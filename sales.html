@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>Ambitio Team — Espace Sales</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+  <!-- NAV SIDEBAR -->
+  <script>
+    (function(){
+      const role = localStorage.getItem('ambitio_role');
+      if(role && role === 'coach') { window.location.href = 'coaching.html'; }
+      if(!role) { window.location.href = 'login.html'; }
+    })();
+  </script>
+  <script src="nav.js"></script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --red-dark:#3b0a0a;--red-main:#b91c1c;--red-light:#fca5a5;
+      --text:#1a1f36;--muted:#6b7280;--border:#e2e8f0;--bg:#fdf2f2;--radius:14px;
+      --green:#10b981;--orange:#f59e0b;--purple:#6366f1;
+    }
+    body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px}
+
+    /* TOPBAR */
+    .topbar{background:white;border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 8px rgba(185,28,28,.04)}
+    .topbar-left{display:flex;align-items:center;gap:14px}
+    .topbar-logo{width:38px;height:38px;background:linear-gradient(135deg,#7f1d1d,#b91c1c);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white}
+    .topbar-left h1{font-size:18px;font-weight:800}
+    .topbar-left h1 span{color:var(--red-main)}
+    .topbar-sub{font-size:11px;color:var(--muted)}
+    .topbar-right{display:flex;align-items:center;gap:10px}
+    .btn{padding:8px 16px;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:linear-gradient(135deg,#b91c1c,#ef4444);color:white;box-shadow:0 3px 12px rgba(185,28,28,.25)}
+    .btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+    .btn-outline{background:white;color:var(--text);border:1.5px solid var(--border)}
+    .btn-outline:hover{border-color:var(--red-main);background:#fff5f5}
+    .user-badge{display:flex;align-items:center;gap:8px;padding:6px 12px;background:#fff5f5;border-radius:10px}
+    .user-avatar{width:28px;height:28px;background:linear-gradient(135deg,#ef4444,#b91c1c);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white}
+    .user-badge-name{font-size:12px;font-weight:600}
+    .user-badge-role{font-size:10px;color:var(--muted)}
+
+    /* TOOLBAR */
+    .toolbar{padding:14px 28px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:white;border-bottom:1px solid var(--border)}
+    .search-box{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;min-width:260px;transition:border-color .15s}
+    .search-box:focus-within{border-color:var(--red-main);background:white}
+    .search-box input{border:none;background:transparent;font-family:inherit;font-size:13px;outline:none;width:100%;color:var(--text)}
+    .filter-btn{padding:6px 14px;border:1.5px solid var(--border);border-radius:20px;background:white;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s}
+    .filter-btn.active{background:var(--red-main);color:white;border-color:var(--red-main)}
+    .toolbar-stats{margin-left:auto;display:flex;gap:16px}
+    .stat-pill{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
+    .stat-pill .num{font-size:16px;font-weight:800;color:var(--text)}
+
+    /* PIPELINE KANBAN */
+    .kanban{display:flex;gap:16px;padding:20px 28px;overflow-x:auto;min-height:calc(100vh - 180px);align-items:flex-start}
+    .kanban-col{min-width:280px;max-width:320px;flex:1;background:white;border-radius:var(--radius);border:1px solid var(--border);display:flex;flex-direction:column}
+    .kanban-col-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .col-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+    .col-count{font-size:11px;font-weight:700;color:white;padding:2px 8px;border-radius:20px}
+    .kanban-cards{padding:10px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 280px)}
+
+    /* DEAL CARD */
+    .deal-card{background:white;border:1.5px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:all .15s;position:relative}
+    .deal-card:hover{border-color:#fca5a5;box-shadow:0 4px 16px rgba(185,28,28,.08);transform:translateY(-1px)}
+    .deal-card.hot{border-left:4px solid #ef4444}
+    .deal-card.warm{border-left:4px solid var(--orange)}
+    .dc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .dc-name{font-size:13px;font-weight:700}
+    .dc-amount{font-size:13px;font-weight:800;color:var(--red-main)}
+    .dc-company{font-size:11px;color:var(--muted);margin-bottom:6px}
+    .dc-proba{font-size:11px;color:var(--muted);margin-bottom:6px}
+    .dc-bar{height:5px;background:#f1f5f9;border-radius:99px;overflow:hidden;margin-bottom:8px}
+    .dc-bar-fill{height:100%;background:linear-gradient(90deg,#ef4444,#b91c1c);border-radius:99px}
+    .dc-bottom{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted)}
+    .dc-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px}
+    .tag-hot{background:#fee2e2;color:#b91c1c}
+    .tag-warm{background:#fef3c7;color:#92400e}
+    .tag-cold{background:#eff6ff;color:#1e40af}
+
+    /* KPIs */
+    .kpi-bar{display:flex;gap:12px;padding:16px 28px;background:white;border-bottom:1px solid var(--border);overflow-x:auto}
+    .kpi-card{min-width:160px;padding:14px 18px;border-radius:12px;border:1px solid var(--border);flex-shrink:0}
+    .kpi-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+    .kpi-val{font-size:22px;font-weight:800}
+    .kpi-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .kpi-up{color:var(--green)}
+    .kpi-down{color:#ef4444}
+    .kpi-card.highlight{background:linear-gradient(135deg,#7f1d1d,#b91c1c);border-color:transparent}
+    .kpi-card.highlight .kpi-label,.kpi-card.highlight .kpi-sub{color:rgba(255,255,255,.6)}
+    .kpi-card.highlight .kpi-val{color:white}
+
+    /* EMPTY STATE */
+    .empty-col{padding:24px 16px;text-align:center;color:var(--muted);font-size:12px}
+    .empty-col-icon{font-size:24px;margin-bottom:8px;opacity:.4}
+  </style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">S</div>
+    <div>
+      <h1>Ambitio <span>Sales</span></h1>
+      <div class="topbar-sub">Pipeline & Gestion commerciale</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="user-badge" id="userBadge">
+      <div class="user-avatar" id="userInitials">?</div>
+      <div>
+        <div class="user-badge-name" id="userName">Chargement...</div>
+        <div class="user-badge-role">📈 Commercial</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="alert('Bientôt disponible')">+ Nouveau deal</button>
+  </div>
+</div>
+
+<!-- KPIs -->
+<div class="kpi-bar">
+  <div class="kpi-card highlight">
+    <div class="kpi-label">Pipeline total</div>
+    <div class="kpi-val">€ 284K</div>
+    <div class="kpi-sub">↑ +18% ce mois</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Deals actifs</div>
+    <div class="kpi-val">23</div>
+    <div class="kpi-sub kpi-up">↑ 4 nouveaux</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Taux de closing</div>
+    <div class="kpi-val">34%</div>
+    <div class="kpi-sub kpi-down">↓ vs 38% M-1</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Deal moyen</div>
+    <div class="kpi-val">€ 12.4K</div>
+    <div class="kpi-sub kpi-up">↑ +5%</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Objectif mois</div>
+    <div class="kpi-val">67%</div>
+    <div class="kpi-sub">€ 40K / € 60K</div>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <div class="search-box">
+    <span>🔍</span>
+    <input type="text" placeholder="Rechercher un deal, prospect..." id="searchInput"/>
+  </div>
+  <button class="filter-btn active">Tous</button>
+  <button class="filter-btn">Hot 🔥</button>
+  <button class="filter-btn">En cours</button>
+  <button class="filter-btn">Gagné ✅</button>
+  <div class="toolbar-stats" style="margin-left:auto">
+    <div class="stat-pill"><span class="num">7</span> Hot leads</div>
+    <div class="stat-pill"><span class="num">3</span> À relancer</div>
+  </div>
+</div>
+
+<!-- KANBAN PIPELINE -->
+<div class="kanban" id="kanbanBoard">
+
+  <!-- COL 1: PROSPECTION -->
+  <div class="kanban-col">
+    <div class="kanban-col-head">
+      <div class="col-title"><span>🔭</span> Prospection</div>
+      <span class="col-count" style="background:#6366f1">5</span>
+    </div>
+    <div class="kanban-cards">
+      <div class="deal-card">
+        <div class="dc-top"><span class="dc-name">TechStart SAS</span><span class="dc-amount">€ 8 500</span></div>
+        <div class="dc-company">🏢 Startup fintech — 12 salariés</div>
+        <div class="dc-proba">Probabilité · 20%</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:20%"></div></div>
+        <div class="dc-bottom"><span>📅 Premier contact le 12/02</span><span class="dc-tag tag-cold">Cold</span></div>
+      </div>
+      <div class="deal-card">
+        <div class="dc-top"><span class="dc-name">Groupe Leclercq</span><span class="dc-amount">€ 24 000</span></div>
+        <div class="dc-company">🏢 PME retail — 85 salariés</div>
+        <div class="dc-proba">Probabilité · 15%</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:15%"></div></div>
+        <div class="dc-bottom"><span>📅 Email envoyé 20/02</span><span class="dc-tag tag-cold">Cold</span></div>
+      </div>
+      <div class="deal-card">
+        <div class="dc-top"><span class="dc-name">Innova Digital</span><span class="dc-amount">€ 6 200</span></div>
+        <div class="dc-company">🏢 Agence — 8 salariés</div>
+        <div class="dc-proba">Probabilité · 25%</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:25%"></div></div>
+        <div class="dc-bottom"><span>📅 LinkedIn 18/02</span><span class="dc-tag tag-cold">Cold</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COL 2: QUALIFICATION -->
+  <div class="kanban-col">
+    <div class="kanban-col-head">
+      <div class="col-title"><span>🎯</span> Qualification</div>
+      <span class="col-count" style="background:#f59e0b">6</span>
+    </div>
+    <div class="kanban-cards">
+      <div class="deal-card warm">
+        <div class="dc-top"><span class="dc-name">Fleury & Associés</span><span class="dc-amount">€ 18 000</span></div>
+        <div class="dc-company">🏢 Cabinet RH — 25 salariés</div>
+        <div class="dc-proba">Probabilité · 45%</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:45%"></div></div>
+        <div class="dc-bottom"><span>📅 Démo planifiée 01/03</span><span class="dc-tag tag-warm">Warm</span></div>
+      </div>
+      <div class="deal-card warm">
+        <div class="dc-top"><span class="dc-name">Accelrise</span><span class="dc-amount">€ 32 000</span></div>
+        <div class="dc-company">🏢 Scale-up B2B — 45 salariés</div>
+        <div class="dc-proba">Probabilité · 50%</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:50%"></div></div>
+        <div class="dc-bottom"><span>📅 Appel découverte 25/02</span><span class="dc-tag tag-warm">Warm</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COL 3: PROPOSITION -->
+  <div class="kanban-col">
+    <div class="kanban-col-head">
+      <div class="col-title"><span>📋</span> Proposition</div>
+      <span class="col-count" style="background:#14b8a6">4</span>
+    </div>
+    <div class="kanban-cards">
+      <div class="deal-card hot">
+        <div class="dc-top"><span class="dc-name">Verto Finance</span><span class="dc-amount">€ 56 000</span></div>
+        <div class="dc-company">🏢 Fintech — 60 salariés</div>
+        <div class="dc-proba">Probabilité · 70%</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:70%"></div></div>
+        <div class="dc-bottom"><span>📅 Devis envoyé 22/02</span><span class="dc-tag tag-hot">Hot 🔥</span></div>
+      </div>
+      <div class="deal-card hot">
+        <div class="dc-top"><span class="dc-name">Studio Luma</span><span class="dc-amount">€ 14 500</span></div>
+        <div class="dc-company">🏢 Studio créatif — 18 salariés</div>
+        <div class="dc-proba">Probabilité · 65%</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:65%"></div></div>
+        <div class="dc-bottom"><span>📅 Relance le 27/02</span><span class="dc-tag tag-hot">Hot 🔥</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COL 4: NÉGOCIATION -->
+  <div class="kanban-col">
+    <div class="kanban-col-head">
+      <div class="col-title"><span>🤝</span> Négociation</div>
+      <span class="col-count" style="background:#ef4444">3</span>
+    </div>
+    <div class="kanban-cards">
+      <div class="deal-card hot">
+        <div class="dc-top"><span class="dc-name">Nexum Group</span><span class="dc-amount">€ 78 000</span></div>
+        <div class="dc-company">🏢 Groupe industriel — 200 salariés</div>
+        <div class="dc-proba">Probabilité · 80%</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:80%"></div></div>
+        <div class="dc-bottom"><span>📅 Closing prévu 05/03</span><span class="dc-tag tag-hot">Hot 🔥</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COL 5: GAGNÉ -->
+  <div class="kanban-col">
+    <div class="kanban-col-head">
+      <div class="col-title"><span>🏆</span> Gagné</div>
+      <span class="col-count" style="background:#10b981">5</span>
+    </div>
+    <div class="kanban-cards">
+      <div class="deal-card" style="border-left:4px solid #10b981">
+        <div class="dc-top"><span class="dc-name">Arkéa Digital</span><span class="dc-amount">€ 42 000</span></div>
+        <div class="dc-company">🏢 Banque digitale — 120 salariés</div>
+        <div class="dc-proba">Fermé le 18/02/2026</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:100%;background:linear-gradient(90deg,#10b981,#059669)"></div></div>
+        <div class="dc-bottom"><span>✅ Signé</span><span class="dc-tag" style="background:#d1fae5;color:#065f46">Gagné</span></div>
+      </div>
+      <div class="deal-card" style="border-left:4px solid #10b981">
+        <div class="dc-top"><span class="dc-name">Pulse Agency</span><span class="dc-amount">€ 9 800</span></div>
+        <div class="dc-company">🏢 Agence marketing — 10 salariés</div>
+        <div class="dc-proba">Fermé le 10/02/2026</div>
+        <div class="dc-bar"><div class="dc-bar-fill" style="width:100%;background:linear-gradient(90deg,#10b981,#059669)"></div></div>
+        <div class="dc-bottom"><span>✅ Signé</span><span class="dc-tag" style="background:#d1fae5;color:#065f46">Gagné</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Display user info from localStorage
+  window.addEventListener('DOMContentLoaded', () => {
+    const name = localStorage.getItem('ambitio_name') || 'Commercial';
+    const initials = name.slice(0,1).toUpperCase();
+    const el = document.getElementById('userName');
+    const av = document.getElementById('userInitials');
+    if(el) el.textContent = name;
+    if(av) av.textContent = initials;
+  });
+
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

@@ -150,7 +150,7 @@
       <h2 id="welcomeName">Bienvenue !</h2>
       <div class="role-badge" id="roleBadge"></div>
       <p id="welcomeEmail">Vous êtes connecté</p>
-      <a class="go-btn" href="coaching.html">🎓 Accéder à l'espace coaching →</a>
+      <a class="go-btn" id="goBtn" href="coaching.html">🎓 Accéder à mon espace →</a>
       <button class="logout-link" onclick="handleLogout()">Se déconnecter</button>
     </div>
   </div>
@@ -211,6 +211,14 @@
     document.getElementById('roleBadge').textContent=label;
     document.getElementById('roleBadge').className='role-badge '+cls;
     document.getElementById('welcomeEmail').textContent=user.email;
+    // Save role for nav.js
+    localStorage.setItem('ambitio_role',role);
+    localStorage.setItem('ambitio_name',name);
+    localStorage.setItem('ambitio_email',user.email);
+    // Redirect button based on role
+    const dest={coach:'coaching.html',sales:'sales.html',admin:'coaching.html'};
+    const goBtn=document.getElementById('goBtn');
+    if(goBtn) goBtn.href=dest[role]||'coaching.html';
   };
 
   window.handleLogin=async function(){
