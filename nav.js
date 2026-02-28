@@ -24,12 +24,22 @@
       { id: 'import',      icon: '❖',  label: 'Import Notion',     href: 'import-notion.html' },
     ],
     admin: [
-      { id: 'overview',    icon: '◈',  label: 'Vue globale',       href: 'coaching.html' },
-      { id: 'equipe',      icon: '◎',  label: 'Équipe',            href: '#' },
-      { id: 'coaching',    icon: '◷',  label: 'Espace Coaching',   href: 'coaching.html' },
-      { id: 'sales',       icon: '◆',  label: 'Espace Sales',      href: 'sales.html' },
-      { id: 'import',      icon: '❖',  label: 'Import Notion',     href: 'import-notion.html' },
-      { id: 'settings',    icon: '◉',  label: 'Paramètres',        href: '#' },
+      // ── GLOBAL ──
+      { id: 'overview',    icon: '◈',  label: 'Vue globale',       href: 'coaching.html', section: 'Admin' },
+      { id: 'equipe',      icon: '◎',  label: 'Équipe',            href: '#',              section: 'Admin' },
+      // ── COACHING ──
+      { id: 'dashboard',   icon: '◷',  label: 'Dashboard coaching',href: 'coaching.html',  section: 'Coaching' },
+      { id: 'clients',     icon: '◎',  label: 'Clients',           href: 'coaching.html#clients', section: 'Coaching' },
+      { id: 'sessions',    icon: '◈',  label: 'Sessions',          href: 'coaching.html#sessions', section: 'Coaching' },
+      { id: 'progression', icon: '▲',  label: 'Progression',       href: 'coaching.html#progression', section: 'Coaching' },
+      // ── SALES ──
+      { id: 'pipeline',    icon: '◆',  label: 'Pipeline',          href: 'sales.html',     section: 'Sales' },
+      { id: 'prospects',   icon: '◎',  label: 'Prospects',         href: 'sales.html#prospects', section: 'Sales' },
+      { id: 'deals',       icon: '◆',  label: 'Deals',             href: 'sales.html#deals', section: 'Sales' },
+      { id: 'objectifs',   icon: '▲',  label: 'Objectifs',         href: 'sales.html#objectifs', section: 'Sales' },
+      // ── OUTILS ──
+      { id: 'import',      icon: '❖',  label: 'Import Notion',     href: 'import-notion.html', section: 'Outils' },
+      { id: 'settings',    icon: '◉',  label: 'Paramètres',        href: '#',              section: 'Outils' },
     ],
   };
 
@@ -762,17 +772,25 @@
 
       <!-- NAV ITEMS -->
       <div class="nav-items" id="navItems">
-        ${modules.map(m => {
-          const isActive = path === (m.href.split('#')[0] || path) && (!m.href.includes('#') || hash === m.href.split('#')[1]);
-          const badgeClass = m.badge && /^\d+$/.test(m.badge) ? 'nav-item-badge num' : 'nav-item-badge';
-          return `
-            <a class="nav-item${isActive ? ' active' : ''}" href="${m.href}" data-id="${m.id}">
-              <span class="nav-item-icon">${m.icon}</span>
-              <span class="nav-item-label">${m.label}</span>
-              ${m.badge ? `<span class="${badgeClass}">${m.badge}</span>` : ''}
-            </a>
-          `;
-        }).join('')}
+        ${(function() {
+          let html = '';
+          let lastSection = null;
+          modules.forEach(m => {
+            if (m.section && m.section !== lastSection) {
+              html += `<div class="nav-section-label" style="margin-top:${lastSection ? '10px' : '0'}">${m.section}</div>`;
+              lastSection = m.section;
+            }
+            const isActive = path === (m.href.split('#')[0] || path) && (!m.href.includes('#') || hash === m.href.split('#')[1]);
+            const badgeClass = m.badge && /^\d+$/.test(m.badge) ? 'nav-item-badge num' : 'nav-item-badge';
+            html += `
+              <a class="nav-item${isActive ? ' active' : ''}" href="${m.href}" data-id="${m.id}">
+                <span class="nav-item-icon">${m.icon}</span>
+                <span class="nav-item-label">${m.label}</span>
+                ${m.badge ? `<span class="${badgeClass}">${m.badge}</span>` : ''}
+              </a>`;
+          });
+          return html;
+        })()}
       </div>
 
       <!-- FOOTER PROFIL -->
