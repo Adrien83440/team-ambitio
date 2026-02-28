@@ -702,16 +702,25 @@
 
   /* ─── DETECT ROLE ─── */
   function getRole() {
-    // From Firebase auth via window._currentRole (set by login.html)
-    // Also check localStorage fallback for dev
-    return window._currentRole || localStorage.getItem('ambitio_role') || 'coach';
+    // localStorage est la source de vérité — écrit par login.html avant navigation
+    const role = localStorage.getItem('ambitio_role') || window._currentRole;
+    if (!role || !['coach','sales','admin'].includes(role)) {
+      // Pas de rôle valide = non connecté
+      if (!window.location.pathname.includes('login')) {
+        window.location.href = 'login.html';
+      }
+      return 'coach';
+    }
+    return role;
   }
 
   function getUserInfo() {
+    const name = localStorage.getItem('ambitio_name') || window._currentUserName || 'Utilisateur';
+    const email = localStorage.getItem('ambitio_email') || window._currentUserEmail || '';
     return {
-      name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Utilisateur',
-      email: window._currentUserEmail || localStorage.getItem('ambitio_email') || '',
-      initials: (window._currentUserName || 'U').slice(0, 1).toUpperCase(),
+      name,
+      email,
+      initials: name.slice(0, 1).toUpperCase(),
     };
   }
 
