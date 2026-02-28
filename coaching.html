@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
   <title>Ambitio Team — Espace Coaching</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -216,6 +217,23 @@
     .toast.show{transform:translateY(0);opacity:1}
     .toast.success{background:var(--green)}
     .toast.error{background:var(--red)}
+
+    /* ── DRIVE LINK ── */
+    .si-drive-link{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#e8f0fe;color:#1a73e8;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;margin-top:6px;transition:background .15s}
+    .si-drive-link:hover{background:#d2e3fc}
+    .drive-scan-bar{padding:12px 16px;background:linear-gradient(135deg,#1e40af,#3b82f6);border-radius:10px;margin:10px 24px;display:flex;align-items:center;gap:10px;color:white;font-size:12px;font-weight:600}
+    .drive-scan-bar .btn-drive{background:rgba(255,255,255,.2);color:white;border:1.5px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 14px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .15s}
+    .drive-scan-bar .btn-drive:hover{background:rgba(255,255,255,.35)}
+    .drive-scan-bar .btn-drive:disabled{opacity:.5;cursor:wait}
+    .drive-scan-log{margin:0 24px;max-height:0;overflow:hidden;transition:max-height .3s;font-size:11px;background:#0f172a;color:rgba(255,255,255,.7);border-radius:0 0 10px 10px}
+    .drive-scan-log.show{max-height:200px;padding:10px 14px;overflow-y:auto}
+    .dsl-match{color:#34d399}
+    .dsl-skip{color:#94a3b8}
+    .dsl-err{color:#f87171}
+    .drive-unlinked{margin-top:14px;padding:14px 16px;background:#fff7ed;border:1.5px solid #fed7aa;border-radius:12px}
+    .drive-unlinked-title{font-size:13px;font-weight:700;margin-bottom:10px;color:#c2410c;display:flex;align-items:center;gap:6px}
+    .drive-unlinked-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #fed7aa}
+    .drive-unlinked-item:last-child{border-bottom:none}
 
     /* ── RESPONSIVE ── */
     @media(max-width:768px){
@@ -729,6 +747,18 @@ function openDetail(id){
 
     ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
 
+    <!-- DRIVE SCAN -->
+    <div class="drive-scan-bar" id="driveScanBar">
+      <span>📁</span>
+      <span id="driveScanLabel">${_driveToken?'Drive connecté — ':'Connectez Drive pour lier les résumés Gemini'}</span>
+      ${_driveToken?
+        `<button class="btn-drive" id="driveScanBtn-${id}" onclick="scanDriveForClient('${id}')">🔍 Chercher les résumés</button>`
+        :`<button class="btn-drive" onclick="connectDriveThen('${id}')">🔗 Connecter Google Drive</button>`
+      }
+      <span id="driveScanStatus-${id}" style="margin-left:auto;font-size:11px;opacity:.8"></span>
+    </div>
+    <div class="drive-scan-log" id="driveScanLog-${id}"></div>
+
     <!-- QUOTA SECTION -->
     <div class="dp-quota-section" style="margin-top:12px">
       <div class="dp-quota-header">
@@ -797,11 +827,27 @@ function openDetail(id){
             </div>
           </div>
           <div class="si-body">
-            ${s.resume?`<div class="si-resume">${escHtml(s.resume)}</div>`:'<div style="padding:12px;color:var(--muted);font-size:12px;font-style:italic">Pas de résumé</div>'}
+            ${s.resume?`<div class="si-resume">${escHtml(s.resume)}</div>`:''}
+            ${s.driveSummary&&!s.resume?`<div class="si-resume">${escHtml(s.driveSummary)}</div>`:''}
+            ${!s.resume&&!s.driveSummary?'<div style="padding:12px;color:var(--muted);font-size:12px;font-style:italic">Pas de résumé</div>':''}
+            ${s.driveUrl?`<a class="si-drive-link" href="${s.driveUrl}" target="_blank">📄 Voir le résumé complet dans Drive ↗</a>`:''}
             ${s.devoirs?`<div class="si-devoirs"><b>📝 Devoirs :</b><br>${escHtml(s.devoirs)}</div>`:''}
           </div>
         </div>`;
       }).join('')}
+
+      ${(c.driveDocs&&c.driveDocs.length>0)?`
+        <div class="drive-unlinked">
+          <div class="drive-unlinked-title">📎 Documents Drive non liés à une session (${c.driveDocs.length})</div>
+          ${c.driveDocs.map(d=>`<div class="drive-unlinked-item">
+            <div>
+              <div style="font-size:12px;font-weight:600">${d.date||'—'} · ${d.type==='rdv72h'?'RDV 72H':'Coaching'}</div>
+              ${d.summary?`<div style="font-size:11px;color:var(--muted);margin-top:2px;max-width:400px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((d.summary||'').substring(0,120))}</div>`:''}
+            </div>
+            <a class="si-drive-link" href="${d.docUrl}" target="_blank">📄 Ouvrir ↗</a>
+          </div>`).join('')}
+        </div>
+      `:''}
     </div>
   `;
   document.getElementById('detailOverlay').classList.add('show');
@@ -901,7 +947,229 @@ function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 function showToast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+(type||'');setTimeout(()=>t.className='toast',3200);}
 async function handleLogout(){await window._signOut(window._auth);window.location.href='index.html';}
 
+// ══════════════════════════════════════════
+// ══ GOOGLE DRIVE — PER CLIENT ══
+// ══════════════════════════════════════════
+const GAPI_CLIENT_ID = '1050138912851-3ffa6ol1cet9mjgg5fkp3ijdji0b7k4u.apps.googleusercontent.com';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+let _driveToken = null;
+
+// Connect Drive then scan for a specific client
+function connectDriveThen(clientId){
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: GAPI_CLIENT_ID,
+    scope: DRIVE_SCOPE,
+    callback: (resp) => {
+      if(resp.error){ showToast('Erreur Drive: '+resp.error,'error'); return; }
+      _driveToken = resp.access_token;
+      showToast('✅ Drive connecté !','success');
+      // Re-render panel to show scan button
+      openDetail(clientId);
+      // Auto-scan
+      setTimeout(()=>scanDriveForClient(clientId), 500);
+    }
+  });
+  client.requestAccessToken();
+}
+
+// Drive API helper
+async function driveApi(url){
+  const res = await fetch(url, {headers:{'Authorization':'Bearer '+_driveToken}});
+  if(!res.ok) return null;
+  return res.json();
+}
+
+// Fetch doc text content (first 2000 chars for summary)
+async function fetchDocText(docId){
+  try{
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${docId}/export?mimeType=text/plain`,
+      {headers:{'Authorization':'Bearer '+_driveToken}}
+    );
+    if(!res.ok) return '';
+    return (await res.text()).substring(0, 2500);
+  }catch(e){ return ''; }
+}
+
+// Extract summary from Gemini doc text
+function extractSummary(text){
+  if(!text) return '';
+  const lines = text.split('\n').map(l=>l.trim()).filter(l=>l);
+  let summary = '';
+  let capture = false;
+  for(const line of lines){
+    if(/^(résumé|summary|vue d.ensemble|overview)/i.test(line)){ capture=true; continue; }
+    if(/^(détails|details|transcription|étapes suivantes|next steps|action items)/i.test(line)){
+      if(summary) break;
+      capture=true; continue;
+    }
+    if(capture && line.length>5){
+      summary += (summary?'\n':'')+line;
+      if(summary.length>600) break;
+    }
+  }
+  if(!summary) summary = lines.filter(l=>l.length>20).slice(0,4).join('\n');
+  return summary.substring(0,800);
+}
+
+// Normalize name for matching
+function normName(n){
+  return (n||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
+}
+
+// Scan Drive for a specific client
+async function scanDriveForClient(clientId){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !_driveToken) return;
+
+  const btn = document.getElementById('driveScanBtn-'+clientId);
+  const status = document.getElementById('driveScanStatus-'+clientId);
+  const logEl = document.getElementById('driveScanLog-'+clientId);
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Recherche...'; }
+  logEl.classList.add('show');
+  logEl.innerHTML = '';
+  const log = (msg,cls='') => { logEl.innerHTML+=`<div class="${cls}">${msg}</div>`; logEl.scrollTop=logEl.scrollHeight; };
+
+  // Build search terms from client name
+  const nameParts = normName(c.nom).split(' ').filter(p=>p.length>2);
+  log(`🔍 Recherche pour "${c.nom}" → mots-clés: ${nameParts.join(', ')}`);
+
+  // Search Drive by client name parts
+  let allDocs = [];
+  for(const part of nameParts){
+    const q = encodeURIComponent(`name contains '${part}' and mimeType='application/vnd.google-apps.document'`);
+    const res = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime)&pageSize=50&orderBy=createdTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+    if(res && res.files){
+      res.files.forEach(f=>{
+        if(!allDocs.find(d=>d.id===f.id)) allDocs.push(f);
+      });
+    }
+  }
+  log(`📄 ${allDocs.length} document(s) trouvé(s) dans Drive`);
+
+  // Filter: only coaching/rdv docs that match this client
+  const matchedDocs = [];
+  for(const doc of allDocs){
+    const title = doc.name||'';
+    // Must be a coaching or RDV doc
+    if(!/coaching 1:1|rdv urgent|post inscription/i.test(title)) continue;
+    // Skip group coaching
+    if(/coaching gr/i.test(title)) continue;
+
+    // Extract client name from title
+    const withMatch = title.match(/with\s+(.+?)\s*-\s*\d{4}/i) || title.match(/with\s+(.+?)(?:\s*-|$)/i);
+    if(!withMatch) continue;
+    const driveClient = normName(withMatch[1]);
+
+    // Check if this Drive doc matches our client
+    const clientNorm = normName(c.nom);
+    const clientParts = clientNorm.split(' ').filter(p=>p.length>2);
+    const driveParts = driveClient.split(' ').filter(p=>p.length>2);
+
+    let score = 0;
+    for(const dp of driveParts){
+      for(const cp of clientParts){
+        if(cp===dp) score+=10;
+        else if(cp.startsWith(dp)||dp.startsWith(cp)) score+=5;
+        else if(cp.includes(dp)||dp.includes(cp)) score+=3;
+      }
+    }
+    if(score < 5) continue;
+
+    // Extract date
+    const dateMatch = title.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+    const date = dateMatch ? `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}` : null;
+    const type = /rdv urgent|post inscription/i.test(title) ? 'rdv72h' : 'coaching';
+
+    matchedDocs.push({id:doc.id, title, date, type, url:`https://docs.google.com/document/d/${doc.id}/edit`});
+    log(`✅ Match: "${title.substring(0,70)}..." (${date})`,'dsl-match');
+  }
+
+  if(matchedDocs.length===0){
+    log('⚠️ Aucun document trouvé pour ce client','dsl-skip');
+    if(btn){ btn.disabled=false; btn.textContent='🔍 Chercher les résumés'; }
+    if(status) status.textContent='Aucun doc trouvé';
+    return;
+  }
+
+  // Link docs to sessions (avoid duplicates)
+  let linked=0, unlinked=0;
+  let changed = false;
+  const sessions = c.sessions||[];
+  if(!c.driveDocs) c.driveDocs = [];
+
+  for(const doc of matchedDocs){
+    // Check if already linked (by URL)
+    const alreadyInSession = sessions.some(s=>s.driveUrl===doc.url);
+    const alreadyInUnlinked = c.driveDocs.some(d=>d.docUrl===doc.url);
+    if(alreadyInSession || alreadyInUnlinked){
+      log(`⏩ Déjà lié: ${doc.date}`,'dsl-skip');
+      continue;
+    }
+
+    // Fetch summary
+    log(`📝 Récupération résumé ${doc.date}...`);
+    const text = await fetchDocText(doc.id);
+    const summary = extractSummary(text);
+
+    // Try to match to a session by date (±2 days)
+    let matchedSession = null;
+    if(doc.date){
+      const dDate = new Date(doc.date);
+      matchedSession = sessions.find(s=>{
+        if(!s.date || s.driveUrl) return false; // skip already linked
+        const sDate = new Date(s.date);
+        return Math.abs(dDate-sDate) < 86400000*2;
+      });
+    }
+
+    if(matchedSession){
+      matchedSession.driveUrl = doc.url;
+      matchedSession.driveTitle = doc.title;
+      matchedSession.driveSummary = summary;
+      if(!matchedSession.resume || matchedSession.resume.length<20){
+        matchedSession.resume = summary;
+      }
+      linked++;
+      changed = true;
+      log(`🔗 Lié à session #${matchedSession.numero} (${matchedSession.date})`,'dsl-match');
+    } else {
+      // Store as unlinked
+      c.driveDocs.push({
+        date: doc.date,
+        docUrl: doc.url,
+        docTitle: doc.title,
+        type: doc.type,
+        summary: summary
+      });
+      unlinked++;
+      changed = true;
+      log(`📎 Pas de session correspondante → stocké comme non-lié (${doc.date})`,'dsl-skip');
+    }
+  }
+
+  // Save
+  if(changed){
+    try{
+      await window._setDoc(window._doc(window._db,'clients',clientId),c);
+      log(`💾 Sauvegardé: ${linked} liés, ${unlinked} non-liés`,'dsl-match');
+    }catch(e){
+      log(`❌ Erreur sauvegarde: ${e.message}`,'dsl-err');
+    }
+  }
+
+  if(btn){ btn.disabled=false; btn.textContent='🔍 Chercher les résumés'; }
+  if(status) status.textContent=`✅ ${linked} liés · ${unlinked} non-liés`;
+
+  // Refresh detail panel
+  if(linked>0 || unlinked>0){
+    showToast(`✅ ${linked} résumé(s) lié(s), ${unlinked} doc(s) trouvé(s)`,'success');
+    setTimeout(()=>openDetail(clientId), 300);
+  }
+}
+
 // Expose
+window.handleDriveAuth=connectDriveThen;window.connectDriveThen=connectDriveThen;window.scanDriveForClient=scanDriveForClient;
 window.applyFilters=applyFilters;window.toggleAlertFilter=toggleAlertFilter;window.toggleQuotaFilter=toggleQuotaFilter;
 window.setView=setView;window.openDetail=openDetail;window.closeDetail=closeDetail;
 window.toggleSession=toggleSession;window.toggleNewSession=toggleNewSession;
