@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
-  <title>ALTEORE Team — Espace Coaching</title>
+  <title>Ambitio Team — Espace Coaching</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -18,8 +18,8 @@
     /* ── TOPBAR ── */
     .topbar{background:white;border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 8px rgba(15,31,92,.04)}
     .topbar-left{display:flex;align-items:center;gap:14px}
-    .topbar-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--blue-dark),var(--blue-main));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white;letter-spacing:1px}
-    .topbar-left h1{font-size:18px;font-weight:800;color:var(--text)}
+    .topbar-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--blue-dark),var(--blue-main));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white}
+    .topbar-left h1{font-size:18px;font-weight:800}
     .topbar-left h1 span{color:var(--blue-main)}
     .topbar-sub{font-size:11px;color:var(--muted)}
     .topbar-right{display:flex;align-items:center;gap:10px}
@@ -51,18 +51,26 @@
     .stat-pill{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
     .stat-pill .num{font-size:16px;font-weight:800;color:var(--text)}
     .stat-pill.alert .num{color:var(--red)}
+    .stat-pill.quota .num{color:var(--orange)}
 
     /* ── VIEWS ── */
     .view-tabs{display:flex;gap:4px;background:var(--bg);padding:3px;border-radius:10px;border:1px solid var(--border)}
     .view-tab{padding:6px 14px;border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s}
     .view-tab.active{background:white;color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.08)}
 
+    /* ── MONTH NAV ── */
+    .month-nav{display:flex;align-items:center;gap:8px;padding:10px 28px;background:white;border-bottom:1px solid var(--border)}
+    .month-nav-btn{width:32px;height:32px;border:1.5px solid var(--border);border-radius:8px;background:white;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .month-nav-btn:hover{border-color:var(--blue-main);background:var(--blue-ghost)}
+    .month-nav-label{font-size:14px;font-weight:700;min-width:160px;text-align:center;text-transform:capitalize}
+    .month-nav-today{font-size:11px;font-weight:600;color:var(--blue-main);cursor:pointer;padding:4px 10px;border-radius:6px;background:var(--blue-ghost);border:none;font-family:inherit}
+
     /* ── KANBAN ── */
-    .kanban{display:flex;gap:16px;padding:20px 28px;overflow-x:auto;min-height:calc(100vh - 180px);align-items:flex-start}
-    .kanban-col{min-width:300px;max-width:340px;flex:1;background:white;border-radius:var(--radius);border:1px solid var(--border);display:flex;flex-direction:column;max-height:calc(100vh - 200px)}
+    .kanban{display:flex;gap:16px;padding:20px 28px;overflow-x:auto;min-height:calc(100vh - 240px);align-items:flex-start}
+    .kanban-col{min-width:300px;max-width:340px;flex:1;background:white;border-radius:var(--radius);border:1px solid var(--border);display:flex;flex-direction:column;max-height:calc(100vh - 260px)}
     .kanban-col-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:white;border-radius:var(--radius) var(--radius) 0 0;z-index:2}
     .col-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
-    .col-count{font-size:11px;font-weight:700;color:white;background:var(--blue-main);padding:2px 8px;border-radius:20px}
+    .col-count{font-size:11px;font-weight:700;color:white;padding:2px 8px;border-radius:20px}
     .col-badge-green{background:var(--green)}
     .col-badge-orange{background:var(--orange)}
     .col-badge-purple{background:var(--purple)}
@@ -88,6 +96,13 @@
     .cc-date{display:flex;align-items:center;gap:4px}
     .cc-alert-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--red-light);color:var(--red)}
     .cc-warn-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--orange-light);color:var(--orange)}
+
+    /* ── QUOTA BADGE ── */
+    .cc-quota{display:flex;align-items:center;gap:4px;margin-top:6px;padding:4px 8px;border-radius:8px;font-size:11px;font-weight:700}
+    .cc-quota.ok{background:var(--green-light);color:var(--green)}
+    .cc-quota.partial{background:var(--orange-light);color:var(--orange)}
+    .cc-quota.empty{background:var(--red-light);color:var(--red)}
+    .cc-quota.done{background:#f1f5f9;color:var(--muted)}
 
     /* ── LIST VIEW ── */
     .list-view{padding:20px 28px;display:none}
@@ -128,6 +143,25 @@
     .dp-alert-box.orange{background:var(--orange-light);color:var(--orange)}
     .dp-alert-box.green{background:var(--green-light);color:var(--green)}
 
+    /* ── QUOTA DETAIL ── */
+    .dp-quota-section{margin:0 24px 0;padding:14px 16px;border-radius:12px;border:1.5px solid var(--border);background:white}
+    .dp-quota-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .dp-quota-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px}
+    .dp-quota-badge{font-size:18px;font-weight:800;padding:4px 14px;border-radius:10px}
+    .dp-quota-badge.ok{background:var(--green-light);color:var(--green)}
+    .dp-quota-badge.partial{background:var(--orange-light);color:var(--orange)}
+    .dp-quota-badge.empty{background:var(--red-light);color:var(--red)}
+    .dp-quota-badge.over{background:var(--purple-light);color:var(--purple)}
+    .dp-quota-badge.done{background:#f1f5f9;color:var(--muted)}
+    .dp-quota-bar{height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden;margin:8px 0}
+    .dp-quota-bar-fill{height:100%;border-radius:99px;transition:width .4s}
+    .dp-quota-sub{font-size:11px;color:var(--muted)}
+    .dp-quota-history{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
+    .dp-quota-month{padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid var(--border)}
+    .dp-quota-month.ok{background:var(--green-light);color:var(--green);border-color:#86efac}
+    .dp-quota-month.partial{background:var(--orange-light);color:var(--orange);border-color:#fcd34d}
+    .dp-quota-month.empty{background:var(--red-light);color:var(--red);border-color:#fca5a5}
+
     /* ── SESSIONS LIST ── */
     .dp-sessions{padding:16px 24px}
     .dp-sessions-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
@@ -152,7 +186,6 @@
     .session-item.open .si-body{display:block}
     .si-resume{font-size:12px;line-height:1.7;color:var(--text);padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px;white-space:pre-wrap}
     .si-devoirs{font-size:12px;padding:10px 12px;background:#fefce8;border-radius:8px;border-left:3px solid var(--orange)}
-    .si-actions{display:flex;gap:8px;margin-top:10px}
 
     /* ── NEW SESSION FORM ── */
     .new-session-form{padding:16px;background:var(--blue-ghost);border-radius:12px;margin:10px 24px;display:none}
@@ -195,8 +228,8 @@
       .list-view{padding:14px}
       .dp-info-grid{grid-template-columns:1fr}
       .toolbar-stats{margin-left:0;width:100%;justify-content:space-between}
-      .nsf-row{grid-template-columns:1fr}
-      .mf-row{grid-template-columns:1fr}
+      .nsf-row,.mf-row{grid-template-columns:1fr}
+      .month-nav{padding:8px 14px}
     }
   </style>
 </head>
@@ -224,6 +257,18 @@
   </div>
 </div>
 
+<!-- MONTH NAV -->
+<div class="month-nav">
+  <button class="month-nav-btn" onclick="changeMonth(-1)">◀</button>
+  <div class="month-nav-label" id="monthLabel">—</div>
+  <button class="month-nav-btn" onclick="changeMonth(1)">▶</button>
+  <button class="month-nav-today" onclick="goToday()">Aujourd'hui</button>
+  <div style="margin-left:auto;display:flex;gap:16px">
+    <div class="stat-pill quota"><span class="num" id="statQuotaOk">0</span> ✅ à jour</div>
+    <div class="stat-pill alert"><span class="num" id="statQuotaMiss">0</span> ❌ quota manqué</div>
+  </div>
+</div>
+
 <!-- TOOLBAR -->
 <div class="toolbar">
   <div class="search-box">
@@ -237,15 +282,16 @@
   <div class="filter-group">
     <select class="filter-select" id="filterProg" onchange="applyFilters()">
       <option value="">Tous les programmes</option>
-      <option value="BP 12 Mois - 12C">BP 12 Mois - 12C</option>
-      <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
-      <option value="BP 6 Mois - 6C">BP 6 Mois - 6C</option>
-      <option value="Elite - 12 Mois - 24C">Elite - 12M - 24C</option>
+      <option value="BP 12 Mois - 12C">BP 12M - 12C</option>
+      <option value="BP 12 Mois - 24C">BP 12M - 24C</option>
+      <option value="BP 6 Mois - 6C">BP 6M - 6C</option>
+      <option value="Elite - 12 Mois - 24C">Elite 12M - 24C</option>
     </select>
     <select class="filter-select" id="filterCoach" onchange="applyFilters()">
       <option value="">Tous les coachs</option>
     </select>
     <button class="filter-btn" id="filterAlert" onclick="toggleAlertFilter(this)">⚠️ En retard</button>
+    <button class="filter-btn" id="filterQuota" onclick="toggleQuotaFilter(this)">📊 Quota manqué</button>
   </div>
   <div class="toolbar-stats">
     <div class="stat-pill"><span class="num" id="statTotal">0</span> clients</div>
@@ -265,8 +311,8 @@
         <th>Client</th>
         <th>Programme</th>
         <th>Avancement</th>
+        <th>Quota mois</th>
         <th>Dernier coaching</th>
-        <th>Coach</th>
         <th>Statut</th>
       </tr>
     </thead>
@@ -338,12 +384,11 @@
   onAuthStateChanged(auth,async user=>{
     if(!user){window.location.href='index.html';return;}
     window._uid=user.uid;
-    // Check role
     const uSnap=await getDoc(doc(db,'users',user.uid));
     const uData=uSnap.exists()?uSnap.data():{};
     const role=uData.role||'admin';
     if(!['coach','sales','admin'].includes(role)){
-      document.body.innerHTML='<div style="padding:60px;text-align:center"><h2>⛔ Accès réservé à l\'équipe</h2><p style="margin-top:10px;color:#6b7280">Contactez votre administrateur.</p></div>';
+      document.body.innerHTML='<div style="padding:60px;text-align:center"><h2>⛔ Accès réservé</h2></div>';
       return;
     }
     window._role=role;
@@ -362,8 +407,102 @@ let _clients = [];
 let _filtered = [];
 let _currentView = 'kanban';
 let _alertFilterOn = false;
-const ALERT_DAYS = 21; // 3 semaines sans coaching = alerte
+let _quotaFilterOn = false;
+const ALERT_DAYS = 21;
 const WARN_DAYS = 14;
+
+// Current viewed month
+let _viewYear = new Date().getFullYear();
+let _viewMonth = new Date().getMonth(); // 0-indexed
+
+// ── QUOTA LOGIC ──
+function getMonthlyQuota(programme){
+  if(!programme) return 1;
+  const p = programme.toLowerCase();
+  if(p.includes('24c')) return 2;
+  if(p.includes('12c')) return 1;
+  if(p.includes('6c')) return 1;
+  return 1;
+}
+
+function getSessionsInMonth(c, year, month){
+  return (c.sessions||[]).filter(s=>{
+    if(s.statut!=='fait' || !s.date) return false;
+    const d = new Date(s.date);
+    return d.getFullYear()===year && d.getMonth()===month;
+  });
+}
+
+function getQuotaStatus(c, year, month){
+  const done = c.nbCoachingsFaits||0;
+  const total = c.nbCoachingsTotal||12;
+  if(done >= total) return {status:'done', used:0, max:0, label:'Terminé'};
+  
+  const quota = getMonthlyQuota(c.programme);
+  const sessions = getSessionsInMonth(c, year, month);
+  const used = sessions.length;
+  
+  if(used >= quota) return {status:'ok', used, max:quota, label:`${used}/${quota}`};
+  if(used > 0) return {status:'partial', used, max:quota, label:`${used}/${quota}`};
+  return {status:'empty', used:0, max:quota, label:`0/${quota}`};
+}
+
+function getQuotaHistory(c){
+  // Get last 6 months of quota history
+  const months = [];
+  const now = new Date();
+  const entry = c.dateEntree ? new Date(c.dateEntree) : null;
+  
+  for(let i=5; i>=0; i--){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    // Skip months before client entry
+    if(entry && d < new Date(entry.getFullYear(), entry.getMonth(), 1)) continue;
+    const q = getQuotaStatus(c, d.getFullYear(), d.getMonth());
+    months.push({
+      year: d.getFullYear(),
+      month: d.getMonth(),
+      label: d.toLocaleDateString('fr-FR',{month:'short'}),
+      ...q
+    });
+  }
+  return months;
+}
+
+// ── MONTH NAV ──
+function updateMonthLabel(){
+  const d = new Date(_viewYear, _viewMonth, 1);
+  document.getElementById('monthLabel').textContent = d.toLocaleDateString('fr-FR',{month:'long', year:'numeric'});
+  updateQuotaStats();
+}
+
+function changeMonth(delta){
+  _viewMonth += delta;
+  if(_viewMonth > 11){_viewMonth=0;_viewYear++;}
+  if(_viewMonth < 0){_viewMonth=11;_viewYear--;}
+  updateMonthLabel();
+  render();
+}
+
+function goToday(){
+  _viewYear = new Date().getFullYear();
+  _viewMonth = new Date().getMonth();
+  updateMonthLabel();
+  render();
+}
+
+function updateQuotaStats(){
+  let ok=0, miss=0;
+  _clients.forEach(c=>{
+    const done = c.nbCoachingsFaits||0;
+    const total = c.nbCoachingsTotal||12;
+    if(done >= total) return; // terminé, on ne compte pas
+    const q = getQuotaStatus(c, _viewYear, _viewMonth);
+    if(q.status==='ok') ok++;
+    else miss++;
+  });
+  document.getElementById('statQuotaOk').textContent = ok;
+  document.getElementById('statQuotaMiss').textContent = miss;
+}
 
 // ── LOAD ──
 window.loadClients = async function(){
@@ -378,7 +517,6 @@ window.loadClients = async function(){
     });
   }catch(e){console.warn('Load error:',e);}
   
-  // Build coach filter
   const coaches = new Set();
   _clients.forEach(c=>{
     (c.sessions||[]).forEach(s=>{if(s.coach)coaches.add(s.coach);});
@@ -389,6 +527,7 @@ window.loadClients = async function(){
     sel.innerHTML += `<option value="${c}">${c}</option>`;
   });
 
+  updateMonthLabel();
   applyFilters();
 };
 
@@ -406,14 +545,17 @@ function applyFilters(){
       if(!hasCoach) return false;
     }
     if(_alertFilterOn && getAlertStatus(c)==='ok') return false;
+    if(_quotaFilterOn){
+      const q = getQuotaStatus(c, _viewYear, _viewMonth);
+      if(q.status==='ok' || q.status==='done') return false;
+    }
     return true;
   });
   
-  // Stats
   document.getElementById('statTotal').textContent = _filtered.length;
   document.getElementById('statAlert').textContent = _filtered.filter(c=>getAlertStatus(c)==='alert').length;
-  document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>(c.sessions||[]).length+s,0);
-  
+  document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>(c.sessions||[]).filter(s=>s.statut==='fait').length+s,0);
+  updateQuotaStats();
   render();
 }
 
@@ -423,25 +565,34 @@ function toggleAlertFilter(btn){
   applyFilters();
 }
 
+function toggleQuotaFilter(btn){
+  _quotaFilterOn = !_quotaFilterOn;
+  btn.classList.toggle('active', _quotaFilterOn);
+  applyFilters();
+}
+
 // ── ALERT STATUS ──
 function getAlertStatus(c){
+  const done = c.nbCoachingsFaits||0;
+  const total = c.nbCoachingsTotal||12;
+  if(done >= total) return 'ok';
   if(!c.lastSessionDate) return 'alert';
   const last = new Date(c.lastSessionDate);
   const diff = (Date.now() - last.getTime()) / (1000*60*60*24);
-  const done = c.nbCoachingsFaits || 0;
-  const total = c.nbCoachingsTotal || 12;
-  if(done >= total) return 'ok'; // Terminé
   if(diff > ALERT_DAYS) return 'alert';
   if(diff > WARN_DAYS) return 'warning';
   return 'ok';
 }
 
 function getAlertText(c){
-  if(!c.lastSessionDate) return 'Aucune séance enregistrée';
+  const done = c.nbCoachingsFaits||0;
+  const total = c.nbCoachingsTotal||12;
+  if(done >= total) return '';
+  if(!c.lastSessionDate) return 'Aucune séance';
   const last = new Date(c.lastSessionDate);
   const diff = Math.floor((Date.now() - last.getTime()) / (1000*60*60*24));
   if(diff > ALERT_DAYS) return `${diff}j sans coaching`;
-  if(diff > WARN_DAYS) return `${diff}j depuis dernier coaching`;
+  if(diff > WARN_DAYS) return `${diff}j depuis dernier`;
   return '';
 }
 
@@ -476,7 +627,12 @@ function renderCard(c){
   const alert = getAlertStatus(c);
   const alertText = getAlertText(c);
   const barColor = pct>=100?'var(--green)':pct>=50?'var(--blue-main)':pct>=25?'var(--orange)':'var(--red)';
-  const lastCoach = (c.sessions||[]).filter(s=>s.coach).pop();
+  const lastCoach = (c.sessions||[]).filter(s=>s.coach&&s.statut==='fait').pop();
+  
+  // Quota for viewed month
+  const q = getQuotaStatus(c, _viewYear, _viewMonth);
+  const quotaCls = q.status;
+  const quotaIcon = q.status==='ok'?'✅':q.status==='partial'?'🟡':q.status==='empty'?'❌':'✔️';
   
   return `<div class="client-card ${alert==='alert'?'alert':alert==='warning'?'warning':''}" onclick="openDetail('${c._id}')">
     <div class="cc-top">
@@ -485,8 +641,13 @@ function renderCard(c){
     </div>
     ${c.activite?`<div class="cc-activite">${c.activite}</div>`:''}
     <div class="cc-progress">
-      <div class="cc-progress-label"><span>Séances</span><span>${done} / ${total}</span></div>
+      <div class="cc-progress-label"><span>Programme</span><span>${done} / ${total}</span></div>
       <div class="cc-bar"><div class="cc-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+    </div>
+    <div class="cc-quota ${quotaCls}">
+      <span>${quotaIcon}</span>
+      <span>Ce mois : ${q.label}</span>
+      ${q.status==='done'?'<span style="margin-left:auto;font-size:10px">Programme terminé</span>':'<span style="margin-left:auto;font-size:10px">coaching/mois</span>'}
     </div>
     <div class="cc-bottom">
       <div class="cc-date">📅 ${c.lastSessionDate?formatDate(c.lastSessionDate):'—'}</div>
@@ -502,13 +663,15 @@ function renderList(){
     const pct=Math.min(done/total*100,100);
     const barColor=pct>=100?'var(--green)':pct>=50?'var(--blue-main)':'var(--orange)';
     const alert=getAlertStatus(c);
-    const lastCoach=(c.sessions||[]).filter(s=>s.coach).pop();
+    const q=getQuotaStatus(c,_viewYear,_viewMonth);
+    const qIcon=q.status==='ok'?'✅':q.status==='partial'?'🟡':q.status==='empty'?'❌':'✔️';
+    const qColor=q.status==='ok'?'var(--green)':q.status==='empty'?'var(--red)':q.status==='partial'?'var(--orange)':'var(--muted)';
     return `<tr onclick="openDetail('${c._id}')">
       <td class="name-cell">${c.nom}</td>
       <td>${c.programme}</td>
       <td>${done}/${total} <div class="progress-mini"><div class="progress-mini-fill" style="width:${pct}%;background:${barColor}"></div></div></td>
+      <td><span style="color:${qColor};font-weight:700">${qIcon} ${q.label}</span></td>
       <td>${c.lastSessionDate?formatDate(c.lastSessionDate):'—'}</td>
-      <td>${lastCoach?lastCoach.coach:'—'}</td>
       <td>${alert==='alert'?'<span style="color:var(--red);font-weight:700">🔴 En retard</span>':alert==='warning'?'<span style="color:var(--orange);font-weight:700">🟡 Attention</span>':'<span style="color:var(--green);font-weight:700">✅ OK</span>'}</td>
     </tr>`;
   }).join('');
@@ -535,6 +698,13 @@ function openDetail(id){
   const alertText=getAlertText(c);
   const sessions=(c.sessions||[]).sort((a,b)=>a.numero-b.numero);
   
+  // Quota
+  const q = getQuotaStatus(c, _viewYear, _viewMonth);
+  const qHistory = getQuotaHistory(c);
+  const qBadgeCls = q.status==='ok'?'ok':q.status==='partial'?'partial':q.status==='empty'?'empty':q.status==='done'?'done':'ok';
+  const qBarPct = q.max>0 ? Math.min(q.used/q.max*100,100) : 0;
+  const qBarColor = q.status==='ok'?'var(--green)':q.status==='partial'?'var(--orange)':'var(--red)';
+  
   const panel = document.getElementById('detailPanel');
   panel.innerHTML = `
     <div class="dp-header">
@@ -559,15 +729,34 @@ function openDetail(id){
 
     ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
 
+    <!-- QUOTA SECTION -->
+    <div class="dp-quota-section" style="margin-top:12px">
+      <div class="dp-quota-header">
+        <div class="dp-quota-title">📊 Quota coaching du mois</div>
+        <div class="dp-quota-badge ${qBadgeCls}">${q.status==='done'?'✔️ Terminé':q.label}</div>
+      </div>
+      ${q.status!=='done'?`
+        <div class="dp-quota-bar"><div class="dp-quota-bar-fill" style="width:${qBarPct}%;background:${qBarColor}"></div></div>
+        <div class="dp-quota-sub">
+          ${q.used} coaching(s) fait(s) ce mois sur ${q.max} prévu(s)
+          ${q.status==='ok'?' — ✅ Quota atteint !':q.status==='partial'?' — 🟡 Il reste des séances à planifier':' — ❌ Aucun coaching ce mois'}
+        </div>
+      `:`<div class="dp-quota-sub">Le programme est terminé (${done}/${total} séances faites)</div>`}
+      <div class="dp-quota-history">
+        <span style="font-size:10px;font-weight:700;color:var(--muted);padding:4px 0">Historique :</span>
+        ${qHistory.map(m=>`<div class="dp-quota-month ${m.status}">${m.label} ${m.status==='ok'?'✅':m.status==='partial'?'🟡':'❌'} ${m.label!=='Terminé'?m.used+'/'+m.max:''}</div>`).join('')}
+      </div>
+    </div>
+
     <div class="dp-progress-section">
       <div class="dp-progress-header">
-        <div class="dp-progress-title">📊 Avancement du programme</div>
+        <div class="dp-progress-title">📈 Avancement du programme</div>
         <div class="dp-progress-count">${done} / ${total}</div>
       </div>
       <div class="dp-bar"><div class="dp-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
       <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted)">
         <span>${pct>=100?'✅ Programme terminé':Math.round(pct)+'% complété'}</span>
-        <span>${total-done} séance(s) restante(s)</span>
+        <span>${Math.max(total-done,0)} séance(s) restante(s)</span>
       </div>
     </div>
 
@@ -579,13 +768,13 @@ function openDetail(id){
       <div class="new-session-form" id="newSessionForm">
         <div class="nsf-row">
           <div class="nsf-field"><label>Date *</label><input type="date" id="ns-date"/></div>
-          <div class="nsf-field"><label>Coach *</label><input id="ns-coach" placeholder="Edouard, Mickael..."/></div>
+          <div class="nsf-field"><label>Coach *</label><input id="ns-coach" placeholder="Emily, Mickael..."/></div>
         </div>
-        <div class="nsf-field" style="margin-bottom:10px"><label>Résumé</label><textarea id="ns-resume" placeholder="Résumé de la séance... (saisie manuelle ou collage IA)"></textarea></div>
-        <div class="nsf-field" style="margin-bottom:10px"><label>Devoirs / Actions</label><textarea id="ns-devoirs" rows="2" placeholder="Actions à mener pour le client..."></textarea></div>
+        <div class="nsf-field" style="margin-bottom:10px"><label>Résumé</label><textarea id="ns-resume" placeholder="Résumé de la séance..."></textarea></div>
+        <div class="nsf-field" style="margin-bottom:10px"><label>Devoirs / Actions</label><textarea id="ns-devoirs" rows="2" placeholder="Actions à mener..."></textarea></div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button class="btn btn-outline btn-sm" onclick="toggleNewSession()">Annuler</button>
-          <button class="btn btn-green btn-sm" onclick="addSession('${id}')">💾 Enregistrer la séance</button>
+          <button class="btn btn-green btn-sm" onclick="addSession('${id}')">💾 Enregistrer</button>
         </div>
       </div>
       ${sessions.map(s=>{
@@ -608,7 +797,7 @@ function openDetail(id){
             </div>
           </div>
           <div class="si-body">
-            ${s.resume?`<div class="si-resume">${escHtml(s.resume)}</div>`:'<div style="padding:12px;color:var(--muted);font-size:12px;font-style:italic">Pas de résumé pour cette séance</div>'}
+            ${s.resume?`<div class="si-resume">${escHtml(s.resume)}</div>`:'<div style="padding:12px;color:var(--muted);font-size:12px;font-style:italic">Pas de résumé</div>'}
             ${s.devoirs?`<div class="si-devoirs"><b>📝 Devoirs :</b><br>${escHtml(s.devoirs)}</div>`:''}
           </div>
         </div>`;
@@ -636,8 +825,7 @@ async function addSession(clientId){
   const newSession = {
     numero: maxNum+1,
     titre: `COACHING #${maxNum+1}`,
-    date: date,
-    coach: coach,
+    date, coach,
     resume: document.getElementById('ns-resume').value.trim(),
     devoirs: document.getElementById('ns-devoirs').value.trim(),
     statut: 'fait'
@@ -645,7 +833,7 @@ async function addSession(clientId){
   sessions.push(newSession);
   c.sessions = sessions;
   c.nbCoachingsFaits = sessions.filter(s=>s.statut==='fait').length;
-  const dates = sessions.filter(s=>s.date).map(s=>s.date);
+  const dates = sessions.filter(s=>s.date&&s.statut==='fait').map(s=>s.date);
   c.lastSessionDate = dates.length?dates.sort().pop():'';
   
   try{
@@ -669,8 +857,7 @@ async function createClient(){
   
   const id = 'cli_'+Date.now();
   const client = {
-    _id: id,
-    nom,
+    _id: id, nom,
     email: document.getElementById('nc-email').value.trim(),
     tel: document.getElementById('nc-tel').value.trim(),
     activite: document.getElementById('nc-activite').value.trim(),
@@ -688,7 +875,6 @@ async function createClient(){
     closeNewClientModal();
     applyFilters();
     showToast('✅ Client créé !','success');
-    // Clear form
     ['nc-nom','nc-email','nc-tel','nc-activite'].forEach(id=>document.getElementById(id).value='');
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -708,23 +894,21 @@ async function deleteClient(id){
 // ── UTILS ──
 function formatDate(d){
   if(!d) return '—';
-  try{
-    const dt=new Date(d);
-    return dt.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'});
-  }catch(e){return d;}
+  try{return new Date(d).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'});}
+  catch(e){return d;}
 }
 function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
 function showToast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+(type||'');setTimeout(()=>t.className='toast',3200);}
 async function handleLogout(){await window._signOut(window._auth);window.location.href='index.html';}
 
 // Expose
-window.loadClients=window.loadClients;
-window.applyFilters=applyFilters;window.toggleAlertFilter=toggleAlertFilter;
+window.applyFilters=applyFilters;window.toggleAlertFilter=toggleAlertFilter;window.toggleQuotaFilter=toggleQuotaFilter;
 window.setView=setView;window.openDetail=openDetail;window.closeDetail=closeDetail;
 window.toggleSession=toggleSession;window.toggleNewSession=toggleNewSession;
 window.addSession=addSession;window.openNewClientModal=openNewClientModal;
 window.closeNewClientModal=closeNewClientModal;window.createClient=createClient;
 window.deleteClient=deleteClient;window.handleLogout=handleLogout;
+window.changeMonth=changeMonth;window.goToday=goToday;
 window.editClient=function(id){openNewClientModal();}; // TODO: pre-fill
 </script>
 
