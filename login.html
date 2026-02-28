@@ -194,7 +194,14 @@
         window.showConnected(user,role);
       }catch(e){
         console.error(e);
-        window.showConnected(user,'coach');
+        // Firestore error: use role from localStorage if available, else show error
+        const cachedRole=localStorage.getItem('ambitio_role');
+        if(cachedRole&&['coach','sales','admin'].includes(cachedRole)){
+          window.showConnected(user,cachedRole);
+        } else {
+          console.error('Impossible de lire le rôle Firestore:',e);
+          window.showConnected(user,'admin'); // fallback admin pour éviter blocage
+        }
       }
     }
   });
