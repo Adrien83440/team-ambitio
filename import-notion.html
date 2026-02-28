@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>ALTEORE — Import Notion → Firebase</title>
+  <style>
+    body{font-family:'Plus Jakarta Sans',sans-serif;padding:40px;background:#f5f7ff;color:#1a1f36}
+    h1{font-size:22px;margin-bottom:8px}
+    p{color:#6b7280;margin-bottom:20px}
+    .card{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:24px;max-width:700px}
+    .btn{padding:12px 24px;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:all .18s}
+    .btn-primary{background:linear-gradient(135deg,#1a3dce,#4f7ef8);color:white;box-shadow:0 3px 12px rgba(26,61,206,.25)}
+    .btn-primary:hover{opacity:.9}
+    .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+    .log{margin-top:16px;padding:14px;background:#f8faff;border-radius:10px;font-size:12px;max-height:400px;overflow-y:auto;font-family:monospace;white-space:pre-wrap}
+    .log .ok{color:#10b981}
+    .log .err{color:#ef4444}
+    .log .info{color:#6366f1}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+    .stat{padding:12px;background:#f0f4ff;border-radius:10px;text-align:center}
+    .stat .num{font-size:24px;font-weight:800;color:#1a3dce}
+    .stat .lbl{font-size:11px;color:#6b7280;font-weight:600}
+    textarea{width:100%;min-height:120px;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px;font-family:monospace;font-size:11px;resize:vertical;outline:none}
+    textarea:focus{border-color:#1a3dce}
+  </style>
+</head>
+<body>
+  <h1>📥 Import Notion → Firebase</h1>
+  <p>Cet outil importe les données clients de l'export Notion dans Firestore (collection <code>clients</code>).</p>
+
+  <div class="card">
+    <h3 style="margin-bottom:10px">1. Collez le JSON exporté depuis Notion</h3>
+    <p style="font-size:12px">Copiez le contenu du fichier <code>notion_clients.json</code> ci-dessous :</p>
+    <textarea id="jsonInput" placeholder='Collez le JSON ici...'></textarea>
+
+    <div class="stats" id="stats" style="display:none">
+      <div class="stat"><div class="num" id="sTotal">0</div><div class="lbl">Clients</div></div>
+      <div class="stat"><div class="num" id="sSessions">0</div><div class="lbl">Séances</div></div>
+      <div class="stat"><div class="num" id="sResumes">0</div><div class="lbl">Résumés</div></div>
+    </div>
+
+    <button class="btn" style="margin:10px 0;background:#f0f4ff;color:#1a3dce;border:1.5px solid #c7d2fe" onclick="previewData()">👁 Prévisualiser</button>
+    <button class="btn btn-primary" id="importBtn" onclick="startImport()" disabled>🚀 Lancer l'import</button>
+
+    <div class="log" id="log" style="display:none"></div>
+  </div>
+
+  <script type="module">
+    import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import{getAuth,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import{getFirestore,doc,setDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    const app=initializeApp({
+      apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+      authDomain:"ambitio-team.firebaseapp.com",
+      projectId:"ambitio-team",
+      storageBucket:"ambitio-team.firebasestorage.app",
+      messagingSenderId:"1079366902268",
+      appId:"1:1079366902268:web:b4ec1691dba54230339279"
+    });
+    const auth=getAuth(app),db=getFirestore(app);
+    window._db=db;window._doc=doc;window._setDoc=setDoc;
+    onAuthStateChanged(auth,user=>{
+      if(!user){document.body.innerHTML='<h2 style="padding:40px">⛔ Connectez-vous d\'abord sur alteore.com</h2>';return;}
+      window._uid=user.uid;
+      log('info','✅ Connecté en tant que '+user.email);
+      log('info','UID: '+user.uid);
+    });
+  </script>
+
+  <script>
+    let _data = [];
+
+    function log(type, msg){
+      const el=document.getElementById('log');
+      el.style.display='block';
+      el.innerHTML+=`<span class="${type}">${msg}</span>\n`;
+      el.scrollTop=el.scrollHeight;
+    }
+
+    window.previewData = function(){
+      const raw = document.getElementById('jsonInput').value.trim();
+      if(!raw){alert('Collez le JSON');return;}
+      try{
+        _data = JSON.parse(raw);
+      }catch(e){alert('JSON invalide: '+e.message);return;}
+      
+      const total = _data.length;
+      const sessions = _data.reduce((s,c)=>(c.sessions||[]).length+s,0);
+      const resumes = _data.reduce((s,c)=>(c.sessions||[]).filter(x=>x.resume).length+s,0);
+      
+      document.getElementById('stats').style.display='grid';
+      document.getElementById('sTotal').textContent=total;
+      document.getElementById('sSessions').textContent=sessions;
+      document.getElementById('sResumes').textContent=resumes;
+      document.getElementById('importBtn').disabled=false;
+      
+      log('info',`📊 ${total} clients, ${sessions} séances, ${resumes} résumés`);
+      
+      // Preview first 5
+      _data.slice(0,5).forEach(c=>{
+        log('info',`  📁 ${c.nom} — ${c.programme} — ${(c.sessions||[]).length} séances`);
+      });
+      if(_data.length>5) log('info',`  ... et ${_data.length-5} de plus`);
+    };
+
+    window.startImport = async function(){
+      if(!window._uid){alert('Non connecté');return;}
+      if(!_data.length){alert('Aucune donnée');return;}
+      if(!confirm(`Importer ${_data.length} clients dans Firebase ?`)) return;
+      
+      const btn=document.getElementById('importBtn');
+      btn.disabled=true;
+      btn.textContent='⏳ Import en cours...';
+      
+      let ok=0, err=0;
+      for(const c of _data){
+        const id = 'cli_'+c.nom.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_àâéèêëïôùûüçÀÂÉÈÊËÏÔÙÛÜÇ]/g,'').substring(0,40)+'_'+Date.now().toString(36);
+        const doc = {
+          _id: id,
+          nom: c.nom,
+          email: c.email||'',
+          tel: c.tel||'',
+          activite: c.activite||'',
+          programme: c.programme,
+          dateEntree: c.dateEntree||'',
+          nbCoachingsTotal: c.nbCoachingsTotal||12,
+          nbCoachingsFaits: c.nbCoachingsFaits||0,
+          lastSessionDate: c.lastSessionDate||'',
+          sessions: (c.sessions||[]).map(s=>({
+            numero: s.numero||0,
+            titre: s.titre||'',
+            date: s.date||'',
+            coach: s.coach||'',
+            resume: s.resume||'',
+            devoirs: s.devoirs||'',
+            statut: s.statut||'planifie'
+          })),
+          importedFrom: 'notion',
+          importedAt: new Date().toISOString()
+        };
+        
+        try{
+          await window._setDoc(window._doc(window._db,'clients',id), doc);
+          ok++;
+          log('ok',`✅ ${c.nom} (${(c.sessions||[]).length} séances)`);
+        }catch(e){
+          err++;
+          log('err',`❌ ${c.nom}: ${e.message}`);
+        }
+        
+        // Petit délai pour pas surcharger
+        if(ok % 10 === 0) await new Promise(r=>setTimeout(r,200));
+      }
+      
+      log('info',`\n🏁 Terminé ! ${ok} importés, ${err} erreurs`);
+      btn.textContent='✅ Import terminé';
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>ALTEORE Team — Espace Coaching</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue-dark:#0f1f5c;--blue-main:#1a3dce;--blue-light:#4f7ef8;--blue-ghost:#f0f4ff;
+      --text:#1a1f36;--muted:#6b7280;--border:#e2e8f0;--bg:#f5f7ff;--radius:14px;
+      --green:#10b981;--green-light:#d1fae5;--orange:#f59e0b;--orange-light:#fef3c7;
+      --red:#ef4444;--red-light:#fee2e2;--purple:#6366f1;--purple-light:#eef2ff;--teal:#14b8a6;
+    }
+    body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px}
+
+    /* ── TOPBAR ── */
+    .topbar{background:white;border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 8px rgba(15,31,92,.04)}
+    .topbar-left{display:flex;align-items:center;gap:14px}
+    .topbar-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--blue-dark),var(--blue-main));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white;letter-spacing:1px}
+    .topbar-left h1{font-size:18px;font-weight:800;color:var(--text)}
+    .topbar-left h1 span{color:var(--blue-main)}
+    .topbar-sub{font-size:11px;color:var(--muted)}
+    .topbar-right{display:flex;align-items:center;gap:10px}
+    .btn{padding:8px 16px;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:linear-gradient(135deg,var(--blue-main),var(--blue-light));color:white;box-shadow:0 3px 12px rgba(26,61,206,.25)}
+    .btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+    .btn-outline{background:white;color:var(--text);border:1.5px solid var(--border)}
+    .btn-outline:hover{border-color:var(--blue-main);background:var(--blue-ghost)}
+    .btn-danger{background:#fef2f2;color:var(--red);border:1px solid #fecaca}
+    .btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
+    .btn-xs{padding:4px 8px;font-size:11px;border-radius:6px}
+    .btn-green{background:linear-gradient(135deg,#10b981,#34d399);color:white}
+    .user-badge{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--blue-ghost);border-radius:10px}
+    .user-avatar{width:28px;height:28px;background:linear-gradient(135deg,var(--blue-light),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white}
+    .user-badge-name{font-size:12px;font-weight:600}
+    .user-badge-role{font-size:10px;color:var(--muted)}
+
+    /* ── TOOLBAR ── */
+    .toolbar{padding:14px 28px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:white;border-bottom:1px solid var(--border)}
+    .search-box{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;min-width:260px;transition:border-color .15s}
+    .search-box:focus-within{border-color:var(--blue-main);background:white}
+    .search-box input{border:none;background:transparent;font-family:inherit;font-size:13px;outline:none;width:100%;color:var(--text)}
+    .filter-group{display:flex;align-items:center;gap:6px}
+    .filter-btn{padding:6px 14px;border:1.5px solid var(--border);border-radius:20px;background:white;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s}
+    .filter-btn:hover{border-color:var(--blue-light);color:var(--text)}
+    .filter-btn.active{background:var(--blue-main);color:white;border-color:var(--blue-main)}
+    .filter-select{padding:6px 12px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:12px;font-weight:600;color:var(--text);background:white;cursor:pointer;outline:none}
+    .toolbar-stats{margin-left:auto;display:flex;gap:16px}
+    .stat-pill{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--muted)}
+    .stat-pill .num{font-size:16px;font-weight:800;color:var(--text)}
+    .stat-pill.alert .num{color:var(--red)}
+
+    /* ── VIEWS ── */
+    .view-tabs{display:flex;gap:4px;background:var(--bg);padding:3px;border-radius:10px;border:1px solid var(--border)}
+    .view-tab{padding:6px 14px;border-radius:8px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s}
+    .view-tab.active{background:white;color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+
+    /* ── KANBAN ── */
+    .kanban{display:flex;gap:16px;padding:20px 28px;overflow-x:auto;min-height:calc(100vh - 180px);align-items:flex-start}
+    .kanban-col{min-width:300px;max-width:340px;flex:1;background:white;border-radius:var(--radius);border:1px solid var(--border);display:flex;flex-direction:column;max-height:calc(100vh - 200px)}
+    .kanban-col-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:white;border-radius:var(--radius) var(--radius) 0 0;z-index:2}
+    .col-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+    .col-count{font-size:11px;font-weight:700;color:white;background:var(--blue-main);padding:2px 8px;border-radius:20px}
+    .col-badge-green{background:var(--green)}
+    .col-badge-orange{background:var(--orange)}
+    .col-badge-purple{background:var(--purple)}
+    .col-badge-teal{background:var(--teal)}
+    .kanban-cards{padding:10px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:8px}
+
+    /* ── CLIENT CARD ── */
+    .client-card{background:white;border:1.5px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:all .15s;position:relative}
+    .client-card:hover{border-color:var(--blue-light);box-shadow:0 4px 16px rgba(26,61,206,.08);transform:translateY(-1px)}
+    .client-card.alert{border-left:4px solid var(--red)}
+    .client-card.warning{border-left:4px solid var(--orange)}
+    .cc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .cc-name{font-size:13px;font-weight:700;color:var(--text)}
+    .cc-coach{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--purple-light);color:var(--purple)}
+    .cc-activite{font-size:11px;color:var(--muted);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cc-progress{margin-bottom:6px}
+    .cc-progress-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px}
+    .cc-progress-label span:first-child{color:var(--muted);font-weight:600}
+    .cc-progress-label span:last-child{font-weight:700}
+    .cc-bar{height:6px;background:#f1f5f9;border-radius:99px;overflow:hidden}
+    .cc-bar-fill{height:100%;border-radius:99px;transition:width .4s ease}
+    .cc-bottom{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--muted)}
+    .cc-date{display:flex;align-items:center;gap:4px}
+    .cc-alert-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--red-light);color:var(--red)}
+    .cc-warn-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--orange-light);color:var(--orange)}
+
+    /* ── LIST VIEW ── */
+    .list-view{padding:20px 28px;display:none}
+    .list-view.active{display:block}
+    .list-table{width:100%;border-collapse:collapse;background:white;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
+    .list-table th{padding:10px 16px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;background:#f8faff;border-bottom:1px solid var(--border)}
+    .list-table td{padding:10px 16px;border-bottom:1px solid #f1f5f9;font-size:12px}
+    .list-table tr{cursor:pointer;transition:background .1s}
+    .list-table tbody tr:hover{background:var(--blue-ghost)}
+    .list-table .name-cell{font-weight:700}
+    .progress-mini{width:60px;height:5px;background:#f1f5f9;border-radius:99px;overflow:hidden;display:inline-block;vertical-align:middle;margin-left:6px}
+    .progress-mini-fill{height:100%;border-radius:99px}
+
+    /* ── CLIENT DETAIL PANEL ── */
+    .detail-overlay{position:fixed;inset:0;background:rgba(15,31,92,.35);backdrop-filter:blur(4px);z-index:200;display:none;justify-content:flex-end}
+    .detail-overlay.show{display:flex}
+    .detail-panel{width:680px;max-width:100vw;height:100vh;background:white;overflow-y:auto;box-shadow:-8px 0 40px rgba(15,31,92,.15);animation:slideIn .25s ease}
+    @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+    .dp-header{padding:24px;border-bottom:1px solid var(--border);position:sticky;top:0;background:white;z-index:5}
+    .dp-header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .dp-close{width:36px;height:36px;border:1.5px solid var(--border);border-radius:10px;background:white;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .dp-close:hover{background:var(--red-light);border-color:var(--red);color:var(--red)}
+    .dp-name{font-size:22px;font-weight:800}
+    .dp-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .dp-badge{font-size:11px;font-weight:600;padding:4px 12px;border-radius:20px}
+    .dp-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+    .dp-info{padding:10px 14px;background:var(--bg);border-radius:10px}
+    .dp-info-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:2px}
+    .dp-info-val{font-size:13px;font-weight:600}
+    .dp-progress-section{padding:16px 24px;border-bottom:1px solid var(--border)}
+    .dp-progress-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .dp-progress-title{font-size:14px;font-weight:700}
+    .dp-progress-count{font-size:20px;font-weight:800;color:var(--blue-main)}
+    .dp-bar{height:10px;background:#f1f5f9;border-radius:99px;overflow:hidden}
+    .dp-bar-fill{height:100%;border-radius:99px;transition:width .6s ease}
+    .dp-alert-box{margin:12px 24px;padding:12px 16px;border-radius:10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px}
+    .dp-alert-box.red{background:var(--red-light);color:var(--red)}
+    .dp-alert-box.orange{background:var(--orange-light);color:var(--orange)}
+    .dp-alert-box.green{background:var(--green-light);color:var(--green)}
+
+    /* ── SESSIONS LIST ── */
+    .dp-sessions{padding:16px 24px}
+    .dp-sessions-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .dp-sessions-title{font-size:14px;font-weight:700}
+    .session-item{border:1.5px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;transition:border-color .15s}
+    .session-item:hover{border-color:var(--blue-light)}
+    .session-item.done{border-left:4px solid var(--green)}
+    .session-item.planned{border-left:4px solid var(--border)}
+    .si-header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:white;transition:background .1s}
+    .si-header:hover{background:#fafbff}
+    .si-left{display:flex;align-items:center;gap:10px}
+    .si-num{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+    .si-num.done{background:var(--green-light);color:var(--green)}
+    .si-num.planned{background:#f1f5f9;color:var(--muted)}
+    .si-info{display:flex;flex-direction:column}
+    .si-title{font-size:12px;font-weight:700}
+    .si-meta{font-size:11px;color:var(--muted);display:flex;gap:8px}
+    .si-right{display:flex;align-items:center;gap:6px}
+    .si-chevron{font-size:14px;color:var(--muted);transition:transform .2s}
+    .session-item.open .si-chevron{transform:rotate(180deg)}
+    .si-body{padding:0 16px 14px;display:none}
+    .session-item.open .si-body{display:block}
+    .si-resume{font-size:12px;line-height:1.7;color:var(--text);padding:12px;background:var(--bg);border-radius:10px;margin-bottom:8px;white-space:pre-wrap}
+    .si-devoirs{font-size:12px;padding:10px 12px;background:#fefce8;border-radius:8px;border-left:3px solid var(--orange)}
+    .si-actions{display:flex;gap:8px;margin-top:10px}
+
+    /* ── NEW SESSION FORM ── */
+    .new-session-form{padding:16px;background:var(--blue-ghost);border-radius:12px;margin:10px 24px;display:none}
+    .new-session-form.show{display:block}
+    .nsf-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+    .nsf-field label{font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px}
+    .nsf-field input,.nsf-field select,.nsf-field textarea{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;outline:none;background:white}
+    .nsf-field textarea{min-height:100px;resize:vertical}
+    .nsf-field input:focus,.nsf-field textarea:focus{border-color:var(--blue-main)}
+
+    /* ── MODAL ── */
+    .modal-overlay{position:fixed;inset:0;background:rgba(15,31,92,.45);backdrop-filter:blur(4px);z-index:300;display:none;align-items:center;justify-content:center}
+    .modal-overlay.show{display:flex}
+    .modal{background:white;border-radius:18px;width:100%;max-width:520px;box-shadow:0 24px 60px rgba(15,31,92,.2);overflow:hidden}
+    .modal-head{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .modal-head h3{font-size:16px;font-weight:700}
+    .modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);padding:4px}
+    .modal-body{padding:20px 24px;max-height:70vh;overflow-y:auto}
+    .modal-foot{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+    .mf{margin-bottom:14px}
+    .mf label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;display:block}
+    .mf input,.mf select{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;outline:none}
+    .mf input:focus,.mf select:focus{border-color:var(--blue-main)}
+    .mf-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+    /* ── TOAST ── */
+    .toast{position:fixed;bottom:24px;right:24px;background:#1a1f36;color:white;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:9999;transform:translateY(80px);opacity:0;transition:all .3s}
+    .toast.show{transform:translateY(0);opacity:1}
+    .toast.success{background:var(--green)}
+    .toast.error{background:var(--red)}
+
+    /* ── RESPONSIVE ── */
+    @media(max-width:768px){
+      .topbar{padding:12px 14px;flex-wrap:wrap;gap:8px}
+      .toolbar{padding:10px 14px;gap:8px}
+      .search-box{min-width:100%;order:-1}
+      .kanban{padding:14px;gap:12px}
+      .kanban-col{min-width:280px}
+      .detail-panel{width:100vw}
+      .list-view{padding:14px}
+      .dp-info-grid{grid-template-columns:1fr}
+      .toolbar-stats{margin-left:0;width:100%;justify-content:space-between}
+      .nsf-row{grid-template-columns:1fr}
+      .mf-row{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">A</div>
+    <div>
+      <h1>Espace <span>Coaching</span></h1>
+      <div class="topbar-sub">Gestion des clients et séances de coaching</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn btn-primary btn-sm" onclick="openNewClientModal()">+ Nouveau client</button>
+    <div class="user-badge">
+      <div class="user-avatar" id="uAvatar">A</div>
+      <div>
+        <div class="user-badge-name" id="uName">—</div>
+        <div class="user-badge-role" id="uRole">Admin</div>
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="handleLogout()" title="Déconnexion">🚪</button>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <div class="search-box">
+    <span>🔍</span>
+    <input id="searchInput" placeholder="Rechercher un client..." oninput="applyFilters()"/>
+  </div>
+  <div class="view-tabs">
+    <button class="view-tab active" onclick="setView('kanban',this)">📋 Kanban</button>
+    <button class="view-tab" onclick="setView('list',this)">📄 Liste</button>
+  </div>
+  <div class="filter-group">
+    <select class="filter-select" id="filterProg" onchange="applyFilters()">
+      <option value="">Tous les programmes</option>
+      <option value="BP 12 Mois - 12C">BP 12 Mois - 12C</option>
+      <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
+      <option value="BP 6 Mois - 6C">BP 6 Mois - 6C</option>
+      <option value="Elite - 12 Mois - 24C">Elite - 12M - 24C</option>
+    </select>
+    <select class="filter-select" id="filterCoach" onchange="applyFilters()">
+      <option value="">Tous les coachs</option>
+    </select>
+    <button class="filter-btn" id="filterAlert" onclick="toggleAlertFilter(this)">⚠️ En retard</button>
+  </div>
+  <div class="toolbar-stats">
+    <div class="stat-pill"><span class="num" id="statTotal">0</span> clients</div>
+    <div class="stat-pill alert"><span class="num" id="statAlert">0</span> ⚠️ en retard</div>
+    <div class="stat-pill"><span class="num" id="statSessions">0</span> séances totales</div>
+  </div>
+</div>
+
+<!-- KANBAN VIEW -->
+<div class="kanban" id="kanbanView"></div>
+
+<!-- LIST VIEW -->
+<div class="list-view" id="listView">
+  <table class="list-table">
+    <thead>
+      <tr>
+        <th>Client</th>
+        <th>Programme</th>
+        <th>Avancement</th>
+        <th>Dernier coaching</th>
+        <th>Coach</th>
+        <th>Statut</th>
+      </tr>
+    </thead>
+    <tbody id="listBody"></tbody>
+  </table>
+</div>
+
+<!-- DETAIL PANEL -->
+<div class="detail-overlay" id="detailOverlay" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-panel" id="detailPanel"></div>
+</div>
+
+<!-- NEW CLIENT MODAL -->
+<div class="modal-overlay" id="newClientModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>➕ Nouveau client coaching</h3>
+      <button class="modal-close" onclick="closeNewClientModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="mf-row">
+        <div class="mf"><label>Nom complet *</label><input id="nc-nom" placeholder="Ex: DUPONT Marie"/></div>
+        <div class="mf"><label>Email</label><input id="nc-email" type="email" placeholder="email@exemple.com"/></div>
+      </div>
+      <div class="mf-row">
+        <div class="mf"><label>Téléphone</label><input id="nc-tel" placeholder="06 12 34 56 78"/></div>
+        <div class="mf"><label>Activité professionnelle</label><input id="nc-activite" placeholder="Boulangerie, Coaching..."/></div>
+      </div>
+      <div class="mf-row">
+        <div class="mf">
+          <label>Programme *</label>
+          <select id="nc-programme">
+            <option value="BP 12 Mois - 12C">BP 12 Mois - 12C</option>
+            <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
+            <option value="BP 6 Mois - 6C">BP 6 Mois - 6C</option>
+            <option value="Elite - 12 Mois - 24C">Elite - 12 Mois - 24C</option>
+          </select>
+        </div>
+        <div class="mf"><label>Date d'entrée</label><input id="nc-date" type="date"/></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeNewClientModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="createClient()">Créer le client →</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Firebase -->
+<script type="module">
+  import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  const app=initializeApp({
+    apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+    authDomain:"ambitio-team.firebaseapp.com",
+    projectId:"ambitio-team",
+    storageBucket:"ambitio-team.firebasestorage.app",
+    messagingSenderId:"1079366902268",
+    appId:"1:1079366902268:web:b4ec1691dba54230339279"
+  });
+  const auth=getAuth(app),db=getFirestore(app);
+  window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
+  window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
+  window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._signOut=signOut;
+
+  onAuthStateChanged(auth,async user=>{
+    if(!user){window.location.href='index.html';return;}
+    window._uid=user.uid;
+    // Check role
+    const uSnap=await getDoc(doc(db,'users',user.uid));
+    const uData=uSnap.exists()?uSnap.data():{};
+    const role=uData.role||'admin';
+    if(!['coach','sales','admin'].includes(role)){
+      document.body.innerHTML='<div style="padding:60px;text-align:center"><h2>⛔ Accès réservé à l\'équipe</h2><p style="margin-top:10px;color:#6b7280">Contactez votre administrateur.</p></div>';
+      return;
+    }
+    window._role=role;
+    window._userName=user.displayName||user.email.split('@')[0];
+    document.getElementById('uName').textContent=window._userName;
+    document.getElementById('uAvatar').textContent=window._userName.charAt(0).toUpperCase();
+    document.getElementById('uRole').textContent=role==='admin'?'Administrateur':role==='coach'?'Coach':'Sales';
+    window._firebaseReady=true;
+    window.loadClients();
+  });
+</script>
+
+<script>
+// ── STATE ──
+let _clients = [];
+let _filtered = [];
+let _currentView = 'kanban';
+let _alertFilterOn = false;
+const ALERT_DAYS = 21; // 3 semaines sans coaching = alerte
+const WARN_DAYS = 14;
+
+// ── LOAD ──
+window.loadClients = async function(){
+  if(!window._uid)return;
+  _clients = [];
+  try{
+    const snap = await window._getDocs(window._collection(window._db,'clients'));
+    snap.forEach(d=>{
+      const data = d.data();
+      data._id = d.id;
+      _clients.push(data);
+    });
+  }catch(e){console.warn('Load error:',e);}
+  
+  // Build coach filter
+  const coaches = new Set();
+  _clients.forEach(c=>{
+    (c.sessions||[]).forEach(s=>{if(s.coach)coaches.add(s.coach);});
+  });
+  const sel = document.getElementById('filterCoach');
+  sel.innerHTML = '<option value="">Tous les coachs</option>';
+  [...coaches].sort().forEach(c=>{
+    sel.innerHTML += `<option value="${c}">${c}</option>`;
+  });
+
+  applyFilters();
+};
+
+// ── FILTERS ──
+function applyFilters(){
+  const q = (document.getElementById('searchInput').value||'').toLowerCase();
+  const prog = document.getElementById('filterProg').value;
+  const coach = document.getElementById('filterCoach').value;
+  
+  _filtered = _clients.filter(c=>{
+    if(q && !c.nom.toLowerCase().includes(q) && !(c.email||'').toLowerCase().includes(q) && !(c.activite||'').toLowerCase().includes(q)) return false;
+    if(prog && c.programme !== prog) return false;
+    if(coach){
+      const hasCoach = (c.sessions||[]).some(s=>s.coach===coach);
+      if(!hasCoach) return false;
+    }
+    if(_alertFilterOn && getAlertStatus(c)==='ok') return false;
+    return true;
+  });
+  
+  // Stats
+  document.getElementById('statTotal').textContent = _filtered.length;
+  document.getElementById('statAlert').textContent = _filtered.filter(c=>getAlertStatus(c)==='alert').length;
+  document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>(c.sessions||[]).length+s,0);
+  
+  render();
+}
+
+function toggleAlertFilter(btn){
+  _alertFilterOn = !_alertFilterOn;
+  btn.classList.toggle('active', _alertFilterOn);
+  applyFilters();
+}
+
+// ── ALERT STATUS ──
+function getAlertStatus(c){
+  if(!c.lastSessionDate) return 'alert';
+  const last = new Date(c.lastSessionDate);
+  const diff = (Date.now() - last.getTime()) / (1000*60*60*24);
+  const done = c.nbCoachingsFaits || 0;
+  const total = c.nbCoachingsTotal || 12;
+  if(done >= total) return 'ok'; // Terminé
+  if(diff > ALERT_DAYS) return 'alert';
+  if(diff > WARN_DAYS) return 'warning';
+  return 'ok';
+}
+
+function getAlertText(c){
+  if(!c.lastSessionDate) return 'Aucune séance enregistrée';
+  const last = new Date(c.lastSessionDate);
+  const diff = Math.floor((Date.now() - last.getTime()) / (1000*60*60*24));
+  if(diff > ALERT_DAYS) return `${diff}j sans coaching`;
+  if(diff > WARN_DAYS) return `${diff}j depuis dernier coaching`;
+  return '';
+}
+
+// ── RENDER ──
+function render(){
+  if(_currentView === 'kanban') renderKanban();
+  else renderList();
+}
+
+function renderKanban(){
+  const progs = ['BP 12 Mois - 12C','BP 12 Mois - 24C','BP 6 Mois - 6C','Elite - 12 Mois - 24C'];
+  const colors = ['col-badge-green','col-badge-orange','col-badge-purple','col-badge-teal'];
+  const emojis = ['📗','📙','📕','⭐'];
+  
+  const kanban = document.getElementById('kanbanView');
+  kanban.innerHTML = progs.map((prog,i)=>{
+    const items = _filtered.filter(c=>c.programme===prog);
+    return `<div class="kanban-col">
+      <div class="kanban-col-head">
+        <div class="col-title">${emojis[i]} ${prog}</div>
+        <span class="col-count ${colors[i]}">${items.length}</span>
+      </div>
+      <div class="kanban-cards">${items.length?items.map(c=>renderCard(c)).join(''):'<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Aucun client</div>'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderCard(c){
+  const done = c.nbCoachingsFaits||0;
+  const total = c.nbCoachingsTotal||12;
+  const pct = Math.min(done/total*100,100);
+  const alert = getAlertStatus(c);
+  const alertText = getAlertText(c);
+  const barColor = pct>=100?'var(--green)':pct>=50?'var(--blue-main)':pct>=25?'var(--orange)':'var(--red)';
+  const lastCoach = (c.sessions||[]).filter(s=>s.coach).pop();
+  
+  return `<div class="client-card ${alert==='alert'?'alert':alert==='warning'?'warning':''}" onclick="openDetail('${c._id}')">
+    <div class="cc-top">
+      <div class="cc-name">${c.nom}</div>
+      ${lastCoach?`<div class="cc-coach">${lastCoach.coach}</div>`:''}
+    </div>
+    ${c.activite?`<div class="cc-activite">${c.activite}</div>`:''}
+    <div class="cc-progress">
+      <div class="cc-progress-label"><span>Séances</span><span>${done} / ${total}</span></div>
+      <div class="cc-bar"><div class="cc-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+    </div>
+    <div class="cc-bottom">
+      <div class="cc-date">📅 ${c.lastSessionDate?formatDate(c.lastSessionDate):'—'}</div>
+      ${alert==='alert'?`<div class="cc-alert-badge">🔴 ${alertText}</div>`:alert==='warning'?`<div class="cc-warn-badge">🟡 ${alertText}</div>`:''}
+    </div>
+  </div>`;
+}
+
+function renderList(){
+  const body = document.getElementById('listBody');
+  body.innerHTML = _filtered.map(c=>{
+    const done=c.nbCoachingsFaits||0, total=c.nbCoachingsTotal||12;
+    const pct=Math.min(done/total*100,100);
+    const barColor=pct>=100?'var(--green)':pct>=50?'var(--blue-main)':'var(--orange)';
+    const alert=getAlertStatus(c);
+    const lastCoach=(c.sessions||[]).filter(s=>s.coach).pop();
+    return `<tr onclick="openDetail('${c._id}')">
+      <td class="name-cell">${c.nom}</td>
+      <td>${c.programme}</td>
+      <td>${done}/${total} <div class="progress-mini"><div class="progress-mini-fill" style="width:${pct}%;background:${barColor}"></div></div></td>
+      <td>${c.lastSessionDate?formatDate(c.lastSessionDate):'—'}</td>
+      <td>${lastCoach?lastCoach.coach:'—'}</td>
+      <td>${alert==='alert'?'<span style="color:var(--red);font-weight:700">🔴 En retard</span>':alert==='warning'?'<span style="color:var(--orange);font-weight:700">🟡 Attention</span>':'<span style="color:var(--green);font-weight:700">✅ OK</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── VIEW SWITCH ──
+function setView(v, btn){
+  _currentView = v;
+  document.querySelectorAll('.view-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('kanbanView').style.display = v==='kanban'?'flex':'none';
+  document.getElementById('listView').classList.toggle('active', v==='list');
+  render();
+}
+
+// ── DETAIL PANEL ──
+function openDetail(id){
+  const c = _clients.find(x=>x._id===id);
+  if(!c) return;
+  const done=c.nbCoachingsFaits||0, total=c.nbCoachingsTotal||12;
+  const pct=Math.min(done/total*100,100);
+  const barColor=pct>=100?'var(--green)':pct>=50?'var(--blue-main)':'var(--orange)';
+  const alert=getAlertStatus(c);
+  const alertText=getAlertText(c);
+  const sessions=(c.sessions||[]).sort((a,b)=>a.numero-b.numero);
+  
+  const panel = document.getElementById('detailPanel');
+  panel.innerHTML = `
+    <div class="dp-header">
+      <div class="dp-header-top">
+        <div class="dp-name">🎓 ${c.nom}</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-outline btn-sm" onclick="editClient('${id}')">✏️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteClient('${id}')">🗑</button>
+          <button class="dp-close" onclick="closeDetail()">✕</button>
+        </div>
+      </div>
+      <div class="dp-meta">
+        <span class="dp-badge" style="background:var(--blue-ghost);color:var(--blue-main)">${c.programme}</span>
+        ${c.activite?`<span class="dp-badge" style="background:#f0fdf4;color:var(--green)">${c.activite}</span>`:''}
+        ${c.dateEntree?`<span class="dp-badge" style="background:#faf5ff;color:var(--purple)">Depuis ${formatDate(c.dateEntree)}</span>`:''}
+      </div>
+      <div class="dp-info-grid">
+        <div class="dp-info"><div class="dp-info-label">Email</div><div class="dp-info-val">${c.email||'—'}</div></div>
+        <div class="dp-info"><div class="dp-info-label">Téléphone</div><div class="dp-info-val">${c.tel||'—'}</div></div>
+      </div>
+    </div>
+
+    ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
+
+    <div class="dp-progress-section">
+      <div class="dp-progress-header">
+        <div class="dp-progress-title">📊 Avancement du programme</div>
+        <div class="dp-progress-count">${done} / ${total}</div>
+      </div>
+      <div class="dp-bar"><div class="dp-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted)">
+        <span>${pct>=100?'✅ Programme terminé':Math.round(pct)+'% complété'}</span>
+        <span>${total-done} séance(s) restante(s)</span>
+      </div>
+    </div>
+
+    <div class="dp-sessions">
+      <div class="dp-sessions-head">
+        <div class="dp-sessions-title">📞 Séances de coaching (${sessions.length})</div>
+        <button class="btn btn-primary btn-sm" onclick="toggleNewSession('${id}')">+ Nouvelle séance</button>
+      </div>
+      <div class="new-session-form" id="newSessionForm">
+        <div class="nsf-row">
+          <div class="nsf-field"><label>Date *</label><input type="date" id="ns-date"/></div>
+          <div class="nsf-field"><label>Coach *</label><input id="ns-coach" placeholder="Edouard, Mickael..."/></div>
+        </div>
+        <div class="nsf-field" style="margin-bottom:10px"><label>Résumé</label><textarea id="ns-resume" placeholder="Résumé de la séance... (saisie manuelle ou collage IA)"></textarea></div>
+        <div class="nsf-field" style="margin-bottom:10px"><label>Devoirs / Actions</label><textarea id="ns-devoirs" rows="2" placeholder="Actions à mener pour le client..."></textarea></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-outline btn-sm" onclick="toggleNewSession()">Annuler</button>
+          <button class="btn btn-green btn-sm" onclick="addSession('${id}')">💾 Enregistrer la séance</button>
+        </div>
+      </div>
+      ${sessions.map(s=>{
+        const isDone = s.statut==='fait';
+        return `<div class="session-item ${isDone?'done':'planned'}" id="sess-${s.numero}">
+          <div class="si-header" onclick="toggleSession(this)">
+            <div class="si-left">
+              <div class="si-num ${isDone?'done':'planned'}">${s.numero===0?'72H':'#'+s.numero}</div>
+              <div class="si-info">
+                <div class="si-title">${s.titre}</div>
+                <div class="si-meta">
+                  ${s.date?`<span>📅 ${formatDate(s.date)}</span>`:'<span style="color:var(--orange)">📅 Non planifié</span>'}
+                  ${s.coach?`<span>👤 ${s.coach}</span>`:''}
+                </div>
+              </div>
+            </div>
+            <div class="si-right">
+              ${isDone?'<span style="color:var(--green);font-size:11px;font-weight:700">✅ Fait</span>':'<span style="color:var(--muted);font-size:11px;font-weight:700">⏳ À venir</span>'}
+              <span class="si-chevron">▼</span>
+            </div>
+          </div>
+          <div class="si-body">
+            ${s.resume?`<div class="si-resume">${escHtml(s.resume)}</div>`:'<div style="padding:12px;color:var(--muted);font-size:12px;font-style:italic">Pas de résumé pour cette séance</div>'}
+            ${s.devoirs?`<div class="si-devoirs"><b>📝 Devoirs :</b><br>${escHtml(s.devoirs)}</div>`:''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+  document.getElementById('detailOverlay').classList.add('show');
+}
+
+function closeDetail(){document.getElementById('detailOverlay').classList.remove('show');}
+function toggleSession(el){el.closest('.session-item').classList.toggle('open');}
+function toggleNewSession(){document.getElementById('newSessionForm').classList.toggle('show');}
+
+// ── ADD SESSION ──
+async function addSession(clientId){
+  const date = document.getElementById('ns-date').value;
+  const coach = document.getElementById('ns-coach').value.trim();
+  if(!date || !coach){showToast('Remplissez la date et le coach','error');return;}
+  
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+  
+  const sessions = c.sessions||[];
+  const maxNum = sessions.reduce((m,s)=>Math.max(m,s.numero),0);
+  const newSession = {
+    numero: maxNum+1,
+    titre: `COACHING #${maxNum+1}`,
+    date: date,
+    coach: coach,
+    resume: document.getElementById('ns-resume').value.trim(),
+    devoirs: document.getElementById('ns-devoirs').value.trim(),
+    statut: 'fait'
+  };
+  sessions.push(newSession);
+  c.sessions = sessions;
+  c.nbCoachingsFaits = sessions.filter(s=>s.statut==='fait').length;
+  const dates = sessions.filter(s=>s.date).map(s=>s.date);
+  c.lastSessionDate = dates.length?dates.sort().pop():'';
+  
+  try{
+    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    showToast('✅ Séance ajoutée !','success');
+    openDetail(clientId);
+    applyFilters();
+  }catch(e){showToast('Erreur: '+e.message,'error');console.error(e);}
+}
+
+// ── CREATE CLIENT ──
+function openNewClientModal(){document.getElementById('newClientModal').classList.add('show');}
+function closeNewClientModal(){document.getElementById('newClientModal').classList.remove('show');}
+
+async function createClient(){
+  const nom = document.getElementById('nc-nom').value.trim();
+  if(!nom){showToast('Nom requis','error');return;}
+  const programme = document.getElementById('nc-programme').value;
+  const nbMatch = programme.match(/(\d+)C/);
+  const nbTotal = nbMatch ? parseInt(nbMatch[1]) : 12;
+  
+  const id = 'cli_'+Date.now();
+  const client = {
+    _id: id,
+    nom,
+    email: document.getElementById('nc-email').value.trim(),
+    tel: document.getElementById('nc-tel').value.trim(),
+    activite: document.getElementById('nc-activite').value.trim(),
+    programme,
+    dateEntree: document.getElementById('nc-date').value||new Date().toISOString().slice(0,10),
+    nbCoachingsTotal: nbTotal,
+    nbCoachingsFaits: 0,
+    lastSessionDate: '',
+    sessions: []
+  };
+  
+  try{
+    await window._setDoc(window._doc(window._db,'clients',id),client);
+    _clients.push(client);
+    closeNewClientModal();
+    applyFilters();
+    showToast('✅ Client créé !','success');
+    // Clear form
+    ['nc-nom','nc-email','nc-tel','nc-activite'].forEach(id=>document.getElementById(id).value='');
+  }catch(e){showToast('Erreur: '+e.message,'error');}
+}
+
+// ── DELETE CLIENT ──
+async function deleteClient(id){
+  if(!confirm('Supprimer ce client et toutes ses séances ?')) return;
+  try{
+    await window._deleteDoc(window._doc(window._db,'clients',id));
+    _clients = _clients.filter(c=>c._id!==id);
+    closeDetail();
+    applyFilters();
+    showToast('Client supprimé','success');
+  }catch(e){showToast('Erreur','error');}
+}
+
+// ── UTILS ──
+function formatDate(d){
+  if(!d) return '—';
+  try{
+    const dt=new Date(d);
+    return dt.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'});
+  }catch(e){return d;}
+}
+function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
+function showToast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show '+(type||'');setTimeout(()=>t.className='toast',3200);}
+async function handleLogout(){await window._signOut(window._auth);window.location.href='index.html';}
+
+// Expose
+window.loadClients=window.loadClients;
+window.applyFilters=applyFilters;window.toggleAlertFilter=toggleAlertFilter;
+window.setView=setView;window.openDetail=openDetail;window.closeDetail=closeDetail;
+window.toggleSession=toggleSession;window.toggleNewSession=toggleNewSession;
+window.addSession=addSession;window.openNewClientModal=openNewClientModal;
+window.closeNewClientModal=closeNewClientModal;window.createClient=createClient;
+window.deleteClient=deleteClient;window.handleLogout=handleLogout;
+window.editClient=function(id){openNewClientModal();}; // TODO: pre-fill
+</script>
+
+</body>
+</html>
