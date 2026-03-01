@@ -6,8 +6,769 @@
 <title>Ambitio — Équipe</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<script src="sales-data.js"></script>
-<script src="sync-bridge.js"></script>
+<script>
+/* === sales-data.js inline === */
+/**
+ * sales-data.js — Data Store + Firebase + Utilitaires
+ * Les données "a" (actuelles) viennent de Firestore en temps réel.
+ * Les données "p" (projections) sont les références fixes.
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   PROJECTIONS FIXES — modifier ici pour changer les cibles
+═══════════════════════════════════════════════════════════ */
+const PROJECTIONS = {
+  closing: {
+    s1: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
+    s2: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
+    s3: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
+    s4: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
+    livesP:0.75, offresP:0.667, engP:0.5, cOffP:0.4, cCallP:0.2, cashLive:666.7,
+  },
+  setting: {
+    s1: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
+    s2: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
+    s3: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
+    s4: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
+    decrochesP:0.12, engP:0.222, setP:0.5, showupP:0.8, cCallP:0.8,
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════
+   DATA STORE
+═══════════════════════════════════════════════════════════ */
+const DB = {
+  months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
+
+  // Données brutes saisies (remplacées par Firestore)
+  _raw: {
+    closing: {
+      s1: { calls:8,  lives:2, offres:1, closes:0, hc:0, fu:0, contracte:0,     collecte:0    },
+      s2: { calls:8,  lives:4, offres:2, closes:2, hc:2, fu:0, contracte:12000, collecte:1000 },
+      s3: { calls:9,  lives:6, offres:3, closes:1, hc:1, fu:0, contracte:5400,  collecte:400  },
+      s4: { calls:9,  lives:7, offres:2, closes:0, hc:0, fu:0, contracte:1800,  collecte:200  },
+    },
+    setting: {
+      s1: { leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, closes:0 },
+      s2: { leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, closes:2 },
+      s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
+      s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
+    },
+    deals: [
+      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
+      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
+      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
+      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
+      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
+    ],
+  },
+
+  // Calculé depuis _raw
+  closing: null,
+  setting: null,
+  commissions: {
+    'Janvier 2026': { contracte:12000, collecte:0,    totalComm:0,    statut:'Validé',     deals:[] },
+    'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
+    'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
+  },
+  team: {
+    week: [
+      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:33020, collecte:3342,  calls:23, lives:20, offres:14, closes:6, showup:0.87, txOffre:0.70,  txTransfoShow:0.30,  txTransfoOffre:0.429, caCall:1435.7 },
+      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
+    ],
+    month: [
+      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:48469, collecte:4686, calls:56, lives:33, offres:17, closes:9, showup:0.589, txOffre:0.515, txTransfoShow:0.273, txTransfoOffre:0.529, caCall:721.3 },
+      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
+    ],
+  },
+
+  // Recalcule toutes les métriques depuis _raw
+  compute() {
+    const rc = DB._raw.closing;
+    const rs = DB._raw.setting;
+    const pc = PROJECTIONS.closing;
+    const ps = PROJECTIONS.setting;
+
+    const sumC  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rc[w][k]||0), 0);
+    const sumS  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rs[w][k]||0), 0);
+    const projC = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (pc[w][k]||0), 0);
+    const projS = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (ps[w][k]||0), 0);
+
+    const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
+    const cta=sumC('contracte'), cola=sumC('collecte');
+    const cp=projC('calls'), lp=projC('lives'), op=projC('offres'), clp=projC('closes');
+    const ctp=projC('contracte'), colp=projC('collecte');
+
+    DB.closing = {
+      mois: {
+        calls:     {a:ca,  p:cp  },
+        lives:     {a:la,  p:lp  },
+        offres:    {a:oa,  p:op  },
+        closes:    {a:cla, p:clp },
+        hc:        {a:sumC('hc'), p:clp},
+        fu:        {a:sumC('fu'), p:0  },
+        contracte: {a:cta, p:ctp },
+        collecte:  {a:cola,p:colp},
+        livesP:  {a:ca>0  ? la/ca   : 0, p:pc.livesP  },
+        offresP: {a:la>0  ? oa/la   : 0, p:pc.offresP },
+        engP:    {a:oa>0  ? cla/oa  : 0, p:pc.engP    },
+        cOffP:   {a:oa>0  ? cla/oa  : 0, p:pc.cOffP   },
+        cCallP:  {a:ca>0  ? cla/ca  : 0, p:pc.cCallP  },
+        cashLive:{a:la>0  ? cta/la  : 0, p:pc.cashLive},
+        atteinte: ctp>0 ? cta/ctp : 0,
+        delta:    Math.max(0, ctp-cta),
+      },
+      s1: DB._cw('s1'), s2: DB._cw('s2'), s3: DB._cw('s3'), s4: DB._cw('s4'),
+    };
+
+    const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
+    const sa=sumS('sets'), pra=sumS('presents'), sca2=sumS('closes');
+
+    DB.setting = {
+      mois: {
+        leads:     {a:sumS('leads'),  p:projS('leads')    },
+        calls:     {a:sca,            p:projS('calls')    },
+        decroches: {a:da,             p:projS('decroches')},
+        propRdv:   {a:pa,             p:projS('propRdv')  },
+        sets:      {a:sa,             p:projS('sets')     },
+        presents:  {a:pra,            p:projS('presents') },
+        closes:    {a:sca2,           p:projS('closes')   },
+        decrochesP:{a:sca>0?da/sca:0,  p:ps.decrochesP },
+        engP:      {a:da>0 ?pa/da:0,    p:ps.engP       },
+        setP:      {a:pa>0 ?sa/pa:0,    p:ps.setP       },
+        showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
+        cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
+      },
+      s1: DB._sw('s1'), s2: DB._sw('s2'), s3: DB._sw('s3'), s4: DB._sw('s4'),
+    };
+
+    // Sync deals dans commissions
+    try {
+      const cmk = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
+      if (DB.commissions[cmk]) DB.commissions[cmk].deals = DB._raw.deals;
+    } catch(e) {}
+  },
+
+  _cw(w) {
+    const d=DB._raw.closing[w], p=PROJECTIONS.closing[w];
+    return {
+      calls:{a:d.calls||0,p:p.calls}, lives:{a:d.lives||0,p:p.lives},
+      offres:{a:d.offres||0,p:p.offres}, closes:{a:d.closes||0,p:p.closes},
+      hc:{a:d.hc||0,p:p.closes}, fu:{a:d.fu||0,p:0},
+      contracte:{a:d.contracte||0,p:p.contracte}, collecte:{a:d.collecte||0,p:p.collecte},
+    };
+  },
+  _sw(w) {
+    const d=DB._raw.setting[w], p=PROJECTIONS.setting[w];
+    return {
+      leads:{a:d.leads||0,p:p.leads}, calls:{a:d.calls||0,p:p.calls},
+      decroches:{a:d.decroches||0,p:p.decroches}, propRdv:{a:d.propRdv||0,p:p.propRdv},
+      sets:{a:d.sets||0,p:p.sets}, presents:{a:d.presents||0,p:p.presents},
+      closes:{a:d.closes||0,p:p.closes},
+    };
+  },
+};
+
+DB.compute();
+
+/* ═══════════════════════════════════════════════════════════
+   FIREBASE — couche temps réel
+   Initialisé après que firebase SDK soit chargé + auth ready
+═══════════════════════════════════════════════════════════ */
+const Fire = {
+  db:  null,
+  uid: null,
+  _unsubs: [],
+
+  init(firestore, uid) {
+    Fire.db  = firestore;
+    Fire.uid = uid;
+  },
+
+  _key(label) {
+    const p = label.split(' ');
+    const m = DB.months.indexOf(p[0]);
+    return `${p[1]}-${String(m+1).padStart(2,'0')}`;
+  },
+
+  // Écoute en temps réel les données d'un user pour un mois
+  watchUser(userId, monthLabel, callback) {
+    if (!Fire.db) return () => {};
+    const ref = Fire.db
+      .collection('saisies').doc(userId)
+      .collection('mois').doc(Fire._key(monthLabel));
+    const unsub = ref.onSnapshot(snap => callback(snap.exists ? snap.data() : null));
+    Fire._unsubs.push(unsub);
+    return unsub;
+  },
+
+  // Sauvegarde une semaine de closing
+  async saveClosing(userId, monthLabel, week, data) {
+    if (!Fire.db) throw new Error('Firebase non init');
+    const ref = Fire.db.collection('saisies').doc(userId)
+      .collection('mois').doc(Fire._key(monthLabel));
+    await ref.set({ closing: { [week]: data } }, { merge: true });
+  },
+
+  // Sauvegarde une semaine de setting
+  async saveSetting(userId, monthLabel, week, data) {
+    if (!Fire.db) throw new Error('Firebase non init');
+    const ref = Fire.db.collection('saisies').doc(userId)
+      .collection('mois').doc(Fire._key(monthLabel));
+    await ref.set({ setting: { [week]: data } }, { merge: true });
+  },
+
+  // Sauvegarde un deal (append)
+  async saveDeal(userId, monthLabel, deal) {
+    if (!Fire.db) throw new Error('Firebase non init');
+    const ref = Fire.db.collection('saisies').doc(userId)
+      .collection('mois').doc(Fire._key(monthLabel));
+    const snap = await ref.get();
+    const deals = snap.exists ? (snap.data().deals || []) : [];
+    deals.push({ ...deal, _ts: Date.now() });
+    await ref.set({ deals }, { merge: true });
+  },
+
+  // Applique un snapshot Firestore dans DB puis recalcule
+  apply(data) {
+    if (!data) return;
+    if (data.closing) ['s1','s2','s3','s4'].forEach(w => {
+      if (data.closing[w]) Object.assign(DB._raw.closing[w], data.closing[w]);
+    });
+    if (data.setting) ['s1','s2','s3','s4'].forEach(w => {
+      if (data.setting[w]) Object.assign(DB._raw.setting[w], data.setting[w]);
+    });
+    if (data.deals) DB._raw.deals = data.deals;
+    DB.compute();
+    document.dispatchEvent(new CustomEvent('db:updated'));
+  },
+
+  stop() { Fire._unsubs.forEach(u => u()); Fire._unsubs = []; },
+};
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════════════════════ */
+const U = {
+  euro:  v => v == null ? '—' : '€\u202f' + Number(v).toLocaleString('fr-FR'),
+  pct:   v => v == null ? '—' : (v * 100).toFixed(1) + '%',
+  num:   v => v == null ? '—' : Number(v).toLocaleString('fr-FR'),
+  pp:  (a, p) => p > 0 ? Math.min((a / p) * 100, 200) : 0,
+  ppv: (a, p) => p > 0 ? ((a / p) * 100).toFixed(0) + '%' : '—',
+  cb:  (a, p) => { const r = p > 0 ? a / p : 0; return r >= 1 ? '#34d399' : r >= 0.65 ? '#f59e0b' : '#ef4444'; },
+  g:   id => document.getElementById(id),
+  getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
+  getCurrentUser:  () => ({
+    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || 'guillaume',
+    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Guillaume',
+    role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
+  }),
+
+  progRow: (label, a, p, isEuro = false) => {
+    const col = U.cb(a, p);
+    return `<div class="pr">
+      <div class="pr-l">${label}</div>
+      <div class="pr-track"><div class="pr-fill" style="width:${Math.min(U.pp(a,p),100)}%;background:${col}"></div></div>
+      <div class="pr-val">${isEuro ? `${U.euro(a)} / ${U.euro(p)}` : `${a} / ${p}`}</div>
+      <div class="pr-pct" style="color:${col}">${U.ppv(a,p)}</div>
+    </div>`;
+  },
+
+  kpiCard: ({ label, val, sub, rawA, proj, color='#ef4444', pct:fp }) => {
+    const pc = fp!=null ? fp : (proj!=null ? U.pp(rawA??0, proj) : null);
+    return `<div class="kpi" style="--kc:${color}">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-value">${val}</div>
+      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
+      ${pc!=null ? `<div class="kpi-prog">
+        <div class="kpi-prog-row"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div>
+        <div class="kpi-prog-track"><div class="kpi-prog-fill" style="width:${Math.min(pc,100)}%;background:${color}"></div></div>
+      </div>` : ''}
+    </div>`;
+  },
+
+  funnelStep: (label, val, max, isFirst=false, isEuro=false) => {
+    const ratio = max > 0 ? val / max : 0;
+    return `<div class="fs">
+      <div class="fs-label">${label}</div>
+      <div class="fs-track"><div class="fs-fill" style="width:${Math.min(ratio*100,100)}%"></div></div>
+      <div class="fs-val">${isEuro ? U.euro(val) : val}</div>
+      <div class="fs-rate">${!isFirst ? U.pct(ratio) : ''}</div>
+    </div>`;
+  },
+
+  weekCard: (label, mainVal, mainLabel, minis, isCurrent, dateRange) => `
+    <div class="wc${isCurrent?' wc-active':''}">
+      <div class="wc-label">${label}</div>
+      ${dateRange ? `<div class="wc-dates">${dateRange}</div>` : ''}
+      <div class="wc-main">${mainVal}</div>
+      <div class="wc-sub">${mainLabel}</div>
+      <div class="wc-grid">${minis.map(m=>`
+        <div class="wc-mini">
+          <div class="wc-mini-v"${m.color?` style="color:${m.color}"`:''} >${m.val}</div>
+          <div class="wc-mini-l">${m.label}</div>
+        </div>`).join('')}</div>
+    </div>`,
+
+  barChart: (labels, actuals, projs, unit='') => {
+    const mx = Math.max(...actuals, ...projs, 1);
+    return `<div class="chart-legend">
+        <span class="cl-dot cl-real"></span>Réel
+        <span class="cl-dot cl-proj" style="margin-left:14px"></span>Projection
+      </div>
+      <div class="chart-bars">
+        ${labels.map((l,i)=>`<div class="chart-col">
+          <div class="chart-pair">
+            <div class="chart-bar bar-real" style="height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}${unit}"></div>
+            <div class="chart-bar bar-proj" style="height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj:${projs[i]}${unit}"></div>
+          </div>
+          <div class="chart-lbl">${l}</div>
+        </div>`).join('')}
+      </div>`;
+  },
+
+  toast: (msg, type='success') => {
+    let t = document.getElementById('_toast');
+    if (!t) { t=document.createElement('div'); t.id='_toast'; document.body.appendChild(t); }
+    const s = { success:'background:#1a2e1a;border:1px solid rgba(52,211,153,.3);color:#6ee7b7', error:'background:#2e1a1a;border:1px solid rgba(239,68,68,.3);color:#fca5a5', info:'background:#1a1a2e;border:1px solid rgba(96,165,250,.3);color:#93c5fd' };
+    t.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(0);font-size:12px;font-weight:600;padding:9px 18px;border-radius:10px;z-index:9999;opacity:1;transition:all .28s;white-space:nowrap;font-family:var(--font-b);${s[type]||s.success}`;
+    t.textContent = msg;
+    clearTimeout(t._t);
+    t._t = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
+  },
+};
+
+
+/* ═══════════════════════════════════════════════════════════
+   SEMAINES RÉELLES — calcule les vraies dates lun→dim
+═══════════════════════════════════════════════════════════ */
+function getMonthWeeks(monthLabel) {
+  // monthLabel = "Février 2026"
+  const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
+                     'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const parts = monthLabel.split(' ');
+  const month = MONTHS_FR.indexOf(parts[0]); // 0-based
+  const year  = parseInt(parts[1]);
+  if (month === -1 || isNaN(year)) return [];
+
+  const DAYS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  const pad = n => String(n).padStart(2,'0');
+
+  function fmt(d) {
+    // "14/02"
+    return pad(d.getDate()) + '/' + pad(d.getMonth()+1);
+  }
+  function fmtShort(d) {
+    // "14 fév"
+    const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
+    return d.getDate() + ' ' + M[d.getMonth()];
+  }
+
+  // Premier lundi qui touche le mois (peut être dans le mois précédent)
+  const firstOfMonth = new Date(year, month, 1);
+  const dayOfWeek = firstOfMonth.getDay(); // 0=Sun,1=Mon...
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  let monday = new Date(year, month, 1 + daysToMonday);
+
+  const weeks = [];
+  while (true) {
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+    // Inclure si la semaine chevauche le mois cible
+    if (monday.getMonth() === month || sunday.getMonth() === month) {
+      weeks.push({
+        id:    's' + (weeks.length + 1),
+        label: 'S' + (weeks.length + 1),
+        start: monday,
+        end:   sunday,
+        range: fmt(monday) + ' → ' + fmt(sunday),       // "26/01 → 01/02"
+        short: fmtShort(monday) + ' – ' + fmtShort(sunday), // "26 jan – 1 fév"
+        tab:   fmt(monday) + '→' + fmt(sunday),
+      });
+    }
+    monday = new Date(monday.getTime() + 7 * 86400000);
+    if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
+      if (monday.getMonth() !== month) break;
+    }
+    if (monday.getFullYear() > year + 1) break;
+    if (weeks.length >= 6) break;
+  }
+  return weeks;
+}
+
+window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
+window.getMonthWeeks=getMonthWeeks;
+
+/* === end sales-data.js === */
+
+/* === sync-bridge v2 inline === */
+/**
+ * sync-bridge.js — Bridge de synchronisation localStorage → DB
+ * VERSION 2 — Robuste, source unique de vérité
+ *
+ * Lit les données saisies dans Closing, Setting, Commissions (par uid + mois)
+ * et les injecte dans DB._raw + DB.commissions + DB.team pour que
+ * Dashboard, Projections et Équipe soient toujours synchronisés.
+ *
+ * Clés localStorage :
+ *   closing_{uid}_{monthKey}    → { s1..s5: {calls,lives,offres,closes,hardClose,followUp,contracte,collecte} }
+ *   setting_{uid}_{monthKey}    → { s1..s5: {leads,calls,decroches,propRdv,sets,presents,closes} }
+ *   comm_deals_{uid}_{monthKey} → [{client,offre,type,subtype,contracteHT,collecteHT,comm,bonus,ok,...}]
+ *   comm_statut_{monthKey}      → 'Validé' | 'En attente' | 'Partiel'
+ *
+ * monthKey = "Février 2026" (identique à sales_month)
+ */
+
+const SYNC_UIDS = ['guillaume', 'elodie'];
+const SYNC_MEMBERS = [
+  { uid: 'guillaume', name: 'Guillaume', role: 'Closing + Setting', color: '#ef4444' },
+  { uid: 'elodie',    name: 'Élodie',    role: 'Closing',           color: '#60a5fa' },
+];
+
+/* ──────────────────────────────────────────────────────────
+   RÈGLES DE COMMISSION (miroir de sales-commissions.html)
+────────────────────────────────────────────────────────── */
+const _COMM_RULES = {
+  closing: {
+    'BP 6':  { mensualise: 250,  pif: 300  },
+    'BP 12': { mensualise: 500,  pif: 600  },
+    'Elite': { mensualise: 800,  pif: 900  },
+    'Titan': { mensualise: 1200, pif: 1500 },
+  },
+  setting: {
+    'BP 6':  { noBooking: 100, selfBooking: 50  },
+    'BP 12': { noBooking: 250, selfBooking: 125 },
+    'Elite': { noBooking: 300, selfBooking: 150 },
+    'Titan': { noBooking: 500, selfBooking: 250 },
+  },
+};
+
+function _calcDealComm(deal) {
+  if (!deal.ok) return 0;
+  // If comm already set manually, use it
+  const t = (deal.type || '').toLowerCase();
+  const rules = _COMM_RULES[t];
+  if (!rules) return deal.comm || 0;
+  const offre = deal.offre || 'BP 12';
+  const r = rules[offre] || rules['BP 12'];
+  if (!r) return deal.comm || 0;
+  const sub = (deal.subtype || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (t === 'closing') {
+    return sub.includes('pif') ? r.pif : r.mensualise;
+  } else {
+    return sub.includes('self') ? r.selfBooking : r.noBooking;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────
+   FONCTION PRINCIPALE
+────────────────────────────────────────────────────────── */
+function syncBridge_loadMonth(monthKey) {
+  if (!monthKey) monthKey = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
+  if (typeof DB === 'undefined') return; // DB pas encore chargé
+
+  /* ── 1. Agréger closing et setting par semaine (tous membres) ── */
+  const closingAgg = { s1: {}, s2: {}, s3: {}, s4: {}, s5: {} };
+  const settingAgg = { s1: {}, s2: {}, s3: {}, s4: {}, s5: {} };
+  const closingPerMember = {};
+  const settingPerMember = {};
+
+  SYNC_UIDS.forEach(uid => {
+    /* ── Closing ── */
+    let cr = null;
+    try {
+      const v = localStorage.getItem(`closing_${uid}_${monthKey}`);
+      cr = v ? JSON.parse(v) : null;
+    } catch (e) {}
+    closingPerMember[uid] = cr;
+
+    if (cr) {
+      ['s1', 's2', 's3', 's4', 's5'].forEach(w => {
+        const d = cr[w] || {};
+        const a = closingAgg[w];
+        ['calls', 'lives', 'offres', 'closes', 'hardClose', 'followUp', 'contracte', 'collecte'].forEach(k => {
+          a[k] = (a[k] || 0) + (d[k] || 0);
+        });
+        // Alias hc/fu
+        a.hc = (a.hc || 0) + (d.hardClose || d.hc || 0);
+        a.fu = (a.fu || 0) + (d.followUp  || d.fu  || 0);
+      });
+    }
+
+    /* ── Setting ── */
+    let sr = null;
+    try {
+      const v = localStorage.getItem(`setting_${uid}_${monthKey}`);
+      sr = v ? JSON.parse(v) : null;
+    } catch (e) {}
+    settingPerMember[uid] = sr;
+
+    if (sr) {
+      ['s1', 's2', 's3', 's4', 's5'].forEach(w => {
+        const d = sr[w] || {};
+        const a = settingAgg[w];
+        ['leads', 'calls', 'decroches', 'propRdv', 'sets', 'presents', 'closes'].forEach(k => {
+          a[k] = (a[k] || 0) + (d[k] || 0);
+        });
+      });
+    }
+  });
+
+  /* ── Détecter si des données localStorage existent pour ce mois ── */
+  const hasClosingData = SYNC_UIDS.some(uid => closingPerMember[uid] !== null);
+  const hasSettingData = SYNC_UIDS.some(uid => settingPerMember[uid] !== null);
+
+  /* ── 2. Injecter dans DB._raw seulement si des données existent ── */
+  if (hasClosingData) {
+    ['s1', 's2', 's3', 's4'].forEach(w => {
+      const ca = closingAgg[w] || {};
+      DB._raw.closing[w] = {
+        calls:     ca.calls     || 0,
+        lives:     ca.lives     || 0,
+        offres:    ca.offres    || 0,
+        closes:    ca.closes    || 0,
+        hc:        ca.hc        || 0,
+        fu:        ca.fu        || 0,
+        contracte: ca.contracte || 0,
+        collecte:  ca.collecte  || 0,
+      };
+    });
+    // Fusionner s5 dans s4
+    const s5c = closingAgg.s5 || {};
+    if (Object.values(s5c).some(v => v > 0)) {
+      Object.keys(DB._raw.closing.s4).forEach(k => {
+        DB._raw.closing.s4[k] = (DB._raw.closing.s4[k] || 0) + (s5c[k] || 0);
+      });
+    }
+  }
+
+  if (hasSettingData) {
+    ['s1', 's2', 's3', 's4'].forEach(w => {
+      const sa = settingAgg[w] || {};
+      DB._raw.setting[w] = {
+        leads:     sa.leads     || 0,
+        calls:     sa.calls     || 0,
+        decroches: sa.decroches || 0,
+        propRdv:   sa.propRdv   || 0,
+        sets:      sa.sets      || 0,
+        presents:  sa.presents  || 0,
+        closes:    sa.closes    || 0,
+      };
+    });
+    // Fusionner s5 dans s4
+    const s5s = settingAgg.s5 || {};
+    if (Object.values(s5s).some(v => v > 0)) {
+      Object.keys(DB._raw.setting.s4).forEach(k => {
+        DB._raw.setting.s4[k] = (DB._raw.setting.s4[k] || 0) + (s5s[k] || 0);
+      });
+    }
+  }
+
+  /* ── 3. Agréger les deals de commissions ── */
+  let totalComm      = 0;
+  let totalContracte = 0;
+  let totalCollecte  = 0;
+  const allDeals     = [];
+  const commPerMember = {};
+  let hasDealsData = false;
+
+  SYNC_UIDS.forEach(uid => {
+    let deals = null;
+    try {
+      const v = localStorage.getItem(`comm_deals_${uid}_${monthKey}`);
+      deals = v ? JSON.parse(v) : null;
+    } catch (e) {}
+
+    if (deals && Array.isArray(deals) && deals.length > 0) {
+      hasDealsData = true;
+      const comm      = deals.reduce((t, d) => t + _calcDealComm(d), 0);
+      const contracte = deals.filter(d => d.ok).reduce((t, d) => t + (d.contracteHT || d.cHT || 0), 0);
+      const collecte  = deals.filter(d => d.ok).reduce((t, d) => t + (d.collecteHT  || d.coHT || 0), 0);
+      commPerMember[uid] = { comm, contracte, collecte, deals };
+      totalComm      += comm;
+      totalContracte += contracte;
+      totalCollecte  += collecte;
+      allDeals.push(...deals);
+    } else {
+      commPerMember[uid] = { comm: 0, contracte: 0, collecte: 0, deals: [] };
+    }
+  });
+
+  /* ── 4. Statut commission (persisté séparément) ── */
+  let statut = 'En attente';
+  try {
+    const savedStatut = localStorage.getItem(`comm_statut_${monthKey}`);
+    if (savedStatut) statut = savedStatut;
+  } catch (e) {}
+
+  /* ── 5. Mettre à jour DB.commissions ── */
+  // Toujours créer l'entrée pour ce mois
+  if (hasDealsData || hasClosingData) {
+    DB.commissions[monthKey] = {
+      totalComm,
+      contracte: totalContracte || (hasClosingData ? DB._raw.closing.s1.contracte + DB._raw.closing.s2.contracte + DB._raw.closing.s3.contracte + DB._raw.closing.s4.contracte : 0),
+      collecte:  totalCollecte,
+      statut,
+      deals:     allDeals,
+      perMember: commPerMember,
+    };
+  } else if (!DB.commissions[monthKey]) {
+    // Créer une entrée vide pour éviter les erreurs
+    DB.commissions[monthKey] = {
+      totalComm: 0, contracte: 0, collecte: 0,
+      statut: 'En attente', deals: [], perMember: {},
+    };
+  }
+
+  /* ── 6. Mettre à jour DB.team par membre ── */
+  const teamWeek  = [];
+  const teamMonth = [];
+
+  SYNC_MEMBERS.forEach(m => {
+    const cr   = closingPerMember[m.uid];
+    const sr   = settingPerMember[m.uid];
+    const comm = commPerMember[m.uid] || { comm: 0, contracte: 0, collecte: 0 };
+
+    function sumCk(k) {
+      if (!cr) return 0;
+      return ['s1', 's2', 's3', 's4', 's5'].reduce((t, w) => t + ((cr[w] || {})[k] || 0), 0);
+    }
+    function sumSk(k) {
+      if (!sr) return 0;
+      return ['s1', 's2', 's3', 's4', 's5'].reduce((t, w) => t + ((sr[w] || {})[k] || 0), 0);
+    }
+
+    const calls     = sumCk('calls');
+    const lives     = sumCk('lives');
+    const offres    = sumCk('offres');
+    const closes    = sumCk('closes');
+    const contracte = sumCk('contracte');
+    const collecte  = sumCk('collecte');
+    const sets      = sumSk('sets');
+    const presents  = sumSk('presents');
+
+    const entry = {
+      name:            m.name,
+      role:            m.role,
+      color:           m.color,
+      uid:             m.uid,
+      contracte,
+      collecte,
+      calls,
+      lives,
+      offres,
+      closes,
+      sets,
+      presents,
+      showup:          calls  > 0 ? lives  / calls  : 0,
+      txOffre:         lives  > 0 ? offres / lives  : 0,
+      txTransfoShow:   lives  > 0 ? closes / lives  : 0,
+      txTransfoOffre:  offres > 0 ? closes / offres : 0,
+      caCall:          calls  > 0 ? contracte / calls : 0,
+      comm:            comm.comm || 0,
+    };
+
+    teamMonth.push(entry);
+
+    // Semaine la plus récente avec données
+    const lastW = ['s4', 's3', 's2', 's1'].find(w => {
+      const d = (cr || {})[w] || {};
+      return Object.values(d).some(v => v > 0);
+    });
+
+    if (lastW) {
+      const wd = (cr || {})[lastW] || {};
+      const ws = (sr || {})[lastW] || {};
+      const wc = wd.calls || 0;
+      const wl = wd.lives || 0;
+      const wo = wd.offres || 0;
+      const wcl = wd.closes || 0;
+      const wct = wd.contracte || 0;
+      teamWeek.push({
+        ...entry,
+        calls:          wc,
+        lives:          wl,
+        offres:         wo,
+        closes:         wcl,
+        contracte:      wct,
+        collecte:       wd.collecte  || 0,
+        sets:           ws.sets      || 0,
+        presents:       ws.presents  || 0,
+        showup:         wc  > 0 ? wl  / wc  : 0,
+        txOffre:        wl  > 0 ? wo  / wl  : 0,
+        txTransfoShow:  wl  > 0 ? wcl / wl  : 0,
+        txTransfoOffre: wo  > 0 ? wcl / wo  : 0,
+        caCall:         wc  > 0 ? wct / wc  : 0,
+      });
+    } else {
+      teamWeek.push({
+        ...entry,
+        calls: 0, lives: 0, offres: 0, closes: 0, contracte: 0, collecte: 0,
+        sets: 0, presents: 0,
+        showup: 0, txOffre: 0, txTransfoShow: 0, txTransfoOffre: 0, caCall: 0,
+      });
+    }
+  });
+
+  if (teamWeek.length)  DB.team.week  = teamWeek;
+  if (teamMonth.length) DB.team.month = teamMonth;
+
+  /* ── 7. Recalculer toutes les métriques ── */
+  DB.compute();
+
+  /* ── 8. Notifier tous les modules ── */
+  document.dispatchEvent(new CustomEvent('db:updated', { detail: { monthKey } }));
+}
+
+/* ──────────────────────────────────────────────────────────
+   ÉCOUTE DES CHANGEMENTS CROSS-ONGLETS
+────────────────────────────────────────────────────────── */
+window.addEventListener('storage', function (e) {
+  const k = e.key || '';
+  if (k.startsWith('closing_') || k.startsWith('setting_') || k.startsWith('comm_deals_') || k.startsWith('comm_statut_')) {
+    const monthKey = (typeof currentMonthKey === 'function')
+      ? currentMonthKey()
+      : localStorage.getItem('sales_month') || 'Février 2026';
+    syncBridge_loadMonth(monthKey);
+    if (typeof renderAll === 'function') renderAll();
+  }
+});
+
+/* ──────────────────────────────────────────────────────────
+   HELPER : sauvegarder le statut commission
+────────────────────────────────────────────────────────── */
+function syncBridge_saveCommStatut(monthKey, statut) {
+  try {
+    localStorage.setItem(`comm_statut_${monthKey}`, statut);
+    // Mettre à jour en mémoire
+    if (typeof DB !== 'undefined' && DB.commissions[monthKey]) {
+      DB.commissions[monthKey].statut = statut;
+    }
+    document.dispatchEvent(new CustomEvent('db:updated', { detail: { monthKey } }));
+  } catch (e) {}
+}
+
+/* ──────────────────────────────────────────────────────────
+   HELPER : obtenir les données d'un membre pour un mois
+────────────────────────────────────────────────────────── */
+function syncBridge_getMemberData(uid, monthKey) {
+  let closing = null, setting = null, deals = null;
+  try { const v = localStorage.getItem(`closing_${uid}_${monthKey}`);    closing = v ? JSON.parse(v) : null; } catch (e) {}
+  try { const v = localStorage.getItem(`setting_${uid}_${monthKey}`);    setting = v ? JSON.parse(v) : null; } catch (e) {}
+  try { const v = localStorage.getItem(`comm_deals_${uid}_${monthKey}`); deals   = v ? JSON.parse(v) : null; } catch (e) {}
+  return { closing, setting, deals };
+}
+
+/* ──────────────────────────────────────────────────────────
+   EXPORT GLOBAL
+────────────────────────────────────────────────────────── */
+window.syncBridge_loadMonth   = syncBridge_loadMonth;
+window.syncBridge_saveCommStatut = syncBridge_saveCommStatut;
+window.syncBridge_getMemberData  = syncBridge_getMemberData;
+window.SYNC_UIDS    = SYNC_UIDS;
+window.SYNC_MEMBERS = SYNC_MEMBERS;
+
+/* === end sync-bridge === */
+</script>
 <script src="nav.js" defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -282,6 +1043,7 @@ label.flabel{display:block;font-size:10px;color:var(--muted);text-transform:uppe
 .cal-add-btn{position:absolute;bottom:6px;right:6px;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted2);cursor:pointer;transition:all .15s}
 .cal-add-btn:hover{background:rgba(167,139,250,.15);border-color:var(--purple);color:var(--purple)}
 </style>
+<script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
 </head>
 <body>
 <script>
@@ -1088,7 +1850,7 @@ function renderMeetingDetail() {
   const meeting = meetings.find(m => m.id === currentMeeting);
   const main = document.getElementById('mm-main');
   if (!meeting) { main.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div>Sélectionne un meeting</div>'; return; }
-  const isAdmin = true; // Always admin in this view
+  const isAdmin = (localStorage.getItem('ambitio_role') === 'admin');
 
   main.innerHTML = `
     <!-- Meeting header -->
@@ -1100,8 +1862,8 @@ function renderMeetingDetail() {
           <span class="tag" style="background:${meeting.statut==='À venir'?'rgba(96,165,250,.1)':'rgba(52,211,153,.1)'};border-color:${meeting.statut==='À venir'?'rgba(96,165,250,.25)':'rgba(52,211,153,.25)'};color:${meeting.statut==='À venir'?'var(--blue)':'var(--green)'};font-size:10px">${meeting.statut}</span>
         </div>
         <div style="display:flex;gap:8px">
-          ${meeting.statut==='À venir'?`<button class="btn btn-green btn-sm" onclick="setMeetingStatut('${meeting.id}','Terminé')">✓ Marquer terminé</button>`:''}
-          <button class="btn btn-ghost btn-sm" onclick="openEditMeeting('${meeting.id}')">✏️ Modifier</button>
+          ${isAdmin && meeting.statut==='À venir'?`<button class="btn btn-green btn-sm" onclick="setMeetingStatut('${meeting.id}','Terminé')">✓ Marquer terminé</button>`:''}
+          ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="openEditMeeting('${meeting.id}')">✏️ Modifier</button>` : ''}
         </div>
       </div>
       <div class="mm-card-body">
@@ -1118,7 +1880,7 @@ function renderMeetingDetail() {
         <!-- Sujets -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)">📋 Ordre du jour</div>
-          <button class="btn btn-ghost btn-sm" onclick="toggleAgendaEdit('${meeting.id}')" id="agenda-edit-btn-${meeting.id}">✏️ Modifier</button>
+          ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="toggleAgendaEdit('${meeting.id}')" id="agenda-edit-btn-${meeting.id}">✏️ Modifier</button>` : ''}
         </div>
         
         <!-- Vue lecture -->
@@ -1131,7 +1893,7 @@ function renderMeetingDetail() {
           ${meeting.sujets.length === 0 ? '<div style="color:var(--muted2);font-size:13px;padding:8px 0">Aucun sujet défini</div>' : ''}
         </div>
         
-        <!-- Vue édition (cachée par défaut) -->
+        <!-- Vue édition (admin only) -->
         <div id="agenda-edit-${meeting.id}" style="display:none;margin-top:6px">
           <div id="sujets-edit-list-${meeting.id}">
             ${meeting.sujets.map((s, si) => `
@@ -1275,6 +2037,7 @@ function deleteSujet(meetingId, si) {
 }
 
 function saveAgenda(meetingId) {
+  if (!_requireAdmin('saveAgenda')) return;
   const meetings = getMeetings();
   const m = meetings.find(m => m.id === meetingId);
   if (!m) return;
@@ -1333,6 +2096,7 @@ function toggleResumeEdit(id) {
 }
 
 function saveResume(meetingId) {
+  if (!_requireAdmin('saveResume')) return;
   const ta = document.getElementById('resume-ta-' + meetingId);
   const meetings = getMeetings();
   const m = meetings.find(m => m.id === meetingId);
@@ -1347,12 +2111,25 @@ function saveResume(meetingId) {
 }
 
 function setMeetingStatut(id, statut) {
+  if (!_requireAdmin('setStatut')) return;
   const meetings = getMeetings();
   const m = meetings.find(m => m.id === id);
   if (m) { m.statut = statut; setMeetings(meetings); renderCalendar(); renderMeetingDetail(); }
 }
 
+
+/* ── Guard admin actions ── */
+function _requireAdmin(action) {
+  const r = localStorage.getItem('ambitio_role') || 'sales';
+  if (r !== 'admin') {
+    toast('⛔ Action réservée au manager');
+    return false;
+  }
+  return true;
+}
+
 function openAddMeeting() {
+  if (!_requireAdmin('addMeeting')) return;
   document.getElementById('nm-date').value = '';
   document.getElementById('add-meeting-modal').style.display = 'flex';
 }
@@ -1417,6 +2194,7 @@ function setVisioScope(scope) {
 }
 
 function applyVisioLink() {
+  if (!_requireAdmin('applyVisio')) return;
   const newLien = document.getElementById('visio-new-lien')?.value.trim();
   if (!newLien) { toast('⚠️ Entrez un lien de réunion'); return; }
   const meetings = getMeetings();
@@ -1487,6 +2265,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const _equipeMonthKey = localStorage.getItem('sales_month') || 'Février 2026';
   if (typeof syncBridge_loadMonth === 'function') {
     syncBridge_loadMonth(_equipeMonthKey);
+  }
+
+  // ── Restrictions rôle : masquer les éléments admin pour le rôle "sales" ──
+  const _role = localStorage.getItem('ambitio_role') || 'sales';
+  if (_role !== 'admin') {
+    // Masquer le panel de gestion du lien visio
+    const visioPanel = document.getElementById('visio-settings-panel');
+    if (visioPanel) visioPanel.style.display = 'none';
+    // Masquer le bouton "+ Nouveau meeting"
+    const btnAddMeeting = document.getElementById('btn-add-meeting');
+    if (btnAddMeeting) btnAddMeeting.style.display = 'none';
   }
 
   setMainTab(savedTab);
@@ -1587,7 +2376,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-ghost btn-sm" onclick="calGoToday()">Aujourd'hui</button>
-        <button class="btn btn-primary btn-sm" onclick="openAddMeeting()">+ Nouveau meeting</button>
+        ${isAdmin ? `<button class="btn btn-primary btn-sm" id="btn-add-meeting" onclick="openAddMeeting()">+ Nouveau meeting</button>` : ''}
       </div>
     </div>
     <!-- Weekly calendar grid -->
