@@ -1290,6 +1290,7 @@ function renderSaisieWeek() {
       if (proj > 0) {
         input.className = 'saisie-input ' + (v >= proj ? 'above' : v > 0 ? 'filled' : '');
       }
+      scheduleAutoSave();
     };
   });
 }
@@ -1363,26 +1364,34 @@ function setWeek(w) {
 }
 
 /* ─── SAVE ─── */
-async function saveCurrentWeek() {
+let _autoSaveTimer = null;
+function scheduleAutoSave() {
+  clearTimeout(_autoSaveTimer);
+  const st = document.getElementById('save-status');
+  if (st) { st.textContent = '...'; st.style.color = 'var(--muted)'; }
+  _autoSaveTimer = setTimeout(() => saveCurrentWeek(true), 2000);
+}
+
+async function saveCurrentWeek(auto = false) {
   if (!currentMember) return;
-  if (currentWeek === 'mois') { U.toast('ℹ️ Sélectionne une semaine pour saisir des données', 'info'); return; }
+  if (currentWeek === 'mois') { if (!auto) U.toast('ℹ️ Sélectionne une semaine pour saisir des données', 'info'); return; }
 
   const data = readForm();
   saveMemberData(currentMember.uid, data);
 
-  const statusEl = document.getElementById('save-status');
-  statusEl.textContent = '⏳ Sauvegarde...';
+  const st = document.getElementById('save-status');
+  if (st) { st.textContent = '⏳ Sauvegarde...'; st.style.color = 'var(--muted)'; }
 
   try {
     if (window.Fire && Fire.db) {
       await Fire.saveSetting(currentMember.uid, cmk(), currentWeek, data);
     }
-    U.toast('✅ Données sauvegardées !');
-    statusEl.textContent = '✅ Sauvegardé · ' + new Date().toLocaleTimeString('fr-FR');
-    renderFiche(); // refresh les taux
+    if (st) { st.textContent = '✅ ' + new Date().toLocaleTimeString('fr-FR'); st.style.color = '#34d399'; }
+    if (!auto) U.toast('✅ Données sauvegardées !');
+    renderFiche();
   } catch(e) {
-    statusEl.textContent = '⚠️ Local seulement';
-    U.toast('⚠️ Firebase indisponible, sauvegarde locale', 'info');
+    if (st) { st.textContent = '⚠️ Local seulement'; st.style.color = '#f59e0b'; }
+    if (!auto) U.toast('⚠️ Firebase indisponible, sauvegarde locale', 'info');
   }
 }
 

@@ -920,6 +920,7 @@ function renderSaisieWeek() {
       const v = parseFloat(el.value) || 0;
       el.className = 'saisie-input' + (f.proj>0 ? (v>=f.proj?' above':v>0?' filled':'') : (v>0?' filled':''));
       renderRatesLive(readForm());
+      scheduleAutoSave();
     };
   });
   renderRatesLive(d);
@@ -942,15 +943,34 @@ function renderRatesLive(d) {
 }
 
 /* ── SAVE ── */
-async function saveCurrentWeek() {
+let _autoSaveTimer = null;
+function scheduleAutoSave() {
+  clearTimeout(_autoSaveTimer);
+  const st = document.getElementById('save-status');
+  if (st) { st.textContent = '...'; st.style.color = 'var(--muted)'; }
+  _autoSaveTimer = setTimeout(() => saveCurrentWeek(true), 2000);
+}
+
+async function saveCurrentWeek(auto = false) {
   if (!currentMember || currentWeek === 'mois') return;
   const data = readForm();
   if (!currentMember.data[cmk()]) currentMember.data[cmk()] = emptyMonth();
   currentMember.data[cmk()][currentWeek] = { ...data };
   saveDataC(currentMember.uid, currentMember.data[cmk()]);
+
   const st = document.getElementById('save-status');
-  if (st) st.textContent = '✅ Sauvegardé · ' + new Date().toLocaleTimeString('fr-FR');
-  if (U.toast) U.toast('✅ Données sauvegardées !');
+  if (st) { st.textContent = '⏳ Sauvegarde...'; st.style.color = 'var(--muted)'; }
+
+  try {
+    if (window.Fire && Fire.db) {
+      await Fire.saveClosing(currentMember.uid, cmk(), currentWeek, data);
+    }
+    if (st) { st.textContent = '✅ ' + new Date().toLocaleTimeString('fr-FR'); st.style.color = '#34d399'; }
+    if (!auto && U.toast) U.toast('✅ Données sauvegardées !');
+  } catch(e) {
+    if (st) { st.textContent = '⚠️ Local seulement'; st.style.color = '#f59e0b'; }
+    if (!auto) U.toast && U.toast('⚠️ Firebase indisponible, sauvegarde locale', 'info');
+  }
   renderFiche();
 }
 
