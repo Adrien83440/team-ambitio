@@ -491,6 +491,101 @@ body {
 .offre-bp12  { background: rgba(167,139,250,0.12); color: #a78bfa; }
 .offre-elite { background: rgba(245,158,11,0.12); color: #f59e0b; }
 .offre-titan { background: rgba(239,68,68,0.12); color: #ef4444; }
+
+/* ═══ GLOBAL DASHBOARD ══════════════════════════════════════ */
+.dash-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+@media(max-width:900px){ .dash-row { grid-template-columns: repeat(2,1fr); } }
+@media(max-width:500px){ .dash-row { grid-template-columns: 1fr 1fr; } }
+
+.dash-kpi {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.dash-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: var(--dk-color, var(--green));
+}
+.dash-kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+.dash-kpi-val { font-family: var(--font-mono); font-size: 24px; font-weight: 500; color: var(--dk-color, var(--text)); }
+.dash-kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.dash-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+@media(max-width:768px){ .dash-bottom { grid-template-columns: 1fr; } }
+
+.dash-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.dash-panel-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-head); font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.dash-panel-body { padding: 14px 18px; }
+
+/* Comparatif bar */
+.comp-bar-row { margin-bottom: 16px; }
+.comp-bar-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.comp-bar-name { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.comp-bar-val { font-family: var(--font-mono); font-size: 13px; }
+.comp-bar-track { height: 7px; background: rgba(255,255,255,0.05); border-radius: 99px; overflow: hidden; }
+.comp-bar-fill { height: 100%; border-radius: 99px; transition: width 0.7s cubic-bezier(.4,0,.2,1); }
+.comp-bar-sub { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+/* Top deals list */
+.top-deal-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.top-deal-row:last-child { border-bottom: none; }
+.top-deal-num {
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  background: var(--bg3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: var(--muted);
+  flex-shrink: 0;
+}
+.top-deal-num.gold { background: rgba(245,158,11,0.15); color: var(--gold); }
+.top-deal-info { flex: 1; min-width: 0; }
+.top-deal-client { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top-deal-meta { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.top-deal-comm { font-family: var(--font-mono); font-size: 13px; color: var(--green); flex-shrink: 0; }
+
+/* Offre distribution */
+.offre-dist { display: flex; flex-direction: column; gap: 8px; }
+.offre-dist-row { display: flex; align-items: center; gap: 10px; }
+.offre-dist-label { width: 60px; font-size: 11px; }
+.offre-dist-track { flex: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 99px; overflow: hidden; }
+.offre-dist-fill { height: 100%; border-radius: 99px; transition: width 0.6s; }
+.offre-dist-count { font-family: var(--font-mono); font-size: 11px; color: var(--muted); width: 32px; text-align: right; }
+
+.dash-section-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--muted);
+  margin-bottom: 14px; margin-top: 2px;
+}
+
 </style>
 </head>
 <body>
@@ -700,9 +795,97 @@ function offreClass(offre) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   RENDER GLOBAL DASHBOARD
+══════════════════════════════════════════════════════════ */
+function renderDashboard() {
+  const month = cmk();
+  const lbl = document.getElementById('dash-month-label'); if (lbl) lbl.textContent = month;
+
+  // Aggregate all members
+  let totalComm = 0, totalContracte = 0, totalCollecte = 0, allDeals = [];
+  MEMBERS_COMM.forEach(m => {
+    const deals = getDeals(m.uid, month);
+    totalComm      += calcComm(deals);
+    totalContracte += calcContracte(deals);
+    totalCollecte  += calcCollecte(deals);
+    deals.filter(d => d.ok).forEach(d => allDeals.push({ ...d, _member: m }));
+  });
+
+  // KPIs row
+  const nClos = allDeals.filter(d => d.type === 'Closing').length;
+  const nSet  = allDeals.filter(d => d.type === 'Setting').length;
+  const totPtsMonth = MEMBERS_COMM.reduce((t, m) => t + calcPoints(getDeals(m.uid, month)), 0);
+
+  document.getElementById('dash-comm').textContent      = fmtDec(totalComm);
+  document.getElementById('dash-contracte').textContent = fmt(totalContracte);
+  document.getElementById('dash-collecte').textContent  = fmt(totalCollecte);
+  document.getElementById('dash-deals').textContent     = nClos + ' closes · ' + nSet + ' sets';
+
+  // Comparatif members
+  const maxComm = Math.max(...MEMBERS_COMM.map(m => calcComm(getDeals(m.uid, month))), 1);
+  const compHtml = MEMBERS_COMM.map(m => {
+    const deals = getDeals(m.uid, month);
+    const comm = calcComm(deals);
+    const pts  = calcPoints(deals);
+    const nc   = deals.filter(d => d.type === 'Closing' && d.ok).length;
+    const pct  = Math.round((comm / maxComm) * 100);
+    return `<div class="comp-bar-row">
+      <div class="comp-bar-top">
+        <div class="comp-bar-name">
+          <div style="width:8px;height:8px;border-radius:50%;background:${m.color}"></div>
+          ${m.name}
+        </div>
+        <div class="comp-bar-val" style="color:var(--green)">${fmtDec(comm)}</div>
+      </div>
+      <div class="comp-bar-track">
+        <div class="comp-bar-fill" style="width:${pct}%;background:${m.color}"></div>
+      </div>
+      <div class="comp-bar-sub">${nc} closes · ${pts.toFixed(1)} pts ce mois</div>
+    </div>`;
+  }).join('');
+  document.getElementById('dash-comp').innerHTML = compHtml;
+
+  // Top deals (by commission, descending)
+  const sorted = [...allDeals].sort((a, b) => (b.comm + b.bonus) - (a.comm + a.bonus)).slice(0, 6);
+  const topHtml = sorted.length
+    ? sorted.map((d, i) => `
+      <div class="top-deal-row">
+        <div class="top-deal-num ${i === 0 ? 'gold' : ''}">${i + 1}</div>
+        <div class="top-deal-info">
+          <div class="top-deal-client">${d.client}</div>
+          <div class="top-deal-meta">
+            <span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}" style="padding:1px 5px;font-size:10px">${d.type}</span>
+            &nbsp;<span class="deal-offre ${offreClass(d.offre)}" style="padding:1px 5px;font-size:10px">${d.offre}</span>
+            &nbsp;· ${d._member.name}
+          </div>
+        </div>
+        <div class="top-deal-comm">${fmtDec(d.comm + d.bonus)}</div>
+      </div>`).join('')
+    : '<div style="padding:20px;text-align:center;color:var(--muted2);font-size:13px">Aucun deal validé ce mois</div>';
+  document.getElementById('dash-top-deals').innerHTML = topHtml;
+
+  // Offre distribution
+  const offres = ['BP 12', 'BP 6', 'Elite', 'Titan'];
+  const colors  = { 'BP 12': '#a78bfa', 'BP 6': '#60a5fa', 'Elite': '#f59e0b', 'Titan': '#ef4444' };
+  const offreCounts = {};
+  offres.forEach(o => { offreCounts[o] = allDeals.filter(d => d.offre === o && d.type === 'Closing').length; });
+  const maxCount = Math.max(...Object.values(offreCounts), 1);
+  const distHtml = offres.map(o => `
+    <div class="offre-dist-row">
+      <div class="offre-dist-label"><span class="deal-offre ${offreClass(o)}" style="padding:2px 6px;font-size:10px">${o}</span></div>
+      <div class="offre-dist-track">
+        <div class="offre-dist-fill" style="width:${Math.round((offreCounts[o]/maxCount)*100)}%;background:${colors[o]}"></div>
+      </div>
+      <div class="offre-dist-count">${offreCounts[o]}</div>
+    </div>`).join('');
+  document.getElementById('dash-dist').innerHTML = distHtml;
+}
+
+/* ══════════════════════════════════════════════════════════
    RENDER LISTE
 ══════════════════════════════════════════════════════════ */
 function renderListe() {
+  renderDashboard();
   const grid = document.getElementById('members-grid');
   grid.innerHTML = MEMBERS_COMM.map(m => {
     const deals = getDeals(m.uid, cmk());
@@ -989,6 +1172,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
   <!-- VUE LISTE -->
   <div id="view-liste">
+
+    <!-- ── GLOBAL DASHBOARD ─────────────────────────────────── -->
+    <div class="dash-section-label">Vue d'ensemble · <span id="dash-month-label"></span></div>
+    <div class="dash-row">
+      <div class="dash-kpi" style="--dk-color:var(--green)">
+        <div class="dash-kpi-label">Commissions équipe</div>
+        <div class="dash-kpi-val" id="dash-comm">—</div>
+        <div class="dash-kpi-sub">Deals validés &amp; encaissés</div>
+      </div>
+      <div class="dash-kpi" style="--dk-color:var(--blue)">
+        <div class="dash-kpi-label">Contracté HT</div>
+        <div class="dash-kpi-val" id="dash-contracte">—</div>
+        <div class="dash-kpi-sub">Total signatures</div>
+      </div>
+      <div class="dash-kpi" style="--dk-color:var(--purple)">
+        <div class="dash-kpi-label">Collecté HT</div>
+        <div class="dash-kpi-val" id="dash-collecte">—</div>
+        <div class="dash-kpi-sub">Cash encaissé</div>
+      </div>
+      <div class="dash-kpi" style="--dk-color:var(--gold)">
+        <div class="dash-kpi-label">Deals du mois</div>
+        <div class="dash-kpi-val" style="font-size:16px;padding-top:4px" id="dash-deals">—</div>
+        <div class="dash-kpi-sub">Closes + settings validés</div>
+      </div>
+    </div>
+
+    <div class="dash-bottom">
+      <!-- Comparatif commerciaux -->
+      <div class="dash-panel">
+        <div class="dash-panel-head">
+          <span>📊 Comparatif commerciaux</span>
+        </div>
+        <div class="dash-panel-body" id="dash-comp"></div>
+      </div>
+
+      <!-- Top deals + distribution -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="dash-panel" style="flex:1">
+          <div class="dash-panel-head">🔥 Top deals du mois</div>
+          <div class="dash-panel-body" id="dash-top-deals"></div>
+        </div>
+        <div class="dash-panel">
+          <div class="dash-panel-head">📦 Répartition par offre (closes)</div>
+          <div class="dash-panel-body">
+            <div class="offre-dist" id="dash-dist"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SALARIÉS ─────────────────────────────────────────── -->
+    <div class="dash-section-label">Fiches commerciaux</div>
     <div class="members-grid" id="members-grid"></div>
   </div>
 
