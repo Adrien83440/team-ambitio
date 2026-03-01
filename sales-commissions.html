@@ -4,676 +4,1157 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Commissions</title>
-<link rel="stylesheet" href="sales.css"/>
-<script>
-/* === sales-data.js inlined === */
-/**
- * sales-data.js — Data Store + Firebase + Utilitaires
- * Les données "a" (actuelles) viennent de Firestore en temps réel.
- * Les données "p" (projections) sont les références fixes.
- */
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="nav.js" defer></script>
+<style>
+/* ═══ RESET & BASE ══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ═══════════════════════════════════════════════════════════
-   PROJECTIONS FIXES — modifier ici pour changer les cibles
-═══════════════════════════════════════════════════════════ */
-const PROJECTIONS = {
-  closing: {
-    s1: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s2: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s3: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s4: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    livesP:0.75, offresP:0.667, engP:0.5, cOffP:0.4, cCallP:0.2, cashLive:666.7,
-  },
-  setting: {
-    s1: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s2: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s3: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s4: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    decrochesP:0.12, engP:0.222, setP:0.5, showupP:0.8, cCallP:0.8,
-  },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   DATA STORE
-═══════════════════════════════════════════════════════════ */
-const DB = {
-  months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-
-  // Données brutes saisies (remplacées par Firestore)
-  _raw: {
-    closing: {
-      s1: { calls:8,  lives:2, offres:1, closes:0, hc:0, fu:0, contracte:0,     collecte:0    },
-      s2: { calls:8,  lives:4, offres:2, closes:2, hc:2, fu:0, contracte:12000, collecte:1000 },
-      s3: { calls:9,  lives:6, offres:3, closes:1, hc:1, fu:0, contracte:5400,  collecte:400  },
-      s4: { calls:9,  lives:7, offres:2, closes:0, hc:0, fu:0, contracte:1800,  collecte:200  },
-    },
-    setting: {
-      s1: { leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, closes:0 },
-      s2: { leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, closes:2 },
-      s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
-      s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
-    },
-    deals: [
-      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
-      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
-      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-    ],
-  },
-
-  // Calculé depuis _raw
-  closing: null,
-  setting: null,
-  commissions: {
-    'Janvier 2026': { contracte:12000, collecte:0,    totalComm:0,    statut:'Validé',     deals:[] },
-    'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
-    'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
-  },
-  team: {
-    week: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:33020, collecte:3342,  calls:23, lives:20, offres:14, closes:6, showup:0.87, txOffre:0.70,  txTransfoShow:0.30,  txTransfoOffre:0.429, caCall:1435.7 },
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
-    ],
-    month: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:48469, collecte:4686, calls:56, lives:33, offres:17, closes:9, showup:0.589, txOffre:0.515, txTransfoShow:0.273, txTransfoOffre:0.529, caCall:721.3 },
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
-    ],
-  },
-
-  // Recalcule toutes les métriques depuis _raw
-  compute() {
-    const rc = DB._raw.closing;
-    const rs = DB._raw.setting;
-    const pc = PROJECTIONS.closing;
-    const ps = PROJECTIONS.setting;
-
-    const sumC  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rc[w][k]||0), 0);
-    const sumS  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rs[w][k]||0), 0);
-    const projC = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (pc[w][k]||0), 0);
-    const projS = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (ps[w][k]||0), 0);
-
-    const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
-    const cta=sumC('contracte'), cola=sumC('collecte');
-    const cp=projC('calls'), lp=projC('lives'), op=projC('offres'), clp=projC('closes');
-    const ctp=projC('contracte'), colp=projC('collecte');
-
-    DB.closing = {
-      mois: {
-        calls:     {a:ca,  p:cp  },
-        lives:     {a:la,  p:lp  },
-        offres:    {a:oa,  p:op  },
-        closes:    {a:cla, p:clp },
-        hc:        {a:sumC('hc'), p:clp},
-        fu:        {a:sumC('fu'), p:0  },
-        contracte: {a:cta, p:ctp },
-        collecte:  {a:cola,p:colp},
-        livesP:  {a:ca>0  ? la/ca   : 0, p:pc.livesP  },
-        offresP: {a:la>0  ? oa/la   : 0, p:pc.offresP },
-        engP:    {a:oa>0  ? cla/oa  : 0, p:pc.engP    },
-        cOffP:   {a:oa>0  ? cla/oa  : 0, p:pc.cOffP   },
-        cCallP:  {a:ca>0  ? cla/ca  : 0, p:pc.cCallP  },
-        cashLive:{a:la>0  ? cta/la  : 0, p:pc.cashLive},
-        atteinte: ctp>0 ? cta/ctp : 0,
-        delta:    Math.max(0, ctp-cta),
-      },
-      s1: DB._cw('s1'), s2: DB._cw('s2'), s3: DB._cw('s3'), s4: DB._cw('s4'),
-    };
-
-    const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
-    const sa=sumS('sets'), pra=sumS('presents'), sca2=sumS('closes');
-
-    DB.setting = {
-      mois: {
-        leads:     {a:sumS('leads'),  p:projS('leads')    },
-        calls:     {a:sca,            p:projS('calls')    },
-        decroches: {a:da,             p:projS('decroches')},
-        propRdv:   {a:pa,             p:projS('propRdv')  },
-        sets:      {a:sa,             p:projS('sets')     },
-        presents:  {a:pra,            p:projS('presents') },
-        closes:    {a:sca2,           p:projS('closes')   },
-        decrochesP:{a:sca>0?da/sca:0,  p:ps.decrochesP },
-        engP:      {a:da>0 ?pa/da:0,    p:ps.engP       },
-        setP:      {a:pa>0 ?sa/pa:0,    p:ps.setP       },
-        showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
-        cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
-      },
-      s1: DB._sw('s1'), s2: DB._sw('s2'), s3: DB._sw('s3'), s4: DB._sw('s4'),
-    };
-
-    // Sync deals dans commissions
-    try {
-      const cmk = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-      if (DB.commissions[cmk]) DB.commissions[cmk].deals = DB._raw.deals;
-    } catch(e) {}
-  },
-
-  _cw(w) {
-    const d=DB._raw.closing[w], p=PROJECTIONS.closing[w];
-    return {
-      calls:{a:d.calls||0,p:p.calls}, lives:{a:d.lives||0,p:p.lives},
-      offres:{a:d.offres||0,p:p.offres}, closes:{a:d.closes||0,p:p.closes},
-      hc:{a:d.hc||0,p:p.closes}, fu:{a:d.fu||0,p:0},
-      contracte:{a:d.contracte||0,p:p.contracte}, collecte:{a:d.collecte||0,p:p.collecte},
-    };
-  },
-  _sw(w) {
-    const d=DB._raw.setting[w], p=PROJECTIONS.setting[w];
-    return {
-      leads:{a:d.leads||0,p:p.leads}, calls:{a:d.calls||0,p:p.calls},
-      decroches:{a:d.decroches||0,p:p.decroches}, propRdv:{a:d.propRdv||0,p:p.propRdv},
-      sets:{a:d.sets||0,p:p.sets}, presents:{a:d.presents||0,p:p.presents},
-      closes:{a:d.closes||0,p:p.closes},
-    };
-  },
-};
-
-DB.compute();
-
-/* ═══════════════════════════════════════════════════════════
-   FIREBASE — couche temps réel
-   Initialisé après que firebase SDK soit chargé + auth ready
-═══════════════════════════════════════════════════════════ */
-const Fire = {
-  db:  null,
-  uid: null,
-  _unsubs: [],
-
-  init(firestore, uid) {
-    Fire.db  = firestore;
-    Fire.uid = uid;
-  },
-
-  _key(label) {
-    const p = label.split(' ');
-    const m = DB.months.indexOf(p[0]);
-    return `${p[1]}-${String(m+1).padStart(2,'0')}`;
-  },
-
-  // Écoute en temps réel les données d'un user pour un mois
-  watchUser(userId, monthLabel, callback) {
-    if (!Fire.db) return () => {};
-    const ref = Fire.db
-      .collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const unsub = ref.onSnapshot(snap => callback(snap.exists ? snap.data() : null));
-    Fire._unsubs.push(unsub);
-    return unsub;
-  },
-
-  // Sauvegarde une semaine de closing
-  async saveClosing(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ closing: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde une semaine de setting
-  async saveSetting(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ setting: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde un deal (append)
-  async saveDeal(userId, monthLabel, deal) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const snap = await ref.get();
-    const deals = snap.exists ? (snap.data().deals || []) : [];
-    deals.push({ ...deal, _ts: Date.now() });
-    await ref.set({ deals }, { merge: true });
-  },
-
-  // Applique un snapshot Firestore dans DB puis recalcule
-  apply(data) {
-    if (!data) return;
-    if (data.closing) ['s1','s2','s3','s4'].forEach(w => {
-      if (data.closing[w]) Object.assign(DB._raw.closing[w], data.closing[w]);
-    });
-    if (data.setting) ['s1','s2','s3','s4'].forEach(w => {
-      if (data.setting[w]) Object.assign(DB._raw.setting[w], data.setting[w]);
-    });
-    if (data.deals) DB._raw.deals = data.deals;
-    DB.compute();
-    document.dispatchEvent(new CustomEvent('db:updated'));
-  },
-
-  stop() { Fire._unsubs.forEach(u => u()); Fire._unsubs = []; },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════════════════════════ */
-const U = {
-  euro:  v => v == null ? '—' : '€\u202f' + Number(v).toLocaleString('fr-FR'),
-  pct:   v => v == null ? '—' : (v * 100).toFixed(1) + '%',
-  num:   v => v == null ? '—' : Number(v).toLocaleString('fr-FR'),
-  pp:  (a, p) => p > 0 ? Math.min((a / p) * 100, 200) : 0,
-  ppv: (a, p) => p > 0 ? ((a / p) * 100).toFixed(0) + '%' : '—',
-  cb:  (a, p) => { const r = p > 0 ? a / p : 0; return r >= 1 ? '#34d399' : r >= 0.65 ? '#f59e0b' : '#ef4444'; },
-  g:   id => document.getElementById(id),
-  getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
-  getCurrentUser:  () => ({
-    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || 'guillaume',
-    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Guillaume',
-    role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
-  }),
-
-  progRow: (label, a, p, isEuro = false) => {
-    const col = U.cb(a, p);
-    return `<div class="pr">
-      <div class="pr-l">${label}</div>
-      <div class="pr-track"><div class="pr-fill" style="width:${Math.min(U.pp(a,p),100)}%;background:${col}"></div></div>
-      <div class="pr-val">${isEuro ? `${U.euro(a)} / ${U.euro(p)}` : `${a} / ${p}`}</div>
-      <div class="pr-pct" style="color:${col}">${U.ppv(a,p)}</div>
-    </div>`;
-  },
-
-  kpiCard: ({ label, val, sub, rawA, proj, color='#ef4444', pct:fp }) => {
-    const pc = fp!=null ? fp : (proj!=null ? U.pp(rawA??0, proj) : null);
-    return `<div class="kpi" style="--kc:${color}">
-      <div class="kpi-label">${label}</div>
-      <div class="kpi-value">${val}</div>
-      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
-      ${pc!=null ? `<div class="kpi-prog">
-        <div class="kpi-prog-row"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div>
-        <div class="kpi-prog-track"><div class="kpi-prog-fill" style="width:${Math.min(pc,100)}%;background:${color}"></div></div>
-      </div>` : ''}
-    </div>`;
-  },
-
-  funnelStep: (label, val, max, isFirst=false, isEuro=false) => {
-    const ratio = max > 0 ? val / max : 0;
-    return `<div class="fs">
-      <div class="fs-label">${label}</div>
-      <div class="fs-track"><div class="fs-fill" style="width:${Math.min(ratio*100,100)}%"></div></div>
-      <div class="fs-val">${isEuro ? U.euro(val) : val}</div>
-      <div class="fs-rate">${!isFirst ? U.pct(ratio) : ''}</div>
-    </div>`;
-  },
-
-  weekCard: (label, mainVal, mainLabel, minis, isCurrent, dateRange) => `
-    <div class="wc${isCurrent?' wc-active':''}">
-      <div class="wc-label">${label}</div>
-      ${dateRange ? `<div class="wc-dates">${dateRange}</div>` : ''}
-      <div class="wc-main">${mainVal}</div>
-      <div class="wc-sub">${mainLabel}</div>
-      <div class="wc-grid">${minis.map(m=>`
-        <div class="wc-mini">
-          <div class="wc-mini-v"${m.color?` style="color:${m.color}"`:''} >${m.val}</div>
-          <div class="wc-mini-l">${m.label}</div>
-        </div>`).join('')}</div>
-    </div>`,
-
-  barChart: (labels, actuals, projs, unit='') => {
-    const mx = Math.max(...actuals, ...projs, 1);
-    return `<div class="chart-legend">
-        <span class="cl-dot cl-real"></span>Réel
-        <span class="cl-dot cl-proj" style="margin-left:14px"></span>Projection
-      </div>
-      <div class="chart-bars">
-        ${labels.map((l,i)=>`<div class="chart-col">
-          <div class="chart-pair">
-            <div class="chart-bar bar-real" style="height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}${unit}"></div>
-            <div class="chart-bar bar-proj" style="height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj:${projs[i]}${unit}"></div>
-          </div>
-          <div class="chart-lbl">${l}</div>
-        </div>`).join('')}
-      </div>`;
-  },
-
-  toast: (msg, type='success') => {
-    let t = document.getElementById('_toast');
-    if (!t) { t=document.createElement('div'); t.id='_toast'; document.body.appendChild(t); }
-    const s = { success:'background:#1a2e1a;border:1px solid rgba(52,211,153,.3);color:#6ee7b7', error:'background:#2e1a1a;border:1px solid rgba(239,68,68,.3);color:#fca5a5', info:'background:#1a1a2e;border:1px solid rgba(96,165,250,.3);color:#93c5fd' };
-    t.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(0);font-size:12px;font-weight:600;padding:9px 18px;border-radius:10px;z-index:9999;opacity:1;transition:all .28s;white-space:nowrap;font-family:var(--font-b);${s[type]||s.success}`;
-    t.textContent = msg;
-    clearTimeout(t._t);
-    t._t = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
-  },
-};
-
-
-/* ═══════════════════════════════════════════════════════════
-   SEMAINES RÉELLES — calcule les vraies dates lun→dim
-═══════════════════════════════════════════════════════════ */
-function getMonthWeeks(monthLabel) {
-  // monthLabel = "Février 2026"
-  const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                     'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const parts = monthLabel.split(' ');
-  const month = MONTHS_FR.indexOf(parts[0]); // 0-based
-  const year  = parseInt(parts[1]);
-  if (month === -1 || isNaN(year)) return [];
-
-  const DAYS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-  const pad = n => String(n).padStart(2,'0');
-
-  function fmt(d) {
-    // "14/02"
-    return pad(d.getDate()) + '/' + pad(d.getMonth()+1);
-  }
-  function fmtShort(d) {
-    // "14 fév"
-    const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
-    return d.getDate() + ' ' + M[d.getMonth()];
-  }
-
-  // Premier lundi qui touche le mois (peut être dans le mois précédent)
-  const firstOfMonth = new Date(year, month, 1);
-  const dayOfWeek = firstOfMonth.getDay(); // 0=Sun,1=Mon...
-  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  let monday = new Date(year, month, 1 + daysToMonday);
-
-  const weeks = [];
-  while (true) {
-    const sunday = new Date(monday.getTime() + 6 * 86400000);
-    // Inclure si la semaine chevauche le mois cible
-    if (monday.getMonth() === month || sunday.getMonth() === month) {
-      weeks.push({
-        id:    's' + (weeks.length + 1),
-        label: 'S' + (weeks.length + 1),
-        start: monday,
-        end:   sunday,
-        range: fmt(monday) + ' → ' + fmt(sunday),       // "26/01 → 01/02"
-        short: fmtShort(monday) + ' – ' + fmtShort(sunday), // "26 jan – 1 fév"
-        tab:   fmt(monday) + '→' + fmt(sunday),
-      });
-    }
-    monday = new Date(monday.getTime() + 7 * 86400000);
-    if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
-      if (monday.getMonth() !== month) break;
-    }
-    if (monday.getFullYear() > year + 1) break;
-    if (weeks.length >= 6) break;
-  }
-  return weeks;
+:root {
+  --bg:        #080b14;
+  --bg2:       #0d1220;
+  --bg3:       #111827;
+  --border:    rgba(255,255,255,0.07);
+  --border2:   rgba(255,255,255,0.12);
+  --text:      #f1f5f9;
+  --muted:     rgba(255,255,255,0.4);
+  --muted2:    rgba(255,255,255,0.2);
+  --red:       #ef4444;
+  --red-soft:  rgba(239,68,68,0.12);
+  --blue:      #60a5fa;
+  --blue-soft: rgba(96,165,250,0.12);
+  --gold:      #f59e0b;
+  --gold-soft: rgba(245,158,11,0.12);
+  --green:     #34d399;
+  --green-soft:rgba(52,211,153,0.1);
+  --purple:    #a78bfa;
+  --radius:    14px;
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --font-body: 'Inter', sans-serif;
 }
 
-window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
-window.getMonthWeeks=getMonthWeeks;
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
 
-/* === end sales-data.js === */
-</script>
-<script src="nav.js"></script>
-<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
+/* ═══ LAYOUT ════════════════════════════════════════════════ */
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+/* ═══ TOPBAR ════════════════════════════════════════════════ */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-icon {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 4px 16px rgba(245,158,11,0.3);
+}
+.topbar-title { font-family: var(--font-head); font-size: 22px; font-weight: 800; }
+.topbar-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+/* Month nav */
+.month-nav {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px 12px;
+}
+.month-nav button {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 16px; line-height: 1;
+  padding: 2px 6px;
+  transition: color 0.15s;
+}
+.month-nav button:hover { color: var(--text); }
+#month-lbl {
+  font-family: var(--font-head);
+  font-size: 14px; font-weight: 700;
+  min-width: 120px; text-align: center;
+  color: var(--text);
+}
+
+/* ═══ MEMBERS GRID (vue liste) ══════════════════════════════ */
+#view-liste {}
+.members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.member-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  cursor: pointer;
+  transition: all 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+.member-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--mc, #ef4444);
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+.member-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.member-card:hover::before { opacity: 1; }
+
+.mc-head {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 18px;
+}
+.mc-avatar {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-head); font-size: 18px; font-weight: 800;
+  color: white; flex-shrink: 0;
+}
+.mc-info {}
+.mc-name { font-family: var(--font-head); font-size: 16px; font-weight: 700; }
+.mc-role { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.mc-kpis {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; margin-bottom: 14px;
+}
+.mc-kpi {
+  background: var(--bg3);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.mc-kpi-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+.mc-kpi-val { font-family: var(--font-mono); font-size: 16px; font-weight: 500; }
+
+.mc-progress {
+  margin-bottom: 14px;
+}
+.mc-progress-top {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--muted); margin-bottom: 6px;
+}
+.mc-bar { height: 6px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+.mc-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s; }
+
+.mc-points-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+.mc-pts-label { font-size: 11px; color: var(--muted); }
+.mc-pts-val {
+  font-family: var(--font-mono); font-size: 14px;
+  color: var(--gold);
+  display: flex; align-items: center; gap: 6px;
+}
+.mc-pts-stars { font-size: 12px; }
+
+.mc-next-bonus {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  background: rgba(245,158,11,0.06);
+  border: 1px solid rgba(245,158,11,0.15);
+  border-radius: 10px;
+  font-size: 11px;
+}
+.mc-next-bonus .bonus-icon { font-size: 18px; }
+.mc-next-bonus .bonus-text { color: var(--muted); }
+.mc-next-bonus .bonus-name { font-weight: 600; color: var(--gold); margin-top: 1px; }
+
+.mc-caret {
+  position: absolute; right: 16px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px; color: var(--muted2);
+}
+
+/* ═══ FICHE VIEW ════════════════════════════════════════════ */
+#view-fiche { display: none; }
+
+.fiche-header {
+  display: flex; align-items: center; gap: 16px;
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.fiche-back {
+  width: 36px; height: 36px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: var(--muted);
+  transition: all 0.15s; flex-shrink: 0;
+}
+.fiche-back:hover { background: var(--bg3); color: var(--text); }
+.fiche-avatar {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-head); font-size: 20px; font-weight: 800;
+  color: white; flex-shrink: 0;
+}
+.fiche-title { flex: 1; }
+.fiche-name { font-family: var(--font-head); font-size: 20px; font-weight: 800; }
+.fiche-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* KPI Cards row */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.kpi-card.highlight {
+  background: linear-gradient(135deg, rgba(245,158,11,0.1), rgba(245,158,11,0.04));
+  border-color: rgba(245,158,11,0.2);
+}
+.kpi-label {
+  font-size: 10px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 8px;
+}
+.kpi-val {
+  font-family: var(--font-mono); font-size: 22px; font-weight: 500;
+}
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* Points / Bonus section */
+.bonus-section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.bonus-section-title {
+  font-family: var(--font-head); font-size: 14px; font-weight: 700;
+  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+.bonus-progress-wrap { margin-bottom: 16px; }
+.bonus-milestones {
+  display: flex; gap: 0;
+  position: relative;
+  margin-bottom: 8px;
+}
+.bonus-milestones::before {
+  content: '';
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  height: 2px;
+  background: var(--border);
+  transform: translateY(-50%);
+  z-index: 0;
+}
+.bonus-milestone {
+  flex: 1; text-align: center;
+  position: relative; z-index: 1;
+}
+.bonus-milestone-dot {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 2px solid var(--border2);
+  margin: 0 auto 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px;
+  transition: all 0.3s;
+}
+.bonus-milestone.reached .bonus-milestone-dot {
+  background: var(--gold);
+  border-color: var(--gold);
+  box-shadow: 0 0 12px rgba(245,158,11,0.5);
+}
+.bonus-milestone.next .bonus-milestone-dot {
+  border-color: rgba(245,158,11,0.5);
+  background: rgba(245,158,11,0.1);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0.4)} 50%{box-shadow:0 0 0 6px rgba(245,158,11,0)} }
+
+.bonus-milestone-pts { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.bonus-milestone-gift { font-size: 10px; color: var(--muted2); margin-top: 2px; max-width: 80px; margin-left: auto; margin-right: auto; }
+
+.bonus-bar-track {
+  height: 8px; background: rgba(255,255,255,0.05);
+  border-radius: 99px; overflow: hidden; margin-bottom: 6px;
+}
+.bonus-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  border-radius: 99px;
+  transition: width 0.8s cubic-bezier(.4,0,.2,1);
+  position: relative;
+}
+.bonus-bar-fill::after {
+  content: '';
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 20px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+  border-radius: 99px;
+}
+.bonus-pts-label {
+  font-size: 11px; color: var(--muted);
+  display: flex; justify-content: space-between;
+}
+.bonus-pts-current { font-weight: 600; color: var(--gold); }
+
+/* Deals table */
+.deals-section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.deals-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap; gap: 10px;
+}
+.deals-header-title { font-family: var(--font-head); font-size: 14px; font-weight: 700; }
+.deals-header-actions { display: flex; gap: 8px; }
+
+/* Add deal form */
+.add-deal-form {
+  padding: 16px 20px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  display: none;
+}
+.add-deal-form.open { display: block; }
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+@media(max-width:768px){.form-grid{grid-template-columns:1fr 1fr;}}
+.form-field { display: flex; flex-direction: column; gap: 4px; }
+.form-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+.form-input, .form-select {
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-body); font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-input:focus, .form-select:focus { border-color: var(--gold); }
+.form-select option { background: #1a1a2e; }
+.form-input::placeholder { color: var(--muted2); }
+.form-actions { display: flex; gap: 8px; align-items: center; }
+.comm-preview {
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--gold); padding: 6px 10px;
+  background: var(--gold-soft); border-radius: 6px;
+  margin-left: auto;
+}
+.pts-preview {
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--purple); padding: 6px 10px;
+  background: rgba(167,139,250,0.1); border-radius: 6px;
+}
+
+/* Table */
+.deals-table { width: 100%; border-collapse: collapse; }
+.deals-table th {
+  padding: 10px 20px;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--muted);
+  text-align: left;
+  background: rgba(255,255,255,0.02);
+  border-bottom: 1px solid var(--border);
+}
+.deals-table td {
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 13px;
+  vertical-align: middle;
+}
+.deals-table tr:last-child td { border-bottom: none; }
+.deals-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+.deal-client { font-weight: 600; }
+.deal-email { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.deal-offre {
+  display: inline-flex; align-items: center;
+  padding: 3px 8px; border-radius: 6px;
+  font-size: 11px; font-weight: 700;
+  font-family: var(--font-mono);
+}
+.deal-type-tag {
+  display: inline-flex; align-items: center;
+  padding: 3px 8px; border-radius: 6px;
+  font-size: 11px; font-weight: 600;
+}
+.tag-closing { background: rgba(239,68,68,0.12); color: #ef4444; }
+.tag-setting { background: rgba(96,165,250,0.12); color: #60a5fa; }
+.deal-comm { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--green); }
+.deal-pts { font-family: var(--font-mono); font-size: 12px; color: var(--gold); }
+.deal-status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; }
+.status-ok { background: var(--green); }
+.status-pending { background: var(--gold); }
+.deal-notes { font-size: 11px; color: var(--muted); max-width: 160px; }
+.deal-del {
+  width: 28px; height: 28px;
+  background: none; border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer;
+  color: var(--muted2); font-size: 12px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.deal-del:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #ef4444; }
+
+.deals-empty {
+  padding: 40px; text-align: center;
+  color: var(--muted2); font-size: 13px;
+}
+
+/* Deals footer totals */
+.deals-footer {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 24px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+}
+.deals-footer-item { font-size: 12px; }
+.deals-footer-label { color: var(--muted); margin-right: 6px; }
+.deals-footer-val { font-family: var(--font-mono); font-weight: 500; }
+
+/* ═══ BUTTONS ═══════════════════════════════════════════════ */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  border: none; border-radius: 9px;
+  font-family: var(--font-body); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.btn-primary {
+  background: var(--gold); color: #0a0e1a;
+}
+.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-ghost {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+.btn-sm { padding: 6px 10px; font-size: 11px; }
+
+/* Section title */
+.section-title {
+  font-family: var(--font-head); font-size: 13px; font-weight: 700;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 14px;
+}
+
+/* Offre colors */
+.offre-bp6   { background: rgba(96,165,250,0.12); color: #60a5fa; }
+.offre-bp12  { background: rgba(167,139,250,0.12); color: #a78bfa; }
+.offre-elite { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.offre-titan { background: rgba(239,68,68,0.12); color: #ef4444; }
+</style>
 </head>
 <body>
+<script>
+/* ══════════════════════════════════════════════════════════
+   COMMISSION RULES
+══════════════════════════════════════════════════════════ */
+const COMM_RULES = {
+  // Source: Contrat Full Cycle + Avenant Elite Phénix
+  closing: {
+    'BP 6':   { mensualise: 250,  pif: 300  }, // demi-palier BP12
+    'BP 12':  { mensualise: 500,  pif: 600  }, // contrat principal
+    'Elite':  { mensualise: 800,  pif: 900  }, // avenant Elite Phénix
+    'Titan':  { mensualise: 1200, pif: 1500 },
+  },
+  setting: {
+    'BP 6':   { noBooking: 100,  selfBooking: 50  }, // proportionnel
+    'BP 12':  { noBooking: 250,  selfBooking: 125 }, // contrat principal
+    'Elite':  { noBooking: 300,  selfBooking: 150 }, // avenant Elite Phénix
+    'Titan':  { noBooking: 500,  selfBooking: 250 },
+  },
+};
 
-<div class="topbar">
-  <div class="tb-logo">S</div>
-  <div class="tb-title">Ambitio <em>Sales</em></div>
-  <div class="tb-sep"></div>
-  <div class="tb-page">💰 Commissions</div>
-  <div class="tb-right">
-    <div class="tb-month">
+// Points system
+const POINTS = { 'BP 6': 0.5, 'BP 12': 1, 'Elite': 1.5, 'Titan': 3 };
+
+// Bonus milestones (points cumulatifs sur la carrière)
+const BONUS_MILESTONES = [
+  { pts: 10,  icon: '📱', gift: 'iPad Apple 64Go',          label: '10 pts' },
+  { pts: 50,  icon: '✈️', gift: 'Voyage Maroc 7J/6N 5★',   label: '50 pts' },
+  { pts: 100, icon: '💻', gift: 'Suite Apple (MacBook + iPhone)', label: '100 pts' },
+];
+
+/* ══════════════════════════════════════════════════════════
+   HISTORICAL DATA
+══════════════════════════════════════════════════════════ */
+const MEMBERS_COMM = [
+  {
+    uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke',
+    role: 'Closing + Setting', color: '#ef4444',
+    data: {
+      'Janvier 2026': [
+        { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',          offre:'BP 12', type:'Closing', subtype:'mensualise', date:'24/01/2026', contracteHT:6000, collecteHT:0,   comm:0,   bonus:0, notes:'Setting après self booking', ok:false },
+        { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',     offre:'BP 12', type:'Closing', subtype:'mensualise', date:'30/01/2026', contracteHT:6000, collecteHT:0,   comm:0,   bonus:0, notes:'Setting no-booking',         ok:false },
+      ],
+      'Février 2026': [
+        { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',          offre:'BP 12', type:'Closing', subtype:'mensualise', date:'24/01/2026', contracteHT:6000, collecteHT:500, comm:500, bonus:0,   notes:'Setting après self booking', ok:true },
+        { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com',  offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'27/01/2026', contracteHT:0,    collecteHT:0,   comm:125, bonus:0,   notes:"Setting d'un close d'Elodie", ok:true },
+        { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',    offre:'BP 12', type:'Closing', subtype:'mensualise', date:'30/01/2026', contracteHT:6000, collecteHT:500, comm:500, bonus:0,   notes:'Setting no-booking',         ok:true },
+        { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', subtype:'mensualise', date:'09/02/2026', contracteHT:6000, collecteHT:500, comm:500, bonus:0,   notes:'Setting no-booking',         ok:true },
+        { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', subtype:'mensualise', date:'09/02/2026', contracteHT:6000, collecteHT:500, comm:500, bonus:0,   notes:'Setting no-booking',         ok:true },
+      ],
+      'Mars 2026': [
+        { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',          offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'24/01/2026', contracteHT:0, collecteHT:0, comm:125, bonus:0, notes:'Setting après self booking', ok:false },
+        { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',    offre:'BP 12', type:'Setting', subtype:'noBooking',   date:'30/01/2026', contracteHT:0, collecteHT:0, comm:250, bonus:0, notes:'Setting no-booking',         ok:false },
+        { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Setting', subtype:'noBooking',   date:'09/02/2026', contracteHT:0, collecteHT:0, comm:250, bonus:0, notes:'Setting no-booking',         ok:false },
+        { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Setting', subtype:'noBooking',   date:'09/02/2026', contracteHT:0, collecteHT:0, comm:250, bonus:0, notes:'Setting no-booking',         ok:false },
+        { client:'Fabienne Theres',    email:'theres.fabienne64@gmail.com',      offre:'BP 12', type:'Setting', subtype:'noBooking',   date:'23/02/2026', contracteHT:0, collecteHT:0, comm:250, bonus:0, notes:'Rattrapage échec self booking (enc. 04/03)', ok:false },
+        { client:'Fabienne Theres',    email:'theres.fabienne64@gmail.com',      offre:'BP 12', type:'Closing', subtype:'mensualise', date:'23/02/2026', contracteHT:6000, collecteHT:0, comm:500, bonus:0, notes:'Encaissement le 04/03/2026', ok:true },
+      ],
+    }
+  },
+  {
+    uid: 'elodie', name: 'Elodie', surname: '',
+    role: 'Closing + Setting', color: '#60a5fa',
+    data: {
+      'Janvier 2026': [
+        { client:'Céline Louvel',       email:'cblanchet40@orange.fr',            offre:'BP 12', type:'Closing', subtype:'mensualise', date:'06/01/2026', contracteHT:4797, collecteHT:479.7, comm:479.7, bonus:0, notes:'', ok:true },
+        { client:'Céline Gyongyosi',    email:'cecilegyongyosi@gmail.com',        offre:'BP 12', type:'Closing', subtype:'mensualise', date:'07/01/2026', contracteHT:4797, collecteHT:479.7, comm:479.7, bonus:0, notes:'', ok:true },
+        { client:'Soumia Aouidat',      email:'masoum@hotmail.fr',               offre:'BP 12', type:'Closing', subtype:'mensualise', date:'12/01/2026', contracteHT:4797, collecteHT:479.7, comm:479.7, bonus:0, notes:'', ok:true },
+        { client:'Céline Louvel',       email:'cblanchet40@orange.fr',            offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'06/01/2026', contracteHT:0,    collecteHT:0,     comm:239.85,bonus:0, notes:'', ok:true },
+        { client:'Céline Gyongyosi',    email:'cecilegyongyosi@gmail.com',        offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'07/01/2026', contracteHT:0,    collecteHT:0,     comm:239.85,bonus:0, notes:'', ok:true },
+        { client:'Soumia Aouidat',      email:'masoum@hotmail.fr',               offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'12/01/2026', contracteHT:0,    collecteHT:0,     comm:239.85,bonus:0, notes:'', ok:true },
+        { client:'Véronique Berger',    email:'ivoire-mongeron@orange.fr',        offre:'BP 6',  type:'Closing', subtype:'mensualise', date:'19/01/2026', contracteHT:2000, collecteHT:800,   comm:200,   bonus:0, notes:'', ok:true },
+        { client:'Isabelle Mittard',    email:'lejardindezazou@gmail.com',        offre:'BP 12', type:'Closing', subtype:'pif',        date:'21/01/2026', contracteHT:6000, collecteHT:600,   comm:500,   bonus:0, notes:'', ok:true },
+        { client:'Laurence Lannoy',     email:'belleensoi@gmx.fr',               offre:'BP 12', type:'Closing', subtype:'pif',        date:'23/01/2026', contracteHT:6000, collecteHT:600,   comm:500,   bonus:0, notes:'', ok:true },
+        { client:'Corinne Alaga',       email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Closing', subtype:'mensualise', date:'27/01/2026', contracteHT:6000, collecteHT:0,     comm:0,     bonus:0, notes:'Non encaissé', ok:false },
+      ],
+      'Février 2026': [
+        { client:'Véronique Berger',    email:'ivoire-montgeron@orange.fr',       offre:'BP 6',  type:'Setting', subtype:'selfBooking', date:'19/01/2026', contracteHT:0,    collecteHT:0,     comm:100,   bonus:0,   notes:'', ok:true },
+        { client:'Isabelle Mittard',    email:'lejardindezazou@gmail.com',        offre:'BP 12', type:'Setting', subtype:'selfBooking', date:'21/01/2026', contracteHT:0,    collecteHT:0,     comm:125,   bonus:0,   notes:'', ok:true },
+        { client:'Laurence Lannoy',     email:'belleensoi@gmx.fr',               offre:'BP 12', type:'Setting', subtype:'noBooking',  date:'23/01/2026', contracteHT:0,    collecteHT:0,     comm:250,   bonus:0,   notes:'', ok:true },
+        { client:'Corinne Alaga',       email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Closing', subtype:'mensualise', date:'28/01/2026', contracteHT:6000, collecteHT:600,   comm:500,   bonus:0,   notes:'', ok:true },
+        { client:'Franck Dulong',       email:'lebienvenu.franck@gmail.com',      offre:'BP 12', type:'Closing', subtype:'pif',        date:'19/02/2026', contracteHT:5000, collecteHT:5000,  comm:500,   bonus:100, notes:'Bonus PIF', ok:true },
+        { client:'Julie Moreau',        email:'julita.connexion@hotmail.fr',      offre:'BP 6',  type:'Closing', subtype:'mensualise', date:'24/02/2026', contracteHT:2000, collecteHT:666.6, comm:200,   bonus:0,   notes:'', ok:true },
+      ],
+      'Mars 2026': [
+        { client:'Franck Dulong',       email:'lebienvenu.franck@gmail.com',      offre:'BP 12', type:'Setting', subtype:'noBooking',  date:'19/02/2026', contracteHT:0,    collecteHT:0,     comm:250,   bonus:0, notes:'', ok:false },
+        { client:'Houlaimatou Saw',     email:'sodikaguinexo@gmail.com',          offre:'BP 12', type:'Closing', subtype:'mensualise', date:'23/02/2026', contracteHT:6000, collecteHT:600,   comm:500,   bonus:0, notes:'', ok:false },
+        { client:'Julie Moreau',        email:'julita.connexion@hotmail.fr',      offre:'BP 6',  type:'Setting', subtype:'selfBooking', date:'24/02/2026', contracteHT:0,    collecteHT:0,     comm:50,    bonus:0, notes:'', ok:false },
+      ],
+      'Avril 2026': [
+        { client:'Houlaimatou Saw',     email:'sodikaguinexo@gmail.com',          offre:'BP 12', type:'Setting', subtype:'noBooking',  date:'23/02/2026', contracteHT:0,    collecteHT:0,     comm:250,   bonus:0, notes:'', ok:false },
+      ],
+    }
+  },
+];
+
+/* ══════════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════════ */
+const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+let _cm = (() => {
+  const s = localStorage.getItem('comm_month') || 'Février 2026';
+  const p = s.split(' ');
+  const mi = MONTHS_FR.indexOf(p[0]);
+  return { month: mi >= 0 ? mi : 1, year: parseInt(p[1]) || 2026 };
+})();
+function cmk() { return MONTHS_FR[_cm.month] + ' ' + _cm.year; }
+function prevMonth() { _cm.month--; if (_cm.month < 0) { _cm.month = 11; _cm.year--; } saveCm(); renderAll(); }
+function nextMonth() { _cm.month++; if (_cm.month > 11) { _cm.month = 0; _cm.year++; } saveCm(); renderAll(); }
+function saveCm() {
+  localStorage.setItem('comm_month', cmk());
+  document.getElementById('month-lbl').textContent = cmk();
+}
+
+let currentMember = null;
+let addFormOpen = false;
+
+/* ══════════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════════ */
+function getDeals(uid, month) {
+  const m = MEMBERS_COMM.find(m => m.uid === uid);
+  if (!m) return [];
+  // Check localStorage for overrides
+  const key = `comm_deals_${uid}_${month}`;
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return (m.data[month] || []).map(d => ({...d}));
+}
+
+function saveDeals(uid, month, deals) {
+  const key = `comm_deals_${uid}_${month}`;
+  localStorage.setItem(key, JSON.stringify(deals));
+}
+
+function calcPoints(deals) {
+  return deals.filter(d => d.ok && d.type === 'Closing')
+    .reduce((t, d) => t + (POINTS[d.offre] || 0), 0);
+}
+
+function calcTotalPoints(uid) {
+  // Sum all months points
+  const m = MEMBERS_COMM.find(m => m.uid === uid);
+  if (!m) return 0;
+  const allMonths = [...Object.keys(m.data)];
+  // Also check localStorage months
+  let total = 0;
+  allMonths.forEach(mo => {
+    const deals = getDeals(uid, mo);
+    total += calcPoints(deals);
+  });
+  return total;
+}
+
+function calcComm(deals) {
+  return deals.filter(d => d.ok).reduce((t, d) => t + d.comm + d.bonus, 0);
+}
+
+function calcContracte(deals) {
+  return deals.filter(d => d.ok).reduce((t, d) => t + (d.contracteHT || 0), 0);
+}
+
+function calcCollecte(deals) {
+  return deals.filter(d => d.ok).reduce((t, d) => t + (d.collecteHT || 0), 0);
+}
+
+function nextMilestone(pts) {
+  return BONUS_MILESTONES.find(m => m.pts > pts) || null;
+}
+
+function prevMilestone(pts) {
+  const reached = BONUS_MILESTONES.filter(m => m.pts <= pts);
+  return reached.length ? reached[reached.length - 1] : null;
+}
+
+function fmt(n) {
+  if (!n) return '0 €';
+  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(n) + ' €';
+}
+
+function fmtDec(n) {
+  if (!n) return '0 €';
+  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n) + ' €';
+}
+
+function autoCalcComm(offre, type, subtype) {
+  const rules = COMM_RULES[type.toLowerCase()];
+  if (!rules || !rules[offre]) return 0;
+  const r = rules[offre];
+  if (type === 'Closing') {
+    return subtype === 'pif' ? r.pif : r.mensualise;
+  } else {
+    return subtype === 'noBooking' ? r.noBooking : r.selfBooking;
+  }
+}
+
+function offreClass(offre) {
+  if (offre === 'BP 6') return 'offre-bp6';
+  if (offre === 'BP 12') return 'offre-bp12';
+  if (offre === 'Elite') return 'offre-elite';
+  if (offre === 'Titan') return 'offre-titan';
+  return '';
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDER LISTE
+══════════════════════════════════════════════════════════ */
+function renderListe() {
+  const grid = document.getElementById('members-grid');
+  grid.innerHTML = MEMBERS_COMM.map(m => {
+    const deals = getDeals(m.uid, cmk());
+    const comm = calcComm(deals);
+    const pts = calcPoints(deals);
+    const totalPts = calcTotalPoints(m.uid);
+    const next = nextMilestone(totalPts);
+    const prev = prevMilestone(totalPts);
+    const nClos = deals.filter(d => d.type === 'Closing' && d.ok).length;
+    const nSet  = deals.filter(d => d.type === 'Setting' && d.ok).length;
+
+    const progressPct = next
+      ? Math.min(100, ((totalPts - (prev ? prev.pts : 0)) / (next.pts - (prev ? prev.pts : 0))) * 100)
+      : 100;
+
+    return `<div class="member-card" style="--mc:${m.color}" onclick="openFiche('${m.uid}')">
+      <div class="mc-head">
+        <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
+        <div class="mc-info">
+          <div class="mc-name">${m.name} ${m.surname}</div>
+          <div class="mc-role">${m.role}</div>
+        </div>
+      </div>
+      <div class="mc-kpis">
+        <div class="mc-kpi">
+          <div class="mc-kpi-label">Commissions</div>
+          <div class="mc-kpi-val" style="color:var(--green)">${fmtDec(comm)}</div>
+        </div>
+        <div class="mc-kpi">
+          <div class="mc-kpi-label">Deals ce mois</div>
+          <div class="mc-kpi-val">${nClos} clos · ${nSet} sets</div>
+        </div>
+      </div>
+      <div class="mc-points-row">
+        <div class="mc-pts-label">Points cumulés (total carrière)</div>
+        <div class="mc-pts-val">
+          <span>${totalPts.toFixed(1)} pts</span>
+          <span class="mc-pts-stars">${totalPts >= 100 ? '🌟' : totalPts >= 50 ? '⭐' : totalPts >= 10 ? '✨' : ''}</span>
+        </div>
+      </div>
+      ${next ? `
+      <div class="mc-next-bonus">
+        <span class="bonus-icon">${next.icon}</span>
+        <div>
+          <div class="bonus-text">Prochain bonus à ${next.pts} pts</div>
+          <div class="bonus-name">${next.gift}</div>
+        </div>
+        <div style="margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--gold)">${(next.pts - totalPts).toFixed(1)} pts restants</div>
+      </div>` : `
+      <div class="mc-next-bonus">
+        <span class="bonus-icon">🏆</span>
+        <div class="bonus-name">Tous les paliers débloqués !</div>
+      </div>`}
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDER FICHE
+══════════════════════════════════════════════════════════ */
+function openFiche(uid) {
+  currentMember = MEMBERS_COMM.find(m => m.uid === uid);
+  document.getElementById('view-liste').style.display = 'none';
+  document.getElementById('view-fiche').style.display = 'block';
+  addFormOpen = false;
+  renderFiche();
+}
+
+function backToListe() {
+  currentMember = null;
+  document.getElementById('view-fiche').style.display = 'none';
+  document.getElementById('view-liste').style.display = 'block';
+  renderListe();
+}
+
+function renderFiche() {
+  if (!currentMember) return;
+  const m = currentMember;
+  const deals = getDeals(m.uid, cmk());
+  const comm = calcComm(deals);
+  const contracte = calcContracte(deals);
+  const collecte  = calcCollecte(deals);
+  const pts = calcPoints(deals);
+  const totalPts = calcTotalPoints(m.uid);
+  const next = nextMilestone(totalPts);
+  const prev = prevMilestone(totalPts);
+
+  // Header
+  document.getElementById('fiche-av').style.background = `linear-gradient(135deg,${m.color}88,${m.color})`;
+  document.getElementById('fiche-av').textContent = m.name[0];
+  document.getElementById('fiche-name').textContent = `${m.name} ${m.surname}`;
+  document.getElementById('fiche-sub').textContent = `${m.role} · ${cmk()}`;
+  document.getElementById('sub-month-label').textContent = cmk();
+
+  // KPIs
+  document.getElementById('kpi-comm').textContent = fmtDec(comm);
+  document.getElementById('kpi-contracte').textContent = fmt(contracte);
+  document.getElementById('kpi-collecte').textContent = fmt(collecte);
+  document.getElementById('kpi-deals').textContent = deals.filter(d=>d.ok).length;
+  document.getElementById('kpi-pts-month').textContent = pts.toFixed(1) + ' pts';
+  document.getElementById('kpi-pts-total').textContent = totalPts.toFixed(1) + ' pts';
+
+  // Bonus section
+  renderBonusSection(totalPts, pts, next, prev);
+
+  // Deals table
+  renderDealsTable(deals);
+}
+
+function renderBonusSection(totalPts, monthPts, next, prev) {
+  const html = BONUS_MILESTONES.map(ms => {
+    const reached = totalPts >= ms.pts;
+    const isNext = !reached && (!prev || ms.pts > (prev ? prev.pts : 0)) && ms === nextMilestone(totalPts);
+    return `<div class="bonus-milestone ${reached ? 'reached' : ''} ${isNext ? 'next' : ''}">
+      <div class="bonus-milestone-dot">${reached ? '✓' : ''}</div>
+      <div class="bonus-milestone-pts">${ms.label}</div>
+      <div class="bonus-milestone-gift">${ms.icon} ${ms.gift}</div>
+    </div>`;
+  }).join('');
+
+  const progressFrom = prev ? prev.pts : 0;
+  const progressTo   = next ? next.pts : BONUS_MILESTONES[BONUS_MILESTONES.length-1].pts;
+  const pct = next
+    ? Math.min(100, ((totalPts - progressFrom) / (progressTo - progressFrom)) * 100)
+    : 100;
+
+  document.getElementById('bonus-milestones').innerHTML = html;
+  document.getElementById('bonus-bar').style.width = pct + '%';
+  document.getElementById('bonus-pts-current').textContent = totalPts.toFixed(1) + ' pts';
+  document.getElementById('bonus-pts-next').textContent = next ? `Prochain: ${next.pts} pts (${(next.pts - totalPts).toFixed(1)} restants)` : '🏆 Tous débloqués !';
+}
+
+function renderDealsTable(deals) {
+  const tbody = document.getElementById('deals-tbody');
+  if (!deals.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="deals-empty">Aucun deal ce mois — ajoute le premier ↑</div></td></tr>`;
+  } else {
+    tbody.innerHTML = deals.map((d, i) => `
+      <tr>
+        <td>
+          <div class="deal-client">${d.client}</div>
+          <div class="deal-email">${d.email}</div>
+        </td>
+        <td><span class="deal-offre ${offreClass(d.offre)}">${d.offre}</span></td>
+        <td><span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}">${d.type}</span></td>
+        <td style="font-size:12px;color:var(--muted)">${d.date || '—'}</td>
+        <td>
+          <div class="deal-comm">${fmtDec(d.comm)}${d.bonus ? ` <span style="font-size:11px;color:var(--gold)">+${d.bonus}€</span>` : ''}</div>
+        </td>
+        <td><span class="deal-pts">${d.type === 'Closing' ? '⭐ ×' + (POINTS[d.offre] || 0) : '—'}</span></td>
+        <td onclick="toggleDealOk(${i})" style="cursor:pointer" title="Clic pour basculer le statut">
+          <div class="deal-status">
+            <div class="status-dot ${d.ok ? 'status-ok' : 'status-pending'}"></div>
+            <span style="color:${d.ok ? 'var(--green)' : 'var(--gold)'}">${d.ok ? '✓ Validé' : '⏳ En attente'}</span>
+          </div>
+        </td>
+        <td class="deal-notes">${d.notes || '—'}</td>
+        <td>
+          <button class="deal-del" onclick="deleteDeal(${i})" title="Supprimer">✕</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  // Footer
+  const valid = deals.filter(d => d.ok);
+  document.getElementById('footer-comm').textContent = fmtDec(calcComm(deals));
+  document.getElementById('footer-contracte').textContent = fmt(calcContracte(deals));
+  document.getElementById('footer-collecte').textContent = fmt(calcCollecte(deals));
+}
+
+/* ══════════════════════════════════════════════════════════
+   ADD DEAL
+══════════════════════════════════════════════════════════ */
+function toggleAddForm() {
+  addFormOpen = !addFormOpen;
+  document.getElementById('add-deal-form').className = 'add-deal-form' + (addFormOpen ? ' open' : '');
+  if (addFormOpen) {
+    document.getElementById('f-client').focus();
+    updateCommPreview();
+  }
+}
+
+function updateCommPreview() {
+  const offre   = document.getElementById('f-offre').value;
+  const type    = document.getElementById('f-type').value;
+  const subtype = document.getElementById('f-subtype').value;
+  const comm = autoCalcComm(offre, type, subtype);
+  const pts  = type === 'Closing' ? (POINTS[offre] || 0) : 0;
+  document.getElementById('comm-preview').textContent = fmtDec(comm);
+  document.getElementById('pts-preview').textContent = pts + ' pts';
+  document.getElementById('f-comm').value = comm;
+
+  // Update subtype options based on type
+  const st = document.getElementById('f-subtype');
+  if (type === 'Closing') {
+    st.innerHTML = '<option value="mensualise">Mensualise</option><option value="pif">PIF (comptant)</option>';
+  } else {
+    st.innerHTML = '<option value="noBooking">No-Booking</option><option value="selfBooking">Self-Booking</option>';
+  }
+  // Re-calc after updating
+  const comm2 = autoCalcComm(offre, type, document.getElementById('f-subtype').value);
+  document.getElementById('comm-preview').textContent = fmtDec(comm2);
+  document.getElementById('f-comm').value = comm2;
+}
+
+function addDeal() {
+  const offre   = document.getElementById('f-offre').value;
+  const type    = document.getElementById('f-type').value;
+  const subtype = document.getElementById('f-subtype').value;
+  const client  = document.getElementById('f-client').value.trim();
+  const email   = document.getElementById('f-email').value.trim();
+  const date    = document.getElementById('f-date').value;
+  const commVal = parseFloat(document.getElementById('f-comm').value) || autoCalcComm(offre, type, subtype);
+  const bonus   = parseFloat(document.getElementById('f-bonus').value) || 0;
+  const notes   = document.getElementById('f-notes').value.trim();
+  const ok      = document.getElementById('f-ok').checked;
+
+  if (!client) { document.getElementById('f-client').focus(); return; }
+
+  const deals = getDeals(currentMember.uid, cmk());
+  deals.push({ client, email, offre, type, subtype, date, contracteHT: 0, collecteHT: 0, comm: commVal, bonus, notes, ok });
+  saveDeals(currentMember.uid, cmk(), deals);
+
+  // Reset form
+  document.getElementById('f-client').value = '';
+  document.getElementById('f-email').value = '';
+  document.getElementById('f-date').value = '';
+  document.getElementById('f-bonus').value = '';
+  document.getElementById('f-notes').value = '';
+  document.getElementById('f-ok').checked = false;
+
+  renderFiche();
+}
+
+function deleteDeal(i) {
+  const deals = getDeals(currentMember.uid, cmk());
+  deals.splice(i, 1);
+  saveDeals(currentMember.uid, cmk(), deals);
+  renderFiche();
+}
+
+function toggleDealOk(i) {
+  const deals = getDeals(currentMember.uid, cmk());
+  deals[i].ok = !deals[i].ok;
+  saveDeals(currentMember.uid, cmk(), deals);
+  renderFiche();
+}
+
+/* ══════════════════════════════════════════════════════════
+   RENDER ALL
+══════════════════════════════════════════════════════════ */
+function renderAll() {
+  document.getElementById('month-lbl').textContent = cmk();
+  if (currentMember) renderFiche();
+  else renderListe();
+}
+
+/* ══════════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('month-lbl').textContent = cmk();
+  renderListe();
+});
+</script>
+
+<div class="page">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-icon">💰</div>
+      <div>
+        <div class="topbar-title">Commissions</div>
+        <div class="topbar-sub">Suivi des rémunérations par commercial</div>
+      </div>
+    </div>
+    <div class="month-nav">
       <button onclick="prevMonth()">&#9664;</button>
       <span id="month-lbl">Février 2026</span>
       <button onclick="nextMonth()">&#9654;</button>
     </div>
-    <div class="tb-user">
-      <div class="tb-av" id="tb-av">G</div>
-      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
-    </div>
-  </div>
-</div>
-
-<div class="page">
-
-  <div class="page-header-row">
-    <div>
-      <div class="page-title">Commissions — Tracking</div>
-      <div class="page-sub">Guillaume Bilcke · <span id="sub-month">Février 2026</span></div>
-    </div>
-    <div class="page-actions">
-      <button class="btn btn-ghost" onclick="openAddDeal()">+ Ajouter deal</button>
-      <button class="btn btn-primary" onclick="submitCommissions()">📤 Soumettre</button>
-    </div>
   </div>
 
-  <div class="g13">
-
-    <!-- LEFT: Summary + History -->
-    <div style="display:flex;flex-direction:column;gap:13px">
-
-      <!-- Summary card -->
-      <div class="comm-summary" id="comm-summary"></div>
-
-      <!-- History -->
-      <div class="card">
-        <div class="card-header"><span class="card-title">Historique mensuel</span></div>
-        <div id="history"></div>
-      </div>
-
-    </div>
-
-    <!-- RIGHT: Deals table -->
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title" id="table-title">Deals — Février 2026</span>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="data-table" id="deals-table" style="width:100%;min-width:700px">
-          <thead>
-            <tr>
-              <th>Client</th><th>Offre</th><th>Type</th><th>Date</th>
-              <th>Contracté HT</th><th>Collecté HT</th><th>Commission</th><th>Bonus</th><th>Statut</th>
-            </tr>
-          </thead>
-          <tbody id="deals-body"></tbody>
-        </table>
-      </div>
-    </div>
-
+  <!-- VUE LISTE -->
+  <div id="view-liste">
+    <div class="members-grid" id="members-grid"></div>
   </div>
 
-</div>
+  <!-- VUE FICHE -->
+  <div id="view-fiche">
 
-<!-- ADD DEAL MODAL -->
-<div id="add-modal" style="display:none">
-  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
-    <div class="modal">
-      <div class="modal-header">
-        <div class="modal-title">Nouveau deal</div>
-        <button class="modal-close" onclick="closeModal()">✕</button>
+    <!-- Header fiche -->
+    <div class="fiche-header">
+      <button class="fiche-back" onclick="backToListe()">←</button>
+      <div class="fiche-avatar" id="fiche-av">G</div>
+      <div class="fiche-title">
+        <div class="fiche-name" id="fiche-name">Guillaume Bilcke</div>
+        <div class="fiche-sub" id="fiche-sub">Closing + Setting · Février 2026</div>
       </div>
-      <div class="modal-body">
-        <div class="form-row">
-          <div class="form-field">
-            <label class="form-label">Client</label>
-            <input class="form-input" id="nd-client" placeholder="Nom du client"/>
-          </div>
-          <div class="form-field">
-            <label class="form-label">Email</label>
-            <input class="form-input" id="nd-email" type="email" placeholder="email@..."/>
-          </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-row">
+      <div class="kpi-card highlight">
+        <div class="kpi-label">Commissions du mois</div>
+        <div class="kpi-val" id="kpi-comm" style="color:var(--green)">0 €</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Contracté HT</div>
+        <div class="kpi-val" id="kpi-contracte">0 €</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Collecté HT</div>
+        <div class="kpi-val" id="kpi-collecte">0 €</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Deals validés</div>
+        <div class="kpi-val" id="kpi-deals">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Points ce mois</div>
+        <div class="kpi-val" id="kpi-pts-month" style="color:var(--gold)">0 pts</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Points total carrière</div>
+        <div class="kpi-val" id="kpi-pts-total" style="color:var(--gold)">0 pts</div>
+      </div>
+    </div>
+
+    <!-- Bonus section -->
+    <div class="bonus-section">
+      <div class="bonus-section-title">🎁 Programme de Bonus Vente</div>
+      <div class="bonus-milestones" id="bonus-milestones"></div>
+      <div style="height:16px"></div>
+      <div class="bonus-bar-track">
+        <div class="bonus-bar-fill" id="bonus-bar" style="width:0%"></div>
+      </div>
+      <div class="bonus-pts-label">
+        <span class="bonus-pts-current" id="bonus-pts-current">0 pts</span>
+        <span id="bonus-pts-next">—</span>
+      </div>
+    </div>
+
+    <!-- Deals section -->
+    <div class="deals-section">
+      <div class="deals-header">
+        <div class="deals-header-title">📋 Deals — <span style="color:var(--muted);font-weight:400;font-size:13px" id="sub-month-label"></span></div>
+        <div class="deals-header-actions">
+          <button class="btn btn-primary btn-sm" onclick="toggleAddForm()">+ Ajouter un deal</button>
         </div>
-        <div class="form-row">
+      </div>
+
+      <!-- Add deal form -->
+      <div class="add-deal-form" id="add-deal-form">
+        <div class="form-grid">
+          <div class="form-field" style="grid-column:span 2">
+            <label class="form-label">Nom du client *</label>
+            <input class="form-input" id="f-client" placeholder="Prénom Nom"/>
+          </div>
+          <div class="form-field" style="grid-column:span 2">
+            <label class="form-label">Email</label>
+            <input class="form-input" id="f-email" placeholder="email@exemple.com"/>
+          </div>
           <div class="form-field">
             <label class="form-label">Offre</label>
-            <input class="form-input" id="nd-offre" placeholder="BP 12, Mentor..."/>
+            <select class="form-select" id="f-offre" onchange="updateCommPreview()">
+              <option value="BP 12">BP 12</option>
+              <option value="BP 6">BP 6</option>
+              <option value="Elite">Elite Phénix</option>
+              <option value="Titan">Titan</option>
+            </select>
           </div>
           <div class="form-field">
             <label class="form-label">Type</label>
-            <select class="form-input" id="nd-type">
+            <select class="form-select" id="f-type" onchange="updateCommPreview()">
               <option value="Closing">Closing</option>
               <option value="Setting">Setting</option>
             </select>
           </div>
-        </div>
-        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Modalité</label>
+            <select class="form-select" id="f-subtype" onchange="updateCommPreview()">
+              <option value="mensualise">Mensualise</option>
+              <option value="pif">PIF (comptant)</option>
+            </select>
+          </div>
           <div class="form-field">
             <label class="form-label">Date du close</label>
-            <input class="form-input" id="nd-date" type="date"/>
-          </div>
-          <div class="form-field">
-            <label class="form-label">Contracté HT (€)</label>
-            <input class="form-input" id="nd-contracte" type="number" placeholder="6000"/>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-field">
-            <label class="form-label">Collecté HT (€)</label>
-            <input class="form-input" id="nd-collecte" type="number" placeholder="500"/>
+            <input class="form-input" id="f-date" type="date"/>
           </div>
           <div class="form-field">
             <label class="form-label">Commission (€)</label>
-            <input class="form-input" id="nd-comm" type="number" placeholder="500"/>
+            <input class="form-input" id="f-comm" type="number" placeholder="auto-calculé"/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Bonus (€)</label>
+            <input class="form-input" id="f-bonus" type="number" placeholder="0"/>
+          </div>
+          <div class="form-field" style="grid-column:span 2">
+            <label class="form-label">Notes</label>
+            <input class="form-input" id="f-notes" placeholder="Observations..."/>
           </div>
         </div>
-        <div class="form-field">
-          <label class="form-label">Notes</label>
-          <input class="form-input" id="nd-notes" placeholder="Contexte du close..."/>
+        <div class="form-actions">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--muted)">
+            <input type="checkbox" id="f-ok" style="accent-color:var(--green)"/>
+            Deal validé / encaissé
+          </label>
+          <span class="pts-preview" id="pts-preview">0 pts</span>
+          <span class="comm-preview" id="comm-preview">0 €</span>
+          <button class="btn btn-ghost btn-sm" onclick="toggleAddForm()">Annuler</button>
+          <button class="btn btn-primary btn-sm" onclick="addDeal()">✓ Ajouter</button>
         </div>
-        <div style="display:flex;gap:9px;margin-top:18px">
-          <button class="btn btn-ghost" style="flex:1" onclick="closeModal()">Annuler</button>
-          <button class="btn btn-primary" style="flex:1" onclick="saveDeal()">💾 Ajouter</button>
+      </div>
+
+      <!-- Table -->
+      <table class="deals-table">
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Offre</th>
+            <th>Type</th>
+            <th>Date</th>
+            <th>Commission</th>
+            <th>Points</th>
+            <th>Statut</th>
+            <th>Notes</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="deals-tbody"></tbody>
+      </table>
+
+      <div class="deals-footer">
+        <div class="deals-footer-item">
+          <span class="deals-footer-label">Contracté HT :</span>
+          <span class="deals-footer-val" id="footer-contracte">0 €</span>
+        </div>
+        <div class="deals-footer-item">
+          <span class="deals-footer-label">Collecté HT :</span>
+          <span class="deals-footer-val" id="footer-collecte">0 €</span>
+        </div>
+        <div class="deals-footer-item" style="font-size:14px">
+          <span class="deals-footer-label">Total commissions :</span>
+          <span class="deals-footer-val" id="footer-comm" style="color:var(--green);font-size:16px">0 €</span>
         </div>
       </div>
     </div>
-  </div>
-</div>
 
-<script>
-const MONTHS = DB.months;
-let _cm = (() => { const s=localStorage.getItem('sales_month')||'Février 2026'; const p=s.split(' '); return{month:MONTHS.indexOf(p[0]),year:parseInt(p[1])||2026}; })();
-function currentMonthKey() { return MONTHS[_cm.month]+' '+_cm.year; }
-function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); renderAll(); }
-function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); renderAll(); }
-function _saveMonth() { localStorage.setItem('sales_month',currentMonthKey()); document.getElementById('month-lbl').textContent=currentMonthKey(); document.getElementById('sub-month').textContent=currentMonthKey(); }
+  </div><!-- /view-fiche -->
 
-let selectedDeal = null;
-
-function renderAll() {
-  const mk = currentMonthKey();
-  const data = DB.commissions[mk] || { contracte:0, collecte:0, totalComm:0, statut:'En attente', deals:[] };
-
-  document.getElementById('table-title').textContent = 'Deals — ' + mk;
-
-  // Summary
-  document.getElementById('comm-summary').innerHTML = `
-    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(255,255,255,0.35);margin-bottom:8px">GUILLAUME BILCKE</div>
-    <div class="comm-total">${U.euro(data.totalComm)}</div>
-    <div class="comm-row"><span>Cash contracté</span><span style="font-weight:600">${U.euro(data.contracte)}</span></div>
-    <div class="comm-row"><span>Cash collecté</span><span style="font-weight:600">${U.euro(data.collecte)}</span></div>
-    <div class="comm-row"><span>Nombre de deals</span><span style="font-weight:600">${data.deals.length}</span></div>
-    <div class="comm-row"><span>Total commissions</span><span>${U.euro(data.totalComm)}</span></div>
-    <div class="status-badge ${data.statut==='Validé'?'status-paid':'status-pending'}" style="width:100%">
-      ${data.statut==='Validé'?'✅ Validé':'⏳ '+data.statut} · Paiement max le 5 du mois
-    </div>`;
-
-  // History
-  document.getElementById('history').innerHTML = Object.entries(DB.commissions).map(([k,v]) => `
-    <div class="pr" style="cursor:pointer" onclick="jumpToMonth('${k}')">
-      <div class="pr-l" style="font-size:12px">${k}</div>
-      <div style="margin-left:auto;font-family:var(--font-m);font-size:12px;color:${v.totalComm>0?'var(--gold)':'var(--muted)'}">${U.euro(v.totalComm)}</div>
-      <div style="margin-left:10px">
-        <span class="badge ${v.statut==='Validé'?'badge-green':'badge-gold'}">${v.statut==='Validé'?'✓ Validé':'En attente'}</span>
-      </div>
-    </div>`).join('');
-
-  // Deals table
-  const tbody = document.getElementById('deals-body');
-  if (data.deals.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:35px;color:var(--muted)">Aucun deal pour ce mois. Cliquez sur "+ Ajouter deal" pour commencer.</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = data.deals.map((d,i) => `
-    <tr onclick="selectDeal(${i})" style="${selectedDeal===i?'background:rgba(239,68,68,0.05);':''};cursor:pointer">
-      <td>
-        <div style="font-weight:600;font-size:12px">${d.client}</div>
-        <div style="font-size:10px;color:var(--muted)">${d.email}</div>
-      </td>
-      <td style="font-size:12px">${d.offre}</td>
-      <td><span class="badge ${d.type==='Closing'?'badge-red':'badge-blue'}">${d.type}</span></td>
-      <td class="td-mono" style="font-size:11px">${d.date}</td>
-      <td class="td-mono">${d.cHT?U.euro(d.cHT):'—'}</td>
-      <td class="td-mono">${d.coHT?U.euro(d.coHT):'—'}</td>
-      <td class="td-mono" style="color:var(--gold);font-weight:700">${U.euro(d.comm)}</td>
-      <td class="td-mono">${d.bonus?U.euro(d.bonus):'—'}</td>
-      <td><span class="badge ${d.ok?'badge-green':'badge-gold'}">${d.ok?'✓ Vérifié':'En attente'}</span></td>
-    </tr>`).join('');
-}
-
-function selectDeal(i) {
-  selectedDeal = selectedDeal === i ? null : i;
-  renderAll();
-}
-
-function jumpToMonth(key) {
-  const parts = key.split(' ');
-  const mIdx  = MONTHS.indexOf(parts[0]);
-  if (mIdx >= 0) { _cm.month = mIdx; _cm.year = parseInt(parts[1]); }
-  _saveMonth();
-  renderAll();
-}
-
-function openAddDeal() { document.getElementById('add-modal').style.display='block'; }
-function closeModal()  { document.getElementById('add-modal').style.display='none'; }
-
-function saveDeal() {
-  const mk = currentMonthKey();
-  if (!DB.commissions[mk]) {
-    DB.commissions[mk] = { contracte:0, collecte:0, totalComm:0, statut:'En attente', deals:[] };
-  }
-  const deal = {
-    client:  document.getElementById('nd-client').value  || 'Client',
-    email:   document.getElementById('nd-email').value   || '',
-    offre:   document.getElementById('nd-offre').value   || 'BP 12',
-    type:    document.getElementById('nd-type').value,
-    date:    document.getElementById('nd-date').value    || new Date().toLocaleDateString('fr-FR'),
-    cHT:     parseFloat(document.getElementById('nd-contracte').value) || null,
-    coHT:    parseFloat(document.getElementById('nd-collecte').value)  || null,
-    comm:    parseFloat(document.getElementById('nd-comm').value)      || 0,
-    bonus:   0, notes: document.getElementById('nd-notes').value, ok: false,
-  };
-  DB.commissions[mk].deals.push(deal);
-  DB.commissions[mk].totalComm  += deal.comm;
-  DB.commissions[mk].contracte  += deal.cHT  || 0;
-  DB.commissions[mk].collecte   += deal.coHT || 0;
-  closeModal();
-  U.toast('✅ Deal ajouté !');
-  // Reset form
-  ['nd-client','nd-email','nd-offre','nd-date','nd-contracte','nd-collecte','nd-comm','nd-notes'].forEach(id => {
-    const el = document.getElementById(id); if(el) el.value='';
-  });
-  renderAll();
-}
-
-function submitCommissions() {
-  const mk = currentMonthKey();
-  if (DB.commissions[mk]) DB.commissions[mk].statut = 'Soumis';
-  U.toast('📤 Commissions soumises pour validation !');
-  renderAll();
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('month-lbl').textContent = currentMonthKey();
-  document.getElementById('sub-month').textContent = currentMonthKey();
-  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
-  document.getElementById('tb-nm').textContent = nm;
-  document.getElementById('tb-av').textContent = nm[0].toUpperCase();
-  renderAll();
-
-  // Firebase : connecte et écoute les données en temps réel
-  const _fbUser = U.getCurrentUser();
-  if (window.firebase && window.firebase.firestore && !Fire.db) {
-    Fire.init(window.firebase.firestore(), _fbUser.uid);
-  }
-  if (Fire.db) {
-    Fire.watchUser(_fbUser.uid, currentMonthKey(), (data) => {
-      if (data) { Fire.apply(data); renderAll(); }
-    });
-  }
-  // Refresh auto si DB mis à jour (ex: changement depuis saisie)
-  document.addEventListener('db:updated', renderAll);
-});
-
-</script>
-
+</div><!-- /page -->
 </body>
 </html>
