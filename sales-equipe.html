@@ -785,15 +785,8 @@ function renderCallCards(uid, calls) {
           
           <!-- Scores éditables -->
           <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:8px">Scores /5</div>
-          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">
-            ${['ouverture','decouverte','pitch','objections','closing'].map(s => `
-              <div style="text-align:center">
-                <div style="font-size:10px;color:var(--muted);margin-bottom:4px">${s.charAt(0).toUpperCase()+s.slice(1)}</div>
-                <div class="star-rating" id="stars-${uid}-${i}-${s}">
-                  ${[1,2,3,4,5].map(n => `<span class="star ${(c.scores&&c.scores[s]>=n)?'on':''}" onclick="setStar('${uid}',${i},'${s}',${n})" style="cursor:pointer;font-size:18px;user-select:none">${(c.scores&&c.scores[s]>=n)?'⭐':'☆'}</span>`).join('')}
-                </div>
-                <input type="hidden" id="score-${uid}-${i}-${s}" value="${(c.scores&&c.scores[s])||0}"/>
-              </div>`).join('')}
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px" id="stars-grid-${uid}-${i}">
+            ${renderStarsGrid(uid, i, c.scores)}
           </div>
           
           <textarea class="debrief-edit" id="edit-forts-${uid}-${i}" placeholder="Points forts...">${c.points_forts||''}</textarea>
@@ -850,52 +843,98 @@ function addCall(uid) {
   toast('✅ Appel enregistré');
 }
 
-// Interactive star rating
+// ── Render star grid (pure function, no nested template literals) ──
+function renderStarsGrid(uid, i, scores) {
+  const keys = ['ouverture','decouverte','pitch','objections','closing'];
+  let html = '';
+  keys.forEach(function(key) {
+    const val = (scores && scores[key]) ? +scores[key] : 0;
+    let stars = '';
+    for (let n = 1; n <= 5; n++) {
+      const filled = val >= n;
+      stars += '<span class="star ' + (filled ? 'on' : '') + '" '
+        + 'onclick="setStar(\'' + uid + '\',' + i + ',\'' + key + '\',' + n + ')" '
+        + 'style="cursor:pointer;font-size:20px;line-height:1.2;user-select:none;transition:transform .1s" '
+        + 'onmouseover="this.style.transform=\'scale(1.2)\'" '
+        + 'onmouseout="this.style.transform=\'scale(1)\'">'
+        + (filled ? '⭐' : '☆') + '</span>';
+    }
+    html += '<div style="text-align:center">'
+      + '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.4px">' + key.charAt(0).toUpperCase() + key.slice(1) + '</div>'
+      + '<div class="star-rating" id="stars-' + uid + '-' + i + '-' + key + '" style="display:flex;justify-content:center;gap:1px">' + stars + '</div>'
+      + '<input type="hidden" id="score-' + uid + '-' + i + '-' + key + '" value="' + val + '"/>'
+      + '</div>';
+  });
+  return html;
+}
+
+// Interactive star click
 function setStar(uid, i, scoreKey, val) {
-  document.getElementById(`score-${uid}-${i}-${scoreKey}`).value = val;
-  const container = document.getElementById(`stars-${uid}-${i}-${scoreKey}`);
+  const hiddenInput = document.getElementById('score-' + uid + '-' + i + '-' + scoreKey);
+  if (hiddenInput) hiddenInput.value = val;
+  const container = document.getElementById('stars-' + uid + '-' + i + '-' + scoreKey);
   if (!container) return;
-  container.querySelectorAll('.star').forEach((star, idx) => {
+  container.querySelectorAll('.star').forEach(function(star, idx) {
     const on = idx < val;
     star.textContent = on ? '⭐' : '☆';
     star.classList.toggle('on', on);
   });
+  // Auto-save on star change
+  scheduleAutoSave(uid, i);
 }
 
-function saveCall(uid, i) {
+// Auto-save debounce per call
+const _autoSaveTimers = {};
+function scheduleAutoSave(uid, i) {
+  const key = uid + '-' + i;
+  clearTimeout(_autoSaveTimers[key]);
+  _autoSaveTimers[key] = setTimeout(function() { saveCall(uid, i, true); }, 900);
+}
+
+function saveCall(uid, i, silent) {
   const calls = getCallBreakdowns(uid);
-  calls[i].points_forts      = document.getElementById(`edit-forts-${uid}-${i}`)?.value || '';
-  calls[i].axes_amelioration = document.getElementById(`edit-axes-${uid}-${i}`)?.value || '';
-  calls[i].note_head         = document.getElementById(`edit-note-${uid}-${i}`)?.value || '';
-  calls[i].statut            = document.getElementById(`edit-statut-${uid}-${i}`)?.value || 'En attente';
+  if (!calls[i]) return;
+  calls[i].points_forts      = document.getElementById('edit-forts-' + uid + '-' + i)?.value || '';
+  calls[i].axes_amelioration = document.getElementById('edit-axes-' + uid + '-' + i)?.value || '';
+  calls[i].note_head         = document.getElementById('edit-note-' + uid + '-' + i)?.value || '';
+  calls[i].statut            = document.getElementById('edit-statut-' + uid + '-' + i)?.value || 'En attente';
   // Collect scores from hidden inputs
   const scores = {};
-  ['ouverture','decouverte','pitch','objections','closing'].forEach(s => {
-    const el = document.getElementById(`score-${uid}-${i}-${s}`);
-    if (el && el.value) scores[s] = +el.value;
+  ['ouverture','decouverte','pitch','objections','closing'].forEach(function(s) {
+    const el = document.getElementById('score-' + uid + '-' + i + '-' + s);
+    if (el && el.value && +el.value > 0) scores[s] = +el.value;
   });
   if (Object.keys(scores).length) calls[i].scores = scores;
   setCallBreakdowns(uid, calls);
-  // Update header score display without closing card
+  // Update statut badge in header
   const c = calls[i];
-  const card = document.getElementById(`cc-card-${uid}-${i}`);
+  const card = document.getElementById('cc-card-' + uid + '-' + i);
   if (card) {
-    const badges = card.querySelectorAll('.call-card-badge');
-    badges.forEach(b => {
+    card.querySelectorAll('.call-card-badge').forEach(function(b) {
       if (b.textContent === 'Débriefé' || b.textContent === 'En attente') {
         b.textContent = c.statut;
-        b.style.background = c.statut==='Débriefé'?'rgba(52,211,153,.1)':'rgba(245,158,11,.1)';
-        b.style.color = c.statut==='Débriefé'?'var(--green)':'var(--gold)';
+        b.style.background = c.statut === 'Débriefé' ? 'rgba(52,211,153,.1)' : 'rgba(245,158,11,.1)';
+        b.style.color = c.statut === 'Débriefé' ? 'var(--green)' : 'var(--gold)';
       }
     });
-    // Update avg score
+    // Update avg score display
     if (c.scores && Object.keys(c.scores).length) {
-      const avg = Object.values(c.scores).reduce((a,b)=>a+(+b||0),0)/Object.keys(c.scores).length;
-      const scoreEl = card.querySelector('[data-avg-score]');
-      if (scoreEl) { scoreEl.textContent = avg.toFixed(1); }
+      const vals = Object.values(c.scores).map(Number);
+      const avg = vals.reduce(function(a,b){return a+b;},0) / vals.length;
+      const avgEl = card.querySelector('.score-avg-display');
+      if (avgEl) avgEl.textContent = avg.toFixed(1);
     }
   }
-  toast('✅ Débrief sauvegardé');
+  if (!silent) toast('✅ Débrief sauvegardé');
+  else showAutoSaveDot(uid, i);
+}
+
+function showAutoSaveDot(uid, i) {
+  const btn = document.querySelector('#cc-card-' + uid + '-' + i + ' .save-indicator');
+  if (!btn) return;
+  btn.textContent = '✓ Sauvegardé';
+  btn.style.opacity = '1';
+  setTimeout(function() { btn.style.opacity = '0'; }, 2000);
 }
 
 function deleteCall(uid, i) {
