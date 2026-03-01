@@ -165,6 +165,19 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('tb-nm').textContent = nm;
   document.getElementById('tb-av').textContent = nm[0].toUpperCase();
   renderAll();
+
+  // Firebase : connecte et écoute les données en temps réel
+  const _fbUser = U.getCurrentUser();
+  if (window.firebase && window.firebase.firestore && !Fire.db) {
+    Fire.init(window.firebase.firestore(), _fbUser.uid);
+  }
+  if (Fire.db) {
+    Fire.watchUser(_fbUser.uid, currentMonthKey(), (data) => {
+      if (data) { Fire.apply(data); renderAll(); }
+    });
+  }
+  // Refresh auto si DB mis à jour (ex: changement depuis saisie)
+  document.addEventListener('db:updated', renderAll);
 });
 </script>
 

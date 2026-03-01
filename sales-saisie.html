@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Saisie</title>
+<link rel="stylesheet" href="sales.css"/>
+<script src="sales-data.js"></script>
+<script src="nav.js"></script>
+<script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';})();</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-logo">S</div>
+  <div class="tb-title">Ambitio <em>Sales</em></div>
+  <div class="tb-sep"></div>
+  <div class="tb-page">✏️ Saisie des données</div>
+  <div class="tb-right">
+    <div class="tb-month">
+      <button onclick="prevMonth()">&#9664;</button>
+      <span id="month-lbl">Février 2026</span>
+      <button onclick="nextMonth()">&#9654;</button>
+    </div>
+    <div class="tb-user">
+      <div class="tb-av" id="tb-av">G</div>
+      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header-row">
+    <div>
+      <div class="page-title">Saisie — <span id="hdr-month">Février 2026</span></div>
+      <div class="page-sub" id="hdr-user">Chargement...</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="save-status" style="font-size:11px;color:var(--muted)"></div>
+      <div class="tabs">
+        <div class="tab active" onclick="setSection('closing')" id="tab-closing">🎯 Closing</div>
+        <div class="tab" onclick="setSection('setting')" id="tab-setting">📞 Setting</div>
+        <div class="tab" onclick="setSection('deals')" id="tab-deals">💰 Deals</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION CLOSING -->
+  <div id="section-closing">
+
+    <div style="background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.12);border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:12px;color:var(--muted);line-height:1.6">
+      💡 Saisis tes chiffres <b style="color:var(--text)">semaine par semaine</b>. Les totaux mensuels et ratios sont calculés automatiquement.
+    </div>
+
+    <div class="week-grid" style="grid-template-columns:repeat(2,1fr);gap:16px" id="closing-weeks"></div>
+
+    <div style="margin-top:16px;display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="saveClosing()">💾 Sauvegarder Closing</button>
+    </div>
+  </div>
+
+  <!-- SECTION SETTING -->
+  <div id="section-setting" style="display:none">
+
+    <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.12);border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:12px;color:var(--muted);line-height:1.6">
+      💡 Saisis ton activité setting semaine par semaine. Leads = contacts traités depuis Notion/CRM.
+    </div>
+
+    <div class="week-grid" style="grid-template-columns:repeat(2,1fr);gap:16px" id="setting-weeks"></div>
+
+    <div style="margin-top:16px;display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="saveSetting()">💾 Sauvegarder Setting</button>
+    </div>
+  </div>
+
+  <!-- SECTION DEALS -->
+  <div id="section-deals" style="display:none">
+
+    <div class="g21">
+
+      <!-- Formulaire ajout -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">Ajouter un deal</span></div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Client *</label>
+            <input class="form-input" id="nd-client" placeholder="Nom du client"/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Email</label>
+            <input class="form-input" id="nd-email" type="email" placeholder="email@..."/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Offre</label>
+            <input class="form-input" id="nd-offre" placeholder="BP 12, Mentor..."/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Type</label>
+            <select class="form-input" id="nd-type">
+              <option value="Closing">Closing</option>
+              <option value="Setting">Setting</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Date du close</label>
+            <input class="form-input" id="nd-date" type="date"/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Contracté HT (€)</label>
+            <input class="form-input" id="nd-contracte" type="number" placeholder="6000"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Collecté HT (€)</label>
+            <input class="form-input" id="nd-collecte" type="number" placeholder="500"/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Commission (€)</label>
+            <input class="form-input" id="nd-comm" type="number" placeholder="500"/>
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Notes</label>
+          <input class="form-input" id="nd-notes" placeholder="Context du close..."/>
+        </div>
+
+        <div style="margin-top:6px">
+          <button class="btn btn-primary" style="width:100%" onclick="addDeal()">+ Ajouter ce deal</button>
+        </div>
+      </div>
+
+      <!-- Liste des deals du mois -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" id="deals-title">Deals — Février 2026</span>
+          <span id="deals-count" style="font-size:11px;color:var(--muted)"></span>
+        </div>
+        <div id="deals-list" style="overflow-x:auto"></div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<style>
+.week-form-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  transition: border-color 0.2s;
+}
+.week-form-card:hover { border-color: var(--border2); }
+.week-form-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.9px; color: var(--muted); margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.week-form-title span { color: var(--red3); font-size: 9px; }
+.form-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; }
+.form-grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; }
+.fi { }
+.fi label { display:block; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); margin-bottom:4px; }
+.fi input {
+  width:100%; padding:7px 10px;
+  background:rgba(255,255,255,0.04); border:1.5px solid rgba(255,255,255,0.07);
+  border-radius:8px; color:var(--text); font-family:var(--font-m); font-size:13px;
+  outline:none; transition: border-color 0.15s, background 0.15s;
+}
+.fi input:focus { border-color:var(--red2); background:rgba(239,68,68,0.04); }
+.fi input.changed { border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.03); }
+.fi-sep { grid-column:1/-1; height:1px; background:var(--border); margin:4px 0; }
+.proj-hint { font-size:9px; color:var(--muted2); margin-top:3px; font-family:var(--font-m); }
+</style>
+
+<script>
+/* ── Month nav ── */
+const MONTHS = DB.months;
+let _cm = (() => {
+  const s = localStorage.getItem('sales_month') || 'Février 2026';
+  const p = s.split(' ');
+  return { month: MONTHS.indexOf(p[0]), year: parseInt(p[1]) || 2026 };
+})();
+function cmk() { return MONTHS[_cm.month] + ' ' + _cm.year; }
+function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveM(); loadData(); }
+function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveM(); loadData(); }
+function _saveM() {
+  localStorage.setItem('sales_month', cmk());
+  ['month-lbl','hdr-month'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=cmk(); });
+  document.getElementById('deals-title').textContent = 'Deals — ' + cmk();
+}
+
+/* ── Section tabs ── */
+let currentSection = 'closing';
+function setSection(s) {
+  currentSection = s;
+  ['closing','setting','deals'].forEach(x => {
+    document.getElementById('section-' + x).style.display = x === s ? 'block' : 'none';
+    document.getElementById('tab-' + x).classList.toggle('active', x === s);
+  });
+}
+
+/* ── Build closing week form ── */
+function buildClosingWeeks() {
+  const container = document.getElementById('closing-weeks');
+  const pc = PROJECTIONS.closing;
+  container.innerHTML = ['s1','s2','s3','s4'].map((w, i) => {
+    const d = DB._raw.closing[w];
+    const p = pc[w];
+    return `
+      <div class="week-form-card">
+        <div class="week-form-title">
+          Semaine ${i+1}
+          <span>Proj: ${p.closes} closes · ${U.euro(p.contracte)}</span>
+        </div>
+        <div class="form-grid-3">
+          <div class="fi">
+            <label>Calls</label>
+            <input type="number" id="c-${w}-calls" value="${d.calls||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.calls}</div>
+          </div>
+          <div class="fi">
+            <label>Lives</label>
+            <input type="number" id="c-${w}-lives" value="${d.lives||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.lives}</div>
+          </div>
+          <div class="fi">
+            <label>Offres faites</label>
+            <input type="number" id="c-${w}-offres" value="${d.offres||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.offres}</div>
+          </div>
+          <div class="fi">
+            <label>Closes total</label>
+            <input type="number" id="c-${w}-closes" value="${d.closes||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.closes}</div>
+          </div>
+          <div class="fi">
+            <label>Hard close</label>
+            <input type="number" id="c-${w}-hc" value="${d.hc||''}" placeholder="0"/>
+          </div>
+          <div class="fi">
+            <label>Follow-up</label>
+            <input type="number" id="c-${w}-fu" value="${d.fu||''}" placeholder="0"/>
+          </div>
+          <div class="fi-sep"></div>
+          <div class="fi">
+            <label>Contracté (€)</label>
+            <input type="number" id="c-${w}-contracte" value="${d.contracte||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${U.euro(p.contracte)}</div>
+          </div>
+          <div class="fi">
+            <label>Collecté (€)</label>
+            <input type="number" id="c-${w}-collecte" value="${d.collecte||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${U.euro(p.collecte)}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Highlight changed fields
+  document.querySelectorAll('#closing-weeks input').forEach(input => {
+    input.addEventListener('input', () => input.classList.add('changed'));
+  });
+}
+
+/* ── Build setting week form ── */
+function buildSettingWeeks() {
+  const container = document.getElementById('setting-weeks');
+  const ps = PROJECTIONS.setting;
+  container.innerHTML = ['s1','s2','s3','s4'].map((w, i) => {
+    const d = DB._raw.setting[w];
+    const p = ps[w];
+    return `
+      <div class="week-form-card">
+        <div class="week-form-title">
+          Semaine ${i+1}
+          <span>Proj: ${p.sets} sets · ${p.closes} closes</span>
+        </div>
+        <div class="form-grid-3">
+          <div class="fi">
+            <label>Leads</label>
+            <input type="number" id="s-${w}-leads" value="${d.leads||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.leads}</div>
+          </div>
+          <div class="fi">
+            <label>Calls passés</label>
+            <input type="number" id="s-${w}-calls" value="${d.calls||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.calls}</div>
+          </div>
+          <div class="fi">
+            <label>Décrochés</label>
+            <input type="number" id="s-${w}-decroches" value="${d.decroches||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.decroches}</div>
+          </div>
+          <div class="fi">
+            <label>Prop. RDV</label>
+            <input type="number" id="s-${w}-propRdv" value="${d.propRdv||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.propRdv}</div>
+          </div>
+          <div class="fi">
+            <label>Sets</label>
+            <input type="number" id="s-${w}-sets" value="${d.sets||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.sets}</div>
+          </div>
+          <div class="fi">
+            <label>Show-up</label>
+            <input type="number" id="s-${w}-presents" value="${d.presents||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.presents}</div>
+          </div>
+          <div class="fi-sep"></div>
+          <div class="fi">
+            <label>Closes</label>
+            <input type="number" id="s-${w}-closes" value="${d.closes||''}" placeholder="0"/>
+            <div class="proj-hint">Proj: ${p.closes}</div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  document.querySelectorAll('#setting-weeks input').forEach(input => {
+    input.addEventListener('input', () => input.classList.add('changed'));
+  });
+}
+
+/* ── Build deals list ── */
+function buildDealsList() {
+  const deals = DB._raw.deals || [];
+  document.getElementById('deals-count').textContent = deals.length + ' deal(s)';
+  if (!deals.length) {
+    document.getElementById('deals-list').innerHTML = `
+      <div style="text-align:center;padding:40px;color:var(--muted);font-size:12px">
+        Aucun deal ce mois.<br>Utilise le formulaire pour ajouter ton premier.
+      </div>`;
+    return;
+  }
+  document.getElementById('deals-list').innerHTML = `
+    <table class="data-table" style="width:100%;min-width:500px">
+      <thead><tr>
+        <th>Client</th><th>Type</th><th>Contracté</th><th>Commission</th><th>Statut</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${deals.map((d,i) => `
+          <tr>
+            <td>
+              <div style="font-weight:600;font-size:12px">${d.client}</div>
+              <div style="font-size:10px;color:var(--muted)">${d.date}</div>
+            </td>
+            <td><span class="badge ${d.type==='Closing'?'badge-red':'badge-blue'}">${d.type}</span></td>
+            <td class="td-mono">${d.cHT ? U.euro(d.cHT) : '—'}</td>
+            <td class="td-mono" style="color:var(--gold);font-weight:700">${U.euro(d.comm)}</td>
+            <td><span class="badge ${d.ok?'badge-green':'badge-gold'}">${d.ok?'✓ Vérifié':'En attente'}</span></td>
+            <td>
+              <button onclick="removeDeal(${i})" style="border:none;background:rgba(239,68,68,0.08);border-radius:6px;color:var(--red3);cursor:pointer;padding:3px 8px;font-size:11px">✕</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+/* ── Read closing form ── */
+function readClosingForm() {
+  const data = {};
+  ['s1','s2','s3','s4'].forEach(w => {
+    const g = k => parseFloat(document.getElementById(`c-${w}-${k}`)?.value) || 0;
+    data[w] = {
+      calls:     g('calls'),
+      lives:     g('lives'),
+      offres:    g('offres'),
+      closes:    g('closes'),
+      hc:        g('hc'),
+      fu:        g('fu'),
+      contracte: g('contracte'),
+      collecte:  g('collecte'),
+    };
+  });
+  return data;
+}
+
+/* ── Read setting form ── */
+function readSettingForm() {
+  const data = {};
+  ['s1','s2','s3','s4'].forEach(w => {
+    const g = k => parseFloat(document.getElementById(`s-${w}-${k}`)?.value) || 0;
+    data[w] = {
+      leads:     g('leads'),
+      calls:     g('calls'),
+      decroches: g('decroches'),
+      propRdv:   g('propRdv'),
+      sets:      g('sets'),
+      presents:  g('presents'),
+      closes:    g('closes'),
+    };
+  });
+  return data;
+}
+
+/* ── Save closing ── */
+async function saveClosing() {
+  const user = U.getCurrentUser();
+  const data = readClosingForm();
+  const btn  = document.querySelector('#section-closing .btn-primary');
+  btn.textContent = '⏳ Sauvegarde...';
+  btn.disabled = true;
+
+  // Update local DB immediately
+  Object.assign(DB._raw.closing, data);
+  DB.compute();
+
+  try {
+    if (Fire.db) {
+      for (const w of ['s1','s2','s3','s4']) {
+        await Fire.saveClosing(user.uid, cmk(), w, data[w]);
+      }
+      U.toast('✅ Closing sauvegardé dans Firebase !');
+    } else {
+      // Fallback localStorage
+      localStorage.setItem(`saisie_closing_${user.uid}_${cmk()}`, JSON.stringify(data));
+      U.toast('✅ Closing sauvegardé (local)');
+    }
+    // Clear changed highlights
+    document.querySelectorAll('#closing-weeks input.changed').forEach(el => el.classList.remove('changed'));
+    setStatus('Dernière sauvegarde : ' + new Date().toLocaleTimeString('fr-FR'));
+  } catch(e) {
+    U.toast('❌ Erreur : ' + e.message, 'error');
+  }
+
+  btn.textContent = '💾 Sauvegarder Closing';
+  btn.disabled = false;
+}
+
+/* ── Save setting ── */
+async function saveSetting() {
+  const user = U.getCurrentUser();
+  const data = readSettingForm();
+  const btn  = document.querySelector('#section-setting .btn-primary');
+  btn.textContent = '⏳ Sauvegarde...';
+  btn.disabled = true;
+
+  Object.assign(DB._raw.setting, data);
+  DB.compute();
+
+  try {
+    if (Fire.db) {
+      for (const w of ['s1','s2','s3','s4']) {
+        await Fire.saveSetting(user.uid, cmk(), w, data[w]);
+      }
+      U.toast('✅ Setting sauvegardé dans Firebase !');
+    } else {
+      localStorage.setItem(`saisie_setting_${user.uid}_${cmk()}`, JSON.stringify(data));
+      U.toast('✅ Setting sauvegardé (local)');
+    }
+    document.querySelectorAll('#setting-weeks input.changed').forEach(el => el.classList.remove('changed'));
+    setStatus('Dernière sauvegarde : ' + new Date().toLocaleTimeString('fr-FR'));
+  } catch(e) {
+    U.toast('❌ Erreur : ' + e.message, 'error');
+  }
+
+  btn.textContent = '💾 Sauvegarder Setting';
+  btn.disabled = false;
+}
+
+/* ── Add deal ── */
+async function addDeal() {
+  const client = document.getElementById('nd-client').value.trim();
+  if (!client) { U.toast('❌ Le nom du client est requis', 'error'); return; }
+
+  const deal = {
+    client,
+    email:     document.getElementById('nd-email').value.trim(),
+    offre:     document.getElementById('nd-offre').value.trim() || 'BP 12',
+    type:      document.getElementById('nd-type').value,
+    date:      document.getElementById('nd-date').value || new Date().toLocaleDateString('fr-FR'),
+    cHT:       parseFloat(document.getElementById('nd-contracte').value) || null,
+    coHT:      parseFloat(document.getElementById('nd-collecte').value)  || null,
+    comm:      parseFloat(document.getElementById('nd-comm').value)      || 0,
+    bonus:     0,
+    notes:     document.getElementById('nd-notes').value.trim(),
+    ok:        false,
+  };
+
+  DB._raw.deals.push(deal);
+
+  try {
+    if (Fire.db) {
+      await Fire.saveDeal(U.getCurrentUser().uid, cmk(), deal);
+      U.toast('✅ Deal ajouté dans Firebase !');
+    } else {
+      localStorage.setItem(`saisie_deals_${U.getCurrentUser().uid}_${cmk()}`, JSON.stringify(DB._raw.deals));
+      U.toast('✅ Deal ajouté (local)');
+    }
+    // Reset form
+    ['nd-client','nd-email','nd-offre','nd-date','nd-contracte','nd-collecte','nd-comm','nd-notes']
+      .forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    buildDealsList();
+  } catch(e) {
+    U.toast('❌ ' + e.message, 'error');
+  }
+}
+
+/* ── Remove deal ── */
+async function removeDeal(i) {
+  DB._raw.deals.splice(i, 1);
+  if (Fire.db) {
+    const user = U.getCurrentUser();
+    const ref = Fire.db.collection('saisies').doc(user.uid).collection('mois').doc(Fire._key(cmk()));
+    await ref.set({ deals: DB._raw.deals }, { merge: true });
+  }
+  buildDealsList();
+}
+
+/* ── Load data from Firebase ── */
+function loadData() {
+  const user = U.getCurrentUser();
+  _saveM();
+
+  if (Fire.db) {
+    setStatus('🔄 Synchronisation...');
+    Fire.stop();
+    Fire.watchUser(user.uid, cmk(), (data) => {
+      if (data) {
+        Fire.apply(data);
+        // Rebuild forms with fresh data
+        buildClosingWeeks();
+        buildSettingWeeks();
+        buildDealsList();
+        setStatus('🟢 Synchronisé · ' + new Date().toLocaleTimeString('fr-FR'));
+      } else {
+        setStatus('Aucune donnée pour ce mois');
+      }
+    });
+  } else {
+    // Fallback localStorage
+    const sc = localStorage.getItem(`saisie_closing_${user.uid}_${cmk()}`);
+    const ss = localStorage.getItem(`saisie_setting_${user.uid}_${cmk()}`);
+    if (sc) { const d=JSON.parse(sc); Object.assign(DB._raw.closing, d); }
+    if (ss) { const d=JSON.parse(ss); Object.assign(DB._raw.setting, d); }
+    DB.compute();
+    buildClosingWeeks();
+    buildSettingWeeks();
+    buildDealsList();
+    setStatus('Mode hors-ligne');
+  }
+}
+
+function setStatus(msg) {
+  const el = document.getElementById('save-status');
+  if (el) el.textContent = msg;
+}
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded', () => {
+  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
+  const uid = localStorage.getItem('ambitio_uid') || 'guillaume';
+  document.getElementById('tb-nm').textContent  = nm;
+  document.getElementById('tb-av').textContent  = nm[0].toUpperCase();
+  document.getElementById('hdr-user').textContent = '✏️ Saisie pour ' + nm + ' · ' + cmk();
+  document.getElementById('month-lbl').textContent = cmk();
+  document.getElementById('hdr-month').textContent = cmk();
+
+  // Connect Firebase if available
+  if (window.firebase && window.firebase.firestore) {
+    Fire.init(window.firebase.firestore(), uid);
+  }
+
+  loadData();
+  buildClosingWeeks();
+  buildSettingWeeks();
+  buildDealsList();
+
+  // Refresh forms quand DB updated (ex: via Firebase listener)
+  document.addEventListener('db:updated', () => {
+    buildClosingWeeks();
+    buildSettingWeeks();
+    buildDealsList();
+  });
+});
+</script>
+
+</body>
+</html>

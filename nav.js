@@ -22,6 +22,7 @@
       { id: 'equipe',       icon: '👥', label: 'Équipe',            href: 'sales-equipe.html' },
       { id: 'commissions',  icon: '💰', label: 'Commissions',       href: 'sales-commissions.html' },
       { id: 'projections',  icon: '📈', label: 'Projections',       href: 'sales-projections.html' },
+      { id: 'saisie',       icon: '✏️', label: 'Saisie des données', href: 'sales-saisie.html' },
     ],
     admin: [
       // ── GLOBAL ──
