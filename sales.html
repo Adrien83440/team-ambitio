@@ -5,25 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Espace Sales</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-<script>
-(function(){var r=localStorage.getItem("ambitio_role");if(r==="coach")window.location.href="coaching.html";if(!r)window.location.href="login.html";})();
-</script>
-<script src="nav.js"></script>
+<script>(function(){var r=localStorage.getItem("ambitio_role");if(r==="coach")window.location.href="coaching.html";if(!r)window.location.href="login.html";})();<\/script>
+<script src="../nav.js"><\/script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#08080f;--bg2:#0f0f1a;--bg3:#14141f;--bg4:#1a1a28;
   --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
-  --red:#c41c1c;--red2:#ef4444;--red3:#fca5a5;--red-glow:rgba(196,28,28,0.15);
-  --gold:#f59e0b;--gold2:#fde68a;--green:#10b981;--green2:#34d399;
-  --orange:#f97316;--blue:#3b82f6;--purple:#8b5cf6;
+  --red:#c41c1c;--red2:#ef4444;--red3:#fca5a5;
+  --gold:#f59e0b;--green2:#34d399;--blue:#3b82f6;
   --text:rgba(255,255,255,0.92);--muted:rgba(255,255,255,0.45);--muted2:rgba(255,255,255,0.22);
   --radius:12px;--radius2:16px;
   --font-d:'Syne',sans-serif;--font-b:'DM Sans',sans-serif;--font-m:'DM Mono',monospace;
 }
 html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font-b);font-size:13px;overflow-x:hidden}
-
-/* TOPBAR */
 .topbar{position:sticky;top:0;z-index:100;background:rgba(8,8,15,0.96);border-bottom:1px solid var(--border);backdrop-filter:blur(20px);padding:0 28px;height:56px;display:flex;align-items:center;gap:14px}
 .tb-logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#7f1d1d,#b91c1c);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:white;font-family:var(--font-d);box-shadow:0 4px 14px rgba(185,28,28,0.4)}
 .tb-title{font-size:15px;font-weight:700;font-family:var(--font-d);letter-spacing:-0.3px}
@@ -32,51 +27,39 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
 .month-sel{display:flex;align-items:center;gap:6px}
 .month-btn{width:26px;height:26px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
 .month-btn:hover{border-color:var(--border2);color:var(--text)}
-.month-lbl{font-size:13px;font-weight:600;min-width:108px;text-align:center}
+#month-lbl{font-size:13px;font-weight:600;min-width:110px;text-align:center}
 .tb-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-.alert-chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);font-size:11px;font-weight:600;color:var(--gold);cursor:pointer;display:none}
+.alert-chip{display:none;align-items:center;gap:5px;padding:4px 10px;border-radius:7px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);font-size:11px;font-weight:600;color:var(--gold);cursor:pointer}
 .alert-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:pdot 2s infinite}
 @keyframes pdot{0%,100%{opacity:1}50%{opacity:0.3}}
 .tb-user{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:9px;background:var(--bg3);border:1px solid var(--border)}
 .tb-av{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#7f1d1d,#ef4444);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white}
-.tb-nm{font-size:12px;font-weight:600}
-.tb-rl{font-size:10px;color:var(--muted)}
-
-/* MODULE TABS */
+.tb-nm{font-size:12px;font-weight:600}.tb-rl{font-size:10px;color:var(--muted)}
 .mod-nav{display:flex;gap:2px;padding:10px 28px 0;border-bottom:1px solid var(--border);background:var(--bg);overflow-x:auto;scrollbar-width:none}
 .mod-nav::-webkit-scrollbar{display:none}
 .mod-tab{display:flex;align-items:center;gap:6px;padding:8px 14px 10px;border-radius:10px 10px 0 0;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);border:1px solid transparent;border-bottom:none;transition:all 0.15s;white-space:nowrap;position:relative;bottom:-1px}
 .mod-tab:hover{color:var(--text);background:var(--bg3)}
 .mod-tab.active{color:var(--text);background:var(--bg2);border-color:var(--border)}
-.mod-tab.active::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:var(--bg2)}
+.mod-tab.active::after{content:"";position:absolute;bottom:-1px;left:0;right:0;height:1px;background:var(--bg2)}
 .mod-tab-badge{font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;background:rgba(245,158,11,0.12);color:var(--gold)}
-
-/* MAIN */
 .main{padding:22px 28px;min-height:calc(100vh - 120px)}
 .mod-view{display:none}
 .mod-view.active{display:block;animation:fiu 0.2s ease}
 @keyframes fiu{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-
-/* GRIDS */
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
 .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:13px}
 .g21{display:grid;grid-template-columns:2fr 1fr;gap:13px}
 .g12{display:grid;grid-template-columns:1fr 2fr;gap:13px}
 .mb13{margin-bottom:13px}
-.mb20{margin-bottom:20px}
-
-/* CARD */
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:17px}
 .ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
 .ct{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted)}
 .ca{font-size:11px;color:var(--muted);cursor:pointer;transition:color 0.15s}
 .ca:hover{color:var(--text)}
-
-/* KPI */
 .kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:17px 19px;position:relative;overflow:hidden;transition:border-color 0.2s}
 .kpi:hover{border-color:var(--border2)}
-.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kc,#ef4444);opacity:0.7}
+.kpi::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--kc,#ef4444);opacity:0.7}
 .kpi-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:7px}
 .kpi-v{font-size:26px;font-weight:700;font-family:var(--font-d);letter-spacing:-0.8px;line-height:1}
 .kpi-s{font-size:11px;color:var(--muted);margin-top:4px}
@@ -84,26 +67,18 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
 .kpi-pb{height:3px;background:rgba(255,255,255,0.07);border-radius:99px;overflow:hidden;margin-top:4px}
 .kpi-pf{height:100%;border-radius:99px;transition:width 0.9s ease}
 .kpi-pl{display:flex;justify-content:space-between;font-size:10px;color:var(--muted)}
-
-/* SECTION HEADER */
 .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .st{font-size:14px;font-weight:700;font-family:var(--font-d)}
 .ss{font-size:11px;color:var(--muted);margin-top:1px}
 .sa{display:flex;gap:8px}
-
-/* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border:none;border-radius:8px;font-family:var(--font-b);font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s}
 .btn-red{background:linear-gradient(135deg,#b91c1c,#ef4444);color:white;box-shadow:0 3px 10px rgba(185,28,28,0.3)}
 .btn-red:hover{opacity:0.9;transform:translateY(-1px)}
 .btn-ghost{background:var(--bg3);border:1px solid var(--border);color:var(--muted)}
 .btn-ghost:hover{border-color:var(--border2);color:var(--text)}
-
-/* INNER TABS */
 .itabs{display:flex;gap:3px;padding:3px;background:var(--bg3);border-radius:9px;border:1px solid var(--border);width:fit-content}
 .itab{padding:5px 11px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);transition:all 0.15s}
 .itab.active{background:var(--bg4);color:var(--text)}
-
-/* PROGRESS ROWS */
 .pr{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
 .pr:last-child{border-bottom:none}
 .pr-l{font-size:12px;font-weight:600;min-width:145px}
@@ -111,8 +86,6 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
 .pr-f{height:100%;border-radius:99px;transition:width 0.9s ease}
 .pr-v{font-size:11px;font-family:var(--font-m);color:var(--muted);min-width:90px;text-align:right}
 .pr-p{font-size:11px;font-weight:700;min-width:38px;text-align:right}
-
-/* FUNNEL */
 .fnl{display:flex;flex-direction:column;gap:4px}
 .fs{display:flex;align-items:center;gap:11px;padding:9px 13px;border-radius:9px;background:var(--bg3);border:1px solid var(--border);transition:border-color 0.15s}
 .fs:hover{border-color:var(--border2)}
@@ -121,20 +94,14 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
 .fs-f{height:100%;border-radius:99px;background:linear-gradient(90deg,#b91c1c,#ef4444)}
 .fs-v{font-size:14px;font-weight:700;font-family:var(--font-d);min-width:40px;text-align:right}
 .fs-r{font-size:10px;color:var(--muted);min-width:42px;text-align:right}
-
-/* WEEK CARDS */
 .wg{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.wc{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:default}
+.wc{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px}
 .wc:hover,.wc.cur{border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.04)}
 .wl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:7px;display:flex;justify-content:space-between}
-.wv{font-size:20px;font-weight:700;font-family:var(--font-d)}
-.wvl{font-size:9px;color:var(--muted);margin-top:2px}
+.wv{font-size:20px;font-weight:700;font-family:var(--font-d)}.wvl{font-size:9px;color:var(--muted);margin-top:2px}
 .wmg{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:9px}
 .wm{background:rgba(255,255,255,0.04);border-radius:7px;padding:5px 7px}
-.wmv{font-size:13px;font-weight:700;font-family:var(--font-d)}
-.wml{font-size:9px;color:var(--muted)}
-
-/* TEAM TABLE */
+.wmv{font-size:13px;font-weight:700;font-family:var(--font-d)}.wml{font-size:9px;color:var(--muted)}
 .ttbl{width:100%;border-collapse:collapse}
 .ttbl th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);padding:7px 11px;border-bottom:1px solid var(--border);text-align:left}
 .ttbl td{padding:11px 11px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px}
@@ -142,12 +109,9 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
 .ttbl tbody tr:hover td{background:rgba(255,255,255,0.02)}
 .tac{display:flex;align-items:center;gap:9px}
 .tav{width:29px;height:29px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0}
-.tnm{font-weight:600;font-size:13px}
-.trt{font-size:10px;font-weight:600;padding:2px 6px;border-radius:20px;background:rgba(255,255,255,0.07);color:var(--muted)}
+.tnm{font-weight:600;font-size:13px}.trt{font-size:10px;font-weight:600;padding:2px 6px;border-radius:20px;background:rgba(255,255,255,0.07);color:var(--muted)}
 .tn{font-family:var(--font-m);font-size:12px}
 .tn.ok{color:var(--green2)}.tn.wn{color:var(--gold)}.tn.bd{color:var(--red2)}
-
-/* COMMISSION */
 .ctbl{width:100%;border-collapse:collapse}
 .ctbl th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);padding:7px 11px;border-bottom:1px solid var(--border);text-align:left}
 .ctbl td{padding:10px 11px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px}
@@ -163,32 +127,22 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
 .cs{background:linear-gradient(135deg,rgba(127,29,29,0.3),rgba(185,28,28,0.15));border:1px solid rgba(239,68,68,0.2);border-radius:var(--radius2);padding:19px}
 .csv{font-size:30px;font-weight:800;font-family:var(--font-d);color:var(--gold);margin-bottom:15px}
 .csr{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px}
-.csr:last-child{border:none;padding-top:9px;margin-top:3px}
+.csr:last-child{border:none;padding-top:9px}
 .csr.tot{font-weight:700;font-size:13px;color:var(--gold)}
 .cst{display:flex;align-items:center;gap:5px;padding:9px 13px;border-radius:9px;font-size:12px;font-weight:600;margin-top:10px}
 .cst.due{background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:var(--gold)}
 .cst.paid{background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);color:var(--green2)}
-
-/* CHART */
+.ap{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:var(--radius);padding:11px 15px;display:flex;align-items:flex-start;gap:9px;margin-bottom:12px}
+.ap-ic{font-size:15px;margin-top:1px}.ap-ti{font-weight:700;color:var(--gold);margin-bottom:2px;font-size:12px}
+.ap-tx{font-size:12px;color:rgba(255,255,255,0.65);line-height:1.5}
+.ap.rd{background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.15)}
+.ap.rd .ap-ti{color:var(--red2)}
 .chrt{display:flex;gap:4px;align-items:flex-end;height:150px;padding:0 4px}
-.chrt-grp{flex:1;display:flex;gap:2px;align-items:flex-end;height:calc(100% - 22px)}
 .chrt-bar{flex:1;border-radius:4px 4px 0 0;min-height:2px;transition:height 0.7s ease;cursor:pointer}
 .chrt-bar:hover{filter:brightness(1.2)}
 .chrt-a{background:linear-gradient(180deg,#ef4444,#b91c1c)}
 .chrt-p{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.12)}
 .chrt-lbl{font-size:9px;color:var(--muted);text-align:center;margin-top:5px;font-family:var(--font-m)}
-
-/* ALERT PANEL */
-.ap{background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:var(--radius);padding:11px 15px;display:flex;align-items:flex-start;gap:9px;margin-bottom:12px}
-.ap-ic{font-size:15px;margin-top:1px}
-.ap-ti{font-weight:700;color:var(--gold);margin-bottom:2px;font-size:12px}
-.ap-tx{font-size:12px;color:rgba(255,255,255,0.65);line-height:1.5}
-.ap.rd{background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.15)}
-.ap.rd .ap-ti{color:var(--red2)}
-.ap.gn{background:rgba(16,185,129,0.06);border-color:rgba(16,185,129,0.15)}
-.ap.gn .ap-ti{color:var(--green2)}
-
-/* MODAL */
 .mbk{position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:500;backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;animation:fdi 0.2s ease}
 @keyframes fdi{from{opacity:0}to{opacity:1}}
 .mdl{background:var(--bg2);border:1px solid var(--border2);border-radius:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,0.6);margin:20px;animation:slu 0.25s cubic-bezier(.4,0,.2,1)}
@@ -197,474 +151,102 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
 .mti{font-size:15px;font-weight:700;font-family:var(--font-d)}
 .mc{width:29px;height:29px;border:1px solid var(--border);border-radius:7px;background:var(--bg3);cursor:pointer;color:var(--muted);font-size:13px;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
 .mc:hover{background:var(--bg4);color:var(--text)}
-.mb{padding:19px 23px 23px}
-.ff{margin-bottom:13px}
+.mb{padding:19px 23px 23px}.ff{margin-bottom:13px}
 .fl{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:4px}
 .fi{width:100%;padding:8px 12px;background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.08);border-radius:9px;color:var(--text);font-family:var(--font-b);font-size:13px;outline:none;transition:border-color 0.15s}
 .fi:focus{border-color:var(--red2);background:rgba(239,68,68,0.04)}
-.fi::placeholder{color:var(--muted2)}
-.fi option{background:#1a1a2e}
+.fi::placeholder{color:var(--muted2)}.fi option{background:#1a1a2e}
 .fr{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-
-/* SCROLLBAR */
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.09);border-radius:99px}
-
-/* TOAST */
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.09);border-radius:99px}
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(18px);background:#1a2e1a;border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;font-size:12px;font-weight:600;padding:8px 17px;border-radius:9px;z-index:2000;opacity:0;transition:all 0.28s;white-space:nowrap}
-
-/* RESPONSIVE */
 @media(max-width:1100px){.g4{grid-template-columns:repeat(2,1fr)}.wg{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:768px){.main{padding:14px}.g2,.g21,.g12{grid-template-columns:1fr}.g3{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
-
-<!-- TOPBAR -->
 <div class="topbar">
   <div class="tb-logo">S</div>
   <div class="tb-title">Ambitio <span>Sales</span></div>
   <div class="tb-div"></div>
   <div class="month-sel">
-    <button class="month-btn" onclick="changeMonth(-1)">&#9664;</button>
-    <div class="month-lbl" id="monthLbl">Février 2026</div>
-    <button class="month-btn" onclick="changeMonth(1)">&#9654;</button>
+    <button class="month-btn" onclick="SalesApp.changeMonth(-1)">&#9664;</button>
+    <div id="month-lbl">F&#233;vrier 2026</div>
+    <button class="month-btn" onclick="SalesApp.changeMonth(1)">&#9654;</button>
   </div>
   <div class="tb-right">
-    <div class="alert-chip" id="alertChip" onclick="switchMod('dashboard')">
-      <div class="alert-dot"></div><span id="alertTxt">alertes</span>
+    <div class="alert-chip" id="alert-chip" onclick="SalesApp.switchMod('dashboard')">
+      <div class="alert-dot"></div><span id="alert-txt">alertes</span>
     </div>
     <div class="tb-user">
-      <div class="tb-av" id="tbAv">G</div>
-      <div><div class="tb-nm" id="tbNm">Guillaume</div><div class="tb-rl">📈 Commercial</div></div>
+      <div class="tb-av" id="tb-av">G</div>
+      <div><div class="tb-nm" id="tb-nm">Guillaume</div><div class="tb-rl">&#128200; Commercial</div></div>
     </div>
   </div>
 </div>
-
-<!-- MODULE TABS -->
 <div class="mod-nav">
-  <div class="mod-tab active" data-mod="dashboard" onclick="switchMod('dashboard')">◈ Dashboard</div>
-  <div class="mod-tab" data-mod="closing" onclick="switchMod('closing')">🎯 Closing</div>
-  <div class="mod-tab" data-mod="setting" onclick="switchMod('setting')">📞 Setting</div>
-  <div class="mod-tab" data-mod="equipe" onclick="switchMod('equipe')">👥 Équipe</div>
-  <div class="mod-tab" data-mod="commissions" onclick="switchMod('commissions')">
-    💰 Commissions <span class="mod-tab-badge" id="cBadge">2 125 €</span>
+  <div class="mod-tab active" data-mod="dashboard"   onclick="SalesApp.switchMod('dashboard')">&#9672; Dashboard</div>
+  <div class="mod-tab"        data-mod="closing"     onclick="SalesApp.switchMod('closing')">&#127919; Closing</div>
+  <div class="mod-tab"        data-mod="setting"     onclick="SalesApp.switchMod('setting')">&#128222; Setting</div>
+  <div class="mod-tab"        data-mod="equipe"      onclick="SalesApp.switchMod('equipe')">&#128101; &#201;quipe</div>
+  <div class="mod-tab"        data-mod="commissions" onclick="SalesApp.switchMod('commissions')">
+    &#128176; Commissions <span class="mod-tab-badge" id="comm-badge">2 125 &#8364;</span>
   </div>
-  <div class="mod-tab" data-mod="projections" onclick="switchMod('projections')">📈 Projections</div>
+  <div class="mod-tab"        data-mod="projections" onclick="SalesApp.switchMod('projections')">&#128200; Projections</div>
 </div>
-
 <div class="main">
-
-<!-- ══ DASHBOARD ══ -->
-<div class="mod-view active" id="mod-dashboard">
-  <div id="dAlerts"></div>
-  <div class="g4 mb13" id="dKpis"></div>
-  <div class="g21 mb13">
-    <div class="card">
-      <div class="ch"><span class="ct">Funnel Closing — Mois</span><span class="ca" onclick="switchMod('closing')">Détails →</span></div>
-      <div class="fnl" id="dFunnel"></div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:13px">
-      <div class="card" style="flex:1"><div class="ch"><span class="ct">Commissions dues</span></div><div id="dComm"></div></div>
-      <div class="card" style="flex:1"><div class="ch"><span class="ct">Objectif mensuel</span></div><div id="dObj"></div></div>
-    </div>
-  </div>
-  <div class="g2">
-    <div class="card"><div class="ch"><span class="ct">Setting — Résumé</span><span class="ca" onclick="switchMod('setting')">Détails →</span></div><div id="dSetting"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Équipe — Semaine</span><span class="ca" onclick="switchMod('equipe')">Équipe →</span></div><div id="dTeam"></div></div>
-  </div>
+  <div class="mod-view active" id="mod-dashboard"></div>
+  <div class="mod-view"        id="mod-closing"></div>
+  <div class="mod-view"        id="mod-setting"></div>
+  <div class="mod-view"        id="mod-equipe"></div>
+  <div class="mod-view"        id="mod-commissions"></div>
+  <div class="mod-view"        id="mod-projections"></div>
 </div>
-
-<!-- ══ CLOSING ══ -->
-<div class="mod-view" id="mod-closing">
-  <div class="sh">
-    <div><div class="st">Closing — KPIs & Pipeline</div><div class="ss">Projections vs Réel · Février 2026</div></div>
-    <div class="itabs" id="cTabs">
-      <div class="itab active" data-w="mois" onclick="setCW('mois')">Mois</div>
-      <div class="itab" data-w="s1" onclick="setCW('s1')">Sem 1</div>
-      <div class="itab" data-w="s2" onclick="setCW('s2')">Sem 2</div>
-      <div class="itab" data-w="s3" onclick="setCW('s3')">Sem 3</div>
-      <div class="itab" data-w="s4" onclick="setCW('s4')">Sem 4</div>
-    </div>
-  </div>
-  <div class="g4 mb13" id="cKpis"></div>
-  <div class="g21 mb13">
-    <div class="card"><div class="ch"><span class="ct">Actuel vs Projection</span></div><div id="cProg"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Taux de conversion</span></div><div id="cRates"></div></div>
-  </div>
-  <div class="g2">
-    <div class="card"><div class="ch"><span class="ct">Breakdown hebdomadaire</span></div><div class="wg" id="cWeeks"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Évolution contracté</span></div><div id="cChart"></div></div>
-  </div>
-</div>
-
-<!-- ══ SETTING ══ -->
-<div class="mod-view" id="mod-setting">
-  <div class="sh">
-    <div><div class="st">Setting — KPIs & Activité</div><div class="ss">Projections vs Réel · Février 2026</div></div>
-    <div class="itabs" id="sTabs">
-      <div class="itab active" data-w="mois" onclick="setSW('mois')">Mois</div>
-      <div class="itab" data-w="s1" onclick="setSW('s1')">Sem 1</div>
-      <div class="itab" data-w="s2" onclick="setSW('s2')">Sem 2</div>
-      <div class="itab" data-w="s3" onclick="setSW('s3')">Sem 3</div>
-      <div class="itab" data-w="s4" onclick="setSW('s4')">Sem 4</div>
-    </div>
-  </div>
-  <div class="g4 mb13" id="sKpis"></div>
-  <div class="g21 mb13">
-    <div class="card"><div class="ch"><span class="ct">Funnel Setting</span></div><div class="fnl" id="sFunnel"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Taux clés</span></div><div id="sRates"></div></div>
-  </div>
-  <div class="card"><div class="ch"><span class="ct">Breakdown hebdomadaire</span></div><div class="wg" id="sWeeks"></div></div>
-</div>
-
-<!-- ══ EQUIPE ══ -->
-<div class="mod-view" id="mod-equipe">
-  <div class="sh">
-    <div><div class="st">Équipe — Performance comparée</div><div class="ss">Guillaume vs Elodie</div></div>
-    <div class="itabs" id="eTabs">
-      <div class="itab active" onclick="setEV('week')">Cette semaine</div>
-      <div class="itab" onclick="setEV('month')">Ce mois</div>
-    </div>
-  </div>
-  <div class="g4 mb13" id="eKpis"></div>
-  <div class="g21">
-    <div class="card"><div class="ch"><span class="ct">Comparatif détaillé</span></div><div id="eTbl"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Taux de performance</span></div><div id="ePrf"></div></div>
-  </div>
-</div>
-
-<!-- ══ COMMISSIONS ══ -->
-<div class="mod-view" id="mod-commissions">
-  <div class="sh">
-    <div><div class="st">Commissions — Tracking</div><div class="ss">Guillaume Bilcke · <span id="cMoLbl">Février 2026</span></div></div>
-    <div class="sa">
-      <button class="btn btn-ghost" onclick="openAddDeal()">+ Ajouter deal</button>
-      <button class="btn btn-red" onclick="submitComm()">📤 Soumettre</button>
-    </div>
-  </div>
-  <div class="g12">
-    <div style="display:flex;flex-direction:column;gap:13px">
-      <div class="cs" id="cSum"></div>
-      <div class="card"><div class="ch"><span class="ct">Historique</span></div><div id="cHist"></div></div>
-    </div>
-    <div class="card">
-      <div class="ch"><span class="ct" id="cTblTi">Deals — Février 2026</span></div>
-      <div style="overflow-x:auto">
-        <table class="ctbl" id="cTbl">
-          <thead><tr>
-            <th>Client</th><th>Offre</th><th>Type</th><th>Date</th>
-            <th>Contracté HT</th><th>Collecté HT</th><th>Commission</th><th>Bonus</th><th>Statut</th>
-          </tr></thead>
-          <tbody id="cTblB"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ PROJECTIONS ══ -->
-<div class="mod-view" id="mod-projections">
-  <div class="sh">
-    <div><div class="st">Projections — Analyse & Tendances</div><div class="ss">Objectifs vs réalisé</div></div>
-    <div class="itabs" id="pTabs">
-      <div class="itab active" onclick="setPV('closing')">Closing</div>
-      <div class="itab" onclick="setPV('setting')">Setting</div>
-      <div class="itab" onclick="setPV('revenue')">Revenus</div>
-    </div>
-  </div>
-  <div class="g4 mb13" id="pKpis"></div>
-  <div class="g2 mb13">
-    <div class="card"><div class="ch"><span class="ct">Progression hebdomadaire</span></div><div id="pBars"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Analyse des écarts</span></div><div id="pGap"></div></div>
-  </div>
-  <div class="card"><div class="ch"><span class="ct">Note du manager</span></div><div id="pMsg"></div></div>
-</div>
-
-</div><!-- /main -->
 <div id="toast"></div>
-
+<script src="modules/sales-core.js"><\/script>
+<script src="modules/mod-dashboard.js"><\/script>
+<script src="modules/mod-closing.js"><\/script>
+<script src="modules/mod-setting.js"><\/script>
+<script src="modules/mod-equipe.js"><\/script>
+<script src="modules/mod-commissions.js"><\/script>
+<script src="modules/mod-projections.js"><\/script>
 <script>
-/* ═══ DATA STORE ═══ */
-const DB={
-  cm:{year:2026,month:1},
-  months:["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"],
-  closing:{
-    mois:{calls:{a:34,p:100},lives:{a:19,p:75},offres:{a:8,p:50},closes:{a:3,p:20},
-          hc:{a:3,p:20},fu:{a:0,p:0},contracte:{a:19200,p:120000},collecte:{a:1600,p:10000},
-          livesP:{a:0.559,p:0.75},offresP:{a:0.421,p:0.667},engP:{a:0.375,p:0.5},
-          cOffP:{a:0.375,p:0.4},cCallP:{a:0.088,p:0.2},cLiveP:{a:0.0,p:0.267},
-          cashLive:{a:84.2,p:666.7},atteinte:0.16,delta:100800},
-    s1:{calls:{a:8,p:20},lives:{a:2,p:15},offres:{a:1,p:10},closes:{a:0,p:4},contracte:{a:0,p:24000},collecte:{a:0,p:2000},atteinte:0,delta:24000},
-    s2:{calls:{a:8,p:20},lives:{a:4,p:15},offres:{a:2,p:10},closes:{a:2,p:4},contracte:{a:12000,p:24000},collecte:{a:1000,p:2000},atteinte:0.5,delta:12000},
-    s3:{calls:{a:9,p:20},lives:{a:6,p:15},offres:{a:3,p:10},closes:{a:1,p:4},contracte:{a:5400,p:24000},collecte:{a:400,p:2000},atteinte:0.225,delta:18600},
-    s4:{calls:{a:9,p:20},lives:{a:7,p:15},offres:{a:2,p:10},closes:{a:0,p:4},contracte:{a:1800,p:24000},collecte:{a:200,p:2000},atteinte:0.075,delta:22200},
-  },
-  setting:{
-    mois:{tempsAppel:{a:18,p:28},leads:{a:551,p:520},calls:{a:883,p:1500},decroches:{a:176,p:180},
-          propRdv:{a:61,p:40},sets:{a:41,p:20},presents:{a:14,p:16},closes:{a:3,p:16},
-          decrochesP:{a:0.199,p:0.12},engP:{a:0.347,p:0.222},setP:{a:0.672,p:0.5},
-          showupP:{a:0.341,p:0.8},cCallP:{a:0.073,p:0.8},collecte:{a:1600,p:8000},
-          collecteCall:{a:39,p:400},collecteLive:{a:114,p:500}},
-    s1:{tempsAppel:{a:5,p:7},leads:{a:133,p:130},calls:{a:231,p:375},decroches:{a:56,p:45},propRdv:{a:13,p:10},sets:{a:9,p:5},presents:{a:2,p:4},closes:{a:0,p:4},collecte:{a:0,p:2000}},
-    s2:{tempsAppel:{a:7,p:7},leads:{a:191,p:130},calls:{a:324,p:375},decroches:{a:54,p:45},propRdv:{a:17,p:10},sets:{a:11,p:5},presents:{a:4,p:4},closes:{a:2,p:4},collecte:{a:1000,p:2000}},
-    s3:{tempsAppel:{a:4,p:7},leads:{a:127,p:130},calls:{a:178,p:375},decroches:{a:38,p:45},propRdv:{a:16,p:10},sets:{a:11,p:5},presents:{a:4,p:4},closes:{a:1,p:4},collecte:{a:400,p:2000}},
-    s4:{tempsAppel:{a:2,p:7},leads:{a:100,p:130},calls:{a:150,p:375},decroches:{a:28,p:45},propRdv:{a:15,p:10},sets:{a:10,p:5},presents:{a:4,p:4},closes:{a:0,p:4},collecte:{a:200,p:2000}},
-  },
-  team:{
-    week:[
-      {name:"Guillaume",role:"Closing + Setting",color:"#ef4444",contracte:33020,collecte:3342,calls:23,lives:20,offres:14,closes:6,fu:1,showup:0.87,txOffre:0.70,txTransfoShow:0.30,txTransfoOffre:0.429,caCall:1435.7},
-      {name:"Elodie",role:"Closing",color:"#60a5fa",contracte:22748,collecte:13629,calls:29,lives:24,offres:19,closes:7,fu:1,showup:0.83,txOffre:0.792,txTransfoShow:0.292,txTransfoOffre:0.368,caCall:784.4},
-    ],
-    month:[
-      {name:"Guillaume",role:"Closing + Setting",color:"#ef4444",contracte:48469,collecte:4686,calls:56,lives:33,offres:17,closes:9,fu:2,showup:0.589,txOffre:0.515,txTransfoShow:0.273,txTransfoOffre:0.529,caCall:721.3},
-      {name:"Elodie",role:"Closing",color:"#60a5fa",contracte:34069,collecte:3966,calls:46,lives:28,offres:13,closes:7,fu:0,showup:0.609,txOffre:0.464,txTransfoShow:0.25,txTransfoOffre:0.538,caCall:617.2},
-    ],
-  },
-  commissions:{
-    "Janvier 2026":{sales:"GUILLAUME",contracte:12000,collecte:0,totalComm:0,statut:"Validé",deals:[]},
-    "Février 2026":{sales:"GUILLAUME",contracte:24000,collecte:2000,totalComm:2125,statut:"En attente",deals:[
-      {client:"Julie Berchoux",email:"julieberchoux@icloud.com",offre:"BP 12",type:"Closing",date:"24/01/2026",cHT:6000,coHT:500,comm:500,bonus:0,notes:"Setting qualification après self booking",ok:true},
-      {client:"Corinne Alaga",email:"contact@lestabliersgourmands.com",offre:"BP 12",type:"Setting",date:"27/01/2026",cHT:null,coHT:null,comm:125,bonus:0,notes:"Setting d'un close d'Elodie",ok:true},
-      {client:"Belinda Giangiulio",email:"lesdemoisellesduvrac@gmail.com",offre:"BP 12",type:"Closing",date:"30/01/2026",cHT:6000,coHT:500,comm:500,bonus:0,notes:"Setting no-booking",ok:true},
-      {client:"Cecile Auneau",email:"domcecile@gmail.com",offre:"BP 12",type:"Closing",date:"09/02/2026",cHT:6000,coHT:500,comm:500,bonus:0,notes:"Setting no-booking",ok:true},
-      {client:"Justine Biton",email:"lephildesidees@hotmail.com",offre:"BP 12",type:"Closing",date:"09/02/2026",cHT:6000,coHT:500,comm:500,bonus:0,notes:"Setting no-booking",ok:true},
-    ]},
-    "Mars 2026":{sales:"GUILLAUME",contracte:0,collecte:0,totalComm:1625,statut:"En attente",deals:[]},
-  },
-};
-
-/* ═══ STATE ═══ */
-const S={mod:"dashboard",cw:"mois",sw:"mois",ev:"week",pv:"closing",selDeal:null};
-
-/* ═══ EVENT BUS ═══ */
-const Bus={_l:{},on(e,c){(this._l[e]=this._l[e]||[]).push(c)},emit(e,d){(this._l[e]||[]).forEach(c=>c(d))}};
-
-/* ═══ UTILS ═══ */
-const euro=v=>v==null?"—":"€ "+Number(v).toLocaleString("fr-FR");
-const pct=v=>v==null?"—":(v*100).toFixed(1)+"%";
-const num=v=>v==null?"—":Number(v).toLocaleString("fr-FR");
-const pp=(a,p)=>p>0?Math.min((a/p)*100,200):0;
-const ppv=(a,p)=>p>0?((a/p)*100).toFixed(0)+"%":"—";
-const cb=(a,p)=>{const r=p>0?a/p:0;return r>=1?"#10b981":r>=0.7?"#f59e0b":"#ef4444"};
-const g=id=>document.getElementById(id);
-
-function toast(msg){const t=g("toast");t.textContent=msg;t.style.opacity="1";t.style.transform="translateX(-50%) translateY(0)";setTimeout(()=>{t.style.opacity="0";t.style.transform="translateX(-50%) translateY(18px)"},2500)}
-
-/* ═══ NAV ═══ */
-function switchMod(m){
-  S.mod=m;
-  document.querySelectorAll(".mod-tab").forEach(t=>t.classList.toggle("active",t.dataset.mod===m));
-  document.querySelectorAll(".mod-view").forEach(v=>v.classList.toggle("active",v.id==="mod-"+m));
-  Bus.emit("modSwitch",m);
-  renders[m]&&renders[m]();
-}
-
-function changeMonth(d){
-  DB.cm.month+=d;
-  if(DB.cm.month>11){DB.cm.month=0;DB.cm.year++}
-  if(DB.cm.month<0){DB.cm.month=11;DB.cm.year--}
-  g("monthLbl").textContent=DB.months[DB.cm.month]+" "+DB.cm.year;
-  Bus.emit("monthChange",DB.cm);
-  renders[S.mod]&&renders[S.mod]();
-}
-
-/* ═══ RENDER DASHBOARD ═══ */
-function renderDash(){
-  const c=DB.closing.mois,s=DB.setting.mois;
-  // Alerts
-  const als=[];
-  if(c.atteinte<0.2)als.push({t:"rd",ic:"🚨",ti:"Objectif closing critique",tx:`${pct(c.atteinte)} atteint. ${euro(c.delta)} à récupérer ce mois.`});
-  if(s.showupP.a<0.5)als.push({t:"",ic:"⚠️",ti:"Show-up faible en setting",tx:`${pct(s.showupP.a)} vs ${pct(s.showupP.p)} projeté. Requalifier les RDVs.`});
-  if(als.length){g("alertChip").style.display="flex";g("alertTxt").textContent=als.length+" alerte"+(als.length>1?"s":"")}
-  g("dAlerts").innerHTML=als.map(a=>`<div class="ap ${a.t}"><div class="ap-ic">${a.ic}</div><div><div class="ap-ti">${a.ti}</div><div class="ap-tx">${a.tx}</div></div></div>`).join("");
-  // KPIs
-  g("dKpis").innerHTML=[
-    {l:"Contracté",v:euro(c.contracte.a),s:`/ ${euro(c.contracte.p)}`,pc:pp(c.contracte.a,c.contracte.p),col:"#ef4444"},
-    {l:"Closes",v:c.closes.a,s:`/ ${c.closes.p} proj.`,pc:pp(c.closes.a,c.closes.p),col:"#f59e0b"},
-    {l:"Calls Setting",v:num(s.calls.a),s:`/ ${num(s.calls.p)} proj.`,pc:pp(s.calls.a,s.calls.p),col:"#3b82f6"},
-    {l:"Commissions",v:euro(DB.commissions["Février 2026"].totalComm),s:"Ce mois",pc:100,col:"#10b981"},
-  ].map(k=>`<div class="kpi" style="--kc:${k.col}">
-    <div class="kpi-l">${k.l}</div><div class="kpi-v">${k.v}</div><div class="kpi-s">${k.s}</div>
-    <div class="kpi-pg"><div class="kpi-pl"><span>Objectif</span><span>${k.pc.toFixed(0)}%</span></div>
-    <div class="kpi-pb"><div class="kpi-pf" style="width:${Math.min(k.pc,100)}%;background:${k.col}"></div></div></div>
-  </div>`).join("");
-  // Funnel
-  const fn=[
-    {l:"Calls",v:c.calls.a,mx:c.calls.p},
-    {l:"Lives",v:c.lives.a,mx:c.calls.a},
-    {l:"Offres",v:c.offres.a,mx:c.lives.a},
-    {l:"Closes",v:c.closes.a,mx:c.offres.a},
-    {l:"Collecté",v:c.collecte.a,mx:c.contracte.a,eu:true},
-  ];
-  g("dFunnel").innerHTML=fn.map((f,i)=>{
-    const r=f.mx>0?f.v/f.mx:0;
-    return`<div class="fs"><div class="fs-l">${f.l}</div><div class="fs-b"><div class="fs-f" style="width:${Math.min(r*100,100)}%"></div></div><div class="fs-v">${f.eu?euro(f.v):f.v}</div><div class="fs-r">${i>0?pct(r):""}</div></div>`;
-  }).join("");
-  // Comm summary
-  const cm=DB.commissions["Février 2026"];
-  g("dComm").innerHTML=`<div style="font-size:24px;font-weight:800;font-family:var(--font-d);color:var(--gold);margin-bottom:8px">${euro(cm.totalComm)}</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Contracté: <b style="color:var(--text)">${euro(cm.contracte)}</b></div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Collecté: <b style="color:var(--text)">${euro(cm.collecte)}</b></div>
-    <div class="cst due">⏳ En attente · Max le 5 mars</div>`;
-  // Objectif
-  const at=c.atteinte*100;
-  g("dObj").innerHTML=`<div style="display:flex;align-items:center;gap:13px">
-    <div style="font-size:30px;font-weight:800;font-family:var(--font-d);color:${at>=80?"var(--green2)":at>=50?"var(--gold)":"var(--red2)"}">${at.toFixed(0)}%</div>
-    <div style="flex:1"><div style="height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden"><div style="height:100%;width:${Math.min(at,100)}%;background:linear-gradient(90deg,#b91c1c,#ef4444);border-radius:99px"></div></div>
-    <div style="font-size:10px;color:var(--muted);margin-top:4px">Delta: <b style="color:var(--red2)">${euro(c.delta)}</b></div></div></div>`;
-  // Setting mini
-  g("dSetting").innerHTML=[
-    {l:"Calls",a:s.calls.a,p:s.calls.p},{l:"Sets",a:s.sets.a,p:s.sets.p},
-    {l:"Show-up",a:s.presents.a,p:s.presents.p},{l:"Closes",a:s.closes.a,p:s.closes.p},
-  ].map(r=>`<div class="pr"><div class="pr-l">${r.l}</div><div class="pr-b"><div class="pr-f" style="width:${Math.min(pp(r.a,r.p),100)}%;background:${cb(r.a,r.p)}"></div></div><div class="pr-v">${r.a} / ${r.p}</div><div class="pr-p" style="color:${cb(r.a,r.p)}">${ppv(r.a,r.p)}</div></div>`).join("");
-  // Team mini
-  g("dTeam").innerHTML=`<table class="ttbl" style="width:100%"><thead><tr><th>Commercial</th><th>Closes</th><th>Contracté</th><th>Show-up</th></tr></thead><tbody>${DB.team.week.map(m=>`<tr><td><div class="tac"><div class="tav" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div><span class="tnm">${m.name}</span></div></td><td class="tn ${m.closes>=5?"ok":"wn"}">${m.closes}</td><td class="tn">${euro(m.contracte)}</td><td class="tn ${m.showup>=0.7?"ok":"wn"}">${pct(m.showup)}</td></tr>`).join("")}</tbody></table>`;
-}
-
-/* ═══ RENDER CLOSING ═══ */
-function setCW(w){S.cw=w;document.querySelectorAll("#cTabs .itab").forEach(t=>t.classList.toggle("active",t.dataset.w===w));renderClosing()}
-function renderClosing(){
-  const d=DB.closing[S.cw]||DB.closing.mois;
-  const isM=S.cw==="mois";
-  g("cKpis").innerHTML=[
-    {l:"Calls",v:d.calls.a,p:d.calls.p,col:"#3b82f6"},
-    {l:"Lives",v:d.lives.a,p:d.lives.p,col:"#8b5cf6"},
-    {l:"Closes",v:d.closes.a,p:d.closes.p,col:"#f59e0b"},
-    {l:"Contracté",v:euro(d.contracte.a),p:d.contracte.p,raw:d.contracte.a,col:"#ef4444"},
-  ].map(k=>{const pc=pp(k.raw!=null?k.raw:k.v,k.p);return`<div class="kpi" style="--kc:${k.col}"><div class="kpi-l">${k.l}</div><div class="kpi-v">${k.v}</div><div class="kpi-s">Proj: ${k.l==="Contracté"?euro(k.p):k.p}</div><div class="kpi-pg"><div class="kpi-pl"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div><div class="kpi-pb"><div class="kpi-pf" style="width:${Math.min(pc,100)}%;background:${cb(k.raw!=null?k.raw:k.v,k.p)}"></div></div></div></div>`}).join("");
-  if(isM){
-    g("cProg").innerHTML=[
-      {l:"Calls",a:d.calls.a,p:d.calls.p},{l:"Lives",a:d.lives.a,p:d.lives.p},
-      {l:"Offres",a:d.offres.a,p:d.offres.p},{l:"Closes",a:d.closes.a,p:d.closes.p},
-      {l:"Hard close",a:d.hc.a,p:d.hc.p},{l:"Follow-up close",a:d.fu.a,p:d.fu.p},
-      {l:"Contracté (€)",a:d.contracte.a,p:d.contracte.p,eu:true},{l:"Collecté (€)",a:d.collecte.a,p:d.collecte.p,eu:true},
-    ].map(r=>`<div class="pr"><div class="pr-l">${r.l}</div><div class="pr-b"><div class="pr-f" style="width:${Math.min(pp(r.a,r.p),100)}%;background:${cb(r.a,r.p)}"></div></div><div class="pr-v">${r.eu?euro(r.a)+" / "+euro(r.p):r.a+" / "+r.p}</div><div class="pr-p" style="color:${cb(r.a,r.p)}">${ppv(r.a,r.p)}</div></div>`).join("");
-    g("cRates").innerHTML=[
-      {l:"Lives / Calls",a:d.livesP.a,p:d.livesP.p},{l:"Offres / Lives",a:d.offresP.a,p:d.offresP.p},
-      {l:"Engagement offres",a:d.engP.a,p:d.engP.p},{l:"Close / Offres",a:d.cOffP.a,p:d.cOffP.p},
-      {l:"Close / Calls",a:d.cCallP.a,p:d.cCallP.p},
-    ].map(r=>`<div class="pr"><div class="pr-l">${r.l}</div><div class="pr-b"><div class="pr-f" style="width:${Math.min(pp(r.a,r.p),100)}%;background:${cb(r.a,r.p)}"></div></div><div class="pr-v">${pct(r.a)} / ${pct(r.p)}</div><div class="pr-p" style="color:${cb(r.a,r.p)}">${ppv(r.a,r.p)}</div></div>`).join("");
-  } else {
-    g("cProg").innerHTML=[
-      {l:"Calls",a:d.calls.a,p:d.calls.p},{l:"Lives",a:d.lives.a,p:d.lives.p},
-      {l:"Offres",a:d.offres.a,p:d.offres.p},{l:"Closes",a:d.closes.a,p:d.closes.p},
-    ].map(r=>`<div class="pr"><div class="pr-l">${r.l}</div><div class="pr-b"><div class="pr-f" style="width:${Math.min(pp(r.a,r.p),100)}%;background:${cb(r.a,r.p)}"></div></div><div class="pr-v">${r.a} / ${r.p}</div><div class="pr-p" style="color:${cb(r.a,r.p)}">${ppv(r.a,r.p)}</div></div>`).join("");
-    g("cRates").innerHTML=`<div style="color:var(--muted);font-size:12px;padding:20px;text-align:center">Taux détaillés disponibles en vue Mois</div>`;
+const SalesApp=(()=>{
+  const MODS={
+    dashboard:{mod:ModDashboard,rendered:false},
+    closing:{mod:ModClosing,rendered:false},
+    setting:{mod:ModSetting,rendered:false},
+    equipe:{mod:ModEquipe,rendered:false},
+    commissions:{mod:ModCommissions,rendered:false},
+    projections:{mod:ModProjections,rendered:false},
+  };
+  function switchMod(id){
+    STATE.activeModule=id;
+    document.querySelectorAll(".mod-tab").forEach(t=>t.classList.toggle("active",t.dataset.mod===id));
+    document.querySelectorAll(".mod-view").forEach(v=>v.classList.toggle("active",v.id==="mod-"+id));
+    const e=MODS[id];if(!e)return;
+    if(!e.rendered){e.mod.init(document.getElementById("mod-"+id));e.rendered=true;}
+    e.mod.render();Bus.emit("modSwitch",id);
   }
-  g("cWeeks").innerHTML=["s1","s2","s3","s4"].map((w,i)=>{const wd=DB.closing[w];return`<div class="wc ${S.cw===w?"cur":""}"><div class="wl"><span>Semaine ${i+1}</span><span style="color:${wd.atteinte>=0.5?"var(--green2)":"var(--red2)"}">${(wd.atteinte*100).toFixed(0)}%</span></div><div class="wv">${wd.closes.a}</div><div class="wvl">closes</div><div class="wmg"><div class="wm"><div class="wmv">${wd.calls.a}</div><div class="wml">Calls</div></div><div class="wm"><div class="wmv">${wd.lives.a}</div><div class="wml">Lives</div></div><div class="wm"><div class="wmv">${wd.offres.a}</div><div class="wml">Offres</div></div><div class="wm"><div class="wmv" style="color:var(--gold)">${euro(wd.contracte.a)}</div><div class="wml">Contracté</div></div></div></div>`}).join("");
-  drawBars("cChart",["S1","S2","S3","S4"],[DB.closing.s1.contracte.a,DB.closing.s2.contracte.a,DB.closing.s3.contracte.a,DB.closing.s4.contracte.a],[DB.closing.s1.contracte.p,DB.closing.s2.contracte.p,DB.closing.s3.contracte.p,DB.closing.s4.contracte.p]);
-}
-
-/* ═══ RENDER SETTING ═══ */
-function setSW(w){S.sw=w;document.querySelectorAll("#sTabs .itab").forEach(t=>t.classList.toggle("active",t.dataset.w===w));renderSetting()}
-function renderSetting(){
-  const d=DB.setting[S.sw]||DB.setting.mois;const isM=S.sw==="mois";
-  g("sKpis").innerHTML=[
-    {l:"Calls passés",v:d.calls.a,p:d.calls.p,col:"#3b82f6"},{l:"Sets",v:d.sets.a,p:d.sets.p,col:"#8b5cf6"},
-    {l:"Show-up",v:d.presents.a,p:d.presents.p,col:"#f59e0b"},{l:"Closes",v:d.closes.a,p:d.closes.p,col:"#ef4444"},
-  ].map(k=>`<div class="kpi" style="--kc:${k.col}"><div class="kpi-l">${k.l}</div><div class="kpi-v">${k.v}</div><div class="kpi-s">Proj: ${k.p}</div><div class="kpi-pg"><div class="kpi-pl"><span>Atteinte</span><span>${ppv(k.v,k.p)}</span></div><div class="kpi-pb"><div class="kpi-pf" style="width:${Math.min(pp(k.v,k.p),100)}%;background:${cb(k.v,k.p)}"></div></div></div></div>`).join("");
-  const fn=[{l:"Leads",v:d.leads.a,mx:d.leads.a},{l:"Calls",v:d.calls.a,mx:d.leads.a},{l:"Décrochés",v:d.decroches.a,mx:d.calls.a},{l:"Proposition RDV",v:d.propRdv.a,mx:d.decroches.a},{l:"Sets",v:d.sets.a,mx:d.propRdv.a},{l:"Show-up",v:d.presents.a,mx:d.sets.a},{l:"Closes",v:d.closes.a,mx:d.presents.a}];
-  g("sFunnel").innerHTML=fn.map((f,i)=>{const r=f.mx>0?f.v/f.mx:0;return`<div class="fs"><div class="fs-l">${f.l}</div><div class="fs-b"><div class="fs-f" style="width:${Math.min(r*100,100)}%"></div></div><div class="fs-v">${f.v}</div><div class="fs-r">${i>0?pct(r):""}</div></div>`}).join("");
-  g("sRates").innerHTML=isM?[
-    {l:"Décrochés %",a:d.decrochesP.a,p:d.decrochesP.p},{l:"Engagement %",a:d.engP.a,p:d.engP.p},
-    {l:"Set %",a:d.setP.a,p:d.setP.p},{l:"Show-up %",a:d.showupP.a,p:d.showupP.p},
-    {l:"Close Calls %",a:d.cCallP.a,p:d.cCallP.p},
-  ].map(r=>`<div class="pr"><div class="pr-l">${r.l}</div><div class="pr-b"><div class="pr-f" style="width:${Math.min(pp(r.a,r.p),100)}%;background:${cb(r.a,r.p)}"></div></div><div class="pr-v">${pct(r.a)} / ${pct(r.p)}</div><div class="pr-p" style="color:${cb(r.a,r.p)}">${ppv(r.a,r.p)}</div></div>`).join(""):`<div style="color:var(--muted);font-size:12px;padding:20px;text-align:center">Taux disponibles en vue Mois</div>`;
-  g("sWeeks").innerHTML=["s1","s2","s3","s4"].map((w,i)=>{const wd=DB.setting[w];return`<div class="wc ${S.sw===w?"cur":""}"><div class="wl"><span>Semaine ${i+1}</span></div><div class="wv">${wd.calls.a}</div><div class="wvl">calls</div><div class="wmg"><div class="wm"><div class="wmv">${wd.decroches.a}</div><div class="wml">Décrochés</div></div><div class="wm"><div class="wmv">${wd.sets.a}</div><div class="wml">Sets</div></div><div class="wm"><div class="wmv">${wd.presents.a}</div><div class="wml">Show-up</div></div><div class="wm"><div class="wmv" style="color:var(--red2)">${wd.closes.a}</div><div class="wml">Closes</div></div></div></div>`}).join("");
-}
-
-/* ═══ RENDER EQUIPE ═══ */
-function setEV(v){S.ev=v;document.querySelectorAll("#eTabs .itab").forEach((t,i)=>t.classList.toggle("active",(i===0&&v==="week")||(i===1&&v==="month")));renderEquipe()}
-function renderEquipe(){
-  const tm=DB.team[S.ev==="week"?"week":"month"];
-  const tot={contracte:tm.reduce((s,m)=>s+m.contracte,0),collecte:tm.reduce((s,m)=>s+m.collecte,0),calls:tm.reduce((s,m)=>s+m.calls,0),closes:tm.reduce((s,m)=>s+m.closes,0)};
-  g("eKpis").innerHTML=[
-    {l:"Contracté total",v:euro(tot.contracte),col:"#ef4444"},{l:"Collecté total",v:euro(tot.collecte),col:"#10b981"},
-    {l:"Total calls",v:tot.calls,col:"#3b82f6"},{l:"Total closes",v:tot.closes,col:"#f59e0b"},
-  ].map(k=>`<div class="kpi" style="--kc:${k.col}"><div class="kpi-l">${k.l}</div><div class="kpi-v">${k.v}</div></div>`).join("");
-  g("eTbl").innerHTML=`<table class="ttbl" style="width:100%"><thead><tr><th>Commercial</th><th>Contracté</th><th>Collecté</th><th>Calls</th><th>Lives</th><th>Offres</th><th>Closes</th><th>Show-up</th><th>CA/Call</th></tr></thead><tbody>${tm.map(m=>`<tr><td><div class="tac"><div class="tav" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div><div><div class="tnm">${m.name}</div><div class="trt">${m.role}</div></div></div></td><td class="tn">${euro(m.contracte)}</td><td class="tn ${m.collecte>5000?"ok":"wn"}">${euro(m.collecte)}</td><td class="tn">${m.calls}</td><td class="tn">${m.lives}</td><td class="tn">${m.offres}</td><td class="tn ${m.closes>=5?"ok":"wn"}">${m.closes}</td><td class="tn ${m.showup>=0.7?"ok":"wn"}">${pct(m.showup)}</td><td class="tn">${euro(m.caCall)}</td></tr>`).join("")}<tr style="border-top:1px solid var(--border2);font-weight:700"><td><b>Total</b></td><td class="tn">${euro(tot.contracte)}</td><td class="tn">${euro(tot.collecte)}</td><td class="tn">${tot.calls}</td><td class="tn">${tm.reduce((s,m)=>s+m.lives,0)}</td><td class="tn">${tm.reduce((s,m)=>s+m.offres,0)}</td><td class="tn">${tot.closes}</td><td class="tn">—</td><td class="tn">—</td></tr></tbody></table>`;
-  g("ePrf").innerHTML=[{l:"Show-up",k:"showup",g:0.75},{l:"Tx d'offre",k:"txOffre",g:0.7},{l:"Tx transfo show",k:"txTransfoShow",g:0.3},{l:"Tx transfo offre",k:"txTransfoOffre",g:0.4}].map(m=>`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">${m.l}</div>${tm.map(t=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><div style="width:68px;font-size:11px;color:var(--muted)">${t.name}</div><div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden"><div style="width:${Math.min((t[m.k]/m.g)*100,100)}%;height:100%;background:${t.color};border-radius:99px;opacity:0.75"></div></div><div style="font-size:11px;font-family:var(--font-m);min-width:40px;text-align:right;color:${cb(t[m.k],m.g)}">${pct(t[m.k])}</div></div>`).join("")}</div>`).join("");
-}
-
-/* ═══ RENDER COMMISSIONS ═══ */
-function renderComm(){
-  const mk=DB.months[DB.cm.month]+" "+DB.cm.year;
-  const data=DB.commissions[mk]||{sales:"—",contracte:0,collecte:0,totalComm:0,statut:"—",deals:[]};
-  g("cMoLbl").textContent=mk;g("cTblTi").textContent="Deals — "+mk;
-  g("cBadge").textContent=euro(data.totalComm);
-  g("cSum").innerHTML=`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(255,255,255,0.35);margin-bottom:7px">${data.sales}</div><div class="csv">${euro(data.totalComm)}</div><div class="csr"><span style="color:var(--muted)">Cash contracté</span><span style="font-weight:600">${euro(data.contracte)}</span></div><div class="csr"><span style="color:var(--muted)">Cash collecté</span><span style="font-weight:600">${euro(data.collecte)}</span></div><div class="csr"><span style="color:var(--muted)">Deals</span><span style="font-weight:600">${data.deals.length}</span></div><div class="csr tot"><span>Total commissions</span><span>${euro(data.totalComm)}</span></div><div class="cst ${data.statut==="Validé"?"paid":"due"}">${data.statut==="Validé"?"✅ Validé":"⏳ "+data.statut} · Max le 5 du mois</div>`;
-  g("cHist").innerHTML=Object.entries(DB.commissions).map(([k,v])=>`<div class="pr" style="cursor:pointer" onclick="jumpMo('${k}')"><div class="pr-l" style="font-size:12px">${k}</div><div class="tn" style="font-size:12px;margin-left:auto;color:${v.totalComm>0?"var(--gold)":"var(--muted)"}">${euro(v.totalComm)}</div><div style="margin-left:8px"><span class="bdg ${v.statut==="Validé"?"bdg-ok":"bdg-pd"}">${v.statut==="Validé"?"✓ Validé":"En attente"}</span></div></div>`).join("");
-  g("cTblB").innerHTML=data.deals.length===0?`<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--muted)">Aucun deal pour ce mois</td></tr>`:data.deals.map((d,i)=>`<tr onclick="selDeal(${i})" ${S.selDeal===i?"class='sel'":""}}><td><div style="font-weight:600">${d.client}</div><div style="font-size:10px;color:var(--muted)">${d.email}</div></td><td>${d.offre}</td><td><span class="bdg ${d.type==="Closing"?"bdg-cl":"bdg-st"}">${d.type}</span></td><td style="font-family:var(--font-m);font-size:11px">${d.date}</td><td class="tn">${d.cHT?euro(d.cHT):"—"}</td><td class="tn">${d.coHT?euro(d.coHT):"—"}</td><td class="tn" style="color:var(--gold);font-weight:700">${euro(d.comm)}</td><td class="tn">${d.bonus?euro(d.bonus):"—"}</td><td><span class="bdg ${d.ok?"bdg-ok":"bdg-pd"}">${d.ok?"✓ Vérifié":"En attente"}</span></td></tr>`).join("");
-}
-function jumpMo(k){const p=k.split(" ");const mi=DB.months.indexOf(p[0]);const yr=parseInt(p[1]);if(mi>=0){DB.cm.month=mi;DB.cm.year=yr}g("monthLbl").textContent=k;Bus.emit("monthChange",DB.cm);renderComm()}
-function selDeal(i){S.selDeal=S.selDeal===i?null:i;renderComm()}
-function submitComm(){const mk=DB.months[DB.cm.month]+" "+DB.cm.year;if(DB.commissions[mk])DB.commissions[mk].statut="Soumis";toast("📤 Commissions soumises pour validation !");renderComm()}
-function openAddDeal(){
-  const bd=document.createElement("div");bd.className="mbk";
-  bd.innerHTML=`<div class="mdl"><div class="mh"><div class="mti">Nouveau deal</div><button class="mc" onclick="this.closest('.mbk').remove()">✕</button></div><div class="mb">
-    <div class="fr"><div class="ff"><label class="fl">Client</label><input class="fi" id="nd-c" placeholder="Nom du client"/></div><div class="ff"><label class="fl">Email</label><input class="fi" id="nd-e" type="email" placeholder="email@..."/></div></div>
-    <div class="fr"><div class="ff"><label class="fl">Offre</label><input class="fi" id="nd-o" placeholder="BP 12, Mentor..."/></div><div class="ff"><label class="fl">Type</label><select class="fi" id="nd-t"><option>Closing</option><option>Setting</option></select></div></div>
-    <div class="fr"><div class="ff"><label class="fl">Date</label><input class="fi" id="nd-d" type="date"/></div><div class="ff"><label class="fl">Contracté HT (€)</label><input class="fi" id="nd-ct" type="number" placeholder="6000"/></div></div>
-    <div class="fr"><div class="ff"><label class="fl">Collecté HT (€)</label><input class="fi" id="nd-co" type="number" placeholder="500"/></div><div class="ff"><label class="fl">Commission (€)</label><input class="fi" id="nd-cm" type="number" placeholder="500"/></div></div>
-    <div class="ff"><label class="fl">Notes</label><input class="fi" id="nd-n" placeholder="Contexte..."/></div>
-    <div style="display:flex;gap:9px;margin-top:15px"><button class="btn btn-ghost" style="flex:1" onclick="this.closest('.mbk').remove()">Annuler</button><button class="btn btn-red" style="flex:1" onclick="saveDeal(this)">💾 Ajouter</button></div>
-  </div></div>`;
-  document.body.appendChild(bd);bd.addEventListener("click",e=>{if(e.target===bd)bd.remove()});
-}
-function saveDeal(btn){
-  const mk=DB.months[DB.cm.month]+" "+DB.cm.year;
-  if(!DB.commissions[mk])DB.commissions[mk]={sales:"GUILLAUME",contracte:0,collecte:0,totalComm:0,statut:"En attente",deals:[]};
-  const d={client:g("nd-c").value||"Client",email:g("nd-e").value||"",offre:g("nd-o").value||"BP 12",type:g("nd-t").value,date:g("nd-d").value||new Date().toLocaleDateString("fr-FR"),cHT:parseFloat(g("nd-ct").value)||null,coHT:parseFloat(g("nd-co").value)||null,comm:parseFloat(g("nd-cm").value)||0,bonus:0,notes:g("nd-n").value,ok:false};
-  DB.commissions[mk].deals.push(d);DB.commissions[mk].totalComm+=d.comm;DB.commissions[mk].contracte+=d.cHT||0;DB.commissions[mk].collecte+=d.coHT||0;
-  btn.closest(".mbk").remove();toast("✅ Deal ajouté !");Bus.emit("dealAdded",d);renderComm();
-}
-
-/* ═══ RENDER PROJECTIONS ═══ */
-function setPV(v){S.pv=v;document.querySelectorAll("#pTabs .itab").forEach((t,i)=>t.classList.toggle("active",["closing","setting","revenue"][i]===v));renderProj()}
-function renderProj(){
-  const v=S.pv,c=DB.closing.mois,s=DB.setting.mois,cm=DB.commissions["Février 2026"];
-  let kpis,actuals,projs,labels,gaps;
-  if(v==="closing"){
-    kpis=[{l:"Atteinte objectif",v:(c.atteinte*100).toFixed(0)+"%",col:c.atteinte<0.5?"#ef4444":"#f59e0b"},{l:"Delta contracté",v:euro(c.delta),col:"#ef4444"},{l:"Cash / Live call",v:euro(c.cashLive.a),s:"Proj: "+euro(c.cashLive.p),col:"#8b5cf6"},{l:"Closes restants",v:(c.closes.p-c.closes.a)+" closes",s:"pour proj.",col:"#f59e0b"}];
-    labels=["S1","S2","S3","S4"];actuals=[DB.closing.s1.closes.a,DB.closing.s2.closes.a,DB.closing.s3.closes.a,DB.closing.s4.closes.a];projs=[DB.closing.s1.closes.p,DB.closing.s2.closes.p,DB.closing.s3.closes.p,DB.closing.s4.closes.p];
-    gaps=[{l:"Calls",a:c.calls.a,p:c.calls.p},{l:"Lives",a:c.lives.a,p:c.lives.p},{l:"Offres",a:c.offres.a,p:c.offres.p},{l:"Closes",a:c.closes.a,p:c.closes.p},{l:"Contracté",a:c.contracte.a,p:c.contracte.p,eu:true}];
-  } else if(v==="setting"){
-    kpis=[{l:"Calls vs proj.",v:ppv(s.calls.a,s.calls.p),col:"#3b82f6"},{l:"Sets obtenus",v:s.sets.a+" / "+s.sets.p,col:"#8b5cf6"},{l:"Show-up rate",v:pct(s.showupP.a),s:"Proj: "+pct(s.showupP.p),col:s.showupP.a>=s.showupP.p?"#10b981":"#f59e0b"},{l:"Leads traités",v:num(s.leads.a),col:"#3b82f6"}];
-    labels=["S1","S2","S3","S4"];actuals=[DB.setting.s1.calls.a,DB.setting.s2.calls.a,DB.setting.s3.calls.a,DB.setting.s4.calls.a];projs=[DB.setting.s1.calls.p,DB.setting.s2.calls.p,DB.setting.s3.calls.p,DB.setting.s4.calls.p];
-    gaps=[{l:"Leads",a:s.leads.a,p:s.leads.p},{l:"Calls",a:s.calls.a,p:s.calls.p},{l:"Sets",a:s.sets.a,p:s.sets.p},{l:"Show-up",a:s.presents.a,p:s.presents.p},{l:"Closes",a:s.closes.a,p:s.closes.p}];
-  } else {
-    kpis=[{l:"Contracté",v:euro(c.contracte.a),s:"Proj: "+euro(c.contracte.p),col:"#ef4444"},{l:"Collecté",v:euro(c.collecte.a),s:"Proj: "+euro(c.collecte.p),col:"#10b981"},{l:"Commissions",v:euro(cm.totalComm),col:"#f59e0b"},{l:"Taux collecte",v:pct(c.collecte.a/c.contracte.a),s:"8.3% standard",col:"#8b5cf6"}];
-    labels=["S1","S2","S3","S4"];actuals=[DB.closing.s1.contracte.a,DB.closing.s2.contracte.a,DB.closing.s3.contracte.a,DB.closing.s4.contracte.a];projs=[DB.closing.s1.contracte.p,DB.closing.s2.contracte.p,DB.closing.s3.contracte.p,DB.closing.s4.contracte.p];
-    gaps=[{l:"Contracté",a:c.contracte.a,p:c.contracte.p,eu:true},{l:"Collecté",a:c.collecte.a,p:c.collecte.p,eu:true}];
+  function changeMonth(dir){
+    DB.cm.month+=dir;
+    if(DB.cm.month>11){DB.cm.month=0;DB.cm.year++;}
+    if(DB.cm.month<0){DB.cm.month=11;DB.cm.year--;}
+    document.getElementById("month-lbl").textContent=DB.months[DB.cm.month]+" "+DB.cm.year;
+    Bus.emit("monthChange",DB.cm);
+    const e=MODS[STATE.activeModule];if(e&&e.rendered)e.mod.render();
   }
-  g("pKpis").innerHTML=kpis.map(k=>`<div class="kpi" style="--kc:${k.col}"><div class="kpi-l">${k.l}</div><div class="kpi-v">${k.v}</div>${k.s?`<div class="kpi-s">${k.s}</div>`:""}</div>`).join("");
-  drawBars("pBars",labels,actuals,projs);
-  g("pGap").innerHTML=gaps.map(g2=>`<div class="pr"><div class="pr-l">${g2.l}</div><div class="pr-v">${g2.eu?euro(g2.a):g2.a} / ${g2.eu?euro(g2.p):g2.p}</div><div class="pr-p" style="color:${g2.p-g2.a>0?"var(--red2)":"var(--green2)"};font-weight:700">${g2.p-g2.a>0?"−":"+"} ${g2.eu?euro(Math.abs(g2.p-g2.a)):Math.abs(g2.p-g2.a)}</div></div>`).join("");
-  g("pMsg").innerHTML=`<div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:15px 17px;border-left:3px solid var(--red)"><div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:0.8px">Note du manager</div><div style="font-size:13px;line-height:1.75;color:rgba(255,255,255,0.65)">Ce que tu as écrit, ce sont tes <b style="color:var(--text)">projections</b>, pas tes objectifs.<br><br>Une projection, c'est ce que tu es censé atteindre dans 75 à 80% des cas. C'est ce que tu atteins sans te forcer.<br><br>Un objectif, c'est ta projection augmentée de <b style="color:var(--gold)">33 à 50%</b>. C'est ce que tu vises pour sortir de ta zone de confort.<br><br><span style="color:var(--red3)">Projection = zone de confort &nbsp;·&nbsp; Objectif = zone de progression</span></div></div>`;
-}
-
-/* ═══ CHART ═══ */
-function drawBars(cid,labels,actuals,projs){
-  const c=g(cid);if(!c)return;
-  const mx=Math.max(...actuals,...projs,1);
-  c.innerHTML=`<div style="display:flex;gap:10px;margin-bottom:8px;font-size:11px;color:var(--muted)"><div style="display:flex;align-items:center;gap:4px"><div style="width:9px;height:9px;border-radius:2px;background:linear-gradient(180deg,#ef4444,#b91c1c)"></div> Réel</div><div style="display:flex;align-items:center;gap:4px"><div style="width:9px;height:9px;border-radius:2px;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.18)"></div> Projection</div></div><div class="chrt">${labels.map((l,i)=>`<div style="flex:1;display:flex;flex-direction:column"><div style="display:flex;gap:2px;align-items:flex-end;height:130px"><div class="chrt-bar chrt-a" style="flex:1;height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}"></div><div class="chrt-bar chrt-p" style="flex:1;height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj: ${projs[i]}"></div></div><div class="chrt-lbl">${l}</div></div>`).join("")}</div>`;
-}
-
-/* ═══ CROSS-MODULE ═══ */
-Bus.on("dealAdded",()=>{g("cBadge")&&(g("cBadge").textContent=euro(DB.commissions["Février 2026"]?.totalComm||0))});
-Bus.on("monthChange",()=>{if(S.mod==="commissions")renderComm()});
-
-/* ═══ RENDERS MAP ═══ */
-const renders={dashboard:renderDash,closing:renderClosing,setting:renderSetting,equipe:renderEquipe,commissions:renderComm,projections:renderProj};
-
-/* ═══ INIT ═══ */
-window.addEventListener("DOMContentLoaded",()=>{
-  const nm=localStorage.getItem("ambitio_name")||"Guillaume";
-  g("tbNm").textContent=nm;g("tbAv").textContent=nm[0].toUpperCase();
-  renderDash();
-});
-</script>
+  function init(){
+    const nm=localStorage.getItem("ambitio_name")||"Guillaume";
+    document.getElementById("tb-nm").textContent=nm;
+    document.getElementById("tb-av").textContent=nm[0].toUpperCase();
+    Bus.on("dealAdded",()=>{const mk=U.currentMonthKey();const b=document.getElementById("comm-badge");if(b)b.textContent=U.euro(DB.commissions[mk]?.totalComm||0);});
+    Bus.on("monthChange",()=>{const mk=U.currentMonthKey();const b=document.getElementById("comm-badge");if(b)b.textContent=U.euro(DB.commissions[mk]?.totalComm||0);});
+    ModDashboard.init(document.getElementById("mod-dashboard"));
+    MODS.dashboard.rendered=true;ModDashboard.render();
+  }
+  return{switchMod,changeMonth,init};
+})();
+window.addEventListener("DOMContentLoaded",SalesApp.init);
+<\/script>
 </body>
 </html>
