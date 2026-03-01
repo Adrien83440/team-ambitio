@@ -287,9 +287,10 @@ const U = {
     </div>`;
   },
 
-  weekCard: (label, mainVal, mainLabel, minis, isCurrent) => `
+  weekCard: (label, mainVal, mainLabel, minis, isCurrent, dateRange) => `
     <div class="wc${isCurrent?' wc-active':''}">
       <div class="wc-label">${label}</div>
+      ${dateRange ? `<div class="wc-dates">${dateRange}</div>` : ''}
       <div class="wc-main">${mainVal}</div>
       <div class="wc-sub">${mainLabel}</div>
       <div class="wc-grid">${minis.map(m=>`
@@ -327,4 +328,62 @@ const U = {
   },
 };
 
+
+/* ═══════════════════════════════════════════════════════════
+   SEMAINES RÉELLES — calcule les vraies dates lun→dim
+═══════════════════════════════════════════════════════════ */
+function getMonthWeeks(monthLabel) {
+  // monthLabel = "Février 2026"
+  const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
+                     'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const parts = monthLabel.split(' ');
+  const month = MONTHS_FR.indexOf(parts[0]); // 0-based
+  const year  = parseInt(parts[1]);
+  if (month === -1 || isNaN(year)) return [];
+
+  const DAYS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  const pad = n => String(n).padStart(2,'0');
+
+  function fmt(d) {
+    // "14/02"
+    return pad(d.getDate()) + '/' + pad(d.getMonth()+1);
+  }
+  function fmtShort(d) {
+    // "14 fév"
+    const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
+    return d.getDate() + ' ' + M[d.getMonth()];
+  }
+
+  // Premier lundi qui touche le mois (peut être dans le mois précédent)
+  const firstOfMonth = new Date(year, month, 1);
+  const dayOfWeek = firstOfMonth.getDay(); // 0=Sun,1=Mon...
+  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  let monday = new Date(year, month, 1 + daysToMonday);
+
+  const weeks = [];
+  while (true) {
+    const sunday = new Date(monday.getTime() + 6 * 86400000);
+    // Inclure si la semaine chevauche le mois cible
+    if (monday.getMonth() === month || sunday.getMonth() === month) {
+      weeks.push({
+        id:    's' + (weeks.length + 1),
+        label: 'S' + (weeks.length + 1),
+        start: monday,
+        end:   sunday,
+        range: fmt(monday) + ' → ' + fmt(sunday),       // "26/01 → 01/02"
+        short: fmtShort(monday) + ' – ' + fmtShort(sunday), // "26 jan – 1 fév"
+        tab:   fmt(monday) + '→' + fmt(sunday),
+      });
+    }
+    monday = new Date(monday.getTime() + 7 * 86400000);
+    if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
+      if (monday.getMonth() !== month) break;
+    }
+    if (monday.getFullYear() > year + 1) break;
+    if (weeks.length >= 6) break;
+  }
+  return weeks;
+}
+
 window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
+window.getMonthWeeks=getMonthWeeks;
