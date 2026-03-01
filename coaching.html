@@ -38,6 +38,37 @@
     .user-badge-name{font-size:12px;font-weight:600}
     .user-badge-role{font-size:10px;color:var(--muted)}
 
+    /* ── VIEW TABS (statut) ── */
+    .status-tabs {
+      display: flex; gap: 0; background: white;
+      border-bottom: 2px solid var(--border);
+      padding: 0 28px; overflow-x: auto;
+    }
+    .status-tab {
+      display: flex; align-items: center; gap: 7px;
+      padding: 12px 18px; border: none; background: none;
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      color: var(--muted); cursor: pointer; position: relative;
+      white-space: nowrap; transition: color .15s; border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+    }
+    .status-tab:hover { color: var(--text); }
+    .status-tab.active { color: var(--blue-main); border-bottom-color: var(--blue-main); }
+    .status-tab .tab-count {
+      font-size: 11px; font-weight: 700; padding: 2px 7px;
+      border-radius: 20px; background: #f1f5f9; color: var(--muted);
+      transition: all .15s;
+    }
+    .status-tab.active .tab-count { background: var(--blue-ghost); color: var(--blue-main); }
+    .status-tab.tab-alert.active { color: var(--red); border-bottom-color: var(--red); }
+    .status-tab.tab-alert.active .tab-count { background: var(--red-light); color: var(--red); }
+    .status-tab.tab-warn.active { color: var(--orange); border-bottom-color: var(--orange); }
+    .status-tab.tab-warn.active .tab-count { background: var(--orange-light); color: var(--orange); }
+    .status-tab.tab-inactive.active { color: #64748b; border-bottom-color: #94a3b8; }
+    .status-tab.tab-inactive.active .tab-count { background: #f1f5f9; color: #64748b; }
+    .status-tab.tab-quota.active { color: var(--purple); border-bottom-color: var(--purple); }
+    .status-tab.tab-quota.active .tab-count { background: var(--purple-light); color: var(--purple); }
+
     /* ── TOOLBAR ── */
     .toolbar{padding:14px 28px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:white;border-bottom:1px solid var(--border)}
     .search-box{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px;min-width:260px;transition:border-color .15s}
@@ -354,6 +385,28 @@
   </div>
 </div>
 
+<!-- STATUS TABS (vue principale) -->
+<div class="status-tabs" id="statusTabs">
+  <button class="status-tab active" data-view="actifs" onclick="setStatusTab('actifs',this)">
+    🟢 Actifs <span class="tab-count" id="tabCount-actifs">0</span>
+  </button>
+  <button class="status-tab tab-alert" data-view="retard" onclick="setStatusTab('retard',this)">
+    🔴 En retard <span class="tab-count" id="tabCount-retard">0</span>
+  </button>
+  <button class="status-tab tab-quota" data-view="quota" onclick="setStatusTab('quota',this)">
+    📊 Quota manqué ce mois <span class="tab-count" id="tabCount-quota">0</span>
+  </button>
+  <button class="status-tab tab-warn" data-view="attention" onclick="setStatusTab('attention',this)">
+    🟡 Attention <span class="tab-count" id="tabCount-attention">0</span>
+  </button>
+  <button class="status-tab tab-inactive" data-view="inactifs" onclick="setStatusTab('inactifs',this)">
+    ⚫ Inactifs <span class="tab-count" id="tabCount-inactifs">0</span>
+  </button>
+  <button class="status-tab" data-view="tous" onclick="setStatusTab('tous',this)">
+    👥 Tous <span class="tab-count" id="tabCount-tous">0</span>
+  </button>
+</div>
+
 <!-- TOOLBAR -->
 <div class="toolbar">
   <div class="search-box">
@@ -374,16 +427,16 @@
     </select>
     <select class="filter-select" id="filterCoach" onchange="applyFilters()">
       <option value="">Tous les coachs</option>
+      <option value="Mickael">Mickael</option>
+      <option value="Edouard">Edouard</option>
+      <option value="Emily">Emily</option>
+      <option value="Adrien">Adrien</option>
     </select>
-    <button class="filter-btn filter-btn--active-only active" id="filterActive" onclick="toggleActiveFilter(this)">✅ Actifs seulement</button>
-    <button class="filter-btn" id="filterAlert" onclick="toggleAlertFilter(this)">⚠️ En retard</button>
-    <button class="filter-btn" id="filterQuota" onclick="toggleQuotaFilter(this)">📊 Quota manqué</button>
   </div>
   <div class="toolbar-stats">
-    <div class="stat-pill"><span class="num" id="statTotal">0</span> clients actifs</div>
-    <div class="stat-pill alert"><span class="num" id="statAlert">0</span> ⚠️ en retard</div>
-    <div class="stat-pill"><span class="num" id="statSessions">0</span> séances totales</div>
-    <div class="stat-pill" style="color:var(--muted)"><span class="num" id="statInactive" style="font-size:14px">0</span> inactifs</div>
+    <div class="stat-pill"><span class="num" id="statTotal">0</span> affichés</div>
+    <div class="stat-pill"><span class="num" id="statSessions">0</span> séances</div>
+    <div class="stat-pill" style="color:var(--muted)"><span class="num" id="statInactive">0</span> inactifs</div>
   </div>
 </div>
 
@@ -495,7 +548,22 @@ let _filtered = [];
 let _currentView = 'kanban';
 let _alertFilterOn = false;
 let _quotaFilterOn = false;
-let _activeFilterOn = true; // par défaut : affiche seulement les actifs
+let _activeFilterOn = true;
+let _statusTab = 'actifs'; // actifs | retard | attention | quota | inactifs | tous
+
+// ── NORMALISE COACH NAME ──
+// Regroupe toutes les variantes vers un prénom canonique
+function normalizeCoach(raw){
+  if(!raw) return '';
+  const s = raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if(/^mick|^micha|^mik/.test(s)) return 'Mickael';
+  if(/^edou|^edw|^edo/.test(s)) return 'Edouard';
+  if(/^emil/.test(s)) return 'Emily';
+  if(/^adri/.test(s)) return 'Adrien';
+  // fallback : capitalize first word
+  const first = raw.trim().split(/[\s.]/)[0];
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
 const ALERT_DAYS = 21;
 const WARN_DAYS = 14;
 
@@ -602,20 +670,14 @@ window.loadClients = async function(){
     snap.forEach(d=>{
       const data = d.data();
       data._id = d.id;
+      // Normalize all coach names in sessions
+      if(data.sessions){
+        data.sessions = data.sessions.map(s=>({...s, coach: normalizeCoach(s.coach)}));
+      }
       _clients.push(data);
     });
   }catch(e){console.warn('Load error:',e);}
   
-  const coaches = new Set();
-  _clients.forEach(c=>{
-    (c.sessions||[]).forEach(s=>{if(s.coach)coaches.add(s.coach);});
-  });
-  const sel = document.getElementById('filterCoach');
-  sel.innerHTML = '<option value="">Tous les coachs</option>';
-  [...coaches].sort().forEach(c=>{
-    sel.innerHTML += `<option value="${c}">${c}</option>`;
-  });
-
   updateMonthLabel();
   applyFilters();
 };
@@ -625,32 +687,55 @@ function applyFilters(){
   const q = (document.getElementById('searchInput').value||'').toLowerCase();
   const prog = document.getElementById('filterProg').value;
   const coach = document.getElementById('filterCoach').value;
-  
-  _filtered = _clients.filter(c=>{
+
+  // Compute all counts for tabs (before status-tab filter)
+  const base = _clients.filter(c=>{
     if(q && !c.nom.toLowerCase().includes(q) && !(c.email||'').toLowerCase().includes(q) && !(c.activite||'').toLowerCase().includes(q)) return false;
     if(prog && c.programme !== prog) return false;
     if(coach){
-      const hasCoach = (c.sessions||[]).some(s=>s.coach===coach);
+      const hasCoach = (c.sessions||[]).some(s=>normalizeCoach(s.coach)===coach);
       if(!hasCoach) return false;
-    }
-    if(_activeFilterOn && c.statut === 'inactif') return false;
-    if(_alertFilterOn && getAlertStatus(c)==='ok') return false;
-    if(_quotaFilterOn){
-      const q = getQuotaStatus(c, _viewYear, _viewMonth);
-      if(q.status==='ok' || q.status==='done') return false;
     }
     return true;
   });
-  
-  const inactiveCount = _clients.filter(c=>c.statut==='inactif').length;
-  const activeFiltered = _filtered.filter(c=>c.statut!=='inactif');
-  
-  document.getElementById('statTotal').textContent = _activeFilterOn ? activeFiltered.length : _filtered.filter(c=>c.statut!=='inactif').length;
-  document.getElementById('statAlert').textContent = _filtered.filter(c=>c.statut!=='inactif' && getAlertStatus(c)==='alert').length;
+
+  const actifs    = base.filter(c=>c.statut !== 'inactif');
+  const inactifs  = base.filter(c=>c.statut === 'inactif');
+  const retard    = actifs.filter(c=>getAlertStatus(c)==='alert');
+  const attention = actifs.filter(c=>getAlertStatus(c)==='warning');
+  const quotaMiss = actifs.filter(c=>{ const qs=getQuotaStatus(c,_viewYear,_viewMonth); return qs.status==='empty'||qs.status==='partial'; });
+
+  // Update tab counts
+  document.getElementById('tabCount-actifs').textContent    = actifs.length;
+  document.getElementById('tabCount-retard').textContent    = retard.length;
+  document.getElementById('tabCount-attention').textContent = attention.length;
+  document.getElementById('tabCount-quota').textContent     = quotaMiss.length;
+  document.getElementById('tabCount-inactifs').textContent  = inactifs.length;
+  document.getElementById('tabCount-tous').textContent      = base.length;
+
+  // Apply status tab filter
+  switch(_statusTab){
+    case 'actifs':    _filtered = actifs; break;
+    case 'retard':    _filtered = retard; break;
+    case 'attention': _filtered = attention; break;
+    case 'quota':     _filtered = quotaMiss; break;
+    case 'inactifs':  _filtered = inactifs; break;
+    case 'tous':      _filtered = base; break;
+    default:          _filtered = actifs;
+  }
+
+  document.getElementById('statTotal').textContent    = _filtered.length;
   document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>(c.sessions||[]).filter(s=>s.statut==='fait').length+s,0);
-  document.getElementById('statInactive').textContent = inactiveCount;
+  document.getElementById('statInactive').textContent = inactifs.length;
   updateQuotaStats();
   render();
+}
+
+function setStatusTab(tab, btn){
+  _statusTab = tab;
+  document.querySelectorAll('.status-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilters();
 }
 
 function toggleActiveFilter(btn){
@@ -960,7 +1045,7 @@ function toggleNewSession(){document.getElementById('newSessionForm').classList.
 // ── ADD SESSION ──
 async function addSession(clientId){
   const date = document.getElementById('ns-date').value;
-  const coach = document.getElementById('ns-coach').value.trim();
+  const coach = normalizeCoach(document.getElementById('ns-coach').value.trim());
   if(!date || !coach){showToast('Remplissez la date et le coach','error');return;}
   
   const c = _clients.find(x=>x._id===clientId);
@@ -1284,7 +1369,7 @@ async function toggleClientStatus(clientId, isActive){
 
 // Expose
 window.handleDriveAuth=connectDriveThen;window.connectDriveThen=connectDriveThen;window.scanDriveForClient=scanDriveForClient;
-window.applyFilters=applyFilters;window.toggleActiveFilter=toggleActiveFilter;window.toggleAlertFilter=toggleAlertFilter;window.toggleQuotaFilter=toggleQuotaFilter;
+window.applyFilters=applyFilters;window.setStatusTab=setStatusTab;window.toggleActiveFilter=toggleActiveFilter;window.toggleAlertFilter=toggleAlertFilter;window.toggleQuotaFilter=toggleQuotaFilter;
 window.setView=setView;window.openDetail=openDetail;window.closeDetail=closeDetail;
 window.toggleSession=toggleSession;window.toggleNewSession=toggleNewSession;
 window.addSession=addSession;window.openNewClientModal=openNewClientModal;
