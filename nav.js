@@ -9,10 +9,9 @@
   const MODULES = {
 
     coach: [
-      { id: 'clients',   icon: '👥', label: 'Clients',   href: 'coaching.html' },
-      { id: 'dashboard', icon: '📊', label: 'Dashboard', href: 'coaching-dashboard.html' },
-      { id: 'analyse',   icon: '📈', label: 'Analyse',   href: 'coaching-analyse.html' },
-      { id: 'agenda',    icon: '📅', label: 'Agenda',    href: 'coaching-agenda.html' },
+      { id: 'clients',       icon: '👥', label: 'Clients',       href: 'coaching.html' },
+      { id: 'dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html' },
+      { id: 'communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html' },
     ],
 
     sales: [
@@ -26,10 +25,9 @@
     ],
 
     admin: [
-      { id: 'coach-clients',   icon: '👥', label: 'Clients',   href: 'coaching.html',           section: 'Coaching' },
-      { id: 'coach-dashboard', icon: '📊', label: 'Dashboard', href: 'coaching-dashboard.html', section: 'Coaching' },
-      { id: 'coach-analyse',   icon: '📈', label: 'Analyse',   href: 'coaching-analyse.html',   section: 'Coaching' },
-      { id: 'coach-agenda',    icon: '📅', label: 'Agenda',    href: 'coaching-agenda.html',    section: 'Coaching' },
+      { id: 'coach-clients',       icon: '👥', label: 'Clients',       href: 'coaching.html',                section: 'Coaching' },
+      { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',      section: 'Coaching' },
+      { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html',  section: 'Coaching' },
       { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',   href: 'sales-dashboard.html',   section: 'Sales' },
       { id: 'sales-closing',     icon: '🎯', label: 'Closing',     href: 'sales-closing.html',     section: 'Sales' },
       { id: 'sales-setting',     icon: '📞', label: 'Setting',     href: 'sales-setting.html',     section: 'Sales' },

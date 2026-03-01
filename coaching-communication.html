@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Ambitio — Communication Équipe</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue-dark:#0f1f5c;--blue-main:#1a3dce;--blue-light:#4f7ef8;--blue-ghost:#f0f4ff;
+      --text:#1a1f36;--muted:#6b7280;--border:#e2e8f0;--bg:#f5f7ff;
+      --green:#10b981;--green-light:#d1fae5;
+      --orange:#f59e0b;--orange-light:#fef3c7;
+      --red:#ef4444;--red-light:#fee2e2;
+      --purple:#6366f1;--purple-light:#eef2ff;
+    }
+    body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px}
+
+    /* ── TOPBAR ── */
+    .topbar{background:white;border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 8px rgba(15,31,92,.04)}
+    .topbar-left{display:flex;align-items:center;gap:14px}
+    .topbar-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--blue-dark),var(--blue-main));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white}
+    .topbar-left h1{font-size:18px;font-weight:800}
+    .topbar-left h1 span{color:var(--blue-main)}
+    .topbar-sub{font-size:11px;color:var(--muted)}
+    .topbar-right{display:flex;align-items:center;gap:10px}
+    .btn{padding:8px 16px;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:linear-gradient(135deg,var(--blue-main),var(--blue-light));color:white;box-shadow:0 3px 12px rgba(26,61,206,.25)}
+    .btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+    .btn-outline{background:white;color:var(--text);border:1.5px solid var(--border)}
+    .btn-outline:hover{border-color:var(--blue-main);background:var(--blue-ghost)}
+    .btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
+    .btn-xs{padding:4px 8px;font-size:11px;border-radius:6px}
+    .btn-danger{background:#fef2f2;color:var(--red);border:1px solid #fecaca}
+    .user-badge{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--blue-ghost);border-radius:10px}
+    .user-avatar{width:28px;height:28px;background:linear-gradient(135deg,var(--blue-light),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white}
+    .user-badge-name{font-size:12px;font-weight:600}
+
+    /* ── LAYOUT ── */
+    .page-layout{display:grid;grid-template-columns:280px 1fr 320px;gap:0;height:calc(100vh - 65px)}
+
+    /* ── LEFT PANEL : Channels ── */
+    .channels-panel{background:white;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .channels-header{padding:18px 16px 12px;border-bottom:1px solid var(--border)}
+    .channels-title{font-size:14px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .channels-search{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--bg);border:1.5px solid var(--border);border-radius:10px}
+    .channels-search input{border:none;background:transparent;font-family:inherit;font-size:12px;outline:none;width:100%;color:var(--text)}
+    .channels-list{flex:1;overflow-y:auto;padding:8px 8px}
+    .channel-section-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);padding:8px 8px 4px}
+    .channel-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;transition:all .15s;position:relative;margin-bottom:2px}
+    .channel-item:hover{background:var(--bg)}
+    .channel-item.active{background:var(--blue-ghost)}
+    .channel-icon{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;background:var(--bg)}
+    .channel-item.active .channel-icon{background:var(--blue-main);color:white}
+    .channel-info{flex:1;overflow:hidden}
+    .channel-name{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .channel-item.active .channel-name{color:var(--blue-main)}
+    .channel-preview{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+    .channel-meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+    .channel-time{font-size:10px;color:var(--muted)}
+    .channel-badge{width:18px;height:18px;background:var(--blue-main);color:white;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+    .channel-badge.alert{background:var(--red)}
+    .channel-badge.warn{background:var(--orange)}
+
+    /* ── CENTER : Messages ── */
+    .chat-panel{display:flex;flex-direction:column;overflow:hidden;background:#fafbff}
+    .chat-header{background:white;border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+    .chat-header-icon{width:38px;height:38px;border-radius:11px;background:var(--blue-ghost);display:flex;align-items:center;justify-content:center;font-size:18px}
+    .chat-header-info{flex:1}
+    .chat-header-name{font-size:15px;font-weight:800}
+    .chat-header-desc{font-size:11px;color:var(--muted)}
+    .chat-header-actions{display:flex;gap:8px}
+    .chat-messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:4px}
+    .chat-messages::-webkit-scrollbar{width:4px}
+    .chat-messages::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:4px}
+
+    /* Message groups */
+    .msg-group{display:flex;gap:10px;margin-bottom:8px}
+    .msg-group.mine{flex-direction:row-reverse}
+    .msg-avatar{width:32px;height:32px;border-radius:9px;background:var(--purple-light);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--purple);flex-shrink:0;margin-top:2px}
+    .msg-avatar.adrien{background:#fef3c7;color:#92400e}
+    .msg-avatar.emily{background:#d1fae5;color:#065f46}
+    .msg-avatar.mickael{background:#ede9fe;color:#5b21b6}
+    .msg-avatar.edouard{background:#fee2e2;color:#991b1b}
+    .msg-content{max-width:72%;display:flex;flex-direction:column;gap:2px}
+    .msg-group.mine .msg-content{align-items:flex-end}
+    .msg-sender{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px}
+    .msg-bubble{padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.6;word-break:break-word;position:relative}
+    .msg-bubble.other{background:white;border:1px solid var(--border);border-bottom-left-radius:4px;color:var(--text)}
+    .msg-bubble.mine{background:var(--blue-main);color:white;border-bottom-right-radius:4px}
+    .msg-time{font-size:10px;color:var(--muted);margin-top:2px}
+
+    /* Special message types */
+    .msg-bubble.alert-msg{background:#fef2f2;border:1.5px solid #fecaca;color:var(--text)}
+    .msg-bubble.info-msg{background:#eff6ff;border:1.5px solid #bfdbfe;color:var(--text)}
+    .msg-bubble.warn-msg{background:#fffbeb;border:1.5px solid #fde68a;color:var(--text)}
+    .msg-bubble.pin-msg{background:#f0fdf4;border:1.5px solid #bbf7d0;color:var(--text)}
+    .msg-type-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;display:flex;align-items:center;gap:5px}
+    .msg-type-tag.alert{color:var(--red)}
+    .msg-type-tag.info{color:var(--blue-main)}
+    .msg-type-tag.warn{color:var(--orange)}
+    .msg-type-tag.pin{color:var(--green)}
+    .msg-client-tag{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;background:var(--blue-ghost);border:1px solid #bfdbfe;border-radius:20px;font-size:11px;font-weight:600;color:var(--blue-main);cursor:pointer;transition:all .15s;margin-top:6px}
+    .msg-client-tag:hover{background:#dbeafe}
+
+    /* Day divider */
+    .day-divider{text-align:center;position:relative;margin:12px 0}
+    .day-divider span{background:#fafbff;padding:0 12px;font-size:11px;font-weight:600;color:var(--muted);position:relative;z-index:1}
+    .day-divider::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:var(--border)}
+
+    /* ── COMPOSE ── */
+    .chat-compose{background:white;border-top:1px solid var(--border);padding:14px 16px;flex-shrink:0}
+    .compose-tags{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+    .compose-tag{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:white;color:var(--muted);transition:all .15s;display:flex;align-items:center;gap:4px}
+    .compose-tag:hover{border-color:var(--blue-main);color:var(--blue-main)}
+    .compose-tag.selected-alert{background:var(--red-light);border-color:#fca5a5;color:var(--red)}
+    .compose-tag.selected-info{background:var(--blue-ghost);border-color:#93c5fd;color:var(--blue-main)}
+    .compose-tag.selected-warn{background:var(--orange-light);border-color:#fcd34d;color:var(--orange)}
+    .compose-tag.selected-pin{background:var(--green-light);border-color:#6ee7b7;color:var(--green)}
+    .compose-row{display:flex;align-items:flex-end;gap:8px}
+    .compose-input-wrap{flex:1;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:8px 14px;transition:border-color .15s}
+    .compose-input-wrap:focus-within{border-color:var(--blue-main);background:white}
+    .compose-input-wrap textarea{width:100%;border:none;background:transparent;font-family:inherit;font-size:13px;outline:none;resize:none;max-height:120px;color:var(--text);min-height:36px}
+    .compose-client-row{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+    .compose-client-select{padding:5px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;background:white;outline:none;color:var(--text);cursor:pointer}
+    .compose-client-select:focus{border-color:var(--blue-main)}
+    .send-btn{width:40px;height:40px;border-radius:11px;background:var(--blue-main);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;transition:all .18s;flex-shrink:0}
+    .send-btn:hover{background:var(--blue-dark);transform:scale(1.05)}
+
+    /* ── RIGHT PANEL : Context ── */
+    .context-panel{background:white;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+    .context-header{padding:16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700}
+    .context-tabs{display:flex;border-bottom:1px solid var(--border)}
+    .ctx-tab{flex:1;padding:10px;text-align:center;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+    .ctx-tab.active{color:var(--blue-main);border-bottom-color:var(--blue-main)}
+    .context-body{flex:1;overflow-y:auto;padding:14px}
+    .ctx-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px;margin-top:16px}
+    .ctx-section-title:first-child{margin-top:0}
+
+    /* Alarm cards */
+    .alarm-card{border-radius:12px;padding:12px 14px;margin-bottom:8px;border:1.5px solid;cursor:pointer;transition:all .15s}
+    .alarm-card:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.06)}
+    .alarm-card.red{background:#fef2f2;border-color:#fecaca}
+    .alarm-card.orange{background:#fffbeb;border-color:#fde68a}
+    .alarm-card.blue{background:#eff6ff;border-color:#bfdbfe}
+    .alarm-card.green{background:#f0fdf4;border-color:#bbf7d0}
+    .alarm-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .alarm-card-title{font-size:12px;font-weight:700}
+    .alarm-card.red .alarm-card-title{color:var(--red)}
+    .alarm-card.orange .alarm-card-title{color:var(--orange)}
+    .alarm-card.blue .alarm-card-title{color:var(--blue-main)}
+    .alarm-card.green .alarm-card-title{color:var(--green)}
+    .alarm-card-client{font-size:12px;font-weight:600;color:var(--text)}
+    .alarm-card-desc{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5}
+    .alarm-card-meta{font-size:10px;color:var(--muted);margin-top:5px;display:flex;align-items:center;justify-content:space-between}
+    .alarm-dismiss{font-size:10px;font-weight:600;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:white;cursor:pointer;color:var(--muted);transition:all .15s}
+    .alarm-dismiss:hover{background:var(--red-light);border-color:#fca5a5;color:var(--red)}
+
+    /* Pinned messages */
+    .pinned-item{padding:10px 12px;border-radius:10px;background:var(--bg);border:1px solid var(--border);margin-bottom:8px;font-size:12px;line-height:1.6}
+    .pinned-item-meta{font-size:10px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:6px}
+
+    /* New alarm modal */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+    .modal-overlay.show{display:flex}
+    .modal{background:white;border-radius:18px;width:100%;max-width:480px;margin:20px;box-shadow:0 24px 60px rgba(0,0,0,.18)}
+    .modal-head{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between}
+    .modal-head h3{font-size:16px;font-weight:800}
+    .modal-close{width:30px;height:30px;border:1px solid var(--border);border-radius:8px;background:var(--bg);cursor:pointer;font-size:14px;color:var(--muted);display:flex;align-items:center;justify-content:center;transition:all .15s}
+    .modal-close:hover{background:var(--red-light);color:var(--red)}
+    .modal-body{padding:20px 24px}
+    .mf{margin-bottom:14px}
+    .mf label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+    .mf input,.mf select,.mf textarea{width:100%;padding:9px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;transition:border-color .15s;color:var(--text);background:white}
+    .mf input:focus,.mf select:focus,.mf textarea:focus{border-color:var(--blue-main)}
+    .mf textarea{resize:vertical;min-height:80px}
+    .modal-foot{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+    .alarm-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .alarm-type-option{padding:10px 12px;border-radius:10px;border:1.5px solid var(--border);cursor:pointer;transition:all .15s;text-align:center}
+    .alarm-type-option:hover{border-color:var(--blue-main)}
+    .alarm-type-option.selected{border-color:var(--blue-main);background:var(--blue-ghost)}
+    .alarm-type-option.selected.red-type{border-color:var(--red);background:var(--red-light)}
+    .alarm-type-option.selected.orange-type{border-color:var(--orange);background:var(--orange-light)}
+    .alarm-type-option.selected.green-type{border-color:var(--green);background:var(--green-light)}
+    .alarm-type-option .ato-icon{font-size:20px;margin-bottom:4px}
+    .alarm-type-option .ato-label{font-size:11px;font-weight:700}
+
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;white-space:nowrap;pointer-events:none}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .toast.error{background:#2e1a1a;border-color:rgba(239,68,68,.3);color:#fca5a5}
+
+    @media(max-width:1024px){.page-layout{grid-template-columns:1fr}.channels-panel,.context-panel{display:none}}
+  </style>
+  <script>
+    (function(){
+      const role = localStorage.getItem('ambitio_role');
+      if(role === 'sales') window.location.href = 'sales.html';
+    })();
+  </script>
+  <script src="nav.js"></script>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">A</div>
+    <div>
+      <h1>💬 <span>Communication</span> Équipe</h1>
+      <div class="topbar-sub">Messages, alarmes clients, notes partagées</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <button class="btn btn-outline btn-sm" onclick="openAlarmModal()">🔔 Nouvelle alarme</button>
+    <button class="btn btn-primary btn-sm" onclick="openAlarmModal()">+ Message</button>
+    <div class="user-badge">
+      <div class="user-avatar" id="uAvatar">A</div>
+      <div>
+        <div class="user-badge-name" id="uName">—</div>
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="handleLogout()" title="Déconnexion">🚪</button>
+  </div>
+</div>
+
+<div class="page-layout">
+
+  <!-- ── CHANNELS ── -->
+  <div class="channels-panel">
+    <div class="channels-header">
+      <div class="channels-title">💬 Canaux</div>
+      <div class="channels-search">
+        <span>🔍</span>
+        <input id="channelSearch" placeholder="Rechercher..." oninput="filterChannels()"/>
+      </div>
+    </div>
+    <div class="channels-list" id="channelsList">
+      <!-- Generated by JS -->
+    </div>
+  </div>
+
+  <!-- ── CHAT ── -->
+  <div class="chat-panel">
+    <div class="chat-header" id="chatHeader">
+      <div class="chat-header-icon" id="chatIcon">💬</div>
+      <div class="chat-header-info">
+        <div class="chat-header-name" id="chatName">Général</div>
+        <div class="chat-header-desc" id="chatDesc">Canal principal de l'équipe coaching</div>
+      </div>
+      <div class="chat-header-actions">
+        <button class="btn btn-outline btn-sm" onclick="openAlarmModal()">🔔 Alarme</button>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+      <!-- Messages loaded by JS -->
+    </div>
+
+    <div class="chat-compose">
+      <div class="compose-tags" id="composeTags">
+        <button class="compose-tag" id="tag-normal" onclick="setMsgType('normal')">💬 Message</button>
+        <button class="compose-tag" id="tag-alert" onclick="setMsgType('alert')">🚨 Alerte client</button>
+        <button class="compose-tag" id="tag-info" onclick="setMsgType('info')">ℹ️ Info</button>
+        <button class="compose-tag" id="tag-warn" onclick="setMsgType('warn')">⚠️ Attention</button>
+        <button class="compose-tag" id="tag-pin" onclick="setMsgType('pin')">📌 Épingler</button>
+      </div>
+      <div class="compose-client-row" id="clientTagRow" style="display:none">
+        <span style="font-size:12px;color:var(--muted);font-weight:600">Client concerné :</span>
+        <select class="compose-client-select" id="clientSelect">
+          <option value="">— Choisir un client —</option>
+        </select>
+      </div>
+      <div class="compose-row">
+        <div class="compose-input-wrap">
+          <textarea id="composeInput" placeholder="Écrivez votre message..." rows="1"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+            oninput="autoResize(this)"></textarea>
+        </div>
+        <button class="send-btn" onclick="sendMessage()">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CONTEXT PANEL ── -->
+  <div class="context-panel">
+    <div class="context-header">📋 Contexte du canal</div>
+    <div class="context-tabs">
+      <div class="ctx-tab active" onclick="setCtxTab('alarmes',this)" id="ctxTabAlarmes">🔔 Alarmes</div>
+      <div class="ctx-tab" onclick="setCtxTab('pins',this)" id="ctxTabPins">📌 Épinglés</div>
+      <div class="ctx-tab" onclick="setCtxTab('membres',this)" id="ctxTabMembres">👥 Membres</div>
+    </div>
+    <div class="context-body" id="contextBody">
+      <!-- loaded by JS -->
+    </div>
+  </div>
+
+</div>
+
+<!-- ALARM MODAL -->
+<div class="modal-overlay" id="alarmModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>🔔 Nouvelle alarme client</h3>
+      <button class="modal-close" onclick="closeAlarmModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="mf">
+        <label>Type d'alarme</label>
+        <div class="alarm-type-grid">
+          <div class="alarm-type-option red-type" id="ato-urgent" onclick="selectAlarmType('urgent',this)">
+            <div class="ato-icon">🚨</div>
+            <div class="ato-label" style="color:var(--red)">Urgent</div>
+          </div>
+          <div class="alarm-type-option orange-type" id="ato-attention" onclick="selectAlarmType('attention',this)">
+            <div class="ato-icon">⚠️</div>
+            <div class="ato-label" style="color:var(--orange)">Attention</div>
+          </div>
+          <div class="alarm-type-option" id="ato-suivi" onclick="selectAlarmType('suivi',this)">
+            <div class="ato-icon">👁️</div>
+            <div class="ato-label">Suivi requis</div>
+          </div>
+          <div class="alarm-type-option green-type" id="ato-info" onclick="selectAlarmType('info',this)">
+            <div class="ato-icon">ℹ️</div>
+            <div class="ato-label" style="color:var(--green)">Information</div>
+          </div>
+        </div>
+      </div>
+      <div class="mf">
+        <label>Client concerné</label>
+        <select id="alarm-client">
+          <option value="">— Sélectionner un client —</option>
+        </select>
+      </div>
+      <div class="mf">
+        <label>Message / Contexte</label>
+        <textarea id="alarm-msg" placeholder="Décrivez la situation, l'action requise..."></textarea>
+      </div>
+      <div class="mf">
+        <label>Assigner à</label>
+        <select id="alarm-assign">
+          <option value="">— Toute l'équipe —</option>
+          <option>Mickael</option>
+          <option>Edouard</option>
+          <option>Emily</option>
+          <option>Adrien</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeAlarmModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="createAlarm()">🔔 Créer l'alarme</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Firebase -->
+<script type="module">
+  import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc,query,orderBy,onSnapshot,addDoc,serverTimestamp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  const app=initializeApp({
+    apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+    authDomain:"ambitio-team.firebaseapp.com",
+    projectId:"ambitio-team",
+    storageBucket:"ambitio-team.firebasestorage.app",
+    messagingSenderId:"1079366902268",
+    appId:"1:1079366902268:web:b4ec1691dba54230339279"
+  });
+  const auth=getAuth(app),db=getFirestore(app);
+  window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
+  window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
+  window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._signOut=signOut;
+  window._addDoc=addDoc;window._query=query;window._orderBy=orderBy;
+  window._onSnapshot=onSnapshot;window._serverTimestamp=serverTimestamp;
+
+  onAuthStateChanged(auth, async user => {
+    if(!user){window.location.href='index.html';return;}
+    window._uid = user.uid;
+    const role = localStorage.getItem('ambitio_role')||'coach';
+    const name = localStorage.getItem('ambitio_name')||user.email||'Coach';
+    window._myName = name.split(' ')[0];
+    window._myRole = role;
+    document.getElementById('uName').textContent = window._myName;
+    document.getElementById('uAvatar').textContent = window._myName[0].toUpperCase();
+    await loadClients();
+    initChannels();
+    loadChannel('general');
+  });
+</script>
+
+<script>
+// ── STATE ──
+let _clients = [];
+let _currentChannel = 'general';
+let _msgType = 'normal';
+let _alarmType = 'urgent';
+let _ctxTab = 'alarmes';
+let _unsubMessages = null;
+let _alarms = []; // stored in localStorage for now
+let _pinnedMessages = [];
+
+const CHANNELS = [
+  { id:'general',     icon:'💬', name:'Général',          desc:'Canal principal de l\'équipe coaching',   color:'blue' },
+  { id:'alarmes',     icon:'🚨', name:'Alarmes clients',  desc:'Alertes urgentes sur les clients',         color:'red' },
+  { id:'suivi',       icon:'👁️', name:'Suivi hebdo',      desc:'Points de suivi réguliers',                color:'orange' },
+  { id:'admins',      icon:'👑', name:'Admins seulement', desc:'Canal réservé aux administrateurs',        color:'purple' },
+  { id:'annonces',    icon:'📢', name:'Annonces',         desc:'Informations importantes de la direction', color:'green' },
+];
+
+const COACH_COLORS = {
+  adrien:  { bg:'#fef3c7', color:'#92400e', cls:'adrien' },
+  emily:   { bg:'#d1fae5', color:'#065f46', cls:'emily' },
+  mickael: { bg:'#ede9fe', color:'#5b21b6', cls:'mickael' },
+  edouard: { bg:'#fee2e2', color:'#991b1b', cls:'edouard' },
+};
+
+function getCoachStyle(name){
+  const key = (name||'').toLowerCase().split(' ')[0];
+  return COACH_COLORS[key] || { bg:'#f0f4ff', color:'#1a3dce', cls:'' };
+}
+
+// ── LOAD CLIENTS ──
+async function loadClients(){
+  if(!window._uid) return;
+  try{
+    const snap = await window._getDocs(window._collection(window._db,'clients'));
+    snap.forEach(d=>{
+      const data=d.data(); data._id=d.id;
+      _clients.push(data);
+    });
+    // Populate selects
+    const opts = _clients.filter(c=>c.statut!=='inactif').map(c=>`<option value="${c._id}">${c.nom}</option>`).join('');
+    document.getElementById('clientSelect').innerHTML = '<option value="">— Aucun client spécifique —</option>'+opts;
+    document.getElementById('alarm-client').innerHTML = '<option value="">— Sélectionner un client —</option>'+opts;
+  }catch(e){ console.warn('loadClients error',e); }
+}
+
+// ── CHANNELS ──
+function initChannels(){
+  // Load alarms from Firebase (collection 'alarms') + localStorage fallback
+  _alarms = JSON.parse(localStorage.getItem('ambitio_alarms')||'[]');
+  renderChannels();
+}
+
+function renderChannels(){
+  const search = (document.getElementById('channelSearch').value||'').toLowerCase();
+  const el = document.getElementById('channelsList');
+  let html = '<div class="channel-section-label">Canaux</div>';
+  CHANNELS.forEach(ch=>{
+    if(search && !ch.name.toLowerCase().includes(search)) return;
+    const isActive = _currentChannel === ch.id;
+    const alertCount = _alarms.filter(a=>a.channel===ch.id && !a.dismissed).length;
+    html += `<div class="channel-item ${isActive?'active':''}" onclick="loadChannel('${ch.id}')">
+      <div class="channel-icon">${ch.icon}</div>
+      <div class="channel-info">
+        <div class="channel-name">${ch.name}</div>
+        <div class="channel-preview">${ch.desc}</div>
+      </div>
+      <div class="channel-meta">
+        ${alertCount?`<div class="channel-badge ${ch.id==='alarmes'?'alert':''}">${alertCount}</div>`:''}
+      </div>
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function filterChannels(){ renderChannels(); }
+
+// ── LOAD CHANNEL ──
+function loadChannel(channelId){
+  _currentChannel = channelId;
+  const ch = CHANNELS.find(c=>c.id===channelId) || CHANNELS[0];
+
+  document.getElementById('chatIcon').textContent = ch.icon;
+  document.getElementById('chatName').textContent = ch.name;
+  document.getElementById('chatDesc').textContent = ch.desc;
+  renderChannels();
+  subscribeMessages(channelId);
+  renderContextPanel();
+}
+
+// ── MESSAGES (Firestore realtime) ──
+function subscribeMessages(channelId){
+  if(_unsubMessages) _unsubMessages();
+  const messagesEl = document.getElementById('chatMessages');
+  messagesEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Chargement...</div>';
+
+  try{
+    const q = window._query(
+      window._collection(window._db,'messages_'+channelId),
+      window._orderBy('ts','asc')
+    );
+    _unsubMessages = window._onSnapshot(q, snap => {
+      const msgs = [];
+      snap.forEach(d=>{msgs.push({id:d.id,...d.data()});});
+      renderMessages(msgs);
+    }, err => {
+      // If collection doesn't exist yet, show empty state
+      renderMessages([]);
+    });
+  }catch(e){ renderMessages([]); }
+}
+
+function renderMessages(msgs){
+  const el = document.getElementById('chatMessages');
+  if(msgs.length === 0){
+    el.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:8px;padding:40px">
+      <div style="font-size:40px">💬</div>
+      <div style="font-size:14px;font-weight:600">Aucun message pour l'instant</div>
+      <div style="font-size:12px">Soyez le premier à écrire !</div>
+    </div>`;
+    return;
+  }
+
+  let html = '';
+  let lastDate = '';
+  let lastSender = '';
+
+  msgs.forEach((msg, i) => {
+    const msgDate = msg.ts ? new Date(msg.ts.seconds*1000).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}) : 'Aujourd\'hui';
+    const msgTime = msg.ts ? new Date(msg.ts.seconds*1000).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}) : '';
+    const isMe = msg.sender === window._myName;
+    const coachStyle = getCoachStyle(msg.sender);
+
+    if(msgDate !== lastDate){
+      html += `<div class="day-divider"><span>${msgDate}</span></div>`;
+      lastDate = msgDate;
+      lastSender = '';
+    }
+
+    const showSender = !isMe && msg.sender !== lastSender;
+    lastSender = msg.sender;
+
+    const bubbleCls = isMe ? 'mine' : (msg.type ? msg.type+'-msg' : 'other');
+    const typeTags = {
+      alert: '<div class="msg-type-tag alert">🚨 Alerte client</div>',
+      info:  '<div class="msg-type-tag info">ℹ️ Information</div>',
+      warn:  '<div class="msg-type-tag warn">⚠️ Attention</div>',
+      pin:   '<div class="msg-type-tag pin">📌 Épinglé</div>',
+    };
+    const typeTag = (!isMe && msg.type && msg.type!=='normal') ? (typeTags[msg.type]||'') : '';
+    const clientTag = msg.clientId ? `<div class="msg-client-tag" onclick="window.open('coaching.html','_blank')">👤 ${msg.clientName||msg.clientId}</div>` : '';
+
+    html += `<div class="msg-group ${isMe?'mine':''}">
+      ${!isMe ? `<div class="msg-avatar ${coachStyle.cls}" style="background:${coachStyle.bg};color:${coachStyle.color}">${(msg.sender||'?')[0].toUpperCase()}</div>` : ''}
+      <div class="msg-content">
+        ${showSender ? `<div class="msg-sender">${msg.sender}</div>` : ''}
+        <div class="msg-bubble ${bubbleCls}">
+          ${typeTag}
+          ${escHtml(msg.text)}
+          ${clientTag}
+        </div>
+        <div class="msg-time">${msgTime}</div>
+      </div>
+    </div>`;
+  });
+
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── SEND MESSAGE ──
+async function sendMessage(){
+  const input = document.getElementById('composeInput');
+  const text = input.value.trim();
+  if(!text) return;
+
+  const clientSelect = document.getElementById('clientSelect');
+  const clientId = clientSelect.value;
+  const clientName = clientId ? (_clients.find(c=>c._id===clientId)||{}).nom || clientId : '';
+
+  const msg = {
+    text,
+    sender: window._myName || 'Coach',
+    type: _msgType === 'normal' ? null : _msgType,
+    clientId: clientId || null,
+    clientName: clientName || null,
+    ts: window._serverTimestamp(),
+    channel: _currentChannel,
+  };
+
+  try{
+    await window._addDoc(window._collection(window._db,'messages_'+_currentChannel), msg);
+    input.value = '';
+    input.style.height = 'auto';
+    // If pin type, save to pinnedMessages
+    if(_msgType === 'pin'){
+      _pinnedMessages.unshift({text, sender:window._myName, time:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})});
+      localStorage.setItem('ambitio_pins_'+_currentChannel, JSON.stringify(_pinnedMessages));
+      renderContextPanel();
+    }
+    setMsgType('normal');
+  }catch(e){ showToast('Erreur envoi: '+e.message,'error'); }
+}
+
+// ── MSG TYPE ──
+function setMsgType(type){
+  _msgType = type;
+  document.querySelectorAll('.compose-tag').forEach(t=>t.className='compose-tag');
+  if(type !== 'normal'){
+    const btn = document.getElementById('tag-'+type);
+    if(btn) btn.classList.add('selected-'+type);
+  }
+  document.getElementById('clientTagRow').style.display = (type==='alert'||type==='warn') ? 'flex' : 'none';
+  // Update placeholder
+  const placeholders = {
+    normal: 'Écrivez votre message...',
+    alert:  '🚨 Décrivez l\'alerte sur ce client...',
+    info:   'ℹ️ Partagez une information...',
+    warn:   '⚠️ Décrivez la situation d\'attention...',
+    pin:    '📌 Message à épingler pour toute l\'équipe...',
+  };
+  document.getElementById('composeInput').placeholder = placeholders[type]||placeholders.normal;
+}
+
+// ── ALARM MODAL ──
+function openAlarmModal(){ document.getElementById('alarmModal').classList.add('show'); }
+function closeAlarmModal(){ document.getElementById('alarmModal').classList.remove('show'); }
+
+function selectAlarmType(type, el){
+  _alarmType = type;
+  document.querySelectorAll('.alarm-type-option').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+}
+// Default select urgent
+setTimeout(()=>{ const el=document.getElementById('ato-urgent'); if(el) el.classList.add('selected'); },100);
+
+function createAlarm(){
+  const clientId = document.getElementById('alarm-client').value;
+  const clientName = clientId ? (_clients.find(c=>c._id===clientId)||{}).nom || clientId : '';
+  const msg = document.getElementById('alarm-msg').value.trim();
+  const assign = document.getElementById('alarm-assign').value;
+
+  if(!msg){ showToast('Écrivez un message pour l\'alarme','error'); return; }
+
+  const alarm = {
+    id: 'alarm_'+Date.now(),
+    type: _alarmType,
+    clientId, clientName,
+    msg, assign,
+    by: window._myName||'Coach',
+    time: new Date().toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}),
+    channel: _currentChannel,
+    dismissed: false,
+  };
+
+  _alarms.unshift(alarm);
+  localStorage.setItem('ambitio_alarms', JSON.stringify(_alarms));
+
+  // Also send as message in the alarmes channel and current channel
+  const typeMap = { urgent:'alert', attention:'warn', suivi:'info', info:'pin' };
+  const msgObj = {
+    text: `${alarm.msg}${clientName?' — Client : '+clientName:''}${assign?' — Pour : '+assign:''}`,
+    sender: window._myName||'Coach',
+    type: typeMap[_alarmType]||'alert',
+    clientId: clientId||null,
+    clientName: clientName||null,
+    ts: window._serverTimestamp(),
+    channel: 'alarmes',
+  };
+
+  if(window._addDoc){
+    window._addDoc(window._collection(window._db,'messages_alarmes'), msgObj).catch(console.warn);
+    if(_currentChannel !== 'alarmes'){
+      window._addDoc(window._collection(window._db,'messages_'+_currentChannel), {...msgObj, channel:_currentChannel}).catch(console.warn);
+    }
+  }
+
+  closeAlarmModal();
+  renderChannels();
+  renderContextPanel();
+  showToast('🔔 Alarme créée !','success');
+  document.getElementById('alarm-msg').value='';
+  document.getElementById('alarm-client').value='';
+}
+
+// ── CONTEXT PANEL ──
+function setCtxTab(tab, el){
+  _ctxTab = tab;
+  document.querySelectorAll('.ctx-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderContextPanel();
+}
+
+function renderContextPanel(){
+  const body = document.getElementById('contextBody');
+  if(_ctxTab === 'alarmes'){
+    const activeAlarms = _alarms.filter(a=>!a.dismissed);
+    if(!activeAlarms.length){
+      body.innerHTML = `<div style="text-align:center;padding:30px 16px;color:var(--muted)">
+        <div style="font-size:32px;margin-bottom:8px">✅</div>
+        <div style="font-weight:600">Aucune alarme active</div>
+        <div style="font-size:11px;margin-top:4px">Tout est sous contrôle</div>
+      </div>`;
+      return;
+    }
+    const colorMap = {urgent:'red',attention:'orange',suivi:'blue',info:'green'};
+    const iconMap = {urgent:'🚨',attention:'⚠️',suivi:'👁️',info:'ℹ️'};
+    body.innerHTML = activeAlarms.map(a=>`
+      <div class="alarm-card ${colorMap[a.type]||'blue'}">
+        <div class="alarm-card-top">
+          <div class="alarm-card-title">${iconMap[a.type]||'🔔'} ${a.type==='urgent'?'URGENT':a.type==='attention'?'Attention':a.type==='suivi'?'Suivi requis':'Information'}</div>
+        </div>
+        ${a.clientName?`<div class="alarm-card-client">👤 ${a.clientName}</div>`:''}
+        <div class="alarm-card-desc">${escHtml(a.msg)}</div>
+        <div class="alarm-card-meta">
+          <span>Par ${a.by} · ${a.time}</span>
+          <button class="alarm-dismiss" onclick="dismissAlarm('${a.id}')">✓ Traité</button>
+        </div>
+        ${a.assign?`<div style="font-size:10px;color:var(--muted);margin-top:4px">Assigné à : ${a.assign}</div>`:''}
+      </div>
+    `).join('');
+  } else if(_ctxTab === 'pins'){
+    _pinnedMessages = JSON.parse(localStorage.getItem('ambitio_pins_'+_currentChannel)||'[]');
+    if(!_pinnedMessages.length){
+      body.innerHTML = `<div style="text-align:center;padding:30px 16px;color:var(--muted)">
+        <div style="font-size:32px;margin-bottom:8px">📌</div>
+        <div style="font-weight:600">Aucun message épinglé</div>
+        <div style="font-size:11px;margin-top:4px">Épinglez des messages importants</div>
+      </div>`;
+      return;
+    }
+    body.innerHTML = _pinnedMessages.map(p=>`
+      <div class="pinned-item">
+        ${escHtml(p.text)}
+        <div class="pinned-item-meta">📌 ${p.sender} · ${p.time}</div>
+      </div>
+    `).join('');
+  } else if(_ctxTab === 'membres'){
+    const members = ['Mickael','Edouard','Emily','Adrien'];
+    body.innerHTML = '<div class="ctx-section-title">Équipe Coaching</div>'+members.map(m=>{
+      const s = getCoachStyle(m);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:9px;background:${s.bg};color:${s.color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${m[0]}</div>
+        <div>
+          <div style="font-size:12px;font-weight:700">${m}</div>
+          <div style="font-size:11px;color:var(--muted)">Coach</div>
+        </div>
+        <div style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--green)"></div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function dismissAlarm(id){
+  const alarm = _alarms.find(a=>a.id===id);
+  if(alarm) alarm.dismissed = true;
+  localStorage.setItem('ambitio_alarms', JSON.stringify(_alarms));
+  renderChannels();
+  renderContextPanel();
+  showToast('✅ Alarme traitée','success');
+}
+
+// ── UTILS ──
+function autoResize(el){
+  el.style.height='auto';
+  el.style.height=Math.min(el.scrollHeight,120)+'px';
+}
+
+function escHtml(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast show '+(type||'');
+  setTimeout(()=>t.className='toast',3000);
+}
+
+async function handleLogout(){
+  if(window._signOut&&window._auth) await window._signOut(window._auth);
+  window.location.href='index.html';
+}
+
+window.loadChannel=loadChannel;
+window.sendMessage=sendMessage;
+window.setMsgType=setMsgType;
+window.setCtxTab=setCtxTab;
+window.openAlarmModal=openAlarmModal;
+window.closeAlarmModal=closeAlarmModal;
+window.selectAlarmType=selectAlarmType;
+window.createAlarm=createAlarm;
+window.dismissAlarm=dismissAlarm;
+window.filterChannels=filterChannels;
+window.autoResize=autoResize;
+window.handleLogout=handleLogout;
+</script>
+
+</body>
+</html>
