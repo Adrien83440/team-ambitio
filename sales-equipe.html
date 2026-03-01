@@ -784,15 +784,16 @@ function renderCallCards(uid, calls) {
             ${renderStarsGrid(uid, i, c.scores)}
           </div>
           
-          <textarea class="debrief-edit" id="edit-forts-${uid}-${i}" placeholder="Points forts...">${c.points_forts||''}</textarea>
-          <textarea class="debrief-edit" id="edit-axes-${uid}-${i}" placeholder="Axes d'amélioration..." style="margin-top:6px">${c.axes_amelioration||''}</textarea>
-          <textarea class="debrief-edit" id="edit-note-${uid}-${i}" placeholder="Note du Head of Sales..." style="margin-top:6px">${c.note_head||''}</textarea>
+          <textarea class="debrief-edit" id="edit-forts-${uid}-${i}" placeholder="Points forts..." oninput="scheduleAutoSave('${uid}',${i})">${c.points_forts||''}</textarea>
+          <textarea class="debrief-edit" id="edit-axes-${uid}-${i}" placeholder="Axes d'amélioration..." style="margin-top:6px" oninput="scheduleAutoSave('${uid}',${i})">${c.axes_amelioration||''}</textarea>
+          <textarea class="debrief-edit" id="edit-note-${uid}-${i}" placeholder="Note du Head of Sales..." style="margin-top:6px" oninput="scheduleAutoSave('${uid}',${i})">${c.note_head||''}</textarea>
           <div style="display:flex;gap:8px;margin-top:10px;justify-content:space-between;align-items:center">
             <select id="edit-statut-${uid}-${i}" style="width:auto;min-width:140px">
               <option ${c.statut==='En attente'?'selected':''}>En attente</option>
               <option ${c.statut==='Débriefé'?'selected':''}>Débriefé</option>
             </select>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="save-indicator" style="font-size:11px;color:var(--green);opacity:0;transition:opacity .4s;white-space:nowrap">✓ Sauvegardé</span>
               <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:rgba(239,68,68,.2)" onclick="deleteCall('${uid}',${i})">Supprimer</button>
               <button class="btn btn-primary btn-sm" onclick="saveCall('${uid}',${i})">💾 Sauvegarder</button>
             </div>
@@ -974,11 +975,14 @@ function saveCall(uid, i, silent) {
 }
 
 function showAutoSaveDot(uid, i) {
-  const btn = document.querySelector('#cc-card-' + uid + '-' + i + ' .save-indicator');
-  if (!btn) return;
-  btn.textContent = '✓ Sauvegardé';
-  btn.style.opacity = '1';
-  setTimeout(function() { btn.style.opacity = '0'; }, 2000);
+  const card = document.getElementById('cc-card-' + uid + '-' + i);
+  if (!card) return;
+  const indicator = card.querySelector('.save-indicator');
+  if (!indicator) return;
+  indicator.textContent = '✓ Sauvegardé automatiquement';
+  indicator.style.opacity = '1';
+  clearTimeout(indicator._timer);
+  indicator._timer = setTimeout(function() { indicator.style.opacity = '0'; }, 2500);
 }
 
 function deleteCall(uid, i) {
