@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Dashboard Sales</title>
+<link rel="stylesheet" href="sales.css"/>
+<script src="sales-data.js"></script>
+<script src="nav.js"></script>
+<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="tb-logo">S</div>
+  <div class="tb-title">Ambitio <em>Sales</em></div>
+  <div class="tb-sep"></div>
+  <div class="tb-page">◈ Dashboard</div>
+  <div class="tb-right">
+    <div class="tb-month">
+      <button onclick="prevMonth()">&#9664;</button>
+      <span id="month-lbl">Février 2026</span>
+      <button onclick="nextMonth()">&#9654;</button>
+    </div>
+    <div class="tb-user">
+      <div class="tb-av" id="tb-av">G</div>
+      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- ALERTS -->
+  <div id="alerts"></div>
+
+  <!-- KPI ROW -->
+  <div class="g4 mb" id="kpis"></div>
+
+  <!-- ROW 2: Funnel + Side cards -->
+  <div class="g21 mb">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Funnel Closing — Mois</span>
+        <a class="card-action" href="sales-closing.html">Détails →</a>
+      </div>
+      <div class="funnel" id="funnel"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <div class="card" style="flex:1">
+        <div class="card-header"><span class="card-title">Commissions dues</span></div>
+        <div id="comm-card"></div>
+      </div>
+      <div class="card" style="flex:1">
+        <div class="card-header"><span class="card-title">Objectif mensuel</span></div>
+        <div id="obj-card"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW 3: Setting + Equipe -->
+  <div class="g2">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Setting — Résumé</span>
+        <a class="card-action" href="sales-setting.html">Détails →</a>
+      </div>
+      <div id="setting-mini"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Équipe — Cette semaine</span>
+        <a class="card-action" href="sales-equipe.html">Équipe →</a>
+      </div>
+      <div id="team-mini"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const MONTHS = DB.months;
+let _cm = (() => {
+  const saved = localStorage.getItem('sales_month') || 'Février 2026';
+  const parts = saved.split(' ');
+  return { month: MONTHS.indexOf(parts[0]), year: parseInt(parts[1]) || 2026 };
+})();
+function currentMonthKey() { return MONTHS[_cm.month] + ' ' + _cm.year; }
+function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); renderAll(); }
+function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); renderAll(); }
+function _saveMonth() { localStorage.setItem('sales_month', currentMonthKey()); document.getElementById('month-lbl').textContent = currentMonthKey(); }
+
+function renderAll() {
+  const c = DB.closing.mois;
+  const s = DB.setting.mois;
+  const cm = DB.commissions[currentMonthKey()] || { totalComm:0, contracte:0, collecte:0, statut:'—', deals:[] };
+
+  // Alerts
+  const alerts = [];
+  if (c.atteinte < 0.2) alerts.push({ type:'crit', icon:'🚨', title:'Objectif closing critique', text:`${U.pct(c.atteinte)} atteint — ${U.euro(c.delta)} de delta à combler ce mois.` });
+  if (s.showupP.a < 0.5) alerts.push({ type:'warn', icon:'⚠️', title:'Taux de show-up faible', text:`Show-up à ${U.pct(s.showupP.a)} vs ${U.pct(s.showupP.p)} projeté. Requalifier les RDVs.` });
+  document.getElementById('alerts').innerHTML = alerts.map(a => `
+    <div class="alert-panel ${a.type}">
+      <div class="alert-icon">${a.icon}</div>
+      <div><div class="alert-title">${a.title}</div><div class="alert-text">${a.text}</div></div>
+    </div>`).join('');
+
+  // KPIs
+  document.getElementById('kpis').innerHTML = [
+    { label:'Contracté',     val:U.euro(c.contracte.a), sub:`/ ${U.euro(c.contracte.p)}`,    rawA:c.contracte.a, proj:c.contracte.p, color:'#ef4444' },
+    { label:'Closes',        val:c.closes.a,            sub:`/ ${c.closes.p} projetés`,       rawA:c.closes.a,    proj:c.closes.p,    color:'#f59e0b' },
+    { label:'Calls Setting', val:U.num(s.calls.a),      sub:`/ ${U.num(s.calls.p)} projetés`, rawA:s.calls.a,     proj:s.calls.p,     color:'#60a5fa' },
+    { label:'Commissions',   val:U.euro(cm.totalComm),  sub:'Ce mois',                        pct:100,            color:'#34d399'     },
+  ].map(U.kpiCard).join('');
+
+  // Funnel
+  document.getElementById('funnel').innerHTML = [
+    U.funnelStep('Calls',    c.calls.a,    c.calls.p,    true),
+    U.funnelStep('Lives',    c.lives.a,    c.calls.a),
+    U.funnelStep('Offres',   c.offres.a,   c.lives.a),
+    U.funnelStep('Closes',   c.closes.a,   c.offres.a),
+    U.funnelStep('Collecté', c.collecte.a, c.contracte.a, false, true),
+  ].join('');
+
+  // Commissions mini
+  document.getElementById('comm-card').innerHTML = `
+    <div style="font-size:26px;font-weight:800;font-family:var(--font-d);color:var(--gold);margin-bottom:10px">${U.euro(cm.totalComm)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Contracté: <b style="color:var(--text)">${U.euro(cm.contracte)}</b></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Collecté: <b style="color:var(--text)">${U.euro(cm.collecte)}</b></div>
+    <div class="status-badge ${cm.statut === 'Validé' ? 'status-paid' : 'status-pending'}">
+      ${cm.statut === 'Validé' ? '✅ Validé' : '⏳ ' + cm.statut}
+    </div>`;
+
+  // Objectif
+  const at = c.atteinte * 100;
+  const col = at >= 80 ? 'var(--green)' : at >= 50 ? 'var(--gold)' : 'var(--red2)';
+  document.getElementById('obj-card').innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="font-size:32px;font-weight:800;font-family:var(--font-d);color:${col}">${at.toFixed(0)}%</div>
+      <div style="flex:1">
+        <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden;margin-bottom:5px">
+          <div style="height:100%;width:${Math.min(at,100)}%;background:linear-gradient(90deg,#991b1b,#ef4444);border-radius:99px"></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted)">Delta: <b style="color:var(--red2)">${U.euro(c.delta)}</b></div>
+      </div>
+    </div>`;
+
+  // Setting mini
+  document.getElementById('setting-mini').innerHTML = [
+    { l:'Calls passés',  a:s.calls.a,    p:s.calls.p    },
+    { l:'Sets obtenus',  a:s.sets.a,     p:s.sets.p     },
+    { l:'Show-up',       a:s.presents.a, p:s.presents.p },
+    { l:'Closes',        a:s.closes.a,   p:s.closes.p   },
+  ].map(r => U.progRow(r.l, r.a, r.p)).join('');
+
+  // Team mini
+  document.getElementById('team-mini').innerHTML = `
+    <table class="data-table">
+      <thead><tr><th>Commercial</th><th>Closes</th><th>Contracté</th><th>Show-up</th></tr></thead>
+      <tbody>
+        ${DB.team.week.map(m => `
+          <tr>
+            <td><div class="member-cell">
+              <div class="member-av" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
+              <div class="member-name">${m.name}</div>
+            </div></td>
+            <td class="td-mono ${m.closes>=5?'td-ok':'td-warn'}">${m.closes}</td>
+            <td class="td-mono">${U.euro(m.contracte)}</td>
+            <td class="td-mono ${m.showup>=0.7?'td-ok':'td-warn'}">${U.pct(m.showup)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('month-lbl').textContent = currentMonthKey();
+  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
+  document.getElementById('tb-nm').textContent = nm;
+  document.getElementById('tb-av').textContent = nm[0].toUpperCase();
+  renderAll();
+});
+</script>
+
+</body>
+</html>

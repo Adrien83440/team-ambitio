@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Équipe</title>
+<link rel="stylesheet" href="sales.css"/>
+<script src="sales-data.js"></script>
+<script src="nav.js"></script>
+<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-logo">S</div>
+  <div class="tb-title">Ambitio <em>Sales</em></div>
+  <div class="tb-sep"></div>
+  <div class="tb-page">👥 Équipe</div>
+  <div class="tb-right">
+    <div class="tb-month">
+      <button onclick="prevMonth()">&#9664;</button>
+      <span id="month-lbl">Février 2026</span>
+      <button onclick="nextMonth()">&#9654;</button>
+    </div>
+    <div class="tb-user">
+      <div class="tb-av" id="tb-av">G</div>
+      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="page-header-row">
+    <div>
+      <div class="page-title">Équipe — Performance comparée</div>
+      <div class="page-sub">Guillaume vs Elodie</div>
+    </div>
+    <div class="tabs" id="view-tabs">
+      <div class="tab active" onclick="setView('week')">Cette semaine</div>
+      <div class="tab" onclick="setView('month')">Ce mois</div>
+    </div>
+  </div>
+
+  <!-- KPIs totaux -->
+  <div class="g4 mb" id="kpis"></div>
+
+  <!-- Table + Perf bars -->
+  <div class="g21">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Comparatif détaillé</span></div>
+      <div style="overflow-x:auto"><div id="team-table"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Taux de performance</span></div>
+      <div id="perf-bars"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const MONTHS = DB.months;
+let _cm = (() => { const s=localStorage.getItem('sales_month')||'Février 2026'; const p=s.split(' '); return{month:MONTHS.indexOf(p[0]),year:parseInt(p[1])||2026}; })();
+function currentMonthKey() { return MONTHS[_cm.month]+' '+_cm.year; }
+function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); renderAll(); }
+function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); renderAll(); }
+function _saveMonth() { localStorage.setItem('sales_month',currentMonthKey()); document.getElementById('month-lbl').textContent=currentMonthKey(); }
+
+let currentView = 'week';
+
+function setView(v) {
+  currentView = v;
+  document.querySelectorAll('#view-tabs .tab').forEach((t,i) =>
+    t.classList.toggle('active', (i===0&&v==='week')||(i===1&&v==='month')));
+  renderAll();
+}
+
+function renderAll() {
+  const team = DB.team[currentView === 'week' ? 'week' : 'month'];
+
+  const tot = {
+    contracte: team.reduce((s,m)=>s+m.contracte,0),
+    collecte:  team.reduce((s,m)=>s+m.collecte,0),
+    calls:     team.reduce((s,m)=>s+m.calls,0),
+    closes:    team.reduce((s,m)=>s+m.closes,0),
+  };
+
+  // KPIs
+  document.getElementById('kpis').innerHTML = [
+    { label:'Contracté total', val:U.euro(tot.contracte), color:'#ef4444' },
+    { label:'Collecté total',  val:U.euro(tot.collecte),  color:'#34d399' },
+    { label:'Total calls',     val:tot.calls,              color:'#60a5fa' },
+    { label:'Total closes',    val:tot.closes,             color:'#f59e0b' },
+  ].map(k => U.kpiCard({ label:k.label, val:k.val, color:k.color })).join('');
+
+  // Table
+  document.getElementById('team-table').innerHTML = `
+    <table class="data-table" style="width:100%">
+      <thead><tr>
+        <th>Commercial</th><th>Contracté</th><th>Collecté</th>
+        <th>Calls</th><th>Lives</th><th>Offres</th><th>Closes</th>
+        <th>Show-up</th><th>CA/Call</th>
+      </tr></thead>
+      <tbody>
+        ${team.map(m => `
+          <tr>
+            <td><div class="member-cell">
+              <div class="member-av" style="background:linear-gradient(135deg,${m.color}66,${m.color})">${m.name[0]}</div>
+              <div>
+                <div class="member-name">${m.name}</div>
+                <div class="member-role">${m.role}</div>
+              </div>
+            </div></td>
+            <td class="td-mono">${U.euro(m.contracte)}</td>
+            <td class="td-mono ${m.collecte>5000?'td-ok':'td-warn'}">${U.euro(m.collecte)}</td>
+            <td class="td-mono">${m.calls}</td>
+            <td class="td-mono">${m.lives}</td>
+            <td class="td-mono">${m.offres}</td>
+            <td class="td-mono ${m.closes>=5?'td-ok':'td-warn'}">${m.closes}</td>
+            <td class="td-mono ${m.showup>=0.7?'td-ok':'td-warn'}">${U.pct(m.showup)}</td>
+            <td class="td-mono">${U.euro(m.caCall)}</td>
+          </tr>`).join('')}
+        <tr style="border-top:1px solid var(--border2);font-weight:700">
+          <td><b style="font-size:12px">Total</b></td>
+          <td class="td-mono">${U.euro(tot.contracte)}</td>
+          <td class="td-mono">${U.euro(tot.collecte)}</td>
+          <td class="td-mono">${tot.calls}</td>
+          <td class="td-mono">${team.reduce((s,m)=>s+m.lives,0)}</td>
+          <td class="td-mono">${team.reduce((s,m)=>s+m.offres,0)}</td>
+          <td class="td-mono">${tot.closes}</td>
+          <td class="td-mono">—</td>
+          <td class="td-mono">—</td>
+        </tr>
+      </tbody>
+    </table>`;
+
+  // Performance bars
+  const metrics = [
+    { label:"Show-up",          key:'showup',         ref:0.75 },
+    { label:"Taux d'offre",     key:'txOffre',        ref:0.70 },
+    { label:"Tx transfo show",  key:'txTransfoShow',  ref:0.30 },
+    { label:"Tx transfo offre", key:'txTransfoOffre', ref:0.40 },
+  ];
+
+  document.getElementById('perf-bars').innerHTML = metrics.map(m => `
+    <div style="margin-bottom:16px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:7px">${m.label}</div>
+      ${team.map(t => `
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:5px">
+          <div style="width:72px;font-size:11px;color:var(--muted)">${t.name}</div>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden">
+            <div style="width:${Math.min((t[m.key]/m.ref)*100,100)}%;height:100%;background:${t.color};border-radius:99px;opacity:0.8"></div>
+          </div>
+          <div style="font-size:11px;font-family:var(--font-m);min-width:42px;text-align:right;color:${U.cb(t[m.key],m.ref)}">
+            ${U.pct(t[m.key])}
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('month-lbl').textContent = currentMonthKey();
+  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
+  document.getElementById('tb-nm').textContent = nm;
+  document.getElementById('tb-av').textContent = nm[0].toUpperCase();
+  renderAll();
+});
+</script>
+
+</body>
+</html>

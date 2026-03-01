@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Setting</title>
+<link rel="stylesheet" href="sales.css"/>
+<script src="sales-data.js"></script>
+<script src="nav.js"></script>
+<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-logo">S</div>
+  <div class="tb-title">Ambitio <em>Sales</em></div>
+  <div class="tb-sep"></div>
+  <div class="tb-page">📞 Setting</div>
+  <div class="tb-right">
+    <div class="tb-month">
+      <button onclick="prevMonth()">&#9664;</button>
+      <span id="month-lbl">Février 2026</span>
+      <button onclick="nextMonth()">&#9654;</button>
+    </div>
+    <div class="tb-user">
+      <div class="tb-av" id="tb-av">G</div>
+      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="page-header-row">
+    <div>
+      <div class="page-title">Setting — KPIs & Activité</div>
+      <div class="page-sub">Projections vs Réel · <span id="sub-month">Février 2026</span></div>
+    </div>
+    <div class="tabs" id="week-tabs">
+      <div class="tab active" onclick="setWeek('mois')">Mois</div>
+      <div class="tab" onclick="setWeek('s1')">Sem 1</div>
+      <div class="tab" onclick="setWeek('s2')">Sem 2</div>
+      <div class="tab" onclick="setWeek('s3')">Sem 3</div>
+      <div class="tab" onclick="setWeek('s4')">Sem 4</div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="g4 mb" id="kpis"></div>
+
+  <!-- Funnel + Rates -->
+  <div class="g21 mb">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Funnel Setting complet</span></div>
+      <div class="funnel" id="funnel"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Taux clés</span></div>
+      <div id="rates"></div>
+    </div>
+  </div>
+
+  <!-- Week breakdown -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Breakdown hebdomadaire</span></div>
+    <div class="week-grid" id="week-cards"></div>
+  </div>
+
+</div>
+
+<script>
+const MONTHS = DB.months;
+let _cm = (() => { const s=localStorage.getItem('sales_month')||'Février 2026'; const p=s.split(' '); return{month:MONTHS.indexOf(p[0]),year:parseInt(p[1])||2026}; })();
+function currentMonthKey() { return MONTHS[_cm.month]+' '+_cm.year; }
+function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); renderAll(); }
+function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); renderAll(); }
+function _saveMonth() { localStorage.setItem('sales_month',currentMonthKey()); document.getElementById('month-lbl').textContent=currentMonthKey(); document.getElementById('sub-month').textContent=currentMonthKey(); }
+
+let currentWeek = 'mois';
+
+function setWeek(w) {
+  currentWeek = w;
+  document.querySelectorAll('#week-tabs .tab').forEach((t,i) =>
+    t.classList.toggle('active', ['mois','s1','s2','s3','s4'][i] === w));
+  renderAll();
+}
+
+function renderAll() {
+  const d = DB.setting[currentWeek] || DB.setting.mois;
+  const isM = currentWeek === 'mois';
+
+  // KPIs
+  document.getElementById('kpis').innerHTML = [
+    { label:'Calls passés', val:d.calls.a,    sub:`Proj: ${d.calls.p}`,    rawA:d.calls.a,    proj:d.calls.p,    color:'#60a5fa' },
+    { label:'Sets',         val:d.sets.a,     sub:`Proj: ${d.sets.p}`,     rawA:d.sets.a,     proj:d.sets.p,     color:'#a78bfa' },
+    { label:'Show-up',      val:d.presents.a, sub:`Proj: ${d.presents.p}`, rawA:d.presents.a, proj:d.presents.p, color:'#f59e0b' },
+    { label:'Closes',       val:d.closes.a,   sub:`Proj: ${d.closes.p}`,   rawA:d.closes.a,   proj:d.closes.p,   color:'#ef4444' },
+  ].map(U.kpiCard).join('');
+
+  // Funnel
+  document.getElementById('funnel').innerHTML = [
+    U.funnelStep('Leads',           d.leads.a,     d.leads.a,     true),
+    U.funnelStep('Calls passés',    d.calls.a,     d.leads.a),
+    U.funnelStep('Décrochés',       d.decroches.a, d.calls.a),
+    U.funnelStep('Proposition RDV', d.propRdv.a,   d.decroches.a),
+    U.funnelStep('Sets',            d.sets.a,      d.propRdv.a),
+    U.funnelStep('Show-up',         d.presents.a,  d.sets.a),
+    U.funnelStep('Closes',          d.closes.a,    d.presents.a),
+  ].join('');
+
+  // Rates
+  if (isM) {
+    const m = DB.setting.mois;
+    document.getElementById('rates').innerHTML = [
+      { l:'Décrochés %',   a:m.decrochesP.a, p:m.decrochesP.p },
+      { l:'Engagement %',  a:m.engP.a,       p:m.engP.p       },
+      { l:'Set %',         a:m.setP.a,       p:m.setP.p       },
+      { l:'Show-up %',     a:m.showupP.a,    p:m.showupP.p    },
+      { l:'Close Calls %', a:m.cCallP.a,     p:m.cCallP.p     },
+    ].map(r => U.progRow(r.l, r.a, r.p)).join('');
+  } else {
+    document.getElementById('rates').innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted);font-size:12px">Taux disponibles en vue Mois</div>`;
+  }
+
+  // Week cards
+  document.getElementById('week-cards').innerHTML = ['s1','s2','s3','s4'].map((w,i) => {
+    const wd = DB.setting[w];
+    return U.weekCard(`Semaine ${i+1}`, wd.calls.a, 'calls', [
+      { val:wd.decroches.a, label:'Décrochés' },
+      { val:wd.sets.a,      label:'Sets'       },
+      { val:wd.presents.a,  label:'Show-up'    },
+      { val:wd.closes.a,    label:'Closes', color:'var(--red2)' },
+    ], currentWeek === w);
+  }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('month-lbl').textContent = currentMonthKey();
+  document.getElementById('sub-month').textContent = currentMonthKey();
+  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
+  document.getElementById('tb-nm').textContent = nm;
+  document.getElementById('tb-av').textContent = nm[0].toUpperCase();
+  renderAll();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Commissions</title>
+<link rel="stylesheet" href="sales.css"/>
+<script src="sales-data.js"></script>
+<script src="nav.js"></script>
+<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-logo">S</div>
+  <div class="tb-title">Ambitio <em>Sales</em></div>
+  <div class="tb-sep"></div>
+  <div class="tb-page">💰 Commissions</div>
+  <div class="tb-right">
+    <div class="tb-month">
+      <button onclick="prevMonth()">&#9664;</button>
+      <span id="month-lbl">Février 2026</span>
+      <button onclick="nextMonth()">&#9654;</button>
+    </div>
+    <div class="tb-user">
+      <div class="tb-av" id="tb-av">G</div>
+      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="page-header-row">
+    <div>
+      <div class="page-title">Commissions — Tracking</div>
+      <div class="page-sub">Guillaume Bilcke · <span id="sub-month">Février 2026</span></div>
+    </div>
+    <div class="page-actions">
+      <button class="btn btn-ghost" onclick="openAddDeal()">+ Ajouter deal</button>
+      <button class="btn btn-primary" onclick="submitCommissions()">📤 Soumettre</button>
+    </div>
+  </div>
+
+  <div class="g13">
+
+    <!-- LEFT: Summary + History -->
+    <div style="display:flex;flex-direction:column;gap:13px">
+
+      <!-- Summary card -->
+      <div class="comm-summary" id="comm-summary"></div>
+
+      <!-- History -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">Historique mensuel</span></div>
+        <div id="history"></div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: Deals table -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title" id="table-title">Deals — Février 2026</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="deals-table" style="width:100%;min-width:700px">
+          <thead>
+            <tr>
+              <th>Client</th><th>Offre</th><th>Type</th><th>Date</th>
+              <th>Contracté HT</th><th>Collecté HT</th><th>Commission</th><th>Bonus</th><th>Statut</th>
+            </tr>
+          </thead>
+          <tbody id="deals-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ADD DEAL MODAL -->
+<div id="add-modal" style="display:none">
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Nouveau deal</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Client</label>
+            <input class="form-input" id="nd-client" placeholder="Nom du client"/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Email</label>
+            <input class="form-input" id="nd-email" type="email" placeholder="email@..."/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Offre</label>
+            <input class="form-input" id="nd-offre" placeholder="BP 12, Mentor..."/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Type</label>
+            <select class="form-input" id="nd-type">
+              <option value="Closing">Closing</option>
+              <option value="Setting">Setting</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Date du close</label>
+            <input class="form-input" id="nd-date" type="date"/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Contracté HT (€)</label>
+            <input class="form-input" id="nd-contracte" type="number" placeholder="6000"/>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Collecté HT (€)</label>
+            <input class="form-input" id="nd-collecte" type="number" placeholder="500"/>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Commission (€)</label>
+            <input class="form-input" id="nd-comm" type="number" placeholder="500"/>
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Notes</label>
+          <input class="form-input" id="nd-notes" placeholder="Contexte du close..."/>
+        </div>
+        <div style="display:flex;gap:9px;margin-top:18px">
+          <button class="btn btn-ghost" style="flex:1" onclick="closeModal()">Annuler</button>
+          <button class="btn btn-primary" style="flex:1" onclick="saveDeal()">💾 Ajouter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const MONTHS = DB.months;
+let _cm = (() => { const s=localStorage.getItem('sales_month')||'Février 2026'; const p=s.split(' '); return{month:MONTHS.indexOf(p[0]),year:parseInt(p[1])||2026}; })();
+function currentMonthKey() { return MONTHS[_cm.month]+' '+_cm.year; }
+function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); renderAll(); }
+function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); renderAll(); }
+function _saveMonth() { localStorage.setItem('sales_month',currentMonthKey()); document.getElementById('month-lbl').textContent=currentMonthKey(); document.getElementById('sub-month').textContent=currentMonthKey(); }
+
+let selectedDeal = null;
+
+function renderAll() {
+  const mk = currentMonthKey();
+  const data = DB.commissions[mk] || { contracte:0, collecte:0, totalComm:0, statut:'En attente', deals:[] };
+
+  document.getElementById('table-title').textContent = 'Deals — ' + mk;
+
+  // Summary
+  document.getElementById('comm-summary').innerHTML = `
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(255,255,255,0.35);margin-bottom:8px">GUILLAUME BILCKE</div>
+    <div class="comm-total">${U.euro(data.totalComm)}</div>
+    <div class="comm-row"><span>Cash contracté</span><span style="font-weight:600">${U.euro(data.contracte)}</span></div>
+    <div class="comm-row"><span>Cash collecté</span><span style="font-weight:600">${U.euro(data.collecte)}</span></div>
+    <div class="comm-row"><span>Nombre de deals</span><span style="font-weight:600">${data.deals.length}</span></div>
+    <div class="comm-row"><span>Total commissions</span><span>${U.euro(data.totalComm)}</span></div>
+    <div class="status-badge ${data.statut==='Validé'?'status-paid':'status-pending'}" style="width:100%">
+      ${data.statut==='Validé'?'✅ Validé':'⏳ '+data.statut} · Paiement max le 5 du mois
+    </div>`;
+
+  // History
+  document.getElementById('history').innerHTML = Object.entries(DB.commissions).map(([k,v]) => `
+    <div class="pr" style="cursor:pointer" onclick="jumpToMonth('${k}')">
+      <div class="pr-l" style="font-size:12px">${k}</div>
+      <div style="margin-left:auto;font-family:var(--font-m);font-size:12px;color:${v.totalComm>0?'var(--gold)':'var(--muted)'}">${U.euro(v.totalComm)}</div>
+      <div style="margin-left:10px">
+        <span class="badge ${v.statut==='Validé'?'badge-green':'badge-gold'}">${v.statut==='Validé'?'✓ Validé':'En attente'}</span>
+      </div>
+    </div>`).join('');
+
+  // Deals table
+  const tbody = document.getElementById('deals-body');
+  if (data.deals.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:35px;color:var(--muted)">Aucun deal pour ce mois. Cliquez sur "+ Ajouter deal" pour commencer.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = data.deals.map((d,i) => `
+    <tr onclick="selectDeal(${i})" style="${selectedDeal===i?'background:rgba(239,68,68,0.05);':''};cursor:pointer">
+      <td>
+        <div style="font-weight:600;font-size:12px">${d.client}</div>
+        <div style="font-size:10px;color:var(--muted)">${d.email}</div>
+      </td>
+      <td style="font-size:12px">${d.offre}</td>
+      <td><span class="badge ${d.type==='Closing'?'badge-red':'badge-blue'}">${d.type}</span></td>
+      <td class="td-mono" style="font-size:11px">${d.date}</td>
+      <td class="td-mono">${d.cHT?U.euro(d.cHT):'—'}</td>
+      <td class="td-mono">${d.coHT?U.euro(d.coHT):'—'}</td>
+      <td class="td-mono" style="color:var(--gold);font-weight:700">${U.euro(d.comm)}</td>
+      <td class="td-mono">${d.bonus?U.euro(d.bonus):'—'}</td>
+      <td><span class="badge ${d.ok?'badge-green':'badge-gold'}">${d.ok?'✓ Vérifié':'En attente'}</span></td>
+    </tr>`).join('');
+}
+
+function selectDeal(i) {
+  selectedDeal = selectedDeal === i ? null : i;
+  renderAll();
+}
+
+function jumpToMonth(key) {
+  const parts = key.split(' ');
+  const mIdx  = MONTHS.indexOf(parts[0]);
+  if (mIdx >= 0) { _cm.month = mIdx; _cm.year = parseInt(parts[1]); }
+  _saveMonth();
+  renderAll();
+}
+
+function openAddDeal() { document.getElementById('add-modal').style.display='block'; }
+function closeModal()  { document.getElementById('add-modal').style.display='none'; }
+
+function saveDeal() {
+  const mk = currentMonthKey();
+  if (!DB.commissions[mk]) {
+    DB.commissions[mk] = { contracte:0, collecte:0, totalComm:0, statut:'En attente', deals:[] };
+  }
+  const deal = {
+    client:  document.getElementById('nd-client').value  || 'Client',
+    email:   document.getElementById('nd-email').value   || '',
+    offre:   document.getElementById('nd-offre').value   || 'BP 12',
+    type:    document.getElementById('nd-type').value,
+    date:    document.getElementById('nd-date').value    || new Date().toLocaleDateString('fr-FR'),
+    cHT:     parseFloat(document.getElementById('nd-contracte').value) || null,
+    coHT:    parseFloat(document.getElementById('nd-collecte').value)  || null,
+    comm:    parseFloat(document.getElementById('nd-comm').value)      || 0,
+    bonus:   0, notes: document.getElementById('nd-notes').value, ok: false,
+  };
+  DB.commissions[mk].deals.push(deal);
+  DB.commissions[mk].totalComm  += deal.comm;
+  DB.commissions[mk].contracte  += deal.cHT  || 0;
+  DB.commissions[mk].collecte   += deal.coHT || 0;
+  closeModal();
+  U.toast('✅ Deal ajouté !');
+  // Reset form
+  ['nd-client','nd-email','nd-offre','nd-date','nd-contracte','nd-collecte','nd-comm','nd-notes'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value='';
+  });
+  renderAll();
+}
+
+function submitCommissions() {
+  const mk = currentMonthKey();
+  if (DB.commissions[mk]) DB.commissions[mk].statut = 'Soumis';
+  U.toast('📤 Commissions soumises pour validation !');
+  renderAll();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('month-lbl').textContent = currentMonthKey();
+  document.getElementById('sub-month').textContent = currentMonthKey();
+  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
+  document.getElementById('tb-nm').textContent = nm;
+  document.getElementById('tb-av').textContent = nm[0].toUpperCase();
+  renderAll();
+});
+</script>
+
+</body>
+</html>

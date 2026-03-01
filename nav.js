@@ -16,12 +16,12 @@
       { id: 'messagerie',  icon: '◉',  label: 'Messagerie',        href: '#', badge: '3' },
     ],
     sales: [
-      { id: 'pipeline',    icon: '◈',  label: 'Pipeline',          href: 'sales.html' },
-      { id: 'prospects',   icon: '◎',  label: 'Prospects',         href: 'sales.html#prospects' },
-      { id: 'deals',       icon: '◆',  label: 'Deals',             href: 'sales.html#deals' },
-      { id: 'objectifs',   icon: '▲',  label: 'Objectifs',         href: 'sales.html#objectifs' },
-      { id: 'reporting',   icon: '◉',  label: 'Reporting',         href: '#', badge: 'Bientôt' },
-      { id: 'import',      icon: '❖',  label: 'Import Notion',     href: 'import-notion.html' },
+      { id: 'dashboard',    icon: '◈',  label: 'Dashboard',         href: 'sales-dashboard.html' },
+      { id: 'closing',      icon: '🎯', label: 'Closing',           href: 'sales-closing.html' },
+      { id: 'setting',      icon: '📞', label: 'Setting',           href: 'sales-setting.html' },
+      { id: 'equipe',       icon: '👥', label: 'Équipe',            href: 'sales-equipe.html' },
+      { id: 'commissions',  icon: '💰', label: 'Commissions',       href: 'sales-commissions.html' },
+      { id: 'projections',  icon: '📈', label: 'Projections',       href: 'sales-projections.html' },
     ],
     admin: [
       // ── GLOBAL ──
@@ -33,10 +33,12 @@
       { id: 'sessions',    icon: '◈',  label: 'Sessions',          href: 'coaching.html#sessions', section: 'Coaching' },
       { id: 'progression', icon: '▲',  label: 'Progression',       href: 'coaching.html#progression', section: 'Coaching' },
       // ── SALES ──
-      { id: 'pipeline',    icon: '◆',  label: 'Pipeline',          href: 'sales.html',     section: 'Sales' },
-      { id: 'prospects',   icon: '◎',  label: 'Prospects',         href: 'sales.html#prospects', section: 'Sales' },
-      { id: 'deals',       icon: '◆',  label: 'Deals',             href: 'sales.html#deals', section: 'Sales' },
-      { id: 'objectifs',   icon: '▲',  label: 'Objectifs',         href: 'sales.html#objectifs', section: 'Sales' },
+      { id: 'dashboard',   icon: '◈',  label: 'Dashboard',         href: 'sales-dashboard.html',    section: 'Sales' },
+      { id: 'closing',     icon: '🎯', label: 'Closing',           href: 'sales-closing.html',      section: 'Sales' },
+      { id: 'setting',     icon: '📞', label: 'Setting',           href: 'sales-setting.html',      section: 'Sales' },
+      { id: 'equipe',      icon: '👥', label: 'Équipe',            href: 'sales-equipe.html',       section: 'Sales' },
+      { id: 'commissions', icon: '💰', label: 'Commissions',       href: 'sales-commissions.html',  section: 'Sales' },
+      { id: 'projections', icon: '📈', label: 'Projections',       href: 'sales-projections.html',  section: 'Sales' },
       // ── OUTILS ──
       { id: 'import',      icon: '❖',  label: 'Import Notion',     href: 'import-notion.html', section: 'Outils' },
       { id: 'settings',    icon: '◉',  label: 'Paramètres',        href: '#',              section: 'Outils' },
@@ -702,25 +704,16 @@
 
   /* ─── DETECT ROLE ─── */
   function getRole() {
-    // localStorage est la source de vérité — écrit par login.html avant navigation
-    const role = localStorage.getItem('ambitio_role') || window._currentRole;
-    if (!role || !['coach','sales','admin'].includes(role)) {
-      // Pas de rôle valide = non connecté
-      if (!window.location.pathname.includes('login')) {
-        window.location.href = 'login.html';
-      }
-      return 'coach';
-    }
-    return role;
+    // From Firebase auth via window._currentRole (set by login.html)
+    // Also check localStorage fallback for dev
+    return window._currentRole || localStorage.getItem('ambitio_role') || 'coach';
   }
 
   function getUserInfo() {
-    const name = localStorage.getItem('ambitio_name') || window._currentUserName || 'Utilisateur';
-    const email = localStorage.getItem('ambitio_email') || window._currentUserEmail || '';
     return {
-      name,
-      email,
-      initials: name.slice(0, 1).toUpperCase(),
+      name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Utilisateur',
+      email: window._currentUserEmail || localStorage.getItem('ambitio_email') || '',
+      initials: (window._currentUserName || 'U').slice(0, 1).toUpperCase(),
     };
   }
 

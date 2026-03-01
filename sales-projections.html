@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Projections</title>
+<link rel="stylesheet" href="sales.css"/>
+<script src="sales-data.js"></script>
+<script src="nav.js"></script>
+<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-logo">S</div>
+  <div class="tb-title">Ambitio <em>Sales</em></div>
+  <div class="tb-sep"></div>
+  <div class="tb-page">📈 Projections</div>
+  <div class="tb-right">
+    <div class="tb-month">
+      <button onclick="prevMonth()">&#9664;</button>
+      <span id="month-lbl">Février 2026</span>
+      <button onclick="nextMonth()">&#9654;</button>
+    </div>
+    <div class="tb-user">
+      <div class="tb-av" id="tb-av">G</div>
+      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="page-header-row">
+    <div>
+      <div class="page-title">Projections — Analyse & Tendances</div>
+      <div class="page-sub">Objectifs vs réalisé · <span id="sub-month">Février 2026</span></div>
+    </div>
+    <div class="tabs" id="view-tabs">
+      <div class="tab active" onclick="setView('closing')">Closing</div>
+      <div class="tab" onclick="setView('setting')">Setting</div>
+      <div class="tab" onclick="setView('revenue')">Revenus</div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="g4 mb" id="kpis"></div>
+
+  <!-- Chart + Gap analysis -->
+  <div class="g2 mb">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Progression hebdomadaire</span></div>
+      <div id="chart"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Analyse des écarts</span></div>
+      <div id="gaps"></div>
+    </div>
+  </div>
+
+  <!-- Manager note -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Note du manager</span></div>
+    <div style="background:rgba(255,255,255,0.025);border-radius:10px;padding:18px 20px;border-left:3px solid var(--red2)">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:10px">Message du manager</div>
+      <div style="font-size:13px;line-height:1.8;color:rgba(255,255,255,0.65)">
+        Ce que tu as écrit, ce sont tes <b style="color:var(--text)">projections</b>, pas tes objectifs.<br><br>
+        Une projection, c'est ce que tu es censé atteindre dans <b style="color:var(--text)">75 à 80% des cas</b>.
+        C'est ce que tu atteins sans te forcer.<br><br>
+        Un objectif, c'est ta projection augmentée de <b style="color:var(--gold)">33 à 50%</b>.
+        C'est ce que tu vises pour sortir de ta zone de confort.<br><br>
+        <span style="color:var(--red3)">
+          Projection = zone de confort &nbsp;·&nbsp; Objectif = zone de progression
+        </span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const MONTHS = DB.months;
+let _cm = (() => { const s=localStorage.getItem('sales_month')||'Février 2026'; const p=s.split(' '); return{month:MONTHS.indexOf(p[0]),year:parseInt(p[1])||2026}; })();
+function currentMonthKey() { return MONTHS[_cm.month]+' '+_cm.year; }
+function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); renderAll(); }
+function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); renderAll(); }
+function _saveMonth() { localStorage.setItem('sales_month',currentMonthKey()); document.getElementById('month-lbl').textContent=currentMonthKey(); document.getElementById('sub-month').textContent=currentMonthKey(); }
+
+let currentView = 'closing';
+
+function setView(v) {
+  currentView = v;
+  document.querySelectorAll('#view-tabs .tab').forEach((t,i) =>
+    t.classList.toggle('active', ['closing','setting','revenue'][i] === v));
+  renderAll();
+}
+
+function buildData() {
+  const c  = DB.closing.mois;
+  const s  = DB.setting.mois;
+  const cm = DB.commissions[currentMonthKey()] || { totalComm:0 };
+
+  if (currentView === 'closing') {
+    return {
+      kpis: [
+        { label:'Atteinte objectif', val:(c.atteinte*100).toFixed(0)+'%', color: c.atteinte<0.5?'#ef4444':'#f59e0b' },
+        { label:'Delta contracté',   val:U.euro(c.delta),                  color:'#ef4444' },
+        { label:'Cash / Live call',  val:U.euro(c.cashLive.a), sub:'Proj: '+U.euro(c.cashLive.p), color:'#a78bfa' },
+        { label:'Closes manquants',  val:(c.closes.p-c.closes.a)+' closes', sub:'pour atteindre proj.', color:'#f59e0b' },
+      ],
+      labels:  ['S1','S2','S3','S4'],
+      actuals: [DB.closing.s1.closes.a, DB.closing.s2.closes.a, DB.closing.s3.closes.a, DB.closing.s4.closes.a],
+      projs:   [DB.closing.s1.closes.p, DB.closing.s2.closes.p, DB.closing.s3.closes.p, DB.closing.s4.closes.p],
+      gaps: [
+        { l:'Calls',      a:c.calls.a,     p:c.calls.p      },
+        { l:'Lives',      a:c.lives.a,     p:c.lives.p      },
+        { l:'Offres',     a:c.offres.a,    p:c.offres.p     },
+        { l:'Closes',     a:c.closes.a,    p:c.closes.p     },
+        { l:'Contracté',  a:c.contracte.a, p:c.contracte.p, eu:true },
+      ],
+    };
+  }
+
+  if (currentView === 'setting') {
+    return {
+      kpis: [
+        { label:'Calls vs proj.',  val:U.ppv(s.calls.a,s.calls.p),                      color:'#60a5fa' },
+        { label:'Sets obtenus',    val:`${s.sets.a} / ${s.sets.p}`,                      color:'#a78bfa' },
+        { label:'Show-up rate',    val:U.pct(s.showupP.a), sub:'Proj: '+U.pct(s.showupP.p), color: s.showupP.a>=s.showupP.p?'#34d399':'#f59e0b' },
+        { label:'Leads traités',   val:U.num(s.leads.a),                                  color:'#60a5fa' },
+      ],
+      labels:  ['S1','S2','S3','S4'],
+      actuals: [DB.setting.s1.calls.a, DB.setting.s2.calls.a, DB.setting.s3.calls.a, DB.setting.s4.calls.a],
+      projs:   [DB.setting.s1.calls.p, DB.setting.s2.calls.p, DB.setting.s3.calls.p, DB.setting.s4.calls.p],
+      gaps: [
+        { l:'Leads',    a:s.leads.a,    p:s.leads.p    },
+        { l:'Calls',    a:s.calls.a,    p:s.calls.p    },
+        { l:'Sets',     a:s.sets.a,     p:s.sets.p     },
+        { l:'Show-up',  a:s.presents.a, p:s.presents.p },
+        { l:'Closes',   a:s.closes.a,   p:s.closes.p   },
+      ],
+    };
+  }
+
+  // Revenue
+  return {
+    kpis: [
+      { label:'Contracté',     val:U.euro(c.contracte.a), sub:'Proj: '+U.euro(c.contracte.p),                              color:'#ef4444' },
+      { label:'Collecté',      val:U.euro(c.collecte.a),  sub:'Proj: '+U.euro(c.collecte.p),                               color:'#34d399' },
+      { label:'Commissions',   val:U.euro(cm.totalComm),                                                                    color:'#f59e0b' },
+      { label:'Taux collecte', val:U.pct(c.contracte.a>0?c.collecte.a/c.contracte.a:0), sub:'8.3% standard',               color:'#a78bfa' },
+    ],
+    labels:  ['S1','S2','S3','S4'],
+    actuals: [DB.closing.s1.contracte.a, DB.closing.s2.contracte.a, DB.closing.s3.contracte.a, DB.closing.s4.contracte.a],
+    projs:   [DB.closing.s1.contracte.p, DB.closing.s2.contracte.p, DB.closing.s3.contracte.p, DB.closing.s4.contracte.p],
+    gaps: [
+      { l:'Contracté', a:c.contracte.a, p:c.contracte.p, eu:true },
+      { l:'Collecté',  a:c.collecte.a,  p:c.collecte.p,  eu:true },
+    ],
+  };
+}
+
+function renderAll() {
+  const { kpis, labels, actuals, projs, gaps } = buildData();
+
+  // KPIs
+  document.getElementById('kpis').innerHTML = kpis.map(k =>
+    U.kpiCard({ label:k.label, val:k.val, sub:k.sub, color:k.color })).join('');
+
+  // Chart
+  document.getElementById('chart').innerHTML = U.barChart(labels, actuals, projs);
+
+  // Gap analysis
+  document.getElementById('gaps').innerHTML = gaps.map(g => {
+    const ecart  = g.p - g.a;
+    const isGood = ecart <= 0;
+    const sign   = ecart > 0 ? '−' : '+';
+    const disp   = g.eu ? U.euro(Math.abs(ecart)) : Math.abs(ecart);
+    return `
+      <div class="pr">
+        <div class="pr-l">${g.l}</div>
+        <div class="pr-val">${g.eu?U.euro(g.a):g.a} / ${g.eu?U.euro(g.p):g.p}</div>
+        <div class="pr-pct" style="color:${isGood?'var(--green)':'var(--red2)'}">
+          ${sign} ${disp}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('month-lbl').textContent = currentMonthKey();
+  document.getElementById('sub-month').textContent = currentMonthKey();
+  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
+  document.getElementById('tb-nm').textContent = nm;
+  document.getElementById('tb-av').textContent = nm[0].toUpperCase();
+  renderAll();
+});
+</script>
+
+</body>
+</html>
