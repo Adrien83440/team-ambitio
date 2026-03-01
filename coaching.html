@@ -235,6 +235,63 @@
     .drive-unlinked-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #fed7aa}
     .drive-unlinked-item:last-child{border-bottom:none}
 
+    /* ── STATUT ACTIF / INACTIF ── */
+    .client-card.inactive {
+      opacity: 0.55;
+      border-left: 4px solid #94a3b8 !important;
+      filter: grayscale(0.3);
+    }
+    .client-card.inactive:hover {
+      opacity: 0.75;
+      filter: grayscale(0);
+    }
+    .cc-status-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+    }
+    .cc-status-badge.active { background: var(--green-light); color: var(--green); }
+    .cc-status-badge.inactive { background: #f1f5f9; color: #64748b; }
+
+    /* Toggle switch */
+    .status-toggle-wrap {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; background: #f8faff; border-radius: 10px;
+      border: 1.5px solid var(--border); margin: 12px 24px;
+    }
+    .status-toggle-label { font-size: 13px; font-weight: 600; flex: 1; }
+    .status-toggle-sub { font-size: 11px; color: var(--muted); }
+    .toggle-switch {
+      position: relative; width: 44px; height: 24px; cursor: pointer;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0; border-radius: 24px;
+      background: #cbd5e1; transition: background .2s;
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute; left: 3px; top: 3px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: white; transition: transform .2s;
+      box-shadow: 0 1px 4px rgba(0,0,0,.15);
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--green); }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+    /* Inactive section in kanban */
+    .kanban-col.inactive-col .kanban-col-head { background: #f8fafc; }
+    .inactive-section {
+      padding: 14px 28px 0;
+    }
+    .inactive-toggle-btn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px; border: 1.5px solid var(--border); border-radius: 10px;
+      background: white; font-family: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer; color: var(--muted); transition: all .15s; margin-bottom: 8px;
+    }
+    .inactive-toggle-btn:hover { border-color: #94a3b8; color: var(--text); }
+    .list-table tr.inactive-row { opacity: 0.55; }
+    .list-table tr.inactive-row:hover { opacity: 0.8; background: #f8fafc; }
+
     /* ── RESPONSIVE ── */
     @media(max-width:768px){
       .topbar{padding:12px 14px;flex-wrap:wrap;gap:8px}
@@ -318,13 +375,15 @@
     <select class="filter-select" id="filterCoach" onchange="applyFilters()">
       <option value="">Tous les coachs</option>
     </select>
+    <button class="filter-btn filter-btn--active-only active" id="filterActive" onclick="toggleActiveFilter(this)">✅ Actifs seulement</button>
     <button class="filter-btn" id="filterAlert" onclick="toggleAlertFilter(this)">⚠️ En retard</button>
     <button class="filter-btn" id="filterQuota" onclick="toggleQuotaFilter(this)">📊 Quota manqué</button>
   </div>
   <div class="toolbar-stats">
-    <div class="stat-pill"><span class="num" id="statTotal">0</span> clients</div>
+    <div class="stat-pill"><span class="num" id="statTotal">0</span> clients actifs</div>
     <div class="stat-pill alert"><span class="num" id="statAlert">0</span> ⚠️ en retard</div>
     <div class="stat-pill"><span class="num" id="statSessions">0</span> séances totales</div>
+    <div class="stat-pill" style="color:var(--muted)"><span class="num" id="statInactive" style="font-size:14px">0</span> inactifs</div>
   </div>
 </div>
 
@@ -436,6 +495,7 @@ let _filtered = [];
 let _currentView = 'kanban';
 let _alertFilterOn = false;
 let _quotaFilterOn = false;
+let _activeFilterOn = true; // par défaut : affiche seulement les actifs
 const ALERT_DAYS = 21;
 const WARN_DAYS = 14;
 
@@ -521,9 +581,10 @@ function goToday(){
 function updateQuotaStats(){
   let ok=0, miss=0;
   _clients.forEach(c=>{
+    if(c.statut === 'inactif') return; // exclure les inactifs
     const done = c.nbCoachingsFaits||0;
     const total = c.nbCoachingsTotal||12;
-    if(done >= total) return; // terminé, on ne compte pas
+    if(done >= total) return;
     const q = getQuotaStatus(c, _viewYear, _viewMonth);
     if(q.status==='ok') ok++;
     else miss++;
@@ -572,6 +633,7 @@ function applyFilters(){
       const hasCoach = (c.sessions||[]).some(s=>s.coach===coach);
       if(!hasCoach) return false;
     }
+    if(_activeFilterOn && c.statut === 'inactif') return false;
     if(_alertFilterOn && getAlertStatus(c)==='ok') return false;
     if(_quotaFilterOn){
       const q = getQuotaStatus(c, _viewYear, _viewMonth);
@@ -580,11 +642,22 @@ function applyFilters(){
     return true;
   });
   
-  document.getElementById('statTotal').textContent = _filtered.length;
-  document.getElementById('statAlert').textContent = _filtered.filter(c=>getAlertStatus(c)==='alert').length;
+  const inactiveCount = _clients.filter(c=>c.statut==='inactif').length;
+  const activeFiltered = _filtered.filter(c=>c.statut!=='inactif');
+  
+  document.getElementById('statTotal').textContent = _activeFilterOn ? activeFiltered.length : _filtered.filter(c=>c.statut!=='inactif').length;
+  document.getElementById('statAlert').textContent = _filtered.filter(c=>c.statut!=='inactif' && getAlertStatus(c)==='alert').length;
   document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>(c.sessions||[]).filter(s=>s.statut==='fait').length+s,0);
+  document.getElementById('statInactive').textContent = inactiveCount;
   updateQuotaStats();
   render();
+}
+
+function toggleActiveFilter(btn){
+  _activeFilterOn = !_activeFilterOn;
+  btn.classList.toggle('active', _activeFilterOn);
+  btn.textContent = _activeFilterOn ? '✅ Actifs seulement' : '👥 Tous les clients';
+  applyFilters();
 }
 
 function toggleAlertFilter(btn){
@@ -654,32 +727,38 @@ function renderCard(c){
   const pct = Math.min(done/total*100,100);
   const alert = getAlertStatus(c);
   const alertText = getAlertText(c);
-  const barColor = pct>=100?'var(--green)':pct>=50?'var(--blue-main)':pct>=25?'var(--orange)':'var(--red)';
+  const isInactive = c.statut === 'inactif';
+  const barColor = isInactive ? '#94a3b8' : (pct>=100?'var(--green)':pct>=50?'var(--blue-main)':pct>=25?'var(--orange)':'var(--red)');
   const lastCoach = (c.sessions||[]).filter(s=>s.coach&&s.statut==='fait').pop();
   
   // Quota for viewed month
   const q = getQuotaStatus(c, _viewYear, _viewMonth);
-  const quotaCls = q.status;
-  const quotaIcon = q.status==='ok'?'✅':q.status==='partial'?'🟡':q.status==='empty'?'❌':'✔️';
+  const quotaCls = isInactive ? 'done' : q.status;
+  const quotaIcon = isInactive ? '⚫' : (q.status==='ok'?'✅':q.status==='partial'?'🟡':q.status==='empty'?'❌':'✔️');
   
-  return `<div class="client-card ${alert==='alert'?'alert':alert==='warning'?'warning':''}" onclick="openDetail('${c._id}')">
+  return `<div class="client-card ${isInactive ? 'inactive' : (alert==='alert'?'alert':alert==='warning'?'warning':'')}" onclick="openDetail('${c._id}')">
     <div class="cc-top">
       <div class="cc-name">${c.nom}</div>
-      ${lastCoach?`<div class="cc-coach">${lastCoach.coach}</div>`:''}
+      ${isInactive
+        ? `<span class="cc-status-badge inactive">⚫ Inactif</span>`
+        : (lastCoach?`<div class="cc-coach">${lastCoach.coach}</div>`:'')
+      }
     </div>
     ${c.activite?`<div class="cc-activite">${c.activite}</div>`:''}
     <div class="cc-progress">
       <div class="cc-progress-label"><span>Programme</span><span>${done} / ${total}</span></div>
       <div class="cc-bar"><div class="cc-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
     </div>
-    <div class="cc-quota ${quotaCls}">
+    ${!isInactive ? `<div class="cc-quota ${quotaCls}">
       <span>${quotaIcon}</span>
       <span>Ce mois : ${q.label}</span>
       ${q.status==='done'?'<span style="margin-left:auto;font-size:10px">Programme terminé</span>':'<span style="margin-left:auto;font-size:10px">coaching/mois</span>'}
-    </div>
+    </div>` : `<div class="cc-quota done" style="background:#f1f5f9;color:#64748b">
+      <span>⚫</span><span>Contrat terminé — non renouvelé</span>
+    </div>`}
     <div class="cc-bottom">
       <div class="cc-date">📅 ${c.lastSessionDate?formatDate(c.lastSessionDate):'—'}</div>
-      ${alert==='alert'?`<div class="cc-alert-badge">🔴 ${alertText}</div>`:alert==='warning'?`<div class="cc-warn-badge">🟡 ${alertText}</div>`:''}
+      ${!isInactive && alert==='alert'?`<div class="cc-alert-badge">🔴 ${alertText}</div>`:!isInactive && alert==='warning'?`<div class="cc-warn-badge">🟡 ${alertText}</div>`:''}
     </div>
   </div>`;
 }
@@ -689,18 +768,19 @@ function renderList(){
   body.innerHTML = _filtered.map(c=>{
     const done=c.nbCoachingsFaits||0, total=c.nbCoachingsTotal||12;
     const pct=Math.min(done/total*100,100);
-    const barColor=pct>=100?'var(--green)':pct>=50?'var(--blue-main)':'var(--orange)';
+    const isInactive = c.statut === 'inactif';
+    const barColor=isInactive?'#94a3b8':(pct>=100?'var(--green)':pct>=50?'var(--blue-main)':'var(--orange)');
     const alert=getAlertStatus(c);
     const q=getQuotaStatus(c,_viewYear,_viewMonth);
     const qIcon=q.status==='ok'?'✅':q.status==='partial'?'🟡':q.status==='empty'?'❌':'✔️';
     const qColor=q.status==='ok'?'var(--green)':q.status==='empty'?'var(--red)':q.status==='partial'?'var(--orange)':'var(--muted)';
-    return `<tr onclick="openDetail('${c._id}')">
-      <td class="name-cell">${c.nom}</td>
+    return `<tr class="${isInactive?'inactive-row':''}" onclick="openDetail('${c._id}')">
+      <td class="name-cell">${c.nom} ${isInactive?'<span class="cc-status-badge inactive" style="vertical-align:middle">⚫ Inactif</span>':''}</td>
       <td>${c.programme}</td>
       <td>${done}/${total} <div class="progress-mini"><div class="progress-mini-fill" style="width:${pct}%;background:${barColor}"></div></div></td>
-      <td><span style="color:${qColor};font-weight:700">${qIcon} ${q.label}</span></td>
+      <td>${isInactive?'<span style="color:#94a3b8;font-weight:600">— Inactif</span>':`<span style="color:${qColor};font-weight:700">${qIcon} ${q.label}</span>`}</td>
       <td>${c.lastSessionDate?formatDate(c.lastSessionDate):'—'}</td>
-      <td>${alert==='alert'?'<span style="color:var(--red);font-weight:700">🔴 En retard</span>':alert==='warning'?'<span style="color:var(--orange);font-weight:700">🟡 Attention</span>':'<span style="color:var(--green);font-weight:700">✅ OK</span>'}</td>
+      <td>${isInactive?'<span style="color:#64748b;font-weight:700">⚫ Inactif</span>':alert==='alert'?'<span style="color:var(--red);font-weight:700">🔴 En retard</span>':alert==='warning'?'<span style="color:var(--orange);font-weight:700">🟡 Attention</span>':'<span style="color:var(--green);font-weight:700">✅ OK</span>'}</td>
     </tr>`;
   }).join('');
 }
@@ -757,7 +837,17 @@ function openDetail(id){
 
     ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
 
-    <!-- DRIVE SCAN -->
+    <!-- STATUT ACTIF / INACTIF -->
+    <div class="status-toggle-wrap">
+      <div>
+        <div class="status-toggle-label">${c.statut === 'inactif' ? '⚫ Client inactif' : '🟢 Client actif'}</div>
+        <div class="status-toggle-sub">${c.statut === 'inactif' ? 'Contrat terminé — non renouvelé' : 'Contrat en cours'}</div>
+      </div>
+      <label class="toggle-switch" title="Changer le statut">
+        <input type="checkbox" ${c.statut !== 'inactif' ? 'checked' : ''} onchange="toggleClientStatus('${id}', this.checked)"/>
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
     <div class="drive-scan-bar" id="driveScanBar">
       <span>📁</span>
       <span id="driveScanLabel">${_driveToken?'Drive connecté — ':'Connectez Drive pour lier les résumés Gemini'}</span>
@@ -1178,15 +1268,30 @@ async function scanDriveForClient(clientId){
   }
 }
 
+// ── TOGGLE CLIENT STATUS (actif / inactif) ──
+async function toggleClientStatus(clientId, isActive){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+  c.statut = isActive ? 'actif' : 'inactif';
+  try{
+    await window._updateDoc(window._doc(window._db,'clients',clientId),{statut: c.statut});
+    showToast(isActive ? '✅ Client marqué comme actif' : '⚫ Client marqué comme inactif', 'success');
+    applyFilters();
+    // Re-render detail panel to update toggle state
+    setTimeout(()=>openDetail(clientId), 200);
+  }catch(e){showToast('Erreur: '+e.message,'error');}
+}
+
 // Expose
 window.handleDriveAuth=connectDriveThen;window.connectDriveThen=connectDriveThen;window.scanDriveForClient=scanDriveForClient;
-window.applyFilters=applyFilters;window.toggleAlertFilter=toggleAlertFilter;window.toggleQuotaFilter=toggleQuotaFilter;
+window.applyFilters=applyFilters;window.toggleActiveFilter=toggleActiveFilter;window.toggleAlertFilter=toggleAlertFilter;window.toggleQuotaFilter=toggleQuotaFilter;
 window.setView=setView;window.openDetail=openDetail;window.closeDetail=closeDetail;
 window.toggleSession=toggleSession;window.toggleNewSession=toggleNewSession;
 window.addSession=addSession;window.openNewClientModal=openNewClientModal;
 window.closeNewClientModal=closeNewClientModal;window.createClient=createClient;
 window.deleteClient=deleteClient;window.handleLogout=handleLogout;
 window.changeMonth=changeMonth;window.goToday=goToday;
+window.toggleClientStatus=toggleClientStatus;
 window.editClient=function(id){openNewClientModal();}; // TODO: pre-fill
 </script>
 
