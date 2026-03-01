@@ -553,6 +553,13 @@ const MEMBERS_C = [
     uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke',
     role: 'Setting + Closing', color: '#ef4444',
     data: {
+      'Juillet 2025':   { _total: { calls:23, lives:20, offres:14, deposits:0, closes:6, hardClose:6, followUp:0, contracte:33020.4, collecte:3342.4   } },
+      'Août 2025':      { _total: { calls:39, lives:25, offres:20, deposits:0, closes:4, hardClose:4, followUp:0, contracte:30282.0, collecte:1998.75  } },
+      'Septembre 2025': { _total: { calls:18, lives:11, offres:8,  deposits:0, closes:2, hardClose:2, followUp:0, contracte:11512.8, collecte:959.4    } },
+      'Octobre 2025':   { _total: { calls:9,  lives:9,  offres:8,  deposits:0, closes:1, hardClose:1, followUp:0, contracte:5756.4,  collecte:479.7    } },
+      'Novembre 2025':  { _total: { calls:5,  lives:2,  offres:1,  deposits:0, closes:1, hardClose:1, followUp:0, contracte:2300.0,  collecte:1149.0   } },
+      'Décembre 2025':  { _total: { calls:0,  lives:0,  offres:0,  deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,       collecte:0        } },
+      'Janvier 2026':   { _total: { calls:10, lives:5,  offres:4,  deposits:0, closes:2, hardClose:2, followUp:0, contracte:14400,   collecte:720      } },
       'Février 2026': {
         s1: { calls:8,  lives:2, offres:1, deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,     collecte:0    },
         s2: { calls:8,  lives:4, offres:2, deposits:0, closes:2, hardClose:2, followUp:0, contracte:12000, collecte:1000 },
@@ -566,6 +573,13 @@ const MEMBERS_C = [
     uid: 'elodie', name: 'Elodie', surname: '',
     role: 'Closing', color: '#60a5fa',
     data: {
+      'Juillet 2025':   { _total: { calls:29, lives:24, offres:19, deposits:0, closes:7, hardClose:7, followUp:0, contracte:22748.6, collecte:13629.0  } },
+      'Août 2025':      { _total: { calls:28, lives:19, offres:14, deposits:0, closes:5, hardClose:5, followUp:0, contracte:28782.0, collecte:799.5    } },
+      'Septembre 2025': { _total: { calls:24, lives:17, offres:10, deposits:0, closes:2, hardClose:2, followUp:0, contracte:11512.8, collecte:959.4    } },
+      'Octobre 2025':   { _total: { calls:8,  lives:2,  offres:2,  deposits:0, closes:1, hardClose:1, followUp:0, contracte:5756.4,  collecte:239.85   } },
+      'Novembre 2025':  { _total: { calls:13, lives:7,  offres:3,  deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,       collecte:0        } },
+      'Décembre 2025':  { _total: { calls:16, lives:10, offres:8,  deposits:0, closes:1, hardClose:1, followUp:0, contracte:5756.4,  collecte:399.75   } },
+      'Janvier 2026':   { _total: { calls:46, lives:28, offres:13, deposits:0, closes:7, hardClose:7, followUp:0, contracte:34069.2, collecte:3966.12  } },
       'Février 2026': {
         s1:{calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
         s2:{calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
@@ -581,6 +595,8 @@ function emptyWeek()  { return {calls:0,lives:0,offres:0,deposits:0,closes:0,har
 function emptyMonth() { return {s1:emptyWeek(),s2:emptyWeek(),s3:emptyWeek(),s4:emptyWeek(),s5:emptyWeek()}; }
 
 function sumMonth(md) {
+  // Si le mois a un _total (données historiques sans découpage hebdo), on l'utilise directement
+  if (md._total) return { ...emptyWeek(), ...md._total };
   const t = emptyWeek();
   ['s1','s2','s3','s4','s5'].forEach(w => { const d = md[w]||{}; Object.keys(t).forEach(k => { t[k] += (d[k]||0); }); });
   return t;
@@ -622,7 +638,13 @@ const SAISIE_FIELDS = [
   { key:'collecte',  label:'Collecté (€)',         bloc:'r', proj:PROJ_S.collecte  },
 ];
 
-function loadDataC(uid)     { try { const v = localStorage.getItem('closing_'+uid+'_'+cmk()); return v ? JSON.parse(v) : null; } catch(e) { return null; } }
+function loadDataC(uid) {
+  // Données hardcodées = source de vérité pour mois historiques
+  const member = MEMBERS_C.find(m => m.uid === uid);
+  const hardcoded = member && member.data[cmk()];
+  if (hardcoded && hardcoded._total) return hardcoded; // mois historique → ignorer localStorage
+  try { const v = localStorage.getItem('closing_'+uid+'_'+cmk()); return v ? JSON.parse(v) : null; } catch(e) { return null; }
+}
 function saveDataC(uid, md) { try { localStorage.setItem('closing_'+uid+'_'+cmk(), JSON.stringify(md)); } catch(e) {} }
 
 let currentMember = null, currentWeek = 'mois';
@@ -665,7 +687,8 @@ function rateTableRows(r) {
 /* ── LISTE ── */
 function renderListe() {
   document.getElementById('members-grid').innerHTML = MEMBERS_C.map(m => {
-    const md = loadDataC(m.uid) || m.data[cmk()] || emptyMonth();
+    const hardcoded = m.data[cmk()];
+    const md = (hardcoded && hardcoded._total) ? hardcoded : (loadDataC(m.uid) || hardcoded || emptyMonth());
     const t = sumMonth(md);
     return `<div class="member-card" style="--mc:${m.color}" onclick="openFiche('${m.uid}')">
       <div class="mc-arrow">→</div>
@@ -688,9 +711,14 @@ function renderListe() {
 function openFiche(uid) {
   currentMember = MEMBERS_C.find(m => m.uid === uid);
   currentWeek = 'mois';
-  const saved = loadDataC(uid);
-  if (saved) currentMember.data[cmk()] = saved;
-  else if (!currentMember.data[cmk()]) currentMember.data[cmk()] = emptyMonth();
+  const hardcoded = currentMember.data[cmk()];
+  if (hardcoded && hardcoded._total) {
+    // Mois historique — données hardcodées, pas de localStorage
+  } else {
+    const saved = loadDataC(uid);
+    if (saved) currentMember.data[cmk()] = saved;
+    else if (!hardcoded) currentMember.data[cmk()] = emptyMonth();
+  }
   document.getElementById('view-liste').style.display = 'none';
   document.getElementById('view-fiche').style.display = 'block';
   document.getElementById('fiche-av').textContent = currentMember.name[0];
@@ -707,20 +735,28 @@ function backToListe() {
 }
 
 /* ── TABS ── */
-function buildWeekTabs() {
+function buildWeekTabs(isHistorical) {
   const weeks = getMonthWeeks(cmk());
   const row = document.getElementById('week-tabs-row');
   if (!row) return;
-  row.innerHTML = `<div class="wtab${currentWeek==='mois'?' active':''}" onclick="setWeek('mois')">Mois complet</div>`
-    + weeks.map(wk => `<div class="wtab${currentWeek===wk.id?' active':''}" onclick="setWeek('${wk.id}')" title="${wk.range}">
+  let html = `<div class="wtab${currentWeek==='mois'?' active':''}" onclick="setWeek('mois')">Mois complet</div>`;
+  if (!isHistorical) {
+    html += weeks.map(wk => `<div class="wtab${currentWeek===wk.id?' active':''}" onclick="setWeek('${wk.id}')" title="${wk.range}">
         <span style="font-weight:600">S${wk.id.replace('s','')}</span>
         <span style="font-size:10px;color:var(--muted);margin-left:4px;font-family:var(--font-m)">${wk.range}</span>
       </div>`).join('');
+  } else {
+    html += `<span style="font-size:11px;color:var(--muted);margin-left:8px;font-style:italic">Données mensuelles globales</span>`;
+  }
+  row.innerHTML = html;
 }
 function setWeek(w) { currentWeek = w; renderFiche(); }
 
 function renderFiche() {
-  buildWeekTabs();
+  const md = currentMember && currentMember.data[cmk()];
+  const isHistorical = !!(md && md._total);
+  if (isHistorical && currentWeek !== 'mois') currentWeek = 'mois';
+  buildWeekTabs(isHistorical);
   if (currentWeek === 'mois') {
     document.getElementById('reporting-mois').style.display = 'block';
     document.getElementById('saisie-week').style.display = 'none';
@@ -741,6 +777,7 @@ function renderReportingMois() {
   const r = computeRatesC(tot);
   const allWeeks = getMonthWeeks(cmk());
   const color = currentMember.color;
+  const isHistorical = !!(md._total);
 
   const sumKpis = [
     { label:'Calls',     val:tot.calls,    proj:proj.calls,    color:'#60a5fa', euro:false },
@@ -833,8 +870,10 @@ function renderReportingMois() {
         <tbody>${rateTableRows(r)}</tbody>
       </table>
     </div>
-    <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px">Détail par semaine</div>
-    <div class="week-reports">${weekSections}</div>`;
+    ${isHistorical
+      ? '<div style=\"padding:20px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--muted);font-size:13px;text-align:center\">Données mensuelles globales — découpage hebdomadaire non disponible</div>'
+      : '<div style=\"font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px\">Détail par semaine</div><div class=\"week-reports\">' + weekSections + '</div>'
+    }`;
 }
 
 /* ── SAISIE SEMAINE ── */
@@ -929,7 +968,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const nm = (typeof localStorage !== 'undefined' && localStorage.getItem('ambitio_name')) || 'Guillaume';
   document.getElementById('tb-nm').textContent = nm;
   document.getElementById('tb-av').textContent = nm[0].toUpperCase();
-  MEMBERS_C.forEach(m => { const s = loadDataC(m.uid); if (s) m.data[cmk()] = s; });
+  MEMBERS_C.forEach(m => {
+    const hardcoded = m.data[cmk()];
+    if (hardcoded && hardcoded._total) return; // garder données historiques
+    const s = loadDataC(m.uid);
+    if (s) m.data[cmk()] = s;
+  });
   document.addEventListener('db:updated', renderAll);
   renderListe();
 });

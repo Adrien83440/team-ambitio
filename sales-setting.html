@@ -897,6 +897,10 @@ let currentWeek   = 'mois';
 
 /* ─── LOAD / SAVE depuis localStorage ─── */
 function loadMemberData(uid) {
+  // Données hardcodées = source de vérité pour mois historiques
+  const member = MEMBERS.find(m => m.uid === uid);
+  const hardcoded = member && member.data[cmk()];
+  if (hardcoded && hardcoded._total) return hardcoded; // mois historique → ignorer localStorage
   const key = `setting_${uid}_${cmk()}`;
   try {
     const saved = localStorage.getItem(key);
@@ -962,8 +966,9 @@ const RATE_DEFS = [
 function renderListe() {
   document.getElementById('members-grid').innerHTML = MEMBERS.map(m => {
     // Charger données locales
-    const saved = loadMemberData(m.uid);
-    const monthData = saved || (m.data[cmk()] || emptyMonth());
+    const hardcoded = m.data[cmk()];
+    const saved = (hardcoded && hardcoded._total) ? null : loadMemberData(m.uid);
+    const monthData = saved || hardcoded || emptyMonth();
     const tot = computeMonthTotals(monthData);
     const rates = computeRates(tot);
 
@@ -1008,10 +1013,15 @@ function openFiche(uid) {
   currentMember = MEMBERS.find(m => m.uid === uid);
   currentWeek = 'mois';
 
-  // Load saved data
-  const saved = loadMemberData(uid);
-  if (saved) currentMember.data[cmk()] = saved;
-  else if (!currentMember.data[cmk()]) currentMember.data[cmk()] = emptyMonth();
+  // Load saved data — historique: priorité aux données hardcodées
+  const hardcoded = currentMember.data[cmk()];
+  if (hardcoded && hardcoded._total) {
+    // Mois historique — données hardcodées, on ne touche à rien
+  } else {
+    const saved = loadMemberData(uid);
+    if (saved) currentMember.data[cmk()] = saved;
+    else if (!hardcoded) currentMember.data[cmk()] = emptyMonth();
+  }
 
   // UI
   document.getElementById('view-liste').style.display = 'none';
