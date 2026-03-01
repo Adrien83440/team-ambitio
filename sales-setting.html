@@ -5,9 +5,531 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Setting</title>
 <link rel="stylesheet" href="sales.css"/>
-<script src="sales-data.js"></script>
+<script>
+/* === sales-data.js inlined === */
+/**
+ * sales-data.js — Data Store + Firebase + Utilitaires
+ * Les données "a" (actuelles) viennent de Firestore en temps réel.
+ * Les données "p" (projections) sont les références fixes.
+ */
+
+/* ═══════════════════════════════════════════════════════════
+   PROJECTIONS FIXES — modifier ici pour changer les cibles
+═══════════════════════════════════════════════════════════ */
+const PROJECTIONS = {
+  closing: {
+    s1: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
+    s2: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
+    s3: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
+    s4: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
+    livesP:0.75, offresP:0.667, engP:0.5, cOffP:0.4, cCallP:0.2, cashLive:666.7,
+  },
+  setting: {
+    s1: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
+    s2: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
+    s3: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
+    s4: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
+    decrochesP:0.12, engP:0.222, setP:0.5, showupP:0.8, cCallP:0.8,
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════
+   DATA STORE
+═══════════════════════════════════════════════════════════ */
+const DB = {
+  months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
+
+  // Données brutes saisies (remplacées par Firestore)
+  _raw: {
+    closing: {
+      s1: { calls:8,  lives:2, offres:1, closes:0, hc:0, fu:0, contracte:0,     collecte:0    },
+      s2: { calls:8,  lives:4, offres:2, closes:2, hc:2, fu:0, contracte:12000, collecte:1000 },
+      s3: { calls:9,  lives:6, offres:3, closes:1, hc:1, fu:0, contracte:5400,  collecte:400  },
+      s4: { calls:9,  lives:7, offres:2, closes:0, hc:0, fu:0, contracte:1800,  collecte:200  },
+    },
+    setting: {
+      s1: { leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, closes:0 },
+      s2: { leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, closes:2 },
+      s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
+      s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
+    },
+    deals: [
+      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
+      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
+      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
+      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
+      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
+    ],
+  },
+
+  // Calculé depuis _raw
+  closing: null,
+  setting: null,
+  commissions: {
+    'Janvier 2026': { contracte:12000, collecte:0,    totalComm:0,    statut:'Validé',     deals:[] },
+    'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
+    'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
+  },
+  team: {
+    week: [
+      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:33020, collecte:3342,  calls:23, lives:20, offres:14, closes:6, showup:0.87, txOffre:0.70,  txTransfoShow:0.30,  txTransfoOffre:0.429, caCall:1435.7 },
+      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
+    ],
+    month: [
+      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:48469, collecte:4686, calls:56, lives:33, offres:17, closes:9, showup:0.589, txOffre:0.515, txTransfoShow:0.273, txTransfoOffre:0.529, caCall:721.3 },
+      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
+    ],
+  },
+
+  // Recalcule toutes les métriques depuis _raw
+  compute() {
+    const rc = DB._raw.closing;
+    const rs = DB._raw.setting;
+    const pc = PROJECTIONS.closing;
+    const ps = PROJECTIONS.setting;
+
+    const sumC  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rc[w][k]||0), 0);
+    const sumS  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rs[w][k]||0), 0);
+    const projC = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (pc[w][k]||0), 0);
+    const projS = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (ps[w][k]||0), 0);
+
+    const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
+    const cta=sumC('contracte'), cola=sumC('collecte');
+    const cp=projC('calls'), lp=projC('lives'), op=projC('offres'), clp=projC('closes');
+    const ctp=projC('contracte'), colp=projC('collecte');
+
+    DB.closing = {
+      mois: {
+        calls:     {a:ca,  p:cp  },
+        lives:     {a:la,  p:lp  },
+        offres:    {a:oa,  p:op  },
+        closes:    {a:cla, p:clp },
+        hc:        {a:sumC('hc'), p:clp},
+        fu:        {a:sumC('fu'), p:0  },
+        contracte: {a:cta, p:ctp },
+        collecte:  {a:cola,p:colp},
+        livesP:  {a:ca>0  ? la/ca   : 0, p:pc.livesP  },
+        offresP: {a:la>0  ? oa/la   : 0, p:pc.offresP },
+        engP:    {a:oa>0  ? cla/oa  : 0, p:pc.engP    },
+        cOffP:   {a:oa>0  ? cla/oa  : 0, p:pc.cOffP   },
+        cCallP:  {a:ca>0  ? cla/ca  : 0, p:pc.cCallP  },
+        cashLive:{a:la>0  ? cta/la  : 0, p:pc.cashLive},
+        atteinte: ctp>0 ? cta/ctp : 0,
+        delta:    Math.max(0, ctp-cta),
+      },
+      s1: DB._cw('s1'), s2: DB._cw('s2'), s3: DB._cw('s3'), s4: DB._cw('s4'),
+    };
+
+    const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
+    const sa=sumS('sets'), pra=sumS('presents'), sca2=sumS('closes');
+
+    DB.setting = {
+      mois: {
+        leads:     {a:sumS('leads'),  p:projS('leads')    },
+        calls:     {a:sca,            p:projS('calls')    },
+        decroches: {a:da,             p:projS('decroches')},
+        propRdv:   {a:pa,             p:projS('propRdv')  },
+        sets:      {a:sa,             p:projS('sets')     },
+        presents:  {a:pra,            p:projS('presents') },
+        closes:    {a:sca2,           p:projS('closes')   },
+        decrochesP:{a:sca>0?da/sca:0,  p:ps.decrochesP },
+        engP:      {a:da>0 ?pa/da:0,    p:ps.engP       },
+        setP:      {a:pa>0 ?sa/pa:0,    p:ps.setP       },
+        showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
+        cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
+      },
+      s1: DB._sw('s1'), s2: DB._sw('s2'), s3: DB._sw('s3'), s4: DB._sw('s4'),
+    };
+
+    // Sync deals dans commissions
+    try {
+      const cmk = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
+      if (DB.commissions[cmk]) DB.commissions[cmk].deals = DB._raw.deals;
+    } catch(e) {}
+  },
+
+  _cw(w) {
+    const d=DB._raw.closing[w], p=PROJECTIONS.closing[w];
+    return {
+      calls:{a:d.calls||0,p:p.calls}, lives:{a:d.lives||0,p:p.lives},
+      offres:{a:d.offres||0,p:p.offres}, closes:{a:d.closes||0,p:p.closes},
+      hc:{a:d.hc||0,p:p.closes}, fu:{a:d.fu||0,p:0},
+      contracte:{a:d.contracte||0,p:p.contracte}, collecte:{a:d.collecte||0,p:p.collecte},
+    };
+  },
+  _sw(w) {
+    const d=DB._raw.setting[w], p=PROJECTIONS.setting[w];
+    return {
+      leads:{a:d.leads||0,p:p.leads}, calls:{a:d.calls||0,p:p.calls},
+      decroches:{a:d.decroches||0,p:p.decroches}, propRdv:{a:d.propRdv||0,p:p.propRdv},
+      sets:{a:d.sets||0,p:p.sets}, presents:{a:d.presents||0,p:p.presents},
+      closes:{a:d.closes||0,p:p.closes},
+    };
+  },
+};
+
+DB.compute();
+
+/* ═══════════════════════════════════════════════════════════
+   FIREBASE — couche temps réel
+   Initialisé après que firebase SDK soit chargé + auth ready
+═══════════════════════════════════════════════════════════ */
+const Fire = {
+  db:  null,
+  uid: null,
+  _unsubs: [],
+
+  init(firestore, uid) {
+    Fire.db  = firestore;
+    Fire.uid = uid;
+  },
+
+  _key(label) {
+    const p = label.split(' ');
+    const m = DB.months.indexOf(p[0]);
+    return `${p[1]}-${String(m+1).padStart(2,'0')}`;
+  },
+
+  // Écoute en temps réel les données d'un user pour un mois
+  watchUser(userId, monthLabel, callback) {
+    if (!Fire.db) return () => {};
+    const ref = Fire.db
+      .collection('saisies').doc(userId)
+      .collection('mois').doc(Fire._key(monthLabel));
+    const unsub = ref.onSnapshot(snap => callback(snap.exists ? snap.data() : null));
+    Fire._unsubs.push(unsub);
+    return unsub;
+  },
+
+  // Sauvegarde une semaine de closing
+  async saveClosing(userId, monthLabel, week, data) {
+    if (!Fire.db) throw new Error('Firebase non init');
+    const ref = Fire.db.collection('saisies').doc(userId)
+      .collection('mois').doc(Fire._key(monthLabel));
+    await ref.set({ closing: { [week]: data } }, { merge: true });
+  },
+
+  // Sauvegarde une semaine de setting
+  async saveSetting(userId, monthLabel, week, data) {
+    if (!Fire.db) throw new Error('Firebase non init');
+    const ref = Fire.db.collection('saisies').doc(userId)
+      .collection('mois').doc(Fire._key(monthLabel));
+    await ref.set({ setting: { [week]: data } }, { merge: true });
+  },
+
+  // Sauvegarde un deal (append)
+  async saveDeal(userId, monthLabel, deal) {
+    if (!Fire.db) throw new Error('Firebase non init');
+    const ref = Fire.db.collection('saisies').doc(userId)
+      .collection('mois').doc(Fire._key(monthLabel));
+    const snap = await ref.get();
+    const deals = snap.exists ? (snap.data().deals || []) : [];
+    deals.push({ ...deal, _ts: Date.now() });
+    await ref.set({ deals }, { merge: true });
+  },
+
+  // Applique un snapshot Firestore dans DB puis recalcule
+  apply(data) {
+    if (!data) return;
+    if (data.closing) ['s1','s2','s3','s4'].forEach(w => {
+      if (data.closing[w]) Object.assign(DB._raw.closing[w], data.closing[w]);
+    });
+    if (data.setting) ['s1','s2','s3','s4'].forEach(w => {
+      if (data.setting[w]) Object.assign(DB._raw.setting[w], data.setting[w]);
+    });
+    if (data.deals) DB._raw.deals = data.deals;
+    DB.compute();
+    document.dispatchEvent(new CustomEvent('db:updated'));
+  },
+
+  stop() { Fire._unsubs.forEach(u => u()); Fire._unsubs = []; },
+};
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════════════════════ */
+const U = {
+  euro:  v => v == null ? '—' : '€\u202f' + Number(v).toLocaleString('fr-FR'),
+  pct:   v => v == null ? '—' : (v * 100).toFixed(1) + '%',
+  num:   v => v == null ? '—' : Number(v).toLocaleString('fr-FR'),
+  pp:  (a, p) => p > 0 ? Math.min((a / p) * 100, 200) : 0,
+  ppv: (a, p) => p > 0 ? ((a / p) * 100).toFixed(0) + '%' : '—',
+  cb:  (a, p) => { const r = p > 0 ? a / p : 0; return r >= 1 ? '#34d399' : r >= 0.65 ? '#f59e0b' : '#ef4444'; },
+  g:   id => document.getElementById(id),
+  getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
+  getCurrentUser:  () => ({
+    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || 'guillaume',
+    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Guillaume',
+    role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
+  }),
+
+  progRow: (label, a, p, isEuro = false) => {
+    const col = U.cb(a, p);
+    return `<div class="pr">
+      <div class="pr-l">${label}</div>
+      <div class="pr-track"><div class="pr-fill" style="width:${Math.min(U.pp(a,p),100)}%;background:${col}"></div></div>
+      <div class="pr-val">${isEuro ? `${U.euro(a)} / ${U.euro(p)}` : `${a} / ${p}`}</div>
+      <div class="pr-pct" style="color:${col}">${U.ppv(a,p)}</div>
+    </div>`;
+  },
+
+  kpiCard: ({ label, val, sub, rawA, proj, color='#ef4444', pct:fp }) => {
+    const pc = fp!=null ? fp : (proj!=null ? U.pp(rawA??0, proj) : null);
+    return `<div class="kpi" style="--kc:${color}">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-value">${val}</div>
+      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
+      ${pc!=null ? `<div class="kpi-prog">
+        <div class="kpi-prog-row"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div>
+        <div class="kpi-prog-track"><div class="kpi-prog-fill" style="width:${Math.min(pc,100)}%;background:${color}"></div></div>
+      </div>` : ''}
+    </div>`;
+  },
+
+  funnelStep: (label, val, max, isFirst=false, isEuro=false) => {
+    const ratio = max > 0 ? val / max : 0;
+    return `<div class="fs">
+      <div class="fs-label">${label}</div>
+      <div class="fs-track"><div class="fs-fill" style="width:${Math.min(ratio*100,100)}%"></div></div>
+      <div class="fs-val">${isEuro ? U.euro(val) : val}</div>
+      <div class="fs-rate">${!isFirst ? U.pct(ratio) : ''}</div>
+    </div>`;
+  },
+
+  weekCard: (label, mainVal, mainLabel, minis, isCurrent) => `
+    <div class="wc${isCurrent?' wc-active':''}">
+      <div class="wc-label">${label}</div>
+      <div class="wc-main">${mainVal}</div>
+      <div class="wc-sub">${mainLabel}</div>
+      <div class="wc-grid">${minis.map(m=>`
+        <div class="wc-mini">
+          <div class="wc-mini-v"${m.color?` style="color:${m.color}"`:''} >${m.val}</div>
+          <div class="wc-mini-l">${m.label}</div>
+        </div>`).join('')}</div>
+    </div>`,
+
+  barChart: (labels, actuals, projs, unit='') => {
+    const mx = Math.max(...actuals, ...projs, 1);
+    return `<div class="chart-legend">
+        <span class="cl-dot cl-real"></span>Réel
+        <span class="cl-dot cl-proj" style="margin-left:14px"></span>Projection
+      </div>
+      <div class="chart-bars">
+        ${labels.map((l,i)=>`<div class="chart-col">
+          <div class="chart-pair">
+            <div class="chart-bar bar-real" style="height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}${unit}"></div>
+            <div class="chart-bar bar-proj" style="height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj:${projs[i]}${unit}"></div>
+          </div>
+          <div class="chart-lbl">${l}</div>
+        </div>`).join('')}
+      </div>`;
+  },
+
+  toast: (msg, type='success') => {
+    let t = document.getElementById('_toast');
+    if (!t) { t=document.createElement('div'); t.id='_toast'; document.body.appendChild(t); }
+    const s = { success:'background:#1a2e1a;border:1px solid rgba(52,211,153,.3);color:#6ee7b7', error:'background:#2e1a1a;border:1px solid rgba(239,68,68,.3);color:#fca5a5', info:'background:#1a1a2e;border:1px solid rgba(96,165,250,.3);color:#93c5fd' };
+    t.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(0);font-size:12px;font-weight:600;padding:9px 18px;border-radius:10px;z-index:9999;opacity:1;transition:all .28s;white-space:nowrap;font-family:var(--font-b);${s[type]||s.success}`;
+    t.textContent = msg;
+    clearTimeout(t._t);
+    t._t = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
+  },
+};
+
+window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
+
+/* === end sales-data.js === */
+</script>
 <script src="nav.js"></script>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
+<style>
+
+/* ── Vue liste commerciaux ── */
+.members-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 8px;
+}
+.member-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.member-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--mc, #ef4444);
+  opacity: 0.8;
+}
+.member-card:hover {
+  border-color: var(--mc, #ef4444);
+  background: var(--bg3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.mc-avatar {
+  width: 52px; height: 52px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 800; color: #fff;
+  margin-bottom: 14px;
+  font-family: var(--font-d);
+}
+.mc-name { font-size: 20px; font-weight: 800; font-family: var(--font-d); margin-bottom: 3px; }
+.mc-role { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
+.mc-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.mc-stat { background: var(--bg3); border-radius: 9px; padding: 9px 10px; }
+.mc-stat-v { font-size: 18px; font-weight: 700; font-family: var(--font-d); }
+.mc-stat-l { font-size: 9px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+.mc-arrow {
+  position: absolute; top: 20px; right: 20px;
+  width: 32px; height: 32px; border-radius: 9px;
+  background: rgba(255,255,255,0.06);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--muted);
+  transition: all 0.15s;
+}
+.member-card:hover .mc-arrow { background: rgba(255,255,255,0.12); color: var(--text); }
+
+/* ── Vue fiche individuelle ── */
+#view-fiche { display: none; }
+
+.fiche-header {
+  display: flex; align-items: center; gap: 16px;
+  margin-bottom: 22px;
+}
+.fiche-back {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 14px; border-radius: 9px;
+  background: var(--bg3); border: 1px solid var(--border);
+  cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600;
+  transition: all 0.15s;
+}
+.fiche-back:hover { border-color: var(--border2); color: var(--text); }
+.fiche-av {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 800; color: #fff; font-family: var(--font-d);
+}
+.fiche-name { font-size: 22px; font-weight: 800; font-family: var(--font-d); }
+.fiche-role { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+/* ── Semaine tabs ── */
+.week-tabs-row {
+  display: flex; gap: 8px; margin-bottom: 16px;
+  align-items: center; flex-wrap: wrap;
+}
+.wtab {
+  padding: 6px 14px; border-radius: 9px; font-size: 12px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--bg3);
+  color: var(--muted); transition: all 0.15s; user-select: none;
+}
+.wtab:hover { color: var(--text); border-color: var(--border2); }
+.wtab.active {
+  background: rgba(239,68,68,0.1);
+  border-color: rgba(239,68,68,0.35);
+  color: #fff;
+}
+.wtab.mois { background: var(--bg4); border-color: var(--border2); color: var(--text); }
+.wtab.mois.active { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.5); }
+
+/* ── Saisie semaine ── */
+.saisie-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.saisie-bloc {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px;
+}
+.saisie-bloc-title {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px;
+  color: var(--muted); margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.saisie-field { margin-bottom: 10px; }
+.saisie-field label {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.6px; color: var(--muted); margin-bottom: 4px;
+}
+.saisie-field label .proj-tag {
+  font-size: 9px; font-weight: 500; color: var(--muted2);
+  font-family: var(--font-m); text-transform: none; letter-spacing: 0;
+}
+.saisie-input {
+  width: 100%; padding: 8px 12px;
+  background: rgba(255,255,255,0.04);
+  border: 1.5px solid rgba(255,255,255,0.07);
+  border-radius: 9px; color: var(--text);
+  font-family: var(--font-m); font-size: 14px; font-weight: 500;
+  outline: none; transition: border-color 0.15s, background 0.15s;
+}
+.saisie-input:focus { border-color: var(--red2); background: rgba(239,68,68,0.04); }
+.saisie-input.filled { border-color: rgba(52,211,153,0.3); }
+.saisie-input.above { border-color: rgba(52,211,153,0.5); }
+.saisie-input.below { border-color: rgba(239,68,68,0.4); }
+
+/* ── Reporting calculé ── */
+.reporting-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.rep-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 13px 14px;
+}
+.rep-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px; }
+.rep-value { font-size: 20px; font-weight: 700; font-family: var(--font-d); }
+.rep-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.rep-delta { font-size: 10px; margin-top: 4px; font-weight: 600; }
+.rep-delta.good { color: var(--green); }
+.rep-delta.warn { color: var(--gold); }
+.rep-delta.bad  { color: var(--red2); }
+
+/* ── Taux calculés ── */
+.rates-table {
+  width: 100%; border-collapse: collapse;
+}
+.rates-table th {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--muted); padding: 6px 12px; border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.rates-table td {
+  padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 12px;
+}
+.rates-table tr:last-child td { border-bottom: none; }
+.rate-bar-cell { width: 160px; }
+.rate-bar-wrap { height: 5px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+.rate-bar-fill { height: 100%; border-radius: 99px; transition: width 0.8s ease; }
+
+/* ── Save button row ── */
+.save-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 0;
+}
+.save-status { font-size: 11px; color: var(--muted); }
+
+@media(max-width:900px) {
+  .members-grid { grid-template-columns: 1fr; }
+  .saisie-grid  { grid-template-columns: 1fr; }
+  .reporting-grid { grid-template-columns: repeat(2,1fr); }
+}
+</style>
 </head>
 <body>
 
@@ -31,129 +553,603 @@
 
 <div class="page">
 
-  <div class="page-header-row">
-    <div>
-      <div class="page-title">Setting — KPIs & Activité</div>
-      <div class="page-sub">Projections vs Réel · <span id="sub-month">Février 2026</span></div>
+  <!-- ═══ VUE LISTE ═══ -->
+  <div id="view-liste">
+    <div class="page-header-row">
+      <div>
+        <div class="page-title">Setting — Équipe</div>
+        <div class="page-sub">Clique sur un commercial pour accéder à sa fiche</div>
+      </div>
     </div>
-    <div class="tabs" id="week-tabs">
-      <div class="tab active" onclick="setWeek('mois')">Mois</div>
-      <div class="tab" onclick="setWeek('s1')">Sem 1</div>
-      <div class="tab" onclick="setWeek('s2')">Sem 2</div>
-      <div class="tab" onclick="setWeek('s3')">Sem 3</div>
-      <div class="tab" onclick="setWeek('s4')">Sem 4</div>
-    </div>
+
+    <div class="members-grid" id="members-grid"></div>
   </div>
 
-  <!-- KPIs -->
-  <div class="g4 mb" id="kpis"></div>
+  <!-- ═══ VUE FICHE INDIVIDUELLE ═══ -->
+  <div id="view-fiche">
 
-  <!-- Funnel + Rates -->
-  <div class="g21 mb">
-    <div class="card">
-      <div class="card-header"><span class="card-title">Funnel Setting complet</span></div>
-      <div class="funnel" id="funnel"></div>
+    <!-- Header fiche -->
+    <div class="fiche-header">
+      <button class="fiche-back" onclick="backToListe()">← Retour</button>
+      <div class="fiche-av" id="fiche-av">G</div>
+      <div>
+        <div class="fiche-name" id="fiche-name">Guillaume</div>
+        <div class="fiche-role" id="fiche-role">Setting</div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+        <span class="save-status" id="save-status"></span>
+        <button class="btn btn-primary" onclick="saveCurrentWeek()">💾 Sauvegarder</button>
+      </div>
     </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Taux clés</span></div>
-      <div id="rates"></div>
-    </div>
-  </div>
 
-  <!-- Week breakdown -->
-  <div class="card">
-    <div class="card-header"><span class="card-title">Breakdown hebdomadaire</span></div>
-    <div class="week-grid" id="week-cards"></div>
+    <!-- Semaine tabs -->
+    <div class="week-tabs-row">
+      <div class="wtab mois active" id="wtab-mois" onclick="setWeek('mois')">Vue Mois</div>
+      <div class="wtab" id="wtab-s1" onclick="setWeek('s1')">Semaine 1</div>
+      <div class="wtab" id="wtab-s2" onclick="setWeek('s2')">Semaine 2</div>
+      <div class="wtab" id="wtab-s3" onclick="setWeek('s3')">Semaine 3</div>
+      <div class="wtab" id="wtab-s4" onclick="setWeek('s4')">Semaine 4</div>
+      <div class="wtab" id="wtab-s5" onclick="setWeek('s5')">Semaine 5</div>
+    </div>
+
+    <!-- Reporting mensuel (visible en mode Mois) -->
+    <div id="reporting-mois"></div>
+
+    <!-- Saisie semaine (visible en mode semaine) -->
+    <div id="saisie-week" style="display:none">
+      <div class="saisie-grid">
+        <!-- Bloc Activité -->
+        <div class="saisie-bloc">
+          <div class="saisie-bloc-title">
+            Activité
+            <span id="week-proj-hint" style="color:var(--muted2);font-size:9px"></span>
+          </div>
+
+          <div class="saisie-field">
+            <label>Temps d'appel (h) <span class="proj-tag" id="p-tempsAppel"></span></label>
+            <input class="saisie-input" type="number" step="0.5" id="f-tempsAppel" placeholder="0"/>
+          </div>
+          <div class="saisie-field">
+            <label>Total Leads <span class="proj-tag" id="p-leads"></span></label>
+            <input class="saisie-input" type="number" id="f-leads" placeholder="0"/>
+          </div>
+          <div class="saisie-field">
+            <label>Calls passés <span class="proj-tag" id="p-calls"></span></label>
+            <input class="saisie-input" type="number" id="f-calls" placeholder="0"/>
+          </div>
+          <div class="saisie-field">
+            <label>Décrochés <span class="proj-tag" id="p-decroches"></span></label>
+            <input class="saisie-input" type="number" id="f-decroches" placeholder="0"/>
+          </div>
+          <div class="saisie-field">
+            <label>Proposition RDV <span class="proj-tag" id="p-propRdv"></span></label>
+            <input class="saisie-input" type="number" id="f-propRdv" placeholder="0"/>
+          </div>
+        </div>
+
+        <!-- Bloc Résultats -->
+        <div class="saisie-bloc">
+          <div class="saisie-bloc-title">Résultats</div>
+
+          <div class="saisie-field">
+            <label>Nbr de Sets <span class="proj-tag" id="p-sets"></span></label>
+            <input class="saisie-input" type="number" id="f-sets" placeholder="0"/>
+          </div>
+          <div class="saisie-field">
+            <label>Prospects présents (show-up) <span class="proj-tag" id="p-presents"></span></label>
+            <input class="saisie-input" type="number" id="f-presents" placeholder="0"/>
+          </div>
+          <div class="saisie-field">
+            <label>Deposits <span class="proj-tag" id="p-deposits"></span></label>
+            <input class="saisie-input" type="number" id="f-deposits" placeholder="0"/>
+          </div>
+          <div class="saisie-field">
+            <label>Closes <span class="proj-tag" id="p-closes"></span></label>
+            <input class="saisie-input" type="number" id="f-closes" placeholder="0"/>
+          </div>
+          <div class="saisie-field">
+            <label>Collecté (€) <span class="proj-tag" id="p-collecte"></span></label>
+            <input class="saisie-input" type="number" id="f-collecte" placeholder="0"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reporting calculé de la semaine -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">Taux calculés — Semaine en cours</span></div>
+        <div id="rates-week"></div>
+      </div>
+    </div>
+
   </div>
 
 </div>
 
 <script>
+/* ─── DONNÉES ─── */
 const MONTHS = DB.months;
-let _cm = (() => { const s=localStorage.getItem('sales_month')||'Février 2026'; const p=s.split(' '); return{month:MONTHS.indexOf(p[0]),year:parseInt(p[1])||2026}; })();
-function currentMonthKey() { return MONTHS[_cm.month]+' '+_cm.year; }
-function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); renderAll(); }
-function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); renderAll(); }
-function _saveMonth() { localStorage.setItem('sales_month',currentMonthKey()); document.getElementById('month-lbl').textContent=currentMonthKey(); document.getElementById('sub-month').textContent=currentMonthKey(); }
+let _cm = (() => {
+  const s = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
+  const p = s.split(' ');
+  return { month: MONTHS.indexOf(p[0]), year: parseInt(p[1]) || 2026 };
+})();
+function cmk() { return MONTHS[_cm.month] + ' ' + _cm.year; }
+function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveM(); renderAll(); }
+function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveM(); renderAll(); }
+function _saveM() { localStorage.setItem('sales_month', cmk()); document.getElementById('month-lbl').textContent = cmk(); }
 
-let currentWeek = 'mois';
+/* ─── COMMERCIAUX ─── */
+const MEMBERS = [
+  {
+    uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke', role: 'Setting + Closing',
+    color: '#ef4444', type: 'setting',
+    // Données par défaut Février 2026
+    data: {
+      'Février 2026': {
+        s1: { tempsAppel:5,   leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, deposits:0, closes:0, collecte:0    },
+        s2: { tempsAppel:7,   leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, deposits:0, closes:2, collecte:1000 },
+        s3: { tempsAppel:3,   leads:178, calls:312, decroches:43, propRdv:24, sets:17, presents:7, deposits:0, closes:0, collecte:0    },
+        s4: { tempsAppel:3,   leads:49,  calls:16,  decroches:23, propRdv:7,  sets:4,  presents:7, deposits:0, closes:1, collecte:600  },
+        s5: { tempsAppel:0,   leads:0,   calls:0,   decroches:0,  propRdv:0,  sets:0,  presents:0, deposits:0, closes:0, collecte:0    },
+      }
+    }
+  },
+  {
+    uid: 'elodie', name: 'Elodie', surname: '', role: 'Closing',
+    color: '#60a5fa', type: 'closing',
+    data: {
+      'Février 2026': {
+        s1: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
+        s2: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
+        s3: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
+        s4: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
+        s5: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
+      }
+    }
+  },
+];
 
-function setWeek(w) {
-  currentWeek = w;
-  document.querySelectorAll('#week-tabs .tab').forEach((t,i) =>
-    t.classList.toggle('active', ['mois','s1','s2','s3','s4'][i] === w));
-  renderAll();
+const PROJECTIONS_S = {
+  tempsAppel: 7, leads: 130, calls: 375, decroches: 45, propRdv: 10,
+  sets: 5, presents: 4, deposits: 0, closes: 4, collecte: 2000,
+};
+
+const FIELDS = [
+  { key:'tempsAppel', label:"Temps d'appel (h)" },
+  { key:'leads',      label:'Total Leads' },
+  { key:'calls',      label:'Calls passés' },
+  { key:'decroches',  label:'Décrochés' },
+  { key:'propRdv',    label:'Proposition RDV' },
+  { key:'sets',       label:'Nbr de Sets' },
+  { key:'presents',   label:'Prospects présents' },
+  { key:'deposits',   label:'Deposits' },
+  { key:'closes',     label:'Closes' },
+  { key:'collecte',   label:'Collecté (€)' },
+];
+
+/* ─── STATE ─── */
+let currentMember = null;
+let currentWeek   = 'mois';
+
+/* ─── LOAD / SAVE depuis localStorage ─── */
+function loadMemberData(uid) {
+  const key = `setting_${uid}_${cmk()}`;
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return null;
 }
 
-function renderAll() {
-  const d = DB.setting[currentWeek] || DB.setting.mois;
-  const isM = currentWeek === 'mois';
+function saveMemberData(uid, weekData) {
+  const key = `setting_${uid}_${cmk()}`;
+  // Merge dans les données existantes
+  const member = MEMBERS.find(m => m.uid === uid);
+  if (!member.data[cmk()]) member.data[cmk()] = emptyMonth();
+  member.data[cmk()][currentWeek] = { ...weekData };
+  try {
+    localStorage.setItem(key, JSON.stringify(member.data[cmk()]));
+  } catch(e) {}
+}
 
-  // KPIs
-  document.getElementById('kpis').innerHTML = [
-    { label:'Calls passés', val:d.calls.a,    sub:`Proj: ${d.calls.p}`,    rawA:d.calls.a,    proj:d.calls.p,    color:'#60a5fa' },
-    { label:'Sets',         val:d.sets.a,     sub:`Proj: ${d.sets.p}`,     rawA:d.sets.a,     proj:d.sets.p,     color:'#a78bfa' },
-    { label:'Show-up',      val:d.presents.a, sub:`Proj: ${d.presents.p}`, rawA:d.presents.a, proj:d.presents.p, color:'#f59e0b' },
-    { label:'Closes',       val:d.closes.a,   sub:`Proj: ${d.closes.p}`,   rawA:d.closes.a,   proj:d.closes.p,   color:'#ef4444' },
-  ].map(U.kpiCard).join('');
+function emptyMonth() {
+  const empty = { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 };
+  return { s1:{...empty}, s2:{...empty}, s3:{...empty}, s4:{...empty}, s5:{...empty} };
+}
 
-  // Funnel
-  document.getElementById('funnel').innerHTML = [
-    U.funnelStep('Leads',           d.leads.a,     d.leads.a,     true),
-    U.funnelStep('Calls passés',    d.calls.a,     d.leads.a),
-    U.funnelStep('Décrochés',       d.decroches.a, d.calls.a),
-    U.funnelStep('Proposition RDV', d.propRdv.a,   d.decroches.a),
-    U.funnelStep('Sets',            d.sets.a,      d.propRdv.a),
-    U.funnelStep('Show-up',         d.presents.a,  d.sets.a),
-    U.funnelStep('Closes',          d.closes.a,    d.presents.a),
-  ].join('');
+/* ─── CALCULS ─── */
+function computeMonthTotals(monthData) {
+  const t = { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 };
+  ['s1','s2','s3','s4','s5'].forEach(w => {
+    const d = monthData[w] || {};
+    Object.keys(t).forEach(k => { t[k] += (d[k] || 0); });
+  });
+  return t;
+}
 
-  // Rates
-  if (isM) {
-    const m = DB.setting.mois;
-    document.getElementById('rates').innerHTML = [
-      { l:'Décrochés %',   a:m.decrochesP.a, p:m.decrochesP.p },
-      { l:'Engagement %',  a:m.engP.a,       p:m.engP.p       },
-      { l:'Set %',         a:m.setP.a,       p:m.setP.p       },
-      { l:'Show-up %',     a:m.showupP.a,    p:m.showupP.p    },
-      { l:'Close Calls %', a:m.cCallP.a,     p:m.cCallP.p     },
-    ].map(r => U.progRow(r.l, r.a, r.p)).join('');
-  } else {
-    document.getElementById('rates').innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted);font-size:12px">Taux disponibles en vue Mois</div>`;
-  }
+function computeRates(d) {
+  return {
+    appelUnique:  d.calls    > 0 ? d.leads    / d.calls    : 0,
+    decrochesPct: d.calls    > 0 ? d.decroches/ d.calls    : 0,
+    engagementPct:d.decroches> 0 ? d.propRdv  / d.decroches: 0,
+    setPct:       d.propRdv  > 0 ? d.sets     / d.propRdv  : 0,
+    showupPct:    d.sets     > 0 ? d.presents / d.sets     : 0,
+    closeCallsPct:d.presents > 0 ? d.closes   / d.presents : 0,
+    collecteBook: d.sets     > 0 ? d.collecte / d.sets     : 0,
+    collecteLive: d.presents > 0 ? d.collecte / d.presents : 0,
+  };
+}
 
-  // Week cards
-  document.getElementById('week-cards').innerHTML = ['s1','s2','s3','s4'].map((w,i) => {
-    const wd = DB.setting[w];
-    return U.weekCard(`Semaine ${i+1}`, wd.calls.a, 'calls', [
-      { val:wd.decroches.a, label:'Décrochés' },
-      { val:wd.sets.a,      label:'Sets'       },
-      { val:wd.presents.a,  label:'Show-up'    },
-      { val:wd.closes.a,    label:'Closes', color:'var(--red2)' },
-    ], currentWeek === w);
+const RATE_DEFS = [
+  { key:'appelUnique',   label:"Appel unique %",      proj:0.347, isEuro:false },
+  { key:'decrochesPct',  label:"Décrochés %",          proj:0.12,  isEuro:false },
+  { key:'engagementPct', label:"Engagement %",         proj:0.222, isEuro:false },
+  { key:'setPct',        label:"Set %",                proj:0.5,   isEuro:false },
+  { key:'showupPct',     label:"Show-Up %",            proj:0.8,   isEuro:false },
+  { key:'closeCallsPct', label:"Close / Calls Book %", proj:null,  isEuro:false },
+  { key:'collecteBook',  label:"Collecté / Call Book", proj:400,   isEuro:true  },
+  { key:'collecteLive',  label:"Collecté / Call Live", proj:500,   isEuro:true  },
+];
+
+/* ─── RENDER LISTE ─── */
+function renderListe() {
+  document.getElementById('members-grid').innerHTML = MEMBERS.map(m => {
+    // Charger données locales
+    const saved = loadMemberData(m.uid);
+    const monthData = saved || (m.data[cmk()] || emptyMonth());
+    const tot = computeMonthTotals(monthData);
+    const rates = computeRates(tot);
+
+    return `
+      <div class="member-card" style="--mc:${m.color}" onclick="openFiche('${m.uid}')">
+        <div class="mc-arrow">→</div>
+        <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
+        <div class="mc-name">${m.name} ${m.surname}</div>
+        <div class="mc-role">${m.role}</div>
+        <div class="mc-stats">
+          <div class="mc-stat">
+            <div class="mc-stat-v" style="color:${m.color}">${tot.calls}</div>
+            <div class="mc-stat-l">Calls</div>
+          </div>
+          <div class="mc-stat">
+            <div class="mc-stat-v" style="color:${m.color}">${tot.sets}</div>
+            <div class="mc-stat-l">Sets</div>
+          </div>
+          <div class="mc-stat">
+            <div class="mc-stat-v" style="color:${m.color}">${tot.closes}</div>
+            <div class="mc-stat-l">Closes</div>
+          </div>
+          <div class="mc-stat">
+            <div class="mc-stat-v" style="color:${m.color}">${tot.presents}</div>
+            <div class="mc-stat-l">Show-up</div>
+          </div>
+          <div class="mc-stat">
+            <div class="mc-stat-v" style="color:${m.color}">${(rates.showupPct*100).toFixed(0)}%</div>
+            <div class="mc-stat-l">Tx Show-up</div>
+          </div>
+          <div class="mc-stat">
+            <div class="mc-stat-v" style="color:${m.color}">${U.euro(tot.collecte)}</div>
+            <div class="mc-stat-l">Collecté</div>
+          </div>
+        </div>
+      </div>`;
   }).join('');
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('month-lbl').textContent = currentMonthKey();
-  document.getElementById('sub-month').textContent = currentMonthKey();
-  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
-  document.getElementById('tb-nm').textContent = nm;
-  document.getElementById('tb-av').textContent = nm[0].toUpperCase();
-  renderAll();
+/* ─── OPEN FICHE ─── */
+function openFiche(uid) {
+  currentMember = MEMBERS.find(m => m.uid === uid);
+  currentWeek = 'mois';
 
-  // Firebase : connecte et écoute les données en temps réel
-  const _fbUser = U.getCurrentUser();
-  if (window.firebase && window.firebase.firestore && !Fire.db) {
-    Fire.init(window.firebase.firestore(), _fbUser.uid);
+  // Load saved data
+  const saved = loadMemberData(uid);
+  if (saved) currentMember.data[cmk()] = saved;
+  else if (!currentMember.data[cmk()]) currentMember.data[cmk()] = emptyMonth();
+
+  // UI
+  document.getElementById('view-liste').style.display = 'none';
+  document.getElementById('view-fiche').style.display = 'block';
+  document.getElementById('fiche-av').textContent  = currentMember.name[0];
+  document.getElementById('fiche-av').style.background = `linear-gradient(135deg,${currentMember.color}88,${currentMember.color})`;
+  document.getElementById('fiche-name').textContent = currentMember.name + (currentMember.surname ? ' ' + currentMember.surname : '');
+  document.getElementById('fiche-role').textContent = currentMember.role + ' · ' + cmk();
+
+  renderFiche();
+}
+
+function backToListe() {
+  document.getElementById('view-liste').style.display = 'block';
+  document.getElementById('view-fiche').style.display = 'none';
+  currentMember = null;
+  renderListe();
+}
+
+/* ─── RENDER FICHE ─── */
+function renderFiche() {
+  // Tabs
+  ['mois','s1','s2','s3','s4','s5'].forEach(w => {
+    document.getElementById('wtab-' + w).classList.toggle('active', w === currentWeek);
+  });
+
+  if (currentWeek === 'mois') {
+    document.getElementById('reporting-mois').style.display = 'block';
+    document.getElementById('saisie-week').style.display    = 'none';
+    renderReportingMois();
+  } else {
+    document.getElementById('reporting-mois').style.display = 'none';
+    document.getElementById('saisie-week').style.display    = 'block';
+    renderSaisieWeek();
   }
-  if (Fire.db) {
-    Fire.watchUser(_fbUser.uid, currentMonthKey(), (data) => {
-      if (data) { Fire.apply(data); renderAll(); }
-    });
+}
+
+/* ─── REPORTING MOIS ─── */
+function renderReportingMois() {
+  const monthData = currentMember.data[cmk()] || emptyMonth();
+  const tot  = computeMonthTotals(monthData);
+  const proj = Object.keys(PROJECTIONS_S).reduce((acc, k) => {
+    acc[k] = PROJECTIONS_S[k] * 4; return acc;
+  }, {});
+  const rates = computeRates(tot);
+  const projRates = computeRates(proj);
+
+  // KPI cards
+  const kpiDefs = [
+    { label:"Temps d'appel (h)",  val:tot.tempsAppel, proj:proj.tempsAppel, color:'#a78bfa' },
+    { label:'Total Leads',         val:tot.leads,      proj:proj.leads,      color:'#60a5fa' },
+    { label:'Calls passés',        val:tot.calls,      proj:proj.calls,      color:'#60a5fa' },
+    { label:'Décrochés',           val:tot.decroches,  proj:proj.decroches,  color:'#f59e0b' },
+    { label:'Proposition RDV',     val:tot.propRdv,    proj:proj.propRdv,    color:'#f59e0b' },
+    { label:'Sets',                val:tot.sets,       proj:proj.sets,       color:'#ef4444' },
+    { label:'Show-up (présents)',  val:tot.presents,   proj:proj.presents,   color:'#ef4444' },
+    { label:'Closes',              val:tot.closes,     proj:proj.closes,     color:'#34d399' },
+  ];
+
+  document.getElementById('reporting-mois').innerHTML = `
+    <!-- KPIs grille -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      ${kpiDefs.map(k => {
+        const pct = k.proj > 0 ? (k.val/k.proj*100) : 0;
+        const col = pct >= 100 ? 'var(--green)' : pct >= 65 ? 'var(--gold)' : 'var(--red2)';
+        const delta = k.val - k.proj;
+        return `<div class="rep-card">
+          <div class="rep-label">${k.label}</div>
+          <div class="rep-value" style="color:${k.color}">${k.val}</div>
+          <div class="rep-sub">/ ${k.proj} projeté</div>
+          <div class="rep-delta ${delta>=0?'good':'bad'}">${delta>=0?'+':''}${delta} · ${pct.toFixed(0)}%</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- Taux calculés -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header"><span class="card-title">Taux de conversion — Mois complet</span></div>
+      <table class="rates-table">
+        <thead><tr>
+          <th>Métrique</th><th>Réel</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th>
+        </tr></thead>
+        <tbody>
+          ${RATE_DEFS.map(r => {
+            const val  = rates[r.key];
+            const proj = r.proj;
+            const pct  = proj ? Math.min(val/proj*100,200) : 0;
+            const col  = pct >= 100 ? '#34d399' : pct >= 65 ? '#f59e0b' : '#ef4444';
+            const display = r.isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
+            const projDisp = proj ? (r.isEuro ? U.euro(proj) : (proj*100).toFixed(1)+'%') : '—';
+            return `<tr>
+              <td style="font-weight:600;font-size:12px">${r.label}</td>
+              <td class="td-mono" style="font-size:13px;font-weight:700;color:${col}">${display}</td>
+              <td class="td-mono" style="color:var(--muted)">${projDisp}</td>
+              <td class="rate-bar-cell">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div class="rate-bar-wrap" style="flex:1">
+                    <div class="rate-bar-fill" style="width:${Math.min(pct,100)}%;background:${col}"></div>
+                  </div>
+                  <span style="font-size:10px;font-family:var(--font-m);color:${col};min-width:34px;text-align:right">${proj?pct.toFixed(0)+'%':'—'}</span>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Breakdown semaines -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Breakdown S1 → S5</span></div>
+      <div style="overflow-x:auto">
+        <table class="data-table" style="width:100%;min-width:680px">
+          <thead><tr>
+            <th>Semaine</th><th>Calls</th><th>Décrochés</th><th>Sets</th><th>Show-up</th><th>Closes</th><th>Collecté</th><th>Décrochés%</th><th>Set%</th>
+          </tr></thead>
+          <tbody>
+            ${['s1','s2','s3','s4','s5'].map((w,i) => {
+              const d = monthData[w] || {};
+              const decPct = d.calls > 0 ? (d.decroches/d.calls*100).toFixed(1)+'%' : '—';
+              const setPct = d.propRdv > 0 ? (d.sets/d.propRdv*100).toFixed(1)+'%' : '—';
+              const hasData = d.calls > 0;
+              return `<tr style="${!hasData?'opacity:0.35':''}">
+                <td style="font-weight:600">S${i+1}
+                  <span style="font-size:10px;color:var(--muted);margin-left:5px;cursor:pointer;text-decoration:underline" onclick="setWeek('${w}')">éditer</span>
+                </td>
+                <td class="td-mono">${d.calls||0}</td>
+                <td class="td-mono">${d.decroches||0}</td>
+                <td class="td-mono" style="color:var(--red3);font-weight:600">${d.sets||0}</td>
+                <td class="td-mono">${d.presents||0}</td>
+                <td class="td-mono" style="color:var(--gold);font-weight:600">${d.closes||0}</td>
+                <td class="td-mono">${U.euro(d.collecte||0)}</td>
+                <td class="td-mono">${decPct}</td>
+                <td class="td-mono">${setPct}</td>
+              </tr>`;
+            }).join('')}
+            <tr style="border-top:1px solid var(--border2);font-weight:700;background:rgba(255,255,255,0.015)">
+              <td><b>Total</b></td>
+              <td class="td-mono"><b>${tot.calls}</b></td>
+              <td class="td-mono"><b>${tot.decroches}</b></td>
+              <td class="td-mono" style="color:var(--red3)"><b>${tot.sets}</b></td>
+              <td class="td-mono"><b>${tot.presents}</b></td>
+              <td class="td-mono" style="color:var(--gold)"><b>${tot.closes}</b></td>
+              <td class="td-mono"><b>${U.euro(tot.collecte)}</b></td>
+              <td class="td-mono">${tot.calls>0?(tot.decroches/tot.calls*100).toFixed(1)+'%':'—'}</td>
+              <td class="td-mono">${tot.propRdv>0?(tot.sets/tot.propRdv*100).toFixed(1)+'%':'—'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+/* ─── SAISIE SEMAINE ─── */
+function renderSaisieWeek() {
+  const monthData = currentMember.data[cmk()] || emptyMonth();
+  const d = monthData[currentWeek] || {};
+  const p = PROJECTIONS_S;
+
+  // Fill form
+  FIELDS.forEach(f => {
+    const input = document.getElementById('f-' + f.key);
+    const projEl = document.getElementById('p-' + f.key);
+    if (!input) return;
+    input.value = d[f.key] || '';
+    // Projection hint
+    if (projEl) projEl.textContent = 'Proj: ' + (f.key === 'collecte' ? U.euro(p[f.key]) : p[f.key]);
+    // Color based on vs projection
+    if (d[f.key] != null && p[f.key] > 0) {
+      const ratio = d[f.key] / p[f.key];
+      input.className = 'saisie-input ' + (ratio >= 1 ? 'above' : d[f.key] > 0 ? 'filled' : '');
+    } else {
+      input.className = 'saisie-input';
+    }
+  });
+
+  // Semaine label
+  const wNum = currentWeek.replace('s','');
+  document.getElementById('week-proj-hint').textContent = `Semaine ${wNum} · ${cmk()}`;
+
+  // Live rates calculation
+  renderRatesWeek(d);
+
+  // Add live update listeners
+  FIELDS.forEach(f => {
+    const input = document.getElementById('f-' + f.key);
+    if (!input) return;
+    input.onchange = input.oninput = () => {
+      const currentVals = readForm();
+      renderRatesWeek(currentVals);
+      // Color feedback
+      const v = parseFloat(input.value) || 0;
+      const proj = PROJECTIONS_S[f.key] || 0;
+      if (proj > 0) {
+        input.className = 'saisie-input ' + (v >= proj ? 'above' : v > 0 ? 'filled' : '');
+      }
+    };
+  });
+}
+
+function readForm() {
+  const vals = {};
+  FIELDS.forEach(f => {
+    const el = document.getElementById('f-' + f.key);
+    vals[f.key] = parseFloat(el?.value) || 0;
+  });
+  return vals;
+}
+
+function renderRatesWeek(d) {
+  const rates = computeRates(d);
+  const p = PROJECTIONS_S;
+
+  document.getElementById('rates-week').innerHTML = `
+    <table class="rates-table">
+      <thead><tr><th>Taux</th><th>Valeur</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th></tr></thead>
+      <tbody>
+        ${RATE_DEFS.map(r => {
+          const val  = rates[r.key];
+          const proj = r.proj;
+          const pct  = proj ? Math.min(val/proj*100,200) : 0;
+          const col  = pct>=100?'#34d399':pct>=65?'#f59e0b':'#ef4444';
+          const vd   = r.isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
+          const pd   = proj ? (r.isEuro ? U.euro(proj) : (proj*100).toFixed(1)+'%') : '—';
+          return `<tr>
+            <td style="font-weight:600;font-size:12px">${r.label}</td>
+            <td class="td-mono" style="color:${col};font-weight:700;font-size:13px">${vd}</td>
+            <td class="td-mono" style="color:var(--muted)">${pd}</td>
+            <td class="rate-bar-cell">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="rate-bar-wrap" style="flex:1">
+                  <div class="rate-bar-fill" style="width:${Math.min(pct,100)}%;background:${col}"></div>
+                </div>
+                <span style="font-size:10px;font-family:var(--font-m);color:${col};min-width:34px;text-align:right">${proj?pct.toFixed(0)+'%':'—'}</span>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+/* ─── SET WEEK ─── */
+function setWeek(w) {
+  currentWeek = w;
+  renderFiche();
+}
+
+/* ─── SAVE ─── */
+async function saveCurrentWeek() {
+  if (!currentMember) return;
+  if (currentWeek === 'mois') { U.toast('ℹ️ Sélectionne une semaine pour saisir des données', 'info'); return; }
+
+  const data = readForm();
+  saveMemberData(currentMember.uid, data);
+
+  const statusEl = document.getElementById('save-status');
+  statusEl.textContent = '⏳ Sauvegarde...';
+
+  try {
+    if (window.Fire && Fire.db) {
+      await Fire.saveSetting(currentMember.uid, cmk(), currentWeek, data);
+    }
+    U.toast('✅ Données sauvegardées !');
+    statusEl.textContent = '✅ Sauvegardé · ' + new Date().toLocaleTimeString('fr-FR');
+    renderFiche(); // refresh les taux
+  } catch(e) {
+    statusEl.textContent = '⚠️ Local seulement';
+    U.toast('⚠️ Firebase indisponible, sauvegarde locale', 'info');
   }
-  // Refresh auto si DB mis à jour (ex: changement depuis saisie)
+}
+
+/* ─── RENDER ALL ─── */
+function renderAll() {
+  if (currentMember) {
+    // Reload from localStorage
+    const saved = loadMemberData(currentMember.uid);
+    if (saved) currentMember.data[cmk()] = saved;
+    renderFiche();
+  } else {
+    renderListe();
+  }
+}
+
+/* ─── INIT ─── */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('month-lbl').textContent = cmk();
+  const nm = (typeof localStorage !== 'undefined' && localStorage.getItem('ambitio_name')) || 'Guillaume';
+  document.getElementById('tb-nm').textContent = nm;
+  document.getElementById('tb-av').textContent  = nm[0].toUpperCase();
+
+  // Charger données sauvegardées dans les membres
+  MEMBERS.forEach(m => {
+    const saved = loadMemberData(m.uid);
+    if (saved) m.data[cmk()] = saved;
+  });
+
+  // Firebase
+  if (window.firebase && window.firebase.firestore && window.Fire && !Fire.db) {
+    const uid = (typeof localStorage !== 'undefined' && localStorage.getItem('ambitio_uid')) || 'guillaume';
+    Fire.init(window.firebase.firestore(), uid);
+  }
+
   document.addEventListener('db:updated', renderAll);
+  renderListe();
 });
 </script>
 
