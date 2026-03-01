@@ -386,6 +386,54 @@
     .dp-plan-textarea:focus { border-color: var(--purple); }
     .dp-plan-save-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
 
+    /* ── SESSION LINKS & NOTES ── */
+    .si-links {
+      display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px;
+    }
+    .si-link-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 11px; border-radius: 8px; font-size: 11px; font-weight: 600;
+      text-decoration: none; transition: all .15s; border: 1.5px solid;
+    }
+    .si-link-pill.visio {
+      background: #eff6ff; color: #2563eb; border-color: #bfdbfe;
+    }
+    .si-link-pill.visio:hover { background: #dbeafe; }
+    .si-link-pill.gdoc {
+      background: #f0fdf4; color: #16a34a; border-color: #bbf7d0;
+    }
+    .si-link-pill.gdoc:hover { background: #dcfce7; }
+    .si-notes {
+      font-size: 12px; line-height: 1.7; color: var(--text);
+      background: #fffbeb; border-radius: 8px; padding: 10px 12px;
+      border-left: 3px solid var(--orange); margin-top: 6px;
+      white-space: pre-wrap;
+    }
+    .si-notes-label { font-size: 10px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+    .si-edit-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 11px; border-radius: 7px; border: 1.5px solid var(--border);
+      background: white; font-family: inherit; font-size: 11px; font-weight: 600;
+      cursor: pointer; color: var(--muted); transition: all .15s; margin-top: 6px;
+    }
+    .si-edit-btn:hover { border-color: var(--blue-main); color: var(--blue-main); }
+    .si-edit-form {
+      background: #f8faff; border-radius: 10px; padding: 12px;
+      margin-top: 8px; border: 1.5px solid #e2e8f0;
+      display: none;
+    }
+    .si-edit-form.show { display: block; }
+    .si-edit-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .si-edit-field label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; display: block; margin-bottom: 3px; }
+    .si-edit-field input, .si-edit-field textarea, .si-edit-field select {
+      width: 100%; padding: 7px 10px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-family: inherit; font-size: 12px; outline: none;
+      background: white; color: var(--text); transition: border-color .15s;
+    }
+    .si-edit-field input:focus, .si-edit-field textarea:focus, .si-edit-field select:focus { border-color: var(--blue-main); }
+    .si-edit-field textarea { resize: vertical; min-height: 70px; }
+    .si-edit-save-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+
     /* ── SESSION PLANIFIÉE ── */
     .session-item.planifie { border-left: 4px solid #e2e8f0; opacity: 0.7; }
     .session-item.planifie:hover { opacity: 1; border-left-color: var(--blue-light); }
@@ -571,6 +619,49 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- EDIT CLIENT MODAL -->
+<div class="modal-overlay" id="editClientModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>✏️ Modifier le client</h3>
+      <button class="modal-close" onclick="closeEditClientModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ec-id"/>
+      <div class="mf-row">
+        <div class="mf"><label>Nom complet *</label><input id="ec-nom" placeholder="Ex: DUPONT Marie"/></div>
+        <div class="mf"><label>Email</label><input id="ec-email" type="email" placeholder="email@exemple.com"/></div>
+      </div>
+      <div class="mf-row">
+        <div class="mf"><label>Téléphone</label><input id="ec-tel" placeholder="06 12 34 56 78"/></div>
+        <div class="mf"><label>Activité professionnelle</label><input id="ec-activite" placeholder="Boulangerie, Coaching..."/></div>
+      </div>
+      <div class="mf-row">
+        <div class="mf">
+          <label>Programme *</label>
+          <select id="ec-programme">
+            <option value="BP 12 Mois - 12C">BP 12 Mois - 12C</option>
+            <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
+            <option value="BP 6 Mois - 6C">BP 6 Mois - 6C</option>
+            <option value="Elite - 12 Mois - 24C">Elite - 12 Mois - 24C</option>
+          </select>
+        </div>
+        <div class="mf"><label>Date d'entrée</label><input id="ec-date" type="date"/></div>
+      </div>
+      <div class="mf-row">
+        <div class="mf" style="grid-column:1/-1">
+          <label>Notes sur le client</label>
+          <textarea id="ec-notes" rows="3" placeholder="Contexte, objectifs, points importants..." style="width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:13px;outline:none;resize:vertical;background:white;color:var(--text)"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeEditClientModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveEditClient()">💾 Sauvegarder les modifications</button>
+    </div>
+  </div>
+</div>
 
 <!-- Firebase -->
 <script type="module">
@@ -987,6 +1078,7 @@ function openDetail(id){
         <div class="dp-info"><div class="dp-info-label">Email</div><div class="dp-info-val">${c.email||'—'}</div></div>
         <div class="dp-info"><div class="dp-info-label">Téléphone</div><div class="dp-info-val">${c.tel||'—'}</div></div>
       </div>
+      ${c.clientNotes?`<div style="margin:10px 0 0;padding:10px 14px;background:#fffbeb;border-radius:10px;border-left:3px solid var(--orange);font-size:12px;line-height:1.7;color:var(--text);white-space:pre-wrap"><span style="font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px">📌 Notes</span>${escHtml(c.clientNotes)}</div>`:''}
     </div>
 
     ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
@@ -1112,6 +1204,9 @@ function openDetail(id){
         const statusCls = isDone ? 'done' : 'planifie';
         const numCls = isDone ? 'done' : (is72h ? 'rdv72h' : 'planifie');
         const numLabel = is72h ? '72H' : '#'+s.numero;
+        const hasLinks = s.visioUrl || s.driveUrl || s.resumeUrl;
+        const hasNotes = s.notes;
+        const hasResume = s.resume || s.driveSummary;
         return `<div class="session-item ${statusCls}" id="sess-${s.numero}">
           <div class="si-header" onclick="toggleSession(this)">
             <div class="si-left">
@@ -1121,6 +1216,8 @@ function openDetail(id){
                 <div class="si-meta">
                   ${s.date?`<span>📅 ${formatDate(s.date)}</span>`:'<span style="color:#94a3b8;font-style:italic">📅 Date à planifier</span>'}
                   ${s.coach?`<span>👤 ${s.coach}</span>`:'<span style="color:#94a3b8;font-style:italic">👤 Coach à assigner</span>'}
+                  ${hasLinks?'<span style="color:var(--blue-main)">🔗 Liens</span>':''}
+                  ${hasNotes?'<span style="color:var(--orange)">📝 Notes</span>':''}
                 </div>
               </div>
             </div>
@@ -1134,24 +1231,64 @@ function openDetail(id){
           </div>
           <div class="si-body">
             ${isDone ? `
-              ${s.resume?`<div class="si-resume">${escHtml(s.resume)}</div>`:''}
-              ${s.driveSummary&&!s.resume?`<div class="si-resume">${escHtml(s.driveSummary)}</div>`:''}
-              ${!s.resume&&!s.driveSummary?'<div style="padding:12px;color:var(--muted);font-size:12px;font-style:italic">Pas de résumé</div>':''}
-              ${s.driveUrl?`<a class="si-drive-link" href="${s.driveUrl}" target="_blank">📄 Voir le résumé complet dans Drive ↗</a>`:''}
+              <!-- LIENS -->
+              ${hasLinks ? `<div class="si-links">
+                ${s.visioUrl?`<a class="si-link-pill visio" href="${s.visioUrl}" target="_blank">🎥 Lien visio ↗</a>`:''}
+                ${(s.driveUrl||s.resumeUrl)?`<a class="si-link-pill gdoc" href="${s.driveUrl||s.resumeUrl}" target="_blank">📄 Résumé Google ↗</a>`:''}
+              </div>` : ''}
+              <!-- RESUME -->
+              ${hasResume?`<div class="si-resume">${escHtml(s.resume||s.driveSummary)}</div>`:''}
+              <!-- DEVOIRS -->
               ${s.devoirs?`<div class="si-devoirs"><b>📝 Devoirs :</b><br>${escHtml(s.devoirs)}</div>`:''}
-            ` : `
-              <div style="padding:8px 0 4px">
-                <div class="nsf-row" style="margin-bottom:8px">
-                  <div class="nsf-field"><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Date</label>
-                    <input type="date" id="qs-date-${s.numero}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;outline:none"/>
+              <!-- NOTES -->
+              ${hasNotes?`<div class="si-notes"><div class="si-notes-label">📌 Notes internes</div>${escHtml(s.notes)}</div>`:''}
+              <!-- EDIT BTN -->
+              <button class="si-edit-btn" onclick="toggleSessionEdit('${id}',${s.numero})">✏️ Modifier cette séance</button>
+              <!-- EDIT FORM -->
+              <div class="si-edit-form" id="sedit-${s.numero}">
+                <div class="si-edit-row">
+                  <div class="si-edit-field"><label>Date</label><input type="date" id="se-date-${s.numero}" value="${s.date||''}"/></div>
+                  <div class="si-edit-field"><label>Coach</label>
+                    <select id="se-coach-${s.numero}">
+                      <option value="">Choisir...</option>
+                      <option ${s.coach==='Mickael'?'selected':''}>Mickael</option>
+                      <option ${s.coach==='Edouard'?'selected':''}>Edouard</option>
+                      <option ${s.coach==='Emily'?'selected':''}>Emily</option>
+                      <option ${s.coach==='Adrien'?'selected':''}>Adrien</option>
+                    </select>
                   </div>
-                  <div class="nsf-field"><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px">Coach</label>
-                    <select id="qs-coach-${s.numero}" style="width:100%;padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;outline:none;background:white">
+                </div>
+                <div class="si-edit-row">
+                  <div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="se-visio-${s.numero}" value="${s.visioUrl||''}" placeholder="https://meet.google.com/..."/></div>
+                  <div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="se-gdoc-${s.numero}" value="${s.driveUrl||s.resumeUrl||''}" placeholder="https://docs.google.com/..."/></div>
+                </div>
+                <div class="si-edit-field" style="margin-bottom:8px"><label>Résumé de séance</label><textarea id="se-resume-${s.numero}">${s.resume||''}</textarea></div>
+                <div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs / Actions</label><textarea id="se-devoirs-${s.numero}" rows="2">${s.devoirs||''}</textarea></div>
+                <div class="si-edit-field" style="margin-bottom:4px"><label>📌 Notes internes</label><textarea id="se-notes-${s.numero}" rows="2" placeholder="Notes confidentielles, observations coach...">${s.notes||''}</textarea></div>
+                <div class="si-edit-save-row">
+                  <button class="si-edit-btn" onclick="toggleSessionEdit('${id}',${s.numero})">Annuler</button>
+                  <button class="btn btn-primary btn-sm" onclick="saveSessionEdit('${id}',${s.numero})">💾 Sauvegarder</button>
+                </div>
+              </div>
+            ` : `
+              <!-- SÉANCE NON FAITE : formulaire rapide -->
+              <div style="padding:8px 0 4px">
+                <div class="si-edit-row" style="margin-bottom:8px">
+                  <div class="si-edit-field"><label>Date</label><input type="date" id="qs-date-${s.numero}"/></div>
+                  <div class="si-edit-field"><label>Coach</label>
+                    <select id="qs-coach-${s.numero}">
                       <option value="">Choisir...</option>
                       <option>Mickael</option><option>Edouard</option><option>Emily</option><option>Adrien</option>
                     </select>
                   </div>
                 </div>
+                <div class="si-edit-row" style="margin-bottom:8px">
+                  <div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="qs-visio-${s.numero}" placeholder="https://meet.google.com/..."/></div>
+                  <div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="qs-gdoc-${s.numero}" placeholder="https://docs.google.com/..."/></div>
+                </div>
+                <div class="si-edit-field" style="margin-bottom:8px"><label>Résumé de séance</label><textarea id="qs-resume-${s.numero}" rows="2" placeholder="Résumé de la séance..."></textarea></div>
+                <div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs / Actions</label><textarea id="qs-devoirs-${s.numero}" rows="2" placeholder="Actions à mener..."></textarea></div>
+                <div class="si-edit-field" style="margin-bottom:8px"><label>📌 Notes internes</label><textarea id="qs-notes-${s.numero}" rows="2" placeholder="Observations, points de vigilance..."></textarea></div>
                 <div style="display:flex;gap:8px;justify-content:flex-end">
                   <button class="btn btn-green btn-xs" onclick="quickMarkDone('${id}',${s.numero})">✅ Valider comme fait</button>
                 </div>
@@ -1315,16 +1452,19 @@ async function quickMarkDone(clientId, sessionNum){
   const s = (c.sessions||[]).find(s=>s.numero===sessionNum);
   if(!s) return;
 
-  const dateEl  = document.getElementById('qs-date-'+sessionNum);
-  const coachEl = document.getElementById('qs-coach-'+sessionNum);
-  const date  = dateEl  ? dateEl.value  : '';
-  const coach = coachEl ? normalizeCoach(coachEl.value) : '';
+  const date  = (document.getElementById('qs-date-'+sessionNum)||{}).value || '';
+  const coach = normalizeCoach(((document.getElementById('qs-coach-'+sessionNum)||{}).value)||'');
 
   if(!date || !coach){ showToast('Remplissez la date et le coach','error'); return; }
 
-  s.date   = date;
-  s.coach  = coach;
-  s.statut = 'fait';
+  s.date      = date;
+  s.coach     = coach;
+  s.statut    = 'fait';
+  s.visioUrl  = ((document.getElementById('qs-visio-'+sessionNum)||{}).value||'').trim();
+  s.driveUrl  = ((document.getElementById('qs-gdoc-'+sessionNum)||{}).value||'').trim();
+  s.resume    = ((document.getElementById('qs-resume-'+sessionNum)||{}).value||'').trim();
+  s.devoirs   = ((document.getElementById('qs-devoirs-'+sessionNum)||{}).value||'').trim();
+  s.notes     = ((document.getElementById('qs-notes-'+sessionNum)||{}).value||'').trim();
 
   const doneSessions = (c.sessions||[]).filter(s=>s.statut==='fait');
   c.nbCoachingsFaits = doneSessions.length;
@@ -1333,7 +1473,7 @@ async function quickMarkDone(clientId, sessionNum){
 
   try{
     await window._setDoc(window._doc(window._db,'clients',clientId),c);
-    showToast('✅ Séance marquée comme faite !','success');
+    showToast('✅ Séance enregistrée !','success');
     applyFilters();
     openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
@@ -1341,6 +1481,42 @@ async function quickMarkDone(clientId, sessionNum){
 
 async function markSessionDone(clientId, sessionNum){
   quickMarkDone(clientId, sessionNum);
+}
+
+// ── TOGGLE SESSION EDIT FORM ──
+function toggleSessionEdit(clientId, sessionNum){
+  const form = document.getElementById('sedit-'+sessionNum);
+  if(!form) return;
+  form.classList.toggle('show');
+}
+
+// ── SAVE SESSION EDIT ──
+async function saveSessionEdit(clientId, sessionNum){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+  const s = (c.sessions||[]).find(s=>s.numero===sessionNum);
+  if(!s) return;
+
+  const get = id => (document.getElementById(id)||{}).value || '';
+  s.date     = get('se-date-'+sessionNum);
+  s.coach    = normalizeCoach(get('se-coach-'+sessionNum));
+  s.visioUrl = get('se-visio-'+sessionNum).trim();
+  s.driveUrl = get('se-gdoc-'+sessionNum).trim();
+  s.resume   = get('se-resume-'+sessionNum).trim();
+  s.devoirs  = get('se-devoirs-'+sessionNum).trim();
+  s.notes    = get('se-notes-'+sessionNum).trim();
+
+  const doneSessions = (c.sessions||[]).filter(s=>s.statut==='fait');
+  c.nbCoachingsFaits = doneSessions.length;
+  const dates = doneSessions.filter(s=>s.date).map(s=>s.date);
+  c.lastSessionDate = dates.length ? dates.sort().pop() : '';
+
+  try{
+    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    showToast('✅ Séance mise à jour !','success');
+    applyFilters();
+    openDetail(clientId);
+  }catch(e){showToast('Erreur: '+e.message,'error');}
 }
 
 // ── DELETE CLIENT ──
@@ -1612,7 +1788,65 @@ window.changeMonth=changeMonth;window.goToday=goToday;
 window.toggleClientStatus=toggleClientStatus;
 window.togglePlanEdit=togglePlanEdit;window.savePlanAction=savePlanAction;
 window.quickMarkDone=quickMarkDone;window.markSessionDone=markSessionDone;
-window.editClient=function(id){openNewClientModal();}; // TODO: pre-fill
+window.toggleSessionEdit=toggleSessionEdit;window.saveSessionEdit=saveSessionEdit;
+
+// ── EDIT CLIENT ──
+function editClient(id){
+  const c = _clients.find(x=>x._id===id);
+  if(!c) return;
+
+  document.getElementById('ec-id').value       = id;
+  document.getElementById('ec-nom').value      = c.nom       || '';
+  document.getElementById('ec-email').value    = c.email     || '';
+  document.getElementById('ec-tel').value      = c.tel       || '';
+  document.getElementById('ec-activite').value = c.activite  || '';
+  document.getElementById('ec-date').value     = c.dateEntree|| '';
+  document.getElementById('ec-notes').value    = c.clientNotes || '';
+
+  const sel = document.getElementById('ec-programme');
+  sel.value = c.programme || 'BP 12 Mois - 12C';
+
+  document.getElementById('editClientModal').classList.add('show');
+}
+
+function closeEditClientModal(){
+  document.getElementById('editClientModal').classList.remove('show');
+}
+
+async function saveEditClient(){
+  const id  = document.getElementById('ec-id').value;
+  const nom = document.getElementById('ec-nom').value.trim();
+  if(!nom){ showToast('Nom requis','error'); return; }
+
+  const c = _clients.find(x=>x._id===id);
+  if(!c) return;
+
+  // Update only info fields — preserve sessions, plan, etc.
+  c.nom          = nom;
+  c.email        = document.getElementById('ec-email').value.trim();
+  c.tel          = document.getElementById('ec-tel').value.trim();
+  c.activite     = document.getElementById('ec-activite').value.trim();
+  c.programme    = document.getElementById('ec-programme').value;
+  c.dateEntree   = document.getElementById('ec-date').value;
+  c.clientNotes  = document.getElementById('ec-notes').value.trim();
+
+  // Update nbCoachingsTotal if programme changed
+  const nbMatch = c.programme.match(/(\d+)C/);
+  if(nbMatch) c.nbCoachingsTotal = parseInt(nbMatch[1]);
+
+  try{
+    await window._setDoc(window._doc(window._db,'clients',id), c);
+    closeEditClientModal();
+    applyFilters();
+    openDetail(id);
+    showToast('✅ Informations mises à jour !','success');
+  }catch(e){ showToast('Erreur: '+e.message,'error'); }
+}
+
+window.editClient=editClient;
+window.closeEditClientModal=closeEditClientModal;
+window.saveEditClient=saveEditClient;
+
 </script>
 
 </body>
