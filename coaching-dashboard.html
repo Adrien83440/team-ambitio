@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>Ambitio — Espace <span>Coaching</span></title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue-dark:#0f1f5c;--blue-main:#1a3dce;--blue-light:#4f7ef8;--blue-ghost:#f0f4ff;
+      --text:#1a1f36;--muted:#6b7280;--border:#e2e8f0;--bg:#f5f7ff;--radius:14px;
+      --green:#10b981;--green-light:#d1fae5;--orange:#f59e0b;--orange-light:#fef3c7;
+      --red:#ef4444;--red-light:#fee2e2;--purple:#6366f1;--purple-light:#eef2ff;--teal:#14b8a6;
+    }
+    body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px}
+
+    /* ── TOPBAR ── */
+    .topbar{background:white;border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 8px rgba(15,31,92,.04)}
+    .topbar-left{display:flex;align-items:center;gap:14px}
+    .topbar-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--blue-dark),var(--blue-main));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white}
+    .topbar-left h1{font-size:18px;font-weight:800}
+    .topbar-left h1 span{color:var(--blue-main)}
+    .topbar-sub{font-size:11px;color:var(--muted)}
+    .topbar-right{display:flex;align-items:center;gap:10px}
+    .btn{padding:8px 16px;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:linear-gradient(135deg,var(--blue-main),var(--blue-light));color:white;box-shadow:0 3px 12px rgba(26,61,206,.25)}
+    .btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+    .btn-outline{background:white;color:var(--text);border:1.5px solid var(--border)}
+    .btn-outline:hover{border-color:var(--blue-main);background:var(--blue-ghost)}
+    .btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
+    .user-badge{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--blue-ghost);border-radius:10px}
+    .user-avatar{width:28px;height:28px;background:linear-gradient(135deg,var(--blue-light),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white}
+    .user-badge-name{font-size:12px;font-weight:600}
+    .user-badge-role{font-size:10px;color:var(--muted)}
+
+    /* ── COACHING NAV TABS ── */
+    .cnav{background:white;border-bottom:2px solid var(--border);padding:0 28px;position:sticky;z-index:40}
+    .cnav-inner{display:flex;align-items:center;gap:0}
+    .cnav-tab{padding:14px 20px;font-family:inherit;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .18s;text-decoration:none;display:flex;align-items:center;gap:7px;white-space:nowrap}
+    .cnav-tab:hover{color:var(--text)}
+    .cnav-tab.active{color:var(--blue-main);border-bottom-color:var(--blue-main)}
+    .cnav-badge{background:var(--red);color:white;font-size:10px;padding:1px 6px;border-radius:99px;font-weight:700;min-width:18px;text-align:center}
+    .cnav-badge.warn{background:var(--orange)}
+
+    /* ── TOAST ── */
+    .toast{position:fixed;bottom:24px;right:24px;background:#1a1f36;color:white;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:9999;transform:translateY(80px);opacity:0;transition:all .3s}
+    .toast.show{transform:translateY(0);opacity:1}
+    .toast.success{background:var(--green)}
+    .toast.error{background:var(--red)}
+
+    /* ── CARDS & LAYOUT UTILS ── */
+    .page-body{padding:24px 28px}
+    .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+    .kpi-card{background:white;border:1.5px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden;transition:box-shadow .15s}
+    .kpi-card:hover{box-shadow:0 4px 20px rgba(26,61,206,.08)}
+    .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0}
+    .kpi-card.blue::before{background:linear-gradient(90deg,var(--blue-main),var(--blue-light))}
+    .kpi-card.green::before{background:linear-gradient(90deg,#10b981,#34d399)}
+    .kpi-card.orange::before{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+    .kpi-card.red::before{background:linear-gradient(90deg,#ef4444,#f87171)}
+    .kpi-card.purple::before{background:linear-gradient(90deg,#6366f1,#818cf8)}
+    .kpi-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+    .kpi-val{font-size:32px;font-weight:800;line-height:1;margin-bottom:4px}
+    .kpi-sub{font-size:11px;color:var(--muted);font-weight:500}
+    .kpi-icon{position:absolute;top:16px;right:16px;font-size:24px;opacity:.15}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+    .grid-wide{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+    .card{background:white;border:1.5px solid var(--border);border-radius:14px;overflow:hidden}
+    .card-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .card-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px}
+    .card-sub{font-size:11px;color:var(--muted)}
+    .card-body{padding:16px 18px}
+
+    @media(max-width:900px){
+      .kpi-row{grid-template-columns:repeat(2,1fr)}
+      .grid-2,.grid-wide{grid-template-columns:1fr}
+      .page-body{padding:16px}
+    }
+
+
+    .alert-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;transition:background .12s}
+    .alert-row:hover{background:var(--bg)}
+    .alert-row.crit{border-left:3px solid var(--red);background:var(--red-light)}
+    .alert-row.warn{border-left:3px solid var(--orange);background:var(--orange-light)}
+    .alert-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .alert-dot.crit{background:var(--red)}
+    .alert-dot.warn{background:var(--orange)}
+    .alert-info{flex:1;min-width:0}
+    .alert-name{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .alert-desc{font-size:11px;color:var(--muted);margin-top:1px}
+    .alert-days{font-size:11px;font-weight:700;flex-shrink:0}
+    .alert-days.crit{color:var(--red)}
+    .alert-days.warn{color:var(--orange)}
+    .coach-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+    .coach-row:last-child{border-bottom:none}
+    .coach-name{font-size:12px;font-weight:700;min-width:100px}
+    .coach-bar-wrap{flex:1;height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden}
+    .coach-bar{height:100%;border-radius:99px}
+    .coach-count{font-size:12px;font-weight:700;color:var(--muted);min-width:70px;text-align:right}
+    .prog-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .prog-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+    .prog-name{font-size:11px;font-weight:600;flex:1}
+    .prog-bar-wrap{width:80px;height:6px;background:#f1f5f9;border-radius:99px;overflow:hidden}
+    .prog-bar{height:100%;border-radius:99px}
+    .prog-num{font-size:12px;font-weight:700;min-width:24px;text-align:right}
+    .ring-wrap{display:flex;align-items:center;justify-content:center;gap:20px;padding:8px 0}
+    .ring-svg{width:80px;height:80px;transform:rotate(-90deg)}
+    .ring-track{fill:none;stroke:#f1f5f9;stroke-width:8}
+    .ring-fill{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset .8s ease}
+    .ring-info{text-align:center}
+    .ring-pct{font-size:26px;font-weight:800;line-height:1}
+    .ring-label{font-size:11px;color:var(--muted);margin-top:2px}
+    .inactive-row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:10px;cursor:pointer;transition:background .12s;border:1px solid transparent}
+    .inactive-row:hover{background:var(--bg);border-color:var(--border)}
+    .inactive-name{font-size:12px;font-weight:700}
+    .inactive-meta{font-size:11px;color:var(--muted);margin-top:1px}
+    .inactive-badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap}
+    .inactive-badge.c1{background:#fff7ed;color:#c2410c}
+    .inactive-badge.c2{background:#fef2f2;color:var(--red)}
+    .inactive-badge.c3{background:#4f0707;color:#fca5a5}
+
+  </style>
+  <script>
+    (function(){
+      const role = localStorage.getItem('ambitio_role');
+      if(role && role === 'sales') window.location.href = 'sales.html';
+    })();
+  </script>
+  <script src="nav.js"></script>
+  
+</head>
+<body>
+
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">A</div>
+    <div>
+      <h1>Espace <span>Coaching</span></h1>
+      <div class="topbar-sub">Espace Coaching — Espace <span>Coaching</span></div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    
+    <div class="user-badge">
+      <div class="user-avatar" id="uAvatar">A</div>
+      <div>
+        <div class="user-badge-name" id="uName">—</div>
+        <div class="user-badge-role" id="uRole">Admin</div>
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="handleLogout()" title="Déconnexion">🚪</button>
+  </div>
+</div>
+<div class="cnav"><div class="cnav-inner"><a class="cnav-tab" href="coaching.html">👥 Clients</a>
+<a class="cnav-tab active" href="coaching-dashboard.html">📊 Dashboard</a>
+<a class="cnav-tab" href="coaching-analyse.html">📈 Analyse</a>
+<a class="cnav-tab" href="coaching-agenda.html">📅 Agenda<span class="cnav-badge warn" id="badge-agenda" style="display:none">0</span></a>
+</div></div>
+
+
+<div class="page-body" id="page-content">
+  <div style="padding:60px;text-align:center;color:var(--muted)">⏳ Chargement des données…</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+
+<script type="module">
+  import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  const app=initializeApp({
+    apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+    authDomain:"ambitio-team.firebaseapp.com",
+    projectId:"ambitio-team",
+    storageBucket:"ambitio-team.firebasestorage.app",
+    messagingSenderId:"1079366902268",
+    appId:"1:1079366902268:web:b4ec1691dba54230339279"
+  });
+  const auth=getAuth(app),db=getFirestore(app);
+  window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
+  window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
+  window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._signOut=signOut;
+
+  onAuthStateChanged(auth,async user=>{
+    if(!user){window.location.href='index.html';return;}
+    window._uid=user.uid;
+    const uSnap=await getDoc(doc(db,'users',user.uid));
+    const uData=uSnap.exists()?uSnap.data():{};
+    const role=uData.role||'admin';
+    if(role==='sales'){window.location.href='sales.html';return;}
+    window._role=role;
+    window._userName=user.displayName||user.email.split('@')[0];
+    const el=id=>document.getElementById(id);
+    if(el('uName'))  el('uName').textContent=window._userName;
+    if(el('uAvatar'))el('uAvatar').textContent=window._userName.charAt(0).toUpperCase();
+    if(el('uRole'))  el('uRole').textContent=role==='admin'?'Administrateur':role==='coach'?'Coach':'Sales';
+    window._firebaseReady=true;
+    if(window.onFirebaseReady) window.onFirebaseReady();
+  });
+</script>
+<script src="coaching-shared.js"></script>
+<script>
+async function handleLogout(){await window._signOut(window._auth);window.location.href='index.html';}
+
+window.onFirebaseReady = function() {
+  window.loadCoachingClients(function(clients) {
+    window._clients = clients;
+    onClientsLoaded(clients);
+  });
+};
+
+
+function onClientsLoaded(clients) {
+  const now = new Date();
+  const curY = now.getFullYear(), curM = now.getMonth();
+
+  const total    = clients.length;
+  const actifs   = clients.filter(c => (c.nbCoachingsFaits||0) < (c.nbCoachingsTotal||12));
+  const termines = clients.filter(c => (c.nbCoachingsFaits||0) >= (c.nbCoachingsTotal||12));
+  const enRetard = actifs.filter(c => getAlertStatus(c) === 'alert');
+  const enAttente = actifs.filter(c => getAlertStatus(c) === 'warning');
+
+  const sessionsCeMois = clients.reduce((acc, c) => acc + getSessionsInMonth(c, curY, curM).length, 0);
+  const avgSessions = actifs.length
+    ? (clients.reduce((a,c) => a + (c.nbCoachingsFaits||0), 0) / actifs.length).toFixed(1)
+    : 0;
+
+  // Workload coachs
+  const coachLoad = {};
+  clients.forEach(c => {
+    if ((c.nbCoachingsFaits||0) >= (c.nbCoachingsTotal||12)) return;
+    (c.sessions||[]).filter(s => s.coach && s.statut==='fait').forEach(s => {
+      coachLoad[s.coach] = (coachLoad[s.coach]||0)+1;
+    });
+  });
+  const maxLoad = Math.max(...Object.values(coachLoad), 1);
+  const coachColors = ['#3b82f6','#10b981','#f59e0b','#6366f1','#ef4444','#14b8a6'];
+
+  // Alertes
+  const alertClients = actifs
+    .map(c => {
+      const days = c.lastSessionDate
+        ? Math.floor((Date.now()-new Date(c.lastSessionDate).getTime())/86400000)
+        : 999;
+      return {...c, daysSince: days};
+    })
+    .filter(c => c.daysSince > 14)
+    .sort((a,b) => b.daysSince-a.daysSince)
+    .slice(0,8);
+
+  // Répartition programmes
+  const progCount = {};
+  clients.forEach(c => { const p = c.programme||'Autre'; progCount[p]=(progCount[p]||0)+1; });
+  const progColors = {'BP 12 Mois - 12C':'#3b82f6','BP 12 Mois - 24C':'#10b981','BP 6 Mois - 6C':'#f59e0b','Elite - 12 Mois - 24C':'#6366f1'};
+
+  // Heatmap 6 mois
+  const heatData = [];
+  for (let i=5; i>=0; i--) {
+    const d = new Date(curY, curM-i, 1);
+    heatData.push({
+      label: d.toLocaleDateString('fr-FR',{month:'short'}),
+      count: clients.reduce((acc,c) => acc + getSessionsInMonth(c,d.getFullYear(),d.getMonth()).length, 0)
+    });
+  }
+  const maxHeat = Math.max(...heatData.map(h=>h.count), 1);
+
+  // Complétion
+  const totalPlanned = clients.reduce((a,c) => a+(c.nbCoachingsTotal||12), 0);
+  const totalDone    = clients.reduce((a,c) => a+(c.nbCoachingsFaits||0), 0);
+  const completionPct = totalPlanned ? Math.round(totalDone/totalPlanned*100) : 0;
+  const ringR = 32, ringCirc = Math.PI*2*ringR;
+
+  // Inactifs 30j+
+  const inactifs30 = actifs
+    .map(c => ({...c, days: c.lastSessionDate ? Math.floor((Date.now()-new Date(c.lastSessionDate).getTime())/86400000) : 999}))
+    .filter(c => c.days >= 30)
+    .sort((a,b) => b.days-a.days)
+    .slice(0,6);
+
+  document.getElementById('page-content').innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi-card blue">
+        <div class="kpi-icon">👥</div>
+        <div class="kpi-label">Clients actifs</div>
+        <div class="kpi-val" style="color:var(--blue-main)">${actifs.length}</div>
+        <div class="kpi-sub">${total} au total · ${termines.length} terminé${termines.length>1?'s':''}</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-icon">✅</div>
+        <div class="kpi-label">Séances ce mois</div>
+        <div class="kpi-val" style="color:var(--green)">${sessionsCeMois}</div>
+        <div class="kpi-sub">Moy. ${avgSessions} séances/client</div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-icon">⚠️</div>
+        <div class="kpi-label">Clients en retard</div>
+        <div class="kpi-val" style="color:var(--orange)">${enRetard.length}</div>
+        <div class="kpi-sub">${enAttente.length} en zone d'alerte</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-label">Complétion globale</div>
+        <div class="kpi-val" style="color:var(--blue-main)">${completionPct}%</div>
+        <div class="kpi-sub">${totalDone} / ${totalPlanned} séances</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">🔴 Clients à relancer</div>
+          <div class="card-sub">${alertClients.length} nécessitent une action</div>
+        </div>
+        <div class="card-body">
+          ${alertClients.length===0
+            ? '<div style="padding:20px;text-align:center;color:var(--muted)">🎉 Tous les clients sont à jour !</div>'
+            : alertClients.map(c => `
+            <a class="alert-row ${c.daysSince>21?'crit':'warn'}" href="coaching.html" onclick="event.preventDefault();window.location='coaching.html'">
+              <div class="alert-dot ${c.daysSince>21?'crit':'warn'}"></div>
+              <div class="alert-info">
+                <div class="alert-name">${c.nom}</div>
+                <div class="alert-desc">${c.programme||'—'} · ${c.lastSessionDate?'Dernier : '+formatDate(c.lastSessionDate):'Jamais eu de séance'}</div>
+              </div>
+              <div class="alert-days ${c.daysSince>21?'crit':'warn'}">${c.daysSince>=999?'∞':c.daysSince+'j'}</div>
+            </a>`).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">👤 Charge par coach</div>
+          <div class="card-sub">Séances réalisées (actifs)</div>
+        </div>
+        <div class="card-body">
+          ${Object.keys(coachLoad).length===0
+            ? '<div style="padding:20px;text-align:center;color:var(--muted)">Aucune donnée</div>'
+            : Object.entries(coachLoad).sort((a,b)=>b[1]-a[1]).map(([coach,count],i) => `
+            <div class="coach-row">
+              <div class="coach-name">${coach}</div>
+              <div class="coach-bar-wrap"><div class="coach-bar" style="width:${Math.round(count/maxLoad*100)}%;background:${coachColors[i%6]}"></div></div>
+              <div class="coach-count">${count} séances</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">📅 Activité mensuelle (6 mois)</div>
+        </div>
+        <div class="card-body">
+          <div style="display:flex;align-items:flex-end;gap:8px;height:90px;margin-bottom:8px">
+            ${heatData.map(h => {
+              const pct = Math.round(h.count/maxHeat*100);
+              const col = pct===0?'#f1f5f9':pct<30?'#bfdbfe':pct<60?'#60a5fa':pct<85?'#2563eb':'#1d4ed8';
+              return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div style="font-size:12px;font-weight:700">${h.count||''}</div>
+                <div style="width:100%;height:${Math.max(pct*.7,h.count>0?8:4)}px;background:${col};border-radius:4px 4px 0 0"></div>
+                <div style="font-size:10px;color:var(--muted);font-weight:600">${h.label}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">📋 Répartition & progression</div>
+        </div>
+        <div class="card-body">
+          <div class="ring-wrap" style="margin-bottom:12px">
+            <svg class="ring-svg" viewBox="0 0 80 80">
+              <circle class="ring-track" cx="40" cy="40" r="${ringR}"/>
+              <circle class="ring-fill" cx="40" cy="40" r="${ringR}" stroke="#3b82f6"
+                stroke-dasharray="${ringCirc:.2f}"
+                stroke-dashoffset="${ringCirc-(completionPct/100*ringCirc):.2f}"/>
+            </svg>
+            <div class="ring-info">
+              <div class="ring-pct" style="color:var(--blue-main)">${completionPct}%</div>
+              <div class="ring-label">Progression<br>globale</div>
+            </div>
+            <div style="flex:1">
+              ${Object.entries(progCount).map(([prog,count])=>`
+              <div class="prog-row">
+                <div class="prog-dot" style="background:${progColors[prog]||'#94a3b8'}"></div>
+                <div class="prog-name" style="font-size:11px">${prog.replace('Mois','M').replace(' - ','-')}</div>
+                <div class="prog-bar-wrap"><div class="prog-bar" style="width:${Math.round(count/total*100)}%;background:${progColors[prog]||'#94a3b8'}"></div></div>
+                <div class="prog-num">${count}</div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    ${inactifs30.length>0?`
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">💤 Sans coaching depuis 30+ jours</div>
+        <div class="card-sub">${inactifs30.length} client${inactifs30.length>1?'s':''} identifié${inactifs30.length>1?'s':''}</div>
+      </div>
+      <div class="card-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${inactifs30.map(c=>`
+        <div class="inactive-row">
+          <div>
+            <div class="inactive-name">${c.nom}</div>
+            <div class="inactive-meta">${c.programme||'—'}</div>
+          </div>
+          <span class="inactive-badge ${c.days>60?'c3':c.days>45?'c2':'c1'}">${c.days>=999?'Jamais':c.days+'j'}</span>
+        </div>`).join('')}
+      </div>
+    </div>`:''}
+  `;
+}
+
+</script>
+</body>
+</html>

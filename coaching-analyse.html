@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>Ambitio — Espace <span>Coaching</span></title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --blue-dark:#0f1f5c;--blue-main:#1a3dce;--blue-light:#4f7ef8;--blue-ghost:#f0f4ff;
+      --text:#1a1f36;--muted:#6b7280;--border:#e2e8f0;--bg:#f5f7ff;--radius:14px;
+      --green:#10b981;--green-light:#d1fae5;--orange:#f59e0b;--orange-light:#fef3c7;
+      --red:#ef4444;--red-light:#fee2e2;--purple:#6366f1;--purple-light:#eef2ff;--teal:#14b8a6;
+    }
+    body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:13px}
+
+    /* ── TOPBAR ── */
+    .topbar{background:white;border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 8px rgba(15,31,92,.04)}
+    .topbar-left{display:flex;align-items:center;gap:14px}
+    .topbar-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--blue-dark),var(--blue-main));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:white}
+    .topbar-left h1{font-size:18px;font-weight:800}
+    .topbar-left h1 span{color:var(--blue-main)}
+    .topbar-sub{font-size:11px;color:var(--muted)}
+    .topbar-right{display:flex;align-items:center;gap:10px}
+    .btn{padding:8px 16px;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;gap:6px}
+    .btn-primary{background:linear-gradient(135deg,var(--blue-main),var(--blue-light));color:white;box-shadow:0 3px 12px rgba(26,61,206,.25)}
+    .btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+    .btn-outline{background:white;color:var(--text);border:1.5px solid var(--border)}
+    .btn-outline:hover{border-color:var(--blue-main);background:var(--blue-ghost)}
+    .btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
+    .user-badge{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--blue-ghost);border-radius:10px}
+    .user-avatar{width:28px;height:28px;background:linear-gradient(135deg,var(--blue-light),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white}
+    .user-badge-name{font-size:12px;font-weight:600}
+    .user-badge-role{font-size:10px;color:var(--muted)}
+
+    /* ── COACHING NAV TABS ── */
+    .cnav{background:white;border-bottom:2px solid var(--border);padding:0 28px;position:sticky;z-index:40}
+    .cnav-inner{display:flex;align-items:center;gap:0}
+    .cnav-tab{padding:14px 20px;font-family:inherit;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .18s;text-decoration:none;display:flex;align-items:center;gap:7px;white-space:nowrap}
+    .cnav-tab:hover{color:var(--text)}
+    .cnav-tab.active{color:var(--blue-main);border-bottom-color:var(--blue-main)}
+    .cnav-badge{background:var(--red);color:white;font-size:10px;padding:1px 6px;border-radius:99px;font-weight:700;min-width:18px;text-align:center}
+    .cnav-badge.warn{background:var(--orange)}
+
+    /* ── TOAST ── */
+    .toast{position:fixed;bottom:24px;right:24px;background:#1a1f36;color:white;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:9999;transform:translateY(80px);opacity:0;transition:all .3s}
+    .toast.show{transform:translateY(0);opacity:1}
+    .toast.success{background:var(--green)}
+    .toast.error{background:var(--red)}
+
+    /* ── CARDS & LAYOUT UTILS ── */
+    .page-body{padding:24px 28px}
+    .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+    .kpi-card{background:white;border:1.5px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden;transition:box-shadow .15s}
+    .kpi-card:hover{box-shadow:0 4px 20px rgba(26,61,206,.08)}
+    .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:14px 14px 0 0}
+    .kpi-card.blue::before{background:linear-gradient(90deg,var(--blue-main),var(--blue-light))}
+    .kpi-card.green::before{background:linear-gradient(90deg,#10b981,#34d399)}
+    .kpi-card.orange::before{background:linear-gradient(90deg,#f59e0b,#fbbf24)}
+    .kpi-card.red::before{background:linear-gradient(90deg,#ef4444,#f87171)}
+    .kpi-card.purple::before{background:linear-gradient(90deg,#6366f1,#818cf8)}
+    .kpi-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+    .kpi-val{font-size:32px;font-weight:800;line-height:1;margin-bottom:4px}
+    .kpi-sub{font-size:11px;color:var(--muted);font-weight:500}
+    .kpi-icon{position:absolute;top:16px;right:16px;font-size:24px;opacity:.15}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+    .grid-wide{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+    .card{background:white;border:1.5px solid var(--border);border-radius:14px;overflow:hidden}
+    .card-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .card-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px}
+    .card-sub{font-size:11px;color:var(--muted)}
+    .card-body{padding:16px 18px}
+
+    @media(max-width:900px){
+      .kpi-row{grid-template-columns:repeat(2,1fr)}
+      .grid-2,.grid-wide{grid-template-columns:1fr}
+      .page-body{padding:16px}
+    }
+
+
+    .metric-card{background:white;border:1.5px solid var(--border);border-radius:14px;padding:18px 20px}
+    .metric-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+    .metric-big{font-size:36px;font-weight:800;margin-bottom:2px}
+    .metric-context{font-size:11px;color:var(--muted)}
+    .metric-bar-label{display:flex;justify-content:space-between;font-size:11px;margin:8px 0 4px}
+    .metric-bar{height:8px;background:#f1f5f9;border-radius:99px;overflow:hidden}
+    .metric-bar-fill{height:100%;border-radius:99px}
+    .sparkline-list{display:flex;flex-direction:column;gap:10px}
+    .sparkline-row{display:flex;align-items:center;gap:10px}
+    .sparkline-name{font-size:12px;font-weight:600;min-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sparkline-bars{display:flex;gap:2px;align-items:flex-end;height:28px;flex:1}
+    .sparkline-bar{flex:1;min-height:3px;border-radius:2px 2px 0 0}
+    .sparkline-total{font-size:12px;font-weight:700;min-width:32px;text-align:right}
+    .segment-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)}
+    .segment-row:last-child{border-bottom:none}
+    .segment-name{font-size:12px;font-weight:700;min-width:80px;display:flex;align-items:center;gap:6px}
+    .segment-bar-outer{flex:1;height:10px;background:#f1f5f9;border-radius:99px;overflow:hidden}
+    .segment-bar-inner{height:100%;border-radius:99px;transition:width .5s ease}
+    .segment-count{font-size:12px;font-weight:700;min-width:32px;text-align:right}
+    .segment-pct{font-size:11px;color:var(--muted);min-width:36px;text-align:right}
+
+  </style>
+  <script>
+    (function(){
+      const role = localStorage.getItem('ambitio_role');
+      if(role && role === 'sales') window.location.href = 'sales.html';
+    })();
+  </script>
+  <script src="nav.js"></script>
+  
+</head>
+<body>
+
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">A</div>
+    <div>
+      <h1>Espace <span>Coaching</span></h1>
+      <div class="topbar-sub">Espace Coaching — Espace <span>Coaching</span></div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    
+    <div class="user-badge">
+      <div class="user-avatar" id="uAvatar">A</div>
+      <div>
+        <div class="user-badge-name" id="uName">—</div>
+        <div class="user-badge-role" id="uRole">Admin</div>
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="handleLogout()" title="Déconnexion">🚪</button>
+  </div>
+</div>
+<div class="cnav"><div class="cnav-inner"><a class="cnav-tab" href="coaching.html">👥 Clients</a>
+<a class="cnav-tab" href="coaching-dashboard.html">📊 Dashboard</a>
+<a class="cnav-tab active" href="coaching-analyse.html">📈 Analyse</a>
+<a class="cnav-tab" href="coaching-agenda.html">📅 Agenda<span class="cnav-badge warn" id="badge-agenda" style="display:none">0</span></a>
+</div></div>
+
+
+<div class="page-body" id="page-content">
+  <div style="padding:60px;text-align:center;color:var(--muted)">⏳ Chargement des données…</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+
+<script type="module">
+  import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  const app=initializeApp({
+    apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+    authDomain:"ambitio-team.firebaseapp.com",
+    projectId:"ambitio-team",
+    storageBucket:"ambitio-team.firebasestorage.app",
+    messagingSenderId:"1079366902268",
+    appId:"1:1079366902268:web:b4ec1691dba54230339279"
+  });
+  const auth=getAuth(app),db=getFirestore(app);
+  window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
+  window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
+  window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._signOut=signOut;
+
+  onAuthStateChanged(auth,async user=>{
+    if(!user){window.location.href='index.html';return;}
+    window._uid=user.uid;
+    const uSnap=await getDoc(doc(db,'users',user.uid));
+    const uData=uSnap.exists()?uSnap.data():{};
+    const role=uData.role||'admin';
+    if(role==='sales'){window.location.href='sales.html';return;}
+    window._role=role;
+    window._userName=user.displayName||user.email.split('@')[0];
+    const el=id=>document.getElementById(id);
+    if(el('uName'))  el('uName').textContent=window._userName;
+    if(el('uAvatar'))el('uAvatar').textContent=window._userName.charAt(0).toUpperCase();
+    if(el('uRole'))  el('uRole').textContent=role==='admin'?'Administrateur':role==='coach'?'Coach':'Sales';
+    window._firebaseReady=true;
+    if(window.onFirebaseReady) window.onFirebaseReady();
+  });
+</script>
+<script src="coaching-shared.js"></script>
+<script>
+async function handleLogout(){await window._signOut(window._auth);window.location.href='index.html';}
+
+window.onFirebaseReady = function() {
+  window.loadCoachingClients(function(clients) {
+    window._clients = clients;
+    onClientsLoaded(clients);
+  });
+};
+
+
+function onClientsLoaded(clients) {
+  const now = new Date();
+  const curY = now.getFullYear(), curM = now.getMonth();
+
+  const actifs = clients.filter(c => (c.nbCoachingsFaits||0) < (c.nbCoachingsTotal||12));
+
+  // Progression moyenne
+  const progMoyenne = clients.length
+    ? Math.round(clients.reduce((a,c) => {
+        const done=c.nbCoachingsFaits||0, total=c.nbCoachingsTotal||12;
+        return a + (total>0 ? done/total : 0);
+      }, 0) / clients.length * 100)
+    : 0;
+
+  // Fréquence entre séances
+  let totalIntervals=0, countIntervals=0;
+  clients.forEach(c => {
+    const dates=(c.sessions||[]).filter(s=>s.statut==='fait'&&s.date)
+      .map(s=>new Date(s.date).getTime()).sort((a,b)=>a-b);
+    for(let i=1;i<dates.length;i++){totalIntervals+=Math.floor((dates[i]-dates[i-1])/86400000);countIntervals++;}
+  });
+  const avgInterval = countIntervals ? Math.round(totalIntervals/countIntervals) : 0;
+
+  // Quotas mois courant
+  const quotaOk      = actifs.filter(c=>getQuotaStatus(c,curY,curM).status==='ok').length;
+  const quotaPartial = actifs.filter(c=>getQuotaStatus(c,curY,curM).status==='partial').length;
+  const quotaEmpty   = actifs.filter(c=>getQuotaStatus(c,curY,curM).status==='empty').length;
+  const quotaDone    = clients.filter(c=>getQuotaStatus(c,curY,curM).status==='done').length;
+
+  // Sparklines clients
+  const clientActivity = clients.map(c => {
+    const monthly=[];
+    for(let i=5;i>=0;i--){const d=new Date(curY,curM-i,1);monthly.push(getSessionsInMonth(c,d.getFullYear(),d.getMonth()).length);}
+    return {name:c.nom, monthly, total:c.nbCoachingsFaits||0};
+  }).sort((a,b)=>b.total-a.total).slice(0,10);
+  const maxAct = Math.max(...clientActivity.flatMap(c=>c.monthly),1);
+
+  // Distribution avancement
+  const tranches = [
+    {label:'0–25%',  min:0,  max:25,  color:'#ef4444'},
+    {label:'26–50%', min:26, max:50,  color:'#f59e0b'},
+    {label:'51–75%', min:51, max:75,  color:'#3b82f6'},
+    {label:'76–99%', min:76, max:99,  color:'#10b981'},
+    {label:'100%',   min:100,max:100, color:'#6366f1'},
+  ];
+  const trancheCount = tranches.map(t=>({
+    ...t,
+    count: clients.filter(c=>{
+      const pct=Math.round((c.nbCoachingsFaits||0)/(c.nbCoachingsTotal||12)*100);
+      return pct>=t.min && pct<=t.max;
+    }).length
+  }));
+  const maxTranche = Math.max(...trancheCount.map(t=>t.count),1);
+
+  // Entrées cette année
+  const entresAnnee = clients.filter(c=>c.dateEntree && new Date(c.dateEntree).getFullYear()===curY).length;
+
+  const moisLabel = new Date(curY,curM).toLocaleDateString('fr-FR',{month:'long'});
+
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:22px">
+      <div class="metric-card">
+        <div class="metric-title">📈 Progression moyenne</div>
+        <div class="metric-big" style="color:var(--blue-main)">${progMoyenne}%</div>
+        <div class="metric-context">Sur tous les programmes actifs</div>
+        <div class="metric-bar-label"><span>Avancement global</span><span>${progMoyenne}%</span></div>
+        <div class="metric-bar"><div class="metric-bar-fill" style="width:${progMoyenne}%;background:var(--blue-main)"></div></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">🔄 Fréquence moyenne</div>
+        <div class="metric-big" style="color:${avgInterval>21?'var(--red)':avgInterval>14?'var(--orange)':'var(--green)'}">
+          ${avgInterval>0?avgInterval+'j':'—'}
+        </div>
+        <div class="metric-context">Entre deux séances</div>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+          ${avgInterval===0?'Pas assez de données':
+            avgInterval<=10?'✅ Cadence excellente (<10j)':
+            avgInterval<=14?'✅ Cadence bonne (<14j)':
+            avgInterval<=21?'🟡 Cadence correcte (<21j)':
+            '🔴 Cadence trop lente ('+avgInterval+'j moy.)'}
+        </div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">📅 Quota ${moisLabel}</div>
+        <div class="metric-big" style="color:var(--green)">${quotaOk}</div>
+        <div class="metric-context">Clients avec quota atteint</div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+          ${[
+            {label:'✅ Atteint',count:quotaOk,color:'var(--green)'},
+            {label:'🟡 Partiel',count:quotaPartial,color:'var(--orange)'},
+            {label:'❌ Aucune séance',count:quotaEmpty,color:'var(--red)'},
+            {label:'✔️ Programme terminé',count:quotaDone,color:'var(--muted)'},
+          ].map(r=>`<div style="display:flex;justify-content:space-between;font-size:11px">
+            <span style="color:${r.color};font-weight:600">${r.label}</span>
+            <span style="font-weight:700">${r.count}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">📊 Activité par client (6 mois)</div>
+          <div class="card-sub">Top ${clientActivity.length} par séances</div>
+        </div>
+        <div class="card-body">
+          <div style="display:flex;gap:10px;margin-bottom:10px">
+            ${Array.from({length:6},(_,i)=>{const d=new Date(curY,curM-5+i,1);return `<div style="flex:1;text-align:center;font-size:9px;color:var(--muted);font-weight:700">${d.toLocaleDateString('fr-FR',{month:'short'})}</div>`;}).join('')}
+          </div>
+          <div class="sparkline-list">
+            ${clientActivity.map(c=>`
+            <div class="sparkline-row">
+              <div class="sparkline-name" title="${c.name}">${c.name}</div>
+              <div class="sparkline-bars">
+                ${c.monthly.map(v=>`<div class="sparkline-bar" style="height:${v?Math.max(v/maxAct*26,4):3}px;background:${v?'#3b82f6':'#f1f5f9'}"></div>`).join('')}
+              </div>
+              <div class="sparkline-total">${c.total}</div>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">📉 Distribution par avancement</div>
+        </div>
+        <div class="card-body" style="padding-top:16px">
+          ${trancheCount.map(t=>`
+          <div class="segment-row">
+            <div class="segment-name"><span style="width:8px;height:8px;border-radius:2px;background:${t.color};display:inline-block"></span>${t.label}</div>
+            <div class="segment-bar-outer"><div class="segment-bar-inner" style="width:${Math.round(t.count/maxTranche*100)}%;background:${t.color}"></div></div>
+            <div class="segment-count">${t.count}</div>
+            <div class="segment-pct">${Math.round(t.count/Math.max(clients.length,1)*100)}%</div>
+          </div>`).join('')}
+          <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Nouvelles entrées ${curY}</div>
+            <div style="font-size:28px;font-weight:800;color:var(--blue-main)">${entresAnnee}</div>
+            <div style="font-size:11px;color:var(--muted)">clients enregistrés cette année</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+</script>
+</body>
+</html>
