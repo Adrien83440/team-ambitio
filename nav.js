@@ -21,7 +21,7 @@
       { id: 'equipe',      icon: '👥', label: 'Équipe',            href: 'sales-equipe.html' },
       { id: 'commissions', icon: '💰', label: 'Commissions',       href: 'sales-commissions.html' },
       { id: 'projections', icon: '📈', label: 'Projections',       href: 'sales-projections.html' },
-      { id: 'saisie',      icon: '✏️', label: 'Saisie des données', href: 'sales-saisie.html' },
+
     ],
 
     admin: [
@@ -34,7 +34,7 @@
       { id: 'sales-equipe',      icon: '👥', label: 'Équipe',      href: 'sales-equipe.html',      section: 'Sales' },
       { id: 'sales-commissions', icon: '💰', label: 'Commissions', href: 'sales-commissions.html', section: 'Sales' },
       { id: 'sales-projections', icon: '📈', label: 'Projections', href: 'sales-projections.html', section: 'Sales' },
-      { id: 'sales-saisie',      icon: '✏️', label: 'Saisie',      href: 'sales-saisie.html',      section: 'Sales' },
+
       { id: 'import', icon: '🔗', label: 'Import Notion', href: 'import-notion.html', section: 'Outils' },
     ],
   };
