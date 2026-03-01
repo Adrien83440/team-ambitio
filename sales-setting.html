@@ -588,6 +588,116 @@ window.getMonthWeeks=getMonthWeeks;
   .saisie-grid  { grid-template-columns: 1fr; }
   .reporting-grid { grid-template-columns: repeat(2,1fr); }
 }
+
+/* ── Week report sections ── */
+.week-reports { display: flex; flex-direction: column; gap: 12px; }
+
+.week-report-section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.week-report-section:hover { border-color: var(--border2); }
+.week-empty { opacity: 0.55; }
+.week-empty:hover { opacity: 0.8; }
+
+.wrs-header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 18px;
+  cursor: pointer;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.wrs-header:hover { background: var(--bg4); }
+
+.wrs-left {
+  display: flex; align-items: center; gap: 12px;
+  flex-shrink: 0;
+}
+.wrs-num {
+  width: 32px; height: 32px; border-radius: 9px;
+  background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: var(--red3);
+  flex-shrink: 0;
+}
+.wrs-range { font-size: 13px; font-weight: 600; letter-spacing: -0.2px; }
+.wrs-short { font-size: 11px; color: var(--muted); margin-top: 1px; font-family: var(--font-m); }
+
+.wrs-summary {
+  display: flex; align-items: center; gap: 6px;
+  margin-left: auto; flex-wrap: wrap;
+}
+.wrs-pill {
+  display: flex; align-items: baseline; gap: 4px;
+  padding: 5px 10px; border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.wrs-pill-v { font-size: 14px; font-weight: 700; font-family: var(--font-m); letter-spacing: -0.4px; }
+.wrs-pill-l { font-size: 10px; color: var(--muted); }
+
+.wrs-edit {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  padding: 5px 10px; border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+  white-space: nowrap; flex-shrink: 0;
+  transition: all 0.15s;
+}
+.wrs-header:hover .wrs-edit { color: var(--text); border-color: var(--border2); }
+
+.wrs-body {
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+}
+
+.wrs-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.wrs-kpi {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 11px; padding: 12px 13px;
+}
+.wrs-kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
+.wrs-kpi-val   { font-size: 22px; font-weight: 700; letter-spacing: -0.7px; line-height: 1; }
+.wrs-kpi-proj  { font-size: 10px; color: var(--muted2); margin-top: 3px; font-family: var(--font-m); }
+
+.wrs-rates {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 11px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 0;
+}
+.wrs-rate-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.wrs-rate-row:last-child { border-bottom: none; }
+.wrs-rate-label { font-size: 12px; color: var(--muted); flex: 1; font-weight: 500; }
+.wrs-rate-proj  { font-size: 10px; color: var(--muted2); font-family: var(--font-m); min-width: 55px; text-align: right; }
+
+.wrs-no-data {
+  padding: 16px 18px;
+  font-size: 13px; color: var(--muted);
+  font-style: italic;
+}
+
+@media(max-width: 1100px) {
+  .wrs-body { grid-template-columns: 1fr; }
+  .wrs-kpis { grid-template-columns: repeat(4,1fr); }
+  .wrs-summary { display: none; }
+}
+@media(max-width: 768px) {
+  .wrs-kpis { grid-template-columns: repeat(2,1fr); }
+}
 </style>
 </head>
 <body>
@@ -935,66 +1045,170 @@ function renderFiche() {
 /* ─── REPORTING MOIS ─── */
 function renderReportingMois() {
   const monthData = currentMember.data[cmk()] || emptyMonth();
-  const tot  = computeMonthTotals(monthData);
-  const proj = Object.keys(PROJECTIONS_S).reduce((acc, k) => {
-    acc[k] = PROJECTIONS_S[k] * 4; return acc;
+  const tot   = computeMonthTotals(monthData);
+  const nWeeks = getMonthWeeks(cmk()).length || 4;
+  const proj  = Object.keys(PROJECTIONS_S).reduce((acc, k) => {
+    acc[k] = PROJECTIONS_S[k] * nWeeks; return acc;
   }, {});
-  const rates = computeRates(tot);
-  const projRates = computeRates(proj);
+  const rates     = computeRates(tot);
+  const allWeeks  = getMonthWeeks(cmk());
+  const color     = currentMember.color;
 
-  // KPI cards
-  const kpiDefs = [
-    { label:"Temps d'appel (h)",  val:tot.tempsAppel, proj:proj.tempsAppel, color:'#a78bfa' },
-    { label:'Total Leads',         val:tot.leads,      proj:proj.leads,      color:'#60a5fa' },
-    { label:'Calls passés',        val:tot.calls,      proj:proj.calls,      color:'#60a5fa' },
-    { label:'Décrochés',           val:tot.decroches,  proj:proj.decroches,  color:'#f59e0b' },
-    { label:'Proposition RDV',     val:tot.propRdv,    proj:proj.propRdv,    color:'#f59e0b' },
-    { label:'Sets',                val:tot.sets,       proj:proj.sets,       color:'#ef4444' },
-    { label:'Show-up (présents)',  val:tot.presents,   proj:proj.presents,   color:'#ef4444' },
-    { label:'Closes',              val:tot.closes,     proj:proj.closes,     color:'#34d399' },
+  /* ── Helper: mini barre progress ── */
+  function miniBar(a, p) {
+    const pct = p > 0 ? Math.min(a/p*100, 100) : 0;
+    const col = pct >= 100 ? '#34d399' : pct >= 65 ? '#f59e0b' : '#ef4444';
+    return `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+      <div style="flex:1;height:3px;background:rgba(255,255,255,0.07);border-radius:99px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${col};border-radius:99px"></div>
+      </div>
+      <span style="font-size:10px;font-family:var(--font-m);color:${col};min-width:30px">${p>0?pct.toFixed(0)+'%':'—'}</span>
+    </div>`;
+  }
+
+  /* ── Helper: taux pill ── */
+  function pill(val, proj, isEuro) {
+    const pct = proj ? Math.min(val/proj*100,200) : 0;
+    const col = pct>=100?'#34d399':pct>=65?'#f59e0b':'#ef4444';
+    const v   = isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
+    return `<span style="font-weight:700;color:${col};font-family:var(--font-m)">${v}</span>`;
+  }
+
+  /* ── Résumé mensuel en haut ── */
+  const summaryKpis = [
+    { label:'Calls',       val:tot.calls,     proj:proj.calls,     color:'#60a5fa' },
+    { label:'Sets',        val:tot.sets,       proj:proj.sets,      color:color     },
+    { label:'Show-up',     val:tot.presents,   proj:proj.presents,  color:color     },
+    { label:'Closes',      val:tot.closes,     proj:proj.closes,    color:'#34d399' },
   ];
 
+  /* ── Sections semaine ── */
+  const weekSections = allWeeks.map((wk, i) => {
+    const w  = wk.id;
+    const d  = monthData[w] || {};
+    const p  = PROJECTIONS_S;
+    const r  = computeRates(d);
+    const hasData = (d.calls||0) > 0 || (d.sets||0) > 0;
+
+    const kpis = [
+      { label:"Tps d'appel", val:d.tempsAppel||0, proj:p.tempsAppel, unit:'h',  color:'#a78bfa' },
+      { label:'Leads',       val:d.leads||0,       proj:p.leads,      unit:'',   color:'#60a5fa' },
+      { label:'Calls',       val:d.calls||0,       proj:p.calls,      unit:'',   color:'#60a5fa' },
+      { label:'Décrochés',   val:d.decroches||0,   proj:p.decroches,  unit:'',   color:'#f59e0b' },
+      { label:'Prop. RDV',   val:d.propRdv||0,     proj:p.propRdv,    unit:'',   color:'#f59e0b' },
+      { label:'Sets',        val:d.sets||0,         proj:p.sets,       unit:'',   color:color     },
+      { label:'Show-up',     val:d.presents||0,     proj:p.presents,   unit:'',   color:color     },
+      { label:'Closes',      val:d.closes||0,       proj:p.closes,     unit:'',   color:'#34d399' },
+    ];
+
+    return `
+      <div class="week-report-section${!hasData?' week-empty':''}">
+        <!-- En-tête semaine -->
+        <div class="wrs-header" onclick="setWeek('${w}')">
+          <div class="wrs-left">
+            <span class="wrs-num">S${i+1}</span>
+            <div>
+              <div class="wrs-range">${wk.range}</div>
+              <div class="wrs-short">${wk.short}</div>
+            </div>
+          </div>
+          <div class="wrs-summary">
+            <div class="wrs-pill"><span class="wrs-pill-v">${d.calls||0}</span><span class="wrs-pill-l">calls</span></div>
+            <div class="wrs-pill"><span class="wrs-pill-v" style="color:${color}">${d.sets||0}</span><span class="wrs-pill-l">sets</span></div>
+            <div class="wrs-pill"><span class="wrs-pill-v" style="color:${color}">${d.presents||0}</span><span class="wrs-pill-l">présents</span></div>
+            <div class="wrs-pill"><span class="wrs-pill-v" style="color:#34d399">${d.closes||0}</span><span class="wrs-pill-l">closes</span></div>
+            <div class="wrs-pill"><span class="wrs-pill-v" style="color:var(--gold)">${U.euro(d.collecte||0)}</span><span class="wrs-pill-l">collecté</span></div>
+          </div>
+          <div class="wrs-edit">✏️ Saisir</div>
+        </div>
+
+        ${hasData ? `
+        <!-- Détail KPIs -->
+        <div class="wrs-body">
+          <div class="wrs-kpis">
+            ${kpis.map(k => `
+              <div class="wrs-kpi">
+                <div class="wrs-kpi-label">${k.label}</div>
+                <div class="wrs-kpi-val" style="color:${k.color}">${k.val}${k.unit}</div>
+                <div class="wrs-kpi-proj">/ ${k.proj}${k.unit} proj</div>
+                ${miniBar(k.val, k.proj)}
+              </div>`).join('')}
+          </div>
+
+          <!-- Taux clés -->
+          <div class="wrs-rates">
+            <div class="wrs-rate-row">
+              <span class="wrs-rate-label">Décrochés %</span>
+              ${pill(r.decrochesPct, 0.12)}
+              <span class="wrs-rate-proj">proj 12%</span>
+            </div>
+            <div class="wrs-rate-row">
+              <span class="wrs-rate-label">Engagement %</span>
+              ${pill(r.engagementPct, 0.222)}
+              <span class="wrs-rate-proj">proj 22%</span>
+            </div>
+            <div class="wrs-rate-row">
+              <span class="wrs-rate-label">Set %</span>
+              ${pill(r.setPct, 0.5)}
+              <span class="wrs-rate-proj">proj 50%</span>
+            </div>
+            <div class="wrs-rate-row">
+              <span class="wrs-rate-label">Show-Up %</span>
+              ${pill(r.showupPct, 0.8)}
+              <span class="wrs-rate-proj">proj 80%</span>
+            </div>
+            <div class="wrs-rate-row">
+              <span class="wrs-rate-label">Close / Présent</span>
+              ${pill(r.closeCallsPct, null)}
+              <span class="wrs-rate-proj"></span>
+            </div>
+          </div>
+        </div>` : `
+        <div class="wrs-no-data">Aucune donnée — <span onclick="setWeek('${w}')" style="color:var(--red3);cursor:pointer;text-decoration:underline">saisir les données</span></div>
+        `}
+      </div>`;
+  }).join('');
+
   document.getElementById('reporting-mois').innerHTML = `
-    <!-- KPIs grille -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
-      ${kpiDefs.map(k => {
+
+    <!-- ── Résumé mensuel ── -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+      ${summaryKpis.map(k => {
         const pct = k.proj > 0 ? (k.val/k.proj*100) : 0;
         const col = pct >= 100 ? 'var(--green)' : pct >= 65 ? 'var(--gold)' : 'var(--red2)';
-        const delta = k.val - k.proj;
         return `<div class="rep-card">
           <div class="rep-label">${k.label}</div>
           <div class="rep-value" style="color:${k.color}">${k.val}</div>
           <div class="rep-sub">/ ${k.proj} projeté</div>
-          <div class="rep-delta ${delta>=0?'good':'bad'}">${delta>=0?'+':''}${delta} · ${pct.toFixed(0)}%</div>
+          ${miniBar(k.val, k.proj)}
         </div>`;
       }).join('')}
     </div>
 
-    <!-- Taux calculés -->
-    <div class="card" style="margin-bottom:14px">
-      <div class="card-header"><span class="card-title">Taux de conversion — Mois complet</span></div>
+    <!-- ── Taux mois complet ── -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <span class="card-title">Taux de conversion — Mois complet</span>
+        <span style="font-size:11px;color:var(--muted)">${tot.calls} calls · ${tot.sets} sets · ${tot.presents} présents · ${tot.closes} closes</span>
+      </div>
       <table class="rates-table">
-        <thead><tr>
-          <th>Métrique</th><th>Réel</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th>
-        </tr></thead>
+        <thead><tr><th>Métrique</th><th>Réel</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th></tr></thead>
         <tbody>
           ${RATE_DEFS.map(r => {
-            const val  = rates[r.key];
-            const proj = r.proj;
-            const pct  = proj ? Math.min(val/proj*100,200) : 0;
-            const col  = pct >= 100 ? '#34d399' : pct >= 65 ? '#f59e0b' : '#ef4444';
-            const display = r.isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
-            const projDisp = proj ? (r.isEuro ? U.euro(proj) : (proj*100).toFixed(1)+'%') : '—';
+            const val = rates[r.key];
+            const prj = r.proj;
+            const pct = prj ? Math.min(val/prj*100,200) : 0;
+            const col = pct>=100?'#34d399':pct>=65?'#f59e0b':'#ef4444';
+            const vd  = r.isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
+            const pd  = prj ? (r.isEuro ? U.euro(prj) : (prj*100).toFixed(1)+'%') : '—';
             return `<tr>
-              <td style="font-weight:600;font-size:12px">${r.label}</td>
-              <td class="td-mono" style="font-size:13px;font-weight:700;color:${col}">${display}</td>
-              <td class="td-mono" style="color:var(--muted)">${projDisp}</td>
+              <td style="font-weight:500;font-size:13px">${r.label}</td>
+              <td class="td-mono" style="font-size:14px;font-weight:700;color:${col}">${vd}</td>
+              <td class="td-mono" style="color:var(--muted)">${pd}</td>
               <td class="rate-bar-cell">
                 <div style="display:flex;align-items:center;gap:8px">
-                  <div class="rate-bar-wrap" style="flex:1">
-                    <div class="rate-bar-fill" style="width:${Math.min(pct,100)}%;background:${col}"></div>
-                  </div>
-                  <span style="font-size:10px;font-family:var(--font-m);color:${col};min-width:34px;text-align:right">${proj?pct.toFixed(0)+'%':'—'}</span>
+                  <div class="rate-bar-wrap" style="flex:1"><div class="rate-bar-fill" style="width:${Math.min(pct,100)}%;background:${col}"></div></div>
+                  <span style="font-size:11px;font-family:var(--font-m);color:${col};min-width:36px;text-align:right">${prj?pct.toFixed(0)+'%':'—'}</span>
                 </div>
               </td>
             </tr>`;
@@ -1003,52 +1217,10 @@ function renderReportingMois() {
       </table>
     </div>
 
-    <!-- Breakdown semaines -->
-    <div class="card">
-      <div class="card-header"><span class="card-title">Breakdown S1 → S5</span></div>
-      <div style="overflow-x:auto">
-        <table class="data-table" style="width:100%;min-width:680px">
-          <thead><tr>
-            <th>Semaine</th><th>Calls</th><th>Décrochés</th><th>Sets</th><th>Show-up</th><th>Closes</th><th>Collecté</th><th>Décrochés%</th><th>Set%</th>
-          </tr></thead>
-          <tbody>
-            ${(() => {
-      const _allWeeks = getMonthWeeks(cmk());
-      return ['s1','s2','s3','s4','s5'].map((w,i) => {
-        const wkMeta = _allWeeks[i];
-        const wkLabel = wkMeta ? wkMeta.range : `S${i+1}`;
-              const d = monthData[w] || {};
-              const decPct = d.calls > 0 ? (d.decroches/d.calls*100).toFixed(1)+'%' : '—';
-              const setPct = d.propRdv > 0 ? (d.sets/d.propRdv*100).toFixed(1)+'%' : '—';
-              const hasData = d.calls > 0;
-              return `<tr style="${!hasData?'opacity:0.35':''}">
-                <td style="font-weight:600">${wkLabel}
-                  <span style="font-size:10px;color:var(--muted);margin-left:5px;cursor:pointer;text-decoration:underline" onclick="setWeek('${w}')">éditer</span>
-                </td>
-                <td class="td-mono">${d.calls||0}</td>
-                <td class="td-mono">${d.decroches||0}</td>
-                <td class="td-mono" style="color:var(--red3);font-weight:600">${d.sets||0}</td>
-                <td class="td-mono">${d.presents||0}</td>
-                <td class="td-mono" style="color:var(--gold);font-weight:600">${d.closes||0}</td>
-                <td class="td-mono">${U.euro(d.collecte||0)}</td>
-                <td class="td-mono">${decPct}</td>
-                <td class="td-mono">${setPct}</td>
-              </tr>`;
-            });}).join('')}
-            <tr style="border-top:1px solid var(--border2);font-weight:700;background:rgba(255,255,255,0.015)">
-              <td><b>Total</b></td>
-              <td class="td-mono"><b>${tot.calls}</b></td>
-              <td class="td-mono"><b>${tot.decroches}</b></td>
-              <td class="td-mono" style="color:var(--red3)"><b>${tot.sets}</b></td>
-              <td class="td-mono"><b>${tot.presents}</b></td>
-              <td class="td-mono" style="color:var(--gold)"><b>${tot.closes}</b></td>
-              <td class="td-mono"><b>${U.euro(tot.collecte)}</b></td>
-              <td class="td-mono">${tot.calls>0?(tot.decroches/tot.calls*100).toFixed(1)+'%':'—'}</td>
-              <td class="td-mono">${tot.propRdv>0?(tot.sets/tot.propRdv*100).toFixed(1)+'%':'—'}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <!-- ── Reporting semaine par semaine ── -->
+    <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;letter-spacing:0.1px">Détail par semaine</div>
+    <div class="week-reports">
+      ${weekSections}
     </div>`;
 }
 
