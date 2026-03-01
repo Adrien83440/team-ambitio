@@ -845,8 +845,8 @@ const MEMBERS = [
   {
     uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke', role: 'Setting + Closing',
     color: '#ef4444', type: 'setting',
-    // Données par défaut Février 2026
     data: {
+      'Janvier 2026':   { _total: { tempsAppel:0, leads:0, calls:225, decroches:51, propRdv:8,  sets:8,  presents:6,  deposits:0, closes:2, collecte:0 } },
       'Février 2026': {
         s1: { tempsAppel:5,   leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, deposits:0, closes:0, collecte:0    },
         s2: { tempsAppel:7,   leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, deposits:0, closes:2, collecte:1000 },
@@ -860,6 +860,8 @@ const MEMBERS = [
     uid: 'elodie', name: 'Elodie', surname: '', role: 'Closing',
     color: '#60a5fa', type: 'closing',
     data: {
+      'Décembre 2025':  { _total: { tempsAppel:0, leads:0, calls:81,  decroches:27, propRdv:15, sets:15, presents:4,  deposits:0, closes:0, collecte:0 } },
+      'Janvier 2026':   { _total: { tempsAppel:0, leads:0, calls:470, decroches:112,propRdv:64, sets:39, presents:17, deposits:0, closes:6, collecte:0 } },
       'Février 2026': {
         s1: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
         s2: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
@@ -921,7 +923,10 @@ function emptyMonth() {
 
 /* ─── CALCULS ─── */
 function computeMonthTotals(monthData) {
-  const t = { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 };
+  const empty = { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 };
+  // Données mensuelles historiques sans découpage hebdo
+  if (monthData._total) return { ...empty, ...monthData._total };
+  const t = { ...empty };
   ['s1','s2','s3','s4','s5'].forEach(w => {
     const d = monthData[w] || {};
     Object.keys(t).forEach(k => { t[k] += (d[k] || 0); });
@@ -1028,8 +1033,10 @@ function backToListe() {
 
 /* ─── RENDER FICHE ─── */
 function renderFiche() {
-  // Build tabs with real dates
-  buildWeekTabs();
+  const md = currentMember && currentMember.data[cmk()];
+  const isHistorical = !!(md && md._total);
+  if (isHistorical && currentWeek !== 'mois') currentWeek = 'mois';
+  buildWeekTabs(isHistorical);
 
   if (currentWeek === 'mois') {
     document.getElementById('reporting-mois').style.display = 'block';
@@ -1053,6 +1060,7 @@ function renderReportingMois() {
   const rates     = computeRates(tot);
   const allWeeks  = getMonthWeeks(cmk());
   const color     = currentMember.color;
+  const isHistorical = !!(monthData._total);
 
   /* ── Helper: mini barre progress ── */
   function miniBar(a, p) {
@@ -1218,10 +1226,13 @@ function renderReportingMois() {
     </div>
 
     <!-- ── Reporting semaine par semaine ── -->
-    <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;letter-spacing:0.1px">Détail par semaine</div>
+    ${isHistorical
+      ? `<div style="padding:20px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--muted);font-size:13px;text-align:center">Données mensuelles globales — découpage hebdomadaire non disponible pour ce mois</div>`
+      : `<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;letter-spacing:0.1px">Détail par semaine</div>
     <div class="week-reports">
       ${weekSections}
-    </div>`;
+    </div>`
+    }`;
 }
 
 /* ─── SAISIE SEMAINE ─── */
@@ -1316,18 +1327,22 @@ function renderRatesWeek(d) {
 }
 
 /* ─── TABS DYNAMIQUES AVEC DATES RÉELLES ─── */
-function buildWeekTabs() {
+function buildWeekTabs(isHistorical) {
   const weeks = getMonthWeeks(cmk());
   const row   = document.getElementById('week-tabs-row');
   if (!row) return;
 
   let html = `<div class="wtab mois${currentWeek==='mois'?' active':''}" onclick="setWeek('mois')">Mois complet</div>`;
-  weeks.forEach(wk => {
-    html += `<div class="wtab${currentWeek===wk.id?' active':''}" onclick="setWeek('${wk.id}')" title="${wk.range}">
-      <span style="font-weight:600">S${wk.id.replace('s','')}</span>
-      <span style="font-size:10px;color:var(--muted);margin-left:5px;font-family:var(--font-m)">${wk.range}</span>
-    </div>`;
-  });
+  if (!isHistorical) {
+    weeks.forEach(wk => {
+      html += `<div class="wtab${currentWeek===wk.id?' active':''}" onclick="setWeek('${wk.id}')" title="${wk.range}">
+        <span style="font-weight:600">S${wk.id.replace('s','')}</span>
+        <span style="font-size:10px;color:var(--muted);margin-left:5px;font-family:var(--font-m)">${wk.range}</span>
+      </div>`;
+    });
+  } else {
+    html += `<span style="font-size:11px;color:var(--muted);margin-left:8px;font-style:italic">Données mensuelles globales</span>`;
+  }
   row.innerHTML = html;
 }
 
