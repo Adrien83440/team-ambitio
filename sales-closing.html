@@ -401,6 +401,85 @@ window.getMonthWeeks=getMonthWeeks;
 </script>
 <script src="nav.js"></script>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
+<style>
+.members-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:8px}
+.member-card{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:24px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden}
+.member-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--mc,#ef4444);opacity:0.8}
+.member-card:hover{border-color:var(--mc,#ef4444);background:var(--bg3);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.3)}
+.mc-avatar{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;margin-bottom:14px}
+.mc-name{font-size:20px;font-weight:700;letter-spacing:-0.5px;margin-bottom:3px}
+.mc-role{font-size:12px;color:var(--muted);margin-bottom:16px}
+.mc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.mc-stat{background:var(--bg3);border-radius:9px;padding:9px 10px}
+.mc-stat-v{font-size:18px;font-weight:700;letter-spacing:-0.5px}
+.mc-stat-l{font-size:10px;color:var(--muted);margin-top:2px}
+.mc-arrow{position:absolute;top:20px;right:20px;width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted);transition:all 0.15s}
+.member-card:hover .mc-arrow{background:rgba(255,255,255,0.12);color:var(--text)}
+#view-fiche{display:none}
+.fiche-header{display:flex;align-items:center;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.fiche-back{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:9px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;color:var(--muted);font-size:13px;font-weight:500;transition:all 0.15s}
+.fiche-back:hover{border-color:var(--border2);color:var(--text)}
+.fiche-av{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff}
+.fiche-name{font-size:22px;font-weight:700;letter-spacing:-0.5px}
+.fiche-role{font-size:12px;color:var(--muted);margin-top:1px}
+.save-status{font-size:11px;color:var(--muted)}
+.week-tabs-row{display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap}
+.wtab{padding:6px 14px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--muted);transition:all 0.15s;user-select:none}
+.wtab:hover{color:var(--text);border-color:var(--border2)}
+.wtab.active{background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.35);color:#fff}
+.saisie-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.saisie-bloc{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px}
+.saisie-bloc-title{font-size:11px;font-weight:600;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+.saisie-field{margin-bottom:10px}
+.saisie-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.proj-tag{font-size:10px;font-weight:400;color:var(--muted2);font-family:var(--font-m)}
+.saisie-input{width:100%;padding:8px 12px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.07);border-radius:9px;color:var(--text);font-family:var(--font-m);font-size:14px;outline:none;transition:border-color 0.15s}
+.saisie-input:focus{border-color:var(--red2);background:rgba(239,68,68,0.04)}
+.saisie-input.above{border-color:rgba(52,211,153,0.5)}
+.saisie-input.filled{border-color:rgba(52,211,153,0.3)}
+.rep-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px 14px}
+.rep-label{font-size:11px;font-weight:500;color:var(--muted);margin-bottom:6px}
+.rep-value{font-size:22px;font-weight:700;letter-spacing:-0.7px}
+.rep-sub{font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--font-m)}
+.rates-table{width:100%;border-collapse:collapse}
+.rates-table th{font-size:11px;font-weight:600;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--border);text-align:left}
+.rates-table td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px}
+.rates-table tr:last-child td{border-bottom:none}
+.rate-bar-cell{width:160px}
+.rate-bar-wrap{height:5px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden}
+.rate-bar-fill{height:100%;border-radius:99px;transition:width 0.8s ease}
+.week-reports{display:flex;flex-direction:column;gap:12px}
+.week-report-section{background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;transition:border-color 0.2s}
+.week-report-section:hover{border-color:var(--border2)}
+.week-empty{opacity:0.55}
+.week-empty:hover{opacity:0.8}
+.wrs-header{display:flex;align-items:center;gap:16px;padding:16px 18px;cursor:pointer;background:var(--bg3);border-bottom:1px solid var(--border);transition:background 0.15s}
+.wrs-header:hover{background:var(--bg4)}
+.wrs-left{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.wrs-num{width:32px;height:32px;border-radius:9px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--red3);flex-shrink:0}
+.wrs-range{font-size:13px;font-weight:600;letter-spacing:-0.2px}
+.wrs-short{font-size:11px;color:var(--muted);margin-top:1px;font-family:var(--font-m)}
+.wrs-summary{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap}
+.wrs-pill{display:flex;align-items:baseline;gap:4px;padding:5px 10px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)}
+.wrs-pill-v{font-size:14px;font-weight:700;font-family:var(--font-m);letter-spacing:-0.4px}
+.wrs-pill-l{font-size:10px;color:var(--muted)}
+.wrs-edit{font-size:11px;font-weight:600;color:var(--muted);padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.03);white-space:nowrap;flex-shrink:0;transition:all 0.15s}
+.wrs-header:hover .wrs-edit{color:var(--text);border-color:var(--border2)}
+.wrs-body{padding:16px 18px;display:grid;grid-template-columns:1fr 280px;gap:20px}
+.wrs-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.wrs-kpi{background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:12px 13px}
+.wrs-kpi-label{font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:500}
+.wrs-kpi-val{font-size:20px;font-weight:700;letter-spacing:-0.7px;line-height:1}
+.wrs-kpi-proj{font-size:10px;color:var(--muted2);margin-top:3px;font-family:var(--font-m)}
+.wrs-rates{background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:14px 16px;display:flex;flex-direction:column}
+.wrs-rate-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.wrs-rate-row:last-child{border-bottom:none}
+.wrs-rate-label{font-size:12px;color:var(--muted);flex:1;font-weight:500}
+.wrs-rate-proj{font-size:10px;color:var(--muted2);font-family:var(--font-m);min-width:55px;text-align:right}
+.wrs-no-data{padding:16px 18px;font-size:13px;color:var(--muted);font-style:italic}
+@media(max-width:1100px){.members-grid{grid-template-columns:1fr}.saisie-grid{grid-template-columns:1fr}.wrs-body{grid-template-columns:1fr}.wrs-summary{display:none}}
+@media(max-width:768px){.wrs-kpis{grid-template-columns:repeat(2,1fr)}}
+</style>
 </head>
 <body>
 
@@ -423,164 +502,437 @@ window.getMonthWeeks=getMonthWeeks;
 </div>
 
 <div class="page">
-
-  <div class="page-header-row">
-    <div>
-      <div class="page-title">Closing — KPIs & Pipeline</div>
-      <div class="page-sub">Projections vs Réel · <span id="sub-month">Février 2026</span></div>
+  <div id="view-liste">
+    <div class="page-header-row">
+      <div>
+        <div class="page-title">Closing — Équipe</div>
+        <div class="page-sub">Sélectionne un commercial · <span id="sub-month">Février 2026</span></div>
+      </div>
     </div>
-    <div class="tabs" id="week-tabs">
-      <div class="tab active" onclick="setWeek('mois')">Mois</div>
-      <div class="tab" onclick="setWeek('s1')">Sem 1</div>
-      <div class="tab" onclick="setWeek('s2')">Sem 2</div>
-      <div class="tab" onclick="setWeek('s3')">Sem 3</div>
-      <div class="tab" onclick="setWeek('s4')">Sem 4</div>
-    </div>
+    <div class="members-grid" id="members-grid"></div>
   </div>
-
-  <!-- KPIs -->
-  <div class="g4 mb" id="kpis"></div>
-
-  <!-- Prog + Rates -->
-  <div class="g21 mb">
-    <div class="card">
-      <div class="card-header"><span class="card-title">Actuel vs Projection</span></div>
-      <div id="prog-bars"></div>
+  <div id="view-fiche">
+    <div class="fiche-header">
+      <button class="fiche-back" onclick="backToListe()">← Retour</button>
+      <div class="fiche-av" id="fiche-av">G</div>
+      <div>
+        <div class="fiche-name" id="fiche-name">Guillaume</div>
+        <div class="fiche-role" id="fiche-role">Closing</div>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="save-status" id="save-status"></span>
+        <button class="btn btn-primary" onclick="saveCurrentWeek()">💾 Sauvegarder</button>
+      </div>
     </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Taux de conversion</span></div>
-      <div id="rates"></div>
-    </div>
+    <div class="week-tabs-row" id="week-tabs-row"></div>
+    <div id="reporting-mois"></div>
+    <div id="saisie-week" style="display:none"></div>
   </div>
-
-  <!-- Week breakdown + Chart -->
-  <div class="g2">
-    <div class="card">
-      <div class="card-header"><span class="card-title">Breakdown hebdomadaire</span></div>
-      <div class="week-grid" id="week-cards"></div>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Évolution contracté S1→S4</span></div>
-      <div id="chart"></div>
-    </div>
-  </div>
-
 </div>
 
 <script>
 const MONTHS = DB.months;
-let _cm = (() => { const s=localStorage.getItem('sales_month')||'Février 2026'; const p=s.split(' '); return{month:MONTHS.indexOf(p[0]),year:parseInt(p[1])||2026}; })();
-function currentMonthKey() { return MONTHS[_cm.month]+' '+_cm.year; }
-function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); renderAll(); }
-function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); renderAll(); }
-function _saveMonth() { localStorage.setItem('sales_month',currentMonthKey()); document.getElementById('month-lbl').textContent=currentMonthKey(); document.getElementById('sub-month').textContent=currentMonthKey(); }
+let _cm = (() => {
+  const s = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
+  const p = s.split(' ');
+  return { month: MONTHS.indexOf(p[0]), year: parseInt(p[1]) || 2026 };
+})();
+function cmk() { return MONTHS[_cm.month] + ' ' + _cm.year; }
+function prevMonth() { _cm.month--; if (_cm.month < 0) { _cm.month = 11; _cm.year--; } _sm(); renderAll(); }
+function nextMonth() { _cm.month++; if (_cm.month > 11) { _cm.month = 0; _cm.year++; } _sm(); renderAll(); }
+function _sm() {
+  if (typeof localStorage !== 'undefined') localStorage.setItem('sales_month', cmk());
+  document.getElementById('month-lbl').textContent = cmk();
+  document.getElementById('sub-month').textContent = cmk();
+}
 
-let currentWeek = 'mois';
+const PROJ_S = { calls:20, lives:15, offres:10, deposits:1, closes:4, hardClose:4, followUp:0, contracte:24000, collecte:2000 };
 
-function setWeek(w) {
-  currentWeek = w;
-  document.querySelectorAll('#week-tabs .tab').forEach((t,i) =>
-    t.classList.toggle('active', ['mois','s1','s2','s3','s4'][i] === w));
-  renderAll();
+const MEMBERS_C = [
+  {
+    uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke',
+    role: 'Setting + Closing', color: '#ef4444',
+    data: {
+      'Février 2026': {
+        s1: { calls:8,  lives:2, offres:1, deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,     collecte:0    },
+        s2: { calls:8,  lives:4, offres:2, deposits:0, closes:2, hardClose:2, followUp:0, contracte:12000, collecte:1000 },
+        s3: { calls:8,  lives:6, offres:2, deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,     collecte:0    },
+        s4: { calls:10, lives:7, offres:3, deposits:0, closes:1, hardClose:1, followUp:0, contracte:7200,  collecte:600  },
+        s5: { calls:0,  lives:0, offres:0, deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,     collecte:0    },
+      }
+    }
+  },
+  {
+    uid: 'elodie', name: 'Elodie', surname: '',
+    role: 'Closing', color: '#60a5fa',
+    data: {
+      'Février 2026': {
+        s1:{calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s2:{calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s3:{calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s4:{calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s5:{calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+      }
+    }
+  }
+];
+
+function emptyWeek()  { return {calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0}; }
+function emptyMonth() { return {s1:emptyWeek(),s2:emptyWeek(),s3:emptyWeek(),s4:emptyWeek(),s5:emptyWeek()}; }
+
+function sumMonth(md) {
+  const t = emptyWeek();
+  ['s1','s2','s3','s4','s5'].forEach(w => { const d = md[w]||{}; Object.keys(t).forEach(k => { t[k] += (d[k]||0); }); });
+  return t;
+}
+
+function computeRatesC(d) {
+  return {
+    livesPct:     d.calls    > 0 ? d.lives               / d.calls     : 0,
+    offresPct:    d.lives    > 0 ? d.offres              / d.lives     : 0,
+    engOffresPct: d.offres   > 0 ? (d.deposits+d.closes) / d.offres    : 0,
+    closeOffrPct: d.offres   > 0 ? d.closes              / d.offres    : 0,
+    closeCallPct: d.calls    > 0 ? d.closes              / d.calls     : 0,
+    closeLivePct: d.lives    > 0 ? d.closes              / d.lives     : 0,
+    cashPerLive:  d.lives    > 0 ? d.collecte            / d.lives     : 0,
+    collectePct:  d.contracte> 0 ? d.collecte            / d.contracte : 0,
+  };
+}
+
+const RATE_DEFS_C = [
+  { key:'livesPct',    label:'Lives / Calls',          proj:0.75,  isEuro:false },
+  { key:'offresPct',   label:'Offres / Lives',          proj:0.667, isEuro:false },
+  { key:'engOffresPct',label:'Engagement / Offres',     proj:0.5,   isEuro:false },
+  { key:'closeOffrPct',label:'Close / Offres',          proj:0.4,   isEuro:false },
+  { key:'closeCallPct',label:'Close / Calls',           proj:null,  isEuro:false },
+  { key:'closeLivePct',label:'Close / Lives',           proj:null,  isEuro:false },
+  { key:'cashPerLive', label:'Cash collecté / Live',    proj:133,   isEuro:true  },
+  { key:'collectePct', label:'Collecté / Contracté',   proj:null,  isEuro:false },
+];
+
+const SAISIE_FIELDS = [
+  { key:'calls',     label:'Calls passés',        bloc:'a', proj:PROJ_S.calls     },
+  { key:'lives',     label:'Lives (appel live)',   bloc:'a', proj:PROJ_S.lives     },
+  { key:'offres',    label:'Offres faites',        bloc:'a', proj:PROJ_S.offres    },
+  { key:'deposits',  label:'Deposits',             bloc:'r', proj:PROJ_S.deposits  },
+  { key:'closes',    label:'Closes',               bloc:'r', proj:PROJ_S.closes    },
+  { key:'hardClose', label:'Hard closing',         bloc:'r', proj:PROJ_S.hardClose },
+  { key:'followUp',  label:'Follow-up closing',    bloc:'r', proj:PROJ_S.followUp  },
+  { key:'contracte', label:'Contracté (€)',        bloc:'r', proj:PROJ_S.contracte },
+  { key:'collecte',  label:'Collecté (€)',         bloc:'r', proj:PROJ_S.collecte  },
+];
+
+function loadDataC(uid)     { try { const v = localStorage.getItem('closing_'+uid+'_'+cmk()); return v ? JSON.parse(v) : null; } catch(e) { return null; } }
+function saveDataC(uid, md) { try { localStorage.setItem('closing_'+uid+'_'+cmk(), JSON.stringify(md)); } catch(e) {} }
+
+let currentMember = null, currentWeek = 'mois';
+
+function miniBar(a, p) {
+  const pct = p > 0 ? Math.min(a/p*100, 100) : 0;
+  const col = pct>=100 ? '#34d399' : pct>=65 ? '#f59e0b' : '#ef4444';
+  return `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+    <div style="flex:1;height:3px;background:rgba(255,255,255,0.07);border-radius:99px;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:${col};border-radius:99px"></div>
+    </div>
+    <span style="font-size:10px;font-family:var(--font-m);color:${col};min-width:30px">${p>0?pct.toFixed(0)+'%':'—'}</span>
+  </div>`;
+}
+function pill(val, proj, isEuro) {
+  const pct = proj ? Math.min(val/proj*100, 200) : 0;
+  const col = pct>=100 ? '#34d399' : pct>=65 ? '#f59e0b' : '#ef4444';
+  const v = isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
+  return `<span style="font-weight:700;color:${proj?col:'var(--text)'};font-family:var(--font-m)">${v}</span>`;
+}
+function rateTableRows(r) {
+  return RATE_DEFS_C.map(rd => {
+    const val = r[rd.key]; const prj = rd.proj;
+    const pct = prj ? Math.min(val/prj*100, 200) : 0;
+    const col = pct>=100?'#34d399':pct>=65?'#f59e0b':'#ef4444';
+    const vd = rd.isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
+    const pd = prj ? (rd.isEuro ? U.euro(prj) : (prj*100).toFixed(1)+'%') : '—';
+    return `<tr>
+      <td style="font-weight:500;font-size:13px">${rd.label}</td>
+      <td class="td-mono" style="font-size:14px;font-weight:700;color:${prj?col:'var(--text)'}">${vd}</td>
+      <td class="td-mono" style="color:var(--muted)">${pd}</td>
+      <td class="rate-bar-cell"><div style="display:flex;align-items:center;gap:8px">
+        <div class="rate-bar-wrap" style="flex:1"><div class="rate-bar-fill" style="width:${Math.min(pct,100)}%;background:${prj?col:'rgba(255,255,255,0.2)'}"></div></div>
+        <span style="font-size:11px;font-family:var(--font-m);color:${prj?col:'var(--muted)'};min-width:36px;text-align:right">${prj?pct.toFixed(0)+'%':'—'}</span>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── LISTE ── */
+function renderListe() {
+  document.getElementById('members-grid').innerHTML = MEMBERS_C.map(m => {
+    const md = loadDataC(m.uid) || m.data[cmk()] || emptyMonth();
+    const t = sumMonth(md);
+    return `<div class="member-card" style="--mc:${m.color}" onclick="openFiche('${m.uid}')">
+      <div class="mc-arrow">→</div>
+      <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
+      <div class="mc-name">${m.name} ${m.surname}</div>
+      <div class="mc-role">${m.role}</div>
+      <div class="mc-stats">
+        <div class="mc-stat"><div class="mc-stat-v" style="color:${m.color}">${t.calls}</div><div class="mc-stat-l">Calls</div></div>
+        <div class="mc-stat"><div class="mc-stat-v" style="color:#a78bfa">${t.lives}</div><div class="mc-stat-l">Lives</div></div>
+        <div class="mc-stat"><div class="mc-stat-v" style="color:#f59e0b">${t.offres}</div><div class="mc-stat-l">Offres</div></div>
+        <div class="mc-stat"><div class="mc-stat-v" style="color:#34d399">${t.closes}</div><div class="mc-stat-l">Closes</div></div>
+        <div class="mc-stat"><div class="mc-stat-v" style="color:var(--gold)">${U.euro(t.contracte)}</div><div class="mc-stat-l">Contracté</div></div>
+        <div class="mc-stat"><div class="mc-stat-v" style="color:var(--gold)">${U.euro(t.collecte)}</div><div class="mc-stat-l">Collecté</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── FICHE ── */
+function openFiche(uid) {
+  currentMember = MEMBERS_C.find(m => m.uid === uid);
+  currentWeek = 'mois';
+  const saved = loadDataC(uid);
+  if (saved) currentMember.data[cmk()] = saved;
+  else if (!currentMember.data[cmk()]) currentMember.data[cmk()] = emptyMonth();
+  document.getElementById('view-liste').style.display = 'none';
+  document.getElementById('view-fiche').style.display = 'block';
+  document.getElementById('fiche-av').textContent = currentMember.name[0];
+  document.getElementById('fiche-av').style.background = `linear-gradient(135deg,${currentMember.color}88,${currentMember.color})`;
+  document.getElementById('fiche-name').textContent = currentMember.name + (currentMember.surname ? ' '+currentMember.surname : '');
+  document.getElementById('fiche-role').textContent = currentMember.role + ' · ' + cmk();
+  renderFiche();
+}
+function backToListe() {
+  document.getElementById('view-liste').style.display = 'block';
+  document.getElementById('view-fiche').style.display = 'none';
+  currentMember = null;
+  renderListe();
+}
+
+/* ── TABS ── */
+function buildWeekTabs() {
+  const weeks = getMonthWeeks(cmk());
+  const row = document.getElementById('week-tabs-row');
+  if (!row) return;
+  row.innerHTML = `<div class="wtab${currentWeek==='mois'?' active':''}" onclick="setWeek('mois')">Mois complet</div>`
+    + weeks.map(wk => `<div class="wtab${currentWeek===wk.id?' active':''}" onclick="setWeek('${wk.id}')" title="${wk.range}">
+        <span style="font-weight:600">S${wk.id.replace('s','')}</span>
+        <span style="font-size:10px;color:var(--muted);margin-left:4px;font-family:var(--font-m)">${wk.range}</span>
+      </div>`).join('');
+}
+function setWeek(w) { currentWeek = w; renderFiche(); }
+
+function renderFiche() {
+  buildWeekTabs();
+  if (currentWeek === 'mois') {
+    document.getElementById('reporting-mois').style.display = 'block';
+    document.getElementById('saisie-week').style.display = 'none';
+    renderReportingMois();
+  } else {
+    document.getElementById('reporting-mois').style.display = 'none';
+    document.getElementById('saisie-week').style.display = 'block';
+    renderSaisieWeek();
+  }
+}
+
+/* ── REPORTING MOIS ── */
+function renderReportingMois() {
+  const md = currentMember.data[cmk()] || emptyMonth();
+  const tot = sumMonth(md);
+  const nW = getMonthWeeks(cmk()).length || 4;
+  const proj = Object.keys(PROJ_S).reduce((a,k) => { a[k] = PROJ_S[k]*nW; return a; }, {});
+  const r = computeRatesC(tot);
+  const allWeeks = getMonthWeeks(cmk());
+  const color = currentMember.color;
+
+  const sumKpis = [
+    { label:'Calls',     val:tot.calls,    proj:proj.calls,    color:'#60a5fa', euro:false },
+    { label:'Lives',     val:tot.lives,    proj:proj.lives,    color:'#a78bfa', euro:false },
+    { label:'Closes',    val:tot.closes,   proj:proj.closes,   color:'#34d399', euro:false },
+    { label:'Contracté', val:tot.contracte,proj:proj.contracte,color:color,     euro:true  },
+  ];
+
+  const weekSections = allWeeks.map((wk, i) => {
+    const w = wk.id;
+    const d = md[w] || emptyWeek();
+    const hasData = d.calls > 0 || d.lives > 0;
+    const wr = computeRatesC(d);
+
+    const kpis = [
+      { label:'Calls',     val:d.calls,    proj:PROJ_S.calls,    color:'#60a5fa', euro:false },
+      { label:'Lives',     val:d.lives,    proj:PROJ_S.lives,    color:'#a78bfa', euro:false },
+      { label:'Offres',    val:d.offres,   proj:PROJ_S.offres,   color:'#f59e0b', euro:false },
+      { label:'Closes',    val:d.closes,   proj:PROJ_S.closes,   color:'#34d399', euro:false },
+      { label:'Hard close',val:d.hardClose,proj:PROJ_S.hardClose,color:'#ef4444', euro:false },
+      { label:'Follow-up', val:d.followUp, proj:PROJ_S.followUp, color:'#ef4444', euro:false },
+      { label:'Contracté', val:d.contracte,proj:PROJ_S.contracte,color:color,     euro:true  },
+      { label:'Collecté',  val:d.collecte, proj:PROJ_S.collecte, color:'var(--gold)',euro:true },
+    ];
+    const rateRows = [
+      { label:'Lives / Calls',    v:wr.livesPct,    p:0.75,  euro:false },
+      { label:'Offres / Lives',   v:wr.offresPct,   p:0.667, euro:false },
+      { label:'Engagement offres',v:wr.engOffresPct,p:0.5,   euro:false },
+      { label:'Close / Offres',   v:wr.closeOffrPct,p:0.4,   euro:false },
+      { label:'Close / Calls',    v:wr.closeCallPct,p:null,  euro:false },
+      { label:'Cash / Live',      v:wr.cashPerLive, p:133,   euro:true  },
+    ];
+    return `
+    <div class="week-report-section${hasData?'':' week-empty'}">
+      <div class="wrs-header" onclick="setWeek('${w}')">
+        <div class="wrs-left">
+          <span class="wrs-num">S${i+1}</span>
+          <div><div class="wrs-range">${wk.range}</div><div class="wrs-short">${wk.short}</div></div>
+        </div>
+        <div class="wrs-summary">
+          <div class="wrs-pill"><span class="wrs-pill-v">${d.calls}</span><span class="wrs-pill-l">calls</span></div>
+          <div class="wrs-pill"><span class="wrs-pill-v" style="color:#a78bfa">${d.lives}</span><span class="wrs-pill-l">lives</span></div>
+          <div class="wrs-pill"><span class="wrs-pill-v" style="color:#f59e0b">${d.offres}</span><span class="wrs-pill-l">offres</span></div>
+          <div class="wrs-pill"><span class="wrs-pill-v" style="color:#34d399">${d.closes}</span><span class="wrs-pill-l">closes</span></div>
+          <div class="wrs-pill"><span class="wrs-pill-v" style="color:var(--gold)">${U.euro(d.contracte)}</span><span class="wrs-pill-l">contracté</span></div>
+          <div class="wrs-pill"><span class="wrs-pill-v" style="color:var(--gold)">${U.euro(d.collecte)}</span><span class="wrs-pill-l">collecté</span></div>
+        </div>
+        <div class="wrs-edit">✏️ Saisir</div>
+      </div>
+      ${hasData ? `
+      <div class="wrs-body">
+        <div class="wrs-kpis">
+          ${kpis.map(k => `<div class="wrs-kpi">
+            <div class="wrs-kpi-label">${k.label}</div>
+            <div class="wrs-kpi-val" style="color:${k.color}">${k.euro?U.euro(k.val):k.val}</div>
+            <div class="wrs-kpi-proj">/ ${k.euro?U.euro(k.proj):k.proj} proj</div>
+            ${miniBar(k.val, k.proj)}
+          </div>`).join('')}
+        </div>
+        <div class="wrs-rates">
+          ${rateRows.map(row => `<div class="wrs-rate-row">
+            <span class="wrs-rate-label">${row.label}</span>
+            ${pill(row.v, row.p, row.euro)}
+            <span class="wrs-rate-proj">${row.p?(row.euro?U.euro(row.p):(row.p*100).toFixed(0)+'%'):''}</span>
+          </div>`).join('')}
+        </div>
+      </div>` : `<div class="wrs-no-data">Aucune donnée — <span onclick="setWeek('${w}')" style="color:var(--red3);cursor:pointer;text-decoration:underline">saisir les données</span></div>`}
+    </div>`;
+  }).join('');
+
+  document.getElementById('reporting-mois').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+      ${sumKpis.map(k => {
+        const pct = k.proj>0 ? k.val/k.proj*100 : 0;
+        return `<div class="rep-card">
+          <div class="rep-label">${k.label}</div>
+          <div class="rep-value" style="color:${k.color}">${k.euro?U.euro(k.val):k.val}</div>
+          <div class="rep-sub">/ ${k.euro?U.euro(k.proj):k.proj} proj</div>
+          ${miniBar(k.val, k.proj)}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-header">
+        <span class="card-title">Taux de conversion — Mois complet</span>
+        <span style="font-size:11px;color:var(--muted)">${tot.calls} calls · ${tot.lives} lives · ${tot.offres} offres · ${tot.closes} closes</span>
+      </div>
+      <table class="rates-table">
+        <thead><tr><th>Métrique</th><th>Réel</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th></tr></thead>
+        <tbody>${rateTableRows(r)}</tbody>
+      </table>
+    </div>
+    <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px">Détail par semaine</div>
+    <div class="week-reports">${weekSections}</div>`;
+}
+
+/* ── SAISIE SEMAINE ── */
+function renderSaisieWeek() {
+  const md = currentMember.data[cmk()] || emptyMonth();
+  const d = md[currentWeek] || emptyWeek();
+  const allWeeks = getMonthWeeks(cmk());
+  const wkMeta = allWeeks.find(w => w.id === currentWeek);
+
+  const fieldHtml = f => {
+    const v = d[f.key] !== undefined && d[f.key] !== 0 ? d[f.key] : '';
+    const proj = f.proj || 0;
+    const isEuro = f.key === 'contracte' || f.key === 'collecte';
+    let cls = 'saisie-input';
+    if (v !== '' && proj > 0) cls += v >= proj ? ' above' : ' filled';
+    return `<div class="saisie-field">
+      <label class="saisie-label">${f.label}<span class="proj-tag">Proj: ${isEuro?U.euro(proj):proj}</span></label>
+      <input class="${cls}" type="number" id="f-${f.key}" value="${v}" placeholder="0" step="${isEuro?100:1}"/>
+    </div>`;
+  };
+
+  document.getElementById('saisie-week').innerHTML = `
+    <div class="saisie-grid">
+      <div class="saisie-bloc">
+        <div class="saisie-bloc-title">Activité
+          <span style="font-size:10px;color:var(--muted2);font-family:var(--font-m)">${wkMeta?wkMeta.range:''} · ${cmk()}</span>
+        </div>
+        ${SAISIE_FIELDS.filter(f=>f.bloc==='a').map(fieldHtml).join('')}
+      </div>
+      <div class="saisie-bloc">
+        <div class="saisie-bloc-title">Résultats</div>
+        ${SAISIE_FIELDS.filter(f=>f.bloc==='r').map(fieldHtml).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Taux calculés en temps réel</span></div>
+      <div id="rates-live"></div>
+    </div>`;
+
+  SAISIE_FIELDS.forEach(f => {
+    const el = document.getElementById('f-'+f.key);
+    if (!el) return;
+    el.oninput = () => {
+      const v = parseFloat(el.value) || 0;
+      el.className = 'saisie-input' + (f.proj>0 ? (v>=f.proj?' above':v>0?' filled':'') : (v>0?' filled':''));
+      renderRatesLive(readForm());
+    };
+  });
+  renderRatesLive(d);
+}
+
+function readForm() {
+  const v = {};
+  SAISIE_FIELDS.forEach(f => { const el = document.getElementById('f-'+f.key); v[f.key] = parseFloat(el?.value)||0; });
+  return v;
+}
+
+function renderRatesLive(d) {
+  const r = computeRatesC(d);
+  const el = document.getElementById('rates-live');
+  if (!el) return;
+  el.innerHTML = `<table class="rates-table">
+    <thead><tr><th>Taux</th><th>Valeur</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th></tr></thead>
+    <tbody>${rateTableRows(r)}</tbody>
+  </table>`;
+}
+
+/* ── SAVE ── */
+async function saveCurrentWeek() {
+  if (!currentMember || currentWeek === 'mois') return;
+  const data = readForm();
+  if (!currentMember.data[cmk()]) currentMember.data[cmk()] = emptyMonth();
+  currentMember.data[cmk()][currentWeek] = { ...data };
+  saveDataC(currentMember.uid, currentMember.data[cmk()]);
+  const st = document.getElementById('save-status');
+  if (st) st.textContent = '✅ Sauvegardé · ' + new Date().toLocaleTimeString('fr-FR');
+  if (U.toast) U.toast('✅ Données sauvegardées !');
+  renderFiche();
 }
 
 function renderAll() {
-  const d   = DB.closing[currentWeek] || DB.closing.mois;
-  const isM = currentWeek === 'mois';
-
-  // KPIs
-  document.getElementById('kpis').innerHTML = [
-    { label:'Calls',     val:d.calls.a,             sub:`Proj: ${d.calls.p}`,             rawA:d.calls.a,     proj:d.calls.p,     color:'#60a5fa' },
-    { label:'Lives',     val:d.lives.a,             sub:`Proj: ${d.lives.p}`,             rawA:d.lives.a,     proj:d.lives.p,     color:'#a78bfa' },
-    { label:'Closes',    val:d.closes.a,            sub:`Proj: ${d.closes.p}`,            rawA:d.closes.a,    proj:d.closes.p,    color:'#f59e0b' },
-    { label:'Contracté', val:U.euro(d.contracte.a), sub:`Proj: ${U.euro(d.contracte.p)}`, rawA:d.contracte.a, proj:d.contracte.p, color:'#ef4444' },
-  ].map(U.kpiCard).join('');
-
-  // Progress bars
-  if (isM) {
-    document.getElementById('prog-bars').innerHTML = [
-      { l:'Calls',           a:d.calls.a,     p:d.calls.p      },
-      { l:'Lives',           a:d.lives.a,     p:d.lives.p      },
-      { l:'Offres faites',   a:d.offres.a,    p:d.offres.p     },
-      { l:'Closes total',    a:d.closes.a,    p:d.closes.p     },
-      { l:'Hard close',      a:d.hc.a,        p:d.hc.p         },
-      { l:'Follow-up close', a:d.fu.a,        p:d.fu.p         },
-      { l:'Contracté (€)',   a:d.contracte.a, p:d.contracte.p, eu:true },
-      { l:'Collecté (€)',    a:d.collecte.a,  p:d.collecte.p,  eu:true },
-    ].map(r => U.progRow(r.l, r.a, r.p, r.eu)).join('');
-  } else {
-    document.getElementById('prog-bars').innerHTML = [
-      { l:'Calls',  a:d.calls.a,  p:d.calls.p  },
-      { l:'Lives',  a:d.lives.a,  p:d.lives.p  },
-      { l:'Offres', a:d.offres.a, p:d.offres.p },
-      { l:'Closes', a:d.closes.a, p:d.closes.p },
-      { l:'Contracté (€)', a:d.contracte.a, p:d.contracte.p, eu:true },
-    ].map(r => U.progRow(r.l, r.a, r.p, r.eu)).join('');
-  }
-
-  // Rates
-  if (isM) {
-    const m = DB.closing.mois;
-    document.getElementById('rates').innerHTML = [
-      { l:'Lives / Calls',      a:m.livesP.a,  p:m.livesP.p  },
-      { l:'Offres / Lives',     a:m.offresP.a, p:m.offresP.p },
-      { l:'Engagement offres',  a:m.engP.a,    p:m.engP.p    },
-      { l:'Close / Offres',     a:m.cOffP.a,   p:m.cOffP.p   },
-      { l:'Close / Calls',      a:m.cCallP.a,  p:m.cCallP.p  },
-    ].map(r => U.progRow(r.l, r.a, r.p)).join('');
-  } else {
-    document.getElementById('rates').innerHTML = `<div style="text-align:center;padding:30px;color:var(--muted);font-size:12px">Taux détaillés disponibles en vue Mois</div>`;
-  }
-
-  // Week cards
-  document.getElementById('week-cards').innerHTML = ['s1','s2','s3','s4'].map((w,i) => {
-    const wd = DB.closing[w];
-    const _wks = getMonthWeeks(currentMonthKey());
-    const _wMeta = _wks[i];
-    const _wLabel = _wMeta ? 'S'+(i+1) : 'S'+(i+1);
-    const _wRange = _wMeta ? _wMeta.range : '';
-    return U.weekCard(_wLabel, wd.closes.a, 'closes', [
-      { val:wd.calls.a,              label:'Calls'      },
-      { val:wd.lives.a,              label:'Lives'      },
-      { val:wd.offres.a,             label:'Offres'     },
-      { val:U.euro(wd.contracte.a),  label:'Contracté', color:'var(--gold)' },
-    ], currentWeek === w, _wRange);
-  }).join('');
-
-  // Chart
-  const _chartWks = getMonthWeeks(currentMonthKey());
-  const _chartLabels = ['s1','s2','s3','s4'].map((w,i) => _chartWks[i] ? _chartWks[i].range : 'S'+(i+1));
-  document.getElementById('chart').innerHTML = U.barChart(
-    _chartLabels,
-    [DB.closing.s1.contracte.a, DB.closing.s2.contracte.a, DB.closing.s3.contracte.a, DB.closing.s4.contracte.a],
-    [DB.closing.s1.contracte.p, DB.closing.s2.contracte.p, DB.closing.s3.contracte.p, DB.closing.s4.contracte.p],
-    ' €'
-  );
+  if (currentMember) {
+    const s = loadDataC(currentMember.uid);
+    if (s) currentMember.data[cmk()] = s;
+    renderFiche();
+  } else { renderListe(); }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('month-lbl').textContent = currentMonthKey();
-  document.getElementById('sub-month').textContent = currentMonthKey();
-  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('month-lbl').textContent = cmk();
+  document.getElementById('sub-month').textContent = cmk();
+  const nm = (typeof localStorage !== 'undefined' && localStorage.getItem('ambitio_name')) || 'Guillaume';
   document.getElementById('tb-nm').textContent = nm;
   document.getElementById('tb-av').textContent = nm[0].toUpperCase();
-  renderAll();
-
-  // Firebase : connecte et écoute les données en temps réel
-  const _fbUser = U.getCurrentUser();
-  if (window.firebase && window.firebase.firestore && !Fire.db) {
-    Fire.init(window.firebase.firestore(), _fbUser.uid);
-  }
-  if (Fire.db) {
-    Fire.watchUser(_fbUser.uid, currentMonthKey(), (data) => {
-      if (data) { Fire.apply(data); renderAll(); }
-    });
-  }
-  // Refresh auto si DB mis à jour (ex: changement depuis saisie)
+  MEMBERS_C.forEach(m => { const s = loadDataC(m.uid); if (s) m.data[cmk()] = s; });
   document.addEventListener('db:updated', renderAll);
+  renderListe();
 });
-
 </script>
-
 </body>
 </html>
