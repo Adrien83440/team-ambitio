@@ -4,576 +4,1163 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Équipe</title>
-<link rel="stylesheet" href="sales.css"/>
-<script>
-/* === sales-data.js inlined === */
-/**
- * sales-data.js — Data Store + Firebase + Utilitaires
- * Les données "a" (actuelles) viennent de Firestore en temps réel.
- * Les données "p" (projections) sont les références fixes.
- */
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="nav.js" defer></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-/* ═══════════════════════════════════════════════════════════
-   PROJECTIONS FIXES — modifier ici pour changer les cibles
-═══════════════════════════════════════════════════════════ */
-const PROJECTIONS = {
-  closing: {
-    s1: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s2: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s3: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s4: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    livesP:0.75, offresP:0.667, engP:0.5, cOffP:0.4, cCallP:0.2, cashLive:666.7,
-  },
-  setting: {
-    s1: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s2: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s3: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s4: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    decrochesP:0.12, engP:0.222, setP:0.5, showupP:0.8, cCallP:0.8,
-  },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   DATA STORE
-═══════════════════════════════════════════════════════════ */
-const DB = {
-  months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-
-  // Données brutes saisies (remplacées par Firestore)
-  _raw: {
-    closing: {
-      s1: { calls:8,  lives:2, offres:1, closes:0, hc:0, fu:0, contracte:0,     collecte:0    },
-      s2: { calls:8,  lives:4, offres:2, closes:2, hc:2, fu:0, contracte:12000, collecte:1000 },
-      s3: { calls:9,  lives:6, offres:3, closes:1, hc:1, fu:0, contracte:5400,  collecte:400  },
-      s4: { calls:9,  lives:7, offres:2, closes:0, hc:0, fu:0, contracte:1800,  collecte:200  },
-    },
-    setting: {
-      s1: { leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, closes:0 },
-      s2: { leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, closes:2 },
-      s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
-      s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
-    },
-    deals: [
-      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
-      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
-      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-    ],
-  },
-
-  // Calculé depuis _raw
-  closing: null,
-  setting: null,
-  commissions: {
-    'Janvier 2026': { contracte:12000, collecte:0,    totalComm:0,    statut:'Validé',     deals:[] },
-    'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
-    'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
-  },
-  team: {
-    week: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:33020, collecte:3342,  calls:23, lives:20, offres:14, closes:6, showup:0.87, txOffre:0.70,  txTransfoShow:0.30,  txTransfoOffre:0.429, caCall:1435.7 },
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
-    ],
-    month: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:48469, collecte:4686, calls:56, lives:33, offres:17, closes:9, showup:0.589, txOffre:0.515, txTransfoShow:0.273, txTransfoOffre:0.529, caCall:721.3 },
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
-    ],
-  },
-
-  // Recalcule toutes les métriques depuis _raw
-  compute() {
-    const rc = DB._raw.closing;
-    const rs = DB._raw.setting;
-    const pc = PROJECTIONS.closing;
-    const ps = PROJECTIONS.setting;
-
-    const sumC  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rc[w][k]||0), 0);
-    const sumS  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rs[w][k]||0), 0);
-    const projC = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (pc[w][k]||0), 0);
-    const projS = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (ps[w][k]||0), 0);
-
-    const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
-    const cta=sumC('contracte'), cola=sumC('collecte');
-    const cp=projC('calls'), lp=projC('lives'), op=projC('offres'), clp=projC('closes');
-    const ctp=projC('contracte'), colp=projC('collecte');
-
-    DB.closing = {
-      mois: {
-        calls:     {a:ca,  p:cp  },
-        lives:     {a:la,  p:lp  },
-        offres:    {a:oa,  p:op  },
-        closes:    {a:cla, p:clp },
-        hc:        {a:sumC('hc'), p:clp},
-        fu:        {a:sumC('fu'), p:0  },
-        contracte: {a:cta, p:ctp },
-        collecte:  {a:cola,p:colp},
-        livesP:  {a:ca>0  ? la/ca   : 0, p:pc.livesP  },
-        offresP: {a:la>0  ? oa/la   : 0, p:pc.offresP },
-        engP:    {a:oa>0  ? cla/oa  : 0, p:pc.engP    },
-        cOffP:   {a:oa>0  ? cla/oa  : 0, p:pc.cOffP   },
-        cCallP:  {a:ca>0  ? cla/ca  : 0, p:pc.cCallP  },
-        cashLive:{a:la>0  ? cta/la  : 0, p:pc.cashLive},
-        atteinte: ctp>0 ? cta/ctp : 0,
-        delta:    Math.max(0, ctp-cta),
-      },
-      s1: DB._cw('s1'), s2: DB._cw('s2'), s3: DB._cw('s3'), s4: DB._cw('s4'),
-    };
-
-    const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
-    const sa=sumS('sets'), pra=sumS('presents'), sca2=sumS('closes');
-
-    DB.setting = {
-      mois: {
-        leads:     {a:sumS('leads'),  p:projS('leads')    },
-        calls:     {a:sca,            p:projS('calls')    },
-        decroches: {a:da,             p:projS('decroches')},
-        propRdv:   {a:pa,             p:projS('propRdv')  },
-        sets:      {a:sa,             p:projS('sets')     },
-        presents:  {a:pra,            p:projS('presents') },
-        closes:    {a:sca2,           p:projS('closes')   },
-        decrochesP:{a:sca>0?da/sca:0,  p:ps.decrochesP },
-        engP:      {a:da>0 ?pa/da:0,    p:ps.engP       },
-        setP:      {a:pa>0 ?sa/pa:0,    p:ps.setP       },
-        showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
-        cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
-      },
-      s1: DB._sw('s1'), s2: DB._sw('s2'), s3: DB._sw('s3'), s4: DB._sw('s4'),
-    };
-
-    // Sync deals dans commissions
-    try {
-      const cmk = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-      if (DB.commissions[cmk]) DB.commissions[cmk].deals = DB._raw.deals;
-    } catch(e) {}
-  },
-
-  _cw(w) {
-    const d=DB._raw.closing[w], p=PROJECTIONS.closing[w];
-    return {
-      calls:{a:d.calls||0,p:p.calls}, lives:{a:d.lives||0,p:p.lives},
-      offres:{a:d.offres||0,p:p.offres}, closes:{a:d.closes||0,p:p.closes},
-      hc:{a:d.hc||0,p:p.closes}, fu:{a:d.fu||0,p:0},
-      contracte:{a:d.contracte||0,p:p.contracte}, collecte:{a:d.collecte||0,p:p.collecte},
-    };
-  },
-  _sw(w) {
-    const d=DB._raw.setting[w], p=PROJECTIONS.setting[w];
-    return {
-      leads:{a:d.leads||0,p:p.leads}, calls:{a:d.calls||0,p:p.calls},
-      decroches:{a:d.decroches||0,p:p.decroches}, propRdv:{a:d.propRdv||0,p:p.propRdv},
-      sets:{a:d.sets||0,p:p.sets}, presents:{a:d.presents||0,p:p.presents},
-      closes:{a:d.closes||0,p:p.closes},
-    };
-  },
-};
-
-DB.compute();
-
-/* ═══════════════════════════════════════════════════════════
-   FIREBASE — couche temps réel
-   Initialisé après que firebase SDK soit chargé + auth ready
-═══════════════════════════════════════════════════════════ */
-const Fire = {
-  db:  null,
-  uid: null,
-  _unsubs: [],
-
-  init(firestore, uid) {
-    Fire.db  = firestore;
-    Fire.uid = uid;
-  },
-
-  _key(label) {
-    const p = label.split(' ');
-    const m = DB.months.indexOf(p[0]);
-    return `${p[1]}-${String(m+1).padStart(2,'0')}`;
-  },
-
-  // Écoute en temps réel les données d'un user pour un mois
-  watchUser(userId, monthLabel, callback) {
-    if (!Fire.db) return () => {};
-    const ref = Fire.db
-      .collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const unsub = ref.onSnapshot(snap => callback(snap.exists ? snap.data() : null));
-    Fire._unsubs.push(unsub);
-    return unsub;
-  },
-
-  // Sauvegarde une semaine de closing
-  async saveClosing(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ closing: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde une semaine de setting
-  async saveSetting(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ setting: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde un deal (append)
-  async saveDeal(userId, monthLabel, deal) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const snap = await ref.get();
-    const deals = snap.exists ? (snap.data().deals || []) : [];
-    deals.push({ ...deal, _ts: Date.now() });
-    await ref.set({ deals }, { merge: true });
-  },
-
-  // Applique un snapshot Firestore dans DB puis recalcule
-  apply(data) {
-    if (!data) return;
-    if (data.closing) ['s1','s2','s3','s4'].forEach(w => {
-      if (data.closing[w]) Object.assign(DB._raw.closing[w], data.closing[w]);
-    });
-    if (data.setting) ['s1','s2','s3','s4'].forEach(w => {
-      if (data.setting[w]) Object.assign(DB._raw.setting[w], data.setting[w]);
-    });
-    if (data.deals) DB._raw.deals = data.deals;
-    DB.compute();
-    document.dispatchEvent(new CustomEvent('db:updated'));
-  },
-
-  stop() { Fire._unsubs.forEach(u => u()); Fire._unsubs = []; },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════════════════════════ */
-const U = {
-  euro:  v => v == null ? '—' : '€\u202f' + Number(v).toLocaleString('fr-FR'),
-  pct:   v => v == null ? '—' : (v * 100).toFixed(1) + '%',
-  num:   v => v == null ? '—' : Number(v).toLocaleString('fr-FR'),
-  pp:  (a, p) => p > 0 ? Math.min((a / p) * 100, 200) : 0,
-  ppv: (a, p) => p > 0 ? ((a / p) * 100).toFixed(0) + '%' : '—',
-  cb:  (a, p) => { const r = p > 0 ? a / p : 0; return r >= 1 ? '#34d399' : r >= 0.65 ? '#f59e0b' : '#ef4444'; },
-  g:   id => document.getElementById(id),
-  getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
-  getCurrentUser:  () => ({
-    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || 'guillaume',
-    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Guillaume',
-    role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
-  }),
-
-  progRow: (label, a, p, isEuro = false) => {
-    const col = U.cb(a, p);
-    return `<div class="pr">
-      <div class="pr-l">${label}</div>
-      <div class="pr-track"><div class="pr-fill" style="width:${Math.min(U.pp(a,p),100)}%;background:${col}"></div></div>
-      <div class="pr-val">${isEuro ? `${U.euro(a)} / ${U.euro(p)}` : `${a} / ${p}`}</div>
-      <div class="pr-pct" style="color:${col}">${U.ppv(a,p)}</div>
-    </div>`;
-  },
-
-  kpiCard: ({ label, val, sub, rawA, proj, color='#ef4444', pct:fp }) => {
-    const pc = fp!=null ? fp : (proj!=null ? U.pp(rawA??0, proj) : null);
-    return `<div class="kpi" style="--kc:${color}">
-      <div class="kpi-label">${label}</div>
-      <div class="kpi-value">${val}</div>
-      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
-      ${pc!=null ? `<div class="kpi-prog">
-        <div class="kpi-prog-row"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div>
-        <div class="kpi-prog-track"><div class="kpi-prog-fill" style="width:${Math.min(pc,100)}%;background:${color}"></div></div>
-      </div>` : ''}
-    </div>`;
-  },
-
-  funnelStep: (label, val, max, isFirst=false, isEuro=false) => {
-    const ratio = max > 0 ? val / max : 0;
-    return `<div class="fs">
-      <div class="fs-label">${label}</div>
-      <div class="fs-track"><div class="fs-fill" style="width:${Math.min(ratio*100,100)}%"></div></div>
-      <div class="fs-val">${isEuro ? U.euro(val) : val}</div>
-      <div class="fs-rate">${!isFirst ? U.pct(ratio) : ''}</div>
-    </div>`;
-  },
-
-  weekCard: (label, mainVal, mainLabel, minis, isCurrent, dateRange) => `
-    <div class="wc${isCurrent?' wc-active':''}">
-      <div class="wc-label">${label}</div>
-      ${dateRange ? `<div class="wc-dates">${dateRange}</div>` : ''}
-      <div class="wc-main">${mainVal}</div>
-      <div class="wc-sub">${mainLabel}</div>
-      <div class="wc-grid">${minis.map(m=>`
-        <div class="wc-mini">
-          <div class="wc-mini-v"${m.color?` style="color:${m.color}"`:''} >${m.val}</div>
-          <div class="wc-mini-l">${m.label}</div>
-        </div>`).join('')}</div>
-    </div>`,
-
-  barChart: (labels, actuals, projs, unit='') => {
-    const mx = Math.max(...actuals, ...projs, 1);
-    return `<div class="chart-legend">
-        <span class="cl-dot cl-real"></span>Réel
-        <span class="cl-dot cl-proj" style="margin-left:14px"></span>Projection
-      </div>
-      <div class="chart-bars">
-        ${labels.map((l,i)=>`<div class="chart-col">
-          <div class="chart-pair">
-            <div class="chart-bar bar-real" style="height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}${unit}"></div>
-            <div class="chart-bar bar-proj" style="height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj:${projs[i]}${unit}"></div>
-          </div>
-          <div class="chart-lbl">${l}</div>
-        </div>`).join('')}
-      </div>`;
-  },
-
-  toast: (msg, type='success') => {
-    let t = document.getElementById('_toast');
-    if (!t) { t=document.createElement('div'); t.id='_toast'; document.body.appendChild(t); }
-    const s = { success:'background:#1a2e1a;border:1px solid rgba(52,211,153,.3);color:#6ee7b7', error:'background:#2e1a1a;border:1px solid rgba(239,68,68,.3);color:#fca5a5', info:'background:#1a1a2e;border:1px solid rgba(96,165,250,.3);color:#93c5fd' };
-    t.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(0);font-size:12px;font-weight:600;padding:9px 18px;border-radius:10px;z-index:9999;opacity:1;transition:all .28s;white-space:nowrap;font-family:var(--font-b);${s[type]||s.success}`;
-    t.textContent = msg;
-    clearTimeout(t._t);
-    t._t = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
-  },
-};
-
-
-/* ═══════════════════════════════════════════════════════════
-   SEMAINES RÉELLES — calcule les vraies dates lun→dim
-═══════════════════════════════════════════════════════════ */
-function getMonthWeeks(monthLabel) {
-  // monthLabel = "Février 2026"
-  const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                     'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const parts = monthLabel.split(' ');
-  const month = MONTHS_FR.indexOf(parts[0]); // 0-based
-  const year  = parseInt(parts[1]);
-  if (month === -1 || isNaN(year)) return [];
-
-  const DAYS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-  const pad = n => String(n).padStart(2,'0');
-
-  function fmt(d) {
-    // "14/02"
-    return pad(d.getDate()) + '/' + pad(d.getMonth()+1);
-  }
-  function fmtShort(d) {
-    // "14 fév"
-    const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
-    return d.getDate() + ' ' + M[d.getMonth()];
-  }
-
-  // Premier lundi qui touche le mois (peut être dans le mois précédent)
-  const firstOfMonth = new Date(year, month, 1);
-  const dayOfWeek = firstOfMonth.getDay(); // 0=Sun,1=Mon...
-  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  let monday = new Date(year, month, 1 + daysToMonday);
-
-  const weeks = [];
-  while (true) {
-    const sunday = new Date(monday.getTime() + 6 * 86400000);
-    // Inclure si la semaine chevauche le mois cible
-    if (monday.getMonth() === month || sunday.getMonth() === month) {
-      weeks.push({
-        id:    's' + (weeks.length + 1),
-        label: 'S' + (weeks.length + 1),
-        start: monday,
-        end:   sunday,
-        range: fmt(monday) + ' → ' + fmt(sunday),       // "26/01 → 01/02"
-        short: fmtShort(monday) + ' – ' + fmtShort(sunday), // "26 jan – 1 fév"
-        tab:   fmt(monday) + '→' + fmt(sunday),
-      });
-    }
-    monday = new Date(monday.getTime() + 7 * 86400000);
-    if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
-      if (monday.getMonth() !== month) break;
-    }
-    if (monday.getFullYear() > year + 1) break;
-    if (weeks.length >= 6) break;
-  }
-  return weeks;
+:root{
+  --bg:#080b14; --bg2:#0d1220; --bg3:#111827;
+  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.12);
+  --text:#f1f5f9; --muted:rgba(255,255,255,0.4); --muted2:rgba(255,255,255,0.2);
+  --red:#ef4444; --blue:#60a5fa; --gold:#f59e0b;
+  --green:#34d399; --purple:#a78bfa; --orange:#fb923c;
+  --radius:14px;
+  --fh:'Syne',sans-serif; --fm:'DM Mono',monospace; --fb:'Inter',sans-serif;
 }
 
-window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
-window.getMonthWeeks=getMonthWeeks;
+body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:14px;line-height:1.5;min-height:100vh}
 
-/* === end sales-data.js === */
-</script>
-<script src="nav.js"></script>
-<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
+/* ── LAYOUT ── */
+.page{max-width:1300px;margin:0 auto;padding:28px 24px 80px}
+
+/* ── TOPBAR ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+.topbar-left{display:flex;align-items:center;gap:12px}
+.topbar-icon{width:44px;height:44px;background:linear-gradient(135deg,#a78bfa,#7c3aed);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 16px rgba(167,139,250,0.3)}
+.topbar-title{font-family:var(--fh);font-size:22px;font-weight:800}
+.topbar-sub{font-size:12px;color:var(--muted);margin-top:1px}
+
+/* ── MAIN TABS ── */
+.main-tabs{display:flex;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:5px;margin-bottom:28px;width:fit-content;flex-wrap:wrap}
+.main-tab{padding:8px 18px;border-radius:8px;font-family:var(--fh);font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);transition:all .15s;white-space:nowrap;border:none;background:none}
+.main-tab:hover{color:var(--text)}
+.main-tab.active{background:rgba(255,255,255,0.08);color:var(--text);border:1px solid var(--border2)}
+
+/* ── SECTIONS ── */
+.section{display:none}
+.section.active{display:block}
+
+/* ════════════════════════════════════════════
+   SECTION — ESPACES SALARIÉS
+════════════════════════════════════════════ */
+.member-selector{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+.member-btn{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:all .15s;font-family:var(--fb)}
+.member-btn:hover{border-color:var(--border2)}
+.member-btn.active{border-color:var(--mb-color,var(--purple));background:rgba(167,139,250,0.06)}
+.member-btn-av{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:14px;font-weight:800;color:white;flex-shrink:0}
+.member-btn-name{font-size:13px;font-weight:700}
+.member-btn-role{font-size:10px;color:var(--muted)}
+
+/* Espace membre */
+.espace{display:none}
+.espace.active{display:block}
+.espace-header{display:flex;align-items:center;gap:18px;padding:24px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px;position:relative;overflow:hidden}
+.espace-header::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:var(--eh-color,rgba(167,139,250,0.08));filter:blur(50px);pointer-events:none}
+.espace-av{width:64px;height:64px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:28px;font-weight:800;color:white;flex-shrink:0;border:2px solid rgba(255,255,255,0.1)}
+.espace-info{}
+.espace-name{font-family:var(--fh);font-size:20px;font-weight:800}
+.espace-role{font-size:12px;color:var(--muted);margin-top:3px}
+.espace-badges{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid}
+
+/* Espace tabs */
+.espace-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px}
+.espace-tab{padding:9px 16px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap}
+.espace-tab:hover{color:var(--text)}
+.espace-tab.active{color:var(--text);border-bottom-color:var(--et-color,var(--purple))}
+
+/* Sub panel */
+.sub-panel{display:none}
+.sub-panel.active{display:block}
+
+/* Infos grille */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-bottom:20px}
+.info-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
+.info-card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:12px}
+.info-field{margin-bottom:10px}
+.info-field label{display:block;font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.info-field .val{font-size:13px;font-weight:500}
+.info-field .val a{color:var(--blue);text-decoration:none}
+.info-field .val a:hover{text-decoration:underline}
+
+/* Documents */
+.docs-list{display:flex;flex-direction:column;gap:8px}
+.doc-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;transition:border-color .15s}
+.doc-row:hover{border-color:var(--border2)}
+.doc-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.doc-info{flex:1;min-width:0}
+.doc-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-meta{font-size:11px;color:var(--muted);margin-top:1px}
+.doc-actions{display:flex;gap:6px}
+
+/* Messages / feed */
+.feed{display:flex;flex-direction:column;gap:12px}
+.msg-bubble{display:flex;gap:12px;animation:fadeUp .2s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.msg-av{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:13px;font-weight:800;color:white;flex-shrink:0;margin-top:2px}
+.msg-content{}
+.msg-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.msg-author{font-size:12px;font-weight:700}
+.msg-time{font-size:10px;color:var(--muted2)}
+.msg-role-tag{font-size:10px;padding:1px 7px;border-radius:10px;font-weight:700}
+.msg-text{font-size:13px;color:rgba(255,255,255,.85);line-height:1.6;background:var(--bg2);border:1px solid var(--border);border-radius:0 10px 10px 10px;padding:10px 14px;max-width:540px}
+.msg-text.head-msg{background:rgba(167,139,250,0.06);border-color:rgba(167,139,250,0.2)}
+
+/* Compose */
+.compose-box{margin-top:16px;display:flex;gap:10px;align-items:flex-end}
+.compose-input{flex:1;padding:10px 14px;background:rgba(255,255,255,0.04);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:13px;outline:none;resize:vertical;min-height:44px;max-height:120px;transition:border-color .15s}
+.compose-input:focus{border-color:var(--purple)}
+.compose-input::placeholder{color:var(--muted2)}
+
+/* ════════════════════════════════════════════
+   SECTION — CALL BREAKDOWN
+════════════════════════════════════════════ */
+.cb-member-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+.cb-member-tab{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);transition:all .15s}
+.cb-member-tab:hover{color:var(--text)}
+.cb-member-tab.active{color:var(--text);border-color:var(--cbt-color,var(--red));background:rgba(239,68,68,0.06)}
+.cb-member-tab .dot{width:8px;height:8px;border-radius:50%}
+
+.cb-panel{display:none}
+.cb-panel.active{display:block}
+
+/* Call session cards */
+.calls-grid{display:flex;flex-direction:column;gap:12px}
+.call-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:border-color .15s}
+.call-card:hover{border-color:var(--border2)}
+.call-card-head{display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer}
+.call-card-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.call-card-info{flex:1}
+.call-card-title{font-size:14px;font-weight:700}
+.call-card-meta{font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.call-card-badge{padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700}
+.call-card-chevron{font-size:12px;color:var(--muted2);transition:transform .2s}
+.call-card.open .call-card-chevron{transform:rotate(90deg)}
+.call-card-body{display:none;padding:0 20px 18px;border-top:1px solid var(--border)}
+.call-card.open .call-card-body{display:block}
+
+/* Score grid */
+.score-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;margin:14px 0}
+.score-item{background:var(--bg3);border-radius:10px;padding:10px 12px;text-align:center}
+.score-label{font-size:10px;color:var(--muted);margin-bottom:4px}
+.score-val{font-family:var(--fm);font-size:18px;font-weight:500}
+.score-star{font-size:10px;margin-top:2px}
+
+/* Debrief notes */
+.debrief-block{margin-top:14px}
+.debrief-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:8px}
+.debrief-content{font-size:13px;color:rgba(255,255,255,.8);line-height:1.7;background:var(--bg3);border-radius:10px;padding:12px 14px;border-left:3px solid var(--purple)}
+.debrief-edit{width:100%;padding:10px 12px;background:rgba(255,255,255,0.04);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:13px;resize:vertical;min-height:80px;outline:none;margin-top:8px}
+.debrief-edit:focus{border-color:var(--purple)}
+
+/* Add call form */
+.add-call-form{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px;display:none}
+.add-call-form.open{display:block}
+.form-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+@media(max-width:640px){.form-grid-3{grid-template-columns:1fr}}
+.score-inputs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:12px}
+
+/* ════════════════════════════════════════════
+   SECTION — MORNING MEETING
+════════════════════════════════════════════ */
+.mm-layout{display:grid;grid-template-columns:260px 1fr;gap:20px}
+@media(max-width:900px){.mm-layout{grid-template-columns:1fr}}
+
+/* Sidebar meetings */
+.mm-sidebar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.mm-sidebar-head{padding:16px 18px;border-bottom:1px solid var(--border);font-family:var(--fh);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+.mm-list{padding:8px}
+.mm-item{padding:10px 12px;border-radius:10px;cursor:pointer;transition:background .15s;margin-bottom:4px}
+.mm-item:hover{background:rgba(255,255,255,0.04)}
+.mm-item.active{background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.15)}
+.mm-item-date{font-family:var(--fh);font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
+.mm-item-day{font-size:10px;color:var(--muted);margin-top:2px}
+.mm-item-preview{font-size:10px;color:var(--muted2);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mm-day-label{padding:6px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted2)}
+
+/* MM main */
+.mm-main{}
+.mm-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px}
+.mm-card-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.mm-card-title{font-family:var(--fh);font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.mm-card-body{padding:16px 20px}
+
+/* Meeting link */
+.meet-link-box{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);border-radius:10px;margin-bottom:16px}
+.meet-link-icon{font-size:22px;flex-shrink:0}
+.meet-link-text{flex:1;min-width:0}
+.meet-link-label{font-size:11px;color:var(--muted);margin-bottom:2px}
+.meet-link-url{font-size:12px;font-family:var(--fm);color:var(--blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meet-link-url a{color:var(--blue);text-decoration:none}
+.meet-link-url a:hover{text-decoration:underline}
+.btn-copy{padding:6px 12px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);border-radius:8px;color:var(--blue);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;flex-shrink:0}
+.btn-copy:hover{background:rgba(96,165,250,0.18)}
+
+/* Agenda items */
+.agenda-list{display:flex;flex-direction:column;gap:6px}
+.agenda-item{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-radius:8px;background:var(--bg3);border-left:3px solid var(--ag-color,var(--blue))}
+.agenda-bullet{flex-shrink:0;margin-top:2px;font-size:14px}
+.agenda-text{font-size:13px;line-height:1.5}
+.agenda-item.done .agenda-text{text-decoration:line-through;color:var(--muted)}
+
+/* Questions section */
+.questions-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.question-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px}
+.q-av{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:white;flex-shrink:0;margin-top:2px}
+.q-body{flex:1}
+.q-author{font-size:11px;font-weight:700;margin-bottom:3px}
+.q-text{font-size:12px;color:rgba(255,255,255,.8);line-height:1.5}
+.q-answer{font-size:12px;color:var(--green);margin-top:6px;padding-top:6px;border-top:1px solid var(--border);display:flex;gap:6px}
+.q-answer::before{content:'↳';flex-shrink:0}
+.q-actions{display:flex;gap:6px;margin-top:6px}
+.q-time{font-size:10px;color:var(--muted2);margin-top:2px}
+
+/* Summary */
+.summary-block{font-size:13px;line-height:1.8;color:rgba(255,255,255,.85);white-space:pre-wrap}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:none;border-radius:9px;font-family:var(--fb);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--purple);color:white}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-blue{background:var(--blue);color:#0a0e1a}
+.btn-blue:hover{opacity:.9}
+.btn-ghost{background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted)}
+.btn-ghost:hover{background:rgba(255,255,255,.1);color:var(--text)}
+.btn-green{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2);color:var(--green)}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-icon{width:32px;height:32px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+
+/* Shared */
+.sep{height:1px;background:var(--border);margin:16px 0}
+.tag{padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;border:1px solid}
+.empty-state{padding:32px;text-align:center;color:var(--muted2);font-size:13px}
+.empty-icon{font-size:32px;margin-bottom:8px}
+
+textarea,input[type=text],input[type=url],input[type=date],select{
+  background:rgba(255,255,255,.04);border:1.5px solid var(--border);
+  border-radius:9px;color:var(--text);font-family:var(--fb);font-size:13px;
+  outline:none;transition:border-color .15s;width:100%;padding:9px 12px;
+}
+textarea:focus,input[type=text]:focus,input[type=url]:focus,input[type=date]:focus,select:focus{border-color:var(--purple)}
+textarea::placeholder,input::placeholder{color:var(--muted2)}
+select option{background:#1a1a2e}
+label.flabel{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.fgroup{display:flex;flex-direction:column;gap:4px}
+</style>
 </head>
 <body>
-
-<div class="topbar">
-  <div class="tb-logo">S</div>
-  <div class="tb-title">Ambitio <em>Sales</em></div>
-  <div class="tb-sep"></div>
-  <div class="tb-page">👥 Équipe</div>
-  <div class="tb-right">
-    <div class="tb-month">
-      <button onclick="prevMonth()">&#9664;</button>
-      <span id="month-lbl">Février 2026</span>
-      <button onclick="nextMonth()">&#9654;</button>
-    </div>
-    <div class="tb-user">
-      <div class="tb-av" id="tb-av">G</div>
-      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
-    </div>
-  </div>
-</div>
-
-<div class="page">
-
-  <div class="page-header-row">
-    <div>
-      <div class="page-title">Équipe — Performance comparée</div>
-      <div class="page-sub">Guillaume vs Elodie</div>
-    </div>
-    <div class="tabs" id="view-tabs">
-      <div class="tab active" onclick="setView('week')">Cette semaine</div>
-      <div class="tab" onclick="setView('month')">Ce mois</div>
-    </div>
-  </div>
-
-  <!-- KPIs totaux -->
-  <div class="g4 mb" id="kpis"></div>
-
-  <!-- Table + Perf bars -->
-  <div class="g21">
-    <div class="card">
-      <div class="card-header"><span class="card-title">Comparatif détaillé</span></div>
-      <div style="overflow-x:auto"><div id="team-table"></div></div>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Taux de performance</span></div>
-      <div id="perf-bars"></div>
-    </div>
-  </div>
-
-</div>
-
 <script>
-const MONTHS = DB.months;
-let _cm = (() => { const s=localStorage.getItem('sales_month')||'Février 2026'; const p=s.split(' '); return{month:MONTHS.indexOf(p[0]),year:parseInt(p[1])||2026}; })();
-function currentMonthKey() { return MONTHS[_cm.month]+' '+_cm.year; }
-function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); renderAll(); }
-function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); renderAll(); }
-function _saveMonth() { localStorage.setItem('sales_month',currentMonthKey()); document.getElementById('month-lbl').textContent=currentMonthKey(); }
+/* ════════════════════════════════════════════════════════════
+   DATA STORE — persistance localStorage
+════════════════════════════════════════════════════════════ */
+function lsGet(k, def) {
+  try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; }
+}
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
-let currentView = 'week';
+/* ── Members ── */
+const MEMBERS = [
+  { uid:'guillaume', name:'Guillaume', surname:'Bilcke', role:'Closer + Setter', color:'#ef4444',
+    email:'guillaume@ambitiocorp.com', phone:'+33 6 00 00 00 00',
+    contrat:'Closing & Setting Full Cycle', dateDebut:'Septembre 2025', statut:'Actif',
+    linkedin:'https://linkedin.com/in/guillaumebilcke',
+  },
+  { uid:'elodie', name:'Élodie', surname:'', role:'Closer + Setter', color:'#60a5fa',
+    email:'elodie@ambitiocorp.com', phone:'',
+    contrat:'Closing & Setting Full Cycle', dateDebut:'Juillet 2025', statut:'Actif',
+    linkedin:'',
+  },
+];
 
-function setView(v) {
-  currentView = v;
-  document.querySelectorAll('#view-tabs .tab').forEach((t,i) =>
-    t.classList.toggle('active', (i===0&&v==='week')||(i===1&&v==='month')));
-  renderAll();
+/* ── Meeting link (permanent) ── */
+const MEETING_LINK = 'https://us06web.zoom.us/j/00000000000?pwd=xxxxxx'; // à remplacer
+
+/* ── Getters / setters ── */
+function getMemberMsgs(uid)   { return lsGet(`equipe_msgs_${uid}`, []); }
+function setMemberMsgs(uid,v) { lsSet(`equipe_msgs_${uid}`, v); }
+function getMemberDocs(uid)   { return lsGet(`equipe_docs_${uid}`, []); }
+function setMemberDocs(uid,v) { lsSet(`equipe_docs_${uid}`, v); }
+function getCallBreakdowns(uid)   { return lsGet(`equipe_calls_${uid}`, getSampleCalls(uid)); }
+function setCallBreakdowns(uid,v) { lsSet(`equipe_calls_${uid}`, v); }
+function getMeetings()   { return lsGet('equipe_meetings', getSampleMeetings()); }
+function setMeetings(v)  { lsSet('equipe_meetings', v); }
+
+/* ── Sample data ── */
+function getSampleCalls(uid) {
+  if (uid === 'guillaume') return [
+    { id: 'c1', date:'2026-02-10', client:'Julie Berchoux', type:'Closing', duree:'52 min',
+      lien:'', scores:{ ouverture:4, decouverte:4, pitch:5, objections:4, closing:5 },
+      points_forts:'Très bon rythme, excellente gestion des objections. Closing naturel.',
+      axes_amelioration:'Ouverture un peu rapide, prendre 30s de plus pour créer la connexion.',
+      note_head:'Belle performance. Continuer sur cette dynamique pour les prochains BP12.',
+      statut:'Débriefé' },
+    { id: 'c2', date:'2026-02-17', client:'Belinda Giangiulio', type:'Closing', duree:'48 min',
+      lien:'', scores:{ ouverture:3, decouverte:5, pitch:4, objections:3, closing:4 },
+      points_forts:'Découverte profonde, bonne qualification du budget.',
+      axes_amelioration:'Hésitations sur les objections prix. Travailler le script de gestion.',
+      note_head:'Bonne progression depuis janvier. La découverte est ton point fort. Travail objections semaine prochaine.',
+      statut:'Débriefé' },
+    { id: 'c3', date:'2026-03-04', client:'Fabienne Theres', type:'Closing', duree:'61 min',
+      lien:'', scores:{ ouverture:4, decouverte:4, pitch:4, objections:4, closing:5 },
+      points_forts:'', axes_amelioration:'', note_head:'', statut:'En attente' },
+  ];
+  if (uid === 'elodie') return [
+    { id: 'c4', date:'2026-01-21', client:'Isabelle Mittard', type:'Closing', duree:'45 min',
+      lien:'', scores:{ ouverture:5, decouverte:4, pitch:5, objections:5, closing:5 },
+      points_forts:'Parfaite maîtrise du script. Tone exceptionnel. Close très fluide.',
+      axes_amelioration:'RAS sur ce call, vraiment excellent.',
+      note_head:'Top performance. Utilise ce call comme référence pour tes futurs closes.',
+      statut:'Débriefé' },
+    { id: 'c5', date:'2026-02-19', client:'Franck Dulong', type:'Closing', duree:'55 min',
+      lien:'', scores:{ ouverture:4, decouverte:5, pitch:4, objections:4, closing:5 },
+      points_forts:'Gestion de la timeline PIF remarquable.', axes_amelioration:'Pitch à structurer davantage.',
+      note_head:'Belle gestion du PIF. Tu maîtrises bien les closes en 1 appel.', statut:'Débriefé' },
+  ];
+  return [];
 }
 
-function renderAll() {
-  const team = DB.team[currentView === 'week' ? 'week' : 'month'];
-
-  const tot = {
-    contracte: team.reduce((s,m)=>s+m.contracte,0),
-    collecte:  team.reduce((s,m)=>s+m.collecte,0),
-    calls:     team.reduce((s,m)=>s+m.calls,0),
-    closes:    team.reduce((s,m)=>s+m.closes,0),
-  };
-
-  // KPIs
-  document.getElementById('kpis').innerHTML = [
-    { label:'Contracté total', val:U.euro(tot.contracte), color:'#ef4444' },
-    { label:'Collecté total',  val:U.euro(tot.collecte),  color:'#34d399' },
-    { label:'Total calls',     val:tot.calls,              color:'#60a5fa' },
-    { label:'Total closes',    val:tot.closes,             color:'#f59e0b' },
-  ].map(k => U.kpiCard({ label:k.label, val:k.val, color:k.color })).join('');
-
-  // Table
-  document.getElementById('team-table').innerHTML = `
-    <table class="data-table" style="width:100%">
-      <thead><tr>
-        <th>Commercial</th><th>Contracté</th><th>Collecté</th>
-        <th>Calls</th><th>Lives</th><th>Offres</th><th>Closes</th>
-        <th>Show-up</th><th>CA/Call</th>
-      </tr></thead>
-      <tbody>
-        ${team.map(m => `
-          <tr>
-            <td><div class="member-cell">
-              <div class="member-av" style="background:linear-gradient(135deg,${m.color}66,${m.color})">${m.name[0]}</div>
-              <div>
-                <div class="member-name">${m.name}</div>
-                <div class="member-role">${m.role}</div>
-              </div>
-            </div></td>
-            <td class="td-mono">${U.euro(m.contracte)}</td>
-            <td class="td-mono ${m.collecte>5000?'td-ok':'td-warn'}">${U.euro(m.collecte)}</td>
-            <td class="td-mono">${m.calls}</td>
-            <td class="td-mono">${m.lives}</td>
-            <td class="td-mono">${m.offres}</td>
-            <td class="td-mono ${m.closes>=5?'td-ok':'td-warn'}">${m.closes}</td>
-            <td class="td-mono ${m.showup>=0.7?'td-ok':'td-warn'}">${U.pct(m.showup)}</td>
-            <td class="td-mono">${U.euro(m.caCall)}</td>
-          </tr>`).join('')}
-        <tr style="border-top:1px solid var(--border2);font-weight:700">
-          <td><b style="font-size:12px">Total</b></td>
-          <td class="td-mono">${U.euro(tot.contracte)}</td>
-          <td class="td-mono">${U.euro(tot.collecte)}</td>
-          <td class="td-mono">${tot.calls}</td>
-          <td class="td-mono">${team.reduce((s,m)=>s+m.lives,0)}</td>
-          <td class="td-mono">${team.reduce((s,m)=>s+m.offres,0)}</td>
-          <td class="td-mono">${tot.closes}</td>
-          <td class="td-mono">—</td>
-          <td class="td-mono">—</td>
-        </tr>
-      </tbody>
-    </table>`;
-
-  // Performance bars
-  const metrics = [
-    { label:"Show-up",          key:'showup',         ref:0.75 },
-    { label:"Taux d'offre",     key:'txOffre',        ref:0.70 },
-    { label:"Tx transfo show",  key:'txTransfoShow',  ref:0.30 },
-    { label:"Tx transfo offre", key:'txTransfoOffre', ref:0.40 },
+function getSampleMeetings() {
+  return [
+    { id:'m1', date:'2026-02-24', jourSemaine:'Lundi', heure:'09h00',
+      lien_meet: MEETING_LINK,
+      sujets:['Bilan semaine S7','Points de progression Guillaume & Élodie','Objectifs S8','Nouvelles offres Q1'],
+      questions:[
+        { uid:'guillaume', text:'Est-ce qu\'on peut revoir le script d\'objection prix ?', reponse:'Oui, on va y travailler en debrief jeudi', ts: 1740355200000 },
+        { uid:'elodie', text:'Les leads cold sont-ils toujours disponibles cette semaine ?', reponse:'', ts: 1740355600000 },
+      ],
+      resume:'Morning meeting productif. Focus sur les objections prix BP12. Guillaume et Élodie progressent bien. Objectif S8 : 5 closes minimum chacun. Rappel : bien qualifier le budget avant le pitch.',
+      statut:'Terminé' },
+    { id:'m2', date:'2026-02-26', jourSemaine:'Mercredi', heure:'09h00',
+      lien_meet: MEETING_LINK,
+      sujets:['Flash S8 J3','Review calls Élodie','Point offre Elite Phénix'],
+      questions:[],
+      resume:'', statut:'Terminé' },
+    { id:'m3', date:'2026-02-28', jourSemaine:'Vendredi', heure:'09h00',
+      lien_meet: MEETING_LINK,
+      sujets:['Bilan S8','Préparation S9','Planning de la semaine','Tops & flops'],
+      questions:[{ uid:'elodie', text:'Comment bien gérer les no-show en setting ?', reponse:'', ts: Date.now() - 3600000 }],
+      resume:'', statut:'Terminé' },
+    { id:'m4', date:'2026-03-03', jourSemaine:'Lundi', heure:'09h00',
+      lien_meet: MEETING_LINK,
+      sujets:['Lancement semaine S9','Objectifs de la semaine','Mindset & énergie'],
+      questions:[], resume:'', statut:'À venir' },
+    { id:'m5', date:'2026-03-05', jourSemaine:'Mercredi', heure:'09h00',
+      lien_meet: MEETING_LINK,
+      sujets:['Flash mi-semaine S9','Review calls Guillaume'],
+      questions:[], resume:'', statut:'À venir' },
   ];
+}
 
-  document.getElementById('perf-bars').innerHTML = metrics.map(m => `
-    <div style="margin-bottom:16px">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:7px">${m.label}</div>
-      ${team.map(t => `
-        <div style="display:flex;align-items:center;gap:9px;margin-bottom:5px">
-          <div style="width:72px;font-size:11px;color:var(--muted)">${t.name}</div>
-          <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden">
-            <div style="width:${Math.min((t[m.key]/m.ref)*100,100)}%;height:100%;background:${t.color};border-radius:99px;opacity:0.8"></div>
+/* ════════════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════════════ */
+let currentMainTab = 'espaces';
+let currentMemberUid = MEMBERS[0].uid;
+let currentEspaceTab = {};  // uid → tab name
+let currentCbMember = MEMBERS[0].uid;
+let currentMeeting = null;
+
+/* ════════════════════════════════════════════════════════════
+   MAIN TAB
+════════════════════════════════════════════════════════════ */
+function setMainTab(name) {
+  currentMainTab = name;
+  document.querySelectorAll('.main-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'sec-' + name));
+  if (name === 'espaces')   renderEspaces();
+  if (name === 'breakdown') renderBreakdown();
+  if (name === 'meeting')   renderMeeting();
+}
+
+/* ════════════════════════════════════════════════════════════
+   SECTION — ESPACES
+════════════════════════════════════════════════════════════ */
+function renderEspaces() {
+  // Member selector buttons
+  const sel = document.getElementById('member-selector');
+  sel.innerHTML = MEMBERS.map(m => `
+    <div class="member-btn ${m.uid === currentMemberUid ? 'active' : ''}" style="--mb-color:${m.color}" onclick="selectMember('${m.uid}')">
+      <div class="member-btn-av" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
+      <div>
+        <div class="member-btn-name">${m.name} ${m.surname}</div>
+        <div class="member-btn-role">${m.role}</div>
+      </div>
+    </div>`).join('');
+
+  MEMBERS.forEach(m => renderEspace(m));
+  showEspace(currentMemberUid);
+}
+
+function selectMember(uid) {
+  currentMemberUid = uid;
+  document.querySelectorAll('.member-btn').forEach(b => b.classList.toggle('active', b.onclick.toString().includes(`'${uid}'`)));
+  showEspace(uid);
+}
+
+function showEspace(uid) {
+  document.querySelectorAll('.espace').forEach(e => e.classList.toggle('active', e.id === 'espace-' + uid));
+}
+
+function renderEspace(m) {
+  const el = document.getElementById('espace-' + m.uid);
+  if (!el) return;
+  const tab = currentEspaceTab[m.uid] || 'profil';
+  el.innerHTML = `
+    <!-- Header -->
+    <div class="espace-header" style="--eh-color:${m.color}22">
+      <div class="espace-av" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
+      <div class="espace-info">
+        <div class="espace-name">${m.name} ${m.surname}</div>
+        <div class="espace-role">${m.role}</div>
+        <div class="espace-badges">
+          <span class="badge" style="background:rgba(52,211,153,.1);border-color:rgba(52,211,153,.25);color:#34d399">● ${m.statut}</span>
+          <span class="badge" style="background:rgba(255,255,255,.05);border-color:var(--border);color:var(--muted)">${m.contrat}</span>
+          <span class="badge" style="background:rgba(255,255,255,.05);border-color:var(--border);color:var(--muted)">Depuis ${m.dateDebut}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="espace-tabs" style="--et-color:${m.color}">
+      ${['profil','documents','messages'].map(t => `
+        <div class="espace-tab ${tab===t?'active':''}" onclick="setEspaceTab('${m.uid}','${t}')">${
+          t==='profil'?'👤 Profil':t==='documents'?'📁 Documents':'💬 Messages'
+        }</div>`).join('')}
+    </div>
+
+    <!-- Profil -->
+    <div class="sub-panel ${tab==='profil'?'active':''}" id="sp-${m.uid}-profil">
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="info-card-title">Coordonnées</div>
+          <div class="info-field"><label>Email</label><div class="val">${m.email||'—'}</div></div>
+          <div class="info-field"><label>Téléphone</label><div class="val">${m.phone||'—'}</div></div>
+          <div class="info-field"><label>LinkedIn</label><div class="val">${m.linkedin?`<a href="${m.linkedin}" target="_blank">Voir le profil →</a>`:'—'}</div></div>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">Contrat</div>
+          <div class="info-field"><label>Type de contrat</label><div class="val">${m.contrat}</div></div>
+          <div class="info-field"><label>Date de début</label><div class="val">${m.dateDebut}</div></div>
+          <div class="info-field"><label>Statut</label><div class="val" style="color:var(--green)">● ${m.statut}</div></div>
+        </div>
+        <div class="info-card" style="grid-column:span 1">
+          <div class="info-card-title">Notes internes</div>
+          <textarea id="notes-${m.uid}" placeholder="Notes confidentielles (admin seulement)..." style="min-height:90px">${lsGet('equipe_notes_'+m.uid,'')}</textarea>
+          <div style="margin-top:8px;display:flex;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="saveNotes('${m.uid}')">💾 Sauvegarder</button>
           </div>
-          <div style="font-size:11px;font-family:var(--font-m);min-width:42px;text-align:right;color:${U.cb(t[m.key],m.ref)}">
-            ${U.pct(t[m.key])}
+        </div>
+      </div>
+    </div>
+
+    <!-- Documents -->
+    <div class="sub-panel ${tab==='documents'?'active':''}" id="sp-${m.uid}-documents">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:12px;color:var(--muted)">Documents partagés avec ${m.name}</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddDoc('${m.uid}')">+ Ajouter un document</button>
+      </div>
+
+      <div class="add-doc-form" id="add-doc-form-${m.uid}" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div class="fgroup"><label class="flabel">Nom du document</label><input type="text" id="doc-name-${m.uid}" placeholder="Contrat de mission..."/></div>
+          <div class="fgroup"><label class="flabel">Lien (URL ou Drive)</label><input type="url" id="doc-url-${m.uid}" placeholder="https://..."/></div>
+          <div class="fgroup"><label class="flabel">Type</label>
+            <select id="doc-type-${m.uid}">
+              <option value="📄">Contrat / PDF</option>
+              <option value="📊">Tableau</option>
+              <option value="🔗">Lien</option>
+              <option value="📹">Vidéo</option>
+              <option value="📝">Note</option>
+            </select>
           </div>
-        </div>`).join('')}
+          <div class="fgroup"><label class="flabel">Description</label><input type="text" id="doc-desc-${m.uid}" placeholder="Description courte..."/></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost btn-sm" onclick="closeAddDoc('${m.uid}')">Annuler</button>
+          <button class="btn btn-primary btn-sm" onclick="addDoc('${m.uid}')">Ajouter</button>
+        </div>
+      </div>
+
+      <div class="docs-list" id="docs-list-${m.uid}">${renderDocsList(m.uid)}</div>
+    </div>
+
+    <!-- Messages -->
+    <div class="sub-panel ${tab==='messages'?'active':''}" id="sp-${m.uid}-messages">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Espace de communication privé avec ${m.name} — visible par l'admin uniquement</div>
+      <div class="feed" id="feed-${m.uid}">${renderFeed(m.uid)}</div>
+      <div class="sep"></div>
+      <div class="compose-box">
+        <textarea class="compose-input" id="compose-${m.uid}" placeholder="Écrire un message à ${m.name}..." rows="2"></textarea>
+        <button class="btn btn-primary" onclick="sendMsg('${m.uid}')">Envoyer ↑</button>
+      </div>
+    </div>
+  `;
+}
+
+function setEspaceTab(uid, tab) {
+  currentEspaceTab[uid] = tab;
+  renderEspace(MEMBERS.find(m => m.uid === uid));
+}
+
+function saveNotes(uid) {
+  const val = document.getElementById('notes-' + uid)?.value || '';
+  lsSet('equipe_notes_' + uid, val);
+  toast('✅ Notes sauvegardées');
+}
+
+/* ── Docs ── */
+function renderDocsList(uid) {
+  const docs = getMemberDocs(uid);
+  if (!docs.length) return `<div class="empty-state"><div class="empty-icon">📁</div>Aucun document partagé pour l'instant</div>`;
+  return docs.map((d, i) => `
+    <div class="doc-row">
+      <div class="doc-icon" style="background:rgba(255,255,255,.05)">${d.type}</div>
+      <div class="doc-info">
+        <div class="doc-name">${d.name}</div>
+        <div class="doc-meta">${d.desc||''} ${d.date ? '· Ajouté le ' + d.date : ''}</div>
+      </div>
+      <div class="doc-actions">
+        ${d.url ? `<a href="${d.url}" target="_blank"><button class="btn btn-ghost btn-sm">Ouvrir →</button></a>` : ''}
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteDoc('${uid}',${i})" style="color:var(--muted2)">✕</button>
+      </div>
     </div>`).join('');
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('month-lbl').textContent = currentMonthKey();
-  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
+function openAddDoc(uid) { document.getElementById('add-doc-form-' + uid).style.display = 'block'; }
+function closeAddDoc(uid) { document.getElementById('add-doc-form-' + uid).style.display = 'none'; }
+
+function addDoc(uid) {
+  const name = document.getElementById('doc-name-' + uid)?.value.trim();
+  if (!name) return;
+  const docs = getMemberDocs(uid);
+  docs.push({
+    name,
+    url:  document.getElementById('doc-url-' + uid)?.value.trim(),
+    type: document.getElementById('doc-type-' + uid)?.value || '📄',
+    desc: document.getElementById('doc-desc-' + uid)?.value.trim(),
+    date: new Date().toLocaleDateString('fr-FR'),
+  });
+  setMemberDocs(uid, docs);
+  closeAddDoc(uid);
+  document.getElementById('docs-list-' + uid).innerHTML = renderDocsList(uid);
+  toast('📎 Document ajouté');
+}
+
+function deleteDoc(uid, i) {
+  const docs = getMemberDocs(uid);
+  docs.splice(i, 1);
+  setMemberDocs(uid, docs);
+  document.getElementById('docs-list-' + uid).innerHTML = renderDocsList(uid);
+}
+
+/* ── Messages ── */
+function renderFeed(uid) {
+  const msgs = getMemberMsgs(uid);
+  if (!msgs.length) return `<div class="empty-state"><div class="empty-icon">💬</div>Aucun message pour l'instant</div>`;
+  return msgs.map(msg => {
+    const isHead = msg.from === 'head';
+    const av = isHead ? 'A' : uid[0].toUpperCase();
+    const color = isHead ? '#a78bfa' : MEMBERS.find(m => m.uid === uid)?.color || '#60a5fa';
+    return `<div class="msg-bubble">
+      <div class="msg-av" style="background:${color}88;border:1.5px solid ${color}33">${av}</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author">${isHead ? 'Head of Sales' : MEMBERS.find(m=>m.uid===uid)?.name}</span>
+          <span class="msg-role-tag" style="background:${isHead?'rgba(167,139,250,.1)':'rgba(255,255,255,.05)'};color:${isHead?'var(--purple)':'var(--muted)'}">${isHead?'👑 Admin':'👤'}</span>
+          <span class="msg-time">${new Date(msg.ts).toLocaleDateString('fr-FR')} à ${new Date(msg.ts).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+        <div class="msg-text ${isHead?'head-msg':''}">${msg.text}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function sendMsg(uid) {
+  const input = document.getElementById('compose-' + uid);
+  const text = input?.value.trim();
+  if (!text) return;
+  const msgs = getMemberMsgs(uid);
+  msgs.push({ from: 'head', text, ts: Date.now() });
+  setMemberMsgs(uid, msgs);
+  input.value = '';
+  document.getElementById('feed-' + uid).innerHTML = renderFeed(uid);
+  toast('✅ Message envoyé');
+}
+
+/* ════════════════════════════════════════════════════════════
+   SECTION — CALL BREAKDOWN
+════════════════════════════════════════════════════════════ */
+function renderBreakdown() {
+  // Member tabs
+  const tabs = document.getElementById('cb-member-tabs');
+  tabs.innerHTML = MEMBERS.map(m => `
+    <div class="cb-member-tab ${m.uid === currentCbMember ? 'active' : ''}" style="--cbt-color:${m.color}" onclick="setCbMember('${m.uid}')">
+      <div class="dot" style="background:${m.color}"></div>
+      ${m.name} ${m.surname}
+    </div>`).join('');
+
+  MEMBERS.forEach(m => renderCbPanel(m));
+  document.querySelectorAll('.cb-panel').forEach(p => p.classList.toggle('active', p.id === 'cb-' + currentCbMember));
+}
+
+function setCbMember(uid) {
+  currentCbMember = uid;
+  document.querySelectorAll('.cb-member-tab').forEach(t => t.classList.toggle('active', t.onclick.toString().includes(`'${uid}'`)));
+  document.querySelectorAll('.cb-panel').forEach(p => p.classList.toggle('active', p.id === 'cb-' + uid));
+}
+
+function renderCbPanel(m) {
+  const el = document.getElementById('cb-' + m.uid);
+  if (!el) return;
+  const calls = getCallBreakdowns(m.uid);
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-family:var(--fh);font-size:16px;font-weight:800">Call Breakdown — ${m.name} ${m.surname}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${calls.length} appels enregistrés · Cliquer sur un appel pour voir le débrief</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openAddCall('${m.uid}')">+ Ajouter un appel</button>
+    </div>
+
+    <!-- Add call form -->
+    <div class="add-call-form" id="add-call-form-${m.uid}">
+      <div style="font-family:var(--fh);font-size:13px;font-weight:700;margin-bottom:12px">Nouvel appel</div>
+      <div class="form-grid-3">
+        <div class="fgroup"><label class="flabel">Nom du client</label><input type="text" id="cc-client-${m.uid}" placeholder="Prénom Nom"/></div>
+        <div class="fgroup"><label class="flabel">Date</label><input type="date" id="cc-date-${m.uid}"/></div>
+        <div class="fgroup"><label class="flabel">Durée</label><input type="text" id="cc-duree-${m.uid}" placeholder="ex: 45 min"/></div>
+        <div class="fgroup"><label class="flabel">Type</label>
+          <select id="cc-type-${m.uid}">
+            <option>Closing</option><option>Setting</option><option>Debrief</option><option>Autre</option>
+          </select>
+        </div>
+        <div class="fgroup" style="grid-column:span 2"><label class="flabel">Lien enregistrement (optionnel)</label><input type="url" id="cc-lien-${m.uid}" placeholder="https://..."/></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.6px">Scores /5</div>
+      <div class="score-inputs">
+        ${['ouverture','decouverte','pitch','objections','closing'].map(s => `
+          <div class="fgroup"><label class="flabel">${s.charAt(0).toUpperCase()+s.slice(1)}</label>
+            <select id="cc-${s}-${m.uid}">
+              <option value="">—</option>${[1,2,3,4,5].map(n=>`<option value="${n}">${n}</option>`).join('')}
+            </select>
+          </div>`).join('')}
+      </div>
+      <div class="fgroup" style="margin-bottom:10px"><label class="flabel">Points forts</label><textarea id="cc-forts-${m.uid}" placeholder="Ce qui a bien marché..." rows="2"></textarea></div>
+      <div class="fgroup" style="margin-bottom:10px"><label class="flabel">Axes d'amélioration</label><textarea id="cc-axes-${m.uid}" placeholder="Ce à quoi travailler..." rows="2"></textarea></div>
+      <div class="fgroup" style="margin-bottom:12px"><label class="flabel">Note du Head of Sales</label><textarea id="cc-note-${m.uid}" placeholder="Commentaire et directive..." rows="2"></textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick="closeAddCall('${m.uid}')">Annuler</button>
+        <button class="btn btn-primary btn-sm" onclick="addCall('${m.uid}')">✓ Enregistrer</button>
+      </div>
+    </div>
+
+    <!-- Calls list -->
+    <div class="calls-grid" id="calls-grid-${m.uid}">
+      ${renderCallCards(m.uid, calls)}
+    </div>
+  `;
+}
+
+function renderCallCards(uid, calls) {
+  if (!calls.length) return `<div class="empty-state"><div class="empty-icon">📞</div>Aucun appel enregistré pour l'instant</div>`;
+  return calls.slice().reverse().map((c, ri) => {
+    const i = calls.length - 1 - ri;
+    const avgScore = c.scores ? Object.values(c.scores).reduce((a,b)=>a+(+b||0),0) / Object.keys(c.scores).length : null;
+    const scoreColor = avgScore >= 4.5 ? 'var(--green)' : avgScore >= 3.5 ? 'var(--gold)' : avgScore >= 2.5 ? 'var(--orange)' : 'var(--red)';
+    const typeColor = c.type === 'Closing' ? '#ef4444' : c.type === 'Setting' ? '#60a5fa' : '#a78bfa';
+    return `
+    <div class="call-card" id="cc-card-${uid}-${i}">
+      <div class="call-card-head" onclick="toggleCall('${uid}',${i})">
+        <div class="call-card-icon" style="background:${typeColor}18;color:${typeColor}">📞</div>
+        <div class="call-card-info">
+          <div class="call-card-title">${c.client}</div>
+          <div class="call-card-meta">
+            <span>${new Date(c.date).toLocaleDateString('fr-FR')}</span>
+            <span>·</span><span>${c.duree || '—'}</span>
+            <span class="call-card-badge" style="background:${typeColor}18;color:${typeColor}">${c.type}</span>
+            <span class="call-card-badge" style="background:${c.statut==='Débriefé'?'rgba(52,211,153,.1)':'rgba(245,158,11,.1)'};color:${c.statut==='Débriefé'?'var(--green)':'var(--gold)'}">${c.statut}</span>
+          </div>
+        </div>
+        ${avgScore ? `<div style="font-family:var(--fm);font-size:18px;font-weight:500;color:${scoreColor};flex-shrink:0">${avgScore.toFixed(1)}<span style="font-size:11px;color:var(--muted)">/5</span></div>` : ''}
+        <span class="call-card-chevron">▶</span>
+      </div>
+      <div class="call-card-body">
+        ${c.lien ? `<div style="margin-top:12px"><a href="${c.lien}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;color:var(--blue);font-size:12px">▶ Voir l'enregistrement</a></div>` : ''}
+        ${c.scores && Object.keys(c.scores).length ? `
+          <div class="score-grid">
+            ${Object.entries(c.scores).map(([k,v]) => `
+              <div class="score-item">
+                <div class="score-label">${k.charAt(0).toUpperCase()+k.slice(1)}</div>
+                <div class="score-val" style="color:${+v>=4.5?'var(--green)':+v>=3.5?'var(--gold)':'var(--orange)'}">${v||'—'}</div>
+                <div class="score-star">${'⭐'.repeat(+v||0)}</div>
+              </div>`).join('')}
+          </div>` : ''}
+        ${c.points_forts ? `<div class="debrief-block"><div class="debrief-title" style="color:var(--green)">✅ Points forts</div><div class="debrief-content" style="border-left-color:var(--green)">${c.points_forts}</div></div>` : ''}
+        ${c.axes_amelioration ? `<div class="debrief-block" style="margin-top:10px"><div class="debrief-title" style="color:var(--orange)">🔧 Axes d'amélioration</div><div class="debrief-content" style="border-left-color:var(--orange)">${c.axes_amelioration}</div></div>` : ''}
+        ${c.note_head ? `<div class="debrief-block" style="margin-top:10px"><div class="debrief-title" style="color:var(--purple)">👑 Note du Head of Sales</div><div class="debrief-content" style="border-left-color:var(--purple)">${c.note_head}</div></div>` : ''}
+        <div class="debrief-block" style="margin-top:14px">
+          <div class="debrief-title">✏️ Éditer le débrief</div>
+          <textarea class="debrief-edit" id="edit-forts-${uid}-${i}" placeholder="Points forts...">${c.points_forts||''}</textarea>
+          <textarea class="debrief-edit" id="edit-axes-${uid}-${i}" placeholder="Axes d'amélioration..." style="margin-top:6px">${c.axes_amelioration||''}</textarea>
+          <textarea class="debrief-edit" id="edit-note-${uid}-${i}" placeholder="Note du Head of Sales..." style="margin-top:6px">${c.note_head||''}</textarea>
+          <div style="display:flex;gap:8px;margin-top:8px;justify-content:space-between;align-items:center">
+            <select id="edit-statut-${uid}-${i}" style="width:auto;min-width:140px">
+              <option ${c.statut==='En attente'?'selected':''}>En attente</option>
+              <option ${c.statut==='Débriefé'?'selected':''}>Débriefé</option>
+            </select>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:rgba(239,68,68,.2)" onclick="deleteCall('${uid}',${i})">Supprimer</button>
+              <button class="btn btn-primary btn-sm" onclick="saveCall('${uid}',${i})">💾 Sauvegarder</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleCall(uid, i) {
+  const card = document.getElementById(`cc-card-${uid}-${i}`);
+  if (card) card.classList.toggle('open');
+}
+
+function openAddCall(uid) { document.getElementById('add-call-form-' + uid).classList.add('open'); }
+function closeAddCall(uid) { document.getElementById('add-call-form-' + uid).classList.remove('open'); }
+
+function addCall(uid) {
+  const client = document.getElementById('cc-client-' + uid)?.value.trim();
+  if (!client) return;
+  const scores = {};
+  ['ouverture','decouverte','pitch','objections','closing'].forEach(s => {
+    const v = document.getElementById(`cc-${s}-${uid}`)?.value;
+    if (v) scores[s] = +v;
+  });
+  const calls = getCallBreakdowns(uid);
+  calls.push({
+    id: 'c' + Date.now(), client,
+    date: document.getElementById('cc-date-' + uid)?.value || new Date().toISOString().split('T')[0],
+    duree: document.getElementById('cc-duree-' + uid)?.value,
+    type: document.getElementById('cc-type-' + uid)?.value || 'Closing',
+    lien: document.getElementById('cc-lien-' + uid)?.value,
+    scores,
+    points_forts:       document.getElementById('cc-forts-' + uid)?.value || '',
+    axes_amelioration:  document.getElementById('cc-axes-' + uid)?.value || '',
+    note_head:          document.getElementById('cc-note-' + uid)?.value || '',
+    statut: 'En attente',
+  });
+  setCallBreakdowns(uid, calls);
+  closeAddCall(uid);
+  renderCbPanel(MEMBERS.find(m => m.uid === uid));
+  toast('✅ Appel enregistré');
+}
+
+function saveCall(uid, i) {
+  const calls = getCallBreakdowns(uid);
+  calls[i].points_forts      = document.getElementById(`edit-forts-${uid}-${i}`)?.value || '';
+  calls[i].axes_amelioration = document.getElementById(`edit-axes-${uid}-${i}`)?.value || '';
+  calls[i].note_head         = document.getElementById(`edit-note-${uid}-${i}`)?.value || '';
+  calls[i].statut            = document.getElementById(`edit-statut-${uid}-${i}`)?.value || 'En attente';
+  setCallBreakdowns(uid, calls);
+  renderCbPanel(MEMBERS.find(m => m.uid === uid));
+  toast('✅ Débrief sauvegardé');
+}
+
+function deleteCall(uid, i) {
+  const calls = getCallBreakdowns(uid);
+  calls.splice(i, 1);
+  setCallBreakdowns(uid, calls);
+  renderCbPanel(MEMBERS.find(m => m.uid === uid));
+}
+
+/* ════════════════════════════════════════════════════════════
+   SECTION — MORNING MEETING
+════════════════════════════════════════════════════════════ */
+function renderMeeting() {
+  const meetings = getMeetings();
+  if (!currentMeeting && meetings.length) currentMeeting = meetings[meetings.length - 1].id;
+
+  // Sidebar list
+  const list = document.getElementById('mm-list');
+  const groups = {};
+  meetings.forEach(m => {
+    const week = getWeekLabel(m.date);
+    if (!groups[week]) groups[week] = [];
+    groups[week].push(m);
+  });
+
+  let listHtml = '';
+  Object.entries(groups).reverse().forEach(([week, ms]) => {
+    listHtml += `<div class="mm-day-label">${week}</div>`;
+    ms.forEach(m => {
+      const isActive = m.id === currentMeeting;
+      listHtml += `
+        <div class="mm-item ${isActive?'active':''}" onclick="selectMeeting('${m.id}')">
+          <div class="mm-item-date">
+            <span style="font-size:14px">${m.statut==='À venir'?'🔵':'✅'}</span>
+            ${m.jourSemaine} ${formatDate(m.date)}
+          </div>
+          <div class="mm-item-day" style="color:${m.statut==='À venir'?'var(--blue)':'var(--muted)'}">${m.statut}</div>
+          <div class="mm-item-preview">${m.sujets[0]||'—'}</div>
+        </div>`;
+    });
+  });
+
+  list.innerHTML = listHtml + `
+    <div style="padding:10px;border-top:1px solid var(--border);margin-top:4px">
+      <button class="btn btn-primary btn-sm" style="width:100%" onclick="openAddMeeting()">+ Nouveau meeting</button>
+    </div>`;
+
+  renderMeetingDetail();
+}
+
+function getWeekLabel(dateStr) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffWeeks = Math.round((now - d) / (7 * 86400000));
+  if (diffWeeks <= 0) return 'Cette semaine & à venir';
+  if (diffWeeks === 1) return 'Semaine passée';
+  return `Il y a ${diffWeeks} semaines`;
+}
+
+function formatDate(dateStr) {
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+function selectMeeting(id) {
+  currentMeeting = id;
+  renderMeeting();
+}
+
+function renderMeetingDetail() {
+  const meetings = getMeetings();
+  const meeting = meetings.find(m => m.id === currentMeeting);
+  const main = document.getElementById('mm-main');
+  if (!meeting) { main.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div>Sélectionne un meeting</div>'; return; }
+  const isAdmin = true; // Always admin in this view
+
+  main.innerHTML = `
+    <!-- Meeting header -->
+    <div class="mm-card">
+      <div class="mm-card-head">
+        <div class="mm-card-title">
+          <span style="font-size:20px">${meeting.statut==='À venir'?'🔵':'✅'}</span>
+          Morning Meeting — ${meeting.jourSemaine} ${formatDate(meeting.date)}
+          <span class="tag" style="background:${meeting.statut==='À venir'?'rgba(96,165,250,.1)':'rgba(52,211,153,.1)'};border-color:${meeting.statut==='À venir'?'rgba(96,165,250,.25)':'rgba(52,211,153,.25)'};color:${meeting.statut==='À venir'?'var(--blue)':'var(--green)'};font-size:10px">${meeting.statut}</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          ${meeting.statut==='À venir'?`<button class="btn btn-green btn-sm" onclick="setMeetingStatut('${meeting.id}','Terminé')">✓ Marquer terminé</button>`:''}
+          <button class="btn btn-ghost btn-sm" onclick="openEditMeeting('${meeting.id}')">✏️ Modifier</button>
+        </div>
+      </div>
+      <div class="mm-card-body">
+        <!-- Lien permanent -->
+        <div class="meet-link-box">
+          <div class="meet-link-icon">📹</div>
+          <div class="meet-link-text">
+            <div class="meet-link-label">Lien de réunion (permanent)</div>
+            <div class="meet-link-url"><a href="${meeting.lien_meet}" target="_blank">${meeting.lien_meet}</a></div>
+          </div>
+          <button class="btn-copy" onclick="copyLink('${meeting.lien_meet}')">📋 Copier</button>
+        </div>
+
+        <!-- Sujets -->
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:10px">📋 Ordre du jour</div>
+        <div class="agenda-list" id="agenda-${meeting.id}">
+          ${meeting.sujets.map((s, i) => `
+            <div class="agenda-item" style="--ag-color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--border2)'}">
+              <div class="agenda-bullet" style="color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--muted)'}">◆</div>
+              <div class="agenda-text">${s}</div>
+            </div>`).join('')}
+        </div>
+
+        ${isAdmin ? `
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <input type="text" id="new-sujet-${meeting.id}" placeholder="Ajouter un sujet..." style="flex:1"/>
+          <button class="btn btn-ghost btn-sm" onclick="addSujet('${meeting.id}')">+ Ajouter</button>
+        </div>` : ''}
+      </div>
+    </div>
+
+    <!-- Questions en amont -->
+    <div class="mm-card">
+      <div class="mm-card-head">
+        <div class="mm-card-title">❓ Questions de l'équipe</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddQuestion('${meeting.id}')">+ Poser une question</button>
+      </div>
+      <div class="mm-card-body">
+        <div class="add-q-form" id="add-q-form-${meeting.id}" style="display:none;margin-bottom:14px">
+          <div style="display:grid;grid-template-columns:160px 1fr;gap:10px;margin-bottom:8px">
+            <div class="fgroup"><label class="flabel">De la part de</label>
+              <select id="q-who-${meeting.id}">
+                ${MEMBERS.map(m=>`<option value="${m.uid}">${m.name}</option>`).join('')}
+                <option value="head">Head of Sales</option>
+              </select>
+            </div>
+            <div class="fgroup"><label class="flabel">Question</label>
+              <textarea id="q-text-${meeting.id}" placeholder="Votre question..." rows="2"></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="closeAddQuestion('${meeting.id}')">Annuler</button>
+            <button class="btn btn-primary btn-sm" onclick="addQuestion('${meeting.id}')">Envoyer</button>
+          </div>
+        </div>
+
+        <div class="questions-list" id="q-list-${meeting.id}">
+          ${renderQuestions(meeting)}
+        </div>
+      </div>
+    </div>
+
+    <!-- Résumé post-meeting -->
+    <div class="mm-card">
+      <div class="mm-card-head">
+        <div class="mm-card-title">📝 Résumé post-meeting</div>
+        ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="toggleResumeEdit('${meeting.id}')">✏️ Éditer</button>` : ''}
+      </div>
+      <div class="mm-card-body">
+        <div id="resume-view-${meeting.id}">
+          ${meeting.resume
+            ? `<div class="summary-block">${meeting.resume}</div>`
+            : `<div class="empty-state" style="padding:16px"><div class="empty-icon">📝</div>Résumé à rédiger après le meeting</div>`}
+        </div>
+        <div id="resume-edit-${meeting.id}" style="display:none">
+          <textarea rows="6" id="resume-ta-${meeting.id}" style="margin-bottom:8px">${meeting.resume||''}</textarea>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" onclick="toggleResumeEdit('${meeting.id}')">Annuler</button>
+            <button class="btn btn-primary btn-sm" onclick="saveResume('${meeting.id}')">💾 Sauvegarder</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderQuestions(meeting) {
+  if (!meeting.questions.length) return `<div class="empty-state" style="padding:16px;text-align:center;color:var(--muted2);font-size:12px">Aucune question pour l'instant — pose la tienne ↑</div>`;
+  return meeting.questions.map((q, i) => {
+    const member = MEMBERS.find(m => m.uid === q.uid) || { name: 'Head of Sales', color: '#a78bfa' };
+    return `
+    <div class="question-item">
+      <div class="q-av" style="background:${member.color}88">${member.name[0]}</div>
+      <div class="q-body">
+        <div class="q-author">${member.name} <span style="font-size:10px;color:var(--muted);font-weight:400">${new Date(q.ts).toLocaleDateString('fr-FR')}</span></div>
+        <div class="q-text">${q.text}</div>
+        ${q.reponse ? `<div class="q-answer">${q.reponse}</div>` : `
+          <div class="q-actions">
+            <input type="text" id="rep-${meeting.id}-${i}" placeholder="Répondre..." style="font-size:11px;padding:5px 9px;flex:1"/>
+            <button class="btn btn-ghost btn-sm" onclick="answerQuestion('${meeting.id}',${i})">Répondre</button>
+          </div>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openAddQuestion(id) { document.getElementById('add-q-form-' + id).style.display = 'block'; }
+function closeAddQuestion(id) { document.getElementById('add-q-form-' + id).style.display = 'none'; }
+
+function addQuestion(meetingId) {
+  const text = document.getElementById('q-text-' + meetingId)?.value.trim();
+  if (!text) return;
+  const who = document.getElementById('q-who-' + meetingId)?.value || 'equipe';
+  const meetings = getMeetings();
+  const m = meetings.find(m => m.id === meetingId);
+  if (!m) return;
+  m.questions.push({ uid: who, text, reponse: '', ts: Date.now() });
+  setMeetings(meetings);
+  closeAddQuestion(meetingId);
+  document.getElementById('q-list-' + meetingId).innerHTML = renderQuestions(m);
+  toast('✅ Question ajoutée');
+}
+
+function answerQuestion(meetingId, qi) {
+  const rep = document.getElementById(`rep-${meetingId}-${qi}`)?.value.trim();
+  if (!rep) return;
+  const meetings = getMeetings();
+  const m = meetings.find(m => m.id === meetingId);
+  if (!m) return;
+  m.questions[qi].reponse = rep;
+  setMeetings(meetings);
+  document.getElementById('q-list-' + meetingId).innerHTML = renderQuestions(m);
+  toast('✅ Réponse ajoutée');
+}
+
+function addSujet(meetingId) {
+  const input = document.getElementById('new-sujet-' + meetingId);
+  const text = input?.value.trim();
+  if (!text) return;
+  const meetings = getMeetings();
+  const m = meetings.find(m => m.id === meetingId);
+  if (!m) return;
+  m.sujets.push(text);
+  setMeetings(meetings);
+  input.value = '';
+  document.getElementById('agenda-' + meetingId).innerHTML = m.sujets.map((s, i) => `
+    <div class="agenda-item" style="--ag-color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--border2)'}">
+      <div class="agenda-bullet" style="color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--muted)'}">◆</div>
+      <div class="agenda-text">${s}</div>
+    </div>`).join('');
+  toast('✅ Sujet ajouté');
+}
+
+function toggleResumeEdit(id) {
+  const view = document.getElementById('resume-view-' + id);
+  const edit = document.getElementById('resume-edit-' + id);
+  const showEdit = edit.style.display === 'none';
+  view.style.display = showEdit ? 'none' : 'block';
+  edit.style.display = showEdit ? 'block' : 'none';
+}
+
+function saveResume(meetingId) {
+  const ta = document.getElementById('resume-ta-' + meetingId);
+  const meetings = getMeetings();
+  const m = meetings.find(m => m.id === meetingId);
+  if (!m) return;
+  m.resume = ta?.value || '';
+  setMeetings(meetings);
+  toggleResumeEdit(meetingId);
+  document.getElementById('resume-view-' + meetingId).innerHTML = m.resume
+    ? `<div class="summary-block">${m.resume}</div>`
+    : `<div class="empty-state" style="padding:16px"><div class="empty-icon">📝</div>Résumé à rédiger après le meeting</div>`;
+  toast('✅ Résumé sauvegardé');
+}
+
+function setMeetingStatut(id, statut) {
+  const meetings = getMeetings();
+  const m = meetings.find(m => m.id === id);
+  if (m) { m.statut = statut; setMeetings(meetings); renderMeeting(); }
+}
+
+function openAddMeeting() {
+  const modal = document.getElementById('add-meeting-modal');
+  modal.style.display = 'flex';
+}
+function closeAddMeeting() {
+  document.getElementById('add-meeting-modal').style.display = 'none';
+}
+function saveNewMeeting() {
+  const date = document.getElementById('nm-date')?.value;
+  const jour = document.getElementById('nm-jour')?.value;
+  const sujet1 = document.getElementById('nm-sujet')?.value.trim();
+  if (!date) return;
+  const meetings = getMeetings();
+  const newM = {
+    id: 'm' + Date.now(), date, jourSemaine: jour, heure: '09h00',
+    lien_meet: MEETING_LINK,
+    sujets: sujet1 ? [sujet1] : [],
+    questions: [], resume: '', statut: 'À venir',
+  };
+  meetings.push(newM);
+  setMeetings(meetings);
+  currentMeeting = newM.id;
+  closeAddMeeting();
+  renderMeeting();
+  toast('✅ Meeting créé');
+}
+
+function openEditMeeting(id) { /* simplified: just reload */ toast('ℹ️ Modifiez directement l\'ordre du jour et le résumé'); }
+
+function copyLink(url) {
+  navigator.clipboard?.writeText(url).then(() => toast('📋 Lien copié !'));
+}
+
+/* ════════════════════════════════════════════════════════════
+   TOAST
+════════════════════════════════════════════════════════════ */
+function toast(msg) {
+  let t = document.getElementById('_toast');
+  if (!t) { t = document.createElement('div'); t.id = '_toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2035;border:1px solid rgba(255,255,255,.15);color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:opacity .3s';
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
+/* ════════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  const nm = localStorage.getItem('ambitio_name') || 'Admin';
   document.getElementById('tb-nm').textContent = nm;
   document.getElementById('tb-av').textContent = nm[0].toUpperCase();
-  renderAll();
-
-  // Firebase : connecte et écoute les données en temps réel
-  const _fbUser = U.getCurrentUser();
-  if (window.firebase && window.firebase.firestore && !Fire.db) {
-    Fire.init(window.firebase.firestore(), _fbUser.uid);
-  }
-  if (Fire.db) {
-    Fire.watchUser(_fbUser.uid, currentMonthKey(), (data) => {
-      if (data) { Fire.apply(data); renderAll(); }
-    });
-  }
-  // Refresh auto si DB mis à jour (ex: changement depuis saisie)
-  document.addEventListener('db:updated', renderAll);
+  setMainTab('espaces');
 });
-
 </script>
+
+<div class="page">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-icon">👥</div>
+      <div>
+        <div class="topbar-title">Équipe</div>
+        <div class="topbar-sub">Espaces personnels · Call Breakdown · Morning Meeting</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,.08);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700" id="tb-av">A</div>
+      <span style="font-size:13px;font-weight:600" id="tb-nm">Admin</span>
+    </div>
+  </div>
+
+  <!-- MAIN TABS -->
+  <div class="main-tabs">
+    <button class="main-tab active" data-tab="espaces" onclick="setMainTab('espaces')">👤 Espaces salariés</button>
+    <button class="main-tab" data-tab="breakdown" onclick="setMainTab('breakdown')">📞 Call Breakdown</button>
+    <button class="main-tab" data-tab="meeting" onclick="setMainTab('meeting')">☀️ Morning Meeting</button>
+  </div>
+
+  <!-- SECTION ESPACES -->
+  <div class="section active" id="sec-espaces">
+    <div class="member-selector" id="member-selector"></div>
+    <div id="espace-guillaume" class="espace"></div>
+    <div id="espace-elodie" class="espace"></div>
+  </div>
+
+  <!-- SECTION CALL BREAKDOWN -->
+  <div class="section" id="sec-breakdown">
+    <div class="cb-member-tabs" id="cb-member-tabs"></div>
+    <div id="cb-guillaume" class="cb-panel"></div>
+    <div id="cb-elodie" class="cb-panel"></div>
+  </div>
+
+  <!-- SECTION MORNING MEETING -->
+  <div class="section" id="sec-meeting">
+    <div class="mm-layout">
+      <div class="mm-sidebar">
+        <div class="mm-sidebar-head">
+          <span>📅 Sessions</span>
+          <span style="font-size:11px;color:var(--muted)">Lun · Mer · Ven</span>
+        </div>
+        <div class="mm-list" id="mm-list"></div>
+      </div>
+      <div id="mm-main"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL NOUVEAU MEETING -->
+<div id="add-meeting-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1100;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+  <div style="background:#0f1422;border:1px solid var(--border2);border-radius:20px;padding:28px;width:100%;max-width:420px;margin:20px">
+    <div style="font-family:var(--fh);font-size:16px;font-weight:800;margin-bottom:20px">📅 Nouveau Morning Meeting</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px">
+      <div class="fgroup"><label class="flabel">Date</label><input type="date" id="nm-date"/></div>
+      <div class="fgroup"><label class="flabel">Jour</label>
+        <select id="nm-jour"><option>Lundi</option><option>Mercredi</option><option>Vendredi</option></select>
+      </div>
+      <div class="fgroup"><label class="flabel">Premier sujet</label><input type="text" id="nm-sujet" placeholder="Ex: Lancement semaine S10"/></div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeAddMeeting()">Annuler</button>
+      <button class="btn btn-primary" onclick="saveNewMeeting()">Créer</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
