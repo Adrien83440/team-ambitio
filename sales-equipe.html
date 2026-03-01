@@ -398,6 +398,7 @@ let currentMeeting = null;
 ════════════════════════════════════════════════════════════ */
 function setMainTab(name) {
   currentMainTab = name;
+  lsSet('equipe_active_tab', name);
   document.querySelectorAll('.main-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'sec-' + name));
   if (name === 'espaces')   renderEspaces();
@@ -763,20 +764,14 @@ function renderCallCards(uid, calls) {
             <span class="call-card-badge" style="background:${c.statut==='Débriefé'?'rgba(52,211,153,.1)':'rgba(245,158,11,.1)'};color:${c.statut==='Débriefé'?'var(--green)':'var(--gold)'}">${c.statut}</span>
           </div>
         </div>
-        ${avgScore ? `<div style="font-family:var(--fm);font-size:18px;font-weight:500;color:${scoreColor};flex-shrink:0">${avgScore.toFixed(1)}<span style="font-size:11px;color:var(--muted)">/5</span></div>` : ''}
+        <div id="avg-display-${uid}-${i}" style="font-family:var(--fm);font-size:18px;font-weight:500;color:${scoreColor};flex-shrink:0;min-width:44px;text-align:right">${avgScore ? avgScore.toFixed(1) + '<span style="font-size:11px;color:rgba(255,255,255,.4)">/5</span>' : ''}</div>
         <span class="call-card-chevron">▶</span>
       </div>
       <div class="call-card-body">
         ${c.lien ? `<div style="margin-top:12px"><a href="${c.lien}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;color:var(--blue);font-size:12px">▶ Voir l'enregistrement</a></div>` : ''}
-        ${c.scores && Object.keys(c.scores).length ? `
-          <div class="score-grid">
-            ${Object.entries(c.scores).map(([k,v]) => `
-              <div class="score-item">
-                <div class="score-label">${k.charAt(0).toUpperCase()+k.slice(1)}</div>
-                <div class="score-val" style="color:${+v>=4.5?'var(--green)':+v>=3.5?'var(--gold)':'var(--orange)'}">${v||'—'}</div>
-                <div class="score-star">${'⭐'.repeat(+v||0)}</div>
-              </div>`).join('')}
-          </div>` : ''}
+        <div class="score-grid" id="score-grid-view-${uid}-${i}">
+          ${renderScoreGrid(uid, i, c.scores)}
+        </div>
         ${c.points_forts ? `<div class="debrief-block"><div class="debrief-title" style="color:var(--green)">✅ Points forts</div><div class="debrief-content" style="border-left-color:var(--green)">${c.points_forts}</div></div>` : ''}
         ${c.axes_amelioration ? `<div class="debrief-block" style="margin-top:10px"><div class="debrief-title" style="color:var(--orange)">🔧 Axes d'amélioration</div><div class="debrief-content" style="border-left-color:var(--orange)">${c.axes_amelioration}</div></div>` : ''}
         ${c.note_head ? `<div class="debrief-block" style="margin-top:10px"><div class="debrief-title" style="color:var(--purple)">👑 Note du Head of Sales</div><div class="debrief-content" style="border-left-color:var(--purple)">${c.note_head}</div></div>` : ''}
@@ -843,6 +838,22 @@ function addCall(uid) {
   toast('✅ Appel enregistré');
 }
 
+// ── Render read-only score grid (top of card) ──
+function renderScoreGrid(uid, i, scores) {
+  if (!scores || !Object.keys(scores).length) return '';
+  const keys = ['ouverture','decouverte','pitch','objections','closing'];
+  return keys.map(function(k) {
+    const v = scores[k] ? +scores[k] : 0;
+    if (!v) return '';
+    const col = v >= 4.5 ? 'var(--green)' : v >= 3.5 ? 'var(--gold)' : 'var(--orange)';
+    return '<div class="score-item">'
+      + '<div class="score-label">' + k.charAt(0).toUpperCase() + k.slice(1) + '</div>'
+      + '<div class="score-val" id="sv-' + uid + '-' + i + '-' + k + '" style="color:' + col + '">' + v + '</div>'
+      + '<div class="score-star">' + '⭐'.repeat(v) + '</div>'
+      + '</div>';
+  }).join('');
+}
+
 // ── Render star grid (pure function, no nested template literals) ──
 function renderStarsGrid(uid, i, scores) {
   const keys = ['ouverture','decouverte','pitch','objections','closing'];
@@ -870,16 +881,46 @@ function renderStarsGrid(uid, i, scores) {
 
 // Interactive star click
 function setStar(uid, i, scoreKey, val) {
+  // 1. Update hidden input
   const hiddenInput = document.getElementById('score-' + uid + '-' + i + '-' + scoreKey);
   if (hiddenInput) hiddenInput.value = val;
+
+  // 2. Update interactive stars
   const container = document.getElementById('stars-' + uid + '-' + i + '-' + scoreKey);
-  if (!container) return;
-  container.querySelectorAll('.star').forEach(function(star, idx) {
-    const on = idx < val;
-    star.textContent = on ? '⭐' : '☆';
-    star.classList.toggle('on', on);
+  if (container) {
+    container.querySelectorAll('.star').forEach(function(star, idx) {
+      const on = idx < val;
+      star.textContent = on ? '⭐' : '☆';
+      star.classList.toggle('on', on);
+    });
+  }
+
+  // 3. Live-update the read-only score value at top
+  const readVal = document.getElementById('sv-' + uid + '-' + i + '-' + scoreKey);
+  if (readVal) {
+    const col = val >= 4.5 ? 'var(--green)' : val >= 3.5 ? 'var(--gold)' : 'var(--orange)';
+    readVal.textContent = val;
+    readVal.style.color = col;
+  }
+
+  // 4. Live-update the avg score in card header
+  const keys = ['ouverture','decouverte','pitch','objections','closing'];
+  const scores = {};
+  keys.forEach(function(k) {
+    const el = document.getElementById('score-' + uid + '-' + i + '-' + k);
+    if (el && +el.value > 0) scores[k] = +el.value;
   });
-  // Auto-save on star change
+  if (Object.keys(scores).length) {
+    const avg = Object.values(scores).reduce(function(a,b){return a+b;},0) / Object.keys(scores).length;
+    const avgEl = document.getElementById('avg-display-' + uid + '-' + i);
+    if (avgEl) {
+      const col = avg >= 4.5 ? 'var(--green)' : avg >= 3.5 ? 'var(--gold)' : avg >= 2.5 ? 'var(--orange)' : 'var(--red)';
+      avgEl.style.color = col;
+      avgEl.innerHTML = avg.toFixed(1) + '<span style="font-size:11px;color:rgba(255,255,255,.4)">/5</span>';
+    }
+  }
+
+  // 5. Auto-save
   scheduleAutoSave(uid, i);
 }
 
@@ -925,6 +966,9 @@ function saveCall(uid, i, silent) {
       if (avgEl) avgEl.textContent = avg.toFixed(1);
     }
   }
+  // Refresh read-only score grid
+  const gridEl = document.getElementById('score-grid-view-' + uid + '-' + i);
+  if (gridEl && c.scores) gridEl.innerHTML = renderScoreGrid(uid, i, c.scores);
   if (!silent) toast('✅ Débrief sauvegardé');
   else showAutoSaveDot(uid, i);
 }
@@ -1431,7 +1475,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const saved = lsGet('equipe_profile_' + m.uid, null);
     if (saved) Object.assign(m, saved);
   });
-  setMainTab('espaces');
+  const savedTab = lsGet('equipe_active_tab', 'espaces');
+  setMainTab(savedTab);
 });
 </script>
 
