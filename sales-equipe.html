@@ -249,6 +249,18 @@ select option{background:#1a1a2e}
 label.flabel{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
 .fgroup{display:flex;flex-direction:column;gap:4px}
 
+/* ── Visio Settings Panel ── */
+.visio-panel{background:var(--bg2);border:1px solid rgba(96,165,250,.25);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+.visio-panel-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+.visio-panel-head:hover{background:rgba(255,255,255,.02)}
+.visio-panel-body{padding:18px;display:none}
+.visio-panel-body.open{display:block}
+.radio-group{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.radio-opt{display:flex;align-items:center;gap:6px;padding:7px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:9px;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s}
+.radio-opt:hover{border-color:var(--border2)}
+.radio-opt.selected{border-color:var(--blue);background:rgba(96,165,250,.08);color:var(--blue)}
+.radio-opt input{display:none}
+
 /* ── CALENDAR ── */
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 @media(max-width:700px){.cal-grid{grid-template-columns:repeat(3,1fr)}}
@@ -293,8 +305,8 @@ const MEMBERS = [
   },
 ];
 
-/* ── Meeting link (permanent) ── */
-const MEETING_LINK = 'https://us06web.zoom.us/j/00000000000?pwd=xxxxxx'; // à remplacer
+/* ── Meeting link (permanent — overridable per meeting) ── */
+const MEETING_LINK = lsGet('visio_default_link', 'https://us06web.zoom.us/j/00000000000?pwd=xxxxxx');
 
 /* ── Getters / setters ── */
 function getMemberMsgs(uid)   { return lsGet(`equipe_msgs_${uid}`, []); }
@@ -768,12 +780,26 @@ function renderCallCards(uid, calls) {
         ${c.points_forts ? `<div class="debrief-block"><div class="debrief-title" style="color:var(--green)">✅ Points forts</div><div class="debrief-content" style="border-left-color:var(--green)">${c.points_forts}</div></div>` : ''}
         ${c.axes_amelioration ? `<div class="debrief-block" style="margin-top:10px"><div class="debrief-title" style="color:var(--orange)">🔧 Axes d'amélioration</div><div class="debrief-content" style="border-left-color:var(--orange)">${c.axes_amelioration}</div></div>` : ''}
         ${c.note_head ? `<div class="debrief-block" style="margin-top:10px"><div class="debrief-title" style="color:var(--purple)">👑 Note du Head of Sales</div><div class="debrief-content" style="border-left-color:var(--purple)">${c.note_head}</div></div>` : ''}
-        <div class="debrief-block" style="margin-top:14px">
-          <div class="debrief-title">✏️ Éditer le débrief</div>
+        <div class="debrief-block" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+          <div class="debrief-title" style="margin-bottom:12px">✏️ Éditer le débrief</div>
+          
+          <!-- Scores éditables -->
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:8px">Scores /5</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">
+            ${['ouverture','decouverte','pitch','objections','closing'].map(s => `
+              <div style="text-align:center">
+                <div style="font-size:10px;color:var(--muted);margin-bottom:4px">${s.charAt(0).toUpperCase()+s.slice(1)}</div>
+                <div class="star-rating" id="stars-${uid}-${i}-${s}">
+                  ${[1,2,3,4,5].map(n => `<span class="star ${(c.scores&&c.scores[s]>=n)?'on':''}" onclick="setStar('${uid}',${i},'${s}',${n})" style="cursor:pointer;font-size:18px;user-select:none">${(c.scores&&c.scores[s]>=n)?'⭐':'☆'}</span>`).join('')}
+                </div>
+                <input type="hidden" id="score-${uid}-${i}-${s}" value="${(c.scores&&c.scores[s])||0}"/>
+              </div>`).join('')}
+          </div>
+          
           <textarea class="debrief-edit" id="edit-forts-${uid}-${i}" placeholder="Points forts...">${c.points_forts||''}</textarea>
           <textarea class="debrief-edit" id="edit-axes-${uid}-${i}" placeholder="Axes d'amélioration..." style="margin-top:6px">${c.axes_amelioration||''}</textarea>
           <textarea class="debrief-edit" id="edit-note-${uid}-${i}" placeholder="Note du Head of Sales..." style="margin-top:6px">${c.note_head||''}</textarea>
-          <div style="display:flex;gap:8px;margin-top:8px;justify-content:space-between;align-items:center">
+          <div style="display:flex;gap:8px;margin-top:10px;justify-content:space-between;align-items:center">
             <select id="edit-statut-${uid}-${i}" style="width:auto;min-width:140px">
               <option ${c.statut==='En attente'?'selected':''}>En attente</option>
               <option ${c.statut==='Débriefé'?'selected':''}>Débriefé</option>
@@ -824,18 +850,36 @@ function addCall(uid) {
   toast('✅ Appel enregistré');
 }
 
+// Interactive star rating
+function setStar(uid, i, scoreKey, val) {
+  document.getElementById(`score-${uid}-${i}-${scoreKey}`).value = val;
+  const container = document.getElementById(`stars-${uid}-${i}-${scoreKey}`);
+  if (!container) return;
+  container.querySelectorAll('.star').forEach((star, idx) => {
+    const on = idx < val;
+    star.textContent = on ? '⭐' : '☆';
+    star.classList.toggle('on', on);
+  });
+}
+
 function saveCall(uid, i) {
   const calls = getCallBreakdowns(uid);
   calls[i].points_forts      = document.getElementById(`edit-forts-${uid}-${i}`)?.value || '';
   calls[i].axes_amelioration = document.getElementById(`edit-axes-${uid}-${i}`)?.value || '';
   calls[i].note_head         = document.getElementById(`edit-note-${uid}-${i}`)?.value || '';
   calls[i].statut            = document.getElementById(`edit-statut-${uid}-${i}`)?.value || 'En attente';
+  // Collect scores from hidden inputs
+  const scores = {};
+  ['ouverture','decouverte','pitch','objections','closing'].forEach(s => {
+    const el = document.getElementById(`score-${uid}-${i}-${s}`);
+    if (el && el.value) scores[s] = +el.value;
+  });
+  if (Object.keys(scores).length) calls[i].scores = scores;
   setCallBreakdowns(uid, calls);
-  // Update displayed content blocks without closing the card
+  // Update header score display without closing card
   const c = calls[i];
   const card = document.getElementById(`cc-card-${uid}-${i}`);
   if (card) {
-    // Update statut badge
     const badges = card.querySelectorAll('.call-card-badge');
     badges.forEach(b => {
       if (b.textContent === 'Débriefé' || b.textContent === 'En attente') {
@@ -844,6 +888,12 @@ function saveCall(uid, i) {
         b.style.color = c.statut==='Débriefé'?'var(--green)':'var(--gold)';
       }
     });
+    // Update avg score
+    if (c.scores && Object.keys(c.scores).length) {
+      const avg = Object.values(c.scores).reduce((a,b)=>a+(+b||0),0)/Object.keys(c.scores).length;
+      const scoreEl = card.querySelector('[data-avg-score]');
+      if (scoreEl) { scoreEl.textContent = avg.toFixed(1); }
+    }
   }
   toast('✅ Débrief sauvegardé');
 }
@@ -884,6 +934,7 @@ function renderMeeting() {
   }
   renderCalendar();
   renderMeetingDetail();
+  setTimeout(updateVisioPanelPreview, 50);
 }
 
 function renderCalendar() {
@@ -940,6 +991,7 @@ function formatDate(dateStr) {
 function selectMeeting(id) {
   currentMeeting = id;
   renderMeeting();
+  setTimeout(updateVisioPanelPreview, 80);
 }
 
 function renderMeetingDetail() {
@@ -975,20 +1027,40 @@ function renderMeetingDetail() {
         </div>
 
         <!-- Sujets -->
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:10px">📋 Ordre du jour</div>
-        <div class="agenda-list" id="agenda-${meeting.id}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)">📋 Ordre du jour</div>
+          <button class="btn btn-ghost btn-sm" onclick="toggleAgendaEdit('${meeting.id}')" id="agenda-edit-btn-${meeting.id}">✏️ Modifier</button>
+        </div>
+        
+        <!-- Vue lecture -->
+        <div class="agenda-list" id="agenda-view-${meeting.id}">
           ${meeting.sujets.map((s, i) => `
             <div class="agenda-item" style="--ag-color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--border2)'}">
               <div class="agenda-bullet" style="color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--muted)'}">◆</div>
               <div class="agenda-text">${s}</div>
             </div>`).join('')}
+          ${meeting.sujets.length === 0 ? '<div style="color:var(--muted2);font-size:13px;padding:8px 0">Aucun sujet défini</div>' : ''}
         </div>
-
-        ${isAdmin ? `
-        <div style="margin-top:10px;display:flex;gap:8px">
-          <input type="text" id="new-sujet-${meeting.id}" placeholder="Ajouter un sujet..." style="flex:1"/>
-          <button class="btn btn-ghost btn-sm" onclick="addSujet('${meeting.id}')">+ Ajouter</button>
-        </div>` : ''}
+        
+        <!-- Vue édition (cachée par défaut) -->
+        <div id="agenda-edit-${meeting.id}" style="display:none;margin-top:6px">
+          <div id="sujets-edit-list-${meeting.id}">
+            ${meeting.sujets.map((s, si) => `
+              <div class="sujet-edit-row" id="sujet-row-${meeting.id}-${si}" style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
+                <span style="color:var(--muted);font-size:12px;width:16px;flex-shrink:0">${si+1}.</span>
+                <input type="text" id="sujet-inp-${meeting.id}-${si}" value="${s}" style="flex:1"/>
+                <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteSujet('${meeting.id}',${si})" style="color:var(--muted2);flex-shrink:0">✕</button>
+              </div>`).join('')}
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <input type="text" id="new-sujet-${meeting.id}" placeholder="Nouveau sujet..." style="flex:1"/>
+            <button class="btn btn-ghost btn-sm" onclick="addSujet('${meeting.id}')">+ Ajouter</button>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+            <button class="btn btn-ghost btn-sm" onclick="toggleAgendaEdit('${meeting.id}')">Annuler</button>
+            <button class="btn btn-primary btn-sm" onclick="saveAgenda('${meeting.id}')">💾 Sauvegarder l'ordre du jour</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1096,22 +1168,71 @@ function answerQuestion(meetingId, qi) {
   toast('✅ Réponse ajoutée');
 }
 
+function toggleAgendaEdit(meetingId) {
+  const editDiv = document.getElementById('agenda-edit-' + meetingId);
+  const viewDiv = document.getElementById('agenda-view-' + meetingId);
+  const btn = document.getElementById('agenda-edit-btn-' + meetingId);
+  const isEditing = editDiv.style.display !== 'none';
+  editDiv.style.display = isEditing ? 'none' : 'block';
+  if (btn) btn.textContent = isEditing ? '✏️ Modifier' : '✕ Fermer';
+}
+
+function deleteSujet(meetingId, si) {
+  const row = document.getElementById(`sujet-row-${meetingId}-${si}`);
+  if (row) row.style.opacity = '0.3';
+  // Mark as deleted with data attr
+  const inp = document.getElementById(`sujet-inp-${meetingId}-${si}`);
+  if (inp) inp.dataset.deleted = '1';
+}
+
+function saveAgenda(meetingId) {
+  const meetings = getMeetings();
+  const m = meetings.find(m => m.id === meetingId);
+  if (!m) return;
+  // Collect non-deleted existing sujets
+  const newSujets = [];
+  let si = 0;
+  while (document.getElementById(`sujet-inp-${meetingId}-${si}`)) {
+    const inp = document.getElementById(`sujet-inp-${meetingId}-${si}`);
+    if (inp && !inp.dataset.deleted && inp.value.trim()) {
+      newSujets.push(inp.value.trim());
+    }
+    si++;
+  }
+  // Add new one if filled
+  const newInput = document.getElementById('new-sujet-' + meetingId);
+  if (newInput?.value.trim()) { newSujets.push(newInput.value.trim()); newInput.value=''; }
+  m.sujets = newSujets;
+  setMeetings(meetings);
+  // Refresh view and close edit
+  const viewDiv = document.getElementById('agenda-view-' + meetingId);
+  if (viewDiv) viewDiv.innerHTML = m.sujets.map((s, i) => `
+    <div class="agenda-item" style="--ag-color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--border2)'}">
+      <div class="agenda-bullet" style="color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--muted)'}">◆</div>
+      <div class="agenda-text">${s}</div>
+    </div>`).join('') || '<div style="color:var(--muted2);font-size:13px;padding:8px 0">Aucun sujet défini</div>';
+  toggleAgendaEdit(meetingId);
+  toast('✅ Ordre du jour sauvegardé');
+}
+
 function addSujet(meetingId) {
   const input = document.getElementById('new-sujet-' + meetingId);
   const text = input?.value.trim();
   if (!text) return;
-  const meetings = getMeetings();
-  const m = meetings.find(m => m.id === meetingId);
-  if (!m) return;
-  m.sujets.push(text);
-  setMeetings(meetings);
-  input.value = '';
-  document.getElementById('agenda-' + meetingId).innerHTML = m.sujets.map((s, i) => `
-    <div class="agenda-item" style="--ag-color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--border2)'}">
-      <div class="agenda-bullet" style="color:${i===0?'var(--blue)':i===1?'var(--purple)':'var(--muted)'}">◆</div>
-      <div class="agenda-text">${s}</div>
-    </div>`).join('');
-  toast('✅ Sujet ajouté');
+  // Just add a new row in the edit list
+  const list = document.getElementById('sujets-edit-list-' + meetingId);
+  if (list) {
+    const si = list.querySelectorAll('.sujet-edit-row').length;
+    const row = document.createElement('div');
+    row.className = 'sujet-edit-row';
+    row.id = `sujet-row-${meetingId}-${si}`;
+    row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:center';
+    row.innerHTML = `<span style="color:var(--muted);font-size:12px;width:16px;flex-shrink:0">${si+1}.</span>
+      <input type="text" id="sujet-inp-${meetingId}-${si}" value="${text}" style="flex:1"/>
+      <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteSujet('${meetingId}',${si})" style="color:var(--muted2);flex-shrink:0">✕</button>`;
+    list.appendChild(row);
+    input.value = '';
+  }
 }
 
 function toggleResumeEdit(id) {
@@ -1178,7 +1299,69 @@ function saveNewMeeting() {
   toast('✅ Meeting créé');
 }
 
-function openEditMeeting(id) { /* simplified: just reload */ toast('ℹ️ Modifiez directement l\'ordre du jour et le résumé'); }
+function openEditMeeting(id) { toast('ℹ️ Modifiez l\'ordre du jour via le bouton ✏️ Modifier, et le résumé via Éditer'); }
+
+/* ── Visio link management ── */
+let _visioScope = 'all_future';
+
+function toggleVisioPanel() {
+  const body = document.getElementById('visio-panel-body');
+  const chev = document.getElementById('visio-chevron');
+  const isOpen = body.classList.toggle('open');
+  chev.textContent = isOpen ? '▲' : '▼';
+  // Pre-fill with current link from selected meeting
+  if (isOpen) {
+    const meetings = getMeetings();
+    const m = meetings.find(m => m.id === currentMeeting);
+    const lien = m?.lien_meet || lsGet('visio_default_link', '') || '';
+    document.getElementById('visio-new-lien').value = lien;
+  }
+}
+
+function setVisioScope(scope) {
+  _visioScope = scope;
+  document.querySelectorAll('.radio-opt').forEach(el => {
+    el.classList.toggle('selected', el.getAttribute('onclick').includes(`'${scope}'`));
+  });
+  const rangeDiv = document.getElementById('visio-range-inputs');
+  if (rangeDiv) rangeDiv.style.display = scope === 'date_range' ? 'block' : 'none';
+}
+
+function applyVisioLink() {
+  const newLien = document.getElementById('visio-new-lien')?.value.trim();
+  if (!newLien) { toast('⚠️ Entrez un lien de réunion'); return; }
+  const meetings = getMeetings();
+  const today = new Date().toISOString().split('T')[0];
+  let count = 0;
+
+  if (_visioScope === 'all_future') {
+    meetings.forEach(m => { if (m.date >= today) { m.lien_meet = newLien; count++; } });
+  } else if (_visioScope === 'date_range') {
+    const from = document.getElementById('visio-date-from')?.value;
+    const to   = document.getElementById('visio-date-to')?.value;
+    if (!from || !to) { toast('⚠️ Définissez la plage de dates'); return; }
+    meetings.forEach(m => { if (m.date >= from && m.date <= to) { m.lien_meet = newLien; count++; } });
+  } else if (_visioScope === 'selected') {
+    const m = meetings.find(m => m.id === currentMeeting);
+    if (m) { m.lien_meet = newLien; count = 1; }
+  }
+
+  // Also save as default for new meetings
+  if (_visioScope === 'all_future') lsSet('visio_default_link', newLien);
+  setMeetings(meetings);
+  toggleVisioPanel();
+  renderCalendar();
+  renderMeetingDetail();
+  toast(`✅ Lien mis à jour sur ${count} meeting${count > 1 ? 's' : ''}`);
+}
+
+function updateVisioPanelPreview() {
+  const meetings = getMeetings();
+  const m = meetings.find(m => m.id === currentMeeting);
+  const lien = m?.lien_meet || '';
+  const el = document.getElementById('visio-lien-preview');
+  if (el) el.textContent = lien.length > 50 ? lien.slice(0, 50) + '…' : (lien || 'Non défini');
+}
 
 function copyLink(url) {
   navigator.clipboard?.writeText(url).then(() => toast('📋 Lien copié !'));
@@ -1252,6 +1435,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
   <!-- SECTION MORNING MEETING -->
   <div class="section" id="sec-meeting">
+    <!-- Visio settings collapsible panel -->
+    <div class="visio-panel" id="visio-settings-panel">
+      <div class="visio-panel-head" onclick="toggleVisioPanel()">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px">📹</span>
+          <div>
+            <div style="font-family:var(--fh);font-size:13px;font-weight:700">Gestion du lien de réunion</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:1px" id="visio-current-preview">Lien actuel : <span id="visio-lien-preview" style="color:var(--blue);font-family:var(--fm);font-size:11px"></span></div>
+          </div>
+        </div>
+        <span id="visio-chevron" style="color:var(--muted);font-size:12px">▼</span>
+      </div>
+      <div class="visio-panel-body" id="visio-panel-body">
+        <div class="fgroup" style="margin-bottom:14px">
+          <label class="flabel">Nouveau lien de réunion</label>
+          <input type="url" id="visio-new-lien" placeholder="https://us06web.zoom.us/j/... ou https://meet.google.com/..."/>
+        </div>
+        <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Appliquer à</div>
+        <div class="radio-group" id="visio-scope-group">
+          <label class="radio-opt selected" onclick="setVisioScope('all_future')"><input type="radio" name="vscope" value="all_future" checked/>🔄 Tous les meetings futurs</label>
+          <label class="radio-opt" onclick="setVisioScope('date_range')"><input type="radio" name="vscope" value="date_range"/>📅 Plage de dates</label>
+          <label class="radio-opt" onclick="setVisioScope('selected')"><input type="radio" name="vscope" value="selected"/>📌 Meeting sélectionné uniquement</label>
+        </div>
+        <div id="visio-range-inputs" style="display:none;margin-top:10px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="fgroup"><label class="flabel">Du</label><input type="date" id="visio-date-from"/></div>
+            <div class="fgroup"><label class="flabel">Au</label><input type="date" id="visio-date-to"/></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end">
+          <button class="btn btn-ghost btn-sm" onclick="toggleVisioPanel()">Annuler</button>
+          <button class="btn btn-blue btn-sm" onclick="applyVisioLink()">✓ Appliquer le lien</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Calendar header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
       <div style="display:flex;align-items:center;gap:12px">
