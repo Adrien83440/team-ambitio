@@ -37,6 +37,20 @@
     .user-avatar{width:28px;height:28px;background:linear-gradient(135deg,var(--blue-light),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white}
     .user-badge-name{font-size:12px;font-weight:600}
 
+    /* ── CLIENT SEARCH AUTOCOMPLETE ── */
+    .client-search-wrap{position:relative;flex:1}
+    .client-search-input{width:100%;padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;outline:none;background:white;color:var(--text);transition:border-color .15s}
+    .client-search-input:focus{border-color:var(--blue-main)}
+    .client-search-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:white;border:1.5px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:200;max-height:200px;overflow-y:auto;display:none}
+    .client-search-dropdown.show{display:block}
+    .client-search-item{padding:8px 12px;cursor:pointer;font-size:12px;font-weight:600;transition:background .1s;display:flex;align-items:center;gap:8px}
+    .client-search-item:hover{background:var(--blue-ghost)}
+    .client-search-item .cs-avatar{width:24px;height:24px;border-radius:6px;background:var(--blue-ghost);color:var(--blue-main);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0}
+    .client-search-item .cs-prog{font-size:10px;color:var(--muted);font-weight:400;margin-left:auto}
+    .client-selected-tag{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--blue-ghost);border:1px solid #bfdbfe;border-radius:20px;font-size:12px;font-weight:600;color:var(--blue-main)}
+    .client-selected-tag .cs-remove{cursor:pointer;opacity:.6;font-size:11px;transition:opacity .15s}
+    .client-selected-tag .cs-remove:hover{opacity:1}
+
     /* ── LAYOUT ── */
     .page-layout{display:grid;grid-template-columns:280px 1fr 320px;gap:0;height:calc(100vh - 65px)}
 
@@ -266,10 +280,18 @@
         <button class="compose-tag" id="tag-pin" onclick="setMsgType('pin')">📌 Épingler</button>
       </div>
       <div class="compose-client-row" id="clientTagRow" style="display:none">
-        <span style="font-size:12px;color:var(--muted);font-weight:600">Client concerné :</span>
-        <select class="compose-client-select" id="clientSelect">
-          <option value="">— Choisir un client —</option>
-        </select>
+        <span style="font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap">Client :</span>
+        <div id="clientSelectedTag" style="display:none">
+          <!-- populated by JS -->
+        </div>
+        <div class="client-search-wrap" id="clientSearchWrap">
+          <input class="client-search-input" id="clientSearchInput"
+            placeholder="Rechercher un client (3 lettres min)..."
+            oninput="searchClients(this.value)"
+            onblur="setTimeout(()=>hideClientDropdown(),150)"
+            autocomplete="off"/>
+          <div class="client-search-dropdown" id="clientDropdown"></div>
+        </div>
       </div>
       <div class="compose-row">
         <div class="compose-input-wrap">
@@ -328,9 +350,17 @@
       </div>
       <div class="mf">
         <label>Client concerné</label>
-        <select id="alarm-client">
-          <option value="">— Sélectionner un client —</option>
-        </select>
+        <div id="alarmClientSelectedTag" style="display:none;margin-bottom:6px"></div>
+        <div style="position:relative">
+          <input class="client-search-input" id="alarmClientSearch" style="width:100%"
+            placeholder="Rechercher un client (3 lettres min)..."
+            oninput="searchClientsAlarm(this.value)"
+            onblur="setTimeout(()=>hideAlarmClientDropdown(),150)"
+            autocomplete="off"/>
+          <div class="client-search-dropdown" id="alarmClientDropdown"></div>
+        </div>
+        <input type="hidden" id="alarm-client-id"/>
+        <input type="hidden" id="alarm-client-name"/>
       </div>
       <div class="mf">
         <label>Message / Contexte</label>
@@ -380,9 +410,17 @@
     if(!user){window.location.href='index.html';return;}
     window._uid = user.uid;
     const role = localStorage.getItem('ambitio_role')||'coach';
-    const name = localStorage.getItem('ambitio_name')||user.email||'Coach';
-    window._myName = name.split(' ')[0];
+
+    // Priorité : displayName Firebase > localStorage name > email prefix
+    const savedName = localStorage.getItem('ambitio_name')||'';
+    const firebaseName = user.displayName||'';
+    const fullName = firebaseName || savedName || user.email.split('@')[0];
+
+    // Premier prénom uniquement pour les messages (plus lisible)
+    window._myFullName = fullName;
+    window._myName = fullName.split(' ')[0];
     window._myRole = role;
+
     document.getElementById('uName').textContent = window._myName;
     document.getElementById('uAvatar').textContent = window._myName[0].toUpperCase();
     await loadClients();
@@ -399,8 +437,97 @@ let _msgType = 'normal';
 let _alarmType = 'urgent';
 let _ctxTab = 'alarmes';
 let _unsubMessages = null;
-let _alarms = []; // stored in localStorage for now
+let _alarms = [];
 let _pinnedMessages = [];
+let _selectedClientId = '';
+let _selectedClientName = '';
+
+// ── CLIENT SEARCH (compose) ──
+function searchClients(q){
+  const dropdown = document.getElementById('clientDropdown');
+  if(q.length < 3){ dropdown.classList.remove('show'); return; }
+  const results = _clients.filter(c=>
+    c.statut !== 'inactif' &&
+    c.nom.toLowerCase().includes(q.toLowerCase())
+  ).slice(0, 8);
+  if(!results.length){
+    dropdown.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--muted)">Aucun résultat</div>';
+  } else {
+    dropdown.innerHTML = results.map(c=>`
+      <div class="client-search-item" onclick="selectClient('${c._id}','${escHtml(c.nom)}')">
+        <div class="cs-avatar">${c.nom[0]}</div>
+        <span>${c.nom}</span>
+        <span class="cs-prog">${c.programme||''}</span>
+      </div>`).join('');
+  }
+  dropdown.classList.add('show');
+}
+
+function selectClient(id, name){
+  _selectedClientId = id;
+  _selectedClientName = name;
+  document.getElementById('clientSearchWrap').style.display = 'none';
+  const tag = document.getElementById('clientSelectedTag');
+  tag.style.display = 'flex';
+  tag.innerHTML = `<div class="client-selected-tag">👤 ${name} <span class="cs-remove" onclick="clearClientSelection()">✕</span></div>`;
+  document.getElementById('clientDropdown').classList.remove('show');
+}
+
+function clearClientSelection(){
+  _selectedClientId = '';
+  _selectedClientName = '';
+  document.getElementById('clientSearchWrap').style.display = '';
+  document.getElementById('clientSelectedTag').style.display = 'none';
+  document.getElementById('clientSearchInput').value = '';
+}
+
+function hideClientDropdown(){
+  document.getElementById('clientDropdown').classList.remove('show');
+}
+
+// ── CLIENT SEARCH (alarm modal) ──
+function searchClientsAlarm(q){
+  const dropdown = document.getElementById('alarmClientDropdown');
+  if(q.length < 3){ dropdown.classList.remove('show'); return; }
+  const results = _clients.filter(c=>
+    c.statut !== 'inactif' &&
+    c.nom.toLowerCase().includes(q.toLowerCase())
+  ).slice(0, 8);
+  if(!results.length){
+    dropdown.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--muted)">Aucun résultat</div>';
+  } else {
+    dropdown.innerHTML = results.map(c=>`
+      <div class="client-search-item" onclick="selectAlarmClient('${c._id}','${escHtml(c.nom)}')">
+        <div class="cs-avatar">${c.nom[0]}</div>
+        <span>${c.nom}</span>
+        <span class="cs-prog">${c.programme||''}</span>
+      </div>`).join('');
+  }
+  dropdown.classList.add('show');
+}
+
+function selectAlarmClient(id, name){
+  document.getElementById('alarm-client-id').value = id;
+  document.getElementById('alarm-client-name').value = name;
+  document.getElementById('alarmClientSearch').value = name;
+  document.getElementById('alarmClientDropdown').classList.remove('show');
+  const tag = document.getElementById('alarmClientSelectedTag');
+  tag.style.display = 'flex';
+  tag.innerHTML = `<div class="client-selected-tag">👤 ${name} <span class="cs-remove" onclick="clearAlarmClient()">✕</span></div>`;
+  document.getElementById('alarmClientSearch').style.display = 'none';
+}
+
+function clearAlarmClient(){
+  document.getElementById('alarm-client-id').value = '';
+  document.getElementById('alarm-client-name').value = '';
+  document.getElementById('alarmClientSearch').value = '';
+  document.getElementById('alarmClientSearch').style.display = '';
+  document.getElementById('alarmClientSelectedTag').style.display = 'none';
+}
+
+function hideAlarmClientDropdown(){
+  document.getElementById('alarmClientDropdown').classList.remove('show');
+}
 
 const CHANNELS = [
   { id:'general',     icon:'💬', name:'Général',          desc:'Canal principal de l\'équipe coaching',   color:'blue' },
@@ -431,10 +558,6 @@ async function loadClients(){
       const data=d.data(); data._id=d.id;
       _clients.push(data);
     });
-    // Populate selects
-    const opts = _clients.filter(c=>c.statut!=='inactif').map(c=>`<option value="${c._id}">${c.nom}</option>`).join('');
-    document.getElementById('clientSelect').innerHTML = '<option value="">— Aucun client spécifique —</option>'+opts;
-    document.getElementById('alarm-client').innerHTML = '<option value="">— Sélectionner un client —</option>'+opts;
   }catch(e){ console.warn('loadClients error',e); }
 }
 
@@ -568,16 +691,15 @@ async function sendMessage(){
   const text = input.value.trim();
   if(!text) return;
 
-  const clientSelect = document.getElementById('clientSelect');
-  const clientId = clientSelect.value;
-  const clientName = clientId ? (_clients.find(c=>c._id===clientId)||{}).nom || clientId : '';
+  // Use full name for messages so it's clear who wrote
+  const senderName = window._myFullName || window._myName || 'Coach';
 
   const msg = {
     text,
-    sender: window._myName || 'Coach',
+    sender: senderName,
     type: _msgType === 'normal' ? null : _msgType,
-    clientId: clientId || null,
-    clientName: clientName || null,
+    clientId: _selectedClientId || null,
+    clientName: _selectedClientName || null,
     ts: window._serverTimestamp(),
     channel: _currentChannel,
   };
@@ -586,12 +708,12 @@ async function sendMessage(){
     await window._addDoc(window._collection(window._db,'messages_'+_currentChannel), msg);
     input.value = '';
     input.style.height = 'auto';
-    // If pin type, save to pinnedMessages
     if(_msgType === 'pin'){
-      _pinnedMessages.unshift({text, sender:window._myName, time:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})});
+      _pinnedMessages.unshift({text, sender:senderName, time:new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})});
       localStorage.setItem('ambitio_pins_'+_currentChannel, JSON.stringify(_pinnedMessages));
       renderContextPanel();
     }
+    clearClientSelection();
     setMsgType('normal');
   }catch(e){ showToast('Erreur envoi: '+e.message,'error'); }
 }
@@ -605,6 +727,7 @@ function setMsgType(type){
     if(btn) btn.classList.add('selected-'+type);
   }
   document.getElementById('clientTagRow').style.display = (type==='alert'||type==='warn') ? 'flex' : 'none';
+  if(type !== 'alert' && type !== 'warn') clearClientSelection();
   // Update placeholder
   const placeholders = {
     normal: 'Écrivez votre message...',
@@ -629,10 +752,11 @@ function selectAlarmType(type, el){
 setTimeout(()=>{ const el=document.getElementById('ato-urgent'); if(el) el.classList.add('selected'); },100);
 
 function createAlarm(){
-  const clientId = document.getElementById('alarm-client').value;
-  const clientName = clientId ? (_clients.find(c=>c._id===clientId)||{}).nom || clientId : '';
-  const msg = document.getElementById('alarm-msg').value.trim();
+  const clientId   = document.getElementById('alarm-client-id').value;
+  const clientName = document.getElementById('alarm-client-name').value;
+  const msg    = document.getElementById('alarm-msg').value.trim();
   const assign = document.getElementById('alarm-assign').value;
+  const senderName = window._myFullName || window._myName || 'Coach';
 
   if(!msg){ showToast('Écrivez un message pour l\'alarme','error'); return; }
 
@@ -641,7 +765,7 @@ function createAlarm(){
     type: _alarmType,
     clientId, clientName,
     msg, assign,
-    by: window._myName||'Coach',
+    by: senderName,
     time: new Date().toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}),
     channel: _currentChannel,
     dismissed: false,
@@ -654,7 +778,7 @@ function createAlarm(){
   const typeMap = { urgent:'alert', attention:'warn', suivi:'info', info:'pin' };
   const msgObj = {
     text: `${alarm.msg}${clientName?' — Client : '+clientName:''}${assign?' — Pour : '+assign:''}`,
-    sender: window._myName||'Coach',
+    sender: senderName,
     type: typeMap[_alarmType]||'alert',
     clientId: clientId||null,
     clientName: clientName||null,
@@ -674,7 +798,7 @@ function createAlarm(){
   renderContextPanel();
   showToast('🔔 Alarme créée !','success');
   document.getElementById('alarm-msg').value='';
-  document.getElementById('alarm-client').value='';
+  clearAlarmClient();
 }
 
 // ── CONTEXT PANEL ──
@@ -775,7 +899,8 @@ async function handleLogout(){
   window.location.href='index.html';
 }
 
-window.loadChannel=loadChannel;
+window.searchClients=searchClients;window.selectClient=selectClient;window.clearClientSelection=clearClientSelection;window.hideClientDropdown=hideClientDropdown;
+window.searchClientsAlarm=searchClientsAlarm;window.selectAlarmClient=selectAlarmClient;window.clearAlarmClient=clearAlarmClient;window.hideAlarmClientDropdown=hideAlarmClientDropdown;
 window.sendMessage=sendMessage;
 window.setMsgType=setMsgType;
 window.setCtxTab=setCtxTab;
