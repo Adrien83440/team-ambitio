@@ -248,6 +248,25 @@ textarea::placeholder,input::placeholder{color:var(--muted2)}
 select option{background:#1a1a2e}
 label.flabel{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
 .fgroup{display:flex;flex-direction:column;gap:4px}
+
+/* ── CALENDAR ── */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+@media(max-width:700px){.cal-grid{grid-template-columns:repeat(3,1fr)}}
+.cal-day{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;min-height:80px;position:relative;transition:border-color .15s}
+.cal-day.has-meeting{border-color:rgba(96,165,250,0.3);cursor:pointer}
+.cal-day.has-meeting:hover{border-color:rgba(96,165,250,0.6);background:rgba(96,165,250,.04)}
+.cal-day.today{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.04)}
+.cal-day.selected{border-color:var(--purple)!important;background:rgba(167,139,250,.06)!important}
+.cal-day-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+.cal-day-name{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.cal-day-num{font-family:var(--fh);font-size:18px;font-weight:800;line-height:1}
+.cal-day.today .cal-day-num{color:var(--gold)}
+.cal-meeting-pill{padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;margin-top:4px;cursor:pointer;transition:opacity .15s}
+.cal-meeting-pill:hover{opacity:.8}
+.cal-meeting-pill.terminé{background:rgba(52,211,153,.1);color:var(--green);border:1px solid rgba(52,211,153,.2)}
+.cal-meeting-pill.avenir{background:rgba(96,165,250,.1);color:var(--blue);border:1px solid rgba(96,165,250,.2)}
+.cal-add-btn{position:absolute;bottom:6px;right:6px;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted2);cursor:pointer;transition:all .15s}
+.cal-add-btn:hover{background:rgba(167,139,250,.15);border-color:var(--purple);color:var(--purple)}
 </style>
 </head>
 <body>
@@ -432,27 +451,7 @@ function renderEspace(m) {
 
     <!-- Profil -->
     <div class="sub-panel ${tab==='profil'?'active':''}" id="sp-${m.uid}-profil">
-      <div class="info-grid">
-        <div class="info-card">
-          <div class="info-card-title">Coordonnées</div>
-          <div class="info-field"><label>Email</label><div class="val">${m.email||'—'}</div></div>
-          <div class="info-field"><label>Téléphone</label><div class="val">${m.phone||'—'}</div></div>
-          <div class="info-field"><label>LinkedIn</label><div class="val">${m.linkedin?`<a href="${m.linkedin}" target="_blank">Voir le profil →</a>`:'—'}</div></div>
-        </div>
-        <div class="info-card">
-          <div class="info-card-title">Contrat</div>
-          <div class="info-field"><label>Type de contrat</label><div class="val">${m.contrat}</div></div>
-          <div class="info-field"><label>Date de début</label><div class="val">${m.dateDebut}</div></div>
-          <div class="info-field"><label>Statut</label><div class="val" style="color:var(--green)">● ${m.statut}</div></div>
-        </div>
-        <div class="info-card" style="grid-column:span 1">
-          <div class="info-card-title">Notes internes</div>
-          <textarea id="notes-${m.uid}" placeholder="Notes confidentielles (admin seulement)..." style="min-height:90px">${lsGet('equipe_notes_'+m.uid,'')}</textarea>
-          <div style="margin-top:8px;display:flex;justify-content:flex-end">
-            <button class="btn btn-ghost btn-sm" onclick="saveNotes('${m.uid}')">💾 Sauvegarder</button>
-          </div>
-        </div>
-      </div>
+      ${renderProfilEdit(m)}
     </div>
 
     <!-- Documents -->
@@ -502,6 +501,74 @@ function renderEspace(m) {
 function setEspaceTab(uid, tab) {
   currentEspaceTab[uid] = tab;
   renderEspace(MEMBERS.find(m => m.uid === uid));
+}
+
+function getProfileData(uid) {
+  const m = MEMBERS.find(m => m.uid === uid);
+  const saved = lsGet('equipe_profile_' + uid, {});
+  return { ...m, ...saved };
+}
+
+function renderProfilEdit(m) {
+  const p = getProfileData(m.uid);
+  return `
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-card-title" style="display:flex;justify-content:space-between;align-items:center">
+        Coordonnées
+        <button class="btn btn-ghost btn-sm" onclick="saveProfile('${m.uid}')">💾 Sauvegarder</button>
+      </div>
+      <div class="info-field"><label>Prénom</label><input type="text" id="pf-name-${m.uid}" value="${p.name||''}" placeholder="Prénom"/></div>
+      <div class="info-field"><label>Nom</label><input type="text" id="pf-surname-${m.uid}" value="${p.surname||''}" placeholder="Nom"/></div>
+      <div class="info-field"><label>Email</label><input type="text" id="pf-email-${m.uid}" value="${p.email||''}" placeholder="email@..."/></div>
+      <div class="info-field"><label>Téléphone</label><input type="text" id="pf-phone-${m.uid}" value="${p.phone||''}" placeholder="+33 6..."/></div>
+      <div class="info-field"><label>LinkedIn</label><input type="url" id="pf-linkedin-${m.uid}" value="${p.linkedin||''}" placeholder="https://linkedin.com/in/..."/></div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-title">Contrat & poste</div>
+      <div class="info-field"><label>Rôle</label><input type="text" id="pf-role-${m.uid}" value="${p.role||''}" placeholder="Ex: Closer + Setter"/></div>
+      <div class="info-field"><label>Type de contrat</label><input type="text" id="pf-contrat-${m.uid}" value="${p.contrat||''}" placeholder="Closing & Setting..."/></div>
+      <div class="info-field"><label>Date de début</label><input type="text" id="pf-debut-${m.uid}" value="${p.dateDebut||''}" placeholder="Septembre 2025"/></div>
+      <div class="info-field"><label>Statut</label>
+        <select id="pf-statut-${m.uid}">
+          <option ${p.statut==='Actif'?'selected':''}>Actif</option>
+          <option ${p.statut==='Inactif'?'selected':''}>Inactif</option>
+          <option ${p.statut==='Congé'?'selected':''}>Congé</option>
+        </select>
+      </div>
+      <div class="info-field"><label>Objectif mensuel (€)</label><input type="text" id="pf-objectif-${m.uid}" value="${p.objectif||''}" placeholder="Ex: 10000"/></div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-title">Notes internes (admin)</div>
+      <textarea id="pf-notes-${m.uid}" placeholder="Notes confidentielles..." style="min-height:110px;width:100%">${lsGet('equipe_notes_'+m.uid,'')}</textarea>
+      <div class="info-field" style="margin-top:10px"><label>Bio / Observations</label><textarea id="pf-bio-${m.uid}" placeholder="Observations générales..." style="min-height:70px;width:100%">${p.bio||''}</textarea></div>
+    </div>
+  </div>`;
+}
+
+function saveProfile(uid) {
+  const data = {
+    name:     document.getElementById('pf-name-' + uid)?.value.trim() || '',
+    surname:  document.getElementById('pf-surname-' + uid)?.value.trim() || '',
+    email:    document.getElementById('pf-email-' + uid)?.value.trim() || '',
+    phone:    document.getElementById('pf-phone-' + uid)?.value.trim() || '',
+    linkedin: document.getElementById('pf-linkedin-' + uid)?.value.trim() || '',
+    role:     document.getElementById('pf-role-' + uid)?.value.trim() || '',
+    contrat:  document.getElementById('pf-contrat-' + uid)?.value.trim() || '',
+    dateDebut:document.getElementById('pf-debut-' + uid)?.value.trim() || '',
+    statut:   document.getElementById('pf-statut-' + uid)?.value || 'Actif',
+    objectif: document.getElementById('pf-objectif-' + uid)?.value.trim() || '',
+    bio:      document.getElementById('pf-bio-' + uid)?.value.trim() || '',
+  };
+  lsSet('equipe_profile_' + uid, data);
+  lsSet('equipe_notes_' + uid, document.getElementById('pf-notes-' + uid)?.value || '');
+  // Update in-memory MEMBERS for header refresh
+  const m = MEMBERS.find(m => m.uid === uid);
+  if (m) Object.assign(m, data);
+  // Refresh header only
+  const hdr = document.querySelector(`#espace-${uid} .espace-name`);
+  if (hdr) hdr.textContent = data.name + ' ' + data.surname;
+  toast('✅ Profil sauvegardé');
 }
 
 function saveNotes(uid) {
@@ -764,7 +831,20 @@ function saveCall(uid, i) {
   calls[i].note_head         = document.getElementById(`edit-note-${uid}-${i}`)?.value || '';
   calls[i].statut            = document.getElementById(`edit-statut-${uid}-${i}`)?.value || 'En attente';
   setCallBreakdowns(uid, calls);
-  renderCbPanel(MEMBERS.find(m => m.uid === uid));
+  // Update displayed content blocks without closing the card
+  const c = calls[i];
+  const card = document.getElementById(`cc-card-${uid}-${i}`);
+  if (card) {
+    // Update statut badge
+    const badges = card.querySelectorAll('.call-card-badge');
+    badges.forEach(b => {
+      if (b.textContent === 'Débriefé' || b.textContent === 'En attente') {
+        b.textContent = c.statut;
+        b.style.background = c.statut==='Débriefé'?'rgba(52,211,153,.1)':'rgba(245,158,11,.1)';
+        b.style.color = c.statut==='Débriefé'?'var(--green)':'var(--gold)';
+      }
+    });
+  }
   toast('✅ Débrief sauvegardé');
 }
 
@@ -778,42 +858,70 @@ function deleteCall(uid, i) {
 /* ════════════════════════════════════════════════════════════
    SECTION — MORNING MEETING
 ════════════════════════════════════════════════════════════ */
+// Calendar state
+let calWeekOffset = 0; // 0 = current week
+
+function getWeekStart(offset) {
+  const now = new Date();
+  const day = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
+  monday.setHours(0,0,0,0);
+  return monday;
+}
+
+function calPrevWeek() { calWeekOffset--; renderCalendar(); }
+function calNextWeek() { calWeekOffset++; renderCalendar(); }
+function calGoToday()  { calWeekOffset = 0; renderCalendar(); }
+
 function renderMeeting() {
   const meetings = getMeetings();
-  if (!currentMeeting && meetings.length) currentMeeting = meetings[meetings.length - 1].id;
-
-  // Sidebar list
-  const list = document.getElementById('mm-list');
-  const groups = {};
-  meetings.forEach(m => {
-    const week = getWeekLabel(m.date);
-    if (!groups[week]) groups[week] = [];
-    groups[week].push(m);
-  });
-
-  let listHtml = '';
-  Object.entries(groups).reverse().forEach(([week, ms]) => {
-    listHtml += `<div class="mm-day-label">${week}</div>`;
-    ms.forEach(m => {
-      const isActive = m.id === currentMeeting;
-      listHtml += `
-        <div class="mm-item ${isActive?'active':''}" onclick="selectMeeting('${m.id}')">
-          <div class="mm-item-date">
-            <span style="font-size:14px">${m.statut==='À venir'?'🔵':'✅'}</span>
-            ${m.jourSemaine} ${formatDate(m.date)}
-          </div>
-          <div class="mm-item-day" style="color:${m.statut==='À venir'?'var(--blue)':'var(--muted)'}">${m.statut}</div>
-          <div class="mm-item-preview">${m.sujets[0]||'—'}</div>
-        </div>`;
-    });
-  });
-
-  list.innerHTML = listHtml + `
-    <div style="padding:10px;border-top:1px solid var(--border);margin-top:4px">
-      <button class="btn btn-primary btn-sm" style="width:100%" onclick="openAddMeeting()">+ Nouveau meeting</button>
-    </div>`;
-
+  // Auto-select most recent past or next upcoming
+  if (!currentMeeting) {
+    const today = new Date().toISOString().split('T')[0];
+    const past = meetings.filter(m => m.date <= today).sort((a,b)=>b.date.localeCompare(a.date));
+    currentMeeting = (past[0] || meetings[0])?.id || null;
+  }
+  renderCalendar();
   renderMeetingDetail();
+}
+
+function renderCalendar() {
+  const meetings = getMeetings();
+  const weekStart = getWeekStart(calWeekOffset);
+  
+  // Build 7 days
+  const DAYS_FR = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+  const today = new Date(); today.setHours(0,0,0,0);
+  
+  // Week label
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+  const fmt = d => d.toLocaleDateString('fr-FR', {day:'numeric', month:'long'});
+  document.getElementById('cal-week-label').textContent = `${fmt(weekStart)} — ${fmt(weekEnd)} ${weekStart.getFullYear()}`;
+  
+  let html = '<div class="cal-grid">';
+  for (let d = 0; d < 7; d++) {
+    const day = new Date(weekStart); day.setDate(weekStart.getDate() + d);
+    const dateStr = day.toISOString().split('T')[0];
+    const isToday = day.getTime() === today.getTime();
+    const dayMeetings = meetings.filter(m => m.date === dateStr);
+    const hasMeeting = dayMeetings.length > 0;
+    const isSelected = dayMeetings.some(m => m.id === currentMeeting);
+    const isMmDay = d === 0 || d === 2 || d === 4; // Lun, Mer, Ven
+    
+    html += `<div class="cal-day ${hasMeeting?'has-meeting':''} ${isToday?'today':''} ${isSelected?'selected':''}" ${hasMeeting?`onclick="selectMeeting('${dayMeetings[0].id}')"`:''}">
+      <div class="cal-day-header">
+        <div class="cal-day-name">${DAYS_FR[d]}</div>
+        <div class="cal-day-num" ${isToday?'style="color:var(--gold)"':''}>${day.getDate()}</div>
+      </div>
+      ${dayMeetings.map(m => `<div class="cal-meeting-pill ${m.statut==='À venir'?'avenir':'terminé'}" onclick="event.stopPropagation();selectMeeting('${m.id}')">
+        ☀️ ${m.heure}
+      </div>`).join('')}
+      ${isMmDay && !hasMeeting ? `<div class="cal-add-btn" onclick="openAddMeetingDate('${dateStr}','${DAYS_FR[d]}')" title="Créer meeting">+</div>` : ''}
+    </div>`;
+  }
+  html += '</div>';
+  document.getElementById('cal-week-grid').innerHTML = html;
 }
 
 function getWeekLabel(dateStr) {
@@ -1031,12 +1139,20 @@ function saveResume(meetingId) {
 function setMeetingStatut(id, statut) {
   const meetings = getMeetings();
   const m = meetings.find(m => m.id === id);
-  if (m) { m.statut = statut; setMeetings(meetings); renderMeeting(); }
+  if (m) { m.statut = statut; setMeetings(meetings); renderCalendar(); renderMeetingDetail(); }
 }
 
 function openAddMeeting() {
-  const modal = document.getElementById('add-meeting-modal');
-  modal.style.display = 'flex';
+  document.getElementById('nm-date').value = '';
+  document.getElementById('add-meeting-modal').style.display = 'flex';
+}
+function openAddMeetingDate(dateStr, dayName) {
+  document.getElementById('nm-date').value = dateStr;
+  const jourMap = {'Lun':'Lundi','Mar':'Mardi','Mer':'Mercredi','Jeu':'Jeudi','Ven':'Vendredi','Sam':'Samedi','Dim':'Dimanche'};
+  const sel = document.getElementById('nm-jour');
+  const mapped = jourMap[dayName] || 'Lundi';
+  for (let i=0;i<sel.options.length;i++) { if(sel.options[i].value===mapped){sel.selectedIndex=i;break;} }
+  document.getElementById('add-meeting-modal').style.display = 'flex';
 }
 function closeAddMeeting() {
   document.getElementById('add-meeting-modal').style.display = 'none';
@@ -1057,7 +1173,8 @@ function saveNewMeeting() {
   setMeetings(meetings);
   currentMeeting = newM.id;
   closeAddMeeting();
-  renderMeeting();
+  renderCalendar();
+  renderMeetingDetail();
   toast('✅ Meeting créé');
 }
 
@@ -1087,6 +1204,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const nm = localStorage.getItem('ambitio_name') || 'Admin';
   document.getElementById('tb-nm').textContent = nm;
   document.getElementById('tb-av').textContent = nm[0].toUpperCase();
+  // Load saved profiles into MEMBERS
+  MEMBERS.forEach(m => {
+    const saved = lsGet('equipe_profile_' + m.uid, null);
+    if (saved) Object.assign(m, saved);
+  });
   setMainTab('espaces');
 });
 </script>
@@ -1130,16 +1252,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   <!-- SECTION MORNING MEETING -->
   <div class="section" id="sec-meeting">
-    <div class="mm-layout">
-      <div class="mm-sidebar">
-        <div class="mm-sidebar-head">
-          <span>📅 Sessions</span>
-          <span style="font-size:11px;color:var(--muted)">Lun · Mer · Ven</span>
-        </div>
-        <div class="mm-list" id="mm-list"></div>
+    <!-- Calendar header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn btn-ghost btn-sm" onclick="calPrevWeek()">◀ Semaine préc.</button>
+        <div id="cal-week-label" style="font-family:var(--fh);font-size:15px;font-weight:700;min-width:200px;text-align:center"></div>
+        <button class="btn btn-ghost btn-sm" onclick="calNextWeek()">Semaine suiv. ▶</button>
       </div>
-      <div id="mm-main"></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="calGoToday()">Aujourd'hui</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddMeeting()">+ Nouveau meeting</button>
+      </div>
     </div>
+    <!-- Weekly calendar grid -->
+    <div id="cal-week-grid" style="margin-bottom:24px"></div>
+    <!-- Meeting detail -->
+    <div id="mm-main"></div>
   </div>
 
 </div>
