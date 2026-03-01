@@ -917,6 +917,8 @@ function saveMemberData(uid, weekData) {
   member.data[cmk()][currentWeek] = { ...weekData };
   try {
     localStorage.setItem(key, JSON.stringify(member.data[cmk()]));
+    // Notifier les autres modules
+    document.dispatchEvent(new CustomEvent('setting:saved', { detail: { uid, month: cmk() } }));
   } catch(e) {}
 }
 

@@ -645,7 +645,15 @@ function loadDataC(uid) {
   if (hardcoded && hardcoded._total) return hardcoded; // mois historique → ignorer localStorage
   try { const v = localStorage.getItem('closing_'+uid+'_'+cmk()); return v ? JSON.parse(v) : null; } catch(e) { return null; }
 }
-function saveDataC(uid, md) { try { localStorage.setItem('closing_'+uid+'_'+cmk(), JSON.stringify(md)); } catch(e) {} }
+function saveDataC(uid, md) {
+  try {
+    const key = 'closing_' + uid + '_' + cmk();
+    localStorage.setItem(key, JSON.stringify(md));
+    // Notifier les autres onglets (dashboard/projections) via storage event
+    // Note: storage event ne se déclenche pas dans le même onglet, on dispatch manuellement
+    document.dispatchEvent(new CustomEvent('closing:saved', { detail: { uid, month: cmk(), data: md } }));
+  } catch(e) {}
+}
 
 let currentMember = null, currentWeek = 'mois';
 

@@ -723,6 +723,17 @@ function getDeals(uid, month) {
 function saveDeals(uid, month, deals) {
   const key = `comm_deals_${uid}_${month}`;
   localStorage.setItem(key, JSON.stringify(deals));
+  // Notifier les modules dashboard/projections
+  document.dispatchEvent(new CustomEvent('comm:saved', { detail: { uid, month } }));
+}
+
+function saveCommStatut(month, statut) {
+  try {
+    localStorage.setItem(`comm_statut_${month}`, statut);
+    if (typeof syncBridge_saveCommStatut === 'function') {
+      syncBridge_saveCommStatut(month, statut);
+    }
+  } catch(e) {}
 }
 
 function calcPoints(deals) {

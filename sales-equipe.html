@@ -6,6 +6,8 @@
 <title>Ambitio — Équipe</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="sales-data.js"></script>
+<script src="sync-bridge.js"></script>
 <script src="nav.js" defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1480,7 +1482,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saved) Object.assign(m, saved);
   });
   const savedTab = lsGet('equipe_active_tab', 'espaces');
+
+  // ── Sync live performance data from Closing/Setting localStorage ──
+  const _equipeMonthKey = localStorage.getItem('sales_month') || 'Février 2026';
+  if (typeof syncBridge_loadMonth === 'function') {
+    syncBridge_loadMonth(_equipeMonthKey);
+  }
+
   setMainTab(savedTab);
+
+  // Refresh si données modifiées dans un autre onglet
+  window.addEventListener('storage', function(e) {
+    const k = e.key || '';
+    if (k.startsWith('closing_') || k.startsWith('setting_') || k.startsWith('comm_deals_')) {
+      if (typeof syncBridge_loadMonth === 'function') {
+        syncBridge_loadMonth(localStorage.getItem('sales_month') || 'Février 2026');
+      }
+    }
+  });
 });
 </script>
 
