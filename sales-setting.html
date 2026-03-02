@@ -1534,16 +1534,22 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('tb-av').textContent  = nm[0].toUpperCase();
 
   // Charger données sauvegardées dans les membres
+  // ET bootstrapper les données hardcodées dans localStorage pour syncBridge
   MEMBERS.forEach(m => {
+    const key = `setting_${m.uid}_${cmk()}`;
     const saved = loadMemberData(m.uid);
-    if (saved) m.data[cmk()] = saved;
+    if (saved) {
+      m.data[cmk()] = saved;
+    } else if (m.data[cmk()] && !m.data[cmk()]._total) {
+      // Données hardcodées présentes mais pas dans localStorage → les écrire
+      try { localStorage.setItem(key, JSON.stringify(m.data[cmk()])); } catch(e) {}
+    }
   });
 
-  // Firebase
+  // Firebase : init + sync données hardcodées vers Firestore + watch temps réel
   if (window.firebase && window.firebase.firestore && window.Fire && !Fire.db) {
     const uid = (typeof localStorage !== 'undefined' && localStorage.getItem('ambitio_uid')) || 'guillaume';
     Fire.init(window.firebase.firestore(), uid);
-    // Sync des données vers Firebase + écoute temps réel
     firebaseSyncMembers();
   }
 

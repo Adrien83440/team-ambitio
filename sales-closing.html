@@ -1106,8 +1106,14 @@ document.addEventListener('DOMContentLoaded', () => {
   MEMBERS_C.forEach(m => {
     const hardcoded = m.data[cmk()];
     if (hardcoded && hardcoded._total) return; // garder données historiques
+    const key = `closing_${m.uid}_${cmk()}`;
     const s = loadDataC(m.uid);
-    if (s) m.data[cmk()] = s;
+    if (s) {
+      m.data[cmk()] = s;
+    } else if (hardcoded) {
+      // Données hardcodées présentes mais pas dans localStorage → les écrire pour syncBridge
+      try { localStorage.setItem(key, JSON.stringify(hardcoded)); } catch(e) {}
+    }
   });
   document.addEventListener('db:updated', renderAll);
 

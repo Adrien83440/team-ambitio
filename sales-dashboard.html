@@ -483,8 +483,8 @@ let _cm = (() => {
   return { month: MONTHS.indexOf(parts[0]), year: parseInt(parts[1]) || 2026 };
 })();
 function currentMonthKey() { return MONTHS[_cm.month] + ' ' + _cm.year; }
-function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); syncBridge_loadMonth(currentMonthKey()); renderAll(); }
-function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); syncBridge_loadMonth(currentMonthKey()); renderAll(); }
+async function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); await syncBridge_loadMonth(currentMonthKey()); syncBridge_watchMonth(currentMonthKey()); renderAll(); }
+async function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); await syncBridge_loadMonth(currentMonthKey()); syncBridge_watchMonth(currentMonthKey()); renderAll(); }
 function _saveMonth() { localStorage.setItem('sales_month', currentMonthKey()); document.getElementById('month-lbl').textContent = currentMonthKey(); }
 
 function renderAll() {
@@ -569,29 +569,27 @@ function renderAll() {
     </table>`;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
   document.getElementById('month-lbl').textContent = currentMonthKey();
   const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
   document.getElementById('tb-nm').textContent = nm;
   document.getElementById('tb-av').textContent = nm[0].toUpperCase();
 
-  // ── Sync live data from Closing/Setting/Commissions localStorage ──
-  syncBridge_loadMonth(currentMonthKey());
-  renderAll();
-
-  // Refresh quand DB est mis à jour
-  document.addEventListener('db:updated', renderAll);
-
-  // Firebase (optionnel, si dispo)
+  // ── Initialiser Firebase avant le chargement des données ──
   const _fbUser = U.getCurrentUser();
   if (window.firebase && window.firebase.firestore && !Fire.db) {
     Fire.init(window.firebase.firestore(), _fbUser.uid);
   }
-  if (Fire.db) {
-    Fire.watchUser(_fbUser.uid, currentMonthKey(), (data) => {
-      if (data) { Fire.apply(data); renderAll(); }
-    });
-  }
+
+  // ── Charger les données agrégées depuis Firestore (tous membres) ──
+  await syncBridge_loadMonth(currentMonthKey());
+  renderAll();
+
+  // ── Watch temps réel sur tous les membres ──
+  syncBridge_watchMonth(currentMonthKey());
+
+  // Refresh quand DB est mis à jour
+  document.addEventListener('db:updated', renderAll);
 });
 
 </script>
