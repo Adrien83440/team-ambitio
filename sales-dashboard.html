@@ -412,12 +412,12 @@ window.getMonthWeeks=getMonthWeeks;
   <div class="tb-logo">S</div>
   <div class="tb-title">Ambitio <em>Sales</em></div>
   <div class="tb-sep"></div>
-  <div class="tb-page">◈ Dashboard</div>
+  <div class="tb-page">◈ Synthèse</div>
   <div class="tb-right">
-    <div class="tb-month">
-      <button onclick="prevMonth()">&#9664;</button>
-      <span id="month-lbl">Février 2026</span>
-      <button onclick="nextMonth()">&#9654;</button>
+    <div class="tb-month" id="year-nav">
+      <button onclick="prevYear()">&#9664;</button>
+      <span id="year-lbl" style="min-width:50px;text-align:center">2026</span>
+      <button onclick="nextYear()">&#9654;</button>
     </div>
     <div class="tb-user">
       <div class="tb-av" id="tb-av">G</div>
@@ -426,173 +426,511 @@ window.getMonthWeeks=getMonthWeeks;
   </div>
 </div>
 
+<style>
+/* === DASHBOARD YEAR STYLES === */
+.yr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:13px; margin-bottom:18px; }
+.yr-kpi { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:18px; position:relative; overflow:hidden; }
+.yr-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--kc,var(--red2)); }
+.yr-kpi-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+.yr-kpi-val { font-size:28px; font-weight:800; font-family:var(--font-d); color:var(--text); line-height:1.1; }
+.yr-kpi-sub { font-size:11px; color:var(--muted); margin-top:4px; }
+
+.yr-row { display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-bottom:18px; }
+.yr-row-3 { display:grid; grid-template-columns:2fr 1fr; gap:13px; margin-bottom:18px; }
+
+.yr-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius2); padding:20px; }
+.yr-card-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.yr-card-title { font-size:14px; font-weight:700; color:var(--text); }
+.yr-card-badge { font-size:10px; font-weight:700; color:var(--muted); background:var(--bg4); padding:4px 10px; border-radius:20px; border:1px solid var(--border); }
+
+/* Month grid for drill-down */
+.month-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-bottom:18px; }
+.month-btn { padding:8px 4px; border:1px solid var(--border); border-radius:8px; background:var(--bg2); color:var(--muted); font-size:11px; font-weight:600; text-align:center; cursor:pointer; transition:all .15s; font-family:var(--font-b); }
+.month-btn:hover { background:var(--bg4); color:var(--text); border-color:var(--border2); }
+.month-btn.active { background:rgba(239,68,68,.12); color:var(--red2); border-color:rgba(239,68,68,.3); }
+.month-btn.has-data { color:var(--text); }
+.month-btn.has-data::after { content:''; display:block; width:4px; height:4px; border-radius:50%; background:var(--green); margin:3px auto 0; }
+
+/* Chart area */
+.yr-chart { position:relative; height:220px; display:flex; align-items:flex-end; gap:4px; padding:0 4px 24px; }
+.yr-chart-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; position:relative; }
+.yr-chart-bar { width:100%; border-radius:4px 4px 0 0; min-height:2px; transition:height .4s cubic-bezier(.4,0,.2,1); cursor:pointer; position:relative; }
+.yr-chart-bar:hover { filter:brightness(1.3); }
+.yr-chart-bar.bar-ct { background:linear-gradient(180deg,#ef4444,#991b1b); }
+.yr-chart-bar.bar-co { background:linear-gradient(180deg,#34d399,#065f46); }
+.yr-chart-lbl { position:absolute; bottom:0; font-size:9px; color:var(--muted); font-weight:600; white-space:nowrap; }
+.yr-chart-tooltip { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:var(--bg); border:1px solid var(--border2); padding:6px 10px; border-radius:8px; font-size:11px; color:var(--text); white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .15s; z-index:10; }
+.yr-chart-col:hover .yr-chart-tooltip { opacity:1; }
+
+.chart-legend-row { display:flex; gap:16px; justify-content:center; margin-bottom:12px; }
+.chart-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); font-weight:600; }
+.chart-legend-dot { width:10px; height:10px; border-radius:3px; }
+
+/* Member table */
+.yr-table { width:100%; border-collapse:collapse; }
+.yr-table th { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
+.yr-table td { font-size:13px; font-weight:600; color:var(--text); padding:10px; border-bottom:1px solid rgba(255,255,255,.03); font-family:var(--font-m); }
+.yr-table td:first-child { font-family:var(--font-b); }
+.yr-table tr:last-child td { border-bottom:none; }
+.yr-table .tr-total td { color:var(--gold); font-weight:800; border-top:1px solid var(--border2); }
+.member-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; vertical-align:middle; }
+
+/* Funnel horizontal */
+.yr-funnel { display:flex; flex-direction:column; gap:8px; }
+.yr-funnel-row { display:flex; align-items:center; gap:10px; }
+.yr-funnel-label { width:80px; font-size:11px; font-weight:700; color:var(--muted); text-align:right; flex-shrink:0; }
+.yr-funnel-track { flex:1; height:28px; background:var(--bg); border-radius:6px; overflow:hidden; position:relative; }
+.yr-funnel-fill { height:100%; border-radius:6px; background:linear-gradient(90deg,#991b1b,#ef4444); display:flex; align-items:center; padding-left:10px; font-size:11px; font-weight:700; color:white; min-width:fit-content; transition:width .5s cubic-bezier(.4,0,.2,1); }
+.yr-funnel-val { font-size:12px; font-weight:700; color:var(--text); font-family:var(--font-m); width:60px; text-align:right; flex-shrink:0; }
+.yr-funnel-rate { font-size:11px; color:var(--muted); width:50px; flex-shrink:0; }
+
+/* Drill-down overlay */
+.drill-panel { display:none; }
+.drill-panel.show { display:block; }
+.drill-back { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--red3); cursor:pointer; margin-bottom:14px; padding:6px 14px; border-radius:8px; background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.2); transition:all .15s; }
+.drill-back:hover { background:rgba(239,68,68,.14); }
+
+@media(max-width:1100px) {
+  .yr-grid { grid-template-columns:repeat(2,1fr); }
+  .yr-row, .yr-row-3 { grid-template-columns:1fr; }
+  .month-grid { grid-template-columns:repeat(4,1fr); }
+}
+@media(max-width:600px) {
+  .yr-grid { grid-template-columns:1fr; }
+  .month-grid { grid-template-columns:repeat(3,1fr); }
+}
+</style>
+
 <div class="page">
 
-  <!-- ALERTS -->
-  <div id="alerts"></div>
+  <!-- MONTH SELECTOR -->
+  <div class="month-grid" id="month-grid"></div>
 
-  <!-- KPI ROW -->
-  <div class="g4 mb" id="kpis"></div>
+  <!-- YEAR VIEW -->
+  <div id="year-view">
+    <!-- KPIs -->
+    <div class="yr-grid" id="yr-kpis"></div>
 
-  <!-- ROW 2: Funnel + Side cards -->
-  <div class="g21 mb">
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Funnel Closing — Mois</span>
-        <a class="card-action" href="sales-closing.html">Détails →</a>
+    <!-- Chart + Funnel -->
+    <div class="yr-row-3">
+      <div class="yr-card">
+        <div class="yr-card-hdr">
+          <div class="yr-card-title" id="chart-title">Contracté & Collecté — 2026</div>
+          <div class="yr-card-badge" id="chart-badge">Par mois</div>
+        </div>
+        <div class="chart-legend-row">
+          <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#ef4444"></div>Contracté</div>
+          <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#34d399"></div>Collecté</div>
+        </div>
+        <div class="yr-chart" id="yr-chart"></div>
       </div>
-      <div class="funnel" id="funnel"></div>
+      <div class="yr-card">
+        <div class="yr-card-hdr">
+          <div class="yr-card-title">Funnel Année</div>
+        </div>
+        <div class="yr-funnel" id="yr-funnel"></div>
+      </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:13px">
-      <div class="card" style="flex:1">
-        <div class="card-header"><span class="card-title">Commissions dues</span></div>
-        <div id="comm-card"></div>
+
+    <!-- Team + Details -->
+    <div class="yr-row">
+      <div class="yr-card">
+        <div class="yr-card-hdr">
+          <div class="yr-card-title">Performance par membre</div>
+          <div class="yr-card-badge" id="team-badge">Année</div>
+        </div>
+        <div id="yr-team"></div>
       </div>
-      <div class="card" style="flex:1">
-        <div class="card-header"><span class="card-title">Objectif mensuel</span></div>
-        <div id="obj-card"></div>
+      <div class="yr-card">
+        <div class="yr-card-hdr">
+          <div class="yr-card-title">Détail mois par mois</div>
+        </div>
+        <div id="yr-months-table"></div>
       </div>
     </div>
   </div>
 
-  <!-- ROW 3: Setting + Equipe -->
-  <div class="g2">
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Setting — Résumé</span>
-        <a class="card-action" href="sales-setting.html">Détails →</a>
+  <!-- DRILL-DOWN MONTH VIEW (hidden by default) -->
+  <div class="drill-panel" id="drill-panel">
+    <div class="drill-back" onclick="closeDrill()">◀ Retour synthèse <span id="drill-year"></span></div>
+    <div class="yr-grid" id="drill-kpis"></div>
+    <div class="yr-row">
+      <div class="yr-card">
+        <div class="yr-card-hdr"><div class="yr-card-title" id="drill-funnel-title">Funnel</div></div>
+        <div class="yr-funnel" id="drill-funnel"></div>
       </div>
-      <div id="setting-mini"></div>
-    </div>
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Équipe — Cette semaine</span>
-        <a class="card-action" href="sales-equipe.html">Équipe →</a>
+      <div class="yr-card">
+        <div class="yr-card-hdr"><div class="yr-card-title">Équipe</div></div>
+        <div id="drill-team"></div>
       </div>
-      <div id="team-mini"></div>
     </div>
   </div>
 
 </div>
 
 <script>
-const MONTHS = DB.months;
-let _cm = (() => {
-  const saved = localStorage.getItem('sales_month') || 'Février 2026';
-  const parts = saved.split(' ');
-  return { month: MONTHS.indexOf(parts[0]), year: parseInt(parts[1]) || 2026 };
-})();
-function currentMonthKey() { return MONTHS[_cm.month] + ' ' + _cm.year; }
-async function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); await syncBridge_loadMonth(currentMonthKey()); syncBridge_watchMonth(currentMonthKey()); renderAll(); }
-async function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); await syncBridge_loadMonth(currentMonthKey()); syncBridge_watchMonth(currentMonthKey()); renderAll(); }
-function _saveMonth() { localStorage.setItem('sales_month', currentMonthKey()); document.getElementById('month-lbl').textContent = currentMonthKey(); }
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD SYNTHÈSE ANNUELLE
+═══════════════════════════════════════════════════════════ */
 
-function renderAll() {
-  const c = DB.closing.mois;
-  const s = DB.setting.mois;
-  const cm = DB.commissions[currentMonthKey()] || { totalComm:0, contracte:0, collecte:0, statut:'—', deals:[] };
+const MONTHS_FR = DB.months;
+let _year = 2026;
+let _drillMonth = null; // null = vue année, sinon "Février 2026"
 
-  // Alerts
-  const alerts = [];
-  if (c.atteinte < 0.2) alerts.push({ type:'crit', icon:'🚨', title:'Objectif closing critique', text:`${U.pct(c.atteinte)} atteint — ${U.euro(c.delta)} de delta à combler ce mois.` });
-  if (s.showupP.a < 0.5) alerts.push({ type:'warn', icon:'⚠️', title:'Taux de show-up faible', text:`Show-up à ${U.pct(s.showupP.a)} vs ${U.pct(s.showupP.p)} projeté. Requalifier les RDVs.` });
-  document.getElementById('alerts').innerHTML = alerts.map(a => `
-    <div class="alert-panel ${a.type}">
-      <div class="alert-icon">${a.icon}</div>
-      <div><div class="alert-title">${a.title}</div><div class="alert-text">${a.text}</div></div>
-    </div>`).join('');
+function yearLabel() { return String(_year); }
+function prevYear() { _year--; _drillMonth = null; refreshYear(); }
+function nextYear() { _year++; _drillMonth = null; refreshYear(); }
 
-  // KPIs
-  document.getElementById('kpis').innerHTML = [
-    { label:'Contracté',     val:U.euro(c.contracte.a), sub:`/ ${U.euro(c.contracte.p)}`,    rawA:c.contracte.a, proj:c.contracte.p, color:'#ef4444' },
-    { label:'Closes',        val:c.closes.a,            sub:`/ ${c.closes.p} projetés`,       rawA:c.closes.a,    proj:c.closes.p,    color:'#f59e0b' },
-    { label:'Calls Setting', val:U.num(s.calls.a),      sub:`/ ${U.num(s.calls.p)} projetés`, rawA:s.calls.a,     proj:s.calls.p,     color:'#60a5fa' },
-    { label:'Commissions',   val:U.euro(cm.totalComm),  sub:'Ce mois',                        pct:100,            color:'#34d399'     },
-  ].map(U.kpiCard).join('');
+/* ── Charger TOUTES les données de l'année depuis Firestore ── */
+async function loadYearData() {
+  const db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
+  const results = {}; // { "Janvier 2026": { guillaume: {...}, elodie: {...} } }
 
-  // Funnel
-  document.getElementById('funnel').innerHTML = [
-    U.funnelStep('Calls',    c.calls.a,    c.calls.p,    true),
-    U.funnelStep('Lives',    c.lives.a,    c.calls.a),
-    U.funnelStep('Offres',   c.offres.a,   c.lives.a),
-    U.funnelStep('Closes',   c.closes.a,   c.offres.a),
-    U.funnelStep('Collecté', c.collecte.a, c.contracte.a, false, true),
-  ].join('');
+  for (let m = 0; m < 12; m++) {
+    const monthKey = MONTHS_FR[m] + ' ' + _year;
+    const fsKey = `${_year}-${String(m+1).padStart(2,'0')}`;
+    results[monthKey] = {};
 
-  // Commissions mini
-  document.getElementById('comm-card').innerHTML = `
-    <div style="font-size:26px;font-weight:800;font-family:var(--font-d);color:var(--gold);margin-bottom:10px">${U.euro(cm.totalComm)}</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Contracté: <b style="color:var(--text)">${U.euro(cm.contracte)}</b></div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Collecté: <b style="color:var(--text)">${U.euro(cm.collecte)}</b></div>
-    <div class="status-badge ${cm.statut === 'Validé' ? 'status-paid' : 'status-pending'}">
-      ${cm.statut === 'Validé' ? '✅ Validé' : '⏳ ' + cm.statut}
-    </div>`;
+    for (const uid of SYNC_UIDS) {
+      let data = null;
 
-  // Objectif
-  const at = c.atteinte * 100;
-  const col = at >= 80 ? 'var(--green)' : at >= 50 ? 'var(--gold)' : 'var(--red2)';
-  document.getElementById('obj-card').innerHTML = `
-    <div style="display:flex;align-items:center;gap:14px">
-      <div style="font-size:32px;font-weight:800;font-family:var(--font-d);color:${col}">${at.toFixed(0)}%</div>
-      <div style="flex:1">
-        <div style="height:6px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden;margin-bottom:5px">
-          <div style="height:100%;width:${Math.min(at,100)}%;background:linear-gradient(90deg,#991b1b,#ef4444);border-radius:99px"></div>
-        </div>
-        <div style="font-size:10px;color:var(--muted)">Delta: <b style="color:var(--red2)">${U.euro(c.delta)}</b></div>
-      </div>
-    </div>`;
+      // Firestore
+      if (db) {
+        try {
+          const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+          const snap = await ref.get();
+          if (snap.exists) {
+            const raw = snap.data();
+            data = { closing: null, setting: null };
+            if (raw.closing_total) data.closing = raw.closing_total;
+            else if (raw.closing) {
+              const t = {};
+              ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
+              ['s1','s2','s3','s4','s5'].forEach(w => {
+                if (raw.closing[w]) Object.keys(t).forEach(k => t[k] += (raw.closing[w][k] || 0));
+              });
+              data.closing = t;
+            }
+            if (raw.setting_total) data.setting = raw.setting_total;
+            else if (raw.setting) {
+              const t = {};
+              ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
+              ['s1','s2','s3','s4','s5'].forEach(w => {
+                if (raw.setting[w]) Object.keys(t).forEach(k => t[k] += (raw.setting[w][k] || 0));
+              });
+              data.setting = t;
+            }
+          }
+        } catch(e) { console.warn('[year] Firestore err', uid, monthKey, e.message); }
+      }
 
-  // Setting mini
-  document.getElementById('setting-mini').innerHTML = [
-    { l:'Calls passés',  a:s.calls.a,    p:s.calls.p    },
-    { l:'Sets obtenus',  a:s.sets.a,     p:s.sets.p     },
-    { l:'Show-up',       a:s.presents.a, p:s.presents.p },
-    { l:'Closes',        a:s.closes.a,   p:s.closes.p   },
-  ].map(r => U.progRow(r.l, r.a, r.p)).join('');
+      // Fallback localStorage
+      if (!data) {
+        let cls = null, set = null;
+        try { const v = localStorage.getItem(`closing_${uid}_${monthKey}`); cls = v ? JSON.parse(v) : null; } catch(e){}
+        try { const v = localStorage.getItem(`setting_${uid}_${monthKey}`); set = v ? JSON.parse(v) : null; } catch(e){}
+        if (cls || set) {
+          data = { closing: null, setting: null };
+          if (cls) {
+            if (cls._total) data.closing = cls._total;
+            else {
+              const t = {};
+              ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
+              ['s1','s2','s3','s4','s5'].forEach(w => {
+                if (cls[w]) Object.keys(t).forEach(k => t[k] += (cls[w][k] || 0));
+              });
+              data.closing = t;
+            }
+          }
+          if (set) {
+            if (set._total) data.setting = set._total;
+            else {
+              const t = {};
+              ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
+              ['s1','s2','s3','s4','s5'].forEach(w => {
+                if (set[w]) Object.keys(t).forEach(k => t[k] += (set[w][k] || 0));
+              });
+              data.setting = t;
+            }
+          }
+        }
+      }
 
-  // Team mini
-  document.getElementById('team-mini').innerHTML = `
-    <table class="data-table">
-      <thead><tr><th>Commercial</th><th>Closes</th><th>Contracté</th><th>Show-up</th></tr></thead>
-      <tbody>
-        ${DB.team.week.map(m => `
-          <tr>
-            <td><div class="member-cell">
-              <div class="member-av" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
-              <div class="member-name">${m.name}</div>
-            </div></td>
-            <td class="td-mono ${m.closes>=5?'td-ok':'td-warn'}">${m.closes}</td>
-            <td class="td-mono">${U.euro(m.contracte)}</td>
-            <td class="td-mono ${m.showup>=0.7?'td-ok':'td-warn'}">${U.pct(m.showup)}</td>
-          </tr>`).join('')}
-      </tbody>
-    </table>`;
+      results[monthKey][uid] = data;
+    }
+  }
+  return results;
 }
 
+/* ── Agréger les données par année ── */
+function aggregateYear(yearData) {
+  const totals = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0, settingCalls:0, settingCloses:0 };
+  const perMonth = {};
+  const perMember = {};
+
+  SYNC_UIDS.forEach(uid => { perMember[uid] = { ...totals }; });
+
+  for (let m = 0; m < 12; m++) {
+    const mk = MONTHS_FR[m] + ' ' + _year;
+    const mData = yearData[mk] || {};
+    const mt = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0, settingCalls:0, settingCloses:0, hasData:false };
+
+    SYNC_UIDS.forEach(uid => {
+      const d = mData[uid];
+      if (!d) return;
+      if (d.closing) {
+        mt.hasData = true;
+        ['calls','lives','offres','closes','contracte','collecte'].forEach(k => {
+          const v = d.closing[k] || 0;
+          mt[k] += v;
+          totals[k] += v;
+          perMember[uid][k] += v;
+        });
+      }
+      if (d.setting) {
+        mt.hasData = true;
+        mt.sets += (d.setting.sets || 0); totals.sets += (d.setting.sets || 0); perMember[uid].sets += (d.setting.sets || 0);
+        mt.presents += (d.setting.presents || 0); totals.presents += (d.setting.presents || 0); perMember[uid].presents += (d.setting.presents || 0);
+        mt.settingCalls += (d.setting.calls || 0); totals.settingCalls += (d.setting.calls || 0); perMember[uid].settingCalls += (d.setting.calls || 0);
+        mt.settingCloses += (d.setting.closes || 0); totals.settingCloses += (d.setting.closes || 0); perMember[uid].settingCloses += (d.setting.closes || 0);
+      }
+    });
+    perMonth[mk] = mt;
+  }
+  return { totals, perMonth, perMember };
+}
+
+/* ── RENDER ── */
+let _yearData = null;
+let _agg = null;
+
+async function refreshYear() {
+  document.getElementById('year-lbl').textContent = yearLabel();
+  _yearData = await loadYearData();
+  _agg = aggregateYear(_yearData);
+  renderYear();
+}
+
+function renderYear() {
+  if (!_agg) return;
+  const { totals, perMonth, perMember } = _agg;
+  const T = totals;
+
+  // Month grid
+  const monthBtns = MONTHS_FR.map((m, i) => {
+    const mk = m + ' ' + _year;
+    const md = perMonth[mk];
+    const hasData = md && md.hasData;
+    const isActive = _drillMonth === mk;
+    const short = m.slice(0, 3);
+    return `<div class="month-btn${isActive ? ' active' : ''}${hasData ? ' has-data' : ''}" onclick="drillMonth('${mk}')">${short}</div>`;
+  }).join('');
+  document.getElementById('month-grid').innerHTML = monthBtns;
+
+  // Drill or year view
+  document.getElementById('year-view').style.display = _drillMonth ? 'none' : '';
+  document.getElementById('drill-panel').className = _drillMonth ? 'drill-panel show' : 'drill-panel';
+
+  if (_drillMonth) {
+    renderDrill(_drillMonth);
+    return;
+  }
+
+  // KPIs
+  document.getElementById('yr-kpis').innerHTML = [
+    { label:'Contracté', val:U.euro(T.contracte), sub:`${T.closes} closes`, color:'#ef4444' },
+    { label:'Collecté', val:U.euro(T.collecte), sub:T.contracte > 0 ? `${(T.collecte/T.contracte*100).toFixed(0)}% du contracté` : '', color:'#34d399' },
+    { label:'Calls Closing', val:U.num(T.calls), sub:`${T.lives} lives · ${T.offres} offres`, color:'#f59e0b' },
+    { label:'Setting', val:`${T.sets} sets`, sub:`${T.presents} présents · ${T.settingCalls} calls`, color:'#60a5fa' },
+  ].map(k => `<div class="yr-kpi" style="--kc:${k.color}"><div class="yr-kpi-label">${k.label}</div><div class="yr-kpi-val">${k.val}</div><div class="yr-kpi-sub">${k.sub}</div></div>`).join('');
+
+  // Chart — Contracté & Collecté par mois
+  document.getElementById('chart-title').textContent = `Contracté & Collecté — ${_year}`;
+  const chartMonths = [];
+  MONTHS_FR.forEach((m, i) => {
+    const mk = m + ' ' + _year;
+    const md = perMonth[mk];
+    if (md && md.hasData) chartMonths.push({ label: m.slice(0, 3), ct: md.contracte, co: md.collecte, mk });
+  });
+  const maxChart = Math.max(...chartMonths.map(c => c.ct), 1);
+  document.getElementById('yr-chart').innerHTML = chartMonths.map(c => {
+    const hCt = (c.ct / maxChart * 180).toFixed(0);
+    const hCo = (c.co / maxChart * 180).toFixed(0);
+    return `<div class="yr-chart-col" onclick="drillMonth('${c.mk}')">
+      <div class="yr-chart-tooltip">${c.label}: ${U.euro(c.ct)} ct · ${U.euro(c.co)} co</div>
+      <div style="display:flex;align-items:flex-end;gap:2px;height:190px;width:100%">
+        <div class="yr-chart-bar bar-ct" style="height:${hCt}px;flex:1"></div>
+        <div class="yr-chart-bar bar-co" style="height:${hCo}px;flex:1"></div>
+      </div>
+      <div class="yr-chart-lbl">${c.label}</div>
+    </div>`;
+  }).join('');
+
+  // Funnel
+  const maxF = Math.max(T.calls, 1);
+  const funnelData = [
+    { label:'Calls', val:T.calls, rate:'' },
+    { label:'Lives', val:T.lives, rate:T.calls > 0 ? U.pct(T.lives/T.calls) : '' },
+    { label:'Offres', val:T.offres, rate:T.lives > 0 ? U.pct(T.offres/T.lives) : '' },
+    { label:'Closes', val:T.closes, rate:T.offres > 0 ? U.pct(T.closes/T.offres) : '' },
+    { label:'Contracté', val:U.euro(T.contracte), rate:'' },
+    { label:'Collecté', val:U.euro(T.collecte), rate:T.contracte > 0 ? U.pct(T.collecte/T.contracte) : '' },
+  ];
+  const funnelVals = [T.calls, T.lives, T.offres, T.closes, T.contracte/1000, T.collecte/1000];
+  const maxFV = Math.max(...funnelVals, 1);
+  document.getElementById('yr-funnel').innerHTML = funnelData.map((f, i) => {
+    const w = (funnelVals[i] / maxFV * 100).toFixed(0);
+    return `<div class="yr-funnel-row">
+      <div class="yr-funnel-label">${f.label}</div>
+      <div class="yr-funnel-track"><div class="yr-funnel-fill" style="width:${Math.max(w, 3)}%"></div></div>
+      <div class="yr-funnel-val">${f.val}</div>
+      <div class="yr-funnel-rate">${f.rate}</div>
+    </div>`;
+  }).join('');
+
+  // Team table
+  const members = SYNC_MEMBERS.map(m => {
+    const d = perMember[m.uid] || {};
+    return { ...m, ...d, showup: d.calls > 0 ? (d.lives/d.calls) : 0, txClose: d.offres > 0 ? (d.closes/d.offres) : 0 };
+  });
+  const tTotal = members.reduce((t, m) => {
+    ['calls','lives','offres','closes','contracte','collecte','sets','presents'].forEach(k => t[k] = (t[k]||0) + (m[k]||0));
+    return t;
+  }, {});
+
+  document.getElementById('yr-team').innerHTML = `<table class="yr-table">
+    <thead><tr><th>Membre</th><th>Calls</th><th>Lives</th><th>Offres</th><th>Closes</th><th>Contracté</th><th>Collecté</th><th>Show-up</th></tr></thead>
+    <tbody>
+      ${members.map(m => `<tr>
+        <td><span class="member-dot" style="background:${m.color}"></span>${m.name}</td>
+        <td>${m.calls}</td><td>${m.lives}</td><td>${m.offres}</td><td>${m.closes}</td>
+        <td>${U.euro(m.contracte)}</td><td>${U.euro(m.collecte)}</td>
+        <td>${U.pct(m.showup)}</td>
+      </tr>`).join('')}
+      <tr class="tr-total">
+        <td>Total</td>
+        <td>${tTotal.calls||0}</td><td>${tTotal.lives||0}</td><td>${tTotal.offres||0}</td><td>${tTotal.closes||0}</td>
+        <td>${U.euro(tTotal.contracte||0)}</td><td>${U.euro(tTotal.collecte||0)}</td>
+        <td>${tTotal.calls > 0 ? U.pct(tTotal.lives/tTotal.calls) : '—'}</td>
+      </tr>
+    </tbody>
+  </table>`;
+
+  // Months detail table
+  const monthsWithData = MONTHS_FR.filter((m, i) => {
+    const mk = m + ' ' + _year;
+    return perMonth[mk] && perMonth[mk].hasData;
+  });
+  document.getElementById('yr-months-table').innerHTML = `<table class="yr-table">
+    <thead><tr><th>Mois</th><th>Calls</th><th>Closes</th><th>Contracté</th><th>Collecté</th></tr></thead>
+    <tbody>
+      ${monthsWithData.map(m => {
+        const mk = m + ' ' + _year;
+        const d = perMonth[mk];
+        return `<tr style="cursor:pointer" onclick="drillMonth('${mk}')">
+          <td style="color:var(--red3)">${m}</td>
+          <td>${d.calls}</td><td>${d.closes}</td>
+          <td>${U.euro(d.contracte)}</td><td>${U.euro(d.collecte)}</td>
+        </tr>`;
+      }).join('')}
+      <tr class="tr-total">
+        <td>Total ${_year}</td>
+        <td>${T.calls}</td><td>${T.closes}</td>
+        <td>${U.euro(T.contracte)}</td><td>${U.euro(T.collecte)}</td>
+      </tr>
+    </tbody>
+  </table>`;
+}
+
+/* ── DRILL-DOWN MOIS ── */
+function drillMonth(mk) {
+  _drillMonth = (_drillMonth === mk) ? null : mk;
+  renderYear();
+}
+function closeDrill() {
+  _drillMonth = null;
+  renderYear();
+}
+
+function renderDrill(mk) {
+  document.getElementById('drill-year').textContent = _year;
+  const mData = _yearData[mk] || {};
+
+  // Agréger les 2 membres pour ce mois
+  const T = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0 };
+  const members = [];
+  SYNC_MEMBERS.forEach(m => {
+    const d = mData[m.uid];
+    const entry = { ...m, calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0 };
+    if (d && d.closing) {
+      ['calls','lives','offres','closes','contracte','collecte'].forEach(k => { entry[k] = d.closing[k] || 0; T[k] += entry[k]; });
+    }
+    if (d && d.setting) {
+      entry.sets = d.setting.sets || 0; T.sets += entry.sets;
+      entry.presents = d.setting.presents || 0; T.presents += entry.presents;
+    }
+    members.push(entry);
+  });
+
+  // KPIs drill
+  document.getElementById('drill-kpis').innerHTML = [
+    { label:'Contracté', val:U.euro(T.contracte), sub:`${T.closes} closes`, color:'#ef4444' },
+    { label:'Collecté', val:U.euro(T.collecte), sub:T.contracte > 0 ? `${(T.collecte/T.contracte*100).toFixed(0)}%` : '', color:'#34d399' },
+    { label:'Calls', val:U.num(T.calls), sub:`${T.lives} lives`, color:'#f59e0b' },
+    { label:'Setting', val:`${T.sets} sets`, sub:`${T.presents} présents`, color:'#60a5fa' },
+  ].map(k => `<div class="yr-kpi" style="--kc:${k.color}"><div class="yr-kpi-label">${k.label}</div><div class="yr-kpi-val">${k.val}</div><div class="yr-kpi-sub">${k.sub}</div></div>`).join('');
+
+  document.getElementById('drill-funnel-title').textContent = `Funnel — ${mk}`;
+  const funnelVals = [T.calls, T.lives, T.offres, T.closes];
+  const maxFV = Math.max(...funnelVals, 1);
+  document.getElementById('drill-funnel').innerHTML = [
+    { label:'Calls', val:T.calls, rate:'' },
+    { label:'Lives', val:T.lives, rate:T.calls > 0 ? U.pct(T.lives/T.calls) : '' },
+    { label:'Offres', val:T.offres, rate:T.lives > 0 ? U.pct(T.offres/T.lives) : '' },
+    { label:'Closes', val:T.closes, rate:T.offres > 0 ? U.pct(T.closes/T.offres) : '' },
+  ].map((f, i) => `<div class="yr-funnel-row">
+    <div class="yr-funnel-label">${f.label}</div>
+    <div class="yr-funnel-track"><div class="yr-funnel-fill" style="width:${Math.max(funnelVals[i]/maxFV*100, 3)}%"></div></div>
+    <div class="yr-funnel-val">${f.val}</div>
+    <div class="yr-funnel-rate">${f.rate}</div>
+  </div>`).join('');
+
+  // Team drill
+  document.getElementById('drill-team').innerHTML = `<table class="yr-table">
+    <thead><tr><th>Membre</th><th>Calls</th><th>Closes</th><th>Contracté</th><th>Collecté</th><th>Sets</th><th>Show-up</th></tr></thead>
+    <tbody>
+      ${members.map(m => `<tr>
+        <td><span class="member-dot" style="background:${m.color}"></span>${m.name}</td>
+        <td>${m.calls}</td><td>${m.closes}</td>
+        <td>${U.euro(m.contracte)}</td><td>${U.euro(m.collecte)}</td>
+        <td>${m.sets}</td>
+        <td>${m.calls > 0 ? U.pct(m.lives/m.calls) : '—'}</td>
+      </tr>`).join('')}
+      <tr class="tr-total">
+        <td>Total</td>
+        <td>${T.calls}</td><td>${T.closes}</td>
+        <td>${U.euro(T.contracte)}</td><td>${U.euro(T.collecte)}</td>
+        <td>${T.sets}</td>
+        <td>${T.calls > 0 ? U.pct(T.lives/T.calls) : '—'}</td>
+      </tr>
+    </tbody>
+  </table>`;
+}
+
+/* ── INIT ── */
 document.addEventListener('DOMContentLoaded', async function() {
-  document.getElementById('month-lbl').textContent = currentMonthKey();
   const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
   document.getElementById('tb-nm').textContent = nm;
   document.getElementById('tb-av').textContent = nm[0].toUpperCase();
 
-  // ── Initialiser Firebase avant le chargement des données ──
+  // Firebase init
   const _fbUser = U.getCurrentUser();
   if (window.firebase && window.firebase.firestore && !Fire.db) {
     Fire.init(window.firebase.firestore(), _fbUser.uid);
   }
 
-  // ── Charger les données agrégées depuis Firestore (tous membres) ──
-  await syncBridge_loadMonth(currentMonthKey());
-  renderAll();
-
-  // ── Watch temps réel sur tous les membres ──
-  syncBridge_watchMonth(currentMonthKey());
-
-  // Refresh quand DB est mis à jour
-  document.addEventListener('db:updated', renderAll);
+  await refreshYear();
 });
-
 </script>
-
 </body>
 </html>
