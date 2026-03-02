@@ -1117,6 +1117,192 @@ function setView(v, btn){
 }
 
 // ── DETAIL PANEL ──
+
+// ── RENDER YEAR TABS (separate to avoid template literal nesting issues) ──
+function renderYearTabs(c, id) {
+  const years = c.years || [];
+  let html = '<div class="dp-sessions">';
+  html += '<div class="dp-sessions-head">';
+  html += '<div class="dp-sessions-title">📅 Années de coaching</div>';
+  html += '<button class="btn btn-primary btn-sm" onclick="openAddYearModal(\''+id+'\')" >🔄 + Renouveler</button>';
+  html += '</div>';
+  
+  // Plan d action section
+  html += '<div class="dp-plan-section" style="margin:0 0 16px">';
+  html += '<div class="dp-plan-header">';
+  html += '<div class="dp-plan-title">🎯 Plan d\'action client ';
+  html += c.planAction ? '<span class="dp-plan-badge">✅ Défini</span>' : '<span class="dp-plan-badge" style="background:#fef3c7;color:#92400e">À compléter</span>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+  html += c.planAction
+    ? '<button class="dp-plan-edit-btn" onclick="togglePlanEdit(\''+id+'\')">✏️ Modifier</button>'
+    : '<button class="dp-plan-edit-btn" onclick="togglePlanEdit(\''+id+'\')">+ Rédiger</button>';
+  html += '</div></div>';
+  html += '<div class="dp-plan-body">';
+  html += '<div id="planView-'+id+'">';
+  html += c.planAction
+    ? '<div class="dp-plan-content">'+escHtml(c.planAction)+'</div>'
+    : '<div class="dp-plan-empty"><div class="dp-plan-empty-icon">🎯</div><div>Aucun plan d\'action défini</div><div class="dp-plan-empty-sub">Rédigez le plan manuellement ou générez-le avec l\'IA</div><button class="dp-plan-btn-ia">✨ Générer avec l\'IA<span class="soon-tag">Bientôt</span></button></div>';
+  html += '</div>';
+  html += '<div id="planEdit-'+id+'" style="display:none">';
+  html += '<textarea class="dp-plan-textarea" id="planTextarea-'+id+'" placeholder="Rédigez le plan d\'action...">'+escHtml(c.planAction||'')+'</textarea>';
+  html += '<div class="dp-plan-save-row"><button class="dp-plan-edit-btn" onclick="togglePlanEdit(\''+id+'\')">Annuler</button>';
+  html += '<button class="btn btn-primary btn-sm" onclick="savePlanAction(\''+id+'\')">💾 Sauvegarder</button></div>';
+  html += '<div style="margin-top:10px;padding:10px 12px;background:var(--purple-light);border-radius:8px;display:flex;align-items:center;gap:8px"><span style="font-size:18px">✨</span><div><div style="font-size:12px;font-weight:700;color:var(--purple)">Génération IA — Bientôt disponible</div><div style="font-size:11px;color:#818cf8;margin-top:2px">L\'IA analysera les séances passées</div></div></div>';
+  html += '</div></div></div>';
+
+  // Year tabs
+  html += '<div class="year-tabs-wrap" id="yearTabsWrap-'+id+'">';
+  html += '<div class="year-tabs-bar" id="yearTabsBar-'+id+'">';
+  
+  if (years.length === 0) {
+    html += '<span style="font-size:12px;color:var(--muted);font-weight:600;padding:8px 0">Aucune année — cliquez sur Renouveler ci-dessus</span>';
+  } else {
+    years.forEach(function(y, idx) {
+      var ydone = (y.sessions||[]).filter(function(s){return s.statut==='fait';}).length;
+      var ytotal = (y.sessions||[]).length;
+      var isActive = idx === years.length - 1;
+      html += '<button class="year-tab-btn '+(isActive?'active':'')+'" onclick="switchYearTab(\''+id+'\','+idx+')" id="ytab-'+id+'-'+idx+'">';
+      html += (y.label || 'Année '+(idx+1));
+      html += '<span class="year-tab-count">'+ydone+'/'+ytotal+'</span>';
+      html += '</button>';
+    });
+  }
+  html += '</div>'; // year-tabs-bar
+
+  if (years.length === 0) {
+    html += '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;background:var(--bg);border-radius:12px">🔄 Aucune année — cliquez sur <b>🔄 + Renouveler</b> pour créer la première année.</div>';
+  } else {
+    years.forEach(function(y, yIdx) {
+      var isActive = yIdx === years.length - 1;
+      var ydone = (y.sessions||[]).filter(function(s){return s.statut==='fait';}).length;
+      var ytotal = (y.sessions||[]).length;
+      var ypct = ytotal > 0 ? Math.round(ydone/ytotal*100) : 0;
+      var ybarColor = ypct>=100?'var(--green)':ypct>=50?'var(--blue-main)':(ypct>=25?'var(--orange)':'var(--red)');
+      var ysessions = (y.sessions||[]).slice().sort(function(a,b){return a.numero-b.numero;});
+      
+      html += '<div class="year-content '+(isActive?'':'year-content-hidden')+'" id="ycontent-'+id+'-'+yIdx+'">';
+      
+      // Year header
+      html += '<div class="year-header">';
+      html += '<div><div style="font-size:13px;font-weight:800;color:var(--text)">'+(y.label||('Année '+(yIdx+1)))+'</div>';
+      if(y.startDate) html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">Début : '+formatDate(y.startDate)+(y.notes?' · '+y.notes:'')+'</div>';
+      html += '</div>';
+      html += '<div style="display:flex;align-items:center;gap:10px">';
+      html += '<span class="year-stat-pill '+(ypct>=100?'ok':'')+'">'+ydone+'/'+ytotal+' séances · '+ypct+'%</span>';
+      html += '<div style="width:100px"><div class="year-prog-bar"><div class="year-prog-fill" style="width:'+ypct+'%;background:'+ybarColor+'"></div></div></div>';
+      html += '</div></div>'; // year-header
+      
+      // New session form (hidden by default)
+      html += '<div class="new-session-form" id="newSessionForm-'+yIdx+'" style="margin-bottom:10px">';
+      html += '<div style="font-size:11px;font-weight:700;color:var(--blue-main);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">➕ Nouvelle séance — '+(y.label||'Année '+(yIdx+1))+'</div>';
+      html += '<div class="nsf-row"><div class="nsf-field"><label>Date *</label><input type="date" id="ns-date-'+yIdx+'"/></div>';
+      html += '<div class="nsf-field"><label>Coach *</label><input id="ns-coach-'+yIdx+'" placeholder="Emily, Mickael..."/></div></div>';
+      html += '<div class="nsf-field" style="margin-bottom:10px"><label>Résumé</label><textarea id="ns-resume-'+yIdx+'" placeholder="Résumé de la séance..."></textarea></div>';
+      html += '<div class="nsf-field" style="margin-bottom:10px"><label>Devoirs</label><textarea id="ns-devoirs-'+yIdx+'" rows="2"></textarea></div>';
+      html += '<div style="display:flex;gap:8px;justify-content:flex-end">';
+      html += '<button class="btn btn-outline btn-sm" onclick="toggleNewSessionYear('+yIdx+')">Annuler</button>';
+      html += '<button class="btn btn-green btn-sm" onclick="addSessionToYear(\''+id+'\','+yIdx+')">💾 Enregistrer</button>';
+      html += '</div></div>';
+      html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn btn-primary btn-sm" onclick="toggleNewSessionYear('+yIdx+')">+ Séance</button></div>';
+      
+      // Sessions
+      ysessions.forEach(function(s) {
+        var isDone = s.statut==='fait';
+        var is72h = s.numero===0 || s.type==='rdv72h';
+        var statusCls = isDone ? 'done' : 'planifie';
+        var numCls = isDone ? 'done' : (is72h ? 'rdv72h' : 'planifie');
+        var numLabel = is72h ? '72H' : '#'+s.numero;
+        var hasLinks = s.visioUrl || s.driveUrl || s.resumeUrl;
+        var hasNotes = s.notes;
+        var hasResume = s.resume || s.driveSummary;
+        var sk = 'y'+yIdx+'s'+s.numero;
+        
+        html += '<div class="session-item '+statusCls+'" id="sess-'+sk+'">';
+        html += '<div class="si-header" onclick="toggleSession(this)">';
+        html += '<div class="si-left">';
+        html += '<div class="si-num '+numCls+'">'+numLabel+'</div>';
+        html += '<div class="si-info"><div class="si-title">'+escHtml(s.titre||'')+'</div>';
+        html += '<div class="si-meta">';
+        html += s.date ? '<span>📅 '+formatDate(s.date)+'</span>' : '<span style="color:#94a3b8;font-style:italic">📅 Date à planifier</span>';
+        html += s.coach ? '<span>👤 '+escHtml(s.coach)+'</span>' : '<span style="color:#94a3b8;font-style:italic">👤 Coach à assigner</span>';
+        if(hasLinks) html += '<span style="color:var(--blue-main)">🔗 Liens</span>';
+        if(hasNotes) html += '<span style="color:var(--orange)">📝 Notes</span>';
+        html += '</div></div></div>';
+        html += '<div class="si-right">';
+        if(isDone){
+          html += '<button class="btn btn-danger btn-xs" style="font-size:10px" onclick="event.stopPropagation();unmarkSessionDone(\''+id+'\','+yIdx+','+s.numero+')">↩ Annuler</button>';
+          html += '<span style="color:var(--green);font-size:11px;font-weight:700">✅ Fait</span>';
+        } else {
+          html += '<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();quickMarkDoneYear(\''+id+'\','+yIdx+','+s.numero+')">✓ Marquer fait</button>';
+        }
+        html += '<span class="si-chevron">▼</span>';
+        html += '</div></div>'; // si-right, si-header
+        
+        html += '<div class="si-body">';
+        if(isDone){
+          if(hasLinks){
+            html += '<div class="si-links">';
+            if(s.visioUrl) html += '<a class="si-link-pill visio" href="'+s.visioUrl+'" target="_blank">🎥 Lien visio ↗</a>';
+            if(s.driveUrl||s.resumeUrl) html += '<a class="si-link-pill gdoc" href="'+(s.driveUrl||s.resumeUrl)+'" target="_blank">📄 Résumé Google ↗</a>';
+            html += '</div>';
+          }
+          if(hasResume) html += '<div class="si-resume">'+escHtml(s.resume||s.driveSummary||'')+'</div>';
+          if(s.devoirs) html += '<div class="si-devoirs"><b>📝 Devoirs :</b><br>'+escHtml(s.devoirs)+'</div>';
+          if(hasNotes) html += '<div class="si-notes"><div class="si-notes-label">📌 Notes internes</div>'+escHtml(s.notes)+'</div>';
+          html += '<button class="si-edit-btn" onclick="toggleSessionEditYear(\''+id+'\','+yIdx+','+s.numero+')">✏️ Modifier cette séance</button>';
+          html += '<div class="si-edit-form" id="sedit-'+sk+'">';
+          html += '<div class="si-edit-row">';
+          html += '<div class="si-edit-field"><label>Date</label><input type="date" id="se-date-'+sk+'" value="'+(s.date||'')+'"/></div>';
+          html += '<div class="si-edit-field"><label>Coach</label><select id="se-coach-'+sk+'">';
+          html += '<option value="">Choisir...</option>';
+          ['Mickael','Edouard','Emily','Adrien'].forEach(function(cn){
+            html += '<option'+(s.coach===cn?' selected':'')+'>'+cn+'</option>';
+          });
+          html += '</select></div></div>';
+          html += '<div class="si-edit-row">';
+          html += '<div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="se-visio-'+sk+'" value="'+(s.visioUrl||'')+'" placeholder="https://meet.google.com/..."/></div>';
+          html += '<div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="se-gdoc-'+sk+'" value="'+(s.driveUrl||s.resumeUrl||'')+'" placeholder="https://docs.google.com/..."/></div>';
+          html += '</div>';
+          html += '<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé</label><textarea id="se-resume-'+sk+'">'+escHtml(s.resume||'')+'</textarea></div>';
+          html += '<div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs</label><textarea id="se-devoirs-'+sk+'" rows="2">'+escHtml(s.devoirs||'')+'</textarea></div>';
+          html += '<div class="si-edit-field" style="margin-bottom:4px"><label>📌 Notes internes</label><textarea id="se-notes-'+sk+'" rows="2">'+escHtml(s.notes||'')+'</textarea></div>';
+          html += '<div class="si-edit-save-row"><button class="si-edit-btn" onclick="toggleSessionEditYear(\''+id+'\','+yIdx+','+s.numero+')">Annuler</button>';
+          html += '<button class="btn btn-primary btn-sm" onclick="saveSessionEditYear(\''+id+'\','+yIdx+','+s.numero+')">💾 Sauvegarder</button></div>';
+          html += '</div>'; // si-edit-form
+        } else {
+          html += '<div style="padding:8px 0 4px">';
+          html += '<div class="si-edit-row" style="margin-bottom:8px">';
+          html += '<div class="si-edit-field"><label>Date</label><input type="date" id="qs-date-'+sk+'"/></div>';
+          html += '<div class="si-edit-field"><label>Coach</label><select id="qs-coach-'+sk+'">';
+          html += '<option value="">Choisir...</option>';
+          ['Mickael','Edouard','Emily','Adrien'].forEach(function(cn){
+            html += '<option>'+cn+'</option>';
+          });
+          html += '</select></div></div>';
+          html += '<div class="si-edit-row" style="margin-bottom:8px">';
+          html += '<div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="qs-visio-'+sk+'" placeholder="https://meet.google.com/..."/></div>';
+          html += '<div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="qs-gdoc-'+sk+'" placeholder="https://docs.google.com/..."/></div>';
+          html += '</div>';
+          html += '<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé</label><textarea id="qs-resume-'+sk+'" rows="2"></textarea></div>';
+          html += '<div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs</label><textarea id="qs-devoirs-'+sk+'" rows="2"></textarea></div>';
+          html += '<div class="si-edit-field" style="margin-bottom:8px"><label>📌 Notes internes</label><textarea id="qs-notes-'+sk+'" rows="2"></textarea></div>';
+          html += '<div style="display:flex;gap:8px;justify-content:flex-end">';
+          html += '<button class="btn btn-green btn-xs" onclick="quickMarkDoneYear(\''+id+'\','+yIdx+','+s.numero+')">✅ Valider comme fait</button>';
+          html += '</div></div>';
+        }
+        html += '</div></div>'; // si-body, session-item
+      });
+      
+      html += '</div>'; // year-content
+    });
+  }
+  
+  html += '</div>'; // year-tabs-wrap
+  html += '</div>'; // dp-sessions
+  return html;
+}
+
 function openDetail(id){
   const c = _clients.find(x=>x._id===id);
   if(!c) return;
@@ -1212,222 +1398,8 @@ function openDetail(id){
       </div>
     </div>
 
-    <div class="dp-sessions">
-      <div class="dp-sessions-head">
-        <div class="dp-sessions-title">📅 Années de coaching</div>
-        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 + Renouveler</button>
-      </div>
-
-      <!-- YEAR TABS -->
-      <div class="year-tabs-wrap" id="yearTabsWrap-${id}">
-        <div class="year-tabs-bar" id="yearTabsBar-${id}">
-          ${(function(){
-            const years = c.years || [];
-            if(years.length === 0) return '<span style="font-size:12px;color:var(--muted);font-weight:600;padding:8px 0">Aucune année — créez la première ci-dessus</span>';
-            return years.map((y,idx) => {
-              const ydone = (y.sessions||[]).filter(s=>s.statut==='fait').length;
-              const ytotal = (y.sessions||[]).length;
-              const isActive = idx === (years.length - 1);
-              return \`<button class="year-tab-btn \${isActive?'active':''}" onclick="switchYearTab('${id}',\${idx})" id="ytab-${id}-\${idx}">
-                \${y.label || ('Année '+(idx+1))}
-                <span class="year-tab-count">\${ydone}/\${ytotal}</span>
-              </button>\`;
-            }).join('');
-          })()}
-        </div>
-        ${(function(){
-          const years = c.years || [];
-          if(years.length === 0) return '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;background:var(--bg);border-radius:12px">🔄 Aucune année définie — utilisez le bouton <b>Renouveler</b> pour créer la première année.</div>';
-          return years.map((y,yIdx) => {
-            const isActive = yIdx === (years.length - 1);
-            const ydone = (y.sessions||[]).filter(s=>s.statut==='fait').length;
-            const ytotal = (y.sessions||[]).length;
-            const ypct = ytotal > 0 ? Math.round(ydone/ytotal*100) : 0;
-            const ybarColor = ypct>=100?'var(--green)':ypct>=50?'var(--blue-main)':(ypct>=25?'var(--orange)':'var(--red)');
-            const ysessions = (y.sessions||[]).sort((a,b)=>a.numero-b.numero);
-            return \`<div class="year-content \${isActive?'':'year-content-hidden'}" id="ycontent-${id}-\${yIdx}">
-              <!-- Year header -->
-              <div class="year-header">
-                <div>
-                  <div style="font-size:13px;font-weight:800;color:var(--text)">\${y.label || ('Année '+(yIdx+1))}</div>
-                  \${y.startDate ? \`<div style="font-size:11px;color:var(--muted);margin-top:2px">Début : \${formatDate(y.startDate)}\${y.notes ? ' · '+y.notes : ''}</div>\` : ''}
-                </div>
-                <div style="display:flex;align-items:center;gap:10px">
-                  <div class="year-stats">
-                    <span class="year-stat-pill \${ypct>=100?'ok':ypct>=50?'':''}">
-                      \${ydone}/\${ytotal} séances · \${ypct}%
-                    </span>
-                  </div>
-                  <div style="width:100px">
-                    <div class="year-prog-bar"><div class="year-prog-fill" style="width:\${ypct}%;background:\${ybarColor}"></div></div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- New session form for this year -->
-              <div class="new-session-form" id="newSessionForm-\${yIdx}" style="margin-bottom:10px">
-                <div style="font-size:11px;font-weight:700;color:var(--blue-main);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">➕ Nouvelle séance — \${y.label}</div>
-                <div class="nsf-row">
-                  <div class="nsf-field"><label>Date *</label><input type="date" id="ns-date-\${yIdx}"/></div>
-                  <div class="nsf-field"><label>Coach *</label><input id="ns-coach-\${yIdx}" placeholder="Emily, Mickael..."/></div>
-                </div>
-                <div class="nsf-field" style="margin-bottom:10px"><label>Résumé</label><textarea id="ns-resume-\${yIdx}" placeholder="Résumé de la séance..."></textarea></div>
-                <div class="nsf-field" style="margin-bottom:10px"><label>Devoirs / Actions</label><textarea id="ns-devoirs-\${yIdx}" rows="2" placeholder="Actions à mener..."></textarea></div>
-                <div style="display:flex;gap:8px;justify-content:flex-end">
-                  <button class="btn btn-outline btn-sm" onclick="toggleNewSessionYear(\${yIdx})">Annuler</button>
-                  <button class="btn btn-green btn-sm" onclick="addSessionToYear('${id}',\${yIdx})">💾 Enregistrer</button>
-                </div>
-              </div>
-              <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-                <button class="btn btn-primary btn-sm" onclick="toggleNewSessionYear(\${yIdx})">+ Séance</button>
-              </div>
-
-              <!-- Sessions list for this year -->
-              \${ysessions.map(s => {
-                const isDone = s.statut==='fait';
-                const is72h = s.numero===0 || s.type==='rdv72h';
-                const statusCls = isDone ? 'done' : 'planifie';
-                const numCls = isDone ? 'done' : (is72h ? 'rdv72h' : 'planifie');
-                const numLabel = is72h ? '72H' : '#'+s.numero;
-                const hasLinks = s.visioUrl || s.driveUrl || s.resumeUrl;
-                const hasNotes = s.notes;
-                const hasResume = s.resume || s.driveSummary;
-                const sessKey = 'y'+yIdx+'s'+s.numero;
-                return \`<div class="session-item \${statusCls}" id="sess-\${sessKey}">
-                  <div class="si-header" onclick="toggleSession(this)">
-                    <div class="si-left">
-                      <div class="si-num \${numCls}">\${numLabel}</div>
-                      <div class="si-info">
-                        <div class="si-title">\${s.titre}</div>
-                        <div class="si-meta">
-                          \${s.date?\`<span>📅 \${formatDate(s.date)}</span>\`:\`<span style="color:#94a3b8;font-style:italic">📅 Date à planifier</span>\`}
-                          \${s.coach?\`<span>👤 \${s.coach}</span>\`:\`<span style="color:#94a3b8;font-style:italic">👤 Coach à assigner</span>\`}
-                          \${hasLinks?'<span style="color:var(--blue-main)">🔗 Liens</span>':''}
-                          \${hasNotes?'<span style="color:var(--orange)">📝 Notes</span>':''}
-                        </div>
-                      </div>
-                    </div>
-                    <div class="si-right">
-                      \${isDone
-                        ? \`<button class="btn btn-danger btn-xs" style="font-size:10px" onclick="event.stopPropagation();unmarkSessionDone('${id}',\${yIdx},\${s.numero})">↩ Annuler</button>
-                           <span style="color:var(--green);font-size:11px;font-weight:700">✅ Fait</span>\`
-                        : \`<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();markSessionDoneYear('${id}',\${yIdx},\${s.numero})">✓ Marquer fait</button>\`
-                      }
-                      <span class="si-chevron">▼</span>
-                    </div>
-                  </div>
-                  <div class="si-body">
-                    \${isDone ? \`
-                      \${hasLinks ? \`<div class="si-links">
-                        \${s.visioUrl?\`<a class="si-link-pill visio" href="\${s.visioUrl}" target="_blank">🎥 Lien visio ↗</a>\`:''}
-                        \${(s.driveUrl||s.resumeUrl)?\`<a class="si-link-pill gdoc" href="\${s.driveUrl||s.resumeUrl}" target="_blank">📄 Résumé Google ↗</a>\`:''}
-                      </div>\` : ''}
-                      \${hasResume?\`<div class="si-resume">\${escHtml(s.resume||s.driveSummary)}</div>\`:''}
-                      \${s.devoirs?\`<div class="si-devoirs"><b>📝 Devoirs :</b><br>\${escHtml(s.devoirs)}</div>\`:''}
-                      \${hasNotes?\`<div class="si-notes"><div class="si-notes-label">📌 Notes internes</div>\${escHtml(s.notes)}</div>\`:''}
-                      <button class="si-edit-btn" onclick="toggleSessionEditYear('${id}',\${yIdx},\${s.numero})">✏️ Modifier cette séance</button>
-                      <div class="si-edit-form" id="sedit-\${sessKey}">
-                        <div class="si-edit-row">
-                          <div class="si-edit-field"><label>Date</label><input type="date" id="se-date-\${sessKey}" value="\${s.date||''}" /></div>
-                          <div class="si-edit-field"><label>Coach</label>
-                            <select id="se-coach-\${sessKey}">
-                              <option value="">Choisir...</option>
-                              <option \${s.coach==='Mickael'?'selected':''}>Mickael</option>
-                              <option \${s.coach==='Edouard'?'selected':''}>Edouard</option>
-                              <option \${s.coach==='Emily'?'selected':''}>Emily</option>
-                              <option \${s.coach==='Adrien'?'selected':''}>Adrien</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div class="si-edit-row">
-                          <div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="se-visio-\${sessKey}" value="\${s.visioUrl||''}" placeholder="https://meet.google.com/..."/></div>
-                          <div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="se-gdoc-\${sessKey}" value="\${s.driveUrl||s.resumeUrl||''}" placeholder="https://docs.google.com/..."/></div>
-                        </div>
-                        <div class="si-edit-field" style="margin-bottom:8px"><label>Résumé de séance</label><textarea id="se-resume-\${sessKey}">\${s.resume||''}</textarea></div>
-                        <div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs / Actions</label><textarea id="se-devoirs-\${sessKey}" rows="2">\${s.devoirs||''}</textarea></div>
-                        <div class="si-edit-field" style="margin-bottom:4px"><label>📌 Notes internes</label><textarea id="se-notes-\${sessKey}" rows="2" placeholder="Notes confidentielles...">\${s.notes||''}</textarea></div>
-                        <div class="si-edit-save-row">
-                          <button class="si-edit-btn" onclick="toggleSessionEditYear('${id}',\${yIdx},\${s.numero})">Annuler</button>
-                          <button class="btn btn-primary btn-sm" onclick="saveSessionEditYear('${id}',\${yIdx},\${s.numero})">💾 Sauvegarder</button>
-                        </div>
-                      </div>
-                    \` : \`
-                      <div style="padding:8px 0 4px">
-                        <div class="si-edit-row" style="margin-bottom:8px">
-                          <div class="si-edit-field"><label>Date</label><input type="date" id="qs-date-\${sessKey}"/></div>
-                          <div class="si-edit-field"><label>Coach</label>
-                            <select id="qs-coach-\${sessKey}">
-                              <option value="">Choisir...</option>
-                              <option>Mickael</option><option>Edouard</option><option>Emily</option><option>Adrien</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div class="si-edit-row" style="margin-bottom:8px">
-                          <div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="qs-visio-\${sessKey}" placeholder="https://meet.google.com/..."/></div>
-                          <div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="qs-gdoc-\${sessKey}" placeholder="https://docs.google.com/..."/></div>
-                        </div>
-                        <div class="si-edit-field" style="margin-bottom:8px"><label>Résumé de séance</label><textarea id="qs-resume-\${sessKey}" rows="2" placeholder="Résumé de la séance..."></textarea></div>
-                        <div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs / Actions</label><textarea id="qs-devoirs-\${sessKey}" rows="2" placeholder="Actions à mener..."></textarea></div>
-                        <div class="si-edit-field" style="margin-bottom:8px"><label>📌 Notes internes</label><textarea id="qs-notes-\${sessKey}" rows="2" placeholder="Observations..."></textarea></div>
-                        <div style="display:flex;gap:8px;justify-content:flex-end">
-                          <button class="btn btn-green btn-xs" onclick="quickMarkDoneYear('${id}',\${yIdx},\${s.numero})">✅ Valider comme fait</button>
-                        </div>
-                      </div>
-                    \`}
-                  </div>
-                </div>\`;
-              }).join('')}
-            </div>\`;
-          }).join('');
-        })()}
-      </div>
-
-      <!-- PLAN D'ACTION -->
-      <div class="dp-plan-section" style="margin: 0 0 16px">
-        <div class="dp-plan-header">
-          <div class="dp-plan-title">🎯 Plan d'action client
-            ${c.planAction ? '<span class="dp-plan-badge">✅ Défini</span>' : '<span class="dp-plan-badge" style="background:#fef3c7;color:#92400e">À compléter</span>'}
-          </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            ${c.planAction
-              ? `<button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">✏️ Modifier</button>`
-              : `<button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">+ Rédiger</button>`
-            }
-          </div>
-        </div>
-        <div class="dp-plan-body">
-          <div id="planView-${id}">
-            ${c.planAction
-              ? `<div class="dp-plan-content">${escHtml(c.planAction)}</div>`
-              : `<div class="dp-plan-empty">
-                  <div class="dp-plan-empty-icon">🎯</div>
-                  <div>Aucun plan d'action défini</div>
-                  <div class="dp-plan-empty-sub">Rédigez le plan manuellement ou générez-le avec l'IA</div>
-                  <button class="dp-plan-btn-ia">
-                    ✨ Générer avec l'IA
-                    <span class="soon-tag">Bientôt</span>
-                  </button>
-                </div>`
-            }
-          </div>
-          <div id="planEdit-${id}" style="display:none">
-            <textarea class="dp-plan-textarea" id="planTextarea-${id}" placeholder="Rédigez le plan d'action du client : objectifs, étapes clés, points de travail, axes d'amélioration...">${c.planAction||''}</textarea>
-            <div class="dp-plan-save-row">
-              <button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">Annuler</button>
-              <button class="btn btn-primary btn-sm" onclick="savePlanAction('${id}')">💾 Sauvegarder</button>
-            </div>
-            <div style="margin-top:10px;padding:10px 12px;background:var(--purple-light);border-radius:8px;display:flex;align-items:center;gap:8px">
-              <span style="font-size:18px">✨</span>
-              <div>
-                <div style="font-size:12px;font-weight:700;color:var(--purple)">Génération IA — Bientôt disponible</div>
-                <div style="font-size:11px;color:#818cf8;margin-top:2px">L'IA analysera les séances passées pour générer un plan d'action personnalisé</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+    \${renderYearTabs(c, id)}
+  \`;
   document.getElementById('detailOverlay').classList.add('show');
 }
 
