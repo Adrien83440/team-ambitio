@@ -198,6 +198,36 @@
     .dp-sessions{padding:16px 24px}
     .dp-sessions-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
     .dp-sessions-title{font-size:14px;font-weight:700}
+
+    /* ── YEAR TABS ── */
+    .year-tabs-wrap{margin:0 0 0;padding:0}
+    .year-tabs-bar{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;align-items:flex-end;padding-bottom:0}
+    .year-tabs-bar::-webkit-scrollbar{display:none}
+    .year-tab-btn{display:flex;align-items:center;gap:7px;padding:8px 14px;border:1.5px solid var(--border);border-bottom:none;border-radius:10px 10px 0 0;background:#f8faff;font-family:inherit;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .15s;position:relative;z-index:1}
+    .year-tab-btn:hover{background:#f0f4ff;color:var(--text)}
+    .year-tab-btn.active{background:white;color:var(--blue-main);border-color:var(--blue-main);border-bottom:1.5px solid white;z-index:3;margin-bottom:-1.5px}
+    .year-tab-count{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:#e2e8f0;color:var(--muted);transition:all .15s}
+    .year-tab-btn.active .year-tab-count{background:var(--blue-ghost);color:var(--blue-main)}
+    .year-tab-add{padding:8px 12px;border:1.5px dashed #cbd5e1;border-bottom:none;border-radius:10px 10px 0 0;background:#fafafa;font-family:inherit;font-size:12px;font-weight:700;color:#94a3b8;cursor:pointer;white-space:nowrap;transition:all .15s}
+    .year-tab-add:hover{border-color:var(--blue-light);color:var(--blue-main);background:#f0f4ff}
+    .year-content{border:1.5px solid var(--blue-main);border-radius:0 12px 12px 12px;background:white;padding:16px;position:relative;z-index:2}
+    .year-content-hidden{display:none}
+    .year-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+    .year-stats{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .year-stat-pill{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;background:#f1f5f9;color:var(--muted)}
+    .year-stat-pill.ok{background:var(--green-light);color:var(--green)}
+    .year-stat-pill.warn{background:var(--orange-light);color:var(--orange)}
+    .year-prog-bar{height:6px;background:#f1f5f9;border-radius:99px;overflow:hidden;margin-top:6px;flex:1;min-width:80px}
+    .year-prog-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--blue-main),var(--blue-light));transition:width .4s}
+
+    /* ── ADD YEAR MODAL ── */
+    .add-year-modal{position:fixed;inset:0;background:rgba(15,31,92,.5);backdrop-filter:blur(4px);z-index:500;display:none;align-items:center;justify-content:center}
+    .add-year-modal.show{display:flex}
+    .add-year-modal .modal{max-width:440px}
+    .year-count-btns{display:flex;gap:8px;margin-top:4px}
+    .year-count-btn{flex:1;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:white;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);transition:all .15s;text-align:center}
+    .year-count-btn.active{background:var(--blue-ghost);color:var(--blue-main);border-color:var(--blue-main)}
+    .year-count-btn:hover{border-color:var(--blue-light)}
     .session-item{border:1.5px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden;transition:border-color .15s}
     .session-item:hover{border-color:var(--blue-light)}
     .session-item.done{border-left:4px solid var(--green)}
@@ -620,6 +650,41 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- ADD YEAR MODAL -->
+<div class="add-year-modal" id="addYearModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>🔄 Renouveler le contrat</h3>
+      <button class="modal-close" onclick="closeAddYearModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ay-clientId"/>
+      <div id="ay-yearLabel" style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--blue-ghost);border-radius:8px"></div>
+      <div class="mf">
+        <label>Date de début de l'année <span style="color:var(--red)">*</span></label>
+        <input type="date" id="ay-startDate"/>
+      </div>
+      <div class="mf">
+        <label>Nombre de séances</label>
+        <div class="year-count-btns">
+          <button class="year-count-btn active" data-count="12" onclick="selectYearCount(this,12)">12 séances</button>
+          <button class="year-count-btn" data-count="24" onclick="selectYearCount(this,24)">24 séances</button>
+          <button class="year-count-btn" data-count="6" onclick="selectYearCount(this,6)">6 séances</button>
+        </div>
+        <input type="hidden" id="ay-count" value="12"/>
+      </div>
+      <div class="mf">
+        <label>Notes / Offre renouvelée</label>
+        <input id="ay-notes" placeholder="Ex: BP 12 Mois renouvelé, Elite..."/>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeAddYearModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmAddYear()">🔄 Créer l'Année →</button>
+    </div>
+  </div>
+</div>
+
 <!-- EDIT CLIENT MODAL -->
 <div class="modal-overlay" id="editClientModal">
   <div class="modal">
@@ -834,6 +899,17 @@ window.loadClients = async function(){
       if(data.sessions){
         data.sessions = data.sessions.map(s=>({...s, coach: normalizeCoach(s.coach)}));
       }
+      // Migrate legacy flat sessions to years system if no years defined
+      if(!data.years && data.sessions && data.sessions.length > 0){
+        data.years = [{
+          yearNum: 1, label: 'Année 1',
+          startDate: data.dateEntree || '',
+          notes: data.programme || '',
+          sessions: data.sessions
+        }];
+      }
+      // Sync stats
+      if(data.years) _syncClientStatsData(data);
       _clients.push(data);
     });
   }catch(e){console.warn('Load error:',e);}
@@ -1138,8 +1214,172 @@ function openDetail(id){
 
     <div class="dp-sessions">
       <div class="dp-sessions-head">
-        <div class="dp-sessions-title">📞 Séances de coaching (${sessions.length})</div>
-        <button class="btn btn-primary btn-sm" onclick="toggleNewSession('${id}')">+ Nouvelle séance</button>
+        <div class="dp-sessions-title">📅 Années de coaching</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 + Renouveler</button>
+      </div>
+
+      <!-- YEAR TABS -->
+      <div class="year-tabs-wrap" id="yearTabsWrap-${id}">
+        <div class="year-tabs-bar" id="yearTabsBar-${id}">
+          ${(function(){
+            const years = c.years || [];
+            if(years.length === 0) return '<span style="font-size:12px;color:var(--muted);font-weight:600;padding:8px 0">Aucune année — créez la première ci-dessus</span>';
+            return years.map((y,idx) => {
+              const ydone = (y.sessions||[]).filter(s=>s.statut==='fait').length;
+              const ytotal = (y.sessions||[]).length;
+              const isActive = idx === (years.length - 1);
+              return \`<button class="year-tab-btn \${isActive?'active':''}" onclick="switchYearTab('${id}',\${idx})" id="ytab-${id}-\${idx}">
+                \${y.label || ('Année '+(idx+1))}
+                <span class="year-tab-count">\${ydone}/\${ytotal}</span>
+              </button>\`;
+            }).join('');
+          })()}
+        </div>
+        ${(function(){
+          const years = c.years || [];
+          if(years.length === 0) return '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;background:var(--bg);border-radius:12px">🔄 Aucune année définie — utilisez le bouton <b>Renouveler</b> pour créer la première année.</div>';
+          return years.map((y,yIdx) => {
+            const isActive = yIdx === (years.length - 1);
+            const ydone = (y.sessions||[]).filter(s=>s.statut==='fait').length;
+            const ytotal = (y.sessions||[]).length;
+            const ypct = ytotal > 0 ? Math.round(ydone/ytotal*100) : 0;
+            const ybarColor = ypct>=100?'var(--green)':ypct>=50?'var(--blue-main)':(ypct>=25?'var(--orange)':'var(--red)');
+            const ysessions = (y.sessions||[]).sort((a,b)=>a.numero-b.numero);
+            return \`<div class="year-content \${isActive?'':'year-content-hidden'}" id="ycontent-${id}-\${yIdx}">
+              <!-- Year header -->
+              <div class="year-header">
+                <div>
+                  <div style="font-size:13px;font-weight:800;color:var(--text)">\${y.label || ('Année '+(yIdx+1))}</div>
+                  \${y.startDate ? \`<div style="font-size:11px;color:var(--muted);margin-top:2px">Début : \${formatDate(y.startDate)}\${y.notes ? ' · '+y.notes : ''}</div>\` : ''}
+                </div>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div class="year-stats">
+                    <span class="year-stat-pill \${ypct>=100?'ok':ypct>=50?'':''}">
+                      \${ydone}/\${ytotal} séances · \${ypct}%
+                    </span>
+                  </div>
+                  <div style="width:100px">
+                    <div class="year-prog-bar"><div class="year-prog-fill" style="width:\${ypct}%;background:\${ybarColor}"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- New session form for this year -->
+              <div class="new-session-form" id="newSessionForm-\${yIdx}" style="margin-bottom:10px">
+                <div style="font-size:11px;font-weight:700;color:var(--blue-main);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">➕ Nouvelle séance — \${y.label}</div>
+                <div class="nsf-row">
+                  <div class="nsf-field"><label>Date *</label><input type="date" id="ns-date-\${yIdx}"/></div>
+                  <div class="nsf-field"><label>Coach *</label><input id="ns-coach-\${yIdx}" placeholder="Emily, Mickael..."/></div>
+                </div>
+                <div class="nsf-field" style="margin-bottom:10px"><label>Résumé</label><textarea id="ns-resume-\${yIdx}" placeholder="Résumé de la séance..."></textarea></div>
+                <div class="nsf-field" style="margin-bottom:10px"><label>Devoirs / Actions</label><textarea id="ns-devoirs-\${yIdx}" rows="2" placeholder="Actions à mener..."></textarea></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                  <button class="btn btn-outline btn-sm" onclick="toggleNewSessionYear(\${yIdx})">Annuler</button>
+                  <button class="btn btn-green btn-sm" onclick="addSessionToYear('${id}',\${yIdx})">💾 Enregistrer</button>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+                <button class="btn btn-primary btn-sm" onclick="toggleNewSessionYear(\${yIdx})">+ Séance</button>
+              </div>
+
+              <!-- Sessions list for this year -->
+              \${ysessions.map(s => {
+                const isDone = s.statut==='fait';
+                const is72h = s.numero===0 || s.type==='rdv72h';
+                const statusCls = isDone ? 'done' : 'planifie';
+                const numCls = isDone ? 'done' : (is72h ? 'rdv72h' : 'planifie');
+                const numLabel = is72h ? '72H' : '#'+s.numero;
+                const hasLinks = s.visioUrl || s.driveUrl || s.resumeUrl;
+                const hasNotes = s.notes;
+                const hasResume = s.resume || s.driveSummary;
+                const sessKey = 'y'+yIdx+'s'+s.numero;
+                return \`<div class="session-item \${statusCls}" id="sess-\${sessKey}">
+                  <div class="si-header" onclick="toggleSession(this)">
+                    <div class="si-left">
+                      <div class="si-num \${numCls}">\${numLabel}</div>
+                      <div class="si-info">
+                        <div class="si-title">\${s.titre}</div>
+                        <div class="si-meta">
+                          \${s.date?\`<span>📅 \${formatDate(s.date)}</span>\`:\`<span style="color:#94a3b8;font-style:italic">📅 Date à planifier</span>\`}
+                          \${s.coach?\`<span>👤 \${s.coach}</span>\`:\`<span style="color:#94a3b8;font-style:italic">👤 Coach à assigner</span>\`}
+                          \${hasLinks?'<span style="color:var(--blue-main)">🔗 Liens</span>':''}
+                          \${hasNotes?'<span style="color:var(--orange)">📝 Notes</span>':''}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="si-right">
+                      \${isDone
+                        ? \`<button class="btn btn-danger btn-xs" style="font-size:10px" onclick="event.stopPropagation();unmarkSessionDone('${id}',\${yIdx},\${s.numero})">↩ Annuler</button>
+                           <span style="color:var(--green);font-size:11px;font-weight:700">✅ Fait</span>\`
+                        : \`<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();markSessionDoneYear('${id}',\${yIdx},\${s.numero})">✓ Marquer fait</button>\`
+                      }
+                      <span class="si-chevron">▼</span>
+                    </div>
+                  </div>
+                  <div class="si-body">
+                    \${isDone ? \`
+                      \${hasLinks ? \`<div class="si-links">
+                        \${s.visioUrl?\`<a class="si-link-pill visio" href="\${s.visioUrl}" target="_blank">🎥 Lien visio ↗</a>\`:''}
+                        \${(s.driveUrl||s.resumeUrl)?\`<a class="si-link-pill gdoc" href="\${s.driveUrl||s.resumeUrl}" target="_blank">📄 Résumé Google ↗</a>\`:''}
+                      </div>\` : ''}
+                      \${hasResume?\`<div class="si-resume">\${escHtml(s.resume||s.driveSummary)}</div>\`:''}
+                      \${s.devoirs?\`<div class="si-devoirs"><b>📝 Devoirs :</b><br>\${escHtml(s.devoirs)}</div>\`:''}
+                      \${hasNotes?\`<div class="si-notes"><div class="si-notes-label">📌 Notes internes</div>\${escHtml(s.notes)}</div>\`:''}
+                      <button class="si-edit-btn" onclick="toggleSessionEditYear('${id}',\${yIdx},\${s.numero})">✏️ Modifier cette séance</button>
+                      <div class="si-edit-form" id="sedit-\${sessKey}">
+                        <div class="si-edit-row">
+                          <div class="si-edit-field"><label>Date</label><input type="date" id="se-date-\${sessKey}" value="\${s.date||''}" /></div>
+                          <div class="si-edit-field"><label>Coach</label>
+                            <select id="se-coach-\${sessKey}">
+                              <option value="">Choisir...</option>
+                              <option \${s.coach==='Mickael'?'selected':''}>Mickael</option>
+                              <option \${s.coach==='Edouard'?'selected':''}>Edouard</option>
+                              <option \${s.coach==='Emily'?'selected':''}>Emily</option>
+                              <option \${s.coach==='Adrien'?'selected':''}>Adrien</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div class="si-edit-row">
+                          <div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="se-visio-\${sessKey}" value="\${s.visioUrl||''}" placeholder="https://meet.google.com/..."/></div>
+                          <div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="se-gdoc-\${sessKey}" value="\${s.driveUrl||s.resumeUrl||''}" placeholder="https://docs.google.com/..."/></div>
+                        </div>
+                        <div class="si-edit-field" style="margin-bottom:8px"><label>Résumé de séance</label><textarea id="se-resume-\${sessKey}">\${s.resume||''}</textarea></div>
+                        <div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs / Actions</label><textarea id="se-devoirs-\${sessKey}" rows="2">\${s.devoirs||''}</textarea></div>
+                        <div class="si-edit-field" style="margin-bottom:4px"><label>📌 Notes internes</label><textarea id="se-notes-\${sessKey}" rows="2" placeholder="Notes confidentielles...">\${s.notes||''}</textarea></div>
+                        <div class="si-edit-save-row">
+                          <button class="si-edit-btn" onclick="toggleSessionEditYear('${id}',\${yIdx},\${s.numero})">Annuler</button>
+                          <button class="btn btn-primary btn-sm" onclick="saveSessionEditYear('${id}',\${yIdx},\${s.numero})">💾 Sauvegarder</button>
+                        </div>
+                      </div>
+                    \` : \`
+                      <div style="padding:8px 0 4px">
+                        <div class="si-edit-row" style="margin-bottom:8px">
+                          <div class="si-edit-field"><label>Date</label><input type="date" id="qs-date-\${sessKey}"/></div>
+                          <div class="si-edit-field"><label>Coach</label>
+                            <select id="qs-coach-\${sessKey}">
+                              <option value="">Choisir...</option>
+                              <option>Mickael</option><option>Edouard</option><option>Emily</option><option>Adrien</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div class="si-edit-row" style="margin-bottom:8px">
+                          <div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="qs-visio-\${sessKey}" placeholder="https://meet.google.com/..."/></div>
+                          <div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="qs-gdoc-\${sessKey}" placeholder="https://docs.google.com/..."/></div>
+                        </div>
+                        <div class="si-edit-field" style="margin-bottom:8px"><label>Résumé de séance</label><textarea id="qs-resume-\${sessKey}" rows="2" placeholder="Résumé de la séance..."></textarea></div>
+                        <div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs / Actions</label><textarea id="qs-devoirs-\${sessKey}" rows="2" placeholder="Actions à mener..."></textarea></div>
+                        <div class="si-edit-field" style="margin-bottom:8px"><label>📌 Notes internes</label><textarea id="qs-notes-\${sessKey}" rows="2" placeholder="Observations..."></textarea></div>
+                        <div style="display:flex;gap:8px;justify-content:flex-end">
+                          <button class="btn btn-green btn-xs" onclick="quickMarkDoneYear('${id}',\${yIdx},\${s.numero})">✅ Valider comme fait</button>
+                        </div>
+                      </div>
+                    \`}
+                  </div>
+                </div>\`;
+              }).join('')}
+            </div>\`;
+          }).join('');
+        })()}
       </div>
 
       <!-- PLAN D'ACTION -->
@@ -1186,130 +1426,6 @@ function openDetail(id){
           </div>
         </div>
       </div>
-      <div class="new-session-form" id="newSessionForm">
-        <div class="nsf-row">
-          <div class="nsf-field"><label>Date *</label><input type="date" id="ns-date"/></div>
-          <div class="nsf-field"><label>Coach *</label><input id="ns-coach" placeholder="Emily, Mickael..."/></div>
-        </div>
-        <div class="nsf-field" style="margin-bottom:10px"><label>Résumé</label><textarea id="ns-resume" placeholder="Résumé de la séance..."></textarea></div>
-        <div class="nsf-field" style="margin-bottom:10px"><label>Devoirs / Actions</label><textarea id="ns-devoirs" rows="2" placeholder="Actions à mener..."></textarea></div>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button class="btn btn-outline btn-sm" onclick="toggleNewSession()">Annuler</button>
-          <button class="btn btn-green btn-sm" onclick="addSession('${id}')">💾 Enregistrer</button>
-        </div>
-      </div>
-      ${sessions.map(s=>{
-        const isDone = s.statut==='fait';
-        const is72h = s.numero===0 || s.type==='rdv72h';
-        const statusCls = isDone ? 'done' : 'planifie';
-        const numCls = isDone ? 'done' : (is72h ? 'rdv72h' : 'planifie');
-        const numLabel = is72h ? '72H' : '#'+s.numero;
-        const hasLinks = s.visioUrl || s.driveUrl || s.resumeUrl;
-        const hasNotes = s.notes;
-        const hasResume = s.resume || s.driveSummary;
-        return `<div class="session-item ${statusCls}" id="sess-${s.numero}">
-          <div class="si-header" onclick="toggleSession(this)">
-            <div class="si-left">
-              <div class="si-num ${numCls}">${numLabel}</div>
-              <div class="si-info">
-                <div class="si-title">${s.titre}</div>
-                <div class="si-meta">
-                  ${s.date?`<span>📅 ${formatDate(s.date)}</span>`:'<span style="color:#94a3b8;font-style:italic">📅 Date à planifier</span>'}
-                  ${s.coach?`<span>👤 ${s.coach}</span>`:'<span style="color:#94a3b8;font-style:italic">👤 Coach à assigner</span>'}
-                  ${hasLinks?'<span style="color:var(--blue-main)">🔗 Liens</span>':''}
-                  ${hasNotes?'<span style="color:var(--orange)">📝 Notes</span>':''}
-                </div>
-              </div>
-            </div>
-            <div class="si-right">
-              ${isDone
-                ? '<span style="color:var(--green);font-size:11px;font-weight:700">✅ Fait</span>'
-                : `<button class="btn btn-outline btn-xs" onclick="event.stopPropagation();markSessionDone('${id}',${s.numero})">✓ Marquer fait</button>`
-              }
-              <span class="si-chevron">▼</span>
-            </div>
-          </div>
-          <div class="si-body">
-            ${isDone ? `
-              <!-- LIENS -->
-              ${hasLinks ? `<div class="si-links">
-                ${s.visioUrl?`<a class="si-link-pill visio" href="${s.visioUrl}" target="_blank">🎥 Lien visio ↗</a>`:''}
-                ${(s.driveUrl||s.resumeUrl)?`<a class="si-link-pill gdoc" href="${s.driveUrl||s.resumeUrl}" target="_blank">📄 Résumé Google ↗</a>`:''}
-              </div>` : ''}
-              <!-- RESUME -->
-              ${hasResume?`<div class="si-resume">${escHtml(s.resume||s.driveSummary)}</div>`:''}
-              <!-- DEVOIRS -->
-              ${s.devoirs?`<div class="si-devoirs"><b>📝 Devoirs :</b><br>${escHtml(s.devoirs)}</div>`:''}
-              <!-- NOTES -->
-              ${hasNotes?`<div class="si-notes"><div class="si-notes-label">📌 Notes internes</div>${escHtml(s.notes)}</div>`:''}
-              <!-- EDIT BTN -->
-              <button class="si-edit-btn" onclick="toggleSessionEdit('${id}',${s.numero})">✏️ Modifier cette séance</button>
-              <!-- EDIT FORM -->
-              <div class="si-edit-form" id="sedit-${s.numero}">
-                <div class="si-edit-row">
-                  <div class="si-edit-field"><label>Date</label><input type="date" id="se-date-${s.numero}" value="${s.date||''}"/></div>
-                  <div class="si-edit-field"><label>Coach</label>
-                    <select id="se-coach-${s.numero}">
-                      <option value="">Choisir...</option>
-                      <option ${s.coach==='Mickael'?'selected':''}>Mickael</option>
-                      <option ${s.coach==='Edouard'?'selected':''}>Edouard</option>
-                      <option ${s.coach==='Emily'?'selected':''}>Emily</option>
-                      <option ${s.coach==='Adrien'?'selected':''}>Adrien</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="si-edit-row">
-                  <div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="se-visio-${s.numero}" value="${s.visioUrl||''}" placeholder="https://meet.google.com/..."/></div>
-                  <div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="se-gdoc-${s.numero}" value="${s.driveUrl||s.resumeUrl||''}" placeholder="https://docs.google.com/..."/></div>
-                </div>
-                <div class="si-edit-field" style="margin-bottom:8px"><label>Résumé de séance</label><textarea id="se-resume-${s.numero}">${s.resume||''}</textarea></div>
-                <div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs / Actions</label><textarea id="se-devoirs-${s.numero}" rows="2">${s.devoirs||''}</textarea></div>
-                <div class="si-edit-field" style="margin-bottom:4px"><label>📌 Notes internes</label><textarea id="se-notes-${s.numero}" rows="2" placeholder="Notes confidentielles, observations coach...">${s.notes||''}</textarea></div>
-                <div class="si-edit-save-row">
-                  <button class="si-edit-btn" onclick="toggleSessionEdit('${id}',${s.numero})">Annuler</button>
-                  <button class="btn btn-primary btn-sm" onclick="saveSessionEdit('${id}',${s.numero})">💾 Sauvegarder</button>
-                </div>
-              </div>
-            ` : `
-              <!-- SÉANCE NON FAITE : formulaire rapide -->
-              <div style="padding:8px 0 4px">
-                <div class="si-edit-row" style="margin-bottom:8px">
-                  <div class="si-edit-field"><label>Date</label><input type="date" id="qs-date-${s.numero}"/></div>
-                  <div class="si-edit-field"><label>Coach</label>
-                    <select id="qs-coach-${s.numero}">
-                      <option value="">Choisir...</option>
-                      <option>Mickael</option><option>Edouard</option><option>Emily</option><option>Adrien</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="si-edit-row" style="margin-bottom:8px">
-                  <div class="si-edit-field"><label>🎥 Lien visio</label><input type="url" id="qs-visio-${s.numero}" placeholder="https://meet.google.com/..."/></div>
-                  <div class="si-edit-field"><label>📄 Résumé Google Doc</label><input type="url" id="qs-gdoc-${s.numero}" placeholder="https://docs.google.com/..."/></div>
-                </div>
-                <div class="si-edit-field" style="margin-bottom:8px"><label>Résumé de séance</label><textarea id="qs-resume-${s.numero}" rows="2" placeholder="Résumé de la séance..."></textarea></div>
-                <div class="si-edit-field" style="margin-bottom:8px"><label>📝 Devoirs / Actions</label><textarea id="qs-devoirs-${s.numero}" rows="2" placeholder="Actions à mener..."></textarea></div>
-                <div class="si-edit-field" style="margin-bottom:8px"><label>📌 Notes internes</label><textarea id="qs-notes-${s.numero}" rows="2" placeholder="Observations, points de vigilance..."></textarea></div>
-                <div style="display:flex;gap:8px;justify-content:flex-end">
-                  <button class="btn btn-green btn-xs" onclick="quickMarkDone('${id}',${s.numero})">✅ Valider comme fait</button>
-                </div>
-              </div>
-            `}
-          </div>
-        </div>`;
-      }).join('')}
-
-      ${(c.driveDocs&&c.driveDocs.length>0)?`
-        <div class="drive-unlinked">
-          <div class="drive-unlinked-title">📎 Documents Drive non liés à une session (${c.driveDocs.length})</div>
-          ${c.driveDocs.map(d=>`<div class="drive-unlinked-item">
-            <div>
-              <div style="font-size:12px;font-weight:600">${d.date||'—'} · ${d.type==='rdv72h'?'RDV 72H':'Coaching'}</div>
-              ${d.summary?`<div style="font-size:11px;color:var(--muted);margin-top:2px;max-width:400px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml((d.summary||'').substring(0,120))}</div>`:''}
-            </div>
-            <a class="si-drive-link" href="${d.docUrl}" target="_blank">📄 Ouvrir ↗</a>
-          </div>`).join('')}
-        </div>
-      `:''}
     </div>
   `;
   document.getElementById('detailOverlay').classList.add('show');
@@ -1317,39 +1433,258 @@ function openDetail(id){
 
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('show');}
 function toggleSession(el){el.closest('.session-item').classList.toggle('open');}
-function toggleNewSession(){document.getElementById('newSessionForm').classList.toggle('show');}
+function toggleNewSession(){} // legacy stub
+function toggleNewSessionYear(yIdx){
+  const form = document.getElementById('newSessionForm-'+yIdx);
+  if(form) form.classList.toggle('show');
+}
 
 // ── ADD SESSION ──
-async function addSession(clientId){
-  const date = document.getElementById('ns-date').value;
-  const coach = normalizeCoach(document.getElementById('ns-coach').value.trim());
-  if(!date || !coach){showToast('Remplissez la date et le coach','error');return;}
-  
+// ── YEAR TABS ──
+function switchYearTab(clientId, yearIdx){
+  // Hide all year contents for this client
+  let i = 0;
+  while(document.getElementById('ycontent-'+clientId+'-'+i)){
+    document.getElementById('ycontent-'+clientId+'-'+i).classList.add('year-content-hidden');
+    i++;
+  }
+  // Deactivate all tabs
+  let j = 0;
+  while(document.getElementById('ytab-'+clientId+'-'+j)){
+    document.getElementById('ytab-'+clientId+'-'+j).classList.remove('active');
+    j++;
+  }
+  // Show selected year
+  const content = document.getElementById('ycontent-'+clientId+'-'+yearIdx);
+  const tab = document.getElementById('ytab-'+clientId+'-'+yearIdx);
+  if(content) content.classList.remove('year-content-hidden');
+  if(tab) tab.classList.add('active');
+}
+
+// ── ADD YEAR MODAL ──
+let _addYearClientId = null;
+function openAddYearModal(clientId){
   const c = _clients.find(x=>x._id===clientId);
   if(!c) return;
-  
-  const sessions = c.sessions||[];
-  const maxNum = sessions.reduce((m,s)=>Math.max(m,s.numero),0);
-  const newSession = {
-    numero: maxNum+1,
-    titre: `COACHING #${maxNum+1}`,
-    date, coach,
-    resume: document.getElementById('ns-resume').value.trim(),
-    devoirs: document.getElementById('ns-devoirs').value.trim(),
-    statut: 'fait'
+  _addYearClientId = clientId;
+  const nextYearNum = (c.years||[]).length + 1;
+  document.getElementById('ay-clientId').value = clientId;
+  document.getElementById('ay-yearLabel').textContent = '👤 '+c.nom+' — Création de l'Année '+nextYearNum;
+  document.getElementById('ay-startDate').value = '';
+  document.getElementById('ay-count').value = '12';
+  document.getElementById('ay-notes').value = '';
+  // Reset count buttons
+  document.querySelectorAll('.year-count-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('.year-count-btn[data-count="12"]').classList.add('active');
+  document.getElementById('addYearModal').classList.add('show');
+}
+function closeAddYearModal(){
+  document.getElementById('addYearModal').classList.remove('show');
+  _addYearClientId = null;
+}
+function selectYearCount(btn, count){
+  document.querySelectorAll('.year-count-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('ay-count').value = count;
+}
+
+async function confirmAddYear(){
+  const clientId = document.getElementById('ay-clientId').value;
+  const startDate = document.getElementById('ay-startDate').value;
+  const count = parseInt(document.getElementById('ay-count').value)||12;
+  const notes = document.getElementById('ay-notes').value.trim();
+  if(!startDate){showToast('Date de début requise','error');return;}
+
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+
+  if(!c.years) c.years = [];
+  const yearNum = c.years.length + 1;
+
+  // Generate sessions for this year
+  const newSessions = [];
+  // RDV 72H at start of new year
+  newSessions.push({numero:0, titre:'RDV URGENT 72H', date:'', coach:'', resume:'', devoirs:'', statut:'planifie', type:'rdv72h'});
+  for(let i=1;i<=count;i++){
+    newSessions.push({numero:i, titre:'COACHING #'+i, date:'', coach:'', resume:'', devoirs:'', statut:'planifie'});
+  }
+
+  const newYear = {
+    yearNum, label:'Année '+yearNum,
+    startDate, notes,
+    sessions: newSessions
   };
-  sessions.push(newSession);
-  c.sessions = sessions;
-  c.nbCoachingsFaits = sessions.filter(s=>s.statut==='fait').length;
-  const dates = sessions.filter(s=>s.date&&s.statut==='fait').map(s=>s.date);
-  c.lastSessionDate = dates.length?dates.sort().pop():'';
-  
+
+  c.years.push(newYear);
+  // Also update nbCoachingsTotal to reflect all years
+  c.nbCoachingsTotal = c.years.reduce((sum,y)=>(y.sessions||[]).filter(s=>s.type!=='rdv72h').length+sum, 0);
+
+  try{
+    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    closeAddYearModal();
+    applyFilters();
+    openDetail(clientId);
+    showToast('✅ Année '+yearNum+' créée — '+count+' séances générées !','success');
+  }catch(e){showToast('Erreur: '+e.message,'error');}
+}
+
+// ── SESSIONS PER YEAR ──
+function getYearSessionKey(yIdx, sNum){ return 'y'+yIdx+'s'+sNum; }
+
+async function markSessionDoneYear(clientId, yearIdx, sessionNum){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.years) return;
+  const y = c.years[yearIndex];
+  if(!y) return;
+  const s = (y.sessions||[]).find(s=>s.numero===sessionNum);
+  if(!s) return;
+  const sk = getYearSessionKey(yearIndex, sessionNum);
+  const date = (document.getElementById('qs-date-'+sk)||{}).value||'';
+  const coach = normalizeCoach(((document.getElementById('qs-coach-'+sk)||{}).value)||'');
+  if(!date||!coach){showToast('Remplissez la date et le coach','error');return;}
+  s.date=date; s.coach=coach; s.statut='fait';
+  s.visioUrl=((document.getElementById('qs-visio-'+sk)||{}).value||'').trim();
+  s.driveUrl=((document.getElementById('qs-gdoc-'+sk)||{}).value||'').trim();
+  s.resume=((document.getElementById('qs-resume-'+sk)||{}).value||'').trim();
+  s.devoirs=((document.getElementById('qs-devoirs-'+sk)||{}).value||'').trim();
+  s.notes=((document.getElementById('qs-notes-'+sk)||{}).value||'').trim();
+  _syncClientStats(c);
+  try{
+    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    showToast('✅ Séance enregistrée !','success');
+    applyFilters();
+    openDetail(clientId);
+  }catch(e){showToast('Erreur: '+e.message,'error');}
+}
+
+// Fix: use correct variable name
+async function quickMarkDoneYear(clientId, yearIndex, sessionNum){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.years || !c.years[yearIndex]) return;
+  const y = c.years[yearIndex];
+  const s = (y.sessions||[]).find(s=>s.numero===sessionNum);
+  if(!s) return;
+  const sk = getYearSessionKey(yearIndex, sessionNum);
+  const date = (document.getElementById('qs-date-'+sk)||{}).value||'';
+  const coach = normalizeCoach(((document.getElementById('qs-coach-'+sk)||{}).value)||'');
+  if(!date||!coach){showToast('Remplissez la date et le coach','error');return;}
+  s.date=date; s.coach=coach; s.statut='fait';
+  s.visioUrl=((document.getElementById('qs-visio-'+sk)||{}).value||'').trim();
+  s.driveUrl=((document.getElementById('qs-gdoc-'+sk)||{}).value||'').trim();
+  s.resume=((document.getElementById('qs-resume-'+sk)||{}).value||'').trim();
+  s.devoirs=((document.getElementById('qs-devoirs-'+sk)||{}).value||'').trim();
+  s.notes=((document.getElementById('qs-notes-'+sk)||{}).value||'').trim();
+  _syncClientStats(c);
+  try{
+    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    showToast('✅ Séance enregistrée !','success');
+    applyFilters();
+    openDetail(clientId);
+  }catch(e){showToast('Erreur: '+e.message,'error');}
+}
+
+async function unmarkSessionDone(clientId, yearIndex, sessionNum){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.years || !c.years[yearIndex]) return;
+  const s = (c.years[yearIndex].sessions||[]).find(s=>s.numero===sessionNum);
+  if(!s) return;
+  s.statut='planifie'; s.date=''; s.coach='';
+  _syncClientStats(c);
+  try{
+    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    showToast('↩ Séance marquée non faite','success');
+    applyFilters();
+    openDetail(clientId);
+  }catch(e){showToast('Erreur: '+e.message,'error');}
+}
+
+function toggleSessionEditYear(clientId, yearIndex, sessionNum){
+  const sk = getYearSessionKey(yearIndex, sessionNum);
+  const form = document.getElementById('sedit-'+sk);
+  if(form) form.classList.toggle('show');
+}
+
+async function saveSessionEditYear(clientId, yearIndex, sessionNum){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.years || !c.years[yearIndex]) return;
+  const s = (c.years[yearIndex].sessions||[]).find(s=>s.numero===sessionNum);
+  if(!s) return;
+  const sk = getYearSessionKey(yearIndex, sessionNum);
+  const get = id=>(document.getElementById(id)||{}).value||'';
+  s.date=get('se-date-'+sk);
+  s.coach=normalizeCoach(get('se-coach-'+sk));
+  s.visioUrl=get('se-visio-'+sk).trim();
+  s.driveUrl=get('se-gdoc-'+sk).trim();
+  s.resume=get('se-resume-'+sk).trim();
+  s.devoirs=get('se-devoirs-'+sk).trim();
+  s.notes=get('se-notes-'+sk).trim();
+  _syncClientStats(c);
+  try{
+    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    showToast('✅ Séance mise à jour !','success');
+    applyFilters();
+    openDetail(clientId);
+  }catch(e){showToast('Erreur: '+e.message,'error');}
+}
+
+async function addSessionToYear(clientId, yearIndex){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.years || !c.years[yearIndex]) return;
+  const y = c.years[yearIndex];
+  const date = (document.getElementById('ns-date-'+yearIndex)||{}).value||'';
+  const coach = normalizeCoach(((document.getElementById('ns-coach-'+yearIndex)||{}).value)||'');
+  if(!date||!coach){showToast('Remplissez la date et le coach','error');return;}
+  const maxNum = (y.sessions||[]).reduce((m,s)=>Math.max(m,s.numero),0);
+  const newS = {
+    numero:maxNum+1, titre:'COACHING #'+(maxNum+1),
+    date, coach,
+    resume:(document.getElementById('ns-resume-'+yearIndex)||{}).value||'',
+    devoirs:(document.getElementById('ns-devoirs-'+yearIndex)||{}).value||'',
+    statut:'fait'
+  };
+  y.sessions.push(newS);
+  _syncClientStats(c);
   try{
     await window._setDoc(window._doc(window._db,'clients',clientId),c);
     showToast('✅ Séance ajoutée !','success');
-    openDetail(clientId);
     applyFilters();
-  }catch(e){showToast('Erreur: '+e.message,'error');console.error(e);}
+    openDetail(clientId);
+  }catch(e){showToast('Erreur: '+e.message,'error');}
+}
+
+function _syncClientStatsData(c){
+  // Same as _syncClientStats but no Firebase save — for use at load time
+  let totalDone=0, allDates=[];
+  (c.years||[]).forEach(y=>{
+    (y.sessions||[]).forEach(s=>{
+      if(s.statut==='fait'){totalDone++;if(s.date)allDates.push(s.date);}
+    });
+  });
+  (c.sessions||[]).forEach(s=>{
+    if(s.statut==='fait'){totalDone++;if(s.date)allDates.push(s.date);}
+  });
+  c.nbCoachingsFaits=totalDone;
+  c.lastSessionDate=allDates.length?allDates.sort().pop():'';
+}
+function _syncClientStats(c){
+  // Sync nbCoachingsFaits and lastSessionDate from all years
+  let totalDone=0, allDates=[];
+  (c.years||[]).forEach(y=>{
+    (y.sessions||[]).forEach(s=>{
+      if(s.statut==='fait'){totalDone++;if(s.date)allDates.push(s.date);}
+    });
+  });
+  // Also count legacy sessions (pre-years)
+  (c.sessions||[]).forEach(s=>{
+    if(s.statut==='fait'){totalDone++;if(s.date)allDates.push(s.date);}
+  });
+  c.nbCoachingsFaits=totalDone;
+  c.lastSessionDate=allDates.length?allDates.sort().pop():'';
+}
+
+// Legacy addSession kept for old data without years
+async function addSession(clientId){
+  showToast('Utilisez le bouton + Séance dans l\'onglet de l\'année','error');
 }
 
 // ── CREATE CLIENT ──
@@ -1781,6 +2116,12 @@ window.handleDriveAuth=connectDriveThen;window.connectDriveThen=connectDriveThen
 window.applyFilters=applyFilters;window.setStatusTab=setStatusTab;window.toggleActiveFilter=toggleActiveFilter;window.toggleAlertFilter=toggleAlertFilter;window.toggleQuotaFilter=toggleQuotaFilter;
 window.setView=setView;window.openDetail=openDetail;window.closeDetail=closeDetail;
 window.toggleSession=toggleSession;window.toggleNewSession=toggleNewSession;
+window.switchYearTab=switchYearTab;window.openAddYearModal=openAddYearModal;window.closeAddYearModal=closeAddYearModal;
+window.selectYearCount=selectYearCount;window.confirmAddYear=confirmAddYear;
+window.toggleNewSessionYear=toggleNewSessionYear;window.addSessionToYear=addSessionToYear;
+window.quickMarkDoneYear=quickMarkDoneYear;window.markSessionDoneYear=markSessionDoneYear;
+window.unmarkSessionDone=unmarkSessionDone;
+window.toggleSessionEditYear=toggleSessionEditYear;window.saveSessionEditYear=saveSessionEditYear;
 window.addSession=addSession;window.openNewClientModal=openNewClientModal;
 window.closeNewClientModal=closeNewClientModal;window.createClient=createClient;
 window.deleteClient=deleteClient;window.handleLogout=handleLogout;
