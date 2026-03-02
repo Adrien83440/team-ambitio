@@ -836,8 +836,8 @@ let _cm = (() => {
   return { month: MONTHS.indexOf(p[0]), year: parseInt(p[1]) || 2026 };
 })();
 function cmk() { return MONTHS[_cm.month] + ' ' + _cm.year; }
-function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveM(); renderAll(); }
-function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveM(); renderAll(); }
+function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveM(); loadMonthFromFirebase().then(renderAll); }
+function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveM(); loadMonthFromFirebase().then(renderAll); }
 function _saveM() { localStorage.setItem('sales_month', cmk()); document.getElementById('month-lbl').textContent = cmk(); }
 
 /* ─── COMMERCIAUX ─── */
@@ -857,17 +857,17 @@ const MEMBERS = [
     }
   },
   {
-    uid: 'elodie', name: 'Elodie', surname: '', role: 'Closing',
-    color: '#60a5fa', type: 'closing',
+    uid: 'elodie', name: 'Elodie', surname: '', role: 'Setting',
+    color: '#60a5fa', type: 'setting',
     data: {
       'Décembre 2025':  { _total: { tempsAppel:0, leads:0, calls:81,  decroches:27, propRdv:15, sets:15, presents:4,  deposits:0, closes:0, collecte:0 } },
       'Janvier 2026':   { _total: { tempsAppel:0, leads:0, calls:470, decroches:112,propRdv:64, sets:39, presents:17, deposits:0, closes:6, collecte:0 } },
       'Février 2026': {
-        s1: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
-        s2: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
-        s3: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
-        s4: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
-        s5: { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 },
+        s1: { tempsAppel:9,  leads:33, calls:165, decroches:30, propRdv:10, sets:7,  presents:0, deposits:0, closes:0, collecte:0 },
+        s2: { tempsAppel:8,  leads:50, calls:162, decroches:20, propRdv:10, sets:8,  presents:2, deposits:0, closes:0, collecte:0 },
+        s3: { tempsAppel:0,  leads:56, calls:122, decroches:15, propRdv:13, sets:11, presents:5, deposits:0, closes:0, collecte:0 },
+        s4: { tempsAppel:0,  leads:22, calls:65,  decroches:7,  propRdv:3,  sets:2,  presents:2, deposits:0, closes:1, collecte:0 },
+        s5: { tempsAppel:0,  leads:0,  calls:0,   decroches:0,  propRdv:0,  sets:0,  presents:0, deposits:0, closes:0, collecte:0 },
       }
     }
   },
@@ -1409,6 +1409,123 @@ function renderAll() {
   }
 }
 
+/* ─── FIREBASE: charger un mois depuis Firestore ─── */
+async function loadMonthFromFirebase() {
+  if (!Fire.db) return;
+  const monthLabel = cmk();
+
+  for (const m of MEMBERS) {
+    if (m.data[monthLabel] && m.data[monthLabel]._total) continue;
+
+    const key = Fire._key(monthLabel);
+    const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(key);
+
+    try {
+      const snap = await ref.get();
+      if (snap.exists) {
+        const fbData = snap.data();
+        if (fbData.setting) {
+          if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
+          ['s1','s2','s3','s4','s5'].forEach(w => {
+            if (fbData.setting[w]) {
+              m.data[monthLabel][w] = { ...emptyMonth().s1, ...fbData.setting[w] };
+            }
+          });
+        }
+        if (fbData.setting_total) {
+          m.data[monthLabel] = { _total: fbData.setting_total };
+        }
+        console.log('[Firebase] Chargé ' + m.name + ' ' + monthLabel);
+      }
+    } catch(e) {
+      console.warn('[Firebase] Erreur chargement ' + m.name + ' ' + monthLabel + ':', e.message);
+    }
+  }
+
+  // Relancer le watch sur le nouveau mois
+  Fire.stop();
+  MEMBERS.forEach(m => {
+    Fire.watchUser(m.uid, monthLabel, (data) => {
+      if (!data) return;
+      const md = m.data[monthLabel];
+      if (md && md._total) return;
+      if (data.setting) {
+        if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
+        ['s1','s2','s3','s4','s5'].forEach(w => {
+          if (data.setting[w]) m.data[monthLabel][w] = { ...m.data[monthLabel][w], ...data.setting[w] };
+        });
+      }
+      renderAll();
+    });
+  });
+}
+
+/* ─── FIREBASE SYNC: migrate hardcoded data + watch real-time ─── */
+async function firebaseSyncMembers() {
+  if (!Fire.db) return;
+
+  for (const m of MEMBERS) {
+    // Pour chaque mois avec des données hardcodées, migrer vers Firebase
+    for (const [monthLabel, monthData] of Object.entries(m.data)) {
+      const key = Fire._key(monthLabel);
+      const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(key);
+
+      try {
+        const snap = await ref.get();
+        if (!snap.exists) {
+          // Pas encore dans Firebase → migrer les données hardcodées
+          if (monthData._total) {
+            // Mois historique: stocker comme _total
+            await ref.set({ setting_total: monthData._total, _migrated: true }, { merge: true });
+          } else {
+            // Mois avec détail semaines
+            const settingData = {};
+            ['s1','s2','s3','s4','s5'].forEach(w => {
+              if (monthData[w]) settingData[w] = monthData[w];
+            });
+            await ref.set({ setting: settingData, _migrated: true }, { merge: true });
+          }
+          console.log(`[Firebase] Migré ${m.name} ${monthLabel}`);
+        } else {
+          // Firebase a déjà des données → charger dans le membre
+          const fbData = snap.data();
+          if (fbData.setting) {
+            // Appliquer les données Firebase (plus récentes) sur le membre
+            if (!monthData._total) {
+              ['s1','s2','s3','s4','s5'].forEach(w => {
+                if (fbData.setting[w]) {
+                  if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
+                  m.data[monthLabel][w] = { ...m.data[monthLabel][w], ...fbData.setting[w] };
+                }
+              });
+            }
+          }
+          if (fbData.setting_total && monthData._total) {
+            m.data[monthLabel]._total = { ...monthData._total, ...fbData.setting_total };
+          }
+        }
+      } catch(e) {
+        console.warn(`[Firebase] Sync failed for ${m.name} ${monthLabel}:`, e.message);
+      }
+    }
+
+    // Écouter les changements en temps réel pour le mois courant
+    Fire.watchUser(m.uid, cmk(), (data) => {
+      if (!data) return;
+      const md = m.data[cmk()];
+      if (md && md._total) return; // Pas de mise à jour temps réel pour historique
+
+      if (data.setting) {
+        if (!m.data[cmk()]) m.data[cmk()] = emptyMonth();
+        ['s1','s2','s3','s4','s5'].forEach(w => {
+          if (data.setting[w]) m.data[cmk()][w] = { ...m.data[cmk()][w], ...data.setting[w] };
+        });
+      }
+      renderAll();
+    });
+  }
+}
+
 /* ─── INIT ─── */
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('month-lbl').textContent = cmk();
@@ -1426,6 +1543,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.firebase && window.firebase.firestore && window.Fire && !Fire.db) {
     const uid = (typeof localStorage !== 'undefined' && localStorage.getItem('ambitio_uid')) || 'guillaume';
     Fire.init(window.firebase.firestore(), uid);
+    // Sync des données vers Firebase + écoute temps réel
+    firebaseSyncMembers();
   }
 
   document.addEventListener('db:updated', renderAll);
