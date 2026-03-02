@@ -573,7 +573,8 @@ window.getMonthWeeks=getMonthWeeks;
    DASHBOARD SYNTHÈSE ANNUELLE
 ═══════════════════════════════════════════════════════════ */
 
-const MONTHS_FR = DB.months;
+/* MONTHS_FR déjà déclaré dans getMonthWeeks scope — utiliser DB.months */
+const MF = DB.months;
 let _year = 2026;
 let _drillMonth = null; // null = vue année, sinon "Février 2026"
 
@@ -587,7 +588,7 @@ async function loadYearData() {
   const results = {}; // { "Janvier 2026": { guillaume: {...}, elodie: {...} } }
 
   for (let m = 0; m < 12; m++) {
-    const monthKey = MONTHS_FR[m] + ' ' + _year;
+    const monthKey = MF[m] + ' ' + _year;
     const fsKey = `${_year}-${String(m+1).padStart(2,'0')}`;
     results[monthKey] = {};
 
@@ -671,7 +672,7 @@ function aggregateYear(yearData) {
   SYNC_UIDS.forEach(uid => { perMember[uid] = { ...totals }; });
 
   for (let m = 0; m < 12; m++) {
-    const mk = MONTHS_FR[m] + ' ' + _year;
+    const mk = MF[m] + ' ' + _year;
     const mData = yearData[mk] || {};
     const mt = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0, settingCalls:0, settingCloses:0, hasData:false };
 
@@ -717,7 +718,7 @@ function renderYear() {
   const T = totals;
 
   // Month grid
-  const monthBtns = MONTHS_FR.map((m, i) => {
+  const monthBtns = MF.map((m, i) => {
     const mk = m + ' ' + _year;
     const md = perMonth[mk];
     const hasData = md && md.hasData;
@@ -747,7 +748,7 @@ function renderYear() {
   // Chart — Contracté & Collecté par mois
   document.getElementById('chart-title').textContent = `Contracté & Collecté — ${_year}`;
   const chartMonths = [];
-  MONTHS_FR.forEach((m, i) => {
+  MF.forEach((m, i) => {
     const mk = m + ' ' + _year;
     const md = perMonth[mk];
     if (md && md.hasData) chartMonths.push({ label: m.slice(0, 3), ct: md.contracte, co: md.collecte, mk });
@@ -817,7 +818,7 @@ function renderYear() {
   </table>`;
 
   // Months detail table
-  const monthsWithData = MONTHS_FR.filter((m, i) => {
+  const monthsWithData = MF.filter((m, i) => {
     const mk = m + ' ' + _year;
     return perMonth[mk] && perMonth[mk].hasData;
   });
