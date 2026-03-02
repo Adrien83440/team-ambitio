@@ -413,10 +413,10 @@ window.getMonthWeeks=getMonthWeeks;
   <div class="tb-sep"></div>
   <div class="tb-page">📈 Projections</div>
   <div class="tb-right">
-    <div class="tb-month">
-      <button onclick="prevMonth()">&#9664;</button>
-      <span id="month-lbl">Février 2026</span>
-      <button onclick="nextMonth()">&#9654;</button>
+    <div class="tb-month" id="year-nav">
+      <button onclick="prevYear()">&#9664;</button>
+      <span id="year-lbl" style="min-width:50px;text-align:center">2026</span>
+      <button onclick="nextYear()">&#9654;</button>
     </div>
     <div class="tb-user">
       <div class="tb-av" id="tb-av">G</div>
@@ -425,46 +425,166 @@ window.getMonthWeeks=getMonthWeeks;
   </div>
 </div>
 
+<style>
+/* === PROJECTIONS YEAR STYLES === */
+.yr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:13px; margin-bottom:18px; }
+.yr-kpi { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:18px; position:relative; overflow:hidden; }
+.yr-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--kc,var(--red2)); }
+.yr-kpi-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
+.yr-kpi-val { font-size:26px; font-weight:800; font-family:var(--font-d); color:var(--text); line-height:1.1; }
+.yr-kpi-sub { font-size:11px; color:var(--muted); margin-top:4px; }
+.yr-kpi-prog { margin-top:10px; }
+.yr-kpi-prog-track { height:6px; background:rgba(255,255,255,.06); border-radius:99px; overflow:hidden; }
+.yr-kpi-prog-fill { height:100%; border-radius:99px; transition:width .5s; }
+.yr-kpi-prog-lbl { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top:3px; }
+
+.yr-row { display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-bottom:18px; }
+.yr-row-wide { display:grid; grid-template-columns:2fr 1fr; gap:13px; margin-bottom:18px; }
+.yr-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius2); padding:20px; }
+.yr-card-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.yr-card-title { font-size:14px; font-weight:700; color:var(--text); }
+.yr-card-badge { font-size:10px; font-weight:700; color:var(--muted); background:var(--bg4); padding:4px 10px; border-radius:20px; border:1px solid var(--border); }
+
+/* Chart */
+.proj-chart { position:relative; height:240px; display:flex; align-items:flex-end; gap:3px; padding:0 4px 26px; }
+.proj-chart-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:0; position:relative; }
+.proj-chart-bars { display:flex; align-items:flex-end; gap:2px; width:100%; height:210px; }
+.proj-chart-bar { flex:1; border-radius:4px 4px 0 0; min-height:2px; transition:height .4s; position:relative; }
+.proj-chart-bar.bar-real { background:linear-gradient(180deg,#ef4444,#991b1b); }
+.proj-chart-bar.bar-obj { background:rgba(251,191,36,.25); border:1px dashed rgba(251,191,36,.5); border-bottom:none; }
+.proj-chart-bar.bar-proj-end { background:linear-gradient(180deg,rgba(96,165,250,.5),rgba(96,165,250,.15)); border:1px dashed rgba(96,165,250,.4); border-bottom:none; }
+.proj-chart-lbl { font-size:9px; color:var(--muted); font-weight:600; margin-top:4px; }
+.proj-chart-tooltip { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:var(--bg); border:1px solid var(--border2); padding:6px 10px; border-radius:8px; font-size:11px; color:var(--text); white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .15s; z-index:10; }
+.proj-chart-col:hover .proj-chart-tooltip { opacity:1; }
+
+.chart-legend-row { display:flex; gap:16px; justify-content:center; margin-bottom:12px; flex-wrap:wrap; }
+.chart-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); font-weight:600; }
+.chart-legend-dot { width:10px; height:10px; border-radius:3px; }
+.chart-legend-dot.dashed { border:1.5px dashed; background:transparent !important; }
+
+/* Gap rows */
+.gap-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.04); }
+.gap-row:last-child { border:none; }
+.gap-label { width:90px; font-size:12px; font-weight:600; color:var(--muted); }
+.gap-track { flex:1; height:24px; background:rgba(255,255,255,.03); border-radius:6px; position:relative; overflow:hidden; }
+.gap-fill { height:100%; border-radius:6px; transition:width .5s; display:flex; align-items:center; padding-left:8px; }
+.gap-fill.good { background:linear-gradient(90deg,#065f46,#34d399); }
+.gap-fill.bad { background:linear-gradient(90deg,#991b1b,#ef4444); }
+.gap-val { width:100px; text-align:right; font-size:12px; font-weight:700; color:var(--text); font-family:var(--font-m); }
+.gap-delta { width:80px; text-align:right; font-size:11px; font-weight:700; font-family:var(--font-m); }
+
+/* Table */
+.yr-table { width:100%; border-collapse:collapse; }
+.yr-table th { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
+.yr-table td { font-size:12px; font-weight:600; color:var(--text); padding:9px 10px; border-bottom:1px solid rgba(255,255,255,.03); font-family:var(--font-m); }
+.yr-table tr:last-child td { border-bottom:none; }
+.yr-table .tr-total td { color:var(--gold); font-weight:800; border-top:1px solid var(--border2); }
+.yr-table .td-good { color:var(--green); }
+.yr-table .td-bad { color:var(--red2); }
+
+/* Objective gauge */
+.obj-gauge { text-align:center; padding:10px 0; }
+.obj-gauge-val { font-size:40px; font-weight:800; font-family:var(--font-d); }
+.obj-gauge-track { height:10px; background:rgba(255,255,255,.06); border-radius:99px; overflow:hidden; margin:12px 0 6px; }
+.obj-gauge-fill { height:100%; border-radius:99px; transition:width .6s; }
+.obj-gauge-labels { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); }
+
+/* Manager note */
+.mgr-note { background:rgba(255,255,255,0.025); border-radius:10px; padding:18px 20px; border-left:3px solid var(--red2); }
+.mgr-note-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--muted); margin-bottom:10px; }
+.mgr-note-body { font-size:13px; line-height:1.8; color:rgba(255,255,255,0.65); }
+
+/* Month grid */
+.month-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-bottom:18px; }
+.month-btn { padding:8px 4px; border:1px solid var(--border); border-radius:8px; background:var(--bg2); color:var(--muted); font-size:11px; font-weight:600; text-align:center; cursor:pointer; transition:all .15s; font-family:var(--font-b); }
+.month-btn:hover { background:var(--bg4); color:var(--text); border-color:var(--border2); }
+.month-btn.has-data { color:var(--text); }
+.month-btn.has-data::after { content:''; display:block; width:4px; height:4px; border-radius:50%; background:var(--green); margin:3px auto 0; }
+
+@media(max-width:1100px) {
+  .yr-grid { grid-template-columns:repeat(2,1fr); }
+  .yr-row, .yr-row-wide { grid-template-columns:1fr; }
+  .month-grid { grid-template-columns:repeat(4,1fr); }
+}
+@media(max-width:600px) {
+  .yr-grid { grid-template-columns:1fr; }
+  .month-grid { grid-template-columns:repeat(3,1fr); }
+}
+</style>
+
 <div class="page">
 
-  <div class="page-header-row">
+  <div class="page-header-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
     <div>
-      <div class="page-title">Projections — Analyse & Tendances</div>
-      <div class="page-sub">Objectifs vs réalisé · <span id="sub-month">Février 2026</span></div>
-    </div>
-    <div class="tabs" id="view-tabs">
-      <div class="tab active" onclick="setView('closing')">Closing</div>
-      <div class="tab" onclick="setView('setting')">Setting</div>
-      <div class="tab" onclick="setView('revenue')">Revenus</div>
+      <div class="page-title" style="font-size:18px;font-weight:800;color:var(--text)">Projections — Analyse & Objectif annuel</div>
+      <div class="page-sub" style="font-size:12px;color:var(--muted)">Objectif <span id="yr-obj-text">2026</span> : <b style="color:var(--gold)" id="yr-obj-val">1 000 000 €</b> CA HT contracté</div>
     </div>
   </div>
 
-  <!-- KPIs -->
-  <div class="g4 mb" id="kpis"></div>
+  <!-- Month indicator -->
+  <div class="month-grid" id="month-grid"></div>
 
-  <!-- Chart + Gap analysis -->
-  <div class="g2 mb">
-    <div class="card">
-      <div class="card-header"><span class="card-title">Progression hebdomadaire</span></div>
-      <div id="chart"></div>
+  <!-- KPIs -->
+  <div class="yr-grid" id="proj-kpis"></div>
+
+  <!-- Objective gauge + Projection end of year -->
+  <div class="yr-row">
+    <div class="yr-card">
+      <div class="yr-card-hdr">
+        <div class="yr-card-title">Objectif annuel — CA HT Contracté</div>
+        <div class="yr-card-badge" id="obj-badge">2026</div>
+      </div>
+      <div class="obj-gauge" id="obj-gauge"></div>
     </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Analyse des écarts</span></div>
-      <div id="gaps"></div>
+    <div class="yr-card">
+      <div class="yr-card-hdr">
+        <div class="yr-card-title">Projection fin d'année</div>
+      </div>
+      <div id="proj-forecast"></div>
+    </div>
+  </div>
+
+  <!-- Chart: Contracté par mois vs rythme objectif -->
+  <div class="yr-card" style="margin-bottom:18px">
+    <div class="yr-card-hdr">
+      <div class="yr-card-title" id="chart-title">Contracté mensuel vs Rythme objectif — 2026</div>
+    </div>
+    <div class="chart-legend-row">
+      <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#ef4444"></div>Contracté réel</div>
+      <div class="chart-legend-item"><div class="chart-legend-dot dashed" style="border-color:#f59e0b"></div>Rythme objectif</div>
+      <div class="chart-legend-item"><div class="chart-legend-dot dashed" style="border-color:#60a5fa"></div>Projection</div>
+    </div>
+    <div class="proj-chart" id="proj-chart"></div>
+  </div>
+
+  <!-- Funnel year + Month table -->
+  <div class="yr-row">
+    <div class="yr-card">
+      <div class="yr-card-hdr">
+        <div class="yr-card-title">Écarts vs Objectif — Funnel annuel</div>
+      </div>
+      <div id="proj-gaps"></div>
+    </div>
+    <div class="yr-card">
+      <div class="yr-card-hdr">
+        <div class="yr-card-title">Contracté mois par mois</div>
+      </div>
+      <div id="proj-months"></div>
     </div>
   </div>
 
   <!-- Manager note -->
-  <div class="card">
-    <div class="card-header"><span class="card-title">Note du manager</span></div>
-    <div style="background:rgba(255,255,255,0.025);border-radius:10px;padding:18px 20px;border-left:3px solid var(--red2)">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:10px">Message du manager</div>
-      <div style="font-size:13px;line-height:1.8;color:rgba(255,255,255,0.65)">
+  <div class="yr-card" style="margin-bottom:18px">
+    <div class="yr-card-hdr"><div class="yr-card-title">Note du manager</div></div>
+    <div class="mgr-note">
+      <div class="mgr-note-label">Message du manager</div>
+      <div class="mgr-note-body">
         Ce que tu as écrit, ce sont tes <b style="color:var(--text)">projections</b>, pas tes objectifs.<br><br>
         Une projection, c'est ce que tu es censé atteindre dans <b style="color:var(--text)">75 à 80% des cas</b>.
         C'est ce que tu atteins sans te forcer.<br><br>
         Un objectif, c'est ta projection augmentée de <b style="color:var(--gold)">33 à 50%</b>.
         C'est ce que tu vises pour sortir de ta zone de confort.<br><br>
+        <b style="color:var(--gold)">Objectif 2026 : 1 000 000 € CA HT contracté</b> — soit ~83 333 €/mois en moyenne.<br><br>
         <span style="color:var(--red3)">
           Projection = zone de confort &nbsp;·&nbsp; Objectif = zone de progression
         </span>
@@ -475,141 +595,358 @@ window.getMonthWeeks=getMonthWeeks;
 </div>
 
 <script>
-const MONTHS = DB.months;
-let _cm = (() => { const s=localStorage.getItem('sales_month')||'Février 2026'; const p=s.split(' '); return{month:MONTHS.indexOf(p[0]),year:parseInt(p[1])||2026}; })();
-function currentMonthKey() { return MONTHS[_cm.month]+' '+_cm.year; }
-function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveMonth(); syncBridge_loadMonth(currentMonthKey()); renderAll(); }
-function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveMonth(); syncBridge_loadMonth(currentMonthKey()); renderAll(); }
-function _saveMonth() { localStorage.setItem('sales_month',currentMonthKey()); document.getElementById('month-lbl').textContent=currentMonthKey(); document.getElementById('sub-month').textContent=currentMonthKey(); }
+/* ═══════════════════════════════════════════════════════════
+   PROJECTIONS — VUE ANNUELLE
+═══════════════════════════════════════════════════════════ */
+const MF = DB.months;
+let _year = 2026;
 
-let currentView = 'closing';
+/* Objectif annuel par année (CA HT contracté) */
+const YEAR_OBJECTIVES = {
+  2025: 500000,   // pas d'objectif formel, estimation
+  2026: 1000000,
+  2027: 1500000,
+};
 
-function setView(v) {
-  currentView = v;
-  document.querySelectorAll('#view-tabs .tab').forEach((t,i) =>
-    t.classList.toggle('active', ['closing','setting','revenue'][i] === v));
-  renderAll();
+function prevYear() { _year--; refreshProj(); }
+function nextYear() { _year++; refreshProj(); }
+
+/* ── HIST_DATA — données hardcodées (miroir du dashboard) ── */
+const HIST_DATA = {
+  guillaume: {
+    closing: {
+      'Juillet 2025':   { calls:23,lives:20,offres:14,closes:6,hardClose:6,followUp:0,contracte:33020.4,collecte:3342.4 },
+      'Août 2025':      { calls:39,lives:25,offres:20,closes:4,hardClose:4,followUp:0,contracte:30282.0,collecte:1998.75 },
+      'Septembre 2025': { calls:18,lives:11,offres:8,closes:2,hardClose:2,followUp:0,contracte:11512.8,collecte:959.4 },
+      'Octobre 2025':   { calls:9,lives:9,offres:8,closes:1,hardClose:1,followUp:0,contracte:5756.4,collecte:479.7 },
+      'Novembre 2025':  { calls:5,lives:2,offres:1,closes:1,hardClose:1,followUp:0,contracte:2300.0,collecte:1149.0 },
+      'Décembre 2025':  { calls:0,lives:0,offres:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0 },
+      'Janvier 2026':   { calls:10,lives:5,offres:4,closes:2,hardClose:2,followUp:0,contracte:14400,collecte:720 },
+    },
+    closing_weekly: {
+      'Février 2026': {
+        s1:{calls:8,lives:2,offres:1,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s2:{calls:8,lives:4,offres:2,closes:2,hardClose:2,followUp:0,contracte:12000,collecte:1000},
+        s3:{calls:8,lives:6,offres:2,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s4:{calls:10,lives:7,offres:3,closes:1,hardClose:1,followUp:0,contracte:7200,collecte:600},
+      },
+    },
+    setting: {
+      'Janvier 2026': { calls:225,decroches:51,propRdv:8,sets:8,presents:6,closes:2,collecte:0 },
+    },
+    setting_weekly: {
+      'Février 2026': {
+        s1:{calls:231,decroches:56,propRdv:13,sets:9,presents:2,closes:0,collecte:0},
+        s2:{calls:324,decroches:54,propRdv:17,sets:11,presents:4,closes:2,collecte:1000},
+        s3:{calls:312,decroches:43,propRdv:24,sets:17,presents:7,closes:0,collecte:0},
+        s4:{calls:16,decroches:23,propRdv:7,sets:4,presents:7,closes:1,collecte:600},
+      },
+    },
+  },
+  elodie: {
+    closing: {
+      'Juillet 2025':   { calls:29,lives:24,offres:19,closes:7,hardClose:7,followUp:0,contracte:22748.6,collecte:13629.0 },
+      'Août 2025':      { calls:28,lives:19,offres:14,closes:5,hardClose:5,followUp:0,contracte:28782.0,collecte:799.5 },
+      'Septembre 2025': { calls:24,lives:17,offres:10,closes:2,hardClose:2,followUp:0,contracte:11512.8,collecte:959.4 },
+      'Octobre 2025':   { calls:8,lives:2,offres:2,closes:1,hardClose:1,followUp:0,contracte:5756.4,collecte:239.85 },
+      'Novembre 2025':  { calls:13,lives:7,offres:3,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0 },
+      'Décembre 2025':  { calls:16,lives:10,offres:8,closes:1,hardClose:1,followUp:0,contracte:5756.4,collecte:399.75 },
+      'Janvier 2026':   { calls:46,lives:28,offres:13,closes:7,hardClose:7,followUp:0,contracte:34069.2,collecte:3966.12 },
+    },
+    closing_weekly: {
+      'Février 2026': {
+        s1:{calls:11,lives:2,offres:1,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s2:{calls:14,lives:7,offres:2,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s3:{calls:15,lives:2,offres:2,closes:1,hardClose:0,followUp:0,contracte:6000,collecte:6000},
+        s4:{calls:9,lives:5,offres:0,closes:2,hardClose:0,followUp:0,contracte:9600,collecte:1400},
+      },
+    },
+    setting: {
+      'Décembre 2025': { calls:81,decroches:27,propRdv:15,sets:15,presents:4,closes:0,collecte:0 },
+      'Janvier 2026':  { calls:470,decroches:112,propRdv:64,sets:39,presents:17,closes:6,collecte:0 },
+    },
+    setting_weekly: {
+      'Février 2026': {
+        s1:{calls:165,decroches:30,propRdv:10,sets:7,presents:0,closes:0,collecte:0},
+        s2:{calls:162,decroches:20,propRdv:10,sets:8,presents:2,closes:0,collecte:0},
+        s3:{calls:122,decroches:15,propRdv:13,sets:11,presents:5,closes:0,collecte:0},
+        s4:{calls:65,decroches:7,propRdv:3,sets:2,presents:2,closes:1,collecte:0},
+      },
+    },
+  },
+};
+
+function _mToFs(mk) {
+  const p = mk.split(' '); const m = MF.indexOf(p[0]);
+  return m < 0 ? null : `${p[1]}-${String(m+1).padStart(2,'0')}`;
 }
 
-function buildData() {
-  const c  = DB.closing.mois;
-  const s  = DB.setting.mois;
-  const cm = DB.commissions[currentMonthKey()] || { totalComm:0 };
+/* ── Charger toute l'année ── */
+async function loadYearData() {
+  const db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
+  const results = {};
 
-  if (currentView === 'closing') {
-    return {
-      kpis: [
-        { label:'Atteinte objectif', val:(c.atteinte*100).toFixed(0)+'%', color: c.atteinte<0.5?'#ef4444':'#f59e0b' },
-        { label:'Delta contracté',   val:U.euro(c.delta),                  color:'#ef4444' },
-        { label:'Cash / Live call',  val:U.euro(c.cashLive.a), sub:'Proj: '+U.euro(c.cashLive.p), color:'#a78bfa' },
-        { label:'Closes manquants',  val:(c.closes.p-c.closes.a)+' closes', sub:'pour atteindre proj.', color:'#f59e0b' },
-      ],
-      labels:  ['S1','S2','S3','S4'],
-      actuals: [DB.closing.s1.closes.a, DB.closing.s2.closes.a, DB.closing.s3.closes.a, DB.closing.s4.closes.a],
-      projs:   [DB.closing.s1.closes.p, DB.closing.s2.closes.p, DB.closing.s3.closes.p, DB.closing.s4.closes.p],
-      gaps: [
-        { l:'Calls',      a:c.calls.a,     p:c.calls.p      },
-        { l:'Lives',      a:c.lives.a,     p:c.lives.p      },
-        { l:'Offres',     a:c.offres.a,    p:c.offres.p     },
-        { l:'Closes',     a:c.closes.a,    p:c.closes.p     },
-        { l:'Contracté',  a:c.contracte.a, p:c.contracte.p, eu:true },
-      ],
-    };
+  for (let m = 0; m < 12; m++) {
+    const mk = MF[m] + ' ' + _year;
+    const fsKey = `${_year}-${String(m+1).padStart(2,'0')}`;
+    results[mk] = {};
+
+    for (const uid of SYNC_UIDS) {
+      let data = null;
+      if (db) {
+        try {
+          const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+          const snap = await ref.get();
+          if (snap.exists) {
+            const raw = snap.data();
+            data = { closing: null, setting: null };
+            if (raw.closing_total) data.closing = raw.closing_total;
+            else if (raw.closing) {
+              const t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
+              ['s1','s2','s3','s4','s5'].forEach(w => { if (raw.closing[w]) Object.keys(t).forEach(k => t[k] += (raw.closing[w][k]||0)); });
+              data.closing = t;
+            }
+            if (raw.setting_total) data.setting = raw.setting_total;
+            else if (raw.setting) {
+              const t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
+              ['s1','s2','s3','s4','s5'].forEach(w => { if (raw.setting[w]) Object.keys(t).forEach(k => t[k] += (raw.setting[w][k]||0)); });
+              data.setting = t;
+            }
+          }
+        } catch(e) {}
+      }
+      // Fallback HIST_DATA
+      if (!data) {
+        const h = HIST_DATA[uid];
+        if (h) {
+          data = { closing: null, setting: null };
+          if (h.closing && h.closing[mk]) data.closing = h.closing[mk];
+          if (h.closing_weekly && h.closing_weekly[mk]) {
+            const t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
+            Object.values(h.closing_weekly[mk]).forEach(w => Object.keys(t).forEach(k => t[k] += (w[k]||0)));
+            data.closing = t;
+          }
+          if (h.setting && h.setting[mk]) data.setting = h.setting[mk];
+          if (h.setting_weekly && h.setting_weekly[mk]) {
+            const t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
+            Object.values(h.setting_weekly[mk]).forEach(w => Object.keys(t).forEach(k => t[k] += (w[k]||0)));
+            data.setting = t;
+          }
+          if (!data.closing && !data.setting) data = null;
+        }
+      }
+      results[mk][uid] = data;
+    }
   }
-
-  if (currentView === 'setting') {
-    return {
-      kpis: [
-        { label:'Calls vs proj.',  val:U.ppv(s.calls.a,s.calls.p),                      color:'#60a5fa' },
-        { label:'Sets obtenus',    val:`${s.sets.a} / ${s.sets.p}`,                      color:'#a78bfa' },
-        { label:'Show-up rate',    val:U.pct(s.showupP.a), sub:'Proj: '+U.pct(s.showupP.p), color: s.showupP.a>=s.showupP.p?'#34d399':'#f59e0b' },
-        { label:'Leads traités',   val:U.num(s.leads.a),                                  color:'#60a5fa' },
-      ],
-      labels:  ['S1','S2','S3','S4'],
-      actuals: [DB.setting.s1.calls.a, DB.setting.s2.calls.a, DB.setting.s3.calls.a, DB.setting.s4.calls.a],
-      projs:   [DB.setting.s1.calls.p, DB.setting.s2.calls.p, DB.setting.s3.calls.p, DB.setting.s4.calls.p],
-      gaps: [
-        { l:'Leads',    a:s.leads.a,    p:s.leads.p    },
-        { l:'Calls',    a:s.calls.a,    p:s.calls.p    },
-        { l:'Sets',     a:s.sets.a,     p:s.sets.p     },
-        { l:'Show-up',  a:s.presents.a, p:s.presents.p },
-        { l:'Closes',   a:s.closes.a,   p:s.closes.p   },
-      ],
-    };
-  }
-
-  // Revenue
-  return {
-    kpis: [
-      { label:'Contracté',     val:U.euro(c.contracte.a), sub:'Proj: '+U.euro(c.contracte.p),                              color:'#ef4444' },
-      { label:'Collecté',      val:U.euro(c.collecte.a),  sub:'Proj: '+U.euro(c.collecte.p),                               color:'#34d399' },
-      { label:'Commissions',   val:U.euro(cm.totalComm),                                                                    color:'#f59e0b' },
-      { label:'Taux collecte', val:U.pct(c.contracte.a>0?c.collecte.a/c.contracte.a:0), sub:'8.3% standard',               color:'#a78bfa' },
-    ],
-    labels:  ['S1','S2','S3','S4'],
-    actuals: [DB.closing.s1.contracte.a, DB.closing.s2.contracte.a, DB.closing.s3.contracte.a, DB.closing.s4.contracte.a],
-    projs:   [DB.closing.s1.contracte.p, DB.closing.s2.contracte.p, DB.closing.s3.contracte.p, DB.closing.s4.contracte.p],
-    gaps: [
-      { l:'Contracté', a:c.contracte.a, p:c.contracte.p, eu:true },
-      { l:'Collecté',  a:c.collecte.a,  p:c.collecte.p,  eu:true },
-    ],
-  };
+  return results;
 }
 
-function renderAll() {
-  const { kpis, labels, actuals, projs, gaps } = buildData();
+/* ── Agréger ── */
+function aggregate(yearData) {
+  const T = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0 };
+  const perMonth = {};
+  let monthsWithData = 0;
+
+  for (let m = 0; m < 12; m++) {
+    const mk = MF[m] + ' ' + _year;
+    const mData = yearData[mk] || {};
+    const mt = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0, hasData:false };
+
+    SYNC_UIDS.forEach(uid => {
+      const d = mData[uid]; if (!d) return;
+      if (d.closing) {
+        mt.hasData = true;
+        ['calls','lives','offres','closes','contracte','collecte'].forEach(k => { mt[k] += (d.closing[k]||0); T[k] += (d.closing[k]||0); });
+      }
+      if (d.setting) {
+        mt.hasData = true;
+        mt.sets += (d.setting.sets||0); T.sets += (d.setting.sets||0);
+        mt.presents += (d.setting.presents||0); T.presents += (d.setting.presents||0);
+      }
+    });
+    perMonth[mk] = mt;
+    if (mt.hasData) monthsWithData++;
+  }
+  return { T, perMonth, monthsWithData };
+}
+
+/* ── RENDER ── */
+let _yearData = null;
+let _agg = null;
+
+async function refreshProj() {
+  document.getElementById('year-lbl').textContent = _year;
+  document.getElementById('obj-badge').textContent = _year;
+  document.getElementById('yr-obj-text').textContent = _year;
+  const obj = YEAR_OBJECTIVES[_year] || 0;
+  document.getElementById('yr-obj-val').textContent = obj > 0 ? U.euro(obj) : 'Non défini';
+
+  _yearData = await loadYearData();
+  _agg = aggregate(_yearData);
+  renderProj();
+}
+
+function renderProj() {
+  if (!_agg) return;
+  const { T, perMonth, monthsWithData } = _agg;
+  const obj = YEAR_OBJECTIVES[_year] || 0;
+  const objMensuel = obj > 0 ? obj / 12 : 0;
+  const atteinte = obj > 0 ? T.contracte / obj : 0;
+  const now = new Date();
+  const currentMonth = (now.getFullYear() === _year) ? now.getMonth() : (_year < now.getFullYear() ? 12 : 0);
+  const avgPerMonth = monthsWithData > 0 ? T.contracte / monthsWithData : 0;
+  const projFin = avgPerMonth * 12;
+  const deltaObj = obj - T.contracte;
+  const remainingMonths = Math.max(12 - currentMonth, 1);
+  const neededPerMonth = deltaObj > 0 ? deltaObj / remainingMonths : 0;
+
+  // Month grid
+  document.getElementById('month-grid').innerHTML = MF.map((m, i) => {
+    const mk = m + ' ' + _year;
+    const md = perMonth[mk];
+    return `<div class="month-btn${md && md.hasData ? ' has-data' : ''}">${m.slice(0,3)}</div>`;
+  }).join('');
 
   // KPIs
-  document.getElementById('kpis').innerHTML = kpis.map(k =>
-    U.kpiCard({ label:k.label, val:k.val, sub:k.sub, color:k.color })).join('');
+  document.getElementById('proj-kpis').innerHTML = [
+    { label:'Contracté YTD', val:U.euro(T.contracte), sub:`${T.closes} closes en ${monthsWithData} mois`, color:'#ef4444' },
+    { label:'Atteinte objectif', val:(atteinte*100).toFixed(1)+'%', sub:obj > 0 ? `sur ${U.euro(obj)}` : 'Pas d\'objectif', color: atteinte >= 0.5 ? '#34d399' : atteinte >= 0.25 ? '#f59e0b' : '#ef4444' },
+    { label:'Projection fin année', val:U.euro(projFin), sub:projFin >= obj ? '✅ Au-dessus objectif' : `⚠️ Manque ${U.euro(obj-projFin)}`, color: projFin >= obj ? '#34d399' : '#f59e0b' },
+    { label:'Rythme nécessaire', val:neededPerMonth > 0 ? U.euro(neededPerMonth) + '/mois' : '✅ Objectif atteint', sub:`${remainingMonths} mois restants`, color:'#60a5fa' },
+  ].map(k => `<div class="yr-kpi" style="--kc:${k.color}"><div class="yr-kpi-label">${k.label}</div><div class="yr-kpi-val">${k.val}</div><div class="yr-kpi-sub">${k.sub}</div></div>`).join('');
 
-  // Chart
-  document.getElementById('chart').innerHTML = U.barChart(labels, actuals, projs);
+  // Objective gauge
+  const pct = Math.min(atteinte * 100, 100);
+  const gColor = pct >= 75 ? 'var(--green)' : pct >= 40 ? 'var(--gold)' : 'var(--red2)';
+  document.getElementById('obj-gauge').innerHTML = `
+    <div class="obj-gauge-val" style="color:${gColor}">${(atteinte*100).toFixed(1)}%</div>
+    <div style="font-size:12px;color:var(--muted);margin:4px 0">${U.euro(T.contracte)} / ${U.euro(obj)}</div>
+    <div class="obj-gauge-track"><div class="obj-gauge-fill" style="width:${pct}%;background:linear-gradient(90deg,${gColor},${gColor}88)"></div></div>
+    <div class="obj-gauge-labels"><span>0 €</span><span>${U.euro(obj/2)}</span><span>${U.euro(obj)}</span></div>
+    <div style="margin-top:14px;font-size:11px;color:var(--muted)">
+      Delta: <b style="color:${deltaObj > 0 ? 'var(--red2)' : 'var(--green)'}">${deltaObj > 0 ? '−' : '+'} ${U.euro(Math.abs(deltaObj))}</b>
+    </div>`;
+
+  // Forecast
+  document.getElementById('proj-forecast').innerHTML = `
+    <div style="text-align:center;padding:8px 0">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Si le rythme actuel continue</div>
+      <div style="font-size:36px;font-weight:800;font-family:var(--font-d);color:${projFin >= obj ? 'var(--green)' : 'var(--gold)'}">${U.euro(projFin)}</div>
+      <div style="font-size:12px;color:var(--muted);margin:8px 0">Basé sur ${U.euro(avgPerMonth)}/mois (${monthsWithData} mois)</div>
+      <div style="margin-top:12px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">SCÉNARIOS</div>
+        <div style="font-size:12px;color:var(--text);margin-bottom:4px">
+          📈 Optimiste (+30%): <b style="color:var(--green)">${U.euro(projFin * 1.3)}</b>
+        </div>
+        <div style="font-size:12px;color:var(--text);margin-bottom:4px">
+          📊 Réaliste: <b style="color:var(--gold)">${U.euro(projFin)}</b>
+        </div>
+        <div style="font-size:12px;color:var(--text)">
+          📉 Pessimiste (−20%): <b style="color:var(--red2)">${U.euro(projFin * 0.8)}</b>
+        </div>
+      </div>
+    </div>`;
+
+  // Chart — contracté par mois vs objectif mensuel
+  const chartData = [];
+  MF.forEach((m, i) => {
+    const mk = m + ' ' + _year;
+    const md = perMonth[mk];
+    const isPast = md && md.hasData;
+    const isFuture = !isPast && i >= currentMonth;
+    chartData.push({ label: m.slice(0,3), ct: isPast ? md.contracte : 0, obj: objMensuel, proj: isFuture ? avgPerMonth : 0, hasData: isPast, isFuture });
+  });
+  const maxC = Math.max(...chartData.map(c => Math.max(c.ct, c.obj, c.proj)), 1);
+
+  document.getElementById('chart-title').textContent = `Contracté mensuel vs Rythme objectif — ${_year}`;
+  document.getElementById('proj-chart').innerHTML = chartData.map(c => {
+    const hReal = (c.ct / maxC * 200).toFixed(0);
+    const hObj = (c.obj / maxC * 200).toFixed(0);
+    const hProj = (c.proj / maxC * 200).toFixed(0);
+    return `<div class="proj-chart-col">
+      <div class="proj-chart-tooltip">${c.label}: ${c.hasData ? U.euro(c.ct) : c.isFuture ? 'Proj: '+U.euro(c.proj) : '—'} · Obj: ${U.euro(c.obj)}</div>
+      <div class="proj-chart-bars">
+        ${c.hasData ? `<div class="proj-chart-bar bar-real" style="height:${hReal}px"></div>` : ''}
+        ${c.isFuture ? `<div class="proj-chart-bar bar-proj-end" style="height:${hProj}px"></div>` : ''}
+        <div class="proj-chart-bar bar-obj" style="height:${hObj}px"></div>
+      </div>
+      <div class="proj-chart-lbl">${c.label}</div>
+    </div>`;
+  }).join('');
 
   // Gap analysis
-  document.getElementById('gaps').innerHTML = gaps.map(g => {
-    const ecart  = g.p - g.a;
-    const isGood = ecart <= 0;
-    const sign   = ecart > 0 ? '−' : '+';
-    const disp   = g.eu ? U.euro(Math.abs(ecart)) : Math.abs(ecart);
-    return `
-      <div class="pr">
-        <div class="pr-l">${g.l}</div>
-        <div class="pr-val">${g.eu?U.euro(g.a):g.a} / ${g.eu?U.euro(g.p):g.p}</div>
-        <div class="pr-pct" style="color:${isGood?'var(--green)':'var(--red2)'}">
-          ${sign} ${disp}
-        </div>
-      </div>`;
+  const objCloses = obj > 0 ? Math.ceil(obj / 6000) : 0; // ~6000€ par close en moyenne
+  const objCalls = Math.ceil(objCloses / 0.15); // ~15% close rate
+  const objLives = Math.ceil(objCalls * 0.5);
+  const objOffres = Math.ceil(objLives * 0.5);
+
+  const gaps = [
+    { l:'Contracté', a:T.contracte, p:obj, eu:true },
+    { l:'Collecté', a:T.collecte, p:obj*0.083, eu:true },
+    { l:'Closes', a:T.closes, p:objCloses },
+    { l:'Offres', a:T.offres, p:objOffres },
+    { l:'Calls closing', a:T.calls, p:objCalls },
+    { l:'Sets (setting)', a:T.sets, p:objCloses*3 },
+  ];
+  document.getElementById('proj-gaps').innerHTML = gaps.map(g => {
+    const pct = g.p > 0 ? Math.min(g.a / g.p * 100, 100) : 0;
+    const delta = g.a - g.p;
+    const isGood = delta >= 0;
+    return `<div class="gap-row">
+      <div class="gap-label">${g.l}</div>
+      <div class="gap-track"><div class="gap-fill ${isGood?'good':'bad'}" style="width:${Math.max(pct,3)}%"></div></div>
+      <div class="gap-val">${g.eu ? U.euro(g.a) : g.a} / ${g.eu ? U.euro(g.p) : g.p}</div>
+      <div class="gap-delta" style="color:${isGood?'var(--green)':'var(--red2)'}">${isGood?'+':'−'}${g.eu ? U.euro(Math.abs(delta)) : Math.abs(delta)}</div>
+    </div>`;
   }).join('');
+
+  // Months table
+  const monthsData = MF.map((m, i) => {
+    const mk = m + ' ' + _year;
+    const md = perMonth[mk];
+    return { name: m, ...md, mk };
+  }).filter(m => m.hasData);
+
+  let cumul = 0;
+  document.getElementById('proj-months').innerHTML = `<table class="yr-table">
+    <thead><tr><th>Mois</th><th>Contracté</th><th>Cumulé</th><th>vs Objectif</th><th>Closes</th></tr></thead>
+    <tbody>
+      ${monthsData.map((m, i) => {
+        cumul += m.contracte;
+        const objCumul = objMensuel * (MF.indexOf(m.name) + 1);
+        const delta = cumul - objCumul;
+        return `<tr>
+          <td style="font-family:var(--font-b)">${m.name}</td>
+          <td>${U.euro(m.contracte)}</td>
+          <td>${U.euro(cumul)}</td>
+          <td class="${delta >= 0 ? 'td-good' : 'td-bad'}">${delta >= 0 ? '+' : '−'}${U.euro(Math.abs(delta))}</td>
+          <td>${m.closes}</td>
+        </tr>`;
+      }).join('')}
+      <tr class="tr-total">
+        <td style="font-family:var(--font-b)">Total</td>
+        <td>${U.euro(T.contracte)}</td>
+        <td>${U.euro(cumul)}</td>
+        <td class="${cumul - objMensuel * monthsData.length >= 0 ? 'td-good' : 'td-bad'}">${cumul >= objMensuel*monthsData.length ? '+' : '−'}${U.euro(Math.abs(cumul - objMensuel*monthsData.length))}</td>
+        <td>${T.closes}</td>
+      </tr>
+    </tbody>
+  </table>`;
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('month-lbl').textContent = currentMonthKey();
-  document.getElementById('sub-month').textContent = currentMonthKey();
+/* ── INIT ── */
+document.addEventListener('DOMContentLoaded', async function() {
   const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
   document.getElementById('tb-nm').textContent = nm;
   document.getElementById('tb-av').textContent = nm[0].toUpperCase();
 
-  // ── Sync live data from Closing/Setting/Commissions localStorage ──
-  syncBridge_loadMonth(currentMonthKey());
-  renderAll();
-
-  // Refresh quand DB est mis à jour
-  document.addEventListener('db:updated', renderAll);
-
-  // Firebase (optionnel, si dispo)
   const _fbUser = U.getCurrentUser();
   if (window.firebase && window.firebase.firestore && !Fire.db) {
     Fire.init(window.firebase.firestore(), _fbUser.uid);
   }
-  if (Fire.db) {
-    Fire.watchUser(_fbUser.uid, currentMonthKey(), (data) => {
-      if (data) { Fire.apply(data); renderAll(); }
-    });
-  }
+
+  await refreshProj();
 });
-
 </script>
-
 </body>
 </html>
