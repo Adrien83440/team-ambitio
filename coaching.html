@@ -806,8 +806,15 @@ function getMonthlyQuota(programme){
   return 1;
 }
 
+function getAllSessions(c){
+  // Aggregate sessions from years (new system) + legacy flat sessions
+  const fromYears = (c.years||[]).reduce((acc,y)=>acc.concat(y.sessions||[]),[]);
+  const legacy = (c.sessions||[]).filter(s=>!fromYears.find(fy=>fy.numero===s.numero));
+  return fromYears.concat(legacy);
+}
+
 function getSessionsInMonth(c, year, month){
-  return (c.sessions||[]).filter(s=>{
+  return getAllSessions(c).filter(s=>{
     if(s.statut!=='fait' || !s.date) return false;
     const d = new Date(s.date);
     return d.getFullYear()===year && d.getMonth()===month;
@@ -929,7 +936,7 @@ function applyFilters(){
     if(q && !c.nom.toLowerCase().includes(q) && !(c.email||'').toLowerCase().includes(q) && !(c.activite||'').toLowerCase().includes(q)) return false;
     if(prog && c.programme !== prog) return false;
     if(coach){
-      const hasCoach = (c.sessions||[]).some(s=>normalizeCoach(s.coach)===coach);
+      const hasCoach = getAllSessions(c).some(s=>normalizeCoach(s.coach)===coach);
       if(!hasCoach) return false;
     }
     return true;
@@ -961,7 +968,7 @@ function applyFilters(){
   }
 
   document.getElementById('statTotal').textContent    = _filtered.length;
-  document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>(c.sessions||[]).filter(s=>s.statut==='fait').length+s,0);
+  document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>getAllSessions(c).filter(s=>s.statut==='fait').length+s,0);
   document.getElementById('statInactive').textContent = inactifs.length;
   updateQuotaStats();
   render();
@@ -1050,7 +1057,7 @@ function renderCard(c){
   const alertText = getAlertText(c);
   const isInactive = c.statut === 'inactif';
   const barColor = isInactive ? '#94a3b8' : (pct>=100?'var(--green)':pct>=50?'var(--blue-main)':pct>=25?'var(--orange)':'var(--red)');
-  const lastCoach = (c.sessions||[]).filter(s=>s.coach&&s.statut==='fait').pop();
+  const lastCoach = getAllSessions(c).filter(s=>s.coach&&s.statut==='fait').pop();
   
   // Quota for viewed month
   const q = getQuotaStatus(c, _viewYear, _viewMonth);
@@ -1311,8 +1318,6 @@ function openDetail(id){
   const barColor=pct>=100?'var(--green)':pct>=50?'var(--blue-main)':'var(--orange)';
   const alert=getAlertStatus(c);
   const alertText=getAlertText(c);
-  const sessions=(c.sessions||[]).sort((a,b)=>a.numero-b.numero);
-  
   // Quota
   const q = getQuotaStatus(c, _viewYear, _viewMonth);
   const qHistory = getQuotaHistory(c);
@@ -1703,6 +1708,7 @@ async function createClient(){
   const nbTotal = nbMatch ? parseInt(nbMatch[1]) : 12;
 
   const sessions = generateSessionsTemplate(programme, nbTotal);
+  const entryDate = document.getElementById('nc-date').value||new Date().toISOString().slice(0,10);
 
   const id = 'cli_'+Date.now();
   const client = {
@@ -1711,11 +1717,17 @@ async function createClient(){
     tel: document.getElementById('nc-tel').value.trim(),
     activite: document.getElementById('nc-activite').value.trim(),
     programme,
-    dateEntree: document.getElementById('nc-date').value||new Date().toISOString().slice(0,10),
+    dateEntree: entryDate,
     nbCoachingsTotal: nbTotal,
     nbCoachingsFaits: 0,
     lastSessionDate: '',
     sessions,
+    years: [{
+      yearNum: 1, label: 'Année 1',
+      startDate: entryDate,
+      notes: programme,
+      sessions: sessions
+    }],
     planAction: '',
     statut: 'actif'
   };
