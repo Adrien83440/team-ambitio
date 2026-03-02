@@ -582,6 +582,165 @@ function yearLabel() { return String(_year); }
 function prevYear() { _year--; _drillMonth = null; refreshYear(); }
 function nextYear() { _year++; _drillMonth = null; refreshYear(); }
 
+/* ═══════════════════════════════════════════════════════════
+   DONNÉES HISTORIQUES HARDCODÉES (source de vérité initiale)
+   Migrées vers Firestore au premier chargement
+═══════════════════════════════════════════════════════════ */
+const HIST_DATA = {
+  guillaume: {
+    closing: {
+      'Juillet 2025':   { calls:23,lives:20,offres:14,closes:6,hardClose:6,followUp:0,contracte:33020.4,collecte:3342.4 },
+      'Août 2025':      { calls:39,lives:25,offres:20,closes:4,hardClose:4,followUp:0,contracte:30282.0,collecte:1998.75 },
+      'Septembre 2025': { calls:18,lives:11,offres:8,closes:2,hardClose:2,followUp:0,contracte:11512.8,collecte:959.4 },
+      'Octobre 2025':   { calls:9,lives:9,offres:8,closes:1,hardClose:1,followUp:0,contracte:5756.4,collecte:479.7 },
+      'Novembre 2025':  { calls:5,lives:2,offres:1,closes:1,hardClose:1,followUp:0,contracte:2300.0,collecte:1149.0 },
+      'Décembre 2025':  { calls:0,lives:0,offres:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0 },
+      'Janvier 2026':   { calls:10,lives:5,offres:4,closes:2,hardClose:2,followUp:0,contracte:14400,collecte:720 },
+    },
+    closing_weekly: {
+      'Février 2026': {
+        s1:{calls:8,lives:2,offres:1,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s2:{calls:8,lives:4,offres:2,closes:2,hardClose:2,followUp:0,contracte:12000,collecte:1000},
+        s3:{calls:8,lives:6,offres:2,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s4:{calls:10,lives:7,offres:3,closes:1,hardClose:1,followUp:0,contracte:7200,collecte:600},
+      },
+    },
+    setting: {
+      'Janvier 2026': { tempsAppel:0,leads:0,calls:225,decroches:51,propRdv:8,sets:8,presents:6,closes:2,collecte:0 },
+    },
+    setting_weekly: {
+      'Février 2026': {
+        s1:{tempsAppel:5,leads:133,calls:231,decroches:56,propRdv:13,sets:9,presents:2,closes:0,collecte:0},
+        s2:{tempsAppel:7,leads:191,calls:324,decroches:54,propRdv:17,sets:11,presents:4,closes:2,collecte:1000},
+        s3:{tempsAppel:3,leads:178,calls:312,decroches:43,propRdv:24,sets:17,presents:7,closes:0,collecte:0},
+        s4:{tempsAppel:3,leads:49,calls:16,decroches:23,propRdv:7,sets:4,presents:7,closes:1,collecte:600},
+      },
+    },
+  },
+  elodie: {
+    closing: {
+      'Juillet 2025':   { calls:29,lives:24,offres:19,closes:7,hardClose:7,followUp:0,contracte:22748.6,collecte:13629.0 },
+      'Août 2025':      { calls:28,lives:19,offres:14,closes:5,hardClose:5,followUp:0,contracte:28782.0,collecte:799.5 },
+      'Septembre 2025': { calls:24,lives:17,offres:10,closes:2,hardClose:2,followUp:0,contracte:11512.8,collecte:959.4 },
+      'Octobre 2025':   { calls:8,lives:2,offres:2,closes:1,hardClose:1,followUp:0,contracte:5756.4,collecte:239.85 },
+      'Novembre 2025':  { calls:13,lives:7,offres:3,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0 },
+      'Décembre 2025':  { calls:16,lives:10,offres:8,closes:1,hardClose:1,followUp:0,contracte:5756.4,collecte:399.75 },
+      'Janvier 2026':   { calls:46,lives:28,offres:13,closes:7,hardClose:7,followUp:0,contracte:34069.2,collecte:3966.12 },
+    },
+    closing_weekly: {
+      'Février 2026': {
+        s1:{calls:11,lives:2,offres:1,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s2:{calls:14,lives:7,offres:2,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
+        s3:{calls:15,lives:2,offres:2,closes:1,hardClose:0,followUp:0,contracte:6000,collecte:6000},
+        s4:{calls:9,lives:5,offres:0,closes:2,hardClose:0,followUp:0,contracte:9600,collecte:1400},
+      },
+    },
+    setting: {
+      'Décembre 2025': { tempsAppel:0,leads:0,calls:81,decroches:27,propRdv:15,sets:15,presents:4,closes:0,collecte:0 },
+      'Janvier 2026':  { tempsAppel:0,leads:0,calls:470,decroches:112,propRdv:64,sets:39,presents:17,closes:6,collecte:0 },
+    },
+    setting_weekly: {
+      'Février 2026': {
+        s1:{tempsAppel:9,leads:33,calls:165,decroches:30,propRdv:10,sets:7,presents:0,closes:0,collecte:0},
+        s2:{tempsAppel:8,leads:50,calls:162,decroches:20,propRdv:10,sets:8,presents:2,closes:0,collecte:0},
+        s3:{tempsAppel:0,leads:56,calls:122,decroches:15,propRdv:13,sets:11,presents:5,closes:0,collecte:0},
+        s4:{tempsAppel:0,leads:22,calls:65,decroches:7,propRdv:3,sets:2,presents:2,closes:1,collecte:0},
+      },
+    },
+  },
+};
+
+/* ── Convertir monthLabel → Firestore key ── */
+function _mToFs(monthLabel) {
+  const parts = monthLabel.split(' ');
+  const m = MF.indexOf(parts[0]);
+  if (m < 0) return null;
+  return `${parts[1]}-${String(m+1).padStart(2,'0')}`;
+}
+
+/* ── Migrer les données hardcodées vers Firestore (one-shot) ── */
+async function migrateHistToFirestore() {
+  const db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
+  if (!db) return;
+
+  // Vérifier si déjà migré
+  try {
+    const flag = localStorage.getItem('_hist_migrated_v2');
+    if (flag === '1') return;
+  } catch(e) {}
+
+  console.log('[dashboard] Migration des données historiques vers Firestore...');
+  let count = 0;
+
+  for (const uid of SYNC_UIDS) {
+    const h = HIST_DATA[uid];
+    if (!h) continue;
+
+    // Closing totaux (mois historiques)
+    for (const [mk, data] of Object.entries(h.closing || {})) {
+      const fsKey = _mToFs(mk);
+      if (!fsKey) continue;
+      const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+      try {
+        const snap = await ref.get();
+        const existing = snap.exists ? snap.data() : {};
+        if (!existing.closing_total) {
+          await ref.set({ closing_total: data, _migrated: true }, { merge: true });
+          count++;
+        }
+      } catch(e) { console.warn('[migration]', uid, mk, e.message); }
+    }
+
+    // Closing weekly
+    for (const [mk, weeks] of Object.entries(h.closing_weekly || {})) {
+      const fsKey = _mToFs(mk);
+      if (!fsKey) continue;
+      const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+      try {
+        const snap = await ref.get();
+        const existing = snap.exists ? snap.data() : {};
+        if (!existing.closing) {
+          await ref.set({ closing: weeks, _migrated: true }, { merge: true });
+          count++;
+        }
+      } catch(e) { console.warn('[migration]', uid, mk, e.message); }
+    }
+
+    // Setting totaux
+    for (const [mk, data] of Object.entries(h.setting || {})) {
+      const fsKey = _mToFs(mk);
+      if (!fsKey) continue;
+      const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+      try {
+        const snap = await ref.get();
+        const existing = snap.exists ? snap.data() : {};
+        if (!existing.setting_total) {
+          await ref.set({ setting_total: data, _migrated: true }, { merge: true });
+          count++;
+        }
+      } catch(e) { console.warn('[migration]', uid, mk, e.message); }
+    }
+
+    // Setting weekly
+    for (const [mk, weeks] of Object.entries(h.setting_weekly || {})) {
+      const fsKey = _mToFs(mk);
+      if (!fsKey) continue;
+      const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+      try {
+        const snap = await ref.get();
+        const existing = snap.exists ? snap.data() : {};
+        if (!existing.setting) {
+          await ref.set({ setting: weeks, _migrated: true }, { merge: true });
+          count++;
+        }
+      } catch(e) { console.warn('[migration]', uid, mk, e.message); }
+    }
+  }
+
+  try { localStorage.setItem('_hist_migrated_v2', '1'); } catch(e) {}
+  console.log(`[dashboard] Migration terminée: ${count} documents écrits`);
+}
+
 /* ── Charger TOUTES les données de l'année depuis Firestore ── */
 async function loadYearData() {
   const db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
@@ -654,6 +813,39 @@ async function loadYearData() {
               data.setting = t;
             }
           }
+        }
+      }
+
+      // Fallback HIST_DATA (données hardcodées)
+      if (!data) {
+        const h = HIST_DATA[uid];
+        if (h) {
+          data = { closing: null, setting: null };
+          // Closing total historique
+          if (h.closing && h.closing[monthKey]) {
+            data.closing = h.closing[monthKey];
+          }
+          // Closing weekly
+          if (h.closing_weekly && h.closing_weekly[monthKey]) {
+            const weeks = h.closing_weekly[monthKey];
+            const t = {};
+            ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
+            Object.values(weeks).forEach(w => Object.keys(t).forEach(k => t[k] += (w[k] || 0)));
+            data.closing = t;
+          }
+          // Setting total historique
+          if (h.setting && h.setting[monthKey]) {
+            data.setting = h.setting[monthKey];
+          }
+          // Setting weekly
+          if (h.setting_weekly && h.setting_weekly[monthKey]) {
+            const weeks = h.setting_weekly[monthKey];
+            const t = {};
+            ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
+            Object.values(weeks).forEach(w => Object.keys(t).forEach(k => t[k] += (w[k] || 0)));
+            data.setting = t;
+          }
+          if (!data.closing && !data.setting) data = null;
         }
       }
 
@@ -929,6 +1121,9 @@ document.addEventListener('DOMContentLoaded', async function() {
   if (window.firebase && window.firebase.firestore && !Fire.db) {
     Fire.init(window.firebase.firestore(), _fbUser.uid);
   }
+
+  // Migrer les données historiques vers Firestore (one-shot)
+  await migrateHistToFirestore();
 
   await refreshYear();
 });
