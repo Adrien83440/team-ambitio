@@ -186,6 +186,9 @@
   </div>
 </div>
 
+<!-- CALENDAR FILTERS -->
+<div id="calLegend" style="padding:8px 28px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:white;border-bottom:1px solid var(--border)"></div>
+
 <div id="weekView" style="padding:0 28px 28px">
   <div style="padding:60px;text-align:center;color:var(--muted)">⏳ Chargement…</div>
 </div>
@@ -231,50 +234,78 @@
 // GOOGLE CALENDAR — PUBLIC API
 // ══════════════════════════════════════════════
 
-// ⚠️  REMPLACE cette valeur par ta clé API Google (voir instructions)
+// ── CONFIGURATION MULTI-CALENDRIERS ──
 var GCAL_API_KEY = 'AIzaSyAQqk_05zaAIyDY5sI2mmn1oYbbuRrw_ZY';
-var GCAL_ID = 'coaching@adrienemily.com';
 var GCAL_BASE = 'https://www.googleapis.com/calendar/v3/calendars';
 
-var _events = [];
-var _view = 'week';
-var _vd = new Date(); // view date
+var CALENDARS = [
+  { id: 'coaching@adrienemily.com',
+    label: 'Coaching (principal)',
+    color: '#3b82f6', bg: '#eff6ff', textColor: '#1e40af', enabled: true },
+  { id: 'c_5898d324e45cc9b88c06ddd404f34e94d296c10dbf0f7aaaa61832c1964f003d@group.calendar.google.com',
+    label: 'Edouard',
+    color: '#10b981', bg: '#d1fae5', textColor: '#065f46', enabled: true },
+  { id: 'c_c56c1da8ccae6157369a62f92d5522a911f25d25123daa0c69bc15b07af1ae25@group.calendar.google.com',
+    label: 'Mickael',
+    color: '#f59e0b', bg: '#fef3c7', textColor: '#92400e', enabled: true },
+];
 
-// ── FETCH ──
-async function fetchEvents(tMin, tMax){
-  var calId = encodeURIComponent(GCAL_ID);
+var _allEvents = [];
+var _events = []; // filtered
+var _view = 'week';
+var _vd = new Date();
+
+// ── FETCH ALL CALENDARS ──
+async function fetchAllCalendars(tMin, tMax){
+  var results = await Promise.allSettled(
+    CALENDARS.map(function(cal){ return fetchOneCalendar(cal, tMin, tMax); })
+  );
+  var all = [];
+  var errors = [];
+  results.forEach(function(r, i){
+    if(r.status === 'fulfilled') all = all.concat(r.value);
+    else errors.push(CALENDARS[i].label);
+  });
+  if(errors.length > 0 && all.length === 0){
+    showErr('⚠️','Impossible de charger les calendriers: '+errors.join(', '));
+  } else if(errors.length > 0){
+    showToast('⚠️ Calendrier(s) inaccessible(s): '+errors.join(', '),'error');
+  }
+  // Sort by start time
+  all.sort(function(a,b){ return a.start - b.start; });
+  return all;
+}
+
+async function fetchOneCalendar(cal, tMin, tMax){
+  var calId = encodeURIComponent(cal.id);
   var params = 'key='+GCAL_API_KEY
     +'&timeMin='+tMin.toISOString()
     +'&timeMax='+tMax.toISOString()
     +'&singleEvents=true&orderBy=startTime&maxResults=250';
   var url = GCAL_BASE+'/'+calId+'/events?'+params;
-  try{
-    var res = await fetch(url);
-    if(!res.ok){
-      var err = await res.json().catch(function(){return {};});
-      if(res.status===403||res.status===401){
-        showErr('🔑','Clé API invalide ou Calendar API non activée dans Google Cloud Console.');
-      } else if(res.status===404){
-        showErr('🔍','Calendrier introuvable. Vérifie que <b>coaching@adrienemily.com</b> est partagé publiquement.');
-      } else {
-        showErr('⚠️','Erreur '+res.status+': '+(err.error?err.error.message:res.statusText));
-      }
-      return [];
-    }
-    var data = await res.json();
-    return (data.items||[]).map(parseEv);
-  }catch(e){
-    showErr('🌐','Impossible de contacter Google Calendar.');
-    return [];
+  var res = await fetch(url);
+  if(!res.ok){
+    var err = await res.json().catch(function(){return {};});
+    console.error('Calendar error ['+cal.label+']:', res.status, err);
+    throw new Error(cal.label+': '+(err.error?err.error.message:res.statusText));
   }
+  var data = await res.json();
+  return (data.items||[]).map(function(item){ return parseEv(item, cal); });
 }
 
-function parseEv(item){
+function parseEv(item, cal){
   var s = item.start&&item.start.dateTime ? new Date(item.start.dateTime) : new Date((item.start&&item.start.date||'')+'T00:00:00');
   var e = item.end&&item.end.dateTime ? new Date(item.end.dateTime) : new Date((item.end&&item.end.date||'')+'T23:59:59');
   var allDay = !item.start||!item.start.dateTime;
   var title = item.summary||'(Sans titre)';
-  return {id:item.id,title:title,desc:item.description||'',loc:item.location||'',start:s,end:e,allDay:allDay,type:classEv(title),link:item.htmlLink||''};
+  return {id:item.id,title:title,desc:item.description||'',loc:item.location||'',start:s,end:e,allDay:allDay,
+    type:classEv(title),link:item.htmlLink||'',
+    calId:cal.id, calLabel:cal.label, calColor:cal.color, calBg:cal.bg, calTextColor:cal.textColor};
+}
+
+function applyFilters(){
+  var enabledIds = CALENDARS.filter(function(c){return c.enabled;}).map(function(c){return c.id;});
+  _events = _allEvents.filter(function(ev){return enabledIds.indexOf(ev.calId)!==-1;});
 }
 
 function classEv(t){
@@ -307,9 +338,11 @@ async function loadEv(){
   var d=new Date(_vd);
   var min=new Date(d.getFullYear(),d.getMonth()-1,1);
   var max=new Date(d.getFullYear(),d.getMonth()+2,0,23,59,59);
-  document.getElementById('weekView').innerHTML='<div style="padding:60px;text-align:center;color:var(--muted)">⏳ Chargement du calendrier…</div>';
-  _events=await fetchEvents(min,max);
+  document.getElementById('weekView').innerHTML='<div style="padding:60px;text-align:center;color:var(--muted)">⏳ Chargement des calendriers…</div>';
+  _allEvents=await fetchAllCalendars(min,max);
+  applyFilters();
   updateStats();
+  renderCalendarLegend();
 }
 
 function updateStats(){
@@ -398,8 +431,8 @@ function renderWeek(){
       if(!cell) return;
       cell.style.overflow='visible';
       var el=document.createElement('div');
-      el.className='cal-event '+ev.type;
-      el.style.cssText='top:'+topPx+'px;height:'+hPx+'px';
+      el.className='cal-event';
+      el.style.cssText='top:'+topPx+'px;height:'+hPx+'px;background:'+ev.calBg+';color:'+ev.calTextColor+';border-color:'+ev.calColor;
       el.innerHTML=(hPx>28?'<span class="ev-time">'+fmtT(ev.start)+' – '+fmtT(ev.end)+'</span>':'')
         +'<span class="ev-title">'+esc(ev.title)+'</span>';
       el.onclick=function(e){e.stopPropagation();openEP(ev);};
@@ -428,7 +461,7 @@ function renderMonth(){
       h+='<div class="month-day'+(isO?' other-month':'')+(isT?' today':'')+'">';
       h+='<div class="month-day-num">'+cur.getDate()+'</div>';
       devs.slice(0,3).forEach(function(ev){
-        h+='<div class="month-event '+ev.type+'" onclick="openEPById(\''+ev.id+'\')" title="'+esc(ev.title)+'">'
+        h+='<div class="month-event" style="background:'+ev.calBg+';color:'+ev.calTextColor+';border-color:'+ev.calColor+'" onclick="openEPById(\''+ev.id+'\')" title="'+esc(ev.calLabel+': '+ev.title)+'">'
           +(ev.allDay?'':fmtT(ev.start)+' ')+esc(ev.title)+'</div>';
       });
       if(devs.length>3) h+='<div class="month-more">+'+(devs.length-3)+' autre'+(devs.length>4?'s':'')+'</div>';
@@ -464,10 +497,10 @@ function renderList(){
       var t=evLabel(ev.type);
       h+='<div class="list-event-row" onclick="openEPById(\''+ev.id+'\')">'
         +'<div class="list-event-time">'+(ev.allDay?'Journée':fmtT(ev.start)+' – '+fmtT(ev.end))+'</div>'
-        +'<div class="list-event-dot" style="background:'+t.d+'"></div>'
+        +'<div class="list-event-dot" style="background:'+ev.calColor+'"></div>'
         +'<div class="list-event-info">'
         +'<div class="list-event-title">'+esc(ev.title)+'</div>'
-        +'<div class="list-event-meta">'+t.l+(ev.loc?' · 📍 '+esc(ev.loc):'')+'</div>'
+        +'<div class="list-event-meta"><span style="color:'+ev.calTextColor+';background:'+ev.calBg+';padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700">'+esc(ev.calLabel)+'</span> · '+t.l+(ev.loc?' · 📍 '+esc(ev.loc):'')+'</div>'
         +'</div></div>';
     });
     h+='</div>';
@@ -483,7 +516,8 @@ function openEP(ev){
   var durL=dur>=60?Math.floor(dur/60)+'h'+(dur%60>0?String(dur%60).padStart(2,'0'):''):dur+'min';
   var h='<div class="ep-head"><div class="ep-title">'+esc(ev.title)+'</div><button class="ep-close" onclick="closeEP()">✕</button></div>';
   h+='<div class="ep-body">';
-  h+='<div style="margin-bottom:14px"><span class="ep-badge" style="background:'+t.bg+';color:'+t.c+'">'+t.l+'</span></div>';
+  h+='<div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap"><span class="ep-badge" style="background:'+t.bg+';color:'+t.c+'">'+t.l+'</span>'
+    +'<span class="ep-badge" style="background:'+ev.calBg+';color:'+ev.calTextColor+';border:1px solid '+ev.calColor+'">📅 '+esc(ev.calLabel)+'</span></div>';
   h+='<div class="ep-row"><span class="ep-row-icon">📅</span><div><div class="ep-row-label">Date & heure</div><div class="ep-row-val">'
     +ev.start.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
     +(ev.allDay?' (journée entière)':'<br>'+fmtT(ev.start)+' – '+fmtT(ev.end)+' ('+durL+')')
@@ -498,6 +532,34 @@ function openEP(ev){
 function openEPById(id){var ev=_events.find(function(e){return e.id===id;});if(ev)openEP(ev);}
 function closeEP(){document.getElementById('epOverlay').classList.remove('show');}
 
+// ── CALENDAR LEGEND / FILTERS ──
+function renderCalendarLegend(){
+  var h='<span style="font-size:11px;font-weight:700;color:var(--muted);margin-right:4px">Calendriers :</span>';
+  CALENDARS.forEach(function(cal,i){
+    var opacity = cal.enabled ? '1' : '0.35';
+    var strike = cal.enabled ? '' : 'text-decoration:line-through;';
+    h+='<button onclick="toggleCal('+i+')" style="display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;border:1.5px solid '
+      +(cal.enabled ? cal.color : 'var(--border)')
+      +';background:'+(cal.enabled ? cal.bg : 'transparent')
+      +';cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;color:'
+      +(cal.enabled ? cal.textColor : 'var(--muted)')
+      +';transition:all .15s;opacity:'+opacity+';'+strike+'">'
+      +'<span style="width:8px;height:8px;border-radius:3px;background:'+cal.color+';flex-shrink:0"></span>'
+      +esc(cal.label)
+      +'<span style="font-weight:800;font-size:10px;opacity:.6">('
+      +_allEvents.filter(function(e){return e.calId===cal.id;}).length
+      +')</span></button>';
+  });
+  document.getElementById('calLegend').innerHTML=h;
+}
+
+function toggleCal(idx){
+  CALENDARS[idx].enabled = !CALENDARS[idx].enabled;
+  applyFilters();
+  renderCalendarLegend();
+  render();
+}
+
 // ── UTILS ──
 function fmtT(d){return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -506,6 +568,7 @@ async function handleLogout(){await window._signOut(window._auth);window.locatio
 
 window.navigateAgenda=navigateAgenda;window.goToday=goToday;window.setAgendaView=setAgendaView;
 window.openEP=openEP;window.openEPById=openEPById;window.closeEP=closeEP;window.handleLogout=handleLogout;
+window.toggleCal=toggleCal;
 </script>
 </body>
 </html>
