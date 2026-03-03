@@ -627,6 +627,7 @@ const MEMBERS_COMM = [
   {
     uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke',
     role: 'Closing + Setting', color: '#ef4444',
+    careerPtsBase: 10, // Points bonus historiques (avant données trackées)
     data: {
       'Janvier 2026': [
         { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',          offre:'BP 12', type:'Closing', subtype:'mensualise', date:'24/01/2026', contracteHT:6000, collecteHT:0,   comm:0,   bonus:0, notes:'Setting après self booking', ok:false },
@@ -652,6 +653,7 @@ const MEMBERS_COMM = [
   {
     uid: 'elodie', name: 'Elodie', surname: '',
     role: 'Closing + Setting', color: '#60a5fa',
+    careerPtsBase: 13.5, // Points bonus historiques (avant données trackées)
     data: {
       'Janvier 2026': [
         { client:'Céline Louvel',       email:'cblanchet40@orange.fr',            offre:'BP 12', type:'Closing', subtype:'mensualise', date:'06/01/2026', contracteHT:4797, collecteHT:479.7, comm:479.7, bonus:0, notes:'', ok:true },
@@ -743,12 +745,12 @@ function calcPoints(deals) {
 }
 
 function calcTotalPoints(uid) {
-  // Sum all months points
+  // Sum all months points + historical base points
   const m = MEMBERS_COMM.find(m => m.uid === uid);
   if (!m) return 0;
   const allMonths = [...Object.keys(m.data)];
   // Also check localStorage months
-  let total = 0;
+  let total = m.careerPtsBase || 0; // Points historiques
   allMonths.forEach(mo => {
     const deals = getDeals(uid, mo);
     total += calcPoints(deals);
