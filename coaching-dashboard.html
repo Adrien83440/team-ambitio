@@ -156,7 +156,7 @@
 </div>
 <div class="cnav"><div class="cnav-inner"><a class="cnav-tab" href="coaching.html">👥 Clients</a>
 <a class="cnav-tab active" href="coaching-dashboard.html">📊 Dashboard</a>
-<a class="cnav-tab" href="coaching-analyse.html">📈 Analyse</a>
+
 <a class="cnav-tab" href="coaching-agenda.html">📅 Agenda<span class="cnav-badge warn" id="badge-agenda" style="display:none">0</span></a>
 </div></div>
 
@@ -218,9 +218,25 @@ function onClientsLoaded(clients) {
   const now = new Date();
   const curY = now.getFullYear(), curM = now.getMonth();
 
+  // ── COACHS OFFICIELS (même liste que coaching.html) ──
+  const COACHES = ['Mickael','Edouard','Emily','Adrien'];
+  const coachColors = {'Mickael':'#3b82f6','Edouard':'#10b981','Emily':'#f59e0b','Adrien':'#6366f1'};
+
+  function normalizeCoach(raw){
+    if(!raw) return '';
+    const s = raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    if(/^mick|^micha|^mik/.test(s)) return 'Mickael';
+    if(/^edou|^edw|^edo/.test(s)) return 'Edouard';
+    if(/^emil/.test(s)) return 'Emily';
+    if(/^adri/.test(s)) return 'Adrien';
+    const first = raw.trim().split(/[\s.]/)[0];
+    return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+  }
+
   const total    = clients.length;
-  const actifs   = clients.filter(c => (c.nbCoachingsFaits||0) < (c.nbCoachingsTotal||12));
+  const actifs   = clients.filter(c => c.statut !== 'inactif' && (c.nbCoachingsFaits||0) < (c.nbCoachingsTotal||12));
   const termines = clients.filter(c => (c.nbCoachingsFaits||0) >= (c.nbCoachingsTotal||12));
+  const inactifCount = clients.filter(c => c.statut === 'inactif').length;
   const enRetard = actifs.filter(c => getAlertStatus(c) === 'alert');
   const enAttente = actifs.filter(c => getAlertStatus(c) === 'warning');
 
@@ -229,16 +245,67 @@ function onClientsLoaded(clients) {
     ? (clients.reduce((a,c) => a + (c.nbCoachingsFaits||0), 0) / actifs.length).toFixed(1)
     : 0;
 
-  // Workload coachs
-  const coachLoad = {};
-  clients.forEach(c => {
-    if ((c.nbCoachingsFaits||0) >= (c.nbCoachingsTotal||12)) return;
-    (c.sessions||[]).filter(s => s.coach && s.statut==='fait').forEach(s => {
-      coachLoad[s.coach] = (coachLoad[s.coach]||0)+1;
+  // Helper: get all done sessions from years or flat sessions
+  function getAllDoneSessions(c){
+    const sessions = [];
+    if(c.years && c.years.length){
+      c.years.forEach(y => {
+        (y.sessions||[]).forEach(s => {
+          if(s.statut==='fait') sessions.push(s);
+        });
+      });
+    } else {
+      (c.sessions||[]).forEach(s => {
+        if(s.statut==='fait') sessions.push(s);
+      });
+    }
+    return sessions;
+  }
+
+  // ── CHARGE PAR COACH — PAR MOIS (6 derniers mois) ──
+  const coachMonthly = {};
+  COACHES.forEach(co => { coachMonthly[co] = []; });
+
+  for(let i=5; i>=0; i--){
+    const d = new Date(curY, curM-i, 1);
+    const mY = d.getFullYear(), mM = d.getMonth();
+    const mLabel = d.toLocaleDateString('fr-FR',{month:'short'});
+
+    COACHES.forEach(co => {
+      let coaching = 0, rdv72h = 0;
+      clients.forEach(c => {
+        getAllDoneSessions(c).forEach(s => {
+          if(!s.date) return;
+          const sd = new Date(s.date);
+          if(sd.getFullYear()!==mY || sd.getMonth()!==mM) return;
+          if(normalizeCoach(s.coach) !== co) return;
+          if(s.type==='rdv72h' || s.numero===0) rdv72h++;
+          else coaching++;
+        });
+      });
+      coachMonthly[co].push({month:mLabel, year:mY, m:mM, coaching, rdv72h, total: coaching+rdv72h});
     });
+  }
+
+  const coachCurMonth = {};
+  COACHES.forEach(co => {
+    coachCurMonth[co] = coachMonthly[co][5] || {coaching:0, rdv72h:0, total:0};
   });
-  const maxLoad = Math.max(...Object.values(coachLoad), 1);
-  const coachColors = ['#3b82f6','#10b981','#f59e0b','#6366f1','#ef4444','#14b8a6'];
+
+  const coachAllTime = {};
+  COACHES.forEach(co => {
+    let coaching=0, rdv72h=0;
+    clients.forEach(c => {
+      getAllDoneSessions(c).forEach(s => {
+        if(normalizeCoach(s.coach) !== co) return;
+        if(s.type==='rdv72h' || s.numero===0) rdv72h++;
+        else coaching++;
+      });
+    });
+    coachAllTime[co] = {coaching, rdv72h, total: coaching+rdv72h};
+  });
+
+  const maxSpark = Math.max(...COACHES.flatMap(co => coachMonthly[co].map(m=>m.total)), 1);
 
   // Alertes
   const alertClients = actifs
@@ -257,22 +324,32 @@ function onClientsLoaded(clients) {
   clients.forEach(c => { const p = c.programme||'Autre'; progCount[p]=(progCount[p]||0)+1; });
   const progColors = {'BP 12 Mois - 12C':'#3b82f6','BP 12 Mois - 24C':'#10b981','BP 6 Mois - 6C':'#f59e0b','Elite - 12 Mois - 24C':'#6366f1'};
 
-  // Heatmap 6 mois
-  const heatData = [];
-  for (let i=5; i>=0; i--) {
-    const d = new Date(curY, curM-i, 1);
-    heatData.push({
-      label: d.toLocaleDateString('fr-FR',{month:'short'}),
-      count: clients.reduce((acc,c) => acc + getSessionsInMonth(c,d.getFullYear(),d.getMonth()).length, 0)
-    });
-  }
-  const maxHeat = Math.max(...heatData.map(h=>h.count), 1);
-
   // Complétion
   const totalPlanned = clients.reduce((a,c) => a+(c.nbCoachingsTotal||12), 0);
   const totalDone    = clients.reduce((a,c) => a+(c.nbCoachingsFaits||0), 0);
   const completionPct = totalPlanned ? Math.round(totalDone/totalPlanned*100) : 0;
   const ringR = 32, ringCirc = Math.PI*2*ringR;
+
+  // Global 72H vs classique
+  let global72h=0, globalClassique=0;
+  clients.forEach(c => {
+    getAllDoneSessions(c).forEach(s => {
+      if(s.type==='rdv72h' || s.numero===0) global72h++;
+      else globalClassique++;
+    });
+  });
+
+  // Count 72H + classique this month
+  let cm72h=0, cmClassique=0;
+  clients.forEach(c => {
+    getAllDoneSessions(c).forEach(s => {
+      if(!s.date) return;
+      const sd = new Date(s.date);
+      if(sd.getFullYear()!==curY || sd.getMonth()!==curM) return;
+      if(s.type==='rdv72h' || s.numero===0) cm72h++;
+      else cmClassique++;
+    });
+  });
 
   // Inactifs 30j+
   const inactifs30 = actifs
@@ -281,19 +358,21 @@ function onClientsLoaded(clients) {
     .sort((a,b) => b.days-a.days)
     .slice(0,6);
 
+  const curMonthLabel = new Date(curY, curM).toLocaleDateString('fr-FR',{month:'long', year:'numeric'});
+
   document.getElementById('page-content').innerHTML = `
     <div class="kpi-row">
       <div class="kpi-card blue">
         <div class="kpi-icon">👥</div>
         <div class="kpi-label">Clients actifs</div>
         <div class="kpi-val" style="color:var(--blue-main)">${actifs.length}</div>
-        <div class="kpi-sub">${total} au total · ${termines.length} terminé${termines.length>1?'s':''}</div>
+        <div class="kpi-sub">${total} total · ${termines.length} terminé${termines.length>1?'s':''} · ${inactifCount} inactif${inactifCount>1?'s':''}</div>
       </div>
       <div class="kpi-card green">
         <div class="kpi-icon">✅</div>
         <div class="kpi-label">Séances ce mois</div>
         <div class="kpi-val" style="color:var(--green)">${sessionsCeMois}</div>
-        <div class="kpi-sub">Moy. ${avgSessions} séances/client</div>
+        <div class="kpi-sub">🎓 ${cmClassique} coaching · ⚡ ${cm72h} RDV 72H</div>
       </div>
       <div class="kpi-card orange">
         <div class="kpi-icon">⚠️</div>
@@ -301,11 +380,119 @@ function onClientsLoaded(clients) {
         <div class="kpi-val" style="color:var(--orange)">${enRetard.length}</div>
         <div class="kpi-sub">${enAttente.length} en zone d'alerte</div>
       </div>
-      <div class="kpi-card red">
+      <div class="kpi-card purple">
         <div class="kpi-icon">📊</div>
-        <div class="kpi-label">Complétion globale</div>
-        <div class="kpi-val" style="color:var(--blue-main)">${completionPct}%</div>
-        <div class="kpi-sub">${totalDone} / ${totalPlanned} séances</div>
+        <div class="kpi-label">Total séances réalisées</div>
+        <div class="kpi-val" style="color:var(--purple)">${globalClassique + global72h}</div>
+        <div class="kpi-sub">🎓 ${globalClassique} classiques · ⚡ ${global72h} RDV 72H</div>
+      </div>
+    </div>
+
+    <!-- ══ SECTION COACH — MOIS COURANT ══ -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <div class="card-title">👤 Coachings par coach — ${curMonthLabel}</div>
+        <div class="card-sub">🎓 Coaching classique vs ⚡ RDV 72H</div>
+      </div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+          ${COACHES.map(co => {
+            const cm = coachCurMonth[co];
+            return '<div style="background:var(--bg);border-radius:12px;padding:14px;text-align:center;border:1.5px solid var(--border)">'
+              +'<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:'+coachColors[co]+'">'+co+'</div>'
+              +'<div style="font-size:28px;font-weight:800;color:var(--text)">'+cm.total+'</div>'
+              +'<div style="font-size:10px;color:var(--muted);margin-top:4px">ce mois</div>'
+              +'<div style="display:flex;justify-content:center;gap:8px;margin-top:6px">'
+              +'<span style="font-size:11px;font-weight:700;color:var(--blue-main);background:var(--blue-ghost);padding:2px 8px;border-radius:12px">🎓 '+cm.coaching+'</span>'
+              +'<span style="font-size:11px;font-weight:700;color:#92400e;background:#fef3c7;padding:2px 8px;border-radius:12px">⚡ '+cm.rdv72h+'</span>'
+              +'</div></div>';
+          }).join('')}
+        </div>
+        <!-- Sparklines 6 mois par coach -->
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Évolution sur 6 mois</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;padding-left:110px">
+          ${coachMonthly[COACHES[0]].map(m => '<div style="flex:1;text-align:center;font-size:9px;color:var(--muted);font-weight:700">'+m.month+'</div>').join('')}
+        </div>
+        ${COACHES.map(co => {
+          const months = coachMonthly[co];
+          const allTimeTotal = coachAllTime[co].total;
+          return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'
+            +'<div style="min-width:100px;font-size:12px;font-weight:700;color:'+coachColors[co]+'">'+co+'</div>'
+            +'<div style="display:flex;gap:3px;align-items:flex-end;height:32px;flex:1">'
+            +months.map(m => {
+              const hCoach = m.coaching ? Math.max(Math.round(m.coaching/maxSpark*26),4) : 0;
+              const h72 = m.rdv72h ? Math.max(Math.round(m.rdv72h/maxSpark*26),4) : 0;
+              return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0" title="'+m.month+': '+m.coaching+' coaching + '+m.rdv72h+' 72H">'
+                +'<div style="width:100%;display:flex;flex-direction:column-reverse">'
+                +(m.coaching>0 ? '<div style="width:100%;height:'+hCoach+'px;background:'+coachColors[co]+';border-radius:'+(m.rdv72h>0?'0 0 2px 2px':'2px 2px 0 0')+';opacity:0.85"></div>' : '')
+                +(m.rdv72h>0 ? '<div style="width:100%;height:'+h72+'px;background:#fbbf24;border-radius:2px 2px '+(m.coaching>0?'0 0':'2px 2px')+';opacity:0.85"></div>' : '')
+                +(m.total===0 ? '<div style="width:100%;height:3px;background:#f1f5f9;border-radius:2px"></div>' : '')
+                +'</div></div>';
+            }).join('')
+            +'</div>'
+            +'<div style="min-width:60px;text-align:right;font-size:12px;font-weight:700;color:var(--muted)">'+allTimeTotal+' total</div>'
+            +'</div>';
+        }).join('')}
+        <div style="display:flex;gap:16px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><div style="width:10px;height:10px;background:#3b82f6;border-radius:2px"></div> Coaching classique</div>
+          <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)"><div style="width:10px;height:10px;background:#fbbf24;border-radius:2px"></div> RDV 72H</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TABLEAU RÉCAPITULATIF COACH ══ -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head">
+        <div class="card-title">📊 Tableau détaillé par coach (6 mois)</div>
+        <div class="card-sub">Nombre de séances réalisées — contrôle activité</div>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:#f8faff">
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1.5px solid var(--border)">Coach</th>
+              ${coachMonthly[COACHES[0]].map(m => '<th style="padding:10px 8px;text-align:center;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1.5px solid var(--border)">'+m.month+'</th>').join('')}
+              <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;border-bottom:1.5px solid var(--border)">Total global</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${COACHES.map(co => {
+              const months = coachMonthly[co];
+              const at = coachAllTime[co];
+              return '<tr style="border-bottom:1px solid #f1f5f9">'
+                +'<td style="padding:10px 14px;font-weight:700;color:'+coachColors[co]+'">'+co+'</td>'
+                +months.map((m,i) => {
+                  const isCurrent = i===5;
+                  const bg = isCurrent ? 'background:var(--blue-ghost);' : '';
+                  return '<td style="padding:10px 8px;text-align:center;'+bg+'">'
+                    +'<div style="font-weight:700;font-size:14px">'+m.total+'</div>'
+                    +'<div style="font-size:9px;color:var(--muted);margin-top:2px">'
+                    +(m.coaching>0?'🎓'+m.coaching:'')+(m.coaching>0&&m.rdv72h>0?' · ':'')+(m.rdv72h>0?'⚡'+m.rdv72h:'')+(m.total===0?'—':'')
+                    +'</div></td>';
+                }).join('')
+                +'<td style="padding:10px 14px;text-align:center">'
+                +'<div style="font-weight:800;font-size:16px">'+at.total+'</div>'
+                +'<div style="font-size:9px;color:var(--muted);margin-top:2px">🎓'+at.coaching+' · ⚡'+at.rdv72h+'</div>'
+                +'</td></tr>';
+            }).join('')}
+            <tr style="background:#f8faff;font-weight:700">
+              <td style="padding:10px 14px;font-weight:700;color:var(--text)">TOTAL</td>
+              ${coachMonthly[COACHES[0]].map((_,i) => {
+                let tCoach=0, t72h=0;
+                COACHES.forEach(co => { tCoach+=coachMonthly[co][i].coaching; t72h+=coachMonthly[co][i].rdv72h; });
+                const isCurrent = i===5;
+                const bg = isCurrent ? 'background:rgba(26,61,206,.06);' : '';
+                return '<td style="padding:10px 8px;text-align:center;'+bg+'">'
+                  +'<div style="font-weight:800;font-size:14px">'+(tCoach+t72h)+'</div>'
+                  +'<div style="font-size:9px;color:var(--muted);margin-top:2px">🎓'+tCoach+' · ⚡'+t72h+'</div></td>';
+              }).join('')}
+              <td style="padding:10px 14px;text-align:center">
+                <div style="font-weight:800;font-size:16px">${globalClassique+global72h}</div>
+                <div style="font-size:9px;color:var(--muted);margin-top:2px">🎓${globalClassique} · ⚡${global72h}</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -318,52 +505,14 @@ function onClientsLoaded(clients) {
         <div class="card-body">
           ${alertClients.length===0
             ? '<div style="padding:20px;text-align:center;color:var(--muted)">🎉 Tous les clients sont à jour !</div>'
-            : alertClients.map(c => `
-            <a class="alert-row ${c.daysSince>21?'crit':'warn'}" href="coaching.html" onclick="event.preventDefault();window.location='coaching.html'">
-              <div class="alert-dot ${c.daysSince>21?'crit':'warn'}"></div>
-              <div class="alert-info">
-                <div class="alert-name">${c.nom}</div>
-                <div class="alert-desc">${c.programme||'—'} · ${c.lastSessionDate?'Dernier : '+formatDate(c.lastSessionDate):'Jamais eu de séance'}</div>
-              </div>
-              <div class="alert-days ${c.daysSince>21?'crit':'warn'}">${c.daysSince>=999?'∞':c.daysSince+'j'}</div>
-            </a>`).join('')}
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-head">
-          <div class="card-title">👤 Charge par coach</div>
-          <div class="card-sub">Séances réalisées (actifs)</div>
-        </div>
-        <div class="card-body">
-          ${Object.keys(coachLoad).length===0
-            ? '<div style="padding:20px;text-align:center;color:var(--muted)">Aucune donnée</div>'
-            : Object.entries(coachLoad).sort((a,b)=>b[1]-a[1]).map(([coach,count],i) => `
-            <div class="coach-row">
-              <div class="coach-name">${coach}</div>
-              <div class="coach-bar-wrap"><div class="coach-bar" style="width:${Math.round(count/maxLoad*100)}%;background:${coachColors[i%6]}"></div></div>
-              <div class="coach-count">${count} séances</div>
-            </div>`).join('')}
-        </div>
-      </div>
-    </div>
-
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-head">
-          <div class="card-title">📅 Activité mensuelle (6 mois)</div>
-        </div>
-        <div class="card-body">
-          <div style="display:flex;align-items:flex-end;gap:8px;height:90px;margin-bottom:8px">
-            ${heatData.map(h => {
-              const pct = Math.round(h.count/maxHeat*100);
-              const col = pct===0?'#f1f5f9':pct<30?'#bfdbfe':pct<60?'#60a5fa':pct<85?'#2563eb':'#1d4ed8';
-              return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
-                <div style="font-size:12px;font-weight:700">${h.count||''}</div>
-                <div style="width:100%;height:${Math.max(pct*.7,h.count>0?8:4)}px;background:${col};border-radius:4px 4px 0 0"></div>
-                <div style="font-size:10px;color:var(--muted);font-weight:600">${h.label}</div>
-              </div>`;
-            }).join('')}
-          </div>
+            : alertClients.map(c => '<a class="alert-row '+(c.daysSince>21?'crit':'warn')+'" href="coaching.html" onclick="event.preventDefault();window.location=\'coaching.html\'">'
+              +'<div class="alert-dot '+(c.daysSince>21?'crit':'warn')+'"></div>'
+              +'<div class="alert-info">'
+              +'<div class="alert-name">'+c.nom+'</div>'
+              +'<div class="alert-desc">'+(c.programme||'—')+' · '+(c.lastSessionDate?'Dernier : '+formatDate(c.lastSessionDate):'Jamais eu de séance')+'</div>'
+              +'</div>'
+              +'<div class="alert-days '+(c.daysSince>21?'crit':'warn')+'">'+(c.daysSince>=999?'∞':c.daysSince+'j')+'</div>'
+              +'</a>').join('')}
         </div>
       </div>
       <div class="card">
@@ -383,37 +532,34 @@ function onClientsLoaded(clients) {
               <div class="ring-label">Progression<br>globale</div>
             </div>
             <div style="flex:1">
-              ${Object.entries(progCount).map(([prog,count])=>`
-              <div class="prog-row">
-                <div class="prog-dot" style="background:${progColors[prog]||'#94a3b8'}"></div>
-                <div class="prog-name" style="font-size:11px">${prog.replace('Mois','M').replace(' - ','-')}</div>
-                <div class="prog-bar-wrap"><div class="prog-bar" style="width:${Math.round(count/total*100)}%;background:${progColors[prog]||'#94a3b8'}"></div></div>
-                <div class="prog-num">${count}</div>
-              </div>`).join('')}
+              ${Object.entries(progCount).map(([prog,count])=>
+              '<div class="prog-row">'
+              +'<div class="prog-dot" style="background:'+(progColors[prog]||'#94a3b8')+'"></div>'
+              +'<div class="prog-name" style="font-size:11px">'+prog.replace('Mois','M').replace(' - ','-')+'</div>'
+              +'<div class="prog-bar-wrap"><div class="prog-bar" style="width:'+Math.round(count/total*100)+'%;background:'+(progColors[prog]||'#94a3b8')+'"></div></div>'
+              +'<div class="prog-num">'+count+'</div>'
+              +'</div>').join('')}
             </div>
           </div>
         </div>
       </div>
     </div>
-    </div>
 
-    ${inactifs30.length>0?`
-    <div class="card">
-      <div class="card-head">
-        <div class="card-title">💤 Sans coaching depuis 30+ jours</div>
-        <div class="card-sub">${inactifs30.length} client${inactifs30.length>1?'s':''} identifié${inactifs30.length>1?'s':''}</div>
-      </div>
-      <div class="card-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-        ${inactifs30.map(c=>`
-        <div class="inactive-row">
-          <div>
-            <div class="inactive-name">${c.nom}</div>
-            <div class="inactive-meta">${c.programme||'—'}</div>
-          </div>
-          <span class="inactive-badge ${c.days>60?'c3':c.days>45?'c2':'c1'}">${c.days>=999?'Jamais':c.days+'j'}</span>
-        </div>`).join('')}
-      </div>
-    </div>`:''}
+    ${inactifs30.length>0?
+    '<div class="card">'
+    +'<div class="card-head">'
+    +'<div class="card-title">💤 Sans coaching depuis 30+ jours</div>'
+    +'<div class="card-sub">'+inactifs30.length+' client'+(inactifs30.length>1?'s':'')+' identifié'+(inactifs30.length>1?'s':'')+'</div>'
+    +'</div>'
+    +'<div class="card-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
+    +inactifs30.map(c=>
+      '<div class="inactive-row"><div>'
+      +'<div class="inactive-name">'+c.nom+'</div>'
+      +'<div class="inactive-meta">'+(c.programme||'—')+'</div>'
+      +'</div>'
+      +'<span class="inactive-badge '+(c.days>60?'c3':c.days>45?'c2':'c1')+'">'+(c.days>=999?'Jamais':c.days+'j')+'</span>'
+      +'</div>').join('')
+    +'</div></div>':''}
   `;
 }
 
