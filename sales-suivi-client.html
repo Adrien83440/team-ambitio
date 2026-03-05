@@ -1,0 +1,1192 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Suivi Clients — Ambitio Corp</title>
+  <script src="nav.js" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0c14;
+      --bg2: #111320;
+      --bg3: #181c2e;
+      --border: rgba(255,255,255,0.07);
+      --border2: rgba(255,255,255,0.12);
+      --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.15);
+      --red-glow: rgba(239,68,68,0.08);
+      --accent: #fca5a5;
+      --accent-dim: rgba(252,165,165,0.12);
+      --green: #10b981;
+      --green-dim: rgba(16,185,129,0.12);
+      --blue: #60a5fa;
+      --blue-dim: rgba(96,165,250,0.12);
+      --yellow: #fbbf24;
+      --yellow-dim: rgba(251,191,36,0.12);
+      --purple: #a78bfa;
+      --purple-dim: rgba(167,139,250,0.12);
+      --text: rgba(255,255,255,0.9);
+      --text-2: rgba(255,255,255,0.55);
+      --text-3: rgba(255,255,255,0.3);
+      --radius: 12px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── PAGE LAYOUT ── */
+    .page {
+      padding: 32px 28px 60px;
+      max-width: 1600px;
+    }
+
+    /* ── HEADER ── */
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 28px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .page-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: white;
+      letter-spacing: -0.5px;
+    }
+    .page-title span {
+      color: var(--accent);
+    }
+    .page-subtitle {
+      font-size: 13px;
+      color: var(--text-2);
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 160px;
+    }
+    .stat-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .stat-icon.red { background: var(--red-dim); }
+    .stat-icon.green { background: var(--green-dim); }
+    .stat-icon.blue { background: var(--blue-dim); }
+    .stat-icon.yellow { background: var(--yellow-dim); }
+    .stat-value {
+      font-size: 22px;
+      font-weight: 800;
+      color: white;
+      line-height: 1;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-3);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+
+    /* ── TOOLBAR ── */
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .search-wrap {
+      flex: 1;
+      min-width: 200px;
+      position: relative;
+    }
+    .search-wrap input {
+      width: 100%;
+      background: var(--bg2);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px 10px 38px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .search-wrap input:focus { border-color: var(--red); }
+    .search-wrap input::placeholder { color: var(--text-3); }
+    .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-3);
+      font-size: 14px;
+      pointer-events: none;
+    }
+    .filter-select {
+      background: var(--bg2);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .filter-select:focus { border-color: var(--red); }
+    .filter-select option { background: #1a1a2e; }
+
+    .btn-add {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 18px;
+      background: var(--red);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-add:hover { background: #dc2626; transform: translateY(-1px); }
+    .btn-export {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 16px;
+      background: var(--bg2);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-2);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-export:hover { border-color: var(--border2); color: white; }
+
+    /* ── SORT BAR ── */
+    .sort-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .sort-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--text-3);
+      margin-right: 2px;
+    }
+    .sort-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 14px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--bg2);
+      color: var(--text-2);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .sort-pill:hover {
+      border-color: var(--border2);
+      color: white;
+    }
+    .sort-pill.active {
+      background: var(--red-dim);
+      border-color: rgba(239,68,68,0.4);
+      color: var(--accent);
+    }
+    .sort-dir-btn {
+      margin-left: auto;
+      background: var(--bg3);
+      border-color: var(--border2);
+      color: var(--text-2);
+    }
+    .sort-dir-btn:hover { color: white; }
+
+    /* ── TABLE ── */
+    .table-wrap {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .table-count {
+      padding: 14px 20px;
+      font-size: 12px;
+      color: var(--text-3);
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .table-count strong { color: var(--accent); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-3);
+      background: var(--bg3);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.15s;
+    }
+    thead th:hover { color: var(--text-2); }
+    thead th.sort-asc::after { content: ' ↑'; color: var(--accent); }
+    thead th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+      cursor: pointer;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    tbody tr.selected { background: var(--red-glow) !important; }
+
+    td {
+      padding: 13px 16px;
+      vertical-align: middle;
+    }
+
+    .cell-client {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .client-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: var(--red-dim);
+      border: 1px solid rgba(239,68,68,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .client-name {
+      font-weight: 700;
+      color: white;
+      font-size: 13px;
+      line-height: 1.2;
+    }
+    .client-commerce {
+      font-size: 11px;
+      color: var(--text-3);
+      margin-top: 1px;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .tag-red { background: var(--red-dim); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+    .tag-green { background: var(--green-dim); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.2); }
+    .tag-blue { background: var(--blue-dim); color: #93c5fd; border: 1px solid rgba(96,165,250,0.2); }
+    .tag-yellow { background: var(--yellow-dim); color: #fde68a; border: 1px solid rgba(251,191,36,0.2); }
+    .tag-purple { background: var(--purple-dim); color: #c4b5fd; border: 1px solid rgba(167,139,250,0.2); }
+    .tag-gray { background: rgba(255,255,255,0.06); color: var(--text-2); border: 1px solid var(--border); }
+
+    .cell-text {
+      color: var(--text-2);
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    .cell-text.small { max-width: 180px; }
+
+    .temoignage-icons {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .temoignage-badge {
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      text-decoration: none;
+      transition: transform 0.1s;
+      cursor: pointer;
+    }
+    .temoignage-badge:hover { transform: scale(1.15); }
+    .tb-trustpilot { background: rgba(0,182,122,0.15); border: 1px solid rgba(0,182,122,0.25); }
+    .tb-video { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.25); }
+    .tb-doc { background: var(--blue-dim); border: 1px solid rgba(96,165,250,0.25); }
+    .tb-none { background: rgba(255,255,255,0.04); border: 1px solid var(--border); opacity: 0.4; }
+
+    .cell-date {
+      font-size: 12px;
+      color: var(--text-2);
+      white-space: nowrap;
+    }
+    .cell-mois {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .action-btn {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-3);
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+    .action-btn:hover { background: rgba(255,255,255,0.08); color: white; border-color: var(--border2); }
+    .action-btn.edit:hover { color: var(--blue); border-color: rgba(96,165,250,0.3); }
+    .action-btn.del:hover { color: var(--red); border-color: rgba(239,68,68,0.3); }
+
+    /* ── MODAL ── */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(6px);
+      animation: fadeIn 0.2s ease;
+      padding: 20px;
+    }
+    @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+    .modal {
+      background: #0f1120;
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 680px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 32px 80px rgba(0,0,0,0.7);
+      animation: slideUp 0.25s cubic-bezier(.4,0,.2,1);
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    @keyframes slideUp { from { transform: translateY(24px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+    .modal-header {
+      padding: 22px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      background: #0f1120;
+      z-index: 1;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: white;
+    }
+    .modal-close {
+      width: 32px; height: 32px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      color: var(--text-2);
+      cursor: pointer;
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .modal-close:hover { background: rgba(255,255,255,0.12); color: white; }
+
+    .modal-body { padding: 24px; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .form-grid .full { grid-column: 1 / -1; }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .field label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-3);
+    }
+    .field input,
+    .field textarea,
+    .field select {
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 13px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+      resize: none;
+    }
+    .field input:focus,
+    .field textarea:focus,
+    .field select:focus {
+      border-color: var(--red);
+      background: var(--red-glow);
+    }
+    .field input::placeholder,
+    .field textarea::placeholder { color: var(--text-3); }
+    .field select option { background: #1a1a2e; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-3);
+      margin-top: 18px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      padding: 18px 24px 24px;
+      border-top: 1px solid var(--border);
+    }
+    .btn-primary {
+      flex: 1;
+      padding: 11px;
+      background: var(--red);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary:hover { background: #dc2626; }
+    .btn-ghost {
+      padding: 11px 20px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text-2);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.1); color: white; }
+
+    /* Detail modal */
+    .detail-section { margin-bottom: 20px; }
+    .detail-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--text-3);
+      margin-bottom: 5px;
+    }
+    .detail-value {
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 500;
+      line-height: 1.55;
+    }
+    .detail-value.big {
+      font-size: 14px;
+      font-weight: 700;
+      color: white;
+    }
+    .detail-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .detail-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.15s;
+      cursor: pointer;
+    }
+    .dl-trustpilot { background: rgba(0,182,122,0.12); color: #34d399; border: 1px solid rgba(0,182,122,0.2); }
+    .dl-trustpilot:hover { background: rgba(0,182,122,0.2); }
+    .dl-video { background: var(--red-dim); color: var(--accent); border: 1px solid rgba(239,68,68,0.2); }
+    .dl-video:hover { background: rgba(239,68,68,0.25); }
+    .dl-doc { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(96,165,250,0.2); }
+    .dl-doc:hover { background: rgba(96,165,250,0.2); }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1a2e20;
+      border: 1px solid rgba(16,185,129,0.3);
+      color: #6ee7b7;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 22px;
+      border-radius: 10px;
+      z-index: 2000;
+      opacity: 0;
+      transition: all 0.3s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.error { background: #2e1a1a; border-color: rgba(239,68,68,0.3); color: #fca5a5; }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-3);
+    }
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+    .empty-state p { font-size: 14px; font-weight: 600; }
+
+    /* Confirm delete */
+    .confirm-modal {
+      background: #0f1120;
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 20px;
+      padding: 28px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      animation: slideUp 0.2s ease;
+    }
+    .confirm-modal h3 { font-size: 16px; font-weight: 800; color: white; margin-bottom: 8px; }
+    .confirm-modal p { font-size: 13px; color: var(--text-2); margin-bottom: 20px; }
+    .confirm-actions { display: flex; gap: 10px; }
+
+    @media (max-width: 768px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .form-grid .full { grid-column: 1; }
+      .page { padding: 20px 16px 60px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="page-header">
+    <div>
+      <div class="page-title">Tableau Suivi <span>Clients</span></div>
+      <div class="page-subtitle">63 clients importés depuis le fichier Excel — données éditables en temps réel</div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-bar" id="statsBar"></div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Rechercher un client, commerce, problématique..."/>
+    </div>
+    <select class="filter-select" id="filterMetier">
+      <option value="">Tous les métiers</option>
+    </select>
+    <select class="filter-select" id="filterPb">
+      <option value="">Toutes les problématiques</option>
+      <option value="rentabilité">Rentabilité</option>
+      <option value="marketing">Marketing</option>
+      <option value="management">Management</option>
+      <option value="gestion du temps">Gestion du temps</option>
+      <option value="recrutement">Recrutement</option>
+      <option value="mindset">Mindset</option>
+    </select>
+    <select class="filter-select" id="filterTemoignage">
+      <option value="">Tous les témoignages</option>
+      <option value="trustpilot">Avec TrustPilot</option>
+      <option value="video">Avec Vidéo</option>
+      <option value="aucun">Sans témoignage</option>
+    </select>
+    <button class="btn-export" onclick="exportCSV()">📥 Exporter CSV</button>
+    <button class="btn-add" onclick="openAddModal()">＋ Ajouter un client</button>
+  </div>
+
+  <!-- SORT PILLS -->
+  <div class="sort-bar">
+    <span class="sort-label">Trier par :</span>
+    <button class="sort-pill active" id="pill-date_debut" onclick="setSortPill('date_debut')">📅 Date d'ajout</button>
+    <button class="sort-pill" id="pill-client" onclick="setSortPill('client')">🔤 Alphabétique</button>
+    <button class="sort-pill" id="pill-commerce" onclick="setSortPill('commerce')">🏪 Métier</button>
+    <button class="sort-pill sort-dir-btn" id="sortDirBtn" onclick="toggleSortDir()">↓ Décroissant</button>
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-wrap">
+    <div class="table-count" id="tableCount">Chargement...</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortBy('client')">Client</th>
+            <th onclick="sortBy('problematique')">Problématique principale</th>
+            <th>Résultats</th>
+            <th onclick="sortBy('date_debut')">Date début</th>
+            <th onclick="sortBy('temporalite')">Temporalité</th>
+            <th>Témoignages</th>
+            <th style="width:80px">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div id="emptyState" class="empty-state" style="display:none">
+        <div class="icon">🔍</div>
+        <p>Aucun client ne correspond à votre recherche</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── DATA ── */
+const STORAGE_KEY = 'ambitio_clients_data';
+
+const BASE_CLIENTS = [{"client":"Anne lise NAVE","commerce":"Epicerie ambulante","problematique":"peu de rentabilité","pb_secondaires":"Volonté d'expansion et gestion du temps","resultats":"Hausse du CA/Developpement de son projet de distributeur  rectification de ses réseaux ( dépose du dossier à la banque en juin)","date_debut":"2025-01-20","temporalite":"13","trustpilot":"https://fr.trustpilot.com/reviews/682eccc46452ad994d3af0dc","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Pierrick WATTECAMPS","commerce":"Hotel/ restaurant","problematique":"Pb management","pb_secondaires":"Rentabilité","resultats":"Réduction des charges / negociation de ses contrats/ Repositionnement de sa place de leader","date_debut":"2025-01-02","temporalite":"14","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Floriane CANCY","commerce":"Productrice, transformatrice de volaille","problematique":"Rentabilité","pb_secondaires":"Management, gestion du temps et marketing","resultats":"Doublement des commandes ( strategie marketing avec devellopement d'un site internet) , devellopement de partenariat avec de grandes enseignes environnantes ( leclerc et carrefour), optimisation de son recrutement et developpement de nouveau secteur de distribution pour ses camions de marché","date_debut":"2024-11-25","temporalite":"15","trustpilot":"https://www.notion.so/Process-Closeurs-1f6844533640800b95b3e7be637930b1?source=copy_link#1f6844533640807fb601d3693c31e56d","video":"https://www.notion.so/Process-Closeurs-1f6844533640800b95b3e7be637930b1?source=copy_link#1f6844533640807fb601d3693c31e56d","autre_temoignage":"https://workdrive.zoho.eu/file/nnsne710e1407db364a41b73806e7a22193c8","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk8243524e71114611a7108de92573ce8e","temoignage_supp2":"https://workdrive.zoho.eu/file/gqzqke2afd1b7e84248b281bbd38cdef2be58","temoignage_supp3":"","temoignage_supp4":""},{"client":"Alexandre COMBES","commerce":"Boucher, charcutier , traiteur","problematique":"Management , recrutement","pb_secondaires":"Rentabilité et objectif concours","resultats":"Aide pour sortir un salarié qui était irrespectueux , mise en place d'un systeme de recrutement et managment plus effcicient. Reduction des charges, dev des marges et optimisation de sa présence sur secteur grace à dev marketing).","date_debut":"2025-01-09","temporalite":"13","trustpilot":"https://www.notion.so/Process-Closeurs-1f6844533640800b95b3e7be637930b1?source=copy_link#1f6844533640808381f5d5d1b6edb7c0","video":"https://www.notion.so/Process-Closeurs-1f6844533640800b95b3e7be637930b1?source=copy_link#1f6844533640808381f5d5d1b6edb7c0","autre_temoignage":"https://workdrive.zoho.eu/file/c01dm501a5b3c69c74b3696c61eefe19948ba","temoignage_supp1":"https://workdrive.zoho.eu/file/lw69mc99ad2d857f241bfaf3e6dd37370182e","temoignage_supp2":"https://workdrive.zoho.eu/file/lw69m433bb6725fc24ff9aed193971337f156","temoignage_supp3":"https://workdrive.zoho.eu/file/nnsne5cfed6b2f62b4734a347f76fb9eed8c5","temoignage_supp4":"https://workdrive.zoho.eu/file/nnsne1bed1f09ec034ca7a1c550fed5027484"},{"client":"Mireille BERNARD","commerce":"Restauratrice","problematique":"Rentabilité","pb_secondaires":"Management","resultats":"hausse de 200 euros /j  de son CA (en 1 call) et changement de son positionnement face à son équipe","date_debut":"2025-04-23","temporalite":"10","trustpilot":"https://fr.trustpilot.com/reviews/6828b8455c8eca804b954beb","video":"","autre_temoignage":"","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk1251bee15f44433cb30f64530ecc4aac","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Daniel MATHIEU","commerce":"Producteur de Maroille","problematique":"Rentabilité","pb_secondaires":"Aucun marketing en place","resultats":"Economie proposée de 43 000 euros  grace à une solution face à un problème avec un associé. Mise en place d'un process de marketing","date_debut":"2025-04-14","temporalite":"10","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Ludovic REY","commerce":"Cave à vin","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Reduction de ses charges, hausse de ses marges, pivot dans sa stratégie marketing","date_debut":"2025-01-07","temporalite":"13","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"David RIES","commerce":"Cremerie","problematique":"Gestion de temps","pb_secondaires":"Marketing et hausse de fréquentation","resultats":"Optimisation de son temps, créa d'un site internet et developpement de ses réseaux, optimisation de sa fréquentation avec mise en place d'un systeme de compte client, etc","date_debut":"2025-04-21","temporalite":"10","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Mael FABRE","commerce":"Patissier","problematique":"Gestion du temps","pb_secondaires":"marketing","resultats":"Optimisation de son temps, travail sur ses croyances limitantes pour mettre en place une vraie stratégies de com","date_debut":"2025-01-15","temporalite":"13","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Béatrice BRUN","commerce":"Magasin de déco","problematique":"Gros problème de stock et de rentabilité","pb_secondaires":"Mindset","resultats":"Solutions stratégiques pour réduire son stock trop important, optimisation de ses dépenses, restructuration de son organisation et travail sur son mindset","date_debut":"2025-01-21","temporalite":"13","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Christelle FREVILLE","commerce":"Fleuriste","problematique":"Rentabilité","pb_secondaires":"Gestion du temps et Marketing","resultats":"Pivot sur sa communication ( en 1 coaching), optimisation de ses charges , optimisation de son temps, travail sur ses charges et son expérience client pour augmenter son CA","date_debut":"2025-03-03","temporalite":"12","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Cecile ROGER","commerce":"Creperie","problematique":"Tous les axes","pb_secondaires":"","resultats":"Travail sur sa com, travail sur ses charges, sur sa gestion du temps, sur sa stratégie de prix, etc","date_debut":"2025-03-17","temporalite":"11","trustpilot":"https://fr.trustpilot.com/reviews/6828fc823c24962af79b886e","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/lw69m705d7076b6614a80beda412375b600e6","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sidonie ORY","commerce":"Concept store","problematique":"Com et rentabilité","pb_secondaires":"Gestion du temps","resultats":"Pivot sur sa com, gain de temps par semaine de 2h, travail actuellement sur sa rentabilité","date_debut":"2025-03-18","temporalite":"11","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsned40a6b74bfd04863a2ab45532cde8e69","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Laure BERTOLINO","commerce":"Coiffeuse","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Hausse de ses prix et restructuration de sa manière de communiquer sur ses réseaux","date_debut":"2025-04-07","temporalite":"10","trustpilot":"","video":"https://vimeo.com/1100559693?share=copy","autre_temoignage":"https://workdrive.zoho.eu/file/lw69maeb61e5c92284740924b63ec891364b1","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Lydie VIAL","commerce":"Boulangerie","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Accompagnement actuellement face à son problème de four en panne aussi bien sur les procédures que dans sa manière de communiquer face à ca .","date_debut":"2025-05-20","temporalite":"9","trustpilot":"https://fr.trustpilot.com/reviews/68762b9eaf3ea0fe9f14ea40","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsnea6d0365ac1a54aa9ab74f30f41d41fd9","temoignage_supp1":"https://workdrive.zoho.eu/file/nnsne5f31f7ffcad84795b8ac8edd890917f2","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sébastien","commerce":"Informaticien","problematique":"Gestion du temps","pb_secondaires":"Rentabilite","resultats":"A gagné 3h/ semaine et en reciblant sa niche à augmenté  son CA de 30%","date_debut":"2024-11-05","temporalite":"FIN","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Margaux CANTET","commerce":"Epicerie/ restauration italienne","problematique":"Management , recrutement","pb_secondaires":"Rentabilite et marketing","resultats":"Repositionnement de son role de leader, optimisation de ses stratégies de com ( dev de partenariat pro, optimisation de son instagram,etc), reduction de ses charges ( notament salariale) gestion plus efficaces de ses depenses et de ses marges / En cours : restructuration de son management avec des fiches de postes et une restructuration de son équipe.  Hausse de 20 à 30% du CA chaque mois.","date_debut":"2025-03-27","temporalite":"11","trustpilot":"https://fr.trustpilot.com/reviews/6866685f4c1ef2cebc8a10b5","video":"https://vimeo.com/1098540405?share=copy","autre_temoignage":"https://workdrive.zoho.eu/file/lw69me7bef32dc4394c31bbba0c48c86b9a0a","temoignage_supp1":"https://workdrive.zoho.eu/file/nnsnef8e42788390b4fec8cee826a4034e6fa","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Aurore PRAX","commerce":"Papeterie","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Travail sur sa com, travail sur ses charges, sur sa gestion du temps, sur sa stratégie de prix, etc","date_debut":"2025-04-28","temporalite":"10","trustpilot":"https://fr.trustpilot.com/reviews/686d4963954cc625b676ab1a","video":"https://vimeo.com/1100556025?share=copy","autre_temoignage":"https://workdrive.zoho.eu/file/c01dm670a5039560845a395ffc7de32ca2270","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk4791f511187642599f89eaecc88dd7d2","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Delphine JANVIER","commerce":"Institut beaute","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Travail sur sa com, travail sur ses charges, sur sa gestion du temps, sur sa stratégie de prix, etc en 6 mois economies de 15 000 euros sur ses charges, gain de 1h/jour de travail meilleure visibilite sur sa tréso donc elle a pu enfin prendre 3 semaines de repos pour le mois d'aout. nouveau projet : embaucher 2 collaboratrices","date_debut":"2025-03-25","temporalite":"11","trustpilot":"https://fr.trustpilot.com/users/6862901918a3fc2cc1f461c5","video":"https://workdrive.zoho.eu/file/mjhx1f260e0059621435da4cc331f783c2dfa","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Geneci ALMEIDA","commerce":"Societe de nettoyage","problematique":"Gestion du temps","pb_secondaires":"Rentabilite, management et marketing","resultats":"Reorganisation de sa methode de travail avec ses bras droit et de la gestion de son temps pour lui permettre à minima 1j de repos par semaine.","date_debut":"2025-05-22","temporalite":"9","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Marie Laure LAROCHE","commerce":"Epicerie fine","problematique":"Mindset + Rentabilité","pb_secondaires":"Marketing","resultats":"En 3 mois revision de sa stratégie de prix, de ses charges, gros travail sur son mindset de leader, marketing en cours","date_debut":"2025-02-25","temporalite":"12","trustpilot":"https://fr.trustpilot.com/reviews/686bfce5df70b27eecdaee1b","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Gilbert DARTHAYETTE","commerce":"Producteur/ transformateur/. vendeur de piment d'espelette","problematique":"Recrutement/ management / marketing et rentabilité","pb_secondaires":"Gestion du temps","resultats":"En 1 mois : travail sur son recrutement ( aboutit et consolidé) + changement de son management  En 2 mois travail sur sa gestion du temps en priorisant les actions rentables et  travail sur sa rentabiité en reprenant les bases en reduisant ses charges et augmentant ses marges.","date_debut":"2025-03-25","temporalite":"11","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Ségolène BOUCHER","commerce":"Opticienne","problematique":"Marketing, otpimisation de l'expérience client, rentabilité","pb_secondaires":"","resultats":"Création intégrale d'une communication sur les réseaux, optimisation de son parcours client, developpement de partenariat","date_debut":"2025-04-01","temporalite":"11","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Yagya KARKY","commerce":"Magasin de produit péruvien et népalais","problematique":"Marketing et Rentabilité","pb_secondaires":"Gestion du temps","resultats":"Reprise à 0 de sa communication sur les réseaux et via son site internet. Annulation de salon qui n'etaient pas rentables, optimisation de ses produits à gros coefficients. Changement de stratégie de vente de ses produits en magasin physique ET sur son site.","date_debut":"2025-05-27","temporalite":"9","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Lemya BELGACEM","commerce":"Magasin de prêt à porté","problematique":"Rentabilité","pb_secondaires":"Gestion du temps","resultats":"Elle à 2 magasin cible identique a 10m de distance, changement de son positionnement stratégique, changement de son experience client.","date_debut":"2025-04-22","temporalite":"10","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sylviane LEINARDI","commerce":"Boulangerie / pâtisserie","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Proposition de stratégie de partenariat, gestion de ses charges","date_debut":"2025-02-24","temporalite":"12","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Lisa GUERRIN","commerce":"E shop","problematique":"Developpement complet","pb_secondaires":"Marketing","resultats":"Stratégie de partenariat, developpement de sa boutique, optimisation de ses communications","date_debut":"2024-11-05","temporalite":"16","trustpilot":"","video":"https://vimeo.com/1052759206?share=copy","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Armelle ZAID EL KHIL","commerce":"Maraichaire / Fleuriste","problematique":"Gestion/ gestion du temps et Marketing","pb_secondaires":"Recrutement","resultats":"","date_debut":"2025-07-08","temporalite":"7","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Solange PAPOUCHADO","commerce":"Vente de voyage en ligne","problematique":"Aide au globale","pb_secondaires":"","resultats":"","date_debut":"2025-07-08","temporalite":"7","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sylvie MOURGUES","commerce":"Vente en ligne de produit de DIY","problematique":"Marketing et Management","pb_secondaires":"Rentabilité","resultats":"Mise en place d'une vraie structuration de l'équipe, repositionnement dans son role de leader","date_debut":"2025-07-07","temporalite":"en 1 call de 30min","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/c01dmc5cd4a184f4b494786650f31a18b6206","temoignage_supp1":"https://workdrive.zoho.eu/file/nnsne08282c1608ef4039b7e60ba256d80966","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sophie GUILLET","commerce":"pret à porter","problematique":"Marketing","pb_secondaires":"Gestion/ rentabilité","resultats":"","date_debut":"2025-07-10","temporalite":"","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsne1ca4301444a645efb7920a738ca3ad38","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk1cdb88eff3494a9a961737fd4b966fbe","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sébastien CHAUCHOT","commerce":"Photographe","problematique":"Gestion du temps","pb_secondaires":"","resultats":"","date_debut":"2025-07-11","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sabine HIRTZ","commerce":"Club de plongée","problematique":"Marketing","pb_secondaires":"Gestion","resultats":"Travail de sa gestion mais aussi de sa manière de communiquer depuis l'outre mer pour toucher la metropole meme hors saison et se renouveler. Mise en avant de l'importance de se démarquer avecdes mes formules all inclusives","date_debut":"2025-07-14","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Jérome et Rachel BABE","commerce":"Boucherie","problematique":"Gestion","pb_secondaires":"","resultats":"","date_debut":"2025-07-15","temporalite":"","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsne390979161c9a4fbcba1c7c69b4cb9798","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Francine GOYET","commerce":"Epicerie Ambulante","problematique":"Totalité des poles","pb_secondaires":"","resultats":"Travail en profondeur de leur stratégie entre leur commerce physique et ambulant pour bien analyser lequel est rentable et lequel ne l'est pas. Analyse de methode de partenariat + marketing de terrain","date_debut":"2025-07-14","temporalite":"","trustpilot":"https://fr.trustpilot.com/reviews/68c81310f3595002071e89b1","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Bruno COULONGEAT","commerce":"Poissonnerie","problematique":"-","pb_secondaires":"","resultats":"","date_debut":"2025-07-14","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sylvain VANDENAMEELE","commerce":"Bar/ Hotel/ resto","problematique":"Marketing","pb_secondaires":"baisse clientele et CA","resultats":"Travaille sur la modernisation de tous ses réseaux et moyens de com.Modernisation de son branding et recherche de nouveaux canaux d'acquisition clients.","date_debut":"2025-07-21","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Hadrien ANGOT","commerce":"Opticien lunetier","problematique":"Manque de clientèle","pb_secondaires":"Gestion et marketing +++","resultats":"","date_debut":"2025-07-22","temporalite":"","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/c01dm1fa1bb2fd1a74998955f40f4d0d21339","temoignage_supp1":"https://workdrive.zoho.eu/file/nnsne69516ac4d9da47058ebf9fa5d0af9c39","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Emmanuel MARTY","commerce":"Centre équestre","problematique":"Tres gros problème de recrutement et manegement+ gros problème de gestion","pb_secondaires":"Marketing et renouvellement de clientele","resultats":"Solutions claires de management de son équipe et plus spécifiquement sa stagiaire.Travail en profondeur de son marketing en lui donnant d'autres canaux d'acquisition client mais aussi de manière de travailler.","date_debut":"2025-07-28","temporalite":"2 call 1:1","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Magali BRETON","commerce":"Coiffeuse","problematique":"-","pb_secondaires":"","resultats":"","date_debut":"2025-07-31","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Judith Thomas","commerce":"Institut beaute","problematique":"Marketing","pb_secondaires":"Renouvellement de clients","resultats":"Depoussiérer son institut au niveau de sa communication. Mise en place d'une ligne de travail pour la rendre plus confortable et efficace sur ses réseaux.","date_debut":"2025-08-06","temporalite":"","trustpilot":"https://fr.trustpilot.com/users/68c12aef412e4cebe53e0b63","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/lw69mfd229f2f9caa41119e2b6037f24390b7","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqkb4885de110694cd7b2774e2cf178536a","temoignage_supp2":"https://workdrive.zoho.eu/file/gqzqkbd5d560ce8c44fe89cb5a184c426042f","temoignage_supp3":"https://workdrive.zoho.eu/file/gqzqk139d8cc2fc4d426ea578d229ae9051cb","temoignage_supp4":"https://workdrive.zoho.eu/file/gqzqka68f8554006e4251badacc5684a22d6e"},{"client":"Jimmy LE CLAINCHE","commerce":"Magasin de Vélo","problematique":"Acquisition client et gestion","pb_secondaires":"Merketing","resultats":"Travail pour faire venir de la clientèle dans son atelier qui est vide. La mise en avant de son travail n'etait pas assez mise en avant","date_debut":"2025-08-06","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Anthony MAIRESSE","commerce":"Coiffeur","problematique":"Management/ recrutement","pb_secondaires":"Gestion et gestion du temps","resultats":"Travaille sur la sortie d'un salarié qui pose problème puis travail sur sa stratégie de management sur un stagiaire qui pose problème et enfin travail intensif sur le recrutement pour avoir des joueurs de league A Résultat en moins d'un mois","date_debut":"2025-08-11","temporalite":"En 2 call le salarié est sortis de la boite","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Carole BRUNET","commerce":"Magasin de Chaussures","problematique":"Gros problème acquisition client et marketing a totalement mettre en place","pb_secondaires":"Gestion","resultats":"Travail de base sur ses informations à mettre a jour puis début de travail sur ses réseaux qui ne sont pas du tout gérer .Changement de plusieurs points marketing qui généraient des frictions commerciales ( mauvais site internet etc)","date_debut":"2025-08-14","temporalite":"","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsnea119d46c5887421cad66288f8f88be68","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk90e8b2e2308a4f20863688c61acaef6e","temoignage_supp2":"https://workdrive.zoho.eu/file/gqzqk72f37e80606b4e01a29c34a726d7ebc2","temoignage_supp3":"","temoignage_supp4":""},{"client":"Hubert LOECHNER","commerce":"Peintre en batiment","problematique":"gestion ++","pb_secondaires":"Gestion du temps","resultats":"","date_debut":"2025-08-26","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Natacha ROUSSEAU","commerce":"Boulangerie","problematique":"Gestion","pb_secondaires":"Marketing","resultats":"","date_debut":"2025-08-26","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Jeremy CARETTE","commerce":"Destockage en ligne","problematique":"Problème marketing, communication globale","pb_secondaires":"gestion","resultats":"travail pour relancer toute leur base de donnée clients, changement de strategie de com et optimisation des réseaux existants.","date_debut":"2025-08-26","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Kevin FRETAY","commerce":"Boucher","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2025-08-26","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sylvain MANEIRO","commerce":"patissier","problematique":"","pb_secondaires":"","resultats":"","date_debut":"","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Anis KHEMIR","commerce":"vente en ligne","problematique":"Travail marketing++++","pb_secondaires":"","resultats":"Refonte de son site internet pour creer un branding autour de l'ambiance orientale. Travaille de sa com sur les réseaux","date_debut":"2025-08-28","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Julie SUBLARD","commerce":"patisserie chocolaterie","problematique":"Marketing","pb_secondaires":"","resultats":"travail sur sa communication réseau, web etc . Changement de ses horaires d'ouverture pour coller à la réalité du terrain.","date_debut":"2025-09-15","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Anne NAFFRICHOUX","commerce":"biocoop","problematique":"attraction client + hausse CA","pb_secondaires":"Marketing et partenariat","resultats":"travail sur l'attraction client pour compenser des travaux departementaux devant sont magasin. travail de solution de partenariat et d'event pour redynamiser son attractivité. Proposition de nouveauté à instaurer pour sa clientèle ( click and collect etc)","date_debut":"2025-09-25","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Anne MARCEAUX","commerce":"2 salons de coiffures","problematique":"gestion du temps","pb_secondaires":"Marketing","resultats":"refonte de sz communication sur les réseaux et travail de son mindset pour qu'elle accepte de se montrer en pleine confiance .","date_debut":"2025-09-20","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Mickael CELIME","commerce":"coach sportif","problematique":"com, gestion de ses offres","pb_secondaires":"rentabilité","resultats":"","date_debut":"2025-10-22","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Cecile Gyongyosi","commerce":"Friterie","problematique":"Mindset et rentabilité++++","pb_secondaires":"","resultats":"","date_debut":"2025-01-07","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Celine Louvel","commerce":"Vente de vetement","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2025-01-06","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sandrine Ntaye","commerce":"Lingerie","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2025-12-11","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Soumia Aouidat","commerce":"","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-12","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Veronique Berger","commerce":"","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-19","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Isabelle Mittard","commerce":"Jardinerie","problematique":"Rentabilite","pb_secondaires":"Communicaton/ marketing","resultats":"","date_debut":"2026-01-21","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Laurence Lannoy","commerce":"Lingerie","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-23","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Julie Berchoux","commerce":"","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-24","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Corinne Alaga","commerce":"","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-27","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""}];
+
+/* ── STATE ── */
+let clients = [];
+let filtered = [];
+let sortCol = 'date_debut';
+let sortDir = 'desc';
+let editIdx = null;
+
+function loadData() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      clients = JSON.parse(saved);
+    } else {
+      clients = BASE_CLIENTS.map((c, i) => ({ ...c, _id: i }));
+      saveData();
+    }
+  } catch (e) {
+    clients = BASE_CLIENTS.map((c, i) => ({ ...c, _id: i }));
+  }
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+}
+
+/* ── INITIALS ── */
+function initials(name) {
+  return name.split(/\s+/).filter(Boolean).slice(0,2).map(w => w[0].toUpperCase()).join('');
+}
+
+/* ── PROBLEM TAG ── */
+function pbTag(text) {
+  if (!text || text === '-') return '<span class="tag tag-gray">—</span>';
+  const t = text.toLowerCase();
+  let cls = 'tag-gray';
+  if (t.includes('rentab')) cls = 'tag-red';
+  else if (t.includes('market') || t.includes('com')) cls = 'tag-blue';
+  else if (t.includes('manage') || t.includes('recruit')) cls = 'tag-yellow';
+  else if (t.includes('gestion') || t.includes('temps')) cls = 'tag-purple';
+  else if (t.includes('mindset')) cls = 'tag-green';
+  const short = text.length > 28 ? text.slice(0, 28) + '…' : text;
+  return '<span class="tag ' + cls + '" title="' + escHtml(text) + '">' + escHtml(short) + '</span>';
+}
+
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── STATS ── */
+function renderStats() {
+  const total = clients.length;
+  const withTp = clients.filter(c => c.trustpilot).length;
+  const withVideo = clients.filter(c => c.video).length;
+  const withResults = clients.filter(c => c.resultats).length;
+
+  document.getElementById('statsBar').innerHTML =
+    statCard('🧑‍💼', total, 'Total clients', 'red') +
+    statCard('⭐', withTp, 'TrustPilot', 'green') +
+    statCard('🎬', withVideo, 'Vidéos', 'blue') +
+    statCard('✅', withResults, 'Avec résultats', 'yellow');
+}
+
+function statCard(icon, val, label, color) {
+  return '<div class="stat-card">' +
+    '<div class="stat-icon ' + color + '">' + icon + '</div>' +
+    '<div><div class="stat-value">' + val + '</div><div class="stat-label">' + label + '</div></div>' +
+    '</div>';
+}
+
+/* ── FILTER & SORT ── */
+function getFiltered() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const pbFilter = document.getElementById('filterPb').value.toLowerCase();
+  const temFilter = document.getElementById('filterTemoignage').value;
+  const metierFilter = document.getElementById('filterMetier').value.toLowerCase();
+
+  let res = clients.filter(c => {
+    const text = (c.client + ' ' + c.commerce + ' ' + c.problematique + ' ' + c.pb_secondaires + ' ' + c.resultats).toLowerCase();
+    if (q && !text.includes(q)) return false;
+    if (pbFilter) {
+      const pb = (c.problematique + ' ' + c.pb_secondaires).toLowerCase();
+      if (!pb.includes(pbFilter)) return false;
+    }
+    if (metierFilter && (c.commerce || '').toLowerCase() !== metierFilter) return false;
+    if (temFilter === 'trustpilot' && !c.trustpilot) return false;
+    if (temFilter === 'video' && !c.video) return false;
+    if (temFilter === 'aucun' && (c.trustpilot || c.video || c.autre_temoignage)) return false;
+    return true;
+  });
+
+  res.sort((a, b) => {
+    let va = (a[sortCol] || '').toLowerCase();
+    let vb = (b[sortCol] || '').toLowerCase();
+    if (sortCol === 'temporalite') {
+      va = parseInt(a.temporalite) || 0;
+      vb = parseInt(b.temporalite) || 0;
+    }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  return res;
+}
+
+function setSortPill(col) {
+  sortCol = col;
+  document.querySelectorAll('.sort-pill:not(.sort-dir-btn)').forEach(p => p.classList.remove('active'));
+  const pill = document.getElementById('pill-' + col);
+  if (pill) pill.classList.add('active');
+  renderTable();
+}
+
+function toggleSortDir() {
+  sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  const btn = document.getElementById('sortDirBtn');
+  btn.textContent = sortDir === 'asc' ? '↑ Croissant' : '↓ Décroissant';
+  renderTable();
+}
+
+function sortBy(col) {
+  setSortPill(col);
+}
+
+/* ── RENDER TABLE ── */
+function renderTable() {
+  filtered = getFiltered();
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+
+  document.getElementById('tableCount').innerHTML =
+    'Affichage de <strong>' + filtered.length + '</strong> client' + (filtered.length > 1 ? 's' : '') +
+    ' sur ' + clients.length + ' au total';
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map((c, i) => {
+    const idx = clients.indexOf(c);
+    const init = initials(c.client || '?');
+    const hasTp = !!c.trustpilot;
+    const hasVid = !!c.video;
+    const hasDoc = !!(c.autre_temoignage || c.temoignage_supp1 || c.temoignage_supp2 || c.temoignage_supp3 || c.temoignage_supp4);
+
+    const tpBadge = hasTp
+      ? '<a class="temoignage-badge tb-trustpilot" href="' + escHtml(c.trustpilot) + '" target="_blank" title="TrustPilot" onclick="event.stopPropagation()">⭐</a>'
+      : '<span class="temoignage-badge tb-none" title="Pas de TrustPilot">⭐</span>';
+
+    const vidBadge = hasVid
+      ? '<a class="temoignage-badge tb-video" href="' + escHtml(c.video) + '" target="_blank" title="Vidéo" onclick="event.stopPropagation()">🎬</a>'
+      : '<span class="temoignage-badge tb-none" title="Pas de vidéo">🎬</span>';
+
+    const docBadge = hasDoc
+      ? '<span class="temoignage-badge tb-doc" title="Documents disponibles" onclick="event.stopPropagation();openDetail(' + idx + ')">📄</span>'
+      : '<span class="temoignage-badge tb-none" title="Pas de document">📄</span>';
+
+    const dateStr = c.date_debut && c.date_debut !== 'NaT' ? c.date_debut.slice(0,10) : '—';
+    const moisStr = c.temporalite ? c.temporalite : '—';
+    const resultShort = c.resultats ? escHtml(c.resultats.length > 70 ? c.resultats.slice(0, 70) + '…' : c.resultats) : '<span style="color:var(--text-3)">—</span>';
+
+    return '<tr onclick="openDetail(' + idx + ')">' +
+      '<td><div class="cell-client">' +
+        '<div class="client-avatar">' + init + '</div>' +
+        '<div><div class="client-name">' + escHtml(c.client) + '</div>' +
+        '<div class="client-commerce">' + escHtml(c.commerce || '—') + '</div></div>' +
+      '</div></td>' +
+      '<td>' + pbTag(c.problematique) + '</td>' +
+      '<td><div class="cell-text">' + resultShort + '</div></td>' +
+      '<td><div class="cell-date">' + dateStr + '</div></td>' +
+      '<td><div class="cell-mois">' + escHtml(moisStr) + '</div></td>' +
+      '<td><div class="temoignage-icons">' + tpBadge + vidBadge + docBadge + '</div></td>' +
+      '<td onclick="event.stopPropagation()">' +
+        '<div style="display:flex;gap:5px">' +
+        '<button class="action-btn edit" onclick="openEditModal(' + idx + ')" title="Modifier">✏️</button>' +
+        '<button class="action-btn del" onclick="confirmDelete(' + idx + ')" title="Supprimer">🗑</button>' +
+        '</div>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+/* ── DETAIL MODAL ── */
+function openDetail(idx) {
+  const c = clients[idx];
+  if (!c) return;
+
+  const links = [
+    { url: c.trustpilot, label: '⭐ TrustPilot', cls: 'dl-trustpilot' },
+    { url: c.video, label: '🎬 Vidéo témoignage', cls: 'dl-video' },
+    { url: c.autre_temoignage, label: '📄 Document', cls: 'dl-doc' },
+    { url: c.temoignage_supp1, label: '📄 Fichier 1', cls: 'dl-doc' },
+    { url: c.temoignage_supp2, label: '📄 Fichier 2', cls: 'dl-doc' },
+    { url: c.temoignage_supp3, label: '📄 Fichier 3', cls: 'dl-doc' },
+    { url: c.temoignage_supp4, label: '📄 Fichier 4', cls: 'dl-doc' },
+  ].filter(l => l.url);
+
+  const linkHtml = links.length
+    ? links.map(l => '<a class="detail-link ' + l.cls + '" href="' + escHtml(l.url) + '" target="_blank">' + l.label + '</a>').join('')
+    : '<span style="color:var(--text-3);font-size:12px">Aucun témoignage lié</span>';
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = '<div class="modal">' +
+    '<div class="modal-header">' +
+      '<div>' +
+        '<div class="modal-title">' + escHtml(c.client) + '</div>' +
+        '<div style="font-size:12px;color:var(--text-3);margin-top:3px">' + escHtml(c.commerce || '') + '</div>' +
+      '</div>' +
+      '<button class="modal-close" id="dClose">✕</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      row2('Problématique principale', pbTag(c.problematique)) +
+      (c.pb_secondaires ? row('Problématiques secondaires', c.pb_secondaires) : '') +
+      row('Résultats obtenus', c.resultats || '—') +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px">' +
+        rowInline('Date de début', c.date_debut && c.date_debut !== 'NaT' ? c.date_debut.slice(0,10) : '—') +
+        rowInline('Temporalité (mois)', c.temporalite || '—') +
+      '</div>' +
+      '<div class="detail-section" style="margin-top:16px">' +
+        '<div class="detail-label">Témoignages & documents</div>' +
+        '<div class="detail-links">' + linkHtml + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="modal-actions">' +
+      '<button class="btn-ghost" id="dClose2">Fermer</button>' +
+      '<button class="btn-primary" onclick="openEditModal(' + idx + ');document.querySelector(\'.modal-backdrop\').remove()">✏️ Modifier</button>' +
+    '</div>' +
+  '</div>';
+
+  document.body.appendChild(backdrop);
+  document.getElementById('dClose').onclick = () => backdrop.remove();
+  document.getElementById('dClose2').onclick = () => backdrop.remove();
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) backdrop.remove(); });
+}
+
+function row(label, val) {
+  return '<div class="detail-section"><div class="detail-label">' + label + '</div>' +
+    '<div class="detail-value">' + escHtml(val) + '</div></div>';
+}
+function row2(label, html) {
+  return '<div class="detail-section"><div class="detail-label">' + label + '</div>' +
+    '<div class="detail-value">' + html + '</div></div>';
+}
+function rowInline(label, val) {
+  return '<div class="detail-section"><div class="detail-label">' + label + '</div>' +
+    '<div class="detail-value big">' + escHtml(val) + '</div></div>';
+}
+
+/* ── ADD / EDIT MODAL ── */
+function openAddModal() {
+  editIdx = null;
+  showForm({});
+}
+
+function openEditModal(idx) {
+  editIdx = idx;
+  showForm(clients[idx]);
+}
+
+function showForm(c) {
+  const isEdit = editIdx !== null;
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.id = 'formBackdrop';
+
+  backdrop.innerHTML = '<div class="modal">' +
+    '<div class="modal-header">' +
+      '<div class="modal-title">' + (isEdit ? '✏️ Modifier le client' : '＋ Nouveau client') + '</div>' +
+      '<button class="modal-close" id="fClose">✕</button>' +
+    '</div>' +
+    '<div class="modal-body">' +
+      '<div class="form-grid">' +
+        field('client', 'Nom du client *', c.client || '', false) +
+        field('commerce', 'Type de commerce', c.commerce || '', false) +
+        field('date_debut', 'Date de début', c.date_debut && c.date_debut !== 'NaT' ? c.date_debut.slice(0,10) : '', false, 'date') +
+        field('temporalite', 'Temporalité (mois)', c.temporalite || '', false) +
+        fieldFull('problematique', 'Problématique principale', c.problematique || '') +
+        fieldFull('pb_secondaires', 'Problématiques secondaires', c.pb_secondaires || '') +
+        fieldFull('resultats', 'Résultats obtenus', c.resultats || '', true) +
+      '</div>' +
+      '<div class="section-label">Témoignages & liens</div>' +
+      '<div class="form-grid">' +
+        field('trustpilot', 'Lien TrustPilot', c.trustpilot || '', false, 'url') +
+        field('video', 'Lien Vidéo', c.video || '', false, 'url') +
+        field('autre_temoignage', 'Autre témoignage', c.autre_temoignage || '', false, 'url') +
+        field('temoignage_supp1', 'Fichier supp. 1', c.temoignage_supp1 || '', false, 'url') +
+        field('temoignage_supp2', 'Fichier supp. 2', c.temoignage_supp2 || '', false, 'url') +
+        field('temoignage_supp3', 'Fichier supp. 3', c.temoignage_supp3 || '', false, 'url') +
+        field('temoignage_supp4', 'Fichier supp. 4', c.temoignage_supp4 || '', false, 'url') +
+      '</div>' +
+    '</div>' +
+    '<div class="modal-actions">' +
+      '<button class="btn-ghost" id="fCancel">Annuler</button>' +
+      '<button class="btn-primary" id="fSave">💾 Sauvegarder</button>' +
+    '</div>' +
+  '</div>';
+
+  document.body.appendChild(backdrop);
+
+  document.getElementById('fClose').onclick = () => backdrop.remove();
+  document.getElementById('fCancel').onclick = () => backdrop.remove();
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) backdrop.remove(); });
+
+  document.getElementById('fSave').onclick = () => {
+    const name = document.getElementById('f_client').value.trim();
+    if (!name) { showToast('Le nom du client est requis', true); return; }
+
+    const data = {
+      client: name,
+      commerce: document.getElementById('f_commerce').value.trim(),
+      date_debut: document.getElementById('f_date_debut').value,
+      temporalite: document.getElementById('f_temporalite').value.trim(),
+      problematique: document.getElementById('f_problematique').value.trim(),
+      pb_secondaires: document.getElementById('f_pb_secondaires').value.trim(),
+      resultats: document.getElementById('f_resultats').value.trim(),
+      trustpilot: document.getElementById('f_trustpilot').value.trim(),
+      video: document.getElementById('f_video').value.trim(),
+      autre_temoignage: document.getElementById('f_autre_temoignage').value.trim(),
+      temoignage_supp1: document.getElementById('f_temoignage_supp1').value.trim(),
+      temoignage_supp2: document.getElementById('f_temoignage_supp2').value.trim(),
+      temoignage_supp3: document.getElementById('f_temoignage_supp3').value.trim(),
+      temoignage_supp4: document.getElementById('f_temoignage_supp4').value.trim(),
+    };
+
+    if (isEdit) {
+      clients[editIdx] = { ...clients[editIdx], ...data };
+      showToast('✅ Client modifié avec succès');
+    } else {
+      clients.unshift({ ...data, _id: Date.now() });
+      showToast('✅ Client ajouté avec succès');
+    }
+    saveData();
+    backdrop.remove();
+    renderStats();
+    renderTable();
+  };
+}
+
+function field(id, label, val, full = false, type = 'text') {
+  return '<div class="field' + (full ? ' full' : '') + '">' +
+    '<label>' + label + '</label>' +
+    '<input type="' + type + '" id="f_' + id + '" value="' + escHtml(val) + '" placeholder="' + label + '"/>' +
+    '</div>';
+}
+function fieldFull(id, label, val, textarea = false) {
+  if (textarea) {
+    return '<div class="field full"><label>' + label + '</label>' +
+      '<textarea id="f_' + id + '" rows="4" placeholder="' + label + '">' + escHtml(val) + '</textarea></div>';
+  }
+  return '<div class="field full"><label>' + label + '</label>' +
+    '<input type="text" id="f_' + id + '" value="' + escHtml(val) + '" placeholder="' + label + '"/></div>';
+}
+
+/* ── DELETE ── */
+function confirmDelete(idx) {
+  const c = clients[idx];
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = '<div class="confirm-modal">' +
+    '<h3>Supprimer ce client ?</h3>' +
+    '<p>Vous êtes sur le point de supprimer <strong>' + escHtml(c.client) + '</strong>. Cette action est irréversible.</p>' +
+    '<div class="confirm-actions">' +
+      '<button class="btn-ghost" style="flex:1" id="cdCancel">Annuler</button>' +
+      '<button class="btn-primary" style="background:var(--red)" id="cdConfirm">Supprimer</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(backdrop);
+
+  document.getElementById('cdCancel').onclick = () => backdrop.remove();
+  document.getElementById('cdConfirm').onclick = () => {
+    clients.splice(idx, 1);
+    saveData();
+    renderStats();
+    renderTable();
+    backdrop.remove();
+    showToast('🗑 Client supprimé');
+  };
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) backdrop.remove(); });
+}
+
+/* ── EXPORT CSV ── */
+function exportCSV() {
+  const cols = ['client','commerce','problematique','pb_secondaires','resultats','date_debut','temporalite','trustpilot','video','autre_temoignage'];
+  const header = ['Client','Commerce','Problématique','Pb secondaires','Résultats','Date début','Temporalité','TrustPilot','Vidéo','Autre témoignage'];
+  const rows = filtered.map(c => cols.map(k => '"' + (c[k] || '').replace(/"/g, '""') + '"').join(','));
+  const csv = '\ufeff' + [header.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'suivi_clients_ambitio.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('📥 Export CSV téléchargé');
+}
+
+/* ── TOAST ── */
+function showToast(msg, error = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (error ? ' error' : '');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ── POPULATE METIER FILTER ── */
+function populateMetierFilter() {
+  const sel = document.getElementById('filterMetier');
+  const metiers = [...new Set(
+    clients.map(c => (c.commerce || '').trim()).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'fr'));
+  // keep first option, rebuild the rest
+  sel.innerHTML = '<option value="">Tous les métiers (' + metiers.length + ')</option>';
+  metiers.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m.toLowerCase();
+    opt.textContent = m;
+    sel.appendChild(opt);
+  });
+}
+
+/* ── INIT ── */
+loadData();
+populateMetierFilter();
+renderStats();
+renderTable();
+
+document.getElementById('searchInput').addEventListener('input', renderTable);
+document.getElementById('filterPb').addEventListener('change', renderTable);
+document.getElementById('filterTemoignage').addEventListener('change', renderTable);
+document.getElementById('filterMetier').addEventListener('change', renderTable);
+</script>
+</body>
+</html>
