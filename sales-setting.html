@@ -361,9 +361,7 @@ const U = {
    SEMAINES DU MOIS
    Avant Mars 2026 : semaines lun→dim classiques (peuvent déborder)
    À partir de Mars 2026 : semaines strictement dans le mois
-     - 1re semaine : du 1er au premier dimanche (même partielle)
-     - Semaines pleines lun→dim au milieu
-     - Dernière semaine : du dernier lundi à la fin du mois (même partielle)
+     - Segments ≤ 3 jours fusionnés avec la semaine adjacente
 ═══════════════════════════════════════════════════════════ */
 function getMonthWeeks(monthLabel) {
   const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
@@ -379,6 +377,7 @@ function getMonthWeeks(monthLabel) {
     const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
     return d.getDate() + ' ' + M[d.getMonth()];
   }
+  function dayCount(a, b) { return Math.round((b - a) / 86400000) + 1; }
 
   /* ── Ancien mode (avant Mars 2026) : semaines lun→dim, débordement OK ── */
   if (year < 2026 || (year === 2026 && month < 2)) {
@@ -393,9 +392,9 @@ function getMonthWeeks(monthLabel) {
         weeks.push({
           id: 's' + (weeks.length + 1), label: 'S' + (weeks.length + 1),
           start: new Date(monday), end: new Date(sunday),
-          range: fmt(monday) + ' → ' + fmt(sunday),
-          short: fmtShort(monday) + ' – ' + fmtShort(sunday),
-          tab:   fmt(monday) + '→' + fmt(sunday),
+          range: fmt(monday) + ' \u2192 ' + fmt(sunday),
+          short: fmtShort(monday) + ' \u2013 ' + fmtShort(sunday),
+          tab:   fmt(monday) + '\u2192' + fmt(sunday),
         });
       }
       monday = new Date(monday.getTime() + 7 * 86400000);
@@ -408,34 +407,41 @@ function getMonthWeeks(monthLabel) {
     return weeks;
   }
 
-  /* ── Nouveau mode (Mars 2026+) : semaines strictement dans le mois ── */
-  const lastDay  = new Date(year, month + 1, 0);   // dernier jour du mois
-  const weeks    = [];
-  let cursor     = new Date(year, month, 1);
+  /* ── Nouveau mode (Mars 2026+) : semaines dans le mois, fusion si ≤ 3j ── */
+  const lastDay = new Date(year, month + 1, 0);
+  const segs    = [];
+  let cursor    = new Date(year, month, 1);
 
   while (cursor <= lastDay) {
-    const dow = cursor.getDay(); // 0=Dim,1=Lun...6=Sam
-    // Fin de segment = prochain dimanche (ou fin de mois si avant)
+    const dow = cursor.getDay();
     let end;
-    if (dow === 1) {
-      end = new Date(cursor.getTime() + 6 * 86400000);   // Lundi → Dimanche
-    } else {
-      const daysToSunday = dow === 0 ? 0 : (7 - dow);
-      end = new Date(cursor.getTime() + daysToSunday * 86400000);
-    }
-    if (end > lastDay) end = new Date(lastDay);           // Clamp à fin de mois
-
-    weeks.push({
-      id: 's' + (weeks.length + 1), label: 'S' + (weeks.length + 1),
-      start: new Date(cursor), end: new Date(end),
-      range: fmt(cursor) + ' → ' + fmt(end),
-      short: fmtShort(cursor) + ' – ' + fmtShort(end),
-      tab:   fmt(cursor) + '→' + fmt(end),
-    });
-    cursor = new Date(end.getTime() + 86400000);          // Lendemain
-    if (weeks.length >= 6) break;
+    if (dow === 1) { end = new Date(cursor.getTime() + 6 * 86400000); }
+    else { end = new Date(cursor.getTime() + (dow === 0 ? 0 : 7 - dow) * 86400000); }
+    if (end > lastDay) end = new Date(lastDay);
+    segs.push({ start: new Date(cursor), end: new Date(end) });
+    cursor = new Date(end.getTime() + 86400000);
   }
-  return weeks;
+
+  // Fusion début si ≤ 3 jours
+  if (segs.length >= 2 && dayCount(segs[0].start, segs[0].end) <= 3) {
+    segs[1].start = segs[0].start;
+    segs.shift();
+  }
+  // Fusion fin si ≤ 3 jours
+  if (segs.length >= 2 && dayCount(segs[segs.length-1].start, segs[segs.length-1].end) <= 3) {
+    segs[segs.length-2].end = segs[segs.length-1].end;
+    segs.pop();
+  }
+
+  return segs.map((s, i) => ({
+    id:    's' + (i + 1),
+    label: 'S' + (i + 1),
+    start: s.start,
+    end:   s.end,
+    range: fmt(s.start) + ' \u2192 ' + fmt(s.end),
+    short: fmtShort(s.start) + ' \u2013 ' + fmtShort(s.end),
+    tab:   fmt(s.start) + '\u2192' + fmt(s.end),
+  }));
 }
 
 window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
