@@ -1062,6 +1062,38 @@ async function loadMonthFromFirebaseC() {
 async function firebaseSyncMembersC() {
   if (!Fire.db) return;
 
+  // ── MIGRATION LOCALE → FIRESTORE ──
+  const MONTHS_ALL = DB.months;
+  const YEARS_CHECK = [2025, 2026];
+  for (const m of MEMBERS_C) {
+    for (const yr of YEARS_CHECK) {
+      for (const mo of MONTHS_ALL) {
+        const monthLabel = `${mo} ${yr}`;
+        const lsKey = `closing_${m.uid}_${monthLabel}`;
+        let lsData = null;
+        try { const v = localStorage.getItem(lsKey); lsData = v ? JSON.parse(v) : null; } catch(e) {}
+        if (!lsData) continue;
+
+        const fsKey = Fire._key(monthLabel);
+        if (!fsKey) continue;
+        const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(fsKey);
+        try {
+          const snap = await ref.get();
+          if (!snap.exists || !snap.data().closing) {
+            const closingData = {};
+            ['s1','s2','s3','s4','s5'].forEach(w => {
+              if (lsData[w]) closingData[w] = lsData[w];
+            });
+            if (Object.keys(closingData).length > 0) {
+              await ref.set({ closing: closingData, _ls_migrated: true }, { merge: true });
+              console.log(`[Firebase] Migration localStorage → Firestore: ${m.name} ${monthLabel}`);
+            }
+          }
+        } catch(e) { console.warn(`[Firebase] Migration locale échouée ${m.name} ${monthLabel}:`, e.message); }
+      }
+    }
+  }
+
   for (const m of MEMBERS_C) {
     for (const [monthLabel, monthData] of Object.entries(m.data)) {
       const key = Fire._key(monthLabel);
