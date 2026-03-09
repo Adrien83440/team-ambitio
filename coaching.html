@@ -776,8 +776,18 @@ function getMonthlyQuota(programme){
   return 1;
 }
 
+// Helper: collect all sessions from years (or legacy flat array)
+function getAllSessions(c){
+  if(c.years && c.years.length){
+    const all = [];
+    c.years.forEach(y => (y.sessions||[]).forEach(s => all.push(s)));
+    return all;
+  }
+  return c.sessions||[];
+}
+
 function getSessionsInMonth(c, year, month){
-  return (c.sessions||[]).filter(s=>{
+  return getAllSessions(c).filter(s=>{
     if(s.statut!=='fait' || !s.date) return false;
     const d = new Date(s.date);
     return d.getFullYear()===year && d.getMonth()===month;
@@ -974,7 +984,7 @@ function applyFilters(){
     if(q && !c.nom.toLowerCase().includes(q) && !(c.email||'').toLowerCase().includes(q) && !(c.activite||'').toLowerCase().includes(q)) return false;
     if(prog && c.programme !== prog) return false;
     if(coach){
-      const hasCoach = (c.sessions||[]).some(s=>normalizeCoach(s.coach)===coach);
+      const hasCoach = getAllSessions(c).some(s=>normalizeCoach(s.coach)===coach);
       if(!hasCoach) return false;
     }
     return true;
@@ -1006,7 +1016,7 @@ function applyFilters(){
   }
 
   document.getElementById('statTotal').textContent    = _filtered.length;
-  document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>(c.sessions||[]).filter(s=>s.statut==='fait').length+s,0);
+  document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>getAllSessions(c).filter(s=>s.statut==='fait').length+s,0);
   document.getElementById('statInactive').textContent = inactifs.length;
   updateQuotaStats();
   render();
@@ -1095,7 +1105,7 @@ function renderCard(c){
   const alertText = getAlertText(c);
   const isInactive = c.statut === 'inactif';
   const barColor = isInactive ? '#94a3b8' : (pct>=100?'var(--green)':pct>=50?'var(--blue-main)':pct>=25?'var(--orange)':'var(--red)');
-  const lastCoach = (c.sessions||[]).filter(s=>s.coach&&s.statut==='fait').pop();
+  const lastCoach = getAllSessions(c).filter(s=>s.coach&&s.statut==='fait').pop();
   
   // Quota for viewed month
   const q = getQuotaStatus(c, _viewYear, _viewMonth);
@@ -1170,7 +1180,7 @@ function openDetail(id){
   const barColor=pct>=100?'var(--green)':pct>=50?'var(--blue-main)':'var(--orange)';
   const alert=getAlertStatus(c);
   const alertText=getAlertText(c);
-  const sessions=(c.sessions||[]).sort((a,b)=>a.numero-b.numero);
+  const sessions=getAllSessions(c).sort((a,b)=>a.numero-b.numero);
   
   // Quota
   const q = getQuotaStatus(c, _viewYear, _viewMonth);
@@ -1450,7 +1460,7 @@ async function savePlanAction(clientId){
 async function quickMarkDone(clientId, sessionNum){
   const c = _clients.find(x=>x._id===clientId);
   if(!c) return;
-  const s = (c.sessions||[]).find(s=>s.numero===sessionNum);
+  const s = getAllSessions(c).find(s=>s.numero===sessionNum);
   if(!s) return;
 
   const date  = (document.getElementById('qs-date-'+sessionNum)||{}).value || '';
@@ -1467,7 +1477,7 @@ async function quickMarkDone(clientId, sessionNum){
   s.devoirs   = ((document.getElementById('qs-devoirs-'+sessionNum)||{}).value||'').trim();
   s.notes     = ((document.getElementById('qs-notes-'+sessionNum)||{}).value||'').trim();
 
-  const doneSessions = (c.sessions||[]).filter(s=>s.statut==='fait');
+  const doneSessions = getAllSessions(c).filter(s=>s.statut==='fait');
   c.nbCoachingsFaits = doneSessions.length;
   const dates = doneSessions.filter(s=>s.date).map(s=>s.date);
   c.lastSessionDate = dates.length ? dates.sort().pop() : '';
@@ -1496,7 +1506,7 @@ function toggleSessionEdit(clientId, sessionNum){
 async function saveSessionEdit(clientId, sessionNum){
   const c = _clients.find(x=>x._id===clientId);
   if(!c) return;
-  const s = (c.sessions||[]).find(s=>s.numero===sessionNum);
+  const s = getAllSessions(c).find(s=>s.numero===sessionNum);
   if(!s) return;
 
   const get = id => (document.getElementById(id)||{}).value || '';
@@ -1508,7 +1518,7 @@ async function saveSessionEdit(clientId, sessionNum){
   s.devoirs  = get('se-devoirs-'+sessionNum).trim();
   s.notes    = get('se-notes-'+sessionNum).trim();
 
-  const doneSessions = (c.sessions||[]).filter(s=>s.statut==='fait');
+  const doneSessions = getAllSessions(c).filter(s=>s.statut==='fait');
   c.nbCoachingsFaits = doneSessions.length;
   const dates = doneSessions.filter(s=>s.date).map(s=>s.date);
   c.lastSessionDate = dates.length ? dates.sort().pop() : '';
@@ -1692,22 +1702,37 @@ async function scanDriveForClient(clientId){
   // Link docs to sessions (avoid duplicates)
   let linked=0, unlinked=0;
   let changed = false;
-  const sessions = c.sessions||[];
+  // Collect all sessions from all years (references, so modifications propagate)
+  const sessions = [];
+  if(c.years && c.years.length){
+    c.years.forEach(y => (y.sessions||[]).forEach(s => sessions.push(s)));
+  } else {
+    (c.sessions||[]).forEach(s => sessions.push(s));
+  }
   if(!c.driveDocs) c.driveDocs = [];
 
   for(const doc of matchedDocs){
-    // Check if already linked (by URL)
+    // Check if already linked to a session (by URL)
     const alreadyInSession = sessions.some(s=>s.driveUrl===doc.url);
-    const alreadyInUnlinked = c.driveDocs.some(d=>d.docUrl===doc.url);
-    if(alreadyInSession || alreadyInUnlinked){
-      log(`⏩ Déjà lié: ${doc.date}`,'dsl-skip');
+    if(alreadyInSession){
+      log(`⏩ Déjà lié à une session: ${doc.date}`,'dsl-skip');
       continue;
     }
 
-    // Fetch summary
-    log(`📝 Récupération résumé ${doc.date}...`);
-    const text = await fetchDocText(doc.id);
-    const summary = extractSummary(text);
+    // If in driveDocs (previously unlinked), remove it — we'll retry linking
+    const prevIdx = c.driveDocs.findIndex(d=>d.docUrl===doc.url);
+    const wasPrevUnlinked = prevIdx !== -1;
+
+    // Fetch summary (use cached from driveDocs if available)
+    let summary = '';
+    if(wasPrevUnlinked && c.driveDocs[prevIdx].summary){
+      summary = c.driveDocs[prevIdx].summary;
+      log(`📝 Résumé en cache pour ${doc.date}`);
+    } else {
+      log(`📝 Récupération résumé ${doc.date}...`);
+      const text = await fetchDocText(doc.id);
+      summary = extractSummary(text);
+    }
 
     // Try to match to a session by date (±2 days)
     let matchedSession = null;
@@ -1727,11 +1752,13 @@ async function scanDriveForClient(clientId){
       if(!matchedSession.resume || matchedSession.resume.length<20){
         matchedSession.resume = summary;
       }
+      // Remove from driveDocs if it was previously unlinked
+      if(wasPrevUnlinked) c.driveDocs.splice(prevIdx, 1);
       linked++;
       changed = true;
       log(`🔗 Lié à session #${matchedSession.numero} (${matchedSession.date})`,'dsl-match');
-    } else {
-      // Store as unlinked
+    } else if(!wasPrevUnlinked){
+      // Store as unlinked (only if not already there)
       c.driveDocs.push({
         date: doc.date,
         docUrl: doc.url,
@@ -1742,6 +1769,8 @@ async function scanDriveForClient(clientId){
       unlinked++;
       changed = true;
       log(`📎 Pas de session correspondante → stocké comme non-lié (${doc.date})`,'dsl-skip');
+    } else {
+      log(`⏩ Toujours non-lié: ${doc.date} (pas de session à ±2j)`,'dsl-skip');
     }
   }
 
