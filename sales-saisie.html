@@ -54,6 +54,8 @@ const PROJECTIONS = {
 /* ═══════════════════════════════════════════════════════════
    DATA STORE
 ═══════════════════════════════════════════════════════════ */
+const ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
+
 const DB = {
   months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
 
@@ -106,10 +108,10 @@ const DB = {
     const pc = PROJECTIONS.closing;
     const ps = PROJECTIONS.setting;
 
-    const sumC  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rc[w][k]||0), 0);
-    const sumS  = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (rs[w][k]||0), 0);
-    const projC = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (pc[w][k]||0), 0);
-    const projS = k => ['s1','s2','s3','s4'].reduce((t,w) => t + (ps[w][k]||0), 0);
+    const sumC  = k => ALL_WEEKS.reduce((t,w) => t + ((rc[w]||{})[k]||0), 0);
+    const sumS  = k => ALL_WEEKS.reduce((t,w) => t + ((rs[w]||{})[k]||0), 0);
+    const projC = k => ALL_WEEKS.reduce((t,w) => t + ((pc[w]||{})[k]||0), 0);
+    const projS = k => ALL_WEEKS.reduce((t,w) => t + ((ps[w]||{})[k]||0), 0);
 
     const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
     const cta=sumC('contracte'), cola=sumC('collecte');
@@ -135,7 +137,7 @@ const DB = {
         atteinte: ctp>0 ? cta/ctp : 0,
         delta:    Math.max(0, ctp-cta),
       },
-      s1: DB._cw('s1'), s2: DB._cw('s2'), s3: DB._cw('s3'), s4: DB._cw('s4'),
+      ...Object.fromEntries(ALL_WEEKS.filter(w => rc[w]).map(w => [w, DB._cw(w)])),
     };
 
     const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
@@ -156,7 +158,7 @@ const DB = {
         showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
         cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
       },
-      s1: DB._sw('s1'), s2: DB._sw('s2'), s3: DB._sw('s3'), s4: DB._sw('s4'),
+      ...Object.fromEntries(ALL_WEEKS.filter(w => rs[w]).map(w => [w, DB._sw(w)])),
     };
 
     // Sync deals dans commissions
@@ -167,21 +169,21 @@ const DB = {
   },
 
   _cw(w) {
-    const d=DB._raw.closing[w], p=PROJECTIONS.closing[w];
+    const d=DB._raw.closing[w]||{}, p=PROJECTIONS.closing[w]||PROJECTIONS.closing.s1||{};
     return {
-      calls:{a:d.calls||0,p:p.calls}, lives:{a:d.lives||0,p:p.lives},
-      offres:{a:d.offres||0,p:p.offres}, closes:{a:d.closes||0,p:p.closes},
-      hc:{a:d.hc||0,p:p.closes}, fu:{a:d.fu||0,p:0},
-      contracte:{a:d.contracte||0,p:p.contracte}, collecte:{a:d.collecte||0,p:p.collecte},
+      calls:{a:d.calls||0,p:p.calls||0}, lives:{a:d.lives||0,p:p.lives||0},
+      offres:{a:d.offres||0,p:p.offres||0}, closes:{a:d.closes||0,p:p.closes||0},
+      hc:{a:d.hc||0,p:p.closes||0}, fu:{a:d.fu||0,p:0},
+      contracte:{a:d.contracte||0,p:p.contracte||0}, collecte:{a:d.collecte||0,p:p.collecte||0},
     };
   },
   _sw(w) {
-    const d=DB._raw.setting[w], p=PROJECTIONS.setting[w];
+    const d=DB._raw.setting[w]||{}, p=PROJECTIONS.setting[w]||PROJECTIONS.setting.s1||{};
     return {
-      leads:{a:d.leads||0,p:p.leads}, calls:{a:d.calls||0,p:p.calls},
-      decroches:{a:d.decroches||0,p:p.decroches}, propRdv:{a:d.propRdv||0,p:p.propRdv},
-      sets:{a:d.sets||0,p:p.sets}, presents:{a:d.presents||0,p:p.presents},
-      closes:{a:d.closes||0,p:p.closes},
+      leads:{a:d.leads||0,p:p.leads||0}, calls:{a:d.calls||0,p:p.calls||0},
+      decroches:{a:d.decroches||0,p:p.decroches||0}, propRdv:{a:d.propRdv||0,p:p.propRdv||0},
+      sets:{a:d.sets||0,p:p.sets||0}, presents:{a:d.presents||0,p:p.presents||0},
+      closes:{a:d.closes||0,p:p.closes||0},
     };
   },
 };
@@ -249,11 +251,11 @@ const Fire = {
   // Applique un snapshot Firestore dans DB puis recalcule
   apply(data) {
     if (!data) return;
-    if (data.closing) ['s1','s2','s3','s4'].forEach(w => {
-      if (data.closing[w]) Object.assign(DB._raw.closing[w], data.closing[w]);
+    if (data.closing) ALL_WEEKS.forEach(w => {
+      if (data.closing[w]) Object.assign(DB._raw.closing[w]||(DB._raw.closing[w]={}), data.closing[w]);
     });
-    if (data.setting) ['s1','s2','s3','s4'].forEach(w => {
-      if (data.setting[w]) Object.assign(DB._raw.setting[w], data.setting[w]);
+    if (data.setting) ALL_WEEKS.forEach(w => {
+      if (data.setting[w]) Object.assign(DB._raw.setting[w]||(DB._raw.setting[w]={}), data.setting[w]);
     });
     if (data.deals) DB._raw.deals = data.deals;
     DB.compute();
@@ -357,63 +359,82 @@ const U = {
 
 
 /* ═══════════════════════════════════════════════════════════
-   SEMAINES RÉELLES — calcule les vraies dates lun→dim
+   SEMAINES DU MOIS
+   Avant Mars 2026 : semaines lun→dim classiques (peuvent déborder)
+   À partir de Mars 2026 : semaines strictement dans le mois
 ═══════════════════════════════════════════════════════════ */
 function getMonthWeeks(monthLabel) {
-  // monthLabel = "Février 2026"
   const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
                      'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
   const parts = monthLabel.split(' ');
-  const month = MONTHS_FR.indexOf(parts[0]); // 0-based
+  const month = MONTHS_FR.indexOf(parts[0]);
   const year  = parseInt(parts[1]);
   if (month === -1 || isNaN(year)) return [];
 
-  const DAYS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
   const pad = n => String(n).padStart(2,'0');
-
-  function fmt(d) {
-    // "14/02"
-    return pad(d.getDate()) + '/' + pad(d.getMonth()+1);
-  }
+  function fmt(d) { return pad(d.getDate()) + '/' + pad(d.getMonth()+1); }
   function fmtShort(d) {
-    // "14 fév"
     const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
     return d.getDate() + ' ' + M[d.getMonth()];
   }
 
-  // Premier lundi qui touche le mois (peut être dans le mois précédent)
-  const firstOfMonth = new Date(year, month, 1);
-  const dayOfWeek = firstOfMonth.getDay(); // 0=Sun,1=Mon...
-  const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  let monday = new Date(year, month, 1 + daysToMonday);
+  if (year < 2026 || (year === 2026 && month < 2)) {
+    const firstOfMonth = new Date(year, month, 1);
+    const dayOfWeek = firstOfMonth.getDay();
+    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    let monday = new Date(year, month, 1 + daysToMonday);
+    const weeks = [];
+    while (true) {
+      const sunday = new Date(monday.getTime() + 6 * 86400000);
+      if (monday.getMonth() === month || sunday.getMonth() === month) {
+        weeks.push({
+          id: 's' + (weeks.length + 1), label: 'S' + (weeks.length + 1),
+          start: new Date(monday), end: new Date(sunday),
+          range: fmt(monday) + ' → ' + fmt(sunday),
+          short: fmtShort(monday) + ' – ' + fmtShort(sunday),
+          tab:   fmt(monday) + '→' + fmt(sunday),
+        });
+      }
+      monday = new Date(monday.getTime() + 7 * 86400000);
+      if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
+        if (monday.getMonth() !== month) break;
+      }
+      if (monday.getFullYear() > year + 1) break;
+      if (weeks.length >= 6) break;
+    }
+    return weeks;
+  }
 
-  const weeks = [];
-  while (true) {
-    const sunday = new Date(monday.getTime() + 6 * 86400000);
-    // Inclure si la semaine chevauche le mois cible
-    if (monday.getMonth() === month || sunday.getMonth() === month) {
-      weeks.push({
-        id:    's' + (weeks.length + 1),
-        label: 'S' + (weeks.length + 1),
-        start: monday,
-        end:   sunday,
-        range: fmt(monday) + ' → ' + fmt(sunday),       // "26/01 → 01/02"
-        short: fmtShort(monday) + ' – ' + fmtShort(sunday), // "26 jan – 1 fév"
-        tab:   fmt(monday) + '→' + fmt(sunday),
-      });
+  const lastDay  = new Date(year, month + 1, 0);
+  const weeks    = [];
+  let cursor     = new Date(year, month, 1);
+
+  while (cursor <= lastDay) {
+    const dow = cursor.getDay();
+    let end;
+    if (dow === 1) {
+      end = new Date(cursor.getTime() + 6 * 86400000);
+    } else {
+      const daysToSunday = dow === 0 ? 0 : (7 - dow);
+      end = new Date(cursor.getTime() + daysToSunday * 86400000);
     }
-    monday = new Date(monday.getTime() + 7 * 86400000);
-    if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
-      if (monday.getMonth() !== month) break;
-    }
-    if (monday.getFullYear() > year + 1) break;
+    if (end > lastDay) end = new Date(lastDay);
+
+    weeks.push({
+      id: 's' + (weeks.length + 1), label: 'S' + (weeks.length + 1),
+      start: new Date(cursor), end: new Date(end),
+      range: fmt(cursor) + ' → ' + fmt(end),
+      short: fmtShort(cursor) + ' – ' + fmtShort(end),
+      tab:   fmt(cursor) + '→' + fmt(end),
+    });
+    cursor = new Date(end.getTime() + 86400000);
     if (weeks.length >= 6) break;
   }
   return weeks;
 }
 
 window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
-window.getMonthWeeks=getMonthWeeks;
+window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
 
 /* === end sales-data.js === */
 </script>
@@ -624,13 +645,15 @@ function setSection(s) {
 function buildClosingWeeks() {
   const container = document.getElementById('closing-weeks');
   const pc = PROJECTIONS.closing;
-  container.innerHTML = ['s1','s2','s3','s4'].map((w, i) => {
-    const d = DB._raw.closing[w];
-    const p = pc[w];
+  const weeks = getMonthWeeks(cmk());
+  container.innerHTML = weeks.map((wk, i) => {
+    const w = wk.id;
+    const d = DB._raw.closing[w] || {};
+    const p = pc[w] || pc.s1 || {};
     return `
       <div class="week-form-card">
         <div class="week-form-title">
-          Semaine ${i+1}
+          ${wk.label} <small style="font-weight:400;opacity:.6">(${wk.range})</small>
           <span>Proj: ${p.closes} closes · ${U.euro(p.contracte)}</span>
         </div>
         <div class="form-grid-3">
@@ -687,13 +710,15 @@ function buildClosingWeeks() {
 function buildSettingWeeks() {
   const container = document.getElementById('setting-weeks');
   const ps = PROJECTIONS.setting;
-  container.innerHTML = ['s1','s2','s3','s4'].map((w, i) => {
-    const d = DB._raw.setting[w];
-    const p = ps[w];
+  const weeks = getMonthWeeks(cmk());
+  container.innerHTML = weeks.map((wk, i) => {
+    const w = wk.id;
+    const d = DB._raw.setting[w] || {};
+    const p = ps[w] || ps.s1 || {};
     return `
       <div class="week-form-card">
         <div class="week-form-title">
-          Semaine ${i+1}
+          ${wk.label} <small style="font-weight:400;opacity:.6">(${wk.range})</small>
           <span>Proj: ${p.sets} sets · ${p.closes} closes</span>
         </div>
         <div class="form-grid-3">
@@ -780,7 +805,7 @@ function buildDealsList() {
 /* ── Read closing form ── */
 function readClosingForm() {
   const data = {};
-  ['s1','s2','s3','s4'].forEach(w => {
+  getMonthWeeks(cmk()).map(wk => wk.id).forEach(w => {
     const g = k => parseFloat(document.getElementById(`c-${w}-${k}`)?.value) || 0;
     data[w] = {
       calls:     g('calls'),
@@ -799,7 +824,7 @@ function readClosingForm() {
 /* ── Read setting form ── */
 function readSettingForm() {
   const data = {};
-  ['s1','s2','s3','s4'].forEach(w => {
+  getMonthWeeks(cmk()).map(wk => wk.id).forEach(w => {
     const g = k => parseFloat(document.getElementById(`s-${w}-${k}`)?.value) || 0;
     data[w] = {
       leads:     g('leads'),
@@ -828,7 +853,7 @@ async function saveClosing() {
 
   try {
     if (Fire.db) {
-      for (const w of ['s1','s2','s3','s4']) {
+      for (const w of getMonthWeeks(cmk()).map(wk => wk.id)) {
         await Fire.saveClosing(user.uid, cmk(), w, data[w]);
       }
       U.toast('✅ Closing sauvegardé dans Firebase !');
@@ -861,7 +886,7 @@ async function saveSetting() {
 
   try {
     if (Fire.db) {
-      for (const w of ['s1','s2','s3','s4']) {
+      for (const w of getMonthWeeks(cmk()).map(wk => wk.id)) {
         await Fire.saveSetting(user.uid, cmk(), w, data[w]);
       }
       U.toast('✅ Setting sauvegardé dans Firebase !');
