@@ -5,24 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Saisie</title>
 <link rel="stylesheet" href="sales.css"/>
-
-<!-- ── Firebase v9 compat ── -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script>
-  if (!firebase.apps.length) {
-    firebase.initializeApp({
-      apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
-      authDomain:        "ambitio-team.firebaseapp.com",
-      projectId:         "ambitio-team",
-      storageBucket:     "ambitio-team.firebasestorage.app",
-      messagingSenderId: "1079366902268",
-      appId:             "1:1079366902268:web:b4ec1691dba54230339279"
-    });
-  }
-</script>
-
 <script>
 /* === sales-data.js inlined === */
 /**
@@ -968,50 +950,18 @@ function setStatus(msg) {
 }
 
 /* ── Init ── */
-document.addEventListener('DOMContentLoaded', async () => {
-  // Affichage optimiste depuis cache
-  const nmCache  = localStorage.getItem('ambitio_name') || 'Guillaume';
-  const uidCache = localStorage.getItem('ambitio_uid')  || 'guillaume';
-  document.getElementById('tb-nm').textContent     = nmCache;
-  document.getElementById('tb-av').textContent     = nmCache[0].toUpperCase();
-  document.getElementById('hdr-user').textContent  = '✏️ Saisie pour ' + nmCache + ' · ' + cmk();
+document.addEventListener('DOMContentLoaded', () => {
+  const nm = localStorage.getItem('ambitio_name') || 'Guillaume';
+  const uid = localStorage.getItem('ambitio_uid') || 'guillaume';
+  document.getElementById('tb-nm').textContent  = nm;
+  document.getElementById('tb-av').textContent  = nm[0].toUpperCase();
+  document.getElementById('hdr-user').textContent = '✏️ Saisie pour ' + nm + ' · ' + cmk();
   document.getElementById('month-lbl').textContent = cmk();
   document.getElementById('hdr-month').textContent = cmk();
 
-  // ── Attendre Firebase Auth ──
-  let fbUser = null;
-  try {
-    fbUser = await Promise.race([
-      new Promise(resolve => {
-        const unsub = firebase.auth().onAuthStateChanged(u => { unsub(); resolve(u); });
-      }),
-      new Promise(resolve => setTimeout(() => resolve(null), 5000))
-    ]);
-  } catch(e) { console.warn('[saisie] Auth error:', e); }
-
-  let uid = uidCache;
-  if (fbUser) {
-    try {
-      const uSnap = await firebase.firestore().collection('users').doc(fbUser.uid).get();
-      const uData = uSnap.exists ? uSnap.data() : {};
-      const role  = uData.role || localStorage.getItem('ambitio_role') || 'sales';
-      const name  = fbUser.displayName || fbUser.email.split('@')[0];
-      uid = fbUser.uid;
-      window._currentUserUid  = fbUser.uid;
-      window._currentRole     = role;
-      window._currentUserName = name;
-      localStorage.setItem('ambitio_role',  role);
-      localStorage.setItem('ambitio_uid',   fbUser.uid);
-      localStorage.setItem('ambitio_name',  name);
-      document.getElementById('tb-nm').textContent    = name;
-      document.getElementById('tb-av').textContent    = name[0].toUpperCase();
-      document.getElementById('hdr-user').textContent = '✏️ Saisie pour ' + name + ' · ' + cmk();
-    } catch(e) { console.warn('[saisie] Firestore user read:', e); }
-
-    // Init Firebase
-    if (!Fire.db) {
-      Fire.init(firebase.firestore(), uid);
-    }
+  // Connect Firebase if available
+  if (window.firebase && window.firebase.firestore) {
+    Fire.init(window.firebase.firestore(), uid);
   }
 
   loadData();
