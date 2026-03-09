@@ -1019,15 +1019,23 @@ async function saveCurrentWeek(auto = false) {
   const st = document.getElementById('save-status');
   if (st) { st.textContent = '⏳ Sauvegarde...'; st.style.color = 'var(--muted)'; }
 
+  if (!window.Fire || !Fire.db) {
+    console.warn('[Ambitio] Fire.db est null — sauvegarde locale uniquement. Firebase Auth actif?', typeof firebase !== 'undefined' ? firebase.auth().currentUser : 'SDK absent');
+    if (st) { st.textContent = '⚠️ Local seulement'; st.style.color = '#f59e0b'; }
+    if (!auto && U.toast) U.toast('⚠️ Sauvegarde locale — Firebase non connecté', 'info');
+    renderFiche();
+    return;
+  }
+
   try {
-    if (window.Fire && Fire.db) {
-      await Fire.saveClosing(currentMember.uid, cmk(), currentWeek, data);
-    }
+    await Fire.saveClosing(currentMember.uid, cmk(), currentWeek, data);
+    console.log('[Firebase] ✅ Sauvé closing', currentMember.uid, cmk(), currentWeek);
     if (st) { st.textContent = '✅ ' + new Date().toLocaleTimeString('fr-FR'); st.style.color = '#34d399'; }
     if (!auto && U.toast) U.toast('✅ Données sauvegardées !');
   } catch(e) {
+    console.error('[Firebase] ❌ Erreur sauvegarde closing:', e.code || e.message, e);
     if (st) { st.textContent = '⚠️ Local seulement'; st.style.color = '#f59e0b'; }
-    if (!auto) U.toast && U.toast('⚠️ Firebase indisponible, sauvegarde locale', 'info');
+    if (!auto && U.toast) U.toast('⚠️ Erreur Firebase: ' + (e.code || e.message), 'error');
   }
   renderFiche();
 }
@@ -1226,12 +1234,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Firebase init + sync (attente auth)
   if (typeof firebase !== 'undefined' && firebase.auth) {
+    console.log('[Ambitio] Firebase SDK détecté, en attente auth...');
     firebase.auth().onAuthStateChanged(async function(fbUser) {
-      if (!fbUser) return;
+      if (!fbUser) {
+        console.warn('[Ambitio] ❌ Aucun utilisateur Firebase Auth — données locales uniquement');
+        return;
+      }
+      console.log('[Ambitio] ✅ Firebase Auth OK:', fbUser.email, 'UID:', fbUser.uid);
       const uid = fbUser.uid;
       localStorage.setItem('ambitio_auth_uid', uid);
       if (window.Fire && !Fire.db) {
         Fire.init(firebase.firestore(), uid);
+        console.log('[Ambitio] Fire.db initialisé, lancement sync...');
         firebaseSyncMembersC();
       }
     });
