@@ -443,7 +443,6 @@ function getMonthWeeks(monthLabel) {
     tab:   fmt(s.start) + '\u2192' + fmt(s.end),
   }));
 }
-}
 
 window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
 window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
@@ -1165,19 +1164,44 @@ async function firebaseSyncMembersC() {
       }
     }
 
-    Fire.watchUser(m.uid, cmk(), (data) => {
+    // ── Charger le mois courant depuis Firestore même s'il n'est pas hardcodé ──
+    const curMonth = cmk();
+    if (!m.data[curMonth]) {
+      const curKey = Fire._key(curMonth);
+      try {
+        const curSnap = await Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(curKey).get();
+        if (curSnap.exists) {
+          const fbData = curSnap.data();
+          if (fbData.closing) {
+            m.data[curMonth] = emptyMonth();
+            ALL_WEEKS.forEach(w => {
+              if (fbData.closing[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...fbData.closing[w] };
+            });
+          }
+          if (fbData.closing_total) {
+            m.data[curMonth] = { _total: fbData.closing_total };
+          }
+          console.log('[Firebase] Chargé mois courant closing ' + m.name + ' ' + curMonth);
+        }
+      } catch(e) { console.warn('[Firebase] Erreur chargement mois courant closing ' + m.name + ':', e.message); }
+    }
+
+    Fire.watchUser(m.uid, curMonth, (data) => {
       if (!data) return;
-      const md = m.data[cmk()];
+      const md = m.data[curMonth];
       if (md && md._total) return;
       if (data.closing) {
-        if (!m.data[cmk()]) m.data[cmk()] = emptyMonth();
+        if (!m.data[curMonth]) m.data[curMonth] = emptyMonth();
         ALL_WEEKS.forEach(w => {
-          if (data.closing[w]) m.data[cmk()][w] = { ...m.data[cmk()][w], ...data.closing[w] };
+          if (data.closing[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...data.closing[w] };
         });
       }
       renderAll();
     });
   }
+
+  // ── Re-render après chargement Firestore ──
+  renderAll();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
