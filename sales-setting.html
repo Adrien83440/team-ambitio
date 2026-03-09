@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
-  if (!firebase.apps.length) {
+  if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp({
       apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
       authDomain:        "ambitio-team.firebaseapp.com",
@@ -1595,21 +1595,46 @@ async function firebaseSyncMembers() {
       }
     }
 
+    // ── Charger le mois courant depuis Firestore même s'il n'est pas hardcodé ──
+    const curMonth = cmk();
+    if (!m.data[curMonth]) {
+      const curKey = Fire._key(curMonth);
+      try {
+        const curSnap = await Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(curKey).get();
+        if (curSnap.exists) {
+          const fbData = curSnap.data();
+          if (fbData.setting) {
+            m.data[curMonth] = emptyMonth();
+            ALL_WEEKS.forEach(w => {
+              if (fbData.setting[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...fbData.setting[w] };
+            });
+          }
+          if (fbData.setting_total) {
+            m.data[curMonth] = { _total: fbData.setting_total };
+          }
+          console.log('[Firebase] Chargé mois courant ' + m.name + ' ' + curMonth);
+        }
+      } catch(e) { console.warn('[Firebase] Erreur chargement mois courant ' + m.name + ':', e.message); }
+    }
+
     // Écouter les changements en temps réel pour le mois courant
-    Fire.watchUser(m.uid, cmk(), (data) => {
+    Fire.watchUser(m.uid, curMonth, (data) => {
       if (!data) return;
-      const md = m.data[cmk()];
+      const md = m.data[curMonth];
       if (md && md._total) return; // Pas de mise à jour temps réel pour historique
 
       if (data.setting) {
-        if (!m.data[cmk()]) m.data[cmk()] = emptyMonth();
+        if (!m.data[curMonth]) m.data[curMonth] = emptyMonth();
         ALL_WEEKS.forEach(w => {
-          if (data.setting[w]) m.data[cmk()][w] = { ...m.data[cmk()][w], ...data.setting[w] };
+          if (data.setting[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...data.setting[w] };
         });
       }
       renderAll();
     });
   }
+
+  // ── Re-render après chargement Firestore ──
+  renderAll();
 }
 
 /* ─── INIT ─── */
@@ -1633,15 +1658,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Firebase : init + sync (attente auth)
-  firebase.auth().onAuthStateChanged(async function(fbUser) {
-    if (!fbUser) return;
-    const uid = fbUser.uid;
-    localStorage.setItem('ambitio_auth_uid', uid); // auth UID séparé
-    if (window.Fire && !Fire.db) {
-      Fire.init(firebase.firestore(), uid);
-      firebaseSyncMembers();
-    }
-  });
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(async function(fbUser) {
+      if (!fbUser) return;
+      const uid = fbUser.uid;
+      localStorage.setItem('ambitio_auth_uid', uid);
+      if (window.Fire && !Fire.db) {
+        Fire.init(firebase.firestore(), uid);
+        firebaseSyncMembers();
+      }
+    });
+  } else {
+    console.warn('[Ambitio] Firebase SDK non disponible — mode hors-ligne');
+  }
 
   document.addEventListener('db:updated', renderAll);
   renderListe();

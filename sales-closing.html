@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
-  if (!firebase.apps.length) {
+  if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp({
       apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
       authDomain:        "ambitio-team.firebaseapp.com",
@@ -1225,15 +1225,19 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('db:updated', renderAll);
 
   // Firebase init + sync (attente auth)
-  firebase.auth().onAuthStateChanged(async function(fbUser) {
-    if (!fbUser) return;
-    const uid = fbUser.uid;
-    localStorage.setItem('ambitio_auth_uid', uid); // auth UID séparé
-    if (window.Fire && !Fire.db) {
-      Fire.init(firebase.firestore(), uid);
-      firebaseSyncMembersC();
-    }
-  });
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(async function(fbUser) {
+      if (!fbUser) return;
+      const uid = fbUser.uid;
+      localStorage.setItem('ambitio_auth_uid', uid);
+      if (window.Fire && !Fire.db) {
+        Fire.init(firebase.firestore(), uid);
+        firebaseSyncMembersC();
+      }
+    });
+  } else {
+    console.warn('[Ambitio] Firebase SDK non disponible — mode hors-ligne');
+  }
 
   renderListe();
 });
