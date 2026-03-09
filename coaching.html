@@ -98,6 +98,22 @@
     .month-nav-today{font-size:11px;font-weight:600;color:var(--blue-main);cursor:pointer;padding:4px 10px;border-radius:6px;background:var(--blue-ghost);border:none;font-family:inherit}
 
     /* ── KANBAN ── */
+    /* ── CARTE ACTIVITÉ RÉCENTE ── */
+    .recent-activity-bar{padding:12px 28px 0;display:flex;gap:10px;overflow-x:auto;scrollbar-width:none}
+    .recent-activity-bar::-webkit-scrollbar{display:none}
+    .recent-activity-bar:empty{display:none}
+    .ra-card{display:flex;align-items:center;gap:10px;padding:9px 14px;background:white;border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0;min-width:220px;max-width:280px}
+    .ra-card:hover{border-color:var(--blue-main);box-shadow:0 2px 12px rgba(26,61,206,.1);transform:translateY(-1px)}
+    .ra-avatar{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:white;flex-shrink:0}
+    .ra-info{flex:1;overflow:hidden}
+    .ra-name{font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ra-meta{font-size:10px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ra-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;flex-shrink:0}
+    .ra-badge.session{background:var(--green-light);color:var(--green)}
+    .ra-badge.edit{background:var(--blue-ghost);color:var(--blue-main)}
+    .ra-badge.new{background:#fef3c7;color:#d97706}
+    .ra-section-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:6px;padding:0 4px;flex-shrink:0;align-self:center}
+
     .kanban{display:flex;gap:16px;padding:20px 28px;overflow-x:auto;min-height:calc(100vh - 240px);align-items:flex-start}
     .kanban-col{min-width:300px;max-width:340px;flex:1;background:white;border-radius:var(--radius);border:1px solid var(--border);display:flex;flex-direction:column;max-height:calc(100vh - 260px)}
     .kanban-col-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:white;border-radius:var(--radius) var(--radius) 0 0;z-index:2}
@@ -576,6 +592,7 @@
 </div>
 
 <!-- KANBAN VIEW -->
+<div id="recentActivityBar" class="recent-activity-bar"></div>
 <div class="kanban" id="kanbanView"></div>
 
 <!-- LIST VIEW -->
@@ -866,8 +883,85 @@ window.loadClients = async function(){
   }catch(e){console.warn('Load error:',e);}
   
   updateMonthLabel();
-  applyFilters();
+  applyFilters(); renderRecentActivity();
 };
+
+// ── ACTIVITÉ RÉCENTE ──
+const COACH_COLORS = {'Mickael':'#3b82f6','Edouard':'#10b981','Emily':'#f59e0b','Adrien':'#6366f1'};
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 60)   return 'à l\'instant';
+  if (diff < 3600) return `il y a ${Math.floor(diff/60)} min`;
+  if (diff < 86400)return `il y a ${Math.floor(diff/3600)} h`;
+  const days = Math.floor(diff/86400);
+  if (days === 1)  return 'hier';
+  if (days < 7)   return `il y a ${days} j`;
+  return new Date(ts).toLocaleDateString('fr-FR', {day:'numeric',month:'short'});
+}
+
+function renderRecentActivity() {
+  const bar = document.getElementById('recentActivityBar');
+  if (!bar) return;
+
+  // Trier les clients par _updatedAt décroissant, garder les 8 premiers
+  const sorted = [..._clients]
+    .filter(c => c._updatedAt || c.lastSessionDate)
+    .sort((a, b) => {
+      const ta = a._updatedAt || 0;
+      const tb = b._updatedAt || 0;
+      return tb - ta;
+    })
+    .slice(0, 8);
+
+  if (sorted.length === 0) { bar.innerHTML = ''; return; }
+
+  const items = sorted.map(c => {
+    // Dernière session faite
+    let lastSession = null;
+    const allSessions = [];
+    if (c.years) {
+      c.years.forEach(y => (y.sessions||[]).forEach(s => allSessions.push(s)));
+    } else {
+      (c.sessions||[]).forEach(s => allSessions.push(s));
+    }
+    const done = allSessions.filter(s => s.statut === 'fait').sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    if (done.length) lastSession = done[0];
+
+    // Coach principal
+    const coach = lastSession?.coach || c.coach || '';
+    const coachColor = COACH_COLORS[coach] || '#94a3b8';
+    const initials = (c.nom||'?').slice(0,2).toUpperCase();
+
+    // Badge type
+    const isNew = c._updatedAt && (Date.now() - c._updatedAt) < 3600000 && !lastSession;
+    const hasRecentSession = lastSession && c._updatedAt && (Date.now() - c._updatedAt) < 86400000 * 3;
+    const badgeHtml = hasRecentSession
+      ? `<span class="ra-badge session">Séance</span>`
+      : isNew
+        ? `<span class="ra-badge new">Nouveau</span>`
+        : `<span class="ra-badge edit">Modifié</span>`;
+
+    // Méta info
+    const sessionInfo = lastSession
+      ? `${lastSession.titre||'Séance'} · ${lastSession.date||''}`
+      : coach ? `Coach: ${coach}` : '';
+    const timeInfo = timeAgo(c._updatedAt);
+    const meta = [sessionInfo, timeInfo].filter(Boolean).join(' · ');
+
+    return `<div class="ra-card" onclick="openDetail('${c._id}')">
+      <div class="ra-avatar" style="background:${coachColor}">${initials}</div>
+      <div class="ra-info">
+        <div class="ra-name">${c.nom||'—'}</div>
+        <div class="ra-meta">${meta}</div>
+      </div>
+      ${badgeHtml}
+    </div>`;
+  });
+
+  bar.innerHTML = `<div class="ra-section-label">⚡ Récents</div>` + items.join('');
+}
 
 // ── FILTERS ──
 function applyFilters(){
@@ -922,26 +1016,26 @@ function setStatusTab(tab, btn){
   _statusTab = tab;
   document.querySelectorAll('.status-tab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  applyFilters();
+  applyFilters(); renderRecentActivity();
 }
 
 function toggleActiveFilter(btn){
   _activeFilterOn = !_activeFilterOn;
   btn.classList.toggle('active', _activeFilterOn);
   btn.textContent = _activeFilterOn ? '✅ Actifs seulement' : '👥 Tous les clients';
-  applyFilters();
+  applyFilters(); renderRecentActivity();
 }
 
 function toggleAlertFilter(btn){
   _alertFilterOn = !_alertFilterOn;
   btn.classList.toggle('active', _alertFilterOn);
-  applyFilters();
+  applyFilters(); renderRecentActivity();
 }
 
 function toggleQuotaFilter(btn){
   _quotaFilterOn = !_quotaFilterOn;
   btn.classList.toggle('active', _quotaFilterOn);
-  applyFilters();
+  applyFilters(); renderRecentActivity();
 }
 
 // ── ALERT STATUS ──
@@ -1249,10 +1343,11 @@ async function addSession(clientId){
   c.lastSessionDate = dates.length?dates.sort().pop():'';
   
   try{
+    c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',clientId),c);
     showToast('✅ Séance ajoutée !','success');
     openDetail(clientId);
-    applyFilters();
+    applyFilters(); renderRecentActivity();
   }catch(e){showToast('Erreur: '+e.message,'error');console.error(e);}
 }
 
@@ -1319,10 +1414,11 @@ async function createClient(){
   };
 
   try{
+    client._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',id),client);
     _clients.push(client);
     closeNewClientModal();
-    applyFilters();
+    applyFilters(); renderRecentActivity();
     showToast(`✅ Client créé — ${nbTotal + 1} séances générées (72H + ${nbTotal} coachings) !`,'success');
     ['nc-nom','nc-email','nc-tel','nc-activite'].forEach(fieldId=>document.getElementById(fieldId).value='');
   }catch(e){showToast('Erreur: '+e.message,'error');}
@@ -1377,9 +1473,10 @@ async function quickMarkDone(clientId, sessionNum){
   c.lastSessionDate = dates.length ? dates.sort().pop() : '';
 
   try{
+    c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',clientId),c);
     showToast('✅ Séance enregistrée !','success');
-    applyFilters();
+    applyFilters(); renderRecentActivity();
     openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -1417,9 +1514,10 @@ async function saveSessionEdit(clientId, sessionNum){
   c.lastSessionDate = dates.length ? dates.sort().pop() : '';
 
   try{
+    c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',clientId),c);
     showToast('✅ Séance mise à jour !','success');
-    applyFilters();
+    applyFilters(); renderRecentActivity();
     openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -1431,7 +1529,7 @@ async function deleteClient(id){
     await window._deleteDoc(window._doc(window._db,'clients',id));
     _clients = _clients.filter(c=>c._id!==id);
     closeDetail();
-    applyFilters();
+    applyFilters(); renderRecentActivity();
     showToast('Client supprimé','success');
   }catch(e){showToast('Erreur','error');}
 }
@@ -1650,7 +1748,8 @@ async function scanDriveForClient(clientId){
   // Save
   if(changed){
     try{
-      await window._setDoc(window._doc(window._db,'clients',clientId),c);
+      c._updatedAt = Date.now();
+    await window._setDoc(window._doc(window._db,'clients',clientId),c);
       log(`💾 Sauvegardé: ${linked} liés, ${unlinked} non-liés`,'dsl-match');
     }catch(e){
       log(`❌ Erreur sauvegarde: ${e.message}`,'dsl-err');
@@ -1675,7 +1774,7 @@ async function toggleClientStatus(clientId, isActive){
   try{
     await window._updateDoc(window._doc(window._db,'clients',clientId),{statut: c.statut});
     showToast(isActive ? '✅ Client marqué comme actif' : '⚫ Client marqué comme inactif', 'success');
-    applyFilters();
+    applyFilters(); renderRecentActivity();
     // Re-render detail panel to update toggle state
     setTimeout(()=>openDetail(clientId), 200);
   }catch(e){showToast('Erreur: '+e.message,'error');}
@@ -1730,8 +1829,9 @@ async function confirmAddYear(){
   c.years.push({yearNum:yn,label:'Année '+yn,startDate:sd,notes:note,sessions:ss});
   c.nbCoachingsTotal=(c.years||[]).reduce(function(s,y){return s+(y.sessions||[]).filter(function(x){return x.type!=='rdv72h';}).length;},0);
   try{
+    c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',cid),c);
-    closeAddYearModal();applyFilters();openDetail(cid);
+    closeAddYearModal();applyFilters(); renderRecentActivity();openDetail(cid);
     showToast('Année '+yn+' créée !','success');
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -1752,8 +1852,9 @@ async function addSessToYear(clientId,yi){
     devoirs:(document.getElementById('nsfy-devoirs-'+yi)||{}).value||'',statut:'fait'});
   syncYearStats(c);
   try{
+    c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',clientId),c);
-    showToast('Séance ajoutée !','success');applyFilters();openDetail(clientId);
+    showToast('Séance ajoutée !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
 function syncYearStats(c){
@@ -1781,8 +1882,9 @@ async function markYrDone(clientId,yi,sn){
   s.notes=((document.getElementById('qsn-'+k)||{}).value||'').trim();
   syncYearStats(c);
   try{
+    c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',clientId),c);
-    showToast('Séance validée !','success');applyFilters();openDetail(clientId);
+    showToast('Séance validée !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
 async function unmarkYrDone(clientId,yi,sn){
@@ -1794,8 +1896,9 @@ async function unmarkYrDone(clientId,yi,sn){
   s.statut='planifie';
   syncYearStats(c);
   try{
+    c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',clientId),c);
-    showToast('Séance annulée','success');applyFilters();openDetail(clientId);
+    showToast('Séance annulée','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
 function toggleYrEdit(clientId,yi,sn){
@@ -1815,8 +1918,9 @@ async function saveYrEdit(clientId,yi,sn){
   s.resume=g('ser-'+k).trim();s.devoirs=g('sedv-'+k).trim();s.notes=g('sen-'+k).trim();
   syncYearStats(c);
   try{
+    c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',clientId),c);
-    showToast('Séance mise à jour !','success');applyFilters();openDetail(clientId);
+    showToast('Séance mise à jour !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
 
@@ -2018,9 +2122,10 @@ async function saveEditClient(){
   if(nbMatch) c.nbCoachingsTotal = parseInt(nbMatch[1]);
 
   try{
+    c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db,'clients',id), c);
     closeEditClientModal();
-    applyFilters();
+    applyFilters(); renderRecentActivity();
     openDetail(id);
     showToast('✅ Informations mises à jour !','success');
   }catch(e){ showToast('Erreur: '+e.message,'error'); }
