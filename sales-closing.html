@@ -1064,12 +1064,15 @@ async function loadMonthFromFirebaseC() {
       if (snap.exists) {
         const fbData = snap.data();
         if (fbData.closing) {
-          if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
+          m.data[monthLabel] = emptyMonth();
           ALL_WEEKS.forEach(w => {
             if (fbData.closing[w]) {
               m.data[monthLabel][w] = { ...emptyWeek(), ...fbData.closing[w] };
             }
           });
+          // Sync vers localStorage
+          var lsKey = 'closing_' + m.uid + '_' + monthLabel;
+          try { localStorage.setItem(lsKey, JSON.stringify(m.data[monthLabel])); } catch(e) {}
         }
         if (fbData.closing_total) {
           m.data[monthLabel] = { _total: fbData.closing_total };
@@ -1084,15 +1087,17 @@ async function loadMonthFromFirebaseC() {
   // Relancer le watch sur le nouveau mois
   Fire.stop();
   MEMBERS_C.forEach(m => {
-    Fire.watchUser(m.uid, cmk(), (data) => {
+    Fire.watchUser(m.uid, monthLabel, (data) => {
       if (!data) return;
-      const md = m.data[cmk()];
+      var md = m.data[monthLabel];
       if (md && md._total) return;
       if (data.closing) {
-        if (!m.data[cmk()]) m.data[cmk()] = emptyMonth();
+        if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
         ALL_WEEKS.forEach(w => {
-          if (data.closing[w]) m.data[cmk()][w] = { ...m.data[cmk()][w], ...data.closing[w] };
+          if (data.closing[w]) m.data[monthLabel][w] = { ...m.data[monthLabel][w], ...data.closing[w] };
         });
+        var lsk = 'closing_' + m.uid + '_' + monthLabel;
+        try { localStorage.setItem(lsk, JSON.stringify(m.data[monthLabel])); } catch(e) {}
       }
       renderAll();
     });
@@ -1114,15 +1119,19 @@ async function firebaseSyncMembersC() {
       if (curSnap.exists) {
         const fbData = curSnap.data();
         if (fbData.closing) {
-          if (!m.data[curMonth]) m.data[curMonth] = emptyMonth();
+          m.data[curMonth] = emptyMonth(); // toujours écraser avec les données Firebase
           ALL_WEEKS.forEach(w => {
-            if (fbData.closing[w]) m.data[curMonth][w] = { ...(m.data[curMonth][w] || {}), ...fbData.closing[w] };
+            if (fbData.closing[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...fbData.closing[w] };
           });
+          // Sync vers localStorage
+          var lsKey = 'closing_' + m.uid + '_' + curMonth;
+          try { localStorage.setItem(lsKey, JSON.stringify(m.data[curMonth])); } catch(e) {}
+          console.log('[Firebase] ✅ Chargé + synced LS closing ' + m.name + ' ' + curMonth);
         }
         if (fbData.closing_total) {
           m.data[curMonth] = { _total: fbData.closing_total };
+          console.log('[Firebase] ✅ Chargé total closing ' + m.name + ' ' + curMonth);
         }
-        console.log('[Firebase] ✅ Chargé closing ' + m.name + ' ' + curMonth);
       } else {
         console.log('[Firebase] ℹ️ Pas de données closing Firestore pour ' + m.name + ' ' + curMonth);
       }
@@ -1132,13 +1141,16 @@ async function firebaseSyncMembersC() {
 
     Fire.watchUser(m.uid, curMonth, (data) => {
       if (!data) return;
-      const md = m.data[curMonth];
+      var md = m.data[curMonth];
       if (md && md._total) return;
       if (data.closing) {
         if (!m.data[curMonth]) m.data[curMonth] = emptyMonth();
         ALL_WEEKS.forEach(w => {
           if (data.closing[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...data.closing[w] };
         });
+        // Sync vers localStorage
+        var lsk = 'closing_' + m.uid + '_' + curMonth;
+        try { localStorage.setItem(lsk, JSON.stringify(m.data[curMonth])); } catch(e) {}
       }
       renderAll();
     });
