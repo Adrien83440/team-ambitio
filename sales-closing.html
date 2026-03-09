@@ -1138,7 +1138,7 @@ document.addEventListener('DOMContentLoaded', () => {
   firebase.auth().onAuthStateChanged(async function(fbUser) {
     if (!fbUser) return;
     const uid = fbUser.uid;
-    localStorage.setItem('ambitio_uid', uid);
+    localStorage.setItem('ambitio_auth_uid', uid); // auth UID séparé
     if (window.Fire && !Fire.db) {
       Fire.init(firebase.firestore(), uid);
       firebaseSyncMembersC();

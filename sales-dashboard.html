@@ -802,11 +802,19 @@ async function loadYearData() {
         } catch(e) { console.warn('[year] Firestore err', uid, monthKey, e.message); }
       }
 
-      // Fallback localStorage
+      // Fallback localStorage (essaie les deux formats de clés)
       if (!data) {
         let cls = null, set = null;
-        try { const v = localStorage.getItem(`closing_${uid}_${monthKey}`); cls = v ? JSON.parse(v) : null; } catch(e){}
-        try { const v = localStorage.getItem(`setting_${uid}_${monthKey}`); set = v ? JSON.parse(v) : null; } catch(e){}
+        try {
+          const v = localStorage.getItem(`saisie_closing_${uid}_${monthKey}`)
+                 || localStorage.getItem(`closing_${uid}_${monthKey}`);
+          cls = v ? JSON.parse(v) : null;
+        } catch(e){}
+        try {
+          const v = localStorage.getItem(`saisie_setting_${uid}_${monthKey}`)
+                 || localStorage.getItem(`setting_${uid}_${monthKey}`);
+          set = v ? JSON.parse(v) : null;
+        } catch(e){}
         if (cls || set) {
           data = { closing: null, setting: null };
           if (cls) {
@@ -1163,7 +1171,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       window._currentRole      = role;
       window._currentUserName  = name;
       localStorage.setItem('ambitio_role',  role);
-      localStorage.setItem('ambitio_uid',   fbUser.uid);
+      localStorage.setItem('ambitio_auth_uid', fbUser.uid); // auth UID séparé, ne pas écraser ambitio_uid
       localStorage.setItem('ambitio_name',  name);
       document.getElementById('tb-nm').textContent = name;
       document.getElementById('tb-av').textContent = name[0].toUpperCase();
