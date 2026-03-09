@@ -1518,119 +1518,42 @@ async function loadMonthFromFirebase() {
   });
 }
 
-/* ─── FIREBASE SYNC: migrate hardcoded data + watch real-time ─── */
+/* ─── FIREBASE SYNC: load current month first, then migrate in background ─── */
 async function firebaseSyncMembers() {
   if (!Fire.db) return;
 
-  // ── MIGRATION LOCALE → FIRESTORE ──
-  // Lit toutes les données présentes dans le localStorage de cette machine
-  // et les écrit en Firestore si le document n'existe pas encore.
-  // Permet de récupérer des données saisies avant que Firebase soit opérationnel.
-  const MONTHS_ALL = DB.months;
-  const YEARS_CHECK = [2025, 2026];
+  const curMonth = cmk();
+  const curKey = Fire._key(curMonth);
+  console.log('[Firebase] Chargement mois courant:', curMonth, '(' + curKey + ')');
+
+  // ══ PRIORITÉ 1: Charger le mois courant pour TOUS les membres ══
   for (const m of MEMBERS) {
-    for (const yr of YEARS_CHECK) {
-      for (const mo of MONTHS_ALL) {
-        const monthLabel = `${mo} ${yr}`;
-        const lsKey = `setting_${m.uid}_${monthLabel}`;
-        let lsData = null;
-        try { const v = localStorage.getItem(lsKey); lsData = v ? JSON.parse(v) : null; } catch(e) {}
-        if (!lsData) continue;
-
-        const fsKey = Fire._key(monthLabel);
-        if (!fsKey) continue;
-        const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(fsKey);
-        try {
-          const snap = await ref.get();
-          if (!snap.exists || !snap.data().setting) {
-            // Pas encore en Firestore → uploader
-            const settingData = {};
-            ALL_WEEKS.forEach(w => {
-              if (lsData[w]) settingData[w] = lsData[w];
-            });
-            if (Object.keys(settingData).length > 0) {
-              await ref.set({ setting: settingData, _ls_migrated: true }, { merge: true });
-              console.log(`[Firebase] Migration localStorage → Firestore: ${m.name} ${monthLabel}`);
-            }
-          }
-        } catch(e) { console.warn(`[Firebase] Migration locale échouée ${m.name} ${monthLabel}:`, e.message); }
-      }
-    }
-  }
-
-  for (const m of MEMBERS) {
-    // Pour chaque mois avec des données hardcodées, migrer vers Firebase
-    for (const [monthLabel, monthData] of Object.entries(m.data)) {
-      const key = Fire._key(monthLabel);
-      const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(key);
-
-      try {
-        const snap = await ref.get();
-        if (!snap.exists) {
-          // Pas encore dans Firebase → migrer les données hardcodées
-          if (monthData._total) {
-            // Mois historique: stocker comme _total
-            await ref.set({ setting_total: monthData._total, _migrated: true }, { merge: true });
-          } else {
-            // Mois avec détail semaines
-            const settingData = {};
-            ALL_WEEKS.forEach(w => {
-              if (monthData[w]) settingData[w] = monthData[w];
-            });
-            await ref.set({ setting: settingData, _migrated: true }, { merge: true });
-          }
-          console.log(`[Firebase] Migré ${m.name} ${monthLabel}`);
-        } else {
-          // Firebase a déjà des données → charger dans le membre
-          const fbData = snap.data();
-          if (fbData.setting) {
-            // Appliquer les données Firebase (plus récentes) sur le membre
-            if (!monthData._total) {
-              ALL_WEEKS.forEach(w => {
-                if (fbData.setting[w]) {
-                  if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
-                  m.data[monthLabel][w] = { ...m.data[monthLabel][w], ...fbData.setting[w] };
-                }
-              });
-            }
-          }
-          if (fbData.setting_total && monthData._total) {
-            m.data[monthLabel]._total = { ...monthData._total, ...fbData.setting_total };
-          }
+    try {
+      const curSnap = await Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(curKey).get();
+      if (curSnap.exists) {
+        const fbData = curSnap.data();
+        if (fbData.setting) {
+          if (!m.data[curMonth]) m.data[curMonth] = emptyMonth();
+          ALL_WEEKS.forEach(w => {
+            if (fbData.setting[w]) m.data[curMonth][w] = { ...(m.data[curMonth][w] || {}), ...fbData.setting[w] };
+          });
         }
-      } catch(e) {
-        console.warn(`[Firebase] Sync failed for ${m.name} ${monthLabel}:`, e.message);
-      }
-    }
-
-    // ── Charger le mois courant depuis Firestore même s'il n'est pas hardcodé ──
-    const curMonth = cmk();
-    if (!m.data[curMonth]) {
-      const curKey = Fire._key(curMonth);
-      try {
-        const curSnap = await Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(curKey).get();
-        if (curSnap.exists) {
-          const fbData = curSnap.data();
-          if (fbData.setting) {
-            m.data[curMonth] = emptyMonth();
-            ALL_WEEKS.forEach(w => {
-              if (fbData.setting[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...fbData.setting[w] };
-            });
-          }
-          if (fbData.setting_total) {
-            m.data[curMonth] = { _total: fbData.setting_total };
-          }
-          console.log('[Firebase] Chargé mois courant ' + m.name + ' ' + curMonth);
+        if (fbData.setting_total) {
+          m.data[curMonth] = { _total: fbData.setting_total };
         }
-      } catch(e) { console.warn('[Firebase] Erreur chargement mois courant ' + m.name + ':', e.message); }
+        console.log('[Firebase] ✅ Chargé ' + m.name + ' ' + curMonth);
+      } else {
+        console.log('[Firebase] ℹ️ Pas de données Firestore pour ' + m.name + ' ' + curMonth);
+      }
+    } catch(e) {
+      console.warn('[Firebase] ❌ Erreur chargement ' + m.name + ' ' + curMonth + ':', e.message);
     }
 
     // Écouter les changements en temps réel pour le mois courant
     Fire.watchUser(m.uid, curMonth, (data) => {
       if (!data) return;
       const md = m.data[curMonth];
-      if (md && md._total) return; // Pas de mise à jour temps réel pour historique
-
+      if (md && md._total) return;
       if (data.setting) {
         if (!m.data[curMonth]) m.data[curMonth] = emptyMonth();
         ALL_WEEKS.forEach(w => {
@@ -1641,8 +1564,82 @@ async function firebaseSyncMembers() {
     });
   }
 
-  // ── Re-render après chargement Firestore ──
+  // ── Afficher immédiatement les données chargées ──
   renderAll();
+  console.log('[Firebase] Mois courant chargé et affiché. Migrations en arrière-plan...');
+
+  // ══ PRIORITÉ 2: Migrations en arrière-plan (non-bloquantes) ══
+  setTimeout(() => { firebaseMigrateBackground().catch(e => console.warn('[Firebase] Migration bg error:', e)); }, 500);
+}
+
+/* ─── Migrations arrière-plan: localStorage + hardcoded → Firestore ─── */
+async function firebaseMigrateBackground() {
+  if (!Fire.db) return;
+  const MONTHS_ALL = DB.months;
+  const YEARS_CHECK = [2025, 2026];
+
+  // Migration localStorage → Firestore
+  for (const m of MEMBERS) {
+    for (const yr of YEARS_CHECK) {
+      for (const mo of MONTHS_ALL) {
+        const monthLabel = mo + ' ' + yr;
+        const lsKey = 'setting_' + m.uid + '_' + monthLabel;
+        let lsData = null;
+        try { const v = localStorage.getItem(lsKey); lsData = v ? JSON.parse(v) : null; } catch(e) {}
+        if (!lsData) continue;
+
+        const fsKey = Fire._key(monthLabel);
+        if (!fsKey) continue;
+        const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(fsKey);
+        try {
+          const snap = await ref.get();
+          if (!snap.exists || !snap.data().setting) {
+            const settingData = {};
+            ALL_WEEKS.forEach(w => { if (lsData[w]) settingData[w] = lsData[w]; });
+            if (Object.keys(settingData).length > 0) {
+              await ref.set({ setting: settingData, _ls_migrated: true }, { merge: true });
+              console.log('[Firebase] Migration LS → FS: ' + m.name + ' ' + monthLabel);
+            }
+          }
+        } catch(e) { /* ignore migration errors */ }
+      }
+    }
+  }
+
+  // Migration hardcoded → Firestore
+  for (const m of MEMBERS) {
+    for (const [monthLabel, monthData] of Object.entries(m.data)) {
+      if (monthLabel === cmk()) continue; // déjà traité
+      const key = Fire._key(monthLabel);
+      const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(key);
+      try {
+        const snap = await ref.get();
+        if (!snap.exists) {
+          if (monthData._total) {
+            await ref.set({ setting_total: monthData._total, _migrated: true }, { merge: true });
+          } else {
+            const settingData = {};
+            ALL_WEEKS.forEach(w => { if (monthData[w]) settingData[w] = monthData[w]; });
+            await ref.set({ setting: settingData, _migrated: true }, { merge: true });
+          }
+        } else {
+          const fbData = snap.data();
+          if (fbData.setting && !monthData._total) {
+            ALL_WEEKS.forEach(w => {
+              if (fbData.setting[w]) {
+                if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
+                m.data[monthLabel][w] = { ...m.data[monthLabel][w], ...fbData.setting[w] };
+              }
+            });
+          }
+          if (fbData.setting_total && monthData._total) {
+            m.data[monthLabel]._total = { ...monthData._total, ...fbData.setting_total };
+          }
+        }
+      } catch(e) { /* ignore migration errors */ }
+    }
+  }
+  console.log('[Firebase] Migrations arrière-plan terminées');
 }
 
 /* ─── INIT ─── */
