@@ -463,7 +463,7 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
   <div class="tb-logo">S</div>
   <div class="tb-title">Ambitio <em>Sales</em></div>
   <div class="tb-sep"></div>
-  <div class="tb-page">◈ Synthèse</div>
+  <div class="tb-page">◈ Dashboard</div>
   <div class="tb-right">
     <div class="tb-month" id="year-nav">
       <button onclick="prevYear()">&#9664;</button>
@@ -478,72 +478,100 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
 </div>
 
 <style>
-/* === DASHBOARD YEAR STYLES === */
+/* ═══ OBJECTIVE BAR ═══ */
+.obj-bar-wrap { margin-bottom:20px; }
+.obj-bar { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius2); padding:20px 24px; position:relative; overflow:hidden; }
+.obj-bar::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,#ef4444,#f59e0b,#34d399); }
+.obj-header { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+.obj-title { font-size:13px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; }
+.obj-amount { font-size:32px; font-weight:800; font-family:var(--font-d); color:var(--text); line-height:1; }
+.obj-amount small { font-size:16px; color:var(--muted); font-weight:600; }
+.obj-target { font-size:13px; color:var(--muted); font-weight:600; }
+.obj-track { height:20px; background:var(--bg); border-radius:10px; overflow:hidden; position:relative; margin-bottom:8px; }
+.obj-fill { height:100%; border-radius:10px; transition:width .8s cubic-bezier(.4,0,.2,1); position:relative; }
+.obj-fill::after { content:attr(data-pct); position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:11px; font-weight:800; color:white; text-shadow:0 1px 3px rgba(0,0,0,.5); }
+.obj-stats { display:flex; gap:24px; flex-wrap:wrap; }
+.obj-stat { font-size:12px; color:var(--muted); }
+.obj-stat b { color:var(--text); font-weight:700; }
+
+/* ═══ PERIOD SELECTOR ═══ */
+.period-wrap { margin-bottom:18px; }
+.period-tabs { display:flex; gap:6px; margin-bottom:10px; }
+.period-tab { padding:7px 16px; border-radius:8px; background:var(--bg3); border:1px solid var(--border); color:var(--muted); font-size:12px; font-weight:700; cursor:pointer; transition:all .15s; font-family:var(--font-b); }
+.period-tab:hover { background:var(--bg4); color:var(--text); }
+.period-tab.active { background:rgba(239,68,68,.12); color:var(--red2); border-color:rgba(239,68,68,.3); }
+.month-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+.month-btn { padding:8px 4px; border:1px solid var(--border); border-radius:8px; background:var(--bg2); color:var(--muted); font-size:11px; font-weight:600; text-align:center; cursor:pointer; transition:all .15s; font-family:var(--font-b); user-select:none; }
+.month-btn:hover { background:var(--bg4); color:var(--text); border-color:var(--border2); }
+.month-btn.active { background:rgba(239,68,68,.12); color:var(--red2); border-color:rgba(239,68,68,.3); }
+.month-btn.in-range { background:rgba(239,68,68,.06); color:var(--red3); border-color:rgba(239,68,68,.15); }
+.month-btn.has-data { color:var(--text); }
+.month-btn.has-data::after { content:''; display:block; width:4px; height:4px; border-radius:50%; background:var(--green); margin:3px auto 0; }
+.period-info { font-size:11px; color:var(--muted); margin-top:6px; font-weight:600; }
+
+/* ═══ DASHBOARD GRID ═══ */
 .yr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:13px; margin-bottom:18px; }
+.yr-grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:13px; margin-bottom:18px; }
 .yr-kpi { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:18px; position:relative; overflow:hidden; }
 .yr-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--kc,var(--red2)); }
 .yr-kpi-label { font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }
-.yr-kpi-val { font-size:28px; font-weight:800; font-family:var(--font-d); color:var(--text); line-height:1.1; }
+.yr-kpi-val { font-size:26px; font-weight:800; font-family:var(--font-d); color:var(--text); line-height:1.1; }
 .yr-kpi-sub { font-size:11px; color:var(--muted); margin-top:4px; }
 
 .yr-row { display:grid; grid-template-columns:1fr 1fr; gap:13px; margin-bottom:18px; }
 .yr-row-3 { display:grid; grid-template-columns:2fr 1fr; gap:13px; margin-bottom:18px; }
-
 .yr-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius2); padding:20px; }
 .yr-card-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
 .yr-card-title { font-size:14px; font-weight:700; color:var(--text); }
 .yr-card-badge { font-size:10px; font-weight:700; color:var(--muted); background:var(--bg4); padding:4px 10px; border-radius:20px; border:1px solid var(--border); }
 
-/* Month grid for drill-down */
-.month-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-bottom:18px; }
-.month-btn { padding:8px 4px; border:1px solid var(--border); border-radius:8px; background:var(--bg2); color:var(--muted); font-size:11px; font-weight:600; text-align:center; cursor:pointer; transition:all .15s; font-family:var(--font-b); }
-.month-btn:hover { background:var(--bg4); color:var(--text); border-color:var(--border2); }
-.month-btn.active { background:rgba(239,68,68,.12); color:var(--red2); border-color:rgba(239,68,68,.3); }
-.month-btn.has-data { color:var(--text); }
-.month-btn.has-data::after { content:''; display:block; width:4px; height:4px; border-radius:50%; background:var(--green); margin:3px auto 0; }
-
-/* Chart area */
+/* ═══ CHART ═══ */
 .yr-chart { position:relative; height:220px; display:flex; align-items:flex-end; gap:4px; padding:0 4px 24px; }
-.yr-chart-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; position:relative; }
-.yr-chart-bar { width:100%; border-radius:4px 4px 0 0; min-height:2px; transition:height .4s cubic-bezier(.4,0,.2,1); cursor:pointer; position:relative; }
+.yr-chart-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; position:relative; cursor:pointer; }
+.yr-chart-bar { width:100%; border-radius:4px 4px 0 0; min-height:2px; transition:height .4s cubic-bezier(.4,0,.2,1); position:relative; }
 .yr-chart-bar:hover { filter:brightness(1.3); }
 .yr-chart-bar.bar-ct { background:linear-gradient(180deg,#ef4444,#991b1b); }
 .yr-chart-bar.bar-co { background:linear-gradient(180deg,#34d399,#065f46); }
+.yr-chart-bar.bar-set { background:linear-gradient(180deg,#60a5fa,#1e40af); }
 .yr-chart-lbl { position:absolute; bottom:0; font-size:9px; color:var(--muted); font-weight:600; white-space:nowrap; }
 .yr-chart-tooltip { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); background:var(--bg); border:1px solid var(--border2); padding:6px 10px; border-radius:8px; font-size:11px; color:var(--text); white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .15s; z-index:10; }
 .yr-chart-col:hover .yr-chart-tooltip { opacity:1; }
-
-.chart-legend-row { display:flex; gap:16px; justify-content:center; margin-bottom:12px; }
+.chart-legend-row { display:flex; gap:16px; justify-content:center; margin-bottom:12px; flex-wrap:wrap; }
 .chart-legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--muted); font-weight:600; }
 .chart-legend-dot { width:10px; height:10px; border-radius:3px; }
 
-/* Member table */
+/* ═══ FUNNEL ═══ */
+.yr-funnel { display:flex; flex-direction:column; gap:8px; }
+.yr-funnel-row { display:flex; align-items:center; gap:10px; }
+.yr-funnel-label { width:80px; font-size:11px; font-weight:700; color:var(--muted); text-align:right; flex-shrink:0; }
+.yr-funnel-track { flex:1; height:26px; background:var(--bg); border-radius:6px; overflow:hidden; position:relative; }
+.yr-funnel-fill { height:100%; border-radius:6px; display:flex; align-items:center; padding-left:10px; font-size:11px; font-weight:700; color:white; min-width:fit-content; transition:width .5s cubic-bezier(.4,0,.2,1); }
+.yr-funnel-fill.closing { background:linear-gradient(90deg,#991b1b,#ef4444); }
+.yr-funnel-fill.setting { background:linear-gradient(90deg,#1e40af,#60a5fa); }
+.yr-funnel-val { font-size:12px; font-weight:700; color:var(--text); font-family:var(--font-m); width:60px; text-align:right; flex-shrink:0; }
+.yr-funnel-rate { font-size:11px; color:var(--muted); width:50px; flex-shrink:0; }
+
+/* ═══ TABLE ═══ */
 .yr-table { width:100%; border-collapse:collapse; }
-.yr-table th { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
-.yr-table td { font-size:13px; font-weight:600; color:var(--text); padding:10px; border-bottom:1px solid rgba(255,255,255,.03); font-family:var(--font-m); }
+.yr-table th { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
+.yr-table td { font-size:13px; font-weight:600; color:var(--text); padding:10px; border-bottom:1px solid rgba(255,255,255,.03); font-family:var(--font-m); white-space:nowrap; }
 .yr-table td:first-child { font-family:var(--font-b); }
 .yr-table tr:last-child td { border-bottom:none; }
 .yr-table .tr-total td { color:var(--gold); font-weight:800; border-top:1px solid var(--border2); }
 .member-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; vertical-align:middle; }
+.yr-table-wrap { overflow-x:auto; }
 
-/* Funnel horizontal */
-.yr-funnel { display:flex; flex-direction:column; gap:8px; }
-.yr-funnel-row { display:flex; align-items:center; gap:10px; }
-.yr-funnel-label { width:80px; font-size:11px; font-weight:700; color:var(--muted); text-align:right; flex-shrink:0; }
-.yr-funnel-track { flex:1; height:28px; background:var(--bg); border-radius:6px; overflow:hidden; position:relative; }
-.yr-funnel-fill { height:100%; border-radius:6px; background:linear-gradient(90deg,#991b1b,#ef4444); display:flex; align-items:center; padding-left:10px; font-size:11px; font-weight:700; color:white; min-width:fit-content; transition:width .5s cubic-bezier(.4,0,.2,1); }
-.yr-funnel-val { font-size:12px; font-weight:700; color:var(--text); font-family:var(--font-m); width:60px; text-align:right; flex-shrink:0; }
-.yr-funnel-rate { font-size:11px; color:var(--muted); width:50px; flex-shrink:0; }
-
-/* Drill-down overlay */
-.drill-panel { display:none; }
-.drill-panel.show { display:block; }
+/* ═══ DRILL BACK ═══ */
 .drill-back { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--red3); cursor:pointer; margin-bottom:14px; padding:6px 14px; border-radius:8px; background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.2); transition:all .15s; }
 .drill-back:hover { background:rgba(239,68,68,.14); }
 
+/* ═══ SECTION TITLE ═══ */
+.section-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin:20px 0 10px; padding-left:4px; }
+.section-title:first-child { margin-top:0; }
+
 @media(max-width:1100px) {
   .yr-grid { grid-template-columns:repeat(2,1fr); }
-  .yr-row, .yr-row-3 { grid-template-columns:1fr; }
+  .yr-row, .yr-row-3, .yr-grid-2 { grid-template-columns:1fr; }
   .month-grid { grid-template-columns:repeat(4,1fr); }
 }
 @media(max-width:600px) {
@@ -554,88 +582,51 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
 
 <div class="page">
 
-  <!-- MONTH SELECTOR -->
-  <div class="month-grid" id="month-grid"></div>
-
-  <!-- YEAR VIEW -->
-  <div id="year-view">
-    <!-- KPIs -->
-    <div class="yr-grid" id="yr-kpis"></div>
-
-    <!-- Chart + Funnel -->
-    <div class="yr-row-3">
-      <div class="yr-card">
-        <div class="yr-card-hdr">
-          <div class="yr-card-title" id="chart-title">Contracté & Collecté — 2026</div>
-          <div class="yr-card-badge" id="chart-badge">Par mois</div>
-        </div>
-        <div class="chart-legend-row">
-          <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#ef4444"></div>Contracté</div>
-          <div class="chart-legend-item"><div class="chart-legend-dot" style="background:#34d399"></div>Collecté</div>
-        </div>
-        <div class="yr-chart" id="yr-chart"></div>
-      </div>
-      <div class="yr-card">
-        <div class="yr-card-hdr">
-          <div class="yr-card-title">Funnel Année</div>
-        </div>
-        <div class="yr-funnel" id="yr-funnel"></div>
-      </div>
-    </div>
-
-    <!-- Team + Details -->
-    <div class="yr-row">
-      <div class="yr-card">
-        <div class="yr-card-hdr">
-          <div class="yr-card-title">Performance par membre</div>
-          <div class="yr-card-badge" id="team-badge">Année</div>
-        </div>
-        <div id="yr-team"></div>
-      </div>
-      <div class="yr-card">
-        <div class="yr-card-hdr">
-          <div class="yr-card-title">Détail mois par mois</div>
-        </div>
-        <div id="yr-months-table"></div>
-      </div>
-    </div>
+  <!-- OBJECTIVE BAR -->
+  <div class="obj-bar-wrap">
+    <div class="obj-bar" id="obj-bar"></div>
   </div>
 
-  <!-- DRILL-DOWN MONTH VIEW (hidden by default) -->
-  <div class="drill-panel" id="drill-panel">
-    <div class="drill-back" onclick="closeDrill()">◀ Retour synthèse <span id="drill-year"></span></div>
-    <div class="yr-grid" id="drill-kpis"></div>
-    <div class="yr-row">
-      <div class="yr-card">
-        <div class="yr-card-hdr"><div class="yr-card-title" id="drill-funnel-title">Funnel</div></div>
-        <div class="yr-funnel" id="drill-funnel"></div>
-      </div>
-      <div class="yr-card">
-        <div class="yr-card-hdr"><div class="yr-card-title">Équipe</div></div>
-        <div id="drill-team"></div>
-      </div>
-    </div>
+  <!-- PERIOD SELECTOR -->
+  <div class="period-wrap">
+    <div class="period-tabs" id="period-tabs"></div>
+    <div class="month-grid" id="month-grid"></div>
+    <div class="period-info" id="period-info"></div>
   </div>
+
+  <!-- MAIN CONTENT -->
+  <div id="main-content"></div>
 
 </div>
 
 <script>
 /* ═══════════════════════════════════════════════════════════
-   DASHBOARD SYNTHÈSE ANNUELLE
+   DASHBOARD — NOUVELLE VERSION
+   Features: Objectif 1M, Setting visible, Sélecteur période
 ═══════════════════════════════════════════════════════════ */
 
-/* MONTHS_FR déjà déclaré dans getMonthWeeks scope — utiliser DB.months */
+const OBJECTIF_ANNUEL = 1_000_000;
 const MF = DB.months;
 let _year = 2026;
-let _drillMonth = null; // null = vue année, sinon "Février 2026"
+
+// Modes: 'year', 'month', 'range'
+let _viewMode = 'year';
+let _selectedMonths = []; // pour mode 'month' (1 élément) ou 'range' (N éléments)
+let _rangeStart = null;   // index du premier mois cliqué pour range
 
 function yearLabel() { return String(_year); }
-function prevYear() { _year--; _drillMonth = null; refreshYear(); }
-function nextYear() { _year++; _drillMonth = null; refreshYear(); }
+function getElapsedMonths() {
+  var now = new Date();
+  var cy = now.getFullYear();
+  if (_year < cy) return 12;
+  if (_year > cy) return 0;
+  return Math.min(now.getMonth() + 1, 12);
+}
+function prevYear() { _year--; _viewMode = 'year'; _selectedMonths = []; refreshYear(); }
+function nextYear() { _year++; _viewMode = 'year'; _selectedMonths = []; refreshYear(); }
 
 /* ═══════════════════════════════════════════════════════════
-   DONNÉES HISTORIQUES HARDCODÉES (source de vérité initiale)
-   Migrées vers Firestore au premier chargement
+   DONNÉES HISTORIQUES (identique)
 ═══════════════════════════════════════════════════════════ */
 const HIST_DATA = {
   guillaume: {
@@ -701,524 +692,572 @@ const HIST_DATA = {
   },
 };
 
-/* ── Convertir monthLabel → Firestore key ── */
+/* ── Helpers ── */
 function _mToFs(monthLabel) {
-  const parts = monthLabel.split(' ');
-  const m = MF.indexOf(parts[0]);
+  var parts = monthLabel.split(' ');
+  var m = MF.indexOf(parts[0]);
   if (m < 0) return null;
-  return `${parts[1]}-${String(m+1).padStart(2,'0')}`;
+  return parts[1] + '-' + String(m+1).padStart(2,'0');
 }
 
-/* ── Migrer les données hardcodées vers Firestore (one-shot) ── */
+/* ── Migration Firestore (identique) ── */
 async function migrateHistToFirestore() {
-  const db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
+  var db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
   if (!db) return;
-
-  // Vérifier si déjà migré
-  try {
-    const flag = localStorage.getItem('_hist_migrated_v2');
-    if (flag === '1') return;
-  } catch(e) {}
-
+  try { if (localStorage.getItem('_hist_migrated_v2') === '1') return; } catch(e) {}
   console.log('[dashboard] Migration des données historiques vers Firestore...');
-  let count = 0;
-
-  for (const uid of SYNC_UIDS) {
-    const h = HIST_DATA[uid];
+  var count = 0;
+  for (var u = 0; u < SYNC_UIDS.length; u++) {
+    var uid = SYNC_UIDS[u];
+    var h = HIST_DATA[uid];
     if (!h) continue;
-
-    // Closing totaux (mois historiques)
-    for (const [mk, data] of Object.entries(h.closing || {})) {
-      const fsKey = _mToFs(mk);
-      if (!fsKey) continue;
-      const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-      try {
-        const snap = await ref.get();
-        const existing = snap.exists ? snap.data() : {};
-        if (!existing.closing_total) {
-          await ref.set({ closing_total: data, _migrated: true }, { merge: true });
-          count++;
-        }
+    for (var mk in (h.closing || {})) {
+      var fsKey = _mToFs(mk); if (!fsKey) continue;
+      var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+      try { var snap = await ref.get(); var existing = snap.exists ? snap.data() : {};
+        if (!existing.closing_total) { await ref.set({ closing_total: h.closing[mk], _migrated: true }, { merge: true }); count++; }
       } catch(e) { console.warn('[migration]', uid, mk, e.message); }
     }
-
-    // Closing weekly
-    for (const [mk, weeks] of Object.entries(h.closing_weekly || {})) {
-      const fsKey = _mToFs(mk);
-      if (!fsKey) continue;
-      const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-      try {
-        const snap = await ref.get();
-        const existing = snap.exists ? snap.data() : {};
-        if (!existing.closing) {
-          await ref.set({ closing: weeks, _migrated: true }, { merge: true });
-          count++;
-        }
+    for (var mk in (h.closing_weekly || {})) {
+      var fsKey = _mToFs(mk); if (!fsKey) continue;
+      var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+      try { var snap = await ref.get(); var existing = snap.exists ? snap.data() : {};
+        if (!existing.closing) { await ref.set({ closing: h.closing_weekly[mk], _migrated: true }, { merge: true }); count++; }
       } catch(e) { console.warn('[migration]', uid, mk, e.message); }
     }
-
-    // Setting totaux
-    for (const [mk, data] of Object.entries(h.setting || {})) {
-      const fsKey = _mToFs(mk);
-      if (!fsKey) continue;
-      const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-      try {
-        const snap = await ref.get();
-        const existing = snap.exists ? snap.data() : {};
-        if (!existing.setting_total) {
-          await ref.set({ setting_total: data, _migrated: true }, { merge: true });
-          count++;
-        }
+    for (var mk in (h.setting || {})) {
+      var fsKey = _mToFs(mk); if (!fsKey) continue;
+      var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+      try { var snap = await ref.get(); var existing = snap.exists ? snap.data() : {};
+        if (!existing.setting_total) { await ref.set({ setting_total: h.setting[mk], _migrated: true }, { merge: true }); count++; }
       } catch(e) { console.warn('[migration]', uid, mk, e.message); }
     }
-
-    // Setting weekly
-    for (const [mk, weeks] of Object.entries(h.setting_weekly || {})) {
-      const fsKey = _mToFs(mk);
-      if (!fsKey) continue;
-      const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-      try {
-        const snap = await ref.get();
-        const existing = snap.exists ? snap.data() : {};
-        if (!existing.setting) {
-          await ref.set({ setting: weeks, _migrated: true }, { merge: true });
-          count++;
-        }
+    for (var mk in (h.setting_weekly || {})) {
+      var fsKey = _mToFs(mk); if (!fsKey) continue;
+      var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+      try { var snap = await ref.get(); var existing = snap.exists ? snap.data() : {};
+        if (!existing.setting) { await ref.set({ setting: h.setting_weekly[mk], _migrated: true }, { merge: true }); count++; }
       } catch(e) { console.warn('[migration]', uid, mk, e.message); }
     }
   }
-
   try { localStorage.setItem('_hist_migrated_v2', '1'); } catch(e) {}
-  console.log(`[dashboard] Migration terminée: ${count} documents écrits`);
+  console.log('[dashboard] Migration terminée: ' + count + ' documents écrits');
 }
 
-/* ── Charger TOUTES les données de l'année depuis Firestore ── */
+/* ═══════════════════════════════════════════════════════════
+   CHARGER TOUTES LES DONNÉES DE L'ANNÉE DEPUIS FIRESTORE
+═══════════════════════════════════════════════════════════ */
 async function loadYearData() {
-  const db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
-  const results = {}; // { "Janvier 2026": { guillaume: {...}, elodie: {...} } }
-
-  for (let m = 0; m < 12; m++) {
-    const monthKey = MF[m] + ' ' + _year;
-    const fsKey = `${_year}-${String(m+1).padStart(2,'0')}`;
+  var db = (typeof Fire !== 'undefined' && Fire.db) ? Fire.db : null;
+  var results = {};
+  for (var m = 0; m < 12; m++) {
+    var monthKey = MF[m] + ' ' + _year;
+    var fsKey = _year + '-' + String(m+1).padStart(2,'0');
     results[monthKey] = {};
-
-    for (const uid of SYNC_UIDS) {
-      let data = null;
-
-      // Firestore
+    for (var u = 0; u < SYNC_UIDS.length; u++) {
+      var uid = SYNC_UIDS[u];
+      var data = null;
       if (db) {
         try {
-          const ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
-          const snap = await ref.get();
+          var ref = db.collection('saisies').doc(uid).collection('mois').doc(fsKey);
+          var snap = await ref.get();
           if (snap.exists) {
-            const raw = snap.data();
+            var raw = snap.data();
             data = { closing: null, setting: null };
             if (raw.closing_total) data.closing = raw.closing_total;
             else if (raw.closing) {
-              const t = {};
-              ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
-              ALL_WEEKS.forEach(w => {
-                if (raw.closing[w]) Object.keys(t).forEach(k => t[k] += (raw.closing[w][k] || 0));
-              });
+              var t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(function(k){t[k]=0;});
+              ALL_WEEKS.forEach(function(w){ if(raw.closing[w]) Object.keys(t).forEach(function(k){t[k]+=(raw.closing[w][k]||0);}); });
               data.closing = t;
             }
             if (raw.setting_total) data.setting = raw.setting_total;
             else if (raw.setting) {
-              const t = {};
-              ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
-              ALL_WEEKS.forEach(w => {
-                if (raw.setting[w]) Object.keys(t).forEach(k => t[k] += (raw.setting[w][k] || 0));
-              });
+              var t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(function(k){t[k]=0;});
+              ALL_WEEKS.forEach(function(w){ if(raw.setting[w]) Object.keys(t).forEach(function(k){t[k]+=(raw.setting[w][k]||0);}); });
               data.setting = t;
             }
           }
         } catch(e) { console.warn('[year] Firestore err', uid, monthKey, e.message); }
       }
-
-      // Fallback localStorage (essaie les deux formats de clés)
       if (!data) {
-        let cls = null, set = null;
-        try {
-          const v = localStorage.getItem(`saisie_closing_${uid}_${monthKey}`)
-                 || localStorage.getItem(`closing_${uid}_${monthKey}`);
-          cls = v ? JSON.parse(v) : null;
-        } catch(e){}
-        try {
-          const v = localStorage.getItem(`saisie_setting_${uid}_${monthKey}`)
-                 || localStorage.getItem(`setting_${uid}_${monthKey}`);
-          set = v ? JSON.parse(v) : null;
-        } catch(e){}
+        var cls = null, set = null;
+        try { var v = localStorage.getItem('saisie_closing_'+uid+'_'+monthKey) || localStorage.getItem('closing_'+uid+'_'+monthKey); cls = v ? JSON.parse(v) : null; } catch(e){}
+        try { var v = localStorage.getItem('saisie_setting_'+uid+'_'+monthKey) || localStorage.getItem('setting_'+uid+'_'+monthKey); set = v ? JSON.parse(v) : null; } catch(e){}
         if (cls || set) {
           data = { closing: null, setting: null };
           if (cls) {
             if (cls._total) data.closing = cls._total;
-            else {
-              const t = {};
-              ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
-              ALL_WEEKS.forEach(w => {
-                if (cls[w]) Object.keys(t).forEach(k => t[k] += (cls[w][k] || 0));
-              });
-              data.closing = t;
-            }
+            else { var t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(function(k){t[k]=0;}); ALL_WEEKS.forEach(function(w){if(cls[w])Object.keys(t).forEach(function(k){t[k]+=(cls[w][k]||0);});}); data.closing = t; }
           }
           if (set) {
             if (set._total) data.setting = set._total;
-            else {
-              const t = {};
-              ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
-              ALL_WEEKS.forEach(w => {
-                if (set[w]) Object.keys(t).forEach(k => t[k] += (set[w][k] || 0));
-              });
-              data.setting = t;
-            }
+            else { var t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(function(k){t[k]=0;}); ALL_WEEKS.forEach(function(w){if(set[w])Object.keys(t).forEach(function(k){t[k]+=(set[w][k]||0);});}); data.setting = t; }
           }
         }
       }
-
-      // Fallback HIST_DATA (données hardcodées)
       if (!data) {
-        const h = HIST_DATA[uid];
+        var h = HIST_DATA[uid];
         if (h) {
           data = { closing: null, setting: null };
-          // Closing total historique
-          if (h.closing && h.closing[monthKey]) {
-            data.closing = h.closing[monthKey];
-          }
-          // Closing weekly
+          if (h.closing && h.closing[monthKey]) data.closing = h.closing[monthKey];
           if (h.closing_weekly && h.closing_weekly[monthKey]) {
-            const weeks = h.closing_weekly[monthKey];
-            const t = {};
-            ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(k => t[k] = 0);
-            Object.values(weeks).forEach(w => Object.keys(t).forEach(k => t[k] += (w[k] || 0)));
+            var weeks = h.closing_weekly[monthKey];
+            var t = {}; ['calls','lives','offres','closes','hardClose','followUp','contracte','collecte'].forEach(function(k){t[k]=0;});
+            Object.values(weeks).forEach(function(w){Object.keys(t).forEach(function(k){t[k]+=(w[k]||0);});});
             data.closing = t;
           }
-          // Setting total historique
-          if (h.setting && h.setting[monthKey]) {
-            data.setting = h.setting[monthKey];
-          }
-          // Setting weekly
+          if (h.setting && h.setting[monthKey]) data.setting = h.setting[monthKey];
           if (h.setting_weekly && h.setting_weekly[monthKey]) {
-            const weeks = h.setting_weekly[monthKey];
-            const t = {};
-            ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(k => t[k] = 0);
-            Object.values(weeks).forEach(w => Object.keys(t).forEach(k => t[k] += (w[k] || 0)));
+            var weeks = h.setting_weekly[monthKey];
+            var t = {}; ['leads','calls','decroches','propRdv','sets','presents','closes','collecte'].forEach(function(k){t[k]=0;});
+            Object.values(weeks).forEach(function(w){Object.keys(t).forEach(function(k){t[k]+=(w[k]||0);});});
             data.setting = t;
           }
           if (!data.closing && !data.setting) data = null;
         }
       }
-
       results[monthKey][uid] = data;
     }
   }
   return results;
 }
 
-/* ── Agréger les données par année ── */
-function aggregateYear(yearData) {
-  const totals = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0, settingCalls:0, settingCloses:0 };
-  const perMonth = {};
-  const perMember = {};
+/* ═══════════════════════════════════════════════════════════
+   AGRÉGER — prend en compte closing + setting complet
+═══════════════════════════════════════════════════════════ */
+function aggregateData(yearData, monthKeys) {
+  var totals = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0,
+                 sLeads:0, sCalls:0, sDecroches:0, sPropRdv:0, sSets:0, sPresents:0, sCloses:0 };
+  var perMonth = {};
+  var perMember = {};
+  SYNC_UIDS.forEach(function(uid) { perMember[uid] = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sLeads:0, sCalls:0, sDecroches:0, sPropRdv:0, sSets:0, sPresents:0, sCloses:0 }; });
 
-  SYNC_UIDS.forEach(uid => { perMember[uid] = { ...totals }; });
-
-  for (let m = 0; m < 12; m++) {
-    const mk = MF[m] + ' ' + _year;
-    const mData = yearData[mk] || {};
-    const mt = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0, settingCalls:0, settingCloses:0, hasData:false };
-
-    SYNC_UIDS.forEach(uid => {
-      const d = mData[uid];
+  monthKeys.forEach(function(mk) {
+    var mData = yearData[mk] || {};
+    var mt = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0,
+               sLeads:0, sCalls:0, sDecroches:0, sPropRdv:0, sSets:0, sPresents:0, sCloses:0, hasData:false };
+    SYNC_UIDS.forEach(function(uid) {
+      var d = mData[uid];
       if (!d) return;
       if (d.closing) {
         mt.hasData = true;
-        ['calls','lives','offres','closes','contracte','collecte'].forEach(k => {
-          const v = d.closing[k] || 0;
-          mt[k] += v;
-          totals[k] += v;
-          perMember[uid][k] += v;
+        ['calls','lives','offres','closes','contracte','collecte'].forEach(function(k) {
+          var v = d.closing[k] || 0; mt[k] += v; totals[k] += v; perMember[uid][k] += v;
         });
       }
       if (d.setting) {
         mt.hasData = true;
-        mt.sets += (d.setting.sets || 0); totals.sets += (d.setting.sets || 0); perMember[uid].sets += (d.setting.sets || 0);
-        mt.presents += (d.setting.presents || 0); totals.presents += (d.setting.presents || 0); perMember[uid].presents += (d.setting.presents || 0);
-        mt.settingCalls += (d.setting.calls || 0); totals.settingCalls += (d.setting.calls || 0); perMember[uid].settingCalls += (d.setting.calls || 0);
-        mt.settingCloses += (d.setting.closes || 0); totals.settingCloses += (d.setting.closes || 0); perMember[uid].settingCloses += (d.setting.closes || 0);
+        var map = {leads:'sLeads',calls:'sCalls',decroches:'sDecroches',propRdv:'sPropRdv',sets:'sSets',presents:'sPresents',closes:'sCloses'};
+        Object.keys(map).forEach(function(sk) {
+          var v = d.setting[sk] || 0; var tk = map[sk]; mt[tk] += v; totals[tk] += v; perMember[uid][tk] += v;
+        });
       }
     });
     perMonth[mk] = mt;
-  }
-  return { totals, perMonth, perMember };
+  });
+  return { totals: totals, perMonth: perMonth, perMember: perMember };
 }
 
-/* ── RENDER ── */
-let _yearData = null;
-let _agg = null;
+/* ═══════════════════════════════════════════════════════════
+   RENDER
+═══════════════════════════════════════════════════════════ */
+var _yearData = null;
 
 async function refreshYear() {
   document.getElementById('year-lbl').textContent = yearLabel();
   _yearData = await loadYearData();
-  _agg = aggregateYear(_yearData);
-  renderYear();
+  renderAll();
 }
 
-function renderYear() {
-  if (!_agg) return;
-  const { totals, perMonth, perMember } = _agg;
-  const T = totals;
+function renderAll() {
+  if (!_yearData) return;
+  var allMK = MF.map(function(m) { return m + ' ' + _year; });
+  var fullAgg = aggregateData(_yearData, allMK);
 
-  // Month grid
-  const monthBtns = MF.map((m, i) => {
-    const mk = m + ' ' + _year;
-    const md = perMonth[mk];
-    const hasData = md && md.hasData;
-    const isActive = _drillMonth === mk;
-    const short = m.slice(0, 3);
-    return `<div class="month-btn${isActive ? ' active' : ''}${hasData ? ' has-data' : ''}" onclick="drillMonth('${mk}')">${short}</div>`;
-  }).join('');
-  document.getElementById('month-grid').innerHTML = monthBtns;
+  renderObjectiveBar(fullAgg.totals.contracte);
+  renderPeriodSelector(fullAgg.perMonth);
 
-  // Drill or year view
-  document.getElementById('year-view').style.display = _drillMonth ? 'none' : '';
-  document.getElementById('drill-panel').className = _drillMonth ? 'drill-panel show' : 'drill-panel';
-
-  if (_drillMonth) {
-    renderDrill(_drillMonth);
-    return;
+  var activeMK, label;
+  if (_viewMode === 'year') {
+    activeMK = allMK;
+    label = 'Année ' + _year;
+  } else {
+    activeMK = _selectedMonths;
+    label = activeMK.length === 1 ? activeMK[0] : activeMK[0].split(' ')[0] + ' → ' + activeMK[activeMK.length-1].split(' ')[0] + ' ' + _year;
   }
 
-  // KPIs
-  document.getElementById('yr-kpis').innerHTML = [
-    { label:'Contracté', val:U.euro(T.contracte), sub:`${T.closes} closes`, color:'#ef4444' },
-    { label:'Collecté', val:U.euro(T.collecte), sub:T.contracte > 0 ? `${(T.collecte/T.contracte*100).toFixed(0)}% du contracté` : '', color:'#34d399' },
-    { label:'Calls Closing', val:U.num(T.calls), sub:`${T.lives} lives · ${T.offres} offres`, color:'#f59e0b' },
-    { label:'Setting', val:`${T.sets} sets`, sub:`${T.presents} présents · ${T.settingCalls} calls`, color:'#60a5fa' },
-  ].map(k => `<div class="yr-kpi" style="--kc:${k.color}"><div class="yr-kpi-label">${k.label}</div><div class="yr-kpi-val">${k.val}</div><div class="yr-kpi-sub">${k.sub}</div></div>`).join('');
+  var agg = (_viewMode === 'year') ? fullAgg : aggregateData(_yearData, activeMK);
+  renderContent(agg, fullAgg.perMonth, label);
+}
 
-  // Chart — Contracté & Collecté par mois
-  document.getElementById('chart-title').textContent = `Contracté & Collecté — ${_year}`;
-  const chartMonths = [];
-  MF.forEach((m, i) => {
-    const mk = m + ' ' + _year;
-    const md = perMonth[mk];
-    if (md && md.hasData) chartMonths.push({ label: m.slice(0, 3), ct: md.contracte, co: md.collecte, mk });
-  });
-  const maxChart = Math.max(...chartMonths.map(c => c.ct), 1);
-  document.getElementById('yr-chart').innerHTML = chartMonths.map(c => {
-    const hCt = (c.ct / maxChart * 180).toFixed(0);
-    const hCo = (c.co / maxChart * 180).toFixed(0);
-    return `<div class="yr-chart-col" onclick="drillMonth('${c.mk}')">
-      <div class="yr-chart-tooltip">${c.label}: ${U.euro(c.ct)} ct · ${U.euro(c.co)} co</div>
-      <div style="display:flex;align-items:flex-end;gap:2px;height:190px;width:100%">
-        <div class="yr-chart-bar bar-ct" style="height:${hCt}px;flex:1"></div>
-        <div class="yr-chart-bar bar-co" style="height:${hCo}px;flex:1"></div>
-      </div>
-      <div class="yr-chart-lbl">${c.label}</div>
-    </div>`;
-  }).join('');
+/* ── OBJECTIVE BAR ── */
+function renderObjectiveBar(contracteTotal) {
+  var pct = Math.min(contracteTotal / OBJECTIF_ANNUEL * 100, 100);
+  var remaining = Math.max(OBJECTIF_ANNUEL - contracteTotal, 0);
+  var color = pct >= 100 ? '#34d399' : pct >= 50 ? '#f59e0b' : '#ef4444';
+  var gradient = pct >= 100 ? 'linear-gradient(90deg,#065f46,#34d399)' : pct >= 50 ? 'linear-gradient(90deg,#92400e,#f59e0b)' : 'linear-gradient(90deg,#991b1b,#ef4444)';
+  document.getElementById('obj-bar').innerHTML =
+    '<div class="obj-header">' +
+      '<div>' +
+        '<div class="obj-title">Objectif annuel ' + _year + '</div>' +
+        '<div class="obj-amount">' + U.euro(contracteTotal) + ' <small>/ ' + U.euro(OBJECTIF_ANNUEL) + '</small></div>' +
+      '</div>' +
+      '<div style="text-align:right">' +
+        '<div style="font-size:36px;font-weight:800;color:' + color + ';font-family:var(--font-d);line-height:1">' + pct.toFixed(1) + '%</div>' +
+        '<div class="obj-target">contracté</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="obj-track">' +
+      '<div class="obj-fill" data-pct="' + pct.toFixed(1) + '%" style="width:' + pct + '%;background:' + gradient + '"></div>' +
+    '</div>' +
+    '<div class="obj-stats">' +
+      '<div class="obj-stat">Restant : <b>' + U.euro(remaining) + '</b></div>' +
+      '<div class="obj-stat">Mois écoulés : <b>' + getElapsedMonths() + '/12</b></div>' +
+      (pct > 0 ? '<div class="obj-stat">Rythme projeté : <b>' + U.euro(contracteTotal / Math.max(getElapsedMonths(), 1) * 12) + '</b></div>' : '') +
+    '</div>';
+}
 
-  // Funnel
-  const maxF = Math.max(T.calls, 1);
-  const funnelData = [
-    { label:'Calls', val:T.calls, rate:'' },
-    { label:'Lives', val:T.lives, rate:T.calls > 0 ? U.pct(T.lives/T.calls) : '' },
-    { label:'Offres', val:T.offres, rate:T.lives > 0 ? U.pct(T.offres/T.lives) : '' },
-    { label:'Closes', val:T.closes, rate:T.offres > 0 ? U.pct(T.closes/T.offres) : '' },
-    { label:'Contracté', val:U.euro(T.contracte), rate:'' },
-    { label:'Collecté', val:U.euro(T.collecte), rate:T.contracte > 0 ? U.pct(T.collecte/T.contracte) : '' },
+/* ── PERIOD SELECTOR ── */
+function renderPeriodSelector(perMonth) {
+  // Tabs
+  var tabs = [
+    { mode:'year',  label:'📊 Année entière' },
+    { mode:'month', label:'📅 Mois' },
+    { mode:'range', label:'📐 Période' },
   ];
-  const funnelVals = [T.calls, T.lives, T.offres, T.closes, T.contracte/1000, T.collecte/1000];
-  const maxFV = Math.max(...funnelVals, 1);
-  document.getElementById('yr-funnel').innerHTML = funnelData.map((f, i) => {
-    const w = (funnelVals[i] / maxFV * 100).toFixed(0);
-    return `<div class="yr-funnel-row">
-      <div class="yr-funnel-label">${f.label}</div>
-      <div class="yr-funnel-track"><div class="yr-funnel-fill" style="width:${Math.max(w, 3)}%"></div></div>
-      <div class="yr-funnel-val">${f.val}</div>
-      <div class="yr-funnel-rate">${f.rate}</div>
-    </div>`;
+  document.getElementById('period-tabs').innerHTML = tabs.map(function(t) {
+    return '<div class="period-tab' + (_viewMode === t.mode ? ' active' : '') + '" onclick="setViewMode(\'' + t.mode + '\')">' + t.label + '</div>';
   }).join('');
 
-  // Team table
-  const members = SYNC_MEMBERS.map(m => {
-    const d = perMember[m.uid] || {};
-    return { ...m, ...d, showup: d.calls > 0 ? (d.lives/d.calls) : 0, txClose: d.offres > 0 ? (d.closes/d.offres) : 0 };
-  });
-  const tTotal = members.reduce((t, m) => {
-    ['calls','lives','offres','closes','contracte','collecte','sets','presents'].forEach(k => t[k] = (t[k]||0) + (m[k]||0));
-    return t;
-  }, {});
-
-  document.getElementById('yr-team').innerHTML = `<table class="yr-table">
-    <thead><tr><th>Membre</th><th>Calls</th><th>Lives</th><th>Offres</th><th>Closes</th><th>Contracté</th><th>Collecté</th><th>Show-up</th></tr></thead>
-    <tbody>
-      ${members.map(m => `<tr>
-        <td><span class="member-dot" style="background:${m.color}"></span>${m.name}</td>
-        <td>${m.calls}</td><td>${m.lives}</td><td>${m.offres}</td><td>${m.closes}</td>
-        <td>${U.euro(m.contracte)}</td><td>${U.euro(m.collecte)}</td>
-        <td>${U.pct(m.showup)}</td>
-      </tr>`).join('')}
-      <tr class="tr-total">
-        <td>Total</td>
-        <td>${tTotal.calls||0}</td><td>${tTotal.lives||0}</td><td>${tTotal.offres||0}</td><td>${tTotal.closes||0}</td>
-        <td>${U.euro(tTotal.contracte||0)}</td><td>${U.euro(tTotal.collecte||0)}</td>
-        <td>${tTotal.calls > 0 ? U.pct(tTotal.lives/tTotal.calls) : '—'}</td>
-      </tr>
-    </tbody>
-  </table>`;
-
-  // Months detail table
-  const monthsWithData = MF.filter((m, i) => {
-    const mk = m + ' ' + _year;
-    return perMonth[mk] && perMonth[mk].hasData;
-  });
-  document.getElementById('yr-months-table').innerHTML = `<table class="yr-table">
-    <thead><tr><th>Mois</th><th>Calls</th><th>Closes</th><th>Contracté</th><th>Collecté</th></tr></thead>
-    <tbody>
-      ${monthsWithData.map(m => {
-        const mk = m + ' ' + _year;
-        const d = perMonth[mk];
-        return `<tr style="cursor:pointer" onclick="drillMonth('${mk}')">
-          <td style="color:var(--red3)">${m}</td>
-          <td>${d.calls}</td><td>${d.closes}</td>
-          <td>${U.euro(d.contracte)}</td><td>${U.euro(d.collecte)}</td>
-        </tr>`;
-      }).join('')}
-      <tr class="tr-total">
-        <td>Total ${_year}</td>
-        <td>${T.calls}</td><td>${T.closes}</td>
-        <td>${U.euro(T.contracte)}</td><td>${U.euro(T.collecte)}</td>
-      </tr>
-    </tbody>
-  </table>`;
-}
-
-/* ── DRILL-DOWN MOIS ── */
-function drillMonth(mk) {
-  _drillMonth = (_drillMonth === mk) ? null : mk;
-  renderYear();
-}
-function closeDrill() {
-  _drillMonth = null;
-  renderYear();
-}
-
-function renderDrill(mk) {
-  document.getElementById('drill-year').textContent = _year;
-  const mData = _yearData[mk] || {};
-
-  // Agréger les 2 membres pour ce mois
-  const T = { calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0 };
-  const members = [];
-  SYNC_MEMBERS.forEach(m => {
-    const d = mData[m.uid];
-    const entry = { ...m, calls:0, lives:0, offres:0, closes:0, contracte:0, collecte:0, sets:0, presents:0 };
-    if (d && d.closing) {
-      ['calls','lives','offres','closes','contracte','collecte'].forEach(k => { entry[k] = d.closing[k] || 0; T[k] += entry[k]; });
+  // Month grid
+  var html = MF.map(function(m, i) {
+    var mk = m + ' ' + _year;
+    var md = perMonth[mk];
+    var hasData = md && md.hasData;
+    var isActive = _selectedMonths.indexOf(mk) >= 0;
+    var inRange = false;
+    if (_viewMode === 'range' && _selectedMonths.length >= 2) {
+      var first = MF.indexOf(_selectedMonths[0].split(' ')[0]);
+      var last = MF.indexOf(_selectedMonths[_selectedMonths.length-1].split(' ')[0]);
+      inRange = i >= first && i <= last;
     }
-    if (d && d.setting) {
-      entry.sets = d.setting.sets || 0; T.sets += entry.sets;
-      entry.presents = d.setting.presents || 0; T.presents += entry.presents;
-    }
-    members.push(entry);
-  });
+    var cls = 'month-btn';
+    if (isActive) cls += ' active';
+    else if (inRange) cls += ' in-range';
+    if (hasData) cls += ' has-data';
+    return '<div class="' + cls + '" onclick="clickMonth(' + i + ')" data-idx="' + i + '">' + m.slice(0, 3) + '</div>';
+  }).join('');
+  document.getElementById('month-grid').innerHTML = html;
 
-  // KPIs drill
-  document.getElementById('drill-kpis').innerHTML = [
-    { label:'Contracté', val:U.euro(T.contracte), sub:`${T.closes} closes`, color:'#ef4444' },
-    { label:'Collecté', val:U.euro(T.collecte), sub:T.contracte > 0 ? `${(T.collecte/T.contracte*100).toFixed(0)}%` : '', color:'#34d399' },
-    { label:'Calls', val:U.num(T.calls), sub:`${T.lives} lives`, color:'#f59e0b' },
-    { label:'Setting', val:`${T.sets} sets`, sub:`${T.presents} présents`, color:'#60a5fa' },
-  ].map(k => `<div class="yr-kpi" style="--kc:${k.color}"><div class="yr-kpi-label">${k.label}</div><div class="yr-kpi-val">${k.val}</div><div class="yr-kpi-sub">${k.sub}</div></div>`).join('');
-
-  document.getElementById('drill-funnel-title').textContent = `Funnel — ${mk}`;
-  const funnelVals = [T.calls, T.lives, T.offres, T.closes];
-  const maxFV = Math.max(...funnelVals, 1);
-  document.getElementById('drill-funnel').innerHTML = [
-    { label:'Calls', val:T.calls, rate:'' },
-    { label:'Lives', val:T.lives, rate:T.calls > 0 ? U.pct(T.lives/T.calls) : '' },
-    { label:'Offres', val:T.offres, rate:T.lives > 0 ? U.pct(T.offres/T.lives) : '' },
-    { label:'Closes', val:T.closes, rate:T.offres > 0 ? U.pct(T.closes/T.offres) : '' },
-  ].map((f, i) => `<div class="yr-funnel-row">
-    <div class="yr-funnel-label">${f.label}</div>
-    <div class="yr-funnel-track"><div class="yr-funnel-fill" style="width:${Math.max(funnelVals[i]/maxFV*100, 3)}%"></div></div>
-    <div class="yr-funnel-val">${f.val}</div>
-    <div class="yr-funnel-rate">${f.rate}</div>
-  </div>`).join('');
-
-  // Team drill
-  document.getElementById('drill-team').innerHTML = `<table class="yr-table">
-    <thead><tr><th>Membre</th><th>Calls</th><th>Closes</th><th>Contracté</th><th>Collecté</th><th>Sets</th><th>Show-up</th></tr></thead>
-    <tbody>
-      ${members.map(m => `<tr>
-        <td><span class="member-dot" style="background:${m.color}"></span>${m.name}</td>
-        <td>${m.calls}</td><td>${m.closes}</td>
-        <td>${U.euro(m.contracte)}</td><td>${U.euro(m.collecte)}</td>
-        <td>${m.sets}</td>
-        <td>${m.calls > 0 ? U.pct(m.lives/m.calls) : '—'}</td>
-      </tr>`).join('')}
-      <tr class="tr-total">
-        <td>Total</td>
-        <td>${T.calls}</td><td>${T.closes}</td>
-        <td>${U.euro(T.contracte)}</td><td>${U.euro(T.collecte)}</td>
-        <td>${T.sets}</td>
-        <td>${T.calls > 0 ? U.pct(T.lives/T.calls) : '—'}</td>
-      </tr>
-    </tbody>
-  </table>`;
+  // Info
+  var info = '';
+  if (_viewMode === 'range' && _rangeStart !== null && _selectedMonths.length < 2) {
+    info = '💡 Cliquer sur un second mois pour définir la plage';
+  } else if (_viewMode === 'range' && _selectedMonths.length >= 2) {
+    info = '📐 ' + _selectedMonths[0] + ' → ' + _selectedMonths[_selectedMonths.length - 1];
+  }
+  document.getElementById('period-info').textContent = info;
 }
 
-/* ── INIT ── */
+function setViewMode(mode) {
+  _viewMode = mode;
+  _selectedMonths = [];
+  _rangeStart = null;
+  renderAll();
+}
+
+function clickMonth(idx) {
+  var mk = MF[idx] + ' ' + _year;
+  if (_viewMode === 'year') {
+    // Passer en mode mois
+    _viewMode = 'month';
+    _selectedMonths = [mk];
+  } else if (_viewMode === 'month') {
+    _selectedMonths = [mk];
+  } else if (_viewMode === 'range') {
+    if (_rangeStart === null) {
+      _rangeStart = idx;
+      _selectedMonths = [mk];
+    } else {
+      var from = Math.min(_rangeStart, idx);
+      var to = Math.max(_rangeStart, idx);
+      _selectedMonths = [];
+      for (var i = from; i <= to; i++) _selectedMonths.push(MF[i] + ' ' + _year);
+      _rangeStart = null;
+    }
+  }
+  renderAll();
+}
+
+/* ── MAIN CONTENT ── */
+function renderContent(agg, perMonth, label) {
+  var T = agg.totals;
+  var isYear = _viewMode === 'year';
+  var h = '';
+
+  // Back button if not year
+  if (!isYear) {
+    h += '<div class="drill-back" onclick="setViewMode(\'year\')">◀ Retour année ' + _year + '</div>';
+  }
+
+  // ── KPIs CLOSING ──
+  h += '<div class="section-title" style="margin-top:0">Closing</div>';
+  h += '<div class="yr-grid">';
+  h += kpi('Contracté', U.euro(T.contracte), T.closes + ' closes', '#ef4444');
+  h += kpi('Collecté', U.euro(T.collecte), T.contracte > 0 ? (T.collecte/T.contracte*100).toFixed(0) + '% du contracté' : '', '#34d399');
+  h += kpi('Calls → Lives', U.num(T.calls), T.lives + ' lives · ' + T.offres + ' offres', '#f59e0b');
+  var txClose = T.offres > 0 ? (T.closes/T.offres*100).toFixed(1) + '%' : '—';
+  h += kpi('Tx Closing', txClose, T.closes + '/' + T.offres + ' offres', '#ef4444');
+  h += '</div>';
+
+  // ── KPIs SETTING ──
+  h += '<div class="section-title">Setting</div>';
+  h += '<div class="yr-grid">';
+  h += kpi('Appels Setting', U.num(T.sCalls), T.sDecroches + ' décrochés', '#60a5fa');
+  h += kpi('RDV posés', U.num(T.sSets), T.sPresents + ' présents · ' + T.sCloses + ' closes', '#818cf8');
+  var txDecroche = T.sCalls > 0 ? (T.sDecroches/T.sCalls*100).toFixed(1) + '%' : '—';
+  h += kpi('Tx Décroché', txDecroche, T.sDecroches + '/' + T.sCalls + ' appels', '#60a5fa');
+  var txShowup = T.sSets > 0 ? (T.sPresents/T.sSets*100).toFixed(1) + '%' : '—';
+  h += kpi('Tx Show-up', txShowup, T.sPresents + '/' + T.sSets + ' sets', '#34d399');
+  h += '</div>';
+
+  // ── CHART + FUNNELS ──
+  if (isYear || _selectedMonths.length > 1) {
+    // Chart contracté par mois
+    h += '<div class="yr-row-3">';
+    h += '<div class="yr-card">';
+    h += '<div class="yr-card-hdr"><div class="yr-card-title">Contracté & Collecté — ' + label + '</div></div>';
+    h += '<div class="chart-legend-row">';
+    h += '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#ef4444"></div>Contracté</div>';
+    h += '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#34d399"></div>Collecté</div>';
+    h += '<div class="chart-legend-item"><div class="chart-legend-dot" style="background:#60a5fa"></div>Sets</div>';
+    h += '</div>';
+    h += '<div class="yr-chart" id="yr-chart"></div>';
+    h += '</div>';
+
+    // Closing funnel
+    h += '<div class="yr-card">';
+    h += '<div class="yr-card-hdr"><div class="yr-card-title">Funnel Closing</div></div>';
+    h += renderFunnel(
+      [{l:'Calls',v:T.calls},{l:'Lives',v:T.lives},{l:'Offres',v:T.offres},{l:'Closes',v:T.closes}],
+      'closing'
+    );
+    h += '</div>';
+    h += '</div>';
+
+    // Setting funnel standalone
+    h += '<div class="yr-row">';
+    h += '<div class="yr-card">';
+    h += '<div class="yr-card-hdr"><div class="yr-card-title">Funnel Setting</div></div>';
+    h += renderFunnel(
+      [{l:'Appels',v:T.sCalls},{l:'Décrochés',v:T.sDecroches},{l:'Prop RDV',v:T.sPropRdv},{l:'Sets',v:T.sSets},{l:'Présents',v:T.sPresents},{l:'Closes',v:T.sCloses}],
+      'setting'
+    );
+    h += '</div>';
+
+    // Team table
+    h += '<div class="yr-card">';
+    h += '<div class="yr-card-hdr"><div class="yr-card-title">Performance équipe</div><div class="yr-card-badge">' + label + '</div></div>';
+    h += renderTeamTable(agg.perMember);
+    h += '</div>';
+    h += '</div>';
+  } else {
+    // Single month — funnels side by side
+    h += '<div class="yr-row">';
+    h += '<div class="yr-card">';
+    h += '<div class="yr-card-hdr"><div class="yr-card-title">Funnel Closing</div></div>';
+    h += renderFunnel(
+      [{l:'Calls',v:T.calls},{l:'Lives',v:T.lives},{l:'Offres',v:T.offres},{l:'Closes',v:T.closes}],
+      'closing'
+    );
+    h += '</div>';
+    h += '<div class="yr-card">';
+    h += '<div class="yr-card-hdr"><div class="yr-card-title">Funnel Setting</div></div>';
+    h += renderFunnel(
+      [{l:'Appels',v:T.sCalls},{l:'Décrochés',v:T.sDecroches},{l:'Prop RDV',v:T.sPropRdv},{l:'Sets',v:T.sSets},{l:'Présents',v:T.sPresents},{l:'Closes',v:T.sCloses}],
+      'setting'
+    );
+    h += '</div>';
+    h += '</div>';
+
+    // Team
+    h += '<div class="yr-card" style="margin-bottom:18px">';
+    h += '<div class="yr-card-hdr"><div class="yr-card-title">Performance équipe</div><div class="yr-card-badge">' + label + '</div></div>';
+    h += renderTeamTable(agg.perMember);
+    h += '</div>';
+  }
+
+  // ── MONTH DETAIL TABLE (year/range only) ──
+  if (isYear || _selectedMonths.length > 1) {
+    var monthKeys = isYear ? MF.map(function(m) { return m + ' ' + _year; }) : _selectedMonths;
+    var monthsWithData = monthKeys.filter(function(mk) { return perMonth[mk] && perMonth[mk].hasData; });
+    if (monthsWithData.length > 0) {
+      h += '<div class="yr-card">';
+      h += '<div class="yr-card-hdr"><div class="yr-card-title">Détail par mois</div></div>';
+      h += '<div class="yr-table-wrap"><table class="yr-table">';
+      h += '<thead><tr><th>Mois</th><th>Calls C.</th><th>Lives</th><th>Closes</th><th>Contracté</th><th>Collecté</th><th>Appels S.</th><th>Sets</th><th>Présents</th></tr></thead>';
+      h += '<tbody>';
+      monthsWithData.forEach(function(mk) {
+        var d = perMonth[mk];
+        var mName = mk.split(' ')[0];
+        h += '<tr style="cursor:pointer" onclick="clickMonth(' + MF.indexOf(mName) + ')">';
+        h += '<td style="color:var(--red3)">' + mName + '</td>';
+        h += '<td>' + d.calls + '</td><td>' + d.lives + '</td><td>' + d.closes + '</td>';
+        h += '<td>' + U.euro(d.contracte) + '</td><td>' + U.euro(d.collecte) + '</td>';
+        h += '<td>' + d.sCalls + '</td><td>' + d.sSets + '</td><td>' + d.sPresents + '</td>';
+        h += '</tr>';
+      });
+      h += '<tr class="tr-total"><td>Total</td>';
+      h += '<td>' + T.calls + '</td><td>' + T.lives + '</td><td>' + T.closes + '</td>';
+      h += '<td>' + U.euro(T.contracte) + '</td><td>' + U.euro(T.collecte) + '</td>';
+      h += '<td>' + T.sCalls + '</td><td>' + T.sSets + '</td><td>' + T.sPresents + '</td>';
+      h += '</tr></tbody></table></div>';
+      h += '</div>';
+    }
+  }
+
+  document.getElementById('main-content').innerHTML = h;
+
+  // Render chart after DOM insertion
+  if ((isYear || _selectedMonths.length > 1) && document.getElementById('yr-chart')) {
+    renderChart(perMonth, isYear ? MF.map(function(m){return m+' '+_year;}) : _selectedMonths);
+  }
+}
+
+/* ── HELPERS ── */
+function kpi(label, val, sub, color) {
+  return '<div class="yr-kpi" style="--kc:' + color + '">' +
+    '<div class="yr-kpi-label">' + label + '</div>' +
+    '<div class="yr-kpi-val">' + val + '</div>' +
+    '<div class="yr-kpi-sub">' + sub + '</div>' +
+  '</div>';
+}
+
+function renderFunnel(steps, type) {
+  var maxV = Math.max.apply(null, steps.map(function(s){return s.v;}));
+  if (maxV === 0) maxV = 1;
+  var h = '<div class="yr-funnel">';
+  steps.forEach(function(s, i) {
+    var w = Math.max(s.v / maxV * 100, 3).toFixed(0);
+    var rate = '';
+    if (i > 0 && steps[i-1].v > 0) rate = (s.v / steps[i-1].v * 100).toFixed(1) + '%';
+    h += '<div class="yr-funnel-row">';
+    h += '<div class="yr-funnel-label">' + s.l + '</div>';
+    h += '<div class="yr-funnel-track"><div class="yr-funnel-fill ' + type + '" style="width:' + w + '%"></div></div>';
+    h += '<div class="yr-funnel-val">' + U.num(s.v) + '</div>';
+    h += '<div class="yr-funnel-rate">' + rate + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function renderTeamTable(perMember) {
+  var members = SYNC_MEMBERS.map(function(m) {
+    var d = perMember[m.uid] || {};
+    return Object.assign({}, m, d, {
+      showup: d.calls > 0 ? d.lives/d.calls : 0,
+      txClose: d.offres > 0 ? d.closes/d.offres : 0,
+      sShowup: d.sSets > 0 ? d.sPresents/d.sSets : 0,
+    });
+  });
+  var tC = {calls:0,lives:0,offres:0,closes:0,contracte:0,collecte:0,sCalls:0,sSets:0,sPresents:0};
+  members.forEach(function(m) { Object.keys(tC).forEach(function(k){tC[k]+=(m[k]||0);}); });
+
+  var h = '<div class="yr-table-wrap"><table class="yr-table">';
+  h += '<thead><tr><th>Membre</th><th>Calls C.</th><th>Lives</th><th>Closes</th><th>Contracté</th><th>Collecté</th><th>Appels S.</th><th>Sets</th><th>Show-up S.</th></tr></thead>';
+  h += '<tbody>';
+  members.forEach(function(m) {
+    h += '<tr>';
+    h += '<td><span class="member-dot" style="background:' + m.color + '"></span>' + m.name + '</td>';
+    h += '<td>' + (m.calls||0) + '</td><td>' + (m.lives||0) + '</td><td>' + (m.closes||0) + '</td>';
+    h += '<td>' + U.euro(m.contracte||0) + '</td><td>' + U.euro(m.collecte||0) + '</td>';
+    h += '<td>' + (m.sCalls||0) + '</td><td>' + (m.sSets||0) + '</td>';
+    h += '<td>' + U.pct(m.sShowup) + '</td>';
+    h += '</tr>';
+  });
+  h += '<tr class="tr-total"><td>Total</td>';
+  h += '<td>' + tC.calls + '</td><td>' + tC.lives + '</td><td>' + tC.closes + '</td>';
+  h += '<td>' + U.euro(tC.contracte) + '</td><td>' + U.euro(tC.collecte) + '</td>';
+  h += '<td>' + tC.sCalls + '</td><td>' + tC.sSets + '</td>';
+  h += '<td>' + (tC.sSets > 0 ? U.pct(tC.sPresents/tC.sSets) : '—') + '</td>';
+  h += '</tr></tbody></table></div>';
+  return h;
+}
+
+function renderChart(perMonth, monthKeys) {
+  var el = document.getElementById('yr-chart');
+  if (!el) return;
+  var chartData = [];
+  monthKeys.forEach(function(mk) {
+    var md = perMonth[mk];
+    if (md && md.hasData) {
+      chartData.push({ label: mk.split(' ')[0].slice(0, 3), ct: md.contracte, co: md.collecte, sets: md.sSets || 0, mk: mk });
+    }
+  });
+  if (chartData.length === 0) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;width:100%;padding:40px 0">Aucune donnée</div>'; return; }
+
+  var maxCt = Math.max.apply(null, chartData.map(function(c){return c.ct;}));
+  var maxSets = Math.max.apply(null, chartData.map(function(c){return c.sets;}));
+  if (maxCt === 0) maxCt = 1;
+  if (maxSets === 0) maxSets = 1;
+
+  el.innerHTML = chartData.map(function(c) {
+    var hCt = (c.ct / maxCt * 170).toFixed(0);
+    var hCo = (c.co / maxCt * 170).toFixed(0);
+    var hSet = (c.sets / maxSets * 80).toFixed(0);
+    var mIdx = MF.indexOf(c.mk.split(' ')[0]);
+    return '<div class="yr-chart-col" onclick="clickMonth(' + mIdx + ')">' +
+      '<div class="yr-chart-tooltip">' + c.label + ': ' + U.euro(c.ct) + ' ct · ' + U.euro(c.co) + ' co · ' + c.sets + ' sets</div>' +
+      '<div style="display:flex;align-items:flex-end;gap:2px;height:190px;width:100%">' +
+        '<div class="yr-chart-bar bar-ct" style="height:' + hCt + 'px;flex:1"></div>' +
+        '<div class="yr-chart-bar bar-co" style="height:' + hCo + 'px;flex:1"></div>' +
+        '<div class="yr-chart-bar bar-set" style="height:' + hSet + 'px;flex:1"></div>' +
+      '</div>' +
+      '<div class="yr-chart-lbl">' + c.label + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', async function() {
-  // Affichage immédiat depuis localStorage (optimiste, sera écrasé après auth)
-  const nmCache = localStorage.getItem('ambitio_name') || 'Guillaume';
+  var nmCache = localStorage.getItem('ambitio_name') || 'Guillaume';
   document.getElementById('tb-nm').textContent = nmCache;
   document.getElementById('tb-av').textContent = nmCache[0].toUpperCase();
 
-  // ── Attendre Firebase Auth (avec timeout 5s en fallback localStorage) ──
-  let fbUser = null;
+  var fbUser = null;
   try {
     fbUser = await Promise.race([
-      new Promise(resolve => {
-        const unsub = firebase.auth().onAuthStateChanged(u => { unsub(); resolve(u); });
+      new Promise(function(resolve) {
+        var unsub = firebase.auth().onAuthStateChanged(function(u) { unsub(); resolve(u); });
       }),
-      new Promise(resolve => setTimeout(() => resolve(null), 5000))
+      new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 5000); })
     ]);
   } catch(e) { console.warn('[dashboard] Auth error:', e); }
 
   if (!fbUser) {
-    // Pas authentifié → redirection, sauf si on a un rôle en cache (dev/offline)
-    if (!localStorage.getItem('ambitio_role')) {
-      window.location.href = 'login.html';
-      return;
-    }
+    if (!localStorage.getItem('ambitio_role')) { window.location.href = 'login.html'; return; }
   } else {
-    // Auth OK → récupérer le rôle depuis Firestore
     try {
-      const uSnap = await firebase.firestore().collection('users').doc(fbUser.uid).get();
-      const uData = uSnap.exists ? uSnap.data() : {};
-      const role  = uData.role || localStorage.getItem('ambitio_role') || 'sales';
-      const name  = fbUser.displayName || fbUser.email.split('@')[0];
+      var uSnap = await firebase.firestore().collection('users').doc(fbUser.uid).get();
+      var uData = uSnap.exists ? uSnap.data() : {};
+      var role  = uData.role || localStorage.getItem('ambitio_role') || 'sales';
+      var name  = fbUser.displayName || fbUser.email.split('@')[0];
       window._currentUserUid   = fbUser.uid;
       window._currentRole      = role;
       window._currentUserName  = name;
       localStorage.setItem('ambitio_role',  role);
-      localStorage.setItem('ambitio_auth_uid', fbUser.uid); // auth UID séparé, ne pas écraser ambitio_uid
+      localStorage.setItem('ambitio_auth_uid', fbUser.uid);
       localStorage.setItem('ambitio_name',  name);
       document.getElementById('tb-nm').textContent = name;
       document.getElementById('tb-av').textContent = name[0].toUpperCase();
     } catch(e) { console.warn('[dashboard] Firestore user read:', e); }
-
-    // Initialiser Fire.db avec l'instance Firestore authentifiée
-    if (!Fire.db) {
-      Fire.init(firebase.firestore(), fbUser.uid);
-    }
+    if (!Fire.db) Fire.init(firebase.firestore(), fbUser.uid);
   }
 
-  // Migrer les données historiques vers Firestore (one-shot)
   await migrateHistToFirestore();
-
   await refreshYear();
 });
 </script>
