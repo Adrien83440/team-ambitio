@@ -595,19 +595,29 @@ body {
    COMMISSION RULES
 ══════════════════════════════════════════════════════════ */
 const COMM_RULES = {
-  // Source: Contrat Full Cycle + Avenant Elite Phénix
+  // Source: Contrat Full Cycle (Art.3) + Avenant Elite Phénix (Art.2-3)
+  // ⚠ Commission de base uniquement — la prime PIF est dans PIF_BONUS
   closing: {
-    'BP 6':   { mensualise: 250,  pif: 300  }, // demi-palier BP12
-    'BP 12':  { mensualise: 500,  pif: 600  }, // contrat principal
-    'Elite':  { mensualise: 800,  pif: 900  }, // avenant Elite Phénix
-    'Titan':  { mensualise: 1200, pif: 1500 },
+    'BP 6':   { mensualise: 200,  pif: 200  }, // forfait 200€, pas de prime PIF (contrat Art.3.1)
+    'BP 12':  { mensualise: 500,  pif: 500  }, // forfait 500€ (contrat Art.3.1)
+    'Elite':  { mensualise: 800,  pif: 800  }, // forfait 800€ (avenant Art.2)
+    'Titan':  { mensualise: 1200, pif: 1200 }, // pas de contrat — à confirmer
   },
   setting: {
-    'BP 6':   { noBooking: 100,  selfBooking: 50  }, // proportionnel
-    'BP 12':  { noBooking: 250,  selfBooking: 125 }, // contrat principal
-    'Elite':  { noBooking: 300,  selfBooking: 150 }, // avenant Elite Phénix
-    'Titan':  { noBooking: 500,  selfBooking: 250 },
+    'BP 6':   { noBooking: 100,  selfBooking: 50  }, // contrat Art.3.2
+    'BP 12':  { noBooking: 250,  selfBooking: 125 }, // contrat Art.3.2
+    'Elite':  { noBooking: 300,  selfBooking: 150 }, // avenant Art.3
+    'Titan':  { noBooking: 500,  selfBooking: 250 }, // pas de contrat — à confirmer
   },
+};
+
+// Prime PIF : bonus auto ajouté quand type=Closing + subtype=pif
+// Source: Contrat Full Cycle Art.3.1 (100€ HT BP12) + Avenant Art.2 (900-800=100€)
+const PIF_BONUS = {
+  'BP 6':  0,     // "indépendamment du mode de règlement" (contrat Art.3.1)
+  'BP 12': 100,   // prime forfaitaire 100€ HT (contrat Art.3.1)
+  'Elite': 100,   // 900 PIF - 800 mensu = 100€ (avenant Art.2)
+  'Titan': 0,     // commission fixe, pas de prime PIF
 };
 
 // Points system
@@ -798,6 +808,13 @@ function autoCalcComm(offre, type, subtype) {
   } else {
     return subtype === 'noBooking' ? r.noBooking : r.selfBooking;
   }
+}
+
+function autoCalcBonus(offre, type, subtype) {
+  if (type === 'Closing' && subtype === 'pif') {
+    return PIF_BONUS[offre] || 0;
+  }
+  return 0;
 }
 
 function offreClass(offre) {
@@ -1085,24 +1102,30 @@ function toggleAddForm() {
 function updateCommPreview() {
   const offre   = document.getElementById('f-offre').value;
   const type    = document.getElementById('f-type').value;
-  const subtype = document.getElementById('f-subtype').value;
-  const comm = autoCalcComm(offre, type, subtype);
-  const pts  = type === 'Closing' ? (POINTS[offre] || 0) : 0;
-  document.getElementById('comm-preview').textContent = fmtDec(comm);
-  document.getElementById('pts-preview').textContent = pts + ' pts';
-  document.getElementById('f-comm').value = comm;
+  const st      = document.getElementById('f-subtype');
+  const prevVal = st.value;                          // ← mémoriser avant rebuild
 
-  // Update subtype options based on type
-  const st = document.getElementById('f-subtype');
+  // Rebuild subtype options selon le type
   if (type === 'Closing') {
     st.innerHTML = '<option value="mensualise">Mensualise</option><option value="pif">PIF (comptant)</option>';
   } else {
     st.innerHTML = '<option value="noBooking">No-Booking</option><option value="selfBooking">Self-Booking</option>';
   }
-  // Re-calc after updating
-  const comm2 = autoCalcComm(offre, type, document.getElementById('f-subtype').value);
-  document.getElementById('comm-preview').textContent = fmtDec(comm2);
-  document.getElementById('f-comm').value = comm2;
+
+  // Restaurer la sélection précédente si elle existe encore dans les options
+  if ([...st.options].some(o => o.value === prevVal)) {
+    st.value = prevVal;
+  }
+
+  // Calcul commission + bonus + points
+  const subtype = st.value;
+  const comm  = autoCalcComm(offre, type, subtype);
+  const bonus = autoCalcBonus(offre, type, subtype);
+  const pts   = type === 'Closing' ? (POINTS[offre] || 0) : 0;
+  document.getElementById('comm-preview').textContent = fmtDec(comm) + (bonus ? ' + ' + fmtDec(bonus) + ' bonus' : '');
+  document.getElementById('pts-preview').textContent  = pts + ' pts';
+  document.getElementById('f-comm').value  = comm;
+  document.getElementById('f-bonus').value = bonus || '';
 }
 
 function addDeal() {
@@ -1113,7 +1136,8 @@ function addDeal() {
   const email   = document.getElementById('f-email').value.trim();
   const date    = document.getElementById('f-date').value;
   const commVal = parseFloat(document.getElementById('f-comm').value) || autoCalcComm(offre, type, subtype);
-  const bonus   = parseFloat(document.getElementById('f-bonus').value) || 0;
+  const bonusRaw = document.getElementById('f-bonus').value;
+  const bonus   = bonusRaw !== '' ? (parseFloat(bonusRaw) || 0) : autoCalcBonus(offre, type, subtype);
   const notes   = document.getElementById('f-notes').value.trim();
   const ok      = document.getElementById('f-ok').checked;
 
@@ -1130,6 +1154,7 @@ function addDeal() {
   document.getElementById('f-bonus').value = '';
   document.getElementById('f-notes').value = '';
   document.getElementById('f-ok').checked = false;
+  updateCommPreview();
 
   renderFiche();
 }
