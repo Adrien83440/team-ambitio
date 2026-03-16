@@ -811,6 +811,7 @@ function getAllSessions(c){
 function getSessionsInMonth(c, year, month){
   return getAllSessions(c).filter(s=>{
     if(s.statut!=='fait' || !s.date) return false;
+    if(s.numero===0 || s.type==='rdv72h') return false;
     const d = new Date(s.date);
     return d.getFullYear()===year && d.getMonth()===month;
   });
@@ -1038,7 +1039,7 @@ function applyFilters(){
   }
 
   document.getElementById('statTotal').textContent    = _filtered.length;
-  document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>getAllSessions(c).filter(s=>s.statut==='fait').length+s,0);
+  document.getElementById('statSessions').textContent = _filtered.reduce((s,c)=>getAllSessions(c).filter(s=>s.statut==='fait'&&s.numero!==0&&s.type!=='rdv72h').length+s,0);
   document.getElementById('statInactive').textContent = inactifs.length;
   updateQuotaStats();
   render();
@@ -1370,8 +1371,8 @@ async function addSession(clientId){
   };
   sessions.push(newSession);
   c.sessions = sessions;
-  c.nbCoachingsFaits = sessions.filter(s=>s.statut==='fait').length;
-  const dates = sessions.filter(s=>s.date&&s.statut==='fait').map(s=>s.date);
+  c.nbCoachingsFaits = sessions.filter(s=>s.statut==='fait'&&s.numero!==0&&s.type!=='rdv72h').length;
+  const dates = sessions.filter(s=>s.date&&s.statut==='fait'&&s.numero!==0&&s.type!=='rdv72h').map(s=>s.date);
   c.lastSessionDate = dates.length?dates.sort().pop():'';
   
   try{
@@ -1499,7 +1500,7 @@ async function quickMarkDone(clientId, sessionNum){
   s.devoirs   = ((document.getElementById('qs-devoirs-'+sessionNum)||{}).value||'').trim();
   s.notes     = ((document.getElementById('qs-notes-'+sessionNum)||{}).value||'').trim();
 
-  const doneSessions = getAllSessions(c).filter(s=>s.statut==='fait');
+  const doneSessions = getAllSessions(c).filter(s=>s.statut==='fait'&&s.numero!==0&&s.type!=='rdv72h');
   c.nbCoachingsFaits = doneSessions.length;
   const dates = doneSessions.filter(s=>s.date).map(s=>s.date);
   c.lastSessionDate = dates.length ? dates.sort().pop() : '';
@@ -1540,7 +1541,7 @@ async function saveSessionEdit(clientId, sessionNum){
   s.devoirs  = get('se-devoirs-'+sessionNum).trim();
   s.notes    = get('se-notes-'+sessionNum).trim();
 
-  const doneSessions = getAllSessions(c).filter(s=>s.statut==='fait');
+  const doneSessions = getAllSessions(c).filter(s=>s.statut==='fait'&&s.numero!==0&&s.type!=='rdv72h');
   c.nbCoachingsFaits = doneSessions.length;
   const dates = doneSessions.filter(s=>s.date).map(s=>s.date);
   c.lastSessionDate = dates.length ? dates.sort().pop() : '';
@@ -1911,7 +1912,10 @@ async function addSessToYear(clientId,yi){
 function syncYearStats(c){
   var done=0,dates=[];
   (c.years||[]).forEach(function(y){
-    (y.sessions||[]).forEach(function(s){if(s.statut==='fait'){done++;if(s.date)dates.push(s.date);}});
+    (y.sessions||[]).forEach(function(s){
+      var is72 = s.numero===0 || s.type==='rdv72h';
+      if(s.statut==='fait' && !is72){done++;if(s.date)dates.push(s.date);}
+    });
   });
   c.nbCoachingsFaits=done;
   c.lastSessionDate=dates.length?dates.sort().pop():'';
