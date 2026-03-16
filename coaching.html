@@ -419,6 +419,28 @@
       background: #f0fdf4; color: #16a34a; border-color: #bbf7d0;
     }
     .si-link-pill.gdoc:hover { background: #dcfce7; }
+
+    /* ── File Upload 72H ── */
+    .si-files-zone { margin-top:10px; padding:12px; background:#f8fafc; border:1.5px dashed #cbd5e1; border-radius:10px; }
+    .si-files-zone.dragging { border-color:var(--blue-main); background:#eff6ff; }
+    .si-files-title { font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+    .si-files-list { display:flex; flex-direction:column; gap:6px; margin-bottom:8px; }
+    .si-file-item { display:flex; align-items:center; gap:8px; padding:7px 10px; background:white; border:1px solid #e2e8f0; border-radius:8px; font-size:12px; }
+    .si-file-icon { font-size:16px; flex-shrink:0; }
+    .si-file-name { flex:1; font-weight:600; color:#1e293b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .si-file-name a { color:#1e293b; text-decoration:none; }
+    .si-file-name a:hover { color:var(--blue-main); text-decoration:underline; }
+    .si-file-size { font-size:10px; color:#94a3b8; flex-shrink:0; }
+    .si-file-del { width:22px; height:22px; border:none; background:rgba(239,68,68,.08); color:#ef4444; border-radius:6px; cursor:pointer; font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background .15s; }
+    .si-file-del:hover { background:rgba(239,68,68,.18); }
+    .si-upload-row { display:flex; gap:8px; align-items:center; }
+    .si-upload-input { display:none; }
+    .si-upload-btn { padding:6px 14px; border:1px solid #cbd5e1; border-radius:8px; background:white; color:#475569; font-size:11px; font-weight:700; cursor:pointer; transition:all .15s; font-family:inherit; }
+    .si-upload-btn:hover { background:#f1f5f9; border-color:#94a3b8; }
+    .si-upload-hint { font-size:10px; color:#94a3b8; }
+    .si-upload-progress { height:4px; background:#e2e8f0; border-radius:2px; overflow:hidden; margin-top:6px; display:none; }
+    .si-upload-progress.active { display:block; }
+    .si-upload-progress-fill { height:100%; background:var(--blue-main); border-radius:2px; width:0; transition:width .3s; }
     .si-notes {
       font-size: 12px; line-height: 1.7; color: var(--text);
       background: #fffbeb; border-radius: 8px; padding: 10px 12px;
@@ -703,6 +725,7 @@
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import{getStorage,ref as storageRef,uploadBytes,getDownloadURL,deleteObject}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
   const app=initializeApp({
     apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
     authDomain:"ambitio-team.firebaseapp.com",
@@ -711,10 +734,13 @@
     messagingSenderId:"1079366902268",
     appId:"1:1079366902268:web:b4ec1691dba54230339279"
   });
-  const auth=getAuth(app),db=getFirestore(app);
+  const auth=getAuth(app),db=getFirestore(app),storage=getStorage(app);
   window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
   window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
   window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._signOut=signOut;
+  window._storage=storage;window._storageRef=storageRef;
+  window._uploadBytes=uploadBytes;window._getDownloadURL=getDownloadURL;
+  window._deleteObject=deleteObject;
 
   onAuthStateChanged(auth,async user=>{
     if(!user){window.location.href='index.html';return;}
@@ -1953,6 +1979,176 @@ async function saveYrEdit(clientId,yi,sn){
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
 
+/* ═══════════════════════════════════════════════════════════
+   FILE UPLOAD — RDV 72H uniquement
+   Stocke dans Firebase Storage: coaching-72h/{clientId}/{filename}
+   Metadata dans session.files: [{name, url, storagePath, type, size, uploadedAt}]
+═══════════════════════════════════════════════════════════ */
+
+function _fileIcon(name) {
+  var ext = (name || '').split('.').pop().toLowerCase();
+  if (ext === 'pdf') return '📕';
+  if (['jpg','jpeg','png','gif','webp','svg'].indexOf(ext) >= 0) return '🖼️';
+  if (['doc','docx'].indexOf(ext) >= 0) return '📄';
+  if (['xls','xlsx','csv'].indexOf(ext) >= 0) return '📊';
+  if (['ppt','pptx'].indexOf(ext) >= 0) return '📽️';
+  if (ext === 'html') return '🌐';
+  if (['mp4','mov','avi'].indexOf(ext) >= 0) return '🎬';
+  if (['mp3','wav'].indexOf(ext) >= 0) return '🎵';
+  if (['zip','rar','7z'].indexOf(ext) >= 0) return '📦';
+  return '📎';
+}
+
+function _fileSize(bytes) {
+  if (bytes < 1024) return bytes + ' o';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+}
+
+function render72hFiles(files, clientId, yi, sn) {
+  var k = 'y' + yi + 's' + sn;
+  var h = '';
+  h += '<div class="si-files-zone" id="fz-' + k + '" ondragover="event.preventDefault();this.classList.add(\'dragging\')" ondragleave="this.classList.remove(\'dragging\')" ondrop="event.preventDefault();this.classList.remove(\'dragging\');drop72hFile(event,\'' + clientId + '\',' + yi + ',' + sn + ')">';
+  h += '<div class="si-files-title">📎 Fichiers joints</div>';
+
+  if (files && files.length > 0) {
+    h += '<div class="si-files-list">';
+    for (var fi = 0; fi < files.length; fi++) {
+      var f = files[fi];
+      h += '<div class="si-file-item">';
+      h += '<span class="si-file-icon">' + _fileIcon(f.name) + '</span>';
+      h += '<span class="si-file-name"><a href="' + escHtml(f.url) + '" target="_blank">' + escHtml(f.name) + '</a></span>';
+      h += '<span class="si-file-size">' + (f.size ? _fileSize(f.size) : '') + '</span>';
+      h += '<button class="si-file-del" title="Supprimer" onclick="event.stopPropagation();delete72hFile(\'' + clientId + '\',' + yi + ',' + sn + ',' + fi + ')">✕</button>';
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+
+  h += '<div class="si-upload-row">';
+  h += '<input class="si-upload-input" type="file" id="fu-' + k + '" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.svg,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.html,.mp4,.mov,.mp3,.wav,.zip,.rar,.7z,.txt" onchange="upload72hFiles(\'' + clientId + '\',' + yi + ',' + sn + ')">';
+  h += '<button class="si-upload-btn" onclick="document.getElementById(\'fu-' + k + '\').click()">📤 Ajouter un fichier</button>';
+  h += '<span class="si-upload-hint">ou glisser-déposer ici · max 20 Mo / fichier</span>';
+  h += '</div>';
+  h += '<div class="si-upload-progress" id="fp-' + k + '"><div class="si-upload-progress-fill" id="fpf-' + k + '"></div></div>';
+  h += '</div>';
+  return h;
+}
+
+async function upload72hFiles(clientId, yi, sn) {
+  var k = 'y' + yi + 's' + sn;
+  var input = document.getElementById('fu-' + k);
+  if (!input || !input.files || input.files.length === 0) return;
+  if (!window._storage) { showToast('Storage non initialisé', 'error'); return; }
+
+  var c = _clients.find(function(x) { return x._id === clientId; });
+  if (!c || !c.years || !c.years[yi]) return;
+  var sess = (c.years[yi].sessions || []).find(function(x) { return x.numero === sn; });
+  if (!sess) return;
+  if (!sess.files) sess.files = [];
+
+  var progBar = document.getElementById('fp-' + k);
+  var progFill = document.getElementById('fpf-' + k);
+  if (progBar) progBar.classList.add('active');
+
+  var files = Array.from(input.files);
+  var total = files.length;
+  var done = 0;
+
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    if (file.size > 20 * 1024 * 1024) {
+      showToast('Fichier trop lourd : ' + file.name + ' (max 20 Mo)', 'error');
+      continue;
+    }
+
+    var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var ts = Date.now();
+    var path = 'coaching-72h/' + clientId + '/' + ts + '_' + safeName;
+    try {
+      var sRef = window._storageRef(window._storage, path);
+      await window._uploadBytes(sRef, file, { contentType: file.type });
+      var url = await window._getDownloadURL(sRef);
+      sess.files.push({
+        name: file.name,
+        url: url,
+        storagePath: path,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        uploadedAt: ts
+      });
+      done++;
+      if (progFill) progFill.style.width = (done / total * 100) + '%';
+    } catch (e) {
+      showToast('Erreur upload ' + file.name + ': ' + e.message, 'error');
+    }
+  }
+
+  // Sauvegarder dans Firestore
+  try {
+    c._updatedAt = Date.now();
+    await window._setDoc(window._doc(window._db, 'clients', clientId), c);
+    showToast(done + ' fichier(s) ajouté(s) !', 'success');
+  } catch (e) {
+    showToast('Erreur sauvegarde: ' + e.message, 'error');
+  }
+
+  input.value = '';
+  if (progBar) { progBar.classList.remove('active'); if (progFill) progFill.style.width = '0'; }
+  applyFilters();
+  openDetail(clientId);
+}
+
+function drop72hFile(event, clientId, yi, sn) {
+  var dt = event.dataTransfer;
+  if (!dt || !dt.files || dt.files.length === 0) return;
+  var k = 'y' + yi + 's' + sn;
+  var input = document.getElementById('fu-' + k);
+  if (input) {
+    input.files = dt.files;
+    upload72hFiles(clientId, yi, sn);
+  }
+}
+
+async function delete72hFile(clientId, yi, sn, fileIdx) {
+  if (!confirm('Supprimer ce fichier ?')) return;
+  var c = _clients.find(function(x) { return x._id === clientId; });
+  if (!c || !c.years || !c.years[yi]) return;
+  var sess = (c.years[yi].sessions || []).find(function(x) { return x.numero === sn; });
+  if (!sess || !sess.files || !sess.files[fileIdx]) return;
+
+  var file = sess.files[fileIdx];
+
+  // Supprimer du Storage
+  if (file.storagePath && window._storage) {
+    try {
+      var sRef = window._storageRef(window._storage, file.storagePath);
+      await window._deleteObject(sRef);
+    } catch (e) {
+      console.warn('Storage delete failed (fichier peut-être déjà supprimé):', e.message);
+    }
+  }
+
+  // Retirer de l'array
+  sess.files.splice(fileIdx, 1);
+
+  // Sauvegarder
+  try {
+    c._updatedAt = Date.now();
+    await window._setDoc(window._doc(window._db, 'clients', clientId), c);
+    showToast('Fichier supprimé', 'success');
+  } catch (e) {
+    showToast('Erreur: ' + e.message, 'error');
+  }
+
+  applyFilters();
+  openDetail(clientId);
+}
+
+window.upload72hFiles = upload72hFiles;
+window.drop72hFile = drop72hFile;
+window.delete72hFile = delete72hFile;
+
 // renderYearTabs — pure string concat, zero template literals
 function renderYearTabs(c,id){
   var years=c.years||[];
@@ -2069,6 +2265,7 @@ function renderYearTabs(c,id){
         h+='<div class="si-edit-save-row">';
         h+='<button class="si-edit-btn" onclick="toggleYrEdit(\''+id+'\','+yi+','+s.numero+')">Annuler</button>';
         h+='<button class="btn btn-primary btn-sm" onclick="saveYrEdit(\''+id+'\','+yi+','+s.numero+')">💾 Sauvegarder</button></div></div>';
+        if(is72)h+=render72hFiles(s.files||[],id,yi,s.numero);
       } else {
         h+='<div style="padding:8px 0 4px">';
         h+='<div class="si-edit-row" style="margin-bottom:8px">';
@@ -2083,6 +2280,7 @@ function renderYearTabs(c,id){
         h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Résumé</label><textarea id="qsr-'+k+'" rows="2"></textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Devoirs</label><textarea id="qsdv-'+k+'" rows="2"></textarea></div>';
         h+='<div class="si-edit-field" style="margin-bottom:8px"><label>Notes</label><textarea id="qsn-'+k+'" rows="2"></textarea></div>';
+        if(is72)h+=render72hFiles(s.files||[],id,yi,s.numero);
         h+='<div style="display:flex;gap:8px;justify-content:flex-end">';
         h+='<button class="btn btn-green btn-xs" onclick="markYrDone(\''+id+'\','+yi+','+s.numero+')">✅ Valider</button></div></div>';
       }
