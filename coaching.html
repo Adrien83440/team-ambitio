@@ -725,7 +725,6 @@
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-  import{getStorage,ref as storageRef,uploadBytes,getDownloadURL,deleteObject}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
   const app=initializeApp({
     apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
     authDomain:"ambitio-team.firebaseapp.com",
@@ -734,13 +733,10 @@
     messagingSenderId:"1079366902268",
     appId:"1:1079366902268:web:b4ec1691dba54230339279"
   });
-  const auth=getAuth(app),db=getFirestore(app),storage=getStorage(app);
+  const auth=getAuth(app),db=getFirestore(app);
   window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
   window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
   window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._signOut=signOut;
-  window._storage=storage;window._storageRef=storageRef;
-  window._uploadBytes=uploadBytes;window._getDownloadURL=getDownloadURL;
-  window._deleteObject=deleteObject;
 
   onAuthStateChanged(auth,async user=>{
     if(!user){window.location.href='index.html';return;}
@@ -2017,8 +2013,9 @@ function render72hFiles(files, clientId, yi, sn) {
       var f = files[fi];
       h += '<div class="si-file-item">';
       h += '<span class="si-file-icon">' + _fileIcon(f.name) + '</span>';
-      h += '<span class="si-file-name"><a href="' + escHtml(f.url) + '" target="_blank">' + escHtml(f.name) + '</a></span>';
+      h += '<span class="si-file-name"><a href="#" onclick="event.preventDefault();preview72hFile(\'' + clientId + '\',\'' + (f.fileDocId || '') + '\')">' + escHtml(f.name) + '</a></span>';
       h += '<span class="si-file-size">' + (f.size ? _fileSize(f.size) : '') + '</span>';
+      h += '<button class="si-upload-btn" style="padding:3px 8px;font-size:10px" onclick="event.stopPropagation();download72hFile(\'' + clientId + '\',\'' + (f.fileDocId || '') + '\',\'' + escHtml(f.name).replace(/'/g, '') + '\')">⬇</button>';
       h += '<button class="si-file-del" title="Supprimer" onclick="event.stopPropagation();delete72hFile(\'' + clientId + '\',' + yi + ',' + sn + ',' + fi + ')">✕</button>';
       h += '</div>';
     }
@@ -2026,9 +2023,9 @@ function render72hFiles(files, clientId, yi, sn) {
   }
 
   h += '<div class="si-upload-row">';
-  h += '<input class="si-upload-input" type="file" id="fu-' + k + '" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.svg,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.html,.mp4,.mov,.mp3,.wav,.zip,.rar,.7z,.txt" onchange="upload72hFiles(\'' + clientId + '\',' + yi + ',' + sn + ')">';
+  h += '<input class="si-upload-input" type="file" id="fu-' + k + '" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.svg,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.html,.txt" onchange="upload72hFiles(\'' + clientId + '\',' + yi + ',' + sn + ')">';
   h += '<button class="si-upload-btn" onclick="document.getElementById(\'fu-' + k + '\').click()">📤 Ajouter un fichier</button>';
-  h += '<span class="si-upload-hint">ou glisser-déposer ici · max 20 Mo / fichier</span>';
+  h += '<span class="si-upload-hint">ou glisser-déposer · max 750 Ko / fichier</span>';
   h += '</div>';
   h += '<div class="si-upload-progress" id="fp-' + k + '"><div class="si-upload-progress-fill" id="fpf-' + k + '"></div></div>';
   h += '</div>';
@@ -2039,7 +2036,7 @@ async function upload72hFiles(clientId, yi, sn) {
   var k = 'y' + yi + 's' + sn;
   var input = document.getElementById('fu-' + k);
   if (!input || !input.files || input.files.length === 0) return;
-  if (!window._storage) { showToast('Storage non initialisé', 'error'); return; }
+  if (!window._db) { showToast('Firebase non initialisé', 'error'); return; }
 
   var c = _clients.find(function(x) { return x._id === clientId; });
   if (!c || !c.years || !c.years[yi]) return;
@@ -2054,25 +2051,42 @@ async function upload72hFiles(clientId, yi, sn) {
   var files = Array.from(input.files);
   var total = files.length;
   var done = 0;
+  var MAX_SIZE = 750 * 1024; // 750 Ko max (base64 = ~1Mo = limite Firestore doc)
 
   for (var i = 0; i < files.length; i++) {
     var file = files[i];
-    if (file.size > 20 * 1024 * 1024) {
-      showToast('Fichier trop lourd : ' + file.name + ' (max 20 Mo)', 'error');
+    if (file.size > MAX_SIZE) {
+      showToast('Fichier trop lourd : ' + file.name + ' (max 750 Ko)', 'error');
       continue;
     }
 
-    var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    var ts = Date.now();
-    var path = 'coaching-72h/' + clientId + '/' + ts + '_' + safeName;
     try {
-      var sRef = window._storageRef(window._storage, path);
-      await window._uploadBytes(sRef, file, { contentType: file.type });
-      var url = await window._getDownloadURL(sRef);
+      // Lire le fichier en base64
+      var base64 = await new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onload = function() { resolve(reader.result); };
+        reader.onerror = function() { reject(new Error('Lecture échouée')); };
+        reader.readAsDataURL(file);
+      });
+
+      // Sauvegarder dans Firestore sous-collection clients/{id}/files/{fileId}
+      var ts = Date.now();
+      var fileDocId = ts + '_' + Math.random().toString(36).slice(2, 8);
+      var filesCol = window._collection(window._db, 'clients', clientId, 'files');
+      var fileRef = window._doc(filesCol, fileDocId);
+      await window._setDoc(fileRef, {
+        name: file.name,
+        base64: base64,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        uploadedAt: ts,
+        sessionKey: 'y' + yi + 's' + sn
+      });
+
+      // Stocker uniquement les métadonnées dans session.files
       sess.files.push({
         name: file.name,
-        url: url,
-        storagePath: path,
+        fileDocId: fileDocId,
         type: file.type || 'application/octet-stream',
         size: file.size,
         uploadedAt: ts
@@ -2084,7 +2098,7 @@ async function upload72hFiles(clientId, yi, sn) {
     }
   }
 
-  // Sauvegarder dans Firestore
+  // Sauvegarder le client (avec les métadonnées fichiers)
   try {
     c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db, 'clients', clientId), c);
@@ -2110,6 +2124,48 @@ function drop72hFile(event, clientId, yi, sn) {
   }
 }
 
+async function download72hFile(clientId, fileDocId, fileName) {
+  try {
+    var fileRef = window._doc(window._db, 'clients', clientId, 'files', fileDocId);
+    var snap = await window._getDoc(fileRef);
+    if (!snap.exists()) { showToast('Fichier introuvable', 'error'); return; }
+    var data = snap.data();
+    // data.base64 = "data:type;base64,xxxx"
+    var a = document.createElement('a');
+    a.href = data.base64;
+    a.download = fileName || data.name || 'fichier';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch (e) {
+    showToast('Erreur téléchargement: ' + e.message, 'error');
+  }
+}
+
+async function preview72hFile(clientId, fileDocId) {
+  try {
+    var fileRef = window._doc(window._db, 'clients', clientId, 'files', fileDocId);
+    var snap = await window._getDoc(fileRef);
+    if (!snap.exists()) { showToast('Fichier introuvable', 'error'); return; }
+    var data = snap.data();
+    // Ouvrir dans un nouvel onglet
+    var w = window.open('');
+    if (w) {
+      if (data.type && data.type.indexOf('image') >= 0) {
+        w.document.write('<img src="' + data.base64 + '" style="max-width:100%"/>');
+      } else if (data.type === 'application/pdf') {
+        w.document.write('<iframe src="' + data.base64 + '" style="width:100%;height:100vh;border:none"></iframe>');
+      } else {
+        // Téléchargement direct pour les autres types
+        w.close();
+        download72hFile(clientId, fileDocId, data.name);
+      }
+    }
+  } catch (e) {
+    showToast('Erreur aperçu: ' + e.message, 'error');
+  }
+}
+
 async function delete72hFile(clientId, yi, sn, fileIdx) {
   if (!confirm('Supprimer ce fichier ?')) return;
   var c = _clients.find(function(x) { return x._id === clientId; });
@@ -2119,20 +2175,20 @@ async function delete72hFile(clientId, yi, sn, fileIdx) {
 
   var file = sess.files[fileIdx];
 
-  // Supprimer du Storage
-  if (file.storagePath && window._storage) {
+  // Supprimer le doc Firestore
+  if (file.fileDocId && window._db) {
     try {
-      var sRef = window._storageRef(window._storage, file.storagePath);
-      await window._deleteObject(sRef);
+      var fileRef = window._doc(window._db, 'clients', clientId, 'files', file.fileDocId);
+      await window._deleteDoc(fileRef);
     } catch (e) {
-      console.warn('Storage delete failed (fichier peut-être déjà supprimé):', e.message);
+      console.warn('Firestore file delete failed:', e.message);
     }
   }
 
   // Retirer de l'array
   sess.files.splice(fileIdx, 1);
 
-  // Sauvegarder
+  // Sauvegarder le client
   try {
     c._updatedAt = Date.now();
     await window._setDoc(window._doc(window._db, 'clients', clientId), c);
@@ -2147,6 +2203,8 @@ async function delete72hFile(clientId, yi, sn, fileIdx) {
 
 window.upload72hFiles = upload72hFiles;
 window.drop72hFile = drop72hFile;
+window.download72hFile = download72hFile;
+window.preview72hFile = preview72hFile;
 window.delete72hFile = delete72hFile;
 
 // renderYearTabs — pure string concat, zero template literals
