@@ -326,6 +326,147 @@
 .rt-tag.replay { background: rgba(96,165,250,0.12); color: #93bbfd; }
 .rt-tag.long { background: rgba(245,158,11,0.12); color: #fcd34d; }
 
+/* ── Tag Filter Bar ── */
+.rt-tag-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.rt-tag-bar-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  margin-right: 2px;
+}
+.rt-tag-group-btn {
+  padding: 7px 12px;
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-family: var(--font-b);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.rt-tag-group-btn:hover { border-color: var(--border2); color: var(--text); }
+.rt-tag-group-btn.active { border-color: #7c3aed; color: #c4b5fd; background: rgba(124,58,237,0.1); }
+.rt-tag-group-btn .tg-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.rt-tag-group-btn .tg-count {
+  font-size: 10px;
+  opacity: 0.6;
+  margin-left: 1px;
+}
+
+/* dropdown multi-select */
+.rt-tag-dropdown-wrap {
+  position: relative;
+  margin-left: auto;
+}
+.rt-tag-dropdown-toggle {
+  padding: 7px 14px;
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-family: var(--font-b);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rt-tag-dropdown-toggle:hover { border-color: var(--border2); color: var(--text); }
+.rt-tag-dropdown-toggle.has-selection { border-color: #7c3aed; color: #c4b5fd; background: rgba(124,58,237,0.1); }
+.rt-tag-dropdown-panel {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg2);
+  border: 1.5px solid var(--border2);
+  border-radius: 12px;
+  padding: 8px 0;
+  z-index: 100;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+}
+.rt-tag-dropdown-panel.open { display: block; }
+.rt-tag-dropdown-panel::-webkit-scrollbar { width: 4px; }
+.rt-tag-dropdown-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+.rt-tag-dd-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  transition: background 0.1s;
+}
+.rt-tag-dd-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.rt-tag-dd-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border2);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  transition: all 0.15s;
+}
+.rt-tag-dd-item.checked .rt-tag-dd-check {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: white;
+}
+.rt-tag-dd-item.checked { color: #c4b5fd; }
+.rt-tag-dd-count {
+  margin-left: auto;
+  font-size: 10px;
+  opacity: 0.5;
+}
+.rt-tag-reset-btn {
+  padding: 7px 10px;
+  background: transparent;
+  border: 1.5px solid rgba(239,68,68,0.25);
+  border-radius: var(--radius);
+  color: #fca5a5;
+  font-family: var(--font-b);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  display: none;
+}
+.rt-tag-reset-btn.visible { display: flex; }
+.rt-tag-reset-btn:hover { background: rgba(239,68,68,0.08); }
+
 /* ── Notes ── */
 .rt-notes-cell {
   min-width: 160px;
@@ -519,6 +660,32 @@
     <button class="rt-export-btn" id="rtExport">↓ Exporter</button>
   </div>
 
+  <!-- Tag Filters -->
+  <div class="rt-tag-bar" id="rtTagBar">
+    <span class="rt-tag-bar-label">🏷 Tags :</span>
+    <button class="rt-tag-group-btn active" data-taggroup="all">Tous</button>
+    <button class="rt-tag-group-btn" data-taggroup="present">
+      <span class="tg-dot" style="background:#34d399"></span> Présent
+    </button>
+    <button class="rt-tag-group-btn" data-taggroup="absent">
+      <span class="tg-dot" style="background:#ef4444"></span> Absent
+    </button>
+    <button class="rt-tag-group-btn" data-taggroup="client">
+      <span class="tg-dot" style="background:#a78bfa"></span> Client / Vente
+    </button>
+    <button class="rt-tag-group-btn" data-taggroup="replay">
+      <span class="tg-dot" style="background:#60a5fa"></span> Replay
+    </button>
+    <button class="rt-tag-group-btn" data-taggroup="source">
+      <span class="tg-dot" style="background:#fbbf24"></span> Sources
+    </button>
+    <button class="rt-tag-reset-btn" id="rtTagReset">✕ Reset tags</button>
+    <div class="rt-tag-dropdown-wrap">
+      <button class="rt-tag-dropdown-toggle" id="rtTagDdToggle">▾ Tag précis</button>
+      <div class="rt-tag-dropdown-panel" id="rtTagDdPanel"></div>
+    </div>
+  </div>
+
   <!-- Table -->
   <div class="rt-table-wrap">
     <table class="rt-table">
@@ -623,6 +790,30 @@ let searchQuery = '';
 let activeFilter = 'all';
 let openDropdownId = null;
 
+// ── Tag filter state ──
+let activeTagGroup = 'all';
+let selectedIndividualTags = new Set();
+
+const TAG_GROUPS = {
+  present: { label: 'Présent',       test: t => t.includes('présent') },
+  absent:  { label: 'Absent',        test: t => t.includes('absent') },
+  client:  { label: 'Client / Vente',test: t => t.includes('Client') || t.includes('vente') },
+  replay:  { label: 'Replay',        test: t => t.includes('replay') },
+  source:  { label: 'Sources',       test: t => /everwebinar|skool|acflix|EBOOK|VSL|Newsletter|HEBDO/i.test(t) },
+};
+
+function contactMatchesTagFilter(c) {
+  // Individual tags take priority if any selected
+  if (selectedIndividualTags.size > 0) {
+    return c.tags.some(t => selectedIndividualTags.has(t));
+  }
+  // Group filter
+  if (activeTagGroup === 'all') return true;
+  const group = TAG_GROUPS[activeTagGroup];
+  if (!group) return true;
+  return c.tags.some(t => group.test(t));
+}
+
 function getFilteredContacts() {
   let list = CONTACTS;
 
@@ -641,6 +832,11 @@ function getFilteredContacts() {
     } else {
       list = list.filter(c => getContactState(c.id).status === activeFilter);
     }
+  }
+
+  // Tag filter (AND with status)
+  if (activeTagGroup !== 'all' || selectedIndividualTags.size > 0) {
+    list = list.filter(contactMatchesTagFilter);
   }
 
   return list;
@@ -868,6 +1064,116 @@ document.getElementById('rtPageSize').addEventListener('change', e => {
   currentPage = 1;
   render();
 });
+
+// ── Tag filter: build dropdown + wire events ──
+(function initTagFilters() {
+  // Build unique tags with counts
+  const tagCounts = {};
+  CONTACTS.forEach(c => {
+    c.tags.forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1; });
+  });
+  const allTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+
+  // Populate dropdown
+  const panel = document.getElementById('rtTagDdPanel');
+  panel.innerHTML = allTags.map(t => {
+    var cls = tagClass(t);
+    return '<div class="rt-tag-dd-item" data-tag="' + t + '">'
+      + '<span class="rt-tag-dd-check"></span>'
+      + '<span class="rt-tag ' + cls + '" style="font-size:11px">' + tagLabel(t) + '</span>'
+      + '<span class="rt-tag-dd-count">' + tagCounts[t].toLocaleString('fr-FR') + '</span>'
+      + '</div>';
+  }).join('');
+
+  function updateResetVisibility() {
+    var resetBtn = document.getElementById('rtTagReset');
+    if (activeTagGroup !== 'all' || selectedIndividualTags.size > 0) {
+      resetBtn.classList.add('visible');
+    } else {
+      resetBtn.classList.remove('visible');
+    }
+  }
+
+  function updateDropdownToggleStyle() {
+    var toggle = document.getElementById('rtTagDdToggle');
+    if (selectedIndividualTags.size > 0) {
+      toggle.classList.add('has-selection');
+      toggle.textContent = '▾ ' + selectedIndividualTags.size + ' tag' + (selectedIndividualTags.size > 1 ? 's' : '');
+    } else {
+      toggle.classList.remove('has-selection');
+      toggle.textContent = '▾ Tag précis';
+    }
+  }
+
+  // Group buttons
+  document.getElementById('rtTagBar').addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-taggroup]');
+    if (!btn) return;
+    // Clear individual selection when clicking a group
+    selectedIndividualTags.clear();
+    panel.querySelectorAll('.rt-tag-dd-item').forEach(function(el) { el.classList.remove('checked'); });
+    updateDropdownToggleStyle();
+
+    document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    activeTagGroup = btn.dataset.taggroup;
+    currentPage = 1;
+    updateResetVisibility();
+    render();
+  });
+
+  // Dropdown toggle
+  document.getElementById('rtTagDdToggle').addEventListener('click', function(e) {
+    e.stopPropagation();
+    panel.classList.toggle('open');
+  });
+
+  // Dropdown item click
+  panel.addEventListener('click', function(e) {
+    var item = e.target.closest('.rt-tag-dd-item');
+    if (!item) return;
+    e.stopPropagation();
+    var tag = item.dataset.tag;
+    if (selectedIndividualTags.has(tag)) {
+      selectedIndividualTags.delete(tag);
+      item.classList.remove('checked');
+    } else {
+      selectedIndividualTags.add(tag);
+      item.classList.add('checked');
+    }
+    // When individual tags selected, deactivate group buttons visually
+    if (selectedIndividualTags.size > 0) {
+      document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); });
+      activeTagGroup = 'all';
+    } else {
+      // Restore "Tous" as active
+      document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelector('[data-taggroup="all"]').classList.add('active');
+    }
+    updateDropdownToggleStyle();
+    updateResetVisibility();
+    currentPage = 1;
+    render();
+  });
+
+  // Close dropdown on outside click
+  document.addEventListener('click', function() {
+    panel.classList.remove('open');
+  });
+
+  // Reset
+  document.getElementById('rtTagReset').addEventListener('click', function() {
+    activeTagGroup = 'all';
+    selectedIndividualTags.clear();
+    document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelector('[data-taggroup="all"]').classList.add('active');
+    panel.querySelectorAll('.rt-tag-dd-item').forEach(function(el) { el.classList.remove('checked'); });
+    updateDropdownToggleStyle();
+    updateResetVisibility();
+    currentPage = 1;
+    render();
+  });
+})();
 
 // Export
 document.getElementById('rtExport').addEventListener('click', () => {
