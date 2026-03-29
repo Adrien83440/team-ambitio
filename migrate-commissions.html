@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Migration Commissions</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if (!firebase.apps.length) {
+  firebase.initializeApp({
+    apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+    authDomain:        "ambitio-team.firebaseapp.com",
+    projectId:         "ambitio-team",
+    storageBucket:     "ambitio-team.firebasestorage.app",
+    messagingSenderId: "1079366902268",
+    appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+  });
+}
+</script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { min-height: 100vh; background: #080b14; color: #f1f5f9; font-family: 'Inter', system-ui, sans-serif; padding: 40px 20px; }
+.container { max-width: 700px; margin: 0 auto; }
+h1 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+.sub { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 30px; }
+.card { background: #111827; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 24px; margin-bottom: 16px; }
+.card-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+.status { font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 8px; margin-bottom: 8px; }
+.status.info { background: rgba(96,165,250,0.1); color: #93c5fd; border: 1px solid rgba(96,165,250,0.2); }
+.status.ok { background: rgba(52,211,153,0.1); color: #6ee7b7; border: 1px solid rgba(52,211,153,0.2); }
+.status.err { background: rgba(239,68,68,0.1); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+.status.warn { background: rgba(245,158,11,0.1); color: #fcd34d; border: 1px solid rgba(245,158,11,0.2); }
+.btn { padding: 12px 28px; border: none; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+.btn-primary { background: #ef4444; color: white; }
+.btn-primary:hover { background: #dc2626; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.log { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.6); background: #0d1220; border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; margin-top: 14px; }
+.found-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+.found-item:last-child { border-bottom: none; }
+.found-uid { font-weight: 700; color: #ef4444; min-width: 90px; }
+.found-month { color: #93c5fd; min-width: 120px; }
+.found-count { color: #6ee7b7; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔄 Migration Commissions → Firestore</h1>
+  <div class="sub">Cette page lit les données de commissions stockées dans ton navigateur (localStorage) et les envoie vers Firestore pour que tout le monde les voie.</div>
+
+  <!-- Step 1: Auth -->
+  <div class="card">
+    <div class="card-title">1. Authentification Firebase</div>
+    <div id="auth-status" class="status info">⏳ En attente de connexion Firebase...</div>
+  </div>
+
+  <!-- Step 2: Scan -->
+  <div class="card">
+    <div class="card-title">2. Données trouvées dans ce navigateur</div>
+    <div id="scan-results">
+      <div class="status info">En attente de l'authentification...</div>
+    </div>
+  </div>
+
+  <!-- Step 3: Push -->
+  <div class="card">
+    <div class="card-title">3. Envoyer vers Firestore</div>
+    <button class="btn btn-primary" id="push-btn" disabled onclick="pushToFirestore()">🚀 Envoyer les données</button>
+    <div class="log" id="log" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const UIDS = ['guillaume', 'elodie'];
+const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+let _db = null;
+let _foundData = []; // [{uid, month, deals, fsKey}]
+
+function mToFs(monthLabel) {
+  var p = monthLabel.split(' ');
+  var mi = MONTHS_FR.indexOf(p[0]);
+  if (mi < 0) return null;
+  return p[1] + '-' + String(mi + 1).padStart(2, '0');
+}
+
+function log(msg) {
+  var el = document.getElementById('log');
+  el.style.display = 'block';
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+// Scan localStorage
+function scanLocalStorage() {
+  _foundData = [];
+  var html = '';
+
+  for (var u = 0; u < UIDS.length; u++) {
+    var uid = UIDS[u];
+    for (var yr = 2025; yr <= 2027; yr++) {
+      for (var mi = 0; mi < 12; mi++) {
+        var month = MONTHS_FR[mi] + ' ' + yr;
+        var key = 'comm_deals_' + uid + '_' + month;
+        try {
+          var val = localStorage.getItem(key);
+          if (val) {
+            var deals = JSON.parse(val);
+            if (deals && deals.length > 0) {
+              var fsKey = mToFs(month);
+              _foundData.push({ uid: uid, month: month, deals: deals, fsKey: fsKey });
+              html += '<div class="found-item">';
+              html += '<span class="found-uid">' + uid + '</span>';
+              html += '<span class="found-month">' + month + '</span>';
+              html += '<span class="found-count">' + deals.length + ' deal(s)</span>';
+              html += '</div>';
+            }
+          }
+        } catch(e) {}
+      }
+    }
+  }
+
+  if (_foundData.length === 0) {
+    html = '<div class="status warn">⚠️ Aucune donnée de commissions trouvée dans ce navigateur.</div>';
+  } else {
+    html = '<div class="status ok" style="margin-bottom:10px">✅ ' + _foundData.length + ' mois trouvés</div>' + html;
+    document.getElementById('push-btn').disabled = false;
+  }
+
+  document.getElementById('scan-results').innerHTML = html;
+}
+
+// Push to Firestore
+async function pushToFirestore() {
+  if (!_db) { log('❌ Firebase non connecté'); return; }
+  var btn = document.getElementById('push-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Envoi en cours...';
+
+  var ok = 0, skip = 0, err = 0;
+
+  for (var i = 0; i < _foundData.length; i++) {
+    var d = _foundData[i];
+    log('📤 ' + d.uid + ' / ' + d.month + ' (' + d.deals.length + ' deals)...');
+
+    try {
+      var ref = _db.collection('commissions').doc(d.uid).collection('mois').doc(d.fsKey);
+      var snap = await ref.get();
+
+      if (snap.exists && snap.data().deals && snap.data().deals.length > 0) {
+        // Firestore a déjà des données — merge intelligent
+        var existing = snap.data().deals;
+        // Simple: si Firestore a plus ou autant de deals, on skip
+        if (existing.length >= d.deals.length) {
+          log('   ⏭️ Skip — Firestore a déjà ' + existing.length + ' deals');
+          skip++;
+          continue;
+        }
+      }
+
+      await ref.set({ deals: d.deals }, { merge: true });
+      log('   ✅ Envoyé !');
+      ok++;
+    } catch(e) {
+      log('   ❌ Erreur: ' + e.message);
+      err++;
+    }
+  }
+
+  log('');
+  log('═══ TERMINÉ ═══');
+  log('✅ Envoyés: ' + ok);
+  log('⏭️ Skippés (déjà dans Firestore): ' + skip);
+  if (err > 0) log('❌ Erreurs: ' + err);
+
+  btn.textContent = '✅ Terminé !';
+}
+
+// Auth
+firebase.auth().onAuthStateChanged(function(user) {
+  if (!user) {
+    document.getElementById('auth-status').className = 'status err';
+    document.getElementById('auth-status').textContent = '❌ Non connecté — ouvre d\'abord team.alteore.com et connecte-toi, puis reviens ici';
+    return;
+  }
+
+  _db = firebase.firestore();
+  document.getElementById('auth-status').className = 'status ok';
+  document.getElementById('auth-status').textContent = '✅ Connecté: ' + user.email + ' (UID: ' + user.uid + ')';
+
+  scanLocalStorage();
+});
+</script>
+</body>
+</html>

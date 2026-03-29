@@ -6,6 +6,24 @@
 <title>Ambitio — Commissions</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if (!firebase.apps.length) {
+  firebase.initializeApp({
+    apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+    authDomain:        "ambitio-team.firebaseapp.com",
+    projectId:         "ambitio-team",
+    storageBucket:     "ambitio-team.firebasestorage.app",
+    messagingSenderId: "1079366902268",
+    appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+  });
+}
+</script>
+
 <script src="nav.js" defer></script>
 <style>
 /* ═══ RESET & BASE ══════════════════════════════════════════ */
@@ -701,6 +719,15 @@ const MEMBERS_COMM = [
    STATE
 ══════════════════════════════════════════════════════════ */
 const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+let _fsDb = null; // Firestore instance (set on auth)
+let _fsDealsCache = {}; // { "uid_monthKey": [...deals] }
+
+function _mToFs(monthLabel) {
+  var p = monthLabel.split(' ');
+  var mi = MONTHS_FR.indexOf(p[0]);
+  if (mi < 0) return null;
+  return p[1] + '-' + String(mi + 1).padStart(2, '0');
+}
 let _cm = (() => {
   const s = localStorage.getItem('comm_month') || 'Février 2026';
   const p = s.split(' ');
@@ -722,9 +749,12 @@ let addFormOpen = false;
    HELPERS
 ══════════════════════════════════════════════════════════ */
 function getDeals(uid, month) {
+  const cacheKey = uid + '_' + month;
+  // 1. Firestore cache (source de verite si dispo)
+  if (_fsDealsCache[cacheKey]) return _fsDealsCache[cacheKey].map(d => ({...d}));
+  // 2. localStorage fallback
   const m = MEMBERS_COMM.find(m => m.uid === uid);
   if (!m) return [];
-  // Check localStorage for overrides
   const key = `comm_deals_${uid}_${month}`;
   try {
     const saved = localStorage.getItem(key);
@@ -736,7 +766,18 @@ function getDeals(uid, month) {
 function saveDeals(uid, month, deals) {
   const key = `comm_deals_${uid}_${month}`;
   localStorage.setItem(key, JSON.stringify(deals));
-  // Notifier les modules dashboard/projections
+  // Sync cache
+  _fsDealsCache[uid + '_' + month] = deals;
+  // Firestore
+  if (_fsDb) {
+    const fsKey = _mToFs(month);
+    if (fsKey) {
+      _fsDb.collection('commissions').doc(uid).collection('mois').doc(fsKey)
+        .set({ deals: deals }, { merge: true })
+        .then(function() { console.log('[Comm] Firestore saved', uid, month); })
+        .catch(function(e) { console.warn('[Comm] Firestore save error:', e.message); });
+    }
+  }
   document.dispatchEvent(new CustomEvent('comm:saved', { detail: { uid, month } }));
 }
 
@@ -1176,18 +1217,95 @@ function toggleDealOk(i) {
 /* ══════════════════════════════════════════════════════════
    RENDER ALL
 ══════════════════════════════════════════════════════════ */
-function renderAll() {
+async function renderAll() {
   document.getElementById('month-lbl').textContent = cmk();
+  // Charger depuis Firestore si pas en cache
+  var ck = MEMBERS_COMM[0].uid + '_' + cmk();
+  if (_fsDb && !_fsDealsCache[ck]) {
+    await loadCommFromFirestore(cmk());
+  }
   if (currentMember) renderFiche();
   else renderListe();
 }
 
 /* ══════════════════════════════════════════════════════════
-   INIT
+   INIT + FIREBASE SYNC
 ══════════════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
+
+async function loadCommFromFirestore(month) {
+  if (!_fsDb) return;
+  var fsKey = _mToFs(month);
+  if (!fsKey) return;
+  var loaded = 0;
+  for (var i = 0; i < MEMBERS_COMM.length; i++) {
+    var m = MEMBERS_COMM[i];
+    try {
+      var ref = _fsDb.collection('commissions').doc(m.uid).collection('mois').doc(fsKey);
+      var snap = await ref.get();
+      if (snap.exists && snap.data().deals) {
+        var deals = snap.data().deals;
+        _fsDealsCache[m.uid + '_' + month] = deals;
+        // Sync vers localStorage
+        try { localStorage.setItem('comm_deals_' + m.uid + '_' + month, JSON.stringify(deals)); } catch(e) {}
+        loaded++;
+      }
+    } catch(e) { console.warn('[Comm] Firestore load error', m.uid, month, e.message); }
+  }
+  console.log('[Comm] Firestore: ' + loaded + ' membres chargés pour ' + month);
+}
+
+async function migrateCommToFirestore() {
+  if (!_fsDb) return;
+  var migrated = 0;
+  for (var i = 0; i < MEMBERS_COMM.length; i++) {
+    var m = MEMBERS_COMM[i];
+    // Migrer les données hardcodées + localStorage
+    var allMonths = Object.keys(m.data || {});
+    // Ajouter les mois connus dans localStorage
+    for (var mi = 0; mi < MONTHS_FR.length; mi++) {
+      for (var yr = 2025; yr <= 2027; yr++) {
+        var mk = MONTHS_FR[mi] + ' ' + yr;
+        if (allMonths.indexOf(mk) < 0) allMonths.push(mk);
+      }
+    }
+    for (var j = 0; j < allMonths.length; j++) {
+      var month = allMonths[j];
+      var deals = getDeals(m.uid, month);
+      if (!deals || deals.length === 0) continue;
+      var fsKey = _mToFs(month);
+      if (!fsKey) continue;
+      try {
+        var ref = _fsDb.collection('commissions').doc(m.uid).collection('mois').doc(fsKey);
+        var snap = await ref.get();
+        if (!snap.exists || !snap.data().deals || snap.data().deals.length === 0) {
+          await ref.set({ deals: deals }, { merge: true });
+          migrated++;
+        }
+      } catch(e) { /* ignore */ }
+    }
+  }
+  if (migrated > 0) console.log('[Comm] Migration: ' + migrated + ' mois écrits dans Firestore');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('month-lbl').textContent = cmk();
   renderListe();
+
+  // Firebase Auth
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(async function(fbUser) {
+      if (!fbUser) return;
+      _fsDb = firebase.firestore();
+      console.log('[Comm] Firebase Auth OK:', fbUser.email);
+
+      // Charger le mois courant depuis Firestore
+      await loadCommFromFirestore(cmk());
+      renderAll();
+
+      // Migration en arrière-plan
+      setTimeout(function() { migrateCommToFirestore().catch(function(e) { console.warn('[Comm] Migration err:', e); }); }, 1000);
+    });
+  }
 });
 </script>
 
