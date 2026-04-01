@@ -410,6 +410,7 @@ var filterStatus = 'all';
 var knownLeadIds = {};
 var isFirstLoad = true;
 var openCardId = null;
+var isEditingLead = false;
 
 /* ── Personal mode via URL param ── */
 var personalUser = null;
@@ -763,10 +764,19 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     var editEl = document.querySelector('[data-edit-mode="' + eid + '"]');
     if (!viewEl || !editEl) return;
     var isEditing = editEl.style.display !== 'none';
-    viewEl.style.display = isEditing ? '' : 'none';
-    editEl.style.display = isEditing ? 'none' : '';
-    editBtn.classList.toggle('editing', !isEditing);
-    editBtn.innerHTML = isEditing ? '✏️ Modifier les infos' : '✕ Annuler';
+    if (isEditing) {
+      // Closing edit mode → re-render with fresh data
+      isEditingLead = false;
+      openCardId = eid;
+      renderFeed();
+    } else {
+      // Opening edit mode
+      viewEl.style.display = 'none';
+      editEl.style.display = '';
+      editBtn.classList.add('editing');
+      editBtn.innerHTML = '✕ Annuler';
+      isEditingLead = true;
+    }
     return;
   }
 
@@ -924,7 +934,7 @@ function autoSaveField(leadId, field, value) {
     }).catch(function(err) {
       toast('❌ Erreur : ' + err.message);
     });
-  }, 600);
+  }, 3000);
 }
 
 // Listen on input (text fields) and change (selects)
@@ -991,7 +1001,12 @@ function startListening() {
         allLeads.push(d);
       });
 
-      renderFeed();
+      // Don't re-render while user is editing — only update data + counts
+      if (isEditingLead && newLeads.length === 0) {
+        updateCounts();
+      } else {
+        renderFeed();
+      }
 
       // Show popups for new leads
       for (var j = 0; j < newLeads.length; j++) {
