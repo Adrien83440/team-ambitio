@@ -1030,6 +1030,14 @@ function startListening() {
         showLeadPopup(newLeads[j]);
       }
 
+      // Rattrapage : assigner les leads orphelins (arrivés quand aucun client n'écoutait)
+      if (isFirstLoad) {
+        allLeads.forEach(function(l) {
+          if (!l.assignedTo) {
+            assignLeadRoundRobin(l.id);
+          }
+        });
+      }
       isFirstLoad = false;
 
     }, function(err) {
