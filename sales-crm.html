@@ -340,6 +340,11 @@ function renderCards() {
       h += '<div class="crm-card-bottom">';
       h += '<span class="crm-card-badge ' + badge + '">' + typeLabel + '</span>';
       if (setterLabel) h += '<span class="crm-card-setter ' + setterClass + '">⭐ ' + setterLabel + '</span>';
+      var lStatus = l.status || 'nouveau';
+      var statusLabels = {nouveau:'Nouveau',appele:'Appelé',decroche:'Décroché',messagerie:'Msg',nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',rdv_pose:'RDV posé',pas_interesse:'Pas intéressé',disqualifie:'Disqualifié'};
+      if (lStatus !== 'nouveau') {
+        h += '<span class="crm-card-setter" style="color:var(--blue);border-color:rgba(96,165,250,0.2)">📞 ' + (statusLabels[lStatus] || lStatus) + '</span>';
+      }
       if (hasNotes) h += '<span class="crm-card-notes-dot" title="A des notes"></span>';
       h += '</div></div>';
     });
@@ -401,11 +406,22 @@ document.getElementById('crmBoard').addEventListener('drop', function(e) {
   }
   renderCards();
 
-  // Save to Firestore
-  db.collection('leads').doc(leadId).update({
-    stage: newStage,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function() {
+  // Save to Firestore + sync Leads Live status
+  var STAGE_TO_STATUS = {
+    lead:'nouveau', nrp1:'nrp1', nrp2:'nrp2', nrp3:'nrp3', all_nrp:'nrp3',
+    poubelle:'disqualifie', disqualification:'disqualifie', follow_up_pm:'appele',
+    set:'rdv_pose', rdv_self_booking:'rdv_pose', rdv_confirmes:'rdv_pose',
+    rdv_annules_prospect:'pas_interesse', rdv_annules_equipe:'pas_interesse',
+    no_show_self:'pas_interesse', no_show_setting:'pas_interesse',
+    partenariats:'rdv_pose',
+    closed_won_setting:'rdv_pose', closed_won_self:'rdv_pose',
+    closed_lost:'pas_interesse',
+    follow_up_closing:'appele', disqualifie_closing:'disqualifie'
+  };
+  var syncStatus = STAGE_TO_STATUS[newStage];
+  var dragUpdates = { stage: newStage, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+  if (syncStatus) dragUpdates.status = syncStatus;
+  db.collection('leads').doc(leadId).update(dragUpdates).then(function() {
     var stageObj = STAGE_MAP[newStage];
     toast('→ ' + (stageObj ? stageObj.label : newStage));
   }).catch(function(err) {
@@ -646,8 +662,11 @@ document.getElementById('modalBg').addEventListener('click', function(e) {
       stagePill.style.background = sObj.color + '18';
     }
     renderCards();
-    // Save
-    db.collection('leads').doc(leadId).update({ stage: newStage, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }).then(function() {
+    // Save + sync status
+    var modalUpdates = { stage: newStage, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    var STAGE_TO_STATUS2 = {lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'nrp3',poubelle:'disqualifie',disqualification:'disqualifie',follow_up_pm:'appele',set:'rdv_pose',rdv_self_booking:'rdv_pose',rdv_confirmes:'rdv_pose',rdv_annules_prospect:'pas_interesse',rdv_annules_equipe:'pas_interesse',no_show_self:'pas_interesse',no_show_setting:'pas_interesse',partenariats:'rdv_pose',closed_won_setting:'rdv_pose',closed_won_self:'rdv_pose',closed_lost:'pas_interesse',follow_up_closing:'appele',disqualifie_closing:'disqualifie'};
+    if (STAGE_TO_STATUS2[newStage]) modalUpdates.status = STAGE_TO_STATUS2[newStage];
+    db.collection('leads').doc(leadId).update(modalUpdates).then(function() {
       toast('→ ' + (sObj ? sObj.label : newStage));
     });
   }

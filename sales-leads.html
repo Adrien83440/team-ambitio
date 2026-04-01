@@ -638,6 +638,11 @@ function renderCard(l) {
   h += '<span class="ld-badge ' + typeObj.badgeClass + '">' + typeObj.label + '</span>';
   h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
   if (setterObj) h += '<span class="ld-assigned">' + setterObj.name + '</span>';
+  if (l.stage && l.stage !== 'lead') {
+    var stageNames = {nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',all_nrp:'All NRP',poubelle:'Poubelle',disqualification:'Disqualif.',follow_up_pm:'Follow Up',set:'SET',rdv_self_booking:'RDV Self',rdv_confirmes:'RDV Conf.',rdv_annules_prospect:'Annulé',rdv_annules_equipe:'Annulé Éq.',no_show_self:'No Show',no_show_setting:'No Show S.',partenariats:'Partenariat',closed_won_setting:'Won Setting',closed_won_self:'Won Self',closed_lost:'Lost',follow_up_closing:'Follow Up',disqualifie_closing:'Disqualif.'};
+    var stName = stageNames[l.stage] || l.stage;
+    h += '<span class="ld-assigned" style="color:var(--purple);border-color:rgba(167,139,250,0.25)">🔀 ' + stName + '</span>';
+  }
   h += '</div>';
   h += '</div>';
   h += '<span class="ld-card-time">' + ago + '</span>';
@@ -805,12 +810,22 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     if (rdvSection) {
       rdvSection.style.display = (newStatus === 'rdv_pose') ? 'block' : 'none';
     }
-    // Auto-save status
-    db.collection('leads').doc(leadId).update({
-      status: newStatus,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(function() {
-      toast('✅ Statut → ' + sObj.label);
+    // Auto-save status + sync pipeline stage
+    var STATUS_TO_STAGE = {
+      nouveau:'lead', appele:'lead', decroche:'lead', messagerie:'lead',
+      nrp1:'nrp1', nrp2:'nrp2', nrp3:'nrp3',
+      rdv_pose:'rdv_confirmes', pas_interesse:'disqualification', disqualifie:'disqualification'
+    };
+    var syncStage = STATUS_TO_STAGE[newStatus];
+    var updates = { status: newStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    if (syncStage) {
+      updates.stage = syncStage;
+      for (var j = 0; j < allLeads.length; j++) {
+        if (allLeads[j].id === leadId) { allLeads[j].stage = syncStage; break; }
+      }
+    }
+    db.collection('leads').doc(leadId).update(updates).then(function() {
+      toast('✅ Statut → ' + sObj.label + (syncStage ? ' (pipeline mis à jour)' : ''));
     }).catch(function(err) {
       toast('❌ ' + err.message);
     });
