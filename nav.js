@@ -15,6 +15,7 @@
     ],
 
     sales: [
+      { id: 'crm',        icon: '🧩', label: 'CRM Pipeline',     href: 'sales-crm.html' },
       { id: 'dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html' },
       { id: 'closing',     icon: '🎯', label: 'Closing',           href: 'sales-closing.html' },
       { id: 'setting',     icon: '📞', label: 'Setting',           href: 'sales-setting.html' },
@@ -32,6 +33,7 @@
       { id: 'coach-clients',       icon: '👥', label: 'Clients',       href: 'coaching.html',                section: 'Coaching' },
       { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',      section: 'Coaching' },
       { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html',  section: 'Coaching' },
+      { id: 'sales-crm',        icon: '🧩', label: 'CRM Pipeline', href: 'sales-crm.html',        section: 'Sales' },
       { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',   href: 'sales-dashboard.html',   section: 'Sales' },
       { id: 'sales-closing',     icon: '🎯', label: 'Closing',     href: 'sales-closing.html',     section: 'Sales' },
       { id: 'sales-setting',     icon: '📞', label: 'Setting',     href: 'sales-setting.html',     section: 'Sales' },
