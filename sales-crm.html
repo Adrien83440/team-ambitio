@@ -95,6 +95,48 @@ html,body { min-height:100vh; background:var(--bg); color:var(--text); font-fami
 .crm-card-setter.e { color:#93c5fd; }
 .crm-card-notes-dot { width:6px; height:6px; border-radius:50%; background:var(--gold); margin-left:auto; flex-shrink:0; }
 
+/* ── Eye quick-view ── */
+.crm-card-eye {
+  position:absolute; top:8px; right:8px; width:24px; height:24px; border-radius:6px;
+  background:rgba(255,255,255,0.06); border:1px solid transparent;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  font-size:12px; opacity:0; transition:all .15s; z-index:5;
+}
+.crm-card:hover .crm-card-eye { opacity:1; }
+.crm-card-eye:hover { background:rgba(96,165,250,0.15); border-color:rgba(96,165,250,0.3); }
+
+.qv-overlay { display:none; position:fixed; inset:0; z-index:400; }
+.qv-overlay.open { display:block; }
+.qv-panel {
+  position:fixed; z-index:401; width:320px; max-height:70vh;
+  background:var(--bg2); border:1px solid var(--border2); border-radius:14px;
+  box-shadow:0 16px 48px rgba(0,0,0,0.5); overflow:hidden;
+  animation:qvIn .15s ease;
+}
+@keyframes qvIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+.qv-head { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+.qv-av { width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-family:var(--fh); font-size:14px; font-weight:800; color:white; flex-shrink:0; }
+.qv-name { font-family:var(--fh); font-size:14px; font-weight:800; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.qv-close { width:24px; height:24px; border:1px solid var(--border); border-radius:6px; background:transparent; cursor:pointer; color:var(--muted); font-size:11px; display:flex; align-items:center; justify-content:center; }
+.qv-close:hover { color:var(--text); }
+.qv-body { padding:12px 16px; overflow-y:auto; max-height:calc(70vh - 60px); }
+.qv-field { display:flex; align-items:center; gap:6px; padding:4px 0; font-size:12px; }
+.qv-field-label { color:var(--muted); min-width:80px; font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:0.3px; flex-shrink:0; }
+.qv-field-input {
+  flex:1; padding:5px 8px; background:transparent; border:1px solid transparent;
+  border-radius:6px; color:var(--text); font-family:var(--fb); font-size:12px; outline:none;
+}
+.qv-field-input:hover { border-color:var(--border); }
+.qv-field-input:focus { border-color:var(--red2); background:var(--bg3); }
+.qv-field-input::placeholder { color:var(--muted2); }
+.qv-select { flex:1; padding:5px 8px; background:transparent; border:1px solid transparent; border-radius:6px; color:var(--text); font-family:var(--fb); font-size:12px; outline:none; cursor:pointer; }
+.qv-select:hover { border-color:var(--border); }
+.qv-select option { background:var(--bg2); }
+.qv-sep { height:1px; background:var(--border); margin:8px 0; }
+.qv-saved { font-size:10px; color:var(--green); text-align:center; padding:4px; opacity:0; transition:opacity .3s; }
+.qv-link { display:block; text-align:center; padding:8px; margin-top:4px; font-size:11px; font-weight:700; color:var(--blue); text-decoration:none; border:1px solid rgba(96,165,250,0.2); border-radius:8px; transition:all .15s; }
+.qv-link:hover { background:rgba(96,165,250,0.08); }
+
 /* ── Detail Modal ── */
 .crm-modal-bg { display:none; position:fixed; inset:0; z-index:500; background:rgba(0,0,0,0.65); backdrop-filter:blur(4px); }
 .crm-modal-bg.open { display:flex; justify-content:flex-end; }
@@ -166,6 +208,10 @@ html,body { min-height:100vh; background:var(--bg); color:var(--text); font-fami
 <div class="crm-modal-bg" id="modalBg">
   <div class="crm-modal" id="modalPanel"></div>
 </div>
+
+<!-- Quick View -->
+<div class="qv-overlay" id="qvOverlay"></div>
+<div class="qv-panel" id="qvPanel" style="display:none"></div>
 
 <div class="crm-toast" id="crmToast"></div>
 
@@ -288,6 +334,7 @@ function renderCards() {
       var hasNotes = l.notesHistory && l.notesHistory.length > 0;
 
       h += '<div class="crm-card" draggable="true" data-id="' + l.id + '">';
+      h += '<span class="crm-card-eye" data-action="quickview" data-id="' + l.id + '" title="Aperçu rapide">👁</span>';
       h += '<div class="crm-card-name">' + escHtml(l.nom || '—') + '</div>';
       if (l.telephone) h += '<div class="crm-card-phone">' + escHtml(l.telephone) + '</div>';
       h += '<div class="crm-card-bottom">';
@@ -366,13 +413,129 @@ document.getElementById('crmBoard').addEventListener('drop', function(e) {
   });
 });
 
-/* ═══ CARD CLICK → MODAL ═══ */
+/* ═══ CARD CLICK → QUICKVIEW or MODAL ═══ */
 document.getElementById('crmBoard').addEventListener('click', function(e) {
+  // Quick-view eye
+  var eye = e.target.closest('[data-action="quickview"]');
+  if (eye) {
+    e.stopPropagation();
+    openQuickView(eye.dataset.id, eye);
+    return;
+  }
+  // Full modal on card click
   if (e.target.closest('.crm-card') && !draggedLeadId) {
     var card = e.target.closest('.crm-card');
     openModal(card.dataset.id);
   }
 });
+
+/* ═══ QUICK VIEW ═══ */
+var qvTimer = null;
+var qvLeadId = null;
+
+function openQuickView(leadId, anchor) {
+  var lead = null;
+  for (var i = 0; i < allLeads.length; i++) {
+    if (allLeads[i].id === leadId) { lead = allLeads[i]; break; }
+  }
+  if (!lead) return;
+  qvLeadId = leadId;
+
+  var setterColor = lead.assignedTo === 'guillaume' ? '#ef4444' : '#60a5fa';
+  var ini = (lead.nom || '?')[0].toUpperCase();
+
+  var h = '';
+  h += '<div class="qv-head">';
+  h += '<div class="qv-av" style="background:linear-gradient(135deg,' + setterColor + ',' + setterColor + '88)">' + ini + '</div>';
+  h += '<span class="qv-name">' + escHtml(lead.nom || '—') + '</span>';
+  h += '<button class="qv-close" id="qvClose">✕</button>';
+  h += '</div>';
+  h += '<div class="qv-body">';
+  h += qvF('Nom', 'nom', lead.nom);
+  h += qvF('Téléphone', 'telephone', lead.telephone);
+  h += qvF('Email', 'email', lead.email);
+  h += '<div class="qv-field"><span class="qv-field-label">Attribué</span><select class="qv-select" data-qf="assignedTo">';
+  h += '<option value="guillaume"' + (lead.assignedTo === 'guillaume' ? ' selected' : '') + '>Guillaume</option>';
+  h += '<option value="elodie"' + (lead.assignedTo === 'elodie' ? ' selected' : '') + '>Élodie</option>';
+  h += '</select></div>';
+  h += '<div class="qv-sep"></div>';
+  h += qvF('Source', 'utm', lead.utm);
+  h += qvF('Secteur', 'secteur', lead.secteur);
+  h += qvF('CA actuel', 'ca', lead.ca);
+  h += qvF('Défi', 'defi', lead.defi);
+  h += '<div class="qv-sep"></div>';
+  h += qvF('Closeur', 'closeur', lead.closeur);
+  h += qvF('Setting', 'setting', lead.setting);
+  h += '<div class="qv-saved" id="qvSaved">✅ Sauvegardé</div>';
+  h += '<a class="qv-link" href="sales-contact.html?id=' + leadId + '">↗ Ouvrir la fiche complète</a>';
+  h += '</div>';
+
+  var panel = document.getElementById('qvPanel');
+  panel.innerHTML = h;
+
+  // Position near the eye button
+  var rect = anchor.getBoundingClientRect();
+  var panelW = 320;
+  var left = rect.right + 8;
+  if (left + panelW > window.innerWidth) left = rect.left - panelW - 8;
+  if (left < 8) left = 8;
+  var top = rect.top - 20;
+  if (top + 400 > window.innerHeight) top = window.innerHeight - 420;
+  if (top < 8) top = 8;
+  panel.style.left = left + 'px';
+  panel.style.top = top + 'px';
+  panel.style.display = '';
+  document.getElementById('qvOverlay').classList.add('open');
+
+  // Close events
+  document.getElementById('qvClose').addEventListener('click', closeQuickView);
+  document.getElementById('qvOverlay').addEventListener('click', closeQuickView);
+
+  // Auto-save
+  panel.addEventListener('input', function(e) {
+    if (e.target.closest('[data-qf]')) {
+      if (qvTimer) clearTimeout(qvTimer);
+      qvTimer = setTimeout(function() { saveQuickView(); }, 2000);
+    }
+  });
+  panel.addEventListener('change', function(e) {
+    if (e.target.closest('[data-qf]')) saveQuickView();
+  });
+}
+
+function qvF(label, key, val) {
+  return '<div class="qv-field"><span class="qv-field-label">' + escHtml(label) + '</span><input class="qv-field-input" data-qf="' + key + '" value="' + escAttr(val || '') + '" placeholder="—"/></div>';
+}
+
+function saveQuickView() {
+  if (!qvLeadId) return;
+  var panel = document.getElementById('qvPanel');
+  var fields = ['nom', 'telephone', 'email', 'assignedTo', 'utm', 'secteur', 'ca', 'defi', 'closeur', 'setting'];
+  var updates = {};
+  fields.forEach(function(f) {
+    var el = panel.querySelector('[data-qf="' + f + '"]');
+    if (el) updates[f] = el.value.trim();
+  });
+  updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+  // Update local
+  for (var i = 0; i < allLeads.length; i++) {
+    if (allLeads[i].id === qvLeadId) {
+      for (var k in updates) { if (k !== 'updatedAt') allLeads[i][k] = updates[k]; }
+      break;
+    }
+  }
+  db.collection('leads').doc(qvLeadId).update(updates).then(function() {
+    var msg = document.getElementById('qvSaved');
+    if (msg) { msg.style.opacity = '1'; setTimeout(function() { msg.style.opacity = '0'; }, 1500); }
+    renderCards();
+  });
+}
+
+function closeQuickView() {
+  document.getElementById('qvPanel').style.display = 'none';
+  document.getElementById('qvOverlay').classList.remove('open');
+  qvLeadId = null;
+}
 
 function openModal(leadId) {
   var lead = null;
