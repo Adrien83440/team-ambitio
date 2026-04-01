@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>Ambitio — Leads Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+      authDomain:        "ambitio-team.firebaseapp.com",
+      projectId:         "ambitio-team",
+      storageBucket:     "ambitio-team.firebasestorage.app",
+      messagingSenderId: "1079366902268",
+      appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+    });
+  }
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:     #08080f;
+  --bg2:    #0f0f1a;
+  --bg3:    #14141f;
+  --bg4:    #1a1a28;
+  --border: rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.13);
+  --red:    #b91c1c;
+  --red2:   #ef4444;
+  --red3:   #fca5a5;
+  --gold:   #f59e0b;
+  --green:  #34d399;
+  --blue:   #60a5fa;
+  --purple: #a78bfa;
+  --text:   rgba(255,255,255,0.92);
+  --muted:  rgba(255,255,255,0.48);
+  --muted2: rgba(255,255,255,0.22);
+  --radius: 12px;
+  --radius2:16px;
+  --fh:     'Syne', sans-serif;
+  --fb:     'Inter', sans-serif;
+  --fm:     'DM Mono', monospace;
+}
+
+html, body {
+  min-height: 100vh; min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--fb);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page { max-width: 680px; margin: 0 auto; padding: 0 0 100px; }
+
+/* ── Header ── */
+.ld-header {
+  position: sticky; top: 0; z-index: 100;
+  padding: 14px 16px;
+  background: rgba(8,8,15,0.95);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.ld-header-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ld-logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg,#ef4444,#b91c1c); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: white; box-shadow: 0 3px 12px rgba(239,68,68,0.3); flex-shrink: 0; }
+.ld-title { font-family: var(--fh); font-size: 18px; font-weight: 800; flex: 1; }
+.ld-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; animation: pulse 2s infinite; flex-shrink: 0; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+.ld-live-label { font-size: 11px; font-weight: 700; color: #34d399; text-transform: uppercase; letter-spacing: 0.5px; }
+.ld-count { font-family: var(--fm); font-size: 13px; font-weight: 600; color: var(--muted); margin-left: auto; }
+
+/* ── Filters ── */
+.ld-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.ld-filters::-webkit-scrollbar { display: none; }
+.ld-filter {
+  padding: 6px 12px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: transparent; color: var(--muted); font-family: var(--fb);
+  font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.ld-filter:hover { border-color: var(--border2); color: var(--text); }
+.ld-filter.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
+
+/* ── Member pills ── */
+.ld-members { display: flex; gap: 6px; margin-bottom: 10px; }
+.ld-member-pill {
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: transparent; color: var(--muted); font-family: var(--fb);
+  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+}
+.ld-member-pill:hover { border-color: var(--border2); }
+.ld-member-pill.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
+.ld-member-pill .mp-dot { width: 7px; height: 7px; border-radius: 50%; }
+.ld-member-pill .mp-count { font-family: var(--fm); font-size: 10px; opacity: 0.7; }
+
+/* ── Feed ── */
+.ld-feed { padding: 12px 12px; }
+.ld-empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 13px; }
+
+/* ── Lead Card ── */
+.ld-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius2);
+  margin-bottom: 10px; overflow: hidden; transition: border-color 0.2s;
+}
+.ld-card.new { border-color: rgba(52,211,153,0.4); animation: cardGlow 2s ease-out; }
+@keyframes cardGlow { 0% { box-shadow: 0 0 20px rgba(52,211,153,0.3); } 100% { box-shadow: none; } }
+.ld-card-head {
+  padding: 14px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer;
+}
+.ld-card-avatar {
+  width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center;
+  justify-content: center; font-family: var(--fh); font-size: 15px; font-weight: 800; color: white; flex-shrink: 0;
+}
+.ld-card-info { flex: 1; min-width: 0; }
+.ld-card-name { font-family: var(--fh); font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-card-meta { font-size: 11px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+.ld-card-badges { display: flex; gap: 4px; flex-shrink: 0; }
+.ld-badge {
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
+  text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+}
+.ld-badge.vsl { background: rgba(167,139,250,0.12); color: #c4b5fd; }
+.ld-badge.self { background: rgba(245,158,11,0.12); color: #fcd34d; }
+.ld-badge.other { background: rgba(96,165,250,0.12); color: #93bbfd; }
+.ld-badge-status {
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
+  display: flex; align-items: center; gap: 4px;
+}
+.ld-badge-status .sd { width: 6px; height: 6px; border-radius: 50%; }
+.ld-assigned {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+}
+.ld-card-time { font-size: 10px; color: var(--muted2); white-space: nowrap; flex-shrink: 0; }
+.ld-card-arrow { font-size: 10px; color: var(--muted2); flex-shrink: 0; transition: transform 0.2s; }
+.ld-card.open .ld-card-arrow { transform: rotate(180deg); }
+
+/* ── Card Body (expanded) ── */
+.ld-card-body { display: none; padding: 0 16px 16px; border-top: 1px solid var(--border); }
+.ld-card.open .ld-card-body { display: block; }
+
+.ld-details { padding: 12px 0; }
+.ld-detail-row { display: flex; gap: 8px; padding: 5px 0; font-size: 12px; }
+.ld-detail-label { color: var(--muted); min-width: 90px; flex-shrink: 0; font-weight: 600; }
+.ld-detail-val { color: var(--text); word-break: break-all; }
+.ld-detail-val a { color: var(--blue); text-decoration: none; }
+
+/* Actions */
+.ld-actions { padding: 12px 0 0; border-top: 1px solid var(--border); }
+.ld-actions-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 8px; }
+.ld-status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+@media (max-width: 400px) { .ld-status-grid { grid-template-columns: repeat(2, 1fr); } }
+.ld-status-btn {
+  padding: 8px 6px; border-radius: 8px; border: 1.5px solid var(--border);
+  background: transparent; color: var(--muted); font-family: var(--fb);
+  font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.ld-status-btn:hover { border-color: var(--border2); color: var(--text); }
+.ld-status-btn.active { border-color: currentColor; background: rgba(255,255,255,0.04); }
+
+.ld-rdv-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.ld-rdv-row input {
+  flex: 1; padding: 8px 10px; background: var(--bg3); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none;
+}
+.ld-rdv-row input:focus { border-color: var(--red2); }
+
+.ld-notes-area {
+  width: 100%; padding: 10px 12px; background: var(--bg3); border: 1.5px solid var(--border);
+  border-radius: 10px; color: var(--text); font-family: var(--fb); font-size: 12px;
+  resize: vertical; min-height: 60px; outline: none; margin-bottom: 10px;
+}
+.ld-notes-area:focus { border-color: var(--red2); }
+.ld-notes-area::placeholder { color: var(--muted2); }
+
+.ld-save-btn {
+  width: 100%; padding: 10px; border: none; border-radius: 10px;
+  background: linear-gradient(135deg,#b91c1c,#ef4444); color: white;
+  font-family: var(--fb); font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: all 0.15s; box-shadow: 0 3px 12px rgba(185,28,28,0.3);
+}
+.ld-save-btn:hover { transform: translateY(-1px); }
+.ld-save-btn:active { transform: scale(0.98); }
+
+/* ── New Lead Popup ── */
+.ld-popup-overlay {
+  display: none; position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+  align-items: center; justify-content: center; padding: 20px;
+}
+.ld-popup-overlay.show { display: flex; }
+.ld-popup {
+  background: var(--bg2); border: 2px solid rgba(52,211,153,0.4);
+  border-radius: 20px; width: 100%; max-width: 380px; overflow: hidden;
+  animation: popIn 0.3s cubic-bezier(.4,0,.2,1);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 40px rgba(52,211,153,0.15);
+}
+@keyframes popIn { from { transform: scale(0.9) translateY(20px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+.ld-popup-header {
+  padding: 20px; text-align: center;
+  background: linear-gradient(135deg, rgba(52,211,153,0.1), rgba(96,165,250,0.05));
+}
+.ld-popup-icon { font-size: 40px; margin-bottom: 8px; }
+.ld-popup-title { font-family: var(--fh); font-size: 18px; font-weight: 800; }
+.ld-popup-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.ld-popup-body { padding: 16px 20px; }
+.ld-popup-field { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+.ld-popup-field:last-child { border-bottom: none; }
+.ld-popup-field-label { color: var(--muted); font-weight: 600; }
+.ld-popup-field-val { font-weight: 700; text-align: right; max-width: 60%; word-break: break-all; }
+.ld-popup-assigned {
+  margin: 12px 0 0; padding: 10px 14px; border-radius: 10px; text-align: center;
+  font-size: 13px; font-weight: 700;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+}
+.ld-popup-actions { padding: 12px 20px 20px; display: flex; gap: 8px; }
+.ld-popup-btn {
+  flex: 1; padding: 12px; border: none; border-radius: 12px;
+  font-family: var(--fb); font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+}
+.ld-popup-btn.primary { background: linear-gradient(135deg,#059669,#34d399); color: #0f0f1a; }
+.ld-popup-btn.ghost { background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
+.ld-popup-btn:active { transform: scale(0.97); }
+
+/* ── Toast ── */
+.ld-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: #1a2e1a; border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7;
+  font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 10px;
+  z-index: 2000; opacity: 0; transition: all 0.3s; white-space: nowrap; pointer-events: none;
+}
+.ld-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Responsive helpers ── */
+@media (min-width: 769px) {
+  .page { padding-top: 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ── HEADER ── -->
+  <div class="ld-header">
+    <div class="ld-header-top">
+      <div class="ld-logo">A</div>
+      <div class="ld-title">Leads Live</div>
+      <span class="ld-live-dot"></span>
+      <span class="ld-live-label">Live</span>
+      <span class="ld-count" id="ldCount">— leads</span>
+    </div>
+    <div class="ld-members" id="ldMembers">
+      <button class="ld-member-pill active" data-member="all">
+        <span>Tous</span> <span class="mp-count" id="countAll">0</span>
+      </button>
+      <button class="ld-member-pill" data-member="guillaume">
+        <span class="mp-dot" style="background:#ef4444"></span>
+        <span>Guillaume</span> <span class="mp-count" id="countGuillaume">0</span>
+      </button>
+      <button class="ld-member-pill" data-member="elodie">
+        <span class="mp-dot" style="background:#60a5fa"></span>
+        <span>Élodie</span> <span class="mp-count" id="countElodie">0</span>
+      </button>
+    </div>
+    <div class="ld-filters" id="ldFilters">
+      <button class="ld-filter active" data-status="all">Tous</button>
+      <button class="ld-filter" data-status="nouveau">🆕 Nouveau</button>
+      <button class="ld-filter" data-status="appele">📞 Appelé</button>
+      <button class="ld-filter" data-status="decroche">✅ Décroché</button>
+      <button class="ld-filter" data-status="messagerie">📩 Messagerie</button>
+      <button class="ld-filter" data-status="injoignable">📵 Injoignable</button>
+      <button class="ld-filter" data-status="rdv_pose">📅 RDV posé</button>
+      <button class="ld-filter" data-status="pas_interesse">👎 Pas intéressé</button>
+      <button class="ld-filter" data-status="disqualifie">🚫 Disqualifié</button>
+    </div>
+  </div>
+
+  <!-- ── FEED ── -->
+  <div class="ld-feed" id="ldFeed">
+    <div class="ld-empty">Chargement des leads...</div>
+  </div>
+
+</div>
+
+<!-- ── NEW LEAD POPUP ── -->
+<div class="ld-popup-overlay" id="popupOverlay">
+  <div class="ld-popup">
+    <div class="ld-popup-header">
+      <div class="ld-popup-icon">🔔</div>
+      <div class="ld-popup-title">Nouveau Lead !</div>
+      <div class="ld-popup-sub" id="popupType"></div>
+    </div>
+    <div class="ld-popup-body" id="popupBody"></div>
+    <div class="ld-popup-actions">
+      <button class="ld-popup-btn ghost" id="popupDismiss">OK</button>
+      <button class="ld-popup-btn primary" id="popupCall">📞 Appeler</button>
+    </div>
+  </div>
+</div>
+
+<div class="ld-toast" id="ldToast"></div>
+
+<script>
+/* ═══════════════════════════════════════
+   LEADS LIVE — Ambitio Corp
+   ═══════════════════════════════════════ */
+var db = firebase.firestore();
+
+/* ── Config ── */
+var SETTERS = {
+  guillaume: { name: 'Guillaume', color: '#ef4444', initials: 'G' },
+  elodie:    { name: 'Élodie',    color: '#60a5fa', initials: 'É' }
+};
+
+var LEAD_TYPES = {
+  vsl_elite:    { label: 'VSL ÉLITE',     badgeClass: 'vsl' },
+  self_booking: { label: 'Self-Booking',   badgeClass: 'self' }
+};
+
+var STATUSES = [
+  { key: 'nouveau',       label: 'Nouveau',       icon: '🆕', color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
+  { key: 'appele',        label: 'Appelé',        icon: '📞', color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
+  { key: 'decroche',      label: 'Décroché',      icon: '✅', color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
+  { key: 'messagerie',    label: 'Messagerie',    icon: '📩', color: '#fbbf24', bg: 'rgba(245,158,11,0.12)' },
+  { key: 'injoignable',   label: 'Injoignable',   icon: '📵', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+  { key: 'rdv_pose',      label: 'RDV posé',      icon: '📅', color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
+  { key: 'pas_interesse', label: 'Pas intéressé', icon: '👎', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
+  { key: 'disqualifie',   label: 'Disqualifié',   icon: '🚫', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' }
+];
+
+function getStatusObj(key) {
+  for (var i = 0; i < STATUSES.length; i++) { if (STATUSES[i].key === key) return STATUSES[i]; }
+  return STATUSES[0];
+}
+
+/* ── State ── */
+var allLeads = [];
+var filterMember = 'all';
+var filterStatus = 'all';
+var knownLeadIds = {};
+var isFirstLoad = true;
+var openCardId = null;
+
+/* ── Utils ── */
+function toast(msg) {
+  var el = document.getElementById('ldToast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 2500);
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function timeAgo(ts) {
+  if (!ts) return '';
+  var d = ts.toDate ? ts.toDate() : new Date(ts);
+  var now = new Date();
+  var diff = Math.floor((now - d) / 1000);
+  if (diff < 60) return 'À l\'instant';
+  if (diff < 3600) return Math.floor(diff / 60) + ' min';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h';
+  return Math.floor(diff / 86400) + 'j';
+}
+
+function formatDateTimeFr(ts) {
+  if (!ts) return '—';
+  var d = ts.toDate ? ts.toDate() : new Date(ts);
+  var jours = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  return jours[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + ' à ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+/* ═══ SOUND NOTIFICATION ═══ */
+var audioCtx = null;
+function playNotifSound() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    // Two-tone chime
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+    osc.frequency.setValueAtTime(1100, audioCtx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+/* ═══ NEW LEAD POPUP ═══ */
+var popupQueue = [];
+var popupShowing = false;
+
+function showLeadPopup(lead) {
+  popupQueue.push(lead);
+  if (!popupShowing) processPopupQueue();
+}
+
+function processPopupQueue() {
+  if (popupQueue.length === 0) { popupShowing = false; return; }
+  popupShowing = true;
+  var lead = popupQueue.shift();
+  var typeObj = LEAD_TYPES[lead.type] || { label: lead.type || 'Lead', badgeClass: 'other' };
+  var setterObj = SETTERS[lead.assignedTo] || null;
+
+  document.getElementById('popupType').textContent = typeObj.label;
+  var h = '';
+  h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Nom</span><span class="ld-popup-field-val">' + escHtml(lead.nom) + '</span></div>';
+  if (lead.telephone) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Téléphone</span><span class="ld-popup-field-val">' + escHtml(lead.telephone) + '</span></div>';
+  if (lead.email) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Email</span><span class="ld-popup-field-val">' + escHtml(lead.email) + '</span></div>';
+  if (lead.utm) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Source</span><span class="ld-popup-field-val">' + escHtml(lead.utm) + '</span></div>';
+  if (lead.secteur) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Secteur</span><span class="ld-popup-field-val">' + escHtml(lead.secteur) + '</span></div>';
+  if (lead.ca) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">CA</span><span class="ld-popup-field-val">' + escHtml(lead.ca) + '</span></div>';
+  if (setterObj) {
+    h += '<div class="ld-popup-assigned">Attribué à <strong style="color:' + setterObj.color + '">' + setterObj.name + '</strong></div>';
+  }
+  document.getElementById('popupBody').innerHTML = h;
+
+  // Call button
+  var callBtn = document.getElementById('popupCall');
+  if (lead.telephone) {
+    callBtn.style.display = '';
+    callBtn.onclick = function() {
+      window.open('tel:' + lead.telephone.replace(/\s/g, ''), '_self');
+    };
+  } else {
+    callBtn.style.display = 'none';
+  }
+
+  document.getElementById('popupOverlay').classList.add('show');
+  playNotifSound();
+}
+
+document.getElementById('popupDismiss').addEventListener('click', function() {
+  document.getElementById('popupOverlay').classList.remove('show');
+  setTimeout(processPopupQueue, 300);
+});
+document.getElementById('popupOverlay').addEventListener('click', function(e) {
+  if (e.target === this) {
+    this.classList.remove('show');
+    setTimeout(processPopupQueue, 300);
+  }
+});
+
+/* ═══ FILTERS ═══ */
+document.getElementById('ldMembers').addEventListener('click', function(e) {
+  var pill = e.target.closest('.ld-member-pill');
+  if (!pill) return;
+  document.querySelectorAll('.ld-member-pill').forEach(function(p) { p.classList.remove('active'); });
+  pill.classList.add('active');
+  filterMember = pill.dataset.member;
+  renderFeed();
+});
+
+document.getElementById('ldFilters').addEventListener('click', function(e) {
+  var btn = e.target.closest('.ld-filter');
+  if (!btn) return;
+  document.querySelectorAll('.ld-filter').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  filterStatus = btn.dataset.status;
+  renderFeed();
+});
+
+/* ═══ RENDER FEED ═══ */
+function getFilteredLeads() {
+  var list = allLeads;
+  if (filterMember !== 'all') {
+    list = list.filter(function(l) { return l.assignedTo === filterMember; });
+  }
+  if (filterStatus !== 'all') {
+    list = list.filter(function(l) { return (l.status || 'nouveau') === filterStatus; });
+  }
+  return list;
+}
+
+function updateCounts() {
+  var gCount = 0, eCount = 0;
+  allLeads.forEach(function(l) {
+    if (l.assignedTo === 'guillaume') gCount++;
+    if (l.assignedTo === 'elodie') eCount++;
+  });
+  document.getElementById('countAll').textContent = allLeads.length;
+  document.getElementById('countGuillaume').textContent = gCount;
+  document.getElementById('countElodie').textContent = eCount;
+  document.getElementById('ldCount').textContent = allLeads.length + ' lead' + (allLeads.length > 1 ? 's' : '');
+}
+
+function renderFeed() {
+  var leads = getFilteredLeads();
+  updateCounts();
+  var feed = document.getElementById('ldFeed');
+
+  if (leads.length === 0) {
+    feed.innerHTML = '<div class="ld-empty">Aucun lead ' + (filterStatus !== 'all' ? 'avec ce statut' : '') + '</div>';
+    return;
+  }
+
+  var h = '';
+  for (var i = 0; i < leads.length; i++) {
+    h += renderCard(leads[i]);
+  }
+  feed.innerHTML = h;
+
+  // Restore open card
+  if (openCardId) {
+    var el = document.querySelector('[data-lead-id="' + openCardId + '"]');
+    if (el) el.classList.add('open');
+  }
+}
+
+function renderCard(l) {
+  var id = l.id;
+  var typeObj = LEAD_TYPES[l.type] || { label: l.type || 'Lead', badgeClass: 'other' };
+  var statusObj = getStatusObj(l.status || 'nouveau');
+  var setterObj = SETTERS[l.assignedTo] || null;
+  var isNew = l._isNew;
+  var ago = timeAgo(l.createdAt);
+
+  var h = '<div class="ld-card' + (isNew ? ' new' : '') + '" data-lead-id="' + id + '">';
+
+  // Head
+  h += '<div class="ld-card-head" data-action="toggle" data-id="' + id + '">';
+  if (setterObj) {
+    h += '<div class="ld-card-avatar" style="background:linear-gradient(135deg,' + setterObj.color + ',' + setterObj.color + '99)">' + setterObj.initials + '</div>';
+  } else {
+    h += '<div class="ld-card-avatar" style="background:var(--bg4)">?</div>';
+  }
+  h += '<div class="ld-card-info">';
+  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + '</div>';
+  h += '<div class="ld-card-meta">';
+  h += '<span class="ld-badge ' + typeObj.badgeClass + '">' + typeObj.label + '</span>';
+  h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
+  if (setterObj) h += '<span class="ld-assigned">' + setterObj.name + '</span>';
+  h += '</div>';
+  h += '</div>';
+  h += '<span class="ld-card-time">' + ago + '</span>';
+  h += '<span class="ld-card-arrow">▼</span>';
+  h += '</div>';
+
+  // Body
+  h += '<div class="ld-card-body">';
+  h += '<div class="ld-details">';
+  if (l.telephone) h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><span class="ld-detail-val"><a href="tel:' + l.telephone.replace(/\s/g, '') + '">' + escHtml(l.telephone) + '</a></span></div>';
+  if (l.email) h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><span class="ld-detail-val"><a href="mailto:' + escHtml(l.email) + '">' + escHtml(l.email) + '</a></span></div>';
+  if (l.utm) h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><span class="ld-detail-val">' + escHtml(l.utm) + '</span></div>';
+  if (l.secteur) h += '<div class="ld-detail-row"><span class="ld-detail-label">Secteur</span><span class="ld-detail-val">' + escHtml(l.secteur) + '</span></div>';
+  if (l.ca) h += '<div class="ld-detail-row"><span class="ld-detail-label">CA actuel</span><span class="ld-detail-val">' + escHtml(l.ca) + '</span></div>';
+  if (l.defi) h += '<div class="ld-detail-row"><span class="ld-detail-label">Défi</span><span class="ld-detail-val">' + escHtml(l.defi) + '</span></div>';
+  if (l.disponibilite) h += '<div class="ld-detail-row"><span class="ld-detail-label">Dispo</span><span class="ld-detail-val">' + escHtml(l.disponibilite) + '</span></div>';
+  if (l.timeline) h += '<div class="ld-detail-row"><span class="ld-detail-label">Mise en place</span><span class="ld-detail-val">' + escHtml(l.timeline) + '</span></div>';
+  if (l.dateRdv) h += '<div class="ld-detail-row"><span class="ld-detail-label">Date RDV</span><span class="ld-detail-val">' + escHtml(l.dateRdv) + '</span></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(l.createdAt) + '</span></div>';
+  h += '</div>';
+
+  // Actions
+  h += '<div class="ld-actions">';
+  h += '<div class="ld-actions-title">Statut</div>';
+  h += '<div class="ld-status-grid">';
+  for (var si = 0; si < STATUSES.length; si++) {
+    var s = STATUSES[si];
+    var isActive = (l.status || 'nouveau') === s.key;
+    h += '<button class="ld-status-btn' + (isActive ? ' active' : '') + '" style="' + (isActive ? 'color:' + s.color + ';border-color:' + s.color : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + s.key + '">' + s.icon + ' ' + s.label + '</button>';
+  }
+  h += '</div>';
+
+  // RDV fields
+  h += '<div class="ld-actions-title">RDV</div>';
+  h += '<div class="ld-rdv-row">';
+  h += '<input type="date" data-field="rdvDate" data-id="' + id + '" value="' + (l.rdvDate || '') + '"/>';
+  h += '<input type="time" data-field="rdvHeure" data-id="' + id + '" value="' + (l.rdvHeure || '') + '"/>';
+  h += '</div>';
+
+  // Notes
+  h += '<div class="ld-actions-title">Notes</div>';
+  h += '<textarea class="ld-notes-area" data-field="notes" data-id="' + id + '" placeholder="Ajouter une note...">' + escHtml(l.notes || '') + '</textarea>';
+
+  h += '<button class="ld-save-btn" data-action="save" data-id="' + id + '">💾 Sauvegarder</button>';
+  h += '</div>'; // actions
+  h += '</div>'; // body
+  h += '</div>'; // card
+
+  return h;
+}
+
+/* ═══ FEED EVENTS ═══ */
+document.getElementById('ldFeed').addEventListener('click', function(e) {
+  // Toggle card
+  var toggle = e.target.closest('[data-action="toggle"]');
+  if (toggle) {
+    var card = toggle.closest('.ld-card');
+    var id = card.dataset.leadId;
+    if (card.classList.contains('open')) {
+      card.classList.remove('open');
+      openCardId = null;
+    } else {
+      document.querySelectorAll('.ld-card.open').forEach(function(c) { c.classList.remove('open'); });
+      card.classList.add('open');
+      openCardId = id;
+    }
+    return;
+  }
+
+  // Status button
+  var statusBtn = e.target.closest('[data-action="setStatus"]');
+  if (statusBtn) {
+    var leadId = statusBtn.dataset.id;
+    var newStatus = statusBtn.dataset.status;
+    // Visual update
+    var card2 = statusBtn.closest('.ld-card');
+    card2.querySelectorAll('.ld-status-btn').forEach(function(b) {
+      b.classList.remove('active');
+      b.style.color = '';
+      b.style.borderColor = '';
+    });
+    statusBtn.classList.add('active');
+    var sObj = getStatusObj(newStatus);
+    statusBtn.style.color = sObj.color;
+    statusBtn.style.borderColor = sObj.color;
+    // Update local state
+    for (var i = 0; i < allLeads.length; i++) {
+      if (allLeads[i].id === leadId) { allLeads[i].status = newStatus; break; }
+    }
+    return;
+  }
+
+  // Save button
+  var saveBtn = e.target.closest('[data-action="save"]');
+  if (saveBtn) {
+    saveLead(saveBtn.dataset.id);
+    return;
+  }
+});
+
+function saveLead(leadId) {
+  var lead = null;
+  for (var i = 0; i < allLeads.length; i++) {
+    if (allLeads[i].id === leadId) { lead = allLeads[i]; break; }
+  }
+  if (!lead) return;
+
+  // Gather from DOM
+  var card = document.querySelector('[data-lead-id="' + leadId + '"]');
+  if (!card) return;
+  var notesEl = card.querySelector('[data-field="notes"]');
+  var rdvDateEl = card.querySelector('[data-field="rdvDate"]');
+  var rdvHeureEl = card.querySelector('[data-field="rdvHeure"]');
+
+  var updates = {
+    status: lead.status || 'nouveau',
+    notes: notesEl ? notesEl.value.trim() : '',
+    rdvDate: rdvDateEl ? rdvDateEl.value : '',
+    rdvHeure: rdvHeureEl ? rdvHeureEl.value : '',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  db.collection('leads').doc(leadId).update(updates).then(function() {
+    toast('✅ Lead mis à jour');
+  }).catch(function(err) {
+    console.error('[leads] save error:', err);
+    toast('❌ Erreur : ' + err.message);
+  });
+}
+
+/* ═══ ROUND-ROBIN ASSIGNMENT ═══ */
+function assignLeadRoundRobin(leadId, callback) {
+  var metaRef = db.collection('_meta').doc('roundrobin');
+  db.runTransaction(function(tx) {
+    return tx.get(metaRef).then(function(snap) {
+      var last = (snap.exists && snap.data().lastAssigned) || 'elodie';
+      var next = (last === 'guillaume') ? 'elodie' : 'guillaume';
+      tx.set(metaRef, { lastAssigned: next }, { merge: true });
+      tx.update(db.collection('leads').doc(leadId), { assignedTo: next });
+      return next;
+    });
+  }).then(function(assigned) {
+    if (callback) callback(assigned);
+  }).catch(function(err) {
+    console.error('[leads] roundrobin error:', err);
+  });
+}
+
+/* ═══ FIRESTORE LISTENER ═══ */
+function startListening() {
+  db.collection('leads')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot(function(snap) {
+      var newLeads = [];
+
+      snap.docChanges().forEach(function(change) {
+        if (change.type === 'added' && !isFirstLoad && !knownLeadIds[change.doc.id]) {
+          var newLead = change.doc.data();
+          newLead.id = change.doc.id;
+          newLead._isNew = true;
+
+          // Auto-assign if no assignedTo
+          if (!newLead.assignedTo) {
+            assignLeadRoundRobin(change.doc.id);
+          }
+
+          newLeads.push(newLead);
+        }
+        knownLeadIds[change.doc.id] = true;
+      });
+
+      // Rebuild full list
+      allLeads = [];
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        d.id = doc.id;
+        // Check if it's one of the new ones
+        for (var i = 0; i < newLeads.length; i++) {
+          if (newLeads[i].id === doc.id) { d._isNew = true; break; }
+        }
+        allLeads.push(d);
+      });
+
+      renderFeed();
+
+      // Show popups for new leads
+      for (var j = 0; j < newLeads.length; j++) {
+        showLeadPopup(newLeads[j]);
+      }
+
+      isFirstLoad = false;
+
+    }, function(err) {
+      console.error('[leads] listener error:', err);
+      document.getElementById('ldFeed').innerHTML = '<div class="ld-empty">Erreur de connexion : ' + escHtml(err.message) + '</div>';
+    });
+}
+
+/* ═══ AUTH & INIT ═══ */
+(function init() {
+  firebase.auth().onAuthStateChanged(function(user) {
+    if (user) {
+      db.collection('users').doc(user.uid).get().then(function(snap) {
+        var data = snap.exists ? snap.data() : {};
+        window._currentRole = data.role || 'sales';
+        window._currentUserName = user.displayName || user.email.split('@')[0];
+        localStorage.setItem('ambitio_role', data.role || 'sales');
+        localStorage.setItem('ambitio_name', window._currentUserName);
+        startListening();
+      }).catch(function() { startListening(); });
+    } else {
+      startListening();
+    }
+  });
+
+  // Enable audio on first interaction (mobile requirement)
+  document.addEventListener('click', function initAudio() {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch(e) {}
+    document.removeEventListener('click', initAudio);
+  });
+})();
+</script>
+
+<script src="nav.js"></script>
+</body>
+</html>
