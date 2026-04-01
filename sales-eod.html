@@ -454,17 +454,18 @@ html, body {
       <span class="eod-save-status" id="eodSaveStatus">✅ Sauvegardé !</span>
     </div>
 
-    <!-- Feedback / Retour Head of Sales -->
+    <!-- Discussion EOD -->
     <div style="margin-top:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);overflow:hidden" id="feedbackSection">
       <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
         <span style="font-size:16px">💬</span>
-        <span style="font-family:var(--fh);font-size:13px;font-weight:800">Retour Head of Sales</span>
+        <span style="font-family:var(--fh);font-size:13px;font-weight:800">Discussion</span>
+        <span id="discussionCount" style="font-family:var(--fm);font-size:10px;background:rgba(96,165,250,0.15);color:var(--blue);padding:1px 6px;border-radius:4px"></span>
       </div>
       <div style="padding:14px 16px">
-        <div id="feedbackList"></div>
-        <div style="display:flex;gap:6px;margin-top:8px">
-          <textarea id="feedbackInput" rows="2" placeholder="Ajouter un retour..." style="flex:1;padding:8px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none;resize:none;min-height:38px"></textarea>
-          <button id="feedbackAddBtn" style="padding:8px 14px;border:none;border-radius:8px;background:rgba(96,165,250,0.12);color:var(--blue);font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;align-self:flex-end">Envoyer</button>
+        <div id="feedbackList" style="max-height:300px;overflow-y:auto;margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px">
+          <textarea id="feedbackInput" rows="2" placeholder="Écrire un message..." style="flex:1;padding:8px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none;resize:none;min-height:38px"></textarea>
+          <button id="feedbackAddBtn" style="padding:8px 14px;border:none;border-radius:8px;background:linear-gradient(135deg,#1e3a5f,#60a5fa);color:white;font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;align-self:flex-end;transition:all .15s">Envoyer</button>
         </div>
       </div>
     </div>
@@ -816,19 +817,48 @@ function populateForm(data) {
 
 function renderFeedback(list) {
   var el = document.getElementById('feedbackList');
-  if (!list || list.length === 0) { el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0">Aucun retour pour le moment</div>'; return; }
+  var countEl = document.getElementById('discussionCount');
+  if (!list || list.length === 0) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0;text-align:center">Aucun message — lancez la discussion !</div>';
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+  if (countEl) countEl.textContent = list.length;
+  // Assign colors per unique author
+  var authorColors = {};
+  var palette = ['#60a5fa','#ef4444','#34d399','#f59e0b','#a78bfa','#ec4899'];
+  var ci = 0;
   var h = '';
-  for (var i = list.length - 1; i >= 0; i--) {
+  for (var i = 0; i < list.length; i++) {
     var fb = list[i];
-    h += '<div style="padding:8px 10px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15);border-radius:8px;margin-bottom:6px">';
-    h += '<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:10px;font-weight:700;color:var(--blue)">' + (fb.author || 'Admin') + '</span><span style="font-size:10px;color:var(--muted)">' + (fb.date || '') + '</span></div>';
-    h += '<div style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.5">' + (fb.text || '').replace(/</g, '&lt;') + '</div>';
-    h += '</div>';
+    var author = fb.author || 'Inconnu';
+    if (!authorColors[author]) { authorColors[author] = palette[ci % palette.length]; ci++; }
+    var col = authorColors[author];
+    var bgCol = col.replace(')', ',0.08)').replace('rgb', 'rgba');
+    if (col.charAt(0) === '#') {
+      var r = parseInt(col.slice(1,3),16), g = parseInt(col.slice(3,5),16), b = parseInt(col.slice(5,7),16);
+      bgCol = 'rgba(' + r + ',' + g + ',' + b + ',0.08)';
+    }
+    var initials = author.split(' ').map(function(w) { return w[0]; }).join('').toUpperCase().slice(0,2);
+    h += '<div style="display:flex;gap:8px;margin-bottom:8px">';
+    h += '<div style="width:28px;height:28px;border-radius:8px;background:' + bgCol + ';border:1px solid ' + col + '33;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:' + col + ';flex-shrink:0;margin-top:2px">' + initials + '</div>';
+    h += '<div style="flex:1;padding:8px 12px;background:' + bgCol + ';border:1px solid ' + col + '18;border-radius:10px">';
+    h += '<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:11px;font-weight:700;color:' + col + '">' + (fb.author || '').replace(/</g, '&lt;') + '</span><span style="font-size:10px;color:var(--muted)">' + (fb.date || '') + '</span></div>';
+    h += '<div style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.6;white-space:pre-wrap">' + (fb.text || '').replace(/</g, '&lt;') + '</div>';
+    h += '</div></div>';
   }
   el.innerHTML = h;
+  // Scroll to bottom
+  el.scrollTop = el.scrollHeight;
 }
 
 // Feedback add handler
+document.getElementById('feedbackInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    document.getElementById('feedbackAddBtn').click();
+  }
+});
 document.getElementById('feedbackAddBtn').addEventListener('click', function() {
   var input = document.getElementById('feedbackInput');
   var text = input.value.trim();
