@@ -6,6 +6,9 @@
 
 (function () {
 
+  // Apply saved theme immediately to prevent flash
+  if (localStorage.getItem('ambitio_theme') === 'light') document.body.classList.add('light-theme');
+
   const MODULES = {
 
     coach: [
@@ -303,6 +306,62 @@
       border:1px solid rgba(255,255,255,0.1); border-radius:10px;
       align-items:center; justify-content:center; cursor:pointer; font-size:16px; color:white;
     }
+
+    /* ── Theme Toggle ── */
+    .nav-theme-toggle {
+      display:flex; align-items:center; gap:8px; padding:8px 10px; margin:0 10px 6px;
+      border-radius:10px; cursor:pointer; background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.1); transition:all 0.15s;
+    }
+    .nav-theme-toggle:hover { background:rgba(255,255,255,0.1); }
+    .nav-theme-switch {
+      width:36px; height:20px; border-radius:10px; background:rgba(255,255,255,0.15);
+      position:relative; transition:background 0.2s; flex-shrink:0;
+    }
+    .nav-theme-switch::after {
+      content:''; position:absolute; top:2px; left:2px; width:16px; height:16px;
+      border-radius:50%; background:white; transition:transform 0.2s;
+    }
+    .nav-theme-toggle.light .nav-theme-switch { background:rgba(245,158,11,0.5); }
+    .nav-theme-toggle.light .nav-theme-switch::after { transform:translateX(16px); }
+    .nav-theme-label { font-size:11px; font-weight:600; color:rgba(255,255,255,0.5); transition:opacity 0.2s; }
+    #ambitio-sidebar.collapsed .nav-theme-label { opacity:0; pointer-events:none; }
+    #ambitio-sidebar.collapsed .nav-theme-toggle { justify-content:center; padding:8px; }
+
+    /* ── LIGHT THEME ── */
+    body.light-theme {
+      --bg: #f5f5f7;
+      --bg2: #ffffff;
+      --bg3: #f0f0f3;
+      --bg4: #e8e8ed;
+      --border: rgba(0,0,0,0.08);
+      --border2: rgba(0,0,0,0.14);
+      --text: rgba(0,0,0,0.88);
+      --muted: rgba(0,0,0,0.45);
+      --muted2: rgba(0,0,0,0.2);
+    }
+    body.light-theme .topbar,
+    body.light-theme .fiche-top,
+    body.light-theme .ld-header,
+    body.light-theme .crm-header { background:rgba(255,255,255,0.95); }
+    body.light-theme .eod-textarea,
+    body.light-theme .eod-panel,
+    body.light-theme .crm-card,
+    body.light-theme .crm-col-head,
+    body.light-theme .ld-card,
+    body.light-theme .ct-card,
+    body.light-theme .fl-desc,
+    body.light-theme .note-item,
+    body.light-theme .act-item,
+    body.light-theme .file-item { background:var(--bg2); }
+    body.light-theme .mindset-slider { background:var(--bg4); }
+    body.light-theme input, body.light-theme select, body.light-theme textarea { color:var(--text); }
+    body.light-theme .fl-editable,
+    body.light-theme .qv-field-input,
+    body.light-theme .crm-modal-input,
+    body.light-theme .ct-input { background:var(--bg3); color:var(--text); }
+    body.light-theme .crm-board { background:var(--bg); }
+    body.light-theme .crm-col { border-color:var(--border); }
   `;
   document.head.appendChild(style);
 
@@ -328,6 +387,8 @@
     document.documentElement.style.setProperty('--nav-role-border', theme.roleBorder);
 
     const isCollapsed = localStorage.getItem('nav_collapsed') === '1';
+    const isLight = localStorage.getItem('ambitio_theme') === 'light';
+    if (isLight) document.body.classList.add('light-theme');
 
     const sidebar = document.createElement('div');
     sidebar.id = 'ambitio-sidebar';
@@ -369,6 +430,10 @@
       </div>
       <div class="nav-items" id="navItems">${navHtml}</div>
       <div class="nav-footer">
+        <div class="nav-theme-toggle${isLight ? ' light' : ''}" id="navThemeToggle" title="Thème clair / sombre">
+          <div class="nav-theme-switch"></div>
+          <span class="nav-theme-label">${isLight ? '☀️ Clair' : '🌙 Sombre'}</span>
+        </div>
         <div class="nav-profile-btn" id="navProfileBtn">
           <div class="nav-avatar">${user.initials}</div>
           <div class="nav-profile-info">
@@ -405,6 +470,15 @@
     });
 
     document.getElementById('navProfileBtn').addEventListener('click', openProfileModal);
+
+    // Theme toggle
+    document.getElementById('navThemeToggle').addEventListener('click', () => {
+      const isNowLight = document.body.classList.toggle('light-theme');
+      localStorage.setItem('ambitio_theme', isNowLight ? 'light' : 'dark');
+      const toggle = document.getElementById('navThemeToggle');
+      toggle.classList.toggle('light', isNowLight);
+      toggle.querySelector('.nav-theme-label').innerHTML = isNowLight ? '☀️ Clair' : '🌙 Sombre';
+    });
   }
 
   function openProfileModal() {
