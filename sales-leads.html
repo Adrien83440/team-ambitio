@@ -182,10 +182,32 @@ html, body {
 .ld-notes-area {
   width: 100%; padding: 10px 12px; background: var(--bg3); border: 1.5px solid var(--border);
   border-radius: 10px; color: var(--text); font-family: var(--fb); font-size: 12px;
-  resize: vertical; min-height: 60px; outline: none; margin-bottom: 10px;
+  resize: none; min-height: 40px; max-height: 80px; outline: none;
 }
 .ld-notes-area:focus { border-color: var(--red2); }
 .ld-notes-area::placeholder { color: var(--muted2); }
+.ld-notes-add-row { display: flex; gap: 6px; margin-bottom: 10px; }
+.ld-notes-add-btn {
+  padding: 8px 14px; border: none; border-radius: 8px; background: var(--bg4);
+  border: 1px solid var(--border); color: var(--muted); font-family: var(--fb);
+  font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 0.15s;
+}
+.ld-notes-add-btn:hover { background: rgba(52,211,153,0.1); color: #34d399; border-color: rgba(52,211,153,0.3); }
+.ld-notes-history { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; max-height: 200px; overflow-y: auto; }
+.ld-notes-history::-webkit-scrollbar { width: 3px; }
+.ld-notes-history::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.ld-note-item {
+  padding: 8px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 12px; line-height: 1.5;
+}
+.ld-note-item-head { display: flex; justify-content: space-between; margin-bottom: 3px; }
+.ld-note-item-date { font-size: 10px; font-weight: 700; color: var(--muted); }
+.ld-note-item-del {
+  font-size: 10px; color: var(--muted2); cursor: pointer; background: none; border: none;
+  padding: 0 2px; transition: color 0.15s;
+}
+.ld-note-item-del:hover { color: #ef4444; }
+.ld-note-item-text { color: rgba(255,255,255,0.8); }
 
 .ld-save-btn {
   width: 100%; padding: 10px; border: none; border-radius: 10px;
@@ -624,9 +646,28 @@ function renderCard(l) {
   h += '</div>';
   h += '</div>';
 
-  // Notes
+  // Notes history
   h += '<div class="ld-actions-title">Notes</div>';
-  h += '<textarea class="ld-notes-area" data-field="notes" data-id="' + id + '" placeholder="Ajouter une note...">' + escHtml(l.notes || '') + '</textarea>';
+  var notesArr = l.notesHistory || [];
+  if (notesArr.length > 0) {
+    h += '<div class="ld-notes-history">';
+    for (var ni = notesArr.length - 1; ni >= 0; ni--) {
+      var n = notesArr[ni];
+      var nDate = n.date || '';
+      h += '<div class="ld-note-item">';
+      h += '<div class="ld-note-item-head">';
+      h += '<span class="ld-note-item-date">' + escHtml(nDate) + '</span>';
+      h += '<button class="ld-note-item-del" data-action="delNote" data-id="' + id + '" data-note-idx="' + ni + '" title="Supprimer">✕</button>';
+      h += '</div>';
+      h += '<div class="ld-note-item-text">' + escHtml(n.text || '') + '</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+  h += '<div class="ld-notes-add-row">';
+  h += '<textarea class="ld-notes-area" data-field="newNote" data-id="' + id + '" placeholder="Ajouter une note..." rows="2"></textarea>';
+  h += '<button class="ld-notes-add-btn" data-action="addNote" data-id="' + id + '">+ Ajouter</button>';
+  h += '</div>';
 
   h += '<button class="ld-save-btn" data-action="save" data-id="' + id + '">💾 Sauvegarder</button>';
   h += '</div>'; // actions
@@ -682,6 +723,64 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     return;
   }
 
+  // Add note
+  var addNoteBtn = e.target.closest('[data-action="addNote"]');
+  if (addNoteBtn) {
+    var noteLeadId = addNoteBtn.dataset.id;
+    var card3 = addNoteBtn.closest('.ld-card');
+    var textarea = card3.querySelector('[data-field="newNote"]');
+    var text = textarea ? textarea.value.trim() : '';
+    if (!text) { toast('⚠️ Écris une note d\'abord'); return; }
+    // Format date
+    var now = new Date();
+    var dateStr = String(now.getDate()).padStart(2,'0') + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + now.getFullYear() + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    var newNote = { text: text, date: dateStr };
+    // Update local
+    for (var ni = 0; ni < allLeads.length; ni++) {
+      if (allLeads[ni].id === noteLeadId) {
+        if (!allLeads[ni].notesHistory) allLeads[ni].notesHistory = [];
+        allLeads[ni].notesHistory.push(newNote);
+        break;
+      }
+    }
+    // Save to Firestore
+    var lead3 = allLeads.find(function(l) { return l.id === noteLeadId; });
+    db.collection('leads').doc(noteLeadId).update({
+      notesHistory: lead3.notesHistory,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function() {
+      toast('✅ Note ajoutée');
+    }).catch(function(err) {
+      toast('❌ Erreur : ' + err.message);
+    });
+    // Re-render the card
+    openCardId = noteLeadId;
+    renderFeed();
+    return;
+  }
+
+  // Delete note
+  var delNoteBtn = e.target.closest('[data-action="delNote"]');
+  if (delNoteBtn) {
+    var dnLeadId = delNoteBtn.dataset.id;
+    var dnIdx = parseInt(delNoteBtn.dataset.noteIdx);
+    for (var di = 0; di < allLeads.length; di++) {
+      if (allLeads[di].id === dnLeadId && allLeads[di].notesHistory) {
+        allLeads[di].notesHistory.splice(dnIdx, 1);
+        db.collection('leads').doc(dnLeadId).update({
+          notesHistory: allLeads[di].notesHistory,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(function() {
+          toast('🗑 Note supprimée');
+        });
+        break;
+      }
+    }
+    openCardId = dnLeadId;
+    renderFeed();
+    return;
+  }
+
   // Save button
   var saveBtn = e.target.closest('[data-action="save"]');
   if (saveBtn) {
@@ -700,13 +799,11 @@ function saveLead(leadId) {
   // Gather from DOM
   var card = document.querySelector('[data-lead-id="' + leadId + '"]');
   if (!card) return;
-  var notesEl = card.querySelector('[data-field="notes"]');
   var rdvDateEl = card.querySelector('[data-field="rdvDate"]');
   var rdvHeureEl = card.querySelector('[data-field="rdvHeure"]');
 
   var updates = {
     status: lead.status || 'nouveau',
-    notes: notesEl ? notesEl.value.trim() : '',
     rdvDate: rdvDateEl ? rdvDateEl.value : '',
     rdvHeure: rdvHeureEl ? rdvHeureEl.value : '',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
