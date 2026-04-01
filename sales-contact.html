@@ -15,7 +15,8 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#08080f;--bg2:#0f0f1a;--bg3:#14141f;--bg4:#1a1a28;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--red:#b91c1c;--red2:#ef4444;--red3:#fca5a5;--gold:#f59e0b;--green:#34d399;--blue:#60a5fa;--purple:#a78bfa;--text:rgba(255,255,255,0.92);--muted:rgba(255,255,255,0.48);--muted2:rgba(255,255,255,0.22);--radius:12px;--fh:'Syne',sans-serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:14px;line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body{overflow:hidden;display:flex;flex-direction:column}
 .fiche-top{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;background:rgba(8,8,15,0.95);backdrop-filter:blur(12px)}
 .fiche-back{width:34px;height:34px;border:1px solid var(--border);border-radius:9px;background:var(--bg2);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:14px;text-decoration:none;flex-shrink:0;transition:all .15s}
 .fiche-back:hover{background:var(--bg3);color:var(--text)}
@@ -29,17 +30,16 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .fiche-top-btn:hover{border-color:var(--border2);color:var(--text)}
 .pipeline-bar{padding:10px 20px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;scrollbar-width:none}
 .pipeline-bar::-webkit-scrollbar{display:none}
-.pipeline-dots{display:flex;align-items:center;gap:0;white-space:nowrap}
-.pl-dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:9px;font-weight:800;color:transparent;transition:all .2s;flex-shrink:0;position:relative}
-.pl-dot:hover{border-color:var(--border2)}
-.pl-dot.active{border-width:3px;color:white}
-.pl-dot.past{background:color-mix(in srgb,var(--pl-c) 25%,transparent);border-color:var(--pl-c);color:var(--pl-c)}
-.pl-dot.active{background:var(--pl-c);border-color:var(--pl-c);box-shadow:0 0 10px color-mix(in srgb,var(--pl-c) 40%,transparent)}
-.pl-line{width:8px;height:2px;background:var(--border);flex-shrink:0}
+.pipeline-dots{display:flex;align-items:center;gap:0;white-space:nowrap;padding:8px 0}
+.pl-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:8px;font-weight:800;color:transparent;transition:all .2s;flex-shrink:0;position:relative;background:rgba(255,255,255,0.03)}
+.pl-dot:hover{border-color:rgba(255,255,255,0.3);background:rgba(255,255,255,0.06)}
+.pl-dot.past{border-color:var(--pl-c);background:color-mix(in srgb,var(--pl-c) 20%,transparent);color:var(--pl-c)}
+.pl-dot.active{background:var(--pl-c);border-color:var(--pl-c);box-shadow:0 0 12px color-mix(in srgb,var(--pl-c) 40%,transparent);color:white;width:26px;height:26px;font-size:10px}
+.pl-line{width:6px;height:2px;background:var(--border2);flex-shrink:0}
 .pl-line.past{background:var(--pl-c)}
-.pl-dot-tip{position:absolute;top:-28px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:700;color:var(--text);background:var(--bg3);border:1px solid var(--border2);padding:2px 6px;border-radius:4px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:10}
+.pl-dot-tip{position:absolute;bottom:-24px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:700;color:var(--text);background:var(--bg3);border:1px solid var(--border2);padding:2px 6px;border-radius:4px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s;z-index:10}
 .pl-dot:hover .pl-dot-tip{opacity:1}
-.pl-section-label{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted2);padding:0 4px;flex-shrink:0}
+.pl-section-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);padding:0 8px;flex-shrink:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;line-height:20px}
 .fiche-split{display:flex;flex:1;overflow:hidden}
 .fiche-left{width:340px;min-width:340px;border-right:1px solid var(--border);overflow-y:auto;padding:20px;flex-shrink:0;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.06) transparent}
 .fiche-left::-webkit-scrollbar{width:3px}
@@ -112,12 +112,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .file-upload:hover{border-color:var(--red2);color:var(--text)}
 .ct-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}
 .ct-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.ct-loading{display:flex;align-items:center;justify-content:center;height:100vh;color:var(--muted);font-size:13px}
+.ct-loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--muted);font-size:13px}
 </style>
 </head>
-<body style="display:flex;flex-direction:column;height:100vh">
+<body>
 <div class="ct-loading" id="ctLoading">Chargement de la fiche...</div>
-<div id="ctApp" style="display:none;flex-direction:column;flex:1;overflow:hidden"></div>
+<div id="ctApp" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0"></div>
 <div class="ct-toast" id="ctToast"></div>
 <script>
 var db=firebase.firestore();var leadId=new URLSearchParams(window.location.search).get('id');var lead=null;var autoTimer=null;
@@ -150,7 +150,7 @@ h+='</div></div>';
 h+='<div class="pipeline-bar"><div class="pipeline-dots">';
 var ls='';
 for(var p=0;p<STAGES.length;p++){var s=STAGES[p];
-if(s.s!==ls){if(p>0)h+='<span class="pl-section-label">'+(s.s==='C'?'Closing':'')+'</span>';ls=s.s;}
+if(s.s!==ls){if(p>0&&s.s==='C')h+='<span class="pl-section-label">Closing</span>';ls=s.s;}
 if(p>0&&STAGES[p].s===STAGES[p-1].s)h+='<span class="pl-line'+(p<=ci?' past':'')+'" style="--pl-c:'+s.color+'"></span>';
 h+='<span class="pl-dot'+(p<ci?' past':(p===ci?' active':''))+'" style="--pl-c:'+s.color+'" data-action="setStage" data-stage="'+s.key+'">'+(p===ci?'\u2713':'')+'<span class="pl-dot-tip">'+esc(s.label)+'</span></span>';
 }
