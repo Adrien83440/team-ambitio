@@ -161,17 +161,17 @@ h+='<div class="fiche-split">';
 h+='<div class="fiche-left">';
 h+='<div class="fl-section"><div class="fl-row"><span class="fl-icon">\u2b50</span><select class="fl-select" data-f="assignedTo"><option value="guillaume"'+(l.assignedTo==='guillaume'?' selected':'')+'>Guillaume Bilcke</option><option value="elodie"'+(l.assignedTo==='elodie'?' selected':'')+'>Elodie Vidotto Siarri</option></select></div></div>';
 h+='<div class="fl-section"><div class="fl-title">Informations de base</div>';
-h+=flR('\u2709\ufe0f','email',l.email);h+=flR('\ud83d\udcf1','telephone',l.telephone);h+=flR('\ud83c\udf10','utm',l.utm);
+h+=flR('\u2709\ufe0f','Email','email',l.email);h+=flR('\ud83d\udcf1','T\u00e9l\u00e9phone','telephone',l.telephone);h+=flR('\ud83c\udf10','Source / UTM','utm',l.utm);
 h+='</div>';
 h+='<div class="fl-section"><div class="fl-title">Balises</div><div class="fl-tags" id="ft">';
 var tg=l.tags||[];for(var ti=0;ti<tg.length;ti++)h+='<span class="fl-tag">'+esc(tg[ti])+'<button data-action="delTag" data-idx="'+ti+'">\u2715</button></span>';
 h+='</div><div class="fl-tag-add"><input type="text" id="tagIn" placeholder="+ Balise"/><button id="tagBtn">+</button></div></div>';
 h+='<div class="fl-section"><div class="fl-title">Description</div><textarea class="fl-desc" data-f="description" placeholder="...">'+esc(l.description||'')+'</textarea></div>';
 h+='<div class="fl-section"><div class="fl-title">Autres informations</div>';
-h+=flR('\ud83c\udfaf','secteur',l.secteur);h+=flR('\ud83d\udcb0','ca',l.ca);h+=flR('\ud83d\udd25','defi',l.defi);h+=flR('\ud83d\udccd','disponibilite',l.disponibilite);h+=flR('\u23f1','timeline',l.timeline);h+=flR('\ud83c\udf10','prospectWebinaire',l.prospectWebinaire);h+=flR('\ud83d\udcc5','dateWebinaire',l.dateWebinaire);h+=flR('\ud83d\udc41','present',l.present);h+=flR('\ud83c\udff7','tagsWebi',l.tagsWebi);h+=flR('\ud83d\udce9','rejetMails',l.rejetMails);h+=flR('\ud83d\udcc5','dateReceptionLead',l.dateReceptionLead);
+h+=flR('\ud83c\udfaf','Secteur','secteur',l.secteur);h+=flR('\ud83d\udcb0','CA actuel','ca',l.ca);h+=flR('\ud83d\udd25','D\u00e9fi','defi',l.defi);h+=flR('\ud83d\udccd','Disponibilit\u00e9','disponibilite',l.disponibilite);h+=flR('\u23f1','Timeline','timeline',l.timeline);h+=flR('\ud83c\udf10','Prospect Webinaire','prospectWebinaire',l.prospectWebinaire);h+=flR('\ud83d\udcc5','Date Webinaire','dateWebinaire',l.dateWebinaire);h+=flR('\ud83d\udc41','Pr\u00e9sent','present',l.present);h+=flR('\ud83c\udff7','Tags Webi','tagsWebi',l.tagsWebi);h+=flR('\ud83d\udce9','Rejet mails','rejetMails',l.rejetMails);h+=flR('\ud83d\udcc5','Date r\u00e9ception lead','dateReceptionLead',l.dateReceptionLead);
 h+='</div>';
 h+='<div class="fl-section"><div class="fl-title">Programme & Contrat</div>';
-h+=flR('\ud83d\udccb','formule',l.formule);h+=flR('\ud83d\udcc5','dateInscription',l.dateInscription);h+=flR('\ud83d\udcc5','dateFinProgramme',l.dateFinProgramme);h+=flR('\u21a9\ufe0f','retractation',l.retractation);h+=flR('\ud83d\udcb3','plateformePaiement',l.plateformePaiement);h+=flR('\ud83d\udcb5','commissions',l.commissions);h+=flR('\ud83c\udf93','coaching72h',l.coaching72h);h+=flR('\ud83d\udc64','coach72h',l.coach72h);h+=flR('\ud83e\udd1d','closeur',l.closeur);h+=flR('\ud83d\udcde','setting',l.setting);h+=flR('\ud83c\udf81','goodies',l.goodies);h+=flR('\ud83d\udce6','dateEnvoiGoodies',l.dateEnvoiGoodies);
+h+=flR('\ud83d\udccb','Formule','formule',l.formule);h+=flR('\ud83d\udcc5','Date inscription','dateInscription',l.dateInscription);h+=flR('\ud83d\udcc5','Date fin programme','dateFinProgramme',l.dateFinProgramme);h+=flR('\u21a9\ufe0f','R\u00e9tractation','retractation',l.retractation);h+=flR('\ud83d\udcb3','Plateforme paiement','plateformePaiement',l.plateformePaiement);h+=flR('\ud83d\udcb5','Commissions','commissions',l.commissions);h+=flR('\ud83c\udf93','Coaching 72H','coaching72h',l.coaching72h);h+=flR('\ud83d\udc64','Coach 72H','coach72h',l.coach72h);h+=flR('\ud83e\udd1d','Closeur','closeur',l.closeur);h+=flR('\ud83d\udcde','Setting','setting',l.setting);h+=flR('\ud83c\udf81','Goodies','goodies',l.goodies);h+=flR('\ud83d\udce6','Date envoi goodies','dateEnvoiGoodies',l.dateEnvoiGoodies);
 h+='</div>';
 h+='<div class="fl-saved" id="flS">\u2705 Sauvegard\u00e9</div>';
 if(l.updatedAt){var ud=l.updatedAt.toDate?l.updatedAt.toDate():new Date(l.updatedAt);h+='<div class="fl-modified">Modifi\u00e9 le '+ud.toLocaleString('fr-FR')+'</div>';}
@@ -209,7 +209,7 @@ h+='</div></div>';
 document.getElementById('ctApp').innerHTML=h;
 initEv();
 }
-function flR(ic,k,v){return '<div class="fl-row"><span class="fl-icon">'+ic+'</span><input class="fl-editable" data-f="'+k+'" value="'+escA(v||'')+'" placeholder="\u2014"/></div>';}
+function flR(ic,label,k,v){return '<div class="fl-row"><span class="fl-icon">'+ic+'</span><span style="min-width:120px;font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0">'+esc(label)+'</span><input class="fl-editable" data-f="'+k+'" value="'+escA(v||'')+'" placeholder="\u2014"/></div>';}
 
 function initEv(){
 document.querySelectorAll('.fr-tab').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.fr-tab').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.fr-panel').forEach(function(x){x.classList.remove('active');});b.classList.add('active');var m={chrono:'pChrono',notes:'pNotes',act:'pAct',files:'pFiles'};document.getElementById(m[b.dataset.tab]).classList.add('active');});});
