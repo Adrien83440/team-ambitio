@@ -259,9 +259,10 @@ html, body {
   <div class="ld-header">
     <div class="ld-header-top">
       <div class="ld-logo">A</div>
-      <div class="ld-title">Leads Live</div>
+      <div class="ld-title" id="ldTitle">Leads Live</div>
       <span class="ld-live-dot"></span>
       <span class="ld-live-label">Live</span>
+      <span id="ldPersonalBadge" style="display:none;font-size:12px;font-weight:800;padding:3px 10px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid var(--border)"></span>
       <span class="ld-count" id="ldCount">— leads</span>
     </div>
     <div class="ld-members" id="ldMembers">
@@ -355,6 +356,25 @@ var filterStatus = 'all';
 var knownLeadIds = {};
 var isFirstLoad = true;
 var openCardId = null;
+
+/* ── Personal mode via URL param ── */
+var personalUser = null;
+(function detectPersonalMode() {
+  var params = new URLSearchParams(window.location.search);
+  var u = params.get('user');
+  if (u && SETTERS[u]) {
+    personalUser = u;
+    filterMember = u;
+    // Update header
+    var setter = SETTERS[u];
+    document.getElementById('ldTitle').textContent = 'Mes Leads';
+    document.getElementById('ldPersonalBadge').style.display = '';
+    document.getElementById('ldPersonalBadge').textContent = setter.name;
+    document.getElementById('ldPersonalBadge').style.color = setter.color;
+    // Hide member pills
+    document.getElementById('ldMembers').style.display = 'none';
+  }
+})();
 
 /* ── Utils ── */
 function toast(msg) {
@@ -504,7 +524,12 @@ function updateCounts() {
   document.getElementById('countAll').textContent = allLeads.length;
   document.getElementById('countGuillaume').textContent = gCount;
   document.getElementById('countElodie').textContent = eCount;
-  document.getElementById('ldCount').textContent = allLeads.length + ' lead' + (allLeads.length > 1 ? 's' : '');
+  if (personalUser) {
+    var myCount = personalUser === 'guillaume' ? gCount : eCount;
+    document.getElementById('ldCount').textContent = myCount + ' lead' + (myCount > 1 ? 's' : '');
+  } else {
+    document.getElementById('ldCount').textContent = allLeads.length + ' lead' + (allLeads.length > 1 ? 's' : '');
+  }
 }
 
 function renderFeed() {
@@ -585,11 +610,14 @@ function renderCard(l) {
   }
   h += '</div>';
 
-  // RDV fields
-  h += '<div class="ld-actions-title">RDV</div>';
+  // RDV fields (hidden unless rdv_pose)
+  var showRdv = (l.status || 'nouveau') === 'rdv_pose';
+  h += '<div class="ld-rdv-section" data-rdv-section="' + id + '" style="display:' + (showRdv ? 'block' : 'none') + '">';
+  h += '<div class="ld-actions-title">📅 Rendez-vous</div>';
   h += '<div class="ld-rdv-row">';
   h += '<input type="date" data-field="rdvDate" data-id="' + id + '" value="' + (l.rdvDate || '') + '"/>';
   h += '<input type="time" data-field="rdvHeure" data-id="' + id + '" value="' + (l.rdvHeure || '') + '"/>';
+  h += '</div>';
   h += '</div>';
 
   // Notes
@@ -641,6 +669,11 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     // Update local state
     for (var i = 0; i < allLeads.length; i++) {
       if (allLeads[i].id === leadId) { allLeads[i].status = newStatus; break; }
+    }
+    // Show/hide RDV section
+    var rdvSection = card2.querySelector('[data-rdv-section="' + leadId + '"]');
+    if (rdvSection) {
+      rdvSection.style.display = (newStatus === 'rdv_pose') ? 'block' : 'none';
     }
     return;
   }
@@ -741,6 +774,8 @@ function startListening() {
 
       // Show popups for new leads
       for (var j = 0; j < newLeads.length; j++) {
+        // In personal mode, only show popup for my leads
+        if (personalUser && newLeads[j].assignedTo && newLeads[j].assignedTo !== personalUser) continue;
         showLeadPopup(newLeads[j]);
       }
 
