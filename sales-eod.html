@@ -961,10 +961,20 @@ function renderWeekGrid(monday, entries) {
     h += '<div class="dc-date">' + d.getDate() + ' ' + MOIS[d.getMonth()] + '</div>';
     if (entry) {
       var sm = (entry.setting || {}).mindset || 0;
-      h += '<div class="dc-mindset">🧠 <span class="ms-val" style="color:' + mindsetColor(sm) + '">' + sm + '</span><span style="font-size:10px;color:var(--muted)">/10</span></div>';
+      var cm = (entry.closing || {}).mindset || 0;
+      var skipped = entry.closingSkipped || false;
+      h += '<div class="dc-mindset">📞 <span class="ms-val" style="color:' + mindsetColor(sm) + '">' + sm + '</span><span style="font-size:10px;color:var(--muted)">/10</span>';
+      if (!skipped && cm) {
+        h += ' <span style="margin-left:6px">🎯 </span><span class="ms-val" style="color:' + mindsetColor(cm) + '">' + cm + '</span><span style="font-size:10px;color:var(--muted)">/10</span>';
+      }
+      h += '</div>';
       h += '<div class="dc-tags">';
       if (entry.setting && entry.setting.ressenti) h += '<span class="dc-tag has-setting">Setting</span>';
-      if (entry.closing && ((entry.closing.rdvs && entry.closing.rdvs.length) || entry.closing.commentaire)) h += '<span class="dc-tag has-closing">Closing</span>';
+      if (skipped) {
+        h += '<span class="dc-tag" style="background:rgba(255,255,255,0.04);color:var(--muted2)">Pas de closing</span>';
+      } else if (entry.closing && (cm || (entry.closing.rdvs && entry.closing.rdvs.length) || entry.closing.commentaire)) {
+        h += '<span class="dc-tag has-closing">Closing</span>';
+      }
       var kp = entry.kpis || {};
       if (kp.appels || kp.closes || kp.ca) h += '<span class="dc-tag has-kpi">KPIs</span>';
       h += '</div>';
@@ -985,8 +995,8 @@ function renderWeekStats(entries) {
   keys.forEach(function(k) {
     var e = entries[k];
     if (e.setting && e.setting.mindset) { totalMS += e.setting.mindset; msN++; }
-    if (e.closing && e.closing.mindset) { totalMC += e.closing.mindset; mcN++; }
-    if (e.closing && e.closing.rdvs) totalRdv += e.closing.rdvs.length;
+    if (!e.closingSkipped && e.closing && e.closing.mindset) { totalMC += e.closing.mindset; mcN++; }
+    if (!e.closingSkipped && e.closing && e.closing.rdvs) totalRdv += e.closing.rdvs.length;
     var kp = e.kpis || {};
     if (kp.closes) totalCloses += kp.closes;
     if (kp.ca) totalCA += kp.ca;
@@ -1016,20 +1026,27 @@ function openDayDetail(dateStr, entry) {
   h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#34d399">📞</span> Setting</div>';
   h += '<div class="dm-text"><strong>Ressenti :</strong> ' + (s.ressenti || 'Non renseigné') + '</div>';
   h += '<div class="dm-text" style="margin-top:6px"><strong>Mindset :</strong> <span style="color:' + mindsetColor(s.mindset) + ';font-weight:700">' + (s.mindset || '—') + '/10</span></div>';
+  if (s.mindsetComment) h += '<div class="dm-text" style="margin-top:4px;font-size:12px;color:var(--muted);font-style:italic">' + s.mindsetComment + '</div>';
   if (s.extraMile) h += '<div class="dm-text" style="margin-top:6px"><strong>Extra mile :</strong> ' + s.extraMile + '</div>';
   if (s.besoinAide && s.besoinAide.toLowerCase() !== 'ras') h += '<div class="dm-text" style="margin-top:6px"><strong>Besoin d\'aide :</strong> ' + s.besoinAide + '</div>';
   h += '</div>';
   // Closing
-  h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#ef4444">🎯</span> Closing</div>';
-  if (c.rdvs && c.rdvs.length > 0) {
-    c.rdvs.forEach(function(r) {
-      var il = ''; RDV_ISSUES.forEach(function(o) { if (o.value === r.issue) il = o.label; });
-      h += '<div class="dm-rdv-item"><strong>' + r.nom + '</strong> <span style="color:var(--muted);margin-left:8px">→ ' + il + '</span></div>';
-    });
-  } else { h += '<div class="dm-text" style="color:var(--muted)">Aucun RDV</div>'; }
-  if (c.commentaire) h += '<div class="dm-text" style="margin-top:8px"><strong>Commentaire :</strong> ' + c.commentaire + '</div>';
-  h += '<div class="dm-text" style="margin-top:6px"><strong>Mindset :</strong> <span style="color:' + mindsetColor(c.mindset) + ';font-weight:700">' + (c.mindset || '—') + '/10</span></div>';
-  h += '</div>';
+  if (entry.closingSkipped) {
+    h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#ef4444">🎯</span> Closing</div>';
+    h += '<div class="dm-text" style="color:var(--muted);font-style:italic">Pas de closing ce jour</div></div>';
+  } else {
+    h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#ef4444">🎯</span> Closing</div>';
+    if (c.rdvs && c.rdvs.length > 0) {
+      c.rdvs.forEach(function(r) {
+        var il = ''; RDV_ISSUES.forEach(function(o) { if (o.value === r.issue) il = o.label; });
+        h += '<div class="dm-rdv-item"><strong>' + r.nom + '</strong> <span style="color:var(--muted);margin-left:8px">→ ' + il + '</span></div>';
+      });
+    } else { h += '<div class="dm-text" style="color:var(--muted)">Aucun RDV</div>'; }
+    if (c.commentaire) h += '<div class="dm-text" style="margin-top:8px"><strong>Commentaire :</strong> ' + c.commentaire + '</div>';
+    h += '<div class="dm-text" style="margin-top:6px"><strong>Mindset :</strong> <span style="color:' + mindsetColor(c.mindset) + ';font-weight:700">' + (c.mindset || '—') + '/10</span></div>';
+    if (c.mindsetComment) h += '<div class="dm-text" style="margin-top:4px;font-size:12px;color:var(--muted);font-style:italic">' + c.mindsetComment + '</div>';
+    h += '</div>';
+  }
   // KPIs
   var hasKpi = k.appels || k.decroches || k.rdvPoses || k.rdvEffectues || k.closes || k.ca;
   if (hasKpi) {
@@ -1042,6 +1059,18 @@ function openDayDetail(dateStr, entry) {
     if (k.closes != null) h += '<div class="dm-text"><strong>' + k.closes + '</strong> closes</div>';
     if (k.ca != null) h += '<div class="dm-text"><strong>' + k.ca.toLocaleString('fr-FR') + '€</strong> CA</div>';
     h += '</div></div>';
+  }
+  // Discussion
+  var fb = entry.feedback || [];
+  if (fb.length > 0) {
+    h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#60a5fa">💬</span> Discussion (' + fb.length + ')</div>';
+    for (var fi = 0; fi < fb.length; fi++) {
+      var msg = fb[fi];
+      h += '<div style="padding:6px 10px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.12);border-radius:8px;margin-bottom:4px;font-size:12px">';
+      h += '<span style="font-weight:700;color:var(--blue)">' + (msg.author || '').replace(/</g, '&lt;') + '</span> <span style="color:var(--muted);font-size:10px">' + (msg.date || '') + '</span>';
+      h += '<div style="color:rgba(255,255,255,0.8);margin-top:2px">' + (msg.text || '').replace(/</g, '&lt;') + '</div></div>';
+    }
+    h += '</div>';
   }
   h += '</div></div>';
   backdrop.innerHTML = h;
