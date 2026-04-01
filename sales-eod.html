@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — EOD Reports</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+      authDomain:        "ambitio-team.firebaseapp.com",
+      projectId:         "ambitio-team",
+      storageBucket:     "ambitio-team.firebasestorage.app",
+      messagingSenderId: "1079366902268",
+      appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+    });
+  }
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:     #08080f;
+  --bg2:    #0f0f1a;
+  --bg3:    #14141f;
+  --bg4:    #1a1a28;
+  --border: rgba(255,255,255,0.07);
+  --border2:rgba(255,255,255,0.13);
+  --red:    #b91c1c;
+  --red2:   #ef4444;
+  --red3:   #fca5a5;
+  --gold:   #f59e0b;
+  --green:  #34d399;
+  --blue:   #60a5fa;
+  --purple: #a78bfa;
+  --text:   rgba(255,255,255,0.92);
+  --muted:  rgba(255,255,255,0.48);
+  --muted2: rgba(255,255,255,0.22);
+  --radius: 12px;
+  --radius2:16px;
+  --fh:     'Syne', sans-serif;
+  --fb:     'Inter', sans-serif;
+  --fm:     'DM Mono', monospace;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+html, body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--fb);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page { max-width: 1100px; margin: 0 auto; padding: 28px 24px 60px; }
+
+/* ── Topbar ── */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.topbar-icon { width: 44px; height: 44px; background: linear-gradient(135deg, #ef4444, #b91c1c); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 4px 16px rgba(239,68,68,0.25); }
+.topbar-title { font-family: var(--fh); font-size: 22px; font-weight: 800; }
+.topbar-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.tb-avatar { width: 32px; height: 32px; border-radius: 9px; background: rgba(255,255,255,.08); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+
+/* ── Controls ── */
+.eod-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+.eod-date-input {
+  padding: 9px 14px; background: var(--bg2); border: 1.5px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: var(--fb); font-size: 13px; font-weight: 600; outline: none; cursor: pointer;
+}
+.eod-date-input:focus { border-color: var(--red2); }
+.eod-date-input::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+.eod-member-btn {
+  padding: 9px 16px; background: var(--bg2); border: 1.5px solid var(--border); border-radius: var(--radius);
+  color: var(--muted); font-family: var(--fb); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+  display: flex; align-items: center; gap: 7px;
+}
+.eod-member-btn:hover { border-color: var(--border2); color: var(--text); }
+.eod-member-btn.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
+.eod-member-btn .m-dot { width: 8px; height: 8px; border-radius: 50%; }
+.eod-nav-btns { display: flex; gap: 6px; margin-left: auto; }
+.eod-nav-btn {
+  padding: 8px 12px; background: var(--bg2); border: 1.5px solid var(--border); border-radius: var(--radius);
+  color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--fb);
+}
+.eod-nav-btn:hover { color: var(--text); border-color: var(--border2); }
+.eod-nav-btn.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
+
+/* ── Form panels ── */
+.eod-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px; }
+@media (max-width: 768px) { .eod-form-grid { grid-template-columns: 1fr; } }
+.eod-panel {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius2);
+  padding: 20px; position: relative; overflow: hidden;
+}
+.eod-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+.eod-panel.setting::before { background: linear-gradient(90deg, #34d399, #059669); }
+.eod-panel.closing::before { background: linear-gradient(90deg, #ef4444, #b91c1c); }
+.eod-panel-title {
+  font-family: var(--fh); font-size: 14px; font-weight: 800; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.pt-badge {
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.setting .pt-badge { background: rgba(52,211,153,0.12); color: #6ee7b7; }
+.closing .pt-badge { background: rgba(239,68,68,0.1); color: #fca5a5; }
+.eod-field { margin-bottom: 14px; }
+.eod-field:last-child { margin-bottom: 0; }
+.eod-label {
+  display: block; font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+}
+.eod-textarea {
+  width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1.5px solid var(--border);
+  border-radius: 10px; color: var(--text); font-family: var(--fb); font-size: 13px; font-weight: 500;
+  resize: vertical; min-height: 60px; outline: none; transition: border-color 0.15s;
+}
+.eod-textarea:focus { border-color: var(--red2); background: rgba(255,255,255,0.05); }
+.eod-textarea::placeholder { color: var(--muted2); }
+
+/* Mindset slider */
+.mindset-wrap { display: flex; align-items: center; gap: 12px; }
+.mindset-slider {
+  flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 3px;
+  background: linear-gradient(90deg, #ef4444, #f59e0b, #34d399); outline: none; cursor: pointer;
+}
+.mindset-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: white; border: 3px solid var(--bg2); box-shadow: 0 2px 8px rgba(0,0,0,0.3); cursor: pointer;
+}
+.mindset-val { font-family: var(--fm); font-size: 22px; font-weight: 700; min-width: 40px; text-align: center; }
+
+/* RDV list */
+.rdv-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.rdv-row {
+  display: flex; gap: 8px; align-items: center; padding: 8px 10px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px;
+}
+.rdv-row input, .rdv-row select {
+  flex: 1; padding: 7px 10px; background: transparent; border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none;
+}
+.rdv-row input:focus, .rdv-row select:focus { border-color: var(--red2); }
+.rdv-row select option { background: var(--bg2); }
+.rdv-del {
+  width: 28px; height: 28px; border-radius: 8px; background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2); color: #fca5a5; font-size: 12px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s;
+}
+.rdv-del:hover { background: rgba(239,68,68,0.15); }
+.rdv-add-btn {
+  padding: 8px 14px; background: rgba(255,255,255,0.04); border: 1.5px dashed var(--border2);
+  border-radius: 10px; color: var(--muted); font-family: var(--fb); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.rdv-add-btn:hover { border-color: var(--red2); color: var(--red3); }
+
+/* KPIs */
+.kpi-toggle {
+  display: flex; align-items: center; gap: 8px; padding: 10px 0; cursor: pointer;
+  color: var(--muted); font-size: 12px; font-weight: 600; border: none; background: none; font-family: var(--fb); transition: color 0.15s;
+}
+.kpi-toggle:hover { color: var(--text); }
+.kpi-arrow { transition: transform 0.2s; font-size: 10px; }
+.kpi-toggle.open .kpi-arrow { transform: rotate(90deg); }
+.kpi-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px;
+  max-height: 0; overflow: hidden; transition: max-height 0.3s ease, opacity 0.3s; opacity: 0;
+}
+.kpi-grid.open { max-height: 200px; opacity: 1; padding-top: 6px; }
+.kpi-input-wrap label { display: block; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+.kpi-input {
+  padding: 8px 10px; background: rgba(255,255,255,0.03); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: var(--fm); font-size: 13px; width: 100%; outline: none;
+}
+.kpi-input:focus { border-color: var(--red2); }
+.kpi-input::placeholder { color: var(--muted2); }
+
+/* Save */
+.eod-save-row { display: flex; align-items: center; gap: 12px; margin: 20px 0 36px; }
+.eod-save-btn {
+  padding: 12px 28px; background: linear-gradient(135deg, #ef4444, #b91c1c); border: none;
+  border-radius: var(--radius); color: white; font-family: var(--fh); font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s; box-shadow: 0 4px 16px rgba(239,68,68,0.25);
+}
+.eod-save-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(239,68,68,0.35); }
+.eod-save-status { font-size: 12px; color: var(--green); font-weight: 600; opacity: 0; transition: opacity 0.3s; }
+.eod-save-status.show { opacity: 1; }
+
+/* ── Week History ── */
+.week-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.week-nav-btn {
+  width: 32px; height: 32px; border-radius: 8px; background: var(--bg2); border: 1px solid var(--border);
+  color: var(--muted); font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.week-nav-btn:hover { color: var(--text); border-color: var(--border2); }
+.week-label { font-family: var(--fh); font-size: 15px; font-weight: 700; }
+.summary-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.ss-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; text-align: center; }
+.ss-val { font-family: var(--fm); font-size: 22px; font-weight: 700; }
+.ss-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+.week-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-bottom: 28px; }
+.day-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px;
+  cursor: pointer; transition: all 0.15s; position: relative;
+}
+.day-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.day-card.empty { opacity: 0.35; cursor: default; }
+.day-card.empty:hover { transform: none; border-color: var(--border); }
+.day-card.today { border-color: var(--red2); }
+.dc-day { font-family: var(--fh); font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.dc-date { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+.dc-mindset { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+.dc-mindset .ms-val { font-family: var(--fm); font-weight: 700; font-size: 16px; }
+.dc-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.dc-tag { font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.3px; }
+.dc-tag.has-setting { background: rgba(52,211,153,0.12); color: #6ee7b7; }
+.dc-tag.has-closing { background: rgba(239,68,68,0.1); color: #fca5a5; }
+.dc-tag.has-kpi { background: rgba(96,165,250,0.1); color: #93c5fd; }
+
+/* ── Day Detail Modal ── */
+.day-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 1100;
+  backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+.day-modal {
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 20px;
+  width: 100%; max-width: 600px; max-height: 85vh; overflow-y: auto; margin: 20px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.6); animation: slideUp 0.25s cubic-bezier(.4,0,.2,1);
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+.dm-header { padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.dm-title { font-family: var(--fh); font-size: 16px; font-weight: 800; }
+.dm-close {
+  width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 8px;
+  background: rgba(255,255,255,0.06); cursor: pointer; color: var(--muted); font-size: 14px;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.dm-close:hover { background: rgba(255,255,255,0.12); color: white; }
+.dm-body { padding: 20px 24px; }
+.dm-section { margin-bottom: 18px; }
+.dm-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.dm-text { font-size: 13px; color: rgba(255,255,255,0.8); line-height: 1.6; }
+.dm-rdv-item { padding: 8px 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-size: 12px; }
+
+/* ── Trends ── */
+.sec-title { font-family: var(--fh); font-size: 16px; font-weight: 800; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.sec-title .st-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+.trends-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 28px; }
+@media (max-width: 768px) { .trends-grid { grid-template-columns: 1fr; } }
+.trend-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius2); padding: 20px; }
+.trend-card-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+.trend-chart { width: 100%; height: 120px; }
+.insight-list { display: flex; flex-direction: column; gap: 8px; }
+.insight-item {
+  padding: 10px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  border-radius: 10px; font-size: 12px; line-height: 1.5; display: flex; gap: 10px; align-items: flex-start;
+}
+.insight-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+.insight-icon.up { background: rgba(52,211,153,0.12); color: #34d399; }
+.insight-icon.down { background: rgba(239,68,68,0.1); color: #ef4444; }
+.insight-icon.info { background: rgba(96,165,250,0.1); color: #60a5fa; }
+.insight-icon.warn { background: rgba(245,158,11,0.1); color: #f59e0b; }
+.insight-text { color: rgba(255,255,255,0.75); }
+.insight-text strong { color: var(--text); }
+
+/* ── Toast ── */
+.eod-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: #1a2e1a; border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7;
+  font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 10px;
+  z-index: 2000; opacity: 0; transition: all 0.3s; white-space: nowrap;
+}
+.eod-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.eod-loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-icon">📋</div>
+      <div>
+        <div class="topbar-title">EOD Reports</div>
+        <div class="topbar-sub">End of Day · Setting & Closing · Suivi quotidien</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="tb-avatar" id="tb-av">A</div>
+      <span style="font-size:13px;font-weight:600" id="tb-nm">Admin</span>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="eod-controls">
+    <input type="date" class="eod-date-input" id="eodDate"/>
+    <button class="eod-member-btn active" data-member="current" id="btnCurrentMember">
+      <span class="m-dot" style="background:#ef4444"></span> <span id="btnCurrentLabel">Mon EOD</span>
+    </button>
+    <button class="eod-member-btn" data-member="guillaume" id="btnGuillaume" style="display:none">
+      <span class="m-dot" style="background:#ef4444"></span> Guillaume
+    </button>
+    <button class="eod-member-btn" data-member="elodie" id="btnElodie" style="display:none">
+      <span class="m-dot" style="background:#60a5fa"></span> Élodie
+    </button>
+    <div class="eod-nav-btns">
+      <button class="eod-nav-btn active" data-view="form">✏️ Saisie</button>
+      <button class="eod-nav-btn" data-view="history">📅 Historique</button>
+      <button class="eod-nav-btn" data-view="trends">📊 Tendances</button>
+    </div>
+  </div>
+
+  <!-- ═══════ VIEW: FORM ═══════ -->
+  <div id="viewFormSection">
+    <div class="eod-form-grid">
+      <!-- SETTING -->
+      <div class="eod-panel setting">
+        <div class="eod-panel-title">📞 Setting <span class="pt-badge">SETTING</span></div>
+        <div class="eod-field">
+          <label class="eod-label">Mon ressenti du jour</label>
+          <textarea class="eod-textarea" id="fSettingRessenti" rows="3" placeholder="Qualité des conversations, ambiance, observations..."></textarea>
+        </div>
+        <div class="eod-field">
+          <label class="eod-label">Mon mindset</label>
+          <div class="mindset-wrap">
+            <input type="range" class="mindset-slider" id="fSettingMindset" min="1" max="10" value="7"/>
+            <span class="mindset-val" id="fSettingMindsetVal">7</span>
+            <span style="font-size:11px;color:var(--muted)">/10</span>
+          </div>
+        </div>
+        <div class="eod-field">
+          <label class="eod-label">Mon extra mile du jour</label>
+          <textarea class="eod-textarea" id="fSettingExtra" rows="2" placeholder="Qu'est-ce que j'ai fait en plus aujourd'hui..."></textarea>
+        </div>
+        <div class="eod-field">
+          <label class="eod-label">Avec quoi j'ai besoin d'aide</label>
+          <textarea class="eod-textarea" id="fSettingAide" rows="2" placeholder="RAS ou détail..."></textarea>
+        </div>
+      </div>
+      <!-- CLOSING -->
+      <div class="eod-panel closing">
+        <div class="eod-panel-title">🎯 Closing <span class="pt-badge">CLOSING</span></div>
+        <div class="eod-field">
+          <label class="eod-label">Mes rendez-vous</label>
+          <div class="rdv-list" id="rdvList"></div>
+          <button class="rdv-add-btn" id="rdvAddBtn">+ Ajouter un RDV</button>
+        </div>
+        <div class="eod-field">
+          <label class="eod-label">Commentaire closing</label>
+          <textarea class="eod-textarea" id="fClosingComment" rows="3" placeholder="Résumé de la journée closing, observations..."></textarea>
+        </div>
+        <div class="eod-field">
+          <label class="eod-label">Mon mindset closing</label>
+          <div class="mindset-wrap">
+            <input type="range" class="mindset-slider" id="fClosingMindset" min="1" max="10" value="7"/>
+            <span class="mindset-val" id="fClosingMindsetVal">7</span>
+            <span style="font-size:11px;color:var(--muted)">/10</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- KPIs optionnels -->
+    <button class="kpi-toggle" id="kpiToggle"><span class="kpi-arrow">▶</span> KPIs optionnels (appels, RDV, CA...)</button>
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-input-wrap"><label>Nb appels</label><input type="number" class="kpi-input" id="kpiAppels" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label>Décrochés</label><input type="number" class="kpi-input" id="kpiDecroches" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label>RDV posés</label><input type="number" class="kpi-input" id="kpiRdvPoses" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label>RDV effectués</label><input type="number" class="kpi-input" id="kpiRdvEffectues" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label>Closes</label><input type="number" class="kpi-input" id="kpiCloses" placeholder="—" min="0"/></div>
+      <div class="kpi-input-wrap"><label>CA closé (€)</label><input type="number" class="kpi-input" id="kpiCA" placeholder="—" min="0"/></div>
+    </div>
+    <!-- Save -->
+    <div class="eod-save-row">
+      <button class="eod-save-btn" id="eodSaveBtn">💾 Sauvegarder mon EOD</button>
+      <span class="eod-save-status" id="eodSaveStatus">✅ Sauvegardé !</span>
+    </div>
+  </div>
+
+  <!-- ═══════ VIEW: HISTORY ═══════ -->
+  <div id="viewHistorySection" style="display:none">
+    <div class="week-header">
+      <button class="week-nav-btn" id="weekPrev">◀</button>
+      <span class="week-label" id="weekLabel">Semaine du ...</span>
+      <button class="week-nav-btn" id="weekNext">▶</button>
+    </div>
+    <div class="summary-stats" id="weekStats"></div>
+    <div class="week-grid" id="weekGrid"></div>
+  </div>
+
+  <!-- ═══════ VIEW: TRENDS ═══════ -->
+  <div id="viewTrendsSection" style="display:none">
+    <div class="sec-title">
+      <span class="st-icon" style="background:rgba(96,165,250,0.12);color:#60a5fa">📊</span>
+      Tendances & Insights — <span id="trendsMemberName" style="color:var(--red3)">...</span>
+    </div>
+    <div class="trends-grid">
+      <div class="trend-card">
+        <div class="trend-card-title">📈 Mindset Setting (14 jours)</div>
+        <canvas class="trend-chart" id="chartMindsetSetting"></canvas>
+      </div>
+      <div class="trend-card">
+        <div class="trend-card-title">📈 Mindset Closing (14 jours)</div>
+        <canvas class="trend-chart" id="chartMindsetClosing"></canvas>
+      </div>
+    </div>
+    <div class="sec-title" style="margin-top:8px">
+      <span class="st-icon" style="background:rgba(245,158,11,0.12);color:#fbbf24">💡</span>
+      Insights IA
+    </div>
+    <div class="insight-list" id="insightList">
+      <div class="eod-loading">Chargement des données...</div>
+    </div>
+  </div>
+
+</div>
+<div class="eod-toast" id="eodToast"></div>
+
+<script>
+/* ═══════════════════════════════════════
+   EOD REPORTS — Ambitio Corp
+   ═══════════════════════════════════════ */
+var db = firebase.firestore();
+var CURRENT_UID = null, CURRENT_NAME = '', CURRENT_ROLE = 'sales';
+var VIEWING_UID = null, VIEWING_NAME = '';
+var MEMBERS = {};
+var currentView = 'form';
+var weekOffset = 0;
+
+var JOURS = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+var MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+function fmtDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function parseDate(s) { var p = s.split('-'); return new Date(+p[0], +p[1]-1, +p[2]); }
+function fmtDateFR(s) { var d = parseDate(s); return JOURS[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS[d.getMonth()]; }
+function toast(msg) { var el = document.getElementById('eodToast'); el.textContent = msg; el.classList.add('show'); setTimeout(function() { el.classList.remove('show'); }, 2200); }
+function getMonday(d) { var day = d.getDay(); var diff = d.getDate() - day + (day === 0 ? -6 : 1); return new Date(d.getFullYear(), d.getMonth(), diff); }
+function mindsetColor(v) { if (typeof v !== 'number') return 'var(--muted)'; if (v <= 3) return '#ef4444'; if (v <= 5) return '#f59e0b'; if (v <= 7) return '#fbbf24'; return '#34d399'; }
+
+var RDV_ISSUES = [
+  { value: 'close', label: 'Closé ✅' },
+  { value: 'follow_up', label: 'Follow-up prévu' },
+  { value: 'annule', label: 'Annulé' },
+  { value: 'no_show', label: 'No-show' },
+  { value: 'reporte', label: 'Reporté' },
+  { value: 'pas_interesse', label: 'Pas intéressé' },
+  { value: 'en_reflexion', label: 'En réflexion' },
+];
+
+document.getElementById('eodDate').value = fmtDate(new Date());
+
+// ══════════ AUTH ══════════
+(function initAuth() {
+  var nmCache  = localStorage.getItem('ambitio_name') || 'Utilisateur';
+  var uidCache = localStorage.getItem('ambitio_auth_uid') || localStorage.getItem('ambitio_uid') || 'default';
+  document.getElementById('tb-nm').textContent = nmCache;
+  document.getElementById('tb-av').textContent = nmCache[0].toUpperCase();
+
+  firebase.auth().onAuthStateChanged(function(user) {
+    if (user) {
+      db.collection('users').doc(user.uid).get().then(function(snap) {
+        var data = snap.exists ? snap.data() : {};
+        CURRENT_UID = user.uid;
+        CURRENT_NAME = user.displayName || user.email.split('@')[0];
+        CURRENT_ROLE = data.role || 'sales';
+        window._currentRole = CURRENT_ROLE;
+        window._currentUserName = CURRENT_NAME;
+        localStorage.setItem('ambitio_role', CURRENT_ROLE);
+        localStorage.setItem('ambitio_auth_uid', user.uid);
+        localStorage.setItem('ambitio_name', CURRENT_NAME);
+        document.getElementById('tb-nm').textContent = CURRENT_NAME;
+        document.getElementById('tb-av').textContent = CURRENT_NAME[0].toUpperCase();
+        loadMembers();
+      });
+    } else {
+      CURRENT_UID = uidCache;
+      CURRENT_NAME = nmCache;
+      selectMember('current');
+      loadFormData();
+    }
+  });
+})();
+
+function loadMembers() {
+  db.collection('users').get().then(function(snap) {
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      if (d.role === 'sales' || d.role === 'admin') {
+        MEMBERS[doc.id] = { uid: doc.id, name: d.displayName || d.name || d.email || doc.id, role: d.role };
+      }
+    });
+    if (CURRENT_ROLE === 'admin') {
+      document.getElementById('btnGuillaume').style.display = '';
+      document.getElementById('btnElodie').style.display = '';
+    }
+    selectMember('current');
+    loadFormData();
+  }).catch(function() { selectMember('current'); loadFormData(); });
+}
+
+function selectMember(key) {
+  document.querySelectorAll('.eod-member-btn').forEach(function(b) { b.classList.remove('active'); });
+  if (key === 'current') {
+    VIEWING_UID = CURRENT_UID; VIEWING_NAME = CURRENT_NAME;
+    document.getElementById('btnCurrentMember').classList.add('active');
+  } else {
+    var search = key.toLowerCase();
+    var found = null;
+    Object.keys(MEMBERS).forEach(function(k) {
+      var n = MEMBERS[k].name.toLowerCase();
+      if (n.includes(search)) found = MEMBERS[k];
+    });
+    VIEWING_UID = found ? found.uid : key;
+    VIEWING_NAME = found ? found.name : key.charAt(0).toUpperCase() + key.slice(1);
+    var btnId = key === 'guillaume' ? 'btnGuillaume' : 'btnElodie';
+    document.getElementById(btnId).classList.add('active');
+  }
+}
+
+// ══════════ RDV LIST ══════════
+var rdvEntries = [];
+
+function renderRdvList() {
+  var list = document.getElementById('rdvList');
+  if (rdvEntries.length === 0) { list.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Aucun RDV ajouté</div>'; return; }
+  var h = '';
+  rdvEntries.forEach(function(r, i) {
+    h += '<div class="rdv-row" data-idx="' + i + '">';
+    h += '<input type="text" placeholder="Nom du prospect" value="' + (r.nom || '').replace(/"/g, '&quot;') + '" data-field="nom"/>';
+    h += '<select data-field="issue">';
+    RDV_ISSUES.forEach(function(opt) {
+      h += '<option value="' + opt.value + '"' + (r.issue === opt.value ? ' selected' : '') + '>' + opt.label + '</option>';
+    });
+    h += '</select>';
+    h += '<button class="rdv-del" data-action="delrdv" title="Supprimer">✕</button>';
+    h += '</div>';
+  });
+  list.innerHTML = h;
+}
+
+document.getElementById('rdvAddBtn').addEventListener('click', function() {
+  rdvEntries.push({ nom: '', issue: 'follow_up' });
+  renderRdvList();
+  // Focus the new input
+  var inputs = document.querySelectorAll('.rdv-row input[data-field="nom"]');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+});
+
+document.getElementById('rdvList').addEventListener('input', function(e) {
+  var row = e.target.closest('.rdv-row');
+  if (!row) return;
+  var idx = parseInt(row.dataset.idx);
+  var field = e.target.dataset.field;
+  if (field && rdvEntries[idx]) rdvEntries[idx][field] = e.target.value;
+});
+document.getElementById('rdvList').addEventListener('change', function(e) {
+  var row = e.target.closest('.rdv-row');
+  if (!row) return;
+  var idx = parseInt(row.dataset.idx);
+  var field = e.target.dataset.field;
+  if (field && rdvEntries[idx]) rdvEntries[idx][field] = e.target.value;
+});
+document.getElementById('rdvList').addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-action="delrdv"]');
+  if (!btn) return;
+  var idx = parseInt(btn.closest('.rdv-row').dataset.idx);
+  rdvEntries.splice(idx, 1);
+  renderRdvList();
+});
+renderRdvList();
+
+// ── Mindset sliders ──
+function colorMindset(val, elId) {
+  document.getElementById(elId).style.color = mindsetColor(parseInt(val));
+}
+document.getElementById('fSettingMindset').addEventListener('input', function(e) {
+  document.getElementById('fSettingMindsetVal').textContent = e.target.value;
+  colorMindset(e.target.value, 'fSettingMindsetVal');
+});
+document.getElementById('fClosingMindset').addEventListener('input', function(e) {
+  document.getElementById('fClosingMindsetVal').textContent = e.target.value;
+  colorMindset(e.target.value, 'fClosingMindsetVal');
+});
+colorMindset(7, 'fSettingMindsetVal');
+colorMindset(7, 'fClosingMindsetVal');
+
+// ── KPI toggle ──
+document.getElementById('kpiToggle').addEventListener('click', function() {
+  this.classList.toggle('open');
+  document.getElementById('kpiGrid').classList.toggle('open');
+});
+
+// ══════════ FIRESTORE SAVE/LOAD ══════════
+function getDocRef(uid, dateStr) {
+  return db.collection('eod').doc(uid).collection('jours').doc(dateStr);
+}
+
+function gatherFormData() {
+  var kA = document.getElementById('kpiAppels').value;
+  var kD = document.getElementById('kpiDecroches').value;
+  var kRP = document.getElementById('kpiRdvPoses').value;
+  var kRE = document.getElementById('kpiRdvEffectues').value;
+  var kC = document.getElementById('kpiCloses').value;
+  var kCA = document.getElementById('kpiCA').value;
+  return {
+    date: document.getElementById('eodDate').value,
+    uid: VIEWING_UID,
+    name: VIEWING_NAME,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    setting: {
+      ressenti: document.getElementById('fSettingRessenti').value,
+      mindset: parseInt(document.getElementById('fSettingMindset').value),
+      extraMile: document.getElementById('fSettingExtra').value,
+      besoinAide: document.getElementById('fSettingAide').value,
+    },
+    closing: {
+      rdvs: rdvEntries.filter(function(r) { return r.nom.trim() !== ''; }),
+      commentaire: document.getElementById('fClosingComment').value,
+      mindset: parseInt(document.getElementById('fClosingMindset').value),
+    },
+    kpis: {
+      appels: kA ? parseInt(kA) : null,
+      decroches: kD ? parseInt(kD) : null,
+      rdvPoses: kRP ? parseInt(kRP) : null,
+      rdvEffectues: kRE ? parseInt(kRE) : null,
+      closes: kC ? parseInt(kC) : null,
+      ca: kCA ? parseFloat(kCA) : null,
+    },
+  };
+}
+
+function populateForm(data) {
+  if (!data) {
+    document.getElementById('fSettingRessenti').value = '';
+    document.getElementById('fSettingMindset').value = 7;
+    document.getElementById('fSettingMindsetVal').textContent = '7';
+    document.getElementById('fSettingExtra').value = '';
+    document.getElementById('fSettingAide').value = '';
+    document.getElementById('fClosingComment').value = '';
+    document.getElementById('fClosingMindset').value = 7;
+    document.getElementById('fClosingMindsetVal').textContent = '7';
+    rdvEntries = []; renderRdvList();
+    ['kpiAppels','kpiDecroches','kpiRdvPoses','kpiRdvEffectues','kpiCloses','kpiCA'].forEach(function(id) { document.getElementById(id).value = ''; });
+    colorMindset(7, 'fSettingMindsetVal'); colorMindset(7, 'fClosingMindsetVal');
+    return;
+  }
+  var s = data.setting || {}, c = data.closing || {}, k = data.kpis || {};
+  document.getElementById('fSettingRessenti').value = s.ressenti || '';
+  document.getElementById('fSettingMindset').value = s.mindset || 7;
+  document.getElementById('fSettingMindsetVal').textContent = s.mindset || 7;
+  document.getElementById('fSettingExtra').value = s.extraMile || '';
+  document.getElementById('fSettingAide').value = s.besoinAide || '';
+  document.getElementById('fClosingComment').value = c.commentaire || '';
+  document.getElementById('fClosingMindset').value = c.mindset || 7;
+  document.getElementById('fClosingMindsetVal').textContent = c.mindset || 7;
+  rdvEntries = (c.rdvs || []).map(function(r) { return { nom: r.nom || '', issue: r.issue || 'follow_up' }; });
+  renderRdvList();
+  document.getElementById('kpiAppels').value = k.appels != null ? k.appels : '';
+  document.getElementById('kpiDecroches').value = k.decroches != null ? k.decroches : '';
+  document.getElementById('kpiRdvPoses').value = k.rdvPoses != null ? k.rdvPoses : '';
+  document.getElementById('kpiRdvEffectues').value = k.rdvEffectues != null ? k.rdvEffectues : '';
+  document.getElementById('kpiCloses').value = k.closes != null ? k.closes : '';
+  document.getElementById('kpiCA').value = k.ca != null ? k.ca : '';
+  colorMindset(s.mindset || 7, 'fSettingMindsetVal');
+  colorMindset(c.mindset || 7, 'fClosingMindsetVal');
+}
+
+function loadFormData() {
+  if (!VIEWING_UID) return;
+  var dateStr = document.getElementById('eodDate').value;
+  if (!dateStr) return;
+  getDocRef(VIEWING_UID, dateStr).get().then(function(snap) {
+    populateForm(snap.exists ? snap.data() : null);
+  }).catch(function(err) { console.warn('[EOD] Load error:', err); populateForm(null); });
+}
+
+document.getElementById('eodSaveBtn').addEventListener('click', function() {
+  if (!VIEWING_UID) { toast('⚠️ Aucun utilisateur sélectionné'); return; }
+  var data = gatherFormData();
+  if (!data.date) { toast('⚠️ Sélectionne une date'); return; }
+  getDocRef(VIEWING_UID, data.date).set(data, { merge: true }).then(function() {
+    var st = document.getElementById('eodSaveStatus');
+    st.classList.add('show');
+    setTimeout(function() { st.classList.remove('show'); }, 2500);
+    toast('✅ EOD sauvegardé !');
+  }).catch(function(err) {
+    console.error('[EOD] Save error:', err);
+    toast('❌ Erreur : ' + err.message);
+  });
+});
+
+document.getElementById('eodDate').addEventListener('change', loadFormData);
+document.querySelectorAll('.eod-member-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    selectMember(btn.dataset.member);
+    loadFormData();
+    if (currentView === 'history') renderWeekHistory();
+    if (currentView === 'trends') renderTrends();
+  });
+});
+
+// ══════════ VIEW SWITCHING ══════════
+document.querySelectorAll('.eod-nav-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.eod-nav-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    currentView = btn.dataset.view;
+    document.getElementById('viewFormSection').style.display = currentView === 'form' ? '' : 'none';
+    document.getElementById('viewHistorySection').style.display = currentView === 'history' ? '' : 'none';
+    document.getElementById('viewTrendsSection').style.display = currentView === 'trends' ? '' : 'none';
+    if (currentView === 'history') renderWeekHistory();
+    if (currentView === 'trends') renderTrends();
+  });
+});
+
+// ══════════ WEEK HISTORY ══════════
+document.getElementById('weekPrev').addEventListener('click', function() { weekOffset--; renderWeekHistory(); });
+document.getElementById('weekNext').addEventListener('click', function() { weekOffset++; renderWeekHistory(); });
+
+function renderWeekHistory() {
+  if (!VIEWING_UID) return;
+  var today = new Date();
+  var monday = getMonday(today);
+  monday.setDate(monday.getDate() + weekOffset * 7);
+  var sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+  document.getElementById('weekLabel').textContent = 'Semaine du ' + monday.getDate() + ' ' + MOIS[monday.getMonth()] + ' au ' + sunday.getDate() + ' ' + MOIS[sunday.getMonth()];
+
+  db.collection('eod').doc(VIEWING_UID).collection('jours')
+    .where('date', '>=', fmtDate(monday))
+    .where('date', '<=', fmtDate(sunday))
+    .get().then(function(snap) {
+      var entries = {};
+      snap.forEach(function(doc) { entries[doc.id] = doc.data(); });
+      renderWeekGrid(monday, entries);
+      renderWeekStats(entries);
+    }).catch(function() { renderWeekGrid(monday, {}); renderWeekStats({}); });
+}
+
+function renderWeekGrid(monday, entries) {
+  var grid = document.getElementById('weekGrid');
+  var todayStr = fmtDate(new Date());
+  var h = '';
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(monday); d.setDate(d.getDate() + i);
+    var ds = fmtDate(d);
+    var entry = entries[ds];
+    var isEmpty = !entry;
+    h += '<div class="day-card' + (isEmpty ? ' empty' : '') + (ds === todayStr ? ' today' : '') + '" data-date="' + ds + '">';
+    h += '<div class="dc-day">' + JOURS[d.getDay()] + '</div>';
+    h += '<div class="dc-date">' + d.getDate() + ' ' + MOIS[d.getMonth()] + '</div>';
+    if (entry) {
+      var sm = (entry.setting || {}).mindset || 0;
+      h += '<div class="dc-mindset">🧠 <span class="ms-val" style="color:' + mindsetColor(sm) + '">' + sm + '</span><span style="font-size:10px;color:var(--muted)">/10</span></div>';
+      h += '<div class="dc-tags">';
+      if (entry.setting && entry.setting.ressenti) h += '<span class="dc-tag has-setting">Setting</span>';
+      if (entry.closing && ((entry.closing.rdvs && entry.closing.rdvs.length) || entry.closing.commentaire)) h += '<span class="dc-tag has-closing">Closing</span>';
+      var kp = entry.kpis || {};
+      if (kp.appels || kp.closes || kp.ca) h += '<span class="dc-tag has-kpi">KPIs</span>';
+      h += '</div>';
+    } else {
+      h += '<div style="font-size:11px;color:var(--muted2);margin-top:8px">Pas de données</div>';
+    }
+    h += '</div>';
+  }
+  grid.innerHTML = h;
+  grid.querySelectorAll('.day-card:not(.empty)').forEach(function(card) {
+    card.addEventListener('click', function() { openDayDetail(card.dataset.date, entries[card.dataset.date]); });
+  });
+}
+
+function renderWeekStats(entries) {
+  var keys = Object.keys(entries);
+  var totalMS = 0, totalMC = 0, msN = 0, mcN = 0, totalRdv = 0, totalCloses = 0, totalCA = 0;
+  keys.forEach(function(k) {
+    var e = entries[k];
+    if (e.setting && e.setting.mindset) { totalMS += e.setting.mindset; msN++; }
+    if (e.closing && e.closing.mindset) { totalMC += e.closing.mindset; mcN++; }
+    if (e.closing && e.closing.rdvs) totalRdv += e.closing.rdvs.length;
+    var kp = e.kpis || {};
+    if (kp.closes) totalCloses += kp.closes;
+    if (kp.ca) totalCA += kp.ca;
+  });
+  var avgMS = msN ? (totalMS / msN).toFixed(1) : '—';
+  var avgMC = mcN ? (totalMC / mcN).toFixed(1) : '—';
+  var h = '';
+  h += '<div class="ss-card"><div class="ss-val">' + keys.length + '/7</div><div class="ss-label">EODs remplis</div></div>';
+  h += '<div class="ss-card"><div class="ss-val" style="color:' + mindsetColor(parseFloat(avgMS)) + '">' + avgMS + '</div><div class="ss-label">Mindset setting moy.</div></div>';
+  h += '<div class="ss-card"><div class="ss-val" style="color:' + mindsetColor(parseFloat(avgMC)) + '">' + avgMC + '</div><div class="ss-label">Mindset closing moy.</div></div>';
+  h += '<div class="ss-card"><div class="ss-val">' + totalRdv + '</div><div class="ss-label">RDV total</div></div>';
+  h += '<div class="ss-card"><div class="ss-val" style="color:var(--green)">' + totalCloses + '</div><div class="ss-label">Closes</div></div>';
+  h += '<div class="ss-card"><div class="ss-val" style="color:var(--gold)">' + (totalCA ? totalCA.toLocaleString('fr-FR') + '€' : '—') + '</div><div class="ss-label">CA closé</div></div>';
+  document.getElementById('weekStats').innerHTML = h;
+}
+
+// ── Day Detail Modal ──
+function openDayDetail(dateStr, entry) {
+  if (!entry) return;
+  var s = entry.setting || {}, c = entry.closing || {}, k = entry.kpis || {};
+  var backdrop = document.createElement('div');
+  backdrop.className = 'day-modal-backdrop';
+  var h = '<div class="day-modal">';
+  h += '<div class="dm-header"><div class="dm-title">' + fmtDateFR(dateStr) + ' — ' + VIEWING_NAME + '</div><button class="dm-close" id="dmClose">✕</button></div>';
+  h += '<div class="dm-body">';
+  // Setting
+  h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#34d399">📞</span> Setting</div>';
+  h += '<div class="dm-text"><strong>Ressenti :</strong> ' + (s.ressenti || 'Non renseigné') + '</div>';
+  h += '<div class="dm-text" style="margin-top:6px"><strong>Mindset :</strong> <span style="color:' + mindsetColor(s.mindset) + ';font-weight:700">' + (s.mindset || '—') + '/10</span></div>';
+  if (s.extraMile) h += '<div class="dm-text" style="margin-top:6px"><strong>Extra mile :</strong> ' + s.extraMile + '</div>';
+  if (s.besoinAide && s.besoinAide.toLowerCase() !== 'ras') h += '<div class="dm-text" style="margin-top:6px"><strong>Besoin d\'aide :</strong> ' + s.besoinAide + '</div>';
+  h += '</div>';
+  // Closing
+  h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#ef4444">🎯</span> Closing</div>';
+  if (c.rdvs && c.rdvs.length > 0) {
+    c.rdvs.forEach(function(r) {
+      var il = ''; RDV_ISSUES.forEach(function(o) { if (o.value === r.issue) il = o.label; });
+      h += '<div class="dm-rdv-item"><strong>' + r.nom + '</strong> <span style="color:var(--muted);margin-left:8px">→ ' + il + '</span></div>';
+    });
+  } else { h += '<div class="dm-text" style="color:var(--muted)">Aucun RDV</div>'; }
+  if (c.commentaire) h += '<div class="dm-text" style="margin-top:8px"><strong>Commentaire :</strong> ' + c.commentaire + '</div>';
+  h += '<div class="dm-text" style="margin-top:6px"><strong>Mindset :</strong> <span style="color:' + mindsetColor(c.mindset) + ';font-weight:700">' + (c.mindset || '—') + '/10</span></div>';
+  h += '</div>';
+  // KPIs
+  var hasKpi = k.appels || k.decroches || k.rdvPoses || k.rdvEffectues || k.closes || k.ca;
+  if (hasKpi) {
+    h += '<div class="dm-section"><div class="dm-section-title"><span style="color:#60a5fa">📊</span> KPIs</div>';
+    h += '<div style="display:flex;gap:12px;flex-wrap:wrap">';
+    if (k.appels != null) h += '<div class="dm-text"><strong>' + k.appels + '</strong> appels</div>';
+    if (k.decroches != null) h += '<div class="dm-text"><strong>' + k.decroches + '</strong> décrochés</div>';
+    if (k.rdvPoses != null) h += '<div class="dm-text"><strong>' + k.rdvPoses + '</strong> RDV posés</div>';
+    if (k.rdvEffectues != null) h += '<div class="dm-text"><strong>' + k.rdvEffectues + '</strong> RDV effectués</div>';
+    if (k.closes != null) h += '<div class="dm-text"><strong>' + k.closes + '</strong> closes</div>';
+    if (k.ca != null) h += '<div class="dm-text"><strong>' + k.ca.toLocaleString('fr-FR') + '€</strong> CA</div>';
+    h += '</div></div>';
+  }
+  h += '</div></div>';
+  backdrop.innerHTML = h;
+  document.body.appendChild(backdrop);
+  document.getElementById('dmClose').addEventListener('click', function() { backdrop.remove(); });
+  backdrop.addEventListener('click', function(e) { if (e.target === backdrop) backdrop.remove(); });
+}
+
+// ══════════ TRENDS & INSIGHTS ══════════
+function renderTrends() {
+  if (!VIEWING_UID) return;
+  document.getElementById('trendsMemberName').textContent = VIEWING_NAME;
+  var today = new Date();
+  var start = new Date(today); start.setDate(start.getDate() - 13);
+
+  db.collection('eod').doc(VIEWING_UID).collection('jours')
+    .where('date', '>=', fmtDate(start))
+    .where('date', '<=', fmtDate(today))
+    .orderBy('date', 'asc')
+    .get().then(function(snap) {
+      var entries = [];
+      snap.forEach(function(doc) { entries.push(doc.data()); });
+      drawMindsetChart('chartMindsetSetting', entries, 'setting');
+      drawMindsetChart('chartMindsetClosing', entries, 'closing');
+      generateInsights(entries);
+    }).catch(function(err) {
+      console.warn('[EOD] Trends error:', err);
+      document.getElementById('insightList').innerHTML = '<div class="eod-loading">Erreur de chargement</div>';
+    });
+}
+
+function drawMindsetChart(canvasId, entries, type) {
+  var canvas = document.getElementById(canvasId);
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width = canvas.offsetWidth * 2;
+  var H = canvas.height = canvas.offsetHeight * 2;
+  ctx.scale(2, 2);
+  var w = canvas.offsetWidth, h = canvas.offsetHeight;
+  ctx.clearRect(0, 0, w, h);
+
+  var values = entries.map(function(e) { return ((e[type] || {}).mindset) || null; });
+  var validPts = values.filter(function(v) { return v !== null; });
+
+  if (validPts.length < 2) {
+    ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.font = '12px Inter'; ctx.textAlign = 'center';
+    ctx.fillText('Pas assez de données', w / 2, h / 2); return;
+  }
+
+  var pad = { t: 10, b: 24, l: 30, r: 10 };
+  var cW = w - pad.l - pad.r, cH = h - pad.t - pad.b;
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+  [1, 4, 7, 10].forEach(function(g) {
+    var gy = pad.t + cH - ((g - 1) / 9) * cH;
+    ctx.beginPath(); ctx.moveTo(pad.l, gy); ctx.lineTo(w - pad.r, gy); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.font = '10px DM Mono'; ctx.textAlign = 'right';
+    ctx.fillText(g + '', pad.l - 6, gy + 3);
+  });
+
+  var pts = [];
+  values.forEach(function(v, i) {
+    if (v === null) return;
+    pts.push({ x: pad.l + (i / (values.length - 1)) * cW, y: pad.t + cH - ((v - 1) / 9) * cH, v: v, date: entries[i].date });
+  });
+  if (pts.length < 2) return;
+
+  var color = type === 'setting' ? '#34d399' : '#ef4444';
+
+  // Gradient fill
+  var grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + cH);
+  grad.addColorStop(0, type === 'setting' ? 'rgba(52,211,153,0.2)' : 'rgba(239,68,68,0.2)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pad.t + cH);
+  pts.forEach(function(p) { ctx.lineTo(p.x, p.y); });
+  ctx.lineTo(pts[pts.length - 1].x, pad.t + cH); ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  // Line
+  ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+  for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+
+  // Dots
+  pts.forEach(function(p) {
+    ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx.fillStyle = '#0f0f1a'; ctx.fill();
+  });
+
+  // Date labels
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '9px Inter'; ctx.textAlign = 'center';
+  var step = Math.max(1, Math.floor(pts.length / 5));
+  for (var di = 0; di < pts.length; di += step) {
+    var dd = parseDate(pts[di].date);
+    ctx.fillText(dd.getDate() + '/' + (dd.getMonth() + 1), pts[di].x, h - 4);
+  }
+}
+
+// ── Insights ──
+function generateInsights(entries) {
+  var list = document.getElementById('insightList');
+  if (entries.length < 2) { list.innerHTML = '<div class="eod-loading">Pas assez de données pour les insights (min 2 jours)</div>'; return; }
+  var insights = [];
+
+  // Mindset trends
+  function analyzeMindset(entries2, type, label) {
+    var vals = entries2.map(function(e) { return ((e[type] || {}).mindset); }).filter(function(v) { return v != null; });
+    if (vals.length < 3) return;
+    var half = Math.floor(vals.length / 2);
+    var avg1 = vals.slice(0, half).reduce(function(a, b) { return a + b; }, 0) / half;
+    var avg2 = vals.slice(half).reduce(function(a, b) { return a + b; }, 0) / (vals.length - half);
+    var diff = avg2 - avg1;
+    if (diff >= 0.5) insights.push({ icon: 'up', text: '<strong>Mindset ' + label + ' en hausse</strong> : ' + avg1.toFixed(1) + ' → ' + avg2.toFixed(1) + '/10.' });
+    else if (diff <= -0.5) insights.push({ icon: 'down', text: '<strong>Mindset ' + label + ' en baisse</strong> : ' + avg1.toFixed(1) + ' → ' + avg2.toFixed(1) + '/10. À surveiller.' });
+    else insights.push({ icon: 'info', text: '<strong>Mindset ' + label + ' stable</strong> autour de ' + avg2.toFixed(1) + '/10.' });
+  }
+  analyzeMindset(entries, 'setting', 'setting');
+  analyzeMindset(entries, 'closing', 'closing');
+
+  // RDV analysis
+  var totalRdv = 0, closedRdv = 0, annuledRdv = 0, noShowRdv = 0;
+  entries.forEach(function(e) {
+    ((e.closing || {}).rdvs || []).forEach(function(r) {
+      totalRdv++;
+      if (r.issue === 'close') closedRdv++;
+      if (r.issue === 'annule') annuledRdv++;
+      if (r.issue === 'no_show') noShowRdv++;
+    });
+  });
+  if (totalRdv > 0) {
+    insights.push({ icon: closedRdv > 0 ? 'up' : 'info', text: '<strong>' + totalRdv + ' RDV</strong> sur la période : ' + closedRdv + ' closés (' + ((closedRdv / totalRdv) * 100).toFixed(0) + '%), ' + annuledRdv + ' annulés, ' + noShowRdv + ' no-shows.' });
+  }
+  if ((annuledRdv + noShowRdv) > totalRdv * 0.4 && totalRdv >= 3) {
+    insights.push({ icon: 'warn', text: '<strong>Taux d\'annulation élevé</strong> (' + (annuledRdv + noShowRdv) + '/' + totalRdv + '). Vérifier la confirmation des RDV.' });
+  }
+
+  // KPIs
+  var kpiDays = entries.filter(function(e) { return (e.kpis || {}).appels != null; });
+  if (kpiDays.length >= 3) {
+    var avgA = kpiDays.reduce(function(a, e) { return a + (e.kpis.appels || 0); }, 0) / kpiDays.length;
+    insights.push({ icon: 'info', text: '<strong>Moyenne de ' + avgA.toFixed(0) + ' appels/jour</strong> sur ' + kpiDays.length + ' jours renseignés.' });
+  }
+
+  // Text sentiment
+  var allText = '';
+  entries.forEach(function(e) {
+    var s = e.setting || {}, c = e.closing || {};
+    [s.ressenti, s.besoinAide, s.extraMile, c.commentaire].forEach(function(t) { if (t) allText += ' ' + t; });
+  });
+  allText = allText.toLowerCase();
+  var posWords = ['bonne','bon','excellent','top','super','confiant','motivé','énergie','bien','content','fier'];
+  var negWords = ['difficile','mauvais','dur','compliqué','fatigué','frustré','déçu','baisse','nul','décourageant'];
+  var posN = 0, negN = 0;
+  posWords.forEach(function(w) { var m = allText.match(new RegExp(w, 'gi')); if (m) posN += m.length; });
+  negWords.forEach(function(w) { var m = allText.match(new RegExp(w, 'gi')); if (m) negN += m.length; });
+  if (posN > negN * 2 && posN >= 3) insights.push({ icon: 'up', text: '<strong>Tonalité très positive</strong> dans les notes. Le moral est bon !' });
+  else if (negN > posN && negN >= 3) insights.push({ icon: 'warn', text: '<strong>Tonalité mitigée</strong> dans les notes. Des frustrations reviennent régulièrement.' });
+
+  // Help requests
+  var helpN = 0;
+  ['aide','besoin','support','accompagnement','formation'].forEach(function(w) { var m = allText.match(new RegExp(w, 'gi')); if (m) helpN += m.length; });
+  if (helpN >= 2) insights.push({ icon: 'warn', text: '<strong>Demandes d\'aide récurrentes</strong> détectées. Point à aborder en management.' });
+
+  // Consistency
+  var last7 = entries.filter(function(e) { return ((new Date()) - parseDate(e.date)) / 86400000 <= 7; });
+  if (last7.length >= 5) insights.push({ icon: 'up', text: '<strong>Excellente régularité</strong> : ' + last7.length + ' EODs sur les 7 derniers jours. 👏' });
+  else if (last7.length <= 2 && entries.length >= 3) insights.push({ icon: 'down', text: '<strong>Régularité en baisse</strong> cette semaine : seulement ' + last7.length + ' EOD(s).' });
+
+  if (insights.length === 0) { list.innerHTML = '<div class="eod-loading">Pas d\'insights pour le moment.</div>'; return; }
+  var ih = '';
+  insights.forEach(function(ins) {
+    ih += '<div class="insight-item"><div class="insight-icon ' + ins.icon + '">';
+    ih += ins.icon === 'up' ? '↑' : ins.icon === 'down' ? '↓' : ins.icon === 'warn' ? '⚠' : 'ℹ';
+    ih += '</div><div class="insight-text">' + ins.text + '</div></div>';
+  });
+  list.innerHTML = ih;
+}
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

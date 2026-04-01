@@ -23,6 +23,7 @@
       { id: 'projections', icon: '📈', label: 'Projections',       href: 'sales-projections.html' },
       { id: 'retargeting', icon: '🔄', label: 'Retargeting',       href: 'sales-retargeting.html' },
       { id: 'suivi-client', icon: '📋', label: 'Suivi Clients',     href: 'sales-suivi-client.html' },
+      { id: 'eod',          icon: '📝', label: 'EOD',               href: 'sales-eod.html' },
 
     ],
 
@@ -38,6 +39,7 @@
       { id: 'sales-projections', icon: '📈', label: 'Projections', href: 'sales-projections.html', section: 'Sales' },
       { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting', href: 'sales-retargeting.html', section: 'Sales' },
       { id: 'sales-suivi-client', icon: '📋', label: 'Suivi Clients', href: 'sales-suivi-client.html', section: 'Sales' },
+      { id: 'sales-eod',          icon: '📝', label: 'EOD',           href: 'sales-eod.html',          section: 'Sales' },
 
       { id: 'import', icon: '🔗', label: 'Import Notion', href: 'import-notion.html', section: 'Outils' },
     ],
