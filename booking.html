@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Réserver un rendez-vous — Ambitio</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#fafafa;--card:#ffffff;--border:#e5e7eb;--border2:#d1d5db;--text:#111827;--muted:#6b7280;--muted2:#9ca3af;--primary:#7c3aed;--primary-light:#ede9fe;--green:#059669;--green-light:#d1fae5;--red:#dc2626;--radius:12px;--font:'Inter',sans-serif;--fh:'Syne',sans-serif}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.bk-page{max-width:640px;margin:0 auto;padding:30px 20px 60px}
+
+/* Header */
+.bk-header{text-align:center;margin-bottom:30px}
+.bk-logo{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#4c1d95);display:inline-flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:20px;font-weight:800;color:white;margin-bottom:12px;box-shadow:0 4px 16px rgba(124,58,237,0.25)}
+.bk-title{font-family:var(--fh);font-size:24px;font-weight:800;color:var(--text);margin-bottom:4px}
+.bk-sub{font-size:14px;color:var(--muted)}
+
+/* Steps */
+.bk-step{display:none}
+.bk-step.active{display:block}
+.bk-step-title{font-family:var(--fh);font-size:16px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.bk-step-num{width:28px;height:28px;border-radius:50%;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0}
+
+/* Cards */
+.bk-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px;cursor:pointer;transition:all .2s}
+.bk-card:hover{border-color:var(--primary);box-shadow:0 2px 12px rgba(124,58,237,0.1)}
+.bk-card.selected{border-color:var(--primary);background:var(--primary-light)}
+.bk-card-top{display:flex;align-items:center;gap:10px}
+.bk-card-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.bk-card-name{font-weight:700;font-size:14px;flex:1}
+.bk-card-dur{font-size:12px;color:var(--muted);background:#f3f4f6;padding:2px 8px;border-radius:6px}
+.bk-card-desc{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* Person cards */
+.bk-person{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.bk-person-av{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:16px;font-weight:800;color:white;flex-shrink:0}
+.bk-person-name{font-weight:700;font-size:14px}
+.bk-person-role{font-size:12px;color:var(--muted)}
+
+/* Calendar */
+.bk-cal{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.bk-cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.bk-cal-month{font-family:var(--fh);font-size:15px;font-weight:800}
+.bk-cal-nav{width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;transition:all .15s;color:var(--muted)}
+.bk-cal-nav:hover{border-color:var(--primary);color:var(--primary)}
+.bk-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.bk-cal-day-label{font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;padding:4px 0}
+.bk-cal-day{width:100%;aspect-ratio:1;border-radius:8px;border:none;background:transparent;font-family:var(--font);font-size:13px;font-weight:600;color:var(--muted2);cursor:default;display:flex;align-items:center;justify-content:center}
+.bk-cal-day.available{color:var(--text);cursor:pointer;background:#f9fafb;transition:all .15s}
+.bk-cal-day.available:hover{background:var(--primary-light);color:var(--primary)}
+.bk-cal-day.selected{background:var(--primary);color:white;font-weight:700}
+.bk-cal-day.today{box-shadow:inset 0 0 0 2px var(--primary)}
+.bk-cal-day.past{color:#e5e7eb}
+
+/* Slots */
+.bk-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px}
+@media(max-width:400px){.bk-slots{grid-template-columns:repeat(2,1fr)}}
+.bk-slot{padding:10px;border:1.5px solid var(--border);border-radius:8px;background:white;font-size:13px;font-weight:600;text-align:center;cursor:pointer;transition:all .15s}
+.bk-slot:hover{border-color:var(--primary);color:var(--primary)}
+.bk-slot.selected{background:var(--primary);color:white;border-color:var(--primary)}
+.bk-no-slots{text-align:center;padding:20px;color:var(--muted);font-size:13px}
+
+/* Form */
+.bk-form{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:20px}
+.bk-field{margin-bottom:14px}
+.bk-field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.3px}
+.bk-field input,.bk-field textarea,.bk-field select{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13px;color:var(--text);outline:none;background:white;transition:border-color .15s}
+.bk-field input:focus,.bk-field textarea:focus{border-color:var(--primary)}
+.bk-field textarea{resize:vertical;min-height:60px}
+.bk-field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* Buttons */
+.bk-btn{width:100%;padding:12px;border:none;border-radius:var(--radius);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s}
+.bk-btn-primary{background:var(--primary);color:white;box-shadow:0 4px 12px rgba(124,58,237,0.3)}
+.bk-btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(124,58,237,0.4)}
+.bk-btn-back{background:transparent;color:var(--muted);border:1.5px solid var(--border);margin-bottom:8px}
+.bk-btn-back:hover{border-color:var(--border2);color:var(--text)}
+
+/* Summary */
+.bk-summary{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+.bk-summary-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px}
+.bk-summary-label{color:var(--muted);font-weight:600}
+.bk-summary-val{font-weight:700}
+
+/* Confirmation */
+.bk-confirm{text-align:center;padding:40px 20px}
+.bk-confirm-icon{font-size:56px;margin-bottom:16px}
+.bk-confirm-title{font-family:var(--fh);font-size:22px;font-weight:800;margin-bottom:8px;color:var(--green)}
+.bk-confirm-text{font-size:14px;color:var(--muted);line-height:1.6;max-width:400px;margin:0 auto}
+
+.bk-loading{text-align:center;padding:60px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="bk-page">
+  <div class="bk-header" style="position:relative">
+    <a id="adminGear" href="booking-admin.html" style="display:none;position:absolute;top:0;right:0;width:36px;height:36px;border-radius:10px;background:#f3f4f6;border:1px solid var(--border);text-align:center;line-height:36px;font-size:16px;text-decoration:none;transition:all .15s" title="Configuration booking">⚙️</a>
+    <div class="bk-logo">A</div>
+    <div class="bk-title">Réserver un rendez-vous</div>
+    <div class="bk-sub">Choisissez le type, la personne, et un créneau qui vous convient</div>
+  </div>
+
+  <div class="bk-loading" id="bkLoading">Chargement des disponibilités...</div>
+  <div id="bkApp" style="display:none">
+    <!-- Step 1: Type -->
+    <div class="bk-step active" id="step1">
+      <div class="bk-step-title"><span class="bk-step-num">1</span> Choisissez le type de rendez-vous</div>
+      <div id="typeCards"></div>
+    </div>
+    <!-- Step 2: Person -->
+    <div class="bk-step" id="step2">
+      <div class="bk-step-title"><span class="bk-step-num">2</span> Avec qui souhaitez-vous prendre rendez-vous ?</div>
+      <div id="personCards"></div>
+      <button class="bk-btn bk-btn-back" data-action="back" data-to="1">← Retour</button>
+    </div>
+    <!-- Step 3: Date + Time -->
+    <div class="bk-step" id="step3">
+      <div class="bk-step-title"><span class="bk-step-num">3</span> Choisissez une date et un horaire</div>
+      <div id="calendarWrap"></div>
+      <div id="slotsWrap"></div>
+      <button class="bk-btn bk-btn-back" data-action="back" data-to="2">← Retour</button>
+    </div>
+    <!-- Step 4: Form -->
+    <div class="bk-step" id="step4">
+      <div class="bk-step-title"><span class="bk-step-num">4</span> Vos informations</div>
+      <div class="bk-summary" id="bookingSummary"></div>
+      <div class="bk-form">
+        <div class="bk-field-row">
+          <div class="bk-field"><label>Prénom</label><input type="text" id="fPrenom" required/></div>
+          <div class="bk-field"><label>Nom</label><input type="text" id="fNom" required/></div>
+        </div>
+        <div class="bk-field"><label>Email</label><input type="email" id="fEmail" required/></div>
+        <div class="bk-field"><label>Téléphone</label><input type="tel" id="fTel"/></div>
+        <div class="bk-field"><label>Secteur d'activité</label><input type="text" id="fSecteur" placeholder="Ex: Commerce, Services..."/></div>
+        <div class="bk-field"><label>Message (optionnel)</label><textarea id="fMessage" placeholder="Contexte, questions..."></textarea></div>
+        <button class="bk-btn bk-btn-primary" id="confirmBtn">✅ Confirmer le rendez-vous</button>
+        <button class="bk-btn bk-btn-back" data-action="back" data-to="3" style="margin-top:8px">← Retour</button>
+      </div>
+    </div>
+    <!-- Step 5: Confirmation -->
+    <div class="bk-step" id="step5">
+      <div class="bk-confirm">
+        <div class="bk-confirm-icon">✅</div>
+        <div class="bk-confirm-title">Rendez-vous confirmé !</div>
+        <div class="bk-confirm-text" id="confirmText"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var db=firebase.firestore();
+var types=[],persons=[],bookings=[];
+var selType=null,selPerson=null,selDate=null,selTime=null;
+var calMonth=new Date().getMonth(),calYear=new Date().getFullYear();
+
+var MOIS=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+var JOURS_IDX={dimanche:0,lundi:1,mardi:2,mercredi:3,jeudi:4,vendredi:5,samedi:6};
+var JOURS_LABELS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+var JOURS_FROM_IDX=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+
+function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+function goStep(n){
+  document.querySelectorAll('.bk-step').forEach(function(s){s.classList.remove('active');});
+  document.getElementById('step'+n).classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ═══ LOAD ═══ */
+var params=new URLSearchParams(window.location.search);
+var presetPerson=params.get('person');
+var presetType=params.get('type');
+
+db.collection('booking_config').get().then(function(snap){
+  snap.forEach(function(doc){
+    var d=doc.data();
+    if(doc.id==='_types'){types=d.list||[];}
+    else if(d.__type==='person'){d.id=doc.id;persons.push(d);}
+  });
+  // Load existing bookings for availability check
+  var today=fmtDate(new Date());
+  db.collection('bookings').where('date','>=',today).where('status','==','confirmed').get().then(function(bSnap){
+    bSnap.forEach(function(doc){bookings.push(doc.data());});
+    document.getElementById('bkLoading').style.display='none';
+    document.getElementById('bkApp').style.display='';
+    init();
+  });
+});
+
+function init(){
+  // Auto-skip steps if presets
+  if(presetType){
+    selType=types.find(function(t){return t.id===presetType;});
+    if(selType){
+      if(presetPerson){
+        selPerson=persons.find(function(p){return p.id===presetPerson;});
+        if(selPerson){renderCalendar();goStep(3);return;}
+      }
+      renderPersonCards();goStep(2);return;
+    }
+  }
+  if(presetPerson){
+    selPerson=persons.find(function(p){return p.id===presetPerson;});
+    if(selPerson){
+      // Show types for this person
+      var personTypes=types.filter(function(t){return(selPerson.types||[]).indexOf(t.id)>=0;});
+      if(personTypes.length===1){selType=personTypes[0];renderCalendar();goStep(3);return;}
+    }
+  }
+  renderTypeCards();
+}
+
+/* ═══ STEP 1: TYPE ═══ */
+function renderTypeCards(){
+  var el=document.getElementById('typeCards');
+  var h='';
+  for(var i=0;i<types.length;i++){
+    var t=types[i];
+    h+='<div class="bk-card" data-action="selectType" data-idx="'+i+'">';
+    h+='<div class="bk-card-top"><span class="bk-card-dot" style="background:'+t.color+'"></span><span class="bk-card-name">'+esc(t.label)+'</span><span class="bk-card-dur">'+t.duration+' min</span></div>';
+    h+='</div>';
+  }
+  el.innerHTML=h;
+}
+
+/* ═══ STEP 2: PERSON ═══ */
+function renderPersonCards(){
+  var el=document.getElementById('personCards');
+  var filtered=persons.filter(function(p){return!selType||(p.types||[]).indexOf(selType.id)>=0;});
+  if(!filtered.length){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Aucune personne disponible pour ce type de RDV</div>';return;}
+  var h='';
+  for(var i=0;i<filtered.length;i++){
+    var p=filtered[i];
+    h+='<div class="bk-card bk-person" data-action="selectPerson" data-id="'+p.id+'">';
+    h+='<div class="bk-person-av" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</div>';
+    h+='<div><div class="bk-person-name">'+esc(p.name)+'</div><div class="bk-person-role">'+esc(p.role||'')+'</div></div>';
+    h+='</div>';
+  }
+  el.innerHTML=h;
+}
+
+/* ═══ STEP 3: CALENDAR + SLOTS ═══ */
+function renderCalendar(){
+  var el=document.getElementById('calendarWrap');
+  var first=new Date(calYear,calMonth,1);
+  var lastDay=new Date(calYear,calMonth+1,0).getDate();
+  var startDay=first.getDay(); // 0=Sun
+  var today=new Date(); today.setHours(0,0,0,0);
+
+  var h='<div class="bk-cal">';
+  h+='<div class="bk-cal-header">';
+  h+='<button class="bk-cal-nav" data-action="prevMonth">◀</button>';
+  h+='<span class="bk-cal-month">'+MOIS[calMonth]+' '+calYear+'</span>';
+  h+='<button class="bk-cal-nav" data-action="nextMonth">▶</button>';
+  h+='</div>';
+  h+='<div class="bk-cal-grid">';
+  for(var d=0;d<7;d++)h+='<span class="bk-cal-day-label">'+JOURS_LABELS[d]+'</span>';
+  // Empty cells
+  for(var e=0;e<startDay;e++)h+='<span class="bk-cal-day"></span>';
+  // Days
+  for(var day=1;day<=lastDay;day++){
+    var dateObj=new Date(calYear,calMonth,day);
+    var ds=fmtDate(dateObj);
+    var isPast=dateObj<today;
+    var isToday=dateObj.getTime()===today.getTime();
+    var isAvail=!isPast&&hasAvailableSlots(ds);
+    var isSel=selDate===ds;
+    var cls='bk-cal-day';
+    if(isPast)cls+=' past';
+    if(isToday)cls+=' today';
+    if(isAvail)cls+=' available';
+    if(isSel)cls+=' selected';
+    h+='<button class="'+cls+'"'+(isAvail?' data-action="selectDate" data-date="'+ds+'"':'')+'>'+day+'</button>';
+  }
+  h+='</div></div>';
+  el.innerHTML=h;
+
+  // Render slots if date selected
+  if(selDate)renderSlots();
+}
+
+function hasAvailableSlots(dateStr){
+  if(!selPerson)return false;
+  var d=new Date(dateStr+'T12:00:00');
+  var dayName=JOURS_FROM_IDX[d.getDay()];
+  var sched=selPerson.schedule||{};
+  var daySlots=sched[dayName]||[];
+  if(!daySlots.length)return false;
+  var blocked=selPerson.blockedDates||[];
+  if(blocked.indexOf(dateStr)>=0)return false;
+  return true;
+}
+
+function renderSlots(){
+  var el=document.getElementById('slotsWrap');
+  if(!selDate||!selPerson){el.innerHTML='';return;}
+  var d=new Date(selDate+'T12:00:00');
+  var dayName=JOURS_FROM_IDX[d.getDay()];
+  var sched=selPerson.schedule||{};
+  var daySlots=sched[dayName]||[];
+  var dur=selType?selType.duration:30;
+
+  // Generate time slots
+  var allSlots=[];
+  for(var si=0;si<daySlots.length;si++){
+    var range=daySlots[si];
+    var startMin=timeToMin(range.start);
+    var endMin=timeToMin(range.end);
+    for(var m=startMin;m+dur<=endMin;m+=dur){
+      allSlots.push(minToTime(m));
+    }
+  }
+
+  // Remove already booked
+  var available=allSlots.filter(function(time){
+    return !bookings.some(function(b){
+      return b.personId===selPerson.id&&b.date===selDate&&b.time===time;
+    });
+  });
+
+  // Remove past times if today
+  var now=new Date();
+  if(selDate===fmtDate(now)){
+    var nowMin=now.getHours()*60+now.getMinutes();
+    available=available.filter(function(t){return timeToMin(t)>nowMin;});
+  }
+
+  if(!available.length){el.innerHTML='<div class="bk-no-slots">Aucun créneau disponible ce jour</div>';return;}
+
+  var h='<div class="bk-slots">';
+  for(var i=0;i<available.length;i++){
+    var isSel=selTime===available[i];
+    h+='<button class="bk-slot'+(isSel?' selected':'')+'" data-action="selectTime" data-time="'+available[i]+'">'+available[i]+'</button>';
+  }
+  h+='</div>';
+  if(selTime){
+    h+='<button class="bk-btn bk-btn-primary" data-action="goForm">Continuer →</button>';
+  }
+  el.innerHTML=h;
+}
+
+function timeToMin(t){var p=t.split(':');return parseInt(p[0])*60+parseInt(p[1]);}
+function minToTime(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+
+/* ═══ STEP 4: FORM + SUMMARY ═══ */
+function renderSummary(){
+  var el=document.getElementById('bookingSummary');
+  var d=new Date(selDate+'T12:00:00');
+  var joursFr=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  var moisFr=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  var dateFr=joursFr[d.getDay()]+' '+d.getDate()+' '+moisFr[d.getMonth()]+' '+d.getFullYear();
+  var h='';
+  if(selType)h+='<div class="bk-summary-row"><span class="bk-summary-label">Type</span><span class="bk-summary-val" style="color:'+selType.color+'">'+esc(selType.label)+'</span></div>';
+  if(selPerson)h+='<div class="bk-summary-row"><span class="bk-summary-label">Avec</span><span class="bk-summary-val">'+esc(selPerson.name)+'</span></div>';
+  h+='<div class="bk-summary-row"><span class="bk-summary-label">Date</span><span class="bk-summary-val">'+dateFr+'</span></div>';
+  h+='<div class="bk-summary-row"><span class="bk-summary-label">Heure</span><span class="bk-summary-val">'+selTime+'</span></div>';
+  if(selType)h+='<div class="bk-summary-row"><span class="bk-summary-label">Durée</span><span class="bk-summary-val">'+selType.duration+' min</span></div>';
+  el.innerHTML=h;
+}
+
+/* ═══ CONFIRM BOOKING ═══ */
+document.getElementById('confirmBtn').addEventListener('click',function(){
+  var prenom=document.getElementById('fPrenom').value.trim();
+  var nom=document.getElementById('fNom').value.trim();
+  var email=document.getElementById('fEmail').value.trim();
+  if(!prenom||!nom||!email){alert('Veuillez remplir au minimum votre prénom, nom et email.');return;}
+
+  var booking={
+    type:selType?selType.id:'',
+    typeLabel:selType?selType.label:'',
+    personId:selPerson?selPerson.id:'',
+    personName:selPerson?selPerson.name:'',
+    date:selDate,
+    time:selTime,
+    duration:selType?selType.duration:30,
+    status:'confirmed',
+    prospect:{
+      prenom:prenom,
+      nom:nom,
+      email:email,
+      telephone:document.getElementById('fTel').value.trim(),
+      secteur:document.getElementById('fSecteur').value.trim(),
+      message:document.getElementById('fMessage').value.trim()
+    },
+    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  this.disabled=true;
+  this.textContent='Réservation en cours...';
+  var btn=this;
+
+  db.collection('bookings').add(booking).then(function(){
+    // Also create a lead in the leads collection
+    db.collection('leads').add({
+      nom:prenom+' '+nom,
+      email:email,
+      telephone:document.getElementById('fTel').value.trim(),
+      type:'self_booking',
+      stage:'rdv_self_booking',
+      status:'rdv_pose',
+      assignedTo:selPerson?selPerson.id:'',
+      secteur:document.getElementById('fSecteur').value.trim(),
+      utm:'Booking - '+(selType?selType.label:''),
+      rdvDate:selDate,
+      rdvHeure:selTime,
+      notesHistory:[{text:'RDV réservé via booking : '+(selType?selType.label:'')+' avec '+(selPerson?selPerson.name:''),date:new Date().toLocaleString('fr-FR')}],
+      createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    var d=new Date(selDate+'T12:00:00');
+    var joursFr2=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+    var moisFr2=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+    document.getElementById('confirmText').innerHTML='Votre rendez-vous <strong>'+(selType?selType.label:'')+'</strong> avec <strong>'+(selPerson?selPerson.name:'')+'</strong> est confirmé pour le <strong>'+joursFr2[d.getDay()]+' '+d.getDate()+' '+moisFr2[d.getMonth()]+'</strong> à <strong>'+selTime+'</strong>.<br><br>Vous recevrez une confirmation par email à <strong>'+esc(email)+'</strong>.';
+    goStep(5);
+  }).catch(function(err){
+    btn.disabled=false;
+    btn.textContent='✅ Confirmer le rendez-vous';
+    alert('Erreur: '+err.message);
+  });
+});
+
+/* ═══ EVENTS ═══ */
+document.addEventListener('click',function(e){
+  var a=e.target.closest('[data-action]');
+  if(!a)return;
+  var action=a.dataset.action;
+
+  if(action==='selectType'){selType=types[+a.dataset.idx];renderPersonCards();goStep(2);}
+  if(action==='selectPerson'){selPerson=persons.find(function(p){return p.id===a.dataset.id;});selDate=null;selTime=null;renderCalendar();goStep(3);}
+  if(action==='prevMonth'){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
+  if(action==='nextMonth'){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
+  if(action==='selectDate'){selDate=a.dataset.date;selTime=null;renderCalendar();}
+  if(action==='selectTime'){selTime=a.dataset.time;renderSlots();}
+  if(action==='goForm'){renderSummary();goStep(4);}
+  if(action==='back'){goStep(+a.dataset.to);}
+});
+
+// Show admin gear if logged in as admin
+firebase.auth().onAuthStateChanged(function(u){
+  if(u){
+    db.collection('users').doc(u.uid).get().then(function(s){
+      if(s.exists&&s.data().role==='admin'){
+        document.getElementById('adminGear').style.display='';
+      }
+    });
+  }
+});
+</script>
+</body>
+</html>

@@ -29,6 +29,7 @@
       { id: 'suivi-client', icon: '📋', label: 'Suivi Clients',     href: 'sales-suivi-client.html' },
       { id: 'eod',          icon: '📝', label: 'EOD',               href: 'sales-eod.html' },
       { id: 'leads',        icon: '🔔', label: 'Leads Live',        href: 'sales-leads.html' },
+      { id: 'booking',      icon: '📅', label: 'Booking',            href: 'booking.html' },
 
     ],
 
@@ -47,6 +48,7 @@
       { id: 'sales-suivi-client', icon: '📋', label: 'Suivi Clients', href: 'sales-suivi-client.html', section: 'Sales' },
       { id: 'sales-eod',          icon: '📝', label: 'EOD',           href: 'sales-eod.html',          section: 'Sales' },
       { id: 'sales-leads',        icon: '🔔', label: 'Leads Live',   href: 'sales-leads.html',        section: 'Sales' },
+      { id: 'sales-booking',      icon: '📅', label: 'Booking',      href: 'booking.html',            section: 'Sales' },
 
       { id: 'import', icon: '🔗', label: 'Import Notion', href: 'import-notion.html', section: 'Outils' },
     ],
