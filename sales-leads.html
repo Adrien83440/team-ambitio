@@ -154,10 +154,38 @@ html, body {
 .ld-card.open .ld-card-body { display: block; }
 
 .ld-details { padding: 12px 0; }
-.ld-detail-row { display: flex; gap: 8px; padding: 5px 0; font-size: 12px; }
+.ld-detail-row { display: flex; gap: 8px; padding: 5px 0; font-size: 12px; align-items: center; }
 .ld-detail-label { color: var(--muted); min-width: 90px; flex-shrink: 0; font-weight: 600; }
 .ld-detail-val { color: var(--text); word-break: break-all; }
 .ld-detail-val a { color: var(--blue); text-decoration: none; }
+
+/* Edit mode */
+.ld-edit-toggle {
+  display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  font-family: var(--fb); font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+  margin-bottom: 4px;
+}
+.ld-edit-toggle:hover { color: var(--text); border-color: var(--border2); }
+.ld-edit-toggle.editing { color: var(--gold); border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.06); }
+.ld-detail-input {
+  flex: 1; padding: 5px 8px; background: var(--bg3); border: 1.5px solid var(--border);
+  border-radius: 6px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none;
+  transition: border-color 0.15s;
+}
+.ld-detail-input:focus { border-color: var(--red2); }
+.ld-detail-select {
+  flex: 1; padding: 5px 8px; background: var(--bg3); border: 1.5px solid var(--border);
+  border-radius: 6px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none;
+}
+.ld-detail-select option { background: var(--bg2); }
+.ld-save-info-btn {
+  width: 100%; padding: 8px; border: none; border-radius: 8px;
+  background: rgba(245,158,11,0.15); color: #fcd34d;
+  font-family: var(--fb); font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: all 0.15s; margin-top: 6px;
+}
+.ld-save-info-btn:hover { background: rgba(245,158,11,0.25); }
 
 /* Actions */
 .ld-actions { padding: 12px 0 0; border-top: 1px solid var(--border); }
@@ -417,6 +445,11 @@ function escHtml(s) {
   return d.innerHTML;
 }
 
+function escAttr(s) {
+  if (!s) return '';
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function timeAgo(ts) {
   if (!ts) return '';
   var d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -612,7 +645,13 @@ function renderCard(l) {
 
   // Body
   h += '<div class="ld-card-body">';
-  h += '<div class="ld-details">';
+
+  // Edit toggle
+  h += '<button class="ld-edit-toggle" data-action="toggleEdit" data-id="' + id + '">✏️ Modifier les infos</button>';
+
+  // ── VIEW MODE ──
+  h += '<div class="ld-details" data-view-mode="' + id + '">';
+  if (l.nom) h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><span class="ld-detail-val">' + escHtml(l.nom) + '</span></div>';
   if (l.telephone) h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><span class="ld-detail-val"><a href="tel:' + l.telephone.replace(/\s/g, '') + '">' + escHtml(l.telephone) + '</a></span></div>';
   if (l.email) h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><span class="ld-detail-val"><a href="mailto:' + escHtml(l.email) + '">' + escHtml(l.email) + '</a></span></div>';
   if (l.utm) h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><span class="ld-detail-val">' + escHtml(l.utm) + '</span></div>';
@@ -621,8 +660,30 @@ function renderCard(l) {
   if (l.defi) h += '<div class="ld-detail-row"><span class="ld-detail-label">Défi</span><span class="ld-detail-val">' + escHtml(l.defi) + '</span></div>';
   if (l.disponibilite) h += '<div class="ld-detail-row"><span class="ld-detail-label">Dispo</span><span class="ld-detail-val">' + escHtml(l.disponibilite) + '</span></div>';
   if (l.timeline) h += '<div class="ld-detail-row"><span class="ld-detail-label">Mise en place</span><span class="ld-detail-val">' + escHtml(l.timeline) + '</span></div>';
-  if (l.dateRdv) h += '<div class="ld-detail-row"><span class="ld-detail-label">Date RDV</span><span class="ld-detail-val">' + escHtml(l.dateRdv) + '</span></div>';
+  if (l.dateRdv) h += '<div class="ld-detail-row"><span class="ld-detail-label">Date booking</span><span class="ld-detail-val">' + escHtml(l.dateRdv) + '</span></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(l.createdAt) + '</span></div>';
+  h += '</div>';
+
+  // ── EDIT MODE (hidden by default) ──
+  h += '<div class="ld-details" data-edit-mode="' + id + '" style="display:none">';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><input class="ld-detail-input" data-edit="nom" data-id="' + id + '" value="' + escAttr(l.nom || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><input class="ld-detail-input" data-edit="telephone" data-id="' + id + '" value="' + escAttr(l.telephone || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><input class="ld-detail-input" data-edit="email" data-id="' + id + '" type="email" value="' + escAttr(l.email || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><input class="ld-detail-input" data-edit="utm" data-id="' + id + '" value="' + escAttr(l.utm || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Type</span><select class="ld-detail-select" data-edit="type" data-id="' + id + '">';
+  h += '<option value="vsl_elite"' + (l.type === 'vsl_elite' ? ' selected' : '') + '>VSL ÉLITE</option>';
+  h += '<option value="self_booking"' + (l.type === 'self_booking' ? ' selected' : '') + '>Self-Booking</option>';
+  h += '</select></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Attribué à</span><select class="ld-detail-select" data-edit="assignedTo" data-id="' + id + '">';
+  h += '<option value="guillaume"' + (l.assignedTo === 'guillaume' ? ' selected' : '') + '>Guillaume</option>';
+  h += '<option value="elodie"' + (l.assignedTo === 'elodie' ? ' selected' : '') + '>Élodie</option>';
+  h += '</select></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Secteur</span><input class="ld-detail-input" data-edit="secteur" data-id="' + id + '" value="' + escAttr(l.secteur || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">CA actuel</span><input class="ld-detail-input" data-edit="ca" data-id="' + id + '" value="' + escAttr(l.ca || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Défi</span><input class="ld-detail-input" data-edit="defi" data-id="' + id + '" value="' + escAttr(l.defi || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Dispo</span><input class="ld-detail-input" data-edit="disponibilite" data-id="' + id + '" value="' + escAttr(l.disponibilite || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Timeline</span><input class="ld-detail-input" data-edit="timeline" data-id="' + id + '" value="' + escAttr(l.timeline || '') + '"/></div>';
+  h += '<button class="ld-save-info-btn" data-action="saveInfo" data-id="' + id + '">💾 Enregistrer les modifications</button>';
   h += '</div>';
 
   // Actions
@@ -692,6 +753,50 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
       card.classList.add('open');
       openCardId = id;
     }
+    return;
+  }
+
+  // Toggle edit mode
+  var editBtn = e.target.closest('[data-action="toggleEdit"]');
+  if (editBtn) {
+    var eid = editBtn.dataset.id;
+    var viewEl = document.querySelector('[data-view-mode="' + eid + '"]');
+    var editEl = document.querySelector('[data-edit-mode="' + eid + '"]');
+    if (!viewEl || !editEl) return;
+    var isEditing = editEl.style.display !== 'none';
+    viewEl.style.display = isEditing ? '' : 'none';
+    editEl.style.display = isEditing ? 'none' : '';
+    editBtn.classList.toggle('editing', !isEditing);
+    editBtn.innerHTML = isEditing ? '✏️ Modifier les infos' : '✕ Annuler';
+    return;
+  }
+
+  // Save info edits
+  var saveInfoBtn = e.target.closest('[data-action="saveInfo"]');
+  if (saveInfoBtn) {
+    var sid = saveInfoBtn.dataset.id;
+    var card3 = saveInfoBtn.closest('.ld-card');
+    var fields = ['nom', 'telephone', 'email', 'utm', 'type', 'assignedTo', 'secteur', 'ca', 'defi', 'disponibilite', 'timeline'];
+    var updates = {};
+    for (var fi = 0; fi < fields.length; fi++) {
+      var el = card3.querySelector('[data-edit="' + fields[fi] + '"]');
+      if (el) updates[fields[fi]] = el.value.trim();
+    }
+    updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    // Update local state
+    for (var li = 0; li < allLeads.length; li++) {
+      if (allLeads[li].id === sid) {
+        for (var key in updates) { if (key !== 'updatedAt') allLeads[li][key] = updates[key]; }
+        break;
+      }
+    }
+    db.collection('leads').doc(sid).update(updates).then(function() {
+      toast('✅ Infos mises à jour');
+      openCardId = sid;
+      renderFeed();
+    }).catch(function(err) {
+      toast('❌ Erreur : ' + err.message);
+    });
     return;
   }
 
