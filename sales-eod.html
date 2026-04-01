@@ -291,6 +291,42 @@ html, body {
 }
 .eod-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .eod-loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+
+/* ── Member Select Gate ── */
+.eod-gate {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 60px 24px; text-align: center;
+}
+.eod-gate-title { font-family: var(--fh); font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+.eod-gate-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+.eod-gate-btns { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.eod-gate-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 28px 36px; background: var(--bg2); border: 2px solid var(--border);
+  border-radius: 18px; cursor: pointer; transition: all 0.2s; min-width: 160px;
+}
+.eod-gate-btn:hover { border-color: var(--border2); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+.eod-gate-btn.sel { border-color: var(--red2); background: rgba(185,28,28,0.06); }
+.eod-gate-av {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--fh); font-size: 20px; font-weight: 800; color: white;
+}
+.eod-gate-name { font-family: var(--fh); font-size: 15px; font-weight: 800; }
+.eod-gate-role { font-size: 11px; color: var(--muted); }
+.eod-active-member {
+  display: none; align-items: center; gap: 10px;
+  padding: 8px 14px; background: rgba(185,28,28,0.08); border: 1.5px solid var(--red2);
+  border-radius: var(--radius); font-size: 13px; font-weight: 700; color: var(--red3);
+}
+.eod-active-member.visible { display: flex; }
+.eod-active-member .m-dot { width: 10px; height: 10px; border-radius: 50%; }
+.eod-change-member {
+  margin-left: 8px; padding: 3px 8px; background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border); border-radius: 6px; color: var(--muted);
+  font-size: 10px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.eod-change-member:hover { color: var(--text); border-color: var(--border2); }
 </style>
 </head>
 <body>
@@ -311,18 +347,32 @@ html, body {
     </div>
   </div>
 
-  <!-- CONTROLS -->
-  <div class="eod-controls">
+  <!-- MEMBER SELECTOR GATE -->
+  <div class="eod-gate" id="eodGate">
+    <div class="eod-gate-title">Qui remplit l'EOD ?</div>
+    <div class="eod-gate-sub">Sélectionne ton profil avant de commencer</div>
+    <div class="eod-gate-btns">
+      <div class="eod-gate-btn" data-pick="guillaume">
+        <div class="eod-gate-av" style="background:linear-gradient(135deg,#7f1d1d,#ef4444)">G</div>
+        <div class="eod-gate-name">Guillaume</div>
+        <div class="eod-gate-role">Closer · Setter</div>
+      </div>
+      <div class="eod-gate-btn" data-pick="elodie">
+        <div class="eod-gate-av" style="background:linear-gradient(135deg,#1e3a5f,#60a5fa)">É</div>
+        <div class="eod-gate-name">Élodie</div>
+        <div class="eod-gate-role">Closer · Setter</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROLS (hidden until member selected) -->
+  <div class="eod-controls" id="eodControls" style="display:none">
+    <div class="eod-active-member visible" id="activeMemberBadge">
+      <span class="m-dot" id="activeMemberDot"></span>
+      <span id="activeMemberName">—</span>
+      <button class="eod-change-member" id="changeMemberBtn">Changer</button>
+    </div>
     <input type="date" class="eod-date-input" id="eodDate"/>
-    <button class="eod-member-btn active" data-member="current" id="btnCurrentMember">
-      <span class="m-dot" style="background:#ef4444"></span> <span id="btnCurrentLabel">Mon EOD</span>
-    </button>
-    <button class="eod-member-btn" data-member="guillaume" id="btnGuillaume" style="display:none">
-      <span class="m-dot" style="background:#ef4444"></span> Guillaume
-    </button>
-    <button class="eod-member-btn" data-member="elodie" id="btnElodie" style="display:none">
-      <span class="m-dot" style="background:#60a5fa"></span> Élodie
-    </button>
     <div class="eod-nav-btns">
       <button class="eod-nav-btn active" data-view="form">✏️ Saisie</button>
       <button class="eod-nav-btn" data-view="history">📅 Historique</button>
@@ -331,7 +381,7 @@ html, body {
   </div>
 
   <!-- ═══════ VIEW: FORM ═══════ -->
-  <div id="viewFormSection">
+  <div id="viewFormSection" style="display:none">
     <div class="eod-form-grid">
       <!-- SETTING -->
       <div class="eod-panel setting">
@@ -469,6 +519,11 @@ var RDV_ISSUES = [
 document.getElementById('eodDate').value = fmtDate(new Date());
 
 // ══════════ AUTH ══════════
+var MEMBER_MAP = {
+  guillaume: { name: 'Guillaume', color: '#ef4444' },
+  elodie:    { name: 'Élodie',    color: '#60a5fa' }
+};
+
 (function initAuth() {
   var nmCache  = localStorage.getItem('ambitio_name') || 'Utilisateur';
   var uidCache = localStorage.getItem('ambitio_auth_uid') || localStorage.getItem('ambitio_uid') || 'default';
@@ -489,18 +544,17 @@ document.getElementById('eodDate').value = fmtDate(new Date());
         localStorage.setItem('ambitio_name', CURRENT_NAME);
         document.getElementById('tb-nm').textContent = CURRENT_NAME;
         document.getElementById('tb-av').textContent = CURRENT_NAME[0].toUpperCase();
-        loadMembers();
+        loadMembersFromFirestore();
       });
     } else {
       CURRENT_UID = uidCache;
       CURRENT_NAME = nmCache;
-      selectMember('current');
-      loadFormData();
+      // Gate stays visible, no auto-select
     }
   });
 })();
 
-function loadMembers() {
+function loadMembersFromFirestore() {
   db.collection('users').get().then(function(snap) {
     snap.forEach(function(doc) {
       var d = doc.data();
@@ -508,33 +562,60 @@ function loadMembers() {
         MEMBERS[doc.id] = { uid: doc.id, name: d.displayName || d.name || d.email || doc.id, role: d.role };
       }
     });
-    if (CURRENT_ROLE === 'admin') {
-      document.getElementById('btnGuillaume').style.display = '';
-      document.getElementById('btnElodie').style.display = '';
-    }
-    selectMember('current');
-    loadFormData();
-  }).catch(function() { selectMember('current'); loadFormData(); });
+  }).catch(function() {});
 }
 
-function selectMember(key) {
-  document.querySelectorAll('.eod-member-btn').forEach(function(b) { b.classList.remove('active'); });
-  if (key === 'current') {
-    VIEWING_UID = CURRENT_UID; VIEWING_NAME = CURRENT_NAME;
-    document.getElementById('btnCurrentMember').classList.add('active');
-  } else {
-    var search = key.toLowerCase();
-    var found = null;
-    Object.keys(MEMBERS).forEach(function(k) {
-      var n = MEMBERS[k].name.toLowerCase();
-      if (n.includes(search)) found = MEMBERS[k];
-    });
-    VIEWING_UID = found ? found.uid : key;
-    VIEWING_NAME = found ? found.name : key.charAt(0).toUpperCase() + key.slice(1);
-    var btnId = key === 'guillaume' ? 'btnGuillaume' : 'btnElodie';
-    document.getElementById(btnId).classList.add('active');
-  }
+function pickMember(key) {
+  var info = MEMBER_MAP[key];
+  if (!info) return;
+
+  // Resolve UID from loaded MEMBERS or fallback to key
+  var found = null;
+  Object.keys(MEMBERS).forEach(function(k) {
+    if (MEMBERS[k].name.toLowerCase().includes(key.toLowerCase())) found = MEMBERS[k];
+  });
+  VIEWING_UID = found ? found.uid : key;
+  VIEWING_NAME = info.name;
+
+  // Update active member badge
+  document.getElementById('activeMemberDot').style.background = info.color;
+  document.getElementById('activeMemberName').textContent = info.name;
+
+  // Hide gate, show controls + form
+  document.getElementById('eodGate').style.display = 'none';
+  document.getElementById('eodControls').style.display = '';
+  document.getElementById('viewFormSection').style.display = '';
+
+  // Store last pick
+  localStorage.setItem('eod_last_member', key);
+
+  // Load data
+  loadFormData();
+  if (currentView === 'history') renderWeekHistory();
+  if (currentView === 'trends') renderTrends();
 }
+
+function showGate() {
+  document.getElementById('eodGate').style.display = '';
+  document.getElementById('eodControls').style.display = 'none';
+  document.getElementById('viewFormSection').style.display = 'none';
+  document.getElementById('viewHistorySection').style.display = 'none';
+  document.getElementById('viewTrendsSection').style.display = 'none';
+  VIEWING_UID = null;
+  VIEWING_NAME = '';
+}
+
+// Gate button clicks
+document.querySelectorAll('.eod-gate-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.eod-gate-btn').forEach(function(b) { b.classList.remove('sel'); });
+    btn.classList.add('sel');
+    pickMember(btn.dataset.pick);
+  });
+});
+
+// Change member button
+document.getElementById('changeMemberBtn').addEventListener('click', showGate);
 
 // ══════════ RDV LIST ══════════
 var rdvEntries = [];
@@ -708,19 +789,14 @@ document.getElementById('eodSaveBtn').addEventListener('click', function() {
   });
 });
 
-document.getElementById('eodDate').addEventListener('change', loadFormData);
-document.querySelectorAll('.eod-member-btn').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    selectMember(btn.dataset.member);
-    loadFormData();
-    if (currentView === 'history') renderWeekHistory();
-    if (currentView === 'trends') renderTrends();
-  });
+document.getElementById('eodDate').addEventListener('change', function() {
+  if (VIEWING_UID) loadFormData();
 });
 
 // ══════════ VIEW SWITCHING ══════════
 document.querySelectorAll('.eod-nav-btn').forEach(function(btn) {
   btn.addEventListener('click', function() {
+    if (!VIEWING_UID) return;
     document.querySelectorAll('.eod-nav-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     currentView = btn.dataset.view;
@@ -742,7 +818,7 @@ function renderWeekHistory() {
   var monday = getMonday(today);
   monday.setDate(monday.getDate() + weekOffset * 7);
   var sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
-  document.getElementById('weekLabel').textContent = 'Semaine du ' + monday.getDate() + ' ' + MOIS[monday.getMonth()] + ' au ' + sunday.getDate() + ' ' + MOIS[sunday.getMonth()];
+  document.getElementById('weekLabel').textContent = VIEWING_NAME + ' — Semaine du ' + monday.getDate() + ' ' + MOIS[monday.getMonth()] + ' au ' + sunday.getDate() + ' ' + MOIS[sunday.getMonth()];
 
   db.collection('eod').doc(VIEWING_UID).collection('jours')
     .where('date', '>=', fmtDate(monday))
