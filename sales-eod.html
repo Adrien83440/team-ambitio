@@ -397,6 +397,7 @@ html, body {
             <span class="mindset-val" id="fSettingMindsetVal">7</span>
             <span style="font-size:11px;color:var(--muted)">/10</span>
           </div>
+          <textarea class="eod-textarea" id="fSettingMindsetComment" rows="1" placeholder="Commentaire mindset (optionnel)..." style="margin-top:6px;min-height:34px;font-size:12px"></textarea>
         </div>
         <div class="eod-field">
           <label class="eod-label">Mon extra mile du jour</label>
@@ -408,8 +409,14 @@ html, body {
         </div>
       </div>
       <!-- CLOSING -->
-      <div class="eod-panel closing">
-        <div class="eod-panel-title">🎯 Closing <span class="pt-badge">CLOSING</span></div>
+      <div class="eod-panel closing" id="closingPanel">
+        <div class="eod-panel-title" style="justify-content:space-between">
+          <span>🎯 Closing <span class="pt-badge">CLOSING</span></span>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;font-weight:600;color:var(--muted)">
+            <input type="checkbox" id="closingSkip" style="accent-color:var(--red2);width:14px;height:14px;cursor:pointer"/> Pas de closing
+          </label>
+        </div>
+        <div id="closingBody">
         <div class="eod-field">
           <label class="eod-label">Mes rendez-vous</label>
           <div class="rdv-list" id="rdvList"></div>
@@ -426,7 +433,9 @@ html, body {
             <span class="mindset-val" id="fClosingMindsetVal">7</span>
             <span style="font-size:11px;color:var(--muted)">/10</span>
           </div>
+          <textarea class="eod-textarea" id="fClosingMindsetComment" rows="1" placeholder="Commentaire mindset closing (optionnel)..." style="margin-top:6px;min-height:34px;font-size:12px"></textarea>
         </div>
+        </div><!-- /closingBody -->
       </div>
     </div>
     <!-- KPIs optionnels -->
@@ -444,6 +453,22 @@ html, body {
       <button class="eod-save-btn" id="eodSaveBtn">💾 Sauvegarder mon EOD</button>
       <span class="eod-save-status" id="eodSaveStatus">✅ Sauvegardé !</span>
     </div>
+
+    <!-- Feedback / Retour Head of Sales -->
+    <div style="margin-top:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);overflow:hidden" id="feedbackSection">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">💬</span>
+        <span style="font-family:var(--fh);font-size:13px;font-weight:800">Retour Head of Sales</span>
+      </div>
+      <div style="padding:14px 16px">
+        <div id="feedbackList"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <textarea id="feedbackInput" rows="2" placeholder="Ajouter un retour..." style="flex:1;padding:8px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none;resize:none;min-height:38px"></textarea>
+          <button id="feedbackAddBtn" style="padding:8px 14px;border:none;border-radius:8px;background:rgba(96,165,250,0.12);color:var(--blue);font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;align-self:flex-end">Envoyer</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ═══════ VIEW: HISTORY ═══════ -->
@@ -684,6 +709,12 @@ document.getElementById('fClosingMindset').addEventListener('input', function(e)
 colorMindset(7, 'fSettingMindsetVal');
 colorMindset(7, 'fClosingMindsetVal');
 
+// Closing skip toggle
+document.getElementById('closingSkip').addEventListener('change', function() {
+  document.getElementById('closingBody').style.display = this.checked ? 'none' : '';
+  document.getElementById('closingPanel').style.opacity = this.checked ? '0.5' : '1';
+});
+
 // ── KPI toggle ──
 document.getElementById('kpiToggle').addEventListener('click', function() {
   this.classList.toggle('open');
@@ -710,13 +741,16 @@ function gatherFormData() {
     setting: {
       ressenti: document.getElementById('fSettingRessenti').value,
       mindset: parseInt(document.getElementById('fSettingMindset').value),
+      mindsetComment: document.getElementById('fSettingMindsetComment').value,
       extraMile: document.getElementById('fSettingExtra').value,
       besoinAide: document.getElementById('fSettingAide').value,
     },
+    closingSkipped: document.getElementById('closingSkip').checked,
     closing: {
       rdvs: rdvEntries.filter(function(r) { return r.nom.trim() !== ''; }),
       commentaire: document.getElementById('fClosingComment').value,
       mindset: parseInt(document.getElementById('fClosingMindset').value),
+      mindsetComment: document.getElementById('fClosingMindsetComment').value,
     },
     kpis: {
       appels: kA ? parseInt(kA) : null,
@@ -734,11 +768,17 @@ function populateForm(data) {
     document.getElementById('fSettingRessenti').value = '';
     document.getElementById('fSettingMindset').value = 7;
     document.getElementById('fSettingMindsetVal').textContent = '7';
+    document.getElementById('fSettingMindsetComment').value = '';
     document.getElementById('fSettingExtra').value = '';
     document.getElementById('fSettingAide').value = '';
     document.getElementById('fClosingComment').value = '';
     document.getElementById('fClosingMindset').value = 7;
     document.getElementById('fClosingMindsetVal').textContent = '7';
+    document.getElementById('fClosingMindsetComment').value = '';
+    document.getElementById('closingSkip').checked = false;
+    document.getElementById('closingBody').style.display = '';
+    document.getElementById('closingPanel').style.opacity = '1';
+    document.getElementById('feedbackList').innerHTML = '';
     rdvEntries = []; renderRdvList();
     ['kpiAppels','kpiDecroches','kpiRdvPoses','kpiRdvEffectues','kpiCloses','kpiCA'].forEach(function(id) { document.getElementById(id).value = ''; });
     colorMindset(7, 'fSettingMindsetVal'); colorMindset(7, 'fClosingMindsetVal');
@@ -748,11 +788,20 @@ function populateForm(data) {
   document.getElementById('fSettingRessenti').value = s.ressenti || '';
   document.getElementById('fSettingMindset').value = s.mindset || 7;
   document.getElementById('fSettingMindsetVal').textContent = s.mindset || 7;
+  document.getElementById('fSettingMindsetComment').value = s.mindsetComment || '';
   document.getElementById('fSettingExtra').value = s.extraMile || '';
   document.getElementById('fSettingAide').value = s.besoinAide || '';
   document.getElementById('fClosingComment').value = c.commentaire || '';
   document.getElementById('fClosingMindset').value = c.mindset || 7;
   document.getElementById('fClosingMindsetVal').textContent = c.mindset || 7;
+  document.getElementById('fClosingMindsetComment').value = c.mindsetComment || '';
+  // Closing skip
+  var skipped = data.closingSkipped || false;
+  document.getElementById('closingSkip').checked = skipped;
+  document.getElementById('closingBody').style.display = skipped ? 'none' : '';
+  document.getElementById('closingPanel').style.opacity = skipped ? '0.5' : '1';
+  // Feedback
+  renderFeedback(data.feedback || []);
   rdvEntries = (c.rdvs || []).map(function(r) { return { nom: r.nom || '', issue: r.issue || 'follow_up' }; });
   renderRdvList();
   document.getElementById('kpiAppels').value = k.appels != null ? k.appels : '';
@@ -764,6 +813,43 @@ function populateForm(data) {
   colorMindset(s.mindset || 7, 'fSettingMindsetVal');
   colorMindset(c.mindset || 7, 'fClosingMindsetVal');
 }
+
+function renderFeedback(list) {
+  var el = document.getElementById('feedbackList');
+  if (!list || list.length === 0) { el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:4px 0">Aucun retour pour le moment</div>'; return; }
+  var h = '';
+  for (var i = list.length - 1; i >= 0; i--) {
+    var fb = list[i];
+    h += '<div style="padding:8px 10px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.15);border-radius:8px;margin-bottom:6px">';
+    h += '<div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:10px;font-weight:700;color:var(--blue)">' + (fb.author || 'Admin') + '</span><span style="font-size:10px;color:var(--muted)">' + (fb.date || '') + '</span></div>';
+    h += '<div style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.5">' + (fb.text || '').replace(/</g, '&lt;') + '</div>';
+    h += '</div>';
+  }
+  el.innerHTML = h;
+}
+
+// Feedback add handler
+document.getElementById('feedbackAddBtn').addEventListener('click', function() {
+  var input = document.getElementById('feedbackInput');
+  var text = input.value.trim();
+  if (!text || !VIEWING_UID) return;
+  var dateStr = document.getElementById('eodDate').value;
+  if (!dateStr) return;
+  var authorName = window._currentUserName || localStorage.getItem('ambitio_name') || 'Admin';
+  var now = new Date();
+  var fmtD = String(now.getDate()).padStart(2,'0') + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + now.getFullYear() + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  var ref = db.collection('eod').doc(VIEWING_UID).collection('jours').doc(dateStr);
+  ref.get().then(function(snap) {
+    var data = snap.exists ? snap.data() : {};
+    var feedback = data.feedback || [];
+    feedback.push({ text: text, author: authorName, date: fmtD });
+    return ref.set({ feedback: feedback }, { merge: true });
+  }).then(function() {
+    input.value = '';
+    loadFormData();
+    toast('✅ Retour envoyé');
+  }).catch(function(err) { toast('❌ ' + err.message); });
+});
 
 function loadFormData() {
   if (!VIEWING_UID) return;
