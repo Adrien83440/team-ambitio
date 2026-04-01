@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Fiche Contact</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",
+      projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",
+      messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"
+    });
+  }
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#08080f;--bg2:#0f0f1a;--bg3:#14141f;--bg4:#1a1a28;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--red:#b91c1c;--red2:#ef4444;--red3:#fca5a5;--gold:#f59e0b;--green:#34d399;--blue:#60a5fa;--purple:#a78bfa;--text:rgba(255,255,255,0.92);--muted:rgba(255,255,255,0.48);--muted2:rgba(255,255,255,0.22);--radius:12px;--radius2:16px;--fh:'Syne',sans-serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.page{max-width:1000px;margin:0 auto;padding:0 20px 80px}
+
+/* ── Top bar ── */
+.ct-top{display:flex;align-items:center;gap:12px;padding:16px 0;border-bottom:1px solid var(--border);margin-bottom:20px;flex-wrap:wrap}
+.ct-back{width:36px;height:36px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:14px;transition:all .15s;text-decoration:none;flex-shrink:0}
+.ct-back:hover{background:var(--bg3);color:var(--text)}
+.ct-avatar{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:20px;font-weight:800;color:white;flex-shrink:0}
+.ct-name-wrap{flex:1;min-width:0}
+.ct-name{font-family:var(--fh);font-size:22px;font-weight:800}
+.ct-sub{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:2px}
+.ct-tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px}
+.ct-tag.client{background:rgba(52,211,153,0.12);color:#6ee7b7}
+.ct-tag.lead{background:rgba(245,158,11,0.12);color:#fcd34d}
+.ct-actions-top{display:flex;gap:6px;flex-shrink:0}
+.ct-action-btn{padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--muted);font-family:var(--fb);font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:5px;transition:all .15s}
+.ct-action-btn:hover{border-color:var(--border2);color:var(--text)}
+.ct-action-btn.primary{background:linear-gradient(135deg,#b91c1c,#ef4444);border:none;color:white}
+
+/* ── Tabs ── */
+.ct-tabs{display:flex;gap:4px;margin-bottom:20px;background:var(--bg2);padding:4px;border-radius:12px;border:1px solid var(--border);overflow-x:auto}
+.ct-tab{padding:8px 14px;border:none;border-radius:8px;background:transparent;color:var(--muted);font-family:var(--fb);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap}
+.ct-tab:hover{color:var(--text);background:rgba(255,255,255,0.04)}
+.ct-tab.active{background:var(--bg4);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
+.ct-panel{display:none}
+.ct-panel.active{display:block}
+
+/* ── Layout ── */
+.ct-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:768px){.ct-grid{grid-template-columns:1fr}}
+
+/* ── Card ── */
+.ct-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);overflow:hidden;margin-bottom:16px}
+.ct-card-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.ct-card-icon{font-size:16px}
+.ct-card-title{font-family:var(--fh);font-size:13px;font-weight:800}
+.ct-card-body{padding:16px 18px}
+
+/* ── Fields ── */
+.ct-field{display:flex;gap:8px;padding:6px 0;align-items:center;font-size:13px}
+.ct-field-label{color:var(--muted);min-width:130px;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;flex-shrink:0}
+.ct-input{flex:1;padding:7px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none;transition:border-color .15s}
+.ct-input:focus{border-color:var(--red2)}
+.ct-select{flex:1;padding:7px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none}
+.ct-select option{background:var(--bg2)}
+.ct-saved{font-size:11px;color:var(--green);text-align:center;padding:6px 0;opacity:0;transition:opacity .3s}
+
+/* ── Tags ── */
+.ct-tags-wrap{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.ct-tag-pill{display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(167,139,250,0.12);color:#c4b5fd}
+.ct-tag-pill button{background:none;border:none;color:#c4b5fd;cursor:pointer;font-size:10px;opacity:0.6;padding:0}
+.ct-tag-pill button:hover{opacity:1}
+.ct-tag-add{display:flex;gap:6px}
+.ct-tag-add input{flex:1;padding:6px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:11px;outline:none}
+.ct-tag-add button{padding:6px 12px;border:none;border-radius:8px;background:var(--bg4);color:var(--muted);font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer}
+
+/* ── Timeline ── */
+.ct-timeline{padding:0}
+.ct-tl-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:12px}
+.ct-tl-item:last-child{border-bottom:none}
+.ct-tl-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.ct-tl-date{color:var(--muted);min-width:100px;font-family:var(--fm);font-size:11px;flex-shrink:0}
+.ct-tl-text{color:rgba(255,255,255,0.8);line-height:1.5}
+.ct-tl-empty{text-align:center;padding:30px;color:var(--muted);font-size:12px}
+
+/* ── Notes ── */
+.ct-note-item{padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;margin-bottom:8px}
+.ct-note-date{font-size:10px;font-weight:700;color:var(--muted);margin-bottom:3px}
+.ct-note-text{font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6}
+.ct-note-add{display:flex;gap:6px;margin-top:8px}
+.ct-note-add textarea{flex:1;padding:8px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none;resize:none;min-height:40px}
+.ct-note-add textarea:focus{border-color:var(--red2)}
+.ct-note-add button{padding:8px 14px;border:none;border-radius:8px;background:var(--bg4);color:var(--muted);font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s;align-self:flex-end}
+.ct-note-add button:hover{color:var(--green);background:rgba(52,211,153,0.1)}
+
+/* ── Files ── */
+.ct-file-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px}
+.ct-file-icon{font-size:18px;flex-shrink:0}
+.ct-file-name{flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ct-file-size{color:var(--muted);font-size:10px;flex-shrink:0}
+.ct-file-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px;padding:2px 4px;transition:color .15s}
+.ct-file-del:hover{color:#ef4444}
+.ct-file-upload{display:flex;align-items:center;gap:8px;padding:10px;border:1.5px dashed var(--border2);border-radius:10px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:600;transition:all .15s;text-align:center;justify-content:center}
+.ct-file-upload:hover{border-color:var(--red2);color:var(--text)}
+
+/* ── Activities ── */
+.ct-act-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-size:12px}
+.ct-act-check{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--border2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-size:10px}
+.ct-act-check.done{background:var(--green);border-color:var(--green);color:white}
+.ct-act-text{flex:1}
+.ct-act-text.done{text-decoration:line-through;opacity:0.5}
+.ct-act-date{font-size:10px;color:var(--muted);font-family:var(--fm);flex-shrink:0}
+.ct-act-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:11px}
+.ct-act-add{display:flex;gap:6px;margin-top:8px}
+.ct-act-add input[type="text"]{flex:1;padding:7px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none}
+.ct-act-add input[type="date"]{padding:7px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none}
+.ct-act-add button{padding:7px 12px;border:none;border-radius:8px;background:var(--bg4);color:var(--muted);font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer}
+
+/* ── Pipeline selector ── */
+.ct-stage-pills{display:flex;flex-wrap:wrap;gap:4px}
+.ct-stage-pill{padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--muted)}
+.ct-stage-pill:hover{border-color:var(--border2);color:var(--text)}
+.ct-stage-pill.active{border-color:currentColor}
+
+/* ── Toast ── */
+.ct-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}
+.ct-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.ct-loading{text-align:center;padding:60px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="ct-loading" id="ctLoading">Chargement de la fiche...</div>
+  <div id="ctContent" style="display:none"></div>
+</div>
+<div class="ct-toast" id="ctToast"></div>
+
+<script>
+/* ═══════════════════════════════════════
+   FICHE CONTACT — Ambitio Corp
+   ═══════════════════════════════════════ */
+var db = firebase.firestore();
+var leadId = new URLSearchParams(window.location.search).get('id');
+var lead = null;
+var autoTimer = null;
+
+var STAGES=[
+  {key:'lead',label:'Lead',color:'#34d399'},{key:'nrp1',label:'NRP 1',color:'#f59e0b'},
+  {key:'nrp2',label:'NRP 2',color:'#e67e22'},{key:'nrp3',label:'NRP 3',color:'#ef4444'},
+  {key:'all_nrp',label:'All NRP',color:'#6b7280'},{key:'poubelle',label:'Poubelle',color:'#374151'},
+  {key:'disqualification',label:'Disqualification',color:'#6b7280'},{key:'follow_up_pm',label:'Follow Up (PM)',color:'#60a5fa'},
+  {key:'set',label:'SET',color:'#a78bfa'},{key:'rdv_self_booking',label:'RDV Self Booking',color:'#fbbf24'},
+  {key:'rdv_confirmes',label:'RDV confirmés',color:'#34d399'},{key:'rdv_annules_prospect',label:'RDV annulés Prospect',color:'#ef4444'},
+  {key:'rdv_annules_equipe',label:'RDV annulés Équipe',color:'#f87171'},{key:'no_show_self',label:'No Show Self Booking',color:'#f59e0b'},
+  {key:'no_show_setting',label:'No Show Setting',color:'#e67e22'},{key:'partenariats',label:'Partenariats',color:'#8b5cf6'},
+  {key:'closed_won_setting',label:'Closed Won Setting',color:'#10b981'},{key:'closed_won_self',label:'Closed Won Self B.',color:'#059669'},
+  {key:'closed_lost',label:'Closed Lost',color:'#ef4444'},{key:'follow_up_closing',label:'Follow-Up',color:'#60a5fa'},
+  {key:'disqualifie_closing',label:'Disqualifié',color:'#6b7280'}
+];
+var STAGE_MAP={};STAGES.forEach(function(s){STAGE_MAP[s.key]=s;});
+
+function toast(m){var t=document.getElementById('ctToast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
+function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function escA(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function fmtNow(){var d=new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function isClient(l){return l.stage==='closed_won_setting'||l.stage==='closed_won_self';}
+
+/* ═══ LOAD ═══ */
+if(!leadId){document.getElementById('ctLoading').textContent='❌ Aucun ID spécifié (ajouter ?id=xxx dans l\'URL)';} else {
+  db.collection('leads').doc(leadId).get().then(function(snap){
+    if(!snap.exists){document.getElementById('ctLoading').textContent='❌ Contact non trouvé';return;}
+    lead=snap.data();lead.id=snap.id;
+    document.getElementById('ctLoading').style.display='none';
+    document.getElementById('ctContent').style.display='';
+    renderPage();
+  }).catch(function(err){document.getElementById('ctLoading').textContent='❌ '+err.message;});
+}
+
+/* ═══ RENDER ═══ */
+function renderPage(){
+  var l=lead;
+  var stObj=STAGE_MAP[l.stage||'lead']||STAGES[0];
+  var setterColor=l.assignedTo==='guillaume'?'#ef4444':'#60a5fa';
+  var initials=(l.nom||'?')[0].toUpperCase();
+  var isC=isClient(l);
+
+  var h='';
+
+  /* ── Top ── */
+  h+='<div class="ct-top">';
+  h+='<a class="ct-back" href="sales-crm.html" title="Retour CRM">←</a>';
+  h+='<div class="ct-avatar" style="background:linear-gradient(135deg,'+setterColor+','+setterColor+'88)">'+initials+'</div>';
+  h+='<div class="ct-name-wrap">';
+  h+='<div class="ct-name">'+esc(l.nom||'—')+'</div>';
+  h+='<div class="ct-sub">';
+  h+='<span class="ct-tag '+(isC?'client':'lead')+'">'+(isC?'✅ Client':'📋 Lead')+'</span>';
+  h+='<span style="color:'+stObj.color+'">'+esc(stObj.label)+'</span>';
+  if(l.assignedTo){h+='<span>⭐ '+(l.assignedTo==='guillaume'?'Guillaume Bilcke':'Élodie Vidotto Siarri')+'</span>';}
+  h+='</div></div>';
+  h+='<div class="ct-actions-top">';
+  if(l.telephone)h+='<a class="ct-action-btn" href="tel:'+l.telephone.replace(/\s/g,'')+'">📞 Appeler</a>';
+  if(l.email)h+='<a class="ct-action-btn" href="mailto:'+escA(l.email)+'">✉️ Email</a>';
+  h+='</div></div>';
+
+  /* ── Tabs ── */
+  h+='<div class="ct-tabs">';
+  h+='<button class="ct-tab active" data-tab="infos">📋 Informations</button>';
+  h+='<button class="ct-tab" data-tab="timeline">📅 Chronologie</button>';
+  h+='<button class="ct-tab" data-tab="notes">📝 Notes</button>';
+  h+='<button class="ct-tab" data-tab="fichiers">📎 Fichiers</button>';
+  h+='<button class="ct-tab" data-tab="activites">✅ Activités</button>';
+  h+='</div>';
+
+  /* ═══ TAB: INFOS ═══ */
+  h+='<div class="ct-panel active" id="tabInfos">';
+  h+='<div class="ct-grid">';
+
+  // Contact info
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">👤</span><span class="ct-card-title">Contact</span></div><div class="ct-card-body">';
+  h+=field('Nom','nom',l.nom);
+  h+=field('Téléphone','telephone',l.telephone);
+  h+=field('Email','email',l.email);
+  h+=fieldSelect('Attribué à','assignedTo',[{v:'guillaume',l:'Guillaume Bilcke'},{v:'elodie',l:'Élodie Vidotto Siarri'}],l.assignedTo);
+  h+=fieldSelect('Type','type',[{v:'vsl_elite',l:'VSL ÉLITE'},{v:'self_booking',l:'Self Booking'}],l.type);
+  h+='<div class="ct-saved" id="savedInfo">✅ Sauvegardé</div>';
+  h+='</div></div>';
+
+  // Origine
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">🌐</span><span class="ct-card-title">Origine du prospect</span></div><div class="ct-card-body">';
+  h+=field('Source / UTM','utm',l.utm);
+  h+=field('Prospect Webinaire','prospectWebinaire',l.prospectWebinaire);
+  h+=field('Date Webinaire','dateWebinaire',l.dateWebinaire);
+  h+=field('Présent','present',l.present);
+  h+=field('Tags Webi','tagsWebi',l.tagsWebi);
+  h+=field('Date réception lead','dateReceptionLead',l.dateReceptionLead);
+  h+=field('Rejet des mails','rejetMails',l.rejetMails);
+  h+='</div></div>';
+
+  // Qualification
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">🎯</span><span class="ct-card-title">Qualification</span></div><div class="ct-card-body">';
+  h+=field('Secteur','secteur',l.secteur);
+  h+=field('CA actuel','ca',l.ca);
+  h+=field('Défi','defi',l.defi);
+  h+=field('Disponibilité','disponibilite',l.disponibilite);
+  h+=field('Timeline','timeline',l.timeline);
+  h+='</div></div>';
+
+  // Programme (client)
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">🎓</span><span class="ct-card-title">Programme & Contrat</span></div><div class="ct-card-body">';
+  h+=field('Formule','formule',l.formule);
+  h+=field('Date inscription','dateInscription',l.dateInscription,'date');
+  h+=field('Date fin programme','dateFinProgramme',l.dateFinProgramme,'date');
+  h+=field('Rétractation','retractation',l.retractation);
+  h+=field('Plateforme paiement','plateformePaiement',l.plateformePaiement);
+  h+=field('Commissions','commissions',l.commissions);
+  h+='</div></div>';
+
+  // Coaching & Equipe
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">🤝</span><span class="ct-card-title">Coaching & Équipe</span></div><div class="ct-card-body">';
+  h+=field('Coaching 72H','coaching72h',l.coaching72h);
+  h+=field('Coach 72H','coach72h',l.coach72h);
+  h+=field('Closeur','closeur',l.closeur);
+  h+=field('Setting','setting',l.setting);
+  h+=field('Goodies','goodies',l.goodies);
+  h+=field('Date envoi goodies','dateEnvoiGoodies',l.dateEnvoiGoodies,'date');
+  h+='</div></div>';
+
+  // Tags
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">🏷</span><span class="ct-card-title">Tags</span></div><div class="ct-card-body">';
+  h+='<div class="ct-tags-wrap" id="tagsWrap">';
+  var tags=l.tags||[];
+  for(var ti=0;ti<tags.length;ti++){
+    h+='<span class="ct-tag-pill">'+esc(tags[ti])+'<button data-action="delTag" data-idx="'+ti+'">✕</button></span>';
+  }
+  h+='</div>';
+  h+='<div class="ct-tag-add"><input type="text" id="tagInput" placeholder="Ajouter un tag..."/><button id="tagAddBtn">+</button></div>';
+  h+='</div></div>';
+
+  // Pipeline
+  h+='<div class="ct-card" style="grid-column:1/-1"><div class="ct-card-head"><span class="ct-card-icon">🔀</span><span class="ct-card-title">Étape pipeline</span></div><div class="ct-card-body">';
+  h+='<div class="ct-stage-pills">';
+  STAGES.forEach(function(s){
+    var act=(l.stage||'lead')===s.key;
+    h+='<span class="ct-stage-pill'+(act?' active':'')+'" data-action="setStage" data-stage="'+s.key+'" style="'+(act?'color:'+s.color+';border-color:'+s.color+';background:'+s.color+'18':'')+'">' +esc(s.label)+'</span>';
+  });
+  h+='</div></div></div>';
+
+  h+='</div>'; // grid
+  h+='</div>'; // tab
+
+  /* ═══ TAB: TIMELINE ═══ */
+  h+='<div class="ct-panel" id="tabTimeline">';
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">📅</span><span class="ct-card-title">Chronologie</span></div><div class="ct-card-body">';
+  var timeline=l.timeline_history||[];
+  if(timeline.length===0){h+='<div class="ct-tl-empty">Aucun événement enregistré</div>';}
+  else{
+    h+='<div class="ct-timeline">';
+    for(var ti2=timeline.length-1;ti2>=0;ti2--){
+      var ev=timeline[ti2];
+      h+='<div class="ct-tl-item"><span class="ct-tl-dot" style="background:'+(ev.color||'var(--muted)')+'"></span><span class="ct-tl-date">'+esc(ev.date)+'</span><span class="ct-tl-text">'+esc(ev.text)+'</span></div>';
+    }
+    h+='</div>';
+  }
+  h+='</div></div></div>';
+
+  /* ═══ TAB: NOTES ═══ */
+  h+='<div class="ct-panel" id="tabNotes">';
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">📝</span><span class="ct-card-title">Notes & Remarques</span></div><div class="ct-card-body">';
+  var notes=l.notesHistory||[];
+  for(var ni=notes.length-1;ni>=0;ni--){
+    h+='<div class="ct-note-item"><div class="ct-note-date">'+esc(notes[ni].date)+'</div><div class="ct-note-text">'+esc(notes[ni].text)+'</div></div>';
+  }
+  h+='<div class="ct-note-add"><textarea id="noteInput" placeholder="Ajouter une note..."></textarea><button id="noteAddBtn">+ Ajouter</button></div>';
+  h+='</div></div></div>';
+
+  /* ═══ TAB: FICHIERS ═══ */
+  h+='<div class="ct-panel" id="tabFichiers">';
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">📎</span><span class="ct-card-title">Fichiers joints</span></div><div class="ct-card-body">';
+  var files=l.files||[];
+  for(var fi=0;fi<files.length;fi++){
+    var f=files[fi];
+    h+='<div class="ct-file-item"><span class="ct-file-icon">📄</span><span class="ct-file-name">'+esc(f.name)+'</span><span class="ct-file-size">'+esc(f.size||'')+'</span><button class="ct-file-del" data-action="delFile" data-idx="'+fi+'">✕</button></div>';
+  }
+  h+='<label class="ct-file-upload" id="fileUploadLabel">📁 Ajouter un fichier (max 750KB)<input type="file" id="fileInput" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"/></label>';
+  h+='</div></div></div>';
+
+  /* ═══ TAB: ACTIVITÉS ═══ */
+  h+='<div class="ct-panel" id="tabActivites">';
+  h+='<div class="ct-card"><div class="ct-card-head"><span class="ct-card-icon">✅</span><span class="ct-card-title">Rappels & Tâches</span></div><div class="ct-card-body">';
+  var acts=l.activities||[];
+  for(var ai=0;ai<acts.length;ai++){
+    var a=acts[ai];
+    h+='<div class="ct-act-item"><span class="ct-act-check'+(a.done?' done':'')+'" data-action="toggleAct" data-idx="'+ai+'">'+(a.done?'✓':'')+'</span><span class="ct-act-text'+(a.done?' done':'')+'">'+esc(a.text)+'</span><span class="ct-act-date">'+esc(a.date||'')+'</span><button class="ct-act-del" data-action="delAct" data-idx="'+ai+'">✕</button></div>';
+  }
+  h+='<div class="ct-act-add"><input type="text" id="actInput" placeholder="Nouvelle tâche / rappel..."/><input type="date" id="actDate"/><button id="actAddBtn">+</button></div>';
+  h+='</div></div></div>';
+
+  document.getElementById('ctContent').innerHTML=h;
+  initEvents();
+}
+
+function field(label,key,val,type){
+  var t=type||'text';
+  return '<div class="ct-field"><span class="ct-field-label">'+esc(label)+'</span><input class="ct-input" type="'+t+'" data-f="'+key+'" value="'+escA(val||'')+'"/></div>';
+}
+function fieldSelect(label,key,opts,val){
+  var h='<div class="ct-field"><span class="ct-field-label">'+esc(label)+'</span><select class="ct-select" data-f="'+key+'">';
+  for(var i=0;i<opts.length;i++){
+    h+='<option value="'+opts[i].v+'"'+(val===opts[i].v?' selected':'')+'>'+esc(opts[i].l)+'</option>';
+  }
+  h+='</select></div>';
+  return h;
+}
+
+/* ═══ EVENTS ═══ */
+function initEvents(){
+  // Tabs
+  document.querySelectorAll('.ct-tab').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      document.querySelectorAll('.ct-tab').forEach(function(b){b.classList.remove('active');});
+      document.querySelectorAll('.ct-panel').forEach(function(p){p.classList.remove('active');});
+      btn.classList.add('active');
+      var tab=btn.dataset.tab;
+      var map={infos:'tabInfos',timeline:'tabTimeline',notes:'tabNotes',fichiers:'tabFichiers',activites:'tabActivites'};
+      document.getElementById(map[tab]).classList.add('active');
+    });
+  });
+
+  // Auto-save fields (2s debounce)
+  document.getElementById('ctContent').addEventListener('input',function(e){
+    var el=e.target.closest('[data-f]');
+    if(!el)return;
+    if(autoTimer)clearTimeout(autoTimer);
+    autoTimer=setTimeout(function(){saveFields();},2000);
+  });
+  document.getElementById('ctContent').addEventListener('change',function(e){
+    var el=e.target.closest('[data-f]');
+    if(el)saveFields();
+  });
+
+  // Stage pills
+  document.getElementById('ctContent').addEventListener('click',function(e){
+    var pill=e.target.closest('[data-action="setStage"]');
+    if(pill){
+      var oldStage=lead.stage||'lead';
+      var newStage=pill.dataset.stage;
+      lead.stage=newStage;
+      // Timeline entry
+      addTimelineEntry('Étape changée : '+getStageName(oldStage)+' → '+getStageName(newStage),STAGE_MAP[newStage]?STAGE_MAP[newStage].color:'var(--muted)');
+      // Auto-create client if closed won
+      if(newStage==='closed_won_setting'||newStage==='closed_won_self'){
+        addTimelineEntry('🎉 Converti en client !','#10b981');
+      }
+      save({stage:newStage});
+      renderPage();
+      return;
+    }
+    // Delete tag
+    var delTag=e.target.closest('[data-action="delTag"]');
+    if(delTag){
+      var idx=parseInt(delTag.dataset.idx);
+      lead.tags=lead.tags||[];
+      lead.tags.splice(idx,1);
+      save({tags:lead.tags});
+      renderPage();
+      return;
+    }
+    // Delete file
+    var delFile=e.target.closest('[data-action="delFile"]');
+    if(delFile){
+      var fi=parseInt(delFile.dataset.idx);
+      lead.files=lead.files||[];
+      lead.files.splice(fi,1);
+      save({files:lead.files});
+      renderPage();
+      return;
+    }
+    // Toggle activity
+    var togAct=e.target.closest('[data-action="toggleAct"]');
+    if(togAct){
+      var ai=parseInt(togAct.dataset.idx);
+      lead.activities=lead.activities||[];
+      if(lead.activities[ai])lead.activities[ai].done=!lead.activities[ai].done;
+      save({activities:lead.activities});
+      renderPage();
+      return;
+    }
+    // Delete activity
+    var delAct=e.target.closest('[data-action="delAct"]');
+    if(delAct){
+      var ai2=parseInt(delAct.dataset.idx);
+      lead.activities=lead.activities||[];
+      lead.activities.splice(ai2,1);
+      save({activities:lead.activities});
+      renderPage();
+      return;
+    }
+  });
+
+  // Add tag
+  document.getElementById('tagAddBtn').addEventListener('click',function(){
+    var input=document.getElementById('tagInput');
+    var val=input.value.trim();
+    if(!val)return;
+    lead.tags=lead.tags||[];
+    lead.tags.push(val);
+    save({tags:lead.tags});
+    renderPage();
+  });
+
+  // Add note
+  document.getElementById('noteAddBtn').addEventListener('click',function(){
+    var input=document.getElementById('noteInput');
+    var text=input.value.trim();
+    if(!text)return;
+    lead.notesHistory=lead.notesHistory||[];
+    lead.notesHistory.push({text:text,date:fmtNow()});
+    addTimelineEntry('Note ajoutée : '+text.substring(0,50)+(text.length>50?'...':''),'#f59e0b');
+    save({notesHistory:lead.notesHistory});
+    renderPage();
+    // Switch to notes tab
+    setTimeout(function(){
+      document.querySelector('[data-tab="notes"]').click();
+    },50);
+  });
+
+  // Add activity
+  document.getElementById('actAddBtn').addEventListener('click',function(){
+    var input=document.getElementById('actInput');
+    var dateInput=document.getElementById('actDate');
+    var text=input.value.trim();
+    if(!text)return;
+    lead.activities=lead.activities||[];
+    lead.activities.push({text:text,date:dateInput.value||'',done:false});
+    addTimelineEntry('Tâche créée : '+text,'#60a5fa');
+    save({activities:lead.activities});
+    renderPage();
+    setTimeout(function(){document.querySelector('[data-tab="activites"]').click();},50);
+  });
+
+  // File upload
+  document.getElementById('fileInput').addEventListener('change',function(e){
+    var file=e.target.files[0];
+    if(!file)return;
+    if(file.size>750*1024){toast('❌ Fichier trop lourd (max 750KB)');return;}
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      lead.files=lead.files||[];
+      lead.files.push({
+        name:file.name,
+        size:Math.round(file.size/1024)+'KB',
+        data:ev.target.result,
+        uploadedAt:fmtNow()
+      });
+      addTimelineEntry('Fichier ajouté : '+file.name,'#a78bfa');
+      save({files:lead.files});
+      renderPage();
+      setTimeout(function(){document.querySelector('[data-tab="fichiers"]').click();},50);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function getStageName(key){var s=STAGE_MAP[key];return s?s.label:key;}
+
+/* ═══ SAVE ═══ */
+function saveFields(){
+  var fields=['nom','telephone','email','assignedTo','type','utm','prospectWebinaire','dateWebinaire','present','tagsWebi','dateReceptionLead','rejetMails','secteur','ca','defi','disponibilite','timeline','formule','dateInscription','dateFinProgramme','retractation','plateformePaiement','commissions','coaching72h','coach72h','closeur','setting','goodies','dateEnvoiGoodies'];
+  var updates={};
+  fields.forEach(function(f){
+    var el=document.querySelector('[data-f="'+f+'"]');
+    if(el){updates[f]=el.value.trim();lead[f]=updates[f];}
+  });
+  save(updates);
+}
+
+function save(updates){
+  updates.updatedAt=firebase.firestore.FieldValue.serverTimestamp();
+  db.collection('leads').doc(leadId).update(updates).then(function(){
+    var msg=document.getElementById('savedInfo');
+    if(msg){msg.style.opacity='1';setTimeout(function(){msg.style.opacity='0';},1500);}
+  }).catch(function(err){toast('❌ '+err.message);});
+}
+
+function addTimelineEntry(text,color){
+  lead.timeline_history=lead.timeline_history||[];
+  lead.timeline_history.push({text:text,date:fmtNow(),color:color||'var(--muted)'});
+  db.collection('leads').doc(leadId).update({timeline_history:lead.timeline_history}).catch(function(){});
+}
+
+/* ═══ AUTH ═══ */
+firebase.auth().onAuthStateChanged(function(user){
+  if(user){
+    db.collection('users').doc(user.uid).get().then(function(snap){
+      var data=snap.exists?snap.data():{};
+      window._currentRole=data.role||'sales';
+      window._currentUserName=user.displayName||user.email.split('@')[0];
+      localStorage.setItem('ambitio_role',data.role||'sales');
+      localStorage.setItem('ambitio_name',window._currentUserName);
+    });
+  }
+});
+</script>
+<script src="nav.js"></script>
+</body>
+</html>
