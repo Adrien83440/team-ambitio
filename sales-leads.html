@@ -683,7 +683,7 @@ function renderCard(l) {
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Défi</span><input class="ld-detail-input" data-edit="defi" data-id="' + id + '" value="' + escAttr(l.defi || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Dispo</span><input class="ld-detail-input" data-edit="disponibilite" data-id="' + id + '" value="' + escAttr(l.disponibilite || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Timeline</span><input class="ld-detail-input" data-edit="timeline" data-id="' + id + '" value="' + escAttr(l.timeline || '') + '"/></div>';
-  h += '<button class="ld-save-info-btn" data-action="saveInfo" data-id="' + id + '">💾 Enregistrer les modifications</button>';
+  h += '<div class="ld-autosave-msg" data-autosave-msg="' + id + '" style="font-size:11px;color:var(--green);text-align:center;padding:6px 0;opacity:0;transition:opacity 0.3s">✅ Sauvegardé automatiquement</div>';
   h += '</div>';
 
   // Actions
@@ -730,7 +730,6 @@ function renderCard(l) {
   h += '<button class="ld-notes-add-btn" data-action="addNote" data-id="' + id + '">+ Ajouter</button>';
   h += '</div>';
 
-  h += '<button class="ld-save-btn" data-action="save" data-id="' + id + '">💾 Sauvegarder</button>';
   h += '</div>'; // actions
   h += '</div>'; // body
   h += '</div>'; // card
@@ -771,35 +770,6 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     return;
   }
 
-  // Save info edits
-  var saveInfoBtn = e.target.closest('[data-action="saveInfo"]');
-  if (saveInfoBtn) {
-    var sid = saveInfoBtn.dataset.id;
-    var card3 = saveInfoBtn.closest('.ld-card');
-    var fields = ['nom', 'telephone', 'email', 'utm', 'type', 'assignedTo', 'secteur', 'ca', 'defi', 'disponibilite', 'timeline'];
-    var updates = {};
-    for (var fi = 0; fi < fields.length; fi++) {
-      var el = card3.querySelector('[data-edit="' + fields[fi] + '"]');
-      if (el) updates[fields[fi]] = el.value.trim();
-    }
-    updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-    // Update local state
-    for (var li = 0; li < allLeads.length; li++) {
-      if (allLeads[li].id === sid) {
-        for (var key in updates) { if (key !== 'updatedAt') allLeads[li][key] = updates[key]; }
-        break;
-      }
-    }
-    db.collection('leads').doc(sid).update(updates).then(function() {
-      toast('✅ Infos mises à jour');
-      openCardId = sid;
-      renderFeed();
-    }).catch(function(err) {
-      toast('❌ Erreur : ' + err.message);
-    });
-    return;
-  }
-
   // Status button
   var statusBtn = e.target.closest('[data-action="setStatus"]');
   if (statusBtn) {
@@ -825,6 +795,15 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     if (rdvSection) {
       rdvSection.style.display = (newStatus === 'rdv_pose') ? 'block' : 'none';
     }
+    // Auto-save status
+    db.collection('leads').doc(leadId).update({
+      status: newStatus,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function() {
+      toast('✅ Statut → ' + sObj.label);
+    }).catch(function(err) {
+      toast('❌ ' + err.message);
+    });
     return;
   }
 
@@ -886,41 +865,77 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     return;
   }
 
-  // Save button
-  var saveBtn = e.target.closest('[data-action="save"]');
-  if (saveBtn) {
-    saveLead(saveBtn.dataset.id);
-    return;
-  }
 });
 
-function saveLead(leadId) {
-  var lead = null;
-  for (var i = 0; i < allLeads.length; i++) {
-    if (allLeads[i].id === leadId) { lead = allLeads[i]; break; }
-  }
-  if (!lead) return;
-
-  // Gather from DOM
+/* ═══ AUTO-SAVE RDV FIELDS ═══ */
+document.getElementById('ldFeed').addEventListener('change', function(e) {
+  var rdvEl = e.target.closest('[data-field="rdvDate"], [data-field="rdvHeure"]');
+  if (!rdvEl) return;
+  var leadId = rdvEl.dataset.id;
   var card = document.querySelector('[data-lead-id="' + leadId + '"]');
   if (!card) return;
-  var rdvDateEl = card.querySelector('[data-field="rdvDate"]');
-  var rdvHeureEl = card.querySelector('[data-field="rdvHeure"]');
-
+  var rdvDate = card.querySelector('[data-field="rdvDate"]');
+  var rdvHeure = card.querySelector('[data-field="rdvHeure"]');
   var updates = {
-    status: lead.status || 'nouveau',
-    rdvDate: rdvDateEl ? rdvDateEl.value : '',
-    rdvHeure: rdvHeureEl ? rdvHeureEl.value : '',
+    rdvDate: rdvDate ? rdvDate.value : '',
+    rdvHeure: rdvHeure ? rdvHeure.value : '',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-
   db.collection('leads').doc(leadId).update(updates).then(function() {
-    toast('✅ Lead mis à jour');
+    toast('✅ RDV enregistré');
   }).catch(function(err) {
-    console.error('[leads] save error:', err);
-    toast('❌ Erreur : ' + err.message);
+    toast('❌ ' + err.message);
   });
+});
+
+/* ═══ AUTO-SAVE EDIT FIELDS ═══ */
+var autoSaveTimers = {};
+
+function autoSaveField(leadId, field, value) {
+  // Debounce per lead
+  if (autoSaveTimers[leadId]) clearTimeout(autoSaveTimers[leadId]);
+  autoSaveTimers[leadId] = setTimeout(function() {
+    // Gather ALL edit fields for this lead (not just the changed one)
+    var card = document.querySelector('[data-lead-id="' + leadId + '"]');
+    if (!card) return;
+    var fields = ['nom', 'telephone', 'email', 'utm', 'type', 'assignedTo', 'secteur', 'ca', 'defi', 'disponibilite', 'timeline'];
+    var updates = {};
+    for (var i = 0; i < fields.length; i++) {
+      var el = card.querySelector('[data-edit="' + fields[i] + '"]');
+      if (el) updates[fields[i]] = el.value.trim();
+    }
+    updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+    // Update local state
+    for (var li = 0; li < allLeads.length; li++) {
+      if (allLeads[li].id === leadId) {
+        for (var key in updates) { if (key !== 'updatedAt') allLeads[li][key] = updates[key]; }
+        break;
+      }
+    }
+
+    db.collection('leads').doc(leadId).update(updates).then(function() {
+      // Flash autosave message
+      var msg = document.querySelector('[data-autosave-msg="' + leadId + '"]');
+      if (msg) {
+        msg.style.opacity = '1';
+        setTimeout(function() { msg.style.opacity = '0'; }, 1500);
+      }
+    }).catch(function(err) {
+      toast('❌ Erreur : ' + err.message);
+    });
+  }, 600);
 }
+
+// Listen on input (text fields) and change (selects)
+document.getElementById('ldFeed').addEventListener('input', function(e) {
+  var el = e.target.closest('[data-edit]');
+  if (el) autoSaveField(el.dataset.id, el.dataset.edit, el.value);
+});
+document.getElementById('ldFeed').addEventListener('change', function(e) {
+  var el = e.target.closest('[data-edit]');
+  if (el) autoSaveField(el.dataset.id, el.dataset.edit, el.value);
+});
 
 /* ═══ ROUND-ROBIN ASSIGNMENT ═══ */
 function assignLeadRoundRobin(leadId, callback) {
