@@ -322,7 +322,13 @@ html, body {
       <span class="ld-live-label">Live</span>
       <span id="ldPersonalBadge" style="display:none;font-size:12px;font-weight:800;padding:3px 10px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid var(--border)"></span>
       <span class="ld-count" id="ldCount">— leads</span>
-      <button id="pushBtn" title="Activer les notifications" style="margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0" onclick="requestPush()">🔕</button>
+      <button id="shareBtn" title="Liens app mobile" style="margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0" onclick="toggleSharePanel()">🔗</button>
+      <button id="pushBtn" title="Activer les notifications" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0" onclick="requestPush()">🔕</button>
+    </div>
+    <!-- Share panel -->
+    <div id="sharePanel" style="display:none;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin:8px 0">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:8px">📱 Liens app mobile — ajouter à l'écran d'accueil</div>
+      <div id="shareLinksList"></div>
     </div>
     <div class="ld-members" id="ldMembers">
       <button class="ld-member-pill active" data-member="all">
@@ -1079,6 +1085,46 @@ function startListening() {
 <script>
 var VAPID_KEY = 'BArDSUTNL4HD0uAK8pU8ZPkilIQ42bmwikmNFEKo-ARPRFFZXTzOWsrNLl5VjgTxvHyS5VxXYmN55VuJXcXfGmM'; // Replace with your VAPID key from Firebase Console
 var pushDb = firebase.firestore();
+
+// Share links panel
+function toggleSharePanel() {
+  var panel = document.getElementById('sharePanel');
+  var isVisible = panel.style.display !== 'none';
+  panel.style.display = isVisible ? 'none' : '';
+  if (!isVisible) renderShareLinks();
+}
+
+function renderShareLinks() {
+  var base = window.location.origin + '/sales-leads.html?app=1';
+  var links = [
+    { label: 'Tous les leads', sub: 'Vue complète', color: '#34d399', url: base },
+    { label: 'Guillaume', sub: 'Leads Guillaume uniquement', color: '#ef4444', url: base + '&user=guillaume' },
+    { label: 'Élodie', sub: 'Leads Élodie uniquement', color: '#60a5fa', url: base + '&user=elodie' }
+  ];
+  var h = '';
+  for (var i = 0; i < links.length; i++) {
+    var l = links[i];
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">';
+    h += '<span style="width:8px;height:8px;border-radius:50%;background:' + l.color + ';flex-shrink:0"></span>';
+    h += '<div style="flex:1;min-width:0">';
+    h += '<div style="font-size:12px;font-weight:700">' + l.label + '</div>';
+    h += '<div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--fm)">' + l.url + '</div>';
+    h += '</div>';
+    h += '<button style="padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg3);color:var(--muted);font-family:var(--fb);font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;transition:all .15s" onclick="copyLink(this,\'' + l.url + '\')">Copier</button>';
+    h += '</div>';
+  }
+  h += '<div style="font-size:10px;color:var(--muted2);margin-top:6px">Ouvrir le lien sur le téléphone → Safari/Chrome → Ajouter à l\'écran d\'accueil</div>';
+  document.getElementById('shareLinksList').innerHTML = h;
+}
+
+function copyLink(btn, url) {
+  navigator.clipboard.writeText(url).then(function() {
+    btn.textContent = '✅ Copié';
+    btn.style.color = 'var(--green)';
+    btn.style.borderColor = 'rgba(52,211,153,0.3)';
+    setTimeout(function() { btn.textContent = 'Copier'; btn.style.color = 'var(--muted)'; btn.style.borderColor = ''; }, 2000);
+  });
+}
 
 function updatePushBtn(state) {
   var btn = document.getElementById('pushBtn');
