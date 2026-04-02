@@ -618,15 +618,7 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 
 /* ═══ RENDER FEED ═══ */
 function getFilteredLeads() {
-  // ══ FRESH START: only show leads created after this cutoff ══
-  // All prior leads (bulk imports, old Make syncs) are hidden.
-  // New leads from Make going forward will appear.
-  var LEADS_LIVE_CUTOFF = new Date('2026-04-02T22:00:00+02:00');
-  var list = allLeads.filter(function(l) {
-    if (!l.createdAt) return false;
-    var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-    return d > LEADS_LIVE_CUTOFF;
-  });
+  var list = getBaseLeads();
 
   // Period filter
   if (filterPeriod === 'today') {
@@ -657,20 +649,31 @@ function getFilteredLeads() {
   return list;
 }
 
+/* Base filter: only leads after fresh-start cutoff */
+var LEADS_LIVE_CUTOFF = new Date('2026-04-02T22:00:00+02:00');
+function getBaseLeads() {
+  return allLeads.filter(function(l) {
+    if (!l.createdAt) return false;
+    var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+    return d > LEADS_LIVE_CUTOFF;
+  });
+}
+
 function updateCounts() {
+  var base = getBaseLeads();
   var gCount = 0, eCount = 0;
-  allLeads.forEach(function(l) {
+  base.forEach(function(l) {
     if (l.assignedTo === 'guillaume') gCount++;
     if (l.assignedTo === 'elodie') eCount++;
   });
-  document.getElementById('countAll').textContent = allLeads.length;
+  document.getElementById('countAll').textContent = base.length;
   document.getElementById('countGuillaume').textContent = gCount;
   document.getElementById('countElodie').textContent = eCount;
   if (personalUser) {
     var myCount = personalUser === 'guillaume' ? gCount : eCount;
     document.getElementById('ldCount').textContent = myCount + ' lead' + (myCount > 1 ? 's' : '');
   } else {
-    document.getElementById('ldCount').textContent = allLeads.length + ' lead' + (allLeads.length > 1 ? 's' : '');
+    document.getElementById('ldCount').textContent = base.length + ' lead' + (base.length > 1 ? 's' : '');
   }
 }
 
