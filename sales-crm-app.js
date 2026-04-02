@@ -97,6 +97,25 @@ function getFiltered(){
   if(filterSetter!=='all')list=list.filter(function(l){return l.assignedTo===filterSetter;});
   if(filterSection!=='all'){var ss=STAGES.filter(function(s){return s.section===filterSection;}).map(function(s){return s.key;});list=list.filter(function(l){return ss.indexOf(l.stage||'lead')>=0;});}
   if(searchQuery){var q=searchQuery.toLowerCase();list=list.filter(function(l){return((l.nom||'')+' '+(l.telephone||'')+' '+(l.email||'')).toLowerCase().indexOf(q)>=0;});}
+  // Date filter
+  if(filterDateRange!=='all'){
+    if(filterDateRange==='custom'){
+      if(filterDateFrom)list=list.filter(function(l){if(!l.createdAt)return false;var d=l.createdAt.toDate?l.createdAt.toDate():new Date(l.createdAt);return d>=filterDateFrom;});
+      if(filterDateTo)list=list.filter(function(l){if(!l.createdAt)return false;var d=l.createdAt.toDate?l.createdAt.toDate():new Date(l.createdAt);return d<=filterDateTo;});
+    } else {
+      var threshold=getDateThreshold(filterDateRange);
+      if(threshold)list=list.filter(function(l){if(!l.createdAt)return false;var d=l.createdAt.toDate?l.createdAt.toDate():new Date(l.createdAt);return d>=threshold;});
+    }
+  }
+  // Tag filter
+  if(filterTags.length>0){
+    list=list.filter(function(l){
+      if(!l.tags||!Array.isArray(l.tags))return false;
+      var lowerTags=l.tags.map(function(t){return(t||'').toLowerCase();});
+      for(var i=0;i<filterTags.length;i++){if(lowerTags.indexOf(filterTags[i].toLowerCase())>=0)return true;}
+      return false;
+    });
+  }
   return list;
 }
 
@@ -196,7 +215,9 @@ function renderCard(l){
   if(sl)h+='<span class="crm-card-setter '+sc+'">'+sl+'</span>';
   if(ls!=='nouveau')h+='<span class="crm-card-setter" style="color:var(--blue)">📞 '+(sL[ls]||ls)+'</span>';
   if(hn)h+='<span class="crm-card-notes-dot"></span>';
-  h+='</div></div>';return h;
+  h+='</div>';
+  if(l.tags&&l.tags.length>0){h+='<div class="crm-card-tags">';l.tags.forEach(function(t){if(t)h+='<span class="crm-card-tag" style="background:'+tagColor(t)+'20;color:'+tagColor(t)+'">'+esc(t)+'</span>';});h+='</div>';}
+  h+='</div>';return h;
 }
 
 function renderList(leads){
@@ -425,6 +446,16 @@ document.getElementById('bulkDeleteBtn').addEventListener('click',function(){
   var batch=db.batch();ids.forEach(function(id){batch.delete(db.collection('leads').doc(id));});
   batch.commit().then(function(){toast('🗑 '+ids.length+' supprimés');clearSelection();});
 });
+document.getElementById('bulkTagBtn').addEventListener('click',function(){
+  var ids=Object.keys(selectedIds).filter(function(k){return selectedIds[k];});if(!ids.length)return;
+  var tag=prompt('Tag à ajouter :');if(!tag||!tag.trim())return;tag=tag.trim();
+  saveCustomTag(tag);
+  var batch=db.batch();
+  ids.forEach(function(id){
+    for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===id){if(!allLeads[i].tags)allLeads[i].tags=[];if(allLeads[i].tags.indexOf(tag)<0)allLeads[i].tags.push(tag);batch.update(db.collection('leads').doc(id),{tags:allLeads[i].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});break;}}
+  });
+  batch.commit().then(function(){toast('🏷 Tag "'+tag+'" ajouté à '+ids.length+' leads');collectTags();clearSelection();renderAll();});
+});
 
 /* ═══ DRAG & DROP ═══ */
 var board=document.getElementById('crmBoard');
@@ -453,10 +484,10 @@ function saveQV(){if(!qvLid)return;var p=document.getElementById('qvPanel'),fs=[
 function closeQV(){document.getElementById('qvPanel').style.display='none';document.getElementById('qvOverlay').classList.remove('open');qvLid=null;}
 
 /* ═══ MODAL ═══ */
-function openModal(lid){var lead;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){lead=allLeads[i];break;}}if(!lead)return;var sc=lead.assignedTo==='guillaume'?'#ef4444':'#60a5fa',ini=(lead.nom||'?')[0].toUpperCase();var h='<div class="crm-modal-head"><div class="crm-modal-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><div class="crm-modal-name">'+esc(lead.nom||'—')+'</div><a href="sales-contact.html?id='+lid+'" style="padding:6px 12px;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">↗ Fiche</a><button class="crm-modal-close" data-action="closeModal">✕</button></div><div class="crm-modal-body">';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📋 Informations</div>';h+=mF('Nom','nom',lead.nom)+mF('Téléphone','telephone',lead.telephone)+mF('Email','email',lead.email)+mF('Source','utm',lead.utm);h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Attribué à</span><select class="crm-modal-select" data-medit="assignedTo"><option value="guillaume"'+(lead.assignedTo==='guillaume'?' selected':'')+'>Guillaume Bilcke</option><option value="elodie"'+(lead.assignedTo==='elodie'?' selected':'')+'>Élodie Vidotto Siarri</option></select></div>';h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Type</span><select class="crm-modal-select" data-medit="type"><option value="vsl_elite"'+(lead.type==='vsl_elite'?' selected':'')+'>VSL ÉLITE</option><option value="self_booking"'+(lead.type==='self_booking'?' selected':'')+'>Self Booking</option></select></div>';h+=mF('Secteur','secteur',lead.secteur)+mF('CA actuel','ca',lead.ca)+mF('Défi','defi',lead.defi);h+='<div class="crm-modal-saved" id="modalSaved">✅ Sauvegardé</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🔀 Étape pipeline</div><div class="crm-stage-pills">';STAGES.forEach(function(s){var isA=(lead.stage||'lead')===s.key;h+='<span class="crm-stage-pill'+(isA?' active':'')+'" data-action="setStage" data-stage="'+s.key+'" style="'+(isA?'color:'+s.color+';border-color:'+s.color+';background:'+s.color+'18':'')+'">'+esc(s.label)+'</span>';});h+='</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📝 Notes</div>';var notes=lead.notesHistory||[];for(var ni=notes.length-1;ni>=0;ni--){h+='<div class="crm-note-item"><div class="crm-note-date">'+esc(notes[ni].date||'')+'</div><div class="crm-note-text">'+esc(notes[ni].text||'')+'</div></div>';}h+='<div class="crm-note-add-row"><textarea class="crm-note-input" id="modalNoteInput" placeholder="Ajouter une note..."></textarea><button class="crm-note-add-btn" data-action="addNote">+ Ajouter</button></div></div>';h+='<div class="crm-modal-section">';if(lead.telephone)h+='<a href="tel:'+lead.telephone.replace(/\s/g,'')+'" style="display:block;text-align:center;padding:10px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);border-radius:10px;color:#34d399;font-weight:700;font-size:13px;text-decoration:none;margin-bottom:8px">📞 Appeler</a>';if(lead.email)h+='<a href="mailto:'+escA(lead.email)+'" style="display:block;text-align:center;padding:10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);border-radius:10px;color:#60a5fa;font-weight:700;font-size:13px;text-decoration:none">✉️ Email</a>';h+='</div></div>';document.getElementById('modalPanel').innerHTML=h;document.getElementById('modalBg').classList.add('open');document.getElementById('modalBg')._leadId=lid;}
+function openModal(lid){var lead;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){lead=allLeads[i];break;}}if(!lead)return;var sc=lead.assignedTo==='guillaume'?'#ef4444':'#60a5fa',ini=(lead.nom||'?')[0].toUpperCase();var h='<div class="crm-modal-head"><div class="crm-modal-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><div class="crm-modal-name">'+esc(lead.nom||'—')+'</div><a href="sales-contact.html?id='+lid+'" style="padding:6px 12px;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">↗ Fiche</a><button class="crm-modal-close" data-action="closeModal">✕</button></div><div class="crm-modal-body">';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📋 Informations</div>';h+=mF('Nom','nom',lead.nom)+mF('Téléphone','telephone',lead.telephone)+mF('Email','email',lead.email)+mF('Source','utm',lead.utm);h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Attribué à</span><select class="crm-modal-select" data-medit="assignedTo"><option value="guillaume"'+(lead.assignedTo==='guillaume'?' selected':'')+'>Guillaume Bilcke</option><option value="elodie"'+(lead.assignedTo==='elodie'?' selected':'')+'>Élodie Vidotto Siarri</option></select></div>';h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Type</span><select class="crm-modal-select" data-medit="type"><option value="vsl_elite"'+(lead.type==='vsl_elite'?' selected':'')+'>VSL ÉLITE</option><option value="self_booking"'+(lead.type==='self_booking'?' selected':'')+'>Self Booking</option></select></div>';h+=mF('Secteur','secteur',lead.secteur)+mF('CA actuel','ca',lead.ca)+mF('Défi','defi',lead.defi);h+='<div class="crm-modal-saved" id="modalSaved">✅ Sauvegardé</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🏷 Tags</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px" id="modalTagsWrap">';var leadTags=lead.tags||[];leadTags.forEach(function(t){if(t)h+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:'+tagColor(t)+'18;color:'+tagColor(t)+';border:1px solid '+tagColor(t)+'30">'+esc(t)+' <span style="cursor:pointer;opacity:0.6" data-action="removeTag" data-tagval="'+escA(t)+'">✕</span></span>';});h+='</div><div style="display:flex;gap:6px"><input class="crm-modal-input" id="modalTagInput" placeholder="Ajouter un tag..." style="flex:1;font-size:11px;padding:6px 10px"/><button style="padding:6px 12px;border:none;border-radius:8px;background:rgba(167,139,250,0.1);color:#c4b5fd;font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer" data-action="addTag">+</button></div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🔀 Étape pipeline</div><div class="crm-stage-pills">';STAGES.forEach(function(s){var isA=(lead.stage||'lead')===s.key;h+='<span class="crm-stage-pill'+(isA?' active':'')+'" data-action="setStage" data-stage="'+s.key+'" style="'+(isA?'color:'+s.color+';border-color:'+s.color+';background:'+s.color+'18':'')+'">'+esc(s.label)+'</span>';});h+='</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📝 Notes</div>';var notes=lead.notesHistory||[];for(var ni=notes.length-1;ni>=0;ni--){h+='<div class="crm-note-item"><div class="crm-note-date">'+esc(notes[ni].date||'')+'</div><div class="crm-note-text">'+esc(notes[ni].text||'')+'</div></div>';}h+='<div class="crm-note-add-row"><textarea class="crm-note-input" id="modalNoteInput" placeholder="Ajouter une note..."></textarea><button class="crm-note-add-btn" data-action="addNote">+ Ajouter</button></div></div>';h+='<div class="crm-modal-section">';if(lead.telephone)h+='<a href="tel:'+lead.telephone.replace(/\s/g,'')+'" style="display:block;text-align:center;padding:10px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);border-radius:10px;color:#34d399;font-weight:700;font-size:13px;text-decoration:none;margin-bottom:8px">📞 Appeler</a>';if(lead.email)h+='<a href="mailto:'+escA(lead.email)+'" style="display:block;text-align:center;padding:10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);border-radius:10px;color:#60a5fa;font-weight:700;font-size:13px;text-decoration:none">✉️ Email</a>';h+='</div></div>';document.getElementById('modalPanel').innerHTML=h;document.getElementById('modalBg').classList.add('open');document.getElementById('modalBg')._leadId=lid;}
 function mF(l,k,v){return'<div class="crm-modal-field"><span class="crm-modal-field-label">'+esc(l)+'</span><input class="crm-modal-input" data-medit="'+k+'" value="'+escA(v||'')+'"/></div>';}
 
-document.getElementById('modalBg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');if(e.target.closest('[data-action="closeModal"]'))this.classList.remove('open');var sp=e.target.closest('[data-action="setStage"]');if(sp){var ns=sp.dataset.stage,lid=this._leadId;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){allLeads[i].stage=ns;break;}}document.querySelectorAll('.crm-stage-pill').forEach(function(p){p.classList.remove('active');p.style.color='';p.style.borderColor='';p.style.background='';});sp.classList.add('active');var sO=SM[ns];if(sO){sp.style.color=sO.color;sp.style.borderColor=sO.color;sp.style.background=sO.color+'18';}renderAll();var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];db.collection('leads').doc(lid).update(upd).then(function(){toast('→ '+(sO?sO.label:ns));});}var nb=e.target.closest('[data-action="addNote"]');if(nb){var inp=document.getElementById('modalNoteInput');var txt=inp?inp.value.trim():'';if(!txt)return;var lid2=this._leadId,nn={text:txt,date:fmtNow()};for(var j=0;j<allLeads.length;j++){if(allLeads[j].id===lid2){if(!allLeads[j].notesHistory)allLeads[j].notesHistory=[];allLeads[j].notesHistory.push(nn);db.collection('leads').doc(lid2).update({notesHistory:allLeads[j].notesHistory,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Note ajoutée');});break;}}openModal(lid2);}});
+document.getElementById('modalBg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');if(e.target.closest('[data-action="closeModal"]'))this.classList.remove('open');var sp=e.target.closest('[data-action="setStage"]');if(sp){var ns=sp.dataset.stage,lid=this._leadId;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){allLeads[i].stage=ns;break;}}document.querySelectorAll('.crm-stage-pill').forEach(function(p){p.classList.remove('active');p.style.color='';p.style.borderColor='';p.style.background='';});sp.classList.add('active');var sO=SM[ns];if(sO){sp.style.color=sO.color;sp.style.borderColor=sO.color;sp.style.background=sO.color+'18';}renderAll();var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];db.collection('leads').doc(lid).update(upd).then(function(){toast('→ '+(sO?sO.label:ns));});}var nb=e.target.closest('[data-action="addNote"]');if(nb){var inp=document.getElementById('modalNoteInput');var txt=inp?inp.value.trim():'';if(!txt)return;var lid2=this._leadId,nn={text:txt,date:fmtNow()};for(var j=0;j<allLeads.length;j++){if(allLeads[j].id===lid2){if(!allLeads[j].notesHistory)allLeads[j].notesHistory=[];allLeads[j].notesHistory.push(nn);db.collection('leads').doc(lid2).update({notesHistory:allLeads[j].notesHistory,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Note ajoutée');});break;}}openModal(lid2);}var addTagBtn=e.target.closest('[data-action="addTag"]');if(addTagBtn){var tagInput=document.getElementById('modalTagInput');var newTag=tagInput?tagInput.value.trim():'';if(!newTag)return;var lid3=this._leadId;for(var x=0;x<allLeads.length;x++){if(allLeads[x].id===lid3){if(!allLeads[x].tags)allLeads[x].tags=[];if(allLeads[x].tags.indexOf(newTag)<0){allLeads[x].tags.push(newTag);db.collection('leads').doc(lid3).update({tags:allLeads[x].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag ajouté');collectTags();});}break;}}saveCustomTag(newTag);openModal(lid3);}var rmTag=e.target.closest('[data-action="removeTag"]');if(rmTag){var tv=rmTag.dataset.tagval;var lid4=this._leadId;for(var y=0;y<allLeads.length;y++){if(allLeads[y].id===lid4){if(allLeads[y].tags){var ti=allLeads[y].tags.indexOf(tv);if(ti>=0)allLeads[y].tags.splice(ti,1);db.collection('leads').doc(lid4).update({tags:allLeads[y].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag retiré');collectTags();});}break;}}openModal(lid4);}});
 
 var mSaveTimer=null;
 document.getElementById('modalBg').addEventListener('input',function(e){if(!e.target.closest('[data-medit]'))return;if(mSaveTimer)clearTimeout(mSaveTimer);mSaveTimer=setTimeout(saveModal,2000);});
@@ -467,6 +498,159 @@ function saveModal(){var lid=document.getElementById('modalBg')._leadId;if(!lid)
 document.getElementById('crmSearch').addEventListener('input',function(){searchQuery=this.value.trim();currentPage=1;renderAll();});
 document.querySelectorAll('.crm-filter-pill').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.crm-filter-pill').forEach(function(p){p.classList.remove('active');});b.classList.add('active');filterSetter=b.dataset.setter;currentPage=1;renderAll();});});
 document.querySelectorAll('.crm-section-pill').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.crm-section-pill').forEach(function(p){p.classList.remove('active');});b.classList.add('active');filterSection=b.dataset.section;currentPage=1;renderAll();});});
+
+/* ═══ DATE FILTER ═══ */
+var filterDateRange='all';
+var filterDateFrom=null,filterDateTo=null;
+
+function getDateThreshold(range){
+  var now=new Date();
+  if(range==='7d')return new Date(now.getTime()-7*86400000);
+  if(range==='30d')return new Date(now.getTime()-30*86400000);
+  if(range==='90d')return new Date(now.getTime()-90*86400000);
+  if(range==='year')return new Date(now.getFullYear(),0,1);
+  return null;
+}
+
+document.getElementById('fbDatePills').addEventListener('click',function(e){
+  var pill=e.target.closest('[data-daterange]');if(!pill)return;
+  document.querySelectorAll('.fb-date-pill').forEach(function(p){p.classList.remove('active');});
+  pill.classList.add('active');
+  filterDateRange=pill.dataset.daterange;
+  var isCustom=filterDateRange==='custom';
+  document.getElementById('fbDateFrom').style.display=isCustom?'':'none';
+  document.getElementById('fbDateTo').style.display=isCustom?'':'none';
+  if(!isCustom){filterDateFrom=null;filterDateTo=null;}
+  currentPage=1;renderAll();renderActiveChips();
+});
+document.getElementById('fbDateFrom').addEventListener('change',function(){
+  filterDateFrom=this.value?new Date(this.value):null;currentPage=1;renderAll();renderActiveChips();
+});
+document.getElementById('fbDateTo').addEventListener('change',function(){
+  filterDateTo=this.value?new Date(this.value+'T23:59:59'):null;currentPage=1;renderAll();renderActiveChips();
+});
+
+/* ═══ TAG SYSTEM ═══ */
+var filterTags=[];
+var allTagsDef=[];
+
+function collectTags(){
+  var tagSet={};
+  allLeads.forEach(function(l){
+    if(l.tags&&Array.isArray(l.tags)){l.tags.forEach(function(t){if(t)tagSet[t.toLowerCase()]=t;});}
+  });
+  // Load custom tags from localStorage
+  var custom=[];try{custom=JSON.parse(localStorage.getItem('crm_custom_tags')||'[]');}catch(e){}
+  custom.forEach(function(t){if(t&&!tagSet[t.toLowerCase()])tagSet[t.toLowerCase()]=t;});
+  allTagsDef=Object.values(tagSet).sort();
+}
+
+function saveCustomTag(tagName){
+  var custom=[];try{custom=JSON.parse(localStorage.getItem('crm_custom_tags')||'[]');}catch(e){}
+  if(custom.indexOf(tagName)<0){custom.push(tagName);localStorage.setItem('crm_custom_tags',JSON.stringify(custom));}
+}
+
+var TAG_COLORS=['#a78bfa','#f59e0b','#34d399','#ef4444','#60a5fa','#ec4899','#f97316','#14b8a6','#8b5cf6','#eab308'];
+function tagColor(t){var h=0;for(var i=0;i<t.length;i++){h=t.charCodeAt(i)+((h<<5)-h);}return TAG_COLORS[Math.abs(h)%TAG_COLORS.length];}
+
+function renderTagDD(filter){
+  collectTags();filter=(filter||'').toLowerCase();
+  var h='<input class="fb-tag-search" id="fbTagSearch" placeholder="Rechercher ou créer un tag..." value="'+escA(filter)+'"/>';
+  var shown=allTagsDef.filter(function(t){return !filter||t.toLowerCase().indexOf(filter)>=0;});
+  shown.forEach(function(t){
+    var sel=filterTags.indexOf(t)>=0;
+    var col=tagColor(t);
+    h+='<div class="fb-tag-item'+(sel?' selected':'')+'" data-tagval="'+escA(t)+'">';
+    h+='<input type="checkbox" class="fb-tag-item-cb"'+(sel?' checked':'')+'/>';
+    h+='<span class="fb-tag-item-color" style="background:'+col+'"></span>';
+    h+=esc(t)+'</div>';
+  });
+  if(filter&&shown.length===0){
+    h+='<div class="fb-tag-create" id="fbTagCreate" data-newtag="'+escA(filter)+'">+ Créer le tag "'+esc(filter)+'"</div>';
+  } else if(filter&&allTagsDef.indexOf(filter)<0){
+    h+='<div class="fb-tag-create" id="fbTagCreate" data-newtag="'+escA(filter)+'">+ Créer "'+esc(filter)+'"</div>';
+  }
+  document.getElementById('fbTagDD').innerHTML=h;
+  var searchEl=document.getElementById('fbTagSearch');
+  if(searchEl){searchEl.addEventListener('input',function(){renderTagDD(this.value);});searchEl.focus();}
+}
+
+document.getElementById('fbTagTrigger').addEventListener('click',function(e){
+  e.stopPropagation();
+  var dd=document.getElementById('fbTagDD');
+  if(dd.classList.contains('open')){dd.classList.remove('open');return;}
+  renderTagDD();dd.classList.add('open');
+});
+document.addEventListener('click',function(e){if(!e.target.closest('#fbTagWrapper'))document.getElementById('fbTagDD').classList.remove('open');});
+
+document.getElementById('fbTagDD').addEventListener('click',function(e){
+  var item=e.target.closest('[data-tagval]');
+  if(item){
+    var tag=item.dataset.tagval;
+    var idx=filterTags.indexOf(tag);
+    if(idx>=0)filterTags.splice(idx,1);else filterTags.push(tag);
+    renderTagDD(document.getElementById('fbTagSearch')?document.getElementById('fbTagSearch').value:'');
+    document.getElementById('fbTagTrigger').classList.toggle('has-tags',filterTags.length>0);
+    document.getElementById('fbTagTrigger').innerHTML=filterTags.length>0?(filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span style="font-size:8px">▼</span>'):('Filtrer par tags <span style="font-size:8px">▼</span>');
+    currentPage=1;renderAll();renderActiveChips();
+    return;
+  }
+  var create=e.target.closest('[data-newtag]');
+  if(create){
+    var newTag=create.dataset.newtag.trim();
+    if(!newTag)return;
+    saveCustomTag(newTag);
+    filterTags.push(newTag);
+    collectTags();
+    renderTagDD();
+    document.getElementById('fbTagTrigger').classList.add('has-tags');
+    document.getElementById('fbTagTrigger').innerHTML=filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span style="font-size:8px">▼</span>';
+    currentPage=1;renderAll();renderActiveChips();
+    toast('🏷 Tag "'+newTag+'" créé');
+  }
+});
+
+/* ═══ ACTIVE FILTER CHIPS ═══ */
+function renderActiveChips(){
+  var h='';var hasFilters=false;
+  if(filterDateRange!=='all'){
+    hasFilters=true;
+    var labels={all:'Tout','7d':'7 jours','30d':'30 jours','90d':'3 mois',year:'Cette année',custom:'Personnalisé'};
+    var label=labels[filterDateRange]||filterDateRange;
+    if(filterDateRange==='custom'&&filterDateFrom){label='Du '+fmtDate(filterDateFrom);if(filterDateTo)label+=' au '+fmtDate(filterDateTo);}
+    h+='<span class="fb-chip">📅 '+esc(label)+' <span class="fb-chip-x" data-chipclear="date">✕</span></span>';
+  }
+  filterTags.forEach(function(t){
+    hasFilters=true;
+    h+='<span class="fb-chip tag-chip">🏷 '+esc(t)+' <span class="fb-chip-x" data-chipclear="tag" data-chipval="'+escA(t)+'">✕</span></span>';
+  });
+  document.getElementById('fbActiveChips').innerHTML=h;
+  document.getElementById('fbClearAll').style.display=hasFilters?'':'none';
+}
+
+document.getElementById('fbActiveChips').addEventListener('click',function(e){
+  var x=e.target.closest('[data-chipclear]');if(!x)return;
+  if(x.dataset.chipclear==='date'){
+    filterDateRange='all';filterDateFrom=null;filterDateTo=null;
+    document.querySelectorAll('.fb-date-pill').forEach(function(p){p.classList.toggle('active',p.dataset.daterange==='all');});
+    document.getElementById('fbDateFrom').style.display='none';document.getElementById('fbDateTo').style.display='none';
+  }
+  if(x.dataset.chipclear==='tag'){
+    var tv=x.dataset.chipval;var idx=filterTags.indexOf(tv);if(idx>=0)filterTags.splice(idx,1);
+    document.getElementById('fbTagTrigger').classList.toggle('has-tags',filterTags.length>0);
+    document.getElementById('fbTagTrigger').innerHTML=filterTags.length>0?(filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span style="font-size:8px">▼</span>'):('Filtrer par tags <span style="font-size:8px">▼</span>');
+  }
+  currentPage=1;renderAll();renderActiveChips();
+});
+
+document.getElementById('fbClearAll').addEventListener('click',function(){
+  filterDateRange='all';filterDateFrom=null;filterDateTo=null;filterTags=[];
+  document.querySelectorAll('.fb-date-pill').forEach(function(p){p.classList.toggle('active',p.dataset.daterange==='all');});
+  document.getElementById('fbDateFrom').style.display='none';document.getElementById('fbDateTo').style.display='none';
+  document.getElementById('fbTagTrigger').classList.remove('has-tags');
+  document.getElementById('fbTagTrigger').innerHTML='Filtrer par tags <span style="font-size:8px">▼</span>';
+  currentPage=1;renderAll();renderActiveChips();
+});
 
 /* ═══ SORT DROPDOWN ═══ */
 var SORT_FIELDS=[
@@ -631,7 +815,7 @@ renderPipeline=function(leads){
 document.getElementById('crmAddBtn').addEventListener('click',function(){var nom=prompt('Nom du lead :');if(!nom||!nom.trim())return;var tel=prompt('Téléphone :')||'',email=prompt('Email :')||'';db.collection('leads').add({nom:nom.trim(),telephone:tel.trim(),email:email.trim(),type:'vsl_elite',stage:'lead',status:'nouveau',assignedTo:'',notesHistory:[],createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Lead ajouté');}).catch(function(err){toast('❌ '+err.message);});});
 
 /* ═══ FIRESTORE ═══ */
-db.collection('leads').orderBy('createdAt','desc').onSnapshot(function(snap){allLeads=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;if(!d.stage)d.stage='lead';allLeads.push(d);});renderAll();renderSavedViews();},function(err){console.error('[crm]',err);});
+db.collection('leads').orderBy('createdAt','desc').onSnapshot(function(snap){allLeads=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;if(!d.stage)d.stage='lead';allLeads.push(d);});collectTags();renderAll();renderSavedViews();renderActiveChips();},function(err){console.error('[crm]',err);});
 
 /* ═══ AUTH ═══ */
 firebase.auth().onAuthStateChanged(function(user){if(user){db.collection('users').doc(user.uid).get().then(function(snap){var d=snap.exists?snap.data():{};window._currentRole=d.role||'sales';window._currentUserName=user.displayName||user.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);});loadSavedViews();}});
