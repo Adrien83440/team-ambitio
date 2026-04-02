@@ -1085,6 +1085,12 @@ function loadRoles(cb){
 
 function getRoles(){return firestoreRoles||DEFAULT_ROLES;}
 
+function countUsersInRole(roleId){
+  var roleMap={pdg:'admin',head_of_sales:'admin',closeurs:'sales',setteurs:'sales',coachs:'coach'};
+  var mappedRole=roleMap[roleId]||roleId;
+  return settingsUsers.filter(function(u){return u.role===mappedRole||u.role===roleId;}).length;
+}
+
 function buildRoleTree(roles){
   var byParent={};
   roles.forEach(function(r){var p=r.reportsTo||'__root__';if(!byParent[p])byParent[p]=[];byParent[p].push(r);});
