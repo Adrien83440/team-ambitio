@@ -1189,7 +1189,7 @@ function copyLink(btn, url) {
 function updatePushBtn(state) {
   var btn = document.getElementById('pushBtn');
   if (!btn) return;
-  if (state === 'granted') {
+  if (state === 'granted' || state === 'active') {
     btn.innerHTML = '🔔';
     btn.style.borderColor = 'rgba(52,211,153,0.3)';
     btn.style.background = 'rgba(52,211,153,0.1)';
@@ -1197,74 +1197,119 @@ function updatePushBtn(state) {
   } else if (state === 'denied') {
     btn.innerHTML = '🚫';
     btn.style.borderColor = 'rgba(239,68,68,0.3)';
-    btn.title = 'Notifications bloquées par le navigateur';
+    btn.style.background = 'rgba(239,68,68,0.06)';
+    btn.title = 'Notifications bloquées';
+  } else if (state === 'loading') {
+    btn.innerHTML = '⏳';
+    btn.style.borderColor = 'rgba(245,158,11,0.3)';
+    btn.style.background = 'rgba(245,158,11,0.06)';
+  } else if (state === 'error') {
+    btn.innerHTML = '⚠️';
+    btn.style.borderColor = 'rgba(239,68,68,0.3)';
+    btn.style.background = 'rgba(239,68,68,0.06)';
   } else {
     btn.innerHTML = '🔕';
+    btn.style.borderColor = '';
+    btn.style.background = 'var(--bg2)';
     btn.title = 'Activer les notifications';
   }
 }
 
-// Check current state on load
-if ('Notification' in window) {
-  updatePushBtn(Notification.permission);
+// Check support and current state
+var pushSupported = ('Notification' in window) && ('serviceWorker' in navigator);
+if (pushSupported) {
+  updatePushBtn(Notification.permission === 'granted' ? 'granted' : 'default');
+} else {
+  updatePushBtn('error');
 }
 
 function requestPush() {
-  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-    alert('Les notifications push ne sont pas supportées sur ce navigateur.');
+  if (!pushSupported) {
+    // Show inline error instead of alert (alerts can fail on mobile PWA)
+    var btn = document.getElementById('pushBtn');
+    btn.innerHTML = '⚠️';
+    btn.title = 'Non supporté sur ce navigateur';
+    setTimeout(function() { updatePushBtn('error'); }, 2000);
     return;
   }
   if (Notification.permission === 'denied') {
-    alert('Les notifications sont bloquées. Allez dans les paramètres de votre navigateur pour les réactiver.');
+    var btn2 = document.getElementById('pushBtn');
+    btn2.innerHTML = '🚫';
+    btn2.title = 'Allez dans Réglages > Notifications pour réactiver';
     return;
   }
-  if (Notification.permission === 'granted') {
-    // Already granted, just re-register token
-    registerToken();
-    return;
-  }
-  Notification.requestPermission().then(function(perm) {
-    updatePushBtn(perm);
-    if (perm === 'granted') {
-      registerToken();
+
+  updatePushBtn('loading');
+
+  // requestPermission: handle both callback and promise
+  try {
+    var permResult = Notification.requestPermission(function(perm) {
+      // Callback style (older browsers)
+      handlePermission(perm);
+    });
+    // Promise style (modern browsers)
+    if (permResult && permResult.then) {
+      permResult.then(function(perm) { handlePermission(perm); });
     }
-  });
+  } catch(e) {
+    console.error('requestPermission error:', e);
+    updatePushBtn('error');
+  }
+}
+
+function handlePermission(perm) {
+  if (perm === 'granted') {
+    registerToken();
+  } else {
+    updatePushBtn(perm);
+  }
 }
 
 function registerToken() {
-  navigator.serviceWorker.register('/sw-leads.js').then(function(reg) {
+  updatePushBtn('loading');
+  navigator.serviceWorker.register('sw-leads.js').then(function(reg) {
+    // Wait for SW to be ready
+    return navigator.serviceWorker.ready.then(function() { return reg; });
+  }).then(function(reg) {
     return firebase.messaging().getToken({
       vapidKey: VAPID_KEY,
       serviceWorkerRegistration: reg
     });
   }).then(function(token) {
-    if (!token) return;
-    // Store token in Firestore
+    if (!token) { updatePushBtn('error'); return; }
     var userName = window._currentUserName || localStorage.getItem('ambitio_name') || 'Inconnu';
     pushDb.collection('fcm_tokens').doc(token).set({
       token: token,
       userName: userName,
       userAgent: navigator.userAgent.substring(0, 100),
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    updatePushBtn('granted');
-    console.log('FCM token registered:', token.substring(0, 20) + '...');
+    }, { merge: true }).then(function() {
+      updatePushBtn('active');
+      console.log('FCM token OK:', token.substring(0, 20) + '...');
+    }).catch(function() {
+      // Token registered in FCM but Firestore write failed — still active
+      updatePushBtn('active');
+    });
   }).catch(function(err) {
     console.error('Push registration failed:', err);
+    updatePushBtn('error');
+    // Show error on button for 3s then reset
+    var btn = document.getElementById('pushBtn');
+    if (btn) btn.title = 'Erreur: ' + (err.message || err).toString().substring(0, 60);
   });
 }
 
-// Handle foreground messages (suppress system notification, app already shows popup)
-if ('serviceWorker' in navigator) {
+// Handle foreground messages
+if (pushSupported) {
   try {
     firebase.messaging().onMessage(function(payload) {
-      console.log('Foreground push received (suppressed, app handles it):', payload);
+      console.log('Foreground push (app handles it):', payload);
     });
   } catch(e) {}
 }
 
 // Auto-register if already granted
-if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+if (pushSupported && Notification.permission === 'granted') {
   registerToken();
 }
 </script>
