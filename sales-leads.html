@@ -343,6 +343,12 @@ html, body {
         <span>Élodie</span> <span class="mp-count" id="countElodie">0</span>
       </button>
     </div>
+    <div class="ld-filters" id="ldPeriodFilters" style="margin-bottom:4px">
+      <button class="ld-filter active" data-period="today">📅 Aujourd'hui</button>
+      <button class="ld-filter" data-period="week">🗓 7 jours</button>
+      <button class="ld-filter" data-period="unprocessed">🆕 Non traités</button>
+      <button class="ld-filter" data-period="all">📋 Tout</button>
+    </div>
     <div class="ld-filters" id="ldFilters">
       <button class="ld-filter active" data-status="all">Tous</button>
       <button class="ld-filter" data-status="nouveau">🆕 Nouveau</button>
@@ -444,6 +450,7 @@ function getStatusObj(key) {
 var allLeads = [];
 var filterMember = 'all';
 var filterStatus = 'all';
+var filterPeriod = 'today';
 var knownLeadIds = {};
 var isFirstLoad = true;
 var openCardId = null;
@@ -591,10 +598,19 @@ document.getElementById('ldMembers').addEventListener('click', function(e) {
   renderFeed();
 });
 
+document.getElementById('ldPeriodFilters').addEventListener('click', function(e) {
+  var btn = e.target.closest('.ld-filter');
+  if (!btn || !btn.dataset.period) return;
+  document.querySelectorAll('#ldPeriodFilters .ld-filter').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  filterPeriod = btn.dataset.period;
+  renderFeed();
+});
+
 document.getElementById('ldFilters').addEventListener('click', function(e) {
   var btn = e.target.closest('.ld-filter');
-  if (!btn) return;
-  document.querySelectorAll('.ld-filter').forEach(function(b) { b.classList.remove('active'); });
+  if (!btn || !btn.dataset.status) return;
+  document.querySelectorAll('#ldFilters .ld-filter').forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
   filterStatus = btn.dataset.status;
   renderFeed();
@@ -602,7 +618,29 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 
 /* ═══ RENDER FEED ═══ */
 function getFilteredLeads() {
-  var list = allLeads;
+  // Exclude bigin imports from live view
+  var list = allLeads.filter(function(l) { return l.source !== 'bigin_import'; });
+
+  // Period filter
+  if (filterPeriod === 'today') {
+    var todayStr = new Date().toISOString().slice(0, 10);
+    list = list.filter(function(l) {
+      if (!l.createdAt) return false;
+      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+      return d.toISOString().slice(0, 10) === todayStr;
+    });
+  } else if (filterPeriod === 'week') {
+    var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+    list = list.filter(function(l) {
+      if (!l.createdAt) return false;
+      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+      return d >= weekAgo;
+    });
+  } else if (filterPeriod === 'unprocessed') {
+    list = list.filter(function(l) { return !l.status || l.status === 'nouveau'; });
+  }
+  // 'all' = no period filter
+
   if (filterMember !== 'all') {
     list = list.filter(function(l) { return l.assignedTo === filterMember; });
   }
@@ -1021,7 +1059,7 @@ function assignLeadRoundRobin(leadId, callback) {
 function startListening() {
   db.collection('leads')
     .orderBy('createdAt', 'desc')
-    .limit(200)
+    .limit(500)
     .onSnapshot(function(snap) {
       var newLeads = [];
 
