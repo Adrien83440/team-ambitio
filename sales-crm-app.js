@@ -1356,16 +1356,161 @@ function renderProfileDetail(profId){
   };
 }
 
-/* ── Fields Tab (placeholder) ── */
+/* ── Fields Tab ── */
+var FIELD_MODULES=[
+  {id:'leads',name:'Pipeline / Affaires',icon:'📋',fields:[
+    {key:'nom',label:'Nom',type:'Texte',required:true,system:true},
+    {key:'telephone',label:'Portable',type:'Téléphone',required:false,system:true},
+    {key:'email',label:'E-mail',type:'Email (Unique)',required:false,system:true},
+    {key:'stage',label:'Étape',type:'Liste déroulante',required:true,system:true},
+    {key:'assignedTo',label:'Gestionnaire de l\'Affaire',type:'Utilisateur',required:false,system:true},
+    {key:'type',label:'Origine du Prospect',type:'Liste déroulante',required:false,system:true},
+    {key:'status',label:'Statut Leads Live',type:'Liste déroulante',required:false,system:true},
+    {key:'utm',label:'Source / UTM',type:'Texte',required:false,system:false},
+    {key:'secteur',label:'Secteur',type:'Texte',required:false,system:false},
+    {key:'ca',label:'CA actuel',type:'Texte',required:false,system:false},
+    {key:'defi',label:'Défi',type:'Texte',required:false,system:false},
+    {key:'closeur',label:'Closeur',type:'Texte',required:false,system:false},
+    {key:'setting',label:'Setting',type:'Texte',required:false,system:false},
+    {key:'tags',label:'Balises',type:'Multi-valeurs',required:false,system:true},
+    {key:'tagsWebi',label:'Tags Webinaire',type:'Texte',required:false,system:false},
+    {key:'dateWebinaire',label:'Date Webinaire',type:'Date',required:false,system:false},
+    {key:'rejetMails',label:'Rejet des mails',type:'Booléen',required:false,system:false},
+    {key:'description',label:'Description',type:'Zone de texte',required:false,system:false},
+    {key:'notesHistory',label:'Notes',type:'Sous-collection',required:false,system:true},
+    {key:'createdAt',label:'Heure de création',type:'Date/Heure',required:true,system:true},
+    {key:'updatedAt',label:'Heure de modification',type:'Date/Heure',required:false,system:true},
+    {key:'importedCreatedAt',label:'Date originale (import)',type:'Date/Heure',required:false,system:true}
+  ]},
+  {id:'clients',name:'Coaching / Clients',icon:'🎓',fields:[
+    {key:'nom',label:'Nom',type:'Texte',required:true,system:true},
+    {key:'prenom',label:'Prénom',type:'Texte',required:false,system:true},
+    {key:'email',label:'E-mail',type:'Email',required:false,system:true},
+    {key:'telephone',label:'Téléphone',type:'Téléphone',required:false,system:true},
+    {key:'coach',label:'Coach assigné',type:'Utilisateur',required:true,system:true},
+    {key:'programme',label:'Programme',type:'Liste déroulante',required:false,system:false},
+    {key:'dateInscription',label:'Date d\'inscription',type:'Date',required:false,system:false},
+    {key:'dateFin',label:'Date fin de programme',type:'Date',required:false,system:false},
+    {key:'retractation',label:'Rétractation',type:'Booléen',required:false,system:false},
+    {key:'coaching72h',label:'Coaching 72H',type:'Booléen',required:false,system:false},
+    {key:'coach72h',label:'Coach Coaching 72H',type:'Utilisateur',required:false,system:false}
+  ]},
+  {id:'bookings',name:'Bookings',icon:'📅',fields:[
+    {key:'nom',label:'Nom du contact',type:'Texte',required:true,system:true},
+    {key:'email',label:'E-mail',type:'Email',required:true,system:true},
+    {key:'telephone',label:'Téléphone',type:'Téléphone',required:false,system:true},
+    {key:'date',label:'Date du RDV',type:'Date/Heure',required:true,system:true},
+    {key:'type',label:'Type de RDV',type:'Liste déroulante',required:false,system:true},
+    {key:'status',label:'Statut',type:'Liste déroulante',required:true,system:true}
+  ]}
+];
+
+var fieldsVisibility=null;
+var activeFieldModule=0;
+
+function loadFieldsVisibility(){
+  var saved=localStorage.getItem('crm_fields_visibility');
+  if(saved){try{fieldsVisibility=JSON.parse(saved);}catch(e){fieldsVisibility={};}}
+  if(!fieldsVisibility)fieldsVisibility={};
+}
+loadFieldsVisibility();
+
+function saveFieldsVisibility(){localStorage.setItem('crm_fields_visibility',JSON.stringify(fieldsVisibility));}
+
+function isFieldVisible(modId,fieldKey){
+  if(!fieldsVisibility[modId])return true;
+  if(fieldsVisibility[modId][fieldKey]===false)return false;
+  return true;
+}
+
 function renderFieldsTab(){
   var body=document.getElementById('setBody');
-  var h='<div style="text-align:center;padding:60px 20px">';
-  h+='<div style="font-size:40px;margin-bottom:12px">📋</div>';
-  h+='<div style="font-family:var(--fh);font-size:16px;font-weight:800;margin-bottom:8px">Configuration des champs</div>';
-  h+='<div style="color:var(--muted);font-size:13px;max-width:400px;margin:0 auto">Personnaliser les champs de chaque module (Contacts, Affaires, Produits, Tâches) — ajouter, masquer, réordonner les champs.</div>';
-  h+='<div style="margin-top:20px;padding:12px 20px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;display:inline-block;font-size:12px;font-weight:700;color:var(--gold)">🚧 Prochaine étape</div>';
+  var h='<div style="display:flex;gap:16px;height:100%">';
+
+  // Left: module cards
+  h+='<div style="width:200px;flex-shrink:0">';
+  h+='<div style="font-family:var(--fh);font-size:13px;font-weight:800;margin-bottom:12px">Champs de module</div>';
+  FIELD_MODULES.forEach(function(mod,idx){
+    var customCount=mod.fields.filter(function(f){return !f.system;}).length;
+    var totalCount=mod.fields.length;
+    h+='<div data-fieldmod="'+idx+'" style="padding:10px 12px;border-radius:10px;cursor:pointer;margin-bottom:4px;transition:all .12s;'+(idx===activeFieldModule?'background:rgba(185,28,28,0.1);border:1px solid rgba(239,68,68,0.2);color:var(--red3)':'background:var(--bg2);border:1px solid var(--border);color:var(--text)')+'">';
+    h+='<div style="display:flex;align-items:center;gap:8px"><span>'+mod.icon+'</span><span style="font-weight:700;font-size:12px">'+esc(mod.name)+'</span></div>';
+    h+='<div style="font-size:10px;color:var(--muted);margin-top:4px">'+totalCount+' champs · '+customCount+' personnalisés</div>';
+    h+='</div>';
+  });
   h+='</div>';
+
+  // Right: fields list
+  var mod=FIELD_MODULES[activeFieldModule];
+  h+='<div style="flex:1;overflow-y:auto">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">';
+  h+='<div><span style="font-family:var(--fh);font-size:15px;font-weight:800">'+mod.icon+' '+esc(mod.name)+'</span>';
+  var customN=mod.fields.filter(function(f){return !f.system;}).length;
+  h+='<span style="font-size:11px;color:var(--muted);margin-left:12px">Champs personnalisés utilisés : <b style="color:var(--text)">'+customN+'/50</b></span></div>';
+  h+='<button class="set-add-user-btn" id="fieldAddBtn" style="font-size:11px;padding:6px 12px">+ Ajouter un champ</button>';
+  h+='</div>';
+
+  h+='<table style="width:100%;border-collapse:collapse">';
+  h+='<thead><tr>';
+  h+='<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);background:var(--bg2);border-bottom:1.5px solid var(--border2);width:30px"></th>';
+  h+='<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);background:var(--bg2);border-bottom:1.5px solid var(--border2)">Nom du champ</th>';
+  h+='<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);background:var(--bg2);border-bottom:1.5px solid var(--border2)">Type</th>';
+  h+='<th style="padding:8px 10px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);background:var(--bg2);border-bottom:1.5px solid var(--border2)">Requis</th>';
+  h+='<th style="padding:8px 10px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);background:var(--bg2);border-bottom:1.5px solid var(--border2)">Visible</th>';
+  h+='</tr></thead><tbody>';
+
+  mod.fields.forEach(function(f){
+    var vis=isFieldVisible(mod.id,f.key);
+    var typeColors={Texte:'#60a5fa','Zone de texte':'#60a5fa',Email:'#34d399','Email (Unique)':'#34d399',Téléphone:'#f59e0b',Date:'#a78bfa','Date/Heure':'#a78bfa','Liste déroulante':'#ec4899',Utilisateur:'#f97316',Booléen:'#14b8a6','Multi-valeurs':'#8b5cf6','Sous-collection':'#6b7280'};
+    var tc=typeColors[f.type]||'#6b7280';
+
+    h+='<tr style="border-bottom:1px solid var(--border);'+(vis?'':'opacity:0.4')+'">';
+    h+='<td style="padding:8px 6px;text-align:center;color:var(--muted2);font-size:10px;cursor:grab">⠿</td>';
+    h+='<td style="padding:8px 10px">';
+    h+='<div style="display:flex;align-items:center;gap:6px">';
+    if(f.system)h+='<span style="width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0" title="Champ système"></span>';
+    h+='<span style="font-size:13px;font-weight:700">'+esc(f.label)+'</span>';
+    h+='<span style="font-size:10px;color:var(--muted2);font-family:var(--fm)">'+esc(f.key)+'</span>';
+    h+='</div></td>';
+    h+='<td style="padding:8px 10px"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:'+tc+'14;color:'+tc+'">'+esc(f.type)+'</span></td>';
+    h+='<td style="padding:8px 10px;text-align:center">'+(f.required?'<span style="color:var(--green);font-size:12px">●</span>':'<span style="color:var(--muted2);font-size:12px">○</span>')+'</td>';
+    h+='<td style="padding:8px 10px;text-align:center"><label class="toggle-switch" style="margin:0 auto"><input type="checkbox" data-fvis="'+f.key+'"'+(vis?' checked':'')+(f.required?' disabled':'')+'/><span class="toggle-track"></span><span class="toggle-knob"></span></label></td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  h+='<div style="margin-top:12px;display:flex;gap:8px"><button class="set-edit-save" id="fieldSaveBtn" style="width:auto;padding:8px 20px;font-size:12px">Enregistrer</button></div>';
+  h+='</div></div>';
+
   body.innerHTML=h;
+
+  // Module click
+  body.querySelectorAll('[data-fieldmod]').forEach(function(el){
+    el.addEventListener('click',function(){activeFieldModule=parseInt(this.dataset.fieldmod);renderFieldsTab();});
+  });
+
+  // Save visibility
+  document.getElementById('fieldSaveBtn').addEventListener('click',function(){
+    var modId=FIELD_MODULES[activeFieldModule].id;
+    if(!fieldsVisibility[modId])fieldsVisibility[modId]={};
+    body.querySelectorAll('[data-fvis]').forEach(function(cb){
+      fieldsVisibility[modId][cb.dataset.fvis]=cb.checked;
+    });
+    saveFieldsVisibility();
+    toast('✅ Configuration des champs sauvegardée');
+  });
+
+  // Add field
+  document.getElementById('fieldAddBtn').addEventListener('click',function(){
+    var label=prompt('Nom du nouveau champ :');
+    if(!label||!label.trim())return;
+    var key=label.trim().toLowerCase().replace(/[^a-z0-9]/g,'_');
+    var types=['Texte','Zone de texte','Email','Téléphone','Date','Date/Heure','Liste déroulante','Booléen','Multi-valeurs'];
+    var typeIdx=prompt('Type (1-9) :\n1. Texte\n2. Zone de texte\n3. Email\n4. Téléphone\n5. Date\n6. Date/Heure\n7. Liste déroulante\n8. Booléen\n9. Multi-valeurs');
+    var type=types[parseInt(typeIdx)-1]||'Texte';
+    FIELD_MODULES[activeFieldModule].fields.push({key:key,label:label.trim(),type:type,required:false,system:false});
+    toast('✅ Champ "'+label.trim()+'" ajouté');
+    renderFieldsTab();
+  });
 }
 
 /* ═══ FIRESTORE ═══ */
