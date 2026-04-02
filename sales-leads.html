@@ -617,20 +617,9 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 });
 
 /* ═══ RENDER FEED ═══ */
-var CLOSING_STAGES = ['rdv_confirmes','rdv_annules_prospect','rdv_annules_equipe','no_show_self','no_show_setting','partenariats','closed_won_setting','closed_won_self','closed_lost','follow_up_closing','disqualifie_closing'];
-var DEAD_STAGES = ['poubelle','disqualification','all_nrp','disqualifie_closing'];
-
 function getFilteredLeads() {
-  // 1) Exclude old bulk imports
-  // 2) Exclude leads already in closing pipeline (assigned to a closer)
-  // 3) Exclude dead/trashed leads
-  var list = allLeads.filter(function(l) {
-    if (l.source === 'bigin_import') return false;
-    var st = l.stage || 'lead';
-    if (CLOSING_STAGES.indexOf(st) >= 0) return false;
-    if (DEAD_STAGES.indexOf(st) >= 0) return false;
-    return true;
-  });
+  // Only show leads assigned to a setter (from Make automation)
+  var list = allLeads.filter(function(l) { return l.assignedTo && l.assignedTo !== ''; });
 
   // Period filter
   if (filterPeriod === 'today') {
