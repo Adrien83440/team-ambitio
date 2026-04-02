@@ -18,8 +18,13 @@
     ],
 
     sales: [
-      { id: 'crm',        icon: '🧩', label: 'CRM Pipeline',     href: 'sales-crm.html' },
       { id: 'dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html' },
+      { id: 'crm',         icon: '🧩', label: 'CRM',               href: '#', children: [
+        { id: 'leads_live',  icon: '🔔', label: 'Leads Live',      href: 'sales-leads.html' },
+        { id: 'pipeline',    icon: '▥',  label: 'Pipeline',        href: 'sales-crm.html' },
+        { id: 'retargeting', icon: '🔄', label: 'Retargeting',     href: 'sales-retargeting.html' },
+        { id: 'suivi',       icon: '📋', label: 'Suivi Clients',   href: 'sales-suivi-client.html' },
+      ]},
       { id: 'saisie',      icon: '✏️', label: 'Setting / Closing', href: '#', children: [
         { id: 'setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
         { id: 'closing', icon: '🎯', label: 'Closing', href: 'sales-closing.html' },
@@ -28,18 +33,19 @@
       { id: 'equipe',      icon: '👥', label: 'Équipe',            href: 'sales-equipe.html' },
       { id: 'commissions', icon: '💰', label: 'Commissions',       href: 'sales-commissions.html' },
       { id: 'projections', icon: '📈', label: 'Projections',       href: 'sales-projections.html' },
-      { id: 'retargeting', icon: '🔄', label: 'Retargeting',       href: 'sales-retargeting.html' },
-      { id: 'suivi-client', icon: '📋', label: 'Suivi Clients',     href: 'sales-suivi-client.html' },
-      { id: 'leads',        icon: '🔔', label: 'Leads Live',        href: 'sales-leads.html' },
-      { id: 'booking',      icon: '📅', label: 'Booking',            href: 'booking.html' },
-
+      { id: 'booking',     icon: '📅', label: 'Booking',           href: 'booking.html' },
     ],
 
     admin: [
       { id: 'coach-clients',       icon: '👥', label: 'Clients',       href: 'coaching.html',                section: 'Coaching' },
       { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',      section: 'Coaching' },
       { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html',  section: 'Coaching' },
-      { id: 'sales-crm',        icon: '🧩', label: 'CRM Pipeline', href: 'sales-crm.html',        section: 'Sales' },
+      { id: 'sales-crm',         icon: '🧩', label: 'CRM', href: '#', section: 'Sales', children: [
+        { id: 'sales-leads_live',  icon: '🔔', label: 'Leads Live',    href: 'sales-leads.html' },
+        { id: 'sales-pipeline',    icon: '▥',  label: 'Pipeline',      href: 'sales-crm.html' },
+        { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting',   href: 'sales-retargeting.html' },
+        { id: 'sales-suivi',       icon: '📋', label: 'Suivi Clients', href: 'sales-suivi-client.html' },
+      ]},
       { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',   href: 'sales-dashboard.html',   section: 'Sales' },
       { id: 'sales-saisie',      icon: '✏️', label: 'Setting / Closing', href: '#', section: 'Sales', children: [
         { id: 'sales-setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
@@ -49,10 +55,7 @@
       { id: 'sales-equipe',      icon: '👥', label: 'Équipe',      href: 'sales-equipe.html',      section: 'Sales' },
       { id: 'sales-commissions', icon: '💰', label: 'Commissions', href: 'sales-commissions.html', section: 'Sales' },
       { id: 'sales-projections', icon: '📈', label: 'Projections', href: 'sales-projections.html', section: 'Sales' },
-      { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting', href: 'sales-retargeting.html', section: 'Sales' },
-      { id: 'sales-suivi-client', icon: '📋', label: 'Suivi Clients', href: 'sales-suivi-client.html', section: 'Sales' },
-      { id: 'sales-leads',        icon: '🔔', label: 'Leads Live',   href: 'sales-leads.html',        section: 'Sales' },
-      { id: 'sales-booking',      icon: '📅', label: 'Booking',      href: 'booking.html',            section: 'Sales' },
+      { id: 'sales-booking',     icon: '📅', label: 'Booking',     href: 'booking.html',           section: 'Sales' },
 
       { id: 'import', icon: '🔗', label: 'Import Notion', href: 'import-notion.html', section: 'Outils' },
     ],
