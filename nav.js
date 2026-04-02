@@ -23,13 +23,13 @@
       { id: 'saisie',      icon: '✏️', label: 'Setting / Closing', href: '#', children: [
         { id: 'setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
         { id: 'closing', icon: '🎯', label: 'Closing', href: 'sales-closing.html' },
+        { id: 'eod',     icon: '📝', label: 'EOD',     href: 'sales-eod.html' },
       ]},
       { id: 'equipe',      icon: '👥', label: 'Équipe',            href: 'sales-equipe.html' },
       { id: 'commissions', icon: '💰', label: 'Commissions',       href: 'sales-commissions.html' },
       { id: 'projections', icon: '📈', label: 'Projections',       href: 'sales-projections.html' },
       { id: 'retargeting', icon: '🔄', label: 'Retargeting',       href: 'sales-retargeting.html' },
       { id: 'suivi-client', icon: '📋', label: 'Suivi Clients',     href: 'sales-suivi-client.html' },
-      { id: 'eod',          icon: '📝', label: 'EOD',               href: 'sales-eod.html' },
       { id: 'leads',        icon: '🔔', label: 'Leads Live',        href: 'sales-leads.html' },
       { id: 'booking',      icon: '📅', label: 'Booking',            href: 'booking.html' },
 
@@ -44,13 +44,13 @@
       { id: 'sales-saisie',      icon: '✏️', label: 'Setting / Closing', href: '#', section: 'Sales', children: [
         { id: 'sales-setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
         { id: 'sales-closing', icon: '🎯', label: 'Closing', href: 'sales-closing.html' },
+        { id: 'sales-eod',    icon: '📝', label: 'EOD',     href: 'sales-eod.html' },
       ]},
       { id: 'sales-equipe',      icon: '👥', label: 'Équipe',      href: 'sales-equipe.html',      section: 'Sales' },
       { id: 'sales-commissions', icon: '💰', label: 'Commissions', href: 'sales-commissions.html', section: 'Sales' },
       { id: 'sales-projections', icon: '📈', label: 'Projections', href: 'sales-projections.html', section: 'Sales' },
       { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting', href: 'sales-retargeting.html', section: 'Sales' },
       { id: 'sales-suivi-client', icon: '📋', label: 'Suivi Clients', href: 'sales-suivi-client.html', section: 'Sales' },
-      { id: 'sales-eod',          icon: '📝', label: 'EOD',           href: 'sales-eod.html',          section: 'Sales' },
       { id: 'sales-leads',        icon: '🔔', label: 'Leads Live',   href: 'sales-leads.html',        section: 'Sales' },
       { id: 'sales-booking',      icon: '📅', label: 'Booking',      href: 'booking.html',            section: 'Sales' },
 
