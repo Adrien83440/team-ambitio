@@ -20,8 +20,10 @@
     sales: [
       { id: 'crm',        icon: '🧩', label: 'CRM Pipeline',     href: 'sales-crm.html' },
       { id: 'dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html' },
-      { id: 'closing',     icon: '🎯', label: 'Closing',           href: 'sales-closing.html' },
-      { id: 'setting',     icon: '📞', label: 'Setting',           href: 'sales-setting.html' },
+      { id: 'saisie',      icon: '✏️', label: 'Setting / Closing', href: '#', children: [
+        { id: 'setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
+        { id: 'closing', icon: '🎯', label: 'Closing', href: 'sales-closing.html' },
+      ]},
       { id: 'equipe',      icon: '👥', label: 'Équipe',            href: 'sales-equipe.html' },
       { id: 'commissions', icon: '💰', label: 'Commissions',       href: 'sales-commissions.html' },
       { id: 'projections', icon: '📈', label: 'Projections',       href: 'sales-projections.html' },
@@ -39,8 +41,10 @@
       { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html',  section: 'Coaching' },
       { id: 'sales-crm',        icon: '🧩', label: 'CRM Pipeline', href: 'sales-crm.html',        section: 'Sales' },
       { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',   href: 'sales-dashboard.html',   section: 'Sales' },
-      { id: 'sales-closing',     icon: '🎯', label: 'Closing',     href: 'sales-closing.html',     section: 'Sales' },
-      { id: 'sales-setting',     icon: '📞', label: 'Setting',     href: 'sales-setting.html',     section: 'Sales' },
+      { id: 'sales-saisie',      icon: '✏️', label: 'Setting / Closing', href: '#', section: 'Sales', children: [
+        { id: 'sales-setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
+        { id: 'sales-closing', icon: '🎯', label: 'Closing', href: 'sales-closing.html' },
+      ]},
       { id: 'sales-equipe',      icon: '👥', label: 'Équipe',      href: 'sales-equipe.html',      section: 'Sales' },
       { id: 'sales-commissions', icon: '💰', label: 'Commissions', href: 'sales-commissions.html', section: 'Sales' },
       { id: 'sales-projections', icon: '📈', label: 'Projections', href: 'sales-projections.html', section: 'Sales' },
@@ -179,6 +183,16 @@
       border:1px solid var(--nav-role-border); flex-shrink:0;
     }
     .nav-item-badge.num { background:var(--nav-accent); color:white; border:none; }
+
+    .nav-parent { cursor:pointer; }
+    .nav-parent-caret { font-size:10px; color:rgba(255,255,255,0.35); flex-shrink:0; transition:transform 0.2s; }
+    .nav-parent.open .nav-parent-caret { transform:rotate(90deg); }
+    .nav-children { display:none; padding-left:12px; }
+    .nav-children.open { display:block; }
+    .nav-children .nav-item { font-size:12px; padding:7px 10px; opacity:0.85; }
+    .nav-children .nav-item.active { opacity:1; }
+    #ambitio-sidebar.collapsed .nav-children { display:none !important; }
+    #ambitio-sidebar.collapsed .nav-parent-caret { opacity:0; }
 
     #ambitio-sidebar.collapsed .nav-item-label,
     #ambitio-sidebar.collapsed .nav-item-badge,
@@ -403,13 +417,33 @@
         navHtml += `<div class="nav-section-label" style="margin-top:${lastSection?'12px':'0'}">${m.section}</div>`;
         lastSection = m.section;
       }
-      const isActive   = path === m.href.split('#')[0];
-      const badgeClass = m.badge && /^\d+$/.test(m.badge) ? 'nav-item-badge num' : 'nav-item-badge';
-      navHtml += `<a class="nav-item${isActive?' active':''}" href="${m.href}" data-id="${m.id}" data-label="${m.label}">
-        <span class="nav-item-icon">${m.icon}</span>
-        <span class="nav-item-label">${m.label}</span>
-        ${m.badge?`<span class="${badgeClass}">${m.badge}</span>`:''}
-      </a>`;
+
+      if (m.children) {
+        // Parent with sub-items
+        const childActive = m.children.some(c => path === c.href.split('#')[0]);
+        navHtml += `<div class="nav-item nav-parent${childActive?' open':''}" data-id="${m.id}" data-label="${m.label}">
+          <span class="nav-item-icon">${m.icon}</span>
+          <span class="nav-item-label">${m.label}</span>
+          <span class="nav-parent-caret">▸</span>
+        </div>`;
+        navHtml += `<div class="nav-children${childActive?' open':''}" data-parent="${m.id}">`;
+        m.children.forEach(c => {
+          const cActive = path === c.href.split('#')[0];
+          navHtml += `<a class="nav-item${cActive?' active':''}" href="${c.href}" data-id="${c.id}" data-label="${c.label}">
+            <span class="nav-item-icon">${c.icon}</span>
+            <span class="nav-item-label">${c.label}</span>
+          </a>`;
+        });
+        navHtml += `</div>`;
+      } else {
+        const isActive   = path === m.href.split('#')[0];
+        const badgeClass = m.badge && /^\d+$/.test(m.badge) ? 'nav-item-badge num' : 'nav-item-badge';
+        navHtml += `<a class="nav-item${isActive?' active':''}" href="${m.href}" data-id="${m.id}" data-label="${m.label}">
+          <span class="nav-item-icon">${m.icon}</span>
+          <span class="nav-item-label">${m.label}</span>
+          ${m.badge?`<span class="${badgeClass}">${m.badge}</span>`:''}
+        </a>`;
+      }
     });
 
     sidebar.innerHTML = `
@@ -472,6 +506,18 @@
     });
 
     document.getElementById('navProfileBtn').addEventListener('click', openProfileModal);
+
+    // Toggle sub-nav parents
+    sidebar.querySelectorAll('.nav-parent').forEach(parent => {
+      parent.addEventListener('click', () => {
+        const id = parent.dataset.id;
+        const children = sidebar.querySelector('[data-parent="' + id + '"]');
+        if (children) {
+          parent.classList.toggle('open');
+          children.classList.toggle('open');
+        }
+      });
+    });
 
     // Theme toggle
     document.getElementById('navThemeToggle').addEventListener('click', () => {
