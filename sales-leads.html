@@ -617,32 +617,34 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 });
 
 /* ═══ RENDER FEED ═══ */
-/* Use original Bigin date when available, otherwise Firestore createdAt */
-function getLeadDate(l) {
-  if (l.importedCreatedAt) {
-    var d = new Date(l.importedCreatedAt.replace(' ', 'T'));
-    if (!isNaN(d.getTime())) return d;
-  }
-  if (l.createdAt) { return l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt); }
-  return null;
-}
+var CLOSING_STAGES = ['rdv_confirmes','rdv_annules_prospect','rdv_annules_equipe','no_show_self','no_show_setting','partenariats','closed_won_setting','closed_won_self','closed_lost','follow_up_closing','disqualifie_closing'];
+var DEAD_STAGES = ['poubelle','disqualification','all_nrp','disqualifie_closing'];
 
 function getFilteredLeads() {
-  var list = allLeads.slice();
+  // 1) Exclude old bulk imports
+  // 2) Exclude leads already in closing pipeline (assigned to a closer)
+  // 3) Exclude dead/trashed leads
+  var list = allLeads.filter(function(l) {
+    if (l.source === 'bigin_import') return false;
+    var st = l.stage || 'lead';
+    if (CLOSING_STAGES.indexOf(st) >= 0) return false;
+    if (DEAD_STAGES.indexOf(st) >= 0) return false;
+    return true;
+  });
 
-  // Period filter — uses real lead date (importedCreatedAt > createdAt)
+  // Period filter
   if (filterPeriod === 'today') {
     var todayStr = new Date().toISOString().slice(0, 10);
     list = list.filter(function(l) {
-      var d = getLeadDate(l);
-      if (!d) return false;
+      if (!l.createdAt) return false;
+      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
       return d.toISOString().slice(0, 10) === todayStr;
     });
   } else if (filterPeriod === 'week') {
     var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
     list = list.filter(function(l) {
-      var d = getLeadDate(l);
-      if (!d) return false;
+      if (!l.createdAt) return false;
+      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
       return d >= weekAgo;
     });
   } else if (filterPeriod === 'unprocessed') {
@@ -705,7 +707,7 @@ function renderCard(l) {
   var statusObj = getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
   var isNew = l._isNew;
-  var ago = timeAgo(getLeadDate(l));
+  var ago = timeAgo(l.createdAt);
 
   var h = '<div class="ld-card' + (isNew ? ' new' : '') + '" data-lead-id="' + id + '">';
 
