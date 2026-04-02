@@ -1450,7 +1450,7 @@ function renderFieldsTab(){
   h+='<button class="set-add-user-btn" id="fieldAddBtn" style="font-size:11px;padding:6px 12px;margin-left:auto">+ Ajouter un champ</button>';
   h+='</div>';
 
-  h+='<table class="fields-table"><thead><tr>';
+  h+='<table class="fields-table"><colgroup><col style="width:24px"/><col/><col style="width:90px"/><col style="width:46px"/><col style="width:50px"/></colgroup><thead><tr>';
   h+='<th style="width:24px"></th>';
   h+='<th>Nom du champ</th>';
   h+='<th style="width:100px">Type</th>';
