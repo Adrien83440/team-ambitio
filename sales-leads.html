@@ -618,8 +618,15 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 
 /* ═══ RENDER FEED ═══ */
 function getFilteredLeads() {
-  // Only show leads assigned to a setter (from Make automation)
-  var list = allLeads.filter(function(l) { return l.assignedTo && l.assignedTo !== ''; });
+  // ══ FRESH START: only show leads created after this cutoff ══
+  // All prior leads (bulk imports, old Make syncs) are hidden.
+  // New leads from Make going forward will appear.
+  var LEADS_LIVE_CUTOFF = new Date('2026-04-02T22:00:00+02:00');
+  var list = allLeads.filter(function(l) {
+    if (!l.createdAt) return false;
+    var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+    return d > LEADS_LIVE_CUTOFF;
+  });
 
   // Period filter
   if (filterPeriod === 'today') {
