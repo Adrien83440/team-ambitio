@@ -617,23 +617,32 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 });
 
 /* ═══ RENDER FEED ═══ */
+/* Use original Bigin date when available, otherwise Firestore createdAt */
+function getLeadDate(l) {
+  if (l.importedCreatedAt) {
+    var d = new Date(l.importedCreatedAt.replace(' ', 'T'));
+    if (!isNaN(d.getTime())) return d;
+  }
+  if (l.createdAt) { return l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt); }
+  return null;
+}
+
 function getFilteredLeads() {
-  // All leads, filtered by date/member/status below
   var list = allLeads.slice();
 
-  // Period filter
+  // Period filter — uses real lead date (importedCreatedAt > createdAt)
   if (filterPeriod === 'today') {
     var todayStr = new Date().toISOString().slice(0, 10);
     list = list.filter(function(l) {
-      if (!l.createdAt) return false;
-      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+      var d = getLeadDate(l);
+      if (!d) return false;
       return d.toISOString().slice(0, 10) === todayStr;
     });
   } else if (filterPeriod === 'week') {
     var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
     list = list.filter(function(l) {
-      if (!l.createdAt) return false;
-      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+      var d = getLeadDate(l);
+      if (!d) return false;
       return d >= weekAgo;
     });
   } else if (filterPeriod === 'unprocessed') {
@@ -696,7 +705,7 @@ function renderCard(l) {
   var statusObj = getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
   var isNew = l._isNew;
-  var ago = timeAgo(l.createdAt);
+  var ago = timeAgo(getLeadDate(l));
 
   var h = '<div class="ld-card' + (isNew ? ' new' : '') + '" data-lead-id="' + id + '">';
 
