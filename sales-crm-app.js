@@ -1184,36 +1184,48 @@ function openRoleEdit(role){
 }
 
 /* ── Permissions/Profils Tab ── */
-var MODULES_PERMS=[
-  {id:'leads',name:'CRM / Pipeline',icon:'📋'},
-  {id:'clients',name:'Coaching / Clients',icon:'🎓'},
-  {id:'commissions',name:'Commissions',icon:'💰'},
-  {id:'dashboard',name:'Dashboard',icon:'📊'},
-  {id:'retargeting',name:'Retargeting',icon:'🔁'},
-  {id:'settings',name:'Paramètres',icon:'⚙'},
-  {id:'booking',name:'Booking',icon:'📅'},
-  {id:'communication',name:'Communication',icon:'💬'}
+var PERM_SECTIONS=[
+  {id:'base',name:'Autorisations de base',items:[
+    {id:'pipeline',name:'Enregistrements de pipeline',subs:['Afficher','Créer','Modifier','Supprimer','Partage externe']},
+    {id:'contacts',name:'Contacts',subs:['Afficher','Créer','Modifier','Supprimer']},
+    {id:'coaching',name:'Coaching / Clients',subs:['Afficher','Créer','Modifier','Supprimer']},
+    {id:'commissions',name:'Commissions',subs:['Afficher','Modifier']},
+    {id:'activites',name:'Activités',subs:['Afficher','Créer','Modifier','Supprimer']},
+    {id:'notes',name:'Notes',subs:['Afficher','Créer','Modifier','Supprimer']},
+    {id:'fichiers',name:'Fichiers',subs:['Afficher','Charger','Supprimer']},
+    {id:'dashboard',name:'Tableaux de bord',subs:['Afficher','Gérer']}
+  ]},
+  {id:'advanced',name:'Fonctions avancées',items:[
+    {id:'manage_pipeline',name:'Manage Team Pipelines',subs:[]},
+    {id:'automatisation',name:'Automatisation',subs:['Manage Automations','Gérer les connexions']},
+    {id:'gestion_users',name:'Gestion des utilisateurs',subs:[]},
+    {id:'actions_bloc',name:'Actions en bloc',subs:['Mettre à jour','Supprimer','Propriétaire de modification']},
+    {id:'admin_data',name:'Administration des données',subs:['Importer','Exporter','Historique des importations']},
+    {id:'divers',name:'Divers',subs:['Rechercher et Fusionner','Gérer les vues personnalisées','Balises']}
+  ]},
+  {id:'canaux',name:'Canaux',items:[
+    {id:'email_channel',name:'E-mail',subs:['Envoyer un e-mail','E-mails en masse','Modèles']},
+    {id:'communication',name:'Communication interne',subs:['Envoyer','Voir tout']}
+  ]}
 ];
-var ACTIONS=['Voir','Créer','Modifier','Supprimer'];
+
 var PROFILES_DEF=[
-  {id:'super_admin',name:'Super administrateur',color:'#f59e0b',perms:{}},
-  {id:'admin',name:'Administrateur',color:'#60a5fa',perms:{}},
-  {id:'standard',name:'Standard',color:'#6b7280',perms:{}}
+  {id:'administrator',name:'Administrator',description:'Ce profil aura toutes les autorisations. Les utilisateurs avec un profil Administrateur pourront visualiser et gérer par défaut toutes les données à l\'intérieur du compte de l\'organisation.',color:'#60a5fa'},
+  {id:'standard',name:'Standard',description:'Ce profil aura toutes les autorisations à l\'exception des privilèges administratifs.',color:'#6b7280'},
+  {id:'closeur_setteur',name:'Closeur/Setteur',description:'Profil limité aux actions de vente : pipeline, contacts, commissions.',color:'#ef4444'}
 ];
 var firestoreProfiles=null;
+var profDetailView=null; // null=list, string=profileId
 
 function loadProfiles(cb){
   db.collection('crm_profiles').get().then(function(snap){
     if(snap.empty){
-      // Initialize defaults: super_admin gets all, admin gets most, standard limited
       firestoreProfiles=PROFILES_DEF.map(function(p){
         var perms={};
-        MODULES_PERMS.forEach(function(m){
-          if(p.id==='super_admin')perms[m.id]={view:true,create:true,edit:true,delete:true};
-          else if(p.id==='admin')perms[m.id]={view:true,create:true,edit:true,delete:m.id!=='settings'};
-          else perms[m.id]={view:true,create:m.id==='leads'||m.id==='clients',edit:m.id==='leads'||m.id==='clients',delete:false};
-        });
-        return{id:p.id,name:p.name,color:p.color,perms:perms};
+        PERM_SECTIONS.forEach(function(sec){sec.items.forEach(function(it){
+          perms[it.id]=(p.id==='administrator');
+        });});
+        return{id:p.id,name:p.name,description:p.description,color:p.color,perms:perms};
       });
       if(cb)cb();
     } else {
@@ -1225,73 +1237,83 @@ function loadProfiles(cb){
 
 function renderPermissionsTab(){
   if(!firestoreProfiles){loadProfiles(function(){renderPermissionsTab();});return;}
+  if(profDetailView){renderProfileDetail(profDetailView);return;}
+  renderProfilesList();
+}
+
+function renderProfilesList(){
   var body=document.getElementById('setBody');
-
-  // Profile selector tabs
-  var h='<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">';
-  firestoreProfiles.forEach(function(p,idx){
-    h+='<button class="set-profile-tab" data-profidx="'+idx+'" style="padding:8px 16px;border:1.5px solid '+(idx===0?p.color:'var(--border)')+';border-radius:8px;background:'+(idx===0?p.color+'14':'transparent')+';color:'+(idx===0?p.color:'var(--muted)')+';font-family:var(--fb);font-size:12px;font-weight:700;cursor:pointer">'+esc(p.name)+'</button>';
+  var h='<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">';
+  h+='<div><div style="font-family:var(--fh);font-size:16px;font-weight:800;margin-bottom:4px">Profils</div>';
+  h+='<div style="font-size:12px;color:var(--muted);line-height:1.5;max-width:600px">Les profils vous aident à définir un ensemble d\'autorisations pour chaque utilisateur ainsi que les actions qu\'ils peuvent exécuter. Lorsque vous invitez des utilisateurs, vous affectez un profil à chacun d\'entre eux.</div></div>';
+  h+='<button class="set-add-user-btn" id="profCreateBtn">+ Créer un nouveau profil</button></div>';
+  h+='<table class="prof-list-table"><thead><tr><th>Nom De Profil</th><th>Description Du Profil</th><th>Modifié Par</th></tr></thead><tbody>';
+  firestoreProfiles.forEach(function(p){
+    h+='<tr data-profclick="'+p.id+'">';
+    h+='<td><span class="prof-name">'+esc(p.name)+'</span></td>';
+    h+='<td><span class="prof-desc">'+esc(p.description||'')+'</span></td>';
+    h+='<td style="color:var(--muted);font-size:11px">—</td></tr>';
   });
-  h+='</div>';
-
-  h+='<div id="profPermGrid"></div>';
-  h+='<div style="margin-top:16px"><button class="set-edit-save" id="profSaveBtn" style="width:auto;padding:10px 24px">💾 Sauvegarder les permissions</button></div>';
+  h+='</tbody></table>';
   body.innerHTML=h;
 
-  var activeProf=0;
-  renderPermGrid(activeProf);
-
   body.addEventListener('click',function(e){
-    var tab=e.target.closest('[data-profidx]');
-    if(tab){
-      activeProf=parseInt(tab.dataset.profidx);
-      body.querySelectorAll('[data-profidx]').forEach(function(t,i){
-        var p=firestoreProfiles[i];
-        t.style.borderColor=i===activeProf?p.color:'var(--border)';
-        t.style.background=i===activeProf?p.color+'14':'transparent';
-        t.style.color=i===activeProf?p.color:'var(--muted)';
-      });
-      renderPermGrid(activeProf);
-    }
+    var row=e.target.closest('[data-profclick]');
+    if(row){profDetailView=row.dataset.profclick;renderPermissionsTab();}
   });
-
-  document.getElementById('profSaveBtn').onclick=function(){
-    // Read all checkboxes
-    var prof=firestoreProfiles[activeProf];
-    if(!prof.perms)prof.perms={};
-    document.querySelectorAll('[data-permmod]').forEach(function(cb){
-      var mod=cb.dataset.permmod,act=cb.dataset.permact;
-      if(!prof.perms[mod])prof.perms[mod]={};
-      prof.perms[mod][act]=cb.checked;
-    });
-    db.collection('crm_profiles').doc(prof.id).set({name:prof.name,color:prof.color,perms:prof.perms,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
-      toast('✅ Permissions "'+prof.name+'" sauvegardées');
+  document.getElementById('profCreateBtn').onclick=function(){
+    var name=prompt('Nom du nouveau profil :');
+    if(!name||!name.trim())return;
+    var desc=prompt('Description :')||'';
+    var newProf={id:name.trim().toLowerCase().replace(/[^a-z0-9]/g,'_'),name:name.trim(),description:desc.trim(),color:'#6b7280',perms:{}};
+    PERM_SECTIONS.forEach(function(sec){sec.items.forEach(function(it){newProf.perms[it.id]=false;});});
+    db.collection('crm_profiles').doc(newProf.id).set(newProf).then(function(){
+      firestoreProfiles.push(newProf);toast('✅ Profil "'+name.trim()+'" créé');renderPermissionsTab();
     }).catch(function(err){toast('❌ '+err.message);});
   };
 }
 
-function renderPermGrid(profIdx){
-  var prof=firestoreProfiles[profIdx];
+function renderProfileDetail(profId){
+  var prof=null;for(var i=0;i<firestoreProfiles.length;i++){if(firestoreProfiles[i].id===profId){prof=firestoreProfiles[i];break;}}
+  if(!prof){profDetailView=null;renderProfilesList();return;}
   var perms=prof.perms||{};
-  var h='<table style="width:100%;border-collapse:collapse">';
-  h+='<thead><tr><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);background:var(--bg2);border-bottom:1.5px solid var(--border2)">Module</th>';
-  ACTIONS.forEach(function(a){h+='<th style="padding:8px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);background:var(--bg2);border-bottom:1.5px solid var(--border2);width:80px">'+a+'</th>';});
-  h+='</tr></thead><tbody>';
-  var actKeys=['view','create','edit','delete'];
-  MODULES_PERMS.forEach(function(m){
-    var mp=perms[m.id]||{};
-    h+='<tr style="border-bottom:1px solid var(--border)">';
-    h+='<td style="padding:10px 12px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:8px"><span>'+m.icon+'</span> '+esc(m.name)+'</td>';
-    actKeys.forEach(function(ak,i){
-      var checked=mp[ak]!==false;
-      if(prof.id==='super_admin')checked=true;
-      h+='<td style="padding:10px 12px;text-align:center"><input type="checkbox" data-permmod="'+m.id+'" data-permact="'+ak+'" style="accent-color:var(--green);width:16px;height:16px;cursor:pointer"'+(checked?' checked':'')+(prof.id==='super_admin'?' disabled':'')+'/></td>';
+
+  var body=document.getElementById('setBody');
+  var h='<div class="prof-detail-header">';
+  h+='<button class="prof-detail-back" id="profBack">← Retour</button>';
+  h+='<div class="prof-detail-name">'+esc(prof.name)+'</div>';
+  h+='</div>';
+  h+='<div class="prof-detail-desc">'+esc(prof.description||'')+'</div>';
+
+  PERM_SECTIONS.forEach(function(sec){
+    h+='<div class="prof-section-title">'+esc(sec.name)+'</div>';
+    sec.items.forEach(function(it){
+      var isOn=perms[it.id]!==false;
+      var subsText=it.subs.length>0?it.subs.join(', '):'';
+      h+='<div class="prof-perm-row">';
+      h+='<div class="prof-perm-name">'+esc(it.name)+'</div>';
+      h+='<label class="toggle-switch"><input type="checkbox" data-permid="'+it.id+'"'+(isOn?' checked':'')+(prof.id==='administrator'?' disabled':'')+'/><span class="toggle-track"></span><span class="toggle-knob"></span></label>';
+      if(subsText)h+='<span class="prof-perm-detail">'+esc(subsText)+'</span>';
+      h+='</div>';
     });
-    h+='</tr>';
   });
-  h+='</tbody></table>';
-  if(prof.id==='super_admin')h+='<div style="font-size:11px;color:var(--muted);margin-top:8px;font-style:italic">Le Super administrateur a toutes les permissions par défaut.</div>';
-  document.getElementById('profPermGrid').innerHTML=h;
+
+  h+='<div style="margin-top:24px;display:flex;gap:8px">';
+  h+='<button class="set-edit-save" id="profSavePerms" style="width:auto;padding:10px 24px">Enregistrer</button>';
+  h+='<button class="set-edit-cancel" id="profCancelPerms">Annuler</button>';
+  h+='</div>';
+  body.innerHTML=h;
+
+  document.getElementById('profBack').onclick=function(){profDetailView=null;renderPermissionsTab();};
+  document.getElementById('profCancelPerms').onclick=function(){profDetailView=null;renderPermissionsTab();};
+  document.getElementById('profSavePerms').onclick=function(){
+    var updatedPerms={};
+    body.querySelectorAll('[data-permid]').forEach(function(cb){updatedPerms[cb.dataset.permid]=cb.checked;});
+    prof.perms=updatedPerms;
+    db.collection('crm_profiles').doc(prof.id).set({name:prof.name,description:prof.description,color:prof.color,perms:updatedPerms,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
+      toast('✅ Permissions "'+prof.name+'" sauvegardées');
+    }).catch(function(err){toast('❌ '+err.message);});
+  };
 }
 
 /* ── Fields Tab (placeholder) ── */
