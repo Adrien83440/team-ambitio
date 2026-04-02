@@ -270,13 +270,18 @@ function renderCard(l){
   var h='<div class="crm-card" draggable="true" data-id="'+l.id+'">';
   h+='<span class="crm-card-eye" data-action="quickview" data-id="'+l.id+'">👁</span>';
   h+='<div class="crm-card-name">'+esc(l.nom||'—')+'</div>';
-  if(l.telephone)h+='<div class="crm-card-phone">'+esc(l.telephone)+'</div>';
-  h+='<div class="crm-card-bottom"><span class="crm-card-badge '+badge+'">'+tl+'</span>';
-  if(sl)h+='<span class="crm-card-setter '+sc+'">'+sl+'</span>';
-  if(ls!=='nouveau')h+='<span class="crm-card-setter" style="color:var(--blue)">📞 '+(sL[ls]||ls)+'</span>';
+  if(isKanbanFieldVisible('telephone')&&l.telephone)h+='<div class="crm-card-phone">'+esc(l.telephone)+'</div>';
+  if(isKanbanFieldVisible('email')&&l.email)h+='<div class="crm-card-phone" style="font-size:10px">'+esc(l.email)+'</div>';
+  if(isKanbanFieldVisible('createdAt')){var cd=getLeadDate(l);if(cd)h+='<div class="crm-card-phone" style="font-size:10px;color:rgba(255,255,255,0.3)">'+fmtDate(cd)+'</div>';}
+  h+='<div class="crm-card-bottom">';
+  if(isKanbanFieldVisible('type'))h+='<span class="crm-card-badge '+badge+'">'+tl+'</span>';
+  if(isKanbanFieldVisible('assignedTo')&&sl)h+='<span class="crm-card-setter '+sc+'">'+sl+'</span>';
+  if(isKanbanFieldVisible('status')&&ls!=='nouveau')h+='<span class="crm-card-setter" style="color:var(--blue)">📞 '+(sL[ls]||ls)+'</span>';
+  if(isKanbanFieldVisible('utm')&&l.utm)h+='<span class="crm-card-setter" style="color:var(--purple);font-size:8px">🔗 '+esc(l.utm)+'</span>';
+  if(isKanbanFieldVisible('closeur')&&l.closeur)h+='<span class="crm-card-setter" style="color:var(--gold);font-size:8px">🎯 '+esc(l.closeur)+'</span>';
   if(hn)h+='<span class="crm-card-notes-dot"></span>';
   h+='</div>';
-  if(l.tags&&l.tags.length>0){h+='<div class="crm-card-tags">';l.tags.forEach(function(t){if(t)h+='<span class="crm-card-tag" style="background:'+tagColor(t)+'20;color:'+tagColor(t)+'">'+esc(t)+'</span>';});h+='</div>';}
+  if(isKanbanFieldVisible('tags')&&l.tags&&l.tags.length>0){h+='<div class="crm-card-tags">';l.tags.forEach(function(t){if(t)h+='<span class="crm-card-tag" style="background:'+tagColor(t)+'20;color:'+tagColor(t)+'">'+esc(t)+'</span>';});h+='</div>';}
   h+='</div>';return h;
 }
 
@@ -802,6 +807,30 @@ loadColConfig();
 
 function saveColConfig(){localStorage.setItem('crm_visible_cols',JSON.stringify(visibleCols));}
 
+/* ═══ KANBAN FIELD CONFIG ═══ */
+var KANBAN_FIELDS=[
+  {key:'telephone',label:'Téléphone',icon:'📱',default:true},
+  {key:'email',label:'Email',icon:'📧',default:false},
+  {key:'type',label:'Type (Origine)',icon:'🏷',default:true},
+  {key:'assignedTo',label:'Setter',icon:'⭐',default:true},
+  {key:'status',label:'Statut appel',icon:'📞',default:true},
+  {key:'tags',label:'Tags',icon:'🏷',default:true},
+  {key:'utm',label:'Source / UTM',icon:'🔗',default:false},
+  {key:'closeur',label:'Closeur',icon:'🎯',default:false},
+  {key:'createdAt',label:'Date de création',icon:'📅',default:false}
+];
+var visibleKanbanFields=null;
+
+function loadKanbanConfig(){
+  var saved=localStorage.getItem('crm_kanban_fields');
+  if(saved){try{visibleKanbanFields=JSON.parse(saved);}catch(e){visibleKanbanFields=null;}}
+  if(!visibleKanbanFields){visibleKanbanFields=KANBAN_FIELDS.filter(function(f){return f.default;}).map(function(f){return f.key;});}
+}
+loadKanbanConfig();
+
+function saveKanbanConfig(){localStorage.setItem('crm_kanban_fields',JSON.stringify(visibleKanbanFields));}
+function isKanbanFieldVisible(key){return visibleKanbanFields.indexOf(key)>=0;}
+
 function getVisibleListCols(){
   var cols=[{key:'_cb',label:'',w:'40px'}];
   visibleCols.forEach(function(k){
@@ -831,37 +860,145 @@ function rebuildDynamicCols(){
   renderAll();
 }
 
+var colcfgActiveTab='pipeline';
+
 function openColConfig(){
-  var h='<div class="colcfg-head"><div class="colcfg-title">Colonnes affichées</div><button class="colcfg-close" id="colcfgClose">✕</button></div>';
-  h+='<input class="colcfg-search" id="colcfgSearch" placeholder="Rechercher"/>';
-  h+='<div class="colcfg-list" id="colcfgList">';
-  ALL_COLUMNS.forEach(function(col){
-    var checked=visibleCols.indexOf(col.key)>=0;
-    h+='<div class="colcfg-item" data-colkey="'+col.key+'">';
-    h+='<span class="colcfg-item-drag">⠿</span>';
-    h+='<input type="checkbox" class="colcfg-cb" data-colcb="'+col.key+'"'+(checked?' checked':'')+'/>';
-    h+='<span>'+esc(col.label)+'</span></div>';
-  });
-  h+='</div>';
-  h+='<div class="colcfg-actions"><button class="colcfg-cancel-btn" id="colcfgCancel">Annuler</button><button class="colcfg-save-btn" id="colcfgSave">Enregistrer</button></div>';
-  document.getElementById('colcfgPanel').innerHTML=h;
+  /* Auto-select tab matching current view */
+  if(currentView==='pipeline')colcfgActiveTab='pipeline';
+  else colcfgActiveTab='list';
+  renderColConfigPanel();
   document.getElementById('colcfgPanel').classList.add('open');
   document.getElementById('colcfgBtn').classList.add('open');
+}
 
+function renderColConfigPanel(){
+  var h='<div class="colcfg-head">';
+  h+='<div class="colcfg-title">Champs affichés</div>';
+  h+='<button class="colcfg-close" id="colcfgClose">✕</button></div>';
+
+  /* Tabs */
+  h+='<div class="colcfg-tabs">';
+  h+='<button class="colcfg-tab'+(colcfgActiveTab==='pipeline'?' active':'')+'" data-cfgtab="pipeline">▥ Pipeline</button>';
+  h+='<button class="colcfg-tab'+(colcfgActiveTab==='list'?' active':'')+'" data-cfgtab="list">☰ Liste / Feuille</button>';
+  h+='</div>';
+
+  if(colcfgActiveTab==='pipeline'){
+    h+='<div class="colcfg-desc">Choisissez les champs visibles sur chaque carte du Kanban.</div>';
+    h+='<div class="colcfg-list" id="colcfgList">';
+    KANBAN_FIELDS.forEach(function(f){
+      var checked=visibleKanbanFields.indexOf(f.key)>=0;
+      h+='<div class="colcfg-item" data-colkey="'+f.key+'">';
+      h+='<span class="colcfg-item-icon">'+f.icon+'</span>';
+      h+='<span class="colcfg-item-label">'+esc(f.label)+'</span>';
+      h+='<label class="colcfg-toggle"><input type="checkbox" class="colcfg-cb" data-colcb="'+f.key+'"'+(checked?' checked':'')
+        +'/><span class="colcfg-toggle-track"></span></label>';
+      h+='</div>';
+    });
+    h+='</div>';
+    /* Mini preview */
+    h+='<div class="colcfg-preview" id="colcfgPreview"></div>';
+  } else {
+    h+='<div class="colcfg-desc">Choisissez les colonnes visibles dans la vue Liste et Feuille.</div>';
+    h+='<input class="colcfg-search" id="colcfgSearch" placeholder="Rechercher une colonne..."/>';
+    h+='<div class="colcfg-list" id="colcfgList">';
+    ALL_COLUMNS.forEach(function(col){
+      var checked=visibleCols.indexOf(col.key)>=0;
+      h+='<div class="colcfg-item" data-colkey="'+col.key+'">';
+      h+='<span class="colcfg-item-drag">⠿</span>';
+      h+='<span class="colcfg-item-label">'+esc(col.label)+'</span>';
+      h+='<label class="colcfg-toggle"><input type="checkbox" class="colcfg-cb" data-colcb="'+col.key+'"'+(checked?' checked':'')
+        +'/><span class="colcfg-toggle-track"></span></label>';
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  h+='<div class="colcfg-actions">';
+  h+='<button class="colcfg-reset-btn" id="colcfgReset">↺ Défaut</button>';
+  h+='<button class="colcfg-cancel-btn" id="colcfgCancel">Annuler</button>';
+  h+='<button class="colcfg-save-btn" id="colcfgSave">Enregistrer</button></div>';
+  document.getElementById('colcfgPanel').innerHTML=h;
+
+  /* Bind events */
   document.getElementById('colcfgClose').onclick=closeColConfig;
   document.getElementById('colcfgCancel').onclick=closeColConfig;
-  document.getElementById('colcfgSearch').addEventListener('input',function(){
-    var q=this.value.toLowerCase();
-    document.querySelectorAll('.colcfg-item').forEach(function(item){
-      var label=item.textContent.toLowerCase();
-      item.style.display=label.indexOf(q)>=0?'':'none';
-    });
+
+  /* Tab switch */
+  document.querySelectorAll('[data-cfgtab]').forEach(function(tab){
+    tab.addEventListener('click',function(){colcfgActiveTab=this.dataset.cfgtab;renderColConfigPanel();});
   });
-  document.getElementById('colcfgSave').onclick=function(){
-    visibleCols=[];
-    document.querySelectorAll('.colcfg-cb:checked').forEach(function(cb){visibleCols.push(cb.dataset.colcb);});
-    saveColConfig();rebuildDynamicCols();closeColConfig();toast('✅ Colonnes mises à jour');
+
+  /* Search (list tab only) */
+  var searchEl=document.getElementById('colcfgSearch');
+  if(searchEl){
+    searchEl.addEventListener('input',function(){
+      var q=this.value.toLowerCase();
+      document.querySelectorAll('.colcfg-item').forEach(function(item){
+        var label=item.querySelector('.colcfg-item-label');
+        item.style.display=(!label||label.textContent.toLowerCase().indexOf(q)>=0)?'':'none';
+      });
+    });
+  }
+
+  /* Live preview for Pipeline tab */
+  if(colcfgActiveTab==='pipeline'){
+    updateKanbanPreview();
+    document.querySelectorAll('#colcfgList .colcfg-cb').forEach(function(cb){
+      cb.addEventListener('change',updateKanbanPreview);
+    });
+  }
+
+  /* Reset */
+  document.getElementById('colcfgReset').onclick=function(){
+    if(colcfgActiveTab==='pipeline'){
+      var defKeys=KANBAN_FIELDS.filter(function(f){return f.default;}).map(function(f){return f.key;});
+      document.querySelectorAll('#colcfgList .colcfg-cb').forEach(function(cb){cb.checked=defKeys.indexOf(cb.dataset.colcb)>=0;});
+      updateKanbanPreview();
+    } else {
+      var defCols=ALL_COLUMNS.filter(function(c){return c.default;}).map(function(c){return c.key;});
+      document.querySelectorAll('#colcfgList .colcfg-cb').forEach(function(cb){cb.checked=defCols.indexOf(cb.dataset.colcb)>=0;});
+    }
   };
+
+  /* Save */
+  document.getElementById('colcfgSave').onclick=function(){
+    if(colcfgActiveTab==='pipeline'){
+      visibleKanbanFields=[];
+      document.querySelectorAll('#colcfgList .colcfg-cb:checked').forEach(function(cb){visibleKanbanFields.push(cb.dataset.colcb);});
+      saveKanbanConfig();renderAll();closeColConfig();toast('✅ Champs Pipeline mis à jour');
+    } else {
+      visibleCols=[];
+      document.querySelectorAll('#colcfgList .colcfg-cb:checked').forEach(function(cb){visibleCols.push(cb.dataset.colcb);});
+      saveColConfig();rebuildDynamicCols();closeColConfig();toast('✅ Colonnes Liste mises à jour');
+    }
+  };
+}
+
+function updateKanbanPreview(){
+  var preview=document.getElementById('colcfgPreview');
+  if(!preview)return;
+  var active=[];
+  document.querySelectorAll('#colcfgList .colcfg-cb:checked').forEach(function(cb){active.push(cb.dataset.colcb);});
+  var h='<div class="colcfg-preview-title">Aperçu carte</div>';
+  h+='<div class="colcfg-preview-card">';
+  h+='<div style="font-weight:800;font-size:12px;margin-bottom:2px">Jean Dupont</div>';
+  if(active.indexOf('telephone')>=0)h+='<div style="font-family:var(--fm);font-size:10px;color:var(--muted)">06 12 34 56 78</div>';
+  if(active.indexOf('email')>=0)h+='<div style="font-family:var(--fm);font-size:10px;color:var(--muted)">jean@email.com</div>';
+  if(active.indexOf('createdAt')>=0)h+='<div style="font-size:10px;color:rgba(255,255,255,0.3)">02/04/2026</div>';
+  h+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">';
+  if(active.indexOf('type')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(167,139,250,0.12);color:#c4b5fd">VSL</span>';
+  if(active.indexOf('assignedTo')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:#fca5a5">Guillaume</span>';
+  if(active.indexOf('status')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--blue)">📞 Appelé</span>';
+  if(active.indexOf('utm')>=0)h+='<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--purple)">🔗 FB Ads</span>';
+  if(active.indexOf('closeur')>=0)h+='<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--gold)">🎯 Adrien</span>';
+  h+='</div>';
+  if(active.indexOf('tags')>=0){
+    h+='<div style="display:flex;gap:3px;margin-top:3px">';
+    h+='<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(167,139,250,0.12);color:#c4b5fd">VSL 03</span>';
+    h+='<span style="font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(52,211,153,0.12);color:#34d399">Chaud</span>';
+    h+='</div>';
+  }
+  h+='</div>';
+  preview.innerHTML=h;
 }
 
 function closeColConfig(){document.getElementById('colcfgPanel').classList.remove('open');document.getElementById('colcfgBtn').classList.remove('open');}
