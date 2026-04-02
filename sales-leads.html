@@ -144,6 +144,14 @@ html, body {
 .ld-badge.vsl { background: rgba(167,139,250,0.12); color: #c4b5fd; }
 .ld-badge.self { background: rgba(245,158,11,0.12); color: #fcd34d; }
 .ld-badge.other { background: rgba(96,165,250,0.12); color: #93bbfd; }
+.ld-badge.booking { background: rgba(52,211,153,0.14); color: #6ee7b7; border: 1px solid rgba(52,211,153,0.25); animation: bookingPulse 2.5s ease-in-out infinite; }
+@keyframes bookingPulse { 0%,100%{ box-shadow: none; } 50%{ box-shadow: 0 0 8px rgba(52,211,153,0.25); } }
+.ld-card.has-booking { border-color: rgba(52,211,153,0.2); }
+.ld-booking-banner { background: rgba(52,211,153,0.06); border: 1px solid rgba(52,211,153,0.15); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+.ld-booking-banner-title { font-size: 11px; font-weight: 700; color: #6ee7b7; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+.ld-booking-banner-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+.ld-booking-banner-label { font-size: 11px; color: var(--muted); }
+.ld-booking-banner-val { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85); }
 .ld-badge-status {
   font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
   display: flex; align-items: center; gap: 4px;
@@ -353,6 +361,7 @@ html, body {
       <button class="ld-filter" data-status="nrp2">📵 NRP 2</button>
       <button class="ld-filter" data-status="nrp3">📵 NRP 3</button>
       <button class="ld-filter" data-status="rdv_pose">📅 RDV posé</button>
+      <button class="ld-filter" data-status="rdv_self_booking">📅 RDV Self</button>
       <button class="ld-filter" data-status="pas_interesse">👎 Pas intéressé</button>
       <button class="ld-filter" data-status="disqualifie">🚫 Disqualifié</button>
     </div>
@@ -409,6 +418,7 @@ var STATUSES = [
   { key: 'nrp2',          label: 'NRP 2',         icon: '📵', color: '#e67e22', bg: 'rgba(230,126,34,0.12)' },
   { key: 'nrp3',          label: 'NRP 3',         icon: '📵', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
   { key: 'rdv_pose',      label: 'RDV posé',      icon: '📅', color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
+  { key: 'rdv_self_booking', label: 'RDV Self-Booking', icon: '📅', color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
   { key: 'pas_interesse', label: 'Pas intéressé', icon: '👎', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
   { key: 'disqualifie',   label: 'Disqualifié',   icon: '🚫', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' }
 ];
@@ -520,14 +530,16 @@ function processPopupQueue() {
   var typeObj = LEAD_TYPES[lead.type] || { label: lead.type || 'Lead', badgeClass: 'other' };
   var setterObj = SETTERS[lead.assignedTo] || null;
 
-  document.getElementById('popupType').textContent = typeObj.label;
+  document.getElementById('popupType').textContent = lead.hasBooking ? '📅 ' + typeObj.label : typeObj.label;
   var h = '';
+  if (lead.hasBooking) h += '<div class="ld-popup-field" style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);border-radius:8px;padding:6px 10px;margin-bottom:6px"><span class="ld-popup-field-val" style="color:#6ee7b7">📅 RDV Self-Booking confirmé</span></div>';
   h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Nom</span><span class="ld-popup-field-val">' + escHtml(lead.nom) + '</span></div>';
   if (lead.telephone) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Téléphone</span><span class="ld-popup-field-val">' + escHtml(lead.telephone) + '</span></div>';
   if (lead.email) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Email</span><span class="ld-popup-field-val">' + escHtml(lead.email) + '</span></div>';
   if (lead.utm) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Source</span><span class="ld-popup-field-val">' + escHtml(lead.utm) + '</span></div>';
   if (lead.secteur) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Secteur</span><span class="ld-popup-field-val">' + escHtml(lead.secteur) + '</span></div>';
   if (lead.ca) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">CA</span><span class="ld-popup-field-val">' + escHtml(lead.ca) + '</span></div>';
+  if (lead.defi) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Défi</span><span class="ld-popup-field-val">' + escHtml(lead.defi) + '</span></div>';
   if (setterObj) {
     h += '<div class="ld-popup-assigned">Attribué à <strong style="color:' + setterObj.color + '">' + setterObj.name + '</strong></div>';
   }
@@ -638,7 +650,7 @@ function renderCard(l) {
   var isNew = l._isNew;
   var ago = timeAgo(l.createdAt);
 
-  var h = '<div class="ld-card' + (isNew ? ' new' : '') + '" data-lead-id="' + id + '">';
+  var h = '<div class="ld-card' + (isNew ? ' new' : '') + (l.hasBooking ? ' has-booking' : '') + '" data-lead-id="' + id + '">';
 
   // Head
   h += '<div class="ld-card-head" data-action="toggle" data-id="' + id + '">';
@@ -651,6 +663,7 @@ function renderCard(l) {
   h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + '</div>';
   h += '<div class="ld-card-meta">';
   h += '<span class="ld-badge ' + typeObj.badgeClass + '">' + typeObj.label + '</span>';
+  if (l.hasBooking) h += '<span class="ld-badge booking">📅 RDV</span>';
   h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
   if (setterObj) h += '<span class="ld-assigned">' + setterObj.name + '</span>';
   if (l.stage && l.stage !== 'lead') {
@@ -669,6 +682,18 @@ function renderCard(l) {
 
   // Edit toggle
   h += '<button class="ld-edit-toggle" data-action="toggleEdit" data-id="' + id + '">✏️ Modifier les infos</button>';
+
+  // ── BOOKING BANNER (if self-booking) ──
+  if (l.hasBooking) {
+    h += '<div class="ld-booking-banner">';
+    h += '<div class="ld-booking-banner-title">📅 RDV Self-Booking confirmé</div>';
+    if (l.secteur) h += '<div class="ld-booking-banner-row"><span class="ld-booking-banner-label">Secteur</span><span class="ld-booking-banner-val">' + escHtml(l.secteur) + '</span></div>';
+    if (l.ca) h += '<div class="ld-booking-banner-row"><span class="ld-booking-banner-label">CA actuel</span><span class="ld-booking-banner-val">' + escHtml(l.ca) + '</span></div>';
+    if (l.defi) h += '<div class="ld-booking-banner-row"><span class="ld-booking-banner-label">Défi</span><span class="ld-booking-banner-val">' + escHtml(l.defi) + '</span></div>';
+    if (l.disponibilite) h += '<div class="ld-booking-banner-row"><span class="ld-booking-banner-label">Disponibilité confirmée</span><span class="ld-booking-banner-val">' + escHtml(l.disponibilite) + '</span></div>';
+    if (l.timeline) h += '<div class="ld-booking-banner-row"><span class="ld-booking-banner-label">Mise en place</span><span class="ld-booking-banner-val">' + escHtml(l.timeline) + '</span></div>';
+    h += '</div>';
+  }
 
   // ── VIEW MODE ──
   h += '<div class="ld-details" data-view-mode="' + id + '">';
@@ -719,7 +744,8 @@ function renderCard(l) {
   h += '</div>';
 
   // RDV fields (hidden unless rdv_pose)
-  var showRdv = (l.status || 'nouveau') === 'rdv_pose';
+  var curStatus = l.status || 'nouveau';
+  var showRdv = (curStatus === 'rdv_pose' || curStatus === 'rdv_self_booking');
   h += '<div class="ld-rdv-section" data-rdv-section="' + id + '" style="display:' + (showRdv ? 'block' : 'none') + '">';
   h += '<div class="ld-actions-title">📅 Rendez-vous</div>';
   h += '<div class="ld-rdv-row">';
@@ -823,13 +849,14 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     // Show/hide RDV section
     var rdvSection = card2.querySelector('[data-rdv-section="' + leadId + '"]');
     if (rdvSection) {
-      rdvSection.style.display = (newStatus === 'rdv_pose') ? 'block' : 'none';
+      rdvSection.style.display = (newStatus === 'rdv_pose' || newStatus === 'rdv_self_booking') ? 'block' : 'none';
     }
     // Auto-save status + sync pipeline stage
     var STATUS_TO_STAGE = {
       nouveau:'lead', appele:'lead', decroche:'lead', messagerie:'lead',
       nrp1:'nrp1', nrp2:'nrp2', nrp3:'nrp3',
-      rdv_pose:'rdv_confirmes', pas_interesse:'disqualification', disqualifie:'disqualification'
+      rdv_pose:'rdv_confirmes', rdv_self_booking:'rdv_self_booking',
+      pas_interesse:'disqualification', disqualifie:'disqualification'
     };
     var syncStage = STATUS_TO_STAGE[newStatus];
     var updates = { status: newStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
@@ -1045,11 +1072,106 @@ function startListening() {
         showLeadPopup(newLeads[j]);
       }
 
+      // Rattrapage : assigner les leads orphelins (arrivés quand aucun client n'écoutait)
+      if (isFirstLoad) {
+        allLeads.forEach(function(l) {
+          if (!l.assignedTo) {
+            assignLeadRoundRobin(l.id);
+          }
+        });
+        // Traiter les booking_events en attente
+        setTimeout(processBookingEvents, 500);
+      }
       isFirstLoad = false;
 
     }, function(err) {
       console.error('[leads] listener error:', err);
       document.getElementById('ldFeed').innerHTML = '<div class="ld-empty">Erreur de connexion : ' + escHtml(err.message) + '</div>';
+    });
+}
+
+/* ═══ BOOKING EVENTS MATCHING ═══ */
+function normalizePhone(p) {
+  if (!p) return '';
+  return p.replace(/[\s\-\.()]/g, '');
+}
+
+function processBookingEvents() {
+  db.collection('booking_events')
+    .where('processed', '==', false)
+    .limit(50)
+    .get()
+    .then(function(snap) {
+      if (snap.empty) return;
+      console.log('[booking] ' + snap.size + ' event(s) à traiter');
+      snap.forEach(function(doc) {
+        var ev = doc.data();
+        var evId = doc.id;
+        var evPhone = normalizePhone(ev.telephone);
+        var evEmail = (ev.email || '').toLowerCase().trim();
+
+        // Chercher un lead existant par tél ou email
+        var found = null;
+        for (var i = 0; i < allLeads.length; i++) {
+          var lead = allLeads[i];
+          var leadPhone = normalizePhone(lead.telephone);
+          var leadEmail = (lead.email || '').toLowerCase().trim();
+          if (evPhone && leadPhone && evPhone === leadPhone) { found = lead; break; }
+          if (evEmail && leadEmail && evEmail === leadEmail) { found = lead; break; }
+        }
+
+        if (found) {
+          // ── Lead trouvé → update ──
+          var updates = {
+            hasBooking: true,
+            status: 'rdv_self_booking',
+            stage: 'rdv_self_booking',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          // Enrichir avec les infos du formulaire (sans écraser si déjà rempli)
+          if (ev.secteur && !found.secteur) updates.secteur = ev.secteur;
+          if (ev.ca && !found.ca) updates.ca = ev.ca;
+          if (ev.defi && !found.defi) updates.defi = ev.defi;
+          if (ev.disponibilite && !found.disponibilite) updates.disponibilite = ev.disponibilite;
+          if (ev.timeline && !found.timeline) updates.timeline = ev.timeline;
+          if (ev.email && !found.email) updates.email = ev.email;
+
+          db.collection('leads').doc(found.id).update(updates).then(function() {
+            db.collection('booking_events').doc(evId).update({ processed: true, matchedLeadId: found.id });
+            console.log('[booking] Lead mis à jour : ' + found.nom + ' → rdv_self_booking');
+            toast('📅 Booking matché → ' + (found.nom || 'lead'));
+          }).catch(function(err) {
+            console.error('[booking] update lead error:', err);
+          });
+
+        } else {
+          // ── Aucun lead → créer ──
+          var newLead = {
+            nom: ev.nom || '',
+            telephone: ev.telephone || '',
+            email: ev.email || '',
+            type: 'self_booking',
+            hasBooking: true,
+            status: 'rdv_self_booking',
+            stage: 'rdv_self_booking',
+            secteur: ev.secteur || '',
+            ca: ev.ca || '',
+            defi: ev.defi || '',
+            disponibilite: ev.disponibilite || '',
+            timeline: ev.timeline || '',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          db.collection('leads').add(newLead).then(function(ref) {
+            db.collection('booking_events').doc(evId).update({ processed: true, matchedLeadId: ref.id });
+            console.log('[booking] Nouveau lead créé depuis booking : ' + ev.nom);
+            toast('📅 Nouveau lead booking → ' + (ev.nom || '?'));
+          }).catch(function(err) {
+            console.error('[booking] create lead error:', err);
+          });
+        }
+      });
+    }).catch(function(err) {
+      console.error('[booking] read booking_events error:', err);
     });
 }
 
