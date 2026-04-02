@@ -888,6 +888,251 @@ renderPipeline=function(leads){
 /* ═══ ADD LEAD ═══ */
 document.getElementById('crmAddBtn').addEventListener('click',function(){var nom=prompt('Nom du lead :');if(!nom||!nom.trim())return;var tel=prompt('Téléphone :')||'',email=prompt('Email :')||'';db.collection('leads').add({nom:nom.trim(),telephone:tel.trim(),email:email.trim(),type:'vsl_elite',stage:'lead',status:'nouveau',assignedTo:'',notesHistory:[],createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Lead ajouté');}).catch(function(err){toast('❌ '+err.message);});});
 
+/* ═══ SETTINGS PANEL ═══ */
+var settingsUsers=[];
+var settingsRoles=[];
+var activeSetTab='users';
+
+var ROLE_HIERARCHY={
+  id:'pdg',name:'PDG',icon:'👑',color:'#f59e0b',children:[
+    {id:'head_of_sales',name:'Head Of Sales',icon:'📊',color:'#60a5fa',children:[
+      {id:'closeurs',name:'Closeurs',icon:'🎯',color:'#ef4444',children:[]},
+      {id:'setteurs',name:'Setteurs',icon:'📞',color:'#f59e0b',children:[]}
+    ]},
+    {id:'coachs',name:'Coachs',icon:'🎓',color:'#a78bfa',children:[]}
+  ]
+};
+
+var ROLE_COLORS={pdg:'#f59e0b',head_of_sales:'#60a5fa',closeurs:'#ef4444',setteurs:'#f59e0b',coachs:'#a78bfa',admin:'#f59e0b',sales:'#ef4444',coach:'#a78bfa'};
+var PROFILE_COLORS={super_admin:'#f59e0b',admin:'#60a5fa',standard:'#6b7280'};
+
+document.getElementById('settingsGear').addEventListener('click',openSettings);
+
+function openSettings(){
+  document.getElementById('settingsOverlay').classList.add('open');
+  document.getElementById('settingsPanel').classList.add('open');
+  renderSettingsPanel();
+  loadSettingsUsers();
+}
+
+function closeSettings(){
+  document.getElementById('settingsOverlay').classList.remove('open');
+  document.getElementById('settingsPanel').classList.remove('open');
+}
+
+function renderSettingsPanel(){
+  var h='<div class="set-header"><div class="set-title">⚙ Paramètres</div><button class="set-close" id="setClose">✕</button></div>';
+  h+='<div class="set-tabs">';
+  h+='<div class="set-tab'+(activeSetTab==='users'?' active':'')+'" data-settab="users">Utilisateurs et contrôles</div>';
+  h+='<div class="set-tab'+(activeSetTab==='roles'?' active':'')+'" data-settab="roles">Rôles</div>';
+  h+='<div class="set-tab'+(activeSetTab==='permissions'?' active':'')+'" data-settab="permissions">Profils</div>';
+  h+='<div class="set-tab'+(activeSetTab==='fields'?' active':'')+'" data-settab="fields">Champs</div>';
+  h+='</div>';
+  h+='<div class="set-body" id="setBody"></div>';
+  document.getElementById('settingsPanel').innerHTML=h;
+
+  document.getElementById('setClose').onclick=closeSettings;
+  document.getElementById('settingsOverlay').onclick=closeSettings;
+
+  document.querySelectorAll('.set-tab').forEach(function(tab){
+    tab.addEventListener('click',function(){activeSetTab=this.dataset.settab;renderSettingsPanel();loadSettingsUsers();});
+  });
+
+  if(activeSetTab==='users')renderUsersTab();
+  else if(activeSetTab==='roles')renderRolesTab();
+  else if(activeSetTab==='permissions')renderPermissionsTab();
+  else if(activeSetTab==='fields')renderFieldsTab();
+}
+
+/* ── Users Tab ── */
+function loadSettingsUsers(){
+  db.collection('users').get().then(function(snap){
+    settingsUsers=[];
+    snap.forEach(function(doc){var d=doc.data();d.uid=doc.id;settingsUsers.push(d);});
+    if(activeSetTab==='users')renderUsersTab();
+  });
+}
+
+function renderUsersTab(){
+  var body=document.getElementById('setBody');
+  var h='<div class="set-user-toolbar">';
+  h+='<input class="set-user-search" id="setUserSearch" placeholder="Rechercher un utilisateur..."/>';
+  h+='<button class="set-add-user-btn" id="setAddUserBtn">+ Nouvel utilisateur</button>';
+  h+='</div>';
+  h+='<table class="set-users-table"><thead><tr>';
+  h+='<th>Nom Complet</th><th>E-Mail</th><th>Rôle</th><th>Profil</th><th>Statut</th><th></th>';
+  h+='</tr></thead><tbody id="setUsersBody">';
+  settingsUsers.forEach(function(u){h+=renderUserRow(u);});
+  h+='</tbody></table>';
+  body.innerHTML=h;
+
+  document.getElementById('setAddUserBtn').onclick=function(){openUserEdit(null);};
+  document.getElementById('setUserSearch').addEventListener('input',function(){
+    var q=this.value.toLowerCase();
+    document.querySelectorAll('#setUsersBody tr').forEach(function(tr){
+      var text=tr.textContent.toLowerCase();
+      tr.style.display=text.indexOf(q)>=0?'':'none';
+    });
+  });
+  document.getElementById('setUsersBody').addEventListener('click',function(e){
+    var editBtn=e.target.closest('[data-uedit]');
+    if(editBtn){var uid=editBtn.dataset.uedit;var user=settingsUsers.filter(function(u){return u.uid===uid;})[0];if(user)openUserEdit(user);}
+    var delBtn=e.target.closest('[data-udel]');
+    if(delBtn){var uid2=delBtn.dataset.udel;if(!confirm('Supprimer cet utilisateur ?'))return;
+      db.collection('users').doc(uid2).delete().then(function(){toast('🗑 Utilisateur supprimé');loadSettingsUsers();});}
+  });
+}
+
+function renderUserRow(u){
+  var name=u.displayName||u.name||u.email||'—';
+  var ini=name.charAt(0).toUpperCase();
+  var role=u.role||'—';
+  var profile=u.profile||'admin';
+  var rc=ROLE_COLORS[role]||'#6b7280';
+  var pc=PROFILE_COLORS[profile]||'#6b7280';
+  var roleLabels={admin:'Admin',coach:'Coachs',sales:'Sales',pdg:'PDG',head_of_sales:'Head Of Sales',closeurs:'Closeurs',setteurs:'Setteurs'};
+  var profileLabels={super_admin:'Super administrateur',admin:'Administrateur',standard:'Standard'};
+
+  var h='<tr>';
+  h+='<td><div class="set-user-name-cell"><div class="set-user-av" style="background:linear-gradient(135deg,'+rc+','+rc+'88)">'+ini+'</div><div><div class="set-user-name">'+esc(name)+'</div></div></div></td>';
+  h+='<td style="color:var(--muted)">'+esc(u.email||'')+'</td>';
+  h+='<td><span class="set-role-badge" style="background:'+rc+'18;color:'+rc+'">'+esc(roleLabels[role]||role)+'</span></td>';
+  h+='<td><span class="set-profile-badge" style="background:'+pc+'18;color:'+pc+'">'+esc(profileLabels[profile]||profile)+'</span></td>';
+  h+='<td><span class="set-status-dot" style="background:var(--green)" title="Actif"></span></td>';
+  h+='<td><div class="set-user-actions">';
+  h+='<button class="set-user-action" data-uedit="'+u.uid+'" title="Modifier">✏</button>';
+  h+='<button class="set-user-action danger" data-udel="'+u.uid+'" title="Supprimer">🗑</button>';
+  h+='</div></td></tr>';
+  return h;
+}
+
+function openUserEdit(user){
+  var isNew=!user;
+  var body=document.getElementById('setBody');
+  var overlay=document.createElement('div');
+  overlay.className='set-edit-backdrop';
+  var h='<div class="set-edit-modal">';
+  h+='<div class="set-edit-title">'+(isNew?'Nouvel utilisateur':'Modifier l\'utilisateur')+'</div>';
+  h+='<div class="set-edit-field"><div class="set-edit-label">Nom complet</div><input class="set-edit-input" id="seditName" value="'+escA(user?user.displayName||user.name||'':'')+'" placeholder="Prénom Nom"/></div>';
+  h+='<div class="set-edit-field"><div class="set-edit-label">Email</div><input class="set-edit-input" id="seditEmail" type="email" value="'+escA(user?user.email||'':'')+'" placeholder="email@ambitiocorp.com"'+(isNew?'':' style="opacity:0.5"')+'/></div>';
+  h+='<div class="set-edit-field"><div class="set-edit-label">Rôle</div><select class="set-edit-select" id="seditRole">';
+  var roles=[{v:'admin',l:'Admin / PDG'},{v:'sales',l:'Sales (Closeur/Setteur)'},{v:'coach',l:'Coach'},{v:'head_of_sales',l:'Head Of Sales'}];
+  roles.forEach(function(r){h+='<option value="'+r.v+'"'+(user&&user.role===r.v?' selected':'')+'>'+r.l+'</option>';});
+  h+='</select></div>';
+  h+='<div class="set-edit-field"><div class="set-edit-label">Profil</div><select class="set-edit-select" id="seditProfile">';
+  var profiles=[{v:'super_admin',l:'Super administrateur'},{v:'admin',l:'Administrateur'},{v:'standard',l:'Standard'}];
+  profiles.forEach(function(p){h+='<option value="'+p.v+'"'+(user&&user.profile===p.v?' selected':'')+'>'+p.l+'</option>';});
+  h+='</select></div>';
+  h+='<div class="set-edit-actions"><button class="set-edit-cancel" id="seditCancel">Annuler</button><button class="set-edit-save" id="seditSave">'+(isNew?'Créer':'Sauvegarder')+'</button></div>';
+  h+='</div>';
+  overlay.innerHTML=h;
+  body.style.position='relative';
+  body.appendChild(overlay);
+
+  document.getElementById('seditCancel').onclick=function(){overlay.remove();};
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+
+  document.getElementById('seditSave').onclick=function(){
+    var name=document.getElementById('seditName').value.trim();
+    var email=document.getElementById('seditEmail').value.trim();
+    var role=document.getElementById('seditRole').value;
+    var profile=document.getElementById('seditProfile').value;
+    if(!name){toast('Nom requis');return;}
+    if(!email){toast('Email requis');return;}
+
+    var data={displayName:name,name:name,email:email,role:role,profile:profile,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+
+    if(isNew){
+      data.createdAt=firebase.firestore.FieldValue.serverTimestamp();
+      var docId=email.replace(/[^a-zA-Z0-9]/g,'_');
+      db.collection('users').doc(docId).set(data).then(function(){
+        toast('✅ Utilisateur créé');overlay.remove();loadSettingsUsers();
+      }).catch(function(err){toast('❌ '+err.message);});
+    } else {
+      db.collection('users').doc(user.uid).update(data).then(function(){
+        toast('✅ Modifié');overlay.remove();loadSettingsUsers();
+      }).catch(function(err){toast('❌ '+err.message);});
+    }
+  };
+}
+
+/* ── Roles Tab ── */
+function renderRolesTab(){
+  var body=document.getElementById('setBody');
+  var h='<div style="margin-bottom:16px"><span style="font-size:11px;color:var(--muted);line-height:1.6">Les rôles définissent les niveaux de visibilité pour les enregistrements. Un utilisateur de rôle inférieur ne peut pas afficher les enregistrements au-dessus de lui dans la hiérarchie.</span></div>';
+  h+='<div style="font-family:var(--fh);font-size:13px;font-weight:800;margin-bottom:12px">SARL Ambitio Corp</div>';
+  h+='<div class="set-role-tree">';
+  h+=renderRoleNode(ROLE_HIERARCHY,true);
+  h+='</div>';
+  h+='<button class="set-add-role-btn" id="setAddRoleBtn">+ Créer un nouveau rôle</button>';
+  body.innerHTML=h;
+
+  document.getElementById('setAddRoleBtn').onclick=function(){
+    var name=prompt('Nom du nouveau rôle :');
+    if(!name||!name.trim())return;
+    toast('✅ Rôle "'+name.trim()+'" créé (ajout à la hiérarchie à configurer)');
+  };
+
+  body.addEventListener('click',function(e){
+    var box=e.target.closest('.set-role-box');
+    if(box){
+      var roleId=box.dataset.roleid;
+      var count=countUsersInRole(roleId);
+      var users=settingsUsers.filter(function(u){return u.role===roleId;});
+      var names=users.map(function(u){return u.displayName||u.name||u.email;}).join(', ');
+      if(names)toast(box.querySelector('.set-role-name').textContent+' : '+names);
+      else toast('Aucun utilisateur dans ce rôle');
+    }
+  });
+}
+
+function renderRoleNode(node,isRoot){
+  var count=countUsersInRole(node.id);
+  var h='<div class="set-role-node'+(isRoot?' set-role-root':'')+'">';
+  h+='<div class="set-role-box" data-roleid="'+node.id+'">';
+  h+='<span class="set-role-icon">'+node.icon+'</span>';
+  h+='<span class="set-role-name">'+esc(node.name)+'</span>';
+  if(count>0)h+='<span class="set-role-count">'+count+' utilisateur'+(count>1?'s':'')+'</span>';
+  h+='</div>';
+  if(node.children&&node.children.length>0){
+    h+='<div class="set-role-children">';
+    node.children.forEach(function(child){h+=renderRoleNode(child,false);});
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+function countUsersInRole(roleId){
+  var roleMap={pdg:'admin',head_of_sales:'admin',closeurs:'sales',setteurs:'sales',coachs:'coach'};
+  var mappedRole=roleMap[roleId]||roleId;
+  return settingsUsers.filter(function(u){return u.role===mappedRole;}).length;
+}
+
+/* ── Permissions Tab (placeholder) ── */
+function renderPermissionsTab(){
+  var body=document.getElementById('setBody');
+  var h='<div style="text-align:center;padding:60px 20px">';
+  h+='<div style="font-size:40px;margin-bottom:12px">🔒</div>';
+  h+='<div style="font-family:var(--fh);font-size:16px;font-weight:800;margin-bottom:8px">Profils & Permissions</div>';
+  h+='<div style="color:var(--muted);font-size:13px;max-width:400px;margin:0 auto">Définir les permissions par profil (Super administrateur, Administrateur, Standard) — quels modules sont accessibles, qui peut créer/modifier/supprimer.</div>';
+  h+='<div style="margin-top:20px;padding:12px 20px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;display:inline-block;font-size:12px;font-weight:700;color:var(--gold)">🚧 Prochaine étape</div>';
+  h+='</div>';
+  body.innerHTML=h;
+}
+
+/* ── Fields Tab (placeholder) ── */
+function renderFieldsTab(){
+  var body=document.getElementById('setBody');
+  var h='<div style="text-align:center;padding:60px 20px">';
+  h+='<div style="font-size:40px;margin-bottom:12px">📋</div>';
+  h+='<div style="font-family:var(--fh);font-size:16px;font-weight:800;margin-bottom:8px">Configuration des champs</div>';
+  h+='<div style="color:var(--muted);font-size:13px;max-width:400px;margin:0 auto">Personnaliser les champs de chaque module (Contacts, Affaires, Produits, Tâches) — ajouter, masquer, réordonner les champs.</div>';
+  h+='<div style="margin-top:20px;padding:12px 20px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;display:inline-block;font-size:12px;font-weight:700;color:var(--gold)">🚧 Prochaine étape</div>';
+  h+='</div>';
+  body.innerHTML=h;
+}
+
 /* ═══ FIRESTORE ═══ */
 db.collection('leads').orderBy('createdAt','desc').onSnapshot(function(snap){allLeads=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;if(!d.stage)d.stage='lead';allLeads.push(d);});collectTags();renderAll();renderSavedViews();renderActiveChips();},function(err){console.error('[crm]',err);});
 
