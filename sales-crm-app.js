@@ -904,7 +904,7 @@ var ROLE_HIERARCHY={
 };
 
 var ROLE_COLORS={pdg:'#f59e0b',head_of_sales:'#60a5fa',closeurs:'#ef4444',setteurs:'#f59e0b',coachs:'#a78bfa',admin:'#f59e0b',sales:'#ef4444',coach:'#a78bfa'};
-var PROFILE_COLORS={super_admin:'#f59e0b',admin:'#60a5fa',standard:'#6b7280'};
+var PROFILE_COLORS={super_admin:'#f59e0b',administrateur:'#60a5fa',admin:'#60a5fa',standard:'#6b7280'};
 
 document.getElementById('settingsGear').addEventListener('click',openSettings);
 
@@ -991,7 +991,7 @@ function renderUserRow(u){
   var rc=ROLE_COLORS[role]||'#6b7280';
   var pc=PROFILE_COLORS[profile]||'#6b7280';
   var roleLabels={admin:'Admin',coach:'Coachs',sales:'Sales',pdg:'PDG',head_of_sales:'Head Of Sales',closeurs:'Closeurs',setteurs:'Setteurs'};
-  var profileLabels={super_admin:'Super administrateur',admin:'Administrateur',standard:'Standard'};
+  var profileLabels={super_admin:'Super administrateur',administrateur:'Administrateur',admin:'Administrateur',standard:'Standard'};
 
   var h='<tr>';
   h+='<td><div class="set-user-name-cell"><div class="set-user-av" style="background:linear-gradient(135deg,'+rc+','+rc+'88)">'+ini+'</div><div><div class="set-user-name">'+esc(name)+'</div></div></div></td>';
@@ -1020,7 +1020,7 @@ function openUserEdit(user){
   roles.forEach(function(r){h+='<option value="'+r.v+'"'+(user&&user.role===r.v?' selected':'')+'>'+r.l+'</option>';});
   h+='</select></div>';
   h+='<div class="set-edit-field"><div class="set-edit-label">Profil</div><select class="set-edit-select" id="seditProfile">';
-  var profiles=[{v:'super_admin',l:'Super administrateur'},{v:'admin',l:'Administrateur'},{v:'standard',l:'Standard'}];
+  var profiles=[{v:'super_admin',l:'Super administrateur'},{v:'administrateur',l:'Administrateur'},{v:'standard',l:'Standard'}];
   profiles.forEach(function(p){h+='<option value="'+p.v+'"'+(user&&user.profile===p.v?' selected':'')+'>'+p.l+'</option>';});
   h+='</select></div>';
   h+='<div class="set-edit-actions"><button class="set-edit-cancel" id="seditCancel">Annuler</button><button class="set-edit-save" id="seditSave">'+(isNew?'Créer':'Sauvegarder')+'</button></div>';
@@ -1067,11 +1067,16 @@ var DEFAULT_ROLES=[
 ];
 
 function loadRoles(cb){
-  db.collection('crm_roles').get().then(function(snap){
-    if(snap.empty){firestoreRoles=DEFAULT_ROLES.slice();if(cb)cb();}
-    else{firestoreRoles=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;firestoreRoles.push(d);});if(cb)cb();}
-  }).catch(function(){firestoreRoles=DEFAULT_ROLES.slice();if(cb)cb();});
+  try{
+    db.collection('crm_roles').get().then(function(snap){
+      if(snap.empty){firestoreRoles=DEFAULT_ROLES.slice();}
+      else{firestoreRoles=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;firestoreRoles.push(d);});}
+      if(cb)cb();
+    }).catch(function(err){console.warn('[crm_roles] load error:',err);firestoreRoles=DEFAULT_ROLES.slice();if(cb)cb();});
+  }catch(e){firestoreRoles=DEFAULT_ROLES.slice();if(cb)cb();}
 }
+
+function getRoles(){return firestoreRoles||DEFAULT_ROLES;}
 
 function buildRoleTree(roles){
   var byParent={};
@@ -1081,7 +1086,6 @@ function buildRoleTree(roles){
     var h='';
     children.forEach(function(r){
       var count=countUsersInRole(r.id);
-      var rc=ROLE_COLORS[r.id]||'#6b7280';
       var icons={pdg:'👑',head_of_sales:'📊',closeurs:'🎯',setteurs:'📞',coachs:'🎓'};
       var icon=icons[r.id]||'📋';
       h+='<div style="padding-left:'+(depth*28)+'px;margin:4px 0">';
@@ -1097,23 +1101,18 @@ function buildRoleTree(roles){
     });
     return h;
   }
-  return renderNode('__root__',0)||renderNode(null,0);
+  return renderNode('__root__',0);
 }
 
 function renderRolesTab(){
-  if(!firestoreRoles){loadRoles(function(){renderRolesTab();});return;}
+  var roles=getRoles();
+  if(!firestoreRoles){loadRoles(function(){renderRolesTab();});}
   var body=document.getElementById('setBody');
+  var roles=getRoles();
   var h='<div style="margin-bottom:16px"><span style="font-size:11px;color:var(--muted);line-height:1.6">Les rôles définissent les niveaux de visibilité pour les enregistrements. Un utilisateur de rôle inférieur ne peut pas afficher les enregistrements au-dessus de lui dans la hiérarchie.</span></div>';
   h+='<div style="font-family:var(--fh);font-size:13px;font-weight:800;margin-bottom:4px">SARL Ambitio Corp</div>';
   h+='<div class="set-role-tree" id="setRoleTree">';
-  // Build tree
-  var roots=firestoreRoles.filter(function(r){return !r.reportsTo||r.reportsTo==='__root__';});
-  if(roots.length===0){
-    // Fallback: treat pdg as root
-    h+=buildRoleTree(firestoreRoles);
-  } else {
-    h+=buildRoleTree(firestoreRoles);
-  }
+  h+=buildRoleTree(roles);
   h+='</div>';
   h+='<button class="set-add-role-btn" id="setAddRoleBtn">+ Créer un nouveau rôle</button>';
   body.innerHTML=h;
@@ -1139,6 +1138,7 @@ function openRoleEdit(role){
   h+='<div class="set-edit-field"><div class="set-edit-label">Nom de rôle</div><input class="set-edit-input" id="srName" value="'+escA(role?role.name:'')+'" placeholder="Ex: Closeurs"/></div>';
   h+='<div class="set-edit-field"><div class="set-edit-label">Rend-compte à</div><select class="set-edit-select" id="srParent">';
   h+='<option value="">— Aucun (rôle racine) —</option>';
+  firestoreRoles=firestoreRoles||DEFAULT_ROLES;
   firestoreRoles.forEach(function(r){
     if(role&&r.id===role.id)return;
     h+='<option value="'+r.id+'"'+(role&&role.reportsTo===r.id?' selected':'')+'>'+esc(r.name)+'</option>';
@@ -1210,12 +1210,12 @@ var PERM_SECTIONS=[
 ];
 
 var PROFILES_DEF=[
-  {id:'administrator',name:'Administrator',description:'Ce profil aura toutes les autorisations. Les utilisateurs avec un profil Administrateur pourront visualiser et gérer par défaut toutes les données à l\'intérieur du compte de l\'organisation.',color:'#60a5fa'},
-  {id:'standard',name:'Standard',description:'Ce profil aura toutes les autorisations à l\'exception des privilèges administratifs.',color:'#6b7280'},
-  {id:'closeur_setteur',name:'Closeur/Setteur',description:'Profil limité aux actions de vente : pipeline, contacts, commissions.',color:'#ef4444'}
+  {id:'super_admin',name:'Super administrateur',description:'Ce profil aura toutes les autorisations. Les utilisateurs avec ce profil pourront visualiser et gérer par défaut toutes les données à l\'intérieur du compte de l\'organisation.',color:'#f59e0b'},
+  {id:'administrateur',name:'Administrateur',description:'Ce profil aura toutes les autorisations à l\'exception de certains privilèges de gestion avancée (gestion utilisateurs, administration des données).',color:'#60a5fa'},
+  {id:'standard',name:'Standard',description:'Profil limité aux actions courantes : consultation et modification des enregistrements de pipeline, contacts, notes et activités. Pas d\'accès aux fonctions administratives.',color:'#6b7280'}
 ];
 var firestoreProfiles=null;
-var profDetailView=null; // null=list, string=profileId
+var profDetailView=null;
 
 function loadProfiles(cb){
   db.collection('crm_profiles').get().then(function(snap){
@@ -1223,7 +1223,14 @@ function loadProfiles(cb){
       firestoreProfiles=PROFILES_DEF.map(function(p){
         var perms={};
         PERM_SECTIONS.forEach(function(sec){sec.items.forEach(function(it){
-          perms[it.id]=(p.id==='administrator');
+          if(p.id==='super_admin'){perms[it.id]=true;}
+          else if(p.id==='administrateur'){
+            perms[it.id]=true;
+            if(it.id==='gestion_users'||it.id==='admin_data')perms[it.id]=false;
+          }
+          else{
+            perms[it.id]=(it.id==='pipeline'||it.id==='contacts'||it.id==='activites'||it.id==='notes'||it.id==='fichiers'||it.id==='coaching');
+          }
         });});
         return{id:p.id,name:p.name,description:p.description,color:p.color,perms:perms};
       });
@@ -1232,7 +1239,17 @@ function loadProfiles(cb){
       firestoreProfiles=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;firestoreProfiles.push(d);});
       if(cb)cb();
     }
-  }).catch(function(){firestoreProfiles=PROFILES_DEF.slice();if(cb)cb();});
+  }).catch(function(err){console.warn('[crm_profiles]',err);
+    firestoreProfiles=PROFILES_DEF.map(function(p){
+      var perms={};PERM_SECTIONS.forEach(function(sec){sec.items.forEach(function(it){
+        if(p.id==='super_admin')perms[it.id]=true;
+        else if(p.id==='administrateur'){perms[it.id]=true;if(it.id==='gestion_users'||it.id==='admin_data')perms[it.id]=false;}
+        else perms[it.id]=(it.id==='pipeline'||it.id==='contacts'||it.id==='activites'||it.id==='notes'||it.id==='fichiers'||it.id==='coaching');
+      });});
+      return{id:p.id,name:p.name,description:p.description,color:p.color,perms:perms};
+    });
+    if(cb)cb();
+  });
 }
 
 function renderPermissionsTab(){
@@ -1292,7 +1309,7 @@ function renderProfileDetail(profId){
       var subsText=it.subs.length>0?it.subs.join(', '):'';
       h+='<div class="prof-perm-row">';
       h+='<div class="prof-perm-name">'+esc(it.name)+'</div>';
-      h+='<label class="toggle-switch"><input type="checkbox" data-permid="'+it.id+'"'+(isOn?' checked':'')+(prof.id==='administrator'?' disabled':'')+'/><span class="toggle-track"></span><span class="toggle-knob"></span></label>';
+      h+='<label class="toggle-switch"><input type="checkbox" data-permid="'+it.id+'"'+(isOn?' checked':'')+(prof.id==='super_admin'?' disabled':'')+'/><span class="toggle-track"></span><span class="toggle-knob"></span></label>';
       if(subsText)h+='<span class="prof-perm-detail">'+esc(subsText)+'</span>';
       h+='</div>';
     });
