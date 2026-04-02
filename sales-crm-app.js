@@ -1056,69 +1056,242 @@ function openUserEdit(user){
   };
 }
 
-/* ── Roles Tab ── */
+/* ── Roles Tab (editable) ── */
+var firestoreRoles=null;
+var DEFAULT_ROLES=[
+  {id:'pdg',name:'PDG',reportsTo:null,peerVisibility:true,description:'Direction générale. Accès total à toutes les données.'},
+  {id:'head_of_sales',name:'Head Of Sales',reportsTo:'pdg',peerVisibility:true,description:'Supervise les closeurs et setteurs. Accès aux données de vente.'},
+  {id:'closeurs',name:'Closeurs',reportsTo:'head_of_sales',peerVisibility:false,description:'Les utilisateurs de ce rôle ne peuvent pas consulter des données pour utilisateurs administrateurs.'},
+  {id:'setteurs',name:'Setteurs',reportsTo:'head_of_sales',peerVisibility:false,description:'Qualification et prise de RDV.'},
+  {id:'coachs',name:'Coachs',reportsTo:'pdg',peerVisibility:true,description:'Coaching client. Accès au module coaching uniquement.'}
+];
+
+function loadRoles(cb){
+  db.collection('crm_roles').get().then(function(snap){
+    if(snap.empty){firestoreRoles=DEFAULT_ROLES.slice();if(cb)cb();}
+    else{firestoreRoles=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;firestoreRoles.push(d);});if(cb)cb();}
+  }).catch(function(){firestoreRoles=DEFAULT_ROLES.slice();if(cb)cb();});
+}
+
+function buildRoleTree(roles){
+  var byParent={};
+  roles.forEach(function(r){var p=r.reportsTo||'__root__';if(!byParent[p])byParent[p]=[];byParent[p].push(r);});
+  function renderNode(parentId,depth){
+    var children=byParent[parentId]||[];
+    var h='';
+    children.forEach(function(r){
+      var count=countUsersInRole(r.id);
+      var rc=ROLE_COLORS[r.id]||'#6b7280';
+      var icons={pdg:'👑',head_of_sales:'📊',closeurs:'🎯',setteurs:'📞',coachs:'🎓'};
+      var icon=icons[r.id]||'📋';
+      h+='<div style="padding-left:'+(depth*28)+'px;margin:4px 0">';
+      if(depth>0)h+='<span style="color:var(--muted2);margin-right:6px">├─</span>';
+      h+='<div class="set-role-box" data-roleid="'+r.id+'" style="display:inline-flex">';
+      h+='<span class="set-role-icon">'+icon+'</span>';
+      h+='<span class="set-role-name">'+esc(r.name)+'</span>';
+      if(count>0)h+='<span class="set-role-count">'+count+'</span>';
+      h+='<button class="set-user-action" data-roleedit="'+r.id+'" style="margin-left:8px" title="Modifier">✏</button>';
+      h+='</div>';
+      h+=renderNode(r.id,depth+1);
+      h+='</div>';
+    });
+    return h;
+  }
+  return renderNode('__root__',0)||renderNode(null,0);
+}
+
 function renderRolesTab(){
+  if(!firestoreRoles){loadRoles(function(){renderRolesTab();});return;}
   var body=document.getElementById('setBody');
   var h='<div style="margin-bottom:16px"><span style="font-size:11px;color:var(--muted);line-height:1.6">Les rôles définissent les niveaux de visibilité pour les enregistrements. Un utilisateur de rôle inférieur ne peut pas afficher les enregistrements au-dessus de lui dans la hiérarchie.</span></div>';
-  h+='<div style="font-family:var(--fh);font-size:13px;font-weight:800;margin-bottom:12px">SARL Ambitio Corp</div>';
-  h+='<div class="set-role-tree">';
-  h+=renderRoleNode(ROLE_HIERARCHY,true);
+  h+='<div style="font-family:var(--fh);font-size:13px;font-weight:800;margin-bottom:4px">SARL Ambitio Corp</div>';
+  h+='<div class="set-role-tree" id="setRoleTree">';
+  // Build tree
+  var roots=firestoreRoles.filter(function(r){return !r.reportsTo||r.reportsTo==='__root__';});
+  if(roots.length===0){
+    // Fallback: treat pdg as root
+    h+=buildRoleTree(firestoreRoles);
+  } else {
+    h+=buildRoleTree(firestoreRoles);
+  }
   h+='</div>';
   h+='<button class="set-add-role-btn" id="setAddRoleBtn">+ Créer un nouveau rôle</button>';
   body.innerHTML=h;
 
-  document.getElementById('setAddRoleBtn').onclick=function(){
-    var name=prompt('Nom du nouveau rôle :');
-    if(!name||!name.trim())return;
-    toast('✅ Rôle "'+name.trim()+'" créé (ajout à la hiérarchie à configurer)');
-  };
-
+  document.getElementById('setAddRoleBtn').onclick=function(){openRoleEdit(null);};
   body.addEventListener('click',function(e){
-    var box=e.target.closest('.set-role-box');
-    if(box){
-      var roleId=box.dataset.roleid;
-      var count=countUsersInRole(roleId);
-      var users=settingsUsers.filter(function(u){return u.role===roleId;});
-      var names=users.map(function(u){return u.displayName||u.name||u.email;}).join(', ');
-      if(names)toast(box.querySelector('.set-role-name').textContent+' : '+names);
-      else toast('Aucun utilisateur dans ce rôle');
+    var editBtn=e.target.closest('[data-roleedit]');
+    if(editBtn){
+      var rid=editBtn.dataset.roleedit;
+      var role=firestoreRoles.filter(function(r){return r.id===rid;})[0];
+      if(role)openRoleEdit(role);
     }
   });
 }
 
-function renderRoleNode(node,isRoot){
-  var count=countUsersInRole(node.id);
-  var h='<div class="set-role-node'+(isRoot?' set-role-root':'')+'">';
-  h+='<div class="set-role-box" data-roleid="'+node.id+'">';
-  h+='<span class="set-role-icon">'+node.icon+'</span>';
-  h+='<span class="set-role-name">'+esc(node.name)+'</span>';
-  if(count>0)h+='<span class="set-role-count">'+count+' utilisateur'+(count>1?'s':'')+'</span>';
-  h+='</div>';
-  if(node.children&&node.children.length>0){
-    h+='<div class="set-role-children">';
-    node.children.forEach(function(child){h+=renderRoleNode(child,false);});
-    h+='</div>';
-  }
-  h+='</div>';
-  return h;
-}
-
-function countUsersInRole(roleId){
-  var roleMap={pdg:'admin',head_of_sales:'admin',closeurs:'sales',setteurs:'sales',coachs:'coach'};
-  var mappedRole=roleMap[roleId]||roleId;
-  return settingsUsers.filter(function(u){return u.role===mappedRole;}).length;
-}
-
-/* ── Permissions Tab (placeholder) ── */
-function renderPermissionsTab(){
+function openRoleEdit(role){
+  var isNew=!role;
   var body=document.getElementById('setBody');
-  var h='<div style="text-align:center;padding:60px 20px">';
-  h+='<div style="font-size:40px;margin-bottom:12px">🔒</div>';
-  h+='<div style="font-family:var(--fh);font-size:16px;font-weight:800;margin-bottom:8px">Profils & Permissions</div>';
-  h+='<div style="color:var(--muted);font-size:13px;max-width:400px;margin:0 auto">Définir les permissions par profil (Super administrateur, Administrateur, Standard) — quels modules sont accessibles, qui peut créer/modifier/supprimer.</div>';
-  h+='<div style="margin-top:20px;padding:12px 20px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;display:inline-block;font-size:12px;font-weight:700;color:var(--gold)">🚧 Prochaine étape</div>';
+  var overlay=document.createElement('div');
+  overlay.className='set-edit-backdrop';
+  var h='<div class="set-edit-modal">';
+  h+='<div class="set-edit-title">'+(isNew?'Créer un rôle':'Modifier le rôle')+'</div>';
+  h+='<div class="set-edit-field"><div class="set-edit-label">Nom de rôle</div><input class="set-edit-input" id="srName" value="'+escA(role?role.name:'')+'" placeholder="Ex: Closeurs"/></div>';
+  h+='<div class="set-edit-field"><div class="set-edit-label">Rend-compte à</div><select class="set-edit-select" id="srParent">';
+  h+='<option value="">— Aucun (rôle racine) —</option>';
+  firestoreRoles.forEach(function(r){
+    if(role&&r.id===role.id)return;
+    h+='<option value="'+r.id+'"'+(role&&role.reportsTo===r.id?' selected':'')+'>'+esc(r.name)+'</option>';
+  });
+  h+='</select></div>';
+  h+='<div class="set-edit-field"><div class="set-edit-label">Visibilité de données des pairs</div>';
+  h+='<div style="display:flex;align-items:center;gap:10px;margin-top:4px">';
+  var peerV=role?role.peerVisibility!==false:true;
+  h+='<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text)"><input type="checkbox" id="srPeerVis" style="accent-color:var(--green);width:18px;height:18px"'+(peerV?' checked':'')+'/> Permettre aux utilisateurs de ce rôle de consulter les données des autres</label>';
+  h+='</div></div>';
+  h+='<div class="set-edit-field"><div class="set-edit-label">Description</div><textarea class="set-edit-input" id="srDesc" rows="3" style="resize:vertical;min-height:60px">'+esc(role?role.description||'':'')+'</textarea></div>';
+  h+='<div class="set-edit-actions"><button class="set-edit-cancel" id="srCancel">Annuler</button><button class="set-edit-save" id="srSave">'+(isNew?'Créer':'Sauvegarder')+'</button></div>';
   h+='</div>';
+  overlay.innerHTML=h;
+  body.style.position='relative';
+  body.appendChild(overlay);
+
+  document.getElementById('srCancel').onclick=function(){overlay.remove();};
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+
+  document.getElementById('srSave').onclick=function(){
+    var name=document.getElementById('srName').value.trim();
+    if(!name){toast('Nom requis');return;}
+    var parent=document.getElementById('srParent').value||null;
+    var peerVis=document.getElementById('srPeerVis').checked;
+    var desc=document.getElementById('srDesc').value.trim();
+    var data={name:name,reportsTo:parent,peerVisibility:peerVis,description:desc,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+
+    if(isNew){
+      var docId=name.toLowerCase().replace(/[^a-z0-9]/g,'_');
+      data.createdAt=firebase.firestore.FieldValue.serverTimestamp();
+      db.collection('crm_roles').doc(docId).set(data).then(function(){
+        data.id=docId;firestoreRoles.push(data);
+        toast('✅ Rôle "'+name+'" créé');overlay.remove();renderRolesTab();
+      }).catch(function(err){toast('❌ '+err.message);});
+    } else {
+      db.collection('crm_roles').doc(role.id).set(data,{merge:true}).then(function(){
+        for(var i=0;i<firestoreRoles.length;i++){if(firestoreRoles[i].id===role.id){for(var k in data){firestoreRoles[i][k]=data[k];}break;}}
+        toast('✅ Rôle modifié');overlay.remove();renderRolesTab();
+      }).catch(function(err){toast('❌ '+err.message);});
+    }
+  };
+}
+
+/* ── Permissions/Profils Tab ── */
+var MODULES_PERMS=[
+  {id:'leads',name:'CRM / Pipeline',icon:'📋'},
+  {id:'clients',name:'Coaching / Clients',icon:'🎓'},
+  {id:'commissions',name:'Commissions',icon:'💰'},
+  {id:'dashboard',name:'Dashboard',icon:'📊'},
+  {id:'retargeting',name:'Retargeting',icon:'🔁'},
+  {id:'settings',name:'Paramètres',icon:'⚙'},
+  {id:'booking',name:'Booking',icon:'📅'},
+  {id:'communication',name:'Communication',icon:'💬'}
+];
+var ACTIONS=['Voir','Créer','Modifier','Supprimer'];
+var PROFILES_DEF=[
+  {id:'super_admin',name:'Super administrateur',color:'#f59e0b',perms:{}},
+  {id:'admin',name:'Administrateur',color:'#60a5fa',perms:{}},
+  {id:'standard',name:'Standard',color:'#6b7280',perms:{}}
+];
+var firestoreProfiles=null;
+
+function loadProfiles(cb){
+  db.collection('crm_profiles').get().then(function(snap){
+    if(snap.empty){
+      // Initialize defaults: super_admin gets all, admin gets most, standard limited
+      firestoreProfiles=PROFILES_DEF.map(function(p){
+        var perms={};
+        MODULES_PERMS.forEach(function(m){
+          if(p.id==='super_admin')perms[m.id]={view:true,create:true,edit:true,delete:true};
+          else if(p.id==='admin')perms[m.id]={view:true,create:true,edit:true,delete:m.id!=='settings'};
+          else perms[m.id]={view:true,create:m.id==='leads'||m.id==='clients',edit:m.id==='leads'||m.id==='clients',delete:false};
+        });
+        return{id:p.id,name:p.name,color:p.color,perms:perms};
+      });
+      if(cb)cb();
+    } else {
+      firestoreProfiles=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;firestoreProfiles.push(d);});
+      if(cb)cb();
+    }
+  }).catch(function(){firestoreProfiles=PROFILES_DEF.slice();if(cb)cb();});
+}
+
+function renderPermissionsTab(){
+  if(!firestoreProfiles){loadProfiles(function(){renderPermissionsTab();});return;}
+  var body=document.getElementById('setBody');
+
+  // Profile selector tabs
+  var h='<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">';
+  firestoreProfiles.forEach(function(p,idx){
+    h+='<button class="set-profile-tab" data-profidx="'+idx+'" style="padding:8px 16px;border:1.5px solid '+(idx===0?p.color:'var(--border)')+';border-radius:8px;background:'+(idx===0?p.color+'14':'transparent')+';color:'+(idx===0?p.color:'var(--muted)')+';font-family:var(--fb);font-size:12px;font-weight:700;cursor:pointer">'+esc(p.name)+'</button>';
+  });
+  h+='</div>';
+
+  h+='<div id="profPermGrid"></div>';
+  h+='<div style="margin-top:16px"><button class="set-edit-save" id="profSaveBtn" style="width:auto;padding:10px 24px">💾 Sauvegarder les permissions</button></div>';
   body.innerHTML=h;
+
+  var activeProf=0;
+  renderPermGrid(activeProf);
+
+  body.addEventListener('click',function(e){
+    var tab=e.target.closest('[data-profidx]');
+    if(tab){
+      activeProf=parseInt(tab.dataset.profidx);
+      body.querySelectorAll('[data-profidx]').forEach(function(t,i){
+        var p=firestoreProfiles[i];
+        t.style.borderColor=i===activeProf?p.color:'var(--border)';
+        t.style.background=i===activeProf?p.color+'14':'transparent';
+        t.style.color=i===activeProf?p.color:'var(--muted)';
+      });
+      renderPermGrid(activeProf);
+    }
+  });
+
+  document.getElementById('profSaveBtn').onclick=function(){
+    // Read all checkboxes
+    var prof=firestoreProfiles[activeProf];
+    if(!prof.perms)prof.perms={};
+    document.querySelectorAll('[data-permmod]').forEach(function(cb){
+      var mod=cb.dataset.permmod,act=cb.dataset.permact;
+      if(!prof.perms[mod])prof.perms[mod]={};
+      prof.perms[mod][act]=cb.checked;
+    });
+    db.collection('crm_profiles').doc(prof.id).set({name:prof.name,color:prof.color,perms:prof.perms,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
+      toast('✅ Permissions "'+prof.name+'" sauvegardées');
+    }).catch(function(err){toast('❌ '+err.message);});
+  };
+}
+
+function renderPermGrid(profIdx){
+  var prof=firestoreProfiles[profIdx];
+  var perms=prof.perms||{};
+  var h='<table style="width:100%;border-collapse:collapse">';
+  h+='<thead><tr><th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);background:var(--bg2);border-bottom:1.5px solid var(--border2)">Module</th>';
+  ACTIONS.forEach(function(a){h+='<th style="padding:8px 12px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted);background:var(--bg2);border-bottom:1.5px solid var(--border2);width:80px">'+a+'</th>';});
+  h+='</tr></thead><tbody>';
+  var actKeys=['view','create','edit','delete'];
+  MODULES_PERMS.forEach(function(m){
+    var mp=perms[m.id]||{};
+    h+='<tr style="border-bottom:1px solid var(--border)">';
+    h+='<td style="padding:10px 12px;font-size:12px;font-weight:700;display:flex;align-items:center;gap:8px"><span>'+m.icon+'</span> '+esc(m.name)+'</td>';
+    actKeys.forEach(function(ak,i){
+      var checked=mp[ak]!==false;
+      if(prof.id==='super_admin')checked=true;
+      h+='<td style="padding:10px 12px;text-align:center"><input type="checkbox" data-permmod="'+m.id+'" data-permact="'+ak+'" style="accent-color:var(--green);width:16px;height:16px;cursor:pointer"'+(checked?' checked':'')+(prof.id==='super_admin'?' disabled':'')+'/></td>';
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  if(prof.id==='super_admin')h+='<div style="font-size:11px;color:var(--muted);margin-top:8px;font-style:italic">Le Super administrateur a toutes les permissions par défaut.</div>';
+  document.getElementById('profPermGrid').innerHTML=h;
 }
 
 /* ── Fields Tab (placeholder) ── */
