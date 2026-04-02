@@ -1637,9 +1637,9 @@ function openFieldEditModal(field,fieldIdx){
   h+='</div>';
 
   overlay.innerHTML=h;
-  var setBody=document.getElementById('setBody');
-  setBody.style.position='relative';
-  setBody.appendChild(overlay);
+  var settingsPanel=document.getElementById('settingsPanel');
+  settingsPanel.style.position='relative';
+  settingsPanel.appendChild(overlay);
 
   // Toggle options section on type change
   document.getElementById('feType').addEventListener('change',function(){
