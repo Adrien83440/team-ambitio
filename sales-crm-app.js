@@ -1450,12 +1450,13 @@ function renderFieldsTab(){
   h+='<button class="set-add-user-btn" id="fieldAddBtn" style="font-size:11px;padding:6px 12px;margin-left:auto">+ Ajouter un champ</button>';
   h+='</div>';
 
-  h+='<table class="fields-table"><colgroup><col style="width:24px"/><col/><col style="width:90px"/><col style="width:46px"/><col style="width:50px"/></colgroup><thead><tr>';
+  h+='<table class="fields-table"><colgroup><col style="width:24px"/><col/><col style="width:90px"/><col style="width:46px"/><col style="width:50px"/><col style="width:36px"/></colgroup><thead><tr>';
   h+='<th style="width:24px"></th>';
   h+='<th>Nom du champ</th>';
   h+='<th style="width:100px">Type</th>';
   h+='<th class="center" style="width:60px">Requis</th>';
   h+='<th class="center" style="width:60px">Visible</th>';
+  h+='<th class="center" style="width:36px"></th>';
   h+='</tr></thead><tbody>';
 
   var typeColors={Texte:'#60a5fa','Zone de texte':'#60a5fa',Email:'#34d399','Email (Unique)':'#34d399','Téléphone':'#f59e0b',Date:'#a78bfa','Date/Heure':'#a78bfa','Liste déroulante':'#ec4899',Utilisateur:'#f97316','Booléen':'#14b8a6','Multi-valeurs':'#8b5cf6','Sous-collection':'#6b7280'};
@@ -1473,6 +1474,7 @@ function renderFieldsTab(){
     h+='<td><span class="field-type-badge" style="background:'+tc+'14;color:'+tc+';cursor:pointer" data-ftypeidx="'+mod.fields.indexOf(f)+'" title="Cliquer pour changer">'+esc(f.type)+' ▾</span></td>';
     h+='<td class="center">'+(f.required?'<span style="color:var(--green)">●</span>':'<span style="color:var(--muted2)">○</span>')+'</td>';
     h+='<td class="center"><label class="toggle-switch"><input type="checkbox" data-fvis="'+f.key+'"'+(vis?' checked':'')+(f.required?' disabled':'')+'/><span class="toggle-track"></span><span class="toggle-knob"></span></label></td>';
+    h+='<td class="center"><button style="width:24px;height:24px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:10px;display:inline-flex;align-items:center;justify-content:center" data-ffieldedit="'+mod.fields.indexOf(f)+'" title="Modifier le champ">✏</button></td>';
     h+='</tr>';
   });
   h+='</tbody></table>';
@@ -1554,6 +1556,162 @@ function renderFieldsTab(){
         }
       });
     },10);
+  });
+
+  // Field edit modal
+  body.addEventListener('click',function(e){
+    var editBtn=e.target.closest('[data-ffieldedit]');
+    if(!editBtn)return;
+    var idx=parseInt(editBtn.dataset.ffieldedit);
+    var mod3=FIELD_MODULES[activeFieldModule];
+    var field=mod3.fields[idx];
+    if(!field)return;
+    openFieldEditModal(field,idx);
+  });
+}
+
+/* ── Field Options Storage ── */
+var fieldOptionsData=null;
+function loadFieldOptions(){
+  var saved=localStorage.getItem('crm_field_options');
+  if(saved){try{fieldOptionsData=JSON.parse(saved);}catch(e){fieldOptionsData={};}}
+  if(!fieldOptionsData)fieldOptionsData={};
+}
+loadFieldOptions();
+function saveFieldOptions(){localStorage.setItem('crm_field_options',JSON.stringify(fieldOptionsData));}
+function getFieldOptions(modId,fieldKey){
+  if(!fieldOptionsData[modId])return[];
+  return fieldOptionsData[modId][fieldKey]||[];
+}
+function setFieldOptions(modId,fieldKey,opts){
+  if(!fieldOptionsData[modId])fieldOptionsData[modId]={};
+  fieldOptionsData[modId][fieldKey]=opts;
+  saveFieldOptions();
+}
+
+function openFieldEditModal(field,fieldIdx){
+  var mod=FIELD_MODULES[activeFieldModule];
+  var modId=mod.id;
+  var opts=getFieldOptions(modId,field.key);
+  var isListType=(field.type==='Liste déroulante'||field.type==='Multi-valeurs');
+
+  var overlay=document.createElement('div');
+  overlay.className='set-edit-backdrop';
+  var h='<div class="set-edit-modal" style="max-width:480px">';
+  h+='<div class="set-edit-title">Modifier le champ</div>';
+
+  h+='<div class="set-edit-field"><div class="set-edit-label">Nom du champ</div>';
+  h+='<input class="set-edit-input" id="feLabel" value="'+escA(field.label)+'"'+(field.system?' style="opacity:0.6" readonly':'')+'/></div>';
+
+  h+='<div class="set-edit-field"><div class="set-edit-label">Clé Firestore</div>';
+  h+='<input class="set-edit-input" id="feKey" value="'+escA(field.key)+'" style="opacity:0.5;font-family:var(--fm)" readonly/></div>';
+
+  h+='<div class="set-edit-field"><div class="set-edit-label">Type</div>';
+  h+='<select class="set-edit-select" id="feType"'+(field.system?' disabled':'')+'>';
+  var allTypes=['Texte','Zone de texte','Email','Téléphone','Date','Date/Heure','Liste déroulante','Utilisateur','Booléen','Multi-valeurs'];
+  allTypes.forEach(function(t){h+='<option value="'+t+'"'+(field.type===t?' selected':'')+'>'+t+'</option>';});
+  h+='</select></div>';
+
+  // Options section (for Liste / Multi-valeurs)
+  h+='<div id="feOptionsSection" style="'+(isListType?'':'display:none')+'">';
+  h+='<div class="set-edit-label" style="margin-top:14px">Options de la liste</div>';
+  h+='<div id="feOptionsList" style="margin-top:6px">';
+  if(opts.length>0){
+    opts.forEach(function(opt,oi){
+      h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">';
+      h+='<span style="font-family:var(--fm);font-size:10px;color:var(--muted);width:20px;text-align:center">'+(oi+1)+'</span>';
+      h+='<input class="set-edit-input fe-opt-input" data-optidx="'+oi+'" value="'+escA(opt)+'" style="font-size:12px;padding:6px 10px"/>';
+      h+='<button class="fe-opt-del" data-optdel="'+oi+'" style="width:24px;height:24px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:10px;flex-shrink:0">✕</button>';
+      h+='</div>';
+    });
+  } else {
+    h+='<div style="font-size:11px;color:var(--muted2);padding:8px 0">Aucune option définie</div>';
+  }
+  h+='</div>';
+  h+='<div style="display:flex;gap:6px;margin-top:6px">';
+  h+='<input class="set-edit-input" id="feNewOpt" placeholder="Nouvelle option..." style="flex:1;font-size:12px;padding:6px 10px"/>';
+  h+='<button id="feAddOpt" style="padding:6px 12px;border:none;border-radius:8px;background:rgba(52,211,153,0.1);color:var(--green);font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">+ Ajouter</button>';
+  h+='</div></div>';
+
+  h+='<div class="set-edit-actions"><button class="set-edit-cancel" id="feCancel">Annuler</button><button class="set-edit-save" id="feSave">Sauvegarder</button></div>';
+  h+='</div>';
+
+  overlay.innerHTML=h;
+  var setBody=document.getElementById('setBody');
+  setBody.style.position='relative';
+  setBody.appendChild(overlay);
+
+  // Toggle options section on type change
+  document.getElementById('feType').addEventListener('change',function(){
+    var show=(this.value==='Liste déroulante'||this.value==='Multi-valeurs');
+    document.getElementById('feOptionsSection').style.display=show?'':'none';
+  });
+
+  // Add option
+  document.getElementById('feAddOpt').addEventListener('click',function(){
+    var input=document.getElementById('feNewOpt');
+    var val=input.value.trim();
+    if(!val)return;
+    opts.push(val);
+    input.value='';
+    refreshOptsList();
+  });
+  document.getElementById('feNewOpt').addEventListener('keydown',function(e){
+    if(e.key==='Enter'){e.preventDefault();document.getElementById('feAddOpt').click();}
+  });
+
+  // Delete option (delegated)
+  document.getElementById('feOptionsList').addEventListener('click',function(e){
+    var del=e.target.closest('[data-optdel]');
+    if(del){opts.splice(parseInt(del.dataset.optdel),1);refreshOptsList();}
+  });
+
+  // Update option text on input
+  document.getElementById('feOptionsList').addEventListener('input',function(e){
+    var inp=e.target.closest('[data-optidx]');
+    if(inp)opts[parseInt(inp.dataset.optidx)]=inp.value;
+  });
+
+  function refreshOptsList(){
+    var lh='';
+    if(opts.length>0){
+      opts.forEach(function(opt,oi){
+        lh+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">';
+        lh+='<span style="font-family:var(--fm);font-size:10px;color:var(--muted);width:20px;text-align:center">'+(oi+1)+'</span>';
+        lh+='<input class="set-edit-input fe-opt-input" data-optidx="'+oi+'" value="'+escA(opt)+'" style="font-size:12px;padding:6px 10px"/>';
+        lh+='<button class="fe-opt-del" data-optdel="'+oi+'" style="width:24px;height:24px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:10px;flex-shrink:0">✕</button>';
+        lh+='</div>';
+      });
+    } else {
+      lh+='<div style="font-size:11px;color:var(--muted2);padding:8px 0">Aucune option définie</div>';
+    }
+    document.getElementById('feOptionsList').innerHTML=lh;
+  }
+
+  // Cancel
+  document.getElementById('feCancel').addEventListener('click',function(){overlay.remove();});
+  overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+
+  // Save
+  document.getElementById('feSave').addEventListener('click',function(){
+    var newLabel=document.getElementById('feLabel').value.trim();
+    var newType=document.getElementById('feType').value;
+    if(newLabel&&!field.system)field.label=newLabel;
+    if(!field.system)field.type=newType;
+
+    // Save options if list type
+    if(newType==='Liste déroulante'||newType==='Multi-valeurs'){
+      // Collect current opts from inputs
+      var currentOpts=[];
+      document.querySelectorAll('.fe-opt-input').forEach(function(inp){
+        var v=inp.value.trim();if(v)currentOpts.push(v);
+      });
+      setFieldOptions(modId,field.key,currentOpts);
+    }
+
+    overlay.remove();
+    toast('✅ Champ "'+field.label+'" modifié');
+    renderFieldsTab();
   });
 }
 
