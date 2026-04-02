@@ -202,7 +202,7 @@ function renderCard(l){
 function renderList(leads){
   var sorted=leads.slice().sort(function(a,b){
     var va=a[listSortKey]||'',vb=b[listSortKey]||'';
-    if(listSortKey==='createdAt'){va=va&&va.toDate?va.toDate().getTime():0;vb=vb&&vb.toDate?vb.toDate().getTime():0;}
+    if(listSortKey==='createdAt'||listSortKey==='updatedAt'){va=va&&va.toDate?va.toDate().getTime():0;vb=vb&&vb.toDate?vb.toDate().getTime():0;}
     if(listSortKey==='stage'){va=SM[va]?SM[va].label:va;vb=SM[vb]?SM[vb].label:vb;}
     if(typeof va==='string')va=va.toLowerCase();if(typeof vb==='string')vb=vb.toLowerCase();
     if(va<vb)return listSortDir==='asc'?-1:1;if(va>vb)return listSortDir==='asc'?1:-1;return 0;
@@ -210,18 +210,20 @@ function renderList(leads){
   var tp=getTotalPages(sorted);if(currentPage>tp)currentPage=tp;
   var page=getPaginated(sorted);
   var h='';page.forEach(function(l){
-    var st=SM[l.stage||'lead']||STAGES[0],setter=l.assignedTo||'',sl=setter==='guillaume'?'Guillaume':(setter==='elodie'?'Élodie':'—');
-    var tk=l.type||'vsl_elite',tl=LT[tk]||tk,tb=TB[tk]||'other',sel=!!selectedIds[l.id];
+    var sel=!!selectedIds[l.id];
     h+='<tr data-id="'+l.id+'"'+(sel?' class="selected"':'')+'>';
-    h+='<td style="width:40px" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb" data-cbid="'+l.id+'"'+(sel?' checked':'')+'/></td>';
-    h+='<td style="font-family:var(--fh);font-weight:700">'+esc(l.nom||'—')+'</td>';
-    h+='<td style="font-family:var(--fm);color:var(--muted)">'+esc(l.telephone||'')+'</td>';
-    h+='<td style="color:var(--muted)">'+esc(l.email||'')+'</td>';
-    h+='<td><span class="list-stage-badge" style="background:'+st.color+'14;color:'+st.color+'"><span class="list-stage-dot" style="background:'+st.color+'"></span>'+esc(st.label)+'</span></td>';
-    h+='<td><span class="list-setter-badge" style="background:'+(setter==='guillaume'?'rgba(239,68,68,0.1);color:#fca5a5':'rgba(96,165,250,0.1);color:#93c5fd')+'">'+esc(sl)+'</span></td>';
-    h+='<td><span class="list-type-badge" style="background:'+(tb==='vsl'?'rgba(167,139,250,0.12);color:#c4b5fd':'rgba(245,158,11,0.12);color:#fcd34d')+'">'+tl+'</span></td>';
-    h+='<td style="color:var(--muted)">'+esc(l.utm||'')+'</td>';
-    h+='<td style="font-family:var(--fm);font-size:11px;color:var(--muted)">'+fmtDate(l.createdAt)+'</td></tr>';
+    LIST_COLS.forEach(function(col){
+      if(col.key==='_cb'){h+='<td style="width:40px" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb" data-cbid="'+l.id+'"'+(sel?' checked':'')+'/></td>';return;}
+      var val=l[col.key]||'';
+      if(col.key==='nom'){h+='<td style="font-family:var(--fh);font-weight:700">'+esc(val||'—')+'</td>';}
+      else if(col.key==='telephone'){h+='<td style="font-family:var(--fm);color:var(--muted)">'+esc(val)+'</td>';}
+      else if(col.key==='stage'){var st=SM[val||'lead']||STAGES[0];h+='<td><span class="list-stage-badge" style="background:'+st.color+'14;color:'+st.color+'"><span class="list-stage-dot" style="background:'+st.color+'"></span>'+esc(st.label)+'</span></td>';}
+      else if(col.key==='assignedTo'){var sl=val==='guillaume'?'Guillaume':(val==='elodie'?'Élodie':'—');h+='<td><span class="list-setter-badge" style="background:'+(val==='guillaume'?'rgba(239,68,68,0.1);color:#fca5a5':'rgba(96,165,250,0.1);color:#93c5fd')+'">'+esc(sl)+'</span></td>';}
+      else if(col.key==='type'){var tl=LT[val]||val,tb=TB[val]||'other';h+='<td><span class="list-type-badge" style="background:'+(tb==='vsl'?'rgba(167,139,250,0.12);color:#c4b5fd':'rgba(245,158,11,0.12);color:#fcd34d')+'">'+tl+'</span></td>';}
+      else if(col.key==='createdAt'||col.key==='updatedAt'){h+='<td style="font-family:var(--fm);font-size:11px;color:var(--muted)">'+fmtDate(val)+'</td>';}
+      else{h+='<td style="color:var(--muted)">'+esc(String(val))+'</td>';}
+    });
+    h+='</tr>';
   });
   document.getElementById('listBody').innerHTML=h;
   renderPagi('pagiList',sorted.length,tp);
@@ -465,6 +467,165 @@ function saveModal(){var lid=document.getElementById('modalBg')._leadId;if(!lid)
 document.getElementById('crmSearch').addEventListener('input',function(){searchQuery=this.value.trim();currentPage=1;renderAll();});
 document.querySelectorAll('.crm-filter-pill').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.crm-filter-pill').forEach(function(p){p.classList.remove('active');});b.classList.add('active');filterSetter=b.dataset.setter;currentPage=1;renderAll();});});
 document.querySelectorAll('.crm-section-pill').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.crm-section-pill').forEach(function(p){p.classList.remove('active');});b.classList.add('active');filterSection=b.dataset.section;currentPage=1;renderAll();});});
+
+/* ═══ SORT DROPDOWN ═══ */
+var SORT_FIELDS=[
+  {key:'createdAt',label:'Heure de création'},
+  {key:'nom',label:'Nom de l\'Affaire'},
+  {key:'assignedTo',label:'Gestionnaire de l\'Affaire'},
+  {key:'telephone',label:'Portable'},
+  {key:'stage',label:'Étape'},
+  {key:'utm',label:'Source / UTM'},
+  {key:'type',label:'Origine du Prospect'},
+  {key:'updatedAt',label:'Heure de modification'}
+];
+var globalSortKey='createdAt',globalSortDir='desc';
+
+function renderSortDD(filter){
+  filter=(filter||'').toLowerCase();
+  var h='<input class="sort-dd-search" id="sortDDSearch" placeholder="Rechercher"/>';
+  SORT_FIELDS.forEach(function(f){
+    if(filter&&f.label.toLowerCase().indexOf(filter)<0)return;
+    h+='<div class="sort-dd-item'+(globalSortKey===f.key?' active':'')+'" data-sortf="'+f.key+'">'+esc(f.label)+'</div>';
+  });
+  document.getElementById('sortDD').innerHTML=h;
+  var search=document.getElementById('sortDDSearch');
+  if(search){search.value=filter;search.addEventListener('input',function(){renderSortDD(this.value);});}
+}
+
+document.getElementById('sortTrigger').addEventListener('click',function(e){
+  e.stopPropagation();
+  var dd=document.getElementById('sortDD');var o=dd.classList.toggle('open');
+  this.classList.toggle('open',o);
+  if(o){renderSortDD();setTimeout(function(){var s=document.getElementById('sortDDSearch');if(s)s.focus();},50);}
+});
+document.addEventListener('click',function(e){if(!e.target.closest('#sortWrapper')){document.getElementById('sortDD').classList.remove('open');document.getElementById('sortTrigger').classList.remove('open');}});
+document.getElementById('sortDD').addEventListener('click',function(e){
+  var item=e.target.closest('[data-sortf]');if(!item)return;
+  globalSortKey=item.dataset.sortf;listSortKey=globalSortKey;
+  var label=SORT_FIELDS.filter(function(f){return f.key===globalSortKey;})[0];
+  document.getElementById('sortTriggerLabel').textContent=label?label.label:globalSortKey;
+  document.getElementById('sortDD').classList.remove('open');
+  document.getElementById('sortTrigger').classList.remove('open');
+  buildListHead();renderAll();
+});
+document.getElementById('sortDirBtn').addEventListener('click',function(){
+  globalSortDir=globalSortDir==='desc'?'asc':'desc';listSortDir=globalSortDir;
+  this.textContent=globalSortDir==='asc'?'↑':'↓';
+  buildListHead();renderAll();
+});
+
+/* ═══ COLUMN CONFIG ═══ */
+var ALL_COLUMNS=[
+  {key:'nom',label:'Nom de l\'Affaire',default:true},
+  {key:'stage',label:'Étape',default:true},
+  {key:'telephone',label:'Portable',default:true},
+  {key:'email',label:'Email',default:true},
+  {key:'assignedTo',label:'Gestionnaire de l\'Affaire',default:true},
+  {key:'type',label:'Origine du Prospect',default:true},
+  {key:'utm',label:'Source / UTM',default:true},
+  {key:'createdAt',label:'Heure de création',default:true},
+  {key:'secteur',label:'Secteur',default:false},
+  {key:'ca',label:'CA actuel',default:false},
+  {key:'defi',label:'Défi',default:false},
+  {key:'closeur',label:'Closeur',default:false},
+  {key:'setting',label:'Setting',default:false},
+  {key:'status',label:'Statut Leads Live',default:false},
+  {key:'updatedAt',label:'Heure de modification',default:false}
+];
+var visibleCols=null;
+
+function loadColConfig(){
+  var saved=localStorage.getItem('crm_visible_cols');
+  if(saved){try{visibleCols=JSON.parse(saved);}catch(e){visibleCols=null;}}
+  if(!visibleCols){visibleCols=ALL_COLUMNS.filter(function(c){return c.default;}).map(function(c){return c.key;});}
+}
+loadColConfig();
+
+function saveColConfig(){localStorage.setItem('crm_visible_cols',JSON.stringify(visibleCols));}
+
+function getVisibleListCols(){
+  var cols=[{key:'_cb',label:'',w:'40px'}];
+  visibleCols.forEach(function(k){
+    var def=null;for(var i=0;i<ALL_COLUMNS.length;i++){if(ALL_COLUMNS[i].key===k){def=ALL_COLUMNS[i];break;}}
+    if(def)cols.push({key:k,label:def.label,w:'140px'});
+  });
+  return cols;
+}
+
+function getVisibleSheetCols(){
+  var cols=[{key:'_cb',label:'',edit:false},{key:'_num',label:'#',edit:false}];
+  visibleCols.forEach(function(k){
+    var editType=true;
+    if(k==='stage'||k==='assignedTo'||k==='type')editType='select';
+    if(k==='createdAt'||k==='updatedAt')editType=false;
+    cols.push({key:k,label:(ALL_COLUMNS.filter(function(c){return c.key===k;})[0]||{}).label||k,edit:editType});
+  });
+  return cols;
+}
+
+/* Override LIST_COLS and SHEET_COLS to be dynamic */
+function rebuildDynamicCols(){
+  LIST_COLS=getVisibleListCols();
+  SHEET_COLS=getVisibleSheetCols();
+  buildListHead();
+  buildSheetHead();
+  renderAll();
+}
+
+function openColConfig(){
+  var h='<div class="colcfg-head"><div class="colcfg-title">Colonnes affichées</div><button class="colcfg-close" id="colcfgClose">✕</button></div>';
+  h+='<input class="colcfg-search" id="colcfgSearch" placeholder="Rechercher"/>';
+  h+='<div class="colcfg-list" id="colcfgList">';
+  ALL_COLUMNS.forEach(function(col){
+    var checked=visibleCols.indexOf(col.key)>=0;
+    h+='<div class="colcfg-item" data-colkey="'+col.key+'">';
+    h+='<span class="colcfg-item-drag">⠿</span>';
+    h+='<input type="checkbox" class="colcfg-cb" data-colcb="'+col.key+'"'+(checked?' checked':'')+'/>';
+    h+='<span>'+esc(col.label)+'</span></div>';
+  });
+  h+='</div>';
+  h+='<div class="colcfg-actions"><button class="colcfg-cancel-btn" id="colcfgCancel">Annuler</button><button class="colcfg-save-btn" id="colcfgSave">Enregistrer</button></div>';
+  document.getElementById('colcfgPanel').innerHTML=h;
+  document.getElementById('colcfgPanel').classList.add('open');
+  document.getElementById('colcfgBtn').classList.add('open');
+
+  document.getElementById('colcfgClose').onclick=closeColConfig;
+  document.getElementById('colcfgCancel').onclick=closeColConfig;
+  document.getElementById('colcfgSearch').addEventListener('input',function(){
+    var q=this.value.toLowerCase();
+    document.querySelectorAll('.colcfg-item').forEach(function(item){
+      var label=item.textContent.toLowerCase();
+      item.style.display=label.indexOf(q)>=0?'':'none';
+    });
+  });
+  document.getElementById('colcfgSave').onclick=function(){
+    visibleCols=[];
+    document.querySelectorAll('.colcfg-cb:checked').forEach(function(cb){visibleCols.push(cb.dataset.colcb);});
+    saveColConfig();rebuildDynamicCols();closeColConfig();toast('✅ Colonnes mises à jour');
+  };
+}
+
+function closeColConfig(){document.getElementById('colcfgPanel').classList.remove('open');document.getElementById('colcfgBtn').classList.remove('open');}
+document.getElementById('colcfgBtn').addEventListener('click',function(){
+  if(document.getElementById('colcfgPanel').classList.contains('open'))closeColConfig();else openColConfig();
+});
+
+/* Apply dynamic columns on init */
+rebuildDynamicCols();
+
+/* Override pipeline sort to use globalSortKey */
+var origRenderPipeline=renderPipeline;
+renderPipeline=function(leads){
+  if(globalSortKey&&globalSortKey!=='createdAt'){
+    leads=leads.slice().sort(function(a,b){
+      var va=a[globalSortKey]||'',vb=b[globalSortKey]||'';
+      if(typeof va==='string')va=va.toLowerCase();if(typeof vb==='string')vb=vb.toLowerCase();
+      if(va<vb)return globalSortDir==='asc'?-1:1;if(va>vb)return globalSortDir==='asc'?1:-1;return 0;
+    });
+  }
+  origRenderPipeline(leads);
+};
 
 /* ═══ ADD LEAD ═══ */
 document.getElementById('crmAddBtn').addEventListener('click',function(){var nom=prompt('Nom du lead :');if(!nom||!nom.trim())return;var tel=prompt('Téléphone :')||'',email=prompt('Email :')||'';db.collection('leads').add({nom:nom.trim(),telephone:tel.trim(),email:email.trim(),type:'vsl_elite',stage:'lead',status:'nouveau',assignedTo:'',notesHistory:[],createdAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Lead ajouté');}).catch(function(err){toast('❌ '+err.message);});});
