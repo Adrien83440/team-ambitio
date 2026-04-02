@@ -1069,9 +1069,16 @@ var DEFAULT_ROLES=[
 function loadRoles(cb){
   try{
     db.collection('crm_roles').get().then(function(snap){
-      if(snap.empty){firestoreRoles=DEFAULT_ROLES.slice();}
-      else{firestoreRoles=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;firestoreRoles.push(d);});}
-      if(cb)cb();
+      if(snap.empty){
+        // Seed defaults to Firestore
+        firestoreRoles=DEFAULT_ROLES.slice();
+        var batch=db.batch();
+        DEFAULT_ROLES.forEach(function(r){
+          batch.set(db.collection('crm_roles').doc(r.id),{name:r.name,reportsTo:r.reportsTo||null,peerVisibility:r.peerVisibility,description:r.description,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+        });
+        batch.commit().then(function(){console.log('[crm_roles] seeded');if(cb)cb();}).catch(function(err){console.warn('[crm_roles] seed error:',err);if(cb)cb();});
+      }
+      else{firestoreRoles=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;firestoreRoles.push(d);});if(cb)cb();}
     }).catch(function(err){console.warn('[crm_roles] load error:',err);firestoreRoles=DEFAULT_ROLES.slice();if(cb)cb();});
   }catch(e){firestoreRoles=DEFAULT_ROLES.slice();if(cb)cb();}
 }
@@ -1105,8 +1112,12 @@ function buildRoleTree(roles){
 }
 
 function renderRolesTab(){
-  var roles=getRoles();
-  if(!firestoreRoles){loadRoles(function(){renderRolesTab();});}
+  if(!firestoreRoles){loadRoles(function(){renderRolesTab();});
+    // Show loading while waiting
+    var body=document.getElementById('setBody');
+    if(body)body.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">Chargement des rôles...</div>';
+    return;
+  }
   var body=document.getElementById('setBody');
   var roles=getRoles();
   var h='<div style="margin-bottom:16px"><span style="font-size:11px;color:var(--muted);line-height:1.6">Les rôles définissent les niveaux de visibilité pour les enregistrements. Un utilisateur de rôle inférieur ne peut pas afficher les enregistrements au-dessus de lui dans la hiérarchie.</span></div>';
@@ -1220,21 +1231,22 @@ var profDetailView=null;
 function loadProfiles(cb){
   db.collection('crm_profiles').get().then(function(snap){
     if(snap.empty){
+      // Seed defaults to Firestore
       firestoreProfiles=PROFILES_DEF.map(function(p){
         var perms={};
         PERM_SECTIONS.forEach(function(sec){sec.items.forEach(function(it){
           if(p.id==='super_admin'){perms[it.id]=true;}
-          else if(p.id==='administrateur'){
-            perms[it.id]=true;
-            if(it.id==='gestion_users'||it.id==='admin_data')perms[it.id]=false;
-          }
-          else{
-            perms[it.id]=(it.id==='pipeline'||it.id==='contacts'||it.id==='activites'||it.id==='notes'||it.id==='fichiers'||it.id==='coaching');
-          }
+          else if(p.id==='administrateur'){perms[it.id]=true;if(it.id==='gestion_users'||it.id==='admin_data')perms[it.id]=false;}
+          else{perms[it.id]=(it.id==='pipeline'||it.id==='contacts'||it.id==='activites'||it.id==='notes'||it.id==='fichiers'||it.id==='coaching');}
         });});
         return{id:p.id,name:p.name,description:p.description,color:p.color,perms:perms};
       });
-      if(cb)cb();
+      // Write to Firestore
+      var batch=db.batch();
+      firestoreProfiles.forEach(function(p){
+        batch.set(db.collection('crm_profiles').doc(p.id),{name:p.name,description:p.description,color:p.color,perms:p.perms,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      });
+      batch.commit().then(function(){console.log('[crm_profiles] seeded');if(cb)cb();}).catch(function(err){console.warn('[crm_profiles] seed error:',err);if(cb)cb();});
     } else {
       firestoreProfiles=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;firestoreProfiles.push(d);});
       if(cb)cb();
@@ -1253,7 +1265,12 @@ function loadProfiles(cb){
 }
 
 function renderPermissionsTab(){
-  if(!firestoreProfiles){loadProfiles(function(){renderPermissionsTab();});return;}
+  if(!firestoreProfiles){
+    var body=document.getElementById('setBody');
+    if(body)body.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">Chargement des profils...</div>';
+    loadProfiles(function(){renderPermissionsTab();});
+    return;
+  }
   if(profDetailView){renderProfileDetail(profDetailView);return;}
   renderProfilesList();
 }
