@@ -1029,6 +1029,13 @@ function startListening() {
         if (change.type === 'added' && !isFirstLoad && !knownLeadIds[change.doc.id]) {
           var newLead = change.doc.data();
           newLead.id = change.doc.id;
+
+          // Skip imported leads (no popup/sound)
+          if (newLead.source === 'bigin_import') {
+            knownLeadIds[change.doc.id] = true;
+            return;
+          }
+
           newLead._isNew = true;
 
           // Auto-assign if no assignedTo
