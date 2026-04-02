@@ -142,16 +142,74 @@ function buildBoard(){
   var board=document.getElementById('crmBoard');var h='';
   STAGES.forEach(function(st){
     h+='<div class="crm-col" data-stage="'+st.key+'">';
-    h+='<div class="crm-col-head"><div class="crm-col-head-top">';
+    h+='<div class="crm-col-head" style="position:relative">';
+    h+='<div class="crm-col-head-top">';
     h+='<span class="crm-col-dot" style="background:'+st.color+'"></span>';
     h+='<span class="crm-col-title" title="'+escA(st.label)+'">'+esc(st.label)+'</span>';
     h+='<span class="crm-col-count" data-count="'+st.key+'">0</span>';
-    h+='</div></div>';
+    h+='<button class="crm-col-sort" data-colsort="'+st.key+'" title="Trier">↕</button>';
+    h+='</div>';
+    h+='<div class="col-sort-dd" data-colsortdd="'+st.key+'">';
+    h+='<div class="col-sort-item" data-csort="nom_asc" data-cstage="'+st.key+'">↑ Nom A → Z</div>';
+    h+='<div class="col-sort-item" data-csort="nom_desc" data-cstage="'+st.key+'">↓ Nom Z → A</div>';
+    h+='<div class="col-sort-item" data-csort="date_asc" data-cstage="'+st.key+'">↑ Date ancien → récent</div>';
+    h+='<div class="col-sort-item" data-csort="date_desc" data-cstage="'+st.key+'">↓ Date récent → ancien</div>';
+    h+='<div class="col-sort-item" data-csort="none" data-cstage="'+st.key+'">✕ Pas de tri</div>';
+    h+='</div>';
+    h+='</div>';
     h+='<div class="crm-col-cards" data-drop="'+st.key+'"></div></div>';
   });
   board.innerHTML=h;
 }
 buildBoard();
+
+/* Per-column sort state */
+var colSorts={};
+
+document.getElementById('crmBoard').addEventListener('click',function(e){
+  // Toggle sort dropdown
+  var sortBtn=e.target.closest('[data-colsort]');
+  if(sortBtn){
+    e.stopPropagation();
+    var stKey=sortBtn.dataset.colsort;
+    // Close all other dropdowns
+    document.querySelectorAll('.col-sort-dd').forEach(function(dd){dd.classList.remove('open');});
+    var dd=document.querySelector('[data-colsortdd="'+stKey+'"]');
+    if(dd)dd.classList.toggle('open');
+    return;
+  }
+  // Sort item click
+  var sortItem=e.target.closest('[data-csort]');
+  if(sortItem){
+    e.stopPropagation();
+    var stageKey=sortItem.dataset.cstage;
+    var sortType=sortItem.dataset.csort;
+    if(sortType==='none'){delete colSorts[stageKey];}
+    else{colSorts[stageKey]=sortType;}
+    // Update active state visually
+    var dd2=sortItem.closest('.col-sort-dd');
+    if(dd2){dd2.querySelectorAll('.col-sort-item').forEach(function(it){it.classList.remove('active');});sortItem.classList.add('active');dd2.classList.remove('open');}
+    // Update sort button indicator
+    var btn=document.querySelector('[data-colsort="'+stageKey+'"]');
+    if(btn)btn.classList.toggle('has-sort',!!colSorts[stageKey]);
+    renderAll();
+    return;
+  }
+  // Close dropdowns when clicking elsewhere on board
+  document.querySelectorAll('.col-sort-dd.open').forEach(function(dd){dd.classList.remove('open');});
+});
+document.addEventListener('click',function(e){if(!e.target.closest('.col-sort-dd')&&!e.target.closest('[data-colsort]'))document.querySelectorAll('.col-sort-dd.open').forEach(function(dd){dd.classList.remove('open');});});
+
+function sortColumnLeads(leads, sortType){
+  if(!sortType)return leads;
+  return leads.slice().sort(function(a,b){
+    if(sortType==='nom_asc'){return(a.nom||'').toLowerCase()<(b.nom||'').toLowerCase()?-1:1;}
+    if(sortType==='nom_desc'){return(a.nom||'').toLowerCase()>(b.nom||'').toLowerCase()?-1:1;}
+    if(sortType==='date_asc'){var da=getLeadDate(a),db2=getLeadDate(b);return(da?da.getTime():0)-(db2?db2.getTime():0);}
+    if(sortType==='date_desc'){var dc=getLeadDate(a),dd=getLeadDate(b);return(dd?dd.getTime():0)-(dc?dc.getTime():0);}
+    return 0;
+  });
+}
 
 var LIST_COLS=[{key:'_cb',label:'',w:'40px'},{key:'nom',label:'Nom',w:'180px'},{key:'telephone',label:'Téléphone',w:'130px'},{key:'email',label:'Email',w:'180px'},{key:'stage',label:'Étape',w:'160px'},{key:'assignedTo',label:'Setter',w:'120px'},{key:'type',label:'Type',w:'100px'},{key:'utm',label:'Source',w:'120px'},{key:'createdAt',label:'Créé le',w:'100px'}];
 
@@ -198,6 +256,7 @@ function renderPipeline(leads){
     if(filterSection!=='all'&&s.section!==filterSection){col.style.display='none';return;}
     col.style.display='';
     var sl=leads.filter(function(l){return(l.stage||'lead')===s.key;});
+    if(colSorts[s.key])sl=sortColumnLeads(sl,colSorts[s.key]);
     var h='';sl.forEach(function(l){h+=renderCard(l);});container.innerHTML=h;
   });
 }
