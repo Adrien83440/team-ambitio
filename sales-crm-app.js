@@ -1470,7 +1470,7 @@ function renderFieldsTab(){
     h+='<span class="field-label">'+esc(f.label)+'</span> ';
     h+='<span class="field-key">'+esc(f.key)+'</span>';
     h+='</div></td>';
-    h+='<td><span class="field-type-badge" style="background:'+tc+'14;color:'+tc+'">'+esc(f.type)+'</span></td>';
+    h+='<td><span class="field-type-badge" style="background:'+tc+'14;color:'+tc+';cursor:pointer" data-ftypeidx="'+mod.fields.indexOf(f)+'" title="Cliquer pour changer">'+esc(f.type)+' ▾</span></td>';
     h+='<td class="center">'+(f.required?'<span style="color:var(--green)">●</span>':'<span style="color:var(--muted2)">○</span>')+'</td>';
     h+='<td class="center"><label class="toggle-switch"><input type="checkbox" data-fvis="'+f.key+'"'+(vis?' checked':'')+(f.required?' disabled':'')+'/><span class="toggle-track"></span><span class="toggle-knob"></span></label></td>';
     h+='</tr>';
@@ -1498,6 +1498,62 @@ function renderFieldsTab(){
     var type=types[parseInt(typeIdx)-1]||'Texte';
     FIELD_MODULES[activeFieldModule].fields.push({key:key,label:label.trim(),type:type,required:false,system:false});
     toast('✅ Champ "'+label.trim()+'" ajouté');renderFieldsTab();
+  });
+
+  // Type change on badge click
+  body.addEventListener('click',function(e){
+    var badge=e.target.closest('[data-ftypeidx]');
+    if(!badge)return;
+    var idx=parseInt(badge.dataset.ftypeidx);
+    var mod2=FIELD_MODULES[activeFieldModule];
+    var field=mod2.fields[idx];
+    if(!field||field.system)return;
+
+    // Remove any existing dropdown
+    var old=document.getElementById('fieldTypeDD');if(old)old.remove();
+
+    var types=['Texte','Zone de texte','Email','Téléphone','Date','Date/Heure','Liste déroulante','Utilisateur','Booléen','Multi-valeurs'];
+    var typeColors2={Texte:'#60a5fa','Zone de texte':'#60a5fa',Email:'#34d399',Téléphone:'#f59e0b',Date:'#a78bfa','Date/Heure':'#a78bfa','Liste déroulante':'#ec4899',Utilisateur:'#f97316',Booléen:'#14b8a6','Multi-valeurs':'#8b5cf6'};
+
+    var dd=document.createElement('div');
+    dd.id='fieldTypeDD';
+    dd.style.cssText='position:absolute;z-index:20;width:160px;background:var(--bg2);border:1.5px solid var(--border2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);padding:4px;max-height:240px;overflow-y:auto';
+    var dh='';
+    types.forEach(function(t){
+      var tc2=typeColors2[t]||'#6b7280';
+      var isActive=field.type===t;
+      dh+='<div data-ftypeval="'+t+'" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .1s;'+(isActive?'background:rgba(185,28,28,0.1);color:var(--red3)':'color:rgba(255,255,255,0.7)')+'">';
+      dh+='<span style="font-size:8px;font-weight:700;padding:2px 5px;border-radius:3px;background:'+tc2+'14;color:'+tc2+'">'+t+'</span>';
+      if(isActive)dh+=' ✓';
+      dh+='</div>';
+    });
+    dd.innerHTML=dh;
+
+    var rect=badge.getBoundingClientRect();
+    var panelRect=document.getElementById('settingsPanel').getBoundingClientRect();
+    dd.style.left=(rect.left-panelRect.left)+'px';
+    dd.style.top=(rect.bottom-panelRect.top+4)+'px';
+    document.getElementById('settingsPanel').appendChild(dd);
+
+    dd.addEventListener('click',function(ev){
+      var item=ev.target.closest('[data-ftypeval]');
+      if(item){
+        field.type=item.dataset.ftypeval;
+        dd.remove();
+        toast('✅ Type → '+field.type);
+        renderFieldsTab();
+      }
+    });
+
+    // Close on click outside
+    setTimeout(function(){
+      document.addEventListener('click',function closeFTDD(ev){
+        if(!ev.target.closest('#fieldTypeDD')&&!ev.target.closest('[data-ftypeidx]')){
+          var el=document.getElementById('fieldTypeDD');if(el)el.remove();
+          document.removeEventListener('click',closeFTDD);
+        }
+      });
+    },10);
   });
 }
 
