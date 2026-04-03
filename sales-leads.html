@@ -1130,6 +1130,55 @@ function startListening() {
     });
 }
 
+/* ═══ BRIDGE: booking_events → leads ═══ */
+function startBookingBridge() {
+  db.collection('booking_events')
+    .where('processed', '==', false)
+    .onSnapshot(function(snap) {
+      snap.docChanges().forEach(function(change) {
+        if (change.type !== 'added') return;
+        var be = change.doc.data();
+        var beId = change.doc.id;
+
+        // Build the lead document
+        var lead = {
+          nom:            be.nom || '',
+          email:          be.email || '',
+          telephone:      be.telephone || '',
+          secteur:        be.secteur || '',
+          ca:             be.ca || '',
+          defi:           be.defi || '',
+          disponibilite:  be.disponibilite || '',
+          timeline:       be.timeline || '',
+          type:           'self_booking',
+          source:         'forms_self_booking',
+          utm:            be.type || 'Forms Self Booking',
+          stage:          'lead',
+          status:         'nouveau',
+          assignedTo:     '',
+          notesHistory:   [],
+          bookingEventId: beId,
+          createdAt:      be.createdAt || firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt:      firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        // Create lead + mark booking_event processed in a batch
+        // Use deterministic lead ID to prevent duplicates across tabs
+        var batch = db.batch();
+        var newLeadRef = db.collection('leads').doc('be_' + beId);
+        batch.set(newLeadRef, lead);
+        batch.update(change.doc.ref, { processed: true });
+        batch.commit().then(function() {
+          console.log('[bridge] booking_event ' + beId + ' → lead ' + newLeadRef.id);
+        }).catch(function(err) {
+          console.error('[bridge] error processing ' + beId + ':', err);
+        });
+      });
+    }, function(err) {
+      console.error('[bridge] booking_events listener error:', err);
+    });
+}
+
 /* ═══ AUTH & INIT ═══ */
 (function init() {
   firebase.auth().onAuthStateChanged(function(user) {
@@ -1143,7 +1192,8 @@ function startListening() {
         localStorage.setItem('ambitio_role', data.role || 'sales');
         localStorage.setItem('ambitio_name', window._currentUserName);
         startListening();
-      }).catch(function() { startListening(); });
+        startBookingBridge();
+      }).catch(function() { startListening(); startBookingBridge(); });
     } else {
       // Show login overlay
       var overlay = document.getElementById('appLoginOverlay');
