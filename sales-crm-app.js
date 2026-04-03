@@ -285,14 +285,14 @@ function renderCard(l){
   h+='<span class="crm-card-eye" data-action="quickview" data-id="'+l.id+'">👁</span>';
   h+='<div class="crm-card-name">'+esc(l.nom||'—')+'</div>';
   if(isKanbanFieldVisible('telephone')&&l.telephone)h+='<div class="crm-card-phone">'+esc(l.telephone)+'</div>';
-  if(isKanbanFieldVisible('email')&&l.email)h+='<div class="crm-card-phone" style="font-size:10px">'+esc(l.email)+'</div>';
-  if(isKanbanFieldVisible('createdAt')){var cd=getLeadDate(l);if(cd)h+='<div class="crm-card-phone" style="font-size:10px;color:rgba(255,255,255,0.3)">'+fmtDate(cd)+'</div>';}
+  if(isKanbanFieldVisible('email')&&l.email)h+='<div class="crm-card-phone" style="font-size:11px">'+esc(l.email)+'</div>';
+  if(isKanbanFieldVisible('createdAt')){var cd=getLeadDate(l);if(cd)h+='<div class="crm-card-phone" style="font-size:11px;color:var(--subtle-text)">'+fmtDate(cd)+'</div>';}
   h+='<div class="crm-card-bottom">';
   if(isKanbanFieldVisible('type'))h+='<span class="crm-card-badge '+badge+'">'+tl+'</span>';
   if(isKanbanFieldVisible('assignedTo')&&sl)h+='<span class="crm-card-setter '+sc+'">'+sl+'</span>';
   if(isKanbanFieldVisible('status')&&ls!=='nouveau')h+='<span class="crm-card-setter" style="color:var(--blue)">📞 '+(sL[ls]||ls)+'</span>';
-  if(isKanbanFieldVisible('utm')&&l.utm)h+='<span class="crm-card-setter" style="color:var(--purple);font-size:8px">🔗 '+esc(l.utm)+'</span>';
-  if(isKanbanFieldVisible('closeur')&&l.closeur)h+='<span class="crm-card-setter" style="color:var(--gold);font-size:8px">🎯 '+esc(l.closeur)+'</span>';
+  if(isKanbanFieldVisible('utm')&&l.utm)h+='<span class="crm-card-setter" style="color:var(--purple);font-size:9px">🔗 '+esc(l.utm)+'</span>';
+  if(isKanbanFieldVisible('closeur')&&l.closeur)h+='<span class="crm-card-setter" style="color:var(--gold);font-size:9px">🎯 '+esc(l.closeur)+'</span>';
   if(hn)h+='<span class="crm-card-notes-dot"></span>';
   h+='</div>';
   if(isKanbanFieldVisible('tags')&&l.tags&&l.tags.length>0){h+='<div class="crm-card-tags">';l.tags.forEach(function(t){if(t)h+='<span class="crm-card-tag" style="background:'+tagColor(t)+'20;color:'+tagColor(t)+'">'+esc(t)+'</span>';});h+='</div>';}
@@ -1012,13 +1012,13 @@ function updateKanbanPreview(){
   h+='<div style="font-weight:800;font-size:12px;margin-bottom:2px">Jean Dupont</div>';
   if(active.indexOf('telephone')>=0)h+='<div style="font-family:var(--fm);font-size:10px;color:var(--muted)">06 12 34 56 78</div>';
   if(active.indexOf('email')>=0)h+='<div style="font-family:var(--fm);font-size:10px;color:var(--muted)">jean@email.com</div>';
-  if(active.indexOf('createdAt')>=0)h+='<div style="font-size:10px;color:rgba(255,255,255,0.3)">02/04/2026</div>';
+  if(active.indexOf('createdAt')>=0)h+='<div style="font-size:11px;color:var(--subtle-text)">02/04/2026</div>';
   h+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">';
-  if(active.indexOf('type')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(167,139,250,0.12);color:#c4b5fd">VSL</span>';
-  if(active.indexOf('assignedTo')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:#fca5a5">Guillaume</span>';
-  if(active.indexOf('status')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--blue)">📞 Appelé</span>';
-  if(active.indexOf('utm')>=0)h+='<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--purple)">🔗 FB Ads</span>';
-  if(active.indexOf('closeur')>=0)h+='<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--gold)">🎯 Adrien</span>';
+  if(active.indexOf('type')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(167,139,250,0.12);color:#c4b5fd">VSL</span>';
+  if(active.indexOf('assignedTo')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--red3)">Guillaume</span>';
+  if(active.indexOf('status')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--blue)">📞 Appelé</span>';
+  if(active.indexOf('utm')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--purple)">🔗 FB Ads</span>';
+  if(active.indexOf('closeur')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--gold)">🎯 Adrien</span>';
   h+='</div>';
   if(active.indexOf('tags')>=0){
     h+='<div style="display:flex;gap:3px;margin-top:3px">';
@@ -1690,7 +1690,7 @@ function renderFieldsTab(){
     types.forEach(function(t){
       var tc2=typeColors2[t]||'#6b7280';
       var isActive=field.type===t;
-      dh+='<div data-ftypeval="'+t+'" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .1s;'+(isActive?'background:rgba(185,28,28,0.1);color:var(--red3)':'color:rgba(255,255,255,0.7)')+'">';
+      dh+='<div data-ftypeval="'+t+'" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .1s;'+(isActive?'background:rgba(185,28,28,0.1);color:var(--red3)':'color:var(--item-text)')+'">';
       dh+='<span style="font-size:8px;font-weight:700;padding:2px 5px;border-radius:3px;background:'+tc2+'14;color:'+tc2+'">'+t+'</span>';
       if(isActive)dh+=' ✓';
       dh+='</div>';
