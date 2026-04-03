@@ -308,7 +308,6 @@ body{min-height:100vh;font-family:var(--fb);font-size:15px;line-height:1.5;color
 var db = firebase.firestore();
 
 /* ── STATE ── */
-var CF_BASE = 'https://us-central1-ambitio-team.cloudfunctions.net';
 var S = {
   types: [],
   persons: [],
@@ -337,37 +336,41 @@ function fmtDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padS
 function timeToMin(t) { var p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
 function minToTime(m) { return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); }
 
-/* ── GOOGLE CALENDAR FREE/BUSY ── */
+/* ── GOOGLE CALENDAR FREE/BUSY (read from Firestore) ── */
 function fetchFreeBusy() {
   if (!S.selPerson || !S.selPerson.calendarConnected) return;
-  var firstDay = new Date(S.calYear, S.calMonth, 1);
-  var lastDay = new Date(S.calYear, S.calMonth + 1, 0);
-  var start = fmtDate(firstDay);
-  var end = fmtDate(lastDay);
-  var cacheKey = S.selPerson.id + '_' + start;
-  if (S.busyTimes[cacheKey]) return; // already cached
+  var pid = S.selPerson.id;
+  if (S.busyTimes[pid]) return; // already loaded
 
   S.busyLoading = true;
-  var url = CF_BASE + '/calendarFreeBusy?personId=' + encodeURIComponent(S.selPerson.id) + '&start=' + start + '&end=' + end;
-  fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-    S.busyTimes[cacheKey] = data.busy || [];
+  db.collection('calendar_busy').doc(pid).get().then(function(doc) {
+    if (doc.exists && doc.data().busy) {
+      S.busyTimes[pid] = doc.data().busy;
+    } else {
+      S.busyTimes[pid] = [];
+    }
     S.busyLoading = false;
-    renderCalendar(); // re-render with busy info
+    renderCalendar();
   }).catch(function(e) {
-    console.log('FreeBusy fetch error:', e);
+    console.log('FreeBusy read error:', e);
+    S.busyTimes[pid] = [];
     S.busyLoading = false;
   });
+
+  // Also trigger a refresh via Firestore write (Cloud Function will sync)
+  db.collection('calendar_sync_requests').doc(pid).set({
+    requestedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(function() {});
 }
 
 /**
  * Get busy time ranges for a specific date (from cache).
- * Returns array of {startMin, endMin} in minutes since midnight (local time).
+ * Returns array of {start, end} in minutes since midnight.
  */
 function getBusyForDate(dateStr) {
   if (!S.selPerson) return [];
-  var firstDay = new Date(S.calYear, S.calMonth, 1);
-  var cacheKey = S.selPerson.id + '_' + fmtDate(firstDay);
-  var busyList = S.busyTimes[cacheKey];
+  var pid = S.selPerson.id;
+  var busyList = S.busyTimes[pid];
   if (!busyList || !busyList.length) return [];
 
   var result = [];
@@ -375,44 +378,15 @@ function getBusyForDate(dateStr) {
     var b = busyList[i];
     var bStart = new Date(b.start);
     var bEnd = new Date(b.end);
-    var bDateStr = fmtDate(bStart);
-    // Check if this busy period overlaps with the target date
     var dayStart = new Date(dateStr + 'T00:00:00');
     var dayEnd = new Date(dateStr + 'T23:59:59');
     if (bStart <= dayEnd && bEnd >= dayStart) {
-      // Compute local minutes
-      var sMin = bDateStr === dateStr ? bStart.getHours() * 60 + bStart.getMinutes() : 0;
-      var eDate = fmtDate(bEnd);
-      var eMin = eDate === dateStr ? bEnd.getHours() * 60 + bEnd.getMinutes() : 1440;
+      var sMin = fmtDate(bStart) === dateStr ? bStart.getHours() * 60 + bStart.getMinutes() : 0;
+      var eMin = fmtDate(bEnd) === dateStr ? bEnd.getHours() * 60 + bEnd.getMinutes() : 1440;
       result.push({ start: sMin, end: eMin });
     }
   }
   return result;
-}
-
-function createCalendarEvent(bookingData) {
-  if (!S.selPerson || !S.selPerson.calendarConnected) return;
-  var payload = {
-    personId: S.selPerson.id,
-    date: bookingData.date,
-    time: bookingData.time,
-    duration: bookingData.duration || 30,
-    title: (S.selType ? S.selType.label : 'RDV') + ' — ' + (bookingData.prospect ? bookingData.prospect.prenom + ' ' + bookingData.prospect.nom : ''),
-    description: 'Réservé via Ambitio Booking',
-    attendeeEmail: bookingData.prospect ? bookingData.prospect.email : '',
-    attendeeName: bookingData.prospect ? bookingData.prospect.prenom + ' ' + bookingData.prospect.nom : '',
-    location: S.selType && S.selType.locationUrl ? S.selType.locationUrl : (S.selPerson.meetLink || '')
-  };
-  fetch(CF_BASE + '/calendarCreateEvent', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).then(function(r) { return r.json(); }).then(function(data) {
-    if (data.created) console.log('Calendar event created:', data.eventId);
-    else console.log('Calendar event not created:', data.reason || data.error);
-  }).catch(function(e) {
-    console.log('Calendar event creation error:', e);
-  });
 }
 
 /* ── PROGRESS ── */
@@ -1007,7 +981,6 @@ function handleSubmit() {
     }
 
     showConfirmation(prenom, email);
-    createCalendarEvent(booking);
   }).catch(function(err) {
     btn.disabled = false;
     btn.textContent = 'Confirmer le rendez-vous';

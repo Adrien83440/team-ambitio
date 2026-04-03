@@ -208,13 +208,31 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // CALENDAR TOKENS (secure — admin only)
+    // CALENDAR TOKENS (secure — admin only, Cloud Functions use admin SDK)
     match /calendar_tokens/{personId} {
       allow read:  if isAdmin();
       allow write: if isAdmin();
     }
 
-    // INTERNAL CONFIG (OAuth keys — admin only, read by Cloud Functions)
+    // CALENDAR AUTH REQUESTS (admin writes code, Cloud Function processes)
+    match /calendar_auth_requests/{requestId} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // CALENDAR BUSY TIMES (public read for booking.html)
+    match /calendar_busy/{personId} {
+      allow read: if true;
+    }
+
+    // CALENDAR SYNC REQUESTS (anyone can request a sync)
+    match /calendar_sync_requests/{personId} {
+      allow read, write: if true;
+    }
+
+    // INTERNAL CONFIG (OAuth keys — admin only)
     match /_config/{docId} {
       allow read:  if isAdmin();
       allow write: if isAdmin();

@@ -8,7 +8,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
 <link rel="stylesheet" href="sales.css"/>
 <style>
@@ -594,26 +593,30 @@ renderExHead();toast('✅ Paramètres enregistrés');
 window.saveExAdvanced=saveExAdvanced;
 
 // ═══ GOOGLE CALENDAR CONNECT/DISCONNECT ═══
-var fnCallable=firebase.functions();
 function connectCalendar(pid){
-var call=fnCallable.httpsCallable('calendarAuthUrl');
-toast('🔗 Connexion en cours…');
-call({personId:pid}).then(function(result){
-window.location.href=result.data.url;
-}).catch(function(e){
-console.error('Calendar auth error:',e);
-if(e.message&&e.message.indexOf('non configuré')>=0){
-alert('Google OAuth non configuré.\n\nCréez le document _config/oauth dans Firestore avec :\n- client_id\n- client_secret\n- redirect_uri\n- app_url');
-}else{
-alert('Erreur: '+e.message);
-}
-});
+toast('🔗 Préparation…');
+db.collection('_config').doc('oauth').get().then(function(doc){
+if(!doc.exists){alert('OAuth non configuré. Créez le document _config/oauth dans Firestore.');return;}
+var conf=doc.data();
+var state=btoa(JSON.stringify({personId:pid}));
+var url='https://accounts.google.com/o/oauth2/v2/auth'
++'?client_id='+encodeURIComponent(conf.client_id)
++'&redirect_uri='+encodeURIComponent(conf.redirect_uri)
++'&response_type=code'
++'&scope='+encodeURIComponent('https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email')
++'&access_type=offline'
++'&prompt=consent'
++'&state='+encodeURIComponent(state);
+window.location.href=url;
+}).catch(function(e){alert('Erreur: '+e.message);});
 }
 function disconnectCalendar(pid){
 if(!confirm('Déconnecter le Google Agenda de cet expert ?'))return;
-var call=fnCallable.httpsCallable('calendarDisconnect');
 toast('Déconnexion…');
-call({personId:pid}).then(function(){
+db.collection('calendar_tokens').doc(pid).delete().then(function(){
+return db.collection('booking_config').doc(pid).update({calendarConnected:firebase.firestore.FieldValue.delete(),calendarEmail:firebase.firestore.FieldValue.delete()});
+}).then(function(){
+db.collection('calendar_busy').doc(pid).delete().catch(function(){});
 var p=P.find(function(x){return x.id===pid;});
 if(p){delete p.calendarConnected;delete p.calendarEmail;}
 renderExSection();renderExHead();
@@ -622,30 +625,57 @@ toast('✅ Calendrier déconnecté');
 }
 window.connectCalendar=connectCalendar;window.disconnectCalendar=disconnectCalendar;
 
-// Handle OAuth return params
+// Handle OAuth return — Google redirects here with ?code=xxx&state=yyy
 (function(){
 var params=new URLSearchParams(window.location.search);
-if(params.get('cal_success')){
-var pid=params.get('cal_person');
+var code=params.get('code');
+var state=params.get('state');
+if(code&&state){
+// Clean URL immediately
+window.history.replaceState({},document.title,window.location.pathname);
+try{
+var stateData=JSON.parse(atob(state));
+var pid=stateData.personId;
+if(!pid){toast('Erreur: personId manquant');return;}
+toast('🔗 Connexion au calendrier en cours…');
+// Write auth request to Firestore — Cloud Function will exchange the code
+var reqId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+db.collection('calendar_auth_requests').doc(reqId).set({
+code:code,
+personId:pid,
+createdAt:firebase.firestore.FieldValue.serverTimestamp()
+}).then(function(){
+// Listen for the result
+var unsub=db.collection('calendar_auth_requests').doc(reqId).onSnapshot(function(snap){
+var d=snap.data();
+if(!d||!d.status)return;
+unsub();
+if(d.status==='success'){
+toast('✅ Google Calendar connecté ! ('+d.email+')');
+var p=P.find(function(x){return x.id===pid;});
+if(p){p.calendarConnected=true;p.calendarEmail=d.email;}
+// Navigate to expert calendar tab
 setTimeout(function(){
-toast('✅ Google Calendar connecté !');
-if(pid){
-// Switch to Experts tab and open the expert
 document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});
 document.querySelector('[data-p="ex"]').classList.add('on');
 document.querySelectorAll('.bp').forEach(function(p){p.classList.remove('on');});
 document.getElementById('p-ex').classList.add('on');
-// Wait for data load then open expert detail
 var checkReady=setInterval(function(){
 if(P.length){clearInterval(checkReady);openExDetail(pid);exSection='calendar';renderExNav();renderExSection();}
 },300);
-}
 },500);
-// Clean URL
-window.history.replaceState({},document.title,window.location.pathname);
+}else{
+alert('Erreur de connexion: '+(d.error||'inconnue'));
 }
-if(params.get('cal_error')){
-setTimeout(function(){alert('Erreur de connexion calendrier: '+params.get('cal_error'));},500);
+});
+// Timeout after 30 seconds
+setTimeout(function(){unsub();},30000);
+});
+}catch(e){console.error('OAuth state parse error:',e);}
+}
+// Handle error from Google
+if(params.get('error')){
+alert('Google a refusé la connexion: '+params.get('error'));
 window.history.replaceState({},document.title,window.location.pathname);
 }
 })();
