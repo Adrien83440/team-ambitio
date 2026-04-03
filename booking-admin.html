@@ -125,6 +125,24 @@
 @media(max-width:640px){.ex-head{gap:10px;padding:14px 16px}.ex-head-av{width:44px;height:44px;font-size:17px}.pl-slots,.pl-add-row,.pl-unavail{padding-left:0}.pl-add-row{flex-wrap:wrap}}
 /* Event type selector */
 .evt-type-opt{background:#141420;border:1.5px solid rgba(255,255,255,.07);border-radius:10px;padding:12px;cursor:pointer;text-align:center;transition:all .15s}.evt-type-opt:hover{border-color:rgba(255,255,255,.2)}.evt-type-opt.on{border-color:#8b5cf6;background:rgba(139,92,246,.08);box-shadow:0 0 0 1px rgba(139,92,246,.3)}
+/* RDV Detail Panel */
+.rdv-panel-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:none;backdrop-filter:blur(3px)}.rdv-panel-bg.show{display:block}
+.rdv-panel{position:fixed;top:0;right:-500px;width:480px;max-width:100%;height:100%;background:#0a0a14;border-left:1px solid rgba(255,255,255,.1);z-index:1101;overflow-y:auto;transition:right .25s ease;box-shadow:-8px 0 40px rgba(0,0,0,.4)}.rdv-panel.show{right:0}
+.rdv-p-head{padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:flex-start;gap:14px}
+.rdv-p-close{width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:0;color:rgba(255,255,255,.5);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}.rdv-p-close:hover{color:#fff;border-color:rgba(255,255,255,.25)}
+.rdv-p-date{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800}.rdv-p-sub{font-size:12px;color:rgba(255,255,255,.48);margin-top:2px}
+.rdv-p-client{display:flex;align-items:center;gap:10px;padding:16px 24px;background:rgba(255,255,255,.02);border-bottom:1px solid rgba(255,255,255,.05)}
+.rdv-p-client-av{width:36px;height:36px;border-radius:10px;background:rgba(139,92,246,.15);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#a78bfa}
+.rdv-p-client-nm{font-size:14px;font-weight:700}.rdv-p-client-em{font-size:12px;color:rgba(255,255,255,.38)}
+.rdv-p-meet{margin:16px 24px;display:flex;align-items:center;gap:10px}
+.rdv-p-meet a{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;background:#1a73e8;color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px;transition:background .15s}.rdv-p-meet a:hover{background:#1557b0}
+.rdv-p-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,.07);padding:0 24px}
+.rdv-p-tab{padding:12px 0;margin-right:20px;font-size:12px;font-weight:600;color:rgba(255,255,255,.38);cursor:pointer;border-bottom:2px solid transparent}.rdv-p-tab:hover{color:#fff}.rdv-p-tab.on{color:#a78bfa;border-bottom-color:#8b5cf6}
+.rdv-p-body{padding:20px 24px}
+.rdv-p-row{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.rdv-p-row:last-child{border-bottom:0}
+.rdv-p-label{font-size:12px;font-weight:600;color:rgba(255,255,255,.38);width:120px;flex-shrink:0}.rdv-p-val{font-size:13px;font-weight:600;flex:1}
+.rdv-p-actions{padding:20px 24px;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:8px}
 </style>
 </head>
 <body>
@@ -181,6 +199,9 @@
 </div>
 </div>
 <div class="mo-bg" id="cMo"><div class="mo"><div class="mo-h"><div class="mo-t">Nouveau rendez-vous</div><button class="mo-x" id="moX">✕</button></div><div class="mo-b"><div class="mfr"><div class="mf"><label>Consultation *</label><select id="mT"></select></div><div class="mf"><label>Expert *</label><select id="mP"></select></div></div><div class="mfr"><div class="mf"><label>Date *</label><input type="date" id="mD"/></div><div class="mf"><label>Heure *</label><input type="time" id="mH" value="09:00"/></div></div><div class="mfd">Client</div><div class="mfr"><div class="mf"><label>Prénom *</label><input id="mFn" placeholder="Prénom"/></div><div class="mf"><label>Nom *</label><input id="mLn" placeholder="Nom"/></div></div><div class="mf"><label>Email *</label><input type="email" id="mEm" placeholder="email@exemple.com"/></div><div class="mf"><label>Téléphone</label><input type="tel" id="mPh" placeholder="+33 6…"/></div><div class="mf"><label>Notes</label><textarea id="mNo" placeholder="Contexte…"></textarea></div><button class="mo-s" id="moSub">Créer le rendez-vous</button></div></div></div>
+<!-- RDV DETAIL PANEL -->
+<div class="rdv-panel-bg" id="rdvBg" onclick="closeRdvDetail()"></div>
+<div class="rdv-panel" id="rdvPanel"><div id="rdvContent"></div></div>
 <div class="bk-toast" id="bkT"></div>
 <script>
 var db=firebase.firestore(),CR=db.collection('booking_config'),T=[],P=[],S={},B=[],aRT='up';
@@ -198,7 +219,7 @@ function renderAll(){rRdv();rCs();rEx();rPg();lSt();pFlt();}
 function pFlt(){var a=document.getElementById('rFP'),b=document.getElementById('rFT');a.innerHTML='<option value="">Tous les experts</option>';b.innerHTML='<option value="">Toutes les consultations</option>';P.forEach(function(p){a.innerHTML+='<option value="'+p.id+'">'+esc(p.name)+'</option>';});T.forEach(function(t){b.innerHTML+='<option value="'+t.id+'">'+esc(t.label)+'</option>';});}
 document.querySelectorAll('[data-rt]').forEach(function(t){t.addEventListener('click',function(){document.querySelectorAll('[data-rt]').forEach(function(x){x.classList.remove('on');});t.classList.add('on');aRT=t.dataset.rt;rRdv();});});
 document.getElementById('rFP').addEventListener('change',rRdv);document.getElementById('rFT').addEventListener('change',rRdv);document.getElementById('rQ').addEventListener('input',rRdv);
-function rRdv(){var td=tISO(),fP=document.getElementById('rFP').value,fT=document.getElementById('rFT').value,q=(document.getElementById('rQ').value||'').toLowerCase();var fl=B.filter(function(b){if(fP&&b.personId!==fP)return false;if(fT&&b.type!==fT)return false;if(q){var n=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')):b.personName||'';if(n.toLowerCase().indexOf(q)<0&&(b.typeLabel||'').toLowerCase().indexOf(q)<0)return false;}return true;});var up=fl.filter(function(b){return b.date>=td&&b.status==='confirmed';}),pa=fl.filter(function(b){return(b.date<td&&b.status!=='cancelled')||b.status==='completed';}),ca=fl.filter(function(b){return b.status==='cancelled';});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML='<div class="rv-stat"><div class="rv-sn" style="color:#a78bfa">'+up.length+'</div><div class="rv-sl">À venir</div></div><div class="rv-stat"><div class="rv-sn" style="color:#34d399">'+tl.length+'</div><div class="rv-sl">Aujourd\'hui</div></div><div class="rv-stat"><div class="rv-sn" style="color:#60a5fa">'+tw.length+'</div><div class="rv-sl">Cette semaine</div></div><div class="rv-stat"><div class="rv-sn" style="color:#fca5a5">'+ca.length+'</div><div class="rv-sl">Annulés</div></div>';var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='past'?function(a,b){return b.localeCompare(a);}:undefined);var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){var tO=T.find(function(t){return t.id===b.type;}),pO=P.find(function(p){return p.id===b.personId;}),tc=tO?tO.color:'#8b5cf6',pc=pO?pO.color:'#666',pN=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')).trim():'Inconnu',du=b.duration||30,sm=parseInt((b.time||'09:00').split(':')[0])*60+parseInt((b.time||'09:00').split(':')[1]),et=mToT(sm+du);h+='<div class="rv-r"><div class="rv-t">'+(b.time||'—')+' - '+et+'</div><div class="rv-tp"><span class="rv-tb" style="background:'+tc+'">'+(tO?tO.label[0].toUpperCase():'?')+'</span><span class="rv-tn">'+esc(b.typeLabel||'—')+'</span></div><div class="rv-ex"><span class="rv-ea" style="background:'+pc+'">'+(pO?(pO.name||'?')[0].toUpperCase():'?')+'</span><span class="rv-en">'+esc(pO?pO.name:'—')+'</span></div><div class="rv-cl">👤 '+esc(pN)+'</div><select class="rv-ss" data-action="chSt" data-bid="'+b._id+'"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option></select></div>';});});el.innerHTML=h;}
+function rRdv(){var td=tISO(),fP=document.getElementById('rFP').value,fT=document.getElementById('rFT').value,q=(document.getElementById('rQ').value||'').toLowerCase();var fl=B.filter(function(b){if(fP&&b.personId!==fP)return false;if(fT&&b.type!==fT)return false;if(q){var n=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')):b.personName||'';if(n.toLowerCase().indexOf(q)<0&&(b.typeLabel||'').toLowerCase().indexOf(q)<0)return false;}return true;});var up=fl.filter(function(b){return b.date>=td&&b.status==='confirmed';}),pa=fl.filter(function(b){return(b.date<td&&b.status!=='cancelled')||b.status==='completed';}),ca=fl.filter(function(b){return b.status==='cancelled';});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML='<div class="rv-stat"><div class="rv-sn" style="color:#a78bfa">'+up.length+'</div><div class="rv-sl">À venir</div></div><div class="rv-stat"><div class="rv-sn" style="color:#34d399">'+tl.length+'</div><div class="rv-sl">Aujourd\'hui</div></div><div class="rv-stat"><div class="rv-sn" style="color:#60a5fa">'+tw.length+'</div><div class="rv-sl">Cette semaine</div></div><div class="rv-stat"><div class="rv-sn" style="color:#fca5a5">'+ca.length+'</div><div class="rv-sl">Annulés</div></div>';var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='past'?function(a,b){return b.localeCompare(a);}:undefined);var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){var tO=T.find(function(t){return t.id===b.type;}),pO=P.find(function(p){return p.id===b.personId;}),tc=tO?tO.color:'#8b5cf6',pc=pO?pO.color:'#666',pN=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')).trim():'Inconnu',du=b.duration||30,sm=parseInt((b.time||'09:00').split(':')[0])*60+parseInt((b.time||'09:00').split(':')[1]),et=mToT(sm+du);h+='<div class="rv-r" style="cursor:pointer" onclick="openRdvDetail(\''+b._id+'\')"><div class="rv-t">'+(b.time||'—')+' - '+et+'</div><div class="rv-tp"><span class="rv-tb" style="background:'+tc+'">'+(tO?tO.label[0].toUpperCase():'?')+'</span><span class="rv-tn">'+esc(b.typeLabel||'—')+'</span></div><div class="rv-ex"><span class="rv-ea" style="background:'+pc+'">'+(pO?(pO.name||'?')[0].toUpperCase():'?')+'</span><span class="rv-en">'+esc(pO?pO.name:'—')+'</span></div><div class="rv-cl">👤 '+esc(pN)+'</div><select class="rv-ss" data-action="chSt" data-bid="'+b._id+'" onclick="event.stopPropagation()"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option></select></div>';});});el.innerHTML=h;}
 function rCs(){var EVT_LABELS={private:'👤 En privé',group:'👥 Groupe',roundrobin:'🔄 Round-robin',collective:'🤝 Collectif'};document.getElementById('cC').textContent=T.length;document.getElementById('cC2').textContent=T.length;var el=document.getElementById('csG');if(!T.length){el.innerHTML='<div class="rv-em" style="grid-column:1/-1">Aucune consultation. Créez-en une !</div>';return;}var h='';T.forEach(function(t,i){var as=P.filter(function(p){return(p.types||[]).indexOf(t.id)>=0;});var evtLabel=EVT_LABELS[t.eventType||'private']||'👤 En privé';h+='<div class="cc" style="cursor:pointer" data-action="openCs" data-tid="'+t.id+'"><div class="cc-bar" style="background:'+t.color+'"></div><div class="cc-n">'+esc(t.label)+'</div><div class="cc-m"><span>⏱ '+(t.duration>=60?(t.duration/60)+'h':t.duration+' min')+'</span><span>'+evtLabel+'</span></div>';var _lc={meet:'📹 Meet',zoom:'📹 Zoom',teams:'📹 Teams',phone:'📞',inperson:'📍',custom:'🔗'};if(t.location&&_lc[t.location])h+='<div style="font-size:11px;color:#60a5fa;margin-top:4px">'+_lc[t.location]+(t.locationUrl?' · <span style="color:rgba(255,255,255,.38)">'+esc(t.locationUrl).slice(0,30)+'</span>':'')+'</div>';if(t.description)h+='<div style="font-size:11px;color:rgba(255,255,255,.48);margin-top:4px">'+esc(t.description)+'</div>';h+='<div class="cc-ex">';as.forEach(function(p){h+='<span class="cc-ea" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</span>';});if(!as.length)h+='<span style="font-size:11px;color:rgba(255,255,255,.48)">Aucun expert</span>';h+='</div><div class="cc-ac"><span style="font-size:11px;color:rgba(255,255,255,.24);cursor:pointer" data-action="delT" data-idx="'+i+'">Supprimer</span><span class="cc-sh" data-action="shT" data-tid="'+t.id+'">↗ Partager</span></div></div>';});el.innerHTML=h;}
 document.getElementById('addT').addEventListener('click',function(){document.getElementById('addTF').style.display='';});
 function selectEvtType(el){document.querySelectorAll('.evt-type-opt').forEach(function(o){o.classList.remove('on');});el.classList.add('on');}
@@ -291,6 +312,96 @@ function saveCdNotif(){var i=T.findIndex(function(t){return t.id===cdType.id;});
 function saveCdForm(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].formFields=cdType.formFields;cdType=T[i];saveTypes().then(function(){toast('✅ Formulaire enregistré');}).catch(function(e){alert('Erreur: '+e.message);});}
 function addFormField(){var label=document.getElementById('ff-label').value.trim();if(!label)return;var type=document.getElementById('ff-type').value;var req=document.getElementById('ff-req').checked;if(!cdType.formFields)cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields.push({id:'custom_'+gid().slice(0,4),label:label,type:type,required:req});document.getElementById('ff-label').value='';renderCdSection();}
 window.saveCdDetails=saveCdDetails;window.saveCdRules=saveCdRules;window.saveCdNotif=saveCdNotif;window.saveCdForm=saveCdForm;window.addFormField=addFormField;window.closeCsDetail=closeCsDetail;
+
+// ═══ RDV DETAIL PANEL ═══
+var rdvTab='info';
+function openRdvDetail(bid){
+var b=B.find(function(x){return x._id===bid;});
+if(!b)return;
+var tO=T.find(function(t){return t.id===b.type;}),pO=P.find(function(p){return p.id===b.personId;});
+var pr=b.prospect||{},du=b.duration||30;
+var sm=parseInt((b.time||'09:00').split(':')[0])*60+parseInt((b.time||'09:00').split(':')[1]);
+var et=mToT(sm+du);
+var clientName=((pr.prenom||'')+' '+(pr.nom||'')).trim()||'Inconnu';
+var meetUrl=b.meetLink||b.calendarEventLink||(pO?pO.meetLink:'')||(tO?tO.locationUrl:'')||'';
+var statusLabels={confirmed:'🟢 À venir',completed:'✅ Terminé',cancelled:'🔴 Annulé'};
+
+var h='';
+// Header
+h+='<div class="rdv-p-head"><div style="flex:1"><div class="rdv-p-date">'+dFR(b.date)+'</div><div class="rdv-p-sub">'+(b.time||'')+' – '+et+' · '+(du>=60?(du/60)+'h':du+' min')+'</div><div style="margin-top:6px"><span style="font-size:11px;padding:4px 10px;border-radius:6px;background:'+(b.status==='confirmed'?'rgba(52,211,153,.1);color:#34d399':b.status==='cancelled'?'rgba(239,68,68,.1);color:#fca5a5':'rgba(139,92,246,.1);color:#a78bfa')+';font-weight:700">'+(statusLabels[b.status]||b.status)+'</span></div></div><button class="rdv-p-close" onclick="closeRdvDetail()">✕</button></div>';
+
+// Client info bar
+h+='<div class="rdv-p-client"><div class="rdv-p-client-av">'+clientName[0].toUpperCase()+'</div><div style="flex:1"><div class="rdv-p-client-nm">'+esc(clientName)+'</div><div class="rdv-p-client-em">'+esc(pr.email||'')+'</div></div></div>';
+
+// Meet button
+if(meetUrl){
+h+='<div class="rdv-p-meet"><a href="'+esc(meetUrl)+'" target="_blank">📹 Rejoindre avec Google Meet</a></div>';
+}
+
+// Tabs
+h+='<div class="rdv-p-tabs"><div class="rdv-p-tab'+(rdvTab==='info'?' on':'')+'" onclick="rdvTab=\'info\';openRdvDetail(\''+bid+'\')">Infos du rendez-vous</div><div class="rdv-p-tab'+(rdvTab==='client'?' on':'')+'" onclick="rdvTab=\'client\';openRdvDetail(\''+bid+'\')">Infos du Client</div><div class="rdv-p-tab'+(rdvTab==='audit'?' on':'')+'" onclick="rdvTab=\'audit\';openRdvDetail(\''+bid+'\')">Infos de l\'audit</div></div>';
+
+h+='<div class="rdv-p-body">';
+if(rdvTab==='info'){
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Consultation</span><span class="rdv-p-val">';
+if(tO)h+='<span style="display:inline-block;width:20px;height:20px;border-radius:5px;background:'+tO.color+';margin-right:6px;vertical-align:middle"></span>';
+h+=esc(b.typeLabel||'—')+'</span></div>';
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Expert</span><span class="rdv-p-val">';
+if(pO)h+='<span style="display:inline-block;width:20px;height:20px;border-radius:5px;background:'+pO.color+';margin-right:6px;vertical-align:middle;text-align:center;font-size:9px;font-weight:800;color:#fff;line-height:20px">'+(pO.name||'?')[0].toUpperCase()+'</span>';
+h+=esc(pO?pO.name:'—')+'</span></div>';
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Heure</span><span class="rdv-p-val">'+(b.time||'')+' – '+et+' ('+(du>=60?(du/60)+'h':du+' min')+')</span></div>';
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Statut</span><span class="rdv-p-val"><select class="bs" data-action="chSt" data-bid="'+b._id+'" style="font-size:12px;padding:4px 8px"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option></select></span></div>';
+if(b.calendarEventLink){
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Événement</span><span class="rdv-p-val"><a href="'+esc(b.calendarEventLink)+'" target="_blank" style="color:#60a5fa;font-size:12px">Voir dans Google Calendar ↗</a></span></div>';
+}
+if(meetUrl){
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Lien Meet</span><span class="rdv-p-val"><a href="'+esc(meetUrl)+'" target="_blank" style="color:#60a5fa;font-size:12px;word-break:break-all">'+esc(meetUrl)+'</a></span></div>';
+}
+}
+else if(rdvTab==='client'){
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Prénom</span><span class="rdv-p-val">'+esc(pr.prenom||'—')+'</span></div>';
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Nom</span><span class="rdv-p-val">'+esc(pr.nom||'—')+'</span></div>';
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Email</span><span class="rdv-p-val">'+(pr.email?'<a href="mailto:'+esc(pr.email)+'" style="color:#60a5fa">'+esc(pr.email)+'</a>':'—')+'</span></div>';
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Téléphone</span><span class="rdv-p-val">'+(pr.telephone?'<a href="tel:'+esc(pr.telephone)+'" style="color:#60a5fa">'+esc(pr.telephone)+'</a>':'—')+'</span></div>';
+if(pr.secteur)h+='<div class="rdv-p-row"><span class="rdv-p-label">Secteur</span><span class="rdv-p-val">'+esc(pr.secteur)+'</span></div>';
+if(pr.message)h+='<div class="rdv-p-row"><span class="rdv-p-label">Message</span><span class="rdv-p-val">'+esc(pr.message)+'</span></div>';
+// Form data
+if(b.formData){
+var fKeys=Object.keys(b.formData);
+fKeys.forEach(function(k){
+if(k==='email'||k==='phone'||k==='secteur'||k==='message')return;
+h+='<div class="rdv-p-row"><span class="rdv-p-label">'+esc(k)+'</span><span class="rdv-p-val">'+esc(b.formData[k])+'</span></div>';
+});
+}
+}
+else if(rdvTab==='audit'){
+h+='<div class="rdv-p-row"><span class="rdv-p-label">ID Booking</span><span class="rdv-p-val" style="font-size:11px;color:rgba(255,255,255,.38);word-break:break-all">'+esc(b._id)+'</span></div>';
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Source</span><span class="rdv-p-val">'+esc(b.source||'self_booking')+'</span></div>';
+if(b.timezone)h+='<div class="rdv-p-row"><span class="rdv-p-label">Fuseau horaire</span><span class="rdv-p-val">'+esc(b.timezone)+'</span></div>';
+if(b.createdAt){var cd=b.createdAt.toDate?b.createdAt.toDate():new Date(b.createdAt);h+='<div class="rdv-p-row"><span class="rdv-p-label">Créé le</span><span class="rdv-p-val">'+cd.toLocaleString('fr-FR')+'</span></div>';}
+if(b.calendarEventId)h+='<div class="rdv-p-row"><span class="rdv-p-label">Event Calendar</span><span class="rdv-p-val" style="font-size:11px;color:rgba(255,255,255,.38)">'+esc(b.calendarEventId)+'</span></div>';
+if(b.calendarSynced)h+='<div class="rdv-p-row"><span class="rdv-p-label">Calendar</span><span class="rdv-p-val" style="color:#34d399">✅ Synchronisé</span></div>';
+}
+h+='</div>';
+
+// Actions
+h+='<div class="rdv-p-actions">';
+if(b.status==='confirmed'){
+h+='<button class="bb bb-o" onclick="closeRdvDetail();toast(\'🔜 Replanification — prochaine version\')">📅 Replanifier</button>';
+h+='<button class="bb bb-r" onclick="cancelRdv(\''+b._id+'\')">Annuler le RDV</button>';
+}
+if(b.status==='cancelled'||b.status==='completed'){
+h+='<button class="bb bb-r" onclick="if(confirm(\'Supprimer définitivement ?\')){db.collection(\'bookings\').doc(\''+b._id+'\').delete().then(function(){closeRdvDetail();loadB();toast(\'🗑 Supprimé\');});}">🗑 Supprimer</button>';
+}
+h+='</div>';
+
+document.getElementById('rdvContent').innerHTML=h;
+document.getElementById('rdvBg').classList.add('show');
+document.getElementById('rdvPanel').classList.add('show');
+}
+function closeRdvDetail(){rdvTab='info';document.getElementById('rdvBg').classList.remove('show');document.getElementById('rdvPanel').classList.remove('show');}
+function cancelRdv(bid){if(!confirm('Annuler ce rendez-vous ?'))return;db.collection('bookings').doc(bid).update({status:'cancelled'}).then(function(){closeRdvDetail();loadB();toast('🔴 RDV annulé');});}
+window.openRdvDetail=openRdvDetail;window.closeRdvDetail=closeRdvDetail;window.cancelRdv=cancelRdv;
 // ═══ EXPERT DETAIL VIEW ═══
 var exPerson=null,exSection='planning',cpSourceDay='';
 var DAY_COLORS=['#3b82f6','#3b82f6','#8b5cf6','#22c55e','#06b6d4','#6b7280','#ef4444'];
