@@ -288,6 +288,7 @@ body{min-height:100vh;font-family:var(--fb);font-size:15px;line-height:1.5;color
             <div class="bk-confirm-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
             <div class="bk-confirm-title">Rendez-vous confirmé !</div>
             <div class="bk-confirm-text" id="confirmText"></div>
+            <div id="meetLinkWrap" style="display:none;margin:16px 0;padding:14px 20px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:12px;text-align:center"><div style="font-size:13px;font-weight:700;color:#60a5fa;margin-bottom:6px">📹 Lien de la réunion</div><a id="meetLinkBtn" href="" target="_blank" style="display:inline-block;padding:10px 24px;background:#1a73e8;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">Rejoindre Google Meet</a><div id="meetLinkUrl" style="font-size:11px;color:rgba(255,255,255,.48);margin-top:6px"></div></div>
             <div class="bk-confirm-actions">
               <button class="bk-btn bk-btn-primary" id="icsBtn" style="width:auto">📅 Ajouter au calendrier</button>
               <button class="bk-btn bk-btn-outline" onclick="location.reload()" style="width:auto">Nouveau rendez-vous</button>
@@ -950,7 +951,21 @@ function handleSubmit() {
   btn.disabled = true;
   btn.textContent = 'Réservation en cours…';
 
-  db.collection('bookings').add(booking).then(function() {
+  db.collection('bookings').add(booking).then(function(docRef) {
+    // Listen for Meet link (Cloud Function generates it async)
+    if (S.selPerson && S.selPerson.calendarConnected) {
+      var unsub = docRef.onSnapshot(function(snap) {
+        var d = snap.data();
+        if (d && d.meetLink) {
+          unsub();
+          document.getElementById('meetLinkWrap').style.display = '';
+          document.getElementById('meetLinkBtn').href = d.meetLink;
+          document.getElementById('meetLinkUrl').textContent = d.meetLink;
+        }
+      });
+      setTimeout(function() { unsub(); }, 30000); // timeout 30s
+    }
+
     // Also create lead
     db.collection('leads').add({
       nom: prenom + ' ' + nom,
