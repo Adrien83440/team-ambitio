@@ -648,11 +648,13 @@ function getFilteredLeads() {
 
   // Period filter
   if (filterPeriod === 'today') {
-    var todayStr = new Date().toISOString().slice(0, 10);
+    var now = new Date();
+    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
     list = list.filter(function(l) {
       if (!l.createdAt) return false;
       var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-      return d.toISOString().slice(0, 10) === todayStr;
+      return d >= todayStart && d <= todayEnd;
     });
   } else if (filterPeriod === 'week') {
     var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
