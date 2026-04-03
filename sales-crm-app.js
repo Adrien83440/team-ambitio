@@ -48,7 +48,7 @@ var CRIT_OPS_TEXT=[{v:'contains',l:'Contient'},{v:'eq',l:'Est'},{v:'neq',l:"N'es
 var CRIT_OPS_SELECT=[{v:'eq',l:'Est'},{v:'neq',l:"N'est pas"}];
 
 /* ═══ STATE ═══ */
-var allLeads=[],filterSetter='all',filterSection='all',searchQuery='',draggedLeadId=null;
+var allLeads=[],filterSetter='all',filterSection='all',filterType='all',searchQuery='',draggedLeadId=null;
 var currentView='pipeline',listSortKey='createdAt',listSortDir='desc';
 var pageSize=50,currentPage=1,selectedIds={};
 var savedViews=[],activeViewId='__all__';
@@ -117,6 +117,8 @@ function getFiltered(){
       return false;
     });
   }
+  // Type filter
+  if(filterType!=='all'){list=list.filter(function(l){return(l.type||'')===filterType;});}
   return list;
 }
 
@@ -233,7 +235,19 @@ function buildSheetHead(){
 buildSheetHead();
 
 /* ═══ RENDER ═══ */
+function rebuildTypePills(){
+  var types={};
+  for(var i=0;i<allLeads.length;i++){var t=allLeads[i].type||'';if(t)types[t]=(types[t]||0)+1;}
+  var keys=Object.keys(types).sort();
+  var c=document.getElementById('fbTypePills');
+  if(keys.length<=1){c.innerHTML='';filterType='all';return;}
+  if(filterType!=='all'&&!types[filterType])filterType='all';
+  var h='<button class="fb-date-pill'+(filterType==='all'?' active':'')+'" data-typef="all">Tous</button>';
+  for(var j=0;j<keys.length;j++){var k=keys[j];var label=LT[k]||k;h+='<button class="fb-date-pill'+(filterType===k?' active':'')+'" data-typef="'+k+'">'+label+' <span style="opacity:.5;font-size:10px">'+types[k]+'</span></button>';}
+  c.innerHTML=h;
+}
 function renderAll(){
+  rebuildTypePills();
   var leads=getFiltered();updateStats(leads);
   if(currentView==='pipeline')renderPipeline(leads);
   else if(currentView==='list')renderList(leads);
@@ -388,7 +402,7 @@ function renderSavedViews(filter){
 function countViewLeads(v){var l=allLeads.slice();if(v.criteria)l=applyCriteria(l,v.criteria);return l.length;}
 function activateView(vid){
   activeViewId=vid;var v=getActiveView();document.getElementById('svTriggerLabel').textContent=v.name;
-  filterSetter='all';filterSection='all';currentPage=1;
+  filterSetter='all';filterSection='all';filterType='all';currentPage=1;
   document.querySelectorAll('.crm-filter-pill').forEach(function(p){p.classList.toggle('active',p.dataset.setter==='all');});
   document.querySelectorAll('.crm-section-pill').forEach(function(p){p.classList.toggle('active',p.dataset.section==='all');});
   clearSelection();renderSavedViews();renderAll();closeSvDD();
@@ -605,6 +619,15 @@ document.getElementById('fbDateTo').addEventListener('change',function(){
   filterDateTo=this.value?new Date(this.value+'T23:59:59'):null;currentPage=1;renderAll();renderActiveChips();
 });
 
+/* ═══ TYPE FILTER ═══ */
+document.getElementById('fbTypePills').addEventListener('click',function(e){
+  var pill=e.target.closest('[data-typef]');if(!pill)return;
+  document.querySelectorAll('#fbTypePills .fb-date-pill').forEach(function(p){p.classList.remove('active');});
+  pill.classList.add('active');
+  filterType=pill.dataset.typef;
+  currentPage=1;renderAll();renderActiveChips();
+});
+
 /* ═══ TAG SYSTEM ═══ */
 var filterTags=[];
 var allTagsDef=[];
@@ -703,6 +726,11 @@ function renderActiveChips(){
     hasFilters=true;
     h+='<span class="fb-chip tag-chip">🏷 '+esc(t)+' <span class="fb-chip-x" data-chipclear="tag" data-chipval="'+escA(t)+'">✕</span></span>';
   });
+  if(filterType!=='all'){
+    hasFilters=true;
+    var tLabel=LT[filterType]||filterType;
+    h+='<span class="fb-chip">📦 '+esc(tLabel)+' <span class="fb-chip-x" data-chipclear="type">✕</span></span>';
+  }
   document.getElementById('fbActiveChips').innerHTML=h;
   document.getElementById('fbClearAll').style.display=hasFilters?'':'none';
 }
@@ -719,11 +747,12 @@ document.getElementById('fbActiveChips').addEventListener('click',function(e){
     document.getElementById('fbTagTrigger').classList.toggle('has-tags',filterTags.length>0);
     document.getElementById('fbTagTrigger').innerHTML=filterTags.length>0?(filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span style="font-size:8px">▼</span>'):('Filtrer par tags <span style="font-size:8px">▼</span>');
   }
+  if(x.dataset.chipclear==='type'){filterType='all';}
   currentPage=1;renderAll();renderActiveChips();
 });
 
 document.getElementById('fbClearAll').addEventListener('click',function(){
-  filterDateRange='all';filterDateFrom=null;filterDateTo=null;filterTags=[];
+  filterDateRange='all';filterDateFrom=null;filterDateTo=null;filterTags=[];filterType='all';
   document.querySelectorAll('.fb-date-pill').forEach(function(p){p.classList.toggle('active',p.dataset.daterange==='all');});
   document.getElementById('fbDateFrom').style.display='none';document.getElementById('fbDateTo').style.display='none';
   document.getElementById('fbTagTrigger').classList.remove('has-tags');
