@@ -7,70 +7,60 @@ const db = admin.firestore();
 const messaging = admin.messaging();
 
 /* ═══════════════════════════════════════════════════
-   CONFIG — read from Firestore document _config/oauth
-   Set these values in Firebase Console → Firestore → _config/oauth
+   HELPERS
    ═══════════════════════════════════════════════════ */
 
-const CALENDAR_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.readonly",
-  "https://www.googleapis.com/auth/calendar.events",
-  "https://www.googleapis.com/auth/userinfo.email"
-];
-
-// Cache config in memory (cold start loads once)
-let _oauthConfig = null;
-
 async function getOAuthConfig() {
-  if (_oauthConfig) return _oauthConfig;
   const doc = await db.collection("_config").doc("oauth").get();
-  if (!doc.exists) {
-    throw new Error("OAuth non configuré. Créez le document _config/oauth dans Firestore avec client_id, client_secret, redirect_uri, app_url.");
-  }
-  _oauthConfig = doc.data();
-  return _oauthConfig;
+  if (!doc.exists) throw new Error("_config/oauth missing in Firestore");
+  return doc.data();
 }
 
-async function getOAuth2Client() {
-  const conf = await getOAuthConfig();
-  if (!conf.client_id || !conf.client_secret || !conf.redirect_uri) {
-    throw new Error("Champs manquants dans _config/oauth : client_id, client_secret, redirect_uri");
-  }
-  return new google.auth.OAuth2(conf.client_id, conf.client_secret, conf.redirect_uri);
-}
-
-async function getAppUrl() {
-  const conf = await getOAuthConfig();
-  return conf.app_url || "https://team.alteore.com";
-}
-
-/**
- * Helper: get an authenticated OAuth2 client for a person.
- * Handles token refresh automatically.
- */
 async function getAuthClientForPerson(personId) {
+  const conf = await getOAuthConfig();
   const tokenDoc = await db.collection("calendar_tokens").doc(personId).get();
   if (!tokenDoc.exists) return null;
-
-  const data = tokenDoc.data();
-  const client = await getOAuth2Client();
+  var data = tokenDoc.data();
+  var client = new google.auth.OAuth2(conf.client_id, conf.client_secret, conf.redirect_uri);
   client.setCredentials({
     access_token: data.accessToken,
-    refresh_token: data.refreshToken,
-    expiry_date: data.expiresAt ? data.expiresAt.toDate().getTime() : 0
+    refresh_token: data.refreshToken
   });
-
-  // Auto-refresh listener: persist new tokens
-  client.on("tokens", async (newTokens) => {
-    const update = {};
-    if (newTokens.access_token) update.accessToken = newTokens.access_token;
-    if (newTokens.expiry_date) update.expiresAt = new Date(newTokens.expiry_date);
-    if (newTokens.refresh_token) update.refreshToken = newTokens.refresh_token;
-    if (Object.keys(update).length) {
-      await db.collection("calendar_tokens").doc(personId).update(update);
-    }
+  client.on("tokens", async function(t) {
+    var u = {};
+    if (t.access_token) u.accessToken = t.access_token;
+    if (t.expiry_date) u.expiresAt = new Date(t.expiry_date);
+    if (t.refresh_token) u.refreshToken = t.refresh_token;
+    if (Object.keys(u).length) await db.collection("calendar_tokens").doc(personId).update(u);
   });
-
   return client;
+}
+
+async function fetchAndStoreBusy(personId) {
+  var client = await getAuthClientForPerson(personId);
+  if (!client) return;
+  var calendar = google.calendar({ version: "v3", auth: client });
+  var now = new Date();
+  var end = new Date();
+  end.setDate(end.getDate() + 60);
+  try {
+    var resp = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: now.toISOString(),
+        timeMax: end.toISOString(),
+        timeZone: "Europe/Paris",
+        items: [{ id: "primary" }]
+      }
+    });
+    var busy = (resp.data.calendars && resp.data.calendars.primary && resp.data.calendars.primary.busy) || [];
+    await db.collection("calendar_busy").doc(personId).set({
+      busy: busy,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    console.log("Synced " + busy.length + " busy slots for " + personId);
+  } catch (e) {
+    console.error("fetchAndStoreBusy error for " + personId + ":", e.message);
+  }
 }
 
 
@@ -83,374 +73,182 @@ exports.onNewLead = functions.firestore
   .onCreate(async (snap, context) => {
     const lead = snap.data();
     const leadId = context.params.leadId;
-
     const nom = lead.nom || "Nouveau prospect";
     const type = lead.type || "";
     const tel = lead.telephone || "";
     const email = lead.email || "";
-
-    const typeLabels = {
-      vsl_elite: "VSL Élite",
-      self_booking: "Self Booking",
-    };
+    const typeLabels = { vsl_elite: "VSL Élite", self_booking: "Self Booking" };
     const typeLabel = typeLabels[type] || type || "Lead";
-
     const title = "🔔 Nouveau lead : " + nom;
     let body = typeLabel;
     if (tel) body += " · " + tel;
     if (email) body += " · " + email;
-
     const tokensSnap = await db.collection("fcm_tokens").get();
-    if (tokensSnap.empty) {
-      console.log("No FCM tokens registered, skipping push.");
-      return null;
-    }
-
+    if (tokensSnap.empty) return null;
     const tokens = [];
-    tokensSnap.forEach((doc) => {
-      const t = doc.data().token;
-      if (t) tokens.push(t);
-    });
-
-    if (!tokens.length) {
-      console.log("No valid tokens found.");
-      return null;
-    }
-
-    console.log("Sending push to " + tokens.length + " device(s) for lead: " + nom);
-
-    const message = {
-      data: {
-        title: title,
-        body: body,
-        leadId: leadId,
-        url: "/sales-leads.html?app=1",
-      },
-      tokens: tokens,
-    };
-
+    tokensSnap.forEach((doc) => { const t = doc.data().token; if (t) tokens.push(t); });
+    if (!tokens.length) return null;
+    const message = { data: { title, body, leadId, url: "/sales-leads.html?app=1" }, tokens };
     const response = await messaging.sendEachForMulticast(message);
-
     if (response.failureCount > 0) {
-      const tokensToRemove = [];
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          const code = resp.error && resp.error.code;
-          if (
-            code === "messaging/invalid-registration-token" ||
-            code === "messaging/registration-token-not-registered"
-          ) {
-            tokensToRemove.push(tokens[idx]);
-          }
-        }
+      const bad = [];
+      response.responses.forEach((r, i) => {
+        if (!r.success && r.error && (r.error.code === "messaging/invalid-registration-token" || r.error.code === "messaging/registration-token-not-registered")) bad.push(tokens[i]);
       });
       const batch = db.batch();
-      tokensToRemove.forEach((t) => {
-        batch.delete(db.collection("fcm_tokens").doc(t));
-      });
-      if (tokensToRemove.length) {
-        await batch.commit();
-        console.log("Cleaned " + tokensToRemove.length + " invalid token(s).");
-      }
+      bad.forEach((t) => batch.delete(db.collection("fcm_tokens").doc(t)));
+      if (bad.length) await batch.commit();
     }
-
-    console.log(
-      "Push sent: " +
-        response.successCount +
-        " success, " +
-        response.failureCount +
-        " failures."
-    );
     return null;
   });
 
 
 /* ═══════════════════════════════════════════════════
-   2. GOOGLE CALENDAR — OAUTH START
-   Callable: returns the Google OAuth URL.
-   Only authenticated admins can trigger this.
+   2. GOOGLE CALENDAR — AUTH REQUEST
+   Triggered when admin writes auth code to Firestore.
+   Exchanges code for tokens server-side.
    ═══════════════════════════════════════════════════ */
 
-exports.calendarAuthUrl = functions.https.onCall(async (data, context) => {
-  // Auth check
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Connexion requise.");
-  }
-  const userDoc = await db.collection("users").doc(context.auth.uid).get();
-  const role = userDoc.exists ? userDoc.data().role : "";
-  if (role !== "admin") {
-    throw new functions.https.HttpsError("permission-denied", "Réservé aux administrateurs.");
-  }
+exports.onCalendarAuthRequest = functions.firestore
+  .document("calendar_auth_requests/{requestId}")
+  .onCreate(async (snap, context) => {
+    const data = snap.data();
+    const code = data.code;
+    const personId = data.personId;
 
-  const personId = data.personId;
-  if (!personId) {
-    throw new functions.https.HttpsError("invalid-argument", "personId requis.");
-  }
-
-  const oauth2Client = await getOAuth2Client();
-
-  // State: encode personId for the callback
-  const state = Buffer.from(JSON.stringify({
-    personId: personId,
-    uid: context.auth.uid,
-    ts: Date.now()
-  })).toString("base64url");
-
-  const url = oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    scope: CALENDAR_SCOPES,
-    prompt: "consent",
-    state: state
-  });
-
-  return { url: url };
-});
-
-
-/* ═══════════════════════════════════════════════════
-   3. GOOGLE CALENDAR — OAUTH CALLBACK
-   HTTP trigger: Google redirects here after consent.
-   Exchanges code for tokens, stores in Firestore.
-   ═══════════════════════════════════════════════════ */
-
-exports.calendarOAuthCallback = functions.https.onRequest(async (req, res) => {
-  const baseUrl = await getAppUrl();
-  const code = req.query.code;
-  const state = req.query.state;
-  const error = req.query.error;
-
-  if (error) {
-    console.error("OAuth error from Google:", error);
-    return res.redirect(baseUrl + "/booking-admin.html?cal_error=" + encodeURIComponent(error));
-  }
-
-  if (!code || !state) {
-    return res.redirect(baseUrl + "/booking-admin.html?cal_error=missing_params");
-  }
-
-  try {
-    // Decode state
-    const stateData = JSON.parse(Buffer.from(state, "base64url").toString());
-    const personId = stateData.personId;
-
-    if (!personId) {
-      return res.redirect(baseUrl + "/booking-admin.html?cal_error=invalid_state");
+    if (!code || !personId) {
+      await snap.ref.update({ status: "error", error: "Missing code or personId" });
+      return null;
     }
 
-    // Exchange code for tokens
-    const oauth2Client = await getOAuth2Client();
-    const { tokens } = await oauth2Client.getToken(code);
-
-    // Get user email
-    oauth2Client.setCredentials(tokens);
-    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
-    const userInfo = await oauth2.userinfo.get();
-    const email = userInfo.data.email || "";
-
-    // Store tokens in secure collection
-    await db.collection("calendar_tokens").doc(personId).set({
-      accessToken: tokens.access_token || "",
-      refreshToken: tokens.refresh_token || "",
-      expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-      email: email,
-      calendarId: "primary",
-      connectedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    // Update expert's booking_config doc (public-readable fields)
-    await db.collection("booking_config").doc(personId).update({
-      calendarConnected: true,
-      calendarEmail: email
-    });
-
-    console.log("Calendar connected for person " + personId + " (" + email + ")");
-    res.redirect(baseUrl + "/booking-admin.html?cal_success=1&cal_person=" + encodeURIComponent(personId));
-
-  } catch (err) {
-    console.error("OAuth callback error:", err);
-    res.redirect(baseUrl + "/booking-admin.html?cal_error=" + encodeURIComponent(err.message || "unknown"));
-  }
-});
-
-
-/* ═══════════════════════════════════════════════════
-   4. GOOGLE CALENDAR — FREE/BUSY CHECK
-   HTTP trigger (public access for booking.html).
-   Returns busy time ranges for a person in a date range.
-   ═══════════════════════════════════════════════════ */
-
-exports.calendarFreeBusy = functions.https.onRequest(async (req, res) => {
-  // CORS
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(204).send("");
-
-  const personId = req.query.personId || (req.body && req.body.personId);
-  const startDate = req.query.start || (req.body && req.body.start); // YYYY-MM-DD
-  const endDate = req.query.end || (req.body && req.body.end);       // YYYY-MM-DD
-
-  if (!personId || !startDate || !endDate) {
-    return res.status(400).json({ error: "personId, start, end required" });
-  }
-
-  try {
-    const authClient = await getAuthClientForPerson(personId);
-    if (!authClient) {
-      // No calendar connected — return empty (no conflicts)
-      return res.json({ busy: [], connected: false });
-    }
-
-    const calendar = google.calendar({ version: "v3", auth: authClient });
-    const tokenDoc = await db.collection("calendar_tokens").doc(personId).get();
-    const calendarId = tokenDoc.data().calendarId || "primary";
-
-    const resp = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: startDate + "T00:00:00+02:00",
-        timeMax: endDate + "T23:59:59+02:00",
-        timeZone: "Europe/Paris",
-        items: [{ id: calendarId }]
-      }
-    });
-
-    const calendars = resp.data.calendars || {};
-    const calData = calendars[calendarId] || {};
-    const busy = calData.busy || [];
-
-    // Return busy ranges as ISO strings
-    res.json({
-      busy: busy.map(function (b) {
-        return { start: b.start, end: b.end };
-      }),
-      connected: true
-    });
-
-  } catch (err) {
-    console.error("FreeBusy error for " + personId + ":", err.message);
-    // Don't fail the booking flow — just return empty
-    res.json({ busy: [], connected: false, error: err.message });
-  }
-});
-
-
-/* ═══════════════════════════════════════════════════
-   5. GOOGLE CALENDAR — CREATE EVENT
-   HTTP trigger (called after booking confirmation).
-   Creates a Google Calendar event for the expert.
-   ═══════════════════════════════════════════════════ */
-
-exports.calendarCreateEvent = functions.https.onRequest(async (req, res) => {
-  // CORS
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(204).send("");
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "POST only" });
-  }
-
-  const {
-    personId, date, time, duration,
-    title, description, attendeeEmail, attendeeName, location
-  } = req.body;
-
-  if (!personId || !date || !time) {
-    return res.status(400).json({ error: "personId, date, time required" });
-  }
-
-  try {
-    const authClient = await getAuthClientForPerson(personId);
-    if (!authClient) {
-      return res.json({ created: false, reason: "no_calendar" });
-    }
-
-    const dur = duration || 30;
-    const startParts = time.split(":");
-    const startMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
-    const endMin = startMin + dur;
-    const endTime = String(Math.floor(endMin / 60)).padStart(2, "0") + ":" + String(endMin % 60).padStart(2, "0");
-
-    const event = {
-      summary: title || "Rendez-vous Ambitio",
-      description: description || "",
-      start: {
-        dateTime: date + "T" + time + ":00",
-        timeZone: "Europe/Paris"
-      },
-      end: {
-        dateTime: date + "T" + endTime + ":00",
-        timeZone: "Europe/Paris"
-      }
-    };
-
-    if (location) event.location = location;
-    if (attendeeEmail) {
-      event.attendees = [{ email: attendeeEmail, displayName: attendeeName || "" }];
-    }
-
-    const tokenDoc = await db.collection("calendar_tokens").doc(personId).get();
-    const calendarId = tokenDoc.data().calendarId || "primary";
-
-    const calendar = google.calendar({ version: "v3", auth: authClient });
-    const resp = await calendar.events.insert({
-      calendarId: calendarId,
-      requestBody: event,
-      sendUpdates: attendeeEmail ? "all" : "none"
-    });
-
-    console.log("Calendar event created for " + personId + ": " + resp.data.id);
-    res.json({ created: true, eventId: resp.data.id, htmlLink: resp.data.htmlLink });
-
-  } catch (err) {
-    console.error("Create event error for " + personId + ":", err.message);
-    res.json({ created: false, error: err.message });
-  }
-});
-
-
-/* ═══════════════════════════════════════════════════
-   6. GOOGLE CALENDAR — DISCONNECT
-   Callable: revokes tokens and removes connection.
-   Admin only.
-   ═══════════════════════════════════════════════════ */
-
-exports.calendarDisconnect = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Connexion requise.");
-  }
-  const userDoc = await db.collection("users").doc(context.auth.uid).get();
-  if (!userDoc.exists || userDoc.data().role !== "admin") {
-    throw new functions.https.HttpsError("permission-denied", "Réservé aux administrateurs.");
-  }
-
-  const personId = data.personId;
-  if (!personId) {
-    throw new functions.https.HttpsError("invalid-argument", "personId requis.");
-  }
-
-  // Try to revoke the token
-  const tokenDoc = await db.collection("calendar_tokens").doc(personId).get();
-  if (tokenDoc.exists) {
     try {
-      const oauth2Client = await getOAuth2Client();
-      const tokenData = tokenDoc.data();
-      if (tokenData.accessToken) {
-        await oauth2Client.revokeToken(tokenData.accessToken);
-      }
-    } catch (e) {
-      console.log("Token revocation failed (may already be expired):", e.message);
-    }
-    await db.collection("calendar_tokens").doc(personId).delete();
-  }
+      const conf = await getOAuthConfig();
+      const client = new google.auth.OAuth2(conf.client_id, conf.client_secret, conf.redirect_uri);
+      const { tokens } = await client.getToken(code);
 
-  // Update expert doc
-  await db.collection("booking_config").doc(personId).update({
-    calendarConnected: admin.firestore.FieldValue.delete(),
-    calendarEmail: admin.firestore.FieldValue.delete()
+      // Get user email
+      client.setCredentials(tokens);
+      const oauth2 = google.oauth2({ version: "v2", auth: client });
+      const userInfo = await oauth2.userinfo.get();
+      const email = userInfo.data.email || "";
+
+      // Store tokens securely
+      await db.collection("calendar_tokens").doc(personId).set({
+        accessToken: tokens.access_token || "",
+        refreshToken: tokens.refresh_token || "",
+        expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        email: email,
+        connectedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Update expert doc
+      await db.collection("booking_config").doc(personId).update({
+        calendarConnected: true,
+        calendarEmail: email
+      });
+
+      // Mark request as done
+      await snap.ref.update({ status: "success", email: email });
+
+      // Sync busy times immediately
+      await fetchAndStoreBusy(personId);
+
+      console.log("Calendar connected for " + personId + " (" + email + ")");
+    } catch (e) {
+      console.error("Auth exchange error:", e.message);
+      await snap.ref.update({ status: "error", error: e.message });
+    }
+    return null;
   });
 
-  console.log("Calendar disconnected for person " + personId);
-  return { success: true };
-});
+
+/* ═══════════════════════════════════════════════════
+   3. GOOGLE CALENDAR — AUTO-CREATE EVENT ON BOOKING
+   Triggered when a new booking is created.
+   ═══════════════════════════════════════════════════ */
+
+exports.onBookingCreated = functions.firestore
+  .document("bookings/{bookingId}")
+  .onCreate(async (snap, context) => {
+    const booking = snap.data();
+    const bookingId = context.params.bookingId;
+    const personId = booking.personId;
+    if (!personId) return null;
+
+    const tokenDoc = await db.collection("calendar_tokens").doc(personId).get();
+    if (!tokenDoc.exists) return null;
+
+    try {
+      const client = await getAuthClientForPerson(personId);
+      if (!client) return null;
+
+      const dur = booking.duration || 30;
+      const time = booking.time || "09:00";
+      const parts = time.split(":");
+      const startMin = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+      const endMin = startMin + dur;
+      const endTime = String(Math.floor(endMin / 60)).padStart(2, "0") + ":" + String(endMin % 60).padStart(2, "0");
+
+      const prospect = booking.prospect || {};
+      const clientName = ((prospect.prenom || "") + " " + (prospect.nom || "")).trim();
+      const summary = (booking.typeLabel || "RDV") + (clientName ? " — " + clientName : "");
+
+      const event = {
+        summary: summary,
+        description: "Réservé via Ambitio Booking",
+        start: { dateTime: booking.date + "T" + time + ":00", timeZone: "Europe/Paris" },
+        end: { dateTime: booking.date + "T" + endTime + ":00", timeZone: "Europe/Paris" }
+      };
+      if (prospect.email) event.attendees = [{ email: prospect.email, displayName: clientName }];
+
+      const calendar = google.calendar({ version: "v3", auth: client });
+      const resp = await calendar.events.insert({
+        calendarId: "primary",
+        requestBody: event,
+        sendUpdates: prospect.email ? "all" : "none"
+      });
+
+      await snap.ref.update({
+        calendarEventId: resp.data.id,
+        calendarEventLink: resp.data.htmlLink || ""
+      });
+
+      console.log("Event created for booking " + bookingId + ": " + resp.data.id);
+      await fetchAndStoreBusy(personId);
+    } catch (e) {
+      console.error("Event creation error for " + bookingId + ":", e.message);
+    }
+    return null;
+  });
+
+
+/* ═══════════════════════════════════════════════════
+   4. GOOGLE CALENDAR — SYNC BUSY TIMES ON REQUEST
+   Triggered when booking.html requests a refresh.
+   ═══════════════════════════════════════════════════ */
+
+exports.onCalendarSyncRequest = functions.firestore
+  .document("calendar_sync_requests/{personId}")
+  .onWrite(async (change, context) => {
+    await fetchAndStoreBusy(context.params.personId);
+    return null;
+  });
+
+
+/* ═══════════════════════════════════════════════════
+   5. SCHEDULED SYNC — every 30 minutes
+   Refreshes busy times for all connected experts.
+   ═══════════════════════════════════════════════════ */
+
+exports.scheduledCalendarSync = functions.pubsub
+  .schedule("every 30 minutes")
+  .timeZone("Europe/Paris")
+  .onRun(async () => {
+    const snap = await db.collection("booking_config")
+      .where("calendarConnected", "==", true).get();
+    const promises = [];
+    snap.forEach((doc) => promises.push(fetchAndStoreBusy(doc.id)));
+    await Promise.all(promises);
+    console.log("Scheduled sync: " + promises.length + " expert(s)");
+    return null;
+  });
