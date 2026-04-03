@@ -1951,7 +1951,7 @@ function startLeadsListener(){
   }
   leadsUnsub=q.onSnapshot(function(snap){
     allLeads=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;if(!d.stage)d.stage='lead';allLeads.push(d);});
-    crmDataLoaded=true;colCardLimits={};collectTags();renderAll();renderSavedViews();renderActiveChips();
+    crmDataLoaded=true;colCardLimits={};buildBoard();collectTags();renderAll();renderSavedViews();renderActiveChips();
     document.getElementById('statTotal').textContent=allLeads.length;
   },function(err){
     console.error('[crm] onSnapshot error:',err);
