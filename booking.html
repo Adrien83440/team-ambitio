@@ -3,455 +3,902 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Réserver un rendez-vous — Ambitio</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<title>Réserver — Ambitio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#fafafa;--card:#ffffff;--border:#e5e7eb;--border2:#d1d5db;--text:#111827;--muted:#6b7280;--muted2:#9ca3af;--primary:#7c3aed;--primary-light:#ede9fe;--green:#059669;--green-light:#d1fae5;--red:#dc2626;--radius:12px;--font:'Inter',sans-serif;--fh:'Syne',sans-serif}
-html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-.bk-page{max-width:640px;margin:0 auto;padding:30px 20px 60px}
+:root{
+  --bg:#f8f9fb;--card:#fff;--card-hover:#fdfcff;
+  --border:#e8e5f0;--border2:#d4d0e0;
+  --primary:#6d28d9;--primary-soft:#8b5cf6;--primary-pale:#f5f3ff;--primary-ring:rgba(109,40,217,0.12);
+  --text:#1a1a2e;--text2:#374151;--muted:#6b7280;--muted2:#9ca3af;--muted3:#d1d5db;
+  --green:#059669;--green-pale:#ecfdf5;--green-border:#a7f3d0;
+  --amber:#d97706;--amber-pale:#fffbeb;
+  --red:#dc2626;
+  --radius:14px;--radius-sm:10px;--radius-xs:8px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.04),0 1px 2px rgba(0,0,0,0.03);
+  --shadow:0 4px 16px rgba(0,0,0,0.06),0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg:0 12px 40px rgba(0,0,0,0.08),0 4px 12px rgba(0,0,0,0.04);
+  --fh:'Bricolage Grotesque',system-ui,sans-serif;
+  --fb:'Figtree','Segoe UI',sans-serif;
+  --ease:cubic-bezier(.4,0,.2,1);--ease-bounce:cubic-bezier(.34,1.56,.64,1);
+}
+html{min-height:100%;background:var(--bg)}
+body{min-height:100vh;font-family:var(--fb);font-size:15px;line-height:1.5;color:var(--text);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 
-/* Header */
-.bk-header{text-align:center;margin-bottom:30px}
-.bk-logo{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#7c3aed,#4c1d95);display:inline-flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:20px;font-weight:800;color:white;margin-bottom:12px;box-shadow:0 4px 16px rgba(124,58,237,0.25)}
-.bk-title{font-family:var(--fh);font-size:24px;font-weight:800;color:var(--text);margin-bottom:4px}
-.bk-sub{font-size:14px;color:var(--muted)}
+/* ── PROGRESS BAR ── */
+.bk-progress{position:fixed;top:0;left:0;right:0;height:3px;background:var(--border);z-index:100}
+.bk-progress-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--primary-soft));border-radius:0 3px 3px 0;transition:width .5s var(--ease);width:0}
 
-/* Steps */
-.bk-step{display:none}
+/* ── MAIN LAYOUT ── */
+.bk-shell{display:flex;min-height:100vh}
+.bk-panel-left{width:340px;flex-shrink:0;background:linear-gradient(180deg,#faf8ff 0%,#f3f0ff 100%);border-right:1px solid var(--border);padding:40px 32px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.bk-panel-right{flex:1;min-width:0;padding:40px;display:flex;justify-content:center}
+.bk-panel-content{width:100%;max-width:560px}
+
+/* ── LEFT PANEL ── */
+.bk-brand{margin-bottom:36px}
+.bk-brand-logo{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#7c3aed,#4c1d95);display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:19px;font-weight:800;color:white;margin-bottom:14px;box-shadow:0 4px 16px rgba(109,40,217,0.25)}
+.bk-brand-name{font-family:var(--fh);font-size:22px;font-weight:800;color:var(--text);letter-spacing:-0.3px}
+.bk-brand-sub{font-size:13px;color:var(--muted);margin-top:2px}
+
+/* Summary items */
+.bk-info{flex:1}
+.bk-info-item{display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid rgba(0,0,0,0.05);opacity:0;transform:translateY(6px);transition:all .4s var(--ease)}
+.bk-info-item.visible{opacity:1;transform:translateY(0)}
+.bk-info-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;background:var(--primary-pale);border:1px solid rgba(109,40,217,0.08)}
+.bk-info-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted2)}
+.bk-info-value{font-size:14px;font-weight:600;color:var(--text);margin-top:1px}
+
+/* Timezone */
+.bk-tz{margin-top:auto;padding-top:20px;border-top:1px solid rgba(0,0,0,0.05);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+
+/* Admin gear */
+.bk-admin-link{position:fixed;top:16px;right:16px;width:38px;height:38px;border-radius:var(--radius-xs);background:var(--card);border:1px solid var(--border);display:none;align-items:center;justify-content:center;font-size:16px;text-decoration:none;z-index:50;transition:all .2s var(--ease);box-shadow:var(--shadow-sm)}
+.bk-admin-link:hover{border-color:var(--primary);box-shadow:var(--shadow)}
+
+/* ── STEP CONTAINER ── */
+.bk-step{display:none;animation:stepIn .4s var(--ease) both}
 .bk-step.active{display:block}
-.bk-step-title{font-family:var(--fh);font-size:16px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px}
-.bk-step-num{width:28px;height:28px;border-radius:50%;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0}
+@keyframes stepIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
-/* Cards */
-.bk-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px;cursor:pointer;transition:all .2s}
-.bk-card:hover{border-color:var(--primary);box-shadow:0 2px 12px rgba(124,58,237,0.1)}
-.bk-card.selected{border-color:var(--primary);background:var(--primary-light)}
-.bk-card-top{display:flex;align-items:center;gap:10px}
-.bk-card-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-.bk-card-name{font-weight:700;font-size:14px;flex:1}
-.bk-card-dur{font-size:12px;color:var(--muted);background:#f3f4f6;padding:2px 8px;border-radius:6px}
-.bk-card-desc{font-size:12px;color:var(--muted);margin-top:4px}
+.bk-step-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--primary-soft);margin-bottom:6px}
+.bk-step-title{font-family:var(--fh);font-size:24px;font-weight:700;color:var(--text);margin-bottom:6px;letter-spacing:-0.3px}
+.bk-step-desc{font-size:14px;color:var(--muted);margin-bottom:24px;line-height:1.6}
 
-/* Person cards */
-.bk-person{display:flex;align-items:center;gap:12px;padding:14px 16px}
-.bk-person-av{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:16px;font-weight:800;color:white;flex-shrink:0}
-.bk-person-name{font-weight:700;font-size:14px}
-.bk-person-role{font-size:12px;color:var(--muted)}
+/* ── EVENT TYPE CARDS ── */
+.bk-types{display:flex;flex-direction:column;gap:10px}
+.bk-type-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:20px;cursor:pointer;transition:all .2s var(--ease);position:relative;overflow:hidden}
+.bk-type-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:4px 0 0 4px;transition:background .2s}
+.bk-type-card:hover{border-color:var(--border2);box-shadow:var(--shadow);transform:translateY(-1px)}
+.bk-type-card:hover::before{background:var(--type-color,var(--primary))}
+.bk-type-top{display:flex;align-items:center;gap:12px}
+.bk-type-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px color-mix(in srgb,var(--type-color) 20%,transparent)}
+.bk-type-name{font-family:var(--fh);font-size:16px;font-weight:700;flex:1}
+.bk-type-dur{font-size:12px;font-weight:600;color:var(--muted);background:var(--bg);padding:4px 10px;border-radius:20px}
+.bk-type-desc{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5}
+.bk-type-card .bk-arrow{color:var(--muted3);font-size:18px;transition:all .2s var(--ease);flex-shrink:0}
+.bk-type-card:hover .bk-arrow{color:var(--primary);transform:translateX(3px)}
 
-/* Calendar */
-.bk-cal{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
-.bk-cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.bk-cal-month{font-family:var(--fh);font-size:15px;font-weight:800}
-.bk-cal-nav{width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:white;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;transition:all .15s;color:var(--muted)}
-.bk-cal-nav:hover{border-color:var(--primary);color:var(--primary)}
-.bk-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
-.bk-cal-day-label{font-size:10px;font-weight:700;color:var(--muted2);text-transform:uppercase;padding:4px 0}
-.bk-cal-day{width:100%;aspect-ratio:1;border-radius:8px;border:none;background:transparent;font-family:var(--font);font-size:13px;font-weight:600;color:var(--muted2);cursor:default;display:flex;align-items:center;justify-content:center}
-.bk-cal-day.available{color:var(--text);cursor:pointer;background:#f9fafb;transition:all .15s}
-.bk-cal-day.available:hover{background:var(--primary-light);color:var(--primary)}
-.bk-cal-day.selected{background:var(--primary);color:white;font-weight:700}
-.bk-cal-day.today{box-shadow:inset 0 0 0 2px var(--primary)}
-.bk-cal-day.past{color:#e5e7eb}
+/* ── PERSON CARDS ── */
+.bk-persons{display:flex;flex-direction:column;gap:10px}
+.bk-person-card{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:18px 20px;cursor:pointer;transition:all .2s var(--ease);display:flex;align-items:center;gap:14px}
+.bk-person-card:hover{border-color:var(--border2);box-shadow:var(--shadow);transform:translateY(-1px)}
+.bk-person-av{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:18px;font-weight:800;color:white;flex-shrink:0}
+.bk-person-name{font-family:var(--fh);font-size:15px;font-weight:700}
+.bk-person-role{font-size:13px;color:var(--muted);margin-top:1px}
+.bk-person-card .bk-arrow{margin-left:auto;color:var(--muted3);font-size:18px;transition:all .2s;flex-shrink:0}
+.bk-person-card:hover .bk-arrow{color:var(--primary);transform:translateX(3px)}
 
-/* Slots */
-.bk-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px}
-@media(max-width:400px){.bk-slots{grid-template-columns:repeat(2,1fr)}}
-.bk-slot{padding:10px;border:1.5px solid var(--border);border-radius:8px;background:white;font-size:13px;font-weight:600;text-align:center;cursor:pointer;transition:all .15s}
-.bk-slot:hover{border-color:var(--primary);color:var(--primary)}
-.bk-slot.selected{background:var(--primary);color:white;border-color:var(--primary)}
-.bk-no-slots{text-align:center;padding:20px;color:var(--muted);font-size:13px}
+/* Round-robin banner */
+.bk-rr-banner{background:var(--primary-pale);border:1.5px solid rgba(109,40,217,0.12);border-radius:var(--radius);padding:20px;text-align:center;margin-bottom:16px}
+.bk-rr-banner p{font-size:14px;color:var(--text2);margin-top:6px}
 
-/* Form */
-.bk-form{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:20px}
-.bk-field{margin-bottom:14px}
-.bk-field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.3px}
-.bk-field input,.bk-field textarea,.bk-field select{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font);font-size:13px;color:var(--text);outline:none;background:white;transition:border-color .15s}
-.bk-field input:focus,.bk-field textarea:focus{border-color:var(--primary)}
-.bk-field textarea{resize:vertical;min-height:60px}
-.bk-field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* ── CALENDAR ── */
+.bk-cal-wrap{display:grid;grid-template-columns:1fr 200px;gap:20px;align-items:start}
+.bk-cal{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow-sm)}
+.bk-cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.bk-cal-month{font-family:var(--fh);font-size:16px;font-weight:700;user-select:none}
+.bk-cal-navs{display:flex;gap:6px}
+.bk-cal-nav{width:34px;height:34px;border:1.5px solid var(--border);border-radius:var(--radius-xs);background:var(--card);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;transition:all .15s var(--ease);color:var(--muted)}
+.bk-cal-nav:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-pale)}
+.bk-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
+.bk-cal-dow{font-size:11px;font-weight:700;color:var(--muted2);text-transform:uppercase;padding:8px 0;letter-spacing:0.3px}
+.bk-cal-day{width:100%;aspect-ratio:1;border-radius:var(--radius-xs);border:1.5px solid transparent;background:transparent;font-family:var(--fb);font-size:13.5px;font-weight:500;color:var(--muted3);cursor:default;display:flex;align-items:center;justify-content:center;transition:all .15s var(--ease);position:relative}
+.bk-cal-day.avail{color:var(--text);cursor:pointer;font-weight:600}
+.bk-cal-day.avail:hover{background:var(--primary-pale);color:var(--primary);border-color:var(--primary-ring)}
+.bk-cal-day.sel{background:var(--primary);color:white;font-weight:700;border-color:var(--primary);box-shadow:0 2px 8px rgba(109,40,217,0.3)}
+.bk-cal-day.today::after{content:'';position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:var(--primary)}
+.bk-cal-day.today.sel::after{background:white}
+.bk-cal-day.past{color:var(--muted3);opacity:.5}
 
-/* Buttons */
-.bk-btn{width:100%;padding:12px;border:none;border-radius:var(--radius);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:all .15s}
-.bk-btn-primary{background:var(--primary);color:white;box-shadow:0 4px 12px rgba(124,58,237,0.3)}
-.bk-btn-primary:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(124,58,237,0.4)}
+/* ── SLOTS ── */
+.bk-slots-panel{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow-sm);max-height:380px;overflow-y:auto}
+.bk-slots-panel::-webkit-scrollbar{width:4px}
+.bk-slots-panel::-webkit-scrollbar-track{background:transparent}
+.bk-slots-panel::-webkit-scrollbar-thumb{background:var(--muted3);border-radius:4px}
+.bk-slots-date{font-family:var(--fh);font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.bk-slots-list{display:flex;flex-direction:column;gap:6px}
+.bk-slot{padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius-xs);background:var(--card);font-size:14px;font-weight:600;text-align:center;cursor:pointer;transition:all .18s var(--ease);font-family:var(--fb);color:var(--text)}
+.bk-slot:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-pale)}
+.bk-slot.sel{background:var(--primary);color:white;border-color:var(--primary);box-shadow:0 2px 8px rgba(109,40,217,0.25);transform:scale(1.02)}
+.bk-no-slots{text-align:center;padding:30px 16px;color:var(--muted);font-size:13px}
+.bk-slots-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:200px;color:var(--muted);font-size:13px;gap:8px}
+.bk-slots-empty span{font-size:28px;opacity:.5}
+
+.bk-continue-bar{margin-top:16px}
+
+/* ── FORM ── */
+.bk-summary{background:var(--primary-pale);border:1.5px solid rgba(109,40,217,0.1);border-radius:var(--radius);padding:18px 20px;margin-bottom:20px}
+.bk-summary-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px}
+.bk-summary-label{color:var(--muted);font-weight:500}
+.bk-summary-val{font-weight:700;color:var(--text)}
+.bk-form{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow-sm)}
+.bk-field{margin-bottom:16px}
+.bk-field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.4px}
+.bk-field label .req{color:var(--red);margin-left:2px}
+.bk-field input,.bk-field textarea,.bk-field select{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--radius-xs);font-family:var(--fb);font-size:14px;color:var(--text);outline:none;background:var(--card);transition:all .2s var(--ease)}
+.bk-field input::placeholder,.bk-field textarea::placeholder{color:var(--muted2)}
+.bk-field input:focus,.bk-field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-ring)}
+.bk-field textarea{resize:vertical;min-height:70px}
+.bk-field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bk-field-error{font-size:11px;color:var(--red);margin-top:3px;display:none}
+
+/* ── BUTTONS ── */
+.bk-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px 20px;border:none;border-radius:var(--radius);font-family:var(--fb);font-size:15px;font-weight:700;cursor:pointer;transition:all .2s var(--ease)}
+.bk-btn-primary{background:var(--primary);color:white;box-shadow:0 4px 14px rgba(109,40,217,0.3)}
+.bk-btn-primary:hover{box-shadow:0 6px 20px rgba(109,40,217,0.4);transform:translateY(-1px)}
+.bk-btn-primary:active{transform:translateY(0)}
+.bk-btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
 .bk-btn-back{background:transparent;color:var(--muted);border:1.5px solid var(--border);margin-bottom:8px}
-.bk-btn-back:hover{border-color:var(--border2);color:var(--text)}
+.bk-btn-back:hover{border-color:var(--border2);color:var(--text);background:var(--bg)}
+.bk-btn-outline{background:transparent;color:var(--primary);border:1.5px solid var(--primary-ring)}
+.bk-btn-outline:hover{background:var(--primary-pale)}
 
-/* Summary */
-.bk-summary{background:var(--card);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px}
-.bk-summary-row{display:flex;justify-content:space-between;padding:6px 0;font-size:13px}
-.bk-summary-label{color:var(--muted);font-weight:600}
-.bk-summary-val{font-weight:700}
+/* ── CONFIRMATION ── */
+.bk-confirm{text-align:center;padding:20px 0 40px}
+.bk-confirm-check{width:72px;height:72px;border-radius:50%;background:var(--green-pale);border:2px solid var(--green-border);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;animation:popIn .5s var(--ease-bounce)}
+.bk-confirm-check svg{width:32px;height:32px;color:var(--green)}
+@keyframes popIn{from{transform:scale(0);opacity:0}60%{transform:scale(1.15)}to{transform:scale(1);opacity:1}}
+.bk-confirm-title{font-family:var(--fh);font-size:24px;font-weight:800;color:var(--green);margin-bottom:8px}
+.bk-confirm-text{font-size:14px;color:var(--muted);line-height:1.7;max-width:420px;margin:0 auto 24px}
+.bk-confirm-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.bk-confirm-actions .bk-btn{width:auto;padding:11px 20px;font-size:13px}
 
-/* Confirmation */
-.bk-confirm{text-align:center;padding:40px 20px}
-.bk-confirm-icon{font-size:56px;margin-bottom:16px}
-.bk-confirm-title{font-family:var(--fh);font-size:22px;font-weight:800;margin-bottom:8px;color:var(--green)}
-.bk-confirm-text{font-size:14px;color:var(--muted);line-height:1.6;max-width:400px;margin:0 auto}
+/* ── LOADING ── */
+.bk-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:16px}
+.bk-spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.bk-loading-text{font-size:14px;color:var(--muted)}
 
-.bk-loading{text-align:center;padding:60px;color:var(--muted);font-size:13px}
+/* ── MOBILE ── */
+@media(max-width:860px){
+  .bk-shell{flex-direction:column}
+  .bk-panel-left{width:100%;height:auto;position:relative;padding:24px 20px 20px;border-right:none;border-bottom:1px solid var(--border);flex-direction:row;flex-wrap:wrap;align-items:center;gap:12px}
+  .bk-brand{margin-bottom:0;flex:1}
+  .bk-info{display:none}
+  .bk-tz{display:none}
+  .bk-panel-right{padding:20px}
+  .bk-cal-wrap{grid-template-columns:1fr;gap:12px}
+  .bk-slots-panel{max-height:none}
+  .bk-slots-list{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .bk-step-title{font-size:20px}
+  .bk-field-row{grid-template-columns:1fr}
+}
+@media(max-width:480px){
+  .bk-slots-list{grid-template-columns:repeat(2,1fr)}
+  .bk-panel-right{padding:16px}
+  .bk-cal{padding:14px}
+}
+
+/* ── MOBILE SUMMARY (compact) ── */
+.bk-mobile-summary{display:none;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+@media(max-width:860px){.bk-mobile-summary{display:flex}}
+.bk-mobile-chip{font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px;background:var(--primary-pale);color:var(--primary);border:1px solid rgba(109,40,217,0.1)}
 </style>
 </head>
 <body>
 
-<div class="bk-page">
-  <div class="bk-header" style="position:relative">
-    <a id="adminGear" href="booking-admin.html" style="display:none;position:absolute;top:0;right:0;width:36px;height:36px;border-radius:10px;background:#f3f4f6;border:1px solid var(--border);text-align:center;line-height:36px;font-size:16px;text-decoration:none;transition:all .15s" title="Configuration booking">⚙️</a>
-    <div class="bk-logo">A</div>
-    <div class="bk-title">Réserver un rendez-vous</div>
-    <div class="bk-sub">Choisissez le type, la personne, et un créneau qui vous convient</div>
+<!-- Progress bar -->
+<div class="bk-progress"><div class="bk-progress-fill" id="progressFill"></div></div>
+
+<!-- Admin link (hidden unless admin) -->
+<a class="bk-admin-link" id="adminGear" href="booking-admin.html" title="Configuration">⚙️</a>
+
+<div class="bk-shell">
+  <!-- LEFT PANEL -->
+  <div class="bk-panel-left">
+    <div class="bk-brand">
+      <div class="bk-brand-logo">A</div>
+      <div class="bk-brand-name">Ambitio</div>
+      <div class="bk-brand-sub">Réserver un rendez-vous</div>
+    </div>
+    <div class="bk-info" id="infoPanel"></div>
+    <div class="bk-tz" id="tzDisplay">🕐 <span id="tzLabel"></span></div>
   </div>
 
-  <div class="bk-loading" id="bkLoading">Chargement des disponibilités...</div>
-  <div id="bkApp" style="display:none">
-    <!-- Step 1: Type -->
-    <div class="bk-step active" id="step1">
-      <div class="bk-step-title"><span class="bk-step-num">1</span> Choisissez le type de rendez-vous</div>
-      <div id="typeCards"></div>
-    </div>
-    <!-- Step 2: Person -->
-    <div class="bk-step" id="step2">
-      <div class="bk-step-title"><span class="bk-step-num">2</span> Avec qui souhaitez-vous prendre rendez-vous ?</div>
-      <div id="personCards"></div>
-      <button class="bk-btn bk-btn-back" data-action="back" data-to="1">← Retour</button>
-    </div>
-    <!-- Step 3: Date + Time -->
-    <div class="bk-step" id="step3">
-      <div class="bk-step-title"><span class="bk-step-num">3</span> Choisissez une date et un horaire</div>
-      <div id="calendarWrap"></div>
-      <div id="slotsWrap"></div>
-      <button class="bk-btn bk-btn-back" data-action="back" data-to="2">← Retour</button>
-    </div>
-    <!-- Step 4: Form -->
-    <div class="bk-step" id="step4">
-      <div class="bk-step-title"><span class="bk-step-num">4</span> Vos informations</div>
-      <div class="bk-summary" id="bookingSummary"></div>
-      <div class="bk-form">
-        <div class="bk-field-row">
-          <div class="bk-field"><label>Prénom</label><input type="text" id="fPrenom" required/></div>
-          <div class="bk-field"><label>Nom</label><input type="text" id="fNom" required/></div>
-        </div>
-        <div class="bk-field"><label>Email</label><input type="email" id="fEmail" required/></div>
-        <div class="bk-field"><label>Téléphone</label><input type="tel" id="fTel"/></div>
-        <div class="bk-field"><label>Secteur d'activité</label><input type="text" id="fSecteur" placeholder="Ex: Commerce, Services..."/></div>
-        <div class="bk-field"><label>Message (optionnel)</label><textarea id="fMessage" placeholder="Contexte, questions..."></textarea></div>
-        <button class="bk-btn bk-btn-primary" id="confirmBtn">✅ Confirmer le rendez-vous</button>
-        <button class="bk-btn bk-btn-back" data-action="back" data-to="3" style="margin-top:8px">← Retour</button>
+  <!-- RIGHT PANEL -->
+  <div class="bk-panel-right">
+    <div class="bk-panel-content">
+
+      <!-- Loading -->
+      <div class="bk-loading" id="bkLoading">
+        <div class="bk-spinner"></div>
+        <div class="bk-loading-text">Chargement des disponibilités…</div>
       </div>
-    </div>
-    <!-- Step 5: Confirmation -->
-    <div class="bk-step" id="step5">
-      <div class="bk-confirm">
-        <div class="bk-confirm-icon">✅</div>
-        <div class="bk-confirm-title">Rendez-vous confirmé !</div>
-        <div class="bk-confirm-text" id="confirmText"></div>
+
+      <div id="bkApp" style="display:none">
+
+        <!-- STEP 1: Type -->
+        <div class="bk-step active" id="step1">
+          <div class="bk-step-label">Étape 1</div>
+          <div class="bk-step-title">Quel type de rendez-vous ?</div>
+          <div class="bk-step-desc">Choisissez le format qui correspond le mieux à votre besoin.</div>
+          <div class="bk-types" id="typeCards"></div>
+        </div>
+
+        <!-- STEP 2: Person -->
+        <div class="bk-step" id="step2">
+          <div class="bk-step-label">Étape 2</div>
+          <div class="bk-step-title">Avec qui ?</div>
+          <div class="bk-step-desc">Choisissez votre interlocuteur.</div>
+          <div class="bk-mobile-summary" id="mobileSummary2"></div>
+          <div id="rrBanner"></div>
+          <div class="bk-persons" id="personCards"></div>
+          <button class="bk-btn bk-btn-back" onclick="goStep(1)">← Retour</button>
+        </div>
+
+        <!-- STEP 3: Date + Time -->
+        <div class="bk-step" id="step3">
+          <div class="bk-step-label">Étape 3</div>
+          <div class="bk-step-title">Choisissez une date</div>
+          <div class="bk-step-desc">Sélectionnez un jour et un créneau disponible.</div>
+          <div class="bk-mobile-summary" id="mobileSummary3"></div>
+          <div class="bk-cal-wrap">
+            <div id="calendarWrap"></div>
+            <div id="slotsWrap">
+              <div class="bk-slots-panel">
+                <div class="bk-slots-empty"><span>📅</span>Sélectionnez un jour</div>
+              </div>
+            </div>
+          </div>
+          <div class="bk-continue-bar" id="continueBar" style="display:none">
+            <button class="bk-btn bk-btn-primary" onclick="goStep(4)">Continuer →</button>
+          </div>
+          <button class="bk-btn bk-btn-back" onclick="goStep(2)" style="margin-top:8px">← Retour</button>
+        </div>
+
+        <!-- STEP 4: Form -->
+        <div class="bk-step" id="step4">
+          <div class="bk-step-label">Étape 4</div>
+          <div class="bk-step-title">Vos informations</div>
+          <div class="bk-step-desc">Renseignez vos coordonnées pour confirmer le rendez-vous.</div>
+          <div class="bk-summary" id="bookingSummary"></div>
+          <div class="bk-form">
+            <div class="bk-field-row">
+              <div class="bk-field"><label>Prénom <span class="req">*</span></label><input type="text" id="fPrenom" placeholder="Votre prénom" autocomplete="given-name"/></div>
+              <div class="bk-field"><label>Nom <span class="req">*</span></label><input type="text" id="fNom" placeholder="Votre nom" autocomplete="family-name"/></div>
+            </div>
+            <div class="bk-field"><label>Email <span class="req">*</span></label><input type="email" id="fEmail" placeholder="votre@email.com" autocomplete="email"/></div>
+            <div class="bk-field"><label>Téléphone</label><input type="tel" id="fTel" placeholder="+33 6 00 00 00 00" autocomplete="tel"/></div>
+            <div class="bk-field"><label>Secteur d'activité</label><input type="text" id="fSecteur" placeholder="Commerce, Services, Tech…"/></div>
+            <div class="bk-field"><label>Message <span style="font-weight:400;text-transform:none;letter-spacing:0">(optionnel)</span></label><textarea id="fMessage" placeholder="Contexte, questions, objectifs…"></textarea></div>
+            <button class="bk-btn bk-btn-primary" id="confirmBtn">Confirmer le rendez-vous</button>
+            <button class="bk-btn bk-btn-back" onclick="goStep(3)" style="margin-top:8px">← Retour</button>
+          </div>
+        </div>
+
+        <!-- STEP 5: Confirmation -->
+        <div class="bk-step" id="step5">
+          <div class="bk-confirm">
+            <div class="bk-confirm-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="bk-confirm-title">Rendez-vous confirmé !</div>
+            <div class="bk-confirm-text" id="confirmText"></div>
+            <div class="bk-confirm-actions">
+              <button class="bk-btn bk-btn-primary" id="icsBtn" style="width:auto">📅 Ajouter au calendrier</button>
+              <button class="bk-btn bk-btn-outline" onclick="location.reload()" style="width:auto">Nouveau rendez-vous</button>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
 </div>
 
 <script>
-var db=firebase.firestore();
-var types=[],persons=[],bookings=[];
-var selType=null,selPerson=null,selDate=null,selTime=null;
-var calMonth=new Date().getMonth(),calYear=new Date().getFullYear();
+/* ═══════════════════════════════════════════════════
+   AMBITIO BOOKING — Smart scheduling engine
+   ═══════════════════════════════════════════════════ */
 
-var MOIS=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-var JOURS_IDX={dimanche:0,lundi:1,mardi:2,mercredi:3,jeudi:4,vendredi:5,samedi:6};
-var JOURS_LABELS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-var JOURS_FROM_IDX=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+var db = firebase.firestore();
 
-function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
-function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+/* ── STATE ── */
+var S = {
+  types: [],
+  persons: [],
+  bookings: [],
+  settings: {},
+  selType: null,
+  selPerson: null,
+  selDate: null,
+  selTime: null,
+  calMonth: new Date().getMonth(),
+  calYear: new Date().getFullYear(),
+  userTz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris',
+  currentStep: 1
+};
 
-function goStep(n){
-  document.querySelectorAll('.bk-step').forEach(function(s){s.classList.remove('active');});
-  document.getElementById('step'+n).classList.add('active');
-  window.scrollTo({top:0,behavior:'smooth'});
+var MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+var JOURS_SHORT = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+var JOURS_FULL = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+var JOURS_FR = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+var MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function timeToMin(t) { var p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
+function minToTime(m) { return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); }
+
+/* ── PROGRESS ── */
+function setProgress(step) {
+  var pct = {1: 0, 2: 25, 3: 50, 4: 75, 5: 100};
+  document.getElementById('progressFill').style.width = (pct[step] || 0) + '%';
 }
 
-/* ═══ LOAD ═══ */
-var params=new URLSearchParams(window.location.search);
-var presetPerson=params.get('person');
-var presetType=params.get('type');
+/* ── STEP NAVIGATION ── */
+function goStep(n) {
+  S.currentStep = n;
+  document.querySelectorAll('.bk-step').forEach(function(el) { el.classList.remove('active'); });
+  var target = document.getElementById('step' + n);
+  if (target) target.classList.add('active');
+  setProgress(n);
+  updateInfoPanel();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 
-db.collection('booking_config').get().then(function(snap){
-  snap.forEach(function(doc){
-    var d=doc.data();
-    if(doc.id==='_types'){types=d.list||[];}
-    else if(d.__type==='person'){d.id=doc.id;persons.push(d);}
+  if (n === 3) renderCalendar();
+  if (n === 4) renderSummary();
+}
+
+/* ── INFO PANEL (left side) ── */
+function updateInfoPanel() {
+  var el = document.getElementById('infoPanel');
+  var h = '';
+  if (S.selType) {
+    h += '<div class="bk-info-item visible"><div class="bk-info-icon" style="background:' + S.selType.color + '18;border-color:' + S.selType.color + '22"><span style="color:' + S.selType.color + '">📋</span></div><div><div class="bk-info-label">Type</div><div class="bk-info-value">' + esc(S.selType.label) + '</div></div></div>';
+  }
+  if (S.selPerson) {
+    h += '<div class="bk-info-item visible"><div class="bk-info-icon"><span>👤</span></div><div><div class="bk-info-label">Avec</div><div class="bk-info-value">' + esc(S.selPerson.name) + '</div></div></div>';
+  }
+  if (S.selDate) {
+    var d = new Date(S.selDate + 'T12:00:00');
+    var dateFr = JOURS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_FR[d.getMonth()];
+    h += '<div class="bk-info-item visible"><div class="bk-info-icon"><span>📅</span></div><div><div class="bk-info-label">Date</div><div class="bk-info-value">' + dateFr + '</div></div></div>';
+  }
+  if (S.selTime) {
+    h += '<div class="bk-info-item visible"><div class="bk-info-icon"><span>🕐</span></div><div><div class="bk-info-label">Heure</div><div class="bk-info-value">' + S.selTime + '</div></div></div>';
+  }
+  if (S.selType && S.selType.duration) {
+    h += '<div class="bk-info-item visible"><div class="bk-info-icon"><span>⏱</span></div><div><div class="bk-info-label">Durée</div><div class="bk-info-value">' + S.selType.duration + ' min</div></div></div>';
+  }
+  el.innerHTML = h;
+
+  // Mobile summaries
+  updateMobileSummary();
+}
+
+function updateMobileSummary() {
+  var chips = '';
+  if (S.selType) chips += '<span class="bk-mobile-chip">' + esc(S.selType.label) + '</span>';
+  if (S.selPerson) chips += '<span class="bk-mobile-chip">' + esc(S.selPerson.name) + '</span>';
+  if (S.selDate) {
+    var d = new Date(S.selDate + 'T12:00:00');
+    chips += '<span class="bk-mobile-chip">' + d.getDate() + ' ' + MOIS_FR[d.getMonth()] + '</span>';
+  }
+  if (S.selTime) chips += '<span class="bk-mobile-chip">' + S.selTime + '</span>';
+  var s2 = document.getElementById('mobileSummary2');
+  var s3 = document.getElementById('mobileSummary3');
+  if (s2) s2.innerHTML = chips;
+  if (s3) s3.innerHTML = chips;
+}
+
+/* ═══════════════════════════════════════════════════
+   LOAD CONFIG FROM FIRESTORE
+   ═══════════════════════════════════════════════════ */
+var params = new URLSearchParams(window.location.search);
+var presetPerson = params.get('person');
+var presetType = params.get('type');
+
+db.collection('booking_config').get().then(function(snap) {
+  snap.forEach(function(doc) {
+    var d = doc.data();
+    if (doc.id === '_types') { S.types = d.list || []; }
+    else if (doc.id === '_settings') { S.settings = d; }
+    else if (d.__type === 'person') { d.id = doc.id; S.persons.push(d); }
   });
-  // Load existing bookings for availability check
-  var today=fmtDate(new Date());
-  db.collection('bookings').where('date','>=',today).where('status','==','confirmed').get().then(function(bSnap){
-    bSnap.forEach(function(doc){bookings.push(doc.data());});
-    document.getElementById('bkLoading').style.display='none';
-    document.getElementById('bkApp').style.display='';
-    init();
-  });
+
+  // Load confirmed bookings (future)
+  var today = fmtDate(new Date());
+  return db.collection('bookings').where('date', '>=', today).where('status', '==', 'confirmed').get();
+}).then(function(bSnap) {
+  bSnap.forEach(function(doc) { S.bookings.push(doc.data()); });
+  document.getElementById('bkLoading').style.display = 'none';
+  document.getElementById('bkApp').style.display = '';
+  initBooking();
 });
 
-function init(){
-  // Auto-skip steps if presets
-  if(presetType){
-    selType=types.find(function(t){return t.id===presetType;});
-    if(selType){
-      if(presetPerson){
-        selPerson=persons.find(function(p){return p.id===presetPerson;});
-        if(selPerson){renderCalendar();goStep(3);return;}
+function initBooking() {
+  // Timezone
+  document.getElementById('tzLabel').textContent = S.userTz.replace(/_/g, ' ');
+
+  // Presets
+  if (presetType) {
+    S.selType = S.types.find(function(t) { return t.id === presetType; });
+    if (S.selType) {
+      if (presetPerson) {
+        S.selPerson = S.persons.find(function(p) { return p.id === presetPerson; });
+        if (S.selPerson) { goStep(3); return; }
       }
-      renderPersonCards();goStep(2);return;
+      renderPersonCards(); goStep(2); return;
     }
   }
-  if(presetPerson){
-    selPerson=persons.find(function(p){return p.id===presetPerson;});
-    if(selPerson){
-      // Show types for this person
-      var personTypes=types.filter(function(t){return(selPerson.types||[]).indexOf(t.id)>=0;});
-      if(personTypes.length===1){selType=personTypes[0];renderCalendar();goStep(3);return;}
+  if (presetPerson) {
+    S.selPerson = S.persons.find(function(p) { return p.id === presetPerson; });
+    if (S.selPerson) {
+      var personTypes = S.types.filter(function(t) { return (S.selPerson.types || []).indexOf(t.id) >= 0; });
+      if (personTypes.length === 1) { S.selType = personTypes[0]; goStep(3); return; }
     }
   }
   renderTypeCards();
+  setProgress(1);
 }
 
-/* ═══ STEP 1: TYPE ═══ */
-function renderTypeCards(){
-  var el=document.getElementById('typeCards');
-  var h='';
-  for(var i=0;i<types.length;i++){
-    var t=types[i];
-    h+='<div class="bk-card" data-action="selectType" data-idx="'+i+'">';
-    h+='<div class="bk-card-top"><span class="bk-card-dot" style="background:'+t.color+'"></span><span class="bk-card-name">'+esc(t.label)+'</span><span class="bk-card-dur">'+t.duration+' min</span></div>';
-    h+='</div>';
+/* ═══════════════════════════════════════════════════
+   STEP 1 — EVENT TYPES
+   ═══════════════════════════════════════════════════ */
+function renderTypeCards() {
+  var el = document.getElementById('typeCards');
+  var h = '';
+  for (var i = 0; i < S.types.length; i++) {
+    var t = S.types[i];
+    h += '<div class="bk-type-card" style="--type-color:' + t.color + '" data-action="selectType" data-idx="' + i + '">';
+    h += '<div class="bk-type-top">';
+    h += '<span class="bk-type-dot" style="background:' + t.color + '"></span>';
+    h += '<span class="bk-type-name">' + esc(t.label) + '</span>';
+    h += '<span class="bk-type-dur">' + t.duration + ' min</span>';
+    h += '<span class="bk-arrow">→</span>';
+    h += '</div>';
+    if (t.description) h += '<div class="bk-type-desc">' + esc(t.description) + '</div>';
+    h += '</div>';
   }
-  el.innerHTML=h;
+  el.innerHTML = h;
 }
 
-/* ═══ STEP 2: PERSON ═══ */
-function renderPersonCards(){
-  var el=document.getElementById('personCards');
-  var filtered=persons.filter(function(p){return!selType||(p.types||[]).indexOf(selType.id)>=0;});
-  if(!filtered.length){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted)">Aucune personne disponible pour ce type de RDV</div>';return;}
-  var h='';
-  for(var i=0;i<filtered.length;i++){
-    var p=filtered[i];
-    h+='<div class="bk-card bk-person" data-action="selectPerson" data-id="'+p.id+'">';
-    h+='<div class="bk-person-av" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</div>';
-    h+='<div><div class="bk-person-name">'+esc(p.name)+'</div><div class="bk-person-role">'+esc(p.role||'')+'</div></div>';
-    h+='</div>';
+/* ═══════════════════════════════════════════════════
+   STEP 2 — PERSON SELECTION (+ round-robin)
+   ═══════════════════════════════════════════════════ */
+function renderPersonCards() {
+  var el = document.getElementById('personCards');
+  var rrEl = document.getElementById('rrBanner');
+  var isRR = S.settings.roundRobin === true;
+
+  // Filter persons who handle this type
+  var filtered = S.persons.filter(function(p) {
+    return !S.selType || (p.types || []).indexOf(S.selType.id) >= 0;
+  });
+
+  if (isRR && filtered.length > 1) {
+    // Round-robin: auto-assign
+    rrEl.innerHTML = '<div class="bk-rr-banner"><div style="font-size:24px;margin-bottom:8px">🎯</div><div style="font-family:var(--fh);font-size:16px;font-weight:700">Attribution automatique</div><p>Nous vous attribuons le meilleur interlocuteur disponible selon les disponibilités.</p></div>';
+    autoAssignRoundRobin(filtered);
+    el.innerHTML = '';
+    return;
   }
-  el.innerHTML=h;
-}
 
-/* ═══ STEP 3: CALENDAR + SLOTS ═══ */
-function renderCalendar(){
-  var el=document.getElementById('calendarWrap');
-  var first=new Date(calYear,calMonth,1);
-  var lastDay=new Date(calYear,calMonth+1,0).getDate();
-  var startDay=first.getDay(); // 0=Sun
-  var today=new Date(); today.setHours(0,0,0,0);
-
-  var h='<div class="bk-cal">';
-  h+='<div class="bk-cal-header">';
-  h+='<button class="bk-cal-nav" data-action="prevMonth">◀</button>';
-  h+='<span class="bk-cal-month">'+MOIS[calMonth]+' '+calYear+'</span>';
-  h+='<button class="bk-cal-nav" data-action="nextMonth">▶</button>';
-  h+='</div>';
-  h+='<div class="bk-cal-grid">';
-  for(var d=0;d<7;d++)h+='<span class="bk-cal-day-label">'+JOURS_LABELS[d]+'</span>';
-  // Empty cells
-  for(var e=0;e<startDay;e++)h+='<span class="bk-cal-day"></span>';
-  // Days
-  for(var day=1;day<=lastDay;day++){
-    var dateObj=new Date(calYear,calMonth,day);
-    var ds=fmtDate(dateObj);
-    var isPast=dateObj<today;
-    var isToday=dateObj.getTime()===today.getTime();
-    var isAvail=!isPast&&hasAvailableSlots(ds);
-    var isSel=selDate===ds;
-    var cls='bk-cal-day';
-    if(isPast)cls+=' past';
-    if(isToday)cls+=' today';
-    if(isAvail)cls+=' available';
-    if(isSel)cls+=' selected';
-    h+='<button class="'+cls+'"'+(isAvail?' data-action="selectDate" data-date="'+ds+'"':'')+'>'+day+'</button>';
+  rrEl.innerHTML = '';
+  if (!filtered.length) {
+    el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:14px">Aucune personne disponible pour ce type de rendez-vous.</div>';
+    return;
   }
-  h+='</div></div>';
-  el.innerHTML=h;
 
-  // Render slots if date selected
-  if(selDate)renderSlots();
+  var h = '';
+  for (var i = 0; i < filtered.length; i++) {
+    var p = filtered[i];
+    h += '<div class="bk-person-card" data-action="selectPerson" data-id="' + p.id + '">';
+    h += '<div class="bk-person-av" style="background:' + p.color + '">' + (p.name || '?')[0].toUpperCase() + '</div>';
+    h += '<div><div class="bk-person-name">' + esc(p.name) + '</div>';
+    if (p.role) h += '<div class="bk-person-role">' + esc(p.role) + '</div>';
+    h += '</div>';
+    h += '<span class="bk-arrow" style="margin-left:auto">→</span>';
+    h += '</div>';
+  }
+  el.innerHTML = h;
 }
 
-function hasAvailableSlots(dateStr){
-  if(!selPerson)return false;
-  var d=new Date(dateStr+'T12:00:00');
-  var dayName=JOURS_FROM_IDX[d.getDay()];
-  var sched=selPerson.schedule||{};
-  var daySlots=sched[dayName]||[];
-  if(!daySlots.length)return false;
-  var blocked=selPerson.blockedDates||[];
-  if(blocked.indexOf(dateStr)>=0)return false;
+function autoAssignRoundRobin(filtered) {
+  // Simple: pick person with least bookings in the next 7 days
+  var counts = {};
+  filtered.forEach(function(p) { counts[p.id] = 0; });
+  var today = new Date(); today.setHours(0,0,0,0);
+  var weekLater = new Date(today); weekLater.setDate(weekLater.getDate() + 7);
+
+  S.bookings.forEach(function(b) {
+    if (counts[b.personId] !== undefined) {
+      var bd = new Date(b.date + 'T12:00:00');
+      if (bd >= today && bd <= weekLater) counts[b.personId]++;
+    }
+  });
+
+  var sorted = filtered.slice().sort(function(a, b) { return (counts[a.id] || 0) - (counts[b.id] || 0); });
+  S.selPerson = sorted[0];
+  updateInfoPanel();
+  setTimeout(function() { goStep(3); }, 800);
+}
+
+/* ═══════════════════════════════════════════════════
+   STEP 3 — CALENDAR + TIME SLOTS
+   ═══════════════════════════════════════════════════ */
+function renderCalendar() {
+  var el = document.getElementById('calendarWrap');
+  var first = new Date(S.calYear, S.calMonth, 1);
+  var lastDay = new Date(S.calYear, S.calMonth + 1, 0).getDate();
+  var startDay = first.getDay();
+  var today = new Date(); today.setHours(0,0,0,0);
+
+  var h = '<div class="bk-cal">';
+  h += '<div class="bk-cal-header">';
+  h += '<span class="bk-cal-month">' + MOIS[S.calMonth] + ' ' + S.calYear + '</span>';
+  h += '<div class="bk-cal-navs">';
+  h += '<button class="bk-cal-nav" data-action="prevMonth">◂</button>';
+  h += '<button class="bk-cal-nav" data-action="nextMonth">▸</button>';
+  h += '</div></div>';
+  h += '<div class="bk-cal-grid">';
+  for (var d = 0; d < 7; d++) h += '<span class="bk-cal-dow">' + JOURS_SHORT[d] + '</span>';
+  for (var e = 0; e < startDay; e++) h += '<span class="bk-cal-day"></span>';
+  for (var day = 1; day <= lastDay; day++) {
+    var dateObj = new Date(S.calYear, S.calMonth, day);
+    var ds = fmtDate(dateObj);
+    var isPast = dateObj < today;
+    var isToday = dateObj.getTime() === today.getTime();
+    var isAvail = !isPast && hasAvailableSlots(ds);
+    var isSel = S.selDate === ds;
+    var cls = 'bk-cal-day';
+    if (isPast) cls += ' past';
+    if (isToday) cls += ' today';
+    if (isAvail) cls += ' avail';
+    if (isSel) cls += ' sel';
+    h += '<button class="' + cls + '"' + (isAvail ? ' data-action="selectDate" data-date="' + ds + '"' : '') + '>' + day + '</button>';
+  }
+  h += '</div></div>';
+  el.innerHTML = h;
+
+  if (S.selDate) renderSlots();
+  else {
+    document.getElementById('slotsWrap').innerHTML = '<div class="bk-slots-panel"><div class="bk-slots-empty"><span>📅</span>Sélectionnez un jour</div></div>';
+    document.getElementById('continueBar').style.display = 'none';
+  }
+}
+
+/* ── AVAILABILITY CHECK ── */
+function hasAvailableSlots(dateStr) {
+  if (!S.selPerson) return false;
+  var d = new Date(dateStr + 'T12:00:00');
+  var dayName = JOURS_FULL[d.getDay()];
+  var sched = S.selPerson.schedule || {};
+  var daySlots = sched[dayName] || [];
+  if (!daySlots.length) return false;
+
+  // Blocked dates
+  var blocked = S.selPerson.blockedDates || [];
+  if (blocked.indexOf(dateStr) >= 0) return false;
+
+  // Min notice check
+  var minNotice = S.selPerson.minNoticeHours || S.settings.defaultMinNotice || 0;
+  if (minNotice > 0) {
+    var now = new Date();
+    var earliest = new Date(now.getTime() + minNotice * 3600000);
+    var dayEnd = new Date(dateStr + 'T23:59:59');
+    if (dayEnd < earliest) return false;
+  }
+
+  // Max per day check
+  var maxPerDay = S.selPerson.maxPerDay || S.settings.defaultMaxPerDay || 0;
+  if (maxPerDay > 0) {
+    var dayBookings = S.bookings.filter(function(b) { return b.personId === S.selPerson.id && b.date === dateStr; });
+    if (dayBookings.length >= maxPerDay) return false;
+  }
+
   return true;
 }
 
-function renderSlots(){
-  var el=document.getElementById('slotsWrap');
-  if(!selDate||!selPerson){el.innerHTML='';return;}
-  var d=new Date(selDate+'T12:00:00');
-  var dayName=JOURS_FROM_IDX[d.getDay()];
-  var sched=selPerson.schedule||{};
-  var daySlots=sched[dayName]||[];
-  var dur=selType?selType.duration:30;
+/* ── SLOT GENERATION ── */
+function renderSlots() {
+  var wrap = document.getElementById('slotsWrap');
+  if (!S.selDate || !S.selPerson) { wrap.innerHTML = ''; return; }
 
-  // Generate time slots
-  var allSlots=[];
-  for(var si=0;si<daySlots.length;si++){
-    var range=daySlots[si];
-    var startMin=timeToMin(range.start);
-    var endMin=timeToMin(range.end);
-    for(var m=startMin;m+dur<=endMin;m+=dur){
+  var d = new Date(S.selDate + 'T12:00:00');
+  var dayName = JOURS_FULL[d.getDay()];
+  var sched = S.selPerson.schedule || {};
+  var daySlots = sched[dayName] || [];
+  var dur = S.selType ? S.selType.duration : 30;
+  var bufBefore = S.selPerson.bufferBefore || S.settings.defaultBufferBefore || 0;
+  var bufAfter = S.selPerson.bufferAfter || S.settings.defaultBufferAfter || 0;
+  var minNotice = S.selPerson.minNoticeHours || S.settings.defaultMinNotice || 0;
+
+  // Generate all possible slots from schedule ranges
+  var allSlots = [];
+  for (var si = 0; si < daySlots.length; si++) {
+    var range = daySlots[si];
+    var startMin = timeToMin(range.start);
+    var endMin = timeToMin(range.end);
+    for (var m = startMin; m + dur <= endMin; m += dur) {
       allSlots.push(minToTime(m));
     }
   }
 
-  // Remove already booked
-  var available=allSlots.filter(function(time){
-    return !bookings.some(function(b){
-      return b.personId===selPerson.id&&b.date===selDate&&b.time===time;
-    });
+  // Get booked times for this person on this date (with buffer)
+  var bookedRanges = [];
+  S.bookings.forEach(function(b) {
+    if (b.personId === S.selPerson.id && b.date === S.selDate) {
+      var bStart = timeToMin(b.time);
+      var bDur = b.duration || 30;
+      bookedRanges.push({ start: bStart - bufBefore, end: bStart + bDur + bufAfter });
+    }
   });
 
-  // Remove past times if today
-  var now=new Date();
-  if(selDate===fmtDate(now)){
-    var nowMin=now.getHours()*60+now.getMinutes();
-    available=available.filter(function(t){return timeToMin(t)>nowMin;});
+  // Filter: remove conflicting slots
+  var available = allSlots.filter(function(time) {
+    var slotStart = timeToMin(time);
+    var slotEnd = slotStart + dur;
+    // Check overlap with any booked range (including buffer)
+    for (var i = 0; i < bookedRanges.length; i++) {
+      var br = bookedRanges[i];
+      if (slotStart < br.end && slotEnd > br.start) return false;
+    }
+    return true;
+  });
+
+  // Filter: remove past times if today
+  var now = new Date();
+  if (S.selDate === fmtDate(now)) {
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    // Also apply min notice for today
+    var noticeMin = nowMin + (minNotice * 60);
+    available = available.filter(function(t) { return timeToMin(t) > noticeMin; });
+  } else if (minNotice > 0) {
+    // For future dates, check if min notice cuts into early slots
+    var earliest = new Date(now.getTime() + minNotice * 3600000);
+    if (S.selDate === fmtDate(earliest)) {
+      var eMin = earliest.getHours() * 60 + earliest.getMinutes();
+      available = available.filter(function(t) { return timeToMin(t) >= eMin; });
+    }
   }
 
-  if(!available.length){el.innerHTML='<div class="bk-no-slots">Aucun créneau disponible ce jour</div>';return;}
+  // Max per day (already checked in hasAvailableSlots, but double-check)
+  var maxPerDay = S.selPerson.maxPerDay || S.settings.defaultMaxPerDay || 0;
+  if (maxPerDay > 0) {
+    var existing = S.bookings.filter(function(b) { return b.personId === S.selPerson.id && b.date === S.selDate; }).length;
+    if (existing >= maxPerDay) available = [];
+  }
 
-  var h='<div class="bk-slots">';
-  for(var i=0;i<available.length;i++){
-    var isSel=selTime===available[i];
-    h+='<button class="bk-slot'+(isSel?' selected':'')+'" data-action="selectTime" data-time="'+available[i]+'">'+available[i]+'</button>';
+  // Render date label
+  var dateFr = JOURS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_FR[d.getMonth()];
+
+  var h = '<div class="bk-slots-panel">';
+  h += '<div class="bk-slots-date">' + dateFr + '</div>';
+
+  if (!available.length) {
+    h += '<div class="bk-no-slots">Aucun créneau disponible ce jour</div>';
+  } else {
+    h += '<div class="bk-slots-list">';
+    for (var i = 0; i < available.length; i++) {
+      var isSel = S.selTime === available[i];
+      h += '<button class="bk-slot' + (isSel ? ' sel' : '') + '" data-action="selectTime" data-time="' + available[i] + '">' + available[i] + '</button>';
+    }
+    h += '</div>';
   }
-  h+='</div>';
-  if(selTime){
-    h+='<button class="bk-btn bk-btn-primary" data-action="goForm">Continuer →</button>';
-  }
-  el.innerHTML=h;
+  h += '</div>';
+  wrap.innerHTML = h;
+
+  document.getElementById('continueBar').style.display = S.selTime ? '' : 'none';
 }
 
-function timeToMin(t){var p=t.split(':');return parseInt(p[0])*60+parseInt(p[1]);}
-function minToTime(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
-
-/* ═══ STEP 4: FORM + SUMMARY ═══ */
-function renderSummary(){
-  var el=document.getElementById('bookingSummary');
-  var d=new Date(selDate+'T12:00:00');
-  var joursFr=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
-  var moisFr=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-  var dateFr=joursFr[d.getDay()]+' '+d.getDate()+' '+moisFr[d.getMonth()]+' '+d.getFullYear();
-  var h='';
-  if(selType)h+='<div class="bk-summary-row"><span class="bk-summary-label">Type</span><span class="bk-summary-val" style="color:'+selType.color+'">'+esc(selType.label)+'</span></div>';
-  if(selPerson)h+='<div class="bk-summary-row"><span class="bk-summary-label">Avec</span><span class="bk-summary-val">'+esc(selPerson.name)+'</span></div>';
-  h+='<div class="bk-summary-row"><span class="bk-summary-label">Date</span><span class="bk-summary-val">'+dateFr+'</span></div>';
-  h+='<div class="bk-summary-row"><span class="bk-summary-label">Heure</span><span class="bk-summary-val">'+selTime+'</span></div>';
-  if(selType)h+='<div class="bk-summary-row"><span class="bk-summary-label">Durée</span><span class="bk-summary-val">'+selType.duration+' min</span></div>';
-  el.innerHTML=h;
+/* ═══════════════════════════════════════════════════
+   STEP 4 — SUMMARY + FORM
+   ═══════════════════════════════════════════════════ */
+function renderSummary() {
+  var el = document.getElementById('bookingSummary');
+  var d = new Date(S.selDate + 'T12:00:00');
+  var dateFr = JOURS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_FR[d.getMonth()] + ' ' + d.getFullYear();
+  var h = '';
+  if (S.selType) h += '<div class="bk-summary-row"><span class="bk-summary-label">Type</span><span class="bk-summary-val">' + esc(S.selType.label) + '</span></div>';
+  if (S.selPerson) h += '<div class="bk-summary-row"><span class="bk-summary-label">Avec</span><span class="bk-summary-val">' + esc(S.selPerson.name) + '</span></div>';
+  h += '<div class="bk-summary-row"><span class="bk-summary-label">Date</span><span class="bk-summary-val">' + dateFr + '</span></div>';
+  h += '<div class="bk-summary-row"><span class="bk-summary-label">Heure</span><span class="bk-summary-val">' + S.selTime + '</span></div>';
+  if (S.selType) h += '<div class="bk-summary-row"><span class="bk-summary-label">Durée</span><span class="bk-summary-val">' + S.selType.duration + ' min</span></div>';
+  el.innerHTML = h;
 }
 
-/* ═══ CONFIRM BOOKING ═══ */
-document.getElementById('confirmBtn').addEventListener('click',function(){
-  var prenom=document.getElementById('fPrenom').value.trim();
-  var nom=document.getElementById('fNom').value.trim();
-  var email=document.getElementById('fEmail').value.trim();
-  if(!prenom||!nom||!email){alert('Veuillez remplir au minimum votre prénom, nom et email.');return;}
+/* ═══════════════════════════════════════════════════
+   STEP 5 — SUBMIT BOOKING
+   ═══════════════════════════════════════════════════ */
+document.getElementById('confirmBtn').addEventListener('click', function() {
+  var prenom = document.getElementById('fPrenom').value.trim();
+  var nom = document.getElementById('fNom').value.trim();
+  var email = document.getElementById('fEmail').value.trim();
+  if (!prenom || !nom || !email) {
+    alert('Veuillez remplir au minimum votre prénom, nom et email.');
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    alert('Veuillez entrer un email valide.');
+    return;
+  }
 
-  var booking={
-    type:selType?selType.id:'',
-    typeLabel:selType?selType.label:'',
-    personId:selPerson?selPerson.id:'',
-    personName:selPerson?selPerson.name:'',
-    date:selDate,
-    time:selTime,
-    duration:selType?selType.duration:30,
-    status:'confirmed',
-    prospect:{
-      prenom:prenom,
-      nom:nom,
-      email:email,
-      telephone:document.getElementById('fTel').value.trim(),
-      secteur:document.getElementById('fSecteur').value.trim(),
-      message:document.getElementById('fMessage').value.trim()
+  var booking = {
+    type: S.selType ? S.selType.id : '',
+    typeLabel: S.selType ? S.selType.label : '',
+    personId: S.selPerson ? S.selPerson.id : '',
+    personName: S.selPerson ? S.selPerson.name : '',
+    date: S.selDate,
+    time: S.selTime,
+    duration: S.selType ? S.selType.duration : 30,
+    status: 'confirmed',
+    timezone: S.userTz,
+    prospect: {
+      prenom: prenom,
+      nom: nom,
+      email: email,
+      telephone: document.getElementById('fTel').value.trim(),
+      secteur: document.getElementById('fSecteur').value.trim(),
+      message: document.getElementById('fMessage').value.trim()
     },
-    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
 
-  this.disabled=true;
-  this.textContent='Réservation en cours...';
-  var btn=this;
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Réservation en cours…';
 
-  db.collection('bookings').add(booking).then(function(){
-    // Also create a lead in the leads collection
+  db.collection('bookings').add(booking).then(function() {
+    // Also create lead
     db.collection('leads').add({
-      nom:prenom+' '+nom,
-      email:email,
-      telephone:document.getElementById('fTel').value.trim(),
-      type:'self_booking',
-      stage:'rdv_self_booking',
-      status:'rdv_pose',
-      assignedTo:selPerson?selPerson.id:'',
-      secteur:document.getElementById('fSecteur').value.trim(),
-      utm:'Booking - '+(selType?selType.label:''),
-      rdvDate:selDate,
-      rdvHeure:selTime,
-      notesHistory:[{text:'RDV réservé via booking : '+(selType?selType.label:'')+' avec '+(selPerson?selPerson.name:''),date:new Date().toLocaleString('fr-FR')}],
-      createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+      nom: prenom + ' ' + nom,
+      email: email,
+      telephone: document.getElementById('fTel').value.trim(),
+      type: 'self_booking',
+      stage: 'rdv_self_booking',
+      status: 'rdv_pose',
+      assignedTo: S.selPerson ? S.selPerson.id : '',
+      secteur: document.getElementById('fSecteur').value.trim(),
+      utm: 'Booking - ' + (S.selType ? S.selType.label : ''),
+      rdvDate: S.selDate,
+      rdvHeure: S.selTime,
+      notesHistory: [{
+        text: 'RDV réservé via booking : ' + (S.selType ? S.selType.label : '') + ' avec ' + (S.selPerson ? S.selPerson.name : ''),
+        date: new Date().toLocaleString('fr-FR')
+      }],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    var d=new Date(selDate+'T12:00:00');
-    var joursFr2=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
-    var moisFr2=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
-    document.getElementById('confirmText').innerHTML='Votre rendez-vous <strong>'+(selType?selType.label:'')+'</strong> avec <strong>'+(selPerson?selPerson.name:'')+'</strong> est confirmé pour le <strong>'+joursFr2[d.getDay()]+' '+d.getDate()+' '+moisFr2[d.getMonth()]+'</strong> à <strong>'+selTime+'</strong>.<br><br>Vous recevrez une confirmation par email à <strong>'+esc(email)+'</strong>.';
-    goStep(5);
-  }).catch(function(err){
-    btn.disabled=false;
-    btn.textContent='✅ Confirmer le rendez-vous';
-    alert('Erreur: '+err.message);
+    // Update round-robin counter
+    if (S.settings.roundRobin && S.selPerson) {
+      db.collection('_meta').doc('booking_rr').set(
+        { lastAssigned: S.selPerson.id, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    }
+
+    showConfirmation(prenom, email);
+  }).catch(function(err) {
+    btn.disabled = false;
+    btn.textContent = 'Confirmer le rendez-vous';
+    alert('Erreur : ' + err.message);
   });
 });
 
-/* ═══ EVENTS ═══ */
-document.addEventListener('click',function(e){
-  var a=e.target.closest('[data-action]');
-  if(!a)return;
-  var action=a.dataset.action;
+function showConfirmation(prenom, email) {
+  var d = new Date(S.selDate + 'T12:00:00');
+  var dateFr = JOURS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_FR[d.getMonth()];
 
-  if(action==='selectType'){selType=types[+a.dataset.idx];renderPersonCards();goStep(2);}
-  if(action==='selectPerson'){selPerson=persons.find(function(p){return p.id===a.dataset.id;});selDate=null;selTime=null;renderCalendar();goStep(3);}
-  if(action==='prevMonth'){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
-  if(action==='nextMonth'){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
-  if(action==='selectDate'){selDate=a.dataset.date;selTime=null;renderCalendar();}
-  if(action==='selectTime'){selTime=a.dataset.time;renderSlots();}
-  if(action==='goForm'){renderSummary();goStep(4);}
-  if(action==='back'){goStep(+a.dataset.to);}
+  document.getElementById('confirmText').innerHTML =
+    'Merci <strong>' + esc(prenom) + '</strong> ! Votre rendez-vous <strong>' + esc(S.selType ? S.selType.label : '') + '</strong> avec <strong>' + esc(S.selPerson ? S.selPerson.name : '') + '</strong> est confirmé pour le <strong>' + dateFr + '</strong> à <strong>' + S.selTime + '</strong>.<br><br>Une confirmation sera envoyée à <strong>' + esc(email) + '</strong>.';
+
+  goStep(5);
+}
+
+/* ── .ICS GENERATION ── */
+document.getElementById('icsBtn').addEventListener('click', function() {
+  if (!S.selDate || !S.selTime) return;
+  var dur = S.selType ? S.selType.duration : 30;
+  var startMin = timeToMin(S.selTime);
+  var endMin = startMin + dur;
+
+  var d = new Date(S.selDate + 'T' + S.selTime + ':00');
+  var dEnd = new Date(S.selDate + 'T' + minToTime(endMin) + ':00');
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function icsDate(dt) { return dt.getFullYear() + pad(dt.getMonth()+1) + pad(dt.getDate()) + 'T' + pad(dt.getHours()) + pad(dt.getMinutes()) + '00'; }
+
+  var ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Ambitio//Booking//FR',
+    'BEGIN:VEVENT',
+    'DTSTART;TZID=Europe/Paris:' + icsDate(d),
+    'DTEND;TZID=Europe/Paris:' + icsDate(dEnd),
+    'SUMMARY:' + (S.selType ? S.selType.label : 'RDV') + ' — Ambitio',
+    'DESCRIPTION:Rendez-vous avec ' + (S.selPerson ? S.selPerson.name : 'Ambitio'),
+    'STATUS:CONFIRMED',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+
+  var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'rdv-ambitio.ics';
+  a.click();
+  URL.revokeObjectURL(url);
 });
 
-// Show admin gear if logged in as admin
-firebase.auth().onAuthStateChanged(function(u){
-  if(u){
-    db.collection('users').doc(u.uid).get().then(function(s){
-      if(s.exists&&s.data().role==='admin'){
-        document.getElementById('adminGear').style.display='';
+/* ═══════════════════════════════════════════════════
+   EVENT DELEGATION
+   ═══════════════════════════════════════════════════ */
+document.addEventListener('click', function(e) {
+  var a = e.target.closest('[data-action]');
+  if (!a) return;
+  var action = a.dataset.action;
+
+  if (action === 'selectType') {
+    S.selType = S.types[+a.dataset.idx];
+    S.selPerson = null; S.selDate = null; S.selTime = null;
+    renderPersonCards();
+    goStep(2);
+  }
+  if (action === 'selectPerson') {
+    S.selPerson = S.persons.find(function(p) { return p.id === a.dataset.id; });
+    S.selDate = null; S.selTime = null;
+    goStep(3);
+  }
+  if (action === 'prevMonth') {
+    S.calMonth--;
+    if (S.calMonth < 0) { S.calMonth = 11; S.calYear--; }
+    renderCalendar();
+  }
+  if (action === 'nextMonth') {
+    S.calMonth++;
+    if (S.calMonth > 11) { S.calMonth = 0; S.calYear++; }
+    renderCalendar();
+  }
+  if (action === 'selectDate') {
+    S.selDate = a.dataset.date;
+    S.selTime = null;
+    renderCalendar();
+    updateInfoPanel();
+  }
+  if (action === 'selectTime') {
+    S.selTime = a.dataset.time;
+    renderSlots();
+    updateInfoPanel();
+  }
+});
+
+/* ═══════════════════════════════════════════════════
+   ADMIN GEAR (show if logged in as admin)
+   ═══════════════════════════════════════════════════ */
+firebase.auth().onAuthStateChanged(function(u) {
+  if (u) {
+    db.collection('users').doc(u.uid).get().then(function(s) {
+      if (s.exists && s.data().role === 'admin') {
+        document.getElementById('adminGear').style.display = 'flex';
       }
     });
   }

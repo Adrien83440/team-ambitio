@@ -4,378 +4,609 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Booking Admin</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#08080f;--bg2:#0f0f1a;--bg3:#14141f;--bg4:#1a1a28;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--red:#b91c1c;--red2:#ef4444;--red3:#fca5a5;--gold:#f59e0b;--green:#34d399;--blue:#60a5fa;--purple:#a78bfa;--text:rgba(255,255,255,0.92);--muted:rgba(255,255,255,0.48);--muted2:rgba(255,255,255,0.22);--radius:12px;--fh:'Syne',sans-serif;--fb:'Inter',sans-serif;--fm:'DM Mono',monospace}
+:root{
+  --bg:#08080f;--bg2:#0e0e1a;--bg3:#141420;--bg4:#1a1a2a;--bg5:#222236;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:rgba(255,255,255,0.92);--muted:rgba(255,255,255,0.48);--muted2:rgba(255,255,255,0.24);
+  --purple:#8b5cf6;--purple2:#a78bfa;--purple-bg:rgba(139,92,246,0.1);--purple-border:rgba(139,92,246,0.2);
+  --green:#34d399;--green-bg:rgba(52,211,153,0.1);--green-border:rgba(52,211,153,0.2);
+  --blue:#60a5fa;--blue-bg:rgba(96,165,250,0.1);
+  --amber:#fbbf24;--amber-bg:rgba(251,191,36,0.08);--amber-border:rgba(251,191,36,0.2);
+  --red:#ef4444;--red2:#fca5a5;--red-bg:rgba(239,68,68,0.08);--red-border:rgba(239,68,68,0.2);
+  --radius:14px;--radius-sm:10px;--radius-xs:8px;
+  --fh:'Bricolage Grotesque',system-ui,sans-serif;
+  --fb:'Figtree','Segoe UI',sans-serif;
+  --fm:'SF Mono','Fira Code',monospace;
+  --ease:cubic-bezier(.4,0,.2,1);
+}
 html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
-.page{max-width:900px;margin:0 auto;padding:20px 20px 80px}
-.top{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap}
-.top-icon{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 3px 12px rgba(139,92,246,0.3)}
-.top-title{font-family:var(--fh);font-size:20px;font-weight:800}
+.page{max-width:920px;margin:0 auto;padding:24px 20px 80px}
+
+/* ── TOP BAR ── */
+.top{display:flex;align-items:center;gap:14px;margin-bottom:28px;flex-wrap:wrap}
+.top-icon{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#8b5cf6,#6d28d9);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 16px rgba(139,92,246,0.3);flex-shrink:0}
+.top-title{font-family:var(--fh);font-size:22px;font-weight:800;letter-spacing:-0.3px}
 .top-sub{font-size:12px;color:var(--muted)}
-.top-link{margin-left:auto;padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--blue);font-size:12px;font-weight:600;text-decoration:none;transition:all .15s}
-.top-link:hover{border-color:var(--blue);background:rgba(96,165,250,0.08)}
+.top-actions{margin-left:auto;display:flex;gap:8px}
+.top-link{padding:9px 16px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--bg2);color:var(--blue);font-size:12px;font-weight:600;text-decoration:none;transition:all .15s var(--ease);display:inline-flex;align-items:center;gap:6px}
+.top-link:hover{border-color:var(--blue);background:var(--blue-bg)}
 
-/* Sections */
+/* ── SECTION CARDS ── */
 .ba-section{background:var(--bg2);border:1px solid var(--border);border-radius:16px;margin-bottom:20px;overflow:hidden}
-.ba-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-.ba-head-icon{font-size:18px}
-.ba-head-title{font-family:var(--fh);font-size:14px;font-weight:800}
-.ba-head-btn{margin-left:auto;padding:6px 12px;border:none;border-radius:8px;background:rgba(52,211,153,0.12);color:var(--green);font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer;transition:all .15s}
-.ba-head-btn:hover{background:rgba(52,211,153,0.2)}
-.ba-body{padding:16px 20px}
+.ba-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.ba-head-icon{font-size:18px;flex-shrink:0}
+.ba-head-title{font-family:var(--fh);font-size:15px;font-weight:700;flex:1}
+.ba-head-tag{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px}
+.ba-body{padding:18px 22px}
 
-/* Type cards */
-.type-list{display:flex;flex-direction:column;gap:8px}
-.type-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px}
-.type-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+/* ── INPUT STYLES ── */
+.ba-input{padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius-xs);color:var(--text);font-family:var(--fb);font-size:13px;outline:none;transition:all .15s var(--ease)}
+.ba-input:focus{border-color:var(--purple)}
+.ba-input::placeholder{color:var(--muted2)}
+.ba-select{padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius-xs);color:var(--text);font-family:var(--fb);font-size:13px;outline:none}
+.ba-select option{background:var(--bg3)}
+.ba-btn{padding:8px 16px;border:none;border-radius:var(--radius-xs);font-family:var(--fb);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s var(--ease);display:inline-flex;align-items:center;gap:5px}
+.ba-btn-green{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.ba-btn-green:hover{background:rgba(52,211,153,0.18)}
+.ba-btn-purple{background:var(--purple-bg);color:var(--purple2);border:1px solid var(--purple-border)}
+.ba-btn-purple:hover{background:rgba(139,92,246,0.18)}
+.ba-btn-red{background:var(--red-bg);color:var(--red2);border:1px solid var(--red-border)}
+.ba-btn-red:hover{background:rgba(239,68,68,0.16)}
+.ba-btn-ghost{background:none;border:1px solid var(--border);color:var(--muted)}
+.ba-btn-ghost:hover{border-color:var(--border2);color:var(--text)}
+.ba-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:6px}
+
+/* ── TYPES ── */
+.type-list{display:flex;flex-direction:column;gap:6px}
+.type-item{display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.type-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
 .type-name{font-weight:700;font-size:13px;flex:1}
-.type-dur{font-family:var(--fm);font-size:12px;color:var(--muted)}
-.type-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px}
-.type-del:hover{color:#ef4444}
-.type-add{display:flex;gap:6px;margin-top:10px}
-.type-add input,.type-add select{padding:7px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none}
-.type-add input:focus{border-color:var(--purple)}
-.type-add button{padding:7px 14px;border:none;border-radius:8px;background:rgba(139,92,246,0.15);color:var(--purple);font-family:var(--fb);font-size:12px;font-weight:700;cursor:pointer}
+.type-dur{font-size:12px;color:var(--muted);font-weight:600}
+.type-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:14px;padding:4px;transition:color .15s}
+.type-del:hover{color:var(--red)}
+.type-add{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.type-add .ba-input{flex:1;min-width:140px}
 
-/* Person cards */
+/* ── GLOBAL SETTINGS ── */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:580px){.settings-grid{grid-template-columns:1fr}}
+.setting-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
+.setting-title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px;display:flex;align-items:center;gap:6px}
+.setting-desc{font-size:11px;color:var(--muted);margin-bottom:8px}
+.setting-row{display:flex;align-items:center;gap:8px}
+.setting-row .ba-input,.setting-row .ba-select{flex:1}
+.setting-unit{font-size:11px;color:var(--muted);flex-shrink:0}
+
+/* Toggle switch */
+.toggle-wrap{display:flex;align-items:center;gap:10px;cursor:pointer}
+.toggle{width:40px;height:22px;border-radius:11px;background:var(--bg5);border:1.5px solid var(--border);position:relative;transition:all .2s var(--ease);flex-shrink:0}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:all .2s var(--ease)}
+.toggle.on{background:var(--purple-bg);border-color:var(--purple-border)}
+.toggle.on::after{left:20px;background:var(--purple)}
+
+/* ── PERSON CARDS ── */
 .person-list{display:flex;flex-direction:column;gap:12px}
-.person-card{background:var(--bg3);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.person-head{padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer}
-.person-av{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:14px;font-weight:800;color:white;flex-shrink:0}
-.person-name{font-family:var(--fh);font-size:14px;font-weight:800;flex:1}
+.person-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:border-color .2s}
+.person-card.open{border-color:var(--border2)}
+.person-head{padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .15s}
+.person-head:hover{background:rgba(255,255,255,0.02)}
+.person-av{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-size:15px;font-weight:800;color:white;flex-shrink:0}
+.person-name{font-family:var(--fh);font-size:14px;font-weight:700;flex:1}
 .person-role{font-size:11px;color:var(--muted);font-weight:600}
-.person-types{display:flex;gap:4px}
-.person-type-badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px}
-.person-link{font-size:10px;color:var(--blue);font-family:var(--fm);margin-left:auto}
-.person-toggle{font-size:10px;color:var(--muted);transition:transform .2s}
+.person-badges{display:flex;gap:4px;flex-wrap:wrap}
+.person-badge{font-size:9px;font-weight:700;padding:2px 8px;border-radius:5px}
+.person-toggle{font-size:11px;color:var(--muted);transition:transform .2s var(--ease);flex-shrink:0}
 .person-card.open .person-toggle{transform:rotate(180deg)}
-.person-body{display:none;padding:12px 16px;border-top:1px solid var(--border)}
+.person-body{display:none;padding:18px;border-top:1px solid var(--border)}
 .person-card.open .person-body{display:block}
 
-/* Schedule grid */
-.sched-day{margin-bottom:10px}
-.sched-day-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px}
-.sched-slots{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}
-.sched-slot{display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:var(--fm)}
-.sched-slot-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:10px}
-.sched-slot-del:hover{color:#ef4444}
-.sched-add-row{display:flex;gap:4px;align-items:center}
-.sched-add-row input{padding:4px 8px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--fm);font-size:11px;outline:none;width:70px}
-.sched-add-row button{padding:4px 8px;border:none;border-radius:6px;background:rgba(52,211,153,0.1);color:var(--green);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fb)}
-.sched-add-row input::-webkit-calendar-picker-indicator{filter:invert(0.7)}
+/* Person sub-sections */
+.p-section{margin-bottom:18px}
+.p-section:last-child{margin-bottom:0}
+.p-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:6px}
 
-/* Person add form */
-.person-add{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
-.person-add input{padding:7px 10px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;outline:none;flex:1;min-width:120px}
-.person-add button{padding:7px 14px;border:none;border-radius:8px;background:rgba(52,211,153,0.12);color:var(--green);font-family:var(--fb);font-size:12px;font-weight:700;cursor:pointer}
+/* Type toggles */
+.p-type-btns{display:flex;flex-wrap:wrap;gap:5px}
+.p-type-btn{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--fb);transition:all .15s}
+.p-type-btn.on{border-color:var(--type-color,var(--purple));background:color-mix(in srgb,var(--type-color,var(--purple)) 12%,transparent);color:var(--type-color,var(--purple))}
+
+/* Person settings */
+.p-settings{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:580px){.p-settings{grid-template-columns:1fr}}
+.p-setting{background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius-xs);padding:10px 12px}
+.p-setting-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px}
+.p-setting-row{display:flex;align-items:center;gap:6px}
+.p-setting-row .ba-input{flex:1;padding:6px 10px;font-size:12px}
+.p-setting-unit{font-size:10px;color:var(--muted);flex-shrink:0}
+
+/* Schedule */
+.sched-grid{display:flex;flex-direction:column;gap:8px}
+.sched-day{background:var(--bg4);border:1px solid var(--border);border-radius:var(--radius-xs);padding:10px 12px}
+.sched-day-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sched-day-name{font-size:12px;font-weight:700;width:36px;flex-shrink:0}
+.sched-slots{display:flex;flex-wrap:wrap;gap:4px;flex:1}
+.sched-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--purple-bg);border:1px solid var(--purple-border);border-radius:6px;font-size:11px;font-weight:600;color:var(--purple2)}
+.sched-chip-del{background:none;border:none;color:var(--purple2);cursor:pointer;font-size:10px;opacity:.6;transition:opacity .15s;padding:0}
+.sched-chip-del:hover{opacity:1;color:var(--red)}
+.sched-add{display:flex;gap:4px;align-items:center}
+.sched-add input[type="time"]{padding:4px 8px;background:var(--bg5);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--fb);font-size:11px;outline:none;width:80px}
+.sched-add input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(.6)}
+.sched-add-btn{padding:4px 10px;border:none;border-radius:6px;background:var(--green-bg);color:var(--green);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fb);border:1px solid var(--green-border)}
 
 /* Blocked dates */
-.blocked-list{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
-.blocked-item{padding:3px 8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:6px;font-size:11px;color:var(--red3);display:flex;align-items:center;gap:4px}
-.blocked-item button{background:none;border:none;color:var(--red3);cursor:pointer;font-size:10px;opacity:0.6}
-.blocked-add{display:flex;gap:4px}
-.blocked-add input{padding:4px 8px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--fm);font-size:11px;outline:none}
-.blocked-add button{padding:4px 10px;border:none;border-radius:6px;background:rgba(239,68,68,0.1);color:var(--red3);font-size:11px;font-weight:700;cursor:pointer;font-family:var(--fb)}
+.blocked-chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.blocked-chip{padding:4px 10px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;font-size:11px;color:var(--red2);display:flex;align-items:center;gap:4px;font-weight:600}
+.blocked-chip button{background:none;border:none;color:var(--red2);cursor:pointer;font-size:10px;opacity:.6;padding:0}
+.blocked-chip button:hover{opacity:1}
+.blocked-add{display:flex;gap:4px;align-items:center}
+.blocked-add input[type="date"]{padding:4px 8px;background:var(--bg5);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--fb);font-size:11px;outline:none}
+.blocked-add input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.6)}
 
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}
+/* ── LINKS SECTION ── */
+.link-card{padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-xs);margin-bottom:6px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all .15s}
+.link-card:hover{border-color:var(--blue);background:var(--blue-bg)}
+.link-label{font-size:11px;font-weight:700;flex-shrink:0}
+.link-url{font-size:11px;color:var(--blue);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.link-copy{font-size:10px;color:var(--muted);font-weight:600;flex-shrink:0}
+
+/* ── PERSON ADD FORM ── */
+.person-add{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.person-add .ba-input{flex:1;min-width:120px}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:var(--radius-sm);z-index:2000;opacity:0;transition:all .3s var(--ease);pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
 </head>
 <body>
 <div class="page">
+
+  <!-- TOP -->
   <div class="top">
     <div class="top-icon">📅</div>
     <div>
       <div class="top-title">Booking — Configuration</div>
-      <div class="top-sub">Gérer les types de RDV, les personnes et leurs disponibilités</div>
+      <div class="top-sub">Types de RDV, personnes, disponibilités, réglages avancés</div>
     </div>
-    <a class="top-link" href="booking.html" target="_blank">↗ Voir la page publique</a>
+    <div class="top-actions">
+      <a class="top-link" href="booking.html" target="_blank">↗ Page publique</a>
+    </div>
   </div>
 
-  <!-- Types de RDV -->
+  <!-- GLOBAL SETTINGS -->
   <div class="ba-section">
-    <div class="ba-head"><span class="ba-head-icon">🏷</span><span class="ba-head-title">Types de RDV</span></div>
+    <div class="ba-head">
+      <span class="ba-head-icon">⚙️</span>
+      <span class="ba-head-title">Réglages globaux</span>
+      <span class="ba-head-tag" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)">Avancé</span>
+    </div>
     <div class="ba-body">
-      <div class="type-list" id="typeList"></div>
-      <div class="type-add">
-        <input type="text" id="typeNameInput" placeholder="Nom du type (ex: Appel de vente)"/>
-        <select id="typeDurInput"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="45">45 min</option><option value="60">1h</option><option value="90">1h30</option></select>
-        <input type="color" id="typeColorInput" value="#8b5cf6" style="width:36px;height:32px;border:none;border-radius:6px;cursor:pointer"/>
-        <button id="typeAddBtn">+ Ajouter</button>
+      <div class="settings-grid">
+        <div class="setting-card">
+          <div class="setting-title">🔄 Round-robin</div>
+          <div class="setting-desc">Attribution automatique au membre le moins chargé</div>
+          <div class="toggle-wrap" id="rrToggle">
+            <div class="toggle" id="rrToggleSwitch"></div>
+            <span style="font-size:12px;color:var(--muted)" id="rrToggleLabel">Désactivé</span>
+          </div>
+        </div>
+        <div class="setting-card">
+          <div class="setting-title">⏳ Délai minimum</div>
+          <div class="setting-desc">Temps min. avant de pouvoir réserver (par défaut)</div>
+          <div class="setting-row">
+            <input type="number" class="ba-input" id="defaultMinNotice" min="0" value="0" style="width:80px"/>
+            <span class="setting-unit">heures</span>
+          </div>
+        </div>
+        <div class="setting-card">
+          <div class="setting-title">🛡 Buffer avant</div>
+          <div class="setting-desc">Temps tampon avant chaque RDV (par défaut)</div>
+          <div class="setting-row">
+            <input type="number" class="ba-input" id="defaultBufferBefore" min="0" value="0" style="width:80px"/>
+            <span class="setting-unit">minutes</span>
+          </div>
+        </div>
+        <div class="setting-card">
+          <div class="setting-title">🛡 Buffer après</div>
+          <div class="setting-desc">Temps tampon après chaque RDV (par défaut)</div>
+          <div class="setting-row">
+            <input type="number" class="ba-input" id="defaultBufferAfter" min="0" value="0" style="width:80px"/>
+            <span class="setting-unit">minutes</span>
+          </div>
+        </div>
+        <div class="setting-card">
+          <div class="setting-title">📊 Max RDVs / jour</div>
+          <div class="setting-desc">Limite quotidienne par personne (0 = illimité)</div>
+          <div class="setting-row">
+            <input type="number" class="ba-input" id="defaultMaxPerDay" min="0" value="0" style="width:80px"/>
+            <span class="setting-unit">par jour</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:14px;text-align:right">
+        <button class="ba-btn ba-btn-purple" id="saveSettingsBtn">💾 Sauvegarder les réglages</button>
       </div>
     </div>
   </div>
 
-  <!-- Personnes bookables -->
+  <!-- TYPES -->
+  <div class="ba-section">
+    <div class="ba-head"><span class="ba-head-icon">🏷</span><span class="ba-head-title">Types de rendez-vous</span></div>
+    <div class="ba-body">
+      <div class="type-list" id="typeList"></div>
+      <div class="type-add">
+        <input type="text" class="ba-input" id="typeNameInput" placeholder="Nom du type (ex: Appel de vente)"/>
+        <select class="ba-select" id="typeDurInput">
+          <option value="15">15 min</option><option value="30" selected>30 min</option><option value="45">45 min</option><option value="60">1h</option><option value="90">1h30</option><option value="120">2h</option>
+        </select>
+        <input type="color" id="typeColorInput" value="#8b5cf6" style="width:38px;height:34px;border:none;border-radius:8px;cursor:pointer;background:transparent"/>
+        <button class="ba-btn ba-btn-green" id="typeAddBtn">+ Ajouter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERSONS -->
   <div class="ba-section">
     <div class="ba-head"><span class="ba-head-icon">👥</span><span class="ba-head-title">Personnes bookables</span></div>
     <div class="ba-body">
       <div class="person-list" id="personList"></div>
       <div class="person-add">
-        <input type="text" id="personNameInput" placeholder="Nom complet"/>
-        <input type="text" id="personRoleInput" placeholder="Rôle (Closer, Coach...)"/>
-        <input type="color" id="personColorInput" value="#ef4444" style="width:36px;height:32px;border:none;border-radius:6px;cursor:pointer"/>
-        <button id="personAddBtn">+ Ajouter une personne</button>
+        <input type="text" class="ba-input" id="personNameInput" placeholder="Nom complet"/>
+        <input type="text" class="ba-input" id="personRoleInput" placeholder="Rôle (Closer, Coach...)"/>
+        <input type="color" id="personColorInput" value="#ef4444" style="width:38px;height:34px;border:none;border-radius:8px;cursor:pointer;background:transparent"/>
+        <button class="ba-btn ba-btn-green" id="personAddBtn">+ Ajouter</button>
       </div>
     </div>
   </div>
 
-  <!-- Lien de partage -->
+  <!-- LINKS -->
   <div class="ba-section">
     <div class="ba-head"><span class="ba-head-icon">🔗</span><span class="ba-head-title">Liens de partage</span></div>
-    <div class="ba-body" id="linksBody">
-      <div style="font-size:12px;color:var(--muted)">Les liens seront générés une fois les personnes configurées.</div>
-    </div>
+    <div class="ba-body" id="linksBody"></div>
   </div>
+
 </div>
 <div class="toast" id="toast"></div>
 
 <script>
-var db=firebase.firestore();
-var configRef=db.collection('booking_config');
-var types=[];
-var persons=[];
+var db = firebase.firestore();
+var configRef = db.collection('booking_config');
+var types = [];
+var persons = [];
+var settings = {};
 
-var JOURS=['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
-var JOURS_SHORT=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+var JOURS = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
+var JOURS_SHORT = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 
-function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
-function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
-function genId(){return Math.random().toString(36).slice(2,10);}
+function toast(m) { var t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function() { t.classList.remove('show'); }, 2200); }
+function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function genId() { return Math.random().toString(36).slice(2, 10); }
 
-/* ═══ LOAD CONFIG ═══ */
-function loadConfig(){
-  configRef.doc('_types').get().then(function(snap){
-    types=(snap.exists&&snap.data().list)||[];
+/* ═══ LOAD ═══ */
+function loadConfig() {
+  configRef.get().then(function(snap) {
+    types = [];
+    persons = [];
+    settings = {};
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      if (doc.id === '_types') { types = d.list || []; }
+      else if (doc.id === '_settings') { settings = d; }
+      else if (d.__type === 'person') { d.id = doc.id; persons.push(d); }
+    });
+    persons.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
     renderTypes();
-  });
-  configRef.where('__type','==','person').get().then(function(snap){
-    persons=[];
-    snap.forEach(function(doc){var d=doc.data();d.id=doc.id;persons.push(d);});
-    persons.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});
     renderPersons();
     renderLinks();
+    loadSettings();
   });
 }
 
-/* ═══ TYPES ═══ */
-function renderTypes(){
-  var el=document.getElementById('typeList');
-  if(!types.length){el.innerHTML='<div style="font-size:12px;color:var(--muted)">Aucun type configuré</div>';return;}
-  var h='';
-  for(var i=0;i<types.length;i++){
-    var t=types[i];
-    h+='<div class="type-item"><span class="type-dot" style="background:'+t.color+'"></span><span class="type-name">'+esc(t.label)+'</span><span class="type-dur">'+t.duration+' min</span><button class="type-del" data-action="delType" data-idx="'+i+'">✕</button></div>';
-  }
-  el.innerHTML=h;
+/* ═══ SETTINGS ═══ */
+function loadSettings() {
+  document.getElementById('defaultMinNotice').value = settings.defaultMinNotice || 0;
+  document.getElementById('defaultBufferBefore').value = settings.defaultBufferBefore || 0;
+  document.getElementById('defaultBufferAfter').value = settings.defaultBufferAfter || 0;
+  document.getElementById('defaultMaxPerDay').value = settings.defaultMaxPerDay || 0;
+
+  var rrOn = settings.roundRobin === true;
+  var sw = document.getElementById('rrToggleSwitch');
+  var lb = document.getElementById('rrToggleLabel');
+  if (rrOn) { sw.classList.add('on'); lb.textContent = 'Activé'; }
+  else { sw.classList.remove('on'); lb.textContent = 'Désactivé'; }
 }
 
-document.getElementById('typeAddBtn').addEventListener('click',function(){
-  var name=document.getElementById('typeNameInput').value.trim();
-  if(!name)return;
-  var dur=parseInt(document.getElementById('typeDurInput').value);
-  var color=document.getElementById('typeColorInput').value;
-  var id=name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,20);
-  types.push({id:id,label:name,duration:dur,color:color});
-  configRef.doc('_types').set({list:types}).then(function(){
-    document.getElementById('typeNameInput').value='';
+document.getElementById('rrToggle').addEventListener('click', function() {
+  var sw = document.getElementById('rrToggleSwitch');
+  var lb = document.getElementById('rrToggleLabel');
+  sw.classList.toggle('on');
+  lb.textContent = sw.classList.contains('on') ? 'Activé' : 'Désactivé';
+});
+
+document.getElementById('saveSettingsBtn').addEventListener('click', function() {
+  var s = {
+    roundRobin: document.getElementById('rrToggleSwitch').classList.contains('on'),
+    defaultMinNotice: parseInt(document.getElementById('defaultMinNotice').value) || 0,
+    defaultBufferBefore: parseInt(document.getElementById('defaultBufferBefore').value) || 0,
+    defaultBufferAfter: parseInt(document.getElementById('defaultBufferAfter').value) || 0,
+    defaultMaxPerDay: parseInt(document.getElementById('defaultMaxPerDay').value) || 0,
+  };
+  configRef.doc('_settings').set(s).then(function() {
+    settings = s;
+    toast('✅ Réglages sauvegardés');
+  });
+});
+
+/* ═══ TYPES ═══ */
+function renderTypes() {
+  var el = document.getElementById('typeList');
+  if (!types.length) { el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Aucun type configuré — ajoutez-en un ci-dessous.</div>'; return; }
+  var h = '';
+  for (var i = 0; i < types.length; i++) {
+    var t = types[i];
+    h += '<div class="type-item"><span class="type-dot" style="background:' + t.color + ';box-shadow:0 0 0 3px ' + t.color + '22"></span><span class="type-name">' + esc(t.label) + '</span><span class="type-dur">' + t.duration + ' min</span><button class="type-del" data-action="delType" data-idx="' + i + '" title="Supprimer">✕</button></div>';
+  }
+  el.innerHTML = h;
+}
+
+document.getElementById('typeAddBtn').addEventListener('click', function() {
+  var name = document.getElementById('typeNameInput').value.trim();
+  if (!name) return;
+  var dur = parseInt(document.getElementById('typeDurInput').value);
+  var color = document.getElementById('typeColorInput').value;
+  var id = name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 20) + '_' + genId().slice(0, 3);
+  types.push({ id: id, label: name, duration: dur, color: color });
+  configRef.doc('_types').set({ list: types }).then(function() {
+    document.getElementById('typeNameInput').value = '';
     renderTypes();
+    renderPersons();
     toast('✅ Type ajouté');
   });
 });
 
-document.getElementById('typeList').addEventListener('click',function(e){
-  var btn=e.target.closest('[data-action="delType"]');
-  if(btn){types.splice(+btn.dataset.idx,1);configRef.doc('_types').set({list:types}).then(function(){renderTypes();toast('🗑 Type supprimé');});}
-});
-
 /* ═══ PERSONS ═══ */
-function renderPersons(){
-  var el=document.getElementById('personList');
-  if(!persons.length){el.innerHTML='<div style="font-size:12px;color:var(--muted)">Aucune personne configurée</div>';return;}
-  var h='';
-  for(var i=0;i<persons.length;i++){
-    var p=persons[i];
-    h+='<div class="person-card" data-pid="'+p.id+'">';
-    h+='<div class="person-head" data-action="togglePerson">';
-    h+='<div class="person-av" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</div>';
-    h+='<span class="person-name">'+esc(p.name)+'</span>';
-    h+='<span class="person-role">'+esc(p.role||'')+'</span>';
-    // Type badges
-    var pt=p.types||[];
-    h+='<div class="person-types">';
-    for(var ti=0;ti<pt.length;ti++){
-      var typeObj=types.find(function(t){return t.id===pt[ti];});
-      if(typeObj)h+='<span class="person-type-badge" style="background:'+typeObj.color+'22;color:'+typeObj.color+'">'+esc(typeObj.label)+'</span>';
+function renderPersons() {
+  var el = document.getElementById('personList');
+  if (!persons.length) { el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">Aucune personne configurée.</div>'; return; }
+  var h = '';
+  for (var i = 0; i < persons.length; i++) {
+    var p = persons[i];
+    h += '<div class="person-card" data-pid="' + p.id + '">';
+    // Head
+    h += '<div class="person-head" data-action="togglePerson">';
+    h += '<div class="person-av" style="background:' + p.color + '">' + (p.name || '?')[0].toUpperCase() + '</div>';
+    h += '<span class="person-name">' + esc(p.name) + '</span>';
+    h += '<span class="person-role">' + esc(p.role || '') + '</span>';
+    h += '<div class="person-badges">';
+    var pt = p.types || [];
+    for (var ti = 0; ti < pt.length; ti++) {
+      var typeObj = types.find(function(t) { return t.id === pt[ti]; });
+      if (typeObj) h += '<span class="person-badge" style="background:' + typeObj.color + '18;color:' + typeObj.color + '">' + esc(typeObj.label) + '</span>';
     }
-    h+='</div>';
-    h+='<span class="person-toggle">▼</span>';
-    h+='</div>';
+    h += '</div>';
+    h += '<span class="person-toggle">▼</span>';
+    h += '</div>';
+
     // Body
-    h+='<div class="person-body">';
-    // Types assignés
-    h+='<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Types de RDV assignés</div>';
-    h+='<div style="display:flex;flex-wrap:wrap;gap:4px">';
-    for(var tj=0;tj<types.length;tj++){
-      var isOn=pt.indexOf(types[tj].id)>=0;
-      h+='<button style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid '+(isOn?types[tj].color+'55':  'var(--border)')+';background:'+(isOn?types[tj].color+'18':'transparent')+';color:'+(isOn?types[tj].color:'var(--muted)')+';font-family:var(--fb)" data-action="toggleType" data-pid="'+p.id+'" data-tid="'+types[tj].id+'">'+esc(types[tj].label)+'</button>';
+    h += '<div class="person-body">';
+
+    // Types
+    h += '<div class="p-section"><div class="p-section-title">🏷 Types de RDV assignés</div>';
+    h += '<div class="p-type-btns">';
+    for (var tj = 0; tj < types.length; tj++) {
+      var isOn = pt.indexOf(types[tj].id) >= 0;
+      h += '<button class="p-type-btn' + (isOn ? ' on' : '') + '" style="--type-color:' + types[tj].color + '" data-action="toggleType" data-pid="' + p.id + '" data-tid="' + types[tj].id + '">' + esc(types[tj].label) + '</button>';
     }
-    h+='</div></div>';
+    h += '</div></div>';
+
+    // Per-person settings
+    h += '<div class="p-section"><div class="p-section-title">⚙️ Réglages individuels <span style="font-weight:400;font-size:9px;color:var(--muted)">(vide = défaut global)</span></div>';
+    h += '<div class="p-settings">';
+    h += '<div class="p-setting"><div class="p-setting-label">Buffer avant</div><div class="p-setting-row"><input type="number" class="ba-input" data-person-setting="bufferBefore" data-pid="' + p.id + '" min="0" value="' + (p.bufferBefore || '') + '" placeholder="' + (settings.defaultBufferBefore || 0) + '"/><span class="p-setting-unit">min</span></div></div>';
+    h += '<div class="p-setting"><div class="p-setting-label">Buffer après</div><div class="p-setting-row"><input type="number" class="ba-input" data-person-setting="bufferAfter" data-pid="' + p.id + '" min="0" value="' + (p.bufferAfter || '') + '" placeholder="' + (settings.defaultBufferAfter || 0) + '"/><span class="p-setting-unit">min</span></div></div>';
+    h += '<div class="p-setting"><div class="p-setting-label">Délai minimum</div><div class="p-setting-row"><input type="number" class="ba-input" data-person-setting="minNoticeHours" data-pid="' + p.id + '" min="0" value="' + (p.minNoticeHours || '') + '" placeholder="' + (settings.defaultMinNotice || 0) + '"/><span class="p-setting-unit">heures</span></div></div>';
+    h += '<div class="p-setting"><div class="p-setting-label">Max RDVs / jour</div><div class="p-setting-row"><input type="number" class="ba-input" data-person-setting="maxPerDay" data-pid="' + p.id + '" min="0" value="' + (p.maxPerDay || '') + '" placeholder="' + (settings.defaultMaxPerDay || 0) + '"/><span class="p-setting-unit">par jour</span></div></div>';
+    h += '</div>';
+    h += '<div style="text-align:right;margin-top:8px"><button class="ba-btn ba-btn-purple" data-action="savePersonSettings" data-pid="' + p.id + '">💾 Sauvegarder</button></div>';
+    h += '</div>';
+
     // Schedule
-    h+='<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Disponibilités hebdomadaires</div>';
-    var sched=p.schedule||{};
-    for(var di=0;di<7;di++){
-      var day=JOURS[di];
-      var slots=sched[day]||[];
-      h+='<div class="sched-day"><div class="sched-day-label">'+JOURS_SHORT[di]+'</div>';
-      h+='<div class="sched-slots">';
-      for(var si=0;si<slots.length;si++){
-        h+='<span class="sched-slot">'+slots[si].start+' - '+slots[si].end+'<button class="sched-slot-del" data-action="delSlot" data-pid="'+p.id+'" data-day="'+day+'" data-idx="'+si+'">✕</button></span>';
+    h += '<div class="p-section"><div class="p-section-title">📅 Disponibilités hebdomadaires</div>';
+    h += '<div class="sched-grid">';
+    var sched = p.schedule || {};
+    for (var di = 0; di < 7; di++) {
+      var day = JOURS[di];
+      var slots = sched[day] || [];
+      h += '<div class="sched-day"><div class="sched-day-top"><span class="sched-day-name">' + JOURS_SHORT[di] + '</span>';
+      h += '<div class="sched-slots">';
+      for (var si = 0; si < slots.length; si++) {
+        h += '<span class="sched-chip">' + slots[si].start + ' – ' + slots[si].end + '<button class="sched-chip-del" data-action="delSlot" data-pid="' + p.id + '" data-day="' + day + '" data-idx="' + si + '">✕</button></span>';
       }
-      h+='</div>';
-      h+='<div class="sched-add-row"><input type="time" data-start="'+p.id+'_'+day+'" value="09:00"/><span style="color:var(--muted);font-size:11px">→</span><input type="time" data-end="'+p.id+'_'+day+'" value="12:00"/><button data-action="addSlot" data-pid="'+p.id+'" data-day="'+day+'">+</button></div>';
-      h+='</div>';
+      h += '</div>';
+      h += '<div class="sched-add"><input type="time" data-start="' + p.id + '_' + day + '" value="09:00"/><span style="color:var(--muted);font-size:10px">→</span><input type="time" data-end="' + p.id + '_' + day + '" value="12:00"/><button class="sched-add-btn" data-action="addSlot" data-pid="' + p.id + '" data-day="' + day + '">+</button></div>';
+      h += '</div></div>';
     }
-    h+='</div>';
+    h += '</div></div>';
+
     // Blocked dates
-    h+='<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Dates bloquées (congés, indispos)</div>';
-    var blocked=p.blockedDates||[];
-    h+='<div class="blocked-list">';
-    for(var bi=0;bi<blocked.length;bi++){
-      h+='<span class="blocked-item">'+blocked[bi]+'<button data-action="delBlocked" data-pid="'+p.id+'" data-idx="'+bi+'">✕</button></span>';
+    h += '<div class="p-section"><div class="p-section-title">🚫 Dates bloquées</div>';
+    var blocked = p.blockedDates || [];
+    h += '<div class="blocked-chips">';
+    for (var bi = 0; bi < blocked.length; bi++) {
+      h += '<span class="blocked-chip">' + blocked[bi] + '<button data-action="delBlocked" data-pid="' + p.id + '" data-idx="' + bi + '">✕</button></span>';
     }
-    h+='</div>';
-    h+='<div class="blocked-add"><input type="date" data-blocked-input="'+p.id+'"/><button data-action="addBlocked" data-pid="'+p.id+'">+ Bloquer</button></div>';
-    h+='</div>';
+    h += '</div>';
+    h += '<div class="blocked-add"><input type="date" data-blocked-input="' + p.id + '"/><button class="ba-btn ba-btn-red" data-action="addBlocked" data-pid="' + p.id + '" style="font-size:11px;padding:5px 12px">+ Bloquer</button></div>';
+    h += '</div>';
+
     // Delete person
-    h+='<button style="width:100%;padding:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;color:var(--red3);font-family:var(--fb);font-size:11px;font-weight:600;cursor:pointer;margin-top:8px" data-action="delPerson" data-pid="'+p.id+'">Supprimer cette personne</button>';
-    h+='</div></div>';
+    h += '<button class="ba-btn ba-btn-red" data-action="delPerson" data-pid="' + p.id + '" style="width:100%;margin-top:8px;justify-content:center">Supprimer cette personne</button>';
+
+    h += '</div></div>';
   }
-  el.innerHTML=h;
+  el.innerHTML = h;
 }
 
 /* ═══ LINKS ═══ */
-function renderLinks(){
-  var el=document.getElementById('linksBody');
-  if(!persons.length){el.innerHTML='<div style="font-size:12px;color:var(--muted)">Configurez des personnes d\'abord.</div>';return;}
-  var base=window.location.origin+'/booking.html';
-  var h='<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Copiez ces liens pour les partager :</div>';
-  h+='<div style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:2px">Page générale</div><div style="font-size:12px;font-family:var(--fm);color:var(--blue);word-break:break-all">'+base+'</div></div>';
-  for(var i=0;i<persons.length;i++){
-    var p=persons[i];
-    h+='<div style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:'+p.color+';margin-bottom:2px">'+esc(p.name)+'</div><div style="font-size:12px;font-family:var(--fm);color:var(--blue);word-break:break-all">'+base+'?person='+p.id+'</div></div>';
+function renderLinks() {
+  var el = document.getElementById('linksBody');
+  if (!persons.length && !types.length) { el.innerHTML = '<div style="font-size:12px;color:var(--muted)">Configurez des types et des personnes d\'abord.</div>'; return; }
+  var base = window.location.origin + '/booking.html';
+  var h = '';
+  h += '<div class="link-card" onclick="copyLink(this)" data-url="' + base + '"><span class="link-label" style="color:var(--purple)">🌐 Général</span><span class="link-url">' + base + '</span><span class="link-copy">Copier</span></div>';
+  for (var i = 0; i < persons.length; i++) {
+    var p = persons[i];
+    var url = base + '?person=' + p.id;
+    h += '<div class="link-card" onclick="copyLink(this)" data-url="' + url + '"><span class="link-label" style="color:' + p.color + '">' + esc(p.name) + '</span><span class="link-url">' + url + '</span><span class="link-copy">Copier</span></div>';
   }
-  for(var j=0;j<types.length;j++){
-    h+='<div style="padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:'+types[j].color+';margin-bottom:2px">'+esc(types[j].label)+'</div><div style="font-size:12px;font-family:var(--fm);color:var(--blue);word-break:break-all">'+base+'?type='+types[j].id+'</div></div>';
+  for (var j = 0; j < types.length; j++) {
+    var url2 = base + '?type=' + types[j].id;
+    h += '<div class="link-card" onclick="copyLink(this)" data-url="' + url2 + '"><span class="link-label" style="color:' + types[j].color + '">' + esc(types[j].label) + '</span><span class="link-url">' + url2 + '</span><span class="link-copy">Copier</span></div>';
   }
-  el.innerHTML=h;
+  el.innerHTML = h;
 }
 
-/* ═══ EVENTS ═══ */
-document.getElementById('personAddBtn').addEventListener('click',function(){
-  var name=document.getElementById('personNameInput').value.trim();
-  if(!name)return;
-  var role=document.getElementById('personRoleInput').value.trim();
-  var color=document.getElementById('personColorInput').value;
-  var id=name.toLowerCase().replace(/[^a-z]/g,'').slice(0,15)+'_'+genId().slice(0,4);
-  configRef.doc(id).set({__type:'person',name:name,role:role,color:color,types:[],schedule:{},blockedDates:[]}).then(function(){
-    document.getElementById('personNameInput').value='';
-    document.getElementById('personRoleInput').value='';
+function copyLink(el) {
+  var url = el.dataset.url;
+  navigator.clipboard.writeText(url).then(function() { toast('📋 Lien copié !'); });
+}
+
+/* ═══ ADD PERSON ═══ */
+document.getElementById('personAddBtn').addEventListener('click', function() {
+  var name = document.getElementById('personNameInput').value.trim();
+  if (!name) return;
+  var role = document.getElementById('personRoleInput').value.trim();
+  var color = document.getElementById('personColorInput').value;
+  var id = name.toLowerCase().replace(/[^a-z]/g, '').slice(0, 15) + '_' + genId().slice(0, 4);
+  configRef.doc(id).set({ __type: 'person', name: name, role: role, color: color, types: [], schedule: {}, blockedDates: [] }).then(function() {
+    document.getElementById('personNameInput').value = '';
+    document.getElementById('personRoleInput').value = '';
     loadConfig();
     toast('✅ Personne ajoutée');
   });
 });
 
-document.addEventListener('click',function(e){
+/* ═══ EVENTS ═══ */
+document.addEventListener('click', function(e) {
+  // Delete type
+  var dt = e.target.closest('[data-action="delType"]');
+  if (dt) { types.splice(+dt.dataset.idx, 1); configRef.doc('_types').set({ list: types }).then(function() { renderTypes(); renderPersons(); toast('🗑 Type supprimé'); }); return; }
+
   // Toggle person card
-  if(e.target.closest('[data-action="togglePerson"]')){
-    e.target.closest('.person-card').classList.toggle('open');
+  if (e.target.closest('[data-action="togglePerson"]')) { e.target.closest('.person-card').classList.toggle('open'); return; }
+
+  // Toggle type on person
+  var tt = e.target.closest('[data-action="toggleType"]');
+  if (tt) {
+    var pid = tt.dataset.pid, tid = tt.dataset.tid;
+    var p = persons.find(function(x) { return x.id === pid; });
+    if (!p) return;
+    p.types = p.types || [];
+    var idx = p.types.indexOf(tid);
+    if (idx >= 0) p.types.splice(idx, 1); else p.types.push(tid);
+    configRef.doc(pid).update({ types: p.types }).then(function() { renderPersons(); renderLinks(); toast('✅ Mis à jour'); });
     return;
   }
-  // Toggle type assignment
-  var tt=e.target.closest('[data-action="toggleType"]');
-  if(tt){
-    var pid=tt.dataset.pid,tid=tt.dataset.tid;
-    var p=persons.find(function(x){return x.id===pid;});
-    if(!p)return;
-    p.types=p.types||[];
-    var idx=p.types.indexOf(tid);
-    if(idx>=0)p.types.splice(idx,1);else p.types.push(tid);
-    configRef.doc(pid).update({types:p.types}).then(function(){renderPersons();renderLinks();toast('✅ Mis à jour');});
+
+  // Save person settings
+  var sps = e.target.closest('[data-action="savePersonSettings"]');
+  if (sps) {
+    var pid2 = sps.dataset.pid;
+    var updates = {};
+    document.querySelectorAll('[data-person-setting][data-pid="' + pid2 + '"]').forEach(function(inp) {
+      var key = inp.dataset.personSetting;
+      var val = parseInt(inp.value);
+      updates[key] = isNaN(val) ? 0 : val;
+    });
+    configRef.doc(pid2).update(updates).then(function() {
+      var p = persons.find(function(x) { return x.id === pid2; });
+      if (p) Object.assign(p, updates);
+      toast('✅ Réglages sauvegardés');
+    });
     return;
   }
+
   // Add slot
-  var as=e.target.closest('[data-action="addSlot"]');
-  if(as){
-    var pid2=as.dataset.pid,day=as.dataset.day;
-    var startEl=document.querySelector('[data-start="'+pid2+'_'+day+'"]');
-    var endEl=document.querySelector('[data-end="'+pid2+'_'+day+'"]');
-    if(!startEl||!endEl)return;
-    var p2=persons.find(function(x){return x.id===pid2;});
-    if(!p2)return;
-    p2.schedule=p2.schedule||{};
-    p2.schedule[day]=p2.schedule[day]||[];
-    p2.schedule[day].push({start:startEl.value,end:endEl.value});
-    configRef.doc(pid2).update({schedule:p2.schedule}).then(function(){renderPersons();toast('✅ Créneau ajouté');});
+  var as = e.target.closest('[data-action="addSlot"]');
+  if (as) {
+    var pid3 = as.dataset.pid, day = as.dataset.day;
+    var startEl = document.querySelector('[data-start="' + pid3 + '_' + day + '"]');
+    var endEl = document.querySelector('[data-end="' + pid3 + '_' + day + '"]');
+    if (!startEl || !endEl || !startEl.value || !endEl.value) return;
+    var p3 = persons.find(function(x) { return x.id === pid3; });
+    if (!p3) return;
+    p3.schedule = p3.schedule || {};
+    p3.schedule[day] = p3.schedule[day] || [];
+    p3.schedule[day].push({ start: startEl.value, end: endEl.value });
+    configRef.doc(pid3).update({ schedule: p3.schedule }).then(function() { renderPersons(); toast('✅ Créneau ajouté'); });
     return;
   }
+
   // Del slot
-  var ds=e.target.closest('[data-action="delSlot"]');
-  if(ds){
-    var pid3=ds.dataset.pid,day2=ds.dataset.day,idx2=+ds.dataset.idx;
-    var p3=persons.find(function(x){return x.id===pid3;});
-    if(!p3||!p3.schedule||!p3.schedule[day2])return;
-    p3.schedule[day2].splice(idx2,1);
-    configRef.doc(pid3).update({schedule:p3.schedule}).then(function(){renderPersons();toast('🗑 Créneau supprimé');});
+  var ds = e.target.closest('[data-action="delSlot"]');
+  if (ds) {
+    var pid4 = ds.dataset.pid, day2 = ds.dataset.day, idx2 = +ds.dataset.idx;
+    var p4 = persons.find(function(x) { return x.id === pid4; });
+    if (!p4 || !p4.schedule || !p4.schedule[day2]) return;
+    p4.schedule[day2].splice(idx2, 1);
+    configRef.doc(pid4).update({ schedule: p4.schedule }).then(function() { renderPersons(); toast('🗑 Créneau supprimé'); });
     return;
   }
+
   // Add blocked
-  var ab=e.target.closest('[data-action="addBlocked"]');
-  if(ab){
-    var pid4=ab.dataset.pid;
-    var dateEl=document.querySelector('[data-blocked-input="'+pid4+'"]');
-    if(!dateEl||!dateEl.value)return;
-    var p4=persons.find(function(x){return x.id===pid4;});
-    if(!p4)return;
-    p4.blockedDates=p4.blockedDates||[];
-    p4.blockedDates.push(dateEl.value);
-    configRef.doc(pid4).update({blockedDates:p4.blockedDates}).then(function(){renderPersons();toast('🚫 Date bloquée');});
+  var ab = e.target.closest('[data-action="addBlocked"]');
+  if (ab) {
+    var pid5 = ab.dataset.pid;
+    var dateEl = document.querySelector('[data-blocked-input="' + pid5 + '"]');
+    if (!dateEl || !dateEl.value) return;
+    var p5 = persons.find(function(x) { return x.id === pid5; });
+    if (!p5) return;
+    p5.blockedDates = p5.blockedDates || [];
+    if (p5.blockedDates.indexOf(dateEl.value) < 0) p5.blockedDates.push(dateEl.value);
+    p5.blockedDates.sort();
+    configRef.doc(pid5).update({ blockedDates: p5.blockedDates }).then(function() { renderPersons(); toast('🚫 Date bloquée'); });
     return;
   }
+
   // Del blocked
-  var db2=e.target.closest('[data-action="delBlocked"]');
-  if(db2){
-    var pid5=db2.dataset.pid,idx3=+db2.dataset.idx;
-    var p5=persons.find(function(x){return x.id===pid5;});
-    if(!p5)return;
-    p5.blockedDates.splice(idx3,1);
-    configRef.doc(pid5).update({blockedDates:p5.blockedDates}).then(function(){renderPersons();toast('✅ Date débloquée');});
+  var db2 = e.target.closest('[data-action="delBlocked"]');
+  if (db2) {
+    var pid6 = db2.dataset.pid, idx3 = +db2.dataset.idx;
+    var p6 = persons.find(function(x) { return x.id === pid6; });
+    if (!p6) return;
+    p6.blockedDates.splice(idx3, 1);
+    configRef.doc(pid6).update({ blockedDates: p6.blockedDates }).then(function() { renderPersons(); toast('✅ Date débloquée'); });
     return;
   }
+
   // Del person
-  var dp=e.target.closest('[data-action="delPerson"]');
-  if(dp){
-    if(!confirm('Supprimer cette personne ?'))return;
-    configRef.doc(dp.dataset.pid).delete().then(function(){loadConfig();toast('🗑 Personne supprimée');});
+  var dp = e.target.closest('[data-action="delPerson"]');
+  if (dp) {
+    if (!confirm('Supprimer définitivement cette personne ?')) return;
+    configRef.doc(dp.dataset.pid).delete().then(function() { loadConfig(); toast('🗑 Personne supprimée'); });
     return;
   }
 });
 
 /* ═══ AUTH + INIT ═══ */
-firebase.auth().onAuthStateChanged(function(u){
-  if(u){db.collection('users').doc(u.uid).get().then(function(s){
-    var d=s.exists?s.data():{};window._currentRole=d.role||'admin';
-    window._currentUserName=u.displayName||u.email.split('@')[0];
-    localStorage.setItem('ambitio_role',d.role||'admin');
-    localStorage.setItem('ambitio_name',window._currentUserName);
-  });}
+firebase.auth().onAuthStateChanged(function(u) {
+  if (u) {
+    db.collection('users').doc(u.uid).get().then(function(s) {
+      var d = s.exists ? s.data() : {};
+      window._currentRole = d.role || 'admin';
+      window._currentUserName = u.displayName || u.email.split('@')[0];
+      localStorage.setItem('ambitio_role', d.role || 'admin');
+      localStorage.setItem('ambitio_name', window._currentUserName);
+    });
+  }
   loadConfig();
 });
 </script>
