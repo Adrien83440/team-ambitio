@@ -29,8 +29,8 @@ var STAGES=[
   {key:'disqualifie_closing',label:'Disqualifié',color:'#6b7280',section:'Closing'}
 ];
 var SM={};STAGES.forEach(function(s){SM[s.key]=s;});
-var LT={vsl_elite:'VSL',self_booking:'Self Booking',webinaire:'Webinaire',webinar:'Webinaire'};
-var TB={vsl_elite:'vsl',self_booking:'self',webinaire:'other',webinar:'other'};
+var LT={vsl_elite:'VSL',self_booking:'Self Booking',webinaire:'Webinaire'};
+var TB={vsl_elite:'vsl',self_booking:'self',webinaire:'other'};
 var S2S={lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'nrp3',poubelle:'disqualifie',disqualification:'disqualifie',follow_up_pm:'appele',set:'rdv_pose',rdv_self_booking:'rdv_pose',rdv_confirmes:'rdv_pose',rdv_annules_prospect:'pas_interesse',rdv_annules_equipe:'pas_interesse',no_show_self:'pas_interesse',no_show_setting:'pas_interesse',partenariats:'rdv_pose',closed_won_setting:'rdv_pose',closed_won_self:'rdv_pose',closed_lost:'pas_interesse',follow_up_closing:'appele',disqualifie_closing:'disqualifie'};
 
 var CRIT_FIELDS=[
@@ -51,6 +51,13 @@ var CRIT_OPS_SELECT=[{v:'eq',l:'Est'},{v:'neq',l:"N'est pas"}];
 var allLeads=[],filterSetter='all',filterSection='all',filterType='all',searchQuery='',draggedLeadId=null;
 var currentView='pipeline',listSortKey='createdAt',listSortDir='desc';
 var pageSize=50,currentPage=1,selectedIds={};
+var savedViews=[],activeViewId='__all__';
+/* ── Column card limits (perf mobile) ── */
+var isMobile=window.innerWidth<=768;
+var COL_CARD_LIMIT=isMobile?15:30;
+var COL_CARD_STEP=isMobile?15:30;
+var colCardLimits={};
+var crmDataLoaded=false;
 var savedViews=[],activeViewId='__all__';
 var DEFAULT_VIEWS=[
   {id:'__all__',name:'Toutes les Affaires',icon:'📋',criteria:[]},
@@ -92,8 +99,6 @@ function applyCriteria(list,criteria){
 
 function getFiltered(){
   var list=allLeads.slice();
-  // Exclude retargeting-only contacts (not promoted to pipeline)
-  list=list.filter(function(l){return l.inPipeline!==false;});
   var view=getActiveView();
   if(view&&view.criteria)list=applyCriteria(list,view.criteria);
   if(filterSetter!=='all')list=list.filter(function(l){return l.assignedTo===filterSetter;});
@@ -171,6 +176,15 @@ buildBoard();
 var colSorts={};
 
 document.getElementById('crmBoard').addEventListener('click',function(e){
+  // Load more cards in column
+  var loadMore=e.target.closest('[data-loadstage]');
+  if(loadMore){
+    e.stopPropagation();
+    var stKey=loadMore.dataset.loadstage;
+    colCardLimits[stKey]=(colCardLimits[stKey]||COL_CARD_LIMIT)+COL_CARD_STEP;
+    renderAll();
+    return;
+  }
   // Toggle sort dropdown
   var sortBtn=e.target.closest('[data-colsort]');
   if(sortBtn){
@@ -273,7 +287,15 @@ function renderPipeline(leads){
     col.style.display='';
     var sl=leads.filter(function(l){return(l.stage||'lead')===s.key;});
     if(colSorts[s.key])sl=sortColumnLeads(sl,colSorts[s.key]);
-    var h='';sl.forEach(function(l){h+=renderCard(l);});container.innerHTML=h;
+    var limit=colCardLimits[s.key]||COL_CARD_LIMIT;
+    var total=sl.length;
+    var visible=sl.slice(0,limit);
+    var remaining=total-limit;
+    var h='';visible.forEach(function(l){h+=renderCard(l);});
+    if(remaining>0){
+      h+='<button class="col-load-more" data-loadstage="'+s.key+'">Voir +'+remaining+' leads</button>';
+    }
+    container.innerHTML=h;
   });
 }
 
@@ -287,14 +309,14 @@ function renderCard(l){
   h+='<span class="crm-card-eye" data-action="quickview" data-id="'+l.id+'">👁</span>';
   h+='<div class="crm-card-name">'+esc(l.nom||'—')+'</div>';
   if(isKanbanFieldVisible('telephone')&&l.telephone)h+='<div class="crm-card-phone">'+esc(l.telephone)+'</div>';
-  if(isKanbanFieldVisible('email')&&l.email)h+='<div class="crm-card-phone" style="font-size:10px">'+esc(l.email)+'</div>';
-  if(isKanbanFieldVisible('createdAt')){var cd=getLeadDate(l);if(cd)h+='<div class="crm-card-phone" style="font-size:10px;color:rgba(255,255,255,0.3)">'+fmtDate(cd)+'</div>';}
+  if(isKanbanFieldVisible('email')&&l.email)h+='<div class="crm-card-phone" style="font-size:11px">'+esc(l.email)+'</div>';
+  if(isKanbanFieldVisible('createdAt')){var cd=getLeadDate(l);if(cd)h+='<div class="crm-card-phone" style="font-size:11px;color:var(--subtle-text)">'+fmtDate(cd)+'</div>';}
   h+='<div class="crm-card-bottom">';
   if(isKanbanFieldVisible('type'))h+='<span class="crm-card-badge '+badge+'">'+tl+'</span>';
   if(isKanbanFieldVisible('assignedTo')&&sl)h+='<span class="crm-card-setter '+sc+'">'+sl+'</span>';
   if(isKanbanFieldVisible('status')&&ls!=='nouveau')h+='<span class="crm-card-setter" style="color:var(--blue)">📞 '+(sL[ls]||ls)+'</span>';
-  if(isKanbanFieldVisible('utm')&&l.utm)h+='<span class="crm-card-setter" style="color:var(--purple);font-size:8px">🔗 '+esc(l.utm)+'</span>';
-  if(isKanbanFieldVisible('closeur')&&l.closeur)h+='<span class="crm-card-setter" style="color:var(--gold);font-size:8px">🎯 '+esc(l.closeur)+'</span>';
+  if(isKanbanFieldVisible('utm')&&l.utm)h+='<span class="crm-card-setter" style="color:var(--purple);font-size:9px">🔗 '+esc(l.utm)+'</span>';
+  if(isKanbanFieldVisible('closeur')&&l.closeur)h+='<span class="crm-card-setter" style="color:var(--gold);font-size:9px">🎯 '+esc(l.closeur)+'</span>';
   if(hn)h+='<span class="crm-card-notes-dot"></span>';
   h+='</div>';
   if(isKanbanFieldVisible('tags')&&l.tags&&l.tags.length>0){h+='<div class="crm-card-tags">';l.tags.forEach(function(t){if(t)h+='<span class="crm-card-tag" style="background:'+tagColor(t)+'20;color:'+tagColor(t)+'">'+esc(t)+'</span>';});h+='</div>';}
@@ -538,17 +560,6 @@ document.getElementById('bulkTagBtn').addEventListener('click',function(){
   batch.commit().then(function(){toast('🏷 Tag "'+tag+'" ajouté à '+ids.length+' leads');collectTags();clearSelection();renderAll();});
 });
 
-document.getElementById('bulkRetargetBtn').addEventListener('click',function(){
-  var ids=Object.keys(selectedIds).filter(function(k){return selectedIds[k];});if(!ids.length)return;
-  if(!confirm('Envoyer '+ids.length+' lead(s) en retargeting ?'))return;
-  var batch=db.batch();
-  ids.forEach(function(id){
-    batch.update(db.collection('leads').doc(id),{inRetargeting:true,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
-    for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===id){allLeads[i].inRetargeting=true;break;}}
-  });
-  batch.commit().then(function(){toast('📌 '+ids.length+' lead(s) envoyé(s) en retargeting');clearSelection();renderAll();});
-});
-
 /* ═══ DRAG & DROP ═══ */
 var board=document.getElementById('crmBoard');
 board.addEventListener('dragstart',function(e){var c=e.target.closest('.crm-card');if(!c)return;draggedLeadId=c.dataset.id;c.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',draggedLeadId);});
@@ -576,10 +587,10 @@ function saveQV(){if(!qvLid)return;var p=document.getElementById('qvPanel'),fs=[
 function closeQV(){document.getElementById('qvPanel').style.display='none';document.getElementById('qvOverlay').classList.remove('open');qvLid=null;}
 
 /* ═══ MODAL ═══ */
-function openModal(lid){var lead;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){lead=allLeads[i];break;}}if(!lead)return;var sc=lead.assignedTo==='guillaume'?'#ef4444':'#60a5fa',ini=(lead.nom||'?')[0].toUpperCase();var h='<div class="crm-modal-head"><div class="crm-modal-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><div class="crm-modal-name">'+esc(lead.nom||'—')+'</div><a href="sales-contact.html?id='+lid+'" style="padding:6px 12px;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">↗ Fiche</a><button class="crm-modal-close" data-action="closeModal">✕</button></div><div class="crm-modal-body">';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📋 Informations</div>';h+=mF('Nom','nom',lead.nom)+mF('Téléphone','telephone',lead.telephone)+mF('Email','email',lead.email)+mF('Source','utm',lead.utm);h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Attribué à</span><select class="crm-modal-select" data-medit="assignedTo"><option value="guillaume"'+(lead.assignedTo==='guillaume'?' selected':'')+'>Guillaume Bilcke</option><option value="elodie"'+(lead.assignedTo==='elodie'?' selected':'')+'>Élodie Vidotto Siarri</option></select></div>';h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Type</span><select class="crm-modal-select" data-medit="type"><option value="vsl_elite"'+(lead.type==='vsl_elite'?' selected':'')+'>VSL ÉLITE</option><option value="self_booking"'+(lead.type==='self_booking'?' selected':'')+'>Self Booking</option></select></div>';h+=mF('Secteur','secteur',lead.secteur)+mF('CA actuel','ca',lead.ca)+mF('Défi','defi',lead.defi);h+='<div class="crm-modal-saved" id="modalSaved">✅ Sauvegardé</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🏷 Tags</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px" id="modalTagsWrap">';var leadTags=lead.tags||[];leadTags.forEach(function(t){if(t)h+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:'+tagColor(t)+'18;color:'+tagColor(t)+';border:1px solid '+tagColor(t)+'30">'+esc(t)+' <span style="cursor:pointer;opacity:0.6" data-action="removeTag" data-tagval="'+escA(t)+'">✕</span></span>';});h+='</div><div style="display:flex;gap:6px"><input class="crm-modal-input" id="modalTagInput" placeholder="Ajouter un tag..." style="flex:1;font-size:11px;padding:6px 10px"/><button style="padding:6px 12px;border:none;border-radius:8px;background:rgba(167,139,250,0.1);color:#c4b5fd;font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer" data-action="addTag">+</button></div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🔀 Étape pipeline</div><div class="crm-stage-pills">';STAGES.forEach(function(s){var isA=(lead.stage||'lead')===s.key;h+='<span class="crm-stage-pill'+(isA?' active':'')+'" data-action="setStage" data-stage="'+s.key+'" style="'+(isA?'color:'+s.color+';border-color:'+s.color+';background:'+s.color+'18':'')+'">'+esc(s.label)+'</span>';});h+='</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📌 Retargeting</div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:var(--muted)">Dans le module retargeting</span><button style="padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid;font-family:var(--fb);'+(lead.inRetargeting?'background:rgba(251,191,36,0.1);border-color:rgba(251,191,36,0.3);color:#fcd34d':'background:rgba(255,255,255,0.04);border-color:var(--border);color:var(--muted)')+'" data-action="toggleRetargeting">'+( lead.inRetargeting?'✅ Activé':'Envoyer ↗')+'</button></div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📝 Notes</div>';var notes=lead.notesHistory||[];for(var ni=notes.length-1;ni>=0;ni--){h+='<div class="crm-note-item"><div class="crm-note-date">'+esc(notes[ni].date||'')+'</div><div class="crm-note-text">'+esc(notes[ni].text||'')+'</div></div>';}h+='<div class="crm-note-add-row"><textarea class="crm-note-input" id="modalNoteInput" placeholder="Ajouter une note..."></textarea><button class="crm-note-add-btn" data-action="addNote">+ Ajouter</button></div></div>';h+='<div class="crm-modal-section">';if(lead.telephone)h+='<a href="tel:'+lead.telephone.replace(/\s/g,'')+'" style="display:block;text-align:center;padding:10px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);border-radius:10px;color:#34d399;font-weight:700;font-size:13px;text-decoration:none;margin-bottom:8px">📞 Appeler</a>';if(lead.email)h+='<a href="mailto:'+escA(lead.email)+'" style="display:block;text-align:center;padding:10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);border-radius:10px;color:#60a5fa;font-weight:700;font-size:13px;text-decoration:none">✉️ Email</a>';h+='</div></div>';document.getElementById('modalPanel').innerHTML=h;document.getElementById('modalBg').classList.add('open');document.getElementById('modalBg')._leadId=lid;}
+function openModal(lid){var lead;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){lead=allLeads[i];break;}}if(!lead)return;var sc=lead.assignedTo==='guillaume'?'#ef4444':'#60a5fa',ini=(lead.nom||'?')[0].toUpperCase();var h='<div class="crm-modal-head"><div class="crm-modal-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><div class="crm-modal-name">'+esc(lead.nom||'—')+'</div><a href="sales-contact.html?id='+lid+'" style="padding:6px 12px;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">↗ Fiche</a><button class="crm-modal-close" data-action="closeModal">✕</button></div><div class="crm-modal-body">';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📋 Informations</div>';h+=mF('Nom','nom',lead.nom)+mF('Téléphone','telephone',lead.telephone)+mF('Email','email',lead.email)+mF('Source','utm',lead.utm);h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Attribué à</span><select class="crm-modal-select" data-medit="assignedTo"><option value="guillaume"'+(lead.assignedTo==='guillaume'?' selected':'')+'>Guillaume Bilcke</option><option value="elodie"'+(lead.assignedTo==='elodie'?' selected':'')+'>Élodie Vidotto Siarri</option></select></div>';h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Type</span><select class="crm-modal-select" data-medit="type"><option value="vsl_elite"'+(lead.type==='vsl_elite'?' selected':'')+'>VSL ÉLITE</option><option value="self_booking"'+(lead.type==='self_booking'?' selected':'')+'>Self Booking</option></select></div>';h+=mF('Secteur','secteur',lead.secteur)+mF('CA actuel','ca',lead.ca)+mF('Défi','defi',lead.defi);h+='<div class="crm-modal-saved" id="modalSaved">✅ Sauvegardé</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🏷 Tags</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px" id="modalTagsWrap">';var leadTags=lead.tags||[];leadTags.forEach(function(t){if(t)h+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:'+tagColor(t)+'18;color:'+tagColor(t)+';border:1px solid '+tagColor(t)+'30">'+esc(t)+' <span style="cursor:pointer;opacity:0.6" data-action="removeTag" data-tagval="'+escA(t)+'">✕</span></span>';});h+='</div><div style="display:flex;gap:6px"><input class="crm-modal-input" id="modalTagInput" placeholder="Ajouter un tag..." style="flex:1;font-size:11px;padding:6px 10px"/><button style="padding:6px 12px;border:none;border-radius:8px;background:rgba(167,139,250,0.1);color:#c4b5fd;font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer" data-action="addTag">+</button></div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🔀 Étape pipeline</div><div class="crm-stage-pills">';STAGES.forEach(function(s){var isA=(lead.stage||'lead')===s.key;h+='<span class="crm-stage-pill'+(isA?' active':'')+'" data-action="setStage" data-stage="'+s.key+'" style="'+(isA?'color:'+s.color+';border-color:'+s.color+';background:'+s.color+'18':'')+'">'+esc(s.label)+'</span>';});h+='</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📝 Notes</div>';var notes=lead.notesHistory||[];for(var ni=notes.length-1;ni>=0;ni--){h+='<div class="crm-note-item"><div class="crm-note-date">'+esc(notes[ni].date||'')+'</div><div class="crm-note-text">'+esc(notes[ni].text||'')+'</div></div>';}h+='<div class="crm-note-add-row"><textarea class="crm-note-input" id="modalNoteInput" placeholder="Ajouter une note..."></textarea><button class="crm-note-add-btn" data-action="addNote">+ Ajouter</button></div></div>';h+='<div class="crm-modal-section">';if(lead.telephone)h+='<a href="tel:'+lead.telephone.replace(/\s/g,'')+'" style="display:block;text-align:center;padding:10px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);border-radius:10px;color:#34d399;font-weight:700;font-size:13px;text-decoration:none;margin-bottom:8px">📞 Appeler</a>';if(lead.email)h+='<a href="mailto:'+escA(lead.email)+'" style="display:block;text-align:center;padding:10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);border-radius:10px;color:#60a5fa;font-weight:700;font-size:13px;text-decoration:none">✉️ Email</a>';h+='</div></div>';document.getElementById('modalPanel').innerHTML=h;document.getElementById('modalBg').classList.add('open');document.getElementById('modalBg')._leadId=lid;}
 function mF(l,k,v){return'<div class="crm-modal-field"><span class="crm-modal-field-label">'+esc(l)+'</span><input class="crm-modal-input" data-medit="'+k+'" value="'+escA(v||'')+'"/></div>';}
 
-document.getElementById('modalBg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');if(e.target.closest('[data-action="closeModal"]'))this.classList.remove('open');var sp=e.target.closest('[data-action="setStage"]');if(sp){var ns=sp.dataset.stage,lid=this._leadId;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){allLeads[i].stage=ns;break;}}document.querySelectorAll('.crm-stage-pill').forEach(function(p){p.classList.remove('active');p.style.color='';p.style.borderColor='';p.style.background='';});sp.classList.add('active');var sO=SM[ns];if(sO){sp.style.color=sO.color;sp.style.borderColor=sO.color;sp.style.background=sO.color+'18';}renderAll();var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];db.collection('leads').doc(lid).update(upd).then(function(){toast('→ '+(sO?sO.label:ns));});}var nb=e.target.closest('[data-action="addNote"]');if(nb){var inp=document.getElementById('modalNoteInput');var txt=inp?inp.value.trim():'';if(!txt)return;var lid2=this._leadId,nn={text:txt,date:fmtNow()};for(var j=0;j<allLeads.length;j++){if(allLeads[j].id===lid2){if(!allLeads[j].notesHistory)allLeads[j].notesHistory=[];allLeads[j].notesHistory.push(nn);db.collection('leads').doc(lid2).update({notesHistory:allLeads[j].notesHistory,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Note ajoutée');});break;}}openModal(lid2);}var addTagBtn=e.target.closest('[data-action="addTag"]');if(addTagBtn){var tagInput=document.getElementById('modalTagInput');var newTag=tagInput?tagInput.value.trim():'';if(!newTag)return;var lid3=this._leadId;for(var x=0;x<allLeads.length;x++){if(allLeads[x].id===lid3){if(!allLeads[x].tags)allLeads[x].tags=[];if(allLeads[x].tags.indexOf(newTag)<0){allLeads[x].tags.push(newTag);db.collection('leads').doc(lid3).update({tags:allLeads[x].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag ajouté');collectTags();});}break;}}saveCustomTag(newTag);openModal(lid3);}var rmTag=e.target.closest('[data-action="removeTag"]');if(rmTag){var tv=rmTag.dataset.tagval;var lid4=this._leadId;for(var y=0;y<allLeads.length;y++){if(allLeads[y].id===lid4){if(allLeads[y].tags){var ti=allLeads[y].tags.indexOf(tv);if(ti>=0)allLeads[y].tags.splice(ti,1);db.collection('leads').doc(lid4).update({tags:allLeads[y].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag retiré');collectTags();});}break;}}openModal(lid4);}var rtBtn=e.target.closest('[data-action="toggleRetargeting"]');if(rtBtn){var lid5=this._leadId;var newVal=true;for(var z=0;z<allLeads.length;z++){if(allLeads[z].id===lid5){newVal=!allLeads[z].inRetargeting;allLeads[z].inRetargeting=newVal;break;}}db.collection('leads').doc(lid5).update({inRetargeting:newVal,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast(newVal?'📌 Envoyé en retargeting':'📌 Retiré du retargeting');});openModal(lid5);}});
+document.getElementById('modalBg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');if(e.target.closest('[data-action="closeModal"]'))this.classList.remove('open');var sp=e.target.closest('[data-action="setStage"]');if(sp){var ns=sp.dataset.stage,lid=this._leadId;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){allLeads[i].stage=ns;break;}}document.querySelectorAll('.crm-stage-pill').forEach(function(p){p.classList.remove('active');p.style.color='';p.style.borderColor='';p.style.background='';});sp.classList.add('active');var sO=SM[ns];if(sO){sp.style.color=sO.color;sp.style.borderColor=sO.color;sp.style.background=sO.color+'18';}renderAll();var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];db.collection('leads').doc(lid).update(upd).then(function(){toast('→ '+(sO?sO.label:ns));});}var nb=e.target.closest('[data-action="addNote"]');if(nb){var inp=document.getElementById('modalNoteInput');var txt=inp?inp.value.trim():'';if(!txt)return;var lid2=this._leadId,nn={text:txt,date:fmtNow()};for(var j=0;j<allLeads.length;j++){if(allLeads[j].id===lid2){if(!allLeads[j].notesHistory)allLeads[j].notesHistory=[];allLeads[j].notesHistory.push(nn);db.collection('leads').doc(lid2).update({notesHistory:allLeads[j].notesHistory,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Note ajoutée');});break;}}openModal(lid2);}var addTagBtn=e.target.closest('[data-action="addTag"]');if(addTagBtn){var tagInput=document.getElementById('modalTagInput');var newTag=tagInput?tagInput.value.trim():'';if(!newTag)return;var lid3=this._leadId;for(var x=0;x<allLeads.length;x++){if(allLeads[x].id===lid3){if(!allLeads[x].tags)allLeads[x].tags=[];if(allLeads[x].tags.indexOf(newTag)<0){allLeads[x].tags.push(newTag);db.collection('leads').doc(lid3).update({tags:allLeads[x].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag ajouté');collectTags();});}break;}}saveCustomTag(newTag);openModal(lid3);}var rmTag=e.target.closest('[data-action="removeTag"]');if(rmTag){var tv=rmTag.dataset.tagval;var lid4=this._leadId;for(var y=0;y<allLeads.length;y++){if(allLeads[y].id===lid4){if(allLeads[y].tags){var ti=allLeads[y].tags.indexOf(tv);if(ti>=0)allLeads[y].tags.splice(ti,1);db.collection('leads').doc(lid4).update({tags:allLeads[y].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag retiré');collectTags();});}break;}}openModal(lid4);}});
 
 var mSaveTimer=null;
 document.getElementById('modalBg').addEventListener('input',function(e){if(!e.target.closest('[data-medit]'))return;if(mSaveTimer)clearTimeout(mSaveTimer);mSaveTimer=setTimeout(saveModal,2000);});
@@ -587,9 +598,9 @@ document.getElementById('modalBg').addEventListener('change',function(e){if(e.ta
 function saveModal(){var lid=document.getElementById('modalBg')._leadId;if(!lid)return;var p=document.getElementById('modalPanel'),fs=['nom','telephone','email','utm','assignedTo','type','secteur','ca','defi'],upd={};fs.forEach(function(f){var el=p.querySelector('[data-medit="'+f+'"]');if(el)upd[f]=el.value.trim();});upd.updatedAt=firebase.firestore.FieldValue.serverTimestamp();for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){for(var k in upd){if(k!=='updatedAt')allLeads[i][k]=upd[k];}break;}}db.collection('leads').doc(lid).update(upd).then(function(){var m=document.getElementById('modalSaved');if(m){m.style.opacity='1';setTimeout(function(){m.style.opacity='0';},1500);}renderAll();});}
 
 /* ═══ SEARCH & FILTER ═══ */
-document.getElementById('crmSearch').addEventListener('input',function(){searchQuery=this.value.trim();currentPage=1;renderAll();});
-document.querySelectorAll('.crm-filter-pill').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.crm-filter-pill').forEach(function(p){p.classList.remove('active');});b.classList.add('active');filterSetter=b.dataset.setter;currentPage=1;renderAll();});});
-document.querySelectorAll('.crm-section-pill').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.crm-section-pill').forEach(function(p){p.classList.remove('active');});b.classList.add('active');filterSection=b.dataset.section;currentPage=1;renderAll();});});
+document.getElementById('crmSearch').addEventListener('input',function(){searchQuery=this.value.trim();currentPage=1;colCardLimits={};renderAll();});
+document.querySelectorAll('.crm-filter-pill').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.crm-filter-pill').forEach(function(p){p.classList.remove('active');});b.classList.add('active');filterSetter=b.dataset.setter;currentPage=1;colCardLimits={};renderAll();});});
+document.querySelectorAll('.crm-section-pill').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.crm-section-pill').forEach(function(p){p.classList.remove('active');});b.classList.add('active');filterSection=b.dataset.section;currentPage=1;colCardLimits={};renderAll();});});
 
 /* ═══ DATE FILTER ═══ */
 var filterDateRange='all';
@@ -1025,13 +1036,13 @@ function updateKanbanPreview(){
   h+='<div style="font-weight:800;font-size:12px;margin-bottom:2px">Jean Dupont</div>';
   if(active.indexOf('telephone')>=0)h+='<div style="font-family:var(--fm);font-size:10px;color:var(--muted)">06 12 34 56 78</div>';
   if(active.indexOf('email')>=0)h+='<div style="font-family:var(--fm);font-size:10px;color:var(--muted)">jean@email.com</div>';
-  if(active.indexOf('createdAt')>=0)h+='<div style="font-size:10px;color:rgba(255,255,255,0.3)">02/04/2026</div>';
+  if(active.indexOf('createdAt')>=0)h+='<div style="font-size:11px;color:var(--subtle-text)">02/04/2026</div>';
   h+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">';
-  if(active.indexOf('type')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(167,139,250,0.12);color:#c4b5fd">VSL</span>';
-  if(active.indexOf('assignedTo')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:#fca5a5">Guillaume</span>';
-  if(active.indexOf('status')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--blue)">📞 Appelé</span>';
-  if(active.indexOf('utm')>=0)h+='<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--purple)">🔗 FB Ads</span>';
-  if(active.indexOf('closeur')>=0)h+='<span style="font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--gold)">🎯 Adrien</span>';
+  if(active.indexOf('type')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(167,139,250,0.12);color:#c4b5fd">VSL</span>';
+  if(active.indexOf('assignedTo')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--red3)">Guillaume</span>';
+  if(active.indexOf('status')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--blue)">📞 Appelé</span>';
+  if(active.indexOf('utm')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--purple)">🔗 FB Ads</span>';
+  if(active.indexOf('closeur')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--gold)">🎯 Adrien</span>';
   h+='</div>';
   if(active.indexOf('tags')>=0){
     h+='<div style="display:flex;gap:3px;margin-top:3px">';
@@ -1703,7 +1714,7 @@ function renderFieldsTab(){
     types.forEach(function(t){
       var tc2=typeColors2[t]||'#6b7280';
       var isActive=field.type===t;
-      dh+='<div data-ftypeval="'+t+'" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .1s;'+(isActive?'background:rgba(185,28,28,0.1);color:var(--red3)':'color:rgba(255,255,255,0.7)')+'">';
+      dh+='<div data-ftypeval="'+t+'" style="padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .1s;'+(isActive?'background:rgba(185,28,28,0.1);color:var(--red3)':'color:var(--item-text)')+'">';
       dh+='<span style="font-size:8px;font-weight:700;padding:2px 5px;border-radius:3px;background:'+tc2+'14;color:'+tc2+'">'+t+'</span>';
       if(isActive)dh+=' ✓';
       dh+='</div>';
@@ -1894,7 +1905,14 @@ function openFieldEditModal(field,fieldIdx){
 }
 
 /* ═══ FIRESTORE ═══ */
-db.collection('leads').orderBy('createdAt','desc').onSnapshot(function(snap){allLeads=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;if(!d.stage)d.stage='lead';allLeads.push(d);});collectTags();renderAll();renderSavedViews();renderActiveChips();},function(err){console.error('[crm]',err);});
+var leadsUnsub=null;
+function startLeadsListener(){
+  if(leadsUnsub)leadsUnsub();
+  // Show loading state
+  var board=document.getElementById('crmBoard');
+  if(board&&!crmDataLoaded)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--muted);font-size:14px;font-weight:600;gap:10px"><span class="crm-spinner"></span> Chargement des leads…</div>';
+  leadsUnsub=db.collection('leads').orderBy('createdAt','desc').limit(1500).onSnapshot(function(snap){allLeads=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;if(!d.stage)d.stage='lead';allLeads.push(d);});crmDataLoaded=true;colCardLimits={};collectTags();renderAll();renderSavedViews();renderActiveChips();document.getElementById('statTotal').textContent=allLeads.length;},function(err){console.error('[crm] onSnapshot error:',err);var board=document.getElementById('crmBoard');if(board)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--red3);font-size:13px;font-weight:600">⚠ Erreur de chargement. Rechargez la page.</div>';});
+}
 
 /* ═══ AUTH ═══ */
-firebase.auth().onAuthStateChanged(function(user){if(user){db.collection('users').doc(user.uid).get().then(function(snap){var d=snap.exists?snap.data():{};window._currentRole=d.role||'sales';window._currentUserName=user.displayName||user.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);});loadSavedViews();}});
+firebase.auth().onAuthStateChanged(function(user){if(user){db.collection('users').doc(user.uid).get().then(function(snap){var d=snap.exists?snap.data():{};window._currentRole=d.role||'sales';window._currentUserName=user.displayName||user.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);startLeadsListener();loadSavedViews();}).catch(function(){startLeadsListener();loadSavedViews();});}else{var board=document.getElementById('crmBoard');if(board)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--muted);font-size:13px;font-weight:600">🔒 Connexion requise</div>';}});
