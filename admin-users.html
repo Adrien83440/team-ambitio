@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Utilisateurs — Ambitio</title>
+<link rel="stylesheet" href="sales.css"/>
+<script src="nav.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;color:white;min-height:100vh}
+.page{max-width:1100px;margin:0 auto;padding:24px 20px 60px}
+.pg-head{display:flex;align-items:center;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+.pg-head-icon{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:24px}
+.pg-head h1{font-family:'Bricolage Grotesque','Plus Jakarta Sans',sans-serif;font-size:22px;font-weight:800;flex:1}
+.pg-head-sub{font-size:13px;color:rgba(255,255,255,.4);margin-top:2px}
+.bb{padding:10px 18px;border:none;border-radius:10px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.bb-p{background:#8b5cf6;color:#fff}.bb-p:hover{background:#7c3aed}
+.bb-o{background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.1)}.bb-o:hover{background:rgba(255,255,255,.12);color:#fff}
+.bb-r{background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}.bb-r:hover{background:rgba(239,68,68,.18)}
+.bb-g{background:rgba(52,211,153,.1);color:#6ee7b7;border:1px solid rgba(52,211,153,.2)}.bb-g:hover{background:rgba(52,211,153,.18)}
+.bi{width:100%;padding:10px 14px;background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.08);border-radius:10px;color:#fff;font-family:inherit;font-size:13px;outline:none;transition:border-color .15s}
+.bi:focus{border-color:#8b5cf6}
+.bi::placeholder{color:rgba(255,255,255,.2)}
+.bs{padding:10px 14px;background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.08);border-radius:10px;color:#fff;font-family:inherit;font-size:13px;outline:none;cursor:pointer}
+.bs option{background:#12121f}
+
+/* Search bar */
+.search-bar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
+.search-bar input{flex:1;min-width:200px}
+.search-bar select{min-width:140px}
+
+/* User cards */
+.u-grid{display:flex;flex-direction:column;gap:8px}
+.u-card{display:flex;align-items:center;gap:14px;padding:14px 18px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:14px;cursor:pointer;transition:all .15s}
+.u-card:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+.u-av{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0}
+.u-info{flex:1;min-width:0}
+.u-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.u-email{font-size:12px;color:rgba(255,255,255,.38);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.u-badges{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;align-items:center}
+.u-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;white-space:nowrap}
+.u-b-admin{background:rgba(245,158,11,.12);color:#fbbf24;border:1px solid rgba(245,158,11,.2)}
+.u-b-coach{background:rgba(139,92,246,.12);color:#a78bfa;border:1px solid rgba(139,92,246,.2)}
+.u-b-sales{background:rgba(16,185,129,.12);color:#6ee7b7;border:1px solid rgba(16,185,129,.2)}
+.u-b-active{background:rgba(52,211,153,.08);color:#34d399;border:1px solid rgba(52,211,153,.15)}
+.u-b-invited{background:rgba(96,165,250,.08);color:#60a5fa;border:1px solid rgba(96,165,250,.15)}
+.u-b-disabled{background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.15)}
+.u-perms{font-size:11px;color:rgba(255,255,255,.3);flex-shrink:0;min-width:80px;text-align:right}
+.u-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,.3);font-size:14px}
+
+/* Modal */
+.mo-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:1000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+.mo-bg.on{display:flex}
+.mo{background:#0e0e1a;border:1px solid rgba(255,255,255,.08);border-radius:20px;width:100%;max-width:600px;box-shadow:0 32px 80px rgba(0,0,0,.6);animation:moIn .2s ease}
+@keyframes moIn{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.mo-h{display:flex;align-items:center;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.06)}
+.mo-t{font-family:'Bricolage Grotesque','Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:800;flex:1}
+.mo-x{width:32px;height:32px;border:1px solid rgba(255,255,255,.1);border-radius:8px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.5);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
+.mo-x:hover{background:rgba(255,255,255,.12);color:#fff}
+.mo-b{padding:24px}
+.mf{margin-bottom:14px}
+.mf label{display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+.mfr{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* Role selector cards */
+.role-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.role-opt{padding:12px 10px;border:1.5px solid rgba(255,255,255,.08);border-radius:12px;text-align:center;cursor:pointer;transition:all .15s;background:rgba(255,255,255,.02)}
+.role-opt:hover{background:rgba(255,255,255,.06)}
+.role-opt.on{border-color:#8b5cf6;background:rgba(139,92,246,.08)}
+.role-opt-icon{font-size:20px;margin-bottom:4px}
+.role-opt-label{font-size:12px;font-weight:700}
+.role-opt-sub{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
+
+/* Method selector */
+.method-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.method-opt{padding:12px;border:1.5px solid rgba(255,255,255,.08);border-radius:12px;cursor:pointer;transition:all .15s;background:rgba(255,255,255,.02)}
+.method-opt:hover{background:rgba(255,255,255,.06)}
+.method-opt.on{border-color:#8b5cf6;background:rgba(139,92,246,.08)}
+
+/* Permission grid */
+.perm-section{margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06)}
+.perm-title{font-size:13px;font-weight:800;margin-bottom:12px;font-family:'Bricolage Grotesque','Plus Jakarta Sans',sans-serif}
+.perm-head{display:grid;grid-template-columns:1fr 80px 80px 80px;gap:4px;padding:0 4px;margin-bottom:6px}
+.perm-head span{font-size:10px;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;text-align:center}
+.perm-head span:first-child{text-align:left}
+.perm-row{display:grid;grid-template-columns:1fr 80px 80px 80px;gap:4px;padding:8px 4px;border-radius:8px;align-items:center}
+.perm-row:nth-child(odd){background:rgba(255,255,255,.02)}
+.perm-row-label{font-size:13px;font-weight:600}
+.perm-row-section{font-size:10px;color:rgba(255,255,255,.25);margin-top:1px}
+.perm-radio{display:flex;justify-content:center}
+.perm-radio input[type="radio"]{display:none}
+.perm-radio label{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;border:1.5px solid rgba(255,255,255,.08);transition:all .15s;background:rgba(255,255,255,.02)}
+.perm-radio label:hover{background:rgba(255,255,255,.08)}
+.perm-radio input[type="radio"]:checked+label.perm-none{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.1);color:#fca5a5}
+.perm-radio input[type="radio"]:checked+label.perm-read{border-color:rgba(96,165,250,.4);background:rgba(96,165,250,.1);color:#60a5fa}
+.perm-radio input[type="radio"]:checked+label.perm-edit{border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.1);color:#34d399}
+
+/* Quick actions */
+.qa-bar{display:flex;gap:8px;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06);flex-wrap:wrap}
+
+/* Toast */
+.toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000}
+.toast{padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;opacity:0;transition:all .3s;transform:translateY(10px)}
+.toast.show{opacity:1;transform:translateY(0)}
+
+/* Stats */
+.u-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+.u-stat{padding:14px 16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;text-align:center}
+.u-stat-n{font-size:22px;font-weight:800;font-family:'Bricolage Grotesque',sans-serif}
+.u-stat-l{font-size:11px;color:rgba(255,255,255,.38);margin-top:2px}
+
+@media(max-width:640px){
+  .perm-head,.perm-row{grid-template-columns:1fr 60px 60px 60px}
+  .mfr{grid-template-columns:1fr}
+  .role-opts{grid-template-columns:1fr}
+  .u-badges{display:none}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="pg-head">
+    <div class="pg-head-icon">🔑</div>
+    <div>
+      <h1>Utilisateurs</h1>
+      <div class="pg-head-sub">Gestion des accès et permissions</div>
+    </div>
+    <button class="bb bb-p" id="btnAdd">+ Nouvel utilisateur</button>
+  </div>
+
+  <div class="u-stats" id="stats"></div>
+
+  <div class="search-bar">
+    <input class="bi" id="searchQ" placeholder="🔍 Rechercher par nom ou email…"/>
+    <select class="bs" id="filterRole">
+      <option value="">Tous les rôles</option>
+      <option value="admin">👑 Admin</option>
+      <option value="coach">🎓 Coach</option>
+      <option value="sales">📈 Sales</option>
+    </select>
+    <select class="bs" id="filterStatus">
+      <option value="">Tous les statuts</option>
+      <option value="active">✅ Actif</option>
+      <option value="invited">📩 Invité</option>
+      <option value="disabled">🚫 Désactivé</option>
+    </select>
+  </div>
+
+  <div class="u-grid" id="userList"></div>
+</div>
+
+<!-- Create / Edit modal -->
+<div class="mo-bg" id="modal">
+  <div class="mo">
+    <div class="mo-h">
+      <div class="mo-t" id="moTitle">Nouvel utilisateur</div>
+      <button class="mo-x" id="moClose">✕</button>
+    </div>
+    <div class="mo-b" id="moBody"></div>
+  </div>
+</div>
+
+<div class="toast-wrap"><div class="toast" id="toast"></div></div>
+
+<!-- Firebase -->
+<script type="module">
+import{initializeApp,deleteApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import{getAuth,onAuthStateChanged,signOut,createUserWithEmailAndPassword,sendPasswordResetEmail}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import{getFirestore,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,deleteField}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const FBCFG={
+  apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+  authDomain:"ambitio-team.firebaseapp.com",
+  projectId:"ambitio-team",
+  storageBucket:"ambitio-team.firebasestorage.app",
+  messagingSenderId:"1079366902268",
+  appId:"1:1079366902268:web:b4ec1691dba54230339279"
+};
+const app=initializeApp(FBCFG);
+const auth=getAuth(app),db=getFirestore(app);
+window._auth=auth;window._signOut=signOut;
+
+// ─── Permission config from nav.js ───
+const PERM_KEYS=window.AmbitioNav?.PERM_KEYS||['coaching_clients','coaching_dashboard','coaching_communication','sales_crm','sales_dashboard','sales_saisie','sales_equipe','sales_commissions','sales_projections','booking'];
+const ROLE_DEFAULTS=window.AmbitioNav?.ROLE_DEFAULTS||{
+  admin:Object.fromEntries(PERM_KEYS.map(k=>[k,'edit'])),
+  coach:{coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none'},
+  sales:{coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit'},
+};
+const PERM_LABELS=window.AmbitioNav?.PERM_LABELS||{
+  coaching_clients:'Clients',coaching_dashboard:'Dashboard (Coaching)',coaching_communication:'Communication',
+  sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'Setting / Closing / EOD',
+  sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking'
+};
+const PERM_SECTIONS={coaching_clients:'Coaching',coaching_dashboard:'Coaching',coaching_communication:'Coaching',
+  sales_crm:'Sales',sales_dashboard:'Sales',sales_saisie:'Sales',
+  sales_equipe:'Sales',sales_commissions:'Sales',sales_projections:'Sales',booking:'Booking'};
+
+const ROLE_COLORS={admin:'#f59e0b',coach:'#8b5cf6',sales:'#10b981'};
+const ROLE_EMOJIS={admin:'👑',coach:'🎓',sales:'📈'};
+const STATUS_LABELS={active:'✅ Actif',invited:'📩 Invité',disabled:'🚫 Désactivé'};
+const STATUS_CLS={active:'u-b-active',invited:'u-b-invited',disabled:'u-b-disabled'};
+
+let USERS=[];
+let currentUid=null; // admin uid
+let editUid=null; // uid being edited
+
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function toast(msg){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2500);}
+
+// ─── Auth guard ───
+onAuthStateChanged(auth,async user=>{
+  if(!user){window.location.href='login.html';return;}
+  try{
+    const snap=await getDoc(doc(db,'users',user.uid));
+    const data=snap.exists()?snap.data():{};
+    if(data.role!=='admin'){window.location.href='coaching.html';return;}
+    currentUid=user.uid;
+    loadUsers();
+  }catch(e){console.error(e);window.location.href='login.html';}
+});
+
+// ─── Load all users ───
+async function loadUsers(){
+  const snap=await getDocs(collection(db,'users'));
+  USERS=[];
+  snap.forEach(d=>{USERS.push(Object.assign({uid:d.id},d.data()));});
+  USERS.sort((a,b)=>(a.displayName||a.email||'').localeCompare(b.displayName||b.email||''));
+  renderStats();
+  renderList();
+}
+
+function renderStats(){
+  var total=USERS.length;
+  var admins=USERS.filter(u=>u.role==='admin').length;
+  var coaches=USERS.filter(u=>u.role==='coach').length;
+  var sales=USERS.filter(u=>u.role==='sales').length;
+  var active=USERS.filter(u=>(u.status||'active')==='active').length;
+  document.getElementById('stats').innerHTML=
+    '<div class="u-stat"><div class="u-stat-n">'+total+'</div><div class="u-stat-l">Total</div></div>'+
+    '<div class="u-stat"><div class="u-stat-n" style="color:#f59e0b">'+admins+'</div><div class="u-stat-l">Admins</div></div>'+
+    '<div class="u-stat"><div class="u-stat-n" style="color:#8b5cf6">'+coaches+'</div><div class="u-stat-l">Coaches</div></div>'+
+    '<div class="u-stat"><div class="u-stat-n" style="color:#10b981">'+sales+'</div><div class="u-stat-l">Sales</div></div>'+
+    '<div class="u-stat"><div class="u-stat-n" style="color:#34d399">'+active+'</div><div class="u-stat-l">Actifs</div></div>';
+}
+
+function renderList(){
+  var q=(document.getElementById('searchQ').value||'').toLowerCase();
+  var fRole=document.getElementById('filterRole').value;
+  var fStatus=document.getElementById('filterStatus').value;
+  var filtered=USERS.filter(function(u){
+    if(q){var hay=((u.displayName||'')+(u.email||'')).toLowerCase();if(hay.indexOf(q)<0)return false;}
+    if(fRole&&u.role!==fRole)return false;
+    if(fStatus&&(u.status||'active')!==fStatus)return false;
+    return true;
+  });
+  var el=document.getElementById('userList');
+  if(!filtered.length){el.innerHTML='<div class="u-empty">Aucun utilisateur trouvé</div>';return;}
+  var h='';
+  filtered.forEach(function(u){
+    var name=u.displayName||u.email||'?';
+    var role=u.role||'coach';
+    var status=u.status||'active';
+    var mods=u.modules||ROLE_DEFAULTS[role]||{};
+    var editCount=PERM_KEYS.filter(function(k){return mods[k]==='edit';}).length;
+    var readCount=PERM_KEYS.filter(function(k){return mods[k]==='read';}).length;
+    var permText=editCount+' édition';
+    if(readCount)permText+=', '+readCount+' lecture';
+    h+='<div class="u-card" data-uid="'+u.uid+'">';
+    h+='<div class="u-av" style="background:'+ROLE_COLORS[role]+'">'+name[0].toUpperCase()+'</div>';
+    h+='<div class="u-info"><div class="u-name">'+esc(name)+'</div><div class="u-email">'+esc(u.email||'')+'</div></div>';
+    h+='<div class="u-badges">';
+    h+='<span class="u-badge u-b-'+role+'">'+(ROLE_EMOJIS[role]||'')+' '+role.charAt(0).toUpperCase()+role.slice(1)+'</span>';
+    h+='<span class="u-badge '+STATUS_CLS[status]+'">'+(STATUS_LABELS[status]||status)+'</span>';
+    h+='</div>';
+    h+='<div class="u-perms">'+permText+'</div>';
+    h+='</div>';
+  });
+  el.innerHTML=h;
+}
+
+// ─── Event: filter & search ───
+document.getElementById('searchQ').addEventListener('input',renderList);
+document.getElementById('filterRole').addEventListener('change',renderList);
+document.getElementById('filterStatus').addEventListener('change',renderList);
+
+// ─── Event: click user card → edit ───
+document.getElementById('userList').addEventListener('click',function(e){
+  var card=e.target.closest('.u-card');
+  if(!card)return;
+  var uid=card.dataset.uid;
+  var u=USERS.find(function(x){return x.uid===uid;});
+  if(u)openEditModal(u);
+});
+
+// ─── Event: add button ───
+document.getElementById('btnAdd').addEventListener('click',openCreateModal);
+
+// ─── Modal controls ───
+function openModal(title){
+  editUid=null;
+  document.getElementById('moTitle').textContent=title;
+  document.getElementById('modal').classList.add('on');
+}
+function closeModal(){
+  document.getElementById('modal').classList.remove('on');
+  editUid=null;
+}
+document.getElementById('moClose').addEventListener('click',closeModal);
+document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+
+// ─── Build permission grid HTML ───
+function buildPermGrid(modules,prefix){
+  var h='<div class="perm-section"><div class="perm-title">📋 Permissions par module</div>';
+  h+='<div class="perm-head"><span>Module</span><span>❌ Aucun</span><span>👁 Lecture</span><span>✏️ Édition</span></div>';
+  var lastSec='';
+  PERM_KEYS.forEach(function(k){
+    var sec=PERM_SECTIONS[k]||'';
+    var val=modules[k]||'none';
+    if(sec!==lastSec){
+      h+='<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.25);text-transform:uppercase;letter-spacing:.8px;padding:10px 4px 4px">'+sec+'</div>';
+      lastSec=sec;
+    }
+    h+='<div class="perm-row">';
+    h+='<div class="perm-row-label">'+esc(PERM_LABELS[k]||k)+'</div>';
+    ['none','read','edit'].forEach(function(v){
+      var id=prefix+'_'+k+'_'+v;
+      var icons={none:'✕',read:'👁',edit:'✏️'};
+      h+='<div class="perm-radio"><input type="radio" name="'+prefix+'_'+k+'" id="'+id+'" value="'+v+'"'+(val===v?' checked':'')+'/><label for="'+id+'" class="perm-'+v+'">'+icons[v]+'</label></div>';
+    });
+    h+='</div>';
+  });
+  h+='</div>';
+  return h;
+}
+
+function readPermGrid(prefix){
+  var mods={};
+  PERM_KEYS.forEach(function(k){
+    var radios=document.querySelectorAll('input[name="'+prefix+'_'+k+'"]');
+    radios.forEach(function(r){if(r.checked)mods[k]=r.value;});
+    if(!mods[k])mods[k]='none';
+  });
+  return mods;
+}
+
+// ─── CREATE modal ───
+function openCreateModal(){
+  openModal('Nouvel utilisateur');
+  var h='';
+  // Name + email
+  h+='<div class="mfr"><div class="mf"><label>Prénom</label><input class="bi" id="cFirstname" placeholder="Prénom"/></div>';
+  h+='<div class="mf"><label>Nom</label><input class="bi" id="cLastname" placeholder="Nom"/></div></div>';
+  h+='<div class="mf"><label>Email *</label><input class="bi" type="email" id="cEmail" placeholder="prenom@ambitiocorp.com"/></div>';
+  // Role
+  h+='<div class="mf"><label>Rôle</label></div>';
+  h+='<div class="role-opts">';
+  h+='<div class="role-opt on" data-role="coach" onclick="selectRole(this)"><div class="role-opt-icon">🎓</div><div class="role-opt-label">Coach</div><div class="role-opt-sub">Espace coaching</div></div>';
+  h+='<div class="role-opt" data-role="sales" onclick="selectRole(this)"><div class="role-opt-icon">📈</div><div class="role-opt-label">Sales</div><div class="role-opt-sub">Espace commercial</div></div>';
+  h+='<div class="role-opt" data-role="admin" onclick="selectRole(this)"><div class="role-opt-icon">👑</div><div class="role-opt-label">Admin</div><div class="role-opt-sub">Accès complet</div></div>';
+  h+='</div>';
+  // Method
+  h+='<div class="mf"><label>Méthode de création</label></div>';
+  h+='<div class="method-opts">';
+  h+='<div class="method-opt on" data-method="invite" onclick="selectMethod(this)"><div style="font-size:14px;font-weight:700">📩 Invitation</div><div style="font-size:11px;color:rgba(255,255,255,.38);margin-top:4px">Envoi d\'un email pour définir le mot de passe</div></div>';
+  h+='<div class="method-opt" data-method="direct" onclick="selectMethod(this)"><div style="font-size:14px;font-weight:700">🔐 Création directe</div><div style="font-size:11px;color:rgba(255,255,255,.38);margin-top:4px">Vous définissez le mot de passe</div></div>';
+  h+='</div>';
+  // Password (hidden by default)
+  h+='<div class="mf" id="cPwdWrap" style="display:none"><label>Mot de passe *</label><input class="bi" type="password" id="cPwd" placeholder="Minimum 6 caractères"/></div>';
+  // Permissions
+  h+=buildPermGrid(ROLE_DEFAULTS.coach,'c');
+  // Submit
+  h+='<div style="display:flex;gap:10px;margin-top:20px"><button class="bb bb-o" onclick="closeModal()">Annuler</button><button class="bb bb-p" id="cSubmit" style="flex:1">Créer l\'utilisateur</button></div>';
+  document.getElementById('moBody').innerHTML=h;
+  document.getElementById('cSubmit').addEventListener('click',handleCreate);
+}
+
+window.selectRole=function(el){
+  document.querySelectorAll('.role-opt').forEach(function(o){o.classList.remove('on');});
+  el.classList.add('on');
+  // Update permissions to role defaults
+  var role=el.dataset.role;
+  var defs=ROLE_DEFAULTS[role]||ROLE_DEFAULTS.coach;
+  PERM_KEYS.forEach(function(k){
+    var radio=document.getElementById('c_'+k+'_'+defs[k]);
+    if(radio)radio.checked=true;
+    // Also uncheck others
+    ['none','read','edit'].forEach(function(v){
+      var r=document.getElementById('c_'+k+'_'+v);
+      if(r)r.checked=(v===defs[k]);
+    });
+  });
+};
+
+window.selectMethod=function(el){
+  document.querySelectorAll('.method-opt').forEach(function(o){o.classList.remove('on');});
+  el.classList.add('on');
+  var wrap=document.getElementById('cPwdWrap');
+  if(wrap)wrap.style.display=el.dataset.method==='direct'?'block':'none';
+};
+
+async function handleCreate(){
+  var email=document.getElementById('cEmail').value.trim();
+  var firstname=document.getElementById('cFirstname').value.trim();
+  var lastname=document.getElementById('cLastname').value.trim();
+  var displayName=((firstname+' '+lastname).trim())||email.split('@')[0];
+  var roleEl=document.querySelector('.role-opt.on');
+  var role=roleEl?roleEl.dataset.role:'coach';
+  var methodEl=document.querySelector('.method-opt.on');
+  var method=methodEl?methodEl.dataset.method:'invite';
+
+  if(!email){toast('⚠️ Email requis');return;}
+
+  var password;
+  if(method==='direct'){
+    password=document.getElementById('cPwd').value;
+    if(!password||password.length<6){toast('⚠️ Mot de passe min. 6 caractères');return;}
+  }else{
+    password=crypto.getRandomValues(new Uint8Array(16)).reduce(function(s,b){return s+b.toString(36);},'').slice(0,20);
+  }
+
+  var btn=document.getElementById('cSubmit');
+  btn.disabled=true;btn.textContent='⏳ Création…';
+
+  try{
+    // Create user via secondary app (to not sign out admin)
+    var secondApp=initializeApp(FBCFG,'_create_'+Date.now());
+    var secondAuth=getAuth(secondApp);
+    var result=await createUserWithEmailAndPassword(secondAuth,email,password);
+    var uid=result.user.uid;
+
+    // Sign out from secondary immediately
+    var signOutMod=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    await signOutMod.signOut(secondAuth);
+    await deleteApp(secondApp);
+
+    // Read permissions from grid
+    var modules=readPermGrid('c');
+
+    // Create Firestore user doc
+    var userData={
+      email:email,
+      displayName:displayName,
+      role:role,
+      status:method==='invite'?'invited':'active',
+      modules:modules,
+      createdAt:new Date().toISOString(),
+      createdBy:currentUid
+    };
+    await setDoc(doc(db,'users',uid),userData);
+
+    // Send password reset for invitation
+    if(method==='invite'){
+      await sendPasswordResetEmail(auth,email);
+    }
+
+    toast(method==='invite'?'✅ Invitation envoyée à '+email:'✅ Utilisateur créé');
+    closeModal();
+    await loadUsers();
+  }catch(e){
+    console.error('Create error:',e);
+    var msgs={
+      'auth/email-already-in-use':'Cet email est déjà utilisé',
+      'auth/invalid-email':'Email invalide',
+      'auth/weak-password':'Mot de passe trop faible (min. 6 car.)'
+    };
+    toast('❌ '+(msgs[e.code]||e.message));
+    btn.disabled=false;btn.textContent='Créer l\'utilisateur';
+  }
+}
+
+// ─── EDIT modal ───
+function openEditModal(u){
+  editUid=u.uid;
+  openModal('Modifier — '+esc(u.displayName||u.email));
+  var role=u.role||'coach';
+  var status=u.status||'active';
+  var mods=u.modules||ROLE_DEFAULTS[role]||{};
+  var isMe=u.uid===currentUid;
+
+  var h='';
+  // Info
+  h+='<div class="mfr"><div class="mf"><label>Nom affiché</label><input class="bi" id="eName" value="'+esc(u.displayName||'')+'"/></div>';
+  h+='<div class="mf"><label>Email</label><input class="bi" id="eEmail" value="'+esc(u.email||'')+'" disabled style="opacity:.5"/></div></div>';
+  // Role
+  h+='<div class="mf"><label>Rôle</label>';
+  h+='<select class="bs" id="eRole" style="width:100%"'+(isMe?' disabled':'')+' onchange="onEditRoleChange()">';
+  h+='<option value="admin"'+(role==='admin'?' selected':'')+'>👑 Admin</option>';
+  h+='<option value="coach"'+(role==='coach'?' selected':'')+'>🎓 Coach</option>';
+  h+='<option value="sales"'+(role==='sales'?' selected':'')+'>📈 Sales</option>';
+  h+='</select></div>';
+  // Status
+  h+='<div class="mf"><label>Statut</label>';
+  h+='<select class="bs" id="eStatus" style="width:100%"'+(isMe?' disabled':'')+'>'; 
+  h+='<option value="active"'+(status==='active'?' selected':'')+'>✅ Actif</option>';
+  h+='<option value="invited"'+(status==='invited'?' selected':'')+'>📩 Invité</option>';
+  h+='<option value="disabled"'+(status==='disabled'?' selected':'')+'>🚫 Désactivé</option>';
+  h+='</select></div>';
+  // Permissions
+  h+=buildPermGrid(mods,'e');
+  // Save
+  h+='<div style="display:flex;gap:10px;margin-top:20px"><button class="bb bb-o" onclick="closeModal()">Annuler</button><button class="bb bb-p" id="eSave" style="flex:1">💾 Enregistrer</button></div>';
+  // Actions
+  h+='<div class="qa-bar">';
+  h+='<button class="bb bb-o" id="eResetPwd">🔑 Réinitialiser MDP</button>';
+  if(!isMe)h+='<button class="bb bb-r" id="eDelete">🗑 Supprimer</button>';
+  h+='</div>';
+
+  document.getElementById('moBody').innerHTML=h;
+  document.getElementById('eSave').addEventListener('click',function(){handleSave(u.uid);});
+  document.getElementById('eResetPwd').addEventListener('click',function(){handleResetPwd(u.email);});
+  var delBtn=document.getElementById('eDelete');
+  if(delBtn)delBtn.addEventListener('click',function(){handleDelete(u.uid,u.displayName||u.email);});
+}
+
+window.onEditRoleChange=function(){
+  var role=document.getElementById('eRole').value;
+  var defs=ROLE_DEFAULTS[role]||ROLE_DEFAULTS.coach;
+  if(!confirm('Appliquer les permissions par défaut du rôle "'+role+'" ?\n\nLes permissions actuelles seront remplacées.'))return;
+  PERM_KEYS.forEach(function(k){
+    ['none','read','edit'].forEach(function(v){
+      var r=document.getElementById('e_'+k+'_'+v);
+      if(r)r.checked=(v===defs[k]);
+    });
+  });
+};
+
+async function handleSave(uid){
+  var btn=document.getElementById('eSave');
+  btn.disabled=true;btn.textContent='⏳…';
+  try{
+    var upd={
+      displayName:document.getElementById('eName').value.trim(),
+      role:document.getElementById('eRole').value,
+      status:document.getElementById('eStatus').value,
+      modules:readPermGrid('e')
+    };
+    await updateDoc(doc(db,'users',uid),upd);
+    toast('✅ Utilisateur mis à jour');
+    closeModal();
+    await loadUsers();
+  }catch(e){
+    console.error(e);toast('❌ Erreur: '+e.message);
+    btn.disabled=false;btn.textContent='💾 Enregistrer';
+  }
+}
+
+async function handleResetPwd(email){
+  if(!email)return;
+  if(!confirm('Envoyer un email de réinitialisation à '+email+' ?'))return;
+  try{
+    await sendPasswordResetEmail(auth,email);
+    toast('✅ Email envoyé à '+email);
+  }catch(e){toast('❌ '+e.message);}
+}
+
+async function handleDelete(uid,name){
+  if(uid===currentUid){toast('⚠️ Impossible de supprimer votre propre compte');return;}
+  if(!confirm('Supprimer l\'utilisateur "'+name+'" ?\n\nCette action supprime le document Firestore. Le compte Firebase Auth devra être supprimé manuellement depuis la console Firebase.'))return;
+  try{
+    await deleteDoc(doc(db,'users',uid));
+    toast('🗑 Utilisateur supprimé');
+    closeModal();
+    await loadUsers();
+  }catch(e){toast('❌ '+e.message);}
+}
+
+</script>
+</body>
+</html>

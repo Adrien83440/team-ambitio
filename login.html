@@ -191,16 +191,16 @@
           await signOut(auth);
           return;
         }
-        window.showConnected(user,role);
+        window.showConnected(user,role,data.modules||null);
       }catch(e){
         console.error(e);
         // Firestore error: use role from localStorage if available, else show error
         const cachedRole=localStorage.getItem('ambitio_role');
         if(cachedRole&&['coach','sales','admin'].includes(cachedRole)){
-          window.showConnected(user,cachedRole);
+          window.showConnected(user,cachedRole,null);
         } else {
           console.error('Impossible de lire le rôle Firestore:',e);
-          window.showConnected(user,'admin'); // fallback admin pour éviter blocage
+          window.showConnected(user,'admin',null); // fallback admin pour éviter blocage
         }
       }
     }
@@ -208,7 +208,7 @@
 </script>
 
 <script>
-  window.showConnected=function(user,role){
+  window.showConnected=function(user,role,modules){
     document.getElementById('authSection').style.display='none';
     document.getElementById('connectedSection').classList.add('show');
     const name=user.displayName||user.email.split('@')[0];
@@ -218,10 +218,12 @@
     document.getElementById('roleBadge').textContent=label;
     document.getElementById('roleBadge').className='role-badge '+cls;
     document.getElementById('welcomeEmail').textContent=user.email;
-    // Save role for nav.js
+    // Save role + modules for nav.js
     localStorage.setItem('ambitio_role',role);
     localStorage.setItem('ambitio_name',name);
     localStorage.setItem('ambitio_email',user.email);
+    if(modules) localStorage.setItem('ambitio_modules',JSON.stringify(modules));
+    else localStorage.removeItem('ambitio_modules');
     // Redirect button based on role
     const dest={coach:'coaching.html',sales:'sales-dashboard.html',admin:'coaching.html'};
     const goBtn=document.getElementById('goBtn');

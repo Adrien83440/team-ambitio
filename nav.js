@@ -9,57 +9,54 @@
   // Apply saved theme immediately to prevent flash
   if (localStorage.getItem('ambitio_theme') === 'light') document.body.classList.add('light-theme');
 
-  const MODULES = {
+  /* ─── Permission keys ─── */
+  const PERM_KEYS = [
+    'coaching_clients','coaching_dashboard','coaching_communication',
+    'sales_crm','sales_dashboard','sales_saisie',
+    'sales_equipe','sales_commissions','sales_projections','booking'
+  ];
 
-    coach: [
-      { id: 'clients',       icon: '👥', label: 'Clients',       href: 'coaching.html' },
-      { id: 'dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html' },
-      { id: 'communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html' },
-    ],
-
-    sales: [
-      { id: 'dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html' },
-      { id: 'crm',         icon: '🧩', label: 'CRM',               href: '#', children: [
-        { id: 'leads_live',  icon: '🔔', label: 'Leads Live',      href: 'sales-leads.html' },
-        { id: 'pipeline',    icon: '▥',  label: 'Pipeline',        href: 'sales-crm.html' },
-        { id: 'retargeting', icon: '🔄', label: 'Retargeting',     href: 'sales-retargeting.html' },
-        { id: 'suivi',       icon: '📋', label: 'Suivi Clients',   href: 'sales-suivi-client.html' },
-      ]},
-      { id: 'saisie',      icon: '✏️', label: 'Setting / Closing', href: '#', children: [
-        { id: 'setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
-        { id: 'closing', icon: '🎯', label: 'Closing', href: 'sales-closing.html' },
-        { id: 'eod',     icon: '📝', label: 'EOD',     href: 'sales-eod.html' },
-      ]},
-      { id: 'equipe',      icon: '👥', label: 'Équipe',            href: 'sales-equipe.html' },
-      { id: 'commissions', icon: '💰', label: 'Commissions',       href: 'sales-commissions.html' },
-      { id: 'projections', icon: '📈', label: 'Projections',       href: 'sales-projections.html' },
-      { id: 'booking',     icon: '📅', label: 'Booking',           href: 'booking-admin.html' },
-    ],
-
-    admin: [
-      { id: 'coach-clients',       icon: '👥', label: 'Clients',       href: 'coaching.html',                section: 'Coaching' },
-      { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',      section: 'Coaching' },
-      { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html',  section: 'Coaching' },
-      { id: 'sales-crm',         icon: '🧩', label: 'CRM', href: '#', section: 'Sales', children: [
-        { id: 'sales-leads_live',  icon: '🔔', label: 'Leads Live',    href: 'sales-leads.html' },
-        { id: 'sales-pipeline',    icon: '▥',  label: 'Pipeline',      href: 'sales-crm.html' },
-        { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting',   href: 'sales-retargeting.html' },
-        { id: 'sales-suivi',       icon: '📋', label: 'Suivi Clients', href: 'sales-suivi-client.html' },
-      ]},
-      { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',   href: 'sales-dashboard.html',   section: 'Sales' },
-      { id: 'sales-saisie',      icon: '✏️', label: 'Setting / Closing', href: '#', section: 'Sales', children: [
-        { id: 'sales-setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
-        { id: 'sales-closing', icon: '🎯', label: 'Closing', href: 'sales-closing.html' },
-        { id: 'sales-eod',    icon: '📝', label: 'EOD',     href: 'sales-eod.html' },
-      ]},
-      { id: 'sales-equipe',      icon: '👥', label: 'Équipe',      href: 'sales-equipe.html',      section: 'Sales' },
-      { id: 'sales-commissions', icon: '💰', label: 'Commissions', href: 'sales-commissions.html', section: 'Sales' },
-      { id: 'sales-projections', icon: '📈', label: 'Projections', href: 'sales-projections.html', section: 'Sales' },
-      { id: 'sales-booking',     icon: '📅', label: 'Booking',     href: 'booking-admin.html',           section: 'Sales' },
-
-      { id: 'import', icon: '🔗', label: 'Import Notion', href: 'import-notion.html', section: 'Outils' },
-    ],
+  const ROLE_DEFAULTS = {
+    admin: { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
+             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',
+             sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit' },
+    coach: { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
+             sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',
+             sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none' },
+    sales: { coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',
+             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',
+             sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit' },
   };
+
+  const PERM_LABELS = {
+    coaching_clients:'Clients (Coaching)',coaching_dashboard:'Dashboard (Coaching)',coaching_communication:'Communication',
+    sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'Setting / Closing / EOD',
+    sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking'
+  };
+
+  const ALL_MODULES = [
+    { id: 'coach-clients',       icon: '👥', label: 'Clients',       href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
+    { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',     section: 'Coaching', perm: 'coaching_dashboard' },
+    { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html', section: 'Coaching', perm: 'coaching_communication' },
+    { id: 'sales-crm', icon: '🧩', label: 'CRM', href: '#', section: 'Sales', perm: 'sales_crm', children: [
+      { id: 'sales-leads_live',  icon: '🔔', label: 'Leads Live',    href: 'sales-leads.html' },
+      { id: 'sales-pipeline',    icon: '▥',  label: 'Pipeline',      href: 'sales-crm.html' },
+      { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting',   href: 'sales-retargeting.html' },
+      { id: 'sales-suivi',       icon: '📋', label: 'Suivi Clients', href: 'sales-suivi-client.html' },
+    ]},
+    { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html',   section: 'Sales', perm: 'sales_dashboard' },
+    { id: 'sales-saisie',      icon: '✏️', label: 'Setting / Closing', href: '#',                      section: 'Sales', perm: 'sales_saisie', children: [
+      { id: 'sales-setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
+      { id: 'sales-closing', icon: '🎯', label: 'Closing', href: 'sales-closing.html' },
+      { id: 'sales-eod',    icon: '📝', label: 'EOD',     href: 'sales-eod.html' },
+    ]},
+    { id: 'sales-equipe',      icon: '👥', label: 'Équipe',      href: 'sales-equipe.html',      section: 'Sales', perm: 'sales_equipe' },
+    { id: 'sales-commissions', icon: '💰', label: 'Commissions', href: 'sales-commissions.html', section: 'Sales', perm: 'sales_commissions' },
+    { id: 'sales-projections', icon: '📈', label: 'Projections', href: 'sales-projections.html', section: 'Sales', perm: 'sales_projections' },
+    { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
+    { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
+    { id: 'import',            icon: '🔗', label: 'Import Notion', href: 'import-notion.html',   section: 'Outils', perm: '_admin' },
+  ];
 
   const THEMES = {
     coach: {
@@ -385,6 +382,11 @@
   document.head.appendChild(style);
 
   function getRole() { return window._currentRole || localStorage.getItem('ambitio_role') || 'coach'; }
+  function getUserModules() {
+    var stored = localStorage.getItem('ambitio_modules');
+    if (stored) { try { return JSON.parse(stored); } catch(e) {} }
+    return ROLE_DEFAULTS[getRole()] || ROLE_DEFAULTS.coach;
+  }
   function getUserInfo() {
     const name = window._currentUserName || localStorage.getItem('ambitio_name') || 'Utilisateur';
     return { name, email: window._currentUserEmail || localStorage.getItem('ambitio_email') || '', initials: name.slice(0,1).toUpperCase() };
@@ -396,7 +398,12 @@
   function buildSidebar() {
     const role    = getRole();
     const theme   = THEMES[role]  || THEMES.coach;
-    const modules = MODULES[role] || MODULES.coach;
+    const perms   = getUserModules();
+    const modules = ALL_MODULES.filter(m => {
+      if (m.perm === '_admin') return role === 'admin';
+      var p = perms[m.perm];
+      return p && p !== 'none';
+    });
     const user    = getUserInfo();
     const { path } = getActivePage();
 
@@ -625,7 +632,7 @@
 
     document.getElementById('pmLogout').addEventListener('click', async () => {
       if (window._signOut && window._auth) await window._signOut(window._auth);
-      ['ambitio_role','ambitio_name','ambitio_email'].forEach(k => localStorage.removeItem(k));
+      ['ambitio_role','ambitio_name','ambitio_email','ambitio_modules'].forEach(k => localStorage.removeItem(k));
       window.location.href = 'login.html';
     });
   }
@@ -636,12 +643,16 @@
   }
 
   window.AmbitioNav = {
-    setRole(role, name, email) {
+    setRole(role, name, email, modules) {
       localStorage.setItem('ambitio_role', role);
       if (name)  localStorage.setItem('ambitio_name', name);
       if (email) localStorage.setItem('ambitio_email', email);
+      if (modules) localStorage.setItem('ambitio_modules', JSON.stringify(modules));
+      else localStorage.removeItem('ambitio_modules');
       window._currentRole = role; window._currentUserName = name; window._currentUserEmail = email;
     },
+    PERM_KEYS, ROLE_DEFAULTS, PERM_LABELS,
+    getUserModules,
     rebuild() {
       document.getElementById('ambitio-sidebar')?.remove();
       document.querySelectorAll('.nav-mobile-toggle,.nav-overlay').forEach(e => e.remove());
