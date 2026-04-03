@@ -49,6 +49,7 @@ var CRIT_OPS_SELECT=[{v:'eq',l:'Est'},{v:'neq',l:"N'est pas"}];
 
 /* ═══ STATE ═══ */
 var allLeads=[],filterSetter='all',filterSection='all',filterType='all',searchQuery='',draggedLeadId=null;
+var archiveMode='recent'; /* 'recent' = ≤6 months, 'old' = >6 months */
 var currentView='pipeline',listSortKey='createdAt',listSortDir='desc';
 var pageSize=50,currentPage=1,selectedIds={};
 var savedViews=[],activeViewId='__all__';
@@ -251,19 +252,21 @@ function buildSheetHead(){
 buildSheetHead();
 
 /* ═══ RENDER ═══ */
-function rebuildTypePills(){
+function rebuildTypeDD(){
   var types={};
   for(var i=0;i<allLeads.length;i++){var t=allLeads[i].type||'';if(t)types[t]=(types[t]||0)+1;}
   var keys=Object.keys(types).sort();
-  var c=document.getElementById('fbTypePills');
-  if(keys.length<=1){c.innerHTML='';filterType='all';return;}
+  var c=document.getElementById('fbTypeDD');
   if(filterType!=='all'&&!types[filterType])filterType='all';
-  var h='<button class="fb-date-pill'+(filterType==='all'?' active':'')+'" data-typef="all">Tous</button>';
-  for(var j=0;j<keys.length;j++){var k=keys[j];var label=LT[k]||k;h+='<button class="fb-date-pill'+(filterType===k?' active':'')+'" data-typef="'+k+'">'+label+' <span style="opacity:.5;font-size:10px">'+types[k]+'</span></button>';}
+  var h='<div class="fb-dd-item'+(filterType==='all'?' active':'')+'" data-typef="all">Tous</div>';
+  for(var j=0;j<keys.length;j++){var k=keys[j];var label=LT[k]||k;h+='<div class="fb-dd-item'+(filterType===k?' active':'')+'" data-typef="'+k+'">'+esc(label)+' <span class="fb-dd-count">'+types[k]+'</span></div>';}
   c.innerHTML=h;
+  var trig=document.getElementById('fbTypeTrigger');
+  if(filterType!=='all'){var tl=LT[filterType]||filterType;trig.innerHTML=esc(tl)+' <span class="fb-dd-caret">▼</span>';trig.classList.add('has-value');}
+  else{trig.innerHTML='📦 Type <span class="fb-dd-caret">▼</span>';trig.classList.remove('has-value');}
 }
 function renderAll(){
-  rebuildTypePills();
+  rebuildTypeDD();
   var leads=getFiltered();updateStats(leads);
   if(currentView==='pipeline')renderPipeline(leads);
   else if(currentView==='list')renderList(leads);
@@ -625,15 +628,27 @@ function getDateThreshold(range){
   return null;
 }
 
-document.getElementById('fbDatePills').addEventListener('click',function(e){
-  var pill=e.target.closest('[data-daterange]');if(!pill)return;
-  document.querySelectorAll('.fb-date-pill').forEach(function(p){p.classList.remove('active');});
-  pill.classList.add('active');
-  filterDateRange=pill.dataset.daterange;
+/* ── Date dropdown open/close ── */
+document.getElementById('fbDateTrigger').addEventListener('click',function(e){
+  e.stopPropagation();
+  var dd=document.getElementById('fbDateDD');
+  dd.classList.toggle('open');
+  document.getElementById('fbTypeDD').classList.remove('open');
+});
+document.getElementById('fbDateDD').addEventListener('click',function(e){
+  var item=e.target.closest('[data-daterange]');if(!item)return;
+  document.querySelectorAll('#fbDateDD .fb-dd-item').forEach(function(p){p.classList.remove('active');});
+  item.classList.add('active');
+  filterDateRange=item.dataset.daterange;
   var isCustom=filterDateRange==='custom';
   document.getElementById('fbDateFrom').style.display=isCustom?'':'none';
   document.getElementById('fbDateTo').style.display=isCustom?'':'none';
   if(!isCustom){filterDateFrom=null;filterDateTo=null;}
+  /* Update trigger label */
+  var trig=document.getElementById('fbDateTrigger');
+  if(filterDateRange!=='all'){var labels={'7d':'7 jours','30d':'30 jours','90d':'3 mois',year:'Cette année',custom:'Personnalisé'};trig.innerHTML=esc(labels[filterDateRange]||filterDateRange)+' <span class="fb-dd-caret">▼</span>';trig.classList.add('has-value');}
+  else{trig.innerHTML='📅 Période <span class="fb-dd-caret">▼</span>';trig.classList.remove('has-value');}
+  if(!isCustom)document.getElementById('fbDateDD').classList.remove('open');
   currentPage=1;renderAll();renderActiveChips();
 });
 document.getElementById('fbDateFrom').addEventListener('change',function(){
@@ -644,12 +659,26 @@ document.getElementById('fbDateTo').addEventListener('change',function(){
 });
 
 /* ═══ TYPE FILTER ═══ */
-document.getElementById('fbTypePills').addEventListener('click',function(e){
-  var pill=e.target.closest('[data-typef]');if(!pill)return;
-  document.querySelectorAll('#fbTypePills .fb-date-pill').forEach(function(p){p.classList.remove('active');});
-  pill.classList.add('active');
-  filterType=pill.dataset.typef;
+/* ── Type dropdown open/close ── */
+document.getElementById('fbTypeTrigger').addEventListener('click',function(e){
+  e.stopPropagation();
+  var dd=document.getElementById('fbTypeDD');
+  dd.classList.toggle('open');
+  document.getElementById('fbDateDD').classList.remove('open');
+});
+document.getElementById('fbTypeDD').addEventListener('click',function(e){
+  var item=e.target.closest('[data-typef]');if(!item)return;
+  document.querySelectorAll('#fbTypeDD .fb-dd-item').forEach(function(p){p.classList.remove('active');});
+  item.classList.add('active');
+  filterType=item.dataset.typef;
+  document.getElementById('fbTypeDD').classList.remove('open');
+  rebuildTypeDD();
   currentPage=1;renderAll();renderActiveChips();
+});
+/* ── Close all dropdowns on outside click ── */
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#fbDateWrapper'))document.getElementById('fbDateDD').classList.remove('open');
+  if(!e.target.closest('#fbTypeWrapper'))document.getElementById('fbTypeDD').classList.remove('open');
 });
 
 /* ═══ TAG SYSTEM ═══ */
@@ -717,7 +746,7 @@ document.getElementById('fbTagDD').addEventListener('click',function(e){
     if(idx>=0)filterTags.splice(idx,1);else filterTags.push(tag);
     renderTagDD(document.getElementById('fbTagSearch')?document.getElementById('fbTagSearch').value:'');
     document.getElementById('fbTagTrigger').classList.toggle('has-tags',filterTags.length>0);
-    document.getElementById('fbTagTrigger').innerHTML=filterTags.length>0?(filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span style="font-size:8px">▼</span>'):('Filtrer par tags <span style="font-size:8px">▼</span>');
+    document.getElementById('fbTagTrigger').innerHTML=filterTags.length>0?(filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span class="fb-dd-caret">▼</span>'):('🏷 Tags <span class="fb-dd-caret">▼</span>');
     currentPage=1;renderAll();renderActiveChips();
     return;
   }
@@ -730,7 +759,7 @@ document.getElementById('fbTagDD').addEventListener('click',function(e){
     collectTags();
     renderTagDD();
     document.getElementById('fbTagTrigger').classList.add('has-tags');
-    document.getElementById('fbTagTrigger').innerHTML=filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span style="font-size:8px">▼</span>';
+    document.getElementById('fbTagTrigger').innerHTML=filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span class="fb-dd-caret">▼</span>';
     currentPage=1;renderAll();renderActiveChips();
     toast('🏷 Tag "'+newTag+'" créé');
   }
@@ -763,13 +792,14 @@ document.getElementById('fbActiveChips').addEventListener('click',function(e){
   var x=e.target.closest('[data-chipclear]');if(!x)return;
   if(x.dataset.chipclear==='date'){
     filterDateRange='all';filterDateFrom=null;filterDateTo=null;
-    document.querySelectorAll('.fb-date-pill').forEach(function(p){p.classList.toggle('active',p.dataset.daterange==='all');});
+    document.querySelectorAll('#fbDateDD .fb-dd-item').forEach(function(p){p.classList.toggle('active',p.dataset.daterange==='all');});
     document.getElementById('fbDateFrom').style.display='none';document.getElementById('fbDateTo').style.display='none';
+    document.getElementById('fbDateTrigger').innerHTML='📅 Période <span class="fb-dd-caret">▼</span>';document.getElementById('fbDateTrigger').classList.remove('has-value');
   }
   if(x.dataset.chipclear==='tag'){
     var tv=x.dataset.chipval;var idx=filterTags.indexOf(tv);if(idx>=0)filterTags.splice(idx,1);
     document.getElementById('fbTagTrigger').classList.toggle('has-tags',filterTags.length>0);
-    document.getElementById('fbTagTrigger').innerHTML=filterTags.length>0?(filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span style="font-size:8px">▼</span>'):('Filtrer par tags <span style="font-size:8px">▼</span>');
+    document.getElementById('fbTagTrigger').innerHTML=filterTags.length>0?(filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span class="fb-dd-caret">▼</span>'):('🏷 Tags <span class="fb-dd-caret">▼</span>');
   }
   if(x.dataset.chipclear==='type'){filterType='all';}
   currentPage=1;renderAll();renderActiveChips();
@@ -777,10 +807,11 @@ document.getElementById('fbActiveChips').addEventListener('click',function(e){
 
 document.getElementById('fbClearAll').addEventListener('click',function(){
   filterDateRange='all';filterDateFrom=null;filterDateTo=null;filterTags=[];filterType='all';
-  document.querySelectorAll('.fb-date-pill').forEach(function(p){p.classList.toggle('active',p.dataset.daterange==='all');});
+  document.querySelectorAll('#fbDateDD .fb-dd-item').forEach(function(p){p.classList.toggle('active',p.dataset.daterange==='all');});
   document.getElementById('fbDateFrom').style.display='none';document.getElementById('fbDateTo').style.display='none';
+  document.getElementById('fbDateTrigger').innerHTML='📅 Période <span class="fb-dd-caret">▼</span>';document.getElementById('fbDateTrigger').classList.remove('has-value');
   document.getElementById('fbTagTrigger').classList.remove('has-tags');
-  document.getElementById('fbTagTrigger').innerHTML='Filtrer par tags <span style="font-size:8px">▼</span>';
+  document.getElementById('fbTagTrigger').innerHTML='🏷 Tags <span class="fb-dd-caret">▼</span>';
   currentPage=1;renderAll();renderActiveChips();
 });
 
@@ -1908,11 +1939,35 @@ function openFieldEditModal(field,fieldIdx){
 var leadsUnsub=null;
 function startLeadsListener(){
   if(leadsUnsub)leadsUnsub();
-  // Show loading state
+  crmDataLoaded=false;
   var board=document.getElementById('crmBoard');
-  if(board&&!crmDataLoaded)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--muted);font-size:14px;font-weight:600;gap:10px"><span class="crm-spinner"></span> Chargement des leads…</div>';
-  leadsUnsub=db.collection('leads').orderBy('createdAt','desc').limit(1500).onSnapshot(function(snap){allLeads=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;if(!d.stage)d.stage='lead';allLeads.push(d);});crmDataLoaded=true;colCardLimits={};collectTags();renderAll();renderSavedViews();renderActiveChips();document.getElementById('statTotal').textContent=allLeads.length;},function(err){console.error('[crm] onSnapshot error:',err);var board=document.getElementById('crmBoard');if(board)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--red3);font-size:13px;font-weight:600">⚠ Erreur de chargement. Rechargez la page.</div>';});
+  if(board)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--muted);font-size:14px;font-weight:600;gap:10px"><span class="crm-spinner"></span> Chargement des leads…</div>';
+  var sixMonthsAgo=new Date();sixMonthsAgo.setMonth(sixMonthsAgo.getMonth()-6);
+  var q=db.collection('leads').orderBy('createdAt','desc');
+  if(archiveMode==='recent'){
+    q=q.where('createdAt','>',sixMonthsAgo).limit(2000);
+  } else {
+    q=q.where('createdAt','<=',sixMonthsAgo).limit(2000);
+  }
+  leadsUnsub=q.onSnapshot(function(snap){
+    allLeads=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;if(!d.stage)d.stage='lead';allLeads.push(d);});
+    crmDataLoaded=true;colCardLimits={};collectTags();renderAll();renderSavedViews();renderActiveChips();
+    document.getElementById('statTotal').textContent=allLeads.length;
+  },function(err){
+    console.error('[crm] onSnapshot error:',err);
+    if(board)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--red3);font-size:13px;font-weight:600">⚠ Erreur de chargement. Rechargez la page.</div>';
+  });
 }
+
+/* ═══ ARCHIVE TOGGLE ═══ */
+document.getElementById('fbArchiveToggle').addEventListener('click',function(e){
+  var btn=e.target.closest('[data-archive]');if(!btn)return;
+  var mode=btn.dataset.archive;if(mode===archiveMode)return;
+  archiveMode=mode;
+  document.querySelectorAll('.fb-archive-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  startLeadsListener();
+});
 
 /* ═══ AUTH ═══ */
 firebase.auth().onAuthStateChanged(function(user){if(user){db.collection('users').doc(user.uid).get().then(function(snap){var d=snap.exists?snap.data():{};window._currentRole=d.role||'sales';window._currentUserName=user.displayName||user.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);startLeadsListener();loadSavedViews();}).catch(function(){startLeadsListener();loadSavedViews();});}else{var board=document.getElementById('crmBoard');if(board)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--muted);font-size:13px;font-weight:600">🔒 Connexion requise</div>';}});
