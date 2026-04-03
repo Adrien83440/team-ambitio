@@ -393,14 +393,38 @@ h+='</div>';
 else if(exSection==='calendar'){
 var isConnected=exPerson.calendarConnected===true;
 var calEmail=exPerson.calendarEmail||'';
+var calList=exPerson.calendarList||[];
 h+='<div class="cd-sec-title">🔗 Paramètres du calendrier</div>';
 h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Connectez le Google Calendar de '+esc(exPerson.name)+' pour vérifier les conflits et créer des événements automatiquement.</div>';
 
 h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin-bottom:10px">Calendrier connecté</div>';
 if(isConnected){
-h+='<div class="cal-card" style="border-color:rgba(52,211,153,.2)"><div class="cal-card-head"><span class="cal-card-icon">✅</span><div><div class="cal-card-title">Google Agenda</div><div class="cal-card-sub">'+esc(calEmail)+'</div></div><button class="bb bb-r" style="margin-left:auto;font-size:11px" onclick="disconnectCalendar(\''+exPerson.id+'\')">Déconnecter</button></div>';
-h+='<div style="font-size:11px;color:rgba(52,211,153,.7);margin-top:8px">Les créneaux occupés seront automatiquement bloqués pour les réservations.</div>';
+h+='<div class="cal-card" style="border-color:rgba(52,211,153,.2)"><div class="cal-card-head"><span class="cal-card-icon">✅</span><div><div class="cal-card-title">Google Agenda</div><div class="cal-card-sub">'+esc(calEmail)+'</div></div><button class="bb bb-r" style="margin-left:auto;font-size:11px" onclick="disconnectCalendar(\''+exPerson.id+'\')">Déconnecter</button></div></div>';
+
+// Calendar list with checkboxes
+if(calList.length){
+h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:20px 0 8px">Calendriers à vérifier pour les conflits</div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:10px">Cochez les calendriers dont les événements bloquent les créneaux de réservation.</div>';
+calList.forEach(function(cal,ci){
+var checked=cal.checkConflicts!==false;
+h+='<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:6px">';
+h+='<div style="width:12px;height:12px;border-radius:3px;background:'+esc(cal.color||'#4285f4')+';flex-shrink:0"></div>';
+h+='<span style="font-size:13px;font-weight:600;flex:1">'+esc(cal.name)+'</span>';
+if(cal.primary)h+='<span style="font-size:10px;color:rgba(255,255,255,.28);margin-right:4px">principal</span>';
+h+='<div class="tg'+(checked?' on':'')+'" data-calci="'+ci+'" style="cursor:pointer;flex-shrink:0" onclick="toggleCalCheck('+ci+',this)"></div>';
 h+='</div>';
+});
+
+h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:20px 0 8px">Calendrier pour créer les événements</div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:10px">Les nouveaux RDV seront ajoutés dans ce calendrier.</div>';
+h+='<select class="bs" id="exEventCal" style="width:100%" onchange="setEventCalendar(this.value)">';
+calList.forEach(function(cal,ci){
+h+='<option value="'+ci+'"'+(cal.createEvents?' selected':'')+'>'+esc(cal.name)+(cal.primary?' (principal)':'')+'</option>';
+});
+h+='</select>';
+
+h+='<div class="cd-save-bar" style="margin-top:16px"><button class="bb bb-p" onclick="saveCalendarSettings()">💾 Enregistrer les préférences</button></div>';
+}
 }else{
 h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">📅</span><div><div class="cal-card-title" style="color:rgba(255,255,255,.38)">Aucun calendrier connecté</div><div class="cal-card-sub">La vérification de conflits n\'est pas active.</div></div></div></div>';
 h+='<div style="margin-top:10px"><button class="bb bb-g" onclick="connectCalendar(\''+exPerson.id+'\')">+ Connecter un Google Agenda</button></div>';
@@ -411,10 +435,6 @@ h+='<div style="display:flex;flex-direction:column;gap:8px">';
 h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">🔍</span><div><div class="cal-card-title">Vérification des conflits</div><div class="cal-card-sub">'+(isConnected?'Actif — les créneaux occupés sont masqués dans la page de réservation':'Inactif — connectez un calendrier pour activer')+'</div></div></div></div>';
 h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">📝</span><div><div class="cal-card-title">Création automatique d\'événements</div><div class="cal-card-sub">'+(isConnected?'Actif — chaque réservation crée un événement dans Google Agenda':'Inactif — connectez un calendrier pour activer')+'</div></div></div></div>';
 h+='</div>';
-
-h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:24px 0 10px">Paramètres de synchronisation</div>';
-var syncBuffer=exPerson.syncIncludeBuffer!==false;
-h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div class="tg'+(syncBuffer?' on':'')+'" id="exSyncBuf" style="cursor:pointer" onclick="this.classList.toggle(\'on\')"></div><span style="font-size:13px">Inclure les périodes tampons dans le calendrier</span></div>';
 }
 
 else if(exSection==='advanced'){
@@ -624,6 +644,32 @@ toast('✅ Calendrier déconnecté');
 }).catch(function(e){alert('Erreur: '+e.message);});
 }
 window.connectCalendar=connectCalendar;window.disconnectCalendar=disconnectCalendar;
+
+// Calendar settings management
+function toggleCalCheck(idx,el){el.classList.toggle('on');}
+function setEventCalendar(idx){}
+function saveCalendarSettings(){
+if(!exPerson||!exPerson.calendarList)return;
+var list=exPerson.calendarList;
+// Read checkConflicts from toggles
+document.querySelectorAll('[data-calci]').forEach(function(tg){
+var i=parseInt(tg.dataset.calci);
+if(list[i])list[i].checkConflicts=tg.classList.contains('on');
+});
+// Read createEvents from dropdown
+var sel=document.getElementById('exEventCal');
+if(sel){
+var si=parseInt(sel.value);
+list.forEach(function(c,i){c.createEvents=(i===si);});
+}
+exPerson.calendarList=list;
+CR.doc(exPerson.id).update({calendarList:list}).then(function(){
+// Trigger busy refresh with new calendar selection
+db.collection('calendar_sync_requests').doc(exPerson.id).set({requestedAt:firebase.firestore.FieldValue.serverTimestamp()});
+toast('✅ Préférences calendrier enregistrées');
+}).catch(function(e){alert('Erreur: '+e.message);});
+}
+window.toggleCalCheck=toggleCalCheck;window.setEventCalendar=setEventCalendar;window.saveCalendarSettings=saveCalendarSettings;
 
 // Handle OAuth return — Google redirects here with ?code=xxx&state=yyy
 (function(){
