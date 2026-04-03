@@ -33,7 +33,7 @@
       { id: 'equipe',      icon: '👥', label: 'Équipe',            href: 'sales-equipe.html' },
       { id: 'commissions', icon: '💰', label: 'Commissions',       href: 'sales-commissions.html' },
       { id: 'projections', icon: '📈', label: 'Projections',       href: 'sales-projections.html' },
-      { id: 'booking',     icon: '📅', label: 'Booking',           href: 'booking.html' },
+      { id: 'booking',     icon: '📅', label: 'Booking',           href: 'booking-admin.html' },
     ],
 
     admin: [
@@ -55,7 +55,7 @@
       { id: 'sales-equipe',      icon: '👥', label: 'Équipe',      href: 'sales-equipe.html',      section: 'Sales' },
       { id: 'sales-commissions', icon: '💰', label: 'Commissions', href: 'sales-commissions.html', section: 'Sales' },
       { id: 'sales-projections', icon: '📈', label: 'Projections', href: 'sales-projections.html', section: 'Sales' },
-      { id: 'sales-booking',     icon: '📅', label: 'Booking',     href: 'booking.html',           section: 'Sales' },
+      { id: 'sales-booking',     icon: '📅', label: 'Booking',     href: 'booking-admin.html',           section: 'Sales' },
 
       { id: 'import', icon: '🔗', label: 'Import Notion', href: 'import-notion.html', section: 'Outils' },
     ],
