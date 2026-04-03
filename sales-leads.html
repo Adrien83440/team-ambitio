@@ -497,6 +497,21 @@ function escAttr(s) {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function normalizeTel(raw) {
+  if (!raw) return '';
+  var s = raw.replace(/[^\d+]/g, '');
+  // +33XXXXXXXXX → 0XXXXXXXXX
+  if (s.indexOf('+33') === 0 && s.length >= 12) s = '0' + s.slice(3);
+  // 33XXXXXXXXX (11 digits) → 0XXXXXXXXX
+  if (/^33[67]/.test(s) && s.length === 11) s = '0' + s.slice(2);
+  // 9 digits starting with 6 or 7 → prepend 0
+  if (/^[67]/.test(s) && s.length === 9) s = '0' + s;
+  // Format 10-digit French number with spaces
+  if (/^0[67]\d{8}$/.test(s)) return s.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5');
+  // Fallback: return cleaned version
+  return raw;
+}
+
 function timeAgo(ts) {
   if (!ts) return '';
   var d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -780,7 +795,7 @@ function renderCard(l) {
   // ── VIEW MODE ──
   h += '<div class="ld-details" data-view-mode="' + id + '">';
   if (l.nom) h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><span class="ld-detail-val">' + escHtml(l.nom) + '</span></div>';
-  if (l.telephone) h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><span class="ld-detail-val"><a href="tel:' + l.telephone.replace(/\s/g, '') + '">' + escHtml(l.telephone) + '</a></span></div>';
+  if (l.telephone) h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><span class="ld-detail-val"><a href="tel:' + normalizeTel(l.telephone).replace(/\s/g, '') + '">' + escHtml(normalizeTel(l.telephone)) + '</a></span></div>';
   if (l.email) h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><span class="ld-detail-val"><a href="mailto:' + escHtml(l.email) + '">' + escHtml(l.email) + '</a></span></div>';
   if (l.utm) h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><span class="ld-detail-val">' + escHtml(l.utm) + '</span></div>';
   if (l.secteur) h += '<div class="ld-detail-row"><span class="ld-detail-label">Secteur</span><span class="ld-detail-val">' + escHtml(l.secteur) + '</span></div>';
@@ -795,7 +810,7 @@ function renderCard(l) {
   // ── EDIT MODE (hidden by default) ──
   h += '<div class="ld-details" data-edit-mode="' + id + '" style="display:none">';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><input class="ld-detail-input" data-edit="nom" data-id="' + id + '" value="' + escAttr(l.nom || '') + '"/></div>';
-  h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><input class="ld-detail-input" data-edit="telephone" data-id="' + id + '" value="' + escAttr(l.telephone || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><input class="ld-detail-input" data-edit="telephone" data-id="' + id + '" value="' + escAttr(normalizeTel(l.telephone || '')) + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><input class="ld-detail-input" data-edit="email" data-id="' + id + '" type="email" value="' + escAttr(l.email || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><input class="ld-detail-input" data-edit="utm" data-id="' + id + '" value="' + escAttr(l.utm || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Type</span><select class="ld-detail-select" data-edit="type" data-id="' + id + '">';
@@ -1181,7 +1196,7 @@ function startBookingBridge() {
         var lead = {
           nom:            be.nom || '',
           email:          be.email || '',
-          telephone:      be.telephone || '',
+          telephone:      normalizeTel(be.telephone || ''),
           secteur:        be.secteur || '',
           ca:             be.ca || '',
           defi:           be.defi || '',
