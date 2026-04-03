@@ -308,6 +308,7 @@ body{min-height:100vh;font-family:var(--fb);font-size:15px;line-height:1.5;color
 var db = firebase.firestore();
 
 /* ── STATE ── */
+var CF_BASE = 'https://us-central1-ambitio-team.cloudfunctions.net';
 var S = {
   types: [],
   persons: [],
@@ -320,7 +321,9 @@ var S = {
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
   userTz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris',
-  currentStep: 1
+  currentStep: 1,
+  busyTimes: {},
+  busyLoading: false
 };
 
 var MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -333,6 +336,84 @@ function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.te
 function fmtDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function timeToMin(t) { var p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
 function minToTime(m) { return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); }
+
+/* ── GOOGLE CALENDAR FREE/BUSY ── */
+function fetchFreeBusy() {
+  if (!S.selPerson || !S.selPerson.calendarConnected) return;
+  var firstDay = new Date(S.calYear, S.calMonth, 1);
+  var lastDay = new Date(S.calYear, S.calMonth + 1, 0);
+  var start = fmtDate(firstDay);
+  var end = fmtDate(lastDay);
+  var cacheKey = S.selPerson.id + '_' + start;
+  if (S.busyTimes[cacheKey]) return; // already cached
+
+  S.busyLoading = true;
+  var url = CF_BASE + '/calendarFreeBusy?personId=' + encodeURIComponent(S.selPerson.id) + '&start=' + start + '&end=' + end;
+  fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+    S.busyTimes[cacheKey] = data.busy || [];
+    S.busyLoading = false;
+    renderCalendar(); // re-render with busy info
+  }).catch(function(e) {
+    console.log('FreeBusy fetch error:', e);
+    S.busyLoading = false;
+  });
+}
+
+/**
+ * Get busy time ranges for a specific date (from cache).
+ * Returns array of {startMin, endMin} in minutes since midnight (local time).
+ */
+function getBusyForDate(dateStr) {
+  if (!S.selPerson) return [];
+  var firstDay = new Date(S.calYear, S.calMonth, 1);
+  var cacheKey = S.selPerson.id + '_' + fmtDate(firstDay);
+  var busyList = S.busyTimes[cacheKey];
+  if (!busyList || !busyList.length) return [];
+
+  var result = [];
+  for (var i = 0; i < busyList.length; i++) {
+    var b = busyList[i];
+    var bStart = new Date(b.start);
+    var bEnd = new Date(b.end);
+    var bDateStr = fmtDate(bStart);
+    // Check if this busy period overlaps with the target date
+    var dayStart = new Date(dateStr + 'T00:00:00');
+    var dayEnd = new Date(dateStr + 'T23:59:59');
+    if (bStart <= dayEnd && bEnd >= dayStart) {
+      // Compute local minutes
+      var sMin = bDateStr === dateStr ? bStart.getHours() * 60 + bStart.getMinutes() : 0;
+      var eDate = fmtDate(bEnd);
+      var eMin = eDate === dateStr ? bEnd.getHours() * 60 + bEnd.getMinutes() : 1440;
+      result.push({ start: sMin, end: eMin });
+    }
+  }
+  return result;
+}
+
+function createCalendarEvent(bookingData) {
+  if (!S.selPerson || !S.selPerson.calendarConnected) return;
+  var payload = {
+    personId: S.selPerson.id,
+    date: bookingData.date,
+    time: bookingData.time,
+    duration: bookingData.duration || 30,
+    title: (S.selType ? S.selType.label : 'RDV') + ' — ' + (bookingData.prospect ? bookingData.prospect.prenom + ' ' + bookingData.prospect.nom : ''),
+    description: 'Réservé via Ambitio Booking',
+    attendeeEmail: bookingData.prospect ? bookingData.prospect.email : '',
+    attendeeName: bookingData.prospect ? bookingData.prospect.prenom + ' ' + bookingData.prospect.nom : '',
+    location: S.selType && S.selType.locationUrl ? S.selType.locationUrl : (S.selPerson.meetLink || '')
+  };
+  fetch(CF_BASE + '/calendarCreateEvent', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.created) console.log('Calendar event created:', data.eventId);
+    else console.log('Calendar event not created:', data.reason || data.error);
+  }).catch(function(e) {
+    console.log('Calendar event creation error:', e);
+  });
+}
 
 /* ── PROGRESS ── */
 function setProgress(step) {
@@ -545,6 +626,7 @@ function autoAssignRoundRobin(filtered) {
    STEP 3 — CALENDAR + TIME SLOTS
    ═══════════════════════════════════════════════════ */
 function renderCalendar() {
+  fetchFreeBusy(); // Fetch Google Calendar busy times in background
   var el = document.getElementById('calendarWrap');
   var first = new Date(S.calYear, S.calMonth, 1);
   var lastDay = new Date(S.calYear, S.calMonth + 1, 0).getDate();
@@ -643,6 +725,25 @@ function hasAvailableSlots(dateStr) {
     if (dayBookings.length >= maxPerDay) return false;
   }
 
+  // Google Calendar busy check — if ALL schedule slots are fully covered by busy times, day is unavailable
+  var gcBusy = getBusyForDate(dateStr);
+  if (gcBusy.length > 0 && daySlots.length > 0) {
+    var dur = S.selType ? S.selType.duration : 30;
+    var anyFree = false;
+    for (var si = 0; si < daySlots.length && !anyFree; si++) {
+      var rStart = timeToMin(daySlots[si].start);
+      var rEnd = timeToMin(daySlots[si].end);
+      for (var m = rStart; m + dur <= rEnd; m += dur) {
+        var blocked = false;
+        for (var bi = 0; bi < gcBusy.length; bi++) {
+          if (m < gcBusy[bi].end && m + dur > gcBusy[bi].start) { blocked = true; break; }
+        }
+        if (!blocked) { anyFree = true; break; }
+      }
+    }
+    if (!anyFree) return false;
+  }
+
   return true;
 }
 
@@ -684,6 +785,12 @@ function renderSlots() {
       bookedRanges.push({ start: bStart - bufBefore, end: bStart + bDur + bufAfter });
     }
   });
+
+  // Add Google Calendar busy times
+  var gcBusy = getBusyForDate(S.selDate);
+  for (var gi = 0; gi < gcBusy.length; gi++) {
+    bookedRanges.push({ start: gcBusy[gi].start, end: gcBusy[gi].end });
+  }
 
   // Filter: remove conflicting slots
   var available = allSlots.filter(function(time) {
@@ -900,6 +1007,7 @@ function handleSubmit() {
     }
 
     showConfirmation(prenom, email);
+    createCalendarEvent(booking);
   }).catch(function(err) {
     btn.disabled = false;
     btn.textContent = 'Confirmer le rendez-vous';

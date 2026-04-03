@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
 <link rel="stylesheet" href="sales.css"/>
 <style>
@@ -391,29 +392,30 @@ h+='</div>';
 }
 
 else if(exSection==='calendar'){
+var isConnected=exPerson.calendarConnected===true;
+var calEmail=exPerson.calendarEmail||'';
 h+='<div class="cd-sec-title">🔗 Paramètres du calendrier</div>';
-h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Définissez les calendriers pour vérifier les périodes d\'activité.</div>';
-h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin-bottom:10px">Calendriers où vérifier les conflits</div>';
-h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px"><button class="bb bb-g" disabled style="opacity:.5">+ Connecter un compte de calendrier</button></div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Connectez le Google Calendar de '+esc(exPerson.name)+' pour vérifier les conflits et créer des événements automatiquement.</div>';
 
-var calConnected=exPerson.calendarConnections||[];
-if(calConnected.length){
-calConnected.forEach(function(cal){
-h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">📅</span><div><div class="cal-card-title">'+esc(cal.provider||'Google Agenda')+'</div><div class="cal-card-sub">'+esc(cal.email||'')+'</div></div></div></div>';
-});
+h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin-bottom:10px">Calendrier connecté</div>';
+if(isConnected){
+h+='<div class="cal-card" style="border-color:rgba(52,211,153,.2)"><div class="cal-card-head"><span class="cal-card-icon">✅</span><div><div class="cal-card-title">Google Agenda</div><div class="cal-card-sub">'+esc(calEmail)+'</div></div><button class="bb bb-r" style="margin-left:auto;font-size:11px" onclick="disconnectCalendar(\''+exPerson.id+'\')">Déconnecter</button></div>';
+h+='<div style="font-size:11px;color:rgba(52,211,153,.7);margin-top:8px">Les créneaux occupés seront automatiquement bloqués pour les réservations.</div>';
+h+='</div>';
 }else{
 h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">📅</span><div><div class="cal-card-title" style="color:rgba(255,255,255,.38)">Aucun calendrier connecté</div><div class="cal-card-sub">La vérification de conflits n\'est pas active.</div></div></div></div>';
+h+='<div style="margin-top:10px"><button class="bb bb-g" onclick="connectCalendar(\''+exPerson.id+'\')">+ Connecter un Google Agenda</button></div>';
 }
 
-h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:20px 0 10px">Calendrier auquel ajouter des événements</div>';
-h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">📝</span><div><div class="cal-card-title" style="color:rgba(255,255,255,.38)">Non configuré</div><div class="cal-card-sub">Les nouveaux RDV ne seront pas ajoutés automatiquement.</div></div></div></div>';
+h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:24px 0 10px">Fonctionnement</div>';
+h+='<div style="display:flex;flex-direction:column;gap:8px">';
+h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">🔍</span><div><div class="cal-card-title">Vérification des conflits</div><div class="cal-card-sub">'+(isConnected?'Actif — les créneaux occupés sont masqués dans la page de réservation':'Inactif — connectez un calendrier pour activer')+'</div></div></div></div>';
+h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">📝</span><div><div class="cal-card-title">Création automatique d\'événements</div><div class="cal-card-sub">'+(isConnected?'Actif — chaque réservation crée un événement dans Google Agenda':'Inactif — connectez un calendrier pour activer')+'</div></div></div></div>';
+h+='</div>';
 
-h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:20px 0 10px">Paramètres de synchronisation</div>';
+h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:24px 0 10px">Paramètres de synchronisation</div>';
 var syncBuffer=exPerson.syncIncludeBuffer!==false;
-h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div class="tg'+(syncBuffer?' on':'')+'" id="exSyncBuf" style="cursor:pointer" onclick="this.classList.toggle(\'on\')"></div><span style="font-size:13px">Inclure les périodes tampons dans ce calendrier</span></div>';
-h+='<div style="display:flex;align-items:center;gap:10px"><div class="tg" id="exSyncAuto" style="cursor:pointer" onclick="this.classList.toggle(\'on\')"></div><span style="font-size:13px">Synchroniser automatiquement les modifications</span></div>';
-
-h+='<div class="cal-warn" style="margin-top:16px">⚡ La connexion calendrier sera opérationnelle après la mise en place de l\'authentification OAuth (prochaine phase).</div>';
+h+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div class="tg'+(syncBuffer?' on':'')+'" id="exSyncBuf" style="cursor:pointer" onclick="this.classList.toggle(\'on\')"></div><span style="font-size:13px">Inclure les périodes tampons dans le calendrier</span></div>';
 }
 
 else if(exSection==='advanced'){
@@ -590,6 +592,63 @@ renderExHead();toast('✅ Paramètres enregistrés');
 }).catch(function(e){alert('Erreur: '+e.message);});
 }
 window.saveExAdvanced=saveExAdvanced;
+
+// ═══ GOOGLE CALENDAR CONNECT/DISCONNECT ═══
+var fnCallable=firebase.functions();
+function connectCalendar(pid){
+var call=fnCallable.httpsCallable('calendarAuthUrl');
+toast('🔗 Connexion en cours…');
+call({personId:pid}).then(function(result){
+window.location.href=result.data.url;
+}).catch(function(e){
+console.error('Calendar auth error:',e);
+if(e.message&&e.message.indexOf('non configuré')>=0){
+alert('Google OAuth non configuré.\n\nCréez le document _config/oauth dans Firestore avec :\n- client_id\n- client_secret\n- redirect_uri\n- app_url');
+}else{
+alert('Erreur: '+e.message);
+}
+});
+}
+function disconnectCalendar(pid){
+if(!confirm('Déconnecter le Google Agenda de cet expert ?'))return;
+var call=fnCallable.httpsCallable('calendarDisconnect');
+toast('Déconnexion…');
+call({personId:pid}).then(function(){
+var p=P.find(function(x){return x.id===pid;});
+if(p){delete p.calendarConnected;delete p.calendarEmail;}
+renderExSection();renderExHead();
+toast('✅ Calendrier déconnecté');
+}).catch(function(e){alert('Erreur: '+e.message);});
+}
+window.connectCalendar=connectCalendar;window.disconnectCalendar=disconnectCalendar;
+
+// Handle OAuth return params
+(function(){
+var params=new URLSearchParams(window.location.search);
+if(params.get('cal_success')){
+var pid=params.get('cal_person');
+setTimeout(function(){
+toast('✅ Google Calendar connecté !');
+if(pid){
+// Switch to Experts tab and open the expert
+document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});
+document.querySelector('[data-p="ex"]').classList.add('on');
+document.querySelectorAll('.bp').forEach(function(p){p.classList.remove('on');});
+document.getElementById('p-ex').classList.add('on');
+// Wait for data load then open expert detail
+var checkReady=setInterval(function(){
+if(P.length){clearInterval(checkReady);openExDetail(pid);exSection='calendar';renderExNav();renderExSection();}
+},300);
+}
+},500);
+// Clean URL
+window.history.replaceState({},document.title,window.location.pathname);
+}
+if(params.get('cal_error')){
+setTimeout(function(){alert('Erreur de connexion calendrier: '+params.get('cal_error'));},500);
+window.history.replaceState({},document.title,window.location.pathname);
+}
+})();
 document.getElementById('addE').addEventListener('click',function(){document.getElementById('addEF').style.display='';});
 document.getElementById('eSub').addEventListener('click',function(){var n=document.getElementById('eN').value.trim();if(!n)return;var r=document.getElementById('eR').value.trim(),c=document.getElementById('eCo').value,id=n.toLowerCase().replace(/[^a-z]/g,'').slice(0,15)+'_'+gid().slice(0,4);CR.doc(id).set({__type:'person',name:n,role:r,color:c,types:[],schedule:{},blockedDates:[]}).then(function(){document.getElementById('eN').value='';document.getElementById('eR').value='';document.getElementById('addEF').style.display='none';loadAll();toast('✅ Expert ajouté');});});
 function rPg(){var el=document.getElementById('pgC'),base=window.location.origin+'/booking.html';var h='<div class="pg-m"><div class="pg-av">A</div><div style="flex:1"><div class="pg-nm">SARL Ambitio Corp</div><div class="pg-ds">Page de réservation principale.</div></div><div style="display:flex;gap:8px"><button class="bb bb-o" onclick="window.open(\''+base+'\',\'_blank\')">↗ Ouvrir</button><button class="bb bb-o" onclick="navigator.clipboard.writeText(\''+base+'\');toast(\'📋 Copié !\')">Partager</button></div></div>';if(T.length){h+='<div class="pg-sh">Consultations</div>';T.forEach(function(t){var u=base+'?type='+t.id;h+='<div class="pg-l" onclick="navigator.clipboard.writeText(\''+u+'\');toast(\'📋 Copié !\')"><div class="pg-la" style="background:'+t.color+'">'+t.label[0].toUpperCase()+'</div><div class="pg-ln">'+esc(t.label)+'</div><div class="pg-lu">'+u+'</div><span class="pg-lc">Copier</span></div>';});}if(P.length){h+='<div class="pg-sh">Experts</div><div style="font-size:12px;color:rgba(255,255,255,.48);margin-bottom:10px">Chaque expert a sa propre page.</div>';P.forEach(function(p){var u=base+'?person='+p.id;h+='<div class="pg-l" onclick="navigator.clipboard.writeText(\''+u+'\');toast(\'📋 Copié !\')"><div class="pg-la" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</div><div class="pg-ln">'+esc(p.name)+'</div><div class="pg-lu">'+u+'</div><span class="pg-lc">Copier</span></div>';});}el.innerHTML=h;}

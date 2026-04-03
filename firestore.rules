@@ -1,0 +1,264 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // HELPERS
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isAuth() && getRole() == 'admin';
+    }
+
+    function isCoach() {
+      return isAuth() && getRole() == 'coach';
+    }
+
+    function isSales() {
+      return isAuth() && getRole() == 'sales';
+    }
+
+    function isCoachOrAdmin() {
+      return isAuth() && (getRole() == 'coach' || getRole() == 'admin');
+    }
+
+    function isSalesOrAdmin() {
+      return isAuth() && (getRole() == 'sales' || getRole() == 'admin');
+    }
+
+    function isSelfOrAdmin(userId) {
+      return isAuth() && (request.auth.uid == userId || isAdmin());
+    }
+
+
+    // USERS
+    match /users/{userId} {
+      allow read:  if isSelfOrAdmin(userId);
+      allow write: if isAdmin();
+    }
+
+
+    // COACHING / CLIENTS
+    match /clients/{clientId} {
+      allow read:           if isCoachOrAdmin();
+      allow create, update: if isCoachOrAdmin();
+      allow delete:         if isAdmin();
+    }
+
+    // Fichiers joints 72H
+    match /clients/{clientId}/files/{fileId} {
+      allow read:   if isCoachOrAdmin();
+      allow create: if isCoachOrAdmin();
+      allow delete: if isCoachOrAdmin();
+    }
+
+
+    // SAISIES SALES (closing + setting)
+    match /saisies/{userId}/mois/{monthKey} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isSalesOrAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
+    // COMMISSIONS
+    match /commissions/{userId}/mois/{monthKey} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isSalesOrAdmin();
+      allow delete:         if isAdmin();
+    }
+
+    match /commissions/{userId}/total/{year} {
+      allow read:  if isSalesOrAdmin();
+      allow write: if isAdmin();
+    }
+
+
+    // MODULE EQUIPE
+    match /membres/{userId} {
+      allow read:  if isSalesOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /membres/{userId}/notes/{noteId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /membres/{userId}/documents/{docId} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isAdmin();
+      allow delete:         if isAdmin();
+    }
+
+    match /membres/{userId}/messages/{msgId} {
+      allow read:           if isSelfOrAdmin(userId);
+      allow create:         if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /membres/{userId}/calls/{callId} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
+    // MORNING MEETINGS
+    match /meetings/{meetingId} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isAdmin();
+      allow delete:         if isAdmin();
+    }
+
+    match /meetings/{meetingId}/questions/{questionId} {
+      allow read: if isSalesOrAdmin();
+      allow create: if isSalesOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+
+    // PROJECTIONS & ALERTES
+    match /projections/{monthKey} {
+      allow read:  if isSalesOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /alerts/{alertId} {
+      allow read:  if isSalesOrAdmin();
+      allow write: if isAdmin();
+    }
+
+
+    // COMMUNICATION (coaching)
+    match /messages_general/{messageId} {
+      allow read:   if isCoachOrAdmin();
+      allow create: if isCoachOrAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /messages_alarmes/{messageId} {
+      allow read:   if isCoachOrAdmin();
+      allow create: if isCoachOrAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /messages_suivi/{messageId} {
+      allow read:   if isCoachOrAdmin();
+      allow create: if isCoachOrAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /messages_admins/{messageId} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /messages_annonces/{messageId} {
+      allow read:   if isCoachOrAdmin() || isSalesOrAdmin();
+      allow create: if isAdmin();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /alarms/{alarmId} {
+      allow read:   if isCoachOrAdmin();
+      allow create: if isCoachOrAdmin();
+      allow update: if isCoachOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+
+    // EOD (End of Day)
+    match /eod/{userId}/jours/{dateKey} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isSalesOrAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
+    // LEADS
+    match /leads/{leadId} {
+      allow read:           if isSalesOrAdmin();
+      allow create:         if true;
+      allow update:         if isSalesOrAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
+    // META (round-robin counter)
+    match /_meta/{docId} {
+      allow read, write: if isSalesOrAdmin();
+    }
+
+
+    // BOOKING CONFIG
+    match /booking_config/{docId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // CALENDAR TOKENS (secure — admin only)
+    match /calendar_tokens/{personId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // INTERNAL CONFIG (OAuth keys — admin only, read by Cloud Functions)
+    match /_config/{docId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // BOOKINGS (public read for booking.html visitors)
+    match /bookings/{bookingId} {
+      allow read:   if true;
+      allow create: if true;
+      allow update: if isSalesOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // BOOKING EVENTS (from Zoho via Make)
+    match /booking_events/{eventId} {
+      allow read:   if isSalesOrAdmin();
+      allow create: if true;
+      allow update: if isSalesOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+
+    // FCM TOKENS (push notifications)
+    match /fcm_tokens/{tokenId} {
+      allow read:   if isSalesOrAdmin();
+      allow create, update: if true;
+      allow delete: if isSalesOrAdmin();
+    }
+
+    // CRM VIEWS (saved filters)
+    match /crm_views/{viewId} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isSalesOrAdmin();
+      allow delete:         if isSalesOrAdmin();
+    }
+
+    match /crm_roles/{roleId} {
+      allow read: if isSalesOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /crm_profiles/{profileId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+  }
+}
