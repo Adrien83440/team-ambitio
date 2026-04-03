@@ -422,14 +422,26 @@ db.collection('booking_config').get().then(function(snap) {
     else if (d.__type === 'person') { d.id = doc.id; S.persons.push(d); }
   });
 
-  // Load confirmed bookings (future)
+  // Try loading existing bookings (may fail for unauthenticated users)
   var today = fmtDate(new Date());
-  return db.collection('bookings').where('date', '>=', today).where('status', '==', 'confirmed').get();
-}).then(function(bSnap) {
-  bSnap.forEach(function(doc) { S.bookings.push(doc.data()); });
-  document.getElementById('bkLoading').style.display = 'none';
-  document.getElementById('bkApp').style.display = '';
-  initBooking();
+  db.collection('bookings').where('date', '>=', today).get().then(function(bSnap) {
+    bSnap.forEach(function(doc) {
+      var d = doc.data();
+      if (d.status === 'confirmed') S.bookings.push(d);
+    });
+  }).catch(function(err) {
+    // Permission denied for public users — that's OK, slots just won't filter
+    console.log('Bookings not accessible (public mode):', err.code || err.message);
+    S.bookings = [];
+  }).then(function() {
+    // Always show the page regardless of bookings access
+    document.getElementById('bkLoading').style.display = 'none';
+    document.getElementById('bkApp').style.display = '';
+    initBooking();
+  });
+}).catch(function(err) {
+  console.error('Config load error:', err);
+  document.getElementById('bkLoading').innerHTML = '<div style="color:var(--red);font-size:14px">Erreur de chargement. Veuillez réessayer.</div>';
 });
 
 function initBooking() {

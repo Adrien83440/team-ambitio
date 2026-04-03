@@ -336,6 +336,9 @@ function loadConfig(){
     });
     persons.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});
     renderTypes(); renderPersons(); renderLinks(); loadSettingsUI(); populateEvFilters(); loadBookings();
+  }).catch(function(err){
+    console.error('Config load error:',err);
+    renderTypes(); renderPersons(); renderLinks(); loadSettingsUI(); populateEvFilters();
   });
 }
 
@@ -343,9 +346,14 @@ function loadConfig(){
    ÉVÉNEMENTS
    ═══════════════════════════════════════ */
 function loadBookings(){
-  db.collection('bookings').orderBy('date','desc').limit(300).get().then(function(snap){
+  db.collection('bookings').get().then(function(snap){
     allBookings=[];
     snap.forEach(function(doc){var d=doc.data();d._id=doc.id;allBookings.push(d);});
+    allBookings.sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
+    renderEvents();
+  }).catch(function(err){
+    console.error('Bookings load error:',err);
+    allBookings=[];
     renderEvents();
   });
 }
