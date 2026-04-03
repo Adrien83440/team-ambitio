@@ -527,7 +527,7 @@ function formatDateTimeFr(ts) {
   if (!ts) return '—';
   var d = ts.toDate ? ts.toDate() : new Date(ts);
   var jours = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-  return jours[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear() + ' à ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  return jours[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + ' à ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
 }
 
 /* ═══ SOUND NOTIFICATION ═══ */
@@ -1177,6 +1177,16 @@ function startListening() {
       }
 
       isFirstLoad = false;
+
+      // On first load, assign any unassigned recent leads (arrived while page was closed)
+      if (!window._firstLoadAssignDone) {
+        window._firstLoadAssignDone = true;
+        allLeads.forEach(function(l) {
+          if (!l.assignedTo && l.source !== 'bigin_import' && l.source !== 'webinar_import') {
+            assignLeadRoundRobin(l.id);
+          }
+        });
+      }
 
     }, function(err) {
       console.error('[leads] listener error:', err);
