@@ -196,6 +196,15 @@
 <div class="sc2"><div class="sc-t">📧 Notifications</div><div class="sc-d2">Email par défaut</div><div class="cd-field" style="margin-top:10px"><div class="cd-field-label">Email de notification admin</div><input type="email" class="bi" id="stNotifEmail" placeholder="contact@adrienemily.com" style="width:100%"/></div><div class="cal-warn" style="margin-top:8px">⚡ Les emails seront opérationnels après la mise en place des Cloud Functions.</div></div>
 </div>
 <div style="margin-top:14px;text-align:right"><button class="bb bb-p" id="saveSt">💾 Sauvegarder</button></div>
+
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700;margin:32px 0 16px">Intégrations</div>
+
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:700;color:rgba(255,255,255,.48);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Vidéoconférence</div>
+<div class="sg" id="intVideo"></div>
+
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:700;color:rgba(255,255,255,.48);margin:20px 0 10px;text-transform:uppercase;letter-spacing:.5px">Calendrier & productivité</div>
+<div class="sg" id="intCal"></div>
+
 </div>
 </div>
 <div class="mo-bg" id="cMo"><div class="mo"><div class="mo-h"><div class="mo-t">Nouveau rendez-vous</div><button class="mo-x" id="moX">✕</button></div><div class="mo-b"><div class="mfr"><div class="mf"><label>Consultation *</label><select id="mT"></select></div><div class="mf"><label>Expert *</label><select id="mP"></select></div></div><div class="mfr"><div class="mf"><label>Date *</label><input type="date" id="mD"/></div><div class="mf"><label>Heure *</label><input type="time" id="mH" value="09:00"/></div></div><div class="mfd">Client</div><div class="mfr"><div class="mf"><label>Prénom *</label><input id="mFn" placeholder="Prénom"/></div><div class="mf"><label>Nom *</label><input id="mLn" placeholder="Nom"/></div></div><div class="mf"><label>Email *</label><input type="email" id="mEm" placeholder="email@exemple.com"/></div><div class="mf"><label>Téléphone</label><input type="tel" id="mPh" placeholder="+33 6…"/></div><div class="mf"><label>Notes</label><textarea id="mNo" placeholder="Contexte…"></textarea></div><button class="mo-s" id="moSub">Créer le rendez-vous</button></div></div></div>
@@ -335,7 +344,7 @@ h+='<div class="rdv-p-client"><div class="rdv-p-client-av">'+clientName[0].toUpp
 
 // Meet button
 if(meetUrl){
-h+='<div class="rdv-p-meet"><a href="'+esc(meetUrl)+'" target="_blank">📹 Rejoindre avec Google Meet</a></div>';
+h+='<div class="rdv-p-meet"><a href="'+esc(meetUrl)+'" target="_blank">📹 Rejoindre avec Google Meet</a><button class="rdv-p-close" style="width:28px;height:28px;font-size:11px" onclick="navigator.clipboard.writeText(\''+esc(meetUrl)+'\');toast(\'📋 Lien copié !\')">📋</button></div>';
 }
 
 // Tabs
@@ -847,6 +856,49 @@ el=document.getElementById('stTimezone');if(el)el.value=S.timezone||'Europe/Pari
 el=document.getElementById('stBrandColor');if(el)el.value=S.brandColor||'#8b5cf6';
 el=document.getElementById('stWelcome');if(el)el.value=S.welcomeMessage||'';
 el=document.getElementById('stNotifEmail');if(el)el.value=S.notifEmail||'';
+// Render integrations
+var connExperts=P.filter(function(p){return p.calendarConnected===true;});
+var calConnected=connExperts.length>0;
+var calEmails=connExperts.map(function(p){return p.calendarEmail||p.name;}).join(', ');
+var h='';
+// Google Meet card
+h+='<div class="sc2" style="display:flex;align-items:flex-start;gap:14px"><div style="width:44px;height:44px;border-radius:10px;background:rgba(52,211,153,.08);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">📹</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800;font-size:14px">Google Meet</span>';
+if(calConnected)h+='<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(52,211,153,.1);color:#34d399;font-weight:700">✅ Connecté</span>';
+else h+='<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.38);font-weight:700">Non connecté</span>';
+h+='</div><div style="font-size:12px;color:rgba(255,255,255,.38);margin-top:4px">Crée automatiquement un lien de réunion pour chaque rendez-vous planifié.</div>';
+if(calConnected){
+h+='<div style="margin-top:10px;display:flex;flex-direction:column;gap:4px">';
+h+='<div style="font-size:11px;display:flex;align-items:center;gap:6px"><span style="color:#34d399">✓</span> Crée un lien de réunion à chaque rendez-vous</div>';
+h+='<div style="font-size:11px;display:flex;align-items:center;gap:6px"><span style="color:#34d399">✓</span> Envoie le lien aux clients dans la notification</div>';
+h+='<div style="font-size:11px;display:flex;align-items:center;gap:6px"><span style="color:#34d399">✓</span> Ajoute les détails dans le récapitulatif</div>';
+h+='</div>';
+}else{
+h+='<div class="cal-warn" style="margin-top:8px">Connectez un Google Calendar sur un expert pour activer Google Meet.</div>';
+}
+h+='</div></div>';
+document.getElementById('intVideo').innerHTML=h;
+// Google Calendar card
+var h2='';
+h2+='<div class="sc2" style="display:flex;align-items:flex-start;gap:14px"><div style="width:44px;height:44px;border-radius:10px;background:rgba(96,165,250,.08);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">📅</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px"><span style="font-weight:800;font-size:14px">Google Calendar</span>';
+if(calConnected)h2+='<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(52,211,153,.1);color:#34d399;font-weight:700">✅ Connecté</span>';
+else h2+='<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.38);font-weight:700">Non connecté</span>';
+h2+='</div><div style="font-size:12px;color:rgba(255,255,255,.38);margin-top:4px">Synchronise les événements et vérifie les conflits avec Google Agenda.</div>';
+if(calConnected){
+h2+='<div style="margin-top:10px;display:flex;flex-direction:column;gap:4px">';
+h2+='<div style="font-size:11px;display:flex;align-items:center;gap:6px"><span style="color:#34d399">✓</span> Crée un événement calendrier à chaque réservation</div>';
+h2+='<div style="font-size:11px;display:flex;align-items:center;gap:6px"><span style="color:#34d399">✓</span> Vérifie les conflits d\'agenda (free/busy)</div>';
+h2+='<div style="font-size:11px;display:flex;align-items:center;gap:6px"><span style="color:#34d399">✓</span> Synchronisation automatique toutes les 30 min</div>';
+h2+='</div>';
+h2+='<div style="margin-top:10px;padding:10px 14px;background:#141420;border-radius:8px;font-size:12px">';
+connExperts.forEach(function(p){
+h2+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="width:20px;height:20px;border-radius:6px;background:'+p.color+';display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff">'+(p.name||'?')[0].toUpperCase()+'</span><span style="font-weight:700">'+esc(p.name)+'</span><span style="color:rgba(255,255,255,.38)">'+esc(p.calendarEmail||'')+'</span></div>';
+});
+h2+='</div>';
+}else{
+h2+='<div class="cal-warn" style="margin-top:8px">Allez dans Experts → Paramètres du calendrier pour connecter un Google Calendar.</div>';
+}
+h2+='</div></div>';
+document.getElementById('intCal').innerHTML=h2;
 }
 document.getElementById('saveSt').addEventListener('click',function(){
 var u={};
