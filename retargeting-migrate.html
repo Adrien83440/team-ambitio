@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Migration Retargeting</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+.mig-container{max-width:700px;margin:60px auto;padding:30px;background:var(--bg2);border:1px solid var(--border);border-radius:16px}
+.mig-title{font-size:22px;font-weight:800;color:var(--text);margin-bottom:6px}
+.mig-sub{font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.5}
+.mig-btn{padding:12px 28px;background:#7c3aed;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;transition:all .15s}
+.mig-btn:hover{opacity:.9;transform:translateY(-1px)}
+.mig-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.mig-progress{margin-top:20px;display:none}
+.mig-bar-bg{width:100%;height:8px;background:rgba(255,255,255,.06);border-radius:8px;overflow:hidden;margin-bottom:8px}
+.mig-bar{height:100%;background:#7c3aed;border-radius:8px;transition:width .3s}
+.mig-log{font-size:12px;color:var(--muted);max-height:200px;overflow-y:auto;font-family:'DM Mono',monospace;white-space:pre-wrap;margin-top:12px;padding:12px;background:rgba(0,0,0,.2);border-radius:8px}
+.mig-done{color:#34d399;font-weight:700;margin-top:12px;display:none}
+.mig-warn{color:#fbbf24;font-size:12px;margin-top:12px;padding:10px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);border-radius:8px}
+.mig-login{text-align:center;padding:40px}
+.mig-login input{padding:10px 14px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;width:240px;margin:6px}
+.mig-login button{margin-top:10px}
+</style>
+</head>
+<body>
+<div class="mig-container">
+  <div class="mig-title">🔄 Migration Retargeting → Firestore</div>
+  <div class="mig-sub">
+    Importe les contacts webinaires (<code>retargeting-data.js</code>) dans la collection Firestore <code>leads</code>
+    avec <code>inRetargeting: true</code> et <code>inPipeline: false</code>.<br/>
+    Migre aussi les statuts/notes depuis localStorage si présents.<br/>
+    <strong>À exécuter une seule fois.</strong>
+  </div>
+  <div class="mig-warn">⚠️ Vérifie que tu es connecté en admin. Cette opération va créer ~3500 documents dans Firestore.</div>
+  <div id="loginSection" class="mig-login" style="display:none">
+    <div style="font-weight:700;margin-bottom:10px">Connexion requise</div>
+    <input type="email" id="loginEmail" placeholder="Email"/><br/>
+    <input type="password" id="loginPass" placeholder="Mot de passe"/><br/>
+    <button class="mig-btn" id="loginBtn">Se connecter</button>
+  </div>
+  <div id="mainSection" style="display:none">
+    <button class="mig-btn" id="startBtn">🚀 Lancer la migration</button>
+    <div class="mig-progress" id="progress">
+      <div class="mig-bar-bg"><div class="mig-bar" id="bar" style="width:0%"></div></div>
+      <span id="progressText" style="font-size:12px;color:var(--muted)">0%</span>
+    </div>
+    <div class="mig-done" id="done">✅ Migration terminée !</div>
+    <div class="mig-log" id="log"></div>
+  </div>
+</div>
+
+<script src="retargeting-data.js"></script>
+<script>
+var db = firebase.firestore();
+var logEl = document.getElementById('log');
+function log(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+
+// Auth
+firebase.auth().onAuthStateChanged(function(user) {
+  if (user) {
+    document.getElementById('loginSection').style.display = 'none';
+    document.getElementById('mainSection').style.display = '';
+    log('Connecté: ' + user.email);
+  } else {
+    document.getElementById('loginSection').style.display = '';
+    document.getElementById('mainSection').style.display = 'none';
+  }
+});
+document.getElementById('loginBtn').addEventListener('click', function() {
+  var email = document.getElementById('loginEmail').value;
+  var pass = document.getElementById('loginPass').value;
+  firebase.auth().signInWithEmailAndPassword(email, pass).catch(function(err) { alert(err.message); });
+});
+
+// Load existing localStorage state
+var lsState = {};
+try { lsState = JSON.parse(localStorage.getItem('ambitio_retargeting_state') || '{}'); } catch(e) {}
+
+document.getElementById('startBtn').addEventListener('click', async function() {
+  this.disabled = true;
+  document.getElementById('progress').style.display = '';
+
+  if (typeof RAW_CONTACTS === 'undefined' || !RAW_CONTACTS.length) {
+    log('❌ RAW_CONTACTS non trouvé. Vérifie que retargeting-data.js est présent.');
+    return;
+  }
+
+  var total = RAW_CONTACTS.length;
+  log('Total contacts à migrer: ' + total);
+  log('Statuts localStorage trouvés: ' + Object.keys(lsState).length);
+
+  var BATCH_SIZE = 400;
+  var imported = 0;
+  var skipped = 0;
+
+  for (var i = 0; i < total; i += BATCH_SIZE) {
+    var batch = db.batch();
+    var chunk = RAW_CONTACTS.slice(i, i + BATCH_SIZE);
+
+    for (var j = 0; j < chunk.length; j++) {
+      var r = chunk[j];
+      var st = lsState[r.i] || {};
+      var fullName = ((r.p || '') + ' ' + (r.n || '')).trim() || 'Sans nom';
+
+      // Map old retargeting status to unified
+      var statusMap = { none: 'nouveau', appele: 'appele', decroche: 'decroche', parle: 'parle', rdv: 'rdv_pose', pasinteresse: 'pas_interesse', arappeler: 'arappeler' };
+      var unifiedStatus = statusMap[st.status] || 'nouveau';
+
+      // Map setter
+      var setter = '';
+      if (st.setter === 'Elodie' || st.setter === 'elodie') setter = 'elodie';
+      if (st.setter === 'Guillaume' || st.setter === 'guillaume') setter = 'guillaume';
+
+      var doc = {
+        nom: fullName,
+        email: r.e || '',
+        telephone: r.t || '',
+        webinarDate: r.w || '',
+        webinarTags: r.g || [],
+        type: 'webinar',
+        source: 'webinar_import',
+        acId: r.i,
+        inRetargeting: true,
+        inPipeline: false,
+        stage: 'lead',
+        status: unifiedStatus,
+        assignedTo: setter,
+        rtContacter: st.contacter || false,
+        rtNotes: st.notes || '',
+        rtRappelDate: st.rappelDate || '',
+        utm: '',
+        secteur: '',
+        notesHistory: [],
+        tags: [],
+        createdAt: r.d ? firebase.firestore.Timestamp.fromDate(new Date(r.d + 'T12:00:00')) : firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      var ref = db.collection('leads').doc('wb_' + r.i);
+      batch.set(ref, doc);
+    }
+
+    try {
+      await batch.commit();
+      imported += chunk.length;
+      var pct = Math.round((imported / total) * 100);
+      document.getElementById('bar').style.width = pct + '%';
+      document.getElementById('progressText').textContent = pct + '% (' + imported + '/' + total + ')';
+      log('Batch ' + Math.ceil((i + BATCH_SIZE) / BATCH_SIZE) + ': ' + chunk.length + ' contacts importés');
+    } catch (err) {
+      log('❌ Erreur batch: ' + err.message);
+      skipped += chunk.length;
+    }
+  }
+
+  document.getElementById('bar').style.width = '100%';
+  document.getElementById('done').style.display = '';
+  log('');
+  log('═══ RÉSULTAT ═══');
+  log('Importés: ' + imported);
+  log('Échoués: ' + skipped);
+  log('IDs déterministes (rt_XXXX) → pas de doublons si relancé.');
+});
+</script>
+</body>
+</html>

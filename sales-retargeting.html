@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Retargeting</title>
 <link rel="stylesheet" href="sales.css"/>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
 <style>
 /* ══════════════════════════════════════════
    RETARGETING MODULE — Styles
@@ -637,6 +641,21 @@
     </div>
   </div>
 
+  <!-- Migration Banner -->
+  <div class="rt-migration-banner" id="migrationBanner" style="display:none">
+    <span style="font-size:20px">📦</span>
+    <div class="mig-text">Les contacts webinaires n'ont pas encore été importés dans Firestore. Clique pour lancer l'import (3 500+ contacts).</div>
+    <button class="mig-btn" id="migrationBtn">🚀 Importer maintenant</button>
+  </div>
+
+  <!-- Source Filter -->
+  <div class="rt-source-bar" id="rtSourceBar">
+    <span class="fb-label">📦 Source :</span>
+    <button class="rt-source-pill active" data-source="all">Toutes</button>
+    <button class="rt-source-pill" data-source="webinar">Webinaire</button>
+    <button class="rt-source-pill" data-source="pipeline">Pipeline</button>
+  </div>
+
   <!-- Toolbar -->
   <div class="rt-toolbar">
     <div class="rt-search-wrap">
@@ -645,12 +664,14 @@
     <div class="rt-filter-group">
       <button class="rt-filter-btn active" data-filter="all">Tous</button>
       <button class="rt-filter-btn" data-filter="contacter">À contacter</button>
+      <button class="rt-filter-btn" data-filter="nouveau">Nouveau</button>
       <button class="rt-filter-btn" data-filter="appele">Appelés</button>
       <button class="rt-filter-btn" data-filter="decroche">Décroché</button>
+      <button class="rt-filter-btn" data-filter="messagerie">Messagerie</button>
       <button class="rt-filter-btn" data-filter="parle">Parlé</button>
-      <button class="rt-filter-btn" data-filter="rdv">RDV</button>
+      <button class="rt-filter-btn" data-filter="rdv_pose">RDV</button>
       <button class="rt-filter-btn" data-filter="arappeler">À rappeler</button>
-      <button class="rt-filter-btn" data-filter="pasinteresse">Pas intéressé</button>
+      <button class="rt-filter-btn" data-filter="pas_interesse">Pas intéressé</button>
     </div>
     <select class="rt-pagesize" id="rtPageSize" title="Lignes par page">
       <option value="25">25 / page</option>
@@ -699,6 +720,7 @@
           <th>Statut</th>
           <th>Setter</th>
           <th>Notes</th>
+          <th style="width:80px">Pipeline</th>
         </tr>
       </thead>
       <tbody id="rtBody"></tbody>
@@ -712,503 +734,467 @@
 
 <div class="rt-toast" id="rtToast">✅ Sauvegardé</div>
 
+<!-- Auth overlay -->
+<div class="rt-auth-overlay" id="rtAuthOverlay" style="display:none">
+  <div style="font-size:28px;font-weight:800;color:white;margin-bottom:4px">Ambitio <span style="opacity:.5">Retargeting</span></div>
+  <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Connexion requise</div>
+  <input type="email" id="rtLoginEmail" placeholder="Email"/>
+  <input type="password" id="rtLoginPwd" placeholder="Mot de passe"/>
+  <button id="rtLoginBtn">Se connecter</button>
+  <div id="rtLoginErr" style="color:#ef4444;font-size:12px;margin-top:8px"></div>
+</div>
+
 <!-- DATA -->
 <script src="retargeting-data.js"></script>
 
+
 <script>
 /* ═══════════════════════════════════════════
-   RETARGETING MODULE — Logic
+   RETARGETING MODULE — Firestore-powered
 ═══════════════════════════════════════════ */
 
-const STATUS_MAP = {
-  none:          { label: '—',                color: '#666',    dot: '#444' },
-  appele:        { label: 'Appelé',           color: '#60a5fa', dot: '#60a5fa' },
-  decroche:      { label: 'Décroché',         color: '#fbbf24', dot: '#fbbf24' },
-  parle:         { label: 'Parlé',            color: '#34d399', dot: '#34d399' },
-  rdv:           { label: 'RDV',              color: '#a78bfa', dot: '#a78bfa' },
-  pasinteresse:  { label: 'Pas intéressé',    color: '#ef4444', dot: '#ef4444' },
-  arappeler:     { label: 'À rappeler',       color: '#f59e0b', dot: '#f59e0b' },
+var db = firebase.firestore();
+
+/* ═══ UNIFIED STATUS MAP ═══ */
+var STATUS_MAP = {
+  nouveau:       { label: 'Nouveau',       color: '#34d399', dot: '#34d399' },
+  appele:        { label: 'Appelé',        color: '#60a5fa', dot: '#60a5fa' },
+  decroche:      { label: 'Décroché',      color: '#fbbf24', dot: '#fbbf24' },
+  messagerie:    { label: 'Messagerie',    color: '#fb923c', dot: '#fb923c' },
+  parle:         { label: 'Parlé',         color: '#2dd4bf', dot: '#2dd4bf' },
+  nrp1:          { label: 'NRP 1',         color: '#f59e0b', dot: '#f59e0b' },
+  nrp2:          { label: 'NRP 2',         color: '#e67e22', dot: '#e67e22' },
+  nrp3:          { label: 'NRP 3',         color: '#ef4444', dot: '#ef4444' },
+  rdv_pose:      { label: 'RDV posé',      color: '#a78bfa', dot: '#a78bfa' },
+  arappeler:     { label: 'À rappeler',    color: '#f59e0b', dot: '#f59e0b' },
+  pas_interesse: { label: 'Pas intéressé', color: '#ef4444', dot: '#ef4444' },
+  disqualifie:   { label: 'Disqualifié',   color: '#6b7280', dot: '#6b7280' }
 };
 
-// ── State (persisted in localStorage) ──
-const STORAGE_KEY = 'ambitio_retargeting_state';
-let STATE = {};
+/* ═══ STATE ═══ */
+var allContacts = [];
+var currentPage = 1;
+var pageSize = 50;
+var searchQuery = '';
+var activeFilter = 'all';
+var activeSource = 'all';
+var openDropdownId = null;
+var activeTagGroup = 'all';
+var selectedIndividualTags = new Set();
+var tagDropdownBuilt = false;
 
-function loadState() {
-  try { STATE = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { STATE = {}; }
-}
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE));
-}
-function getContactState(id) {
-  if (!STATE[id]) {
-    STATE[id] = { 
-      contacter: false, 
-      status: 'none', 
-      notes: '', 
-      rappelDate: '', 
-      setter: '' 
-    };
-  } else {
-    // Rétro-compatibilité
-    if (typeof STATE[id].setter === 'undefined') STATE[id].setter = '';
-  }
-  return STATE[id];
-}
+var TAG_GROUPS = {
+  present: { label: 'Présent',       test: function(t){ return t.indexOf('présent') >= 0; } },
+  absent:  { label: 'Absent',        test: function(t){ return t.indexOf('absent') >= 0; } },
+  client:  { label: 'Client / Vente',test: function(t){ return t.indexOf('Client') >= 0 || t.indexOf('vente') >= 0; } },
+  replay:  { label: 'Replay',        test: function(t){ return t.indexOf('replay') >= 0; } },
+  source:  { label: 'Sources',       test: function(t){ return t.indexOf('webinar') < 0 && t.indexOf('everwebinar') < 0; } }
+};
 
-loadState();
-
-// ── Build contacts array ──
-const CONTACTS = RAW_CONTACTS.map(r => ({
-  id: r.i,
-  email: r.e,
-  prenom: r.p,
-  nom: r.n,
-  tel: r.t,
-  date: r.d,
-  webinarDate: r.w,
-  tags: r.g,
-}));
-
-// ── Classify tags ──
+/* ═══ TAG HELPERS ═══ */
+function getContactTags(c) { return c.webinarTags || c.tags || []; }
 function tagClass(t) {
-  if (t.includes('présent') && (t.includes('+1h30') || t.includes('+2h'))) return 'long';
-  if (t.includes('présent')) return 'present';
-  if (t.includes('absent')) return 'absent';
-  if (t.includes('Client') || t.includes('vente')) return 'client';
-  if (t.includes('replay')) return 'replay';
+  if (t.indexOf('présent') >= 0 && (t.indexOf('+1h30') >= 0 || t.indexOf('+2h') >= 0)) return 'long';
+  if (t.indexOf('présent') >= 0) return 'present';
+  if (t.indexOf('absent') >= 0) return 'absent';
+  if (t.indexOf('Client') >= 0 || t.indexOf('vente') >= 0) return 'client';
+  if (t.indexOf('replay') >= 0) return 'replay';
   return '';
 }
 function tagLabel(t) {
   return t.replace('[webinar] ', '').replace('[everwebinar] ', '').replace('[', '').replace(']', '');
 }
-
-// ── Pagination & filter state ──
-let currentPage = 1;
-let pageSize = 50;
-let searchQuery = '';
-let activeFilter = 'all';
-let openDropdownId = null;
-
-// ── Tag filter state ──
-let activeTagGroup = 'all';
-let selectedIndividualTags = new Set();
-
-const TAG_GROUPS = {
-  present: { label: 'Présent',       test: t => t.includes('présent') },
-  absent:  { label: 'Absent',        test: t => t.includes('absent') },
-  client:  { label: 'Client / Vente',test: t => t.includes('Client') || t.includes('vente') },
-  replay:  { label: 'Replay',        test: t => t.includes('replay') },
-  source:  { label: 'Sources',       test: t => /everwebinar|skool|acflix|EBOOK|VSL|Newsletter|HEBDO/i.test(t) },
-};
-
 function contactMatchesTagFilter(c) {
-  // Individual tags take priority if any selected
+  var tags = getContactTags(c);
   if (selectedIndividualTags.size > 0) {
-    return c.tags.some(t => selectedIndividualTags.has(t));
+    for (var i = 0; i < tags.length; i++) { if (selectedIndividualTags.has(tags[i])) return true; }
+    return false;
   }
-  // Group filter
-  if (activeTagGroup === 'all') return true;
-  const group = TAG_GROUPS[activeTagGroup];
-  if (!group) return true;
-  return c.tags.some(t => group.test(t));
+  if (activeTagGroup !== 'all') {
+    var grp = TAG_GROUPS[activeTagGroup];
+    if (!grp) return true;
+    for (var j = 0; j < tags.length; j++) { if (grp.test(tags[j])) return true; }
+    return false;
+  }
+  return true;
 }
 
+/* ═══ UTILS ═══ */
+function formatTel(t) {
+  if (!t) return '—';
+  var s = t.replace(/\D/g, '');
+  if (s.indexOf('33') === 0 && s.length > 9) s = '0' + s.slice(2);
+  if (s.length === 10) return s.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5');
+  return t;
+}
+function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escAttr(s) { return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+function toast(msg) {
+  var el = document.getElementById('rtToast');
+  el.textContent = msg || '✅ Sauvegardé';
+  el.classList.add('show');
+  setTimeout(function(){ el.classList.remove('show'); }, 1500);
+}
+
+/* ═══ FIRESTORE ═══ */
+function startListening() {
+  db.collection('leads')
+    .where('inRetargeting', '==', true)
+    .onSnapshot(function(snap) {
+      allContacts = [];
+      snap.forEach(function(doc) { var d = doc.data(); d.id = doc.id; allContacts.push(d); });
+      allContacts.sort(function(a, b) {
+        var da = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+        var db2 = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
+        return db2 - da;
+      });
+      if (!tagDropdownBuilt) { initTagDropdown(); tagDropdownBuilt = true; }
+      render();
+    }, function(err) { console.error('[retargeting] listener error:', err); });
+}
+
+function updateLead(id, fields) {
+  fields.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+  db.collection('leads').doc(id).update(fields).catch(function(err) { console.error('[rt] update error:', err); });
+}
+
+/* ═══ FILTERING ═══ */
 function getFilteredContacts() {
-  let list = CONTACTS;
-
+  var list = allContacts.slice();
   if (searchQuery) {
-    const q = searchQuery.toLowerCase();
-    list = list.filter(c =>
-      (c.prenom + ' ' + c.nom).toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q) ||
-      c.tel.includes(q)
-    );
+    var q = searchQuery.toLowerCase();
+    list = list.filter(function(c) { return ((c.nom || '') + ' ' + (c.email || '') + ' ' + (c.telephone || '')).toLowerCase().indexOf(q) >= 0; });
   }
-
+  if (activeSource !== 'all') {
+    if (activeSource === 'webinar') list = list.filter(function(c) { return c.source === 'webinar_import' || c.source === 'retargeting_import'; });
+    else if (activeSource === 'pipeline') list = list.filter(function(c) { return c.inPipeline === true; });
+  }
   if (activeFilter !== 'all') {
-    if (activeFilter === 'contacter') {
-      list = list.filter(c => getContactState(c.id).contacter);
-    } else {
-      list = list.filter(c => getContactState(c.id).status === activeFilter);
-    }
+    if (activeFilter === 'contacter') list = list.filter(function(c) { return c.rtContacter === true; });
+    else list = list.filter(function(c) { return (c.status || 'nouveau') === activeFilter; });
   }
-
-  // Tag filter (AND with status)
-  if (activeTagGroup !== 'all' || selectedIndividualTags.size > 0) {
-    list = list.filter(contactMatchesTagFilter);
-  }
-
+  if (activeTagGroup !== 'all' || selectedIndividualTags.size > 0) list = list.filter(contactMatchesTagFilter);
   return list;
 }
 
-// ── Render ──
+/* ═══ RENDER ═══ */
 function render() {
-  const filtered = getFilteredContacts();
-  const total = filtered.length;
-  const pages = Math.ceil(total / pageSize) || 1;
+  var filtered = getFilteredContacts();
+  var total = filtered.length;
+  var pages = Math.ceil(total / pageSize) || 1;
   if (currentPage > pages) currentPage = pages;
+  var start = (currentPage - 1) * pageSize;
+  var end = Math.min(start + pageSize, total);
+  var slice = filtered.slice(start, end);
 
-  const start = (currentPage - 1) * pageSize;
-  const end = Math.min(start + pageSize, total);
-  const slice = filtered.slice(start, end);
+  var tbody = document.getElementById('rtBody');
+  var h = '';
+  for (var i = 0; i < slice.length; i++) {
+    var c = slice[i];
+    var st = c.status || 'nouveau';
+    var statusInfo = STATUS_MAP[st] || STATUS_MAP.nouveau;
+    var tags = getContactTags(c);
+    var tagsHtml = '';
+    for (var j = 0; j < Math.min(tags.length, 4); j++) tagsHtml += '<span class="rt-tag ' + tagClass(tags[j]) + '">' + tagLabel(tags[j]) + '</span>';
+    var isC = c.rtContacter === true;
+    var notes = c.rtNotes || '';
+    var rappel = c.rtRappelDate || '';
+    var setter = c.assignedTo || '';
+    var webD = c.webinarDate || '—';
 
-  const tbody = document.getElementById('rtBody');
-  tbody.innerHTML = slice.map(c => {
-    const st = getContactState(c.id);
-    const statusInfo = STATUS_MAP[st.status] || STATUS_MAP.none;
-    const tagsHtml = c.tags.slice(0, 4).map(t =>
-      `<span class="rt-tag ${tagClass(t)}">${tagLabel(t)}</span>`
-    ).join('');
+    h += '<tr class="' + (isC ? 'rt-contacted' : '') + '" data-id="' + c.id + '">';
+    h += '<td><div class="rt-toggle ' + (isC ? 'on' : '') + '" data-action="toggle" data-id="' + c.id + '"></div></td>';
+    h += '<td><div class="rt-client-name">' + escHtml(c.nom || '—') + '</div><div class="rt-client-email">' + escHtml(c.email || '') + '</div></td>';
+    h += '<td><span class="rt-client-tel">' + formatTel(c.telephone || '') + '</span></td>';
+    h += '<td><div class="rt-tags">' + tagsHtml + '</div></td>';
+    h += '<td style="font-size:12px;color:var(--muted);white-space:nowrap">' + escHtml(webD) + '</td>';
 
-    return `
-    <tr class="${st.contacter ? 'rt-contacted' : ''}" data-id="${c.id}">
-      <td>
-        <div class="rt-toggle ${st.contacter ? 'on' : ''}" data-action="toggle" data-id="${c.id}" title="${st.contacter ? 'Marqué à contacter' : 'Non contacté'}"></div>
-      </td>
-      <td>
-        <div class="rt-client-name">${c.prenom || '—'}${c.nom ? ' ' + c.nom : ''}</div>
-        <div class="rt-client-email">${c.email}</div>
-      </td>
-      <td><span class="rt-client-tel">${formatTel(c.tel)}</span></td>
-      <td><div class="rt-tags">${tagsHtml}</div></td>
-      <td style="font-size:12px;color:var(--muted);white-space:nowrap">${c.webinarDate || '—'}</td>
-      <td>
-        <div class="rt-status-wrap">
-          <div class="rt-status-pill" data-status="${st.status}" data-action="status" data-id="${c.id}">
-            <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${statusInfo.dot}"></span>
-            ${statusInfo.label}
-            ${st.status === 'arappeler' && st.rappelDate ? `<span style="font-size:10px;opacity:0.7;margin-left:2px">${st.rappelDate}</span>` : ''}
-          </div>
-          <div class="rt-status-dropdown" data-dropdown="${c.id}">
-            ${Object.entries(STATUS_MAP).map(([key, val]) => `
-              <div class="rt-status-opt" data-action="setStatus" data-id="${c.id}" data-status="${key}">
-                <span class="dot" style="background:${val.dot}"></span>
-                ${val.label}
-              </div>
-            `).join('')}
-            <div style="padding:6px 12px;border-top:1px solid var(--border);margin-top:4px;display:${st.status === 'arappeler' ? 'block' : 'none'}" data-rappel-wrap="${c.id}">
-              <label style="font-size:10px;color:var(--muted);font-weight:600">Date de rappel</label>
-              <input type="date" class="rt-rappel-date" data-action="rappelDate" data-id="${c.id}" value="${st.rappelDate || ''}"/>
-            </div>
-          </div>
-        </div>
-      </td>
-      <td>
-        <select class="rt-setter-select" data-action="setter" data-id="${c.id}">
-          <option value="">—</option>
-          <option value="Elodie" ${st.setter === 'Elodie' ? 'selected' : ''}>Élodie</option>
-          <option value="Guillaume" ${st.setter === 'Guillaume' ? 'selected' : ''}>Guillaume</option>
-        </select>
-      </td>
-      <td class="rt-notes-cell">
-        <input type="text" class="rt-notes-input" data-action="notes" data-id="${c.id}" value="${escHtml(st.notes)}" placeholder="Ajouter une note..."/>
-      </td>
-    </tr>`;
-  }).join('');
+    h += '<td><div class="rt-status-wrap">';
+    h += '<div class="rt-status-pill" data-status="' + st + '" data-action="status" data-id="' + c.id + '">';
+    h += '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + statusInfo.dot + '"></span> ' + statusInfo.label;
+    if (st === 'arappeler' && rappel) h += ' <span style="font-size:10px;opacity:0.7">' + rappel + '</span>';
+    h += '</div>';
+    h += '<div class="rt-status-dropdown" data-dropdown="' + c.id + '">';
+    var skeys = Object.keys(STATUS_MAP);
+    for (var sk = 0; sk < skeys.length; sk++) {
+      h += '<div class="rt-status-opt" data-action="setStatus" data-id="' + c.id + '" data-status="' + skeys[sk] + '">';
+      h += '<span class="dot" style="background:' + STATUS_MAP[skeys[sk]].dot + '"></span> ' + STATUS_MAP[skeys[sk]].label + '</div>';
+    }
+    h += '<div style="padding:6px 12px;border-top:1px solid var(--border);margin-top:4px;display:' + (st === 'arappeler' ? 'block' : 'none') + '">';
+    h += '<label style="font-size:10px;color:var(--muted);font-weight:600">Date de rappel</label>';
+    h += '<input type="date" class="rt-rappel-date" data-action="rappelDate" data-id="' + c.id + '" value="' + rappel + '"/>';
+    h += '</div></div></div></td>';
 
-  document.getElementById('rtPageInfo').textContent = `${start + 1}–${end} sur ${total} contacts`;
+    h += '<td><select class="rt-setter-select" data-action="setter" data-id="' + c.id + '">';
+    h += '<option value="">—</option>';
+    h += '<option value="elodie"' + (setter === 'elodie' ? ' selected' : '') + '>Élodie</option>';
+    h += '<option value="guillaume"' + (setter === 'guillaume' ? ' selected' : '') + '>Guillaume</option>';
+    h += '</select></td>';
 
-  const btnsEl = document.getElementById('rtPageBtns');
-  let btnsHtml = `<button class="rt-page-btn" ${currentPage <= 1 ? 'disabled' : ''} data-page="${currentPage-1}">‹</button>`;
-  const maxBtns = 7;
-  let startP = Math.max(1, currentPage - 3);
-  let endP = Math.min(pages, startP + maxBtns - 1);
-  if (endP - startP < maxBtns - 1) startP = Math.max(1, endP - maxBtns + 1);
-  for (let p = startP; p <= endP; p++) {
-    btnsHtml += `<button class="rt-page-btn ${p === currentPage ? 'active' : ''}" data-page="${p}">${p}</button>`;
+    h += '<td class="rt-notes-cell"><input type="text" class="rt-notes-input" data-action="notes" data-id="' + c.id + '" value="' + escAttr(notes) + '" placeholder="Ajouter une note..."/></td>';
+
+    // Pipeline column
+    if (c.inPipeline === true) {
+      h += '<td style="text-align:center"><span style="font-size:11px;color:#34d399;font-weight:600" title="Déjà dans le pipeline">✅ CRM</span></td>';
+    } else {
+      h += '<td style="text-align:center"><button class="rt-filter-btn" style="font-size:10px;padding:4px 8px" data-action="addToPipeline" data-id="' + c.id + '">+ CRM</button></td>';
+    }
+
+    h += '</tr>';
   }
-  btnsHtml += `<button class="rt-page-btn" ${currentPage >= pages ? 'disabled' : ''} data-page="${currentPage+1}">›</button>`;
-  btnsEl.innerHTML = btnsHtml;
+  tbody.innerHTML = h;
 
+  document.getElementById('rtPageInfo').textContent = (start + 1) + '–' + end + ' sur ' + total + ' contacts';
+  var btnsEl = document.getElementById('rtPageBtns');
+  var bh = '<button class="rt-page-btn"' + (currentPage <= 1 ? ' disabled' : '') + ' data-page="' + (currentPage - 1) + '">‹</button>';
+  var maxBtns = 7, startP = Math.max(1, currentPage - 3), endP = Math.min(pages, startP + maxBtns - 1);
+  if (endP - startP < maxBtns - 1) startP = Math.max(1, endP - maxBtns + 1);
+  for (var p = startP; p <= endP; p++) bh += '<button class="rt-page-btn' + (p === currentPage ? ' active' : '') + '" data-page="' + p + '">' + p + '</button>';
+  bh += '<button class="rt-page-btn"' + (currentPage >= pages ? ' disabled' : '') + ' data-page="' + (currentPage + 1) + '">›</button>';
+  btnsEl.innerHTML = bh;
   updateStats();
 }
 
 function updateStats() {
-  let contacter = 0, appeles = 0, rdv = 0, rappeler = 0;
-  CONTACTS.forEach(c => {
-    const st = getContactState(c.id);
-    if (st.contacter) contacter++;
-    if (['appele','decroche','parle','rdv','pasinteresse','arappeler'].includes(st.status)) appeles++;
-    if (st.status === 'rdv') rdv++;
-    if (st.status === 'arappeler') rappeler++;
-  });
-  document.getElementById('statTotal').textContent = CONTACTS.length.toLocaleString('fr-FR');
+  var contacter = 0, appeles = 0, rdv = 0, rappeler = 0;
+  for (var i = 0; i < allContacts.length; i++) {
+    var c = allContacts[i], s = c.status || 'nouveau';
+    if (c.rtContacter) contacter++;
+    if (s === 'appele' || s === 'decroche' || s === 'parle') appeles++;
+    if (s === 'rdv_pose') rdv++;
+    if (s === 'arappeler') rappeler++;
+  }
+  document.getElementById('statTotal').textContent = allContacts.length;
   document.getElementById('statContacter').textContent = contacter;
   document.getElementById('statAppeles').textContent = appeles;
   document.getElementById('statRdv').textContent = rdv;
   document.getElementById('statRappeler').textContent = rappeler;
 }
 
-function formatTel(t) {
-  if (!t) return '—';
-  let s = t.replace(/\D/g, '');
-  if (s.startsWith('33') && s.length > 9) s = '0' + s.slice(2);
-  if (s.length === 10) return s.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5');
-  return t;
-}
-
-function escHtml(s) {
-  return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function toast(msg) {
-  const el = document.getElementById('rtToast');
-  el.textContent = msg || '✅ Sauvegardé';
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 1500);
-}
-
-// ── Events ──
-document.addEventListener('click', e => {
-  const action = e.target.dataset?.action || e.target.closest('[data-action]')?.dataset?.action;
-  const el = e.target.closest('[data-action]') || e.target;
-  const id = el?.dataset?.id;
-
-  if (action !== 'status' && action !== 'setStatus') {
-    document.querySelectorAll('.rt-status-dropdown.show').forEach(d => d.classList.remove('show'));
-    openDropdownId = null;
+/* ═══ TAG DROPDOWN ═══ */
+function initTagDropdown() {
+  var tagCounts = {};
+  for (var i = 0; i < allContacts.length; i++) {
+    var tags = getContactTags(allContacts[i]);
+    for (var j = 0; j < tags.length; j++) tagCounts[tags[j]] = (tagCounts[tags[j]] || 0) + 1;
   }
+  var allTags = Object.keys(tagCounts).sort(function(a, b) { return tagCounts[b] - tagCounts[a]; });
+  var panel = document.getElementById('rtTagDdPanel');
+  var h = '';
+  for (var k = 0; k < allTags.length; k++) {
+    var t = allTags[k];
+    h += '<div class="rt-tag-dd-item" data-tag="' + escAttr(t) + '"><span class="rt-tag-dd-check"></span>';
+    h += '<span class="rt-tag ' + tagClass(t) + '" style="font-size:11px">' + tagLabel(t) + '</span>';
+    h += '<span class="rt-tag-dd-count">' + tagCounts[t] + '</span></div>';
+  }
+  panel.innerHTML = h;
+}
 
+/* ═══ EVENTS ═══ */
+document.addEventListener('click', function(e) {
+  var el = e.target.closest('[data-action]') || e.target;
+  var action = el ? el.dataset.action : null;
+  var id = el ? el.dataset.id : null;
+  if (action !== 'status' && action !== 'setStatus') document.querySelectorAll('.rt-status-dropdown.show').forEach(function(d) { d.classList.remove('show'); });
   if (action === 'toggle' && id) {
-    const st = getContactState(id);
-    st.contacter = !st.contacter;
-    saveState();
-    render();
+    var c = allContacts.find(function(x) { return x.id === id; });
+    if (c) updateLead(id, { rtContacter: !(c.rtContacter === true) });
   }
-
   if (action === 'status' && id) {
-    const dd = document.querySelector(`[data-dropdown="${id}"]`);
-    if (dd) {
-      const wasOpen = dd.classList.contains('show');
-      document.querySelectorAll('.rt-status-dropdown.show').forEach(d => d.classList.remove('show'));
-      if (!wasOpen) dd.classList.add('show');
-    }
+    var dd = document.querySelector('[data-dropdown="' + id + '"]');
+    if (dd) { var wo = dd.classList.contains('show'); document.querySelectorAll('.rt-status-dropdown.show').forEach(function(d) { d.classList.remove('show'); }); if (!wo) dd.classList.add('show'); }
   }
-
   if (action === 'setStatus' && id) {
-    const status = el.dataset.status;
-    const st = getContactState(id);
-    st.status = status;
-    if (status !== 'arappeler') st.rappelDate = '';
-    if (status !== 'none') st.contacter = true;
-    saveState();
-    document.querySelectorAll('.rt-status-dropdown.show').forEach(d => d.classList.remove('show'));
-    render();
+    var ns = el.dataset.status;
+    var upd = { status: ns };
+    if (ns !== 'arappeler') upd.rtRappelDate = '';
+    if (ns !== 'nouveau') upd.rtContacter = true;
+    updateLead(id, upd);
+    document.querySelectorAll('.rt-status-dropdown.show').forEach(function(d) { d.classList.remove('show'); });
     toast();
+  }
+  if (action === 'addToPipeline' && id) {
+    updateLead(id, { inPipeline: true, stage: 'lead' });
+    toast('✅ Ajouté au pipeline CRM');
   }
 });
 
-// Notes + rappel + setter
-let notesTimer = null;
-document.addEventListener('input', e => {
-  if (e.target.dataset?.action === 'notes') {
-    const id = e.target.dataset.id;
-    const st = getContactState(id);
-    st.notes = e.target.value;
+var notesTimer = null;
+document.addEventListener('input', function(e) {
+  if (e.target.dataset && e.target.dataset.action === 'notes') {
+    var nid = e.target.dataset.id, nval = e.target.value;
     clearTimeout(notesTimer);
-    notesTimer = setTimeout(() => { saveState(); toast(); }, 800);
+    notesTimer = setTimeout(function() { updateLead(nid, { rtNotes: nval }); toast(); }, 800);
   }
-  if (e.target.dataset?.action === 'rappelDate') {
-    const id = e.target.dataset.id;
-    const st = getContactState(id);
-    st.rappelDate = e.target.value;
-    st.status = 'arappeler';
-    saveState();
-    render();
+  if (e.target.dataset && e.target.dataset.action === 'rappelDate') {
+    updateLead(e.target.dataset.id, { rtRappelDate: e.target.value, status: 'arappeler' });
     toast();
   }
 });
 
-document.addEventListener('change', e => {
-  if (e.target.dataset?.action === 'setter') {
-    const id = e.target.dataset.id;
-    const st = getContactState(id);
-    st.setter = e.target.value;
-    saveState();
+document.addEventListener('change', function(e) {
+  if (e.target.dataset && e.target.dataset.action === 'setter') {
+    updateLead(e.target.dataset.id, { assignedTo: e.target.value });
     toast('Setter mis à jour');
   }
 });
 
-// Search
-document.getElementById('rtSearch').addEventListener('input', e => {
-  searchQuery = e.target.value.trim();
-  currentPage = 1;
-  render();
-});
+document.getElementById('rtSearch').addEventListener('input', function(e) { searchQuery = e.target.value.trim(); currentPage = 1; render(); });
 
-// Filters
-document.querySelectorAll('.rt-filter-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.rt-filter-btn').forEach(b => b.classList.remove('active'));
+document.querySelectorAll('.rt-filter-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.rt-filter-btn').forEach(function(b) { b.classList.remove('active'); });
     btn.classList.add('active');
     activeFilter = btn.dataset.filter;
-    currentPage = 1;
-    render();
+    currentPage = 1; render();
   });
 });
 
-// Pagination
-document.getElementById('rtPageBtns').addEventListener('click', e => {
-  const btn = e.target.closest('[data-page]');
-  if (btn && !btn.disabled) {
-    currentPage = parseInt(btn.dataset.page);
-    render();
-    document.querySelector('.rt-table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+document.getElementById('rtSourceBar').addEventListener('click', function(e) {
+  var pill = e.target.closest('[data-source]'); if (!pill) return;
+  document.querySelectorAll('.rt-source-pill').forEach(function(p) { p.classList.remove('active'); });
+  pill.classList.add('active');
+  activeSource = pill.dataset.source;
+  currentPage = 1; render();
 });
 
-// Page size
-document.getElementById('rtPageSize').addEventListener('change', e => {
-  pageSize = parseInt(e.target.value);
-  currentPage = 1;
-  render();
+document.getElementById('rtPageBtns').addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-page]');
+  if (btn && !btn.disabled) { currentPage = parseInt(btn.dataset.page); render(); document.querySelector('.rt-table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 });
+document.getElementById('rtPageSize').addEventListener('change', function(e) { pageSize = parseInt(e.target.value); currentPage = 1; render(); });
 
-// ── Tag filter: build dropdown + wire events ──
+/* ═══ TAG FILTERS ═══ */
 (function initTagFilters() {
-  // Build unique tags with counts
-  const tagCounts = {};
-  CONTACTS.forEach(c => {
-    c.tags.forEach(t => { tagCounts[t] = (tagCounts[t] || 0) + 1; });
-  });
-  const allTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
-
-  // Populate dropdown
-  const panel = document.getElementById('rtTagDdPanel');
-  panel.innerHTML = allTags.map(t => {
-    var cls = tagClass(t);
-    return '<div class="rt-tag-dd-item" data-tag="' + t + '">'
-      + '<span class="rt-tag-dd-check"></span>'
-      + '<span class="rt-tag ' + cls + '" style="font-size:11px">' + tagLabel(t) + '</span>'
-      + '<span class="rt-tag-dd-count">' + tagCounts[t].toLocaleString('fr-FR') + '</span>'
-      + '</div>';
-  }).join('');
-
-  function updateResetVisibility() {
-    var resetBtn = document.getElementById('rtTagReset');
-    if (activeTagGroup !== 'all' || selectedIndividualTags.size > 0) {
-      resetBtn.classList.add('visible');
-    } else {
-      resetBtn.classList.remove('visible');
-    }
+  function updateResetVis() {
+    var r = document.getElementById('rtTagReset');
+    if (activeTagGroup !== 'all' || selectedIndividualTags.size > 0) r.classList.add('visible'); else r.classList.remove('visible');
   }
-
-  function updateDropdownToggleStyle() {
-    var toggle = document.getElementById('rtTagDdToggle');
-    if (selectedIndividualTags.size > 0) {
-      toggle.classList.add('has-selection');
-      toggle.textContent = '▾ ' + selectedIndividualTags.size + ' tag' + (selectedIndividualTags.size > 1 ? 's' : '');
-    } else {
-      toggle.classList.remove('has-selection');
-      toggle.textContent = '▾ Tag précis';
-    }
+  function updateDdToggle() {
+    var t = document.getElementById('rtTagDdToggle');
+    if (selectedIndividualTags.size > 0) { t.classList.add('has-selection'); t.textContent = '▾ ' + selectedIndividualTags.size + ' tag' + (selectedIndividualTags.size > 1 ? 's' : ''); }
+    else { t.classList.remove('has-selection'); t.textContent = '▾ Tag précis'; }
   }
-
-  // Group buttons
   document.getElementById('rtTagBar').addEventListener('click', function(e) {
-    var btn = e.target.closest('[data-taggroup]');
-    if (!btn) return;
-    // Clear individual selection when clicking a group
+    var btn = e.target.closest('[data-taggroup]'); if (!btn) return;
     selectedIndividualTags.clear();
-    panel.querySelectorAll('.rt-tag-dd-item').forEach(function(el) { el.classList.remove('checked'); });
-    updateDropdownToggleStyle();
-
+    document.getElementById('rtTagDdPanel').querySelectorAll('.rt-tag-dd-item').forEach(function(el) { el.classList.remove('checked'); });
+    updateDdToggle();
     document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); });
-    btn.classList.add('active');
-    activeTagGroup = btn.dataset.taggroup;
-    currentPage = 1;
-    updateResetVisibility();
-    render();
+    btn.classList.add('active'); activeTagGroup = btn.dataset.taggroup; currentPage = 1; updateResetVis(); render();
   });
-
-  // Dropdown toggle
-  document.getElementById('rtTagDdToggle').addEventListener('click', function(e) {
-    e.stopPropagation();
-    panel.classList.toggle('open');
-  });
-
-  // Dropdown item click
-  panel.addEventListener('click', function(e) {
-    var item = e.target.closest('.rt-tag-dd-item');
-    if (!item) return;
-    e.stopPropagation();
+  document.getElementById('rtTagDdToggle').addEventListener('click', function(e) { e.stopPropagation(); document.getElementById('rtTagDdPanel').classList.toggle('open'); });
+  document.getElementById('rtTagDdPanel').addEventListener('click', function(e) {
+    var item = e.target.closest('.rt-tag-dd-item'); if (!item) return; e.stopPropagation();
     var tag = item.dataset.tag;
-    if (selectedIndividualTags.has(tag)) {
-      selectedIndividualTags.delete(tag);
-      item.classList.remove('checked');
-    } else {
-      selectedIndividualTags.add(tag);
-      item.classList.add('checked');
-    }
-    // When individual tags selected, deactivate group buttons visually
-    if (selectedIndividualTags.size > 0) {
-      document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); });
-      activeTagGroup = 'all';
-    } else {
-      // Restore "Tous" as active
-      document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); });
-      document.querySelector('[data-taggroup="all"]').classList.add('active');
-    }
-    updateDropdownToggleStyle();
-    updateResetVisibility();
-    currentPage = 1;
-    render();
+    if (selectedIndividualTags.has(tag)) { selectedIndividualTags.delete(tag); item.classList.remove('checked'); }
+    else { selectedIndividualTags.add(tag); item.classList.add('checked'); }
+    if (selectedIndividualTags.size > 0) { document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); }); activeTagGroup = 'all'; }
+    else { document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); }); document.querySelector('[data-taggroup="all"]').classList.add('active'); }
+    updateDdToggle(); updateResetVis(); currentPage = 1; render();
   });
-
-  // Close dropdown on outside click
-  document.addEventListener('click', function() {
-    panel.classList.remove('open');
-  });
-
-  // Reset
+  document.addEventListener('click', function() { document.getElementById('rtTagDdPanel').classList.remove('open'); });
   document.getElementById('rtTagReset').addEventListener('click', function() {
-    activeTagGroup = 'all';
-    selectedIndividualTags.clear();
+    activeTagGroup = 'all'; selectedIndividualTags.clear();
     document.querySelectorAll('.rt-tag-group-btn').forEach(function(b) { b.classList.remove('active'); });
     document.querySelector('[data-taggroup="all"]').classList.add('active');
-    panel.querySelectorAll('.rt-tag-dd-item').forEach(function(el) { el.classList.remove('checked'); });
-    updateDropdownToggleStyle();
-    updateResetVisibility();
-    currentPage = 1;
-    render();
+    document.getElementById('rtTagDdPanel').querySelectorAll('.rt-tag-dd-item').forEach(function(el) { el.classList.remove('checked'); });
+    updateDdToggle(); updateResetVis(); currentPage = 1; render();
   });
 })();
 
-// Export
-document.getElementById('rtExport').addEventListener('click', () => {
-  const filtered = getFilteredContacts();
-  const rows = [['ID','Prénom','Nom','Email','Téléphone','Tags','Statut','Setter','Notes','Date rappel','Contacter']];
-  filtered.forEach(c => {
-    const st = getContactState(c.id);
-    rows.push([
-      c.id, c.prenom, c.nom, c.email, c.tel,
-      c.tags.join('; '),
-      STATUS_MAP[st.status]?.label || '—',
-      st.setter || '—',
-      st.notes, 
-      st.rappelDate,
-      st.contacter ? 'Oui' : 'Non'
-    ]);
-  });
-  const csv = rows.map(r => r.map(v => `"${(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `retargeting_export_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
+/* ═══ EXPORT ═══ */
+document.getElementById('rtExport').addEventListener('click', function() {
+  var filtered = getFilteredContacts();
+  var rows = [['Nom','Email','Téléphone','Type','Tags','Statut','Setter','Notes','Date rappel','Contacter']];
+  for (var i = 0; i < filtered.length; i++) {
+    var c = filtered[i], tags = getContactTags(c);
+    rows.push([c.nom || '', c.email || '', c.telephone || '', c.type || '', tags.join('; '),
+      (STATUS_MAP[c.status || 'nouveau'] || {}).label || '—', c.assignedTo || '—', c.rtNotes || '', c.rtRappelDate || '', c.rtContacter ? 'Oui' : 'Non']);
+  }
+  var csv = rows.map(function(r) { return r.map(function(v) { return '"' + (v || '').replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+  var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'retargeting_export_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
   toast('📁 Export téléchargé');
 });
 
-// Close dropdowns
-document.addEventListener('click', e => {
-  if (!e.target.closest('.rt-status-wrap')) {
-    document.querySelectorAll('.rt-status-dropdown.show').forEach(d => d.classList.remove('show'));
-  }
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.rt-status-wrap')) document.querySelectorAll('.rt-status-dropdown.show').forEach(function(d) { d.classList.remove('show'); });
 });
 
-// ── Init ──
-render();
+/* ═══ MIGRATION (one-shot import of webinar contacts) ═══ */
+function checkMigration() {
+  db.collection('_meta').doc('retargeting_migrated').get().then(function(snap) {
+    if (!snap.exists) document.getElementById('migrationBanner').style.display = 'flex';
+  });
+}
+document.getElementById('migrationBtn').addEventListener('click', function() {
+  if (typeof RAW_CONTACTS === 'undefined') { alert('retargeting-data.js non chargé'); return; }
+  var OLD_KEY = 'ambitio_retargeting_state';
+  var oldState = {}; try { oldState = JSON.parse(localStorage.getItem(OLD_KEY) || '{}'); } catch(e) {}
+  var SR = { none:'nouveau', appele:'appele', decroche:'decroche', parle:'parle', rdv:'rdv_pose', pasinteresse:'pas_interesse', arappeler:'arappeler' };
+  var SN = { Elodie:'elodie', Guillaume:'guillaume' };
+  var btn = document.getElementById('migrationBtn');
+  btn.disabled = true; btn.textContent = 'Import en cours...';
+  var batchSize = 400, total = RAW_CONTACTS.length, done = 0;
+
+  function processBatch(si) {
+    var batch = db.batch();
+    var be = Math.min(si + batchSize, total);
+    for (var i = si; i < be; i++) {
+      var r = RAW_CONTACTS[i], os = oldState[r.i] || {};
+      var pd = new Date(r.d || '2025-01-01'); if (isNaN(pd.getTime())) pd = new Date('2025-01-01');
+      batch.set(db.collection('leads').doc('wb_' + r.i), {
+        nom: ((r.p || '') + ' ' + (r.n || '')).trim() || '—',
+        email: r.e || '', telephone: r.t || '',
+        type: 'webinar', source: 'webinar_import', stage: 'lead',
+        status: SR[os.status || 'none'] || 'nouveau',
+        inRetargeting: true,
+        assignedTo: SN[os.setter || ''] || '',
+        webinarTags: r.g || [], webinarDate: r.w || '',
+        rtNotes: os.notes || '', rtRappelDate: os.rappelDate || '', rtContacter: os.contacter || false,
+        createdAt: firebase.firestore.Timestamp.fromDate(pd),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    batch.commit().then(function() {
+      done += (be - si); btn.textContent = 'Import… ' + done + '/' + total;
+      if (be < total) processBatch(be);
+      else {
+        db.collection('_meta').doc('retargeting_migrated').set({ done: true, date: new Date().toISOString() });
+        btn.textContent = '✅ Import terminé (' + total + ')';
+        setTimeout(function() { document.getElementById('migrationBanner').style.display = 'none'; }, 2000);
+      }
+    }).catch(function(err) { btn.textContent = '❌ ' + err.message; btn.disabled = false; });
+  }
+  processBatch(0);
+});
+
+/* ═══ AUTH & INIT ═══ */
+firebase.auth().onAuthStateChanged(function(user) {
+  if (user) {
+    document.getElementById('rtAuthOverlay').style.display = 'none';
+    db.collection('users').doc(user.uid).get().then(function(snap) {
+      var data = snap.exists ? snap.data() : {};
+      window._currentRole = data.role || 'sales';
+      window._currentUserName = user.displayName || user.email.split('@')[0];
+      localStorage.setItem('ambitio_role', data.role || 'sales');
+      localStorage.setItem('ambitio_name', window._currentUserName);
+      document.getElementById('tbUserName').textContent = window._currentUserName;
+    });
+    startListening();
+    checkMigration();
+  } else {
+    document.getElementById('rtAuthOverlay').style.display = 'flex';
+  }
+});
+document.getElementById('rtLoginBtn').addEventListener('click', function() {
+  var email = document.getElementById('rtLoginEmail').value;
+  var pwd = document.getElementById('rtLoginPwd').value;
+  firebase.auth().signInWithEmailAndPassword(email, pwd).catch(function(err) { document.getElementById('rtLoginErr').textContent = err.message; });
+});
+document.getElementById('rtLoginPwd').addEventListener('keydown', function(e) { if (e.key === 'Enter') document.getElementById('rtLoginBtn').click(); });
 </script>
 
 <script src="nav.js"></script>
