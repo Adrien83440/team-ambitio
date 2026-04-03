@@ -349,6 +349,7 @@ html, body {
       <button class="ld-filter" data-period="unprocessed">🆕 Non traités</button>
       <button class="ld-filter" data-period="all">📋 Tout</button>
     </div>
+    <div class="ld-filters" id="ldTypeFilters" style="margin-bottom:4px"></div>
     <div class="ld-filters" id="ldFilters">
       <button class="ld-filter active" data-status="all">Tous</button>
       <button class="ld-filter" data-status="nouveau">🆕 Nouveau</button>
@@ -450,6 +451,7 @@ function getStatusObj(key) {
 var allLeads = [];
 var filterMember = 'all';
 var filterStatus = 'all';
+var filterType = 'all';
 var filterPeriod = 'today';
 var knownLeadIds = {};
 var isFirstLoad = true;
@@ -607,6 +609,15 @@ document.getElementById('ldPeriodFilters').addEventListener('click', function(e)
   renderFeed();
 });
 
+document.getElementById('ldTypeFilters').addEventListener('click', function(e) {
+  var btn = e.target.closest('.ld-filter');
+  if (!btn || !btn.dataset.type) return;
+  document.querySelectorAll('#ldTypeFilters .ld-filter').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  filterType = btn.dataset.type;
+  renderFeed();
+});
+
 document.getElementById('ldFilters').addEventListener('click', function(e) {
   var btn = e.target.closest('.ld-filter');
   if (!btn || !btn.dataset.status) return;
@@ -643,6 +654,9 @@ function getFilteredLeads() {
   if (filterMember !== 'all') {
     list = list.filter(function(l) { return l.assignedTo === filterMember; });
   }
+  if (filterType !== 'all') {
+    list = list.filter(function(l) { return (l.type || '') === filterType; });
+  }
   if (filterStatus !== 'all') {
     list = list.filter(function(l) { return (l.status || 'nouveau') === filterStatus; });
   }
@@ -677,9 +691,32 @@ function updateCounts() {
   }
 }
 
+function rebuildTypeFilters() {
+  var types = {};
+  var base = getBaseLeads();
+  for (var i = 0; i < base.length; i++) {
+    var t = base[i].type || '';
+    if (t) types[t] = (types[t] || 0) + 1;
+  }
+  var keys = Object.keys(types).sort();
+  var container = document.getElementById('ldTypeFilters');
+  // Hide row if 0 or 1 type only
+  if (keys.length <= 1) { container.innerHTML = ''; filterType = 'all'; return; }
+  // Reset if selected type no longer exists
+  if (filterType !== 'all' && !types[filterType]) filterType = 'all';
+  var h = '<button class="ld-filter' + (filterType === 'all' ? ' active' : '') + '" data-type="all">Tous</button>';
+  for (var j = 0; j < keys.length; j++) {
+    var k = keys[j];
+    var label = LEAD_TYPES[k] ? LEAD_TYPES[k].label : k;
+    h += '<button class="ld-filter' + (filterType === k ? ' active' : '') + '" data-type="' + k + '">' + label + ' <span style="opacity:.5">' + types[k] + '</span></button>';
+  }
+  container.innerHTML = h;
+}
+
 function renderFeed() {
   var leads = getFilteredLeads();
   updateCounts();
+  rebuildTypeFilters();
   var feed = document.getElementById('ldFeed');
 
   if (leads.length === 0) {
