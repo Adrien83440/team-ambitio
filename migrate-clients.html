@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Migration Clients — Ambitio Corp</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0a0c14;color:rgba(255,255,255,0.9);font-family:'Inter',system-ui,sans-serif;padding:24px}
+    h1{font-size:22px;margin-bottom:8px}
+    .sub{color:rgba(255,255,255,0.5);font-size:13px;margin-bottom:24px}
+    .status{padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:600}
+    .status.info{background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);color:#60a5fa}
+    .status.ok{background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:#34d399}
+    .status.err{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#ef4444}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px}
+    th{text-align:left;padding:8px;background:#111320;color:rgba(255,255,255,0.5);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;position:sticky;top:0}
+    td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.05)}
+    .match{color:#34d399;font-weight:700}
+    .nomatch{color:#f59e0b}
+    .new{color:#60a5fa}
+    .btn{padding:10px 20px;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;margin-right:8px;margin-top:12px}
+    .btn-go{background:linear-gradient(135deg,#b91c1c,#ef4444);color:#fff}
+    .btn-go:disabled{opacity:0.4;cursor:not-allowed}
+    .btn-dry{background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.3)}
+    .log{background:#0f0f1a;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:12px;margin-top:16px;max-height:300px;overflow-y:auto;font-family:'DM Mono',monospace;font-size:11px;line-height:1.6;white-space:pre-wrap}
+    .temo-count{color:#a78bfa;font-size:10px;font-weight:700}
+  </style>
+</head>
+<body>
+  <h1>🔄 Migration Clients → Firestore</h1>
+  <div class="sub">Importe les 63 clients depuis l'ancien fichier et les enrichit dans la collection <code>leads</code></div>
+  <div id="status" class="status info">⏳ Authentification…</div>
+  <div id="tableWrap"></div>
+  <button class="btn btn-dry" id="btnPreview" disabled onclick="runPreview()">👁 Prévisualiser</button>
+  <button class="btn btn-go" id="btnMigrate" disabled onclick="runMigrate()">🚀 Lancer la migration</button>
+  <div class="log" id="log" style="display:none"></div>
+
+<script>
+var BASE_CLIENTS = [{"client":"Anne lise NAVE","commerce":"Epicerie ambulante","problematique":"peu de rentabilité","pb_secondaires":"Volonté d'expansion et gestion du temps","resultats":"Hausse du CA/Developpement de son projet de distributeur  rectification de ses réseaux ( dépose du dossier à la banque en juin)","date_debut":"2025-01-20","temporalite":"13","trustpilot":"https://fr.trustpilot.com/reviews/682eccc46452ad994d3af0dc","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Pierrick WATTECAMPS","commerce":"Hotel/ restaurant","problematique":"Pb management","pb_secondaires":"Rentabilité","resultats":"Réduction des charges / negociation de ses contrats/ Repositionnement de sa place de leader","date_debut":"2025-01-02","temporalite":"14","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Floriane CANCY","commerce":"Productrice, transformatrice de volaille","problematique":"Rentabilité","pb_secondaires":"Management, gestion du temps et marketing","resultats":"Doublement des commandes ( strategie marketing avec devellopement d'un site internet) , devellopement de partenariat avec de grandes enseignes environnantes ( leclerc et carrefour), optimisation de son recrutement et developpement de nouveau secteur de distribution pour ses camions de marché","date_debut":"2024-11-25","temporalite":"15","trustpilot":"https://www.notion.so/Process-Closeurs-1f6844533640800b95b3e7be637930b1?source=copy_link#1f6844533640807fb601d3693c31e56d","video":"https://www.notion.so/Process-Closeurs-1f6844533640800b95b3e7be637930b1?source=copy_link#1f6844533640807fb601d3693c31e56d","autre_temoignage":"https://workdrive.zoho.eu/file/nnsne710e1407db364a41b73806e7a22193c8","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk8243524e71114611a7108de92573ce8e","temoignage_supp2":"https://workdrive.zoho.eu/file/gqzqke2afd1b7e84248b281bbd38cdef2be58","temoignage_supp3":"","temoignage_supp4":""},{"client":"Alexandre COMBES","commerce":"Boucher, charcutier , traiteur","problematique":"Management , recrutement","pb_secondaires":"Rentabilité et objectif concours","resultats":"Aide pour sortir un salarié qui était irrespectueux , mise en place d'un systeme de recrutement et managment plus effcicient. Reduction des charges, dev des marges et optimisation de sa présence sur secteur grace à dev marketing).","date_debut":"2025-01-09","temporalite":"13","trustpilot":"https://www.notion.so/Process-Closeurs-1f6844533640800b95b3e7be637930b1?source=copy_link#1f6844533640808381f5d5d1b6edb7c0","video":"https://www.notion.so/Process-Closeurs-1f6844533640800b95b3e7be637930b1?source=copy_link#1f6844533640808381f5d5d1b6edb7c0","autre_temoignage":"https://workdrive.zoho.eu/file/c01dm501a5b3c69c74b3696c61eefe19948ba","temoignage_supp1":"https://workdrive.zoho.eu/file/lw69mc99ad2d857f241bfaf3e6dd37370182e","temoignage_supp2":"https://workdrive.zoho.eu/file/lw69m433bb6725fc24ff9aed193971337f156","temoignage_supp3":"https://workdrive.zoho.eu/file/nnsne5cfed6b2f62b4734a347f76fb9eed8c5","temoignage_supp4":"https://workdrive.zoho.eu/file/nnsne1bed1f09ec034ca7a1c550fed5027484"},{"client":"Mireille BERNARD","commerce":"Restauratrice","problematique":"Rentabilité","pb_secondaires":"Management","resultats":"hausse de 200 euros /j  de son CA (en 1 call) et changement de son positionnement face à son équipe","date_debut":"2025-04-23","temporalite":"10","trustpilot":"https://fr.trustpilot.com/reviews/6828b8455c8eca804b954beb","video":"","autre_temoignage":"","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk1251bee15f44433cb30f64530ecc4aac","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Daniel MATHIEU","commerce":"Producteur de Maroille","problematique":"Rentabilité","pb_secondaires":"Aucun marketing en place","resultats":"Economie proposée de 43 000 euros  grace à une solution face à un problème avec un associé. Mise en place d'un process de marketing","date_debut":"2025-04-14","temporalite":"10","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Ludovic REY","commerce":"Cave à vin","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Reduction de ses charges, hausse de ses marges, pivot dans sa stratégie marketing","date_debut":"2025-01-07","temporalite":"13","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"David RIES","commerce":"Cremerie","problematique":"Gestion de temps","pb_secondaires":"Marketing et hausse de fréquentation","resultats":"Optimisation de son temps, créa d'un site internet et developpement de ses réseaux, optimisation de sa fréquentation avec mise en place d'un systeme de compte client, etc","date_debut":"2025-04-21","temporalite":"10","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Mael FABRE","commerce":"Patissier","problematique":"Gestion du temps","pb_secondaires":"marketing","resultats":"Optimisation de son temps, travail sur ses croyances limitantes pour mettre en place une vraie stratégies de com","date_debut":"2025-01-15","temporalite":"13","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Béatrice BRUN","commerce":"Magasin de déco","problematique":"Gros problème de stock et de rentabilité","pb_secondaires":"Mindset","resultats":"Solutions stratégiques pour réduire son stock trop important, optimisation de ses dépenses, restructuration de son organisation et travail sur son mindset","date_debut":"2025-01-21","temporalite":"13","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Christelle FREVILLE","commerce":"Fleuriste","problematique":"Rentabilité","pb_secondaires":"Gestion du temps et Marketing","resultats":"Pivot sur sa communication ( en 1 coaching), optimisation de ses charges , optimisation de son temps, travail sur ses charges et son expérience client pour augmenter son CA","date_debut":"2025-03-03","temporalite":"12","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Cecile ROGER","commerce":"Creperie","problematique":"Tous les axes","pb_secondaires":"","resultats":"Travail sur sa com, travail sur ses charges, sur sa gestion du temps, sur sa stratégie de prix, etc","date_debut":"2025-03-17","temporalite":"11","trustpilot":"https://fr.trustpilot.com/reviews/6828fc823c24962af79b886e","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/lw69m705d7076b6614a80beda412375b600e6","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sidonie ORY","commerce":"Concept store","problematique":"Com et rentabilité","pb_secondaires":"Gestion du temps","resultats":"Pivot sur sa com, gain de temps par semaine de 2h, travail actuellement sur sa rentabilité","date_debut":"2025-03-18","temporalite":"11","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsned40a6b74bfd04863a2ab45532cde8e69","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Laure BERTOLINO","commerce":"Coiffeuse","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Hausse de ses prix et restructuration de sa manière de communiquer sur ses réseaux","date_debut":"2025-04-07","temporalite":"10","trustpilot":"","video":"https://vimeo.com/1100559693?share=copy","autre_temoignage":"https://workdrive.zoho.eu/file/lw69maeb61e5c92284740924b63ec891364b1","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Lydie VIAL","commerce":"Boulangerie","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Accompagnement actuellement face à son problème de four en panne aussi bien sur les procédures que dans sa manière de communiquer face à ca .","date_debut":"2025-05-20","temporalite":"9","trustpilot":"https://fr.trustpilot.com/reviews/68762b9eaf3ea0fe9f14ea40","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsnea6d0365ac1a54aa9ab74f30f41d41fd9","temoignage_supp1":"https://workdrive.zoho.eu/file/nnsne5f31f7ffcad84795b8ac8edd890917f2","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sébastien","commerce":"Informaticien","problematique":"Gestion du temps","pb_secondaires":"Rentabilite","resultats":"A gagné 3h/ semaine et en reciblant sa niche à augmenté  son CA de 30%","date_debut":"2024-11-05","temporalite":"FIN","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Margaux CANTET","commerce":"Epicerie/ restauration italienne","problematique":"Management , recrutement","pb_secondaires":"Rentabilite et marketing","resultats":"Repositionnement de son role de leader, optimisation de ses stratégies de com ( dev de partenariat pro, optimisation de son instagram,etc), reduction de ses charges ( notament salariale) gestion plus efficaces de ses depenses et de ses marges / En cours : restructuration de son management avec des fiches de postes et une restructuration de son équipe.  Hausse de 20 à 30% du CA chaque mois.","date_debut":"2025-03-27","temporalite":"11","trustpilot":"https://fr.trustpilot.com/reviews/6866685f4c1ef2cebc8a10b5","video":"https://vimeo.com/1098540405?share=copy","autre_temoignage":"https://workdrive.zoho.eu/file/lw69me7bef32dc4394c31bbba0c48c86b9a0a","temoignage_supp1":"https://workdrive.zoho.eu/file/nnsnef8e42788390b4fec8cee826a4034e6fa","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Aurore PRAX","commerce":"Papeterie","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Travail sur sa com, travail sur ses charges, sur sa gestion du temps, sur sa stratégie de prix, etc","date_debut":"2025-04-28","temporalite":"10","trustpilot":"https://fr.trustpilot.com/reviews/686d4963954cc625b676ab1a","video":"https://vimeo.com/1100556025?share=copy","autre_temoignage":"https://workdrive.zoho.eu/file/c01dm670a5039560845a395ffc7de32ca2270","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk4791f511187642599f89eaecc88dd7d2","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Delphine JANVIER","commerce":"Institut beaute","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Travail sur sa com, travail sur ses charges, sur sa gestion du temps, sur sa stratégie de prix, etc en 6 mois economies de 15 000 euros sur ses charges, gain de 1h/jour de travail meilleure visibilite sur sa tréso donc elle a pu enfin prendre 3 semaines de repos pour le mois d'aout. nouveau projet : embaucher 2 collaboratrices","date_debut":"2025-03-25","temporalite":"11","trustpilot":"https://fr.trustpilot.com/users/6862901918a3fc2cc1f461c5","video":"https://workdrive.zoho.eu/file/mjhx1f260e0059621435da4cc331f783c2dfa","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Geneci ALMEIDA","commerce":"Societe de nettoyage","problematique":"Gestion du temps","pb_secondaires":"Rentabilite, management et marketing","resultats":"Reorganisation de sa methode de travail avec ses bras droit et de la gestion de son temps pour lui permettre à minima 1j de repos par semaine.","date_debut":"2025-05-22","temporalite":"9","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Marie Laure LAROCHE","commerce":"Epicerie fine","problematique":"Mindset + Rentabilité","pb_secondaires":"Marketing","resultats":"En 3 mois revision de sa stratégie de prix, de ses charges, gros travail sur son mindset de leader, marketing en cours","date_debut":"2025-02-25","temporalite":"12","trustpilot":"https://fr.trustpilot.com/reviews/686bfce5df70b27eecdaee1b","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Gilbert DARTHAYETTE","commerce":"Producteur/ transformateur/. vendeur de piment d'espelette","problematique":"Recrutement/ management / marketing et rentabilité","pb_secondaires":"Gestion du temps","resultats":"En 1 mois : travail sur son recrutement ( aboutit et consolidé) + changement de son management  En 2 mois travail sur sa gestion du temps en priorisant les actions rentables et  travail sur sa rentabiité en reprenant les bases en reduisant ses charges et augmentant ses marges.","date_debut":"2025-03-25","temporalite":"11","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Ségolène BOUCHER","commerce":"Opticienne","problematique":"Marketing, otpimisation de l'expérience client, rentabilité","pb_secondaires":"","resultats":"Création intégrale d'une communication sur les réseaux, optimisation de son parcours client, developpement de partenariat","date_debut":"2025-04-01","temporalite":"11","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Yagya KARKY","commerce":"Magasin de produit péruvien et népalais","problematique":"Marketing et Rentabilité","pb_secondaires":"Gestion du temps","resultats":"Reprise à 0 de sa communication sur les réseaux et via son site internet. Annulation de salon qui n'etaient pas rentables, optimisation de ses produits à gros coefficients. Changement de stratégie de vente de ses produits en magasin physique ET sur son site.","date_debut":"2025-05-27","temporalite":"9","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Lemya BELGACEM","commerce":"Magasin de prêt à porté","problematique":"Rentabilité","pb_secondaires":"Gestion du temps","resultats":"Elle à 2 magasin cible identique a 10m de distance, changement de son positionnement stratégique, changement de son experience client.","date_debut":"2025-04-22","temporalite":"10","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sylviane LEINARDI","commerce":"Boulangerie / pâtisserie","problematique":"Rentabilité","pb_secondaires":"Marketing","resultats":"Proposition de stratégie de partenariat, gestion de ses charges","date_debut":"2025-02-24","temporalite":"12","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Lisa GUERRIN","commerce":"E shop","problematique":"Developpement complet","pb_secondaires":"Marketing","resultats":"Stratégie de partenariat, developpement de sa boutique, optimisation de ses communications","date_debut":"2024-11-05","temporalite":"16","trustpilot":"","video":"https://vimeo.com/1052759206?share=copy","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Armelle ZAID EL KHIL","commerce":"Maraichaire / Fleuriste","problematique":"Gestion/ gestion du temps et Marketing","pb_secondaires":"Recrutement","resultats":"","date_debut":"2025-07-08","temporalite":"7","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Solange PAPOUCHADO","commerce":"Vente de voyage en ligne","problematique":"Aide au globale","pb_secondaires":"","resultats":"","date_debut":"2025-07-08","temporalite":"7","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sylvie MOURGUES","commerce":"Vente en ligne de produit de DIY","problematique":"Marketing et Management","pb_secondaires":"Rentabilité","resultats":"Mise en place d'une vraie structuration de l'équipe, repositionnement dans son role de leader","date_debut":"2025-07-07","temporalite":"en 1 call de 30min","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/c01dmc5cd4a184f4b494786650f31a18b6206","temoignage_supp1":"https://workdrive.zoho.eu/file/nnsne08282c1608ef4039b7e60ba256d80966","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sophie GUILLET","commerce":"pret à porter","problematique":"Marketing","pb_secondaires":"Gestion/ rentabilité","resultats":"","date_debut":"2025-07-10","temporalite":"","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsne1ca4301444a645efb7920a738ca3ad38","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk1cdb88eff3494a9a961737fd4b966fbe","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sébastien CHAUCHOT","commerce":"Photographe","problematique":"Gestion du temps","pb_secondaires":"","resultats":"","date_debut":"2025-07-11","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sabine HIRTZ","commerce":"Club de plongée","problematique":"Marketing","pb_secondaires":"Gestion","resultats":"Travail de sa gestion mais aussi de sa manière de communiquer depuis l'outre mer pour toucher la metropole meme hors saison et se renouveler. Mise en avant de l'importance de se démarquer avecdes mes formules all inclusives","date_debut":"2025-07-14","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Jérome et Rachel BABE","commerce":"Boucherie","problematique":"Gestion","pb_secondaires":"","resultats":"","date_debut":"2025-07-15","temporalite":"","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsne390979161c9a4fbcba1c7c69b4cb9798","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Francine GOYET","commerce":"Epicerie Ambulante","problematique":"Totalité des poles","pb_secondaires":"","resultats":"Travail en profondeur de leur stratégie entre leur commerce physique et ambulant pour bien analyser lequel est rentable et lequel ne l'est pas. Analyse de methode de partenariat + marketing de terrain","date_debut":"2025-07-14","temporalite":"","trustpilot":"https://fr.trustpilot.com/reviews/68c81310f3595002071e89b1","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Bruno COULONGEAT","commerce":"Poissonnerie","problematique":"-","pb_secondaires":"","resultats":"","date_debut":"2025-07-14","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sylvain VANDENAMEELE","commerce":"Bar/ Hotel/ resto","problematique":"Marketing","pb_secondaires":"baisse clientele et CA","resultats":"Travaille sur la modernisation de tous ses réseaux et moyens de com.Modernisation de son branding et recherche de nouveaux canaux d'acquisition clients.","date_debut":"2025-07-21","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Hadrien ANGOT","commerce":"Opticien lunetier","problematique":"Manque de clientèle","pb_secondaires":"Gestion et marketing +++","resultats":"","date_debut":"2025-07-22","temporalite":"","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/c01dm1fa1bb2fd1a74998955f40f4d0d21339","temoignage_supp1":"https://workdrive.zoho.eu/file/nnsne69516ac4d9da47058ebf9fa5d0af9c39","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Emmanuel MARTY","commerce":"Centre équestre","problematique":"Tres gros problème de recrutement et manegement+ gros problème de gestion","pb_secondaires":"Marketing et renouvellement de clientele","resultats":"Solutions claires de management de son équipe et plus spécifiquement sa stagiaire.Travail en profondeur de son marketing en lui donnant d'autres canaux d'acquisition client mais aussi de manière de travailler.","date_debut":"2025-07-28","temporalite":"2 call 1:1","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Magali BRETON","commerce":"Coiffeuse","problematique":"-","pb_secondaires":"","resultats":"","date_debut":"2025-07-31","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Judith Thomas","commerce":"Institut beaute","problematique":"Marketing","pb_secondaires":"Renouvellement de clients","resultats":"Depoussiérer son institut au niveau de sa communication. Mise en place d'une ligne de travail pour la rendre plus confortable et efficace sur ses réseaux.","date_debut":"2025-08-06","temporalite":"","trustpilot":"https://fr.trustpilot.com/users/68c12aef412e4cebe53e0b63","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/lw69mfd229f2f9caa41119e2b6037f24390b7","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqkb4885de110694cd7b2774e2cf178536a","temoignage_supp2":"https://workdrive.zoho.eu/file/gqzqkbd5d560ce8c44fe89cb5a184c426042f","temoignage_supp3":"https://workdrive.zoho.eu/file/gqzqk139d8cc2fc4d426ea578d229ae9051cb","temoignage_supp4":"https://workdrive.zoho.eu/file/gqzqka68f8554006e4251badacc5684a22d6e"},{"client":"Jimmy LE CLAINCHE","commerce":"Magasin de Vélo","problematique":"Acquisition client et gestion","pb_secondaires":"Merketing","resultats":"Travail pour faire venir de la clientèle dans son atelier qui est vide. La mise en avant de son travail n'etait pas assez mise en avant","date_debut":"2025-08-06","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Anthony MAIRESSE","commerce":"Coiffeur","problematique":"Management/ recrutement","pb_secondaires":"Gestion et gestion du temps","resultats":"Travaille sur la sortie d'un salarié qui pose problème puis travail sur sa stratégie de management sur un stagiaire qui pose problème et enfin travail intensif sur le recrutement pour avoir des joueurs de league A Résultat en moins d'un mois","date_debut":"2025-08-11","temporalite":"En 2 call le salarié est sortis de la boite","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Carole BRUNET","commerce":"Magasin de Chaussures","problematique":"Gros problème acquisition client et marketing a totalement mettre en place","pb_secondaires":"Gestion","resultats":"Travail de base sur ses informations à mettre a jour puis début de travail sur ses réseaux qui ne sont pas du tout gérer .Changement de plusieurs points marketing qui généraient des frictions commerciales ( mauvais site internet etc)","date_debut":"2025-08-14","temporalite":"","trustpilot":"","video":"","autre_temoignage":"https://workdrive.zoho.eu/file/nnsnea119d46c5887421cad66288f8f88be68","temoignage_supp1":"https://workdrive.zoho.eu/file/gqzqk90e8b2e2308a4f20863688c61acaef6e","temoignage_supp2":"https://workdrive.zoho.eu/file/gqzqk72f37e80606b4e01a29c34a726d7ebc2","temoignage_supp3":"","temoignage_supp4":""},{"client":"Hubert LOECHNER","commerce":"Peintre en batiment","problematique":"gestion ++","pb_secondaires":"Gestion du temps","resultats":"","date_debut":"2025-08-26","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Natacha ROUSSEAU","commerce":"Boulangerie","problematique":"Gestion","pb_secondaires":"Marketing","resultats":"","date_debut":"2025-08-26","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Jeremy CARETTE","commerce":"Destockage en ligne","problematique":"Problème marketing, communication globale","pb_secondaires":"gestion","resultats":"travail pour relancer toute leur base de donnée clients, changement de strategie de com et optimisation des réseaux existants.","date_debut":"2025-08-26","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Kevin FRETAY","commerce":"Boucher","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2025-08-26","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sylvain MANEIRO","commerce":"patissier","problematique":"","pb_secondaires":"","resultats":"","date_debut":"","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Anis KHEMIR","commerce":"vente en ligne","problematique":"Travail marketing++++","pb_secondaires":"","resultats":"Refonte de son site internet pour creer un branding autour de l'ambiance orientale. Travaille de sa com sur les réseaux","date_debut":"2025-08-28","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Julie SUBLARD","commerce":"patisserie chocolaterie","problematique":"Marketing","pb_secondaires":"","resultats":"travail sur sa communication réseau, web etc . Changement de ses horaires d'ouverture pour coller à la réalité du terrain.","date_debut":"2025-09-15","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Anne NAFFRICHOUX","commerce":"biocoop","problematique":"attraction client + hausse CA","pb_secondaires":"Marketing et partenariat","resultats":"travail sur l'attraction client pour compenser des travaux departementaux devant sont magasin. travail de solution de partenariat et d'event pour redynamiser son attractivité. Proposition de nouveauté à instaurer pour sa clientèle ( click and collect etc)","date_debut":"2025-09-25","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Anne MARCEAUX","commerce":"2 salons de coiffures","problematique":"gestion du temps","pb_secondaires":"Marketing","resultats":"refonte de sz communication sur les réseaux et travail de son mindset pour qu'elle accepte de se montrer en pleine confiance .","date_debut":"2025-09-20","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Mickael CELIME","commerce":"coach sportif","problematique":"com, gestion de ses offres","pb_secondaires":"rentabilité","resultats":"","date_debut":"2025-10-22","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Cecile Gyongyosi","commerce":"Friterie","problematique":"Mindset et rentabilité++++","pb_secondaires":"","resultats":"","date_debut":"2025-01-07","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Celine Louvel","commerce":"Vente de vetement","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2025-01-06","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Sandrine Ntaye","commerce":"Lingerie","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2025-12-11","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Soumia Aouidat","commerce":"","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-12","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Veronique Berger","commerce":"","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-19","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Isabelle Mittard","commerce":"Jardinerie","problematique":"Rentabilite","pb_secondaires":"Communicaton/ marketing","resultats":"","date_debut":"2026-01-21","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Laurence Lannoy","commerce":"Lingerie","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-23","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Julie Berchoux","commerce":"","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-24","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""},{"client":"Corinne Alaga","commerce":"","problematique":"","pb_secondaires":"","resultats":"","date_debut":"2026-01-27","temporalite":"","trustpilot":"","video":"","autre_temoignage":"","temoignage_supp1":"","temoignage_supp2":"","temoignage_supp3":"","temoignage_supp4":""}]
+;
+
+var db = firebase.firestore();
+var allLeads = [];
+var matchResults = []; // {base, matchedLead, matchType}
+
+function normalize(s) {
+  return (s || '').toLowerCase().replace(/[^a-zàâäéèêëïîôùûüÿçœæ\s]/gi, '').replace(/\s+/g, ' ').trim();
+}
+
+function log(msg) {
+  var el = document.getElementById('log');
+  el.style.display = 'block';
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(msg, cls) {
+  var el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + cls;
+}
+
+firebase.auth().onAuthStateChanged(function(user) {
+  if (!user) { setStatus('❌ Non connecté — ouvrez login.html d\'abord', 'err'); return; }
+  setStatus('⏳ Chargement des leads…', 'info');
+  db.collection('leads').get().then(function(snap) {
+    allLeads = [];
+    snap.forEach(function(doc) { var d = doc.data(); d.id = doc.id; allLeads.push(d); });
+    setStatus('✅ ' + allLeads.length + ' leads chargés. Prêt pour la prévisualisation.', 'ok');
+    document.getElementById('btnPreview').disabled = false;
+  }).catch(function(err) {
+    setStatus('❌ Erreur : ' + err.message, 'err');
+  });
+});
+
+function findMatch(clientName) {
+  var norm = normalize(clientName);
+  var parts = norm.split(' ').filter(function(p) { return p.length > 2; });
+  var bestMatch = null;
+  var bestScore = 0;
+
+  allLeads.forEach(function(lead) {
+    var leadNorm = normalize(lead.nom || '');
+    // Exact match
+    if (leadNorm === norm) { bestMatch = lead; bestScore = 100; return; }
+    // All parts match
+    var score = 0;
+    parts.forEach(function(p) { if (leadNorm.indexOf(p) >= 0) score++; });
+    var pct = parts.length > 0 ? (score / parts.length) * 100 : 0;
+    if (pct > bestScore && pct >= 60) { bestScore = pct; bestMatch = lead; }
+  });
+  return { lead: bestMatch, score: bestScore };
+}
+
+function countTemos(base) {
+  var count = 0;
+  ['trustpilot','video','autre_temoignage','temoignage_supp1','temoignage_supp2','temoignage_supp3','temoignage_supp4'].forEach(function(k) {
+    if (base[k] && base[k].trim()) count++;
+  });
+  return count;
+}
+
+function runPreview() {
+  matchResults = [];
+  BASE_CLIENTS.forEach(function(base) {
+    var result = findMatch(base.client);
+    matchResults.push({
+      base: base,
+      matchedLead: result.lead,
+      matchScore: result.score,
+      matchType: result.lead ? (result.score === 100 ? 'exact' : 'partial') : 'none'
+    });
+  });
+
+  var matched = matchResults.filter(function(r) { return r.matchType !== 'none'; }).length;
+  var unmatched = matchResults.length - matched;
+
+  var h = '<table><thead><tr><th>#</th><th>Client (ancien)</th><th>Match</th><th>Lead Firestore</th><th>Score</th><th>Commerce</th><th>Début</th><th>Tém.</th></tr></thead><tbody>';
+  matchResults.forEach(function(r, i) {
+    var cls = r.matchType === 'exact' ? 'match' : r.matchType === 'partial' ? 'nomatch' : 'new';
+    var label = r.matchType === 'exact' ? '✅ Exact' : r.matchType === 'partial' ? '🟡 Partiel' : '🆕 Nouveau';
+    h += '<tr>';
+    h += '<td>' + (i + 1) + '</td>';
+    h += '<td><strong>' + (r.base.client || '—') + '</strong></td>';
+    h += '<td class="' + cls + '">' + label + '</td>';
+    h += '<td>' + (r.matchedLead ? r.matchedLead.nom + ' <span style="color:rgba(255,255,255,0.3);font-size:10px">(' + r.matchedLead.id.slice(0, 8) + '…)</span>' : '—') + '</td>';
+    h += '<td>' + (r.matchScore > 0 ? r.matchScore + '%' : '—') + '</td>';
+    h += '<td style="color:rgba(255,255,255,0.5)">' + (r.base.commerce || '—') + '</td>';
+    h += '<td style="color:rgba(255,255,255,0.5)">' + (r.base.date_debut || '—') + '</td>';
+    h += '<td><span class="temo-count">' + countTemos(r.base) + '</span></td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  h += '<div style="color:rgba(255,255,255,0.5);font-size:12px;margin-top:8px">✅ ' + matched + ' matchés · 🆕 ' + unmatched + ' nouveaux leads à créer</div>';
+  document.getElementById('tableWrap').innerHTML = h;
+  document.getElementById('btnMigrate').disabled = false;
+  setStatus('👁 Prévisualisation prête — ' + matched + ' matchés, ' + unmatched + ' à créer', 'ok');
+}
+
+async function runMigrate() {
+  if (!confirm('Lancer la migration de ' + matchResults.length + ' clients ? Cette action enrichira les leads existants et créera les nouveaux.')) return;
+  document.getElementById('btnMigrate').disabled = true;
+  setStatus('⏳ Migration en cours…', 'info');
+  log('=== MIGRATION START ===');
+
+  var success = 0, errors = 0;
+
+  for (var i = 0; i < matchResults.length; i++) {
+    var r = matchResults[i];
+    var base = r.base;
+    try {
+      var clientFields = {
+        isClient: true,
+        clientSince: firebase.firestore.FieldValue.serverTimestamp(),
+        commerce: base.commerce || '',
+        problematique: base.problematique || '',
+        pbSecondaires: base.pb_secondaires || '',
+        resultats: base.resultats || '',
+        accompagnementDebut: base.date_debut || '',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      // Calculate accompagnementFin from temporalite
+      if (base.date_debut && base.temporalite && !isNaN(parseInt(base.temporalite))) {
+        var weeks = parseInt(base.temporalite);
+        var d = new Date(base.date_debut);
+        if (!isNaN(d.getTime())) {
+          d.setDate(d.getDate() + weeks * 7);
+          clientFields.accompagnementFin = d.toISOString().split('T')[0];
+        }
+      }
+
+      var leadId;
+      if (r.matchedLead) {
+        // Update existing lead
+        leadId = r.matchedLead.id;
+        await db.collection('leads').doc(leadId).update(clientFields);
+        log('✅ [' + (i+1) + '] ENRICHI: ' + base.client + ' → ' + leadId);
+      } else {
+        // Create new lead
+        clientFields.nom = base.client || '';
+        clientFields.stage = 'closed_won_setting';
+        clientFields.status = 'rdv_pose';
+        clientFields.source = 'migration_suivi_client';
+        clientFields.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        var docRef = await db.collection('leads').add(clientFields);
+        leadId = docRef.id;
+        log('🆕 [' + (i+1) + '] CRÉÉ: ' + base.client + ' → ' + leadId);
+      }
+
+      // Create témoignage sub-docs
+      var temoFields = [
+        {key: 'trustpilot', type: 'trustpilot'},
+        {key: 'video', type: 'video'},
+        {key: 'autre_temoignage', type: 'autre'},
+        {key: 'temoignage_supp1', type: 'autre'},
+        {key: 'temoignage_supp2', type: 'autre'},
+        {key: 'temoignage_supp3', type: 'autre'},
+        {key: 'temoignage_supp4', type: 'autre'}
+      ];
+      var temoCount = 0;
+      for (var t = 0; t < temoFields.length; t++) {
+        var url = (base[temoFields[t].key] || '').trim();
+        if (url) {
+          await db.collection('leads').doc(leadId).collection('client_temoignages').add({
+            type: temoFields[t].type,
+            url: url,
+            label: '',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          temoCount++;
+        }
+      }
+      if (temoCount > 0) log('   ⭐ ' + temoCount + ' témoignage(s) migrés');
+      success++;
+    } catch (err) {
+      log('❌ [' + (i+1) + '] ERREUR ' + base.client + ': ' + err.message);
+      errors++;
+    }
+  }
+
+  log('=== MIGRATION TERMINÉE: ' + success + ' OK, ' + errors + ' erreurs ===');
+  setStatus('✅ Migration terminée — ' + success + ' clients migrés' + (errors > 0 ? ', ' + errors + ' erreurs' : ''), errors > 0 ? 'err' : 'ok');
+}
+</script>
+</body>
+</html>

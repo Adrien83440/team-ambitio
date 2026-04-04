@@ -42,7 +42,7 @@
       { id: 'sales-leads_live',  icon: '🔔', label: 'Leads Live',    href: 'sales-leads.html' },
       { id: 'sales-pipeline',    icon: '▥',  label: 'Pipeline',      href: 'sales-crm.html' },
       { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting',   href: 'sales-retargeting.html' },
-      { id: 'sales-suivi',       icon: '📋', label: 'Suivi Clients', href: 'sales-suivi-client.html' },
+      { id: 'sales-suivi',       icon: '📋', label: 'Clients', href: 'sales-clients.html' },
     ]},
     { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html',   section: 'Sales', perm: 'sales_dashboard' },
     { id: 'sales-saisie',      icon: '✏️', label: 'Setting / Closing', href: '#',                      section: 'Sales', perm: 'sales_saisie', children: [

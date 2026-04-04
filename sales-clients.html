@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gestion Clients — Ambitio Corp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+  <link rel="stylesheet" href="sales-clients.css"/>
+</head>
+<body>
+<div class="cl-app" id="app">
+  <!-- Header -->
+  <div class="cl-header">
+    <div class="cl-logo">👥</div>
+    <div class="cl-title">Gestion Clients</div>
+    <div class="cl-stats" id="statsBar">
+      <div class="cl-stat"><div class="cl-stat-val" id="statTotal">—</div><div class="cl-stat-label">Total</div></div>
+      <div class="cl-stat"><div class="cl-stat-val" id="statEnCours">—</div><div class="cl-stat-label">En cours</div></div>
+      <div class="cl-stat"><div class="cl-stat-val" id="statTermines">—</div><div class="cl-stat-label">Terminés</div></div>
+      <div class="cl-stat"><div class="cl-stat-val" id="statAlertes">—</div><div class="cl-stat-label">Alertes</div></div>
+      <div class="cl-stat"><div class="cl-stat-val" id="statTemo">—</div><div class="cl-stat-label">Témoignages</div></div>
+    </div>
+  </div>
+  <!-- Toolbar -->
+  <div class="cl-toolbar">
+    <input class="cl-search" id="searchInput" type="text" placeholder="🔍 Rechercher un client…"/>
+    <button class="cl-filter-pill active" data-filter="statut" data-val="all">Tous</button>
+    <button class="cl-filter-pill" data-filter="statut" data-val="en_cours">En cours</button>
+    <button class="cl-filter-pill" data-filter="statut" data-val="termine">Terminés</button>
+    <button class="cl-filter-pill" data-filter="statut" data-val="alerte">⚠ Alertes</button>
+    <span style="width:1px;height:20px;background:var(--border);margin:0 4px"></span>
+    <select class="cl-search" id="filterCoach" style="min-width:140px;cursor:pointer;padding:6px 10px;appearance:auto;-webkit-appearance:auto">
+      <option value="all">Tous les coachs</option>
+      <option value="mickael">Mickael</option>
+      <option value="edouard">Edouard</option>
+      <option value="emily">Emily</option>
+      <option value="adrien">Adrien</option>
+      <option value="">Non assigné</option>
+    </select>
+    <div class="cl-toolbar-spacer"></div>
+    <button class="cl-btn" id="btnExport">📥 Export CSV</button>
+  </div>
+  <!-- Body -->
+  <div class="cl-body" id="tableBody">
+    <div class="cl-loading" id="loadingState"><div class="cl-spinner"></div>Chargement des clients…</div>
+  </div>
+</div>
+
+<!-- Detail Panel -->
+<div class="cl-panel-backdrop" id="panelBg">
+  <div class="cl-panel" id="panelContent"></div>
+</div>
+
+<!-- Toast -->
+<div class="cl-toast" id="toast"></div>
+
+<script src="sales-clients-app.js"></script>
+<script src="nav.js"></script>
+</body>
+</html>
