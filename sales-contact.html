@@ -110,6 +110,16 @@ body{overflow:hidden;display:flex;flex-direction:column}
 .file-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px}
 .file-upload{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:1.5px dashed var(--border2);border-radius:12px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:600;transition:all .15s;margin-top:8px}
 .file-upload:hover{border-color:var(--red2);color:var(--text)}
+.sms-thread{display:flex;flex-direction:column;gap:6px;padding-bottom:12px}
+.sms-date-sep{text-align:center;font-size:10px;font-weight:700;color:var(--muted);padding:12px 0 4px;letter-spacing:0.3px}
+.sms-bubble{max-width:80%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.5;word-wrap:break-word;position:relative}
+.sms-bubble.inbound{align-self:flex-start;background:var(--bg3);border:1px solid var(--border);border-bottom-left-radius:4px;color:rgba(255,255,255,0.88)}
+.sms-bubble.outbound{align-self:flex-end;background:linear-gradient(135deg,rgba(96,165,250,0.18),rgba(96,165,250,0.08));border:1px solid rgba(96,165,250,0.2);border-bottom-right-radius:4px;color:rgba(255,255,255,0.92)}
+.sms-meta{font-size:10px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:6px}
+.sms-dir-icon{font-size:11px}
+.sms-empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px}
+.sms-empty-icon{font-size:32px;margin-bottom:12px;opacity:0.4}
+.sms-count-pill{font-family:var(--fm);font-size:10px;background:rgba(96,165,250,0.15);color:var(--blue);padding:1px 5px;border-radius:4px;margin-left:4px}
 .ct-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}
 .ct-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .ct-loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--muted);font-size:13px}
@@ -178,11 +188,12 @@ if(l.updatedAt){var ud=l.updatedAt.toDate?l.updatedAt.toDate():new Date(l.update
 h+='</div>';
 // RIGHT
 h+='<div class="fiche-right"><div class="fr-tabs">';
-var nc=l.notesHistory?l.notesHistory.length:0,fc=l.files?l.files.length:0,ac=l.activities?l.activities.length:0,tc=l.timeline_history?l.timeline_history.length:0;
+var nc=l.notesHistory?l.notesHistory.length:0,fc=l.files?l.files.length:0,ac=l.activities?l.activities.length:0,tc=l.timeline_history?l.timeline_history.length:0,sc=(l.communications||[]).filter(function(c){return c.type==='sms';}).length;
 h+='<button class="fr-tab active" data-tab="chrono">Chronologie'+(tc?'<span class="tc">'+tc+'</span>':'')+'</button>';
 h+='<button class="fr-tab" data-tab="notes">Remarques'+(nc?'<span class="tc">'+nc+'</span>':'')+'</button>';
 h+='<button class="fr-tab" data-tab="act">Activit\u00e9s'+(ac?'<span class="tc">'+ac+'</span>':'')+'</button>';
 h+='<button class="fr-tab" data-tab="files">Fichiers'+(fc?'<span class="tc">'+fc+'</span>':'')+'</button>';
+h+='<button class="fr-tab" data-tab="sms">\ud83d\udcac SMS'+(sc?'<span class="sms-count-pill">'+sc+'</span>':'')+'</button>';
 h+='</div>';
 // Chrono
 h+='<div class="fr-panel active" id="pChrono">';
@@ -205,6 +216,28 @@ h+='<div class="fr-panel" id="pFiles">';
 var fs=l.files||[];
 for(var fi=0;fi<fs.length;fi++){var f=fs[fi];h+='<div class="file-item"><span class="file-icon">'+(f.name&&/\.pdf$/i.test(f.name)?'\ud83d\udcd5':'\ud83d\udcc4')+'</span><span class="file-name">'+esc(f.name)+'</span><span class="file-meta">'+esc(f.size||'')+' \u00b7 '+esc(f.uploadedAt||'')+'</span><button class="file-del" data-action="delFile" data-idx="'+fi+'">\u2715</button></div>';}
 h+='<label class="file-upload">\ud83d\udcc1 Ajouter un fichier (max 750KB)<input type="file" id="fileIn" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx"/></label></div>';
+// SMS
+h+='<div class="fr-panel" id="pSms">';
+var smsAll=(l.communications||[]).filter(function(c){return c.type==='sms';});
+if(!smsAll.length){h+='<div class="sms-empty"><div class="sms-empty-icon">\ud83d\udcac</div>Aucun SMS synchronis\u00e9<br/><span style="font-size:11px;color:var(--muted2)">Les SMS appara\u00eetront ici automatiquement via Ringover</span></div>';}
+else{
+h+='<div class="sms-thread">';
+var lastDay='';
+for(var si=0;si<smsAll.length;si++){
+var sm=smsAll[si];
+var smDate=sm.date?new Date(sm.date):null;
+var dayKey=smDate?smDate.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
+if(dayKey&&dayKey!==lastDay){h+='<div class="sms-date-sep">'+esc(dayKey)+'</div>';lastDay=dayKey;}
+var dir=sm.direction||'inbound';
+var timeStr=smDate?smDate.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+h+='<div class="sms-bubble '+dir+'">';
+if(sm.content)h+=esc(sm.content);else h+='<span style="color:var(--muted);font-style:italic">Contenu non disponible</span>';
+h+='<div class="sms-meta"><span class="sms-dir-icon">'+(dir==='outbound'?'\u2197\ufe0f':'\u2199\ufe0f')+'</span><span>'+esc(timeStr)+'</span>'+(sm.source?'<span>\u00b7 '+esc(sm.source)+'</span>':'')+'</div>';
+h+='</div>';
+}
+h+='</div>';
+}
+h+='</div>';
 h+='</div></div>';
 document.getElementById('ctApp').innerHTML=h;
 initEv();
@@ -212,7 +245,7 @@ initEv();
 function flR(ic,label,k,v){return '<div class="fl-row"><span class="fl-icon">'+ic+'</span><span style="min-width:120px;font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0">'+esc(label)+'</span><input class="fl-editable" data-f="'+k+'" value="'+escA(v||'')+'" placeholder="\u2014"/></div>';}
 
 function initEv(){
-document.querySelectorAll('.fr-tab').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.fr-tab').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.fr-panel').forEach(function(x){x.classList.remove('active');});b.classList.add('active');var m={chrono:'pChrono',notes:'pNotes',act:'pAct',files:'pFiles'};document.getElementById(m[b.dataset.tab]).classList.add('active');});});
+document.querySelectorAll('.fr-tab').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.fr-tab').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.fr-panel').forEach(function(x){x.classList.remove('active');});b.classList.add('active');var m={chrono:'pChrono',notes:'pNotes',act:'pAct',files:'pFiles',sms:'pSms'};document.getElementById(m[b.dataset.tab]).classList.add('active');});});
 document.getElementById('ctApp').addEventListener('input',function(e){if(e.target.closest('[data-f]')){if(autoTimer)clearTimeout(autoTimer);autoTimer=setTimeout(saveF,3000);}});
 document.getElementById('ctApp').addEventListener('change',function(e){if(e.target.closest('[data-f]'))saveF();});
 document.getElementById('ctApp').addEventListener('click',function(e){
