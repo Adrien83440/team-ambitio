@@ -65,6 +65,111 @@ async function fetchAndStoreBusy(personId) {
 
 
 /* ═══════════════════════════════════════════════════
+   WEBHOOK HELPERS
+   ═══════════════════════════════════════════════════ */
+
+/**
+ * Validate API key from Authorization header.
+ * Key is stored in Firestore: _config/webhook_keys { keys: ["key1", "key2"] }
+ */
+async function validateApiKey(req) {
+  const auth = req.headers.authorization || "";
+  if (!auth.startsWith("Bearer ")) return false;
+  const key = auth.slice(7).trim();
+  if (!key) return false;
+  try {
+    const doc = await db.collection("_config").doc("webhook_keys").get();
+    if (!doc.exists) return false;
+    const keys = doc.data().keys || [];
+    return keys.includes(key);
+  } catch (e) {
+    console.error("validateApiKey error:", e.message);
+    return false;
+  }
+}
+
+/**
+ * CORS headers for Make.com HTTP module
+ */
+function setCors(res) {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
+
+/**
+ * Find a lead by email or phone.
+ * Returns { id, data } or null.
+ */
+async function findLead(email, phone) {
+  // Try email first (more reliable identifier)
+  if (email) {
+    const emailNorm = email.trim().toLowerCase();
+    const snap = await db.collection("leads")
+      .where("email", "==", emailNorm)
+      .limit(1).get();
+    if (!snap.empty) {
+      const doc = snap.docs[0];
+      return { id: doc.id, data: doc.data() };
+    }
+    // Try case-sensitive (some leads may have mixed case)
+    const snap2 = await db.collection("leads")
+      .where("email", "==", email.trim())
+      .limit(1).get();
+    if (!snap2.empty) {
+      const doc = snap2.docs[0];
+      return { id: doc.id, data: doc.data() };
+    }
+  }
+  // Fallback: phone
+  if (phone) {
+    const phoneClean = phone.replace(/\s+/g, "").replace(/^(\+33)/, "0");
+    const snap = await db.collection("leads")
+      .where("telephone", "==", phoneClean)
+      .limit(1).get();
+    if (!snap.empty) {
+      const doc = snap.docs[0];
+      return { id: doc.id, data: doc.data() };
+    }
+    // Also try with +33 format
+    const snap2 = await db.collection("leads")
+      .where("telephone", "==", phone.replace(/\s+/g, ""))
+      .limit(1).get();
+    if (!snap2.empty) {
+      const doc = snap2.docs[0];
+      return { id: doc.id, data: doc.data() };
+    }
+  }
+  return null;
+}
+
+/**
+ * Format date for timeline_history entries.
+ */
+function fmtNow() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + "/" + d.getFullYear()
+    + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+
+/**
+ * Stage-to-status mapping (mirrors S2S in sales-crm-app.js)
+ */
+const S2S = {
+  lead: "nouveau", nrp1: "nrp1", nrp2: "nrp2", nrp3: "nrp3",
+  all_nrp: "nrp3", poubelle: "disqualifie", disqualification: "disqualifie",
+  follow_up_pm: "appele", set: "rdv_pose", rdv_self_booking: "rdv_pose",
+  rdv_confirmes: "rdv_pose", rdv_annules_prospect: "pas_interesse",
+  rdv_annules_equipe: "pas_interesse", no_show_self: "pas_interesse",
+  no_show_setting: "pas_interesse", partenariats: "rdv_pose",
+  closed_won_setting: "rdv_pose", closed_won_self: "rdv_pose",
+  closed_lost: "pas_interesse", follow_up_closing: "appele",
+  disqualifie_closing: "disqualifie"
+};
+
+
+/* ═══════════════════════════════════════════════════
    1. PUSH NOTIFICATIONS ON NEW LEAD
    ═══════════════════════════════════════════════════ */
 
@@ -252,3 +357,346 @@ exports.scheduledCalendarSync = functions.pubsub
     console.log("Scheduled sync: " + promises.length + " expert(s)");
     return null;
   });
+
+
+/* ═══════════════════════════════════════════════════
+   6. WEBHOOK — LEAD UPDATE
+   Called by Make.com to update a lead (stage, tags,
+   contract info, subscription, etc.)
+   ═══════════════════════════════════════════════════
+
+   POST /webhookLeadUpdate
+   Headers: Authorization: Bearer <API_KEY>
+   Body JSON:
+   {
+     "email": "client@example.com",       // required (or phone)
+     "phone": "+33612345678",             // fallback lookup
+     "stage": "closed_won_setting",       // optional — pipeline stage
+     "addTags": ["client", "elite"],      // optional — tags to add
+     "removeTags": ["prospect"],          // optional — tags to remove
+     "contractUrl": "https://...",        // optional — signed doc link
+     "contractSignedAt": "2026-04-04",    // optional — ISO date
+     "subscriptionType": "Elite 6 mois", // optional
+     "accompagnementStart": "2026-04-07", // optional — ISO date
+     "accompagnementEnd": "2026-10-07",   // optional — ISO date
+     "fields": { "closeur": "adrien" }    // optional — any extra fields
+   }
+   ═══════════════════════════════════════════════════ */
+
+exports.webhookLeadUpdate = functions.https.onRequest(async (req, res) => {
+  setCors(res);
+  if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+  if (req.method !== "POST") { res.status(405).json({ error: "POST only" }); return; }
+
+  // Auth
+  const valid = await validateApiKey(req);
+  if (!valid) { res.status(401).json({ error: "Invalid API key" }); return; }
+
+  const body = req.body || {};
+  const { email, phone } = body;
+  if (!email && !phone) {
+    res.status(400).json({ error: "email or phone required to identify the lead" });
+    return;
+  }
+
+  try {
+    // Find the lead
+    const found = await findLead(email, phone);
+    if (!found) {
+      res.status(404).json({ error: "Lead not found", email, phone });
+      return;
+    }
+
+    const leadId = found.id;
+    const existing = found.data;
+    const update = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    const timelineEntries = [];
+
+    // Stage change
+    if (body.stage && body.stage !== existing.stage) {
+      update.stage = body.stage;
+      if (S2S[body.stage]) update.status = S2S[body.stage];
+      timelineEntries.push({
+        text: "⚡ " + (existing.stage || "lead") + " → " + body.stage + " (via webhook)",
+        date: fmtNow(),
+        color: "#a78bfa"
+      });
+      // If closing as won, add isClient flag
+      if (body.stage === "closed_won_setting" || body.stage === "closed_won_self") {
+        update.isClient = true;
+        timelineEntries.push({
+          text: "🎉 Converti en client ! (automatique)",
+          date: fmtNow(),
+          color: "#10b981"
+        });
+      }
+    }
+
+    // Tags
+    let currentTags = existing.tags || [];
+    if (body.addTags && Array.isArray(body.addTags)) {
+      body.addTags.forEach((t) => {
+        if (t && currentTags.indexOf(t) < 0) currentTags.push(t);
+      });
+      update.tags = currentTags;
+    }
+    if (body.removeTags && Array.isArray(body.removeTags)) {
+      currentTags = currentTags.filter((t) => !(body.removeTags || []).includes(t));
+      update.tags = currentTags;
+    }
+
+    // Contract info
+    if (body.contractUrl) {
+      update.contractUrl = body.contractUrl;
+      timelineEntries.push({
+        text: "📝 Contrat signé reçu",
+        date: fmtNow(),
+        color: "#34d399"
+      });
+    }
+    if (body.contractSignedAt) update.contractSignedAt = body.contractSignedAt;
+    if (body.subscriptionType) {
+      update.subscriptionType = body.subscriptionType;
+      timelineEntries.push({
+        text: "📦 Abonnement : " + body.subscriptionType,
+        date: fmtNow(),
+        color: "#60a5fa"
+      });
+    }
+    if (body.accompagnementStart) update.accompagnementStart = body.accompagnementStart;
+    if (body.accompagnementEnd) {
+      update.accompagnementEnd = body.accompagnementEnd;
+      timelineEntries.push({
+        text: "📅 Accompagnement : " + (body.accompagnementStart || "?") + " → " + body.accompagnementEnd,
+        date: fmtNow(),
+        color: "#f59e0b"
+      });
+    }
+
+    // Extra fields
+    if (body.fields && typeof body.fields === "object") {
+      Object.keys(body.fields).forEach((k) => {
+        // Safety: don't allow overwriting system fields
+        if (!["id", "createdAt", "timeline_history", "notesHistory"].includes(k)) {
+          update[k] = body.fields[k];
+        }
+      });
+    }
+
+    // Append timeline entries
+    if (timelineEntries.length > 0) {
+      const currentTimeline = existing.timeline_history || [];
+      update.timeline_history = currentTimeline.concat(timelineEntries);
+    }
+
+    await db.collection("leads").doc(leadId).update(update);
+
+    console.log("webhookLeadUpdate: updated lead " + leadId + " (" + (email || phone) + ")");
+    res.status(200).json({
+      success: true,
+      leadId: leadId,
+      updated: Object.keys(update).filter((k) => k !== "updatedAt")
+    });
+
+  } catch (e) {
+    console.error("webhookLeadUpdate error:", e.message);
+    res.status(500).json({ error: "Internal error", message: e.message });
+  }
+});
+
+
+/* ═══════════════════════════════════════════════════
+   7. WEBHOOK — LEAD ACTIVITY
+   Called by Make.com to log an activity on a lead
+   (Ringover call/SMS, email events, etc.)
+   ═══════════════════════════════════════════════════
+
+   POST /webhookLeadActivity
+   Headers: Authorization: Bearer <API_KEY>
+   Body JSON:
+   {
+     "email": "client@example.com",     // required (or phone)
+     "phone": "+33612345678",           // fallback lookup
+     "type": "call",                    // required: call | sms | email | note | other
+     "direction": "inbound",            // optional: inbound | outbound
+     "content": "Discussion abonnement...",  // optional — summary
+     "duration": 180,                   // optional — seconds (for calls)
+     "source": "ringover",              // optional — origin system
+     "date": "2026-04-04T14:30:00"      // optional — ISO, defaults to now
+   }
+   ═══════════════════════════════════════════════════ */
+
+exports.webhookLeadActivity = functions.https.onRequest(async (req, res) => {
+  setCors(res);
+  if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+  if (req.method !== "POST") { res.status(405).json({ error: "POST only" }); return; }
+
+  // Auth
+  const valid = await validateApiKey(req);
+  if (!valid) { res.status(401).json({ error: "Invalid API key" }); return; }
+
+  const body = req.body || {};
+  const { email, phone, type } = body;
+  if (!email && !phone) {
+    res.status(400).json({ error: "email or phone required" });
+    return;
+  }
+  if (!type) {
+    res.status(400).json({ error: "type required (call, sms, email, note, other)" });
+    return;
+  }
+
+  try {
+    const found = await findLead(email, phone);
+    if (!found) {
+      res.status(404).json({ error: "Lead not found", email, phone });
+      return;
+    }
+
+    const leadId = found.id;
+    const existing = found.data;
+    const now = fmtNow();
+
+    // Build timeline entry
+    const icons = { call: "📞", sms: "💬", email: "✉️", note: "📝", other: "📌" };
+    const labels = { call: "Appel", sms: "SMS", email: "Email", note: "Note", other: "Activité" };
+    const icon = icons[type] || "📌";
+    const label = labels[type] || type;
+    const dir = body.direction === "outbound" ? " sortant" : body.direction === "inbound" ? " entrant" : "";
+    const src = body.source ? " (" + body.source + ")" : "";
+    let tlText = icon + " " + label + dir + src;
+    if (body.content) tlText += " — " + body.content.substring(0, 100);
+    if (type === "call" && body.duration) {
+      const mins = Math.floor(body.duration / 60);
+      const secs = body.duration % 60;
+      tlText += " [" + mins + "m" + (secs ? String(secs).padStart(2, "0") + "s" : "") + "]";
+    }
+
+    const timelineEntry = {
+      text: tlText,
+      date: body.date ? new Date(body.date).toLocaleString("fr-FR", { timeZone: "Europe/Paris" }) : now,
+      color: type === "call" ? "#34d399" : type === "sms" ? "#60a5fa" : type === "email" ? "#f59e0b" : "#a78bfa"
+    };
+
+    // Also store structured activity for potential detailed view
+    const activityEntry = {
+      type: type,
+      direction: body.direction || null,
+      content: body.content || null,
+      duration: body.duration || null,
+      source: body.source || null,
+      date: body.date || new Date().toISOString(),
+      createdAt: now
+    };
+
+    const currentTimeline = existing.timeline_history || [];
+    const currentCommunications = existing.communications || [];
+
+    await db.collection("leads").doc(leadId).update({
+      timeline_history: currentTimeline.concat([timelineEntry]),
+      communications: currentCommunications.concat([activityEntry]),
+      lastContactAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastContactType: type,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    console.log("webhookLeadActivity: logged " + type + " on lead " + leadId);
+    res.status(200).json({
+      success: true,
+      leadId: leadId,
+      activityType: type,
+      timelineEntriesCount: currentTimeline.length + 1
+    });
+
+  } catch (e) {
+    console.error("webhookLeadActivity error:", e.message);
+    res.status(500).json({ error: "Internal error", message: e.message });
+  }
+});
+
+
+/* ═══════════════════════════════════════════════════
+   8. WEBHOOK — LEAD CREATE (optional)
+   If the contact doesn't exist yet, create it.
+   ═══════════════════════════════════════════════════
+
+   POST /webhookLeadCreate
+   Headers: Authorization: Bearer <API_KEY>
+   Body JSON:
+   {
+     "nom": "Jean Dupont",               // required
+     "email": "jean@example.com",         // required
+     "telephone": "+33612345678",         // optional
+     "type": "vsl_elite",                // optional — default: vsl_elite
+     "stage": "lead",                    // optional — default: lead
+     "source": "zoho_sign",              // optional — tracked in utm
+     "fields": { "secteur": "coaching" } // optional — any extra fields
+   }
+   ═══════════════════════════════════════════════════ */
+
+exports.webhookLeadCreate = functions.https.onRequest(async (req, res) => {
+  setCors(res);
+  if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+  if (req.method !== "POST") { res.status(405).json({ error: "POST only" }); return; }
+
+  const valid = await validateApiKey(req);
+  if (!valid) { res.status(401).json({ error: "Invalid API key" }); return; }
+
+  const body = req.body || {};
+  if (!body.nom || !body.email) {
+    res.status(400).json({ error: "nom and email required" });
+    return;
+  }
+
+  try {
+    // Check if lead already exists
+    const existing = await findLead(body.email, body.telephone);
+    if (existing) {
+      res.status(409).json({
+        error: "Lead already exists",
+        leadId: existing.id,
+        hint: "Use /webhookLeadUpdate to update this lead"
+      });
+      return;
+    }
+
+    const stage = body.stage || "lead";
+    const newLead = {
+      nom: body.nom.trim(),
+      email: body.email.trim().toLowerCase(),
+      telephone: (body.telephone || "").replace(/\s+/g, ""),
+      type: body.type || "vsl_elite",
+      stage: stage,
+      status: S2S[stage] || "nouveau",
+      assignedTo: "",
+      tags: [],
+      notesHistory: [],
+      timeline_history: [{
+        text: "✨ Lead créé via webhook" + (body.source ? " (" + body.source + ")" : ""),
+        date: fmtNow(),
+        color: "#a78bfa"
+      }],
+      communications: [],
+      source: body.source || "webhook",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    // Extra fields
+    if (body.fields && typeof body.fields === "object") {
+      Object.keys(body.fields).forEach((k) => {
+        if (!["id", "createdAt", "timeline_history", "notesHistory"].includes(k)) {
+          newLead[k] = body.fields[k];
+        }
+      });
+    }
+
+    const ref = await db.collection("leads").add(newLead);
+    console.log("webhookLeadCreate: created lead " + ref.id + " (" + body.email + ")");
+    res.status(201).json({ success: true, leadId: ref.id });
+
+  } catch (e) {
+    console.error("webhookLeadCreate error:", e.message);
+    res.status(500).json({ error: "Internal error", message: e.message });
+  }
+});
