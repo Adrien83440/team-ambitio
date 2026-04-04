@@ -254,6 +254,20 @@ html, body {
 .ld-save-btn:hover { transform: translateY(-1px); }
 .ld-save-btn:active { transform: scale(0.98); }
 
+/* Delete lead */
+.ld-delete-btn {
+  width: 100%; padding: 9px; border: 1.5px solid rgba(239,68,68,0.25); border-radius: 10px;
+  background: transparent; color: rgba(239,68,68,0.7);
+  font-family: var(--fb); font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: all 0.2s; margin-top: 14px;
+}
+.ld-delete-btn:hover { background: rgba(239,68,68,0.08); color: #ef4444; border-color: rgba(239,68,68,0.4); }
+.ld-delete-btn.confirming {
+  background: rgba(239,68,68,0.15); color: #fca5a5; border-color: #ef4444;
+  animation: deletePulse 1s infinite;
+}
+@keyframes deletePulse { 0%,100% { border-color: #ef4444; } 50% { border-color: rgba(239,68,68,0.4); } }
+
 /* ── New Lead Popup ── */
 .ld-popup-overlay {
   display: none; position: fixed; inset: 0; z-index: 1000;
@@ -875,6 +889,9 @@ function renderCard(l) {
   h += '<button class="ld-notes-add-btn" data-action="addNote" data-id="' + id + '">+ Ajouter</button>';
   h += '</div>';
 
+  // Delete button
+  h += '<button class="ld-delete-btn" data-action="deleteLead" data-id="' + id + '">🗑 Supprimer cette fiche</button>';
+
   h += '</div>'; // actions
   h += '</div>'; // body
   h += '</div>'; // card
@@ -1026,6 +1043,41 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     }
     openCardId = dnLeadId;
     renderFeed();
+    return;
+  }
+
+  // Delete lead (two-step confirmation)
+  var delLeadBtn = e.target.closest('[data-action="deleteLead"]');
+  if (delLeadBtn) {
+    var dlId = delLeadBtn.dataset.id;
+    if (!delLeadBtn.classList.contains('confirming')) {
+      // First click: ask confirmation
+      delLeadBtn.classList.add('confirming');
+      delLeadBtn.textContent = '⚠️ Confirmer la suppression ?';
+      // Auto-reset after 4s
+      delLeadBtn._resetTimer = setTimeout(function() {
+        delLeadBtn.classList.remove('confirming');
+        delLeadBtn.textContent = '🗑 Supprimer cette fiche';
+      }, 4000);
+    } else {
+      // Second click: actually delete
+      if (delLeadBtn._resetTimer) clearTimeout(delLeadBtn._resetTimer);
+      delLeadBtn.textContent = '⏳ Suppression...';
+      delLeadBtn.disabled = true;
+      db.collection('leads').doc(dlId).delete().then(function() {
+        // Remove from local state
+        allLeads = allLeads.filter(function(l) { return l.id !== dlId; });
+        delete knownLeadIds[dlId];
+        if (openCardId === dlId) openCardId = null;
+        renderFeed();
+        toast('🗑 Fiche supprimée');
+      }).catch(function(err) {
+        toast('❌ Erreur : ' + err.message);
+        delLeadBtn.classList.remove('confirming');
+        delLeadBtn.textContent = '🗑 Supprimer cette fiche';
+        delLeadBtn.disabled = false;
+      });
+    }
     return;
   }
 
