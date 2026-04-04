@@ -268,6 +268,41 @@ html, body {
 }
 @keyframes deletePulse { 0%,100% { border-color: #ef4444; } 50% { border-color: rgba(239,68,68,0.4); } }
 
+/* ── Communications history ── */
+.ld-comm-section { padding: 12px 0 0; border-top: 1px solid var(--border); }
+.ld-comm-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-family: var(--fb);
+  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+}
+.ld-comm-toggle:hover { color: var(--text); border-color: var(--border2); }
+.ld-comm-toggle .ct-arrow { transition: transform 0.2s; font-size: 9px; margin-left: auto; }
+.ld-comm-toggle.open .ct-arrow { transform: rotate(180deg); }
+.ld-comm-count { font-family: var(--fm); font-size: 10px; padding: 1px 5px; border-radius: 4px; }
+.ld-comm-list { display: none; margin-top: 8px; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.ld-comm-list::-webkit-scrollbar { width: 3px; }
+.ld-comm-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.ld-comm-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 12px; line-height: 1.4;
+}
+.ld-comm-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.ld-comm-body { flex: 1; min-width: 0; }
+.ld-comm-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.ld-comm-type { font-weight: 700; font-size: 11px; }
+.ld-comm-type.call { color: #34d399; }
+.ld-comm-type.sms { color: #60a5fa; }
+.ld-comm-dir { font-size: 10px; color: var(--muted); }
+.ld-comm-dur { font-family: var(--fm); font-size: 10px; color: var(--muted); }
+.ld-comm-date { font-size: 10px; color: var(--muted2); margin-left: auto; white-space: nowrap; }
+.ld-comm-content {
+  font-size: 11px; color: rgba(255,255,255,0.7); overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.ld-comm-empty { text-align: center; padding: 16px; color: var(--muted2); font-size: 11px; }
+
 /* ── New Lead Popup ── */
 .ld-popup-overlay {
   display: none; position: fixed; inset: 0; z-index: 1000;
@@ -889,6 +924,63 @@ function renderCard(l) {
   h += '<button class="ld-notes-add-btn" data-action="addNote" data-id="' + id + '">+ Ajouter</button>';
   h += '</div>';
 
+  // ── Communications history (calls + SMS) ──
+  var comms = l.communications || [];
+  var callsAndSms = [];
+  for (var ci = 0; ci < comms.length; ci++) {
+    if (comms[ci].type === 'call' || comms[ci].type === 'sms') callsAndSms.push(comms[ci]);
+  }
+  var callCount = 0, smsCount = 0;
+  for (var cci = 0; cci < callsAndSms.length; cci++) {
+    if (callsAndSms[cci].type === 'call') callCount++; else smsCount++;
+  }
+  h += '<div class="ld-comm-section">';
+  h += '<button class="ld-comm-toggle" data-action="toggleComm" data-id="' + id + '">';
+  h += '📞 Appels';
+  if (callCount) h += ' <span class="ld-comm-count" style="background:rgba(52,211,153,0.12);color:#34d399">' + callCount + '</span>';
+  h += ' &nbsp;💬 SMS';
+  if (smsCount) h += ' <span class="ld-comm-count" style="background:rgba(96,165,250,0.12);color:#60a5fa">' + smsCount + '</span>';
+  h += '<span class="ct-arrow">▼</span></button>';
+  h += '<div class="ld-comm-list" data-comm-list="' + id + '" style="display:none">';
+  if (callsAndSms.length === 0) {
+    h += '<div class="ld-comm-empty">Aucun appel ou SMS synchronisé<br/>Les données apparaîtront via Ringover</div>';
+  } else {
+    // Sort by date descending
+    callsAndSms.sort(function(a, b) {
+      var da = a.date ? new Date(a.date).getTime() : 0;
+      var db2 = b.date ? new Date(b.date).getTime() : 0;
+      return db2 - da;
+    });
+    for (var cj = 0; cj < callsAndSms.length; cj++) {
+      var cm = callsAndSms[cj];
+      var isCall = cm.type === 'call';
+      var cmDir = cm.direction || '';
+      var cmDirLabel = cmDir === 'outbound' ? 'Sortant' : cmDir === 'inbound' ? 'Entrant' : '';
+      var cmDirIcon = cmDir === 'outbound' ? '↗️' : cmDir === 'inbound' ? '↙️' : '';
+      var cmDate = cm.date ? new Date(cm.date) : null;
+      var cmDateStr = cmDate ? cmDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + cmDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+      h += '<div class="ld-comm-item">';
+      h += '<span class="ld-comm-icon">' + (isCall ? '📞' : '💬') + '</span>';
+      h += '<div class="ld-comm-body">';
+      h += '<div class="ld-comm-head">';
+      h += '<span class="ld-comm-type ' + cm.type + '">' + (isCall ? 'Appel' : 'SMS') + '</span>';
+      if (cmDirLabel) h += '<span class="ld-comm-dir">' + cmDirIcon + ' ' + cmDirLabel + '</span>';
+      if (isCall && cm.duration) {
+        var durMin = Math.floor(cm.duration / 60);
+        var durSec = cm.duration % 60;
+        h += '<span class="ld-comm-dur">' + durMin + 'm' + (durSec ? String(durSec).padStart(2, '0') + 's' : '') + '</span>';
+      }
+      h += '<span class="ld-comm-date">' + escHtml(cmDateStr) + '</span>';
+      h += '</div>';
+      if (cm.content) h += '<div class="ld-comm-content">' + escHtml(cm.content) + '</div>';
+      if (cm.source) h += '<div style="font-size:10px;color:var(--muted2);margin-top:2px">' + escHtml(cm.source) + '</div>';
+      h += '</div>';
+      h += '</div>';
+    }
+  }
+  h += '</div>';
+  h += '</div>';
+
   // Delete button
   h += '<button class="ld-delete-btn" data-action="deleteLead" data-id="' + id + '">🗑 Supprimer cette fiche</button>';
 
@@ -913,6 +1005,19 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
       document.querySelectorAll('.ld-card.open').forEach(function(c) { c.classList.remove('open'); });
       card.classList.add('open');
       openCardId = id;
+    }
+    return;
+  }
+
+  // Toggle communications history
+  var commToggle = e.target.closest('[data-action="toggleComm"]');
+  if (commToggle) {
+    var commId = commToggle.dataset.id;
+    var commList = document.querySelector('[data-comm-list="' + commId + '"]');
+    if (commList) {
+      var isOpen = commList.style.display !== 'none';
+      commList.style.display = isOpen ? 'none' : 'flex';
+      commToggle.classList.toggle('open', !isOpen);
     }
     return;
   }
