@@ -401,10 +401,13 @@ exports.onWebhookInbox = functions.firestore
         const dir = data.direction === "outbound" ? " sortant" : data.direction === "inbound" ? " entrant" : "";
         const src = data.source ? " (" + data.source + ")" : "";
         let tlText = (icons[type] || "📌") + " " + (labels[type] || type) + dir + src;
-        if (data.content) tlText += " — " + String(data.content).substring(0, 100);
+        if (data.note) tlText += " — " + String(data.note).substring(0, 100);
+        else if (data.content) tlText += " — " + String(data.content).substring(0, 100);
         if (type === "call" && data.duration) {
           tlText += " [" + Math.floor(data.duration / 60) + "m]";
         }
+        if (type === "call" && data.recordingUrl) tlText += " 🎙";
+        if (type === "call" && data.transcription) tlText += " 📄";
 
         const timelineEntry = {
           text: tlText,
@@ -419,7 +422,11 @@ exports.onWebhookInbox = functions.firestore
           duration: data.duration || null,
           source: data.source || null,
           date: data.date || new Date().toISOString(),
-          createdAt: now
+          createdAt: now,
+          recordingUrl: data.recordingUrl || null,
+          transcription: data.transcription || null,
+          note: data.note || null,
+          callTags: data.callTags || null
         };
 
         await db.collection("leads").doc(leadId).update({
