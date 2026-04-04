@@ -89,11 +89,23 @@ async function findLead(email, phone) {
     if (!snap2.empty) return { id: snap2.docs[0].id, data: snap2.docs[0].data() };
   }
   if (phone) {
-    const phoneClean = phone.replace(/\s+/g, "").replace(/^\+33/, "0");
-    const snap = await db.collection("leads").where("telephone", "==", phoneClean).limit(1).get();
-    if (!snap.empty) return { id: snap.docs[0].id, data: snap.docs[0].data() };
-    const snap2 = await db.collection("leads").where("telephone", "==", phone.replace(/\s+/g, "")).limit(1).get();
-    if (!snap2.empty) return { id: snap2.docs[0].id, data: snap2.docs[0].data() };
+    // Normalize: strip spaces, then convert all formats to 0XXXXXXXXX
+    const raw = phone.replace(/\s+/g, "");
+    const variants = new Set();
+    variants.add(raw);
+    // +33612345678 → 0612345678
+    if (raw.startsWith("+33")) variants.add("0" + raw.slice(3));
+    // 33612345678 → 0612345678
+    if (raw.startsWith("33") && raw.length >= 11) variants.add("0" + raw.slice(2));
+    // 0612345678 → +33612345678 and 33612345678
+    if (raw.startsWith("0") && raw.length === 10) {
+      variants.add("+33" + raw.slice(1));
+      variants.add("33" + raw.slice(1));
+    }
+    for (const v of variants) {
+      const snap = await db.collection("leads").where("telephone", "==", v).limit(1).get();
+      if (!snap.empty) return { id: snap.docs[0].id, data: snap.docs[0].data() };
+    }
   }
   return null;
 }
