@@ -101,12 +101,39 @@
 .pl-btn-add:hover{border-color:rgba(52,211,153,.4);color:#34d399;background:rgba(52,211,153,.08)}
 .pl-add-row{display:flex;align-items:center;gap:6px;padding-left:42px;margin-top:4px}
 .pl-add-row input[type="time"]{padding:5px 8px;font-size:12px;width:90px}
-/* Date overrides */
+/* Date overrides & Availability Rules */
 .pl-overrides{margin-top:24px;padding-top:20px;border-top:1px solid rgba(255,255,255,.07)}
 .pl-over-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .pl-over-icon{font-size:18px}.pl-over-title{font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:700;flex:1}
 .pl-over-item{background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
 .pl-over-date{font-size:13px;font-weight:700;min-width:140px}.pl-over-slots{font-size:12px;color:rgba(255,255,255,.48);flex:1}
+.ar-card{background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.ar-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.ar-icon.avail{background:rgba(52,211,153,.1);color:#34d399}.ar-icon.unavail{background:rgba(239,68,68,.1);color:#ef4444}
+.ar-info{flex:1;min-width:0}.ar-label{font-size:13px;font-weight:600;color:rgba(255,255,255,.85)}.ar-detail{font-size:11px;color:rgba(255,255,255,.35);margin-top:2px}
+.ar-form{background:#141420;border:1px solid rgba(139,92,246,.15);border-radius:12px;padding:18px;margin-top:12px}
+.ar-form-row{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.ar-form-row:last-child{margin-bottom:0}
+.ar-form label{font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px}
+.ar-toggle{display:flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
+.ar-toggle-btn{padding:7px 14px;font-size:12px;font-weight:600;border:0;background:transparent;color:rgba(255,255,255,.35);cursor:pointer;transition:all .15s}
+.ar-toggle-btn.on{background:rgba(139,92,246,.15);color:#a78bfa}
+.ar-toggle-btn.on.green{background:rgba(52,211,153,.12);color:#34d399}
+.ar-toggle-btn.on.red{background:rgba(239,68,68,.12);color:#ef4444}
+.ar-rule{background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.ar-rule-icon{font-size:18px;flex-shrink:0}
+.ar-rule-info{flex:1;min-width:0}.ar-rule-title{font-size:13px;font-weight:600;color:rgba(255,255,255,.85)}.ar-rule-desc{font-size:11px;color:rgba(255,255,255,.35);margin-top:2px}
+.ar-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;flex-shrink:0}
+.ar-badge-avail{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.15)}
+.ar-badge-unavail{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.15)}
+.ar-form{background:#141420;border:1px solid rgba(139,92,246,.2);border-radius:12px;padding:18px;margin-top:12px}
+.ar-form-row{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.ar-form-label{font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.ar-toggle{display:flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
+.ar-toggle-btn{padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;border:none;color:rgba(255,255,255,.4);transition:all .15s}
+.ar-toggle-btn.on{color:#fff}
+.ar-toggle-btn.on[data-val="available"]{background:rgba(52,211,153,.15);color:#34d399}
+.ar-toggle-btn.on[data-val="unavailable"]{background:rgba(239,68,68,.15);color:#ef4444}
 /* Calendar params */
 .cal-card{background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 18px;margin-bottom:12px}
 .cal-card-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
@@ -808,21 +835,83 @@ h+='</div>';
 h+='</div>';
 });
 
-// Date overrides
+// Availability Rules
+var _rules=exPerson.availabilityRules||[];
+var _DAYS_FR=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+var _PAT_FR={every_week:'Toutes les semaines',every_2_weeks:'1 semaine sur 2',first_of_month:'1er du mois',last_of_month:'Dernier du mois'};
 h+='<div class="pl-overrides">';
-h+='<div class="pl-over-head"><span class="pl-over-icon">📌</span><span class="pl-over-title">Heures spécifiques à une date</span><button class="bb bb-g" onclick="addDateOverride(\''+exPerson.id+'\')" style="font-size:11px;padding:5px 12px">+ Heures</button></div>';
-h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:10px">Ajustez les heures pour des jours spécifiques.</div>';
+h+='<div class="pl-over-head"><span class="pl-over-icon">📌</span><span class="pl-over-title">Exceptions & Récurrences</span><button class="bb bb-g" onclick="toggleArForm()" style="font-size:11px;padding:5px 12px" id="arAddBtn">+ Ajouter</button></div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:12px">Gérez les disponibilités exceptionnelles et les récurrences.</div>';
+
+// Migrate legacy dateOverrides for display
 var ovKeys=Object.keys(ov).sort();
 if(ovKeys.length){
 ovKeys.forEach(function(dt){
 var ovSlots=ov[dt]||[];
 var slotsStr=ovSlots.map(function(s){return s.start+' – '+s.end;}).join(', ');
-h+='<div class="pl-over-item"><span class="pl-over-date">'+dFR(dt)+'</span><span class="pl-over-slots">'+(slotsStr||'Indisponible')+'</span><button class="pl-btn pl-btn-del" onclick="delDateOverride(\''+exPerson.id+'\',\''+dt+'\')">✕</button></div>';
+h+='<div class="ar-rule"><span class="ar-rule-icon">✅</span><div class="ar-rule-info"><div class="ar-rule-title">'+dFR(dt)+'</div><div class="ar-rule-desc">'+esc(slotsStr||'Journée entière')+'</div></div><span class="ar-badge ar-badge-avail">Dispo</span><button class="pl-btn pl-btn-del" onclick="delDateOverride(\''+exPerson.id+'\',\''+dt+'\')">✕</button></div>';
 });
+}
+
+// New rules
+if(_rules.length){
+_rules.forEach(function(r,ri){
+var icon=r.type==='available'?'✅':'🚫';
+var badge=r.type==='available'?'<span class="ar-badge ar-badge-avail">Dispo</span>':'<span class="ar-badge ar-badge-unavail">Indispo</span>';
+var title='',desc='';
+if(r.mode==='date'){
+title=dFR(r.date);
+if(r.type==='available'&&r.slots&&r.slots.length){desc=r.slots.map(function(s){return s.start+' – '+s.end;}).join(', ');}
+else if(r.type==='unavailable'){desc='Journée entière bloquée';}
 }else{
+title=_DAYS_FR[r.dayOfWeek||0]+' — '+(_PAT_FR[r.pattern]||r.pattern);
+if(r.type==='available'&&r.slots&&r.slots.length){desc=r.slots.map(function(s){return s.start+' – '+s.end;}).join(', ');}
+else{desc='Indisponible';}
+var dates=[];
+if(r.startDate)dates.push('Début : '+dFR(r.startDate));
+if(r.endDate)dates.push('Fin : '+dFR(r.endDate));
+if(dates.length)desc+=' · '+dates.join(' · ');
+}
+h+='<div class="ar-rule"><span class="ar-rule-icon">'+icon+'</span><div class="ar-rule-info"><div class="ar-rule-title">'+esc(title)+'</div><div class="ar-rule-desc">'+esc(desc)+'</div></div>'+badge+'<button class="pl-btn pl-btn-del" onclick="delAvailRule(\''+exPerson.id+'\','+ri+')">✕</button></div>';
+});
+}
+
+if(!ovKeys.length&&!_rules.length){
 h+='<div style="font-size:12px;color:rgba(255,255,255,.28);padding:8px 0">Aucune exception configurée.</div>';
 }
-h+='<div style="display:flex;gap:6px;align-items:center;margin-top:8px"><input type="date" class="bi" id="exOvDate" style="font-size:12px;padding:5px 8px"/><input type="time" class="bi" id="exOvStart" value="14:00" style="font-size:12px;padding:5px 8px;width:90px"/><span style="color:rgba(255,255,255,.28)">→</span><input type="time" class="bi" id="exOvEnd" value="18:00" style="font-size:12px;padding:5px 8px;width:90px"/><button class="bb bb-g" onclick="saveNewOverride(\''+exPerson.id+'\')" style="font-size:11px;padding:5px 12px">Ajouter</button></div>';
+
+// Add form (hidden by default)
+h+='<div id="arFormWrap" style="display:none">';
+h+='<div class="ar-form">';
+
+// Type toggle
+h+='<div class="ar-form-label">Type</div>';
+h+='<div class="ar-toggle" id="arTypeToggle"><button class="ar-toggle-btn on" data-val="unavailable" onclick="setArToggle(\'arTypeToggle\',this)">🚫 Indisponible</button><button class="ar-toggle-btn" data-val="available" onclick="setArToggle(\'arTypeToggle\',this)">✅ Disponible</button></div>';
+
+// Mode toggle
+h+='<div class="ar-form-label" style="margin-top:14px">Quand</div>';
+h+='<div class="ar-toggle" id="arModeToggle"><button class="ar-toggle-btn on" data-val="date" onclick="setArToggle(\'arModeToggle\',this);toggleArMode()">📅 Date unique</button><button class="ar-toggle-btn" data-val="recurring" onclick="setArToggle(\'arModeToggle\',this);toggleArMode()">🔄 Récurrence</button></div>';
+
+// Date mode fields
+h+='<div id="arDateFields" style="margin-top:12px"><div class="ar-form-row"><input type="date" class="bi" id="arDate" style="font-size:12px;padding:6px 10px"/></div></div>';
+
+// Recurring mode fields
+h+='<div id="arRecFields" style="display:none;margin-top:12px">';
+h+='<div class="ar-form-row"><div><div class="ar-form-label">Jour</div><select class="bs" id="arDayOfWeek" style="width:140px">';
+for(var di=1;di<=6;di++)h+='<option value="'+di+'">'+_DAYS_FR[di]+'</option>';
+h+='<option value="0">Dimanche</option>';
+h+='</select></div>';
+h+='<div><div class="ar-form-label">Fréquence</div><select class="bs" id="arPattern" style="width:180px"><option value="every_week">Toutes les semaines</option><option value="every_2_weeks">1 semaine sur 2</option><option value="first_of_month">1er du mois</option><option value="last_of_month">Dernier du mois</option></select></div></div>';
+h+='<div class="ar-form-row"><div><div class="ar-form-label">À partir du</div><input type="date" class="bi" id="arStartDate" style="font-size:12px;padding:6px 10px"/></div><div><div class="ar-form-label">Jusqu\'au (optionnel)</div><input type="date" class="bi" id="arEndDate" style="font-size:12px;padding:6px 10px"/></div></div>';
+h+='</div>';
+
+// Time slots (only for "available")
+h+='<div id="arSlotsWrap" style="display:none;margin-top:12px"><div class="ar-form-label">Horaires</div><div class="ar-form-row"><input type="time" class="bi" id="arSlotStart" value="09:00" style="font-size:12px;padding:6px 10px;width:100px"/><span style="color:rgba(255,255,255,.28)">→</span><input type="time" class="bi" id="arSlotEnd" value="18:00" style="font-size:12px;padding:6px 10px;width:100px"/></div></div>';
+
+// Submit
+h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="bb" onclick="toggleArForm()" style="padding:7px 16px;font-size:12px">Annuler</button><button class="bb bb-p" onclick="saveAvailRule(\''+exPerson.id+'\')" style="padding:7px 16px;font-size:12px">Ajouter la règle</button></div>';
+h+='</div></div>';
+
 h+='</div>';
 }
 
@@ -1016,7 +1105,7 @@ renderExSection();toast('✅ Copié sur '+targets.length+' jour(s)');
 }
 window.openCopyModal=openCopyModal;window.applyCopySchedule=applyCopySchedule;
 
-// Date overrides
+// Date overrides (legacy) + Availability Rules
 function addDateOverride(pid){
 var dtEl=document.getElementById('exOvDate'),stEl=document.getElementById('exOvStart'),enEl=document.getElementById('exOvEnd');
 if(!dtEl||!dtEl.value)return;
@@ -1032,7 +1121,74 @@ var p=P.find(function(x){return x.id===pid;});if(!p||!p.dateOverrides)return;
 delete p.dateOverrides[dt];
 CR.doc(pid).update({dateOverrides:p.dateOverrides}).then(function(){renderExSection();toast('🗑');});
 }
+// Toggle form visibility
+function toggleArForm(){
+var w=document.getElementById('arFormWrap');
+if(!w)return;
+w.style.display=w.style.display==='none'?'block':'none';
+}
+// Toggle button groups
+function setArToggle(groupId,btn){
+var grp=document.getElementById(groupId);
+if(!grp)return;
+grp.querySelectorAll('.ar-toggle-btn').forEach(function(b){b.classList.remove('on');});
+btn.classList.add('on');
+// Show/hide slots when type changes
+if(groupId==='arTypeToggle'){
+var sw=document.getElementById('arSlotsWrap');
+if(sw)sw.style.display=btn.dataset.val==='available'?'block':'none';
+}
+}
+// Toggle date/recurring fields
+function toggleArMode(){
+var mode=document.querySelector('#arModeToggle .ar-toggle-btn.on');
+if(!mode)return;
+var m=mode.dataset.val;
+document.getElementById('arDateFields').style.display=m==='date'?'block':'none';
+document.getElementById('arRecFields').style.display=m==='recurring'?'block':'none';
+}
+// Save a new rule
+function saveAvailRule(pid){
+var p=P.find(function(x){return x.id===pid;});if(!p)return;
+var typeBtn=document.querySelector('#arTypeToggle .ar-toggle-btn.on');
+var modeBtn=document.querySelector('#arModeToggle .ar-toggle-btn.on');
+if(!typeBtn||!modeBtn)return;
+var type=typeBtn.dataset.val;
+var mode=modeBtn.dataset.val;
+var rule={id:'ar_'+gid().slice(0,6),type:type,mode:mode};
+if(mode==='date'){
+var dt=document.getElementById('arDate').value;
+if(!dt){toast('❌ Sélectionnez une date');return;}
+rule.date=dt;
+}else{
+rule.dayOfWeek=parseInt(document.getElementById('arDayOfWeek').value);
+rule.pattern=document.getElementById('arPattern').value;
+var sd=document.getElementById('arStartDate').value;
+if(!sd){toast('❌ Sélectionnez une date de début');return;}
+rule.startDate=sd;
+var ed=document.getElementById('arEndDate').value;
+if(ed)rule.endDate=ed;
+}
+if(type==='available'){
+var ss=document.getElementById('arSlotStart').value;
+var se=document.getElementById('arSlotEnd').value;
+if(!ss||!se){toast('❌ Renseignez les horaires');return;}
+rule.slots=[{start:ss,end:se}];
+}
+p.availabilityRules=p.availabilityRules||[];
+p.availabilityRules.push(rule);
+CR.doc(pid).update({availabilityRules:p.availabilityRules}).then(function(){
+toggleArForm();renderExSection();toast('✅ Règle ajoutée');
+}).catch(function(e){alert('Erreur: '+e.message);});
+}
+// Delete a rule
+function delAvailRule(pid,idx){
+var p=P.find(function(x){return x.id===pid;});if(!p||!p.availabilityRules)return;
+p.availabilityRules.splice(idx,1);
+CR.doc(pid).update({availabilityRules:p.availabilityRules}).then(function(){renderExSection();toast('🗑 Règle supprimée');});
+}
 window.addDateOverride=addDateOverride;window.saveNewOverride=saveNewOverride;window.delDateOverride=delDateOverride;
+window.toggleArForm=toggleArForm;window.setArToggle=setArToggle;window.toggleArMode=toggleArMode;window.saveAvailRule=saveAvailRule;window.delAvailRule=delAvailRule;
 
 // Toggle consultation type for expert
 function toggleExType(pid,tid){
