@@ -350,9 +350,26 @@ h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdNotif()">�
 h+='<div id="tplModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;display:none;align-items:center;justify-content:center">';
 h+='<div style="background:#1a1a2e;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:28px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto">';
 h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><div style="font-size:16px;font-weight:800" id="tplModalTitle">Personnaliser le message</div><button onclick="closeTplModal()" style="border:none;background:transparent;color:rgba(255,255,255,.5);font-size:20px;cursor:pointer">✕</button></div>';
-h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:6px">OBJET DE L\'EMAIL</div><div style="display:flex;gap:6px"><input class="bi tpl-field" id="tplM-subject" style="flex:1" placeholder="Objet..."/><select class="bs" id="tplVarSubject" style="width:140px;font-size:11px" onchange="insertTplVar(\'tplM-subject\',this.value);this.selectedIndex=0"><option value="">Insérer variable</option><option value="{{prenom}}">Prénom</option><option value="{{nom}}">Nom</option><option value="{{date}}">Date</option><option value="{{time}}">Heure</option><option value="{{typeLabel}}">Type RDV</option></select></div></div>';
-h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:6px">CORPS DE L\'EMAIL</div><div style="display:flex;justify-content:flex-end;margin-bottom:4px"><select class="bs" id="tplVarBody" style="width:140px;font-size:11px" onchange="insertTplVar(\'tplM-body\',this.value);this.selectedIndex=0"><option value="">Insérer variable</option><option value="{{prenom}}">Prénom</option><option value="{{nom}}">Nom</option><option value="{{date}}">Date</option><option value="{{time}}">Heure</option><option value="{{typeLabel}}">Type RDV</option></select></div><textarea class="bi tpl-field" id="tplM-body" rows="8" style="width:100%;resize:vertical;font-size:13px;line-height:1.7" placeholder="Corps du message..."></textarea></div>';
-h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:6px">SMS</div><div style="display:flex;justify-content:flex-end;margin-bottom:4px"><select class="bs" id="tplVarSms" style="width:140px;font-size:11px" onchange="insertTplVar(\'tplM-sms\',this.value);this.selectedIndex=0"><option value="">Insérer variable</option><option value="{{prenom}}">Prénom</option><option value="{{nom}}">Nom</option><option value="{{date}}">Date</option><option value="{{time}}">Heure</option><option value="{{typeLabel}}">Type RDV</option></select></div><textarea class="bi tpl-field" id="tplM-sms" rows="3" style="width:100%;resize:vertical;font-size:13px;line-height:1.5" placeholder="Message SMS..."></textarea></div>';
+h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:6px">OBJET DE L\'EMAIL</div><div style="display:flex;gap:6px"><input class="bi tpl-field" id="tplM-subject" style="flex:1" placeholder="Objet..." oninput="updateTplPreview()"/><select class="bs" id="tplVarSubject" style="width:140px;font-size:11px" onchange="insertTplVar(\'tplM-subject\',this.value);this.selectedIndex=0"><option value="">Insérer variable</option><option value="{{prenom}}">Prénom</option><option value="{{nom}}">Nom</option><option value="{{date}}">Date</option><option value="{{time}}">Heure</option><option value="{{typeLabel}}">Type RDV</option></select></div></div>';
+h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:6px">CORPS DE L\'EMAIL</div><div style="display:flex;justify-content:flex-end;margin-bottom:4px"><select class="bs" id="tplVarBody" style="width:140px;font-size:11px" onchange="insertTplVar(\'tplM-body\',this.value);this.selectedIndex=0"><option value="">Insérer variable</option><option value="{{prenom}}">Prénom</option><option value="{{nom}}">Nom</option><option value="{{date}}">Date</option><option value="{{time}}">Heure</option><option value="{{typeLabel}}">Type RDV</option></select></div><textarea class="bi tpl-field" id="tplM-body" rows="8" style="width:100%;resize:vertical;font-size:13px;line-height:1.7" placeholder="Corps du message..." oninput="updateTplPreview()"></textarea></div>';
+h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:6px">SMS</div><div style="display:flex;justify-content:flex-end;margin-bottom:4px"><select class="bs" id="tplVarSms" style="width:140px;font-size:11px" onchange="insertTplVar(\'tplM-sms\',this.value);this.selectedIndex=0"><option value="">Insérer variable</option><option value="{{prenom}}">Prénom</option><option value="{{nom}}">Nom</option><option value="{{date}}">Date</option><option value="{{time}}">Heure</option><option value="{{typeLabel}}">Type RDV</option></select></div><textarea class="bi tpl-field" id="tplM-sms" rows="3" style="width:100%;resize:vertical;font-size:13px;line-height:1.5" placeholder="Message SMS..." oninput="updateTplPreview()"></textarea></div>';
+h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:8px">👁 APERÇU EN DIRECT</div>';
+h+='<div style="display:flex;gap:12px;flex-wrap:wrap">';
+// Email preview
+h+='<div style="flex:1;min-width:280px;background:#ffffff;border-radius:12px;overflow:hidden;color:#1a1a2e">';
+h+='<div style="background:linear-gradient(135deg,#2563eb,#3b82f6);padding:20px;text-align:center"><div style="font-size:18px;font-weight:800;color:white;letter-spacing:1px">ADRIEN & EMILY</div><div style="font-size:10px;color:rgba(255,255,255,.7);margin-top:4px">Accompagnement des dirigeants</div></div>';
+h+='<div style="padding:20px"><div id="tplPrevSubject" style="font-size:15px;font-weight:800;color:#1a1a2e;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #e5e7eb"></div><div id="tplPrevBody" style="font-size:13px;color:#374151;line-height:1.7;white-space:pre-wrap"></div></div>';
+h+='<div style="padding:12px 20px;background:#f9fafb;border-top:1px solid #e5e7eb;text-align:center"><div style="font-size:10px;color:#9ca3af">www.adrienemily.com · www.alteore.com</div></div>';
+h+='</div>';
+// SMS preview
+h+='<div style="min-width:200px;width:220px">';
+h+='<div style="font-size:9px;font-weight:700;color:rgba(255,255,255,.25);text-transform:uppercase;margin-bottom:6px;text-align:center">Aperçu SMS</div>';
+h+='<div style="background:#1a1a2e;border-radius:20px;padding:16px 12px;border:1px solid rgba(255,255,255,.08)">';
+h+='<div style="text-align:center;font-size:10px;color:rgba(255,255,255,.3);margin-bottom:10px">adrienemily</div>';
+h+='<div id="tplPrevSms" style="background:rgba(96,165,250,.15);color:rgba(255,255,255,.8);font-size:12px;line-height:1.5;padding:10px 12px;border-radius:14px 14px 4px 14px;max-width:100%"></div>';
+h+='<div style="text-align:right;font-size:9px;color:rgba(255,255,255,.2);margin-top:4px">Maintenant</div>';
+h+='</div></div>';
+h+='</div></div>';
 h+='<div style="display:flex;gap:8px;justify-content:flex-end"><button class="bb" style="padding:10px 20px" onclick="closeTplModal()">Annuler</button><button class="bb bb-p" style="padding:10px 20px" onclick="saveTplModal()">💾 Enregistrer</button></div>';
 h+='</div></div>';
 }
@@ -410,8 +427,20 @@ document.getElementById('tplM-subject').value=tpls[key+'_email_subject']||d.subj
 document.getElementById('tplM-body').value=tpls[key+'_email_body']||d.body;
 document.getElementById('tplM-sms').value=tpls[key+'_sms']||d.sms;
 document.getElementById('tplModal').style.display='flex';
+updateTplPreview();
 }
 function closeTplModal(){document.getElementById('tplModal').style.display='none';_currentTplKey='';}
+function updateTplPreview(){
+var exVars={'{{prenom}}':'Marie','{{nom}}':'Dupont','{{date}}':'lundi 7 avril 2026','{{time}}':'14:30','{{typeLabel}}':'Consultation Stratégique'};
+function rep(s){if(!s)return'';var r=s;for(var k in exVars)r=r.split(k).join('<span style="color:#a78bfa;font-weight:700">'+exVars[k]+'</span>');return r;}
+function repText(s){if(!s)return'';var r=s;for(var k in exVars)r=r.split(k).join(exVars[k]);return r;}
+var subj=document.getElementById('tplM-subject');
+var body=document.getElementById('tplM-body');
+var sms=document.getElementById('tplM-sms');
+if(subj)document.getElementById('tplPrevSubject').innerHTML=rep(esc(subj.value));
+if(body){var bVal=esc(body.value).replace(/\n/g,'<br>');document.getElementById('tplPrevBody').innerHTML=rep(bVal);}
+if(sms)document.getElementById('tplPrevSms').innerHTML=rep(esc(sms.value));
+}
 function saveTplModal(){
 if(!_currentTplKey)return;
 var nf=cdType.notifications||{};if(!nf.templates)nf.templates={};
@@ -423,7 +452,7 @@ var i=T.findIndex(function(t){return t.id===cdType.id;});
 if(i>=0)T[i].notifications=nf;
 saveTypes().then(function(){toast('✅ Template enregistré');closeTplModal();}).catch(function(e){alert('Erreur: '+e.message);});
 }
-function insertTplVar(fieldId,val){if(!val)return;var el=document.getElementById(fieldId);if(!el)return;var s=el.selectionStart||el.value.length;el.value=el.value.substring(0,s)+val+el.value.substring(s);el.focus();el.selectionStart=el.selectionEnd=s+val.length;}
+function insertTplVar(fieldId,val){if(!val)return;var el=document.getElementById(fieldId);if(!el)return;var s=el.selectionStart||el.value.length;el.value=el.value.substring(0,s)+val+el.value.substring(s);el.focus();el.selectionStart=el.selectionEnd=s+val.length;updateTplPreview();}
 window.openTplModal=openTplModal;window.closeTplModal=closeTplModal;window.saveTplModal=saveTplModal;window.insertTplVar=insertTplVar;
 function saveCdForm(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].formFields=cdType.formFields;cdType=T[i];saveTypes().then(function(){toast('✅ Formulaire enregistré');}).catch(function(e){alert('Erreur: '+e.message);});}
 function addFormField(){var label=document.getElementById('ff-label').value.trim();if(!label)return;var type=document.getElementById('ff-type').value;var req=document.getElementById('ff-req').checked;if(!cdType.formFields)cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields.push({id:'custom_'+gid().slice(0,4),label:label,type:type,required:req});document.getElementById('ff-label').value='';renderCdSection();}
