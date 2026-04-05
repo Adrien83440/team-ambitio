@@ -289,11 +289,38 @@ h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdRules()">�
 
 else if(cdSection==='notifications'){
 h+='<div class="cd-sec-title">🔔 Notifications et rappels</div>';
-h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Configurez les notifications envoyées au client et à l\'expert.</div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Configurez les notifications envoyées au client. Email + SMS automatiques.</div>';
+
+// Email account selector
+h+='<div class="cd-notif-card" style="margin-bottom:16px"><div class="cd-notif-icon">📬</div><div class="cd-notif-info"><div class="cd-notif-nm">Compte d\'envoi</div><div class="cd-notif-desc">Depuis quelle adresse envoyer les mails</div></div><select class="bs" id="cd-emailAccount" style="width:200px;flex-shrink:0"><option value="strategie"'+(nf.emailAccount==='strategie'||!nf.emailAccount?' selected':'')+'>strategie@adrienemily.com</option><option value="coaching"'+(nf.emailAccount==='coaching'?' selected':'')+'>coaching@adrienemily.com</option><option value="contact"'+(nf.emailAccount==='contact'?' selected':'')+'>contact@adrienemily.com</option></select></div>';
+
+// Section: Confirmation
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px">À la réservation</div>';
 h+='<div class="cd-notif-card"><div class="cd-notif-icon">📧</div><div class="cd-notif-info"><div class="cd-notif-nm">Email de confirmation</div><div class="cd-notif-desc">Envoyé au client à la réservation</div></div><div class="tg-w"><div class="tg'+(nf.emailOnBook!==false?' on':'')+'" data-ntog="emailOnBook"></div></div></div>';
+h+='<div class="cd-notif-card"><div class="cd-notif-icon">💬</div><div class="cd-notif-info"><div class="cd-notif-nm">SMS de confirmation</div><div class="cd-notif-desc">SMS envoyé au client via Twilio</div></div><div class="tg-w"><div class="tg'+(nf.smsOnBook?' on':'')+'" data-ntog="smsOnBook"></div></div></div>';
 h+='<div class="cd-notif-card"><div class="cd-notif-icon">❌</div><div class="cd-notif-info"><div class="cd-notif-nm">Email d\'annulation</div><div class="cd-notif-desc">Envoyé en cas d\'annulation</div></div><div class="tg-w"><div class="tg'+(nf.emailOnCancel!==false?' on':'')+'" data-ntog="emailOnCancel"></div></div></div>';
-h+='<div class="cd-notif-card"><div class="cd-notif-icon">⏰</div><div class="cd-notif-info"><div class="cd-notif-nm">Rappel avant le RDV</div><div class="cd-notif-desc">Rappel envoyé au client</div></div><div class="cd-rule-inputs"><input type="number" class="bi" id="cd-reminder" min="0" value="'+(nf.reminderMinutes||30)+'" style="width:70px"/><span class="cd-rule-unit">min avant</span></div></div>';
-h+='<div style="margin-top:16px;padding:12px 16px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:10px;font-size:12px;color:#fbbf24">⚡ Les emails seront opérationnels après la mise en place des Cloud Functions (prochaine phase).</div>';
+
+// Section: Rappels
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:24px 0 8px">Rappels automatiques</div>';
+h+='<div class="cd-notif-card"><div class="cd-notif-icon">📧</div><div class="cd-notif-info"><div class="cd-notif-nm">Email J-1</div><div class="cd-notif-desc">Email de rappel 24h avant</div></div><div class="tg-w"><div class="tg'+(nf.emailJ1!==false?' on':'')+'" data-ntog="emailJ1"></div></div></div>';
+h+='<div class="cd-notif-card"><div class="cd-notif-icon">💬</div><div class="cd-notif-info"><div class="cd-notif-nm">SMS J-1</div><div class="cd-notif-desc">SMS de rappel 24h avant</div></div><div class="tg-w"><div class="tg'+(nf.smsJ1!==false?' on':'')+'" data-ntog="smsJ1"></div></div></div>';
+h+='<div class="cd-notif-card"><div class="cd-notif-icon">📧</div><div class="cd-notif-info"><div class="cd-notif-nm">Email H-1</div><div class="cd-notif-desc">Email de rappel 1h avant</div></div><div class="tg-w"><div class="tg'+(nf.emailH1!==false?' on':'')+'" data-ntog="emailH1"></div></div></div>';
+h+='<div class="cd-notif-card"><div class="cd-notif-icon">💬</div><div class="cd-notif-info"><div class="cd-notif-nm">SMS H-1</div><div class="cd-notif-desc">SMS de rappel 1h avant</div></div><div class="tg-w"><div class="tg'+(nf.smsH1!==false?' on':'')+'" data-ntog="smsH1"></div></div></div>';
+
+// Section: Custom reminders
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:24px 0 8px">Rappels personnalisés</div>';
+var customs=nf.customReminders||[];
+customs.forEach(function(cr,idx){
+h+='<div class="cd-notif-card" data-cidx="'+idx+'"><div class="cd-notif-icon">⏰</div><div class="cd-notif-info"><div class="cd-notif-nm">Rappel '+cr.value+' '+cr.unit+' avant</div><div class="cd-notif-desc">'+(cr.email?'📧 Email':'')+(cr.email&&cr.sms?' + ':'')+(cr.sms?'💬 SMS':'')+'</div></div><button class="bb" style="padding:4px 10px;font-size:11px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444;border-radius:6px" onclick="removeCustomReminder('+idx+')">✕</button></div>';
+});
+h+='<div style="display:flex;gap:8px;align-items:center;margin-top:8px;padding:12px;background:#141420;border:1px dashed rgba(255,255,255,.1);border-radius:10px">';
+h+='<input type="number" class="bi" id="cr-value" min="1" value="3" style="width:60px"/>';
+h+='<select class="bs" id="cr-unit" style="width:100px"><option value="heures">heures</option><option value="jours">jours</option></select>';
+h+='<label style="font-size:11px;color:rgba(255,255,255,.48);display:flex;align-items:center;gap:4px"><input type="checkbox" id="cr-email" checked/> Email</label>';
+h+='<label style="font-size:11px;color:rgba(255,255,255,.48);display:flex;align-items:center;gap:4px"><input type="checkbox" id="cr-sms" checked/> SMS</label>';
+h+='<button class="bb bb-g" onclick="addCustomReminder()" style="padding:6px 14px;font-size:12px">+ Ajouter</button>';
+h+='</div>';
+
 h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdNotif()">💾 Enregistrer</button></div>';
 }
 
@@ -328,7 +355,10 @@ function cleanType(t){var o={id:t.id,label:t.label||'',duration:t.duration||30,c
 function saveTypes(){var clean=T.map(cleanType);return CR.doc('_types').set({list:clean});}
 function saveCdDetails(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].label=document.getElementById('cd-name').value.trim()||T[i].label;T[i].duration=parseInt(document.getElementById('cd-dur').value)||30;T[i].color=document.getElementById('cd-color').value;T[i].active=document.getElementById('cd-active').value!=='false';T[i].eventType=document.getElementById('cd-eventType').value;T[i].description=document.getElementById('cd-desc').value.trim();T[i].location=document.getElementById('cd-location').value;T[i].locationUrl=document.getElementById('cd-locUrl').value.trim();cdType=T[i];saveTypes().then(function(){renderCdHead();toast('✅ Enregistré');}).catch(function(e){console.error('Save error:',e);alert('Erreur de sauvegarde: '+e.message);});}
 function saveCdRules(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var r=T[i].rules||{};var ids=['cd-bufBefore','cd-bufAfter','cd-interval','cd-cancelH','cd-maxDays','cd-minNotice'];var keys=['bufferBefore','bufferAfter','slotInterval','cancelPeriodHours','maxNoticeDays','minNoticeHours'];ids.forEach(function(id,j){var el=document.getElementById(id);if(el)r[keys[j]]=parseInt(el.value)||0;});T[i].rules=r;cdType=T[i];saveTypes().then(function(){toast('✅ Règles enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
-function saveCdNotif(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var n={};document.querySelectorAll('[data-ntog]').forEach(function(tg){n[tg.dataset.ntog]=tg.classList.contains('on');});var rem=document.getElementById('cd-reminder');if(rem)n.reminderMinutes=parseInt(rem.value)||30;T[i].notifications=n;cdType=T[i];saveTypes().then(function(){toast('✅ Notifications enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
+function saveCdNotif(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var n=T[i].notifications||{};document.querySelectorAll('[data-ntog]').forEach(function(tg){n[tg.dataset.ntog]=tg.classList.contains('on');});var ea=document.getElementById('cd-emailAccount');if(ea)n.emailAccount=ea.value;if(!n.customReminders)n.customReminders=[];T[i].notifications=n;cdType=T[i];saveTypes().then(function(){toast('✅ Notifications enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
+function addCustomReminder(){var v=parseInt(document.getElementById('cr-value').value)||1;var u=document.getElementById('cr-unit').value;var em=document.getElementById('cr-email').checked;var sm=document.getElementById('cr-sms').checked;if(!em&&!sm){toast('❌ Sélectionne au moins Email ou SMS');return;}var nf=cdType.notifications||{};if(!nf.customReminders)nf.customReminders=[];nf.customReminders.push({value:v,unit:u,email:em,sms:sm});cdType.notifications=nf;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].notifications=nf;renderCdSection();saveCdNotif();}
+function removeCustomReminder(idx){var nf=cdType.notifications||{};if(!nf.customReminders)return;nf.customReminders.splice(idx,1);cdType.notifications=nf;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].notifications=nf;renderCdSection();saveCdNotif();}
+window.addCustomReminder=addCustomReminder;window.removeCustomReminder=removeCustomReminder;
 function saveCdForm(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].formFields=cdType.formFields;cdType=T[i];saveTypes().then(function(){toast('✅ Formulaire enregistré');}).catch(function(e){alert('Erreur: '+e.message);});}
 function addFormField(){var label=document.getElementById('ff-label').value.trim();if(!label)return;var type=document.getElementById('ff-type').value;var req=document.getElementById('ff-req').checked;if(!cdType.formFields)cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields.push({id:'custom_'+gid().slice(0,4),label:label,type:type,required:req});document.getElementById('ff-label').value='';renderCdSection();}
 window.saveCdDetails=saveCdDetails;window.saveCdRules=saveCdRules;window.saveCdNotif=saveCdNotif;window.saveCdForm=saveCdForm;window.addFormField=addFormField;window.closeCsDetail=closeCsDetail;
