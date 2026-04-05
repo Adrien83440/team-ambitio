@@ -321,6 +321,43 @@ h+='<label style="font-size:11px;color:rgba(255,255,255,.48);display:flex;align-
 h+='<button class="bb bb-g" onclick="addCustomReminder()" style="padding:6px 14px;font-size:12px">+ Ajouter</button>';
 h+='</div>';
 
+// Section: Templates
+var tpls=nf.templates||{};
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:24px 0 8px">Contenu des messages</div>';
+h+='<div style="padding:10px 14px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:12px">';
+h+='<div style="font-size:10px;color:rgba(255,255,255,.38);margin-bottom:6px">Variables disponibles (cliquer pour insérer) :</div>';
+h+='<div style="display:flex;flex-wrap:wrap;gap:4px" id="tplVarsBar">';
+var vars=[{k:"{{prenom}}",l:"Prénom"},{k:"{{nom}}",l:"Nom"},{k:"{{date}}",l:"Date"},{k:"{{time}}",l:"Heure"},{k:"{{typeLabel}}",l:"Type de RDV"}];
+vars.forEach(function(v){h+='<button class="bb" style="padding:3px 10px;font-size:10px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.2);color:#a78bfa;border-radius:5px;cursor:pointer" data-tplvar="'+v.k+'">'+v.l+' <code style="font-size:9px;opacity:.6">'+v.k+'</code></button>';});
+h+='</div></div>';
+
+// Confirmation templates
+h+='<div style="margin-bottom:16px;padding:14px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px">';
+h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:10px">📧 Email de confirmation</div>';
+h+='<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Objet</div><input class="bi tpl-field" id="tpl-conf-subject" value="'+escA(tpls.confirmation_email_subject||'Confirmation de votre RDV — {{typeLabel}}')+'" style="width:100%"/></div>';
+h+='<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Corps</div><textarea class="bi tpl-field" id="tpl-conf-body" rows="4" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.confirmation_email_body||'Bonjour {{prenom}},\\n\\nVotre RDV {{typeLabel}} est confirmé pour le {{date}} à {{time}}.\\n\\nÀ bientôt !\\n\\nL\'équipe Adrien&Emily')+'</textarea></div>';
+h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:6px;margin-top:12px">💬 SMS de confirmation</div>';
+h+='<div><textarea class="bi tpl-field" id="tpl-conf-sms" rows="2" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.confirmation_sms||'Bonjour {{prenom}}, votre RDV {{typeLabel}} est confirmé pour le {{date}} à {{time}}. À bientôt ! - Adrien&Emily')+'</textarea></div>';
+h+='</div>';
+
+// J-1 templates
+h+='<div style="margin-bottom:16px;padding:14px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px">';
+h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:10px">📧 Email rappel J-1</div>';
+h+='<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Objet</div><input class="bi tpl-field" id="tpl-j1-subject" value="'+escA(tpls.j1_email_subject||'Rappel : votre RDV demain — {{typeLabel}}')+'" style="width:100%"/></div>';
+h+='<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Corps</div><textarea class="bi tpl-field" id="tpl-j1-body" rows="4" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.j1_email_body||'Bonjour {{prenom}},\\n\\nPetit rappel : votre RDV {{typeLabel}} est prévu demain {{date}} à {{time}}.\\n\\nÀ demain !')+'</textarea></div>';
+h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:6px;margin-top:12px">💬 SMS rappel J-1</div>';
+h+='<div><textarea class="bi tpl-field" id="tpl-j1-sms" rows="2" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.j1_sms||'Rappel : votre RDV {{typeLabel}} est demain à {{time}}. À demain ! - Adrien&Emily')+'</textarea></div>';
+h+='</div>';
+
+// H-1 templates
+h+='<div style="margin-bottom:16px;padding:14px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px">';
+h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:10px">📧 Email rappel H-1</div>';
+h+='<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Objet</div><input class="bi tpl-field" id="tpl-h1-subject" value="'+escA(tpls.h1_email_subject||'Rappel : votre RDV dans 1h — {{typeLabel}}')+'" style="width:100%"/></div>';
+h+='<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Corps</div><textarea class="bi tpl-field" id="tpl-h1-body" rows="4" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.h1_email_body||'Bonjour {{prenom}},\\n\\nVotre RDV {{typeLabel}} commence dans 1h ({{time}}).\\n\\nÀ tout de suite !')+'</textarea></div>';
+h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:6px;margin-top:12px">💬 SMS rappel H-1</div>';
+h+='<div><textarea class="bi tpl-field" id="tpl-h1-sms" rows="2" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.h1_sms||'Votre RDV {{typeLabel}} commence dans 1h ({{time}}). À tout de suite ! - Adrien&Emily')+'</textarea></div>';
+h+='</div>';
+
 h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdNotif()">💾 Enregistrer</button></div>';
 }
 
@@ -355,7 +392,17 @@ function cleanType(t){var o={id:t.id,label:t.label||'',duration:t.duration||30,c
 function saveTypes(){var clean=T.map(cleanType);return CR.doc('_types').set({list:clean});}
 function saveCdDetails(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].label=document.getElementById('cd-name').value.trim()||T[i].label;T[i].duration=parseInt(document.getElementById('cd-dur').value)||30;T[i].color=document.getElementById('cd-color').value;T[i].active=document.getElementById('cd-active').value!=='false';T[i].eventType=document.getElementById('cd-eventType').value;T[i].description=document.getElementById('cd-desc').value.trim();T[i].location=document.getElementById('cd-location').value;T[i].locationUrl=document.getElementById('cd-locUrl').value.trim();cdType=T[i];saveTypes().then(function(){renderCdHead();toast('✅ Enregistré');}).catch(function(e){console.error('Save error:',e);alert('Erreur de sauvegarde: '+e.message);});}
 function saveCdRules(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var r=T[i].rules||{};var ids=['cd-bufBefore','cd-bufAfter','cd-interval','cd-cancelH','cd-maxDays','cd-minNotice'];var keys=['bufferBefore','bufferAfter','slotInterval','cancelPeriodHours','maxNoticeDays','minNoticeHours'];ids.forEach(function(id,j){var el=document.getElementById(id);if(el)r[keys[j]]=parseInt(el.value)||0;});T[i].rules=r;cdType=T[i];saveTypes().then(function(){toast('✅ Règles enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
-function saveCdNotif(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var n=T[i].notifications||{};document.querySelectorAll('[data-ntog]').forEach(function(tg){n[tg.dataset.ntog]=tg.classList.contains('on');});var ea=document.getElementById('cd-emailAccount');if(ea)n.emailAccount=ea.value;if(!n.customReminders)n.customReminders=[];T[i].notifications=n;cdType=T[i];saveTypes().then(function(){toast('✅ Notifications enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
+function saveCdNotif(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var n=T[i].notifications||{};document.querySelectorAll('[data-ntog]').forEach(function(tg){n[tg.dataset.ntog]=tg.classList.contains('on');});var ea=document.getElementById('cd-emailAccount');if(ea)n.emailAccount=ea.value;if(!n.customReminders)n.customReminders=[];
+// Save templates
+var tpls={};
+var tplIds=[['tpl-conf-subject','confirmation_email_subject'],['tpl-conf-body','confirmation_email_body'],['tpl-conf-sms','confirmation_sms'],['tpl-j1-subject','j1_email_subject'],['tpl-j1-body','j1_email_body'],['tpl-j1-sms','j1_sms'],['tpl-h1-subject','h1_email_subject'],['tpl-h1-body','h1_email_body'],['tpl-h1-sms','h1_sms']];
+tplIds.forEach(function(p){var el=document.getElementById(p[0]);if(el)tpls[p[1]]=el.value;});
+n.templates=tpls;
+T[i].notifications=n;cdType=T[i];saveTypes().then(function(){toast('✅ Notifications enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
+// Variable insertion into template fields
+var _lastTplField=null;
+document.addEventListener('focus',function(e){if(e.target.classList&&e.target.classList.contains('tpl-field'))_lastTplField=e.target;},true);
+document.addEventListener('click',function(e){var btn=e.target.closest('[data-tplvar]');if(!btn)return;var v=btn.dataset.tplvar;if(!_lastTplField){var first=document.querySelector('.tpl-field');if(first)_lastTplField=first;}if(_lastTplField){var s=_lastTplField.selectionStart||_lastTplField.value.length;var before=_lastTplField.value.substring(0,s);var after=_lastTplField.value.substring(s);_lastTplField.value=before+v+after;_lastTplField.focus();_lastTplField.selectionStart=_lastTplField.selectionEnd=s+v.length;}});
 function addCustomReminder(){var v=parseInt(document.getElementById('cr-value').value)||1;var u=document.getElementById('cr-unit').value;var em=document.getElementById('cr-email').checked;var sm=document.getElementById('cr-sms').checked;if(!em&&!sm){toast('❌ Sélectionne au moins Email ou SMS');return;}var nf=cdType.notifications||{};if(!nf.customReminders)nf.customReminders=[];nf.customReminders.push({value:v,unit:u,email:em,sms:sm});cdType.notifications=nf;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].notifications=nf;renderCdSection();saveCdNotif();}
 function removeCustomReminder(idx){var nf=cdType.notifications||{};if(!nf.customReminders)return;nf.customReminders.splice(idx,1);cdType.notifications=nf;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].notifications=nf;renderCdSection();saveCdNotif();}
 window.addCustomReminder=addCustomReminder;window.removeCustomReminder=removeCustomReminder;
