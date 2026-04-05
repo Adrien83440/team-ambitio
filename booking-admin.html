@@ -422,9 +422,9 @@ h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">C
 ff.forEach(function(f,i){
 h+='<div class="cd-ff-item"><span class="cd-ff-grip">⠿</span><span class="cd-ff-name">'+esc(f.label)+'</span>';
 h+='<span class="cd-ff-type">'+f.type+'</span>';
-h+='<button style="background:none;border:1px solid '+(f.required?'rgba(239,68,68,.3)':'rgba(255,255,255,.1)')+';padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;color:'+(f.required?'#ef4444':'rgba(255,255,255,.25)')+';cursor:pointer" onclick="toggleFormFieldReq('+i+')">'+(f.required?'* Requis':'Optionnel')+'</button>';
+h+='<button style="background:none;border:1px solid '+(f.required?'rgba(239,68,68,.3)':'rgba(255,255,255,.1)')+';padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;color:'+(f.required?'#ef4444':'rgba(255,255,255,.25)')+';cursor:pointer" onclick="toggleFormFieldReq('+i+',event)">'+(f.required?'* Requis':'Optionnel')+'</button>';
 if(f.system)h+='<span style="font-size:9px;color:rgba(255,255,255,.2)">système</span>';
-else h+='<button class="cd-ff-del" onclick="deleteFormField('+i+')" style="padding:4px 8px;font-size:12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);border-radius:4px;color:#ef4444;cursor:pointer">✕</button>';
+else h+='<button class="cd-ff-del" onclick="deleteFormField('+i+',event)" style="padding:4px 8px;font-size:12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);border-radius:4px;color:#ef4444;cursor:pointer">✕</button>';
 h+='</div>';
 });
 h+='<div class="cd-ff-add"><input class="bi" id="ff-label" placeholder="Nom du champ" style="flex:1"/><select class="bs" id="ff-type"><option value="text">Texte</option><option value="textarea">Zone de texte</option><option value="tel">Téléphone</option><option value="email">Email</option><option value="select">Liste</option></select><label style="font-size:11px;color:rgba(255,255,255,.48);display:flex;align-items:center;gap:4px"><input type="checkbox" id="ff-req"/> Requis</label><button class="bb bb-g" onclick="addFormField()">+ Ajouter</button></div>';
@@ -563,22 +563,33 @@ navigator.clipboard.writeText(code).then(function(){toast('📋 Code copié !');
 window.openShareModal=openShareModal;window.switchShareTab=switchShareTab;window.copyEmbed=copyEmbed;
 function saveCdForm(silent){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].formFields=cdType.formFields;cdType=T[i];saveTypes().then(function(){var ind=document.getElementById('cd-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Formulaire enregistré');}).catch(function(e){if(!silent)alert('Erreur: '+e.message);});}
 function addFormField(){var label=document.getElementById('ff-label').value.trim();if(!label)return;var type=document.getElementById('ff-type').value;var req=document.getElementById('ff-req').checked;if(!cdType.formFields)cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields.push({id:'custom_'+gid().slice(0,4),label:label,type:type,required:req});document.getElementById('ff-label').value='';var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].formFields=cdType.formFields;renderCdSection();saveTypes().then(function(){toast('✅ Champ ajouté');});}
-function deleteFormField(idx){
-if(!cdType||!cdType.formFields||!Array.isArray(cdType.formFields))return;
+function deleteFormField(idx,evt){
+if(evt){evt.stopPropagation();evt.preventDefault();}
+if(!cdType||!cdType.formFields)return;
 if(idx<0||idx>=cdType.formFields.length)return;
+// Immediate visual removal
+var items=document.querySelectorAll('#cdContent .cd-ff-item');
+if(items[idx])items[idx].style.display='none';
+// Data update
 cdType.formFields.splice(idx,1);
 var i=T.findIndex(function(t){return t.id===cdType.id;});
 if(i>=0)T[i].formFields=cdType.formFields;
+// Deferred full re-render + save
+setTimeout(function(){
 renderCdSection();
 saveTypes().then(function(){toast('🗑 Champ supprimé');}).catch(function(e){console.error(e);});
+},50);
 }
-function toggleFormFieldReq(idx){
+function toggleFormFieldReq(idx,evt){
+if(evt){evt.stopPropagation();evt.preventDefault();}
 if(!cdType||!cdType.formFields||!cdType.formFields[idx])return;
 cdType.formFields[idx].required=!cdType.formFields[idx].required;
 var i=T.findIndex(function(t){return t.id===cdType.id;});
 if(i>=0)T[i].formFields=cdType.formFields;
+setTimeout(function(){
 renderCdSection();
 saveTypes().then(function(){toast('✅ Modifié');});
+},0);
 }
 window.saveCdDetails=saveCdDetails;window.saveCdRules=saveCdRules;window.saveCdNotif=saveCdNotif;window.saveCdForm=saveCdForm;window.addFormField=addFormField;window.deleteFormField=deleteFormField;window.toggleFormFieldReq=toggleFormFieldReq;window.closeCsDetail=closeCsDetail;
 
