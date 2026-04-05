@@ -223,7 +223,7 @@ function tISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+
 function dFR(ds){var d=new Date(ds+'T12:00:00');return JF[d.getDay()]+' '+d.getDate()+' '+MF[d.getMonth()]+' '+d.getFullYear();}
 function mToT(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
 document.querySelectorAll('.bn-i').forEach(function(t){t.addEventListener('click',function(){document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});t.classList.add('on');document.querySelectorAll('.bp').forEach(function(p){p.classList.remove('on');});document.getElementById('p-'+t.dataset.p).classList.add('on');});});
-function loadAll(){CR.get().then(function(sn){T=[];P=[];S={};sn.forEach(function(d){var v=d.data();if(d.id==='_types')T=v.list||[];else if(d.id==='_settings')S=v;else if(v.__type==='person'){v.id=d.id;P.push(v);}});P.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});renderAll();loadB();}).catch(function(e){console.error(e);});}
+function loadAll(){CR.get().then(function(sn){var _oldCdId=cdType?cdType.id:null;var _oldExId=(typeof exPerson!=='undefined'&&exPerson)?exPerson.id:null;T=[];P=[];S={};sn.forEach(function(d){var v=d.data();if(d.id==='_types')T=v.list||[];else if(d.id==='_settings')S=v;else if(v.__type==='person'){v.id=d.id;P.push(v);}});P.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});if(_oldCdId){var _fresh=T.find(function(t){return t.id===_oldCdId;});if(_fresh)cdType=_fresh;}if(_oldExId){var _freshEx=P.find(function(p){return p.id===_oldExId;});if(_freshEx)exPerson=_freshEx;}renderAll();loadB();}).catch(function(e){console.error(e);});}
 function loadB(){db.collection('bookings').get().then(function(sn){B=[];sn.forEach(function(d){var v=d.data();v._id=d.id;B.push(v);});B.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});rRdv();}).catch(function(e){B=[];rRdv();});}
 function renderAll(){rRdv();rCs();rEx();rPg();lSt();pFlt();}
 function pFlt(){var a=document.getElementById('rFP'),b=document.getElementById('rFT');a.innerHTML='<option value="">Tous les experts</option>';b.innerHTML='<option value="">Toutes les consultations</option>';P.forEach(function(p){a.innerHTML+='<option value="'+p.id+'">'+esc(p.name)+'</option>';});T.forEach(function(t){b.innerHTML+='<option value="'+t.id+'">'+esc(t.label)+'</option>';});}
@@ -267,7 +267,14 @@ else if(cdSection==='form')saveCdForm(true);
 else if(cdSection==='availability')saveCdDetails(true);
 },delay);
 }
-function openCsDetail(tid){cdType=T.find(function(t){return t.id===tid;});if(!cdType)return;cdSection='details';document.getElementById('csGridView').style.display='none';document.getElementById('csDetailView').style.display='';renderCdHead();renderCdNav();renderCdSection();}
+function openCsDetail(tid){cdType=T.find(function(t){return t.id===tid;});if(!cdType)return;
+// Ensure formFields exists
+if(!cdType.formFields||!Array.isArray(cdType.formFields)){
+cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];
+var _ti=T.findIndex(function(t){return t.id===cdType.id;});if(_ti>=0)T[_ti].formFields=cdType.formFields;
+saveTypes();
+}
+cdSection='details';document.getElementById('csGridView').style.display='none';document.getElementById('csDetailView').style.display='';renderCdHead();renderCdNav();renderCdSection();}
 function closeCsDetail(){document.getElementById('csDetailView').style.display='none';document.getElementById('csGridView').style.display='';cdType=null;renderAll();}
 function renderCdHead(){var EVT_LABELS={private:'En privé',group:'Groupe',roundrobin:'Round-robin',collective:'Collectif'};var locLabels={meet:'📹 Google Meet',zoom:'📹 Zoom',teams:'📹 Teams',phone:'📞 Téléphone',inperson:'📍 En personne',custom:'🔗 Lien custom'};var _cC=P.some(function(p){return p.calendarConnected===true;});var locBadge='';if(cdType.location){var _lbl=locLabels[cdType.location]||'';if(cdType.location==='meet'&&_cC){locBadge='<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.15);margin-left:8px">✨ '+_lbl+' · Auto</span>';}else{locBadge='<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.15);margin-left:8px">'+_lbl+'</span>';}}var evtLabel=EVT_LABELS[cdType.eventType||'private']||'En privé';var h='<span class="cd-back" onclick="closeCsDetail()">← Retour aux consultations</span><div class="sp"></div>';
 if(cdType.image)h+='<img src="'+cdType.image+'" style="width:48px;height:48px;border-radius:13px;object-fit:cover"/>';
@@ -278,8 +285,8 @@ document.addEventListener('click',function(e){var n=e.target.closest('[data-cds]
 
 function renderCdSection(){
 var el=document.getElementById('cdContent'),h='',r=cdType.rules||{},nf=cdType.notifications||{},ff=cdType.formFields||null;
-// Default form fields if none set
-if(!ff)ff=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true},{id:'secteur',label:'Secteur d\'activité',type:'text',required:false},{id:'message',label:'Message',type:'textarea',required:false}];
+// Default form fields if none set — MUST set on cdType too
+if(!ff){ff=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true},{id:'secteur',label:'Secteur d\'activité',type:'text',required:false},{id:'message',label:'Message',type:'textarea',required:false}];cdType.formFields=ff;var _ti=T.findIndex(function(t){return t.id===cdType.id;});if(_ti>=0)T[_ti].formFields=ff;}
 
 if(cdSection==='details'){
 h+='<div class="cd-sec-title">📋 Détails de Consultation</div>';
@@ -416,7 +423,13 @@ h+='</div></div>';
 }
 
 else if(cdSection==='form'){
-if(!ff||!Array.isArray(ff)){ff=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields=ff;}
+if(!ff||!Array.isArray(ff)){
+ff=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];
+cdType.formFields=ff;
+var _ffi=T.findIndex(function(t){return t.id===cdType.id;});
+if(_ffi>=0)T[_ffi].formFields=ff;
+saveTypes();
+}
 h+='<div class="cd-sec-title">📝 Formulaire de réservation</div>';
 h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Champs affichés au client lors de la réservation.</div>';
 ff.forEach(function(f,i){
@@ -565,16 +578,29 @@ function saveCdForm(silent){var i=T.findIndex(function(t){return t.id===cdType.i
 function addFormField(){var label=document.getElementById('ff-label').value.trim();if(!label)return;var type=document.getElementById('ff-type').value;var req=document.getElementById('ff-req').checked;if(!cdType.formFields)cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields.push({id:'custom_'+gid().slice(0,4),label:label,type:type,required:req});document.getElementById('ff-label').value='';var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].formFields=cdType.formFields;renderCdSection();saveTypes().then(function(){toast('✅ Champ ajouté');});}
 function deleteFormField(idx,evt){
 if(evt){evt.stopPropagation();evt.preventDefault();}
-if(!cdType||!cdType.formFields)return;
+if(!cdType)return;
+// If formFields is missing, reconstruct from DOM
+if(!cdType.formFields||!Array.isArray(cdType.formFields)){
+cdType.formFields=[];
+document.querySelectorAll('#cdContent .cd-ff-item').forEach(function(item){
+var nameEl=item.querySelector('.cd-ff-name');
+var typeEl=item.querySelector('.cd-ff-type');
+if(!nameEl||!typeEl)return;
+var isSys=item.textContent.indexOf('système')>=0;
+var isReq=item.textContent.indexOf('Requis')>=0;
+var f={id:isSys?nameEl.textContent.trim().toLowerCase().replace(/[^a-z]/g,''):'custom_'+Math.random().toString(36).slice(2,6),label:nameEl.textContent.trim(),type:typeEl.textContent.trim(),required:isReq};
+if(isSys)f.system=true;
+cdType.formFields.push(f);
+});
+var ti=T.findIndex(function(t){return t.id===cdType.id;});
+if(ti>=0)T[ti].formFields=cdType.formFields;
+}
 if(idx<0||idx>=cdType.formFields.length)return;
-// Immediate visual removal
-var items=document.querySelectorAll('#cdContent .cd-ff-item');
-if(items[idx])items[idx].style.display='none';
-// Data update
 cdType.formFields.splice(idx,1);
 var i=T.findIndex(function(t){return t.id===cdType.id;});
 if(i>=0)T[i].formFields=cdType.formFields;
-// Deferred full re-render + save
+var items=document.querySelectorAll('#cdContent .cd-ff-item');
+if(items[idx])items[idx].style.display='none';
 setTimeout(function(){
 renderCdSection();
 saveTypes().then(function(){toast('🗑 Champ supprimé');}).catch(function(e){console.error(e);});
@@ -582,13 +608,31 @@ saveTypes().then(function(){toast('🗑 Champ supprimé');}).catch(function(e){c
 }
 function toggleFormFieldReq(idx,evt){
 if(evt){evt.stopPropagation();evt.preventDefault();}
-if(!cdType||!cdType.formFields||!cdType.formFields[idx])return;
+if(!cdType)return;
+if(!cdType.formFields||!Array.isArray(cdType.formFields)){
+cdType.formFields=[];
+document.querySelectorAll('#cdContent .cd-ff-item').forEach(function(item){
+var nameEl=item.querySelector('.cd-ff-name');
+var typeEl=item.querySelector('.cd-ff-type');
+if(!nameEl||!typeEl)return;
+var isSys=item.textContent.indexOf('système')>=0;
+var isReq=item.textContent.indexOf('Requis')>=0;
+var f={id:isSys?nameEl.textContent.trim().toLowerCase().replace(/[^a-z]/g,''):'custom_'+Math.random().toString(36).slice(2,6),label:nameEl.textContent.trim(),type:typeEl.textContent.trim(),required:isReq};
+if(isSys)f.system=true;
+cdType.formFields.push(f);
+});
+var ti=T.findIndex(function(t){return t.id===cdType.id;});
+if(ti>=0)T[ti].formFields=cdType.formFields;
+}
+if(!cdType.formFields[idx])return;
 cdType.formFields[idx].required=!cdType.formFields[idx].required;
 var i=T.findIndex(function(t){return t.id===cdType.id;});
 if(i>=0)T[i].formFields=cdType.formFields;
 setTimeout(function(){
 renderCdSection();
 saveTypes().then(function(){toast('✅ Modifié');});
+},0);
+}
 },0);
 }
 window.saveCdDetails=saveCdDetails;window.saveCdRules=saveCdRules;window.saveCdNotif=saveCdNotif;window.saveCdForm=saveCdForm;window.addFormField=addFormField;window.deleteFormField=deleteFormField;window.toggleFormFieldReq=toggleFormFieldReq;window.closeCsDetail=closeCsDetail;
