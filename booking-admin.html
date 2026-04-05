@@ -217,6 +217,7 @@ var db=firebase.firestore(),CR=db.collection('booking_config'),T=[],P=[],S={},B=
 var JR=['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'],JS=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'],JF=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],MF=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 function toast(m){var t=document.getElementById('bkT');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function escA(s){return esc(s).replace(/"/g,'&quot;');}
 function gid(){return Math.random().toString(36).slice(2,10);}
 function tISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function dFR(ds){var d=new Date(ds+'T12:00:00');return JF[d.getDay()]+' '+d.getDate()+' '+MF[d.getMonth()]+' '+d.getFullYear();}
