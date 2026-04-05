@@ -195,7 +195,7 @@
 <div class="sc2"><div class="sc-t">🎨 Page de réservation</div><div class="sc-d2">Personnalisation visuelle</div><div class="cd-field" style="margin-top:10px"><div class="cd-field-label">Couleur principale</div><input type="color" id="stBrandColor" value="#8b5cf6" style="width:60px;height:36px;border:0;border-radius:8px;cursor:pointer"/></div><div class="cd-field" style="margin-top:8px"><div class="cd-field-label">Message d'accueil</div><input class="bi" id="stWelcome" placeholder="Bienvenue ! Choisissez votre rendez-vous." style="width:100%"/></div></div>
 <div class="sc2"><div class="sc-t">📧 Notifications</div><div class="sc-d2">Email par défaut</div><div class="cd-field" style="margin-top:10px"><div class="cd-field-label">Email de notification admin</div><input type="email" class="bi" id="stNotifEmail" placeholder="contact@adrienemily.com" style="width:100%"/></div><div style="margin-top:8px;font-size:11px;color:rgba(52,211,153,.7);display:flex;align-items:center;gap:6px">✅ Emails et SMS opérationnels via Cloud Functions</div></div>
 </div>
-<div style="margin-top:14px;text-align:right"><button class="bb bb-p" id="saveSt">💾 Sauvegarder</button></div>
+<div style="margin-top:14px;text-align:right"><span id="st-autosave-status" style="font-size:11px;font-weight:600"></span></div>
 
 <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700;margin:32px 0 16px">Intégrations</div>
 
@@ -242,6 +242,31 @@ document.getElementById('tSub').addEventListener('click',function(){var n=docume
 
 // ═══ CONSULTATION DETAIL VIEW ═══
 var cdType=null,cdSection='details';
+var _autoSaveTimer=null;
+var _autoSaving=false;
+function autoSaveIndicator(el){
+if(!el)return;
+el.textContent='⏳ Sauvegarde…';el.style.color='rgba(255,255,255,.3)';
+}
+function autoSaveDone(el){
+if(!el)return;
+el.textContent='✓ Sauvegardé';el.style.color='#34d399';
+setTimeout(function(){if(el)el.textContent='';},2000);
+}
+function autoSaveCd(immediate){
+if(!cdType)return;
+if(_autoSaveTimer)clearTimeout(_autoSaveTimer);
+var delay=immediate?0:800;
+_autoSaveTimer=setTimeout(function(){
+var ind=document.getElementById('cd-autosave-status');
+if(ind)autoSaveIndicator(ind);
+if(cdSection==='details')saveCdDetails(true);
+else if(cdSection==='rules')saveCdRules(true);
+else if(cdSection==='notifications')saveCdNotif(true);
+else if(cdSection==='form')saveCdForm(true);
+else if(cdSection==='availability')saveCdDetails(true);
+},delay);
+}
 function openCsDetail(tid){cdType=T.find(function(t){return t.id===tid;});if(!cdType)return;cdSection='details';document.getElementById('csGridView').style.display='none';document.getElementById('csDetailView').style.display='';renderCdHead();renderCdNav();renderCdSection();}
 function closeCsDetail(){document.getElementById('csDetailView').style.display='none';document.getElementById('csGridView').style.display='';cdType=null;renderAll();}
 function renderCdHead(){var EVT_LABELS={private:'En privé',group:'Groupe',roundrobin:'Round-robin',collective:'Collectif'};var locLabels={meet:'📹 Google Meet',zoom:'📹 Zoom',teams:'📹 Teams',phone:'📞 Téléphone',inperson:'📍 En personne',custom:'🔗 Lien custom'};var _cC=P.some(function(p){return p.calendarConnected===true;});var locBadge='';if(cdType.location){var _lbl=locLabels[cdType.location]||'';if(cdType.location==='meet'&&_cC){locBadge='<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.15);margin-left:8px">✨ '+_lbl+' · Auto</span>';}else{locBadge='<span style="font-size:11px;padding:3px 10px;border-radius:6px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.15);margin-left:8px">'+_lbl+'</span>';}}var evtLabel=EVT_LABELS[cdType.eventType||'private']||'En privé';var h='<span class="cd-back" onclick="closeCsDetail()">← Retour aux consultations</span><div class="sp"></div>';
@@ -275,7 +300,7 @@ h+='<div class="cd-row"><div class="cd-field"><div class="cd-field-label">Mode d
 h+='<div class="cd-field" id="cd-meetAuto-wrap" style="display:'+(_meetAuto?'block':'none')+'"><div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(52,211,153,.06);border:1px solid rgba(52,211,153,.15);border-radius:10px;font-size:12px;color:#34d399"><span style="font-size:16px">✨</span><div><strong>Lien généré automatiquement</strong><div style="color:rgba(52,211,153,.7);margin-top:2px">Un lien Google Meet unique sera créé pour chaque rendez-vous via Google Calendar.</div></div></div></div>';
 h+='<div class="cd-field" id="cd-locUrl-wrap" style="display:'+((!_meetAuto&&(loc==='meet'||loc==='zoom'||loc==='custom'))?'block':'none')+'"><div class="cd-field-label">'+(loc==='meet'?'Lien Google Meet':loc==='zoom'?'Lien Zoom':'URL de la réunion')+'</div><input class="bi" id="cd-locUrl" value="'+esc(locUrl)+'" placeholder="https://meet.google.com/xxx-xxx-xxx"/></div></div>';
 h+='<div class="cd-field"><div class="cd-field-label">Description</div><textarea class="bi" id="cd-desc" style="width:100%;min-height:60px;resize:vertical" placeholder="Décrivez cette consultation…">'+(cdType.description||'')+'</textarea></div>';
-h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdDetails()">💾 Enregistrer</button></div>';
+h+='<div class="cd-save-bar" style="border-top:0;justify-content:flex-end"><span id="cd-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }
 
 else if(cdSection==='experts'){
@@ -291,14 +316,14 @@ else if(cdSection==='availability'){
 h+='<div class="cd-sec-title">🕐 Disponibilité et limites</div>';
 h+='<div class="cd-row"><div class="cd-field"><div class="cd-field-label">Plage de dates (dans le futur)</div><div class="cd-rule-inputs"><input type="number" class="bi" id="cd-maxDays" min="1" value="'+(r.maxNoticeDays||60)+'" style="width:80px"/><select class="bs" id="cd-maxDaysUnit" style="width:90px"><option value="jours"'+(r.maxNoticeDaysUnit==='jours'||!r.maxNoticeDaysUnit?' selected':'')+'>jours</option><option value="heures"'+(r.maxNoticeDaysUnit==='heures'?' selected':'')+'>heures</option><option value="minutes"'+(r.maxNoticeDaysUnit==='minutes'?' selected':'')+'>minutes</option></select></div></div><div class="cd-field"><div class="cd-field-label">Préavis minimum</div><div class="cd-rule-inputs"><input type="number" class="bi" id="cd-minNotice" min="0" value="'+(r.minNoticeHours||0)+'" style="width:80px"/><select class="bs" id="cd-minNoticeUnit" style="width:90px"><option value="heures"'+(r.minNoticeUnit==='heures'||!r.minNoticeUnit?' selected':'')+'>heures</option><option value="minutes"'+(r.minNoticeUnit==='minutes'?' selected':'')+'>minutes</option><option value="jours"'+(r.minNoticeUnit==='jours'?' selected':'')+'>jours</option></select></div></div></div>';
 h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:10px">Les disponibilités horaires sont configurées par expert dans l\'onglet Experts.</div>';
-h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdRules()">💾 Enregistrer</button></div>';
+h+='<div class="cd-save-bar" style="border-top:0;justify-content:flex-end"><span id="cd-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }
 
 else if(cdSection==='rules'){
 h+='<div class="cd-sec-title">📐 Règles de planification</div>';
 h+='<div class="cd-row"><div class="cd-rule-card"><div class="cd-rule-title">Pré-tampon</div><div class="cd-rule-desc">Délai supplémentaire avant un RDV</div><div class="cd-rule-inputs"><input type="number" class="bi" id="cd-bufBefore" min="0" value="'+(r.bufferBefore||0)+'" style="width:80px"/><span class="cd-rule-unit">minutes</span></div></div><div class="cd-rule-card"><div class="cd-rule-title">Post-tampon</div><div class="cd-rule-desc">Délai supplémentaire après un RDV</div><div class="cd-rule-inputs"><input type="number" class="bi" id="cd-bufAfter" min="0" value="'+(r.bufferAfter||0)+'" style="width:80px"/><span class="cd-rule-unit">minutes</span></div></div></div>';
 h+='<div class="cd-row"><div class="cd-rule-card"><div class="cd-rule-title">Intervalle de planification</div><div class="cd-rule-desc">Écart entre les créneaux proposés</div><div class="cd-rule-inputs"><input type="number" class="bi" id="cd-interval" min="5" value="'+(r.slotInterval||15)+'" style="width:80px"/><span class="cd-rule-unit">minutes</span></div></div><div class="cd-rule-card"><div class="cd-rule-title">Période d\'annulation</div><div class="cd-rule-desc">Délai min pour annuler / replanifier</div><div class="cd-rule-inputs"><input type="number" class="bi" id="cd-cancelH" min="0" value="'+(r.cancelPeriodHours||0)+'" style="width:80px"/><span class="cd-rule-unit">heures</span></div></div></div>';
-h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdRules()">💾 Enregistrer</button></div>';
+h+='<div class="cd-save-bar" style="border-top:0;justify-content:flex-end"><span id="cd-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }
 
 else if(cdSection==='notifications'){
@@ -360,7 +385,7 @@ h+='<label style="font-size:11px;color:rgba(255,255,255,.48);display:flex;align-
 h+='<button class="bb bb-g" onclick="addCustomReminder()" style="padding:6px 14px;font-size:12px">+ Ajouter</button>';
 h+='</div>';
 
-h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdNotif()">💾 Enregistrer</button></div>';
+h+='<div class="cd-save-bar" style="border-top:0;justify-content:flex-end"><span id="cd-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 
 // Template modal (hidden)
 h+='<div id="tplModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;display:none;align-items:center;justify-content:center">';
@@ -403,11 +428,16 @@ else h+='<button class="cd-ff-del" data-action="delFF" data-idx="'+i+'" style="p
 h+='</div>';
 });
 h+='<div class="cd-ff-add"><input class="bi" id="ff-label" placeholder="Nom du champ" style="flex:1"/><select class="bs" id="ff-type"><option value="text">Texte</option><option value="textarea">Zone de texte</option><option value="tel">Téléphone</option><option value="email">Email</option><option value="select">Liste</option></select><label style="font-size:11px;color:rgba(255,255,255,.48);display:flex;align-items:center;gap:4px"><input type="checkbox" id="ff-req"/> Requis</label><button class="bb bb-g" onclick="addFormField()">+ Ajouter</button></div>';
-h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdForm()">💾 Enregistrer</button></div>';
+h+='<div class="cd-save-bar" style="border-top:0;justify-content:flex-end"><span id="cd-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }
 el.innerHTML=h;
-// Bind notification toggles
-el.querySelectorAll('[data-ntog]').forEach(function(tg){tg.addEventListener('click',function(){tg.classList.toggle('on');});});
+// Bind notification toggles + auto-save on toggle click
+el.querySelectorAll('[data-ntog]').forEach(function(tg){tg.addEventListener('click',function(){tg.classList.toggle('on');autoSaveCd(true);});});
+// Auto-save on input/change for all fields in consultation detail
+el.querySelectorAll('input:not(#ff-label):not(#ff-req):not(#cr-value):not(#cr-email):not(#cr-sms),textarea,select:not(#ff-type):not(#cr-unit)').forEach(function(inp){
+inp.addEventListener('input',function(){autoSaveCd();});
+inp.addEventListener('change',function(){autoSaveCd(true);});
+});
 }
 
 // Save functions — clean undefined before Firestore
@@ -420,12 +450,12 @@ else{autoW.style.display='none';urlW.style.display=(val==='meet'||val==='zoom'||
 }
 function cleanType(t){var o={id:t.id,label:t.label||'',duration:t.duration||30,color:t.color||'#8b5cf6'};if(t.eventType)o.eventType=t.eventType;if(t.description)o.description=t.description;if(t.active===false)o.active=false;if(t.image)o.image=t.image;if(t.location)o.location=t.location;if(t.locationUrl)o.locationUrl=t.locationUrl;if(t.rules){o.rules={};for(var k in t.rules)if(t.rules[k]!==undefined&&t.rules[k]!==null)o.rules[k]=t.rules[k];}if(t.notifications){o.notifications={};for(var k2 in t.notifications)if(t.notifications[k2]!==undefined&&t.notifications[k2]!==null)o.notifications[k2]=t.notifications[k2];}if(t.formFields)o.formFields=t.formFields.map(function(f){var r={id:f.id,label:f.label,type:f.type,required:!!f.required};if(f.system)r.system=true;return r;});return o;}
 function saveTypes(){var clean=T.map(cleanType);return CR.doc('_types').set({list:clean});}
-function saveCdDetails(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].label=document.getElementById('cd-name').value.trim()||T[i].label;T[i].duration=parseInt(document.getElementById('cd-dur').value)||30;T[i].color=document.getElementById('cd-color').value;T[i].active=document.getElementById('cd-active').value!=='false';T[i].eventType=document.getElementById('cd-eventType').value;T[i].description=document.getElementById('cd-desc').value.trim();T[i].location=document.getElementById('cd-location').value;T[i].locationUrl=document.getElementById('cd-locUrl').value.trim();if(cdType.image)T[i].image=cdType.image;else delete T[i].image;cdType=T[i];saveTypes().then(function(){renderCdHead();toast('✅ Enregistré');}).catch(function(e){console.error('Save error:',e);alert('Erreur de sauvegarde: '+e.message);});}
+function saveCdDetails(silent){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].label=document.getElementById('cd-name').value.trim()||T[i].label;T[i].duration=parseInt(document.getElementById('cd-dur').value)||30;T[i].color=document.getElementById('cd-color').value;T[i].active=document.getElementById('cd-active').value!=='false';T[i].eventType=document.getElementById('cd-eventType').value;T[i].description=document.getElementById('cd-desc').value.trim();T[i].location=document.getElementById('cd-location').value;T[i].locationUrl=document.getElementById('cd-locUrl').value.trim();if(cdType.image)T[i].image=cdType.image;else delete T[i].image;cdType=T[i];saveTypes().then(function(){renderCdHead();var ind=document.getElementById('cd-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Enregistré');}).catch(function(e){console.error('Save error:',e);if(!silent)alert('Erreur de sauvegarde: '+e.message);});}
 function previewCdImage(input){var f=input.files[0];if(!f)return;if(f.size>200*1024){toast('❌ Image trop lourde (max 200KB)');return;}var r=new FileReader();r.onload=function(e){cdType.image=e.target.result;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].image=cdType.image;renderCdSection();};r.readAsDataURL(f);}
 function removeCdImage(){delete cdType.image;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)delete T[i].image;renderCdSection();}
 window.previewCdImage=previewCdImage;window.removeCdImage=removeCdImage;
-function saveCdRules(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var r=T[i].rules||{};var ids=['cd-bufBefore','cd-bufAfter','cd-interval','cd-cancelH','cd-maxDays','cd-minNotice'];var keys=['bufferBefore','bufferAfter','slotInterval','cancelPeriodHours','maxNoticeDays','minNoticeHours'];ids.forEach(function(id,j){var el=document.getElementById(id);if(el)r[keys[j]]=parseInt(el.value)||0;});var muEl=document.getElementById('cd-maxDaysUnit');if(muEl)r.maxNoticeDaysUnit=muEl.value;var mnuEl=document.getElementById('cd-minNoticeUnit');if(mnuEl)r.minNoticeUnit=mnuEl.value;T[i].rules=r;cdType=T[i];saveTypes().then(function(){toast('✅ Règles enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
-function saveCdNotif(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var n=T[i].notifications||{};document.querySelectorAll('[data-ntog]').forEach(function(tg){n[tg.dataset.ntog]=tg.classList.contains('on');});var ea=document.getElementById('cd-emailAccount');if(ea)n.emailAccount=ea.value;if(!n.customReminders)n.customReminders=[];T[i].notifications=n;cdType=T[i];saveTypes().then(function(){toast('✅ Notifications enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
+function saveCdRules(silent){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var r=T[i].rules||{};var ids=['cd-bufBefore','cd-bufAfter','cd-interval','cd-cancelH','cd-maxDays','cd-minNotice'];var keys=['bufferBefore','bufferAfter','slotInterval','cancelPeriodHours','maxNoticeDays','minNoticeHours'];ids.forEach(function(id,j){var el=document.getElementById(id);if(el)r[keys[j]]=parseInt(el.value)||0;});var muEl=document.getElementById('cd-maxDaysUnit');if(muEl)r.maxNoticeDaysUnit=muEl.value;var mnuEl=document.getElementById('cd-minNoticeUnit');if(mnuEl)r.minNoticeUnit=mnuEl.value;T[i].rules=r;cdType=T[i];saveTypes().then(function(){var ind=document.getElementById('cd-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Règles enregistrées');}).catch(function(e){if(!silent)alert('Erreur: '+e.message);});}
+function saveCdNotif(silent){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var n=T[i].notifications||{};document.querySelectorAll('[data-ntog]').forEach(function(tg){n[tg.dataset.ntog]=tg.classList.contains('on');});var ea=document.getElementById('cd-emailAccount');if(ea)n.emailAccount=ea.value;if(!n.customReminders)n.customReminders=[];T[i].notifications=n;cdType=T[i];saveTypes().then(function(){var ind=document.getElementById('cd-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Notifications enregistrées');}).catch(function(e){if(!silent)alert('Erreur: '+e.message);});}
 // Variable insertion into template fields
 
 function addCustomReminder(){var v=parseInt(document.getElementById('cr-value').value)||1;var u=document.getElementById('cr-unit').value;var em=document.getElementById('cr-email').checked;var sm=document.getElementById('cr-sms').checked;if(!em&&!sm){toast('❌ Sélectionne au moins Email ou SMS');return;}var nf=cdType.notifications||{};if(!nf.customReminders)nf.customReminders=[];nf.customReminders.push({value:v,unit:u,email:em,sms:sm});cdType.notifications=nf;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].notifications=nf;renderCdSection();saveCdNotif();}
@@ -531,8 +561,8 @@ else code='<a href="'+url+'" target="_blank">Réserver un rendez-vous</a>';
 navigator.clipboard.writeText(code).then(function(){toast('📋 Code copié !');});
 }
 window.openShareModal=openShareModal;window.switchShareTab=switchShareTab;window.copyEmbed=copyEmbed;
-function saveCdForm(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].formFields=cdType.formFields;cdType=T[i];saveTypes().then(function(){toast('✅ Formulaire enregistré');}).catch(function(e){alert('Erreur: '+e.message);});}
-function addFormField(){var label=document.getElementById('ff-label').value.trim();if(!label)return;var type=document.getElementById('ff-type').value;var req=document.getElementById('ff-req').checked;if(!cdType.formFields)cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields.push({id:'custom_'+gid().slice(0,4),label:label,type:type,required:req});document.getElementById('ff-label').value='';renderCdSection();}
+function saveCdForm(silent){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].formFields=cdType.formFields;cdType=T[i];saveTypes().then(function(){var ind=document.getElementById('cd-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Formulaire enregistré');}).catch(function(e){if(!silent)alert('Erreur: '+e.message);});}
+function addFormField(){var label=document.getElementById('ff-label').value.trim();if(!label)return;var type=document.getElementById('ff-type').value;var req=document.getElementById('ff-req').checked;if(!cdType.formFields)cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields.push({id:'custom_'+gid().slice(0,4),label:label,type:type,required:req});document.getElementById('ff-label').value='';var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].formFields=cdType.formFields;renderCdSection();saveTypes().then(function(){toast('✅ Champ ajouté');});}
 window.saveCdDetails=saveCdDetails;window.saveCdRules=saveCdRules;window.saveCdNotif=saveCdNotif;window.saveCdForm=saveCdForm;window.addFormField=addFormField;window.closeCsDetail=closeCsDetail;
 
 // ═══ RDV DETAIL PANEL ═══
@@ -757,7 +787,7 @@ h+='<option value="'+ci+'"'+(cal.createEvents?' selected':'')+'>'+esc(cal.name)+
 });
 h+='</select>';
 
-h+='<div class="cd-save-bar" style="margin-top:16px"><button class="bb bb-p" onclick="saveCalendarSettings()">💾 Enregistrer les préférences</button></div>';
+h+='<div class="cd-save-bar" style="margin-top:16px;border-top:0;justify-content:flex-end"><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }
 }else{
 h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">📅</span><div><div class="cal-card-title" style="color:rgba(255,255,255,.38)">Aucun calendrier connecté</div><div class="cal-card-sub">La vérification de conflits n\'est pas active.</div></div></div></div>';
@@ -822,7 +852,7 @@ h+='<span class="hol-date">Prochain : '+formatHolDate(nextDt)+'</span>';
 h+='</div>';
 });
 
-h+='<div class="cd-save-bar" style="margin-top:20px"><button class="bb bb-r" onclick="if(confirm(\'Supprimer cet expert ?\')){CR.doc(\''+exPerson.id+'\').delete().then(function(){closeExDetail();loadAll();toast(\'🗑 Expert supprimé\');});}" style="margin-right:auto">🗑 Supprimer cet expert</button><button class="bb bb-p" onclick="saveExAdvanced()">💾 Sauvegarder</button></div>';
+h+='<div class="cd-save-bar" style="margin-top:20px"><button class="bb bb-r" onclick="if(confirm(\'Supprimer cet expert ?\')){CR.doc(\''+exPerson.id+'\').delete().then(function(){closeExDetail();loadAll();toast(\'🗑 Expert supprimé\');});}" style="margin-right:auto">🗑 Supprimer cet expert</button><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }
 
 el.innerHTML=h;
@@ -836,6 +866,32 @@ p.schedule[dy][idx][field]=inp.value;
 CR.doc(pid).update({schedule:p.schedule}).then(function(){toast('✅');});
 });
 });
+// Auto-save for expert advanced + calendar sections
+var _exAutoTimer=null;
+function autoSaveEx(immediate){
+if(_exAutoTimer)clearTimeout(_exAutoTimer);
+var delay=immediate?0:800;
+_exAutoTimer=setTimeout(function(){
+var ind=document.getElementById('ex-autosave-status');
+if(ind)autoSaveIndicator(ind);
+if(exSection==='advanced')saveExAdvanced(true);
+else if(exSection==='calendar')saveCalendarSettings(true);
+},delay);
+}
+if(exSection==='advanced'||exSection==='calendar'){
+el.querySelectorAll('input,select').forEach(function(inp){
+inp.addEventListener('input',function(){autoSaveEx();});
+inp.addEventListener('change',function(){autoSaveEx(true);});
+});
+// Calendar conflict toggles
+el.querySelectorAll('[data-calci]').forEach(function(tg){
+tg.addEventListener('click',function(){autoSaveEx(true);});
+});
+// Holiday toggles
+el.querySelectorAll('[data-holid]').forEach(function(tg){
+tg.addEventListener('click',function(){autoSaveEx(true);});
+});
+}
 }
 
 // Slot management functions
@@ -923,7 +979,7 @@ el.classList.toggle('on');
 window.toggleHoliday=toggleHoliday;
 
 // Save advanced settings
-function saveExAdvanced(){
+function saveExAdvanced(silent){
 if(!exPerson)return;
 var u={};
 var ml=document.getElementById('exMeetLink').value.trim();
@@ -935,16 +991,15 @@ var md=parseInt(document.getElementById('exMaxDay').value);u.maxPerDay=isNaN(md)
 var mw=parseInt(document.getElementById('exMaxWeek').value);u.maxPerWeek=isNaN(mw)?0:mw;
 CR.doc(exPerson.id).update(u).then(function(){
 Object.assign(exPerson,u);
-// Save holidays to _settings
 var hols=[];
 document.querySelectorAll('[data-holid]').forEach(function(tg){
 if(tg.classList.contains('on'))hols.push(tg.dataset.holid);
 });
 S.holidays=hols;
 CR.doc('_settings').set(S,{merge:true}).then(function(){
-renderExHead();toast('✅ Paramètres enregistrés');
+renderExHead();var ind=document.getElementById('ex-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Paramètres enregistrés');
 });
-}).catch(function(e){alert('Erreur: '+e.message);});
+}).catch(function(e){if(!silent)alert('Erreur: '+e.message);});
 }
 window.saveExAdvanced=saveExAdvanced;
 
@@ -984,15 +1039,13 @@ window.connectCalendar=connectCalendar;window.disconnectCalendar=disconnectCalen
 // Calendar settings management
 function toggleCalCheck(idx,el){el.classList.toggle('on');}
 function setEventCalendar(idx){}
-function saveCalendarSettings(){
+function saveCalendarSettings(silent){
 if(!exPerson||!exPerson.calendarList)return;
 var list=exPerson.calendarList;
-// Read checkConflicts from toggles
 document.querySelectorAll('[data-calci]').forEach(function(tg){
 var i=parseInt(tg.dataset.calci);
 if(list[i])list[i].checkConflicts=tg.classList.contains('on');
 });
-// Read createEvents from dropdown
 var sel=document.getElementById('exEventCal');
 if(sel){
 var si=parseInt(sel.value);
@@ -1000,10 +1053,9 @@ list.forEach(function(c,i){c.createEvents=(i===si);});
 }
 exPerson.calendarList=list;
 CR.doc(exPerson.id).update({calendarList:list}).then(function(){
-// Trigger busy refresh with new calendar selection
 db.collection('calendar_sync_requests').doc(exPerson.id).set({requestedAt:firebase.firestore.FieldValue.serverTimestamp()});
-toast('✅ Préférences calendrier enregistrées');
-}).catch(function(e){alert('Erreur: '+e.message);});
+var ind=document.getElementById('ex-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Préférences calendrier enregistrées');
+}).catch(function(e){if(!silent)alert('Erreur: '+e.message);});
 }
 window.toggleCalCheck=toggleCalCheck;window.setEventCalendar=setEventCalendar;window.saveCalendarSettings=saveCalendarSettings;
 
@@ -1116,7 +1168,10 @@ h2+='<div class="cal-warn" style="margin-top:8px">Allez dans Experts → Paramè
 h2+='</div></div>';
 document.getElementById('intCal').innerHTML=h2;
 }
-document.getElementById('saveSt').addEventListener('click',function(){
+var _stAutoTimer=null;
+function saveSettingsAuto(){
+var ind=document.getElementById('st-autosave-status');
+if(ind)autoSaveIndicator(ind);
 var u={};
 var el;
 el=document.getElementById('stOrgName');if(el)u.orgName=el.value.trim();
@@ -1127,7 +1182,13 @@ el=document.getElementById('stWelcome');if(el)u.welcomeMessage=el.value.trim();
 el=document.getElementById('stNotifEmail');if(el)u.notifEmail=el.value.trim();
 // Preserve existing holidays
 if(S.holidays)u.holidays=S.holidays;
-CR.doc('_settings').set(u,{merge:true}).then(function(){Object.assign(S,u);toast('✅ Sauvegardé');});
+CR.doc('_settings').set(u,{merge:true}).then(function(){Object.assign(S,u);if(ind)autoSaveDone(ind);});
+}
+['stOrgName','stOrgEmail','stTimezone','stBrandColor','stWelcome','stNotifEmail'].forEach(function(id){
+var inp=document.getElementById(id);
+if(!inp)return;
+inp.addEventListener('input',function(){if(_stAutoTimer)clearTimeout(_stAutoTimer);_stAutoTimer=setTimeout(saveSettingsAuto,800);});
+inp.addEventListener('change',function(){if(_stAutoTimer)clearTimeout(_stAutoTimer);saveSettingsAuto();});
 });
 document.getElementById('newRdv').addEventListener('click',function(){var a=document.getElementById('mT'),b=document.getElementById('mP');a.innerHTML='<option value="">Choisir</option>';b.innerHTML='<option value="">Choisir</option>';T.forEach(function(t){a.innerHTML+='<option value="'+t.id+'">'+esc(t.label)+' ('+t.duration+' min)</option>';});P.forEach(function(p){b.innerHTML+='<option value="'+p.id+'">'+esc(p.name)+'</option>';});document.getElementById('mD').value=tISO();['mFn','mLn','mEm','mPh','mNo'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('cMo').classList.add('show');});
 document.getElementById('moX').addEventListener('click',function(){document.getElementById('cMo').classList.remove('show');});
@@ -1138,7 +1199,7 @@ else if(ac==='openCs'){openCsDetail(a.dataset.tid);}
 else if(ac==='assignEx'){var ap=P.find(function(x){return x.id===a.dataset.pid;});if(ap){ap.types=ap.types||[];if(ap.types.indexOf(cdType.id)<0)ap.types.push(cdType.id);CR.doc(ap.id).update({types:ap.types}).then(function(){renderCdSection();toast('✅ Expert assigné');});}}
 else if(ac==='unassignEx'){var up=P.find(function(x){return x.id===a.dataset.pid;});if(up){up.types=up.types||[];var ui=up.types.indexOf(cdType.id);if(ui>=0)up.types.splice(ui,1);CR.doc(up.id).update({types:up.types}).then(function(){renderCdSection();toast('✅ Expert retiré');});}}
 else if(ac==='delFF'){if(cdType){if(!cdType.formFields||!Array.isArray(cdType.formFields))return;var dIdx=+a.dataset.idx;if(isNaN(dIdx)||dIdx<0||dIdx>=cdType.formFields.length)return;cdType.formFields.splice(dIdx,1);var ti=T.findIndex(function(t){return t.id===cdType.id;});if(ti>=0)T[ti].formFields=cdType.formFields;renderCdSection();saveTypes().then(function(){toast('🗑 Champ supprimé');}).catch(function(e){console.error('Erreur suppression champ:',e);});}}
-else if(ac==='togReq'){if(cdType&&cdType.formFields&&cdType.formFields[+a.dataset.idx]){cdType.formFields[+a.dataset.idx].required=!cdType.formFields[+a.dataset.idx].required;renderCdSection();}}
+else if(ac==='togReq'){if(cdType&&cdType.formFields&&cdType.formFields[+a.dataset.idx]){cdType.formFields[+a.dataset.idx].required=!cdType.formFields[+a.dataset.idx].required;var ti2=T.findIndex(function(t){return t.id===cdType.id;});if(ti2>=0)T[ti2].formFields=cdType.formFields;renderCdSection();saveTypes().then(function(){toast('✅ Modifié');});}}
 else if(ac==='togEx'){var c=document.querySelector('.ec[data-pid="'+a.dataset.pid+'"]');if(c)c.classList.toggle('open');}else if(ac==='togTy'){var pid=a.dataset.pid,tid=a.dataset.tid,p=P.find(function(x){return x.id===pid;});if(!p)return;p.types=p.types||[];var i=p.types.indexOf(tid);if(i>=0)p.types.splice(i,1);else p.types.push(tid);CR.doc(pid).update({types:p.types}).then(function(){renderAll();toast('✅');});}else if(ac==='savPS'){var pid2=a.dataset.pid,u={};document.querySelectorAll('[data-ps][data-pid="'+pid2+'"]').forEach(function(inp){var v=parseInt(inp.value);u[inp.dataset.ps]=isNaN(v)?0:v;});CR.doc(pid2).update(u).then(function(){var p2=P.find(function(x){return x.id===pid2;});if(p2)Object.assign(p2,u);toast('✅');});}else if(ac==='addSl'){var pid3=a.dataset.pid,dy=a.dataset.day,sE=document.querySelector('[data-start="'+pid3+'_'+dy+'"]'),eE=document.querySelector('[data-end="'+pid3+'_'+dy+'"]');if(!sE||!eE||!sE.value||!eE.value)return;var p3=P.find(function(x){return x.id===pid3;});if(!p3)return;p3.schedule=p3.schedule||{};p3.schedule[dy]=p3.schedule[dy]||[];p3.schedule[dy].push({start:sE.value,end:eE.value});CR.doc(pid3).update({schedule:p3.schedule}).then(function(){rEx();toast('✅');});}else if(ac==='delSl'){var pid4=a.dataset.pid,dy2=a.dataset.day,ix=+a.dataset.idx;var p4=P.find(function(x){return x.id===pid4;});if(!p4||!p4.schedule||!p4.schedule[dy2])return;p4.schedule[dy2].splice(ix,1);CR.doc(pid4).update({schedule:p4.schedule}).then(function(){rEx();toast('🗑');});}else if(ac==='addBl'){var pid5=a.dataset.pid,dE=document.querySelector('[data-bl="'+pid5+'"]');if(!dE||!dE.value)return;var p5=P.find(function(x){return x.id===pid5;});if(!p5)return;p5.blockedDates=p5.blockedDates||[];if(p5.blockedDates.indexOf(dE.value)<0)p5.blockedDates.push(dE.value);p5.blockedDates.sort();CR.doc(pid5).update({blockedDates:p5.blockedDates}).then(function(){rEx();toast('🚫');});}else if(ac==='delBl'){var pid6=a.dataset.pid,ix2=+a.dataset.idx;var p6=P.find(function(x){return x.id===pid6;});if(!p6)return;p6.blockedDates.splice(ix2,1);CR.doc(pid6).update({blockedDates:p6.blockedDates}).then(function(){rEx();toast('✅');});}else if(ac==='delP'){if(!confirm('Supprimer ?'))return;CR.doc(a.dataset.pid).delete().then(function(){loadAll();toast('🗑');});}else if(ac==='shT'){openShareModal(a.dataset.tid,'type');}else if(ac==='shEx'){navigator.clipboard.writeText(window.location.origin+'/booking.html?person='+a.dataset.pid).then(function(){toast('📋 Copié !');});}});
 document.addEventListener('change',function(e){var s=e.target.closest('[data-action="chSt"]');if(!s)return;db.collection('bookings').doc(s.dataset.bid).update({status:s.value}).then(function(){loadB();toast('✅');});});
 firebase.auth().onAuthStateChanged(function(u){if(u){db.collection('users').doc(u.uid).get().then(function(s){var d=s.exists?s.data():{};window._currentRole=d.role||'admin';window._currentUserName=u.displayName||u.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'admin');localStorage.setItem('ambitio_name',window._currentUserName);});}loadAll();});
