@@ -289,30 +289,52 @@ h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdRules()">�
 }
 
 else if(cdSection==='notifications'){
+var tpls=nf.templates||{};
 h+='<div class="cd-sec-title">🔔 Notifications et rappels</div>';
 h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Configurez les notifications envoyées au client. Email + SMS automatiques.</div>';
 
 // Email account selector
 h+='<div class="cd-notif-card" style="margin-bottom:16px"><div class="cd-notif-icon">📬</div><div class="cd-notif-info"><div class="cd-notif-nm">Compte d\'envoi</div><div class="cd-notif-desc">Depuis quelle adresse envoyer les mails</div></div><select class="bs" id="cd-emailAccount" style="width:200px;flex-shrink:0"><option value="strategie"'+(nf.emailAccount==='strategie'||!nf.emailAccount?' selected':'')+'>strategie@adrienemily.com</option><option value="coaching"'+(nf.emailAccount==='coaching'?' selected':'')+'>coaching@adrienemily.com</option><option value="contact"'+(nf.emailAccount==='contact'?' selected':'')+'>contact@adrienemily.com</option></select></div>';
 
-// Section: Confirmation
-h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px">À la réservation</div>';
-h+='<div class="cd-notif-card"><div class="cd-notif-icon">📧</div><div class="cd-notif-info"><div class="cd-notif-nm">Email de confirmation</div><div class="cd-notif-desc">Envoyé au client à la réservation</div></div><div class="tg-w"><div class="tg'+(nf.emailOnBook!==false?' on':'')+'" data-ntog="emailOnBook"></div></div></div>';
-h+='<div class="cd-notif-card"><div class="cd-notif-icon">💬</div><div class="cd-notif-info"><div class="cd-notif-nm">SMS de confirmation</div><div class="cd-notif-desc">SMS envoyé au client via Twilio</div></div><div class="tg-w"><div class="tg'+(nf.smsOnBook?' on':'')+'" data-ntog="smsOnBook"></div></div></div>';
-h+='<div class="cd-notif-card"><div class="cd-notif-icon">❌</div><div class="cd-notif-info"><div class="cd-notif-nm">Email d\'annulation</div><div class="cd-notif-desc">Envoyé en cas d\'annulation</div></div><div class="tg-w"><div class="tg'+(nf.emailOnCancel!==false?' on':'')+'" data-ntog="emailOnCancel"></div></div></div>';
+// Notifications cards
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:20px 0 10px">Notifications</div>';
+h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:20px">';
+var notifCards=[
+{id:'emailOnBook',icon:'✅',label:'Confirmé',desc:'Email',tog:nf.emailOnBook!==false,tplKey:'confirmation'},
+{id:'smsOnBook',icon:'✅',label:'Confirmé',desc:'SMS',tog:!!nf.smsOnBook,tplKey:'confirmation_sms_only'},
+{id:'emailOnCancel',icon:'❌',label:'Annulé',desc:'Email',tog:nf.emailOnCancel!==false,tplKey:null}
+];
+notifCards.forEach(function(c){
+h+='<div style="background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;position:relative">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:20px">'+c.icon+'</span><div class="tg-w"><div class="tg'+(c.tog?' on':'')+'" data-ntog="'+c.id+'"></div></div></div>';
+h+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">'+c.label+'</div>';
+h+='<div style="font-size:11px;color:rgba(255,255,255,.38)">'+c.desc+'</div>';
+if(c.tplKey&&c.tplKey!=='confirmation_sms_only')h+='<button class="bb" style="margin-top:8px;padding:4px 10px;font-size:10px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.15);color:#a78bfa;border-radius:5px;width:100%" onclick="openTplModal(\''+c.tplKey+'\')">✏️ Modifier</button>';
+h+='</div>';
+});
+h+='</div>';
 
-// Section: Rappels
-h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:24px 0 8px">Rappels automatiques</div>';
-h+='<div class="cd-notif-card"><div class="cd-notif-icon">📧</div><div class="cd-notif-info"><div class="cd-notif-nm">Email J-1</div><div class="cd-notif-desc">Email de rappel 24h avant</div></div><div class="tg-w"><div class="tg'+(nf.emailJ1!==false?' on':'')+'" data-ntog="emailJ1"></div></div></div>';
-h+='<div class="cd-notif-card"><div class="cd-notif-icon">💬</div><div class="cd-notif-info"><div class="cd-notif-nm">SMS J-1</div><div class="cd-notif-desc">SMS de rappel 24h avant</div></div><div class="tg-w"><div class="tg'+(nf.smsJ1!==false?' on':'')+'" data-ntog="smsJ1"></div></div></div>';
-h+='<div class="cd-notif-card"><div class="cd-notif-icon">📧</div><div class="cd-notif-info"><div class="cd-notif-nm">Email H-1</div><div class="cd-notif-desc">Email de rappel 1h avant</div></div><div class="tg-w"><div class="tg'+(nf.emailH1!==false?' on':'')+'" data-ntog="emailH1"></div></div></div>';
-h+='<div class="cd-notif-card"><div class="cd-notif-icon">💬</div><div class="cd-notif-info"><div class="cd-notif-nm">SMS H-1</div><div class="cd-notif-desc">SMS de rappel 1h avant</div></div><div class="tg-w"><div class="tg'+(nf.smsH1!==false?' on':'')+'" data-ntog="smsH1"></div></div></div>';
+// Rappels section
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:20px 0 10px">Rappels</div>';
+var rappels=[
+{id:'emailJ1',sid:'smsJ1',label:'J-1 (24h avant)',emailOn:nf.emailJ1!==false,smsOn:nf.smsJ1!==false,tplKey:'j1'},
+{id:'emailH1',sid:'smsH1',label:'H-1 (1h avant)',emailOn:nf.emailH1!==false,smsOn:nf.smsH1!==false,tplKey:'h1'}
+];
+rappels.forEach(function(r){
+h+='<div class="cd-notif-card" style="flex-wrap:wrap;gap:10px;margin-bottom:8px">';
+h+='<div class="cd-notif-icon">⏰</div>';
+h+='<div class="cd-notif-info" style="min-width:120px"><div class="cd-notif-nm">'+r.label+'</div></div>';
+h+='<div style="display:flex;align-items:center;gap:12px">';
+h+='<label style="font-size:11px;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:4px">📧<div class="tg-w" style="margin-left:4px"><div class="tg'+(r.emailOn?' on':'')+'" data-ntog="'+r.id+'"></div></div></label>';
+h+='<label style="font-size:11px;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:4px">💬<div class="tg-w" style="margin-left:4px"><div class="tg'+(r.smsOn?' on':'')+'" data-ntog="'+r.sid+'"></div></div></label>';
+h+='<button class="bb" style="padding:4px 10px;font-size:10px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.15);color:#a78bfa;border-radius:5px" onclick="openTplModal(\''+r.tplKey+'\')">✏️ Modifier</button>';
+h+='</div></div>';
+});
 
-// Section: Custom reminders
-h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:24px 0 8px">Rappels personnalisés</div>';
+// Custom reminders
 var customs=nf.customReminders||[];
 customs.forEach(function(cr,idx){
-h+='<div class="cd-notif-card" data-cidx="'+idx+'"><div class="cd-notif-icon">⏰</div><div class="cd-notif-info"><div class="cd-notif-nm">Rappel '+cr.value+' '+cr.unit+' avant</div><div class="cd-notif-desc">'+(cr.email?'📧 Email':'')+(cr.email&&cr.sms?' + ':'')+(cr.sms?'💬 SMS':'')+'</div></div><button class="bb" style="padding:4px 10px;font-size:11px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444;border-radius:6px" onclick="removeCustomReminder('+idx+')">✕</button></div>';
+h+='<div class="cd-notif-card" style="margin-bottom:8px"><div class="cd-notif-icon">⏰</div><div class="cd-notif-info"><div class="cd-notif-nm">'+cr.value+' '+cr.unit+' avant</div><div class="cd-notif-desc">'+(cr.email?'📧':'')+(cr.sms?' 💬':'')+'</div></div><button class="bb" style="padding:4px 10px;font-size:11px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#ef4444;border-radius:6px" onclick="removeCustomReminder('+idx+')">✕</button></div>';
 });
 h+='<div style="display:flex;gap:8px;align-items:center;margin-top:8px;padding:12px;background:#141420;border:1px dashed rgba(255,255,255,.1);border-radius:10px">';
 h+='<input type="number" class="bi" id="cr-value" min="1" value="3" style="width:60px"/>';
@@ -322,44 +344,17 @@ h+='<label style="font-size:11px;color:rgba(255,255,255,.48);display:flex;align-
 h+='<button class="bb bb-g" onclick="addCustomReminder()" style="padding:6px 14px;font-size:12px">+ Ajouter</button>';
 h+='</div>';
 
-// Section: Templates
-var tpls=nf.templates||{};
-h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:24px 0 8px">Contenu des messages</div>';
-h+='<div style="padding:10px 14px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;margin-bottom:12px">';
-h+='<div style="font-size:10px;color:rgba(255,255,255,.38);margin-bottom:6px">Variables disponibles (cliquer pour insérer) :</div>';
-h+='<div style="display:flex;flex-wrap:wrap;gap:4px" id="tplVarsBar">';
-var vars=[{k:"{{prenom}}",l:"Prénom"},{k:"{{nom}}",l:"Nom"},{k:"{{date}}",l:"Date"},{k:"{{time}}",l:"Heure"},{k:"{{typeLabel}}",l:"Type de RDV"}];
-vars.forEach(function(v){h+='<button class="bb" style="padding:3px 10px;font-size:10px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.2);color:#a78bfa;border-radius:5px;cursor:pointer" data-tplvar="'+v.k+'">'+v.l+' <code style="font-size:9px;opacity:.6">'+v.k+'</code></button>';});
-h+='</div></div>';
-
-// Confirmation templates
-h+='<div style="margin-bottom:16px;padding:14px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px">';
-h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:10px">📧 Email de confirmation</div>';
-h+='<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Objet</div><input class="bi tpl-field" id="tpl-conf-subject" value="'+escA(tpls.confirmation_email_subject||'Confirmation de votre RDV — {{typeLabel}}')+'" style="width:100%"/></div>';
-h+='<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Corps</div><textarea class="bi tpl-field" id="tpl-conf-body" rows="4" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.confirmation_email_body||'Bonjour {{prenom}},\\n\\nVotre RDV {{typeLabel}} est confirmé pour le {{date}} à {{time}}.\\n\\nÀ bientôt !\\n\\nL\'équipe Adrien&Emily')+'</textarea></div>';
-h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:6px;margin-top:12px">💬 SMS de confirmation</div>';
-h+='<div><textarea class="bi tpl-field" id="tpl-conf-sms" rows="2" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.confirmation_sms||'Bonjour {{prenom}}, votre RDV {{typeLabel}} est confirmé pour le {{date}} à {{time}}. À bientôt ! - Adrien&Emily')+'</textarea></div>';
-h+='</div>';
-
-// J-1 templates
-h+='<div style="margin-bottom:16px;padding:14px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px">';
-h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:10px">📧 Email rappel J-1</div>';
-h+='<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Objet</div><input class="bi tpl-field" id="tpl-j1-subject" value="'+escA(tpls.j1_email_subject||'Rappel : votre RDV demain — {{typeLabel}}')+'" style="width:100%"/></div>';
-h+='<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Corps</div><textarea class="bi tpl-field" id="tpl-j1-body" rows="4" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.j1_email_body||'Bonjour {{prenom}},\\n\\nPetit rappel : votre RDV {{typeLabel}} est prévu demain {{date}} à {{time}}.\\n\\nÀ demain !')+'</textarea></div>';
-h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:6px;margin-top:12px">💬 SMS rappel J-1</div>';
-h+='<div><textarea class="bi tpl-field" id="tpl-j1-sms" rows="2" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.j1_sms||'Rappel : votre RDV {{typeLabel}} est demain à {{time}}. À demain ! - Adrien&Emily')+'</textarea></div>';
-h+='</div>';
-
-// H-1 templates
-h+='<div style="margin-bottom:16px;padding:14px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px">';
-h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:10px">📧 Email rappel H-1</div>';
-h+='<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Objet</div><input class="bi tpl-field" id="tpl-h1-subject" value="'+escA(tpls.h1_email_subject||'Rappel : votre RDV dans 1h — {{typeLabel}}')+'" style="width:100%"/></div>';
-h+='<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:3px">Corps</div><textarea class="bi tpl-field" id="tpl-h1-body" rows="4" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.h1_email_body||'Bonjour {{prenom}},\\n\\nVotre RDV {{typeLabel}} commence dans 1h ({{time}}).\\n\\nÀ tout de suite !')+'</textarea></div>';
-h+='<div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:6px;margin-top:12px">💬 SMS rappel H-1</div>';
-h+='<div><textarea class="bi tpl-field" id="tpl-h1-sms" rows="2" style="width:100%;resize:vertical;font-size:12px;line-height:1.5">'+esc(tpls.h1_sms||'Votre RDV {{typeLabel}} commence dans 1h ({{time}}). À tout de suite ! - Adrien&Emily')+'</textarea></div>';
-h+='</div>';
-
 h+='<div class="cd-save-bar"><button class="bb bb-p" onclick="saveCdNotif()">💾 Enregistrer</button></div>';
+
+// Template modal (hidden)
+h+='<div id="tplModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;display:none;align-items:center;justify-content:center">';
+h+='<div style="background:#1a1a2e;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:28px;max-width:600px;width:90%;max-height:85vh;overflow-y:auto">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px"><div style="font-size:16px;font-weight:800" id="tplModalTitle">Personnaliser le message</div><button onclick="closeTplModal()" style="border:none;background:transparent;color:rgba(255,255,255,.5);font-size:20px;cursor:pointer">✕</button></div>';
+h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:6px">OBJET DE L\'EMAIL</div><div style="display:flex;gap:6px"><input class="bi tpl-field" id="tplM-subject" style="flex:1" placeholder="Objet..."/><select class="bs" id="tplVarSubject" style="width:140px;font-size:11px" onchange="insertTplVar(\'tplM-subject\',this.value);this.selectedIndex=0"><option value="">Insérer variable</option><option value="{{prenom}}">Prénom</option><option value="{{nom}}">Nom</option><option value="{{date}}">Date</option><option value="{{time}}">Heure</option><option value="{{typeLabel}}">Type RDV</option></select></div></div>';
+h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:6px">CORPS DE L\'EMAIL</div><div style="display:flex;justify-content:flex-end;margin-bottom:4px"><select class="bs" id="tplVarBody" style="width:140px;font-size:11px" onchange="insertTplVar(\'tplM-body\',this.value);this.selectedIndex=0"><option value="">Insérer variable</option><option value="{{prenom}}">Prénom</option><option value="{{nom}}">Nom</option><option value="{{date}}">Date</option><option value="{{time}}">Heure</option><option value="{{typeLabel}}">Type RDV</option></select></div><textarea class="bi tpl-field" id="tplM-body" rows="8" style="width:100%;resize:vertical;font-size:13px;line-height:1.7" placeholder="Corps du message..."></textarea></div>';
+h+='<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:6px">SMS</div><div style="display:flex;justify-content:flex-end;margin-bottom:4px"><select class="bs" id="tplVarSms" style="width:140px;font-size:11px" onchange="insertTplVar(\'tplM-sms\',this.value);this.selectedIndex=0"><option value="">Insérer variable</option><option value="{{prenom}}">Prénom</option><option value="{{nom}}">Nom</option><option value="{{date}}">Date</option><option value="{{time}}">Heure</option><option value="{{typeLabel}}">Type RDV</option></select></div><textarea class="bi tpl-field" id="tplM-sms" rows="3" style="width:100%;resize:vertical;font-size:13px;line-height:1.5" placeholder="Message SMS..."></textarea></div>';
+h+='<div style="display:flex;gap:8px;justify-content:flex-end"><button class="bb" style="padding:10px 20px" onclick="closeTplModal()">Annuler</button><button class="bb bb-p" style="padding:10px 20px" onclick="saveTplModal()">💾 Enregistrer</button></div>';
+h+='</div></div>';
 }
 
 else if(cdSection==='form'){
@@ -393,20 +388,43 @@ function cleanType(t){var o={id:t.id,label:t.label||'',duration:t.duration||30,c
 function saveTypes(){var clean=T.map(cleanType);return CR.doc('_types').set({list:clean});}
 function saveCdDetails(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].label=document.getElementById('cd-name').value.trim()||T[i].label;T[i].duration=parseInt(document.getElementById('cd-dur').value)||30;T[i].color=document.getElementById('cd-color').value;T[i].active=document.getElementById('cd-active').value!=='false';T[i].eventType=document.getElementById('cd-eventType').value;T[i].description=document.getElementById('cd-desc').value.trim();T[i].location=document.getElementById('cd-location').value;T[i].locationUrl=document.getElementById('cd-locUrl').value.trim();cdType=T[i];saveTypes().then(function(){renderCdHead();toast('✅ Enregistré');}).catch(function(e){console.error('Save error:',e);alert('Erreur de sauvegarde: '+e.message);});}
 function saveCdRules(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var r=T[i].rules||{};var ids=['cd-bufBefore','cd-bufAfter','cd-interval','cd-cancelH','cd-maxDays','cd-minNotice'];var keys=['bufferBefore','bufferAfter','slotInterval','cancelPeriodHours','maxNoticeDays','minNoticeHours'];ids.forEach(function(id,j){var el=document.getElementById(id);if(el)r[keys[j]]=parseInt(el.value)||0;});T[i].rules=r;cdType=T[i];saveTypes().then(function(){toast('✅ Règles enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
-function saveCdNotif(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var n=T[i].notifications||{};document.querySelectorAll('[data-ntog]').forEach(function(tg){n[tg.dataset.ntog]=tg.classList.contains('on');});var ea=document.getElementById('cd-emailAccount');if(ea)n.emailAccount=ea.value;if(!n.customReminders)n.customReminders=[];
-// Save templates
-var tpls={};
-var tplIds=[['tpl-conf-subject','confirmation_email_subject'],['tpl-conf-body','confirmation_email_body'],['tpl-conf-sms','confirmation_sms'],['tpl-j1-subject','j1_email_subject'],['tpl-j1-body','j1_email_body'],['tpl-j1-sms','j1_sms'],['tpl-h1-subject','h1_email_subject'],['tpl-h1-body','h1_email_body'],['tpl-h1-sms','h1_sms']];
-tplIds.forEach(function(p){var el=document.getElementById(p[0]);if(el)tpls[p[1]]=el.value;});
-n.templates=tpls;
-T[i].notifications=n;cdType=T[i];saveTypes().then(function(){toast('✅ Notifications enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
+function saveCdNotif(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;var n=T[i].notifications||{};document.querySelectorAll('[data-ntog]').forEach(function(tg){n[tg.dataset.ntog]=tg.classList.contains('on');});var ea=document.getElementById('cd-emailAccount');if(ea)n.emailAccount=ea.value;if(!n.customReminders)n.customReminders=[];T[i].notifications=n;cdType=T[i];saveTypes().then(function(){toast('✅ Notifications enregistrées');}).catch(function(e){alert('Erreur: '+e.message);});}
 // Variable insertion into template fields
-var _lastTplField=null;
-document.addEventListener('focus',function(e){if(e.target.classList&&e.target.classList.contains('tpl-field'))_lastTplField=e.target;},true);
-document.addEventListener('click',function(e){var btn=e.target.closest('[data-tplvar]');if(!btn)return;var v=btn.dataset.tplvar;if(!_lastTplField){var first=document.querySelector('.tpl-field');if(first)_lastTplField=first;}if(_lastTplField){var s=_lastTplField.selectionStart||_lastTplField.value.length;var before=_lastTplField.value.substring(0,s);var after=_lastTplField.value.substring(s);_lastTplField.value=before+v+after;_lastTplField.focus();_lastTplField.selectionStart=_lastTplField.selectionEnd=s+v.length;}});
+
 function addCustomReminder(){var v=parseInt(document.getElementById('cr-value').value)||1;var u=document.getElementById('cr-unit').value;var em=document.getElementById('cr-email').checked;var sm=document.getElementById('cr-sms').checked;if(!em&&!sm){toast('❌ Sélectionne au moins Email ou SMS');return;}var nf=cdType.notifications||{};if(!nf.customReminders)nf.customReminders=[];nf.customReminders.push({value:v,unit:u,email:em,sms:sm});cdType.notifications=nf;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].notifications=nf;renderCdSection();saveCdNotif();}
 function removeCustomReminder(idx){var nf=cdType.notifications||{};if(!nf.customReminders)return;nf.customReminders.splice(idx,1);cdType.notifications=nf;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].notifications=nf;renderCdSection();saveCdNotif();}
 window.addCustomReminder=addCustomReminder;window.removeCustomReminder=removeCustomReminder;
+var _currentTplKey='';
+var _tplDefaults={
+confirmation:{subject:'Confirmation de votre RDV — {{typeLabel}}',body:'Bonjour {{prenom}},\n\nVotre RDV {{typeLabel}} est confirmé pour le {{date}} à {{time}}.\n\nÀ bientôt !\n\nL\'équipe Adrien&Emily',sms:'Bonjour {{prenom}}, votre RDV {{typeLabel}} est confirmé pour le {{date}} à {{time}}. À bientôt ! - Adrien&Emily'},
+j1:{subject:'Rappel : votre RDV demain — {{typeLabel}}',body:'Bonjour {{prenom}},\n\nPetit rappel : votre RDV {{typeLabel}} est prévu demain {{date}} à {{time}}.\n\nÀ demain !',sms:'Rappel : votre RDV {{typeLabel}} est demain à {{time}}. À demain ! - Adrien&Emily'},
+h1:{subject:'Rappel : votre RDV dans 1h — {{typeLabel}}',body:'Bonjour {{prenom}},\n\nVotre RDV {{typeLabel}} commence dans 1h ({{time}}).\n\nÀ tout de suite !',sms:'Votre RDV {{typeLabel}} commence dans 1h ({{time}}). À tout de suite ! - Adrien&Emily'}
+};
+var _tplLabels={confirmation:'Confirmation',j1:'Rappel J-1 (24h avant)',h1:'Rappel H-1 (1h avant)'};
+function openTplModal(key){
+_currentTplKey=key;
+var tpls=(cdType.notifications||{}).templates||{};
+var d=_tplDefaults[key]||{subject:'',body:'',sms:''};
+document.getElementById('tplModalTitle').textContent='✏️ '+(_tplLabels[key]||key);
+document.getElementById('tplM-subject').value=tpls[key+'_email_subject']||d.subject;
+document.getElementById('tplM-body').value=tpls[key+'_email_body']||d.body;
+document.getElementById('tplM-sms').value=tpls[key+'_sms']||d.sms;
+document.getElementById('tplModal').style.display='flex';
+}
+function closeTplModal(){document.getElementById('tplModal').style.display='none';_currentTplKey='';}
+function saveTplModal(){
+if(!_currentTplKey)return;
+var nf=cdType.notifications||{};if(!nf.templates)nf.templates={};
+nf.templates[_currentTplKey+'_email_subject']=document.getElementById('tplM-subject').value;
+nf.templates[_currentTplKey+'_email_body']=document.getElementById('tplM-body').value;
+nf.templates[_currentTplKey+'_sms']=document.getElementById('tplM-sms').value;
+cdType.notifications=nf;
+var i=T.findIndex(function(t){return t.id===cdType.id;});
+if(i>=0)T[i].notifications=nf;
+saveTypes().then(function(){toast('✅ Template enregistré');closeTplModal();}).catch(function(e){alert('Erreur: '+e.message);});
+}
+function insertTplVar(fieldId,val){if(!val)return;var el=document.getElementById(fieldId);if(!el)return;var s=el.selectionStart||el.value.length;el.value=el.value.substring(0,s)+val+el.value.substring(s);el.focus();el.selectionStart=el.selectionEnd=s+val.length;}
+window.openTplModal=openTplModal;window.closeTplModal=closeTplModal;window.saveTplModal=saveTplModal;window.insertTplVar=insertTplVar;
 function saveCdForm(){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].formFields=cdType.formFields;cdType=T[i];saveTypes().then(function(){toast('✅ Formulaire enregistré');}).catch(function(e){alert('Erreur: '+e.message);});}
 function addFormField(){var label=document.getElementById('ff-label').value.trim();if(!label)return;var type=document.getElementById('ff-type').value;var req=document.getElementById('ff-req').checked;if(!cdType.formFields)cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields.push({id:'custom_'+gid().slice(0,4),label:label,type:type,required:req});document.getElementById('ff-label').value='';renderCdSection();}
 window.saveCdDetails=saveCdDetails;window.saveCdRules=saveCdRules;window.saveCdNotif=saveCdNotif;window.saveCdForm=saveCdForm;window.addFormField=addFormField;window.closeCsDetail=closeCsDetail;
