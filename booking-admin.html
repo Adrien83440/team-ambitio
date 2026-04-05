@@ -861,12 +861,12 @@ var badge=r.type==='available'?'<span class="ar-badge ar-badge-avail">Dispo</spa
 var title='',desc='';
 if(r.mode==='date'){
 title=dFR(r.date);
-if(r.type==='available'&&r.slots&&r.slots.length){desc=r.slots.map(function(s){return s.start+' – '+s.end;}).join(', ');}
-else if(r.type==='unavailable'){desc='Journée entière bloquée';}
+if(r.slots&&r.slots.length){desc=r.slots.map(function(s){return s.start+' – '+s.end;}).join(', ');}
+else{desc=r.type==='unavailable'?'Journée entière bloquée':'Journée entière';}
 }else{
 title=_DAYS_FR[r.dayOfWeek||0]+' — '+(_PAT_FR[r.pattern]||r.pattern);
-if(r.type==='available'&&r.slots&&r.slots.length){desc=r.slots.map(function(s){return s.start+' – '+s.end;}).join(', ');}
-else{desc='Indisponible';}
+if(r.slots&&r.slots.length){desc=r.slots.map(function(s){return s.start+' – '+s.end;}).join(', ');}
+else{desc=r.type==='unavailable'?'Journée entière bloquée':'Journée entière';}
 var dates=[];
 if(r.startDate)dates.push('Début : '+dFR(r.startDate));
 if(r.endDate)dates.push('Fin : '+dFR(r.endDate));
@@ -905,8 +905,10 @@ h+='<div><div class="ar-form-label">Fréquence</div><select class="bs" id="arPat
 h+='<div class="ar-form-row"><div><div class="ar-form-label">À partir du</div><input type="date" class="bi" id="arStartDate" style="font-size:12px;padding:6px 10px"/></div><div><div class="ar-form-label">Jusqu\'au (optionnel)</div><input type="date" class="bi" id="arEndDate" style="font-size:12px;padding:6px 10px"/></div></div>';
 h+='</div>';
 
-// Time slots (only for "available")
-h+='<div id="arSlotsWrap" style="display:none;margin-top:12px"><div class="ar-form-label">Horaires</div><div class="ar-form-row"><input type="time" class="bi" id="arSlotStart" value="09:00" style="font-size:12px;padding:6px 10px;width:100px"/><span style="color:rgba(255,255,255,.28)">→</span><input type="time" class="bi" id="arSlotEnd" value="18:00" style="font-size:12px;padding:6px 10px;width:100px"/></div></div>';
+// Time slots (for both types — optional for unavailable)
+h+='<div id="arSlotsWrap" style="margin-top:12px"><div class="ar-form-label">Créneaux horaires <span style="font-weight:400;color:rgba(255,255,255,.25)">(vide = journée entière)</span></div>';
+h+='<div id="arSlotsContainer"><div class="ar-form-row ar-slot-row"><input type="time" class="bi ar-slot-s" value="09:00" style="font-size:12px;padding:6px 10px;width:100px"/><span style="color:rgba(255,255,255,.28)">→</span><input type="time" class="bi ar-slot-e" value="18:00" style="font-size:12px;padding:6px 10px;width:100px"/><button class="pl-btn pl-btn-del" onclick="this.closest(\'.ar-slot-row\').remove()" style="width:24px;height:24px;font-size:11px">✕</button></div></div>';
+h+='<button class="bb" onclick="addArSlot()" style="padding:5px 12px;font-size:11px;margin-top:6px">+ Créneau</button></div>';
 
 // Submit
 h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><button class="bb" onclick="toggleArForm()" style="padding:7px 16px;font-size:12px">Annuler</button><button class="bb bb-p" onclick="saveAvailRule(\''+exPerson.id+'\')" style="padding:7px 16px;font-size:12px">Ajouter la règle</button></div>';
@@ -1133,11 +1135,6 @@ var grp=document.getElementById(groupId);
 if(!grp)return;
 grp.querySelectorAll('.ar-toggle-btn').forEach(function(b){b.classList.remove('on');});
 btn.classList.add('on');
-// Show/hide slots when type changes
-if(groupId==='arTypeToggle'){
-var sw=document.getElementById('arSlotsWrap');
-if(sw)sw.style.display=btn.dataset.val==='available'?'block':'none';
-}
 }
 // Toggle date/recurring fields
 function toggleArMode(){
@@ -1146,6 +1143,15 @@ if(!mode)return;
 var m=mode.dataset.val;
 document.getElementById('arDateFields').style.display=m==='date'?'block':'none';
 document.getElementById('arRecFields').style.display=m==='recurring'?'block':'none';
+}
+// Add a slot row
+function addArSlot(){
+var c=document.getElementById('arSlotsContainer');
+if(!c)return;
+var row=document.createElement('div');
+row.className='ar-form-row ar-slot-row';
+row.innerHTML='<input type="time" class="bi ar-slot-s" value="14:00" style="font-size:12px;padding:6px 10px;width:100px"/><span style="color:rgba(255,255,255,.28)">→</span><input type="time" class="bi ar-slot-e" value="18:00" style="font-size:12px;padding:6px 10px;width:100px"/><button class="pl-btn pl-btn-del" onclick="this.closest(\'.ar-slot-row\').remove()" style="width:24px;height:24px;font-size:11px">✕</button>';
+c.appendChild(row);
 }
 // Save a new rule
 function saveAvailRule(pid){
@@ -1169,12 +1175,14 @@ rule.startDate=sd;
 var ed=document.getElementById('arEndDate').value;
 if(ed)rule.endDate=ed;
 }
-if(type==='available'){
-var ss=document.getElementById('arSlotStart').value;
-var se=document.getElementById('arSlotEnd').value;
-if(!ss||!se){toast('❌ Renseignez les horaires');return;}
-rule.slots=[{start:ss,end:se}];
-}
+// Collect all slot rows
+var slots=[];
+document.querySelectorAll('#arSlotsContainer .ar-slot-row').forEach(function(row){
+var s=row.querySelector('.ar-slot-s');
+var e=row.querySelector('.ar-slot-e');
+if(s&&e&&s.value&&e.value)slots.push({start:s.value,end:e.value});
+});
+if(slots.length)rule.slots=slots;
 p.availabilityRules=p.availabilityRules||[];
 p.availabilityRules.push(rule);
 CR.doc(pid).update({availabilityRules:p.availabilityRules}).then(function(){
@@ -1188,7 +1196,7 @@ p.availabilityRules.splice(idx,1);
 CR.doc(pid).update({availabilityRules:p.availabilityRules}).then(function(){renderExSection();toast('🗑 Règle supprimée');});
 }
 window.addDateOverride=addDateOverride;window.saveNewOverride=saveNewOverride;window.delDateOverride=delDateOverride;
-window.toggleArForm=toggleArForm;window.setArToggle=setArToggle;window.toggleArMode=toggleArMode;window.saveAvailRule=saveAvailRule;window.delAvailRule=delAvailRule;
+window.toggleArForm=toggleArForm;window.setArToggle=setArToggle;window.toggleArMode=toggleArMode;window.addArSlot=addArSlot;window.saveAvailRule=saveAvailRule;window.delAvailRule=delAvailRule;
 
 // Toggle consultation type for expert
 function toggleExType(pid,tid){
