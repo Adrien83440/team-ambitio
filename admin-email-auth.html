@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Connexion Email</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#08080f;--bg2:#0f0f1a;--bg3:#14141f;--border:rgba(255,255,255,0.07);--text:rgba(255,255,255,0.92);--muted:rgba(255,255,255,0.48);--green:#34d399;--red:#ef4444;--blue:#60a5fa;--gold:#f59e0b;--purple:#a78bfa}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:40px;max-width:500px;width:100%}
+h1{font-size:22px;font-weight:800;margin-bottom:8px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:30px;line-height:1.6}
+.account{display:flex;align-items:center;gap:14px;padding:16px;border:1px solid var(--border);border-radius:12px;margin-bottom:10px;cursor:pointer;transition:all .15s}
+.account:hover{border-color:rgba(255,255,255,0.15);background:var(--bg3)}
+.account-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.account-icon.strategie{background:rgba(96,165,250,0.12)}
+.account-icon.coaching{background:rgba(52,211,153,0.12)}
+.account-icon.contact{background:rgba(167,139,250,0.12)}
+.account-info{flex:1}
+.account-name{font-size:14px;font-weight:700}
+.account-email{font-size:12px;color:var(--muted)}
+.account-status{font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;flex-shrink:0}
+.account-status.connected{background:rgba(52,211,153,0.12);color:var(--green)}
+.account-status.disconnected{background:rgba(239,68,68,0.12);color:var(--red)}
+.msg{margin-top:20px;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;display:none}
+.msg.success{display:block;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:var(--green)}
+.msg.error{display:block;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:var(--red)}
+.msg.loading{display:block;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);color:var(--blue)}
+.back{display:inline-block;margin-top:20px;color:var(--muted);font-size:12px;text-decoration:none}
+.back:hover{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="card">
+<h1>Connexion Email</h1>
+<p class="sub">Connecte les comptes Gmail de l'équipe pour envoyer et recevoir des emails depuis les fiches contacts.</p>
+<div id="accounts"></div>
+<div class="msg" id="msg"></div>
+<a href="sales-equipe.html" class="back">← Retour</a>
+</div>
+<script>
+var db=firebase.firestore();
+var ACCOUNTS=[
+  {key:'strategie',label:'Stratégie',email:'strategie@adrienemily.com',icon:'📊',cls:'strategie'},
+  {key:'coaching',label:'Coaching',email:'coaching@adrienemily.com',icon:'🎓',cls:'coaching'},
+  {key:'contact',label:'Contact (Admin)',email:'contact@adrienemily.com',icon:'📧',cls:'contact'}
+];
+var oauthConf=null;
+
+function showMsg(type,text){var m=document.getElementById('msg');m.className='msg '+type;m.textContent=text;}
+
+async function init(){
+  // Check auth
+  firebase.auth().onAuthStateChanged(async function(user){
+    if(!user){window.location.href='login.html';return;}
+    var uDoc=await db.collection('users').doc(user.uid).get();
+    if(!uDoc.exists||uDoc.data().role!=='admin'){document.body.innerHTML='<div style="padding:40px;color:#ef4444;text-align:center">Accès réservé aux administrateurs</div>';return;}
+
+    // Load OAuth config
+    var confDoc=await db.collection('_config').doc('oauth').get();
+    if(!confDoc.exists){showMsg('error','Config OAuth manquante dans _config/oauth');return;}
+    oauthConf=confDoc.data();
+
+    // Load connection status for each account
+    var html='';
+    for(var i=0;i<ACCOUNTS.length;i++){
+      var acc=ACCOUNTS[i];
+      var tokenDoc=await db.collection('email_tokens').doc(acc.key).get();
+      var connected=tokenDoc.exists&&tokenDoc.data().accessToken;
+      var connEmail=connected?tokenDoc.data().email:'';
+      html+='<div class="account" onclick="connectAccount(\''+acc.key+'\')">';
+      html+='<div class="account-icon '+acc.cls+'">'+acc.icon+'</div>';
+      html+='<div class="account-info"><div class="account-name">'+acc.label+'</div><div class="account-email">'+acc.email+'</div></div>';
+      html+='<span class="account-status '+(connected?'connected':'disconnected')+'">'+(connected?'✓ '+connEmail:'Non connecté')+'</span>';
+      html+='</div>';
+    }
+    document.getElementById('accounts').innerHTML=html;
+
+    // Handle OAuth callback
+    var params=new URLSearchParams(window.location.search);
+    var code=params.get('code');
+    var state=params.get('state');
+    if(code&&state){
+      showMsg('loading','Connexion en cours...');
+      // Write auth request to Firestore — Cloud Function will exchange the code
+      await db.collection('email_auth_requests').add({
+        code:code,
+        emailKey:state,
+        redirectUri:'https://team.alteore.com/admin-email-auth.html',
+        createdAt:firebase.firestore.FieldValue.serverTimestamp()
+      });
+      // Listen for result
+      var unsub=db.collection('email_auth_requests')
+        .where('emailKey','==',state)
+        .where('createdAt','>',new Date(Date.now()-30000))
+        .onSnapshot(function(snap){
+          snap.forEach(function(doc){
+            var d=doc.data();
+            if(d.status==='success'){
+              showMsg('success','✓ Compte '+state+' connecté avec succès ('+d.email+')');
+              unsub();
+              setTimeout(function(){window.location.href='admin-email-auth.html';},2000);
+            } else if(d.status==='error'){
+              showMsg('error','Erreur : '+d.error);
+              unsub();
+            }
+          });
+        });
+      // Clean URL
+      window.history.replaceState({},'',window.location.pathname);
+    }
+  });
+}
+
+function connectAccount(accountKey){
+  if(!oauthConf){showMsg('error','Config OAuth non chargée');return;}
+  var redirectUri='https://team.alteore.com/admin-email-auth.html';
+  var scopes='https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
+  var url='https://accounts.google.com/o/oauth2/v2/auth'
+    +'?client_id='+encodeURIComponent(oauthConf.client_id)
+    +'&redirect_uri='+encodeURIComponent(redirectUri)
+    +'&response_type=code'
+    +'&scope='+encodeURIComponent(scopes)
+    +'&access_type=offline'
+    +'&prompt=consent'
+    +'&state='+encodeURIComponent(accountKey);
+  window.location.href=url;
+}
+
+init();
+</script>
+</body>
+</html>

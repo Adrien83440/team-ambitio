@@ -151,6 +151,24 @@ body{overflow:hidden;display:flex;flex-direction:column}
 .email-empty-icon{font-size:32px;margin-bottom:12px;opacity:0.4}
 .email-count-pill{font-family:var(--fm);font-size:10px;background:rgba(245,158,11,0.15);color:var(--gold);padding:1px 5px;border-radius:4px;margin-left:4px}
 .email-via{font-size:10px;color:var(--muted2);font-style:italic}
+.email-compose{border-top:1px solid var(--border);padding:16px 0 0;margin-top:12px}
+.email-compose-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border:1.5px dashed var(--border);border-radius:12px;background:transparent;color:var(--muted);font-family:var(--fb);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.email-compose-btn:hover{border-color:var(--gold);color:var(--gold)}
+.email-form{display:none;margin-top:12px}
+.email-form.open{display:block}
+.email-form-field{margin-bottom:10px}
+.email-form-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
+.email-form-input{width:100%;padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:13px;outline:none}
+.email-form-input:focus{border-color:var(--gold)}
+.email-form-textarea{width:100%;padding:10px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:13px;outline:none;resize:vertical;min-height:120px;line-height:1.6}
+.email-form-textarea:focus{border-color:var(--gold)}
+.email-form-select{width:100%;padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:13px;outline:none;cursor:pointer}
+.email-form-select option{background:var(--bg2)}
+.email-form-actions{display:flex;gap:8px;margin-top:12px}
+.email-send-btn{flex:1;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#0f0f1a;font-family:var(--fb);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.email-send-btn:hover{opacity:0.9}
+.email-send-btn:disabled{opacity:0.5;cursor:not-allowed}
+.email-cancel-btn{padding:12px 20px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--muted);font-family:var(--fb);font-size:13px;font-weight:600;cursor:pointer}
 .ct-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}
 .ct-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .ct-loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--muted);font-size:13px}
@@ -333,6 +351,16 @@ if(emBody){h+='<div class="email-preview">'+esc(emBody.substring(0,200))+'</div>
 h+='</div>';
 }
 }
+// Compose form
+h+='<div class="email-compose">';
+h+='<button class="email-compose-btn" id="emailComposeToggle">\u2709\ufe0f Nouveau mail</button>';
+h+='<div class="email-form" id="emailForm">';
+h+='<div class="email-form-field"><div class="email-form-label">Depuis</div><select class="email-form-select" id="emailFromSelect"><option value="strategie">strategie@adrienemily.com</option><option value="coaching">coaching@adrienemily.com</option><option value="contact">contact@adrienemily.com</option></select></div>';
+h+='<div class="email-form-field"><div class="email-form-label">\u00c0</div><input class="email-form-input" id="emailToInput" value="'+escA(l.email||'')+'" placeholder="email@exemple.com"/></div>';
+h+='<div class="email-form-field"><div class="email-form-label">Objet</div><input class="email-form-input" id="emailSubjectInput" placeholder="Objet du mail..."/></div>';
+h+='<div class="email-form-field"><div class="email-form-label">Message</div><textarea class="email-form-textarea" id="emailBodyInput" placeholder="Votre message..."></textarea></div>';
+h+='<div class="email-form-actions"><button class="email-send-btn" id="emailSendBtn">\u2709\ufe0f Envoyer</button><button class="email-cancel-btn" id="emailCancelBtn">Annuler</button></div>';
+h+='</div></div>';
 h+='</div>';
 h+='</div></div>';
 document.getElementById('ctApp').innerHTML=h;
@@ -356,6 +384,38 @@ document.getElementById('tagBtn').addEventListener('click',function(){var v=docu
 document.getElementById('noteBtn').addEventListener('click',function(){var v=document.getElementById('noteIn').value.trim();if(!v)return;lead.notesHistory=(lead.notesHistory||[]);lead.notesHistory.push({text:v,date:fmtNow()});addTL('Note : '+v.substring(0,60),'#f59e0b');sv({notesHistory:lead.notesHistory});renderAll();setTimeout(function(){document.querySelector('[data-tab="notes"]').click();},50);});
 document.getElementById('actBtn').addEventListener('click',function(){var v=document.getElementById('actIn').value.trim();if(!v)return;lead.activities=(lead.activities||[]);lead.activities.push({text:v,date:document.getElementById('actDt').value,done:false});addTL('T\u00e2che : '+v,'#60a5fa');sv({activities:lead.activities});renderAll();setTimeout(function(){document.querySelector('[data-tab="act"]').click();},50);});
 document.getElementById('fileIn').addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;if(f.size>750*1024){toast('\u274c Max 750KB');return;}var r=new FileReader();r.onload=function(ev){lead.files=(lead.files||[]);lead.files.push({name:f.name,size:Math.round(f.size/1024)+'KB',data:ev.target.result,uploadedAt:fmtNow()});addTL('Fichier : '+f.name,'#a78bfa');sv({files:lead.files});renderAll();setTimeout(function(){document.querySelector('[data-tab="files"]').click();},50);};r.readAsDataURL(f);});
+document.getElementById('emailComposeToggle').addEventListener('click',function(){document.getElementById('emailForm').classList.toggle('open');});
+document.getElementById('emailCancelBtn').addEventListener('click',function(){document.getElementById('emailForm').classList.remove('open');});
+document.getElementById('emailSendBtn').addEventListener('click',function(){
+var emailKey=document.getElementById('emailFromSelect').value;
+var to=document.getElementById('emailToInput').value.trim();
+var subject=document.getElementById('emailSubjectInput').value.trim();
+var body=document.getElementById('emailBodyInput').value.trim();
+if(!to||!subject){toast('\u274c Destinataire et objet requis');return;}
+if(!body){toast('\u274c Message vide');return;}
+this.disabled=true;this.textContent='Envoi en cours...';
+var btn=this;
+db.collection('webhook_inbox').add({
+apiKey:localStorage.getItem('ambitio_webhook_key')||'',
+action:'send_email',
+emailKey:emailKey,
+to:to,
+subject:subject,
+body:body,
+leadId:leadId,
+createdAt:firebase.firestore.FieldValue.serverTimestamp()
+}).then(function(ref){
+var checks=0;
+var iv=setInterval(function(){
+checks++;
+ref.get().then(function(doc){
+if(doc.exists&&doc.data().status==='done'){clearInterval(iv);toast('\u2705 Email envoy\u00e9 !');btn.disabled=false;btn.textContent='\u2709\ufe0f Envoyer';document.getElementById('emailSubjectInput').value='';document.getElementById('emailBodyInput').value='';document.getElementById('emailForm').classList.remove('open');renderAll();setTimeout(function(){document.querySelector('[data-tab="emails"]').click();},100);}
+else if(doc.exists&&doc.data().status==='error'){clearInterval(iv);toast('\u274c '+doc.data().error);btn.disabled=false;btn.textContent='Envoyer';}
+else if(checks>15){clearInterval(iv);toast('\u274c Timeout');btn.disabled=false;btn.textContent='Envoyer';}
+});
+},2000);
+}).catch(function(e){toast('\u274c '+e.message);btn.disabled=false;btn.textContent='Envoyer';});
+});
 }
 
 function saveF(){
@@ -365,7 +425,7 @@ sv(u);var m=document.getElementById('flS');if(m){m.style.opacity='1';setTimeout(
 }
 function sv(u){u.updatedAt=firebase.firestore.FieldValue.serverTimestamp();db.collection('leads').doc(leadId).update(u).catch(function(e){toast('\u274c '+e.message);});}
 function addTL(t,c){lead.timeline_history=(lead.timeline_history||[]);lead.timeline_history.push({text:t,date:fmtNow(),color:c||'var(--muted)'});db.collection('leads').doc(leadId).update({timeline_history:lead.timeline_history}).catch(function(){});}
-firebase.auth().onAuthStateChanged(function(u){if(u){db.collection('users').doc(u.uid).get().then(function(s){var d=s.exists?s.data():{};window._currentRole=d.role||'sales';window._currentUserName=u.displayName||u.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);});}});
+firebase.auth().onAuthStateChanged(function(u){if(u){db.collection('users').doc(u.uid).get().then(function(s){var d=s.exists?s.data():{};window._currentRole=d.role||'sales';window._currentUserName=u.displayName||u.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);});db.collection('_config').doc('webhook_keys').get().then(function(s){if(s.exists){var keys=s.data().keys||[];if(keys.length)localStorage.setItem('ambitio_webhook_key',keys[0]);}}).catch(function(){});}});
 </script>
 <script src="nav.js"></script>
 </body>
