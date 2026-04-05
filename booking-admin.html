@@ -296,20 +296,23 @@ h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">C
 // Email account selector
 h+='<div class="cd-notif-card" style="margin-bottom:16px"><div class="cd-notif-icon">📬</div><div class="cd-notif-info"><div class="cd-notif-nm">Compte d\'envoi</div><div class="cd-notif-desc">Depuis quelle adresse envoyer les mails</div></div><select class="bs" id="cd-emailAccount" style="width:200px;flex-shrink:0"><option value="strategie"'+(nf.emailAccount==='strategie'||!nf.emailAccount?' selected':'')+'>strategie@adrienemily.com</option><option value="coaching"'+(nf.emailAccount==='coaching'?' selected':'')+'>coaching@adrienemily.com</option><option value="contact"'+(nf.emailAccount==='contact'?' selected':'')+'>contact@adrienemily.com</option></select></div>';
 
-// Notifications cards
+// Notifications cards - one per type
 h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin:20px 0 10px">Notifications</div>';
-h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:20px">';
+h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:20px">';
 var notifCards=[
-{id:'emailOnBook',icon:'✅',label:'Confirmé',desc:'Email',tog:nf.emailOnBook!==false,tplKey:'confirmation'},
-{id:'smsOnBook',icon:'✅',label:'Confirmé',desc:'SMS',tog:!!nf.smsOnBook,tplKey:'confirmation_sms_only'},
-{id:'emailOnCancel',icon:'❌',label:'Annulé',desc:'Email',tog:nf.emailOnCancel!==false,tplKey:null}
+{id:'OnBook',icon:'✅',label:'Confirmé',tplKey:'confirmation',emailOn:nf.emailOnBook!==false,smsOn:!!nf.smsOnBook},
+{id:'OnReschedule',icon:'🔄',label:'Replanifié',tplKey:'reschedule',emailOn:!!nf.emailOnReschedule,smsOn:!!nf.smsOnReschedule},
+{id:'OnCancel',icon:'❌',label:'Annulé',tplKey:'cancel',emailOn:nf.emailOnCancel!==false,smsOn:!!nf.smsOnCancel}
 ];
 notifCards.forEach(function(c){
-h+='<div style="background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px;position:relative">';
-h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:20px">'+c.icon+'</span><div class="tg-w"><div class="tg'+(c.tog?' on':'')+'" data-ntog="'+c.id+'"></div></div></div>';
-h+='<div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">'+c.label+'</div>';
-h+='<div style="font-size:11px;color:rgba(255,255,255,.38)">'+c.desc+'</div>';
-if(c.tplKey&&c.tplKey!=='confirmation_sms_only')h+='<button class="bb" style="margin-top:8px;padding:4px 10px;font-size:10px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.15);color:#a78bfa;border-radius:5px;width:100%" onclick="openTplModal(\''+c.tplKey+'\')">✏️ Modifier</button>';
+h+='<div style="background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:14px">';
+h+='<div style="text-align:center;font-size:24px;margin-bottom:8px">'+c.icon+'</div>';
+h+='<div style="text-align:center;font-size:13px;font-weight:700;color:rgba(255,255,255,.85);margin-bottom:10px">'+c.label+'</div>';
+h+='<div style="display:flex;justify-content:center;gap:14px;margin-bottom:10px">';
+h+='<label style="font-size:10px;color:rgba(255,255,255,.4);display:flex;align-items:center;gap:4px">📧<div class="tg-w" style="margin-left:2px"><div class="tg'+(c.emailOn?' on':'')+'" data-ntog="email'+c.id+'"></div></div></label>';
+h+='<label style="font-size:10px;color:rgba(255,255,255,.4);display:flex;align-items:center;gap:4px">💬<div class="tg-w" style="margin-left:2px"><div class="tg'+(c.smsOn?' on':'')+'" data-ntog="sms'+c.id+'"></div></div></label>';
+h+='</div>';
+h+='<button class="bb" style="padding:5px 12px;font-size:10px;background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.15);color:#a78bfa;border-radius:5px;width:100%" onclick="openTplModal(\''+c.tplKey+'\')">✏️ Modifier</button>';
 h+='</div>';
 });
 h+='</div>';
@@ -414,10 +417,12 @@ window.addCustomReminder=addCustomReminder;window.removeCustomReminder=removeCus
 var _currentTplKey='';
 var _tplDefaults={
 confirmation:{subject:'Confirmation de votre RDV — {{typeLabel}}',body:'Bonjour {{prenom}},\n\nVotre RDV {{typeLabel}} est confirmé pour le {{date}} à {{time}}.\n\nÀ bientôt !\n\nL\'équipe Adrien&Emily',sms:'Bonjour {{prenom}}, votre RDV {{typeLabel}} est confirmé pour le {{date}} à {{time}}. À bientôt ! - Adrien&Emily'},
+reschedule:{subject:'Votre RDV a été replanifié — {{typeLabel}}',body:'Bonjour {{prenom}},\n\nVotre RDV {{typeLabel}} a été replanifié au {{date}} à {{time}}.\n\nÀ bientôt !\n\nL\'équipe Adrien&Emily',sms:'Bonjour {{prenom}}, votre RDV {{typeLabel}} a été replanifié au {{date}} à {{time}}. - Adrien&Emily'},
+cancel:{subject:'Annulation de votre RDV — {{typeLabel}}',body:'Bonjour {{prenom}},\n\nVotre RDV {{typeLabel}} prévu le {{date}} à {{time}} a été annulé.\n\nN\'hésitez pas à reprendre rendez-vous.\n\nL\'équipe Adrien&Emily',sms:'Bonjour {{prenom}}, votre RDV {{typeLabel}} du {{date}} à {{time}} a été annulé. - Adrien&Emily'},
 j1:{subject:'Rappel : votre RDV demain — {{typeLabel}}',body:'Bonjour {{prenom}},\n\nPetit rappel : votre RDV {{typeLabel}} est prévu demain {{date}} à {{time}}.\n\nÀ demain !',sms:'Rappel : votre RDV {{typeLabel}} est demain à {{time}}. À demain ! - Adrien&Emily'},
 h1:{subject:'Rappel : votre RDV dans 1h — {{typeLabel}}',body:'Bonjour {{prenom}},\n\nVotre RDV {{typeLabel}} commence dans 1h ({{time}}).\n\nÀ tout de suite !',sms:'Votre RDV {{typeLabel}} commence dans 1h ({{time}}). À tout de suite ! - Adrien&Emily'}
 };
-var _tplLabels={confirmation:'Confirmation',j1:'Rappel J-1 (24h avant)',h1:'Rappel H-1 (1h avant)'};
+var _tplLabels={confirmation:'Confirmation',reschedule:'Replanification',cancel:'Annulation',j1:'Rappel J-1 (24h avant)',h1:'Rappel H-1 (1h avant)'};
 function openTplModal(key){
 _currentTplKey=key;
 var tpls=(cdType.notifications||{}).templates||{};
