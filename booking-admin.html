@@ -134,6 +134,24 @@
 .ar-toggle-btn.on{color:#fff}
 .ar-toggle-btn.on[data-val="available"]{background:rgba(52,211,153,.15);color:#34d399}
 .ar-toggle-btn.on[data-val="unavailable"]{background:rgba(239,68,68,.15);color:#ef4444}
+/* Form builder */
+.fb-pos-toggle{display:flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1);margin-bottom:18px}
+.fb-pos-btn{flex:1;padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;border:none;color:rgba(255,255,255,.35);text-align:center;transition:all .15s}
+.fb-pos-btn.on{background:rgba(139,92,246,.12);color:#a78bfa}
+.fb-field{background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.fb-field-icon{font-size:16px;flex-shrink:0;width:28px;text-align:center}
+.fb-field-info{flex:1;min-width:0}.fb-field-name{font-size:13px;font-weight:600;color:rgba(255,255,255,.85)}.fb-field-meta{font-size:11px;color:rgba(255,255,255,.3);margin-top:1px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.fb-type-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(96,165,250,.1);color:#60a5fa;border:1px solid rgba(96,165,250,.12)}
+.fb-cond-badge{font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:rgba(251,191,36,.08);color:#fbbf24;border:1px solid rgba(251,191,36,.12)}
+.fb-req-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.12)}
+.fb-opt-badge{font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.06)}
+.fb-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}.fb-modal-bg.show{display:flex}
+.fb-modal{background:#0e0e1a;border:1px solid rgba(255,255,255,.13);border-radius:16px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;padding:24px;margin:20px}
+.fb-modal-title{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}
+.fb-group{margin-bottom:14px}.fb-group-label{font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.fb-opts-list{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+.fb-opt-row{display:flex;gap:6px;align-items:center}
+.fb-opt-row input{flex:1;padding:6px 10px;font-size:12px}
 /* Calendar params */
 .cal-card{background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 18px;margin-bottom:12px}
 .cal-card-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
@@ -459,18 +477,69 @@ var _ffi=T.findIndex(function(t){return t.id===cdType.id;});
 if(_ffi>=0)T[_ffi].formFields=ff;
 saveTypes();
 }
+var _fp=cdType.formPosition||'after';
 h+='<div class="cd-sec-title">📝 Formulaire de réservation</div>';
-h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Champs affichés au client lors de la réservation.</div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:14px">Champs affichés au client lors de la réservation.</div>';
+
+// Position toggle
+h+='<div class="fb-group-label">Affichage du formulaire</div>';
+h+='<div class="fb-pos-toggle"><button class="fb-pos-btn'+(_fp==='before'?' on':'')+'" onclick="setFormPos(\'before\')">📋 Avant la réservation</button><button class="fb-pos-btn'+(_fp==='after'?' on':'')+'" onclick="setFormPos(\'after\')">📅 Après la réservation</button></div>';
+h+='<div style="font-size:11px;color:rgba(255,255,255,.25);margin:-10px 0 16px;padding:0 4px">'+(_fp==='before'?'Le client remplit le formulaire puis voit les créneaux disponibles':'Le client choisit un créneau (grisé si non rempli) puis remplit le formulaire')+'</div>';
+
+// Field list
+var _FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤'};
+var _FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle'};
 ff.forEach(function(f,i){
-h+='<div class="cd-ff-item"><span class="cd-ff-grip">⠿</span><span class="cd-ff-name">'+esc(f.label)+'</span>';
-h+='<span class="cd-ff-type">'+f.type+'</span>';
-h+='<button style="background:none;border:1px solid '+(f.required?'rgba(239,68,68,.3)':'rgba(255,255,255,.1)')+';padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;color:'+(f.required?'#ef4444':'rgba(255,255,255,.25)')+';cursor:pointer" onclick="toggleFormFieldReq('+i+',event)">'+(f.required?'* Requis':'Optionnel')+'</button>';
-if(f.system)h+='<span style="font-size:9px;color:rgba(255,255,255,.2)">système</span>';
-else h+='<button class="cd-ff-del" onclick="deleteFormField('+i+',event)" style="padding:4px 8px;font-size:12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.15);border-radius:4px;color:#ef4444;cursor:pointer">✕</button>';
+h+='<div class="fb-field">';
+h+='<div class="fb-field-icon">'+(_FT_ICONS[f.type]||'?')+'</div>';
+h+='<div class="fb-field-info"><div class="fb-field-name">'+esc(f.label)+'</div><div class="fb-field-meta">';
+h+='<span class="fb-type-badge">'+(_FT_LABELS[f.type]||f.type)+'</span>';
+if(f.required)h+='<span class="fb-req-badge">* Requis</span>';
+else h+='<span class="fb-opt-badge">Optionnel</span>';
+if(f.options&&f.options.length)h+='<span style="color:rgba(255,255,255,.2)">'+f.options.length+' options</span>';
+if(f.scaleMax)h+='<span style="color:rgba(255,255,255,.2)">1-'+f.scaleMax+'</span>';
+if(f.condition)h+='<span class="fb-cond-badge">⚡ Conditionnel</span>';
+if(f.system)h+='<span style="font-size:9px;color:rgba(255,255,255,.15)">système</span>';
+h+='</div></div>';
+if(!f.system){
+h+='<button class="pl-btn" onclick="openFieldEditor('+i+')" title="Modifier" style="font-size:11px">✏️</button>';
+h+='<button class="pl-btn pl-btn-del" onclick="deleteFormField('+i+',event)" title="Supprimer" style="font-size:11px">✕</button>';
+}
 h+='</div>';
 });
-h+='<div class="cd-ff-add"><input class="bi" id="ff-label" placeholder="Nom du champ" style="flex:1"/><select class="bs" id="ff-type"><option value="text">Texte</option><option value="textarea">Zone de texte</option><option value="tel">Téléphone</option><option value="email">Email</option><option value="select">Liste</option></select><label style="font-size:11px;color:rgba(255,255,255,.48);display:flex;align-items:center;gap:4px"><input type="checkbox" id="ff-req"/> Requis</label><button class="bb bb-g" onclick="addFormField()">+ Ajouter</button></div>';
+
+// Add button
+h+='<div style="margin-top:12px;display:flex;justify-content:center"><button class="bb bb-g" onclick="openFieldEditor(-1)" style="padding:8px 20px;font-size:12px">+ Ajouter un champ</button></div>';
 h+='<div class="cd-save-bar" style="border-top:0;justify-content:flex-end"><span id="cd-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
+
+// Field editor modal
+h+='<div class="fb-modal-bg" id="fbModal"><div class="fb-modal"><div class="fb-modal-title"><span id="fbModalTitle">Nouveau champ</span><button onclick="closeFbModal()" style="border:none;background:0;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer">✕</button></div>';
+h+='<div class="fb-group"><div class="fb-group-label">Libellé</div><input class="bi" id="fb-label" placeholder="Ex: Secteur d\'activité" style="width:100%"/></div>';
+h+='<div class="fb-group"><div class="fb-group-label">Type de champ</div><select class="bs" id="fb-type" onchange="fbTypeChanged()" style="width:100%"><option value="text">Aa Texte court</option><option value="textarea">¶ Zone de texte</option><option value="select">▾ Liste déroulante</option><option value="radio">◉ Choix unique (boutons)</option><option value="checkbox">☑ Cases à cocher (multiple)</option><option value="scale">⬤ Échelle / Curseur</option><option value="email">@ Email</option><option value="tel">📞 Téléphone</option></select></div>';
+
+// Options editor (for select, checkbox, radio)
+h+='<div class="fb-group" id="fb-opts-wrap" style="display:none"><div class="fb-group-label">Options</div><div class="fb-opts-list" id="fb-opts-list"></div><button class="bb" onclick="addFbOption()" style="padding:4px 12px;font-size:11px">+ Option</button></div>';
+
+// Scale config (for scale type)
+h+='<div class="fb-group" id="fb-scale-wrap" style="display:none"><div class="fb-group-label">Échelle maximale</div><div style="display:flex;gap:8px;align-items:center"><select class="bs" id="fb-scaleMax" style="width:80px"><option value="5">1 - 5</option><option value="10">1 - 10</option></select><span style="font-size:11px;color:rgba(255,255,255,.3)">Le client pourra noter de 1 à N</span></div></div>';
+
+// Required toggle
+h+='<div class="fb-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fb-required"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Champ requis</span></label></div>';
+
+// Condition builder
+h+='<div class="fb-group"><div class="fb-group-label">Condition d\'affichage <span style="font-weight:400;color:rgba(255,255,255,.2)">(optionnel)</span></div>';
+h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">';
+h+='<span style="font-size:12px;color:rgba(255,255,255,.4)">Afficher si</span>';
+h+='<select class="bs" id="fb-cond-field" style="width:140px;font-size:11px"><option value="">— Aucune —</option>';
+ff.forEach(function(f,i){if(!f.system)h+='<option value="'+f.id+'">'+esc(f.label)+'</option>';});
+h+='</select>';
+h+='<select class="bs" id="fb-cond-op" style="width:80px;font-size:11px"><option value="eq">=</option><option value="neq">≠</option><option value="gte">≥</option><option value="lte">≤</option></select>';
+h+='<input class="bi" id="fb-cond-val" placeholder="valeur" style="width:100px;font-size:11px;padding:5px 8px"/>';
+h+='</div></div>';
+
+// Submit
+h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px"><button class="bb" onclick="closeFbModal()" style="padding:8px 18px;font-size:12px">Annuler</button><button class="bb bb-p" onclick="saveFbField()" style="padding:8px 18px;font-size:12px" id="fbSubmitBtn">Ajouter</button></div>';
+h+='</div></div>';
 }
 el.innerHTML=h;
 // Bind notification toggles + auto-save on toggle click
@@ -490,7 +559,7 @@ var urlW=document.getElementById('cd-locUrl-wrap');
 if(val==='meet'&&_calConn){autoW.style.display='block';urlW.style.display='none';}
 else{autoW.style.display='none';urlW.style.display=(val==='meet'||val==='zoom'||val==='custom')?'block':'none';}
 }
-function cleanType(t){var o={id:t.id,label:t.label||'',duration:t.duration||30,color:t.color||'#8b5cf6'};if(t.eventType)o.eventType=t.eventType;if(t.description)o.description=t.description;if(t.active===false)o.active=false;if(t.image)o.image=t.image;if(t.location)o.location=t.location;if(t.locationUrl)o.locationUrl=t.locationUrl;if(t.rules){o.rules={};for(var k in t.rules)if(t.rules[k]!==undefined&&t.rules[k]!==null)o.rules[k]=t.rules[k];}if(t.notifications){o.notifications={};for(var k2 in t.notifications)if(t.notifications[k2]!==undefined&&t.notifications[k2]!==null)o.notifications[k2]=t.notifications[k2];}if(t.formFields)o.formFields=t.formFields.map(function(f){var r={id:f.id,label:f.label,type:f.type,required:!!f.required};if(f.system)r.system=true;return r;});return o;}
+function cleanType(t){var o={id:t.id,label:t.label||'',duration:t.duration||30,color:t.color||'#8b5cf6'};if(t.eventType)o.eventType=t.eventType;if(t.description)o.description=t.description;if(t.active===false)o.active=false;if(t.image)o.image=t.image;if(t.location)o.location=t.location;if(t.locationUrl)o.locationUrl=t.locationUrl;if(t.formPosition)o.formPosition=t.formPosition;if(t.rules){o.rules={};for(var k in t.rules)if(t.rules[k]!==undefined&&t.rules[k]!==null)o.rules[k]=t.rules[k];}if(t.notifications){o.notifications={};for(var k2 in t.notifications)if(t.notifications[k2]!==undefined&&t.notifications[k2]!==null)o.notifications[k2]=t.notifications[k2];}if(t.formFields)o.formFields=t.formFields.map(function(f){var r={id:f.id,label:f.label,type:f.type,required:!!f.required};if(f.system)r.system=true;if(f.options)r.options=f.options;if(f.scaleMax)r.scaleMax=f.scaleMax;if(f.condition)r.condition=f.condition;return r;});return o;}
 function saveTypes(){var clean=T.map(cleanType);return CR.doc('_types').set({list:clean});}
 function saveCdDetails(silent){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].label=document.getElementById('cd-name').value.trim()||T[i].label;T[i].duration=parseInt(document.getElementById('cd-dur').value)||30;T[i].color=document.getElementById('cd-color').value;T[i].active=document.getElementById('cd-active').value!=='false';T[i].eventType=document.getElementById('cd-eventType').value;T[i].description=document.getElementById('cd-desc').value.trim();T[i].location=document.getElementById('cd-location').value;T[i].locationUrl=document.getElementById('cd-locUrl').value.trim();if(cdType.image)T[i].image=cdType.image;else delete T[i].image;cdType=T[i];saveTypes().then(function(){renderCdHead();var ind=document.getElementById('cd-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Enregistré');}).catch(function(e){console.error('Save error:',e);if(!silent)alert('Erreur de sauvegarde: '+e.message);});}
 function previewCdImage(input){var f=input.files[0];if(!f)return;if(f.size>200*1024){toast('❌ Image trop lourde (max 200KB)');return;}var r=new FileReader();r.onload=function(e){cdType.image=e.target.result;var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].image=cdType.image;renderCdSection();};r.readAsDataURL(f);}
@@ -604,65 +673,150 @@ navigator.clipboard.writeText(code).then(function(){toast('📋 Code copié !');
 }
 window.openShareModal=openShareModal;window.switchShareTab=switchShareTab;window.copyEmbed=copyEmbed;
 function saveCdForm(silent){var i=T.findIndex(function(t){return t.id===cdType.id;});if(i<0)return;T[i].formFields=cdType.formFields;cdType=T[i];saveTypes().then(function(){var ind=document.getElementById('cd-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅ Formulaire enregistré');}).catch(function(e){if(!silent)alert('Erreur: '+e.message);});}
-function addFormField(){var label=document.getElementById('ff-label').value.trim();if(!label)return;var type=document.getElementById('ff-type').value;var req=document.getElementById('ff-req').checked;if(!cdType.formFields)cdType.formFields=[{id:'name',label:'Nom complet',type:'text',required:true,system:true},{id:'email',label:'Email',type:'email',required:true,system:true},{id:'phone',label:'Téléphone',type:'tel',required:false,system:true}];cdType.formFields.push({id:'custom_'+gid().slice(0,4),label:label,type:type,required:req});document.getElementById('ff-label').value='';var i=T.findIndex(function(t){return t.id===cdType.id;});if(i>=0)T[i].formFields=cdType.formFields;renderCdSection();saveTypes().then(function(){toast('✅ Champ ajouté');});}
+// ═══ FORM BUILDER FUNCTIONS ═══
+var _fbEditIdx=-1; // -1 = new, >=0 = editing index
+
+function setFormPos(pos){
+if(!cdType)return;
+cdType.formPosition=pos;
+var i=T.findIndex(function(t){return t.id===cdType.id;});
+if(i>=0)T[i].formPosition=pos;
+renderCdSection();
+saveTypes().then(function(){toast('✅ Position enregistrée');});
+}
+
 function deleteFormField(idx,evt){
 if(evt){evt.stopPropagation();evt.preventDefault();}
 if(!cdType)return;
-// If formFields is missing, reconstruct from DOM
-if(!cdType.formFields||!Array.isArray(cdType.formFields)){
-cdType.formFields=[];
-document.querySelectorAll('#cdContent .cd-ff-item').forEach(function(item){
-var nameEl=item.querySelector('.cd-ff-name');
-var typeEl=item.querySelector('.cd-ff-type');
-if(!nameEl||!typeEl)return;
-var isSys=item.textContent.indexOf('système')>=0;
-var isReq=item.textContent.indexOf('Requis')>=0;
-var f={id:isSys?nameEl.textContent.trim().toLowerCase().replace(/[^a-z]/g,''):'custom_'+Math.random().toString(36).slice(2,6),label:nameEl.textContent.trim(),type:typeEl.textContent.trim(),required:isReq};
-if(isSys)f.system=true;
-cdType.formFields.push(f);
-});
-var ti=T.findIndex(function(t){return t.id===cdType.id;});
-if(ti>=0)T[ti].formFields=cdType.formFields;
-}
-if(idx<0||idx>=cdType.formFields.length)return;
+var fresh=T.find(function(t){return t.id===cdType.id;});
+if(fresh&&fresh!==cdType){if(cdType.formFields&&!fresh.formFields)fresh.formFields=cdType.formFields;cdType=fresh;}
+if(!cdType.formFields||idx<0||idx>=cdType.formFields.length)return;
+var label=cdType.formFields[idx].label;
 cdType.formFields.splice(idx,1);
 var i=T.findIndex(function(t){return t.id===cdType.id;});
 if(i>=0)T[i].formFields=cdType.formFields;
-var items=document.querySelectorAll('#cdContent .cd-ff-item');
+var items=document.querySelectorAll('#cdContent .fb-field');
 if(items[idx])items[idx].style.display='none';
 setTimeout(function(){
 renderCdSection();
-saveTypes().then(function(){toast('🗑 Champ supprimé');}).catch(function(e){console.error(e);});
+saveTypes().then(function(){toast('🗑 '+label+' supprimé');});
 },50);
 }
-function toggleFormFieldReq(idx,evt){
-if(evt){evt.stopPropagation();evt.preventDefault();}
-if(!cdType)return;
-if(!cdType.formFields||!Array.isArray(cdType.formFields)){
-cdType.formFields=[];
-document.querySelectorAll('#cdContent .cd-ff-item').forEach(function(item){
-var nameEl=item.querySelector('.cd-ff-name');
-var typeEl=item.querySelector('.cd-ff-type');
-if(!nameEl||!typeEl)return;
-var isSys=item.textContent.indexOf('système')>=0;
-var isReq=item.textContent.indexOf('Requis')>=0;
-var f={id:isSys?nameEl.textContent.trim().toLowerCase().replace(/[^a-z]/g,''):'custom_'+Math.random().toString(36).slice(2,6),label:nameEl.textContent.trim(),type:typeEl.textContent.trim(),required:isReq};
-if(isSys)f.system=true;
-cdType.formFields.push(f);
-});
-var ti=T.findIndex(function(t){return t.id===cdType.id;});
-if(ti>=0)T[ti].formFields=cdType.formFields;
+
+function openFieldEditor(idx){
+_fbEditIdx=idx;
+var modal=document.getElementById('fbModal');
+if(!modal)return;
+document.getElementById('fbModalTitle').textContent=idx>=0?'Modifier le champ':'Nouveau champ';
+document.getElementById('fbSubmitBtn').textContent=idx>=0?'Enregistrer':'Ajouter';
+// Reset
+document.getElementById('fb-label').value='';
+document.getElementById('fb-type').value='text';
+document.getElementById('fb-required').checked=false;
+document.getElementById('fb-cond-field').value='';
+document.getElementById('fb-cond-op').value='eq';
+document.getElementById('fb-cond-val').value='';
+document.getElementById('fb-opts-list').innerHTML='';
+document.getElementById('fb-opts-wrap').style.display='none';
+document.getElementById('fb-scale-wrap').style.display='none';
+// Fill if editing
+if(idx>=0&&cdType&&cdType.formFields&&cdType.formFields[idx]){
+var f=cdType.formFields[idx];
+document.getElementById('fb-label').value=f.label||'';
+document.getElementById('fb-type').value=f.type||'text';
+document.getElementById('fb-required').checked=!!f.required;
+if(f.options&&f.options.length){
+document.getElementById('fb-opts-wrap').style.display='block';
+var ol=document.getElementById('fb-opts-list');
+f.options.forEach(function(o){_appendOptRow(ol,o);});
 }
-if(!cdType.formFields[idx])return;
-cdType.formFields[idx].required=!cdType.formFields[idx].required;
+if(f.type==='scale'){
+document.getElementById('fb-scale-wrap').style.display='block';
+document.getElementById('fb-scaleMax').value=String(f.scaleMax||5);
+}
+if(f.condition){
+document.getElementById('fb-cond-field').value=f.condition.fieldId||'';
+document.getElementById('fb-cond-op').value=f.condition.operator||'eq';
+document.getElementById('fb-cond-val').value=f.condition.value||'';
+}
+}
+fbTypeChanged();
+modal.classList.add('show');
+}
+
+function closeFbModal(){
+var modal=document.getElementById('fbModal');
+if(modal)modal.classList.remove('show');
+_fbEditIdx=-1;
+}
+
+function fbTypeChanged(){
+var type=document.getElementById('fb-type').value;
+var hasOpts=type==='select'||type==='checkbox'||type==='radio';
+var isScale=type==='scale';
+document.getElementById('fb-opts-wrap').style.display=hasOpts?'block':'none';
+document.getElementById('fb-scale-wrap').style.display=isScale?'block':'none';
+if(hasOpts&&document.getElementById('fb-opts-list').children.length===0){
+addFbOption();addFbOption();
+}
+}
+
+function _appendOptRow(container,val){
+var row=document.createElement('div');
+row.className='fb-opt-row';
+row.innerHTML='<input class="bi fb-opt-input" value="'+esc(val||'')+'" placeholder="Option…" style="padding:6px 10px;font-size:12px"/><button class="pl-btn pl-btn-del" onclick="this.closest(\'.fb-opt-row\').remove()" style="width:24px;height:24px;font-size:11px">✕</button>';
+container.appendChild(row);
+}
+
+function addFbOption(){
+var list=document.getElementById('fb-opts-list');
+if(list)_appendOptRow(list,'');
+}
+
+function saveFbField(){
+if(!cdType)return;
+var label=document.getElementById('fb-label').value.trim();
+if(!label){toast('❌ Le libellé est requis');return;}
+var type=document.getElementById('fb-type').value;
+var required=document.getElementById('fb-required').checked;
+var field={id:_fbEditIdx>=0&&cdType.formFields[_fbEditIdx]?cdType.formFields[_fbEditIdx].id:'custom_'+gid().slice(0,6),label:label,type:type,required:required};
+// Options
+if(type==='select'||type==='checkbox'||type==='radio'){
+var opts=[];
+document.querySelectorAll('#fb-opts-list .fb-opt-input').forEach(function(inp){
+var v=inp.value.trim();
+if(v)opts.push(v);
+});
+if(!opts.length){toast('❌ Ajoutez au moins une option');return;}
+field.options=opts;
+}
+// Scale
+if(type==='scale'){
+field.scaleMax=parseInt(document.getElementById('fb-scaleMax').value)||5;
+}
+// Condition
+var condField=document.getElementById('fb-cond-field').value;
+if(condField){
+field.condition={fieldId:condField,operator:document.getElementById('fb-cond-op').value,value:document.getElementById('fb-cond-val').value};
+}
+// Save
+if(!cdType.formFields)cdType.formFields=[];
+if(_fbEditIdx>=0&&_fbEditIdx<cdType.formFields.length){
+// Preserve system flag if editing
+if(cdType.formFields[_fbEditIdx].system)field.system=true;
+cdType.formFields[_fbEditIdx]=field;
+}else{
+cdType.formFields.push(field);
+}
 var i=T.findIndex(function(t){return t.id===cdType.id;});
 if(i>=0)T[i].formFields=cdType.formFields;
-setTimeout(function(){
+closeFbModal();
 renderCdSection();
-saveTypes().then(function(){toast('✅ Modifié');});
-},0);
+saveTypes().then(function(){toast('✅ '+(_fbEditIdx>=0?'Champ modifié':'Champ ajouté'));});
 }
-window.saveCdDetails=saveCdDetails;window.saveCdRules=saveCdRules;window.saveCdNotif=saveCdNotif;window.saveCdForm=saveCdForm;window.addFormField=addFormField;window.deleteFormField=deleteFormField;window.toggleFormFieldReq=toggleFormFieldReq;window.closeCsDetail=closeCsDetail;
+
+window.saveCdDetails=saveCdDetails;window.saveCdRules=saveCdRules;window.saveCdNotif=saveCdNotif;window.saveCdForm=saveCdForm;
+window.setFormPos=setFormPos;window.openFieldEditor=openFieldEditor;window.closeFbModal=closeFbModal;window.fbTypeChanged=fbTypeChanged;window.addFbOption=addFbOption;window.saveFbField=saveFbField;window.deleteFormField=deleteFormField;window.closeCsDetail=closeCsDetail;
 
 // ═══ RDV DETAIL PANEL ═══
 var rdvTab='info';
