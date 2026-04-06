@@ -96,6 +96,29 @@
 .ed-toggle{display:flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
 .ed-toggle-btn{flex:1;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;border:none;color:rgba(255,255,255,.35);text-align:center;transition:all .15s}
 .ed-toggle-btn.on{background:rgba(245,158,11,.12);color:#fbbf24}
+/* Rules */
+.rule-card{background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 18px;margin-bottom:12px;transition:border-color .2s}
+.rule-card:hover{border-color:rgba(255,255,255,.12)}
+.rule-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.rule-name{font-size:14px;font-weight:700;flex:1}
+.rule-block{border-left:3px solid rgba(255,255,255,.08);padding:10px 14px;margin-bottom:10px;border-radius:0 8px 8px 0}
+.rule-block-si{border-left-color:#f59e0b;background:rgba(245,158,11,.03)}
+.rule-block-puis{border-left-color:#34d399;background:rgba(52,211,153,.03)}
+.rule-tag{display:inline-block;font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;margin-right:8px}
+.rule-tag-si{background:rgba(245,158,11,.15);color:#fbbf24}
+.rule-tag-ou{background:rgba(96,165,250,.1);color:#60a5fa}
+.rule-tag-puis{background:rgba(52,211,153,.15);color:#34d399}
+.rule-cond{font-size:12px;color:rgba(255,255,255,.6);padding:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rule-cond-field{font-weight:600;color:rgba(255,255,255,.8)}
+.rule-cond-op{color:#f59e0b;font-weight:700}
+.rule-cond-val{font-weight:600;color:rgba(255,255,255,.7)}
+.rule-action{font-size:12px;color:rgba(255,255,255,.6);padding:4px 0;display:flex;align-items:center;gap:6px}
+.rule-action-icon{font-size:14px}
+/* Rule modal (wider) */
+.rule-mo{max-width:600px!important}
+.rule-cond-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.rule-cond-row select,.rule-cond-row input{font-size:11px;padding:6px 8px}
+.rule-logic-tag{font-size:10px;font-weight:800;color:#60a5fa;padding:2px 8px;background:rgba(96,165,250,.1);border-radius:4px;margin:4px 0}
 @media(max-width:768px){.ed.on{flex-direction:column}.ed-left{width:100%;border-right:0;border-bottom:1px solid rgba(255,255,255,.07);display:flex;overflow-x:auto}.ed-nav-item{border-left:0;border-bottom:3px solid transparent;white-space:nowrap;padding:10px 14px}.ed-nav-item.on{border-bottom-color:#f59e0b;border-left:0}.ed-right{padding:16px 0}}
 </style>
 </head>
@@ -122,6 +145,7 @@
 <div class="ed on">
 <div class="ed-left"><div class="ed-nav" id="edNav">
 <div class="ed-nav-item on" data-sec="fields"><span class="ed-nav-icon">📋</span><div><div class="ed-nav-label">Champs</div><div class="ed-nav-desc">Questions du formulaire</div></div></div>
+<div class="ed-nav-item" data-sec="rules"><span class="ed-nav-icon">⚡</span><div><div class="ed-nav-label">Règles</div><div class="ed-nav-desc">Conditions & redirections</div></div></div>
 <div class="ed-nav-item" data-sec="settings"><span class="ed-nav-icon">⚙️</span><div><div class="ed-nav-label">Paramètres</div><div class="ed-nav-desc">Apparence, redirection</div></div></div>
 <div class="ed-nav-item" data-sec="share"><span class="ed-nav-icon">🔗</span><div><div class="ed-nav-label">Partager</div><div class="ed-nav-desc">Lien, embed, QR</div></div></div>
 <div class="ed-nav-item" data-sec="responses"><span class="ed-nav-icon">📊</span><div><div class="ed-nav-label">Réponses</div><div class="ed-nav-desc">Soumissions reçues</div></div></div>
@@ -164,6 +188,38 @@
 </div></div>
 <!-- Submit -->
 <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px"><button class="bb bb-o" onclick="closeFldModal()">Annuler</button><button class="bb bb-p" onclick="saveFldModal()" id="fldSaveBtn">Ajouter</button></div>
+</div></div>
+
+<!-- Rule editor modal -->
+<div class="ed-mo-bg" id="ruleModal"><div class="ed-mo rule-mo">
+<div class="ed-mo-title"><span id="ruleModalTitle">Nouvelle règle</span><button onclick="closeRuleModal()" style="border:none;background:0;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer">✕</button></div>
+<div class="ed-field-row"><div class="ed-group-label">Nom de la règle</div><input class="bi" id="rule-name" placeholder="Ex: CA Mensuel" style="width:100%"/></div>
+
+<div class="ed-field-row"><div class="ed-group-label">Logique</div>
+<div class="ed-toggle" id="ruleLogicToggle">
+<button class="ed-toggle-btn on" data-val="or" onclick="setRuleToggle(this)">N'IMPORTE QUELLE condition</button>
+<button class="ed-toggle-btn" data-val="and" onclick="setRuleToggle(this)">TOUTES les conditions</button>
+</div></div>
+
+<div class="ed-field-row">
+<div class="ed-group-label" style="display:flex;align-items:center;justify-content:space-between">Conditions <button class="bb" onclick="addRuleCond()" style="padding:3px 10px;font-size:10px">+ Condition</button></div>
+<div id="ruleCondsContainer"></div>
+</div>
+
+<div class="ed-field-row" style="margin-top:16px"><div class="ed-group-label">Action</div>
+<select class="bs" id="rule-action" onchange="ruleActionChanged()" style="width:100%">
+<option value="redirect">🔀 Rediriger vers une URL</option>
+<option value="booking">📅 Ouvrir un calendrier Booking</option>
+<option value="message">💬 Afficher un message</option>
+</select></div>
+
+<div class="ed-field-row" id="rule-action-val-wrap"><div class="ed-group-label" id="rule-action-val-label">URL de redirection</div>
+<input class="bi" id="rule-action-val" placeholder="https://..." style="width:100%"/></div>
+
+<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px">
+<button class="bb bb-o" onclick="closeRuleModal()">Annuler</button>
+<button class="bb bb-p" onclick="saveRuleModal()" id="ruleSaveBtn">Ajouter</button>
+</div>
 </div></div>
 
 <!-- Create form modal -->
@@ -288,7 +344,7 @@ function saveForm(silent){
 if(!currentForm)return;
 var clean={
 title:currentForm.title,description:currentForm.description,color:currentForm.color,
-status:currentForm.status,fields:currentForm.fields||[],settings:currentForm.settings||{},
+status:currentForm.status,fields:currentForm.fields||[],rules:currentForm.rules||[],settings:currentForm.settings||{},
 responseCount:currentForm.responseCount||0,
 updatedAt:firebase.firestore.FieldValue.serverTimestamp()
 };
@@ -324,6 +380,46 @@ h+='<button class="ed-btn ed-btn-del" onclick="deleteField('+i+')" title="Suppri
 h+='</div>';
 });
 h+='<div style="margin-top:16px;text-align:center"><button class="bb bb-p" onclick="openFldModal(-1)" style="padding:10px 24px">+ Ajouter un champ</button></div>';
+}
+
+else if(edSection==='rules'){
+var rules=f.rules||[];
+var fields=f.fields||[];
+h+='<div class="ed-sec-title">⚡ Règles du formulaire</div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Définissez des actions conditionnelles exécutées à la soumission. Si aucune règle ne matche, le comportement par défaut (paramètres) s\'applique.</div>';
+
+if(!rules.length){
+h+='<div style="text-align:center;padding:40px;color:rgba(255,255,255,.25)"><div style="font-size:32px;margin-bottom:8px">⚡</div><div style="font-size:13px">Aucune règle. Ajoutez-en une pour personnaliser le parcours.</div></div>';
+}
+
+var _OP_FR={eq:'Est',neq:'N\'est pas',contains:'Contient',gte:'≥',lte:'≤'};
+var _ACT_FR={redirect:'Rediriger vers',message:'Afficher message',booking:'Ouvrir Booking'};
+var _ACT_ICON={redirect:'🔀',message:'💬',booking:'📅'};
+
+rules.forEach(function(rule,ri){
+h+='<div class="rule-card">';
+h+='<div class="rule-head"><span class="rule-name">'+esc(rule.name||'Règle '+(ri+1))+'</span><button class="ed-btn" onclick="openRuleModal('+ri+')" title="Modifier">✏️</button><button class="ed-btn ed-btn-del" onclick="deleteRule('+ri+')" title="Supprimer">✕</button></div>';
+
+// Conditions
+h+='<div class="rule-block rule-block-si"><span class="rule-tag rule-tag-si">Si</span>';
+h+='<span style="font-size:11px;color:rgba(255,255,255,.35)"> — '+(rule.logic==='and'?'TOUTES':'N\'IMPORTE QUELLE')+' des conditions suivantes</span>';
+(rule.conditions||[]).forEach(function(c,ci){
+var fLabel='?';
+fields.forEach(function(fl){if(fl.id===c.fieldId)fLabel=fl.label;});
+if(ci>0)h+='<div class="rule-logic-tag">'+(rule.logic==='and'?'ET':'OU')+'</div>';
+h+='<div class="rule-cond"><span class="rule-cond-field">'+esc(fLabel)+'</span><span class="rule-cond-op">'+(_OP_FR[c.operator]||c.operator)+'</span><span class="rule-cond-val">'+esc(c.value)+'</span></div>';
+});
+h+='</div>';
+
+// Action
+h+='<div class="rule-block rule-block-puis"><span class="rule-tag rule-tag-puis">Puis</span>';
+h+='<div class="rule-action"><span class="rule-action-icon">'+(_ACT_ICON[rule.action]||'🔀')+'</span>'+(_ACT_FR[rule.action]||rule.action);
+if(rule.actionValue)h+=' — <span style="color:rgba(255,255,255,.5)">'+esc(rule.actionValue)+'</span>';
+h+='</div></div>';
+h+='</div>';
+});
+
+h+='<div style="margin-top:16px;text-align:center"><button class="bb bb-p" onclick="openRuleModal(-1)" style="padding:10px 24px">+ Ajouter une règle</button></div>';
 }
 
 else if(edSection==='settings'){
@@ -517,11 +613,154 @@ if(!currentForm)return;
 window.open('alteoforms-render.html?id='+currentForm._id+'&preview=1','_blank');
 }
 
+// ═══ RULES ═══
+var _ruleEditIdx=-1;
+
+function openRuleModal(idx){
+_ruleEditIdx=idx;
+document.getElementById('ruleModalTitle').textContent=idx>=0?'Modifier la règle':'Nouvelle règle';
+document.getElementById('ruleSaveBtn').textContent=idx>=0?'Enregistrer':'Ajouter';
+// Reset
+document.getElementById('rule-name').value='';
+document.getElementById('rule-action').value='redirect';
+document.getElementById('rule-action-val').value='';
+document.getElementById('ruleCondsContainer').innerHTML='';
+// Logic toggle reset
+document.querySelectorAll('#ruleLogicToggle .ed-toggle-btn').forEach(function(b){b.classList.remove('on');});
+document.querySelector('#ruleLogicToggle [data-val="or"]').classList.add('on');
+ruleActionChanged();
+
+// Fill if editing
+if(idx>=0&&currentForm.rules&&currentForm.rules[idx]){
+var rule=currentForm.rules[idx];
+document.getElementById('rule-name').value=rule.name||'';
+document.getElementById('rule-action').value=rule.action||'redirect';
+document.getElementById('rule-action-val').value=rule.actionValue||'';
+// Logic
+document.querySelectorAll('#ruleLogicToggle .ed-toggle-btn').forEach(function(b){b.classList.remove('on');});
+var logicVal=rule.logic||'or';
+var logicBtn=document.querySelector('#ruleLogicToggle [data-val="'+logicVal+'"]');
+if(logicBtn)logicBtn.classList.add('on');
+// Conditions
+(rule.conditions||[]).forEach(function(c){_addCondRow(c.fieldId,c.operator,c.value);});
+ruleActionChanged();
+}
+if(!document.getElementById('ruleCondsContainer').children.length)addRuleCond();
+document.getElementById('ruleModal').classList.add('show');
+}
+
+function closeRuleModal(){document.getElementById('ruleModal').classList.remove('show');_ruleEditIdx=-1;}
+document.getElementById('ruleModal').addEventListener('click',function(e){if(e.target===this)closeRuleModal();});
+
+function setRuleToggle(btn){
+document.querySelectorAll('#ruleLogicToggle .ed-toggle-btn').forEach(function(b){b.classList.remove('on');});
+btn.classList.add('on');
+}
+
+function _addCondRow(fieldId,op,val){
+var fields=currentForm?currentForm.fields||[]:[];
+var row=document.createElement('div');row.className='rule-cond-row';
+var fSel='<select class="bs rule-cond-fld" style="width:160px"><option value="">— Champ —</option>';
+fields.forEach(function(f){fSel+='<option value="'+f.id+'"'+(fieldId===f.id?' selected':'')+'>'+esc(f.label)+'</option>';});
+fSel+='</select>';
+var opSel='<select class="bs rule-cond-op-sel" style="width:100px"><option value="eq"'+(op==='eq'?' selected':'')+'>Est</option><option value="neq"'+(op==='neq'?' selected':'')+'>N\'est pas</option><option value="contains"'+(op==='contains'?' selected':'')+'>Contient</option><option value="gte"'+(op==='gte'?' selected':'')+'>≥</option><option value="lte"'+(op==='lte'?' selected':'')+'>≤</option></select>';
+
+// Build value selector - if field has options, show dropdown; else show text input
+var valHtml='<input class="bi rule-cond-val-inp" value="'+esc(val||'')+'" placeholder="Valeur" style="width:160px;font-size:11px;padding:6px 8px"/>';
+row.innerHTML=fSel+opSel+valHtml+'<button class="ed-btn ed-btn-del" onclick="this.closest(\'.rule-cond-row\').remove()" style="width:24px;height:24px;font-size:11px">✕</button>';
+
+// Update value input when field changes (show options if available)
+var fieldSelect=row.querySelector('.rule-cond-fld');
+fieldSelect.addEventListener('change',function(){
+var fid=this.value;
+var fld=fields.find(function(f){return f.id===fid;});
+var valContainer=row.querySelector('.rule-cond-val-inp');
+if(fld&&fld.options&&fld.options.length){
+var sel=document.createElement('select');
+sel.className='bs rule-cond-val-inp';
+sel.style.cssText='width:160px;font-size:11px;padding:6px 8px';
+sel.innerHTML='<option value="">— Valeur —</option>';
+fld.options.forEach(function(o){sel.innerHTML+='<option value="'+esc(o)+'">'+esc(o)+'</option>';});
+valContainer.replaceWith(sel);
+}else if(valContainer.tagName==='SELECT'){
+var inp=document.createElement('input');
+inp.className='bi rule-cond-val-inp';
+inp.placeholder='Valeur';
+inp.style.cssText='width:160px;font-size:11px;padding:6px 8px';
+valContainer.replaceWith(inp);
+}
+});
+
+// Trigger change to set initial state
+if(fieldId){
+setTimeout(function(){
+var fld=fields.find(function(f){return f.id===fieldId;});
+if(fld&&fld.options&&fld.options.length){
+var sel=document.createElement('select');
+sel.className='bs rule-cond-val-inp';
+sel.style.cssText='width:160px;font-size:11px;padding:6px 8px';
+sel.innerHTML='<option value="">— Valeur —</option>';
+fld.options.forEach(function(o){sel.innerHTML+='<option value="'+esc(o)+'"'+(val===o?' selected':'')+'>'+esc(o)+'</option>';});
+row.querySelector('.rule-cond-val-inp').replaceWith(sel);
+}
+},0);
+}
+
+document.getElementById('ruleCondsContainer').appendChild(row);
+}
+
+function addRuleCond(){_addCondRow('','eq','');}
+
+function ruleActionChanged(){
+var action=document.getElementById('rule-action').value;
+var label=document.getElementById('rule-action-val-label');
+var inp=document.getElementById('rule-action-val');
+if(action==='redirect'){label.textContent='URL de redirection';inp.placeholder='https://www.example.com/merci';}
+else if(action==='booking'){label.textContent='ID de consultation Booking';inp.placeholder='coaching_1v1_abc';}
+else if(action==='message'){label.textContent='Message à afficher';inp.placeholder='Merci, nous vous recontacterons !';}
+}
+
+function saveRuleModal(){
+var name=document.getElementById('rule-name').value.trim();
+if(!name){toast('❌ Le nom est requis');return;}
+var logicBtn=document.querySelector('#ruleLogicToggle .ed-toggle-btn.on');
+var logic=logicBtn?logicBtn.dataset.val:'or';
+// Collect conditions
+var conds=[];
+document.querySelectorAll('#ruleCondsContainer .rule-cond-row').forEach(function(row){
+var fld=row.querySelector('.rule-cond-fld').value;
+var op=row.querySelector('.rule-cond-op-sel').value;
+var val=row.querySelector('.rule-cond-val-inp').value;
+if(fld&&val)conds.push({fieldId:fld,operator:op,value:val});
+});
+if(!conds.length){toast('❌ Ajoutez au moins une condition');return;}
+var action=document.getElementById('rule-action').value;
+var actionValue=document.getElementById('rule-action-val').value.trim();
+if(!actionValue){toast('❌ Renseignez l\'action');return;}
+
+var rule={id:'rule_'+gid().slice(0,6),name:name,logic:logic,conditions:conds,action:action,actionValue:actionValue};
+
+if(!currentForm.rules)currentForm.rules=[];
+if(_ruleEditIdx>=0&&_ruleEditIdx<currentForm.rules.length)currentForm.rules[_ruleEditIdx]=rule;
+else currentForm.rules.push(rule);
+
+closeRuleModal();
+saveForm(true).then(function(){renderEdSection();toast('✅ '+(_ruleEditIdx>=0?'Règle modifiée':'Règle ajoutée'));});
+}
+
+function deleteRule(idx){
+if(!currentForm||!currentForm.rules)return;
+currentForm.rules.splice(idx,1);
+saveForm(true).then(function(){renderEdSection();toast('🗑 Règle supprimée');});
+}
+
 // ═══ INIT ═══
 window.openFldModal=openFldModal;window.closeFldModal=closeFldModal;window.fldTypeChanged=fldTypeChanged;
 window.addFldOption=addFldOption;window.saveFldModal=saveFldModal;window.deleteField=deleteField;
 window.setFormStyle=setFormStyle;window.publishForm=publishForm;window.previewForm=previewForm;
 window.openEditor=openEditor;window.closeNewModal=closeNewModal;window.createForm=createForm;
+window.openRuleModal=openRuleModal;window.closeRuleModal=closeRuleModal;window.setRuleToggle=setRuleToggle;
+window.addRuleCond=addRuleCond;window.ruleActionChanged=ruleActionChanged;window.saveRuleModal=saveRuleModal;window.deleteRule=deleteRule;
 
 firebase.auth().onAuthStateChanged(function(u){
 if(u)loadForms();

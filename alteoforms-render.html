@@ -429,7 +429,44 @@ responseCount:firebase.firestore.FieldValue.increment(1)
 });
 });
 
-// Show thank you or redirect
+// Evaluate rules first, then fall back to default behavior
+var rules=FORM.rules||[];
+var matchedRule=null;
+for(var ri=0;ri<rules.length;ri++){
+var rule=rules[ri];
+var conds=rule.conditions||[];
+if(!conds.length)continue;
+var logic=rule.logic||'or';
+var results=conds.map(function(c){
+var val=answers[c.fieldId];
+if(val===undefined||val===null)val='';
+val=String(val);
+var cv=c.value||'';
+if(c.operator==='eq')return val===cv;
+if(c.operator==='neq')return val!==cv;
+if(c.operator==='contains')return val.toLowerCase().indexOf(cv.toLowerCase())>=0;
+if(c.operator==='gte')return parseFloat(val)>=parseFloat(cv);
+if(c.operator==='lte')return parseFloat(val)<=parseFloat(cv);
+return false;
+});
+var match=logic==='and'?results.every(Boolean):results.some(Boolean);
+if(match){matchedRule=rule;break;}
+}
+
+// Execute matched rule action
+if(matchedRule){
+if(matchedRule.action==='redirect'&&matchedRule.actionValue){
+window.location.href=matchedRule.actionValue;return;
+}
+if(matchedRule.action==='booking'&&matchedRule.actionValue){
+window.location.href='booking.html?type='+matchedRule.actionValue+'&fromForm='+FORM._id;return;
+}
+if(matchedRule.action==='message'&&matchedRule.actionValue){
+showThankYou(matchedRule.actionValue);return;
+}
+}
+
+// Default: settings-based behavior
 var settings=FORM.settings||{};
 if(settings.linkedBookingType){
 window.location.href='booking.html?type='+settings.linkedBookingType+'&fromForm='+FORM._id;
@@ -440,9 +477,15 @@ window.location.href=settings.redirectUrl;
 return;
 }
 
-// Show thank you card
+showThankYou(settings.thankYouMessage||'Merci pour vos réponses !');
+}
+
+function showThankYou(msg){
 document.querySelectorAll('.card').forEach(function(c){c.classList.remove('active');c.classList.add('exit-up');});
 var ty=document.getElementById('card-thankyou');
+// Update message
+var msgEl=ty.querySelector('.thankyou-msg');
+if(msgEl)msgEl.textContent=msg;
 ty.classList.add('active');
 document.getElementById('navBar').style.display='none';
 document.getElementById('navHint').style.display='none';
