@@ -303,6 +303,89 @@ html, body {
 }
 .ld-comm-empty { text-align: center; padding: 16px; color: var(--muted2); font-size: 11px; }
 
+/* ── Follow-Up Section ── */
+.ld-fu-section { padding: 12px 0 0; border-top: 1px solid var(--border); }
+.ld-fu-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-family: var(--fb);
+  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+}
+.ld-fu-toggle:hover { color: var(--text); border-color: var(--border2); }
+.ld-fu-toggle .ct-arrow { transition: transform 0.2s; font-size: 9px; margin-left: auto; }
+.ld-fu-toggle.open .ct-arrow { transform: rotate(180deg); }
+.ld-fu-count { font-family: var(--fm); font-size: 10px; padding: 1px 5px; border-radius: 4px; }
+.ld-fu-body { margin-top: 8px; }
+.ld-fu-add { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.ld-fu-add input[type="date"], .ld-fu-add input[type="time"] {
+  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text); font-family: var(--fm); font-size: 12px;
+  flex: 1; min-width: 100px;
+}
+.ld-fu-add input:focus { border-color: var(--gold); }
+.ld-fu-add textarea {
+  width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text); font-family: var(--fb); font-size: 12px;
+  resize: none; line-height: 1.4;
+}
+.ld-fu-add textarea::placeholder { color: var(--muted2); }
+.ld-fu-add-btn {
+  padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(245,158,11,0.3);
+  background: rgba(245,158,11,0.1); color: #f59e0b; font-family: var(--fb);
+  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.ld-fu-add-btn:hover { background: rgba(245,158,11,0.15); color: #fbbf24; border-color: rgba(245,158,11,0.5); }
+.ld-fu-list { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
+.ld-fu-list::-webkit-scrollbar { width: 3px; }
+.ld-fu-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.ld-fu-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 12px; line-height: 1.4; transition: all 0.15s;
+}
+.ld-fu-item.done { opacity: 0.45; }
+.ld-fu-item.overdue { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.04); }
+.ld-fu-item.due-soon { border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.04); }
+.ld-fu-check {
+  width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border2);
+  background: transparent; cursor: pointer; flex-shrink: 0; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center; font-size: 10px;
+  color: transparent; transition: all 0.15s;
+}
+.ld-fu-check:hover { border-color: var(--green); color: var(--green); }
+.ld-fu-item.done .ld-fu-check { border-color: var(--green); color: var(--green); background: rgba(52,211,153,0.1); }
+.ld-fu-info { flex: 1; min-width: 0; }
+.ld-fu-datetime { font-weight: 700; font-size: 11px; color: var(--gold); }
+.ld-fu-item.done .ld-fu-datetime { color: var(--muted); }
+.ld-fu-item.overdue .ld-fu-datetime { color: #ef4444; }
+.ld-fu-note { font-size: 11px; color: rgba(255,255,255,0.65); margin-top: 2px; }
+.ld-fu-by { font-size: 9px; color: var(--muted2); margin-top: 2px; }
+.ld-fu-del {
+  background: none; border: none; color: var(--muted2); cursor: pointer;
+  font-size: 11px; padding: 2px; flex-shrink: 0; transition: color 0.15s;
+}
+.ld-fu-del:hover { color: #ef4444; }
+.ld-fu-empty { text-align: center; padding: 12px; color: var(--muted2); font-size: 11px; }
+
+/* ── FU badge on card header ── */
+.ld-fu-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-family: var(--fm); font-size: 10px; font-weight: 700;
+  padding: 1px 6px; border-radius: 4px;
+  background: rgba(245,158,11,0.12); color: #f59e0b;
+}
+.ld-fu-badge.overdue { background: rgba(239,68,68,0.12); color: #ef4444; animation: fuPulse 2s ease-in-out infinite; }
+@keyframes fuPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* ── Reassign button ── */
+.ld-reassign-btn {
+  display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
+  border-radius: 8px; font-size: 12px; font-weight: 700; font-family: var(--fm);
+  background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2);
+  color: #f59e0b; text-decoration: none; cursor: pointer; transition: all 0.15s;
+}
+.ld-reassign-btn:hover { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); }
+
 /* ── New Lead Popup ── */
 .ld-popup-overlay {
   display: none; position: fixed; inset: 0; z-index: 1000;
@@ -545,8 +628,12 @@ var personalUser = null;
     document.getElementById('ldPersonalBadge').style.display = '';
     document.getElementById('ldPersonalBadge').textContent = setter.name;
     document.getElementById('ldPersonalBadge').style.color = setter.color;
-    // Hide member pills
-    document.getElementById('ldMembers').style.display = 'none';
+    // Keep member pills visible so setter can view the other's leads
+    // Pre-select their own pill
+    document.querySelectorAll('.ld-member-pill').forEach(function(p) {
+      p.classList.remove('active');
+      if (p.dataset.member === u) p.classList.add('active');
+    });
   }
 })();
 
@@ -828,6 +915,27 @@ function renderFeed() {
   }
 }
 
+/* ── FU badge helper ── */
+function getFuBadge(l) {
+  var fus = l.followUps || [];
+  if (fus.length === 0) return '';
+  var now = Date.now();
+  var pending = 0, overdue = 0, nextTs = Infinity;
+  for (var i = 0; i < fus.length; i++) {
+    if (fus[i].done) continue;
+    pending++;
+    var ts = new Date(fus[i].dateTime).getTime();
+    if (ts <= now) overdue++;
+    if (ts < nextTs) nextTs = ts;
+  }
+  if (pending === 0) return '';
+  if (overdue > 0) return '<span class="ld-fu-badge overdue">🔔 ' + overdue + ' FU</span>';
+  // Show next FU time
+  var nd = new Date(nextTs);
+  var nStr = String(nd.getDate()).padStart(2,'0') + '/' + String(nd.getMonth()+1).padStart(2,'0') + ' ' + String(nd.getHours()).padStart(2,'0') + ':' + String(nd.getMinutes()).padStart(2,'0');
+  return '<span class="ld-fu-badge">🔔 ' + nStr + '</span>';
+}
+
 function renderCard(l) {
   var id = l.id;
   var typeObj = LEAD_TYPES[l.type] || { label: l.type || 'Lead', badgeClass: 'other' };
@@ -859,16 +967,23 @@ function renderCard(l) {
   h += '</div>';
   h += '</div>';
   h += '<span class="ld-card-time">' + ago + '</span>';
+  // FU badge on card
+  var fuBadge = getFuBadge(l);
+  if (fuBadge) h += fuBadge;
   h += '<span class="ld-card-arrow">▼</span>';
   h += '</div>';
 
   // Body
   h += '<div class="ld-card-body">';
 
-  // Edit toggle
+  // Edit toggle + CRM link + reassign
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
   h += '<button class="ld-edit-toggle" data-action="toggleEdit" data-id="' + id + '">✏️ Modifier les infos</button>';
   h += '<a href="sales-contact.html?id=' + id + '" style="display:inline-flex;align-items:center;gap:4px;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;font-family:var(--fm);background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#818cf8;text-decoration:none;cursor:pointer;transition:all .15s">📋 Fiche CRM</a>';
+  // Reassign button: show if viewing someone else's lead in personal mode
+  if (personalUser && l.assignedTo && l.assignedTo !== personalUser) {
+    h += '<button class="ld-reassign-btn" data-action="reassign" data-id="' + id + '">📥 M\'attribuer</button>';
+  }
   h += '</div>';
 
   // ── VIEW MODE ──
@@ -951,6 +1066,70 @@ function renderCard(l) {
   h += '<textarea class="ld-notes-area" data-field="newNote" data-id="' + id + '" placeholder="Ajouter une note..." rows="2"></textarea>';
   h += '<button class="ld-notes-add-btn" data-action="addNote" data-id="' + id + '">+ Ajouter</button>';
   h += '</div>';
+
+  // ── Follow-Up section ──
+  var fus = l.followUps || [];
+  var fuPending = 0, fuOverdue = 0;
+  var nowTs = Date.now();
+  for (var fi = 0; fi < fus.length; fi++) {
+    if (!fus[fi].done) {
+      fuPending++;
+      var fuTs = new Date(fus[fi].dateTime).getTime();
+      if (fuTs <= nowTs) fuOverdue++;
+    }
+  }
+  h += '<div class="ld-fu-section">';
+  h += '<button class="ld-fu-toggle" data-action="toggleFu" data-id="' + id + '">';
+  h += '🔔 Follow-Up';
+  if (fuOverdue > 0) {
+    h += ' <span class="ld-fu-count" style="background:rgba(239,68,68,0.12);color:#ef4444">' + fuOverdue + ' en retard</span>';
+  } else if (fuPending > 0) {
+    h += ' <span class="ld-fu-count" style="background:rgba(245,158,11,0.12);color:#f59e0b">' + fuPending + '</span>';
+  }
+  h += '<span class="ct-arrow">▼</span></button>';
+  h += '<div class="ld-fu-body" data-fu-body="' + id + '" style="display:none">';
+  // Add form
+  h += '<div class="ld-fu-add">';
+  h += '<input type="date" data-fu-field="date" data-id="' + id + '"/>';
+  h += '<input type="time" data-fu-field="time" data-id="' + id + '"/>';
+  h += '<textarea data-fu-field="note" data-id="' + id + '" placeholder="Note du FU (optionnel)..." rows="1"></textarea>';
+  h += '<button class="ld-fu-add-btn" data-action="addFu" data-id="' + id + '">🔔 Programmer</button>';
+  h += '</div>';
+  // List
+  if (fus.length === 0) {
+    h += '<div class="ld-fu-empty">Aucun follow-up programmé</div>';
+  } else {
+    h += '<div class="ld-fu-list">';
+    // Sort: pending first (overdue first), then done
+    var fuSorted = fus.map(function(f, idx) { f._idx = idx; return f; }).sort(function(a, b) {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
+    });
+    for (var fj = 0; fj < fuSorted.length; fj++) {
+      var fu = fuSorted[fj];
+      var fuDate = new Date(fu.dateTime);
+      var fuTimeDiff = fuDate.getTime() - nowTs;
+      var fuClass = '';
+      if (!fu.done) {
+        if (fuTimeDiff <= 0) fuClass = ' overdue';
+        else if (fuTimeDiff <= 3600000) fuClass = ' due-soon'; // 1h
+      }
+      var fuDateStr = String(fuDate.getDate()).padStart(2,'0') + '/' + String(fuDate.getMonth()+1).padStart(2,'0') + '/' + fuDate.getFullYear();
+      var fuTimeStr = String(fuDate.getHours()).padStart(2,'0') + ':' + String(fuDate.getMinutes()).padStart(2,'0');
+      h += '<div class="ld-fu-item' + (fu.done ? ' done' : '') + fuClass + '">';
+      h += '<button class="ld-fu-check" data-action="toggleFuDone" data-id="' + id + '" data-fu-idx="' + fu._idx + '">' + (fu.done ? '✓' : '') + '</button>';
+      h += '<div class="ld-fu-info">';
+      h += '<div class="ld-fu-datetime">' + (fu.done ? '✅ ' : (fuTimeDiff <= 0 && !fu.done ? '⚠️ ' : '🔔 ')) + fuDateStr + ' à ' + fuTimeStr + '</div>';
+      if (fu.note) h += '<div class="ld-fu-note">' + escHtml(fu.note) + '</div>';
+      if (fu.createdBy) h += '<div class="ld-fu-by">par ' + escHtml(fu.createdBy) + '</div>';
+      h += '</div>';
+      h += '<button class="ld-fu-del" data-action="delFu" data-id="' + id + '" data-fu-idx="' + fu._idx + '">✕</button>';
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+  h += '</div>'; // fu-body
+  h += '</div>'; // fu-section
 
   // ── Communications history (calls + SMS) ──
   var comms = l.communications || [];
@@ -1176,6 +1355,137 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     }
     openCardId = dnLeadId;
     renderFeed();
+    return;
+  }
+
+  // Toggle FU section
+  var fuToggle = e.target.closest('[data-action="toggleFu"]');
+  if (fuToggle) {
+    var fuId = fuToggle.dataset.id;
+    var fuBody = document.querySelector('[data-fu-body="' + fuId + '"]');
+    if (fuBody) {
+      var isOpen = fuBody.style.display !== 'none';
+      fuBody.style.display = isOpen ? 'none' : 'block';
+      fuToggle.classList.toggle('open', !isOpen);
+    }
+    return;
+  }
+
+  // Add FU
+  var addFuBtn = e.target.closest('[data-action="addFu"]');
+  if (addFuBtn) {
+    var afId = addFuBtn.dataset.id;
+    var card4 = addFuBtn.closest('.ld-card');
+    var fuDateEl = card4.querySelector('[data-fu-field="date"]');
+    var fuTimeEl = card4.querySelector('[data-fu-field="time"]');
+    var fuNoteEl = card4.querySelector('[data-fu-field="note"]');
+    var fuDate = fuDateEl ? fuDateEl.value : '';
+    var fuTime = fuTimeEl ? fuTimeEl.value : '';
+    var fuNote = fuNoteEl ? fuNoteEl.value.trim() : '';
+    if (!fuDate || !fuTime) { toast('⚠️ Date et heure requises'); return; }
+    var fuDateTime = fuDate + 'T' + fuTime + ':00';
+    var fuObj = {
+      id: Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+      dateTime: fuDateTime,
+      note: fuNote,
+      done: false,
+      createdBy: personalUser ? (SETTERS[personalUser] ? SETTERS[personalUser].name : personalUser) : (window._currentUserName || 'Admin'),
+      createdAt: new Date().toISOString()
+    };
+    // Update local
+    var afLead = allLeads.find(function(l) { return l.id === afId; });
+    if (afLead) {
+      if (!afLead.followUps) afLead.followUps = [];
+      afLead.followUps.push(fuObj);
+      // Save to Firestore
+      db.collection('leads').doc(afId).update({
+        followUps: afLead.followUps,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(function() {
+        toast('🔔 Follow-up programmé');
+        // Request notification permission if not already granted
+        if ('Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }).catch(function(err) { toast('❌ ' + err.message); });
+    }
+    openCardId = afId;
+    renderFeed();
+    // Re-open the FU section
+    setTimeout(function() {
+      var ft = document.querySelector('[data-action="toggleFu"][data-id="' + afId + '"]');
+      var fb = document.querySelector('[data-fu-body="' + afId + '"]');
+      if (ft && fb) { fb.style.display = 'block'; ft.classList.add('open'); }
+    }, 50);
+    return;
+  }
+
+  // Toggle FU done
+  var fuDoneBtn = e.target.closest('[data-action="toggleFuDone"]');
+  if (fuDoneBtn) {
+    var fdId = fuDoneBtn.dataset.id;
+    var fdIdx = parseInt(fuDoneBtn.dataset.fuIdx);
+    var fdLead = allLeads.find(function(l) { return l.id === fdId; });
+    if (fdLead && fdLead.followUps && fdLead.followUps[fdIdx] !== undefined) {
+      fdLead.followUps[fdIdx].done = !fdLead.followUps[fdIdx].done;
+      db.collection('leads').doc(fdId).update({
+        followUps: fdLead.followUps,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(function() {
+        toast(fdLead.followUps[fdIdx].done ? '✅ FU terminé' : '🔔 FU réactivé');
+      }).catch(function(err) { toast('❌ ' + err.message); });
+      openCardId = fdId;
+      renderFeed();
+      setTimeout(function() {
+        var ft = document.querySelector('[data-action="toggleFu"][data-id="' + fdId + '"]');
+        var fb = document.querySelector('[data-fu-body="' + fdId + '"]');
+        if (ft && fb) { fb.style.display = 'block'; ft.classList.add('open'); }
+      }, 50);
+    }
+    return;
+  }
+
+  // Delete FU
+  var fuDelBtn = e.target.closest('[data-action="delFu"]');
+  if (fuDelBtn) {
+    var fxId = fuDelBtn.dataset.id;
+    var fxIdx = parseInt(fuDelBtn.dataset.fuIdx);
+    var fxLead = allLeads.find(function(l) { return l.id === fxId; });
+    if (fxLead && fxLead.followUps) {
+      fxLead.followUps.splice(fxIdx, 1);
+      db.collection('leads').doc(fxId).update({
+        followUps: fxLead.followUps,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(function() { toast('🗑 Follow-up supprimé'); }).catch(function(err) { toast('❌ ' + err.message); });
+      openCardId = fxId;
+      renderFeed();
+      setTimeout(function() {
+        var ft = document.querySelector('[data-action="toggleFu"][data-id="' + fxId + '"]');
+        var fb = document.querySelector('[data-fu-body="' + fxId + '"]');
+        if (ft && fb) { fb.style.display = 'block'; ft.classList.add('open'); }
+      }, 50);
+    }
+    return;
+  }
+
+  // Reassign lead to me
+  var reassignBtn = e.target.closest('[data-action="reassign"]');
+  if (reassignBtn) {
+    var raId = reassignBtn.dataset.id;
+    if (!personalUser) return;
+    var raLead = allLeads.find(function(l) { return l.id === raId; });
+    var prevSetter = raLead ? raLead.assignedTo : '';
+    db.collection('leads').doc(raId).update({
+      assignedTo: personalUser,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function() {
+      toast('📥 Lead réattribué à ' + (SETTERS[personalUser] ? SETTERS[personalUser].name : personalUser));
+      // Add note about reassignment
+      var raNote = { text: '📥 Réattribué de ' + (SETTERS[prevSetter] ? SETTERS[prevSetter].name : prevSetter) + ' à ' + (SETTERS[personalUser] ? SETTERS[personalUser].name : personalUser), date: new Date().toLocaleString('fr-FR') };
+      var notes = (raLead && raLead.notesHistory) ? raLead.notesHistory : [];
+      notes.push(raNote);
+      db.collection('leads').doc(raId).update({ notesHistory: notes });
+    }).catch(function(err) { toast('❌ ' + err.message); });
     return;
   }
 
@@ -1723,6 +2033,68 @@ if (pushSupported) {
 if (pushSupported && Notification.permission === 'granted') {
   registerToken();
 }
+</script>
+
+<!-- Follow-Up Reminder System -->
+<script>
+var _fuNotifiedIds = {};
+var _fuCheckInterval = null;
+
+function checkFollowUpReminders() {
+  if (!window.allLeads || allLeads.length === 0) return;
+  var now = Date.now();
+  var hasOverdue = false;
+
+  for (var i = 0; i < allLeads.length; i++) {
+    var l = allLeads[i];
+    // In personal mode, only check my leads
+    if (window.personalUser && l.assignedTo !== window.personalUser) continue;
+    var fus = l.followUps || [];
+    for (var j = 0; j < fus.length; j++) {
+      var fu = fus[j];
+      if (fu.done) continue;
+      var fuTs = new Date(fu.dateTime).getTime();
+      var diff = fuTs - now;
+      // Notify if due within 2 minutes or overdue (and not already notified)
+      var fuKey = l.id + '_' + j + '_' + fu.dateTime;
+      if (diff <= 120000 && !_fuNotifiedIds[fuKey]) {
+        _fuNotifiedIds[fuKey] = true;
+        hasOverdue = true;
+        // Toast
+        var fuName = l.nom || 'Lead';
+        var fuNote = fu.note ? ' — ' + fu.note : '';
+        toast('🔔 FU: ' + fuName + fuNote);
+        // Browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            var notifBody = 'Follow-up pour ' + fuName;
+            if (fu.note) notifBody += '\n' + fu.note;
+            new Notification('🔔 Rappel Follow-Up', {
+              body: notifBody,
+              icon: 'icon-leads.png',
+              tag: 'fu-' + fuKey,
+              requireInteraction: true
+            });
+          } catch(e) { console.warn('Notification error:', e); }
+        }
+        // Play sound
+        if (typeof playNotifSound === 'function') playNotifSound();
+      }
+    }
+  }
+
+  // Re-render badges if there are overdue FUs (throttled)
+  if (hasOverdue && !window._fuRenderThrottle) {
+    window._fuRenderThrottle = true;
+    renderFeed();
+    setTimeout(function() { window._fuRenderThrottle = false; }, 10000);
+  }
+}
+
+// Check every 30 seconds
+_fuCheckInterval = setInterval(checkFollowUpReminders, 30000);
+// Also check on first load after a short delay
+setTimeout(checkFollowUpReminders, 3000);
 </script>
 
 <script>
