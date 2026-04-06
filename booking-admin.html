@@ -1083,8 +1083,8 @@ if(isConnected){
 h+='<div class="cal-card" style="border-color:rgba(52,211,153,.2)"><div class="cal-card-head"><span class="cal-card-icon">✅</span><div><div class="cal-card-title">Google Agenda</div><div class="cal-card-sub">'+esc(calEmail)+'</div></div><button class="bb bb-r" style="margin-left:auto;font-size:11px" onclick="disconnectCalendar(\''+exPerson.id+'\')">Déconnecter</button></div></div>';
 
 // Calendar list with checkboxes
+h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 8px"><div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700">Calendriers à vérifier pour les conflits</div><button class="bb" onclick="refreshCalendars(\''+exPerson.id+'\')" style="padding:4px 12px;font-size:11px">🔄 Rafraîchir</button></div>';
 if(calList.length){
-h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:20px 0 8px">Calendriers à vérifier pour les conflits</div>';
 h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:10px">Cochez les calendriers dont les événements bloquent les créneaux de réservation.</div>';
 calList.forEach(function(cal,ci){
 var checked=cal.checkConflicts!==false;
@@ -1105,6 +1105,8 @@ h+='<option value="'+ci+'"'+(cal.createEvents?' selected':'')+'>'+esc(cal.name)+
 h+='</select>';
 
 h+='<div class="cd-save-bar" style="margin-top:16px;border-top:0;justify-content:flex-end"><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
+}else{
+h+='<div style="padding:16px;background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;text-align:center;color:rgba(255,255,255,.35);font-size:13px">Cliquez sur 🔄 Rafraîchir pour charger la liste des calendriers.</div>';
 }
 
 // Extra connected Google accounts (personal agendas)
@@ -1448,6 +1450,28 @@ toast('✅ Calendrier déconnecté');
 }).catch(function(e){alert('Erreur: '+e.message);});
 }
 window.connectCalendar=connectCalendar;window.disconnectCalendar=disconnectCalendar;
+
+function refreshCalendars(pid){
+toast('🔄 Rafraîchissement en cours…');
+db.collection('calendar_sync_requests').doc(pid).set({requestedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
+// Wait a few seconds for the Cloud Function to process, then reload expert data
+setTimeout(function(){
+db.collection('booking_config').doc(pid).get().then(function(doc){
+if(doc.exists){
+var p=P.find(function(x){return x.id===pid;});
+if(p){
+p.calendarList=doc.data().calendarList||[];
+p.extraConnections=doc.data().extraConnections||[];
+}
+renderExSection();
+var cl=doc.data().calendarList||[];
+toast('✅ '+cl.length+' calendrier(s) trouvé(s)');
+}
+});
+},4000);
+}).catch(function(e){toast('❌ '+e.message);});
+}
+window.refreshCalendars=refreshCalendars;
 
 // Calendar settings management
 function toggleCalCheck(idx,el){el.classList.toggle('on');}
