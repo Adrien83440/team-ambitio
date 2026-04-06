@@ -222,7 +222,8 @@
 <div class="ex-head" id="exHead"></div>
 <div class="cd on">
 <div class="cd-left">
-<div class="cd-nav-item on" data-exs="planning"><span class="cd-nav-icon">📅</span><div><div class="cd-nav-label">Plannings</div><div class="cd-nav-desc">Heures hebdomadaires</div></div></div>
+<div class="cd-nav-item on" data-exs="profil"><span class="cd-nav-icon">👤</span><div><div class="cd-nav-label">Profil</div><div class="cd-nav-desc">Photo, coordonnées</div></div></div>
+<div class="cd-nav-item" data-exs="planning"><span class="cd-nav-icon">📅</span><div><div class="cd-nav-label">Plannings</div><div class="cd-nav-desc">Heures hebdomadaires</div></div></div>
 <div class="cd-nav-item" data-exs="calendar"><span class="cd-nav-icon">🔗</span><div><div class="cd-nav-label">Paramètres du calendrier</div><div class="cd-nav-desc">Connexion, sync</div></div></div>
 <div class="cd-nav-item" data-exs="advanced"><span class="cd-nav-icon">⚙️</span><div><div class="cd-nav-label">Paramètres avancés</div><div class="cd-nav-desc">Limites, jours fériés</div></div></div>
 </div>
@@ -929,15 +930,15 @@ function computeEaster(year){var a=year%19,b=Math.floor(year/100),c=year%100,d=M
 function getHolidayDate(hol,year){if(hol.month)return new Date(year,hol.month-1,hol.day);var e=computeEaster(year);var d=new Date(e);d.setDate(d.getDate()+hol.easter);return d;}
 function formatHolDate(d){return d.getDate()+' '+MF[d.getMonth()]+' '+d.getFullYear();}
 
-function rEx(){document.getElementById('cE').textContent=P.length;document.getElementById('cE2').textContent=P.length;var el=document.getElementById('exG');if(!P.length){el.innerHTML='<div class="rv-em" style="grid-column:1/-1">Aucun expert.</div>';return;}var h='';P.forEach(function(p){var pt=p.types||[],sc=p.schedule||{},sd=JR.filter(function(d){return(sc[d]||[]).length>0;});h+='<div class="ec" style="cursor:pointer" onclick="openExDetail(\''+p.id+'\')">';h+='<div class="ec-top"><div class="ec-av" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</div><div><div class="ec-nm">'+esc(p.name)+'</div><div class="ec-rl">'+esc(p.role||'Expert')+'</div></div></div>';h+='<div>';pt.forEach(function(tid){var tO=T.find(function(t){return t.id===tid;});if(tO)h+='<span class="ec-tb" style="background:'+tO.color+'18;color:'+tO.color+'">'+esc(tO.label)+'</span>';});if(!pt.length)h+='<span style="font-size:11px;color:rgba(255,255,255,.48)">Aucune consultation</span>';h+='</div>';h+='<div style="font-size:11px;color:rgba(255,255,255,.48);margin:8px 0">📅 '+(sd.length?sd.length+' jours/sem':'Non configuré');if(p.calendarConnected)h+=' · <span style="color:#34d399">✨ Meet Auto</span>';else if(p.meetLink)h+=' · <span style="color:#60a5fa">📹 Meet</span>';h+='</div>';h+='<div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;color:#a78bfa;font-weight:600">Configurer →</span><span class="cc-sh" style="margin-left:auto" onclick="event.stopPropagation();navigator.clipboard.writeText(window.location.origin+\'/booking.html?person='+p.id+'\');toast(\'📋 Copié !\')">↗ Partager</span></div>';h+='</div>';});el.innerHTML=h;}
+function rEx(){document.getElementById('cE').textContent=P.length;document.getElementById('cE2').textContent=P.length;var el=document.getElementById('exG');if(!P.length){el.innerHTML='<div class="rv-em" style="grid-column:1/-1">Aucun expert.</div>';return;}var h='';P.forEach(function(p){var pt=p.types||[],sc=p.schedule||{},sd=JR.filter(function(d){return(sc[d]||[]).length>0;});h+='<div class="ec" style="cursor:pointer" onclick="openExDetail(\''+p.id+'\')">';h+='<div class="ec-top"><div class="ec-av" style="background:'+p.color+';overflow:hidden">'+(p.photoUrl?'<img src="'+p.photoUrl+'" style="width:100%;height:100%;object-fit:cover">':(p.name||'?')[0].toUpperCase())+'</div><div><div class="ec-nm">'+esc(p.name)+'</div><div class="ec-rl">'+esc(p.role||'Expert')+'</div></div></div>';h+='<div>';pt.forEach(function(tid){var tO=T.find(function(t){return t.id===tid;});if(tO)h+='<span class="ec-tb" style="background:'+tO.color+'18;color:'+tO.color+'">'+esc(tO.label)+'</span>';});if(!pt.length)h+='<span style="font-size:11px;color:rgba(255,255,255,.48)">Aucune consultation</span>';h+='</div>';h+='<div style="font-size:11px;color:rgba(255,255,255,.48);margin:8px 0">📅 '+(sd.length?sd.length+' jours/sem':'Non configuré');if(p.calendarConnected)h+=' · <span style="color:#34d399">✨ Meet Auto</span>';else if(p.meetLink)h+=' · <span style="color:#60a5fa">📹 Meet</span>';h+='</div>';h+='<div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;color:#a78bfa;font-weight:600">Configurer →</span><span class="cc-sh" style="margin-left:auto" onclick="event.stopPropagation();navigator.clipboard.writeText(window.location.origin+\'/booking.html?person='+p.id+'\');toast(\'📋 Copié !\')">↗ Partager</span></div>';h+='</div>';});el.innerHTML=h;}
 
-function openExDetail(pid){exPerson=P.find(function(x){return x.id===pid;});if(!exPerson)return;exSection='planning';document.getElementById('exGridView').style.display='none';document.getElementById('exDetailView').style.display='';renderExHead();renderExNav();renderExSection();}
+function openExDetail(pid){exPerson=P.find(function(x){return x.id===pid;});if(!exPerson)return;exSection='profil';document.getElementById('exGridView').style.display='none';document.getElementById('exDetailView').style.display='';renderExHead();renderExNav();renderExSection();}
 function closeExDetail(){document.getElementById('exDetailView').style.display='none';document.getElementById('exGridView').style.display='';exPerson=null;renderAll();}
 window.openExDetail=openExDetail;window.closeExDetail=closeExDetail;
 
 function renderExHead(){var pt=exPerson.types||[],ml=exPerson.meetLink||'';
 var h='<span class="cd-back" onclick="closeExDetail()">← Retour aux experts</span><div class="sp"></div>';
-h+='<div class="ex-head-av" style="background:'+exPerson.color+'">'+(exPerson.name||'?')[0].toUpperCase()+'</div>';
+h+='<div class="ex-head-av" style="background:'+exPerson.color+';overflow:hidden">'+(exPerson.photoUrl?'<img src="'+exPerson.photoUrl+'" style="width:100%;height:100%;object-fit:cover">':(exPerson.name||'?')[0].toUpperCase())+'</div>';
 h+='<div style="flex:1"><div class="ex-head-nm">'+esc(exPerson.name)+'</div>';
 h+='<div class="ex-head-sub"><span>'+esc(exPerson.role||'Expert')+'</span>';
 if(exPerson.email)h+='<span>· '+esc(exPerson.email)+'</span>';
@@ -956,7 +957,44 @@ document.addEventListener('click',function(e){var n=e.target.closest('[data-exs]
 function renderExSection(){
 var el=document.getElementById('exContent'),h='',sc=exPerson.schedule||{},ov=exPerson.dateOverrides||{};
 
-if(exSection==='planning'){
+if(exSection==='profil'){
+h+='<div class="cd-sec-title">👤 Profil de l\'expert</div>';
+// Photo
+h+='<div style="display:flex;align-items:center;gap:20px;margin-bottom:24px">';
+h+='<div onclick="document.getElementById(\'exPhotoInput\').click()" style="width:80px;height:80px;border-radius:50%;background:'+exPerson.color+';display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;border:3px solid rgba(255,255,255,.1);transition:border-color .2s;flex-shrink:0" onmouseover="this.style.borderColor=\'rgba(99,102,241,.5)\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,.1)\'">';
+if(exPerson.photoUrl){h+='<img src="'+exPerson.photoUrl+'" style="width:100%;height:100%;object-fit:cover">';}
+else{h+='<span style="font-size:28px;font-weight:800;color:white">'+(exPerson.name||'?')[0].toUpperCase()+'</span>';}
+h+='</div>';
+h+='<div><div style="font-size:13px;font-weight:700;margin-bottom:4px">Photo de profil</div>';
+h+='<div style="font-size:11px;color:rgba(255,255,255,.35);margin-bottom:8px">Cliquez sur l\'avatar pour changer</div>';
+if(exPerson.photoUrl){h+='<button class="bb" style="font-size:11px;padding:4px 10px" onclick="removeExPhoto()">Supprimer la photo</button>';}
+h+='<input type="file" id="exPhotoInput" accept="image/*" style="display:none" onchange="handleExPhoto(this)">';
+h+='</div></div>';
+// Name + Role
+h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
+h+='<div><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Nom</div><input class="bi" id="exProName" value="'+esc(exPerson.name||'')+'" style="width:100%" placeholder="Nom complet"></div>';
+h+='<div><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Rôle</div><input class="bi" id="exProRole" value="'+esc(exPerson.role||'')+'" style="width:100%" placeholder="Ex: Coach, Expert…"></div>';
+h+='</div>';
+// Email + Phone
+h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
+h+='<div><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Email personnel</div><input class="bi" id="exProEmail" type="email" value="'+esc(exPerson.personalEmail||'')+'" style="width:100%" placeholder="email@perso.com"></div>';
+h+='<div><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Téléphone</div><input class="bi" id="exProPhone" type="tel" value="'+esc(exPerson.phone||'')+'" style="width:100%" placeholder="06 12 34 56 78"></div>';
+h+='</div>';
+// Color
+h+='<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Couleur</div>';
+h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+var exColors=['#ef4444','#f97316','#f59e0b','#22c55e','#14b8a6','#3b82f6','#6366f1','#a855f7','#ec4899','#64748b'];
+exColors.forEach(function(c){
+h+='<div onclick="setExColor(\''+c+'\')" style="width:32px;height:32px;border-radius:50%;background:'+c+';cursor:pointer;border:3px solid '+(exPerson.color===c?'white':'transparent')+';transition:border-color .15s"></div>';
+});
+h+='</div></div>';
+// Bio / description
+h+='<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Bio / Description</div>';
+h+='<textarea class="bi" id="exProBio" rows="3" style="width:100%;resize:vertical" placeholder="Courte description visible sur la page de réservation…">'+esc(exPerson.bio||'')+'</textarea></div>';
+h+='<div class="cd-save-bar" style="border-top:0"><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
+}
+
+else if(exSection==='planning'){
 h+='<div class="cd-sec-title">📅 Heures hebdomadaires</div>';
 h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Définissez quand '+esc(exPerson.name)+' est disponible pour les réunions.</div>';
 
@@ -1227,10 +1265,11 @@ var ind=document.getElementById('ex-autosave-status');
 if(ind)autoSaveIndicator(ind);
 if(exSection==='advanced')saveExAdvanced(true);
 else if(exSection==='calendar')saveCalendarSettings(true);
+else if(exSection==='profil')saveExProfil(true);
 },delay);
 }
-if(exSection==='advanced'||exSection==='calendar'){
-el.querySelectorAll('input,select').forEach(function(inp){
+if(exSection==='advanced'||exSection==='calendar'||exSection==='profil'){
+el.querySelectorAll('input,select,textarea').forEach(function(inp){
 inp.addEventListener('input',function(){autoSaveEx();});
 inp.addEventListener('change',function(){autoSaveEx(true);});
 });
@@ -1403,6 +1442,57 @@ el.classList.toggle('on');
 window.toggleHoliday=toggleHoliday;
 
 // Save advanced settings
+/* ── PROFIL ── */
+function saveExProfil(silent){
+if(!exPerson)return;
+var u={};
+var n=document.getElementById('exProName');if(n)u.name=n.value.trim();
+var r=document.getElementById('exProRole');if(r)u.role=r.value.trim();
+var e=document.getElementById('exProEmail');if(e)u.personalEmail=e.value.trim();
+var p=document.getElementById('exProPhone');if(p)u.phone=p.value.trim();
+var b=document.getElementById('exProBio');if(b)u.bio=b.value.trim();
+Object.assign(exPerson,u);
+CR.doc(exPerson.id).update(u).then(function(){
+renderExHead();
+var ind=document.getElementById('ex-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅');
+}).catch(function(e){if(!silent)alert('Erreur: '+e.message);});
+}
+function handleExPhoto(input){
+if(!input.files||!input.files[0])return;
+var file=input.files[0];
+if(file.size>5*1024*1024){alert('Image trop lourde (max 5 Mo)');return;}
+var reader=new FileReader();
+reader.onload=function(e){
+var img=new Image();
+img.onload=function(){
+var max=200,w=img.width,h=img.height;
+if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
+var c=document.createElement('canvas');c.width=w;c.height=h;
+var ctx=c.getContext('2d');ctx.drawImage(img,0,0,w,h);
+var b64=c.toDataURL('image/jpeg',0.85);
+exPerson.photoUrl=b64;
+CR.doc(exPerson.id).update({photoUrl:b64}).then(function(){
+renderExHead();renderExSection();toast('✅ Photo mise à jour');
+}).catch(function(e){alert('Erreur: '+e.message);});
+};
+img.src=e.target.result;
+};
+reader.readAsDataURL(file);
+}
+function removeExPhoto(){
+exPerson.photoUrl=null;
+CR.doc(exPerson.id).update({photoUrl:firebase.firestore.FieldValue.delete()}).then(function(){
+renderExHead();renderExSection();toast('🗑 Photo supprimée');
+});
+}
+function setExColor(c){
+exPerson.color=c;
+CR.doc(exPerson.id).update({color:c}).then(function(){
+renderExHead();renderExSection();toast('✅');
+});
+}
+window.handleExPhoto=handleExPhoto;window.removeExPhoto=removeExPhoto;window.setExColor=setExColor;
+
 function saveExAdvanced(silent){
 if(!exPerson)return;
 var u={};
