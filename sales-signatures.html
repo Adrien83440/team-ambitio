@@ -629,18 +629,23 @@ function submitSend(){
     document.getElementById('sendPhone').value='';
     document.getElementById('sendMsg').value='';
     toast('✅ Contrat envoyé à '+name);
-    loadRequests();
+    switchTab('requests');
   }).catch(function(e){
     btn.disabled=false;btn.textContent='📨 Envoyer le contrat';
     alert('Erreur: '+e.message);
   });
 }
 
-/* ═══ REQUESTS LIST ═══ */
+/* ═══ REQUESTS LIST (real-time) ═══ */
+var reqUnsubscribe=null;
 function loadRequests(){
-  db.collection('signature_requests').orderBy('createdAt','desc').limit(50).get().then(function(sn){
+  // Unsubscribe previous listener if any
+  if(reqUnsubscribe){reqUnsubscribe();reqUnsubscribe=null;}
+  reqUnsubscribe=db.collection('signature_requests').orderBy('createdAt','desc').limit(50).onSnapshot(function(sn){
     REQ=[];sn.forEach(function(d){var v=d.data();v.id=d.id;REQ.push(v);});
     renderRequests();
+  },function(err){
+    console.error('[SIG] Requests listener error:',err);
   });
 }
 function renderRequests(){
@@ -652,18 +657,51 @@ function renderRequests(){
   REQ.forEach(function(r){
     var st=r.status||'pending';
     var stLabels={pending:'⏳ En attente',opened:'👁 Ouvert',signed:'✅ Signé',expired:'⏰ Expiré'};
+    var stDots={pending:'#f59e0b',opened:'#60a5fa',signed:'#34d399',expired:'#ef4444'};
     var dt=r.createdAt?new Date(r.createdAt.seconds*1000).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
     h+='<tr>';
     h+='<td style="font-weight:600">'+esc(r.clientName)+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail)+'</div></td>';
     h+='<td>'+esc(r.templateName||'—')+'</td>';
     h+='<td style="font-size:12px">'+dt+'</td>';
-    h+='<td><span class="req-status '+st+'">'+(stLabels[st]||st)+'</span></td>';
-    h+='<td>';
-    if(st==='signed'&&r.signedPdfUrl){h+='<a href="'+r.signedPdfUrl+'" target="_blank" class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px;text-decoration:none">📥 PDF</a>';}
-    h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px;margin-left:4px" onclick="navigator.clipboard.writeText(\''+esc(r.signUrl||'')+'\');toast(\'📋 Lien copié !\')">🔗 Copier</button>';
+    h+='<td><span class="req-status '+st+'"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+(stDots[st]||'#888')+';margin-right:5px"></span>'+(stLabels[st]||st)+'</span></td>';
+    h+='<td style="white-space:nowrap">';
+    if(st==='signed'&&r.signedPdfBase64){
+      h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="downloadSignedPdf(\''+r.id+'\')">📥 PDF</button> ';
+    }
+    h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" onclick="navigator.clipboard.writeText(\''+esc(r.signUrl||'')+'\');toast(\'📋 Lien copié !\')">🔗 Copier</button>';
+    if(st!=='signed'){
+      h+=' <button class="sig-btn sig-btn-r" style="font-size:11px;padding:4px 10px" onclick="deleteRequest(\''+r.id+'\',\''+esc(r.clientName)+'\')">🗑</button>';
+    }
     h+='</td></tr>';
   });
   el.innerHTML=h;
+}
+function deleteRequest(id,name){
+  if(!confirm('Supprimer la demande pour '+name+' ? Cette action est irréversible.'))return;
+  db.collection('signature_requests').doc(id).delete().then(function(){
+    toast('🗑 Demande supprimée');
+  }).catch(function(e){alert('Erreur: '+e.message);});
+}
+function downloadSignedPdf(reqId){
+  var r=REQ.find(function(x){return x.id===reqId;});
+  if(!r)return;
+  if(r.signedPdfBase64){
+    var link=document.createElement('a');
+    link.href='data:application/pdf;base64,'+r.signedPdfBase64;
+    link.download=(r.templateName||'contrat')+'_signe.pdf';
+    link.click();
+    return;
+  }
+  // Load from chunks
+  toast('⏳ Chargement du PDF…');
+  db.collection('signature_requests').doc(reqId).collection('signed_pdf').orderBy('chunk').get().then(function(sn){
+    var parts=[];sn.forEach(function(d){parts.push(d.data().data);});
+    if(!parts.length){alert('PDF signé introuvable.');return;}
+    var link=document.createElement('a');
+    link.href='data:application/pdf;base64,'+parts.join('');
+    link.download=(r.templateName||'contrat')+'_signe.pdf';
+    link.click();
+  });
 }
 
 /* ═══ INIT ═══ */
