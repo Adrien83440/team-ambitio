@@ -377,6 +377,25 @@ if(!f)return;
 if(edSection==='fields'){
 h+='<div class="ed-sec-title">📋 Champs du formulaire</div>';
 h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Ajoutez et organisez les questions de votre formulaire.</div>';
+
+// Quick-add templates
+h+='<div style="margin-bottom:20px">';
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Champs rapides</div>';
+h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+var _tpls=[
+{icon:'👤',label:'Prénom',type:'text',mapping:'prenom',req:true},
+{icon:'👤',label:'Nom',type:'text',mapping:'nom',req:true},
+{icon:'📧',label:'Email',type:'email',mapping:'email',req:true},
+{icon:'📞',label:'Téléphone',type:'tel',mapping:'telephone',req:false},
+{icon:'🏢',label:'Entreprise',type:'text',mapping:'',req:false},
+{icon:'🌐',label:'Site Web',type:'text',mapping:'',req:false},
+{icon:'📍',label:'Ville',type:'text',mapping:'',req:false},
+{icon:'💼',label:'Poste / Fonction',type:'text',mapping:'',req:false},
+];
+_tpls.forEach(function(t,ti){
+h+='<button class="bb bb-o" onclick="quickAddField('+ti+')" style="padding:6px 12px;font-size:11px">'+t.icon+' '+t.label+'</button>';
+});
+h+='</div></div>';
 var fields=f.fields||[];
 if(!fields.length){
 h+='<div style="text-align:center;padding:40px;color:rgba(255,255,255,.25)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:13px">Aucun champ. Commencez par ajouter une question.</div></div>';
@@ -681,6 +700,31 @@ currentForm.fields.splice(idx,1);
 saveForm(true).then(function(){renderEdSection();toast('🗑 Champ supprimé');});
 }
 
+var _QUICK_TPLS=[
+{icon:'👤',label:'Prénom',type:'text',mapping:'prenom',req:true},
+{icon:'👤',label:'Nom',type:'text',mapping:'nom',req:true},
+{icon:'📧',label:'Email',type:'email',mapping:'email',req:true},
+{icon:'📞',label:'Téléphone',type:'tel',mapping:'telephone',req:false},
+{icon:'🏢',label:'Entreprise',type:'text',mapping:'',req:false},
+{icon:'🌐',label:'Site Web',type:'text',mapping:'',req:false},
+{icon:'📍',label:'Ville',type:'text',mapping:'',req:false},
+{icon:'💼',label:'Poste / Fonction',type:'text',mapping:'',req:false},
+];
+
+function quickAddField(tplIdx){
+if(!currentForm)return;
+var t=_QUICK_TPLS[tplIdx];
+if(!t)return;
+if(!currentForm.fields)currentForm.fields=[];
+// Check if already exists
+var exists=currentForm.fields.some(function(f){return f.label===t.label;});
+if(exists){toast('⚠️ Ce champ existe déjà');return;}
+var field={id:'fld_'+gid().slice(0,6),label:t.label,type:t.type,required:t.req};
+if(t.mapping)field.contactMapping=t.mapping;
+currentForm.fields.push(field);
+saveForm(true).then(function(){renderEdSection();toast('✅ '+t.label+' ajouté');});
+}
+
 // ═══ SETTINGS HELPERS ═══
 function setFormStyle(style){
 if(!currentForm)return;
@@ -865,7 +909,7 @@ saveForm(true).then(function(){renderEdSection();toast('🗑 Règle supprimée')
 
 // ═══ INIT ═══
 window.openFldModal=openFldModal;window.closeFldModal=closeFldModal;window.fldTypeChanged=fldTypeChanged;
-window.addFldOption=addFldOption;window.saveFldModal=saveFldModal;window.deleteField=deleteField;
+window.addFldOption=addFldOption;window.saveFldModal=saveFldModal;window.deleteField=deleteField;window.quickAddField=quickAddField;
 window.setFormStyle=setFormStyle;window.publishForm=publishForm;window.previewForm=previewForm;
 window.openEditor=openEditor;window.closeNewModal=closeNewModal;window.createForm=createForm;
 window.openRuleModal=openRuleModal;window.closeRuleModal=closeRuleModal;window.setRuleToggle=setRuleToggle;
