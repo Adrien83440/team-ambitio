@@ -603,15 +603,20 @@ function submitSend(){
   var btn=document.getElementById('sendSubmitBtn');
   btn.disabled=true;btn.textContent='Envoi en cours…';
   var token=gid()+gid();
+  // Get template fields
+  var tpl=currentTpl.fields?currentTpl:TPL.find(function(t){return t.id===currentTpl.id;})||{};
+  var tplFields=(tpl.fields||[]).map(function(f){return{id:f.id,fieldType:f.fieldType,label:f.label,type:f.type,required:f.required!==false,page:f.page,x:f.x,y:f.y,w:f.w,h:f.h};});
   var req={
     templateId:currentTpl.id,
-    templateName:(currentTpl.name||TPL.find(function(t){return t.id===currentTpl.id;})||{}).name||'Contrat',
+    templateName:tpl.name||(currentTpl.name||'Contrat'),
     clientName:name,
     clientEmail:email,
     clientPhone:phone.replace(/\s+/g,''),
     message:document.getElementById('sendMsg').value.trim(),
     token:token,
     status:'pending',
+    fields:tplFields,
+    pdfScale:1.2,
     signUrl:window.location.origin+'/sign.html?t='+token,
     events:[{type:'created',date:new Date().toISOString(),by:window._currentUserName||'admin'}],
     createdAt:firebase.firestore.FieldValue.serverTimestamp()
@@ -619,8 +624,12 @@ function submitSend(){
   db.collection('signature_requests').add(req).then(function(ref){
     btn.disabled=false;btn.textContent='📨 Envoyer le contrat';
     document.getElementById('sendModal').style.display='none';
+    document.getElementById('sendName').value='';
+    document.getElementById('sendEmail').value='';
+    document.getElementById('sendPhone').value='';
+    document.getElementById('sendMsg').value='';
     toast('✅ Contrat envoyé à '+name);
-    // The Cloud Function will handle sending the actual email + SMS OTP
+    loadRequests();
   }).catch(function(e){
     btn.disabled=false;btn.textContent='📨 Envoyer le contrat';
     alert('Erreur: '+e.message);
