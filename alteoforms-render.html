@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1"/>
+<title>Formulaire</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--accent:#f59e0b;--accent-light:rgba(245,158,11,.12);--bg:#0a0a14;--card-bg:#12121e;--text:#f0f0f5;--text-muted:rgba(240,240,245,.45);--border:rgba(255,255,255,.06);--radius:16px}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow:hidden}
+/* Progress */
+.progress{position:fixed;top:0;left:0;right:0;height:4px;background:rgba(255,255,255,.05);z-index:100}
+.progress-bar{height:100%;background:var(--accent);transition:width .5s cubic-bezier(.4,0,.2,1);border-radius:0 2px 2px 0}
+/* Container */
+.form-container{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+/* Card */
+.card-wrap{width:100%;max-width:640px;position:relative;min-height:300px}
+.card{position:absolute;width:100%;opacity:0;transform:translateY(40px);transition:all .5s cubic-bezier(.4,0,.2,1);pointer-events:none}
+.card.active{opacity:1;transform:translateY(0);pointer-events:auto}
+.card.exit-up{opacity:0;transform:translateY(-60px)}
+.card.exit-down{opacity:0;transform:translateY(60px)}
+/* Card content */
+.card-num{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card-num span{font-size:11px;color:var(--text-muted);font-weight:400}
+.card-question{font-size:26px;font-weight:700;line-height:1.35;margin-bottom:8px;letter-spacing:-.3px}
+.card-desc{font-size:14px;color:var(--text-muted);margin-bottom:28px;line-height:1.6}
+.card-req{color:var(--accent);font-size:12px;font-weight:600}
+/* Inputs */
+.af-input{width:100%;padding:16px 18px;background:transparent;border:none;border-bottom:2px solid rgba(255,255,255,.12);color:var(--text);font-family:'DM Sans',sans-serif;font-size:20px;font-weight:500;outline:none;transition:border-color .3s}
+.af-input:focus{border-bottom-color:var(--accent)}
+.af-input::placeholder{color:rgba(255,255,255,.15)}
+.af-textarea{width:100%;padding:16px 18px;background:rgba(255,255,255,.03);border:1.5px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px;min-height:120px;resize:vertical;outline:none;transition:border-color .3s}
+.af-textarea:focus{border-color:var(--accent)}
+/* Options (radio/checkbox) */
+.af-options{display:flex;flex-direction:column;gap:8px}
+.af-option{display:flex;align-items:center;gap:14px;padding:16px 18px;background:rgba(255,255,255,.03);border:1.5px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all .2s;user-select:none}
+.af-option:hover{border-color:rgba(255,255,255,.15);background:rgba(255,255,255,.05)}
+.af-option.selected{border-color:var(--accent);background:var(--accent-light)}
+.af-option-marker{width:22px;height:22px;border-radius:50%;border:2px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
+.af-option.selected .af-option-marker{border-color:var(--accent);background:var(--accent)}
+.af-option.selected .af-option-marker::after{content:'';width:8px;height:8px;border-radius:50%;background:#000}
+.af-option-check .af-option-marker{border-radius:6px}
+.af-option-check.selected .af-option-marker::after{content:'✓';font-size:12px;font-weight:800;color:#000;width:auto;height:auto;border-radius:0;background:none}
+.af-option-label{font-size:16px;font-weight:500;flex:1}
+.af-option-key{font-size:11px;font-weight:700;color:var(--text-muted);padding:2px 8px;border:1px solid rgba(255,255,255,.08);border-radius:4px}
+/* Select */
+.af-select{width:100%;padding:16px 18px;background:rgba(255,255,255,.03);border:1.5px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:'DM Sans',sans-serif;font-size:16px;outline:none;appearance:none;cursor:pointer;transition:border-color .3s}
+.af-select:focus{border-color:var(--accent)}
+.af-select option{background:var(--card-bg);color:var(--text)}
+/* Scale */
+.af-scale{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.af-scale-btn{width:56px;height:56px;border-radius:14px;border:1.5px solid var(--border);background:transparent;color:var(--text);font-family:'DM Sans',sans-serif;font-size:18px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center}
+.af-scale-btn:hover{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.05)}
+.af-scale-btn.selected{border-color:var(--accent);background:var(--accent);color:#000}
+.af-scale-labels{display:flex;justify-content:space-between;width:100%;margin-top:8px;font-size:11px;color:var(--text-muted)}
+/* Navigation */
+.nav-bar{position:fixed;bottom:0;left:0;right:0;padding:16px 24px;display:flex;align-items:center;justify-content:center;gap:12px;background:linear-gradient(transparent,var(--bg) 30%)}
+.nav-btn{padding:12px 28px;border:none;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px}
+.nav-btn-next{background:var(--accent);color:#000}.nav-btn-next:hover{background:#d97706;transform:translateY(-1px)}
+.nav-btn-next:disabled{opacity:.3;cursor:not-allowed;transform:none}
+.nav-btn-back{background:transparent;color:var(--text-muted);border:1px solid var(--border)}.nav-btn-back:hover{color:var(--text);border-color:rgba(255,255,255,.15)}
+.nav-hint{font-size:11px;color:var(--text-muted);position:fixed;bottom:60px;text-align:center;width:100%}
+/* Thank you */
+.thankyou{text-align:center;animation:fadeUp .6s ease both}
+.thankyou-icon{font-size:64px;margin-bottom:20px}
+.thankyou-title{font-size:32px;font-weight:800;margin-bottom:12px;letter-spacing:-.5px}
+.thankyou-msg{font-size:16px;color:var(--text-muted);line-height:1.6;max-width:400px;margin:0 auto}
+/* Loading */
+.loading{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}
+.loading-spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.08);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+/* Error */
+.error-page{text-align:center;padding:60px;color:var(--text-muted)}
+/* Keyboard nav hint */
+@media(max-width:640px){
+.card-question{font-size:22px}
+.af-input{font-size:18px}
+.af-scale-btn{width:44px;height:44px;font-size:15px;border-radius:10px}
+.nav-hint{display:none}
+}
+</style>
+</head>
+<body>
+<div class="progress"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+<div class="form-container" id="formContainer">
+<div class="loading" id="loadingView"><div class="loading-spinner"></div><div style="font-size:13px;color:rgba(255,255,255,.3)">Chargement…</div></div>
+</div>
+<div class="nav-bar" id="navBar" style="display:none">
+<button class="nav-btn nav-btn-back" id="btnBack" onclick="goBack()">← Retour</button>
+<button class="nav-btn nav-btn-next" id="btnNext" onclick="goNext()">Continuer →</button>
+</div>
+<div class="nav-hint" id="navHint" style="display:none">Appuyez sur <strong>Entrée ↵</strong> pour continuer</div>
+
+<script>
+var db=firebase.firestore();
+var FORM=null;
+var FIELDS=[];
+var currentIdx=0;
+var answers={};
+var submitted=false;
+
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+// ═══ LOAD FORM ═══
+(function(){
+var params=new URLSearchParams(window.location.search);
+var formId=params.get('id');
+if(!formId){showError('Aucun formulaire spécifié.');return;}
+db.collection('alteo_forms').doc(formId).get().then(function(doc){
+if(!doc.exists){showError('Formulaire introuvable.');return;}
+FORM=doc.data();FORM._id=doc.id;
+if(FORM.status!=='live'&&!params.get('preview')){showError('Ce formulaire n\'est pas encore publié.');return;}
+document.title=FORM.title||'Formulaire';
+if(FORM.color)document.documentElement.style.setProperty('--accent',FORM.color);
+FIELDS=(FORM.fields||[]).filter(function(f){return f.label;});
+if(!FIELDS.length){showError('Ce formulaire ne contient aucun champ.');return;}
+document.getElementById('loadingView').style.display='none';
+document.getElementById('navBar').style.display='flex';
+document.getElementById('navHint').style.display='block';
+buildCards();
+showCard(0);
+}).catch(function(e){showError('Erreur : '+e.message);});
+})();
+
+function showError(msg){
+document.getElementById('loadingView').style.display='none';
+document.getElementById('formContainer').innerHTML='<div class="error-page"><div style="font-size:48px;margin-bottom:16px">😕</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">Oups</div><div>'+msg+'</div></div>';
+}
+
+// ═══ BUILD CARDS ═══
+function buildCards(){
+var wrap=document.createElement('div');
+wrap.className='card-wrap';
+wrap.id='cardWrap';
+
+FIELDS.forEach(function(fld,i){
+var card=document.createElement('div');
+card.className='card';
+card.id='card-'+i;
+card.dataset.idx=i;
+card.dataset.fid=fld.id;
+
+var h='<div class="card-num">'+(i+1)+' →<span>sur '+FIELDS.length+'</span></div>';
+h+='<div class="card-question">'+esc(fld.label)+'</div>';
+if(fld.description)h+='<div class="card-desc">'+esc(fld.description)+'</div>';
+
+// Render input by type
+if(fld.type==='text'||fld.type==='email'||fld.type==='tel'||fld.type==='number'){
+var ph={text:'Votre réponse…',email:'email@exemple.com',tel:'+33 6…',number:'0'}[fld.type];
+var it={text:'text',email:'email',tel:'tel',number:'number'}[fld.type];
+h+='<input class="af-input" type="'+it+'" placeholder="'+ph+'" data-fid="'+fld.id+'" autocomplete="off"/>';
+}
+else if(fld.type==='textarea'){
+h+='<textarea class="af-textarea" placeholder="Votre réponse…" data-fid="'+fld.id+'"></textarea>';
+}
+else if(fld.type==='date'){
+h+='<input class="af-input" type="date" data-fid="'+fld.id+'"/>';
+}
+else if(fld.type==='select'){
+h+='<select class="af-select" data-fid="'+fld.id+'"><option value="">Sélectionnez…</option>';
+(fld.options||[]).forEach(function(o){h+='<option value="'+esc(o)+'">'+esc(o)+'</option>';});
+h+='</select>';
+}
+else if(fld.type==='radio'){
+h+='<div class="af-options" data-fid="'+fld.id+'">';
+(fld.options||[]).forEach(function(o,oi){
+var key=String.fromCharCode(65+oi);
+h+='<div class="af-option" data-value="'+esc(o)+'" onclick="selectRadio(this)"><div class="af-option-marker"></div><div class="af-option-label">'+esc(o)+'</div><span class="af-option-key">'+key+'</span></div>';
+});
+h+='</div>';
+}
+else if(fld.type==='checkbox'){
+h+='<div class="af-options" data-fid="'+fld.id+'">';
+(fld.options||[]).forEach(function(o,oi){
+var key=String.fromCharCode(65+oi);
+h+='<div class="af-option af-option-check" data-value="'+esc(o)+'" onclick="toggleCheck(this)"><div class="af-option-marker"></div><div class="af-option-label">'+esc(o)+'</div><span class="af-option-key">'+key+'</span></div>';
+});
+h+='</div>';
+}
+else if(fld.type==='scale'){
+var max=fld.scaleMax||5;
+h+='<div class="af-scale" data-fid="'+fld.id+'">';
+for(var s=1;s<=max;s++)h+='<button class="af-scale-btn" data-value="'+s+'" onclick="selectScale(this)">'+s+'</button>';
+h+='</div><div class="af-scale-labels"><span>Pas du tout</span><span>Tout à fait</span></div>';
+}
+
+card.innerHTML=h;
+wrap.appendChild(card);
+});
+
+// Thank you card
+var ty=document.createElement('div');
+ty.className='card';ty.id='card-thankyou';
+var tyMsg=FORM.settings&&FORM.settings.thankYouMessage?FORM.settings.thankYouMessage:'Merci pour vos réponses !';
+ty.innerHTML='<div class="thankyou"><div class="thankyou-icon">✅</div><div class="thankyou-title">Envoyé !</div><div class="thankyou-msg">'+esc(tyMsg)+'</div></div>';
+wrap.appendChild(ty);
+
+document.getElementById('formContainer').appendChild(wrap);
+}
+
+// ═══ NAVIGATION ═══
+function getVisibleFields(){
+return FIELDS.filter(function(fld){
+if(!fld.condition||!fld.condition.fieldId)return true;
+var depVal=answers[fld.condition.fieldId];
+if(depVal===undefined||depVal===null||depVal==='')return false;
+var op=fld.condition.operator||'eq';
+var cv=fld.condition.value||'';
+if(op==='eq')return String(depVal)===cv;
+if(op==='neq')return String(depVal)!==cv;
+if(op==='contains')return String(depVal).toLowerCase().indexOf(cv.toLowerCase())>=0;
+return true;
+});
+}
+
+function showCard(idx){
+var visible=getVisibleFields();
+if(idx<0)idx=0;
+if(idx>=visible.length)idx=visible.length-1;
+currentIdx=idx;
+
+// Find actual field index in FIELDS
+var targetFld=visible[idx];
+var realIdx=FIELDS.indexOf(targetFld);
+
+// Update all cards
+document.querySelectorAll('.card').forEach(function(c){
+c.classList.remove('active','exit-up','exit-down');
+var ci=parseInt(c.dataset.idx);
+if(isNaN(ci))return;
+if(ci<realIdx)c.classList.add('exit-up');
+else if(ci>realIdx)c.classList.add('exit-down');
+});
+
+var activeCard=document.getElementById('card-'+realIdx);
+if(activeCard){
+activeCard.classList.add('active');
+// Focus input
+setTimeout(function(){
+var inp=activeCard.querySelector('input,textarea,select');
+if(inp&&inp.type!=='date')inp.focus();
+},300);
+}
+
+// Progress
+var pct=((idx+1)/visible.length)*100;
+document.getElementById('progressBar').style.width=pct+'%';
+
+// Nav buttons
+document.getElementById('btnBack').style.display=idx>0?'':'none';
+var isLast=idx===visible.length-1;
+var btn=document.getElementById('btnNext');
+btn.textContent=isLast?(FORM.settings&&FORM.settings.submitLabel||'Envoyer'):'Continuer →';
+
+// Check if required field has value
+updateNextBtn();
+}
+
+function updateNextBtn(){
+var visible=getVisibleFields();
+var fld=visible[currentIdx];
+if(!fld)return;
+var val=answers[fld.id];
+var hasValue=val!==undefined&&val!==null&&val!=='';
+var btn=document.getElementById('btnNext');
+btn.disabled=fld.required&&!hasValue;
+}
+
+function goNext(){
+var visible=getVisibleFields();
+var fld=visible[currentIdx];
+if(!fld)return;
+
+// Collect answer
+collectAnswer(fld);
+
+// Check required
+if(fld.required){
+var val=answers[fld.id];
+if(!val&&val!==0){shakeCard();return;}
+}
+
+if(currentIdx>=visible.length-1){
+// Submit
+submitForm();
+return;
+}
+showCard(currentIdx+1);
+}
+
+function goBack(){
+if(currentIdx>0)showCard(currentIdx-1);
+}
+
+function collectAnswer(fld){
+var realIdx=FIELDS.indexOf(fld);
+var card=document.getElementById('card-'+realIdx);
+if(!card)return;
+
+if(fld.type==='radio'){
+var sel=card.querySelector('.af-option.selected');
+answers[fld.id]=sel?sel.dataset.value:'';
+}
+else if(fld.type==='checkbox'){
+var vals=[];
+card.querySelectorAll('.af-option.selected').forEach(function(o){vals.push(o.dataset.value);});
+answers[fld.id]=vals.length?vals.join(', '):'';
+}
+else if(fld.type==='scale'){
+var selBtn=card.querySelector('.af-scale-btn.selected');
+answers[fld.id]=selBtn?selBtn.dataset.value:'';
+}
+else{
+var inp=card.querySelector('input,textarea,select');
+answers[fld.id]=inp?inp.value:'';
+}
+}
+
+function shakeCard(){
+var visible=getVisibleFields();
+var fld=visible[currentIdx];
+var realIdx=FIELDS.indexOf(fld);
+var card=document.getElementById('card-'+realIdx);
+if(!card)return;
+card.style.animation='shake .4s ease';
+setTimeout(function(){card.style.animation='';},400);
+}
+
+// ═══ INTERACTIONS ═══
+function selectRadio(el){
+el.closest('.af-options').querySelectorAll('.af-option').forEach(function(o){o.classList.remove('selected');});
+el.classList.add('selected');
+var fld=getVisibleFields()[currentIdx];
+if(fld)answers[fld.id]=el.dataset.value;
+updateNextBtn();
+// Auto-advance on radio
+setTimeout(goNext,350);
+}
+
+function toggleCheck(el){
+el.classList.toggle('selected');
+var fld=getVisibleFields()[currentIdx];
+if(fld){
+var vals=[];
+el.closest('.af-options').querySelectorAll('.af-option.selected').forEach(function(o){vals.push(o.dataset.value);});
+answers[fld.id]=vals.join(', ');
+}
+updateNextBtn();
+}
+
+function selectScale(el){
+el.closest('.af-scale').querySelectorAll('.af-scale-btn').forEach(function(b){b.classList.remove('selected');});
+el.classList.add('selected');
+var fld=getVisibleFields()[currentIdx];
+if(fld)answers[fld.id]=el.dataset.value;
+updateNextBtn();
+setTimeout(goNext,350);
+}
+
+// Keyboard navigation
+document.addEventListener('keydown',function(e){
+if(submitted)return;
+if(e.key==='Enter'&&!e.shiftKey){
+e.preventDefault();
+goNext();
+}
+// Letter shortcuts for radio/checkbox
+var visible=getVisibleFields();
+var fld=visible[currentIdx];
+if(!fld)return;
+if(fld.type==='radio'||fld.type==='checkbox'){
+var letter=e.key.toUpperCase();
+var idx=letter.charCodeAt(0)-65;
+var realIdx=FIELDS.indexOf(fld);
+var card=document.getElementById('card-'+realIdx);
+if(!card)return;
+var opts=card.querySelectorAll('.af-option');
+if(idx>=0&&idx<opts.length){
+if(fld.type==='radio')selectRadio(opts[idx]);
+else toggleCheck(opts[idx]);
+}
+}
+});
+
+// Live collect on input
+document.addEventListener('input',function(e){
+var inp=e.target;
+if(!inp.dataset||!inp.dataset.fid)return;
+answers[inp.dataset.fid]=inp.value;
+updateNextBtn();
+});
+document.addEventListener('change',function(e){
+var inp=e.target;
+if(!inp.dataset||!inp.dataset.fid)return;
+answers[inp.dataset.fid]=inp.value;
+updateNextBtn();
+});
+
+// ═══ SUBMIT ═══
+function submitForm(){
+if(submitted)return;
+submitted=true;
+
+// Collect last answer
+var visible=getVisibleFields();
+var lastFld=visible[currentIdx];
+if(lastFld)collectAnswer(lastFld);
+
+// Build answers array
+var ansArr=FIELDS.map(function(f){
+return{fieldId:f.id,label:f.label,type:f.type,value:answers[f.id]||''};
+}).filter(function(a){return a.value!=='';});
+
+// Save to Firestore
+db.collection('alteo_forms').doc(FORM._id).collection('responses').add({
+answers:ansArr,
+answersMap:answers,
+submittedAt:firebase.firestore.FieldValue.serverTimestamp(),
+userAgent:navigator.userAgent
+}).then(function(){
+// Increment response count
+db.collection('alteo_forms').doc(FORM._id).update({
+responseCount:firebase.firestore.FieldValue.increment(1)
+});
+});
+
+// Show thank you or redirect
+var settings=FORM.settings||{};
+if(settings.linkedBookingType){
+window.location.href='booking.html?type='+settings.linkedBookingType+'&fromForm='+FORM._id;
+return;
+}
+if(settings.redirectUrl){
+window.location.href=settings.redirectUrl;
+return;
+}
+
+// Show thank you card
+document.querySelectorAll('.card').forEach(function(c){c.classList.remove('active');c.classList.add('exit-up');});
+var ty=document.getElementById('card-thankyou');
+ty.classList.add('active');
+document.getElementById('navBar').style.display='none';
+document.getElementById('navHint').style.display='none';
+document.getElementById('progressBar').style.width='100%';
+}
+
+// Shake animation
+var style=document.createElement('style');
+style.textContent='@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}';
+document.head.appendChild(style);
+</script>
+</body>
+</html>

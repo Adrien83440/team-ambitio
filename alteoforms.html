@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — AlteoForms</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+.af{padding:20px 24px 80px;max-width:1100px;margin:0 auto}
+.af-top{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+.af-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px}
+.af-top small{font-size:12px;color:rgba(255,255,255,.48)}
+.af-top .sp{flex:1}
+.af-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 3px 12px rgba(245,158,11,.3)}
+/* Buttons */
+.bb{padding:8px 16px;border:none;border-radius:8px;font-family:'Figtree',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s}
+.bb-p{background:#f59e0b;color:#000}.bb-p:hover{background:#d97706}
+.bb-g{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.2)}
+.bb-o{background:0;border:1px solid rgba(255,255,255,.07);color:rgba(255,255,255,.48)}.bb-o:hover{color:#fff}
+.bb-r{background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}
+.bi{padding:8px 12px;background:#141420;border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0;box-sizing:border-box}.bi:focus{border-color:#f59e0b}.bi::placeholder{color:rgba(255,255,255,.2)}
+.bs{padding:8px 12px;background:#141420;border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0}.bs option{background:#141420}
+/* Toast */
+.af-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}.af-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* Grid */
+.af-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.af-card{background:#0e0e1a;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:20px;cursor:pointer;transition:all .2s;position:relative}
+.af-card:hover{border-color:rgba(245,158,11,.3);transform:translateY(-2px)}
+.af-card-top{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.af-card-color{width:8px;height:40px;border-radius:4px;flex-shrink:0}
+.af-card-title{font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:700}
+.af-card-desc{font-size:12px;color:rgba(255,255,255,.38);margin-bottom:14px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.af-card-stats{display:flex;gap:16px;font-size:11px;color:rgba(255,255,255,.35)}
+.af-card-stat{display:flex;align-items:center;gap:4px}
+.af-card-badge{position:absolute;top:12px;right:12px;font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px}
+.af-card-badge.live{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.15)}
+.af-card-badge.draft{background:rgba(255,255,255,.04);color:rgba(255,255,255,.3);border:1px solid rgba(255,255,255,.06)}
+/* Empty */
+.af-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,.35)}
+.af-empty-icon{font-size:48px;margin-bottom:12px}
+.af-empty-title{font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:700;margin-bottom:6px;color:rgba(255,255,255,.5)}
+/* Editor */
+.ed{display:none}
+.ed.on{display:flex;gap:0;min-height:calc(100vh - 160px)}
+.ed-left{width:240px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.07)}
+.ed-right{flex:1;padding:20px 28px;min-width:0;overflow-y:auto}
+.ed-nav{padding:0 8px}
+.ed-nav-item{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;cursor:pointer;border-left:3px solid transparent;border-radius:0 8px 8px 0;transition:all .15s;font-size:13px;color:rgba(255,255,255,.5)}
+.ed-nav-item:hover{background:rgba(255,255,255,.02);color:rgba(255,255,255,.7)}
+.ed-nav-item.on{background:rgba(245,158,11,.06);border-left-color:#f59e0b;color:#fbbf24}
+.ed-nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.ed-nav-label{font-weight:600}
+.ed-nav-desc{font-size:11px;color:rgba(255,255,255,.25);margin-top:1px}
+.ed-sec-title{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;margin-bottom:16px}
+.ed-head{display:flex;align-items:center;gap:14px;padding:16px 20px;background:#0e0e1a;border:1px solid rgba(255,255,255,.07);border-radius:14px;margin-bottom:16px}
+.ed-head-color{width:10px;height:44px;border-radius:5px;flex-shrink:0}
+.ed-head-title{font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:800}
+.ed-head-sub{font-size:12px;color:rgba(255,255,255,.4);margin-top:2px}
+/* Field items */
+.ed-field{background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;transition:all .15s}
+.ed-field:hover{border-color:rgba(255,255,255,.12)}
+.ed-field-icon{font-size:16px;flex-shrink:0;width:28px;text-align:center}
+.ed-field-info{flex:1;min-width:0}
+.ed-field-name{font-size:13px;font-weight:600;color:rgba(255,255,255,.85)}
+.ed-field-meta{font-size:11px;color:rgba(255,255,255,.3);margin-top:1px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ed-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px}
+.ed-badge-type{background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.12)}
+.ed-badge-req{background:rgba(239,68,68,.08);color:#ef4444;border:1px solid rgba(239,68,68,.12)}
+.ed-badge-opt{background:rgba(255,255,255,.04);color:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.06)}
+.ed-badge-cond{background:rgba(96,165,250,.08);color:#60a5fa;border:1px solid rgba(96,165,250,.12)}
+.ed-btn{width:28px;height:28px;border-radius:7px;border:1px solid rgba(255,255,255,.08);background:0;color:rgba(255,255,255,.3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .15s;flex-shrink:0}
+.ed-btn:hover{border-color:rgba(255,255,255,.2);color:#fff;background:rgba(255,255,255,.04)}
+.ed-btn-del:hover{border-color:rgba(239,68,68,.4);color:#ef4444;background:rgba(239,68,68,.06)}
+/* Field group label */
+.ed-group-label{font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.ed-field-row{margin-bottom:14px}
+/* Modal */
+.ed-mo-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.ed-mo-bg.show{display:flex}
+.ed-mo{background:#0e0e1a;border:1px solid rgba(255,255,255,.13);border-radius:16px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;padding:24px;margin:20px}
+.ed-mo-title{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}
+.ed-opt-row{display:flex;gap:6px;align-items:center;margin-bottom:4px}
+.ed-opt-row input{flex:1}
+/* Settings */
+.ed-set-card{background:#141420;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 18px;margin-bottom:12px}
+.ed-set-title{font-size:13px;font-weight:700;margin-bottom:4px}
+.ed-set-desc{font-size:11px;color:rgba(255,255,255,.35);margin-bottom:10px}
+/* Share */
+.ed-share-url{width:100%;padding:10px 12px;background:#141420;border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.7);font-size:12px;font-family:monospace}
+/* Toggle */
+.ed-toggle{display:flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
+.ed-toggle-btn{flex:1;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;border:none;color:rgba(255,255,255,.35);text-align:center;transition:all .15s}
+.ed-toggle-btn.on{background:rgba(245,158,11,.12);color:#fbbf24}
+@media(max-width:768px){.ed.on{flex-direction:column}.ed-left{width:100%;border-right:0;border-bottom:1px solid rgba(255,255,255,.07);display:flex;overflow-x:auto}.ed-nav-item{border-left:0;border-bottom:3px solid transparent;white-space:nowrap;padding:10px 14px}.ed-nav-item.on{border-bottom-color:#f59e0b;border-left:0}.ed-right{padding:16px 0}}
+</style>
+</head>
+<body>
+<div class="af" id="mainView">
+<div class="af-top">
+<div class="af-ic">📝</div>
+<div><h1>AlteoForms</h1><small>Formulaires & questionnaires</small></div>
+<div class="sp"></div>
+<button class="bb bb-p" id="btnNew">+ Nouveau formulaire</button>
+</div>
+<div id="formGrid" class="af-grid"></div>
+</div>
+
+<!-- Editor view -->
+<div class="af" id="editorView" style="display:none">
+<div class="af-top">
+<div class="af-ic">📝</div>
+<div><span id="edBack" style="font-size:12px;color:rgba(255,255,255,.4);cursor:pointer">← Retour aux formulaires</span><div id="edTitle" style="font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:800;margin-top:4px"></div></div>
+<div class="sp"></div>
+<button class="bb bb-o" onclick="previewForm()">👁 Aperçu</button>
+<button class="bb bb-p" onclick="publishForm()" id="edPubBtn">🚀 Publier</button>
+</div>
+<div class="ed on">
+<div class="ed-left"><div class="ed-nav" id="edNav">
+<div class="ed-nav-item on" data-sec="fields"><span class="ed-nav-icon">📋</span><div><div class="ed-nav-label">Champs</div><div class="ed-nav-desc">Questions du formulaire</div></div></div>
+<div class="ed-nav-item" data-sec="settings"><span class="ed-nav-icon">⚙️</span><div><div class="ed-nav-label">Paramètres</div><div class="ed-nav-desc">Apparence, redirection</div></div></div>
+<div class="ed-nav-item" data-sec="share"><span class="ed-nav-icon">🔗</span><div><div class="ed-nav-label">Partager</div><div class="ed-nav-desc">Lien, embed, QR</div></div></div>
+<div class="ed-nav-item" data-sec="responses"><span class="ed-nav-icon">📊</span><div><div class="ed-nav-label">Réponses</div><div class="ed-nav-desc">Soumissions reçues</div></div></div>
+</div></div>
+<div class="ed-right" id="edContent"></div>
+</div>
+</div>
+
+<!-- Field editor modal -->
+<div class="ed-mo-bg" id="fldModal"><div class="ed-mo">
+<div class="ed-mo-title"><span id="fldModalTitle">Nouveau champ</span><button onclick="closeFldModal()" style="border:none;background:0;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer">✕</button></div>
+<div class="ed-field-row"><div class="ed-group-label">Libellé</div><input class="bi" id="fld-label" placeholder="Ex: Quel est votre secteur d'activité ?" style="width:100%"/></div>
+<div class="ed-field-row"><div class="ed-group-label">Description (optionnel)</div><input class="bi" id="fld-desc" placeholder="Aide ou précision pour le répondant" style="width:100%"/></div>
+<div class="ed-field-row"><div class="ed-group-label">Type de champ</div>
+<select class="bs" id="fld-type" onchange="fldTypeChanged()" style="width:100%">
+<option value="text">Aa Texte court</option>
+<option value="textarea">¶ Zone de texte</option>
+<option value="select">▾ Liste déroulante</option>
+<option value="radio">◉ Choix unique (boutons)</option>
+<option value="checkbox">☑ Cases à cocher (multiple)</option>
+<option value="scale">⬤ Échelle / Curseur</option>
+<option value="email">@ Email</option>
+<option value="tel">📞 Téléphone</option>
+<option value="number">🔢 Nombre</option>
+<option value="date">📅 Date</option>
+</select></div>
+<!-- Options -->
+<div class="ed-field-row" id="fld-opts-wrap" style="display:none"><div class="ed-group-label">Options</div><div id="fld-opts-list"></div><button class="bb" onclick="addFldOption()" style="padding:4px 12px;font-size:11px;margin-top:4px">+ Option</button></div>
+<!-- Scale -->
+<div class="ed-field-row" id="fld-scale-wrap" style="display:none"><div class="ed-group-label">Échelle</div><div style="display:flex;gap:10px;align-items:center"><select class="bs" id="fld-scaleMax" style="width:80px"><option value="5">1 – 5</option><option value="10">1 – 10</option></select><span style="font-size:11px;color:rgba(255,255,255,.3)">Note de 1 à N</span></div></div>
+<!-- Required -->
+<div class="ed-field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-req"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Champ requis</span></label></div>
+<!-- Condition -->
+<div class="ed-field-row"><div class="ed-group-label">Condition d'affichage <span style="font-weight:400;color:rgba(255,255,255,.2)">(optionnel)</span></div>
+<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+<span style="font-size:12px;color:rgba(255,255,255,.4)">Afficher si</span>
+<select class="bs" id="fld-cond-field" style="width:130px;font-size:11px"><option value="">— Aucune —</option></select>
+<select class="bs" id="fld-cond-op" style="width:70px;font-size:11px"><option value="eq">=</option><option value="neq">≠</option><option value="contains">contient</option></select>
+<input class="bi" id="fld-cond-val" placeholder="valeur" style="width:100px;font-size:11px;padding:5px 8px"/>
+</div></div>
+<!-- Submit -->
+<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px"><button class="bb bb-o" onclick="closeFldModal()">Annuler</button><button class="bb bb-p" onclick="saveFldModal()" id="fldSaveBtn">Ajouter</button></div>
+</div></div>
+
+<!-- Create form modal -->
+<div class="ed-mo-bg" id="newModal"><div class="ed-mo">
+<div class="ed-mo-title"><span>Nouveau formulaire</span><button onclick="closeNewModal()" style="border:none;background:0;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer">✕</button></div>
+<div class="ed-field-row"><div class="ed-group-label">Nom du formulaire</div><input class="bi" id="new-title" placeholder="Ex: Questionnaire de qualification" style="width:100%"/></div>
+<div class="ed-field-row"><div class="ed-group-label">Description</div><input class="bi" id="new-desc" placeholder="Décrivez l'objectif de ce formulaire" style="width:100%"/></div>
+<div class="ed-field-row"><div class="ed-group-label">Couleur</div><input type="color" id="new-color" value="#f59e0b" style="width:50px;height:36px;border:0;border-radius:8px;cursor:pointer"/></div>
+<div style="text-align:right;margin-top:14px"><button class="bb bb-p" onclick="createForm()">Créer le formulaire</button></div>
+</div></div>
+
+<div class="af-toast" id="afToast"></div>
+
+<script>
+var db=firebase.firestore();
+var FORMS=[];
+var currentForm=null;
+var edSection='fields';
+var _fldEditIdx=-1;
+
+var FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤',number:'🔢',date:'📅'};
+var FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle',number:'Nombre',date:'Date'};
+
+function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function gid(){return Math.random().toString(36).slice(2,10);}
+function toast(msg){var t=document.getElementById('afToast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2500);}
+
+// ═══ FORM LIST ═══
+function loadForms(){
+db.collection('alteo_forms').orderBy('createdAt','desc').get().then(function(sn){
+FORMS=[];sn.forEach(function(d){var v=d.data();v._id=d.id;FORMS.push(v);});
+renderGrid();
+});
+}
+
+function renderGrid(){
+var el=document.getElementById('formGrid');
+if(!FORMS.length){
+el.innerHTML='<div class="af-empty" style="grid-column:1/-1"><div class="af-empty-icon">📝</div><div class="af-empty-title">Aucun formulaire</div><div>Créez votre premier formulaire pour commencer.</div></div>';
+return;
+}
+var h='';
+FORMS.forEach(function(f){
+var fc=f.fields?f.fields.length:0;
+var rc=f.responseCount||0;
+var status=f.status==='live'?'live':'draft';
+h+='<div class="af-card" onclick="openEditor(\''+f._id+'\')">';
+h+='<div class="af-card-badge '+status+'">'+(status==='live'?'● Publié':'Brouillon')+'</div>';
+h+='<div class="af-card-top"><div class="af-card-color" style="background:'+(f.color||'#f59e0b')+'"></div><div class="af-card-title">'+esc(f.title||'Sans titre')+'</div></div>';
+if(f.description)h+='<div class="af-card-desc">'+esc(f.description)+'</div>';
+h+='<div class="af-card-stats"><div class="af-card-stat">📋 '+fc+' champ'+(fc>1?'s':'')+'</div><div class="af-card-stat">📊 '+rc+' réponse'+(rc>1?'s':'')+'</div></div>';
+h+='</div>';
+});
+el.innerHTML=h;
+}
+
+// ═══ CREATE FORM ═══
+document.getElementById('btnNew').addEventListener('click',function(){
+document.getElementById('new-title').value='';
+document.getElementById('new-desc').value='';
+document.getElementById('new-color').value='#f59e0b';
+document.getElementById('newModal').classList.add('show');
+});
+function closeNewModal(){document.getElementById('newModal').classList.remove('show');}
+document.getElementById('newModal').addEventListener('click',function(e){if(e.target===this)closeNewModal();});
+
+function createForm(){
+var title=document.getElementById('new-title').value.trim();
+if(!title){toast('❌ Le nom est requis');return;}
+var doc={
+title:title,
+description:document.getElementById('new-desc').value.trim(),
+color:document.getElementById('new-color').value,
+status:'draft',
+fields:[],
+settings:{redirectUrl:'',formStyle:'cards',submitLabel:'Envoyer',thankYouMessage:'Merci pour vos réponses !'},
+responseCount:0,
+createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+};
+db.collection('alteo_forms').add(doc).then(function(ref){
+closeNewModal();
+doc._id=ref.id;
+FORMS.unshift(doc);
+openEditor(ref.id);
+toast('✅ Formulaire créé');
+});
+}
+
+// ═══ EDITOR ═══
+function openEditor(id){
+currentForm=FORMS.find(function(f){return f._id===id;});
+if(!currentForm)return;
+document.getElementById('mainView').style.display='none';
+document.getElementById('editorView').style.display='';
+document.getElementById('edTitle').textContent=currentForm.title||'Sans titre';
+document.getElementById('edPubBtn').textContent=currentForm.status==='live'?'✅ Publié':'🚀 Publier';
+edSection='fields';
+renderEdNav();
+renderEdSection();
+}
+
+function closeEditor(){
+document.getElementById('editorView').style.display='none';
+document.getElementById('mainView').style.display='';
+currentForm=null;
+loadForms();
+}
+document.getElementById('edBack').addEventListener('click',closeEditor);
+
+function renderEdNav(){
+document.querySelectorAll('[data-sec]').forEach(function(n){n.classList.toggle('on',n.dataset.sec===edSection);});
+}
+document.addEventListener('click',function(e){
+var n=e.target.closest('[data-sec]');
+if(n&&document.getElementById('editorView').style.display!=='none'){
+edSection=n.dataset.sec;renderEdNav();renderEdSection();
+}
+});
+
+function saveForm(silent){
+if(!currentForm)return;
+var clean={
+title:currentForm.title,description:currentForm.description,color:currentForm.color,
+status:currentForm.status,fields:currentForm.fields||[],settings:currentForm.settings||{},
+responseCount:currentForm.responseCount||0,
+updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+};
+return db.collection('alteo_forms').doc(currentForm._id).update(clean).then(function(){
+if(!silent)toast('✅ Enregistré');
+});
+}
+
+function renderEdSection(){
+var el=document.getElementById('edContent'),h='',f=currentForm;
+if(!f)return;
+
+if(edSection==='fields'){
+h+='<div class="ed-sec-title">📋 Champs du formulaire</div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Ajoutez et organisez les questions de votre formulaire.</div>';
+var fields=f.fields||[];
+if(!fields.length){
+h+='<div style="text-align:center;padding:40px;color:rgba(255,255,255,.25)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:13px">Aucun champ. Commencez par ajouter une question.</div></div>';
+}
+fields.forEach(function(fld,i){
+h+='<div class="ed-field">';
+h+='<div class="ed-field-icon">'+(FT_ICONS[fld.type]||'?')+'</div>';
+h+='<div class="ed-field-info"><div class="ed-field-name">'+esc(fld.label)+'</div><div class="ed-field-meta">';
+h+='<span class="ed-badge ed-badge-type">'+(FT_LABELS[fld.type]||fld.type)+'</span>';
+h+=fld.required?'<span class="ed-badge ed-badge-req">* Requis</span>':'<span class="ed-badge ed-badge-opt">Optionnel</span>';
+if(fld.options&&fld.options.length)h+='<span style="color:rgba(255,255,255,.2)">'+fld.options.length+' options</span>';
+if(fld.scaleMax)h+='<span style="color:rgba(255,255,255,.2)">1-'+fld.scaleMax+'</span>';
+if(fld.condition&&fld.condition.fieldId)h+='<span class="ed-badge ed-badge-cond">⚡ Conditionnel</span>';
+if(fld.description)h+='<span style="color:rgba(255,255,255,.15)" title="'+esc(fld.description)+'">💬</span>';
+h+='</div></div>';
+h+='<button class="ed-btn" onclick="openFldModal('+i+')" title="Modifier">✏️</button>';
+h+='<button class="ed-btn ed-btn-del" onclick="deleteField('+i+')" title="Supprimer">✕</button>';
+h+='</div>';
+});
+h+='<div style="margin-top:16px;text-align:center"><button class="bb bb-p" onclick="openFldModal(-1)" style="padding:10px 24px">+ Ajouter un champ</button></div>';
+}
+
+else if(edSection==='settings'){
+var s=f.settings||{};
+h+='<div class="ed-sec-title">⚙️ Paramètres</div>';
+// General
+h+='<div class="ed-set-card"><div class="ed-set-title">📝 Informations générales</div><div class="ed-set-desc">Nom et description du formulaire</div>';
+h+='<div class="ed-field-row"><div class="ed-group-label">Titre</div><input class="bi" id="set-title" value="'+esc(f.title||'')+'" style="width:100%" onchange="currentForm.title=this.value;document.getElementById(\'edTitle\').textContent=this.value;saveForm(true)"/></div>';
+h+='<div class="ed-field-row"><div class="ed-group-label">Description</div><input class="bi" id="set-desc" value="'+esc(f.description||'')+'" style="width:100%" onchange="currentForm.description=this.value;saveForm(true)"/></div>';
+h+='<div class="ed-field-row"><div class="ed-group-label">Couleur</div><input type="color" id="set-color" value="'+(f.color||'#f59e0b')+'" style="width:50px;height:36px;border:0;border-radius:8px;cursor:pointer" onchange="currentForm.color=this.value;saveForm(true)"/></div>';
+h+='</div>';
+// Style
+h+='<div class="ed-set-card"><div class="ed-set-title">🎨 Style d\'affichage</div><div class="ed-set-desc">Comment le formulaire s\'affiche pour le répondant</div>';
+h+='<div class="ed-toggle"><button class="ed-toggle-btn'+(s.formStyle==='cards'||!s.formStyle?' on':'')+'" onclick="setFormStyle(\'cards\')">📑 Carte par carte</button><button class="ed-toggle-btn'+(s.formStyle==='scroll'?' on':'')+'" onclick="setFormStyle(\'scroll\')">📜 Scroll continu</button></div>';
+h+='</div>';
+// Submit
+h+='<div class="ed-set-card"><div class="ed-set-title">✅ Soumission</div><div class="ed-set-desc">Texte du bouton et message de fin</div>';
+h+='<div class="ed-field-row"><div class="ed-group-label">Texte du bouton</div><input class="bi" id="set-submit" value="'+esc(s.submitLabel||'Envoyer')+'" style="width:100%" onchange="currentForm.settings.submitLabel=this.value;saveForm(true)"/></div>';
+h+='<div class="ed-field-row"><div class="ed-group-label">Message de remerciement</div><textarea class="bi" id="set-thanks" style="width:100%;min-height:60px;resize:vertical" onchange="currentForm.settings.thankYouMessage=this.value;saveForm(true)">'+esc(s.thankYouMessage||'')+'</textarea></div>';
+h+='</div>';
+// Redirect
+h+='<div class="ed-set-card"><div class="ed-set-title">🔄 Redirection après soumission</div><div class="ed-set-desc">Laissez vide pour afficher le message de remerciement</div>';
+h+='<div class="ed-field-row"><div class="ed-group-label">URL de redirection</div><input class="bi" id="set-redirect" value="'+esc(s.redirectUrl||'')+'" placeholder="https://..." style="width:100%" onchange="currentForm.settings.redirectUrl=this.value;saveForm(true)"/></div>';
+h+='</div>';
+// Booking link
+h+='<div class="ed-set-card"><div class="ed-set-title">📅 Liaison Booking</div><div class="ed-set-desc">Après soumission, rediriger vers un calendrier de prise de RDV</div>';
+h+='<div class="ed-field-row"><div class="ed-group-label">ID de consultation (optionnel)</div><input class="bi" id="set-booking" value="'+esc(s.linkedBookingType||'')+'" placeholder="Ex: coaching_1v1_abc" style="width:100%" onchange="currentForm.settings.linkedBookingType=this.value;saveForm(true)"/></div>';
+h+='<div style="font-size:11px;color:rgba(255,255,255,.2)">Si renseigné, le calendrier de booking s\'affiche après le formulaire.</div>';
+h+='</div>';
+}
+
+else if(edSection==='share'){
+var url=window.location.origin+'/alteoforms-render.html?id='+f._id;
+var qrUrl='https://api.qrserver.com/v1/create-qr-code/?data='+encodeURIComponent(url)+'&size=150x150&bgcolor=ffffff&color=1a1a2e';
+h+='<div class="ed-sec-title">🔗 Partager le formulaire</div>';
+if(f.status!=='live')h+='<div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:8px;padding:10px 14px;font-size:12px;color:#fbbf24;margin-bottom:16px">⚠️ Ce formulaire est en brouillon. Publiez-le pour le rendre accessible.</div>';
+h+='<div class="ed-set-card"><div class="ed-set-title">🌐 Lien direct</div>';
+h+='<div style="display:flex;gap:8px;margin-top:8px"><input class="ed-share-url" value="'+esc(url)+'" readonly id="shareUrl"/><button class="bb bb-p" onclick="navigator.clipboard.writeText(document.getElementById(\'shareUrl\').value);toast(\'📋 Copié !\')">Copier</button></div>';
+h+='</div>';
+h+='<div class="ed-set-card"><div style="display:flex;gap:16px;align-items:center"><img src="'+qrUrl+'" style="width:100px;height:100px;border-radius:8px;background:white;padding:4px"/><div><div class="ed-set-title">QR Code</div><div style="font-size:11px;color:rgba(255,255,255,.35)">Partagez ce code QR pour un accès instantané.</div></div></div></div>';
+// Embed
+h+='<div class="ed-set-card"><div class="ed-set-title">📄 Code d\'intégration (embed)</div>';
+h+='<textarea class="bi" readonly style="width:100%;font-size:11px;font-family:monospace;resize:none;margin-top:8px" rows="3">&lt;iframe src=&quot;'+esc(url)+'&quot; width=&quot;100%&quot; height=&quot;700&quot; frameborder=&quot;0&quot; style=&quot;border-radius:12px&quot;&gt;&lt;/iframe&gt;</textarea>';
+h+='<button class="bb bb-o" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);toast(\'📋 Code copié !\')" style="margin-top:6px">Copier le code</button>';
+h+='</div>';
+}
+
+else if(edSection==='responses'){
+h+='<div class="ed-sec-title">📊 Réponses</div>';
+h+='<div id="respList" style="font-size:12px;color:rgba(255,255,255,.38)">Chargement…</div>';
+loadResponses();
+}
+
+el.innerHTML=h;
+}
+
+function loadResponses(){
+if(!currentForm)return;
+db.collection('alteo_forms').doc(currentForm._id).collection('responses').orderBy('submittedAt','desc').limit(50).get().then(function(sn){
+var el=document.getElementById('respList');
+if(!el)return;
+if(!sn.size){el.innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,.25)">Aucune réponse pour le moment.</div>';return;}
+var h='<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:12px">'+sn.size+' réponse'+(sn.size>1?'s':'')+'</div>';
+sn.forEach(function(d){
+var r=d.data();
+var date=r.submittedAt?r.submittedAt.toDate().toLocaleString('fr-FR'):'—';
+h+='<div class="ed-field" style="cursor:default"><div class="ed-field-icon">📨</div><div class="ed-field-info"><div class="ed-field-name">'+esc(r.answers&&r.answers[0]?r.answers[0].value:'Réponse')+'</div><div class="ed-field-meta"><span style="color:rgba(255,255,255,.25)">'+date+'</span></div></div></div>';
+});
+el.innerHTML=h;
+});
+}
+
+// ═══ FIELD MODAL ═══
+function openFldModal(idx){
+_fldEditIdx=idx;
+document.getElementById('fldModalTitle').textContent=idx>=0?'Modifier le champ':'Nouveau champ';
+document.getElementById('fldSaveBtn').textContent=idx>=0?'Enregistrer':'Ajouter';
+// Reset
+document.getElementById('fld-label').value='';
+document.getElementById('fld-desc').value='';
+document.getElementById('fld-type').value='text';
+document.getElementById('fld-req').checked=false;
+document.getElementById('fld-cond-field').value='';
+document.getElementById('fld-cond-op').value='eq';
+document.getElementById('fld-cond-val').value='';
+document.getElementById('fld-opts-list').innerHTML='';
+document.getElementById('fld-opts-wrap').style.display='none';
+document.getElementById('fld-scale-wrap').style.display='none';
+// Populate condition field selector
+var condSel=document.getElementById('fld-cond-field');
+condSel.innerHTML='<option value="">— Aucune —</option>';
+(currentForm.fields||[]).forEach(function(f,i){
+if(i!==idx)condSel.innerHTML+='<option value="'+f.id+'">'+esc(f.label)+'</option>';
+});
+// Fill if editing
+if(idx>=0&&currentForm.fields&&currentForm.fields[idx]){
+var fld=currentForm.fields[idx];
+document.getElementById('fld-label').value=fld.label||'';
+document.getElementById('fld-desc').value=fld.description||'';
+document.getElementById('fld-type').value=fld.type||'text';
+document.getElementById('fld-req').checked=!!fld.required;
+if(fld.options&&fld.options.length){
+document.getElementById('fld-opts-wrap').style.display='block';
+fld.options.forEach(function(o){_addOptRow(o);});
+}
+if(fld.type==='scale'){
+document.getElementById('fld-scale-wrap').style.display='block';
+document.getElementById('fld-scaleMax').value=String(fld.scaleMax||5);
+}
+if(fld.condition){
+document.getElementById('fld-cond-field').value=fld.condition.fieldId||'';
+document.getElementById('fld-cond-op').value=fld.condition.operator||'eq';
+document.getElementById('fld-cond-val').value=fld.condition.value||'';
+}
+}
+fldTypeChanged();
+document.getElementById('fldModal').classList.add('show');
+}
+function closeFldModal(){document.getElementById('fldModal').classList.remove('show');_fldEditIdx=-1;}
+document.getElementById('fldModal').addEventListener('click',function(e){if(e.target===this)closeFldModal();});
+
+function fldTypeChanged(){
+var type=document.getElementById('fld-type').value;
+var hasOpts=type==='select'||type==='checkbox'||type==='radio';
+document.getElementById('fld-opts-wrap').style.display=hasOpts?'block':'none';
+document.getElementById('fld-scale-wrap').style.display=type==='scale'?'block':'none';
+if(hasOpts&&document.getElementById('fld-opts-list').children.length===0){addFldOption();addFldOption();}
+}
+
+function _addOptRow(val){
+var row=document.createElement('div');row.className='ed-opt-row';
+row.innerHTML='<input class="bi fld-opt-input" value="'+esc(val||'')+'" placeholder="Option…" style="padding:6px 10px;font-size:12px"/><button class="ed-btn ed-btn-del" onclick="this.closest(\'.ed-opt-row\').remove()" style="width:24px;height:24px;font-size:11px">✕</button>';
+document.getElementById('fld-opts-list').appendChild(row);
+}
+function addFldOption(){_addOptRow('');}
+
+function saveFldModal(){
+var label=document.getElementById('fld-label').value.trim();
+if(!label){toast('❌ Le libellé est requis');return;}
+var type=document.getElementById('fld-type').value;
+var field={
+id:_fldEditIdx>=0&&currentForm.fields[_fldEditIdx]?currentForm.fields[_fldEditIdx].id:'fld_'+gid().slice(0,6),
+label:label,
+type:type,
+required:document.getElementById('fld-req').checked
+};
+var desc=document.getElementById('fld-desc').value.trim();
+if(desc)field.description=desc;
+// Options
+if(type==='select'||type==='checkbox'||type==='radio'){
+var opts=[];
+document.querySelectorAll('#fld-opts-list .fld-opt-input').forEach(function(inp){var v=inp.value.trim();if(v)opts.push(v);});
+if(!opts.length){toast('❌ Ajoutez au moins une option');return;}
+field.options=opts;
+}
+if(type==='scale')field.scaleMax=parseInt(document.getElementById('fld-scaleMax').value)||5;
+// Condition
+var condField=document.getElementById('fld-cond-field').value;
+if(condField)field.condition={fieldId:condField,operator:document.getElementById('fld-cond-op').value,value:document.getElementById('fld-cond-val').value};
+// Save
+if(!currentForm.fields)currentForm.fields=[];
+if(_fldEditIdx>=0&&_fldEditIdx<currentForm.fields.length)currentForm.fields[_fldEditIdx]=field;
+else currentForm.fields.push(field);
+closeFldModal();
+saveForm(true).then(function(){renderEdSection();toast('✅ '+(_fldEditIdx>=0?'Champ modifié':'Champ ajouté'));});
+}
+
+function deleteField(idx){
+if(!currentForm||!currentForm.fields)return;
+currentForm.fields.splice(idx,1);
+saveForm(true).then(function(){renderEdSection();toast('🗑 Champ supprimé');});
+}
+
+// ═══ SETTINGS HELPERS ═══
+function setFormStyle(style){
+if(!currentForm)return;
+currentForm.settings=currentForm.settings||{};
+currentForm.settings.formStyle=style;
+saveForm(true).then(function(){renderEdSection();toast('✅');});
+}
+
+function publishForm(){
+if(!currentForm)return;
+currentForm.status=currentForm.status==='live'?'draft':'live';
+document.getElementById('edPubBtn').textContent=currentForm.status==='live'?'✅ Publié':'🚀 Publier';
+saveForm(false);
+}
+
+function previewForm(){
+if(!currentForm)return;
+window.open('alteoforms-render.html?id='+currentForm._id+'&preview=1','_blank');
+}
+
+// ═══ INIT ═══
+window.openFldModal=openFldModal;window.closeFldModal=closeFldModal;window.fldTypeChanged=fldTypeChanged;
+window.addFldOption=addFldOption;window.saveFldModal=saveFldModal;window.deleteField=deleteField;
+window.setFormStyle=setFormStyle;window.publishForm=publishForm;window.previewForm=previewForm;
+window.openEditor=openEditor;window.closeNewModal=closeNewModal;window.createForm=createForm;
+
+firebase.auth().onAuthStateChanged(function(u){
+if(u)loadForms();
+});
+</script>
+<script src="nav.js"></script>
+</body>
+</html>
