@@ -720,21 +720,20 @@ function escAttr(s) {
 
 function sanitizeCommContent(raw) {
   if (!raw) return '';
-  // Strip all HTML tags except: extract href from <a> tags, convert <br> to newlines
   var s = raw;
-  // Replace <br>, <br/>, <br /> with newline marker
   s = s.replace(/<br\s*\/?>/gi, '\n');
-  // Extract links: <a href="URL">text</a> → URL
   s = s.replace(/<a[^>]+href=["']([^"']+)["'][^>]*>[^<]*<\/a>/gi, '$1');
-  // Incomplete/truncated <a> tags: extract URL if possible
   s = s.replace(/<a[^>]+href=["']([^"']+)["'][^>]*/gi, '$1');
-  // Strip remaining HTML tags (complete or truncated)
+  s = s.replace(/<a[^>]*href=["'][^"']*/gi, '');
   s = s.replace(/<[^>]*>?/g, '');
-  // Now escape for safe display
+  s = s.replace(/\[\d*m\]/g, '');
+  s = s.replace(/\x1b\[[0-9;]*m/g, '');
+  s = s.replace(/Enregistrement de l'appel\s*:\s*$/gm, '');
+  s = s.replace(/Enregistrement de l'appel\s*:\s*htt\w{0,5}\s*$/gm, '');
+  s = s.replace(/\n\s*\n/g, '\n').replace(/\n+$/, '').replace(/^\n+/, '');
   var d = document.createElement('div');
   d.textContent = s;
   var escaped = d.innerHTML;
-  // Convert newlines to <br> and URLs to clickable links
   escaped = escaped.replace(/\n/g, '<br/>');
   escaped = escaped.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:#60a5fa;word-break:break-all">$1</a>');
   return escaped;

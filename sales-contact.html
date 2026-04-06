@@ -214,12 +214,19 @@ function sanitizeComm(raw){
 if(!raw)return'';
 var s=raw;
 s=s.replace(/<br\s*\/?>/gi,'\n');
-// Complete <a> tags: extract URL
 s=s.replace(/<a[^>]+href=["']([^"']+)["'][^>]*>[^<]*<\/a>/gi,'$1');
-// Incomplete/truncated <a> tags: extract URL if possible, else remove
 s=s.replace(/<a[^>]+href=["']([^"']+)["'][^>]*/gi,'$1');
-// Strip any remaining HTML tags (complete or truncated)
+// Handle incomplete <a href="... (no closing quote)
+s=s.replace(/<a[^>]*href=["'][^"']*/gi,'');
 s=s.replace(/<[^>]*>?/g,'');
+// Remove ANSI escape codes and junk fragments
+s=s.replace(/\[\d*m\]/g,'');
+s=s.replace(/\x1b\[[0-9;]*m/g,'');
+// Remove orphaned labels with nothing after (e.g. "Enregistrement de l'appel : ")
+s=s.replace(/Enregistrement de l'appel\s*:\s*$/gm,'');
+s=s.replace(/Enregistrement de l'appel\s*:\s*htt\w{0,5}\s*$/gm,'');
+// Clean up trailing whitespace/newlines
+s=s.replace(/\n\s*\n/g,'\n').replace(/\n+$/,'').replace(/^\n+/,'');
 var d=document.createElement('div');d.textContent=s;var e=d.innerHTML;
 e=e.replace(/\n/g,'<br/>');
 e=e.replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener" style="color:#60a5fa;word-break:break-all">$1</a>');
