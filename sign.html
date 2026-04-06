@@ -10,636 +10,367 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
-:root{--bg:#f8f9fb;--card:#ffffff;--border:#e2e8f0;--fg:#0f172a;--muted:#64748b;--accent:#6366f1;--accent2:#818cf8;--green:#059669;--red:#dc2626;--fm:'Plus Jakarta Sans',system-ui,sans-serif;}
+:root{--bg:#f8f9fb;--card:#ffffff;--border:#e2e8f0;--fg:#0f172a;--muted:#64748b;--accent:#6366f1;--accent2:#818cf8;--green:#059669;--red:#dc2626;--fm:'Plus Jakarta Sans',system-ui,sans-serif;--fsig:'Dancing Script',cursive;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh;}
-.wrap{max-width:720px;margin:0 auto;padding:20px 16px 60px;}
-
-/* Header */
-.header{text-align:center;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);}
-.logo{display:inline-flex;align-items:center;gap:8px;margin-bottom:12px;}
+.wrap{max-width:900px;margin:0 auto;padding:20px 16px 60px;}
+.header{text-align:center;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+.logo{display:inline-flex;align-items:center;gap:8px;margin-bottom:10px;}
 .logo-box{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#1e3a8a,#6366f1);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:16px;}
 .logo-txt{font-size:15px;font-weight:800;color:var(--fg);}
-.header h1{font-size:20px;font-weight:800;margin-bottom:4px;}
+.header h1{font-size:18px;font-weight:800;margin-bottom:4px;}
 .header .sub{font-size:13px;color:var(--muted);}
-
-/* Progress */
-.progress{display:flex;gap:4px;margin-bottom:28px;}
+.progress{display:flex;gap:4px;margin-bottom:20px;}
 .prog-step{flex:1;height:4px;border-radius:2px;background:var(--border);transition:background .3s;}
 .prog-step.done{background:var(--accent);}
 .prog-step.active{background:var(--accent2);}
-
-/* Steps */
-.step{display:none;}
-.step.active{display:block;}
-
-/* Cards */
-.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
-.card-title{font-size:16px;font-weight:800;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
-
-/* Form */
-.field-group{margin-bottom:14px;}
-.field-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;display:flex;align-items:center;gap:4px;}
-.field-label .req{color:var(--red);font-weight:800;}
-.field-input{width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--fg);font-size:14px;font-family:var(--fm);transition:border-color .15s;}
-.field-input:focus{outline:none;border-color:var(--accent);}
-.field-check{display:flex;align-items:center;gap:8px;padding:10px 0;}
-.field-check input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;}
-.field-check label{font-size:14px;cursor:pointer;}
-
-/* Buttons */
+.step{display:none;}.step.active{display:block;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.card-title{font-size:15px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
 .btn{padding:12px 24px;border-radius:12px;font-size:14px;font-weight:700;font-family:var(--fm);border:none;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:8px;justify-content:center;}
-.btn-primary{background:var(--accent);color:#fff;width:100%;}
-.btn-primary:hover{background:var(--accent2);}
-.btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+.btn-primary{background:var(--accent);color:#fff;width:100%;}.btn-primary:hover{background:var(--accent2);}.btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+.btn-green{background:var(--green);color:#fff;width:100%;font-size:16px;padding:14px;}.btn-green:hover{background:#047857;}.btn-green:disabled{opacity:.5;cursor:not-allowed;}
 .btn-outline{background:transparent;color:var(--accent);border:1px solid var(--accent);}
-.btn-green{background:var(--green);color:#fff;width:100%;}
-.btn-green:hover{background:#047857;}
-
-/* OTP */
 .otp-wrap{display:flex;gap:8px;justify-content:center;margin:16px 0;}
 .otp-input{width:48px;height:56px;text-align:center;font-size:24px;font-weight:800;border-radius:10px;border:2px solid var(--border);background:var(--bg);color:var(--fg);font-family:var(--fm);}
 .otp-input:focus{outline:none;border-color:var(--accent);}
-
-/* Signature canvas */
-.sig-canvas-wrap{position:relative;border:2px dashed var(--border);border-radius:12px;background:#fff;margin:12px 0;overflow:hidden;}
-.sig-canvas-wrap canvas{display:block;width:100%;touch-action:none;}
-.sig-clear{position:absolute;top:8px;right:8px;padding:4px 10px;border-radius:6px;background:rgba(0,0,0,.06);border:none;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;}
-.sig-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;pointer-events:none;opacity:.6;}
-
-/* PDF preview */
-.pdf-preview{text-align:center;margin:12px 0;}
-.pdf-preview canvas{max-width:100%;border:1px solid var(--border);border-radius:8px;}
-.pdf-nav-bar{display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0;font-size:13px;font-weight:700;}
-.pdf-nav-bar button{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-weight:700;}
-
-/* Status */
+.pdf-viewer{position:relative;margin:0 auto;overflow-x:auto;}
+.pdf-page-wrap{position:relative;margin:0 auto;display:inline-block;}
+.pdf-page-wrap canvas{display:block;}
+.pdf-fields-layer{position:absolute;top:0;left:0;}
+.pdf-nav{display:flex;align-items:center;justify-content:center;gap:14px;padding:10px 0;font-size:13px;font-weight:700;}
+.pdf-nav button{padding:6px 16px;border-radius:8px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-weight:700;font-size:13px;}
+.field-overlay{position:absolute;border-radius:3px;overflow:visible;}
+.field-overlay input[type=text],.field-overlay input[type=email],.field-overlay input[type=tel]{width:100%;height:100%;border:1.5px solid rgba(99,102,241,.5);border-radius:3px;background:rgba(255,255,255,.9);padding:0 4px;font-family:var(--fm);color:var(--fg);outline:none;}
+.field-overlay input:focus{border-color:#4f46e5;box-shadow:0 0 0 2px rgba(99,102,241,.15);}
+.field-overlay .sig-zone{width:100%;height:100%;border:2px dashed rgba(99,102,241,.4);border-radius:4px;background:rgba(255,255,255,.93);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}
+.field-overlay .sig-zone.filled{border-style:solid;border-color:var(--green);background:rgba(255,255,255,.97);}
+.field-overlay .sig-zone .sig-text{font-family:var(--fsig);color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px;}
+.field-overlay .cb-wrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.9);border:1.5px solid rgba(99,102,241,.5);border-radius:3px;cursor:pointer;}
+.field-overlay .cb-wrap input{width:18px;height:18px;accent-color:var(--accent);}
+.sig-panel{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-top:14px;}
+.sig-panel-title{font-size:14px;font-weight:800;margin-bottom:10px;}
+.sig-type-input{width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:10px;font-family:var(--fsig);font-size:28px;color:#1e293b;background:var(--bg);text-align:center;}
+.sig-type-input:focus{outline:none;border-color:var(--accent);}
+.sig-preview{font-family:var(--fsig);font-size:32px;color:#1e293b;text-align:center;padding:8px;min-height:45px;}
 .status-icon{font-size:48px;margin-bottom:12px;}
 .info-box{padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;}
 .info-box.blue{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.15);color:var(--accent);}
 .info-box.green{background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.15);color:var(--green);}
-.info-box.red{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.15);color:var(--red);}
-
-/* Loading */
 .loader{display:flex;align-items:center;justify-content:center;gap:8px;padding:60px;color:var(--muted);font-size:14px;}
 .spinner{width:20px;height:20px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-/* Mobile */
-@media(max-width:480px){
-  .wrap{padding:12px 10px 40px;}
-  .card{padding:16px;border-radius:10px;}
-  .otp-input{width:40px;height:48px;font-size:20px;}
-}
+.field-check-row{display:flex;align-items:center;gap:8px;padding:8px 0;}
+.field-check-row input{width:18px;height:18px;accent-color:var(--accent);}
+.field-check-row label{font-size:14px;cursor:pointer;}
+@media(max-width:480px){.wrap{padding:12px 10px 40px;}.otp-input{width:40px;height:48px;font-size:20px;}.sig-type-input{font-size:22px;}}
 </style>
 </head>
 <body>
 <div class="wrap">
-
-<!-- HEADER -->
 <div class="header">
   <div class="logo"><div class="logo-box">A</div><div class="logo-txt">Ambitio</div></div>
   <h1 id="headerTitle">Signature de contrat</h1>
   <div class="sub" id="headerSub">Chargement…</div>
 </div>
-
-<!-- PROGRESS -->
-<div class="progress" id="progressBar">
-  <div class="prog-step active"></div>
-  <div class="prog-step"></div>
-  <div class="prog-step"></div>
-  <div class="prog-step"></div>
-</div>
-
-<!-- LOADING -->
+<div class="progress" id="progressBar"><div class="prog-step active"></div><div class="prog-step"></div><div class="prog-step"></div></div>
 <div id="loadingView" class="loader"><div class="spinner"></div> Chargement du contrat…</div>
+<div id="errorView" style="display:none;text-align:center;padding:40px"><div class="status-icon">❌</div><h2 style="margin-bottom:8px">Lien invalide</h2><p style="color:var(--muted);font-size:14px" id="errorMsg"></p></div>
+<div id="signedView" style="display:none;text-align:center;padding:40px"><div class="status-icon">✅</div><h2 style="margin-bottom:8px">Contrat déjà signé</h2><p style="color:var(--muted);font-size:14px">Ce contrat a déjà été signé.</p></div>
 
-<!-- ERROR -->
-<div id="errorView" style="display:none;text-align:center;padding:40px">
-  <div class="status-icon">❌</div>
-  <h2 style="margin-bottom:8px">Lien invalide</h2>
-  <p style="color:var(--muted);font-size:14px" id="errorMsg">Ce lien de signature est invalide ou a expiré.</p>
-</div>
-
-<!-- ALREADY SIGNED -->
-<div id="signedView" style="display:none;text-align:center;padding:40px">
-  <div class="status-icon">✅</div>
-  <h2 style="margin-bottom:8px">Contrat déjà signé</h2>
-  <p style="color:var(--muted);font-size:14px">Ce contrat a déjà été signé. Vous avez dû recevoir une copie par email.</p>
-</div>
-
-<!-- ═══ STEP 1: VERIFICATION OTP ═══ -->
+<!-- STEP 1: OTP -->
 <div class="step" id="step1">
   <div class="card">
     <div class="card-title">🔐 Vérification d'identité</div>
-    <p style="font-size:14px;color:var(--muted);margin-bottom:16px">Pour votre sécurité, nous devons vérifier votre identité avant de vous donner accès au contrat.</p>
-    <div class="info-box blue" id="otpInfo">Un code à 6 chiffres sera envoyé au <strong id="otpPhone"></strong></div>
-    <div id="otpSendWrap" style="margin-top:16px">
-      <button class="btn btn-primary" id="otpSendBtn" onclick="requestOtp()">📱 Recevoir le code par SMS</button>
-    </div>
-    <div id="otpVerifyWrap" style="display:none;margin-top:16px">
-      <div style="font-size:13px;font-weight:600;text-align:center;margin-bottom:8px">Entrez le code reçu par SMS</div>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:14px">Un code de vérification sera envoyé par SMS.</p>
+    <div class="info-box blue">Numéro : <strong id="otpPhone"></strong></div>
+    <div id="otpSendWrap" style="margin-top:14px"><button class="btn btn-primary" id="otpSendBtn" onclick="requestOtp()">📱 Recevoir le code</button></div>
+    <div id="otpVerifyWrap" style="display:none;margin-top:14px">
+      <div style="font-size:13px;font-weight:600;text-align:center;margin-bottom:8px">Entrez le code reçu</div>
       <div class="otp-wrap" id="otpInputs"></div>
       <button class="btn btn-primary" id="otpVerifyBtn" onclick="verifyOtp()">Vérifier</button>
-      <div style="text-align:center;margin-top:10px">
-        <button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="requestOtp()">🔄 Renvoyer le code</button>
-      </div>
+      <div style="text-align:center;margin-top:10px"><button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="requestOtp()">🔄 Renvoyer</button></div>
     </div>
   </div>
 </div>
 
-<!-- ═══ STEP 2: FILL FIELDS ═══ -->
+<!-- STEP 2: PDF + INLINE FIELDS + SIGNATURE -->
 <div class="step" id="step2">
-  <div class="card">
-    <div class="card-title">📋 Vos informations</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Remplissez les informations requises pour votre contrat.</p>
-    <div id="fieldsForm"></div>
-    <button class="btn btn-primary" style="margin-top:8px" onclick="goToStep(3)">Continuer →</button>
-  </div>
-</div>
-
-<!-- ═══ STEP 3: SIGNATURE ═══ -->
-<div class="step" id="step3">
-  <div class="card">
-    <div class="card-title">📄 Aperçu du contrat</div>
-    <div class="pdf-preview" id="pdfPreview">
-      <canvas id="previewCanvas"></canvas>
-      <div class="pdf-nav-bar">
-        <button onclick="prevPreviewPage()">◀</button>
-        <span>Page <strong id="prevPageNum">1</strong> / <strong id="prevPageTotal">1</strong></span>
-        <button onclick="nextPreviewPage()">▶</button>
+  <div class="card" style="padding:12px;text-align:center">
+    <div class="pdf-viewer" id="pdfViewer">
+      <div class="pdf-page-wrap" id="pdfPageWrap">
+        <canvas id="pdfCanvas"></canvas>
+        <div class="pdf-fields-layer" id="fieldsLayer"></div>
+      </div>
+      <div class="pdf-nav">
+        <button onclick="goPdfPage(-1)">◀</button>
+        <span>Page <strong id="pNum">1</strong> / <strong id="pTotal">1</strong></span>
+        <button onclick="goPdfPage(1)">▶</button>
       </div>
     </div>
   </div>
-
-  <div class="card" id="signatureCard">
-    <div class="card-title">✍️ Votre signature</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Dessinez votre signature ci-dessous</p>
-    <div class="sig-canvas-wrap">
-      <canvas id="signCanvas" height="160"></canvas>
-      <div class="sig-placeholder" id="signPlaceholder">Dessinez ici votre signature</div>
-      <button class="sig-clear" onclick="clearCanvas('sign')">✕ Effacer</button>
-    </div>
+  <div class="sig-panel">
+    <div class="sig-panel-title">✍️ Votre signature</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Tapez votre nom complet — il apparaîtra sur les zones de signature du contrat.</p>
+    <input class="sig-type-input" id="sigInput" type="text" placeholder="Votre Nom Prénom" oninput="onSigType()"/>
+    <div class="sig-preview" id="sigPreview"></div>
   </div>
-
-  <div class="card" id="parapheCard" style="display:none">
-    <div class="card-title">✏️ Votre paraphe</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:8px">Dessinez vos initiales ci-dessous</p>
-    <div class="sig-canvas-wrap">
-      <canvas id="parapheCanvas" height="100"></canvas>
-      <div class="sig-placeholder" id="paraphePlaceholder">Dessinez ici votre paraphe</div>
-      <button class="sig-clear" onclick="clearCanvas('paraphe')">✕ Effacer</button>
-    </div>
+  <div class="sig-panel" id="paraphePanel" style="display:none">
+    <div class="sig-panel-title">✏️ Votre paraphe</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Tapez vos initiales.</p>
+    <input class="sig-type-input" id="parapheInput" type="text" placeholder="A.F." maxlength="10" style="font-size:22px" oninput="onParapheType()"/>
   </div>
-
-  <div class="card">
-    <div class="field-check">
-      <input type="checkbox" id="acceptCheck"/>
+  <div class="card" style="margin-top:14px">
+    <div class="field-check-row">
+      <input type="checkbox" id="acceptCheck" onchange="updateBtn()"/>
       <label for="acceptCheck">J'ai lu le contrat et j'accepte ses termes et conditions</label>
     </div>
-    <button class="btn btn-green" id="submitSignBtn" onclick="submitSignature()" disabled>✍️ Signer le contrat</button>
+    <button class="btn btn-green" id="submitBtn" onclick="doSubmit()" disabled>✍️ Signer le contrat</button>
   </div>
 </div>
 
-<!-- ═══ STEP 4: DONE ═══ -->
-<div class="step" id="step4">
+<!-- STEP 3: DONE -->
+<div class="step" id="step3">
   <div class="card" style="text-align:center">
     <div class="status-icon">🎉</div>
     <h2 style="margin-bottom:8px">Contrat signé avec succès !</h2>
-    <p style="color:var(--muted);font-size:14px;margin-bottom:16px">Merci. Une copie de votre contrat signé vous sera envoyée par email à <strong id="doneEmail"></strong>.</p>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:14px">Une copie vous sera envoyée à <strong id="doneEmail"></strong>.</p>
     <div class="info-box green">Le document signé est horodaté et conservé de manière sécurisée.</div>
   </div>
 </div>
-
 </div>
 
 <script>
-var db=firebase.firestore();
-var REQ=null;     // signature request doc
-var REQ_ID=null;  // doc id
-var TPL=null;     // template doc
-var pdfDoc=null;  // pdf.js doc for preview
-var pdfBytes=null;// raw PDF bytes for pdf-lib
-var previewPage=1;
-var previewTotal=1;
-var currentStep=1;
-var fieldValues={};
-var canvases={sign:{drawing:false,hasData:false},paraphe:{drawing:false,hasData:false}};
+var db=firebase.firestore(),REQ=null,REQ_ID=null,TPL=null;
+var pdfDoc=null,pdfBytes=null,curPage=1,totalPages=1;
+var tplScale=1.2,renderScale=1;
+var fieldValues={},sigText='',parapheText='';
 
 /* ═══ INIT ═══ */
-(function init(){
-  var params=new URLSearchParams(window.location.search);
-  var token=params.get('t');
-  if(!token){showError('Aucun token dans le lien.');return;}
-  // Find request by token
-  db.collection('signature_requests').where('token','==',token).limit(1).get().then(function(sn){
-    if(sn.empty){showError('Ce lien de signature est invalide ou a expiré.');return;}
-    var doc=sn.docs[0];
-    REQ=doc.data();REQ_ID=doc.id;
-    if(REQ.status==='signed'){
-      document.getElementById('loadingView').style.display='none';
-      document.getElementById('signedView').style.display='block';
-      document.getElementById('progressBar').style.display='none';
-      return;
-    }
-    // Update status to opened
-    if(REQ.status==='pending'){
-      db.collection('signature_requests').doc(REQ_ID).update({
-        status:'opened',
-        events:firebase.firestore.FieldValue.arrayUnion({type:'opened',date:new Date().toISOString()})
-      });
-      REQ.status='opened';
-    }
+(function(){
+  var t=new URLSearchParams(location.search).get('t');
+  if(!t){showErr('Aucun token.');return;}
+  db.collection('signature_requests').where('token','==',t).limit(1).get().then(function(sn){
+    if(sn.empty){showErr('Lien invalide ou expiré.');return;}
+    REQ=sn.docs[0].data();REQ_ID=sn.docs[0].id;
+    if(REQ.status==='signed'){hide('loadingView');show('signedView');hide('progressBar');return;}
+    if(REQ.status==='pending')db.collection('signature_requests').doc(REQ_ID).update({status:'opened',events:firebase.firestore.FieldValue.arrayUnion({type:'opened',date:new Date().toISOString()})});
     document.getElementById('headerTitle').textContent=REQ.templateName||'Signature de contrat';
     document.getElementById('headerSub').textContent='Contrat pour '+REQ.clientName;
-    // Mask phone
     var ph=REQ.clientPhone||'';
-    var masked=ph.length>4?ph.slice(0,-4).replace(/\d/g,'*')+ph.slice(-4):ph;
-    document.getElementById('otpPhone').textContent=masked;
-    // Pre-fill field values from request
+    document.getElementById('otpPhone').textContent=ph.length>4?ph.slice(0,-4).replace(/\d/g,'*')+ph.slice(-4):ph;
     if(REQ.clientName)fieldValues.nom_prenom=REQ.clientName;
     if(REQ.clientEmail)fieldValues.email=REQ.clientEmail;
     if(REQ.clientPhone)fieldValues.telephone=REQ.clientPhone;
-    // Load template PDF
-    loadTemplatePdf();
-  }).catch(function(e){
-    showError('Erreur: '+e.message);
-  });
+    fieldValues.date_signature=new Date().toLocaleDateString('fr-FR');
+    loadPdf();
+  }).catch(function(e){showErr(e.message);});
 })();
 
-function showError(msg){
-  document.getElementById('loadingView').style.display='none';
-  document.getElementById('errorView').style.display='block';
-  document.getElementById('errorMsg').textContent=msg;
-  document.getElementById('progressBar').style.display='none';
-}
+function showErr(m){hide('loadingView');show('errorView');hide('progressBar');document.getElementById('errorMsg').textContent=m;}
+function show(id){document.getElementById(id).style.display='';}
+function hide(id){document.getElementById(id).style.display='none';}
 
-function loadTemplatePdf(){
-  if(!REQ.templateId){finishLoading();return;}
-  db.collection('signature_templates').doc(REQ.templateId).get().then(function(doc){
-    if(!doc.exists){finishLoading();return;}
-    TPL=doc.data();
-    if(TPL.pdfBase64){
-      decodePdf(TPL.pdfBase64);
-    }else{
-      // Load chunks
-      db.collection('signature_templates').doc(REQ.templateId).collection('pdf').orderBy('chunk').get().then(function(sn){
-        var parts=[];sn.forEach(function(d){parts.push(d.data().data);});
-        decodePdf('data:application/pdf;base64,'+parts.join(''));
-      }).catch(function(){finishLoading();});
-    }
-  }).catch(function(){finishLoading();});
+function loadPdf(){
+  if(!REQ.templateId){finishLoad();return;}
+  db.collection('signature_templates').doc(REQ.templateId).get().then(function(d){
+    if(!d.exists){finishLoad();return;}
+    TPL=d.data();
+    if(TPL.pdfBase64)decodePdf(TPL.pdfBase64);
+    else db.collection('signature_templates').doc(REQ.templateId).collection('pdf').orderBy('chunk').get().then(function(sn){
+      var p=[];sn.forEach(function(d){p.push(d.data().data);});
+      decodePdf('data:application/pdf;base64,'+p.join(''));
+    }).catch(function(){finishLoad();});
+  }).catch(function(){finishLoad();});
 }
-
-function decodePdf(dataUrl){
+function decodePdf(url){
   try{
-    var b64=dataUrl.split(',')[1]||dataUrl;
-    var raw=atob(b64);
+    var b=url.split(',')[1]||url,raw=atob(b);
     pdfBytes=new Uint8Array(raw.length);
     for(var i=0;i<raw.length;i++)pdfBytes[i]=raw.charCodeAt(i);
-    pdfjsLib.getDocument({data:pdfBytes.slice()}).promise.then(function(pdf){
-      pdfDoc=pdf;previewTotal=pdf.numPages;
-      finishLoading();
-    }).catch(function(){finishLoading();});
-  }catch(e){finishLoading();}
+    pdfjsLib.getDocument({data:pdfBytes.slice()}).promise.then(function(pdf){pdfDoc=pdf;totalPages=pdf.numPages;finishLoad();}).catch(function(){finishLoad();});
+  }catch(e){finishLoad();}
 }
-
-function finishLoading(){
-  document.getElementById('loadingView').style.display='none';
-  // Build OTP inputs
-  var otpH='';for(var i=0;i<6;i++)otpH+='<input class="otp-input" type="tel" maxlength="1" id="otp'+i+'" oninput="otpNav(this,'+i+')" onkeydown="otpBack(event,'+i+')"/>';
-  document.getElementById('otpInputs').innerHTML=otpH;
-  buildFieldsForm();
-  initCanvases();
+function finishLoad(){
+  hide('loadingView');
+  var h='';for(var i=0;i<6;i++)h+='<input class="otp-input" type="tel" maxlength="1" id="otp'+i+'" oninput="otpNav(this,'+i+')" onkeydown="otpBack(event,'+i+')"/>';
+  document.getElementById('otpInputs').innerHTML=h;
+  var fields=REQ.fields||[];
+  if(fields.some(function(f){return f.fieldType==='paraphe';}))show('paraphePanel');
+  document.getElementById('sigInput').value=REQ.clientName||'';
+  sigText=REQ.clientName||'';onSigType();
   goToStep(1);
 }
 
 /* ═══ STEPS ═══ */
 function goToStep(n){
-  currentStep=n;
-  for(var i=1;i<=4;i++){
-    var el=document.getElementById('step'+i);
-    if(el)el.classList.toggle('active',i===n);
-  }
-  // Update progress
-  var bars=document.querySelectorAll('.prog-step');
-  bars.forEach(function(b,idx){
-    b.className='prog-step';
-    if(idx<n-1)b.classList.add('done');
-    else if(idx===n-1)b.classList.add('active');
-  });
-  // Step 2 validation
-  if(n===2)validateStep2();
-  // Step 3: render PDF preview + check sig fields
-  if(n===3){
-    renderPreviewPage();
-    var fields=REQ.fields||[];
-    var hasParaphe=fields.some(function(f){return f.fieldType==='paraphe';});
-    document.getElementById('parapheCard').style.display=hasParaphe?'':'none';
-    updateSubmitBtn();
-  }
-  if(n===4)document.getElementById('doneEmail').textContent=REQ.clientEmail||'';
-  window.scrollTo(0,0);
+  for(var i=1;i<=3;i++)document.getElementById('step'+i).classList.toggle('active',i===n);
+  document.querySelectorAll('.prog-step').forEach(function(b,i){b.className='prog-step';if(i<n-1)b.classList.add('done');else if(i===n-1)b.classList.add('active');});
+  if(n===2){renderPage();updateBtn();}
+  if(n===3)document.getElementById('doneEmail').textContent=REQ.clientEmail||'';
+  scrollTo(0,0);
 }
 
 /* ═══ OTP ═══ */
 function otpNav(el,i){if(el.value&&i<5)document.getElementById('otp'+(i+1)).focus();}
 function otpBack(e,i){if(e.key==='Backspace'&&!e.target.value&&i>0)document.getElementById('otp'+(i-1)).focus();}
-
 function requestOtp(){
-  var btn=document.getElementById('otpSendBtn');
-  btn.disabled=true;btn.textContent='Envoi en cours…';
-  // Write OTP request to webhook_inbox for Cloud Function to process
-  db.collection('webhook_inbox').add({
-    action:'signature_otp_send',
-    signatureRequestId:REQ_ID,
-    phone:REQ.clientPhone,
-    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){
-    btn.textContent='✅ Code envoyé';
-    document.getElementById('otpSendWrap').style.display='none';
-    document.getElementById('otpVerifyWrap').style.display='block';
-    document.getElementById('otp0').focus();
-  }).catch(function(e){
-    btn.disabled=false;btn.textContent='📱 Recevoir le code par SMS';
-    alert('Erreur: '+e.message);
-  });
+  var b=document.getElementById('otpSendBtn');b.disabled=true;b.textContent='Envoi…';
+  db.collection('webhook_inbox').add({action:'signature_otp_send',signatureRequestId:REQ_ID,phone:REQ.clientPhone,createdAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
+    b.textContent='✅ Code envoyé';hide('otpSendWrap');show('otpVerifyWrap');document.getElementById('otp0').focus();
+  }).catch(function(e){b.disabled=false;b.textContent='📱 Recevoir le code';alert(e.message);});
 }
-
 function verifyOtp(){
   var code='';for(var i=0;i<6;i++)code+=document.getElementById('otp'+i).value;
   if(code.length!==6){alert('Entrez les 6 chiffres.');return;}
-  var btn=document.getElementById('otpVerifyBtn');
-  btn.disabled=true;btn.textContent='Vérification…';
-  // Write verify attempt to webhook_inbox
-  db.collection('webhook_inbox').add({
-    action:'signature_otp_verify',
-    signatureRequestId:REQ_ID,
-    code:code,
-    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){
-    // Poll for verification result
-    pollOtpResult(btn);
-  }).catch(function(e){
-    btn.disabled=false;btn.textContent='Vérifier';
-    alert('Erreur: '+e.message);
-  });
+  var b=document.getElementById('otpVerifyBtn');b.disabled=true;b.textContent='Vérification…';
+  db.collection('webhook_inbox').add({action:'signature_otp_verify',signatureRequestId:REQ_ID,code:code,createdAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
+    var att=0,iv=setInterval(function(){att++;
+      db.collection('signature_requests').doc(REQ_ID).get().then(function(d){
+        var r=d.data();
+        if(r.otpVerified){clearInterval(iv);goToStep(2);}
+        else if(r.otpError){clearInterval(iv);b.disabled=false;b.textContent='Vérifier';alert(r.otpError);db.collection('signature_requests').doc(REQ_ID).update({otpError:firebase.firestore.FieldValue.delete()});}
+        else if(att>15){clearInterval(iv);goToStep(2);}
+      });
+    },1500);
+  }).catch(function(e){b.disabled=false;b.textContent='Vérifier';alert(e.message);});
 }
 
-function pollOtpResult(btn){
-  var attempts=0;
-  var interval=setInterval(function(){
-    attempts++;
-    db.collection('signature_requests').doc(REQ_ID).get().then(function(doc){
-      var d=doc.data();
-      if(d.otpVerified===true){
-        clearInterval(interval);
-        goToStep(2);
-      }else if(d.otpError){
-        clearInterval(interval);
-        btn.disabled=false;btn.textContent='Vérifier';
-        alert(d.otpError);
-        // Clear error
-        db.collection('signature_requests').doc(REQ_ID).update({otpError:firebase.firestore.FieldValue.delete()});
-      }else if(attempts>15){
-        clearInterval(interval);
-        btn.disabled=false;btn.textContent='Vérifier';
-        // Fallback: proceed anyway (Cloud Function may not be deployed yet)
-        goToStep(2);
-      }
-    });
-  },1500);
-}
-
-/* ═══ FIELDS FORM ═══ */
-function buildFieldsForm(){
-  var fields=REQ.fields||[];
-  var form=document.getElementById('fieldsForm');
-  var h='';
-  var done={};
-  fields.forEach(function(f){
-    // Skip signature/paraphe (handled in step 3)
-    if(f.fieldType==='signature'||f.fieldType==='paraphe')return;
-    // Deduplicate by fieldType (same field type = one input)
-    if(done[f.fieldType])return;
-    done[f.fieldType]=true;
-    var req=f.required!==false;
-    var val=fieldValues[f.fieldType]||'';
-    if(f.fieldType==='date_signature')val=new Date().toLocaleDateString('fr-FR');
-    if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
-      h+='<div class="field-check">';
-      h+='<input type="checkbox" id="fv_'+f.fieldType+'" onchange="fieldValues[\''+f.fieldType+'\']=this.checked;validateStep2()"'+(req?' required':'')+'>';
-      h+='<label for="fv_'+f.fieldType+'">'+esc(f.label)+(req?' <span style="color:var(--red)">*</span>':'')+'</label>';
-      h+='</div>';
-    }else{
-      h+='<div class="field-group">';
-      h+='<div class="field-label">'+esc(f.label)+(req?' <span class="req">*</span>':'')+'</div>';
-      var type=f.fieldType==='email'?'email':f.fieldType==='telephone'?'tel':'text';
-      h+='<input class="field-input" type="'+type+'" id="fv_'+f.fieldType+'" value="'+esc(val)+'" placeholder="'+esc(f.label)+'" oninput="fieldValues[\''+f.fieldType+'\']=this.value;validateStep2()"'+(req?' required':'')+'>';
-      h+='</div>';
-    }
-  });
-  if(!h)h='<div style="text-align:center;padding:12px;color:var(--muted);font-size:13px">Aucune information à remplir.</div>';
-  form.innerHTML=h;
-  // Set pre-filled values
-  Object.keys(fieldValues).forEach(function(k){
-    var el=document.getElementById('fv_'+k);
-    if(el&&el.type!=='checkbox')el.value=fieldValues[k];
-  });
-}
-
-function validateStep2(){
-  var fields=REQ.fields||[];
-  var done={};
-  var valid=true;
-  fields.forEach(function(f){
-    if(f.fieldType==='signature'||f.fieldType==='paraphe')return;
-    if(done[f.fieldType])return;
-    done[f.fieldType]=true;
-    if(f.required===false)return;
-    var el=document.getElementById('fv_'+f.fieldType);
-    if(!el)return;
-    if(el.type==='checkbox'&&!el.checked)valid=false;
-    else if(el.type!=='checkbox'&&!el.value.trim())valid=false;
-  });
-  return valid;
-}
-
-/* ═══ SIGNATURE CANVASES ═══ */
-function initCanvases(){
-  ['sign','paraphe'].forEach(function(id){
-    var canvas=document.getElementById(id+'Canvas');
-    if(!canvas)return;
-    canvas.width=canvas.parentElement.clientWidth-4;
-    var ctx=canvas.getContext('2d');
-    ctx.strokeStyle='#1e293b';ctx.lineWidth=2.5;ctx.lineCap='round';ctx.lineJoin='round';
-    var state=canvases[id];
-    function getPos(e){
-      var r=canvas.getBoundingClientRect();
-      return{x:e.clientX-r.left,y:e.clientY-r.top};
-    }
-    function start(e){
-      state.drawing=true;var p=getPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);
-      document.getElementById(id+'Placeholder').style.display='none';
-    }
-    function move(e){if(!state.drawing)return;var p=getPos(e);ctx.lineTo(p.x,p.y);ctx.stroke();}
-    function stop(){state.drawing=false;state.hasData=true;updateSubmitBtn();}
-    canvas.addEventListener('mousedown',start);
-    canvas.addEventListener('mousemove',move);
-    canvas.addEventListener('mouseup',stop);
-    canvas.addEventListener('mouseleave',stop);
-    canvas.addEventListener('touchstart',function(e){e.preventDefault();start(e.touches[0]);},{passive:false});
-    canvas.addEventListener('touchmove',function(e){e.preventDefault();move(e.touches[0]);},{passive:false});
-    canvas.addEventListener('touchend',function(e){e.preventDefault();stop();},{passive:false});
-  });
-  // Accept checkbox
-  document.getElementById('acceptCheck').addEventListener('change',updateSubmitBtn);
-}
-
-function clearCanvas(id){
-  var canvas=document.getElementById(id+'Canvas');
-  var ctx=canvas.getContext('2d');
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.strokeStyle='#1e293b';ctx.lineWidth=2.5;ctx.lineCap='round';ctx.lineJoin='round';
-  canvases[id].hasData=false;
-  document.getElementById(id+'Placeholder').style.display='';
-  updateSubmitBtn();
-}
-
-function updateSubmitBtn(){
-  var hasSign=canvases.sign.hasData;
-  var fields=REQ.fields||[];
-  var needsParaphe=fields.some(function(f){return f.fieldType==='paraphe';});
-  var hasParaphe=!needsParaphe||canvases.paraphe.hasData;
-  var accepted=document.getElementById('acceptCheck').checked;
-  document.getElementById('submitSignBtn').disabled=!(hasSign&&hasParaphe&&accepted);
-}
-
-/* ═══ PDF PREVIEW ═══ */
-function renderPreviewPage(){
+/* ═══ PDF RENDER + OVERLAYS ═══ */
+function renderPage(){
   if(!pdfDoc)return;
-  document.getElementById('prevPageNum').textContent=previewPage;
-  document.getElementById('prevPageTotal').textContent=previewTotal;
-  pdfDoc.getPage(previewPage).then(function(page){
-    var scale=Math.min((window.innerWidth-60)/page.getViewport({scale:1}).width,1.5);
-    var vp=page.getViewport({scale:scale});
-    var canvas=document.getElementById('previewCanvas');
-    canvas.width=vp.width;canvas.height=vp.height;
-    page.render({canvasContext:canvas.getContext('2d'),viewport:vp});
+  document.getElementById('pNum').textContent=curPage;
+  document.getElementById('pTotal').textContent=totalPages;
+  pdfDoc.getPage(curPage).then(function(page){
+    var maxW=document.getElementById('pdfViewer').clientWidth-24;
+    var nat=page.getViewport({scale:1});
+    renderScale=Math.min(maxW/nat.width,1.5);
+    var vp=page.getViewport({scale:renderScale});
+    var c=document.getElementById('pdfCanvas');
+    c.width=vp.width;c.height=vp.height;
+    page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise.then(function(){renderOverlays();});
+    var l=document.getElementById('fieldsLayer');l.style.width=vp.width+'px';l.style.height=vp.height+'px';
   });
 }
-function prevPreviewPage(){if(previewPage>1){previewPage--;renderPreviewPage();}}
-function nextPreviewPage(){if(previewPage<previewTotal){previewPage++;renderPreviewPage();}}
+function goPdfPage(d){var p=curPage+d;if(p>=1&&p<=totalPages){curPage=p;renderPage();}}
 
-/* ═══ SUBMIT SIGNATURE ═══ */
-function submitSignature(){
-  var btn=document.getElementById('submitSignBtn');
-  btn.disabled=true;btn.innerHTML='<div class="spinner" style="width:16px;height:16px;border-width:2px"></div> Génération du contrat signé…';
-  generateSignedPdf().then(function(signedB64){
-    // Save to Firestore
-    var update={
-      status:'signed',
-      signedAt:firebase.firestore.FieldValue.serverTimestamp(),
-      fieldValues:fieldValues,
-      signatureDataUrl:document.getElementById('signCanvas').toDataURL('image/png'),
-      events:firebase.firestore.FieldValue.arrayUnion({type:'signed',date:new Date().toISOString()})
-    };
-    // Store PDF (chunk if needed)
-    var pdfSize=signedB64.length;
-    if(pdfSize<900000){
-      update.signedPdfBase64=signedB64;
+function renderOverlays(){
+  var layer=document.getElementById('fieldsLayer');
+  var fields=REQ.fields||[];
+  var r=renderScale/tplScale;
+  var h='';
+  fields.forEach(function(f){
+    if(f.page!==curPage)return;
+    var x=f.x*r,y=f.y*r,w=f.w*r,fh=f.h*r;
+    var val=fieldValues[f.fieldType]||'';
+    h+='<div class="field-overlay" style="left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+fh+'px">';
+    if(f.fieldType==='signature'){
+      var ok=sigText.length>0;
+      h+='<div class="sig-zone'+(ok?' filled':'')+'" onclick="document.getElementById(\'sigInput\').focus();document.getElementById(\'sigInput\').scrollIntoView({behavior:\'smooth\',block:\'center\'})">';
+      h+=ok?'<div class="sig-text" style="font-size:'+Math.min(fh*.6,20)+'px">'+esc(sigText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✍️ Signature</span>';
+      h+='</div>';
+    }else if(f.fieldType==='paraphe'){
+      var ok2=parapheText.length>0;
+      h+='<div class="sig-zone'+(ok2?' filled':'')+'" onclick="document.getElementById(\'parapheInput\').focus();document.getElementById(\'parapheInput\').scrollIntoView({behavior:\'smooth\',block:\'center\'})">';
+      h+=ok2?'<div class="sig-text" style="font-size:'+Math.min(fh*.55,16)+'px">'+esc(parapheText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✏️ Paraphe</span>';
+      h+='</div>';
+    }else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
+      h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[f.fieldType]?'checked':'')+' onchange="fieldValues[\''+f.fieldType+'\']=this.checked;updateBtn()"/></div>';
+    }else{
+      var fs=Math.min(fh*.55,13);
+      h+='<input type="text" value="'+esc(val)+'" placeholder="'+esc(f.label)+'" style="font-size:'+fs+'px" oninput="fieldValues[\''+f.fieldType+'\']=this.value;updateBtn()"/>';
     }
-    return db.collection('signature_requests').doc(REQ_ID).update(update).then(function(){
-      if(pdfSize>=900000)return saveSignedPdfChunks(signedB64);
+    h+='</div>';
+  });
+  layer.innerHTML=h;
+}
+
+/* ═══ SIGNATURE / PARAPHE TYPED ═══ */
+function onSigType(){
+  sigText=document.getElementById('sigInput').value;
+  document.getElementById('sigPreview').textContent=sigText;
+  renderOverlays();updateBtn();
+}
+function onParapheType(){
+  parapheText=document.getElementById('parapheInput').value;
+  renderOverlays();updateBtn();
+}
+
+/* ═══ VALIDATION ═══ */
+function updateBtn(){
+  var fields=REQ.fields||[],ok=true,done={};
+  fields.forEach(function(f){
+    if(done[f.fieldType])return;done[f.fieldType]=true;
+    if(f.required===false)return;
+    if(f.fieldType==='signature'&&!sigText.trim())ok=false;
+    else if(f.fieldType==='paraphe'&&!parapheText.trim())ok=false;
+    else if((f.fieldType==='case_cocher'||f.fieldType==='lu_approuve')&&!fieldValues[f.fieldType])ok=false;
+    else if(f.fieldType!=='signature'&&f.fieldType!=='paraphe'&&f.fieldType!=='case_cocher'&&f.fieldType!=='lu_approuve'&&!(fieldValues[f.fieldType]||'').trim())ok=false;
+  });
+  document.getElementById('submitBtn').disabled=!(ok&&document.getElementById('acceptCheck').checked);
+}
+
+/* ═══ SUBMIT ═══ */
+function doSubmit(){
+  var btn=document.getElementById('submitBtn');
+  btn.disabled=true;btn.innerHTML='<div class="spinner" style="width:16px;height:16px;border-width:2px"></div> Génération…';
+  genPdf().then(function(b64){
+    var u={status:'signed',signedAt:firebase.firestore.FieldValue.serverTimestamp(),fieldValues:fieldValues,signatureText:sigText,parapheText:parapheText,events:firebase.firestore.FieldValue.arrayUnion({type:'signed',date:new Date().toISOString()})};
+    if(b64.length<900000)u.signedPdfBase64=b64;
+    return db.collection('signature_requests').doc(REQ_ID).update(u).then(function(){
+      if(b64.length>=900000)return saveChunks(b64);
     });
   }).then(function(){
-    // Notify via webhook_inbox
-    db.collection('webhook_inbox').add({
-      action:'signature_completed',
-      signatureRequestId:REQ_ID,
-      clientName:REQ.clientName,
-      clientEmail:REQ.clientEmail,
-      templateName:REQ.templateName,
-      createdAt:firebase.firestore.FieldValue.serverTimestamp()
-    });
-    goToStep(4);
-  }).catch(function(e){
-    btn.disabled=false;btn.textContent='✍️ Signer le contrat';
-    alert('Erreur: '+e.message);
-    console.error('[SIGN]',e);
-  });
+    db.collection('webhook_inbox').add({action:'signature_completed',signatureRequestId:REQ_ID,clientName:REQ.clientName,clientEmail:REQ.clientEmail,templateName:REQ.templateName,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    goToStep(3);
+  }).catch(function(e){btn.disabled=false;btn.textContent='✍️ Signer le contrat';alert('Erreur: '+e.message);console.error(e);});
 }
-
-function saveSignedPdfChunks(b64){
-  var chunkSize=600000;
-  var chunks=[];
-  for(var i=0;i<b64.length;i+=chunkSize)chunks.push(b64.slice(i,i+chunkSize));
+function saveChunks(b64){
+  var cs=600000,ch=[];for(var i=0;i<b64.length;i+=cs)ch.push(b64.slice(i,i+cs));
   var batch=db.batch();
-  chunks.forEach(function(c,idx){
-    var ref=db.collection('signature_requests').doc(REQ_ID).collection('signed_pdf').doc('chunk_'+String(idx).padStart(3,'0'));
-    batch.set(ref,{chunk:idx,data:c});
-  });
+  ch.forEach(function(c,i){batch.set(db.collection('signature_requests').doc(REQ_ID).collection('signed_pdf').doc('chunk_'+String(i).padStart(3,'0')),{chunk:i,data:c});});
   return batch.commit();
 }
 
-/* ═══ PDF GENERATION (pdf-lib) ═══ */
-async function generateSignedPdf(){
-  var PDFLib=window.PDFLib;
-  var pdfDocLib=await PDFLib.PDFDocument.load(pdfBytes);
-  var font=await pdfDocLib.embedFont(PDFLib.StandardFonts.Helvetica);
-  var pages=pdfDocLib.getPages();
-  var fields=REQ.fields||[];
-  var scale=REQ.pdfScale||1.2;
-
-  // Get signature/paraphe images
-  var signDataUrl=document.getElementById('signCanvas').toDataURL('image/png');
-  var signImg=await pdfDocLib.embedPng(signDataUrl);
-  var parapheImg=null;
-  if(canvases.paraphe.hasData){
-    var pDataUrl=document.getElementById('parapheCanvas').toDataURL('image/png');
-    parapheImg=await pdfDocLib.embedPng(pDataUrl);
-  }
-
+/* ═══ PDF GEN (pdf-lib) ═══ */
+async function genPdf(){
+  var P=window.PDFLib,doc=await P.PDFDocument.load(pdfBytes);
+  var font=await doc.embedFont(P.StandardFonts.Helvetica);
+  var fontB=await doc.embedFont(P.StandardFonts.HelveticaBold);
+  var pages=doc.getPages(),fields=REQ.fields||[];
+  var sigImg=sigText?await makeSigPng(doc,sigText,32):null;
+  var parImg=parapheText?await makeSigPng(doc,parapheText,20):null;
   fields.forEach(function(f){
-    var pageIdx=f.page-1;
-    if(pageIdx<0||pageIdx>=pages.length)return;
-    var page=pages[pageIdx];
-    var ph=page.getHeight();
-    // Convert coordinates from canvas (top-left, scaled) to PDF (bottom-left, native)
-    var pdfX=f.x/scale;
-    var pdfY=ph-(f.y/scale)-(f.h/scale);
-    var pdfW=f.w/scale;
-    var pdfH=f.h/scale;
-
-    if(f.fieldType==='signature'){
-      page.drawImage(signImg,{x:pdfX,y:pdfY,width:pdfW,height:pdfH});
-    }else if(f.fieldType==='paraphe'&&parapheImg){
-      page.drawImage(parapheImg,{x:pdfX,y:pdfY,width:pdfW,height:pdfH});
-    }else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
-      var checked=fieldValues[f.fieldType];
-      if(checked){
-        var fontSize=Math.min(pdfH*0.8,14);
-        page.drawText('✓',{x:pdfX+2,y:pdfY+pdfH*0.15,size:fontSize,font:font,color:PDFLib.rgb(0,0,0)});
-      }
+    var pi=f.page-1;if(pi<0||pi>=pages.length)return;
+    var pg=pages[pi],ph=pg.getHeight();
+    var px=f.x/tplScale,py=ph-f.y/tplScale-f.h/tplScale,pw=f.w/tplScale,pfh=f.h/tplScale;
+    if(f.fieldType==='signature'&&sigImg)pg.drawImage(sigImg,{x:px,y:py,width:pw,height:pfh});
+    else if(f.fieldType==='paraphe'&&parImg)pg.drawImage(parImg,{x:px,y:py,width:pw,height:pfh});
+    else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
+      if(fieldValues[f.fieldType])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
     }else{
-      var val=fieldValues[f.fieldType]||'';
-      if(!val)return;
-      var fontSize=Math.min(pdfH*0.65,11);
-      page.drawText(val,{x:pdfX+3,y:pdfY+pdfH*0.25,size:fontSize,font:font,color:PDFLib.rgb(0,0,0)});
+      var v=fieldValues[f.fieldType]||'';if(!v)return;
+      pg.drawText(v,{x:px+2,y:py+pfh*.25,size:Math.min(pfh*.65,11),font:font,color:P.rgb(0,0,0)});
     }
   });
-
-  var bytes=await pdfDocLib.save();
-  // Convert to base64
-  var binary='';
-  var arr=new Uint8Array(bytes);
-  for(var i=0;i<arr.length;i++)binary+=String.fromCharCode(arr[i]);
-  return btoa(binary);
+  var bytes=await doc.save();
+  var bin='';var a=new Uint8Array(bytes);for(var i=0;i<a.length;i++)bin+=String.fromCharCode(a[i]);
+  return btoa(bin);
 }
-
-/* ═══ UTILS ═══ */
+async function makeSigPng(doc,text,sz){
+  var c=document.createElement('canvas');c.width=500;c.height=80;
+  var ctx=c.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,500,80);
+  ctx.font='bold '+sz+'px Dancing Script';ctx.fillStyle='#1a1a2e';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(text,250,40);
+  var d=c.toDataURL('image/png').split(',')[1];
+  var raw=atob(d),arr=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+  return doc.embedPng(arr);
+}
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
 </script>
 </body>
