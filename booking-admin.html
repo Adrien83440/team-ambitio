@@ -1098,11 +1098,20 @@ h+='</div>';
 
 h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:20px 0 8px">Calendrier pour créer les événements</div>';
 h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:10px">Les nouveaux RDV seront ajoutés dans ce calendrier.</div>';
-h+='<select class="bs" id="exEventCal" style="width:100%" onchange="setEventCalendar(this.value)">';
+h+='<select class="bs" id="exEventCal" style="display:none" onchange="setEventCalendar(this.value)">';
 calList.forEach(function(cal,ci){
-h+='<option value="'+ci+'"'+(cal.createEvents?' selected':'')+'>'+esc(cal.name)+(cal.primary?' (principal)':'')+'</option>';
+h+='<option value="'+ci+'"'+(cal.createEvents?' selected':'')+'>'+esc(cal.name)+'</option>';
 });
 h+='</select>';
+calList.forEach(function(cal,ci){
+var sel=cal.createEvents;
+h+='<div onclick="document.getElementById(\'exEventCal\').value=\''+ci+'\';document.getElementById(\'exEventCal\').dispatchEvent(new Event(\'change\'));document.querySelectorAll(\'[data-evtcal]\').forEach(function(x){x.style.borderColor=\'rgba(255,255,255,.07)\';x.querySelector(\'.evtcal-dot\').style.opacity=\'0\';});this.style.borderColor=\'rgba(99,102,241,.5)\';this.querySelector(\'.evtcal-dot\').style.opacity=\'1\';" data-evtcal="'+ci+'" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#141420;border:2px solid '+(sel?'rgba(99,102,241,.5)':'rgba(255,255,255,.07)')+';border-radius:10px;margin-bottom:6px;cursor:pointer;transition:border-color .2s">';
+h+='<div style="width:12px;height:12px;border-radius:3px;background:'+esc(cal.color||'#4285f4')+';flex-shrink:0"></div>';
+h+='<span style="font-size:13px;font-weight:600;flex:1;color:rgba(255,255,255,.85)">'+esc(cal.name)+'</span>';
+if(cal.primary)h+='<span style="font-size:10px;color:rgba(255,255,255,.28);margin-right:4px">principal</span>';
+h+='<div class="evtcal-dot" style="width:18px;height:18px;border-radius:50%;background:rgba(99,102,241,.9);display:flex;align-items:center;justify-content:center;opacity:'+(sel?'1':'0')+';transition:opacity .2s;flex-shrink:0"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5L4.5 7.5L8 3" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+h+='</div>';
+});
 
 h+='<div class="cd-save-bar" style="margin-top:16px;border-top:0;justify-content:flex-end"><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }else{
