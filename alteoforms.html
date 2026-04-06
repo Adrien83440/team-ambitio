@@ -76,6 +76,21 @@
 .ed-btn{width:28px;height:28px;border-radius:7px;border:1px solid rgba(255,255,255,.08);background:0;color:rgba(255,255,255,.3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .15s;flex-shrink:0}
 .ed-btn:hover{border-color:rgba(255,255,255,.2);color:#fff;background:rgba(255,255,255,.04)}
 .ed-btn-del:hover{border-color:rgba(239,68,68,.4);color:#ef4444;background:rgba(239,68,68,.06)}
+/* Drag & Drop */
+.ed-field[draggable="true"]{cursor:grab}
+.ed-field[draggable="true"]:active{cursor:grabbing}
+.ed-field.dragging{opacity:.3;border-style:dashed}
+.ed-field.drag-over-top{border-top:2px solid #f59e0b!important;margin-top:-1px}
+.ed-field.drag-over-bot{border-bottom:2px solid #f59e0b!important;margin-bottom:-1px}
+.ed-drag-handle{color:rgba(255,255,255,.15);font-size:14px;cursor:grab;flex-shrink:0;padding:0 2px;user-select:none;transition:color .15s}
+.ed-field:hover .ed-drag-handle{color:rgba(255,255,255,.35)}
+/* Drag and drop */
+.ed-field[draggable="true"]{cursor:grab}
+.ed-field[draggable="true"]:active{cursor:grabbing}
+.ed-field.dragging{opacity:.3;border-style:dashed}
+.ed-field.drag-over{border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.04)}
+.ed-drag-handle{cursor:grab;color:rgba(255,255,255,.15);font-size:14px;flex-shrink:0;padding:0 2px;user-select:none;transition:color .15s}
+.ed-field:hover .ed-drag-handle{color:rgba(255,255,255,.35)}
 /* Field group label */
 .ed-group-label{font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
 .ed-field-row{margin-bottom:14px}
@@ -408,7 +423,8 @@ var groupStyle='';
 if(isGrouped)groupStyle+='margin-top:-4px;border-top-left-radius:0;border-top-right-radius:0;border-left:2px solid rgba(245,158,11,.25);';
 if(nextGrouped)groupStyle+='margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;';
 if(isGrouped&&!nextGrouped)groupStyle+='border-bottom-left-radius:10px;';
-h+='<div class="ed-field" style="'+groupStyle+'">';
+h+='<div class="ed-field" style="'+groupStyle+'" draggable="true" data-fidx="'+i+'">';
+h+='<span class="ed-drag-handle">⠿</span>';
 h+='<div class="ed-field-icon">'+(FT_ICONS[fld.type]||'?')+'</div>';
 h+='<div class="ed-field-info"><div class="ed-field-name">'+esc(fld.label)+'</div><div class="ed-field-meta">';
 h+='<span class="ed-badge ed-badge-type">'+(FT_LABELS[fld.type]||fld.type)+'</span>';
@@ -534,6 +550,48 @@ loadResponses();
 }
 
 el.innerHTML=h;
+
+// Bind drag & drop on field cards
+if(edSection==='fields'){
+var _dragIdx=null;
+el.querySelectorAll('.ed-field[draggable]').forEach(function(card){
+card.addEventListener('dragstart',function(e){
+_dragIdx=parseInt(card.dataset.fidx);
+card.classList.add('dragging');
+e.dataTransfer.effectAllowed='move';
+e.dataTransfer.setData('text/plain',_dragIdx);
+});
+card.addEventListener('dragend',function(){
+card.classList.remove('dragging');
+el.querySelectorAll('.ed-field').forEach(function(c){c.classList.remove('drag-over-top','drag-over-bot');});
+});
+card.addEventListener('dragover',function(e){
+e.preventDefault();e.dataTransfer.dropEffect='move';
+var rect=card.getBoundingClientRect();
+var mid=rect.top+rect.height/2;
+el.querySelectorAll('.ed-field').forEach(function(c){c.classList.remove('drag-over-top','drag-over-bot');});
+if(e.clientY<mid)card.classList.add('drag-over-top');
+else card.classList.add('drag-over-bot');
+});
+card.addEventListener('dragleave',function(){
+card.classList.remove('drag-over-top','drag-over-bot');
+});
+card.addEventListener('drop',function(e){
+e.preventDefault();
+var fromIdx=parseInt(e.dataTransfer.getData('text/plain'));
+var toIdx=parseInt(card.dataset.fidx);
+var rect=card.getBoundingClientRect();
+var mid=rect.top+rect.height/2;
+if(e.clientY>=mid)toIdx++;
+if(isNaN(fromIdx)||isNaN(toIdx)||fromIdx===toIdx)return;
+if(!currentForm||!currentForm.fields)return;
+var moved=currentForm.fields.splice(fromIdx,1)[0];
+if(fromIdx<toIdx)toIdx--;
+currentForm.fields.splice(toIdx,0,moved);
+saveForm(true).then(function(){renderEdSection();toast('✅ Champ déplacé');});
+});
+});
+}
 }
 
 function loadResponses(){
