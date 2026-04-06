@@ -1421,8 +1421,8 @@ window.saveExAdvanced=saveExAdvanced;
 // ═══ GOOGLE CALENDAR CONNECT/DISCONNECT ═══
 function connectCalendar(pid){
 toast('🔗 Préparation…');
-db.collection('_config').doc('oauth').get().then(function(doc){
-if(!doc.exists){alert('OAuth non configuré. Créez le document _config/oauth dans Firestore.');return;}
+db.collection('_config').doc('oauth_calendar').get().then(function(doc){
+if(!doc.exists){alert('OAuth non configuré. Créez le document _config/oauth_calendar dans Firestore.');return;}
 var conf=doc.data();
 var state=btoa(JSON.stringify({personId:pid}));
 var url='https://accounts.google.com/o/oauth2/v2/auth'
@@ -1501,7 +1501,7 @@ function removeExternalCal(){}
 
 function connectExtraCalendar(pid){
 toast('🔗 Connexion agenda personnel…');
-db.collection('_config').doc('oauth').get().then(function(doc){
+db.collection('_config').doc('oauth_calendar').get().then(function(doc){
 if(!doc.exists){alert('OAuth non configuré.');return;}
 var conf=doc.data();
 var state=btoa(JSON.stringify({personId:pid,isExtra:true}));
