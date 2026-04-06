@@ -312,7 +312,13 @@ async function doSubmit(){
   try{
     var b64=await genPdf();
     var hashHex='';
-    try{var hashBuf=await crypto.subtle.digest('SHA-256',pdfBytes);var hArr=new Uint8Array(hashBuf);hashHex=Array.from(hArr).map(function(b){return b.toString(16).padStart(2,'0');}).join('');}catch(e){}
+    try{
+      var raw=atob(b64);var signedArr=new Uint8Array(raw.length);
+      for(var i=0;i<raw.length;i++)signedArr[i]=raw.charCodeAt(i);
+      var hashBuf=await crypto.subtle.digest('SHA-256',signedArr);
+      var hArr=new Uint8Array(hashBuf);
+      hashHex=Array.from(hArr).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
+    }catch(e){console.error('Hash error:',e);}
     var certId='CERT-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
     var u={status:'signed',signedAt:firebase.firestore.FieldValue.serverTimestamp(),fieldValues:fieldValues,signatureText:sigText,parapheText:parapheText,
       certificateId:certId,documentHash:hashHex,
