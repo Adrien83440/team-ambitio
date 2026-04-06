@@ -1106,6 +1106,29 @@ h+='</select>';
 
 h+='<div class="cd-save-bar" style="margin-top:16px;border-top:0;justify-content:flex-end"><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }
+
+// Extra connected Google accounts (personal agendas)
+h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin:24px 0 8px">📱 Agendas personnels</div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:12px">Connectez les agendas Google personnels de '+esc(exPerson.name)+' pour bloquer les créneaux en conflit.</div>';
+var extraConns=exPerson.extraConnections||[];
+extraConns.forEach(function(conn,ci){
+h+='<div class="cal-card" style="border-color:rgba(245,158,11,.2);margin-bottom:12px"><div class="cal-card-head"><span class="cal-card-icon">📅</span><div><div class="cal-card-title">'+esc(conn.email)+'</div><div class="cal-card-sub">'+((conn.calendars||[]).length)+' calendrier(s)</div></div><button class="bb bb-r" style="margin-left:auto;font-size:11px" onclick="disconnectExtraCal(\''+exPerson.id+'\','+ci+')">Déconnecter</button></div>';
+// Show calendars with conflict toggles
+if(conn.calendars&&conn.calendars.length){
+h+='<div style="padding:0 14px 12px">';
+conn.calendars.forEach(function(cal,calIdx){
+var checked=cal.checkConflicts!==false;
+h+='<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid rgba(255,255,255,.04)">';
+h+='<div style="width:10px;height:10px;border-radius:3px;background:'+esc(cal.color||'#f59e0b')+'"></div>';
+h+='<span style="font-size:12px;flex:1;color:rgba(255,255,255,.7)">'+esc(cal.name)+'</span>';
+h+='<div class="tg'+(checked?' on':'')+'" data-extraci="'+ci+'-'+calIdx+'" style="cursor:pointer;flex-shrink:0" onclick="toggleExtraCalCheck('+ci+','+calIdx+',this)"></div>';
+h+='</div>';
+});
+h+='</div>';
+}
+h+='</div>';
+});
+h+='<div style="margin-top:8px"><button class="bb bb-g" onclick="connectExtraCalendar(\''+exPerson.id+'\')">+ Connecter un agenda Google personnel</button></div>';
 }else{
 h+='<div class="cal-card"><div class="cal-card-head"><span class="cal-card-icon">📅</span><div><div class="cal-card-title" style="color:rgba(255,255,255,.38)">Aucun calendrier connecté</div><div class="cal-card-sub">La vérification de conflits n\'est pas active.</div></div></div></div>';
 h+='<div style="margin-top:10px"><button class="bb bb-g" onclick="connectCalendar(\''+exPerson.id+'\')">+ Connecter un Google Agenda</button></div>';
@@ -1449,6 +1472,59 @@ var ind=document.getElementById('ex-autosave-status');if(silent&&ind)autoSaveDon
 }
 window.toggleCalCheck=toggleCalCheck;window.setEventCalendar=setEventCalendar;window.saveCalendarSettings=saveCalendarSettings;
 
+function addExternalCal(){}
+function removeExternalCal(){}
+
+function connectExtraCalendar(pid){
+toast('🔗 Connexion agenda personnel…');
+db.collection('_config').doc('oauth').get().then(function(doc){
+if(!doc.exists){alert('OAuth non configuré.');return;}
+var conf=doc.data();
+var state=btoa(JSON.stringify({personId:pid,isExtra:true}));
+var url='https://accounts.google.com/o/oauth2/v2/auth'
++'?client_id='+encodeURIComponent(conf.client_id)
++'&redirect_uri='+encodeURIComponent(conf.redirect_uri)
++'&response_type=code'
++'&scope='+encodeURIComponent('https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/userinfo.email')
++'&access_type=offline'
++'&prompt=consent'
++'&state='+encodeURIComponent(state);
+window.location.href=url;
+}).catch(function(e){alert('Erreur: '+e.message);});
+}
+
+function disconnectExtraCal(pid,idx){
+if(!confirm('Déconnecter cet agenda personnel ?'))return;
+var p=P.find(function(x){return x.id===pid;});
+if(!p||!p.extraConnections)return;
+var conn=p.extraConnections[idx];
+if(!conn)return;
+// Delete tokens
+db.collection('calendar_extra_tokens').doc(pid+'__'+conn.id).delete().catch(function(){});
+// Remove from config
+p.extraConnections.splice(idx,1);
+CR.doc(pid).update({extraConnections:p.extraConnections}).then(function(){
+db.collection('calendar_sync_requests').doc(pid).set({requestedAt:firebase.firestore.FieldValue.serverTimestamp()});
+renderExSection();
+toast('✅ Agenda personnel déconnecté');
+}).catch(function(e){toast('❌ '+e.message);});
+}
+
+function toggleExtraCalCheck(connIdx,calIdx,el){
+el.classList.toggle('on');
+var conns=exPerson.extraConnections||[];
+if(conns[connIdx]&&conns[connIdx].calendars&&conns[connIdx].calendars[calIdx]){
+conns[connIdx].calendars[calIdx].checkConflicts=el.classList.contains('on');
+exPerson.extraConnections=conns;
+CR.doc(exPerson.id).update({extraConnections:conns}).then(function(){
+db.collection('calendar_sync_requests').doc(exPerson.id).set({requestedAt:firebase.firestore.FieldValue.serverTimestamp()});
+toast('✅');
+}).catch(function(){});
+}
+}
+window.addExternalCal=addExternalCal;window.removeExternalCal=removeExternalCal;
+window.connectExtraCalendar=connectExtraCalendar;window.disconnectExtraCal=disconnectExtraCal;window.toggleExtraCalCheck=toggleExtraCalCheck;
+
 // Handle OAuth return — Google redirects here with ?code=xxx&state=yyy
 (function(){
 var params=new URLSearchParams(window.location.search);
@@ -1467,6 +1543,7 @@ var reqId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
 db.collection('calendar_auth_requests').doc(reqId).set({
 code:code,
 personId:pid,
+isExtra:!!stateData.isExtra,
 createdAt:firebase.firestore.FieldValue.serverTimestamp()
 }).then(function(){
 // Listen for the result
@@ -1477,7 +1554,14 @@ unsub();
 if(d.status==='success'){
 toast('✅ Google Calendar connecté ! ('+d.email+')');
 var p=P.find(function(x){return x.id===pid;});
-if(p){p.calendarConnected=true;p.calendarEmail=d.email;}
+if(p){
+if(d.isExtra){
+// Extra connection — add to extraConnections
+if(!p.extraConnections)p.extraConnections=[];
+}else{
+p.calendarConnected=true;p.calendarEmail=d.email;
+}
+}
 // Navigate to expert calendar tab
 setTimeout(function(){
 document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});
