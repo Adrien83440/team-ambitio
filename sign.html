@@ -117,11 +117,6 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
     <input class="sig-type-input" id="sigInput" type="text" placeholder="Votre Nom Prénom" oninput="onSigType()"/>
     <div class="sig-preview" id="sigPreview"></div>
   </div>
-  <div class="sig-panel" id="paraphePanel" style="display:none">
-    <div class="sig-panel-title">✏️ Votre paraphe</div>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Tapez vos initiales.</p>
-    <input class="sig-type-input" id="parapheInput" type="text" placeholder="A.F." maxlength="10" style="font-size:22px" oninput="onParapheType()"/>
-  </div>
   <div class="card" style="margin-top:14px">
     <div class="field-check-row">
       <input type="checkbox" id="acceptCheck" onchange="updateBtn()"/>
@@ -198,7 +193,6 @@ function finishLoad(){
   var h='';for(var i=0;i<6;i++)h+='<input class="otp-input" type="tel" maxlength="1" id="otp'+i+'" oninput="otpNav(this,'+i+')" onkeydown="otpBack(event,'+i+')"/>';
   document.getElementById('otpInputs').innerHTML=h;
   var fields=REQ.fields||[];
-  if(fields.some(function(f){return f.fieldType==='paraphe';}))show('paraphePanel');
   document.getElementById('sigInput').value=REQ.clientName||'';
   sigText=REQ.clientName||'';onSigType();
   goToStep(1);
@@ -273,8 +267,8 @@ function renderOverlays(){
       h+='</div>';
     }else if(f.fieldType==='paraphe'){
       var ok2=parapheText.length>0;
-      h+='<div class="sig-zone'+(ok2?' filled':'')+'" onclick="document.getElementById(\'parapheInput\').focus();document.getElementById(\'parapheInput\').scrollIntoView({behavior:\'smooth\',block:\'center\'})">';
-      h+=ok2?'<div class="sig-text" style="font-size:'+Math.min(fh*.55,16)+'px">'+esc(parapheText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✏️ Paraphe</span>';
+      h+='<div class="sig-zone'+(ok2?' filled':'')+'">';
+      h+=ok2?'<div class="sig-text" style="font-size:'+Math.min(fh*.55,16)+'px">'+esc(parapheText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✏️</span>';
       h+='</div>';
     }else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
       h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[f.fieldType]?'checked':'')+' onchange="fieldValues[\''+f.fieldType+'\']=this.checked;updateBtn()"/></div>';
@@ -291,10 +285,9 @@ function renderOverlays(){
 function onSigType(){
   sigText=document.getElementById('sigInput').value;
   document.getElementById('sigPreview').textContent=sigText;
-  renderOverlays();updateBtn();
-}
-function onParapheType(){
-  parapheText=document.getElementById('parapheInput').value;
+  // Auto-generate paraphe from initials
+  parapheText=sigText.trim().split(/\s+/).map(function(w){return w.charAt(0).toUpperCase();}).join('.');
+  if(parapheText)parapheText+='.';
   renderOverlays();updateBtn();
 }
 
@@ -313,19 +306,24 @@ function updateBtn(){
 }
 
 /* ═══ SUBMIT ═══ */
-function doSubmit(){
+async function doSubmit(){
   var btn=document.getElementById('submitBtn');
   btn.disabled=true;btn.innerHTML='<div class="spinner" style="width:16px;height:16px;border-width:2px"></div> Génération…';
-  genPdf().then(function(b64){
-    var u={status:'signed',signedAt:firebase.firestore.FieldValue.serverTimestamp(),fieldValues:fieldValues,signatureText:sigText,parapheText:parapheText,events:firebase.firestore.FieldValue.arrayUnion({type:'signed',date:new Date().toISOString()})};
+  try{
+    var b64=await genPdf();
+    var hashHex='';
+    try{var hashBuf=await crypto.subtle.digest('SHA-256',pdfBytes);var hArr=new Uint8Array(hashBuf);hashHex=Array.from(hArr).map(function(b){return b.toString(16).padStart(2,'0');}).join('');}catch(e){}
+    var certId='CERT-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+    var u={status:'signed',signedAt:firebase.firestore.FieldValue.serverTimestamp(),fieldValues:fieldValues,signatureText:sigText,parapheText:parapheText,
+      certificateId:certId,documentHash:hashHex,
+      signingMeta:{userAgent:navigator.userAgent,platform:navigator.platform,language:navigator.language,screenWidth:screen.width,screenHeight:screen.height,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,signedAtLocal:new Date().toISOString()},
+      events:firebase.firestore.FieldValue.arrayUnion({type:'signed',date:new Date().toISOString()})};
     if(b64.length<900000)u.signedPdfBase64=b64;
-    return db.collection('signature_requests').doc(REQ_ID).update(u).then(function(){
-      if(b64.length>=900000)return saveChunks(b64);
-    });
-  }).then(function(){
-    db.collection('webhook_inbox').add({action:'signature_completed',signatureRequestId:REQ_ID,clientName:REQ.clientName,clientEmail:REQ.clientEmail,templateName:REQ.templateName,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    await db.collection('signature_requests').doc(REQ_ID).update(u);
+    if(b64.length>=900000)await saveChunks(b64);
+    await db.collection('webhook_inbox').add({action:'signature_completed',signatureRequestId:REQ_ID,clientName:REQ.clientName,clientEmail:REQ.clientEmail,templateName:REQ.templateName,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
     goToStep(3);
-  }).catch(function(e){btn.disabled=false;btn.textContent='✍️ Signer le contrat';alert('Erreur: '+e.message);console.error(e);});
+  }catch(e){btn.disabled=false;btn.textContent='✍️ Signer le contrat';alert('Erreur: '+e.message);console.error(e);}
 }
 function saveChunks(b64){
   var cs=600000,ch=[];for(var i=0;i<b64.length;i+=cs)ch.push(b64.slice(i,i+cs));

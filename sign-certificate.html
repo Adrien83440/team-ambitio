@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Certificat de signature — Adrien & Emily</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});</script>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root{--fm:'Plus Jakarta Sans',system-ui,sans-serif;--fsig:'Dancing Script',cursive;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#f0f2f5;font-family:var(--fm);color:#1e293b;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.page{max-width:800px;margin:20px auto;background:#fff;border-radius:12px;box-shadow:0 2px 20px rgba(0,0,0,.08);overflow:hidden;}
+@media print{body{background:#fff;}.page{margin:0;box-shadow:none;border-radius:0;}.no-print{display:none!important;}}
+
+/* Header */
+.cert-header{background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:40px;text-align:center;position:relative;overflow:hidden;}
+.cert-header::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");}
+.cert-badge{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7);margin-bottom:16px;position:relative;}
+.cert-badge::after{content:'✓';font-size:32px;color:#fff;font-weight:800;}
+.cert-title{font-size:26px;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:4px;position:relative;}
+.cert-subtitle{font-size:14px;color:rgba(255,255,255,.6);position:relative;}
+.cert-id{display:inline-block;margin-top:12px;padding:4px 14px;background:rgba(255,255,255,.1);border-radius:20px;font-size:11px;font-weight:700;color:rgba(255,255,255,.7);letter-spacing:1px;position:relative;}
+
+/* Body */
+.cert-body{padding:40px;}
+.section{margin-bottom:28px;}
+.section-title{font-size:12px;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;display:flex;align-items:center;gap:6px;}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;}
+@media(max-width:500px){.info-grid{grid-template-columns:1fr;}}
+.info-item{padding:8px 0;}
+.info-label{font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;}
+.info-value{font-size:14px;font-weight:600;color:#0f172a;word-break:break-all;}
+.info-value.mono{font-family:'SF Mono',Consolas,monospace;font-size:11px;color:#475569;}
+
+/* Timeline */
+.timeline{position:relative;padding-left:24px;}
+.timeline::before{content:'';position:absolute;left:7px;top:4px;bottom:4px;width:2px;background:#e2e8f0;}
+.tl-item{position:relative;padding:8px 0 8px 16px;font-size:13px;}
+.tl-item::before{content:'';position:absolute;left:-20px;top:12px;width:12px;height:12px;border-radius:50%;background:#e2e8f0;border:2px solid #fff;z-index:1;}
+.tl-item.green::before{background:#34d399;}
+.tl-item.blue::before{background:#60a5fa;}
+.tl-item.purple::before{background:#a78bfa;}
+.tl-item.amber::before{background:#f59e0b;}
+.tl-date{font-size:11px;color:#94a3b8;font-weight:600;}
+.tl-text{font-weight:600;margin-top:2px;}
+
+/* Signature display */
+.sig-display{display:inline-block;padding:8px 24px;font-family:var(--fsig);font-size:28px;color:#1e293b;border-bottom:2px solid #1e293b;margin:8px 0;}
+.paraphe-display{display:inline-block;padding:6px 16px;font-family:var(--fsig);font-size:20px;color:#1e293b;border:1px solid #cbd5e1;border-radius:6px;margin:8px 0 8px 12px;}
+
+/* Hash */
+.hash-box{padding:10px 14px;background:#f1f5f9;border-radius:8px;font-family:'SF Mono',Consolas,monospace;font-size:10px;color:#475569;word-break:break-all;line-height:1.6;}
+
+/* Legal */
+.legal{padding:24px 40px;background:#f8f9fb;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;line-height:1.7;}
+
+/* Footer */
+.cert-footer{padding:20px 40px;text-align:center;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;}
+
+/* Print button */
+.print-bar{max-width:800px;margin:0 auto 20px;display:flex;gap:8px;justify-content:flex-end;padding:0 4px;}
+.print-btn{padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;font-family:var(--fm);border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+.print-btn-p{background:#6366f1;color:#fff;}
+.print-btn-o{background:#fff;border:1px solid #e2e8f0;color:#475569;}
+
+/* Loading */
+.loader{display:flex;align-items:center;justify-content:center;gap:8px;padding:80px;color:#94a3b8;}
+.spinner{width:20px;height:20px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="loadingView" class="loader"><div class="spinner"></div> Chargement du certificat…</div>
+
+<div id="certContent" style="display:none">
+<div class="print-bar no-print">
+  <button class="print-btn print-btn-o" onclick="window.print()">🖨️ Imprimer</button>
+  <button class="print-btn print-btn-p" onclick="window.print()">📥 Enregistrer en PDF</button>
+</div>
+
+<div class="page">
+  <div class="cert-header">
+    <div class="cert-badge"></div>
+    <div class="cert-title">Certificat de signature électronique</div>
+    <div class="cert-subtitle">Adrien & Emily — SARL Ambitio Corp</div>
+    <div class="cert-id" id="certId"></div>
+  </div>
+
+  <div class="cert-body">
+
+    <div class="section">
+      <div class="section-title">📄 Document</div>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Nom du document</div><div class="info-value" id="docName"></div></div>
+        <div class="info-item"><div class="info-label">Statut</div><div class="info-value" style="color:#059669">✅ Signé</div></div>
+        <div class="info-item"><div class="info-label">Nombre de pages</div><div class="info-value" id="docPages"></div></div>
+        <div class="info-item"><div class="info-label">Nombre de champs</div><div class="info-value" id="docFields"></div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">👤 Signataire</div>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Nom complet</div><div class="info-value" id="signerName"></div></div>
+        <div class="info-item"><div class="info-label">Email</div><div class="info-value" id="signerEmail"></div></div>
+        <div class="info-item"><div class="info-label">Téléphone</div><div class="info-value" id="signerPhone"></div></div>
+        <div class="info-item"><div class="info-label">Vérification OTP</div><div class="info-value" id="signerOtp"></div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">✍️ Signature apposée</div>
+      <div>
+        <div class="sig-display" id="sigDisplay"></div>
+        <span class="paraphe-display" id="parDisplay" style="display:none"></span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📅 Chronologie des événements</div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">🔐 Intégrité du document</div>
+      <div class="info-item"><div class="info-label">Empreinte SHA-256 du document original</div><div class="hash-box" id="docHash"></div></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">💻 Métadonnées techniques</div>
+      <div class="info-grid">
+        <div class="info-item"><div class="info-label">Navigateur</div><div class="info-value mono" id="metaBrowser"></div></div>
+        <div class="info-item"><div class="info-label">Plateforme</div><div class="info-value mono" id="metaPlatform"></div></div>
+        <div class="info-item"><div class="info-label">Fuseau horaire</div><div class="info-value" id="metaTz"></div></div>
+        <div class="info-item"><div class="info-label">Résolution écran</div><div class="info-value" id="metaScreen"></div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📋 Champs remplis par le signataire</div>
+      <div class="info-grid" id="filledFields"></div>
+    </div>
+
+  </div>
+
+  <div class="legal">
+    <strong>Mention légale :</strong> Ce certificat atteste que le document désigné ci-dessus a été signé électroniquement par le signataire identifié. L'identité du signataire a été vérifiée par code OTP envoyé par SMS au numéro de téléphone indiqué. L'empreinte cryptographique (SHA-256) du document original garantit que le contenu n'a pas été modifié après signature. Ce document est conservé de manière sécurisée par la SARL Ambitio Corp (SIRET 943 098 700 0012) conformément aux dispositions applicables. Ce certificat a été généré automatiquement et ne nécessite pas de signature manuscrite pour être valable.
+  </div>
+
+  <div class="cert-footer">
+    © <span id="footYear"></span> SARL Ambitio Corp — 231B chemin de mourre de masque, 83440 Fayence — contact@adrienemily.com
+  </div>
+</div>
+</div>
+
+<div id="errorView" style="display:none;text-align:center;padding:80px;color:#94a3b8;font-size:14px;">
+  <div style="font-size:48px;margin-bottom:12px">❌</div>
+  <h2 style="color:#1e293b;margin-bottom:8px">Certificat introuvable</h2>
+  <p id="errorMsg">Ce certificat n'existe pas ou le document n'a pas encore été signé.</p>
+</div>
+
+<script>
+var db=firebase.firestore();
+(function(){
+  var p=new URLSearchParams(location.search);
+  var id=p.get('id');
+  var token=p.get('t');
+  if(!id&&!token){showErr('Paramètre manquant.');return;}
+
+  var promise;
+  if(id){
+    promise=db.collection('signature_requests').doc(id).get().then(function(d){return d.exists?[d]:[];});
+  }else{
+    promise=db.collection('signature_requests').where('token','==',token).limit(1).get().then(function(sn){return sn.docs;});
+  }
+
+  promise.then(function(docs){
+    if(!docs.length){showErr('Document introuvable.');return;}
+    var doc=docs[0];var r=doc.data();
+    if(r.status!=='signed'){showErr('Ce document n\'a pas encore été signé.');return;}
+    render(r,doc.id);
+  }).catch(function(e){showErr(e.message);});
+})();
+
+function showErr(m){
+  document.getElementById('loadingView').style.display='none';
+  document.getElementById('errorView').style.display='block';
+  document.getElementById('errorMsg').textContent=m;
+}
+
+function render(r,docId){
+  document.getElementById('loadingView').style.display='none';
+  document.getElementById('certContent').style.display='block';
+  document.getElementById('footYear').textContent=new Date().getFullYear();
+
+  // Certificate ID
+  document.getElementById('certId').textContent=r.certificateId||('CERT-'+docId.slice(0,8).toUpperCase());
+
+  // Document info
+  document.getElementById('docName').textContent=r.templateName||'Contrat';
+  var fields=r.fields||[];
+  document.getElementById('docPages').textContent=(fields.length?Math.max.apply(null,fields.map(function(f){return f.page||1;})):'-')+' page(s)';
+  document.getElementById('docFields').textContent=fields.length+' champ(s)';
+
+  // Signer info
+  document.getElementById('signerName').textContent=r.clientName||'—';
+  document.getElementById('signerEmail').textContent=r.clientEmail||'—';
+  document.getElementById('signerPhone').textContent=r.clientPhone||'—';
+  document.getElementById('signerOtp').textContent=r.otpVerified?'✅ Vérifié par SMS':'❌ Non vérifié';
+  document.getElementById('signerOtp').style.color=r.otpVerified?'#059669':'#dc2626';
+
+  // Signature display
+  document.getElementById('sigDisplay').textContent=r.signatureText||r.clientName||'—';
+  if(r.parapheText){
+    var pd=document.getElementById('parDisplay');
+    pd.textContent=r.parapheText;pd.style.display='';
+  }
+
+  // Timeline
+  var events=r.events||[];
+  var evLabels={created:{icon:'📝',text:'Demande créée',color:'purple'},opened:{icon:'👁',text:'Document ouvert par le client',color:'blue'},otp_verified:{icon:'🔐',text:'Identité vérifiée par OTP SMS',color:'amber'},signed:{icon:'✍️',text:'Document signé électroniquement',color:'green'},resent:{icon:'🔄',text:'Lien renvoyé au client',color:'blue'}};
+  var tlH='';
+  events.forEach(function(ev){
+    var cfg=evLabels[ev.type]||{icon:'📌',text:ev.type,color:'blue'};
+    var d=ev.date?new Date(ev.date):null;
+    var dateStr=d?d.toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Europe/Paris'}):'—';
+    tlH+='<div class="tl-item '+cfg.color+'">';
+    tlH+='<div class="tl-date">'+dateStr+'</div>';
+    tlH+='<div class="tl-text">'+cfg.icon+' '+cfg.text;
+    if(ev.by)tlH+=' <span style="color:#94a3b8;font-weight:400">par '+ev.by+'</span>';
+    tlH+='</div></div>';
+  });
+  document.getElementById('timeline').innerHTML=tlH||'<div style="color:#94a3b8;font-size:13px">Aucun événement enregistré.</div>';
+
+  // Hash
+  document.getElementById('docHash').textContent=r.documentHash||'Non disponible';
+
+  // Technical metadata
+  var meta=r.signingMeta||{};
+  var ua=meta.userAgent||'';
+  var browser='Inconnu';
+  if(ua.indexOf('Chrome')>-1&&ua.indexOf('Edg')<0)browser='Chrome';
+  else if(ua.indexOf('Safari')>-1&&ua.indexOf('Chrome')<0)browser='Safari';
+  else if(ua.indexOf('Firefox')>-1)browser='Firefox';
+  else if(ua.indexOf('Edg')>-1)browser='Edge';
+  document.getElementById('metaBrowser').textContent=browser+(ua?' — '+ua.slice(0,80):'');
+  document.getElementById('metaPlatform').textContent=meta.platform||'—';
+  document.getElementById('metaTz').textContent=meta.timezone||'—';
+  document.getElementById('metaScreen').textContent=meta.screenWidth&&meta.screenHeight?meta.screenWidth+'×'+meta.screenHeight+'px':'—';
+
+  // Filled fields
+  var fv=r.fieldValues||{};
+  var fieldLabels={nom_prenom:'Nom Prénom',email:'Email',telephone:'Téléphone',adresse:'Adresse',entreprise:'Entreprise',type_entreprise:'Type entreprise',siege_social:'Siège social',siret:'SIRET',date_signature:'Date signature',case_cocher:'Case à cocher',lu_approuve:'Lu et approuvé'};
+  var ffH='';
+  Object.keys(fv).forEach(function(k){
+    var val=fv[k];
+    if(typeof val==='boolean')val=val?'✅ Oui':'❌ Non';
+    ffH+='<div class="info-item"><div class="info-label">'+(fieldLabels[k]||k)+'</div><div class="info-value">'+esc(String(val))+'</div></div>';
+  });
+  document.getElementById('filledFields').innerHTML=ffH||'<div style="color:#94a3b8;font-size:13px">Aucun champ.</div>';
+}
+
+function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+</script>
+</body>
+</html>
