@@ -251,6 +251,7 @@ function switchTab(tab){
   document.getElementById('tabCompleted').style.display=tab==='completed'?'':'none';
   document.getElementById('editorView').style.display='none';
   if(tab==='requests'||tab==='completed')loadRequests();
+  if(tab==='completed')renderCompleted();
 }
 
 /* ═══ TEMPLATES LIST ═══ */
@@ -673,7 +674,7 @@ function renderRequests(){
   var empty=document.getElementById('reqEmpty');
   // Filter: only non-signed requests
   var pending=REQ.filter(function(r){return r.status!=='signed';});
-  if(!pending.length){el.innerHTML='';empty.style.display='';return;}
+  if(!pending.length){el.innerHTML='';empty.style.display='';renderCompleted();return;}
   empty.style.display='none';
   var h='';
   pending.forEach(function(r){
@@ -699,16 +700,19 @@ function renderRequests(){
 function renderCompleted(){
   var el=document.getElementById('compBody');
   var empty=document.getElementById('compEmpty');
+  if(!REQ||!REQ.length){el.innerHTML='';empty.style.display='';return;}
   var signed=REQ.filter(function(r){return r.status==='signed';});
   // Search filter
-  var q=(document.getElementById('compSearch').value||'').toLowerCase().trim();
+  var searchEl=document.getElementById('compSearch');
+  var q=searchEl?searchEl.value.toLowerCase().trim():'';
   if(q){
     signed=signed.filter(function(r){
       return (r.clientName||'').toLowerCase().indexOf(q)>=0||(r.clientEmail||'').toLowerCase().indexOf(q)>=0||(r.templateName||'').toLowerCase().indexOf(q)>=0;
     });
   }
   // Sort
-  var sort=document.getElementById('compSort').value;
+  var sortEl=document.getElementById('compSort');
+  var sort=sortEl?sortEl.value:'date_desc';
   signed.sort(function(a,b){
     if(sort==='alpha_asc')return(a.clientName||'').localeCompare(b.clientName||'');
     if(sort==='alpha_desc')return(b.clientName||'').localeCompare(a.clientName||'');
@@ -717,9 +721,19 @@ function renderCompleted(){
   });
   if(!signed.length){el.innerHTML='';empty.style.display='';return;}
   empty.style.display='none';
+  // Group by month
+  var months=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  var lastMonth='';
   var h='';
   signed.forEach(function(r){
-    var dt=r.signedAt?new Date(r.signedAt.seconds*1000).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):r.createdAt?new Date(r.createdAt.seconds*1000).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'—';
+    var ts=(r.signedAt||r.createdAt||{}).seconds||0;
+    var d=new Date(ts*1000);
+    var monthKey=months[d.getMonth()]+' '+d.getFullYear();
+    if(monthKey!==lastMonth){
+      lastMonth=monthKey;
+      h+='<tr><td colspan="4" style="padding:14px 14px 6px;font-family:var(--fh);font-size:13px;font-weight:800;color:var(--accent);border:none;background:transparent">📅 '+monthKey+'</td></tr>';
+    }
+    var dt=d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
     h+='<tr>';
     h+='<td style="font-weight:600">'+esc(r.clientName)+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail)+'</div></td>';
     h+='<td>'+esc(r.templateName||'—')+'</td>';
