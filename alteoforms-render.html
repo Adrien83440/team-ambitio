@@ -100,6 +100,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 var db=firebase.firestore();
 var FORM=null;
 var FIELDS=[];
+var CARD_GROUPS=[];
 var currentIdx=0;
 var answers={};
 var submitted=false;
@@ -138,22 +139,38 @@ var wrap=document.createElement('div');
 wrap.className='card-wrap';
 wrap.id='cardWrap';
 
-FIELDS.forEach(function(fld,i){
+// Build card groups: consecutive fields with sameCard form one card
+CARD_GROUPS=[];
+var curGroup=[];
+FIELDS.forEach(function(fld){
+if(fld.sameCard&&curGroup.length>0){curGroup.push(fld);}
+else{if(curGroup.length)CARD_GROUPS.push(curGroup);curGroup=[fld];}
+});
+if(curGroup.length)CARD_GROUPS.push(curGroup);
+
+CARD_GROUPS.forEach(function(group,gi){
 var card=document.createElement('div');
 card.className='card';
-card.id='card-'+i;
-card.dataset.idx=i;
-card.dataset.fid=fld.id;
+card.id='card-g'+gi;
+card.dataset.gidx=gi;
 
-var h='<div class="card-num">'+(i+1)+' →<span>sur '+FIELDS.length+'</span></div>';
+var h='<div class="card-num">'+(gi+1)+' →<span>sur '+CARD_GROUPS.length+'</span></div>';
+
+group.forEach(function(fld,fi){
+// Label
+if(group.length>1){
+h+='<div style="margin-'+(fi>0?'top:24px':'bottom:0')+'">';
+h+='<div style="font-size:15px;font-weight:600;margin-bottom:6px;color:rgba(255,255,255,.85)">'+esc(fld.label)+(fld.required?' <span style="color:var(--accent)">*</span>':'')+'</div>';
+}else{
 h+='<div class="card-question">'+esc(fld.label)+'</div>';
-if(fld.description)h+='<div class="card-desc">'+esc(fld.description)+'</div>';
+}
+if(fld.description)h+='<div class="card-desc" style="margin-bottom:'+(group.length>1?'10':'28')+'px">'+esc(fld.description)+'</div>';
 
-// Render input by type
+// Render input
 if(fld.type==='text'||fld.type==='email'||fld.type==='tel'||fld.type==='number'){
 var ph={text:'Votre réponse…',email:'email@exemple.com',tel:'+33 6…',number:'0'}[fld.type];
 var it={text:'text',email:'email',tel:'tel',number:'number'}[fld.type];
-h+='<input class="af-input" type="'+it+'" placeholder="'+ph+'" data-fid="'+fld.id+'" autocomplete="off"/>';
+h+='<input class="af-input" type="'+it+'" placeholder="'+ph+'" data-fid="'+fld.id+'" autocomplete="off" style="'+(group.length>1?'font-size:16px;padding:12px 0;':'')+'"/>';
 }
 else if(fld.type==='textarea'){
 h+='<textarea class="af-textarea" placeholder="Votre réponse…" data-fid="'+fld.id+'"></textarea>';
@@ -188,6 +205,8 @@ h+='<div class="af-scale" data-fid="'+fld.id+'">';
 for(var s=1;s<=max;s++)h+='<button class="af-scale-btn" data-value="'+s+'" onclick="selectScale(this)">'+s+'</button>';
 h+='</div><div class="af-scale-labels"><span>Pas du tout</span><span>Tout à fait</span></div>';
 }
+if(group.length>1)h+='</div>';
+});
 
 card.innerHTML=h;
 wrap.appendChild(card);
@@ -204,8 +223,10 @@ document.getElementById('formContainer').appendChild(wrap);
 }
 
 // ═══ NAVIGATION ═══
-function getVisibleFields(){
-return FIELDS.filter(function(fld){
+function getVisibleGroups(){
+return CARD_GROUPS.filter(function(group){
+// A group is visible if at least one field in it is visible
+return group.some(function(fld){
 if(!fld.condition||!fld.condition.fieldId)return true;
 var depVal=answers[fld.condition.fieldId];
 if(depVal===undefined||depVal===null||depVal==='')return false;
@@ -216,77 +237,77 @@ if(op==='neq')return String(depVal)!==cv;
 if(op==='contains')return String(depVal).toLowerCase().indexOf(cv.toLowerCase())>=0;
 return true;
 });
+});
 }
 
 function showCard(idx){
-var visible=getVisibleFields();
+var visible=getVisibleGroups();
 if(idx<0)idx=0;
 if(idx>=visible.length)idx=visible.length-1;
 currentIdx=idx;
 
-// Find actual field index in FIELDS
-var targetFld=visible[idx];
-var realIdx=FIELDS.indexOf(targetFld);
+var targetGroup=visible[idx];
+var realGIdx=CARD_GROUPS.indexOf(targetGroup);
 
 // Update all cards
 document.querySelectorAll('.card').forEach(function(c){
 c.classList.remove('active','exit-up','exit-down');
-var ci=parseInt(c.dataset.idx);
+var ci=parseInt(c.dataset.gidx);
 if(isNaN(ci))return;
-if(ci<realIdx)c.classList.add('exit-up');
-else if(ci>realIdx)c.classList.add('exit-down');
+if(ci<realGIdx)c.classList.add('exit-up');
+else if(ci>realGIdx)c.classList.add('exit-down');
 });
 
-var activeCard=document.getElementById('card-'+realIdx);
+var activeCard=document.getElementById('card-g'+realGIdx);
 if(activeCard){
 activeCard.classList.add('active');
-// Focus input
 setTimeout(function(){
 var inp=activeCard.querySelector('input,textarea,select');
 if(inp&&inp.type!=='date')inp.focus();
 },300);
 }
 
-// Progress
 var pct=((idx+1)/visible.length)*100;
 document.getElementById('progressBar').style.width=pct+'%';
 
-// Nav buttons
 document.getElementById('btnBack').style.display=idx>0?'':'none';
 var isLast=idx===visible.length-1;
 var btn=document.getElementById('btnNext');
 btn.textContent=isLast?(FORM.settings&&FORM.settings.submitLabel||'Envoyer'):'Continuer →';
-
-// Check if required field has value
 updateNextBtn();
 }
 
 function updateNextBtn(){
-var visible=getVisibleFields();
-var fld=visible[currentIdx];
-if(!fld)return;
-var val=answers[fld.id];
-var hasValue=val!==undefined&&val!==null&&val!=='';
+var visible=getVisibleGroups();
+var group=visible[currentIdx];
+if(!group)return;
 var btn=document.getElementById('btnNext');
-btn.disabled=fld.required&&!hasValue;
+// All required fields in group must have values
+var allFilled=group.every(function(fld){
+if(!fld.required)return true;
+var val=answers[fld.id];
+return val!==undefined&&val!==null&&val!=='';
+});
+btn.disabled=!allFilled;
 }
 
 function goNext(){
-var visible=getVisibleFields();
-var fld=visible[currentIdx];
-if(!fld)return;
+var visible=getVisibleGroups();
+var group=visible[currentIdx];
+if(!group)return;
 
-// Collect answer
-collectAnswer(fld);
+// Collect all answers from current card
+collectGroupAnswers(group);
 
-// Check required
-if(fld.required){
+// Check required fields
+var missing=group.find(function(fld){
+if(!fld.required)return false;
 var val=answers[fld.id];
-if(!val&&val!==0){shakeCard();return;}
-}
+return !val&&val!==0;
+});
+if(missing){shakeCard();return;}
 
 if(currentIdx>=visible.length-1){
-// Submit
 submitForm();
 return;
 }
@@ -297,35 +318,39 @@ function goBack(){
 if(currentIdx>0)showCard(currentIdx-1);
 }
 
-function collectAnswer(fld){
-var realIdx=FIELDS.indexOf(fld);
-var card=document.getElementById('card-'+realIdx);
+function collectGroupAnswers(group){
+var realGIdx=CARD_GROUPS.indexOf(group);
+var card=document.getElementById('card-g'+realGIdx);
 if(!card)return;
 
+group.forEach(function(fld){
+var fidEls=card.querySelectorAll('[data-fid="'+fld.id+'"]');
+fidEls.forEach(function(el){
 if(fld.type==='radio'){
-var sel=card.querySelector('.af-option.selected');
+var sel=el.querySelector('.af-option.selected');
 answers[fld.id]=sel?sel.dataset.value:'';
 }
 else if(fld.type==='checkbox'){
 var vals=[];
-card.querySelectorAll('.af-option.selected').forEach(function(o){vals.push(o.dataset.value);});
+el.querySelectorAll('.af-option.selected').forEach(function(o){vals.push(o.dataset.value);});
 answers[fld.id]=vals.length?vals.join(', '):'';
 }
 else if(fld.type==='scale'){
-var selBtn=card.querySelector('.af-scale-btn.selected');
+var selBtn=el.querySelector('.af-scale-btn.selected');
 answers[fld.id]=selBtn?selBtn.dataset.value:'';
 }
-else{
-var inp=card.querySelector('input,textarea,select');
-answers[fld.id]=inp?inp.value:'';
+else if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'){
+answers[fld.id]=el.value;
 }
+});
+});
 }
 
 function shakeCard(){
-var visible=getVisibleFields();
-var fld=visible[currentIdx];
-var realIdx=FIELDS.indexOf(fld);
-var card=document.getElementById('card-'+realIdx);
+var visible=getVisibleGroups();
+var group=visible[currentIdx];
+var realGIdx=CARD_GROUPS.indexOf(group);
+var card=document.getElementById('card-g'+realGIdx);
 if(!card)return;
 card.style.animation='shake .4s ease';
 setTimeout(function(){card.style.animation='';},400);
@@ -335,31 +360,34 @@ setTimeout(function(){card.style.animation='';},400);
 function selectRadio(el){
 el.closest('.af-options').querySelectorAll('.af-option').forEach(function(o){o.classList.remove('selected');});
 el.classList.add('selected');
-var fld=getVisibleFields()[currentIdx];
-if(fld)answers[fld.id]=el.dataset.value;
+var fid=el.closest('[data-fid]').dataset.fid;
+answers[fid]=el.dataset.value;
 updateNextBtn();
-// Auto-advance on radio
-setTimeout(goNext,350);
+// Auto-advance only if single-field card
+var visible=getVisibleGroups();
+var group=visible[currentIdx];
+if(group&&group.length===1)setTimeout(goNext,350);
 }
 
 function toggleCheck(el){
 el.classList.toggle('selected');
-var fld=getVisibleFields()[currentIdx];
-if(fld){
+var container=el.closest('[data-fid]');
+var fid=container.dataset.fid;
 var vals=[];
-el.closest('.af-options').querySelectorAll('.af-option.selected').forEach(function(o){vals.push(o.dataset.value);});
-answers[fld.id]=vals.join(', ');
-}
+container.querySelectorAll('.af-option.selected').forEach(function(o){vals.push(o.dataset.value);});
+answers[fid]=vals.join(', ');
 updateNextBtn();
 }
 
 function selectScale(el){
 el.closest('.af-scale').querySelectorAll('.af-scale-btn').forEach(function(b){b.classList.remove('selected');});
 el.classList.add('selected');
-var fld=getVisibleFields()[currentIdx];
-if(fld)answers[fld.id]=el.dataset.value;
+var fid=el.closest('[data-fid]').dataset.fid;
+answers[fid]=el.dataset.value;
 updateNextBtn();
-setTimeout(goNext,350);
+var visible=getVisibleGroups();
+var group=visible[currentIdx];
+if(group&&group.length===1)setTimeout(goNext,350);
 }
 
 // Keyboard navigation
@@ -368,22 +396,6 @@ if(submitted)return;
 if(e.key==='Enter'&&!e.shiftKey){
 e.preventDefault();
 goNext();
-}
-// Letter shortcuts for radio/checkbox
-var visible=getVisibleFields();
-var fld=visible[currentIdx];
-if(!fld)return;
-if(fld.type==='radio'||fld.type==='checkbox'){
-var letter=e.key.toUpperCase();
-var idx=letter.charCodeAt(0)-65;
-var realIdx=FIELDS.indexOf(fld);
-var card=document.getElementById('card-'+realIdx);
-if(!card)return;
-var opts=card.querySelectorAll('.af-option');
-if(idx>=0&&idx<opts.length){
-if(fld.type==='radio')selectRadio(opts[idx]);
-else toggleCheck(opts[idx]);
-}
 }
 });
 
@@ -407,9 +419,9 @@ if(submitted)return;
 submitted=true;
 
 // Collect last answer
-var visible=getVisibleFields();
-var lastFld=visible[currentIdx];
-if(lastFld)collectAnswer(lastFld);
+var visible=getVisibleGroups();
+var lastGroup=visible[currentIdx];
+if(lastGroup)collectGroupAnswers(lastGroup);
 
 // Build answers array
 var ansArr=FIELDS.map(function(f){

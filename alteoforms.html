@@ -178,6 +178,7 @@
 <div class="ed-field-row" id="fld-scale-wrap" style="display:none"><div class="ed-group-label">Échelle</div><div style="display:flex;gap:10px;align-items:center"><select class="bs" id="fld-scaleMax" style="width:80px"><option value="5">1 – 5</option><option value="10">1 – 10</option></select><span style="font-size:11px;color:rgba(255,255,255,.3)">Note de 1 à N</span></div></div>
 <!-- Required -->
 <div class="ed-field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-req"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Champ requis</span></label></div>
+<div class="ed-field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-sameCard"/><span style="font-size:13px;color:rgba(255,255,255,.7)">📑 Même carte que le champ précédent</span></label><div style="font-size:11px;color:rgba(255,255,255,.2);margin-top:4px;padding-left:24px">Regroupe ce champ avec le précédent sur une seule carte dans le formulaire.</div></div>
 <!-- Condition -->
 <!-- Contact mapping -->
 <div class="ed-field-row"><div class="ed-group-label">Mapping contact <span style="font-weight:400;color:rgba(255,255,255,.2)">(pour créer un lead)</span></div>
@@ -401,7 +402,13 @@ if(!fields.length){
 h+='<div style="text-align:center;padding:40px;color:rgba(255,255,255,.25)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:13px">Aucun champ. Commencez par ajouter une question.</div></div>';
 }
 fields.forEach(function(fld,i){
-h+='<div class="ed-field">';
+var isGrouped=fld.sameCard;
+var nextGrouped=fields[i+1]&&fields[i+1].sameCard;
+var groupStyle='';
+if(isGrouped)groupStyle+='margin-top:-4px;border-top-left-radius:0;border-top-right-radius:0;border-left:2px solid rgba(245,158,11,.25);';
+if(nextGrouped)groupStyle+='margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0;';
+if(isGrouped&&!nextGrouped)groupStyle+='border-bottom-left-radius:10px;';
+h+='<div class="ed-field" style="'+groupStyle+'">';
 h+='<div class="ed-field-icon">'+(FT_ICONS[fld.type]||'?')+'</div>';
 h+='<div class="ed-field-info"><div class="ed-field-name">'+esc(fld.label)+'</div><div class="ed-field-meta">';
 h+='<span class="ed-badge ed-badge-type">'+(FT_LABELS[fld.type]||fld.type)+'</span>';
@@ -411,6 +418,7 @@ if(fld.scaleMax)h+='<span style="color:rgba(255,255,255,.2)">1-'+fld.scaleMax+'<
 if(fld.condition&&fld.condition.fieldId)h+='<span class="ed-badge ed-badge-cond">⚡ Conditionnel</span>';
 var _CM_FR={prenom:'👤 Prénom',nom:'👤 Nom',email:'📧 Email',telephone:'📞 Tél'};
 if(fld.contactMapping)h+='<span class="ed-badge" style="background:rgba(52,211,153,.08);color:#34d399;border:1px solid rgba(52,211,153,.12)">'+(_CM_FR[fld.contactMapping]||fld.contactMapping)+'</span>';
+if(fld.sameCard)h+='<span class="ed-badge" style="background:rgba(245,158,11,.08);color:#fbbf24;border:1px solid rgba(245,158,11,.12)">📑 Même carte</span>';
 if(fld.description)h+='<span style="color:rgba(255,255,255,.15)" title="'+esc(fld.description)+'">💬</span>';
 h+='</div></div>';
 h+='<button class="ed-btn" onclick="openFldModal('+i+')" title="Modifier">✏️</button>';
@@ -604,6 +612,7 @@ document.getElementById('fld-label').value='';
 document.getElementById('fld-desc').value='';
 document.getElementById('fld-type').value='text';
 document.getElementById('fld-req').checked=false;
+document.getElementById('fld-sameCard').checked=false;
 document.getElementById('fld-cond-field').value='';
 document.getElementById('fld-cond-op').value='eq';
 document.getElementById('fld-cond-val').value='';
@@ -624,6 +633,7 @@ document.getElementById('fld-label').value=fld.label||'';
 document.getElementById('fld-desc').value=fld.description||'';
 document.getElementById('fld-type').value=fld.type||'text';
 document.getElementById('fld-req').checked=!!fld.required;
+document.getElementById('fld-sameCard').checked=!!fld.sameCard;
 if(fld.options&&fld.options.length){
 document.getElementById('fld-opts-wrap').style.display='block';
 fld.options.forEach(function(o){_addOptRow(o);});
@@ -670,6 +680,7 @@ label:label,
 type:type,
 required:document.getElementById('fld-req').checked
 };
+if(document.getElementById('fld-sameCard').checked)field.sameCard=true;
 var desc=document.getElementById('fld-desc').value.trim();
 if(desc)field.description=desc;
 // Options
