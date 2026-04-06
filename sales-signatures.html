@@ -42,8 +42,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
 /* Editor */
 .editor{display:none;}
 .editor-top{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
-.editor-body{display:flex;gap:16px;min-height:600px;}
-.editor-pdf{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:14px;overflow:hidden;position:relative;display:flex;flex-direction:column;}
+.editor-body{display:flex;gap:16px;align-items:flex-start;}
+.editor-pdf{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:14px;overflow:hidden;position:relative;display:flex;flex-direction:column;min-height:600px;}
 .pdf-nav{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;}
 .pdf-nav button{padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--fg);cursor:pointer;font-size:12px;font-weight:700;}
 .pdf-canvas-wrap{flex:1;position:relative;overflow:auto;padding:10px;display:flex;justify-content:center;}
@@ -55,20 +55,31 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
 .pdf-field:hover,.pdf-field.selected{box-shadow:0 0 0 2px var(--accent);z-index:10;}
 .pdf-field .field-label{pointer-events:none;text-align:center;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
 .pdf-field .field-resize{position:absolute;right:-4px;bottom:-4px;width:12px;height:12px;background:var(--accent);border-radius:2px;cursor:nwse-resize;}
+.pdf-field .field-req{position:absolute;top:-2px;right:2px;color:#ef4444;font-size:11px;font-weight:900;pointer-events:none;}
 
-/* Sidebar panel */
-.editor-panel{width:280px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;overflow-y:auto;max-height:700px;flex-shrink:0;}
-.ep-title{font-family:var(--fh);font-size:14px;font-weight:800;margin-bottom:12px;}
-.ep-section{margin-bottom:16px;}
+/* Sidebar panel — sticky */
+.editor-panel{width:300px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;overflow-y:auto;max-height:calc(100vh - 140px);flex-shrink:0;position:sticky;top:20px;}
+.ep-title{font-family:var(--fh);font-size:13px;font-weight:800;margin-bottom:10px;}
+.ep-section{margin-bottom:12px;}
 .ep-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
 .ep-input{width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:12px;font-family:var(--fm);}
 .ep-select{width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:12px;font-family:var(--fm);}
 
-/* Field toolbar */
-.field-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
-.ft-btn{padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);cursor:pointer;font-size:11px;font-weight:600;font-family:var(--fm);transition:all .15s;display:flex;align-items:center;gap:4px;}
-.ft-btn:hover{border-color:var(--accent);color:var(--accent2);}
-.ft-btn .ft-ico{font-size:14px;}
+/* Field palette (vertical grid in sidebar) */
+.field-palette{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.fp-btn{padding:7px 6px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);cursor:pointer;font-size:10px;font-weight:600;font-family:var(--fm);transition:all .15s;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;}
+.fp-btn:hover{border-color:var(--accent);color:var(--accent2);background:rgba(99,102,241,.06);}
+.fp-btn .fp-ico{font-size:13px;flex-shrink:0;}
+
+/* Required toggle */
+.req-toggle{display:flex;align-items:center;gap:8px;padding:8px 0;}
+.req-toggle label{font-size:11px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.req-switch{position:relative;width:34px;height:18px;display:inline-block;}
+.req-switch input{opacity:0;width:0;height:0;}
+.req-slider{position:absolute;inset:0;background:rgba(255,255,255,.1);border-radius:9px;cursor:pointer;transition:all .2s;}
+.req-slider:before{content:'';position:absolute;left:2px;top:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:all .2s;}
+.req-switch input:checked+.req-slider{background:var(--accent);}
+.req-switch input:checked+.req-slider:before{transform:translateX(16px);}
 
 /* Requests list */
 .req-table{width:100%;border-collapse:collapse;}
@@ -126,25 +137,6 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
     <button class="sig-btn sig-btn-g" onclick="sendForSignature()">📨 Envoyer pour signature</button>
   </div>
 
-  <div style="margin-bottom:12px">
-    <div class="ep-label" style="margin-bottom:6px">Ajouter un champ :</div>
-    <div class="field-toolbar" id="fieldToolbar">
-      <button class="ft-btn" onclick="addField('nom_prenom')"><span class="ft-ico">👤</span> Nom Prénom</button>
-      <button class="ft-btn" onclick="addField('email')"><span class="ft-ico">✉️</span> Email</button>
-      <button class="ft-btn" onclick="addField('telephone')"><span class="ft-ico">📞</span> Téléphone</button>
-      <button class="ft-btn" onclick="addField('adresse')"><span class="ft-ico">🏠</span> Adresse perso</button>
-      <button class="ft-btn" onclick="addField('entreprise')"><span class="ft-ico">🏢</span> Entreprise</button>
-      <button class="ft-btn" onclick="addField('type_entreprise')"><span class="ft-ico">📋</span> Type entreprise</button>
-      <button class="ft-btn" onclick="addField('siege_social')"><span class="ft-ico">📍</span> Siège social</button>
-      <button class="ft-btn" onclick="addField('siret')"><span class="ft-ico">🔢</span> SIRET</button>
-      <button class="ft-btn" onclick="addField('date_signature')"><span class="ft-ico">📅</span> Date signature</button>
-      <button class="ft-btn" onclick="addField('case_cocher')"><span class="ft-ico">☐</span> Case à cocher</button>
-      <button class="ft-btn" onclick="addField('lu_approuve')"><span class="ft-ico">☑️</span> Lu et approuvé</button>
-      <button class="ft-btn" onclick="addField('paraphe')"><span class="ft-ico">✏️</span> Paraphe</button>
-      <button class="ft-btn" onclick="addField('signature')"><span class="ft-ico">✍️</span> Signature</button>
-    </div>
-  </div>
-
   <div class="editor-body">
     <div class="editor-pdf" id="editorPdf">
       <div class="pdf-nav">
@@ -160,12 +152,18 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
     </div>
 
     <div class="editor-panel" id="editorPanel">
-      <div class="ep-title">Propriétés du champ</div>
-      <div id="propPanel">
-        <div style="text-align:center;padding:30px;color:var(--muted);font-size:12px">Sélectionnez un champ sur le PDF pour modifier ses propriétés.</div>
+      <div class="ep-section">
+        <div class="ep-title">➕ Ajouter un champ</div>
+        <div class="field-palette" id="fieldPalette"></div>
       </div>
-      <div class="ep-section" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
-        <div class="ep-title">Champs du modèle</div>
+      <div style="border-top:1px solid var(--border);margin:4px 0 12px"></div>
+      <div class="ep-title">⚙️ Propriétés</div>
+      <div id="propPanel">
+        <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Sélectionnez un champ sur le PDF pour modifier ses propriétés.</div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:8px 0 12px"></div>
+      <div class="ep-section">
+        <div class="ep-title">📋 Champs du modèle</div>
         <div id="fieldsList" style="font-size:12px"></div>
       </div>
     </div>
@@ -301,6 +299,7 @@ function openEditorWithPdf(dataUrl){
   document.getElementById('editorView').style.display='block';
   document.getElementById('edTplName').value=currentTpl.name||'';
   selectedField=null;
+  renderFieldPalette();
   // Load PDF
   try{
     var b64Part=dataUrl.split(',')[1];
@@ -365,8 +364,10 @@ function renderFieldsOnPage(){
     if(f.page!==currentPage)return;
     var def=FIELD_DEFS[f.fieldType]||{};
     var sel=selectedField===idx;
+    var req=f.required!==false;
     h+='<div class="pdf-field'+(sel?' selected':'')+'" data-idx="'+idx+'" style="left:'+f.x+'px;top:'+f.y+'px;width:'+f.w+'px;height:'+f.h+'px;border-color:'+def.color+';background:'+def.color+'12"';
     h+=' onmousedown="startDrag(event,'+idx+')">';
+    if(req){h+='<div class="field-req">*</div>';}
     h+='<div class="field-label" style="color:'+def.color+'">'+(def.icon||'')+' '+esc(f.label||def.label)+'</div>';
     h+='<div class="field-resize" style="background:'+def.color+'" onmousedown="startResize(event,'+idx+')"></div>';
     h+='</div>';
@@ -383,11 +384,13 @@ function renderFieldsList(){
   var h='';
   fields.forEach(function(f,idx){
     var def=FIELD_DEFS[f.fieldType]||{};
-    h+='<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer'+(selectedField===idx?';background:rgba(99,102,241,.08);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px':'')+'" onclick="selectField('+idx+')">';
-    h+='<span style="font-size:12px">'+(def.icon||'')+'</span>';
-    h+='<span style="flex:1;font-size:11px;font-weight:600">'+esc(f.label||def.label)+'</span>';
-    h+='<span style="font-size:10px;color:var(--muted)">p.'+f.page+'</span>';
-    h+='<button onclick="event.stopPropagation();removeField('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:2px 4px">✕</button>';
+    var req=f.required!==false;
+    h+='<div style="display:flex;align-items:center;gap:5px;padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer'+(selectedField===idx?';background:rgba(99,102,241,.08);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px':'')+'" onclick="selectField('+idx+')">';
+    h+='<span style="font-size:11px">'+(def.icon||'')+'</span>';
+    h+='<span style="flex:1;font-size:10px;font-weight:600">'+esc(f.label||def.label)+'</span>';
+    if(req){h+='<span style="color:#ef4444;font-size:10px;font-weight:800" title="Obligatoire">*</span>';}
+    h+='<span style="font-size:9px;color:var(--muted)">p.'+f.page+'</span>';
+    h+='<button onclick="event.stopPropagation();removeField('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:11px;padding:2px 4px">✕</button>';
     h+='</div>';
   });
   el.innerHTML=h;
@@ -396,15 +399,21 @@ function renderFieldsList(){
 function renderPropPanel(){
   var el=document.getElementById('propPanel');
   if(selectedField===null||!currentTpl.fields[selectedField]){
-    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted);font-size:12px">Sélectionnez un champ sur le PDF.</div>';
+    el.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Sélectionnez un champ sur le PDF.</div>';
     return;
   }
   var f=currentTpl.fields[selectedField];
   var def=FIELD_DEFS[f.fieldType]||{};
+  var req=f.required!==false;
   var h='<div class="ep-section">';
-  h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px"><span style="font-size:16px">'+(def.icon||'')+'</span><span style="font-family:var(--fh);font-size:13px;font-weight:700">'+esc(def.label)+'</span></div>';
+  h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="font-size:14px">'+(def.icon||'')+'</span><span style="font-family:var(--fh);font-size:12px;font-weight:700">'+esc(def.label)+'</span></div>';
   h+='<div class="ep-label">Label personnalisé</div>';
   h+='<input class="ep-input" value="'+esc(f.label||'')+'" onchange="updateFieldProp('+selectedField+',\'label\',this.value)" placeholder="'+esc(def.label)+'"/>';
+  h+='</div>';
+  // Required toggle
+  h+='<div class="req-toggle">';
+  h+='<label><span class="req-switch"><input type="checkbox" '+(req?'checked':'')+' onchange="updateFieldProp('+selectedField+',\'required\',this.checked);renderFieldsOnPage()"/><span class="req-slider"></span></span>';
+  h+='Obligatoire'+(req?' <span style="color:#ef4444;font-weight:800">*</span>':'')+'</label>';
   h+='</div>';
   h+='<div class="ep-section"><div class="ep-label">Position</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
@@ -417,9 +426,22 @@ function renderPropPanel(){
   h+='<input class="ep-input" type="number" value="'+Math.round(f.h)+'" onchange="updateFieldProp('+selectedField+',\'h\',+this.value)" placeholder="H"/>';
   h+='</div></div>';
   if(f.fieldType==='paraphe'||f.fieldType==='signature'){
-    h+='<div class="ep-section" style="padding:10px;background:rgba(99,102,241,.05);border-radius:8px;font-size:11px;color:var(--accent2)">🔁 Le client dessine une seule fois — appliqué automatiquement sur toutes les instances.</div>';
+    h+='<div class="ep-section" style="padding:8px;background:rgba(99,102,241,.05);border-radius:8px;font-size:10px;color:var(--accent2)">🔁 Le client dessine une seule fois — appliqué sur toutes les instances.</div>';
   }
-  h+='<button class="sig-btn sig-btn-r" style="width:100%;justify-content:center;margin-top:8px" onclick="removeField('+selectedField+')">🗑 Supprimer ce champ</button>';
+  h+='<button class="sig-btn sig-btn-r" style="width:100%;justify-content:center;margin-top:8px;font-size:11px" onclick="removeField('+selectedField+')">🗑 Supprimer</button>';
+  el.innerHTML=h;
+}
+
+/* ═══ FIELD PALETTE (sidebar) ═══ */
+function renderFieldPalette(){
+  var el=document.getElementById('fieldPalette');
+  if(!el)return;
+  var types=Object.keys(FIELD_DEFS);
+  var h='';
+  types.forEach(function(t){
+    var d=FIELD_DEFS[t];
+    h+='<button class="fp-btn" onclick="addField(\''+t+'\')"><span class="fp-ico">'+d.icon+'</span> '+d.label+'</button>';
+  });
   el.innerHTML=h;
 }
 
@@ -432,6 +454,7 @@ function addField(type){
     fieldType:type,
     label:def.label,
     type:def.type,
+    required:true,
     page:currentPage,
     x:60,y:100+(currentTpl.fields||[]).filter(function(ff){return ff.page===currentPage;}).length*40,
     w:def.w,h:def.h
@@ -498,7 +521,7 @@ function startResize(e,idx){
 /* Click on PDF to deselect */
 document.addEventListener('click',function(e){
   if(document.getElementById('editorView').style.display==='none')return;
-  if(!e.target.closest('.pdf-field')&&!e.target.closest('.editor-panel')&&!e.target.closest('.field-toolbar')&&e.target.closest('.pdf-canvas-wrap')){
+  if(!e.target.closest('.pdf-field')&&!e.target.closest('.editor-panel')&&e.target.closest('.pdf-canvas-wrap')){
     selectedField=null;
     renderFieldsOnPage();
   }
