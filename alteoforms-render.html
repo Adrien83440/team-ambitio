@@ -442,7 +442,39 @@ executePostSubmit();
 }
 
 function executePostSubmit(){
-// Evaluate rules first, then fall back to default behavior
+var settings=FORM.settings||{};
+var fields=FORM.fields||[];
+
+// Extract contact data from mapped fields
+var contact={prenom:'',nom:'',email:'',telephone:''};
+fields.forEach(function(f){
+if(f.contactMapping&&answers[f.id]){
+contact[f.contactMapping]=answers[f.id];
+}
+});
+
+// Search for existing lead if CRM sync enabled, then continue
+if(settings.createLead&&(contact.email||contact.telephone)){
+findAndUpdateLead(contact,function(leadData){
+doPostActions(settings,contact,leadData);
+});
+}else{
+doPostActions(settings,contact,null);
+}
+}
+
+function doPostActions(settings,contact,leadData){
+// Build booking URL params
+var _bkParams='&fromForm='+FORM._id;
+if(contact.prenom)_bkParams+='&prenom='+encodeURIComponent(contact.prenom);
+if(contact.nom)_bkParams+='&nom='+encodeURIComponent(contact.nom);
+if(contact.email)_bkParams+='&email='+encodeURIComponent(contact.email);
+if(contact.telephone)_bkParams+='&tel='+encodeURIComponent(contact.telephone);
+// Force the assigned closer only
+if(leadData&&leadData.assignedTo)_bkParams+='&person='+encodeURIComponent(leadData.assignedTo);
+if(leadData&&leadData._id)_bkParams+='&leadId='+encodeURIComponent(leadData._id);
+
+// Evaluate rules
 var rules=FORM.rules||[];
 var matchedRule=null;
 for(var ri=0;ri<rules.length;ri++){
@@ -472,7 +504,7 @@ if(matchedRule.action==='redirect'&&matchedRule.actionValue){
 window.location.href=matchedRule.actionValue;return;
 }
 if(matchedRule.action==='booking'&&matchedRule.actionValue){
-window.location.href='booking.html?type='+matchedRule.actionValue+'&fromForm='+FORM._id;return;
+window.location.href='booking.html?type='+matchedRule.actionValue+_bkParams;return;
 }
 if(matchedRule.action==='message'&&matchedRule.actionValue){
 showThankYou(matchedRule.actionValue);return;
@@ -480,17 +512,60 @@ showThankYou(matchedRule.actionValue);return;
 }
 
 // Default: settings-based behavior
-var settings=FORM.settings||{};
 if(settings.linkedBookingType){
-window.location.href='booking.html?type='+settings.linkedBookingType+'&fromForm='+FORM._id;
+window.location.href='booking.html?type='+settings.linkedBookingType+_bkParams;
 return;
 }
 if(settings.redirectUrl){
 window.location.href=settings.redirectUrl;
 return;
 }
-
 showThankYou(settings.thankYouMessage||'Merci pour vos réponses !');
+}
+
+function findAndUpdateLead(contact,callback){
+// Try to find existing lead by email first, then phone
+var searchField=null,searchValue=null;
+if(contact.email){searchField='email';searchValue=contact.email;}
+else if(contact.telephone){searchField='telephone';searchValue=contact.telephone;}
+
+if(!searchField){callback(null);return;}
+
+db.collection('leads').where(searchField,'==',searchValue).limit(1).get().then(function(sn){
+if(sn.empty){
+// Try phone if email didn't match
+if(searchField==='email'&&contact.telephone){
+db.collection('leads').where('telephone','==',contact.telephone).limit(1).get().then(function(sn2){
+if(sn2.empty){callback(null);return;}
+var doc=sn2.docs[0];
+updateLeadWithForm(doc);
+var ld=doc.data();ld._id=doc.id;
+callback(ld);
+}).catch(function(){callback(null);});
+}else{callback(null);}
+return;
+}
+var doc=sn.docs[0];
+updateLeadWithForm(doc);
+var ld=doc.data();ld._id=doc.id;
+callback(ld);
+}).catch(function(e){
+console.error('Lead search error:',e);
+callback(null);
+});
+}
+
+function updateLeadWithForm(doc){
+var update={
+status:'self_booking',
+selfBooking:true,
+formId:FORM._id,
+formTitle:FORM.title||'',
+formAnswers:answers,
+formSubmittedAt:new Date().toISOString(),
+updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+};
+doc.ref.update(update).catch(function(e){console.error('Lead update error:',e);});
 }
 
 function showThankYou(msg){

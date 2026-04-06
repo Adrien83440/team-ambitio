@@ -179,6 +179,16 @@
 <!-- Required -->
 <div class="ed-field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-req"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Champ requis</span></label></div>
 <!-- Condition -->
+<!-- Contact mapping -->
+<div class="ed-field-row"><div class="ed-group-label">Mapping contact <span style="font-weight:400;color:rgba(255,255,255,.2)">(pour créer un lead)</span></div>
+<select class="bs" id="fld-contact" style="width:100%">
+<option value="">— Aucun —</option>
+<option value="prenom">Prénom du contact</option>
+<option value="nom">Nom du contact</option>
+<option value="email">Email du contact</option>
+<option value="telephone">Téléphone du contact</option>
+</select></div>
+<!-- Condition -->
 <div class="ed-field-row"><div class="ed-group-label">Condition d'affichage <span style="font-weight:400;color:rgba(255,255,255,.2)">(optionnel)</span></div>
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
 <span style="font-size:12px;color:rgba(255,255,255,.4)">Afficher si</span>
@@ -380,6 +390,8 @@ h+=fld.required?'<span class="ed-badge ed-badge-req">* Requis</span>':'<span cla
 if(fld.options&&fld.options.length)h+='<span style="color:rgba(255,255,255,.2)">'+fld.options.length+' options</span>';
 if(fld.scaleMax)h+='<span style="color:rgba(255,255,255,.2)">1-'+fld.scaleMax+'</span>';
 if(fld.condition&&fld.condition.fieldId)h+='<span class="ed-badge ed-badge-cond">⚡ Conditionnel</span>';
+var _CM_FR={prenom:'👤 Prénom',nom:'👤 Nom',email:'📧 Email',telephone:'📞 Tél'};
+if(fld.contactMapping)h+='<span class="ed-badge" style="background:rgba(52,211,153,.08);color:#34d399;border:1px solid rgba(52,211,153,.12)">'+(_CM_FR[fld.contactMapping]||fld.contactMapping)+'</span>';
 if(fld.description)h+='<span style="color:rgba(255,255,255,.15)" title="'+esc(fld.description)+'">💬</span>';
 h+='</div></div>';
 h+='<button class="ed-btn" onclick="openFldModal('+i+')" title="Modifier">✏️</button>';
@@ -450,6 +462,13 @@ h+='</div>';
 // Redirect
 h+='<div class="ed-set-card"><div class="ed-set-title">🔄 Redirection après soumission</div><div class="ed-set-desc">Laissez vide pour afficher le message de remerciement</div>';
 h+='<div class="ed-field-row"><div class="ed-group-label">URL de redirection</div><input class="bi" id="set-redirect" value="'+esc(s.redirectUrl||'')+'" placeholder="https://..." style="width:100%" onchange="currentForm.settings.redirectUrl=this.value;saveForm(true)"/></div>';
+h+='</div>';
+// Lead sync
+h+='<div class="ed-set-card"><div class="ed-set-title">👤 Synchronisation Lead CRM</div><div class="ed-set-desc">À la soumission, retrouver le lead existant par email/tél, mettre à jour sa fiche (status self_booking, réponses formulaire) et proposer uniquement son closer assigné dans le booking.</div>';
+var _hasMapping=(f.fields||[]).some(function(fl){return fl.contactMapping;});
+h+='<div style="margin-top:8px"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="set-createLead"'+(s.createLead?' checked':'')+' onchange="currentForm.settings.createLead=this.checked;saveForm(true)"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Synchroniser avec le CRM</span></label></div>';
+if(s.createLead&&!_hasMapping)h+='<div style="font-size:11px;color:#fbbf24;margin-top:8px">⚠️ Aucun champ n\'a de mapping contact. Allez dans Champs → Modifier un champ → Mapping contact.</div>';
+if(s.createLead&&_hasMapping){var _maps=[];(f.fields||[]).forEach(function(fl){if(fl.contactMapping)_maps.push(fl.contactMapping);});h+='<div style="font-size:11px;color:#34d399;margin-top:8px">✅ Champs mappés : '+_maps.join(', ')+'</div>';}
 h+='</div>';
 // Booking link
 h+='<div class="ed-set-card"><div class="ed-set-title">📅 Liaison Booking</div><div class="ed-set-desc">Après soumission, rediriger vers un calendrier de prise de RDV</div>';
@@ -569,6 +588,7 @@ document.getElementById('fld-req').checked=false;
 document.getElementById('fld-cond-field').value='';
 document.getElementById('fld-cond-op').value='eq';
 document.getElementById('fld-cond-val').value='';
+document.getElementById('fld-contact').value='';
 document.getElementById('fld-opts-list').innerHTML='';
 document.getElementById('fld-opts-wrap').style.display='none';
 document.getElementById('fld-scale-wrap').style.display='none';
@@ -598,6 +618,7 @@ document.getElementById('fld-cond-field').value=fld.condition.fieldId||'';
 document.getElementById('fld-cond-op').value=fld.condition.operator||'eq';
 document.getElementById('fld-cond-val').value=fld.condition.value||'';
 }
+if(fld.contactMapping)document.getElementById('fld-contact').value=fld.contactMapping;
 }
 fldTypeChanged();
 document.getElementById('fldModal').classList.add('show');
@@ -643,6 +664,9 @@ if(type==='scale')field.scaleMax=parseInt(document.getElementById('fld-scaleMax'
 // Condition
 var condField=document.getElementById('fld-cond-field').value;
 if(condField)field.condition={fieldId:condField,operator:document.getElementById('fld-cond-op').value,value:document.getElementById('fld-cond-val').value};
+// Contact mapping
+var contactMap=document.getElementById('fld-contact').value;
+if(contactMap)field.contactMapping=contactMap;
 // Save
 if(!currentForm.fields)currentForm.fields=[];
 if(_fldEditIdx>=0&&_fldEditIdx<currentForm.fields.length)currentForm.fields[_fldEditIdx]=field;
