@@ -38,25 +38,24 @@
     { id: 'coach-clients',       icon: '👥', label: 'Clients',       href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
     { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',     section: 'Coaching', perm: 'coaching_dashboard' },
     { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html', section: 'Coaching', perm: 'coaching_communication' },
+    { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html',   section: 'Sales', perm: 'sales_dashboard' },
     { id: 'sales-crm', icon: '🧩', label: 'CRM', href: '#', section: 'Sales', perm: 'sales_crm', children: [
       { id: 'sales-leads_live',  icon: '🔔', label: 'Leads Live',    href: 'sales-leads.html' },
       { id: 'sales-pipeline',    icon: '▥',  label: 'Pipeline',      href: 'sales-crm.html' },
       { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting',   href: 'sales-retargeting.html' },
       { id: 'sales-suivi',       icon: '📋', label: 'Clients', href: 'sales-clients.html' },
     ]},
-    { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html',   section: 'Sales', perm: 'sales_dashboard' },
     { id: 'sales-saisie',      icon: '✏️', label: 'Setting / Closing', href: '#',                      section: 'Sales', perm: 'sales_saisie', children: [
-      { id: 'sales-setting', icon: '📞', label: 'Setting', href: 'sales-setting.html' },
-      { id: 'sales-closing', icon: '🎯', label: 'Closing', href: 'sales-closing.html' },
-      { id: 'sales-eod',    icon: '📝', label: 'EOD',     href: 'sales-eod.html' },
+      { id: 'sales-setting',      icon: '📞', label: 'Setting',      href: 'sales-setting.html' },
+      { id: 'sales-closing',      icon: '🎯', label: 'Closing',      href: 'sales-closing.html' },
+      { id: 'sales-eod',          icon: '📝', label: 'EOD',          href: 'sales-eod.html' },
+      { id: 'sales-commissions',  icon: '💰', label: 'Commissions',  href: 'sales-commissions.html' },
+      { id: 'sales-projections',  icon: '📈', label: 'Projections',  href: 'sales-projections.html' },
     ]},
     { id: 'sales-equipe',      icon: '👥', label: 'Équipe',      href: 'sales-equipe.html',      section: 'Sales', perm: 'sales_equipe' },
-    { id: 'sales-commissions', icon: '💰', label: 'Commissions', href: 'sales-commissions.html', section: 'Sales', perm: 'sales_commissions' },
-    { id: 'sales-projections', icon: '📈', label: 'Projections', href: 'sales-projections.html', section: 'Sales', perm: 'sales_projections' },
     { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: '_admin' },
-    { id: 'import',            icon: '🔗', label: 'Import Notion', href: 'import-notion.html',   section: 'Outils', perm: '_admin' },
   ];
 
   const THEMES = {
