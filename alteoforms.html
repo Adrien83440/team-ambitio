@@ -492,19 +492,69 @@ el.innerHTML=h;
 
 function loadResponses(){
 if(!currentForm)return;
-db.collection('alteo_forms').doc(currentForm._id).collection('responses').orderBy('submittedAt','desc').limit(50).get().then(function(sn){
+var fields=currentForm.fields||[];
+db.collection('alteo_forms').doc(currentForm._id).collection('responses').orderBy('submittedAt','desc').limit(100).get().then(function(sn){
 var el=document.getElementById('respList');
 if(!el)return;
 if(!sn.size){el.innerHTML='<div style="text-align:center;padding:40px;color:rgba(255,255,255,.25)">Aucune réponse pour le moment.</div>';return;}
-var h='<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:12px">'+sn.size+' réponse'+(sn.size>1?'s':'')+'</div>';
-sn.forEach(function(d){
+var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><div style="font-size:13px;color:rgba(255,255,255,.5);font-weight:600">'+sn.size+' réponse'+(sn.size>1?'s':'')+'</div></div>';
+
+sn.forEach(function(d,idx){
 var r=d.data();
 var date=r.submittedAt?r.submittedAt.toDate().toLocaleString('fr-FR'):'—';
-h+='<div class="ed-field" style="cursor:default"><div class="ed-field-icon">📨</div><div class="ed-field-info"><div class="ed-field-name">'+esc(r.answers&&r.answers[0]?r.answers[0].value:'Réponse')+'</div><div class="ed-field-meta"><span style="color:rgba(255,255,255,.25)">'+date+'</span></div></div></div>';
+var answers=r.answers||[];
+var aMap=r.answersMap||{};
+
+// Preview: first 2 answers
+var preview='';
+answers.slice(0,2).forEach(function(a){
+if(a.value)preview+='<span style="color:rgba(255,255,255,.5)">'+esc(a.label)+':</span> '+esc(String(a.value).substring(0,40))+' ';
+});
+
+h+='<div style="margin-bottom:10px">';
+h+='<div class="ed-field" style="cursor:pointer" onclick="toggleResp(this)">';
+h+='<div class="ed-field-icon">📨</div>';
+h+='<div class="ed-field-info"><div class="ed-field-name" style="font-size:12px">'+esc(preview||'Réponse')+'</div><div class="ed-field-meta"><span style="color:rgba(255,255,255,.2)">'+date+'</span><span style="color:rgba(255,255,255,.15)">'+answers.length+' champs</span></div></div>';
+h+='<span style="font-size:12px;color:rgba(255,255,255,.25);transition:transform .2s" class="resp-arrow">▼</span>';
+h+='</div>';
+
+// Detail panel (hidden)
+h+='<div class="resp-detail" style="display:none;background:#0e0e1a;border:1px solid rgba(255,255,255,.07);border-top:0;border-radius:0 0 10px 10px;padding:16px 18px;margin-top:-8px">';
+if(answers.length){
+answers.forEach(function(a){
+var val=a.value||'—';
+h+='<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.04)">';
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">'+esc(a.label)+'</div>';
+h+='<div style="font-size:14px;color:rgba(255,255,255,.85);line-height:1.5">'+esc(String(val))+'</div>';
+h+='</div>';
+});
+}else{
+// Fallback to answersMap
+for(var key in aMap){
+var fld=fields.find(function(f){return f.id===key;});
+var label=fld?fld.label:key;
+h+='<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.04)">';
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">'+esc(label)+'</div>';
+h+='<div style="font-size:14px;color:rgba(255,255,255,.85);line-height:1.5">'+esc(String(aMap[key]))+'</div>';
+h+='</div>';
+}
+}
+h+='</div>';
+h+='</div>';
 });
 el.innerHTML=h;
 });
 }
+
+function toggleResp(el){
+var detail=el.parentElement.querySelector('.resp-detail');
+var arrow=el.querySelector('.resp-arrow');
+if(!detail)return;
+var open=detail.style.display!=='none';
+detail.style.display=open?'none':'block';
+if(arrow)arrow.style.transform=open?'':'rotate(180deg)';
+}
+window.toggleResp=toggleResp;
 
 // ═══ FIELD MODAL ═══
 function openFldModal(idx){
