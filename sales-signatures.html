@@ -240,8 +240,9 @@ function loadTemplates(){
   db.collection('signature_templates').orderBy('createdAt','desc').get().then(function(sn){
     TPL=[];
     sn.forEach(function(d){var v=d.data();v.id=d.id;TPL.push(v);});
+    console.log('[SIG] Templates loaded:',TPL.length);
     renderTemplates();
-  });
+  }).catch(function(err){console.error('[SIG] loadTemplates error:',err);renderTemplates();});
 }
 function renderTemplates(){
   var h='<div class="tpl-card tpl-card-new" onclick="createNewTpl()"><span style="font-size:28px">+</span><span style="font-size:13px;font-weight:700">Nouveau modèle</span></div>';
@@ -266,8 +267,10 @@ function createNewTpl(){
     if(!file)return;
     if(file.size>3*1024*1024){alert('PDF trop lourd (max 3 Mo)');return;}
     var reader=new FileReader();
+    reader.onerror=function(){alert('Erreur lecture du fichier.');console.error('FileReader error',reader.error);};
     reader.onload=function(e){
       var b64=e.target.result;
+      console.log('[SIG] FileReader OK, size='+b64.length+', prefix='+b64.substring(0,40));
       currentTpl={id:null,name:file.name.replace('.pdf',''),pdfBase64:b64,fields:[],pages:0};
       openEditorWithPdf(b64);
     };
@@ -299,16 +302,29 @@ function openEditorWithPdf(dataUrl){
   document.getElementById('edTplName').value=currentTpl.name||'';
   selectedField=null;
   // Load PDF
-  var raw=atob(dataUrl.split(',')[1]);
-  var arr=new Uint8Array(raw.length);
-  for(var i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
-  pdfjsLib.getDocument({data:arr}).promise.then(function(pdf){
-    pdfDoc=pdf;
-    totalPages=pdf.numPages;
-    currentTpl.pages=totalPages;
-    currentPage=1;
-    renderPdfPage();
-  });
+  try{
+    var b64Part=dataUrl.split(',')[1];
+    if(!b64Part){alert('Format PDF invalide (pas de base64).');console.error('[SIG] No base64 part in dataUrl');closeEditor();return;}
+    console.log('[SIG] Decoding base64, length='+b64Part.length);
+    var raw=atob(b64Part);
+    var arr=new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+    console.log('[SIG] Loading PDF, bytes='+arr.length);
+    pdfjsLib.getDocument({data:arr}).promise.then(function(pdf){
+      console.log('[SIG] PDF loaded, pages='+pdf.numPages);
+      pdfDoc=pdf;
+      totalPages=pdf.numPages;
+      currentTpl.pages=totalPages;
+      currentPage=1;
+      renderPdfPage();
+    }).catch(function(err){
+      console.error('[SIG] pdf.js load error:',err);
+      alert('Erreur chargement PDF: '+err.message);
+    });
+  }catch(e){
+    console.error('[SIG] openEditorWithPdf crash:',e);
+    alert('Erreur traitement PDF: '+e.message);
+  }
 }
 function closeEditor(){
   document.getElementById('editorView').style.display='none';
@@ -330,12 +346,12 @@ function renderPdfPage(){
     var ctx=canvas.getContext('2d');
     page.render({canvasContext:ctx,viewport:vp}).promise.then(function(){
       renderFieldsOnPage();
-    });
+    }).catch(function(err){console.error('[SIG] Page render error:',err);});
     // Size the fields layer
     var layer=document.getElementById('fieldsLayer');
     layer.style.width=vp.width+'px';
     layer.style.height=vp.height+'px';
-  });
+  }).catch(function(err){console.error('[SIG] getPage error:',err);});
 }
 function prevPage(){if(currentPage>1){currentPage--;renderPdfPage();}}
 function nextPage(){if(currentPage<totalPages){currentPage++;renderPdfPage();}}
@@ -625,9 +641,15 @@ firebase.auth().onAuthStateChanged(function(u){
       var d=s.exists?s.data():{};
       window._currentRole=d.role||'admin';
       window._currentUserName=u.displayName||u.email.split('@')[0];
+      console.log('[SIG] Auth OK:',u.email,'role:',window._currentRole);
+      loadTemplates();
+    }).catch(function(err){
+      console.error('[SIG] User doc error:',err);
+      loadTemplates();
     });
+  } else {
+    console.log('[SIG] Not authenticated');
   }
-  loadTemplates();
 });
 </script>
 </body>
