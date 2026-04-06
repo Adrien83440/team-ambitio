@@ -78,9 +78,7 @@ body{background:#f0f2f5;font-family:var(--fm);color:#1e293b;-webkit-print-color-
 
 <div id="certContent" style="display:none">
 <div class="print-bar no-print">
-  <button class="print-btn print-btn-o" onclick="window.print()">🖨️ Imprimer</button>
-  <button class="print-btn print-btn-p" onclick="window.print()">📥 Enregistrer en PDF</button>
-  <div style="font-size:11px;color:#94a3b8;margin-left:8px;line-height:1.3">Sur Mac : cliquez "PDF" en bas à gauche<br/>puis "Enregistrer au format PDF"</div>
+  <button class="print-btn print-btn-o" onclick="doPrint()">🖨️ Imprimer / PDF</button>
 </div>
 
 <div class="page">
@@ -266,6 +264,23 @@ function render(r,docId){
 }
 
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+
+function doPrint(){
+  // Open print-friendly version in new window to avoid Safari issues
+  var w=window.open('','_blank','width=900,height=700');
+  if(!w){alert('Autorisez les pop-ups pour ce site puis réessayez.');return;}
+  var page=document.querySelector('.page');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Certificat</title>');
+  // Copy all styles
+  var styles=document.querySelectorAll('style,link[rel=stylesheet]');
+  styles.forEach(function(s){w.document.write(s.outerHTML);});
+  w.document.write('<style>.no-print{display:none!important}body{background:#fff;padding:0;margin:0}.page{margin:0;box-shadow:none;border-radius:0;max-width:100%}</style>');
+  w.document.write('</head><body>');
+  w.document.write(page.outerHTML);
+  w.document.write('<script>setTimeout(function(){window.print();},500);<\/script>');
+  w.document.write('</body></html>');
+  w.document.close();
+}
 </script>
 </body>
 </html>
