@@ -215,6 +215,11 @@
     }
 
     .nav-footer { position:relative; z-index:1; padding:12px 10px; border-top:1px solid rgba(255,255,255,0.08); flex-shrink:0; }
+    .nav-legal { text-align:center; padding:6px 0 2px; font-size:10px; opacity:.25; transition:opacity .2s; }
+    .nav-legal:hover { opacity:.5; }
+    .nav-legal a { color:inherit; text-decoration:none; }
+    .nav-legal a:hover { text-decoration:underline; }
+    .sidebar-collapsed .nav-legal { display:none; }
     .nav-profile-btn {
       display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px;
       cursor:pointer; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
@@ -489,6 +494,7 @@
           </div>
           <span class="nav-profile-caret">⚙</span>
         </div>
+        <div class="nav-legal"><a href="/privacy.html" target="_blank">Confidentialité</a> · <a href="/terms.html" target="_blank">Conditions</a></div>
       </div>`;
 
     document.body.appendChild(sidebar);
