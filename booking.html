@@ -407,7 +407,7 @@ function goStep(n) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   if (n === 3) renderCalendar();
-  if (n === 4) { renderSummary(); renderForm(); }
+  if (n === 4) { renderSummary(); renderForm(); prefillFromForm(); }
 }
 
 /* ── INFO PANEL (left side) ── */
@@ -459,6 +459,12 @@ function updateMobileSummary() {
 var params = new URLSearchParams(window.location.search);
 var presetPerson = params.get('person');
 var presetType = params.get('type');
+var _formPrenom = params.get('prenom') || '';
+var _formNom = params.get('nom') || '';
+var _formEmail = params.get('email') || '';
+var _formTel = params.get('tel') || '';
+var _formLeadId = params.get('leadId') || '';
+var _fromForm = params.get('fromForm') || '';
 
 db.collection('booking_config').get().then(function(snap) {
   snap.forEach(function(doc) {
@@ -889,6 +895,32 @@ function renderForm() {
   document.getElementById('confirmBtn').addEventListener('click', handleSubmit);
 }
 
+/* ═══ PRE-FILL FROM ALTEOFORMS ═══ */
+function prefillFromForm() {
+  if (!_fromForm && !_formPrenom && !_formEmail) return;
+  // Pre-fill fields
+  var prenomEl = document.getElementById('fPrenom');
+  var nomEl = document.getElementById('fNom');
+  if (prenomEl && _formPrenom) prenomEl.value = _formPrenom;
+  if (nomEl && _formNom) nomEl.value = _formNom;
+  // Email field
+  var emailEl = document.getElementById('fField_email');
+  if (emailEl && _formEmail) emailEl.value = _formEmail;
+  // Phone field
+  var phoneEl = document.getElementById('fField_phone');
+  if (phoneEl && _formTel) phoneEl.value = _formTel;
+
+  // If all required fields are filled, auto-submit
+  if (_fromForm && _formPrenom && _formEmail) {
+    // Small delay to let user see what's filled, then auto-submit
+    var btn = document.getElementById('confirmBtn');
+    if (btn) {
+      btn.textContent = 'Confirmation automatique…';
+      setTimeout(function() { handleSubmit(); }, 800);
+    }
+  }
+}
+
 /* ═══════════════════════════════════════════════════
    STEP 5 — SUBMIT BOOKING
    ═══════════════════════════════════════════════════ */
@@ -947,12 +979,28 @@ function handleSubmit() {
     formData: formData,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
+  if (_formLeadId) booking.leadId = _formLeadId;
+  if (_fromForm) booking.formId = _fromForm;
+  if (_formLeadId) booking.source = 'self_booking';
 
   var btn = document.getElementById('confirmBtn');
   btn.disabled = true;
   btn.textContent = 'Réservation en cours…';
 
   db.collection('bookings').add(booking).then(function(docRef) {
+    // Update lead if linked
+    if (_formLeadId) {
+      db.collection('leads').doc(_formLeadId).update({
+        status: 'rdv_pose',
+        selfBooking: true,
+        rdvDate: S.selDate,
+        rdvHeure: S.selTime,
+        rdvType: S.selType ? S.selType.label : '',
+        rdvExpert: S.selPerson ? S.selPerson.name : '',
+        bookingId: docRef.id,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(function(e) { console.log('Lead update error:', e); });
+    }
     // Listen for Meet link (Cloud Function generates it async)
     if (S.selPerson && S.selPerson.calendarConnected) {
       var unsub = docRef.onSnapshot(function(snap) {
