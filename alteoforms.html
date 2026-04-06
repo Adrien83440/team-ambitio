@@ -239,6 +239,7 @@ var FORMS=[];
 var currentForm=null;
 var edSection='fields';
 var _fldEditIdx=-1;
+var _bookingTypes=[];
 
 var FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤',number:'🔢',date:'📅'};
 var FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle',number:'Nombre',date:'Date'};
@@ -253,6 +254,12 @@ db.collection('alteo_forms').orderBy('createdAt','desc').get().then(function(sn)
 FORMS=[];sn.forEach(function(d){var v=d.data();v._id=d.id;FORMS.push(v);});
 renderGrid();
 });
+}
+
+function loadBookingTypes(){
+db.collection('booking_config').doc('_types').get().then(function(doc){
+if(doc.exists&&doc.data().list)_bookingTypes=doc.data().list;
+}).catch(function(){});
 }
 
 function renderGrid(){
@@ -446,8 +453,15 @@ h+='<div class="ed-field-row"><div class="ed-group-label">URL de redirection</di
 h+='</div>';
 // Booking link
 h+='<div class="ed-set-card"><div class="ed-set-title">📅 Liaison Booking</div><div class="ed-set-desc">Après soumission, rediriger vers un calendrier de prise de RDV</div>';
-h+='<div class="ed-field-row"><div class="ed-group-label">ID de consultation (optionnel)</div><input class="bi" id="set-booking" value="'+esc(s.linkedBookingType||'')+'" placeholder="Ex: coaching_1v1_abc" style="width:100%" onchange="currentForm.settings.linkedBookingType=this.value;saveForm(true)"/></div>';
-h+='<div style="font-size:11px;color:rgba(255,255,255,.2)">Si renseigné, le calendrier de booking s\'affiche après le formulaire.</div>';
+h+='<div class="ed-field-row"><div class="ed-group-label">Consultation liée</div>';
+h+='<select class="bs" id="set-booking" style="width:100%" onchange="currentForm.settings.linkedBookingType=this.value;saveForm(true)">';
+h+='<option value="">— Aucune —</option>';
+_bookingTypes.forEach(function(bt){
+h+='<option value="'+esc(bt.id)+'"'+(s.linkedBookingType===bt.id?' selected':'')+'>'+esc(bt.label)+' ('+bt.duration+' min)</option>';
+});
+h+='</select></div>';
+if(s.linkedBookingType){var _bt=_bookingTypes.find(function(t){return t.id===s.linkedBookingType;});h+='<div style="font-size:11px;color:#34d399;margin-top:4px">✅ Liée à : '+esc(_bt?_bt.label:s.linkedBookingType)+'</div>';}
+else{h+='<div style="font-size:11px;color:rgba(255,255,255,.2)">Le calendrier de booking s\'affichera après le formulaire.</div>';}
 h+='</div>';
 }
 
@@ -714,10 +728,31 @@ function addRuleCond(){_addCondRow('','eq','');}
 function ruleActionChanged(){
 var action=document.getElementById('rule-action').value;
 var label=document.getElementById('rule-action-val-label');
-var inp=document.getElementById('rule-action-val');
-if(action==='redirect'){label.textContent='URL de redirection';inp.placeholder='https://www.example.com/merci';}
-else if(action==='booking'){label.textContent='ID de consultation Booking';inp.placeholder='coaching_1v1_abc';}
-else if(action==='message'){label.textContent='Message à afficher';inp.placeholder='Merci, nous vous recontacterons !';}
+var wrap=document.getElementById('rule-action-val-wrap');
+// Remove old input/select
+var old=document.getElementById('rule-action-val');
+if(action==='booking'&&_bookingTypes.length){
+label.textContent='Consultation Booking';
+var sel=document.createElement('select');
+sel.className='bs';sel.id='rule-action-val';sel.style.cssText='width:100%';
+sel.innerHTML='<option value="">— Choisir —</option>';
+_bookingTypes.forEach(function(bt){
+sel.innerHTML+='<option value="'+esc(bt.id)+'"'+(old&&old.value===bt.id?' selected':'')+'>'+esc(bt.label)+' ('+bt.duration+' min)</option>';
+});
+old.replaceWith(sel);
+}else{
+if(action==='redirect'){label.textContent='URL de redirection';}
+else if(action==='message'){label.textContent='Message à afficher';}
+else{label.textContent='Valeur';}
+if(old&&old.tagName==='SELECT'){
+var inp=document.createElement('input');
+inp.className='bi';inp.id='rule-action-val';inp.style.cssText='width:100%';
+inp.placeholder=action==='redirect'?'https://www.example.com/merci':action==='message'?'Merci, nous vous recontacterons !':'';
+old.replaceWith(inp);
+}else if(old){
+old.placeholder=action==='redirect'?'https://www.example.com/merci':action==='message'?'Merci, nous vous recontacterons !':'';
+}
+}
 }
 
 function saveRuleModal(){
@@ -763,7 +798,7 @@ window.openRuleModal=openRuleModal;window.closeRuleModal=closeRuleModal;window.s
 window.addRuleCond=addRuleCond;window.ruleActionChanged=ruleActionChanged;window.saveRuleModal=saveRuleModal;window.deleteRule=deleteRule;
 
 firebase.auth().onAuthStateChanged(function(u){
-if(u)loadForms();
+if(u){loadForms();loadBookingTypes();}
 });
 </script>
 <script src="nav.js"></script>
