@@ -30,6 +30,11 @@
 }
 html{min-height:100%;background:var(--bg)}
 body{min-height:100vh;font-family:var(--fb);font-size:15px;line-height:1.5;color:var(--text);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+/* Embed mode */
+body.bk-embed .bk-brand{display:none}
+body.bk-embed .bk-panel-left{padding-top:12px}
+body.bk-embed .bk-admin-link{display:none!important}
+body.bk-embed .bk-progress{position:relative}
 
 /* ── PROGRESS BAR ── */
 .bk-progress{position:fixed;top:0;left:0;right:0;height:3px;background:var(--border);z-index:100}
@@ -465,6 +470,14 @@ var _formEmail = params.get('email') || '';
 var _formTel = params.get('tel') || '';
 var _formLeadId = params.get('leadId') || '';
 var _fromForm = params.get('fromForm') || '';
+var _embedMode = params.has('embed');
+
+// Embed mode: hide brand, compact layout
+if (_embedMode) {
+  document.body.classList.add('bk-embed');
+  var adminGear = document.getElementById('adminGear');
+  if (adminGear) adminGear.style.display = 'none';
+}
 
 db.collection('booking_config').get().then(function(snap) {
   snap.forEach(function(doc) {
@@ -1040,6 +1053,22 @@ function showConfirmation(prenom, email) {
   confirmHtml += '<br><br>Une confirmation sera envoyée à <strong>' + esc(email) + '</strong>.';
 
   document.getElementById('confirmText').innerHTML = confirmHtml;
+
+  // Embed mode: notify parent window
+  if (_embedMode && window.parent !== window) {
+    try {
+      window.parent.postMessage({
+        type: 'booking_confirmed',
+        leadId: _formLeadId,
+        date: S.selDate,
+        time: S.selTime,
+        personName: S.selPerson ? S.selPerson.name : '',
+        personId: S.selPerson ? S.selPerson.id : '',
+        typeLabel: S.selType ? S.selType.label : '',
+        duration: S.selType ? S.selType.duration : 30
+      }, '*');
+    } catch(e) { console.warn('postMessage error:', e); }
+  }
 
   goStep(5);
 }

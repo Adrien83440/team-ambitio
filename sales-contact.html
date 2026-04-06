@@ -172,12 +172,36 @@ body{overflow:hidden;display:flex;flex-direction:column}
 .ct-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}
 .ct-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .ct-loading{display:flex;align-items:center;justify-content:center;flex:1;color:var(--muted);font-size:13px}
+/* Booking modal */
+.ct-booking-overlay{display:none;position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px}
+.ct-booking-overlay.show{display:flex}
+.ct-booking-modal{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:800px;height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+.ct-booking-header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
+.ct-booking-header .title{font-family:var(--fh);font-size:15px;font-weight:800;flex:1}
+.ct-booking-header .info{font-size:11px;color:var(--muted);font-family:var(--fm)}
+.ct-booking-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--muted);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.ct-booking-close:hover{color:var(--text);border-color:var(--border2)}
+.ct-booking-iframe{flex:1;border:none;width:100%;background:white;border-radius:0 0 16px 16px}
+@media(max-width:640px){.ct-booking-modal{max-width:100%;height:95vh;border-radius:12px}}
 </style>
 </head>
 <body>
 <div class="ct-loading" id="ctLoading">Chargement de la fiche...</div>
 <div id="ctApp" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0"></div>
 <div class="ct-toast" id="ctToast"></div>
+
+<!-- Booking modal -->
+<div class="ct-booking-overlay" id="ctBookingOverlay" onclick="if(event.target===this)closeBookingFiche()">
+  <div class="ct-booking-modal">
+    <div class="ct-booking-header">
+      <span style="font-size:20px">📅</span>
+      <div class="title">Prendre un RDV</div>
+      <div class="info" id="ctBookingInfo"></div>
+      <button class="ct-booking-close" onclick="closeBookingFiche()">✕</button>
+    </div>
+    <iframe class="ct-booking-iframe" id="ctBookingIframe" src="about:blank"></iframe>
+  </div>
+</div>
 <script>
 var db=firebase.firestore();var leadId=new URLSearchParams(window.location.search).get('id');var lead=null;var autoTimer=null;
 var STAGES=[{key:'lead',label:'Lead',color:'#34d399',s:'P'},{key:'nrp1',label:'NRP 1',color:'#f59e0b',s:'P'},{key:'nrp2',label:'NRP 2',color:'#e67e22',s:'P'},{key:'nrp3',label:'NRP 3',color:'#ef4444',s:'P'},{key:'all_nrp',label:'All NRP',color:'#6b7280',s:'P'},{key:'poubelle',label:'Poubelle',color:'#374151',s:'P'},{key:'disqualification',label:'Disqualification',color:'#6b7280',s:'P'},{key:'follow_up_pm',label:'Follow Up (PM)',color:'#60a5fa',s:'P'},{key:'set',label:'SET',color:'#a78bfa',s:'P'},{key:'rdv_self_booking',label:'RDV Self Booking',color:'#fbbf24',s:'P'},{key:'rdv_confirmes',label:'RDV confirmés',color:'#34d399',s:'C'},{key:'rdv_annules_prospect',label:'Annulés Prospect',color:'#ef4444',s:'C'},{key:'rdv_annules_equipe',label:'Annulés Équipe',color:'#f87171',s:'C'},{key:'no_show_self',label:'No Show Self',color:'#f59e0b',s:'C'},{key:'no_show_setting',label:'No Show Setting',color:'#e67e22',s:'C'},{key:'partenariats',label:'Partenariats',color:'#8b5cf6',s:'C'},{key:'closed_won_setting',label:'Won Setting',color:'#10b981',s:'C'},{key:'closed_won_self',label:'Won Self B.',color:'#059669',s:'C'},{key:'closed_lost',label:'Closed Lost',color:'#ef4444',s:'C'},{key:'follow_up_closing',label:'Follow-Up',color:'#60a5fa',s:'C'},{key:'disqualifie_closing',label:'Disqualifié',color:'#6b7280',s:'C'}];
@@ -204,6 +228,7 @@ var h='';
 h+='<div class="fiche-top"><a class="fiche-back" href="sales-crm.html">\u2190</a><div class="fiche-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><span class="fiche-name">'+esc(l.nom||'\u2014')+'</span><span class="fiche-badge '+(isC?'client':'lead')+'">'+(isC?'\u2705 Client':'\ud83d\udccb Lead')+'</span><div class="fiche-top-actions">';
 if(l.telephone)h+='<a class="fiche-top-btn" href="tel:'+l.telephone.replace(/\s/g,'')+'">\ud83d\udcde Appeler</a>';
 if(l.email)h+='<a class="fiche-top-btn" href="mailto:'+escA(l.email)+'">\u2709\ufe0f Email</a>';
+h+='<button class="fiche-top-btn" style="color:#a78bfa;border-color:rgba(167,139,250,.25)" onclick="openBookingFromFiche()">\ud83d\udcc5 RDV</button>';
 h+='</div></div>';
 // Pipeline
 h+='<div class="pipeline-bar"><div class="pipeline-dots">';
@@ -439,6 +464,40 @@ sv(u);var m=document.getElementById('flS');if(m){m.style.opacity='1';setTimeout(
 }
 function sv(u){u.updatedAt=firebase.firestore.FieldValue.serverTimestamp();db.collection('leads').doc(leadId).update(u).catch(function(e){toast('\u274c '+e.message);});}
 function addTL(t,c){lead.timeline_history=(lead.timeline_history||[]);lead.timeline_history.push({text:t,date:fmtNow(),color:c||'var(--muted)'});db.collection('leads').doc(leadId).update({timeline_history:lead.timeline_history}).catch(function(){});}
+
+/* ── BOOKING FROM FICHE ── */
+function openBookingFromFiche(){
+  if(!lead)return;
+  var parts=(lead.nom||'').split(' ');
+  var prenom=encodeURIComponent(parts[0]||'');
+  var nom=encodeURIComponent(parts.slice(1).join(' ')||'');
+  var email=encodeURIComponent(lead.email||'');
+  var tel=encodeURIComponent((lead.telephone||'').replace(/\s/g,''));
+  var url='booking.html?embed=1&leadId='+encodeURIComponent(leadId)+'&prenom='+prenom+'&nom='+nom+'&email='+email+'&tel='+tel;
+  document.getElementById('ctBookingInfo').textContent=lead.nom||'\u2014';
+  document.getElementById('ctBookingIframe').src=url;
+  document.getElementById('ctBookingOverlay').classList.add('show');
+}
+function closeBookingFiche(){
+  document.getElementById('ctBookingOverlay').classList.remove('show');
+  setTimeout(function(){document.getElementById('ctBookingIframe').src='about:blank';},300);
+}
+window.addEventListener('message',function(e){
+  if(!e.data||e.data.type!=='booking_confirmed')return;
+  var data=e.data;
+  var dateFr=data.date?data.date.split('-').reverse().join('/'):'';
+  lead.status='rdv_pose';lead.stage='rdv_confirmes';
+  lead.rdvDate=data.date||'';lead.rdvHeure=data.time||'';
+  lead.dateRdv=dateFr+' \u00e0 '+(data.time||'');
+  var noteText='\ud83d\udcc5 RDV pos\u00e9 \u2014 '+(data.typeLabel||'')+' avec '+(data.personName||'')+' le '+dateFr+' \u00e0 '+(data.time||'')+' ('+(data.duration||30)+'min)';
+  lead.notesHistory=(lead.notesHistory||[]);lead.notesHistory.push({text:noteText,date:fmtNow()});
+  addTL('\ud83d\udcc5 RDV pos\u00e9 avec '+(data.personName||''),'#a78bfa');
+  sv({status:'rdv_pose',stage:'rdv_confirmes',rdvDate:data.date||'',rdvHeure:data.time||'',dateRdv:lead.dateRdv,notesHistory:lead.notesHistory});
+  toast('\u2705 RDV confirm\u00e9 \u2014 '+(data.personName||'')+' le '+dateFr+' \u00e0 '+(data.time||''));
+  renderAll();
+  setTimeout(closeBookingFiche,1500);
+});
+
 firebase.auth().onAuthStateChanged(function(u){if(u){db.collection('users').doc(u.uid).get().then(function(s){var d=s.exists?s.data():{};window._currentRole=d.role||'sales';window._currentUserName=u.displayName||u.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);});db.collection('_config').doc('webhook_keys').get().then(function(s){if(s.exists){var keys=s.data().keys||[];if(keys.length)localStorage.setItem('ambitio_webhook_key',keys[0]);}}).catch(function(){});}});
 </script>
 <script src="nav.js"></script>

@@ -386,6 +386,53 @@ html, body {
 }
 .ld-reassign-btn:hover { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); }
 
+/* ── Booking button ── */
+.ld-booking-btn {
+  display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
+  border-radius: 8px; font-size: 12px; font-weight: 700; font-family: var(--fm);
+  background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2);
+  color: #a78bfa; cursor: pointer; transition: all 0.15s;
+}
+.ld-booking-btn:hover { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.4); }
+
+/* ── Booking modal ── */
+.ld-booking-overlay {
+  display: none; position: fixed; inset: 0; z-index: 1500;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+  align-items: center; justify-content: center; padding: 16px;
+}
+.ld-booking-overlay.show { display: flex; }
+.ld-booking-modal {
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: 16px; width: 100%; max-width: 800px; height: 85vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  animation: popIn 0.3s cubic-bezier(.4,0,.2,1);
+}
+.ld-booking-modal-header {
+  display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.ld-booking-modal-header .title {
+  font-family: var(--fh); font-size: 15px; font-weight: 800; flex: 1;
+}
+.ld-booking-modal-header .lead-info {
+  font-size: 11px; color: var(--muted); font-family: var(--fm);
+}
+.ld-booking-close {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--muted); font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.ld-booking-close:hover { color: var(--text); border-color: var(--border2); }
+.ld-booking-iframe {
+  flex: 1; border: none; width: 100%; background: white; border-radius: 0 0 16px 16px;
+}
+
+@media (max-width: 640px) {
+  .ld-booking-modal { max-width: 100%; height: 95vh; border-radius: 12px; }
+}
+
 /* ── New Lead Popup ── */
 .ld-popup-overlay {
   display: none; position: fixed; inset: 0; z-index: 1000;
@@ -565,6 +612,19 @@ html, body {
     </div>
     <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">UTM / Source</label><input id="clUtm" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="Ex: Ads, Organique, Parrainage…"></div>
     <button id="clSubmit" onclick="submitCreateLead()" style="margin-top:16px;width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#34d399,#059669);color:white;font-size:14px;font-weight:700;font-family:var(--fh);cursor:pointer;transition:opacity .15s">Créer la fiche</button>
+  </div>
+</div>
+
+<!-- ── BOOKING MODAL ── -->
+<div class="ld-booking-overlay" id="bookingOverlay" onclick="if(event.target===this)closeBookingModal()">
+  <div class="ld-booking-modal">
+    <div class="ld-booking-modal-header">
+      <span style="font-size:20px">📅</span>
+      <div class="title">Prendre un RDV</div>
+      <div class="lead-info" id="bookingLeadInfo"></div>
+      <button class="ld-booking-close" onclick="closeBookingModal()">✕</button>
+    </div>
+    <iframe class="ld-booking-iframe" id="bookingIframe" src="about:blank"></iframe>
   </div>
 </div>
 
@@ -980,6 +1040,7 @@ function renderCard(l) {
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
   h += '<button class="ld-edit-toggle" data-action="toggleEdit" data-id="' + id + '">✏️ Modifier les infos</button>';
   h += '<a href="sales-contact.html?id=' + id + '" style="display:inline-flex;align-items:center;gap:4px;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;font-family:var(--fm);background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#818cf8;text-decoration:none;cursor:pointer;transition:all .15s">📋 Fiche CRM</a>';
+  h += '<button class="ld-booking-btn" data-action="openBooking" data-id="' + id + '">📅 Prendre RDV</button>';
   // Reassign button: show if viewing someone else's lead in personal mode
   if (personalUser && l.assignedTo && l.assignedTo !== personalUser) {
     h += '<button class="ld-reassign-btn" data-action="reassign" data-id="' + id + '">📥 M\'attribuer</button>';
@@ -1468,6 +1529,15 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     return;
   }
 
+  // Open booking modal
+  var bookBtn = e.target.closest('[data-action="openBooking"]');
+  if (bookBtn) {
+    var bkId = bookBtn.dataset.id;
+    var bkLead = allLeads.find(function(l) { return l.id === bkId; });
+    if (bkLead) openBookingModal(bkLead);
+    return;
+  }
+
   // Reassign lead to me
   var reassignBtn = e.target.closest('[data-action="reassign"]');
   if (reassignBtn) {
@@ -1829,6 +1899,81 @@ function openCreateLead() {
 function closeCreateLead() {
   document.getElementById('createLeadOverlay').style.display = 'none';
 }
+
+/* ── BOOKING MODAL ── */
+var _bookingLeadId = null;
+
+function openBookingModal(lead) {
+  _bookingLeadId = lead.id;
+  var nom = encodeURIComponent(lead.nom || '');
+  var email = encodeURIComponent(lead.email || '');
+  var tel = encodeURIComponent((lead.telephone || '').replace(/\s/g, ''));
+  var leadId = encodeURIComponent(lead.id);
+
+  // Split nom into prenom/nom if possible
+  var parts = (lead.nom || '').split(' ');
+  var prenom = encodeURIComponent(parts[0] || '');
+  var nomF = encodeURIComponent(parts.slice(1).join(' ') || '');
+
+  var url = 'booking.html?embed=1&leadId=' + leadId + '&prenom=' + prenom + '&nom=' + nomF + '&email=' + email + '&tel=' + tel;
+
+  document.getElementById('bookingLeadInfo').textContent = lead.nom || '—';
+  document.getElementById('bookingIframe').src = url;
+  document.getElementById('bookingOverlay').classList.add('show');
+}
+
+function closeBookingModal() {
+  document.getElementById('bookingOverlay').classList.remove('show');
+  // Clear iframe after animation
+  setTimeout(function() {
+    document.getElementById('bookingIframe').src = 'about:blank';
+    _bookingLeadId = null;
+  }, 300);
+}
+
+// Listen for booking confirmation from iframe
+window.addEventListener('message', function(e) {
+  if (!e.data || e.data.type !== 'booking_confirmed') return;
+  var data = e.data;
+  var leadId = data.leadId || _bookingLeadId;
+  if (!leadId) return;
+
+  // Update lead: status → rdv_pose, stage → rdv_confirmes, add RDV info + note
+  var dateFr = data.date ? data.date.split('-').reverse().join('/') : '';
+  var updates = {
+    status: 'rdv_pose',
+    stage: 'rdv_confirmes',
+    rdvDate: data.date || '',
+    rdvHeure: data.time || '',
+    dateRdv: dateFr + ' à ' + (data.time || ''),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  // Update local state
+  var lead = allLeads.find(function(l) { return l.id === leadId; });
+  if (lead) {
+    lead.status = 'rdv_pose';
+    lead.stage = 'rdv_confirmes';
+    lead.rdvDate = data.date || '';
+    lead.rdvHeure = data.time || '';
+    // Add note
+    if (!lead.notesHistory) lead.notesHistory = [];
+    var noteText = '📅 RDV posé — ' + (data.typeLabel || '') + ' avec ' + (data.personName || '') + ' le ' + dateFr + ' à ' + (data.time || '') + ' (' + (data.duration || 30) + 'min)';
+    lead.notesHistory.push({ text: noteText, date: new Date().toLocaleString('fr-FR') });
+    updates.notesHistory = lead.notesHistory;
+  }
+
+  db.collection('leads').doc(leadId).update(updates).then(function() {
+    toast('✅ RDV confirmé — ' + (data.personName || '') + ' le ' + dateFr + ' à ' + (data.time || ''));
+    openCardId = leadId;
+    renderFeed();
+  }).catch(function(err) {
+    toast('❌ ' + err.message);
+  });
+
+  // Close modal after a short delay
+  setTimeout(closeBookingModal, 1500);
+});
 function submitCreateLead() {
   var prenom = document.getElementById('clPrenom').value.trim();
   var nom = document.getElementById('clNom').value.trim();
