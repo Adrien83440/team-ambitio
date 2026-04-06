@@ -70,6 +70,29 @@ body{background:#f0f2f5;font-family:var(--fm);color:#1e293b;-webkit-print-color-
 .loader{display:flex;align-items:center;justify-content:center;gap:8px;padding:80px;color:#94a3b8;}
 .spinner{width:20px;height:20px;border:3px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:spin .6s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* Mobile responsive */
+@media(max-width:600px){
+  .page{margin:0;border-radius:0;box-shadow:none;}
+  .cert-header{padding:24px 16px;}
+  .cert-title{font-size:19px;}
+  .cert-subtitle{font-size:12px;}
+  .cert-badge{width:48px;height:48px;}
+  .cert-badge::after{font-size:24px;}
+  .cert-body{padding:20px 16px;}
+  .section{margin-bottom:20px;}
+  .info-grid{grid-template-columns:1fr;}
+  .info-value{font-size:13px;}
+  .info-value.mono{font-size:10px;}
+  .hash-box{font-size:8px;padding:8px 10px;}
+  .sig-display{font-size:22px;padding:6px 16px;}
+  .paraphe-display{font-size:16px;padding:4px 12px;}
+  .legal{padding:16px;font-size:10px;}
+  .cert-footer{padding:14px 16px;font-size:10px;}
+  .print-bar{justify-content:center;padding:10px;}
+  .tl-item{font-size:12px;}
+  .tl-date{font-size:10px;}
+}
 </style>
 </head>
 <body>
@@ -165,24 +188,34 @@ body{background:#f0f2f5;font-family:var(--fm);color:#1e293b;-webkit-print-color-
 <script>
 var db=firebase.firestore();
 (function(){
-  var p=new URLSearchParams(location.search);
-  var id=p.get('id');
-  var token=p.get('t');
-  if(!id&&!token){showErr('Paramètre manquant.');return;}
+  try{
+    var p=new URLSearchParams(location.search);
+    var id=p.get('id');
+    var token=p.get('t');
+    // Clean token (some email clients add trailing chars)
+    if(token)token=token.replace(/[^a-zA-Z0-9]/g,'');
+    if(!id&&!token){showErr('Lien invalide — paramètre manquant.');return;}
 
-  var promise;
-  if(id){
-    promise=db.collection('signature_requests').doc(id).get().then(function(d){return d.exists?[d]:[];});
-  }else{
-    promise=db.collection('signature_requests').where('token','==',token).limit(1).get().then(function(sn){return sn.docs;});
+    var promise;
+    if(id){
+      promise=db.collection('signature_requests').doc(id).get().then(function(d){return d.exists?[d]:[];});
+    }else{
+      promise=db.collection('signature_requests').where('token','==',token).limit(1).get().then(function(sn){return sn.docs;});
+    }
+
+    promise.then(function(docs){
+      if(!docs||!docs.length){showErr('Certificat introuvable. Le document n\'existe pas ou a été supprimé.');return;}
+      var doc=docs[0];var r=doc.data();
+      if(r.status!=='signed'){showErr('Ce document n\'a pas encore été signé. Le certificat sera disponible après la signature.');return;}
+      render(r,doc.id);
+    }).catch(function(e){
+      console.error('[CERT] Load error:',e);
+      showErr('Erreur de chargement : '+e.message);
+    });
+  }catch(e){
+    console.error('[CERT] Init error:',e);
+    showErr('Erreur : '+e.message);
   }
-
-  promise.then(function(docs){
-    if(!docs.length){showErr('Document introuvable.');return;}
-    var doc=docs[0];var r=doc.data();
-    if(r.status!=='signed'){showErr('Ce document n\'a pas encore été signé.');return;}
-    render(r,doc.id);
-  }).catch(function(e){showErr(e.message);});
 })();
 
 function showErr(m){
