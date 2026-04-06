@@ -988,19 +988,7 @@ function handleSubmit() {
   btn.textContent = 'Réservation en cours…';
 
   db.collection('bookings').add(booking).then(function(docRef) {
-    // Update lead if linked
-    if (_formLeadId) {
-      db.collection('leads').doc(_formLeadId).update({
-        status: 'rdv_pose',
-        selfBooking: true,
-        rdvDate: S.selDate,
-        rdvHeure: S.selTime,
-        rdvType: S.selType ? S.selType.label : '',
-        rdvExpert: S.selPerson ? S.selPerson.name : '',
-        bookingId: docRef.id,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).catch(function(e) { console.log('Lead update error:', e); });
-    }
+    // Lead update/creation is handled by Cloud Function onBookingCreated
     // Listen for Meet link (Cloud Function generates it async)
     if (S.selPerson && S.selPerson.calendarConnected) {
       var unsub = docRef.onSnapshot(function(snap) {
@@ -1015,26 +1003,7 @@ function handleSubmit() {
       setTimeout(function() { unsub(); }, 30000); // timeout 30s
     }
 
-    // Also create lead
-    db.collection('leads').add({
-      nom: prenom + ' ' + nom,
-      email: email,
-      telephone: formData.phone || '',
-      type: 'self_booking',
-      stage: 'rdv_self_booking',
-      status: 'rdv_pose',
-      assignedTo: S.selPerson ? S.selPerson.id : '',
-      secteur: formData.secteur || '',
-      utm: 'Booking - ' + (S.selType ? S.selType.label : ''),
-      rdvDate: S.selDate,
-      rdvHeure: S.selTime,
-      notesHistory: [{
-        text: 'RDV réservé via booking : ' + (S.selType ? S.selType.label : '') + ' avec ' + (S.selPerson ? S.selPerson.name : ''),
-        date: new Date().toLocaleString('fr-FR')
-      }],
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    // Lead creation/dedup is handled by Cloud Function onBookingCreated (server-side, with admin access)
 
     // Update round-robin counter
     if (S.selType && S.selType.eventType === 'roundrobin' && S.selPerson) {
