@@ -213,10 +213,13 @@ function escA(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/"/g,'&qu
 function sanitizeComm(raw){
 if(!raw)return'';
 var s=raw;
-// Extract recording URLs before stripping
 s=s.replace(/<br\s*\/?>/gi,'\n');
+// Complete <a> tags: extract URL
 s=s.replace(/<a[^>]+href=["']([^"']+)["'][^>]*>[^<]*<\/a>/gi,'$1');
-s=s.replace(/<[^>]+>/g,'');
+// Incomplete/truncated <a> tags: extract URL if possible, else remove
+s=s.replace(/<a[^>]+href=["']([^"']+)["'][^>]*/gi,'$1');
+// Strip any remaining HTML tags (complete or truncated)
+s=s.replace(/<[^>]*>?/g,'');
 var d=document.createElement('div');d.textContent=s;var e=d.innerHTML;
 e=e.replace(/\n/g,'<br/>');
 e=e.replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener" style="color:#60a5fa;word-break:break-all">$1</a>');

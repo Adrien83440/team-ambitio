@@ -726,8 +726,10 @@ function sanitizeCommContent(raw) {
   s = s.replace(/<br\s*\/?>/gi, '\n');
   // Extract links: <a href="URL">text</a> → URL
   s = s.replace(/<a[^>]+href=["']([^"']+)["'][^>]*>[^<]*<\/a>/gi, '$1');
-  // Strip remaining HTML tags
-  s = s.replace(/<[^>]+>/g, '');
+  // Incomplete/truncated <a> tags: extract URL if possible
+  s = s.replace(/<a[^>]+href=["']([^"']+)["'][^>]*/gi, '$1');
+  // Strip remaining HTML tags (complete or truncated)
+  s = s.replace(/<[^>]*>?/g, '');
   // Now escape for safe display
   var d = document.createElement('div');
   d.textContent = s;
