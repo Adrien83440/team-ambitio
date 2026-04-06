@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Ambitio — Signatures</title>
+<link rel="stylesheet" href="sales.css"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+<style>
+:root{--bg:#08080f;--bg2:#0e0e1a;--bg3:#141420;--fg:#f0f0f5;--muted:rgba(255,255,255,.38);--border:rgba(255,255,255,.07);--accent:#6366f1;--accent2:#818cf8;--green:#34d399;--red:#ef4444;--fh:'Bricolage Grotesque',sans-serif;--fm:'Plus Jakarta Sans',sans-serif;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh;}
+.sig-wrap{padding:20px;max-width:1400px;margin:0 auto;}
+.sig-header{display:flex;align-items:center;gap:14px;margin-bottom:24px;}
+.sig-icon{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#a855f7);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 16px rgba(99,102,241,.3);}
+.sig-title{font-family:var(--fh);font-size:22px;font-weight:800;}
+.sig-sub{font-size:13px;color:var(--muted);}
+.sig-tabs{display:flex;gap:6px;margin-bottom:20px;}
+.sig-tab{padding:8px 18px;border-radius:10px;font-size:13px;font-weight:700;font-family:var(--fm);border:1px solid var(--border);background:var(--bg2);color:var(--muted);cursor:pointer;transition:all .15s;}
+.sig-tab.on{background:var(--accent);color:white;border-color:var(--accent);}
+.sig-btn{padding:8px 16px;border-radius:9px;font-size:12px;font-weight:700;font-family:var(--fm);border:none;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
+.sig-btn-p{background:var(--accent);color:white;}
+.sig-btn-p:hover{background:var(--accent2);}
+.sig-btn-g{background:rgba(52,211,153,.1);color:var(--green);border:1px solid rgba(52,211,153,.2);}
+.sig-btn-o{background:var(--bg3);color:var(--fg);border:1px solid var(--border);}
+.sig-btn-r{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2);}
+
+/* Template grid */
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;}
+.tpl-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:all .2s;}
+.tpl-card:hover{border-color:rgba(99,102,241,.3);transform:translateY(-2px);}
+.tpl-card-name{font-family:var(--fh);font-size:15px;font-weight:700;margin-bottom:6px;}
+.tpl-card-meta{font-size:11px;color:var(--muted);}
+.tpl-card-new{border-style:dashed;border-color:rgba(99,102,241,.3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:120px;color:var(--accent2);}
+.tpl-card-new:hover{background:rgba(99,102,241,.05);}
+
+/* Editor */
+.editor{display:none;}
+.editor-top{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+.editor-body{display:flex;gap:16px;min-height:600px;}
+.editor-pdf{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:14px;overflow:hidden;position:relative;display:flex;flex-direction:column;}
+.pdf-nav{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;}
+.pdf-nav button{padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--fg);cursor:pointer;font-size:12px;font-weight:700;}
+.pdf-canvas-wrap{flex:1;position:relative;overflow:auto;padding:10px;display:flex;justify-content:center;}
+.pdf-canvas-wrap canvas{display:block;}
+.pdf-fields-layer{position:absolute;top:10px;left:50%;transform:translateX(-50%);}
+
+/* Fields on PDF */
+.pdf-field{position:absolute;border:2px dashed var(--accent);background:rgba(99,102,241,.08);border-radius:4px;cursor:move;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--accent2);user-select:none;overflow:hidden;transition:box-shadow .15s;}
+.pdf-field:hover,.pdf-field.selected{box-shadow:0 0 0 2px var(--accent);z-index:10;}
+.pdf-field .field-label{pointer-events:none;text-align:center;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.pdf-field .field-resize{position:absolute;right:-4px;bottom:-4px;width:12px;height:12px;background:var(--accent);border-radius:2px;cursor:nwse-resize;}
+
+/* Sidebar panel */
+.editor-panel{width:280px;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px;overflow-y:auto;max-height:700px;flex-shrink:0;}
+.ep-title{font-family:var(--fh);font-size:14px;font-weight:800;margin-bottom:12px;}
+.ep-section{margin-bottom:16px;}
+.ep-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.ep-input{width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:12px;font-family:var(--fm);}
+.ep-select{width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:12px;font-family:var(--fm);}
+
+/* Field toolbar */
+.field-toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+.ft-btn{padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);cursor:pointer;font-size:11px;font-weight:600;font-family:var(--fm);transition:all .15s;display:flex;align-items:center;gap:4px;}
+.ft-btn:hover{border-color:var(--accent);color:var(--accent2);}
+.ft-btn .ft-ico{font-size:14px;}
+
+/* Requests list */
+.req-table{width:100%;border-collapse:collapse;}
+.req-table th{text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:10px 14px;border-bottom:1px solid var(--border);}
+.req-table td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;}
+.req-status{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;}
+.req-status.pending{background:rgba(245,158,11,.1);color:#f59e0b;}
+.req-status.opened{background:rgba(96,165,250,.1);color:#60a5fa;}
+.req-status.signed{background:rgba(52,211,153,.1);color:#34d399;}
+.req-status.expired{background:rgba(239,68,68,.1);color:#ef4444;}
+
+/* Toast */
+.sig-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#1e1e2e;border:1px solid var(--border);color:var(--fg);padding:10px 24px;border-radius:10px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:all .3s;pointer-events:none;}
+.sig-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<script src="nav.js"></script>
+<main class="main-content">
+<div class="sig-wrap">
+
+<div class="sig-header">
+  <div class="sig-icon">✍️</div>
+  <div>
+    <div class="sig-title">Signatures électroniques</div>
+    <div class="sig-sub">Gérez vos modèles de contrats et envoyez-les pour signature</div>
+  </div>
+</div>
+
+<div class="sig-tabs">
+  <button class="sig-tab on" data-tab="templates" onclick="switchTab('templates')">📄 Modèles</button>
+  <button class="sig-tab" data-tab="requests" onclick="switchTab('requests')">📨 Envois</button>
+</div>
+
+<!-- ═══ TEMPLATES TAB ═══ -->
+<div id="tabTemplates">
+  <div class="tpl-grid" id="tplGrid"></div>
+</div>
+
+<!-- ═══ REQUESTS TAB ═══ -->
+<div id="tabRequests" style="display:none">
+  <table class="req-table" id="reqTable">
+    <thead><tr><th>Client</th><th>Modèle</th><th>Envoyé le</th><th>Statut</th><th></th></tr></thead>
+    <tbody id="reqBody"></tbody>
+  </table>
+  <div id="reqEmpty" style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Aucun envoi pour le moment.</div>
+</div>
+
+<!-- ═══ TEMPLATE EDITOR ═══ -->
+<div class="editor" id="editorView">
+  <div class="editor-top">
+    <button class="sig-btn sig-btn-o" onclick="closeEditor()">← Retour</button>
+    <input class="ep-input" id="edTplName" placeholder="Nom du modèle" style="flex:1;max-width:300px;font-size:14px;font-weight:700"/>
+    <button class="sig-btn sig-btn-p" onclick="saveTpl()">💾 Enregistrer</button>
+    <button class="sig-btn sig-btn-g" onclick="sendForSignature()">📨 Envoyer pour signature</button>
+  </div>
+
+  <div style="margin-bottom:12px">
+    <div class="ep-label" style="margin-bottom:6px">Ajouter un champ :</div>
+    <div class="field-toolbar" id="fieldToolbar">
+      <button class="ft-btn" onclick="addField('prenom')"><span class="ft-ico">👤</span> Prénom</button>
+      <button class="ft-btn" onclick="addField('nom')"><span class="ft-ico">👤</span> Nom</button>
+      <button class="ft-btn" onclick="addField('email')"><span class="ft-ico">✉️</span> Email</button>
+      <button class="ft-btn" onclick="addField('telephone')"><span class="ft-ico">📞</span> Téléphone</button>
+      <button class="ft-btn" onclick="addField('adresse')"><span class="ft-ico">🏠</span> Adresse perso</button>
+      <button class="ft-btn" onclick="addField('entreprise')"><span class="ft-ico">🏢</span> Entreprise</button>
+      <button class="ft-btn" onclick="addField('type_entreprise')"><span class="ft-ico">📋</span> Type entreprise</button>
+      <button class="ft-btn" onclick="addField('siege_social')"><span class="ft-ico">📍</span> Siège social</button>
+      <button class="ft-btn" onclick="addField('siret')"><span class="ft-ico">🔢</span> SIRET</button>
+      <button class="ft-btn" onclick="addField('date_signature')"><span class="ft-ico">📅</span> Date signature</button>
+      <button class="ft-btn" onclick="addField('lu_approuve')"><span class="ft-ico">☑️</span> Lu et approuvé</button>
+      <button class="ft-btn" onclick="addField('paraphe')"><span class="ft-ico">✏️</span> Paraphe</button>
+      <button class="ft-btn" onclick="addField('signature')"><span class="ft-ico">✍️</span> Signature</button>
+    </div>
+  </div>
+
+  <div class="editor-body">
+    <div class="editor-pdf" id="editorPdf">
+      <div class="pdf-nav">
+        <button onclick="prevPage()">◀</button>
+        <span>Page <strong id="pageNum">1</strong> / <strong id="pageTotal">1</strong></span>
+        <button onclick="nextPage()">▶</button>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="edZoomInfo">100%</span>
+      </div>
+      <div class="pdf-canvas-wrap" id="pdfWrap">
+        <canvas id="pdfCanvas"></canvas>
+        <div class="pdf-fields-layer" id="fieldsLayer"></div>
+      </div>
+    </div>
+
+    <div class="editor-panel" id="editorPanel">
+      <div class="ep-title">Propriétés du champ</div>
+      <div id="propPanel">
+        <div style="text-align:center;padding:30px;color:var(--muted);font-size:12px">Sélectionnez un champ sur le PDF pour modifier ses propriétés.</div>
+      </div>
+      <div class="ep-section" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <div class="ep-title">Champs du modèle</div>
+        <div id="fieldsList" style="font-size:12px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SEND MODAL ═══ -->
+<div id="sendModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;backdrop-filter:blur(4px);align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:92%;max-width:440px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <div style="font-size:22px">📨</div>
+      <div style="font-family:var(--fh);font-size:16px;font-weight:800">Envoyer pour signature</div>
+      <button onclick="document.getElementById('sendModal').style.display='none'" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div style="margin-bottom:10px"><div class="ep-label">Nom du client *</div><input class="ep-input" id="sendName" placeholder="Prénom Nom"/></div>
+    <div style="margin-bottom:10px"><div class="ep-label">Email *</div><input class="ep-input" id="sendEmail" type="email" placeholder="email@client.com"/></div>
+    <div style="margin-bottom:10px"><div class="ep-label">Téléphone (pour OTP SMS) *</div><input class="ep-input" id="sendPhone" type="tel" placeholder="+33 6 12 34 56 78"/></div>
+    <div style="margin-bottom:16px"><div class="ep-label">Message personnalisé</div><textarea class="ep-input" id="sendMsg" rows="3" placeholder="Bonjour, veuillez trouver ci-joint votre contrat à signer…"></textarea></div>
+    <button class="sig-btn sig-btn-p" style="width:100%;justify-content:center;padding:12px;font-size:14px" id="sendSubmitBtn" onclick="submitSend()">📨 Envoyer le contrat</button>
+  </div>
+</div>
+
+</div>
+<div class="sig-toast" id="sigToast"></div>
+</main>
+
+<script>
+var db=firebase.firestore();
+var TPL=[]; // loaded templates
+var REQ=[]; // loaded requests
+var currentTpl=null; // currently editing template
+var pdfDoc=null; // pdf.js document
+var currentPage=1;
+var totalPages=1;
+var pdfScale=1.2;
+var selectedField=null;
+var dragState=null;
+
+/* ═══ FIELD DEFINITIONS ═══ */
+var FIELD_DEFS={
+  prenom:         {label:'Prénom',          icon:'👤',  type:'text',      w:160, h:28, color:'#6366f1'},
+  nom:            {label:'Nom',             icon:'👤',  type:'text',      w:160, h:28, color:'#6366f1'},
+  email:          {label:'Email',           icon:'✉️',  type:'email',     w:220, h:28, color:'#3b82f6'},
+  telephone:      {label:'Téléphone',       icon:'📞',  type:'tel',       w:160, h:28, color:'#3b82f6'},
+  adresse:        {label:'Adresse perso',   icon:'🏠',  type:'text',      w:280, h:28, color:'#14b8a6'},
+  entreprise:     {label:'Entreprise',      icon:'🏢',  type:'text',      w:200, h:28, color:'#f59e0b'},
+  type_entreprise:{label:'Type entreprise', icon:'📋',  type:'text',      w:160, h:28, color:'#f59e0b'},
+  siege_social:   {label:'Siège social',    icon:'📍',  type:'text',      w:280, h:28, color:'#f59e0b'},
+  siret:          {label:'SIRET',           icon:'🔢',  type:'text',      w:180, h:28, color:'#f59e0b'},
+  date_signature: {label:'Date signature',  icon:'📅',  type:'date',      w:140, h:28, color:'#34d399'},
+  lu_approuve:    {label:'Lu et approuvé',  icon:'☑️',  type:'checkbox',  w:200, h:28, color:'#a855f7'},
+  paraphe:        {label:'Paraphe',         icon:'✏️',  type:'paraphe',   w:80,  h:50, color:'#ec4899'},
+  signature:      {label:'Signature',       icon:'✍️',  type:'signature', w:240, h:80, color:'#ef4444'},
+};
+
+/* ═══ UTILS ═══ */
+function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function gid(){return Math.random().toString(36).slice(2,10);}
+function toast(m){var t=document.getElementById('sigToast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2500);}
+
+/* ═══ TABS ═══ */
+function switchTab(tab){
+  document.querySelectorAll('.sig-tab').forEach(function(b){b.classList.toggle('on',b.dataset.tab===tab);});
+  document.getElementById('tabTemplates').style.display=tab==='templates'?'':'none';
+  document.getElementById('tabRequests').style.display=tab==='requests'?'':'none';
+  document.getElementById('editorView').style.display='none';
+  if(tab==='requests')loadRequests();
+}
+
+/* ═══ TEMPLATES LIST ═══ */
+function loadTemplates(){
+  db.collection('signature_templates').orderBy('createdAt','desc').get().then(function(sn){
+    TPL=[];
+    sn.forEach(function(d){var v=d.data();v.id=d.id;TPL.push(v);});
+    renderTemplates();
+  });
+}
+function renderTemplates(){
+  var h='<div class="tpl-card tpl-card-new" onclick="createNewTpl()"><span style="font-size:28px">+</span><span style="font-size:13px;font-weight:700">Nouveau modèle</span></div>';
+  TPL.forEach(function(t){
+    h+='<div class="tpl-card" onclick="openTpl(\''+t.id+'\')">';
+    h+='<div class="tpl-card-name">'+esc(t.name||'Sans nom')+'</div>';
+    h+='<div class="tpl-card-meta">'+((t.fields||[]).length)+' champs · '+(t.pages||0)+' pages</div>';
+    h+='<div style="display:flex;gap:6px;margin-top:10px">';
+    h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();sendForSignatureFromList(\''+t.id+'\')">📨 Envoyer</button>';
+    h+='<button class="sig-btn sig-btn-r" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();deleteTpl(\''+t.id+'\')">🗑</button>';
+    h+='</div></div>';
+  });
+  document.getElementById('tplGrid').innerHTML=h;
+}
+
+/* ═══ CREATE / OPEN TEMPLATE ═══ */
+function createNewTpl(){
+  var inp=document.createElement('input');
+  inp.type='file';inp.accept='.pdf';
+  inp.onchange=function(){
+    var file=inp.files[0];
+    if(!file)return;
+    if(file.size>3*1024*1024){alert('PDF trop lourd (max 3 Mo)');return;}
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var b64=e.target.result;
+      currentTpl={id:null,name:file.name.replace('.pdf',''),pdfBase64:b64,fields:[],pages:0};
+      openEditorWithPdf(b64);
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+function openTpl(id){
+  var t=TPL.find(function(x){return x.id===id;});
+  if(!t)return;
+  currentTpl=JSON.parse(JSON.stringify(t));
+  // Load PDF chunks if needed
+  if(currentTpl.pdfBase64){
+    openEditorWithPdf(currentTpl.pdfBase64);
+  }else{
+    // Load from sub-collection
+    db.collection('signature_templates').doc(id).collection('pdf').orderBy('chunk').get().then(function(sn){
+      var parts=[];sn.forEach(function(d){parts.push(d.data().data);});
+      currentTpl.pdfBase64='data:application/pdf;base64,'+parts.join('');
+      openEditorWithPdf(currentTpl.pdfBase64);
+    });
+  }
+}
+function openEditorWithPdf(dataUrl){
+  document.getElementById('tabTemplates').style.display='none';
+  document.getElementById('tabRequests').style.display='none';
+  document.querySelector('.sig-tabs').style.display='none';
+  document.getElementById('editorView').style.display='';
+  document.getElementById('edTplName').value=currentTpl.name||'';
+  selectedField=null;
+  // Load PDF
+  var raw=atob(dataUrl.split(',')[1]);
+  var arr=new Uint8Array(raw.length);
+  for(var i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+  pdfjsLib.getDocument({data:arr}).promise.then(function(pdf){
+    pdfDoc=pdf;
+    totalPages=pdf.numPages;
+    currentTpl.pages=totalPages;
+    currentPage=1;
+    renderPdfPage();
+  });
+}
+function closeEditor(){
+  document.getElementById('editorView').style.display='none';
+  document.querySelector('.sig-tabs').style.display='';
+  document.getElementById('tabTemplates').style.display='';
+  currentTpl=null;pdfDoc=null;selectedField=null;
+  loadTemplates();
+}
+
+/* ═══ PDF RENDERING ═══ */
+function renderPdfPage(){
+  if(!pdfDoc)return;
+  document.getElementById('pageNum').textContent=currentPage;
+  document.getElementById('pageTotal').textContent=totalPages;
+  pdfDoc.getPage(currentPage).then(function(page){
+    var vp=page.getViewport({scale:pdfScale});
+    var canvas=document.getElementById('pdfCanvas');
+    canvas.width=vp.width;canvas.height=vp.height;
+    var ctx=canvas.getContext('2d');
+    page.render({canvasContext:ctx,viewport:vp}).promise.then(function(){
+      renderFieldsOnPage();
+    });
+    // Size the fields layer
+    var layer=document.getElementById('fieldsLayer');
+    layer.style.width=vp.width+'px';
+    layer.style.height=vp.height+'px';
+  });
+}
+function prevPage(){if(currentPage>1){currentPage--;renderPdfPage();}}
+function nextPage(){if(currentPage<totalPages){currentPage++;renderPdfPage();}}
+
+/* ═══ FIELD RENDERING ═══ */
+function renderFieldsOnPage(){
+  var layer=document.getElementById('fieldsLayer');
+  var h='';
+  var fields=currentTpl.fields||[];
+  fields.forEach(function(f,idx){
+    if(f.page!==currentPage)return;
+    var def=FIELD_DEFS[f.fieldType]||{};
+    var sel=selectedField===idx;
+    h+='<div class="pdf-field'+(sel?' selected':'')+'" data-idx="'+idx+'" style="left:'+f.x+'px;top:'+f.y+'px;width:'+f.w+'px;height:'+f.h+'px;border-color:'+def.color+';background:'+def.color+'12"';
+    h+=' onmousedown="startDrag(event,'+idx+')">';
+    h+='<div class="field-label" style="color:'+def.color+'">'+(def.icon||'')+' '+esc(f.label||def.label)+'</div>';
+    h+='<div class="field-resize" style="background:'+def.color+'" onmousedown="startResize(event,'+idx+')"></div>';
+    h+='</div>';
+  });
+  layer.innerHTML=h;
+  renderFieldsList();
+  renderPropPanel();
+}
+
+function renderFieldsList(){
+  var el=document.getElementById('fieldsList');
+  var fields=currentTpl.fields||[];
+  if(!fields.length){el.innerHTML='<div style="color:var(--muted);font-style:italic">Aucun champ ajouté</div>';return;}
+  var h='';
+  fields.forEach(function(f,idx){
+    var def=FIELD_DEFS[f.fieldType]||{};
+    h+='<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer'+(selectedField===idx?';background:rgba(99,102,241,.08);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px':'')+'" onclick="selectField('+idx+')">';
+    h+='<span style="font-size:12px">'+(def.icon||'')+'</span>';
+    h+='<span style="flex:1;font-size:11px;font-weight:600">'+esc(f.label||def.label)+'</span>';
+    h+='<span style="font-size:10px;color:var(--muted)">p.'+f.page+'</span>';
+    h+='<button onclick="event.stopPropagation();removeField('+idx+')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:12px;padding:2px 4px">✕</button>';
+    h+='</div>';
+  });
+  el.innerHTML=h;
+}
+
+function renderPropPanel(){
+  var el=document.getElementById('propPanel');
+  if(selectedField===null||!currentTpl.fields[selectedField]){
+    el.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted);font-size:12px">Sélectionnez un champ sur le PDF.</div>';
+    return;
+  }
+  var f=currentTpl.fields[selectedField];
+  var def=FIELD_DEFS[f.fieldType]||{};
+  var h='<div class="ep-section">';
+  h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:10px"><span style="font-size:16px">'+(def.icon||'')+'</span><span style="font-family:var(--fh);font-size:13px;font-weight:700">'+esc(def.label)+'</span></div>';
+  h+='<div class="ep-label">Label personnalisé</div>';
+  h+='<input class="ep-input" value="'+esc(f.label||'')+'" onchange="updateFieldProp('+selectedField+',\'label\',this.value)" placeholder="'+esc(def.label)+'"/>';
+  h+='</div>';
+  h+='<div class="ep-section"><div class="ep-label">Position</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
+  h+='<input class="ep-input" type="number" value="'+Math.round(f.x)+'" onchange="updateFieldProp('+selectedField+',\'x\',+this.value)" placeholder="X"/>';
+  h+='<input class="ep-input" type="number" value="'+Math.round(f.y)+'" onchange="updateFieldProp('+selectedField+',\'y\',+this.value)" placeholder="Y"/>';
+  h+='</div></div>';
+  h+='<div class="ep-section"><div class="ep-label">Taille</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
+  h+='<input class="ep-input" type="number" value="'+Math.round(f.w)+'" onchange="updateFieldProp('+selectedField+',\'w\',+this.value)" placeholder="L"/>';
+  h+='<input class="ep-input" type="number" value="'+Math.round(f.h)+'" onchange="updateFieldProp('+selectedField+',\'h\',+this.value)" placeholder="H"/>';
+  h+='</div></div>';
+  if(f.fieldType==='paraphe'||f.fieldType==='signature'){
+    h+='<div class="ep-section" style="padding:10px;background:rgba(99,102,241,.05);border-radius:8px;font-size:11px;color:var(--accent2)">🔁 Le client dessine une seule fois — appliqué automatiquement sur toutes les instances.</div>';
+  }
+  h+='<button class="sig-btn sig-btn-r" style="width:100%;justify-content:center;margin-top:8px" onclick="removeField('+selectedField+')">🗑 Supprimer ce champ</button>';
+  el.innerHTML=h;
+}
+
+/* ═══ FIELD ACTIONS ═══ */
+function addField(type){
+  if(!currentTpl)return;
+  var def=FIELD_DEFS[type];if(!def)return;
+  var f={
+    id:'f_'+gid(),
+    fieldType:type,
+    label:def.label,
+    type:def.type,
+    page:currentPage,
+    x:60,y:100+(currentTpl.fields||[]).filter(function(ff){return ff.page===currentPage;}).length*40,
+    w:def.w,h:def.h
+  };
+  currentTpl.fields=currentTpl.fields||[];
+  currentTpl.fields.push(f);
+  selectedField=currentTpl.fields.length-1;
+  renderFieldsOnPage();
+  toast('✅ '+def.label+' ajouté');
+}
+function removeField(idx){
+  currentTpl.fields.splice(idx,1);
+  if(selectedField===idx)selectedField=null;
+  else if(selectedField>idx)selectedField--;
+  renderFieldsOnPage();
+}
+function selectField(idx){
+  selectedField=idx;
+  // Navigate to field's page if needed
+  var f=currentTpl.fields[idx];
+  if(f&&f.page!==currentPage){currentPage=f.page;renderPdfPage();}
+  else{renderFieldsOnPage();}
+}
+function updateFieldProp(idx,prop,val){
+  if(!currentTpl.fields[idx])return;
+  currentTpl.fields[idx][prop]=val;
+  renderFieldsOnPage();
+}
+
+/* ═══ DRAG & RESIZE ═══ */
+function startDrag(e,idx){
+  if(e.target.classList.contains('field-resize'))return;
+  e.preventDefault();
+  selectedField=idx;
+  renderFieldsOnPage();
+  var f=currentTpl.fields[idx];
+  var startX=e.clientX,startY=e.clientY,origX=f.x,origY=f.y;
+  function onMove(ev){
+    f.x=Math.max(0,origX+(ev.clientX-startX));
+    f.y=Math.max(0,origY+(ev.clientY-startY));
+    var el=document.querySelector('[data-idx="'+idx+'"]');
+    if(el){el.style.left=f.x+'px';el.style.top=f.y+'px';}
+  }
+  function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);renderPropPanel();}
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
+}
+function startResize(e,idx){
+  e.preventDefault();e.stopPropagation();
+  selectedField=idx;
+  var f=currentTpl.fields[idx];
+  var startX=e.clientX,startY=e.clientY,origW=f.w,origH=f.h;
+  function onMove(ev){
+    f.w=Math.max(40,origW+(ev.clientX-startX));
+    f.h=Math.max(20,origH+(ev.clientY-startY));
+    var el=document.querySelector('[data-idx="'+idx+'"]');
+    if(el){el.style.width=f.w+'px';el.style.height=f.h+'px';}
+  }
+  function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);renderFieldsOnPage();}
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
+}
+
+/* Click on PDF to deselect */
+document.addEventListener('click',function(e){
+  if(document.getElementById('editorView').style.display==='none')return;
+  if(!e.target.closest('.pdf-field')&&!e.target.closest('.editor-panel')&&!e.target.closest('.field-toolbar')&&e.target.closest('.pdf-canvas-wrap')){
+    selectedField=null;
+    renderFieldsOnPage();
+  }
+});
+
+/* ═══ SAVE TEMPLATE ═══ */
+function saveTpl(){
+  if(!currentTpl)return;
+  var name=document.getElementById('edTplName').value.trim();
+  if(!name){alert('Donnez un nom au modèle.');return;}
+  currentTpl.name=name;
+  var data={
+    name:currentTpl.name,
+    fields:currentTpl.fields||[],
+    pages:currentTpl.pages||totalPages,
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  };
+  // Store PDF as base64 (check size)
+  var pdfB64=currentTpl.pdfBase64||'';
+  var pdfSizeKB=Math.round(pdfB64.length*0.75/1024);
+  
+  if(pdfSizeKB<700){
+    // Fits in single document
+    data.pdfBase64=pdfB64;
+  }
+  
+  if(currentTpl.id){
+    // Update existing
+    db.collection('signature_templates').doc(currentTpl.id).update(data).then(function(){
+      if(pdfSizeKB>=700)savePdfChunks(currentTpl.id,pdfB64);
+      toast('✅ Modèle enregistré');
+    }).catch(function(e){alert('Erreur: '+e.message);});
+  }else{
+    // Create new
+    data.createdAt=firebase.firestore.FieldValue.serverTimestamp();
+    db.collection('signature_templates').add(data).then(function(ref){
+      currentTpl.id=ref.id;
+      if(pdfSizeKB>=700)savePdfChunks(ref.id,pdfB64);
+      toast('✅ Modèle créé');
+    }).catch(function(e){alert('Erreur: '+e.message);});
+  }
+}
+function savePdfChunks(tplId,b64){
+  var raw=b64.split(',')[1]||b64;
+  var chunkSize=600000; // ~600KB per chunk
+  var chunks=[];
+  for(var i=0;i<raw.length;i+=chunkSize)chunks.push(raw.slice(i,i+chunkSize));
+  var batch=db.batch();
+  chunks.forEach(function(c,idx){
+    var ref=db.collection('signature_templates').doc(tplId).collection('pdf').doc('chunk_'+String(idx).padStart(3,'0'));
+    batch.set(ref,{chunk:idx,data:c});
+  });
+  batch.commit().then(function(){console.log('PDF chunks saved: '+chunks.length);});
+}
+function deleteTpl(id){
+  if(!confirm('Supprimer ce modèle ?'))return;
+  db.collection('signature_templates').doc(id).delete().then(function(){
+    TPL=TPL.filter(function(t){return t.id!==id;});
+    renderTemplates();
+    toast('🗑 Modèle supprimé');
+  });
+}
+
+/* ═══ SEND FOR SIGNATURE ═══ */
+function sendForSignature(){
+  if(!currentTpl||!currentTpl.id){alert('Enregistrez d\'abord le modèle.');return;}
+  document.getElementById('sendModal').style.display='flex';
+}
+function sendForSignatureFromList(tplId){
+  // Quick open modal with template context
+  currentTpl={id:tplId};
+  document.getElementById('sendModal').style.display='flex';
+}
+function submitSend(){
+  var name=document.getElementById('sendName').value.trim();
+  var email=document.getElementById('sendEmail').value.trim();
+  var phone=document.getElementById('sendPhone').value.trim();
+  if(!name||!email||!phone){alert('Tous les champs sont obligatoires.');return;}
+  var btn=document.getElementById('sendSubmitBtn');
+  btn.disabled=true;btn.textContent='Envoi en cours…';
+  var token=gid()+gid();
+  var req={
+    templateId:currentTpl.id,
+    templateName:(currentTpl.name||TPL.find(function(t){return t.id===currentTpl.id;})||{}).name||'Contrat',
+    clientName:name,
+    clientEmail:email,
+    clientPhone:phone.replace(/\s+/g,''),
+    message:document.getElementById('sendMsg').value.trim(),
+    token:token,
+    status:'pending',
+    signUrl:window.location.origin+'/sign.html?t='+token,
+    events:[{type:'created',date:new Date().toISOString(),by:window._currentUserName||'admin'}],
+    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+  };
+  db.collection('signature_requests').add(req).then(function(ref){
+    btn.disabled=false;btn.textContent='📨 Envoyer le contrat';
+    document.getElementById('sendModal').style.display='none';
+    toast('✅ Contrat envoyé à '+name);
+    // The Cloud Function will handle sending the actual email + SMS OTP
+  }).catch(function(e){
+    btn.disabled=false;btn.textContent='📨 Envoyer le contrat';
+    alert('Erreur: '+e.message);
+  });
+}
+
+/* ═══ REQUESTS LIST ═══ */
+function loadRequests(){
+  db.collection('signature_requests').orderBy('createdAt','desc').limit(50).get().then(function(sn){
+    REQ=[];sn.forEach(function(d){var v=d.data();v.id=d.id;REQ.push(v);});
+    renderRequests();
+  });
+}
+function renderRequests(){
+  var el=document.getElementById('reqBody');
+  var empty=document.getElementById('reqEmpty');
+  if(!REQ.length){el.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+  var h='';
+  REQ.forEach(function(r){
+    var st=r.status||'pending';
+    var stLabels={pending:'⏳ En attente',opened:'👁 Ouvert',signed:'✅ Signé',expired:'⏰ Expiré'};
+    var dt=r.createdAt?new Date(r.createdAt.seconds*1000).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+    h+='<tr>';
+    h+='<td style="font-weight:600">'+esc(r.clientName)+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail)+'</div></td>';
+    h+='<td>'+esc(r.templateName||'—')+'</td>';
+    h+='<td style="font-size:12px">'+dt+'</td>';
+    h+='<td><span class="req-status '+st+'">'+(stLabels[st]||st)+'</span></td>';
+    h+='<td>';
+    if(st==='signed'&&r.signedPdfUrl){h+='<a href="'+r.signedPdfUrl+'" target="_blank" class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px;text-decoration:none">📥 PDF</a>';}
+    h+='<button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px;margin-left:4px" onclick="navigator.clipboard.writeText(\''+esc(r.signUrl||'')+'\');toast(\'📋 Lien copié !\')">🔗 Copier</button>';
+    h+='</td></tr>';
+  });
+  el.innerHTML=h;
+}
+
+/* ═══ INIT ═══ */
+firebase.auth().onAuthStateChanged(function(u){
+  if(u){
+    db.collection('users').doc(u.uid).get().then(function(s){
+      var d=s.exists?s.data():{};
+      window._currentRole=d.role||'admin';
+      window._currentUserName=u.displayName||u.email.split('@')[0];
+    });
+  }
+  loadTemplates();
+});
+</script>
+</body>
+</html>
