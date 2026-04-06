@@ -416,19 +416,32 @@ var ansArr=FIELDS.map(function(f){
 return{fieldId:f.id,label:f.label,type:f.type,value:answers[f.id]||''};
 }).filter(function(a){return a.value!=='';});
 
-// Save to Firestore
+// Disable nav
+var btnNext=document.getElementById('btnNext');
+if(btnNext){btnNext.disabled=true;btnNext.textContent='Envoi…';}
+
+// Save to Firestore THEN redirect
 db.collection('alteo_forms').doc(FORM._id).collection('responses').add({
 answers:ansArr,
 answersMap:answers,
 submittedAt:firebase.firestore.FieldValue.serverTimestamp(),
 userAgent:navigator.userAgent
 }).then(function(){
-// Increment response count
+// Increment response count (fire & forget)
 db.collection('alteo_forms').doc(FORM._id).update({
 responseCount:firebase.firestore.FieldValue.increment(1)
-});
-});
+}).catch(function(){});
 
+// Now evaluate rules and redirect
+executePostSubmit();
+}).catch(function(e){
+console.error('Erreur soumission:',e);
+// Redirect anyway to not block user
+executePostSubmit();
+});
+}
+
+function executePostSubmit(){
 // Evaluate rules first, then fall back to default behavior
 var rules=FORM.rules||[];
 var matchedRule=null;
