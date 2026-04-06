@@ -373,6 +373,7 @@ html, body {
       <span class="ld-count" id="ldCount">— leads</span>
       <button id="shareBtn" title="Liens app mobile" style="margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0" onclick="toggleSharePanel()">🔗</button>
       <button id="pushBtn" title="Activer les notifications" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0" onclick="requestPush()">🔕</button>
+      <button title="Créer une fiche" style="width:34px;height:34px;border-radius:9px;border:1px solid rgba(52,211,153,.3);background:rgba(52,211,153,.1);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;color:#34d399;font-weight:700" onclick="openCreateLead()">+</button>
     </div>
     <!-- Share panel -->
     <div id="sharePanel" style="display:none;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin:8px 0">
@@ -460,6 +461,29 @@ html, body {
 </div>
 
 <div class="ld-toast" id="ldToast"></div>
+
+<!-- ── CREATE LEAD MODAL ── -->
+<div id="createLeadOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;backdrop-filter:blur(4px);align-items:center;justify-content:center" onclick="if(event.target===this)closeCreateLead()">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:92%;max-width:420px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <div style="width:36px;height:36px;border-radius:10px;background:rgba(52,211,153,.15);display:flex;align-items:center;justify-content:center;font-size:18px">📝</div>
+      <div style="font-family:var(--fh);font-size:16px;font-weight:800">Nouvelle fiche</div>
+      <button onclick="closeCreateLead()" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Prénom *</label><input id="clPrenom" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="Prénom"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Nom</label><input id="clNom" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="Nom"></div>
+    </div>
+    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Email *</label><input id="clEmail" type="email" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="email@exemple.com"></div>
+    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Téléphone</label><input id="clTel" type="tel" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="06 12 34 56 78"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Type</label><select id="clType" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="vsl_elite">VSL Élite</option><option value="self_booking">Self Booking</option><option value="webinaire">Webinaire</option></select></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Attribuer à</label><select id="clAssign" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="">Non attribué</option><option value="guillaume">Guillaume</option><option value="elodie">Élodie</option></select></div>
+    </div>
+    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">UTM / Source</label><input id="clUtm" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="Ex: Ads, Organique, Parrainage…"></div>
+    <button id="clSubmit" onclick="submitCreateLead()" style="margin-top:16px;width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#34d399,#059669);color:white;font-size:14px;font-weight:700;font-family:var(--fh);cursor:pointer;transition:opacity .15s">Créer la fiche</button>
+  </div>
+</div>
 
 <script>
 /* ═══════════════════════════════════════
@@ -1474,6 +1498,63 @@ var VAPID_KEY = 'BArDSUTNL4HD0uAK8pU8ZPkilIQ42bmwikmNFEKo-ARPRFFZXTzOWsrNLl5VjgT
 var pushDb = firebase.firestore();
 
 // Share links panel
+/* ── CREATE LEAD ── */
+function openCreateLead() {
+  var o = document.getElementById('createLeadOverlay');
+  o.style.display = 'flex';
+  document.getElementById('clPrenom').value = '';
+  document.getElementById('clNom').value = '';
+  document.getElementById('clEmail').value = '';
+  document.getElementById('clTel').value = '';
+  document.getElementById('clType').value = 'vsl_elite';
+  document.getElementById('clAssign').value = '';
+  document.getElementById('clUtm').value = '';
+  document.getElementById('clSubmit').disabled = false;
+  document.getElementById('clSubmit').textContent = 'Créer la fiche';
+  setTimeout(function() { document.getElementById('clPrenom').focus(); }, 100);
+}
+function closeCreateLead() {
+  document.getElementById('createLeadOverlay').style.display = 'none';
+}
+function submitCreateLead() {
+  var prenom = document.getElementById('clPrenom').value.trim();
+  var nom = document.getElementById('clNom').value.trim();
+  var email = document.getElementById('clEmail').value.trim().toLowerCase();
+  var tel = document.getElementById('clTel').value.trim();
+  var type = document.getElementById('clType').value;
+  var assign = document.getElementById('clAssign').value;
+  var utm = document.getElementById('clUtm').value.trim();
+  if (!prenom) { alert('Le prénom est obligatoire.'); return; }
+  if (!email) { alert('L\'email est obligatoire.'); return; }
+  var btn = document.getElementById('clSubmit');
+  btn.disabled = true;
+  btn.textContent = 'Création…';
+  var lead = {
+    nom: (prenom + ' ' + nom).trim(),
+    email: email,
+    telephone: tel.replace(/\s+/g, ''),
+    type: type,
+    stage: 'lead',
+    status: 'nouveau',
+    assignedTo: assign,
+    utm: utm || 'Création manuelle',
+    tags: [],
+    notesHistory: [{ text: '📝 Fiche créée manuellement', date: new Date().toLocaleString('fr-FR') }],
+    timeline_history: [{ text: '✨ Fiche créée manuellement', date: new Date().toLocaleString('fr-FR'), color: '#a78bfa' }],
+    communications: [],
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  db.collection('leads').add(lead).then(function(ref) {
+    toast('✅ Fiche créée !');
+    closeCreateLead();
+  }).catch(function(e) {
+    btn.disabled = false;
+    btn.textContent = 'Créer la fiche';
+    alert('Erreur : ' + e.message);
+  });
+}
+
 function toggleSharePanel() {
   var panel = document.getElementById('sharePanel');
   var isVisible = panel.style.display !== 'none';
