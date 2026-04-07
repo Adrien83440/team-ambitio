@@ -888,21 +888,33 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 function getFilteredLeads() {
   var list = getBaseLeads();
 
+  // Helper : retourne la date la plus récente entre createdAt et updatedAt.
+  // Ça permet qu'un lead existant qui reçoit une activité aujourd'hui (self-booking
+  // mergé, changement de stage, nouvelle note, etc.) apparaisse dans le filtre
+  // "Aujourd'hui" ou "7 jours", même si sa createdAt est plus ancienne.
+  function mostRecentDate(l) {
+    var cd = null, ud = null;
+    if (l.createdAt) cd = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+    if (l.updatedAt) ud = l.updatedAt.toDate ? l.updatedAt.toDate() : new Date(l.updatedAt);
+    if (cd && ud) return cd > ud ? cd : ud;
+    return cd || ud;
+  }
+
   // Period filter
   if (filterPeriod === 'today') {
     var now = new Date();
     var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
     list = list.filter(function(l) {
-      if (!l.createdAt) return false;
-      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+      var d = mostRecentDate(l);
+      if (!d) return false;
       return d >= todayStart && d <= todayEnd;
     });
   } else if (filterPeriod === 'week') {
     var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
     list = list.filter(function(l) {
-      if (!l.createdAt) return false;
-      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+      var d = mostRecentDate(l);
+      if (!d) return false;
       return d >= weekAgo;
     });
   } else if (filterPeriod === 'unprocessed') {
@@ -922,14 +934,19 @@ function getFilteredLeads() {
   return list;
 }
 
-/* Base filter: only leads after fresh-start cutoff */
+/* Base filter: only leads after fresh-start cutoff
+   On utilise max(createdAt, updatedAt) pour que les anciens leads qui ont eu
+   une activité récente (self-booking mergé, changement de stage…) réapparaissent. */
 var LEADS_LIVE_CUTOFF = new Date('2026-04-02T22:00:00+02:00');
 function getBaseLeads() {
   return allLeads.filter(function(l) {
-    if (!l.createdAt) return false;
     if (l.source === 'migration_suivi_client') return false;
-    var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-    return d > LEADS_LIVE_CUTOFF;
+    var cd = null, ud = null;
+    if (l.createdAt) cd = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+    if (l.updatedAt) ud = l.updatedAt.toDate ? l.updatedAt.toDate() : new Date(l.updatedAt);
+    var mostRecent = cd && ud ? (cd > ud ? cd : ud) : (cd || ud);
+    if (!mostRecent) return false;
+    return mostRecent > LEADS_LIVE_CUTOFF;
   });
 }
 
