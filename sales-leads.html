@@ -280,27 +280,55 @@ html, body {
 .ld-comm-toggle .ct-arrow { transition: transform 0.2s; font-size: 9px; margin-left: auto; }
 .ld-comm-toggle.open .ct-arrow { transform: rotate(180deg); }
 .ld-comm-count { font-family: var(--fm); font-size: 10px; padding: 1px 5px; border-radius: 4px; }
-.ld-comm-list { display: none; margin-top: 8px; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
-.ld-comm-list::-webkit-scrollbar { width: 3px; }
-.ld-comm-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-.ld-comm-item {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 8px 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border);
-  border-radius: 8px; font-size: 12px; line-height: 1.4;
+.ld-comm-list {
+  display: none; margin-top: 8px; max-height: 320px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px; padding: 4px 2px;
 }
-.ld-comm-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
-.ld-comm-body { flex: 1; min-width: 0; }
-.ld-comm-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
-.ld-comm-type { font-weight: 700; font-size: 11px; }
-.ld-comm-type.call { color: #34d399; }
-.ld-comm-type.sms { color: #60a5fa; }
-.ld-comm-dir { font-size: 10px; color: var(--muted); }
-.ld-comm-dur { font-family: var(--fm); font-size: 10px; color: var(--muted); }
-.ld-comm-date { font-size: 10px; color: var(--muted2); margin-left: auto; white-space: nowrap; }
-.ld-comm-content {
-  font-size: 11px; color: rgba(255,255,255,0.7); overflow: hidden;
-  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
-  line-height: 1.5; word-break: break-word;
+/* ── Bulles iMessage compactes (Leads Live cards) ── */
+.ld-conv-row { display: flex; flex-direction: column; max-width: 82%; }
+.ld-conv-row.in { align-self: flex-start; align-items: flex-start; }
+.ld-conv-row.out { align-self: flex-end; align-items: flex-end; }
+.ld-conv-author { font-size: 9px; font-weight: 700; padding: 0 10px 2px; letter-spacing: 0.2px; color: var(--muted); }
+.ld-conv-author.elodie { color: #60a5fa; }
+.ld-conv-author.guillaume { color: #f87171; }
+.ld-conv-bubble {
+  padding: 7px 11px; border-radius: 13px; font-size: 12px; line-height: 1.4;
+  word-wrap: break-word; border: 1px solid transparent;
+}
+.ld-conv-bubble.in {
+  background: rgba(255,255,255,0.04); border-color: var(--border);
+  border-bottom-left-radius: 4px; color: rgba(255,255,255,0.86);
+}
+.ld-conv-bubble.out { border-bottom-right-radius: 4px; color: rgba(255,255,255,0.94); }
+.ld-conv-bubble.out.elodie {
+  background: linear-gradient(135deg, rgba(96,165,250,0.30), rgba(96,165,250,0.14));
+  border-color: rgba(96,165,250,0.32);
+}
+.ld-conv-bubble.out.guillaume {
+  background: linear-gradient(135deg, rgba(248,113,113,0.30), rgba(248,113,113,0.14));
+  border-color: rgba(248,113,113,0.32);
+}
+.ld-conv-bubble.out.unknown {
+  background: linear-gradient(135deg, rgba(167,139,250,0.26), rgba(167,139,250,0.12));
+  border-color: rgba(167,139,250,0.30);
+}
+.ld-conv-call {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  border: 1px solid var(--border); background: rgba(255,255,255,0.04);
+  border-radius: 13px; min-width: 180px; font-size: 11px;
+}
+.ld-conv-call.in { border-bottom-left-radius: 4px; }
+.ld-conv-call.out { border-bottom-right-radius: 4px; }
+.ld-conv-call.out.elodie { background: rgba(96,165,250,0.10); border-color: rgba(96,165,250,0.26); }
+.ld-conv-call.out.guillaume { background: rgba(248,113,113,0.10); border-color: rgba(248,113,113,0.26); }
+.ld-conv-call.missed { background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.28); }
+.ld-conv-call-icon { font-size: 12px; }
+.ld-conv-call-title { font-weight: 600; color: rgba(255,255,255,0.9); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-conv-call-dur { font-family: var(--fm); font-size: 10px; color: var(--muted); flex-shrink: 0; }
+.ld-conv-meta { font-size: 9px; color: var(--muted); margin-top: 2px; padding: 0 10px; }
+.ld-conv-date-sep {
+  align-self: center; font-size: 9px; font-weight: 700; color: var(--muted);
+  padding: 8px 0 2px; letter-spacing: 0.4px; text-transform: uppercase;
 }
 .ld-comm-empty { text-align: center; padding: 16px; color: var(--muted2); font-size: 11px; }
 
@@ -1253,37 +1281,61 @@ function renderCard(l) {
   if (callsAndSms.length === 0) {
     h += '<div class="ld-comm-empty">Aucun appel ou SMS synchronisé<br/>Les données apparaîtront via Ringover</div>';
   } else {
-    // Sort by date descending
+    // Tri chronologique ASC (du plus vieux en haut, comme iMessage)
     callsAndSms.sort(function(a, b) {
       var da = a.date ? new Date(a.date).getTime() : 0;
       var db2 = b.date ? new Date(b.date).getTime() : 0;
-      return db2 - da;
+      return da - db2;
     });
+    var ldOwnerKey = function(c) {
+      var n = (c.ownerName || '').toLowerCase();
+      if (n.indexOf('elodie') >= 0 || n.indexOf('élodie') >= 0) return 'elodie';
+      if (n.indexOf('guillaume') >= 0) return 'guillaume';
+      return 'unknown';
+    };
+    var ldLastDay = '';
     for (var cj = 0; cj < callsAndSms.length; cj++) {
       var cm = callsAndSms[cj];
       var isCall = cm.type === 'call';
-      var cmDir = cm.direction || '';
-      var cmDirLabel = cmDir === 'outbound' ? 'Sortant' : cmDir === 'inbound' ? 'Entrant' : '';
-      var cmDirIcon = cmDir === 'outbound' ? '↗️' : cmDir === 'inbound' ? '↙️' : '';
+      var cmDir = cm.direction || 'inbound';
+      var side = cmDir === 'outbound' ? 'out' : 'in';
+      var ow = ldOwnerKey(cm);
       var cmDate = cm.date ? new Date(cm.date) : null;
-      var cmDateStr = cmDate ? cmDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + cmDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
-      h += '<div class="ld-comm-item">';
-      h += '<span class="ld-comm-icon">' + (isCall ? '📞' : '💬') + '</span>';
-      h += '<div class="ld-comm-body">';
-      h += '<div class="ld-comm-head">';
-      h += '<span class="ld-comm-type ' + cm.type + '">' + (isCall ? 'Appel' : 'SMS') + '</span>';
-      if (cmDirLabel) h += '<span class="ld-comm-dir">' + cmDirIcon + ' ' + cmDirLabel + '</span>';
-      if (isCall && cm.duration) {
-        var durMin = Math.floor(cm.duration / 60);
-        var durSec = cm.duration % 60;
-        h += '<span class="ld-comm-dur">' + durMin + 'm' + (durSec ? String(durSec).padStart(2, '0') + 's' : '') + '</span>';
+      var cmDayKey = cmDate ? cmDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+      if (cmDayKey && cmDayKey !== ldLastDay) {
+        h += '<div class="ld-conv-date-sep">' + escHtml(cmDayKey) + '</div>';
+        ldLastDay = cmDayKey;
       }
-      h += '<span class="ld-comm-date">' + escHtml(cmDateStr) + '</span>';
-      h += '</div>';
-      if (cm.content) h += '<div class="ld-comm-content">' + sanitizeCommContent(cm.content) + '</div>';
-      if (cm.source) h += '<div style="font-size:10px;color:var(--muted2);margin-top:2px">' + escHtml(cm.source) + '</div>';
-      h += '</div>';
-      h += '</div>';
+      var timeStr = cmDate ? cmDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+      h += '<div class="ld-conv-row ' + side + '">';
+      // Auteur (côté équipe seulement)
+      if (side === 'out' && cm.ownerName) {
+        h += '<div class="ld-conv-author ' + ow + '">' + escHtml(cm.ownerName) + '</div>';
+      }
+      if (isCall) {
+        var clMissed = !cm.duration;
+        var clDurStr = '';
+        if (cm.duration) {
+          var dm = Math.floor(cm.duration / 60), ds = cm.duration % 60;
+          clDurStr = dm + 'm' + (ds ? String(ds).padStart(2, '0') + 's' : '');
+        }
+        var clIcon = cmDir === 'outbound' ? '📞↗' : (clMissed ? '❌' : '📞↙');
+        var clTitle = (cmDir === 'outbound' ? 'Appel sortant' : 'Appel entrant') + (clMissed && cmDir === 'inbound' ? ' (manqué)' : '');
+        var callClass = 'ld-conv-call ' + side + (side === 'out' ? ' ' + ow : '') + (clMissed && cmDir === 'inbound' ? ' missed' : '');
+        h += '<div class="' + callClass + '">';
+        h += '<span class="ld-conv-call-icon">' + clIcon + '</span>';
+        h += '<span class="ld-conv-call-title">' + escHtml(clTitle) + '</span>';
+        if (clDurStr) h += '<span class="ld-conv-call-dur">' + clDurStr + '</span>';
+        h += '</div>';
+      } else {
+        // SMS bubble
+        h += '<div class="ld-conv-bubble ' + side + (side === 'out' ? ' ' + ow : '') + '">';
+        if (cm.content) h += sanitizeCommContent(cm.content);
+        else h += '<span style="color:var(--muted);font-style:italic">Contenu non disponible</span>';
+        h += '</div>';
+      }
+      h += '<div class="ld-conv-meta">' + escHtml(timeStr) + (cm.source ? ' · ' + escHtml(cm.source) : '') + '</div>';
+      h += '</div>'; // ld-conv-row
     }
   }
   h += '</div>';

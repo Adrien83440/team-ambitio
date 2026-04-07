@@ -110,27 +110,50 @@ body{overflow:hidden;display:flex;flex-direction:column}
 .file-del{background:none;border:none;color:var(--muted2);cursor:pointer;font-size:12px}
 .file-upload{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:1.5px dashed var(--border2);border-radius:12px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:600;transition:all .15s;margin-top:8px}
 .file-upload:hover{border-color:var(--red2);color:var(--text)}
-.sms-thread{display:flex;flex-direction:column;gap:6px;padding-bottom:12px}
-.sms-date-sep{text-align:center;font-size:10px;font-weight:700;color:var(--muted);padding:12px 0 4px;letter-spacing:0.3px}
-.sms-bubble{max-width:80%;padding:10px 14px;border-radius:14px;font-size:13px;line-height:1.5;word-wrap:break-word;position:relative}
-.sms-bubble.inbound{align-self:flex-start;background:var(--bg3);border:1px solid var(--border);border-bottom-left-radius:4px;color:rgba(255,255,255,0.88)}
-.sms-bubble.outbound{align-self:flex-end;background:linear-gradient(135deg,rgba(96,165,250,0.18),rgba(96,165,250,0.08));border:1px solid rgba(96,165,250,0.2);border-bottom-right-radius:4px;color:rgba(255,255,255,0.92)}
-.sms-meta{font-size:10px;color:var(--muted);margin-top:4px;display:flex;align-items:center;gap:6px}
-.sms-dir-icon{font-size:11px}
-.sms-empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px}
-.sms-empty-icon{font-size:32px;margin-bottom:12px;opacity:0.4}
+/* ═══ Conversation unifiée style iMessage ═══
+   - Bulles owner-colorées (Élodie bleu / Guillaume rouge)
+   - SMS et appels entrelacés chronologiquement (asc, du plus vieux au plus récent)
+   - L'inbound (= prospect) est aligné à gauche en gris
+   - L'outbound (= équipe) est aligné à droite, coloré selon l'owner
+*/
+.conv-thread{display:flex;flex-direction:column;gap:8px;padding:8px 4px 16px}
+.conv-empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px}
+.conv-empty-icon{font-size:32px;margin-bottom:12px;opacity:0.4}
+.conv-date-sep{align-self:center;font-size:10px;font-weight:700;color:var(--muted);padding:14px 0 6px;letter-spacing:0.4px;text-transform:uppercase}
+.conv-row{display:flex;flex-direction:column;max-width:78%}
+.conv-row.in{align-self:flex-start;align-items:flex-start}
+.conv-row.out{align-self:flex-end;align-items:flex-end}
+.conv-author{font-size:10px;font-weight:700;color:var(--muted);padding:0 12px 3px;letter-spacing:0.2px}
+.conv-author.elodie{color:#60a5fa}
+.conv-author.guillaume{color:#f87171}
+/* SMS bubble */
+.conv-bubble{padding:9px 13px;border-radius:16px;font-size:13px;line-height:1.45;word-wrap:break-word;position:relative;border:1px solid transparent}
+.conv-bubble.in{background:var(--bg3);border-color:var(--border);border-bottom-left-radius:4px;color:rgba(255,255,255,0.88)}
+.conv-bubble.out{border-bottom-right-radius:4px;color:rgba(255,255,255,0.95)}
+.conv-bubble.out.elodie{background:linear-gradient(135deg,rgba(96,165,250,0.32),rgba(96,165,250,0.16));border-color:rgba(96,165,250,0.35)}
+.conv-bubble.out.guillaume{background:linear-gradient(135deg,rgba(248,113,113,0.32),rgba(248,113,113,0.16));border-color:rgba(248,113,113,0.35)}
+.conv-bubble.out.unknown{background:linear-gradient(135deg,rgba(167,139,250,0.28),rgba(167,139,250,0.14));border-color:rgba(167,139,250,0.32)}
+.conv-meta{font-size:10px;color:var(--muted);margin-top:3px;padding:0 12px;display:flex;align-items:center;gap:6px}
+/* Call card (compact horizontal style, en bulle inline dans le fil) */
+.conv-call{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:14px;border:1px solid var(--border);background:var(--bg3);min-width:220px}
+.conv-call.in{border-bottom-left-radius:4px}
+.conv-call.out{border-bottom-right-radius:4px}
+.conv-call.out.elodie{background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.28)}
+.conv-call.out.guillaume{background:rgba(248,113,113,0.12);border-color:rgba(248,113,113,0.28)}
+.conv-call.out.unknown{background:rgba(167,139,250,0.10);border-color:rgba(167,139,250,0.25)}
+.conv-call.missed{background:rgba(239,68,68,0.10);border-color:rgba(239,68,68,0.28)}
+.conv-call-icon{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;background:rgba(255,255,255,0.06)}
+.conv-call.missed .conv-call-icon{background:rgba(239,68,68,0.18)}
+.conv-call-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.conv-call-title{font-size:12px;font-weight:600;color:rgba(255,255,255,0.92);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-call-sub{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.conv-call-dur{font-family:var(--fm);font-size:10px;color:rgba(255,255,255,0.6);flex-shrink:0}
+.conv-call-extras{display:flex;flex-direction:column;gap:4px;margin-top:6px;width:100%}
+.conv-call-extra{padding:6px 10px;background:rgba(0,0,0,0.18);border-radius:8px;font-size:11px;color:rgba(255,255,255,0.78);line-height:1.4;max-height:120px;overflow-y:auto}
+.conv-call-extra-label{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:2px}
+.conv-call-rec{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(52,211,153,0.10);border:1px solid rgba(52,211,153,0.25);border-radius:8px;color:var(--green);font-size:10px;font-weight:700;text-decoration:none;margin-top:6px;align-self:flex-start}
+/* Compteurs onglets — gardés pour les emails */
 .sms-count-pill{font-family:var(--fm);font-size:10px;background:rgba(96,165,250,0.15);color:var(--blue);padding:1px 5px;border-radius:4px;margin-left:4px}
-.call-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-bottom:6px}
-.call-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
-.call-icon.inbound{background:rgba(52,211,153,0.12)}
-.call-icon.outbound{background:rgba(96,165,250,0.12)}
-.call-icon.missed{background:rgba(239,68,68,0.12)}
-.call-info{flex:1;min-width:0}
-.call-title{font-size:13px;font-weight:600;color:rgba(255,255,255,0.9)}
-.call-sub{font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:8px}
-.call-duration{font-family:var(--fm);font-size:11px;color:var(--muted);flex-shrink:0}
-.call-empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:13px}
-.call-empty-icon{font-size:32px;margin-bottom:12px;opacity:0.4}
 .call-count-pill{font-family:var(--fm);font-size:10px;background:rgba(52,211,153,0.15);color:var(--green);padding:1px 5px;border-radius:4px;margin-left:4px}
 .email-item{padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;cursor:pointer;transition:all .15s}
 .email-item:hover{border-color:var(--border2)}
@@ -299,8 +322,7 @@ h+='<button class="fr-tab active" data-tab="chrono">Chronologie'+(tc?'<span clas
 h+='<button class="fr-tab" data-tab="notes">Remarques'+(nc?'<span class="tc">'+nc+'</span>':'')+'</button>';
 h+='<button class="fr-tab" data-tab="act">Activit\u00e9s'+(ac?'<span class="tc">'+ac+'</span>':'')+'</button>';
 h+='<button class="fr-tab" data-tab="files">Fichiers'+(fc?'<span class="tc">'+fc+'</span>':'')+'</button>';
-h+='<button class="fr-tab" data-tab="sms">\ud83d\udcac SMS'+(sc?'<span class="sms-count-pill">'+sc+'</span>':'')+'</button>';
-h+='<button class="fr-tab" data-tab="calls">\ud83d\udcde Appels'+(cc?'<span class="call-count-pill">'+cc+'</span>':'')+'</button>';
+h+='<button class="fr-tab" data-tab="convo">\ud83d\udcac Conversation'+((sc+cc)?'<span class="sms-count-pill">'+(sc+cc)+'</span>':'')+'</button>';
 h+='<button class="fr-tab" data-tab="emails">\u2709\ufe0f Emails'+(ec?'<span class="email-count-pill">'+ec+'</span>':'')+'</button>';
 h+='</div>';
 // Chrono
@@ -324,60 +346,82 @@ h+='<div class="fr-panel" id="pFiles">';
 var fs=l.files||[];
 for(var fi=0;fi<fs.length;fi++){var f=fs[fi];h+='<div class="file-item"><span class="file-icon">'+(f.name&&/\.pdf$/i.test(f.name)?'\ud83d\udcd5':'\ud83d\udcc4')+'</span><span class="file-name">'+esc(f.name)+'</span><span class="file-meta">'+esc(f.size||'')+' \u00b7 '+esc(f.uploadedAt||'')+'</span><button class="file-del" data-action="delFile" data-idx="'+fi+'">\u2715</button></div>';}
 h+='<label class="file-upload">\ud83d\udcc1 Ajouter un fichier (max 750KB)<input type="file" id="fileIn" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx"/></label></div>';
-// SMS
-h+='<div class="fr-panel" id="pSms">';
-var smsAll=(l.communications||[]).filter(function(c){return c.type==='sms';});
-if(!smsAll.length){h+='<div class="sms-empty"><div class="sms-empty-icon">\ud83d\udcac</div>Aucun SMS synchronis\u00e9<br/><span style="font-size:11px;color:var(--muted2)">Les SMS appara\u00eetront ici automatiquement via Ringover</span></div>';}
+// Conversation unifiée (SMS + Appels triés chronologiquement, style iMessage)
+h+='<div class="fr-panel" id="pConvo">';
+var convoAll=(l.communications||[]).filter(function(c){return c.type==='sms'||c.type==='call';});
+if(!convoAll.length){h+='<div class="conv-empty"><div class="conv-empty-icon">\ud83d\udcac</div>Aucun SMS ni appel synchronis\u00e9<br/><span style="font-size:11px;color:var(--muted2)">Les communications appara\u00eetront ici automatiquement via Ringover</span></div>';}
 else{
-h+='<div class="sms-thread">';
+// Tri chronologique ASCENDANT (du plus vieux en haut au plus récent en bas, comme iMessage)
+convoAll.sort(function(a,b){var da=a.date?new Date(a.date).getTime():0;var db=b.date?new Date(b.date).getTime():0;return da-db;});
+// Helper : déduit la classe owner depuis ownerName / ownerUid
+function ownerKey(c){
+  var n=(c.ownerName||'').toLowerCase();
+  if(n.indexOf('elodie')>=0||n.indexOf('\u00e9lodie')>=0)return 'elodie';
+  if(n.indexOf('guillaume')>=0)return 'guillaume';
+  return 'unknown';
+}
+h+='<div class="conv-thread">';
 var lastDay='';
-for(var si=0;si<smsAll.length;si++){
-var sm=smsAll[si];
-var smDate=sm.date?new Date(sm.date):null;
-var dayKey=smDate?smDate.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
-if(dayKey&&dayKey!==lastDay){h+='<div class="sms-date-sep">'+esc(dayKey)+'</div>';lastDay=dayKey;}
-var dir=sm.direction||'inbound';
-var timeStr=smDate?smDate.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
-h+='<div class="sms-bubble '+dir+'">';
-if(sm.content)h+=sanitizeComm(sm.content);else h+='<span style="color:var(--muted);font-style:italic">Contenu non disponible</span>';
-h+='<div class="sms-meta"><span class="sms-dir-icon">'+(dir==='outbound'?'\u2197\ufe0f':'\u2199\ufe0f')+'</span><span>'+esc(timeStr)+'</span>'+(sm.source?'<span>\u00b7 '+esc(sm.source)+'</span>':'')+'</div>';
-h+='</div>';
+for(var ki=0;ki<convoAll.length;ki++){
+  var cm=convoAll[ki];
+  var cmDate=cm.date?new Date(cm.date):null;
+  var dayKey=cmDate?cmDate.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
+  if(dayKey&&dayKey!==lastDay){h+='<div class="conv-date-sep">'+esc(dayKey)+'</div>';lastDay=dayKey;}
+  var dir=cm.direction||'inbound';
+  var side=dir==='outbound'?'out':'in';
+  var ow=ownerKey(cm);
+  var timeStr=cmDate?cmDate.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+  h+='<div class="conv-row '+side+'">';
+  // Auteur (uniquement côté équipe, et si on connaît l'owner)
+  if(side==='out'&&cm.ownerName){
+    h+='<div class="conv-author '+ow+'">'+esc(cm.ownerName)+'</div>';
+  }
+  if(cm.type==='sms'){
+    // Bulle SMS classique
+    h+='<div class="conv-bubble '+side+(side==='out'?' '+ow:'')+'">';
+    if(cm.content)h+=sanitizeComm(cm.content);
+    else h+='<span style="color:var(--muted);font-style:italic">Contenu non disponible</span>';
+    h+='</div>';
+  }else{
+    // Bulle Appel
+    var clMissed=cm.duration===0||cm.duration===null||cm.duration===undefined;
+    var clDur='';
+    if(cm.duration){var dm=Math.floor(cm.duration/60),ds=cm.duration%60;clDur=dm+'m'+(ds?String(ds).padStart(2,'0')+'s':'');}
+    var clIcon=dir==='outbound'?'\ud83d\udcde\u2197':clMissed?'\u274c':'\ud83d\udcde\u2199';
+    var clTitle=(dir==='outbound'?'Appel sortant':'Appel entrant')+(clMissed&&dir==='inbound'?' (manqu\u00e9)':'');
+    var callClass='conv-call '+side+(side==='out'?' '+ow:'')+(clMissed&&dir==='inbound'?' missed':'');
+    h+='<div class="'+callClass+'">';
+    h+='<div class="conv-call-icon">'+clIcon+'</div>';
+    h+='<div class="conv-call-info"><div class="conv-call-title">'+esc(clTitle)+'</div>';
+    h+='<div class="conv-call-sub">'+(cm.source?'<span>'+esc(cm.source)+'</span>':'')+'</div></div>';
+    if(clDur)h+='<div class="conv-call-dur">'+esc(clDur)+'</div>';
+    h+='</div>';
+    // Extras (note, transcription, enregistrement, tags) — sous la bulle
+    var hasExtras=cm.note||cm.transcription||cm.recordingUrl||extractRecordingUrl(cm.content||'')||cm.callTags;
+    if(hasExtras){
+      h+='<div class="conv-call-extras">';
+      if(cm.note)h+='<div class="conv-call-extra"><span class="conv-call-extra-label">\ud83d\udcdd Note</span>'+sanitizeComm(cm.note)+'</div>';
+      if(cm.transcription)h+='<div class="conv-call-extra"><span class="conv-call-extra-label">\ud83d\udcc4 Transcription</span>'+sanitizeComm(cm.transcription)+'</div>';
+      var recUrl=cm.recordingUrl||extractRecordingUrl(cm.content||'');
+      if(recUrl)h+='<a href="'+escA(recUrl)+'" target="_blank" class="conv-call-rec">\ud83c\udfa7 \u00c9couter l\'enregistrement</a>';
+      if(cm.callTags){
+        var ctArr=typeof cm.callTags==='string'?cm.callTags.split(','):Array.isArray(cm.callTags)?cm.callTags:[];
+        if(ctArr.length){
+          h+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px">';
+          ctArr.forEach(function(ct){if(ct.trim())h+='<span style="padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;background:rgba(167,139,250,0.12);color:var(--purple)">'+esc(ct.trim())+'</span>';});
+          h+='</div>';
+        }
+      }
+      h+='</div>';
+    }
+  }
+  // Meta (heure + source) sous la bulle
+  h+='<div class="conv-meta"><span>'+esc(timeStr)+'</span>'+(cm.type==='sms'&&cm.source?'<span>\u00b7 '+esc(cm.source)+'</span>':'')+'</div>';
+  h+='</div>'; // conv-row
 }
-h+='</div>';
+h+='</div>'; // conv-thread
 }
-h+='</div>';
-// Appels
-h+='<div class="fr-panel" id="pCalls">';
-var callsAll=(l.communications||[]).filter(function(c){return c.type==='call';});
-if(!callsAll.length){h+='<div class="call-empty"><div class="call-empty-icon">\ud83d\udcde</div>Aucun appel synchronis\u00e9<br/><span style="font-size:11px;color:var(--muted2)">Les appels appara\u00eetront ici automatiquement via Ringover</span></div>';}
-else{
-for(var ci=callsAll.length-1;ci>=0;ci--){
-var cl=callsAll[ci];
-var clDir=cl.direction||'inbound';
-var clDate=cl.date?new Date(cl.date):null;
-var clDateStr=clDate?clDate.toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}):'';
-var clTimeStr=clDate?clDate.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
-var clDur='';
-if(cl.duration){var dm=Math.floor(cl.duration/60),ds=cl.duration%60;clDur=dm+'m'+String(ds).padStart(2,'0')+'s';}
-var clMissed=cl.duration===0||cl.duration===null;
-var clIconClass=clMissed?'missed':clDir;
-var clIcon=clDir==='outbound'?'\u2197\ufe0f':clMissed?'\u274c':'\u2199\ufe0f';
-var clTitle=(clDir==='outbound'?'Appel sortant':'Appel entrant')+(clMissed&&clDir==='inbound'?' (manqu\u00e9)':'')+(cl.caller?' \u2014 '+cl.caller:'');
-h+='<div class="call-item" style="flex-wrap:wrap">';
-h+='<div style="display:flex;align-items:center;gap:12px;width:100%">';
-h+='<div class="call-icon '+clIconClass+'">'+clIcon+'</div>';
-h+='<div class="call-info"><div class="call-title">'+esc(clTitle)+'</div><div class="call-sub"><span>'+esc(clDateStr)+' '+esc(clTimeStr)+'</span>'+(cl.source?'<span>\u00b7 '+esc(cl.source)+'</span>':'')+'</div></div>';
-if(clDur)h+='<div class="call-duration">'+esc(clDur)+'</div>';
-h+='</div>';
-if(cl.note){h+='<div style="width:100%;padding:8px 12px;margin-top:6px;background:var(--bg4);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.8);line-height:1.5"><span style="font-weight:700;color:var(--gold);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px">\ud83d\udcdd Note</span>'+sanitizeComm(cl.note)+'</div>';}
-if(cl.transcription){h+='<div style="width:100%;padding:8px 12px;margin-top:4px;background:var(--bg4);border-radius:8px;font-size:12px;color:rgba(255,255,255,0.7);line-height:1.5;max-height:120px;overflow-y:auto"><span style="font-weight:700;color:var(--purple);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px">\ud83d\udcc4 Transcription</span>'+sanitizeComm(cl.transcription)+'</div>';}
-var clRecUrl=cl.recordingUrl||extractRecordingUrl(cl.content||'');
-if(clRecUrl){h+='<a href="'+escA(clRecUrl)+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:6px 12px;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.2);border-radius:8px;color:var(--green);font-size:11px;font-weight:700;text-decoration:none">\ud83c\udfa7 \u00c9couter l\'enregistrement</a>';}
-if(cl.callTags){var ctArr=typeof cl.callTags==='string'?cl.callTags.split(','):Array.isArray(cl.callTags)?cl.callTags:[];if(ctArr.length){h+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">';ctArr.forEach(function(ct){if(ct.trim())h+='<span style="padding:2px 8px;border-radius:5px;font-size:10px;font-weight:700;background:rgba(167,139,250,0.12);color:var(--purple)">'+esc(ct.trim())+'</span>';});h+='</div>';}}
-h+='</div>';
-}
-}
-h+='</div>';
+h+='</div>'; // pConvo
 // Emails
 h+='<div class="fr-panel" id="pEmails">';
 var emailsAll=(l.communications||[]).filter(function(c){return c.type==='email';});
@@ -429,7 +473,7 @@ initEv();
 function flR(ic,label,k,v){return '<div class="fl-row"><span class="fl-icon">'+ic+'</span><span style="min-width:120px;font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0">'+esc(label)+'</span><input class="fl-editable" data-f="'+k+'" value="'+escA(v||'')+'" placeholder="\u2014"/></div>';}
 
 function initEv(){
-document.querySelectorAll('.fr-tab').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.fr-tab').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.fr-panel').forEach(function(x){x.classList.remove('active');});b.classList.add('active');var m={chrono:'pChrono',notes:'pNotes',act:'pAct',files:'pFiles',sms:'pSms',calls:'pCalls',emails:'pEmails'};document.getElementById(m[b.dataset.tab]).classList.add('active');});});
+document.querySelectorAll('.fr-tab').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.fr-tab').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.fr-panel').forEach(function(x){x.classList.remove('active');});b.classList.add('active');var m={chrono:'pChrono',notes:'pNotes',act:'pAct',files:'pFiles',convo:'pConvo',emails:'pEmails'};document.getElementById(m[b.dataset.tab]).classList.add('active');});});
 document.getElementById('ctApp').addEventListener('input',function(e){if(e.target.closest('[data-f]')){if(autoTimer)clearTimeout(autoTimer);autoTimer=setTimeout(saveF,3000);}});
 document.getElementById('ctApp').addEventListener('change',function(e){if(e.target.closest('[data-f]'))saveF();});
 document.getElementById('ctApp').addEventListener('click',function(e){
