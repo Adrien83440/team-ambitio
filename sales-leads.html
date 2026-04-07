@@ -1293,12 +1293,20 @@ function renderCard(l) {
       if (n.indexOf('guillaume') >= 0) return 'guillaume';
       return 'unknown';
     };
+    // Détermine si la comm vient de l'équipe (out) ou du prospect (in).
+    // Règle : si ownerName est défini → forcément équipe (out).
+    // Sinon on regarde direction (qui peut être 'out', 'outbound', 'sortant', etc.).
+    var ldSide = function(c) {
+      if (c.ownerName) return 'out';
+      var d = String(c.direction || '').toLowerCase();
+      if (d === 'out' || d === 'outbound' || d === 'sortant') return 'out';
+      return 'in';
+    };
     var ldLastDay = '';
     for (var cj = 0; cj < callsAndSms.length; cj++) {
       var cm = callsAndSms[cj];
       var isCall = cm.type === 'call';
-      var cmDir = cm.direction || 'inbound';
-      var side = cmDir === 'outbound' ? 'out' : 'in';
+      var side = ldSide(cm);
       var ow = ldOwnerKey(cm);
       var cmDate = cm.date ? new Date(cm.date) : null;
       var cmDayKey = cmDate ? cmDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
@@ -1319,9 +1327,9 @@ function renderCard(l) {
           var dm = Math.floor(cm.duration / 60), ds = cm.duration % 60;
           clDurStr = dm + 'm' + (ds ? String(ds).padStart(2, '0') + 's' : '');
         }
-        var clIcon = cmDir === 'outbound' ? '📞↗' : (clMissed ? '❌' : '📞↙');
-        var clTitle = (cmDir === 'outbound' ? 'Appel sortant' : 'Appel entrant') + (clMissed && cmDir === 'inbound' ? ' (manqué)' : '');
-        var callClass = 'ld-conv-call ' + side + (side === 'out' ? ' ' + ow : '') + (clMissed && cmDir === 'inbound' ? ' missed' : '');
+        var clIcon = side === 'out' ? '📞↗' : (clMissed ? '❌' : '📞↙');
+        var clTitle = (side === 'out' ? 'Appel sortant' : 'Appel entrant') + (clMissed && side === 'in' ? ' (manqué)' : '');
+        var callClass = 'ld-conv-call ' + side + (side === 'out' ? ' ' + ow : '') + (clMissed && side === 'in' ? ' missed' : '');
         h += '<div class="' + callClass + '">';
         h += '<span class="ld-conv-call-icon">' + clIcon + '</span>';
         h += '<span class="ld-conv-call-title">' + escHtml(clTitle) + '</span>';

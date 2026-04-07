@@ -360,6 +360,15 @@ function ownerKey(c){
   if(n.indexOf('guillaume')>=0)return 'guillaume';
   return 'unknown';
 }
+// Détermine si la comm vient de l'équipe (out) ou du prospect (in).
+// Règle : si ownerName est défini → forcément équipe (out, peu importe direction).
+// Sinon on regarde direction normalisée ('out'/'outbound'/'sortant' = équipe).
+function convSide(c){
+  if(c.ownerName)return 'out';
+  var d=String(c.direction||'').toLowerCase();
+  if(d==='out'||d==='outbound'||d==='sortant')return 'out';
+  return 'in';
+}
 h+='<div class="conv-thread">';
 var lastDay='';
 for(var ki=0;ki<convoAll.length;ki++){
@@ -367,8 +376,7 @@ for(var ki=0;ki<convoAll.length;ki++){
   var cmDate=cm.date?new Date(cm.date):null;
   var dayKey=cmDate?cmDate.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
   if(dayKey&&dayKey!==lastDay){h+='<div class="conv-date-sep">'+esc(dayKey)+'</div>';lastDay=dayKey;}
-  var dir=cm.direction||'inbound';
-  var side=dir==='outbound'?'out':'in';
+  var side=convSide(cm);
   var ow=ownerKey(cm);
   var timeStr=cmDate?cmDate.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
   h+='<div class="conv-row '+side+'">';
@@ -387,9 +395,9 @@ for(var ki=0;ki<convoAll.length;ki++){
     var clMissed=cm.duration===0||cm.duration===null||cm.duration===undefined;
     var clDur='';
     if(cm.duration){var dm=Math.floor(cm.duration/60),ds=cm.duration%60;clDur=dm+'m'+(ds?String(ds).padStart(2,'0')+'s':'');}
-    var clIcon=dir==='outbound'?'\ud83d\udcde\u2197':clMissed?'\u274c':'\ud83d\udcde\u2199';
-    var clTitle=(dir==='outbound'?'Appel sortant':'Appel entrant')+(clMissed&&dir==='inbound'?' (manqu\u00e9)':'');
-    var callClass='conv-call '+side+(side==='out'?' '+ow:'')+(clMissed&&dir==='inbound'?' missed':'');
+    var clIcon=side==='out'?'\ud83d\udcde\u2197':clMissed?'\u274c':'\ud83d\udcde\u2199';
+    var clTitle=(side==='out'?'Appel sortant':'Appel entrant')+(clMissed&&side==='in'?' (manqu\u00e9)':'');
+    var callClass='conv-call '+side+(side==='out'?' '+ow:'')+(clMissed&&side==='in'?' missed':'');
     h+='<div class="'+callClass+'">';
     h+='<div class="conv-call-icon">'+clIcon+'</div>';
     h+='<div class="conv-call-info"><div class="conv-call-title">'+esc(clTitle)+'</div>';
