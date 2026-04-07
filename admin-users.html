@@ -497,6 +497,16 @@ function openEditModal(u){
   h+='<option value="invited"'+(status==='invited'?' selected':'')+'>📩 Invité</option>';
   h+='<option value="disabled"'+(status==='disabled'?' selected':'')+'>🚫 Désactivé</option>';
   h+='</select></div>';
+  // Numéros Ringover (un par ligne)
+  var phonesValue = Array.isArray(u.ringoverPhones) ? u.ringoverPhones.join('\n') : '';
+  h+='<div class="mf"><label>📞 Numéros Ringover (un par ligne)</label>';
+  h+='<textarea class="bi" id="ePhones" rows="3" placeholder="+33 7 45 88 46 95&#10;+33 4 65 84 72 05" style="width:100%;font-family:monospace;font-size:12px;resize:vertical">'+esc(phonesValue)+'</textarea>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px">Servent à exclure les communications internes du matching et à attribuer SMS/appels au bon owner.</div></div>';
+  // Emails pro additionnels (un par ligne) — l'email principal est déjà géré via u.email
+  var emailsValue = Array.isArray(u.workEmails) ? u.workEmails.join('\n') : '';
+  h+='<div class="mf"><label>✉️ Emails pro additionnels (un par ligne)</label>';
+  h+='<textarea class="bi" id="eEmails" rows="2" placeholder="elodie@adrienemily.com&#10;contact@adrienemily.com" style="width:100%;font-family:monospace;font-size:12px;resize:vertical">'+esc(emailsValue)+'</textarea>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px">Optionnel. Tous les emails @adrienemily.com et @ambitiocorp.com sont déjà filtrés automatiquement.</div></div>';
   // Permissions
   h+=buildPermGrid(mods,'e');
   // Save
@@ -530,10 +540,17 @@ async function handleSave(uid){
   var btn=document.getElementById('eSave');
   btn.disabled=true;btn.textContent='⏳…';
   try{
+    // Parse les zones texte multilignes en arrays
+    function parseList(id){
+      var raw=(document.getElementById(id)||{}).value||'';
+      return raw.split(/[\n,;]+/).map(function(s){return s.trim();}).filter(Boolean);
+    }
     var upd={
       displayName:document.getElementById('eName').value.trim(),
       role:document.getElementById('eRole').value,
       status:document.getElementById('eStatus').value,
+      ringoverPhones:parseList('ePhones'),
+      workEmails:parseList('eEmails'),
       modules:readPermGrid('e')
     };
     await updateDoc(doc(db,'users',uid),upd);
