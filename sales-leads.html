@@ -754,6 +754,19 @@ function normalizeTel(raw) {
   return raw;
 }
 
+// Retourne les 9 derniers chiffres significatifs d'un numéro (mobile FR ou
+// international). Sert de clé de matching robuste indépendante du format.
+//   "06 11 71 73 05"   → "611717305"
+//   "+33611717305"     → "611717305"
+//   "33611717305"      → "611717305"
+function phoneNormalized(raw) {
+  if (!raw) return null;
+  var digits = String(raw).replace(/[^\d]/g, '');
+  if (digits.length < 6) return null;
+  if (digits.length >= 9) return digits.slice(-9);
+  return digits;
+}
+
 function timeAgo(ts) {
   if (!ts) return '';
   var d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -1660,6 +1673,10 @@ function autoSaveField(leadId, field, value) {
       var el = card.querySelector('[data-edit="' + fields[i] + '"]');
       if (el) updates[fields[i]] = el.value.trim();
     }
+    // Si le téléphone fait partie du payload, recalculer phoneNormalized
+    if (updates.telephone != null) {
+      updates.phoneNormalized = phoneNormalized(updates.telephone);
+    }
     updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
 
     // Update local state
@@ -1911,6 +1928,12 @@ function startBookingBridge() {
               update.type = 'self_booking';
             }
 
+            // Si phoneNormalized manque côté master, le calculer maintenant
+            if (!cur.phoneNormalized) {
+              var pn = phoneNormalized(cur.telephone || be.telephone);
+              if (pn) update.phoneNormalized = pn;
+            }
+
             // Merger champs formulaire uniquement si vides côté lead
             var mergeFields = ['secteur', 'ca', 'defi', 'disponibilite', 'timeline'];
             mergeFields.forEach(function(f) {
@@ -1950,6 +1973,7 @@ function startBookingBridge() {
               nom:            be.nom || '',
               email:          (be.email || '').trim().toLowerCase(),
               telephone:      normalizeTel(be.telephone || ''),
+              phoneNormalized: phoneNormalized(be.telephone || ''),
               secteur:        be.secteur || '',
               ca:             be.ca || '',
               defi:           be.defi || '',
@@ -2168,8 +2192,9 @@ function submitCreateLead() {
   btn.textContent = 'Création…';
   var lead = {
     nom: (prenom + ' ' + nom).trim(),
-    email: email,
+    email: (email || '').trim().toLowerCase(),
     telephone: tel.replace(/\s+/g, ''),
+    phoneNormalized: phoneNormalized(tel),
     type: type,
     stage: 'lead',
     status: 'nouveau',
