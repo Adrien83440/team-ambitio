@@ -1742,6 +1742,8 @@ function startListening() {
       snap.forEach(function(doc) {
         var d = doc.data();
         d.id = doc.id;
+        // Skip les leads marqués comme fusionnés dans un autre (via dedup-leads.js)
+        if (d._merged === true) return;
         // Check if it's one of the new ones
         for (var i = 0; i < newLeads.length; i++) {
           if (newLeads[i].id === doc.id) { d._isNew = true; break; }
@@ -1781,7 +1783,86 @@ function startListening() {
     });
 }
 
-/* ═══ BRIDGE: booking_events → leads ═══ */
+/* ═══ BRIDGE: booking_events → leads ═══
+   Quand un booking_event arrive (form self-booking externe via Make), on cherche
+   d'abord si un lead existe déjà pour ce prospect (par email, puis par téléphone
+   avec variantes +33/33/0). Si oui → update intelligent. Si non → create.
+   Évite les doublons quand un lead VSL Élite reprend un rdv self-booking. */
+
+// Stages "terminaux" : on n'écrase pas le stage d'un lead qui est déjà dans ces états
+var TERMINAL_STAGES = ['closed_won_setting', 'closed_won_self', 'closed_lost', 'poubelle', 'disqualification'];
+
+// Génère les variantes de numéro de téléphone pour retrouver un lead existant
+function telVariants(raw) {
+  if (!raw) return [];
+  var clean = String(raw).replace(/\s+/g, '');
+  var set = {};
+  set[clean] = 1;
+  // +33X... → 0X...
+  if (clean.indexOf('+33') === 0) set['0' + clean.slice(3)] = 1;
+  // 33X... (11 chars) → 0X...
+  if (clean.indexOf('33') === 0 && clean.length >= 11) set['0' + clean.slice(2)] = 1;
+  // 0X... → +33X... et 33X...
+  if (clean.indexOf('0') === 0 && clean.length === 10) {
+    set['+33' + clean.slice(1)] = 1;
+    set['33' + clean.slice(1)] = 1;
+  }
+  // Version sans formatting (chiffres uniquement)
+  var digitsOnly = clean.replace(/[^\d]/g, '');
+  if (digitsOnly) set[digitsOnly] = 1;
+  return Object.keys(set);
+}
+
+// Cherche un lead existant par email (lowercase prioritaire) puis par téléphone
+function findExistingLead(email, phone) {
+  return new Promise(function(resolve) {
+    var emailNorm = (email || '').trim().toLowerCase();
+
+    function byPhone() {
+      var variants = telVariants(phone);
+      if (!variants.length) { resolve(null); return; }
+      var remaining = variants.length;
+      var found = null;
+      variants.forEach(function(v) {
+        db.collection('leads').where('telephone', '==', v).limit(1).get().then(function(snap) {
+          if (!found && !snap.empty) {
+            found = { id: snap.docs[0].id, data: snap.docs[0].data() };
+          }
+          remaining--;
+          if (remaining === 0) resolve(found);
+        }).catch(function() {
+          remaining--;
+          if (remaining === 0) resolve(found);
+        });
+      });
+    }
+
+    if (emailNorm) {
+      db.collection('leads').where('email', '==', emailNorm).limit(1).get().then(function(snap) {
+        if (!snap.empty) {
+          resolve({ id: snap.docs[0].id, data: snap.docs[0].data() });
+          return;
+        }
+        // Fallback : email non normalisé (au cas où d'anciens leads ont de la casse)
+        var emailRaw = (email || '').trim();
+        if (emailRaw && emailRaw !== emailNorm) {
+          db.collection('leads').where('email', '==', emailRaw).limit(1).get().then(function(snap2) {
+            if (!snap2.empty) {
+              resolve({ id: snap2.docs[0].id, data: snap2.docs[0].data() });
+              return;
+            }
+            byPhone();
+          }).catch(byPhone);
+        } else {
+          byPhone();
+        }
+      }).catch(byPhone);
+    } else {
+      byPhone();
+    }
+  });
+}
+
 function startBookingBridge() {
   db.collection('booking_events')
     .where('processed', '==', false)
@@ -1790,39 +1871,99 @@ function startBookingBridge() {
         if (change.type !== 'added') return;
         var be = change.doc.data();
         var beId = change.doc.id;
+        var beRef = change.doc.ref;
 
-        // Build the lead document
-        var lead = {
-          nom:            be.nom || '',
-          email:          be.email || '',
-          telephone:      normalizeTel(be.telephone || ''),
-          secteur:        be.secteur || '',
-          ca:             be.ca || '',
-          defi:           be.defi || '',
-          disponibilite:  be.disponibilite || '',
-          timeline:       be.timeline || '',
-          type:           'self_booking',
-          source:         'forms_self_booking',
-          utm:            be.type || 'Forms Self Booking',
-          stage:          'lead',
-          status:         'nouveau',
-          assignedTo:     '',
-          notesHistory:   [],
-          bookingEventId: beId,
-          createdAt:      be.createdAt || firebase.firestore.FieldValue.serverTimestamp(),
-          updatedAt:      firebase.firestore.FieldValue.serverTimestamp()
-        };
+        var nowFr = new Date().toLocaleString('fr-FR');
 
-        // Create lead + mark booking_event processed in a batch
-        // Use deterministic lead ID to prevent duplicates across tabs
-        var batch = db.batch();
-        var newLeadRef = db.collection('leads').doc('be_' + beId);
-        batch.set(newLeadRef, lead);
-        batch.update(change.doc.ref, { processed: true });
-        batch.commit().then(function() {
-          console.log('[bridge] booking_event ' + beId + ' → lead ' + newLeadRef.id);
+        findExistingLead(be.email, be.telephone).then(function(existing) {
+          if (existing) {
+            // ───── LEAD EXISTANT → UPDATE INTELLIGENT ─────
+            var leadRef = db.collection('leads').doc(existing.id);
+            var cur = existing.data || {};
+            var update = {
+              bookingEventId: beId,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            // Type : on force self_booking (le lead vient de prendre un RDV self,
+            // c'est son état d'engagement le plus avancé, même s'il venait d'un
+            // funnel VSL Élite ou webinaire à l'origine)
+            if (cur.type !== 'self_booking') {
+              update.type = 'self_booking';
+            }
+
+            // Merger les champs formulaire UNIQUEMENT s'ils sont vides côté lead
+            // (ne jamais écraser les données saisies par un sales à la main)
+            var mergeFields = ['secteur', 'ca', 'defi', 'disponibilite', 'timeline'];
+            mergeFields.forEach(function(f) {
+              if (be[f] && !cur[f]) update[f] = be[f];
+            });
+
+            // Stage : ne pas toucher si le lead est dans un état terminal
+            var curStage = cur.stage || 'lead';
+            if (TERMINAL_STAGES.indexOf(curStage) < 0) {
+              update.stage = 'rdv_self_booking';
+              update.status = 'rdv_pose';
+            }
+
+            // Entrée timeline
+            var tlText;
+            if (curStage === 'rdv_self_booking' || curStage === 'rdv_confirmes' || curStage === 'set') {
+              tlText = '🔄 RDV Self-Booking reporté (form externe)';
+            } else if (TERMINAL_STAGES.indexOf(curStage) >= 0) {
+              tlText = '📅 Nouveau RDV Self-Booking reçu (lead déjà en ' + curStage + ')';
+            } else {
+              tlText = '📅 RDV Self-Booking pris (form externe)';
+            }
+            var tlEntry = { text: tlText, date: nowFr, color: '#34d399' };
+            update.timeline_history = (cur.timeline_history || []).concat([tlEntry]);
+
+            var batch = db.batch();
+            batch.update(leadRef, update);
+            batch.update(beRef, { processed: true, mergedIntoLeadId: existing.id });
+            batch.commit().then(function() {
+              console.log('[bridge] booking_event ' + beId + ' → merged into existing lead ' + existing.id);
+            }).catch(function(err) {
+              console.error('[bridge] merge error for ' + beId + ':', err);
+            });
+
+          } else {
+            // ───── PAS DE LEAD → CREATE (comportement d'origine) ─────
+            var lead = {
+              nom:            be.nom || '',
+              email:          (be.email || '').trim().toLowerCase(),
+              telephone:      normalizeTel(be.telephone || ''),
+              secteur:        be.secteur || '',
+              ca:             be.ca || '',
+              defi:           be.defi || '',
+              disponibilite:  be.disponibilite || '',
+              timeline:       be.timeline || '',
+              type:           'self_booking',
+              source:         'forms_self_booking',
+              utm:            be.type || 'Forms Self Booking',
+              stage:          'lead',
+              status:         'nouveau',
+              assignedTo:     '',
+              notesHistory:   [],
+              timeline_history: [{ text: '✨ Lead créé via form Self-Booking', date: nowFr, color: '#a78bfa' }],
+              bookingEventId: beId,
+              createdAt:      be.createdAt || firebase.firestore.FieldValue.serverTimestamp(),
+              updatedAt:      firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            // ID déterministe pour éviter les doublons cross-tab
+            var batch = db.batch();
+            var newLeadRef = db.collection('leads').doc('be_' + beId);
+            batch.set(newLeadRef, lead);
+            batch.update(beRef, { processed: true });
+            batch.commit().then(function() {
+              console.log('[bridge] booking_event ' + beId + ' → new lead ' + newLeadRef.id);
+            }).catch(function(err) {
+              console.error('[bridge] create error for ' + beId + ':', err);
+            });
+          }
         }).catch(function(err) {
-          console.error('[bridge] error processing ' + beId + ':', err);
+          console.error('[bridge] findExistingLead error for ' + beId + ':', err);
         });
       });
     }, function(err) {
