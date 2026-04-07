@@ -518,7 +518,6 @@ html, body {
 var db = firebase.firestore();
 var CURRENT_UID = null, CURRENT_NAME = '', CURRENT_ROLE = 'sales';
 var VIEWING_UID = null, VIEWING_NAME = '';
-var MEMBERS = {};
 var currentView = 'form';
 var weekOffset = 0;
 
@@ -545,9 +544,11 @@ var RDV_ISSUES = [
 document.getElementById('eodDate').value = fmtDate(new Date());
 
 // ══════════ AUTH ══════════
+// UIDs Firebase en dur : on n'utilise plus le matching par nom (race condition qui
+// provoquait des écritures sous des chemins eod/guillaume et eod/elodie en string).
 var MEMBER_MAP = {
-  guillaume: { name: 'Guillaume', color: '#ef4444' },
-  elodie:    { name: 'Élodie',    color: '#60a5fa' }
+  guillaume: { uid: 'uEE8DLaCNRZOiztmlBuHmWPSSx52', name: 'Guillaume', color: '#ef4444' },
+  elodie:    { uid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', name: 'Élodie',    color: '#60a5fa' }
 };
 
 (function initAuth() {
@@ -570,7 +571,22 @@ var MEMBER_MAP = {
         localStorage.setItem('ambitio_name', CURRENT_NAME);
         document.getElementById('tb-nm').textContent = CURRENT_NAME;
         document.getElementById('tb-av').textContent = CURRENT_NAME[0].toUpperCase();
-        loadMembersFromFirestore();
+
+        // Si c'est un sales connu (Guillaume / Élodie), on auto-pick sur lui-même.
+        // L'admin (Adrien) conserve le gate pour choisir qui consulter.
+        if (CURRENT_ROLE === 'sales') {
+          var autoKey = null;
+          Object.keys(MEMBER_MAP).forEach(function(k) {
+            if (MEMBER_MAP[k].uid === CURRENT_UID) autoKey = k;
+          });
+          if (autoKey) {
+            document.querySelectorAll('.eod-gate-btn').forEach(function(b) {
+              b.classList.remove('sel');
+              if (b.dataset.pick === autoKey) b.classList.add('sel');
+            });
+            pickMember(autoKey);
+          }
+        }
       });
     } else {
       CURRENT_UID = uidCache;
@@ -580,27 +596,13 @@ var MEMBER_MAP = {
   });
 })();
 
-function loadMembersFromFirestore() {
-  db.collection('users').get().then(function(snap) {
-    snap.forEach(function(doc) {
-      var d = doc.data();
-      if (d.role === 'sales' || d.role === 'admin') {
-        MEMBERS[doc.id] = { uid: doc.id, name: d.displayName || d.name || d.email || doc.id, role: d.role };
-      }
-    });
-  }).catch(function() {});
-}
-
 function pickMember(key) {
   var info = MEMBER_MAP[key];
-  if (!info) return;
+  if (!info || !info.uid) return;
 
-  // Resolve UID from loaded MEMBERS or fallback to key
-  var found = null;
-  Object.keys(MEMBERS).forEach(function(k) {
-    if (MEMBERS[k].name.toLowerCase().includes(key.toLowerCase())) found = MEMBERS[k];
-  });
-  VIEWING_UID = found ? found.uid : key;
+  // Plus de matching par nom, plus de fallback sur la string : on utilise
+  // directement le vrai UID Firebase défini dans MEMBER_MAP.
+  VIEWING_UID = info.uid;
   VIEWING_NAME = info.name;
 
   // Update active member badge
