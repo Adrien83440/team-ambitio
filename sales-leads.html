@@ -888,33 +888,21 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 function getFilteredLeads() {
   var list = getBaseLeads();
 
-  // Helper : retourne la date la plus récente entre createdAt et updatedAt.
-  // Ça permet qu'un lead existant qui reçoit une activité aujourd'hui (self-booking
-  // mergé, changement de stage, nouvelle note, etc.) apparaisse dans le filtre
-  // "Aujourd'hui" ou "7 jours", même si sa createdAt est plus ancienne.
-  function mostRecentDate(l) {
-    var cd = null, ud = null;
-    if (l.createdAt) cd = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-    if (l.updatedAt) ud = l.updatedAt.toDate ? l.updatedAt.toDate() : new Date(l.updatedAt);
-    if (cd && ud) return cd > ud ? cd : ud;
-    return cd || ud;
-  }
-
   // Period filter
   if (filterPeriod === 'today') {
     var now = new Date();
     var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
     list = list.filter(function(l) {
-      var d = mostRecentDate(l);
-      if (!d) return false;
+      if (!l.createdAt) return false;
+      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
       return d >= todayStart && d <= todayEnd;
     });
   } else if (filterPeriod === 'week') {
     var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
     list = list.filter(function(l) {
-      var d = mostRecentDate(l);
-      if (!d) return false;
+      if (!l.createdAt) return false;
+      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
       return d >= weekAgo;
     });
   } else if (filterPeriod === 'unprocessed') {
@@ -934,9 +922,9 @@ function getFilteredLeads() {
   return list;
 }
 
-/* Base filter: only leads after fresh-start cutoff
-   On utilise max(createdAt, updatedAt) pour que les anciens leads qui ont eu
-   une activité récente (self-booking mergé, changement de stage…) réapparaissent. */
+/* Base filter: only leads after fresh-start cutoff.
+   Utilise max(createdAt, updatedAt) pour que les vieux leads (Bigin/webinar)
+   ré-engagés récemment (self-booking, merge) restent visibles. */
 var LEADS_LIVE_CUTOFF = new Date('2026-04-02T22:00:00+02:00');
 function getBaseLeads() {
   return allLeads.filter(function(l) {
@@ -1759,7 +1747,7 @@ function startListening() {
       snap.forEach(function(doc) {
         var d = doc.data();
         d.id = doc.id;
-        // Skip les leads marqués comme fusionnés dans un autre (via dedup-leads.js)
+        // Skip les leads marqués comme fusionnés (via dedup ou repair scripts)
         if (d._merged === true) return;
         // Check if it's one of the new ones
         for (var i = 0; i < newLeads.length; i++) {
@@ -1802,35 +1790,48 @@ function startListening() {
 
 /* ═══ BRIDGE: booking_events → leads ═══
    Quand un booking_event arrive (form self-booking externe via Make), on cherche
-   d'abord si un lead existe déjà pour ce prospect (par email, puis par téléphone
-   avec variantes +33/33/0). Si oui → update intelligent. Si non → create.
-   Évite les doublons quand un lead VSL Élite reprend un rdv self-booking. */
+   d'abord si un lead existe déjà pour ce prospect (par email puis téléphone).
+   Si oui → update intelligent. Si non → create. */
 
-// Stages "terminaux" : on n'écrase pas le stage d'un lead qui est déjà dans ces états
 var TERMINAL_STAGES = ['closed_won_setting', 'closed_won_self', 'closed_lost', 'poubelle', 'disqualification'];
+var IMPORT_SOURCES_BRIDGE = ['bigin_import', 'migration_suivi_client', 'webinar_import'];
 
-// Génère les variantes de numéro de téléphone pour retrouver un lead existant
 function telVariants(raw) {
   if (!raw) return [];
   var clean = String(raw).replace(/\s+/g, '');
   var set = {};
   set[clean] = 1;
-  // +33X... → 0X...
   if (clean.indexOf('+33') === 0) set['0' + clean.slice(3)] = 1;
-  // 33X... (11 chars) → 0X...
   if (clean.indexOf('33') === 0 && clean.length >= 11) set['0' + clean.slice(2)] = 1;
-  // 0X... → +33X... et 33X...
   if (clean.indexOf('0') === 0 && clean.length === 10) {
     set['+33' + clean.slice(1)] = 1;
     set['33' + clean.slice(1)] = 1;
   }
-  // Version sans formatting (chiffres uniquement)
   var digitsOnly = clean.replace(/[^\d]/g, '');
   if (digitsOnly) set[digitsOnly] = 1;
   return Object.keys(set);
 }
 
-// Cherche un lead existant par email (lowercase prioritaire) puis par téléphone
+// Préfère les leads non-import (VSL/webinaire/self vs Bigin/webinar_import).
+// Parmi les candidats non-imports, prend le plus récemment actif.
+function pickBestLead(docs) {
+  if (!docs || docs.length === 0) return null;
+  var nonImports = [], imports = [];
+  docs.forEach(function(d) {
+    if (IMPORT_SOURCES_BRIDGE.indexOf(d.data.source) < 0) nonImports.push(d);
+    else imports.push(d);
+  });
+  var pool = nonImports.length > 0 ? nonImports : imports;
+  pool.sort(function(a, b) {
+    var ta = (a.data.updatedAt && a.data.updatedAt.toMillis) ? a.data.updatedAt.toMillis() :
+             ((a.data.createdAt && a.data.createdAt.toMillis) ? a.data.createdAt.toMillis() : 0);
+    var tb = (b.data.updatedAt && b.data.updatedAt.toMillis) ? b.data.updatedAt.toMillis() :
+             ((b.data.createdAt && b.data.createdAt.toMillis) ? b.data.createdAt.toMillis() : 0);
+    return tb - ta;
+  });
+  return pool[0];
+}
+
 function findExistingLead(email, phone) {
   return new Promise(function(resolve) {
     var emailNorm = (email || '').trim().toLowerCase();
@@ -1839,37 +1840,41 @@ function findExistingLead(email, phone) {
       var variants = telVariants(phone);
       if (!variants.length) { resolve(null); return; }
       var remaining = variants.length;
-      var found = null;
+      var collected = [];
       variants.forEach(function(v) {
-        db.collection('leads').where('telephone', '==', v).limit(1).get().then(function(snap) {
-          if (!found && !snap.empty) {
-            found = { id: snap.docs[0].id, data: snap.docs[0].data() };
-          }
+        db.collection('leads').where('telephone', '==', v).get().then(function(snap) {
+          snap.forEach(function(doc) {
+            if (doc.data()._merged === true) return;
+            collected.push({ id: doc.id, data: doc.data() });
+          });
           remaining--;
-          if (remaining === 0) resolve(found);
+          if (remaining === 0) resolve(pickBestLead(collected));
         }).catch(function() {
           remaining--;
-          if (remaining === 0) resolve(found);
+          if (remaining === 0) resolve(pickBestLead(collected));
         });
       });
     }
 
     if (emailNorm) {
-      db.collection('leads').where('email', '==', emailNorm).limit(1).get().then(function(snap) {
-        if (!snap.empty) {
-          resolve({ id: snap.docs[0].id, data: snap.docs[0].data() });
-          return;
-        }
-        // Fallback : email non normalisé (au cas où d'anciens leads ont de la casse)
+      db.collection('leads').where('email', '==', emailNorm).get().then(function(snap) {
+        var collected = [];
+        snap.forEach(function(doc) {
+          if (doc.data()._merged === true) return;
+          collected.push({ id: doc.id, data: doc.data() });
+        });
         var emailRaw = (email || '').trim();
-        if (emailRaw && emailRaw !== emailNorm) {
-          db.collection('leads').where('email', '==', emailRaw).limit(1).get().then(function(snap2) {
-            if (!snap2.empty) {
-              resolve({ id: snap2.docs[0].id, data: snap2.docs[0].data() });
-              return;
-            }
-            byPhone();
+        if (collected.length === 0 && emailRaw && emailRaw !== emailNorm) {
+          db.collection('leads').where('email', '==', emailRaw).get().then(function(snap2) {
+            snap2.forEach(function(doc) {
+              if (doc.data()._merged === true) return;
+              collected.push({ id: doc.id, data: doc.data() });
+            });
+            if (collected.length > 0) resolve(pickBestLead(collected));
+            else byPhone();
           }).catch(byPhone);
+        } else if (collected.length > 0) {
+          resolve(pickBestLead(collected));
         } else {
           byPhone();
         }
@@ -1889,12 +1894,11 @@ function startBookingBridge() {
         var be = change.doc.data();
         var beId = change.doc.id;
         var beRef = change.doc.ref;
-
         var nowFr = new Date().toLocaleString('fr-FR');
 
         findExistingLead(be.email, be.telephone).then(function(existing) {
           if (existing) {
-            // ───── LEAD EXISTANT → UPDATE INTELLIGENT ─────
+            // ───── UPDATE lead existant ─────
             var leadRef = db.collection('leads').doc(existing.id);
             var cur = existing.data || {};
             var update = {
@@ -1902,28 +1906,24 @@ function startBookingBridge() {
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
 
-            // Type : on force self_booking (le lead vient de prendre un RDV self,
-            // c'est son état d'engagement le plus avancé, même s'il venait d'un
-            // funnel VSL Élite ou webinaire à l'origine)
+            // Type : on force self_booking (lead plus engagé)
             if (cur.type !== 'self_booking') {
               update.type = 'self_booking';
             }
 
-            // Merger les champs formulaire UNIQUEMENT s'ils sont vides côté lead
-            // (ne jamais écraser les données saisies par un sales à la main)
+            // Merger champs formulaire uniquement si vides côté lead
             var mergeFields = ['secteur', 'ca', 'defi', 'disponibilite', 'timeline'];
             mergeFields.forEach(function(f) {
               if (be[f] && !cur[f]) update[f] = be[f];
             });
 
-            // Stage : ne pas toucher si le lead est dans un état terminal
+            // Stage : ne pas écraser si terminal
             var curStage = cur.stage || 'lead';
             if (TERMINAL_STAGES.indexOf(curStage) < 0) {
               update.stage = 'rdv_self_booking';
               update.status = 'rdv_pose';
             }
 
-            // Entrée timeline
             var tlText;
             if (curStage === 'rdv_self_booking' || curStage === 'rdv_confirmes' || curStage === 'set') {
               tlText = '🔄 RDV Self-Booking reporté (form externe)';
@@ -1939,13 +1939,13 @@ function startBookingBridge() {
             batch.update(leadRef, update);
             batch.update(beRef, { processed: true, mergedIntoLeadId: existing.id });
             batch.commit().then(function() {
-              console.log('[bridge] booking_event ' + beId + ' → merged into existing lead ' + existing.id);
+              console.log('[bridge] booking_event ' + beId + ' → merged into ' + existing.id);
             }).catch(function(err) {
               console.error('[bridge] merge error for ' + beId + ':', err);
             });
 
           } else {
-            // ───── PAS DE LEAD → CREATE (comportement d'origine) ─────
+            // ───── CREATE nouveau lead ─────
             var lead = {
               nom:            be.nom || '',
               email:          (be.email || '').trim().toLowerCase(),
@@ -1968,7 +1968,6 @@ function startBookingBridge() {
               updatedAt:      firebase.firestore.FieldValue.serverTimestamp()
             };
 
-            // ID déterministe pour éviter les doublons cross-tab
             var batch = db.batch();
             var newLeadRef = db.collection('leads').doc('be_' + beId);
             batch.set(newLeadRef, lead);
