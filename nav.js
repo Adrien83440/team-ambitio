@@ -9,6 +9,118 @@
   // Apply saved theme immediately to prevent flash
   if (localStorage.getItem('ambitio_theme') === 'light') document.body.classList.add('light-theme');
 
+  /* ──────────────────────────────────────────────────────────
+     TEAM MEMBERS — source unique de vérité
+     Lit _meta/team_members (Firestore), expose window.TEAM_MEMBERS,
+     fire l'event "team-members-loaded" quand prêt.
+     Cache 5 min pour éviter de re-fetch à chaque page.
+     Fallback hardcodé si Firestore indisponible.
+  ────────────────────────────────────────────────────────── */
+  const TM_FALLBACK = [
+    { slug: 'guillaume', shortName: 'Guillaume', fullName: 'Guillaume Bilcke',     email: 'strategie@adrienemily.com', role: 'Closing + Setting',  color: '#ef4444', initials: 'G', active: true },
+    { slug: 'elodie',    shortName: 'Élodie',    fullName: 'Élodie Vidotto Siarri', email: 'strategie@adrienemily.com', role: 'Closing',            color: '#60a5fa', initials: 'É', active: true },
+    { slug: 'vincent',   shortName: 'Vincent',   fullName: 'Vincent HOS',           email: 'strategie@adrienemily.com', role: 'Setting + Closing',  color: '#a78bfa', initials: 'V', active: true }
+  ];
+  const TM_CACHE_KEY = 'ambitio_team_members_cache_v1';
+  const TM_CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+  // État global immédiatement disponible (avec fallback hardcodé pour pages qui ne savent pas attendre)
+  if (!Array.isArray(window.TEAM_MEMBERS) || !window.TEAM_MEMBERS.length) {
+    try {
+      const raw = localStorage.getItem(TM_CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.members) && (Date.now() - (parsed.ts || 0) < TM_CACHE_TTL)) {
+          window.TEAM_MEMBERS = parsed.members;
+        }
+      }
+    } catch (_) { /* noop */ }
+    if (!Array.isArray(window.TEAM_MEMBERS) || !window.TEAM_MEMBERS.length) {
+      window.TEAM_MEMBERS = TM_FALLBACK.slice();
+    }
+  }
+
+  let _tmInflight = null;
+
+  function _tmFireLoaded(source) {
+    try { window.dispatchEvent(new CustomEvent('team-members-loaded', { detail: { source: source, members: window.TEAM_MEMBERS } })); } catch (_) {}
+  }
+
+  window.loadTeamMembers = function (opts) {
+    opts = opts || {};
+    if (_tmInflight) return _tmInflight;
+
+    // Cache hit (sauf si force)
+    if (!opts.force) {
+      try {
+        const raw = localStorage.getItem(TM_CACHE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.members) && (Date.now() - (parsed.ts || 0) < TM_CACHE_TTL)) {
+            window.TEAM_MEMBERS = parsed.members;
+            // Async event pour laisser les listeners s'attacher
+            setTimeout(function () { _tmFireLoaded('cache'); }, 0);
+            return Promise.resolve(window.TEAM_MEMBERS);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (typeof firebase === 'undefined' || !firebase.firestore) {
+      // Pas de Firebase chargé → on garde le fallback
+      setTimeout(function () { _tmFireLoaded('fallback'); }, 0);
+      return Promise.resolve(window.TEAM_MEMBERS);
+    }
+
+    _tmInflight = firebase.firestore().collection('_meta').doc('team_members').get()
+      .then(function (snap) {
+        if (snap.exists) {
+          const d = snap.data();
+          if (d && Array.isArray(d.members) && d.members.length) {
+            window.TEAM_MEMBERS = d.members;
+            try { localStorage.setItem(TM_CACHE_KEY, JSON.stringify({ ts: Date.now(), members: d.members })); } catch (_) {}
+            _tmFireLoaded('firestore');
+            return window.TEAM_MEMBERS;
+          }
+        }
+        // Doc absent → fallback
+        _tmFireLoaded('fallback-empty');
+        return window.TEAM_MEMBERS;
+      })
+      .catch(function (err) {
+        console.warn('[loadTeamMembers] échec Firestore, fallback hardcodé', err);
+        _tmFireLoaded('fallback-error');
+        return window.TEAM_MEMBERS;
+      })
+      .then(function (res) {
+        _tmInflight = null;
+        return res;
+      });
+
+    return _tmInflight;
+  };
+
+  // Helpers utilitaires exposés (utilisables sync car window.TEAM_MEMBERS a toujours une valeur)
+  window.tmGet = function (slug) {
+    const list = window.TEAM_MEMBERS || [];
+    for (let i = 0; i < list.length; i++) if (list[i].slug === slug) return list[i];
+    return null;
+  };
+  window.tmActives = function () {
+    return (window.TEAM_MEMBERS || []).filter(function (m) { return m.active !== false; });
+  };
+  window.tmName = function (slug) {
+    const m = window.tmGet(slug);
+    return m ? (m.shortName || m.fullName || slug) : slug;
+  };
+  window.tmColor = function (slug) {
+    const m = window.tmGet(slug);
+    return m ? (m.color || '#94a3b8') : '#94a3b8';
+  };
+
+  // Auto-load au chargement de nav.js
+  setTimeout(function () { try { window.loadTeamMembers(); } catch (_) {} }, 0);
+
   /* ─── Permission keys ─── */
   const PERM_KEYS = [
     'coaching_clients','coaching_dashboard','coaching_communication',
