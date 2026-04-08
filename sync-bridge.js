@@ -15,11 +15,54 @@
  * Fallback localStorage si Firestore indisponible.
  */
 
-const SYNC_UIDS = ['guillaume', 'elodie'];
-const SYNC_MEMBERS = [
-  { uid: 'guillaume', name: 'Guillaume', role: 'Closing + Setting', color: '#ef4444' },
-  { uid: 'elodie',    name: 'Élodie',    role: 'Closing',           color: '#60a5fa' },
-];
+/* ──────────────────────────────────────────────────────────
+   TEAM MEMBERS — alimenté par window.TEAM_MEMBERS (nav.js)
+   On garde les noms historiques SYNC_UIDS / SYNC_MEMBERS pour
+   éviter de casser les autres modules. Ils sont rebuildés à
+   chaque fois que team-members-loaded est fired.
+────────────────────────────────────────────────────────── */
+let SYNC_UIDS = [];
+let SYNC_MEMBERS = [];
+
+function _refreshSyncMembers() {
+  const list = (typeof window !== 'undefined' && Array.isArray(window.TEAM_MEMBERS)) ? window.TEAM_MEMBERS : [];
+  // Actifs uniquement pour la sync (les inactifs ne saisissent plus)
+  const actives = list.filter(function (m) { return m && m.active !== false; });
+  if (actives.length) {
+    SYNC_UIDS = actives.map(function (m) { return m.slug; });
+    SYNC_MEMBERS = actives.map(function (m) {
+      return {
+        uid: m.slug,
+        name: m.shortName || m.fullName || m.slug,
+        role: m.role || '',
+        color: m.color || '#94a3b8'
+      };
+    });
+  } else {
+    // Fallback ultime si TEAM_MEMBERS pas encore prêt
+    SYNC_UIDS    = ['guillaume', 'elodie'];
+    SYNC_MEMBERS = [
+      { uid: 'guillaume', name: 'Guillaume', role: 'Closing + Setting', color: '#ef4444' },
+      { uid: 'elodie',    name: 'Élodie',    role: 'Closing',           color: '#60a5fa' }
+    ];
+  }
+  // Re-export sur window au cas où d'autres modules lisent depuis là
+  if (typeof window !== 'undefined') {
+    window.SYNC_UIDS = SYNC_UIDS;
+    window.SYNC_MEMBERS = SYNC_MEMBERS;
+  }
+}
+_refreshSyncMembers();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('team-members-loaded', function () {
+    _refreshSyncMembers();
+    // Re-jouer la sync si la page a déjà tourné une fois
+    if (typeof window.SyncBridge !== 'undefined' && typeof window.SyncBridge.syncAll === 'function') {
+      try { window.SyncBridge.syncAll(); } catch (_) {}
+    }
+  });
+}
 
 /* ──────────────────────────────────────────────────────────
    HELPERS
