@@ -16,52 +16,59 @@
  */
 
 /* ──────────────────────────────────────────────────────────
-   TEAM MEMBERS — alimenté par window.TEAM_MEMBERS (nav.js)
-   On garde les noms historiques SYNC_UIDS / SYNC_MEMBERS pour
-   éviter de casser les autres modules. Ils sont rebuildés à
-   chaque fois que team-members-loaded est fired.
-────────────────────────────────────────────────────────── */
-let SYNC_UIDS = [];
-let SYNC_MEMBERS = [];
+   ÉQUIPE — source dynamique depuis window.TEAM_MEMBERS_LIST
+   ──────────────────────────────────────────────────────────
+   Avant : SYNC_UIDS et SYNC_MEMBERS étaient des constantes hardcodées.
+   Maintenant : on lit dynamiquement depuis nav.js → window.TEAM_MEMBERS_LIST
+   (chargé via window.loadTeamMembers()).
 
-function _refreshSyncMembers() {
-  const list = (typeof window !== 'undefined' && Array.isArray(window.TEAM_MEMBERS)) ? window.TEAM_MEMBERS : [];
-  // Actifs uniquement pour la sync (les inactifs ne saisissent plus)
-  const actives = list.filter(function (m) { return m && m.active !== false; });
-  if (actives.length) {
-    SYNC_UIDS = actives.map(function (m) { return m.slug; });
-    SYNC_MEMBERS = actives.map(function (m) {
-      return {
-        uid: m.slug,
-        name: m.shortName || m.fullName || m.slug,
-        role: m.role || '',
-        color: m.color || '#94a3b8'
-      };
-    });
-  } else {
-    // Fallback ultime si TEAM_MEMBERS pas encore prêt
-    SYNC_UIDS    = ['guillaume', 'elodie'];
-    SYNC_MEMBERS = [
-      { uid: 'guillaume', name: 'Guillaume', role: 'Closing + Setting', color: '#ef4444' },
-      { uid: 'elodie',    name: 'Élodie',    role: 'Closing',           color: '#60a5fa' }
-    ];
+   Pour compatibilité, on garde un fallback statique au cas où nav.js
+   n'aurait pas encore chargé les membres au moment du premier sync. */
+
+const _SYNC_FALLBACK = [
+  { uid: 'guillaume', name: 'Guillaume', role: 'Closing + Setting', color: '#ef4444' },
+  { uid: 'elodie',    name: 'Élodie',    role: 'Closing',           color: '#60a5fa' },
+];
+
+/** Retourne la liste des membres de l'équipe au format SYNC_MEMBERS legacy
+ *  ({uid, name, role, color}). Lit depuis window.TEAM_MEMBERS_LIST si dispo,
+ *  sinon utilise le fallback statique. */
+function _getSyncMembers() {
+  const live = (typeof window !== 'undefined') && window.TEAM_MEMBERS_LIST;
+  if (live && live.length) {
+    return live.map(m => ({
+      uid:    m.slug,
+      name:   m.shortName || m.displayName || m.slug,
+      role:   m.role === 'closer' ? 'Closing'
+            : m.role === 'setter' ? 'Setting'
+            : m.role === 'closer_setter' ? 'Closing + Setting'
+            : (m.role || ''),
+      color:  m.color || '#6b7280',
+      active: m.active !== false,
+      _meta:  m
+    }));
   }
-  // Re-export sur window au cas où d'autres modules lisent depuis là
-  if (typeof window !== 'undefined') {
-    window.SYNC_UIDS = SYNC_UIDS;
-    window.SYNC_MEMBERS = SYNC_MEMBERS;
-  }
+  return _SYNC_FALLBACK;
 }
-_refreshSyncMembers();
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('team-members-loaded', function () {
-    _refreshSyncMembers();
-    // Re-jouer la sync si la page a déjà tourné une fois
-    if (typeof window.SyncBridge !== 'undefined' && typeof window.SyncBridge.syncAll === 'function') {
-      try { window.SyncBridge.syncAll(); } catch (_) {}
-    }
-  });
+/** Retourne uniquement les UIDs (= slugs). */
+function _getSyncUids() {
+  return _getSyncMembers().map(m => m.uid);
+}
+
+// Exports legacy : ces variables sont maintenant des "live getters" qui
+// recalculent à chaque accès. Pour rester compatibles avec le code existant
+// qui fait `for (const uid of SYNC_UIDS)`, on utilise des getters d'objet.
+let SYNC_UIDS    = _getSyncUids();
+let SYNC_MEMBERS = _getSyncMembers();
+
+/** À appeler au début de chaque sync pour garantir qu'on a la liste à jour. */
+async function _ensureTeamMembersLoaded() {
+  if (typeof window !== 'undefined' && typeof window.loadTeamMembers === 'function') {
+    try { await window.loadTeamMembers(); } catch (e) { /* fallback déjà en place */ }
+  }
+  SYNC_UIDS    = _getSyncUids();
+  SYNC_MEMBERS = _getSyncMembers();
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -204,6 +211,9 @@ function _extractWeeks(data, type) {
 async function syncBridge_loadMonth(monthKey) {
   if (!monthKey) monthKey = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
   if (typeof DB === 'undefined') return;
+
+  // Garantit que SYNC_UIDS / SYNC_MEMBERS reflètent la liste à jour de l'équipe
+  await _ensureTeamMembersLoaded();
 
   const db = _getDb();
 
@@ -570,5 +580,20 @@ window.syncBridge_watchMonth     = syncBridge_watchMonth;
 window.syncBridge_stopWatch      = syncBridge_stopWatch;
 window.syncBridge_saveCommStatut = syncBridge_saveCommStatut;
 window.syncBridge_getMemberData  = syncBridge_getMemberData;
+// Snapshot initial (recalé à chaque _ensureTeamMembersLoaded())
 window.SYNC_UIDS    = SYNC_UIDS;
 window.SYNC_MEMBERS = SYNC_MEMBERS;
+// Helpers exposés pour les pages qui veulent une lecture live (sans attendre un sync)
+window.syncBridge_refreshTeamMembers = _ensureTeamMembersLoaded;
+window.syncBridge_getCurrentMembers  = function() { return _getSyncMembers(); };
+window.syncBridge_getCurrentUids     = function() { return _getSyncUids(); };
+
+// Re-sync automatique quand TEAM_MEMBERS change (évent émis par nav.js)
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('team-members-loaded', function() {
+    SYNC_UIDS    = _getSyncUids();
+    SYNC_MEMBERS = _getSyncMembers();
+    window.SYNC_UIDS    = SYNC_UIDS;
+    window.SYNC_MEMBERS = SYNC_MEMBERS;
+  });
+}

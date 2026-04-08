@@ -829,6 +829,32 @@ function formatTel(t) {
 }
 function escHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function escAttr(s) { return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+
+/* ── TEAM MEMBERS HELPERS (synchro window.TEAM_MEMBERS) ── */
+function buildRtSetterOptions(currentSlug) {
+  var html = '';
+  var list = window.TEAM_MEMBERS_LIST || [];
+  var actives = list.filter(function(m){return m.active!==false;});
+  var inactives = list.filter(function(m){return m.active===false;});
+  for (var i = 0; i < actives.length; i++) {
+    var m = actives[i];
+    html += '<option value="' + m.slug + '"' + (currentSlug === m.slug ? ' selected' : '') + '>' + (m.shortName || m.slug) + '</option>';
+  }
+  for (var j = 0; j < inactives.length; j++) {
+    var m2 = inactives[j];
+    var isCur = currentSlug === m2.slug;
+    html += '<option value="' + m2.slug + '"' + (isCur ? ' selected' : '') + (isCur ? '' : ' disabled') + '>🔒 ' + (m2.shortName || m2.slug) + ' (inactif)</option>';
+  }
+  return html;
+}
+window.addEventListener('team-members-loaded', function() {
+  if (typeof render === 'function' && typeof contacts !== 'undefined') {
+    try { render(); } catch(e) {}
+  }
+});
+if (typeof window.loadTeamMembers === 'function') {
+  window.loadTeamMembers();
+}
 function toast(msg) {
   var el = document.getElementById('rtToast');
   el.textContent = msg || '✅ Sauvegardé';
@@ -927,8 +953,7 @@ function render() {
 
     h += '<td><select class="rt-setter-select" data-action="setter" data-id="' + c.id + '">';
     h += '<option value="">—</option>';
-    h += '<option value="elodie"' + (setter === 'elodie' ? ' selected' : '') + '>Élodie</option>';
-    h += '<option value="guillaume"' + (setter === 'guillaume' ? ' selected' : '') + '>Guillaume</option>';
+    h += buildRtSetterOptions(setter);
     h += '</select></td>';
 
     h += '<td class="rt-notes-cell"><input type="text" class="rt-notes-input" data-action="notes" data-id="' + c.id + '" value="' + escAttr(notes) + '" placeholder="Ajouter une note..."/></td>';
@@ -1134,7 +1159,14 @@ document.getElementById('migrationBtn').addEventListener('click', function() {
   var OLD_KEY = 'ambitio_retargeting_state';
   var oldState = {}; try { oldState = JSON.parse(localStorage.getItem(OLD_KEY) || '{}'); } catch(e) {}
   var SR = { none:'nouveau', appele:'appele', decroche:'decroche', parle:'parle', rdv:'rdv_pose', pasinteresse:'pas_interesse', arappeler:'arappeler' };
-  var SN = { Elodie:'elodie', Guillaume:'guillaume' };
+  // Map "shortName du fichier d'import" → slug actuel. Construit dynamiquement
+  // depuis TEAM_MEMBERS_LIST pour gérer l'évolution de l'équipe.
+  var SN = {};
+  (window.TEAM_MEMBERS_LIST || []).forEach(function(m) {
+    var sn = (m.shortName || m.displayName || m.slug);
+    SN[sn] = m.slug;
+    SN[sn.replace(/[éèê]/g, 'e')] = m.slug; // tolérance accents
+  });
   var btn = document.getElementById('migrationBtn');
   btn.disabled = true; btn.textContent = 'Import en cours...';
   var batchSize = 400, total = RAW_CONTACTS.length, done = 0;
