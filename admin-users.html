@@ -46,8 +46,24 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 .u-b-active{background:rgba(52,211,153,.08);color:#34d399;border:1px solid rgba(52,211,153,.15)}
 .u-b-invited{background:rgba(96,165,250,.08);color:#60a5fa;border:1px solid rgba(96,165,250,.15)}
 .u-b-disabled{background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.15)}
+.u-b-archived{background:rgba(148,163,184,.08);color:#94a3b8;border:1px solid rgba(148,163,184,.2)}
 .u-perms{font-size:11px;color:rgba(255,255,255,.3);flex-shrink:0;min-width:80px;text-align:right}
 .u-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,.3);font-size:14px}
+
+/* Archive modal */
+.arch-banner{padding:12px 14px;border-radius:10px;background:rgba(148,163,184,.07);border:1px solid rgba(148,163,184,.18);margin-bottom:14px;font-size:12px;color:#cbd5e1;line-height:1.5}
+.arch-banner b{color:#fff}
+.arch-scan{padding:14px;border-radius:10px;background:rgba(15,23,42,.6);border:1px solid rgba(255,255,255,.06);margin-bottom:12px}
+.arch-scan-h{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.4);margin-bottom:8px;font-weight:700}
+.arch-scan-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:13px}
+.arch-scan-row:last-child{border-bottom:0}
+.arch-scan-row .lbl{flex:1;color:#e2e8f0}
+.arch-scan-row .val{font-family:'JetBrains Mono',monospace;color:#fbbf24;font-weight:700;font-size:13px}
+.arch-scan-row .val.zero{color:rgba(255,255,255,.3)}
+.arch-confirm-input{font-family:'JetBrains Mono',monospace !important;letter-spacing:.04em}
+.arch-warn{padding:10px 12px;border-radius:8px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#fca5a5;font-size:12px;line-height:1.5;margin-top:10px}
+.bb-warn{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35);color:#fbbf24}
+.bb-warn:hover:not(:disabled){background:rgba(245,158,11,.22)}
 
 /* Modal */
 .mo-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:1000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
@@ -144,6 +160,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
       <option value="active">✅ Actif</option>
       <option value="invited">📩 Invité</option>
       <option value="disabled">🚫 Désactivé</option>
+      <option value="archived">🗄 Archivé</option>
     </select>
   </div>
 
@@ -167,7 +184,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 <script type="module">
 import{initializeApp,deleteApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import{getAuth,onAuthStateChanged,signOut,createUserWithEmailAndPassword,sendPasswordResetEmail}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import{getFirestore,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,deleteField}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{getFirestore,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,deleteField,query,where,writeBatch,serverTimestamp,addDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FBCFG={
   apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
@@ -199,8 +216,11 @@ const PERM_SECTIONS={coaching_clients:'Coaching',coaching_dashboard:'Coaching',c
 
 const ROLE_COLORS={admin:'#f59e0b',coach:'#8b5cf6',sales:'#10b981'};
 const ROLE_EMOJIS={admin:'👑',coach:'🎓',sales:'📈'};
-const STATUS_LABELS={active:'✅ Actif',invited:'📩 Invité',disabled:'🚫 Désactivé'};
-const STATUS_CLS={active:'u-b-active',invited:'u-b-invited',disabled:'u-b-disabled'};
+const STATUS_LABELS={active:'✅ Actif',invited:'📩 Invité',disabled:'🚫 Désactivé',archived:'🗄 Archivé'};
+const STATUS_CLS={active:'u-b-active',invited:'u-b-invited',disabled:'u-b-disabled',archived:'u-b-archived'};
+
+// Stages "clos" (utilisé par l'archivage : par défaut on ne transfère pas les leads dans ces stages)
+const CLOSED_STAGES=['closed_won_setting','closed_won_self','closed_lost','poubelle','disqualification','disqualifie_closing'];
 
 let USERS=[];
 let currentUid=null; // admin uid
@@ -237,12 +257,14 @@ function renderStats(){
   var coaches=USERS.filter(u=>u.role==='coach').length;
   var sales=USERS.filter(u=>u.role==='sales').length;
   var active=USERS.filter(u=>(u.status||'active')==='active').length;
+  var archived=USERS.filter(u=>(u.status||'active')==='archived').length;
   document.getElementById('stats').innerHTML=
     '<div class="u-stat"><div class="u-stat-n">'+total+'</div><div class="u-stat-l">Total</div></div>'+
     '<div class="u-stat"><div class="u-stat-n" style="color:#f59e0b">'+admins+'</div><div class="u-stat-l">Admins</div></div>'+
     '<div class="u-stat"><div class="u-stat-n" style="color:#8b5cf6">'+coaches+'</div><div class="u-stat-l">Coaches</div></div>'+
     '<div class="u-stat"><div class="u-stat-n" style="color:#10b981">'+sales+'</div><div class="u-stat-l">Sales</div></div>'+
-    '<div class="u-stat"><div class="u-stat-n" style="color:#34d399">'+active+'</div><div class="u-stat-l">Actifs</div></div>';
+    '<div class="u-stat"><div class="u-stat-n" style="color:#34d399">'+active+'</div><div class="u-stat-l">Actifs</div></div>'+
+    (archived?'<div class="u-stat"><div class="u-stat-n" style="color:#94a3b8">'+archived+'</div><div class="u-stat-l">Archivés</div></div>':'');
 }
 
 function renderList(){
@@ -250,9 +272,12 @@ function renderList(){
   var fRole=document.getElementById('filterRole').value;
   var fStatus=document.getElementById('filterStatus').value;
   var filtered=USERS.filter(function(u){
+    var st=u.status||'active';
+    // Par défaut on cache les archivés sauf si l'admin filtre explicitement dessus
+    if(!fStatus && st==='archived')return false;
     if(q){var hay=((u.displayName||'')+(u.email||'')).toLowerCase();if(hay.indexOf(q)<0)return false;}
     if(fRole&&u.role!==fRole)return false;
-    if(fStatus&&(u.status||'active')!==fStatus)return false;
+    if(fStatus&&st!==fStatus)return false;
     return true;
   });
   var el=document.getElementById('userList');
@@ -509,11 +534,22 @@ function openEditModal(u){
   h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px">Optionnel. Tous les emails @adrienemily.com et @ambitiocorp.com sont déjà filtrés automatiquement.</div></div>';
   // Permissions
   h+=buildPermGrid(mods,'e');
+
+  // Bandeau si déjà archivé
+  if(status==='archived'){
+    var aFrom=u.archivedFromSlug||'?', aTo=u.archivedToSlug||'?', aCount=(u.archiveTransferCount==null?'?':u.archiveTransferCount);
+    var aDate='';
+    if(u.archivedAt && u.archivedAt.toDate){try{aDate=u.archivedAt.toDate().toLocaleDateString('fr-FR');}catch(_){}}
+    h+='<div class="arch-banner" style="margin-top:14px"><b>🗄 Compte archivé</b>'+(aDate?' le '+aDate:'')+'.<br>Slug équipe <b>'+esc(aFrom)+'</b> → leads transférés vers <b>'+esc(aTo)+'</b> ('+aCount+' leads).</div>';
+  }
+
   // Save
   h+='<div style="display:flex;gap:10px;margin-top:20px"><button class="bb bb-o" onclick="closeModal()">Annuler</button><button class="bb bb-p" id="eSave" style="flex:1">💾 Enregistrer</button></div>';
   // Actions
   h+='<div class="qa-bar">';
   h+='<button class="bb bb-o" id="eResetPwd">🔑 Réinitialiser MDP</button>';
+  if(!isMe && status!=='archived')h+='<button class="bb bb-warn" id="eArchive">🗄 Archiver & transférer</button>';
+  if(!isMe && status==='archived')h+='<button class="bb bb-o" id="eReactivate">♻ Réactiver</button>';
   if(!isMe)h+='<button class="bb bb-r" id="eDelete">🗑 Supprimer</button>';
   h+='</div>';
 
@@ -522,6 +558,10 @@ function openEditModal(u){
   document.getElementById('eResetPwd').addEventListener('click',function(){handleResetPwd(u.email);});
   var delBtn=document.getElementById('eDelete');
   if(delBtn)delBtn.addEventListener('click',function(){handleDelete(u.uid,u.displayName||u.email);});
+  var archBtn=document.getElementById('eArchive');
+  if(archBtn)archBtn.addEventListener('click',function(){openArchiveModal(u);});
+  var reBtn=document.getElementById('eReactivate');
+  if(reBtn)reBtn.addEventListener('click',function(){handleReactivate(u);});
 }
 
 window.onEditRoleChange=function(){
@@ -582,6 +622,349 @@ async function handleDelete(uid,name){
     await loadUsers();
   }catch(e){toast('❌ '+e.message);}
 }
+
+// ════════════════════════════════════════════════════════════════════
+//   ARCHIVAGE & TRANSFERT
+// ════════════════════════════════════════════════════════════════════
+//
+// Architecture :
+//  • USERS (firebase auth + role + permissions) — ce module
+//  • _meta/team_members.members — slug → {shortName, displayName, color, active, order, ...}
+//  • leads/{id}.assignedTo — string slug (= clé d'un member)
+//
+// Pas de lien formel user→slug. L'admin confirme le slug équipe correspondant
+// dans le modal d'archivage (auto-matché par nom).
+//
+// Archiver = 3 actions liées :
+//  1. Transférer leads.assignedTo (fromSlug → toSlug) — writeBatch chunks 450
+//  2. _meta/team_members.members[fromSlug].active = false
+//  3. users/{authUid}.status = 'archived' + métadonnées + audit_log
+
+const ARCHIVE_CLOSED_STAGES = CLOSED_STAGES; // alias local
+
+// Lit _meta/team_members et retourne {raw, members:[{slug,...}], wasArray}
+async function loadTeamMembersDoc(){
+  const snap = await getDoc(doc(db,'_meta','team_members'));
+  if(!snap.exists()) return {raw:null, members:[], wasArray:false};
+  const data = snap.data() || {};
+  const rawMembers = data.members;
+  const members = [];
+  let wasArray = false;
+  if(Array.isArray(rawMembers)){
+    wasArray = true;
+    rawMembers.forEach((entry,i)=>{
+      if(!entry || typeof entry!=='object') return;
+      const slug = entry.slug || ('m'+i);
+      members.push(Object.assign({slug:slug}, entry));
+    });
+  }else if(rawMembers && typeof rawMembers==='object'){
+    Object.keys(rawMembers).forEach(slug=>{
+      const entry = rawMembers[slug];
+      if(!entry || typeof entry!=='object') return;
+      const realSlug = entry.slug || slug;
+      members.push(Object.assign({slug:realSlug}, entry));
+    });
+  }
+  members.sort((a,b)=>(a.order||999)-(b.order||999));
+  return {raw:data, members:members, wasArray:wasArray};
+}
+
+// Réécrit _meta/team_members.members en respectant le format d'origine (object|array)
+async function writeTeamMembersDoc(tmDoc, mutator){
+  // mutator: function(members[]) → modifie en place
+  mutator(tmDoc.members);
+  let newMembersField;
+  if(tmDoc.wasArray){
+    newMembersField = tmDoc.members.map(m=>Object.assign({},m));
+  }else{
+    newMembersField = {};
+    tmDoc.members.forEach(m=>{ newMembersField[m.slug] = Object.assign({},m); });
+  }
+  await updateDoc(doc(db,'_meta','team_members'), {members:newMembersField});
+}
+
+// Normalise un nom pour matching tolérant accents/casse
+function _normName(s){
+  return (s||'').toString().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]/g,'');
+}
+
+// Auto-match : trouve le slug team_member le plus probable pour un user
+function autoMatchSlug(user, members){
+  const candidates = [user.displayName, user.email && user.email.split('@')[0]].filter(Boolean).map(_normName);
+  for(const m of members){
+    const variants = [m.slug, m.shortName, m.displayName].filter(Boolean).map(_normName);
+    for(const c of candidates){
+      for(const v of variants){
+        if(c && v && (c===v || c.indexOf(v)>=0 || v.indexOf(c)>=0)) return m.slug;
+      }
+    }
+  }
+  return '';
+}
+
+// Compte les leads assignés à un slug, séparant pipeline-actifs vs clos
+async function scanLeadsForSlug(slug){
+  if(!slug) return {active:0, closed:0, total:0};
+  const q = query(collection(db,'leads'), where('assignedTo','==',slug));
+  const snap = await getDocs(q);
+  let active=0, closed=0;
+  snap.forEach(d=>{
+    const stage = (d.data()||{}).stage || '';
+    if(ARCHIVE_CLOSED_STAGES.indexOf(stage)>=0) closed++;
+    else active++;
+  });
+  return {active:active, closed:closed, total:active+closed};
+}
+
+let _archState = null; // {user, tmDoc, fromSlug, scan}
+
+async function openArchiveModal(u){
+  if(u.uid===currentUid){toast('⚠️ Tu ne peux pas archiver ton propre compte');return;}
+  closeModal();
+  openModal('🗄 Archiver — '+(u.displayName||u.email));
+  document.getElementById('moBody').innerHTML='<div class="u-empty">Chargement des membres équipe…</div>';
+
+  let tmDoc;
+  try{
+    tmDoc = await loadTeamMembersDoc();
+  }catch(e){
+    document.getElementById('moBody').innerHTML='<div class="arch-warn">❌ Erreur lecture _meta/team_members : '+esc(e.message)+'</div>';
+    return;
+  }
+  if(!tmDoc.members.length){
+    document.getElementById('moBody').innerHTML='<div class="arch-warn">⚠️ Aucun membre dans <code>_meta/team_members</code>. Lance la migration équipe d\'abord.</div>';
+    return;
+  }
+
+  const guess = autoMatchSlug(u, tmDoc.members);
+  _archState = {user:u, tmDoc:tmDoc, fromSlug:guess, scan:null};
+
+  renderArchiveModal();
+  if(guess) refreshArchiveScan();
+}
+
+function renderArchiveModal(){
+  const st = _archState; if(!st) return;
+  const u = st.user;
+  const members = st.tmDoc.members;
+  const activeMembers = members.filter(m=>m.active!==false && m.slug!==st.fromSlug);
+
+  let h = '';
+  h += '<div class="arch-banner">';
+  h += 'Tu vas archiver <b>'+esc(u.displayName||u.email)+'</b>. Le compte Firebase Auth ne sera <b>pas supprimé</b> (tu peux le réactiver). Les leads attribués au membre équipe correspondant seront transférés vers le destinataire choisi. Les données historiques (EOD, commissions, setting/closing) restent intactes au nom de la personne archivée.';
+  h += '</div>';
+
+  // 1. Slug source
+  h += '<div class="mf"><label>Membre équipe correspondant (source)</label>';
+  h += '<select class="bs" id="archFrom" style="width:100%">';
+  h += '<option value="">— Sélectionner —</option>';
+  members.forEach(m=>{
+    const lab = (m.displayName||m.shortName||m.slug)+(m.active===false?' 🔒 (déjà inactif)':'');
+    h += '<option value="'+esc(m.slug)+'"'+(m.slug===st.fromSlug?' selected':'')+'>'+esc(lab)+'</option>';
+  });
+  h += '</select>';
+  h += '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px">Auto-matché par nom. Corrige si nécessaire.</div></div>';
+
+  // 2. Scan compteurs
+  h += '<div class="arch-scan" id="archScanBox"><div class="arch-scan-h">📊 Leads attribués</div>';
+  if(!st.fromSlug){
+    h += '<div style="color:rgba(255,255,255,.3);font-size:12px;text-align:center;padding:10px">Sélectionne un membre source pour scanner</div>';
+  }else if(!st.scan){
+    h += '<div style="color:rgba(255,255,255,.4);font-size:12px;text-align:center;padding:10px">⏳ Scan en cours…</div>';
+  }else{
+    const s = st.scan;
+    h += '<div class="arch-scan-row"><span class="lbl">🟢 Leads en pipeline actif</span><span class="val'+(s.active?'':' zero')+'">'+s.active+'</span></div>';
+    h += '<div class="arch-scan-row"><span class="lbl">⚫ Leads en stages clos (gagné/perdu/poubelle)</span><span class="val'+(s.closed?'':' zero')+'">'+s.closed+'</span></div>';
+    h += '<div class="arch-scan-row"><span class="lbl"><b>Total</b></span><span class="val">'+s.total+'</span></div>';
+  }
+  h += '</div>';
+
+  // 3. Destinataire
+  h += '<div class="mf"><label>Transférer les leads vers</label>';
+  h += '<select class="bs" id="archTo" style="width:100%">';
+  h += '<option value="">— Sélectionner un destinataire —</option>';
+  activeMembers.forEach(m=>{
+    h += '<option value="'+esc(m.slug)+'">'+esc(m.displayName||m.shortName||m.slug)+'</option>';
+  });
+  h += '</select></div>';
+
+  // 4. Toggle inclure clos
+  h += '<div class="mf" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(15,23,42,.4);border-radius:10px;border:1px solid rgba(255,255,255,.05)">';
+  h += '<input type="checkbox" id="archInclClosed" style="width:16px;height:16px;cursor:pointer"/>';
+  h += '<label for="archInclClosed" style="margin:0;cursor:pointer;font-size:12px;color:#cbd5e1">Inclure aussi les leads en stages clos (par défaut : non)</label>';
+  h += '</div>';
+
+  // 5. Note bookings
+  h += '<div class="arch-warn" style="background:rgba(96,165,250,.07);border-color:rgba(96,165,250,.2);color:#93c5fd"><b>ℹ Bookings non transférés.</b> Les RDV (collection <code>bookings</code>) sont liés aux experts définis dans <code>booking_config</code>, indépendamment des comptes utilisateurs. Si la personne archivée était aussi un expert booking, va dans <b>Booking → Experts</b> pour transférer manuellement les RDV.</div>';
+
+  // 6. Confirmation
+  const confirmName = u.displayName || u.email || '?';
+  h += '<div class="mf" style="margin-top:14px"><label>Pour confirmer, tape <b style="color:#fbbf24">'+esc(confirmName)+'</b></label>';
+  h += '<input class="bi arch-confirm-input" id="archConfirm" placeholder="'+esc(confirmName)+'" autocomplete="off"/></div>';
+
+  // 7. Boutons
+  h += '<div style="display:flex;gap:10px;margin-top:18px">';
+  h += '<button class="bb bb-o" id="archCancel">Annuler</button>';
+  h += '<button class="bb bb-warn" id="archGo" style="flex:1" disabled>🗄 Archiver et transférer</button>';
+  h += '</div>';
+
+  document.getElementById('moBody').innerHTML = h;
+
+  document.getElementById('archFrom').addEventListener('change', function(){
+    _archState.fromSlug = this.value;
+    _archState.scan = null;
+    renderArchiveModal();
+    if(this.value) refreshArchiveScan();
+  });
+  document.getElementById('archCancel').addEventListener('click', closeModal);
+  const goBtn = document.getElementById('archGo');
+  const confirmInput = document.getElementById('archConfirm');
+  function refreshGoState(){
+    const ok = _archState.fromSlug
+      && document.getElementById('archTo').value
+      && _archState.scan
+      && _normName(confirmInput.value) === _normName(confirmName);
+    goBtn.disabled = !ok;
+  }
+  confirmInput.addEventListener('input', refreshGoState);
+  document.getElementById('archTo').addEventListener('change', refreshGoState);
+  goBtn.addEventListener('click', function(){
+    handleArchive(
+      _archState.user,
+      _archState.fromSlug,
+      document.getElementById('archTo').value,
+      document.getElementById('archInclClosed').checked
+    );
+  });
+}
+
+async function refreshArchiveScan(){
+  const slug = _archState.fromSlug;
+  try{
+    const scan = await scanLeadsForSlug(slug);
+    if(_archState && _archState.fromSlug===slug){
+      _archState.scan = scan;
+      renderArchiveModal();
+    }
+  }catch(e){
+    console.error('[archive scan]',e);
+    toast('❌ Scan leads : '+e.message);
+  }
+}
+
+async function handleArchive(u, fromSlug, toSlug, includeClosed){
+  if(!fromSlug || !toSlug || fromSlug===toSlug){toast('⚠️ Source et destinataire invalides');return;}
+  const goBtn = document.getElementById('archGo');
+  goBtn.disabled = true; goBtn.textContent = '⏳ Archivage en cours…';
+  try{
+    // 1. Récupérer tous les leads source
+    const leadsSnap = await getDocs(query(collection(db,'leads'), where('assignedTo','==',fromSlug)));
+    const targets = [];
+    leadsSnap.forEach(d=>{
+      const stage = (d.data()||{}).stage || '';
+      if(!includeClosed && ARCHIVE_CLOSED_STAGES.indexOf(stage)>=0) return;
+      targets.push(d.id);
+    });
+
+    // 2. Batch update par chunks de 450
+    const CHUNK = 450;
+    for(let i=0;i<targets.length;i+=CHUNK){
+      const batch = writeBatch(db);
+      const slice = targets.slice(i,i+CHUNK);
+      slice.forEach(id=>{
+        batch.update(doc(db,'leads',id), {
+          assignedTo: toSlug,
+          archivedFromSlug: fromSlug,
+          updatedAt: serverTimestamp()
+        });
+      });
+      await batch.commit();
+    }
+
+    // 3. Désactiver le member dans _meta/team_members
+    await writeTeamMembersDoc(_archState.tmDoc, function(members){
+      members.forEach(m=>{ if(m.slug===fromSlug){ m.active = false; m.archivedAt = new Date().toISOString(); }});
+    });
+
+    // 4. Marquer le user comme archivé
+    await updateDoc(doc(db,'users',u.uid), {
+      status: 'archived',
+      archivedAt: serverTimestamp(),
+      archivedBy: currentUid,
+      archivedFromSlug: fromSlug,
+      archivedToSlug: toSlug,
+      archiveTransferCount: targets.length,
+      archiveIncludedClosed: !!includeClosed
+    });
+
+    // 5. Audit log
+    try{
+      await addDoc(collection(db,'audit_log'), {
+        action: 'archive_user',
+        targetUid: u.uid,
+        targetName: u.displayName || u.email || '',
+        byUid: currentUid,
+        at: serverTimestamp(),
+        fromSlug: fromSlug,
+        toSlug: toSlug,
+        transferCount: targets.length,
+        includeClosed: !!includeClosed
+      });
+    }catch(e){console.warn('[audit_log] write failed (non bloquant):',e.message);}
+
+    toast('✅ Archivé — '+targets.length+' lead'+(targets.length>1?'s':'')+' transféré'+(targets.length>1?'s':''));
+    _archState = null;
+    closeModal();
+    await loadUsers();
+  }catch(e){
+    console.error('[handleArchive]',e);
+    toast('❌ '+e.message);
+    if(goBtn){ goBtn.disabled = false; goBtn.textContent = '🗄 Archiver et transférer'; }
+  }
+}
+
+async function handleReactivate(u){
+  if(!confirm('Réactiver le compte de "'+(u.displayName||u.email)+'" ?\n\nLe compte redevient actif et le membre équipe correspondant est ré-activé.\n\nNote : les leads déjà transférés ne reviennent PAS automatiquement.'))return;
+  try{
+    const fromSlug = u.archivedFromSlug;
+    if(fromSlug){
+      const tmDoc = await loadTeamMembersDoc();
+      await writeTeamMembersDoc(tmDoc, function(members){
+        members.forEach(m=>{ if(m.slug===fromSlug){ m.active = true; delete m.archivedAt; }});
+      });
+    }
+    await updateDoc(doc(db,'users',u.uid), {
+      status: 'active',
+      archivedAt: deleteField(),
+      archivedBy: deleteField(),
+      archivedFromSlug: deleteField(),
+      archivedToSlug: deleteField(),
+      archiveTransferCount: deleteField(),
+      archiveIncludedClosed: deleteField(),
+      reactivatedAt: serverTimestamp(),
+      reactivatedBy: currentUid
+    });
+    try{
+      await addDoc(collection(db,'audit_log'), {
+        action: 'reactivate_user',
+        targetUid: u.uid,
+        targetName: u.displayName || u.email || '',
+        byUid: currentUid,
+        at: serverTimestamp(),
+        restoredSlug: fromSlug || null
+      });
+    }catch(e){console.warn('[audit_log]',e.message);}
+    toast('♻ Compte réactivé');
+    closeModal();
+    await loadUsers();
+  }catch(e){
+    console.error('[handleReactivate]',e);
+    toast('❌ '+e.message);
+  }
+}
+
 
 </script>
 </body>
