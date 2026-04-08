@@ -9,118 +9,6 @@
   // Apply saved theme immediately to prevent flash
   if (localStorage.getItem('ambitio_theme') === 'light') document.body.classList.add('light-theme');
 
-  /* ──────────────────────────────────────────────────────────
-     TEAM MEMBERS — source unique de vérité
-     Lit _meta/team_members (Firestore), expose window.TEAM_MEMBERS,
-     fire l'event "team-members-loaded" quand prêt.
-     Cache 5 min pour éviter de re-fetch à chaque page.
-     Fallback hardcodé si Firestore indisponible.
-  ────────────────────────────────────────────────────────── */
-  const TM_FALLBACK = [
-    { slug: 'guillaume', shortName: 'Guillaume', fullName: 'Guillaume Bilcke',     email: 'strategie@adrienemily.com', role: 'Closing + Setting',  color: '#ef4444', initials: 'G', active: true },
-    { slug: 'elodie',    shortName: 'Élodie',    fullName: 'Élodie Vidotto Siarri', email: 'strategie@adrienemily.com', role: 'Closing',            color: '#60a5fa', initials: 'É', active: true },
-    { slug: 'vincent',   shortName: 'Vincent',   fullName: 'Vincent HOS',           email: 'strategie@adrienemily.com', role: 'Setting + Closing',  color: '#a78bfa', initials: 'V', active: true }
-  ];
-  const TM_CACHE_KEY = 'ambitio_team_members_cache_v1';
-  const TM_CACHE_TTL = 5 * 60 * 1000; // 5 min
-
-  // État global immédiatement disponible (avec fallback hardcodé pour pages qui ne savent pas attendre)
-  if (!Array.isArray(window.TEAM_MEMBERS) || !window.TEAM_MEMBERS.length) {
-    try {
-      const raw = localStorage.getItem(TM_CACHE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.members) && (Date.now() - (parsed.ts || 0) < TM_CACHE_TTL)) {
-          window.TEAM_MEMBERS = parsed.members;
-        }
-      }
-    } catch (_) { /* noop */ }
-    if (!Array.isArray(window.TEAM_MEMBERS) || !window.TEAM_MEMBERS.length) {
-      window.TEAM_MEMBERS = TM_FALLBACK.slice();
-    }
-  }
-
-  let _tmInflight = null;
-
-  function _tmFireLoaded(source) {
-    try { window.dispatchEvent(new CustomEvent('team-members-loaded', { detail: { source: source, members: window.TEAM_MEMBERS } })); } catch (_) {}
-  }
-
-  window.loadTeamMembers = function (opts) {
-    opts = opts || {};
-    if (_tmInflight) return _tmInflight;
-
-    // Cache hit (sauf si force)
-    if (!opts.force) {
-      try {
-        const raw = localStorage.getItem(TM_CACHE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && Array.isArray(parsed.members) && (Date.now() - (parsed.ts || 0) < TM_CACHE_TTL)) {
-            window.TEAM_MEMBERS = parsed.members;
-            // Async event pour laisser les listeners s'attacher
-            setTimeout(function () { _tmFireLoaded('cache'); }, 0);
-            return Promise.resolve(window.TEAM_MEMBERS);
-          }
-        }
-      } catch (_) {}
-    }
-
-    if (typeof firebase === 'undefined' || !firebase.firestore) {
-      // Pas de Firebase chargé → on garde le fallback
-      setTimeout(function () { _tmFireLoaded('fallback'); }, 0);
-      return Promise.resolve(window.TEAM_MEMBERS);
-    }
-
-    _tmInflight = firebase.firestore().collection('_meta').doc('team_members').get()
-      .then(function (snap) {
-        if (snap.exists) {
-          const d = snap.data();
-          if (d && Array.isArray(d.members) && d.members.length) {
-            window.TEAM_MEMBERS = d.members;
-            try { localStorage.setItem(TM_CACHE_KEY, JSON.stringify({ ts: Date.now(), members: d.members })); } catch (_) {}
-            _tmFireLoaded('firestore');
-            return window.TEAM_MEMBERS;
-          }
-        }
-        // Doc absent → fallback
-        _tmFireLoaded('fallback-empty');
-        return window.TEAM_MEMBERS;
-      })
-      .catch(function (err) {
-        console.warn('[loadTeamMembers] échec Firestore, fallback hardcodé', err);
-        _tmFireLoaded('fallback-error');
-        return window.TEAM_MEMBERS;
-      })
-      .then(function (res) {
-        _tmInflight = null;
-        return res;
-      });
-
-    return _tmInflight;
-  };
-
-  // Helpers utilitaires exposés (utilisables sync car window.TEAM_MEMBERS a toujours une valeur)
-  window.tmGet = function (slug) {
-    const list = window.TEAM_MEMBERS || [];
-    for (let i = 0; i < list.length; i++) if (list[i].slug === slug) return list[i];
-    return null;
-  };
-  window.tmActives = function () {
-    return (window.TEAM_MEMBERS || []).filter(function (m) { return m.active !== false; });
-  };
-  window.tmName = function (slug) {
-    const m = window.tmGet(slug);
-    return m ? (m.shortName || m.fullName || slug) : slug;
-  };
-  window.tmColor = function (slug) {
-    const m = window.tmGet(slug);
-    return m ? (m.color || '#94a3b8') : '#94a3b8';
-  };
-
-  // Auto-load au chargement de nav.js
-  setTimeout(function () { try { window.loadTeamMembers(); } catch (_) {} }, 0);
-
   /* ─── Permission keys ─── */
   const PERM_KEYS = [
     'coaching_clients','coaching_dashboard','coaching_communication',
@@ -783,3 +671,142 @@
 
   init();
 })();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TEAM MEMBERS — Source unique de vérité pour l'équipe sales
+   ───────────────────────────────────────────────────────────────────────
+   Lit le doc _meta/team_members et expose :
+     • window.TEAM_MEMBERS         → { slug: memberObj }
+     • window.TEAM_MEMBERS_LIST    → array trié par order
+     • window.TEAM_MEMBERS_ACTIVE  → array trié, actifs uniquement
+
+   Utilisation depuis n'importe quelle page :
+     await window.loadTeamMembers();
+     const guillaume = window.TEAM_MEMBERS.guillaume;
+     for (const m of window.TEAM_MEMBERS_ACTIVE) { ... }
+
+   Expose aussi un événement 'team-members-loaded' pour les pages qui
+   doivent re-rendre après le chargement.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+  window.TEAM_MEMBERS = {};
+  window.TEAM_MEMBERS_LIST = [];
+  window.TEAM_MEMBERS_ACTIVE = [];
+  window._teamMembersLoadPromise = null;
+  window._teamMembersLastLoadAt = 0;
+
+  /**
+   * Charge (ou recharge) la liste des membres équipe depuis Firestore.
+   * Cache 5 min sauf si force=true.
+   * @param {boolean} force - bypass le cache
+   * @returns {Promise<Array>} - liste triée des membres
+   */
+  window.loadTeamMembers = async function (force) {
+    const now = Date.now();
+    const CACHE_MS = 5 * 60 * 1000; // 5 minutes
+    if (!force && window._teamMembersLoadPromise && (now - window._teamMembersLastLoadAt) < CACHE_MS) {
+      return window._teamMembersLoadPromise;
+    }
+    if (typeof firebase === 'undefined' || !firebase.firestore) {
+      console.warn('[loadTeamMembers] Firebase not initialized');
+      return null;
+    }
+    const db = firebase.firestore();
+    window._teamMembersLastLoadAt = now;
+    window._teamMembersLoadPromise = (async () => {
+      try {
+        const snap = await db.collection('_meta').doc('team_members').get();
+        if (!snap.exists) {
+          console.warn('[loadTeamMembers] Doc _meta/team_members introuvable. Lance migrate-team-members.js.');
+          window.TEAM_MEMBERS = {};
+          window.TEAM_MEMBERS_LIST = [];
+          window.TEAM_MEMBERS_ACTIVE = [];
+          return [];
+        }
+        const data = snap.data() || {};
+        const rawMembers = data.members;
+        const map = {};
+        const list = [];
+
+        // Le champ `members` peut être stocké soit comme un OBJET (map slug→memberObj),
+        // soit comme un ARRAY (Firestore le convertit parfois automatiquement, surtout
+        // si les valeurs sont écrites via certains SDK ou si on a fait set() avec un array).
+        // On gère les 2 cas en se basant TOUJOURS sur le champ `slug` interne de chaque
+        // membre, qui doit être présent dans tous les cas.
+        if (Array.isArray(rawMembers)) {
+          // Cas ARRAY : on itère et on prend le slug interne de chaque entrée
+          for (let i = 0; i < rawMembers.length; i++) {
+            const entry = rawMembers[i];
+            if (!entry || typeof entry !== 'object') continue;
+            const slug = entry.slug || ('m' + i);
+            const m = Object.assign({ slug: slug }, entry);
+            map[slug] = m;
+            list.push(m);
+          }
+        } else if (rawMembers && typeof rawMembers === 'object') {
+          // Cas OBJET : itération classique sur les clés
+          Object.keys(rawMembers).forEach(function (slug) {
+            const entry = rawMembers[slug];
+            if (!entry || typeof entry !== 'object') return;
+            // Si l'entry contient déjà un slug interne, on le préfère à la clé externe
+            // (au cas où la clé externe soit numérique parce que Firestore a array-ified)
+            const realSlug = entry.slug || slug;
+            const m = Object.assign({ slug: realSlug }, entry);
+            map[realSlug] = m;
+            list.push(m);
+          });
+        } else {
+          console.warn('[loadTeamMembers] Champ `members` absent ou format invalide:', rawMembers);
+        }
+
+        list.sort(function (a, b) { return (a.order || 999) - (b.order || 999); });
+        window.TEAM_MEMBERS = map;
+        window.TEAM_MEMBERS_LIST = list;
+        window.TEAM_MEMBERS_ACTIVE = list.filter(function (m) { return m.active !== false; });
+        // Notifier les pages qu'elles peuvent re-rendre
+        window.dispatchEvent(new CustomEvent('team-members-loaded', {
+          detail: { count: list.length, activeCount: window.TEAM_MEMBERS_ACTIVE.length }
+        }));
+        return list;
+      } catch (e) {
+        console.error('[loadTeamMembers] erreur', e);
+        return [];
+      }
+    })();
+    return window._teamMembersLoadPromise;
+  };
+
+  /**
+   * Helper synchrone : retourne un membre par slug, ou un fallback "inconnu".
+   * Si le membre n'existe pas, retourne un objet placeholder pour éviter les
+   * crashes côté UI quand on affiche un assignedTo dont le membre a été
+   * complètement supprimé (cas exceptionnel).
+   */
+  window.getTeamMember = function (slug) {
+    if (!slug) return null;
+    if (window.TEAM_MEMBERS[slug]) return window.TEAM_MEMBERS[slug];
+    return {
+      slug: slug,
+      shortName: slug,
+      displayName: slug,
+      initials: (slug[0] || '?').toUpperCase(),
+      color: '#6b7280',
+      active: false,
+      _missing: true
+    };
+  };
+
+  // Auto-load au DOMContentLoaded si Firebase est prêt
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      if (typeof firebase !== 'undefined' && firebase.firestore) {
+        window.loadTeamMembers();
+      }
+    });
+  } else {
+    if (typeof firebase !== 'undefined' && firebase.firestore) {
+      window.loadTeamMembers();
+    }
+  }
+})();
+
