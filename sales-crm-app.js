@@ -2034,19 +2034,14 @@ function startLeadsListener(){
   var sixMonthsAgo=new Date();sixMonthsAgo.setMonth(sixMonthsAgo.getMonth()-6);
   var q=db.collection('leads').orderBy('createdAt','desc');
   if(archiveMode==='recent'){
-    q=q.where('createdAt','>',sixMonthsAgo).limit(2000);
+    q=q.where('createdAt','>',sixMonthsAgo).limit(5000);
   } else {
-    q=q.where('createdAt','<=',sixMonthsAgo).limit(2000);
+    q=q.where('createdAt','<=',sixMonthsAgo).limit(5000);
   }
   leadsUnsub=q.onSnapshot(function(snap){
     allLeads=[];
-    var excludeImports=(archiveMode==='recent');
     snap.forEach(function(doc){
       var d=doc.data();d.id=doc.id;
-      // En mode "Récents", on exclut les imports historiques (Bigin / migration suivi-client)
-      // qui saturent la fenêtre de chargement et masquent les vrais leads récents.
-      // En mode "Anciens (>6 mois)", on garde tout puisque c'est leur place naturelle.
-      if(excludeImports && (d.source==='bigin_import'||d.source==='migration_suivi_client'))return;
       if(!d.stage)d.stage='lead';
       allLeads.push(d);
     });
