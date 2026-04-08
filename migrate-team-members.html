@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Migration · Team Members → Firestore</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root { --bg:#0b0f17; --bg2:#11182a; --bg3:#172033; --fg:#e5e7eb; --muted:#94a3b8; --border:#1f2937; --acc:#3b82f6; --ok:#10b981; --warn:#f59e0b; --err:#ef4444; }
+  html,body { background:var(--bg); color:var(--fg); font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; margin:0; padding:0; }
+  .wrap { max-width:880px; margin:40px auto; padding:0 24px; }
+  h1 { font-size:22px; margin:0 0 8px; }
+  .sub { color:var(--muted); margin-bottom:24px; }
+  .card { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:22px; margin-bottom:18px; }
+  .card h2 { margin:0 0 12px; font-size:16px; }
+  pre { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:14px; font-size:12px; overflow-x:auto; max-height:340px; color:#cbd5e1; }
+  button { background:var(--acc); color:white; border:0; border-radius:9px; padding:11px 18px; font-weight:700; cursor:pointer; font-size:13px; margin-right:8px; }
+  button.ghost { background:var(--bg3); border:1px solid var(--border); color:var(--fg); }
+  button.danger { background:var(--err); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .log { background:#000; border-radius:10px; padding:12px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; max-height:280px; overflow-y:auto; color:#a3e635; white-space:pre-wrap; }
+  .ok { color:var(--ok); }
+  .err { color:var(--err); }
+  .warn { color:var(--warn); }
+  .row { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+  .pill { display:inline-block; padding:3px 10px; border-radius:99px; font-size:11px; font-weight:700; }
+  .pill.dry { background:#1e3a8a; color:#bfdbfe; }
+  .pill.live { background:#7f1d1d; color:#fecaca; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>🔧 Migration · Team Members</h1>
+  <p class="sub">Crée le document Firestore <code>_meta/team_members</code> à partir de la liste hardcodée actuelle. Cette opération sert à initialiser la source unique de vérité pour l'équipe.</p>
+
+  <div class="card">
+    <h2>📋 Données qui vont être écrites</h2>
+    <pre id="preview"></pre>
+  </div>
+
+  <div class="card">
+    <h2>🚀 Exécution</h2>
+    <p style="color:var(--muted);font-size:12px;margin-top:0">
+      <strong>Dry-run</strong> = aucune écriture, juste un test de connexion + affichage. <strong>Live</strong> = écrit réellement le doc Firestore.
+    </p>
+    <div class="row">
+      <button id="btnDry">Dry-run</button>
+      <button id="btnLive" class="danger">Écrire en live</button>
+      <button id="btnRead" class="ghost">Relire le doc</button>
+    </div>
+    <div class="log" id="log">Prêt.</div>
+  </div>
+
+  <div class="card">
+    <h2>ℹ️ Schéma du doc</h2>
+    <pre>_meta/team_members
+{
+  members: [
+    {
+      slug: "guillaume",        // identifiant interne (utilisé partout)
+      shortName: "Guillaume",   // affichage compact
+      fullName: "Guillaume Bilcke",
+      email: "strategie@adrienemily.com",
+      role: "Closing + Setting",
+      color: "#ef4444",
+      initials: "G",
+      active: true
+    },
+    ...
+  ],
+  updatedAt: <serverTimestamp>,
+  updatedBy: "migration-script"
+}</pre>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if (!firebase.apps.length) {
+  firebase.initializeApp({
+    apiKey: "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+    authDomain: "ambitio-team.firebaseapp.com",
+    projectId: "ambitio-team",
+    storageBucket: "ambitio-team.firebasestorage.app",
+    messagingSenderId: "1079366902268",
+    appId: "1:1079366902268:web:b4ec1691dba54230339279"
+  });
+}
+const db = firebase.firestore();
+
+/* ─── DONNÉES SOURCE (hardcode actuel à migrer) ─── */
+const MEMBERS = [
+  {
+    slug: "guillaume",
+    shortName: "Guillaume",
+    fullName: "Guillaume Bilcke",
+    email: "strategie@adrienemily.com",
+    role: "Closing + Setting",
+    color: "#ef4444",
+    initials: "G",
+    active: true
+  },
+  {
+    slug: "elodie",
+    shortName: "Élodie",
+    fullName: "Élodie Vidotto Siarri",
+    email: "strategie@adrienemily.com",
+    role: "Closing",
+    color: "#60a5fa",
+    initials: "É",
+    active: true
+  },
+  {
+    slug: "vincent",
+    shortName: "Vincent",
+    fullName: "Vincent HOS",
+    email: "strategie@adrienemily.com",
+    role: "Setting + Closing",
+    color: "#a78bfa",
+    initials: "V",
+    active: true
+  }
+];
+
+document.getElementById('preview').textContent = JSON.stringify(MEMBERS, null, 2);
+
+const logEl = document.getElementById('log');
+function log(msg, cls) {
+  const ts = new Date().toLocaleTimeString();
+  const line = '[' + ts + '] ' + msg;
+  const span = document.createElement('div');
+  if (cls) span.className = cls;
+  span.textContent = line;
+  logEl.appendChild(span);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function ensureAuth() {
+  return new Promise((resolve, reject) => {
+    const unsub = firebase.auth().onAuthStateChanged(u => {
+      unsub();
+      if (u) resolve(u);
+      else reject(new Error('Tu dois être connecté à team.alteore.com d\'abord. Ouvre login.html, puis reviens ici.'));
+    });
+  });
+}
+
+document.getElementById('btnDry').onclick = async () => {
+  try {
+    log('▶ Dry-run démarré', 'warn');
+    const u = await ensureAuth();
+    log('✓ Auth OK : ' + u.email, 'ok');
+    log('✓ ' + MEMBERS.length + ' membres prêts à être écrits (DRY-RUN, aucune écriture)');
+    log('  Slugs : ' + MEMBERS.map(m => m.slug).join(', '));
+    log('✓ Dry-run terminé sans erreur', 'ok');
+  } catch (e) {
+    log('✗ ' + e.message, 'err');
+  }
+};
+
+document.getElementById('btnLive').onclick = async () => {
+  if (!confirm('Tu vas écrire le doc _meta/team_members en LIVE. Continuer ?')) return;
+  try {
+    log('▶ LIVE démarré', 'warn');
+    const u = await ensureAuth();
+    log('✓ Auth OK : ' + u.email, 'ok');
+    await db.collection('_meta').doc('team_members').set({
+      members: MEMBERS,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: u.email || 'migration-script'
+    });
+    log('✅ Doc écrit avec succès dans _meta/team_members', 'ok');
+    log('   ' + MEMBERS.length + ' membres en base.');
+  } catch (e) {
+    log('✗ ' + e.message, 'err');
+    if (e.code) log('  code : ' + e.code, 'err');
+  }
+};
+
+document.getElementById('btnRead').onclick = async () => {
+  try {
+    log('▶ Lecture du doc...');
+    await ensureAuth();
+    const snap = await db.collection('_meta').doc('team_members').get();
+    if (!snap.exists) {
+      log('⚠ Le doc n\'existe pas encore.', 'warn');
+      return;
+    }
+    const d = snap.data();
+    log('✓ Doc lu : ' + (d.members?.length || 0) + ' membres', 'ok');
+    log(JSON.stringify(d.members, null, 2));
+  } catch (e) {
+    log('✗ ' + e.message, 'err');
+  }
+};
+</script>
+</body>
+</html>
