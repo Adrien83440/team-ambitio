@@ -1076,19 +1076,18 @@ function getFilteredLeads() {
   return list;
 }
 
-/* Base filter: only leads after fresh-start cutoff.
-   Utilise max(createdAt, updatedAt) pour que les vieux leads (Bigin/webinar)
-   ré-engagés récemment (self-booking, merge) restent visibles. */
-var LEADS_LIVE_CUTOFF = new Date('2026-04-02T22:00:00+02:00');
+/* Base filter: only leads CREATED in the last 30 days (rolling window).
+   On filtre uniquement sur createdAt (vraie date d'origine après migration),
+   PAS sur updatedAt — sinon les vieux leads ré-engagés remontent dans la liste. */
 function getBaseLeads() {
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
   return allLeads.filter(function(l) {
     if (l.source === 'migration_suivi_client') return false;
-    var cd = null, ud = null;
-    if (l.createdAt) cd = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-    if (l.updatedAt) ud = l.updatedAt.toDate ? l.updatedAt.toDate() : new Date(l.updatedAt);
-    var mostRecent = cd && ud ? (cd > ud ? cd : ud) : (cd || ud);
-    if (!mostRecent) return false;
-    return mostRecent > LEADS_LIVE_CUTOFF;
+    if (!l.createdAt) return false;
+    var cd = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+    if (isNaN(cd.getTime())) return false;
+    return cd > cutoff;
   });
 }
 
@@ -2007,10 +2006,6 @@ function startListening() {
         d.id = doc.id;
         // Skip les leads marqués comme fusionnés (via dedup ou repair scripts)
         if (d._merged === true) return;
-        // Skip les leads d'import historique : Lead Live ne montre que les leads
-        // qui arrivent vraiment en temps réel (formulaires, webhooks, self-booking).
-        // Les imports Bigin / migration suivi-client restent visibles dans le Pipeline CRM.
-        if (d.source === 'bigin_import' || d.source === 'migration_suivi_client') return;
         // Check if it's one of the new ones
         for (var i = 0; i < newLeads.length; i++) {
           if (newLeads[i].id === doc.id) { d._isNew = true; break; }
