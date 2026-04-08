@@ -2039,7 +2039,17 @@ function startLeadsListener(){
     q=q.where('createdAt','<=',sixMonthsAgo).limit(2000);
   }
   leadsUnsub=q.onSnapshot(function(snap){
-    allLeads=[];snap.forEach(function(doc){var d=doc.data();d.id=doc.id;if(!d.stage)d.stage='lead';allLeads.push(d);});
+    allLeads=[];
+    var excludeImports=(archiveMode==='recent');
+    snap.forEach(function(doc){
+      var d=doc.data();d.id=doc.id;
+      // En mode "Récents", on exclut les imports historiques (Bigin / migration suivi-client)
+      // qui saturent la fenêtre de chargement et masquent les vrais leads récents.
+      // En mode "Anciens (>6 mois)", on garde tout puisque c'est leur place naturelle.
+      if(excludeImports && (d.source==='bigin_import'||d.source==='migration_suivi_client'))return;
+      if(!d.stage)d.stage='lead';
+      allLeads.push(d);
+    });
     crmDataLoaded=true;colCardLimits={};buildBoard();collectTags();renderAll();renderSavedViews();renderActiveChips();
     document.getElementById('statTotal').textContent=allLeads.length;
   },function(err){
