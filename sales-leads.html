@@ -1964,9 +1964,16 @@ function assignLeadRoundRobin(leadId, callback) {
 
 /* ═══ FIRESTORE LISTENER ═══ */
 function startListening() {
+  // Fenêtre glissante 30 jours : on charge tous les leads créés depuis 30 jours
+  // au lieu d'une limite fixe à 500 (qui devenait insuffisante avec >500 leads/semaine
+  // et faisait disparaître des leads récents de la vue Lead Live).
+  var thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  var cutoffTs = firebase.firestore.Timestamp.fromDate(thirtyDaysAgo);
+
   db.collection('leads')
+    .where('createdAt', '>=', cutoffTs)
     .orderBy('createdAt', 'desc')
-    .limit(500)
     .onSnapshot(function(snap) {
       var newLeads = [];
 
@@ -2000,6 +2007,10 @@ function startListening() {
         d.id = doc.id;
         // Skip les leads marqués comme fusionnés (via dedup ou repair scripts)
         if (d._merged === true) return;
+        // Skip les leads d'import historique : Lead Live ne montre que les leads
+        // qui arrivent vraiment en temps réel (formulaires, webhooks, self-booking).
+        // Les imports Bigin / migration suivi-client restent visibles dans le Pipeline CRM.
+        if (d.source === 'bigin_import' || d.source === 'migration_suivi_client') return;
         // Check if it's one of the new ones
         for (var i = 0; i < newLeads.length; i++) {
           if (newLeads[i].id === doc.id) { d._isNew = true; break; }
