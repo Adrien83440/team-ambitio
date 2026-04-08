@@ -35,7 +35,7 @@ var S2S={lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'nrp3',poube
 
 var CRIT_FIELDS=[
   {key:'stage',label:'Étape',type:'select',opts:STAGES.map(function(s){return{v:s.key,l:s.label};})},
-  {key:'assignedTo',label:'Gestionnaire (Setter)',type:'select',opts:[{v:'guillaume',l:'Guillaume Bilcke'},{v:'elodie',l:'Élodie Vidotto Siarri'}]},
+  {key:'assignedTo',label:'Gestionnaire (Setter)',type:'select',opts:[]/* rempli dynamiquement par rebuildTeamDependentConfig() */},
   {key:'type',label:'Origine du Prospect',type:'select',opts:[{v:'vsl_elite',l:'VSL'},{v:'self_booking',l:'Self Booking'},{v:'webinaire',l:'Webinaire'}]},
   {key:'nom',label:'Nom',type:'text'},
   {key:'email',label:'Email',type:'text'},
@@ -46,6 +46,79 @@ var CRIT_FIELDS=[
 ];
 var CRIT_OPS_TEXT=[{v:'contains',l:'Contient'},{v:'eq',l:'Est'},{v:'neq',l:"N'est pas"},{v:'empty',l:'Est vide'},{v:'notempty',l:"N'est pas vide"}];
 var CRIT_OPS_SELECT=[{v:'eq',l:'Est'},{v:'neq',l:"N'est pas"}];
+
+/* ═══ TEAM MEMBERS HELPERS ═══
+   Source de vérité : window.TEAM_MEMBERS_LIST (chargé via nav.js).
+   Ces helpers évitent les hardcodes 'guillaume'/'elodie' dans le reste du fichier. */
+function tmList(){return window.TEAM_MEMBERS_LIST||[];}
+function tmActive(){return window.TEAM_MEMBERS_ACTIVE||[];}
+function tmGet(slug){
+  if(!slug)return null;
+  if(window.TEAM_MEMBERS&&window.TEAM_MEMBERS[slug])return window.TEAM_MEMBERS[slug];
+  return null;
+}
+function tmName(slug){var m=tmGet(slug);return m?(m.shortName||m.displayName||slug):(slug||'');}
+function tmFullName(slug){var m=tmGet(slug);return m?(m.displayName||m.shortName||slug):(slug||'');}
+function tmColor(slug){var m=tmGet(slug);return m?(m.color||'#6b7280'):'#6b7280';}
+function tmIsActive(slug){var m=tmGet(slug);return m?(m.active!==false):false;}
+
+/* Helper hex → "r,g,b" pour styles inline */
+function hexToRgbCrm(hex){
+  var s=(hex||'').replace('#','');
+  if(s.length===3)s=s[0]+s[0]+s[1]+s[1]+s[2]+s[2];
+  if(s.length!==6)return '107,114,128';
+  var n=parseInt(s,16);
+  return ((n>>16)&255)+','+((n>>8)&255)+','+(n&255);
+}
+
+/* Génère les <option> d'un dropdown d'assignation. fullName=true affiche
+   displayName, false affiche shortName. Inclut les inactifs en grisé. */
+function buildAssignOptionsCrm(currentSlug,fullName){
+  var html='';
+  var list=tmList();
+  var actives=list.filter(function(m){return m.active!==false;});
+  var inactives=list.filter(function(m){return m.active===false;});
+  for(var i=0;i<actives.length;i++){
+    var m=actives[i];
+    var label=fullName?(m.displayName||m.shortName||m.slug):(m.shortName||m.slug);
+    html+='<option value="'+m.slug+'"'+(currentSlug===m.slug?' selected':'')+'>'+esc(label)+'</option>';
+  }
+  for(var j=0;j<inactives.length;j++){
+    var m2=inactives[j];
+    var isCur=currentSlug===m2.slug;
+    var label2=fullName?(m2.displayName||m2.shortName||m2.slug):(m2.shortName||m2.slug);
+    html+='<option value="'+m2.slug+'"'+(isCur?' selected':'')+(isCur?'':' disabled')+'>🔒 '+esc(label2)+' (inactif)</option>';
+  }
+  return html;
+}
+
+/* Recompose CRIT_FIELDS et DEFAULT_VIEWS dynamiquement à partir des membres
+   chargés. Appelé au démarrage et à chaque rechargement de TEAM_MEMBERS. */
+function rebuildTeamDependentConfig(){
+  // CRIT_FIELDS : option assignedTo dynamique (tous les membres, actifs + inactifs)
+  for(var i=0;i<CRIT_FIELDS.length;i++){
+    if(CRIT_FIELDS[i].key==='assignedTo'){
+      var opts=tmList().map(function(m){
+        var label=m.displayName||m.shortName||m.slug;
+        if(m.active===false)label='🔒 '+label+' (inactif)';
+        return {v:m.slug,l:label};
+      });
+      CRIT_FIELDS[i].opts=opts;
+      break;
+    }
+  }
+  // DEFAULT_VIEWS : retire les anciennes vues hardcodées par membre et regénère
+  DEFAULT_VIEWS=DEFAULT_VIEWS.filter(function(v){return !v._teamMemberView;});
+  tmActive().forEach(function(m){
+    DEFAULT_VIEWS.push({
+      id:'__'+m.slug+'__',
+      name:m.shortName||m.slug,
+      icon:'⭐',
+      criteria:[{field:'assignedTo',op:'eq',value:m.slug}],
+      _teamMemberView:true
+    });
+  });
+}
 
 /* ═══ STATE ═══ */
 var allLeads=[],filterSetter='all',filterSection='all',filterType='all',searchQuery='',draggedLeadId=null;
@@ -67,9 +140,8 @@ var DEFAULT_VIEWS=[
   {id:'__won__',name:'Closed Won',icon:'🏆',criteria:[{field:'stage',op:'eq',value:'closed_won_setting,closed_won_self'}]},
   {id:'__lost__',name:'Closed Lost',icon:'❌',criteria:[{field:'stage',op:'eq',value:'closed_lost'}]},
   {id:'__followup__',name:'Follow-Up',icon:'🔔',criteria:[{field:'stage',op:'eq',value:'follow_up_pm,follow_up_closing'}]},
-  {id:'__leads__',name:'Leads récents',icon:'✨',criteria:[{field:'stage',op:'eq',value:'lead'}]},
-  {id:'__guillaume__',name:'Guillaume',icon:'⭐',criteria:[{field:'assignedTo',op:'eq',value:'guillaume'}]},
-  {id:'__elodie__',name:'Élodie',icon:'⭐',criteria:[{field:'assignedTo',op:'eq',value:'elodie'}]}
+  {id:'__leads__',name:'Leads récents',icon:'✨',criteria:[{field:'stage',op:'eq',value:'lead'}]}
+  /* Les vues par membre sont injectées dynamiquement par rebuildTeamDependentConfig() */
 ];
 
 /* ═══ UTILS ═══ */
@@ -304,7 +376,12 @@ function renderPipeline(leads){
 
 function renderCard(l){
   var tk=l.type||'vsl_elite',badge=TB[tk]||'other',tl=LT[tk]||tk;
-  var setter=l.assignedTo||'',sl=setter==='guillaume'?'Guillaume':(setter==='elodie'?'Élodie':''),sc=setter==='guillaume'?'g':(setter==='elodie'?'e':'');
+  var setter=l.assignedTo||'';
+  var sl=setter?tmName(setter):'';
+  // Classe CSS = slug (la couleur sera appliquée via style inline pour les nouveaux membres)
+  var sc=setter||'';
+  var setterColor=setter?tmColor(setter):'';
+  var setterInactive=setter?!tmIsActive(setter):false;
   var hn=l.notesHistory&&l.notesHistory.length>0;
   var sL={nouveau:'Nouveau',appele:'Appelé',decroche:'Décroché',messagerie:'Msg',nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',rdv_pose:'RDV posé',pas_interesse:'Pas intéressé',disqualifie:'Disqualifié'};
   var ls=l.status||'nouveau';
@@ -316,7 +393,11 @@ function renderCard(l){
   if(isKanbanFieldVisible('createdAt')){var cd=getLeadDate(l);if(cd)h+='<div class="crm-card-phone" style="font-size:11px;color:var(--subtle-text)">'+fmtDate(cd)+'</div>';}
   h+='<div class="crm-card-bottom">';
   if(isKanbanFieldVisible('type'))h+='<span class="crm-card-badge '+badge+'">'+tl+'</span>';
-  if(isKanbanFieldVisible('assignedTo')&&sl)h+='<span class="crm-card-setter '+sc+'">'+sl+'</span>';
+  if(isKanbanFieldVisible('assignedTo')&&sl){
+    var styleAttr='';
+    if(setterColor){var rgb=hexToRgbCrm(setterColor);styleAttr='background:rgba('+rgb+',0.10);color:'+setterColor+(setterInactive?';opacity:.55':'');}
+    h+='<span class="crm-card-setter" style="'+styleAttr+'">'+(setterInactive?'🔒 ':'')+esc(sl)+'</span>';
+  }
   if(isKanbanFieldVisible('status')&&ls!=='nouveau')h+='<span class="crm-card-setter" style="color:var(--blue)">📞 '+(sL[ls]||ls)+'</span>';
   if(isKanbanFieldVisible('utm')&&l.utm)h+='<span class="crm-card-setter" style="color:var(--purple);font-size:9px">🔗 '+esc(l.utm)+'</span>';
   if(isKanbanFieldVisible('closeur')&&l.closeur)h+='<span class="crm-card-setter" style="color:var(--gold);font-size:9px">🎯 '+esc(l.closeur)+'</span>';
@@ -345,7 +426,13 @@ function renderList(leads){
       if(col.key==='nom'){h+='<td style="font-family:var(--fh);font-weight:700">'+esc(val||'—')+'</td>';}
       else if(col.key==='telephone'){h+='<td style="font-family:var(--fm);color:var(--muted)">'+esc(val)+'</td>';}
       else if(col.key==='stage'){var st=SM[val||'lead']||STAGES[0];h+='<td><span class="list-stage-badge" style="background:'+st.color+'14;color:'+st.color+'"><span class="list-stage-dot" style="background:'+st.color+'"></span>'+esc(st.label)+'</span></td>';}
-      else if(col.key==='assignedTo'){var sl=val==='guillaume'?'Guillaume':(val==='elodie'?'Élodie':'—');h+='<td><span class="list-setter-badge" style="background:'+(val==='guillaume'?'rgba(239,68,68,0.1);color:#fca5a5':'rgba(96,165,250,0.1);color:#93c5fd')+'">'+esc(sl)+'</span></td>';}
+      else if(col.key==='assignedTo'){
+        var sl=val?tmName(val):'—';
+        var col2=val?tmColor(val):'#6b7280';
+        var rgb2=hexToRgbCrm(col2);
+        var inactive2=val?!tmIsActive(val):false;
+        h+='<td><span class="list-setter-badge" style="background:rgba('+rgb2+',0.10);color:'+col2+(inactive2?';opacity:.55':'')+'">'+(inactive2?'🔒 ':'')+esc(sl)+'</span></td>';
+      }
       else if(col.key==='type'){var tl=LT[val]||val,tb=TB[val]||'other';h+='<td><span class="list-type-badge" style="background:'+(tb==='vsl'?'rgba(167,139,250,0.12);color:#c4b5fd':'rgba(245,158,11,0.12);color:#fcd34d')+'">'+tl+'</span></td>';}
       else if(col.key==='createdAt'||col.key==='updatedAt'){h+='<td style="font-family:var(--fm);font-size:11px;color:var(--muted)">'+fmtDate(col.key==='createdAt'?getLeadDate(l):val)+'</td>';}
       else{h+='<td style="color:var(--muted)">'+esc(String(val))+'</td>';}
@@ -366,7 +453,7 @@ function renderSheet(leads){
       if(col.key==='_cb'){h+='<td style="width:40px;padding:5px 8px;text-align:center"><input type="checkbox" class="row-cb" data-cbid="'+l.id+'"'+(sel?' checked':'')+'/></td>';}
       else if(col.key==='_num'){h+='<td class="sheet-row-num">'+(si+idx+1)+'</td>';}
       else if(col.edit==='select'&&col.key==='stage'){h+='<td><select class="sheet-cell-select" data-sf="stage">';STAGES.forEach(function(s){h+='<option value="'+s.key+'"'+((l.stage||'lead')===s.key?' selected':'')+'>'+esc(s.label)+'</option>';});h+='</select></td>';}
-      else if(col.edit==='select'&&col.key==='assignedTo'){h+='<td><select class="sheet-cell-select" data-sf="assignedTo"><option value="">—</option><option value="guillaume"'+(l.assignedTo==='guillaume'?' selected':'')+'>Guillaume</option><option value="elodie"'+(l.assignedTo==='elodie'?' selected':'')+'>Élodie</option></select></td>';}
+      else if(col.edit==='select'&&col.key==='assignedTo'){h+='<td><select class="sheet-cell-select" data-sf="assignedTo"><option value="">—</option>'+buildAssignOptionsCrm(l.assignedTo)+'</select></td>';}
       else if(col.edit==='select'&&col.key==='type'){h+='<td><select class="sheet-cell-select" data-sf="type"><option value="vsl_elite"'+(l.type==='vsl_elite'?' selected':'')+'>VSL</option><option value="self_booking"'+(l.type==='self_booking'?' selected':'')+'>Self Booking</option></select></td>';}
       else if(col.edit){h+='<td><input class="sheet-cell" data-sf="'+col.key+'" value="'+escA(l[col.key]||'')+'" placeholder="—"/></td>';}
       else{h+='<td style="padding:5px 8px;font-size:11px;color:var(--muted)">'+esc(String(l[col.key]||''))+'</td>';}
@@ -541,7 +628,9 @@ document.getElementById('bulkStageDD').addEventListener('click',function(e){
 });
 document.getElementById('bulkSetterBtn').addEventListener('click',function(){
   var ids=Object.keys(selectedIds).filter(function(k){return selectedIds[k];});if(!ids.length)return;
-  var setter=prompt('Setter (guillaume / elodie) :');if(!setter||['guillaume','elodie'].indexOf(setter.toLowerCase())<0){toast('Setter invalide');return;}
+  var slugs=tmActive().map(function(m){return m.slug;});
+  var setter=prompt('Setter ('+slugs.join(' / ')+') :');
+  if(!setter||slugs.indexOf(setter.toLowerCase())<0){toast('Setter invalide');return;}
   setter=setter.toLowerCase();var batch=db.batch();
   ids.forEach(function(id){batch.update(db.collection('leads').doc(id),{assignedTo:setter,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===id){allLeads[i].assignedTo=setter;break;}}});
   batch.commit().then(function(){toast('✅ '+ids.length+' → '+setter);clearSelection();renderAll();});
@@ -584,13 +673,13 @@ function saveSheetRow(tr){var lid=tr.dataset.sid,upd={};tr.querySelectorAll('[da
 
 /* ═══ QUICK VIEW ═══ */
 var qvTimer=null,qvLid=null;
-function openQV(lid,anchor){var lead;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){lead=allLeads[i];break;}}if(!lead)return;qvLid=lid;var sc=lead.assignedTo==='guillaume'?'#ef4444':'#60a5fa',ini=(lead.nom||'?')[0].toUpperCase();var h='<div class="qv-head"><div class="qv-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><span class="qv-name">'+esc(lead.nom||'—')+'</span><button class="qv-close" id="qvClose">✕</button></div><div class="qv-body">';h+=qvF('Nom','nom',lead.nom)+qvF('Téléphone','telephone',lead.telephone)+qvF('Email','email',lead.email);h+='<div class="qv-field"><span class="qv-field-label">Attribué</span><select class="qv-select" data-qf="assignedTo"><option value="guillaume"'+(lead.assignedTo==='guillaume'?' selected':'')+'>Guillaume</option><option value="elodie"'+(lead.assignedTo==='elodie'?' selected':'')+'>Élodie</option></select></div><div class="qv-sep"></div>';h+=qvF('Source','utm',lead.utm)+qvF('Secteur','secteur',lead.secteur)+qvF('CA','ca',lead.ca)+qvF('Défi','defi',lead.defi)+'<div class="qv-sep"></div>'+qvF('Closeur','closeur',lead.closeur)+qvF('Setting','setting',lead.setting);h+='<div class="qv-saved" id="qvSaved">✅ Sauvegardé</div><a class="qv-link" href="sales-contact.html?id='+lid+'">↗ Fiche complète</a></div>';var p=document.getElementById('qvPanel');p.innerHTML=h;var r=anchor.getBoundingClientRect(),left=r.right+8;if(left+320>window.innerWidth)left=r.left-328;if(left<8)left=8;var top=r.top-20;if(top+400>window.innerHeight)top=window.innerHeight-420;if(top<8)top=8;p.style.left=left+'px';p.style.top=top+'px';p.style.display='';document.getElementById('qvOverlay').classList.add('open');document.getElementById('qvClose').onclick=closeQV;document.getElementById('qvOverlay').onclick=closeQV;p.addEventListener('input',function(e){if(e.target.closest('[data-qf]')){if(qvTimer)clearTimeout(qvTimer);qvTimer=setTimeout(saveQV,2000);}});p.addEventListener('change',function(e){if(e.target.closest('[data-qf]'))saveQV();});}
+function openQV(lid,anchor){var lead;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){lead=allLeads[i];break;}}if(!lead)return;qvLid=lid;var sc=lead.assignedTo?tmColor(lead.assignedTo):'#6b7280',ini=(lead.nom||'?')[0].toUpperCase();var h='<div class="qv-head"><div class="qv-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><span class="qv-name">'+esc(lead.nom||'—')+'</span><button class="qv-close" id="qvClose">✕</button></div><div class="qv-body">';h+=qvF('Nom','nom',lead.nom)+qvF('Téléphone','telephone',lead.telephone)+qvF('Email','email',lead.email);h+='<div class="qv-field"><span class="qv-field-label">Attribué</span><select class="qv-select" data-qf="assignedTo"><option value="">—</option>'+buildAssignOptionsCrm(lead.assignedTo)+'</select></div><div class="qv-sep"></div>';h+=qvF('Source','utm',lead.utm)+qvF('Secteur','secteur',lead.secteur)+qvF('CA','ca',lead.ca)+qvF('Défi','defi',lead.defi)+'<div class="qv-sep"></div>'+qvF('Closeur','closeur',lead.closeur)+qvF('Setting','setting',lead.setting);h+='<div class="qv-saved" id="qvSaved">✅ Sauvegardé</div><a class="qv-link" href="sales-contact.html?id='+lid+'">↗ Fiche complète</a></div>';var p=document.getElementById('qvPanel');p.innerHTML=h;var r=anchor.getBoundingClientRect(),left=r.right+8;if(left+320>window.innerWidth)left=r.left-328;if(left<8)left=8;var top=r.top-20;if(top+400>window.innerHeight)top=window.innerHeight-420;if(top<8)top=8;p.style.left=left+'px';p.style.top=top+'px';p.style.display='';document.getElementById('qvOverlay').classList.add('open');document.getElementById('qvClose').onclick=closeQV;document.getElementById('qvOverlay').onclick=closeQV;p.addEventListener('input',function(e){if(e.target.closest('[data-qf]')){if(qvTimer)clearTimeout(qvTimer);qvTimer=setTimeout(saveQV,2000);}});p.addEventListener('change',function(e){if(e.target.closest('[data-qf]'))saveQV();});}
 function qvF(l,k,v){return'<div class="qv-field"><span class="qv-field-label">'+esc(l)+'</span><input class="qv-field-input" data-qf="'+k+'" value="'+escA(v||'')+'" placeholder="—"/></div>';}
 function saveQV(){if(!qvLid)return;var p=document.getElementById('qvPanel'),fs=['nom','telephone','email','assignedTo','utm','secteur','ca','defi','closeur','setting'],upd={};fs.forEach(function(f){var el=p.querySelector('[data-qf="'+f+'"]');if(el)upd[f]=el.value.trim();});upd.updatedAt=firebase.firestore.FieldValue.serverTimestamp();for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===qvLid){for(var k in upd){if(k!=='updatedAt')allLeads[i][k]=upd[k];}break;}}db.collection('leads').doc(qvLid).update(upd).then(function(){var m=document.getElementById('qvSaved');if(m){m.style.opacity='1';setTimeout(function(){m.style.opacity='0';},1500);}renderAll();});}
 function closeQV(){document.getElementById('qvPanel').style.display='none';document.getElementById('qvOverlay').classList.remove('open');qvLid=null;}
 
 /* ═══ MODAL ═══ */
-function openModal(lid){var lead;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){lead=allLeads[i];break;}}if(!lead)return;var sc=lead.assignedTo==='guillaume'?'#ef4444':'#60a5fa',ini=(lead.nom||'?')[0].toUpperCase();var h='<div class="crm-modal-head"><div class="crm-modal-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><div class="crm-modal-name">'+esc(lead.nom||'—')+'</div><a href="sales-contact.html?id='+lid+'" style="padding:6px 12px;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">↗ Fiche</a><button class="crm-modal-close" data-action="closeModal">✕</button></div><div class="crm-modal-body">';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📋 Informations</div>';h+=mF('Nom','nom',lead.nom)+mF('Téléphone','telephone',lead.telephone)+mF('Email','email',lead.email)+mF('Source','utm',lead.utm);h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Attribué à</span><select class="crm-modal-select" data-medit="assignedTo"><option value="guillaume"'+(lead.assignedTo==='guillaume'?' selected':'')+'>Guillaume Bilcke</option><option value="elodie"'+(lead.assignedTo==='elodie'?' selected':'')+'>Élodie Vidotto Siarri</option></select></div>';h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Type</span><select class="crm-modal-select" data-medit="type"><option value="vsl_elite"'+(lead.type==='vsl_elite'?' selected':'')+'>VSL ÉLITE</option><option value="self_booking"'+(lead.type==='self_booking'?' selected':'')+'>Self Booking</option></select></div>';h+=mF('Secteur','secteur',lead.secteur)+mF('CA actuel','ca',lead.ca)+mF('Défi','defi',lead.defi);h+='<div class="crm-modal-saved" id="modalSaved">✅ Sauvegardé</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🏷 Tags</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px" id="modalTagsWrap">';var leadTags=lead.tags||[];leadTags.forEach(function(t){if(t)h+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:'+tagColor(t)+'18;color:'+tagColor(t)+';border:1px solid '+tagColor(t)+'30">'+esc(t)+' <span style="cursor:pointer;opacity:0.6" data-action="removeTag" data-tagval="'+escA(t)+'">✕</span></span>';});h+='</div><div style="display:flex;gap:6px"><input class="crm-modal-input" id="modalTagInput" placeholder="Ajouter un tag..." style="flex:1;font-size:11px;padding:6px 10px"/><button style="padding:6px 12px;border:none;border-radius:8px;background:rgba(167,139,250,0.1);color:#c4b5fd;font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer" data-action="addTag">+</button></div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🔀 Étape pipeline</div><div class="crm-stage-pills">';STAGES.forEach(function(s){var isA=(lead.stage||'lead')===s.key;h+='<span class="crm-stage-pill'+(isA?' active':'')+'" data-action="setStage" data-stage="'+s.key+'" style="'+(isA?'color:'+s.color+';border-color:'+s.color+';background:'+s.color+'18':'')+'">'+esc(s.label)+'</span>';});h+='</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📝 Notes</div>';var notes=lead.notesHistory||[];for(var ni=notes.length-1;ni>=0;ni--){h+='<div class="crm-note-item"><div class="crm-note-date">'+esc(notes[ni].date||'')+'</div><div class="crm-note-text">'+esc(notes[ni].text||'')+'</div></div>';}h+='<div class="crm-note-add-row"><textarea class="crm-note-input" id="modalNoteInput" placeholder="Ajouter une note..."></textarea><button class="crm-note-add-btn" data-action="addNote">+ Ajouter</button></div></div>';h+='<div class="crm-modal-section">';if(lead.telephone)h+='<a href="tel:'+lead.telephone.replace(/\s/g,'')+'" style="display:block;text-align:center;padding:10px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);border-radius:10px;color:#34d399;font-weight:700;font-size:13px;text-decoration:none;margin-bottom:8px">📞 Appeler</a>';if(lead.email)h+='<a href="mailto:'+escA(lead.email)+'" style="display:block;text-align:center;padding:10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);border-radius:10px;color:#60a5fa;font-weight:700;font-size:13px;text-decoration:none">✉️ Email</a>';h+='</div></div>';document.getElementById('modalPanel').innerHTML=h;document.getElementById('modalBg').classList.add('open');document.getElementById('modalBg')._leadId=lid;}
+function openModal(lid){var lead;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){lead=allLeads[i];break;}}if(!lead)return;var sc=lead.assignedTo?tmColor(lead.assignedTo):'#6b7280',ini=(lead.nom||'?')[0].toUpperCase();var h='<div class="crm-modal-head"><div class="crm-modal-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><div class="crm-modal-name">'+esc(lead.nom||'—')+'</div><a href="sales-contact.html?id='+lid+'" style="padding:6px 12px;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">↗ Fiche</a><button class="crm-modal-close" data-action="closeModal">✕</button></div><div class="crm-modal-body">';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📋 Informations</div>';h+=mF('Nom','nom',lead.nom)+mF('Téléphone','telephone',lead.telephone)+mF('Email','email',lead.email)+mF('Source','utm',lead.utm);h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Attribué à</span><select class="crm-modal-select" data-medit="assignedTo"><option value="">— Non attribué —</option>'+buildAssignOptionsCrm(lead.assignedTo,true)+'</select></div>';h+='<div class="crm-modal-field"><span class="crm-modal-field-label">Type</span><select class="crm-modal-select" data-medit="type"><option value="vsl_elite"'+(lead.type==='vsl_elite'?' selected':'')+'>VSL ÉLITE</option><option value="self_booking"'+(lead.type==='self_booking'?' selected':'')+'>Self Booking</option></select></div>';h+=mF('Secteur','secteur',lead.secteur)+mF('CA actuel','ca',lead.ca)+mF('Défi','defi',lead.defi);h+='<div class="crm-modal-saved" id="modalSaved">✅ Sauvegardé</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🏷 Tags</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px" id="modalTagsWrap">';var leadTags=lead.tags||[];leadTags.forEach(function(t){if(t)h+='<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;background:'+tagColor(t)+'18;color:'+tagColor(t)+';border:1px solid '+tagColor(t)+'30">'+esc(t)+' <span style="cursor:pointer;opacity:0.6" data-action="removeTag" data-tagval="'+escA(t)+'">✕</span></span>';});h+='</div><div style="display:flex;gap:6px"><input class="crm-modal-input" id="modalTagInput" placeholder="Ajouter un tag..." style="flex:1;font-size:11px;padding:6px 10px"/><button style="padding:6px 12px;border:none;border-radius:8px;background:rgba(167,139,250,0.1);color:#c4b5fd;font-family:var(--fb);font-size:11px;font-weight:700;cursor:pointer" data-action="addTag">+</button></div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">🔀 Étape pipeline</div><div class="crm-stage-pills">';STAGES.forEach(function(s){var isA=(lead.stage||'lead')===s.key;h+='<span class="crm-stage-pill'+(isA?' active':'')+'" data-action="setStage" data-stage="'+s.key+'" style="'+(isA?'color:'+s.color+';border-color:'+s.color+';background:'+s.color+'18':'')+'">'+esc(s.label)+'</span>';});h+='</div></div>';h+='<div class="crm-modal-section"><div class="crm-modal-stitle">📝 Notes</div>';var notes=lead.notesHistory||[];for(var ni=notes.length-1;ni>=0;ni--){h+='<div class="crm-note-item"><div class="crm-note-date">'+esc(notes[ni].date||'')+'</div><div class="crm-note-text">'+esc(notes[ni].text||'')+'</div></div>';}h+='<div class="crm-note-add-row"><textarea class="crm-note-input" id="modalNoteInput" placeholder="Ajouter une note..."></textarea><button class="crm-note-add-btn" data-action="addNote">+ Ajouter</button></div></div>';h+='<div class="crm-modal-section">';if(lead.telephone)h+='<a href="tel:'+lead.telephone.replace(/\s/g,'')+'" style="display:block;text-align:center;padding:10px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);border-radius:10px;color:#34d399;font-weight:700;font-size:13px;text-decoration:none;margin-bottom:8px">📞 Appeler</a>';if(lead.email)h+='<a href="mailto:'+escA(lead.email)+'" style="display:block;text-align:center;padding:10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);border-radius:10px;color:#60a5fa;font-weight:700;font-size:13px;text-decoration:none">✉️ Email</a>';h+='</div></div>';document.getElementById('modalPanel').innerHTML=h;document.getElementById('modalBg').classList.add('open');document.getElementById('modalBg')._leadId=lid;}
 function mF(l,k,v){return'<div class="crm-modal-field"><span class="crm-modal-field-label">'+esc(l)+'</span><input class="crm-modal-input" data-medit="'+k+'" value="'+escA(v||'')+'"/></div>';}
 
 document.getElementById('modalBg').addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');if(e.target.closest('[data-action="closeModal"]'))this.classList.remove('open');var sp=e.target.closest('[data-action="setStage"]');if(sp){var ns=sp.dataset.stage,lid=this._leadId;for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){allLeads[i].stage=ns;break;}}document.querySelectorAll('.crm-stage-pill').forEach(function(p){p.classList.remove('active');p.style.color='';p.style.borderColor='';p.style.background='';});sp.classList.add('active');var sO=SM[ns];if(sO){sp.style.color=sO.color;sp.style.borderColor=sO.color;sp.style.background=sO.color+'18';}renderAll();var upd={stage:ns,updatedAt:firebase.firestore.FieldValue.serverTimestamp()};if(S2S[ns])upd.status=S2S[ns];if(ns==='closed_won_setting'||ns==='closed_won_self'){upd.isClient=true;upd.clientSince=firebase.firestore.FieldValue.serverTimestamp();}db.collection('leads').doc(lid).update(upd).then(function(){toast('→ '+(sO?sO.label:ns));});}var nb=e.target.closest('[data-action="addNote"]');if(nb){var inp=document.getElementById('modalNoteInput');var txt=inp?inp.value.trim():'';if(!txt)return;var lid2=this._leadId,nn={text:txt,date:fmtNow()};for(var j=0;j<allLeads.length;j++){if(allLeads[j].id===lid2){if(!allLeads[j].notesHistory)allLeads[j].notesHistory=[];allLeads[j].notesHistory.push(nn);db.collection('leads').doc(lid2).update({notesHistory:allLeads[j].notesHistory,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('✅ Note ajoutée');});break;}}openModal(lid2);}var addTagBtn=e.target.closest('[data-action="addTag"]');if(addTagBtn){var tagInput=document.getElementById('modalTagInput');var newTag=tagInput?tagInput.value.trim():'';if(!newTag)return;var lid3=this._leadId;for(var x=0;x<allLeads.length;x++){if(allLeads[x].id===lid3){if(!allLeads[x].tags)allLeads[x].tags=[];if(allLeads[x].tags.indexOf(newTag)<0){allLeads[x].tags.push(newTag);db.collection('leads').doc(lid3).update({tags:allLeads[x].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag ajouté');collectTags();});}break;}}saveCustomTag(newTag);openModal(lid3);}var rmTag=e.target.closest('[data-action="removeTag"]');if(rmTag){var tv=rmTag.dataset.tagval;var lid4=this._leadId;for(var y=0;y<allLeads.length;y++){if(allLeads[y].id===lid4){if(allLeads[y].tags){var ti=allLeads[y].tags.indexOf(tv);if(ti>=0)allLeads[y].tags.splice(ti,1);db.collection('leads').doc(lid4).update({tags:allLeads[y].tags,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){toast('🏷 Tag retiré');collectTags();});}break;}}openModal(lid4);}});
@@ -1970,4 +2059,18 @@ document.getElementById('fbArchiveToggle').addEventListener('click',function(e){
 });
 
 /* ═══ AUTH ═══ */
+/* ═══ TEAM MEMBERS — initialisation et re-render ═══ */
+function onTeamMembersReadyCrm(){
+  rebuildTeamDependentConfig();
+  // Si les leads sont déjà chargés, force un re-render complet
+  if(crmDataLoaded){
+    if(typeof renderSavedViews==='function')renderSavedViews();
+    if(typeof renderAll==='function')renderAll();
+  }
+}
+window.addEventListener('team-members-loaded',onTeamMembersReadyCrm);
+if(typeof window.loadTeamMembers==='function'){
+  window.loadTeamMembers().then(onTeamMembersReadyCrm);
+}
+
 firebase.auth().onAuthStateChanged(function(user){if(user){db.collection('users').doc(user.uid).get().then(function(snap){var d=snap.exists?snap.data():{};window._currentRole=d.role||'sales';window._currentUserName=user.displayName||user.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);startLeadsListener();loadSavedViews();}).catch(function(){startLeadsListener();loadSavedViews();});}else{var board=document.getElementById('crmBoard');if(board)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--muted);font-size:13px;font-weight:600">🔒 Connexion requise</div>';}});
