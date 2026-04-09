@@ -508,4 +508,7 @@ exports.onWebhookInbox = functions.firestore
       try { await snap.ref.update({ status: "error", error: e.message }); } catch (e2) {}
     }
     return null;
+     }
+     // ═══ DIALER MODULE (Step 5 Vague 1) ═══
+Object.assign(exports, require('./dialerFunctions'));
   });
