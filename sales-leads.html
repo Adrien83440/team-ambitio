@@ -2726,17 +2726,24 @@ setTimeout(checkFollowUpReminders, 3000);
 </script>
 
 <script>
-// App mode: skip nav, force sales role
+// App mode: hide sidebar, force sales role — BUT still load nav.js so that
+// TEAM_MEMBERS / loadTeamMembers / getTeamMember helpers are available
+// (otherwise lead cards display "?" instead of setter avatars on mobile).
 var isAppMode = new URLSearchParams(window.location.search).has('app');
 if (isAppMode) {
   localStorage.setItem('ambitio_role', 'sales');
   window._currentRole = 'sales';
+  window._hideSidebar = true; // nav.js can read this flag to skip sidebar DOM injection
   document.body.style.paddingLeft = '0';
-} else {
-  var navScript = document.createElement('script');
-  navScript.src = 'nav.js';
-  document.body.appendChild(navScript);
+  // Also hide any existing sidebar via CSS as a safety net
+  var hideStyle = document.createElement('style');
+  hideStyle.textContent = '#ambitio-nav,#ambitio-sidebar,.sidebar,.side-nav{display:none !important;}';
+  document.head.appendChild(hideStyle);
 }
+// Always load nav.js — it's needed for team members, not just the sidebar
+var navScript = document.createElement('script');
+navScript.src = 'nav.js';
+document.body.appendChild(navScript);
 </script>
 </body>
 </html>
