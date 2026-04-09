@@ -742,7 +742,7 @@ function renderMemberPills() {
       container.querySelectorAll('.ld-member-pill').forEach(function (x) { x.classList.remove('active'); });
       p.classList.add('active');
       filterMember = p.dataset.member;
-      render();
+      renderFeed();
     });
   });
   // Si on est en mode personnel, sélectionner la pill correspondante
@@ -2255,13 +2255,15 @@ function startBookingBridge() {
 function onTeamMembersReady() {
   refreshSettersFromTeamMembers();
   injectTeamMemberStyles();
-  // Si les leads sont déjà chargés, force un re-render complet
+  // Re-render les pills membres (leur contenu dépend de TEAM_MEMBERS_ACTIVE)
+  if (typeof renderMemberPills === 'function') renderMemberPills();
+  // Si les leads sont déjà chargés, force un re-render complet du feed
+  // (pour que chaque carte affiche l'avatar/couleur/nom du bon setter)
   if (typeof allLeads !== 'undefined' && allLeads && allLeads.length) {
-    if (typeof render === 'function') render();
-  } else {
-    // Sinon mettre à jour au moins les compteurs vides et les pills
-    if (typeof updateCounts === 'function') updateCounts();
+    if (typeof renderFeed === 'function') renderFeed();
   }
+  // Recalcule toujours les compteurs (ils dépendent des slugs TEAM_MEMBERS_LIST)
+  if (typeof updateCounts === 'function') updateCounts();
   // Mettre à jour le dropdown de création s'il existe
   var clAssign = document.getElementById('clAssign');
   if (clAssign && typeof buildAssignSelectOptions === 'function') {
