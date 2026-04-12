@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Numéros · Ambitio</title>
+  <link rel="stylesheet" href="sales.css">
+  <link rel="stylesheet" href="admin-numbers.css">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div id="nav-container"></div>
+
+  <main class="an-main">
+    <header class="an-header">
+      <div>
+        <h1 class="an-title">Numéros de téléphone <span class="an-flag" aria-label="France">🇫🇷</span></h1>
+        <p class="an-subtitle">Gestion des numéros Twilio rattachés à l'équipe</p>
+      </div>
+      <button id="btn-sync" class="an-btn an-btn-secondary">
+        <span class="an-btn-icon">↻</span> Synchroniser depuis Twilio
+      </button>
+    </header>
+
+    <!-- Section 1 : Stats globales -->
+    <section class="an-section an-stats-grid">
+      <div class="an-stat-card">
+        <div class="an-stat-label">Numéros actifs</div>
+        <div class="an-stat-value" id="stat-total">—</div>
+      </div>
+      <div class="an-stat-card">
+        <div class="an-stat-label">Locaux</div>
+        <div class="an-stat-value" id="stat-local">—</div>
+      </div>
+      <div class="an-stat-card">
+        <div class="an-stat-label">Mobiles</div>
+        <div class="an-stat-value" id="stat-mobile">—</div>
+      </div>
+      <div class="an-stat-card">
+        <div class="an-stat-label">Coût mensuel</div>
+        <div class="an-stat-value" id="stat-cost">—</div>
+      </div>
+    </section>
+
+    <!-- Section 2 : Liste des numéros actifs -->
+    <section class="an-section">
+      <h2 class="an-section-title">Numéros actifs</h2>
+      <div class="an-table-wrap">
+        <table class="an-table">
+          <thead>
+            <tr>
+              <th>Numéro</th>
+              <th>Type</th>
+              <th>Nom convivial</th>
+              <th>Assigné à</th>
+              <th>Localité</th>
+              <th class="an-th-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="numbers-tbody">
+            <tr><td colspan="6" class="an-empty">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 3 : Recherche -->
+    <section class="an-section">
+      <h2 class="an-section-title">Acheter un nouveau numéro</h2>
+      <form id="search-form" class="an-search-form">
+        <div class="an-field">
+          <label for="f-country">Pays</label>
+          <select id="f-country" name="country">
+            <option value="FR" selected>🇫🇷 France</option>
+            <option value="BE">🇧🇪 Belgique</option>
+            <option value="CH">🇨🇭 Suisse</option>
+            <option value="LU">🇱🇺 Luxembourg</option>
+          </select>
+        </div>
+        <div class="an-field">
+          <label for="f-type">Type</label>
+          <select id="f-type" name="type">
+            <option value="local">Local</option>
+            <option value="mobile">Mobile</option>
+            <option value="national">National</option>
+            <option value="tollFree">Numéro vert</option>
+          </select>
+        </div>
+        <div class="an-field">
+          <label for="f-area">Indicatif</label>
+          <input id="f-area" name="areaCode" type="text" placeholder="04, 01, 09…" maxlength="4">
+        </div>
+        <div class="an-field">
+          <label for="f-contains">Contient</label>
+          <input id="f-contains" name="contains" type="text" placeholder="411, 1234…">
+        </div>
+        <button type="submit" class="an-btn an-btn-primary">Rechercher</button>
+      </form>
+    </section>
+
+    <!-- Section 4 : Résultats de recherche -->
+    <section class="an-section" id="results-section" hidden>
+      <h2 class="an-section-title">Résultats disponibles</h2>
+      <div class="an-table-wrap">
+        <table class="an-table">
+          <thead>
+            <tr>
+              <th>Numéro</th>
+              <th>Localité</th>
+              <th>Capacités</th>
+              <th>Prix mensuel</th>
+              <th class="an-th-actions">Action</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modale d'achat -->
+  <div id="purchase-modal" class="an-modal" hidden>
+    <div class="an-modal-content">
+      <h3>Confirmer l'achat</h3>
+      <p>Numéro : <strong id="pm-number"></strong></p>
+      <div class="an-field">
+        <label for="pm-friendly">Nom convivial</label>
+        <input id="pm-friendly" type="text" placeholder="Ex: Adrien&Emily">
+      </div>
+      <div class="an-field">
+        <label for="pm-assigned">Assigner à</label>
+        <select id="pm-assigned"></select>
+      </div>
+      <div class="an-modal-actions">
+        <button class="an-btn an-btn-ghost" id="pm-cancel">Annuler</button>
+        <button class="an-btn an-btn-primary" id="pm-confirm">Acheter</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container" class="an-toast-container"></div>
+
+  <script src="nav.js"></script>
+  <script src="sales-dialer-api.js"></script>
+  <script src="admin-numbers.js"></script>
+</body>
+</html>

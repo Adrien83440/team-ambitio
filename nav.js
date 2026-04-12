@@ -12,25 +12,26 @@
   /* ─── Permission keys ─── */
   const PERM_KEYS = [
     'coaching_clients','coaching_dashboard','coaching_communication',
-    'sales_crm','sales_dashboard','sales_saisie',
+    'sales_crm','sales_dashboard','sales_saisie','sales_dialer',
     'sales_equipe','sales_commissions','sales_projections','booking'
   ];
 
   const ROLE_DEFAULTS = {
     admin: { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
-             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',
+             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_dialer:'edit',
              sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit' },
     coach: { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
-             sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',
+             sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_dialer:'none',
              sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none' },
     sales: { coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',
-             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',
+             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_dialer:'edit',
              sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit' },
   };
 
   const PERM_LABELS = {
     coaching_clients:'Clients (Coaching)',coaching_dashboard:'Dashboard (Coaching)',coaching_communication:'Communication',
     sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'Setting / Closing / EOD',
+    sales_dialer:'Dialer',
     sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking',alteoforms:'AlteoForms'
   };
 
@@ -54,8 +55,10 @@
       { id: 'sales-equipe',       icon: '👥', label: 'Équipe Sales', href: 'sales-equipe.html' },
     ]},
     { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
+    { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
     { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: '_admin' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
+    { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: '_admin' },
   ];
 
