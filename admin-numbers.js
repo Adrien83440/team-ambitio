@@ -213,8 +213,16 @@
     select.innerHTML = '<option value="">— Non assigné —</option>' +
       eligible.map(m => {
         // On retrouve l'UID Firebase via l'email du team member
-        const matchUser = usersCache.find(u => u.email && m.email && u.email.toLowerCase() === m.email.toLowerCase());
-        const uid = matchUser ? matchUser.uid : '';
+        // Priorité 1 : champ firebaseUid explicite sur le team member (le plus fiable)
+        // Priorité 2 : matching par email (fallback pour compatibilité)
+        let matchUser = null;
+        if (m.firebaseUid) {
+          matchUser = usersCache.find(u => u.uid === m.firebaseUid);
+        }
+        if (!matchUser && m.email) {
+          matchUser = usersCache.find(u => u.email && u.email.toLowerCase() === m.email.toLowerCase());
+        }
+        const uid = matchUser ? matchUser.uid : (m.firebaseUid || '');
         return `<option value="${esc(m.slug)}" data-uid="${esc(uid)}" data-role="${esc(matchUser ? matchUser.role : '')}">${esc(m.fullName || m.shortName || m.slug)} (${esc(m.role || '')})</option>`;
       }).join('');
 
@@ -297,8 +305,14 @@
     const select = $('#pm-assigned');
     select.innerHTML = '<option value="">— Non assigné —</option>' +
       eligible.map(m => {
-        const matchUser = usersCache.find(u => u.email && m.email && u.email.toLowerCase() === m.email.toLowerCase());
-        const uid = matchUser ? matchUser.uid : '';
+        let matchUser = null;
+        if (m.firebaseUid) {
+          matchUser = usersCache.find(u => u.uid === m.firebaseUid);
+        }
+        if (!matchUser && m.email) {
+          matchUser = usersCache.find(u => u.email && u.email.toLowerCase() === m.email.toLowerCase());
+        }
+        const uid = matchUser ? matchUser.uid : (m.firebaseUid || '');
         const sel = (m.slug === n.assignedToSlug) ? ' selected' : '';
         return `<option value="${esc(m.slug)}" data-uid="${esc(uid)}" data-role="${esc(matchUser ? matchUser.role : '')}"${sel}>${esc(m.fullName || m.shortName || m.slug)} (${esc(m.role || '')})</option>`;
       }).join('');
