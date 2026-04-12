@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dialer · Ambitio</title>
+  <link rel="stylesheet" href="sales.css">
+  <link rel="stylesheet" href="sales-dialer.css">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+  <script src="https://sdk.twilio.com/js/voice/2.11.3/twilio.min.js"></script>
+</head>
+<body>
+  <div id="nav-container"></div>
+
+  <main class="sd-main">
+    <!-- ─── Colonne gauche : historique ─── -->
+    <aside class="sd-col sd-col-left">
+      <header class="sd-col-head">
+        <h2>Historique</h2>
+        <button id="sd-history-refresh" class="sd-icon-btn" title="Rafraîchir">↻</button>
+      </header>
+      <div class="sd-history-filters">
+        <button class="sd-chip sd-chip-active" data-filter="all">Tous</button>
+        <button class="sd-chip" data-filter="outbound">Sortants</button>
+        <button class="sd-chip" data-filter="inbound">Entrants</button>
+        <button class="sd-chip" data-filter="missed">Manqués</button>
+      </div>
+      <div id="sd-history-list" class="sd-history-list">
+        <div class="sd-empty">Chargement…</div>
+      </div>
+    </aside>
+
+    <!-- ─── Colonne centre : softphone ─── -->
+    <section class="sd-col sd-col-center">
+      <header class="sd-phone-status">
+        <div class="sd-status-dot" id="sd-status-dot"></div>
+        <span id="sd-status-text">Initialisation…</span>
+        <select id="sd-from-number" class="sd-select" title="Numéro émetteur"></select>
+      </header>
+
+      <!-- Vue 1 : idle / dialpad -->
+      <div id="sd-view-idle" class="sd-view sd-view-active">
+        <div class="sd-phone-display">
+          <input type="tel" id="sd-phone-input" placeholder="+33 6 12 34 56 78" autocomplete="off">
+        </div>
+        <div class="sd-dialpad">
+          <button class="sd-key" data-k="1"><b>1</b></button>
+          <button class="sd-key" data-k="2"><b>2</b><i>ABC</i></button>
+          <button class="sd-key" data-k="3"><b>3</b><i>DEF</i></button>
+          <button class="sd-key" data-k="4"><b>4</b><i>GHI</i></button>
+          <button class="sd-key" data-k="5"><b>5</b><i>JKL</i></button>
+          <button class="sd-key" data-k="6"><b>6</b><i>MNO</i></button>
+          <button class="sd-key" data-k="7"><b>7</b><i>PQRS</i></button>
+          <button class="sd-key" data-k="8"><b>8</b><i>TUV</i></button>
+          <button class="sd-key" data-k="9"><b>9</b><i>WXYZ</i></button>
+          <button class="sd-key" data-k="*"><b>*</b></button>
+          <button class="sd-key" data-k="0"><b>0</b><i>+</i></button>
+          <button class="sd-key" data-k="#"><b>#</b></button>
+        </div>
+        <div class="sd-actions">
+          <button id="sd-btn-call" class="sd-btn sd-btn-call">📞 Appeler</button>
+          <button id="sd-btn-clear" class="sd-btn sd-btn-ghost" title="Effacer">⌫</button>
+        </div>
+      </div>
+
+      <!-- Vue 2 : appel en cours -->
+      <div id="sd-view-incall" class="sd-view">
+        <div class="sd-incall-card">
+          <div class="sd-incall-avatar" id="sd-incall-avatar">?</div>
+          <div class="sd-incall-name" id="sd-incall-name">Inconnu</div>
+          <div class="sd-incall-phone" id="sd-incall-phone">—</div>
+          <div class="sd-incall-state" id="sd-incall-state">Connexion…</div>
+          <div class="sd-incall-timer" id="sd-incall-timer">00:00</div>
+        </div>
+        <div class="sd-incall-controls">
+          <button id="sd-btn-mute" class="sd-ctl">🎙</button>
+          <button id="sd-btn-keypad" class="sd-ctl">⌨</button>
+          <button id="sd-btn-hangup" class="sd-ctl sd-ctl-danger">📵</button>
+        </div>
+      </div>
+
+      <!-- Vue 3 : appel entrant -->
+      <div id="sd-view-incoming" class="sd-view">
+        <div class="sd-incoming-pulse"></div>
+        <div class="sd-incall-name" id="sd-incoming-name">Appel entrant</div>
+        <div class="sd-incall-phone" id="sd-incoming-phone">—</div>
+        <div class="sd-incoming-actions">
+          <button id="sd-btn-reject" class="sd-ctl sd-ctl-danger">📵</button>
+          <button id="sd-btn-accept" class="sd-ctl sd-ctl-call">📞</button>
+        </div>
+      </div>
+
+      <!-- Vue 4 : campagne multi-call -->
+      <div id="sd-view-campaign" class="sd-view">
+        <div class="sd-campaign-head">
+          <h3>Campagne en cours</h3>
+          <span id="sd-campaign-status" class="sd-badge">dialing</span>
+        </div>
+        <div id="sd-campaign-legs" class="sd-campaign-legs"></div>
+        <button id="sd-btn-cancel-campaign" class="sd-btn sd-btn-danger">Annuler la campagne</button>
+      </div>
+    </section>
+
+    <!-- ─── Colonne droite : contexte lead ─── -->
+    <aside class="sd-col sd-col-right">
+      <header class="sd-col-head">
+        <h2>Contexte lead</h2>
+      </header>
+      <div id="sd-lead-panel" class="sd-lead-panel">
+        <div class="sd-empty">Aucun lead sélectionné</div>
+      </div>
+    </aside>
+  </main>
+
+  <div id="sd-toast" class="sd-toast"></div>
+
+  <script src="nav.js"></script>
+  <script src="sales-dialer-api.js"></script>
+  <script src="sales-dialer.js"></script>
+</body>
+</html>
