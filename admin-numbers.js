@@ -203,8 +203,10 @@
     // Filtrage : on exclut les coachs (rôles 'Coaching', 'Coach') du module Dialer.
     const tm = Array.isArray(window.TEAM_MEMBERS_ACTIVE) ? window.TEAM_MEMBERS_ACTIVE : [];
     const eligible = tm.filter(m => {
+      if (m.active === false) return false;          // exclut les archivés (Guillaume)
+      if (m.canPassCalls !== true) return false;     // exclut tous ceux qui ne passent pas d'appels (Vincent, coachs, etc.)
       const r = (m.role || '').toLowerCase();
-      return !r.includes('coach'); // exclut Mickael, Edouard
+      return !r.includes('coach');                   // sécurité supplémentaire : jamais de coach
     });
 
     const select = $('#pm-assigned');
@@ -287,7 +289,11 @@
 
     // Même logique de population que pour l'achat
     const tm = Array.isArray(window.TEAM_MEMBERS_ACTIVE) ? window.TEAM_MEMBERS_ACTIVE : [];
-    const eligible = tm.filter(m => !((m.role || '').toLowerCase().includes('coach')));
+    const eligible = tm.filter(m => {
+      if (m.active === false) return false;
+      if (m.canPassCalls !== true) return false;
+      return !((m.role || '').toLowerCase().includes('coach'));
+    });
     const select = $('#pm-assigned');
     select.innerHTML = '<option value="">— Non assigné —</option>' +
       eligible.map(m => {
