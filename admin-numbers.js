@@ -154,6 +154,7 @@
         <td>${userLabel(n.assignedToSlug, n.assignedTo)}</td>
         <td>${esc(n.regionIndicatif ? '0' + n.regionIndicatif : (n.countryCode || ''))}</td>
         <td class="an-row-actions">
+          <button class="an-btn an-btn-ghost" data-action="edit" data-id="${esc(n.id)}">Modifier</button>
           <button class="an-btn an-btn-danger" data-action="release" data-id="${esc(n.id)}" data-num="${esc(n.phoneNumber)}">Libérer</button>
         </td>
       </tr>
@@ -216,12 +217,24 @@
         return `<option value="${esc(m.slug)}" data-uid="${esc(uid)}" data-role="${esc(matchUser ? matchUser.role : '')}">${esc(m.fullName || m.shortName || m.slug)} (${esc(m.role || '')})</option>`;
       }).join('');
 
+    // Restaurer libellés en mode achat (au cas où on vient de quitter le mode édition)
+    $('.an-modal-content h3').textContent = "Confirmer l'achat";
+    $('#pm-confirm').textContent = "Acheter";
+
     const modal = $('#purchase-modal');
     modal.hidden = false;
+    modal.dataset.mode = 'purchase';
     modal.dataset.searchPayload = JSON.stringify(searchResult);
+    delete modal.dataset.editId;
   }
 
-  function closePurchaseModal() { $('#purchase-modal').hidden = true; }
+  function closePurchaseModal() {
+    const modal = $('#purchase-modal');
+    modal.hidden = true;
+    delete modal.dataset.mode;
+    delete modal.dataset.editId;
+    delete modal.dataset.searchPayload;
+  }
 
   async function confirmPurchase() {
     const modal = $('#purchase-modal');
@@ -265,7 +278,74 @@
     }
   }
 
-  // ─── Actions ──────────────────────────────────────────────────────────
+  // ─── Modale d'édition (réassigner + renommer) ─────────────────────────
+  function openEditModal(numberId) {
+    const n = numbersCache.find(x => x.id === numberId);
+    if (!n) { toast("Numéro introuvable.", 'error'); return; }
+
+    $('#pm-number').textContent = n.phoneNumber;
+    $('#pm-friendly').value = n.friendlyName || '';
+
+    // Même logique de population que pour l'achat
+    const tm = (typeof window.tmActives === 'function') ? window.tmActives() : [];
+    const eligible = tm.filter(m => !((m.role || '').toLowerCase().includes('coach')));
+    const select = $('#pm-assigned');
+    select.innerHTML = '<option value="">— Non assigné —</option>' +
+      eligible.map(m => {
+        const matchUser = usersCache.find(u => u.email && m.email && u.email.toLowerCase() === m.email.toLowerCase());
+        const uid = matchUser ? matchUser.uid : '';
+        const sel = (m.slug === n.assignedToSlug) ? ' selected' : '';
+        return `<option value="${esc(m.slug)}" data-uid="${esc(uid)}" data-role="${esc(matchUser ? matchUser.role : '')}"${sel}>${esc(m.fullName || m.shortName || m.slug)} (${esc(m.role || '')})</option>`;
+      }).join('');
+
+    // Adapter les libellés et boutons en mode édition
+    $('.an-modal-content h3').textContent = "Modifier le numéro";
+    $('#pm-confirm').textContent = "Enregistrer";
+
+    const modal = $('#purchase-modal');
+    modal.hidden = false;
+    modal.dataset.mode = 'edit';
+    modal.dataset.editId = numberId;
+  }
+
+  async function confirmEdit() {
+    const modal = $('#purchase-modal');
+    const numberId = modal.dataset.editId;
+    if (!numberId) return;
+
+    const friendlyName = $('#pm-friendly').value.trim();
+    const select = $('#pm-assigned');
+    const slug = select.value || null;
+    const opt = slug ? select.options[select.selectedIndex] : null;
+    const assignedTo = opt ? (opt.dataset.uid || null) : null;
+    const assignedToRole = opt ? (opt.dataset.role || null) : null;
+
+    if (slug && !assignedTo) {
+      toast(`Aucun compte Firebase trouvé pour ${slug}. Vérifiez admin-users.html.`, 'error');
+      return;
+    }
+
+    const btn = $('#pm-confirm');
+    btn.disabled = true; btn.textContent = 'Enregistrement…';
+    try {
+      await db.collection('phone_numbers').doc(numberId).update({
+        friendlyName: friendlyName || null,
+        assignedTo,
+        assignedToSlug: slug,
+        assignedToRole,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: firebase.auth().currentUser.uid,
+      });
+      toast("Modifications enregistrées.", 'success');
+      closePurchaseModal();
+    } catch (e) {
+      console.error('[admin-numbers] update:', e);
+      toast("Erreur d'enregistrement : " + (e.message || e.code), 'error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   async function handleSearch(ev) {
     ev.preventDefault();
     const params = {
@@ -316,7 +396,11 @@
     $('#search-form').addEventListener('submit', handleSearch);
     $('#btn-sync').addEventListener('click', handleSync);
     $('#pm-cancel').addEventListener('click', closePurchaseModal);
-    $('#pm-confirm').addEventListener('click', confirmPurchase);
+    $('#pm-confirm').addEventListener('click', () => {
+      const mode = $('#purchase-modal').dataset.mode;
+      if (mode === 'edit') confirmEdit();
+      else confirmPurchase();
+    });
 
     // Délégation pour les boutons générés dynamiquement
     document.addEventListener('click', (ev) => {
@@ -327,6 +411,8 @@
         const idx = parseInt(btn.dataset.idx, 10);
         const sr = lastSearchResults[idx];
         if (sr) openPurchaseModal(sr);
+      } else if (action === 'edit') {
+        openEditModal(btn.dataset.id);
       } else if (action === 'release') {
         handleRelease(btn.dataset.id, btn.dataset.num);
       }
