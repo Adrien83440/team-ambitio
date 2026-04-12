@@ -19,6 +19,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+<script src="dialer-bridge.js" defer></script>
 <script>
   if (!firebase.apps.length) {
     firebase.initializeApp({
@@ -1169,6 +1170,14 @@ function renderFeed() {
   }
   feed.innerHTML = h;
 
+  // Dialer bridge : boutons d'appel + multi-sélection campagne
+  if (window.DialerBridge) {
+    try {
+      window.DialerBridge.attachButtons('#ldFeed', { cardSelector: '.ld-card' });
+      window.DialerBridge.enableMultiSelect('#ldFeed', { cardSelector: '.ld-card', maxSelection: 5 });
+    } catch (e) { console.warn('[DialerBridge] attach failed', e); }
+  }
+
   // Restore open card
   if (openCardId) {
     var el = document.querySelector('[data-lead-id="' + openCardId + '"]');
@@ -1205,7 +1214,8 @@ function renderCard(l) {
   var isNew = l._isNew;
   var ago = timeAgo(l.createdAt);
 
-  var h = '<div class="ld-card' + (isNew ? ' new' : '') + '" data-lead-id="' + id + '">';
+  var _tel = (l.telephone || '').toString().replace(/\s/g, '');
+  var h = '<div class="ld-card' + (isNew ? ' new' : '') + '" data-lead-id="' + id + '" data-phone="' + escAttr(_tel) + '" data-name="' + escAttr(l.nom || '') + '">';
 
   // Head
   h += '<div class="ld-card-head" data-action="toggle" data-id="' + id + '">';

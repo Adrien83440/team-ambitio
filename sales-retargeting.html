@@ -928,7 +928,8 @@ function render() {
     var setter = c.assignedTo || '';
     var webD = c.webinarDate || '—';
 
-    h += '<tr class="' + (isC ? 'rt-contacted' : '') + '" data-id="' + c.id + '">';
+    var _telR = (c.telephone || '').toString().replace(/\s/g, '');
+    h += '<tr class="' + (isC ? 'rt-contacted' : '') + '" data-id="' + c.id + '" data-lead-id="' + c.id + '" data-phone="' + escAttr(_telR) + '" data-name="' + escAttr(c.nom || '') + '">';
     h += '<td><div class="rt-toggle ' + (isC ? 'on' : '') + '" data-action="toggle" data-id="' + c.id + '"></div></td>';
     h += '<td><div class="rt-client-name">' + escHtml(c.nom || '—') + '</div><div class="rt-client-email">' + escHtml(c.email || '') + '</div></td>';
     h += '<td><span class="rt-client-tel">' + formatTel(c.telephone || '') + '</span></td>';
@@ -968,6 +969,14 @@ function render() {
     h += '</tr>';
   }
   tbody.innerHTML = h;
+
+  // Dialer bridge : boutons d'appel + multi-sélection campagne sur les lignes
+  if (window.DialerBridge) {
+    try {
+      window.DialerBridge.attachButtons(tbody, { cardSelector: 'tr[data-lead-id]' });
+      window.DialerBridge.enableMultiSelect(tbody, { cardSelector: 'tr[data-lead-id]', maxSelection: 5 });
+    } catch (e) { console.warn('[DialerBridge] attach failed', e); }
+  }
 
   document.getElementById('rtPageInfo').textContent = (start + 1) + '–' + end + ' sur ' + total + ' contacts';
   var btnsEl = document.getElementById('rtPageBtns');
@@ -1230,6 +1239,7 @@ document.getElementById('rtLoginPwd').addEventListener('keydown', function(e) { 
 </script>
 
 <script src="nav.js"></script>
+<script src="dialer-bridge.js" defer></script>
 
 </body>
 </html>

@@ -372,6 +372,13 @@ function renderPipeline(leads){
     }
     container.innerHTML=h;
   });
+  // Dialer bridge : boutons d'appel + multi-sélection sur le board kanban
+  if (window.DialerBridge) {
+    try {
+      window.DialerBridge.attachButtons('#crmBoard', { cardSelector: '.crm-card' });
+      window.DialerBridge.enableMultiSelect('#crmBoard', { cardSelector: '.crm-card', maxSelection: 5 });
+    } catch (e) { console.warn('[DialerBridge] attach failed', e); }
+  }
 }
 
 function renderCard(l){
@@ -385,7 +392,8 @@ function renderCard(l){
   var hn=l.notesHistory&&l.notesHistory.length>0;
   var sL={nouveau:'Nouveau',appele:'Appelé',decroche:'Décroché',messagerie:'Msg',nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',rdv_pose:'RDV posé',pas_interesse:'Pas intéressé',disqualifie:'Disqualifié'};
   var ls=l.status||'nouveau';
-  var h='<div class="crm-card" draggable="true" data-id="'+l.id+'">';
+  var _telC=(l.telephone||'').toString().replace(/\s/g,'');
+  var h='<div class="crm-card" draggable="true" data-id="'+l.id+'" data-lead-id="'+l.id+'" data-phone="'+_telC+'" data-name="'+esc(l.nom||'').replace(/"/g,'&quot;')+'">';
   h+='<span class="crm-card-eye" data-action="quickview" data-id="'+l.id+'">👁</span>';
   h+='<div class="crm-card-name">'+esc(l.nom||'—')+'</div>';
   if(isKanbanFieldVisible('telephone')&&l.telephone)h+='<div class="crm-card-phone">'+esc(l.telephone)+'</div>';
@@ -419,7 +427,8 @@ function renderList(leads){
   var page=getPaginated(sorted);
   var h='';page.forEach(function(l){
     var sel=!!selectedIds[l.id];
-    h+='<tr data-id="'+l.id+'"'+(sel?' class="selected"':'')+'>';
+    var _telL=(l.telephone||'').toString().replace(/\s/g,'');
+    h+='<tr data-id="'+l.id+'" data-lead-id="'+l.id+'" data-phone="'+_telL+'" data-name="'+esc(l.nom||'').replace(/"/g,'&quot;')+'"'+(sel?' class="selected"':'')+'>';
     LIST_COLS.forEach(function(col){
       if(col.key==='_cb'){h+='<td style="width:40px" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb" data-cbid="'+l.id+'"'+(sel?' checked':'')+'/></td>';return;}
       var val=l[col.key]||'';
@@ -440,6 +449,13 @@ function renderList(leads){
     h+='</tr>';
   });
   document.getElementById('listBody').innerHTML=h;
+  if (window.DialerBridge) {
+    try {
+      var _lb=document.getElementById('listBody');
+      window.DialerBridge.attachButtons(_lb, { cardSelector: 'tr[data-lead-id]' });
+      window.DialerBridge.enableMultiSelect(_lb, { cardSelector: 'tr[data-lead-id]', maxSelection: 5 });
+    } catch (e) { console.warn('[DialerBridge] attach failed', e); }
+  }
   renderPagi('pagiList',sorted.length,tp);
 }
 
