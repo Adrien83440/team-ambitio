@@ -16,6 +16,7 @@
 //     "countryCode": "FR",               // optionnel
 //     "monthlyPrice": 1.0,               // optionnel (EUR)
 //     "assignedTo": "user_uid",          // optionnel — UID Firebase d'un user
+//     "assignedToSlug": "elodie",        // optionnel — slug team member (_meta/team_members)
 //     "assignedToRole": "sales",         // optionnel
 //     "notes": "..."                     // optionnel
 //   }
@@ -80,6 +81,7 @@ module.exports = async (req, res) => {
         typeof body.monthlyPrice === 'number' ? body.monthlyPrice : 1.0,
       monthlyPriceCurrency: 'EUR',
       assignedTo: body.assignedTo || null,
+      assignedToSlug: body.assignedToSlug || null,
       assignedToRole: body.assignedToRole || null,
       active: true,
       notes: body.notes || '',
