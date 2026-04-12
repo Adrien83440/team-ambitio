@@ -78,6 +78,8 @@ module.exports = async (req, res) => {
     const campaignId = campaignRef.id;
 
     await campaignRef.set({
+      createdBy: auth.uid,
+      assignedUserIds: [auth.uid],
       userId: auth.uid,
       fromNumber: outboundE164,
       fromNumberId: outboundDocId,
