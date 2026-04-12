@@ -191,9 +191,31 @@
     }));
   }
 
-  // ─── Pending call (bridge CRM) ──────────────────────────────────────────
+  // ─── Pending call/campaign (bridge CRM) ─────────────────────────────────
   function handlePendingCall() {
     try {
+      // 1. Campagne multi-call pending ?
+      const rawCamp = sessionStorage.getItem('dialer_pending_campaign');
+      if (rawCamp) {
+        sessionStorage.removeItem('dialer_pending_campaign');
+        const leads = JSON.parse(rawCamp);
+        if (Array.isArray(leads) && leads.length > 0) {
+          // Attendre que le device soit prêt
+          const tryStart = (retries = 10) => {
+            if (device && device.state === 'registered') {
+              window.SalesDialerStartCampaign(leads);
+            } else if (retries > 0) {
+              setTimeout(() => tryStart(retries - 1), 400);
+            } else {
+              toast('Softphone pas prêt pour la campagne', 'error');
+            }
+          };
+          setTimeout(tryStart, 400);
+          return;
+        }
+      }
+
+      // 2. Appel single pending ?
       const raw = sessionStorage.getItem('dialer_pending_call');
       if (!raw) return;
       sessionStorage.removeItem('dialer_pending_call');
