@@ -86,8 +86,8 @@ module.exports = async (req, res) => {
       status: 'dialing',
       leadCount: leads.length,
       legs: leads.map(l => ({
-        leadId: l.id,
-        leadName: l.name || null,
+        leadId: l.leadId || l.id || null,
+        leadName: l.leadName || l.name || null,
         phone: normalizePhone(l.phone),
         callSid: null,
         status: 'queuing',
@@ -105,26 +105,27 @@ module.exports = async (req, res) => {
     const baseUrl = `${proto}://${host}`;
 
     const callPromises = leads.map(async (lead) => {
+      const lid = lead.leadId || lead.id || null;
       const phone = normalizePhone(lead.phone);
       if (!phone) {
-        return { leadId: lead.id, error: 'phone invalide' };
+        return { leadId: lid, error: 'phone invalide' };
       }
       try {
         const call = await client.calls.create({
           to: phone,
           from: outboundE164,
-          url: `${baseUrl}/api/dialer-multi-call-twiml?campaignId=${campaignId}&leadId=${encodeURIComponent(lead.id)}&uid=${auth.uid}`,
+          url: `${baseUrl}/api/dialer-multi-call-twiml?campaignId=${campaignId}&leadId=${encodeURIComponent(lid || '')}&uid=${auth.uid}`,
           method: 'POST',
-          statusCallback: `${baseUrl}/api/dialer-multi-call-status?campaignId=${campaignId}&leadId=${encodeURIComponent(lead.id)}`,
+          statusCallback: `${baseUrl}/api/dialer-multi-call-status?campaignId=${campaignId}&leadId=${encodeURIComponent(lid || '')}`,
           statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
           statusCallbackMethod: 'POST',
           timeout: 25,
           record: false, // recording sera activé par le TwiML une fois bridgé
         });
-        return { leadId: lead.id, callSid: call.sid, status: 'initiated' };
+        return { leadId: lid, callSid: call.sid, status: 'initiated' };
       } catch (err) {
-        console.error('[multi-call] create failed for lead', lead.id, err.message);
-        return { leadId: lead.id, error: err.message };
+        console.error('[multi-call] create failed for lead', lid, err.message);
+        return { leadId: lid, error: err.message };
       }
     });
 
