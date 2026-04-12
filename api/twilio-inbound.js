@@ -78,19 +78,20 @@ module.exports = async (req, res) => {
     }
 
     // 2. Lookup lead par téléphone (best-effort, non-bloquant)
+    // Champ canonical : `telephone` (E.164 strict après migration)
     let leadId = null;
     let leadNameSnapshot = null;
     if (fromNumber) {
       try {
         const leadQuery = await db.collection('leads')
-          .where('phone', '==', fromNumber)
+          .where('telephone', '==', fromNumber)
           .limit(1)
           .get();
         if (!leadQuery.empty) {
           const ld = leadQuery.docs[0];
           leadId = ld.id;
           const d = ld.data();
-          leadNameSnapshot = d.name || d.fullName || d.firstName || null;
+          leadNameSnapshot = d.nom || d.name || d.fullName || d.firstName || null;
         }
       } catch (e) { /* non-bloquant */ }
     }
