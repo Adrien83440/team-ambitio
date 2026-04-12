@@ -23,6 +23,8 @@
     purchaseNumber: `${API_BASE}/dialer-purchase-number`,
     releaseNumber:  `${API_BASE}/dialer-release-number`,
     syncNumbers:    `${API_BASE}/dialer-sync-numbers`,
+    multiCall:      `${API_BASE}/dialer-multi-call`,
+    cancelCampaign: `${API_BASE}/dialer-cancel-campaign`,
   };
 
   // ─── Auth helper ───────────────────────────────────────────────────────────
@@ -133,6 +135,34 @@
      */
     async voiceToken() {
       return authedFetch(ENDPOINTS.voiceToken, { method: 'POST' });
+    },
+
+    /**
+     * Lance une campagne d'appels parallèles (max 5 leads).
+     * Le premier qui décroche bridge le browser de l'utilisateur, les autres
+     * sont annulés automatiquement côté serveur.
+     * @param {Array<{id: string, phone: string, name?: string}>} leads
+     * @param {string} [fromNumberId] - id du doc phone_numbers à utiliser. Si omis,
+     *                                  utilise le premier numéro assigné à l'utilisateur.
+     * @returns {Promise<{campaignId: string, calls: Array}>}
+     */
+    async multiCall(leads, fromNumberId = null) {
+      return authedFetch(ENDPOINTS.multiCall, {
+        method: 'POST',
+        body: JSON.stringify({ leads, fromNumberId }),
+      });
+    },
+
+    /**
+     * Annule une campagne en cours (cancel tous les legs Twilio actifs).
+     * @param {string} campaignId
+     * @returns {Promise<{ok: boolean, cancelledLegs?: number}>}
+     */
+    async cancelCampaign(campaignId) {
+      return authedFetch(ENDPOINTS.cancelCampaign, {
+        method: 'POST',
+        body: JSON.stringify({ campaignId }),
+      });
     },
 
     /**
