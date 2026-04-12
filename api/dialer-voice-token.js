@@ -19,11 +19,12 @@
 //   500 — erreur serveur (Twilio creds, etc.)
 //
 // IMPORTANT — Région Twilio :
-// Les credentials et numéros vivent dans la région Ireland (IE1). Le token
-// doit être signé avec region: 'ie1' pour que le SDK browser s'authentifie
-// correctement contre le gateway IE1 (sinon AccessTokenInvalid).
-// Côté frontend, sales-dialer.js initialise Twilio.Device avec edge:'dublin'
-// pour matcher la même région.
+// Les credentials et numéros vivent dans la région Ireland (IE1) côté REST API,
+// MAIS le routing Voice se fait via le realm global Twilio (les TwiML Apps
+// vivent en US1 par défaut). Donc on NE met PAS region:'ie1' dans le token
+// (paramètre réservé à Chat/Sync/Conversations, pas Voice) et on NE met PAS
+// edge sur le Device côté frontend — on laisse le SDK utiliser 'roaming'
+// (auto-select) qui est la config qui fonctionnait historiquement.
 // ============================================================================
 const twilio = require('twilio');
 const { requireAuth } = require('./_verifyFirebaseAuth');
@@ -58,7 +59,7 @@ module.exports = async (req, res) => {
       creds.accountSid,
       creds.apiKeySid,
       creds.apiKeySecret,
-      { identity, ttl: ttlSeconds, region: 'ie1' }
+      { identity, ttl: ttlSeconds }
     );
 
     const voiceGrant = new VoiceGrant({
