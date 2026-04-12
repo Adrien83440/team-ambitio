@@ -73,7 +73,6 @@
       device = new Twilio.Device(token, {
         codecPreferences: ['opus', 'pcmu'],
         logLevel: 'warn',
-        edge: 'dublin',
       });
       device.on('registered', () => setStatus('Prêt', 'ready'));
       device.on('error', (e) => {
