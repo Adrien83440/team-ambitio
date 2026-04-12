@@ -84,13 +84,13 @@
   }
 
   function userLabel(slugOrUid, fallbackUid) {
-    // Affichage prioritaire via le slug team member (cohérent avec le reste d'Ambitio)
-    if (slugOrUid && typeof window.tmName === 'function') {
-      const name = window.tmName(slugOrUid);
-      const color = (typeof window.tmColor === 'function') ? window.tmColor(slugOrUid) : '#8b949e';
-      if (name && name !== slugOrUid) {
-        return `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${esc(color)}"></span>${esc(name)}</span>`;
-      }
+    // Affichage prioritaire via le slug team member (cohérent avec le reste d'Ambitio).
+    // nav.js expose window.TEAM_MEMBERS = { slug: memberObj }
+    if (slugOrUid && window.TEAM_MEMBERS && window.TEAM_MEMBERS[slugOrUid]) {
+      const m = window.TEAM_MEMBERS[slugOrUid];
+      const name = m.fullName || m.shortName || slugOrUid;
+      const color = m.color || '#8b949e';
+      return `<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${esc(color)}"></span>${esc(name)}</span>`;
     }
     // Fallback : lookup users cache via UID
     if (fallbackUid) {
@@ -152,7 +152,7 @@
         <td>${badge(n.numberType)}</td>
         <td>${esc(n.friendlyName || '')}</td>
         <td>${userLabel(n.assignedToSlug, n.assignedTo)}</td>
-        <td>${esc(n.regionIndicatif ? '0' + n.regionIndicatif : (n.countryCode || ''))}</td>
+        <td>${esc(n.locality || n.region || (n.regionIndicatif ? 'Indicatif ' + String(n.regionIndicatif).replace(/^0+/, '0') : (n.countryCode || '')))}</td>
         <td class="an-row-actions">
           <button class="an-btn an-btn-ghost" data-action="edit" data-id="${esc(n.id)}">Modifier</button>
           <button class="an-btn an-btn-danger" data-action="release" data-id="${esc(n.id)}" data-num="${esc(n.phoneNumber)}">Libérer</button>
@@ -199,10 +199,9 @@
     $('#pm-friendly').value = searchResult.friendlyName || `Ambitio ${searchResult.locality || ''}`.trim();
 
     // Sélecteur basé sur _meta/team_members (cohérent avec le reste d'Ambitio).
+    // nav.js expose window.TEAM_MEMBERS_ACTIVE (array trié, actifs uniquement).
     // Filtrage : on exclut les coachs (rôles 'Coaching', 'Coach') du module Dialer.
-    // On stocke le SLUG en value, et on garde l'UID Firebase associé en data-uid
-    // pour pouvoir l'envoyer aussi à l'endpoint (routage Twilio Voice).
-    const tm = (typeof window.tmActives === 'function') ? window.tmActives() : [];
+    const tm = Array.isArray(window.TEAM_MEMBERS_ACTIVE) ? window.TEAM_MEMBERS_ACTIVE : [];
     const eligible = tm.filter(m => {
       const r = (m.role || '').toLowerCase();
       return !r.includes('coach'); // exclut Mickael, Edouard
@@ -287,7 +286,7 @@
     $('#pm-friendly').value = n.friendlyName || '';
 
     // Même logique de population que pour l'achat
-    const tm = (typeof window.tmActives === 'function') ? window.tmActives() : [];
+    const tm = Array.isArray(window.TEAM_MEMBERS_ACTIVE) ? window.TEAM_MEMBERS_ACTIVE : [];
     const eligible = tm.filter(m => !((m.role || '').toLowerCase().includes('coach')));
     const select = $('#pm-assigned');
     select.innerHTML = '<option value="">— Non assigné —</option>' +
