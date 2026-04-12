@@ -366,9 +366,24 @@
 
   // ─── Multi-call campagne (écoute live) ──────────────────────────────────
   window.SalesDialerStartCampaign = async function (leads) {
+    // [DEBUG TEMPORAIRE] - identifier qui appelle avec quoi
+    console.log('[StartCampaign] called with:', JSON.stringify(leads), '\nstack:', new Error().stack);
+    // Garde stricte : refuse array vide / non-array
+    if (!Array.isArray(leads) || leads.length === 0) {
+      console.warn('[StartCampaign] BLOCKED - leads vide ou invalide');
+      toast('Aucun lead à appeler', 'error');
+      return;
+    }
+    // Filtre supplémentaire : exiger au moins un téléphone valide
+    const valid = leads.filter(l => l && (l.phone || l.telephone));
+    if (valid.length === 0) {
+      console.warn('[StartCampaign] BLOCKED - aucun téléphone valide dans', leads);
+      toast('Aucun téléphone valide', 'error');
+      return;
+    }
     try {
       const fromId = $('sd-from-number').value;
-      const { campaignId } = await SalesDialerAPI.multiCall(leads, fromId);
+      const { campaignId } = await SalesDialerAPI.multiCall(valid, fromId);
       subscribeCampaign(campaignId);
       showView('campaign');
     } catch (e) {
