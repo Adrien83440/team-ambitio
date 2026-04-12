@@ -17,8 +17,14 @@
 //   401 — token manquant ou invalide
 //   403 — user inconnu dans Firestore
 //   500 — erreur serveur (Twilio creds, etc.)
+//
+// IMPORTANT — Région Twilio :
+// Les credentials et numéros vivent dans la région Ireland (IE1). Le token
+// doit être signé avec region: 'ie1' pour que le SDK browser s'authentifie
+// correctement contre le gateway IE1 (sinon AccessTokenInvalid).
+// Côté frontend, sales-dialer.js initialise Twilio.Device avec edge:'dublin'
+// pour matcher la même région.
 // ============================================================================
-
 const twilio = require('twilio');
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const { getTwilioCreds } = require('./_twilioClient');
@@ -36,7 +42,6 @@ module.exports = async (req, res) => {
 
   try {
     const creds = await getTwilioCreds();
-
     if (!creds.apiKeySid || !creds.apiKeySecret || !creds.voiceAppSid) {
       throw new Error(
         'telco_credentials incomplete: apiKeySid, apiKeySecret and voiceAppSid are required'
@@ -53,7 +58,7 @@ module.exports = async (req, res) => {
       creds.accountSid,
       creds.apiKeySid,
       creds.apiKeySecret,
-      { identity, ttl: ttlSeconds }
+      { identity, ttl: ttlSeconds, region: 'ie1' }
     );
 
     const voiceGrant = new VoiceGrant({
