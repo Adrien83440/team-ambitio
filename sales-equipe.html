@@ -1077,6 +1077,10 @@ label.flabel{display:block;font-size:10px;color:var(--muted);text-transform:uppe
 .cal-add-btn:hover{background:rgba(167,139,250,.15);border-color:var(--purple);color:var(--purple)}
 /* ── Membres archivés (visibles admin seulement, marqués d'une pill) ── */
 .archived-pill{display:inline-block;margin-left:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);vertical-align:middle;text-transform:uppercase;letter-spacing:.3px}
+.member-archived-admin{opacity:.55;filter:grayscale(.65);transition:opacity .2s,filter .2s}
+.member-archived-admin:hover{opacity:.88;filter:grayscale(.25)}
+tr.member-archived-admin td{opacity:.55;filter:grayscale(.65)}
+tr.member-archived-admin:hover td{opacity:.88;filter:grayscale(.25)}
 </style>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
 </head>
@@ -1220,9 +1224,38 @@ function getSampleMeetings() {
    STATE
 ════════════════════════════════════════════════════════════ */
 let currentMainTab = 'espaces';
-let currentMemberUid = MEMBERS[0].uid;
+let currentMemberUid = (function() {
+  // Init paresseuse : premier membre visible selon le rôle courant.
+  // Si TEAM_MEMBERS pas encore chargé au boot, on tombe sur MEMBERS[0] en fallback,
+  // et renderEspaces() corrige dès qu'il tourne avec _visibleMembers().
+  try {
+    var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
+    var isAdmin = (role === 'admin');
+    var tm = window.TEAM_MEMBERS || {};
+    for (var i = 0; i < MEMBERS.length; i++) {
+      var m = MEMBERS[i];
+      var meta = tm[m.uid];
+      var archived = !!(meta && meta.active === false);
+      if (isAdmin || !archived) return m.uid;
+    }
+  } catch(e) {}
+  return MEMBERS[0].uid;
+})();
 let currentEspaceTab = {};  // uid → tab name
-let currentCbMember = MEMBERS[0].uid;
+let currentCbMember = (function() {
+  try {
+    var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
+    var isAdmin = (role === 'admin');
+    var tm = window.TEAM_MEMBERS || {};
+    for (var i = 0; i < MEMBERS.length; i++) {
+      var m = MEMBERS[i];
+      var meta = tm[m.uid];
+      var archived = !!(meta && meta.active === false);
+      if (isAdmin || !archived) return m.uid;
+    }
+  } catch(e) {}
+  return MEMBERS[0].uid;
+})();
 let currentMeeting = null;
 
 /* ════════════════════════════════════════════════════════════
@@ -1244,10 +1277,15 @@ function setMainTab(name) {
 function renderEspaces() {
   _markArchivedMembers();
   var visible = _visibleMembers();
+  // Si le membre actuellement sélectionné n'est plus visible (non-admin qui
+  // avait 'guillaume' en cache), on bascule sur le premier visible.
+  if (currentMemberUid && !visible.find(m => m.uid === currentMemberUid) && visible.length) {
+    currentMemberUid = visible[0].uid;
+  }
   // Member selector buttons
   const sel = document.getElementById('member-selector');
   sel.innerHTML = visible.map(m => `
-    <div class="member-btn ${m.uid === currentMemberUid ? 'active' : ''}" style="--mb-color:${m.color}" onclick="selectMember('${m.uid}')">
+    <div class="member-btn ${m.uid === currentMemberUid ? 'active' : ''}${m.archived ? ' member-archived-admin' : ''}" style="--mb-color:${m.color}" onclick="selectMember('${m.uid}')">
       <div class="member-btn-av" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
       <div>
         <div class="member-btn-name">${m.name} ${m.surname}${m.archived ? ' <span class="archived-pill">📦</span>' : ''}</div>
@@ -1256,11 +1294,6 @@ function renderEspaces() {
     </div>`).join('');
 
   visible.forEach(m => renderEspace(m));
-  // Si le membre actuellement sélectionné n'est plus visible (archivé + user non-admin),
-  // on bascule sur le premier visible.
-  if (currentMemberUid && !visible.find(m => m.uid === currentMemberUid) && visible.length) {
-    currentMemberUid = visible[0].uid;
-  }
   showEspace(currentMemberUid);
 }
 
@@ -1512,15 +1545,21 @@ function sendMsg(uid) {
    SECTION — CALL BREAKDOWN
 ════════════════════════════════════════════════════════════ */
 function renderBreakdown() {
+  _markArchivedMembers();
+  var visible = _visibleMembers();
+  // Fallback si le membre sélectionné n'est plus visible
+  if (currentCbMember && !visible.find(m => m.uid === currentCbMember) && visible.length) {
+    currentCbMember = visible[0].uid;
+  }
   // Member tabs
   const tabs = document.getElementById('cb-member-tabs');
-  tabs.innerHTML = MEMBERS.map(m => `
-    <div class="cb-member-tab ${m.uid === currentCbMember ? 'active' : ''}" style="--cbt-color:${m.color}" onclick="setCbMember('${m.uid}')">
+  tabs.innerHTML = visible.map(m => `
+    <div class="cb-member-tab ${m.uid === currentCbMember ? 'active' : ''}${m.archived ? ' member-archived-admin' : ''}" style="--cbt-color:${m.color}" onclick="setCbMember('${m.uid}')">
       <div class="dot" style="background:${m.color}"></div>
-      ${m.name} ${m.surname}
+      ${m.name} ${m.surname}${m.archived ? ' <span class="archived-pill">📦</span>' : ''}
     </div>`).join('');
 
-  MEMBERS.forEach(m => renderCbPanel(m));
+  visible.forEach(m => renderCbPanel(m));
   document.querySelectorAll('.cb-panel').forEach(p => p.classList.toggle('active', p.id === 'cb-' + currentCbMember));
 }
 
@@ -2001,7 +2040,7 @@ function renderMeetingDetail() {
           <div style="display:grid;grid-template-columns:160px 1fr;gap:10px;margin-bottom:8px">
             <div class="fgroup"><label class="flabel">De la part de</label>
               <select id="q-who-${meeting.id}">
-                ${MEMBERS.map(m=>`<option value="${m.uid}">${m.name}</option>`).join('')}
+                ${_visibleMembers().map(m=>`<option value="${m.uid}">${m.name}${m.archived ? ' (archivé)' : ''}</option>`).join('')}
                 <option value="head">Head of Sales</option>
               </select>
             </div>

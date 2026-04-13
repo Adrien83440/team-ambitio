@@ -327,6 +327,10 @@ html, body {
   font-size: 10px; font-weight: 600; cursor: pointer; transition: all 0.15s;
 }
 .eod-change-member:hover { color: var(--text); border-color: var(--border2); }
+/* ── Membres archivés (admin only, grisé + pill, click actif) ── */
+.member-archived-admin { opacity: .55; filter: grayscale(.65); transition: opacity .2s, filter .2s; }
+.member-archived-admin:hover { opacity: .88; filter: grayscale(.25); }
+.eod-gate-btn.member-archived-admin .archived-pill { margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -552,12 +556,12 @@ var MEMBER_MAP = {
   elodie:    { uid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', name: 'Élodie',    color: '#60a5fa' }
 };
 
-// Masque le bouton gate d'un membre archivé UNIQUEMENT pour les non-admins.
-// Les admins (Adrien, Emily, Vincent) continuent à voir Guillaume dans la
-// gate pour pouvoir consulter son historique EOD. Appelé :
-//   1. Au chargement initial (role probablement en cache localStorage)
-//   2. Sur l'event team-members-loaded (nav.js finit de charger les membres)
-//   3. Après résolution du rôle dans firebase.auth().onAuthStateChanged()
+// Gate EOD : masque OU grise le bouton des archivés selon le rôle.
+//   - Non-admin (sales, coach) : bouton totalement masqué (display:none)
+//   - Admin : bouton visible mais grisé + pill 📦 Archivé (pour consulter
+//     l'historique EOD d'un archivé sans pouvoir saisir — mais techniquement
+//     admin peut cliquer et saisir, seul l'intent visuel change)
+// Appelé : au load, sur team-members-loaded, après résolution du rôle auth.
 function _eodApplyArchivedFlags() {
   var tm = window.TEAM_MEMBERS || {};
   var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
@@ -567,9 +571,25 @@ function _eodApplyArchivedFlags() {
     var isArchived = !!(meta && meta.active === false);
     MEMBER_MAP[key].archived = isArchived;
     var btn = document.querySelector('.eod-gate-btn[data-pick="' + key + '"]');
-    if (btn) {
-      // Admin voit tout. Non-admin ne voit pas les archivés.
-      btn.style.display = (isArchived && !isAdmin) ? 'none' : '';
+    if (!btn) return;
+    if (isArchived && !isAdmin) {
+      // Non-admin : invisible
+      btn.style.display = 'none';
+      return;
+    }
+    btn.style.display = '';
+    if (isArchived && isAdmin) {
+      // Admin : grisé + pill, click actif
+      btn.classList.add('member-archived-admin');
+      if (!btn.querySelector('.archived-pill')) {
+        var pill = document.createElement('span');
+        pill.className = 'archived-pill';
+        pill.textContent = '📦 Archivé';
+        pill.style.cssText = 'display:inline-block;margin-top:4px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);letter-spacing:.3px;text-transform:uppercase';
+        btn.appendChild(pill);
+      }
+    } else {
+      btn.classList.remove('member-archived-admin');
     }
   });
 }
