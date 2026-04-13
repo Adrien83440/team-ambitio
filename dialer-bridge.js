@@ -65,32 +65,60 @@
       }
       .dbr-call-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.35); }
       .dbr-call-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+      .crm-card:has(> .dbr-checkbox) { padding-left: 40px; }
       .dbr-checkbox {
         appearance: none;
-        width: 18px;
-        height: 18px;
-        border: 2px solid rgba(255,255,255,0.25);
-        border-radius: 5px;
+        -webkit-appearance: none;
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 6;
+        width: 20px;
+        height: 20px;
+        margin: 0;
+        border: 1.5px solid rgba(255,255,255,0.18);
+        border-radius: 6px;
+        background: rgba(255,255,255,0.04);
         cursor: pointer;
-        background: rgba(0,0,0,0.3);
         flex-shrink: 0;
-        position: relative;
+        transition: all 0.18s cubic-bezier(.4,0,.2,1);
+        backdrop-filter: blur(4px);
+      }
+      .dbr-checkbox:hover {
+        border-color: rgba(239,68,68,0.55);
+        background: rgba(239,68,68,0.08);
+        transform: scale(1.08);
       }
       .dbr-checkbox:checked {
-        background: linear-gradient(135deg, #059669, #10b981);
-        border-color: #10b981;
+        background: linear-gradient(135deg,#b91c1c,#ef4444);
+        border-color: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239,68,68,0.15), 0 2px 8px rgba(185,28,28,0.35);
       }
       .dbr-checkbox:checked::after {
-        content: '✓';
-        color: #fff;
-        font-size: 13px;
-        font-weight: 700;
+        content: '';
         position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -52%);
+        inset: 0;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='5 10.5 8.5 14 15 7'/></svg>");
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 16px 16px;
+        animation: dbrCheckPop 0.22s cubic-bezier(.4,0,.2,1);
       }
-      .dbr-checkbox:disabled { opacity: 0.3; cursor: not-allowed; }
+      @keyframes dbrCheckPop {
+        0%   { opacity: 0; transform: scale(0.6); }
+        60%  { opacity: 1; transform: scale(1.15); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      .dbr-checkbox:disabled {
+        opacity: 0.25;
+        cursor: not-allowed;
+        filter: grayscale(1);
+      }
+      .dbr-checkbox:disabled:hover {
+        transform: none;
+        background: rgba(255,255,255,0.04);
+        border-color: rgba(255,255,255,0.18);
+      }
       .dbr-attempts-badge {
         display: inline-flex;
         align-items: center;
