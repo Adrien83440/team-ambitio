@@ -164,23 +164,7 @@ var html='';var inList=false;
 lines.forEach(function(line){
 var trimmed=line.trim();
 if(!trimmed){if(inList){html+='</ul>';inList=false;}return;}
-if(trimmed.charAt(0)==='*'&&trimmed.charAt(1)===' '){
-if(!inList){html+='<ul>';inList=true;}
-html+='<li>'+esc(trimmed.slice(2).trim())+'</li>';
-}else if(trimmed.charAt(0)==='⚠'||trimmed.indexOf('⚠️')===0){
-if(inList){html+='</ul>';inList=false;}
-html+='<div class="info-warning">'+esc(trimmed)+'</div>';
-}else if(trimmed.slice(0,6)==='Adrien'||trimmed.slice(0,5)==='Merci'){
-if(inList){html+='</ul>';inList=false;}
-html+='<div class="info-signature">'+esc(trimmed)+'</div>';
-}else{
-if(inList){html+='</ul>';inList=false;}
-html+='<p>'+esc(trimmed)+'</p>';
-}
-});
-if(inList)html+='</ul>';
-return html;
-}
+
 if(trimmed.charAt(0)==='*'&&trimmed.charAt(1)===' '){
 if(!inList){html+='<ul>';inList=true;}
 html+='<li>'+esc(trimmed.slice(2).trim())+'</li>';
