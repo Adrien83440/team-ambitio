@@ -28,6 +28,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .card-num span{font-size:11px;color:var(--text-muted);font-weight:400}
 .card-question{font-size:26px;font-weight:700;line-height:1.35;margin-bottom:8px;letter-spacing:-.3px}
 .card-desc{font-size:14px;color:var(--text-muted);margin-bottom:28px;line-height:1.6}
+/* Info card */
+.card-info-body{font-size:15px;line-height:1.75;color:rgba(240,240,245,.85)}
+.card-info-body p{margin-bottom:14px}
+.card-info-body ul{list-style:none;padding:0;margin-bottom:14px}
+.card-info-body ul li{padding:6px 0 6px 22px;position:relative;color:rgba(240,240,245,.75)}
+.card-info-body ul li::before{content:"\2192";position:absolute;left:0;color:var(--accent);font-weight:700}
+.card-info-body .info-warning{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:12px 16px;margin:16px 0;font-size:13px;color:rgba(245,158,11,.9)}
+.card-info-body .info-signature{margin-top:24px;font-weight:700;color:var(--text);font-size:15px}
+.card-info-title{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:20px;text-transform:uppercase;letter-spacing:.5px}
 .card-req{color:var(--accent);font-size:12px;font-weight:600}
 /* Inputs */
 .af-input{width:100%;padding:16px 18px;background:transparent;border:none;border-bottom:2px solid rgba(255,255,255,.12);color:var(--text);font-family:'DM Sans',sans-serif;font-size:20px;font-weight:500;outline:none;transition:border-color .3s}
@@ -118,7 +127,7 @@ FORM=doc.data();FORM._id=doc.id;
 if(FORM.status!=='live'&&!params.get('preview')){showError('Ce formulaire n\'est pas encore publié.');return;}
 document.title=FORM.title||'Formulaire';
 if(FORM.color)document.documentElement.style.setProperty('--accent',FORM.color);
-FIELDS=(FORM.fields||[]).filter(function(f){return f.label;});
+FIELDS=(FORM.fields||[]).filter(function(f){return f.label||f.type==='info';});
 if(!FIELDS.length){showError('Ce formulaire ne contient aucun champ.');return;}
 document.getElementById('loadingView').style.display='none';
 document.getElementById('navBar').style.display='flex';
@@ -131,6 +140,36 @@ showCard(0);
 function showError(msg){
 document.getElementById('loadingView').style.display='none';
 document.getElementById('formContainer').innerHTML='<div class="error-page"><div style="font-size:48px;margin-bottom:16px">😕</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">Oups</div><div>'+msg+'</div></div>';
+}
+
+// === FORMAT INFO BODY ===
+function formatInfoBody(text){
+if(!text)return '';
+var lines=text.split('\n');
+var html='';
+var inList=false;
+lines.forEach(function(line){
+var trimmed=line.trim();
+if(!trimmed){
+if(inList){html+='</ul>';inList=false;}
+return;
+}
+if(trimmed.charAt(0)==='*'&&trimmed.charAt(1)===' '){
+if(!inList){html+='<ul>';inList=true;}
+html+='<li>'+esc(trimmed.slice(2).trim())+'</li>';
+}else if(trimmed.charAt(0)==='\u26a0'||trimmed.indexOf('\u26a0\ufe0f')===0){
+if(inList){html+='</ul>';inList=false;}
+html+='<div class="info-warning">'+esc(trimmed)+'</div>';
+}else if(trimmed.slice(0,6)==='Adrien'||trimmed.slice(0,5)==='Merci'){
+if(inList){html+='</ul>';inList=false;}
+html+='<div class="info-signature">'+esc(trimmed)+'</div>';
+}else{
+if(inList){html+='</ul>';inList=false;}
+html+='<p>'+esc(trimmed)+'</p>';
+}
+});
+if(inList)html+='</ul>';
+return html;
 }
 
 // ═══ BUILD CARDS ═══
@@ -157,6 +196,12 @@ card.dataset.gidx=gi;
 var h='<div class="card-num">'+(gi+1)+' →<span>sur '+CARD_GROUPS.length+'</span></div>';
 
 group.forEach(function(fld,fi){
+// Info type: static text card, no input
+if(fld.type==='info'){
+if(fld.label&&fld.label.indexOf('📄 Carte')!==0)h+='<div class="card-info-title">'+esc(fld.label)+'</div>';
+h+='<div class="card-info-body">'+formatInfoBody(fld.body||'')+'</div>';
+return;
+}
 // Label
 if(group.length>1){
 h+='<div style="margin-'+(fi>0?'top:24px':'bottom:0')+'">';
@@ -227,6 +272,7 @@ function getVisibleGroups(){
 return CARD_GROUPS.filter(function(group){
 // A group is visible if at least one field in it is visible
 return group.some(function(fld){
+if(fld.type==='info')return true;
 if(!fld.condition||!fld.condition.fieldId)return true;
 var depVal=answers[fld.condition.fieldId];
 if(depVal===undefined||depVal===null||depVal==='')return false;
@@ -273,7 +319,8 @@ document.getElementById('progressBar').style.width=pct+'%';
 document.getElementById('btnBack').style.display=idx>0?'':'none';
 var isLast=idx===visible.length-1;
 var btn=document.getElementById('btnNext');
-btn.textContent=isLast?(FORM.settings&&FORM.settings.submitLabel||'Envoyer'):'Continuer →';
+var isInfoCard=group.length===1&&group[0].type==='info';
+btn.textContent=isLast?(FORM.settings&&FORM.settings.submitLabel||'Envoyer'):(isInfoCard?'Commencer →':'Continuer →');
 updateNextBtn();
 }
 
@@ -283,7 +330,8 @@ var group=visible[currentIdx];
 if(!group)return;
 var btn=document.getElementById('btnNext');
 // All required fields in group must have values
-var allFilled=group.every(function(fld){
+var isInfoGroup=group.length===1&&group[0].type==='info';
+var allFilled=isInfoGroup||group.every(function(fld){
 if(!fld.required)return true;
 var val=answers[fld.id];
 return val!==undefined&&val!==null&&val!=='';
@@ -299,8 +347,9 @@ if(!group)return;
 // Collect all answers from current card
 collectGroupAnswers(group);
 
-// Check required fields
-var missing=group.find(function(fld){
+// Check required fields (skip for info cards)
+var isInfoGroup=group.length===1&&group[0].type==='info';
+var missing=!isInfoGroup&&group.find(function(fld){
 if(!fld.required)return false;
 var val=answers[fld.id];
 return !val&&val!==0;
@@ -324,6 +373,7 @@ var card=document.getElementById('card-g'+realGIdx);
 if(!card)return;
 
 group.forEach(function(fld){
+if(fld.type==='info')return;
 var fidEls=card.querySelectorAll('[data-fid="'+fld.id+'"]');
 fidEls.forEach(function(el){
 if(fld.type==='radio'){

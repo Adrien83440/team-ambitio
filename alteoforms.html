@@ -186,17 +186,20 @@
 <option value="tel">📞 Téléphone</option>
 <option value="number">🔢 Nombre</option>
 <option value="date">📅 Date</option>
+<option value="info">📄 Texte informatif / Intro</option>
 </select></div>
 <!-- Options -->
 <div class="ed-field-row" id="fld-opts-wrap" style="display:none"><div class="ed-group-label">Options</div><div id="fld-opts-list"></div><button class="bb" onclick="addFldOption()" style="padding:4px 12px;font-size:11px;margin-top:4px">+ Option</button></div>
 <!-- Scale -->
 <div class="ed-field-row" id="fld-scale-wrap" style="display:none"><div class="ed-group-label">Échelle</div><div style="display:flex;gap:10px;align-items:center"><select class="bs" id="fld-scaleMax" style="width:80px"><option value="5">1 – 5</option><option value="10">1 – 10</option></select><span style="font-size:11px;color:rgba(255,255,255,.3)">Note de 1 à N</span></div></div>
+<!-- Info body -->
+<div class="ed-field-row" id="fld-body-wrap" style="display:none"><div class="ed-group-label">Contenu de la carte</div><textarea class="bi" id="fld-body" placeholder="Saisissez le texte affiché sur la carte. Utilisez * en début de ligne pour les puces." style="width:100%;min-height:160px;resize:vertical;font-size:12px;line-height:1.6"></textarea></div>
 <!-- Required -->
-<div class="ed-field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-req"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Champ requis</span></label></div>
-<div class="ed-field-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-sameCard"/><span style="font-size:13px;color:rgba(255,255,255,.7)">📑 Même carte que le champ précédent</span></label><div style="font-size:11px;color:rgba(255,255,255,.2);margin-top:4px;padding-left:24px">Regroupe ce champ avec le précédent sur une seule carte dans le formulaire.</div></div>
+<div class="ed-field-row" id="fld-req-wrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-req"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Champ requis</span></label></div>
+<div class="ed-field-row" id="fld-samecard-wrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-sameCard"/><span style="font-size:13px;color:rgba(255,255,255,.7)">📑 Même carte que le champ précédent</span></label><div style="font-size:11px;color:rgba(255,255,255,.2);margin-top:4px;padding-left:24px">Regroupe ce champ avec le précédent sur une seule carte dans le formulaire.</div></div>
 <!-- Condition -->
 <!-- Contact mapping -->
-<div class="ed-field-row"><div class="ed-group-label">Mapping contact <span style="font-weight:400;color:rgba(255,255,255,.2)">(pour créer un lead)</span></div>
+<div class="ed-field-row" id="fld-contact-wrap"><div class="ed-group-label">Mapping contact <span style="font-weight:400;color:rgba(255,255,255,.2)">(pour créer un lead)</span></div>
 <select class="bs" id="fld-contact" style="width:100%">
 <option value="">— Aucun —</option>
 <option value="prenom">Prénom du contact</option>
@@ -205,7 +208,7 @@
 <option value="telephone">Téléphone du contact</option>
 </select></div>
 <!-- Condition -->
-<div class="ed-field-row"><div class="ed-group-label">Condition d'affichage <span style="font-weight:400;color:rgba(255,255,255,.2)">(optionnel)</span></div>
+<div class="ed-field-row" id="fld-cond-wrap"><div class="ed-group-label">Condition d'affichage <span style="font-weight:400;color:rgba(255,255,255,.2)">(optionnel)</span></div>
 <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
 <span style="font-size:12px;color:rgba(255,255,255,.4)">Afficher si</span>
 <select class="bs" id="fld-cond-field" style="width:130px;font-size:11px"><option value="">— Aucune —</option></select>
@@ -267,8 +270,8 @@ var edSection='fields';
 var _fldEditIdx=-1;
 var _bookingTypes=[];
 
-var FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤',number:'🔢',date:'📅'};
-var FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle',number:'Nombre',date:'Date'};
+var FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤',number:'🔢',date:'📅',info:'📄'};
+var FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle',number:'Nombre',date:'Date',info:'Texte informatif'};
 
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 function gid(){return Math.random().toString(36).slice(2,10);}
@@ -668,6 +671,7 @@ document.getElementById('fldSaveBtn').textContent=idx>=0?'Enregistrer':'Ajouter'
 // Reset
 document.getElementById('fld-label').value='';
 document.getElementById('fld-desc').value='';
+document.getElementById('fld-body').value='';
 document.getElementById('fld-type').value='text';
 document.getElementById('fld-req').checked=false;
 document.getElementById('fld-sameCard').checked=false;
@@ -678,11 +682,12 @@ document.getElementById('fld-contact').value='';
 document.getElementById('fld-opts-list').innerHTML='';
 document.getElementById('fld-opts-wrap').style.display='none';
 document.getElementById('fld-scale-wrap').style.display='none';
-// Populate condition field selector
+document.getElementById('fld-body-wrap').style.display='none';
+// Populate condition field selector (exclude info fields)
 var condSel=document.getElementById('fld-cond-field');
 condSel.innerHTML='<option value="">— Aucune —</option>';
 (currentForm.fields||[]).forEach(function(f,i){
-if(i!==idx)condSel.innerHTML+='<option value="'+f.id+'">'+esc(f.label)+'</option>';
+if(i!==idx&&f.type!=='info')condSel.innerHTML+='<option value="'+f.id+'">'+esc(f.label)+'</option>';
 });
 // Fill if editing
 if(idx>=0&&currentForm.fields&&currentForm.fields[idx]){
@@ -692,6 +697,7 @@ document.getElementById('fld-desc').value=fld.description||'';
 document.getElementById('fld-type').value=fld.type||'text';
 document.getElementById('fld-req').checked=!!fld.required;
 document.getElementById('fld-sameCard').checked=!!fld.sameCard;
+if(fld.body)document.getElementById('fld-body').value=fld.body;
 if(fld.options&&fld.options.length){
 document.getElementById('fld-opts-wrap').style.display='block';
 fld.options.forEach(function(o){_addOptRow(o);});
@@ -715,9 +721,15 @@ document.getElementById('fldModal').addEventListener('click',function(e){if(e.ta
 
 function fldTypeChanged(){
 var type=document.getElementById('fld-type').value;
+var isInfo=type==='info';
 var hasOpts=type==='select'||type==='checkbox'||type==='radio';
 document.getElementById('fld-opts-wrap').style.display=hasOpts?'block':'none';
 document.getElementById('fld-scale-wrap').style.display=type==='scale'?'block':'none';
+document.getElementById('fld-body-wrap').style.display=isInfo?'block':'none';
+document.getElementById('fld-req-wrap').style.display=isInfo?'none':'';
+document.getElementById('fld-samecard-wrap').style.display=isInfo?'none':'';
+document.getElementById('fld-contact-wrap').style.display=isInfo?'none':'';
+document.getElementById('fld-cond-wrap').style.display=isInfo?'none':'';
 if(hasOpts&&document.getElementById('fld-opts-list').children.length===0){addFldOption();addFldOption();}
 }
 
@@ -729,15 +741,21 @@ document.getElementById('fld-opts-list').appendChild(row);
 function addFldOption(){_addOptRow('');}
 
 function saveFldModal(){
-var label=document.getElementById('fld-label').value.trim();
-if(!label){toast('❌ Le libellé est requis');return;}
 var type=document.getElementById('fld-type').value;
+var label=document.getElementById('fld-label').value.trim();
+if(type!=='info'&&!label){toast('❌ Le libellé est requis');return;}
 var field={
 id:_fldEditIdx>=0&&currentForm.fields[_fldEditIdx]?currentForm.fields[_fldEditIdx].id:'fld_'+gid().slice(0,6),
 label:label,
 type:type,
-required:document.getElementById('fld-req').checked
+required:type!=='info'&&document.getElementById('fld-req').checked
 };
+if(type==='info'){
+var body=document.getElementById('fld-body').value.trim();
+if(!body){toast('❌ Le contenu de la carte est requis');return;}
+field.body=body;
+field.label=label||'📄 Carte d\'intro';
+}else{
 if(document.getElementById('fld-sameCard').checked)field.sameCard=true;
 var desc=document.getElementById('fld-desc').value.trim();
 if(desc)field.description=desc;
@@ -755,6 +773,7 @@ if(condField)field.condition={fieldId:condField,operator:document.getElementById
 // Contact mapping
 var contactMap=document.getElementById('fld-contact').value;
 if(contactMap)field.contactMapping=contactMap;
+}
 // Save
 if(!currentForm.fields)currentForm.fields=[];
 if(_fldEditIdx>=0&&_fldEditIdx<currentForm.fields.length)currentForm.fields[_fldEditIdx]=field;
