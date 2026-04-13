@@ -386,7 +386,104 @@ async function runFullPipeline(db, storage, callSid, recordingSid) {
     { merge: true }
   );
 
+  // ------------------------------------------------------------------
+  // Étape 5 : dual-write dans leads/{leadId}.communications[]
+  // Non-bloquant — si ça échoue, le pipeline a quand même réussi.
+  // ------------------------------------------------------------------
+  try {
+    const freshSnap = await callLogRef.get();
+    const freshLog = freshSnap.exists ? freshSnap.data() : null;
+    if (freshLog) {
+      await writeLeadCommunication(db, callSid, freshLog, analysis);
+    }
+  } catch (err) {
+    console.error(`[pipeline] ${callSid} — writeLeadCommunication failed:`, err.message);
+  }
+
   console.log(`[pipeline] ${callSid} — Full pipeline completed successfully.`);
+}
+
+// ============================================================================
+// Étape 5 : Dual-write dans leads/{leadId}.communications[]
+// ----------------------------------------------------------------------------
+// Le lead card (sales-leads.html) et le pipeline CRM (sales-crm-app.js) lisent
+// leads.communications[] pour afficher l'historique d'appels + SMS. On y pousse
+// une entrée compacte contenant callLogId (référence vers call_logs) pour que
+// le frontend puisse appeler /api/call-detail au moment de l'affichage.
+// ============================================================================
+
+async function writeLeadCommunication(db, callSid, callLog, analysis) {
+  if (!callLog.leadId) {
+    // Appel non rattaché à un lead (ex: inbound sur un numéro non mappé) — skip
+    return;
+  }
+
+  // Résout ownerName depuis _meta/team_members via firebaseUid
+  let ownerName = null;
+  let ownerUid = callLog.userId || null;
+  if (ownerUid) {
+    try {
+      const metaSnap = await db.collection('_meta').doc('team_members').get();
+      if (metaSnap.exists) {
+        const members = metaSnap.data().members || [];
+        const m = members.find(x => x.firebaseUid === ownerUid);
+        if (m) ownerName = m.shortName || m.displayName || null;
+      }
+    } catch (_) { /* non-bloquant */ }
+  }
+
+  // Date de l'appel = initiatedAt si dispo, sinon maintenant
+  const callDate = callLog.initiatedAt && callLog.initiatedAt.toDate
+    ? callLog.initiatedAt.toDate()
+    : new Date();
+  const isoDate = callDate.toISOString();
+
+  const commEntry = {
+    type: 'call',
+    direction: callLog.direction || 'outbound',
+    content: null,
+    duration: callLog.durationSec || null,
+    source: 'twilio-dialer',
+    date: isoDate,
+    createdAt: isoDate,
+    ownerUid,
+    ownerName,
+    // Lien vers call_logs pour le modal détail
+    callLogId: callSid,
+    hasRecording: !!callLog.recordingStoragePath,
+    hasTranscript: !!(analysis && analysis.interestLevel != null),
+    hasAiAnalysis: !!(analysis && analysis.summary),
+  };
+
+  // Entrée timeline_history (format texte court + couleur)
+  const hh = String(callDate.getHours()).padStart(2, '0');
+  const mm = String(callDate.getMinutes()).padStart(2, '0');
+  const dd = String(callDate.getDate()).padStart(2, '0');
+  const mo = String(callDate.getMonth() + 1).padStart(2, '0');
+  const durMin = commEntry.duration ? ' [' + Math.floor(commEntry.duration / 60) + 'm]' : '';
+  const dirLabel = commEntry.direction === 'outbound' ? 'sortant' : 'entrant';
+  const tlText = '📞 Appel ' + dirLabel + ' (Dialer)' + durMin + ' 🎙 📄';
+  const timelineEntry = {
+    text: tlText,
+    date: `${dd}/${mo} ${hh}:${mm}`,
+    color: '#34d399',
+  };
+
+  try {
+    await db.collection('leads').doc(callLog.leadId).update({
+      communications: admin.firestore.FieldValue.arrayUnion(commEntry),
+      timeline_history: admin.firestore.FieldValue.arrayUnion(timelineEntry),
+      lastContactAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastContactType: 'call',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    // Non-bloquant : si le lead a été supprimé entre-temps, on log juste.
+    console.error(
+      `[writeLeadCommunication] Failed to update lead ${callLog.leadId}:`,
+      err.message
+    );
+  }
 }
 
 // ============================================================================
@@ -399,4 +496,5 @@ module.exports = {
   transcribeWithWhisper,
   analyzeWithClaude,
   fetchLeadContext,
+  writeLeadCommunication,
 };
