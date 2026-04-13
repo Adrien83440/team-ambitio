@@ -2245,6 +2245,8 @@ function renderClientsGrid() {
     grid.addEventListener('mouseout', function(e) { var tr = e.target.closest('.cl-row'); if (tr) tr.style.background = ''; });
     grid._clRowBound = true;
   }
+  var STATUS_CLIENT = { active: { label: '✅ Actif', color: '#10b981' }, paused: { label: '⏸ En pause', color: '#f59e0b' }, completed: { label: '🎉 Terminé', color: '#a78bfa' } };
+  var STATUS_PAY = { pending_mandate: '⏳ Mandat en attente', mandate_active: '✅ Mandat actif', active: '💸 Prélèvements actifs', completed: '🎉 Terminé', failed: '❌ Échec', draft: '📝 Brouillon' };
   var viewMode = window._clientsViewMode || 'grid';
   if (!list.length) {
     grid.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:14px;font-weight:600">Aucun client trouvé</div></div>';
@@ -2252,8 +2254,6 @@ function renderClientsGrid() {
   }
   if (viewMode === 'list') { renderClientsList(list, grid, EURO, fmtDate, STATUS_CLIENT, STATUS_PAY); return; }
 
-  var STATUS_CLIENT = { active: { label: '✅ Actif', color: '#10b981' }, paused: { label: '⏸ En pause', color: '#f59e0b' }, completed: { label: '🎉 Terminé', color: '#a78bfa' } };
-  var STATUS_PAY = { pending_mandate: '⏳ Mandat en attente', mandate_active: '✅ Mandat actif', active: '💸 Prélèvements actifs', completed: '🎉 Terminé', failed: '❌ Échec', draft: '📝 Brouillon' };
 
   grid.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">' +
     list.map(function(c) {
