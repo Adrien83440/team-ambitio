@@ -1075,6 +1075,12 @@ label.flabel{display:block;font-size:10px;color:var(--muted);text-transform:uppe
 .cal-meeting-pill.avenir{background:rgba(96,165,250,.1);color:var(--blue);border:1px solid rgba(96,165,250,.2)}
 .cal-add-btn{position:absolute;bottom:6px;right:6px;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.06);border:1px dashed rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted2);cursor:pointer;transition:all .15s}
 .cal-add-btn:hover{background:rgba(167,139,250,.15);border-color:var(--purple);color:var(--purple)}
+/* ── Membres archivés (source : _meta/team_members.active === false) ── */
+.member-archived{opacity:.42 !important;filter:grayscale(.75);position:relative;cursor:not-allowed !important}
+.member-archived::after{content:'📦 Archivé';position:absolute;top:8px;right:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);pointer-events:none;z-index:2}
+.member-btn.member-archived{pointer-events:auto !important}
+.member-btn.member-archived::after{top:4px;right:4px;font-size:8px;padding:2px 6px}
+.member-archived input,.member-archived button,.member-archived select,.member-archived textarea{pointer-events:none !important;cursor:not-allowed !important}
 </style>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
 </head>
@@ -1101,6 +1107,31 @@ const MEMBERS = [
     linkedin:'',
   },
 ];
+
+/* ─── ARCHIVED FLAG (source : _meta/team_members via nav.js) ─── */
+function _markArchivedMembers() {
+  var tm = window.TEAM_MEMBERS || {};
+  MEMBERS.forEach(function(m) {
+    var meta = tm[m.uid];
+    m.archived = !!(meta && meta.active === false);
+  });
+  // Marque aussi SYNC_MEMBERS si présent (pour les tableaux d'agrégation)
+  if (typeof SYNC_MEMBERS !== 'undefined') {
+    SYNC_MEMBERS.forEach(function(m) {
+      var meta = tm[m.uid];
+      m.archived = !!(meta && meta.active === false);
+      m.active = !m.archived;
+    });
+  }
+}
+if (window.TEAM_MEMBERS) _markArchivedMembers();
+window.addEventListener('team-members-loaded', function() {
+  _markArchivedMembers();
+  // Re-render la section courante si accessible
+  if (typeof renderEspaces === 'function') {
+    try { renderEspaces(); } catch(e) {}
+  }
+});
 
 /* ── Meeting link (permanent — overridable per meeting) ── */
 const MEETING_LINK = lsGet('visio_default_link', 'https://us06web.zoom.us/j/00000000000?pwd=xxxxxx');
@@ -1207,10 +1238,11 @@ function setMainTab(name) {
    SECTION — ESPACES
 ════════════════════════════════════════════════════════════ */
 function renderEspaces() {
+  _markArchivedMembers();
   // Member selector buttons
   const sel = document.getElementById('member-selector');
   sel.innerHTML = MEMBERS.map(m => `
-    <div class="member-btn ${m.uid === currentMemberUid ? 'active' : ''}" style="--mb-color:${m.color}" onclick="selectMember('${m.uid}')">
+    <div class="member-btn ${m.uid === currentMemberUid ? 'active' : ''}${m.archived ? ' member-archived' : ''}" style="--mb-color:${m.color}" onclick="if(!this.classList.contains('member-archived'))selectMember('${m.uid}')">
       <div class="member-btn-av" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
       <div>
         <div class="member-btn-name">${m.name} ${m.surname}</div>

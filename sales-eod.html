@@ -546,10 +546,31 @@ document.getElementById('eodDate').value = fmtDate(new Date());
 // ══════════ AUTH ══════════
 // UIDs Firebase en dur : on n'utilise plus le matching par nom (race condition qui
 // provoquait des écritures sous des chemins eod/guillaume et eod/elodie en string).
+// ⚠ 2026-04-13 : UID Guillaume corrigé (manquait un O) + flag archived.
 var MEMBER_MAP = {
-  guillaume: { uid: 'uEE8DLaCNRZOiztmlBuHmWPSSx52', name: 'Guillaume', color: '#ef4444' },
+  guillaume: { uid: 'uEE8DLaCNRZOOiztmlBuHmWPSSx52', name: 'Guillaume', color: '#ef4444' },
   elodie:    { uid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', name: 'Élodie',    color: '#60a5fa' }
 };
+
+// Masque le bouton gate d'un membre archivé (lookup sur _meta/team_members
+// via window.TEAM_MEMBERS exposé par nav.js). Appelé au load + sur l'event
+// team-members-loaded. Grisage serait incohérent ici : un archivé ne doit
+// plus pouvoir saisir d'EOD du tout, donc on hide franchement.
+function _eodApplyArchivedFlags() {
+  var tm = window.TEAM_MEMBERS || {};
+  Object.keys(MEMBER_MAP).forEach(function(key) {
+    var meta = tm[key];
+    var isArchived = !!(meta && meta.active === false);
+    MEMBER_MAP[key].archived = isArchived;
+    var btn = document.querySelector('.eod-gate-btn[data-pick="' + key + '"]');
+    if (btn) btn.style.display = isArchived ? 'none' : '';
+  });
+}
+if (window.TEAM_MEMBERS) {
+  _eodApplyArchivedFlags();
+} else {
+  window.addEventListener('team-members-loaded', _eodApplyArchivedFlags);
+}
 
 (function initAuth() {
   var nmCache  = localStorage.getItem('ambitio_name') || 'Utilisateur';

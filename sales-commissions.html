@@ -604,6 +604,11 @@ body {
   margin-bottom: 14px; margin-top: 2px;
 }
 
+/* ── Membres archivés (source : _meta/team_members.active === false) ── */
+.member-archived{opacity:.42 !important;filter:grayscale(.75);position:relative}
+.member-archived::after{content:'📦 Archivé';position:absolute;top:8px;right:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);pointer-events:none;z-index:2}
+.member-archived input,.member-archived button,.member-archived select,.member-archived textarea{pointer-events:none !important;cursor:not-allowed !important}
+
 </style>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
 </head>
@@ -973,7 +978,7 @@ function renderListe() {
       ? Math.min(100, ((totalPts - (prev ? prev.pts : 0)) / (next.pts - (prev ? prev.pts : 0))) * 100)
       : 100;
 
-    return `<div class="member-card" style="--mc:${m.color}" onclick="openFiche('${m.uid}')">
+    return `<div class="member-card${m.archived?' member-archived':''}" style="--mc:${m.color}" onclick="if(!this.classList.contains('member-archived'))openFiche('${m.uid}')">
       <div class="mc-head">
         <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
         <div class="mc-info">
@@ -1214,10 +1219,25 @@ function toggleDealOk(i) {
   renderFiche();
 }
 
+/* ─── ARCHIVED FLAG (source : _meta/team_members via nav.js) ─── */
+function _markArchivedMembers() {
+  var tm = window.TEAM_MEMBERS || {};
+  MEMBERS_COMM.forEach(function(m) {
+    var meta = tm[m.uid];
+    m.archived = !!(meta && meta.active === false);
+  });
+}
+if (window.TEAM_MEMBERS) _markArchivedMembers();
+window.addEventListener('team-members-loaded', function() {
+  _markArchivedMembers();
+  if (typeof renderAll === 'function') renderAll();
+});
+
 /* ══════════════════════════════════════════════════════════
    RENDER ALL
 ══════════════════════════════════════════════════════════ */
 async function renderAll() {
+  _markArchivedMembers();
   document.getElementById('month-lbl').textContent = cmk();
   // Charger depuis Firestore si pas en cache
   var ck = MEMBERS_COMM[0].uid + '_' + cmk();

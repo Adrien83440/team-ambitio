@@ -26,13 +26,14 @@
    n'aurait pas encore chargé les membres au moment du premier sync. */
 
 const _SYNC_FALLBACK = [
-  { uid: 'guillaume', name: 'Guillaume', role: 'Closing + Setting', color: '#ef4444' },
-  { uid: 'elodie',    name: 'Élodie',    role: 'Closing',           color: '#60a5fa' },
+  { uid: 'elodie', name: 'Élodie', role: 'Closing + Setting', color: '#60a5fa', active: true },
 ];
 
 /** Retourne la liste des membres de l'équipe au format SYNC_MEMBERS legacy
- *  ({uid, name, role, color}). Lit depuis window.TEAM_MEMBERS_LIST si dispo,
- *  sinon utilise le fallback statique. */
+ *  ({uid, name, role, color, active}). Lit depuis window.TEAM_MEMBERS_LIST si
+ *  dispo, sinon utilise le fallback statique. Les membres archivés sont
+ *  conservés dans la liste avec active:false — c'est à chaque page de rendu
+ *  d'appliquer le grisage via CSS. */
 function _getSyncMembers() {
   const live = (typeof window !== 'undefined') && window.TEAM_MEMBERS_LIST;
   if (live && live.length) {
