@@ -66,6 +66,8 @@
       .dbr-call-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.35); }
       .dbr-call-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       .crm-card:has(> .dbr-checkbox) { padding-left: 40px; }
+      .ld-card:has(> .dbr-checkbox) { position: relative; }
+      .ld-card:has(> .dbr-checkbox) .ld-card-head { padding-left: 44px; }
       .dbr-checkbox {
         appearance: none;
         -webkit-appearance: none;
