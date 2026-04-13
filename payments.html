@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Paiements</title>
+<link rel="stylesheet" href="sales.css"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+<style>
+:root{--pay-green:#10b981;--pay-amber:#f59e0b;--pay-red:#ef4444;--pay-blue:#60a5fa;--pay-purple:#a78bfa}
+.pay-wrap{max-width:1200px;margin:0 auto;padding:20px 24px 80px}
+/* Header */
+.pay-header{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+.pay-header h1{font-family:var(--font-d);font-size:20px;font-weight:800;letter-spacing:-.3px}
+.pay-header small{font-size:12px;color:var(--muted)}
+/* Stats */
+.pay-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:20px}
+.pay-stat{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+.pay-stat-l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}
+.pay-stat-v{font-size:22px;font-weight:800;font-family:var(--font-m);margin-top:2px}
+/* Filters */
+.pay-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.pay-fbtn{padding:7px 14px;border-radius:var(--radius);border:1.5px solid var(--border);background:var(--bg2);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.pay-fbtn:hover{border-color:var(--border2);color:var(--text)}
+.pay-fbtn.on{border-color:var(--pay-green);color:var(--pay-green);background:rgba(16,185,129,.08)}
+/* Table */
+.pay-table-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);overflow:hidden}
+.pay-table{width:100%;border-collapse:collapse}
+.pay-table thead th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);background:var(--bg3);border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:5}
+.pay-table tbody tr{border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;transition:background .1s}
+.pay-table tbody tr:hover{background:rgba(255,255,255,.02)}
+.pay-table tbody td{padding:10px 14px;font-size:13px;vertical-align:middle}
+/* Status badges */
+.pay-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+.pay-badge.draft{background:rgba(255,255,255,.05);color:var(--muted);border:1px solid var(--border)}
+.pay-badge.pending_mandate{background:rgba(245,158,11,.1);color:var(--pay-amber);border:1px solid rgba(245,158,11,.2)}
+.pay-badge.mandate_active{background:rgba(16,185,129,.08);color:var(--pay-green);border:1px solid rgba(16,185,129,.15)}
+.pay-badge.active{background:rgba(16,185,129,.12);color:var(--pay-green);border:1px solid rgba(16,185,129,.25)}
+.pay-badge.completed{background:rgba(167,139,250,.1);color:var(--pay-purple);border:1px solid rgba(167,139,250,.2)}
+.pay-badge.failed{background:rgba(239,68,68,.1);color:var(--pay-red);border:1px solid rgba(239,68,68,.2)}
+.pay-badge.cancelled{background:rgba(255,255,255,.04);color:rgba(255,255,255,.3);border:1px solid rgba(255,255,255,.06)}
+/* Modal */
+.pay-mo-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.pay-mo-bg.show{display:flex}
+.pay-mo{background:var(--bg2);border:1px solid var(--border2);border-radius:18px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;padding:28px;margin:16px}
+.pay-mo-title{font-family:var(--font-d);font-size:18px;font-weight:800;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
+.pay-mo-close{background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1}
+.pay-group{margin-bottom:18px}
+.pay-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.pay-input,.pay-select{width:100%;padding:10px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--font-b);font-size:13px;outline:none;transition:border-color .15s;box-sizing:border-box}
+.pay-input:focus,.pay-select:focus{border-color:var(--pay-green)}
+.pay-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pay-type-toggle{display:flex;border-radius:10px;overflow:hidden;border:1.5px solid var(--border)}
+.pay-type-btn{flex:1;padding:10px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:none;color:var(--muted);text-align:center;transition:all .15s;font-family:var(--font-b)}
+.pay-type-btn.on{background:rgba(16,185,129,.12);color:var(--pay-green)}
+.pay-installments-wrap{display:none;margin-top:14px}
+.pay-installments-wrap.show{display:block}
+.pay-preview{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:14px;font-size:12px;color:var(--muted);line-height:1.8}
+.pay-preview strong{color:var(--text)}
+.pay-actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+.pay-btn{padding:10px 20px;border:none;border-radius:10px;font-family:var(--font-b);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.pay-btn-primary{background:var(--pay-green);color:#000}
+.pay-btn-primary:hover{filter:brightness(1.1)}
+.pay-btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.pay-btn-ghost{background:var(--bg3);border:1px solid var(--border);color:var(--muted)}
+.pay-btn-ghost:hover{border-color:var(--border2);color:var(--text)}
+.pay-btn-amber{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:var(--pay-amber)}
+.pay-btn-red{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:var(--pay-red)}
+/* Detail panel */
+.pay-detail{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:24px;display:none}
+.pay-detail.show{display:block}
+.pay-detail-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:20px}
+.pay-detail-av{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#10b98188,#10b981);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;flex-shrink:0}
+.pay-detail-name{font-family:var(--font-d);font-size:17px;font-weight:800}
+.pay-detail-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.pay-section{margin-bottom:20px}
+.pay-section-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.pay-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pay-info-item{background:var(--bg3);border-radius:8px;padding:10px 12px}
+.pay-info-item-l{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.pay-info-item-v{font-size:13px;font-weight:600;color:var(--text);margin-top:3px}
+.pay-timeline{display:flex;flex-direction:column;gap:8px}
+.pay-tl-item{display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)}
+.pay-tl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.pay-tl-text{font-size:12px;font-weight:600;color:var(--text);flex:1}
+.pay-tl-date{font-size:10px;color:var(--muted);white-space:nowrap}
+.pay-send-link-wrap{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px}
+.pay-link-url{font-family:monospace;font-size:11px;color:var(--pay-blue);word-break:break-all;line-height:1.5;margin-bottom:10px}
+.pay-empty{text-align:center;padding:60px 20px;color:var(--muted)}
+.pay-empty-icon{font-size:48px;margin-bottom:12px}
+@media(max-width:700px){.pay-row2{grid-template-columns:1fr}.pay-info-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="pay-wrap">
+  <div class="pay-header">
+    <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:18px">💳</div>
+    <div><h1>Paiements</h1><small>GoCardless — Prélèvements SEPA</small></div>
+    <div style="flex:1"></div>
+    <button class="pay-btn pay-btn-primary" id="btnNewPay">+ Nouveau paiement</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="pay-stats" id="payStats"></div>
+
+  <!-- Filters -->
+  <div class="pay-filters">
+    <select class="pay-fbtn" id="filterStatus" style="padding:7px 12px;appearance:none;cursor:pointer">
+      <option value="">Tous les statuts</option>
+      <option value="pending_mandate">⏳ Mandat en attente</option>
+      <option value="mandate_active">✅ Mandat actif</option>
+      <option value="active">💸 Prélèvements actifs</option>
+      <option value="completed">🎉 Terminé</option>
+      <option value="failed">❌ Échec</option>
+      <option value="cancelled">🚫 Annulé</option>
+    </select>
+    <select class="pay-fbtn" id="filterCloser" style="padding:7px 12px;appearance:none;cursor:pointer">
+      <option value="">Tous les closeurs</option>
+    </select>
+    <input class="pay-fbtn" id="filterSearch" placeholder="🔍 Rechercher un client..." style="min-width:200px;text-align:left;outline:none"/>
+  </div>
+
+  <!-- Table -->
+  <div class="pay-table-wrap" id="payTableWrap">
+    <table class="pay-table">
+      <thead>
+        <tr>
+          <th>Client</th>
+          <th>Type</th>
+          <th>Montant</th>
+          <th>Progression</th>
+          <th>Statut</th>
+          <th>Closeur</th>
+          <th>Créé le</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="payTableBody">
+        <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">Chargement…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Detail panel -->
+  <div class="pay-detail" id="payDetail" style="margin-top:16px"></div>
+</div>
+
+<!-- Modal création paiement -->
+<div class="pay-mo-bg" id="payModal">
+  <div class="pay-mo">
+    <div class="pay-mo-title">
+      <span id="payModalTitle">Nouveau paiement</span>
+      <button class="pay-mo-close" onclick="closePayModal()">✕</button>
+    </div>
+
+    <!-- Lead info -->
+    <div class="pay-group">
+      <div class="pay-label">Client</div>
+      <input class="pay-input" id="pmLeadName" placeholder="Nom du client" style="margin-bottom:8px"/>
+      <input class="pay-input" id="pmLeadEmail" placeholder="Email" style="margin-bottom:8px"/>
+      <input class="pay-input" id="pmLeadPhone" placeholder="Téléphone (+33…)"/>
+    </div>
+
+    <!-- Type -->
+    <div class="pay-group">
+      <div class="pay-label">Type de paiement</div>
+      <div class="pay-type-toggle">
+        <button class="pay-type-btn on" id="typeFull" onclick="setPayType('full')">💳 Paiement intégral</button>
+        <button class="pay-type-btn" id="typeInst" onclick="setPayType('installments')">📅 Paiement fractionné</button>
+      </div>
+    </div>
+
+    <!-- Montant -->
+    <div class="pay-row2">
+      <div class="pay-group">
+        <div class="pay-label">Montant total (€)</div>
+        <input class="pay-input" id="pmTotal" type="number" min="1" step="0.01" placeholder="Ex: 5000" oninput="updatePreview()"/>
+      </div>
+      <div class="pay-group">
+        <div class="pay-label">Description</div>
+        <input class="pay-input" id="pmDesc" placeholder="Ex: Programme Business Phénix"/>
+      </div>
+    </div>
+
+    <!-- Mensualités -->
+    <div class="pay-installments-wrap" id="installmentsWrap">
+      <div class="pay-row2">
+        <div class="pay-group">
+          <div class="pay-label">Nombre de mensualités</div>
+          <select class="pay-select" id="pmCount" onchange="updatePreview()">
+            <option value="2">2 mensualités</option>
+            <option value="3">3 mensualités</option>
+            <option value="4">4 mensualités</option>
+            <option value="6">6 mensualités</option>
+            <option value="9">9 mensualités</option>
+            <option value="12" selected>12 mensualités</option>
+          </select>
+        </div>
+        <div class="pay-group">
+          <div class="pay-label">Date du 1er prélèvement</div>
+          <input class="pay-input" id="pmStartDate" type="date"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div class="pay-preview" id="pmPreview"></div>
+
+    <div class="pay-actions">
+      <button class="pay-btn pay-btn-primary" id="btnCreatePay" onclick="createPayment()">✅ Créer le paiement</button>
+      <button class="pay-btn pay-btn-ghost" onclick="closePayModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const db = firebase.firestore();
+let currentUser = null;
+let currentRole = null;
+let allPayments = [];
+let filteredPayments = [];
+let members = [];
+let currentPaymentId = null;
+
+const STATUS_LABELS = {
+  draft: '📝 Brouillon',
+  pending_mandate: '⏳ Mandat en attente',
+  mandate_active: '✅ Mandat actif',
+  active: '💸 Actifs',
+  completed: '🎉 Terminé',
+  failed: '❌ Échec',
+  cancelled: '🚫 Annulé'
+};
+const EURO = v => new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(v||0);
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function fmtDate(ts){if(!ts)return '—';const d=ts.toDate?ts.toDate():new Date(ts);return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});}
+function toast(msg,ok=true){const t=document.createElement('div');t.textContent=msg;t.style.cssText=`position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:${ok?'#0a2e1a':'#2e0a0a'};border:1px solid ${ok?'rgba(16,185,129,.3)':'rgba(239,68,68,.3)'};color:${ok?'#34d399':'#fca5a5'};font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:9999;font-family:var(--font-b)`;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
+
+/* ══ LOAD ══ */
+firebase.auth().onAuthStateChanged(async u => {
+  if (!u) { window.location.href = 'index.html'; return; }
+  currentUser = u;
+  const snap = await db.collection('users').doc(u.uid).get();
+  currentRole = snap.exists ? snap.data().role : 'sales';
+
+  // Show/hide new payment button for non-sales
+  if (currentRole === 'admin') document.getElementById('btnNewPay').style.display = '';
+
+  // Load team members for filter
+  const tmSnap = await db.collection('_meta').doc('team_members').get();
+  if (tmSnap.exists) {
+    const raw = tmSnap.data().members || {};
+    members = Array.isArray(raw) ? raw : Object.values(raw);
+    const sel = document.getElementById('filterCloser');
+    members.filter(m => m.active !== false).forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.slug || m.firebaseUid || '';
+      opt.textContent = m.displayName || m.shortName || m.slug;
+      sel.appendChild(opt);
+    });
+  }
+
+  loadPayments();
+  checkUrlParams();
+});
+
+function checkUrlParams() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('mandateDone') && p.get('paymentId')) {
+    toast('✅ Mandat créé avec succès ! Le paiement peut maintenant être déclenché.');
+    openDetail(p.get('paymentId'));
+  }
+  if (p.get('mandateCancelled')) toast('⚠️ Le client a annulé la création du mandat.', false);
+  if (p.get('leadId')) {
+    // Pré-remplir depuis le lead
+    prefillFromLead(p.get('leadId'));
+    openPayModal();
+  }
+}
+
+async function prefillFromLead(leadId) {
+  try {
+    const snap = await db.collection('leads').doc(leadId).get();
+    if (!snap.exists) return;
+    const l = snap.data();
+    document.getElementById('pmLeadName').value = l.nom || '';
+    document.getElementById('pmLeadEmail').value = l.email || '';
+    document.getElementById('pmLeadPhone').value = l.telephone || '';
+    document.getElementById('payModal').dataset.leadId = leadId;
+  } catch(e) {}
+}
+
+function loadPayments() {
+  let q = db.collection('payments').orderBy('createdAt', 'desc');
+  if (currentRole === 'sales') q = q.where('createdBy', '==', currentUser.uid);
+  q.onSnapshot(snap => {
+    allPayments = [];
+    snap.forEach(d => { allPayments.push({ id: d.id, ...d.data() }); });
+    renderStats();
+    applyFilters();
+  });
+}
+
+function renderStats() {
+  const total = allPayments.length;
+  const active = allPayments.filter(p => p.status === 'active' || p.status === 'mandate_active').length;
+  const completed = allPayments.filter(p => p.status === 'completed').length;
+  const totalVolume = allPayments.filter(p => p.status !== 'cancelled' && p.status !== 'draft').reduce((s, p) => s + (p.totalAmount || 0), 0);
+  const collected = allPayments.reduce((s, p) => s + (p.paidAmount || 0), 0);
+
+  document.getElementById('payStats').innerHTML = `
+    <div class="pay-stat"><div class="pay-stat-l">Total</div><div class="pay-stat-v">${total}</div></div>
+    <div class="pay-stat"><div class="pay-stat-l">Actifs</div><div class="pay-stat-v" style="color:var(--pay-green)">${active}</div></div>
+    <div class="pay-stat"><div class="pay-stat-l">Terminés</div><div class="pay-stat-v" style="color:var(--pay-purple)">${completed}</div></div>
+    <div class="pay-stat"><div class="pay-stat-l">Volume</div><div class="pay-stat-v" style="color:var(--pay-amber)">${EURO(totalVolume)}</div></div>
+    <div class="pay-stat"><div class="pay-stat-l">Collecté</div><div class="pay-stat-v" style="color:var(--pay-green)">${EURO(collected)}</div></div>
+  `;
+}
+
+function applyFilters() {
+  const status = document.getElementById('filterStatus').value;
+  const closer = document.getElementById('filterCloser').value;
+  const q = (document.getElementById('filterSearch').value || '').toLowerCase();
+  filteredPayments = allPayments.filter(p => {
+    if (status && p.status !== status) return false;
+    if (closer && p.closerSlug !== closer && p.closerId !== closer) return false;
+    if (q) {
+      const search = (p.leadName + ' ' + p.leadEmail + ' ' + p.description).toLowerCase();
+      if (!search.includes(q)) return false;
+    }
+    return true;
+  });
+  renderTable();
+}
+
+document.getElementById('filterStatus').addEventListener('change', applyFilters);
+document.getElementById('filterCloser').addEventListener('change', applyFilters);
+document.getElementById('filterSearch').addEventListener('input', applyFilters);
+
+function renderTable() {
+  const tbody = document.getElementById('payTableBody');
+  if (!filteredPayments.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="pay-empty"><div class="pay-empty-icon">💳</div><div>Aucun paiement trouvé</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = filteredPayments.map(p => {
+    const prog = p.installmentsCount > 1
+      ? `${p.paidCount || 0}/${p.installmentsCount}`
+      : (p.status === 'completed' ? '✅' : p.status === 'active' ? '⏳' : '—');
+    const typeLabel = p.type === 'installments' ? `📅 ${p.installmentsCount} mois` : '💳 Intégral';
+    const closer = p.closerName || p.closerSlug || '—';
+    return `<tr onclick="openDetail('${p.id}')">
+      <td><div style="font-weight:600">${esc(p.leadName||'—')}</div><div style="font-size:11px;color:var(--muted)">${esc(p.leadEmail||'')}</div></td>
+      <td><span style="font-size:12px;color:var(--muted)">${typeLabel}</span></td>
+      <td><span style="font-weight:700">${EURO(p.totalAmount)}</span>${p.type==='installments'?`<div style="font-size:10px;color:var(--muted)">${EURO(p.installmentAmount)}/mois</div>`:''}</td>
+      <td style="font-size:12px;color:var(--muted)">${prog}</td>
+      <td><span class="pay-badge ${p.status||'draft'}">${STATUS_LABELS[p.status]||p.status||'—'}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${esc(closer)}</td>
+      <td style="font-size:11px;color:var(--muted)">${fmtDate(p.createdAt)}</td>
+      <td><button class="pay-btn pay-btn-ghost" style="padding:5px 10px;font-size:11px" onclick="event.stopPropagation();openDetail('${p.id}')">→</button></td>
+    </tr>`;
+  }).join('');
+}
+
+/* ══ DETAIL ══ */
+async function openDetail(id) {
+  currentPaymentId = id;
+  const p = allPayments.find(x => x.id === id);
+  if (!p) return;
+  const el = document.getElementById('payDetail');
+  el.classList.add('show');
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  const ini = (p.leadName || '💳')[0].toUpperCase();
+  const canTrigger = (p.status === 'mandate_active') && (currentRole === 'admin' || p.createdBy === currentUser.uid);
+  const canSendLink = (p.status === 'pending_mandate' || p.status === 'draft') && (currentRole === 'admin' || p.createdBy === currentUser.uid);
+  const isAdmin = currentRole === 'admin';
+
+  let linkSection = '';
+  if (p.gcBillingRequestFlowUrl) {
+    linkSection = `<div class="pay-send-link-wrap">
+      <div class="pay-label" style="margin-bottom:8px">🔗 Lien mandat IBAN</div>
+      <div class="pay-link-url">${esc(p.gcBillingRequestFlowUrl)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="pay-btn pay-btn-ghost" style="font-size:12px" onclick="copyLink('${esc(p.gcBillingRequestFlowUrl)}')">📋 Copier</button>
+        ${p.leadPhone ? `<button class="pay-btn pay-btn-amber" style="font-size:12px" onclick="sendLink('${id}','sms')">📱 Envoyer SMS</button>` : ''}
+        ${p.leadEmail ? `<button class="pay-btn pay-btn-amber" style="font-size:12px" onclick="sendLink('${id}','email')">📧 Envoyer email</button>` : ''}
+      </div>
+    </div>`;
+  }
+
+  const timeline = (p.paymentsHistory || []).map(h => `
+    <div class="pay-tl-item">
+      <div class="pay-tl-dot" style="background:var(--pay-green)"></div>
+      <div class="pay-tl-text">💰 Prélèvement reçu — ${EURO(h.amount)}</div>
+      <div class="pay-tl-date">${h.date ? new Date(h.date).toLocaleDateString('fr-FR') : ''}</div>
+    </div>`).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+      <div class="pay-detail-head">
+        <div class="pay-detail-av">${ini}</div>
+        <div>
+          <div class="pay-detail-name">${esc(p.leadName||'Client')}</div>
+          <div class="pay-detail-meta">${esc(p.leadEmail||'')} ${p.leadPhone?'· '+esc(p.leadPhone):''}</div>
+        </div>
+      </div>
+      <button class="pay-btn pay-btn-ghost" style="font-size:11px;padding:6px 10px" onclick="document.getElementById('payDetail').classList.remove('show')">✕</button>
+    </div>
+    <span class="pay-badge ${p.status||'draft'}">${STATUS_LABELS[p.status]||p.status}</span>
+
+    <div class="pay-section" style="margin-top:16px">
+      <div class="pay-section-title">Détails du paiement</div>
+      <div class="pay-info-grid">
+        <div class="pay-info-item"><div class="pay-info-item-l">Type</div><div class="pay-info-item-v">${p.type==='installments'?`📅 Fractionné (${p.installmentsCount} mois)`:'💳 Intégral'}</div></div>
+        <div class="pay-info-item"><div class="pay-info-item-l">Montant total</div><div class="pay-info-item-v" style="color:var(--pay-amber)">${EURO(p.totalAmount)}</div></div>
+        ${p.type==='installments'?`<div class="pay-info-item"><div class="pay-info-item-l">Mensualité</div><div class="pay-info-item-v">${EURO(p.installmentAmount)}/mois</div></div>`:''}
+        <div class="pay-info-item"><div class="pay-info-item-l">Collecté</div><div class="pay-info-item-v" style="color:var(--pay-green)">${EURO(p.paidAmount||0)}</div></div>
+        <div class="pay-info-item"><div class="pay-info-item-l">Progression</div><div class="pay-info-item-v">${p.paidCount||0} / ${p.installmentsCount||1} prélèvement${(p.installmentsCount||1)>1?'s':''}</div></div>
+        <div class="pay-info-item"><div class="pay-info-item-l">Closeur</div><div class="pay-info-item-v">${esc(p.closerName||p.closerSlug||'—')}</div></div>
+        ${p.description?`<div class="pay-info-item" style="grid-column:1/-1"><div class="pay-info-item-l">Description</div><div class="pay-info-item-v">${esc(p.description)}</div></div>`:''}
+        ${p.gcMandateId?`<div class="pay-info-item"><div class="pay-info-item-l">Mandat GC</div><div class="pay-info-item-v" style="font-size:11px;font-family:monospace">${esc(p.gcMandateId)}</div></div>`:''}
+      </div>
+    </div>
+
+    ${linkSection ? `<div class="pay-section"><div class="pay-section-title">Lien mandat</div>${linkSection}</div>` : ''}
+
+    <div class="pay-section">
+      <div class="pay-section-title">Actions</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${canSendLink && !p.gcBillingRequestFlowUrl ? `<button class="pay-btn pay-btn-primary" onclick="generateMandateLink('${id}')">🔗 Générer le lien mandat</button>` : ''}
+        ${canTrigger ? `<button class="pay-btn pay-btn-primary" onclick="triggerPayment('${id}')">🚀 Déclencher le prélèvement</button>` : ''}
+        ${isAdmin && p.status !== 'cancelled' && p.status !== 'completed' ? `<button class="pay-btn pay-btn-red" onclick="cancelPayment('${id}')">🚫 Annuler</button>` : ''}
+      </div>
+    </div>
+
+    ${timeline ? `<div class="pay-section"><div class="pay-section-title">Historique des prélèvements</div><div class="pay-timeline">${timeline}</div></div>` : ''}
+  `;
+}
+
+/* ══ MODAL CREATION ══ */
+let payType = 'full';
+function openPayModal() { document.getElementById('payModal').classList.add('show'); updatePreview(); }
+function closePayModal() { document.getElementById('payModal').classList.remove('show'); }
+document.getElementById('payModal').addEventListener('click', e => { if (e.target === document.getElementById('payModal')) closePayModal(); });
+document.getElementById('btnNewPay').addEventListener('click', openPayModal);
+
+function setPayType(t) {
+  payType = t;
+  document.getElementById('typeFull').classList.toggle('on', t === 'full');
+  document.getElementById('typeInst').classList.toggle('on', t === 'installments');
+  document.getElementById('installmentsWrap').classList.toggle('show', t === 'installments');
+  updatePreview();
+}
+
+function updatePreview() {
+  const total = parseFloat(document.getElementById('pmTotal').value) || 0;
+  const count = parseInt(document.getElementById('pmCount').value) || 1;
+  const el = document.getElementById('pmPreview');
+  if (!total) { el.innerHTML = ''; return; }
+  if (payType === 'full') {
+    el.innerHTML = `<strong>${EURO(total)}</strong> prélevé en une seule fois.`;
+  } else {
+    const monthly = Math.round((total / count) * 100) / 100;
+    el.innerHTML = `<strong>${count} × ${EURO(monthly)}</strong> = ${EURO(count * monthly)} total${count*monthly !== total ? ' <span style="color:var(--pay-amber)">(arrondi)</span>' : ''}`;
+  }
+}
+
+async function createPayment() {
+  const btn = document.getElementById('btnCreatePay');
+  const name = document.getElementById('pmLeadName').value.trim();
+  const email = document.getElementById('pmLeadEmail').value.trim();
+  const phone = document.getElementById('pmLeadPhone').value.trim();
+  const total = parseFloat(document.getElementById('pmTotal').value);
+  const desc = document.getElementById('pmDesc').value.trim();
+  const count = payType === 'installments' ? parseInt(document.getElementById('pmCount').value) : 1;
+  const startDate = document.getElementById('pmStartDate').value || new Date().toISOString().slice(0, 10);
+  const leadId = document.getElementById('payModal').dataset.leadId || null;
+
+  if (!name || !email || !total) { toast('❌ Nom, email et montant requis', false); return; }
+
+  btn.disabled = true; btn.textContent = 'Création…';
+  try {
+    const memberSnap = await db.collection('_meta').doc('team_members').get();
+    let closerName = currentUser.displayName || currentUser.email || '';
+    let closerSlug = '';
+    if (memberSnap.exists) {
+      const raw = memberSnap.data().members || {};
+      const list = Array.isArray(raw) ? raw : Object.values(raw);
+      const me = list.find(m => m.firebaseUid === currentUser.uid);
+      if (me) { closerName = me.displayName || me.shortName || closerName; closerSlug = me.slug || ''; }
+    }
+
+    const monthly = payType === 'installments' ? Math.round((total / count) * 100) / 100 : total;
+    const doc = {
+      leadId, leadName: name, leadEmail: email, leadPhone: phone,
+      closerId: currentUser.uid, closerName, closerSlug,
+      type: payType,
+      totalAmount: total,
+      installmentsCount: count,
+      installmentAmount: monthly,
+      description: desc || 'Programme Business Phénix',
+      status: 'draft',
+      gcCustomerId: null, gcBillingRequestId: null, gcBillingRequestFlowUrl: null,
+      gcMandateId: null, gcSubscriptionId: null, gcPaymentId: null,
+      mandateSentAt: null, mandateSentVia: null, mandateCreatedAt: null,
+      startDate, paidCount: 0, paidAmount: 0, paymentsHistory: [],
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser.uid
+    };
+    const ref = await db.collection('payments').add(doc);
+    closePayModal();
+    toast('✅ Paiement créé ! Générez maintenant le lien mandat.');
+    setTimeout(() => openDetail(ref.id), 500);
+  } catch(e) {
+    toast('❌ ' + e.message, false);
+  } finally {
+    btn.disabled = false; btn.textContent = '✅ Créer le paiement';
+  }
+}
+
+/* ══ MANDATE LINK ══ */
+async function generateMandateLink(id) {
+  const p = allPayments.find(x => x.id === id);
+  if (!p) return;
+  try {
+    const token = await firebase.auth().currentUser.getIdToken();
+    const resp = await fetch('/api/gocardless-billing-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ paymentId: id, leadName: p.leadName, leadEmail: p.leadEmail, leadPhone: p.leadPhone })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Erreur API');
+    toast('✅ Lien mandat généré !');
+    openDetail(id);
+  } catch(e) { toast('❌ ' + e.message, false); }
+}
+
+function copyLink(url) {
+  navigator.clipboard.writeText(url).then(() => toast('📋 Lien copié !')).catch(() => toast('❌ Impossible de copier', false));
+}
+
+async function sendLink(id, via) {
+  const p = allPayments.find(x => x.id === id);
+  if (!p || !p.gcBillingRequestFlowUrl) return;
+  const msg = `Bonjour ${p.leadName},\n\nVeuillez renseigner vos coordonnées bancaires pour mettre en place votre prélèvement automatique :\n\n${p.gcBillingRequestFlowUrl}\n\nCordialement,\nL'équipe Ambitio`;
+
+  if (via === 'sms' && p.leadPhone) {
+    await db.collection('webhook_inbox').add({
+      action: 'send_sms', to: p.leadPhone, body: msg,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    toast('📱 SMS envoyé !');
+  } else if (via === 'email' && p.leadEmail) {
+    toast('📧 Envoi email en cours… (à implémenter)');
+  }
+
+  await db.collection('payments').doc(id).update({
+    mandateSentAt: firebase.firestore.FieldValue.serverTimestamp(),
+    mandateSentVia: via,
+    status: 'pending_mandate',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+/* ══ TRIGGER PAYMENT ══ */
+async function triggerPayment(id) {
+  if (!confirm('Déclencher le prélèvement GoCardless maintenant ?')) return;
+  try {
+    const token = await firebase.auth().currentUser.getIdToken();
+    const resp = await fetch('/api/gocardless-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ paymentId: id })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Erreur API');
+    toast('🚀 Prélèvement déclenché !');
+    openDetail(id);
+  } catch(e) { toast('❌ ' + e.message, false); }
+}
+
+async function cancelPayment(id) {
+  if (!confirm('Annuler ce paiement ?')) return;
+  await db.collection('payments').doc(id).update({
+    status: 'cancelled',
+    cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  toast('🚫 Paiement annulé');
+  document.getElementById('payDetail').classList.remove('show');
+}
+
+// Set default start date to tomorrow
+const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+document.getElementById('pmStartDate').value = tomorrow.toISOString().slice(0, 10);
+</script>
+<script src="nav.js"></script>
+</body>
+</html>
