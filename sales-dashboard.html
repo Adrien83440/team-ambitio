@@ -578,8 +578,7 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
   .yr-grid { grid-template-columns:1fr; }
   .month-grid { grid-template-columns:repeat(3,1fr); }
 }
-/* ── Membres archivés (source : _meta/team_members.active === false) ── */
-tr.member-archived td { opacity:.42; filter:grayscale(.75); }
+/* ── Membres archivés (visibles admin seulement, marqués d'une pill) ── */
 .archived-pill { display:inline-block; margin-left:8px; background:rgba(0,0,0,.72); color:#fed7aa; font-size:9px; font-weight:700; padding:2px 7px; border-radius:999px; border:1px solid rgba(251,146,60,.4); vertical-align:middle; }
 </style>
 
@@ -1156,7 +1155,10 @@ function renderFunnel(steps, type) {
 }
 
 function renderTeamTable(perMember) {
-  var members = SYNC_MEMBERS.map(function(m) {
+  var _role = window._currentRole || localStorage.getItem('ambitio_role') || '';
+  var _isAdmin = (_role === 'admin');
+  var _src = _isAdmin ? SYNC_MEMBERS : SYNC_MEMBERS.filter(function(m) { return m.active !== false; });
+  var members = _src.map(function(m) {
     var d = perMember[m.uid] || {};
     return Object.assign({}, m, d, {
       showup: d.calls > 0 ? d.lives/d.calls : 0,
@@ -1171,8 +1173,7 @@ function renderTeamTable(perMember) {
   h += '<thead><tr><th>Membre</th><th>Calls C.</th><th>Lives</th><th>Closes</th><th>Contracté</th><th>Collecté</th><th>Appels S.</th><th>Sets</th><th>Show-up S.</th></tr></thead>';
   h += '<tbody>';
   members.forEach(function(m) {
-    var cls = (m.active === false) ? ' member-archived' : '';
-    h += '<tr class="yr-row' + cls + '">';
+    h += '<tr class="yr-row">';
     h += '<td><span class="member-dot" style="background:' + m.color + '"></span>' + m.name + (m.active === false ? ' <span class="archived-pill">📦 Archivé</span>' : '') + '</td>';
     h += '<td>' + (m.calls||0) + '</td><td>' + (m.lives||0) + '</td><td>' + (m.closes||0) + '</td>';
     h += '<td>' + U.euro(m.contracte||0) + '</td><td>' + U.euro(m.collecte||0) + '</td>';

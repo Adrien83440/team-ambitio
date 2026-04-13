@@ -747,10 +747,8 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
 }
 @media(max-width: 768px) {
   .wrs-kpis { grid-template-columns: repeat(2,1fr); }
-/* ── Membres archivés (source : _meta/team_members.active === false) ── */
-.member-archived{opacity:.42 !important;filter:grayscale(.75);position:relative}
-.member-archived::after{content:'📦 Archivé';position:absolute;top:8px;right:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);pointer-events:none;z-index:2}
-.member-archived input,.member-archived button,.member-archived select,.member-archived textarea{pointer-events:none !important;cursor:not-allowed !important}
+/* ── Membres archivés (visibles admin seulement, marqués d'une pill) ── */
+.archived-pill{display:inline-block;margin-left:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);vertical-align:middle;text-transform:uppercase;letter-spacing:.3px}
 </style>
 </head>
 <body>
@@ -1019,7 +1017,7 @@ const RATE_DEFS = [
 
 /* ─── RENDER LISTE ─── */
 function renderListe() {
-  document.getElementById('members-grid').innerHTML = MEMBERS.map(m => {
+  document.getElementById('members-grid').innerHTML = _visibleMembers().map(m => {
     // Charger données locales
     const hardcoded = m.data[cmk()];
     const saved = (hardcoded && hardcoded._total) ? null : loadMemberData(m.uid);
@@ -1028,10 +1026,10 @@ function renderListe() {
     const rates = computeRates(tot);
 
     return `
-      <div class="member-card${m.archived?' member-archived':''}" style="--mc:${m.color}" onclick="if(!this.classList.contains('member-archived'))openFiche('${m.uid}')">
+      <div class="member-card" style="--mc:${m.color}" onclick="openFiche('${m.uid}')">
         <div class="mc-arrow">→</div>
         <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
-        <div class="mc-name">${m.name} ${m.surname}</div>
+        <div class="mc-name">${m.name} ${m.surname}${m.archived ? ' <span class="archived-pill">📦 Archivé</span>' : ''}</div>
         <div class="mc-role">${m.role}</div>
         <div class="mc-stats">
           <div class="mc-stat">
@@ -1458,13 +1456,25 @@ async function saveCurrentWeek(auto = false) {
   }
 }
 
-/* ─── ARCHIVED FLAG (source : _meta/team_members via nav.js) ─── */
+/* ─── ARCHIVED FLAG + VIEW FILTER (source : _meta/team_members via nav.js) ─── */
 function _markArchivedMembers() {
   var tm = window.TEAM_MEMBERS || {};
   MEMBERS.forEach(function(m) {
     var meta = tm[m.uid];
     m.archived = !!(meta && meta.active === false);
   });
+}
+function _isAdminView() {
+  var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
+  return role === 'admin';
+}
+// Retourne la liste des membres visibles pour l'utilisateur courant :
+// - Admin : tout le monde (incluant archivés)
+// - Sales/autre : uniquement les actifs
+function _visibleMembers() {
+  _markArchivedMembers();
+  if (_isAdminView()) return MEMBERS;
+  return MEMBERS.filter(function(m) { return !m.archived; });
 }
 if (window.TEAM_MEMBERS) _markArchivedMembers();
 window.addEventListener('team-members-loaded', function() {

@@ -604,10 +604,8 @@ body {
   margin-bottom: 14px; margin-top: 2px;
 }
 
-/* ── Membres archivés (source : _meta/team_members.active === false) ── */
-.member-archived{opacity:.42 !important;filter:grayscale(.75);position:relative}
-.member-archived::after{content:'📦 Archivé';position:absolute;top:8px;right:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);pointer-events:none;z-index:2}
-.member-archived input,.member-archived button,.member-archived select,.member-archived textarea{pointer-events:none !important;cursor:not-allowed !important}
+/* ── Membres archivés (visibles admin seulement, marqués d'une pill) ── */
+.archived-pill{display:inline-block;margin-left:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);vertical-align:middle;text-transform:uppercase;letter-spacing:.3px}
 
 </style>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
@@ -964,7 +962,7 @@ function renderDashboard() {
 function renderListe() {
   renderDashboard();
   const grid = document.getElementById('members-grid');
-  grid.innerHTML = MEMBERS_COMM.map(m => {
+  grid.innerHTML = _visibleMembers().map(m => {
     const deals = getDeals(m.uid, cmk());
     const comm = calcComm(deals);
     const pts = calcPoints(deals);
@@ -978,11 +976,11 @@ function renderListe() {
       ? Math.min(100, ((totalPts - (prev ? prev.pts : 0)) / (next.pts - (prev ? prev.pts : 0))) * 100)
       : 100;
 
-    return `<div class="member-card${m.archived?' member-archived':''}" style="--mc:${m.color}" onclick="if(!this.classList.contains('member-archived'))openFiche('${m.uid}')">
+    return `<div class="member-card" style="--mc:${m.color}" onclick="openFiche('${m.uid}')">
       <div class="mc-head">
         <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
         <div class="mc-info">
-          <div class="mc-name">${m.name} ${m.surname}</div>
+          <div class="mc-name">${m.name} ${m.surname}${m.archived ? ' <span class="archived-pill">📦 Archivé</span>' : ''}</div>
           <div class="mc-role">${m.role}</div>
         </div>
       </div>
@@ -1219,13 +1217,22 @@ function toggleDealOk(i) {
   renderFiche();
 }
 
-/* ─── ARCHIVED FLAG (source : _meta/team_members via nav.js) ─── */
+/* ─── ARCHIVED FLAG + VIEW FILTER (source : _meta/team_members via nav.js) ─── */
 function _markArchivedMembers() {
   var tm = window.TEAM_MEMBERS || {};
   MEMBERS_COMM.forEach(function(m) {
     var meta = tm[m.uid];
     m.archived = !!(meta && meta.active === false);
   });
+}
+function _isAdminView() {
+  var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
+  return role === 'admin';
+}
+function _visibleMembers() {
+  _markArchivedMembers();
+  if (_isAdminView()) return MEMBERS_COMM;
+  return MEMBERS_COMM.filter(function(m) { return !m.archived; });
 }
 if (window.TEAM_MEMBERS) _markArchivedMembers();
 window.addEventListener('team-members-loaded', function() {
