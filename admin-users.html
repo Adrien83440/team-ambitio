@@ -184,7 +184,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 <script type="module">
 import{initializeApp,deleteApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import{getAuth,onAuthStateChanged,signOut,createUserWithEmailAndPassword,sendPasswordResetEmail}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import{getFirestore,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,deleteField,query,where,writeBatch,serverTimestamp,addDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{getFirestore,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,deleteField,query,where,orderBy,writeBatch,serverTimestamp,addDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FBCFG={
   apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
@@ -593,7 +593,8 @@ async function loadAlteoFormsList(currentFormIds){
   var container=document.getElementById('afFormsList');
   if(!container)return;
   try{
-    var snap=await db.collection('alteo_forms').orderBy('createdAt','desc').get();
+    var q=query(collection(db,'alteo_forms'),orderBy('createdAt','desc'));
+    var snap=await getDocs(q);
     if(snap.empty){container.innerHTML='<span style="color:rgba(255,255,255,.25)">Aucun formulaire disponible.</span>';return;}
     var h='';
     var count=document.getElementById('afFormsCount');
