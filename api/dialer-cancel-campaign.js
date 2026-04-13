@@ -9,6 +9,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const { getTwilioClient } = require('./_twilioClient');
 const { requireAuth } = require('./_verifyFirebaseAuth');
+const parseBody = require('./_parseBody');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -20,12 +21,7 @@ module.exports = async (req, res) => {
   if (!auth) return;
 
   try {
-    // Vercel passe parfois req.body en string brute (bodyParser pas toujours actif)
-    let body = req.body;
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch (_) { body = {}; }
-    }
-    const { campaignId } = body || {};
+    const { campaignId } = parseBody(req);
     if (!campaignId) {
       res.status(400).json({ error: 'campaignId requis' });
       return;

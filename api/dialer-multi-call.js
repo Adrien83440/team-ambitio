@@ -13,6 +13,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const { getTwilioClient } = require('./_twilioClient');
 const { requireAuth } = require('./_verifyFirebaseAuth');
+const parseBody = require('./_parseBody');
 
 function normalizePhone(raw) {
   if (!raw) return null;
@@ -37,12 +38,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Vercel passe parfois req.body en string brute (bodyParser pas toujours actif)
-    let body = req.body;
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch (_) { body = {}; }
-    }
-    const { leads, fromNumberId } = body || {};
+    const { leads, fromNumberId } = parseBody(req);
     if (!Array.isArray(leads) || leads.length === 0) {
       res.status(400).json({ error: 'leads requis (array non vide)' });
       return;

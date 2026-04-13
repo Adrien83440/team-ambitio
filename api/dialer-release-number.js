@@ -20,6 +20,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const { requireAdmin } = require('./_verifyFirebaseAuth');
 const { getTwilioClient } = require('./_twilioClient');
+const parseBody = require('./_parseBody');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -30,7 +31,7 @@ module.exports = async (req, res) => {
   const auth = await requireAdmin(req, res);
   if (!auth) return;
 
-  const body = req.body || {};
+  const body = parseBody(req);
 
   if (!body.numberId) {
     res.status(400).json({ error: 'numberId is required' });

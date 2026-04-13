@@ -21,6 +21,7 @@
 
 const { requireAdmin } = require('./_verifyFirebaseAuth');
 const { getTwilioClient } = require('./_twilioClient');
+const parseBody = require('./_parseBody');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -31,7 +32,7 @@ module.exports = async (req, res) => {
   const auth = await requireAdmin(req, res);
   if (!auth) return;
 
-  const body = req.body || {};
+  const body = parseBody(req);
   const criteria = {
     countryCode: body.countryCode || 'FR',
     regionIndicatif: body.regionIndicatif || null,

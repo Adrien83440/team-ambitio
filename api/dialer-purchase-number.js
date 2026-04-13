@@ -28,6 +28,7 @@
 const { db, admin } = require('./_firebaseAdmin');
 const { requireAdmin } = require('./_verifyFirebaseAuth');
 const { getTwilioClient } = require('./_twilioClient');
+const parseBody = require('./_parseBody');
 
 // Base URL des endpoints Vercel (pour configurer les webhooks voice du numéro)
 const WEBHOOK_BASE_URL = 'https://team.alteore.com';
@@ -41,7 +42,7 @@ module.exports = async (req, res) => {
   const auth = await requireAdmin(req, res);
   if (!auth) return;
 
-  const body = req.body || {};
+  const body = parseBody(req);
 
   if (!body.phoneNumber) {
     res.status(400).json({ error: 'phoneNumber is required (E.164 format)' });
