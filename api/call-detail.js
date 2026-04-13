@@ -87,10 +87,15 @@ module.exports = async (req, res) => {
     }
 
     // Génère une URL signée V4 pour le .mp3 (si disponible)
+    // On force le bucket Firebase Storage au bon format (.firebasestorage.app)
+    // — cf commentaire dans callAnalysisPipeline.js sur le mismatch
+    // .appspot.com / .firebasestorage.app.
     let recordingSignedUrl = null;
     if (log.recordingStoragePath) {
       try {
-        const bucket = storage.bucket();
+        const BUCKET_NAME =
+          process.env.STORAGE_BUCKET || 'ambitio-team.firebasestorage.app';
+        const bucket = storage.bucket(BUCKET_NAME);
         const file = bucket.file(log.recordingStoragePath);
         const [url] = await file.getSignedUrl({
           version: 'v4',
