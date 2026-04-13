@@ -43,6 +43,9 @@
 #fld-body-wrap .ql-snow.ql-toolbar button:hover,#fld-body-wrap .ql-snow .ql-toolbar button:hover{color:#f59e0b}
 #fld-body-wrap .ql-editor strong{color:#fff}
 #fld-body-wrap .ql-editor ul li,#fld-body-wrap .ql-editor ol li{color:rgba(255,255,255,.8)}
+.pal-rating-icon{background:#141420;border:1.5px solid rgba(255,255,255,.08);border-radius:8px;padding:6px 8px;font-size:18px;cursor:pointer;transition:all .15s;line-height:1}
+.pal-rating-icon:hover{border-color:rgba(245,158,11,.4);transform:scale(1.1)}
+.pal-rating-icon.on{border-color:#f59e0b;background:rgba(245,158,11,.1)}
 .af-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}.af-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 /* Grid */
 .af-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
@@ -240,6 +243,7 @@
 <div class="pal-grid">
 <div class="pal-item" draggable="true" data-pal='{"type":"scale","scaleMax":5}' onclick="openFldFromPalette({type:'scale',scaleMax:5})"><div class="pal-icon">⬤</div><div class="pal-label">Échelle 1–5</div></div>
 <div class="pal-item" draggable="true" data-pal='{"type":"scale","scaleMax":10}' onclick="openFldFromPalette({type:'scale',scaleMax:10})"><div class="pal-icon">⬤</div><div class="pal-label">Échelle 1–10</div></div>
+<div class="pal-item pal-wide" draggable="true" data-pal='{"type":"rating","ratingMax":5,"ratingIcon":"⭐"}' onclick="openFldFromPalette({type:'rating',ratingMax:5,ratingIcon:'⭐'})"><div class="pal-icon">⭐</div><div class="pal-label">Note / Icônes</div></div>
 </div></div>
 </div>
 <div class="ed-right" id="edContent"></div>
@@ -264,11 +268,20 @@
 <option value="number">🔢 Nombre</option>
 <option value="date">📅 Date</option>
 <option value="info">📄 Texte informatif / Intro</option>
+<option value="rating">⭐ Note / Icônes</option>
 </select></div>
 <!-- Options -->
 <div class="ed-field-row" id="fld-opts-wrap" style="display:none"><div class="ed-group-label">Options</div><div id="fld-opts-list"></div><button class="bb" onclick="addFldOption()" style="padding:4px 12px;font-size:11px;margin-top:4px">+ Option</button></div>
 <!-- Scale -->
 <div class="ed-field-row" id="fld-scale-wrap" style="display:none"><div class="ed-group-label">Échelle</div><div style="display:flex;gap:10px;align-items:center"><select class="bs" id="fld-scaleMax" style="width:80px"><option value="5">1 – 5</option><option value="10">1 – 10</option></select><span style="font-size:11px;color:rgba(255,255,255,.3)">Note de 1 à N</span></div></div>
+<!-- Rating -->
+<div class="ed-field-row" id="fld-rating-wrap" style="display:none">
+<div class="ed-group-label">Icône</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px" id="fld-icon-picker"><button type="button" class="pal-rating-icon" data-icon="⭐" onclick="selectRatingIcon(this)">⭐</button><button type="button" class="pal-rating-icon" data-icon="🌟" onclick="selectRatingIcon(this)">🌟</button><button type="button" class="pal-rating-icon" data-icon="❤️" onclick="selectRatingIcon(this)">❤️</button><button type="button" class="pal-rating-icon" data-icon="🔥" onclick="selectRatingIcon(this)">🔥</button><button type="button" class="pal-rating-icon" data-icon="👍" onclick="selectRatingIcon(this)">👍</button><button type="button" class="pal-rating-icon" data-icon="😊" onclick="selectRatingIcon(this)">😊</button><button type="button" class="pal-rating-icon" data-icon="😍" onclick="selectRatingIcon(this)">😍</button><button type="button" class="pal-rating-icon" data-icon="💎" onclick="selectRatingIcon(this)">💎</button><button type="button" class="pal-rating-icon" data-icon="🏆" onclick="selectRatingIcon(this)">🏆</button><button type="button" class="pal-rating-icon" data-icon="🚀" onclick="selectRatingIcon(this)">🚀</button><button type="button" class="pal-rating-icon" data-icon="💡" onclick="selectRatingIcon(this)">💡</button><button type="button" class="pal-rating-icon" data-icon="🎯" onclick="selectRatingIcon(this)">🎯</button></div>
+<input type="hidden" id="fld-ratingIcon" value="⭐"/>
+<div class="ed-group-label" style="margin-top:8px">Nombre max</div>
+<select class="bs" id="fld-ratingMax" style="width:80px"><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option></select>
+</div>
 <!-- Info body -->
 <div class="ed-field-row" id="fld-body-wrap" style="display:none"><div class="ed-group-label">Contenu de la carte</div><div id="fld-body-quill" style="border-radius:8px;overflow:hidden"></div></div>
 <!-- Required -->
@@ -351,8 +364,8 @@ var _palInsertIdx=-1;
 var _quillBody=null;
  // insert position from palette DnD (-1 = append)
 
-var FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤',number:'🔢',date:'📅',info:'📄'};
-var FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle',number:'Nombre',date:'Date',info:'Texte informatif'};
+var FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤',number:'🔢',date:'📅',info:'📄',rating:'⭐'};
+var FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle',number:'Nombre',date:'Date',info:'Texte informatif',rating:'Note / Icônes'};
 
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 function gid(){return Math.random().toString(36).slice(2,10);}
@@ -748,6 +761,11 @@ if(config.label){document.getElementById('fld-label').value=config.label;}
 if(config.mapping){document.getElementById('fld-contact').value=config.mapping;}
 if(config.required){document.getElementById('fld-req').checked=true;}
 if(config.scaleMax){document.getElementById('fld-scaleMax').value=String(config.scaleMax);}
+if(config.ratingMax){document.getElementById('fld-ratingMax').value=String(config.ratingMax);}
+if(config.ratingIcon){
+document.getElementById('fld-ratingIcon').value=config.ratingIcon;
+document.querySelectorAll('.pal-rating-icon').forEach(function(b){b.classList.toggle('on',b.dataset.icon===config.ratingIcon);});
+}
 fldTypeChanged();
 }
 
@@ -849,6 +867,10 @@ document.getElementById('fld-opts-list').innerHTML='';
 document.getElementById('fld-opts-wrap').style.display='none';
 document.getElementById('fld-scale-wrap').style.display='none';
 document.getElementById('fld-body-wrap').style.display='none';
+document.getElementById('fld-rating-wrap').style.display='none';
+document.getElementById('fld-ratingIcon').value='⭐';
+document.getElementById('fld-ratingMax').value='5';
+document.querySelectorAll('.pal-rating-icon').forEach(function(b){b.classList.toggle('on',b.dataset.icon==='⭐');});
 // Populate condition field selector (exclude info fields)
 var condSel=document.getElementById('fld-cond-field');
 condSel.innerHTML='<option value="">— Aucune —</option>';
@@ -863,6 +885,11 @@ document.getElementById('fld-desc').value=fld.description||'';
 document.getElementById('fld-type').value=fld.type||'text';
 document.getElementById('fld-req').checked=!!fld.required;
 document.getElementById('fld-sameCard').checked=!!fld.sameCard;
+if(fld.type==='rating'){
+document.getElementById('fld-ratingIcon').value=fld.ratingIcon||'⭐';
+document.getElementById('fld-ratingMax').value=String(fld.ratingMax||5);
+document.querySelectorAll('.pal-rating-icon').forEach(function(b){b.classList.toggle('on',b.dataset.icon===(fld.ratingIcon||'⭐'));});
+}
 if(fld.body&&_quillBody){if(fld.body.trim().startsWith('<')){_quillBody.clipboard.dangerouslyPasteHTML(fld.body);}else{_quillBody.clipboard.dangerouslyPasteHTML(legacyTextToHtml(fld.body));}}
 if(fld.options&&fld.options.length){
 document.getElementById('fld-opts-wrap').style.display='block';
@@ -888,22 +915,24 @@ document.getElementById('fldModal').addEventListener('click',function(e){if(e.ta
 function fldTypeChanged(){
 var type=document.getElementById('fld-type').value;
 var isInfo=type==='info';
+var isRating=type==='rating';
 var hasOpts=type==='select'||type==='checkbox'||type==='radio';
 document.getElementById('fld-opts-wrap').style.display=hasOpts?'block':'none';
 document.getElementById('fld-scale-wrap').style.display=type==='scale'?'block':'none';
 document.getElementById('fld-body-wrap').style.display=isInfo?'block':'none';
+document.getElementById('fld-rating-wrap').style.display=isRating?'block':'none';
 if(isInfo)setTimeout(initQuill,0);
+var isNoInput=isInfo||isRating;
 document.getElementById('fld-req-wrap').style.display=isInfo?'none':'';
 document.getElementById('fld-samecard-wrap').style.display=isInfo?'none':'';
-document.getElementById('fld-contact-wrap').style.display=isInfo?'none':'';
+document.getElementById('fld-contact-wrap').style.display=isNoInput?'none':'';
 document.getElementById('fld-cond-wrap').style.display=isInfo?'none':'';
 document.getElementById('fld-desc-row').style.display=isInfo?'none':'';
-// Relabel for info type
 var gl=document.getElementById('fld-label-gl');
 var li=document.getElementById('fld-label');
-if(isInfo){
-gl.textContent='Titre de la section (optionnel)';
-li.placeholder='Ex : Avant de commencer, À propos de vous…';
+if(isInfo){gl.textContent='Titre de la section (optionnel)';li.placeholder='Ex : Avant de commencer, À propos de vous…';}
+else{gl.textContent='Libellé';li.placeholder="Ex: Quel est votre secteur d'activité ?";}
+if(hasOpts&&document.getElementById('fld-opts-list').children.length===0){addFldOption();addFldOption();}
 }else{
 gl.textContent='Libellé';
 li.placeholder="Ex: Quel est votre secteur d'activité ?";
@@ -945,6 +974,10 @@ if(!opts.length){toast('❌ Ajoutez au moins une option');return;}
 field.options=opts;
 }
 if(type==='scale')field.scaleMax=parseInt(document.getElementById('fld-scaleMax').value)||5;
+if(type==='rating'){
+field.ratingIcon=document.getElementById('fld-ratingIcon').value||'⭐';
+field.ratingMax=parseInt(document.getElementById('fld-ratingMax').value)||5;
+}
 // Condition
 var condField=document.getElementById('fld-cond-field').value;
 if(condField)field.condition={fieldId:condField,operator:document.getElementById('fld-cond-op').value,value:document.getElementById('fld-cond-val').value};
@@ -1215,8 +1248,15 @@ modules:{toolbar:[
 ]}
 });
 }
+function selectRatingIcon(btn){
+document.querySelectorAll('.pal-rating-icon').forEach(function(b){b.classList.remove('on');});
+btn.classList.add('on');
+document.getElementById('fld-ratingIcon').value=btn.dataset.icon;
+// Update FT_ICONS preview for current type
+FT_ICONS.rating=btn.dataset.icon;
+}
 window.openFldModal=openFldModal;window.closeFldModal=closeFldModal;window.fldTypeChanged=fldTypeChanged;
-window.addFldOption=addFldOption;window.saveFldModal=saveFldModal;window.deleteField=deleteField;window.quickAddField=quickAddField;
+window.addFldOption=addFldOption;window.selectRatingIcon=selectRatingIcon;window.saveFldModal=saveFldModal;window.deleteField=deleteField;window.quickAddField=quickAddField;
 window.setFormStyle=setFormStyle;window.publishForm=publishForm;window.previewForm=previewForm;
 window.openEditor=openEditor;window.closeNewModal=closeNewModal;window.createForm=createForm;
 window.openRuleModal=openRuleModal;window.closeRuleModal=closeRuleModal;window.setRuleToggle=setRuleToggle;
