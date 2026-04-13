@@ -2318,15 +2318,21 @@ function openClientDetail(leadId) {
 
   // Payments
   var paysHtml = pays.length ? pays.map(function(p) {
-    var prog = p.installmentsCount > 1 ? p.paidCount + '/' + p.installmentsCount + ' mois' : '';
-    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);margin-bottom:6px">' +
-      '<div>' +
-        '<div style="font-size:13px;font-weight:700">' + EURO(p.totalAmount) + ' <span style="font-size:10px;font-weight:600;opacity:.5">' + (p.vatType || 'ht').toUpperCase() + '</span>' + (p.type === 'installments' ? ' <span style="font-size:11px;color:var(--muted)">· ' + p.installmentsCount + ' mois</span>' : '') + '</div>' +
-        '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + (STATUS_PAY[p.status] || p.status) + (prog ? ' · ' + prog : '') + '</div>' +
+    var prog = p.installmentsCount > 1 ? (p.paidCount||0) + '/' + p.installmentsCount + ' mois' : '';
+    var progressPct = p.installmentsCount > 1 ? Math.round(((p.paidCount||0)/p.installmentsCount)*100) : (p.status==='completed'?100:0);
+    return '<div style="background:var(--bg3);border-radius:10px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px" id="payBlock_'+p.id+'">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<div><div style="font-size:14px;font-weight:700">' + EURO(p.totalAmount) + ' <span style="font-size:10px;opacity:.5">'+(p.vatType||'ht').toUpperCase()+'</span>'+(p.type==='installments'?' <span style="font-size:11px;color:var(--muted)">· '+p.installmentsCount+' mois</span>':'')+'</div>' +
+        '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+(STATUS_PAY[p.status]||p.status)+(prog?' · '+prog:'')+(p.gcMandateId?' · Mandat: <span style="font-family:monospace">'+p.gcMandateId.slice(-8)+'</span>':'')+'</div></div>' +
+        '<div style="text-align:right">' +
+          (p.paidAmount ? '<div style="font-size:13px;font-weight:700;color:#34d399">'+EURO(p.paidAmount)+' collecté</div>' : '') +
+          '<button onclick="syncGCPayment(''+p.id+'',''+leadId+'')" style="margin-top:4px;padding:3px 8px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:6px;color:#60a5fa;font-size:10px;font-weight:600;cursor:pointer">🔄 Sync GC</button>' +
+        '</div>' +
       '</div>' +
-      (p.paidAmount ? '<div style="font-size:12px;font-weight:700;color:#34d399">' + EURO(p.paidAmount) + ' collecté</div>' : '') +
+      (p.installmentsCount > 1 ? '<div style="background:rgba(255,255,255,.06);border-radius:4px;height:4px;overflow:hidden"><div style="background:#34d399;height:100%;width:'+progressPct+'%;transition:width .3s"></div></div>' : '') +
+      '<div id="gcLiveData_'+p.id+'" style="margin-top:8px;display:none"></div>' +
       '</div>';
-  }).join('') : '<div style="font-size:12px;color:var(--muted)">Aucun paiement enregistré</div>';
+  }).join('') : '<div style="font-size:12px;color:var(--muted)">Aucun paiement enregistré — <a href="payments.html?leadId='+leadId+'" style="color:#34d399">Créer un paiement</a></div>';
 
   // Timeline
   var tl = (c.timeline_history || []).slice(-8).reverse();
@@ -2366,10 +2372,16 @@ function openClientDetail(leadId) {
   h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Informations</div>';
   var infoFields = [
     ['Nom', c.nom], ['Email', c.email], ['Téléphone', c.telephone],
-    ['Secteur', c.secteur], ['CA actuel', c.ca], ['Défi', c.defi],
-    ['Setter', c.assignedTo], ['Source', c.utm || c.source],
-    ['Client depuis', fmtDate(c.clientSince)],
-    ['Accompagnement', c.accompagnementStart ? (c.accompagnementStart + ' → ' + (c.accompagnementEnd || '?')) : null]
+    ['Entreprise', c.societe], ['Secteur', c.secteur], ['CA actuel', c.ca], ['Défi', c.defi],
+    ['Setter', c.setting || c.assignedTo], ['Closeur', c.closeurName || c.closeurSlug],
+    ['Source', c.utm || c.source], ['Client depuis', fmtDate(c.clientSince)],
+    ['Accompagnement', c.accompagnementStart ? (c.accompagnementStart + ' → ' + (c.accompagnementEnd || '?')) : null],
+    ['Formule', c.formule], ['Plateforme paiement', c.paiementPlateforme],
+    ['Commissions', c.commissions], ['Coaching 72H', c.coaching72],
+    ['Coach 72H', c.coach], ['Goodies', c.goodies],
+    ['Date envoi goodies', c.dateEnvoiGoodies], ['Rétractation', c.retractation],
+    ['Prospect webinaire', c.prospectWebinaire], ['Date webinaire', c.dateWebinaire],
+    ['Présent', c.present], ['Tags webi', Array.isArray(c.tagsWebi) ? c.tagsWebi.join(', ') : c.tagsWebi]
   ];
   infoFields.forEach(function(f) {
     if (!f[1]) return;
@@ -2379,7 +2391,7 @@ function openClientDetail(leadId) {
   });
   h += '</div>';
 
-  // Colonne droite — contrat + paiements
+  // Colonne droite — contrat + paiements + programme
   h += '<div>';
   h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Contrat & Paiement</div>';
   if (c.contractSigned) {
@@ -2468,6 +2480,62 @@ function addClientNote(leadId) {
 
 /* ── Bouton "Marquer comme client" dans modal lead pipeline ── */
 // Appelé depuis le modal CRM existant
+window.syncGCPayment = async function(payId, leadId) {
+  var btn = document.querySelector('[onclick*="syncGCPayment(\'' + payId + ''"]');
+  var liveEl = document.getElementById('gcLiveData_' + payId);
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch('/api/gocardless-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ paymentId: payId })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Erreur API');
+
+    var EURO = function(v) { return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(v||0); };
+    var gcHtml = '';
+
+    if (data.mandate) {
+      var mStatus = { pending_submission:'⏳ En attente', submitted:'📤 Soumis', active:'✅ Actif', failed:'❌ Échoué', cancelled:'🚫 Annulé', expired:'⌛ Expiré' };
+      gcHtml += '<div style="font-size:10px;color:var(--muted);margin-bottom:6px">Mandat GC : <strong style="color:#60a5fa">' + (mStatus[data.mandate.status]||data.mandate.status) + '</strong>' + (data.mandate.nextPossibleChargeDate ? ' · Prochain : ' + data.mandate.nextPossibleChargeDate : '') + '</div>';
+    }
+
+    if (data.subscription) {
+      var upHtml = '';
+      if (data.subscription.upcomingPayments && data.subscription.upcomingPayments.length) {
+        upHtml = data.subscription.upcomingPayments.slice(0,3).map(function(up){
+          return '<span style="display:inline-block;padding:2px 7px;background:rgba(16,185,129,.1);border-radius:4px;font-size:10px;color:#34d399;margin-right:4px">' + up.charge_date + ' · ' + EURO(up.amount/100) + '</span>';
+        }).join('');
+        gcHtml += '<div style="margin-bottom:6px"><div style="font-size:10px;color:var(--muted);margin-bottom:3px">Prochains prélèvements :</div>' + upHtml + '</div>';
+      }
+    }
+
+    if (data.payments && data.payments.length) {
+      var pStatus = { pending_submission:'⏳', submitted:'📤', confirmed:'✅', paid_out:'💰', cancelled:'🚫', failed:'❌', charged_back:'↩' };
+      gcHtml += '<div style="font-size:10px;color:var(--muted);margin-bottom:4px">Historique GoCardless (' + data.payments.length + ') :</div>';
+      gcHtml += '<div style="max-height:120px;overflow-y:auto">';
+      data.payments.forEach(function(p) {
+        gcHtml += '<div style="display:flex;justify-content:space-between;padding:4px 6px;border-radius:4px;background:rgba(255,255,255,.03);margin-bottom:2px">' +
+          '<span style="font-size:11px">' + (pStatus[p.status]||'?') + ' ' + (p.chargeDate||'') + '</span>' +
+          '<span style="font-size:11px;font-weight:600;color:#34d399">' + EURO(p.amount) + '</span>' +
+          '</div>';
+      });
+      gcHtml += '</div>';
+    }
+
+    if (liveEl) { liveEl.innerHTML = gcHtml; liveEl.style.display = gcHtml ? 'block' : 'none'; }
+    if (typeof toast === 'function') toast('🔄 GoCardless synchronisé');
+    // Reload client data
+    var cIdx = clientsCache.findIndex(function(x){return x.id===leadId;});
+    if (cIdx >= 0) {
+      db.collection('leads').doc(leadId).get().then(function(s){if(s.exists){clientsCache[cIdx]=Object.assign({id:leadId},s.data());}});
+    }
+  } catch(e) {
+    if (typeof toast === 'function') toast('❌ ' + e.message, false);
+  }
+};
+
 window.markAsClient = function(leadId) {
   if (!confirm('Marquer ce lead comme client actif ?')) return;
   db.collection('leads').doc(leadId).update({
