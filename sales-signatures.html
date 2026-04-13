@@ -211,6 +211,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
 
 <script>
 var db=firebase.firestore();
+// URL preset (from CRM lead panel)
+var _presetLeadId = new URLSearchParams(window.location.search).get('leadId') || null;
 var TPL=[]; // loaded templates
 var REQ=[]; // loaded requests
 var currentTpl=null; // currently editing template
@@ -630,6 +632,7 @@ function submitSend(){
   var req={
     templateId:currentTpl.id,
     templateName:tpl.name||(currentTpl.name||'Contrat'),
+    leadId:_presetLeadId||null,
     clientName:name,
     clientEmail:email,
     clientPhone:phone.replace(/\s+/g,''),
