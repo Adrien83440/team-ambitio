@@ -535,6 +535,14 @@ function openEditModal(u){
   // Permissions
   h+=buildPermGrid(mods,'e');
 
+  // Accès AlteoForms
+  if(role!=='admin'){
+    h+='<div class="mf" id="alteoFormsSection" style="margin-top:8px">';
+    h+='<label style="display:flex;align-items:center;justify-content:space-between">📝 Accès AlteoForms (formulaires) <span style="font-size:10px;color:rgba(255,255,255,.3)" id="afFormsCount"></span></label>';
+    h+='<div id="afFormsList" style="background:#0a0a14;border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:10px 12px;margin-top:6px;font-size:12px;color:rgba(255,255,255,.4)">Chargement…</div>';
+    h+='</div>';
+  }
+
   // Bandeau si déjà archivé
   if(status==='archived'){
     var aFrom=u.archivedFromSlug||'?', aTo=u.archivedToSlug||'?', aCount=(u.archiveTransferCount==null?'?':u.archiveTransferCount);
@@ -555,6 +563,10 @@ function openEditModal(u){
 
   document.getElementById('moBody').innerHTML=h;
   document.getElementById('eSave').addEventListener('click',function(){handleSave(u.uid);});
+  // Load AlteoForms list async if non-admin
+  if((u.role||'coach')!=='admin'){
+    loadAlteoFormsList(u.alteoformsFormIds||[]);
+  }
   document.getElementById('eResetPwd').addEventListener('click',function(){handleResetPwd(u.email);});
   var delBtn=document.getElementById('eDelete');
   if(delBtn)delBtn.addEventListener('click',function(){handleDelete(u.uid,u.displayName||u.email);});
@@ -576,6 +588,39 @@ window.onEditRoleChange=function(){
   });
 };
 
+
+async function loadAlteoFormsList(currentFormIds){
+  var container=document.getElementById('afFormsList');
+  if(!container)return;
+  try{
+    var snap=await db.collection('alteo_forms').orderBy('createdAt','desc').get();
+    if(snap.empty){container.innerHTML='<span style="color:rgba(255,255,255,.25)">Aucun formulaire disponible.</span>';return;}
+    var h='';
+    var count=document.getElementById('afFormsCount');
+    if(count)count.textContent=snap.size+' formulaire'+(snap.size>1?'s':'');
+    snap.forEach(function(d){
+      var f=d.data();
+      var checked=currentFormIds.indexOf(d.id)>=0;
+      var color=f.color||'#f59e0b';
+      h+='<label style="display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.04)">';
+      h+='<input type="checkbox" class="af-form-check" data-formid="'+d.id+'"'+(checked?' checked':'')+' style="width:14px;height:14px;accent-color:'+color+';flex-shrink:0"/>';
+      h+='<span style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0"></span>';
+      h+='<span style="color:rgba(255,255,255,.8);font-size:12px">'+esc(f.title||'Sans titre')+'</span>';
+      h+='<span style="font-size:10px;color:rgba(255,255,255,.3);margin-left:auto">'+(f.status==='live'?'● Publié':'Brouillon')+'</span>';
+      h+='</label>';
+    });
+    container.innerHTML=h;
+  }catch(e){container.innerHTML='<span style="color:#ef4444">Erreur: '+e.message+'</span>';}
+}
+
+function readAlteoFormsAccess(){
+  var checks=document.querySelectorAll('.af-form-check');
+  if(!checks.length)return null; // null = not shown (admin)
+  var ids=[];
+  checks.forEach(function(c){if(c.checked)ids.push(c.dataset.formid);});
+  return ids;
+}
+
 async function handleSave(uid){
   var btn=document.getElementById('eSave');
   btn.disabled=true;btn.textContent='⏳…';
@@ -585,6 +630,7 @@ async function handleSave(uid){
       var raw=(document.getElementById(id)||{}).value||'';
       return raw.split(/[\n,;]+/).map(function(s){return s.trim();}).filter(Boolean);
     }
+    var afFormIds=readAlteoFormsAccess();
     var upd={
       displayName:document.getElementById('eName').value.trim(),
       role:document.getElementById('eRole').value,
@@ -593,6 +639,7 @@ async function handleSave(uid){
       workEmails:parseList('eEmails'),
       modules:readPermGrid('e')
     };
+    if(afFormIds!==null)upd.alteoformsFormIds=afFormIds;
     await updateDoc(doc(db,'users',uid),upd);
     toast('✅ Utilisateur mis à jour');
     closeModal();

@@ -59,7 +59,7 @@
     { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: '_admin' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
     { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
-    { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: '_admin' },
+    { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
   ];
 
   const THEMES = {
@@ -410,6 +410,10 @@
     const perms   = getUserModules();
     const modules = ALL_MODULES.filter(m => {
       if (m.perm === '_admin') return role === 'admin';
+      if (m.perm === 'alteoforms') {
+        if (role === 'admin') return true;
+        try { var af=JSON.parse(localStorage.getItem('ambitio_alteoforms_forms')||'[]'); return af.length>0; } catch(e){ return false; }
+      }
       var p = perms[m.perm];
       return p && p !== 'none';
     });
@@ -653,6 +657,15 @@
   }
 
   window.AmbitioNav = {
+    setAlteoFormsAccess(formIds) {
+      if (formIds && formIds.length > 0) {
+        localStorage.setItem('ambitio_alteoforms_forms', JSON.stringify(formIds));
+      } else {
+        localStorage.removeItem('ambitio_alteoforms_forms');
+      }
+      buildSidebar();
+    },
+
     setRole(role, name, email, modules) {
       localStorage.setItem('ambitio_role', role);
       if (name)  localStorage.setItem('ambitio_name', name);
@@ -804,12 +817,34 @@
     document.addEventListener('DOMContentLoaded', function () {
       if (typeof firebase !== 'undefined' && firebase.firestore) {
         window.loadTeamMembers();
+        initAlteoFormsAccessWatch();
       }
     });
   } else {
     if (typeof firebase !== 'undefined' && firebase.firestore) {
       window.loadTeamMembers();
+      initAlteoFormsAccessWatch();
     }
+  }
+
+  function initAlteoFormsAccessWatch() {
+    if (typeof firebase === 'undefined' || !firebase.auth) return;
+    firebase.auth().onAuthStateChanged(async function(user) {
+      if (!user) { localStorage.removeItem('ambitio_alteoforms_forms'); return; }
+      var role = localStorage.getItem('ambitio_role') || 'coach';
+      if (role === 'admin') return; // admin always has access
+      try {
+        var snap = await firebase.firestore().collection('users').doc(user.uid).get();
+        var formIds = (snap.exists && snap.data().alteoformsFormIds) ? snap.data().alteoformsFormIds : [];
+        var prev = localStorage.getItem('ambitio_alteoforms_forms');
+        var next = JSON.stringify(formIds);
+        if (prev !== next) {
+          if (formIds.length > 0) localStorage.setItem('ambitio_alteoforms_forms', next);
+          else localStorage.removeItem('ambitio_alteoforms_forms');
+          if (typeof buildSidebar === 'function') buildSidebar();
+        }
+      } catch(e) { console.warn('[nav] alteoforms access check:', e); }
+    });
   }
 })();
 

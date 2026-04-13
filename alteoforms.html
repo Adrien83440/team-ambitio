@@ -46,6 +46,14 @@
 .pal-rating-icon{background:#141420;border:1.5px solid rgba(255,255,255,.08);border-radius:8px;padding:6px 8px;font-size:18px;cursor:pointer;transition:all .15s;line-height:1}
 .pal-rating-icon:hover{border-color:rgba(245,158,11,.4);transform:scale(1.1)}
 .pal-rating-icon.on{border-color:#f59e0b;background:rgba(245,158,11,.1)}
+.af-limited{padding:20px 24px 80px;max-width:900px;margin:0 auto}
+.af-limited-form{background:#0e0e1a;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:18px 20px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:14px;margin-bottom:10px}
+.af-limited-form:hover{border-color:rgba(245,158,11,.3);transform:translateY(-1px)}
+.af-limited-form-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.af-limited-form-title{font-family:'Bricolage Grotesque',sans-serif;font-size:14px;font-weight:700;flex:1}
+.af-limited-form-meta{font-size:11px;color:rgba(255,255,255,.35)}
+.af-limited-resp{background:#0e0e1a;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:20px 24px;display:none}
+.af-limited-resp.on{display:block}
 .af-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}.af-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 /* Grid */
 .af-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
@@ -184,6 +192,18 @@
 <button class="bb bb-p" id="btnNew">+ Nouveau formulaire</button>
 </div>
 <div id="formGrid" class="af-grid"></div>
+</div>
+
+<!-- Limited view (non-admin users with assigned forms) -->
+<div id="limitedView" style="display:none">
+<div class="af-limited">
+<div class="af-top">
+<div class="af-ic">📝</div>
+<div><h1>AlteoForms</h1><small id="limitedViewSub">Vos formulaires</small></div>
+</div>
+<div id="limitedFormsList"></div>
+<div id="limitedRespPanel" class="af-limited-resp"></div>
+</div>
 </div>
 
 <!-- Editor view -->
@@ -1257,9 +1277,83 @@ window.openEditor=openEditor;window.closeNewModal=closeNewModal;window.createFor
 window.openRuleModal=openRuleModal;window.closeRuleModal=closeRuleModal;window.setRuleToggle=setRuleToggle;
 window.addRuleCond=addRuleCond;window.ruleActionChanged=ruleActionChanged;window.saveRuleModal=saveRuleModal;window.deleteRule=deleteRule;
 
-firebase.auth().onAuthStateChanged(function(u){
-if(u){loadForms();loadBookingTypes();}
+firebase.auth().onAuthStateChanged(async function(u){
+if(!u)return;
+var role=localStorage.getItem('ambitio_role')||'coach';
+if(role==='admin'){
+loadForms();loadBookingTypes();
+}else{
+// Non-admin: check assigned forms
+try{
+var snap=await db.collection('users').doc(u.uid).get();
+var formIds=(snap.exists&&snap.data().alteoformsFormIds)||[];
+if(!formIds.length){
+document.getElementById('mainView').style.display='none';
+document.getElementById('limitedView').innerHTML='<div class="af-limited"><div style="text-align:center;padding:80px;color:rgba(255,255,255,.3)"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Accès non autorisé.<br>Contactez un administrateur.</div></div></div>';
+document.getElementById('limitedView').style.display='';
+return;
+}
+// Store in localStorage for nav
+if(window.AmbitioNav&&window.AmbitioNav.setAlteoFormsAccess)window.AmbitioNav.setAlteoFormsAccess(formIds);
+else localStorage.setItem('ambitio_alteoforms_forms',JSON.stringify(formIds));
+loadBookingTypes();
+loadLimitedView(formIds);
+}catch(e){console.error('alteoforms auth',e);}
+}
 });
+
+async function loadLimitedView(formIds){
+document.getElementById('mainView').style.display='none';
+document.getElementById('limitedView').style.display='';
+document.getElementById('limitedViewSub').textContent=formIds.length+' formulaire'+(formIds.length>1?'s':'')+' accessible'+(formIds.length>1?'s':'');
+var listEl=document.getElementById('limitedFormsList');
+listEl.innerHTML='<div style="color:rgba(255,255,255,.3);font-size:12px;padding:12px">Chargement…</div>';
+var forms=[];
+// Load each assigned form
+for(var i=0;i<formIds.length;i++){
+try{
+var d=await db.collection('alteo_forms').doc(formIds[i]).get();
+if(d.exists){var v=d.data();v._id=d.id;forms.push(v);}
+}catch(e){}
+}
+if(!forms.length){listEl.innerHTML='<div style="color:rgba(255,255,255,.3);font-size:12px;padding:12px">Aucun formulaire trouvé.</div>';return;}
+var h='';
+forms.forEach(function(f){
+var rc=f.responseCount||0;
+h+='<div class="af-limited-form" onclick="openLimitedResponses(''+f._id+'')">';
+h+='<div class="af-limited-form-dot" style="background:'+(f.color||'#f59e0b')+'"></div>';
+h+='<div class="af-limited-form-title">'+esc(f.title||'Sans titre')+'</div>';
+h+='<div class="af-limited-form-meta">'+rc+' réponse'+(rc!==1?'s':'')+'</div>';
+h+='<span style="color:rgba(255,255,255,.25);font-size:16px">→</span>';
+h+='</div>';
+});
+listEl.innerHTML=h;
+window._limitedForms=forms;
+}
+
+function openLimitedResponses(formId){
+var forms=window._limitedForms||[];
+var f=forms.find(function(x){return x._id===formId;});
+if(!f)return;
+// Reuse the existing renderEdSection responses logic
+currentForm=f;
+edSection='responses';
+var panel=document.getElementById('limitedRespPanel');
+panel.classList.add('on');
+renderEdSection();
+// Move edContent into panel
+var edContent=document.getElementById('edContent');
+if(edContent)panel.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><button class="bb bb-o" onclick="closeLimitedResponses()">← Retour</button><div style="font-family:Bricolage Grotesque,sans-serif;font-size:15px;font-weight:800">'+esc(f.title||'')+'</div></div><div id="edContent"></div>';
+renderEdSection();
+}
+function closeLimitedResponses(){
+var panel=document.getElementById('limitedRespPanel');
+panel.classList.remove('on');
+panel.innerHTML='';
+currentForm=null;
+}
+window.openLimitedResponses=openLimitedResponses;
+window.closeLimitedResponses=closeLimitedResponses;
 </script>
 <script src="nav.js"></script>
 </body>
