@@ -189,6 +189,24 @@
 .rdv-p-row:last-child{border-bottom:0}
 .rdv-p-label{font-size:12px;font-weight:600;color:rgba(255,255,255,.38);width:120px;flex-shrink:0}.rdv-p-val{font-size:13px;font-weight:600;flex:1}
 .rdv-p-actions{padding:20px 24px;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:8px}
+/* ── READ-ONLY (non-admin) ── */
+.ex-ro-banner{margin:0 0 16px;padding:12px 14px;border-radius:10px;background:linear-gradient(90deg,rgba(251,146,60,.12),rgba(251,146,60,.04));border:1px solid rgba(251,146,60,.28);color:#fed7aa;font-size:12px;font-weight:600;display:flex;gap:10px;align-items:center}
+.ex-ro-banner .ex-ro-icon{font-size:16px}
+.ex-readonly input,.ex-readonly textarea,.ex-readonly select{pointer-events:none !important;opacity:.55 !important;filter:grayscale(.2)}
+.ex-readonly .cd-save-bar{display:none !important}
+.ex-readonly [data-ro-hide]{display:none !important}
+.ex-readonly .ex-head-av,.ex-readonly [onclick*="exPhotoInput"]{pointer-events:none !important;cursor:default !important}
+.ec-locked{position:relative;opacity:.62}
+.ec-locked::after{content:'🔒 Fiche verrouillée';position:absolute;top:10px;right:10px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:10px;font-weight:700;padding:4px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.35);pointer-events:none}
+.ec-self{border:2px solid rgba(99,102,241,.55) !important;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+.ec-self::before{content:'✨ Votre fiche';position:absolute;top:10px;right:10px;background:rgba(99,102,241,.18);color:#c7d2fe;font-size:10px;font-weight:700;padding:4px 8px;border-radius:999px;border:1px solid rgba(99,102,241,.45);pointer-events:none}
+/* ── Bloc Compte Firebase (admin only) ── */
+.fb-link-box{margin-top:18px;padding:14px;background:#0e0e1a;border:1px solid rgba(99,102,241,.22);border-radius:12px}
+.fb-link-box h4{margin:0 0 8px;font-size:12px;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:.5px}
+.fb-link-box p{margin:0 0 10px;font-size:11px;color:rgba(255,255,255,.48);line-height:1.5}
+.fb-link-box select{width:100%;background:#1a1a2e;color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px;font-size:13px;font-family:inherit}
+.fb-link-current{margin-top:8px;font-size:11px;color:#86efac}
+.fb-link-none{margin-top:8px;font-size:11px;color:#fca5a5}
 </style>
 </head>
 <body>
@@ -270,7 +288,7 @@ function tISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+
 function dFR(ds){var d=new Date(ds+'T12:00:00');return JF[d.getDay()]+' '+d.getDate()+' '+MF[d.getMonth()]+' '+d.getFullYear();}
 function mToT(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
 document.querySelectorAll('.bn-i').forEach(function(t){t.addEventListener('click',function(){document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});t.classList.add('on');document.querySelectorAll('.bp').forEach(function(p){p.classList.remove('on');});document.getElementById('p-'+t.dataset.p).classList.add('on');});});
-function loadAll(){CR.get().then(function(sn){var _oldCdId=cdType?cdType.id:null;var _oldExId=(typeof exPerson!=='undefined'&&exPerson)?exPerson.id:null;T=[];P=[];S={};sn.forEach(function(d){var v=d.data();if(d.id==='_types')T=v.list||[];else if(d.id==='_settings')S=v;else if(v.__type==='person'){v.id=d.id;P.push(v);}});P.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});if(_oldCdId){var _fresh=T.find(function(t){return t.id===_oldCdId;});if(_fresh)cdType=_fresh;}if(_oldExId){var _freshEx=P.find(function(p){return p.id===_oldExId;});if(_freshEx)exPerson=_freshEx;}renderAll();loadB();var _calPid=sessionStorage.getItem('_calConnectPid');if(_calPid){sessionStorage.removeItem('_calConnectPid');setTimeout(function(){document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});document.querySelector('[data-p="ex"]').classList.add('on');document.querySelectorAll('.bp').forEach(function(p){p.classList.remove('on');});document.getElementById('p-ex').classList.add('on');openExDetail(_calPid);exSection='calendar';renderExNav();renderExSection();},500);}}).catch(function(e){console.error(e);});}
+function loadAll(){CR.get().then(function(sn){var _oldCdId=cdType?cdType.id:null;var _oldExId=(typeof exPerson!=='undefined'&&exPerson)?exPerson.id:null;T=[];P=[];S={};sn.forEach(function(d){var v=d.data();if(d.id==='_types')T=v.list||[];else if(d.id==='_settings')S=v;else if(v.__type==='person'){v.id=d.id;P.push(v);}});P.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});window._selfPersonId=null;if(window._currentUid){var _sp=P.find(function(p){return p.firebaseUid===window._currentUid;});if(_sp)window._selfPersonId=_sp.id;}if(_oldCdId){var _fresh=T.find(function(t){return t.id===_oldCdId;});if(_fresh)cdType=_fresh;}if(_oldExId){var _freshEx=P.find(function(p){return p.id===_oldExId;});if(_freshEx)exPerson=_freshEx;}renderAll();loadB();var _calPid=sessionStorage.getItem('_calConnectPid');if(_calPid){sessionStorage.removeItem('_calConnectPid');setTimeout(function(){document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});document.querySelector('[data-p="ex"]').classList.add('on');document.querySelectorAll('.bp').forEach(function(p){p.classList.remove('on');});document.getElementById('p-ex').classList.add('on');openExDetail(_calPid);exSection='calendar';renderExNav();renderExSection();},500);}}).catch(function(e){console.error(e);});}
 function loadB(){db.collection('bookings').get().then(function(sn){B=[];sn.forEach(function(d){var v=d.data();v._id=d.id;B.push(v);});B.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});rRdv();}).catch(function(e){B=[];rRdv();});}
 function renderAll(){rRdv();rCs();rEx();rPg();lSt();pFlt();}
 function pFlt(){var a=document.getElementById('rFP'),b=document.getElementById('rFT');a.innerHTML='<option value="">Tous les experts</option>';b.innerHTML='<option value="">Toutes les consultations</option>';P.forEach(function(p){a.innerHTML+='<option value="'+p.id+'">'+esc(p.name)+'</option>';});T.forEach(function(t){b.innerHTML+='<option value="'+t.id+'">'+esc(t.label)+'</option>';});}
@@ -910,6 +928,37 @@ function cancelRdv(bid){if(!confirm('Annuler ce rendez-vous ?'))return;db.collec
 window.openRdvDetail=openRdvDetail;window.closeRdvDetail=closeRdvDetail;window.cancelRdv=cancelRdv;
 // ═══ EXPERT DETAIL VIEW ═══
 var exPerson=null,exSection='planning',cpSourceDay='';
+
+// ── Helpers gating read-only (non-admin) ──
+function exIsReadOnly(pid){
+  // Admin : jamais read-only. Non-admin : read-only SAUF sur sa propre fiche.
+  return (window._currentRole!=='admin') && (pid!==window._selfPersonId);
+}
+function applyExReadOnly(){
+  var view=document.getElementById('exDetailView');
+  if(!view)return;
+  view.classList.remove('ex-readonly');
+  // Retire un éventuel bandeau précédent
+  var prevBanner=document.getElementById('exRoBanner');
+  if(prevBanner)prevBanner.remove();
+  if(!exPerson)return;
+  if(!exIsReadOnly(exPerson.id))return;
+  view.classList.add('ex-readonly');
+  // Injecte un bandeau au début de exContent
+  var content=document.getElementById('exContent');
+  if(content){
+    var banner=document.createElement('div');
+    banner.id='exRoBanner';
+    banner.className='ex-ro-banner';
+    banner.innerHTML='<span class="ex-ro-icon">🔒</span><span>Vue lecture seule — cette fiche appartient à <strong>'+esc(exPerson.name||'un autre expert')+'</strong>. Seul un administrateur ou l\'expert concerné peut la modifier.</span>';
+    content.insertBefore(banner,content.firstChild);
+  }
+  // Masque tous les éléments marqués data-ro-hide (bouton Supprimer expert,
+  // boutons Connecter/Déconnecter calendrier, ajouter créneau, etc.)
+  view.querySelectorAll('[data-ro-hide]').forEach(function(el){el.style.display='none';});
+}
+window.exIsReadOnly=exIsReadOnly;window.applyExReadOnly=applyExReadOnly;
+
 var DAY_COLORS=['#3b82f6','#3b82f6','#8b5cf6','#22c55e','#06b6d4','#6b7280','#ef4444'];
 var DAY_LETTERS=['L','M','M','J','V','S','D'];
 var DAY_FULL=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
@@ -930,9 +979,9 @@ function computeEaster(year){var a=year%19,b=Math.floor(year/100),c=year%100,d=M
 function getHolidayDate(hol,year){if(hol.month)return new Date(year,hol.month-1,hol.day);var e=computeEaster(year);var d=new Date(e);d.setDate(d.getDate()+hol.easter);return d;}
 function formatHolDate(d){return d.getDate()+' '+MF[d.getMonth()]+' '+d.getFullYear();}
 
-function rEx(){document.getElementById('cE').textContent=P.length;document.getElementById('cE2').textContent=P.length;var el=document.getElementById('exG');if(!P.length){el.innerHTML='<div class="rv-em" style="grid-column:1/-1">Aucun expert.</div>';return;}var h='';P.forEach(function(p){var pt=p.types||[],sc=p.schedule||{},sd=JR.filter(function(d){return(sc[d]||[]).length>0;});h+='<div class="ec" style="cursor:pointer" onclick="openExDetail(\''+p.id+'\')">';h+='<div class="ec-top"><div class="ec-av" style="background:'+p.color+';overflow:hidden">'+(p.photoUrl?'<img src="'+p.photoUrl+'" style="width:100%;height:100%;object-fit:cover">':(p.name||'?')[0].toUpperCase())+'</div><div><div class="ec-nm">'+esc(p.name)+'</div><div class="ec-rl">'+esc(p.role||'Expert')+'</div></div></div>';h+='<div>';pt.forEach(function(tid){var tO=T.find(function(t){return t.id===tid;});if(tO)h+='<span class="ec-tb" style="background:'+tO.color+'18;color:'+tO.color+'">'+esc(tO.label)+'</span>';});if(!pt.length)h+='<span style="font-size:11px;color:rgba(255,255,255,.48)">Aucune consultation</span>';h+='</div>';h+='<div style="font-size:11px;color:rgba(255,255,255,.48);margin:8px 0">📅 '+(sd.length?sd.length+' jours/sem':'Non configuré');if(p.calendarConnected)h+=' · <span style="color:#34d399">✨ Meet Auto</span>';else if(p.meetLink)h+=' · <span style="color:#60a5fa">📹 Meet</span>';h+='</div>';h+='<div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;color:#a78bfa;font-weight:600">Configurer →</span><span class="cc-sh" style="margin-left:auto" onclick="event.stopPropagation();navigator.clipboard.writeText(window.location.origin+\'/booking.html?person='+p.id+'\');toast(\'📋 Copié !\')">↗ Partager</span></div>';h+='</div>';});el.innerHTML=h;}
+function rEx(){document.getElementById('cE').textContent=P.length;document.getElementById('cE2').textContent=P.length;var el=document.getElementById('exG');if(!P.length){el.innerHTML='<div class="rv-em" style="grid-column:1/-1">Aucun expert.</div>';return;}var h='';P.forEach(function(p){var pt=p.types||[],sc=p.schedule||{},sd=JR.filter(function(d){return(sc[d]||[]).length>0;});var _ro=exIsReadOnly(p.id);var _self=(p.id===window._selfPersonId);var _extra=(_self?' ec-self':'')+(_ro?' ec-locked':'');h+='<div class="ec'+_extra+'" style="cursor:pointer;position:relative" onclick="openExDetail(\''+p.id+'\')">';h+='<div class="ec-top"><div class="ec-av" style="background:'+p.color+';overflow:hidden">'+(p.photoUrl?'<img src="'+p.photoUrl+'" style="width:100%;height:100%;object-fit:cover">':(p.name||'?')[0].toUpperCase())+'</div><div><div class="ec-nm">'+esc(p.name)+'</div><div class="ec-rl">'+esc(p.role||'Expert')+'</div></div></div>';h+='<div>';pt.forEach(function(tid){var tO=T.find(function(t){return t.id===tid;});if(tO)h+='<span class="ec-tb" style="background:'+tO.color+'18;color:'+tO.color+'">'+esc(tO.label)+'</span>';});if(!pt.length)h+='<span style="font-size:11px;color:rgba(255,255,255,.48)">Aucune consultation</span>';h+='</div>';h+='<div style="font-size:11px;color:rgba(255,255,255,.48);margin:8px 0">📅 '+(sd.length?sd.length+' jours/sem':'Non configuré');if(p.calendarConnected)h+=' · <span style="color:#34d399">✨ Meet Auto</span>';else if(p.meetLink)h+=' · <span style="color:#60a5fa">📹 Meet</span>';h+='</div>';h+='<div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;color:#a78bfa;font-weight:600">'+(_ro?'Consulter →':'Configurer →')+'</span><span class="cc-sh" style="margin-left:auto" onclick="event.stopPropagation();navigator.clipboard.writeText(window.location.origin+\'/booking.html?person='+p.id+'\');toast(\'📋 Copié !\')">↗ Partager</span></div>';h+='</div>';});el.innerHTML=h;}
 
-function openExDetail(pid){exPerson=P.find(function(x){return x.id===pid;});if(!exPerson)return;exSection='profil';document.getElementById('exGridView').style.display='none';document.getElementById('exDetailView').style.display='';renderExHead();renderExNav();renderExSection();}
+function openExDetail(pid){exPerson=P.find(function(x){return x.id===pid;});if(!exPerson)return;exSection='profil';document.getElementById('exGridView').style.display='none';document.getElementById('exDetailView').style.display='';renderExHead();renderExNav();renderExSection();applyExReadOnly();}
 function closeExDetail(){document.getElementById('exDetailView').style.display='none';document.getElementById('exGridView').style.display='';exPerson=null;renderAll();}
 window.openExDetail=openExDetail;window.closeExDetail=closeExDetail;
 
@@ -952,7 +1001,7 @@ h+='<div style="display:flex;gap:6px"><button class="bb bb-o" onclick="navigator
 document.getElementById('exHead').innerHTML=h;}
 
 function renderExNav(){document.querySelectorAll('[data-exs]').forEach(function(n){n.classList.toggle('on',n.dataset.exs===exSection);});}
-document.addEventListener('click',function(e){var n=e.target.closest('[data-exs]');if(n&&document.getElementById('exDetailView').style.display!=='none'){exSection=n.dataset.exs;renderExNav();renderExSection();}});
+document.addEventListener('click',function(e){var n=e.target.closest('[data-exs]');if(n&&document.getElementById('exDetailView').style.display!=='none'){exSection=n.dataset.exs;renderExNav();renderExSection();applyExReadOnly();}});
 
 function renderExSection(){
 var el=document.getElementById('exContent'),h='',sc=exPerson.schedule||{},ov=exPerson.dateOverrides||{};
@@ -991,6 +1040,32 @@ h+='</div></div>';
 // Bio / description
 h+='<div style="margin-bottom:12px"><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Bio / Description</div>';
 h+='<textarea class="bi" id="exProBio" rows="3" style="width:100%;resize:vertical" placeholder="Courte description visible sur la page de réservation…">'+esc(exPerson.bio||'')+'</textarea></div>';
+// Bloc "Compte Firebase Auth" — admin only, permet de lier cette fiche expert à un compte Firebase Auth
+if(window._currentRole==='admin'){
+  var _users=window._usersCache||[];
+  var _curUid=exPerson.firebaseUid||'';
+  var _curUser=_users.find(function(u){return u.uid===_curUid;});
+  h+='<div class="fb-link-box">';
+  h+='<h4>🔗 Compte Firebase Auth lié</h4>';
+  h+='<p>Associe cette fiche expert à un compte Firebase Auth. Une fois lié, l\'utilisateur pourra éditer SA fiche et connecter SON Google Agenda, mais ne pourra plus modifier celles des autres experts.</p>';
+  h+='<select id="exProFirebaseUid"><option value="">— Aucun compte lié —</option>';
+  _users.forEach(function(u){
+    var sel=(u.uid===_curUid)?' selected':'';
+    var label=esc(u.name)+(u.email&&u.email!==u.name?' ('+esc(u.email)+')':'')+(u.role?' · '+esc(u.role):'');
+    h+='<option value="'+esc(u.uid)+'"'+sel+'>'+label+'</option>';
+  });
+  h+='</select>';
+  if(_curUid){
+    if(_curUser){
+      h+='<div class="fb-link-current">✓ Actuellement lié à <strong>'+esc(_curUser.name)+'</strong> ('+esc(_curUser.email||_curUid)+')</div>';
+    }else{
+      h+='<div class="fb-link-none">⚠ UID '+esc(_curUid)+' présent mais introuvable dans la collection users</div>';
+    }
+  }else{
+    h+='<div class="fb-link-none">⚠ Aucun compte lié — cet expert ne peut pas éditer sa fiche lui-même</div>';
+  }
+  h+='</div>';
+}
 h+='<div class="cd-save-bar" style="border-top:0"><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }
 
@@ -1241,7 +1316,12 @@ h+='<span class="hol-date">Prochain : '+formatHolDate(nextDt)+'</span>';
 h+='</div>';
 });
 
-h+='<div class="cd-save-bar" style="margin-top:20px"><button class="bb bb-r" onclick="if(confirm(\'Supprimer cet expert ?\')){CR.doc(\''+exPerson.id+'\').delete().then(function(){closeExDetail();loadAll();toast(\'🗑 Expert supprimé\');});}" style="margin-right:auto">🗑 Supprimer cet expert</button><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
+// Bouton suppression : admin only (data-ro-hide pour cacher en read-only, display:none pour non-admin sur sa propre fiche aussi car seul l'admin crée/supprime les experts)
+if(window._currentRole==='admin'){
+  h+='<div class="cd-save-bar" style="margin-top:20px"><button class="bb bb-r" data-ro-hide onclick="if(confirm(\'Supprimer cet expert ?\')){CR.doc(\''+exPerson.id+'\').delete().then(function(){closeExDetail();loadAll();toast(\'🗑 Expert supprimé\');});}" style="margin-right:auto">🗑 Supprimer cet expert</button><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
+}else{
+  h+='<div class="cd-save-bar" style="margin-top:20px"><span id="ex-autosave-status" style="font-size:11px;font-weight:600;margin-left:auto"></span></div>';
+}
 }
 
 el.innerHTML=h;
@@ -1451,8 +1531,30 @@ var r=document.getElementById('exProRole');if(r)u.role=r.value.trim();
 var e=document.getElementById('exProEmail');if(e)u.personalEmail=e.value.trim();
 var p=document.getElementById('exProPhone');if(p)u.phone=p.value.trim();
 var b=document.getElementById('exProBio');if(b)u.bio=b.value.trim();
-Object.assign(exPerson,u);
+// Admin only : sauve/retire le lien firebaseUid depuis le dropdown
+if(window._currentRole==='admin'){
+  var fbSel=document.getElementById('exProFirebaseUid');
+  if(fbSel){
+    var v=fbSel.value||'';
+    if(v){u.firebaseUid=v;}
+    else if(exPerson.firebaseUid){u.firebaseUid=firebase.firestore.FieldValue.delete();}
+  }
+}else{
+  // Non-admin : garantit qu'on ne touche JAMAIS au champ firebaseUid
+  // (les rules bloqueraient de toute façon, mais ceinture + bretelles)
+  delete u.firebaseUid;
+}
+// Apply optimistic update to in-memory object (sans le sentinel delete)
+Object.keys(u).forEach(function(k){
+  if(u[k]&&u[k]._methodName==='FieldValue.delete'){delete exPerson[k];}
+  else{exPerson[k]=u[k];}
+});
 CR.doc(exPerson.id).update(u).then(function(){
+// Recompute _selfPersonId si le lien vient de changer
+if(window._currentUid){
+  var _sp=P.find(function(pp){return pp.firebaseUid===window._currentUid;});
+  window._selfPersonId=_sp?_sp.id:null;
+}
 renderExHead();
 var ind=document.getElementById('ex-autosave-status');if(silent&&ind)autoSaveDone(ind);else if(!silent)toast('✅');
 }).catch(function(e){if(!silent)alert('Erreur: '+e.message);});
@@ -1505,6 +1607,15 @@ var md=parseInt(document.getElementById('exMaxDay').value);u.maxPerDay=isNaN(md)
 var mw=parseInt(document.getElementById('exMaxWeek').value);u.maxPerWeek=isNaN(mw)?0:mw;
 CR.doc(exPerson.id).update(u).then(function(){
 Object.assign(exPerson,u);
+// Écriture _settings (holidays partagés) : admin uniquement.
+// Les rules Firestore bloquent cette écriture pour non-admin, et le bloc
+// holidays UI est de toute façon gardé en read-only côté CSS.
+if(window._currentRole!=='admin'){
+  renderExHead();
+  var indNA=document.getElementById('ex-autosave-status');
+  if(silent&&indNA)autoSaveDone(indNA);else if(!silent)toast('✅ Paramètres enregistrés');
+  return;
+}
 var hols=[];
 document.querySelectorAll('[data-holid]').forEach(function(tg){
 if(tg.classList.contains('on'))hols.push(tg.dataset.holid);
@@ -1519,6 +1630,7 @@ window.saveExAdvanced=saveExAdvanced;
 
 // ═══ GOOGLE CALENDAR CONNECT/DISCONNECT ═══
 function connectCalendar(pid){
+if(exIsReadOnly(pid)){toast('🔒 Vous ne pouvez modifier que votre propre fiche');return;}
 toast('🔗 Préparation…');
 db.collection('_config').doc('oauth_calendar').get().then(function(doc){
 if(!doc.exists){alert('OAuth non configuré. Créez le document _config/oauth_calendar dans Firestore.');return;}
@@ -1536,6 +1648,7 @@ window.location.href=url;
 }).catch(function(e){alert('Erreur: '+e.message);});
 }
 function disconnectCalendar(pid){
+if(exIsReadOnly(pid)){toast('🔒 Vous ne pouvez modifier que votre propre fiche');return;}
 if(!confirm('Déconnecter le Google Agenda de cet expert ?'))return;
 toast('Déconnexion…');
 db.collection('calendar_tokens').doc(pid).delete().then(function(){
@@ -1551,6 +1664,7 @@ toast('✅ Calendrier déconnecté');
 window.connectCalendar=connectCalendar;window.disconnectCalendar=disconnectCalendar;
 
 function refreshCalendars(pid){
+if(exIsReadOnly(pid)){toast('🔒 Vous ne pouvez modifier que votre propre fiche');return;}
 toast('🔄 Rafraîchissement en cours…');
 db.collection('calendar_sync_requests').doc(pid).set({requestedAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
 // Wait a few seconds for the Cloud Function to process, then reload expert data
@@ -1599,6 +1713,7 @@ function addExternalCal(){}
 function removeExternalCal(){}
 
 function connectExtraCalendar(pid){
+if(exIsReadOnly(pid)){toast('🔒 Vous ne pouvez modifier que votre propre fiche');return;}
 toast('🔗 Connexion agenda personnel…');
 db.collection('_config').doc('oauth_calendar').get().then(function(doc){
 if(!doc.exists){alert('OAuth non configuré.');return;}
@@ -1617,6 +1732,7 @@ window.location.href=url;
 }
 
 function disconnectExtraCal(pid,idx){
+if(exIsReadOnly(pid)){toast('🔒 Vous ne pouvez modifier que votre propre fiche');return;}
 if(!confirm('Déconnecter cet agenda personnel ?'))return;
 var p=P.find(function(x){return x.id===pid;});
 if(!p||!p.extraConnections)return;
@@ -1695,7 +1811,7 @@ window.history.replaceState({},document.title,window.location.pathname);
 }
 })();
 document.getElementById('addE').addEventListener('click',function(){document.getElementById('addEF').style.display='';});
-document.getElementById('eSub').addEventListener('click',function(){var n=document.getElementById('eN').value.trim();if(!n)return;var r=document.getElementById('eR').value.trim(),c=document.getElementById('eCo').value,id=n.toLowerCase().replace(/[^a-z]/g,'').slice(0,15)+'_'+gid().slice(0,4);CR.doc(id).set({__type:'person',name:n,role:r,color:c,types:[],schedule:{},blockedDates:[]}).then(function(){document.getElementById('eN').value='';document.getElementById('eR').value='';document.getElementById('addEF').style.display='none';loadAll();toast('✅ Expert ajouté');});});
+document.getElementById('eSub').addEventListener('click',function(){if(window._currentRole!=='admin'){toast('🔒 Admin requis');return;}var n=document.getElementById('eN').value.trim();if(!n)return;var r=document.getElementById('eR').value.trim(),c=document.getElementById('eCo').value,id=n.toLowerCase().replace(/[^a-z]/g,'').slice(0,15)+'_'+gid().slice(0,4);CR.doc(id).set({__type:'person',name:n,role:r,color:c,types:[],schedule:{},blockedDates:[]}).then(function(){document.getElementById('eN').value='';document.getElementById('eR').value='';document.getElementById('addEF').style.display='none';loadAll();toast('✅ Expert ajouté');});});
 function rPg(){var el=document.getElementById('pgC'),base=window.location.origin+'/booking.html';var h='<div class="pg-m"><div class="pg-av">A</div><div style="flex:1"><div class="pg-nm">SARL Ambitio Corp</div><div class="pg-ds">Page de réservation principale.</div></div><div style="display:flex;gap:8px"><button class="bb bb-o" onclick="window.open(\''+base+'\',\'_blank\')">↗ Ouvrir</button><button class="bb bb-o" onclick="navigator.clipboard.writeText(\''+base+'\');toast(\'📋 Copié !\')">Partager</button></div></div>';if(T.length){h+='<div class="pg-sh">Consultations</div>';T.forEach(function(t){var u=base+'?type='+t.id;h+='<div class="pg-l" onclick="navigator.clipboard.writeText(\''+u+'\');toast(\'📋 Copié !\')"><div class="pg-la" style="background:'+t.color+'">'+t.label[0].toUpperCase()+'</div><div class="pg-ln">'+esc(t.label)+'</div><div class="pg-lu">'+u+'</div><span class="pg-lc">Copier</span></div>';});}if(P.length){h+='<div class="pg-sh">Experts</div><div style="font-size:12px;color:rgba(255,255,255,.48);margin-bottom:10px">Chaque expert a sa propre page.</div>';P.forEach(function(p){var u=base+'?person='+p.id;h+='<div class="pg-l" onclick="navigator.clipboard.writeText(\''+u+'\');toast(\'📋 Copié !\')"><div class="pg-la" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</div><div class="pg-ln">'+esc(p.name)+'</div><div class="pg-lu">'+u+'</div><span class="pg-lc">Copier</span></div>';});}el.innerHTML=h;}
 function lSt(){
 var el;
@@ -1864,7 +1980,45 @@ else if(ac==='assignEx'){var ap=P.find(function(x){return x.id===a.dataset.pid;}
 else if(ac==='unassignEx'){var up=P.find(function(x){return x.id===a.dataset.pid;});if(up){up.types=up.types||[];var ui=up.types.indexOf(cdType.id);if(ui>=0)up.types.splice(ui,1);CR.doc(up.id).update({types:up.types}).then(function(){renderCdSection();toast('✅ Expert retiré');});}}
 else if(ac==='togEx'){var c=document.querySelector('.ec[data-pid="'+a.dataset.pid+'"]');if(c)c.classList.toggle('open');}else if(ac==='togTy'){var pid=a.dataset.pid,tid=a.dataset.tid,p=P.find(function(x){return x.id===pid;});if(!p)return;p.types=p.types||[];var i=p.types.indexOf(tid);if(i>=0)p.types.splice(i,1);else p.types.push(tid);CR.doc(pid).update({types:p.types}).then(function(){renderAll();toast('✅');});}else if(ac==='savPS'){var pid2=a.dataset.pid,u={};document.querySelectorAll('[data-ps][data-pid="'+pid2+'"]').forEach(function(inp){var v=parseInt(inp.value);u[inp.dataset.ps]=isNaN(v)?0:v;});CR.doc(pid2).update(u).then(function(){var p2=P.find(function(x){return x.id===pid2;});if(p2)Object.assign(p2,u);toast('✅');});}else if(ac==='addSl'){var pid3=a.dataset.pid,dy=a.dataset.day,sE=document.querySelector('[data-start="'+pid3+'_'+dy+'"]'),eE=document.querySelector('[data-end="'+pid3+'_'+dy+'"]');if(!sE||!eE||!sE.value||!eE.value)return;var p3=P.find(function(x){return x.id===pid3;});if(!p3)return;p3.schedule=p3.schedule||{};p3.schedule[dy]=p3.schedule[dy]||[];p3.schedule[dy].push({start:sE.value,end:eE.value});CR.doc(pid3).update({schedule:p3.schedule}).then(function(){rEx();toast('✅');});}else if(ac==='delSl'){var pid4=a.dataset.pid,dy2=a.dataset.day,ix=+a.dataset.idx;var p4=P.find(function(x){return x.id===pid4;});if(!p4||!p4.schedule||!p4.schedule[dy2])return;p4.schedule[dy2].splice(ix,1);CR.doc(pid4).update({schedule:p4.schedule}).then(function(){rEx();toast('🗑');});}else if(ac==='addBl'){var pid5=a.dataset.pid,dE=document.querySelector('[data-bl="'+pid5+'"]');if(!dE||!dE.value)return;var p5=P.find(function(x){return x.id===pid5;});if(!p5)return;p5.blockedDates=p5.blockedDates||[];if(p5.blockedDates.indexOf(dE.value)<0)p5.blockedDates.push(dE.value);p5.blockedDates.sort();CR.doc(pid5).update({blockedDates:p5.blockedDates}).then(function(){rEx();toast('🚫');});}else if(ac==='delBl'){var pid6=a.dataset.pid,ix2=+a.dataset.idx;var p6=P.find(function(x){return x.id===pid6;});if(!p6)return;p6.blockedDates.splice(ix2,1);CR.doc(pid6).update({blockedDates:p6.blockedDates}).then(function(){rEx();toast('✅');});}else if(ac==='delP'){if(!confirm('Supprimer ?'))return;CR.doc(a.dataset.pid).delete().then(function(){loadAll();toast('🗑');});}else if(ac==='shT'){openShareModal(a.dataset.tid,'type');}else if(ac==='shEx'){navigator.clipboard.writeText(window.location.origin+'/booking.html?person='+a.dataset.pid).then(function(){toast('📋 Copié !');});}});
 document.addEventListener('change',function(e){var s=e.target.closest('[data-action="chSt"]');if(!s)return;db.collection('bookings').doc(s.dataset.bid).update({status:s.value}).then(function(){loadB();toast('✅');});});
-firebase.auth().onAuthStateChanged(function(u){if(u){db.collection('users').doc(u.uid).get().then(function(s){var d=s.exists?s.data():{};window._currentRole=d.role||'admin';window._currentUserName=u.displayName||u.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'admin');localStorage.setItem('ambitio_name',window._currentUserName);});}loadAll();});
+firebase.auth().onAuthStateChanged(function(u){
+  if(!u){loadAll();return;}
+  window._currentUid=u.uid;
+  db.collection('users').doc(u.uid).get().then(function(s){
+    var d=s.exists?s.data():{};
+    var role=d.role||'admin';
+    window._currentRole=role;
+    window._currentUserName=u.displayName||u.email.split('@')[0];
+    localStorage.setItem('ambitio_role',role);
+    localStorage.setItem('ambitio_name',window._currentUserName);
+    // Gating UI non-admin : on masque immédiatement les contrôles d'ajout/création d'expert
+    if(role!=='admin'){
+      var addE=document.getElementById('addE');if(addE)addE.style.display='none';
+      var addEF=document.getElementById('addEF');if(addEF)addEF.style.display='none';
+    }
+    // Précharge le cache des users Firebase Auth (admin only) — utilisé par le
+    // dropdown "Compte Firebase" dans la fiche expert.
+    var prefetch;
+    if(role==='admin'){
+      prefetch=db.collection('users').get().then(function(sn){
+        var list=[];
+        sn.forEach(function(x){
+          var dd=x.data()||{};
+          list.push({
+            uid:x.id,
+            email:dd.email||'',
+            name:dd.displayName||dd.name||dd.email||x.id,
+            role:dd.role||''
+          });
+        });
+        list.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});
+        window._usersCache=list;
+      }).catch(function(){window._usersCache=[];});
+    }else{
+      prefetch=Promise.resolve();
+    }
+    prefetch.then(loadAll,loadAll);
+  }).catch(function(){loadAll();});
+});
 </script>
 <script src="nav.js"></script>
 </body>
