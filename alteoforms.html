@@ -232,8 +232,8 @@
 <!-- Field editor modal -->
 <div class="ed-mo-bg" id="fldModal"><div class="ed-mo">
 <div class="ed-mo-title"><span id="fldModalTitle">Nouveau champ</span><button onclick="closeFldModal()" style="border:none;background:0;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer">✕</button></div>
-<div class="ed-field-row"><div class="ed-group-label">Libellé</div><input class="bi" id="fld-label" placeholder="Ex: Quel est votre secteur d'activité ?" style="width:100%"/></div>
-<div class="ed-field-row"><div class="ed-group-label">Description (optionnel)</div><input class="bi" id="fld-desc" placeholder="Aide ou précision pour le répondant" style="width:100%"/></div>
+<div class="ed-field-row" id="fld-label-row"><div class="ed-group-label" id="fld-label-gl">Libellé</div><input class="bi" id="fld-label" placeholder="Ex: Quel est votre secteur d'activité ?" style="width:100%"/></div>
+<div class="ed-field-row" id="fld-desc-row"><div class="ed-group-label">Description (optionnel)</div><input class="bi" id="fld-desc" placeholder="Aide ou précision pour le répondant" style="width:100%"/></div>
 <div class="ed-field-row"><div class="ed-group-label">Type de champ</div>
 <select class="bs" id="fld-type" onchange="fldTypeChanged()" style="width:100%">
 <option value="text">Aa Texte court</option>
@@ -877,6 +877,17 @@ document.getElementById('fld-req-wrap').style.display=isInfo?'none':'';
 document.getElementById('fld-samecard-wrap').style.display=isInfo?'none':'';
 document.getElementById('fld-contact-wrap').style.display=isInfo?'none':'';
 document.getElementById('fld-cond-wrap').style.display=isInfo?'none':'';
+document.getElementById('fld-desc-row').style.display=isInfo?'none':'';
+// Relabel for info type
+var gl=document.getElementById('fld-label-gl');
+var li=document.getElementById('fld-label');
+if(isInfo){
+gl.textContent='Titre de la section (optionnel)';
+li.placeholder='Ex : Avant de commencer, À propos de vous…';
+}else{
+gl.textContent='Libellé';
+li.placeholder="Ex: Quel est votre secteur d'activité ?";
+}
 if(hasOpts&&document.getElementById('fld-opts-list').children.length===0){addFldOption();addFldOption();}
 }
 
