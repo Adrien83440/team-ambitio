@@ -2138,6 +2138,12 @@ function openClientsPanel() {
   var p = document.getElementById('clientsPanel');
   p.style.display = 'flex';
   p.style.flexDirection = 'column';
+  // Show bulk sync button if any GC clients
+  setTimeout(function() {
+    var hasgc = clientsCache.some(function(c){return c.paiementPlateforme==='GOCARDLESS';});
+    var btn = document.getElementById('btnBulkGcSync');
+    if (btn) btn.style.display = hasgc ? '' : 'none';
+  }, 500);
   loadClientsData();
 }
 function closeClientsPanel() {
@@ -2635,6 +2641,69 @@ function addClientNote(leadId) {
 
 /* ── Bouton "Marquer comme client" dans modal lead pipeline ── */
 // Appelé depuis le modal CRM existant
+window.gcBulkSync = async function() {
+  var gcClients = clientsCache.filter(function(c) {
+    return c.paiementPlateforme === 'GOCARDLESS' && c.email;
+  });
+  if (!gcClients.length) { toast('Aucun client GC à synchroniser', false); return; }
+
+  var btn = document.getElementById('btnBulkGcSync');
+  var prog = document.getElementById('bulkSyncProgress');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sync…'; }
+  if (prog) prog.style.display = 'block';
+
+  var done = 0, ok = 0, err = 0;
+  var total = gcClients.length;
+
+  function updateProgress() {
+    if (prog) {
+      var pct = Math.round((done / total) * 100);
+      prog.innerHTML =
+        '<div style="display:flex;align-items:center;gap:10px;padding:10px 0">' +
+        '<div style="flex:1;background:rgba(255,255,255,.06);border-radius:4px;height:6px;overflow:hidden">' +
+        '<div style="background:#34d399;height:100%;width:'+pct+'%;transition:width .3s"></div></div>' +
+        '<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+done+'/'+total+' · ✅ '+ok+' · ❌ '+err+'</span>' +
+        '</div>';
+    }
+  }
+
+  updateProgress();
+  var token = await firebase.auth().currentUser.getIdToken();
+
+  for (var i = 0; i < gcClients.length; i++) {
+    var c = gcClients[i];
+    try {
+      var resp = await fetch('/api/gocardless-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ leadId: c.id, email: c.email })
+      });
+      var data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Erreur');
+      ok++;
+      // Update cache
+      var idx = clientsCache.findIndex(function(x){return x.id===c.id;});
+      if (idx>=0) clientsCache[idx].gcCustomerId = data.customer && data.customer.id;
+    } catch(e) {
+      err++;
+      console.warn('GC sync failed for', c.nom, ':', e.message);
+    }
+    done++;
+    updateProgress();
+    // Small delay to avoid rate limiting
+    if (i < gcClients.length - 1) await new Promise(function(r){setTimeout(r, 200);});
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '🔄 Resync GC'; }
+  var msg = '✅ Sync terminé — ' + ok + ' liés, ' + err + ' non trouvés dans GC';
+  if (prog) prog.innerHTML += '<div style="font-size:11px;color:#34d399;padding:4px 0">'+msg+'</div>';
+  toast(msg);
+  // Reload payments cache
+  loadClientPayments();
+  renderClientsGrid();
+  renderClientsKpis();
+};
+
 window.gcLookupClient = async function(leadId, email) {
   var resultEl = document.getElementById('gcLookupResult_' + leadId);
   if (resultEl) resultEl.innerHTML = '⏳ Recherche en cours…';
