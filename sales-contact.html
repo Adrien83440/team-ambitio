@@ -8,6 +8,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<link rel="stylesheet" href="call-detail-modal.css">
+<script src="call-detail-modal.js" defer></script>
 <script>
 if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}
 </script>
@@ -398,11 +400,21 @@ for(var ki=0;ki<convoAll.length;ki++){
     var clIcon=side==='out'?'\ud83d\udcde\u2197':clMissed?'\u274c':'\ud83d\udcde\u2199';
     var clTitle=(side==='out'?'Appel sortant':'Appel entrant')+(clMissed&&side==='in'?' (manqu\u00e9)':'');
     var callClass='conv-call '+side+(side==='out'?' '+ow:'')+(clMissed&&side==='in'?' missed':'');
-    h+='<div class="'+callClass+'">';
+    // Bouton détail cliquable si l'appel a un callLogId (Twilio Dialer)
+    var hasCallDetail=!!cm.callLogId;
+    if(hasCallDetail)callClass+=' has-detail';
+    h+='<div class="'+callClass+'"'+(hasCallDetail?' data-action="callDetail" data-cid="'+escA(cm.callLogId)+'" style="cursor:pointer"':'')+'>';
     h+='<div class="conv-call-icon">'+clIcon+'</div>';
     h+='<div class="conv-call-info"><div class="conv-call-title">'+esc(clTitle)+'</div>';
     h+='<div class="conv-call-sub">'+(cm.source?'<span>'+esc(cm.source)+'</span>':'')+'</div></div>';
     if(clDur)h+='<div class="conv-call-dur">'+esc(clDur)+'</div>';
+    if(hasCallDetail){
+      var cdBadges='';
+      if(cm.hasRecording)  cdBadges+='\ud83c\udf99';
+      if(cm.hasTranscript) cdBadges+='\ud83d\udcc4';
+      if(cm.hasAiAnalysis) cdBadges+='\ud83e\udd16';
+      if(cdBadges)h+='<div class="conv-call-badges" style="margin-left:6px;font-size:13px;opacity:0.9">'+cdBadges+'</div>';
+    }
     h+='</div>';
     // Extras (note, transcription, enregistrement, tags) — sous la bulle
     var hasExtras=cm.note||cm.transcription||cm.recordingUrl||extractRecordingUrl(cm.content||'')||cm.callTags;
@@ -485,6 +497,7 @@ document.querySelectorAll('.fr-tab').forEach(function(b){b.addEventListener('cli
 document.getElementById('ctApp').addEventListener('input',function(e){if(e.target.closest('[data-f]')){if(autoTimer)clearTimeout(autoTimer);autoTimer=setTimeout(saveF,3000);}});
 document.getElementById('ctApp').addEventListener('change',function(e){if(e.target.closest('[data-f]'))saveF();});
 document.getElementById('ctApp').addEventListener('click',function(e){
+var cdTarget=e.target.closest('[data-action="callDetail"]');if(cdTarget){e.stopPropagation();var ccid=cdTarget.dataset.cid;if(ccid&&window.CallDetailModal)window.CallDetailModal.open(ccid);return;}
 var dot=e.target.closest('[data-action="setStage"]');if(dot){var o=lead.stage||'lead',n=dot.dataset.stage;if(o===n)return;lead.stage=n;addTL(sName(o)+' \u2192 '+sName(n),SM[n]?SM[n].color:'var(--muted)');if(n==='closed_won_setting'||n==='closed_won_self')addTL('\ud83c\udf89 Converti en client !','#10b981');var stSync={lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'nrp3',poubelle:'disqualifie',disqualification:'disqualifie',follow_up_pm:'appele',set:'rdv_pose',rdv_self_booking:'rdv_pose',rdv_confirmes:'rdv_pose',rdv_annules_prospect:'pas_interesse',rdv_annules_equipe:'pas_interesse',no_show_self:'pas_interesse',no_show_setting:'pas_interesse',closed_won_setting:'rdv_pose',closed_won_self:'rdv_pose',closed_lost:'pas_interesse',follow_up_closing:'appele',disqualifie_closing:'disqualifie'};var svData={stage:n};if(stSync[n]){svData.status=stSync[n];lead.status=stSync[n];}sv(svData);renderAll();return;}
 var dt=e.target.closest('[data-action="delTag"]');if(dt){lead.tags=(lead.tags||[]);lead.tags.splice(+dt.dataset.idx,1);sv({tags:lead.tags});renderAll();return;}
 var dn=e.target.closest('[data-action="delNote"]');if(dn){lead.notesHistory=(lead.notesHistory||[]);lead.notesHistory.splice(+dn.dataset.idx,1);sv({notesHistory:lead.notesHistory});renderAll();return;}
