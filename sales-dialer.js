@@ -375,23 +375,34 @@
     const p = $('sd-lead-panel');
     if (!activeLeadData) { p.innerHTML = '<div class="sd-empty">Aucun lead sélectionné</div>'; return; }
     const L = activeLeadData;
-    const name = L.fullName || `${L.firstName || ''} ${L.lastName || ''}`.trim() || '—';
-    const init = (L.firstName || L.fullName || '?')[0].toUpperCase();
+    // Champs canoniques des docs leads/* :
+    //   nom (string unique, pas firstName/lastName)
+    //   email, telephone
+    //   status (pas "statut")
+    //   assignedTo (slug team member)
+    //   dialer_attempts (maintenu par le pipeline)
+    //   notes (champ libre dédié au dialer)
+    const name = L.nom || '—';
+    const init = (L.nom || '?').trim().charAt(0).toUpperCase() || '?';
+    // Helper escape HTML pour éviter les injections dans les valeurs lead
+    const esc = s => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     p.innerHTML = `
       <div class="sd-lead-card">
         <div class="sd-lead-header">
-          <div class="sd-lead-avatar">${init}</div>
+          <div class="sd-lead-avatar">${esc(init)}</div>
           <div>
-            <div class="sd-lead-name">${name}</div>
-            <div class="sd-lead-sub">${L.email || ''}</div>
+            <div class="sd-lead-name">${esc(name)}</div>
+            <div class="sd-lead-sub">${esc(L.email || '')}</div>
           </div>
         </div>
-        <div class="sd-lead-row"><span>Téléphone</span><span>${L.telephone || '—'}</span></div>
-        <div class="sd-lead-row"><span>Statut</span><span>${L.statut || '—'}</span></div>
-        <div class="sd-lead-row"><span>Assigné</span><span>${L.assignedTo || '—'}</span></div>
+        <div class="sd-lead-row"><span>Téléphone</span><span>${esc(L.telephone || '—')}</span></div>
+        <div class="sd-lead-row"><span>Statut</span><span>${esc(L.status || '—')}</span></div>
+        <div class="sd-lead-row"><span>Assigné</span><span>${esc(L.assignedTo || '—')}</span></div>
         <div class="sd-lead-row"><span>Tentatives</span><span>${L.dialer_attempts || 0}</span></div>
         <div class="sd-lead-notes">
-          <textarea id="sd-lead-notes-ta" placeholder="Notes en temps réel…">${L.notes || ''}</textarea>
+          <textarea id="sd-lead-notes-ta" placeholder="Notes en temps réel…">${esc(L.notes || '')}</textarea>
         </div>
         <a class="sd-lead-link" href="sales-contact.html?id=${activeLeadId}" target="_blank">Ouvrir la fiche complète →</a>
       </div>`;
