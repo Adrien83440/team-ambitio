@@ -2245,7 +2245,7 @@ function renderClientsGrid() {
     grid.addEventListener('mouseout', function(e) { var tr = e.target.closest('.cl-row'); if (tr) tr.style.background = ''; });
     grid._clRowBound = true;
   }
-  var STATUS_CLIENT = { active: { label: '✅ Actif', color: '#10b981' }, paused: { label: '⏸ En pause', color: '#f59e0b' }, completed: { label: '🎉 Terminé', color: '#a78bfa' } };
+  var STATUS_CLIENT = { active: { label: '✅ Actif', color: '#10b981' }, paused: { label: '⏸ En pause', color: '#f59e0b' }, completed: { label: '🎉 Terminé', color: '#a78bfa' }, stopped: { label: '🛑 Stoppé', color: '#ef4444' }, procedure: { label: '⚖️ Procédure', color: '#f97316' } };
   var STATUS_PAY = { pending_mandate: '⏳ Mandat en attente', mandate_active: '✅ Mandat actif', active: '💸 Prélèvements actifs', completed: '🎉 Terminé', failed: '❌ Échec', draft: '📝 Brouillon' };
   var viewMode = window._clientsViewMode || 'grid';
   if (!list.length) {
@@ -2312,7 +2312,7 @@ function openClientDetail(leadId) {
   var setterColor = c.assignedTo && window.TEAM_MEMBERS && window.TEAM_MEMBERS[c.assignedTo] ? window.TEAM_MEMBERS[c.assignedTo].color : '#10b981';
   var pays = clientsPaymentsCache[c.id] || [];
   var STATUS_PAY = { draft: '📝 Brouillon', pending_mandate: '⏳ Mandat en attente', mandate_active: '✅ Mandat actif', active: '💸 Actifs', completed: '🎉 Terminé', failed: '❌ Échec', cancelled: '🚫 Annulé' };
-  var STATUS_CLIENT = { active: { label: '✅ Actif', color: '#10b981' }, paused: { label: '⏸ En pause', color: '#f59e0b' }, completed: { label: '🎉 Terminé', color: '#a78bfa' } };
+  var STATUS_CLIENT = { active: { label: '✅ Actif', color: '#10b981' }, paused: { label: '⏸ En pause', color: '#f59e0b' }, completed: { label: '🎉 Terminé', color: '#a78bfa' }, stopped: { label: '🛑 Stoppé', color: '#ef4444' }, procedure: { label: '⚖️ Procédure', color: '#f97316' } };
   var cs = STATUS_CLIENT[c.clientStatus || 'active'] || STATUS_CLIENT.active;
 
   // Notes timeline
@@ -2364,7 +2364,7 @@ function openClientDetail(leadId) {
 
   // Status selector (manuel)
   h += '<div style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap">';
-  ['active', 'paused', 'completed'].forEach(function(s) {
+  ['active', 'paused', 'completed', 'stopped', 'procedure'].forEach(function(s) {
     var sc = STATUS_CLIENT[s];
     var isOn = (c.clientStatus || 'active') === s;
     h += '<button onclick="setClientStatus(\'' + leadId + '\',\'' + s + '\')" style="padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ' + (isOn ? sc.color : 'var(--border)') + ';background:' + (isOn ? sc.color + '18' : 'transparent') + ';color:' + (isOn ? sc.color : 'var(--muted)') + '">' + sc.label + '</button>';
