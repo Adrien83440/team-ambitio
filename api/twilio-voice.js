@@ -16,9 +16,11 @@
 //    puissent le mettre à jour par la suite
 // 6. On retourne un TwiML <Dial> qui bridge vers le prospect avec enregistrement
 //
-// NOTE IMPORTANTE : On utilise record="record-from-answer-dual" qui enregistre
-// en deux pistes séparées (prospect / closer). Whisper peut ensuite mieux
-// attribuer les tours de parole lors de la transcription.
+// NOTE IMPORTANTE : On utilise record="record-from-ringing-dual" qui enregistre
+// en deux pistes séparées (prospect / closer) ET démarre dès la sonnerie (pas
+// à partir du décroché). Ça garantit qu'on ne rate jamais les premières
+// secondes de conversation à cause du délai d'établissement audio côté carrier.
+// Le .mp3 final contient donc 3-15 sec de sonnerie en début de piste.
 // ==========================================================================
 
 const { db, admin } = require('./_firebaseAdmin');
@@ -162,7 +164,7 @@ module.exports = async (req, res) => {
     const twiml = new VoiceResponse();
     const dial = twiml.dial({
       callerId: outboundE164,
-      record: 'record-from-answer-dual',
+      record: 'record-from-ringing-dual',
       recordingStatusCallback: `${baseUrl}/api/twilio-recording-status`,
       recordingStatusCallbackEvent: 'completed',
       recordingStatusCallbackMethod: 'POST',

@@ -51,7 +51,7 @@ module.exports = async (req, res) => {
 
     const twiml = new VoiceResponse();
     const dial = twiml.dial({
-      record: 'record-from-answer-dual',
+      record: 'record-from-ringing-dual',
       recordingStatusCallback: `${baseUrl}/api/twilio-recording-status`,
       recordingStatusCallbackEvent: 'completed',
       recordingStatusCallbackMethod: 'POST',
