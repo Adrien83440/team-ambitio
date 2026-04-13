@@ -708,10 +708,7 @@ if(lead.contractSigned){
 // Check existing payments
 h+='<div id="crmPaySection_'+lid+'" style="margin-bottom:8px;font-size:11px;color:var(--muted)">Chargement paiements…</div>';
 h+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
-h+='<a href="sales-signatures.html?leadId='+lid+'" style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid rgba(167,139,250,0.3);border-radius:8px;background:rgba(167,139,250,0.08);color:#c4b5fd;font-size:12px;font-weight:700;text-decoration:none">📄 Envoyer contrat</a>';
-h+='<a href="payments.html?leadId='+lid+'&leadName='+encodeURIComponent(lead.nom||'')+'" +
-  "'&leadEmail='+encodeURIComponent(lead.email||'')+'&leadPhone='+encodeURIComponent(lead.telephone||'')+'" +
-  "'" style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid rgba(16,185,129,0.3);border-radius:8px;background:rgba(16,185,129,0.08);color:#34d399;font-size:12px;font-weight:700;text-decoration:none">💳 Créer paiement</a>';
+h+='<a href="payments.html?leadId='+lid+'&leadName='+encodeURIComponent(lead.nom||'')+'&leadEmail='+encodeURIComponent(lead.email||'')+'&leadPhone='+encodeURIComponent(lead.telephone||'')+'" style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid rgba(16,185,129,0.3);border-radius:8px;background:rgba(16,185,129,0.08);color:#34d399;font-size:12px;font-weight:700;text-decoration:none">💳 Créer paiement</a>';
 h+='</div>';
 h+='</div>';
 h+='<div class="crm-modal-section">';if(lead.telephone)h+='<a href="tel:'+lead.telephone.replace(/\s/g,'')+'" style="display:block;text-align:center;padding:10px;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);border-radius:10px;color:#34d399;font-weight:700;font-size:13px;text-decoration:none;margin-bottom:8px">📞 Appeler</a>';if(lead.email)h+='<a href="mailto:'+escA(lead.email)+'" style="display:block;text-align:center;padding:10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.2);border-radius:10px;color:#60a5fa;font-weight:700;font-size:13px;text-decoration:none">✉️ Email</a>';h+='</div></div>';document.getElementById('modalPanel').innerHTML=h;document.getElementById('modalBg').classList.add('open');
