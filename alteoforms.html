@@ -47,15 +47,25 @@
 /* Editor */
 .ed{display:none}
 .ed.on{display:flex;gap:0;min-height:calc(100vh - 160px)}
-.ed-left{width:240px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.07)}
+.ed-tabs{display:flex;gap:2px;padding:0 0 0 0;border-bottom:1px solid rgba(255,255,255,.07);margin-bottom:0;background:#0a0a14;position:sticky;top:0;z-index:10}
+.ed-tab{padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;color:rgba(255,255,255,.4);border-bottom:2px solid transparent;transition:all .15s;display:flex;align-items:center;gap:6px;white-space:nowrap;background:none;border-left:none;border-right:none;border-top:none;font-family:'Figtree',sans-serif}
+.ed-tab:hover{color:rgba(255,255,255,.7)}
+.ed-tab.on{color:#fbbf24;border-bottom-color:#f59e0b}
 .ed-right{flex:1;padding:20px 28px;min-width:0;overflow-y:auto}
-.ed-nav{padding:0 8px}
-.ed-nav-item{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;cursor:pointer;border-left:3px solid transparent;border-radius:0 8px 8px 0;transition:all .15s;font-size:13px;color:rgba(255,255,255,.5)}
-.ed-nav-item:hover{background:rgba(255,255,255,.02);color:rgba(255,255,255,.7)}
-.ed-nav-item.on{background:rgba(245,158,11,.06);border-left-color:#f59e0b;color:#fbbf24}
-.ed-nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
-.ed-nav-label{font-weight:600}
-.ed-nav-desc{font-size:11px;color:rgba(255,255,255,.25);margin-top:1px}
+/* Field palette */
+.ed-palette{width:220px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.07);overflow-y:auto;max-height:calc(100vh - 200px);padding:12px 10px 24px}
+.ed-palette.hidden{display:none}
+.pal-section{margin-bottom:16px}
+.pal-section-title{font-size:10px;font-weight:800;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.6px;padding:4px 6px;margin-bottom:6px}
+.pal-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.pal-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px 6px;background:#141420;border:1px solid rgba(255,255,255,.06);border-radius:8px;cursor:pointer;transition:all .15s;text-align:center;user-select:none}
+.pal-item:hover{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.05);transform:translateY(-1px)}
+.pal-item:active{transform:scale(.97)}
+.pal-icon{font-size:18px;line-height:1}
+.pal-label{font-size:10px;font-weight:600;color:rgba(255,255,255,.55);line-height:1.2}
+.pal-item.pal-wide{grid-column:1/-1;flex-direction:row;justify-content:flex-start;gap:10px;padding:8px 12px}
+.pal-wide .pal-icon{font-size:14px}
+.pal-wide .pal-label{font-size:11px;text-align:left}
 .ed-sec-title{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;margin-bottom:16px}
 .ed-head{display:flex;align-items:center;gap:14px;padding:16px 20px;background:#0e0e1a;border:1px solid rgba(255,255,255,.07);border-radius:14px;margin-bottom:16px}
 .ed-head-color{width:10px;height:44px;border-radius:5px;flex-shrink:0}
@@ -134,7 +144,7 @@
 .rule-cond-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
 .rule-cond-row select,.rule-cond-row input{font-size:11px;padding:6px 8px}
 .rule-logic-tag{font-size:10px;font-weight:800;color:#60a5fa;padding:2px 8px;background:rgba(96,165,250,.1);border-radius:4px;margin:4px 0}
-@media(max-width:768px){.ed.on{flex-direction:column}.ed-left{width:100%;border-right:0;border-bottom:1px solid rgba(255,255,255,.07);display:flex;overflow-x:auto}.ed-nav-item{border-left:0;border-bottom:3px solid transparent;white-space:nowrap;padding:10px 14px}.ed-nav-item.on{border-bottom-color:#f59e0b;border-left:0}.ed-right{padding:16px 0}}
+@media(max-width:768px){.ed.on{flex-direction:column}.ed-palette{width:100%;border-right:0;border-bottom:1px solid rgba(255,255,255,.07);max-height:220px}.ed-right{padding:16px 0}}
 </style>
 </head>
 <body>
@@ -157,14 +167,56 @@
 <button class="bb bb-o" onclick="previewForm()">👁 Aperçu</button>
 <button class="bb bb-p" onclick="publishForm()" id="edPubBtn">🚀 Publier</button>
 </div>
+<!-- Top tabs -->
+<div class="ed-tabs" id="edNav">
+<button class="ed-tab on" data-sec="fields">📋 Générateur</button>
+<button class="ed-tab" data-sec="rules">⚡ Règles</button>
+<button class="ed-tab" data-sec="settings">⚙️ Paramètres</button>
+<button class="ed-tab" data-sec="share">🔗 Partager</button>
+<button class="ed-tab" data-sec="responses">📊 Réponses</button>
+</div>
 <div class="ed on">
-<div class="ed-left"><div class="ed-nav" id="edNav">
-<div class="ed-nav-item on" data-sec="fields"><span class="ed-nav-icon">📋</span><div><div class="ed-nav-label">Champs</div><div class="ed-nav-desc">Questions du formulaire</div></div></div>
-<div class="ed-nav-item" data-sec="rules"><span class="ed-nav-icon">⚡</span><div><div class="ed-nav-label">Règles</div><div class="ed-nav-desc">Conditions & redirections</div></div></div>
-<div class="ed-nav-item" data-sec="settings"><span class="ed-nav-icon">⚙️</span><div><div class="ed-nav-label">Paramètres</div><div class="ed-nav-desc">Apparence, redirection</div></div></div>
-<div class="ed-nav-item" data-sec="share"><span class="ed-nav-icon">🔗</span><div><div class="ed-nav-label">Partager</div><div class="ed-nav-desc">Lien, embed, QR</div></div></div>
-<div class="ed-nav-item" data-sec="responses"><span class="ed-nav-icon">📊</span><div><div class="ed-nav-label">Réponses</div><div class="ed-nav-desc">Soumissions reçues</div></div></div>
+<!-- Field palette (visible only in Générateur) -->
+<div class="ed-palette" id="edPalette">
+<div class="pal-section">
+<div class="pal-section-title">Informations de base</div>
+<div class="pal-grid">
+<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Nom',mapping:'nom',required:true})"><div class="pal-icon">👤</div><div class="pal-label">Nom</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Prénom',mapping:'prenom',required:true})"><div class="pal-icon">👤</div><div class="pal-label">Prénom</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'email',label:'Email',mapping:'email',required:true})"><div class="pal-icon">📧</div><div class="pal-label">Email</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'tel',label:'Téléphone',mapping:'telephone'})"><div class="pal-icon">📞</div><div class="pal-label">Téléphone</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Entreprise'})"><div class="pal-icon">🏢</div><div class="pal-label">Entreprise</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'textarea',label:'Adresse'})"><div class="pal-icon">📍</div><div class="pal-label">Adresse</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Site Web'})"><div class="pal-icon">🌐</div><div class="pal-label">Site Web</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Poste / Fonction'})"><div class="pal-icon">💼</div><div class="pal-label">Fonction</div></div>
 </div></div>
+<div class="pal-section">
+<div class="pal-section-title">Texte</div>
+<div class="pal-grid">
+<div class="pal-item" onclick="openFldFromPalette({type:'text'})"><div class="pal-icon">Aa</div><div class="pal-label">Texte court</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'textarea'})"><div class="pal-icon">¶</div><div class="pal-label">Zone de texte</div></div>
+<div class="pal-item pal-wide" onclick="openFldFromPalette({type:'info'})"><div class="pal-icon">📄</div><div class="pal-label">Texte informatif / Intro</div></div>
+</div></div>
+<div class="pal-section">
+<div class="pal-section-title">Choix</div>
+<div class="pal-grid">
+<div class="pal-item" onclick="openFldFromPalette({type:'radio'})"><div class="pal-icon">◉</div><div class="pal-label">Choix unique</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'checkbox'})"><div class="pal-icon">☑</div><div class="pal-label">Cases à cocher</div></div>
+<div class="pal-item pal-wide" onclick="openFldFromPalette({type:'select'})"><div class="pal-icon">▾</div><div class="pal-label">Liste déroulante</div></div>
+</div></div>
+<div class="pal-section">
+<div class="pal-section-title">Numéro & Date</div>
+<div class="pal-grid">
+<div class="pal-item" onclick="openFldFromPalette({type:'number'})"><div class="pal-icon">🔢</div><div class="pal-label">Nombre</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'date'})"><div class="pal-icon">📅</div><div class="pal-label">Date</div></div>
+</div></div>
+<div class="pal-section">
+<div class="pal-section-title">Évaluation</div>
+<div class="pal-grid">
+<div class="pal-item" onclick="openFldFromPalette({type:'scale',scaleMax:5})"><div class="pal-icon">⬤</div><div class="pal-label">Échelle 1–5</div></div>
+<div class="pal-item" onclick="openFldFromPalette({type:'scale',scaleMax:10})"><div class="pal-icon">⬤</div><div class="pal-label">Échelle 1–10</div></div>
+</div></div>
+</div>
 <div class="ed-right" id="edContent"></div>
 </div>
 </div>
@@ -368,6 +420,8 @@ document.getElementById('edBack').addEventListener('click',closeEditor);
 
 function renderEdNav(){
 document.querySelectorAll('[data-sec]').forEach(function(n){n.classList.toggle('on',n.dataset.sec===edSection);});
+var palette=document.getElementById('edPalette');
+if(palette)palette.classList.toggle('hidden',edSection!=='fields');
 }
 document.addEventListener('click',function(e){
 var n=e.target.closest('[data-sec]');
@@ -395,26 +449,7 @@ if(!f)return;
 
 if(edSection==='fields'){
 h+='<div class="ed-sec-title">📋 Champs du formulaire</div>';
-h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Ajoutez et organisez les questions de votre formulaire.</div>';
-
-// Quick-add templates
-h+='<div style="margin-bottom:20px">';
-h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Champs rapides</div>';
-h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
-var _tpls=[
-{icon:'👤',label:'Prénom',type:'text',mapping:'prenom',req:true},
-{icon:'👤',label:'Nom',type:'text',mapping:'nom',req:true},
-{icon:'📧',label:'Email',type:'email',mapping:'email',req:true},
-{icon:'📞',label:'Téléphone',type:'tel',mapping:'telephone',req:false},
-{icon:'🏢',label:'Entreprise',type:'text',mapping:'',req:false},
-{icon:'🌐',label:'Site Web',type:'text',mapping:'',req:false},
-{icon:'📍',label:'Ville',type:'text',mapping:'',req:false},
-{icon:'💼',label:'Poste / Fonction',type:'text',mapping:'',req:false},
-];
-_tpls.forEach(function(t,ti){
-h+='<button class="bb bb-o" onclick="quickAddField('+ti+')" style="padding:6px 12px;font-size:11px">'+t.icon+' '+t.label+'</button>';
-});
-h+='</div></div>';
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:16px">Cliquez sur un type dans la palette à gauche pour ajouter un champ.</div>';
 var fields=f.fields||[];
 if(!fields.length){
 h+='<div style="text-align:center;padding:40px;color:rgba(255,255,255,.25)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-size:13px">Aucun champ. Commencez par ajouter une question.</div></div>';
@@ -662,6 +697,18 @@ detail.style.display=open?'none':'block';
 if(arrow)arrow.style.transform=open?'':'rotate(180deg)';
 }
 window.toggleResp=toggleResp;
+
+function openFldFromPalette(opts){
+// Pre-fill the modal with palette defaults and open
+_fldEditIdx=-1;
+openFldModal(-1);
+if(opts.type){document.getElementById('fld-type').value=opts.type;}
+if(opts.label){document.getElementById('fld-label').value=opts.label;}
+if(opts.mapping){document.getElementById('fld-contact').value=opts.mapping;}
+if(opts.required){document.getElementById('fld-req').checked=true;}
+if(opts.scaleMax){document.getElementById('fld-scaleMax').value=String(opts.scaleMax);}
+fldTypeChanged();
+}
 
 // ═══ FIELD MODAL ═══
 function openFldModal(idx){
