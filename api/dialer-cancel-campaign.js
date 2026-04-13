@@ -20,7 +20,12 @@ module.exports = async (req, res) => {
   if (!auth) return;
 
   try {
-    const { campaignId } = req.body || {};
+    // Vercel passe parfois req.body en string brute (bodyParser pas toujours actif)
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch (_) { body = {}; }
+    }
+    const { campaignId } = body || {};
     if (!campaignId) {
       res.status(400).json({ error: 'campaignId requis' });
       return;
