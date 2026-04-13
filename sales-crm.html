@@ -58,7 +58,7 @@
 
 <!-- ═══ CLIENTS PANEL ═══ -->
 <div id="clientsPanelOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:8000;backdrop-filter:blur(4px)" onclick="if(event.target===this)closeClientsPanel()"></div>
-<div id="clientsPanel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:min(92vw,1100px);background:var(--bg);border-left:1px solid var(--border2);z-index:8001;overflow-y:auto;display:flex;flex-direction:column">
+<div id="clientsPanel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:min(92vw,1100px);background:var(--bg);border-left:1px solid var(--border2);z-index:8001;overflow-y:auto;flex-direction:column">
   <div style="padding:20px 24px;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:0;z-index:10">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
       <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:17px">👥</div>
@@ -67,7 +67,7 @@
         <div style="font-size:11px;color:var(--muted)" id="clientsPanelCount">Chargement…</div>
       </div>
       <div style="flex:1"></div>
-      <button onclick="closeClientsPanel()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--muted);cursor:pointer;font-size:13px">✕</button>
+      <div style="display:flex;gap:6px;align-items:center"><button id="clientsViewGrid" onclick="setClientsView('grid')" title="Grille" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:6px 10px;color:#34d399;cursor:pointer;font-size:13px">⊞</button><button id="clientsViewList" onclick="setClientsView('list')" title="Liste" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--muted);cursor:pointer;font-size:13px">☰</button><button onclick="closeClientsPanel()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--muted);cursor:pointer;font-size:13px">✕</button></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <input id="clientsSearch" placeholder="🔍 Rechercher un client…" oninput="renderClientsGrid()" style="flex:1;min-width:180px;padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-b);font-size:12px;outline:none"/>

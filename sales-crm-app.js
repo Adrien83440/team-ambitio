@@ -2137,7 +2137,7 @@ function openClientsPanel() {
   document.getElementById('clientsPanelOverlay').style.display = 'block';
   var p = document.getElementById('clientsPanel');
   p.style.display = 'flex';
-  setTimeout(function(){ p.style.transform = 'translateX(0)'; }, 10);
+  p.style.flexDirection = 'column';
   loadClientsData();
 }
 function closeClientsPanel() {
@@ -2157,6 +2157,46 @@ function loadClientsData() {
   }).catch(function(e) {
     document.getElementById('clientsGrid').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Erreur : ' + e.message + '</div>';
   });
+}
+
+function setClientsView(mode) {
+  window._clientsViewMode = mode;
+  var grid = document.getElementById('clientsViewGrid');
+  var list = document.getElementById('clientsViewList');
+  if (grid) { grid.style.background = mode === 'grid' ? 'rgba(16,185,129,.12)' : 'var(--bg3)'; grid.style.borderColor = mode === 'grid' ? 'rgba(16,185,129,.25)' : 'var(--border)'; grid.style.color = mode === 'grid' ? '#34d399' : 'var(--muted)'; }
+  if (list) { list.style.background = mode === 'list' ? 'rgba(16,185,129,.12)' : 'var(--bg3)'; list.style.borderColor = mode === 'list' ? 'rgba(16,185,129,.25)' : 'var(--border)'; list.style.color = mode === 'list' ? '#34d399' : 'var(--muted)'; }
+  renderClientsGrid();
+}
+
+function renderClientsList(list, grid, EURO, fmtDate, STATUS_CLIENT, STATUS_PAY) {
+  var rows = list.map(function(c) {
+    var pays = clientsPaymentsCache[c.id] || [];
+    var mainPay = pays.sort(function(a,b){return(b.createdAt&&b.createdAt.seconds||0)-(a.createdAt&&a.createdAt.seconds||0);})[0];
+    var cs = STATUS_CLIENT[c.clientStatus||'active']||STATUS_CLIENT.active;
+    var _slug = c.closeurSlug || c.assignedTo || '';
+    var payStr = mainPay ? EURO(mainPay.totalAmount) + (mainPay.installmentsCount>1?' · '+(mainPay.paidCount||0)+'/'+mainPay.installmentsCount+' mois':'') : '—';
+    return '<tr onclick="openClientDetail(''+c.id+'')" style="border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,.02)'" onmouseout="this.style.background=''">' +
+      '<td style="padding:10px 12px;font-weight:600;font-size:13px">'+esc(c.nom||'—')+'</td>' +
+      '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(c.email||'—')+'</td>' +
+      '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(c.telephone||'—')+'</td>' +
+      '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(c.formule||'—')+'</td>' +
+      '<td style="padding:10px 12px;font-size:12px">'+esc(payStr)+'</td>' +
+      '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(_slug||'—')+'</td>' +
+      '<td style="padding:10px 12px"><span style="padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:'+cs.color+'18;color:'+cs.color+';border:1px solid '+cs.color+'30">'+cs.label+'</span></td>' +
+      '<td style="padding:10px 12px;font-size:11px;color:var(--muted)">'+fmtDate(c.clientSince)+'</td>' +
+      '</tr>';
+  }).join('');
+  grid.innerHTML = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
+    '<thead><tr style="border-bottom:1px solid var(--border)">' +
+    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);white-space:nowrap">Nom</th>' +
+    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Email</th>' +
+    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Téléphone</th>' +
+    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Formule</th>' +
+    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Paiement</th>' +
+    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Closeur</th>' +
+    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Statut</th>' +
+    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Client depuis</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
 function loadClientPayments() {
@@ -2198,10 +2238,12 @@ function renderClientsGrid() {
   });
 
   var grid = document.getElementById('clientsGrid');
+  var viewMode = window._clientsViewMode || 'grid';
   if (!list.length) {
     grid.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:14px;font-weight:600">Aucun client trouvé</div></div>';
     return;
   }
+  if (viewMode === 'list') { renderClientsList(list, grid, EURO, fmtDate, STATUS_CLIENT, STATUS_PAY); return; }
 
   var STATUS_CLIENT = { active: { label: '✅ Actif', color: '#10b981' }, paused: { label: '⏸ En pause', color: '#f59e0b' }, completed: { label: '🎉 Terminé', color: '#a78bfa' } };
   var STATUS_PAY = { pending_mandate: '⏳ Mandat en attente', mandate_active: '✅ Mandat actif', active: '💸 Prélèvements actifs', completed: '🎉 Terminé', failed: '❌ Échec', draft: '📝 Brouillon' };
@@ -2212,7 +2254,9 @@ function renderClientsGrid() {
       var pays = clientsPaymentsCache[c.id] || [];
       var mainPay = pays.sort(function(a, b) { return (b.createdAt && b.createdAt.seconds || 0) - (a.createdAt && a.createdAt.seconds || 0); })[0];
       var cs = STATUS_CLIENT[c.clientStatus || 'active'] || STATUS_CLIENT.active;
-      var setterColor = c.assignedTo && window.TEAM_MEMBERS && window.TEAM_MEMBERS[c.assignedTo] ? window.TEAM_MEMBERS[c.assignedTo].color : '#6b7280';
+      var _slug = c.closeurSlug || c.assignedTo || '';
+      var _tm = window.TEAM_MEMBERS && window.TEAM_MEMBERS[_slug];
+      var setterColor = _tm ? _tm.color : (_slug === 'elodie' ? '#8b5cf6' : _slug === 'guillaume' ? '#ef4444' : '#10b981');
 
       var payHtml = '';
       if (mainPay) {
