@@ -1483,7 +1483,10 @@ function _visibleMembers() {
 if (window.TEAM_MEMBERS) _markArchivedMembers();
 window.addEventListener('team-members-loaded', function() {
   _markArchivedMembers();
-  if (typeof renderAll === 'function') renderAll();
+  // Toujours rafraîchir la liste pour appliquer le greying archived
+  if (typeof renderListe === 'function') renderListe();
+  // Et la fiche si ouverte
+  if (typeof renderAll === 'function' && currentMember) renderAll();
 });
 
 /* ─── RENDER ALL ─── */
