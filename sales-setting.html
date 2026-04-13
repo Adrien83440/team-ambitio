@@ -1030,7 +1030,7 @@ function renderListe() {
     const rates = computeRates(tot);
 
     return `
-      <div class="member-card${m.archived ? ' member-archived-admin' : ''}" style="--mc:${m.color}" onclick="openFiche('${m.uid}')">
+      <div class="member-card${m.archived ? ' member-archived-admin' : ''}" style="--mc:${m.color}${m.archived ? ';opacity:.5;filter:grayscale(.65)' : ''}" onclick="openFiche('${m.uid}')">
         <div class="mc-arrow">→</div>
         <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
         <div class="mc-name">${m.name} ${m.surname}${m.archived ? ' <span class="archived-pill">📦 Archivé</span>' : ''}</div>
