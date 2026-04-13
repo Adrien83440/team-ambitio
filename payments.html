@@ -69,6 +69,8 @@
 .pay-btn-ghost:hover{border-color:var(--border2);color:var(--text)}
 .pay-btn-amber{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:var(--pay-amber)}
 .pay-btn-red{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:var(--pay-red)}
+.vat-btn-on{background:rgba(16,185,129,.15)!important;color:var(--pay-green)!important}
+.vat-btn-off{background:transparent!important;color:var(--muted)!important}
 /* Detail panel */
 .pay-detail{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:24px;display:none}
 .pay-detail.show{display:block}
@@ -176,7 +178,13 @@
     <!-- Montant -->
     <div class="pay-row2">
       <div class="pay-group">
-        <div class="pay-label">Montant total (€)</div>
+        <div class="pay-label" style="display:flex;align-items:center;justify-content:space-between">
+          Montant total (€)
+          <div style="display:flex;border-radius:6px;overflow:hidden;border:1px solid var(--border)">
+            <button type="button" id="vatHT" onclick="setVatType('ht')" style="padding:2px 10px;font-size:10px;font-weight:700;background:rgba(16,185,129,.15);color:var(--pay-green);border:none;cursor:pointer;font-family:var(--font-b)">HT</button>
+            <button type="button" id="vatTTC" onclick="setVatType('ttc')" style="padding:2px 10px;font-size:10px;font-weight:700;background:transparent;color:var(--muted);border:none;cursor:pointer;font-family:var(--font-b)">TTC</button>
+          </div>
+        </div>
         <input class="pay-input" id="pmTotal" type="number" min="1" step="0.01" placeholder="Ex: 5000" oninput="updatePreview()"/>
       </div>
       <div class="pay-group">
@@ -416,7 +424,7 @@ async function openDetail(id) {
       <div class="pay-section-title">Détails du paiement</div>
       <div class="pay-info-grid">
         <div class="pay-info-item"><div class="pay-info-item-l">Type</div><div class="pay-info-item-v">${p.type==='installments'?`📅 Fractionné (${p.installmentsCount} mois)`:'💳 Intégral'}</div></div>
-        <div class="pay-info-item"><div class="pay-info-item-l">Montant total</div><div class="pay-info-item-v" style="color:var(--pay-amber)">${EURO(p.totalAmount)}</div></div>
+        <div class="pay-info-item"><div class="pay-info-item-l">Montant total</div><div class="pay-info-item-v" style="color:var(--pay-amber)">${EURO(p.totalAmount)} <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:rgba(245,158,11,.15)">${(p.vatType||'ht').toUpperCase()}</span></div></div>
         ${p.type==='installments'?`<div class="pay-info-item"><div class="pay-info-item-l">Mensualité</div><div class="pay-info-item-v">${EURO(p.installmentAmount)}/mois</div></div>`:''}
         <div class="pay-info-item"><div class="pay-info-item-l">Collecté</div><div class="pay-info-item-v" style="color:var(--pay-green)">${EURO(p.paidAmount||0)}</div></div>
         <div class="pay-info-item"><div class="pay-info-item-l">Progression</div><div class="pay-info-item-v">${p.paidCount||0} / ${p.installmentsCount||1} prélèvement${(p.installmentsCount||1)>1?'s':''}</div></div>
@@ -443,6 +451,16 @@ async function openDetail(id) {
 
 /* ══ MODAL CREATION ══ */
 let payType = 'full';
+let vatType = 'ht'; // 'ht' or 'ttc'
+
+function setVatType(t) {
+  vatType = t;
+  document.getElementById('vatHT').style.background = t === 'ht' ? 'rgba(16,185,129,.15)' : 'transparent';
+  document.getElementById('vatHT').style.color = t === 'ht' ? 'var(--pay-green)' : 'var(--muted)';
+  document.getElementById('vatTTC').style.background = t === 'ttc' ? 'rgba(16,185,129,.15)' : 'transparent';
+  document.getElementById('vatTTC').style.color = t === 'ttc' ? 'var(--pay-green)' : 'var(--muted)';
+  updatePreview();
+}
 function openPayModal() { document.getElementById('payModal').classList.add('show'); updatePreview(); }
 function closePayModal() { document.getElementById('payModal').classList.remove('show'); }
 document.getElementById('payModal').addEventListener('click', e => { if (e.target === document.getElementById('payModal')) closePayModal(); });
@@ -462,10 +480,10 @@ function updatePreview() {
   const el = document.getElementById('pmPreview');
   if (!total) { el.innerHTML = ''; return; }
   if (payType === 'full') {
-    el.innerHTML = `<strong>${EURO(total)}</strong> prélevé en une seule fois.`;
+    el.innerHTML = `<strong>${EURO(total)} ${vatType.toUpperCase()}</strong> prélevé en une seule fois.`;
   } else {
     const monthly = Math.round((total / count) * 100) / 100;
-    el.innerHTML = `<strong>${count} × ${EURO(monthly)}</strong> = ${EURO(count * monthly)} total${count*monthly !== total ? ' <span style="color:var(--pay-amber)">(arrondi)</span>' : ''}`;
+    el.innerHTML = `<strong>${count} × ${EURO(monthly)} ${vatType.toUpperCase()}</strong> = ${EURO(count * monthly)} total ${vatType.toUpperCase()}${count*monthly !== total ? ' <span style="color:var(--pay-amber)">(arrondi)</span>' : ''}`;
   }
 }
 
@@ -499,6 +517,7 @@ async function createPayment() {
       leadId, leadName: name, leadEmail: email, leadPhone: phone,
       closerId: currentUser.uid, closerName, closerSlug,
       type: payType,
+      vatType: vatType,
       totalAmount: total,
       installmentsCount: count,
       installmentAmount: monthly,

@@ -60,7 +60,7 @@
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
     { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
-    { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: '_admin' },
+    { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
   ];
 
   const THEMES = {
@@ -414,6 +414,10 @@
       if (m.perm === 'alteoforms') {
         if (role === 'admin') return true;
         try { var af=JSON.parse(localStorage.getItem('ambitio_alteoforms_forms')||'[]'); return af.length>0; } catch(e){ return false; }
+      }
+      if (m.perm === 'payments') {
+        if (role === 'admin') return true;
+        return localStorage.getItem('ambitio_payments_access') === '1';
       }
       var p = perms[m.perm];
       return p && p !== 'none';
@@ -836,14 +840,18 @@
       if (role === 'admin') return; // admin always has access
       try {
         var snap = await firebase.firestore().collection('users').doc(user.uid).get();
-        var formIds = (snap.exists && snap.data().alteoformsFormIds) ? snap.data().alteoformsFormIds : [];
+        var userData = snap.exists ? snap.data() : {};
+        var formIds = userData.alteoformsFormIds || [];
         var prev = localStorage.getItem('ambitio_alteoforms_forms');
         var next = JSON.stringify(formIds);
-        if (prev !== next) {
-          if (formIds.length > 0) localStorage.setItem('ambitio_alteoforms_forms', next);
-          else localStorage.removeItem('ambitio_alteoforms_forms');
-          if (typeof buildSidebar === 'function') buildSidebar();
-        }
+        var payAccess = userData.paymentsAccess === true ? '1' : '0';
+        var prevPay = localStorage.getItem('ambitio_payments_access') || '0';
+        var changed = prev !== next || prevPay !== payAccess;
+        if (formIds.length > 0) localStorage.setItem('ambitio_alteoforms_forms', next);
+        else localStorage.removeItem('ambitio_alteoforms_forms');
+        if (payAccess === '1') localStorage.setItem('ambitio_payments_access', '1');
+        else localStorage.removeItem('ambitio_payments_access');
+        if (changed && typeof buildSidebar === 'function') buildSidebar();
       } catch(e) { console.warn('[nav] alteoforms access check:', e); }
     });
   }

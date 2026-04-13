@@ -551,6 +551,15 @@ function openEditModal(u){
     h+='<div class="arch-banner" style="margin-top:14px"><b>🗄 Compte archivé</b>'+(aDate?' le '+aDate:'')+'.<br>Slug équipe <b>'+esc(aFrom)+'</b> → leads transférés vers <b>'+esc(aTo)+'</b> ('+aCount+' leads).</div>';
   }
 
+  // Accès Paiements
+  var paymentsChecked = u.paymentsAccess === true;
+  h+='<div class="mf" style="margin-top:8px">';
+  h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:8px">';
+  h+='<input type="checkbox" id="ePaymentsAccess"'+(paymentsChecked?' checked':'')+' style="width:16px;height:16px;accent-color:#10b981"/>';
+  h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.8)">💳 Accès au module Paiements</div>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Peut créer et voir les paiements GoCardless</div></div>';
+  h+='</label></div>';
+
   // Save
   h+='<div style="display:flex;gap:10px;margin-top:20px"><button class="bb bb-o" onclick="closeModal()">Annuler</button><button class="bb bb-p" id="eSave" style="flex:1">💾 Enregistrer</button></div>';
   // Actions
@@ -641,6 +650,8 @@ async function handleSave(uid){
       modules:readPermGrid('e')
     };
     if(afFormIds!==null)upd.alteoformsFormIds=afFormIds;
+    var paymentsEl=document.getElementById('ePaymentsAccess');
+    if(paymentsEl)upd.paymentsAccess=paymentsEl.checked;
     await updateDoc(doc(db,'users',uid),upd);
     toast('✅ Utilisateur mis à jour');
     closeModal();
