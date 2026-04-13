@@ -48,9 +48,30 @@ module.exports = async (req, res) => {
       res.status(400).json({ error: 'leadId et email requis' }); return;
     }
 
-    // 1. Chercher le customer GC par email
-    const custList = await gcGet(`/customers?email=${encodeURIComponent(email.toLowerCase())}`);
-    const customers = (custList && custList.customers) || [];
+    // 1. Chercher le customer GC par email (GC ne supporte pas le filtre email,
+    //    on pagine les customers récents et on filtre côté serveur)
+    const emailNorm = email.toLowerCase().trim();
+    let customers = [];
+    let after = null;
+    let pages = 0;
+    const MAX_PAGES = 5; // 5 × 200 = 1000 customers max
+
+    while (pages < MAX_PAGES) {
+      const url = `/customers?limit=200&sort_field=created_at&sort_direction=desc${after ? `&after=${after}` : ''}`;
+      const page = await gcGet(url);
+      if (!page || !page.customers || !page.customers.length) break;
+
+      const match = page.customers.find(c =>
+        (c.email || '').toLowerCase().trim() === emailNorm
+      );
+      if (match) { customers = [match]; break; }
+
+      // Pagination cursor
+      const meta = page.meta && page.meta.cursors;
+      if (!meta || !meta.after) break;
+      after = meta.after;
+      pages++;
+    }
 
     if (!customers.length) {
       res.status(404).json({ error: `Aucun customer GoCardless trouvé pour ${email}` });
