@@ -2175,7 +2175,7 @@ function renderClientsList(list, grid, EURO, fmtDate, STATUS_CLIENT, STATUS_PAY)
     var cs = STATUS_CLIENT[c.clientStatus||'active']||STATUS_CLIENT.active;
     var _slug = c.closeurSlug || c.assignedTo || '';
     var payStr = mainPay ? EURO(mainPay.totalAmount) + (mainPay.installmentsCount>1?' · '+(mainPay.paidCount||0)+'/'+mainPay.installmentsCount+' mois':'') : '—';
-    return '<tr onclick="openClientDetail(''+c.id+'')" style="border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,.02)'" onmouseout="this.style.background=''">' +
+    return '<tr data-cid="' + c.id + '" class="cl-row" style="border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s">' +
       '<td style="padding:10px 12px;font-weight:600;font-size:13px">'+esc(c.nom||'—')+'</td>' +
       '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(c.email||'—')+'</td>' +
       '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(c.telephone||'—')+'</td>' +
@@ -2238,6 +2238,13 @@ function renderClientsGrid() {
   });
 
   var grid = document.getElementById('clientsGrid');
+  // Ensure click delegation is set once
+  if (!grid._clRowBound) {
+    grid.addEventListener('click', function(e) { var tr = e.target.closest('.cl-row'); if (tr) openClientDetail(tr.dataset.cid); });
+    grid.addEventListener('mouseover', function(e) { var tr = e.target.closest('.cl-row'); if (tr) tr.style.background = 'rgba(255,255,255,.02)'; });
+    grid.addEventListener('mouseout', function(e) { var tr = e.target.closest('.cl-row'); if (tr) tr.style.background = ''; });
+    grid._clRowBound = true;
+  }
   var viewMode = window._clientsViewMode || 'grid';
   if (!list.length) {
     grid.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:14px;font-weight:600">Aucun client trouvé</div></div>';
@@ -2326,7 +2333,7 @@ function openClientDetail(leadId) {
         '<div style="font-size:10px;color:var(--muted);margin-top:2px">'+(STATUS_PAY[p.status]||p.status)+(prog?' · '+prog:'')+(p.gcMandateId?' · Mandat: <span style="font-family:monospace">'+p.gcMandateId.slice(-8)+'</span>':'')+'</div></div>' +
         '<div style="text-align:right">' +
           (p.paidAmount ? '<div style="font-size:13px;font-weight:700;color:#34d399">'+EURO(p.paidAmount)+' collecté</div>' : '') +
-          '<button onclick="syncGCPayment(''+p.id+'',''+leadId+'')" style="margin-top:4px;padding:3px 8px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:6px;color:#60a5fa;font-size:10px;font-weight:600;cursor:pointer">🔄 Sync GC</button>' +
+          '<button data-syncpay="' + p.id + '" data-synclead="' + leadId + '" class="gc-sync-btn" style="margin-top:4px;padding:3px 8px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:6px;color:#60a5fa;font-size:10px;font-weight:600;cursor:pointer">🔄 Sync GC</button>' +
         '</div>' +
       '</div>' +
       (p.installmentsCount > 1 ? '<div style="background:rgba(255,255,255,.06);border-radius:4px;height:4px;overflow:hidden"><div style="background:#34d399;height:100%;width:'+progressPct+'%;transition:width .3s"></div></div>' : '') +
@@ -2437,6 +2444,10 @@ function openClientDetail(leadId) {
 
   modal.innerHTML = h;
   modal._leadId = leadId;
+  modal.addEventListener('click', function handler(e) {
+    var btn = e.target.closest('.gc-sync-btn');
+    if (btn) window.syncGCPayment(btn.dataset.syncpay, btn.dataset.synclead);
+  });
 }
 
 function closeClientDetail() {
@@ -2481,7 +2492,7 @@ function addClientNote(leadId) {
 /* ── Bouton "Marquer comme client" dans modal lead pipeline ── */
 // Appelé depuis le modal CRM existant
 window.syncGCPayment = async function(payId, leadId) {
-  var btn = document.querySelector('[onclick*="syncGCPayment(\'' + payId + ''"]');
+  // btn reference not needed - using data-attr delegation
   var liveEl = document.getElementById('gcLiveData_' + payId);
   try {
     var token = await firebase.auth().currentUser.getIdToken();
