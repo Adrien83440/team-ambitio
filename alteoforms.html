@@ -61,6 +61,14 @@
 .pal-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px 6px;background:#141420;border:1px solid rgba(255,255,255,.06);border-radius:8px;cursor:pointer;transition:all .15s;text-align:center;user-select:none}
 .pal-item:hover{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.05);transform:translateY(-1px)}
 .pal-item:active{transform:scale(.97)}
+.pal-item[draggable="true"]{cursor:grab}
+.pal-item[draggable="true"]:active{cursor:grabbing}
+.pal-item.pal-dragging{opacity:.4;border-style:dashed}
+.ed-canvas-drop{border:2px dashed rgba(245,158,11,.25);border-radius:10px;padding:24px;text-align:center;font-size:12px;color:rgba(245,158,11,.4);transition:all .2s;margin-top:12px;display:none}
+.ed-canvas-drop.pal-over{border-color:rgba(245,158,11,.7);background:rgba(245,158,11,.06);color:#fbbf24;display:block}
+.ed-canvas-drop.visible{display:block}
+.ed-field.pal-drop-top{border-top:2px solid #f59e0b !important;margin-top:-1px}
+.ed-field.pal-drop-bot{border-bottom:2px solid #f59e0b !important;margin-bottom:-1px}
 .pal-icon{font-size:18px;line-height:1}
 .pal-label{font-size:10px;font-weight:600;color:rgba(255,255,255,.55);line-height:1.2}
 .pal-item.pal-wide{grid-column:1/-1;flex-direction:row;justify-content:flex-start;gap:10px;padding:8px 12px}
@@ -181,40 +189,40 @@
 <div class="pal-section">
 <div class="pal-section-title">Informations de base</div>
 <div class="pal-grid">
-<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Nom',mapping:'nom',required:true})"><div class="pal-icon">👤</div><div class="pal-label">Nom</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Prénom',mapping:'prenom',required:true})"><div class="pal-icon">👤</div><div class="pal-label">Prénom</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'email',label:'Email',mapping:'email',required:true})"><div class="pal-icon">📧</div><div class="pal-label">Email</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'tel',label:'Téléphone',mapping:'telephone'})"><div class="pal-icon">📞</div><div class="pal-label">Téléphone</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Entreprise'})"><div class="pal-icon">🏢</div><div class="pal-label">Entreprise</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'textarea',label:'Adresse'})"><div class="pal-icon">📍</div><div class="pal-label">Adresse</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Site Web'})"><div class="pal-icon">🌐</div><div class="pal-label">Site Web</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'text',label:'Poste / Fonction'})"><div class="pal-icon">💼</div><div class="pal-label">Fonction</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"text","label":"Nom","mapping":"nom","required":true}' onclick="openFldFromPalette({type:'text',label:'Nom',mapping:'nom',required:true})"><div class="pal-icon">👤</div><div class="pal-label">Nom</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"text","label":"Prénom","mapping":"prenom","required":true}' onclick="openFldFromPalette({type:'text',label:'Prénom',mapping:'prenom',required:true})"><div class="pal-icon">👤</div><div class="pal-label">Prénom</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"email","label":"Email","mapping":"email","required":true}' onclick="openFldFromPalette({type:'email',label:'Email',mapping:'email',required:true})"><div class="pal-icon">📧</div><div class="pal-label">Email</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"tel","label":"Téléphone","mapping":"telephone"}' onclick="openFldFromPalette({type:'tel',label:'Téléphone',mapping:'telephone'})"><div class="pal-icon">📞</div><div class="pal-label">Téléphone</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"text","label":"Entreprise"}' onclick="openFldFromPalette({type:'text',label:'Entreprise'})"><div class="pal-icon">🏢</div><div class="pal-label">Entreprise</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"textarea","label":"Adresse"}' onclick="openFldFromPalette({type:'textarea',label:'Adresse'})"><div class="pal-icon">📍</div><div class="pal-label">Adresse</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"text","label":"Site Web"}' onclick="openFldFromPalette({type:'text',label:'Site Web'})"><div class="pal-icon">🌐</div><div class="pal-label">Site Web</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"text","label":"Poste / Fonction"}' onclick="openFldFromPalette({type:'text',label:'Poste / Fonction'})"><div class="pal-icon">💼</div><div class="pal-label">Fonction</div></div>
 </div></div>
 <div class="pal-section">
 <div class="pal-section-title">Texte</div>
 <div class="pal-grid">
-<div class="pal-item" onclick="openFldFromPalette({type:'text'})"><div class="pal-icon">Aa</div><div class="pal-label">Texte court</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'textarea'})"><div class="pal-icon">¶</div><div class="pal-label">Zone de texte</div></div>
-<div class="pal-item pal-wide" onclick="openFldFromPalette({type:'info'})"><div class="pal-icon">📄</div><div class="pal-label">Texte informatif / Intro</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"text"}' onclick="openFldFromPalette({type:'text'})"><div class="pal-icon">Aa</div><div class="pal-label">Texte court</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"textarea"}' onclick="openFldFromPalette({type:'textarea'})"><div class="pal-icon">¶</div><div class="pal-label">Zone de texte</div></div>
+<div class="pal-item pal-wide" draggable="true" data-pal='{"type":"info"}' onclick="openFldFromPalette({type:'info'})"><div class="pal-icon">📄</div><div class="pal-label">Texte informatif / Intro</div></div>
 </div></div>
 <div class="pal-section">
 <div class="pal-section-title">Choix</div>
 <div class="pal-grid">
-<div class="pal-item" onclick="openFldFromPalette({type:'radio'})"><div class="pal-icon">◉</div><div class="pal-label">Choix unique</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'checkbox'})"><div class="pal-icon">☑</div><div class="pal-label">Cases à cocher</div></div>
-<div class="pal-item pal-wide" onclick="openFldFromPalette({type:'select'})"><div class="pal-icon">▾</div><div class="pal-label">Liste déroulante</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"radio"}' onclick="openFldFromPalette({type:'radio'})"><div class="pal-icon">◉</div><div class="pal-label">Choix unique</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"checkbox"}' onclick="openFldFromPalette({type:'checkbox'})"><div class="pal-icon">☑</div><div class="pal-label">Cases à cocher</div></div>
+<div class="pal-item pal-wide" draggable="true" data-pal='{"type":"select"}' onclick="openFldFromPalette({type:'select'})"><div class="pal-icon">▾</div><div class="pal-label">Liste déroulante</div></div>
 </div></div>
 <div class="pal-section">
 <div class="pal-section-title">Numéro & Date</div>
 <div class="pal-grid">
-<div class="pal-item" onclick="openFldFromPalette({type:'number'})"><div class="pal-icon">🔢</div><div class="pal-label">Nombre</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'date'})"><div class="pal-icon">📅</div><div class="pal-label">Date</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"number"}' onclick="openFldFromPalette({type:'number'})"><div class="pal-icon">🔢</div><div class="pal-label">Nombre</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"date"}' onclick="openFldFromPalette({type:'date'})"><div class="pal-icon">📅</div><div class="pal-label">Date</div></div>
 </div></div>
 <div class="pal-section">
 <div class="pal-section-title">Évaluation</div>
 <div class="pal-grid">
-<div class="pal-item" onclick="openFldFromPalette({type:'scale',scaleMax:5})"><div class="pal-icon">⬤</div><div class="pal-label">Échelle 1–5</div></div>
-<div class="pal-item" onclick="openFldFromPalette({type:'scale',scaleMax:10})"><div class="pal-icon">⬤</div><div class="pal-label">Échelle 1–10</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"scale","scaleMax":5}' onclick="openFldFromPalette({type:'scale',scaleMax:5})"><div class="pal-icon">⬤</div><div class="pal-label">Échelle 1–5</div></div>
+<div class="pal-item" draggable="true" data-pal='{"type":"scale","scaleMax":10}' onclick="openFldFromPalette({type:'scale',scaleMax:10})"><div class="pal-icon">⬤</div><div class="pal-label">Échelle 1–10</div></div>
 </div></div>
 </div>
 <div class="ed-right" id="edContent"></div>
@@ -321,6 +329,8 @@ var currentForm=null;
 var edSection='fields';
 var _fldEditIdx=-1;
 var _bookingTypes=[];
+var _paletteDrag=null;
+var _palInsertIdx=-1; // insert position from palette DnD (-1 = append)
 
 var FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤',number:'🔢',date:'📅',info:'📄'};
 var FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle',number:'Nombre',date:'Date',info:'Texte informatif'};
@@ -408,6 +418,7 @@ document.getElementById('edPubBtn').textContent=currentForm.status==='live'?'✅
 edSection='fields';
 renderEdNav();
 renderEdSection();
+bindPaletteDnD();
 }
 
 function closeEditor(){
@@ -480,6 +491,7 @@ h+='<button class="ed-btn ed-btn-del" onclick="deleteField('+i+')" title="Suppri
 h+='</div>';
 });
 h+='<div style="margin-top:16px;text-align:center"><button class="bb bb-p" onclick="openFldModal(-1)" style="padding:10px 24px">+ Ajouter un champ</button></div>';
+h+='<div class="ed-canvas-drop" id="canvasPalDrop">⊕ Déposer ici pour ajouter en fin de formulaire</div>';
 }
 
 else if(edSection==='rules'){
@@ -592,35 +604,63 @@ el.innerHTML=h;
 // Bind drag & drop on field cards
 if(edSection==='fields'){
 var _dragIdx=null;
+
+function clearPalDropVisuals(){
+el.querySelectorAll('.ed-field').forEach(function(c){c.classList.remove('pal-drop-top','pal-drop-bot','drag-over-top','drag-over-bot');});
+var cdz=document.getElementById('canvasPalDrop');
+if(cdz)cdz.classList.remove('pal-over','visible');
+}
+
 el.querySelectorAll('.ed-field[draggable]').forEach(function(card){
 card.addEventListener('dragstart',function(e){
+_paletteDrag=null;
 _dragIdx=parseInt(card.dataset.fidx);
 card.classList.add('dragging');
 e.dataTransfer.effectAllowed='move';
-e.dataTransfer.setData('text/plain',_dragIdx);
+e.dataTransfer.setData('text/plain',String(_dragIdx));
 });
 card.addEventListener('dragend',function(){
 card.classList.remove('dragging');
-el.querySelectorAll('.ed-field').forEach(function(c){c.classList.remove('drag-over-top','drag-over-bot');});
+clearPalDropVisuals();
+_dragIdx=null;
 });
 card.addEventListener('dragover',function(e){
-e.preventDefault();e.dataTransfer.dropEffect='move';
+e.preventDefault();
 var rect=card.getBoundingClientRect();
 var mid=rect.top+rect.height/2;
+if(_paletteDrag){
+// Palette drag: show pal-drop indicator
+el.querySelectorAll('.ed-field').forEach(function(c){c.classList.remove('pal-drop-top','pal-drop-bot');});
+if(e.clientY<mid)card.classList.add('pal-drop-top');
+else card.classList.add('pal-drop-bot');
+}else{
 el.querySelectorAll('.ed-field').forEach(function(c){c.classList.remove('drag-over-top','drag-over-bot');});
 if(e.clientY<mid)card.classList.add('drag-over-top');
 else card.classList.add('drag-over-bot');
+}
 });
 card.addEventListener('dragleave',function(){
-card.classList.remove('drag-over-top','drag-over-bot');
+card.classList.remove('drag-over-top','drag-over-bot','pal-drop-top','pal-drop-bot');
 });
 card.addEventListener('drop',function(e){
 e.preventDefault();
-var fromIdx=parseInt(e.dataTransfer.getData('text/plain'));
 var toIdx=parseInt(card.dataset.fidx);
 var rect=card.getBoundingClientRect();
 var mid=rect.top+rect.height/2;
-if(e.clientY>=mid)toIdx++;
+var insertAfter=e.clientY>=mid;
+clearPalDropVisuals();
+
+if(_paletteDrag){
+// Insert new field from palette at position
+var insertIdx=insertAfter?toIdx+1:toIdx;
+insertPaletteFieldAt(_paletteDrag,insertIdx);
+_paletteDrag=null;
+return;
+}
+
+// Reorder existing field
+var fromIdx=parseInt(e.dataTransfer.getData('text/plain'));
+if(insertAfter)toIdx++;
 if(isNaN(fromIdx)||isNaN(toIdx)||fromIdx===toIdx)return;
 if(!currentForm||!currentForm.fields)return;
 var moved=currentForm.fields.splice(fromIdx,1)[0];
@@ -629,7 +669,67 @@ currentForm.fields.splice(toIdx,0,moved);
 saveForm(true).then(function(){renderEdSection();toast('✅ Champ déplacé');});
 });
 });
+
+// Canvas drop zone (drop at end of list)
+var cdz=document.getElementById('canvasPalDrop');
+if(cdz){
+cdz.addEventListener('dragover',function(e){
+if(!_paletteDrag)return;
+e.preventDefault();
+cdz.classList.add('pal-over');
+});
+cdz.addEventListener('dragleave',function(){cdz.classList.remove('pal-over');});
+cdz.addEventListener('drop',function(e){
+e.preventDefault();
+cdz.classList.remove('pal-over');
+if(!_paletteDrag)return;
+insertPaletteFieldAt(_paletteDrag,-1);
+_paletteDrag=null;
+});
 }
+}
+}
+
+function bindPaletteDnD(){
+document.querySelectorAll('.pal-item[draggable]').forEach(function(item){
+item.addEventListener('dragstart',function(e){
+var raw=item.getAttribute('data-pal');
+if(!raw)return;
+try{_paletteDrag=JSON.parse(raw);}catch(x){return;}
+item.classList.add('pal-dragging');
+e.dataTransfer.effectAllowed='copy';
+e.dataTransfer.setData('text/plain','palette');
+// Show canvas drop zone
+var cdz=document.getElementById('canvasPalDrop');
+if(cdz)cdz.classList.add('visible');
+});
+item.addEventListener('dragend',function(){
+item.classList.remove('pal-dragging');
+_paletteDrag=null;
+_palInsertIdx=-1;
+var cdz=document.getElementById('canvasPalDrop');
+if(cdz)cdz.classList.remove('visible','pal-over');
+// Clear any drop indicators
+var ec=document.getElementById('edContent');
+if(ec)ec.querySelectorAll('.pal-drop-top,.pal-drop-bot').forEach(function(c){c.classList.remove('pal-drop-top','pal-drop-bot');});
+});
+});
+}
+
+function insertPaletteFieldAt(config,idx){
+if(!currentForm)return;
+if(!currentForm.fields)currentForm.fields=[];
+// Build a minimal field skeleton and open modal to configure it
+_fldEditIdx= idx===-1 ? -1 : idx; // -1 = will be pushed, else splice
+// Store pending insert position for the modal save
+_palInsertIdx=idx;
+openFldModal(-1);
+if(config.type){document.getElementById('fld-type').value=config.type;}
+if(config.label){document.getElementById('fld-label').value=config.label;}
+if(config.mapping){document.getElementById('fld-contact').value=config.mapping;}
+if(config.required){document.getElementById('fld-req').checked=true;}
+if(config.scaleMax){document.getElementById('fld-scaleMax').value=String(config.scaleMax);}
+fldTypeChanged();
 }
 
 function loadResponses(){
@@ -763,7 +863,7 @@ if(fld.contactMapping)document.getElementById('fld-contact').value=fld.contactMa
 fldTypeChanged();
 document.getElementById('fldModal').classList.add('show');
 }
-function closeFldModal(){document.getElementById('fldModal').classList.remove('show');_fldEditIdx=-1;}
+function closeFldModal(){document.getElementById('fldModal').classList.remove('show');_fldEditIdx=-1;_palInsertIdx=-1;}
 document.getElementById('fldModal').addEventListener('click',function(e){if(e.target===this)closeFldModal();});
 
 function fldTypeChanged(){
@@ -823,8 +923,14 @@ if(contactMap)field.contactMapping=contactMap;
 }
 // Save
 if(!currentForm.fields)currentForm.fields=[];
-if(_fldEditIdx>=0&&_fldEditIdx<currentForm.fields.length)currentForm.fields[_fldEditIdx]=field;
-else currentForm.fields.push(field);
+if(_fldEditIdx>=0&&_fldEditIdx<currentForm.fields.length){
+currentForm.fields[_fldEditIdx]=field;
+}else if(_palInsertIdx>=0&&_palInsertIdx<=currentForm.fields.length){
+currentForm.fields.splice(_palInsertIdx,0,field);
+}else{
+currentForm.fields.push(field);
+}
+_palInsertIdx=-1;
 closeFldModal();
 saveForm(true).then(function(){renderEdSection();toast('✅ '+(_fldEditIdx>=0?'Champ modifié':'Champ ajouté'));});
 }
