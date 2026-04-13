@@ -37,8 +37,12 @@ module.exports = async (req, res) => {
   }
 
   try {
-    console.log('[multi-call DEBUG] req.body =', JSON.stringify(req.body), 'typeof=', typeof req.body, 'headers.content-type=', req.headers['content-type']);
-    const { leads, fromNumberId } = req.body || {};
+    // Vercel passe parfois req.body en string brute (bodyParser pas toujours actif)
+    let body = req.body;
+    if (typeof body === 'string') {
+      try { body = JSON.parse(body); } catch (_) { body = {}; }
+    }
+    const { leads, fromNumberId } = body || {};
     if (!Array.isArray(leads) || leads.length === 0) {
       res.status(400).json({ error: 'leads requis (array non vide)' });
       return;
