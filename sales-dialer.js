@@ -393,7 +393,7 @@
         <div class="sd-lead-notes">
           <textarea id="sd-lead-notes-ta" placeholder="Notes en temps réel…">${L.notes || ''}</textarea>
         </div>
-        <a class="sd-lead-link" href="lead-live.html?id=${activeLeadId}" target="_blank">Ouvrir la fiche complète →</a>
+        <a class="sd-lead-link" href="sales-contact.html?id=${activeLeadId}" target="_blank">Ouvrir la fiche complète →</a>
       </div>`;
     const ta = $('sd-lead-notes-ta');
     ta.addEventListener('input', () => {
