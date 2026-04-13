@@ -115,39 +115,61 @@
   }
 
   // ─── Historique call_logs ───────────────────────────────────────────────
+  // Schéma canonique écrit par api/twilio-voice.js, api/twilio-inbound.js,
+  // Functions/handlers/twilioHandlers.js :
+  //   initiatedAt, ringingAt, answeredAt, endedAt, durationSec,
+  //   direction ('outbound'|'inbound'), status ('initiated'|'ringing'|
+  //   'in-progress'|'completed'|'busy'|'no-answer'|'failed'|'canceled'),
+  //   fromNumber, toNumber, leadNameSnapshot, leadId, userId
+  const MISSED_STATUSES = new Set(['no-answer', 'busy', 'failed', 'canceled']);
+
   function subscribeHistory() {
     if (historyUnsub) historyUnsub();
     historyUnsub = db.collection('call_logs')
       .where('userId', '==', currentUser.uid)
-      .orderBy('startedAt', 'desc')
+      .orderBy('initiatedAt', 'desc')
       .limit(50)
       .onSnapshot(snap => {
         const items = [];
         snap.forEach(d => items.push({ id: d.id, ...d.data() }));
         renderHistory(items);
-      }, err => console.error('history', err));
+      }, err => {
+        console.error('history', err);
+        const list = $('sd-history-list');
+        if (list) {
+          // Erreur la plus probable : index composite (userId, initiatedAt desc) manquant.
+          // Firebase renvoie un lien de création directe dans err.message.
+          list.innerHTML = '<div class="sd-empty">Erreur historique (voir console)</div>';
+        }
+      });
   }
   function renderHistory(items) {
     const list = $('sd-history-list');
     const filtered = items.filter(c => {
+      const missed = MISSED_STATUSES.has(c.status);
       if (historyFilter === 'all') return true;
       if (historyFilter === 'outbound') return c.direction === 'outbound';
-      if (historyFilter === 'inbound')  return c.direction === 'inbound' && c.status !== 'no-answer';
-      if (historyFilter === 'missed')   return c.status === 'no-answer' || c.status === 'missed';
+      if (historyFilter === 'inbound')  return c.direction === 'inbound' && !missed;
+      if (historyFilter === 'missed')   return missed;
       return true;
     });
     if (!filtered.length) { list.innerHTML = '<div class="sd-empty">Aucun appel</div>'; return; }
     list.innerHTML = filtered.map(c => {
-      const cls = c.direction === 'outbound' ? 'out' : (c.status === 'no-answer' || c.status === 'missed' ? 'miss' : 'in');
-      const ic  = c.direction === 'outbound' ? '↗' : (cls === 'miss' ? '✕' : '↙');
-      const name = c.leadName || c.phoneNumber || '—';
-      const ts = c.startedAt && c.startedAt.toDate ? c.startedAt.toDate() : null;
+      const missed = MISSED_STATUSES.has(c.status);
+      const cls = c.direction === 'outbound' ? (missed ? 'miss' : 'out') : (missed ? 'miss' : 'in');
+      const ic  = c.direction === 'outbound' ? (missed ? '✕' : '↗') : (missed ? '✕' : '↙');
+      // Pour outbound l'interlocuteur est toNumber, pour inbound fromNumber
+      const otherPhone = c.direction === 'outbound' ? (c.toNumber || '') : (c.fromNumber || '');
+      const name = c.leadNameSnapshot || c.leadName || otherPhone || '—';
+      const tsRaw = c.initiatedAt || c.startedAt; // startedAt = fallback legacy
+      const ts = tsRaw && tsRaw.toDate ? tsRaw.toDate() : null;
       const sub = ts ? ts.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
-      return `<div class="sd-history-item" data-lead="${c.leadId || ''}" data-phone="${c.phoneNumber || ''}">
+      const dur = c.durationSec || c.duration;
+      return `<div class="sd-history-item" data-lead="${c.leadId || ''}" data-phone="${otherPhone}">
         <div class="sd-history-icon ${cls}">${ic}</div>
         <div class="sd-history-meta">
           <div class="sd-history-name">${name}</div>
-          <div class="sd-history-sub">${sub}${c.duration ? ' · ' + c.duration + 's' : ''}</div>
+          <div class="sd-history-sub">${sub}${dur ? ' · ' + dur + 's' : ''}</div>
         </div>
       </div>`;
     }).join('');
@@ -366,18 +388,14 @@
 
   // ─── Multi-call campagne (écoute live) ──────────────────────────────────
   window.SalesDialerStartCampaign = async function (leads) {
-    // [DEBUG TEMPORAIRE] - identifier qui appelle avec quoi
-    console.log('[StartCampaign] called with:', JSON.stringify(leads), '\nstack:', new Error().stack);
     // Garde stricte : refuse array vide / non-array
     if (!Array.isArray(leads) || leads.length === 0) {
-      console.warn('[StartCampaign] BLOCKED - leads vide ou invalide');
       toast('Aucun lead à appeler', 'error');
       return;
     }
     // Filtre supplémentaire : exiger au moins un téléphone valide
     const valid = leads.filter(l => l && (l.phone || l.telephone));
     if (valid.length === 0) {
-      console.warn('[StartCampaign] BLOCKED - aucun téléphone valide dans', leads);
       toast('Aucun téléphone valide', 'error');
       return;
     }
