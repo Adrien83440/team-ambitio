@@ -28,6 +28,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .card-num span{font-size:11px;color:var(--text-muted);font-weight:400}
 .card-question{font-size:26px;font-weight:700;line-height:1.35;margin-bottom:8px;letter-spacing:-.3px}
 .card-desc{font-size:14px;color:var(--text-muted);margin-bottom:28px;line-height:1.6}
+/* Page form style */
+.page-form{width:100%;max-width:680px;margin:0 auto;padding:20px 0 100px}
+.pf-section{background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.15);border-radius:14px;padding:24px 28px;margin-bottom:28px}
+.pf-section-title{font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.8px;margin-bottom:14px}
+.pf-field{margin-bottom:24px}
+.pf-label{font-size:15px;font-weight:600;color:rgba(240,240,245,.9);margin-bottom:10px;line-height:1.4}
+.pf-label .pf-req{color:var(--accent);margin-left:4px}
+.pf-desc{font-size:12px;color:rgba(240,240,245,.4);margin-bottom:10px;line-height:1.5}
+.pf-field input,.pf-field textarea,.pf-field select{width:100%}
+.pf-field .af-options{gap:8px}
+.pf-field .af-scale{justify-content:flex-start}
+.pf-error{font-size:11px;color:#ef4444;margin-top:6px;display:none}
+.pf-field.has-error .pf-error{display:block}
+.pf-field.has-error .af-input,.pf-field.has-error .af-textarea,.pf-field.has-error .af-select{border-color:#ef4444}
+.pf-submit-wrap{position:fixed;bottom:0;left:0;right:0;padding:16px 24px;background:linear-gradient(transparent,var(--bg) 30%);display:flex;justify-content:center}
+.pf-hidden{display:none!important}
+/* Progress hidden in page mode */
+.page-mode .progress{display:none}
+
 /* Info card */
 .card-info-body{font-size:15px;line-height:1.75;color:rgba(240,240,245,.82)}
 .card-info-body p{margin-bottom:12px}
@@ -141,10 +160,18 @@ if(FORM.color)document.documentElement.style.setProperty('--accent',FORM.color);
 FIELDS=(FORM.fields||[]).filter(function(f){return f.label||f.type==='info';});
 if(!FIELDS.length){showError('Ce formulaire ne contient aucun champ.');return;}
 document.getElementById('loadingView').style.display='none';
+var _formStyle=(FORM.settings&&FORM.settings.formStyle)||'cards';
+if(_formStyle==='page'){
+document.body.classList.add('page-mode');
+document.getElementById('navBar').style.display='none';
+document.getElementById('navHint').style.display='none';
+buildPageForm();
+}else{
 document.getElementById('navBar').style.display='flex';
 document.getElementById('navHint').style.display='block';
 buildCards();
 showCard(0);
+}
 }).catch(function(e){showError('Erreur : '+e.message);});
 })();
 
@@ -181,6 +208,139 @@ html+='<p>'+esc(trimmed)+'</p>';
 });
 if(inList)html+='</ul>';
 return html;
+}
+
+// ═══ PAGE FORM ═══
+function buildPageForm(){
+var container=document.getElementById('formContainer');
+var h='<div class="page-form" id="pageForm">';
+FIELDS.forEach(function(fld){
+if(fld.type==='info'){
+h+='<div class="pf-section" data-pfid="'+fld.id+'">';
+if(fld.label&&fld.label!=='📄 Carte d\'intro')h+='<div class="pf-section-title">'+esc(fld.label)+'</div>';
+h+='<div class="card-info-body">'+formatInfoBody(fld.body||'')+'</div>';
+h+='</div>';
+return;
+}
+var hasCondition=fld.condition&&fld.condition.fieldId;
+h+='<div class="pf-field'+(hasCondition?' pf-hidden':'')+'" data-pfid="'+fld.id+'"'+(hasCondition?' data-cond-field="'+fld.condition.fieldId+'" data-cond-op="'+fld.condition.operator+'" data-cond-val="'+esc(fld.condition.value||'')+'"':'')+' >';
+h+='<div class="pf-label">'+esc(fld.label)+(fld.required?'<span class="pf-req">*</span>':'')+'</div>';
+if(fld.description)h+='<div class="pf-desc">'+esc(fld.description)+'</div>';
+// Input
+if(fld.type==='text'||fld.type==='email'||fld.type==='tel'||fld.type==='number'){
+var it={text:'text',email:'email',tel:'tel',number:'number'}[fld.type];
+h+='<input class="af-input" type="'+it+'" data-fid="'+fld.id+'" autocomplete="off"/>';
+}else if(fld.type==='textarea'){
+h+='<textarea class="af-textarea" data-fid="'+fld.id+'"></textarea>';
+}else if(fld.type==='date'){
+h+='<input class="af-input" type="date" data-fid="'+fld.id+'"/>';
+}else if(fld.type==='select'){
+h+='<select class="af-select" data-fid="'+fld.id+'"><option value="">Sélectionnez…</option>';
+(fld.options||[]).forEach(function(o){h+='<option value="'+esc(o)+'">'+esc(o)+'</option>';});
+h+='</select>';
+}else if(fld.type==='radio'){
+h+='<div class="af-options" data-fid="'+fld.id+'">';
+(fld.options||[]).forEach(function(o,oi){
+var key=String.fromCharCode(65+oi);
+h+='<div class="af-option" data-value="'+esc(o)+'" onclick="pfSelectRadio(this)"><div class="af-option-marker"></div><div class="af-option-label">'+esc(o)+'</div><span class="af-option-key">'+key+'</span></div>';
+});
+h+='</div>';
+}else if(fld.type==='checkbox'){
+h+='<div class="af-options" data-fid="'+fld.id+'">';
+(fld.options||[]).forEach(function(o,oi){
+var key=String.fromCharCode(65+oi);
+h+='<div class="af-option af-option-check" data-value="'+esc(o)+'" onclick="pfToggleCheck(this)"><div class="af-option-marker"></div><div class="af-option-label">'+esc(o)+'</div><span class="af-option-key">'+key+'</span></div>';
+});
+h+='</div>';
+}else if(fld.type==='scale'){
+var max=fld.scaleMax||5;
+h+='<div class="af-scale" data-fid="'+fld.id+'">';
+for(var s=1;s<=max;s++)h+='<button class="af-scale-btn" type="button" data-value="'+s+'" onclick="pfSelectScale(this)">'+s+'</button>';
+h+='</div><div class="af-scale-labels"><span>Pas du tout</span><span>Tout à fait</span></div>';
+}
+h+='<div class="pf-error">Ce champ est requis.</div>';
+h+='</div>';
+});
+h+='</div>';
+h+='<div class="pf-submit-wrap"><button class="nav-btn nav-btn-next" onclick="submitPageForm()" style="padding:14px 40px;font-size:15px">'+((FORM.settings&&FORM.settings.submitLabel)||'Envoyer')+'</button></div>';
+container.innerHTML=h;
+// Bind condition listeners
+document.querySelectorAll('.pf-field[data-cond-field]').forEach(function(el){
+var condFieldId=el.dataset.condField;
+document.querySelectorAll('[data-fid="'+condFieldId+'"]').forEach(function(inp){
+inp.addEventListener('change',pfEvalConditions);
+inp.addEventListener('click',pfEvalConditions);
+inp.addEventListener('input',pfEvalConditions);
+});
+});
+}
+
+function pfGetValue(fieldId){
+var el=document.querySelector('[data-fid="'+fieldId+'"]');
+if(!el)return '';
+if(el.classList.contains('af-options')){
+var sel=el.querySelector('.af-option.selected');
+return sel?sel.dataset.value:'';
+}
+if(el.classList.contains('af-scale')){
+var selBtn=el.querySelector('.af-scale-btn.selected');
+return selBtn?selBtn.dataset.value:'';
+}
+return el.value||'';
+}
+
+function pfEvalConditions(){
+document.querySelectorAll('.pf-field[data-cond-field]').forEach(function(el){
+var depVal=pfGetValue(el.dataset.condField);
+var op=el.dataset.condOp||'eq';
+var cv=el.dataset.condVal||'';
+var show=false;
+if(op==='eq')show=String(depVal)===cv;
+else if(op==='neq')show=String(depVal)!==cv;
+else if(op==='contains')show=String(depVal).toLowerCase().indexOf(cv.toLowerCase())>=0;
+el.classList.toggle('pf-hidden',!show);
+});
+}
+
+function pfSelectRadio(el){
+el.closest('.af-options').querySelectorAll('.af-option').forEach(function(o){o.classList.remove('selected');});
+el.classList.add('selected');
+pfEvalConditions();
+}
+function pfToggleCheck(el){el.classList.toggle('selected');pfEvalConditions();}
+function pfSelectScale(el){
+el.closest('.af-scale').querySelectorAll('.af-scale-btn').forEach(function(b){b.classList.remove('selected');});
+el.classList.add('selected');
+}
+
+function submitPageForm(){
+if(submitted)return;
+// Validate required visible fields
+var hasError=false;
+FIELDS.forEach(function(fld){
+if(fld.type==='info')return;
+var wrapper=document.querySelector('.pf-field[data-pfid="'+fld.id+'"]');
+if(!wrapper||wrapper.classList.contains('pf-hidden'))return;
+if(!fld.required)return;
+var val=pfGetValue(fld.id);
+wrapper.classList.toggle('has-error',!val);
+if(!val)hasError=true;
+});
+if(hasError){
+var first=document.querySelector('.pf-field.has-error');
+if(first)first.scrollIntoView({behavior:'smooth',block:'center'});
+return;
+}
+// Collect answers
+var answersMap={};
+FIELDS.forEach(function(fld){
+if(fld.type==='info')return;
+var wrapper=document.querySelector('.pf-field[data-pfid="'+fld.id+'"]');
+if(!wrapper||wrapper.classList.contains('pf-hidden'))return;
+var val=pfGetValue(fld.id);
+if(val)answersMap[fld.id]=val;
+});
+submitAnswers(answersMap);
 }
 
 // ═══ BUILD CARDS ═══
@@ -477,6 +637,15 @@ updateNextBtn();
 
 // ═══ SUBMIT ═══
 function submitForm(){
+if(submitted)return;
+// Collect answers from cards
+var answersMap={};
+var visible=getVisibleGroups();
+visible.forEach(function(group){collectGroupAnswers(group);});
+FIELDS.forEach(function(fld){if(fld.type!=='info'&&answers[fld.id]!==undefined)answersMap[fld.id]=answers[fld.id];});
+submitAnswers(answersMap);
+}
+function submitAnswers(answersMap){
 if(submitted)return;
 submitted=true;
 
