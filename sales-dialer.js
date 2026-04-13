@@ -165,16 +165,35 @@
       const ts = tsRaw && tsRaw.toDate ? tsRaw.toDate() : null;
       const sub = ts ? ts.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
       const dur = c.durationSec || c.duration;
-      return `<div class="sd-history-item" data-lead="${c.leadId || ''}" data-phone="${otherPhone}">
+      // Badge détail : c.id = callSid = doc ID de call_logs. On montre l'icône dès
+      // qu'il y a quelque chose d'exploitable (recording, transcript ou analyse).
+      const hasDetail = c.recordingStoragePath || c.transcriptionText || (c.aiAnalysis && c.aiAnalysis.summary);
+      let badges = '';
+      if (c.recordingStoragePath)               badges += '🎙';
+      if (c.transcriptionText)                  badges += '📄';
+      if (c.aiAnalysis && c.aiAnalysis.summary) badges += '🤖';
+      const playBtn = hasDetail
+        ? `<button class="sd-history-play" data-cid="${c.id}" title="Écouter / Voir détail" style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:#34d399;border-radius:8px;padding:4px 8px;font-size:12px;cursor:pointer;margin-left:8px">${badges}</button>`
+        : '';
+      return `<div class="sd-history-item" data-lead="${c.leadId || ''}" data-phone="${otherPhone}" data-cid="${c.id}">
         <div class="sd-history-icon ${cls}">${ic}</div>
         <div class="sd-history-meta">
           <div class="sd-history-name">${name}</div>
           <div class="sd-history-sub">${sub}${dur ? ' · ' + dur + 's' : ''}</div>
         </div>
+        ${playBtn}
       </div>`;
     }).join('');
     list.querySelectorAll('.sd-history-item').forEach(el => {
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (ev) => {
+        // Click sur le bouton play → ouvre le modal détail au lieu de charger le lead
+        const playBtn = ev.target.closest('.sd-history-play');
+        if (playBtn) {
+          ev.stopPropagation();
+          const cid = playBtn.dataset.cid;
+          if (cid && window.CallDetailModal) window.CallDetailModal.open(cid);
+          return;
+        }
         const lid = el.dataset.lead, ph = el.dataset.phone;
         if (lid) loadLead(lid);
         if (ph) $('sd-phone-input').value = ph;
