@@ -292,7 +292,9 @@ function loadAll(){CR.get().then(function(sn){var _oldCdId=cdType?cdType.id:null
 function loadB(){
 var isAdmin=window._currentRole==='admin';
 var selfId=window._selfPersonId;
-var q=(isAdmin||!selfId)?db.collection('bookings'):db.collection('bookings').where('personId','==',selfId);
+// Non-admin sans selfId résolu : rien charger (évite d'exposer tous les RDV)
+if(!isAdmin&&!selfId){B=[];rRdv();return;}
+var q=isAdmin?db.collection('bookings'):db.collection('bookings').where('personId','==',selfId);
 q.get().then(function(sn){B=[];sn.forEach(function(d){var v=d.data();v._id=d.id;B.push(v);});B.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});rRdv();}).catch(function(e){B=[];rRdv();});
 }
 function renderAll(){rRdv();rCs();rEx();rPg();lSt();pFlt();}
