@@ -22,6 +22,12 @@
   let historyUnsub = null;
   let leadNotesUnsub = null;
   let leadNotesTimeout = null;
+  // Permissions : true = voir tous les appels de l'équipe (admin OR users/{uid}.canListenCalls == true)
+  //               false = voir seulement ses propres appels
+  let canViewAllCalls = false;
+  // Map firebaseUid → shortName pour afficher le nom du closer sur chaque item
+  // d'historique quand on est en mode "voir tout"
+  let uidToShortName = {};
 
   // ─── Utilitaires ─────────────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
@@ -57,6 +63,7 @@
     if (!user) { window.location.href = 'login.html'; return; }
     currentUser = user;
     sessionDocRef = db.collection('dialer_sessions').doc(user.uid);
+    await loadUserPermissions();
     await initDevice();
     await loadFromNumbers();
     subscribeHistory();
@@ -64,6 +71,40 @@
     await initSession();
     handlePendingCall();
   });
+
+  // ─── Permissions & team lookup ──────────────────────────────────────────
+  // Détermine si l'user courant peut voir tous les appels de l'équipe
+  // (admin OR users/{uid}.canListenCalls == true) et charge la map
+  // firebaseUid → shortName depuis _meta/team_members pour afficher le
+  // nom du closer sur chaque item d'historique en mode "voir tout".
+  async function loadUserPermissions() {
+    try {
+      const userSnap = await db.collection('users').doc(currentUser.uid).get();
+      if (userSnap.exists) {
+        const u = userSnap.data();
+        canViewAllCalls = (u.role === 'admin') || (u.canListenCalls === true);
+      }
+    } catch (e) {
+      console.warn('loadUserPermissions users:', e);
+    }
+    // Charge la map team_members (seulement si on est en mode "voir tout"
+    // sinon ça sert à rien)
+    if (canViewAllCalls) {
+      try {
+        const metaSnap = await db.collection('_meta').doc('team_members').get();
+        if (metaSnap.exists) {
+          const members = metaSnap.data().members || [];
+          members.forEach(m => {
+            if (m.firebaseUid) {
+              uidToShortName[m.firebaseUid] = m.shortName || m.displayName || '?';
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('loadUserPermissions team_members:', e);
+      }
+    }
+  }
 
   // ─── Twilio Device init ──────────────────────────────────────────────────
   async function initDevice() {
@@ -125,11 +166,16 @@
 
   function subscribeHistory() {
     if (historyUnsub) historyUnsub();
-    historyUnsub = db.collection('call_logs')
-      .where('userId', '==', currentUser.uid)
-      .orderBy('initiatedAt', 'desc')
-      .limit(50)
-      .onSnapshot(snap => {
+    // Query conditionnelle : admin/canListenCalls voient tous les appels,
+    // sinon seulement les leurs. L'index Firestore nécessaire diffère :
+    //   - mode "mes appels"   → composite (userId ASC, initiatedAt DESC)
+    //   - mode "tous"         → index simple automatique sur initiatedAt DESC
+    let q = db.collection('call_logs');
+    if (!canViewAllCalls) {
+      q = q.where('userId', '==', currentUser.uid);
+    }
+    q = q.orderBy('initiatedAt', 'desc').limit(50);
+    historyUnsub = q.onSnapshot(snap => {
         const items = [];
         snap.forEach(d => items.push({ id: d.id, ...d.data() }));
         renderHistory(items);
@@ -165,6 +211,11 @@
       const ts = tsRaw && tsRaw.toDate ? tsRaw.toDate() : null;
       const sub = ts ? ts.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
       const dur = c.durationSec || c.duration;
+      // En mode "voir tout" (admin), affiche aussi qui a fait l'appel.
+      // Résout d'abord depuis userName persisté, sinon map uidToShortName.
+      const closerLabel = canViewAllCalls
+        ? (c.userName || uidToShortName[c.userId] || (c.userId ? c.userId.substring(0, 6) : '?'))
+        : '';
       // Badge détail : c.id = callSid = doc ID de call_logs. On montre l'icône dès
       // qu'il y a quelque chose d'exploitable (recording, transcript ou analyse).
       const hasDetail = c.recordingStoragePath || c.transcriptionText || (c.aiAnalysis && c.aiAnalysis.summary);
@@ -178,7 +229,7 @@
       return `<div class="sd-history-item" data-lead="${c.leadId || ''}" data-phone="${otherPhone}" data-cid="${c.id}">
         <div class="sd-history-icon ${cls}">${ic}</div>
         <div class="sd-history-meta">
-          <div class="sd-history-name">${name}</div>
+          <div class="sd-history-name">${name}${closerLabel ? ` <span style="font-size:10px;color:rgba(255,255,255,0.4);font-weight:500">· ${closerLabel}</span>` : ''}</div>
           <div class="sd-history-sub">${sub}${dur ? ' · ' + dur + 's' : ''}</div>
         </div>
         ${playBtn}
