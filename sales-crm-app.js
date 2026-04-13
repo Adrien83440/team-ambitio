@@ -708,6 +708,7 @@ if(lead.contractSigned){
 // Check existing payments
 h+='<div id="crmPaySection_'+lid+'" style="margin-bottom:8px;font-size:11px;color:var(--muted)">Chargement paiements…</div>';
 h+='<div style="display:flex;gap:6px;flex-wrap:wrap">';
+h+='<button onclick="window.markAsClient(\''+lid+'\')" style="display:'+(!lead.isClient?'inline-flex':'none')+';align-items:center;gap:5px;padding:7px 12px;border:1px solid rgba(16,185,129,0.3);border-radius:8px;background:rgba(16,185,129,0.08);color:#34d399;font-size:12px;font-weight:700;cursor:pointer">👥 Marquer client</button>';
 h+='<a href="payments.html?leadId='+lid+'&leadName='+encodeURIComponent(lead.nom||'')+'&leadEmail='+encodeURIComponent(lead.email||'')+'&leadPhone='+encodeURIComponent(lead.telephone||'')+'" style="display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid rgba(16,185,129,0.3);border-radius:8px;background:rgba(16,185,129,0.08);color:#34d399;font-size:12px;font-weight:700;text-decoration:none">💳 Créer paiement</a>';
 h+='</div>';
 h+='</div>';
@@ -2123,3 +2124,327 @@ if(typeof window.loadTeamMembers==='function'){
 }
 
 firebase.auth().onAuthStateChanged(function(user){if(user){db.collection('users').doc(user.uid).get().then(function(snap){var d=snap.exists?snap.data():{};window._currentRole=d.role||'sales';window._currentUserName=user.displayName||user.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);startLeadsListener();loadSavedViews();}).catch(function(){startLeadsListener();loadSavedViews();});}else{var board=document.getElementById('crmBoard');if(board)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--muted);font-size:13px;font-weight:600">🔒 Connexion requise</div>';}});
+
+/* ══════════════════════════════════════════════════════════
+   CLIENTS ACTIFS — Panel & Modal
+   ══════════════════════════════════════════════════════════ */
+
+var clientsCache = [];
+var clientsPaymentsCache = {};
+
+/* ── Ouvre le panel ── */
+function openClientsPanel() {
+  document.getElementById('clientsPanelOverlay').style.display = 'block';
+  var p = document.getElementById('clientsPanel');
+  p.style.display = 'flex';
+  setTimeout(function(){ p.style.transform = 'translateX(0)'; }, 10);
+  loadClientsData();
+}
+function closeClientsPanel() {
+  document.getElementById('clientsPanelOverlay').style.display = 'none';
+  document.getElementById('clientsPanel').style.display = 'none';
+}
+
+/* ── Charge les leads clients ── */
+function loadClientsData() {
+  db.collection('leads').where('isClient', '==', true).orderBy('clientSince', 'desc').get().then(function(sn) {
+    clientsCache = [];
+    sn.forEach(function(d) { clientsCache.push({ id: d.id, ...d.data() }); });
+    updateClientsCount();
+    renderClientsGrid();
+    // Charger les paiements pour chaque client
+    loadClientPayments();
+  }).catch(function(e) {
+    document.getElementById('clientsGrid').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Erreur : ' + e.message + '</div>';
+  });
+}
+
+function loadClientPayments() {
+  var ids = clientsCache.map(function(c) { return c.id; });
+  if (!ids.length) return;
+  // Charger en chunks de 10 (limite Firestore whereIn)
+  var chunks = [];
+  for (var i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
+  chunks.forEach(function(chunk) {
+    db.collection('payments').where('leadId', 'in', chunk).get().then(function(sn) {
+      sn.forEach(function(d) {
+        var p = d.data();
+        if (!clientsPaymentsCache[p.leadId]) clientsPaymentsCache[p.leadId] = [];
+        clientsPaymentsCache[p.leadId].push({ id: d.id, ...p });
+      });
+      renderClientsGrid();
+    });
+  });
+}
+
+function updateClientsCount() {
+  var el = document.getElementById('crmClientsCount');
+  if (el) { el.textContent = clientsCache.length || ''; el.style.display = clientsCache.length ? '' : 'none'; }
+  var elPanel = document.getElementById('clientsPanelCount');
+  if (elPanel) elPanel.textContent = clientsCache.length + ' client' + (clientsCache.length > 1 ? 's' : '');
+}
+
+/* ── Render la grille clients ── */
+function renderClientsGrid() {
+  var q = (document.getElementById('clientsSearch') ? document.getElementById('clientsSearch').value : '').toLowerCase();
+  var f = document.getElementById('clientsFilter') ? document.getElementById('clientsFilter').value : '';
+  var EURO = function(v) { return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v || 0); };
+  var fmtDate = function(ts) { if (!ts) return '—'; var d = ts.toDate ? ts.toDate() : new Date(ts); return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }); };
+
+  var list = clientsCache.filter(function(c) {
+    if (f && (c.clientStatus || 'active') !== f) return false;
+    if (q) { var s = ((c.nom || '') + ' ' + (c.email || '') + ' ' + (c.telephone || '')).toLowerCase(); if (!s.includes(q)) return false; }
+    return true;
+  });
+
+  var grid = document.getElementById('clientsGrid');
+  if (!list.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)"><div style="font-size:48px;margin-bottom:12px">👥</div><div style="font-size:14px;font-weight:600">Aucun client trouvé</div></div>';
+    return;
+  }
+
+  var STATUS_CLIENT = { active: { label: '✅ Actif', color: '#10b981' }, paused: { label: '⏸ En pause', color: '#f59e0b' }, completed: { label: '🎉 Terminé', color: '#a78bfa' } };
+  var STATUS_PAY = { pending_mandate: '⏳ Mandat en attente', mandate_active: '✅ Mandat actif', active: '💸 Prélèvements actifs', completed: '🎉 Terminé', failed: '❌ Échec', draft: '📝 Brouillon' };
+
+  grid.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">' +
+    list.map(function(c) {
+      var ini = (c.nom || '?')[0].toUpperCase();
+      var pays = clientsPaymentsCache[c.id] || [];
+      var mainPay = pays.sort(function(a, b) { return (b.createdAt && b.createdAt.seconds || 0) - (a.createdAt && a.createdAt.seconds || 0); })[0];
+      var cs = STATUS_CLIENT[c.clientStatus || 'active'] || STATUS_CLIENT.active;
+      var setterColor = c.assignedTo && window.TEAM_MEMBERS && window.TEAM_MEMBERS[c.assignedTo] ? window.TEAM_MEMBERS[c.assignedTo].color : '#6b7280';
+
+      var payHtml = '';
+      if (mainPay) {
+        var prog = mainPay.installmentsCount > 1 ? (mainPay.paidCount || 0) + '/' + mainPay.installmentsCount + ' mois' : (mainPay.status === 'completed' ? 'Soldé' : STATUS_PAY[mainPay.status] || mainPay.status);
+        payHtml = '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.12);border-radius:6px;margin-top:8px">' +
+          '<span style="font-size:12px;font-weight:700;color:#34d399">' + EURO(mainPay.totalAmount) + ' ' + (mainPay.vatType || 'ht').toUpperCase() + '</span>' +
+          '<span style="font-size:10px;color:var(--muted)">' + prog + '</span>' +
+          '</div>';
+      }
+
+      return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:all .15s" ' +
+        'onmouseover="this.style.borderColor=\'rgba(16,185,129,0.35)\'" ' +
+        'onmouseout="this.style.borderColor=\'var(--border)\'" ' +
+        'onclick="openClientDetail(\'' + c.id + '\')">' +
+        '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px">' +
+          '<div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,' + setterColor + '88,' + setterColor + ');display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:#fff;flex-shrink:0">' + ini + '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(c.nom || '—') + '</div>' +
+            '<div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(c.email || '') + '</div>' +
+          '</div>' +
+          '<span style="padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:' + cs.color + '18;color:' + cs.color + ';border:1px solid ' + cs.color + '30;flex-shrink:0">' + cs.label + '</span>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' +
+          (c.telephone ? '<div style="font-size:11px;color:var(--muted)">📞 ' + esc(c.telephone) + '</div>' : '') +
+          (c.clientSince ? '<div style="font-size:11px;color:var(--muted)">📅 Client depuis ' + fmtDate(c.clientSince) + '</div>' : '') +
+          (c.contractSigned ? '<div style="font-size:11px;color:#34d399">✍️ Contrat signé</div>' : '') +
+          (c.assignedTo ? '<div style="font-size:11px;color:var(--muted)">👤 ' + esc(c.assignedTo) + '</div>' : '') +
+        '</div>' +
+        payHtml +
+        '</div>';
+    }).join('') + '</div>';
+}
+
+/* ── Modal détail client ── */
+function openClientDetail(leadId) {
+  var c = clientsCache.find(function(x) { return x.id === leadId; });
+  if (!c) return;
+  var modal = document.getElementById('clientDetailModal');
+  var bg = document.getElementById('clientDetailBg');
+  bg.style.display = 'flex';
+
+  var EURO = function(v) { return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(v || 0); };
+  var fmtDate = function(ts) { if (!ts) return '—'; var d = ts.toDate ? ts.toDate() : new Date(ts); return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }); };
+  var fmtDateTime = function(ts) { if (!ts) return '—'; var d = ts.toDate ? ts.toDate() : new Date(ts); return d.toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+  var ini = (c.nom || '?')[0].toUpperCase();
+  var setterColor = c.assignedTo && window.TEAM_MEMBERS && window.TEAM_MEMBERS[c.assignedTo] ? window.TEAM_MEMBERS[c.assignedTo].color : '#10b981';
+  var pays = clientsPaymentsCache[c.id] || [];
+  var STATUS_PAY = { draft: '📝 Brouillon', pending_mandate: '⏳ Mandat en attente', mandate_active: '✅ Mandat actif', active: '💸 Actifs', completed: '🎉 Terminé', failed: '❌ Échec', cancelled: '🚫 Annulé' };
+  var STATUS_CLIENT = { active: { label: '✅ Actif', color: '#10b981' }, paused: { label: '⏸ En pause', color: '#f59e0b' }, completed: { label: '🎉 Terminé', color: '#a78bfa' } };
+  var cs = STATUS_CLIENT[c.clientStatus || 'active'] || STATUS_CLIENT.active;
+
+  // Notes timeline
+  var notes = (c.notesHistory || []).slice().reverse();
+  var notesHtml = notes.length ? notes.map(function(n) {
+    return '<div style="padding:8px 10px;background:var(--bg3);border-radius:8px;margin-bottom:6px">' +
+      '<div style="font-size:10px;color:var(--muted);margin-bottom:3px">' + esc(n.date || '') + '</div>' +
+      '<div style="font-size:12px">' + esc(n.text || '') + '</div></div>';
+  }).join('') : '<div style="font-size:12px;color:var(--muted)">Aucune note</div>';
+
+  // Payments
+  var paysHtml = pays.length ? pays.map(function(p) {
+    var prog = p.installmentsCount > 1 ? p.paidCount + '/' + p.installmentsCount + ' mois' : '';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border);margin-bottom:6px">' +
+      '<div>' +
+        '<div style="font-size:13px;font-weight:700">' + EURO(p.totalAmount) + ' <span style="font-size:10px;font-weight:600;opacity:.5">' + (p.vatType || 'ht').toUpperCase() + '</span>' + (p.type === 'installments' ? ' <span style="font-size:11px;color:var(--muted)">· ' + p.installmentsCount + ' mois</span>' : '') + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + (STATUS_PAY[p.status] || p.status) + (prog ? ' · ' + prog : '') + '</div>' +
+      '</div>' +
+      (p.paidAmount ? '<div style="font-size:12px;font-weight:700;color:#34d399">' + EURO(p.paidAmount) + ' collecté</div>' : '') +
+      '</div>';
+  }).join('') : '<div style="font-size:12px;color:var(--muted)">Aucun paiement enregistré</div>';
+
+  // Timeline
+  var tl = (c.timeline_history || []).slice(-8).reverse();
+  var tlHtml = tl.map(function(t) {
+    return '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 8px;background:var(--bg3);border-radius:6px;margin-bottom:4px">' +
+      '<div style="width:6px;height:6px;border-radius:50%;background:' + (t.color || '#a78bfa') + ';flex-shrink:0;margin-top:5px"></div>' +
+      '<div style="flex:1;font-size:11px">' + esc(t.text || '') + '</div>' +
+      '<div style="font-size:10px;color:var(--muted);white-space:nowrap">' + esc(t.date || '') + '</div>' +
+      '</div>';
+  }).join('') || '<div style="font-size:12px;color:var(--muted)">Aucun événement</div>';
+
+  var h = '';
+  // Header
+  h += '<div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:20px">';
+  h += '<div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,' + setterColor + '88,' + setterColor + ');display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;flex-shrink:0">' + ini + '</div>';
+  h += '<div style="flex:1"><div style="font-family:var(--font-d);font-size:20px;font-weight:800">' + esc(c.nom || '—') + '</div>';
+  h += '<div style="font-size:12px;color:var(--muted);margin-top:2px">' + esc(c.email || '') + (c.telephone ? ' · ' + esc(c.telephone) : '') + '</div></div>';
+  h += '<div style="display:flex;align-items:center;gap:8px">';
+  h += '<span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:' + cs.color + '18;color:' + cs.color + ';border:1px solid ' + cs.color + '30">' + cs.label + '</span>';
+  h += '<button onclick="closeClientDetail()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;width:30px;height:30px;cursor:pointer;color:var(--muted);font-size:14px">✕</button>';
+  h += '</div></div>';
+
+  // Status selector (manuel)
+  h += '<div style="display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap">';
+  ['active', 'paused', 'completed'].forEach(function(s) {
+    var sc = STATUS_CLIENT[s];
+    var isOn = (c.clientStatus || 'active') === s;
+    h += '<button onclick="setClientStatus(\'' + leadId + '\',\'' + s + '\')" style="padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid ' + (isOn ? sc.color : 'var(--border)') + ';background:' + (isOn ? sc.color + '18' : 'transparent') + ';color:' + (isOn ? sc.color : 'var(--muted)') + '">' + sc.label + '</button>';
+  });
+  h += '</div>';
+
+  // 2 colonnes info
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">';
+
+  // Colonne gauche — infos contact
+  h += '<div>';
+  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Informations</div>';
+  var infoFields = [
+    ['Nom', c.nom], ['Email', c.email], ['Téléphone', c.telephone],
+    ['Secteur', c.secteur], ['CA actuel', c.ca], ['Défi', c.defi],
+    ['Setter', c.assignedTo], ['Source', c.utm || c.source],
+    ['Client depuis', fmtDate(c.clientSince)],
+    ['Accompagnement', c.accompagnementStart ? (c.accompagnementStart + ' → ' + (c.accompagnementEnd || '?')) : null]
+  ];
+  infoFields.forEach(function(f) {
+    if (!f[1]) return;
+    h += '<div style="display:flex;gap:6px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)">';
+    h += '<span style="font-size:11px;color:var(--muted);min-width:90px;flex-shrink:0">' + f[0] + '</span>';
+    h += '<span style="font-size:12px;font-weight:600">' + esc(String(f[1])) + '</span></div>';
+  });
+  h += '</div>';
+
+  // Colonne droite — contrat + paiements
+  h += '<div>';
+  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Contrat & Paiement</div>';
+  if (c.contractSigned) {
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);margin-bottom:8px">';
+    h += '<span style="color:#34d399;font-size:14px">✍️</span><div><div style="font-size:12px;font-weight:700;color:#34d399">Contrat signé</div>';
+    if (c.contractTemplateName) h += '<div style="font-size:10px;color:var(--muted)">' + esc(c.contractTemplateName) + '</div>';
+    if (c.contractSignedAt) h += '<div style="font-size:10px;color:var(--muted)">' + fmtDateTime(c.contractSignedAt) + '</div>';
+    h += '</div></div>';
+  }
+  h += paysHtml;
+
+  // Accompagnement dates éditable
+  h += '<div style="margin-top:10px">';
+  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px">📅 Accompagnement</div>';
+  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
+  h += '<div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Début</div><input type="date" id="cliStart_' + leadId + '" value="' + (c.accompagnementStart || '') + '" onchange="saveClientField(\'' + leadId + '\',\'accompagnementStart\',this.value)" style="width:100%;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;box-sizing:border-box"/></div>';
+  h += '<div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Fin</div><input type="date" id="cliEnd_' + leadId + '" value="' + (c.accompagnementEnd || '') + '" onchange="saveClientField(\'' + leadId + '\',\'accompagnementEnd\',this.value)" style="width:100%;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;box-sizing:border-box"/></div>';
+  h += '</div></div>';
+  h += '</div>';
+  h += '</div>';
+
+  // Timeline
+  h += '<div style="margin-bottom:20px">';
+  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Historique</div>';
+  h += tlHtml;
+  h += '</div>';
+
+  // Notes
+  h += '<div style="margin-bottom:20px">';
+  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Notes</div>';
+  h += notesHtml;
+  h += '<div style="display:flex;gap:8px;margin-top:8px">';
+  h += '<textarea id="cliNoteInput_' + leadId + '" placeholder="Ajouter une note…" style="flex:1;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-b);font-size:12px;resize:none;height:60px;outline:none"></textarea>';
+  h += '<button onclick="addClientNote(\'' + leadId + '\')" style="padding:8px 14px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.25);border-radius:8px;color:#34d399;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;align-self:flex-end">+ Note</button>';
+  h += '</div></div>';
+
+  // Actions
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--border)">';
+  if (c.telephone) h += '<a href="tel:' + esc(c.telephone) + '" style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border:1px solid rgba(52,211,153,.25);border-radius:8px;background:rgba(52,211,153,.08);color:#34d399;font-size:12px;font-weight:700;text-decoration:none">📞 Appeler</a>';
+  if (c.email) h += '<a href="mailto:' + esc(c.email) + '" style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border:1px solid rgba(96,165,250,.25);border-radius:8px;background:rgba(96,165,250,.08);color:#60a5fa;font-size:12px;font-weight:700;text-decoration:none">✉️ Email</a>';
+  h += '<a href="payments.html?leadId=' + leadId + '" style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border:1px solid rgba(16,185,129,.25);border-radius:8px;background:rgba(16,185,129,.08);color:#34d399;font-size:12px;font-weight:700;text-decoration:none">💳 Paiements</a>';
+  h += '</div>';
+
+  modal.innerHTML = h;
+  modal._leadId = leadId;
+}
+
+function closeClientDetail() {
+  document.getElementById('clientDetailBg').style.display = 'none';
+}
+
+/* ── Actions client ── */
+function setClientStatus(leadId, status) {
+  db.collection('leads').doc(leadId).update({
+    clientStatus: status,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    var c = clientsCache.find(function(x) { return x.id === leadId; });
+    if (c) { c.clientStatus = status; renderClientsGrid(); openClientDetail(leadId); }
+  });
+}
+
+function saveClientField(leadId, field, value) {
+  var upd = { updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+  upd[field] = value;
+  db.collection('leads').doc(leadId).update(upd).then(function() {
+    var c = clientsCache.find(function(x) { return x.id === leadId; });
+    if (c) c[field] = value;
+  });
+}
+
+function addClientNote(leadId) {
+  var inp = document.getElementById('cliNoteInput_' + leadId);
+  var txt = inp ? inp.value.trim() : '';
+  if (!txt) return;
+  var note = { text: txt, date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }) };
+  var c = clientsCache.find(function(x) { return x.id === leadId; });
+  if (!c) return;
+  if (!c.notesHistory) c.notesHistory = [];
+  c.notesHistory.push(note);
+  db.collection('leads').doc(leadId).update({
+    notesHistory: c.notesHistory,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() { openClientDetail(leadId); });
+}
+
+/* ── Bouton "Marquer comme client" dans modal lead pipeline ── */
+// Appelé depuis le modal CRM existant
+window.markAsClient = function(leadId) {
+  if (!confirm('Marquer ce lead comme client actif ?')) return;
+  db.collection('leads').doc(leadId).update({
+    isClient: true,
+    clientStatus: 'active',
+    clientSince: firebase.firestore.FieldValue.serverTimestamp(),
+    timeline_history: firebase.firestore.FieldValue.arrayUnion({
+      text: '👥 Passé en client actif (manuel)',
+      date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),
+      color: '#10b981'
+    }),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    // Reload du badge count
+    var existing = clientsCache.find(function(x) { return x.id === leadId; });
+    if (!existing) {
+      for (var i = 0; i < allLeads.length; i++) {
+        if (allLeads[i].id === leadId) { clientsCache.push({ ...allLeads[i], isClient: true, clientStatus: 'active' }); break; }
+      }
+    }
+    updateClientsCount();
+    if (typeof toast === 'function') toast('👥 Lead passé en client !');
+  });
+};

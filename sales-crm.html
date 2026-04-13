@@ -13,7 +13,7 @@
 </head>
 <body style="display:flex;flex-direction:column;height:100vh">
 <div class="crm-header"><div class="crm-logo">A</div><div class="crm-title">CRM Pipeline</div><div class="crm-stats"><div class="crm-stat"><div class="crm-stat-val" id="statTotal">—</div><div class="crm-stat-label">Total</div></div><div class="crm-stat"><div class="crm-stat-val" style="color:var(--green)" id="statWon">—</div><div class="crm-stat-label">Won</div></div><div class="crm-stat"><div class="crm-stat-val" style="color:var(--red3)" id="statLost">—</div><div class="crm-stat-label">Lost</div></div></div><button class="settings-gear" id="settingsGear" title="Paramètres">⚙</button></div>
-<div class="crm-toolbar"><div class="sv-wrapper" id="svWrapper"><div class="sv-trigger" id="svTrigger"><span style="font-size:14px">📋</span> <span id="svTriggerLabel">Toutes les Affaires</span> <span class="sv-count" id="svTriggerCount">—</span> <span class="sv-trigger-caret">▼</span></div><div class="sv-dropdown" id="svDropdown"><div class="sv-search-wrap"><input class="sv-search-input" id="svSearchInput" placeholder="Rechercher des affichages"/></div><div id="svListDefault"></div><div id="svListCustom"></div><button class="sv-create-btn" id="svCreateBtn">+ Créer l'affichage</button></div></div><input class="crm-search" id="crmSearch" placeholder="Rechercher..."/><button class="crm-filter-pill active" data-setter="all">Tous</button><button class="crm-filter-pill" data-setter="guillaume">Guillaume</button><button class="crm-filter-pill" data-setter="elodie">Élodie</button><button class="crm-section-pill active" data-section="all">Tout</button><button class="crm-section-pill" data-section="Prospection">Prospection</button><button class="crm-section-pill" data-section="Closing">Closing</button><div class="view-toggle"><button class="view-btn active" data-view="pipeline" title="Pipeline">▥</button><button class="view-btn" data-view="list" title="Liste">☰</button><button class="view-btn" data-view="sheet" title="Feuille">▦</button></div><div class="sort-wrapper" id="sortWrapper"><span style="font-size:12px;color:var(--muted);font-weight:600">Trier par</span><div class="sort-trigger" id="sortTrigger"><span id="sortTriggerLabel">Heure de création</span> <span style="font-size:9px">▼</span></div><div class="sort-dd" id="sortDD"></div><button class="sort-dir-btn" id="sortDirBtn" title="Inverser le tri">↕</button></div><button class="colcfg-btn" id="colcfgBtn" title="Colonnes affichées">⚙</button><button class="crm-add-btn" id="crmAddBtn">+ Nouveau lead</button></div>
+<div class="crm-toolbar"><div class="sv-wrapper" id="svWrapper"><div class="sv-trigger" id="svTrigger"><span style="font-size:14px">📋</span> <span id="svTriggerLabel">Toutes les Affaires</span> <span class="sv-count" id="svTriggerCount">—</span> <span class="sv-trigger-caret">▼</span></div><div class="sv-dropdown" id="svDropdown"><div class="sv-search-wrap"><input class="sv-search-input" id="svSearchInput" placeholder="Rechercher des affichages"/></div><div id="svListDefault"></div><div id="svListCustom"></div><button class="sv-create-btn" id="svCreateBtn">+ Créer l'affichage</button></div></div><input class="crm-search" id="crmSearch" placeholder="Rechercher..."/><button class="crm-filter-pill active" data-setter="all">Tous</button><button class="crm-filter-pill" data-setter="guillaume">Guillaume</button><button class="crm-filter-pill" data-setter="elodie">Élodie</button><button class="crm-section-pill active" data-section="all">Tout</button><button class="crm-section-pill" data-section="Prospection">Prospection</button><button class="crm-section-pill" data-section="Closing">Closing</button><div class="view-toggle"><button class="view-btn active" data-view="pipeline" title="Pipeline">▥</button><button class="view-btn" data-view="list" title="Liste">☰</button><button class="view-btn" data-view="sheet" title="Feuille">▦</button></div><div class="sort-wrapper" id="sortWrapper"><span style="font-size:12px;color:var(--muted);font-weight:600">Trier par</span><div class="sort-trigger" id="sortTrigger"><span id="sortTriggerLabel">Heure de création</span> <span style="font-size:9px">▼</span></div><div class="sort-dd" id="sortDD"></div><button class="sort-dir-btn" id="sortDirBtn" title="Inverser le tri">↕</button></div><button class="colcfg-btn" id="colcfgBtn" title="Colonnes affichées">⚙</button><button class="crm-clients-btn" id="crmClientsBtn" onclick="openClientsPanel()">👥 Clients actifs <span class="crm-clients-count" id="crmClientsCount"></span></button><button class="crm-add-btn" id="crmAddBtn">+ Nouveau lead</button></div>
 <div class="filter-bar" id="filterBar">
   <div class="fb-archive-toggle" id="fbArchiveToggle"><button class="fb-archive-btn active" data-archive="recent">📅 Récents</button><button class="fb-archive-btn" data-archive="old">📦 Anciens (+6 mois)</button></div>
   <div class="fb-sep"></div>
@@ -55,5 +55,36 @@
 <script src="call-detail-modal.js" defer></script>
 <script src="sales-crm-app.js"></script>
 <script src="nav.js"></script>
+
+<!-- ═══ CLIENTS PANEL ═══ -->
+<div id="clientsPanelOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:8000;backdrop-filter:blur(4px)" onclick="if(event.target===this)closeClientsPanel()"></div>
+<div id="clientsPanel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:min(92vw,1100px);background:var(--bg);border-left:1px solid var(--border2);z-index:8001;overflow-y:auto;display:flex;flex-direction:column">
+  <div style="padding:20px 24px;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:0;z-index:10">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:17px">👥</div>
+      <div>
+        <div style="font-family:var(--font-d);font-size:18px;font-weight:800">Clients actifs</div>
+        <div style="font-size:11px;color:var(--muted)" id="clientsPanelCount">Chargement…</div>
+      </div>
+      <div style="flex:1"></div>
+      <button onclick="closeClientsPanel()" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--muted);cursor:pointer;font-size:13px">✕</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="clientsSearch" placeholder="🔍 Rechercher un client…" oninput="renderClientsGrid()" style="flex:1;min-width:180px;padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-b);font-size:12px;outline:none"/>
+      <select id="clientsFilter" onchange="renderClientsGrid()" style="padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-b);font-size:12px;outline:none;cursor:pointer">
+        <option value="">Tous les statuts</option>
+        <option value="active">✅ Actif</option>
+        <option value="paused">⏸ En pause</option>
+        <option value="completed">🎉 Terminé</option>
+      </select>
+    </div>
+  </div>
+  <div id="clientsGrid" style="padding:20px 24px;flex:1"></div>
+</div>
+
+<!-- ═══ CLIENT DETAIL MODAL ═══ -->
+<div id="clientDetailBg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9000;backdrop-filter:blur(4px);align-items:center;justify-content:center" onclick="if(event.target===this)closeClientDetail()">
+  <div id="clientDetailModal" style="background:var(--bg);border:1px solid var(--border2);border-radius:18px;width:min(94vw,720px);max-height:92vh;overflow-y:auto;padding:28px;position:relative"></div>
+</div>
 </body>
 </html>
