@@ -20,6 +20,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
 <script src="dialer-bridge.js" defer></script>
+<link rel="stylesheet" href="call-detail-modal.css">
+<script src="call-detail-modal.js" defer></script>
 <script>
   if (!firebase.apps.length) {
     firebase.initializeApp({
@@ -1489,10 +1491,20 @@ function renderCard(l) {
         var clIcon = side === 'out' ? '📞↗' : (clMissed ? '❌' : '📞↙');
         var clTitle = (side === 'out' ? 'Appel sortant' : 'Appel entrant') + (clMissed && side === 'in' ? ' (manqué)' : '');
         var callClass = 'ld-conv-call ' + side + (side === 'out' ? ' ' + ow : '') + (clMissed && side === 'in' ? ' missed' : '');
-        h += '<div class="' + callClass + '">';
+        // Bouton détail cliquable si l'appel a un callLogId (Twilio Dialer) ou un recordingUrl legacy (Ringover)
+        var hasDetail = !!cm.callLogId;
+        if (hasDetail) callClass += ' has-detail';
+        h += '<div class="' + callClass + '"' + (hasDetail ? ' data-action="callDetail" data-cid="' + escA(cm.callLogId) + '" style="cursor:pointer"' : '') + '>';
         h += '<span class="ld-conv-call-icon">' + clIcon + '</span>';
         h += '<span class="ld-conv-call-title">' + escHtml(clTitle) + '</span>';
         if (clDurStr) h += '<span class="ld-conv-call-dur">' + clDurStr + '</span>';
+        if (hasDetail) {
+          var badges = '';
+          if (cm.hasRecording)  badges += '🎙';
+          if (cm.hasTranscript) badges += '📄';
+          if (cm.hasAiAnalysis) badges += '🤖';
+          if (badges) h += '<span class="ld-conv-call-badges" style="margin-left:auto;font-size:13px;opacity:0.85">' + badges + '</span>';
+        }
         h += '</div>';
       } else {
         // SMS bubble
@@ -1520,6 +1532,15 @@ function renderCard(l) {
 
 /* ═══ FEED EVENTS ═══ */
 document.getElementById('ldFeed').addEventListener('click', function(e) {
+  // Call detail modal (click on a call row with callLogId)
+  var cdTarget = e.target.closest('[data-action="callDetail"]');
+  if (cdTarget) {
+    e.stopPropagation();
+    var cid = cdTarget.dataset.cid;
+    if (cid && window.CallDetailModal) window.CallDetailModal.open(cid);
+    return;
+  }
+
   // Toggle card
   var toggle = e.target.closest('[data-action="toggle"]');
   if (toggle) {

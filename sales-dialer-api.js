@@ -25,6 +25,7 @@
     syncNumbers:    `${API_BASE}/dialer-sync-numbers`,
     multiCall:      `${API_BASE}/dialer-multi-call`,
     cancelCampaign: `${API_BASE}/dialer-cancel-campaign`,
+    callDetail:     `${API_BASE}/call-detail`,
   };
 
   // ─── Auth helper ───────────────────────────────────────────────────────────
@@ -221,6 +222,20 @@
      */
     async syncNumbers() {
       return authedFetch(ENDPOINTS.syncNumbers, { method: 'POST' });
+    },
+
+    /**
+     * Récupère le détail complet d'un appel (enregistrement signé, transcription,
+     * analyse IA).
+     * @param {string} callLogId - SID Twilio de l'appel (doc ID call_logs)
+     * @returns {Promise<Object>}
+     */
+    async callDetail(callLogId) {
+      if (!callLogId) throw new Error("callLogId manquant.");
+      return authedFetch(ENDPOINTS.callDetail, {
+        method: 'POST',
+        body: JSON.stringify({ callLogId }),
+      });
     },
   };
 
