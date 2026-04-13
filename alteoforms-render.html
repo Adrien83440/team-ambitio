@@ -29,14 +29,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .card-question{font-size:26px;font-weight:700;line-height:1.35;margin-bottom:8px;letter-spacing:-.3px}
 .card-desc{font-size:14px;color:var(--text-muted);margin-bottom:28px;line-height:1.6}
 /* Info card */
-.card-info-body{font-size:15px;line-height:1.75;color:rgba(240,240,245,.85)}
-.card-info-body p{margin-bottom:14px}
+.card-info-body{font-size:15px;line-height:1.75;color:rgba(240,240,245,.82)}
+.card-info-body p{margin-bottom:12px}
+.card-info-body p:last-child{margin-bottom:0}
+.card-info-body strong,.card-info-body b{font-weight:700;color:#fff}
+.card-info-body em,.card-info-body i{font-style:italic}
+.card-info-body h1{font-family:'DM Sans',sans-serif;font-size:20px;font-weight:800;margin-bottom:12px;color:#fff;letter-spacing:-.3px}
+.card-info-body h2{font-family:'DM Sans',sans-serif;font-size:16px;font-weight:700;margin-bottom:10px;color:#fff}
 .card-info-body ul{list-style:none;padding:0;margin-bottom:14px}
-.card-info-body ul li{padding:6px 0 6px 22px;position:relative;color:rgba(240,240,245,.75)}
-.card-info-body ul li::before{content:"\2192";position:absolute;left:0;color:var(--accent);font-weight:700}
+.card-info-body ul li{padding:5px 0 5px 22px;position:relative;color:rgba(240,240,245,.75)}
+.card-info-body ul li::before{content:"→";position:absolute;left:0;color:var(--accent);font-weight:700}
+.card-info-body ol{padding-left:22px;margin-bottom:14px}
+.card-info-body ol li{padding:4px 0;color:rgba(240,240,245,.75);list-style:decimal}
+.card-info-body blockquote{border-left:3px solid var(--accent);padding:8px 16px;margin:12px 0;color:rgba(240,240,245,.55);font-style:italic}
+.card-info-body a{color:var(--accent);text-decoration:underline}
 .card-info-body .info-warning{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:12px 16px;margin:16px 0;font-size:13px;color:rgba(245,158,11,.9)}
 .card-info-body .info-signature{margin-top:24px;font-weight:700;color:var(--text);font-size:15px}
-.card-info-title{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:20px;text-transform:uppercase;letter-spacing:.5px}
+.card-info-title{font-size:11px;font-weight:800;color:var(--accent);margin-bottom:18px;text-transform:uppercase;letter-spacing:.8px}
+/* Info card scroll for long content */
+.card.card-info-type{position:relative;overflow-y:auto;max-height:calc(100vh - 160px);padding-bottom:20px}
 .card-req{color:var(--accent);font-size:12px;font-weight:600}
 /* Inputs */
 .af-input{width:100%;padding:16px 18px;background:transparent;border:none;border-bottom:2px solid rgba(255,255,255,.12);color:var(--text);font-family:'DM Sans',sans-serif;font-size:20px;font-weight:500;outline:none;transition:border-color .3s}
@@ -145,14 +156,30 @@ document.getElementById('formContainer').innerHTML='<div class="error-page"><div
 // === FORMAT INFO BODY ===
 function formatInfoBody(text){
 if(!text)return '';
+// Quill HTML: inject directly
+if(text.trim().charAt(0)==='<'){return text;}
+// Legacy plain text with * bullets
 var lines=text.split('\n');
-var html='';
-var inList=false;
+var html='';var inList=false;
 lines.forEach(function(line){
 var trimmed=line.trim();
-if(!trimmed){
+if(!trimmed){if(inList){html+='</ul>';inList=false;}return;}
+if(trimmed.charAt(0)==='*'&&trimmed.charAt(1)===' '){
+if(!inList){html+='<ul>';inList=true;}
+html+='<li>'+esc(trimmed.slice(2).trim())+'</li>';
+}else if(trimmed.charAt(0)==='⚠'||trimmed.indexOf('⚠️')===0){
 if(inList){html+='</ul>';inList=false;}
-return;
+html+='<div class="info-warning">'+esc(trimmed)+'</div>';
+}else if(trimmed.slice(0,6)==='Adrien'||trimmed.slice(0,5)==='Merci'){
+if(inList){html+='</ul>';inList=false;}
+html+='<div class="info-signature">'+esc(trimmed)+'</div>';
+}else{
+if(inList){html+='</ul>';inList=false;}
+html+='<p>'+esc(trimmed)+'</p>';
+}
+});
+if(inList)html+='</ul>';
+return html;
 }
 if(trimmed.charAt(0)==='*'&&trimmed.charAt(1)===' '){
 if(!inList){html+='<ul>';inList=true;}
@@ -189,11 +216,12 @@ if(curGroup.length)CARD_GROUPS.push(curGroup);
 
 CARD_GROUPS.forEach(function(group,gi){
 var card=document.createElement('div');
-card.className='card';
+var isInfoGroup=group.length===1&&group[0].type==='info';
+card.className='card'+(isInfoGroup?' card-info-type':'');
 card.id='card-g'+gi;
 card.dataset.gidx=gi;
 
-var h='<div class="card-num">'+(gi+1)+' →<span>sur '+CARD_GROUPS.length+'</span></div>';
+var h=isInfoGroup?'':'<div class="card-num">'+(gi+1)+' →<span>sur '+CARD_GROUPS.length+'</span></div>';
 
 group.forEach(function(fld,fi){
 // Info type: static text card, no input

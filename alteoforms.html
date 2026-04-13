@@ -10,6 +10,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
 <link rel="stylesheet" href="sales.css"/>
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet"/>
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <style>
 .af{padding:20px 24px 80px;max-width:1100px;margin:0 auto}
 .af-top{display:flex;align-items:center;gap:14px;margin-bottom:24px}
@@ -26,6 +28,21 @@
 .bi{padding:8px 12px;background:#141420;border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0;box-sizing:border-box}.bi:focus{border-color:#f59e0b}.bi::placeholder{color:rgba(255,255,255,.2)}
 .bs{padding:8px 12px;background:#141420;border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0}.bs option{background:#141420}
 /* Toast */
+/* Quill editor dark theme */
+#fld-body-wrap .ql-toolbar{background:#1a1a2e;border:1px solid rgba(255,255,255,.1);border-bottom:none;border-radius:8px 8px 0 0;padding:6px 8px}
+#fld-body-wrap .ql-container{background:#141420;border:1px solid rgba(255,255,255,.1);border-radius:0 0 8px 8px;font-family:'Figtree',sans-serif;font-size:13px;color:#fff;min-height:160px}
+#fld-body-wrap .ql-editor{min-height:160px;color:#fff;line-height:1.65}
+#fld-body-wrap .ql-editor.ql-blank::before{color:rgba(255,255,255,.2);font-style:normal}
+#fld-body-wrap .ql-toolbar .ql-stroke{stroke:rgba(255,255,255,.45)}
+#fld-body-wrap .ql-toolbar .ql-fill{fill:rgba(255,255,255,.45)}
+#fld-body-wrap .ql-toolbar button:hover .ql-stroke,#fld-body-wrap .ql-toolbar .ql-active .ql-stroke{stroke:#f59e0b}
+#fld-body-wrap .ql-toolbar button:hover .ql-fill,#fld-body-wrap .ql-toolbar .ql-active .ql-fill{fill:#f59e0b}
+#fld-body-wrap .ql-toolbar .ql-picker-label{color:rgba(255,255,255,.45);border-color:rgba(255,255,255,.1)}
+#fld-body-wrap .ql-toolbar .ql-picker-label:hover{color:#f59e0b}
+#fld-body-wrap .ql-toolbar .ql-picker-options{background:#1a1a2e;border-color:rgba(255,255,255,.1);color:#fff}
+#fld-body-wrap .ql-snow.ql-toolbar button:hover,#fld-body-wrap .ql-snow .ql-toolbar button:hover{color:#f59e0b}
+#fld-body-wrap .ql-editor strong{color:#fff}
+#fld-body-wrap .ql-editor ul li,#fld-body-wrap .ql-editor ol li{color:rgba(255,255,255,.8)}
 .af-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none}.af-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 /* Grid */
 .af-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
@@ -253,7 +270,7 @@
 <!-- Scale -->
 <div class="ed-field-row" id="fld-scale-wrap" style="display:none"><div class="ed-group-label">Échelle</div><div style="display:flex;gap:10px;align-items:center"><select class="bs" id="fld-scaleMax" style="width:80px"><option value="5">1 – 5</option><option value="10">1 – 10</option></select><span style="font-size:11px;color:rgba(255,255,255,.3)">Note de 1 à N</span></div></div>
 <!-- Info body -->
-<div class="ed-field-row" id="fld-body-wrap" style="display:none"><div class="ed-group-label">Contenu de la carte</div><textarea class="bi" id="fld-body" placeholder="Saisissez le texte affiché sur la carte. Utilisez * en début de ligne pour les puces." style="width:100%;min-height:160px;resize:vertical;font-size:12px;line-height:1.6"></textarea></div>
+<div class="ed-field-row" id="fld-body-wrap" style="display:none"><div class="ed-group-label">Contenu de la carte</div><div id="fld-body-quill" style="border-radius:8px;overflow:hidden"></div></div>
 <!-- Required -->
 <div class="ed-field-row" id="fld-req-wrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-req"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Champ requis</span></label></div>
 <div class="ed-field-row" id="fld-samecard-wrap"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fld-sameCard"/><span style="font-size:13px;color:rgba(255,255,255,.7)">📑 Même carte que le champ précédent</span></label><div style="font-size:11px;color:rgba(255,255,255,.2);margin-top:4px;padding-left:24px">Regroupe ce champ avec le précédent sur une seule carte dans le formulaire.</div></div>
@@ -330,7 +347,9 @@ var edSection='fields';
 var _fldEditIdx=-1;
 var _bookingTypes=[];
 var _paletteDrag=null;
-var _palInsertIdx=-1; // insert position from palette DnD (-1 = append)
+var _palInsertIdx=-1;
+var _quillBody=null;
+ // insert position from palette DnD (-1 = append)
 
 var FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤',number:'🔢',date:'📅',info:'📄'};
 var FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle',number:'Nombre',date:'Date',info:'Texte informatif'};
@@ -818,7 +837,7 @@ document.getElementById('fldSaveBtn').textContent=idx>=0?'Enregistrer':'Ajouter'
 // Reset
 document.getElementById('fld-label').value='';
 document.getElementById('fld-desc').value='';
-document.getElementById('fld-body').value='';
+initQuill();if(_quillBody)_quillBody.root.innerHTML='';
 document.getElementById('fld-type').value='text';
 document.getElementById('fld-req').checked=false;
 document.getElementById('fld-sameCard').checked=false;
@@ -844,7 +863,7 @@ document.getElementById('fld-desc').value=fld.description||'';
 document.getElementById('fld-type').value=fld.type||'text';
 document.getElementById('fld-req').checked=!!fld.required;
 document.getElementById('fld-sameCard').checked=!!fld.sameCard;
-if(fld.body)document.getElementById('fld-body').value=fld.body;
+if(fld.body&&_quillBody){if(fld.body.trim().startsWith('<')){_quillBody.clipboard.dangerouslyPasteHTML(fld.body);}else{_quillBody.clipboard.dangerouslyPasteHTML(legacyTextToHtml(fld.body));}}
 if(fld.options&&fld.options.length){
 document.getElementById('fld-opts-wrap').style.display='block';
 fld.options.forEach(function(o){_addOptRow(o);});
@@ -873,6 +892,7 @@ var hasOpts=type==='select'||type==='checkbox'||type==='radio';
 document.getElementById('fld-opts-wrap').style.display=hasOpts?'block':'none';
 document.getElementById('fld-scale-wrap').style.display=type==='scale'?'block':'none';
 document.getElementById('fld-body-wrap').style.display=isInfo?'block':'none';
+if(isInfo)setTimeout(initQuill,0);
 document.getElementById('fld-req-wrap').style.display=isInfo?'none':'';
 document.getElementById('fld-samecard-wrap').style.display=isInfo?'none':'';
 document.getElementById('fld-contact-wrap').style.display=isInfo?'none':'';
@@ -909,8 +929,8 @@ type:type,
 required:type!=='info'&&document.getElementById('fld-req').checked
 };
 if(type==='info'){
-var body=document.getElementById('fld-body').value.trim();
-if(!body){toast('❌ Le contenu de la carte est requis');return;}
+var body=_quillBody?_quillBody.root.innerHTML.trim():'';
+if(!body||body==='<p><br></p>'){toast('❌ Le contenu de la carte est requis');return;}
 field.body=body;
 field.label=label||'📄 Carte d\'intro';
 }else{
@@ -1160,6 +1180,41 @@ saveForm(true).then(function(){renderEdSection();toast('🗑 Règle supprimée')
 }
 
 // ═══ INIT ═══
+
+// ═══ QUILL INIT ═══
+function legacyTextToHtml(text){
+if(!text)return '';
+var lines=text.split('\n');
+var html='';var inUl=false;
+lines.forEach(function(line){
+var t=line.trim();
+if(!t){if(inUl){html+='</ul>';inUl=false;}return;}
+if(t.charAt(0)==='*'&&t.charAt(1)===' '){
+if(!inUl){html+='<ul>';inUl=true;}
+html+='<li>'+t.slice(2).trim()+'</li>';
+}else{
+if(inUl){html+='</ul>';inUl=false;}
+html+='<p>'+t+'</p>';
+}
+});
+if(inUl)html+='</ul>';
+return html||'<p></p>';
+}
+
+function initQuill(){
+if(_quillBody)return;
+_quillBody=new Quill('#fld-body-quill',{
+theme:'snow',
+placeholder:'Rédigez le contenu de la carte. Vous pouvez mettre du texte en gras, créer des listes, etc.',
+modules:{toolbar:[
+['bold','italic','underline'],
+[{header:[1,2,false]}],
+[{list:'ordered'},{list:'bullet'}],
+['blockquote','link'],
+['clean']
+]}
+});
+}
 window.openFldModal=openFldModal;window.closeFldModal=closeFldModal;window.fldTypeChanged=fldTypeChanged;
 window.addFldOption=addFldOption;window.saveFldModal=saveFldModal;window.deleteField=deleteField;window.quickAddField=quickAddField;
 window.setFormStyle=setFormStyle;window.publishForm=publishForm;window.previewForm=previewForm;
