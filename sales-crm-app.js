@@ -2169,33 +2169,53 @@ function setClientsView(mode) {
 }
 
 function renderClientsList(list, grid, EURO, fmtDate, STATUS_CLIENT, STATUS_PAY) {
+  // Build team options for closeur dropdown
+  var teamOpts = '<option value="">—</option>';
+  if (window.TEAM_MEMBERS_LIST) {
+    window.TEAM_MEMBERS_LIST.forEach(function(m) {
+      if (m.active !== false) teamOpts += '<option value="'+esc(m.slug||'')+'">'+esc(m.displayName||m.shortName||m.slug)+'</option>';
+    });
+  }
+
+  var statusOpts = [
+    {v:'active',l:'✅ Actif'},{v:'paused',l:'⏸ En pause'},{v:'completed',l:'🎉 Terminé'},
+    {v:'stopped',l:'🛑 Stoppé'},{v:'procedure',l:'⚖️ Procédure'}
+  ].map(function(o){return '<option value="'+o.v+'">'+o.l+'</option>';}).join('');
+
   var rows = list.map(function(c) {
     var pays = clientsPaymentsCache[c.id] || [];
     var mainPay = pays.sort(function(a,b){return(b.createdAt&&b.createdAt.seconds||0)-(a.createdAt&&a.createdAt.seconds||0);})[0];
     var cs = STATUS_CLIENT[c.clientStatus||'active']||STATUS_CLIENT.active;
     var _slug = c.closeurSlug || c.assignedTo || '';
     var payStr = mainPay ? EURO(mainPay.totalAmount) + (mainPay.installmentsCount>1?' · '+(mainPay.paidCount||0)+'/'+mainPay.installmentsCount+' mois':'') : '—';
+
+    var statusSel = '<select data-cid="'+c.id+'" data-field="clientStatus" class="cl-edit-sel" onclick="event.stopPropagation()" style="background:'+cs.color+'18;border:1px solid '+cs.color+'44;border-radius:6px;color:'+cs.color+';font-size:10px;font-weight:700;padding:3px 6px;cursor:pointer;outline:none">'+
+      statusOpts.replace('value="'+(c.clientStatus||'active')+'"','value="'+(c.clientStatus||'active')+'" selected') +
+      '</select>';
+
+    var closeurSel = '<select data-cid="'+c.id+'" data-field="closeurSlug" class="cl-edit-sel" onclick="event.stopPropagation()" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:3px 6px;cursor:pointer;outline:none;max-width:100px">'+
+      teamOpts.replace('value="'+esc(_slug)+'"','value="'+esc(_slug)+'" selected') +
+      '</select>';
+
     return '<tr data-cid="' + c.id + '" class="cl-row" style="border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .1s">' +
-      '<td style="padding:10px 12px;font-weight:600;font-size:13px">'+esc(c.nom||'—')+'</td>' +
-      '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(c.email||'—')+'</td>' +
-      '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(c.telephone||'—')+'</td>' +
-      '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(c.formule||'—')+'</td>' +
-      '<td style="padding:10px 12px;font-size:12px">'+esc(payStr)+'</td>' +
-      '<td style="padding:10px 12px;font-size:12px;color:var(--muted)">'+esc(_slug||'—')+'</td>' +
-      '<td style="padding:10px 12px"><span style="padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;background:'+cs.color+'18;color:'+cs.color+';border:1px solid '+cs.color+'30">'+cs.label+'</span></td>' +
-      '<td style="padding:10px 12px;font-size:11px;color:var(--muted)">'+fmtDate(c.clientSince)+'</td>' +
+      '<td style="padding:9px 12px;font-weight:600;font-size:13px">'+esc(c.nom||'—')+'<div style="font-size:10px;color:var(--muted);font-weight:400">'+esc(c.email||'')+'</div></td>' +
+      '<td style="padding:9px 12px;font-size:12px;color:var(--muted)">'+esc(c.telephone||'—')+'</td>' +
+      '<td style="padding:9px 12px;font-size:12px;color:var(--muted)">'+esc(c.formule||'—')+'</td>' +
+      '<td style="padding:9px 12px;font-size:12px">'+esc(payStr)+'</td>' +
+      '<td style="padding:9px 12px">'+closeurSel+'</td>' +
+      '<td style="padding:9px 12px">'+statusSel+'</td>' +
+      '<td style="padding:9px 12px;font-size:11px;color:var(--muted)">'+esc(c.accompagnementEnd||'—')+'</td>' +
       '</tr>';
   }).join('');
   grid.innerHTML = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
     '<thead><tr style="border-bottom:1px solid var(--border)">' +
     '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);white-space:nowrap">Nom</th>' +
-    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Email</th>' +
     '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Téléphone</th>' +
     '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Formule</th>' +
     '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Paiement</th>' +
     '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Closeur</th>' +
     '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Statut</th>' +
-    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Client depuis</th>' +
+    '<th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)">Fin accomp.</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
@@ -2222,7 +2242,93 @@ function updateClientsCount() {
   if (el) { el.textContent = clientsCache.length || ''; el.style.display = clientsCache.length ? '' : 'none'; }
   var elPanel = document.getElementById('clientsPanelCount');
   if (elPanel) elPanel.textContent = clientsCache.length + ' client' + (clientsCache.length > 1 ? 's' : '');
+  renderClientsKpis();
 }
+
+function renderClientsKpis() {
+  var el = document.getElementById('clientsKpis');
+  if (!el) return;
+  var now = new Date();
+  var in30 = new Date(now); in30.setDate(in30.getDate() + 30);
+  var in7 = new Date(now); in7.setDate(in7.getDate() + 7);
+  var EURO = function(v) { return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(v||0); };
+  var fmtDate = function(s) { if(!s)return null; var d=new Date(s); return isNaN(d)?null:d; };
+
+  // Active clients
+  var nbActifs = clientsCache.filter(function(c){return (c.clientStatus||'active')==='active';}).length;
+
+  // Contracts ending within 30 days
+  var termProche = clientsCache.filter(function(c){
+    if(!c.accompagnementEnd) return false;
+    var d = fmtDate(c.accompagnementEnd);
+    return d && d >= now && d <= in30;
+  });
+
+  // Failed payments
+  var allPays = Object.values(clientsPaymentsCache).reduce(function(a,b){return a.concat(b);},[]);
+  var failed = allPays.filter(function(p){return p.status==='failed';});
+
+  // Upcoming payments this week
+  var upcoming = [];
+  Object.values(clientsPaymentsCache).forEach(function(pays){
+    pays.forEach(function(p){
+      if(!p.gcSubscriptionId && !p.gcMandateId) return;
+      // upcomingPayments stored on subscription - check via paymentsHistory and status
+      if(p.status==='active' && p.type==='installments'){
+        upcoming.push(p);
+      }
+    });
+  });
+
+  // No payment linked
+  var sansPaiement = clientsCache.filter(function(c){
+    return c.paiementPlateforme==='GOCARDLESS' && !(clientsPaymentsCache[c.id]||[]).some(function(p){return p.gcMandateId;});
+  });
+
+  // Retractations
+  var retractations = clientsCache.filter(function(c){return c.retractation && c.retractation.toUpperCase()==='RENONCÉ';});
+
+  // Total collected
+  var totalCollecte = allPays.reduce(function(s,p){return s+(p.paidAmount||0);},0);
+
+  var kpis = [
+    { icon:'👥', label:'Clients actifs', value:nbActifs, color:'#10b981', urgent:false },
+    { icon:'📅', label:'Contrats < 30j', value:termProche.length, color: termProche.length>0?'#f59e0b':'#6b7280', urgent:termProche.length>0, sub: termProche.slice(0,2).map(function(c){return c.nom;}).join(', ')||(termProche.length?termProche[0].nom:'') },
+    { icon:'❌', label:'Paiements échoués', value:failed.length, color:failed.length>0?'#ef4444':'#6b7280', urgent:failed.length>0 },
+    { icon:'💸', label:'Actifs sans mandat GC', value:sansPaiement.length, color:sansPaiement.length>0?'#f97316':'#6b7280', urgent:sansPaiement.length>0 },
+    { icon:'↩️', label:'Rétractations', value:retractations.length, color:retractations.length>0?'#a78bfa':'#6b7280', urgent:false },
+    { icon:'💰', label:'Total collecté', value:EURO(totalCollecte), color:'#34d399', urgent:false, isAmount:true }
+  ];
+
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:4px">';
+  html += kpis.map(function(k) {
+    var bg = k.urgent ? 'rgba('+(k.color==='#ef4444'?'239,68,68':k.color==='#f59e0b'?'245,158,11':k.color==='#f97316'?'249,115,22':'167,139,250')+',0.08)' : 'var(--bg3)';
+    var border = k.urgent ? '1px solid '+(k.color)+'44' : '1px solid var(--border)';
+    return '<div data-kpi="'+esc(k.label)+'" class="'+( k.urgent?'kpi-card-urgent':''  )+'" style="background:'+bg+';border:'+border+';border-radius:10px;padding:10px 12px;cursor:'+(k.urgent?'pointer':'default')+'">'+
+      '<div style="font-size:14px;margin-bottom:3px">'+k.icon+'</div>'+
+      '<div style="font-size:'+(k.isAmount?'14':'20')+'px;font-weight:800;font-family:var(--font-m);color:'+k.color+'">'+k.value+'</div>'+
+      '<div style="font-size:10px;color:var(--muted);font-weight:600;margin-top:1px">'+k.label+'</div>'+
+      (k.sub?'<div style="font-size:9px;color:'+k.color+';margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+k.sub+'</div>':'')+
+      '</div>';
+  }).join('');
+  html += '</div>';
+  el.innerHTML = html;
+  el.style.display = 'block';
+}
+
+// KPI card click delegation
+document.addEventListener('click', function(e) {
+  var card = e.target.closest('[data-kpi]');
+  if (!card || !document.getElementById('clientsPanel') || document.getElementById('clientsPanel').style.display === 'none') return;
+  window.filterByKpi(card.dataset.kpi);
+});
+
+window.filterByKpi = function(label) {
+  var f = document.getElementById('clientsFilter');
+  // For "Contrats < 30j" and "Paiements échoués", apply a special highlight
+  // Just re-render with a console log for now — can extend later
+  if (typeof toast === 'function') toast('Filtre : ' + label);
+};
 
 /* ── Render la grille clients ── */
 function renderClientsGrid() {
@@ -2240,7 +2346,24 @@ function renderClientsGrid() {
   var grid = document.getElementById('clientsGrid');
   // Ensure click delegation is set once
   if (!grid._clRowBound) {
-    grid.addEventListener('click', function(e) { var tr = e.target.closest('.cl-row'); if (tr) openClientDetail(tr.dataset.cid); });
+    grid.addEventListener('click', function(e) { var tr = e.target.closest('.cl-row'); if (tr && !e.target.closest('.cl-edit-sel')) openClientDetail(tr.dataset.cid); });
+    grid.addEventListener('change', function(e) {
+      var sel = e.target.closest('.cl-edit-sel');
+      if (!sel) return;
+      var cid = sel.dataset.cid, field = sel.dataset.field, val = sel.value;
+      var upd = { updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+      upd[field] = val;
+      // Also update closerName if changing closeurSlug
+      if (field === 'closeurSlug' && window.TEAM_MEMBERS && window.TEAM_MEMBERS[val]) {
+        upd.closeurName = window.TEAM_MEMBERS[val].displayName || window.TEAM_MEMBERS[val].shortName || val;
+      }
+      db.collection('leads').doc(cid).update(upd).then(function() {
+        var c = clientsCache.find(function(x){return x.id===cid;});
+        if (c) { c[field] = val; if (upd.closeurName) c.closeurName = upd.closeurName; }
+        if (typeof toast === 'function') toast('✅ Sauvegardé');
+        renderClientsKpis();
+      }).catch(function(e){ if (typeof toast==='function') toast('❌ '+e.message,false); });
+    });
     grid.addEventListener('mouseover', function(e) { var tr = e.target.closest('.cl-row'); if (tr) tr.style.background = 'rgba(255,255,255,.02)'; });
     grid.addEventListener('mouseout', function(e) { var tr = e.target.closest('.cl-row'); if (tr) tr.style.background = ''; });
     grid._clRowBound = true;
