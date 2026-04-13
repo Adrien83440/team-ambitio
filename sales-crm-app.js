@@ -2588,6 +2588,11 @@ function openClientDetail(leadId) {
   if (c.telephone) h += '<a href="tel:' + esc(c.telephone) + '" style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border:1px solid rgba(52,211,153,.25);border-radius:8px;background:rgba(52,211,153,.08);color:#34d399;font-size:12px;font-weight:700;text-decoration:none">📞 Appeler</a>';
   if (c.email) h += '<a href="mailto:' + esc(c.email) + '" style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border:1px solid rgba(96,165,250,.25);border-radius:8px;background:rgba(96,165,250,.08);color:#60a5fa;font-size:12px;font-weight:700;text-decoration:none">✉️ Email</a>';
   h += '<a href="payments.html?leadId=' + leadId + '" style="display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border:1px solid rgba(16,185,129,.25);border-radius:8px;background:rgba(16,185,129,.08);color:#34d399;font-size:12px;font-weight:700;text-decoration:none">💳 Paiements</a>';
+  h += '<div style="flex:1"></div>';
+  h += '<button data-remove="' + leadId + '" class="cl-remove-btn" style="padding:7px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;color:#f59e0b;font-size:11px;font-weight:700;cursor:pointer">📤 Retirer des clients</button>';
+  if (window._currentRole === 'admin') {
+    h += '<button data-delete="' + leadId + '" class="cl-delete-btn" style="padding:7px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;color:#ef4444;font-size:11px;font-weight:700;cursor:pointer">🗑 Supprimer le lead</button>';
+  }
   h += '</div>';
 
   modal.innerHTML = h;
@@ -2597,6 +2602,10 @@ function openClientDetail(leadId) {
     if (btn) window.syncGCPayment(btn.dataset.syncpay, btn.dataset.synclead);
     var lkBtn = e.target.closest('.gc-lookup-btn');
     if (lkBtn) window.gcLookupClient(lkBtn.dataset.gclookup, lkBtn.dataset.gcemail);
+    var rmBtn = e.target.closest('.cl-remove-btn');
+    if (rmBtn) window.removeFromClients(rmBtn.dataset.remove);
+    var delBtn = e.target.closest('.cl-delete-btn');
+    if (delBtn) window.deleteClientLead(delBtn.dataset.delete);
   });
 }
 
@@ -2835,6 +2844,36 @@ window.syncGCPayment = async function(payId, leadId) {
   } catch(e) {
     if (typeof toast === 'function') toast('❌ ' + e.message, false);
   }
+};
+
+window.removeFromClients = function(leadId) {
+  var c = clientsCache.find(function(x){return x.id===leadId;});
+  if (!confirm('Retirer "' + (c?c.nom:leadId) + '" des clients ? (Le lead reste dans le pipeline)')) return;
+  db.collection('leads').doc(leadId).update({
+    isClient: false,
+    clientStatus: null,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function() {
+    clientsCache = clientsCache.filter(function(x){return x.id!==leadId;});
+    delete clientsPaymentsCache[leadId];
+    closeClientDetail();
+    updateClientsCount();
+    renderClientsGrid();
+    toast('📤 Retiré des clients');
+  });
+};
+
+window.deleteClientLead = function(leadId) {
+  var c = clientsCache.find(function(x){return x.id===leadId;});
+  if (!confirm('⚠️ Supprimer définitivement "' + (c?c.nom:leadId) + '" ? Cette action est irréversible.')) return;
+  db.collection('leads').doc(leadId).delete().then(function() {
+    clientsCache = clientsCache.filter(function(x){return x.id!==leadId;});
+    delete clientsPaymentsCache[leadId];
+    closeClientDetail();
+    updateClientsCount();
+    renderClientsGrid();
+    toast('🗑 Lead supprimé');
+  }).catch(function(e){ toast('❌ ' + e.message, false); });
 };
 
 window.markAsClient = function(leadId) {
