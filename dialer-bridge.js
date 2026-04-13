@@ -66,6 +66,7 @@
       .dbr-call-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16,185,129,0.35); }
       .dbr-call-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       .crm-card:has(> .dbr-checkbox) { padding-left: 40px; }
+      td:has(> .dbr-checkbox) { position: relative !important; padding-left: 42px !important; }
       .ld-card:has(> .dbr-checkbox) { position: relative; }
       .ld-card:has(> .dbr-checkbox) .ld-card-head { padding-left: 44px; }
       .dbr-checkbox {
@@ -277,7 +278,12 @@
         callLead(leadId, phone, name);
       });
 
-      const target = insertTarget ? card.querySelector(insertTarget) : card;
+      let target = insertTarget ? card.querySelector(insertTarget) : card;
+      // TR: can't append directly to row — use last TD
+      if (!insertTarget && card.tagName === 'TR') {
+        const tds = card.querySelectorAll('td');
+        if (tds.length) target = tds[tds.length - 1];
+      }
       target.appendChild(btn);
     });
   }
@@ -323,7 +329,11 @@
         updateCheckboxesDisabled();
       });
 
-      card.insertBefore(cb, card.firstChild);
+      // TR = table row → insert into first TD (inserting directly into TR is invalid HTML)
+      const cbTarget = card.tagName === 'TR' ? card.querySelector('td') : card;
+      if (!cbTarget) return;
+      if (card.tagName === 'TR') cbTarget.style.position = 'relative';
+      cbTarget.insertBefore(cb, cbTarget.firstChild);
     });
 
     ensureActionBar();
