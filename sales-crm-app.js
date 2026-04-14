@@ -2624,6 +2624,12 @@ function openClientDetail(leadId) {
     var delBtn = e.target.closest('.cl-delete-btn');
     if (delBtn) window.deleteClientLead(delBtn.dataset.delete);
   });
+
+  // Auto-sync GC si le client est déjà lié (affiche Image 2 sans cliquer Resync)
+  var hasGcLink = c.gcCustomerId || pays.some(function(p){return p.gcMandateId;});
+  if (hasGcLink && c.email) {
+    setTimeout(function() { window.gcLookupClient(leadId, c.email); }, 200);
+  }
 }
 
 function closeClientDetail() {
