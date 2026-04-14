@@ -152,10 +152,9 @@ module.exports = async (req, res) => {
     const activeMandate = mandates.find(m => m.status === 'active') || mandates[0];
     const activeSub = result.subscriptions.find(s => s.status === 'active') || result.subscriptions[0];
 
-    // Chercher un payment existant pour ce lead
+    // Chercher TOUS les payments existants pour ce lead (sans limit — pour purger les doublons)
     const existingPays = await db.collection('payments')
-      .where('leadId', '==', leadId)
-      .limit(1).get();
+      .where('leadId', '==', leadId).get();
 
     const paidRaw = result.payments.filter(p =>
       p.status === 'paid_out' || p.status === 'confirmed'
@@ -185,9 +184,14 @@ module.exports = async (req, res) => {
     };
 
     if (!existingPays.empty) {
-      // Mettre à jour le payment existant
+      // Mettre à jour le premier doc et supprimer les doublons
       await existingPays.docs[0].ref.update(gcFields);
       result.paymentDocId = existingPays.docs[0].id;
+      // Purge des doublons (docs 1, 2, …)
+      for (let i = 1; i < existingPays.docs.length; i++) {
+        await existingPays.docs[i].ref.delete();
+        console.log('[gocardless-lookup] doublon supprimé:', existingPays.docs[i].id, 'leadId:', leadId);
+      }
     } else {
       // Créer un nouveau document payment lié à ce lead
       const leadSnap = await db.collection('leads').doc(leadId).get();
