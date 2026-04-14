@@ -2520,28 +2520,67 @@ function openClientDetail(leadId) {
   // 2 colonnes info
   h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">';
 
-  // Colonne gauche — infos contact
+  // ── Colonne gauche — édition inline ──
+  var IS = 'width:100%;padding:4px 6px;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);color:var(--text);font-size:12px;font-family:var(--font-b);outline:none;box-sizing:border-box';
+  var mkRow = function(emoji, label, inputHtml) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)">' +
+      '<span style="font-size:13px;flex-shrink:0;width:18px;text-align:center">' + emoji + '</span>' +
+      '<span style="font-size:10px;color:var(--muted);min-width:100px;flex-shrink:0">' + label + '</span>' +
+      '<div style="flex:1;min-width:0">' + inputHtml + '</div></div>';
+  };
+  var inp = function(field, val, type) {
+    return '<input type="' + (type||'text') + '" value="' + esc(val||'') + '" onchange="saveClientField(\'' + leadId + '\',\'' + field + '\',this.value)" style="' + IS + (type==='date'?';color-scheme:dark':'') + '">';
+  };
+  var sel = function(field, val, opts) {
+    return '<select onchange="saveClientField(\'' + leadId + '\',\'' + field + '\',this.value)" style="' + IS + ';cursor:pointer;appearance:none">' +
+      '<option value="">—</option>' +
+      opts.map(function(o){ return '<option value="'+esc(o)+'"'+(val===o?' selected':'')+'>'+esc(o)+'</option>'; }).join('') +
+    '</select>';
+  };
+  var txa = function(field, val) {
+    return '<textarea onblur="saveClientField(\'' + leadId + '\',\'' + field + '\',this.value)" rows="2" style="' + IS + ';resize:none">' + esc(val||'') + '</textarea>';
+  };
+
   h += '<div>';
-  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">Informations</div>';
-  var infoFields = [
-    ['Nom', c.nom], ['Email', c.email], ['Téléphone', c.telephone],
-    ['Entreprise', c.societe], ['Secteur', c.secteur], ['CA actuel', c.ca], ['Défi', c.defi],
-    ['Setter', c.setting || c.assignedTo], ['Closeur', c.closeurName || c.closeurSlug],
-    ['Source', c.utm || c.source], ['Client depuis', fmtDate(c.clientSince)],
-    ['Accompagnement', c.accompagnementStart ? (c.accompagnementStart + ' → ' + (c.accompagnementEnd || '?')) : null],
-    ['Formule', c.formule], ['Plateforme paiement', c.paiementPlateforme],
-    ['Commissions', c.commissions], ['Coaching 72H', c.coaching72],
-    ['Coach 72H', c.coach], ['Goodies', c.goodies],
-    ['Date envoi goodies', c.dateEnvoiGoodies], ['Rétractation', c.retractation],
-    ['Prospect webinaire', c.prospectWebinaire], ['Date webinaire', c.dateWebinaire],
-    ['Présent', c.present], ['Tags webi', Array.isArray(c.tagsWebi) ? c.tagsWebi.join(', ') : c.tagsWebi]
-  ];
-  infoFields.forEach(function(f) {
-    if (!f[1]) return;
-    h += '<div style="display:flex;gap:6px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)">';
-    h += '<span style="font-size:11px;color:var(--muted);min-width:90px;flex-shrink:0">' + f[0] + '</span>';
-    h += '<span style="font-size:12px;font-weight:600">' + esc(String(f[1])) + '</span></div>';
-  });
+
+  // Section INFORMATIONS
+  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border)">👤 Informations</div>';
+  h += mkRow('👤','Nom',        inp('nom',       c.nom));
+  h += mkRow('📧','Email',      inp('email',     c.email, 'email'));
+  h += mkRow('📞','Téléphone',  inp('telephone', c.telephone, 'tel'));
+  h += mkRow('🏢','Entreprise', inp('societe',   c.societe));
+  h += mkRow('🏭','Secteur',    inp('secteur',   c.secteur));
+  h += mkRow('💰','CA actuel',  inp('ca',        c.ca));
+  h += mkRow('🎯','Défi',       txa('defi',      c.defi));
+  h += mkRow('⏰','Disponibilité', inp('disponibilite', c.disponibilite));
+  h += mkRow('🔗','Source',     inp('source',    c.utm || c.source));
+  h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)">' +
+    '<span style="font-size:13px;flex-shrink:0;width:18px;text-align:center">📅</span>' +
+    '<span style="font-size:10px;color:var(--muted);min-width:100px;flex-shrink:0">Client depuis</span>' +
+    '<span style="font-size:12px;font-weight:600;color:var(--text)">' + fmtDate(c.clientSince) + '</span></div>';
+
+  // Section PROGRAMME & CONTRAT
+  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)">📋 Programme & Contrat</div>';
+  h += mkRow('🎓','Formule',          inp('formule',          c.formule));
+  h += mkRow('📅','Début accomp.',    inp('accompagnementStart', c.accompagnementStart, 'date'));
+  h += mkRow('📅','Fin accomp.',      inp('accompagnementEnd',   c.accompagnementEnd,   'date'));
+  h += mkRow('↩️','Rétractation',     sel('retractation',   c.retractation,   ['Actif','RENONCÉ','Procédure']));
+  h += mkRow('💳','Plateforme',       sel('paiementPlateforme', c.paiementPlateforme, ['GOCARDLESS','Stripe','Virement','Chèque','Autre']));
+  h += mkRow('💸','Commissions',      sel('commissions',     c.commissions,     ['PAYÉ','En attente','Non']));
+  h += mkRow('🏋️','Coaching 72H',    sel('coaching72',      c.coaching72,      ['FAIT','En cours','Planifié','Non']));
+  h += mkRow('👨‍🏫','Coach 72H',      inp('coach',           c.coach));
+  h += mkRow('🤝','Setter',           inp('setting',         c.setting || c.assignedTo));
+  h += mkRow('🎯','Closeur',          inp('closeurName',     c.closeurName || c.closeurSlug));
+  h += mkRow('🎁','Goodies',          sel('goodies',         c.goodies,         ['Envoyé','En attente','Non']));
+  h += mkRow('📦','Date goodies',     inp('dateEnvoiGoodies', c.dateEnvoiGoodies, 'date'));
+
+  // Section WEBINAIRE
+  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border)">🎙️ Webinaire</div>';
+  h += mkRow('🎙️','Prospect webi',   sel('prospectWebinaire', c.prospectWebinaire, ['Oui','Non']));
+  h += mkRow('📅','Date webinaire',   inp('dateWebinaire',  c.dateWebinaire, 'date'));
+  h += mkRow('✅','Présent',          sel('present',         c.present,         ['Oui','Non','Absent']));
+  h += mkRow('🏷️','Tags webi',       inp('tagsWebi', Array.isArray(c.tagsWebi) ? c.tagsWebi.join(', ') : (c.tagsWebi||'')));
+  h += mkRow('🚫','Rejet mails',      inp('rejetMails',      c.rejetMails));
   h += '</div>';
 
   // Colonne droite — contrat + paiements + programme
@@ -2574,14 +2613,6 @@ function openClientDetail(leadId) {
     gcSection += '</div></div>';
   }
   h += gcSection;
-
-  // Accompagnement dates éditable
-  h += '<div style="margin-top:10px">';
-  h += '<div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:6px">📅 Accompagnement</div>';
-  h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
-  h += '<div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Début</div><input type="date" id="cliStart_' + leadId + '" value="' + (c.accompagnementStart || '') + '" onchange="saveClientField(\'' + leadId + '\',\'accompagnementStart\',this.value)" style="width:100%;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;box-sizing:border-box"/></div>';
-  h += '<div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Fin</div><input type="date" id="cliEnd_' + leadId + '" value="' + (c.accompagnementEnd || '') + '" onchange="saveClientField(\'' + leadId + '\',\'accompagnementEnd\',this.value)" style="width:100%;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;box-sizing:border-box"/></div>';
-  h += '</div></div>';
   h += '</div>';
   h += '</div>';
 
