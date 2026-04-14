@@ -157,9 +157,12 @@ module.exports = async (req, res) => {
       .where('leadId', '==', leadId)
       .limit(1).get();
 
-    const paidPayments = result.payments.filter(p =>
+    const paidRaw = result.payments.filter(p =>
       p.status === 'paid_out' || p.status === 'confirmed'
     );
+    // Déduplique par id (protection contre double-lookup)
+    const seenPay = new Set();
+    const paidPayments = paidRaw.filter(p => { if (seenPay.has(p.id)) return false; seenPay.add(p.id); return true; });
     const paidAmount = paidPayments.reduce((s, p) => s + p.amount, 0);
 
     const gcFields = {

@@ -115,7 +115,10 @@ module.exports = async (req, res) => {
     }
 
     // Sync Firestore avec les données live
-    const paidPayments = result.payments.filter(p => p.status === 'paid_out' || p.status === 'confirmed');
+    const paidRaw = result.payments.filter(p => p.status === 'paid_out' || p.status === 'confirmed');
+    // Déduplique par gcPaymentId (protection contre double-sync)
+    const seenIds = new Set();
+    const paidPayments = paidRaw.filter(p => { if (seenIds.has(p.id)) return false; seenIds.add(p.id); return true; });
     const paidAmount = paidPayments.reduce((s, p) => s + p.amount, 0);
     const updateData = {
       paidCount: paidPayments.length,
