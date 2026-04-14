@@ -431,7 +431,7 @@ async function openDetail(id) {
         <div class="pay-info-item"><div class="pay-info-item-l">Closeur</div><div class="pay-info-item-v">${esc(p.closerName||p.closerSlug||'—')}</div></div>
         ${p.description?`<div class="pay-info-item" style="grid-column:1/-1"><div class="pay-info-item-l">Description</div><div class="pay-info-item-v">${esc(p.description)}</div></div>`:''}
         ${p.gcMandateId?`<div class="pay-info-item"><div class="pay-info-item-l">Mandat GC</div><div class="pay-info-item-v" style="font-size:11px;font-family:monospace">${esc(p.gcMandateId)}</div></div>`:''}
-      </div>
+        ${p.gcLastSyncAt ? `<div class="pay-info-item" style="grid-column:1/-1"><div class="pay-info-item-l">Dernière synchro GC</div><div class="pay-info-item-v" style="font-size:11px;color:var(--muted)">🔄 ${p.gcLastSyncAt.toDate ? p.gcLastSyncAt.toDate().toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'}</div></div>` : ''}
     </div>
 
     ${linkSection ? `<div class="pay-section"><div class="pay-section-title">Lien mandat</div>${linkSection}</div>` : ''}

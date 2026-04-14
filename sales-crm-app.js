@@ -2153,6 +2153,23 @@ function closeClientsPanel() {
 
 /* ── Charge les leads clients ── */
 function loadClientsData() {
+  // Charger la date de dernière synchro automatique GC
+  db.collection('_meta').doc('gc_sync').get().then(function(gsnap) {
+    var el = document.getElementById('gcAutoSyncStatus');
+    if (!el) return;
+    if (gsnap.exists) {
+      var d = gsnap.data();
+      var ts = d.lastSyncAt && d.lastSyncAt.toDate ? d.lastSyncAt.toDate() : null;
+      var label = ts ? ts.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+      el.innerHTML = '🔄 Synchro auto GC : <strong>' + label + '</strong>' +
+        (d.errors ? ' · <span style="color:#ef4444">⚠ ' + d.errors + ' erreur(s)</span>' : '');
+      el.style.display = '';
+    } else {
+      el.innerHTML = '🔄 Synchro auto GC : <em style="color:var(--muted)">jamais effectuée</em>';
+      el.style.display = '';
+    }
+  }).catch(function() {});
+
   db.collection('leads').where('isClient', '==', true).orderBy('clientSince', 'desc').get().then(function(sn) {
     clientsCache = [];
     sn.forEach(function(d) { clientsCache.push({ id: d.id, ...d.data() }); });
