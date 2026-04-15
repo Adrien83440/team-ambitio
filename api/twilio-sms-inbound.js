@@ -1,37 +1,31 @@
 // ============================================================================
-// api/twilio-sms-inbound.js
+// api/twilio-sms-inbound.js  (v2 — direct write, no Cloud Function dependency)
 // ----------------------------------------------------------------------------
 // Webhook Twilio pour les SMS entrants (réponses des prospects).
 //
 // URL  : POST https://team.alteore.com/api/twilio-sms-inbound
-//        (à configurer dans Twilio Console → Phone Numbers → ton numéro →
-//         Messaging → A message comes in → Webhook POST)
-// Auth : Signature Twilio (X-Twilio-Signature) — pas d'auth Firebase
+//        (configurée dans Twilio Console → numéro → Messaging → Webhook POST)
+// Auth : Signature Twilio (X-Twilio-Signature)
 //
-// Twilio POST ce webhook avec un body application/x-www-form-urlencoded
-// contenant notamment :
-//   - MessageSid      → ID unique du SMS entrant (SMxxx)
-//   - From            → numéro E.164 de l'expéditeur (le prospect)
-//   - To              → notre numéro Twilio (celui configuré dans Console)
-//   - Body            → contenu texte du SMS
-//   - NumMedia        → "0" en général (on ignore les MMS pour l'instant)
+// Différence avec la v1 :
+// - v1 poussait dans webhook_inbox et déléguait à onWebhookInbox (Cloud Function)
+// - v2 écrit DIRECTEMENT dans leads.communications[] depuis Vercel
+//
+// Pourquoi v2 :
+// - onWebhookInbox déployée en prod ne correspond pas au code source repo
+//   (versions multiples dans /home/contact/Functions/, fonction "fantôme"
+//   sans source identifiée). Résultat : "Lead not found" même quand la query
+//   marche en local.
+// - Cohérence avec twilio-sms-send.js qui écrit aussi en direct.
+// - Un seul code path SMS = un seul endroit à debugger.
 //
 // Flow :
 // 1. Vérifier signature Twilio (sinon 403)
-// 2. Auto opt-out : si Body == "STOP" / "STOPALL" / "UNSUBSCRIBE", marquer
-//    le lead smsOptedOut:true et répondre avec un ack Twilio (pas de redispatch
-//    parce qu'on veut arrêter toute comm SMS, pas seulement filtrer)
-// 3. Pousser un doc dans webhook_inbox avec action='lead_activity' + type='sms'
-//    + direction='inbound'. Le handler existant onWebhookInbox (Functions/index.js
-//    ligne ~400) sait déjà gérer ce pattern et écrit dans
-//    leads.communications[] automatiquement.
-// 4. Retourner un TwiML vide (200 OK) pour que Twilio marque le webhook
-//    comme consommé (pas de retry).
-//
-// Pourquoi passer par webhook_inbox plutôt qu'écrire direct dans leads[] ?
-// → Cohérence avec Ringover (même chemin = même résultat = un seul bug à
-//   debugger si ça casse). Et on bénéficie de la logique findLead() qui
-//   gère toutes les variantes de numéros FR.
+// 2. Auto opt-out si Body == STOP/STOPALL/UNSUBSCRIBE/etc
+// 3. findBestLeadByPhone : variants exhaustifs + dédoublonnage par activité
+// 4. Si trouvé → écrit dans leads/{id}.communications[] + timeline_history[]
+// 5. Si non trouvé → log côté Vercel, ack Twilio
+// 6. Retour TwiML vide (200 OK) pour ack Twilio
 // ============================================================================
 
 const { db, admin } = require('./_firebaseAdmin');
@@ -39,26 +33,69 @@ const { requireValidSignature } = require('./_twilioSignature');
 const twilio = require('twilio');
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
-// Mots-clés opt-out standard (case-insensitive).
-// Twilio gère déjà l'opt-out côté carrier pour certains mots-clés US,
-// mais en FR/EU on gère côté app pour être sûr.
 const OPT_OUT_KEYWORDS = new Set([
   'stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit',
 ]);
 
-// Réponse TwiML vide (ack Twilio sans répondre au prospect)
 function respondEmpty(res) {
   const twiml = new MessagingResponse();
   res.setHeader('Content-Type', 'text/xml');
   res.status(200).send(twiml.toString());
 }
 
-// Réponse TwiML avec un message automatique (pour l'opt-out confirmation)
 function respondWithMessage(res, message) {
   const twiml = new MessagingResponse();
   twiml.message(message);
   res.setHeader('Content-Type', 'text/xml');
   res.status(200).send(twiml.toString());
+}
+
+// ─── Helper : variantes d'un numéro FR pour lookup Firestore ────────────────
+function phoneVariants(raw) {
+  if (!raw) return [];
+  const cleaned = String(raw).replace(/[\s\-().]/g, '');
+  const variants = new Set();
+  variants.add(cleaned);
+  if (cleaned.startsWith('+33')) {
+    variants.add('0' + cleaned.slice(3));
+    variants.add('33' + cleaned.slice(3));
+  }
+  if (cleaned.startsWith('33') && !cleaned.startsWith('+') && cleaned.length >= 11) {
+    variants.add('0' + cleaned.slice(2));
+    variants.add('+' + cleaned);
+  }
+  if (cleaned.startsWith('0') && cleaned.length === 10) {
+    variants.add('+33' + cleaned.slice(1));
+    variants.add('33' + cleaned.slice(1));
+  }
+  return Array.from(variants);
+}
+
+// ─── Helper : trouve le meilleur lead pour un téléphone ─────────────────────
+// Si plusieurs leads matchent (doublons), priorise celui avec le plus de
+// communications, à défaut celui avec lastContactAt le plus récent.
+async function findBestLeadByPhone(phone) {
+  const variants = phoneVariants(phone);
+  const allMatches = [];
+  for (const v of variants) {
+    const snap = await db.collection('leads').where('telephone', '==', v).get();
+    snap.forEach(d => allMatches.push({ id: d.id, data: d.data() }));
+  }
+  const uniq = {};
+  allMatches.forEach(m => { uniq[m.id] = m; });
+  const candidates = Object.values(uniq);
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  candidates.sort((a, b) => {
+    const aComms = (a.data.communications || []).length;
+    const bComms = (b.data.communications || []).length;
+    if (bComms !== aComms) return bComms - aComms;
+    const aTs = a.data.lastContactAt && a.data.lastContactAt.toMillis ? a.data.lastContactAt.toMillis() : 0;
+    const bTs = b.data.lastContactAt && b.data.lastContactAt.toMillis ? b.data.lastContactAt.toMillis() : 0;
+    return bTs - aTs;
+  });
+  console.log('[twilio-sms-inbound] ' + candidates.length + ' leads match phone ' + phone + ', picking ' + candidates[0].id + ' (' + (candidates[0].data.communications || []).length + ' comms)');
+  return candidates[0];
 }
 
 module.exports = async (req, res) => {
@@ -67,7 +104,6 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // ─── Vérification signature Twilio ───────────────────────────────────────
   if (!requireValidSignature(req, res)) return;
 
   const body = req.body || {};
@@ -77,122 +113,72 @@ module.exports = async (req, res) => {
   const smsContent = body.Body || '';
 
   if (!fromNumber || !smsContent) {
-    // Twilio devrait toujours fournir ces champs — si absent, ack quand même
-    // pour éviter les retries, mais log pour investigation.
     console.warn('[twilio-sms-inbound] Missing From or Body:', body);
     return respondEmpty(res);
   }
 
   try {
-    // ─── Auto opt-out ───────────────────────────────────────────────────────
     const trimmed = smsContent.trim().toLowerCase();
     if (OPT_OUT_KEYWORDS.has(trimmed)) {
-      console.log(`[twilio-sms-inbound] Opt-out from ${fromNumber}`);
-
-      // Lookup le lead par téléphone pour marquer smsOptedOut
-      const optoutVariants = phoneVariants(fromNumber);
-      for (const v of optoutVariants) {
-        const snap = await db.collection('leads')
-          .where('telephone', '==', v).limit(1).get();
-        if (!snap.empty) {
-          await snap.docs[0].ref.update({
-            smsOptedOut: true,
-            smsOptedOutAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          break;
-        }
+      console.log('[twilio-sms-inbound] Opt-out from ' + fromNumber);
+      const found = await findBestLeadByPhone(fromNumber);
+      if (found) {
+        await db.collection('leads').doc(found.id).update({
+          smsOptedOut: true,
+          smsOptedOutAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
       }
-
-      // Confirmation automatique (obligatoire en FR/UE)
       return respondWithMessage(
         res,
         'Vous avez été désabonné. Vous ne recevrez plus de SMS de notre part.'
       );
     }
 
-    // ─── Dispatch normal via webhook_inbox ─────────────────────────────────
-    // On utilise le pattern existant "lead_activity" que onWebhookInbox
-    // (Functions/index.js) sait déjà traiter. Il fait findLead() sur
-    // variants + écrit dans leads.communications[] + timeline_history[].
-    //
-    // Pour que onWebhookInbox reconnaisse et traite, il faut :
-    //   - apiKey valide
-    //   - action === 'lead_activity'
-    //   - data.phone (le numéro du prospect → utilisé pour findLead)
-    //   - data.type === 'sms'
-    //   - data.direction === 'inbound'
-    //   - data.content (le texte du SMS)
-    //
-    // Structure attendue de _config/webhook_keys :
-    //   { keys: ["clé1", "clé2", ...] }    ← ARRAY de strings
-    // Le validator validateApiKey() dans Functions/index.js fait
-    //   (doc.data().keys || []).includes(key)
-    // donc n'importe quelle clé du tableau marche pour signer notre push.
-    // On prend keys[0] (la première de la liste).
-    let apiKey = null;
-    try {
-      const wkSnap = await db.collection('_config').doc('webhook_keys').get();
-      if (wkSnap.exists) {
-        const data = wkSnap.data() || {};
-        if (Array.isArray(data.keys) && data.keys.length > 0) {
-          apiKey = data.keys[0];
-        }
-      }
-    } catch (e) {
-      console.warn('[twilio-sms-inbound] Cannot read webhook_keys:', e.message);
-    }
-
-    if (!apiKey) {
-      console.error(
-        '[twilio-sms-inbound] No usable apiKey in _config/webhook_keys.keys[] — SMS dropped:',
-        { messageSid, fromNumber, toNumber, preview: smsContent.substring(0, 60) }
+    const found = await findBestLeadByPhone(fromNumber);
+    if (!found) {
+      console.warn(
+        '[twilio-sms-inbound] No lead found for ' + fromNumber + ' — SMS not stored:',
+        { messageSid: messageSid, preview: smsContent.substring(0, 80) }
       );
       return respondEmpty(res);
     }
 
-    await db.collection('webhook_inbox').add({
-      apiKey,
-      action: 'lead_activity',
-      data: {
-        type: 'sms',
-        direction: 'inbound',
-        content: smsContent,
-        phone: fromNumber, // findLead() sait normaliser +33 / 0 / 33
-        source: 'twilio-sms',
-        date: new Date().toISOString(),
-        providerMessageSid: messageSid,
-        fromNumber,
-        toNumber,
-      },
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    const nowIso = new Date().toISOString();
+    const commEntry = {
+      type: 'sms',
+      direction: 'inbound',
+      content: smsContent,
+      source: 'twilio-sms',
+      date: nowIso,
+      createdAt: nowIso,
+      providerMessageSid: messageSid,
+      fromNumber: fromNumber,
+      toNumber: toNumber,
+    };
+
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const tlDate = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    const preview = smsContent.substring(0, 100);
+    const timelineEntry = {
+      text: '💬 SMS entrant (twilio-sms) — ' + preview,
+      date: tlDate,
+      color: '#60a5fa',
+    };
+
+    await db.collection('leads').doc(found.id).update({
+      communications: admin.firestore.FieldValue.arrayUnion(commEntry),
+      timeline_history: admin.firestore.FieldValue.arrayUnion(timelineEntry),
+      lastContactAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastContactType: 'sms',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    console.log(`[twilio-sms-inbound] Queued: ${messageSid} from ${fromNumber}`);
-
-    // Ack Twilio. Pas de réponse automatique — les closers répondront
-    // manuellement depuis sales-contact.html.
+    console.log('[twilio-sms-inbound] ✅ Stored on lead ' + found.id + ' (' + (found.data.nom || 'sans nom') + ')');
     return respondEmpty(res);
   } catch (err) {
     console.error('[twilio-sms-inbound] Error:', err);
-    // On ack quand même pour éviter les retries infinis Twilio
     return respondEmpty(res);
   }
 };
-
-// ─── Helper : variantes d'un numéro FR pour lookup Firestore ────────────────
-// Duplique la logique de findLead() dans Functions/index.js. À utiliser ici
-// uniquement pour le lookup opt-out (lookup normal passe par webhook_inbox).
-function phoneVariants(raw) {
-  if (!raw) return [];
-  const cleaned = String(raw).replace(/\s+/g, '');
-  const variants = new Set();
-  variants.add(cleaned);
-  if (cleaned.startsWith('+33')) variants.add('0' + cleaned.slice(3));
-  if (cleaned.startsWith('33') && cleaned.length >= 11) variants.add('0' + cleaned.slice(2));
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
-    variants.add('+33' + cleaned.slice(1));
-    variants.add('33' + cleaned.slice(1));
-  }
-  return Array.from(variants);
-}
