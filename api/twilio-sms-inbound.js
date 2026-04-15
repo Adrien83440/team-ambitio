@@ -124,36 +124,28 @@ module.exports = async (req, res) => {
     //   - data.direction === 'inbound'
     //   - data.content (le texte du SMS)
     //
-    // Structure réelle de _config/webhook_keys observée :
-    //   {
-    //     default: "wh_xxx",      ← clé racine, utilisée par Make/Ringover
-    //     keys: { default: "...", make: "..." }   ← sous-map (legacy?)
-    //   }
-    // On lit data.default en priorité (celle qui marche en prod), avec
-    // fallback sur data.keys.default ou data.keys.make si jamais la clé
-    // racine est absente.
+    // Structure attendue de _config/webhook_keys :
+    //   { keys: ["clé1", "clé2", ...] }    ← ARRAY de strings
+    // Le validator validateApiKey() dans Functions/index.js fait
+    //   (doc.data().keys || []).includes(key)
+    // donc n'importe quelle clé du tableau marche pour signer notre push.
+    // On prend keys[0] (la première de la liste).
     let apiKey = null;
     try {
       const wkSnap = await db.collection('_config').doc('webhook_keys').get();
       if (wkSnap.exists) {
         const data = wkSnap.data() || {};
-        const keysMap = (data.keys && typeof data.keys === 'object') ? data.keys : {};
-        apiKey = data.default
-          || keysMap.default
-          || keysMap.make
-          || keysMap['twilio-sms']
-          || null;
+        if (Array.isArray(data.keys) && data.keys.length > 0) {
+          apiKey = data.keys[0];
+        }
       }
     } catch (e) {
       console.warn('[twilio-sms-inbound] Cannot read webhook_keys:', e.message);
     }
 
     if (!apiKey) {
-      // Si aucune clé n'est définie, on log et on ack pour ne pas perturber
-      // Twilio (sinon il va retry). Le SMS est "perdu" côté CRM mais on a
-      // au moins le log côté Vercel pour investigation manuelle.
       console.error(
-        '[twilio-sms-inbound] No usable apiKey in _config/webhook_keys — SMS dropped:',
+        '[twilio-sms-inbound] No usable apiKey in _config/webhook_keys.keys[] — SMS dropped:',
         { messageSid, fromNumber, toNumber, preview: smsContent.substring(0, 60) }
       );
       return respondEmpty(res);
