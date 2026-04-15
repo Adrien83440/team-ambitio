@@ -270,6 +270,155 @@
 <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:13px;font-weight:700;color:rgba(255,255,255,.48);margin:20px 0 10px;text-transform:uppercase;letter-spacing:.5px">Calendrier & productivité</div>
 <div class="sg" id="intCal"></div>
 
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SLOT TOGGLE SETTINGS — Configuration du système ouvrir/fermer slots    -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700;margin:32px 0 16px">Slots ouverts (compensation no-show)</div>
+
+<style>
+.slotcfg-card { background: #1a1a28; border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px 20px; color: #f5f5f5; }
+.slotcfg-card h3 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 15px; font-weight: 700; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+.slotcfg-card .slotcfg-sub { font-size: 12px; color: rgba(255,255,255,0.55); margin-bottom: 14px; }
+.slotcfg-row { margin-bottom: 14px; }
+.slotcfg-label { display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; }
+.slotcfg-input, .slotcfg-textarea { width: 100%; background: #12121d; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 9px 11px; color: #fff; font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s; box-sizing: border-box; }
+.slotcfg-input:focus, .slotcfg-textarea:focus { border-color: rgba(239,68,68,0.5); }
+.slotcfg-textarea { resize: vertical; min-height: 70px; line-height: 1.5; font-family: inherit; }
+.slotcfg-help { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px; line-height: 1.4; }
+.slotcfg-vars { display: inline-block; background: rgba(96,165,250,0.12); color: #60a5fa; padding: 1px 6px; border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 10px; margin: 0 2px; }
+.slotcfg-actions { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.slotcfg-btn { background: linear-gradient(135deg, #b91c1c, #ef4444); color: #fff; border: none; padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: transform 0.1s; }
+.slotcfg-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.slotcfg-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.slotcfg-status { font-size: 12px; color: rgba(255,255,255,0.5); }
+.slotcfg-status.ok { color: #4ade80; }
+.slotcfg-status.error { color: #ef4444; }
+</style>
+
+<div class="slotcfg-card" id="slotcfgCard">
+  <h3>🟠 Configuration slots ouverts</h3>
+  <div class="slotcfg-sub">Réglages du système ouvrir/fermer pour les RDV (compensation no-show)</div>
+
+  <div class="slotcfg-row">
+    <label class="slotcfg-label">Max bookings simultanés sur un slot ouvert</label>
+    <input type="number" class="slotcfg-input" id="slotcfgMax" min="1" max="10" value="2" style="max-width: 120px">
+    <div class="slotcfg-help">Quand un setter ouvre un slot, jusqu'à N prospects peuvent réserver le même créneau (le N° 1 = présumé no-show, les autres = backup).</div>
+  </div>
+
+  <div class="slotcfg-row">
+    <label class="slotcfg-label">Compte Gmail pour l'envoi des emails de reconfirmation</label>
+    <select class="slotcfg-input" id="slotcfgEmailAcc" style="max-width: 280px">
+      <option value="strategie">strategie@adrienemily.com</option>
+      <option value="coaching">coaching@adrienemily.com</option>
+      <option value="contact">contact@adrienemily.com</option>
+    </select>
+    <div class="slotcfg-help">Le compte doit être connecté via la page <em>Connexion Email</em>.</div>
+  </div>
+
+  <div class="slotcfg-row">
+    <label class="slotcfg-label">Template SMS de reconfirmation</label>
+    <textarea class="slotcfg-textarea" id="slotcfgSms"></textarea>
+    <div class="slotcfg-help">
+      Variables disponibles :
+      <span class="slotcfg-vars">{{prospectName}}</span>
+      <span class="slotcfg-vars">{{date}}</span>
+      <span class="slotcfg-vars">{{time}}</span>
+    </div>
+  </div>
+
+  <div class="slotcfg-row">
+    <label class="slotcfg-label">Sujet email</label>
+    <input type="text" class="slotcfg-input" id="slotcfgEmailSubj">
+  </div>
+
+  <div class="slotcfg-row">
+    <label class="slotcfg-label">Corps email (HTML autorisé)</label>
+    <textarea class="slotcfg-textarea" id="slotcfgEmailHtml" style="min-height: 130px"></textarea>
+    <div class="slotcfg-help">Mêmes variables que pour le SMS. Les balises HTML simples sont supportées (&lt;p&gt;, &lt;strong&gt;, &lt;br&gt;, etc.).</div>
+  </div>
+
+  <div class="slotcfg-actions">
+    <button class="slotcfg-btn" id="slotcfgSaveBtn">💾 Enregistrer</button>
+    <span class="slotcfg-status" id="slotcfgStatus"></span>
+  </div>
+</div>
+
+<script>
+(function() {
+  var DEFAULTS = {
+    maxBookingsPerOpenSlot: 2,
+    emailAccount: 'strategie',
+    smsTemplate: 'Bonjour {{prospectName}}, nous confirmons votre RDV du {{date}} à {{time}}. Merci de répondre OUI pour confirmer votre présence, sans réponse de votre part nous risquons d\'attribuer le créneau à un autre client. À très vite !',
+    emailSubject: 'Confirmation de votre RDV du {{date}} à {{time}}',
+    emailHtml: '<p>Bonjour {{prospectName}},</p><p>Nous souhaitons vous confirmer votre rendez-vous prévu le <strong>{{date}} à {{time}}</strong>.</p><p>Merci de nous confirmer votre présence en répondant à cet email ou par SMS. Sans réponse de votre part, nous risquons d\'attribuer le créneau à un autre client.</p><p>À très vite,<br>L\'équipe Ambitio</p>',
+  };
+
+  function setStatus(msg, type) {
+    var el = document.getElementById('slotcfgStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'slotcfg-status' + (type ? ' ' + type : '');
+  }
+
+  function fillForm(d) {
+    document.getElementById('slotcfgMax').value = d.maxBookingsPerOpenSlot != null ? d.maxBookingsPerOpenSlot : DEFAULTS.maxBookingsPerOpenSlot;
+    document.getElementById('slotcfgEmailAcc').value = d.emailAccount || DEFAULTS.emailAccount;
+    document.getElementById('slotcfgSms').value = d.smsTemplate || DEFAULTS.smsTemplate;
+    document.getElementById('slotcfgEmailSubj').value = d.emailSubject || DEFAULTS.emailSubject;
+    document.getElementById('slotcfgEmailHtml').value = d.emailHtml || DEFAULTS.emailHtml;
+  }
+
+  function load() {
+    var ref = firebase.firestore().collection('_meta').doc('booking_slot_settings');
+    ref.get().then(function(snap) {
+      fillForm(snap.exists ? snap.data() : DEFAULTS);
+    }).catch(function(e) {
+      console.error('[slotcfg] load error:', e);
+      fillForm(DEFAULTS);
+      setStatus('Lecture impossible : ' + e.message, 'error');
+    });
+  }
+
+  document.getElementById('slotcfgSaveBtn').addEventListener('click', function() {
+    var btn = this;
+    btn.disabled = true;
+    setStatus('Enregistrement…');
+
+    var max = parseInt(document.getElementById('slotcfgMax').value, 10);
+    if (isNaN(max) || max < 1) max = 2;
+    if (max > 10) max = 10;
+
+    var data = {
+      maxBookingsPerOpenSlot: max,
+      emailAccount: document.getElementById('slotcfgEmailAcc').value,
+      smsTemplate: document.getElementById('slotcfgSms').value.trim(),
+      emailSubject: document.getElementById('slotcfgEmailSubj').value.trim(),
+      emailHtml: document.getElementById('slotcfgEmailHtml').value.trim(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+
+    firebase.firestore().collection('_meta').doc('booking_slot_settings').set(data, { merge: true }).then(function() {
+      setStatus('✓ Enregistré', 'ok');
+      setTimeout(function() { setStatus(''); }, 2500);
+    }).catch(function(e) {
+      console.error('[slotcfg] save error:', e);
+      setStatus('Erreur : ' + e.message, 'error');
+    }).finally(function() {
+      btn.disabled = false;
+    });
+  });
+
+  if (firebase.auth) {
+    firebase.auth().onAuthStateChanged(function(u) { if (u) load(); });
+  } else {
+    load();
+  }
+})();
+</script>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- /SLOT TOGGLE SETTINGS                                                    -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+
 </div>
 </div>
 <div class="mo-bg" id="cMo"><div class="mo"><div class="mo-h"><div class="mo-t">Nouveau rendez-vous</div><button class="mo-x" id="moX">✕</button></div><div class="mo-b"><div class="mfr"><div class="mf"><label>Consultation *</label><select id="mT"></select></div><div class="mf"><label>Expert *</label><select id="mP"></select></div></div><div class="mfr"><div class="mf"><label>Date *</label><input type="date" id="mD"/></div><div class="mf"><label>Heure *</label><input type="time" id="mH" value="09:00"/></div></div><div class="mfd">Client</div><div class="lead-search-wrap"><span class="lead-search-icon">🔍</span><input class="lead-search-input" id="mLeadSearch" placeholder="Rechercher un lead (nom, email, tél)…" autocomplete="off"/><div class="lead-search-results" id="mLeadResults"></div></div><div id="mLeadSelected" style="display:none;margin-bottom:12px;padding:8px 12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.15);border-radius:8px;display:none;align-items:center;gap:10px;font-size:12px"><span style="color:#a78bfa;font-weight:700" id="mLeadSelName"></span><span style="color:rgba(255,255,255,.3)">·</span><span style="color:rgba(255,255,255,.4)" id="mLeadSelEmail"></span><span class="lead-sr-clear" id="mLeadClear">✕ Effacer</span></div><div class="mfr"><div class="mf"><label>Prénom *</label><input id="mFn" placeholder="Prénom"/></div><div class="mf"><label>Nom *</label><input id="mLn" placeholder="Nom"/></div></div><div class="mf"><label>Email *</label><input type="email" id="mEm" placeholder="email@exemple.com"/></div><div class="mf"><label>Téléphone</label><input type="tel" id="mPh" placeholder="+33 6…"/></div><div class="mf"><label>Notes</label><textarea id="mNo" placeholder="Contexte…"></textarea></div><button class="mo-s" id="moSub">Créer le rendez-vous</button></div></div></div>
