@@ -1081,6 +1081,16 @@ document.getElementById('ldPeriodFilters').addEventListener('click', function(e)
 });
 
 /* ── Date popover ── */
+// Sort le popover de .ld-header (qui a backdrop-filter, créant un containing
+// block pour position:fixed en WebKit). Ré-appendu à <body> pour que
+// position:fixed se calcule bien par rapport au viewport.
+(function moveDatePopToBody() {
+  var pop = document.getElementById('ldDatePop');
+  if (pop && pop.parentNode !== document.body) {
+    document.body.appendChild(pop);
+  }
+})();
+
 function refreshDateBtnLabel() {
   var btn = document.getElementById('ldDateBtn');
   if (!btn) return;
