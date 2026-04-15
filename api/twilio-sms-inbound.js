@@ -154,6 +154,89 @@ async function createInboxNotification({ type, leadId, leadName, fromNumber, toN
   }
 }
 
+// ─── Helper : détection mot de confirmation ────────────────────────────────
+// Mots qui confirment la présence à un RDV. Détection insensible à la casse,
+// match si le SMS COMMENCE par un de ces mots (évite les faux positifs sur
+// des phrases longues comme "j'ai un oui mais... ").
+const CONFIRM_KEYWORDS = ['oui', 'ok', 'yes', 'confirme', 'confirmé', 'confirmee', 'confirmée', 'present', 'présent', 'présente', 'presente', 'd\'accord', 'daccord', 'parfait', 'présent !', 'ouii', 'ouiii'];
+
+function isConfirmationSms(content) {
+  if (!content) return false;
+  const trimmed = content.trim().toLowerCase().replace(/[!?.,]/g, '');
+  if (trimmed.length === 0 || trimmed.length > 50) return false; // ignore les longs messages
+  return CONFIRM_KEYWORDS.some(kw => trimmed === kw || trimmed.startsWith(kw + ' '));
+}
+
+// ─── Helper : ferme automatiquement le slot ouvert le plus proche ───────────
+// Cherche les bookings du lead avec slotOpen=true ET date >= today,
+// trie par date+time croissant, ferme le 1er (= le plus proche dans le temps).
+// Trace l'événement dans bookings.slotEvents et timeline_history du lead.
+async function autoCloseNextOpenSlot(leadId, leadName) {
+  if (!leadId) return null;
+  try {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const snap = await db.collection('bookings')
+      .where('leadId', '==', leadId)
+      .where('date', '>=', todayStr)
+      .get();
+
+    const candidates = [];
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (d.slotOpen === true && (d.status === 'confirmed' || d.status === 'pending')) {
+        candidates.push({ id: doc.id, data: d });
+      }
+    });
+    if (candidates.length === 0) return null;
+
+    // Tri par date+time croissant
+    candidates.sort((a, b) => {
+      const ka = (a.data.date || '') + 'T' + (a.data.time || '');
+      const kb = (b.data.date || '') + 'T' + (b.data.time || '');
+      return ka < kb ? -1 : (ka > kb ? 1 : 0);
+    });
+
+    const target = candidates[0];
+    const eventEntry = {
+      action: 'close',
+      byUid: 'system',
+      byEmail: 'auto-sms-confirm',
+      at: new Date().toISOString(),
+      reason: 'Auto-close suite à SMS confirmation prospect',
+    };
+
+    await db.collection('bookings').doc(target.id).update({
+      slotOpen: false,
+      slotEvents: admin.firestore.FieldValue.arrayUnion(eventEntry),
+      slotLastToggleAt: admin.firestore.FieldValue.serverTimestamp(),
+      slotLastToggleBy: 'system-auto',
+      slotConfirmedBySms: true,
+      slotConfirmedBySmsAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Trace dans la timeline du lead
+    try {
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const tlDate = pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      await db.collection('leads').doc(leadId).update({
+        timeline_history: admin.firestore.FieldValue.arrayUnion({
+          text: '✅ Présence confirmée par SMS — slot du ' + (target.data.date || '?') + ' à ' + (target.data.time || '?') + ' refermé automatiquement',
+          date: tlDate,
+          color: '#4ade80',
+        }),
+      });
+    } catch (e) { /* non-bloquant */ }
+
+    console.log('[twilio-sms-inbound] ✅ Auto-closed slot ' + target.id + ' for lead ' + leadId + ' (' + leadName + ')');
+    return { bookingId: target.id, date: target.data.date, time: target.data.time };
+  } catch (e) {
+    console.error('[twilio-sms-inbound] autoCloseNextOpenSlot error:', e);
+    return null;
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -248,6 +331,12 @@ module.exports = async (req, res) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // AUTO-CLOSE SLOT si le SMS est une confirmation de présence (vague 2 module booking)
+    let autoClosedSlot = null;
+    if (isConfirmationSms(smsContent)) {
+      autoClosedSlot = await autoCloseNextOpenSlot(found.id, found.data.nom);
+    }
+
     // 6. Notif inbox (post-écriture lead, pour avoir le leadName à jour)
     await createInboxNotification({
       type: 'sms',
@@ -255,14 +344,14 @@ module.exports = async (req, res) => {
       leadName: found.data.nom || found.data.name || found.data.fullName || null,
       fromNumber: fromNumber,
       toNumber: toNumber,
-      preview: smsContent,
+      preview: smsContent + (autoClosedSlot ? ' ✅ [slot auto-fermé : ' + autoClosedSlot.date + ' ' + autoClosedSlot.time + ']' : ''),
       ownerUid: ownerUid,
       ownerSlug: ownerSlug,
       source: 'twilio-sms',
       providerMessageSid: messageSid,
     });
 
-    console.log('[twilio-sms-inbound] ✅ Stored on lead ' + found.id + ' (' + (found.data.nom || 'sans nom') + ') + inbox notif');
+    console.log('[twilio-sms-inbound] ✅ Stored on lead ' + found.id + ' (' + (found.data.nom || 'sans nom') + ') + inbox notif' + (autoClosedSlot ? ' + auto-close slot' : ''));
     return respondEmpty(res);
   } catch (err) {
     console.error('[twilio-sms-inbound] Error:', err);
