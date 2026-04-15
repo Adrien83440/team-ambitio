@@ -855,5 +855,44 @@
       } catch(e) { console.warn('[nav] alteoforms access check:', e); }
     });
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // INBOX WIDGET — auto-injection conditionnelle
+  // Le widget de notifications SMS/appels est chargé uniquement pour les
+  // rôles `sales` et `admin`. Les coachs ne le voient jamais.
+  //
+  // L'injection se fait au plus tôt (au load de nav.js) pour que les notifs
+  // soient présentes même sur les pages coaching consultées par un admin.
+  // Le filtrage final par rôle est fait DANS inbox-widget.js (via
+  // onAuthStateChanged + lookup users/{uid}.role), donc on peut l'injecter
+  // sans risque ici.
+  // ─────────────────────────────────────────────────────────────────────────
+  function injectInboxWidget() {
+    if (window.__inboxWidgetInjected) return;
+    window.__inboxWidgetInjected = true;
+
+    // CSS
+    if (!document.querySelector('link[data-inbox-widget]')) {
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'inbox-widget.css';
+      link.setAttribute('data-inbox-widget', '1');
+      document.head.appendChild(link);
+    }
+    // JS
+    if (!document.querySelector('script[data-inbox-widget]')) {
+      var script = document.createElement('script');
+      script.src = 'inbox-widget.js';
+      script.defer = true;
+      script.setAttribute('data-inbox-widget', '1');
+      document.head.appendChild(script);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', injectInboxWidget);
+  } else {
+    injectInboxWidget();
+  }
 })();
 
