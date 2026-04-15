@@ -108,10 +108,10 @@ html, body {
 /* ── Date range popover ── */
 .ld-date-wrap { position: relative; display: inline-block; flex-shrink: 0; }
 .ld-date-pop {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
-  background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px;
-  padding: 12px; min-width: 240px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  position: fixed; z-index: 9999;
+  background: #14141f; border: 1px solid var(--border2); border-radius: 10px;
+  padding: 12px; width: 240px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
 }
 .ld-date-pop-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .ld-date-pop-row label {
@@ -1107,17 +1107,24 @@ function refreshDateBtnLabel() {
 document.getElementById('ldDateBtn').addEventListener('click', function(e) {
   e.stopPropagation();
   var pop = document.getElementById('ldDatePop');
+  var btn = e.currentTarget;
   var open = pop.style.display !== 'none';
-  pop.style.display = open ? 'none' : 'block';
-  if (!open) {
-    // Pré-remplit avec les valeurs courantes si présentes
-    var toIso = function(d) {
-      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    };
-    document.getElementById('ldDateFrom').value = customDateFrom ? toIso(customDateFrom) : '';
-    document.getElementById('ldDateTo').value = customDateTo ? toIso(customDateTo) : '';
-    setTimeout(function() { document.getElementById('ldDateFrom').focus(); }, 50);
-  }
+  if (open) { pop.style.display = 'none'; return; }
+  // Position fixed sous le bouton, recalée pour ne pas dépasser à droite
+  var rect = btn.getBoundingClientRect();
+  var popW = 240 + 24; // largeur + padding
+  var left = Math.min(rect.left, window.innerWidth - popW - 8);
+  if (left < 8) left = 8;
+  pop.style.left = left + 'px';
+  pop.style.top = (rect.bottom + 6) + 'px';
+  pop.style.display = 'block';
+  // Pré-remplit avec les valeurs courantes si présentes
+  var toIso = function(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  };
+  document.getElementById('ldDateFrom').value = customDateFrom ? toIso(customDateFrom) : '';
+  document.getElementById('ldDateTo').value = customDateTo ? toIso(customDateTo) : '';
+  setTimeout(function() { document.getElementById('ldDateFrom').focus(); }, 50);
 });
 
 document.getElementById('ldDatePop').addEventListener('click', function(e) {
@@ -1128,6 +1135,12 @@ document.addEventListener('click', function(e) {
   var pop = document.getElementById('ldDatePop');
   if (pop && pop.style.display !== 'none') pop.style.display = 'none';
 });
+
+// Ferme le popover si l'utilisateur scrolle (sinon il reste flottant à sa position fixed)
+window.addEventListener('scroll', function() {
+  var pop = document.getElementById('ldDatePop');
+  if (pop && pop.style.display !== 'none') pop.style.display = 'none';
+}, true);
 
 document.getElementById('ldDateApply').addEventListener('click', function() {
   var fromVal = document.getElementById('ldDateFrom').value;
