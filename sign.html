@@ -242,9 +242,12 @@ function renderPage(){
     var nat=page.getViewport({scale:1});
     renderScale=Math.min(maxW/nat.width,1.5);
     var vp=page.getViewport({scale:renderScale});
+    var dpr=window.devicePixelRatio||1;
     var c=document.getElementById('pdfCanvas');
-    c.width=vp.width;c.height=vp.height;
-    page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise.then(function(){renderOverlays();});
+    c.width=vp.width*dpr;c.height=vp.height*dpr;
+    c.style.width=vp.width+'px';c.style.height=vp.height+'px';
+    var ctx=c.getContext('2d');ctx.scale(dpr,dpr);
+    page.render({canvasContext:ctx,viewport:vp}).promise.then(function(){renderOverlays();});
     var l=document.getElementById('fieldsLayer');l.style.width=vp.width+'px';l.style.height=vp.height+'px';
   });
 }
