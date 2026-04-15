@@ -69,6 +69,24 @@ body{overflow:hidden;display:flex;flex-direction:column}
 .fl-desc{width:100%;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:12px;resize:vertical;min-height:50px;outline:none}
 .fl-desc:focus{border-color:var(--red2)}
 .fl-saved{font-size:10px;color:var(--green);text-align:center;padding:4px;opacity:0;transition:opacity .3s}
+/* RDV section */
+.fl-rdv-card{display:flex;gap:10px;padding:10px;background:var(--bg3);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:10px;margin-bottom:8px;align-items:center}
+.fl-rdv-card.open{border-left-color:#f59e0b;background:linear-gradient(90deg,rgba(245,158,11,0.06),var(--bg3) 40%)}
+.fl-rdv-card.past{opacity:0.5}
+.fl-rdv-when{flex-shrink:0;text-align:center;min-width:48px}
+.fl-rdv-day{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;font-weight:700}
+.fl-rdv-date{font-family:var(--fh);font-size:18px;font-weight:800;line-height:1;margin-top:2px}
+.fl-rdv-time{font-size:11px;color:var(--text);font-weight:600;margin-top:3px}
+.fl-rdv-info{flex:1;min-width:0}
+.fl-rdv-type{font-size:11px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fl-rdv-status{font-size:10px;color:var(--muted);margin-top:2px;display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:8px}
+.fl-rdv-status.open{background:rgba(245,158,11,0.15);color:#f59e0b}
+.fl-rdv-status.closed{background:rgba(74,222,128,0.12);color:var(--green)}
+.fl-rdv-toggle{flex-shrink:0;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.fl-rdv-toggle:hover{border-color:rgba(255,255,255,0.2)}
+.fl-rdv-toggle.warn{background:linear-gradient(135deg,#92400e,#f59e0b);color:#fff;border-color:transparent}
+.fl-rdv-toggle.primary{background:linear-gradient(135deg,#b91c1c,#ef4444);color:#fff;border-color:transparent}
+.fl-rdv-toggle:disabled{opacity:0.5;cursor:not-allowed}
 .fl-modified{font-size:10px;color:var(--muted2);margin-top:8px;text-align:center}
 .fiche-right{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .fr-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none}
@@ -332,6 +350,7 @@ h+='</div>';
 h+='<div class="fl-section"><div class="fl-title">Programme & Contrat</div>';
 h+=flR('\ud83d\udccb','Formule','formule',l.formule);h+=flR('\ud83d\udcc5','Date inscription','dateInscription',l.dateInscription);h+=flR('\ud83d\udcc5','Date fin programme','dateFinProgramme',l.dateFinProgramme);h+=flR('\u21a9\ufe0f','R\u00e9tractation','retractation',l.retractation);h+=flR('\ud83d\udcb3','Plateforme paiement','plateformePaiement',l.plateformePaiement);h+=flR('\ud83d\udcb5','Commissions','commissions',l.commissions);h+=flR('\ud83c\udf93','Coaching 72H','coaching72h',l.coaching72h);h+=flR('\ud83d\udc64','Coach 72H','coach72h',l.coach72h);h+=flR('\ud83e\udd1d','Closeur','closeur',l.closeur);h+=flR('\ud83d\udcde','Setting','setting',l.setting);h+=flR('\ud83c\udf81','Goodies','goodies',l.goodies);h+=flR('\ud83d\udce6','Date envoi goodies','dateEnvoiGoodies',l.dateEnvoiGoodies);
 h+='</div>';
+h+='<div class="fl-section" id="fcRdvBox"><div class="fl-title">📅 RDV à venir</div><div class="fl-rdv-empty" style="font-size:11px;color:var(--muted);padding:6px 0">Chargement…</div></div>';
 h+='<div class="fl-saved" id="flS">\u2705 Sauvegard\u00e9</div>';
 if(l.updatedAt){var ud=l.updatedAt.toDate?l.updatedAt.toDate():new Date(l.updatedAt);h+='<div class="fl-modified">Modifi\u00e9 le '+ud.toLocaleString('fr-FR')+'</div>';}
 h+='</div>';
@@ -524,6 +543,8 @@ h+='</div></div>';
 h+='</div>';
 h+='</div></div>';
 document.getElementById('ctApp').innerHTML=h;
+// Charger les RDV liés au lead (vague 2 module booking slot toggle)
+if(typeof renderRdvBoxForLead==='function')renderRdvBoxForLead(leadId);
 initEv();
 }
 function flR(ic,label,k,v){return '<div class="fl-row"><span class="fl-icon">'+ic+'</span><span style="min-width:120px;font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0">'+esc(label)+'</span><input class="fl-editable" data-f="'+k+'" value="'+escA(v||'')+'" placeholder="\u2014"/></div>';}
@@ -686,6 +707,117 @@ window.addEventListener('message',function(e){
 });
 
 firebase.auth().onAuthStateChanged(function(u){if(u){db.collection('users').doc(u.uid).get().then(function(s){var d=s.exists?s.data():{};window._currentRole=d.role||'sales';window._currentUserName=u.displayName||u.email.split('@')[0];localStorage.setItem('ambitio_role',d.role||'sales');localStorage.setItem('ambitio_name',window._currentUserName);});db.collection('_config').doc('webhook_keys').get().then(function(s){if(s.exists){var keys=s.data().keys||[];if(keys.length)localStorage.setItem('ambitio_webhook_key',keys[0]);}}).catch(function(){});}});
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/* SECTION RDV — Module booking slot toggle (vague 2)                      */
+/* Affiche les RDV à venir liés au lead avec boutons Ouvrir/Fermer          */
+/* ═══════════════════════════════════════════════════════════════════════ */
+window._fcRdvUnsub = null;
+window._fcRdvCache = [];
+
+function fmtRdvDateKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function isRdvPast(b){if(!b.date||!b.time)return true;var d=new Date(b.date+'T'+b.time+':00');var dur=b.duration||30;return Date.now()>d.getTime()+dur*60000;}
+
+function renderRdvBoxForLead(leadId){
+  var box=document.getElementById('fcRdvBox');
+  if(!box||!leadId)return;
+  // Clean previous listener
+  if(window._fcRdvUnsub){try{window._fcRdvUnsub();}catch(e){}window._fcRdvUnsub=null;}
+  var todayStr=fmtRdvDateKey(new Date());
+  // Listen real-time (réactif si toggle ailleurs)
+  window._fcRdvUnsub=db.collection('bookings')
+    .where('leadId','==',leadId)
+    .where('date','>=',todayStr)
+    .onSnapshot(function(snap){
+      var items=[];
+      snap.forEach(function(doc){
+        var d=doc.data();d.id=doc.id;
+        if(d.status==='confirmed'||d.status==='pending')items.push(d);
+      });
+      items.sort(function(a,b){var ka=(a.date||'')+'T'+(a.time||'');var kb=(b.date||'')+'T'+(b.time||'');return ka<kb?-1:(ka>kb?1:0);});
+      window._fcRdvCache=items;
+      paintRdvBox(items);
+    },function(err){
+      console.warn('[fcRdv] snapshot error:',err);
+      box.innerHTML='<div class="fl-title">📅 RDV à venir</div><div style="font-size:11px;color:var(--red);padding:6px 0">Erreur : '+esc(err.message||'')+'</div>';
+    });
+}
+
+function paintRdvBox(items){
+  var box=document.getElementById('fcRdvBox');
+  if(!box)return;
+  var h='<div class="fl-title">📅 RDV à venir <span style="font-size:10px;color:var(--muted);font-weight:500;margin-left:4px">'+items.length+'</span></div>';
+  if(items.length===0){
+    h+='<div style="font-size:11px;color:var(--muted);padding:6px 0;font-style:italic">Aucun RDV programmé</div>';
+    box.innerHTML=h;return;
+  }
+  var JOURS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  var MOIS_FR=['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
+  items.forEach(function(b){
+    var dt=new Date(b.date+'T'+b.time+':00');
+    var dayName=JOURS[dt.getDay()];
+    var dayNum=dt.getDate();
+    var monthShort=MOIS_FR[dt.getMonth()];
+    var typeName=(b.consultation&&b.consultation.label)||b.typeName||b.type||'RDV';
+    var personName=b.personName||'';
+    var subInfo=typeName+(personName?' · '+personName:'');
+    var open=b.slotOpen===true;
+    var past=isRdvPast(b);
+    var classes='fl-rdv-card'+(open?' open':'')+(past?' past':'');
+    var statusLabel=open?'🟠 Ouvert':'🔒 Confirmé';
+    var statusCls=open?'open':'closed';
+    var btnLabel=open?'🔒 Fermer':'🟠 Ouvrir';
+    var btnCls=open?'primary':'warn';
+    h+='<div class="'+classes+'">'+
+      '<div class="fl-rdv-when">'+
+        '<div class="fl-rdv-day">'+dayName+' '+monthShort+'</div>'+
+        '<div class="fl-rdv-date">'+dayNum+'</div>'+
+        '<div class="fl-rdv-time">'+esc(b.time||'')+'</div>'+
+      '</div>'+
+      '<div class="fl-rdv-info">'+
+        '<div class="fl-rdv-type">'+esc(subInfo)+'</div>'+
+        '<div class="fl-rdv-status '+statusCls+'">'+statusLabel+'</div>'+
+      '</div>'+
+      (past?'':'<button class="fl-rdv-toggle '+btnCls+'" onclick="toggleSlotFromFiche(\''+esc(b.id)+'\',\''+(open?'close':'open')+'\',this)">'+btnLabel+'</button>')+
+    '</div>';
+  });
+  box.innerHTML=h;
+}
+
+async function toggleSlotFromFiche(bookingId,action,btn){
+  if(!bookingId||(action!=='open'&&action!=='close'))return;
+  var b=window._fcRdvCache.find(function(x){return x.id===bookingId;});
+  var msg=action==='open'
+    ?'Ouvrir le créneau ? Un SMS + email de reconfirmation sera envoyé au prospect, et le slot redeviendra réservable jusqu\'à atteindre la limite configurée.'
+    :'Fermer le créneau ? Plus aucun nouveau prospect ne pourra réserver dessus.';
+  if(!confirm(msg))return;
+  var orig=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='Envoi…';}
+  try{
+    var idToken=await firebase.auth().currentUser.getIdToken();
+    var resp=await fetch('/api/booking-toggle-slot',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+idToken},
+      body:JSON.stringify({bookingId:bookingId,action:action})
+    });
+    var data=await resp.json();
+    if(!resp.ok)throw new Error(data.error||'Erreur API');
+    var msg2=action==='open'?'🟠 Slot ouvert':'🔒 Slot fermé';
+    if(action==='open'){
+      msg2+=' — SMS '+(data.sms&&data.sms.sent?'✓':'✗')+' / Email '+(data.email&&data.email.sent?'✓':'✗');
+    }
+    if(typeof toast==='function')toast(msg2);
+    // Trace timeline
+    if(typeof addTL==='function'){
+      addTL((action==='open'?'🟠 Slot ouvert':'🔒 Slot fermé')+' — '+(b?b.date+' '+b.time:''),action==='open'?'#f59e0b':'#4ade80');
+    }
+    // Le snapshot listener met à jour automatiquement l'UI
+  }catch(e){
+    if(typeof toast==='function')toast('❌ '+e.message,false);
+    else alert('Erreur : '+e.message);
+    if(btn){btn.disabled=false;btn.textContent=orig;}
+  }
+}
 </script>
 <script src="nav.js"></script>
 </body>

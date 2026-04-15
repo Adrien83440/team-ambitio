@@ -51,6 +51,58 @@ body { min-height: 100vh; }
 .rdv-filter:hover { color: var(--text); }
 .rdv-filter.active { background: rgba(239,68,68,0.15); color: var(--red); }
 
+/* VIEW TOGGLE */
+.rdv-view-toggle { display: flex; gap: 4px; padding: 4px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; }
+.rdv-vt { background: transparent; border: none; width: 36px; height: 32px; border-radius: 7px; color: var(--text-muted); cursor: pointer; font-size: 16px; transition: all 0.15s; }
+.rdv-vt:hover { color: var(--text); }
+.rdv-vt.active { background: rgba(239,68,68,0.15); color: var(--red); }
+
+/* GRID VIEW (calendrier hebdomadaire) */
+.rdv-grid-wrap { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.rdv-grid-nav { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.rdv-grid-nav-title { font-family: var(--fh); font-size: 15px; font-weight: 700; }
+.rdv-grid-nav-btns { display: flex; gap: 6px; }
+.rdv-grid-nav-btn { background: var(--bg-card); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; transition: border-color 0.15s; }
+.rdv-grid-nav-btn:hover { border-color: rgba(255,255,255,0.2); }
+.rdv-grid-nav-btn.today { background: linear-gradient(135deg, var(--red-dark), var(--red)); color: #fff; border-color: transparent; }
+
+.rdv-grid { display: grid; grid-template-columns: 60px repeat(7, 1fr); overflow-x: auto; }
+.rdv-grid-head { display: contents; }
+.rdv-grid-day-label { padding: 10px 6px; text-align: center; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border-soft); }
+.rdv-grid-day-label:last-child { border-right: none; }
+.rdv-grid-day-name { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; }
+.rdv-grid-day-num { font-family: var(--fh); font-size: 18px; font-weight: 800; margin-top: 2px; }
+.rdv-grid-day-label.today .rdv-grid-day-num { color: var(--red); }
+.rdv-grid-day-label.today .rdv-grid-day-name { color: var(--red); }
+.rdv-grid-empty-corner { padding: 10px 6px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border-soft); background: var(--bg); }
+
+.rdv-grid-time-col { display: contents; }
+.rdv-grid-time-cell { padding: 4px 6px; font-size: 10px; color: var(--text-dim); text-align: right; border-right: 1px solid var(--border-soft); border-top: 1px solid var(--border-soft); height: 30px; }
+.rdv-grid-cell { border-right: 1px solid var(--border-soft); border-top: 1px solid var(--border-soft); height: 30px; position: relative; }
+.rdv-grid-cell:last-child { border-right: none; }
+.rdv-grid-cell.today { background: rgba(239,68,68,0.03); }
+
+.rdv-grid-event {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  background: linear-gradient(135deg, rgba(74,222,128,0.18), rgba(74,222,128,0.08));
+  border-left: 3px solid var(--green);
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  z-index: 2;
+  transition: transform 0.1s;
+}
+.rdv-grid-event:hover { transform: scale(1.02); z-index: 3; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+.rdv-grid-event.open { background: linear-gradient(135deg, rgba(245,158,11,0.22), rgba(245,158,11,0.1)); border-left-color: var(--orange); }
+.rdv-grid-event.double { background: linear-gradient(135deg, rgba(239,68,68,0.22), rgba(239,68,68,0.1)); border-left-color: var(--red); }
+.rdv-grid-event-time { font-weight: 700; color: var(--text); font-family: var(--fh); }
+.rdv-grid-event-name { color: var(--text); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.rdv-grid-event-status { font-size: 9px; color: var(--text-muted); margin-top: 1px; }
+
 /* STATS */
 .rdv-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
 .rdv-stat { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
@@ -174,6 +226,10 @@ body { min-height: 100vh; }
       <button class="rdv-filter" data-filter="closed">🔒 Fermés</button>
       <button class="rdv-filter" data-filter="today">Aujourd'hui</button>
     </div>
+    <div class="rdv-view-toggle">
+      <button class="rdv-vt active" data-view="list" title="Vue liste">📋</button>
+      <button class="rdv-vt" data-view="grid" title="Vue calendrier">🗓️</button>
+    </div>
   </div>
 
   <div class="rdv-stats" id="rdvStats"></div>
@@ -215,6 +271,8 @@ var STATE = {
   role: null,
   bookings: [],
   filter: 'all',
+  view: 'list',         // 'list' | 'grid'
+  weekStart: null,      // Date du lundi de la semaine affichée en grid
   unsub: null,
   ownerSlug: null,
   maxOpen: 2,
@@ -328,7 +386,14 @@ function startListener() {
 /* ── RENDER ── */
 function render() {
   renderStats();
+  if (STATE.view === 'grid') {
+    renderGrid();
+  } else {
+    renderList();
+  }
+}
 
+function renderList() {
   var list = STATE.bookings.slice();
 
   // Apply filter
@@ -379,6 +444,157 @@ function render() {
     html += '</div>';
   });
   listEl.innerHTML = html;
+}
+
+/* ── GRID VIEW (calendrier hebdomadaire) ── */
+function getMondayOfWeek(d) {
+  var x = new Date(d);
+  x.setHours(0,0,0,0);
+  var day = x.getDay();
+  var diff = (day === 0 ? -6 : 1 - day); // dimanche -> -6, sinon 1-day
+  x.setDate(x.getDate() + diff);
+  return x;
+}
+
+function renderGrid() {
+  var listEl = document.getElementById('rdvList');
+  if (!STATE.weekStart) STATE.weekStart = getMondayOfWeek(new Date());
+
+  var weekDays = [];
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(STATE.weekStart);
+    d.setDate(d.getDate() + i);
+    weekDays.push(d);
+  }
+
+  var weekStartStr = fmtDateKey(weekDays[0]);
+  var weekEndStr = fmtDateKey(weekDays[6]);
+  var todayKey = fmtDateKey(new Date());
+
+  var weekBookings = STATE.bookings.filter(function(b) {
+    if (!b.date || b.date < weekStartStr || b.date > weekEndStr) return false;
+    if (STATE.filter === 'open' && b.slotOpen !== true) return false;
+    if (STATE.filter === 'closed' && b.slotOpen === true) return false;
+    if (STATE.filter === 'today' && b.date !== todayKey) return false;
+    return true;
+  });
+
+  var slotCounts = {};
+  STATE.bookings.forEach(function(b) {
+    var k = b.date + '|' + b.time + '|' + (b.personId || '');
+    slotCounts[k] = (slotCounts[k] || 0) + 1;
+  });
+
+  // Range horaire dynamique : default 8h-20h, étendu si bookings hors plage
+  var minHour = 8, maxHour = 20;
+  weekBookings.forEach(function(b) {
+    if (!b.time) return;
+    var h = parseInt(b.time.split(':')[0], 10);
+    if (h < minHour) minHour = Math.max(0, h);
+    var dur = b.duration || 30;
+    var endHour = h + Math.ceil(dur / 60);
+    if (endHour > maxHour) maxHour = Math.min(24, endHour);
+  });
+
+  var first = weekDays[0], last = weekDays[6];
+  var title = first.getDate() + ' ' + MOIS_FR[first.getMonth()] +
+              ' — ' + last.getDate() + ' ' + MOIS_FR[last.getMonth()] + ' ' + last.getFullYear();
+
+  var html = '<div class="rdv-grid-wrap">';
+  html += '<div class="rdv-grid-nav">' +
+    '<div class="rdv-grid-nav-title">' + escapeHtml(title) + '</div>' +
+    '<div class="rdv-grid-nav-btns">' +
+      '<button class="rdv-grid-nav-btn" onclick="navWeek(-1)">‹ Préc.</button>' +
+      '<button class="rdv-grid-nav-btn today" onclick="navWeekToday()">Cette semaine</button>' +
+      '<button class="rdv-grid-nav-btn" onclick="navWeek(1)">Suiv. ›</button>' +
+    '</div>' +
+  '</div>';
+
+  html += '<div class="rdv-grid">';
+
+  // Header row
+  html += '<div class="rdv-grid-empty-corner"></div>';
+  for (var di = 0; di < 7; di++) {
+    var dd = weekDays[di];
+    var ddKey = fmtDateKey(dd);
+    var todayCls = (ddKey === todayKey) ? ' today' : '';
+    html += '<div class="rdv-grid-day-label' + todayCls + '">' +
+      '<div class="rdv-grid-day-name">' + ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][di] + '</div>' +
+      '<div class="rdv-grid-day-num">' + dd.getDate() + '</div>' +
+    '</div>';
+  }
+
+  // Time grid (par 30 min)
+  for (var hh = minHour; hh < maxHour; hh++) {
+    for (var mm = 0; mm < 60; mm += 30) {
+      var label = (mm === 0) ? (String(hh).padStart(2,'0') + 'h') : '';
+      html += '<div class="rdv-grid-time-cell">' + label + '</div>';
+      for (var di2 = 0; di2 < 7; di2++) {
+        var dd2 = weekDays[di2];
+        var dd2Key = fmtDateKey(dd2);
+        var todayCls2 = (dd2Key === todayKey) ? ' today' : '';
+        html += '<div class="rdv-grid-cell' + todayCls2 + '" data-date="' + dd2Key + '" data-hh="' + hh + '" data-mm="' + mm + '"></div>';
+      }
+    }
+  }
+
+  html += '</div></div>';
+  listEl.innerHTML = html;
+
+  // Place les events absolument dans leurs cellules
+  weekBookings.forEach(function(b) {
+    var slotKey = b.date + '|' + b.time + '|' + (b.personId || '');
+    var doubleBooked = slotCounts[slotKey] > 1;
+    if (!b.time) return;
+    var parts = b.time.split(':');
+    var bh = parseInt(parts[0], 10);
+    var bm = parseInt(parts[1] || '0', 10);
+    var roundedM = (bm < 30) ? 0 : 30;
+    var cell = document.querySelector('.rdv-grid-cell[data-date="' + b.date + '"][data-hh="' + bh + '"][data-mm="' + roundedM + '"]');
+    if (!cell) return;
+    var dur = b.duration || 30;
+    var heightPx = (dur / 30) * 30 - 2;
+    var topOffset = ((bm % 30) / 30) * 30;
+    var prospect = b.prospect || {};
+    var name = ((prospect.prenom || '') + ' ' + (prospect.nom || '')).trim() || prospect.email || '?';
+    var cls = 'rdv-grid-event';
+    if (doubleBooked) cls += ' double';
+    else if (b.slotOpen) cls += ' open';
+    var statusLabel = doubleBooked ? '⚠ Double' : (b.slotOpen ? '🟠 Ouvert' : '🔒 Fermé');
+    var ev = document.createElement('div');
+    ev.className = cls;
+    ev.style.top = topOffset + 'px';
+    ev.style.height = heightPx + 'px';
+    ev.title = name + ' — ' + b.time + ' (' + dur + ' min)\n' + statusLabel + ' (cliquer pour ' + (b.slotOpen ? 'fermer' : 'ouvrir') + ')';
+    ev.innerHTML =
+      '<div class="rdv-grid-event-time">' + escapeHtml(b.time) + '</div>' +
+      '<div class="rdv-grid-event-name">' + escapeHtml(name) + '</div>' +
+      (heightPx > 48 ? '<div class="rdv-grid-event-status">' + statusLabel + '</div>' : '');
+    ev.addEventListener('click', function() {
+      openConfirmModal(b.id, b.slotOpen ? 'close' : 'open');
+    });
+    cell.appendChild(ev);
+  });
+
+  if (weekBookings.length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'rdv-empty';
+    empty.style.padding = '30px 20px';
+    empty.innerHTML = '<div class="rdv-empty-icon">📭</div><div class="rdv-empty-text">Aucun RDV cette semaine</div>';
+    listEl.querySelector('.rdv-grid-wrap').appendChild(empty);
+  }
+}
+
+function navWeek(delta) {
+  if (!STATE.weekStart) STATE.weekStart = getMondayOfWeek(new Date());
+  var d = new Date(STATE.weekStart);
+  d.setDate(d.getDate() + delta * 7);
+  STATE.weekStart = d;
+  render();
+}
+function navWeekToday() {
+  STATE.weekStart = getMondayOfWeek(new Date());
+  render();
 }
 
 function renderCard(b, doubleBooked) {
@@ -522,6 +738,17 @@ document.getElementById('rdvModalBg').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
 
+/* ── VIEW TOGGLE ── */
+document.querySelectorAll('.rdv-vt').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.rdv-vt').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    STATE.view = btn.dataset.view;
+    try { localStorage.setItem('rdv_view', STATE.view); } catch(e) {}
+    render();
+  });
+});
+
 /* ── FILTERS ── */
 document.querySelectorAll('.rdv-filter').forEach(function(btn) {
   btn.addEventListener('click', function() {
@@ -557,6 +784,17 @@ firebase.auth().onAuthStateChanged(async function(user) {
       STATE.maxOpen = s.data().maxBookingsPerOpenSlot;
     }
   } catch (e) { /* default 2 */ }
+
+  // Restore view préférée
+  try {
+    var savedView = localStorage.getItem('rdv_view');
+    if (savedView === 'grid' || savedView === 'list') {
+      STATE.view = savedView;
+      document.querySelectorAll('.rdv-vt').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.view === savedView);
+      });
+    }
+  } catch(e) {}
 
   startListener();
 });
