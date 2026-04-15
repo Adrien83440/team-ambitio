@@ -1,13 +1,8 @@
 // ==========================================================================
-// api/gocardless-debug.js — DIAGNOSTIC TEMPORAIRE
+// api/gocardless-debug.js — DIAGNOSTIC v2 (READ + WRITE)
 // --------------------------------------------------------------------------
 // À SUPPRIMER après debug.
-//
-// Compare le token chargé par Vercel avec celui qui marche en local,
-// et fait un test ping vers GoCardless depuis Vercel.
-//
 // Auth : admin uniquement.
-// Réponse : { tokenPrefix, tokenSuffix, tokenLength, env, pingStatus, pingBody }
 // ==========================================================================
 
 const { requireAuth } = require('./_verifyFirebaseAuth');
@@ -26,42 +21,67 @@ module.exports = async (req, res) => {
     ? 'https://api-sandbox.gocardless.com'
     : 'https://api.gocardless.com';
 
-  // Masque : 8 premiers chars + 4 derniers
-  const tokenPrefix = token.substring(0, 8);
-  const tokenSuffix = token.substring(Math.max(0, token.length - 4));
-  const tokenLength = token.length;
-  const hasWhitespace = /\s/.test(token);
-  const hasNewline = /[\r\n]/.test(token);
-
-  // Test ping GoCardless
-  let pingStatus = null;
-  let pingBody = null;
-  let pingError = null;
-  try {
-    const resp = await fetch(`${base}/customers?limit=1`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'GoCardless-Version': '2015-07-06',
-        'Accept': 'application/json',
-      },
-    });
-    pingStatus = resp.status;
-    try { pingBody = await resp.json(); } catch (e) { pingBody = { parseError: true }; }
-  } catch (e) {
-    pingError = e.message;
+  async function gc(method, path, body) {
+    try {
+      const resp = await fetch(`${base}${path}`, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'GoCardless-Version': '2015-07-06',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      let json = null;
+      try { json = await resp.json(); } catch (e) { json = { parseError: true }; }
+      return { status: resp.status, body: json };
+    } catch (e) {
+      return { status: null, error: e.message };
+    }
   }
+
+  // 1. READ test
+  const readTest = await gc('GET', '/customers?limit=1');
+
+  // 2. WRITE test avec email random (élimine doublon)
+  const randomId = Math.random().toString(36).substring(2, 12);
+  const randomEmail = `debug+${randomId}@team-alteore-test.com`;
+  const writeTest = await gc('POST', '/customers', {
+    customers: {
+      given_name: 'Debug',
+      family_name: 'Test',
+      email: randomEmail,
+      country_code: 'FR',
+    },
+  });
+
+  // 3. WRITE test bare-minimum (sans country_code)
+  const randomEmail2 = `debug+${randomId}b@team-alteore-test.com`;
+  const writeTestMinimal = await gc('POST', '/customers', {
+    customers: {
+      email: randomEmail2,
+    },
+  });
 
   res.json({
     env,
     base,
-    tokenPrefix,
-    tokenSuffix,
-    tokenLength,
-    hasWhitespace,
-    hasNewline,
-    pingStatus,
-    pingError,
-    pingBody,
+    tokenInfo: {
+      prefix: token.substring(0, 8),
+      suffix: token.substring(Math.max(0, token.length - 4)),
+      length: token.length,
+    },
+    readTest: { status: readTest.status, customerCount: readTest.body && readTest.body.customers ? readTest.body.customers.length : null },
+    writeTest: {
+      status: writeTest.status,
+      attemptedEmail: randomEmail,
+      body: writeTest.body,
+    },
+    writeTestMinimal: {
+      status: writeTestMinimal.status,
+      attemptedEmail: randomEmail2,
+      body: writeTestMinimal.body,
+    },
   });
 };
