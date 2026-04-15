@@ -197,7 +197,7 @@
       n.onclick = function () {
         window.focus();
         if (notif.leadId) {
-          window.location.href = 'sales-contact.html?leadId=' + encodeURIComponent(notif.leadId);
+          window.location.href = 'sales-contact.html?id=' + encodeURIComponent(notif.leadId);
         }
         n.close();
       };
@@ -472,7 +472,7 @@
   function handleNotifClick(notif) {
     markAsRead(notif);
     if (notif.leadId) {
-      window.location.href = 'sales-contact.html?leadId=' + encodeURIComponent(notif.leadId);
+      window.location.href = 'sales-contact.html?id=' + encodeURIComponent(notif.leadId);
     } else if (notif.fromNumber) {
       // Pas de lead → on suggère de créer la fiche depuis retargeting/leads
       alert('Aucune fiche prospect liée à ce numéro (' + notif.fromNumber + '). Créez la fiche depuis "Leads".');
@@ -501,7 +501,7 @@
     if (action === 'open') {
       markAsRead(notif);
       if (notif.leadId) {
-        window.location.href = 'sales-contact.html?leadId=' + encodeURIComponent(notif.leadId);
+        window.location.href = 'sales-contact.html?id=' + encodeURIComponent(notif.leadId);
       }
       return;
     }
