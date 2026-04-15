@@ -117,7 +117,7 @@ module.exports = async (req, res) => {
     // variants + écrit dans leads.communications[] + timeline_history[].
     //
     // Pour que onWebhookInbox reconnaisse et traite, il faut :
-    //   - apiKey valide (lu depuis _config/webhook_keys)
+    //   - apiKey valide (validée contre _config/webhook_keys.keys[])
     //   - action === 'lead_activity'
     //   - data.phone (le numéro du prospect → utilisé pour findLead)
     //   - data.type === 'sms'
@@ -125,25 +125,29 @@ module.exports = async (req, res) => {
     //   - data.content (le texte du SMS)
     //   - data.source pour tagguer la provenance
     //
-    // On lit l'apiKey depuis _config/webhook_keys (prend le premier "twilio-sms"
-    // ou un alias générique). Fallback : on essaie avec la clé "twilio".
+    // La structure réelle de _config/webhook_keys est :
+    //   { keys: ["cle1", "cle2", ...] }
+    // Le validator validateApiKey() dans Functions/index.js fait
+    // .includes(key) sur ce tableau. On prend donc la PREMIÈRE clé du
+    // tableau pour signer notre push (n'importe quelle clé valide marche).
     let apiKey = null;
     try {
       const wkSnap = await db.collection('_config').doc('webhook_keys').get();
       if (wkSnap.exists) {
-        const keys = wkSnap.data() || {};
-        apiKey = keys['twilio-sms'] || keys['twilio'] || keys.default || null;
+        const data = wkSnap.data() || {};
+        const keys = Array.isArray(data.keys) ? data.keys : [];
+        if (keys.length > 0) apiKey = keys[0];
       }
     } catch (e) {
       console.warn('[twilio-sms-inbound] Cannot read webhook_keys:', e.message);
     }
 
     if (!apiKey) {
-      // Si on ne trouve pas de clé, on log et on ack pour ne pas perturber
+      // Si aucune clé n'est définie, on log et on ack pour ne pas perturber
       // Twilio (sinon il va retry). Le SMS est "perdu" côté CRM mais on a
       // au moins le log côté Vercel pour investigation manuelle.
       console.error(
-        '[twilio-sms-inbound] No apiKey in _config/webhook_keys — SMS dropped:',
+        '[twilio-sms-inbound] No apiKey in _config/webhook_keys.keys[] — SMS dropped:',
         { messageSid, fromNumber, toNumber, preview: smsContent.substring(0, 60) }
       );
       return respondEmpty(res);
