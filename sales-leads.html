@@ -105,6 +105,38 @@ html, body {
 .ld-filter:hover { border-color: var(--border2); color: var(--text); }
 .ld-filter.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
 
+/* ── Date range popover ── */
+.ld-date-wrap { position: relative; display: inline-block; flex-shrink: 0; }
+.ld-date-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 10px;
+  padding: 12px; min-width: 240px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.ld-date-pop-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ld-date-pop-row label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--muted); width: 28px; flex-shrink: 0;
+}
+.ld-date-pop input[type="date"] {
+  flex: 1; padding: 6px 8px; background: var(--bg3); border: 1.5px solid var(--border);
+  border-radius: 6px; color: var(--text); font-family: var(--fb); font-size: 12px;
+  color-scheme: dark;
+}
+.ld-date-pop input[type="date"]:focus { outline: none; border-color: var(--gold); }
+.ld-date-pop-actions { display: flex; gap: 6px; margin-top: 4px; }
+.ld-date-pop-actions button {
+  flex: 1; padding: 7px 10px; border-radius: 7px; border: 1.5px solid var(--border);
+  background: transparent; color: var(--muted); font-family: var(--fb);
+  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+}
+.ld-date-pop-actions button:hover { border-color: var(--border2); color: var(--text); }
+.ld-date-pop-actions button.primary {
+  border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08);
+}
+.ld-date-pop-actions button.primary:hover { background: rgba(185,28,28,0.16); }
+.ld-date-pop-hint { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+
 /* ── Member pills ── */
 .ld-members { display: flex; gap: 6px; margin-bottom: 10px; }
 .ld-member-pill {
@@ -554,6 +586,24 @@ html, body {
       <button class="ld-filter" data-period="week">🗓 7 jours</button>
       <button class="ld-filter" data-period="unprocessed">🆕 Non traités</button>
       <button class="ld-filter" data-period="all">📋 Tout</button>
+      <div class="ld-date-wrap">
+        <button class="ld-filter" id="ldDateBtn" type="button">📆 Date</button>
+        <div class="ld-date-pop" id="ldDatePop" style="display:none">
+          <div class="ld-date-pop-row">
+            <label>Du</label>
+            <input type="date" id="ldDateFrom"/>
+          </div>
+          <div class="ld-date-pop-row">
+            <label>Au</label>
+            <input type="date" id="ldDateTo"/>
+          </div>
+          <div class="ld-date-pop-actions">
+            <button type="button" id="ldDateClear">Effacer</button>
+            <button type="button" class="primary" id="ldDateApply">Appliquer</button>
+          </div>
+          <div class="ld-date-pop-hint">Laisse « Au » vide pour filtrer un seul jour.</div>
+        </div>
+      </div>
     </div>
     <div class="ld-filters" id="ldTypeFilters" style="margin-bottom:4px"></div>
     <div class="ld-filters" id="ldFilters">
@@ -814,6 +864,8 @@ var filterMember = 'all';
 var filterStatus = 'all';
 var filterType = 'all';
 var filterPeriod = 'today';
+var customDateFrom = null; // Date object (start of day) ou null
+var customDateTo = null;   // Date object (end of day) ou null
 var knownLeadIds = {};
 var isFirstLoad = true;
 var openCardId = null;
@@ -1016,10 +1068,107 @@ document.getElementById('ldMembers').addEventListener('click', function(e) {
 
 document.getElementById('ldPeriodFilters').addEventListener('click', function(e) {
   var btn = e.target.closest('.ld-filter');
-  if (!btn || !btn.dataset.period) return;
+  if (!btn || !btn.dataset.period) return; // ignore le bouton 📆 Date (pas de data-period)
   document.querySelectorAll('#ldPeriodFilters .ld-filter').forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
   filterPeriod = btn.dataset.period;
+  // Reset custom date si on quitte le mode date
+  customDateFrom = null;
+  customDateTo = null;
+  refreshDateBtnLabel();
+  document.getElementById('ldDatePop').style.display = 'none';
+  renderFeed();
+});
+
+/* ── Date popover ── */
+function refreshDateBtnLabel() {
+  var btn = document.getElementById('ldDateBtn');
+  if (!btn) return;
+  if (filterPeriod === 'custom' && customDateFrom) {
+    var fmt = function(d) {
+      return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+    };
+    var label = '📆 ' + fmt(customDateFrom);
+    if (customDateTo) {
+      // Si même jour, on n'affiche qu'une date
+      var sameDay = customDateFrom.getFullYear() === customDateTo.getFullYear()
+                 && customDateFrom.getMonth() === customDateTo.getMonth()
+                 && customDateFrom.getDate() === customDateTo.getDate();
+      if (!sameDay) label += ' → ' + fmt(customDateTo);
+    }
+    btn.textContent = label;
+    btn.classList.add('active');
+  } else {
+    btn.textContent = '📆 Date';
+    btn.classList.remove('active');
+  }
+}
+
+document.getElementById('ldDateBtn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  var pop = document.getElementById('ldDatePop');
+  var open = pop.style.display !== 'none';
+  pop.style.display = open ? 'none' : 'block';
+  if (!open) {
+    // Pré-remplit avec les valeurs courantes si présentes
+    var toIso = function(d) {
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    };
+    document.getElementById('ldDateFrom').value = customDateFrom ? toIso(customDateFrom) : '';
+    document.getElementById('ldDateTo').value = customDateTo ? toIso(customDateTo) : '';
+    setTimeout(function() { document.getElementById('ldDateFrom').focus(); }, 50);
+  }
+});
+
+document.getElementById('ldDatePop').addEventListener('click', function(e) {
+  e.stopPropagation();
+});
+
+document.addEventListener('click', function(e) {
+  var pop = document.getElementById('ldDatePop');
+  if (pop && pop.style.display !== 'none') pop.style.display = 'none';
+});
+
+document.getElementById('ldDateApply').addEventListener('click', function() {
+  var fromVal = document.getElementById('ldDateFrom').value;
+  var toVal = document.getElementById('ldDateTo').value;
+  if (!fromVal) {
+    toast('Choisis au moins une date « Du »');
+    return;
+  }
+  // Parse en local pour éviter les décalages UTC
+  var parts = fromVal.split('-');
+  customDateFrom = new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, parseInt(parts[2],10), 0, 0, 0, 0);
+  if (toVal) {
+    var p2 = toVal.split('-');
+    customDateTo = new Date(parseInt(p2[0],10), parseInt(p2[1],10)-1, parseInt(p2[2],10), 23, 59, 59, 999);
+  } else {
+    // Date unique : fin de journée du même jour
+    customDateTo = new Date(customDateFrom.getFullYear(), customDateFrom.getMonth(), customDateFrom.getDate(), 23, 59, 59, 999);
+  }
+  if (customDateTo < customDateFrom) {
+    toast('La date « Au » doit être après « Du »');
+    return;
+  }
+  filterPeriod = 'custom';
+  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period]').forEach(function(b) { b.classList.remove('active'); });
+  refreshDateBtnLabel();
+  document.getElementById('ldDatePop').style.display = 'none';
+  renderFeed();
+});
+
+document.getElementById('ldDateClear').addEventListener('click', function() {
+  customDateFrom = null;
+  customDateTo = null;
+  document.getElementById('ldDateFrom').value = '';
+  document.getElementById('ldDateTo').value = '';
+  document.getElementById('ldDatePop').style.display = 'none';
+  // Retour à "Aujourd'hui" par défaut
+  filterPeriod = 'today';
+  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period]').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.period === 'today');
+  });
+  refreshDateBtnLabel();
   renderFeed();
 });
 
@@ -1064,6 +1213,14 @@ function getFilteredLeads() {
     });
   } else if (filterPeriod === 'unprocessed') {
     list = list.filter(function(l) { return !l.status || l.status === 'nouveau'; });
+  } else if (filterPeriod === 'custom' && customDateFrom) {
+    var cFrom = customDateFrom;
+    var cTo = customDateTo || new Date(customDateFrom.getFullYear(), customDateFrom.getMonth(), customDateFrom.getDate(), 23, 59, 59, 999);
+    list = list.filter(function(l) {
+      if (!l.createdAt) return false;
+      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+      return d >= cFrom && d <= cTo;
+    });
   }
   // 'all' = no period filter
 
@@ -1081,8 +1238,11 @@ function getFilteredLeads() {
 
 /* Base filter: only leads CREATED in the last 30 days (rolling window).
    On filtre uniquement sur createdAt (vraie date d'origine après migration),
-   PAS sur updatedAt — sinon les vieux leads ré-engagés remontent dans la liste. */
+   PAS sur updatedAt — sinon les vieux leads ré-engagés remontent dans la liste.
+   En mode 'custom' (sélecteur de date), on bypass le plafond 30j pour
+   permettre à l'utilisateur de remonter dans le passé. */
 function getBaseLeads() {
+  var useCutoff = filterPeriod !== 'custom';
   var cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
   return allLeads.filter(function(l) {
@@ -1090,7 +1250,8 @@ function getBaseLeads() {
     if (!l.createdAt) return false;
     var cd = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
     if (isNaN(cd.getTime())) return false;
-    return cd > cutoff;
+    if (useCutoff && cd <= cutoff) return false;
+    return true;
   });
 }
 
