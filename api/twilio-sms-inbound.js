@@ -117,26 +117,32 @@ module.exports = async (req, res) => {
     // variants + écrit dans leads.communications[] + timeline_history[].
     //
     // Pour que onWebhookInbox reconnaisse et traite, il faut :
-    //   - apiKey valide (validée contre _config/webhook_keys.keys[])
+    //   - apiKey valide
     //   - action === 'lead_activity'
     //   - data.phone (le numéro du prospect → utilisé pour findLead)
     //   - data.type === 'sms'
     //   - data.direction === 'inbound'
     //   - data.content (le texte du SMS)
-    //   - data.source pour tagguer la provenance
     //
-    // La structure réelle de _config/webhook_keys est :
-    //   { keys: ["cle1", "cle2", ...] }
-    // Le validator validateApiKey() dans Functions/index.js fait
-    // .includes(key) sur ce tableau. On prend donc la PREMIÈRE clé du
-    // tableau pour signer notre push (n'importe quelle clé valide marche).
+    // Structure réelle de _config/webhook_keys observée :
+    //   {
+    //     default: "wh_xxx",      ← clé racine, utilisée par Make/Ringover
+    //     keys: { default: "...", make: "..." }   ← sous-map (legacy?)
+    //   }
+    // On lit data.default en priorité (celle qui marche en prod), avec
+    // fallback sur data.keys.default ou data.keys.make si jamais la clé
+    // racine est absente.
     let apiKey = null;
     try {
       const wkSnap = await db.collection('_config').doc('webhook_keys').get();
       if (wkSnap.exists) {
         const data = wkSnap.data() || {};
-        const keys = Array.isArray(data.keys) ? data.keys : [];
-        if (keys.length > 0) apiKey = keys[0];
+        const keysMap = (data.keys && typeof data.keys === 'object') ? data.keys : {};
+        apiKey = data.default
+          || keysMap.default
+          || keysMap.make
+          || keysMap['twilio-sms']
+          || null;
       }
     } catch (e) {
       console.warn('[twilio-sms-inbound] Cannot read webhook_keys:', e.message);
@@ -147,7 +153,7 @@ module.exports = async (req, res) => {
       // Twilio (sinon il va retry). Le SMS est "perdu" côté CRM mais on a
       // au moins le log côté Vercel pour investigation manuelle.
       console.error(
-        '[twilio-sms-inbound] No apiKey in _config/webhook_keys.keys[] — SMS dropped:',
+        '[twilio-sms-inbound] No usable apiKey in _config/webhook_keys — SMS dropped:',
         { messageSid, fromNumber, toNumber, preview: smsContent.substring(0, 60) }
       );
       return respondEmpty(res);
