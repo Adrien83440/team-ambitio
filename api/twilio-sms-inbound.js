@@ -1,5 +1,5 @@
 // ============================================================================
-// api/twilio-sms-inbound.js  (v2 — direct write, no Cloud Function dependency)
+// api/twilio-sms-inbound.js  (v3 — direct write + inbox_notifications)
 // ----------------------------------------------------------------------------
 // Webhook Twilio pour les SMS entrants (réponses des prospects).
 //
@@ -7,25 +7,26 @@
 //        (configurée dans Twilio Console → numéro → Messaging → Webhook POST)
 // Auth : Signature Twilio (X-Twilio-Signature)
 //
-// Différence avec la v1 :
-// - v1 poussait dans webhook_inbox et déléguait à onWebhookInbox (Cloud Function)
-// - v2 écrit DIRECTEMENT dans leads.communications[] depuis Vercel
+// v3 ajoute :
+//   - lookup phone_numbers par toNumber → récupère assignedTo (ownerUid)
+//     pour le filtrage de visibilité dans inbox_notifications
+//   - création d'un doc inbox_notifications/{auto} alimentant le widget
+//     temps réel des sales (inbox-widget.js)
 //
-// Pourquoi v2 :
-// - onWebhookInbox déployée en prod ne correspond pas au code source repo
-//   (versions multiples dans /home/contact/Functions/, fonction "fantôme"
-//   sans source identifiée). Résultat : "Lead not found" même quand la query
-//   marche en local.
-// - Cohérence avec twilio-sms-send.js qui écrit aussi en direct.
-// - Un seul code path SMS = un seul endroit à debugger.
+// v2 (rappel) :
+// - écrit DIRECTEMENT dans leads.communications[] depuis Vercel
+// - court-circuite onWebhookInbox (qui ne matchait pas en prod)
+// - cohérent avec twilio-sms-send.js
 //
 // Flow :
 // 1. Vérifier signature Twilio (sinon 403)
 // 2. Auto opt-out si Body == STOP/STOPALL/UNSUBSCRIBE/etc
 // 3. findBestLeadByPhone : variants exhaustifs + dédoublonnage par activité
-// 4. Si trouvé → écrit dans leads/{id}.communications[] + timeline_history[]
-// 5. Si non trouvé → log côté Vercel, ack Twilio
-// 6. Retour TwiML vide (200 OK) pour ack Twilio
+// 4. Lookup phone_numbers par toNumber → ownerUid (sales/admin assigné au num)
+// 5. Si lead trouvé → écrit dans leads/{id}.communications[] + timeline
+// 6. Crée inbox_notifications/{auto} (toujours, même si lead pas trouvé,
+//    pour que le sales/admin assigné au numéro soit notifié)
+// 7. Retour TwiML vide (200 OK) pour ack Twilio
 // ============================================================================
 
 const { db, admin } = require('./_firebaseAdmin');
@@ -48,6 +49,16 @@ function respondWithMessage(res, message) {
   twiml.message(message);
   res.setHeader('Content-Type', 'text/xml');
   res.status(200).send(twiml.toString());
+}
+
+// Normalise un numéro pour matcher dans Firestore (E.164 strict)
+function normalizePhone(raw) {
+  if (!raw) return null;
+  const cleaned = String(raw).replace(/[\s\-().]/g, '');
+  if (cleaned.startsWith('+')) return cleaned;
+  if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
+  if (cleaned.startsWith('0') && cleaned.length === 10) return '+33' + cleaned.slice(1);
+  return cleaned;
 }
 
 // ─── Helper : variantes d'un numéro FR pour lookup Firestore ────────────────
@@ -98,6 +109,51 @@ async function findBestLeadByPhone(phone) {
   return candidates[0];
 }
 
+// ─── Helper : lookup phone_numbers par numéro → assignedTo (uid) ────────────
+async function findOwnerByToNumber(toNumber) {
+  if (!toNumber) return { ownerUid: null, ownerSlug: null };
+  const normalized = normalizePhone(toNumber);
+  try {
+    const snap = await db.collection('phone_numbers')
+      .where('phoneNumber', '==', normalized)
+      .where('active', '==', true)
+      .limit(1)
+      .get();
+    if (snap.empty) return { ownerUid: null, ownerSlug: null };
+    const data = snap.docs[0].data();
+    return {
+      ownerUid: data.assignedTo || null,
+      ownerSlug: data.assignedToSlug || null,
+    };
+  } catch (e) {
+    console.warn('[twilio-sms-inbound] findOwnerByToNumber error:', e.message);
+    return { ownerUid: null, ownerSlug: null };
+  }
+}
+
+// ─── Helper : crée la notification inbox ────────────────────────────────────
+async function createInboxNotification({ type, leadId, leadName, fromNumber, toNumber, preview, ownerUid, ownerSlug, source, providerMessageSid }) {
+  try {
+    await db.collection('inbox_notifications').add({
+      type: type,                                  // 'sms' | 'call' | 'call_missed'
+      direction: 'inbound',
+      leadId: leadId || null,
+      leadName: leadName || null,
+      fromNumber: fromNumber || null,
+      toNumber: toNumber || null,
+      preview: preview ? String(preview).substring(0, 200) : null,
+      ownerUid: ownerUid || null,                  // null = visible admins seulement
+      ownerSlug: ownerSlug || null,
+      source: source || 'unknown',
+      providerMessageSid: providerMessageSid || null,
+      readBy: {},                                  // map per-user lu/non-lu
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.error('[twilio-sms-inbound] createInboxNotification error:', e);
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -118,6 +174,9 @@ module.exports = async (req, res) => {
   }
 
   try {
+    // 1. Lookup owner du numéro destinataire (qui est assigné à ce numéro Twilio ?)
+    const { ownerUid, ownerSlug } = await findOwnerByToNumber(toNumber);
+
     const trimmed = smsContent.trim().toLowerCase();
     if (OPT_OUT_KEYWORDS.has(trimmed)) {
       console.log('[twilio-sms-inbound] Opt-out from ' + fromNumber);
@@ -136,11 +195,25 @@ module.exports = async (req, res) => {
     }
 
     const found = await findBestLeadByPhone(fromNumber);
+
     if (!found) {
       console.warn(
-        '[twilio-sms-inbound] No lead found for ' + fromNumber + ' — SMS not stored:',
+        '[twilio-sms-inbound] No lead found for ' + fromNumber + ' — SMS stored as orphan notif:',
         { messageSid: messageSid, preview: smsContent.substring(0, 80) }
       );
+      // On crée quand même la notif pour ne pas perdre le SMS côté UI sales
+      await createInboxNotification({
+        type: 'sms',
+        leadId: null,
+        leadName: null,
+        fromNumber: fromNumber,
+        toNumber: toNumber,
+        preview: smsContent,
+        ownerUid: ownerUid,
+        ownerSlug: ownerSlug,
+        source: 'twilio-sms',
+        providerMessageSid: messageSid,
+      });
       return respondEmpty(res);
     }
 
@@ -175,7 +248,21 @@ module.exports = async (req, res) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    console.log('[twilio-sms-inbound] ✅ Stored on lead ' + found.id + ' (' + (found.data.nom || 'sans nom') + ')');
+    // 6. Notif inbox (post-écriture lead, pour avoir le leadName à jour)
+    await createInboxNotification({
+      type: 'sms',
+      leadId: found.id,
+      leadName: found.data.nom || found.data.name || found.data.fullName || null,
+      fromNumber: fromNumber,
+      toNumber: toNumber,
+      preview: smsContent,
+      ownerUid: ownerUid,
+      ownerSlug: ownerSlug,
+      source: 'twilio-sms',
+      providerMessageSid: messageSid,
+    });
+
+    console.log('[twilio-sms-inbound] ✅ Stored on lead ' + found.id + ' (' + (found.data.nom || 'sans nom') + ') + inbox notif');
     return respondEmpty(res);
   } catch (err) {
     console.error('[twilio-sms-inbound] Error:', err);
