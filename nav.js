@@ -55,6 +55,7 @@
       { id: 'sales-equipe',       icon: '👥', label: 'Équipe Sales', href: 'sales-equipe.html' },
     ]},
     { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
+    { id: 'sales-rdv',         icon: '🗓️', label: 'Mes RDV',     href: 'sales-rdv.html',         section: 'Sales', perm: 'booking' },
     { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
     { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: '_admin' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },

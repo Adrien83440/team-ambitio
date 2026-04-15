@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="theme-color" content="#08080f"/>
+<title>Ambitio — Mes RDV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+<style>
+:root {
+  --bg: #08080f;
+  --bg-elev: #12121d;
+  --bg-card: #1a1a28;
+  --border: rgba(255,255,255,0.08);
+  --border-soft: rgba(255,255,255,0.05);
+  --text: #f5f5f5;
+  --text-muted: rgba(255,255,255,0.55);
+  --text-dim: rgba(255,255,255,0.35);
+  --red: #ef4444;
+  --red-dark: #b91c1c;
+  --orange: #f59e0b;
+  --green: #4ade80;
+  --blue: #60a5fa;
+  --fh: 'Syne', sans-serif;
+  --fb: 'Inter', sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--fb); }
+body { min-height: 100vh; }
+
+.rdv-container {
+  margin-left: 260px;
+  padding: 24px 32px;
+  max-width: 1200px;
+}
+@media (max-width: 768px) { .rdv-container { margin-left: 0; padding: 16px; } }
+
+/* HEADER */
+.rdv-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
+.rdv-header-left { display: flex; align-items: center; gap: 14px; }
+.rdv-icon { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--red-dark), var(--red)); display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 16px rgba(239,68,68,0.3); }
+.rdv-title { font-family: var(--fh); font-size: 26px; font-weight: 800; margin: 0; }
+.rdv-subtitle { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
+
+/* FILTERS */
+.rdv-filters { display: flex; gap: 6px; padding: 4px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; }
+.rdv-filter { background: transparent; border: none; color: var(--text-muted); padding: 7px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+.rdv-filter:hover { color: var(--text); }
+.rdv-filter.active { background: rgba(239,68,68,0.15); color: var(--red); }
+
+/* STATS */
+.rdv-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.rdv-stat { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.rdv-stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+.rdv-stat-value { font-family: var(--fh); font-size: 22px; font-weight: 800; margin-top: 4px; }
+.rdv-stat-value.warn { color: var(--orange); }
+.rdv-stat-value.ok { color: var(--green); }
+
+/* DAYS GROUPING */
+.rdv-day-group { margin-bottom: 24px; }
+.rdv-day-header { display: flex; align-items: baseline; gap: 10px; padding: 8px 4px; margin-bottom: 8px; }
+.rdv-day-name { font-family: var(--fh); font-size: 16px; font-weight: 700; }
+.rdv-day-date { font-size: 12px; color: var(--text-muted); }
+.rdv-day-count { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+
+/* RDV CARD */
+.rdv-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-dim);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.rdv-card:hover { border-color: rgba(255,255,255,0.15); }
+.rdv-card.slot-open { border-left-color: var(--orange); background: linear-gradient(90deg, rgba(245,158,11,0.04), var(--bg-elev) 30%); }
+.rdv-card.slot-closed { border-left-color: var(--green); }
+.rdv-card.past { opacity: 0.5; }
+.rdv-card.imminent { border-left-color: var(--red); animation: imminentPulse 2s ease-in-out infinite; }
+@keyframes imminentPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); } 50% { box-shadow: 0 0 0 4px rgba(239,68,68,0); } }
+
+.rdv-time { text-align: center; }
+.rdv-time-h { font-family: var(--fh); font-size: 22px; font-weight: 800; line-height: 1; }
+.rdv-time-dur { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+
+.rdv-info { min-width: 0; }
+.rdv-name { font-size: 14px; font-weight: 700; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rdv-meta { font-size: 12px; color: var(--text-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rdv-meta-dot { opacity: 0.4; }
+.rdv-status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.rdv-status-badge.open { background: rgba(245,158,11,0.15); color: var(--orange); border: 1px solid rgba(245,158,11,0.3); }
+.rdv-status-badge.closed { background: rgba(74,222,128,0.12); color: var(--green); border: 1px solid rgba(74,222,128,0.25); }
+.rdv-status-badge.double { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+
+.rdv-actions { display: flex; gap: 6px; align-items: center; }
+.rdv-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.rdv-btn:hover { border-color: rgba(255,255,255,0.2); }
+.rdv-btn.primary { background: linear-gradient(135deg, var(--red-dark), var(--red)); border-color: transparent; color: white; }
+.rdv-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239,68,68,0.3); }
+.rdv-btn.warn { background: linear-gradient(135deg, #92400e, var(--orange)); border-color: transparent; color: white; }
+.rdv-btn.icon { width: 32px; height: 32px; padding: 0; justify-content: center; }
+.rdv-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* EMPTY */
+.rdv-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.rdv-empty-icon { font-size: 48px; opacity: 0.4; margin-bottom: 12px; }
+.rdv-empty-text { font-size: 14px; }
+
+/* LOADING */
+.rdv-loading { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+.rdv-spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--red); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* TOAST */
+#rdvToast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--bg-card); color: var(--text); padding: 12px 18px; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 12px 30px rgba(0,0,0,0.5); z-index: 99999; opacity: 0; transition: all 0.25s; font-size: 13px; font-weight: 500; max-width: 90vw; }
+#rdvToast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#rdvToast.error { border-color: var(--red); }
+#rdvToast.ok { border-color: var(--green); }
+
+/* CONFIRM MODAL */
+#rdvModalBg { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 99998; display: none; align-items: center; justify-content: center; padding: 20px; }
+#rdvModalBg.show { display: flex; }
+.rdv-modal { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 16px; max-width: 460px; width: 100%; padding: 24px; }
+.rdv-modal h3 { font-family: var(--fh); font-size: 18px; margin: 0 0 12px; }
+.rdv-modal p { color: var(--text-muted); font-size: 13px; line-height: 1.55; margin: 0 0 16px; }
+.rdv-modal-info { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 12px; margin-bottom: 16px; }
+.rdv-modal-info strong { color: var(--text); }
+.rdv-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="nav.js" defer></script>
+</head>
+
+<body>
+<div class="rdv-container">
+  <div class="rdv-header">
+    <div class="rdv-header-left">
+      <div class="rdv-icon">📅</div>
+      <div>
+        <h1 class="rdv-title">Mes RDV à venir</h1>
+        <div class="rdv-subtitle">Confirmer la présence pour sécuriser le créneau</div>
+      </div>
+    </div>
+    <div class="rdv-filters">
+      <button class="rdv-filter active" data-filter="all">Tous</button>
+      <button class="rdv-filter" data-filter="open">🟠 Ouverts</button>
+      <button class="rdv-filter" data-filter="closed">🔒 Fermés</button>
+      <button class="rdv-filter" data-filter="today">Aujourd'hui</button>
+    </div>
+  </div>
+
+  <div class="rdv-stats" id="rdvStats"></div>
+
+  <div id="rdvList">
+    <div class="rdv-loading"><div class="rdv-spinner"></div>Chargement…</div>
+  </div>
+</div>
+
+<div id="rdvToast"></div>
+
+<div id="rdvModalBg">
+  <div class="rdv-modal">
+    <h3 id="rdvModalTitle">Confirmer l'action</h3>
+    <p id="rdvModalDesc"></p>
+    <div class="rdv-modal-info" id="rdvModalInfo"></div>
+    <div class="rdv-modal-actions">
+      <button class="rdv-btn" onclick="closeModal()">Annuler</button>
+      <button class="rdv-btn primary" id="rdvModalConfirmBtn">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+if (!firebase.apps.length) {
+  firebase.initializeApp({
+    apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+    authDomain:        "ambitio-team.firebaseapp.com",
+    projectId:         "ambitio-team",
+    storageBucket:     "ambitio-team.firebasestorage.app",
+    messagingSenderId: "1079366902268",
+    appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+  });
+}
+
+var db = firebase.firestore();
+var STATE = {
+  uid: null,
+  role: null,
+  bookings: [],
+  filter: 'all',
+  unsub: null,
+  ownerSlug: null,
+  maxOpen: 2,
+};
+
+var JOURS_FR = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+var MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function toast(msg, type) {
+  var t = document.getElementById('rdvToast');
+  t.textContent = msg;
+  t.className = '';
+  if (type) t.classList.add(type);
+  t.classList.add('show');
+  clearTimeout(window.__rdvToastTo);
+  window.__rdvToastTo = setTimeout(function() { t.classList.remove('show'); }, 3500);
+}
+
+function fmtDateKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function parseDateTime(b) {
+  // b.date = "YYYY-MM-DD", b.time = "HH:MM"
+  if (!b.date || !b.time) return null;
+  var d = new Date(b.date + 'T' + b.time + ':00');
+  if (isNaN(d)) return null;
+  return d;
+}
+
+function isImminent(b) {
+  var d = parseDateTime(b);
+  if (!d) return false;
+  var diffH = (d - new Date()) / 3600000;
+  return diffH > 0 && diffH < 4;
+}
+
+function isPast(b) {
+  var d = parseDateTime(b);
+  if (!d) return true;
+  var dur = b.duration || 30;
+  return (Date.now() > d.getTime() + dur * 60000);
+}
+
+function relDay(dateKey) {
+  var d = new Date(dateKey + 'T12:00:00');
+  var today = new Date(); today.setHours(0,0,0,0);
+  var diff = Math.round((d - today) / 86400000);
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return 'Demain';
+  if (diff === -1) return 'Hier';
+  if (diff > 0 && diff < 7) return JOURS_FR[d.getDay()];
+  return JOURS_FR[d.getDay()];
+}
+
+function fmtFullDate(dateKey) {
+  var d = new Date(dateKey + 'T12:00:00');
+  return d.getDate() + ' ' + MOIS_FR[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+/* ── LOAD ── */
+function startListener() {
+  if (STATE.unsub) STATE.unsub();
+  document.getElementById('rdvList').innerHTML = '<div class="rdv-loading"><div class="rdv-spinner"></div>Chargement…</div>';
+
+  // Range : aujourd'hui → +60 jours
+  var today = new Date(); today.setHours(0,0,0,0);
+  var horizonStr = fmtDateKey(new Date(today.getTime() + 60*86400000));
+  var todayStr = fmtDateKey(today);
+
+  var q = db.collection('bookings')
+    .where('date', '>=', todayStr)
+    .where('date', '<=', horizonStr);
+
+  STATE.unsub = q.onSnapshot(function(snap) {
+    var all = [];
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      d.id = doc.id;
+      if (d.status !== 'confirmed' && d.status !== 'pending') return;
+      // Filtrage par owner si sales (admin voit tout)
+      if (STATE.role !== 'admin') {
+        var matchesOwner =
+          (d.ownerSlug && STATE.ownerSlug && d.ownerSlug === STATE.ownerSlug) ||
+          (d.personId && STATE.ownerSlug && d.personId === STATE.ownerSlug) ||
+          (d.assignedToUid && d.assignedToUid === STATE.uid);
+        if (!matchesOwner) return;
+      }
+      all.push(d);
+    });
+    // Sort par date+time croissant
+    all.sort(function(a,b) {
+      var ka = (a.date||'') + 'T' + (a.time||'');
+      var kb = (b.date||'') + 'T' + (b.time||'');
+      return ka < kb ? -1 : (ka > kb ? 1 : 0);
+    });
+    STATE.bookings = all;
+    render();
+  }, function(err) {
+    console.error('[sales-rdv] snapshot error:', err);
+    document.getElementById('rdvList').innerHTML =
+      '<div class="rdv-empty"><div class="rdv-empty-icon">⚠️</div><div class="rdv-empty-text">Erreur de chargement : ' + escapeHtml(err.message || err.code) + '</div></div>';
+  });
+}
+
+/* ── RENDER ── */
+function render() {
+  renderStats();
+
+  var list = STATE.bookings.slice();
+
+  // Apply filter
+  if (STATE.filter === 'open') list = list.filter(function(b) { return b.slotOpen === true; });
+  else if (STATE.filter === 'closed') list = list.filter(function(b) { return b.slotOpen !== true; });
+  else if (STATE.filter === 'today') {
+    var todayKey = fmtDateKey(new Date());
+    list = list.filter(function(b) { return b.date === todayKey; });
+  }
+
+  var listEl = document.getElementById('rdvList');
+  if (list.length === 0) {
+    listEl.innerHTML =
+      '<div class="rdv-empty"><div class="rdv-empty-icon">📭</div><div class="rdv-empty-text">Aucun RDV ' +
+      (STATE.filter === 'all' ? 'à venir' : 'dans ce filtre') + '</div></div>';
+    return;
+  }
+
+  // Group by date
+  var byDate = {};
+  list.forEach(function(b) {
+    if (!byDate[b.date]) byDate[b.date] = [];
+    byDate[b.date].push(b);
+  });
+  var dates = Object.keys(byDate).sort();
+
+  // Pour détecter les double-bookings : count par (date, time)
+  var slotCounts = {};
+  STATE.bookings.forEach(function(b) {
+    var k = b.date + '|' + b.time + '|' + (b.personId || '');
+    slotCounts[k] = (slotCounts[k] || 0) + 1;
+  });
+
+  var html = '';
+  dates.forEach(function(dateKey) {
+    var items = byDate[dateKey];
+    html += '<div class="rdv-day-group">' +
+      '<div class="rdv-day-header">' +
+        '<div class="rdv-day-name">' + escapeHtml(relDay(dateKey)) + '</div>' +
+        '<div class="rdv-day-date">' + escapeHtml(fmtFullDate(dateKey)) + '</div>' +
+        '<div class="rdv-day-count">' + items.length + ' RDV</div>' +
+      '</div>';
+    items.forEach(function(b) {
+      var slotKey = b.date + '|' + b.time + '|' + (b.personId || '');
+      var doubleBooked = slotCounts[slotKey] > 1;
+      html += renderCard(b, doubleBooked);
+    });
+    html += '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function renderCard(b, doubleBooked) {
+  var prospect = b.prospect || {};
+  var name = ((prospect.prenom || '') + ' ' + (prospect.nom || '')).trim() || prospect.email || 'Prospect inconnu';
+  var phone = prospect.telephone || prospect.phone || '';
+  var typeName = (b.consultation && b.consultation.label) || b.typeName || b.type || '';
+
+  var classes = ['rdv-card'];
+  if (b.slotOpen) classes.push('slot-open');
+  else classes.push('slot-closed');
+  if (isPast(b)) classes.push('past');
+  if (isImminent(b) && !b.slotOpen) classes.push('imminent');
+
+  var statusBadge = '';
+  if (doubleBooked) {
+    statusBadge = '<span class="rdv-status-badge double">⚠ Double-booké</span>';
+  } else if (b.slotOpen) {
+    statusBadge = '<span class="rdv-status-badge open">🟠 Ouvert</span>';
+  } else {
+    statusBadge = '<span class="rdv-status-badge closed">🔒 Confirmé</span>';
+  }
+
+  var actions = '';
+  if (b.slotOpen) {
+    actions += '<button class="rdv-btn primary" onclick="openConfirmModal(\'' + b.id + '\', \'close\')">🔒 Fermer</button>';
+  } else {
+    actions += '<button class="rdv-btn warn" onclick="openConfirmModal(\'' + b.id + '\', \'open\')">🟠 Ouvrir</button>';
+  }
+  if (b.leadId) {
+    actions += '<a class="rdv-btn icon" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Fiche prospect">👁</a>';
+  }
+  if (phone) {
+    actions += '<a class="rdv-btn icon" href="tel:' + encodeURIComponent(phone) + '" title="Appeler">📞</a>';
+  }
+
+  return (
+    '<div class="' + classes.join(' ') + '">' +
+      '<div class="rdv-time">' +
+        '<div class="rdv-time-h">' + escapeHtml(b.time || '--:--') + '</div>' +
+        '<div class="rdv-time-dur">' + (b.duration || 30) + ' min</div>' +
+      '</div>' +
+      '<div class="rdv-info">' +
+        '<div class="rdv-name">' + escapeHtml(name) + '</div>' +
+        '<div class="rdv-meta">' +
+          (typeName ? '<span>' + escapeHtml(typeName) + '</span><span class="rdv-meta-dot">·</span>' : '') +
+          (phone ? '<span>' + escapeHtml(phone) + '</span><span class="rdv-meta-dot">·</span>' : '') +
+          statusBadge +
+        '</div>' +
+      '</div>' +
+      '<div class="rdv-actions">' + actions + '</div>' +
+    '</div>'
+  );
+}
+
+function renderStats() {
+  var total = STATE.bookings.length;
+  var open = STATE.bookings.filter(function(b) { return b.slotOpen === true; }).length;
+  var todayKey = fmtDateKey(new Date());
+  var today = STATE.bookings.filter(function(b) { return b.date === todayKey; }).length;
+  var imminent = STATE.bookings.filter(isImminent).length;
+
+  document.getElementById('rdvStats').innerHTML =
+    '<div class="rdv-stat"><div class="rdv-stat-label">Total à venir</div><div class="rdv-stat-value">' + total + '</div></div>' +
+    '<div class="rdv-stat"><div class="rdv-stat-label">Aujourd\'hui</div><div class="rdv-stat-value">' + today + '</div></div>' +
+    '<div class="rdv-stat"><div class="rdv-stat-label">Slots ouverts</div><div class="rdv-stat-value warn">' + open + '</div></div>' +
+    '<div class="rdv-stat"><div class="rdv-stat-label">Imminents (&lt; 4h)</div><div class="rdv-stat-value' + (imminent > 0 ? ' warn' : '') + '">' + imminent + '</div></div>';
+}
+
+/* ── ACTIONS ── */
+var pendingAction = null;
+
+function openConfirmModal(bookingId, action) {
+  var b = STATE.bookings.find(function(x) { return x.id === bookingId; });
+  if (!b) return;
+  pendingAction = { bookingId: bookingId, action: action };
+
+  var prospect = b.prospect || {};
+  var name = ((prospect.prenom || '') + ' ' + (prospect.nom || '')).trim() || 'Prospect';
+
+  if (action === 'open') {
+    document.getElementById('rdvModalTitle').textContent = '🟠 Ouvrir le slot ?';
+    document.getElementById('rdvModalDesc').innerHTML =
+      'Le créneau redeviendra réservable par d\'autres prospects (jusqu\'à <strong>' + STATE.maxOpen + ' réservations max</strong> sur ce créneau).<br><br>' +
+      'Un <strong>SMS + email de reconfirmation</strong> sera automatiquement envoyé au prospect actuel.';
+    document.getElementById('rdvModalConfirmBtn').textContent = '🟠 Ouvrir + envoyer';
+    document.getElementById('rdvModalConfirmBtn').className = 'rdv-btn warn';
+  } else {
+    document.getElementById('rdvModalTitle').textContent = '🔒 Fermer le slot ?';
+    document.getElementById('rdvModalDesc').innerHTML =
+      'Le créneau sera verrouillé : aucun nouveau prospect ne pourra réserver dessus.<br><br>' +
+      'À utiliser quand le prospect a confirmé sa présence.';
+    document.getElementById('rdvModalConfirmBtn').textContent = '🔒 Fermer';
+    document.getElementById('rdvModalConfirmBtn').className = 'rdv-btn primary';
+  }
+
+  document.getElementById('rdvModalInfo').innerHTML =
+    '<strong>' + escapeHtml(name) + '</strong><br>' +
+    escapeHtml(fmtFullDate(b.date)) + ' à ' + escapeHtml(b.time);
+
+  document.getElementById('rdvModalBg').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('rdvModalBg').classList.remove('show');
+  pendingAction = null;
+}
+
+document.getElementById('rdvModalConfirmBtn').addEventListener('click', async function() {
+  if (!pendingAction) return;
+  var btn = this;
+  var orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Envoi…';
+
+  try {
+    var idToken = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch('/api/booking-toggle-slot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify(pendingAction)
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Erreur API');
+
+    var msg = pendingAction.action === 'open' ? '🟠 Slot ouvert' : '🔒 Slot fermé';
+    if (pendingAction.action === 'open') {
+      msg += ' — SMS ' + (data.sms.sent ? '✓' : '✗') + ' / Email ' + (data.email.sent ? '✓' : '✗');
+    }
+    toast(msg, 'ok');
+    closeModal();
+  } catch (e) {
+    toast('❌ ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+});
+
+document.getElementById('rdvModalBg').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+/* ── FILTERS ── */
+document.querySelectorAll('.rdv-filter').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.rdv-filter').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    STATE.filter = btn.dataset.filter;
+    render();
+  });
+});
+
+/* ── INIT ── */
+firebase.auth().onAuthStateChanged(async function(user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  STATE.uid = user.uid;
+
+  // Récup rôle + slug
+  try {
+    var udoc = await db.collection('users').doc(user.uid).get();
+    var udata = udoc.exists ? udoc.data() : {};
+    STATE.role = udata.role || 'sales';
+    STATE.ownerSlug = udata.slug || udata.bookingSlug || null;
+  } catch (e) { STATE.role = 'sales'; }
+
+  if (STATE.role !== 'sales' && STATE.role !== 'admin') {
+    document.body.innerHTML = '<div style="padding:60px;text-align:center;color:var(--red)">Accès réservé aux sales et admins.</div>';
+    return;
+  }
+
+  // Récup config max bookings
+  try {
+    var s = await db.collection('_meta').doc('booking_slot_settings').get();
+    if (s.exists && typeof s.data().maxBookingsPerOpenSlot === 'number') {
+      STATE.maxOpen = s.data().maxBookingsPerOpenSlot;
+    }
+  } catch (e) { /* default 2 */ }
+
+  startListener();
+});
+</script>
+</body>
+</html>

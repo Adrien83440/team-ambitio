@@ -772,30 +772,49 @@ function renderSlots() {
   }
 
   // Get booked times for this person on this date (with buffer)
+  // Pour chaque booking conflictuel, on track son slotOpen pour permettre
+  // le double-booking sur des slots ouverts par le setter (compensation no-show).
+  // Limite : (S.settings.maxBookingsPerOpenSlot || 2) bookings par créneau ouvert.
   var bookedRanges = [];
   S.bookings.forEach(function(b) {
     if (b.personId === S.selPerson.id && b.date === S.selDate) {
       var bStart = timeToMin(b.time);
       var bDur = b.duration || 30;
-      bookedRanges.push({ start: bStart - bufBefore, end: bStart + bDur + bufAfter });
+      bookedRanges.push({
+        start: bStart - bufBefore,
+        end: bStart + bDur + bufAfter,
+        slotOpen: b.slotOpen === true,
+      });
     }
   });
 
-  // Add Google Calendar busy times
+  // Add Google Calendar busy times (toujours bloquant — pas d'override possible)
   var gcBusy = getBusyForDate(S.selDate);
   for (var gi = 0; gi < gcBusy.length; gi++) {
-    bookedRanges.push({ start: gcBusy[gi].start, end: gcBusy[gi].end });
+    bookedRanges.push({ start: gcBusy[gi].start, end: gcBusy[gi].end, slotOpen: false });
   }
 
+  var maxOpen = (S.settings && typeof S.settings.maxBookingsPerOpenSlot === 'number')
+    ? S.settings.maxBookingsPerOpenSlot
+    : 2;
+
   // Filter: remove conflicting slots
+  // Logique :
+  //   - si AU MOINS UN booking conflictuel est fermé (slotOpen=false)  → slot bloqué
+  //   - si TOUS les bookings conflictuels sont ouverts ET count < maxOpen → slot dispo
+  //   - sinon (tous ouverts mais count >= maxOpen) → slot bloqué
   var available = allSlots.filter(function(time) {
     var slotStart = timeToMin(time);
     var slotEnd = slotStart + dur;
-    // Check overlap with any booked range (including buffer)
+    var openCount = 0;
     for (var i = 0; i < bookedRanges.length; i++) {
       var br = bookedRanges[i];
-      if (slotStart < br.end && slotEnd > br.start) return false;
+      if (slotStart < br.end && slotEnd > br.start) {
+        if (!br.slotOpen) return false;        // un booking fermé / busy GCal → bloqué
+        openCount++;
+      }
     }
+    if (openCount > 0 && openCount >= maxOpen) return false;
     return true;
   });
 
@@ -980,6 +999,8 @@ function handleSubmit() {
     time: S.selTime,
     duration: S.selType ? S.selType.duration : 30,
     status: 'confirmed',
+    slotOpen: false,  // Slot fermé par défaut. Le setter peut l'ouvrir depuis sales-rdv.html
+                      // s'il n'arrive pas à confirmer la présence du prospect.
     timezone: S.userTz,
     prospect: {
       prenom: prenom,
