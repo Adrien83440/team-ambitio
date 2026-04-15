@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <link rel="stylesheet" href="call-detail-modal.css">
 <script src="call-detail-modal.js" defer></script>
+<script src="sales-dialer-api.js" defer></script>
 <script>
 if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}
 </script>
@@ -154,6 +155,23 @@ body{overflow:hidden;display:flex;flex-direction:column}
 .conv-call-extra{padding:6px 10px;background:rgba(0,0,0,0.18);border-radius:8px;font-size:11px;color:rgba(255,255,255,0.78);line-height:1.4;max-height:120px;overflow-y:auto}
 .conv-call-extra-label{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:2px}
 .conv-call-rec{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(52,211,153,0.10);border:1px solid rgba(52,211,153,0.25);border-radius:8px;color:var(--green);font-size:10px;font-weight:700;text-decoration:none;margin-top:6px;align-self:flex-start}
+/* ═══ SMS composer (en haut de l'onglet Conversation) ═══ */
+.sms-composer{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px}
+.sms-composer-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sms-composer-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;flex:1}
+.sms-composer-from{font-family:var(--fm);font-size:10px;color:var(--muted2)}
+.sms-composer textarea{width:100%;min-height:68px;padding:10px 12px;background:var(--bg2);border:1.5px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--fb);font-size:13px;outline:none;resize:vertical;line-height:1.5;box-sizing:border-box}
+.sms-composer textarea:focus{border-color:var(--blue)}
+.sms-composer textarea:disabled{opacity:.55;cursor:not-allowed}
+.sms-composer-footer{display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:10px}
+.sms-composer-counter{font-family:var(--fm);font-size:10px;color:var(--muted);white-space:nowrap}
+.sms-composer-counter.warn{color:#fbbf24}
+.sms-composer-counter.over{color:#ef4444}
+.sms-send-btn{padding:9px 18px;background:linear-gradient(135deg,rgba(96,165,250,0.28),rgba(96,165,250,0.14));border:1px solid rgba(96,165,250,0.45);border-radius:8px;color:#bfdbfe;font-family:var(--fb);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;letter-spacing:0.2px}
+.sms-send-btn:hover:not(:disabled){background:linear-gradient(135deg,rgba(96,165,250,0.38),rgba(96,165,250,0.22));color:#fff}
+.sms-send-btn:disabled{opacity:0.5;cursor:not-allowed}
+.sms-composer-error{font-size:11px;color:#ef4444;margin-top:6px}
+.sms-composer-optedout{padding:10px 12px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.28);border-radius:8px;color:#fbbf24;font-size:11px;font-weight:600;text-align:center}
 /* Compteurs onglets — gardés pour les emails */
 .sms-count-pill{font-family:var(--fm);font-size:10px;background:rgba(96,165,250,0.15);color:var(--blue);padding:1px 5px;border-radius:4px;margin-left:4px}
 .call-count-pill{font-family:var(--fm);font-size:10px;background:rgba(52,211,153,0.15);color:var(--green);padding:1px 5px;border-radius:4px;margin-left:4px}
@@ -350,6 +368,24 @@ for(var fi=0;fi<fs.length;fi++){var f=fs[fi];h+='<div class="file-item"><span cl
 h+='<label class="file-upload">\ud83d\udcc1 Ajouter un fichier (max 750KB)<input type="file" id="fileIn" style="display:none" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx"/></label></div>';
 // Conversation unifiée (SMS + Appels triés chronologiquement, style iMessage)
 h+='<div class="fr-panel" id="pConvo">';
+// ─── SMS composer (en haut de l'onglet) ─────────────────────────────────
+var smsOptedOut=!!l.smsOptedOut;
+var smsHasPhone=!!(l.telephone&&l.telephone.trim());
+h+='<div class="sms-composer" id="smsComposer">';
+h+='<div class="sms-composer-head"><div class="sms-composer-title">\ud83d\udcac Envoyer un SMS</div><div class="sms-composer-from" id="smsComposerFrom">\u2014</div></div>';
+if(smsOptedOut){
+  h+='<div class="sms-composer-optedout">\u26a0\ufe0f Ce lead s\'est d\u00e9sabonn\u00e9 des SMS (STOP re\u00e7u). Impossible d\'envoyer.</div>';
+}else if(!smsHasPhone){
+  h+='<div class="sms-composer-optedout">\u26a0\ufe0f Aucun t\u00e9l\u00e9phone enregistr\u00e9 pour ce lead.</div>';
+}else{
+  h+='<textarea id="smsInput" placeholder="Votre message (signez avec votre pr\u00e9nom)..." maxlength="1530"></textarea>';
+  h+='<div class="sms-composer-footer">';
+  h+='<div class="sms-composer-counter" id="smsCounter">0 / 160</div>';
+  h+='<button class="sms-send-btn" id="smsSendBtn">\ud83d\udcac Envoyer SMS</button>';
+  h+='</div>';
+  h+='<div class="sms-composer-error" id="smsError" style="display:none"></div>';
+}
+h+='</div>';
 var convoAll=(l.communications||[]).filter(function(c){return c.type==='sms'||c.type==='call';});
 if(!convoAll.length){h+='<div class="conv-empty"><div class="conv-empty-icon">\ud83d\udcac</div>Aucun SMS ni appel synchronis\u00e9<br/><span style="font-size:11px;color:var(--muted2)">Les communications appara\u00eetront ici automatiquement via Ringover</span></div>';}
 else{
@@ -493,6 +529,59 @@ initEv();
 function flR(ic,label,k,v){return '<div class="fl-row"><span class="fl-icon">'+ic+'</span><span style="min-width:120px;font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0">'+esc(label)+'</span><input class="fl-editable" data-f="'+k+'" value="'+escA(v||'')+'" placeholder="\u2014"/></div>';}
 
 function initEv(){
+// ─── SMS composer (si présent, sinon skip) ─────────────────────────────
+(function(){
+  var smsInput=document.getElementById('smsInput');
+  var smsSendBtn=document.getElementById('smsSendBtn');
+  var smsCounter=document.getElementById('smsCounter');
+  var smsError=document.getElementById('smsError');
+  var smsFromEl=document.getElementById('smsComposerFrom');
+  if(!smsInput||!smsSendBtn)return; // lead opted-out ou sans téléphone
+  // Affiche le numéro destinataire (toujours dispo à ce stade)
+  if(smsFromEl){smsFromEl.textContent='\u2192 '+(lead.telephone||'');}
+  // Compteur dynamique — le GSM-7 segmente à 160, le Unicode à 70
+  function updateCounter(){
+    var txt=smsInput.value;
+    var len=txt.length;
+    // Détection grossière GSM-7 vs Unicode (présence de chars hors ASCII étendu)
+    var isUnicode=/[^\u0000-\u00ff]/.test(txt);
+    var segSize=isUnicode?70:160;
+    var segs=len===0?0:Math.ceil(len/segSize);
+    smsCounter.textContent=len+' / '+segSize+(segs>1?' \u00b7 '+segs+' SMS':'');
+    smsCounter.className='sms-composer-counter'+(segs>=3?' warn':'')+(segs>=8?' over':'');
+  }
+  smsInput.addEventListener('input',updateCounter);
+  updateCounter();
+  // Envoi
+  smsSendBtn.addEventListener('click',async function(){
+    var msg=smsInput.value.trim();
+    if(!msg){smsError.textContent='Message vide';smsError.style.display='block';return;}
+    if(!window.SalesDialerAPI||!window.SalesDialerAPI.sendSms){
+      smsError.textContent='SalesDialerAPI non chargé';smsError.style.display='block';return;
+    }
+    smsError.style.display='none';
+    smsSendBtn.disabled=true;
+    smsInput.disabled=true;
+    smsSendBtn.textContent='Envoi...';
+    try{
+      var result=await window.SalesDialerAPI.sendSms({leadId:leadId,message:msg});
+      toast('\u2705 SMS envoy\u00e9 \u00e0 '+(result.to||lead.telephone));
+      smsInput.value='';
+      updateCounter();
+      // Re-fetch le lead pour afficher le nouveau SMS dans la thread
+      var snap=await db.collection('leads').doc(leadId).get();
+      if(snap.exists){lead=snap.data();renderAll();}
+    }catch(e){
+      console.error('[sendSms]',e);
+      smsError.textContent='\u274c '+(e.message||'Échec envoi');
+      smsError.style.display='block';
+    }finally{
+      smsSendBtn.disabled=false;
+      smsInput.disabled=false;
+      smsSendBtn.textContent='\ud83d\udcac Envoyer SMS';
+    }
+  });
+})();
 document.querySelectorAll('.fr-tab').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.fr-tab').forEach(function(x){x.classList.remove('active');});document.querySelectorAll('.fr-panel').forEach(function(x){x.classList.remove('active');});b.classList.add('active');var m={chrono:'pChrono',notes:'pNotes',act:'pAct',files:'pFiles',convo:'pConvo',emails:'pEmails'};document.getElementById(m[b.dataset.tab]).classList.add('active');});});
 document.getElementById('ctApp').addEventListener('input',function(e){if(e.target.closest('[data-f]')){if(autoTimer)clearTimeout(autoTimer);autoTimer=setTimeout(saveF,3000);}});
 document.getElementById('ctApp').addEventListener('change',function(e){if(e.target.closest('[data-f]'))saveF();});

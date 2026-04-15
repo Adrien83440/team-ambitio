@@ -26,6 +26,7 @@
     multiCall:      `${API_BASE}/dialer-multi-call`,
     cancelCampaign: `${API_BASE}/dialer-cancel-campaign`,
     callDetail:     `${API_BASE}/call-detail`,
+    smsSend:        `${API_BASE}/twilio-sms-send`,
   };
 
   // ─── Auth helper ───────────────────────────────────────────────────────────
@@ -235,6 +236,22 @@
       return authedFetch(ENDPOINTS.callDetail, {
         method: 'POST',
         body: JSON.stringify({ callLogId }),
+      });
+    },
+
+    /**
+     * Envoie un SMS à un lead via Twilio.
+     * @param {Object} params
+     * @param {string} params.leadId  - ID du lead destinataire
+     * @param {string} params.message - Contenu du SMS (max 1530 chars)
+     * @returns {Promise<{ok: true, messageSid: string, from: string, to: string}>}
+     */
+    async sendSms({ leadId, message } = {}) {
+      if (!leadId)  throw new Error("leadId manquant.");
+      if (!message) throw new Error("Message vide.");
+      return authedFetch(ENDPOINTS.smsSend, {
+        method: 'POST',
+        body: JSON.stringify({ leadId, message }),
       });
     },
   };
