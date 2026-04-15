@@ -1022,6 +1022,10 @@ function handleSubmit() {
   btn.textContent = 'Réservation en cours…';
 
   db.collection('bookings').add(booking).then(function(docRef) {
+    // Stocker les infos de la résa pour générer un .ics riche
+    S.confirmedBookingId = docRef.id;
+    S.confirmedBooking = booking;
+    S.confirmedMeetLink = null;
     // Lead update/creation is handled by Cloud Function onBookingCreated
     // Listen for Meet link (Cloud Function generates it async)
     if (S.selPerson && S.selPerson.calendarConnected) {
@@ -1029,6 +1033,7 @@ function handleSubmit() {
         var d = snap.data();
         if (d && d.meetLink) {
           unsub();
+          S.confirmedMeetLink = d.meetLink;  // dispo pour le .ics
           document.getElementById('meetLinkWrap').style.display = '';
           document.getElementById('meetLinkBtn').href = d.meetLink;
           document.getElementById('meetLinkUrl').textContent = d.meetLink;
@@ -1106,22 +1111,102 @@ document.getElementById('icsBtn').addEventListener('click', function() {
 
   function pad(n) { return String(n).padStart(2, '0'); }
   function icsDate(dt) { return dt.getFullYear() + pad(dt.getMonth()+1) + pad(dt.getDate()) + 'T' + pad(dt.getHours()) + pad(dt.getMinutes()) + '00'; }
+  function icsDateUtc(dt) { return dt.getUTCFullYear() + pad(dt.getUTCMonth()+1) + pad(dt.getUTCDate()) + 'T' + pad(dt.getUTCHours()) + pad(dt.getUTCMinutes()) + pad(dt.getUTCSeconds()) + 'Z'; }
+  // RFC 5545 : escape \, ; , et newlines dans les valeurs textuelles
+  function icsEscape(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r\n|\r|\n/g, '\\n'); }
+  // Plier les longues lignes (RFC : max 75 octets, repli avec espace)
+  function icsFold(line) {
+    if (line.length <= 73) return line;
+    var out = line.substring(0, 73);
+    var rest = line.substring(73);
+    while (rest.length > 0) {
+      out += '\r\n ' + rest.substring(0, 72);
+      rest = rest.substring(72);
+    }
+    return out;
+  }
 
-  var ics = [
+  // Récup contexte (utilise S.confirmedBooking si présent, sinon construit à la volée)
+  var booking = S.confirmedBooking || {};
+  var prospect = booking.prospect || {};
+  var prenom = prospect.prenom || '';
+  var nom = prospect.nom || '';
+  var email = prospect.email || '';
+  var phone = prospect.telephone || '';
+  var personName = (S.selPerson && S.selPerson.name) || booking.personName || '';
+  var personEmail = (S.selPerson && S.selPerson.email) || '';
+  var typeLabel = (S.selType && S.selType.label) || booking.typeLabel || 'RDV';
+  var meetLink = S.confirmedMeetLink || (S.selType && S.selType.locationUrl) || '';
+
+  // Description riche (multi-lignes, échappées en \\n pour ICS)
+  var descLines = [];
+  descLines.push('Type : ' + typeLabel);
+  if (personName) descLines.push('Avec : ' + personName);
+  descLines.push('Durée : ' + dur + ' min');
+  if (meetLink) {
+    descLines.push('');
+    descLines.push('🎥 Lien de visioconférence :');
+    descLines.push(meetLink);
+  }
+  if (prenom || nom || email || phone) {
+    descLines.push('');
+    descLines.push('— Mes informations —');
+    if (prenom || nom) descLines.push('Nom : ' + (prenom + ' ' + nom).trim());
+    if (email) descLines.push('Email : ' + email);
+    if (phone) descLines.push('Téléphone : ' + phone);
+  }
+  descLines.push('');
+  descLines.push('Réservé via Ambitio Booking');
+  var description = descLines.join('\n');
+
+  // Organisateur : Ambitio (ou personEmail si dispo)
+  var orgEmail = personEmail || 'contact@adrienemily.com';
+  var orgName = personName || 'Ambitio';
+
+  // UID stable basé sur bookingId si dispo, sinon timestamp
+  var uid = (S.confirmedBookingId || ('booking-' + Date.now())) + '@team.alteore.com';
+
+  var summary = typeLabel + (prenom || nom ? ' — ' + (prenom + ' ' + nom).trim() : '');
+  var location = meetLink || (S.selType && S.selType.location) || '';
+
+  var lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Ambitio//Booking//FR',
+    'CALSCALE:GREGORIAN',
+    'METHOD:REQUEST',
     'BEGIN:VEVENT',
+    'UID:' + icsEscape(uid),
+    'DTSTAMP:' + icsDateUtc(new Date()),
     'DTSTART;TZID=Europe/Paris:' + icsDate(d),
     'DTEND;TZID=Europe/Paris:' + icsDate(dEnd),
-    'SUMMARY:' + (S.selType ? S.selType.label : 'RDV') + ' — Ambitio',
-    'DESCRIPTION:Rendez-vous avec ' + (S.selPerson ? S.selPerson.name : 'Ambitio') + (S.selType && S.selType.locationUrl ? '\\nLien: ' + S.selType.locationUrl : ''),
-    'LOCATION:' + (S.selType && S.selType.locationUrl ? S.selType.locationUrl : (S.selPerson && S.selPerson.meetLink ? S.selPerson.meetLink : '')),
+    icsFold('SUMMARY:' + icsEscape(summary)),
+    icsFold('DESCRIPTION:' + icsEscape(description)),
+    icsFold('LOCATION:' + icsEscape(location)),
+    icsFold('ORGANIZER;CN=' + icsEscape(orgName) + ':mailto:' + orgEmail),
+  ];
+  if (email) {
+    lines.push(icsFold('ATTENDEE;CN=' + icsEscape((prenom + ' ' + nom).trim() || email) + ';RSVP=TRUE:mailto:' + email));
+  }
+  if (meetLink) {
+    lines.push(icsFold('URL;VALUE=URI:' + meetLink));
+    // Apple Calendar / Outlook : custom property pour Meet
+    lines.push(icsFold('X-GOOGLE-CONFERENCE:' + meetLink));
+  }
+  lines.push(
     'STATUS:CONFIRMED',
+    'SEQUENCE:0',
+    // Rappel 15 min avant
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:' + icsEscape('Rappel : ' + summary),
+    'TRIGGER:-PT15M',
+    'END:VALARM',
     'END:VEVENT',
     'END:VCALENDAR'
-  ].join('\r\n');
+  );
 
+  var ics = lines.join('\r\n');
   var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
