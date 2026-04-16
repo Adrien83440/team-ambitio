@@ -17,7 +17,6 @@
   <div id="nav-container"></div>
 
   <main class="sd-main">
-    <!-- ─── Colonne gauche : historique ─── -->
     <aside class="sd-col sd-col-left">
       <header class="sd-col-head">
         <h2>Historique</h2>
@@ -34,7 +33,6 @@
       </div>
     </aside>
 
-    <!-- ─── Colonne centre : softphone ─── -->
     <section class="sd-col sd-col-center">
       <header class="sd-phone-status">
         <div class="sd-status-dot" id="sd-status-dot"></div>
@@ -42,7 +40,6 @@
         <select id="sd-from-number" class="sd-select" title="Numéro émetteur"></select>
       </header>
 
-      <!-- Vue 1 : idle / dialpad -->
       <div id="sd-view-idle" class="sd-view sd-view-active">
         <div class="sd-phone-display">
           <input type="tel" id="sd-phone-input" placeholder="+33 6 12 34 56 78" autocomplete="off">
@@ -66,7 +63,6 @@
           <button id="sd-btn-clear" class="sd-btn sd-btn-ghost" title="Effacer">⌫</button>
         </div>
 
-        <!-- Préférences Power Dialer (persistantes par user) -->
         <div class="sd-power-prefs" id="sd-power-prefs">
           <div class="sd-power-prefs-head">
             <span class="sd-power-prefs-icon">🚀</span>
@@ -85,15 +81,19 @@
                 <button class="sd-power-size-btn" data-size="5">5</button>
               </div>
             </div>
+            <label class="sd-power-prefs-toggle">
+              <input type="checkbox" id="sd-pref-ding" checked>
+              <span>🔔 Ding court quand un lead décroche</span>
+            </label>
             <p class="sd-power-prefs-hint">
-              Ces réglages sont pré-chargés quand tu coches des leads dans le CRM.
-              Tu peux toujours les modifier avant de lancer.
+              Pendant le Power Dialer, les sonneries sont coupées et les appels
+              sont acceptés automatiquement. Le ding te signale discrètement
+              qu'un lead vient de décrocher.
             </p>
           </div>
         </div>
       </div>
 
-      <!-- Vue 2 : appel en cours -->
       <div id="sd-view-incall" class="sd-view">
         <div class="sd-incall-card">
           <div class="sd-incall-avatar" id="sd-incall-avatar">?</div>
@@ -101,7 +101,6 @@
           <div class="sd-incall-phone" id="sd-incall-phone">—</div>
           <div class="sd-incall-state" id="sd-incall-state">Connexion…</div>
           <div class="sd-incall-timer" id="sd-incall-timer">00:00</div>
-          <!-- Badge mode auto visible pendant l'appel -->
           <div class="sd-incall-power-tag" id="sd-incall-power-tag" style="display:none">
             🚀 Power Dialer · Vague <em id="sd-incall-wave">1</em>
           </div>
@@ -113,7 +112,6 @@
         </div>
       </div>
 
-      <!-- Vue 3 : appel entrant -->
       <div id="sd-view-incoming" class="sd-view">
         <div class="sd-incoming-pulse"></div>
         <div class="sd-incall-name" id="sd-incoming-name">Appel entrant</div>
@@ -124,9 +122,7 @@
         </div>
       </div>
 
-      <!-- Vue 4 : campagne multi-call / Power Dialer -->
       <div id="sd-view-campaign" class="sd-view">
-        <!-- Bandeau Power Mode (caché en one-shot) -->
         <div class="sd-power-banner" id="sd-power-banner" style="display:none">
           <span class="sd-power-banner-icon">🚀</span>
           <span class="sd-power-banner-label">Power Dialer actif</span>
@@ -138,7 +134,6 @@
           <span id="sd-campaign-status" class="sd-badge">dialing</span>
         </div>
 
-        <!-- Stats + progress (Power Mode uniquement) -->
         <div class="sd-power-progress" id="sd-power-progress" style="display:none">
           <div class="sd-power-stats">
             <div class="sd-power-stat">
@@ -159,10 +154,8 @@
           </div>
         </div>
 
-        <!-- Liste des legs de la vague actuelle -->
         <div id="sd-campaign-legs" class="sd-campaign-legs"></div>
 
-        <!-- Actions bas de vue -->
         <div class="sd-campaign-actions">
           <button id="sd-btn-cancel-campaign" class="sd-btn sd-btn-danger">Annuler la campagne</button>
           <button id="sd-btn-stop-power" class="sd-btn sd-btn-stop-power" style="display:none">
@@ -170,7 +163,6 @@
           </button>
         </div>
 
-        <!-- Overlay countdown entre 2 vagues -->
         <div class="sd-countdown-overlay" id="sd-countdown-overlay" style="display:none">
           <div class="sd-countdown-box">
             <div class="sd-countdown-label">Vague suivante dans</div>
@@ -191,7 +183,6 @@
       </div>
     </section>
 
-    <!-- ─── Colonne droite : contexte lead ─── -->
     <aside class="sd-col sd-col-right">
       <header class="sd-col-head">
         <h2>Contexte lead</h2>

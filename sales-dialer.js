@@ -4,7 +4,17 @@
  * Bridge CRM via sessionStorage.dialer_pending_call / dialer_pending_campaign
  *                                  / dialer_pending_auto_campaign (Power Dialer)
  *
- * Power Dialer (nouveau) :
+ * Ergonomie sonore :
+ *   - Les bips Twilio "outgoing" (début d'appel sortant) et "disconnect" (fin
+ *     d'appel) sont désactivés en permanence : la UI change déjà visuellement,
+ *     ces bips sont inutiles et fatigants sur une journée.
+ *   - Le ringtone "incoming" reste actif en mode normal (appels entrants
+ *     imprévus) mais est désactivé pendant une session Power Dialer : dans ce
+ *     contexte, on auto-accept le call dès qu'un lead décroche, et on joue un
+ *     court "ding" custom (150ms, 880Hz, Web Audio) pour signaler au closer
+ *     qu'il doit parler. Le ding peut être coupé via la pref dingOnAnswer.
+ *
+ * Power Dialer :
  *   Une session auto = queue complète [leads] + waveSize (3/4/5).
  *   Chaque vague crée un doc dialer_campaigns classique (même format),
  *   relié par un champ autoCampaignId (UUID client) + waveIndex.
@@ -12,7 +22,6 @@
  *     - si connecté + raccroché → countdown 3s puis vague suivante
  *     - si aucun décroche       → enchainement immédiat (pas de countdown)
  *   Stop = cancel vague en cours + reset state + toast récap.
- *   Fermeture onglet = auto-stop (les legs Twilio timeout seuls à 25s).
  */
 (function () {
   'use strict';
@@ -33,32 +42,17 @@
   let historyUnsub = null;
   let leadNotesUnsub = null;
   let leadNotesTimeout = null;
-  // Permissions : true = voir tous les appels de l'équipe (admin OR users/{uid}.canListenCalls == true)
-  //               false = voir seulement ses propres appels
   let canViewAllCalls = false;
-  // Map firebaseUid → shortName pour afficher le nom du closer sur chaque item
-  // d'historique quand on est en mode "voir tout"
   let uidToShortName = {};
 
   // ─── État Power Dialer ───────────────────────────────────────────────────
-  // Session auto active : null quand aucune session, sinon objet complet.
   let autoSession = null;
-  // Forme :
-  //   {
-  //     id: 'uuid-client',           autoCampaignId partagé entre vagues
-  //     queue: [{leadId, leadName, phone}],
-  //     cursor: 0,                   prochain index à lancer
-  //     waveSize: 5,
-  //     waveIndex: 0,                vague en cours (0-based)
-  //     totalWaves: 4,               ceil(queue.length / waveSize)
-  //     currentCampaignId: null,     doc id de la vague en cours
-  //     fromNumberId: 'PNxxx',
-  //     status: 'running'|'countdown'|'incall'|'stopped',
-  //     stats: { dialed: 0, connected: 0, noAnswer: 0 },
-  //     countdownTimer: null,
-  //     countdownDeadline: 0,
-  //     connectedLeadSeenForCurrentWave: false,
-  //   }
+
+  // ─── Ergonomie sonore ────────────────────────────────────────────────────
+  // Préférence "ding court quand un lead décroche en Power Dialer" (défaut ON)
+  let dingOnAnswer = true;
+  // Contexte Web Audio partagé (créé paresseusement au premier usage)
+  let audioCtx = null;
 
   // ─── Utilitaires ─────────────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
@@ -88,10 +82,64 @@
     if (!p.startsWith('+')) p = '+' + p;
     return p;
   };
-  // UUID v4 simple pour autoCampaignId côté client
   const uuid = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
     (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
   );
+
+  // ─── Sons Twilio : helpers de mute/restore ──────────────────────────────
+  // device.audio est un AudioHelper (SDK v2). Les méthodes .incoming(),
+  // .outgoing(), .disconnect() sans argument retournent l'état courant ;
+  // avec un bool elles l'affectent. Elles peuvent throw si le SDK change
+  // d'API → toujours wrappé dans un try/catch.
+  function muteTwilioOutgoingAndDisconnect() {
+    if (!device || !device.audio) return;
+    try {
+      if (typeof device.audio.outgoing === 'function')   device.audio.outgoing(false);
+      if (typeof device.audio.disconnect === 'function') device.audio.disconnect(false);
+    } catch (e) { console.warn('[sounds] mute outgoing/disconnect failed', e); }
+  }
+  function muteTwilioIncoming() {
+    if (!device || !device.audio) return;
+    try {
+      if (typeof device.audio.incoming === 'function') device.audio.incoming(false);
+    } catch (e) { console.warn('[sounds] mute incoming failed', e); }
+  }
+  function restoreTwilioIncoming() {
+    if (!device || !device.audio) return;
+    try {
+      if (typeof device.audio.incoming === 'function') device.audio.incoming(true);
+    } catch (e) { console.warn('[sounds] restore incoming failed', e); }
+  }
+
+  // Petit "ding" (880Hz, ~150ms) via Web Audio. Non bloquant, ignore les erreurs
+  // (ex. AudioContext bloqué tant que l'user n'a pas interagi avec la page).
+  function playDing() {
+    if (!dingOnAnswer) return;
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      // Certains browsers suspendent l'AudioContext → resume si besoin
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      // Enveloppe courte avec attack/decay pour éviter le clic
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.25, now + 0.015);
+      gain.gain.linearRampToValueAtTime(0, now + 0.18);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } catch (e) {
+      // Silencieux : pas critique
+    }
+  }
 
   // ─── Auth + bootstrap ────────────────────────────────────────────────────
   firebase.auth().onAuthStateChanged(async (user) => {
@@ -110,10 +158,6 @@
   });
 
   // ─── Permissions & team lookup ──────────────────────────────────────────
-  // Détermine si l'user courant peut voir tous les appels de l'équipe
-  // (admin OR users/{uid}.canListenCalls == true) et charge la map
-  // firebaseUid → shortName depuis _meta/team_members pour afficher le
-  // nom du closer sur chaque item d'historique en mode "voir tout".
   async function loadUserPermissions() {
     try {
       const userSnap = await db.collection('users').doc(currentUser.uid).get();
@@ -124,8 +168,6 @@
     } catch (e) {
       console.warn('loadUserPermissions users:', e);
     }
-    // Charge la map team_members (seulement si on est en mode "voir tout"
-    // sinon ça sert à rien)
     if (canViewAllCalls) {
       try {
         const metaSnap = await db.collection('_meta').doc('team_members').get();
@@ -152,7 +194,13 @@
         codecPreferences: ['opus', 'pcmu'],
         logLevel: 'warn',
       });
-      device.on('registered', () => setStatus('Prêt', 'ready'));
+      device.on('registered', () => {
+        setStatus('Prêt', 'ready');
+        // Désactivation permanente des bips outgoing + disconnect (ergonomie).
+        // Le ringtone incoming reste actif en mode normal ; il sera coupé
+        // ponctuellement pendant les sessions Power Dialer.
+        muteTwilioOutgoingAndDisconnect();
+      });
       device.on('error', (e) => {
         console.error('[Device]', e);
         setStatus('Erreur Device', 'error');
@@ -193,20 +241,10 @@
   }
 
   // ─── Historique call_logs ───────────────────────────────────────────────
-  // Schéma canonique écrit par api/twilio-voice.js, api/twilio-inbound.js,
-  // Functions/handlers/twilioHandlers.js :
-  //   initiatedAt, ringingAt, answeredAt, endedAt, durationSec,
-  //   direction ('outbound'|'inbound'), status ('initiated'|'ringing'|
-  //   'in-progress'|'completed'|'busy'|'no-answer'|'failed'|'canceled'),
-  //   fromNumber, toNumber, leadNameSnapshot, leadId, userId
   const MISSED_STATUSES = new Set(['no-answer', 'busy', 'failed', 'canceled']);
 
   function subscribeHistory() {
     if (historyUnsub) historyUnsub();
-    // Query conditionnelle : admin/canListenCalls voient tous les appels,
-    // sinon seulement les leurs. L'index Firestore nécessaire diffère :
-    //   - mode "mes appels"   → composite (userId ASC, initiatedAt DESC)
-    //   - mode "tous"         → index simple automatique sur initiatedAt DESC
     let q = db.collection('call_logs');
     if (!canViewAllCalls) {
       q = q.where('userId', '==', currentUser.uid);
@@ -220,8 +258,6 @@
         console.error('history', err);
         const list = $('sd-history-list');
         if (list) {
-          // Erreur la plus probable : index composite (userId, initiatedAt desc) manquant.
-          // Firebase renvoie un lien de création directe dans err.message.
           list.innerHTML = '<div class="sd-empty">Erreur historique (voir console)</div>';
         }
       });
@@ -241,20 +277,15 @@
       const missed = MISSED_STATUSES.has(c.status);
       const cls = c.direction === 'outbound' ? (missed ? 'miss' : 'out') : (missed ? 'miss' : 'in');
       const ic  = c.direction === 'outbound' ? (missed ? '✕' : '↗') : (missed ? '✕' : '↙');
-      // Pour outbound l'interlocuteur est toNumber, pour inbound fromNumber
       const otherPhone = c.direction === 'outbound' ? (c.toNumber || '') : (c.fromNumber || '');
       const name = c.leadNameSnapshot || c.leadName || otherPhone || '—';
-      const tsRaw = c.initiatedAt || c.startedAt; // startedAt = fallback legacy
+      const tsRaw = c.initiatedAt || c.startedAt;
       const ts = tsRaw && tsRaw.toDate ? tsRaw.toDate() : null;
       const sub = ts ? ts.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
       const dur = c.durationSec || c.duration;
-      // En mode "voir tout" (admin), affiche aussi qui a fait l'appel.
-      // Résout d'abord depuis userName persisté, sinon map uidToShortName.
       const closerLabel = canViewAllCalls
         ? (c.userName || uidToShortName[c.userId] || (c.userId ? c.userId.substring(0, 6) : '?'))
         : '';
-      // Badge détail : c.id = callSid = doc ID de call_logs. On montre l'icône dès
-      // qu'il y a quelque chose d'exploitable (recording, transcript ou analyse).
       const hasDetail = c.recordingStoragePath || c.transcriptionText || (c.aiAnalysis && c.aiAnalysis.summary);
       let badges = '';
       if (c.recordingStoragePath)               badges += '🎙';
@@ -274,7 +305,6 @@
     }).join('');
     list.querySelectorAll('.sd-history-item').forEach(el => {
       el.addEventListener('click', (ev) => {
-        // Click sur le bouton play → ouvre le modal détail au lieu de charger le lead
         const playBtn = ev.target.closest('.sd-history-play');
         if (playBtn) {
           ev.stopPropagation();
@@ -310,10 +340,8 @@
     });
     $('sd-btn-accept').addEventListener('click', () => { if (activeConn) activeConn.accept(); });
     $('sd-btn-reject').addEventListener('click', () => { if (activeConn) { activeConn.reject(); activeConn = null; showView('idle'); } });
-    // Bouton "Annuler" (mode one-shot) OU "Stop Power" (mode auto)
     $('sd-btn-cancel-campaign').addEventListener('click', cancelCampaign);
     $('sd-btn-stop-power').addEventListener('click', () => stopAutoCampaign('manual'));
-    // Boutons overlay countdown
     $('sd-btn-skip-countdown').addEventListener('click', () => skipCountdown());
     $('sd-btn-stop-countdown').addEventListener('click', () => stopAutoCampaign('manual'));
     $('sd-history-refresh').addEventListener('click', () => subscribeHistory());
@@ -326,19 +354,24 @@
   }
 
   // ─── Power Dialer : préférences utilisateur persistées ──────────────────
-  // Stockées dans dialer_sessions/{uid}.powerPrefs = {enabled, waveSize}.
-  // La bar CRM (dialer-bridge.js) lit et écrit la même structure, ce qui
-  // permet "les deux" endroits de rester synchronisés.
+  // Stockées dans dialer_sessions/{uid}.powerPrefs = {
+  //   enabled: bool, waveSize: 3|4|5, dingOnAnswer: bool
+  // }
   async function loadPowerPrefs() {
     try {
       const snap = await sessionDocRef.get();
       const prefs = (snap.exists && snap.data().powerPrefs) || {};
       const enabled = prefs.enabled === true;
       const size = [3, 4, 5].includes(prefs.waveSize) ? prefs.waveSize : 4;
+      // dingOnAnswer : défaut true si pas défini
+      dingOnAnswer = (typeof prefs.dingOnAnswer === 'boolean') ? prefs.dingOnAnswer : true;
       $('sd-pref-power-enabled').checked = enabled;
       document.querySelectorAll('#sd-pref-power-size .sd-power-size-btn').forEach(b => {
         b.classList.toggle('sd-power-size-btn-active', parseInt(b.dataset.size, 10) === size);
       });
+      // Si la checkbox ding existe dans le DOM (html mis à jour), reflect state
+      const dingCb = $('sd-pref-ding');
+      if (dingCb) dingCb.checked = dingOnAnswer;
     } catch (e) {
       console.warn('loadPowerPrefs', e);
     }
@@ -356,16 +389,25 @@
         savePowerPrefs({ waveSize: parseInt(btn.dataset.size, 10) });
       });
     });
+    // Toggle ding (si présent dans le HTML)
+    const dingCb = $('sd-pref-ding');
+    if (dingCb) {
+      dingCb.addEventListener('change', (e) => {
+        dingOnAnswer = e.target.checked;
+        savePowerPrefs({ dingOnAnswer });
+      });
+    }
   }
 
   async function savePowerPrefs(patch) {
     try {
-      // merge partiel dans powerPrefs
       const current = {};
       const enabledCb = $('sd-pref-power-enabled');
       const activeSizeBtn = document.querySelector('#sd-pref-power-size .sd-power-size-btn-active');
+      const dingCb = $('sd-pref-ding');
       current.enabled = enabledCb ? enabledCb.checked : false;
       current.waveSize = activeSizeBtn ? parseInt(activeSizeBtn.dataset.size, 10) : 4;
+      current.dingOnAnswer = dingCb ? dingCb.checked : dingOnAnswer;
       const merged = { ...current, ...patch };
       await sessionDocRef.set({
         powerPrefs: merged,
@@ -379,7 +421,6 @@
   // ─── Pending call/campaign (bridge CRM) ─────────────────────────────────
   function handlePendingCall() {
     try {
-      // 1. Campagne Power Dialer (nouveau flow) ?
       const rawAuto = sessionStorage.getItem('dialer_pending_auto_campaign');
       if (rawAuto) {
         sessionStorage.removeItem('dialer_pending_auto_campaign');
@@ -399,7 +440,6 @@
         }
       }
 
-      // 2. Campagne multi-call one-shot pending ? (ancien format)
       const rawCamp = sessionStorage.getItem('dialer_pending_campaign');
       if (rawCamp) {
         sessionStorage.removeItem('dialer_pending_campaign');
@@ -419,14 +459,12 @@
         }
       }
 
-      // 3. Appel single pending ?
       const raw = sessionStorage.getItem('dialer_pending_call');
       if (!raw) return;
       sessionStorage.removeItem('dialer_pending_call');
       const { leadId, phone } = JSON.parse(raw);
       if (phone) $('sd-phone-input').value = normalizePhone(phone);
       if (leadId) loadLead(leadId);
-      // auto-call après 800ms si Device prêt
       setTimeout(() => { if (device && device.state === 'registered') placeCall(); }, 800);
     } catch (e) { console.error(e); }
   }
@@ -439,7 +477,6 @@
     const fromId = $('sd-from-number').value;
     if (!fromId) { toast('Aucun numéro émetteur', 'error'); return; }
     try {
-      // Résolution lead si pas déjà chargé
       if (!activeLeadId) await tryAttachLeadByPhone(phone);
       const sessionId = `${currentUser.uid}_${Date.now()}`;
       const params = { To: phone, fromNumberId: fromId, sessionId };
@@ -461,8 +498,6 @@
       callStartTs = Date.now();
       startTimer();
       updateSession('incall');
-      // Marque la vague auto comme "connectée" pour déclencher le countdown
-      // à la fin de l'appel plutôt que l'enchainement direct
       if (autoSession) {
         autoSession.connectedLeadSeenForCurrentWave = true;
         autoSession.status = 'incall';
@@ -489,7 +524,6 @@
     }
     $('sd-incall-state').textContent = 'CONNEXION…';
     $('sd-incall-timer').textContent = '00:00';
-    // Badge Power Dialer visible pendant le pitch
     const tag = $('sd-incall-power-tag');
     if (autoSession) {
       tag.style.display = 'inline-flex';
@@ -511,8 +545,6 @@
     if (callTimer) { clearInterval(callTimer); callTimer = null; }
     activeConn = null;
     activeCallSid = null;
-    // Si Power Dialer actif et qu'on vient de raccrocher le leg connecté :
-    // afficher la vue campagne + déclencher le countdown 3s.
     if (autoSession && autoSession.status === 'incall') {
       autoSession.status = 'countdown';
       showView('campaign');
@@ -526,10 +558,30 @@
   }
 
   // ─── Incoming ───────────────────────────────────────────────────────────
+  // Deux modes de traitement :
+  //   A. Hors Power Dialer (appel entrant classique) : vue "incoming" + user
+  //      clique Accept/Reject. Le ringtone Twilio est actif → il sonne.
+  //   B. Pendant une session Power Dialer : le lead vient de décrocher, on
+  //      enchaine immédiatement (ringtone déjà coupé par startAutoCampaign,
+  //      on auto-accept + ding court pour signaler au closer).
   async function handleIncoming(conn) {
     activeConn = conn;
     const from = conn.parameters.From || '';
     const leadId = (conn.customParameters && conn.customParameters.get('leadId')) || '';
+
+    if (autoSession && autoSession.status !== 'stopped') {
+      // Mode B : auto-accept Power Dialer
+      if (leadId) await loadLead(leadId);
+      bindActiveConn();
+      // Ding discret (150ms) pour alerter le closer — s'il a désactivé la
+      // pref dingOnAnswer, playDing est no-op.
+      playDing();
+      try { conn.accept(); } catch (e) { console.warn('auto-accept failed', e); }
+      enterInCallView(from);
+      return;
+    }
+
+    // Mode A : flow normal
     if (leadId) await loadLead(leadId);
     $('sd-incoming-name').textContent = activeLeadData ? (activeLeadData.fullName || activeLeadData.nom || 'Lead') : 'Appel entrant';
     $('sd-incoming-phone').textContent = from;
@@ -565,16 +617,8 @@
     const p = $('sd-lead-panel');
     if (!activeLeadData) { p.innerHTML = '<div class="sd-empty">Aucun lead sélectionné</div>'; return; }
     const L = activeLeadData;
-    // Champs canoniques des docs leads/* :
-    //   nom (string unique, pas firstName/lastName)
-    //   email, telephone
-    //   status (pas "statut")
-    //   assignedTo (slug team member)
-    //   dialer_attempts (maintenu par le pipeline)
-    //   notes (champ libre dédié au dialer)
     const name = L.nom || '—';
     const init = (L.nom || '?').trim().charAt(0).toUpperCase() || '?';
-    // Helper escape HTML pour éviter les injections dans les valeurs lead
     const esc = s => String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -606,16 +650,12 @@
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // ─── Multi-call one-shot (ancien flow, conservé) ───────────────────────
-  // ═══════════════════════════════════════════════════════════════════════
+  // ─── Multi-call one-shot (ancien flow conservé) ──────────────────────────
   window.SalesDialerStartCampaign = async function (leads) {
-    // Garde stricte : refuse array vide / non-array
     if (!Array.isArray(leads) || leads.length === 0) {
       toast('Aucun lead à appeler', 'error');
       return;
     }
-    // Filtre supplémentaire : exiger au moins un téléphone valide
     const valid = leads.filter(l => l && (l.phone || l.telephone));
     if (valid.length === 0) {
       toast('Aucun téléphone valide', 'error');
@@ -624,13 +664,12 @@
     try {
       const fromId = $('sd-from-number').value;
       const { campaignId } = await SalesDialerAPI.multiCall(valid, fromId);
-      // Mode one-shot : affichage simple, stats masquées, bouton Stop caché
       $('sd-campaign-title').textContent = 'Campagne en cours';
       $('sd-power-banner').style.display = 'none';
       $('sd-power-progress').style.display = 'none';
       $('sd-btn-stop-power').style.display = 'none';
       $('sd-btn-cancel-campaign').style.display = 'inline-block';
-      subscribeCampaign(campaignId, /* autoMode */ false);
+      subscribeCampaign(campaignId, false);
       showView('campaign');
     } catch (e) {
       console.error(e);
@@ -675,7 +714,6 @@
     } catch (e) { toast(e.message || 'Erreur annulation', 'error'); }
   }
 
-  // Helper d'échappement HTML réutilisé pour les legs
   function escapeHtml(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -683,11 +721,8 @@
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // ─── Power Dialer : moteur auto-campagne ───────────────────────────────
+  // Power Dialer : moteur auto-campagne
   // ═══════════════════════════════════════════════════════════════════════
-
-  // Démarre une session Power Dialer.
-  //   payload = {queue: [{leadId, leadName, phone}], waveSize: 3|4|5, fromNumberId?}
   async function startAutoCampaign(payload) {
     const queue = (payload.queue || []).filter(l => l && l.phone);
     if (queue.length === 0) {
@@ -700,7 +735,6 @@
       toast('Aucun numéro émetteur', 'error');
       return;
     }
-    // Aligne le select UI sur le fromNumberId fourni
     if (fromId && $('sd-from-number').value !== fromId) {
       $('sd-from-number').value = fromId;
     }
@@ -721,7 +755,10 @@
       connectedLeadSeenForCurrentWave: false,
     };
 
-    // Affiche la vue campagne en mode Power
+    // Coupe le ringtone incoming : dès qu'un lead décroche on auto-accept,
+    // pas de sonnerie agressive. Sera restauré par stopAutoCampaign().
+    muteTwilioIncoming();
+
     $('sd-campaign-title').textContent = 'Power Dialer';
     $('sd-power-banner').style.display = 'flex';
     $('sd-pw-wavesize').textContent = waveSize;
@@ -735,11 +772,9 @@
     await launchNextWave();
   }
 
-  // Lance la vague suivante. Prend waveSize leads à partir du cursor.
   async function launchNextWave() {
     if (!autoSession || autoSession.status === 'stopped') return;
 
-    // Queue épuisée ?
     if (autoSession.cursor >= autoSession.queue.length) {
       finishAutoCampaign('completed');
       return;
@@ -752,7 +787,6 @@
     autoSession.connectedLeadSeenForCurrentWave = false;
     autoSession.status = 'running';
 
-    // Payload leads pour l'API (format attendu par dialer-multi-call.js)
     const leads = slice.map(l => ({
       id: l.leadId || null,
       leadId: l.leadId || null,
@@ -772,12 +806,10 @@
       autoSession.currentCampaignId = resp.campaignId;
       autoSession.stats.dialed += slice.length;
       renderAutoStats();
-      subscribeCampaign(resp.campaignId, /* autoMode */ true);
+      subscribeCampaign(resp.campaignId, true);
     } catch (e) {
       console.error('[autoCampaign] launchNextWave failed:', e);
       toast(e.message || 'Échec lancement de la vague', 'error');
-      // On tente de skipper cette vague et passer à la suivante après 2s,
-      // sauf si l'erreur est fatale (numéro, auth, etc.) → dans ce cas on stoppe
       if (e.status === 400 || e.status === 401 || e.status === 403) {
         finishAutoCampaign('error');
       } else {
@@ -791,15 +823,11 @@
     }
   }
 
-  // Callback invoqué à chaque update Firestore de la vague en cours
-  // (via subscribeCampaign en autoMode).
   function handleAutoCampaignUpdate(c, campaignId) {
     if (!autoSession || autoSession.id !== (c.autoCampaignId || autoSession.id)) return;
     if (autoSession.currentCampaignId !== campaignId) return;
 
-    // Cas 1 : vague se termine sans connecté → enchainement direct
     if (c.status === 'ended' && !c.connectedCallSid && autoSession.status === 'running') {
-      // Décompte des no-answer
       const noAns = (c.legs || []).filter(l =>
         ['no-answer','busy','failed','canceled'].includes(l.status)
       ).length;
@@ -808,7 +836,6 @@
       autoSession.currentCampaignId = null;
       if (campaignUnsub) { campaignUnsub(); campaignUnsub = null; }
       renderAutoStats();
-      // Enchainement immédiat
       if (autoSession.cursor < autoSession.queue.length) {
         launchNextWave();
       } else {
@@ -817,25 +844,19 @@
       return;
     }
 
-    // Cas 2 : vague se termine après conversation (connectedCallSid + status='ended')
-    //         → le countdown a déjà été déclenché par endCall() côté browser
     if (c.status === 'ended' && c.connectedCallSid && autoSession.status === 'countdown') {
-      // On se désabonne du doc campaign (on en ouvrira un nouveau pour la vague +1)
       if (campaignUnsub) { campaignUnsub(); campaignUnsub = null; }
       autoSession.currentCampaignId = null;
     }
 
-    // Cas 3 : vague annulée (par stopAutoCampaign)
     if (c.status === 'cancelled') {
       if (campaignUnsub) { campaignUnsub(); campaignUnsub = null; }
       autoSession.currentCampaignId = null;
     }
   }
 
-  // ─── Countdown 3s entre deux vagues ─────────────────────────────────────
   function startCountdown(seconds) {
     if (!autoSession) return;
-    // Si queue déjà épuisée → pas de countdown, on finit direct
     if (autoSession.cursor >= autoSession.queue.length) {
       finishAutoCampaign('completed');
       return;
@@ -844,27 +865,22 @@
     autoSession.countdownDeadline = deadline;
     autoSession.status = 'countdown';
 
-    // Affiche l'overlay
     const overlay = $('sd-countdown-overlay');
     const num = $('sd-countdown-number');
     const prog = $('sd-countdown-progress');
     const hint = $('sd-countdown-next-size');
     overlay.style.display = 'flex';
 
-    // Prochaine vague taille
     const nextSize = Math.min(autoSession.waveSize, autoSession.queue.length - autoSession.cursor);
     hint.textContent = nextSize;
 
-    // Reset animation du cercle (2π × 46 = 289.03)
     const CIRC = 289.03;
     prog.style.transition = 'none';
     prog.style.strokeDashoffset = '0';
-    // Force reflow pour que la transition reparte proprement
     void prog.getBoundingClientRect();
     prog.style.transition = `stroke-dashoffset ${seconds}s linear`;
     prog.style.strokeDashoffset = String(CIRC);
 
-    // Timer décompte affichage
     if (autoSession.countdownTimer) clearInterval(autoSession.countdownTimer);
     const tick = () => {
       if (!autoSession) return;
@@ -873,7 +889,7 @@
         num.textContent = '0';
         clearInterval(autoSession.countdownTimer);
         autoSession.countdownTimer = null;
-        endCountdown(/* launch */ true);
+        endCountdown(true);
       } else {
         num.textContent = String(left);
       }
@@ -884,7 +900,7 @@
 
   function skipCountdown() {
     if (!autoSession) return;
-    endCountdown(/* launch */ true);
+    endCountdown(true);
   }
 
   function endCountdown(launch) {
@@ -901,20 +917,17 @@
     }
   }
 
-  // ─── Stop / fin Power Dialer ────────────────────────────────────────────
   async function stopAutoCampaign(reason) {
     if (!autoSession) return;
     const session = autoSession;
     session.status = 'stopped';
 
-    // Coupe le countdown si en cours
     if (session.countdownTimer) {
       clearInterval(session.countdownTimer);
       session.countdownTimer = null;
     }
     $('sd-countdown-overlay').style.display = 'none';
 
-    // Annule la vague en cours si elle existe
     if (session.currentCampaignId) {
       try {
         await SalesDialerAPI.cancelCampaign(session.currentCampaignId);
@@ -924,13 +937,15 @@
     }
     if (campaignUnsub) { campaignUnsub(); campaignUnsub = null; }
 
+    // Restaure le ringtone incoming pour les appels normaux après la session
+    restoreTwilioIncoming();
+
     const msg = reason === 'manual'
       ? `🛑 Power Dialer arrêté · ${session.stats.dialed}/${session.queue.length} appelés · ${session.stats.connected} décrochés`
       : `Power Dialer terminé · ${session.stats.dialed} appelés · ${session.stats.connected} décrochés`;
     toast(msg, 'success');
 
     autoSession = null;
-    // Reset UI mode one-shot par défaut
     $('sd-power-banner').style.display = 'none';
     $('sd-power-progress').style.display = 'none';
     $('sd-btn-stop-power').style.display = 'none';
@@ -939,11 +954,9 @@
   }
 
   function finishAutoCampaign(reason) {
-    // Fin propre (queue épuisée ou erreur fatale)
     stopAutoCampaign(reason === 'completed' ? 'completed' : 'error');
   }
 
-  // ─── Rendu UI Power Dialer ──────────────────────────────────────────────
   function renderAutoUI() {
     if (!autoSession) return;
     $('sd-campaign-title').textContent = 'Power Dialer';
@@ -977,17 +990,15 @@
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       window.addEventListener('beforeunload', () => {
-        // Si session auto active, on tente un cancel best-effort de la vague
         if (autoSession && autoSession.currentCampaignId) {
           try {
-            // sendBeacon pour avoir le temps d'envoyer avant unload ; l'API
-            // accepte le même format JSON. On ne passe pas l'auth header ici,
-            // mais le cancel reste safe : il n'agit que sur une campagne
-            // appartenant à l'utilisateur (vérifié serveur).
             const blob = new Blob([JSON.stringify({ campaignId: autoSession.currentCampaignId })], { type: 'application/json' });
             navigator.sendBeacon('/api/dialer-cancel-campaign', blob);
           } catch (_) {}
         }
+        // Par bonne hygiène, restaurer le ringtone avant fermeture (au cas où
+        // l'onglet serait réutilisé via bfcache)
+        restoreTwilioIncoming();
         sessionDocRef.delete().catch(()=>{});
       });
     } catch (e) { console.error('initSession', e); }
