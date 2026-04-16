@@ -65,6 +65,101 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 .bb-warn{background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.35);color:#fbbf24}
 .bb-warn:hover:not(:disabled){background:rgba(245,158,11,.22)}
 
+/* ─── Section Couleurs équipe ─── */
+.tc-section{
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  padding:18px 20px;
+  margin-bottom:20px;
+}
+.tc-head{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;
+}
+.tc-title{
+  font-family:'Bricolage Grotesque','Plus Jakarta Sans',sans-serif;
+  font-size:14px;font-weight:700;
+  display:flex;align-items:center;gap:8px;
+}
+.tc-sub{
+  font-size:11px;color:rgba(255,255,255,.35);
+  margin-top:2px;
+}
+.tc-toggle{
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.1);
+  color:rgba(255,255,255,.7);
+  padding:5px 12px;border-radius:8px;
+  font-family:inherit;font-size:11px;font-weight:600;
+  cursor:pointer;transition:all .15s;
+}
+.tc-toggle:hover{background:rgba(255,255,255,.1);color:#fff}
+.tc-body{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:10px;
+}
+.tc-body.collapsed{display:none}
+.tc-item{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 12px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;
+  transition:all .15s;
+}
+.tc-item:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14)}
+.tc-swatch{
+  width:38px;height:38px;border-radius:10px;
+  flex-shrink:0;
+  border:2px solid rgba(255,255,255,.12);
+  cursor:pointer;
+  position:relative;
+  transition:transform .15s;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:700;font-size:13px;
+  overflow:hidden;
+}
+.tc-swatch:hover{transform:scale(1.06)}
+.tc-swatch input[type="color"]{
+  position:absolute;inset:0;
+  opacity:0;cursor:pointer;
+  border:none;padding:0;
+}
+.tc-info{flex:1;min-width:0}
+.tc-name{
+  font-size:13px;font-weight:600;
+  color:rgba(255,255,255,.9);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.tc-meta{
+  font-size:10.5px;color:rgba(255,255,255,.4);
+  margin-top:2px;
+  display:flex;gap:6px;align-items:center;
+}
+.tc-role-pill{
+  font-size:9px;font-weight:700;padding:1.5px 6px;
+  border-radius:4px;text-transform:uppercase;letter-spacing:.4px;
+}
+.tc-role-pill.coach{background:rgba(139,92,246,.18);color:#c4b5fd}
+.tc-role-pill.sales{background:rgba(16,185,129,.18);color:#6ee7b7}
+.tc-role-pill.setter{background:rgba(96,165,250,.18);color:#93c5fd}
+.tc-role-pill.closer{background:rgba(245,158,11,.18);color:#fcd34d}
+.tc-role-pill.admin{background:rgba(245,158,11,.18);color:#fbbf24}
+.tc-role-pill.other{background:rgba(148,163,184,.15);color:#cbd5e1}
+.tc-save-ind{
+  font-size:10px;color:rgba(52,211,153,.9);
+  opacity:0;transition:opacity .2s;
+  font-weight:600;
+}
+.tc-item.saved .tc-save-ind{opacity:1}
+.tc-empty{
+  text-align:center;padding:20px;
+  color:rgba(255,255,255,.35);font-size:12px;
+  font-style:italic;
+}
+
 /* Modal */
 .mo-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:1000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
 .mo-bg.on{display:flex}
@@ -164,6 +259,20 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
     </select>
   </div>
 
+  <!-- Couleurs équipe (colorimétrie pour coaching.html et autres modules) -->
+  <div class="tc-section" id="teamColorsSection">
+    <div class="tc-head">
+      <div>
+        <div class="tc-title">🎨 Couleurs équipe</div>
+        <div class="tc-sub">Choisissez une couleur par membre — utilisée pour les cartes, badges, avatars dans toute l'app.</div>
+      </div>
+      <button class="tc-toggle" id="tcToggle">Masquer</button>
+    </div>
+    <div class="tc-body" id="teamColorsBody">
+      <div class="tc-empty">Chargement des membres…</div>
+    </div>
+  </div>
+
   <div class="u-grid" id="userList"></div>
 </div>
 
@@ -238,6 +347,7 @@ onAuthStateChanged(auth,async user=>{
     if(data.role!=='admin'){window.location.href='coaching.html';return;}
     currentUid=user.uid;
     loadUsers();
+    loadTeamColors();
   }catch(e){console.error(e);window.location.href='login.html';}
 });
 
@@ -250,6 +360,173 @@ async function loadUsers(){
   renderStats();
   renderList();
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ─── COULEURS ÉQUIPE (écrit dans _meta/team_members.members[slug].color) ───
+// Le doc _meta/team_members peut stocker `members` soit en OBJET (slug→obj)
+// soit en ARRAY (Firestore array-ify parfois). On gère les 2 cas : on lit
+// en détectant le format et on RÉ-ÉCRIT dans le MÊME format pour préserver
+// la structure existante.
+// ══════════════════════════════════════════════════════════════════
+
+let TEAM_MEMBERS_CACHE = null;         // liste normalisée pour l'UI
+let TEAM_MEMBERS_RAW_FORMAT = 'object'; // 'object' | 'array'
+let TEAM_MEMBERS_RAW_DATA = null;       // le champ members brut (pour préserver les index array)
+
+// Palette de suggestions si aucune couleur définie
+const COLOR_SUGGESTIONS = [
+  '#3b82f6','#10b981','#f59e0b','#6366f1','#ef4444','#14b8a6',
+  '#a16207','#7c3aed','#0891b2','#be185d','#0d9488','#dc2626',
+  '#9333ea','#059669','#ea580c','#0284c7','#16a34a','#db2777'
+];
+function hashStr(s){let h=0;for(let i=0;i<s.length;i++){h=((h<<5)-h+s.charCodeAt(i))|0;}return Math.abs(h);}
+function suggestColorFor(slug){ return COLOR_SUGGESTIONS[hashStr(slug||'x') % COLOR_SUGGESTIONS.length]; }
+
+async function loadTeamColors(){
+  const body = document.getElementById('teamColorsBody');
+  if(!body) return;
+  try{
+    const snap = await getDoc(doc(db,'_meta','team_members'));
+    if(!snap.exists()){
+      body.innerHTML = '<div class="tc-empty">Aucun membre dans <code>_meta/team_members</code>.<br>Lance migrate-team-members.js pour initialiser.</div>';
+      return;
+    }
+    const data = snap.data() || {};
+    const raw = data.members;
+
+    // Normaliser en liste + mémoriser le format original
+    const list = [];
+    if(Array.isArray(raw)){
+      TEAM_MEMBERS_RAW_FORMAT = 'array';
+      TEAM_MEMBERS_RAW_DATA = raw.slice(); // copie pour préservation
+      raw.forEach((entry, i) => {
+        if(!entry || typeof entry !== 'object') return;
+        const slug = entry.slug || ('m' + i);
+        list.push({
+          _rawIndex: i,
+          slug: slug,
+          name: entry.name || entry.displayName || slug,
+          role: entry.role || '',
+          color: entry.color || '',
+          active: entry.active !== false,
+          order: entry.order || 999
+        });
+      });
+    } else if(raw && typeof raw === 'object'){
+      TEAM_MEMBERS_RAW_FORMAT = 'object';
+      TEAM_MEMBERS_RAW_DATA = Object.assign({}, raw);
+      Object.keys(raw).forEach(slug => {
+        const entry = raw[slug];
+        if(!entry || typeof entry !== 'object') return;
+        const realSlug = entry.slug || slug;
+        list.push({
+          _rawKey: slug,
+          slug: realSlug,
+          name: entry.name || entry.displayName || realSlug,
+          role: entry.role || '',
+          color: entry.color || '',
+          active: entry.active !== false,
+          order: entry.order || 999
+        });
+      });
+    } else {
+      body.innerHTML = '<div class="tc-empty">Champ <code>members</code> absent ou invalide.</div>';
+      return;
+    }
+
+    list.sort((a,b) => (a.order||999) - (b.order||999) || a.name.localeCompare(b.name));
+    TEAM_MEMBERS_CACHE = list;
+    renderTeamColors();
+  }catch(e){
+    console.error('loadTeamColors error:', e);
+    body.innerHTML = '<div class="tc-empty" style="color:#fca5a5">Erreur chargement : ' + esc(e.message) + '</div>';
+  }
+}
+
+function renderTeamColors(){
+  const body = document.getElementById('teamColorsBody');
+  if(!body || !TEAM_MEMBERS_CACHE) return;
+  if(TEAM_MEMBERS_CACHE.length === 0){
+    body.innerHTML = '<div class="tc-empty">Aucun membre trouvé.</div>';
+    return;
+  }
+  body.innerHTML = TEAM_MEMBERS_CACHE.map(m => {
+    const color = m.color || suggestColorFor(m.slug);
+    const isDefault = !m.color;
+    const initials = (m.name || m.slug).slice(0,2).toUpperCase();
+    const roleCls = ['coach','sales','setter','closer','admin'].includes(m.role) ? m.role : 'other';
+    const roleLbl = m.role ? m.role : '—';
+    return `<div class="tc-item" data-slug="${esc(m.slug)}">
+      <div class="tc-swatch" style="background:${color}" title="Cliquez pour changer">
+        ${initials}
+        <input type="color" value="${color}" onchange="window.__saveTeamColor('${esc(m.slug)}', this.value)"/>
+      </div>
+      <div class="tc-info">
+        <div class="tc-name">${esc(m.name)}${!m.active ? ' <span style="color:rgba(255,255,255,.3);font-weight:400">(inactif)</span>' : ''}</div>
+        <div class="tc-meta">
+          <span class="tc-role-pill ${roleCls}">${esc(roleLbl)}</span>
+          <span>${esc(m.slug)}</span>
+          ${isDefault ? '<span style="color:rgba(148,163,184,.7)">· auto</span>' : ''}
+        </div>
+      </div>
+      <div class="tc-save-ind">✓</div>
+    </div>`;
+  }).join('');
+}
+
+// Exposé en global pour l'onchange inline du <input type="color">
+window.__saveTeamColor = async function(slug, newColor){
+  if(!TEAM_MEMBERS_CACHE || !TEAM_MEMBERS_RAW_DATA){ toast('❌ Données non chargées'); return; }
+  const member = TEAM_MEMBERS_CACHE.find(m => m.slug === slug);
+  if(!member){ toast('❌ Membre introuvable : ' + slug); return; }
+
+  try{
+    // Mettre à jour la structure brute (en préservant le format array ou object)
+    if(TEAM_MEMBERS_RAW_FORMAT === 'array'){
+      const idx = member._rawIndex;
+      if(idx == null || !TEAM_MEMBERS_RAW_DATA[idx]){ throw new Error('Index introuvable'); }
+      TEAM_MEMBERS_RAW_DATA[idx] = Object.assign({}, TEAM_MEMBERS_RAW_DATA[idx], { color: newColor });
+    } else {
+      const key = member._rawKey;
+      if(!key || !TEAM_MEMBERS_RAW_DATA[key]){ throw new Error('Clé introuvable'); }
+      TEAM_MEMBERS_RAW_DATA[key] = Object.assign({}, TEAM_MEMBERS_RAW_DATA[key], { color: newColor });
+    }
+
+    // Écrire dans Firestore — updateDoc pour ne pas écraser les autres champs du doc
+    await updateDoc(doc(db,'_meta','team_members'), { members: TEAM_MEMBERS_RAW_DATA });
+
+    // Mettre à jour le cache UI
+    member.color = newColor;
+
+    // Feedback visuel discret
+    const el = document.querySelector('.tc-item[data-slug="' + slug.replace(/"/g,'\\"') + '"]');
+    if(el){
+      el.classList.add('saved');
+      const swatch = el.querySelector('.tc-swatch');
+      if(swatch) swatch.style.background = newColor;
+      setTimeout(() => el.classList.remove('saved'), 1800);
+    }
+    toast('🎨 Couleur mise à jour pour ' + member.name);
+  }catch(e){
+    console.error('saveTeamColor error:', e);
+    toast('❌ Erreur : ' + e.message);
+    // Rollback UI
+    loadTeamColors();
+  }
+};
+
+// Toggle d'affichage de la section
+document.addEventListener('click', function(ev){
+  if(ev.target && ev.target.id === 'tcToggle'){
+    const body = document.getElementById('teamColorsBody');
+    const btn = ev.target;
+    if(!body) return;
+    const isCollapsed = body.classList.toggle('collapsed');
+    btn.textContent = isCollapsed ? 'Afficher' : 'Masquer';
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
 
 function renderStats(){
   var total=USERS.length;
