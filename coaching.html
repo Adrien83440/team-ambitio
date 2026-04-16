@@ -321,12 +321,12 @@
       display:flex;flex-direction:column;
       max-height:calc(100vh - 340px);
       min-height:200px;
-      flex:1 1 0; min-width:240px; max-width:420px;
+      flex:1 1 0; min-width:284px; max-width:460px;
     }
-    .kanban-col.weight-xs{flex-grow:0.6;max-width:280px}
-    .kanban-col.weight-s{flex-grow:1;max-width:320px}
-    .kanban-col.weight-m{flex-grow:1.5;max-width:380px}
-    .kanban-col.weight-l{flex-grow:2.5;max-width:460px}
+    .kanban-col.weight-xs{flex-grow:0.5;max-width:310px}
+    .kanban-col.weight-s{flex-grow:1;max-width:340px}
+    .kanban-col.weight-m{flex-grow:1.8;max-width:400px}
+    .kanban-col.weight-l{flex-grow:3;max-width:480px}
 
     .kanban-col-head{
       padding:14px 16px 12px;
@@ -362,6 +362,7 @@
     .kanban-cards{
       padding:10px;overflow-y:auto;flex:1;
       display:flex;flex-direction:column;gap:8px;
+      align-items: center; /* Centre les cartes à largeur fixe */
     }
     .kanban-cards::-webkit-scrollbar{width:8px}
     .kanban-cards::-webkit-scrollbar-thumb{background:var(--hair);border-radius:4px}
@@ -381,6 +382,10 @@
       transition:all .18s ease;
       position:relative;
       display:flex;flex-direction:column;gap:10px;
+      /* Largeur fixe : toutes les cartes ont la même taille, quelle que soit leur colonne */
+      width: 260px;
+      max-width: 100%;
+      align-self: flex-start;
     }
     .client-card:hover{
       border-color:var(--ink);
@@ -533,10 +538,10 @@
     @media (max-width:1100px){
       .kanban{min-width:max-content}
       .kanban-col{flex:0 0 300px}
-      .kanban-col.weight-xs{flex:0 0 260px}
-      .kanban-col.weight-s{flex:0 0 290px}
-      .kanban-col.weight-m{flex:0 0 320px}
-      .kanban-col.weight-l{flex:0 0 360px}
+      .kanban-col.weight-xs{flex:0 0 290px}
+      .kanban-col.weight-s{flex:0 0 310px}
+      .kanban-col.weight-m{flex:0 0 340px}
+      .kanban-col.weight-l{flex:0 0 380px}
     }
     @media (max-width:720px){
       .topbar{padding:12px 18px}
