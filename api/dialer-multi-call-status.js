@@ -9,11 +9,29 @@
 //
 // Pour les statuts terminaux 'no-answer', 'busy', 'failed' : on incrémente
 // dialer_attempts sur le doc lead correspondant.
+// Pour le leg 'connecté' qui passe 'completed' : on incrémente AUSSI
+// dialer_attempts (un pitch téléphonique est bien une tentative, même
+// réussie). Cela permet au CRM de refléter correctement le fait que ce
+// lead a été contacté.
 // ==========================================================================
 
 const { db, admin } = require('./_firebaseAdmin');
 const { getTwilioClient } = require('./_twilioClient');
 const { requireValidSignature } = require('./_twilioSignature');
+
+// Helper : incrémente dialer_attempts + pose last_attempt/last_status
+async function bumpLeadAttempts(leadId, callStatus) {
+  if (!leadId) return;
+  try {
+    await db.collection('leads').doc(leadId).update({
+      dialer_attempts: admin.firestore.FieldValue.increment(1),
+      dialer_last_attempt: admin.firestore.FieldValue.serverTimestamp(),
+      dialer_last_status: callStatus,
+    });
+  } catch (e) {
+    console.warn('[mc-status] bumpLeadAttempts failed:', leadId, e.message);
+  }
+}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -78,6 +96,10 @@ module.exports = async (req, res) => {
       ));
       otherLegs.forEach(l => { l.status = 'canceled'; });
 
+      // Les legs cancel par la logique "autre a gagné" comptent comme tentés :
+      // on bump dialer_attempts pour chacun d'eux (fire and forget).
+      otherLegs.forEach(l => { bumpLeadAttempts(l.leadId, 'canceled'); });
+
       await campRef.update({
         legs,
         status: 'connected',
@@ -90,17 +112,7 @@ module.exports = async (req, res) => {
     // Cas 2 : statut terminal non répondu → incrémenter dialer_attempts du lead
     else if (['no-answer', 'busy', 'failed'].includes(callStatus)) {
       const lead = legs[legIdx];
-      if (lead.leadId) {
-        try {
-          await db.collection('leads').doc(lead.leadId).update({
-            dialer_attempts: admin.firestore.FieldValue.increment(1),
-            dialer_last_attempt: admin.firestore.FieldValue.serverTimestamp(),
-            dialer_last_status: callStatus,
-          });
-        } catch (e) {
-          console.warn('[mc-status] lead update failed:', e.message);
-        }
-      }
+      await bumpLeadAttempts(lead.leadId, callStatus);
       await campRef.update({
         legs,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -113,7 +125,10 @@ module.exports = async (req, res) => {
       }
     }
     // Cas 3 : completed sur le leg connecté → fin de campagne propre
+    //         + incrément dialer_attempts (conversation = tentative réussie)
     else if (callStatus === 'completed' && camp.connectedCallSid === callSid) {
+      const connectedLead = legs[legIdx];
+      await bumpLeadAttempts(connectedLead.leadId, 'answered');
       await campRef.update({
         legs,
         status: 'ended',

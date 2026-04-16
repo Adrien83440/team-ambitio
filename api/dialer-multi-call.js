@@ -5,7 +5,16 @@
 // Le premier qui décroche bridge le browser de l'utilisateur, les autres
 // sont annulés par dialer-multi-call-status.js.
 //
-// Body attendu : { leads: [{id, phone, name?}], fromNumberId? }
+// Body attendu : {
+//   leads: [{id, phone, name?}],       // max 5 par requête (taille d'une vague)
+//   fromNumberId?: string,
+//   autoCampaignId?: string,           // UUID client pour grouper les vagues
+//                                      //   d'une même session Power Dialer
+//   waveIndex?: number,                // 0-based, index de la vague dans la
+//                                      //   session auto
+//   queueSize?: number,                // taille totale de la queue (affiché
+//                                      //   pour audit/stats)
+// }
 // Auth : Bearer Firebase ID token (rôle sales ou admin)
 // Réponse : { campaignId, calls: [{leadId, callSid, status}] }
 // ==========================================================================
@@ -38,7 +47,19 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { leads, fromNumberId } = parseBody(req);
+    const body = parseBody(req);
+    const { leads, fromNumberId } = body;
+    // Champs optionnels Power Dialer
+    const autoCampaignId = typeof body.autoCampaignId === 'string' && body.autoCampaignId.length <= 64
+      ? body.autoCampaignId
+      : null;
+    const waveIndex = Number.isInteger(body.waveIndex) && body.waveIndex >= 0
+      ? body.waveIndex
+      : null;
+    const queueSize = Number.isInteger(body.queueSize) && body.queueSize > 0
+      ? body.queueSize
+      : null;
+
     if (!Array.isArray(leads) || leads.length === 0) {
       res.status(400).json({ error: 'leads requis (array non vide)' });
       return;
@@ -78,7 +99,7 @@ module.exports = async (req, res) => {
     const campaignRef = db.collection('dialer_campaigns').doc();
     const campaignId = campaignRef.id;
 
-    await campaignRef.set({
+    const campaignDoc = {
       createdBy: auth.uid,
       assignedUserIds: [auth.uid],
       userId: auth.uid,
@@ -97,7 +118,13 @@ module.exports = async (req, res) => {
       connectedLeadId: null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+    // Tagging Power Dialer (seulement si présent)
+    if (autoCampaignId) campaignDoc.autoCampaignId = autoCampaignId;
+    if (waveIndex !== null) campaignDoc.waveIndex = waveIndex;
+    if (queueSize !== null) campaignDoc.queueSize = queueSize;
+
+    await campaignRef.set(campaignDoc);
 
     // Création des appels Twilio en parallèle
     const client = await getTwilioClient();
