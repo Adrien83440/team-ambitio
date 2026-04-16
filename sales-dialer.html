@@ -65,6 +65,32 @@
           <button id="sd-btn-call" class="sd-btn sd-btn-call">📞 Appeler</button>
           <button id="sd-btn-clear" class="sd-btn sd-btn-ghost" title="Effacer">⌫</button>
         </div>
+
+        <!-- Préférences Power Dialer (persistantes par user) -->
+        <div class="sd-power-prefs" id="sd-power-prefs">
+          <div class="sd-power-prefs-head">
+            <span class="sd-power-prefs-icon">🚀</span>
+            <span class="sd-power-prefs-title">Power Dialer — préférences par défaut</span>
+          </div>
+          <div class="sd-power-prefs-body">
+            <label class="sd-power-prefs-toggle">
+              <input type="checkbox" id="sd-pref-power-enabled">
+              <span>Activer par défaut depuis le CRM</span>
+            </label>
+            <div class="sd-power-prefs-row">
+              <span>Appels simultanés</span>
+              <div class="sd-power-size-group" id="sd-pref-power-size">
+                <button class="sd-power-size-btn" data-size="3">3</button>
+                <button class="sd-power-size-btn sd-power-size-btn-active" data-size="4">4</button>
+                <button class="sd-power-size-btn" data-size="5">5</button>
+              </div>
+            </div>
+            <p class="sd-power-prefs-hint">
+              Ces réglages sont pré-chargés quand tu coches des leads dans le CRM.
+              Tu peux toujours les modifier avant de lancer.
+            </p>
+          </div>
+        </div>
       </div>
 
       <!-- Vue 2 : appel en cours -->
@@ -75,6 +101,10 @@
           <div class="sd-incall-phone" id="sd-incall-phone">—</div>
           <div class="sd-incall-state" id="sd-incall-state">Connexion…</div>
           <div class="sd-incall-timer" id="sd-incall-timer">00:00</div>
+          <!-- Badge mode auto visible pendant l'appel -->
+          <div class="sd-incall-power-tag" id="sd-incall-power-tag" style="display:none">
+            🚀 Power Dialer · Vague <em id="sd-incall-wave">1</em>
+          </div>
         </div>
         <div class="sd-incall-controls">
           <button id="sd-btn-mute" class="sd-ctl">🎙</button>
@@ -94,14 +124,70 @@
         </div>
       </div>
 
-      <!-- Vue 4 : campagne multi-call -->
+      <!-- Vue 4 : campagne multi-call / Power Dialer -->
       <div id="sd-view-campaign" class="sd-view">
+        <!-- Bandeau Power Mode (caché en one-shot) -->
+        <div class="sd-power-banner" id="sd-power-banner" style="display:none">
+          <span class="sd-power-banner-icon">🚀</span>
+          <span class="sd-power-banner-label">Power Dialer actif</span>
+          <span class="sd-power-banner-size">· <em id="sd-pw-wavesize">5</em>/vague</span>
+        </div>
+
         <div class="sd-campaign-head">
-          <h3>Campagne en cours</h3>
+          <h3 id="sd-campaign-title">Campagne en cours</h3>
           <span id="sd-campaign-status" class="sd-badge">dialing</span>
         </div>
+
+        <!-- Stats + progress (Power Mode uniquement) -->
+        <div class="sd-power-progress" id="sd-power-progress" style="display:none">
+          <div class="sd-power-stats">
+            <div class="sd-power-stat">
+              <span class="sd-power-stat-label">Vague</span>
+              <span class="sd-power-stat-value"><em id="sd-pw-wave">1</em>/<em id="sd-pw-total-waves">1</em></span>
+            </div>
+            <div class="sd-power-stat">
+              <span class="sd-power-stat-label">Appelés</span>
+              <span class="sd-power-stat-value"><em id="sd-pw-dialed">0</em>/<em id="sd-pw-queue-size">0</em></span>
+            </div>
+            <div class="sd-power-stat">
+              <span class="sd-power-stat-label">Décrochés</span>
+              <span class="sd-power-stat-value sd-power-stat-green"><em id="sd-pw-connected">0</em></span>
+            </div>
+          </div>
+          <div class="sd-power-bar">
+            <div class="sd-power-bar-fill" id="sd-pw-bar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Liste des legs de la vague actuelle -->
         <div id="sd-campaign-legs" class="sd-campaign-legs"></div>
-        <button id="sd-btn-cancel-campaign" class="sd-btn sd-btn-danger">Annuler la campagne</button>
+
+        <!-- Actions bas de vue -->
+        <div class="sd-campaign-actions">
+          <button id="sd-btn-cancel-campaign" class="sd-btn sd-btn-danger">Annuler la campagne</button>
+          <button id="sd-btn-stop-power" class="sd-btn sd-btn-stop-power" style="display:none">
+            🛑 Stop Power Dialer
+          </button>
+        </div>
+
+        <!-- Overlay countdown entre 2 vagues -->
+        <div class="sd-countdown-overlay" id="sd-countdown-overlay" style="display:none">
+          <div class="sd-countdown-box">
+            <div class="sd-countdown-label">Vague suivante dans</div>
+            <div class="sd-countdown-circle">
+              <svg class="sd-countdown-svg" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="46" class="sd-countdown-track"></circle>
+                <circle cx="50" cy="50" r="46" class="sd-countdown-progress" id="sd-countdown-progress"></circle>
+              </svg>
+              <div class="sd-countdown-number" id="sd-countdown-number">3</div>
+            </div>
+            <div class="sd-countdown-hint" id="sd-countdown-hint">Prochaine vague : <em id="sd-countdown-next-size">5</em> leads</div>
+            <div class="sd-countdown-actions">
+              <button class="sd-btn sd-btn-ghost" id="sd-btn-skip-countdown">Passer maintenant</button>
+              <button class="sd-btn sd-btn-danger" id="sd-btn-stop-countdown">🛑 Stop</button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 

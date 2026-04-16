@@ -140,18 +140,30 @@
     },
 
     /**
-     * Lance une campagne d'appels parallèles (max 5 leads).
+     * Lance une campagne d'appels parallèles (max 5 leads par vague).
      * Le premier qui décroche bridge le browser de l'utilisateur, les autres
      * sont annulés automatiquement côté serveur.
+     *
      * @param {Array<{id: string, phone: string, name?: string}>} leads
      * @param {string} [fromNumberId] - id du doc phone_numbers à utiliser. Si omis,
      *                                  utilise le premier numéro assigné à l'utilisateur.
+     * @param {Object} [options] - Options avancées Power Dialer (optionnel)
+     * @param {string} [options.autoCampaignId] - UUID client qui groupe les vagues
+     *                                             d'une même session Power Dialer
+     * @param {number} [options.waveIndex]      - Index 0-based de cette vague dans
+     *                                             la session auto
+     * @param {number} [options.queueSize]      - Taille totale de la queue (pour
+     *                                             audit / stats)
      * @returns {Promise<{campaignId: string, calls: Array}>}
      */
-    async multiCall(leads, fromNumberId = null) {
+    async multiCall(leads, fromNumberId = null, options = {}) {
+      const body = { leads, fromNumberId };
+      if (options.autoCampaignId) body.autoCampaignId = options.autoCampaignId;
+      if (Number.isInteger(options.waveIndex)) body.waveIndex = options.waveIndex;
+      if (Number.isInteger(options.queueSize)) body.queueSize = options.queueSize;
       return authedFetch(ENDPOINTS.multiCall, {
         method: 'POST',
-        body: JSON.stringify({ leads, fromNumberId }),
+        body: JSON.stringify(body),
       });
     },
 

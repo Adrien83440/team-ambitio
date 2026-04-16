@@ -128,7 +128,7 @@
   max-width: 180px;
 }
 
-.sd-view { display: none; flex: 1; flex-direction: column; padding: 24px 32px; overflow-y: auto; }
+.sd-view { display: none; flex: 1; flex-direction: column; padding: 24px 32px; overflow-y: auto; position: relative; }
 .sd-view-active { display: flex; }
 
 .sd-phone-display {
@@ -208,6 +208,114 @@
 }
 .sd-btn-ghost { background: transparent; }
 
+/* ── Préférences Power Dialer (vue idle) ── */
+.sd-power-prefs {
+  margin-top: 32px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, rgba(185,28,28,0.06), rgba(239,68,68,0.03));
+  border: 1px solid rgba(239,68,68,0.18);
+  border-radius: var(--radius);
+}
+.sd-power-prefs-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sd-power-prefs-icon { font-size: 16px; }
+.sd-power-prefs-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sd-power-prefs-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sd-power-prefs-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.sd-power-prefs-toggle input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 32px;
+  height: 18px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.sd-power-prefs-toggle input[type="checkbox"]::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  background: var(--muted);
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.sd-power-prefs-toggle input[type="checkbox"]:checked {
+  background: linear-gradient(135deg,#b91c1c,#ef4444);
+  border-color: #ef4444;
+}
+.sd-power-prefs-toggle input[type="checkbox"]:checked::after {
+  background: #fff;
+  transform: translateX(14px);
+}
+.sd-power-prefs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text);
+}
+.sd-power-size-group {
+  display: flex;
+  gap: 4px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+}
+.sd-power-size-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  width: 32px;
+  height: 28px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: var(--font-b);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.sd-power-size-btn:hover { color: var(--text); }
+.sd-power-size-btn-active {
+  background: linear-gradient(135deg, #b91c1c, #ef4444);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(185,28,28,0.35);
+}
+.sd-power-prefs-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
 /* ── Vue in-call ── */
 .sd-incall-card {
   text-align: center;
@@ -225,6 +333,22 @@
 .sd-incall-phone { font-size: 13px; color: var(--muted); font-family: var(--font-m); }
 .sd-incall-state { font-size: 12px; color: var(--gold); margin-top: 12px; text-transform: uppercase; letter-spacing: 1px; }
 .sd-incall-timer { font-size: 32px; font-family: var(--font-m); margin-top: 16px; color: var(--text); }
+.sd-incall-power-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 5px 12px;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.28);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ef4444;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.sd-incall-power-tag em { font-style: normal; font-weight: 700; color: #fff; }
 
 .sd-incall-controls {
   display: flex; gap: 16px; justify-content: center; margin-top: 32px;
@@ -259,6 +383,30 @@
 .sd-incoming-actions { display: flex; gap: 24px; justify-content: center; margin-top: 28px; }
 
 /* ── Campagne ── */
+.sd-power-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(185,28,28,0.18), rgba(239,68,68,0.10));
+  border: 1px solid rgba(239,68,68,0.35);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ef4444;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  align-self: flex-start;
+  animation: sdPowerGlow 2.4s ease-in-out infinite;
+}
+@keyframes sdPowerGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+  50%      { box-shadow: 0 0 0 4px rgba(239,68,68,0.10); }
+}
+.sd-power-banner-icon { font-size: 14px; }
+.sd-power-banner-size em { font-style: normal; font-weight: 700; color: #fff; }
+
 .sd-campaign-head {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 16px;
@@ -276,12 +424,63 @@
 }
 .sd-badge.connected { color: var(--green); }
 .sd-badge.ended    { color: var(--muted); }
+
+/* Stats + progress Power Mode */
+.sd-power-progress {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.sd-power-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.sd-power-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.sd-power-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.sd-power-stat-value {
+  font-size: 18px;
+  font-family: var(--font-m);
+  font-weight: 700;
+  color: var(--text);
+}
+.sd-power-stat-value em { font-style: normal; }
+.sd-power-stat-green .sd-power-stat-value,
+.sd-power-stat-green { color: var(--green); }
+.sd-power-bar {
+  height: 6px;
+  background: var(--bg4);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.sd-power-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #b91c1c, #ef4444);
+  border-radius: 999px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 .sd-campaign-legs {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-bottom: 20px;
+  min-height: 0;
+  overflow-y: auto;
 }
 .sd-leg {
   padding: 12px 14px;
@@ -293,10 +492,115 @@
   gap: 12px;
 }
 .sd-leg.connected { border-color: var(--green); background: rgba(52,211,153,0.08); }
-.sd-leg.cancelled { opacity: 0.5; }
+.sd-leg.cancelled,
+.sd-leg.canceled { opacity: 0.5; }
+.sd-leg.ringing { border-color: var(--gold); }
+.sd-leg.initiated { border-color: var(--border2); }
 .sd-leg-name { flex: 1; font-size: 13px; font-weight: 600; }
 .sd-leg-phone { font-size: 11px; color: var(--muted); font-family: var(--font-m); }
 .sd-leg-status { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+
+/* Actions bas de vue campagne */
+.sd-campaign-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+}
+.sd-campaign-actions .sd-btn { flex: 1; }
+.sd-btn-stop-power {
+  background: linear-gradient(135deg, #b91c1c, #ef4444);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(185,28,28,0.35);
+}
+.sd-btn-stop-power:hover { transform: translateY(-1px); }
+
+/* ── Countdown overlay ── */
+.sd-countdown-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 15, 24, 0.85);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  animation: sdCountdownFadeIn 0.2s ease-out;
+}
+@keyframes sdCountdownFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.sd-countdown-box {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius2);
+  padding: 28px 36px;
+  text-align: center;
+  min-width: 280px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.sd-countdown-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+.sd-countdown-circle {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 16px;
+}
+.sd-countdown-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.sd-countdown-track {
+  fill: none;
+  stroke: var(--bg4);
+  stroke-width: 6;
+}
+.sd-countdown-progress {
+  fill: none;
+  stroke: url(#sdCountdownGradient);
+  stroke: #ef4444;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 289.03;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1s linear;
+}
+.sd-countdown-number {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-m);
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--text);
+}
+.sd-countdown-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 18px;
+}
+.sd-countdown-hint em {
+  color: var(--text);
+  font-style: normal;
+  font-weight: 700;
+}
+.sd-countdown-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.sd-countdown-actions .sd-btn { padding: 10px 18px; font-size: 13px; }
 
 /* ── Lead panel ── */
 .sd-lead-panel { padding: 16px; overflow-y: auto; flex: 1; }
