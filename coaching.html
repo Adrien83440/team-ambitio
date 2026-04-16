@@ -310,10 +310,13 @@
       overflow-x:auto;
     }
     .kanban{
-      display:flex;gap:14px;align-items:flex-start;
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:14px;
+      align-items:flex-start;
       min-height:400px;
     }
-    /* Colonnes adaptatives selon densité */
+    /* Colonnes toutes de même largeur */
     .kanban-col{
       background:var(--bg-soft);
       border:1px solid var(--hair);
@@ -321,12 +324,16 @@
       display:flex;flex-direction:column;
       max-height:calc(100vh - 340px);
       min-height:200px;
-      flex:1 1 0; min-width:284px; max-width:460px;
+      min-width: 0; /* Permet à grid d'imposer la largeur */
     }
-    .kanban-col.weight-xs{flex-grow:0.5;max-width:310px}
-    .kanban-col.weight-s{flex-grow:1;max-width:340px}
-    .kanban-col.weight-m{flex-grow:1.8;max-width:400px}
-    .kanban-col.weight-l{flex-grow:3;max-width:480px}
+    /* Les classes weight-* sont conservées pour rétro-compat mais désactivées : grid gère tout */
+    .kanban-col.weight-xs,
+    .kanban-col.weight-s,
+    .kanban-col.weight-m,
+    .kanban-col.weight-l{
+      flex-grow: unset;
+      max-width: unset;
+    }
 
     .kanban-col-head{
       padding:14px 16px 12px;
@@ -362,7 +369,6 @@
     .kanban-cards{
       padding:10px;overflow-y:auto;flex:1;
       display:flex;flex-direction:column;gap:8px;
-      align-items: center; /* Centre les cartes à largeur fixe */
     }
     .kanban-cards::-webkit-scrollbar{width:8px}
     .kanban-cards::-webkit-scrollbar-thumb{background:var(--hair);border-radius:4px}
@@ -382,10 +388,7 @@
       transition:all .18s ease;
       position:relative;
       display:flex;flex-direction:column;gap:10px;
-      /* Largeur fixe : toutes les cartes ont la même taille, quelle que soit leur colonne */
-      width: 260px;
-      max-width: 100%;
-      align-self: flex-start;
+      width: 100%;
     }
     .client-card:hover{
       border-color:var(--ink);
@@ -535,13 +538,14 @@
     .kanban-cards .client-card:nth-child(n+6){animation-delay:.17s}
 
     /* Responsive kanban */
-    @media (max-width:1100px){
-      .kanban{min-width:max-content}
-      .kanban-col{flex:0 0 300px}
-      .kanban-col.weight-xs{flex:0 0 290px}
-      .kanban-col.weight-s{flex:0 0 310px}
-      .kanban-col.weight-m{flex:0 0 340px}
-      .kanban-col.weight-l{flex:0 0 380px}
+    @media (max-width:1300px){
+      .kanban{grid-template-columns: repeat(4, minmax(260px, 1fr)); min-width: max-content;}
+    }
+    @media (max-width:900px){
+      .kanban{grid-template-columns: repeat(2, 1fr); min-width: auto;}
+    }
+    @media (max-width:600px){
+      .kanban{grid-template-columns: 1fr;}
     }
     @media (max-width:720px){
       .topbar{padding:12px 18px}
