@@ -376,7 +376,13 @@ function renderPipeline(leads){
   if (window.DialerBridge) {
     try {
       window.DialerBridge.attachButtons('#crmBoard', { cardSelector: '.crm-card' });
-      window.DialerBridge.enableMultiSelect('#crmBoard', { cardSelector: '.crm-card', maxSelection: 5 });
+      window.DialerBridge.enableMultiSelect('#crmBoard', {
+        cardSelector: '.crm-card',
+        maxSelection: 5,
+        // Kanban : checkbox "toute la colonne" dans le header de chaque colonne
+        groupSelector: '.crm-col',
+        groupCheckboxTarget: '.crm-col-head-top',
+      });
     } catch (e) { console.warn('[DialerBridge] attach failed', e); }
   }
 }
