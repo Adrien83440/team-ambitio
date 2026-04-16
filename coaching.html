@@ -402,6 +402,97 @@
     .dp-plan-textarea:focus { border-color: var(--purple); }
     .dp-plan-save-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
 
+    /* ── PLANS D'ACTION (documents HTML) ── */
+    .dp-plans-section {
+      margin: 0 24px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .dp-plans-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px;
+      background: linear-gradient(135deg, #fff7ed, #fef3c7);
+      border-bottom: 1.5px solid var(--border);
+    }
+    .dp-plans-title {
+      font-size: 14px; font-weight: 700;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .dp-plans-count {
+      font-size: 10px; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; background: #fde68a; color: #92400e;
+    }
+    .dp-plans-body { padding: 12px 14px; background: white; }
+    .dp-plans-loading {
+      text-align: center; padding: 18px 12px; color: var(--muted); font-size: 12px;
+    }
+    .dp-plans-empty {
+      text-align: center; padding: 20px 14px; color: var(--muted); font-size: 13px;
+    }
+    .dp-plans-empty-icon { font-size: 28px; margin-bottom: 6px; }
+    .dp-plans-empty-sub { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+    .dp-plan-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      transition: all .15s;
+    }
+    .dp-plan-item:hover { border-color: #f59e0b; background: #fef3c7; }
+    .dp-plan-item:last-child { margin-bottom: 0; }
+    .dp-plan-item-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: linear-gradient(135deg, #C9960C, #F5C842);
+      color: white; display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 800; flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(201,150,12,.25);
+    }
+    .dp-plan-item-main { flex: 1; min-width: 0; }
+    .dp-plan-item-title {
+      font-size: 13px; font-weight: 700; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .dp-plan-item-meta {
+      font-size: 11px; color: var(--muted); margin-top: 3px;
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }
+    .dp-plan-tier-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 8px;
+      border-radius: 20px; background: #C9960C; color: white;
+      letter-spacing: .3px;
+    }
+    .dp-plan-tier-badge.phenix { background: #7c3aed; }
+    .dp-plan-tier-badge.autre  { background: #64748b; }
+    .dp-plan-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .dp-plan-action-btn {
+      width: 32px; height: 32px; border-radius: 8px;
+      border: 1.5px solid var(--border); background: white;
+      font-size: 14px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      transition: all .15s; color: var(--muted);
+    }
+    .dp-plan-action-btn:hover { border-color: var(--blue-main); color: var(--blue-main); }
+    .dp-plan-action-btn.danger:hover { border-color: var(--red); color: var(--red); background: var(--red-light); }
+    .dp-plan-upload-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 16px; border-radius: 10px; border: none;
+      background: linear-gradient(135deg, #C9960C, #F5C842);
+      color: white; font-family: inherit; font-size: 12px; font-weight: 700;
+      cursor: pointer; transition: all .18s;
+      box-shadow: 0 2px 8px rgba(201,150,12,.25);
+    }
+    .dp-plan-upload-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(201,150,12,.35); }
+    .dp-plan-upload-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .dp-plan-tier-select {
+      padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+      font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text);
+      background: white; cursor: pointer; outline: none;
+    }
+    .dp-plan-tier-select:focus { border-color: var(--blue-main); }
+
     /* ── SESSION LINKS & NOTES ── */
     .si-links {
       display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px;
@@ -1340,10 +1431,37 @@ function openDetail(id){
           </div>
         </div>
       </div>
+
+      <!-- PLANS D'ACTION (documents HTML) -->
+      <div class="dp-plans-section">
+        <div class="dp-plans-header">
+          <div class="dp-plans-title">📜 Plans d'action
+            <span class="dp-plans-count" id="plansCount-${id}">${(c.plans && c.plans.length) || 0}</span>
+          </div>
+          ${window._role === 'admin'
+            ? `<button class="dp-plan-upload-btn" onclick="triggerPlanUpload('${id}')">
+                 ➕ Ajouter un plan
+               </button>`
+            : ''
+          }
+        </div>
+        <div class="dp-plans-body">
+          <div id="plansList-${id}">
+            ${renderPlansList(c, id)}
+          </div>
+          ${window._role === 'admin' ? `
+            <input type="file" id="planFileInput-${id}" accept=".html,.htm,text/html" style="display:none" onchange="uploadPlanFile('${id}', this)"/>
+          ` : ''}
+        </div>
+      </div>
+
       ${renderYearTabs(c, id)}
     </div>
   `;
   document.getElementById('detailOverlay').classList.add('show');
+
+  // Lazy-load des plans (sous-collection Firestore)
+  loadClientPlans(id);
 }
 
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('show');}
@@ -1478,6 +1596,280 @@ async function savePlanAction(clientId){
     openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ── PLANS D'ACTION (documents HTML attachés) ──
+// Sous-collection Firestore : clients/{clientId}/plans/{planId}
+// Schéma doc plan :
+//   name       : string (nom fichier source, ex. "plan_action_julie.html")
+//   title      : string (titre lisible, extrait du <title> si possible)
+//   tier       : 'elite' | 'phenix' | 'autre'
+//   html       : string (contenu HTML complet, UTF-8)
+//   size       : number (octets)
+//   yearNum    : number | null (année de coaching liée, optionnel)
+//   uploadedAt : number (Date.now())
+//   uploadedBy : string (uid admin)
+// ══════════════════════════════════════════════════════════════════
+
+const PLAN_MAX_BYTES = 750 * 1024; // 750 Ko, aligné sur la limite des files séance
+
+function renderPlansList(c, id){
+  const plans = c.plans;
+  if(plans === undefined){
+    return `<div class="dp-plans-loading">⏳ Chargement des plans...</div>`;
+  }
+  if(!plans || plans.length === 0){
+    return `
+      <div class="dp-plans-empty">
+        <div class="dp-plans-empty-icon">📜</div>
+        <div>Aucun plan d'action attaché</div>
+        <div class="dp-plans-empty-sub">${window._role === 'admin' ? 'Cliquez sur « Ajouter un plan » pour en uploader un (HTML)' : 'Les plans seront ajoutés par un administrateur'}</div>
+      </div>`;
+  }
+  // Tri : plus récent en premier
+  const sorted = plans.slice().sort((a,b)=>(b.uploadedAt||0)-(a.uploadedAt||0));
+  const isAdmin = window._role === 'admin';
+  return sorted.map(p => {
+    const tier = (p.tier || 'autre').toLowerCase();
+    const tierLabel = tier === 'elite' ? 'ELITE' : tier === 'phenix' ? 'PHÉNIX' : 'AUTRE';
+    const tierCls = tier === 'elite' ? '' : tier === 'phenix' ? 'phenix' : 'autre';
+    const dateStr = p.uploadedAt ? new Date(p.uploadedAt).toLocaleDateString('fr-FR', {day:'2-digit',month:'short',year:'numeric'}) : '';
+    const sizeKb = p.size ? Math.round(p.size/1024) + ' Ko' : '';
+    const yearStr = p.yearNum ? `An ${p.yearNum}` : '';
+    return `
+      <div class="dp-plan-item">
+        <div class="dp-plan-item-icon">📜</div>
+        <div class="dp-plan-item-main">
+          <div class="dp-plan-item-title">${escHtml(p.title || p.name || 'Plan d\'action')}</div>
+          <div class="dp-plan-item-meta">
+            <span class="dp-plan-tier-badge ${tierCls}">${tierLabel}</span>
+            ${yearStr ? `<span>${yearStr}</span>` : ''}
+            ${dateStr ? `<span>📅 ${dateStr}</span>` : ''}
+            ${sizeKb ? `<span>${sizeKb}</span>` : ''}
+          </div>
+        </div>
+        <div class="dp-plan-item-actions">
+          <button class="dp-plan-action-btn" onclick="openPlan('${id}','${p._id}')" title="Ouvrir dans un nouvel onglet">👁️</button>
+          <button class="dp-plan-action-btn" onclick="downloadPlan('${id}','${p._id}')" title="Télécharger">⬇️</button>
+          ${isAdmin ? `<button class="dp-plan-action-btn danger" onclick="deletePlan('${id}','${p._id}')" title="Supprimer">🗑️</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadClientPlans(clientId){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+  // Évite le rechargement si déjà en mémoire (re-render instantané)
+  if(c.plans !== undefined){
+    const target = document.getElementById('plansList-'+clientId);
+    if(target) target.innerHTML = renderPlansList(c, clientId);
+    const cnt = document.getElementById('plansCount-'+clientId);
+    if(cnt) cnt.textContent = (c.plans || []).length;
+    return;
+  }
+  try{
+    const snap = await window._getDocs(window._collection(window._db,'clients',clientId,'plans'));
+    const plans = [];
+    snap.forEach(d => {
+      const data = d.data();
+      data._id = d.id;
+      plans.push(data);
+    });
+    c.plans = plans;
+  }catch(e){
+    console.warn('loadClientPlans error:', e);
+    c.plans = []; // Évite le retry infini en cas d'erreur (permission, réseau)
+  }
+  // Rafraîchit uniquement la zone plans si le panel est toujours ouvert sur ce client
+  const target = document.getElementById('plansList-'+clientId);
+  if(target) target.innerHTML = renderPlansList(c, clientId);
+  const cnt = document.getElementById('plansCount-'+clientId);
+  if(cnt) cnt.textContent = (c.plans || []).length;
+}
+
+function triggerPlanUpload(clientId){
+  if(window._role !== 'admin'){ showToast('Réservé aux admins','error'); return; }
+  const input = document.getElementById('planFileInput-'+clientId);
+  if(input) input.click();
+}
+
+async function uploadPlanFile(clientId, inputEl){
+  if(window._role !== 'admin'){ showToast('Réservé aux admins','error'); return; }
+  const file = inputEl && inputEl.files && inputEl.files[0];
+  if(!file) return;
+
+  // Validation type
+  const nameLc = (file.name||'').toLowerCase();
+  if(!nameLc.endsWith('.html') && !nameLc.endsWith('.htm') && file.type !== 'text/html'){
+    showToast('Format attendu : fichier .html','error');
+    inputEl.value = '';
+    return;
+  }
+  if(file.size > PLAN_MAX_BYTES){
+    showToast(`Fichier trop lourd (max ${Math.round(PLAN_MAX_BYTES/1024)} Ko)`,'error');
+    inputEl.value = '';
+    return;
+  }
+
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c){ inputEl.value = ''; return; }
+
+  // Prompt : tier + année liée
+  const tierRaw = prompt('Catégorie du plan ?\n\n  elite   — Business Phénix Elite\n  phenix  — Business Phénix\n  autre   — Autre\n\nEntrez : elite, phenix ou autre', 'elite');
+  if(tierRaw === null){ inputEl.value = ''; return; }
+  const tier = (tierRaw||'').trim().toLowerCase();
+  if(!['elite','phenix','autre'].includes(tier)){
+    showToast('Catégorie invalide (elite, phenix, autre)','error');
+    inputEl.value = '';
+    return;
+  }
+
+  const currentYear = (c.years && c.years.length) ? c.years[c.years.length-1].yearNum : null;
+  const yearRaw = prompt('Année de coaching liée à ce plan ? (laisser vide si non applicable)', currentYear ? String(currentYear) : '');
+  let yearNum = null;
+  if(yearRaw !== null && yearRaw.trim() !== ''){
+    const n = parseInt(yearRaw, 10);
+    if(!isNaN(n) && n > 0) yearNum = n;
+  }
+
+  // Lecture du fichier en texte (pas base64 — c'est du HTML UTF-8)
+  let html;
+  try{
+    html = await file.text();
+  }catch(e){
+    showToast('Erreur lecture fichier: '+e.message,'error');
+    inputEl.value = '';
+    return;
+  }
+
+  // Extraire le <title> du HTML pour l'afficher plus joliment
+  let title = file.name.replace(/\.(html?|htm)$/i,'');
+  const m = html.match(/<title>([^<]+)<\/title>/i);
+  if(m && m[1]) title = m[1].trim();
+
+  // Écriture Firestore
+  const ts = Date.now();
+  const planId = ts + '_' + Math.random().toString(36).slice(2, 8);
+  const planData = {
+    name: file.name,
+    title: title,
+    tier: tier,
+    html: html,
+    size: file.size,
+    yearNum: yearNum,
+    uploadedAt: ts,
+    uploadedBy: window._uid || ''
+  };
+
+  try{
+    const ref = window._doc(window._db,'clients',clientId,'plans',planId);
+    await window._setDoc(ref, planData);
+    // Met à jour le cache local et le rendu
+    if(!c.plans) c.plans = [];
+    c.plans.push({ ...planData, _id: planId });
+    const target = document.getElementById('plansList-'+clientId);
+    if(target) target.innerHTML = renderPlansList(c, clientId);
+    const cnt = document.getElementById('plansCount-'+clientId);
+    if(cnt) cnt.textContent = c.plans.length;
+    showToast('✅ Plan ajouté !','success');
+  }catch(e){
+    showToast('Erreur sauvegarde: '+(e.message||e),'error');
+  }finally{
+    inputEl.value = '';
+  }
+}
+
+async function openPlan(clientId, planId){
+  // Tente d'abord via le cache mémoire pour être instantané
+  const c = _clients.find(x=>x._id===clientId);
+  let html = null;
+  let title = 'Plan d\'action';
+  if(c && c.plans){
+    const p = c.plans.find(x=>x._id===planId);
+    if(p){ html = p.html; title = p.title || p.name || title; }
+  }
+  // Fallback : relecture Firestore si non présent en mémoire
+  if(!html){
+    try{
+      const snap = await window._getDoc(window._doc(window._db,'clients',clientId,'plans',planId));
+      if(!snap.exists()){ showToast('Plan introuvable','error'); return; }
+      const d = snap.data();
+      html = d.html; title = d.title || d.name || title;
+    }catch(e){
+      showToast('Erreur chargement: '+e.message,'error');
+      return;
+    }
+  }
+  if(!html){ showToast('Plan vide','error'); return; }
+
+  // Ouverture dans un nouvel onglet via Blob URL
+  // (document.write() marche aussi mais Blob URL gère mieux les gros HTML + print)
+  try{
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    if(!w){
+      showToast('Popup bloquée par le navigateur','error');
+      URL.revokeObjectURL(url);
+      return;
+    }
+    // Libère l'URL après ouverture (le navigateur garde la ressource tant que l'onglet est ouvert)
+    setTimeout(()=>URL.revokeObjectURL(url), 60000);
+  }catch(e){
+    showToast('Erreur ouverture: '+e.message,'error');
+  }
+}
+
+async function downloadPlan(clientId, planId){
+  const c = _clients.find(x=>x._id===clientId);
+  let html = null;
+  let name = 'plan_action.html';
+  if(c && c.plans){
+    const p = c.plans.find(x=>x._id===planId);
+    if(p){ html = p.html; name = p.name || name; }
+  }
+  if(!html){
+    try{
+      const snap = await window._getDoc(window._doc(window._db,'clients',clientId,'plans',planId));
+      if(!snap.exists()){ showToast('Plan introuvable','error'); return; }
+      const d = snap.data();
+      html = d.html; name = d.name || name;
+    }catch(e){ showToast('Erreur: '+e.message,'error'); return; }
+  }
+  try{
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  }catch(e){
+    showToast('Erreur téléchargement: '+e.message,'error');
+  }
+}
+
+async function deletePlan(clientId, planId){
+  if(window._role !== 'admin'){ showToast('Réservé aux admins','error'); return; }
+  if(!confirm('Supprimer définitivement ce plan d\'action ?\n\nCette action est irréversible.')) return;
+  try{
+    await window._deleteDoc(window._doc(window._db,'clients',clientId,'plans',planId));
+    const c = _clients.find(x=>x._id===clientId);
+    if(c && c.plans){
+      c.plans = c.plans.filter(p => p._id !== planId);
+      const target = document.getElementById('plansList-'+clientId);
+      if(target) target.innerHTML = renderPlansList(c, clientId);
+      const cnt = document.getElementById('plansCount-'+clientId);
+      if(cnt) cnt.textContent = c.plans.length;
+    }
+    showToast('Plan supprimé','success');
+  }catch(e){
+    showToast('Erreur suppression: '+e.message,'error');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
 
 // ── QUICK MARK SESSION DONE ──
 async function quickMarkDone(clientId, sessionNum){
