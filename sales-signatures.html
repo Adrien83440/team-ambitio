@@ -646,6 +646,12 @@ function submitSend(){
     createdAt:firebase.firestore.FieldValue.serverTimestamp()
   };
   db.collection('signature_requests').add(req).then(function(ref){
+    // Envoyer le SMS avec le lien de signature
+    db.collection('webhook_inbox').add({
+      action:'signature_resend',
+      signatureRequestId:ref.id,
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(function(e){console.warn('SMS send failed:',e.message);});
     btn.disabled=false;btn.textContent='📨 Envoyer le contrat';
     document.getElementById('sendModal').style.display='none';
     document.getElementById('sendName').value='';
