@@ -129,7 +129,9 @@ module.exports = async (req, res) => {
 
     const nameParts = (leadName || '').trim().split(/\s+/).filter(Boolean);
     const givenName = nameParts[0] || 'Client';
-    const familyName = nameParts.slice(1).join(' ') || '-';
+    // Si le lead n'a qu'un prénom saisi ("Adrien"), on n'envoie PAS family_name
+    // — envoyer un '-' placeholder affichait le dash sur la page GC.
+    const familyName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
 
     console.log('[gocardless-billing-request] start', {
       env: GC_ENV,
@@ -159,17 +161,20 @@ module.exports = async (req, res) => {
     // page hébergée. Attention : sur l'API version 2015-07-06, seuls
     // given_name / family_name / email sont des clés permises. phone_number
     // et country_code sont rejetés avec "Invalid document structure".
-    // Le client pourra compléter son téléphone sur la page GC si besoin.
+    // Construction conditionnelle : family_name n'est inclus que s'il
+    // existe vraiment — évite d'afficher un dash placeholder.
+    const prefilled = {
+      given_name: givenName,
+      email: leadEmail
+    };
+    if (familyName) prefilled.family_name = familyName;
+
     const baseUrl = process.env.APP_BASE_URL || 'https://team.alteore.com';
     const flowResp = await gcRequest('create_billing_request_flow', 'POST', '/billing_request_flows', {
       billing_request_flows: {
         redirect_uri: `${baseUrl}/payments.html?mandateDone=1&paymentId=${paymentId}`,
         exit_uri: `${baseUrl}/payments.html?mandateCancelled=1&paymentId=${paymentId}`,
-        prefilled_customer: {
-          given_name: givenName,
-          family_name: familyName,
-          email: leadEmail
-        },
+        prefilled_customer: prefilled,
         links: { billing_request: billingRequestId }
       }
     });
