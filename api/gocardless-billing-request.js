@@ -29,7 +29,13 @@ const GC_ENV = process.env.GOCARDLESS_ENVIRONMENT === 'sandbox' ? 'sandbox' : 'l
 const GC_BASE = GC_ENV === 'sandbox'
   ? 'https://api-sandbox.gocardless.com'
   : 'https://api.gocardless.com';
-const GC_VERSION = '2024-02-22';
+// Version API GoCardless. 2015-07-06 est la version de base (celle utilisée
+// partout ailleurs dans le repo : gocardless-payment, gocardless-lookup,
+// gocardless-status). Elle couvre les billing requests en rétro-compat.
+// Ne pas remettre de date "moderne" sans vérifier qu'elle existe dans
+// https://developer.gocardless.com/api-reference → sinon HTTP 400
+// "Version not found".
+const GC_VERSION = '2015-07-06';
 
 class GoCardlessError extends Error {
   constructor(step, status, body) {
