@@ -278,14 +278,51 @@ firebase.auth().onAuthStateChanged(async u => {
 function checkUrlParams() {
   const p = new URLSearchParams(window.location.search);
   if (p.get('mandateDone') && p.get('paymentId')) {
-    toast('✅ Mandat créé avec succès ! Le paiement peut maintenant être déclenché.');
-    openDetail(p.get('paymentId'));
+    const pid = p.get('paymentId');
+    toast('✅ Mandat créé avec succès ! Synchronisation en cours…');
+    // Finalize : pull le mandat depuis GC avant d'ouvrir le détail.
+    // Le webhook onWebhookInbox fera la même chose de son côté, mais
+    // appeler finalize ici garantit un affichage instantané au retour
+    // du flow hébergé.
+    finalizeMandate(pid).finally(() => openDetail(pid));
   }
-  if (p.get('mandateCancelled')) toast('⚠️ Le client a annulé la création du mandat.', false);
+  if (p.get('mandateCancelled') && p.get('paymentId')) {
+    toast('⚠️ Le client a annulé la création du mandat.', false);
+    // Sync pour basculer le statut en draft si besoin (BR cancelled côté GC)
+    finalizeMandate(p.get('paymentId')).catch(()=>{});
+  }
   if (p.get('leadId')) {
     // Pré-remplir depuis le lead
     prefillFromLead(p.get('leadId'));
     openPayModal();
+  }
+}
+
+/* ══ FINALIZE / REFRESH MANDATE STATUS ══ */
+// Appelle /api/gocardless-finalize pour synchroniser gcMandateId +
+// gcCustomerId + status depuis GoCardless. Utilisé :
+//   - au retour du flow hébergé (?mandateDone=1)
+//   - automatiquement à l'ouverture d'un paiement pending_mandate sans mandat
+//   - manuellement via bouton "🔄 Rafraîchir" dans la vue détail
+async function finalizeMandate(paymentId, opts = {}) {
+  const { silent = false } = opts;
+  try {
+    const token = await firebase.auth().currentUser.getIdToken();
+    const resp = await fetch('/api/gocardless-finalize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ paymentId })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Erreur finalize');
+    if (!silent) {
+      if (data.gcMandateId) toast('✅ Mandat synchronisé (' + data.billingRequestStatus + ')');
+      else toast('⏳ En attente : ' + data.billingRequestStatus, false);
+    }
+    return data;
+  } catch(e) {
+    if (!silent) toast('❌ ' + e.message, false);
+    throw e;
   }
 }
 
@@ -382,9 +419,18 @@ async function openDetail(id) {
   el.classList.add('show');
   el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
+  // Auto-finalize : si le paiement attend encore le mandat mais n'a toujours
+  // pas reçu de gcMandateId, on déclenche une synchro silencieuse côté GC.
+  // L'onSnapshot sur allPayments rerendra automatiquement si quelque chose
+  // change. Filet de sécurité au cas où le webhook serait en retard.
+  if (p.status === 'pending_mandate' && p.gcBillingRequestId && !p.gcMandateId) {
+    finalizeMandate(id, { silent: true }).catch(()=>{});
+  }
+
   const ini = (p.leadName || '💳')[0].toUpperCase();
   const canTrigger = (p.status === 'mandate_active') && (currentRole === 'admin' || p.createdBy === currentUser.uid);
   const canSendLink = (p.status === 'pending_mandate' || p.status === 'draft') && (currentRole === 'admin' || p.createdBy === currentUser.uid);
+  const canRefresh = (p.status === 'pending_mandate') && p.gcBillingRequestId;
   const isAdmin = currentRole === 'admin';
 
   let linkSection = '';
@@ -396,6 +442,7 @@ async function openDetail(id) {
         <button class="pay-btn pay-btn-ghost" style="font-size:12px" onclick="copyLink('${esc(p.gcBillingRequestFlowUrl)}')">📋 Copier</button>
         ${p.leadPhone ? `<button class="pay-btn pay-btn-amber" style="font-size:12px" onclick="sendLink('${id}','sms')">📱 Envoyer SMS</button>` : ''}
         ${p.leadEmail ? `<button class="pay-btn pay-btn-amber" style="font-size:12px" onclick="sendLink('${id}','email')">📧 Envoyer email</button>` : ''}
+        ${canRefresh ? `<button class="pay-btn pay-btn-ghost" style="font-size:12px" onclick="finalizeMandate('${id}')">🔄 Rafraîchir statut</button>` : ''}
       </div>
     </div>`;
   }
