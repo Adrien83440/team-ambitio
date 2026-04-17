@@ -616,14 +616,42 @@ async function sendLink(id, via) {
   if (!p || !p.gcBillingRequestFlowUrl) return;
   const msg = `Bonjour ${p.leadName},\n\nVeuillez renseigner vos coordonnées bancaires pour mettre en place votre prélèvement automatique :\n\n${p.gcBillingRequestFlowUrl}\n\nCordialement,\nL'équipe Ambitio`;
 
-  if (via === 'sms' && p.leadPhone) {
-    await db.collection('webhook_inbox').add({
-      action: 'send_sms', to: p.leadPhone, body: msg,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    toast('📱 SMS envoyé !');
+  if (via === 'sms' && p.leadPhone && p.leadId) {
+    try {
+      const token = await firebase.auth().currentUser.getIdToken();
+      const resp = await fetch('/api/twilio-sms-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ leadId: p.leadId, message: msg })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Erreur envoi SMS');
+      toast('📱 SMS envoyé !');
+    } catch(e) {
+      toast('❌ ' + e.message, false);
+      return;
+    }
+  } else if (via === 'sms') {
+    toast('❌ SMS impossible : numéro ou lead manquant', false);
+    return;
   } else if (via === 'email' && p.leadEmail) {
-    toast('📧 Envoi email en cours… (à implémenter)');
+    try {
+      const token = await firebase.auth().currentUser.getIdToken();
+      const resp = await fetch('/api/payments-send-mandate-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ paymentId: id })
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Erreur envoi email');
+      toast('📧 Email envoyé à ' + p.leadEmail);
+    } catch(e) {
+      toast('❌ ' + e.message, false);
+      return;
+    }
+  } else if (via === 'email') {
+    toast('❌ Email impossible : adresse manquante', false);
+    return;
   }
 
   await db.collection('payments').doc(id).update({
