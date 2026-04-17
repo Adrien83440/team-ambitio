@@ -155,23 +155,21 @@ module.exports = async (req, res) => {
     const billingRequestId = brResp.billing_requests.id;
 
     // ─── 2. Créer le flow (URL vers la page hébergée GoCardless) ───
-    // `prefilled_customer` pré-remplit les champs pour le client. La page
-    // hébergée accepte ce champ sans nécessiter de validation custom pages.
-    // Construction conditionnelle : on n'inclut que les champs présents
-    // (éviter undefined qui peut être sérialisé différemment selon runtime).
-    const prefilled = {
-      given_name: givenName,
-      family_name: familyName,
-      email: leadEmail
-    };
-    if (leadPhone) prefilled.phone_number = leadPhone;
-
+    // `prefilled_customer` pré-remplit les champs pour le client sur la
+    // page hébergée. Attention : sur l'API version 2015-07-06, seuls
+    // given_name / family_name / email sont des clés permises. phone_number
+    // et country_code sont rejetés avec "Invalid document structure".
+    // Le client pourra compléter son téléphone sur la page GC si besoin.
     const baseUrl = process.env.APP_BASE_URL || 'https://team.alteore.com';
     const flowResp = await gcRequest('create_billing_request_flow', 'POST', '/billing_request_flows', {
       billing_request_flows: {
         redirect_uri: `${baseUrl}/payments.html?mandateDone=1&paymentId=${paymentId}`,
         exit_uri: `${baseUrl}/payments.html?mandateCancelled=1&paymentId=${paymentId}`,
-        prefilled_customer: prefilled,
+        prefilled_customer: {
+          given_name: givenName,
+          family_name: familyName,
+          email: leadEmail
+        },
         links: { billing_request: billingRequestId }
       }
     });
