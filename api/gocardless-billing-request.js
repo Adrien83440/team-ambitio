@@ -1,15 +1,24 @@
 // ==========================================================================
-// api/gocardless-billing-request.js  (v2 — diagnostic 403)
+// api/gocardless-billing-request.js  (v3 — fix 403 "create_customer")
 // --------------------------------------------------------------------------
-// Crée un customer GoCardless + billing request + flow URL (lien mandat IBAN)
+// Crée un billing request + billing request flow (lien mandat IBAN hébergé).
+//
+// CHANGEMENT CLÉ vs v2 :
+//   v2 appelait POST /customers pour créer le customer avant le BR. Support
+//   GoCardless (Vlad, ticket 4258993) a confirmé que POST /customers est
+//   restreint au niveau compte car nos pages de paiement custom ne sont pas
+//   activées → 403 systématique. On laisse donc GoCardless créer lui-même le
+//   customer + le compte bancaire + le mandat via la page hébergée. Les
+//   infos client sont juste pré-remplies via `prefilled_customer` sur le
+//   flow (ça c'est autorisé, c'est juste de la pré-pop UI).
+//
+// On ajoute aussi `metadata.paymentId` sur le BR → le Cloud Function
+// `onWebhookInbox` et la route `/api/gocardless-finalize` pourront retrouver
+// notre doc Firestore `payments/{id}` à partir du billing request.
 //
 // Body : { paymentId, leadName, leadEmail, leadPhone }
 // Auth : Bearer Firebase ID token (rôle sales ou admin)
-// Réponse : { billingRequestId, flowUrl, customerId }
-//
-// v2 : ajoute le nom de l'étape dans les erreurs + propage le status HTTP
-//      réel renvoyé par GoCardless (au lieu de toujours 500). Permet de
-//      diagnostiquer 403 (auth/permissions), 401 (token), 422 (payload), etc.
+// Réponse : { billingRequestId, flowUrl, reused? }
 // ==========================================================================
 
 const { db } = require('./_firebaseAdmin');
@@ -20,6 +29,7 @@ const GC_ENV = process.env.GOCARDLESS_ENVIRONMENT === 'sandbox' ? 'sandbox' : 'l
 const GC_BASE = GC_ENV === 'sandbox'
   ? 'https://api-sandbox.gocardless.com'
   : 'https://api.gocardless.com';
+const GC_VERSION = '2024-02-22';
 
 class GoCardlessError extends Error {
   constructor(step, status, body) {
@@ -39,7 +49,7 @@ async function gcRequest(stepName, method, path, body) {
     method,
     headers: {
       'Authorization': `Bearer ${token}`,
-      'GoCardless-Version': '2015-07-06',
+      'GoCardless-Version': GC_VERSION,
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     },
@@ -53,7 +63,7 @@ async function gcRequest(stepName, method, path, body) {
     console.error('[gocardless-billing-request] ❌ ' + stepName + ' failed', {
       env: GC_ENV,
       status: resp.status,
-      path: path,
+      path,
       response: json,
     });
     throw new GoCardlessError(stepName, resp.status, json);
@@ -82,13 +92,13 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // Vérifier que le paiement existe et appartient au caller (ou admin)
     const paySnap = await db.collection('payments').doc(paymentId).get();
     if (!paySnap.exists) {
       res.status(404).json({ error: 'Paiement introuvable' });
       return;
     }
     const pay = paySnap.data();
+
     if (auth.role !== 'admin' && pay.createdBy !== auth.uid) {
       res.status(403).json({ error: 'Accès non autorisé à ce paiement' });
       return;
@@ -98,39 +108,47 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // Parse name
-    const nameParts = (leadName || '').trim().split(' ');
+    // Idempotence : si un BR + flow existent déjà, on les renvoie tels quels
+    // plutôt que d'en créer un nouveau (protection contre le double-clic).
+    if (pay.gcBillingRequestId && pay.gcBillingRequestFlowUrl) {
+      res.json({
+        billingRequestId: pay.gcBillingRequestId,
+        flowUrl: pay.gcBillingRequestFlowUrl,
+        reused: true
+      });
+      return;
+    }
+
+    const nameParts = (leadName || '').trim().split(/\s+/).filter(Boolean);
     const givenName = nameParts[0] || 'Client';
     const familyName = nameParts.slice(1).join(' ') || '-';
 
     console.log('[gocardless-billing-request] start', {
       env: GC_ENV,
-      paymentId: paymentId,
-      leadEmail: leadEmail,
+      paymentId,
+      leadEmail,
     });
 
-    // 1. Créer le customer GoCardless
-    const custResp = await gcRequest('create_customer', 'POST', '/customers', {
-      customers: {
-        given_name: givenName,
-        family_name: familyName,
-        email: leadEmail,
-        phone_number: leadPhone || undefined,
-        country_code: 'FR'
-      }
-    });
-    const customerId = custResp.customers.id;
-
-    // 2. Créer le billing request
+    // ─── 1. Créer le billing request ───
+    // Pas de `links.customer` — on laisse GoCardless créer le customer via
+    // la page hébergée. `metadata.paymentId` permet aux webhooks GC et à la
+    // route finalize de retrouver notre doc payment Firestore.
     const brResp = await gcRequest('create_billing_request', 'POST', '/billing_requests', {
       billing_requests: {
-        mandate_request: { currency: 'EUR' },
-        links: { customer: customerId }
+        mandate_request: {
+          currency: 'EUR',
+          scheme: 'sepa_core'
+        },
+        metadata: {
+          paymentId: paymentId
+        }
       }
     });
     const billingRequestId = brResp.billing_requests.id;
 
-    // 3. Créer le flow (lien de redirection)
+    // ─── 2. Créer le flow (URL vers la page hébergée GoCardless) ───
+    // `prefilled_customer` pré-remplit les champs pour le client. La page
+    // hébergée accepte ce champ sans nécessiter de validation custom pages.
     const baseUrl = process.env.APP_BASE_URL || 'https://team.alteore.com';
     const flowResp = await gcRequest('create_billing_request_flow', 'POST', '/billing_request_flows', {
       billing_request_flows: {
@@ -140,28 +158,27 @@ module.exports = async (req, res) => {
           given_name: givenName,
           family_name: familyName,
           email: leadEmail,
-          phone_number: leadPhone || undefined
+          phone_number: leadPhone || undefined,
+          country_code: 'FR'
         },
         links: { billing_request: billingRequestId }
       }
     });
     const flowUrl = flowResp.billing_request_flows.authorisation_url;
 
-    // 4. Mettre à jour le document paiement
+    // ─── 3. MAJ Firestore ───
     await db.collection('payments').doc(paymentId).update({
-      gcCustomerId: customerId,
       gcBillingRequestId: billingRequestId,
       gcBillingRequestFlowUrl: flowUrl,
       status: 'pending_mandate',
       updatedAt: require('firebase-admin').firestore.FieldValue.serverTimestamp()
     });
 
-    console.log('[gocardless-billing-request] ✅ success', { paymentId, customerId, billingRequestId });
-    res.json({ billingRequestId, flowUrl, customerId });
+    console.log('[gocardless-billing-request] ✅ success', { paymentId, billingRequestId });
+    res.json({ billingRequestId, flowUrl });
 
   } catch (e) {
     if (e instanceof GoCardlessError) {
-      // Renvoie le vrai code HTTP de GoCardless + l'étape précise
       res.status(e.status).json({
         error: 'GoCardless error on step "' + e.step + '"',
         step: e.step,
