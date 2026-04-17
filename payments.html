@@ -616,23 +616,23 @@ async function sendLink(id, via) {
   if (!p || !p.gcBillingRequestFlowUrl) return;
   const msg = `Bonjour ${p.leadName},\n\nVeuillez renseigner vos coordonnées bancaires pour mettre en place votre prélèvement automatique :\n\n${p.gcBillingRequestFlowUrl}\n\nCordialement,\nL'équipe Ambitio`;
 
-  if (via === 'sms' && p.leadPhone && p.leadId) {
+  if (via === 'sms' && p.leadPhone) {
     try {
       const token = await firebase.auth().currentUser.getIdToken();
-      const resp = await fetch('/api/twilio-sms-send', {
+      const resp = await fetch('/api/payments-send-mandate-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ leadId: p.leadId, message: msg })
+        body: JSON.stringify({ paymentId: id })
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || 'Erreur envoi SMS');
-      toast('📱 SMS envoyé !');
+      toast('📱 SMS envoyé à ' + (data.to || p.leadPhone));
     } catch(e) {
       toast('❌ ' + e.message, false);
       return;
     }
   } else if (via === 'sms') {
-    toast('❌ SMS impossible : numéro ou lead manquant', false);
+    toast('❌ SMS impossible : numéro manquant', false);
     return;
   } else if (via === 'email' && p.leadEmail) {
     try {
