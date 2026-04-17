@@ -66,12 +66,14 @@ async function gcRequest(stepName, method, path, body) {
   try { json = await resp.json(); } catch (e) { json = { parseError: true }; }
 
   if (!resp.ok) {
-    console.error('[gocardless-billing-request] ❌ ' + stepName + ' failed', {
-      env: GC_ENV,
-      status: resp.status,
-      path,
-      response: json,
-    });
+    // Dump explicite en string pour que Vercel n'affiche pas "[Array]"
+    // sur les sous-objets (errors détaillés sont cruciaux pour le debug GC).
+    console.error('[gocardless-billing-request] ❌ ' + stepName + ' failed',
+      'env=' + GC_ENV,
+      'status=' + resp.status,
+      'path=' + path,
+      'response=' + JSON.stringify(json)
+    );
     throw new GoCardlessError(stepName, resp.status, json);
   }
   return json;
@@ -155,18 +157,21 @@ module.exports = async (req, res) => {
     // ─── 2. Créer le flow (URL vers la page hébergée GoCardless) ───
     // `prefilled_customer` pré-remplit les champs pour le client. La page
     // hébergée accepte ce champ sans nécessiter de validation custom pages.
+    // Construction conditionnelle : on n'inclut que les champs présents
+    // (éviter undefined qui peut être sérialisé différemment selon runtime).
+    const prefilled = {
+      given_name: givenName,
+      family_name: familyName,
+      email: leadEmail
+    };
+    if (leadPhone) prefilled.phone_number = leadPhone;
+
     const baseUrl = process.env.APP_BASE_URL || 'https://team.alteore.com';
     const flowResp = await gcRequest('create_billing_request_flow', 'POST', '/billing_request_flows', {
       billing_request_flows: {
         redirect_uri: `${baseUrl}/payments.html?mandateDone=1&paymentId=${paymentId}`,
         exit_uri: `${baseUrl}/payments.html?mandateCancelled=1&paymentId=${paymentId}`,
-        prefilled_customer: {
-          given_name: givenName,
-          family_name: familyName,
-          email: leadEmail,
-          phone_number: leadPhone || undefined,
-          country_code: 'FR'
-        },
+        prefilled_customer: prefilled,
         links: { billing_request: billingRequestId }
       }
     });
