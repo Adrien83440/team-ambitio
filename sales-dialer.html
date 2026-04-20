@@ -195,6 +195,71 @@
 
   <div id="sd-toast" class="sd-toast"></div>
 
+  <!-- ══════════════════════════════════════════════════════════════════
+       Mode EMBED — quand sales-dialer.html est chargé dans un iframe
+       (depuis dialer-bridge.js), on détecte ?embed=1 et on applique un
+       style compact : nav masquée, colonnes latérales masquées, softphone
+       centré et adapté à la taille d'un widget flottant 420×640.
+       Le postMessage vers la page parent pour signaler qu'un lead a
+       décroché est géré dans sales-dialer.js.
+  ══════════════════════════════════════════════════════════════════ -->
+  <script>
+  (function () {
+    const isEmbed = new URLSearchParams(window.location.search).get('embed') === '1';
+    if (!isEmbed) return;
+    document.documentElement.classList.add('sd-embed');
+    document.body.classList.add('sd-embed');
+    window.IS_DIALER_EMBED = true;
+  })();
+  </script>
+
+  <style>
+    /* Styles activés uniquement dans l'iframe embed */
+    body.sd-embed #nav-container,
+    body.sd-embed .topbar,
+    body.sd-embed .sd-col-left,
+    body.sd-embed .sd-col-right {
+      display: none !important;
+    }
+    body.sd-embed {
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+      background: #0a0c10 !important;
+    }
+    body.sd-embed .sd-main {
+      display: block !important;
+      width: 100% !important;
+      height: 100vh !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      grid-template-columns: none !important;
+    }
+    body.sd-embed .sd-col-center {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 100vh !important;
+      border-radius: 0 !important;
+      border: none !important;
+      padding: 12px !important;
+      box-sizing: border-box !important;
+      overflow-y: auto !important;
+    }
+    body.sd-embed .sd-phone-status {
+      padding: 8px 10px !important;
+      margin-bottom: 10px !important;
+    }
+    body.sd-embed .sd-dialpad {
+      gap: 6px !important;
+    }
+    body.sd-embed .sd-key {
+      padding: 10px !important;
+    }
+    /* Le panneau lead du softphone embarqué reste utile pour voir qui
+       décroche, mais en version compacte.  Il s'affiche sous le pad en
+       mode incall, pas en permanence. */
+  </style>
+
   <script src="nav.js"></script>
   <script src="sales-dialer-api.js"></script>
   <script src="call-detail-modal.js"></script>

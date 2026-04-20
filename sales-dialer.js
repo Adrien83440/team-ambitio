@@ -504,6 +504,18 @@
         autoSession.stats.connected += 1;
         renderAutoStats();
       }
+      // ── Embed mode : notifier la page parent qu'un lead a décroché,
+      // pour qu'elle scrolle automatiquement sur sa fiche + highlight.
+      try {
+        if (window.IS_DIALER_EMBED && window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: 'dialer:lead-connected',
+            leadId: activeLeadId || null,
+            phone: (activeLeadData && (activeLeadData.telephone || activeLeadData.phone)) || null
+          }, window.location.origin);
+          window.parent.postMessage({ type: 'dialer:bubble-badge', active: true }, window.location.origin);
+        }
+      } catch (e) { /* ignore cross-origin */ }
     });
     activeConn.on('disconnect', () => endCall());
     activeConn.on('cancel', () => endCall());
@@ -543,6 +555,17 @@
 
   function endCall() {
     if (callTimer) { clearInterval(callTimer); callTimer = null; }
+    // ── Embed mode : notifier la page parent que l'appel est terminé
+    // (retire le point rouge de la bulle réduite).
+    try {
+      if (window.IS_DIALER_EMBED && window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          type: 'dialer:call-ended',
+          leadId: activeLeadId || null
+        }, window.location.origin);
+        window.parent.postMessage({ type: 'dialer:bubble-badge', active: false }, window.location.origin);
+      }
+    } catch (e) { /* ignore cross-origin */ }
     activeConn = null;
     activeCallSid = null;
     if (autoSession && autoSession.status === 'incall') {

@@ -348,7 +348,356 @@
     return p;
   }
 
-  function openDialer() { window.open(DIALER_URL, '_blank'); }
+  function openDialer() {
+    // Nouvelle UX : au lieu d'ouvrir le Dialer dans un nouvel onglet (ce qui
+    // faisait perdre le contexte CRM/Leads/Retargeting), on affiche un
+    // widget flottant en iframe qui pointe sur sales-dialer.html?embed=1.
+    // L'utilisateur reste sur sa page et peut manipuler la fiche du lead
+    // qui décroche en temps réel. Fallback "nouvel onglet" accessible via
+    // le bouton 🗗 dans le header du widget.
+    openEmbeddedDialer();
+  }
+
+  function openDialerNewTab() { window.open(DIALER_URL, '_blank'); }
+
+  // ─── Widget flottant ─────────────────────────────────────────────────────
+  // Iframe position:fixed en bas-droite. Header drag & drop, bouton
+  // minimize (→ bulle 📞 rétractable), bouton plein onglet, bouton close.
+  // Position + état minimisé persistés dans localStorage.
+  const WIDGET_ID = 'dbr-floating-widget';
+  const WIDGET_BUBBLE_ID = 'dbr-floating-bubble';
+  const STORAGE_WIDGET_STATE = 'dialer_widget_state';
+
+  function loadWidgetState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_WIDGET_STATE);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (typeof s !== 'object' || !s) return null;
+      return s;
+    } catch (_) { return null; }
+  }
+
+  function saveWidgetState(patch) {
+    try {
+      const cur = loadWidgetState() || {};
+      const merged = Object.assign({}, cur, patch);
+      localStorage.setItem(STORAGE_WIDGET_STATE, JSON.stringify(merged));
+    } catch (_) { /* ignore */ }
+  }
+
+  function injectWidgetStyles() {
+    if (document.getElementById('dbr-widget-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'dbr-widget-styles';
+    s.textContent = `
+      #${WIDGET_ID} {
+        position: fixed;
+        width: 420px; height: 640px;
+        background: #0d0f13;
+        border: 1px solid #2a2f38;
+        border-radius: 14px;
+        box-shadow: 0 18px 48px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,0,0,0.2);
+        z-index: 99999;
+        display: flex; flex-direction: column;
+        overflow: hidden;
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      }
+      #${WIDGET_ID}.dbr-w-minimized { display: none; }
+      #${WIDGET_ID} .dbr-w-header {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 14px;
+        background: linear-gradient(180deg, #181b22, #12141a);
+        border-bottom: 1px solid #2a2f38;
+        cursor: grab; user-select: none;
+        flex-shrink: 0;
+      }
+      #${WIDGET_ID} .dbr-w-header.dragging { cursor: grabbing; }
+      #${WIDGET_ID} .dbr-w-title {
+        font-size: 13px; font-weight: 700; color: #e5e7eb;
+        display: flex; align-items: center; gap: 8px; flex: 1;
+      }
+      #${WIDGET_ID} .dbr-w-title::before {
+        content: '☎️'; font-size: 14px;
+      }
+      #${WIDGET_ID} .dbr-w-btn {
+        width: 26px; height: 26px; border-radius: 6px;
+        border: 1px solid #2a2f38; background: rgba(255,255,255,0.03);
+        color: #9ca3af; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; line-height: 1; transition: all 0.15s;
+      }
+      #${WIDGET_ID} .dbr-w-btn:hover {
+        color: #fff; border-color: #3a3f48;
+        background: rgba(255,255,255,0.06);
+      }
+      #${WIDGET_ID} .dbr-w-btn.close:hover {
+        color: #fca5a5; border-color: #b91c1c;
+        background: rgba(185,28,28,0.12);
+      }
+      #${WIDGET_ID} iframe {
+        flex: 1; width: 100%; height: 100%;
+        border: 0; background: #0a0c10;
+      }
+
+      /* Bulle rétractée */
+      #${WIDGET_BUBBLE_ID} {
+        position: fixed;
+        width: 56px; height: 56px; border-radius: 50%;
+        background: linear-gradient(135deg, #059669, #10b981);
+        color: #fff; font-size: 22px;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 8px 24px rgba(16,185,129,0.4);
+        cursor: pointer;
+        z-index: 99998;
+        transition: transform 0.15s;
+        border: none;
+      }
+      #${WIDGET_BUBBLE_ID}:hover { transform: scale(1.08); }
+      #${WIDGET_BUBBLE_ID}::after {
+        content: ''; position: absolute; top: 2px; right: 2px;
+        width: 12px; height: 12px; border-radius: 50%;
+        background: #ef4444; border: 2px solid #0d0f13;
+        display: none;
+      }
+      #${WIDGET_BUBBLE_ID}.has-active::after { display: block; }
+
+      @media (max-width: 480px) {
+        #${WIDGET_ID} {
+          width: calc(100vw - 16px) !important;
+          height: calc(100vh - 16px) !important;
+          left: 8px !important; top: 8px !important;
+          right: auto !important; bottom: auto !important;
+        }
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
+  function applyWidgetPosition(el) {
+    const st = loadWidgetState() || {};
+    // Default : bas-droite avec marge 20px
+    if (typeof st.left === 'number' && typeof st.top === 'number') {
+      el.style.left = st.left + 'px';
+      el.style.top = st.top + 'px';
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+    } else {
+      el.style.right = '20px';
+      el.style.bottom = '20px';
+      el.style.left = 'auto';
+      el.style.top = 'auto';
+    }
+  }
+
+  function makeDraggable(widget, handle) {
+    let dragging = false;
+    let startX = 0, startY = 0, startLeft = 0, startTop = 0;
+    handle.addEventListener('mousedown', (e) => {
+      // Pas de drag si on clique sur un bouton du header
+      if (e.target.closest('.dbr-w-btn')) return;
+      dragging = true;
+      handle.classList.add('dragging');
+      const rect = widget.getBoundingClientRect();
+      startX = e.clientX; startY = e.clientY;
+      startLeft = rect.left; startTop = rect.top;
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      let nL = startLeft + dx;
+      let nT = startTop + dy;
+      // Bornes
+      const maxL = window.innerWidth - widget.offsetWidth - 4;
+      const maxT = window.innerHeight - widget.offsetHeight - 4;
+      nL = Math.max(4, Math.min(maxL, nL));
+      nT = Math.max(4, Math.min(maxT, nT));
+      widget.style.left = nL + 'px';
+      widget.style.top = nT + 'px';
+      widget.style.right = 'auto';
+      widget.style.bottom = 'auto';
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      const rect = widget.getBoundingClientRect();
+      saveWidgetState({ left: rect.left, top: rect.top });
+    });
+  }
+
+  function createBubble() {
+    let bubble = document.getElementById(WIDGET_BUBBLE_ID);
+    if (bubble) return bubble;
+    bubble = document.createElement('button');
+    bubble.id = WIDGET_BUBBLE_ID;
+    bubble.type = 'button';
+    bubble.title = 'Rouvrir le Dialer';
+    bubble.innerHTML = '📞';
+    bubble.addEventListener('click', () => {
+      const w = document.getElementById(WIDGET_ID);
+      if (w) {
+        w.classList.remove('dbr-w-minimized');
+        bubble.style.display = 'none';
+        saveWidgetState({ minimized: false });
+      } else {
+        openEmbeddedDialer();
+      }
+    });
+    // Placement bulle : bas-droite par défaut, suit la dernière position du widget
+    const st = loadWidgetState() || {};
+    if (typeof st.bubbleLeft === 'number' && typeof st.bubbleTop === 'number') {
+      bubble.style.left = st.bubbleLeft + 'px';
+      bubble.style.top = st.bubbleTop + 'px';
+    } else {
+      bubble.style.right = '24px';
+      bubble.style.bottom = '24px';
+    }
+    document.body.appendChild(bubble);
+    return bubble;
+  }
+
+  function openEmbeddedDialer() {
+    injectWidgetStyles();
+
+    // S'il existe déjà, on le ramène visible
+    const existing = document.getElementById(WIDGET_ID);
+    if (existing) {
+      existing.classList.remove('dbr-w-minimized');
+      const b = document.getElementById(WIDGET_BUBBLE_ID);
+      if (b) b.style.display = 'none';
+      saveWidgetState({ minimized: false });
+      // Re-trigger la bascule des campagnes stockées en sessionStorage
+      // en postMessage pour que l'iframe redémarre la queue.
+      try {
+        const ifr = existing.querySelector('iframe');
+        if (ifr && ifr.contentWindow) {
+          ifr.contentWindow.postMessage({ type: 'dialer:pickup-pending' }, window.location.origin);
+        }
+      } catch (_) { /* ignore */ }
+      return existing;
+    }
+
+    const widget = document.createElement('div');
+    widget.id = WIDGET_ID;
+
+    const header = document.createElement('div');
+    header.className = 'dbr-w-header';
+    header.innerHTML = `
+      <div class="dbr-w-title">Dialer</div>
+      <button class="dbr-w-btn" data-act="newtab" title="Ouvrir en plein onglet">🗗</button>
+      <button class="dbr-w-btn" data-act="minimize" title="Réduire">—</button>
+      <button class="dbr-w-btn close" data-act="close" title="Fermer">✕</button>
+    `;
+    widget.appendChild(header);
+
+    const ifr = document.createElement('iframe');
+    ifr.src = DIALER_URL + '?embed=1';
+    ifr.allow = 'microphone; autoplay; clipboard-read; clipboard-write';
+    widget.appendChild(ifr);
+
+    applyWidgetPosition(widget);
+    document.body.appendChild(widget);
+    makeDraggable(widget, header);
+
+    header.addEventListener('click', (e) => {
+      const btn = e.target.closest('.dbr-w-btn');
+      if (!btn) return;
+      const act = btn.dataset.act;
+      if (act === 'newtab') {
+        openDialerNewTab();
+      } else if (act === 'minimize') {
+        widget.classList.add('dbr-w-minimized');
+        const b = createBubble();
+        b.style.display = 'flex';
+        saveWidgetState({ minimized: true });
+      } else if (act === 'close') {
+        // Demander confirmation si appel en cours
+        try {
+          if (ifr && ifr.contentWindow) {
+            const ok = confirm('Fermer le Dialer ? Un appel en cours sera terminé.');
+            if (!ok) return;
+          }
+        } catch (_) { /* ignore */ }
+        widget.remove();
+        const b = document.getElementById(WIDGET_BUBBLE_ID);
+        if (b) b.remove();
+        saveWidgetState({ minimized: false });
+      }
+    });
+
+    // Auto-restaurer l'état minimisé si on l'avait fermé réduit
+    const st = loadWidgetState() || {};
+    if (st.minimized) {
+      widget.classList.add('dbr-w-minimized');
+      const b = createBubble();
+      b.style.display = 'flex';
+    }
+
+    return widget;
+  }
+
+  // ─── Écoute des postMessage depuis l'iframe Dialer ──────────────────────
+  // L'iframe envoie :
+  //   { type: 'dialer:lead-connected', leadId, phone }
+  //     → un lead vient de décrocher. On scroll la fiche correspondante
+  //       dans la page parent + highlight visuel.
+  //   { type: 'dialer:call-ended', leadId }
+  //     → appel terminé (info, pas d'action obligatoire)
+  //   { type: 'dialer:bubble-badge', active }
+  //     → activer/désactiver le point rouge sur la bulle rétractée
+  window.addEventListener('message', (evt) => {
+    if (evt.origin !== window.location.origin) return;
+    const data = evt.data;
+    if (!data || typeof data !== 'object') return;
+
+    if (data.type === 'dialer:lead-connected' && data.leadId) {
+      scrollToLead(data.leadId);
+    }
+    if (data.type === 'dialer:bubble-badge') {
+      const b = document.getElementById(WIDGET_BUBBLE_ID);
+      if (b) b.classList.toggle('has-active', !!data.active);
+    }
+  });
+
+  function scrollToLead(leadId) {
+    // Cherche dans l'ordre : data-lead-id, [data-id="leadId"], etc.
+    const selectors = [
+      '[data-lead-id="' + CSS.escape(leadId) + '"]',
+      '[data-id="' + CSS.escape(leadId) + '"]'
+    ];
+    let el = null;
+    for (const sel of selectors) {
+      el = document.querySelector(sel);
+      if (el) break;
+    }
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Highlight flash
+    el.classList.add('dbr-lead-flash');
+    setTimeout(() => el.classList.remove('dbr-lead-flash'), 2400);
+    // Injecter le style du flash si pas encore fait
+    if (!document.getElementById('dbr-flash-styles')) {
+      const fs = document.createElement('style');
+      fs.id = 'dbr-flash-styles';
+      fs.textContent = `
+        @keyframes dbrFlash {
+          0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.55); }
+          60%  { box-shadow: 0 0 0 10px rgba(16,185,129,0.0); }
+          100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.0); }
+        }
+        .dbr-lead-flash {
+          animation: dbrFlash 2.2s ease-out 1;
+          outline: 2px solid #10b981 !important;
+          outline-offset: 2px;
+          transition: outline 0.3s;
+        }
+      `;
+      document.head.appendChild(fs);
+    }
+  }
 
   // ─── Firestore prefs ─────────────────────────────────────────────────────
   async function loadPowerPrefs() {
@@ -849,5 +1198,7 @@
     clearSelection,
     quickSelect,
     normalizePhone,
+    openEmbeddedDialer,
+    openDialerNewTab,
   };
 })();
