@@ -431,6 +431,62 @@ html, body {
 .ld-fu-del:hover { color: #ef4444; }
 .ld-fu-empty { text-align: center; padding: 12px; color: var(--muted2); font-size: 11px; }
 
+/* ── FU add form : durée + switch calendrier ── */
+.ld-fu-add-row2 {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: -4px; margin-bottom: 10px;
+  padding: 8px 10px; border-radius: 8px;
+  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+}
+.ld-fu-duration-label {
+  font-family: var(--fb); font-size: 11px; font-weight: 700;
+  color: var(--muted); letter-spacing: 0.02em;
+}
+.ld-fu-duration-select {
+  padding: 6px 8px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg3);
+  color: var(--text); font-family: var(--fm); font-size: 11px;
+  cursor: pointer;
+}
+.ld-fu-duration-select:focus { border-color: var(--gold); outline: none; }
+.ld-fu-cal-switch {
+  display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none;
+  font-family: var(--fb); font-size: 11px; color: var(--text);
+  margin-left: auto;
+}
+.ld-fu-cal-switch input { display: none; }
+.ld-fu-cal-switch .sw-track {
+  width: 30px; height: 16px; border-radius: 9px;
+  background: var(--bg3); border: 1px solid var(--border);
+  position: relative; transition: all 0.15s;
+}
+.ld-fu-cal-switch .sw-track::after {
+  content: ''; position: absolute; top: 1px; left: 1px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--muted2); transition: all 0.15s;
+}
+.ld-fu-cal-switch input:checked + .sw-track {
+  background: rgba(167,139,250,0.2); border-color: rgba(167,139,250,0.5);
+}
+.ld-fu-cal-switch input:checked + .sw-track::after {
+  left: 16px; background: #a78bfa;
+}
+.ld-fu-cal-switch .sw-label { white-space: nowrap; }
+
+/* ── FU item : pastille "event Google Calendar" ── */
+.ld-fu-cal-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin-left: 6px; padding: 1px 6px; border-radius: 4px;
+  background: rgba(167,139,250,0.14); color: #a78bfa;
+  font-family: var(--fm); font-size: 10px; font-weight: 700;
+  text-decoration: none; cursor: pointer;
+  transition: all 0.15s;
+}
+.ld-fu-cal-badge:hover {
+  background: rgba(167,139,250,0.22); color: #c4b5fd;
+}
+
 /* ── FU badge on card header ── */
 .ld-fu-badge {
   display: inline-flex; align-items: center; gap: 3px;
@@ -1553,6 +1609,21 @@ function renderCard(l) {
   h += '<textarea data-fu-field="note" data-id="' + id + '" placeholder="Note du FU (optionnel)..." rows="1"></textarea>';
   h += '<button class="ld-fu-add-btn" data-action="addFu" data-id="' + id + '">🔔 Programmer</button>';
   h += '</div>';
+  // Row 2 : durée + switch "ajouter au calendrier Stratégie"
+  h += '<div class="ld-fu-add-row2">';
+  h += '<span class="ld-fu-duration-label">Durée</span>';
+  h += '<select class="ld-fu-duration-select" data-fu-field="duration" data-id="' + id + '">';
+  h += '<option value="15">15 min</option>';
+  h += '<option value="30" selected>30 min</option>';
+  h += '<option value="45">45 min</option>';
+  h += '<option value="60">1h</option>';
+  h += '</select>';
+  h += '<label class="ld-fu-cal-switch" title="Crée un événement sur le calendrier Google du closer assigné">';
+  h += '<input type="checkbox" data-fu-field="pushCal" data-id="' + id + '" checked/>';
+  h += '<span class="sw-track"></span>';
+  h += '<span class="sw-label">📅 Calendrier Stratégie</span>';
+  h += '</label>';
+  h += '</div>';
   // List
   if (fus.length === 0) {
     h += '<div class="ld-fu-empty">Aucun follow-up programmé</div>';
@@ -1577,7 +1648,13 @@ function renderCard(l) {
       h += '<div class="ld-fu-item' + (fu.done ? ' done' : '') + fuClass + '">';
       h += '<button class="ld-fu-check" data-action="toggleFuDone" data-id="' + id + '" data-fu-idx="' + fu._idx + '">' + (fu.done ? '✓' : '') + '</button>';
       h += '<div class="ld-fu-info">';
-      h += '<div class="ld-fu-datetime">' + (fu.done ? '✅ ' : (fuTimeDiff <= 0 && !fu.done ? '⚠️ ' : '🔔 ')) + fuDateStr + ' à ' + fuTimeStr + '</div>';
+      h += '<div class="ld-fu-datetime">' + (fu.done ? '✅ ' : (fuTimeDiff <= 0 && !fu.done ? '⚠️ ' : '🔔 ')) + fuDateStr + ' à ' + fuTimeStr;
+      if (fu.calendarEventId && fu.calendarEventLink) {
+        h += '<a class="ld-fu-cal-badge" href="' + escHtml(fu.calendarEventLink) + '" target="_blank" rel="noopener" title="Ouvrir l\'événement Google Calendar" onclick="event.stopPropagation()">📅 Calendrier</a>';
+      } else if (fu.calendarEventId) {
+        h += '<span class="ld-fu-cal-badge" title="Événement Google Calendar associé">📅</span>';
+      }
+      h += '</div>';
       if (fu.note) h += '<div class="ld-fu-note">' + escHtml(fu.note) + '</div>';
       if (fu.createdBy) h += '<div class="ld-fu-by">par ' + escHtml(fu.createdBy) + '</div>';
       h += '</div>';
@@ -1904,15 +1981,20 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     var fuDateEl = card4.querySelector('[data-fu-field="date"]');
     var fuTimeEl = card4.querySelector('[data-fu-field="time"]');
     var fuNoteEl = card4.querySelector('[data-fu-field="note"]');
+    var fuDurEl = card4.querySelector('[data-fu-field="duration"]');
+    var fuPushCalEl = card4.querySelector('[data-fu-field="pushCal"]');
     var fuDate = fuDateEl ? fuDateEl.value : '';
     var fuTime = fuTimeEl ? fuTimeEl.value : '';
     var fuNote = fuNoteEl ? fuNoteEl.value.trim() : '';
+    var fuDuration = fuDurEl ? parseInt(fuDurEl.value, 10) || 30 : 30;
+    var fuPushCal = fuPushCalEl ? !!fuPushCalEl.checked : false;
     if (!fuDate || !fuTime) { toast('⚠️ Date et heure requises'); return; }
     var fuDateTime = fuDate + 'T' + fuTime + ':00';
     var fuObj = {
       id: Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
       dateTime: fuDateTime,
       note: fuNote,
+      duration: fuDuration,
       done: false,
       createdBy: personalUser ? (SETTERS[personalUser] ? SETTERS[personalUser].name : personalUser) : (window._currentUserName || 'Admin'),
       createdAt: new Date().toISOString()
@@ -1931,6 +2013,10 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
         // Request notification permission if not already granted
         if ('Notification' in window && Notification.permission === 'default') {
           Notification.requestPermission();
+        }
+        // Push event Google Calendar si switch activé + closer assigné
+        if (fuPushCal) {
+          pushFollowUpToCalendar(afLead, fuObj);
         }
       }).catch(function(err) { toast('❌ ' + err.message); });
     }
@@ -1977,11 +2063,19 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     var fxIdx = parseInt(fuDelBtn.dataset.fuIdx);
     var fxLead = allLeads.find(function(l) { return l.id === fxId; });
     if (fxLead && fxLead.followUps) {
+      // Capture le FU avant splice pour récupérer d'éventuelles infos calendrier
+      var removedFu = fxLead.followUps[fxIdx] || null;
       fxLead.followUps.splice(fxIdx, 1);
       db.collection('leads').doc(fxId).update({
         followUps: fxLead.followUps,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(function() { toast('🗑 Follow-up supprimé'); }).catch(function(err) { toast('❌ ' + err.message); });
+      }).then(function() {
+        toast('🗑 Follow-up supprimé');
+        // Si le FU supprimé avait un event Google Calendar lié → delete côté Google
+        if (removedFu && removedFu.calendarEventId) {
+          deleteFollowUpCalendarEvent(removedFu, fxLead);
+        }
+      }).catch(function(err) { toast('❌ ' + err.message); });
       openCardId = fxId;
       renderFeed();
       setTimeout(function() {
@@ -2875,6 +2969,151 @@ if (pushSupported) {
 // Auto-register if already granted
 if (pushSupported && Notification.permission === 'granted') {
   registerToken();
+}
+</script>
+
+<!-- Follow-Up ↔ Google Calendar (Stratégie) -->
+<script>
+/**
+ * Push un follow-up en tant qu'event Google Calendar sur le calendrier
+ * primary du closer assigné au lead. Non-bloquant : en cas d'échec, le
+ * FU reste créé dans Firestore, on affiche juste un toast warning.
+ *
+ * Cible : /api/calendar-followup-event action=create
+ */
+async function pushFollowUpToCalendar(lead, fuObj) {
+  try {
+    if (!lead || !fuObj) return;
+    var assignedToSlug = lead.assignedTo || '';
+    if (!assignedToSlug) {
+      toast('⚠️ FU créé sans event : lead non assigné');
+      return;
+    }
+
+    // Pré-check local : le member a-t-il un firebaseUid dans TEAM_MEMBERS ?
+    var tm = (window.TEAM_MEMBERS || {})[assignedToSlug];
+    if (!tm) {
+      toast('⚠️ FU créé sans event : closer inconnu (' + assignedToSlug + ')');
+      return;
+    }
+    if (!tm.firebaseUid) {
+      toast('⚠️ FU créé sans event : ' + (tm.shortName || tm.displayName || assignedToSlug) + ' n\'a pas de compte Firebase lié');
+      return;
+    }
+
+    var user = firebase.auth().currentUser;
+    if (!user) {
+      toast('⚠️ FU créé sans event : session expirée');
+      return;
+    }
+    var idToken = await user.getIdToken(false);
+
+    var leadName = ((lead.prenom || '') + ' ' + (lead.nom || '')).trim() || (lead.nom || 'Lead');
+    var payload = {
+      action: 'create',
+      leadId: lead.id,
+      fuId: fuObj.id,
+      assignedToSlug: assignedToSlug,
+      fuDateTime: fuObj.dateTime,
+      duration: fuObj.duration || 30,
+      note: fuObj.note || '',
+      leadName: leadName,
+      leadPhone: lead.telephone || '',
+      leadEmail: lead.email || ''
+    };
+
+    var resp = await fetch('/api/calendar-followup-event', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + idToken
+      },
+      body: JSON.stringify(payload)
+    });
+
+    var data = null;
+    try { data = await resp.json(); } catch (_) { data = null; }
+
+    if (!resp.ok) {
+      var errCode = data && data.error ? data.error : 'unknown';
+      var msg = '⚠️ Event calendrier non créé : ';
+      switch (errCode) {
+        case 'no_firebase_uid':     msg += 'closer sans compte lié'; break;
+        case 'no_booking_config':   msg += 'fiche booking absente'; break;
+        case 'calendar_not_connected': msg += 'calendrier Google non connecté pour ' + (data.memberName || 'ce closer'); break;
+        case 'member_not_found':    msg += 'closer introuvable'; break;
+        case 'team_members_missing': msg += '_meta/team_members absent'; break;
+        case 'forbidden':           msg += 'droits insuffisants'; break;
+        default:                    msg += (data && data.message) || ('code ' + resp.status);
+      }
+      toast(msg);
+      return;
+    }
+
+    // Succès : MAJ locale du lead pour refléter calendarEventId + link
+    // (le backend a déjà patché Firestore, mais on évite d'attendre
+    // l'onSnapshot pour afficher la pastille).
+    if (data && data.eventId) {
+      var localLead = (window.allLeads || []).find(function (l) { return l.id === lead.id; });
+      if (localLead && Array.isArray(localLead.followUps)) {
+        for (var i = 0; i < localLead.followUps.length; i++) {
+          if (localLead.followUps[i] && localLead.followUps[i].id === fuObj.id) {
+            localLead.followUps[i].calendarEventId = data.eventId;
+            localLead.followUps[i].calendarEventLink = data.eventLink || '';
+            localLead.followUps[i].calendarPersonId = data.personId || '';
+            break;
+          }
+        }
+        if (typeof renderFeed === 'function') renderFeed();
+      }
+      toast('📅 Event ajouté au calendrier de ' + (data.memberName || 'closer'));
+    }
+  } catch (e) {
+    console.error('[pushFollowUpToCalendar] error:', e);
+    toast('⚠️ Event calendrier non créé : ' + (e.message || 'erreur réseau'));
+  }
+}
+
+/**
+ * Supprime l'event Google Calendar associé à un follow-up qu'on vient
+ * de retirer. Non-bloquant : erreur → toast warning mais le FU reste
+ * bien supprimé côté Firestore.
+ *
+ * Cible : /api/calendar-followup-event action=delete
+ */
+async function deleteFollowUpCalendarEvent(removedFu, lead) {
+  try {
+    if (!removedFu || !removedFu.calendarEventId) return;
+
+    var user = firebase.auth().currentUser;
+    if (!user) return;
+    var idToken = await user.getIdToken(false);
+
+    var payload = {
+      action: 'delete',
+      eventId: removedFu.calendarEventId,
+      personId: removedFu.calendarPersonId || '',
+      assignedToSlug: (lead && lead.assignedTo) || ''
+    };
+
+    var resp = await fetch('/api/calendar-followup-event', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + idToken
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!resp.ok) {
+      var data = null;
+      try { data = await resp.json(); } catch (_) { data = null; }
+      console.warn('[deleteFollowUpCalendarEvent] API error:', resp.status, data);
+      toast('⚠️ Event Google non supprimé — à retirer manuellement');
+    }
+  } catch (e) {
+    console.error('[deleteFollowUpCalendarEvent] error:', e);
+  }
 }
 </script>
 
