@@ -130,8 +130,8 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
 <div class="step" id="step3">
   <div class="card" style="text-align:center">
     <div class="status-icon">🎉</div>
-    <h2 style="margin-bottom:8px">Contrat signé avec succès !</h2>
-    <p style="color:var(--muted);font-size:14px;margin-bottom:14px">Une copie vous sera envoyée à <strong id="doneEmail"></strong>.</p>
+    <h2 id="doneTitle" style="margin-bottom:8px">Contrat signé avec succès !</h2>
+    <p id="doneSub" style="color:var(--muted);font-size:14px;margin-bottom:14px">Une copie vous sera envoyée à <strong id="doneEmail"></strong>.</p>
     <div class="info-box green">Le document signé est horodaté et conservé de manière sécurisée.</div>
   </div>
 </div>
@@ -142,24 +142,113 @@ var db=firebase.firestore(),REQ=null,REQ_ID=null,TPL=null;
 var pdfDoc=null,pdfBytes=null,curPage=1,totalPages=1;
 var tplScale=1.2,renderScale=1;
 var fieldValues={},sigText='',parapheText='';
+// Multi-signataire
+var CURRENT_SIGNER=null;      // référence à signers[N] du signataire courant
+var CURRENT_SIGNER_IDX=0;     // index dans signers[] (0 = filler, 1 = cosigner)
+var IS_COSIGNER=false;        // true si on est le signataire 2
+var PREV_SIGNER_DATA=null;    // données du signataire 1 (pour signer 2)
 
 /* ═══ INIT ═══ */
 (function(){
   var t=new URLSearchParams(location.search).get('t');
   if(!t){showErr('Aucun token.');return;}
-  db.collection('signature_requests').where('token','==',t).limit(1).get().then(function(sn){
-    if(sn.empty){showErr('Lien invalide ou expiré.');return;}
-    REQ=sn.docs[0].data();REQ_ID=sn.docs[0].id;
+  db.collection('signature_requests').where('signers','array-contains-any',[{token:t,order:1,role:'filler',status:'pending'},{token:t,order:1,role:'filler',status:'opened'}]).limit(1).get().catch(function(){return{empty:true};}).then(function(){
+    // Le where sur array-contains avec struct est trop fragile en Firestore.
+    // Fallback : on query par le champ token top-level (retro-compat) et on
+    // cherche aussi dans signers[] côté client.
+    return db.collection('signature_requests').where('token','==',t).limit(1).get();
+  }).then(function(sn){
+    var doc=null;
+    if(sn && !sn.empty){
+      doc=sn.docs[0];
+    }
+    // Si pas trouvé via token top-level, essayer via signers[].token (nouveau modèle)
+    // On scanne les 50 dernières requests — pragmatique et suffisant pour ce volume.
+    var p=doc?Promise.resolve(doc):db.collection('signature_requests').orderBy('createdAt','desc').limit(200).get().then(function(s2){
+      var found=null;
+      s2.forEach(function(d){
+        if(found)return;
+        var r=d.data();
+        if(Array.isArray(r.signers)){
+          for(var i=0;i<r.signers.length;i++){
+            if(r.signers[i] && r.signers[i].token===t){found=d;break;}
+          }
+        }
+      });
+      return found;
+    });
+    return p;
+  }).then(function(doc){
+    if(!doc){showErr('Lien invalide ou expiré.');return;}
+    REQ=doc.data();REQ_ID=doc.id;
+    // Déterminer quel signataire correspond à ce token
+    if(Array.isArray(REQ.signers) && REQ.signers.length){
+      for(var i=0;i<REQ.signers.length;i++){
+        if(REQ.signers[i] && REQ.signers[i].token===t){
+          CURRENT_SIGNER=REQ.signers[i];
+          CURRENT_SIGNER_IDX=i;
+          break;
+        }
+      }
+      IS_COSIGNER=(CURRENT_SIGNER_IDX===1);
+      // Si signataire 2 et le 1 n'a pas encore signé → on affiche un message spécifique
+      if(IS_COSIGNER && REQ.signers[0] && REQ.signers[0].status!=='signed'){
+        showErr('Le premier signataire doit signer avant vous. Vous recevrez un SMS dès qu\'il aura terminé.');return;
+      }
+      // Si ce signataire a déjà signé → on affiche l'écran signed
+      if(CURRENT_SIGNER && CURRENT_SIGNER.status==='signed'){
+        hide('loadingView');show('signedView');hide('progressBar');return;
+      }
+      // Pour signataire 2 : mémoriser les données du signataire 1 (champs déjà remplis)
+      if(IS_COSIGNER && REQ.signers[0]){
+        PREV_SIGNER_DATA=REQ.signers[0];
+      }
+    } else {
+      // Retro-compat : anciennes requests sans signers[]
+      CURRENT_SIGNER={
+        name:REQ.clientName,
+        email:REQ.clientEmail,
+        phone:REQ.clientPhone,
+        token:t,
+        order:1,
+        role:'filler'
+      };
+      CURRENT_SIGNER_IDX=0;
+      IS_COSIGNER=false;
+    }
+    // Request globalement signée → bloque tout le monde
     if(REQ.status==='signed'){hide('loadingView');show('signedView');hide('progressBar');return;}
-    if(REQ.status==='pending')db.collection('signature_requests').doc(REQ_ID).update({status:'opened',events:firebase.firestore.FieldValue.arrayUnion({type:'opened',date:new Date().toISOString()})});
-    document.getElementById('headerTitle').textContent=REQ.templateName||'Signature de contrat';
-    document.getElementById('headerSub').textContent='Contrat pour '+REQ.clientName;
-    var ph=REQ.clientPhone||'';
+    // Marquer "opened" sur le signataire courant (et la request si elle est pending)
+    var openedUpd={};
+    if(REQ.status==='pending')openedUpd.status='opened';
+    if(Array.isArray(REQ.signers)){
+      var newSigners=REQ.signers.slice();
+      if(newSigners[CURRENT_SIGNER_IDX] && newSigners[CURRENT_SIGNER_IDX].status==='pending'){
+        newSigners[CURRENT_SIGNER_IDX]=Object.assign({},newSigners[CURRENT_SIGNER_IDX],{status:'opened',openedAt:new Date().toISOString()});
+        openedUpd.signers=newSigners;
+      }
+    }
+    openedUpd.events=firebase.firestore.FieldValue.arrayUnion({type:'opened',by:'signer'+(CURRENT_SIGNER_IDX+1),date:new Date().toISOString()});
+    if(Object.keys(openedUpd).length)db.collection('signature_requests').doc(REQ_ID).update(openedUpd);
+
+    // Header + OTP display
+    document.getElementById('headerTitle').textContent=(REQ.templateName||'Signature de contrat')+(IS_COSIGNER?' · Co-signataire':'');
+    document.getElementById('headerSub').textContent='Contrat pour '+CURRENT_SIGNER.name;
+    var ph=CURRENT_SIGNER.phone||'';
     document.getElementById('otpPhone').textContent=ph.length>4?ph.slice(0,-4).replace(/\d/g,'*')+ph.slice(-4):ph;
-    if(REQ.clientName)fieldValues.nom_prenom=REQ.clientName;
-    if(REQ.clientEmail)fieldValues.email=REQ.clientEmail;
-    if(REQ.clientPhone)fieldValues.telephone=REQ.clientPhone;
+    // Pré-remplissage des fieldValues pour le signataire courant
+    if(CURRENT_SIGNER.name)fieldValues.nom_prenom=CURRENT_SIGNER.name;
+    if(CURRENT_SIGNER.email)fieldValues.email=CURRENT_SIGNER.email;
+    if(CURRENT_SIGNER.phone)fieldValues.telephone=CURRENT_SIGNER.phone;
     fieldValues.date_signature=new Date().toLocaleDateString('fr-FR');
+    // Signataire 2 : merger les fieldsCompleted du signataire 1 pour affichage read-only
+    if(IS_COSIGNER && PREV_SIGNER_DATA && PREV_SIGNER_DATA.fieldsCompleted){
+      Object.keys(PREV_SIGNER_DATA.fieldsCompleted).forEach(function(k){
+        // Ne pas écraser nom/email/tel du signataire 2 par ceux du 1
+        if(k==='nom_prenom'||k==='email'||k==='telephone')return;
+        if(fieldValues[k]===undefined)fieldValues[k]=PREV_SIGNER_DATA.fieldsCompleted[k];
+      });
+    }
     loadPdf();
   }).catch(function(e){showErr(e.message);});
 })();
@@ -203,7 +292,20 @@ function goToStep(n){
   for(var i=1;i<=3;i++)document.getElementById('step'+i).classList.toggle('active',i===n);
   document.querySelectorAll('.prog-step').forEach(function(b,i){b.className='prog-step';if(i<n-1)b.classList.add('done');else if(i===n-1)b.classList.add('active');});
   if(n===2){renderPage();updateBtn();}
-  if(n===3)document.getElementById('doneEmail').textContent=REQ.clientEmail||'';
+  if(n===3){
+    document.getElementById('doneEmail').textContent=(CURRENT_SIGNER&&CURRENT_SIGNER.email)||REQ.clientEmail||'';
+    // Adapter le message si on est le signataire 1 d'un contrat à 2 signataires
+    var hasNextSigner = Array.isArray(REQ.signers)
+      && REQ.signers.length > (CURRENT_SIGNER_IDX+1)
+      && REQ.signers[CURRENT_SIGNER_IDX+1];
+    if(hasNextSigner && !IS_COSIGNER){
+      var nextName=REQ.signers[CURRENT_SIGNER_IDX+1].name||'le second signataire';
+      var doneTitleEl=document.getElementById('doneTitle');
+      var doneSubEl=document.getElementById('doneSub');
+      if(doneTitleEl)doneTitleEl.textContent='✅ Votre signature est enregistrée';
+      if(doneSubEl)doneSubEl.innerHTML='Merci !<br><strong>'+esc(nextName)+'</strong> va recevoir un SMS pour signer à son tour. Le contrat final vous sera envoyé par email une fois les deux signatures apposées.';
+    }
+  }
   scrollTo(0,0);
 }
 
@@ -212,7 +314,7 @@ function otpNav(el,i){if(el.value&&i<5)document.getElementById('otp'+(i+1)).focu
 function otpBack(e,i){if(e.key==='Backspace'&&!e.target.value&&i>0)document.getElementById('otp'+(i-1)).focus();}
 function requestOtp(){
   var b=document.getElementById('otpSendBtn');b.disabled=true;b.textContent='Envoi…';
-  db.collection('webhook_inbox').add({action:'signature_otp_send',signatureRequestId:REQ_ID,phone:REQ.clientPhone,createdAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
+  db.collection('webhook_inbox').add({action:'signature_otp_send',signatureRequestId:REQ_ID,phone:(CURRENT_SIGNER&&CURRENT_SIGNER.phone)||REQ.clientPhone,signerIndex:CURRENT_SIGNER_IDX,createdAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
     b.textContent='✅ Code envoyé';hide('otpSendWrap');show('otpVerifyWrap');document.getElementById('otp0').focus();
   }).catch(function(e){b.disabled=false;b.textContent='📱 Recevoir le code';alert(e.message);});
 }
@@ -262,22 +364,54 @@ function renderOverlays(){
     if(f.page!==curPage)return;
     var x=f.x*r,y=f.y*r,w=f.w*r,fh=f.h*r;
     var val=fieldValues[f.fieldType]||'';
-    h+='<div class="field-overlay" style="left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+fh+'px">';
+    // Multi-signataire : un champ "appartient" au signataire 1 ou 2 selon signerRole
+    var fRole=f.signerRole===2?2:1;   // défaut 1
+    var myRole=IS_COSIGNER?2:1;
+    var belongsToMe=(fRole===myRole);
+    // Si je suis le signataire 2, les champs du 1 sont affichés en lecture seule
+    // (pour contexte) s'ils ont une valeur connue. Sinon masqués.
+    var readonly=!belongsToMe;
+    h+='<div class="field-overlay" style="left:'+x+'px;top:'+y+'px;width:'+w+'px;height:'+fh+'px;'+(readonly?'opacity:.55;pointer-events:none':'')+'">';
     if(f.fieldType==='signature'){
-      var ok=sigText.length>0;
-      h+='<div class="sig-zone'+(ok?' filled':'')+'" onclick="document.getElementById(\'sigInput\').focus();document.getElementById(\'sigInput\').scrollIntoView({behavior:\'smooth\',block:\'center\'})">';
-      h+=ok?'<div class="sig-text" style="font-size:'+Math.min(fh*.6,20)+'px">'+esc(sigText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✍️ Signature</span>';
-      h+='</div>';
+      // Signature : pour le cosigner, les signatures du signataire 1 sont affichées (lecture seule),
+      // et celles du signataire 2 sont actives.
+      if(belongsToMe){
+        var ok=sigText.length>0;
+        h+='<div class="sig-zone'+(ok?' filled':'')+'" onclick="document.getElementById(\'sigInput\').focus();document.getElementById(\'sigInput\').scrollIntoView({behavior:\'smooth\',block:\'center\'})">';
+        h+=ok?'<div class="sig-text" style="font-size:'+Math.min(fh*.6,20)+'px">'+esc(sigText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✍️ Signature</span>';
+        h+='</div>';
+      } else {
+        // Afficher la signature du 1er (déjà apposée dans le PDF généré intermédiaire)
+        var prevSig=(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.signatureText)||'';
+        h+='<div class="sig-zone filled">';
+        h+=prevSig?'<div class="sig-text" style="font-size:'+Math.min(fh*.6,20)+'px">'+esc(prevSig)+'</div>':'<span style="font-size:10px;color:var(--muted)">✍️ (Signataire 1)</span>';
+        h+='</div>';
+      }
     }else if(f.fieldType==='paraphe'){
-      var ok2=parapheText.length>0;
-      h+='<div class="sig-zone'+(ok2?' filled':'')+'">';
-      h+=ok2?'<div class="sig-text" style="font-size:'+Math.min(fh*.55,16)+'px">'+esc(parapheText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✏️</span>';
-      h+='</div>';
+      if(belongsToMe){
+        var ok2=parapheText.length>0;
+        h+='<div class="sig-zone'+(ok2?' filled':'')+'">';
+        h+=ok2?'<div class="sig-text" style="font-size:'+Math.min(fh*.55,16)+'px">'+esc(parapheText)+'</div>':'<span style="font-size:10px;color:var(--muted)">✏️</span>';
+        h+='</div>';
+      } else {
+        var prevPar=(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.parapheText)||'';
+        h+='<div class="sig-zone filled">';
+        h+=prevPar?'<div class="sig-text" style="font-size:'+Math.min(fh*.55,16)+'px">'+esc(prevPar)+'</div>':'<span style="font-size:10px;color:var(--muted)">✏️ (S1)</span>';
+        h+='</div>';
+      }
     }else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
-      h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[f.fieldType]?'checked':'')+' onchange="fieldValues[\''+f.fieldType+'\']=this.checked;updateBtn()"/></div>';
+      if(belongsToMe){
+        h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[f.fieldType]?'checked':'')+' onchange="fieldValues[\''+f.fieldType+'\']=this.checked;updateBtn()"/></div>';
+      } else {
+        h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[f.fieldType]?'checked':'')+' disabled/></div>';
+      }
     }else{
       var fs=Math.min(fh*.55,13);
-      h+='<input type="text" value="'+esc(val)+'" placeholder="'+esc(f.label)+'" style="font-size:'+fs+'px" oninput="fieldValues[\''+f.fieldType+'\']=this.value;updateBtn()"/>';
+      if(belongsToMe){
+        h+='<input type="text" value="'+esc(val)+'" placeholder="'+esc(f.label)+'" style="font-size:'+fs+'px" oninput="fieldValues[\''+f.fieldType+'\']=this.value;updateBtn()"/>';
+      } else {
+        h+='<input type="text" value="'+esc(val)+'" style="font-size:'+fs+'px" readonly disabled/>';
+      }
     }
     h+='</div>';
   });
@@ -297,7 +431,11 @@ function onSigType(){
 /* ═══ VALIDATION ═══ */
 function updateBtn(){
   var fields=REQ.fields||[],ok=true,done={};
+  var myRole=IS_COSIGNER?2:1;
   fields.forEach(function(f){
+    // Ne valider que les champs du signataire courant
+    var fRole=f.signerRole===2?2:1;
+    if(fRole!==myRole)return;
     if(done[f.fieldType])return;done[f.fieldType]=true;
     if(f.required===false)return;
     if(f.fieldType==='signature'&&!sigText.trim())ok=false;
@@ -323,14 +461,82 @@ async function doSubmit(){
       hashHex=Array.from(hArr).map(function(b){return b.toString(16).padStart(2,'0');}).join('');
     }catch(e){console.error('Hash error:',e);}
     var certId='CERT-'+Date.now().toString(36).toUpperCase()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
-    var u={status:'signed',signedAt:firebase.firestore.FieldValue.serverTimestamp(),fieldValues:fieldValues,signatureText:sigText,parapheText:parapheText,
-      certificateId:certId,documentHash:hashHex,
-      signingMeta:{userAgent:navigator.userAgent,platform:navigator.platform,language:navigator.language,screenWidth:screen.width,screenHeight:screen.height,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,signedAtLocal:new Date().toISOString()},
-      events:firebase.firestore.FieldValue.arrayUnion({type:'signed',date:new Date().toISOString()})};
-    if(b64.length<900000)u.signedPdfBase64=b64;
+
+    // Détermine si c'est la signature finale ou une signature intermédiaire
+    var hasNextSigner = Array.isArray(REQ.signers)
+      && REQ.signers.length > (CURRENT_SIGNER_IDX+1)
+      && REQ.signers[CURRENT_SIGNER_IDX+1]
+      && REQ.signers[CURRENT_SIGNER_IDX+1].status !== 'signed';
+    var isFinalSignature = !hasNextSigner;
+
+    // Snapshot du signataire courant : marquer comme signé et stocker ses contribs
+    var signingMeta={userAgent:navigator.userAgent,platform:navigator.platform,language:navigator.language,screenWidth:screen.width,screenHeight:screen.height,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,signedAtLocal:new Date().toISOString()};
+
+    var u={events:firebase.firestore.FieldValue.arrayUnion({type:'signed',by:'signer'+(CURRENT_SIGNER_IDX+1),date:new Date().toISOString()})};
+
+    // MAJ du tableau signers si présent
+    if(Array.isArray(REQ.signers)){
+      var newSigners=REQ.signers.slice();
+      newSigners[CURRENT_SIGNER_IDX]=Object.assign({},newSigners[CURRENT_SIGNER_IDX],{
+        status:'signed',
+        signedAtLocal:new Date().toISOString(),
+        signatureText:sigText,
+        parapheText:parapheText,
+        fieldsCompleted:fieldValues,
+        certificateId:certId,
+        signingMeta:signingMeta
+      });
+      u.signers=newSigners;
+    }
+
+    if(isFinalSignature){
+      // Signature finale → status global "signed", on persiste le PDF final
+      u.status='signed';
+      u.signedAt=firebase.firestore.FieldValue.serverTimestamp();
+      u.fieldValues=fieldValues;           // retro-compat (certificat actuel)
+      u.signatureText=sigText;
+      u.parapheText=parapheText;
+      u.certificateId=certId;
+      u.documentHash=hashHex;
+      u.signingMeta=signingMeta;
+      if(b64.length<900000)u.signedPdfBase64=b64;
+    } else {
+      // Signature intermédiaire (signataire 1 sur un contrat à 2) → status "partial"
+      // On stocke le PDF "en cours" pour que le signataire 2 le voie avec les contribs du 1 déjà apposées
+      u.status='partial';
+      u.partialSignedAt=firebase.firestore.FieldValue.serverTimestamp();
+      u.currentSigner=CURRENT_SIGNER_IDX+1;  // le prochain signataire
+      // Stocker les contribs du signataire 1 séparément — seront mergées au final
+      u.signer1SignatureText=sigText;
+      u.signer1ParapheText=parapheText;
+      u.signer1FieldValues=fieldValues;
+      // Stocker aussi dans fieldValues top-level pour que sign.html du 2e récupère la data via retro-compat
+      u.fieldValues=fieldValues;
+    }
+
     await db.collection('signature_requests').doc(REQ_ID).update(u);
-    if(b64.length>=900000)await saveChunks(b64);
-    await db.collection('webhook_inbox').add({action:'signature_completed',signatureRequestId:REQ_ID,clientName:REQ.clientName,clientEmail:REQ.clientEmail,templateName:REQ.templateName,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    if(isFinalSignature && b64.length>=900000)await saveChunks(b64);
+
+    if(isFinalSignature){
+      // Email / SMS de confirmation finale (cloud function existante)
+      await db.collection('webhook_inbox').add({
+        action:'signature_completed',
+        signatureRequestId:REQ_ID,
+        clientName:REQ.clientName,
+        clientEmail:REQ.clientEmail,
+        templateName:REQ.templateName,
+        createdAt:firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } else {
+      // Trigger SMS vers le signataire 2 — action gérée côté backend (cf. snippet L2)
+      await db.collection('webhook_inbox').add({
+        action:'signature_resend',
+        signatureRequestId:REQ_ID,
+        targetSignerIndex:CURRENT_SIGNER_IDX+1,
+        createdAt:firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
     goToStep(3);
   }catch(e){btn.disabled=false;btn.textContent='✍️ Signer le contrat';alert('Erreur: '+e.message);console.error(e);}
 }
@@ -347,19 +553,57 @@ async function genPdf(){
   var font=await doc.embedFont(P.StandardFonts.Helvetica);
   var fontB=await doc.embedFont(P.StandardFonts.HelveticaBold);
   var pages=doc.getPages(),fields=REQ.fields||[];
+  var myRole=IS_COSIGNER?2:1;
+
+  // Signatures & paraphes du signataire courant
   var sigImg=sigText?await makeSigPng(doc,sigText,32):null;
   var parImg=parapheText?await makeSigPng(doc,parapheText,20):null;
+
+  // Si je suis le signataire 2 → charger aussi les contribs du signataire 1
+  // (déjà sauvegardées dans REQ.signer1* lors de sa signature intermédiaire)
+  var prevSig=null,prevPar=null,prevFieldValues={};
+  if(IS_COSIGNER){
+    var prevSigText=REQ.signer1SignatureText||(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.signatureText)||'';
+    var prevParText=REQ.signer1ParapheText||(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.parapheText)||'';
+    if(prevSigText)prevSig=await makeSigPng(doc,prevSigText,32);
+    if(prevParText)prevPar=await makeSigPng(doc,prevParText,20);
+    prevFieldValues=REQ.signer1FieldValues||(PREV_SIGNER_DATA&&PREV_SIGNER_DATA.fieldsCompleted)||{};
+  }
+
   fields.forEach(function(f){
     var pi=f.page-1;if(pi<0||pi>=pages.length)return;
     var pg=pages[pi],ph=pg.getHeight();
     var px=f.x/tplScale,py=ph-f.y/tplScale-f.h/tplScale,pw=f.w/tplScale,pfh=f.h/tplScale;
-    if(f.fieldType==='signature'&&sigImg)pg.drawImage(sigImg,{x:px,y:py,width:pw,height:pfh});
-    else if(f.fieldType==='paraphe'&&parImg)pg.drawImage(parImg,{x:px,y:py,width:pw,height:pfh});
+    var fRole=f.signerRole===2?2:1;
+    var isMine=(fRole===myRole);
+
+    // Champs du signataire courant : écrits avec ses données
+    if(isMine){
+      if(f.fieldType==='signature'&&sigImg)pg.drawImage(sigImg,{x:px,y:py,width:pw,height:pfh});
+      else if(f.fieldType==='paraphe'&&parImg)pg.drawImage(parImg,{x:px,y:py,width:pw,height:pfh});
+      else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
+        if(fieldValues[f.fieldType])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
+      }else{
+        var v=fieldValues[f.fieldType]||'';if(!v)return;
+        pg.drawText(v,{x:px+2,y:py+pfh*.25,size:Math.min(pfh*.65,11),font:font,color:P.rgb(0,0,0)});
+      }
+      return;
+    }
+
+    // Champs de l'autre signataire :
+    //   - Si je suis le signataire 2 → les champs du 1 ont déjà leur valeur
+    //     et je dois les apposer sur le PDF final.
+    //   - Si je suis le signataire 1 → ne rien écrire pour les champs du 2
+    //     (ils seront ajoutés par le 2e lors de sa signature).
+    if(!IS_COSIGNER)return;
+
+    if(f.fieldType==='signature'&&prevSig)pg.drawImage(prevSig,{x:px,y:py,width:pw,height:pfh});
+    else if(f.fieldType==='paraphe'&&prevPar)pg.drawImage(prevPar,{x:px,y:py,width:pw,height:pfh});
     else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
-      if(fieldValues[f.fieldType])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
+      if(prevFieldValues[f.fieldType])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
     }else{
-      var v=fieldValues[f.fieldType]||'';if(!v)return;
-      pg.drawText(v,{x:px+2,y:py+pfh*.25,size:Math.min(pfh*.65,11),font:font,color:P.rgb(0,0,0)});
+      var pv=prevFieldValues[f.fieldType]||'';if(!pv)return;
+      pg.drawText(pv,{x:px+2,y:py+pfh*.25,size:Math.min(pfh*.65,11),font:font,color:P.rgb(0,0,0)});
     }
   });
   var bytes=await doc.save();

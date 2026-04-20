@@ -238,14 +238,47 @@ function render(r,docId){
   document.getElementById('docPages').textContent=(fields.length?Math.max.apply(null,fields.map(function(f){return f.page||1;})):'-')+' page(s)';
   document.getElementById('docFields').textContent=fields.length+' champ(s)';
 
-  // Signer info
+  // Signer info (signataire 1, rétro-compat)
   document.getElementById('signerName').textContent=r.clientName||'—';
   document.getElementById('signerEmail').textContent=r.clientEmail||'—';
   document.getElementById('signerPhone').textContent=r.clientPhone||'—';
   document.getElementById('signerOtp').textContent=r.otpVerified?'✅ Vérifié par SMS':'❌ Non vérifié';
   document.getElementById('signerOtp').style.color=r.otpVerified?'#059669':'#dc2626';
 
-  // Signature display
+  // Multi-signataire : si signers[] contient 2 entrées, on affiche un bloc
+  // additionnel pour le signataire 2 juste après celui du signataire 1.
+  if(Array.isArray(r.signers) && r.signers.length>1 && r.signers[1]){
+    var s2=r.signers[1];
+    var signerBlockParent=document.getElementById('signerName').closest('.sec-card')
+      || document.getElementById('signerName').parentElement;
+    if(signerBlockParent){
+      // Renommer le premier bloc en "Signataire 1" via un petit badge
+      var firstLabel=signerBlockParent.querySelector('.sec-title')||signerBlockParent.querySelector('h3');
+      if(firstLabel && firstLabel.textContent.indexOf('①')<0){
+        firstLabel.insertAdjacentHTML('beforeend',' <span style="display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;color:#6366f1;background:rgba(99,102,241,.12);margin-left:8px">① Signataire 1</span>');
+      }
+      // Bloc Signataire 2
+      var s2Html='<div class="sec-card" style="margin-top:18px">';
+      s2Html+='<div class="sec-title" style="font-size:15px;font-weight:700;margin-bottom:12px">Signataire <span style="display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;color:#f59e0b;background:rgba(245,158,11,.12);margin-left:4px">② Signataire 2</span></div>';
+      s2Html+='<div class="info-row"><div class="info-label">Nom</div><div class="info-val">'+(s2.name||'—')+'</div></div>';
+      s2Html+='<div class="info-row"><div class="info-label">Email</div><div class="info-val">'+(s2.email||'—')+'</div></div>';
+      s2Html+='<div class="info-row"><div class="info-label">Téléphone</div><div class="info-val">'+(s2.phone||'—')+'</div></div>';
+      s2Html+='<div class="info-row"><div class="info-label">OTP SMS</div><div class="info-val" style="color:'+(s2.status==='signed'?'#059669':'#dc2626')+'">'+(s2.status==='signed'?'✅ Vérifié par SMS':'❌ Non vérifié')+'</div></div>';
+      s2Html+='<div class="info-row"><div class="info-label">Certificat</div><div class="info-val" style="font-family:monospace;font-size:12px">'+(s2.certificateId||'—')+'</div></div>';
+      s2Html+='<div class="info-row"><div class="info-label">Signé le</div><div class="info-val">'+(s2.signedAtLocal?new Date(s2.signedAtLocal).toLocaleString('fr-FR',{timeZone:'Europe/Paris'}):'—')+'</div></div>';
+      // Signature dessinée S2
+      if(s2.signatureText){
+        s2Html+='<div class="info-row"><div class="info-label">Signature</div><div class="info-val" style="font-family:\'Dancing Script\',cursive;font-size:24px;font-weight:600;color:#1a1a2e">'+esc(s2.signatureText)+'</div></div>';
+      }
+      if(s2.parapheText){
+        s2Html+='<div class="info-row"><div class="info-label">Paraphe</div><div class="info-val" style="font-family:\'Dancing Script\',cursive;font-size:18px;color:#1a1a2e">'+esc(s2.parapheText)+'</div></div>';
+      }
+      s2Html+='</div>';
+      signerBlockParent.insertAdjacentHTML('afterend',s2Html);
+    }
+  }
+
+  // Signature display (signataire 1)
   document.getElementById('sigDisplay').textContent=r.signatureText||r.clientName||'—';
   if(r.parapheText){
     var pd=document.getElementById('parDisplay');
