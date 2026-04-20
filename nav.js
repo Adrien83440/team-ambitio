@@ -57,7 +57,7 @@
     { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
     { id: 'sales-rdv',         icon: '🗓️', label: 'Mes RDV',     href: 'sales-rdv.html',         section: 'Sales', perm: 'booking' },
     { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
-    { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: '_admin' },
+    { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: 'signatures' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
     { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
@@ -419,6 +419,10 @@
       if (m.perm === 'payments') {
         if (role === 'admin') return true;
         return localStorage.getItem('ambitio_payments_access') === '1';
+      }
+      if (m.perm === 'signatures') {
+        if (role === 'admin') return true;
+        return localStorage.getItem('ambitio_signatures_access') === '1';
       }
       var p = perms[m.perm];
       return p && p !== 'none';
@@ -847,11 +851,15 @@
         var next = JSON.stringify(formIds);
         var payAccess = userData.paymentsAccess === true ? '1' : '0';
         var prevPay = localStorage.getItem('ambitio_payments_access') || '0';
-        var changed = prev !== next || prevPay !== payAccess;
+        var sigAccess = userData.signaturesAccess === true ? '1' : '0';
+        var prevSig = localStorage.getItem('ambitio_signatures_access') || '0';
+        var changed = prev !== next || prevPay !== payAccess || prevSig !== sigAccess;
         if (formIds.length > 0) localStorage.setItem('ambitio_alteoforms_forms', next);
         else localStorage.removeItem('ambitio_alteoforms_forms');
         if (payAccess === '1') localStorage.setItem('ambitio_payments_access', '1');
         else localStorage.removeItem('ambitio_payments_access');
+        if (sigAccess === '1') localStorage.setItem('ambitio_signatures_access', '1');
+        else localStorage.removeItem('ambitio_signatures_access');
         if (changed && typeof buildSidebar === 'function') buildSidebar();
       } catch(e) { console.warn('[nav] alteoforms access check:', e); }
     });
