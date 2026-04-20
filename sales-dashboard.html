@@ -601,6 +601,9 @@ tr.member-archived-admin:hover td { opacity:.88; filter:grayscale(.25); }
   <!-- MAIN CONTENT -->
   <div id="main-content"></div>
 
+  <!-- RAPPORT APPELS (L1 — source call_logs Twilio) -->
+  <div id="call-report"></div>
+
 </div>
 
 <script>
@@ -1268,6 +1271,721 @@ document.addEventListener('DOMContentLoaded', async function() {
   await migrateHistToFirestore();
   await refreshYear();
 });
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     RAPPORT APPELS HEBDO — L1 (source Twilio call_logs)
+     Outbound + completed + durationSec >= 5s. Plage libre. Admin voit
+     tous les closers + dropdown filtre ; Sales voit uniquement ses
+     propres stats.
+═══════════════════════════════════════════════════════════════════ -->
+<style>
+.cr-section { margin-top: 24px; }
+.cr-card {
+  background: var(--bg2, #121419); border: 1px solid var(--border, #1f2229);
+  border-radius: 14px; padding: 20px 22px; position: relative; overflow: hidden;
+}
+.cr-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, #34d399, #60a5fa);
+}
+.cr-hdr {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 16px;
+}
+.cr-title {
+  font-size: 15px; font-weight: 800; color: var(--text, #f5f5f5);
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.cr-badge {
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px;
+  background: rgba(52, 211, 153, 0.14); color: #34d399;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.cr-controls {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px; background: var(--bg3, #0c0e12); border-radius: 10px;
+  border: 1px solid var(--border, #1f2229);
+}
+.cr-preset {
+  padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border, #1f2229);
+  background: transparent; color: var(--muted, #9ca3af);
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s;
+}
+.cr-preset:hover { color: var(--text, #f5f5f5); border-color: var(--border2, #2d313a); }
+.cr-preset.active {
+  background: rgba(52, 211, 153, 0.14); color: #34d399;
+  border-color: rgba(52, 211, 153, 0.4);
+}
+.cr-datepair { display: inline-flex; align-items: center; gap: 6px; }
+.cr-datepair label {
+  font-size: 11px; color: var(--muted, #9ca3af); font-weight: 600;
+}
+.cr-datepair input[type="date"] {
+  padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border, #1f2229);
+  background: var(--bg3, #0c0e12); color: var(--text, #f5f5f5);
+  font-family: inherit; font-size: 12px; cursor: pointer;
+}
+.cr-datepair input[type="date"]:focus { border-color: #34d399; outline: none; }
+.cr-filter-select {
+  padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border, #1f2229);
+  background: var(--bg3, #0c0e12); color: var(--text, #f5f5f5);
+  font-family: inherit; font-size: 12px; cursor: pointer;
+  margin-left: auto;
+}
+.cr-filter-select:focus { border-color: #34d399; outline: none; }
+
+.cr-stat-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px; margin-bottom: 18px;
+}
+.cr-stat {
+  background: var(--bg3, #0c0e12); border: 1px solid var(--border, #1f2229);
+  border-radius: 10px; padding: 14px 16px;
+}
+.cr-stat-label {
+  font-size: 10px; color: var(--muted, #9ca3af); text-transform: uppercase;
+  letter-spacing: .5px; font-weight: 700; margin-bottom: 6px;
+}
+.cr-stat-val {
+  font-size: 22px; font-weight: 800; color: var(--text, #f5f5f5);
+  font-family: var(--font-d, inherit); line-height: 1;
+}
+.cr-stat-val small {
+  font-size: 13px; color: var(--muted, #9ca3af); font-weight: 600;
+}
+
+.cr-table-wrap {
+  border: 1px solid var(--border, #1f2229); border-radius: 10px;
+  overflow-x: auto; margin-bottom: 18px;
+}
+.cr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cr-table thead {
+  background: var(--bg3, #0c0e12);
+}
+.cr-table th {
+  text-align: left; padding: 10px 14px; font-size: 10px; font-weight: 700;
+  color: var(--muted, #9ca3af); text-transform: uppercase; letter-spacing: .5px;
+  border-bottom: 1px solid var(--border, #1f2229); white-space: nowrap;
+}
+.cr-table th.num, .cr-table td.num { text-align: right; }
+.cr-table td {
+  padding: 10px 14px; color: var(--text, #f5f5f5);
+  border-bottom: 1px solid var(--border, #1f2229);
+}
+.cr-table tbody tr:last-child td { border-bottom: none; }
+.cr-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+.cr-table tr.cr-total td {
+  background: rgba(52, 211, 153, 0.06);
+  font-weight: 800; color: #34d399;
+  border-top: 1px solid rgba(52, 211, 153, 0.3);
+}
+.cr-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 8px; vertical-align: middle;
+}
+.cr-archived {
+  font-size: 10px; padding: 1px 5px; border-radius: 3px; margin-left: 6px;
+  background: rgba(255,255,255,0.06); color: var(--muted2, #6b7280);
+}
+
+.cr-chart-wrap {
+  background: var(--bg3, #0c0e12); border: 1px solid var(--border, #1f2229);
+  border-radius: 10px; padding: 18px;
+}
+.cr-chart-title {
+  font-size: 11px; color: var(--muted, #9ca3af); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px;
+}
+.cr-chart {
+  display: flex; align-items: flex-end; gap: 6px; height: 140px;
+  position: relative; padding-left: 4px;
+}
+.cr-chart-col {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: 6px; min-width: 0; cursor: default; position: relative;
+}
+.cr-chart-bar {
+  width: 100%; max-width: 42px; min-height: 2px;
+  background: linear-gradient(180deg, #34d399, #059669);
+  border-radius: 4px 4px 0 0; transition: opacity 0.15s;
+}
+.cr-chart-col:hover .cr-chart-bar { opacity: 0.8; }
+.cr-chart-col.empty .cr-chart-bar {
+  background: var(--border, #1f2229); opacity: 0.5;
+}
+.cr-chart-lbl {
+  font-size: 9px; color: var(--muted2, #6b7280); font-weight: 700;
+  text-transform: uppercase;
+}
+.cr-chart-tooltip {
+  position: absolute; bottom: calc(100% + 4px); left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px; background: var(--bg, #0a0c10);
+  border: 1px solid var(--border2, #2d313a); border-radius: 6px;
+  font-size: 11px; color: var(--text, #f5f5f5); white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 0.15s; z-index: 10;
+}
+.cr-chart-col:hover .cr-chart-tooltip { opacity: 1; }
+
+.cr-empty {
+  text-align: center; padding: 40px 20px;
+  color: var(--muted2, #6b7280); font-size: 13px;
+}
+.cr-loading {
+  text-align: center; padding: 40px 20px;
+  color: var(--muted, #9ca3af); font-size: 13px;
+}
+.cr-error {
+  padding: 14px; border-radius: 8px;
+  background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #ef4444; font-size: 12px; margin-bottom: 14px;
+}
+</style>
+
+<script>
+(function () {
+  'use strict';
+
+  // ─── Config ────────────────────────────────────────────────────────────
+  // Seuil pour considérer un appel comme "décroché" (cohérent avec
+  // stats.connected du Dialer — exclut les répondeurs < 5s).
+  const ANSWERED_DURATION_THRESHOLD_SEC = 5;
+  const LOGS_QUERY_LIMIT = 5000;
+
+  // ─── State ─────────────────────────────────────────────────────────────
+  const state = {
+    rangeStart: null,
+    rangeEnd: null,
+    activePreset: 'week',
+    filterUid: 'all',
+    role: null,
+    myUid: null,
+    uidToMember: {},
+    loading: false,
+    logs: []
+  };
+
+  // ─── Helpers date ─────────────────────────────────────────────────────
+  function startOfDay(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+  function endOfDay(d) { const x = new Date(d); x.setHours(23,59,59,999); return x; }
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function isoDate(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
+  }
+  function getCurrentWeekRange() {
+    const now = new Date();
+    const dow = now.getDay(); // 0=dim
+    const diffToMon = dow === 0 ? -6 : 1 - dow;
+    const mon = new Date(now);
+    mon.setDate(now.getDate() + diffToMon);
+    const sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    return { start: startOfDay(mon), end: endOfDay(sun) };
+  }
+  function getLastWeekRange() {
+    const cur = getCurrentWeekRange();
+    const s = new Date(cur.start); s.setDate(s.getDate() - 7);
+    const e = new Date(cur.end);   e.setDate(e.getDate() - 7);
+    return { start: startOfDay(s), end: endOfDay(e) };
+  }
+  function getCurrentMonthRange() {
+    const now = new Date();
+    const s = new Date(now.getFullYear(), now.getMonth(), 1);
+    const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { start: startOfDay(s), end: endOfDay(e) };
+  }
+  function getLast30DaysRange() {
+    const now = new Date();
+    const s = new Date(now); s.setDate(now.getDate() - 29);
+    return { start: startOfDay(s), end: endOfDay(now) };
+  }
+
+  // ─── Helpers format ────────────────────────────────────────────────────
+  function fmtDuration(sec) {
+    sec = Math.max(0, Math.round(sec || 0));
+    if (sec < 60) return sec + 's';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return h + 'h ' + pad2(m) + 'min';
+    if (s === 0) return m + 'min';
+    return m + 'min ' + pad2(s) + 's';
+  }
+  function fmtDurationShort(sec) {
+    sec = Math.max(0, Math.round(sec || 0));
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    if (h > 0) return h + 'h' + (m > 0 ? pad2(m) : '');
+    return m + 'min';
+  }
+  function fmtShortDate(d) {
+    return d.getDate() + '/' + pad2(d.getMonth()+1);
+  }
+  function rangeLabel(start, end) {
+    const sd = new Date(start), ed = new Date(end);
+    if (isoDate(sd) === isoDate(ed)) return fmtShortDate(sd);
+    return fmtShortDate(sd) + ' → ' + fmtShortDate(ed);
+  }
+
+  // ─── Attendre window._currentRole + TEAM_MEMBERS ──────────────────────
+  async function waitForReady() {
+    const startTs = Date.now();
+    while (Date.now() - startTs < 8000) {
+      if (window._currentRole && window._currentUserUid) {
+        // Le role est set. TEAM_MEMBERS peut encore se charger, mais nav.js
+        // a probablement déjà fini. On tolère un TEAM_MEMBERS vide et on
+        // retente après.
+        return true;
+      }
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return false;
+  }
+
+  async function waitForTeamMembers() {
+    const startTs = Date.now();
+    while (Date.now() - startTs < 5000) {
+      if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length > 0) return true;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return false; // on continue quand même avec ce qu'on a
+  }
+
+  function buildUidToMember() {
+    const map = {};
+    const list = window.TEAM_MEMBERS_LIST || [];
+    for (const m of list) {
+      if (m && m.firebaseUid) {
+        map[m.firebaseUid] = {
+          slug: m.slug,
+          name: m.shortName || m.displayName || m.slug,
+          color: m.color || '#6b7280',
+          active: m.active !== false
+        };
+      }
+    }
+    state.uidToMember = map;
+  }
+
+  // ─── Query Firestore ───────────────────────────────────────────────────
+  async function fetchLogs() {
+    const db = firebase.firestore();
+    const start = state.rangeStart;
+    const end = state.rangeEnd;
+
+    try {
+      let q;
+      if (state.role === 'admin') {
+        // Admin : plage temporelle seule (pas de filter userId → composite index non requis)
+        q = db.collection('call_logs')
+          .where('initiatedAt', '>=', start)
+          .where('initiatedAt', '<=', end)
+          .limit(LOGS_QUERY_LIMIT);
+      } else {
+        // Sales : filtre par userId seul (aucun composite index requis)
+        // On filtre la plage temporelle côté client.
+        q = db.collection('call_logs')
+          .where('userId', '==', state.myUid)
+          .limit(LOGS_QUERY_LIMIT);
+      }
+      const snap = await q.get();
+      const logs = [];
+      snap.forEach(function (doc) {
+        const d = doc.data();
+        if (!d.initiatedAt || !d.initiatedAt.toDate) return;
+        const when = d.initiatedAt.toDate();
+        if (state.role === 'sales') {
+          // Filtre côté client sur la plage
+          if (when < start || when > end) return;
+        }
+        logs.push({
+          id: doc.id,
+          userId: d.userId || null,
+          direction: d.direction || null,
+          status: d.status || null,
+          durationSec: typeof d.durationSec === 'number' ? d.durationSec : 0,
+          initiatedAt: when
+        });
+      });
+      return logs;
+    } catch (e) {
+      console.error('[callReport] fetch error:', e);
+      throw e;
+    }
+  }
+
+  // ─── Aggrégation ──────────────────────────────────────────────────────
+  function aggregate(logs) {
+    // Filtre métier : outbound + completed + décroché (>= 5s)
+    const answered = logs.filter(function (l) {
+      return l.direction === 'outbound'
+          && l.status === 'completed'
+          && (l.durationSec || 0) >= ANSWERED_DURATION_THRESHOLD_SEC;
+    });
+
+    // Par closer
+    const byUser = {};
+    // Par jour (global)
+    const byDay = {};
+
+    for (const l of answered) {
+      const uid = l.userId || '__unknown';
+      if (!byUser[uid]) byUser[uid] = { count: 0, totalSec: 0, uid: uid };
+      byUser[uid].count += 1;
+      byUser[uid].totalSec += l.durationSec;
+
+      const dk = isoDate(l.initiatedAt);
+      if (!byDay[dk]) byDay[dk] = { count: 0, totalSec: 0 };
+      byDay[dk].count += 1;
+      byDay[dk].totalSec += l.durationSec;
+    }
+
+    return { byUser: byUser, byDay: byDay, totalCount: answered.length };
+  }
+
+  function buildDaysSeries(byDay, start, end) {
+    // Série continue jour par jour (remplit les jours sans appel avec 0)
+    const days = [];
+    const cur = new Date(start); cur.setHours(0,0,0,0);
+    const endD = new Date(end);  endD.setHours(0,0,0,0);
+    // Cap à 60 jours pour éviter un barchart illisible sur très longue plage
+    let safety = 0;
+    while (cur <= endD && safety < 100) {
+      const dk = isoDate(cur);
+      const d = byDay[dk] || { count: 0, totalSec: 0 };
+      days.push({
+        date: new Date(cur),
+        dateKey: dk,
+        count: d.count,
+        totalSec: d.totalSec
+      });
+      cur.setDate(cur.getDate() + 1);
+      safety++;
+    }
+    return days;
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────
+  function renderShell() {
+    const root = document.getElementById('call-report');
+    if (!root) return;
+
+    const presets = [
+      { key: 'week',     label: 'Cette semaine' },
+      { key: 'lastweek', label: 'Semaine dernière' },
+      { key: 'month',    label: 'Ce mois-ci' },
+      { key: '30days',   label: '30 derniers jours' },
+      { key: 'custom',   label: 'Personnalisé' }
+    ];
+
+    let filterHtml = '';
+    if (state.role === 'admin') {
+      const members = (window.TEAM_MEMBERS_LIST || []).filter(function (m) {
+        return m && m.firebaseUid;
+      });
+      filterHtml = '<select class="cr-filter-select" id="cr-filter">'
+        + '<option value="all">Tous les closers</option>'
+        + members.map(function (m) {
+            const nm = m.shortName || m.displayName || m.slug;
+            return '<option value="' + m.firebaseUid + '">' + nm
+                 + (m.active === false ? ' (archivé)' : '') + '</option>';
+          }).join('')
+        + '</select>';
+    }
+
+    const titleBadge = state.role === 'admin'
+      ? '<span class="cr-badge">Équipe</span>'
+      : '<span class="cr-badge">Mes stats</span>';
+
+    root.innerHTML = ''
+      + '<div class="cr-section"><div class="cr-card">'
+      + '<div class="cr-hdr">'
+      +   '<div class="cr-title">📞 Activité téléphonique</div>'
+      +   titleBadge
+      + '</div>'
+      + '<div class="cr-controls" id="cr-controls">'
+      +   presets.map(function (p) {
+            return '<button class="cr-preset' + (state.activePreset === p.key ? ' active' : '')
+                 + '" data-preset="' + p.key + '">' + p.label + '</button>';
+          }).join('')
+      +   '<div class="cr-datepair">'
+      +     '<label>Du</label><input type="date" id="cr-date-start"/>'
+      +     '<label>Au</label><input type="date" id="cr-date-end"/>'
+      +   '</div>'
+      +   filterHtml
+      + '</div>'
+      + '<div id="cr-body"></div>'
+      + '</div></div>';
+
+    // Init date pickers
+    document.getElementById('cr-date-start').value = isoDate(state.rangeStart);
+    document.getElementById('cr-date-end').value = isoDate(state.rangeEnd);
+
+    // Event listeners
+    document.getElementById('cr-controls').addEventListener('click', function (e) {
+      const btn = e.target.closest('.cr-preset');
+      if (!btn) return;
+      onPresetClick(btn.dataset.preset);
+    });
+    document.getElementById('cr-date-start').addEventListener('change', onDateChange);
+    document.getElementById('cr-date-end').addEventListener('change', onDateChange);
+    if (state.role === 'admin') {
+      document.getElementById('cr-filter').addEventListener('change', function (e) {
+        state.filterUid = e.target.value;
+        renderBody();
+      });
+    }
+  }
+
+  function renderBodyLoading() {
+    const body = document.getElementById('cr-body');
+    if (body) body.innerHTML = '<div class="cr-loading">Chargement des appels…</div>';
+  }
+
+  function renderBodyError(msg) {
+    const body = document.getElementById('cr-body');
+    if (body) body.innerHTML = '<div class="cr-error">' + msg + '</div>';
+  }
+
+  function renderBody() {
+    const body = document.getElementById('cr-body');
+    if (!body) return;
+
+    const agg = aggregate(state.logs);
+
+    // Appliquer filtre closer (admin only)
+    let filteredByUser = agg.byUser;
+    let filteredByDay = agg.byDay;
+    let filteredTotal = agg.totalCount;
+
+    if (state.role === 'admin' && state.filterUid !== 'all') {
+      // Re-agréger uniquement pour l'UID sélectionné
+      const uid = state.filterUid;
+      filteredByUser = agg.byUser[uid] ? { [uid]: agg.byUser[uid] } : {};
+      filteredByDay = {};
+      filteredTotal = 0;
+      for (const l of state.logs) {
+        if (l.userId !== uid) continue;
+        if (l.direction !== 'outbound' || l.status !== 'completed') continue;
+        if ((l.durationSec || 0) < ANSWERED_DURATION_THRESHOLD_SEC) continue;
+        const dk = isoDate(l.initiatedAt);
+        if (!filteredByDay[dk]) filteredByDay[dk] = { count: 0, totalSec: 0 };
+        filteredByDay[dk].count++;
+        filteredByDay[dk].totalSec += l.durationSec;
+        filteredTotal++;
+      }
+    }
+
+    // Total général (pour bannière stats)
+    let totalCount = 0, totalSec = 0;
+    Object.values(filteredByUser).forEach(function (u) {
+      totalCount += u.count;
+      totalSec += u.totalSec;
+    });
+    const avgSec = totalCount > 0 ? totalSec / totalCount : 0;
+
+    // ── Bannière stats ──────────────────────────────────────────────────
+    let html = '<div class="cr-stat-row">';
+    html += '<div class="cr-stat"><div class="cr-stat-label">Appels décrochés</div>'
+         + '<div class="cr-stat-val">' + totalCount + '</div></div>';
+    html += '<div class="cr-stat"><div class="cr-stat-label">Temps total</div>'
+         + '<div class="cr-stat-val">' + fmtDuration(totalSec) + '</div></div>';
+    html += '<div class="cr-stat"><div class="cr-stat-label">Durée moyenne</div>'
+         + '<div class="cr-stat-val">' + (totalCount > 0 ? fmtDuration(avgSec) : '—') + '</div></div>';
+    html += '<div class="cr-stat"><div class="cr-stat-label">Plage</div>'
+         + '<div class="cr-stat-val" style="font-size:15px">'
+         + rangeLabel(state.rangeStart, state.rangeEnd) + '</div></div>';
+    html += '</div>';
+
+    // ── Tableau (admin + vue "Tous") OR uniquement si plusieurs uid ────
+    const showTable = state.role === 'admin' && state.filterUid === 'all';
+    if (showTable) {
+      const rows = Object.values(filteredByUser)
+        .map(function (u) {
+          const m = state.uidToMember[u.uid] || null;
+          return {
+            uid: u.uid,
+            name: m ? m.name : ('Inconnu (' + String(u.uid || '').slice(0, 6) + ')'),
+            color: m ? m.color : '#6b7280',
+            active: m ? m.active : true,
+            count: u.count,
+            totalSec: u.totalSec,
+            avg: u.count > 0 ? (u.totalSec / u.count) : 0
+          };
+        })
+        .sort(function (a, b) { return b.totalSec - a.totalSec; });
+
+      html += '<div class="cr-table-wrap"><table class="cr-table">';
+      html += '<thead><tr>'
+            + '<th>Closer</th>'
+            + '<th class="num">Appels décrochés</th>'
+            + '<th class="num">Temps total</th>'
+            + '<th class="num">Temps moyen</th>'
+            + '</tr></thead><tbody>';
+
+      if (rows.length === 0) {
+        html += '<tr><td colspan="4"><div class="cr-empty">'
+             + 'Aucun appel décroché sur cette plage.</div></td></tr>';
+      } else {
+        rows.forEach(function (r) {
+          html += '<tr>';
+          html += '<td>'
+               +   '<span class="cr-dot" style="background:' + r.color + '"></span>'
+               +   r.name
+               +   (r.active === false ? '<span class="cr-archived">archivé</span>' : '')
+               + '</td>';
+          html += '<td class="num">' + r.count + '</td>';
+          html += '<td class="num">' + fmtDuration(r.totalSec) + '</td>';
+          html += '<td class="num">' + fmtDuration(r.avg) + '</td>';
+          html += '</tr>';
+        });
+        html += '<tr class="cr-total"><td>Total équipe</td>'
+             +   '<td class="num">' + totalCount + '</td>'
+             +   '<td class="num">' + fmtDuration(totalSec) + '</td>'
+             +   '<td class="num">' + (totalCount > 0 ? fmtDuration(avgSec) : '—') + '</td>'
+             + '</tr>';
+      }
+      html += '</tbody></table></div>';
+    }
+
+    // ── Barchart par jour ──────────────────────────────────────────────
+    const days = buildDaysSeries(filteredByDay, state.rangeStart, state.rangeEnd);
+    const maxSec = days.reduce(function (mx, d) { return Math.max(mx, d.totalSec); }, 0) || 1;
+
+    html += '<div class="cr-chart-wrap">';
+    html += '<div class="cr-chart-title">Répartition par jour</div>';
+    html += '<div class="cr-chart">';
+    if (days.length === 0) {
+      html += '<div class="cr-empty" style="flex:1">Aucune donnée.</div>';
+    } else {
+      days.forEach(function (d) {
+        const pct = Math.max(d.totalSec / maxSec * 100, 2);
+        const isEmpty = d.totalSec === 0;
+        const dayLbl = ['D', 'L', 'M', 'M', 'J', 'V', 'S'][d.date.getDay()];
+        const dn = d.date.getDate();
+        const tip = isEmpty
+          ? (fmtShortDate(d.date) + ' : aucun appel')
+          : (fmtShortDate(d.date) + ' : ' + d.count + ' appels — ' + fmtDuration(d.totalSec));
+        html += '<div class="cr-chart-col' + (isEmpty ? ' empty' : '') + '">';
+        html += '<div class="cr-chart-tooltip">' + tip + '</div>';
+        html += '<div class="cr-chart-bar" style="height:' + pct.toFixed(1) + '%"></div>';
+        html += '<div class="cr-chart-lbl">' + dayLbl + dn + '</div>';
+        html += '</div>';
+      });
+    }
+    html += '</div></div>';
+
+    body.innerHTML = html;
+  }
+
+  // ─── Event handlers ────────────────────────────────────────────────────
+  function setPreset(key) {
+    state.activePreset = key;
+    // Actualiser classes actives
+    document.querySelectorAll('.cr-preset').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.preset === key);
+    });
+    // Actualiser dates
+    const pickStart = document.getElementById('cr-date-start');
+    const pickEnd = document.getElementById('cr-date-end');
+    if (pickStart) pickStart.value = isoDate(state.rangeStart);
+    if (pickEnd) pickEnd.value = isoDate(state.rangeEnd);
+  }
+
+  async function onPresetClick(key) {
+    let r = null;
+    switch (key) {
+      case 'week':     r = getCurrentWeekRange(); break;
+      case 'lastweek': r = getLastWeekRange(); break;
+      case 'month':    r = getCurrentMonthRange(); break;
+      case '30days':   r = getLast30DaysRange(); break;
+      case 'custom':
+        state.activePreset = 'custom';
+        document.querySelectorAll('.cr-preset').forEach(function (b) {
+          b.classList.toggle('active', b.dataset.preset === 'custom');
+        });
+        return; // on attend que l'user modifie les date pickers
+    }
+    if (!r) return;
+    state.rangeStart = r.start;
+    state.rangeEnd = r.end;
+    setPreset(key);
+    await reload();
+  }
+
+  async function onDateChange() {
+    const s = document.getElementById('cr-date-start').value;
+    const e = document.getElementById('cr-date-end').value;
+    if (!s || !e) return;
+    const sd = new Date(s + 'T00:00:00');
+    const ed = new Date(e + 'T23:59:59');
+    if (isNaN(sd) || isNaN(ed)) return;
+    if (sd > ed) return; // ignorer l'input invalide
+    state.rangeStart = sd;
+    state.rangeEnd = ed;
+    state.activePreset = 'custom';
+    document.querySelectorAll('.cr-preset').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.preset === 'custom');
+    });
+    await reload();
+  }
+
+  async function reload() {
+    if (state.loading) return;
+    state.loading = true;
+    renderBodyLoading();
+    try {
+      state.logs = await fetchLogs();
+      renderBody();
+    } catch (e) {
+      renderBodyError("Impossible de charger les appels : " + (e.message || e));
+    } finally {
+      state.loading = false;
+    }
+  }
+
+  // ─── Init ──────────────────────────────────────────────────────────────
+  async function init() {
+    const ok = await waitForReady();
+    if (!ok) { console.warn('[callReport] auth/role non prêts'); return; }
+
+    state.role = window._currentRole;
+    state.myUid = window._currentUserUid;
+
+    if (state.role !== 'admin' && state.role !== 'sales') {
+      // Coach n'est pas dans le scope L1
+      return;
+    }
+
+    await waitForTeamMembers();
+    buildUidToMember();
+
+    // Plage par défaut : cette semaine
+    const wk = getCurrentWeekRange();
+    state.rangeStart = wk.start;
+    state.rangeEnd = wk.end;
+
+    renderShell();
+    await reload();
+
+    // Réagir si TEAM_MEMBERS arrive tardivement (après un fetch team_members)
+    window.addEventListener('team-members-loaded', function () {
+      buildUidToMember();
+      renderShell();
+      renderBody();
+    });
+  }
+
+  // Lancement : on attend que le DOM soit prêt ET que l'auth soit traitée.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { init(); });
+  } else {
+    init();
+  }
+})();
 </script>
 </body>
 </html>
