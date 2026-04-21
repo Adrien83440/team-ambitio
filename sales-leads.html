@@ -105,33 +105,23 @@ html, body {
 .ld-filter:hover { border-color: var(--border2); color: var(--text); }
 .ld-filter.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
 
-/* Count badge inline inside period filter buttons */
+/* Count badge inline inside period filter buttons — discret, sans fond */
 .ld-period-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 6px;
-  padding: 2px 7px;
-  border-radius: 10px;
-  background: rgba(255,255,255,0.08);
+  display: inline;
+  margin-left: 5px;
   color: var(--muted);
   font-family: var(--fm);
   font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  min-width: 18px;
-  transition: background 0.15s, color 0.15s;
-  vertical-align: middle;
-}
-.ld-filter:has(.ld-period-count) {
-  padding-right: 8px;
+  font-weight: 500;
+  opacity: 0.55;
+  transition: opacity 0.15s, color 0.15s;
 }
 .ld-filter.active .ld-period-count {
-  background: rgba(239,68,68,0.18);
   color: var(--red3);
+  opacity: 0.75;
 }
 .ld-period-count.zero {
-  opacity: 0.45;
+  opacity: 0.3;
 }
 
 /* ── Date range popover ── */
@@ -1251,14 +1241,9 @@ function refreshDateBtnLabel() {
     var fmt = function(d) {
       return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
     };
+    // On affiche uniquement la date de début pour garder le bouton compact ;
+    // la plage complète reste visible dans le popover si besoin.
     var label = '📆 ' + fmt(customDateFrom);
-    if (customDateTo) {
-      // Si même jour, on n'affiche qu'une date
-      var sameDay = customDateFrom.getFullYear() === customDateTo.getFullYear()
-                 && customDateFrom.getMonth() === customDateTo.getMonth()
-                 && customDateFrom.getDate() === customDateTo.getDate();
-      if (!sameDay) label += ' → ' + fmt(customDateTo);
-    }
     // Count dans la plage custom
     var customCount = 0;
     try {
