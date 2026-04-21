@@ -976,7 +976,6 @@ var filterStatus = 'all';
 var filterType = 'all';
 var filterPeriod = 'today';
 var filterSearch = '';
-var _prevPeriodBeforeSearch = null; // restore on clear
 var customDateFrom = null; // Date object (start of day) ou null
 var customDateTo = null;   // Date object (end of day) ou null
 var knownLeadIds = {};
@@ -1339,51 +1338,26 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 });
 
 /* ── Search bar ──
-   Comportement : quand la recherche devient active, on élargit automatiquement
-   la période à 'all' (dans la fenêtre 30j chargée par le listener Firestore)
-   pour que la recherche couvre un maximum de leads. Au clear, on restaure la
-   période précédente. Les filtres membre / type / statut continuent à se
-   cumuler avec la recherche. */
+   Comportement : la recherche bypass les filtres période / type / statut
+   (pour trouver n'importe quel lead dans la fenêtre 30j chargée), mais garde
+   le filtre membre (cohérent avec le mode personnel / la vue active). Aucun
+   effet sur le rendu quand la barre est vide. */
 (function() {
   var searchWrap  = document.getElementById('ldSearch');
   var searchInput = document.getElementById('ldSearchInput');
   var clearBtn    = document.getElementById('ldSearchClear');
   if (!searchInput || !searchWrap) return;
 
-  function _setPeriodUI(period) {
-    var btns = document.querySelectorAll('#ldPeriodFilters .ld-filter');
-    for (var i = 0; i < btns.length; i++) {
-      var b = btns[i];
-      if (!b.dataset.period) continue;
-      if (b.dataset.period === period) b.classList.add('active');
-      else b.classList.remove('active');
-    }
-  }
+  // Safety clear au chargement : neutralise un éventuel autofill navigateur
+  // (Safari / iOS restaurent parfois les inputs malgré autocomplete="off").
+  searchInput.value = '';
+  filterSearch = '';
+  searchWrap.classList.remove('has-value');
 
   function _applySearch(val) {
-    var prev = filterSearch;
-    filterSearch = val.trim();
-
-    if (filterSearch && !prev) {
-      // Transition inactive → active : on mémorise la période et on élargit
-      _prevPeriodBeforeSearch = filterPeriod;
-      if (filterPeriod !== 'all' && filterPeriod !== 'custom') {
-        filterPeriod = 'all';
-        _setPeriodUI('all');
-      }
-    } else if (!filterSearch && prev) {
-      // Transition active → inactive : on restaure la période précédente
-      if (_prevPeriodBeforeSearch && _prevPeriodBeforeSearch !== 'all') {
-        filterPeriod = _prevPeriodBeforeSearch;
-        _setPeriodUI(filterPeriod);
-      }
-      _prevPeriodBeforeSearch = null;
-    }
-
-    // UI state : afficher / cacher le bouton clear
+    filterSearch = (val || '').trim();
     if (filterSearch) searchWrap.classList.add('has-value');
     else              searchWrap.classList.remove('has-value');
-
     renderFeed();
   }
 
@@ -1414,51 +1388,60 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 /* ═══ RENDER FEED ═══ */
 function getFilteredLeads() {
   var list = getBaseLeads();
+  var searching = !!filterSearch;
 
-  // Period filter
-  if (filterPeriod === 'today') {
-    var now = new Date();
-    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-    var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-    list = list.filter(function(l) {
-      if (!l.createdAt) return false;
-      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-      return d >= todayStart && d <= todayEnd;
-    });
-  } else if (filterPeriod === 'week') {
-    var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
-    list = list.filter(function(l) {
-      if (!l.createdAt) return false;
-      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-      return d >= weekAgo;
-    });
-  } else if (filterPeriod === 'unprocessed') {
-    list = list.filter(function(l) { return !l.status || l.status === 'nouveau'; });
-  } else if (filterPeriod === 'custom' && customDateFrom) {
-    var cFrom = customDateFrom;
-    var cTo = customDateTo || new Date(customDateFrom.getFullYear(), customDateFrom.getMonth(), customDateFrom.getDate(), 23, 59, 59, 999);
-    list = list.filter(function(l) {
-      if (!l.createdAt) return false;
-      var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-      return d >= cFrom && d <= cTo;
-    });
+  // Period filter — skipped en mode recherche (pour trouver n'importe quel
+  // lead dans la fenêtre 30j)
+  if (!searching) {
+    if (filterPeriod === 'today') {
+      var now = new Date();
+      var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      list = list.filter(function(l) {
+        if (!l.createdAt) return false;
+        var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+        return d >= todayStart && d <= todayEnd;
+      });
+    } else if (filterPeriod === 'week') {
+      var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+      list = list.filter(function(l) {
+        if (!l.createdAt) return false;
+        var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+        return d >= weekAgo;
+      });
+    } else if (filterPeriod === 'unprocessed') {
+      list = list.filter(function(l) { return !l.status || l.status === 'nouveau'; });
+    } else if (filterPeriod === 'custom' && customDateFrom) {
+      var cFrom = customDateFrom;
+      var cTo = customDateTo || new Date(customDateFrom.getFullYear(), customDateFrom.getMonth(), customDateFrom.getDate(), 23, 59, 59, 999);
+      list = list.filter(function(l) {
+        if (!l.createdAt) return false;
+        var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+        return d >= cFrom && d <= cTo;
+      });
+    }
+    // 'all' = no period filter
   }
-  // 'all' = no period filter
 
+  // Membre : toujours appliqué (cohérent avec le mode personnel / vue active)
   if (filterMember !== 'all') {
     list = list.filter(function(l) { return l.assignedTo === filterMember; });
   }
-  if (filterType !== 'all') {
-    list = list.filter(function(l) { return (l.type || '') === filterType; });
-  }
-  if (filterStatus !== 'all') {
-    list = list.filter(function(l) { return (l.status || 'nouveau') === filterStatus; });
+
+  // Type / statut : skipped en mode recherche
+  if (!searching) {
+    if (filterType !== 'all') {
+      list = list.filter(function(l) { return (l.type || '') === filterType; });
+    }
+    if (filterStatus !== 'all') {
+      list = list.filter(function(l) { return (l.status || 'nouveau') === filterStatus; });
+    }
   }
 
   // ── Search filter (nom / tel / email / secteur / utm / défi / dispo / timeline /
   //    stage / type / membre assigné / id). Multi-tokens : AND entre tokens,
   //    OR entre champs. Téléphone matché sur 9 derniers digits (FR). ──
-  if (filterSearch) {
+  if (searching) {
     var rawQ = filterSearch;
     var q = _normForSearch(rawQ);
     var tokens = q.split(/\s+/).filter(Boolean);
@@ -1945,7 +1928,7 @@ function renderCard(l) {
         // Bouton détail cliquable si l'appel a un callLogId (Twilio Dialer) ou un recordingUrl legacy (Ringover)
         var hasDetail = !!cm.callLogId;
         if (hasDetail) callClass += ' has-detail';
-        h += '<div class="' + callClass + '"' + (hasDetail ? ' data-action="callDetail" data-cid="' + escA(cm.callLogId) + '" style="cursor:pointer"' : '') + '>';
+        h += '<div class="' + callClass + '"' + (hasDetail ? ' data-action="callDetail" data-cid="' + escAttr(cm.callLogId) + '" style="cursor:pointer"' : '') + '>';
         h += '<span class="ld-conv-call-icon">' + clIcon + '</span>';
         h += '<span class="ld-conv-call-title">' + escHtml(clTitle) + '</span>';
         if (clDurStr) h += '<span class="ld-conv-call-dur">' + clDurStr + '</span>';
