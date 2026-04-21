@@ -1663,12 +1663,80 @@ function updatePeriodCounts() {
 }
 
 function rebuildTypeFilters() {
+  // Le comptage des types doit refléter la vue active : on applique les
+  // filtres période (today / week / unprocessed / custom date range) + membre
+  // + search, et on compte les types sur ce sous-ensemble. Le filtre `type`
+  // lui-même n'est pas appliqué (sinon chaque bouton afficherait 0 ou le
+  // count de la sélection en cours).
   var types = {};
   var base = getBaseLeads();
+  var searching = !!filterSearch;
+  var tokens = searching ? _normForSearch(filterSearch).split(/\s+/).filter(Boolean) : [];
+  var members = (typeof window !== 'undefined' && window.TEAM_MEMBERS) ? window.TEAM_MEMBERS : {};
+
+  // Bornes période (mêmes bornes que getFilteredLeads)
+  var now = new Date();
+  var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  var todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  var weekAgo    = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  var customFrom = customDateFrom;
+  var customTo   = customDateFrom ? (customDateTo || new Date(customDateFrom.getFullYear(), customDateFrom.getMonth(), customDateFrom.getDate(), 23, 59, 59, 999)) : null;
+
+  function inPeriod(l) {
+    if (searching) return true; // la recherche bypass la période
+    if (filterPeriod === 'all') return true;
+    var d = l.createdAt ? (l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt)) : null;
+    if (filterPeriod === 'unprocessed') return !l.status || l.status === 'nouveau';
+    if (!d || isNaN(d.getTime())) return false;
+    if (filterPeriod === 'today')  return d >= todayStart && d <= todayEnd;
+    if (filterPeriod === 'week')   return d >= weekAgo;
+    if (filterPeriod === 'custom' && customFrom) return d >= customFrom && d <= customTo;
+    return true;
+  }
+
+  function matchesSearch(l) {
+    if (!searching) return true;
+    var assigned = l.assignedTo || '';
+    var memberFull = '';
+    if (assigned && members[assigned]) {
+      var m = members[assigned];
+      memberFull = (m.name || '') + ' ' + (m.shortName || '') + ' ' + (m.slug || '');
+    }
+    var statusObj = (typeof getStatusObj === 'function') ? getStatusObj(l.status || 'nouveau') : null;
+    var statusLabel = statusObj ? (statusObj.label || '') : '';
+    var typeLabel = (typeof LEAD_TYPES !== 'undefined' && LEAD_TYPES[l.type]) ? (LEAD_TYPES[l.type].label || '') : '';
+    var hay = _normForSearch([
+      l.nom, l.email, l.utm, l.secteur, l.ca, l.defi,
+      l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
+      l.status, statusLabel, assigned, memberFull, l.id
+    ].filter(Boolean).join(' \u0001 '));
+    var phone9 = phoneNormalized(l.telephone) || '';
+    var phoneFull = _digitsOnly(l.telephone);
+    for (var ti = 0; ti < tokens.length; ti++) {
+      var tok = tokens[ti]; if (!tok) continue;
+      var matched = hay.indexOf(tok) !== -1;
+      if (!matched) {
+        var tokDigits = _digitsOnly(tok);
+        if (tokDigits && (phone9 || phoneFull)) {
+          var tokKey = tokDigits.length >= 9 ? tokDigits.slice(-9) : tokDigits;
+          if (phone9 && phone9.indexOf(tokKey) !== -1) matched = true;
+          else if (phoneFull && phoneFull.indexOf(tokDigits) !== -1) matched = true;
+        }
+      }
+      if (!matched) return false;
+    }
+    return true;
+  }
+
   for (var i = 0; i < base.length; i++) {
-    var t = base[i].type || '';
+    var l = base[i];
+    if (filterMember !== 'all' && l.assignedTo !== filterMember) continue;
+    if (!inPeriod(l)) continue;
+    if (!matchesSearch(l)) continue;
+    var t = l.type || '';
     if (t) types[t] = (types[t] || 0) + 1;
   }
+
   var keys = Object.keys(types).sort();
   var container = document.getElementById('ldTypeFilters');
   // Hide row if 0 or 1 type only
@@ -1679,7 +1747,7 @@ function rebuildTypeFilters() {
   for (var j = 0; j < keys.length; j++) {
     var k = keys[j];
     var label = LEAD_TYPES[k] ? LEAD_TYPES[k].label : k;
-    h += '<button class="ld-filter' + (filterType === k ? ' active' : '') + '" data-type="' + k + '">' + label + ' <span style="opacity:.5">' + types[k] + '</span></button>';
+    h += '<button class="ld-filter' + (filterType === k ? ' active' : '') + '" data-type="' + k + '"><span>' + label + '</span><span class="ld-period-count' + (types[k] === 0 ? ' zero' : '') + '">' + types[k] + '</span></button>';
   }
   container.innerHTML = h;
 }
