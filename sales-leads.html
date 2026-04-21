@@ -94,7 +94,7 @@ html, body {
 .ld-count { font-family: var(--fm); font-size: 13px; font-weight: 600; color: var(--muted); margin-left: auto; }
 
 /* ── Filters ── */
-.ld-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.ld-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; padding-right: 12px; }
 .ld-filters::-webkit-scrollbar { display: none; }
 .ld-filter {
   padding: 6px 12px; border-radius: 20px; border: 1.5px solid var(--border);
@@ -107,19 +107,24 @@ html, body {
 
 /* Count badge inline inside period filter buttons */
 .ld-period-count {
-  display: inline-block;
-  margin-left: 4px;
-  padding: 1px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  padding: 2px 7px;
   border-radius: 10px;
   background: rgba(255,255,255,0.08);
   color: var(--muted);
   font-family: var(--fm);
   font-size: 10px;
-  font-weight: 600;
-  line-height: 1.4;
-  min-width: 16px;
-  text-align: center;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 18px;
   transition: background 0.15s, color 0.15s;
+  vertical-align: middle;
+}
+.ld-filter:has(.ld-period-count) {
+  padding-right: 8px;
 }
 .ld-filter.active .ld-period-count {
   background: rgba(239,68,68,0.18);
