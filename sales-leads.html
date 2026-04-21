@@ -150,6 +150,54 @@ html, body {
 .ld-member-pill .mp-dot { width: 7px; height: 7px; border-radius: 50%; }
 .ld-member-pill .mp-count { font-family: var(--fm); font-size: 10px; opacity: 0.7; }
 
+/* ── Search bar ── */
+.ld-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  background: var(--bg3);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ld-search:focus-within {
+  border-color: rgba(239,68,68,0.4);
+  background: var(--bg4);
+}
+.ld-search.has-value {
+  border-color: rgba(239,68,68,0.3);
+}
+.ld-search-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; flex-shrink: 0;
+  color: var(--muted); font-size: 14px;
+}
+.ld-search-input {
+  flex: 1; min-width: 0;
+  background: transparent; border: none; outline: none;
+  color: var(--text); font-family: var(--fb);
+  font-size: 13px; font-weight: 500;
+  padding: 8px 4px;
+}
+.ld-search-input::placeholder { color: var(--muted2); }
+.ld-search-clear {
+  display: none;
+  align-items: center; justify-content: center;
+  width: 28px; height: 28px; margin-right: 4px;
+  background: transparent; border: none; border-radius: 6px;
+  color: var(--muted); font-size: 16px; cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.ld-search-clear:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.ld-search.has-value .ld-search-clear { display: flex; }
+.ld-search-hint {
+  font-size: 10px; font-weight: 600; color: var(--muted2);
+  padding: 0 10px; font-family: var(--fm);
+  flex-shrink: 0;
+}
+
 /* ── Feed ── */
 .ld-feed { padding: 12px 12px; }
 .ld-empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 13px; }
@@ -630,6 +678,13 @@ html, body {
       <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:8px">📱 Liens app mobile — ajouter à l'écran d'accueil</div>
       <div id="shareLinksList"></div>
     </div>
+    <!-- Search bar -->
+    <div class="ld-search" id="ldSearch">
+      <span class="ld-search-icon">🔍</span>
+      <input type="text" id="ldSearchInput" class="ld-search-input" placeholder="Chercher un lead (nom, tel, email, secteur…)" autocomplete="off" spellcheck="false"/>
+      <span class="ld-search-hint" id="ldSearchHint" style="display:none"></span>
+      <button type="button" id="ldSearchClear" class="ld-search-clear" aria-label="Effacer la recherche">×</button>
+    </div>
     <div class="ld-members" id="ldMembers">
       <button class="ld-member-pill active" data-member="all">
         <span>Tous</span> <span class="mp-count" id="countAll">0</span>
@@ -920,6 +975,8 @@ var filterMember = 'all';
 var filterStatus = 'all';
 var filterType = 'all';
 var filterPeriod = 'today';
+var filterSearch = '';
+var _prevPeriodBeforeSearch = null; // restore on clear
 var customDateFrom = null; // Date object (start of day) ou null
 var customDateTo = null;   // Date object (end of day) ou null
 var knownLeadIds = {};
@@ -1017,6 +1074,18 @@ function phoneNormalized(raw) {
   if (digits.length < 6) return null;
   if (digits.length >= 9) return digits.slice(-9);
   return digits;
+}
+
+/* Normalise une chaîne pour la recherche texte : minuscules + strip accents. */
+function _normForSearch(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+/* Retourne uniquement les chiffres d'une chaîne. */
+function _digitsOnly(s) {
+  return String(s || '').replace(/\D/g, '');
 }
 
 function timeAgo(ts) {
@@ -1269,6 +1338,79 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
   renderFeed();
 });
 
+/* ── Search bar ──
+   Comportement : quand la recherche devient active, on élargit automatiquement
+   la période à 'all' (dans la fenêtre 30j chargée par le listener Firestore)
+   pour que la recherche couvre un maximum de leads. Au clear, on restaure la
+   période précédente. Les filtres membre / type / statut continuent à se
+   cumuler avec la recherche. */
+(function() {
+  var searchWrap  = document.getElementById('ldSearch');
+  var searchInput = document.getElementById('ldSearchInput');
+  var clearBtn    = document.getElementById('ldSearchClear');
+  if (!searchInput || !searchWrap) return;
+
+  function _setPeriodUI(period) {
+    var btns = document.querySelectorAll('#ldPeriodFilters .ld-filter');
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i];
+      if (!b.dataset.period) continue;
+      if (b.dataset.period === period) b.classList.add('active');
+      else b.classList.remove('active');
+    }
+  }
+
+  function _applySearch(val) {
+    var prev = filterSearch;
+    filterSearch = val.trim();
+
+    if (filterSearch && !prev) {
+      // Transition inactive → active : on mémorise la période et on élargit
+      _prevPeriodBeforeSearch = filterPeriod;
+      if (filterPeriod !== 'all' && filterPeriod !== 'custom') {
+        filterPeriod = 'all';
+        _setPeriodUI('all');
+      }
+    } else if (!filterSearch && prev) {
+      // Transition active → inactive : on restaure la période précédente
+      if (_prevPeriodBeforeSearch && _prevPeriodBeforeSearch !== 'all') {
+        filterPeriod = _prevPeriodBeforeSearch;
+        _setPeriodUI(filterPeriod);
+      }
+      _prevPeriodBeforeSearch = null;
+    }
+
+    // UI state : afficher / cacher le bouton clear
+    if (filterSearch) searchWrap.classList.add('has-value');
+    else              searchWrap.classList.remove('has-value');
+
+    renderFeed();
+  }
+
+  // Debounce léger pour éviter de re-render à chaque frappe sur des grosses listes
+  var _searchTimer = null;
+  searchInput.addEventListener('input', function() {
+    var v = this.value;
+    if (_searchTimer) clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(function() { _applySearch(v); }, 80);
+  });
+
+  searchInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      searchInput.value = '';
+      _applySearch('');
+      searchInput.blur();
+    }
+  });
+
+  clearBtn.addEventListener('click', function() {
+    searchInput.value = '';
+    _applySearch('');
+    searchInput.focus();
+  });
+})();
+
 /* ═══ RENDER FEED ═══ */
 function getFilteredLeads() {
   var list = getBaseLeads();
@@ -1312,6 +1454,54 @@ function getFilteredLeads() {
   if (filterStatus !== 'all') {
     list = list.filter(function(l) { return (l.status || 'nouveau') === filterStatus; });
   }
+
+  // ── Search filter (nom / tel / email / secteur / utm / défi / dispo / timeline /
+  //    stage / type / membre assigné / id). Multi-tokens : AND entre tokens,
+  //    OR entre champs. Téléphone matché sur 9 derniers digits (FR). ──
+  if (filterSearch) {
+    var rawQ = filterSearch;
+    var q = _normForSearch(rawQ);
+    var tokens = q.split(/\s+/).filter(Boolean);
+    var members = (typeof window !== 'undefined' && window.TEAM_MEMBERS) ? window.TEAM_MEMBERS : {};
+    list = list.filter(function(l) {
+      // Texte concaténé pour match générique
+      var assigned = l.assignedTo || '';
+      var memberFull = '';
+      if (assigned && members[assigned]) {
+        var m = members[assigned];
+        memberFull = (m.name || '') + ' ' + (m.shortName || '') + ' ' + (m.slug || '');
+      }
+      var statusObj = (typeof getStatusObj === 'function') ? getStatusObj(l.status || 'nouveau') : null;
+      var statusLabel = statusObj ? (statusObj.label || '') : '';
+      var typeLabel = (typeof LEAD_TYPES !== 'undefined' && LEAD_TYPES[l.type]) ? (LEAD_TYPES[l.type].label || '') : '';
+      var hay = _normForSearch([
+        l.nom, l.email, l.utm, l.secteur, l.ca, l.defi,
+        l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
+        l.status, statusLabel, assigned, memberFull, l.id
+      ].filter(Boolean).join(' \u0001 '));
+      // Digits du téléphone (9 derniers)
+      var phone9 = phoneNormalized(l.telephone) || '';
+      var phoneFull = _digitsOnly(l.telephone);
+      // Chaque token doit matcher au moins un champ
+      for (var ti = 0; ti < tokens.length; ti++) {
+        var tok = tokens[ti];
+        if (!tok) continue;
+        var matched = hay.indexOf(tok) !== -1;
+        if (!matched) {
+          var tokDigits = _digitsOnly(tok);
+          if (tokDigits && (phone9 || phoneFull)) {
+            // Normalise le token comme phoneNormalized (9 derniers digits si >= 9)
+            var tokKey = tokDigits.length >= 9 ? tokDigits.slice(-9) : tokDigits;
+            if (phone9 && phone9.indexOf(tokKey) !== -1) matched = true;
+            else if (phoneFull && phoneFull.indexOf(tokDigits) !== -1) matched = true;
+          }
+        }
+        if (!matched) return false;
+      }
+      return true;
+    });
+  }
+
   return list;
 }
 
@@ -1402,7 +1592,7 @@ function renderFeed() {
   var feed = document.getElementById('ldFeed');
 
   if (leads.length === 0) {
-    feed.innerHTML = '<div class="ld-empty">Aucun lead ' + (filterStatus !== 'all' ? 'avec ce statut' : '') + '</div>';
+    feed.innerHTML = '<div class="ld-empty">Aucun lead ' + (filterSearch ? 'ne correspond à « ' + escHtml(filterSearch) + ' »' : (filterStatus !== 'all' ? 'avec ce statut' : '')) + '</div>';
     return;
   }
 
