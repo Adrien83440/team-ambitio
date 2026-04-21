@@ -105,6 +105,30 @@ html, body {
 .ld-filter:hover { border-color: var(--border2); color: var(--text); }
 .ld-filter.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
 
+/* Count badge inline inside period filter buttons */
+.ld-period-count {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  color: var(--muted);
+  font-family: var(--fm);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  min-width: 16px;
+  text-align: center;
+  transition: background 0.15s, color 0.15s;
+}
+.ld-filter.active .ld-period-count {
+  background: rgba(239,68,68,0.18);
+  color: var(--red3);
+}
+.ld-period-count.zero {
+  opacity: 0.45;
+}
+
 /* ── Date range popover ── */
 .ld-date-wrap { position: relative; display: inline-block; flex-shrink: 0; }
 .ld-date-pop {
@@ -693,10 +717,10 @@ html, body {
       <span id="ldMemberPillsDynamic"></span>
     </div>
     <div class="ld-filters" id="ldPeriodFilters" style="margin-bottom:4px">
-      <button class="ld-filter active" data-period="today">📅 Aujourd'hui</button>
-      <button class="ld-filter" data-period="week">🗓 7 jours</button>
-      <button class="ld-filter" data-period="unprocessed">🆕 Non traités</button>
-      <button class="ld-filter" data-period="all">📋 Tout</button>
+      <button class="ld-filter active" data-period="today">📅 Aujourd'hui <span class="ld-period-count" data-period-count="today">0</span></button>
+      <button class="ld-filter" data-period="week">🗓 7 jours <span class="ld-period-count" data-period-count="week">0</span></button>
+      <button class="ld-filter" data-period="unprocessed">🆕 Non traités <span class="ld-period-count" data-period-count="unprocessed">0</span></button>
+      <button class="ld-filter" data-period="all">📋 Tout <span class="ld-period-count" data-period-count="all">0</span></button>
       <div class="ld-date-wrap">
         <button class="ld-filter" id="ldDateBtn" type="button">📆 Date</button>
         <div class="ld-date-pop" id="ldDatePop" style="display:none">
@@ -1230,7 +1254,25 @@ function refreshDateBtnLabel() {
                  && customDateFrom.getDate() === customDateTo.getDate();
       if (!sameDay) label += ' → ' + fmt(customDateTo);
     }
-    btn.textContent = label;
+    // Count dans la plage custom
+    var customCount = 0;
+    try {
+      var cFrom = customDateFrom;
+      var cTo = customDateTo || new Date(customDateFrom.getFullYear(), customDateFrom.getMonth(), customDateFrom.getDate(), 23, 59, 59, 999);
+      var base = getBaseLeads();
+      for (var i = 0; i < base.length; i++) {
+        var l = base[i];
+        if (filterMember !== 'all' && l.assignedTo !== filterMember) continue;
+        if (!filterSearch) {
+          if (filterType !== 'all' && (l.type || '') !== filterType) continue;
+          if (filterStatus !== 'all' && (l.status || 'nouveau') !== filterStatus) continue;
+        }
+        if (!l.createdAt) continue;
+        var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+        if (d >= cFrom && d <= cTo) customCount++;
+      }
+    } catch (_e) { customCount = 0; }
+    btn.innerHTML = label + ' <span class="ld-period-count' + (customCount === 0 ? ' zero' : '') + '">' + customCount + '</span>';
     btn.classList.add('active');
   } else {
     btn.textContent = '📆 Date';
@@ -1546,6 +1588,90 @@ function updateCounts() {
   }
 }
 
+/* Recalcule les compteurs affichés dans les boutons de période (Aujourd'hui,
+   7 jours, Non traités, Tout). Les counts reflètent ce qui s'afficherait
+   réellement si on cliquait sur le bouton : on applique les filtres membre /
+   type / statut / search actifs, mais PAS le filtre période lui-même (sinon
+   chaque bouton afficherait le count de la période sélectionnée). */
+function updatePeriodCounts() {
+  var base = getBaseLeads();
+  var members = (typeof window !== 'undefined' && window.TEAM_MEMBERS) ? window.TEAM_MEMBERS : {};
+
+  // Pré-filtre commun : membre + type + statut + search
+  var searching = !!filterSearch;
+  var tokens = searching ? _normForSearch(filterSearch).split(/\s+/).filter(Boolean) : [];
+
+  function matchesCommonFilters(l) {
+    if (filterMember !== 'all' && l.assignedTo !== filterMember) return false;
+    // En mode recherche, on ignore type & statut (même logique que getFilteredLeads)
+    if (!searching) {
+      if (filterType !== 'all' && (l.type || '') !== filterType) return false;
+      if (filterStatus !== 'all' && (l.status || 'nouveau') !== filterStatus) return false;
+    }
+    if (searching) {
+      var assigned = l.assignedTo || '';
+      var memberFull = '';
+      if (assigned && members[assigned]) {
+        var m = members[assigned];
+        memberFull = (m.name || '') + ' ' + (m.shortName || '') + ' ' + (m.slug || '');
+      }
+      var statusObj = (typeof getStatusObj === 'function') ? getStatusObj(l.status || 'nouveau') : null;
+      var statusLabel = statusObj ? (statusObj.label || '') : '';
+      var typeLabel = (typeof LEAD_TYPES !== 'undefined' && LEAD_TYPES[l.type]) ? (LEAD_TYPES[l.type].label || '') : '';
+      var hay = _normForSearch([
+        l.nom, l.email, l.utm, l.secteur, l.ca, l.defi,
+        l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
+        l.status, statusLabel, assigned, memberFull, l.id
+      ].filter(Boolean).join(' \u0001 '));
+      var phone9 = phoneNormalized(l.telephone) || '';
+      var phoneFull = _digitsOnly(l.telephone);
+      for (var ti = 0; ti < tokens.length; ti++) {
+        var tok = tokens[ti]; if (!tok) continue;
+        var matched = hay.indexOf(tok) !== -1;
+        if (!matched) {
+          var tokDigits = _digitsOnly(tok);
+          if (tokDigits && (phone9 || phoneFull)) {
+            var tokKey = tokDigits.length >= 9 ? tokDigits.slice(-9) : tokDigits;
+            if (phone9 && phone9.indexOf(tokKey) !== -1) matched = true;
+            else if (phoneFull && phoneFull.indexOf(tokDigits) !== -1) matched = true;
+          }
+        }
+        if (!matched) return false;
+      }
+    }
+    return true;
+  }
+
+  // Bornes période
+  var now = new Date();
+  var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  var todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+  var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+
+  var counts = { today: 0, week: 0, unprocessed: 0, all: 0 };
+  for (var i = 0; i < base.length; i++) {
+    var l = base[i];
+    if (!matchesCommonFilters(l)) continue;
+    counts.all++;
+    var d = l.createdAt ? (l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt)) : null;
+    if (d && !isNaN(d.getTime())) {
+      if (d >= todayStart && d <= todayEnd) counts.today++;
+      if (d >= weekAgo) counts.week++;
+    }
+    if (!l.status || l.status === 'nouveau') counts.unprocessed++;
+  }
+
+  var keys = ['today', 'week', 'unprocessed', 'all'];
+  for (var k = 0; k < keys.length; k++) {
+    var el = document.querySelector('[data-period-count="' + keys[k] + '"]');
+    if (!el) continue;
+    var c = counts[keys[k]];
+    el.textContent = c;
+    if (c === 0) el.classList.add('zero');
+    else         el.classList.remove('zero');
+  }
+}
+
 function rebuildTypeFilters() {
   var types = {};
   var base = getBaseLeads();
@@ -1571,6 +1697,7 @@ function rebuildTypeFilters() {
 function renderFeed() {
   var leads = getFilteredLeads();
   updateCounts();
+  updatePeriodCounts();
   rebuildTypeFilters();
   var feed = document.getElementById('ldFeed');
 
