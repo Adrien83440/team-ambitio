@@ -36,7 +36,7 @@
   };
 
   const ALL_MODULES = [
-    { id: 'coach-clients',       icon: '👥', label: 'Clients',       href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
+    { id: 'coach-clients',       icon: '👥', label: 'Coaching',      href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
     { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',     section: 'Coaching', perm: 'coaching_dashboard' },
     { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html', section: 'Coaching', perm: 'coaching_communication' },
     { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html',   section: 'Sales', perm: 'sales_dashboard' },
