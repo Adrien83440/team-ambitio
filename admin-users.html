@@ -853,9 +853,9 @@ function openEditModal(u){
   h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px">Servent à exclure les communications internes du matching et à attribuer SMS/appels au bon owner.</div></div>';
   // Emails pro additionnels (un par ligne) — l'email principal est déjà géré via u.email
   var emailsValue = Array.isArray(u.workEmails) ? u.workEmails.join('\n') : '';
-  h+='<div class="mf"><label>✉️ Emails pro additionnels (un par ligne)</label>';
-  h+='<textarea class="bi" id="eEmails" rows="2" placeholder="elodie@adrienemily.com&#10;contact@adrienemily.com" style="width:100%;font-family:monospace;font-size:12px;resize:vertical">'+esc(emailsValue)+'</textarea>';
-  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px">Optionnel. Tous les emails @adrienemily.com et @ambitiocorp.com sont déjà filtrés automatiquement.</div></div>';
+  h+='<div class="mf"><label>✉️ Emails alias / pro additionnels (un par ligne)</label>';
+  h+='<textarea class="bi" id="eEmails" rows="2" placeholder="elodie@adrienemily.com&#10;elodie.vidotto@adrienemily.com" style="width:100%;font-family:monospace;font-size:12px;resize:vertical">'+esc(emailsValue)+'</textarea>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:4px;line-height:1.5">🔑 Liste ici les alias Workspace du user (autres que son email principal). Ça lui permet de demander un reset MDP en tapant n\'importe lequel de ces emails sur la page login — le mail de reset arrivera toujours dans sa boîte principale.<br>Optionnel. Les emails @adrienemily.com et @ambitiocorp.com sont aussi filtrés automatiquement des communications CRM.</div></div>';
   // Permissions
   h+=buildPermGrid(mods,'e');
 

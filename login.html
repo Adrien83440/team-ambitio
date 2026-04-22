@@ -163,7 +163,7 @@
 <!-- Firebase -->
 <script type="module">
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import{getAuth,onAuthStateChanged,signInWithEmailAndPassword,sendPasswordResetEmail,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import{getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import{getFirestore,doc,getDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   const app=initializeApp({
     apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
@@ -176,7 +176,6 @@
   const auth=getAuth(app),db=getFirestore(app);
   window._auth=auth;window._db=db;window._signOut=signOut;
   window._signIn=signInWithEmailAndPassword;
-  window._sendReset=sendPasswordResetEmail;
   window._doc=doc;window._getDoc=getDoc;
 
   onAuthStateChanged(auth,async user=>{
@@ -248,13 +247,27 @@
   window.handleReset=async function(){
     const email=document.getElementById('inputEmail').value.trim();
     if(!email){showError('Entrez votre email d\'abord');return;}
+    // Appelle l'endpoint serveur qui tolère les alias (strategie@ / elodie@ / etc.)
+    // Le serveur renvoie toujours un succès silencieux pour éviter l'enumeration
+    // — on affiche donc systématiquement le même message neutre.
     try{
-      await window._sendReset(window._auth,email);
-      const el=document.getElementById('successMsg');
-      el.textContent='✅ Email de réinitialisation envoyé !';
+      const resp = await fetch('/api/user-password-reset', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email: email })
+      });
+      const el = document.getElementById('successMsg');
+      el.textContent = '✅ Si cette adresse correspond à un compte, un email de réinitialisation a été envoyé. Vérifiez votre boîte de réception (et les spams).';
       el.classList.add('show');
-      setTimeout(()=>el.classList.remove('show'),5000);
-    }catch(e){showError('Vérifiez votre adresse email');}
+      setTimeout(()=>el.classList.remove('show'),8000);
+    }catch(e){
+      // Erreur réseau — on affiche quand même le message neutre pour la cohérence UX
+      console.error('[handleReset] network error:', e);
+      const el = document.getElementById('successMsg');
+      el.textContent = '✅ Si cette adresse correspond à un compte, un email de réinitialisation a été envoyé. Vérifiez votre boîte de réception (et les spams).';
+      el.classList.add('show');
+      setTimeout(()=>el.classList.remove('show'),8000);
+    }
   };
 
   window.handleLogout=async function(){
