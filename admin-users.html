@@ -227,6 +227,39 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
   .role-opts{grid-template-columns:1fr}
   .u-badges{display:none}
 }
+
+/* ═══ Password modal (sous-modal par dessus le modal edit) ═══ */
+.pw-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);z-index:1200;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+.pw-bg.on{display:flex}
+.pw-mo{background:#0e0e1a;border:1px solid rgba(255,255,255,.08);border-radius:20px;width:100%;max-width:560px;box-shadow:0 32px 80px rgba(0,0,0,.7);animation:moIn .2s ease}
+.pw-h{display:flex;align-items:center;padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.06)}
+.pw-t{font-family:'Bricolage Grotesque','Plus Jakarta Sans',sans-serif;font-size:16px;font-weight:800;flex:1}
+.pw-t-sub{font-size:11px;color:rgba(255,255,255,.4);font-weight:500;margin-top:2px}
+.pw-b{padding:20px 24px 24px}
+.pw-section{padding:16px;border:1px solid rgba(255,255,255,.08);border-radius:12px;margin-bottom:14px;background:rgba(255,255,255,.02)}
+.pw-section-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.pw-section-ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.pw-section-ic.reset{background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.25)}
+.pw-section-ic.set{background:rgba(245,158,11,.12);color:#fbbf24;border:1px solid rgba(245,158,11,.25)}
+.pw-section-ic.self{background:rgba(139,92,246,.12);color:#a78bfa;border:1px solid rgba(139,92,246,.25)}
+.pw-section-title{font-size:14px;font-weight:700}
+.pw-section-sub{font-size:11px;color:rgba(255,255,255,.4);margin-top:1px;line-height:1.4}
+.pw-section-body{margin-top:6px}
+.pw-link-box{display:flex;gap:8px;margin-top:10px;align-items:stretch}
+.pw-link-box input{flex:1;font-family:'JetBrains Mono',monospace;font-size:11px;padding:10px 12px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);border-radius:8px;color:#e2e8f0;outline:none;letter-spacing:.02em}
+.pw-link-box .bb{flex-shrink:0}
+.pw-email-status{font-size:11px;margin-top:8px;padding:8px 10px;border-radius:7px;line-height:1.4}
+.pw-email-status.ok{background:rgba(52,211,153,.08);color:#6ee7b7;border:1px solid rgba(52,211,153,.2)}
+.pw-email-status.warn{background:rgba(245,158,11,.08);color:#fbbf24;border:1px solid rgba(245,158,11,.2)}
+.pw-pwd-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.pw-pwd-row-single{display:block;margin-top:10px}
+.pw-hint{font-size:10.5px;color:rgba(255,255,255,.35);margin-top:6px;line-height:1.4}
+.pw-warn{padding:10px 12px;border-radius:8px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);color:#fcd34d;font-size:11.5px;line-height:1.45;margin-top:10px}
+.pw-success-box{margin-top:10px;padding:10px 12px;background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);border-radius:8px;font-size:12px;color:#6ee7b7;line-height:1.5}
+@media(max-width:640px){
+  .pw-pwd-row{grid-template-columns:1fr}
+  .pw-link-box{flex-direction:column}
+}
 </style>
 </head>
 <body>
@@ -284,6 +317,20 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
       <button class="mo-x" id="moClose">✕</button>
     </div>
     <div class="mo-b" id="moBody"></div>
+  </div>
+</div>
+
+<!-- Password management modal (sous-modal par dessus le modal edit) -->
+<div class="pw-bg" id="pwdModal">
+  <div class="pw-mo">
+    <div class="pw-h">
+      <div style="flex:1">
+        <div class="pw-t" id="pwdTitle">🔑 Gestion du mot de passe</div>
+        <div class="pw-t-sub" id="pwdSubtitle"></div>
+      </div>
+      <button class="mo-x" id="pwdClose">✕</button>
+    </div>
+    <div class="pw-b" id="pwdBody"></div>
   </div>
 </div>
 
@@ -850,7 +897,7 @@ function openEditModal(u){
   h+='<div style="display:flex;gap:10px;margin-top:20px"><button class="bb bb-o" onclick="closeModal()">Annuler</button><button class="bb bb-p" id="eSave" style="flex:1">💾 Enregistrer</button></div>';
   // Actions
   h+='<div class="qa-bar">';
-  h+='<button class="bb bb-o" id="eResetPwd">🔑 Réinitialiser MDP</button>';
+  h+='<button class="bb bb-o" id="eResetPwd">🔑 Gérer le mot de passe</button>';
   if(!isMe && status!=='archived')h+='<button class="bb bb-warn" id="eArchive">🗄 Archiver & transférer</button>';
   if(!isMe && status==='archived')h+='<button class="bb bb-o" id="eReactivate">♻ Réactiver</button>';
   if(!isMe)h+='<button class="bb bb-r" id="eDelete">🗑 Supprimer</button>';
@@ -862,7 +909,7 @@ function openEditModal(u){
   if((u.role||'coach')!=='admin'){
     loadAlteoFormsList(u.alteoformsFormIds||[]);
   }
-  document.getElementById('eResetPwd').addEventListener('click',function(){handleResetPwd(u.email);});
+  document.getElementById('eResetPwd').addEventListener('click',function(){openPasswordModal(u);});
   var delBtn=document.getElementById('eDelete');
   if(delBtn)delBtn.addEventListener('click',function(){handleDelete(u.uid,u.displayName||u.email);});
   var archBtn=document.getElementById('eArchive');
@@ -950,13 +997,217 @@ async function handleSave(uid){
   }
 }
 
-async function handleResetPwd(email){
-  if(!email)return;
-  if(!confirm('Envoyer un email de réinitialisation à '+email+' ?'))return;
+// ════════════════════════════════════════════════════════════════════
+//   PASSWORD MODAL — Reset / Set / Change own
+// ════════════════════════════════════════════════════════════════════
+//
+// Backend : POST /api/admin-password { action, uid, password? }
+// Auth    : Bearer <firebaseIdToken> de l'admin courant
+// Actions :
+//   - sendResetLink : génère un lien reset Firebase + envoie email auto
+//                     via strategie@ OAuth. Retourne lien en fallback copier.
+//   - setPassword   : définit un MDP directement (Admin SDK updateUser).
+//                     Si uid === currentUid → change son propre MDP.
+//
+// UI :
+//   - User autre que soi : 2 sections (Envoyer reset / Définir MDP temporaire)
+//   - Soi-même (admin)   : 1 section (Changer mon MDP) — la section reset est
+//                          masquée car inutile pour soi-même (tu es déjà loggué)
+
+function openPasswordModal(u){
+  var isSelf = (u.uid === currentUid);
+  document.getElementById('pwdTitle').innerHTML = isSelf
+    ? '🔑 Changer mon mot de passe'
+    : '🔑 Gestion du mot de passe';
+  document.getElementById('pwdSubtitle').textContent =
+    (u.displayName || u.email || '') + (u.email ? ' · ' + u.email : '');
+
+  var h = '';
+
+  // ─── Section 1 : Envoyer un lien de reset (uniquement pour les autres) ───
+  if(!isSelf){
+    h += '<div class="pw-section">';
+    h +=   '<div class="pw-section-h">';
+    h +=     '<div class="pw-section-ic reset">📧</div>';
+    h +=     '<div><div class="pw-section-title">Envoyer un lien de réinitialisation</div>';
+    h +=     '<div class="pw-section-sub">Un email est envoyé à '+esc(u.email||'')+' depuis strategie@adrienemily.com. Le lien expire sous 1h.</div></div>';
+    h +=   '</div>';
+    h +=   '<div class="pw-section-body">';
+    h +=     '<button class="bb bb-p" id="pwdSendReset" style="width:100%">📧 Envoyer le lien de reset</button>';
+    h +=     '<div id="pwdResetResult" style="display:none"></div>';
+    h +=   '</div>';
+    h += '</div>';
+  }
+
+  // ─── Section 2 : Définir un MDP (autre user OU soi-même) ───
+  h += '<div class="pw-section">';
+  h +=   '<div class="pw-section-h">';
+  if(isSelf){
+    h +=   '<div class="pw-section-ic self">🔐</div>';
+    h +=   '<div><div class="pw-section-title">Changer mon mot de passe</div>';
+    h +=   '<div class="pw-section-sub">Le changement est immédiat. Ta session actuelle reste active ; le nouveau MDP sera demandé à ta prochaine connexion.</div></div>';
+  }else{
+    h +=   '<div class="pw-section-ic set">⚡</div>';
+    h +=   '<div><div class="pw-section-title">Définir un mot de passe temporaire</div>';
+    h +=   '<div class="pw-section-sub">Communique-le à '+esc(u.displayName||u.email||'l\'utilisateur')+' par WhatsApp/SMS. Il pourra le modifier ensuite depuis son profil.</div></div>';
+  }
+  h +=   '</div>';
+  h +=   '<div class="pw-section-body">';
+  h +=     '<div class="pw-pwd-row">';
+  h +=       '<div><label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Nouveau mot de passe</label>';
+  h +=         '<input class="bi" type="password" id="pwdNew" autocomplete="new-password" placeholder="min. 8 caractères" style="font-family:\'JetBrains Mono\',monospace"/></div>';
+  h +=       '<div><label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">Confirmer</label>';
+  h +=         '<input class="bi" type="password" id="pwdConfirm" autocomplete="new-password" placeholder="retaper" style="font-family:\'JetBrains Mono\',monospace"/></div>';
+  h +=     '</div>';
+  h +=     '<div style="display:flex;gap:8px;margin-top:12px">';
+  h +=       '<button class="bb bb-o" id="pwdGenerate" title="Générer un mot de passe aléatoire">🎲 Générer</button>';
+  h +=       '<button class="bb bb-o" id="pwdShowHide" type="button">👁 Voir</button>';
+  h +=       '<button class="bb bb-p" id="pwdSet" style="flex:1">'+(isSelf?'🔐 Changer mon mot de passe':'⚡ Définir le mot de passe')+'</button>';
+  h +=     '</div>';
+  if(!isSelf){
+    h +=   '<div class="pw-warn">⚠️ À communiquer de manière sécurisée. L\'utilisateur pourra le changer lui-même depuis son profil après connexion.</div>';
+  }
+  h +=   '</div>';
+  h += '</div>';
+
+  document.getElementById('pwdBody').innerHTML = h;
+  document.getElementById('pwdModal').classList.add('on');
+
+  // Handlers
+  var sendBtn = document.getElementById('pwdSendReset');
+  if(sendBtn) sendBtn.addEventListener('click', function(){ handleSendResetLink(u.uid); });
+
+  document.getElementById('pwdSet').addEventListener('click', function(){ handleSetPassword(u.uid, isSelf); });
+  document.getElementById('pwdGenerate').addEventListener('click', function(){
+    var newPwd = generateRandomPassword();
+    document.getElementById('pwdNew').value = newPwd;
+    document.getElementById('pwdConfirm').value = newPwd;
+    // Force l'affichage pour que l'admin puisse le lire et le copier
+    document.getElementById('pwdNew').type = 'text';
+    document.getElementById('pwdConfirm').type = 'text';
+    document.getElementById('pwdShowHide').textContent = '🙈 Masquer';
+  });
+  document.getElementById('pwdShowHide').addEventListener('click', function(){
+    var n = document.getElementById('pwdNew');
+    var c = document.getElementById('pwdConfirm');
+    var hidden = n.type === 'password';
+    n.type = hidden ? 'text' : 'password';
+    c.type = hidden ? 'text' : 'password';
+    this.textContent = hidden ? '🙈 Masquer' : '👁 Voir';
+  });
+
+  // Autofocus
+  setTimeout(function(){
+    var firstInput = sendBtn ? sendBtn : document.getElementById('pwdNew');
+    if(firstInput) firstInput.focus();
+  }, 100);
+}
+
+function closePasswordModal(){
+  document.getElementById('pwdModal').classList.remove('on');
+  document.getElementById('pwdBody').innerHTML = '';
+}
+document.getElementById('pwdClose').addEventListener('click', closePasswordModal);
+document.getElementById('pwdModal').addEventListener('click', function(e){
+  if(e.target === this) closePasswordModal();
+});
+
+// Génère un MDP aléatoire facile à dicter (16 car alphanum sans ambigus)
+function generateRandomPassword(){
+  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  var pwd = '';
+  var arr = new Uint32Array(16);
+  window.crypto.getRandomValues(arr);
+  for(var i=0; i<16; i++){
+    pwd += chars[arr[i] % chars.length];
+  }
+  return pwd;
+}
+
+// Appel backend authentifié avec idToken
+async function callAdminPassword(payload){
+  var user = auth.currentUser;
+  if(!user) throw new Error('Session expirée — reconnecte-toi');
+  var idToken = await user.getIdToken();
+  var resp = await fetch('/api/admin-password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + idToken
+    },
+    body: JSON.stringify(payload)
+  });
+  var data = await resp.json().catch(function(){ return {}; });
+  if(!resp.ok) throw new Error(data.error || ('HTTP '+resp.status));
+  return data;
+}
+
+async function handleSendResetLink(uid){
+  var btn = document.getElementById('pwdSendReset');
+  var resultDiv = document.getElementById('pwdResetResult');
+  btn.disabled = true;
+  btn.textContent = '⏳ Envoi en cours…';
+  resultDiv.style.display = 'none';
+  resultDiv.innerHTML = '';
   try{
-    await sendPasswordResetEmail(auth,email);
-    toast('✅ Email envoyé à '+email);
-  }catch(e){toast('❌ '+e.message);}
+    var data = await callAdminPassword({ action: 'sendResetLink', uid: uid });
+    var html = '';
+    if(data.emailSent){
+      html += '<div class="pw-email-status ok">✅ Email envoyé à '+esc(data.targetEmail||'')+'</div>';
+    }else{
+      html += '<div class="pw-email-status warn">⚠️ Email non envoyé ('+esc(data.emailError||'erreur inconnue')+') — utilise le lien ci-dessous</div>';
+    }
+    html += '<div class="pw-link-box">';
+    html +=   '<input type="text" id="pwdLinkCopy" readonly value="'+esc(data.link)+'"/>';
+    html +=   '<button class="bb bb-o" id="pwdLinkBtn">📋 Copier</button>';
+    html += '</div>';
+    html += '<div class="pw-hint">Le lien expire après 1h. Tu peux le partager par WhatsApp/SMS/vocal si besoin.</div>';
+    resultDiv.innerHTML = html;
+    resultDiv.style.display = 'block';
+    document.getElementById('pwdLinkBtn').addEventListener('click', function(){
+      var input = document.getElementById('pwdLinkCopy');
+      input.select();
+      navigator.clipboard.writeText(input.value).then(function(){
+        document.getElementById('pwdLinkBtn').textContent = '✅ Copié';
+        setTimeout(function(){
+          var b = document.getElementById('pwdLinkBtn');
+          if(b) b.textContent = '📋 Copier';
+        }, 2000);
+      }).catch(function(){ toast('❌ Impossible de copier — sélectionne manuellement'); });
+    });
+    toast(data.emailSent ? '✅ Lien envoyé par email' : '⚠️ Email échoué — lien disponible ci-dessous');
+  }catch(e){
+    console.error(e);
+    toast('❌ '+e.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = '📧 Envoyer le lien de reset';
+  }
+}
+
+async function handleSetPassword(uid, isSelf){
+  var newPwd = document.getElementById('pwdNew').value;
+  var confirmPwd = document.getElementById('pwdConfirm').value;
+  if(!newPwd || newPwd.length < 8){ toast('❌ Minimum 8 caractères'); return; }
+  if(newPwd !== confirmPwd){ toast('❌ Les deux mots de passe ne correspondent pas'); return; }
+  var confirmMsg = isSelf
+    ? 'Confirmer le changement de ton mot de passe ?'
+    : 'Définir ce nouveau mot de passe pour cet utilisateur ?\n\nIl pourra le changer lui-même ensuite depuis son profil.';
+  if(!confirm(confirmMsg)) return;
+
+  var btn = document.getElementById('pwdSet');
+  btn.disabled = true;
+  btn.textContent = '⏳ Mise à jour…';
+  try{
+    await callAdminPassword({ action: 'setPassword', uid: uid, password: newPwd });
+    toast(isSelf ? '✅ Ton mot de passe a été changé' : '✅ Mot de passe mis à jour');
+    closePasswordModal();
+  }catch(e){
+    console.error(e);
+    toast('❌ '+e.message);
+    btn.disabled = false;
+    btn.textContent = isSelf ? '🔐 Changer mon mot de passe' : '⚡ Définir le mot de passe';
+  }
 }
 
 async function handleDelete(uid,name){
