@@ -567,7 +567,13 @@
     const role  = getRole();
     const theme = THEMES[role] || THEMES.coach;
     const user  = getUserInfo();
-    const saved = JSON.parse(localStorage.getItem('ambitio_profile') || '{}');
+    // Parse défensif : localStorage peut contenir une valeur corrompue
+    // (vieille version, conflit multi-tab, bug navigateur). On tolère et
+    // repart sur un objet vide plutôt que de crash l'ouverture du modal.
+    let saved = {};
+    try {
+      saved = JSON.parse(localStorage.getItem('ambitio_profile') || '{}') || {};
+    } catch (_) { saved = {}; }
 
     const backdrop = document.createElement('div');
     backdrop.className = 'profile-modal-backdrop';

@@ -36,30 +36,72 @@ service cloud.firestore {
       return isAuth() && (request.auth.uid == userId || isAdmin());
     }
 
+    // Helper : utilisateurs habilités à écouter les enregistrements
+    // d'appels. Un flag booléen canListenCalls sur le doc users/{uid} accorde
+    // l'accès lecture aux call_logs et aux enregistrements audio de tous les
+    // closers. Les admins l'ont automatiquement.
+    function canListenCalls() {
+      return isAuth() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.canListenCalls == true
+      );
+    }
 
-    // USERS
+    // Helper : utilisateurs habilités à créer/gérer des templates et des
+    // demandes de signature électronique. Un flag booléen signaturesAccess
+    // sur users/{uid} accorde l'accès aux sales qui doivent pouvoir envoyer
+    // leurs propres signatures (ex : Élodie). Les admins l'ont auto.
+    function canSignaturesAdmin() {
+      return isAuth() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.signaturesAccess == true
+      );
+    }
+
+    // Helper : l'utilisateur authentifié est-il propriétaire de la fiche
+    // expert booking_config/{personId} ? Basé sur le champ firebaseUid
+    // posé par l'admin depuis la page booking-admin. Utilisé pour gater
+    // l'accès calendrier, tokens, sync et auth requests d'un expert à
+    // son seul propriétaire. Si le personId n'existe pas ou que firebaseUid
+    // n'a jamais été posé, retourne false (accès refusé).
+    function ownsBookingPerson(personId) {
+      return isAuth()
+        && exists(/databases/$(database)/documents/booking_config/$(personId))
+        && get(/databases/$(database)/documents/booking_config/$(personId)).data.firebaseUid == request.auth.uid;
+    }
+
+
+    // ═══ USERS ═══
     match /users/{userId} {
       allow read:  if isSelfOrAdmin(userId);
       allow write: if isAdmin();
     }
 
 
-    // COACHING / CLIENTS
+    // ═══ COACHING / CLIENTS ═══
     match /clients/{clientId} {
       allow read:           if isCoachOrAdmin();
       allow create, update: if isCoachOrAdmin();
       allow delete:         if isAdmin();
     }
 
-    // Fichiers joints 72H
     match /clients/{clientId}/files/{fileId} {
       allow read:   if isCoachOrAdmin();
       allow create: if isCoachOrAdmin();
       allow delete: if isCoachOrAdmin();
     }
 
+    // Plans d'action client (documents HTML attachés à la fiche coaching)
+    // Lecture : coach + admin
+    // Écriture (create/update/delete) : admin uniquement
+    match /clients/{clientId}/plans/{planId} {
+      allow read:           if isCoachOrAdmin();
+      allow create, update: if isAdmin();
+      allow delete:         if isAdmin();
+    }
 
-    // SAISIES SALES (closing + setting)
+
+    // ═══ SAISIES SALES ═══
     match /saisies/{userId}/mois/{monthKey} {
       allow read:           if isSalesOrAdmin();
       allow create, update: if isSalesOrAdmin();
@@ -67,7 +109,7 @@ service cloud.firestore {
     }
 
 
-    // COMMISSIONS
+    // ═══ COMMISSIONS ═══
     match /commissions/{userId}/mois/{monthKey} {
       allow read:           if isSalesOrAdmin();
       allow create, update: if isSalesOrAdmin();
@@ -80,7 +122,7 @@ service cloud.firestore {
     }
 
 
-    // MODULE EQUIPE
+    // ═══ MODULE EQUIPE ═══
     match /membres/{userId} {
       allow read:  if isSalesOrAdmin();
       allow write: if isAdmin();
@@ -109,7 +151,7 @@ service cloud.firestore {
     }
 
 
-    // MORNING MEETINGS
+    // ═══ MORNING MEETINGS ═══
     match /meetings/{meetingId} {
       allow read:           if isSalesOrAdmin();
       allow create, update: if isAdmin();
@@ -117,13 +159,13 @@ service cloud.firestore {
     }
 
     match /meetings/{meetingId}/questions/{questionId} {
-      allow read: if isSalesOrAdmin();
+      allow read:   if isSalesOrAdmin();
       allow create: if isSalesOrAdmin();
       allow update, delete: if isAdmin();
     }
 
 
-    // PROJECTIONS & ALERTES
+    // ═══ PROJECTIONS & ALERTES ═══
     match /projections/{monthKey} {
       allow read:  if isSalesOrAdmin();
       allow write: if isAdmin();
@@ -135,7 +177,7 @@ service cloud.firestore {
     }
 
 
-    // COMMUNICATION (coaching)
+    // ═══ COMMUNICATION (coaching) ═══
     match /messages_general/{messageId} {
       allow read:   if isCoachOrAdmin();
       allow create: if isCoachOrAdmin();
@@ -179,7 +221,7 @@ service cloud.firestore {
     }
 
 
-    // EOD (End of Day)
+    // ═══ EOD (End of Day) ═══
     match /eod/{userId}/jours/{dateKey} {
       allow read:           if isSalesOrAdmin();
       allow create, update: if isSalesOrAdmin();
@@ -187,7 +229,7 @@ service cloud.firestore {
     }
 
 
-    // LEADS
+    // ═══ LEADS ═══
     match /leads/{leadId} {
       allow read:           if isSalesOrAdmin();
       allow create:         if true;
@@ -195,50 +237,36 @@ service cloud.firestore {
       allow delete:         if isAdmin();
     }
 
+    match /leads/{leadId}/client_temoignages/{temoId} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isSalesOrAdmin();
+      allow delete:         if isSalesOrAdmin();
+    }
 
-    // META (round-robin counter)
+    match /leads/{leadId}/client_notes/{noteId} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isSalesOrAdmin();
+      allow delete:         if isSalesOrAdmin();
+    }
+
+
+    // ═══ META ═══
     match /_meta/{docId} {
       allow read, write: if isSalesOrAdmin();
     }
 
 
-    // BOOKING CONFIG
+    // ═══ BOOKING ═══
     match /booking_config/{docId} {
-      allow read:  if true;
-      allow write: if isAdmin();
-    }
-
-    // CALENDAR TOKENS (secure — admin only, Cloud Functions use admin SDK)
-    match /calendar_tokens/{personId} {
-      allow read:  if isAdmin();
-      allow write: if isAdmin();
-    }
-
-    // CALENDAR AUTH REQUESTS (admin writes code, Cloud Function processes)
-    match /calendar_auth_requests/{requestId} {
-      allow read:   if isAdmin();
+      allow read:   if true;
       allow create: if isAdmin();
-      allow update: if false;
       allow delete: if isAdmin();
+      allow update: if isAdmin()
+        || (isAuth()
+            && resource.data.firebaseUid == request.auth.uid
+            && request.resource.data.firebaseUid == request.auth.uid);
     }
 
-    // CALENDAR BUSY TIMES (public read for booking.html)
-    match /calendar_busy/{personId} {
-      allow read: if true;
-    }
-
-    // CALENDAR SYNC REQUESTS (anyone can request a sync)
-    match /calendar_sync_requests/{personId} {
-      allow read, write: if true;
-    }
-
-    // INTERNAL CONFIG (OAuth keys — admin only)
-    match /_config/{docId} {
-      allow read:  if isAdmin();
-      allow write: if isAdmin();
-    }
-
-    // BOOKINGS (public read for booking.html visitors)
     match /bookings/{bookingId} {
       allow read:   if true;
       allow create: if true;
@@ -246,7 +274,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // BOOKING EVENTS (from Zoho via Make)
     match /booking_events/{eventId} {
       allow read:   if isSalesOrAdmin();
       allow create: if true;
@@ -255,14 +282,75 @@ service cloud.firestore {
     }
 
 
-    // FCM TOKENS (push notifications)
+    // ═══ GOOGLE CALENDAR ═══
+    match /calendar_tokens/{personId} {
+      allow read, write: if isAdmin() || ownsBookingPerson(personId);
+    }
+
+    match /calendar_extra_tokens/{docId} {
+      allow read: if isAdmin()
+        || (isAuth() && resource.data.personId != null
+            && ownsBookingPerson(resource.data.personId));
+      allow create, update: if false;
+      allow delete: if isAdmin()
+        || (isAuth() && resource.data.personId != null
+            && ownsBookingPerson(resource.data.personId));
+    }
+
+    match /calendar_auth_requests/{requestId} {
+      allow read:   if isAdmin()
+        || (isAuth() && ownsBookingPerson(resource.data.personId));
+      allow create: if isAdmin()
+        || (isAuth() && ownsBookingPerson(request.resource.data.personId));
+      allow update: if false;
+      allow delete: if isAdmin()
+        || (isAuth() && ownsBookingPerson(resource.data.personId));
+    }
+
+    match /calendar_busy/{personId} {
+      allow read: if true;
+    }
+
+    match /calendar_sync_requests/{personId} {
+      allow read:  if true;
+      allow write: if isAdmin() || ownsBookingPerson(personId);
+    }
+
+
+    // ═══ INTERNAL CONFIG ═══
+    match /_config/oauth_calendar {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /_config/{docId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+
+    // ═══ EMAIL ═══
+    match /email_tokens/{accountKey} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /email_auth_requests/{requestId} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+
+    // ═══ FCM TOKENS ═══
     match /fcm_tokens/{tokenId} {
       allow read:   if isSalesOrAdmin();
       allow create, update: if true;
       allow delete: if isSalesOrAdmin();
     }
 
-    // CRM VIEWS (saved filters)
+
+    // ═══ CRM ═══
     match /crm_views/{viewId} {
       allow read:           if isSalesOrAdmin();
       allow create, update: if isSalesOrAdmin();
@@ -270,13 +358,161 @@ service cloud.firestore {
     }
 
     match /crm_roles/{roleId} {
-      allow read: if isSalesOrAdmin();
+      allow read:  if isSalesOrAdmin();
       allow write: if isAdmin();
     }
 
     match /crm_profiles/{profileId} {
-      allow read: if isAuth();
+      allow read:  if isAuth();
       allow write: if isAdmin();
     }
+
+
+    // ═══ WEBHOOK INBOX ═══
+    match /webhook_inbox/{docId} {
+      allow create: if true;
+      allow read, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+
+    // ═══ ALTEOFORMS ═══
+    match /alteo_forms/{formId} {
+      allow read:   if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /alteo_forms/{formId}/responses/{responseId} {
+      allow read:   if isAdmin();
+      allow create: if true;
+      allow delete: if isAdmin();
+    }
+
+
+    // ═══ SIGNATURES ═══
+    // Accès admin + sales avec flag signaturesAccess == true sur users/{uid}.
+    // Les lectures + update restent ouvertes (signed_pdf créé par le prospect
+    // non-authentifié côté sign.html).
+    match /signature_templates/{tplId} {
+      allow read:  if true;
+      allow write: if canSignaturesAdmin();
+    }
+
+    match /signature_templates/{tplId}/pdf/{chunkId} {
+      allow read:  if true;
+      allow write: if canSignaturesAdmin();
+    }
+
+    match /signature_requests/{reqId} {
+      allow read:   if true;
+      allow create: if canSignaturesAdmin();
+      allow update: if true;
+      allow delete: if canSignaturesAdmin();
+    }
+
+    match /signature_requests/{reqId}/signed_pdf/{chunkId} {
+      allow read:   if true;
+      allow create: if true;
+      allow delete: if canSignaturesAdmin();
+    }
+
+
+    // ═══ AUDIT LOG ═══
+    match /audit_log/{logId} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+
+    // ═══ DIALER — PHONE NUMBERS ═══
+    match /phone_numbers/{numberId} {
+      allow read:           if isAuth();
+      allow create, update: if isAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
+    // ═══ DIALER — SESSIONS ═══
+    match /dialer_sessions/{sessionId} {
+      allow read: if isAuth() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid
+      );
+      allow create: if isSalesOrAdmin()
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuth() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid
+      );
+      allow delete: if isAdmin();
+    }
+
+
+    // ═══ DIALER — CAMPAIGNS ═══
+    match /dialer_campaigns/{campaignId} {
+      allow read: if isAuth() && (
+        isAdmin() ||
+        request.auth.uid in resource.data.assignedUserIds
+      );
+      allow create: if isSalesOrAdmin()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuth() && (
+        isAdmin() ||
+        resource.data.createdBy == request.auth.uid
+      );
+      allow delete: if isAdmin();
+    }
+
+
+    // ═══ DIALER — CALL LOGS ═══
+    match /call_logs/{callLogId} {
+      allow read: if isAuth() && (
+        canListenCalls() ||
+        resource.data.userId == request.auth.uid
+      );
+      allow create, update, delete: if false;
+    }
+
+
+    // ═══ PAYMENTS ═══
+    match /payments/{paymentId} {
+      allow read:   if isSalesOrAdmin();
+      allow create: if isSalesOrAdmin();
+      allow update: if isAdmin() || (isSalesOrAdmin() && resource.data.createdBy == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+
+    // ═══ INBOX NOTIFICATIONS — SMS/appels entrants temps réel ═══
+    // Alimentée backend par : api/twilio-sms-inbound, api/twilio-inbound,
+    //                        Cloud Function onWebhookInbox (Ringover + Twilio status).
+    //
+    // Visibilité :
+    //   - admin : voit toutes les notifs
+    //   - sales : voit uniquement les notifs où ownerUid == son uid
+    //   - coach : pas d'accès (le widget ne se monte pas pour eux côté UI,
+    //             et ces rules le bloquent aussi côté serveur par sécurité)
+    //
+    // Update : autorisé pour marquer "lu" (écriture dans readBy.{uid}).
+    // Pas de gating fin sur le champ touché — les rules Firestore ne
+    // permettent pas de restreindre proprement les map keys, et le seul
+    // "abus" possible est qu'un sales modifie une notif lui appartenant
+    // déjà : risque acceptable.
+    match /inbox_notifications/{notifId} {
+      allow read: if isAuth() && (
+        isAdmin() ||
+        resource.data.ownerUid == request.auth.uid
+      );
+      allow create: if false;   // Admin SDK uniquement (Vercel + Cloud Functions)
+      allow update: if isAuth() && (
+        isAdmin() ||
+        resource.data.ownerUid == request.auth.uid
+      );
+      allow delete: if isAdmin();
+    }
+
   }
 }

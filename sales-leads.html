@@ -2629,7 +2629,15 @@ function assignLeadRoundRobin(leadId, callback) {
 }
 
 /* ═══ FIRESTORE LISTENER ═══ */
+// Guard anti-double-listener : Firebase re-fire onAuthStateChanged à chaque
+// refresh de token (~1h), ce qui empile les listeners sans cleanup → doublons
+// de notifications lead et d'événements de booking traités plusieurs fois.
+var _leadsListenerUnsub = null;
+var _bookingBridgeUnsub = null;
+
 function startListening() {
+  // Cleanup si re-appel (défensif)
+  if (_leadsListenerUnsub) { _leadsListenerUnsub(); _leadsListenerUnsub = null; }
   // Fenêtre glissante 30 jours : on charge tous les leads créés depuis 30 jours
   // au lieu d'une limite fixe à 500 (qui devenait insuffisante avec >500 leads/semaine
   // et faisait disparaître des leads récents de la vue Lead Live).
@@ -2637,7 +2645,7 @@ function startListening() {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   var cutoffTs = firebase.firestore.Timestamp.fromDate(thirtyDaysAgo);
 
-  db.collection('leads')
+  _leadsListenerUnsub = db.collection('leads')
     .where('createdAt', '>=', cutoffTs)
     .orderBy('createdAt', 'desc')
     .onSnapshot(function(snap) {
@@ -2810,7 +2818,9 @@ function findExistingLead(email, phone) {
 }
 
 function startBookingBridge() {
-  db.collection('booking_events')
+  // Cleanup si re-appel (défensif — l'onAuth peut re-fire)
+  if (_bookingBridgeUnsub) { _bookingBridgeUnsub(); _bookingBridgeUnsub = null; }
+  _bookingBridgeUnsub = db.collection('booking_events')
     .where('processed', '==', false)
     .onSnapshot(function(snap) {
       snap.docChanges().forEach(function(change) {
@@ -2950,6 +2960,9 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
     });
   }
 
+  // Guard anti-double-démarrage des listeners (voir startListening / startBookingBridge)
+  var _leadsListenersStarted = false;
+
   firebase.auth().onAuthStateChanged(function(user) {
     if (user) {
       // Hide login overlay
@@ -2960,10 +2973,23 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
         window._currentUserName = user.displayName || user.email.split('@')[0];
         localStorage.setItem('ambitio_role', data.role || 'sales');
         localStorage.setItem('ambitio_name', window._currentUserName);
-        startListening();
-        startBookingBridge();
-      }).catch(function() { startListening(); startBookingBridge(); });
+        if (!_leadsListenersStarted) {
+          _leadsListenersStarted = true;
+          startListening();
+          startBookingBridge();
+        }
+      }).catch(function() {
+        if (!_leadsListenersStarted) {
+          _leadsListenersStarted = true;
+          startListening();
+          startBookingBridge();
+        }
+      });
     } else {
+      // Sign out : cleanup + reset flag pour permettre un re-login propre
+      if (_leadsListenerUnsub) { _leadsListenerUnsub(); _leadsListenerUnsub = null; }
+      if (_bookingBridgeUnsub) { _bookingBridgeUnsub(); _bookingBridgeUnsub = null; }
+      _leadsListenersStarted = false;
       // Show login overlay
       var overlay = document.getElementById('appLoginOverlay');
       overlay.style.display = 'flex';

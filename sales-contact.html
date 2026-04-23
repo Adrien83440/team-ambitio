@@ -815,6 +815,9 @@ async function toggleSlotFromFiche(bookingId,action,btn){
   }catch(e){
     if(typeof toast==='function')toast('❌ '+e.message,false);
     else alert('Erreur : '+e.message);
+  }finally{
+    // Toujours réactiver le bouton — qu'on soit en succès ou en erreur —
+    // sinon il reste bloqué "Envoi…" indéfiniment après un succès (bug v1).
     if(btn){btn.disabled=false;btn.textContent=orig;}
   }
 }

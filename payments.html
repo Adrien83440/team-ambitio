@@ -242,8 +242,22 @@ function fmtDate(ts){if(!ts)return '—';const d=ts.toDate?ts.toDate():new Date(
 function toast(msg,ok=true){const t=document.createElement('div');t.textContent=msg;t.style.cssText=`position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:${ok?'#0a2e1a':'#2e0a0a'};border:1px solid ${ok?'rgba(16,185,129,.3)':'rgba(239,68,68,.3)'};color:${ok?'#34d399':'#fca5a5'};font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:9999;font-family:var(--font-b)`;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
 
 /* ══ LOAD ══ */
+// ─── Guard anti-double-listener ────────────────────────────────────────
+// Firebase re-fire onAuthStateChanged lors des refresh de token (~1h) et
+// des changements d'état session. Sans flag, chaque re-fire crée un nouvel
+// onSnapshot sans détacher l'ancien → fuite mémoire + doublons d'events.
+let _payListenersStarted = false;
+let _paymentsUnsub = null;
+
 firebase.auth().onAuthStateChanged(async u => {
-  if (!u) { window.location.href = 'index.html'; return; }
+  if (!u) {
+    // Sign out : cleanup + reset flag pour permettre un re-login propre
+    if (_paymentsUnsub) { _paymentsUnsub(); _paymentsUnsub = null; }
+    _payListenersStarted = false;
+    window.location.href = 'index.html';
+    return;
+  }
+
   currentUser = u;
   const snap = await db.collection('users').doc(u.uid).get();
   currentRole = snap.exists ? snap.data().role : 'sales';
@@ -251,12 +265,14 @@ firebase.auth().onAuthStateChanged(async u => {
   // Show/hide new payment button for non-sales
   if (currentRole === 'admin') document.getElementById('btnNewPay').style.display = '';
 
-  // Load team members for filter
+  // Load team members for filter (à chaque fire, idempotent via appendChild sur select vide)
   const tmSnap = await db.collection('_meta').doc('team_members').get();
   if (tmSnap.exists) {
     const raw = tmSnap.data().members || {};
     members = Array.isArray(raw) ? raw : Object.values(raw);
     const sel = document.getElementById('filterCloser');
+    // Réinitialiser le select pour éviter les doublons lors d'un re-fire onAuth
+    while (sel.options.length > 1) sel.remove(1);
     members.filter(m => m.active !== false).forEach(m => {
       const opt = document.createElement('option');
       opt.value = m.slug || m.firebaseUid || '';
@@ -265,8 +281,12 @@ firebase.auth().onAuthStateChanged(async u => {
     });
   }
 
-  loadPayments();
-  checkUrlParams();
+  // Démarrer les listeners UNE SEULE FOIS par session authentifiée
+  if (!_payListenersStarted) {
+    _payListenersStarted = true;
+    loadPayments();
+    checkUrlParams();
+  }
 });
 
 function checkUrlParams() {
@@ -333,9 +353,11 @@ async function prefillFromLead(leadId) {
 }
 
 function loadPayments() {
+  // Cleanup si re-appel manuel (défensif)
+  if (_paymentsUnsub) { _paymentsUnsub(); _paymentsUnsub = null; }
   let q = db.collection('payments').orderBy('createdAt', 'desc');
   if (currentRole === 'sales') q = q.where('createdBy', '==', currentUser.uid);
-  q.onSnapshot(snap => {
+  _paymentsUnsub = q.onSnapshot(snap => {
     allPayments = [];
     snap.forEach(d => { allPayments.push({ id: d.id, ...d.data() }); });
     renderStats();

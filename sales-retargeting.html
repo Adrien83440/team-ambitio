@@ -863,8 +863,15 @@ function toast(msg) {
 }
 
 /* ═══ FIRESTORE ═══ */
+// Guard anti-double-listener : Firebase re-fire onAuthStateChanged à chaque
+// refresh de token, ce qui empile les listeners sans cleanup → doublons
+// et double écritures Firestore.
+var _retargetingUnsub = null;
+
 function startListening() {
-  db.collection('leads')
+  // Cleanup si re-appel (défensif)
+  if (_retargetingUnsub) { _retargetingUnsub(); _retargetingUnsub = null; }
+  _retargetingUnsub = db.collection('leads')
     .where('inRetargeting', '==', true)
     .onSnapshot(function(snap) {
       allContacts = [];
@@ -1213,6 +1220,9 @@ document.getElementById('migrationBtn').addEventListener('click', function() {
 });
 
 /* ═══ AUTH & INIT ═══ */
+// Guard anti-double-démarrage (voir startListening ci-dessus)
+var _rtListenersStarted = false;
+
 firebase.auth().onAuthStateChanged(function(user) {
   if (user) {
     document.getElementById('rtAuthOverlay').style.display = 'none';
@@ -1224,9 +1234,15 @@ firebase.auth().onAuthStateChanged(function(user) {
       localStorage.setItem('ambitio_name', window._currentUserName);
       document.getElementById('tbUserName').textContent = window._currentUserName;
     });
-    startListening();
-    checkMigration();
+    if (!_rtListenersStarted) {
+      _rtListenersStarted = true;
+      startListening();
+      checkMigration();
+    }
   } else {
+    // Sign out : cleanup + reset flag
+    if (_retargetingUnsub) { _retargetingUnsub(); _retargetingUnsub = null; }
+    _rtListenersStarted = false;
     document.getElementById('rtAuthOverlay').style.display = 'flex';
   }
 });
