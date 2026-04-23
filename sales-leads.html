@@ -748,6 +748,7 @@ html, body {
       <button class="ld-filter" data-status="rdv_pose">📅 RDV posé</button>
       <button class="ld-filter" data-status="pas_interesse">👎 Pas intéressé</button>
       <button class="ld-filter" data-status="disqualifie">🚫 Disqualifié</button>
+      <button class="ld-filter" data-status="faux_numero">⛔ Faux numéro</button>
     </div>
   </div>
 
@@ -980,7 +981,8 @@ var STATUSES = [
   { key: 'nrp3',          label: 'NRP 3',         icon: '📵', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
   { key: 'rdv_pose',      label: 'RDV posé',      icon: '📅', color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
   { key: 'pas_interesse', label: 'Pas intéressé', icon: '👎', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
-  { key: 'disqualifie',   label: 'Disqualifié',   icon: '🚫', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' }
+  { key: 'disqualifie',   label: 'Disqualifié',   icon: '🚫', color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
+  { key: 'faux_numero',   label: 'Faux numéro',   icon: '⛔', color: '#64748b', bg: 'rgba(100,116,139,0.14)' }
 ];
 
 function getStatusObj(key) {
@@ -1831,7 +1833,7 @@ function renderCard(l) {
   h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
   if (setterObj) h += '<span class="ld-assigned">' + setterObj.name + '</span>';
   if (l.stage && l.stage !== 'lead') {
-    var stageNames = {nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',all_nrp:'All NRP',poubelle:'Poubelle',disqualification:'Disqualif.',follow_up_pm:'Follow Up',set:'SET',rdv_self_booking:'RDV Self',rdv_confirmes:'RDV Conf.',rdv_annules_prospect:'Annulé',rdv_annules_equipe:'Annulé Éq.',no_show_self:'No Show',no_show_setting:'No Show S.',partenariats:'Partenariat',closed_won_setting:'Won Setting',closed_won_self:'Won Self',closed_lost:'Lost',follow_up_closing:'Follow Up',disqualifie_closing:'Disqualif.'};
+    var stageNames = {nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',all_nrp:'All NRP',faux_numero:'Faux n°',poubelle:'Poubelle',disqualification:'Disqualif.',follow_up_pm:'Follow Up',set:'SET',rdv_self_booking:'RDV Self',rdv_confirmes:'RDV Conf.',rdv_annules_prospect:'Annulé',rdv_annules_equipe:'Annulé Éq.',no_show_self:'No Show',no_show_setting:'No Show S.',partenariats:'Partenariat',closed_won_setting:'Won Setting',closed_won_self:'Won Self',closed_lost:'Lost',follow_up_closing:'Follow Up',disqualifie_closing:'Disqualif.'};
     var stName = stageNames[l.stage] || l.stage;
     h += '<span class="ld-assigned" style="color:var(--purple);border-color:rgba(167,139,250,0.25)">🔀 ' + stName + '</span>';
   }
@@ -2242,7 +2244,8 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     var STATUS_TO_STAGE = {
       nouveau:'lead', appele:'lead', decroche:'lead', messagerie:'lead',
       nrp1:'nrp1', nrp2:'nrp2', nrp3:'nrp3',
-      rdv_pose:'rdv_confirmes', pas_interesse:'disqualification', disqualifie:'disqualification'
+      rdv_pose:'rdv_confirmes', pas_interesse:'disqualification', disqualifie:'disqualification',
+      faux_numero:'faux_numero'
     };
     var syncStage = STATUS_TO_STAGE[newStatus];
     var updates = { status: newStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };

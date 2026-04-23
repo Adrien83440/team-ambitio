@@ -543,6 +543,7 @@ var RDV_ISSUES = [
   { value: 'reporte', label: 'Reporté' },
   { value: 'pas_interesse', label: 'Pas intéressé' },
   { value: 'en_reflexion', label: 'En réflexion' },
+  { value: 'disqualifie', label: 'Disqualifié 🚫' },
 ];
 
 document.getElementById('eodDate').value = fmtDate(new Date());
@@ -1240,17 +1241,21 @@ function generateInsights(entries) {
   analyzeMindset(entries, 'closing', 'closing');
 
   // RDV analysis
-  var totalRdv = 0, closedRdv = 0, annuledRdv = 0, noShowRdv = 0;
+  var totalRdv = 0, closedRdv = 0, annuledRdv = 0, noShowRdv = 0, disqualifieRdv = 0;
   entries.forEach(function(e) {
     ((e.closing || {}).rdvs || []).forEach(function(r) {
       totalRdv++;
       if (r.issue === 'close') closedRdv++;
       if (r.issue === 'annule') annuledRdv++;
       if (r.issue === 'no_show') noShowRdv++;
+      if (r.issue === 'disqualifie') disqualifieRdv++;
     });
   });
   if (totalRdv > 0) {
     insights.push({ icon: closedRdv > 0 ? 'up' : 'info', text: '<strong>' + totalRdv + ' RDV</strong> sur la période : ' + closedRdv + ' closés (' + ((closedRdv / totalRdv) * 100).toFixed(0) + '%), ' + annuledRdv + ' annulés, ' + noShowRdv + ' no-shows.' });
+  }
+  if (disqualifieRdv > 0) {
+    insights.push({ icon: 'info', text: '<strong>' + disqualifieRdv + ' RDV disqualifié' + (disqualifieRdv > 1 ? 's' : '') + '</strong> sur la période (' + ((disqualifieRdv / totalRdv) * 100).toFixed(0) + '% des RDV).' });
   }
   if ((annuledRdv + noShowRdv) > totalRdv * 0.4 && totalRdv >= 3) {
     insights.push({ icon: 'warn', text: '<strong>Taux d\'annulation élevé</strong> (' + (annuledRdv + noShowRdv) + '/' + totalRdv + '). Vérifier la confirmation des RDV.' });
