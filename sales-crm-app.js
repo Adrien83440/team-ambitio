@@ -32,7 +32,7 @@ var STAGES=[
 var SM={};STAGES.forEach(function(s){SM[s.key]=s;});
 var LT={vsl_elite:'VSL',self_booking:'Self Booking',webinaire:'Webinaire'};
 var TB={vsl_elite:'vsl',self_booking:'self',webinaire:'other'};
-var S2S={lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'nrp3',faux_numero:'faux_numero',poubelle:'disqualifie',disqualification:'disqualifie',follow_up_pm:'appele',set:'rdv_pose',rdv_self_booking:'rdv_pose',rdv_confirmes:'rdv_pose',rdv_annules_prospect:'pas_interesse',rdv_annules_equipe:'pas_interesse',no_show_self:'pas_interesse',no_show_setting:'pas_interesse',partenariats:'rdv_pose',closed_won_setting:'rdv_pose',closed_won_self:'rdv_pose',closed_lost:'pas_interesse',follow_up_closing:'appele',disqualifie_closing:'disqualifie'};
+var S2S={lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'all_nrp',faux_numero:'faux_numero',poubelle:'poubelle',disqualification:'disqualifie',follow_up_pm:'follow_up_pm',set:'set',rdv_self_booking:'rdv_self_booking',rdv_confirmes:'rdv_pose',rdv_annules_prospect:'pas_interesse',rdv_annules_equipe:'pas_interesse',no_show_self:'pas_interesse',no_show_setting:'pas_interesse',partenariats:'rdv_pose',closed_won_setting:'rdv_pose',closed_won_self:'rdv_pose',closed_lost:'pas_interesse',follow_up_closing:'appele',disqualifie_closing:'disqualifie'};
 
 var CRIT_FIELDS=[
   {key:'stage',label:'Étape',type:'select',opts:STAGES.map(function(s){return{v:s.key,l:s.label};})},
@@ -397,7 +397,7 @@ function renderCard(l){
   var setterColor=setter?tmColor(setter):'';
   var setterInactive=setter?!tmIsActive(setter):false;
   var hn=l.notesHistory&&l.notesHistory.length>0;
-  var sL={nouveau:'Nouveau',appele:'Appelé',decroche:'Décroché',messagerie:'Msg',nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',rdv_pose:'RDV posé',pas_interesse:'Pas intéressé',disqualifie:'Disqualifié',faux_numero:'Faux n°'};
+  var sL={nouveau:'Nouveau',appele:'Appelé',decroche:'Décroché',messagerie:'Msg',nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',all_nrp:'All NRP',faux_numero:'Faux n°',follow_up_pm:'Follow Up PM',set:'SET',rdv_self_booking:'RDV Self',rdv_pose:'RDV posé',pas_interesse:'Pas intéressé',disqualifie:'Disqualifié',poubelle:'Poubelle'};
   var ls=l.status||'nouveau';
   var _telC=(l.telephone||'').toString().replace(/\s/g,'');
   var h='<div class="crm-card" draggable="true" data-id="'+l.id+'" data-lead-id="'+l.id+'" data-phone="'+_telC+'" data-name="'+esc(l.nom||'').replace(/"/g,'&quot;')+'">';
