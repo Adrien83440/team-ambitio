@@ -10,17 +10,43 @@
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--accent:#f59e0b;--accent-light:rgba(245,158,11,.12);--bg:#0a0a14;--card-bg:#12121e;--text:#f0f0f5;--text-muted:rgba(240,240,245,.45);--border:rgba(255,255,255,.06);--radius:16px}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow:hidden}
+:root{--accent:#f59e0b;--accent-light:rgba(245,158,11,.12);--bg:#0a0a14;--card-bg:#12121e;--text:#f0f0f5;--text-muted:rgba(240,240,245,.45);--border:rgba(255,255,255,.06);--radius:16px;--ease:cubic-bezier(.4,0,.2,1)}
+html{background:var(--bg)}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;overflow-x:hidden;overflow-y:auto;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+/* Embed mode: l'iframe parent matche la hauteur du contenu via postMessage,
+   donc on désactive le centrage vertical forcé et on coule en flux naturel. */
+body.embed-mode{min-height:0;overflow:visible}
+body.embed-mode .progress{position:absolute}
 /* Progress */
 .progress{position:fixed;top:0;left:0;right:0;height:4px;background:rgba(255,255,255,.05);z-index:100}
-.progress-bar{height:100%;background:var(--accent);transition:width .5s cubic-bezier(.4,0,.2,1);border-radius:0 2px 2px 0}
-/* Container */
-.form-container{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
-/* Card */
-.card-wrap{width:100%;max-width:640px;position:relative;min-height:300px}
-.card{position:absolute;width:100%;opacity:0;transform:translateY(40px);transition:all .5s cubic-bezier(.4,0,.2,1);pointer-events:none}
-.card.active{opacity:1;transform:translateY(0);pointer-events:auto}
+.progress-bar{height:100%;background:var(--accent);transition:width .5s var(--ease);border-radius:0 2px 2px 0}
+/* Container — standalone : centrage vertical élégant ; embed : flux naturel */
+.form-container{
+  min-height:100vh;
+  min-height:100dvh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:clamp(20px,4vw,40px) clamp(16px,4vw,32px);
+}
+body.embed-mode .form-container{
+  min-height:0;
+  justify-content:flex-start;
+  padding:clamp(28px,5vw,48px) clamp(16px,4vw,32px);
+}
+/* Card wrap : largeur fluide, hauteur animée pour que les transitions
+   et le postMessage de hauteur soient précis. */
+.card-wrap{
+  width:100%;
+  max-width:640px;
+  position:relative;
+  min-height:240px;
+  height:auto;
+  transition:height .4s var(--ease);
+}
+.card{position:absolute;top:0;left:0;width:100%;opacity:0;transform:translateY(40px);transition:opacity .45s var(--ease),transform .45s var(--ease);pointer-events:none}
+.card.active{opacity:1;transform:translateY(0);pointer-events:auto;position:relative}
 .card.exit-up{opacity:0;transform:translateY(-60px)}
 .card.exit-down{opacity:0;transform:translateY(60px)}
 /* Card content */
@@ -73,6 +99,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .card-info-title{font-size:11px;font-weight:800;color:var(--accent);margin-bottom:18px;text-transform:uppercase;letter-spacing:.8px}
 /* Info card scroll for long content */
 .card.card-info-type{position:relative;overflow-y:auto;max-height:calc(100vh - 160px);padding-bottom:20px}
+body.embed-mode .card.card-info-type{max-height:none;overflow-y:visible}
 .card-req{color:var(--accent);font-size:12px;font-weight:600}
 /* Inputs */
 .af-input{width:100%;padding:16px 18px;background:transparent;border:none;border-bottom:2px solid rgba(255,255,255,.12);color:var(--text);font-family:'DM Sans',sans-serif;font-size:20px;font-weight:500;outline:none;transition:border-color .3s}
@@ -102,31 +129,72 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .af-scale-btn:hover{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.05)}
 .af-scale-btn.selected{border-color:var(--accent);background:var(--accent);color:#000}
 .af-scale-labels{display:flex;justify-content:space-between;width:100%;margin-top:8px;font-size:11px;color:var(--text-muted)}
-/* Navigation */
-.nav-bar{position:fixed;bottom:0;left:0;right:0;padding:16px 24px;display:flex;align-items:center;justify-content:center;gap:12px;background:linear-gradient(transparent,var(--bg) 30%)}
+/* Navigation — standalone : fixed bottom élégant ; embed : flux naturel */
+.nav-bar{position:fixed;bottom:0;left:0;right:0;padding:16px 24px;display:flex;align-items:center;justify-content:center;gap:12px;background:linear-gradient(transparent,var(--bg) 30%);z-index:50}
+body.embed-mode .nav-bar{position:relative;bottom:auto;left:auto;right:auto;padding:24px 16px 8px;background:transparent;width:100%;max-width:640px;margin:8px auto 0}
 .nav-btn{padding:12px 28px;border:none;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:8px}
 .nav-btn-next{background:var(--accent);color:#000}.nav-btn-next:hover{background:#d97706;transform:translateY(-1px)}
 .nav-btn-next:disabled{opacity:.3;cursor:not-allowed;transform:none}
 .nav-btn-back{background:transparent;color:var(--text-muted);border:1px solid var(--border)}.nav-btn-back:hover{color:var(--text);border-color:rgba(255,255,255,.15)}
-.nav-hint{font-size:11px;color:var(--text-muted);position:fixed;bottom:60px;text-align:center;width:100%}
+.nav-hint{font-size:11px;color:var(--text-muted);position:fixed;bottom:64px;text-align:center;width:100%;pointer-events:none}
+body.embed-mode .nav-hint{position:relative;bottom:auto;text-align:center;padding:6px 0 0}
 /* Thank you */
 .thankyou{text-align:center;animation:fadeUp .6s ease both}
 .thankyou-icon{font-size:64px;margin-bottom:20px}
 .thankyou-title{font-size:32px;font-weight:800;margin-bottom:12px;letter-spacing:-.5px}
 .thankyou-msg{font-size:16px;color:var(--text-muted);line-height:1.6;max-width:400px;margin:0 auto}
 /* Loading */
-.loading{display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px}
+.loading{display:flex;align-items:center;justify-content:center;min-height:60vh;flex-direction:column;gap:16px}
+body:not(.embed-mode) .loading{min-height:100vh;min-height:100dvh}
 .loading-spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,.08);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 /* Error */
-.error-page{text-align:center;padding:60px;color:var(--text-muted)}
-/* Keyboard nav hint */
+.error-page{text-align:center;padding:60px 20px;color:var(--text-muted)}
+body.embed-mode .error-page{padding:48px 20px}
+/* ─────────────────────────────────────────────
+   RESPONSIVE BREAKPOINTS
+   Mobile portrait <= 480
+   Mobile / petit iframe   <= 640
+   Tablet portrait         641 – 900
+   Desktop / iPad landscape > 900
+   ───────────────────────────────────────────── */
 @media(max-width:640px){
-.card-question{font-size:22px}
-.af-input{font-size:18px}
-.af-scale-btn{width:44px;height:44px;font-size:15px;border-radius:10px}
-.nav-hint{display:none}
+  .card-question{font-size:22px;line-height:1.3}
+  .card-desc{font-size:13px;margin-bottom:22px}
+  .af-input{font-size:18px;padding:14px 14px}
+  .af-textarea{font-size:15px;padding:14px 14px}
+  .af-option{padding:14px 14px;gap:12px}
+  .af-option-label{font-size:15px}
+  .af-scale-btn{width:44px;height:44px;font-size:15px;border-radius:10px}
+  .af-rating-btn{font-size:24px}
+  .nav-btn{padding:11px 22px;font-size:13px}
+  .nav-hint{display:none}
+  .pf-section{padding:20px 18px}
+  .pf-field{margin-bottom:20px}
+  .form-container{padding:clamp(16px,4vw,28px) 14px}
+  body.embed-mode .form-container{padding:clamp(20px,5vw,32px) 14px}
+  .card-wrap{min-height:200px}
+}
+@media(max-width:480px){
+  .card-question{font-size:20px}
+  .af-scale-btn{width:38px;height:38px;font-size:13px}
+}
+@media(min-width:641px) and (max-width:900px){
+  /* Tablette portrait + iPad portrait : marges plus généreuses */
+  .form-container{padding:clamp(28px,5vw,48px) clamp(24px,4vw,40px)}
+  .card-wrap{max-width:600px}
+}
+@media(min-width:901px){
+  /* Desktop + iPad landscape */
+  .form-container{padding:clamp(32px,4vw,56px) clamp(24px,4vw,48px)}
+  .card-wrap{max-width:640px}
+}
+/* Très petite hauteur (iframe 700px etc.) en mode embed : compact */
+@media(max-height:760px){
+  body.embed-mode .form-container{padding-block:clamp(20px,4vw,32px)}
+  body.embed-mode .card-question{font-size:21px}
+  body.embed-mode .card-desc{margin-bottom:18px}
 }
 </style>
 </head>
@@ -149,6 +217,72 @@ var CARD_GROUPS=[];
 var currentIdx=0;
 var answers={};
 var submitted=false;
+
+/* ═══════════════════════════════════════════════════════════
+   EMBED BRIDGE
+   - Détecte le mode iframe (auto via window.parent OU ?embed=1)
+   - postMessage de la hauteur du contenu au parent (auto-resize iframe)
+   - ResizeObserver + debounce raf pour suivre tous les changements DOM
+   - updateCardWrapHeight() : anime la hauteur de .card-wrap vers la card
+     active pour que la mesure et les transitions soient nettes
+   ═══════════════════════════════════════════════════════════ */
+var EMBED={enabled:false,lastHeight:0,raf:null};
+(function initEmbedDetection(){
+  var qp=new URLSearchParams(window.location.search);
+  var inIframe=false;
+  try{inIframe=window.parent&&window.parent!==window;}catch(e){inIframe=true;}
+  EMBED.enabled=inIframe||qp.get('embed')==='1';
+  if(EMBED.enabled){document.body.classList.add('embed-mode');}
+})();
+
+function notifyParentHeight(){
+  if(!EMBED.enabled)return;
+  if(EMBED.raf)cancelAnimationFrame(EMBED.raf);
+  EMBED.raf=requestAnimationFrame(function(){
+    var h=Math.max(
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight,
+      document.documentElement.offsetHeight
+    );
+    if(h===EMBED.lastHeight)return;
+    EMBED.lastHeight=h;
+    try{
+      window.parent.postMessage({
+        type:'alteoforms:resize',
+        formId:(FORM&&FORM._id)||null,
+        height:h
+      },'*');
+    }catch(e){}
+  });
+}
+
+function updateCardWrapHeight(){
+  var wrap=document.getElementById('cardWrap');
+  if(!wrap)return;
+  var active=wrap.querySelector('.card.active');
+  if(!active){wrap.style.height='';return;}
+  // .active passe en position:relative dans le CSS donc scrollHeight reflète
+  // la hauteur réelle du contenu de la card.
+  var h=active.scrollHeight;
+  if(h>0)wrap.style.height=h+'px';
+  notifyParentHeight();
+}
+
+(function setupResizeObserver(){
+  if(!EMBED.enabled)return;
+  if(typeof ResizeObserver==='undefined')return;
+  var ro=new ResizeObserver(function(){notifyParentHeight();});
+  // Observer le body — ça couvre tous les changements de contenu
+  ro.observe(document.body);
+})();
+
+window.addEventListener('resize',function(){
+  updateCardWrapHeight();
+  notifyParentHeight();
+});
+window.addEventListener('load',function(){
+  setTimeout(notifyParentHeight,100);
+});
 
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
@@ -184,6 +318,7 @@ showCard(0);
 function showError(msg){
 document.getElementById('loadingView').style.display='none';
 document.getElementById('formContainer').innerHTML='<div class="error-page"><div style="font-size:48px;margin-bottom:16px">😕</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">Oups</div><div>'+msg+'</div></div>';
+setTimeout(notifyParentHeight,50);
 }
 
 // === FORMAT INFO BODY ===
@@ -284,6 +419,8 @@ inp.addEventListener('click',pfEvalConditions);
 inp.addEventListener('input',pfEvalConditions);
 });
 });
+// Notifie le parent iframe de la hauteur finale du long form
+setTimeout(notifyParentHeight,50);
 }
 
 function pfGetValue(fieldId){
@@ -513,6 +650,13 @@ setTimeout(function(){
 var inp=activeCard.querySelector('input,textarea,select');
 if(inp&&inp.type!=='date')inp.focus();
 },300);
+// Recalcule la hauteur de card-wrap pour la nouvelle card active
+// + notifie le parent iframe (auto-resize)
+requestAnimationFrame(function(){
+updateCardWrapHeight();
+// Second tick après que le contenu soit peint pour les images/fonts tardives
+setTimeout(updateCardWrapHeight,80);
+});
 }
 
 var pct=((idx+1)/visible.length)*100;
@@ -883,6 +1027,8 @@ ty.classList.add('active');
 document.getElementById('navBar').style.display='none';
 document.getElementById('navHint').style.display='none';
 document.getElementById('progressBar').style.width='100%';
+// Recalcule la hauteur pour la card thank-you et notifie le parent
+requestAnimationFrame(function(){updateCardWrapHeight();setTimeout(updateCardWrapHeight,80);});
 }
 
 // Shake animation
