@@ -893,6 +893,85 @@ function openEditModal(u){
   h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Peut créer et envoyer des demandes de signature électronique</div></div>';
   h+='</label></div>';
 
+  // ─── Visibilité dans l'équipe (team_members) ───
+  // Les flags ci-dessous sont écrits directement dans _meta/team_members
+  // (et non users/) — ils définissent la présence dans Lead Live, la couleur
+  // d'avatar pour les vocaux et les mentions, etc. Le membre TM est trouvé
+  // via firebaseUid (posé par la Cloud Function onUserSyncToTeamMembers).
+  // On lit le RAW pour avoir les vrais champs (firebaseUid, inLeadsModule, etc.)
+  // que le cache normalisé ne contient pas tous.
+  var tmMember = null;
+  var tmRawKey = null;     // clé/index dans TEAM_MEMBERS_RAW_DATA
+  if (TEAM_MEMBERS_RAW_DATA) {
+    if (TEAM_MEMBERS_RAW_FORMAT === 'array' && Array.isArray(TEAM_MEMBERS_RAW_DATA)) {
+      for (var ti = 0; ti < TEAM_MEMBERS_RAW_DATA.length; ti++) {
+        var entry = TEAM_MEMBERS_RAW_DATA[ti];
+        if (entry && entry.firebaseUid === u.uid) { tmMember = entry; tmRawKey = ti; break; }
+      }
+    } else if (TEAM_MEMBERS_RAW_FORMAT === 'object' && typeof TEAM_MEMBERS_RAW_DATA === 'object') {
+      var keys = Object.keys(TEAM_MEMBERS_RAW_DATA);
+      for (var ki = 0; ki < keys.length; ki++) {
+        var k = keys[ki];
+        var v = TEAM_MEMBERS_RAW_DATA[k];
+        if (v && v.firebaseUid === u.uid) { tmMember = v; tmRawKey = k; break; }
+      }
+    }
+  }
+  // Stocker pour handleSave
+  window.__editingTmRawKey = tmRawKey;
+
+  if (tmMember) {
+    var inLM = tmMember.inLeadsModule !== false; // true par défaut
+    var tmColor = tmMember.color || '#6b7280';
+    var tmShortName = tmMember.shortName || '';
+    var tmInitials = tmMember.initials || '';
+    var tmSlug = tmMember.slug || '';
+
+    h+='<div class="mf" style="margin-top:14px;padding:12px;background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.15);border-radius:10px">';
+    h+='<div style="font-size:13px;font-weight:800;color:#60a5fa;margin-bottom:10px;display:flex;align-items:center;gap:6px">🎙️ Visibilité dans l\'équipe</div>';
+
+    // Toggle inLeadsModule
+    h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:8px;margin-bottom:10px">';
+    h+='<input type="checkbox" id="eInLeadsModule"'+(inLM?' checked':'')+' style="width:16px;height:16px;accent-color:#60a5fa"/>';
+    h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">📋 Apparaît dans Lead Live</div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Si décoché : invisible des pills de filtre et de l\'assignation de leads. Reste mentionnable dans les vocaux et notes.</div></div>';
+    h+='</label>';
+
+    // Identité d'équipe : couleur, slug, shortName, initials
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">';
+
+    h+='<div><label style="font-size:11px;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.04em">Slug (identifiant équipe)</label>';
+    h+='<input class="bi" id="eTmSlug" value="'+esc(tmSlug)+'" style="margin-top:4px;font-family:monospace;font-size:12px"/>';
+    h+='<div style="font-size:9px;color:rgba(255,255,255,.3);margin-top:3px">Sert pour @mentions et l\'attribution des leads. Modifier avec prudence.</div></div>';
+
+    h+='<div><label style="font-size:11px;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.04em">Couleur</label>';
+    h+='<div style="display:flex;align-items:center;gap:6px;margin-top:4px"><input type="color" id="eTmColor" value="'+esc(tmColor)+'" style="width:40px;height:38px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:transparent;cursor:pointer"/>';
+    h+='<input class="bi" id="eTmColorHex" value="'+esc(tmColor)+'" style="font-family:monospace;font-size:12px;flex:1" maxlength="7"/></div></div>';
+
+    h+='<div><label style="font-size:11px;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.04em">Nom court</label>';
+    h+='<input class="bi" id="eTmShortName" value="'+esc(tmShortName)+'" style="margin-top:4px"/>';
+    h+='<div style="font-size:9px;color:rgba(255,255,255,.3);margin-top:3px">Affiché dans les pills, badges, notifications.</div></div>';
+
+    h+='<div><label style="font-size:11px;color:rgba(255,255,255,.5);font-weight:700;text-transform:uppercase;letter-spacing:.04em">Initiales</label>';
+    h+='<input class="bi" id="eTmInitials" value="'+esc(tmInitials)+'" style="margin-top:4px;text-transform:uppercase" maxlength="3"/>';
+    h+='<div style="font-size:9px;color:rgba(255,255,255,.3);margin-top:3px">Affichées dans l\'avatar (rond coloré).</div></div>';
+
+    h+='</div>';
+
+    // Aperçu avatar
+    h+='<div style="margin-top:12px;display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,0.02);border-radius:8px">';
+    h+='<span style="font-size:10px;color:rgba(255,255,255,.4);font-weight:700;text-transform:uppercase">Aperçu :</span>';
+    h+='<div id="eTmAvatarPreview" style="width:32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-family:\'Bricolage Grotesque\',system-ui;font-size:12px;font-weight:800;background:linear-gradient(135deg,'+esc(tmColor)+','+esc(tmColor)+'bb)">'+esc(tmInitials.toUpperCase())+'</div>';
+    h+='<span id="eTmShortPreview" style="font-size:13px;color:rgba(255,255,255,.85);font-weight:600">'+esc(tmShortName)+'</span>';
+    h+='</div>';
+
+    h+='</div>';
+  } else {
+    // Pas encore d'entrée team_members pour ce user (cas rare : sync auto pas
+    // encore propagée). On affiche un message info plutôt que des champs vides.
+    h+='<div class="mf" style="margin-top:14px;padding:10px 12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:12px;color:#fbbf24;line-height:1.5">⏳ Pas encore d\'entrée dans l\'équipe (synchronisation en cours). Modifie un autre champ et enregistre, ou attends quelques secondes puis ré-ouvre cette fenêtre.</div>';
+  }
+
   // Save
   h+='<div style="display:flex;gap:10px;margin-top:20px"><button class="bb bb-o" onclick="closeModal()">Annuler</button><button class="bb bb-p" id="eSave" style="flex:1">💾 Enregistrer</button></div>';
   // Actions
@@ -905,6 +984,38 @@ function openEditModal(u){
 
   document.getElementById('moBody').innerHTML=h;
   document.getElementById('eSave').addEventListener('click',function(){handleSave(u.uid);});
+
+  // Bindings team_members : sync color picker ↔ hex input + aperçu live
+  if (tmMember) {
+    var colorPicker = document.getElementById('eTmColor');
+    var colorHex = document.getElementById('eTmColorHex');
+    var initialsInput = document.getElementById('eTmInitials');
+    var shortInput = document.getElementById('eTmShortName');
+    var avatarPreview = document.getElementById('eTmAvatarPreview');
+    var shortPreview = document.getElementById('eTmShortPreview');
+
+    function refreshTmPreview() {
+      var c = colorHex.value || colorPicker.value || '#6b7280';
+      avatarPreview.style.background = 'linear-gradient(135deg,' + c + ',' + c + 'bb)';
+      avatarPreview.textContent = (initialsInput.value || '?').toUpperCase();
+      shortPreview.textContent = shortInput.value || '';
+    }
+
+    colorPicker.addEventListener('input', function() {
+      colorHex.value = colorPicker.value;
+      refreshTmPreview();
+    });
+    colorHex.addEventListener('input', function() {
+      // Valide format #rrggbb
+      if (/^#[0-9a-fA-F]{6}$/.test(colorHex.value)) {
+        colorPicker.value = colorHex.value;
+        refreshTmPreview();
+      }
+    });
+    initialsInput.addEventListener('input', refreshTmPreview);
+    shortInput.addEventListener('input', refreshTmPreview);
+  }
+
   // Load AlteoForms list async if non-admin
   if((u.role||'coach')!=='admin'){
     loadAlteoFormsList(u.alteoformsFormIds||[]);
@@ -988,6 +1099,36 @@ async function handleSave(uid){
     var sigEl=document.getElementById('eSignaturesAccess');
     if(sigEl)upd.signaturesAccess=sigEl.checked;
     await updateDoc(doc(db,'users',uid),upd);
+
+    // ─── Sync vers _meta/team_members (visibilité Lead Live + identité équipe) ───
+    var inLMEl = document.getElementById('eInLeadsModule');
+    var tmRawKey = window.__editingTmRawKey;
+    if (inLMEl && tmRawKey != null && TEAM_MEMBERS_RAW_DATA) {
+      var tmPatch = {
+        inLeadsModule: inLMEl.checked
+      };
+      var slugVal = (document.getElementById('eTmSlug') || {}).value;
+      var colorVal = (document.getElementById('eTmColorHex') || {}).value;
+      var shortVal = (document.getElementById('eTmShortName') || {}).value;
+      var initVal = (document.getElementById('eTmInitials') || {}).value;
+      if (slugVal && slugVal.trim()) tmPatch.slug = slugVal.trim();
+      if (colorVal && /^#[0-9a-fA-F]{6}$/.test(colorVal)) tmPatch.color = colorVal;
+      if (shortVal != null) tmPatch.shortName = shortVal.trim();
+      if (initVal != null) tmPatch.initials = (initVal.trim() || '?').toUpperCase().slice(0, 3);
+
+      // Applique sur RAW_DATA en préservant le format (array vs object)
+      if (TEAM_MEMBERS_RAW_FORMAT === 'array' && Array.isArray(TEAM_MEMBERS_RAW_DATA)) {
+        if (TEAM_MEMBERS_RAW_DATA[tmRawKey]) {
+          TEAM_MEMBERS_RAW_DATA[tmRawKey] = Object.assign({}, TEAM_MEMBERS_RAW_DATA[tmRawKey], tmPatch);
+        }
+      } else if (TEAM_MEMBERS_RAW_FORMAT === 'object' && TEAM_MEMBERS_RAW_DATA[tmRawKey]) {
+        TEAM_MEMBERS_RAW_DATA[tmRawKey] = Object.assign({}, TEAM_MEMBERS_RAW_DATA[tmRawKey], tmPatch);
+      }
+      await updateDoc(doc(db,'_meta','team_members'), { members: TEAM_MEMBERS_RAW_DATA });
+      // Recharge le cache pour que la prochaine ouverture soit fraîche
+      loadTeamColors();
+    }
+
     toast('✅ Utilisateur mis à jour');
     closeModal();
     await loadUsers();

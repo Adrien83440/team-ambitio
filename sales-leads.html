@@ -911,15 +911,32 @@ function hexToRgb(hex) {
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
+/* Filtre les membres qui doivent apparaître dans le module Lead Live.
+   Par défaut : sales + admin (inLeadsModule !== false). Les coachs sont
+   exclus sauf override explicite (inLeadsModule === true).
+   Utilisé pour les pills de filtre et le select d'assignation. */
+function getLeadsModuleMembers(includeInactive) {
+  var src = includeInactive
+    ? (window.TEAM_MEMBERS_LIST || [])
+    : (window.TEAM_MEMBERS_ACTIVE || (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.active !== false; }));
+  return src.filter(function (m) {
+    if (!m) return false;
+    // Si le flag est explicitement false → exclu (typiquement les coachs)
+    if (m.inLeadsModule === false) return false;
+    // Sinon → inclus (sales, admin, et coachs avec override true)
+    return true;
+  });
+}
+
 /* Génère et injecte les "pills" de membres en haut de la page Leads Live.
    Remplace le HTML statique guillaume/elodie par du dynamique basé sur
-   TEAM_MEMBERS_ACTIVE. */
+   les membres actifs du module Leads Live (filtrage inLeadsModule). */
 function renderMemberPills() {
   var container = document.getElementById('ldMemberPillsContainer');
   if (!container) return;
   var html = '<button class="ld-member-pill active" data-member="all">' +
              '<span class="ld-member-dot" style="background:linear-gradient(135deg,#a78bfa,#60a5fa)"></span>Tous</button>';
-  var active = window.TEAM_MEMBERS_ACTIVE || [];
+  var active = getLeadsModuleMembers(false);
   for (var i = 0; i < active.length; i++) {
     var m = active[i];
     html += '<button class="ld-member-pill" data-member="' + m.slug + '">' +
@@ -955,10 +972,24 @@ function renderMemberPills() {
 function buildAssignSelectOptions(currentSlug, includeEmpty) {
   var html = '';
   if (includeEmpty) html += '<option value="">Non attribué</option>';
-  var list = window.TEAM_MEMBERS_LIST || [];
-  // Actifs en premier
-  var activeList = list.filter(function (m) { return m.active !== false; });
-  var inactiveList = list.filter(function (m) { return m.active === false; });
+  // On part de la liste filtrée Leads Module pour ne pas pouvoir assigner
+  // un lead à un coach. Inclut les inactifs (avec verrou) pour préserver
+  // l'affichage si un lead est déjà assigné à un membre désactivé.
+  var listAll = getLeadsModuleMembers(true);
+  var activeList = listAll.filter(function (m) { return m.active !== false; });
+  var inactiveList = listAll.filter(function (m) { return m.active === false; });
+  // Cas spécial : si currentSlug pointe vers un membre qui n'est plus dans
+  // le module (ex : un coach historiquement assigné), on l'inclut quand même
+  // pour ne pas faire disparaître la valeur affichée.
+  var fullList = window.TEAM_MEMBERS_LIST || [];
+  var hasCurrent = currentSlug && (activeList.concat(inactiveList).some(function (m) { return m.slug === currentSlug; }));
+  if (currentSlug && !hasCurrent) {
+    var legacyMember = fullList.find(function (m) { return m && m.slug === currentSlug; });
+    if (legacyMember) {
+      if (legacyMember.active !== false) activeList.unshift(legacyMember);
+      else inactiveList.unshift(legacyMember);
+    }
+  }
   for (var i = 0; i < activeList.length; i++) {
     var m = activeList[i];
     var sel = m.slug === currentSlug ? ' selected' : '';
@@ -1567,11 +1598,11 @@ function updateCounts() {
   });
   document.getElementById('countAll').textContent = base.length;
 
-  // Re-render les pills dynamiques avec leurs compteurs (actifs uniquement)
+  // Re-render les pills dynamiques avec leurs compteurs (actifs + dans le module)
   var dyn = document.getElementById('ldMemberPillsDynamic');
   if (dyn) {
     var html = '';
-    var active = window.TEAM_MEMBERS_ACTIVE || [];
+    var active = getLeadsModuleMembers(false);
     for (var k = 0; k < active.length; k++) {
       var m = active[k];
       var c = countsBySlug[m.slug] || 0;
