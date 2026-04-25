@@ -451,3 +451,172 @@
   .vn-avatar { width: 26px; height: 26px; font-size: 10px; }
   .vn-bubble { min-width: 180px; padding: 7px 9px 9px 9px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MENTIONS — sélecteur avant record + badges dans la bulle
+   ═══════════════════════════════════════════════════════════════ */
+
+.vn-mentions-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  border-radius: 9px;
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+}
+
+.vn-mentions-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted, #94a3b8);
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+  letter-spacing: 0.2px;
+}
+
+/* Chip d'un membre déjà tagué */
+.vn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 4px 4px 9px;
+  border-radius: 7px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+}
+
+.vn-chip-x {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 1px 5px;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: all 0.15s;
+}
+.vn-chip-x:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Bouton + Ajouter / dropdown */
+.vn-mentions-add-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.vn-mentions-add {
+  background: rgba(167, 139, 250, 0.08);
+  border: 1px dashed rgba(167, 139, 250, 0.3);
+  color: #c4b5fd;
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.vn-mentions-add:hover {
+  background: rgba(167, 139, 250, 0.16);
+  border-color: rgba(167, 139, 250, 0.5);
+  border-style: solid;
+}
+
+.vn-mentions-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  min-width: 180px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--bg2, #1a1a1f);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 9px;
+  padding: 4px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.vn-mentions-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  color: var(--fg, #fff);
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.1s;
+}
+.vn-mentions-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vn-mentions-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.vn-mentions-empty {
+  font-size: 11px;
+  color: var(--muted2, #64748b);
+  font-style: italic;
+  padding: 8px 10px;
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+}
+
+/* ─── Badges mentions dans la bulle ─────────────────────── */
+
+.vn-bubble-mentions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.vn-bubble-mentions-label {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.7;
+  margin-right: 2px;
+}
+
+.vn-bubble-mention-badge {
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  letter-spacing: 0.2px;
+}
+
+/* Sur bulle bleue : badges blanc semi-transparent */
+.vn-item--mine .vn-bubble-mention-badge {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* Sur bulle d'auteur : badges sombres */
+.vn-item--other .vn-bubble-mention-badge {
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--fg, #fff);
+}

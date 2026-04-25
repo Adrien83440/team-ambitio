@@ -113,9 +113,15 @@
 
   /* ─── Rendu ──────────────────────────────────────────────────── */
 
-  function renderShell(state) {
+  function renderShell(state, ctx) {
     // state ∈ { 'idle', 'requesting', 'recording', 'uploading', 'unsupported', 'denied' }
     var html = '<div class="vn-thread" data-vn-thread></div>';
+
+    // ── Bloc mentions (toujours rendu, sauf en recording/uploading)
+    if (state === 'idle') {
+      html += renderMentionsPicker(ctx);
+    }
+
     html += '<div class="vn-recorder">';
 
     if (state === 'unsupported') {
@@ -144,6 +150,56 @@
     }
     html += '</div>';
     return html;
+  }
+
+  function renderMentionsPicker(ctx) {
+    var members = (window.TEAM_MEMBERS_ACTIVE || window.TEAM_MEMBERS_LIST || []).filter(function(m) {
+      return m && m.firebaseUid && (!ctx || !ctx.user || m.firebaseUid !== ctx.user.uid);
+    });
+    var pending = (ctx && ctx.pendingMentions) || [];
+
+    var h = '<div class="vn-mentions-picker">';
+    h += '<span class="vn-mentions-label">Mentionner :</span>';
+
+    // Chips déjà sélectionnés
+    pending.forEach(function(uid) {
+      var m = findMemberByUid(members, uid);
+      if (!m) return;
+      var c = m.color || '#6b7280';
+      h += '<span class="vn-chip" style="background:' + c + '26;border-color:' + c + '55;color:' + c + '">';
+      h += escHtml(m.shortName || m.fullName || m.slug || '?');
+      h += '<button class="vn-chip-x" data-vn-action="unmention" data-uid="' + escHtml(uid) + '">✕</button>';
+      h += '</span>';
+    });
+
+    // Bouton + ajouter
+    h += '<div class="vn-mentions-add-wrap">';
+    h += '<button class="vn-mentions-add" data-vn-action="open-mention-menu">+ Ajouter</button>';
+    h += '<div class="vn-mentions-menu" data-vn-mentions-menu style="display:none">';
+    var available = members.filter(function(m) { return pending.indexOf(m.firebaseUid) < 0; });
+    if (available.length === 0) {
+      h += '<div class="vn-mentions-empty">Aucun autre membre disponible.</div>';
+    } else {
+      available.forEach(function(m) {
+        var c = m.color || '#6b7280';
+        h += '<button class="vn-mentions-item" data-vn-action="mention" data-uid="' + escHtml(m.firebaseUid) + '">';
+        h += '<span class="vn-mentions-dot" style="background:' + c + '"></span>';
+        h += escHtml(m.fullName || m.shortName || m.slug);
+        h += '</button>';
+      });
+    }
+    h += '</div>';
+    h += '</div>';
+
+    h += '</div>';
+    return h;
+  }
+
+  function findMemberByUid(members, uid) {
+    for (var i = 0; i < members.length; i++) {
+      if (members[i].firebaseUid === uid || members[i].uid === uid) return members[i];
+    }
+    return null;
   }
 
   function renderNote(note, currentUser) {
@@ -197,6 +253,20 @@
       h += '<div class="vn-bubble-pending"><span class="vn-spinner-sm"></span> Préparation…</div>';
     }
 
+    // Mentions affichées dans la bulle (badges des mentionnés)
+    var mentionsArr = Array.isArray(n.mentions) ? n.mentions : [];
+    if (mentionsArr.length > 0) {
+      var members = window.TEAM_MEMBERS_LIST || [];
+      h += '<div class="vn-bubble-mentions">';
+      h += '<span class="vn-bubble-mentions-label">→</span>';
+      mentionsArr.forEach(function(uid) {
+        var m = findMemberByUid(members, uid);
+        var label = m ? (m.shortName || m.fullName || m.slug) : uid;
+        h += '<span class="vn-bubble-mention-badge">@' + escHtml(label) + '</span>';
+      });
+      h += '</div>';
+    }
+
     // Bouton bascule + résumé (à l'intérieur de la bulle)
     if (status === 'done' && n.summary) {
       h += '<button class="vn-bubble-toggle ' + (isMine ? 'vn-bubble-toggle--mine' : 'vn-bubble-toggle--other') + '" data-vn-action="toggle-summary" data-note-id="' + escHtml(note.id) + '">📝 Lire le résumé</button>';
@@ -237,7 +307,7 @@
 
     if (typeof MediaRecorder === 'undefined' || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       ctx.state = 'unsupported';
-      mount.innerHTML = renderShell('unsupported') + mount.querySelector('[data-vn-thread]').outerHTML;
+      mount.innerHTML = renderShell('unsupported', ctx) + mount.querySelector('[data-vn-thread]').outerHTML;
       reattachThread(mount, ctx);
       return;
     }
@@ -370,6 +440,7 @@
         mimeType: ctx.actualMime || 'audio/webm',
         durationSec: durSec,
         sizeBytes: blob.size,
+        mentions: (ctx.pendingMentions || []).slice(),
         transcription: null,
         summary: null,
         transcriptionStatus: 'pending',
@@ -382,6 +453,8 @@
         .set(noteData)
         .then(function() { return { noteId: noteId, ext: ext }; });
     }).then(function(out) {
+      // Reset les mentions après envoi pour ne pas les ré-appliquer au prochain vocal
+      ctx.pendingMentions = [];
       ctx.state = 'idle';
       rerender(mount, ctx);
       // La transcription est déclenchée automatiquement côté backend par
@@ -434,7 +507,7 @@
     var threadEl = mount.querySelector('[data-vn-thread]');
     if (threadEl) threadHtml = threadEl.innerHTML;
 
-    var newShell = renderShell(ctx.state);
+    var newShell = renderShell(ctx.state, ctx);
     mount.innerHTML = newShell;
     var newThread = mount.querySelector('[data-vn-thread]');
     if (newThread && threadHtml) newThread.innerHTML = threadHtml;
@@ -474,7 +547,32 @@
       } else if (action === 'delete') {
         var nid = btn.dataset.noteId;
         deleteNote(ctx.leadId, nid);
+      } else if (action === 'open-mention-menu') {
+        var menu = mount.querySelector('[data-vn-mentions-menu]');
+        if (menu) {
+          var open = menu.style.display !== 'none';
+          menu.style.display = open ? 'none' : 'block';
+        }
+      } else if (action === 'mention') {
+        var uid = btn.dataset.uid;
+        if (uid && ctx.pendingMentions.indexOf(uid) < 0) {
+          ctx.pendingMentions.push(uid);
+        }
+        rerender(mount, ctx);
+      } else if (action === 'unmention') {
+        var uidR = btn.dataset.uid;
+        ctx.pendingMentions = ctx.pendingMentions.filter(function(x) { return x !== uidR; });
+        rerender(mount, ctx);
       }
+    });
+
+    // Fermer le menu mentions au clic dehors
+    document.addEventListener('click', function(e) {
+      if (!mount.contains(e.target)) return;
+      if (e.target.closest('[data-vn-action="open-mention-menu"]')) return;
+      if (e.target.closest('[data-vn-mentions-menu]')) return;
+      var menu = mount.querySelector('[data-vn-mentions-menu]');
+      if (menu) menu.style.display = 'none';
     });
   }
 
@@ -533,11 +631,12 @@
       timerHandle: null,
       chunks: [],
       cancelled: false,
-      actualMime: ''
+      actualMime: '',
+      pendingMentions: []  // uids des membres tagués pour le PROCHAIN vocal
     };
     _activeMounts[mountId] = ctx;
 
-    mount.innerHTML = renderShell('idle');
+    mount.innerHTML = renderShell('idle', ctx);
     bindEvents(mount);
     startSnapshot(mount, ctx);
   }

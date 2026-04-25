@@ -1949,7 +1949,7 @@ function renderCard(l) {
       h += '<span class="ld-note-item-date">' + escHtml(nDate) + '</span>';
       h += '<button class="ld-note-item-del" data-action="delNote" data-id="' + id + '" data-note-idx="' + ni + '" title="Supprimer">✕</button>';
       h += '</div>';
-      h += '<div class="ld-note-item-text">' + escHtml(n.text || '') + '</div>';
+      h += '<div class="ld-note-item-text">' + highlightMentions(n.text || '') + '</div>';
       h += '</div>';
     }
     h += '</div>';
@@ -2312,7 +2312,22 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     // Format date
     var now = new Date();
     var dateStr = String(now.getDate()).padStart(2,'0') + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + now.getFullYear() + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-    var newNote = { text: text, date: dateStr };
+
+    // Parser les mentions @slug → résoudre vers les firebaseUid via TEAM_MEMBERS
+    var mentionedUids = parseMentions(text);
+
+    // Identité de l'auteur (cohérent avec la logique vocaux)
+    var voiceUser = (typeof getCurrentVoiceUser === 'function') ? getCurrentVoiceUser() : null;
+
+    var newNote = {
+      text: text,
+      date: dateStr,
+      authorUid: voiceUser ? voiceUser.uid : null,
+      authorName: voiceUser ? voiceUser.name : '',
+      authorSlug: voiceUser ? voiceUser.slug : ''
+    };
+    if (mentionedUids.length > 0) newNote.mentions = mentionedUids;
+
     // Update local
     for (var ni = 0; ni < allLeads.length; ni++) {
       if (allLeads[ni].id === noteLeadId) {
@@ -2327,7 +2342,10 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
       notesHistory: lead3.notesHistory,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(function() {
-      toast('✅ Note ajoutée');
+      var msg = mentionedUids.length > 0
+        ? '✅ Note ajoutée · ' + mentionedUids.length + ' mention(s) notifiée(s)'
+        : '✅ Note ajoutée';
+      toast(msg);
     }).catch(function(err) {
       toast('❌ Erreur : ' + err.message);
     });
@@ -2706,6 +2724,175 @@ function getCurrentVoiceUser() {
     initials: match ? match.initials : ((u.email || '?')[0] || '?').toUpperCase()
   };
 }
+
+/* ═══ MENTIONS — parsing @slug et autocomplete dans la zone Note ═══
+   Pattern :
+     - L'utilisateur tape "@" dans le textarea note → un dropdown apparaît
+       sous le caret, listant les membres actifs filtrés par les caractères
+       tapés ensuite.
+     - Au clic sur un membre, "@slug " est inséré dans le texte.
+     - À la sauvegarde de la note, parseMentions() extrait tous les "@slug"
+       du texte et les résout vers les firebaseUid des membres correspondants.
+     - Le doc note résultant a un champ mentions: [uid, uid] qui déclenche
+       la Cloud Function onLeadNoteMentionNotify côté backend. */
+
+function parseMentions(text) {
+  if (!text) return [];
+  var members = window.TEAM_MEMBERS_LIST || [];
+  var slugRegex = /@([a-zA-Z0-9_\-]+)/g;
+  var found = {};
+  var match;
+  while ((match = slugRegex.exec(text)) !== null) {
+    var slug = match[1].toLowerCase();
+    for (var i = 0; i < members.length; i++) {
+      var m = members[i];
+      if (m && m.slug && m.slug.toLowerCase() === slug && m.firebaseUid) {
+        found[m.firebaseUid] = true;
+        break;
+      }
+    }
+  }
+  return Object.keys(found);
+}
+
+// Surligne les mentions @slug valides dans un texte de note pour l'affichage.
+// Échappe d'abord le texte, puis remplace les @slug par un <span> coloré.
+function highlightMentions(text) {
+  if (!text) return '';
+  var safe = escHtml(text);
+  var members = window.TEAM_MEMBERS_LIST || [];
+  if (!members.length) return safe;
+  return safe.replace(/@([a-zA-Z0-9_\-]+)/g, function(full, slug) {
+    var slugLower = slug.toLowerCase();
+    for (var i = 0; i < members.length; i++) {
+      var m = members[i];
+      if (m && m.slug && m.slug.toLowerCase() === slugLower) {
+        var c = m.color || '#a78bfa';
+        return '<span style="color:' + c + ';font-weight:700;background:' + c + '1a;padding:1px 5px;border-radius:4px">@' + escHtml(slug) + '</span>';
+      }
+    }
+    return full;
+  });
+}
+
+/* ─── Autocomplete @ : un seul popup global réutilisable ────────── */
+
+var _mentionPopup = null;
+var _mentionActiveTextarea = null;
+var _mentionAtIndex = -1;
+
+function ensureMentionPopup() {
+  if (_mentionPopup) return _mentionPopup;
+  var p = document.createElement('div');
+  p.id = 'mentionPopup';
+  p.style.cssText = 'position:absolute;z-index:9999;display:none;min-width:200px;max-height:240px;overflow-y:auto;background:var(--bg2,#1a1a1f);border:1px solid var(--border,rgba(255,255,255,0.12));border-radius:9px;padding:4px;box-shadow:0 8px 28px rgba(0,0,0,0.5);font-family:var(--fm,system-ui),sans-serif';
+  document.body.appendChild(p);
+  _mentionPopup = p;
+
+  // Clic sur un item → insère @slug dans le textarea actif
+  p.addEventListener('click', function(e) {
+    var item = e.target.closest('[data-mention-slug]');
+    if (!item || !_mentionActiveTextarea) return;
+    insertMentionIntoTextarea(_mentionActiveTextarea, item.dataset.mentionSlug, _mentionAtIndex);
+    hideMentionPopup();
+  });
+
+  // Cacher le popup au clic ailleurs
+  document.addEventListener('click', function(e) {
+    if (_mentionPopup && _mentionPopup.style.display !== 'none' &&
+        !_mentionPopup.contains(e.target) && e.target !== _mentionActiveTextarea) {
+      hideMentionPopup();
+    }
+  });
+
+  return _mentionPopup;
+}
+
+function hideMentionPopup() {
+  if (_mentionPopup) _mentionPopup.style.display = 'none';
+  _mentionActiveTextarea = null;
+  _mentionAtIndex = -1;
+}
+
+function showMentionPopup(textarea, query, atIndex) {
+  var popup = ensureMentionPopup();
+  var members = (window.TEAM_MEMBERS_ACTIVE || window.TEAM_MEMBERS_LIST || []).filter(function(m) {
+    if (!m || !m.firebaseUid || !m.slug) return false;
+    if (!query) return true;
+    var q = query.toLowerCase();
+    var s = (m.slug || '').toLowerCase();
+    var n = (m.fullName || m.shortName || '').toLowerCase();
+    return s.indexOf(q) >= 0 || n.indexOf(q) >= 0;
+  });
+
+  if (members.length === 0) {
+    hideMentionPopup();
+    return;
+  }
+
+  var html = '';
+  members.slice(0, 8).forEach(function(m) {
+    var c = m.color || '#6b7280';
+    html += '<button data-mention-slug="' + escAttr(m.slug) + '" style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:transparent;border:none;color:#fff;font-family:inherit;font-size:12px;font-weight:600;text-align:left;cursor:pointer;border-radius:6px;width:100%;transition:background 0.1s" onmouseover="this.style.background=\'rgba(255,255,255,0.06)\'" onmouseout="this.style.background=\'transparent\'">';
+    html += '<span style="width:8px;height:8px;border-radius:50%;background:' + c + ';flex-shrink:0"></span>';
+    html += '<span><strong style="color:#fff">' + escHtml(m.fullName || m.shortName || m.slug) + '</strong> <span style="opacity:0.5">@' + escHtml(m.slug) + '</span></span>';
+    html += '</button>';
+  });
+  popup.innerHTML = html;
+
+  // Positionner sous le textarea
+  var rect = textarea.getBoundingClientRect();
+  popup.style.left = (rect.left + window.scrollX) + 'px';
+  popup.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+  popup.style.display = 'block';
+
+  _mentionActiveTextarea = textarea;
+  _mentionAtIndex = atIndex;
+}
+
+function insertMentionIntoTextarea(textarea, slug, atIndex) {
+  if (atIndex < 0) atIndex = textarea.value.lastIndexOf('@');
+  if (atIndex < 0) return;
+  var before = textarea.value.slice(0, atIndex);
+  var after = textarea.value.slice(textarea.selectionStart || textarea.value.length);
+  var insertion = '@' + slug + ' ';
+  textarea.value = before + insertion + after;
+  textarea.focus();
+  var newPos = (before + insertion).length;
+  textarea.setSelectionRange(newPos, newPos);
+}
+
+// Listener global : sur input dans n'importe quel textarea data-field="newNote",
+// détecter "@" en cours de frappe et déclencher l'autocomplete.
+document.addEventListener('input', function(e) {
+  var ta = e.target;
+  if (!ta || ta.tagName !== 'TEXTAREA') return;
+  if (!ta.matches('[data-field="newNote"]')) return;
+
+  var val = ta.value;
+  var caret = ta.selectionStart || val.length;
+  // Cherche le dernier "@" avant le caret, sans espace après
+  var atIdx = val.lastIndexOf('@', caret - 1);
+  if (atIdx < 0) { hideMentionPopup(); return; }
+  var between = val.slice(atIdx + 1, caret);
+  // Si y a un espace ou newline entre @ et caret → pas une mention en cours
+  if (/[\s\n]/.test(between)) { hideMentionPopup(); return; }
+  // Si le @ est juste précédé d'un caractère alphanumérique, pas une mention
+  // (ex : adresse email "contact@adrienemily.com")
+  if (atIdx > 0 && /[a-zA-Z0-9]/.test(val.charAt(atIdx - 1))) { hideMentionPopup(); return; }
+
+  showMentionPopup(ta, between, atIdx);
+});
+
+// Cacher le popup à la perte de focus du textarea (sauf si on clique dans le popup)
+document.addEventListener('focusout', function(e) {
+  if (e.target && e.target.tagName === 'TEXTAREA' && e.target.matches('[data-field="newNote"]')) {
+    // Petit délai pour permettre le clic sur un item du popup
+    setTimeout(function() {
+      if (_mentionPopup && !_mentionPopup.contains(document.activeElement)) hideMentionPopup();
+    }, 200);
+  }
+});
 
 function startListening() {
   // Cleanup si re-appel (défensif)
