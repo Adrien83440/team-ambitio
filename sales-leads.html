@@ -2692,19 +2692,37 @@ document.getElementById('ldFeed').addEventListener('change', function(e) {
 });
 
 /* ═══ ROUND-ROBIN ASSIGNMENT ═══
-   Round-robin générique sur tous les membres ACTIFS de l'équipe.
-   Lit la liste depuis window.TEAM_MEMBERS_ACTIVE (chargé via nav.js).
-   Les membres archivés sont automatiquement exclus de la rotation. */
+   Round-robin sur les membres ÉLIGIBLES uniquement. Critères stricts :
+     - active !== false
+     - !archivedAt
+     - eligibleForLeads === true (le flag dédié — un membre peut être visible
+       dans Lead Live sans recevoir de leads en auto, ex: Head of Sales).
+   Si le flag eligibleForLeads n'est pas posé, on retombe sur inLeadsModule
+   pour la rétrocompatibilité (tant que la migration Phase 2 n'est pas faite). */
+function getRoundRobinPool() {
+  var src = window.TEAM_MEMBERS_LIST || [];
+  return src.filter(function (m) {
+    if (!m) return false;
+    if (m.active === false) return false;
+    if (m.archivedAt) return false;
+    // Si flag explicite eligibleForLeads, on le respecte strictement
+    if (typeof m.eligibleForLeads === 'boolean') return m.eligibleForLeads === true;
+    // Sinon fallback : on utilise inLeadsModule comme proxy
+    if (m.inLeadsModule === false) return false;
+    return true;
+  });
+}
+
 function assignLeadRoundRobin(leadId, callback) {
-  var active = window.TEAM_MEMBERS_ACTIVE || [];
-  if (active.length === 0) {
-    console.warn('[leads] roundrobin: aucun membre actif, abandon');
+  var pool = getRoundRobinPool();
+  if (pool.length === 0) {
+    console.warn('[leads] roundrobin: aucun membre éligible, abandon');
     if (callback) callback(null);
     return;
   }
-  // Si un seul membre actif, lui attribuer directement (pas de round-robin nécessaire)
-  if (active.length === 1) {
-    var only = active[0].slug;
+  // Si un seul membre éligible, lui attribuer directement (pas de RR nécessaire)
+  if (pool.length === 1) {
+    var only = pool[0].slug;
     db.collection('leads').doc(leadId).update({ assignedTo: only })
       .then(function() { if (callback) callback(only); })
       .catch(function(err) { console.error('[leads] solo-assign error:', err); });
@@ -2714,14 +2732,14 @@ function assignLeadRoundRobin(leadId, callback) {
   db.runTransaction(function(tx) {
     return tx.get(metaRef).then(function(snap) {
       var last = (snap.exists && snap.data().lastAssigned) || null;
-      // Trouver l'index du dernier dans la liste active (-1 si introuvable ou archivé)
+      // Trouver l'index du dernier dans le pool actuel (-1 si parti du pool)
       var lastIdx = -1;
-      for (var i = 0; i < active.length; i++) {
-        if (active[i].slug === last) { lastIdx = i; break; }
+      for (var i = 0; i < pool.length; i++) {
+        if (pool[i].slug === last) { lastIdx = i; break; }
       }
-      // Le suivant = (lastIdx + 1) % nbActifs
-      var nextIdx = (lastIdx + 1) % active.length;
-      var next = active[nextIdx].slug;
+      // Le suivant = (lastIdx + 1) % nbPool
+      var nextIdx = (lastIdx + 1) % pool.length;
+      var next = pool[nextIdx].slug;
       tx.set(metaRef, { lastAssigned: next }, { merge: true });
       tx.update(db.collection('leads').doc(leadId), { assignedTo: next });
       return next;
@@ -3587,8 +3605,8 @@ function renderShareLinks() {
   var links = [
     { label: 'Tous les leads', sub: 'Vue complète', color: '#34d399', url: base }
   ];
-  // Génère un lien personnel pour chaque membre actif
-  var active = window.TEAM_MEMBERS_ACTIVE || [];
+  // Génère un lien personnel pour chaque membre éligible Lead Live
+  var active = getLeadsModuleMembers(false);
   for (var ai = 0; ai < active.length; ai++) {
     var m = active[ai];
     links.push({

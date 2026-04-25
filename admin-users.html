@@ -922,6 +922,7 @@ function openEditModal(u){
 
   if (tmMember) {
     var inLM = tmMember.inLeadsModule !== false; // true par défaut
+    var eligibleLeads = tmMember.eligibleForLeads === true; // false par défaut (sécurité)
     var tmColor = tmMember.color || '#6b7280';
     var tmShortName = tmMember.shortName || '';
     var tmInitials = tmMember.initials || '';
@@ -930,11 +931,18 @@ function openEditModal(u){
     h+='<div class="mf" style="margin-top:14px;padding:12px;background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.15);border-radius:10px">';
     h+='<div style="font-size:13px;font-weight:800;color:#60a5fa;margin-bottom:10px;display:flex;align-items:center;gap:6px">🎙️ Visibilité dans l\'équipe</div>';
 
-    // Toggle inLeadsModule
-    h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:8px;margin-bottom:10px">';
+    // Toggle inLeadsModule (visibilité)
+    h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:8px;margin-bottom:8px">';
     h+='<input type="checkbox" id="eInLeadsModule"'+(inLM?' checked':'')+' style="width:16px;height:16px;accent-color:#60a5fa"/>';
-    h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">📋 Apparaît dans Lead Live</div>';
-    h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Si décoché : invisible des pills de filtre et de l\'assignation de leads. Reste mentionnable dans les vocaux et notes.</div></div>';
+    h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">📋 Visible dans Lead Live</div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Apparaît dans les pills de filtre et peut être assigné manuellement à un lead. Si décoché, reste mentionnable dans les vocaux et notes.</div></div>';
+    h+='</label>';
+
+    // Toggle eligibleForLeads (round-robin)
+    h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(34,211,153,0.05);border:1px solid rgba(34,211,153,0.18);border-radius:8px;margin-bottom:10px">';
+    h+='<input type="checkbox" id="eEligibleForLeads"'+(eligibleLeads?' checked':'')+' style="width:16px;height:16px;accent-color:#22d3ee"/>';
+    h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">🎯 Reçoit des leads en round-robin</div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Inclus dans la rotation automatique d\'attribution. ⚠️ Réservé aux closers actifs uniquement (pas Heads of Sales, pas admins).</div></div>';
     h+='</label>';
 
     // Identité d'équipe : couleur, slug, shortName, initials
@@ -1102,10 +1110,12 @@ async function handleSave(uid){
 
     // ─── Sync vers _meta/team_members (visibilité Lead Live + identité équipe) ───
     var inLMEl = document.getElementById('eInLeadsModule');
+    var eligibleEl = document.getElementById('eEligibleForLeads');
     var tmRawKey = window.__editingTmRawKey;
     if (inLMEl && tmRawKey != null && TEAM_MEMBERS_RAW_DATA) {
       var tmPatch = {
-        inLeadsModule: inLMEl.checked
+        inLeadsModule: inLMEl.checked,
+        eligibleForLeads: eligibleEl ? eligibleEl.checked : false
       };
       var slugVal = (document.getElementById('eTmSlug') || {}).value;
       var colorVal = (document.getElementById('eTmColorHex') || {}).value;
