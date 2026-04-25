@@ -160,12 +160,24 @@ html, body {
 .ld-date-pop-hint { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
 
 /* ── Member pills ── */
-.ld-members { display: flex; gap: 6px; margin-bottom: 10px; }
+.ld-members {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+#ldMemberPillsDynamic {
+  display: contents;  /* le span ne casse pas le flex-wrap du parent */
+}
 .ld-member-pill {
-  display: flex; align-items: center; gap: 5px;
+  display: inline-flex; align-items: center; gap: 5px;
   padding: 5px 10px; border-radius: 20px; border: 1.5px solid var(--border);
   background: transparent; color: var(--muted); font-family: var(--fb);
   font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .ld-member-pill:hover { border-color: var(--border2); }
 .ld-member-pill.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
