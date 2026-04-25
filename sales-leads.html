@@ -924,18 +924,21 @@ function hexToRgb(hex) {
 }
 
 /* Filtre les membres qui doivent apparaître dans le module Lead Live.
-   Par défaut : sales + admin (inLeadsModule !== false). Les coachs sont
-   exclus sauf override explicite (inLeadsModule === true).
+   Critères d'inclusion (TOUS doivent être vrais) :
+     - active !== false (n'est pas désactivé)
+     - !archivedAt (n'est pas archivé)
+     - inLeadsModule !== false (par défaut tout le monde est dans Lead Live
+       sauf les coachs, qui ont inLeadsModule: false posé par la sync auto)
    Utilisé pour les pills de filtre et le select d'assignation. */
 function getLeadsModuleMembers(includeInactive) {
-  var src = includeInactive
-    ? (window.TEAM_MEMBERS_LIST || [])
-    : (window.TEAM_MEMBERS_ACTIVE || (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.active !== false; }));
+  var src = window.TEAM_MEMBERS_LIST || [];
   return src.filter(function (m) {
     if (!m) return false;
-    // Si le flag est explicitement false → exclu (typiquement les coachs)
     if (m.inLeadsModule === false) return false;
-    // Sinon → inclus (sales, admin, et coachs avec override true)
+    if (!includeInactive) {
+      if (m.active === false) return false;
+      if (m.archivedAt) return false;
+    }
     return true;
   });
 }
