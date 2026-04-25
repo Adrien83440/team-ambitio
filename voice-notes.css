@@ -1,0 +1,375 @@
+/* ═══════════════════════════════════════════════════════════════
+   voice-notes.css — Fil de vocaux par lead
+   ═══════════════════════════════════════════════════════════════
+   Cohérent avec le dark theme sales.css :
+     --bg / --bg2 / --bg3 / --bg4 / --fg / --muted / --muted2 / --border
+     --purple / --red2 / --green / Bricolage Grotesque / Plus Jakarta Sans
+   ═══════════════════════════════════════════════════════════════ */
+
+.vn-container {
+  width: 100%;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ─── Recorder bar ─────────────────────────────────────────── */
+
+.vn-recorder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+}
+
+.vn-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: var(--bg3, rgba(255, 255, 255, 0.04));
+  color: var(--fg, #fff);
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.vn-btn:hover { background: rgba(255, 255, 255, 0.07); }
+.vn-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.vn-btn-record {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+.vn-btn-record:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.vn-btn-stop {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.vn-btn-stop:hover {
+  background: rgba(239, 68, 68, 0.28);
+  color: #fff;
+}
+
+.vn-btn-cancel {
+  font-size: 11px;
+  padding: 7px 10px;
+  color: var(--muted, #94a3b8);
+}
+
+.vn-rec-hint-side {
+  font-size: 11px;
+  color: var(--muted2, #64748b);
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+}
+
+/* ─── Recording active state ─────────────────────────────── */
+
+.vn-rec-active {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.vn-rec-pulse {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: vnPulse 1s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+@keyframes vnPulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+  50%      { opacity: 0.7; transform: scale(1.18); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+
+.vn-rec-timer {
+  font-family: var(--fb, "Bricolage Grotesque"), monospace;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fca5a5;
+  letter-spacing: 0.5px;
+  min-width: 56px;
+}
+
+.vn-rec-hint {
+  font-size: 12px;
+  color: var(--muted, #94a3b8);
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+  margin-left: -8px;
+}
+
+.vn-rec-uploading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #94a3b8);
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+}
+
+.vn-status {
+  font-size: 12px;
+  color: var(--muted, #94a3b8);
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+}
+.vn-status-error {
+  color: #f87171;
+}
+
+/* ─── Spinners ─────────────────────────────────────────────── */
+
+.vn-spinner, .vn-spinner-sm {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-top-color: var(--purple, #a78bfa);
+  animation: vnSpin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+.vn-spinner    { width: 14px; height: 14px; }
+.vn-spinner-sm { width: 11px; height: 11px; border-width: 1.5px; }
+
+@keyframes vnSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Thread (liste des vocaux) ────────────────────────────── */
+
+.vn-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.vn-thread::-webkit-scrollbar { width: 4px; }
+.vn-thread::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
+
+.vn-empty {
+  font-size: 12px;
+  color: var(--muted2, #64748b);
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+  font-style: italic;
+  padding: 14px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ─── Carte de vocal ───────────────────────────────────────── */
+
+.vn-item {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: vnFadeIn 0.2s ease-out;
+}
+
+@keyframes vnFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.vn-item-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.vn-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+
+.vn-item-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.vn-item-author {
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg, #fff);
+}
+
+.vn-item-date {
+  font-size: 10px;
+  color: var(--muted2, #64748b);
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+}
+
+.vn-item-del {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--muted2, #64748b);
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.vn-item-del:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+/* ─── Player audio ──────────────────────────────────────────── */
+
+.vn-item-player {
+  width: 100%;
+}
+.vn-item-player audio {
+  width: 100%;
+  height: 36px;
+  outline: none;
+  border-radius: 8px;
+}
+/* Light up player controls on dark background (Chrome) */
+.vn-item-player audio::-webkit-media-controls-panel {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.vn-item-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+  padding: 8px 0;
+}
+
+/* ─── Toggle audio / résumé ─────────────────────────────────── */
+
+.vn-item-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.vn-toggle-btn {
+  background: rgba(167, 139, 250, 0.08);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  color: #c4b5fd;
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.vn-toggle-btn:hover {
+  background: rgba(167, 139, 250, 0.16);
+  border-color: rgba(167, 139, 250, 0.35);
+  color: #ddd6fe;
+}
+
+.vn-item-summary {
+  background: rgba(167, 139, 250, 0.05);
+  border: 1px solid rgba(167, 139, 250, 0.15);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.vn-summary-text {
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg, #e5e7eb);
+  white-space: pre-wrap;
+}
+
+.vn-transcript-details {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(167, 139, 250, 0.18);
+}
+.vn-transcript-details summary {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted, #94a3b8);
+  font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
+  cursor: pointer;
+  user-select: none;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.vn-transcript-details summary:hover { color: #c4b5fd; }
+.vn-transcript-text {
+  margin-top: 8px;
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--muted, #94a3b8);
+  white-space: pre-wrap;
+}
+
+/* ─── État status ───────────────────────────────────────────── */
+
+.vn-item-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted, #94a3b8);
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+  padding: 4px 0;
+}
+
+/* ─── Responsive mobile ─────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .vn-recorder { padding: 8px; gap: 8px; }
+  .vn-btn { font-size: 11px; padding: 7px 11px; }
+  .vn-rec-timer { font-size: 14px; }
+  .vn-thread { max-height: 360px; }
+  .vn-item { padding: 9px 10px; }
+}

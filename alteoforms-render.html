@@ -857,9 +857,13 @@ callback(null);
 }
 
 function updateLeadWithForm(doc){
+// Note: cette fonction garde la trace des réponses du formulaire sur le lead
+// existant pour qu'elles soient visibles dans la fiche, MAIS ne pose plus
+// status:'self_booking' / selfBooking:true. Le stage et le status du lead
+// sont dorénavant gérés exclusivement par la Cloud Function onBookingCreated
+// (source unique de vérité côté serveur). Cela évite que stage/status
+// divergent entre AlteoForms et booking direct.
 var update={
-status:'self_booking',
-selfBooking:true,
 formId:FORM._id,
 formTitle:FORM.title||'',
 formAnswers:answers,

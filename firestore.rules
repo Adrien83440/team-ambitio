@@ -250,6 +250,27 @@ service cloud.firestore {
     }
 
 
+    // ═══ VOICE NOTES — fil de discussion audio par lead ═══
+    // Lecture : sales + admin
+    // Création : sales + admin (l'auteur authentifié pose authorUid = uid)
+    // Update : auteur du vocal (pour permettre au backend Vercel d'updater
+    //          via Admin SDK la transcription et le résumé) ou admin
+    // Suppression : auteur ou admin
+    //
+    // Note : la Vercel Function api/transcribe-voice.js utilise le Firebase
+    // Admin SDK et bypass naturellement ces rules pour poser transcription
+    // et summary après traitement Whisper + Claude Haiku.
+    match /leads/{leadId}/voice_notes/{noteId} {
+      allow read:   if isSalesOrAdmin();
+      allow create: if isSalesOrAdmin()
+                    && request.resource.data.authorUid == request.auth.uid;
+      allow update: if isAdmin()
+                    || (isSalesOrAdmin() && resource.data.authorUid == request.auth.uid);
+      allow delete: if isAdmin()
+                    || (isSalesOrAdmin() && resource.data.authorUid == request.auth.uid);
+    }
+
+
     // ═══ META ═══
     match /_meta/{docId} {
       allow read, write: if isSalesOrAdmin();

@@ -1,0 +1,51 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════════════
+//  Firebase Storage Rules — bucket ambitio-team.firebasestorage.app
+// ═══════════════════════════════════════════════════════════════
+//
+//  À coller dans la console Firebase :
+//    Console → Storage → Rules → "Modifier" → coller le contenu →
+//    "Publier".
+//
+//  Ces rules sont indépendantes de firestore.rules (deux services
+//  différents).
+//
+//  Couvrent pour l'instant uniquement la sous-arborescence des vocaux
+//  liés aux leads. Si d'autres usages Storage apparaissent (avatars,
+//  exports CSV, etc.), ajouter d'autres `match` dédiés.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ═══ VOICE NOTES — vocaux de fil de discussion par lead ═══
+    //
+    //  Path : voice_notes/{leadId}/{fileName}
+    //  fileName = noteId.{webm|mp4|m4a|aac|ogg|wav}
+    //
+    //  Read   : tout utilisateur authentifié (sales + admin + coach,
+    //           cohérent avec firestore.rules → match leads/.../voice_notes
+    //           qui n'autorise read qu'aux sales+admin via le doc Firestore.
+    //           Côté Storage on est un cran plus permissif car le bucket
+    //           ne sait pas lire les rôles Firestore sans un appel custom).
+    //  Write  : utilisateur authentifié, taille < 5 MB, content-type audio.
+    //  Delete : utilisateur authentifié (le couplage avec le doc Firestore
+    //           garantit qu'un sales ne supprime que ses propres vocaux —
+    //           si on rentre la suppression côté UI, on supprime d'abord
+    //           le doc Firestore et seulement ensuite le blob Storage).
+    match /voice_notes/{leadId}/{fileName} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('audio/.*');
+      allow update: if false;  // les vocaux sont immuables
+      allow delete: if request.auth != null;
+    }
+
+    // Tout le reste : refusé par défaut. Ajouter d'autres `match` au-dessus
+    // de cette règle "catch-all" si besoin de nouveaux usages Storage.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

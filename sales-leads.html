@@ -18,10 +18,13 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
 <script src="dialer-bridge.js" defer></script>
 <link rel="stylesheet" href="call-detail-modal.css">
+<link rel="stylesheet" href="voice-notes.css">
 <script src="call-detail-modal.js" defer></script>
+<script src="voice-notes.js" defer></script>
 <script>
   if (!firebase.apps.length) {
     firebase.initializeApp({
@@ -1847,6 +1850,11 @@ function renderCard(l) {
     var stName = stageNames[l.stage] || l.stage;
     h += '<span class="ld-assigned" style="color:var(--purple);border-color:rgba(167,139,250,0.25)">🔀 ' + stName + '</span>';
   }
+  // Badge "Réactivé" : lead ressuscité par un nouveau RDV ou activité récente
+  // alors que createdAt est ancien (au-delà de la fenêtre du listener principal).
+  if (l._resurrected) {
+    h += '<span class="ld-assigned" style="color:#fbbf24;border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.1)">🔄 Réactivé</span>';
+  }
   h += '</div>';
   h += '</div>';
   h += '<span class="ld-card-time">' + ago + '</span>';
@@ -1950,6 +1958,13 @@ function renderCard(l) {
   h += '<textarea class="ld-notes-area" data-field="newNote" data-id="' + id + '" placeholder="Ajouter une note..." rows="2"></textarea>';
   h += '<button class="ld-notes-add-btn" data-action="addNote" data-id="' + id + '">+ Ajouter</button>';
   h += '</div>';
+
+  // ── Vocaux (fil de discussion audio) ──
+  // Le conteneur est présent dans le HTML, mais le module VoiceNotes
+  // ne s'attache qu'au moment où la card est ouverte (cf. listener
+  // toggle plus bas) pour éviter des dizaines d'onSnapshot inutiles.
+  h += '<div class="ld-actions-title" style="margin-top:14px">🎙️ Vocaux</div>';
+  h += '<div class="vn-container" data-vn-mount="' + id + '"></div>';
 
   // ── Follow-Up section ──
   var fus = l.followUps || [];
@@ -2181,9 +2196,19 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
       card.classList.remove('open');
       openCardId = null;
     } else {
-      document.querySelectorAll('.ld-card.open').forEach(function(c) { c.classList.remove('open'); });
+      document.querySelectorAll('.ld-card.open').forEach(function(c) {
+        c.classList.remove('open');
+        // Cleanup vocaux des cards qui se ferment
+        var oldVn = c.querySelector('.vn-container');
+        if (oldVn && window.VoiceNotes) window.VoiceNotes.detach(oldVn);
+      });
       card.classList.add('open');
       openCardId = id;
+      // Attacher le module Vocaux pour la fiche qui vient de s'ouvrir
+      var vnMount = card.querySelector('[data-vn-mount="' + id + '"]');
+      if (vnMount && window.VoiceNotes) {
+        window.VoiceNotes.attach(vnMount, id, getCurrentVoiceUser());
+      }
     }
     return;
   }
@@ -2650,6 +2675,37 @@ function assignLeadRoundRobin(leadId, callback) {
 // de notifications lead et d'événements de booking traités plusieurs fois.
 var _leadsListenerUnsub = null;
 var _bookingBridgeUnsub = null;
+var _leadsResurrectListenerUnsub = null;
+
+// IDs des leads ressuscités (vus via le second listener mais hors fenêtre 30j
+// du listener principal). Sert à poser le badge "🔄 Réactivé" dans renderCard
+// et à déclencher popup + son sur changement de lastBookingAt.
+var resurrectedLeadIds = {};
+var lastBookingTimestamps = {};
+
+function getCurrentVoiceUser() {
+  // Construit l'auteur d'un vocal à partir de l'auth Firebase + nav.js
+  // (TEAM_MEMBERS exposé globalement). Si introuvable, on retombe sur un
+  // identifiant générique pour ne pas bloquer l'enregistrement.
+  var u = firebase.auth().currentUser;
+  if (!u) return null;
+  var members = window.TEAM_MEMBERS_LIST || [];
+  var match = null;
+  for (var i = 0; i < members.length; i++) {
+    if (members[i].firebaseUid === u.uid || members[i].uid === u.uid) {
+      match = members[i];
+      break;
+    }
+  }
+  return {
+    uid: u.uid,
+    email: u.email || '',
+    slug: match ? match.slug : (u.email ? u.email.split('@')[0] : 'user'),
+    name: match ? (match.fullName || match.name || match.slug) : (u.displayName || u.email || 'Utilisateur'),
+    color: match ? match.color : '#6b7280',
+    initials: match ? match.initials : ((u.email || '?')[0] || '?').toUpperCase()
+  };
+}
 
 function startListening() {
   // Cleanup si re-appel (défensif)
@@ -2733,6 +2789,93 @@ function startListening() {
     }, function(err) {
       console.error('[leads] listener error:', err);
       document.getElementById('ldFeed').innerHTML = '<div class="ld-empty">Erreur de connexion : ' + escHtml(err.message) + '</div>';
+    });
+}
+
+/* ═══ LISTENER RESSURECTION ═══
+   Second onSnapshot parallèle. Pose le drapeau _resurrected sur les leads
+   qui ont une activité booking récente (lastBookingAt) MAIS dont createdAt
+   est trop ancien pour le listener principal. Fait remonter ces leads en
+   tête du feed Lead Live avec popup + son, comme un nouveau lead.
+   Dedup côté client : si le lead est déjà dans allLeads, on ne le ré-injecte
+   pas, on actualise juste son data + on déclenche le popup si lastBookingAt
+   a bougé. */
+function startResurrectListening() {
+  if (_leadsResurrectListenerUnsub) { _leadsResurrectListenerUnsub(); _leadsResurrectListenerUnsub = null; }
+  var thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  var cutoffTs = firebase.firestore.Timestamp.fromDate(thirtyDaysAgo);
+
+  _leadsResurrectListenerUnsub = db.collection('leads')
+    .where('lastBookingAt', '>=', cutoffTs)
+    .orderBy('lastBookingAt', 'desc')
+    .onSnapshot(function(snap) {
+      var changed = false;
+      snap.docChanges().forEach(function(change) {
+        if (change.type === 'removed') return;
+        var d = change.doc.data();
+        d.id = change.doc.id;
+        if (d._merged === true) return;
+
+        // Détecte un lead "ressuscité" : son createdAt est plus ancien que
+        // la fenêtre du listener principal. Il faut le forcer dans allLeads.
+        var createdAtMs = (d.createdAt && d.createdAt.toMillis) ? d.createdAt.toMillis() : 0;
+        var isOld = createdAtMs > 0 && createdAtMs < cutoffTs.toMillis();
+        if (isOld) resurrectedLeadIds[d.id] = true;
+
+        // Cherche s'il est déjà dans allLeads
+        var idx = -1;
+        for (var i = 0; i < allLeads.length; i++) {
+          if (allLeads[i].id === d.id) { idx = i; break; }
+        }
+
+        var newLastTs = (d.lastBookingAt && d.lastBookingAt.toMillis) ? d.lastBookingAt.toMillis() : 0;
+        var prevLastTs = lastBookingTimestamps[d.id] || 0;
+        var bookingChanged = newLastTs > prevLastTs && prevLastTs > 0;
+        var isFirstSightFresh = !lastBookingTimestamps[d.id];
+        lastBookingTimestamps[d.id] = newLastTs;
+
+        if (idx === -1) {
+          // Lead absent du listener principal → on l'ajoute
+          if (resurrectedLeadIds[d.id]) d._resurrected = true;
+          d._isNew = true;
+          allLeads.unshift(d);
+          changed = true;
+          // Popup + son si pas le tout premier load (sinon on bombarde au refresh)
+          if (!isFirstLoad && !isFirstSightFresh) {
+            // En mode personnel, ne notifier que si c'est mon lead
+            if (!personalUser || !d.assignedTo || d.assignedTo === personalUser) {
+              showLeadPopup(d);
+            }
+          }
+        } else {
+          // Lead déjà chargé → actualise data + ressuscité si applicable
+          if (resurrectedLeadIds[d.id]) {
+            allLeads[idx]._resurrected = true;
+            d._resurrected = true;
+          }
+          // Merge propre des champs récents
+          for (var k in d) {
+            if (k === 'id') continue;
+            allLeads[idx][k] = d[k];
+          }
+          changed = true;
+          // Popup uniquement si c'est un nouveau RDV (lastBookingAt a bougé)
+          if (bookingChanged && !isFirstLoad) {
+            allLeads[idx]._isNew = true;
+            if (!personalUser || !d.assignedTo || d.assignedTo === personalUser) {
+              showLeadPopup(allLeads[idx]);
+            }
+          }
+        }
+      });
+
+      if (changed && !isEditingLead) renderFeed();
+    }, function(err) {
+      // L'index composite (lastBookingAt asc + orderBy) peut ne pas exister
+      // au premier déploiement — Firestore loggue alors un lien direct dans
+      // la console pour le créer en un clic.
+      console.warn('[leads-resurrect] listener error (index manquant ?):', err.message);
     });
 }
 
@@ -2992,18 +3135,21 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
         if (!_leadsListenersStarted) {
           _leadsListenersStarted = true;
           startListening();
+          startResurrectListening();
           startBookingBridge();
         }
       }).catch(function() {
         if (!_leadsListenersStarted) {
           _leadsListenersStarted = true;
           startListening();
+          startResurrectListening();
           startBookingBridge();
         }
       });
     } else {
       // Sign out : cleanup + reset flag pour permettre un re-login propre
       if (_leadsListenerUnsub) { _leadsListenerUnsub(); _leadsListenerUnsub = null; }
+      if (_leadsResurrectListenerUnsub) { _leadsResurrectListenerUnsub(); _leadsResurrectListenerUnsub = null; }
       if (_bookingBridgeUnsub) { _bookingBridgeUnsub(); _bookingBridgeUnsub = null; }
       _leadsListenersStarted = false;
       // Show login overlay
