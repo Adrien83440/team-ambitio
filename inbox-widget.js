@@ -196,9 +196,8 @@
       });
       n.onclick = function () {
         window.focus();
-        if (notif.leadId) {
-          window.location.href = 'sales-contact.html?id=' + encodeURIComponent(notif.leadId);
-        }
+        var target = resolveNotifTarget(notif);
+        if (target) window.location.href = target;
         n.close();
       };
       setTimeout(() => { try { n.close(); } catch (e) {} }, 8000);
@@ -469,10 +468,22 @@
   }
 
   // ---------- ACTIONS ----------
+
+  // Centralise la résolution de l'URL cible quand on clique sur une notif.
+  // Priorité au champ `deepLinkUrl` posé par les nouvelles notifs (mentions
+  // vocaux + notes texte → Lead Live). Sinon fallback historique :
+  // sales-contact.html (fiche pipeline) pour SMS/appels entrants.
+  function resolveNotifTarget(notif) {
+    if (notif.deepLinkUrl) return notif.deepLinkUrl;
+    if (notif.leadId) return 'sales-contact.html?id=' + encodeURIComponent(notif.leadId);
+    return null;
+  }
+
   function handleNotifClick(notif) {
     markAsRead(notif);
-    if (notif.leadId) {
-      window.location.href = 'sales-contact.html?id=' + encodeURIComponent(notif.leadId);
+    var target = resolveNotifTarget(notif);
+    if (target) {
+      window.location.href = target;
     } else if (notif.fromNumber) {
       // Pas de lead → on suggère de créer la fiche depuis retargeting/leads
       alert('Aucune fiche prospect liée à ce numéro (' + notif.fromNumber + '). Créez la fiche depuis "Leads".');
@@ -500,9 +511,8 @@
     }
     if (action === 'open') {
       markAsRead(notif);
-      if (notif.leadId) {
-        window.location.href = 'sales-contact.html?id=' + encodeURIComponent(notif.leadId);
-      }
+      var target = resolveNotifTarget(notif);
+      if (target) window.location.href = target;
       return;
     }
   }
