@@ -898,7 +898,16 @@ contact[f.contactMapping]=answers[f.id];
 }
 });
 
-// Search for existing lead if CRM sync enabled, then continue
+// Sync CRM gouvernée par les toggles du builder (par formulaire) :
+//  - settings.createLead         → si lead existant trouvé (par email/tel),
+//                                   on update sa fiche avec les réponses du form
+//  - settings.createLeadIfMissing → si pas de lead trouvé, on en crée UN
+//                                   nouveau "form sans RDV" (opt-in explicit
+//                                   pour éviter de polluer le CRM sur les
+//                                   formulaires où on ne le souhaite pas).
+// Le _id du lead remonté est ensuite passé à booking.html en URL,
+// ce qui permet à onBookingCreated de faire évoluer le même lead
+// (pas de doublon) si le prospect prend finalement un créneau.
 if(settings.createLead&&(contact.email||contact.telephone)){
 findAndUpdateLead(contact,function(leadData){
 doPostActions(settings,contact,leadData);
@@ -969,35 +978,125 @@ showThankYou(settings.thankYouMessage||'Merci pour vos réponses !');
 }
 
 function findAndUpdateLead(contact,callback){
-// Try to find existing lead by email first, then phone
-var searchField=null,searchValue=null;
-if(contact.email){searchField='email';searchValue=contact.email;}
-else if(contact.telephone){searchField='telephone';searchValue=contact.telephone;}
+  // Skip en mode preview pour ne pas polluer le CRM pendant les tests admin
+  var qp=new URLSearchParams(window.location.search);
+  if(qp.get('preview')){callback(null);return;}
 
-if(!searchField){callback(null);return;}
+  // Le toggle settings.createLeadIfMissing (opt-in par formulaire dans le
+  // builder) gouverne la CRÉATION d'un lead si aucun match n'est trouvé.
+  // - OFF (par défaut) → comportement historique : update si trouvé, sinon rien
+  // - ON               → création d'un lead "form sans RDV" pour ne jamais
+  //                      perdre les coordonnées d'un prospect qui remplit
+  //                      mais ne réserve pas de créneau ensuite.
+  // Dans tous les cas, stage/status d'un lead trouvé ne sont jamais modifiés
+  // (gérés exclusivement par la Cloud Function onBookingCreated).
+  var settings=FORM.settings||{};
+  var allowCreate=!!settings.createLeadIfMissing;
 
-db.collection('leads').where(searchField,'==',searchValue).limit(1).get().then(function(sn){
-if(sn.empty){
-// Try phone if email didn't match
-if(searchField==='email'&&contact.telephone){
-db.collection('leads').where('telephone','==',contact.telephone).limit(1).get().then(function(sn2){
-if(sn2.empty){callback(null);return;}
-var doc=sn2.docs[0];
-updateLeadWithForm(doc);
-var ld=doc.data();ld._id=doc.id;
-callback(ld);
-}).catch(function(){callback(null);});
-}else{callback(null);}
-return;
+  var searchField=null,searchValue=null;
+  if(contact.email){searchField='email';searchValue=contact.email;}
+  else if(contact.telephone){searchField='telephone';searchValue=contact.telephone;}
+
+  if(!searchField){callback(null);return;}
+
+  db.collection('leads').where(searchField,'==',searchValue).limit(1).get().then(function(sn){
+    if(sn.empty){
+      // Tentative fallback par téléphone si on n'avait essayé que par email
+      if(searchField==='email'&&contact.telephone){
+        db.collection('leads').where('telephone','==',contact.telephone).limit(1).get().then(function(sn2){
+          if(sn2.empty){
+            if(allowCreate)createFormLead(contact,callback);
+            else callback(null);
+            return;
+          }
+          var doc=sn2.docs[0];
+          updateLeadWithForm(doc);
+          var ld=doc.data();ld._id=doc.id;
+          callback(ld);
+        }).catch(function(){
+          if(allowCreate)createFormLead(contact,callback);
+          else callback(null);
+        });
+        return;
+      }
+      // Pas de match → création seulement si opt-in explicit
+      if(allowCreate)createFormLead(contact,callback);
+      else callback(null);
+      return;
+    }
+    var doc=sn.docs[0];
+    updateLeadWithForm(doc);
+    var ld=doc.data();ld._id=doc.id;
+    callback(ld);
+  }).catch(function(e){
+    console.error('Lead search error:',e);
+    if(allowCreate)createFormLead(contact,callback);
+    else callback(null);
+  });
 }
-var doc=sn.docs[0];
-updateLeadWithForm(doc);
-var ld=doc.data();ld._id=doc.id;
-callback(ld);
-}).catch(function(e){
-console.error('Lead search error:',e);
-callback(null);
-});
+
+// Normalise un téléphone aux 9 derniers digits (cohérent avec sales-leads.html)
+function _phoneNormalized(raw){
+  if(!raw)return null;
+  var d=String(raw).replace(/[^\d]/g,'');
+  if(d.length<6)return null;
+  if(d.length>=9)return d.slice(-9);
+  return d;
+}
+
+// Format date FR cohérent avec sales-leads.html (notesHistory + timeline_history)
+function _dateNowFR(){return new Date().toLocaleString('fr-FR');}
+
+function createFormLead(contact,callback){
+  // Pas d'email ni de tel = lead inidentifiable → on s'abstient mais on
+  // continue le flow normalement (les réponses du formulaire sont déjà
+  // sauvegardées dans alteo_forms/{id}/responses).
+  if(!contact.email&&!contact.telephone){callback(null);return;}
+
+  var prenom=(contact.prenom||'').trim();
+  var nomBrut=(contact.nom||'').trim();
+  var fullName=(prenom+' '+nomBrut).trim();
+  if(!fullName)fullName=contact.email||contact.telephone||'Sans nom';
+
+  var formTitle=FORM.title||'';
+  var noteTxt='📝 Lead créé via formulaire'+(formTitle?' : '+formTitle:'');
+
+  var leadData={
+    nom:fullName,
+    email:(contact.email||'').trim().toLowerCase(),
+    telephone:(contact.telephone||'').replace(/\s+/g,''),
+    phoneNormalized:_phoneNormalized(contact.telephone),
+    type:'alteoform',
+    source:'alteoform',
+    sourceDetail:formTitle,
+    stage:'lead',
+    status:'nouveau',
+    assignedTo:'',
+    utm:'AlteoForm'+(formTitle?' - '+formTitle:''),
+    formId:FORM._id,
+    formTitle:formTitle,
+    formAnswers:answers,
+    formSubmittedAt:new Date().toISOString(),
+    tags:[],
+    notesHistory:[{text:noteTxt,date:_dateNowFR()}],
+    timeline_history:[{text:'✨ '+noteTxt,date:_dateNowFR(),color:'#f59e0b'}],
+    communications:[],
+    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  db.collection('leads').add(leadData).then(function(ref){
+    // On retourne le lead avec son _id pour que doPostActions puisse passer
+    // &leadId=... à booking.html. Si le user réserve ensuite un créneau,
+    // la Cloud Function onBookingCreated retrouvera ce lead par son ID
+    // et le fera évoluer en stage:'rdv_confirmes' (pas de doublon).
+    var ld={};for(var k in leadData)ld[k]=leadData[k];
+    ld._id=ref.id;
+    callback(ld);
+  }).catch(function(e){
+    console.error('Lead create error:',e);
+    callback(null);
+  });
 }
 
 function updateLeadWithForm(doc){

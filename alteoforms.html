@@ -609,11 +609,20 @@ h+='<div class="ed-set-card"><div class="ed-set-title">🔄 Redirection après s
 h+='<div class="ed-field-row"><div class="ed-group-label">URL de redirection</div><input class="bi" id="set-redirect" value="'+esc(s.redirectUrl||'')+'" placeholder="https://..." style="width:100%" onchange="currentForm.settings.redirectUrl=this.value;saveForm(true)"/></div>';
 h+='</div>';
 // Lead sync
-h+='<div class="ed-set-card"><div class="ed-set-title">👤 Synchronisation Lead CRM</div><div class="ed-set-desc">À la soumission, retrouver le lead existant par email/tél, mettre à jour sa fiche (status self_booking, réponses formulaire) et proposer uniquement son closer assigné dans le booking.</div>';
+h+='<div class="ed-set-card"><div class="ed-set-title">👤 Synchronisation Lead CRM</div><div class="ed-set-desc">À la soumission, retrouver le lead existant par email/tél et mettre à jour sa fiche avec les réponses du formulaire. Si une consultation est liée plus bas, seul le closer assigné au lead sera proposé dans le booking.</div>';
 var _hasMapping=(f.fields||[]).some(function(fl){return fl.contactMapping;});
-h+='<div style="margin-top:8px"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="set-createLead"'+(s.createLead?' checked':'')+' onchange="currentForm.settings.createLead=this.checked;saveForm(true)"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Synchroniser avec le CRM</span></label></div>';
+h+='<div style="margin-top:8px"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="set-createLead"'+(s.createLead?' checked':'')+' onchange="currentForm.settings.createLead=this.checked;if(!this.checked)currentForm.settings.createLeadIfMissing=false;saveForm(true);renderEdSection()"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Synchroniser avec le CRM</span></label></div>';
 if(s.createLead&&!_hasMapping)h+='<div style="font-size:11px;color:#fbbf24;margin-top:8px">⚠️ Aucun champ n\'a de mapping contact. Allez dans Champs → Modifier un champ → Mapping contact.</div>';
 if(s.createLead&&_hasMapping){var _maps=[];(f.fields||[]).forEach(function(fl){if(fl.contactMapping)_maps.push(fl.contactMapping);});h+='<div style="font-size:11px;color:#34d399;margin-top:8px">✅ Champs mappés : '+_maps.join(', ')+'</div>';}
+// Sous-toggle conditionnel : créer un lead "form sans RDV" si le prospect
+// remplit le formulaire mais ne réserve pas de créneau ensuite. Opt-in
+// par formulaire pour ne pas polluer le CRM avec des formulaires où on
+// ne souhaite pas ce comportement (ex: formulaires de feedback, sondages…).
+if(s.createLead){
+  h+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)">';
+  h+='<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer"><input type="checkbox" id="set-createLeadIfMissing" style="margin-top:3px"'+(s.createLeadIfMissing?' checked':'')+' onchange="currentForm.settings.createLeadIfMissing=this.checked;saveForm(true);renderEdSection()"/><span style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.45">Créer une fiche si le lead n\'existe pas <span style="display:block;font-size:11px;color:rgba(255,255,255,.4);margin-top:2px">Si le prospect remplit le formulaire mais ne prend pas de RDV, sa fiche est créée dans le CRM (stage : Lead, type : alteoform) avec ses réponses pour pouvoir être rappelé.</span></span></label>';
+  h+='</div>';
+}
 h+='</div>';
 // Booking link
 h+='<div class="ed-set-card"><div class="ed-set-title">📅 Liaison Booking</div><div class="ed-set-desc">Après soumission, rediriger vers un calendrier de prise de RDV</div>';

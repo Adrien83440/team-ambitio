@@ -1,0 +1,88 @@
+<!--
+═══════════════════════════════════════════════════════════════════
+  AMBITIO — EMBED ALTEOFORMS POUR SYSTEM.IO (ou toute page web)
+  ───────────────────────────────────────────────────────────────────
+  À coller dans un bloc "Code personnalisé" / "HTML brut" sur la VSL.
+  Remplace ton iframe actuelle :
+    <iframe src="…" width="100%" height="700" …>
+
+  Comment ça marche :
+  - L'iframe se charge avec une hauteur initiale de 700px (fallback
+    identique à aujourd'hui, même expérience si JS désactivé).
+  - alteoforms-render.html détecte qu'il est dans un iframe et envoie
+    sa hauteur réelle via postMessage à chaque transition de carte.
+  - Le script ci-dessous écoute, valide l'origine (sécurité) et
+    redimensionne l'iframe en douceur → plus jamais d'espace noir.
+
+  Sécurité : on ne fait confiance qu'aux messages venant de
+  https://team.alteore.com.
+
+  Quand l'utilisateur termine le formulaire et qu'il est redirigé
+  vers booking.html (calendrier) dans la même iframe, on remet
+  automatiquement la hauteur à 700px le temps du chargement —
+  ce qui correspond au comportement actuel "le calendrier c'est bien".
+═══════════════════════════════════════════════════════════════════
+-->
+
+<div style="width:100%;max-width:780px;margin:0 auto;">
+  <iframe
+    id="alteoforms-iframe"
+    src="https://team.alteore.com/alteoforms-render.html?id=2RsHx0PBsrNyY2F8F9vw"
+    width="100%"
+    height="700"
+    frameborder="0"
+    scrolling="no"
+    title="Diagnostic Ambitio"
+    style="
+      display:block;
+      width:100%;
+      height:700px;
+      min-height:520px;
+      border:0;
+      border-radius:12px;
+      background:#0a0a14;
+      transition:height .35s cubic-bezier(.4,0,.2,1);
+      box-shadow:0 6px 32px rgba(0,0,0,.18);
+    "
+  ></iframe>
+</div>
+
+<script>
+(function(){
+  var IFRAME_ID         = 'alteoforms-iframe';
+  var ALLOWED_ORIGINS   = ['https://team.alteore.com'];
+  var FALLBACK_HEIGHT   = 700;   // hauteur de repli (calendrier booking.html, chargement, etc.)
+  var MIN_HEIGHT        = 520;   // garde-fou : jamais en dessous
+  var MAX_HEIGHT        = 4000;  // garde-fou : jamais au-dessus (anti-bug)
+
+  function getIframe(){ return document.getElementById(IFRAME_ID); }
+
+  function setHeight(px){
+    var f = getIframe();
+    if(!f) return;
+    var h = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.round(px)));
+    f.style.height = h + 'px';
+  }
+
+  // Écoute le postMessage de redimensionnement envoyé par alteoforms-render.html
+  window.addEventListener('message', function(ev){
+    // Sécurité : valider l'origine
+    if(ALLOWED_ORIGINS.indexOf(ev.origin) === -1) return;
+    var d = ev.data;
+    if(!d || typeof d !== 'object') return;
+    if(d.type === 'alteoforms:resize' && typeof d.height === 'number'){
+      setHeight(d.height);
+    }
+  }, false);
+
+  // Quand l'iframe charge une nouvelle page (ex: redirection formulaire → booking.html),
+  // on remet la hauteur de repli. Si la nouvelle page envoie elle-même un postMessage
+  // de redimensionnement, on le recevra et on s'ajustera.
+  var iframe = getIframe();
+  if(iframe){
+    iframe.addEventListener('load', function(){
+      try { setHeight(FALLBACK_HEIGHT); } catch(e){}
+    });
+  }
+})();
+</script>
