@@ -148,6 +148,7 @@
 
   function renderNote(note, currentUser) {
     var n = note.data || {};
+    var isMine = !!(currentUser && n.authorUid === currentUser.uid);
     var canDelete = currentUser && (n.authorUid === currentUser.uid || currentUser.role === 'admin');
     var ts = n.createdAt;
     var dateStr = timeAgo(ts);
@@ -157,47 +158,65 @@
     var dur = n.durationSec ? fmtDuration(n.durationSec) : '';
     var status = n.transcriptionStatus || 'pending';
 
-    var h = '<div class="vn-item" data-note-id="' + escHtml(note.id) + '">';
-    h += '<div class="vn-item-head">';
-    h += '<div class="vn-avatar" style="background:linear-gradient(135deg,' + color + ',' + color + 'bb)">' + escHtml(initials) + '</div>';
-    h += '<div class="vn-item-meta">';
-    h += '<div class="vn-item-author">' + name + '</div>';
-    h += '<div class="vn-item-date">' + escHtml(dateStr) + (dur ? ' · ' + dur : '') + '</div>';
-    h += '</div>';
-    if (canDelete) {
-      h += '<button class="vn-item-del" data-vn-action="delete" data-note-id="' + escHtml(note.id) + '" title="Supprimer">✕</button>';
-    }
-    h += '</div>';
-
-    // Player audio (toujours présent dès qu'il y a une downloadUrl)
-    if (n.downloadUrl) {
-      h += '<div class="vn-item-player" data-vn-player>';
-      h += '<audio controls preload="metadata" src="' + escHtml(n.downloadUrl) + '"></audio>';
-      h += '</div>';
+    // Couleur de bulle :
+    //   - "mine"  → bleu iMessage plein (#0b84ff), texte blanc, ressort très visiblement
+    //   - "other" → couleur de l'auteur en fond translucide (15%) + bordure (25%)
+    var bubbleStyle, accentColor;
+    if (isMine) {
+      bubbleStyle = 'background:#0b84ff;border:1px solid #0b84ff;color:#fff';
+      accentColor = '#0b84ff';
     } else {
-      h += '<div class="vn-item-player vn-item-pending"><span class="vn-spinner"></span> Préparation…</div>';
+      bubbleStyle = 'background:' + color + '26;border:1px solid ' + color + '55;color:var(--fg)';
+      accentColor = color;
     }
 
-    // Bouton bascule audio / résumé + zone résumé
+    var h = '<div class="vn-item ' + (isMine ? 'vn-item--mine' : 'vn-item--other') + '" data-note-id="' + escHtml(note.id) + '">';
+
+    // Avatar (à gauche pour autres, à droite pour mine, géré par CSS row-reverse)
+    h += '<div class="vn-avatar" style="background:linear-gradient(135deg,' + color + ',' + color + 'bb)">' + escHtml(initials) + '</div>';
+
+    // Wrapper bulle + métadonnées
+    h += '<div class="vn-bubble-wrap">';
+
+    // Ligne nom + date au-dessus de la bulle
+    h += '<div class="vn-meta-line">';
+    h += '<span class="vn-author">' + name + '</span>';
+    h += '<span class="vn-date">' + escHtml(dateStr) + (dur ? ' · ' + dur : '') + '</span>';
+    if (canDelete) {
+      h += '<button class="vn-del-btn" data-vn-action="delete" data-note-id="' + escHtml(note.id) + '" title="Supprimer">✕</button>';
+    }
+    h += '</div>';
+
+    // La bulle elle-même
+    h += '<div class="vn-bubble" style="' + bubbleStyle + '">';
+
+    // Player audio
+    if (n.downloadUrl) {
+      h += '<audio class="vn-bubble-audio" controls preload="metadata" src="' + escHtml(n.downloadUrl) + '"></audio>';
+    } else {
+      h += '<div class="vn-bubble-pending"><span class="vn-spinner-sm"></span> Préparation…</div>';
+    }
+
+    // Bouton bascule + résumé (à l'intérieur de la bulle)
     if (status === 'done' && n.summary) {
-      h += '<div class="vn-item-toggle">';
-      h += '<button class="vn-toggle-btn" data-vn-action="toggle-summary" data-note-id="' + escHtml(note.id) + '">📝 Lire le résumé</button>';
-      h += '</div>';
-      h += '<div class="vn-item-summary" data-vn-summary="' + escHtml(note.id) + '" style="display:none">';
-      h += '<div class="vn-summary-text">' + escHtml(n.summary) + '</div>';
+      h += '<button class="vn-bubble-toggle ' + (isMine ? 'vn-bubble-toggle--mine' : 'vn-bubble-toggle--other') + '" data-vn-action="toggle-summary" data-note-id="' + escHtml(note.id) + '">📝 Lire le résumé</button>';
+      h += '<div class="vn-bubble-summary" data-vn-summary="' + escHtml(note.id) + '" style="display:none">';
+      h += '<div class="vn-bubble-summary-text">' + escHtml(n.summary) + '</div>';
       if (n.transcription) {
-        h += '<details class="vn-transcript-details"><summary>Voir la transcription complète</summary>';
-        h += '<div class="vn-transcript-text">' + escHtml(n.transcription) + '</div>';
+        h += '<details class="vn-bubble-transcript"><summary>Voir la transcription complète</summary>';
+        h += '<div class="vn-bubble-transcript-text">' + escHtml(n.transcription) + '</div>';
         h += '</details>';
       }
       h += '</div>';
     } else if (status === 'pending' || status === 'processing') {
-      h += '<div class="vn-item-status"><span class="vn-spinner-sm"></span> Transcription en cours…</div>';
+      h += '<div class="vn-bubble-status"><span class="vn-spinner-sm"></span> Transcription en cours…</div>';
     } else if (status === 'error') {
-      h += '<div class="vn-item-status vn-status-error" title="' + escHtml(n.transcriptionError || '') + '">⚠ Transcription échouée</div>';
+      h += '<div class="vn-bubble-status vn-bubble-status--error" title="' + escHtml(n.transcriptionError || '') + '">⚠ Transcription échouée</div>';
     }
 
-    h += '</div>';
+    h += '</div>'; // .vn-bubble
+    h += '</div>'; // .vn-bubble-wrap
+    h += '</div>'; // .vn-item
     return h;
   }
 
@@ -450,7 +469,7 @@
         if (sumEl) {
           var open = sumEl.style.display !== 'none';
           sumEl.style.display = open ? 'none' : 'block';
-          btn.textContent = open ? '📝 Lire le résumé' : '🔊 Masquer le résumé';
+          btn.textContent = open ? '📝 Lire le résumé' : '🔉 Masquer le résumé';
         }
       } else if (action === 'delete') {
         var nid = btn.dataset.noteId;

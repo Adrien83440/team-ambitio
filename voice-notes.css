@@ -1,9 +1,15 @@
 /* ═══════════════════════════════════════════════════════════════
-   voice-notes.css — Fil de vocaux par lead
+   voice-notes.css — Fil de vocaux par lead (style bulles iMessage)
    ═══════════════════════════════════════════════════════════════
    Cohérent avec le dark theme sales.css :
      --bg / --bg2 / --bg3 / --bg4 / --fg / --muted / --muted2 / --border
      --purple / --red2 / --green / Bricolage Grotesque / Plus Jakarta Sans
+
+   Layout :
+     - Vocaux des autres → bulle à gauche, couleur de l'auteur
+     - Mes vocaux       → bulle à droite, bleu iMessage (#0b84ff)
+     - Avatar visible des deux côtés
+     - Bouton "Lire le résumé" + résumé À L'INTÉRIEUR de la bulle
    ═══════════════════════════════════════════════════════════════ */
 
 .vn-container {
@@ -14,7 +20,7 @@
   gap: 10px;
 }
 
-/* ─── Recorder bar ─────────────────────────────────────────── */
+/* ─── Recorder bar (inchangé) ──────────────────────────────── */
 
 .vn-recorder {
   display: flex;
@@ -80,7 +86,7 @@
   font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
 }
 
-/* ─── Recording active state ─────────────────────────────── */
+/* ─── Recording active ───────────────────────────────────── */
 
 .vn-rec-active {
   display: flex;
@@ -148,6 +154,7 @@
   border-top-color: var(--purple, #a78bfa);
   animation: vnSpin 0.8s linear infinite;
   flex-shrink: 0;
+  vertical-align: middle;
 }
 .vn-spinner    { width: 14px; height: 14px; }
 .vn-spinner-sm { width: 11px; height: 11px; border-width: 1.5px; }
@@ -161,10 +168,10 @@
 .vn-thread {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 460px;
+  gap: 14px;
+  max-height: 480px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 4px 6px 4px 2px;
 }
 .vn-thread::-webkit-scrollbar { width: 4px; }
 .vn-thread::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
@@ -180,33 +187,38 @@
   gap: 8px;
 }
 
-/* ─── Carte de vocal ───────────────────────────────────────── */
+/* ─── Item de vocal (style iMessage) ───────────────────────── */
 
 .vn-item {
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-  border-radius: 10px;
-  padding: 10px 12px;
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
-  animation: vnFadeIn 0.2s ease-out;
+  max-width: 88%;
+  animation: vnFadeIn 0.22s ease-out;
+}
+
+/* "Other" : bulle à gauche, avatar à gauche → ordre normal flex-row */
+.vn-item--other {
+  align-self: flex-start;
+  flex-direction: row;
+}
+
+/* "Mine" : bulle à droite, avatar à droite → row-reverse */
+.vn-item--mine {
+  align-self: flex-end;
+  flex-direction: row-reverse;
 }
 
 @keyframes vnFadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.vn-item-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
+/* ─── Avatar ─────────────────────────────────────────────── */
 
 .vn-avatar {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -217,159 +229,225 @@
   font-weight: 800;
   flex-shrink: 0;
   letter-spacing: 0.3px;
+  margin-top: 18px; /* aligne avatar avec la bulle, pas la ligne meta au-dessus */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
-.vn-item-meta {
-  flex: 1;
-  min-width: 0;
+/* ─── Bubble wrapper (meta-line + bubble + delete) ────────── */
+
+.vn-bubble-wrap {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
+  min-width: 0;       /* pour que les enfants flex puissent shrink */
+  flex: 1 1 auto;
 }
 
-.vn-item-author {
+.vn-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
+  padding: 0 4px;
+}
+.vn-item--mine .vn-meta-line {
+  flex-direction: row-reverse;  /* nom + date à droite, alignés sur la bulle */
+}
+
+.vn-author {
   font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--fg, #fff);
+  letter-spacing: 0.1px;
 }
 
-.vn-item-date {
+.vn-date {
   font-size: 10px;
   color: var(--muted2, #64748b);
-  font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
 }
 
-.vn-item-del {
+.vn-del-btn {
   background: transparent;
   border: 1px solid transparent;
   color: var(--muted2, #64748b);
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
   transition: all 0.15s;
   flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.4;
 }
-.vn-item-del:hover {
-  background: rgba(239, 68, 68, 0.1);
+.vn-item:hover .vn-del-btn {
+  opacity: 1;
+}
+.vn-del-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
   color: #f87171;
-  border-color: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+.vn-item--mine .vn-del-btn {
+  margin-left: 0;
+  margin-right: auto;
 }
 
-/* ─── Player audio ──────────────────────────────────────────── */
+/* ─── La bulle elle-même ────────────────────────────────── */
 
-.vn-item-player {
-  width: 100%;
+.vn-bubble {
+  position: relative;
+  padding: 8px 10px 10px 10px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+  word-break: break-word;
 }
-.vn-item-player audio {
+
+/* Queue de bulle (style iMessage) — bord asymétrique */
+.vn-item--other .vn-bubble {
+  border-bottom-left-radius: 5px;
+}
+.vn-item--mine .vn-bubble {
+  border-bottom-right-radius: 5px;
+}
+
+/* ─── Player audio dans la bulle ────────────────────────── */
+
+.vn-bubble-audio {
   width: 100%;
-  height: 36px;
+  height: 32px;
   outline: none;
   border-radius: 8px;
-}
-/* Light up player controls on dark background (Chrome) */
-.vn-item-player audio::-webkit-media-controls-panel {
-  background-color: rgba(255, 255, 255, 0.04);
+  display: block;
 }
 
-.vn-item-pending {
+/* Sur bulle bleue (mine), le player audio par défaut est trop sombre.
+   On laisse le browser gérer son rendu natif pour l'instant —
+   tweaks futurs si besoin. */
+
+.vn-bubble-pending {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: var(--muted, #94a3b8);
   font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
-  padding: 8px 0;
+  padding: 4px 0;
+  opacity: 0.85;
 }
 
-/* ─── Toggle audio / résumé ─────────────────────────────────── */
+/* ─── Bouton "Lire le résumé" intégré dans la bulle ─────── */
 
-.vn-item-toggle {
-  display: flex;
-  gap: 6px;
-}
-
-.vn-toggle-btn {
-  background: rgba(167, 139, 250, 0.08);
-  border: 1px solid rgba(167, 139, 250, 0.2);
-  color: #c4b5fd;
+.vn-bubble-toggle {
+  align-self: flex-start;
+  border: none;
+  border-radius: 8px;
   padding: 6px 12px;
-  border-radius: 7px;
   font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s;
 }
-.vn-toggle-btn:hover {
-  background: rgba(167, 139, 250, 0.16);
-  border-color: rgba(167, 139, 250, 0.35);
-  color: #ddd6fe;
+
+/* Bouton sur bulle bleue (mes vocaux) → blanc semi-transparent */
+.vn-bubble-toggle--mine {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  backdrop-filter: blur(2px);
+}
+.vn-bubble-toggle--mine:hover {
+  background: rgba(255, 255, 255, 0.32);
 }
 
-.vn-item-summary {
-  background: rgba(167, 139, 250, 0.05);
-  border: 1px solid rgba(167, 139, 250, 0.15);
-  border-radius: 8px;
+/* Bouton sur bulle d'auteur (autres vocaux) → fond plus dense, lisible */
+.vn-bubble-toggle--other {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fg, #fff);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.vn-bubble-toggle--other:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ─── Zone résumé / transcription ────────────────────────── */
+
+.vn-bubble-summary {
+  border-radius: 10px;
   padding: 10px 12px;
 }
 
-.vn-summary-text {
+/* Sur bulle bleue : zone semi-transparente blanche */
+.vn-item--mine .vn-bubble-summary {
+  background: rgba(255, 255, 255, 0.13);
+}
+/* Sur bulle d'auteur : zone semi-transparente sombre */
+.vn-item--other .vn-bubble-summary {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.vn-bubble-summary-text {
   font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--fg, #e5e7eb);
   white-space: pre-wrap;
 }
 
-.vn-transcript-details {
+.vn-bubble-transcript {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed rgba(167, 139, 250, 0.18);
+  border-top: 1px dashed rgba(255, 255, 255, 0.18);
 }
-.vn-transcript-details summary {
+.vn-bubble-transcript summary {
   font-size: 10px;
   font-weight: 700;
-  color: var(--muted, #94a3b8);
   font-family: var(--fb, "Bricolage Grotesque"), system-ui, sans-serif;
   cursor: pointer;
   user-select: none;
   letter-spacing: 0.4px;
   text-transform: uppercase;
+  opacity: 0.7;
 }
-.vn-transcript-details summary:hover { color: #c4b5fd; }
-.vn-transcript-text {
+.vn-bubble-transcript summary:hover { opacity: 1; }
+.vn-bubble-transcript-text {
   margin-top: 8px;
   font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
   font-size: 11px;
   line-height: 1.55;
-  color: var(--muted, #94a3b8);
   white-space: pre-wrap;
+  opacity: 0.85;
 }
 
-/* ─── État status ───────────────────────────────────────────── */
+/* ─── État status (transcription en cours / erreur) ─────── */
 
-.vn-item-status {
+.vn-bubble-status {
   display: flex;
   align-items: center;
   gap: 7px;
   font-size: 10px;
   font-weight: 600;
-  color: var(--muted, #94a3b8);
   font-family: var(--fm, "Plus Jakarta Sans"), system-ui, sans-serif;
-  padding: 4px 0;
+  opacity: 0.75;
+  padding: 2px 0;
+}
+.vn-bubble-status--error {
+  color: #fca5a5;
+  opacity: 1;
 }
 
-/* ─── Responsive mobile ─────────────────────────────────────── */
+/* ─── Responsive mobile ───────────────────────────────────── */
 
 @media (max-width: 640px) {
   .vn-recorder { padding: 8px; gap: 8px; }
   .vn-btn { font-size: 11px; padding: 7px 11px; }
   .vn-rec-timer { font-size: 14px; }
-  .vn-thread { max-height: 360px; }
-  .vn-item { padding: 9px 10px; }
+  .vn-thread { max-height: 400px; gap: 12px; }
+  .vn-item { max-width: 92%; }
+  .vn-avatar { width: 26px; height: 26px; font-size: 10px; }
+  .vn-bubble { min-width: 180px; padding: 7px 9px 9px 9px; }
 }
