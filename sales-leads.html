@@ -1615,9 +1615,10 @@ function getBaseLeads() {
   cutoff.setDate(cutoff.getDate() - 30);
   return allLeads.filter(function(l) {
     if (l.source === 'migration_suivi_client') return false;
-    if (!l.createdAt) return false;
-    var cd = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-    if (isNaN(cd.getTime())) return false;
+    // Utilise la date effective (max createdAt/lastOptinAt/lastBookingAt)
+    // pour ne PAS exclure les leads ressuscités via re-optin ou booking récent.
+    var cd = _getLeadEffectiveDate(l);
+    if (!cd) return false;
     if (useCutoff && cd <= cutoff) return false;
     return true;
   });
