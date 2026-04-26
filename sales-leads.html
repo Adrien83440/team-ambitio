@@ -1901,6 +1901,10 @@ function renderCard(l) {
   if (l._resurrected) {
     h += '<span class="ld-assigned" style="color:#fbbf24;border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.1)">🔄 Réactivé</span>';
   }
+  // Badge "Déjà CRM" : lead qui a re-optin via webhook alors qu'il existait déjà.
+  if (l._resurrectedOptin) {
+    h += '<span class="ld-assigned" style="color:#fb923c;border-color:rgba(251,146,60,0.35);background:rgba(251,146,60,0.1)">🔄 Déjà CRM</span>';
+  }
   h += '</div>';
   h += '</div>';
   h += '<span class="ld-card-time">' + ago + '</span>';
@@ -2765,6 +2769,12 @@ var _leadsResurrectListenerUnsub = null;
 var resurrectedLeadIds = {};
 var lastBookingTimestamps = {};
 
+// Listener parallèle pour les RE-OPTIN webhook (lead déjà CRM qui re-optin VSL).
+// Pose le drapeau _resurrectedOptin pour afficher le badge "🔄 Déjà CRM".
+var _leadsOptinResurrectListenerUnsub = null;
+var optinResurrectedLeadIds = {};
+var lastOptinTimestamps = {};
+
 function getCurrentVoiceUser() {
   // Construit l'auteur d'un vocal à partir de l'auth Firebase + nav.js
   // (TEAM_MEMBERS exposé globalement). Si introuvable, on retombe sur un
@@ -3053,6 +3063,7 @@ function startListening() {
    a bougé. */
 function startResurrectListening() {
   if (_leadsResurrectListenerUnsub) { _leadsResurrectListenerUnsub(); _leadsResurrectListenerUnsub = null; }
+      if (_leadsOptinResurrectListenerUnsub) { _leadsOptinResurrectListenerUnsub(); _leadsOptinResurrectListenerUnsub = null; }
   var thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   var cutoffTs = firebase.firestore.Timestamp.fromDate(thirtyDaysAgo);
@@ -3127,6 +3138,80 @@ function startResurrectListening() {
       // au premier déploiement — Firestore loggue alors un lien direct dans
       // la console pour le créer en un clic.
       console.warn('[leads-resurrect] listener error (index manquant ?):', err.message);
+    });
+}
+
+/* ═══ LISTENER OPTIN RESURRECTION ═══
+   3e onSnapshot parallèle. Pose le drapeau _resurrectedOptin sur les leads
+   qui re-optin via webhook (lead déjà présent dans le CRM). Le backend
+   onWebhookInbox écrit lastOptinAt sur le lead existant au lieu de créer
+   un doublon. Ce listener détecte ces updates et injecte la card dans
+   Leads Live avec popup + son, badge "🔄 Déjà CRM" via _resurrectedOptin. */
+function startOptinResurrectListening() {
+  if (_leadsOptinResurrectListenerUnsub) {
+    _leadsOptinResurrectListenerUnsub();
+    _leadsOptinResurrectListenerUnsub = null;
+  }
+  var thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  var cutoffTs = firebase.firestore.Timestamp.fromDate(thirtyDaysAgo);
+
+  _leadsOptinResurrectListenerUnsub = db.collection('leads')
+    .where('lastOptinAt', '>=', cutoffTs)
+    .orderBy('lastOptinAt', 'desc')
+    .onSnapshot(function(snap) {
+      var changed = false;
+      snap.docChanges().forEach(function(change) {
+        if (change.type === 'removed') return;
+        var d = change.doc.data();
+        d.id = change.doc.id;
+        if (d._merged === true) return;
+
+        // Tout lead avec lastOptinAt → est par définition un re-optin sur lead existant.
+        optinResurrectedLeadIds[d.id] = true;
+
+        var idx = -1;
+        for (var i = 0; i < allLeads.length; i++) {
+          if (allLeads[i].id === d.id) { idx = i; break; }
+        }
+
+        var newOptinTs = (d.lastOptinAt && d.lastOptinAt.toMillis) ? d.lastOptinAt.toMillis() : 0;
+        var prevOptinTs = lastOptinTimestamps[d.id] || 0;
+        var optinChanged = newOptinTs > prevOptinTs && prevOptinTs > 0;
+        var isFirstSightFresh = !lastOptinTimestamps[d.id];
+        lastOptinTimestamps[d.id] = newOptinTs;
+
+        if (idx === -1) {
+          // Lead absent du listener principal (createdAt > 30j) → on l'injecte
+          d._resurrectedOptin = true;
+          d._isNew = true;
+          allLeads.unshift(d);
+          changed = true;
+          if (!isFirstLoad && !isFirstSightFresh) {
+            if (!personalUser || !d.assignedTo || d.assignedTo === personalUser) {
+              showLeadPopup(d);
+            }
+          }
+        } else {
+          // Lead déjà chargé → merge data + drapeau + popup si nouveau re-optin
+          allLeads[idx]._resurrectedOptin = true;
+          for (var k in d) {
+            if (k === 'id') continue;
+            allLeads[idx][k] = d[k];
+          }
+          changed = true;
+          if (optinChanged && !isFirstLoad) {
+            allLeads[idx]._isNew = true;
+            if (!personalUser || !d.assignedTo || d.assignedTo === personalUser) {
+              showLeadPopup(allLeads[idx]);
+            }
+          }
+        }
+      });
+
+      if (changed && !isEditingLead) renderFeed();
+    }, function(err) {
+      console.warn('[leads-optin-resurrect] listener error (index manquant ?):', err.message);
     });
 }
 
@@ -3387,6 +3472,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
           _leadsListenersStarted = true;
           startListening();
           startResurrectListening();
+          startOptinResurrectListening();
           startBookingBridge();
         }
       }).catch(function() {
@@ -3394,6 +3480,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
           _leadsListenersStarted = true;
           startListening();
           startResurrectListening();
+          startOptinResurrectListening();
           startBookingBridge();
         }
       });
