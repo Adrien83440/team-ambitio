@@ -1479,6 +1479,29 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
 })();
 
 /* ═══ RENDER FEED ═══ */
+// Helper : retourne la date EFFECTIVE d'un lead pour les filtres de période.
+// = max(createdAt, lastOptinAt, lastBookingAt). Permet aux leads ressuscités
+// (re-optin webhook ou booking sur lead ancien) d'apparaître dans "Aujourd'hui"
+// / "Cette semaine" / filtres custom même si leur createdAt est ancien.
+function _getLeadEffectiveDate(l) {
+  if (!l) return null;
+  var dates = [];
+  if (l.createdAt) {
+    var d1 = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+    if (d1 && !isNaN(d1.getTime())) dates.push(d1);
+  }
+  if (l.lastOptinAt) {
+    var d2 = l.lastOptinAt.toDate ? l.lastOptinAt.toDate() : new Date(l.lastOptinAt);
+    if (d2 && !isNaN(d2.getTime())) dates.push(d2);
+  }
+  if (l.lastBookingAt) {
+    var d3 = l.lastBookingAt.toDate ? l.lastBookingAt.toDate() : new Date(l.lastBookingAt);
+    if (d3 && !isNaN(d3.getTime())) dates.push(d3);
+  }
+  if (dates.length === 0) return null;
+  return new Date(Math.max.apply(null, dates.map(function(d){ return d.getTime(); })));
+}
+
 function getFilteredLeads() {
   var list = getBaseLeads();
   var searching = !!filterSearch;
@@ -1491,15 +1514,15 @@ function getFilteredLeads() {
       var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
       var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
       list = list.filter(function(l) {
-        if (!l.createdAt) return false;
-        var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+        var d = _getLeadEffectiveDate(l);
+        if (!d) return false;
         return d >= todayStart && d <= todayEnd;
       });
     } else if (filterPeriod === 'week') {
       var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
       list = list.filter(function(l) {
-        if (!l.createdAt) return false;
-        var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+        var d = _getLeadEffectiveDate(l);
+        if (!d) return false;
         return d >= weekAgo;
       });
     } else if (filterPeriod === 'unprocessed') {
@@ -1508,8 +1531,8 @@ function getFilteredLeads() {
       var cFrom = customDateFrom;
       var cTo = customDateTo || new Date(customDateFrom.getFullYear(), customDateFrom.getMonth(), customDateFrom.getDate(), 23, 59, 59, 999);
       list = list.filter(function(l) {
-        if (!l.createdAt) return false;
-        var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+        var d = _getLeadEffectiveDate(l);
+        if (!d) return false;
         return d >= cFrom && d <= cTo;
       });
     }
@@ -1704,8 +1727,8 @@ function updatePeriodCounts() {
     var l = base[i];
     if (!matchesCommonFilters(l)) continue;
     counts.all++;
-    var d = l.createdAt ? (l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt)) : null;
-    if (d && !isNaN(d.getTime())) {
+    var d = _getLeadEffectiveDate(l);
+    if (d) {
       if (d >= todayStart && d <= todayEnd) counts.today++;
       if (d >= weekAgo) counts.week++;
     }
@@ -1746,9 +1769,9 @@ function rebuildTypeFilters() {
   function inPeriod(l) {
     if (searching) return true; // la recherche bypass la période
     if (filterPeriod === 'all') return true;
-    var d = l.createdAt ? (l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt)) : null;
+    var d = _getLeadEffectiveDate(l);
     if (filterPeriod === 'unprocessed') return !l.status || l.status === 'nouveau';
-    if (!d || isNaN(d.getTime())) return false;
+    if (!d) return false;
     if (filterPeriod === 'today')  return d >= todayStart && d <= todayEnd;
     if (filterPeriod === 'week')   return d >= weekAgo;
     if (filterPeriod === 'custom' && customFrom) return d >= customFrom && d <= customTo;
@@ -1873,7 +1896,8 @@ function renderCard(l) {
   var statusObj = getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
   var isNew = l._isNew;
-  var ago = timeAgo(l.createdAt);
+  var effectiveD = _getLeadEffectiveDate(l);
+  var ago = timeAgo(effectiveD || l.createdAt);
 
   var _tel = (l.telephone || '').toString().replace(/\s/g, '');
   var h = '<div class="ld-card' + (isNew ? ' new' : '') + '" data-lead-id="' + id + '" data-phone="' + escAttr(_tel) + '" data-name="' + escAttr(l.nom || '') + '">';
