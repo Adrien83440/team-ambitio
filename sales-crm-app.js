@@ -397,7 +397,7 @@ function renderCard(l){
   var setterColor=setter?tmColor(setter):'';
   var setterInactive=setter?!tmIsActive(setter):false;
   var hn=l.notesHistory&&l.notesHistory.length>0;
-  var sL={nouveau:'Nouveau',appele:'Appelé',decroche:'Décroché',messagerie:'Msg',nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',all_nrp:'All NRP',faux_numero:'Faux n°',follow_up_pm:'Follow Up PM',set:'SET',rdv_self_booking:'RDV Self',rdv_pose:'RDV posé',pas_interesse:'Pas intéressé',disqualifie:'Disqualifié',poubelle:'Poubelle'};
+  var sL={nouveau:'Nouveau',appele:'Appelé',decroche:'Décroché',messagerie:'Msg',nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',all_nrp:'All NRP',faux_numero:'Faux n°',follow_up_pm:'Follow Up PM',set:'SET',rdv_self_booking:'RDV Self',rdv_pose:'RDV posé',pas_interesse:'Pas intéressé',disqualifie:'Disqualifié',poubelle:'Poubelle',client:'Client'};
   var ls=l.status||'nouveau';
   var _telC=(l.telephone||'').toString().replace(/\s/g,'');
   var h='<div class="crm-card" draggable="true" data-id="'+l.id+'" data-lead-id="'+l.id+'" data-phone="'+_telC+'" data-name="'+esc(l.nom||'').replace(/"/g,'&quot;')+'">';

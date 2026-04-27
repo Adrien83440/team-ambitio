@@ -1041,7 +1041,8 @@ var STATUSES = [
   { key: 'rdv_pose',         label: 'RDV posé',         icon: '📅',  color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
   { key: 'pas_interesse',    label: 'Pas intéressé',    icon: '👎',  color: '#ef4444', bg: 'rgba(239,68,68,0.1)'   },
   { key: 'disqualifie',      label: 'Disqualifié',      icon: '🚫',  color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
-  { key: 'poubelle',         label: 'Poubelle',         icon: '🗑️', color: '#374151', bg: 'rgba(55,65,81,0.18)'   }
+  { key: 'poubelle',         label: 'Poubelle',         icon: '🗑️', color: '#374151', bg: 'rgba(55,65,81,0.18)'   },
+  { key: 'client',           label: 'Client',           icon: '🏆',  color: '#fbbf24', bg: 'rgba(251,191,36,0.18)' }
 ];
 
 function getStatusObj(key) {
@@ -2734,11 +2735,11 @@ function getRoundRobinPool() {
     if (!m) return false;
     if (m.active === false) return false;
     if (m.archivedAt) return false;
-    // Si flag explicite eligibleForLeads, on le respecte strictement
-    if (typeof m.eligibleForLeads === 'boolean') return m.eligibleForLeads === true;
-    // Sinon fallback : on utilise inLeadsModule comme proxy
-    if (m.inLeadsModule === false) return false;
-    return true;
+    // STRICT : require explicit eligibleForLeads === true.
+    // Tout autre cas (false, undefined, null) = exclu.
+    // Évite les attributions sauvages quand le cache TEAM_MEMBERS_LIST est obsolète
+    // sur un device de l'équipe (membre sans flag posé = jamais dans le pool).
+    return m.eligibleForLeads === true;
   });
 }
 
