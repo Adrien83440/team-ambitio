@@ -688,8 +688,11 @@ function saveTpl(){
   var autoUrl=document.getElementById('edAutoUrl').value.trim();
   var autoNote=document.getElementById('edAutoNote').value.trim();
   if(autoEnabled && !autoUrl){alert('Coche "Déclencher Make" mais URL vide. Renseigne l\'URL ou décoche.');return;}
-  if(autoEnabled && !/^https:\/\/(hook|eu\d+\.hook|us\d+\.hook)\.(make|integromat)\.com\//i.test(autoUrl)){
-    if(!confirm('L\'URL ne ressemble pas à un webhook Make standard. Continuer ?'))return;
+  // Validation soft : on accepte toute URL https://*.make.com/* ou hook.*.make.com/*
+  // (eu1, eu2, us1, us2, etc.). Pas de confirm() bloquant : si l'URL est invalide,
+  // le webhook échouera proprement à l'exécution avec un message clair.
+  if(autoEnabled && !/^https:\/\/[a-z0-9.-]+\.(make|integromat)\.com\//i.test(autoUrl)){
+    if(!confirm('L\'URL ne ressemble pas à un webhook Make/Integromat. Enregistrer quand même ?'))return;
   }
   var data={
     name:currentTpl.name,
