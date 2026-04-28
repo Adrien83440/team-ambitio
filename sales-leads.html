@@ -20,6 +20,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+<script src="sales-dialer-api.js" defer></script>
 <script src="dialer-bridge.js" defer></script>
 <link rel="stylesheet" href="call-detail-modal.css">
 <link rel="stylesheet" href="voice-notes.css">
@@ -403,6 +404,24 @@ html, body {
   animation: deletePulse 1s infinite;
 }
 @keyframes deletePulse { 0%,100% { border-color: #ef4444; } 50% { border-color: rgba(239,68,68,0.4); } }
+
+/* ── SMS composer (envoi depuis la card Leads Live) ── */
+.ld-sms-composer { margin: 12px 0 0; padding: 10px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; }
+.ld-sms-composer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ld-sms-composer-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #93c5fd; flex: 1; }
+.ld-sms-composer-from { font-family: var(--fm); font-size: 10px; color: var(--muted2); }
+.ld-sms-composer textarea { width: 100%; min-height: 60px; padding: 8px 10px; background: var(--bg2); border: 1.5px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none; resize: vertical; line-height: 1.45; box-sizing: border-box; }
+.ld-sms-composer textarea:focus { border-color: #60a5fa; }
+.ld-sms-composer textarea:disabled { opacity: 0.55; cursor: not-allowed; }
+.ld-sms-composer-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 10px; }
+.ld-sms-composer-counter { font-family: var(--fm); font-size: 10px; color: var(--muted); white-space: nowrap; }
+.ld-sms-composer-counter.warn { color: #fbbf24; }
+.ld-sms-composer-counter.over { color: #ef4444; }
+.ld-sms-send-btn { padding: 7px 14px; background: linear-gradient(135deg, rgba(96,165,250,0.28), rgba(96,165,250,0.14)); border: 1px solid rgba(96,165,250,0.45); border-radius: 8px; color: #bfdbfe; font-family: var(--fb); font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s; letter-spacing: 0.2px; }
+.ld-sms-send-btn:hover:not(:disabled) { background: linear-gradient(135deg, rgba(96,165,250,0.38), rgba(96,165,250,0.22)); color: #fff; }
+.ld-sms-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ld-sms-composer-error { font-size: 11px; color: #ef4444; margin-top: 6px; }
+.ld-sms-composer-blocked { padding: 8px 10px; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.28); border-radius: 8px; color: #fbbf24; font-size: 11px; font-weight: 600; text-align: center; }
 
 /* ── Communications history ── */
 .ld-comm-section { padding: 12px 0 0; border-top: 1px solid var(--border); }
@@ -1997,6 +2016,61 @@ function renderFormAnswersBlock(l, id) {
   return h;
 }
 
+/* ── SMS composer (envoi via SalesDialerAPI) ── */
+function updateSmsCounter(leadId) {
+  if (!leadId) return;
+  var ta = document.querySelector('[data-sms-input="' + leadId + '"]');
+  var counter = document.querySelector('[data-sms-counter="' + leadId + '"]');
+  if (!ta || !counter) return;
+  var txt = ta.value;
+  var len = txt.length;
+  // GSM-7 segmente à 160, Unicode à 70
+  var isUnicode = /[^\u0000-\u00ff]/.test(txt);
+  var segSize = isUnicode ? 70 : 160;
+  var segs = len === 0 ? 0 : Math.ceil(len / segSize);
+  counter.textContent = len + ' / ' + segSize + (segs > 1 ? ' · ' + segs + ' SMS' : '');
+  counter.className = 'ld-sms-composer-counter' + (segs >= 3 ? ' warn' : '') + (segs >= 8 ? ' over' : '');
+}
+
+function sendSmsFromCard(leadId, btn) {
+  if (!leadId || !btn) return;
+  var ta      = document.querySelector('[data-sms-input="'  + leadId + '"]');
+  var errEl   = document.querySelector('[data-sms-error="'  + leadId + '"]');
+  if (!ta) return;
+  var msg = ta.value.trim();
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  if (!msg) {
+    if (errEl) { errEl.textContent = 'Message vide'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (!window.SalesDialerAPI || !window.SalesDialerAPI.sendSms) {
+    if (errEl) { errEl.textContent = 'SalesDialerAPI non chargé'; errEl.style.display = 'block'; }
+    return;
+  }
+  btn.disabled = true;
+  ta.disabled = true;
+  var origLabel = btn.textContent;
+  btn.textContent = 'Envoi…';
+  window.SalesDialerAPI.sendSms({ leadId: leadId, message: msg })
+    .then(function(result) {
+      toast('✅ SMS envoyé à ' + (result && result.to ? result.to : ''));
+      ta.value = '';
+      updateSmsCounter(leadId);
+    })
+    .catch(function(e) {
+      console.error('[sendSmsFromCard]', e);
+      if (errEl) {
+        errEl.textContent = '❌ ' + (e && e.message ? e.message : 'Échec envoi');
+        errEl.style.display = 'block';
+      }
+    })
+    .then(function() {
+      btn.disabled = false;
+      ta.disabled = false;
+      btn.textContent = origLabel || '💬 Envoyer SMS';
+    });
+}
+
 /* ── FU badge helper ── */
 function getFuBadge(l) {
   var fus = l.followUps || [];
@@ -2261,6 +2335,33 @@ function renderCard(l) {
   h += '</div>'; // fu-body
   h += '</div>'; // fu-section
 
+  // ── SMS composer (envoi vers le prospect) ──
+  var smsOptedOut = !!l.smsOptedOut;
+  var smsHasPhone = !!(l.telephone && String(l.telephone).trim());
+  if (smsOptedOut || !smsHasPhone) {
+    h += '<div class="ld-sms-composer">';
+    h += '<div class="ld-sms-composer-head"><div class="ld-sms-composer-title">💬 Envoyer un SMS</div></div>';
+    if (smsOptedOut) {
+      h += '<div class="ld-sms-composer-blocked">⚠️ Ce lead s\'est désabonné des SMS (STOP reçu). Impossible d\'envoyer.</div>';
+    } else {
+      h += '<div class="ld-sms-composer-blocked">⚠️ Aucun téléphone enregistré pour ce lead.</div>';
+    }
+    h += '</div>';
+  } else {
+    h += '<div class="ld-sms-composer">';
+    h += '<div class="ld-sms-composer-head">';
+    h += '<div class="ld-sms-composer-title">💬 Envoyer un SMS</div>';
+    h += '<div class="ld-sms-composer-from">→ ' + escHtml(l.telephone) + '</div>';
+    h += '</div>';
+    h += '<textarea data-sms-input="' + id + '" placeholder="Votre message (signez avec votre prénom)..." maxlength="1530"></textarea>';
+    h += '<div class="ld-sms-composer-footer">';
+    h += '<div class="ld-sms-composer-counter" data-sms-counter="' + id + '">0 / 160</div>';
+    h += '<button class="ld-sms-send-btn" data-action="sendSms" data-id="' + id + '">💬 Envoyer SMS</button>';
+    h += '</div>';
+    h += '<div class="ld-sms-composer-error" data-sms-error="' + id + '" style="display:none"></div>';
+    h += '</div>';
+  }
+
   // ── Communications history (calls + SMS) ──
   var comms = l.communications || [];
   var callsAndSms = [];
@@ -2428,6 +2529,14 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
       // Attacher le listener RDV (lit bookings.where('leadId','==',id) en temps réel)
       attachLeadRdvListener(id);
     }
+    return;
+  }
+
+  // Send SMS (composer dans la card)
+  var smsBtn = e.target.closest('[data-action="sendSms"]');
+  if (smsBtn) {
+    var smsLeadId = smsBtn.dataset.id;
+    sendSmsFromCard(smsLeadId, smsBtn);
     return;
   }
 
@@ -2857,6 +2966,9 @@ function autoSaveField(leadId, field, value) {
 document.getElementById('ldFeed').addEventListener('input', function(e) {
   var el = e.target.closest('[data-edit]');
   if (el) autoSaveField(el.dataset.id, el.dataset.edit, el.value);
+  // Compteur dynamique du composer SMS
+  var smsTa = e.target.closest('[data-sms-input]');
+  if (smsTa) updateSmsCounter(smsTa.dataset.smsInput);
 });
 document.getElementById('ldFeed').addEventListener('change', function(e) {
   var el = e.target.closest('[data-edit]');
