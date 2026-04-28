@@ -284,6 +284,25 @@ html, body {
 .ld-detail-val { color: var(--text); word-break: break-all; }
 .ld-detail-val a { color: var(--blue); text-decoration: none; }
 
+/* RDV pris (lus en temps réel depuis bookings) */
+.ld-rdv-block { margin: 10px 0 4px; padding: 10px 12px; border: 1px solid rgba(167,139,250,0.25); background: rgba(167,139,250,0.06); border-radius: 8px; display: none; }
+.ld-rdv-block.has-rdv { display: block; }
+.ld-rdv-block-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #c4b5fd; margin-bottom: 6px; }
+.ld-rdv-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 12px; color: var(--text); }
+.ld-rdv-row + .ld-rdv-row { border-top: 1px dashed rgba(255,255,255,0.06); margin-top: 2px; padding-top: 7px; }
+.ld-rdv-when { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 700; color: #c4b5fd; min-width: 130px; }
+.ld-rdv-when .d { font-size: 11px; color: var(--muted); font-weight: 600; }
+.ld-rdv-meta { font-size: 11px; color: var(--muted); flex: 1; min-width: 0; }
+
+/* Réponses du formulaire AlteoForm */
+.ld-form-answers { margin: 10px 0 4px; padding: 10px 12px; border: 1px solid rgba(96,165,250,0.22); background: rgba(96,165,250,0.05); border-radius: 8px; display: none; }
+.ld-form-answers.has-answers { display: block; }
+.ld-form-answers-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #93c5fd; margin-bottom: 6px; }
+.ld-form-answer-row { display: flex; gap: 10px; padding: 5px 0; font-size: 12px; align-items: flex-start; }
+.ld-form-answer-row + .ld-form-answer-row { border-top: 1px dashed rgba(255,255,255,0.06); margin-top: 2px; padding-top: 7px; }
+.ld-form-answer-label { color: var(--muted); min-width: 130px; flex-shrink: 0; font-weight: 600; font-size: 11px; }
+.ld-form-answer-val { color: var(--text); word-break: break-word; white-space: pre-wrap; flex: 1; }
+
 /* Edit mode */
 .ld-edit-toggle {
   display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px;
@@ -1867,8 +1886,115 @@ function renderFeed() {
   // Restore open card
   if (openCardId) {
     var el = document.querySelector('[data-lead-id="' + openCardId + '"]');
-    if (el) el.classList.add('open');
+    if (el) {
+      el.classList.add('open');
+      // Re-render a recréé le DOM des cards : on force un repaint du RDV box
+      // (l'ancien snapshot a peint un DOM qui n'existe plus).
+      detachLeadRdvListener(openCardId);
+      attachLeadRdvListener(openCardId);
+    }
   }
+}
+
+/* ── RDV box (lue temps réel depuis bookings) ── */
+var _ldRdvUnsubs = {};   // leadId -> unsubscribe fn
+
+function attachLeadRdvListener(leadId) {
+  if (!leadId) return;
+  // Si déjà attaché, ne rien faire
+  if (_ldRdvUnsubs[leadId]) return;
+  var todayStr = (function(){
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  })();
+  try {
+    _ldRdvUnsubs[leadId] = db.collection('bookings')
+      .where('leadId', '==', leadId)
+      .where('date', '>=', todayStr)
+      .onSnapshot(function(snap){
+        var items = [];
+        snap.forEach(function(doc){
+          var d = doc.data();
+          if (d.status === 'confirmed' || d.status === 'pending') {
+            d.id = doc.id;
+            items.push(d);
+          }
+        });
+        items.sort(function(a, b){
+          var ka = (a.date||'') + 'T' + (a.time||'');
+          var kb = (b.date||'') + 'T' + (b.time||'');
+          return ka < kb ? -1 : (ka > kb ? 1 : 0);
+        });
+        paintLeadRdvBox(leadId, items);
+      }, function(err){
+        console.warn('[ldRdv] snapshot error', leadId, err);
+      });
+  } catch(e) {
+    console.warn('[ldRdv] attach error', leadId, e);
+  }
+}
+
+function detachLeadRdvListener(leadId) {
+  if (!leadId) return;
+  var unsub = _ldRdvUnsubs[leadId];
+  if (unsub) { try { unsub(); } catch(e){} delete _ldRdvUnsubs[leadId]; }
+}
+
+function paintLeadRdvBox(leadId, items) {
+  var block = document.querySelector('[data-rdv-block="' + leadId + '"]');
+  var list  = document.querySelector('[data-rdv-list="'  + leadId + '"]');
+  if (!block || !list) return;
+  if (!items || items.length === 0) {
+    block.classList.remove('has-rdv');
+    list.innerHTML = '';
+    return;
+  }
+  var JOURS = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  var MOIS  = ['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
+  var html = '';
+  items.forEach(function(b){
+    var dt = new Date((b.date || '') + 'T' + (b.time || '00:00') + ':00');
+    var when = JOURS[dt.getDay()] + ' ' + dt.getDate() + ' ' + MOIS[dt.getMonth()];
+    var typeName = (b.consultation && b.consultation.label) || b.typeName || b.typeLabel || b.type || 'RDV';
+    var personName = b.personName || '';
+    var meta = escHtml(typeName) + (personName ? ' · ' + escHtml(personName) : '');
+    html += '<div class="ld-rdv-row">';
+    html += '<span class="ld-rdv-when">' + escHtml(when) + ' <span class="d">à</span> ' + escHtml(b.time || '') + '</span>';
+    html += '<span class="ld-rdv-meta">' + meta + '</span>';
+    html += '</div>';
+  });
+  list.innerHTML = html;
+  block.classList.add('has-rdv');
+}
+
+/* ── Réponses du formulaire (AlteoForm) ── */
+// Gère deux formats sur le lead :
+//  - Tableau enrichi : [{fieldId,label,type,value}, ...] (nouveau format, posé par alteoforms-render)
+//  - Map clé→valeur  : {fieldId: value, ...} (ancien format, leads créés avant le patch)
+function renderFormAnswersBlock(l, id) {
+  var fa = l.formAnswers;
+  if (!fa) return '';
+  var rows = [];
+  if (Array.isArray(fa)) {
+    rows = fa.filter(function(a){ return a && a.value !== '' && a.value != null; });
+  } else if (typeof fa === 'object') {
+    Object.keys(fa).forEach(function(k){
+      var v = fa[k];
+      if (v !== '' && v != null) rows.push({ fieldId: k, label: k, value: v });
+    });
+  }
+  if (rows.length === 0) return '';
+  var h = '<div class="ld-form-answers has-answers" data-form-answers="' + id + '">';
+  var headTitle = '📋 Réponses au formulaire' + (l.formTitle ? ' — ' + escHtml(l.formTitle) : '');
+  h += '<div class="ld-form-answers-title">' + headTitle + '</div>';
+  rows.forEach(function(r){
+    h += '<div class="ld-form-answer-row">';
+    h += '<span class="ld-form-answer-label">' + escHtml(r.label || r.fieldId || '') + '</span>';
+    h += '<span class="ld-form-answer-val">' + escHtml(String(r.value)) + '</span>';
+    h += '</div>';
+  });
+  h += '</div>';
+  return h;
 }
 
 /* ── FU badge helper ── */
@@ -1965,9 +2091,17 @@ function renderCard(l) {
   if (l.defi) h += '<div class="ld-detail-row"><span class="ld-detail-label">Défi</span><span class="ld-detail-val">' + escHtml(l.defi) + '</span></div>';
   if (l.disponibilite) h += '<div class="ld-detail-row"><span class="ld-detail-label">Dispo</span><span class="ld-detail-val">' + escHtml(l.disponibilite) + '</span></div>';
   if (l.timeline) h += '<div class="ld-detail-row"><span class="ld-detail-label">Mise en place</span><span class="ld-detail-val">' + escHtml(l.timeline) + '</span></div>';
-  if (l.dateRdv) h += '<div class="ld-detail-row"><span class="ld-detail-label">Date booking</span><span class="ld-detail-val">' + escHtml(l.dateRdv) + '</span></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(l.createdAt) + '</span></div>';
   h += '</div>';
+
+  // RDV à venir (lus en temps réel depuis bookings — voir attachLeadRdvListener)
+  h += '<div class="ld-rdv-block" data-rdv-block="' + id + '">';
+  h += '<div class="ld-rdv-block-title">📅 Rendez-vous</div>';
+  h += '<div class="ld-rdv-list" data-rdv-list="' + id + '"></div>';
+  h += '</div>';
+
+  // Réponses du formulaire (rendu statique au render — alimenté par AlteoForms)
+  h += renderFormAnswersBlock(l, id);
 
   // ── EDIT MODE (hidden by default) ──
   h += '<div class="ld-details" data-edit-mode="' + id + '" style="display:none">';
@@ -2271,12 +2405,18 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     if (card.classList.contains('open')) {
       card.classList.remove('open');
       openCardId = null;
+      // Cleanup vocaux + listener RDV de la card qui se ferme
+      var vnC = card.querySelector('.vn-container');
+      if (vnC && window.VoiceNotes) window.VoiceNotes.detach(vnC);
+      detachLeadRdvListener(id);
     } else {
       document.querySelectorAll('.ld-card.open').forEach(function(c) {
         c.classList.remove('open');
-        // Cleanup vocaux des cards qui se ferment
+        // Cleanup vocaux + listener RDV des cards qui se ferment
         var oldVn = c.querySelector('.vn-container');
         if (oldVn && window.VoiceNotes) window.VoiceNotes.detach(oldVn);
+        var oldId = c.dataset.leadId;
+        if (oldId) detachLeadRdvListener(oldId);
       });
       card.classList.add('open');
       openCardId = id;
@@ -2285,6 +2425,8 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
       if (vnMount && window.VoiceNotes) {
         window.VoiceNotes.attach(vnMount, id, getCurrentVoiceUser());
       }
+      // Attacher le listener RDV (lit bookings.where('leadId','==',id) en temps réel)
+      attachLeadRdvListener(id);
     }
     return;
   }

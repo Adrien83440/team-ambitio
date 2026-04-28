@@ -1047,6 +1047,16 @@ function _phoneNormalized(raw){
 // Format date FR cohérent avec sales-leads.html (notesHistory + timeline_history)
 function _dateNowFR(){return new Date().toLocaleString('fr-FR');}
 
+// Construit le tableau enrichi des réponses (avec labels) pour stockage sur le lead.
+// Format : [{fieldId,label,type,value}, ...] — le rendu côté fiche peut afficher
+// directement les labels sans avoir à re-fetcher le formulaire.
+function _buildAnswersArr(){
+  return FIELDS
+    .filter(function(f){return f.type!=='info';})
+    .map(function(f){return{fieldId:f.id,label:f.label||'',type:f.type,value:answers[f.id]||''};})
+    .filter(function(a){return a.value!=='';});
+}
+
 function createFormLead(contact,callback){
   // Pas d'email ni de tel = lead inidentifiable → on s'abstient mais on
   // continue le flow normalement (les réponses du formulaire sont déjà
@@ -1075,7 +1085,7 @@ function createFormLead(contact,callback){
     utm:'AlteoForm'+(formTitle?' - '+formTitle:''),
     formId:FORM._id,
     formTitle:formTitle,
-    formAnswers:answers,
+    formAnswers:_buildAnswersArr(),
     formSubmittedAt:new Date().toISOString(),
     tags:[],
     notesHistory:[{text:noteTxt,date:_dateNowFR()}],
@@ -1109,7 +1119,7 @@ function updateLeadWithForm(doc){
 var update={
 formId:FORM._id,
 formTitle:FORM.title||'',
-formAnswers:answers,
+formAnswers:_buildAnswersArr(),
 formSubmittedAt:new Date().toISOString(),
 updatedAt:firebase.firestore.FieldValue.serverTimestamp()
 };

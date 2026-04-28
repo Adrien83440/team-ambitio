@@ -87,6 +87,12 @@ body{overflow:hidden;display:flex;flex-direction:column}
 .fl-rdv-toggle.warn{background:linear-gradient(135deg,#92400e,#f59e0b);color:#fff;border-color:transparent}
 .fl-rdv-toggle.primary{background:linear-gradient(135deg,#b91c1c,#ef4444);color:#fff;border-color:transparent}
 .fl-rdv-toggle:disabled{opacity:0.5;cursor:not-allowed}
+/* Réponses du formulaire AlteoForm */
+.fl-form-row{display:flex;gap:10px;padding:6px 0;align-items:flex-start;font-size:12px}
+.fl-form-row + .fl-form-row{border-top:1px dashed rgba(255,255,255,0.06);margin-top:2px;padding-top:8px}
+.fl-form-label{color:var(--muted);min-width:140px;flex-shrink:0;font-weight:600;font-size:11px}
+.fl-form-val{color:var(--text);word-break:break-word;white-space:pre-wrap;flex:1}
+.fl-form-empty{font-size:11px;color:var(--muted);padding:6px 0;font-style:italic}
 .fl-modified{font-size:10px;color:var(--muted2);margin-top:8px;text-align:center}
 .fiche-right{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .fr-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none}
@@ -351,6 +357,7 @@ h+='<div class="fl-section"><div class="fl-title">Programme & Contrat</div>';
 h+=flR('\ud83d\udccb','Formule','formule',l.formule);h+=flR('\ud83d\udcc5','Date inscription','dateInscription',l.dateInscription);h+=flR('\ud83d\udcc5','Date fin programme','dateFinProgramme',l.dateFinProgramme);h+=flR('\u21a9\ufe0f','R\u00e9tractation','retractation',l.retractation);h+=flR('\ud83d\udcb3','Plateforme paiement','plateformePaiement',l.plateformePaiement);h+=flR('\ud83d\udcb5','Commissions','commissions',l.commissions);h+=flR('\ud83c\udf93','Coaching 72H','coaching72h',l.coaching72h);h+=flR('\ud83d\udc64','Coach 72H','coach72h',l.coach72h);h+=flR('\ud83e\udd1d','Closeur','closeur',l.closeur);h+=flR('\ud83d\udcde','Setting','setting',l.setting);h+=flR('\ud83c\udf81','Goodies','goodies',l.goodies);h+=flR('\ud83d\udce6','Date envoi goodies','dateEnvoiGoodies',l.dateEnvoiGoodies);
 h+='</div>';
 h+='<div class="fl-section" id="fcRdvBox"><div class="fl-title">📅 RDV à venir</div><div class="fl-rdv-empty" style="font-size:11px;color:var(--muted);padding:6px 0">Chargement…</div></div>';
+h+=flFormAnswers(l);
 h+='<div class="fl-saved" id="flS">\u2705 Sauvegard\u00e9</div>';
 if(l.updatedAt){var ud=l.updatedAt.toDate?l.updatedAt.toDate():new Date(l.updatedAt);h+='<div class="fl-modified">Modifi\u00e9 le '+ud.toLocaleString('fr-FR')+'</div>';}
 h+='</div>';
@@ -548,6 +555,35 @@ if(typeof renderRdvBoxForLead==='function')renderRdvBoxForLead(leadId);
 initEv();
 }
 function flR(ic,label,k,v){return '<div class="fl-row"><span class="fl-icon">'+ic+'</span><span style="min-width:120px;font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0">'+esc(label)+'</span><input class="fl-editable" data-f="'+k+'" value="'+escA(v||'')+'" placeholder="\u2014"/></div>';}
+
+// Rendu de la section "Réponses au formulaire" (alimentée par AlteoForms).
+// Gère deux formats sur le lead :
+//  - Tableau enrichi : [{fieldId,label,type,value}, ...] (nouveau format)
+//  - Map clé→valeur  : {fieldId: value, ...} (ancien format, sans labels)
+function flFormAnswers(l){
+  var fa=l.formAnswers;
+  if(!fa)return '';
+  var rows=[];
+  if(Array.isArray(fa)){
+    rows=fa.filter(function(a){return a&&a.value!==''&&a.value!=null;});
+  }else if(typeof fa==='object'){
+    Object.keys(fa).forEach(function(k){
+      var v=fa[k];
+      if(v!==''&&v!=null)rows.push({fieldId:k,label:k,value:v});
+    });
+  }
+  if(rows.length===0)return '';
+  var title='\ud83d\udccb R\u00e9ponses au formulaire'+(l.formTitle?' \u2014 '+esc(l.formTitle):'');
+  var h='<div class="fl-section"><div class="fl-title">'+title+'</div>';
+  rows.forEach(function(r){
+    h+='<div class="fl-form-row">';
+    h+='<span class="fl-form-label">'+esc(r.label||r.fieldId||'')+'</span>';
+    h+='<span class="fl-form-val">'+esc(String(r.value))+'</span>';
+    h+='</div>';
+  });
+  h+='</div>';
+  return h;
+}
 
 function initEv(){
 // ─── SMS composer (si présent, sinon skip) ─────────────────────────────
