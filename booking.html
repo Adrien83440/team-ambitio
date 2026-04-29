@@ -1016,6 +1016,9 @@ function handleSubmit() {
   if (_formLeadId) booking.leadId = _formLeadId;
   if (_fromForm) booking.formId = _fromForm;
   if (_formLeadId) booking.source = 'self_booking';
+  // Propage le flag isCoaching depuis la consultation (utilisé par le calendrier coaching
+  // et le matching automatique avec les fiches clients par email).
+  if (S.selType && S.selType.isCoaching === true) booking.isCoaching = true;
 
   var btn = document.getElementById('confirmBtn');
   btn.disabled = true;
