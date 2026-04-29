@@ -412,6 +412,10 @@
     const perms   = getUserModules();
     const modules = ALL_MODULES.filter(m => {
       if (m.perm === '_admin') return role === 'admin';
+      // "Mes RDV" (sales-rdv.html) est un module commercial : un coach peut avoir
+      // la perm 'booking' (pour gérer ses horaires dans booking-admin) sans devoir
+      // accéder au suivi RDV des sales. On masque donc explicitement pour coach.
+      if (m.id === 'sales-rdv' && role === 'coach') return false;
       if (m.perm === 'alteoforms') {
         if (role === 'admin') return true;
         try { var af=JSON.parse(localStorage.getItem('ambitio_alteoforms_forms')||'[]'); return af.length>0; } catch(e){ return false; }
