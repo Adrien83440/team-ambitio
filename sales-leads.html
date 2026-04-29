@@ -1640,6 +1640,19 @@ function getFilteredLeads() {
     });
   }
 
+  // Tri par "date d'activité" décroissante : on prend le max entre createdAt,
+  // lastOptinAt et lastBookingAt. Garantit que les leads les plus récemment
+  // actifs (création OU re-optin OU re-booking) remontent en haut, et qu'un
+  // lead ressuscité ne reste pas coincé en tête au-delà de sa date d'activité.
+  list.sort(function(a, b) {
+    var da = _getLeadEffectiveDate(a);
+    var db = _getLeadEffectiveDate(b);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return db.getTime() - da.getTime();
+  });
+
   return list;
 }
 
