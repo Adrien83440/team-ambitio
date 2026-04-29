@@ -2144,6 +2144,14 @@ function renderCard(l) {
   if (l._resurrectedOptin) {
     h += '<span class="ld-assigned" style="color:#fb923c;border-color:rgba(251,146,60,0.35);background:rgba(251,146,60,0.1)">🔄 Déjà CRM</span>';
   }
+  // Badge "Avant : <previousStatus>" : pour les ressuscités dont le statut historique
+  // n'était pas 'nouveau' (ex : lead disqualifié qui re-optin → repassé à 'nouveau' par
+  // le backend, mais on garde la trace de l'ancien statut pour alerter le setter).
+  if (l.previousStatus && l.previousStatus !== 'nouveau') {
+    var prevStatusObj = (typeof getStatusObj === 'function') ? getStatusObj(l.previousStatus) : null;
+    var prevLabel = prevStatusObj ? prevStatusObj.label : l.previousStatus;
+    h += '<span class="ld-assigned" style="color:#fbbf24;border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.1)" title="Ancien statut avant re-optin">⚠️ Avant : ' + escHtml(prevLabel) + '</span>';
+  }
   h += '</div>';
   h += '</div>';
   h += '<span class="ld-card-time">' + ago + '</span>';
@@ -3351,7 +3359,14 @@ function startListening() {
       if (!window._firstLoadAssignDone) {
         window._firstLoadAssignDone = true;
         allLeads.forEach(function(l) {
-          if (!l.assignedTo && l.source !== 'bigin_import' && l.source !== 'webinar_import' && l.source !== 'migration_suivi_client') {
+          // Round-robin pour les leads sans assignedTo, SAUF les leads import qui n'ont
+          // PAS re-optin (ceux-là restent en stock historique). Un lead import qui re-optin
+          // (lastOptinAt posé par le backend onWebhookInbox) est traité comme un nouveau
+          // lead et passe au round-robin.
+          if (l.assignedTo) return;
+          var isImport = l.source === 'bigin_import' || l.source === 'webinar_import' || l.source === 'migration_suivi_client';
+          var hasReoptin = !!l.lastOptinAt;
+          if (!isImport || hasReoptin) {
             assignLeadRoundRobin(l.id);
           }
         });
