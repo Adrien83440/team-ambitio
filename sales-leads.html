@@ -3287,7 +3287,17 @@ function startListening() {
         knownLeadIds[change.doc.id] = true;
       });
 
-      // Rebuild full list
+      // Rebuild full list — MAIS on préserve les leads ressuscités (re-optin
+      // ou re-booking) qui ont été injectés par les listeners parallèles
+      // startResurrectListening / startOptinResurrectListening. Sans ça, ces
+      // leads sont écrasés à chaque rebuild parce qu'ils ne sont pas dans le
+      // snapshot principal (leur createdAt est > 30j).
+      var snapIds = {};
+      snap.forEach(function(doc) { snapIds[doc.id] = true; });
+      var preservedResurrects = allLeads.filter(function(l) {
+        return (l._resurrectedOptin === true || l._resurrected === true) && !snapIds[l.id];
+      });
+
       allLeads = [];
       snap.forEach(function(doc) {
         var d = doc.data();
@@ -3300,6 +3310,13 @@ function startListening() {
         }
         allLeads.push(d);
       });
+
+      // Ré-injecte les leads ressuscités qui n'étaient pas dans le snapshot
+      // principal. unshift pour les garder en haut du feed (cohérent avec
+      // ce que font les listeners resurrect quand ils les ajoutent).
+      if (preservedResurrects.length > 0) {
+        allLeads = preservedResurrects.concat(allLeads);
+      }
 
       // Don't re-render while user is editing — only update data + counts
       if (isEditingLead && newLeads.length === 0) {
