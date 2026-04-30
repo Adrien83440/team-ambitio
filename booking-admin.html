@@ -752,6 +752,11 @@ el.querySelectorAll('input:not(#ff-label):not(#ff-req):not(#cr-value):not(#cr-em
 inp.addEventListener('input',function(){autoSaveCd();});
 inp.addEventListener('change',function(){autoSaveCd(true);});
 });
+// Toggle isCoaching : force re-render après save pour rafraîchir couleurs/knob.
+var _tIsCoaching=document.getElementById('cd-isCoaching');
+if(_tIsCoaching){_tIsCoaching.addEventListener('change',function(){
+  setTimeout(function(){if(cdSection==='details')renderCdSection();},900);
+});}
 }
 
 // Save functions — clean undefined before Firestore
@@ -1540,6 +1545,12 @@ el.querySelectorAll('input,select,textarea').forEach(function(inp){
 inp.addEventListener('input',function(){autoSaveEx();});
 inp.addEventListener('change',function(){autoSaveEx(true);});
 });
+// Toggle isCoach : force re-render de la section après save pour rafraîchir
+// les couleurs et la position du knob (HTML inline calculé au render).
+var _tIsCoach=document.getElementById('exProIsCoach');
+if(_tIsCoach){_tIsCoach.addEventListener('change',function(){
+  setTimeout(function(){if(exSection==='profil')renderExSection();},900);
+});}
 // Calendar conflict toggles
 el.querySelectorAll('[data-calci]').forEach(function(tg){
 tg.addEventListener('click',function(){autoSaveEx(true);});
