@@ -481,6 +481,7 @@
 <div class="bk-toast" id="bkT"></div>
 <script>
 var db=firebase.firestore(),CR=db.collection('booking_config'),T=[],P=[],S={},B=[],aRT='up';
+var _bUnsub=null;
 var JR=['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'],JS=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'],JF=['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'],MF=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 function toast(m){var t=document.getElementById('bkT');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
@@ -494,10 +495,26 @@ function loadAll(){CR.get().then(function(sn){var _oldCdId=cdType?cdType.id:null
 function loadB(){
 var isAdmin=window._currentRole==='admin';
 var selfId=window._selfPersonId;
+// Détache l'ancien listener si on en attache un nouveau (évite les doublons
+// si loadB est rappelée, ex. après changement de rôle ou mutation manuelle).
+if(_bUnsub){try{_bUnsub();}catch(e){}_bUnsub=null;}
 // Non-admin sans selfId résolu : rien charger (évite d'exposer tous les RDV)
 if(!isAdmin&&!selfId){B=[];rRdv();return;}
 var q=isAdmin?db.collection('bookings'):db.collection('bookings').where('personId','==',selfId);
-q.get().then(function(sn){B=[];sn.forEach(function(d){var v=d.data();v._id=d.id;B.push(v);});B.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});rRdv();}).catch(function(e){B=[];rRdv();});
+// Listener temps réel : B et la vue se rafraîchissent automatiquement à
+// chaque création / mise à jour / annulation / suppression de booking,
+// sans rechargement de page.
+_bUnsub=q.onSnapshot(function(sn){
+  B=[];
+  sn.forEach(function(d){var v=d.data();v._id=d.id;B.push(v);});
+  B.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});
+  rRdv();
+  // Si la fiche expert est ouverte sur l'onglet "Vue planning", on
+  // rafraîchit aussi le mini calendrier pour refléter les nouveaux RDVs.
+  if(typeof exSection!=='undefined'&&exSection==='vue'&&typeof _vuRender==='function'){
+    try{_vuRender();}catch(e){}
+  }
+},function(err){console.error('[bookings onSnapshot]',err);B=[];rRdv();});
 }
 function renderAll(){rRdv();rCs();rEx();rPg();lSt();pFlt();}
 function pFlt(){
