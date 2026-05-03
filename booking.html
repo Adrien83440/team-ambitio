@@ -685,16 +685,113 @@ function isHolidayDate(dateStr){
   return false;
 }
 
+/* ── AVAILABILITY RULES MATCHING ──
+   Helpers pour appliquer les availabilityRules (mode date | range | recurring)
+   créées via booking-admin.html sur une date donnée. Renvoie les slots
+   effectifs pour un jour, après application :
+     1. du schedule récurrent (par jour de semaine)
+     2. des dateOverrides legacy (REMPLACE les slots du jour)
+     3. des availabilityRules :
+        - available + slots → REMPLACE les slots du jour
+        - unavailable sans slots → journée totalement bloquée
+        - unavailable + slots → soustrait ces plages des slots disponibles
+   ── */
+
+function _ruleMatchesDate(r, dateStr) {
+  if (!r || !dateStr) return false;
+  if (r.mode === 'date') return r.date === dateStr;
+  if (r.mode === 'range') {
+    if (!r.startDate || !r.endDate) return false;
+    return dateStr >= r.startDate && dateStr <= r.endDate;
+  }
+  if (r.mode === 'recurring') {
+    if (r.startDate && dateStr < r.startDate) return false;
+    if (r.endDate && dateStr > r.endDate) return false;
+    var d = new Date(dateStr + 'T12:00:00');
+    var dow = d.getDay();
+    if (parseInt(r.dayOfWeek, 10) !== dow) return false;
+    if (r.pattern === 'every_week') return true;
+    if (r.pattern === 'every_2_weeks') {
+      if (!r.startDate) return false;
+      var s = new Date(r.startDate + 'T12:00:00');
+      var diffDays = Math.floor((d - s) / 86400000);
+      return diffDays >= 0 && Math.floor(diffDays / 7) % 2 === 0;
+    }
+    if (r.pattern === 'first_of_month') {
+      var first = new Date(d.getFullYear(), d.getMonth(), 1);
+      var offset = (dow - first.getDay() + 7) % 7;
+      return d.getDate() === (1 + offset);
+    }
+    if (r.pattern === 'last_of_month') {
+      var lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      var lastOffset = (lastDay.getDay() - dow + 7) % 7;
+      return d.getDate() === (lastDay.getDate() - lastOffset);
+    }
+    return false;
+  }
+  return false;
+}
+
+// Soustrait blockSlots [{start,end}] d'une liste slots [{start,end}] et
+// renvoie une nouvelle liste fragmentée si nécessaire.
+function _subtractIntervals(slots, blockSlots) {
+  if (!blockSlots || !blockSlots.length) return slots.slice();
+  var result = slots.slice();
+  blockSlots.forEach(function(b) {
+    var bs = timeToMin(b.start), be = timeToMin(b.end);
+    if (be <= bs) return;
+    var next = [];
+    result.forEach(function(s) {
+      var ss = timeToMin(s.start), se = timeToMin(s.end);
+      if (be <= ss || bs >= se) { next.push(s); return; }
+      if (bs <= ss && be >= se) return;
+      if (bs <= ss && be < se) { next.push({ start: minToTime(be), end: s.end }); return; }
+      if (bs > ss && be >= se) { next.push({ start: s.start, end: minToTime(bs) }); return; }
+      next.push({ start: s.start, end: minToTime(bs) });
+      next.push({ start: minToTime(be), end: s.end });
+    });
+    result = next;
+  });
+  return result;
+}
+
+function getEffectiveSlotsForDate(person, dateStr) {
+  if (!person || !dateStr) return [];
+  var d = new Date(dateStr + 'T12:00:00');
+  var dayName = JOURS_FULL[d.getDay()];
+  var sched = person.schedule || {};
+  var slots = (sched[dayName] || []).slice();
+
+  var dOv = person.dateOverrides || {};
+  if (dOv[dateStr]) slots = dOv[dateStr].slice();
+
+  var rules = person.availabilityRules || [];
+  var matching = rules.filter(function(r) { return _ruleMatchesDate(r, dateStr); });
+
+  matching.forEach(function(r) {
+    if (r.type === 'available' && r.slots && r.slots.length) {
+      slots = r.slots.slice();
+    }
+  });
+
+  for (var i = 0; i < matching.length; i++) {
+    var r = matching[i];
+    if (r.type === 'unavailable') {
+      if (!r.slots || !r.slots.length) return [];
+      slots = _subtractIntervals(slots, r.slots);
+    }
+  }
+
+  return slots;
+}
+
 /* ── AVAILABILITY CHECK ── */
 function hasAvailableSlots(dateStr) {
   if (!S.selPerson) return false;
   var d = new Date(dateStr + 'T12:00:00');
-  var dayName = JOURS_FULL[d.getDay()];
-  var sched = S.selPerson.schedule || {};
 
-  // Check date overrides first
-  var dOv = S.selPerson.dateOverrides || {};
-  var daySlots = dOv[dateStr] ? dOv[dateStr] : (sched[dayName] || []);
+  // Slots effectifs (schedule + dateOverrides + availabilityRules)
+  var daySlots = getEffectiveSlotsForDate(S.selPerson, dateStr);
   if (!daySlots.length) return false;
 
   // Blocked dates
@@ -750,7 +847,6 @@ function renderSlots() {
   var d = new Date(S.selDate + 'T12:00:00');
   var dayName = JOURS_FULL[d.getDay()];
   var sched = S.selPerson.schedule || {};
-  var daySlots = sched[dayName] || [];
   var dur = S.selType ? S.selType.duration : 30;
   var bufBefore = (S.selType && S.selType.rules && S.selType.rules.bufferBefore) || S.selPerson.bufferBefore || 0;
   var bufAfter = (S.selType && S.selType.rules && S.selType.rules.bufferAfter) || S.selPerson.bufferAfter || 0;
@@ -758,9 +854,8 @@ function renderSlots() {
 
   // Generate all possible slots from schedule ranges
   var interval = (S.selType && S.selType.rules && S.selType.rules.slotInterval) ? S.selType.rules.slotInterval : dur;
-  // Use date overrides if available
-  var dOv = S.selPerson.dateOverrides || {};
-  var usedSlots = dOv[S.selDate] ? dOv[S.selDate] : daySlots;
+  // Slots effectifs (schedule + dateOverrides legacy + availabilityRules)
+  var usedSlots = getEffectiveSlotsForDate(S.selPerson, S.selDate);
   var allSlots = [];
   for (var si = 0; si < usedSlots.length; si++) {
     var range = usedSlots[si];
