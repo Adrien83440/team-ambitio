@@ -328,7 +328,9 @@ var S = {
   userTz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris',
   currentStep: 1,
   busyTimes: {},
-  busyLoading: false
+  busyLoading: false,
+  busyUnsub: null,        // unsubscribe fn du listener calendar_busy actif
+  busyUnsubPid: null      // personId pour lequel le listener est actif
 };
 
 var MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -342,28 +344,43 @@ function fmtDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padS
 function timeToMin(t) { var p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
 function minToTime(m) { return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); }
 
-/* ── GOOGLE CALENDAR FREE/BUSY (read from Firestore) ── */
+/* ── GOOGLE CALENDAR FREE/BUSY (read from Firestore) ──
+   Listener LIVE via onSnapshot : dès que calendar_busy/{pid} est mis à
+   jour côté serveur (nouveau RDV pris par un autre prospect, sync Google
+   Calendar, etc.), le frontend reçoit la nouvelle version et re-render
+   les créneaux automatiquement. Évite le bug du cache stale qui laissait
+   réserver des slots déjà occupés si la page restait ouverte longtemps. */
 function fetchFreeBusy() {
   if (!S.selPerson || !S.selPerson.calendarConnected) return;
   var pid = S.selPerson.id;
-  if (S.busyTimes[pid]) return; // already loaded
+
+  // Listener déjà actif pour cette personne ? Rien à faire.
+  if (S.busyUnsub && S.busyUnsubPid === pid) return;
+
+  // Cleanup ancien listener (changement de personne sélectionnée)
+  if (S.busyUnsub) {
+    try { S.busyUnsub(); } catch (e) {}
+    S.busyUnsub = null;
+    S.busyUnsubPid = null;
+  }
 
   S.busyLoading = true;
-  db.collection('calendar_busy').doc(pid).get().then(function(doc) {
-    if (doc.exists && doc.data().busy) {
-      S.busyTimes[pid] = doc.data().busy;
-    } else {
-      S.busyTimes[pid] = [];
-    }
-    S.busyLoading = false;
-    renderCalendar();
-  }).catch(function(e) {
-    console.log('FreeBusy read error:', e);
-    S.busyTimes[pid] = [];
-    S.busyLoading = false;
-  });
+  S.busyUnsubPid = pid;
 
-  // Also trigger a refresh via Firestore write (Cloud Function will sync)
+  S.busyUnsub = db.collection('calendar_busy').doc(pid).onSnapshot(
+    function(doc) {
+      S.busyTimes[pid] = (doc.exists && doc.data().busy) ? doc.data().busy : [];
+      S.busyLoading = false;
+      renderCalendar();
+    },
+    function(e) {
+      console.log('FreeBusy listener error:', e);
+      S.busyTimes[pid] = [];
+      S.busyLoading = false;
+    }
+  );
+
+  // Trigger refresh côté serveur (resync Google Calendar via Cloud Function)
   db.collection('calendar_sync_requests').doc(pid).set({
     requestedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(function() {});
