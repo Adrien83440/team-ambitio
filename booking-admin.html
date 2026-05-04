@@ -1192,6 +1192,11 @@ var vuMode='month',vuYear=null,vuMonth=null,vuWeekStart=null;
 
 // ── Helpers gating read-only (non-admin) ──
 function exIsReadOnly(pid){
+  // Tant que onAuthStateChanged n'a pas résolu le rôle, on N'APPLIQUE PAS
+  // le read-only (sinon l'admin voit sa fiche grisée le temps que le rôle
+  // arrive de Firestore, et certains champs restent désactivés si le re-render
+  // n'a pas lieu après).
+  if(typeof window._currentRole==='undefined')return false;
   // Admin : jamais read-only. Non-admin : read-only SAUF sur sa propre fiche.
   return (window._currentRole!=='admin') && (pid!==window._selfPersonId);
 }
@@ -1287,7 +1292,7 @@ h+='<div><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);
 h+='</div>';
 // Email + Phone
 h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">';
-h+='<div><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Email personnel</div><input class="bi" id="exProEmail" type="email" value="'+esc(exPerson.personalEmail||'')+'" style="width:100%" placeholder="email@perso.com"></div>';
+h+='<div><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Email de notification</div><input class="bi" id="exProEmail" type="email" value="'+esc(exPerson.personalEmail||'')+'" style="width:100%" placeholder="prenom@adrienemily.com"><div style="font-size:10px;color:rgba(255,255,255,.32);margin-top:4px;line-height:1.4">📨 Adresse qui recevra les notifications de RDV (nouveau RDV pris, annulation…). Recommandé : adresse Workspace de l\'expert (ex. <code style="color:#a78bfa">edouard@adrienemily.com</code>).</div></div>';
 h+='<div><div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.38);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Téléphone</div><input class="bi" id="exProPhone" type="tel" value="'+esc(exPerson.phone||'')+'" style="width:100%" placeholder="06 12 34 56 78"></div>';
 h+='</div>';
 // Color
@@ -2651,7 +2656,18 @@ firebase.auth().onAuthStateChanged(function(u){
     }else{
       prefetch=Promise.resolve();
     }
-    prefetch.then(loadAll,loadAll);
+    prefetch.then(function(){
+      loadAll();
+      // Si une fiche expert est déjà ouverte au moment où le rôle vient
+      // d'être posé, on re-render pour appliquer le bon état read-only
+      // (utile quand l'utilisateur clique vite sur une fiche avant que
+      // onAuthStateChanged ait résolu son rôle).
+      setTimeout(function(){
+        if(typeof exPerson!=='undefined'&&exPerson&&typeof renderExSection==='function'){
+          try{renderExSection();applyExReadOnly();}catch(e){}
+        }
+      },50);
+    },function(){loadAll();});
   }).catch(function(){loadAll();});
 });
 </script>
