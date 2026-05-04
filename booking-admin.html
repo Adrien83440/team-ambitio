@@ -1358,9 +1358,9 @@ h+='<div class="pl-unavail">Indisponible</div>';
 h+='<div class="pl-slots">';
 slots.forEach(function(s,si){
 h+='<div class="pl-slot">';
-h+='<input type="time" class="bi" value="'+s.start+'" data-slch="'+exPerson.id+'_'+dy+'_'+si+'_start" style="padding:5px 8px;font-size:12px;width:90px"/>';
+h+='<input type="time" class="bi" value="'+s.start+'" data-slch="'+exPerson.id+'|'+dy+'|'+si+'|start" style="padding:5px 8px;font-size:12px;width:90px"/>';
 h+='<span class="pl-slot-sep">—</span>';
-h+='<input type="time" class="bi" value="'+s.end+'" data-slch="'+exPerson.id+'_'+dy+'_'+si+'_end" style="padding:5px 8px;font-size:12px;width:90px"/>';
+h+='<input type="time" class="bi" value="'+s.end+'" data-slch="'+exPerson.id+'|'+dy+'|'+si+'|end" style="padding:5px 8px;font-size:12px;width:90px"/>';
 h+='<button class="pl-btn pl-btn-del" onclick="delSlotEx(\''+exPerson.id+'\',\''+dy+'\','+si+')" title="Supprimer">✕</button>';
 h+='<button class="pl-btn pl-btn-add" onclick="addSlotAfter(\''+exPerson.id+'\',\''+dy+'\','+si+')" title="Ajouter une plage">⊕</button>';
 if(si===0)h+='<button class="pl-btn" onclick="openCopyModal(\''+exPerson.id+'\',\''+dy+'\')" title="Copier sur d\'autres jours">⊟</button>';
@@ -1718,8 +1718,9 @@ function saveSlotChange(pid){
     var sched=JSON.parse(JSON.stringify(p.schedule||{}));
     // Patch : pour chaque input visible, on met à jour la valeur correspondante
     // dans sched. Les jours absents du DOM restent intacts.
-    document.querySelectorAll('input[data-slch^="'+pid+'_"]').forEach(function(inp){
-      var parts=inp.dataset.slch.split('_'); // [pid, day, idx, start|end]
+    // Délimiteur "|" plutôt que "_" car les IDs experts contiennent des underscores.
+    document.querySelectorAll('input[data-slch^="'+pid+'|"]').forEach(function(inp){
+      var parts=inp.dataset.slch.split('|'); // [pid, day, idx, start|end]
       if(parts.length<4)return;
       var day=parts[1],idx=parseInt(parts[2],10),which=parts[3];
       if(isNaN(idx)||!inp.value)return;
