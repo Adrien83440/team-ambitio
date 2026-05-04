@@ -1458,6 +1458,8 @@ h+='<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px"><
 h+='</div></div>';
 
 h+='</div>';
+// Barre d'indicateur autosave (utilisée par saveSlotChange et toggleArForm)
+h+='<div class="cd-save-bar" style="border-top:0;justify-content:flex-end;margin-top:14px"><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }
 
 else if(exSection==='vue'){
@@ -1656,6 +1658,19 @@ el.querySelectorAll('[data-holid]').forEach(function(tg){
 tg.addEventListener('click',function(){autoSaveEx(true);});
 });
 }
+// Section planning : autosave sur les inputs d'heures hebdomadaires
+// (data-slch="<pid>_<day>_<idx>_<start|end>"). Pas de re-render entre
+// chaque frappe pour préserver le focus.
+if(exSection==='planning'){
+el.querySelectorAll('input[data-slch]').forEach(function(inp){
+inp.addEventListener('input',function(){
+  if(exPerson)saveSlotChange(exPerson.id);
+});
+inp.addEventListener('change',function(){
+  if(exPerson)saveSlotChange(exPerson.id);
+});
+});
+}
 }
 
 // Slot management functions
@@ -1677,7 +1692,48 @@ var p=P.find(function(x){return x.id===pid;});if(!p||!p.schedule||!p.schedule[da
 p.schedule[day].splice(idx,1);
 CR.doc(pid).update({schedule:p.schedule}).then(function(){renderExSection();toast('🗑');});
 }
-window.addEmptySlot=addEmptySlot;window.addSlotAfter=addSlotAfter;window.delSlotEx=delSlotEx;
+// Sauve la modification d'un input d'heure (start ou end) d'un créneau hebdo.
+// Appelé en mode autosave (debounce 600ms) depuis le listener 'input' attaché
+// aux inputs <input type="time" data-slch="<pid>_<day>_<idx>_<start|end>">.
+// On NE re-render PAS pour éviter de perdre le focus pendant la frappe.
+var _slotSaveTimer=null;
+function saveSlotChange(pid){
+  if(_slotSaveTimer)clearTimeout(_slotSaveTimer);
+  _slotSaveTimer=setTimeout(function(){
+    var p=P.find(function(x){return x.id===pid;});
+    if(!p)return;
+    var ind=document.getElementById('ex-autosave-status');
+    if(ind)autoSaveIndicator(ind);
+    // Reconstruit le schedule à partir des inputs présents dans le DOM
+    var sched={};
+    document.querySelectorAll('input[data-slch^="'+pid+'_"]').forEach(function(inp){
+      var parts=inp.dataset.slch.split('_'); // [pid, day, idx, start|end]
+      if(parts.length<4)return;
+      var day=parts[1],idx=parseInt(parts[2],10),which=parts[3];
+      if(isNaN(idx))return;
+      sched[day]=sched[day]||[];
+      sched[day][idx]=sched[day][idx]||{start:'09:00',end:'17:00'};
+      sched[day][idx][which]=inp.value||sched[day][idx][which];
+    });
+    // Validation simple : start < end. Si invalide, on n'écrase pas Firestore.
+    for(var d in sched){
+      for(var i=0;i<sched[d].length;i++){
+        var s=sched[d][i];
+        if(!s||!s.start||!s.end||s.start>=s.end){
+          if(ind){ind.textContent='⚠️ Heure invalide';ind.style.color='#fca5a5';setTimeout(function(){ind.textContent='';},2500);}
+          return;
+        }
+      }
+    }
+    p.schedule=sched;
+    CR.doc(pid).update({schedule:sched}).then(function(){
+      if(ind)autoSaveDone(ind);
+    }).catch(function(e){
+      if(ind){ind.textContent='❌ Erreur sauvegarde';ind.style.color='#fca5a5';}
+    });
+  },600);
+}
+window.addEmptySlot=addEmptySlot;window.addSlotAfter=addSlotAfter;window.delSlotEx=delSlotEx;window.saveSlotChange=saveSlotChange;
 
 // Copy schedule modal
 function openCopyModal(pid,day){
