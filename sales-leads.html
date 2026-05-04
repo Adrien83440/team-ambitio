@@ -301,7 +301,7 @@ html, body {
 .ld-form-answers-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #93c5fd; margin-bottom: 6px; }
 .ld-form-answer-row { display: flex; gap: 10px; padding: 5px 0; font-size: 12px; align-items: flex-start; }
 .ld-form-answer-row + .ld-form-answer-row { border-top: 1px dashed rgba(255,255,255,0.06); margin-top: 2px; padding-top: 7px; }
-.ld-form-answer-label { color: var(--muted); min-width: 130px; flex-shrink: 0; font-weight: 600; font-size: 11px; }
+.ld-form-answer-label { color: var(--muted); min-width: 130px; max-width: 280px; flex-shrink: 0; font-weight: 600; font-size: 11px; word-break: break-word; white-space: normal; line-height: 1.35; }
 .ld-form-answer-val { color: var(--text); word-break: break-word; white-space: pre-wrap; flex: 1; }
 
 /* Edit mode */
@@ -901,17 +901,17 @@ var db = firebase.firestore();
 
 /* ── Cache labels formulaires AlteoForm ──
    Précharge tous les docs alteo_forms au boot pour résoudre les libellés
-   des champs quand un lead a formAnswers stocké en map {fld_xxx:value}
-   (ancien format, pré-_buildAnswersArr). Le nouveau format tableau
-   enrichi [{fieldId,label,type,value}] ne nécessite pas ce cache.
-   Filet de sécurité permanent contre toute future dette du même type. */
+   des champs ET le contactMapping (utilisé pour skipper les champs déjà
+   affichés dans le bloc principal de la fiche : nom/email/téléphone).
+   Format : { formId: { fieldId: {label, contactMapping} } }
+   Filet permanent — survit à la dette legacy formAnswers en map. */
 window.__formsLabels = window.__formsLabels || {};
 db.collection('alteo_forms').get().then(function(sn){
   sn.forEach(function(doc){
     var data = doc.data() || {};
     var map = {};
     (data.fields || []).forEach(function(f){
-      if (f && f.id && f.label) map[f.id] = f.label;
+      if (f && f.id) map[f.id] = { label: f.label || '', contactMapping: f.contactMapping || null };
     });
     window.__formsLabels[doc.id] = map;
   });
@@ -2021,21 +2021,36 @@ function paintLeadRdvBox(leadId, items) {
 // Gère deux formats sur le lead :
 //  - Tableau enrichi : [{fieldId,label,type,value}, ...] (nouveau format, posé par alteoforms-render)
 //  - Map clé→valeur  : {fieldId: value, ...} (ancien format, leads créés avant le patch)
-//    → on tente de résoudre les libellés via window.__formsLabels[formId]
-//      préchargé au boot. Si le formulaire n'est pas en cache (encore en
-//      cours de fetch ou supprimé) ou le champ a été retiré, on garde
-//      l'ID brut comme libellé — transparent et non-mensonger.
+//
+// Skip les champs dont le contactMapping vise des données déjà affichées
+// dans le bloc principal de la fiche (nom, email, téléphone). Évite le
+// doublon visuel : afficher "Prénom: Adrien" + "Nom: François" + "Email: x@y" +
+// "Téléphone: 0688..." sous "Réponses au formulaire" alors que ces données
+// sont déjà visibles tout en haut de la carte.
+//
+// Si formulaire pas en cache ou champ supprimé entre temps → on garde l'ID
+// brut en libellé — transparent et non-mensonger.
+var SKIP_CONTACT_MAPPINGS_LD = { prenom: 1, nom: 1, email: 1, telephone: 1 };
+
 function renderFormAnswersBlock(l, id) {
   var fa = l.formAnswers;
   if (!fa) return '';
+  var fieldIndex = (l.formId && window.__formsLabels && window.__formsLabels[l.formId]) || {};
   var rows = [];
   if (Array.isArray(fa)) {
-    rows = fa.filter(function(a){ return a && a.value !== '' && a.value != null; });
+    fa.forEach(function(a){
+      if (!a || a.value === '' || a.value == null) return;
+      var meta = fieldIndex[a.fieldId];
+      if (meta && SKIP_CONTACT_MAPPINGS_LD[meta.contactMapping]) return;
+      rows.push(a);
+    });
   } else if (typeof fa === 'object') {
-    var labelMap = (l.formId && window.__formsLabels && window.__formsLabels[l.formId]) || {};
     Object.keys(fa).forEach(function(k){
       var v = fa[k];
-      if (v !== '' && v != null) rows.push({ fieldId: k, label: labelMap[k] || k, value: v });
+      if (v === '' || v == null) return;
+      var meta = fieldIndex[k];
+      if (meta && SKIP_CONTACT_MAPPINGS_LD[meta.contactMapping]) return;
+      rows.push({ fieldId: k, label: (meta && meta.label) || k, value: v });
     });
   }
   if (rows.length === 0) return '';

@@ -90,7 +90,7 @@ body{overflow:hidden;display:flex;flex-direction:column}
 /* Réponses du formulaire AlteoForm */
 .fl-form-row{display:flex;gap:10px;padding:6px 0;align-items:flex-start;font-size:12px}
 .fl-form-row + .fl-form-row{border-top:1px dashed rgba(255,255,255,0.06);margin-top:2px;padding-top:8px}
-.fl-form-label{color:var(--muted);min-width:140px;flex-shrink:0;font-weight:600;font-size:11px}
+.fl-form-label{color:var(--muted);min-width:140px;max-width:300px;flex-shrink:0;font-weight:600;font-size:11px;word-break:break-word;white-space:normal;line-height:1.35}
 .fl-form-val{color:var(--text);word-break:break-word;white-space:pre-wrap;flex:1}
 .fl-form-empty{font-size:11px;color:var(--muted);padding:6px 0;font-style:italic}
 .fl-modified{font-size:10px;color:var(--muted2);margin-top:8px;text-align:center}
@@ -274,14 +274,16 @@ var db=firebase.firestore();var leadId=new URLSearchParams(window.location.searc
 
 /* ── Cache labels formulaires AlteoForm ──
    Précharge tous les docs alteo_forms au boot pour résoudre les libellés
-   des champs quand un lead a formAnswers stocké en map {fld_xxx:value}
-   (ancien format). Filet permanent — voir flFormAnswers() plus bas. */
+   des champs ET le contactMapping (skip champs déjà visibles dans le bloc
+   principal de la fiche : nom/email/téléphone). Format :
+   { formId: { fieldId: {label, contactMapping} } }
+   Filet permanent — voir flFormAnswers() plus bas. */
 window.__formsLabels=window.__formsLabels||{};
 db.collection('alteo_forms').get().then(function(sn){
   sn.forEach(function(doc){
     var data=doc.data()||{};
     var map={};
-    (data.fields||[]).forEach(function(f){if(f&&f.id&&f.label)map[f.id]=f.label;});
+    (data.fields||[]).forEach(function(f){if(f&&f.id)map[f.id]={label:f.label||'',contactMapping:f.contactMapping||null};});
     window.__formsLabels[doc.id]=map;
   });
 }).catch(function(e){console.warn('[FormsLabels] preload failed:',e);});
@@ -574,20 +576,31 @@ function flR(ic,label,k,v){return '<div class="fl-row"><span class="fl-icon">'+i
 // Gère deux formats sur le lead :
 //  - Tableau enrichi : [{fieldId,label,type,value}, ...] (nouveau format)
 //  - Map clé→valeur  : {fieldId: value, ...} (ancien format, sans labels)
-//    → libellés résolus via window.__formsLabels[formId] préchargé au boot.
-//      Si formulaire absent du cache ou champ supprimé entre-temps, on
-//      garde l'ID brut comme libellé (transparent, non-mensonger).
+//
+// Skip les champs dont le contactMapping vise des données déjà affichées
+// en haut de fiche (nom/email/téléphone). Évite le doublon visuel.
+// Si formulaire absent du cache ou champ supprimé, on garde l'ID brut.
+var SKIP_CONTACT_MAPPINGS_FL = { prenom: 1, nom: 1, email: 1, telephone: 1 };
+
 function flFormAnswers(l){
   var fa=l.formAnswers;
   if(!fa)return '';
+  var fieldIndex=(l.formId&&window.__formsLabels&&window.__formsLabels[l.formId])||{};
   var rows=[];
   if(Array.isArray(fa)){
-    rows=fa.filter(function(a){return a&&a.value!==''&&a.value!=null;});
+    fa.forEach(function(a){
+      if(!a||a.value===''||a.value==null)return;
+      var meta=fieldIndex[a.fieldId];
+      if(meta&&SKIP_CONTACT_MAPPINGS_FL[meta.contactMapping])return;
+      rows.push(a);
+    });
   }else if(typeof fa==='object'){
-    var labelMap=(l.formId&&window.__formsLabels&&window.__formsLabels[l.formId])||{};
     Object.keys(fa).forEach(function(k){
       var v=fa[k];
-      if(v!==''&&v!=null)rows.push({fieldId:k,label:labelMap[k]||k,value:v});
+      if(v===''||v==null)return;
+      var meta=fieldIndex[k];
+      if(meta&&SKIP_CONTACT_MAPPINGS_FL[meta.contactMapping])return;
+      rows.push({fieldId:k,label:(meta&&meta.label)||k,value:v});
     });
   }
   if(rows.length===0)return '';
