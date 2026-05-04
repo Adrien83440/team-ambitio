@@ -54,6 +54,25 @@
   // Contexte Web Audio partagé (créé paresseusement au premier usage)
   let audioCtx = null;
 
+  // ─── Audio routing (mobile earpiece ↔ haut-parleur) ──────────────────────
+  // Sur mobile, par défaut Twilio route le flux audio vers le speaker, ce qui
+  // n'est pas le comportement attendu d'un appel téléphonique (l'utilisateur
+  // veut pouvoir coller le téléphone à l'oreille). On expose un toggle qui
+  // utilise device.audio.speakerDevices.set() pour basculer entre l'écouteur
+  // et le haut-parleur sur Android Chrome (et iOS dans la limite du support
+  // setSinkId, fonctionnel sur iOS 17+).
+  //
+  // - Mobile : bouton visible. Décrochage par défaut sur earpiece. Préférence
+  //   utilisateur persistée dans localStorage et appliquée à chaque appel.
+  // - Desktop : bouton caché. On laisse Twilio utiliser le default OS (qui
+  //   correspond aux haut-parleurs / casque branché tels que configurés au
+  //   niveau système).
+  const SD_IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  const SD_OUTPUT_PREF_KEY = 'sd_output_pref'; // 'earpiece' | 'speaker'
+  let earpieceDeviceId = null;
+  let speakerDeviceId = null;
+  let currentOutputMode = null; // mode appliqué actuellement
+
   // ─── Utilitaires ─────────────────────────────────────────────────────────
   const $ = (id) => document.getElementById(id);
   const toast = (msg, type = '') => {
@@ -141,6 +160,89 @@
     }
   }
 
+  // ─── Audio routing helpers ───────────────────────────────────────────────
+  // Twilio Voice SDK v2 expose device.audio.availableOutputDevices (Map de
+  // deviceId → MediaDeviceInfo) et device.audio.speakerDevices.set([ids]).
+  // On identifie l'écouteur (earpiece) et le haut-parleur (speaker) par le
+  // label exposé par enumerateDevices(). Sur Android, les labels typiques
+  // contiennent "earpiece" ou "receiver" pour l'écouteur et "speaker" pour
+  // le haut-parleur. Si on ne trouve qu'un seul output (cas iOS Safari où
+  // l'OS gère le routing en interne), le toggle devient un no-op visuel.
+  function detectAudioOutputs() {
+    if (!device || !device.audio || !device.audio.availableOutputDevices) return;
+    earpieceDeviceId = null;
+    speakerDeviceId = null;
+    const all = [];
+    device.audio.availableOutputDevices.forEach((info, deviceId) => {
+      const label = String(info.label || '').toLowerCase();
+      all.push({ deviceId, label });
+      if (!speakerDeviceId && (label.includes('speaker') || label.includes('haut-parleur') || label.includes('speakerphone'))) {
+        speakerDeviceId = deviceId;
+      }
+      if (!earpieceDeviceId && (label.includes('earpiece') || label.includes('receiver') || label.includes('écouteur'))) {
+        earpieceDeviceId = deviceId;
+      }
+    });
+    // Fallbacks si labels non explicites (cas fréquent avant interaction
+    // utilisateur où enumerateDevices retourne des labels vides)
+    if (!earpieceDeviceId) {
+      const def = all.find(d => d.deviceId === 'default');
+      earpieceDeviceId = def ? def.deviceId : (all[0] && all[0].deviceId);
+    }
+    if (!speakerDeviceId) {
+      const other = all.find(d => d.deviceId !== earpieceDeviceId);
+      speakerDeviceId = other ? other.deviceId : earpieceDeviceId;
+    }
+    console.log('[dialer-audio] outputs detected', { earpieceDeviceId, speakerDeviceId, all });
+  }
+
+  function getStoredOutputPref() {
+    if (!SD_IS_MOBILE) return 'speaker'; // desktop : speaker = default OS
+    try {
+      const v = localStorage.getItem(SD_OUTPUT_PREF_KEY);
+      return (v === 'speaker' || v === 'earpiece') ? v : 'earpiece';
+    } catch { return 'earpiece'; }
+  }
+
+  function setStoredOutputPref(mode) {
+    try { localStorage.setItem(SD_OUTPUT_PREF_KEY, mode); } catch {}
+  }
+
+  // Applique le mode (earpiece/speaker) au flux audio Twilio. Idempotent et
+  // safe : peut être appelé avant ou pendant un appel. Sur desktop c'est un
+  // no-op (on laisse l'OS gérer le routing).
+  async function applyOutputMode(mode) {
+    if (!SD_IS_MOBILE) return;
+    if (!device || !device.audio || !device.audio.speakerDevices) return;
+    if (!earpieceDeviceId || !speakerDeviceId) detectAudioOutputs();
+    const targetId = mode === 'speaker' ? speakerDeviceId : earpieceDeviceId;
+    if (!targetId) return;
+    try {
+      await device.audio.speakerDevices.set([targetId]);
+      currentOutputMode = mode;
+      const btn = $('sd-btn-speaker');
+      if (btn) btn.classList.toggle('active', mode === 'speaker');
+      console.log('[dialer-audio] output set →', mode, targetId);
+    } catch (err) {
+      console.warn('[dialer-audio] applyOutputMode failed', err);
+    }
+  }
+
+  // Initialise le bouton speaker : visible mobile uniquement, état initial
+  // depuis la préférence stockée. À appeler une fois le Device registered.
+  function setupSpeakerButton() {
+    const btn = $('sd-btn-speaker');
+    if (!btn) return;
+    if (!SD_IS_MOBILE) {
+      btn.style.display = 'none';
+      return;
+    }
+    btn.style.display = '';
+    const pref = getStoredOutputPref();
+    btn.classList.toggle('active', pref === 'speaker');
+    currentOutputMode = pref;
+  }
+
   // ─── Auth + bootstrap ────────────────────────────────────────────────────
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) { window.location.href = 'login.html'; return; }
@@ -200,6 +302,18 @@
         // Le ringtone incoming reste actif en mode normal ; il sera coupé
         // ponctuellement pendant les sessions Power Dialer.
         muteTwilioOutgoingAndDisconnect();
+        // Audio routing : détection des outputs disponibles + setup du
+        // bouton haut-parleur (mobile uniquement). Re-détection sur
+        // deviceChange (casque branché/débranché).
+        detectAudioOutputs();
+        setupSpeakerButton();
+        try {
+          if (device.audio && typeof device.audio.on === 'function') {
+            device.audio.on('deviceChange', () => {
+              detectAudioOutputs();
+            });
+          }
+        } catch (e) { console.warn('[dialer-audio] deviceChange hook failed', e); }
       });
       device.on('error', (e) => {
         console.error('[Device]', e);
@@ -337,6 +451,13 @@
       const muted = !activeConn.isMuted();
       activeConn.mute(muted);
       e.currentTarget.classList.toggle('active', muted);
+    });
+    $('sd-btn-speaker').addEventListener('click', async () => {
+      // Toggle earpiece ↔ speaker. Persisté dans localStorage pour les
+      // appels suivants. No-op sur desktop (le bouton est caché).
+      const newMode = currentOutputMode === 'speaker' ? 'earpiece' : 'speaker';
+      setStoredOutputPref(newMode);
+      await applyOutputMode(newMode);
     });
     $('sd-btn-accept').addEventListener('click', () => { if (activeConn) activeConn.accept(); });
     $('sd-btn-reject').addEventListener('click', () => { if (activeConn) { activeConn.reject(); activeConn = null; showView('idle'); } });
@@ -498,6 +619,9 @@
       callStartTs = Date.now();
       startTimer();
       updateSession('incall');
+      // Audio routing : applique la préférence utilisateur (earpiece par
+      // défaut sur mobile, speaker sur desktop). No-op sur desktop.
+      applyOutputMode(getStoredOutputPref());
       if (autoSession) {
         autoSession.connectedLeadSeenForCurrentWave = true;
         autoSession.status = 'incall';
