@@ -1676,12 +1676,15 @@ inp.addEventListener('change',function(){
 // Slot management functions
 function addEmptySlot(pid,day){
 var p=P.find(function(x){return x.id===pid;});if(!p)return;
+// Annule le saveSlotChange pending pour éviter une race condition
+if(_slotSaveTimer){clearTimeout(_slotSaveTimer);_slotSaveTimer=null;}
 p.schedule=p.schedule||{};p.schedule[day]=p.schedule[day]||[];
 p.schedule[day].push({start:'09:00',end:'17:00'});
 CR.doc(pid).update({schedule:p.schedule}).then(function(){renderExSection();toast('✅');});
 }
 function addSlotAfter(pid,day,idx){
 var p=P.find(function(x){return x.id===pid;});if(!p||!p.schedule||!p.schedule[day])return;
+if(_slotSaveTimer){clearTimeout(_slotSaveTimer);_slotSaveTimer=null;}
 var prev=p.schedule[day][idx];
 var newStart=prev?prev.end:'14:00';
 p.schedule[day].splice(idx+1,0,{start:newStart,end:'18:00'});
@@ -1689,6 +1692,7 @@ CR.doc(pid).update({schedule:p.schedule}).then(function(){renderExSection();toas
 }
 function delSlotEx(pid,day,idx){
 var p=P.find(function(x){return x.id===pid;});if(!p||!p.schedule||!p.schedule[day])return;
+if(_slotSaveTimer){clearTimeout(_slotSaveTimer);_slotSaveTimer=null;}
 p.schedule[day].splice(idx,1);
 CR.doc(pid).update({schedule:p.schedule}).then(function(){renderExSection();toast('🗑');});
 }
@@ -1696,6 +1700,12 @@ CR.doc(pid).update({schedule:p.schedule}).then(function(){renderExSection();toas
 // Appelé en mode autosave (debounce 600ms) depuis le listener 'input' attaché
 // aux inputs <input type="time" data-slch="<pid>_<day>_<idx>_<start|end>">.
 // On NE re-render PAS pour éviter de perdre le focus pendant la frappe.
+//
+// IMPORTANT : on part de p.schedule existant (snapshot in-memory) et on ne
+// modifie QUE les valeurs des créneaux visibles dans le DOM. On ne reconstruit
+// pas le schedule entier — sinon les jours non rendus côté UI (ex. créés via
+// Copier sur autres jours pendant que la section est en cours de re-render)
+// seraient effacés par .update({schedule: ...}).
 var _slotSaveTimer=null;
 function saveSlotChange(pid){
   if(_slotSaveTimer)clearTimeout(_slotSaveTimer);
@@ -1704,19 +1714,23 @@ function saveSlotChange(pid){
     if(!p)return;
     var ind=document.getElementById('ex-autosave-status');
     if(ind)autoSaveIndicator(ind);
-    // Reconstruit le schedule à partir des inputs présents dans le DOM
-    var sched={};
+    // Clone profond du schedule existant (référence Firestore-safe)
+    var sched=JSON.parse(JSON.stringify(p.schedule||{}));
+    // Patch : pour chaque input visible, on met à jour la valeur correspondante
+    // dans sched. Les jours absents du DOM restent intacts.
     document.querySelectorAll('input[data-slch^="'+pid+'_"]').forEach(function(inp){
       var parts=inp.dataset.slch.split('_'); // [pid, day, idx, start|end]
       if(parts.length<4)return;
       var day=parts[1],idx=parseInt(parts[2],10),which=parts[3];
-      if(isNaN(idx))return;
+      if(isNaN(idx)||!inp.value)return;
       sched[day]=sched[day]||[];
       sched[day][idx]=sched[day][idx]||{start:'09:00',end:'17:00'};
-      sched[day][idx][which]=inp.value||sched[day][idx][which];
+      sched[day][idx][which]=inp.value;
     });
-    // Validation simple : start < end. Si invalide, on n'écrase pas Firestore.
+    // Validation : start < end sur tous les jours, pas seulement ceux modifiés.
+    // Si un créneau est invalide, on n'écrit rien.
     for(var d in sched){
+      if(!Array.isArray(sched[d]))continue;
       for(var i=0;i<sched[d].length;i++){
         var s=sched[d][i];
         if(!s||!s.start||!s.end||s.start>=s.end){
@@ -1749,6 +1763,8 @@ m.classList.add('show');
 }
 function applyCopySchedule(){
 if(!exPerson||!cpSourceDay)return;
+// Annule le saveSlotChange pending pour éviter une race condition
+if(typeof _slotSaveTimer!=='undefined'&&_slotSaveTimer){clearTimeout(_slotSaveTimer);_slotSaveTimer=null;}
 var src=exPerson.schedule[cpSourceDay]||[];
 var targets=[];
 document.querySelectorAll('#cpDays .cp-day').forEach(function(el){
