@@ -171,15 +171,27 @@ module.exports = async (req, res) => {
   }
 
   // ── 4. Match : email exact (lowercased) puis phoneNormalized ──────────
+  // On exclut activement les leads mergés (_merged === true) pour ne pas
+  // écrire sur des fantômes — le doc vivant est référencé via _mergedInto.
+  // Limit(5) pour avoir une marge si plusieurs docs partagent l'email
+  // (cas typique : ancien doc fusionné + nouveau doc actif).
+  function pickAlive(snap) {
+    if (snap.empty) return null;
+    for (const d of snap.docs) {
+      if (d.data()._merged !== true) return d;
+    }
+    return null;
+  }
+
   let existing = null;
   try {
     if (emailLc) {
-      const sn = await db.collection('leads').where('email', '==', emailLc).limit(1).get();
-      if (!sn.empty) existing = sn.docs[0];
+      const sn = await db.collection('leads').where('email', '==', emailLc).limit(5).get();
+      existing = pickAlive(sn);
     }
     if (!existing && phoneNorm) {
-      const sn = await db.collection('leads').where('phoneNormalized', '==', phoneNorm).limit(1).get();
-      if (!sn.empty) existing = sn.docs[0];
+      const sn = await db.collection('leads').where('phoneNormalized', '==', phoneNorm).limit(5).get();
+      existing = pickAlive(sn);
     }
   } catch (e) {
     console.error('[alteoform-submit] lead search error:', e);
