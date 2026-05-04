@@ -977,153 +977,55 @@ return;
 showThankYou(settings.thankYouMessage||'Merci pour vos réponses !');
 }
 
-function findAndUpdateLead(contact,callback){
-  // Skip en mode preview pour ne pas polluer le CRM pendant les tests admin
-  var qp=new URLSearchParams(window.location.search);
-  if(qp.get('preview')){callback(null);return;}
+// ─────────────────────────────────────────────────────────────────────────
+//  Délégation backend : tout le pattern find / update / create / résurrection
+//  est désormais orchestré par /api/alteoform-submit (Vercel Function avec
+//  Admin SDK). Voir l'en-tête de ce fichier pour le pourquoi.
+//
+//  En résumé :
+//   - Les rules Firestore /leads interdisent l'update aux non-authentifiés.
+//     Avant ce changement, updateLeadWithForm échouait silencieusement pour
+//     tous les vrais prospects (seul un admin connecté pouvait l'exécuter).
+//   - Le pattern résurrection (lastOptinAt + timeline orange) qui faisait
+//     défaut côté flux AlteoForm est maintenant câblé : un re-passage sur
+//     un lead existant fait remonter la carte en haut de Lead Live avec
+//     le badge "🔄 Déjà CRM", popup et son — exactement comme un webhook.
+// ─────────────────────────────────────────────────────────────────────────
+function findAndUpdateLead(contact, callback) {
+  // Mode preview : test admin depuis le builder, on ne touche pas au CRM
+  var qp = new URLSearchParams(window.location.search);
+  if (qp.get('preview')) { callback(null); return; }
 
-  // Le toggle settings.createLeadIfMissing (opt-in par formulaire dans le
-  // builder) gouverne la CRÉATION d'un lead si aucun match n'est trouvé.
-  // - OFF (par défaut) → comportement historique : update si trouvé, sinon rien
-  // - ON               → création d'un lead "form sans RDV" pour ne jamais
-  //                      perdre les coordonnées d'un prospect qui remplit
-  //                      mais ne réserve pas de créneau ensuite.
-  // Dans tous les cas, stage/status d'un lead trouvé ne sont jamais modifiés
-  // (gérés exclusivement par la Cloud Function onBookingCreated).
-  var settings=FORM.settings||{};
-  var allowCreate=!!settings.createLeadIfMissing;
-
-  var searchField=null,searchValue=null;
-  if(contact.email){searchField='email';searchValue=contact.email;}
-  else if(contact.telephone){searchField='telephone';searchValue=contact.telephone;}
-
-  if(!searchField){callback(null);return;}
-
-  db.collection('leads').where(searchField,'==',searchValue).limit(1).get().then(function(sn){
-    if(sn.empty){
-      // Tentative fallback par téléphone si on n'avait essayé que par email
-      if(searchField==='email'&&contact.telephone){
-        db.collection('leads').where('telephone','==',contact.telephone).limit(1).get().then(function(sn2){
-          if(sn2.empty){
-            if(allowCreate)createFormLead(contact,callback);
-            else callback(null);
-            return;
-          }
-          var doc=sn2.docs[0];
-          updateLeadWithForm(doc);
-          var ld=doc.data();ld._id=doc.id;
-          callback(ld);
-        }).catch(function(){
-          if(allowCreate)createFormLead(contact,callback);
-          else callback(null);
-        });
-        return;
-      }
-      // Pas de match → création seulement si opt-in explicit
-      if(allowCreate)createFormLead(contact,callback);
-      else callback(null);
-      return;
-    }
-    var doc=sn.docs[0];
-    updateLeadWithForm(doc);
-    var ld=doc.data();ld._id=doc.id;
-    callback(ld);
-  }).catch(function(e){
-    console.error('Lead search error:',e);
-    if(allowCreate)createFormLead(contact,callback);
-    else callback(null);
-  });
-}
-
-// Normalise un téléphone aux 9 derniers digits (cohérent avec sales-leads.html)
-function _phoneNormalized(raw){
-  if(!raw)return null;
-  var d=String(raw).replace(/[^\d]/g,'');
-  if(d.length<6)return null;
-  if(d.length>=9)return d.slice(-9);
-  return d;
-}
-
-// Format date FR cohérent avec sales-leads.html (notesHistory + timeline_history)
-function _dateNowFR(){return new Date().toLocaleString('fr-FR');}
-
-// Construit le tableau enrichi des réponses (avec labels) pour stockage sur le lead.
-// Format : [{fieldId,label,type,value}, ...] — le rendu côté fiche peut afficher
-// directement les labels sans avoir à re-fetcher le formulaire.
-function _buildAnswersArr(){
-  return FIELDS
-    .filter(function(f){return f.type!=='info';})
-    .map(function(f){return{fieldId:f.id,label:f.label||'',type:f.type,value:answers[f.id]||''};})
-    .filter(function(a){return a.value!=='';});
-}
-
-function createFormLead(contact,callback){
-  // Pas d'email ni de tel = lead inidentifiable → on s'abstient mais on
-  // continue le flow normalement (les réponses du formulaire sont déjà
-  // sauvegardées dans alteo_forms/{id}/responses).
-  if(!contact.email&&!contact.telephone){callback(null);return;}
-
-  var prenom=(contact.prenom||'').trim();
-  var nomBrut=(contact.nom||'').trim();
-  var fullName=(prenom+' '+nomBrut).trim();
-  if(!fullName)fullName=contact.email||contact.telephone||'Sans nom';
-
-  var formTitle=FORM.title||'';
-  var noteTxt='📝 Lead créé via formulaire'+(formTitle?' : '+formTitle:'');
-
-  var leadData={
-    nom:fullName,
-    email:(contact.email||'').trim().toLowerCase(),
-    telephone:(contact.telephone||'').replace(/\s+/g,''),
-    phoneNormalized:_phoneNormalized(contact.telephone),
-    type:'alteoform',
-    source:'alteoform',
-    sourceDetail:formTitle,
-    stage:'lead',
-    status:'nouveau',
-    assignedTo:'',
-    utm:'AlteoForm'+(formTitle?' - '+formTitle:''),
-    formId:FORM._id,
-    formTitle:formTitle,
-    formAnswers:_buildAnswersArr(),
-    formSubmittedAt:new Date().toISOString(),
-    tags:[],
-    notesHistory:[{text:noteTxt,date:_dateNowFR()}],
-    timeline_history:[{text:'✨ '+noteTxt,date:_dateNowFR(),color:'#f59e0b'}],
-    communications:[],
-    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  // Snapshot des réponses au moment de l'envoi (la map brute, le backend
+  // se charge de reconstituer le tableau enrichi via les fields du form).
+  var payload = {
+    formId: FORM._id,
+    contact: contact,
+    answers: answers
   };
 
-  db.collection('leads').add(leadData).then(function(ref){
-    // On retourne le lead avec son _id pour que doPostActions puisse passer
-    // &leadId=... à booking.html. Si le user réserve ensuite un créneau,
-    // la Cloud Function onBookingCreated retrouvera ce lead par son ID
-    // et le fera évoluer en stage:'rdv_confirmes' (pas de doublon).
-    var ld={};for(var k in leadData)ld[k]=leadData[k];
-    ld._id=ref.id;
-    callback(ld);
-  }).catch(function(e){
-    console.error('Lead create error:',e);
-    callback(null);
-  });
-}
-
-function updateLeadWithForm(doc){
-// Note: cette fonction garde la trace des réponses du formulaire sur le lead
-// existant pour qu'elles soient visibles dans la fiche, MAIS ne pose plus
-// status:'self_booking' / selfBooking:true. Le stage et le status du lead
-// sont dorénavant gérés exclusivement par la Cloud Function onBookingCreated
-// (source unique de vérité côté serveur). Cela évite que stage/status
-// divergent entre AlteoForms et booking direct.
-var update={
-formId:FORM._id,
-formTitle:FORM.title||'',
-formAnswers:_buildAnswersArr(),
-formSubmittedAt:new Date().toISOString(),
-updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-};
-doc.ref.update(update).catch(function(e){console.error('Lead update error:',e);});
+  fetch('/api/alteoform-submit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+    .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+    .then(function (out) {
+      if (out.status !== 200 || !out.body || out.body.ok !== true) {
+        console.error('[alteoform-submit] non-ok response:', out.status, out.body);
+        callback(null); return;
+      }
+      var data = out.body;
+      // skipped = pas de lead trouvé/créé → on continue le flow sans leadId.
+      // updated/created → on remonte _id + assignedTo pour le routing
+      // booking (doPostActions injecte ces deux champs dans l'URL).
+      if (data.action === 'skipped' || !data.leadId) { callback(null); return; }
+      callback({ _id: data.leadId, assignedTo: data.assignedTo || '' });
+    })
+    .catch(function (e) {
+      console.error('[alteoform-submit] network error:', e);
+      callback(null);
+    });
 }
 
 function showThankYou(msg){

@@ -899,6 +899,24 @@ html, body {
    ═══════════════════════════════════════ */
 var db = firebase.firestore();
 
+/* ── Cache labels formulaires AlteoForm ──
+   Précharge tous les docs alteo_forms au boot pour résoudre les libellés
+   des champs quand un lead a formAnswers stocké en map {fld_xxx:value}
+   (ancien format, pré-_buildAnswersArr). Le nouveau format tableau
+   enrichi [{fieldId,label,type,value}] ne nécessite pas ce cache.
+   Filet de sécurité permanent contre toute future dette du même type. */
+window.__formsLabels = window.__formsLabels || {};
+db.collection('alteo_forms').get().then(function(sn){
+  sn.forEach(function(doc){
+    var data = doc.data() || {};
+    var map = {};
+    (data.fields || []).forEach(function(f){
+      if (f && f.id && f.label) map[f.id] = f.label;
+    });
+    window.__formsLabels[doc.id] = map;
+  });
+}).catch(function(e){ console.warn('[FormsLabels] preload failed:', e); });
+
 /* ── Config ── */
 /* SETTERS est désormais un cache local rempli dynamiquement depuis
    window.TEAM_MEMBERS (chargé via nav.js → loadTeamMembers).
@@ -2003,6 +2021,10 @@ function paintLeadRdvBox(leadId, items) {
 // Gère deux formats sur le lead :
 //  - Tableau enrichi : [{fieldId,label,type,value}, ...] (nouveau format, posé par alteoforms-render)
 //  - Map clé→valeur  : {fieldId: value, ...} (ancien format, leads créés avant le patch)
+//    → on tente de résoudre les libellés via window.__formsLabels[formId]
+//      préchargé au boot. Si le formulaire n'est pas en cache (encore en
+//      cours de fetch ou supprimé) ou le champ a été retiré, on garde
+//      l'ID brut comme libellé — transparent et non-mensonger.
 function renderFormAnswersBlock(l, id) {
   var fa = l.formAnswers;
   if (!fa) return '';
@@ -2010,9 +2032,10 @@ function renderFormAnswersBlock(l, id) {
   if (Array.isArray(fa)) {
     rows = fa.filter(function(a){ return a && a.value !== '' && a.value != null; });
   } else if (typeof fa === 'object') {
+    var labelMap = (l.formId && window.__formsLabels && window.__formsLabels[l.formId]) || {};
     Object.keys(fa).forEach(function(k){
       var v = fa[k];
-      if (v !== '' && v != null) rows.push({ fieldId: k, label: k, value: v });
+      if (v !== '' && v != null) rows.push({ fieldId: k, label: labelMap[k] || k, value: v });
     });
   }
   if (rows.length === 0) return '';

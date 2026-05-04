@@ -271,6 +271,20 @@ body{overflow:hidden;display:flex;flex-direction:column}
 </div>
 <script>
 var db=firebase.firestore();var leadId=new URLSearchParams(window.location.search).get('id');var lead=null;var autoTimer=null;
+
+/* ── Cache labels formulaires AlteoForm ──
+   Précharge tous les docs alteo_forms au boot pour résoudre les libellés
+   des champs quand un lead a formAnswers stocké en map {fld_xxx:value}
+   (ancien format). Filet permanent — voir flFormAnswers() plus bas. */
+window.__formsLabels=window.__formsLabels||{};
+db.collection('alteo_forms').get().then(function(sn){
+  sn.forEach(function(doc){
+    var data=doc.data()||{};
+    var map={};
+    (data.fields||[]).forEach(function(f){if(f&&f.id&&f.label)map[f.id]=f.label;});
+    window.__formsLabels[doc.id]=map;
+  });
+}).catch(function(e){console.warn('[FormsLabels] preload failed:',e);});
 var STAGES=[{key:'lead',label:'Lead',color:'#34d399',s:'P'},{key:'nrp1',label:'NRP 1',color:'#f59e0b',s:'P'},{key:'nrp2',label:'NRP 2',color:'#e67e22',s:'P'},{key:'nrp3',label:'NRP 3',color:'#ef4444',s:'P'},{key:'all_nrp',label:'All NRP',color:'#6b7280',s:'P'},{key:'faux_numero',label:'Faux numéro',color:'#64748b',s:'P'},{key:'poubelle',label:'Poubelle',color:'#374151',s:'P'},{key:'disqualification',label:'Disqualification',color:'#6b7280',s:'P'},{key:'follow_up_pm',label:'Follow Up (PM)',color:'#60a5fa',s:'P'},{key:'set',label:'SET',color:'#a78bfa',s:'P'},{key:'rdv_self_booking',label:'RDV Self Booking',color:'#fbbf24',s:'P'},{key:'rdv_confirmes',label:'RDV confirmés',color:'#34d399',s:'C'},{key:'rdv_annules_prospect',label:'Annulés Prospect',color:'#ef4444',s:'C'},{key:'rdv_annules_equipe',label:'Annulés Équipe',color:'#f87171',s:'C'},{key:'no_show_self',label:'No Show Self',color:'#f59e0b',s:'C'},{key:'no_show_setting',label:'No Show Setting',color:'#e67e22',s:'C'},{key:'partenariats',label:'Partenariats',color:'#8b5cf6',s:'C'},{key:'closed_won_setting',label:'Won Setting',color:'#10b981',s:'C'},{key:'closed_won_self',label:'Won Self B.',color:'#059669',s:'C'},{key:'closed_lost',label:'Closed Lost',color:'#ef4444',s:'C'},{key:'follow_up_closing',label:'Follow-Up',color:'#60a5fa',s:'C'},{key:'disqualifie_closing',label:'Disqualifié',color:'#6b7280',s:'C'}];
 var SM={};STAGES.forEach(function(s,i){s._i=i;SM[s.key]=s;});
 function toast(m){var t=document.getElementById('ctToast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
@@ -560,6 +574,9 @@ function flR(ic,label,k,v){return '<div class="fl-row"><span class="fl-icon">'+i
 // Gère deux formats sur le lead :
 //  - Tableau enrichi : [{fieldId,label,type,value}, ...] (nouveau format)
 //  - Map clé→valeur  : {fieldId: value, ...} (ancien format, sans labels)
+//    → libellés résolus via window.__formsLabels[formId] préchargé au boot.
+//      Si formulaire absent du cache ou champ supprimé entre-temps, on
+//      garde l'ID brut comme libellé (transparent, non-mensonger).
 function flFormAnswers(l){
   var fa=l.formAnswers;
   if(!fa)return '';
@@ -567,9 +584,10 @@ function flFormAnswers(l){
   if(Array.isArray(fa)){
     rows=fa.filter(function(a){return a&&a.value!==''&&a.value!=null;});
   }else if(typeof fa==='object'){
+    var labelMap=(l.formId&&window.__formsLabels&&window.__formsLabels[l.formId])||{};
     Object.keys(fa).forEach(function(k){
       var v=fa[k];
-      if(v!==''&&v!=null)rows.push({fieldId:k,label:k,value:v});
+      if(v!==''&&v!=null)rows.push({fieldId:k,label:labelMap[k]||k,value:v});
     });
   }
   if(rows.length===0)return '';
