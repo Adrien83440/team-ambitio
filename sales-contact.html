@@ -344,6 +344,7 @@ h+='<div class="fiche-top"><a class="fiche-back" href="sales-crm.html">\u2190</a
 if(l.telephone)h+='<a class="fiche-top-btn" href="tel:'+l.telephone.replace(/\s/g,'')+'">\ud83d\udcde Appeler</a>';
 if(l.email)h+='<a class="fiche-top-btn" href="mailto:'+escA(l.email)+'">\u2709\ufe0f Email</a>';
 h+='<button class="fiche-top-btn" style="color:#a78bfa;border-color:rgba(167,139,250,.25)" onclick="openBookingFromFiche()">\ud83d\udcc5 RDV</button>';
+h+='<button class="fiche-top-btn" style="color:#fb923c;border-color:rgba(251,146,60,.3)" onclick="openRemonterModal()" title="Faire remonter dans Leads Live">\ud83d\udd01 Remonter</button>';
 h+='</div></div>';
 // Pipeline
 h+='<div class="pipeline-bar"><div class="pipeline-dots">';
@@ -890,5 +891,60 @@ async function toggleSlotFromFiche(bookingId,action,btn){
 }
 </script>
 <script src="nav.js"></script>
+
+<!-- ═══ Modale "Remonter dans Leads Live" (manuel) — 2026-05-05 ═══ -->
+<div id="remModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:24px;width:90%;max-width:420px;font-family:var(--fb)">
+    <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px">🔁 Remonter dans Leads Live</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:18px">Le lead va apparaître en haut du feed avec la date/heure choisie. Si le stage est terminal (won/lost/poubelle), il sera remis à "lead/nouveau".</div>
+    <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Date / heure</label>
+    <input type="datetime-local" id="remDate" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:13px;margin-bottom:14px"/>
+    <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">Source / raison (optionnel)</label>
+    <input type="text" id="remReason" placeholder="ex: Self-booking Calendly externe, DM Insta..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--fb);font-size:13px;margin-bottom:18px"/>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="closeRemonterModal()" style="padding:10px 16px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--muted);font-family:var(--fb);font-size:12px;font-weight:600;cursor:pointer">Annuler</button>
+      <button onclick="remonterManuelLead()" id="remGo" style="padding:10px 18px;border:none;border-radius:8px;background:linear-gradient(135deg,#fb923c,#f97316);color:#0f0f1a;font-family:var(--fb);font-size:12px;font-weight:700;cursor:pointer">🔁 Remonter</button>
+    </div>
+  </div>
+</div>
+<script>
+function openRemonterModal(){
+  var m=document.getElementById('remModal');
+  var d=new Date();
+  var iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  document.getElementById('remDate').value=iso;
+  document.getElementById('remReason').value='';
+  m.style.display='flex';
+}
+function closeRemonterModal(){document.getElementById('remModal').style.display='none';}
+function remonterManuelLead(){
+  if(typeof lead==='undefined'||!lead||!lead.id){alert('Lead non chargé');return;}
+  var dateStr=document.getElementById('remDate').value;
+  var reason=document.getElementById('remReason').value.trim();
+  if(!dateStr){alert('Date requise');return;}
+  var btn=document.getElementById('remGo');btn.disabled=true;btn.textContent='⏳ ...';
+  var customDate=new Date(dateStr);
+  var TERMINAL=['closed_won_setting','closed_won_self','closed_lost','poubelle','disqualification'];
+  var isTerminal=TERMINAL.indexOf(lead.stage)>=0;
+  var who=(window._currentUserName||localStorage.getItem('ambitio_name')||'admin');
+  var tlText='🔁 Remonté manuellement par '+who+(reason?' · '+reason:'');
+  var newTl=(lead.timeline_history||[]).concat([{text:tlText,date:customDate.toLocaleString('fr-FR'),color:'#fb923c'}]);
+  var update={
+    lastOptinAt:firebase.firestore.Timestamp.fromDate(customDate),
+    lastOptinSource:'manual',
+    lastOptinReason:reason||null,
+    lastOptinBy:who,
+    updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
+    timeline_history:newTl
+  };
+  if(isTerminal){update.previousStatus=lead.status||null;update.stage='lead';update.status='nouveau';}
+  db.collection('leads').doc(lead.id).update(update).then(function(){
+    closeRemonterModal();btn.disabled=false;btn.textContent='🔁 Remonter';
+    if(typeof toast==='function')toast('✅ Lead remonté dans Leads Live');
+    else alert('✅ Lead remonté');
+  }).catch(function(e){btn.disabled=false;btn.textContent='🔁 Remonter';alert('Erreur: '+e.message);});
+}
+</script>
+
 </body>
 </html>

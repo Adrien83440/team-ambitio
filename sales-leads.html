@@ -2180,7 +2180,11 @@ function renderCard(l) {
   }
   // Badge "Déjà CRM" : lead qui a re-optin via webhook alors qu'il existait déjà.
   if (l._resurrectedOptin) {
-    h += '<span class="ld-assigned" style="color:#fb923c;border-color:rgba(251,146,60,0.35);background:rgba(251,146,60,0.1)">🔄 Déjà CRM</span>';
+    if (l.lastOptinSource === 'manual') {
+      h += '<span class="ld-assigned" style="color:#fb923c;border-color:rgba(251,146,60,0.35);background:rgba(251,146,60,0.15);font-weight:700">🔁 Remonté manuel</span>';
+    } else {
+      h += '<span class="ld-assigned" style="color:#fb923c;border-color:rgba(251,146,60,0.35);background:rgba(251,146,60,0.1)">🔄 Déjà CRM</span>';
+    }
   }
   // Badge "Avant : <previousStatus>" : pour les ressuscités dont le statut historique
   // n'était pas 'nouveau' (ex : lead disqualifié qui re-optin → repassé à 'nouveau' par
@@ -3693,9 +3697,13 @@ function startBookingBridge() {
             // ───── UPDATE lead existant ─────
             var leadRef = db.collection('leads').doc(existing.id);
             var cur = existing.data || {};
+            // bridge-fix-2026-05-05 : poser lastBookingAt pour que le lead
+            // remonte dans Leads Live via startResurrectListening (sinon le lead
+            // gardait son ancienne position et le sales ne voyait pas le nouveau RDV).
             var update = {
               bookingEventId: beId,
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              lastBookingAt: firebase.firestore.FieldValue.serverTimestamp()
             };
 
             // Type : on force self_booking (lead plus engagé)
