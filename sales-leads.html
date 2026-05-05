@@ -3591,18 +3591,38 @@ var TERMINAL_STAGES = ['closed_won_setting', 'closed_won_self', 'closed_lost', '
 var IMPORT_SOURCES_BRIDGE = ['bigin_import', 'migration_suivi_client', 'webinar_import'];
 
 function telVariants(raw) {
+  // telVariants-fix-2026-05 : génère une "base" propre (0XXXXXXXXX, 10 digits)
+  // quel que soit le format d'entrée, en strippant le 0 parasite après +33/33.
+  // Avant : "+330749668323" → variants ["+330749668323","00749668323","330749668323"]
+  //         → aucun match avec le lead existant en "+33749668323" → doublon.
   if (!raw) return [];
   var clean = String(raw).replace(/\s+/g, '');
   var set = {};
   set[clean] = 1;
-  if (clean.indexOf('+33') === 0) set['0' + clean.slice(3)] = 1;
-  if (clean.indexOf('33') === 0 && clean.length >= 11) set['0' + clean.slice(2)] = 1;
-  if (clean.indexOf('0') === 0 && clean.length === 10) {
-    set['+33' + clean.slice(1)] = 1;
-    set['33' + clean.slice(1)] = 1;
+
+  var digits = clean.replace(/[^\d+]/g, '').replace(/^\+/, '');
+
+  // Calcul de la base canonique = "0XXXXXXXXX"
+  var base = '';
+  if (digits.indexOf('33') === 0 && digits.length >= 11) {
+    var after33 = digits.slice(2);
+    if (after33.charAt(0) === '0' && after33.length === 10) after33 = after33.slice(1);
+    base = '0' + after33;
+  } else if (digits.charAt(0) === '0' && digits.length === 10) {
+    base = digits;
+  } else if (digits.length === 9) {
+    base = '0' + digits;
   }
-  var digitsOnly = clean.replace(/[^\d]/g, '');
-  if (digitsOnly) set[digitsOnly] = 1;
+
+  if (base && base.length === 10) {
+    set[base] = 1;
+    set['+33' + base.slice(1)] = 1;
+    set['33' + base.slice(1)] = 1;
+    set[base.slice(0,2) + ' ' + base.slice(2,4) + ' ' + base.slice(4,6) + ' ' + base.slice(6,8) + ' ' + base.slice(8,10)] = 1;
+    set[base.slice(0,2) + '.' + base.slice(2,4) + '.' + base.slice(4,6) + '.' + base.slice(6,8) + '.' + base.slice(8,10)] = 1;
+  }
+
+  if (digits) set[digits] = 1;
   return Object.keys(set);
 }
 
@@ -3632,22 +3652,40 @@ function findExistingLead(email, phone) {
 
     function byPhone() {
       var variants = telVariants(phone);
-      if (!variants.length) { resolve(null); return; }
-      var remaining = variants.length;
-      var collected = [];
+      // byPhone-fix-2026-05 : ajout d'un fallback par phoneNormalized (9 derniers
+      // chiffres). Filet de sécurité pour les leads avec format exotique en
+      // telephone (espaces, importés Bigin, etc.) que les variants ne couvrent pas.
+      var digitsOnly = String(phone || '').replace(/[^\d]/g, '');
+      var last9 = digitsOnly.length >= 9 ? digitsOnly.slice(-9) : null;
+      var queries = variants.length + (last9 ? 1 : 0);
+      if (queries === 0) { resolve(null); return; }
+      var remaining = queries;
+      var collectedMap = {};
+      function done() {
+        remaining--;
+        if (remaining === 0) {
+          var collected = Object.keys(collectedMap).map(function(k){ return collectedMap[k]; });
+          resolve(pickBestLead(collected));
+        }
+      }
       variants.forEach(function(v) {
         db.collection('leads').where('telephone', '==', v).get().then(function(snap) {
           snap.forEach(function(doc) {
             if (doc.data()._merged === true) return;
-            collected.push({ id: doc.id, data: doc.data() });
+            if (!collectedMap[doc.id]) collectedMap[doc.id] = { id: doc.id, data: doc.data() };
           });
-          remaining--;
-          if (remaining === 0) resolve(pickBestLead(collected));
-        }).catch(function() {
-          remaining--;
-          if (remaining === 0) resolve(pickBestLead(collected));
-        });
+          done();
+        }).catch(done);
       });
+      if (last9) {
+        db.collection('leads').where('phoneNormalized', '==', last9).get().then(function(snap) {
+          snap.forEach(function(doc) {
+            if (doc.data()._merged === true) return;
+            if (!collectedMap[doc.id]) collectedMap[doc.id] = { id: doc.id, data: doc.data() };
+          });
+          done();
+        }).catch(done);
+      }
     }
 
     if (emailNorm) {
