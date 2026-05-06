@@ -205,6 +205,26 @@
 
   <div id="statusBox"></div>
 
+  <!-- Alerte docs orphelins (legacy _merged=true && isClient=true) -->
+  <div id="orphansAlert" style="display:none;background:rgba(245,158,11,.08);border:1.5px solid rgba(245,158,11,.35);border-radius:14px;padding:16px 20px;margin-bottom:20px">
+    <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+      <div style="font-size:32px;flex-shrink:0">🧹</div>
+      <div style="flex:1;min-width:280px">
+        <div style="font-size:14px;font-weight:800;color:var(--accent);margin-bottom:6px">
+          <span id="orphansCount">0</span> doc(s) orphelin(s) détecté(s)
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,.65);line-height:1.6">
+          Ces docs ont <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">_merged=true</code> mais <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">isClient=true</code> — ils ont été fusionnés par une logique antérieure mais leur flag <code>isClient</code> n'a pas été basculé. C'est pour ça qu'ils apparaissent encore comme doublons dans <strong>Sales CRM &gt; Clients actifs</strong>. Réparation : bascule <code>isClient=false</code> sur tous → ils disparaissent immédiatement des vues clients (sans toucher aux docs primary qui restent intacts).
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+        <button class="btn btn-primary" id="btnRepairOrphans">🧹 Réparer tout</button>
+        <button class="btn btn-ghost btn-sm" id="btnInspectOrphans">👁 Voir la liste</button>
+      </div>
+    </div>
+    <div id="orphansList" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid rgba(245,158,11,.2);max-height:280px;overflow-y:auto;font-size:11px;color:var(--muted);font-family:'DM Mono',monospace"></div>
+  </div>
+
   <!-- Summary -->
   <div class="summary" id="summary" style="display:none">
     <div class="sum-card">
@@ -477,29 +497,137 @@
     setStatus('⏳ Chargement des clients…', 'info');
     $('summary').style.display = 'none';
     $('clustersWrap').innerHTML = '';
+    $('orphansAlert').style.display = 'none';
 
+    // ─── Scan complet : on charge TOUS les leads (sans filtre Firestore)
+    // pour pouvoir détecter à la fois les clusters de doublons (sur les
+    // docs vivants : isClient=true, _merged!==true) ET les orphelins
+    // (_merged=true, isClient=true — état legacy incohérent qui fait que
+    // ces docs restent visibles dans Sales CRM > Clients actifs).
     db.collection('leads').where('isClient', '==', true).get().then(function(snap){
       allClients = [];
       clientsById = {};
+      var orphans = [];
+
       snap.forEach(function(d){
         var data = d.data();
-        // Skip ceux déjà fusionnés (résiduels potentiels)
-        if (data._merged === true) return;
         var lead = Object.assign({ id: d.id }, data);
-        allClients.push(lead);
-        clientsById[lead.id] = lead;
+        if (data._merged === true) {
+          // Orphelin : marqué fusionné mais isClient pas basculé
+          orphans.push(lead);
+        } else {
+          allClients.push(lead);
+          clientsById[lead.id] = lead;
+        }
       });
 
-      var msg = '✅ '+allClients.length+' clients actifs chargés. Détection des doublons…';
-      setStatus(msg, 'info');
+      // Affichage de l'alerte orphelins (si applicable)
+      window._orphans = orphans;
+      if (orphans.length > 0) {
+        $('orphansCount').textContent = orphans.length;
+        $('orphansAlert').style.display = 'block';
+      }
+
+      var msg = '✅ '+allClients.length+' clients vivants · '+orphans.length+' orphelins détectés. Détection des clusters…';
+      setStatus(msg, orphans.length > 0 ? 'warn' : 'info');
 
       detectClusters();
       renderSummary();
       renderClusters();
-      setStatus('', '');
+      setTimeout(function(){ setStatus('', ''); }, 1500);
     }).catch(function(err){
       setStatus('❌ Erreur Firestore : '+err.message, 'err');
     });
+  }
+
+  // ─── Réparation des orphelins ───
+  // Pour chaque doc avec _merged=true && isClient=true, on bascule
+  // isClient=false. Le doc primary correspondant (_mergedInto) existe
+  // déjà avec les bonnes données — l'orphelin redevient juste invisible
+  // des vues clients sans perte d'information.
+  $('btnInspectOrphans').addEventListener('click', function(){
+    var list = $('orphansList');
+    if (list.style.display === 'block') { list.style.display = 'none'; return; }
+    var orphans = window._orphans || [];
+    var h = '';
+    orphans.forEach(function(o, i){
+      h += '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
+      h += '<strong style="color:var(--text)">'+(i+1)+'.</strong> ';
+      h += esc(o.nom || '(sans nom)') + ' · ';
+      h += esc(o.email || '') + ' · ';
+      h += esc(o.telephone || '') + ' ';
+      h += '<span style="color:var(--muted2)">→ fusionné dans '+esc((o._mergedInto||'?').slice(0,12))+'…</span>';
+      h += '</div>';
+    });
+    list.innerHTML = h || '<em>Aucun orphelin</em>';
+    list.style.display = 'block';
+  });
+
+  $('btnRepairOrphans').addEventListener('click', function(){
+    var orphans = window._orphans || [];
+    if (orphans.length === 0) return;
+
+    confirmDialog({
+      icon: '🧹',
+      title: 'Réparer '+orphans.length+' doc(s) orphelin(s) ?',
+      msg: 'Ces docs sont déjà fusionnés mais leur flag <code>isClient</code> n\'a jamais été basculé à <code>false</code>. La réparation bascule simplement <code>isClient=false</code> sur tous, ils disparaîtront immédiatement de la vue Sales CRM > Clients actifs. Aucune donnée perdue (les primary existent déjà). Audit log créé.',
+      confirmLabel: '🧹 Réparer maintenant',
+      confirmType: 'success',
+      onConfirm: function(){ executeRepairOrphans(orphans); }
+    });
+  });
+
+  async function executeRepairOrphans(orphans){
+    var btn = $('btnRepairOrphans');
+    btn.disabled = true;
+    btn.textContent = '⏳ Réparation…';
+
+    try {
+      // Batch updates par paquets de 400 (limite Firestore : 500 ops/batch)
+      var BATCH_SIZE = 400;
+      var orphanIds = [];
+      for (var i = 0; i < orphans.length; i += BATCH_SIZE) {
+        var batch = db.batch();
+        var slice = orphans.slice(i, i + BATCH_SIZE);
+        slice.forEach(function(o){
+          orphanIds.push(o.id);
+          batch.update(db.collection('leads').doc(o.id), {
+            isClient: false,
+            clientStatus: null,
+            _orphanRepaired: true,
+            _orphanRepairedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            _orphanRepairedBy: currentUser.uid,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+        });
+        await batch.commit();
+      }
+
+      // Audit log : un seul doc avec la liste complète des IDs réparés
+      try {
+        await db.collection('audit_log').add({
+          action: 'clients_dedup_orphan_repair',
+          actorUid: currentUser.uid,
+          actorEmail: currentUser.email || null,
+          orphanCount: orphans.length,
+          orphanIds: orphanIds,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+          success: true,
+        });
+      } catch (auditErr) {
+        console.warn('Audit log failed:', auditErr);
+      }
+
+      toast('✅ '+orphans.length+' doc(s) réparé(s) · ils ont disparu de Clients Actifs', 5000);
+      window._orphans = [];
+      $('orphansAlert').style.display = 'none';
+      loadClients();
+    } catch (e) {
+      console.error('Repair error:', e);
+      toast('❌ Erreur réparation : '+e.message, 6000);
+      btn.disabled = false;
+      btn.textContent = '🧹 Réparer tout';
+    }
   }
 
   function detectClusters(){
