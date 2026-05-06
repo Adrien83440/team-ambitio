@@ -1771,33 +1771,84 @@ function renderModal(){
   h += '</div>'; // coaching body
 
   // ─── ONGLET 3 : PAIEMENTS ───
+  // Affichage en deux niveaux :
+  //   1. Liste des paiements Firestore (totalAmount + status global + cycle)
+  //   2. Détail GoCardless (chargé en async via api/gocardless-lookup) avec
+  //      la liste des mandats et de TOUTES les échéances passées+futures
+  //      avec leur status (💰 payé, ⌛ à venir, ❌ échoué).
+  // Cf. screenshots Adrien : exactement le même rendu que sales-clients.html
   h += '<div class="mtab-body" data-mtab-body="payments" style="display:none">';
+
   if(pays.length){
+    var globalPaid = 0, globalTotal = 0;
+    pays.forEach(function(p){
+      if(p.status !== 'cancelled'){
+        globalTotal += (p.totalAmount || 0);
+        globalPaid  += (p.paidAmount  || 0);
+      }
+    });
+    var globalPct = globalTotal > 0 ? Math.round((globalPaid/globalTotal)*100) : 0;
+
+    // Bandeau récap global (tous paiements confondus)
+    h += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">';
+    h += '<div><div style="font-size:11px;color:var(--ink-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Total collecté</div>';
+    h += '<div style="font-size:20px;font-weight:800;color:var(--csm-accent)">' + fmtEuro(globalPaid) + ' <span style="font-size:13px;color:var(--ink-muted);font-weight:600">/ ' + fmtEuro(globalTotal) + '</span></div></div>';
+    h += '<div style="flex:1;max-width:240px"><div style="font-size:10px;color:var(--ink-muted);text-align:right;margin-bottom:3px">' + globalPct + '%</div>';
+    h += '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + globalPct + '%;background:linear-gradient(90deg,var(--csm-accent-dark),var(--csm-accent))"></div></div></div>';
+    h += '</div>';
+
+    // Liste des paiements Firestore (vue compacte)
     h += '<div style="display:flex;flex-direction:column;gap:8px">';
     pays.forEach(function(p){
       var ps = PAY_STATUS[p.status] || { label: p.status||'?', cls:'pay-draft' };
-      var prog = p.installmentsCount > 1 ? (p.paidCount||0) + '/' + p.installmentsCount + ' échéances' : '';
+      var prog = p.installmentsCount > 1 ? (p.paidCount||0) + '/' + p.installmentsCount : '';
       var typeLabel = p.installmentsCount > 1 ? '📅 Fractionné' : '💳 Intégral';
-      h += '<div class="csm-card" style="cursor:default">';
-      h += '<div style="font-size:18px;font-weight:800;color:var(--csm-accent)">' + fmtEuro(p.totalAmount) + '</div>';
-      h += '<div class="csm-card-info"><div class="csm-card-meta">';
-      h += '<span class="csm-badge ' + ps.cls + '">' + ps.label + '</span>';
-      h += '<span>' + typeLabel + (prog ? ' · ' + prog : '') + '</span>';
-      if(p.installmentAmount && p.installmentsCount > 1) h += '<span>' + fmtEuro(p.installmentAmount) + '/mois</span>';
-      if(p.paiementPlateforme) h += '<span>🏦 ' + esc(p.paiementPlateforme) + '</span>';
-      h += '<span>' + fmtDate(p.createdAt) + '</span>';
-      h += '</div></div><div></div>';
-      h += '<a class="csm-act-btn" href="payments.html?leadId=' + c.id + '" target="_blank" title="Détail">→</a>';
+      var progPct = p.installmentsCount > 1 ? Math.round(((p.paidCount||0)/p.installmentsCount)*100) : (p.status==='completed' ? 100 : 0);
+      h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:8px">';
+      h += '<div><div style="font-size:18px;font-weight:800;color:var(--csm-accent)">' + fmtEuro(p.totalAmount);
+      if(p.vatType) h += ' <span style="font-size:10px;opacity:0.5">' + esc(p.vatType.toUpperCase()) + '</span>';
+      h += '</div>';
+      h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">';
+      h += '<span class="csm-badge ' + ps.cls + '" style="font-size:10px;padding:2px 7px">' + ps.label + '</span> · ';
+      h += typeLabel + (prog ? ' · ' + prog + ' échéances' : '');
+      if(p.installmentAmount && p.installmentsCount > 1) h += ' · ' + fmtEuro(p.installmentAmount) + '/mois';
+      h += '</div></div>';
+      h += '<div style="text-align:right">';
+      if(p.paidAmount) h += '<div style="font-size:13px;font-weight:700;color:#34d399">' + fmtEuro(p.paidAmount) + ' collecté</div>';
+      if(p.gcMandateId) h += '<div style="font-size:10px;color:var(--ink-muted);font-family:monospace;margin-top:2px">Mandat: ' + esc(p.gcMandateId.slice(-10)) + '</div>';
+      h += '</div></div>';
+      // Barre de progression
+      if(p.installmentsCount > 1){
+        h += '<div style="height:4px;background:var(--bg2);border-radius:2px;overflow:hidden">';
+        h += '<div style="height:100%;width:' + progPct + '%;background:linear-gradient(90deg,#059669,#34d399);transition:width 0.3s"></div>';
+        h += '</div>';
+      }
       h += '</div>';
     });
     h += '</div>';
+
+    // Section GoCardless live (auto-sync au switch)
+    var hasGc = c.gcCustomerId || pays.some(function(p){ return p.gcMandateId || p.gcCustomerId; });
+    if(hasGc){
+      h += '<div style="margin-top:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px" id="gcLiveSection">';
+      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">';
+      h += '<div style="font-size:13px;font-weight:700">🏦 Détail GoCardless</div>';
+      h += '<button class="csm-btn" id="gcResyncBtn" onclick="csmGcLookup(\'' + c.id + '\', \'' + esc(c.email||'').replace(/\'/g,"\\'") + '\', true)" style="padding:6px 12px;font-size:11px">🔄 Resync</button>';
+      h += '</div>';
+      h += '<div id="gcLiveContent" style="font-size:12px;color:var(--ink-muted)">⏳ Chargement des données live GoCardless…</div>';
+      h += '</div>';
+    } else {
+      h += '<div style="margin-top:14px;font-size:11px;color:var(--ink-muted);font-style:italic">💡 Ce client n\'a pas de lien GoCardless connu. <a href="payments.html?leadId=' + c.id + '" target="_blank" style="color:var(--csm-accent)">Lier dans la page Paiements →</a></div>';
+    }
   } else {
     h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-top:8px">';
     h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">💳</div>';
     h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:10px">Aucun paiement enregistré pour ce client</div>';
+    h += '<a class="csm-btn primary" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Créer un paiement</a>';
     h += '</div>';
   }
-  h += '<div style="margin-top:14px"><a class="csm-btn" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Gérer les paiements</a></div>';
+  h += '<div style="margin-top:14px"><a class="csm-btn" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Gérer dans le module Paiements →</a></div>';
   h += '</div>'; // payments body
 
   // ─── ONGLET 4 : KAJABI ───
@@ -1908,8 +1959,162 @@ function switchModalTab(tabName){
   document.querySelectorAll('.mtab-body').forEach(function(b){
     b.style.display = (b.dataset.mtabBody === tabName) ? '' : 'none';
   });
+
+  // Auto-sync GoCardless quand on ouvre l'onglet Paiements (avec cache pour
+  // éviter de rappeler l'API à chaque switch d'onglet sur le même client)
+  if(tabName === 'payments' && openClientId){
+    var c = allClients.find(function(x){ return x.id === openClientId; });
+    if(c && c.email && document.getElementById('gcLiveContent')){
+      // Cache : si on a déjà résolu pour ce client dans cette session, ne pas rappeler
+      window._gcCsmCache = window._gcCsmCache || {};
+      var cached = window._gcCsmCache[openClientId];
+      if(cached && (Date.now() - cached.at) < 60000){
+        // Cache <60s : réutiliser
+        renderGcLiveData(cached.data);
+      } else {
+        csmGcLookup(openClientId, c.email, false);
+      }
+    }
+  }
 }
 window.switchModalTab = switchModalTab;
+
+/* ─── GoCardless lookup pour la modal CSM ───
+   Appelle /api/gocardless-lookup et rend dans #gcLiveContent la liste des
+   mandats + échéances (passées payées + à venir) avec icônes 💰 / ⌛.
+   Réplique de la logique gcLookupClient() de sales-crm-app.js mais
+   adaptée à la modal CSM. forceRefresh=true ignore le cache.            */
+function csmGcLookup(leadId, email, forceRefresh){
+  var resultEl = document.getElementById('gcLiveContent');
+  var btn = document.getElementById('gcResyncBtn');
+  if(!resultEl) return;
+  if(!email){
+    resultEl.innerHTML = '<span style="color:var(--crit-color)">❌ Email manquant — impossible de chercher dans GoCardless</span>';
+    return;
+  }
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Sync…'; }
+  resultEl.innerHTML = '⏳ Synchronisation GoCardless en cours…';
+
+  firebase.auth().currentUser.getIdToken().then(function(token){
+    return fetch('/api/gocardless-lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ leadId: leadId, email: email })
+    });
+  }).then(function(resp){
+    return resp.json().then(function(data){ return { ok: resp.ok, data: data }; });
+  }).then(function(r){
+    if(btn){ btn.disabled = false; btn.textContent = '🔄 Resync'; }
+    if(!r.ok){
+      resultEl.innerHTML = '<span style="color:var(--crit-color)">❌ ' + esc(r.data.error || 'Erreur API') + '</span>';
+      return;
+    }
+    // Cache pour éviter rappels trop fréquents
+    window._gcCsmCache = window._gcCsmCache || {};
+    window._gcCsmCache[leadId] = { at: Date.now(), data: r.data };
+    renderGcLiveData(r.data);
+  }).catch(function(err){
+    if(btn){ btn.disabled = false; btn.textContent = '🔄 Resync'; }
+    console.error('[csmGcLookup] error', err);
+    resultEl.innerHTML = '<span style="color:var(--crit-color)">❌ ' + esc(err.message) + '</span>';
+  });
+}
+window.csmGcLookup = csmGcLookup;
+
+/* Rend le détail GoCardless (mandats + paiements passés/futurs) dans #gcLiveContent */
+function renderGcLiveData(data){
+  var resultEl = document.getElementById('gcLiveContent');
+  if(!resultEl) return;
+  var html = '';
+
+  // Customer GC (lien)
+  if(data.customer){
+    html += '<div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.20);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px">';
+    html += '<span>👤</span>';
+    html += '<span>' + esc(data.customer.name || '?') + '</span>';
+    if(data.customer.id){
+      html += ' <span>—</span> <span style="font-family:monospace;color:#60a5fa;font-size:11px">' + esc(data.customer.id) + '</span>';
+    }
+    html += '</div>';
+  }
+
+  // Mandats
+  if(data.mandates && data.mandates.length){
+    var mLabels = { pending_submission:'⏳ En attente', submitted:'📤 Soumis', active:'✅ Actif', failed:'❌ Échoué', cancelled:'🚫 Annulé', expired:'⌛ Expiré' };
+    html += '<div style="font-size:11px;font-weight:700;color:var(--ink-muted);margin-bottom:6px">Mandats (' + data.mandates.length + ')</div>';
+    data.mandates.forEach(function(m){
+      html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px">';
+      html += '<span style="font-family:monospace">' + esc(m.id) + '</span>';
+      html += '<span>' + (mLabels[m.status] || m.status) + '</span>';
+      html += '</div>';
+    });
+  } else if(data.mandate){
+    var mLabel = ({ pending_submission:'⏳ En attente', submitted:'📤 Soumis', active:'✅ Actif', failed:'❌ Échoué', cancelled:'🚫 Annulé', expired:'⌛ Expiré' })[data.mandate.status] || data.mandate.status;
+    html += '<div style="font-size:11px;font-weight:700;color:var(--ink-muted);margin-bottom:6px">Mandat</div>';
+    html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px">';
+    html += '<span style="font-family:monospace">' + esc(data.mandate.id) + '</span>';
+    html += '<span>' + mLabel + '</span>';
+    html += '</div>';
+  }
+
+  // Paiements à venir + passés combinés et triés par date desc
+  var paymentList = [];
+  // Passés (paid_out, confirmed, etc.) depuis data.payments
+  if(data.payments && data.payments.length){
+    data.payments.forEach(function(p){
+      paymentList.push({
+        date: p.chargeDate,
+        amount: p.amount,
+        status: p.status,
+        kind: 'past'
+      });
+    });
+  }
+  // Futurs depuis data.subscription.upcomingPayments
+  if(data.subscription && data.subscription.upcomingPayments){
+    data.subscription.upcomingPayments.forEach(function(up){
+      paymentList.push({
+        date: up.charge_date || up.chargeDate,
+        amount: (up.amount/100), // GC retourne en centimes pour upcoming
+        status: 'upcoming',
+        kind: 'upcoming'
+      });
+    });
+  }
+  // Tri par date desc (plus récent en premier comme dans l'image 2)
+  paymentList.sort(function(a,b){
+    return (b.date||'').localeCompare(a.date||'');
+  });
+
+  if(paymentList.length){
+    var pIcons = {
+      pending_submission:'⏳', submitted:'📤', confirmed:'✅', paid_out:'💰',
+      cancelled:'🚫', failed:'❌', charged_back:'↩', upcoming:'⏳'
+    };
+    var pColor = function(st){
+      if(st === 'paid_out' || st === 'confirmed') return '#34d399';
+      if(st === 'failed' || st === 'charged_back') return 'var(--crit-color)';
+      if(st === 'cancelled') return 'var(--ink-muted)';
+      return 'var(--ink-soft)';
+    };
+    html += '<div style="font-size:11px;font-weight:700;color:var(--ink-muted);margin:10px 0 6px">Paiements (' + paymentList.length + ')</div>';
+    html += '<div style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg2)">';
+    paymentList.forEach(function(p){
+      var icon = pIcons[p.status] || '?';
+      var col  = pColor(p.status);
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">';
+      html += '<span style="display:flex;align-items:center;gap:6px"><span style="font-size:14px">' + icon + '</span><span>' + esc(p.date || '—') + '</span></span>';
+      html += '<span style="font-weight:700;color:' + col + '">' + fmtEuro(p.amount) + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div style="font-size:12px;color:var(--ink-muted);font-style:italic">Aucun paiement trouvé dans GoCardless.</div>';
+  }
+
+  resultEl.innerHTML = html;
+}
+window.renderGcLiveData = renderGcLiveData;
 
 // Délégation : clic sur les onglets de modal
 document.addEventListener('click', function(e){
