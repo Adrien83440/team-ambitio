@@ -219,7 +219,7 @@ body { background: var(--bg); color: var(--ink); }
 .csm-badge.att  { background: var(--att-bg); color: var(--att-color); border: 1px solid var(--att-border); }
 .csm-badge.ok   { background: var(--csm-bg-soft); color: var(--csm-accent); border: 1px solid var(--csm-border); }
 .csm-badge.followup{ background: rgba(96,165,250,0.10); color: #93c5fd; border: 1px solid rgba(96,165,250,0.20); }
-.csm-badge-coaching-only {
+.csm-badge-no-lead {
   background: linear-gradient(135deg, rgba(168,85,247,0.15), rgba(192,132,252,0.10));
   color: #c4b5fd;
   border: 1px solid rgba(168,85,247,0.30);
@@ -643,7 +643,7 @@ function computeLevel(c){
   if(status === 'completed') return 'ok';
   if(status === 'stopped')   return null; // exclu de la vue retards
 
-  var pays = paymentsByLead[c.id] || [];
+  var pays = paymentsByLead[c._leadId] || [];
 
   // Détecter paiement(s) en échec non résolu(s)
   var hasFailed = pays.some(function(p){ return p.status === 'failed'; });
@@ -737,68 +737,35 @@ firebase.auth().onAuthStateChanged(function(user){
 });
 
 /* ─── Data loading ─── */
+/* ──────────────────────────────────────────────────────────────────────
+   ARCHITECTURE DE DONNÉES (refonte 2026-05-06)
+   ──────────────────────────────────────────────────────────────────────
+   Source PRIMAIRE = collection `clients` (coaching). Chaque doc est un
+   client en accompagnement, avec ses sessions, programme, quotas, coach.
+
+   Source d'ENRICHISSEMENT = `leads where isClient==true && !_merged`,
+   matché par email canonicalisé. Apporte au client unifié :
+     • paymentsByLead (indexés par leadId du lead matché)
+     • kajabiProgress (champ stocké sur le lead, alimenté par csm-import)
+     • gcCustomerId, source, importedCreatedAt (champs CRM)
+     • temoByLead (témoignages sous-collection du lead)
+
+   Les writes (notes csmNotes, relances csmFollowupHistory, statut
+   clientStatus) vont TOUJOURS sur clients/{coachingId}, qui est la
+   source de vérité de la CSM. Les leads ne sont plus écrits par la CSM.
+
+   `id` du client unifié = coachingId (doc ID dans `clients`).
+   `_leadId` = leadId du lead matché si trouvé, sinon null.
+   `_hasLead` = booléen pour styler/conditionner.
+   ────────────────────────────────────────────────────────────────────── */
+
 function loadAllData(){
-  // ─── Charger les clients coaching (collection séparée) en parallèle ───
-  // Match plus tard avec leads par email canonicalisé.
-  loadCoachingClients();
-  // Charger les coachs (pour afficher coach assigné)
   loadCoachMembers();
-
-  // Listener temps réel sur leads clients
-  db.collection('leads').where('isClient','==',true).onSnapshot(function(snap){
-    allClients = [];
-    snap.forEach(function(d){
-      var data = d.data();
-      // ─── Dédup : skip _merged===true ───
-      // Pattern aligné avec sales-leads.html (memories : "Always check
-      // _merged===true and skip"). Évite les doublons quand un lead a été
-      // fusionné dans un autre.
-      if(data._merged === true) return;
-      data.id = d.id;
-      allClients.push(data);
-    });
-    // Sort : plus récents d'abord
-    allClients.sort(function(a,b){
-      var da = toDate(a.clientSince) || toDate(a.updatedAt) || new Date(0);
-      var db_ = toDate(b.clientSince) || toDate(b.updatedAt) || new Date(0);
-      return db_ - da;
-    });
-    // Recombiner les virtuels coaching-only (cf. rebuildCoachingOnlyVirtuals).
-    // Si un lead vient d'être créé pour un coaching-only (via diagnostic),
-    // le virtuel correspondant disparaîtra automatiquement à ce moment.
-    rebuildCoachingOnlyVirtuals();
-    loadPaymentsForClients();
-    loadTemoignagesForClients();
-
-    // ─── Auto-ouverture modal si ?clientId=X dans l'URL ───
-    // Permet à csm-clients.html (et autres pages) d'ouvrir directement le
-    // détail d'un client via un lien.
-    var openId = (new URLSearchParams(window.location.search)).get('clientId');
-    if(openId && !window._csmClientAutoOpened){
-      window._csmClientAutoOpened = true;
-      // Petit délai pour laisser le temps aux paiements/notes/témoignages de
-      // se charger en arrière-plan et alimenter la modal.
-      setTimeout(function(){ openClientModal(openId); }, 500);
-    }
-  }, function(err){
-    console.error('Clients listener error:', err);
-    document.getElementById('csmBody').innerHTML =
-      '<div class="csm-empty"><div class="csm-empty-icon">⚠️</div><div class="csm-empty-title">Erreur de chargement</div><div>' + esc(err.message) + '</div></div>';
-  });
+  loadCoachingClients();   // listener primaire → déclenche buildAllClients
+  loadEnrichmentLeads();   // listener enrichissement → déclenche aussi buildAllClients
 }
 
-/* ─── Coaching collection — match par email avec leads clients ─── */
-// La collection `clients` est utilisée par coaching.html. Elle contient
-// les sessions, programmes, quotas mensuels, coach assigné. On la charge
-// pour DEUX raisons :
-//   1. Enrichir chaque lead client avec ses infos de coaching matchées
-//      par email (best-effort).
-//   2. Détecter les fiches coaching SANS lead correspondant et les ajouter
-//      au dashboard CSM en tant que "clients virtuels coaching only" (cf.
-//      diagnostic — Catherine TALON et co. qui sont en coaching mais pas
-//      marquées isClient dans leads). Pour ces virtuels, les writes
-//      (notes, status, followup) vont sur le doc clients/{coachingId}
-//      plutôt que leads/{leadId}.
+/* ─── Listener primaire : clients (coaching) ─── */
 function loadCoachingClients(){
   db.collection('clients').onSnapshot(function(snap){
     coachingByEmail = {};
@@ -808,72 +775,121 @@ function loadCoachingClients(){
       var email = (data.email || '').toLowerCase().trim();
       if(email) coachingByEmail[email] = data;
     });
-    // Reconstruire les "clients virtuels coaching only" et merger dans allClients
-    rebuildCoachingOnlyVirtuals();
-    renderAll();
+    buildAllClients();
   }, function(err){
-    console.warn('Coaching clients listener error (non-bloquant):', err.message);
+    console.error('Clients listener error:', err);
+    document.getElementById('csmBody').innerHTML =
+      '<div class="csm-empty"><div class="csm-empty-icon">⚠️</div><div class="csm-empty-title">Erreur de chargement coaching</div><div>' + esc(err.message) + '</div></div>';
   });
 }
 
-/* ─── Construction des clients virtuels coaching-only ───
-   Pour chaque doc dans coachingByEmail dont l'email ne correspond à aucun
-   lead client réel, on crée un objet client virtuel. Ces virtuels sont
-   ajoutés à allClients pour qu'ils apparaissent dans le dashboard avec
-   un badge "📚 Coaching only". Les writes sur ces clients sont routés
-   vers la collection clients/{_id} via les flags _isCoachingOnly et
-   _coachingId. Cf. memory note d'Adrien : "Sauvegardées sur le doc
-   clients/coaching" pour notes/relances coaching-only.                  */
-function rebuildCoachingOnlyVirtuals(){
-  // Repérer les emails de leads clients réels (avec isClient=true && !_merged)
-  var realEmails = {};
-  allClients.forEach(function(c){
-    if(c._isCoachingOnly) return; // ne pas se compter soi-même au passage suivant
-    var em = (c.email||'').toLowerCase().trim();
-    if(em) realEmails[em] = true;
+/* ─── Listener enrichissement : leads where isClient==true ─── */
+var leadsByEmail = {};
+function loadEnrichmentLeads(){
+  db.collection('leads').where('isClient','==',true).onSnapshot(function(snap){
+    leadsByEmail = {};
+    snap.forEach(function(d){
+      var data = d.data();
+      if(data._merged === true) return;
+      data.id = d.id;
+      var em = (data.email||'').toLowerCase().trim();
+      if(em) leadsByEmail[em] = data;
+    });
+    buildAllClients();
+  }, function(err){
+    console.warn('Leads enrichment listener error (non-bloquant):', err.message);
+    // Si enrichissement échoue, on rebuild quand même : on perdra juste les
+    // données issues du lead (paiements, kajabi, etc.) sans casser le dashboard.
+    buildAllClients();
   });
+}
 
-  // Retirer les anciens virtuels (on va les recréer)
-  allClients = allClients.filter(function(c){ return !c._isCoachingOnly; });
-
-  // Pour chaque coaching dont l'email n'est pas couvert, créer le virtuel
+/* ─── Construction des clients unifiés depuis coaching + enrichissement lead ───
+   Cette fonction est appelée chaque fois que l'un des deux listeners reçoit
+   un snapshot. Elle reconstruit allClients de manière déterministe en
+   prenant clients (coaching) comme source et en mergeant avec leads quand
+   il y a match par email. */
+function buildAllClients(){
+  allClients = [];
   Object.keys(coachingByEmail).forEach(function(em){
-    if(realEmails[em]) return;
     var co = coachingByEmail[em];
+    var lead = leadsByEmail[em] || null;
+
+    // Composer le nom (préfix prénom si dispo et pas déjà dans nom)
     var nom = co.nom || co.name || '';
-    if(co.prenom && nom.indexOf(co.prenom) < 0) nom = co.prenom + ' ' + nom;
-    var virtualClient = {
-      // ID préfixé pour que les autres pages (csm-clients.html, deeplinks)
-      // ne tentent pas de read leads/{coaching_xxx} qui n'existe pas
-      id: 'coaching_' + co._id,
-      _isCoachingOnly: true,
+    if(co.prenom && nom.indexOf(co.prenom) < 0){
+      nom = (co.prenom + ' ' + nom).trim();
+    }
+    if(!nom && lead) nom = lead.nom || '';
+    if(!nom) nom = 'Sans nom';
+
+    // Status : la CSM écrit sur clients/, donc clients/.clientStatus prioritaire.
+    // Fallback : statut coaching natif (actif/inactif), puis lead.clientStatus.
+    var status = co.clientStatus
+                || (co.statut === 'inactif' ? 'paused' : null)
+                || (lead && lead.clientStatus)
+                || 'active';
+
+    var client = {
+      id: co._id,                    // toujours coachingId — source primaire
       _coachingId: co._id,
-      // Champs minimaux pour rendre la card et la modal
-      nom: (nom || '').trim() || 'Sans nom',
+      _leadId: lead ? lead.id : null,
+      _hasLead: !!lead,
+      _coaching: co,                 // ref vers le doc coaching pour fonctions helper
+      _lead: lead,                   // ref vers lead matché si présent
+
+      // Champs identité (priorité coaching, fallback lead)
+      nom: nom,
       email: co.email || em,
-      telephone: co.telephone || co.phone || '',
-      commerce: co.activite || co.secteur || co.commerce || '',
-      type: co.type || '',
-      secteur: co.secteur || co.activite || '',
-      isClient: true,
-      clientStatus: co.clientStatus || (co.statut === 'inactif' ? 'paused' : 'active'),
-      clientSince: co.dateEntree || null,
-      // Notes/relances stockées sur le doc coaching pour les virtuels
-      lastCsmFollowupAt: co.lastCsmFollowupAt || null,
-      lastCsmFollowupBy: co.lastCsmFollowupBy || null,
-      csmFollowupHistory: co.csmFollowupHistory || [],
-      // Source pour info
-      source: 'coaching_only_virtual'
+      telephone: co.telephone || co.phone || (lead && lead.telephone) || '',
+      commerce: co.activite || co.secteur || (lead && lead.commerce) || '',
+      type: co.type || (lead && lead.type) || '',
+      secteur: co.secteur || co.activite || (lead && lead.secteur) || '',
+
+      // Marqueurs CSM (depuis clients/, source primaire)
+      clientStatus: status,
+      clientSince: co.dateEntree || (lead && lead.clientSince) || null,
+      lastCsmFollowupAt: co.lastCsmFollowupAt || (lead && lead.lastCsmFollowupAt) || null,
+      lastCsmFollowupBy: co.lastCsmFollowupBy || (lead && lead.lastCsmFollowupBy) || null,
+      csmFollowupHistory: co.csmFollowupHistory || (lead && lead.csmFollowupHistory) || [],
+
+      // Champs enrichis depuis le lead (CRM-only)
+      kajabiProgress: lead ? (lead.kajabiProgress || null) : null,
+      gcCustomerId: lead ? (lead.gcCustomerId || null) : null,
+      source: lead ? lead.source : null,
+      importedCreatedAt: lead ? lead.importedCreatedAt : null,
+
+      isClient: true
     };
-    allClients.push(virtualClient);
+
+    allClients.push(client);
   });
 
-  // Re-tri global
+  // Tri : plus récents (entrée coaching) d'abord
   allClients.sort(function(a,b){
-    var da = toDate(a.clientSince) || toDate(a.updatedAt) || new Date(0);
-    var db_ = toDate(b.clientSince) || toDate(b.updatedAt) || new Date(0);
+    var da = toDate(a.clientSince) || new Date(0);
+    var db_ = toDate(b.clientSince) || new Date(0);
     return db_ - da;
   });
+
+  // Recharger paiements/témoignages indexés par _leadId du lead matché
+  loadPaymentsForClients();
+  loadTemoignagesForClients();
+
+  // ─── Auto-ouverture modal si ?clientId=X dans l'URL ───
+  // Tolérant : le clientId peut être un coachingId (recommandé) ou un
+  // ancien leadId (deeplinks anciens). On match les deux cas.
+  var openId = (new URLSearchParams(window.location.search)).get('clientId');
+  if(openId && !window._csmClientAutoOpened){
+    window._csmClientAutoOpened = true;
+    setTimeout(function(){
+      // Cas 1 : coachingId trouvé direct
+      var found = allClients.find(function(x){ return x.id === openId; });
+      // Cas 2 : leadId → remonter au coaching matché
+      if(!found) found = allClients.find(function(x){ return x._leadId === openId; });
+      if(found) openClientModal(found.id);
+    }, 500);
+  }
 }
 
 function loadCoachMembers(){
@@ -888,6 +904,7 @@ function loadCoachMembers(){
     });
   }).catch(function(){});
 }
+
 
 /* ─── Quota / sessions logic — réplique de coaching.html ─── */
 function getMonthlyQuota(programme){
@@ -944,13 +961,17 @@ function getLastSessionDate(coachingDoc){
 
 function loadPaymentsForClients(){
   if(!allClients.length){ renderAll(); return; }
-  var ids = allClients.map(function(c){ return c.id; });
+  // Les paiements sont indexés par leadId — on ne charge que pour les
+  // clients qui ont un _leadId (lead matché). Les autres n'auront pas de
+  // paiements visibles, c'est par design.
+  var ids = allClients.filter(function(c){ return c._leadId; })
+                     .map(function(c){ return c._leadId; });
   paymentsByLead = {};
+  if(!ids.length){ renderAll(); return; }
   // Chunks de 10 (limite Firestore where-in)
   var chunks = [];
   for(var i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
   var pending = chunks.length;
-  if(pending === 0){ renderAll(); return; }
   chunks.forEach(function(chunk){
     db.collection('payments').where('leadId','in',chunk).get().then(function(sn){
       sn.forEach(function(d){
@@ -959,7 +980,6 @@ function loadPaymentsForClients(){
         paymentsByLead[p.leadId].push(p);
       });
       if(--pending <= 0){
-        // Sort each list by createdAt desc
         Object.keys(paymentsByLead).forEach(function(k){
           paymentsByLead[k].sort(function(a,b){
             return (toDate(b.createdAt)||new Date(0)) - (toDate(a.createdAt)||new Date(0));
@@ -977,19 +997,24 @@ function loadPaymentsForClients(){
 function loadTemoignagesForClients(){
   temoByLead = {};
   temoFlat = [];
-  if(!allClients.length) return;
-  var pending = allClients.length;
-  allClients.forEach(function(c){
-    db.collection('leads').doc(c.id).collection('client_temoignages')
+  // Témoignages = sous-collection des leads. Donc on ne charge que pour
+  // les clients qui ont un lead matché (_leadId).
+  var clientsWithLead = allClients.filter(function(c){ return c._leadId; });
+  if(!clientsWithLead.length){ renderAll(); return; }
+  var pending = clientsWithLead.length;
+  clientsWithLead.forEach(function(c){
+    db.collection('leads').doc(c._leadId).collection('client_temoignages')
       .orderBy('createdAt','desc').get()
       .then(function(snap){
         var arr = [];
         snap.forEach(function(d){
-          var o = d.data(); o._id = d.id; o._leadId = c.id;
+          var o = d.data(); o._id = d.id; o._leadId = c._leadId;
+          o._clientId = c.id;
           o._leadName = clientDisplayName(c);
           arr.push(o);
           temoFlat.push(o);
         });
+        // Index par clientId (id unifié) pour cohérence avec le reste
         temoByLead[c.id] = arr;
         if(--pending <= 0){
           temoFlat.sort(function(a,b){
@@ -1003,53 +1028,34 @@ function loadTemoignagesForClients(){
   });
 }
 
-function loadNotesForLead(leadId, cb){
-  // Pour les "coaching only", les notes sont stockées sur le doc clients/{coachingId}
-  // dans le tableau csmNotes (pas en sous-collection car les virtuels ne peuvent
-  // pas avoir de sous-collection sans doc lead réel).
-  var c = allClients.find(function(x){ return x.id === leadId; });
-  if(c && c._isCoachingOnly){
-    var co = coachingByEmail[(c.email||'').toLowerCase().trim()];
-    var arr = (co && co.csmNotes) ? co.csmNotes.slice().sort(function(a,b){
-      var da = toDate(a.createdAt) || new Date(0), dbn = toDate(b.createdAt) || new Date(0);
-      return dbn - da;
-    }) : [];
-    notesByLead[leadId] = arr;
-    if(cb) cb(arr);
+function loadNotesForLead(clientId, cb){
+  // Toutes les notes CSM sont stockées sur clients/{coachingId}.csmNotes
+  // (array). Le clientId passé EST le coachingId (cf. buildAllClients).
+  var c = allClients.find(function(x){ return x.id === clientId; });
+  if(!c){
+    notesByLead[clientId] = [];
+    if(cb) cb([]);
     return;
   }
-  // Cas normal (lead réel) : sous-collection client_notes
-  db.collection('leads').doc(leadId).collection('client_notes')
-    .orderBy('createdAt','desc').get()
-    .then(function(snap){
-      var arr = [];
-      snap.forEach(function(d){ var o = d.data(); o._id = d.id; arr.push(o); });
-      notesByLead[leadId] = arr;
-      if(cb) cb(arr);
-    }).catch(function(){
-      notesByLead[leadId] = notesByLead[leadId] || [];
-      if(cb) cb(notesByLead[leadId]);
+  // Lire le doc fresh pour avoir les notes les plus récentes (le snapshot
+  // des coachings nous donne déjà les notes mais peut être un poil en
+  // retard après un addNote).
+  db.collection('clients').doc(c.id).get().then(function(snap){
+    var data = snap.data() || {};
+    var arr = (data.csmNotes || []).slice().sort(function(a,b){
+      var da = toDate(a.createdAt) || new Date(0);
+      var dbn = toDate(b.createdAt) || new Date(0);
+      return dbn - da;
     });
-}
-
-/* Helper : retourne {ref, isCoachingOnly} pour router les writes vers la
-   bonne collection selon que le client est un vrai lead ou un virtuel
-   coaching-only. */
-function getClientWriteContext(clientId){
-  var c = allClients.find(function(x){ return x.id === clientId; });
-  if(c && c._isCoachingOnly){
-    return {
-      ref: db.collection('clients').doc(c._coachingId),
-      isCoachingOnly: true,
-      coachingId: c._coachingId,
-      client: c
-    };
-  }
-  return {
-    ref: db.collection('leads').doc(clientId),
-    isCoachingOnly: false,
-    client: c
-  };
+    notesByLead[clientId] = arr;
+    if(cb) cb(arr);
+  }).catch(function(){
+    // Fallback : utiliser le cache du snapshot
+    var co = c._coaching || {};
+    var arr = (co.csmNotes || []).slice();
+    notesByLead[clientId] = arr;
+    if(cb) cb(arr);
+  });
 }
 
 /* ─── Rendering ─── */
@@ -1153,7 +1159,7 @@ function computeReasons(c){
   if(status === 'procedure'){
     reasons.push({ kind:'payment', level:'crit', label:'⚖️ Procédure' });
   }
-  var pays = paymentsByLead[c.id] || [];
+  var pays = paymentsByLead[c._leadId] || [];
   pays.forEach(function(p){
     if(p.status === 'failed'){
       reasons.push({ kind:'payment', level:'crit', label:'❌ Paiement en échec' });
@@ -1247,12 +1253,12 @@ function renderClientCard(c){
     + '<div class="csm2-name">' + nameTxt + '</div>'
     + (commerceTxt ? '<div class="csm2-sub">' + commerceTxt + '</div>' : '')
     + '<div class="csm2-badges">' + lvlBadge + statusBadge
-    + (c._isCoachingOnly ? '<span class="csm-badge csm-badge-coaching-only" title="Présent dans coaching mais pas dans leads CRM">📚 Coaching only</span>' : '')
+    + (!c._hasLead ? '<span class="csm-badge csm-badge-no-lead" title="Ce client coaching n\'a pas de lead CRM lié — paiements et Kajabi non visibles">📚 Pas de lead CRM</span>' : '')
     + '</div>'
     + '</div></div>';
 
   // ───── CELLULE PAIEMENT ─────
-  var pays = paymentsByLead[c.id] || [];
+  var pays = paymentsByLead[c._leadId] || [];
   var payCell;
   if(pays.length){
     var totalAmt = 0, paidAmt = 0;
@@ -1462,7 +1468,7 @@ function renderPayments(){
   // Aplatir et bucketiser
   var failed = [], pending = [], next = [], up = [];
   allClients.forEach(function(c){
-    (paymentsByLead[c.id] || []).forEach(function(p){
+    (paymentsByLead[c._leadId] || []).forEach(function(p){
       var item = buildPayItem(c, p);
       if(!item) return;
       // Filtres recherche
@@ -1690,7 +1696,7 @@ function renderModal(){
   else if(lvl === 'att')  lvlBadge = '<span class="csm-badge att">🟡 Attention</span>';
   else if(lvl === 'ok')   lvlBadge = '<span class="csm-badge ok">✅ OK</span>';
 
-  var pays = paymentsByLead[c.id] || [];
+  var pays = paymentsByLead[c._leadId] || [];
   var notes = notesByLead[c.id] || [];
   var hist = c.csmFollowupHistory || [];
   var coaching = getCoachingForLead(c);
@@ -1721,17 +1727,17 @@ function renderModal(){
   h += '</div>';
   h += '</div>';
 
-  // ───── BANDEAU "COACHING ONLY" (clients virtuels) ─────
-  // Affiché uniquement si le client n'a pas de lead réel dans le CRM. CTA pour
-  // créer le lead manquant (ou rediriger vers la page diagnostic pour batch).
-  if(c._isCoachingOnly){
+  // ───── BANDEAU "PAS DE LEAD CRM" (clients sans lead lié) ─────
+  // Affiché uniquement si le client coaching n'a pas de lead matché.
+  // CTA pour créer le lead manquant et ainsi débloquer paiements/kajabi.
+  if(!c._hasLead){
     h += '<div style="background:linear-gradient(135deg,rgba(168,85,247,0.10),rgba(192,132,252,0.05));border:1px solid rgba(168,85,247,0.30);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">';
     h += '<div style="font-size:18px">📚</div>';
     h += '<div style="flex:1;min-width:200px">';
-    h += '<div style="font-size:12px;font-weight:700;color:#c4b5fd">Client coaching only</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">Présent dans la collection coaching mais pas comme lead client dans le CRM. Notes et relances sont sauvées sur la fiche coaching.</div>';
+    h += '<div style="font-size:12px;font-weight:700;color:#c4b5fd">Pas de lead CRM lié</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">Ce client est en coaching mais n\'a pas de lead correspondant dans le CRM. Sans lead, ni les paiements GoCardless ni la progression Kajabi ne sont visibles ici.</div>';
     h += '</div>';
-    h += '<button class="csm-btn primary" onclick="csmCreateLeadFromCoachingOnly(\'' + openClientId + '\')" style="background:#7c3aed;border-color:#a78bfa">+ Créer le lead client</button>';
+    h += '<button class="csm-btn primary" onclick="csmCreateLeadForClient(\'' + openClientId + '\')" style="background:#7c3aed;border-color:#a78bfa">+ Créer le lead CRM</button>';
     h += '</div>';
   }
 
@@ -2009,14 +2015,13 @@ function renderModal(){
   // Cf. screenshots Adrien : exactement le même rendu que sales-clients.html
   h += '<div class="mtab-body" data-mtab-body="payments" style="display:none">';
 
-  if(c._isCoachingOnly){
-    // Pour les coaching-only, les paiements sont indexés par leadId qui n'existe
-    // pas. On invite à créer le lead pour débloquer cette fonctionnalité.
+  if(!c._hasLead){
+    // Pas de lead CRM lié → pas de paiements indexés. Inviter à créer le lead.
     h += '<div style="background:rgba(168,85,247,0.08);border:1px dashed rgba(168,85,247,0.30);border-radius:10px;padding:24px;text-align:center">';
     h += '<div style="font-size:32px;opacity:0.6;margin-bottom:6px">📚</div>';
-    h += '<div style="font-size:13px;color:#c4b5fd;font-weight:600;margin-bottom:6px">Pas de paiements visibles pour ce client coaching only</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:12px">Les paiements sont indexés par leadId. Créer le lead permettra de matcher et synchroniser GoCardless.</div>';
-    h += '<button class="csm-btn primary" onclick="csmCreateLeadFromCoachingOnly(\'' + openClientId + '\')" style="background:#7c3aed;border-color:#a78bfa">+ Créer le lead client</button>';
+    h += '<div style="font-size:13px;color:#c4b5fd;font-weight:600;margin-bottom:6px">Aucun lead CRM lié à ce client</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:12px">Les paiements sont stockés au niveau du lead CRM. Créer le lead permettra de matcher et synchroniser GoCardless.</div>';
+    h += '<button class="csm-btn primary" onclick="csmCreateLeadForClient(\'' + openClientId + '\')" style="background:#7c3aed;border-color:#a78bfa">+ Créer le lead CRM</button>';
     h += '</div></div>';
   } else if(pays.length){
     var globalPaid = 0, globalTotal = 0;
@@ -2260,28 +2265,31 @@ function csmGcLookup(leadId, email, forceRefresh){
 }
 window.csmGcLookup = csmGcLookup;
 
-/* ─── Créer un lead réel depuis un client virtuel coaching-only ───
+/* ─── Créer un lead CRM lié à un client coaching qui n'en a pas ───
    Cette fonction est appelée depuis le bandeau ou l'onglet Paiements de
-   la modal pour les clients _isCoachingOnly. Elle crée un doc dans
-   `leads` avec isClient=true, copiant les champs depuis la fiche
-   coaching. Le virtuel disparaîtra automatiquement au prochain snapshot
-   (cf. rebuildCoachingOnlyVirtuals).
-   Note : pour migrer en BULK tous les coaching-only d'un coup, utiliser
-   plutôt csm-diagnostic.html qui a un bouton "Créer tous les leads
-   manquants" avec confirmation et compteurs.                            */
-function csmCreateLeadFromCoachingOnly(virtualId){
-  var c = allClients.find(function(x){ return x.id === virtualId; });
-  if(!c || !c._isCoachingOnly){
-    showToast('❌ Client introuvable ou déjà un lead', 'error');
+   la modal pour les clients sans _hasLead. Elle crée un doc dans `leads`
+   avec isClient=true, copiant les champs depuis la fiche coaching. Le
+   `sourceCoachingId` permet de tracer l'origine. Au prochain snapshot
+   leads, le client se retrouvera enrichi automatiquement (cf.
+   buildAllClients qui fait le match par email).
+   Note : pour migrer en BULK, utiliser plutôt csm-diagnostic.html.       */
+function csmCreateLeadForClient(clientId){
+  var c = allClients.find(function(x){ return x.id === clientId; });
+  if(!c){
+    showToast('❌ Client introuvable', 'error');
     return;
   }
-  var co = coachingByEmail[(c.email||'').toLowerCase().trim()];
-  if(!co){
-    showToast('❌ Fiche coaching introuvable', 'error');
+  if(c._hasLead){
+    showToast('Ce client a déjà un lead CRM lié', 'error');
     return;
   }
-  if(!confirm('Créer un lead client pour ' + (c.nom||'?') + ' ?\n\nEmail : ' + (c.email||'—') + '\nTel : ' + (c.telephone||'—'))) return;
+  if(!c.email){
+    showToast('❌ Impossible de créer un lead sans email', 'error');
+    return;
+  }
+  if(!confirm('Créer un lead CRM lié pour ' + (c.nom||'?') + ' ?\n\nEmail : ' + (c.email||'—') + '\nTel : ' + (c.telephone||'—'))) return;
 
+  var co = c._coaching || {};
   var leadData = {
     nom: (c.nom||'').trim(),
     email: (c.email||'').toLowerCase().trim(),
@@ -2292,7 +2300,7 @@ function csmCreateLeadFromCoachingOnly(virtualId){
     clientStatus: c.clientStatus || 'active',
     clientSince: co.dateEntree || firebase.firestore.FieldValue.serverTimestamp(),
     source: 'coaching_migration',
-    sourceCoachingId: co._id,
+    sourceCoachingId: co._id || c._coachingId,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     importedCreatedAt: co.dateEntree || null,
     timeline_history: [{
@@ -2303,18 +2311,21 @@ function csmCreateLeadFromCoachingOnly(virtualId){
   };
   Object.keys(leadData).forEach(function(k){ if(leadData[k] === undefined) delete leadData[k]; });
 
-  db.collection('leads').add(leadData).then(function(ref){
-    showToast('✅ Lead client créé');
-    closeModal();
-    // Le snapshot leads va se rafraîchir tout seul, supprimer le virtuel
-    // et créer la "vraie" card. On rouvre le détail sur le nouveau leadId.
-    setTimeout(function(){ openClientModal(ref.id); }, 800);
+  db.collection('leads').add(leadData).then(function(){
+    showToast('✅ Lead CRM créé et lié');
+    // Le snapshot leads va se rafraîchir et buildAllClients va matcher
+    // automatiquement par email. Pas besoin de fermer la modal — elle
+    // se mettra à jour au prochain renderModal.
+    setTimeout(function(){
+      var refreshed = allClients.find(function(x){ return x.id === clientId; });
+      if(refreshed && refreshed._hasLead) renderModal();
+    }, 1200);
   }).catch(function(e){
-    console.error('csmCreateLeadFromCoachingOnly error', e);
+    console.error('csmCreateLeadForClient error', e);
     showToast('❌ Erreur création lead — voir console', 'error');
   });
 }
-window.csmCreateLeadFromCoachingOnly = csmCreateLeadFromCoachingOnly;
+window.csmCreateLeadForClient = csmCreateLeadForClient;
 
 /* Rend le détail GoCardless (mandats + paiements passés/futurs) dans #gcLiveContent */
 function renderGcLiveData(data){
@@ -2426,15 +2437,13 @@ function closeModal(){
 
 function changeStatus(newStatus){
   if(!openClientId) return;
-  var ctx = getClientWriteContext(openClientId);
-  // Pour un coaching-only, on stocke clientStatus sur le doc clients (pas
-  // de notion de statut dans la fiche coaching native, mais on l'ajoute
-  // comme champ libre pour que la CSM puisse le suivre).
-  ctx.ref.update({
+  // Source de vérité = clients/{coachingId}
+  db.collection('clients').doc(openClientId).update({
     clientStatus: newStatus,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(){
-    if(ctx.client) ctx.client.clientStatus = newStatus;
+    var c = allClients.find(function(x){ return x.id === openClientId; });
+    if(c) c.clientStatus = newStatus;
     showToast('✅ Statut mis à jour');
     renderModal();
   }).catch(function(e){
@@ -2448,41 +2457,24 @@ function addNote(){
   var input = document.getElementById('csmNoteInput');
   var txt = (input.value || '').trim();
   if(!txt){ showToast('Note vide', 'error'); return; }
-  var ctx = getClientWriteContext(openClientId);
   var noteObj = {
     contenu: txt,
     auteur: currentUserEmail || currentUserName || 'CSM',
-    createdAt: new Date().toISOString() // on utilise un ISO pour pouvoir le mettre dans arrayUnion
+    // ISO car arrayUnion ne supporte pas serverTimestamp dans un objet
+    createdAt: new Date().toISOString()
   };
-  if(ctx.isCoachingOnly){
-    // Pour coaching-only : note ajoutée au tableau csmNotes du doc clients
-    ctx.ref.update({
-      csmNotes: firebase.firestore.FieldValue.arrayUnion(noteObj),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(function(){
-      // Mettre à jour le cache local
-      var co = coachingByEmail[(ctx.client.email||'').toLowerCase().trim()];
-      if(co){
-        co.csmNotes = co.csmNotes || [];
-        co.csmNotes.push(noteObj);
-      }
-      showToast('📝 Note ajoutée (sur fiche coaching)');
-      input.value = '';
-      loadNotesForLead(openClientId, function(){ renderModal(); });
-    }).catch(function(e){
-      console.error('addNote (coaching) error', e);
-      showToast('❌ Erreur ajout note', 'error');
-    });
-    return;
-  }
-  // Cas normal lead : sous-collection client_notes
-  ctx.ref.collection('client_notes').add({
-    contenu: txt,
-    auteur: currentUserEmail || currentUserName || 'CSM',
-    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  db.collection('clients').doc(openClientId).update({
+    csmNotes: firebase.firestore.FieldValue.arrayUnion(noteObj),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(){
     showToast('📝 Note ajoutée');
     input.value = '';
+    // Mettre à jour le cache local
+    var c = allClients.find(function(x){ return x.id === openClientId; });
+    if(c && c._coaching){
+      c._coaching.csmNotes = c._coaching.csmNotes || [];
+      c._coaching.csmNotes.push(noteObj);
+    }
     loadNotesForLead(openClientId, function(){ renderModal(); });
   }).catch(function(e){
     console.error('addNote error', e);
@@ -2491,43 +2483,31 @@ function addNote(){
 }
 
 function deleteNote(noteId){
+  // noteId est le createdAt ISO de la note (cf. addNote — pas de doc id Firestore
+  // car les notes sont en array, pas en sous-collection).
   if(!openClientId) return;
   if(!confirm('Supprimer cette note ?')) return;
-  var ctx = getClientWriteContext(openClientId);
-  if(ctx.isCoachingOnly){
-    // Pour coaching-only, noteId est en fait un createdAt ISO (cf. addNote).
-    // On reconstruit le tableau en filtrant l'élément à supprimer.
-    var co = coachingByEmail[(ctx.client.email||'').toLowerCase().trim()];
-    var current = (co && co.csmNotes) ? co.csmNotes.slice() : [];
-    var newArr = current.filter(function(n){ return n.createdAt !== noteId; });
-    ctx.ref.update({
-      csmNotes: newArr,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(function(){
-      if(co) co.csmNotes = newArr;
-      showToast('🗑 Note supprimée');
-      loadNotesForLead(openClientId, function(){ renderModal(); });
-    }).catch(function(e){
-      console.error('deleteNote (coaching) error', e);
-      showToast('❌ Erreur', 'error');
-    });
-    return;
-  }
-  ctx.ref.collection('client_notes').doc(noteId).delete()
-    .then(function(){
-      showToast('🗑 Note supprimée');
-      loadNotesForLead(openClientId, function(){ renderModal(); });
-    }).catch(function(e){
-      console.error('deleteNote error', e);
-      showToast('❌ Erreur', 'error');
-    });
+  var c = allClients.find(function(x){ return x.id === openClientId; });
+  if(!c){ showToast('❌ Client introuvable', 'error'); return; }
+  var current = (c._coaching && c._coaching.csmNotes) ? c._coaching.csmNotes.slice() : [];
+  var newArr = current.filter(function(n){ return n.createdAt !== noteId; });
+  db.collection('clients').doc(openClientId).update({
+    csmNotes: newArr,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    if(c._coaching) c._coaching.csmNotes = newArr;
+    showToast('🗑 Note supprimée');
+    loadNotesForLead(openClientId, function(){ renderModal(); });
+  }).catch(function(e){
+    console.error('deleteNote error', e);
+    showToast('❌ Erreur', 'error');
+  });
 }
 
 function markFollowedUp(){
   if(!openClientId) return;
   var msg = prompt('Note de la relance (facultatif) :', '');
   if(msg === null) return;
-  var ctx = getClientWriteContext(openClientId);
   var historyEntry = {
     at: new Date().toISOString(),
     by: currentUser ? currentUser.uid : null,
@@ -2535,25 +2515,22 @@ function markFollowedUp(){
     channel: 'note',
     message: msg || ''
   };
-  ctx.ref.update({
+  db.collection('clients').doc(openClientId).update({
     lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
     lastCsmFollowupBy: currentUser ? currentUser.uid : null,
     csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(){
-    showToast('✅ Relance enregistrée' + (ctx.isCoachingOnly ? ' (sur fiche coaching)' : ''));
-    if(ctx.client){
-      if(!ctx.client.csmFollowupHistory) ctx.client.csmFollowupHistory = [];
-      ctx.client.csmFollowupHistory.push(historyEntry);
-      ctx.client.lastCsmFollowupAt = new Date();
-    }
-    // Si coaching-only, mettre à jour aussi le cache coachingByEmail
-    if(ctx.isCoachingOnly){
-      var co = coachingByEmail[(ctx.client.email||'').toLowerCase().trim()];
-      if(co){
-        co.csmFollowupHistory = co.csmFollowupHistory || [];
-        co.csmFollowupHistory.push(historyEntry);
-        co.lastCsmFollowupAt = new Date();
+    showToast('✅ Relance enregistrée');
+    var c = allClients.find(function(x){ return x.id === openClientId; });
+    if(c){
+      if(!c.csmFollowupHistory) c.csmFollowupHistory = [];
+      c.csmFollowupHistory.push(historyEntry);
+      c.lastCsmFollowupAt = new Date();
+      if(c._coaching){
+        c._coaching.csmFollowupHistory = c._coaching.csmFollowupHistory || [];
+        c._coaching.csmFollowupHistory.push(historyEntry);
+        c._coaching.lastCsmFollowupAt = new Date();
       }
     }
     renderModal();
