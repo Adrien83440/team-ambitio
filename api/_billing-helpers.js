@@ -58,6 +58,42 @@ async function requireAuth(req, allowedRoles) {
   return { uid: decoded.uid, email: decoded.email || userData.email, role: role, userData: userData };
 }
 
+/**
+ * Variante de requireAuth qui accepte AUSSI un header x-system-key.
+ * 
+ * Si la requête présente un header `x-system-key` valide pour la purpose
+ * demandée (vérifié contre _config/system_keys.{purpose}), bypass le Bearer
+ * token et retourne un user système avec role='admin' et isSystem=true.
+ * 
+ * Sinon, fallback sur requireAuth classique.
+ * 
+ * Utilisé par les endpoints appelables à la fois depuis le frontend (Bearer
+ * admin) et depuis les Cloud Functions / scripts (x-system-key) — typiquement
+ * la génération automatique de factures depuis subscriptions (Step 4B).
+ */
+async function requireAuthOrSystemKey(req, allowedRoles, systemKeyPurpose) {
+  const headerKey = req.headers['x-system-key'];
+  if (headerKey && systemKeyPurpose) {
+    const keysSnap = await db.collection('_config').doc('system_keys').get();
+    const keys = keysSnap.exists ? keysSnap.data() : {};
+    const expected = keys[systemKeyPurpose];
+    if (expected && headerKey === expected) {
+      return {
+        uid: 'system_' + systemKeyPurpose,
+        email: 'system+' + systemKeyPurpose + '@alteore.local',
+        role: 'admin',
+        isSystem: true,
+        systemPurpose: systemKeyPurpose,
+        userData: {},
+      };
+    }
+    /* x-system-key fourni mais invalide → reject explicitement (ne pas fallback Bearer) */
+    const e = new Error('Invalid system key for purpose: ' + systemKeyPurpose); e.status = 401; throw e;
+  }
+  /* Pas de x-system-key → auth classique */
+  return await requireAuth(req, allowedRoles);
+}
+
 /* ─── SHA-256 ─── */
 function sha256(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
@@ -110,7 +146,7 @@ function sendError(res, err) {
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-system-key');
 }
 
 module.exports = {
@@ -118,6 +154,7 @@ module.exports = {
   db: db,
   auth: auth,
   requireAuth: requireAuth,
+  requireAuthOrSystemKey: requireAuthOrSystemKey,
   sha256: sha256,
   chunkBufferToBase64: chunkBufferToBase64,
   reassembleBase64Chunks: reassembleBase64Chunks,
