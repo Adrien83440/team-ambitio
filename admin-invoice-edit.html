@@ -213,9 +213,9 @@
     <div class="inv-actions">
       <span class="inv-save-state" id="invSaveState"><span class="inv-save-dot"></span> <span id="invSaveText">Modifications non enregistrées</span></span>
       <button class="inv-btn inv-btn-ghost" id="btnSaveDraft" onclick="saveDraft(true)">💾 Sauvegarder</button>
-      <button class="inv-btn inv-btn-primary" id="btnValidate" onclick="onValidateClick()" title="Disponible en Step 2B">✅ Valider</button>
-      <button class="inv-btn inv-btn-ghost" id="btnDownload" disabled title="Disponible en Step 2B">⬇️ PDF</button>
-      <button class="inv-btn inv-btn-ghost" id="btnSend" disabled title="Disponible en Step 2B">📨 Envoyer</button>
+      <button class="inv-btn inv-btn-primary" id="btnValidate" onclick="onValidateClick()">✅ Valider</button>
+      <button class="inv-btn inv-btn-ghost" id="btnDownload" onclick="downloadPdf()" disabled title="Disponible après validation">⬇️ PDF</button>
+      <button class="inv-btn inv-btn-ghost" id="btnSend" disabled title="Disponible en Step 2B-2">📨 Envoyer</button>
     </div>
   </div>
 
@@ -559,6 +559,23 @@ function lockAllInputs() {
   document.getElementById('btnValidate').style.display = 'none';
   document.getElementById('invAddLineBtn').style.display = 'none';
   document.getElementById('invSaveState').style.display = 'none';
+
+  /* Activer le téléchargement PDF si disponible */
+  const btnDl = document.getElementById('btnDownload');
+  if (invoiceState.pdfHash) {
+    btnDl.disabled = false;
+    btnDl.removeAttribute('title');
+  } else {
+    btnDl.disabled = true;
+    btnDl.title = invoiceState.pdfPending
+      ? 'PDF en cours de génération — réessayez dans quelques secondes'
+      : (invoiceState.pdfError ? 'Échec génération : ' + invoiceState.pdfError : 'PDF non disponible');
+  }
+
+  /* Bouton Envoyer : Step 2B-2 */
+  const btnSend = document.getElementById('btnSend');
+  btnSend.disabled = true;
+  btnSend.title = 'Envoi par email — disponible en Step 2B-2';
 }
 
 /* ═══ STATUS PILL ═══ */
@@ -1027,9 +1044,106 @@ async function saveDraft(showToast) {
   }
 }
 
-/* ═══ VALIDATE (Step 2B) ═══ */
-function onValidateClick() {
-  toast('La validation arrive en Step 2B. Pour l\'instant, sauvegardez votre brouillon — il sera prêt à valider dès que la Step 2B sera déployée.', false);
+/* ═══ VALIDATE (Step 2B-1) ═══ */
+async function onValidateClick() {
+  if (isReadOnly) return toast('Facture déjà validée', true);
+
+  /* Forcer une sauvegarde finale avant validation pour s'assurer que tout
+     est persisté côté Firestore */
+  if (dirty || !invoiceFirestoreId) {
+    await saveDraft(false);
+    if (!invoiceFirestoreId) { toast('Sauvegarde impossible — réessayez', true); return; }
+  }
+
+  /* Validations préalables côté client (l'API revalide aussi) */
+  if (!invoiceState.clientId) return toast('Sélectionnez un client', true);
+  if (!invoiceState.lines || !invoiceState.lines.length) return toast('Ajoutez au moins une ligne', true);
+  if (!invoiceState.totalTtc || invoiceState.totalTtc <= 0) return toast('Le montant total TTC doit être supérieur à 0', true);
+  for (let i = 0; i < invoiceState.lines.length; i++) {
+    const l = invoiceState.lines[i];
+    if (!(l.qty > 0)) return toast('Ligne ' + (i + 1) + ' : quantité invalide', true);
+    if (l.unitPriceHt < 0) return toast('Ligne ' + (i + 1) + ' : prix invalide', true);
+    if (!l.description && !l.productName) return toast('Ligne ' + (i + 1) + ' : description requise', true);
+  }
+
+  if (!confirm(
+    'Valider définitivement la facture ?\n\n'
+    + '• Un numéro séquentiel sera attribué (F' + new Date().getFullYear() + '-XXXXX)\n'
+    + '• La date d\'émission sera fixée à maintenant\n'
+    + '• Le PDF sera généré (avec CGV embarquées) et stocké\n'
+    + '• Cette action est IRRÉVERSIBLE (loi anti-fraude 2018)\n\n'
+    + 'Total TTC : ' + formatEur(invoiceState.totalTtc)
+  )) return;
+
+  const btn = document.getElementById('btnValidate');
+  const originalLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Validation…';
+
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const response = await fetch('/api/invoice-validate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + idToken
+      },
+      body: JSON.stringify({ invoiceId: invoiceFirestoreId })
+    });
+    let data = {};
+    try { data = await response.json(); } catch(e) {}
+    if (!response.ok) throw new Error(data.error || ('Erreur HTTP ' + response.status));
+
+    toast('✅ Facture ' + data.number + ' validée — PDF généré (' + Math.round(data.pdfSizeBytes / 1024) + ' KB)');
+    /* Recharger la page : le listener Firestore va aussi détecter le changement
+       et basculer en read-only, mais reload garantit un état propre */
+    setTimeout(function(){ location.reload(); }, 1200);
+  } catch (err) {
+    console.error('[validate]', err);
+    toast('Erreur validation : ' + err.message, true);
+    btn.disabled = false;
+    btn.innerHTML = originalLabel;
+  }
+}
+
+/* ═══ DOWNLOAD PDF (Step 2B-1) ═══ */
+async function downloadPdf() {
+  if (!invoiceFirestoreId) return;
+  if (invoiceState.status === 'draft') return toast('PDF disponible après validation', true);
+  if (!invoiceState.pdfHash) return toast('PDF non disponible (génération échouée ou en attente)', true);
+
+  const btn = document.getElementById('btnDownload');
+  const originalLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳';
+
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const response = await fetch('/api/invoice-pdf?id=' + encodeURIComponent(invoiceFirestoreId), {
+      headers: { 'Authorization': 'Bearer ' + idToken }
+    });
+    if (!response.ok) {
+      let errMsg = 'Erreur HTTP ' + response.status;
+      try { const data = await response.json(); errMsg = data.error || errMsg; } catch(e) {}
+      throw new Error(errMsg);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (invoiceState.number || invoiceFirestoreId) + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast('📄 PDF téléchargé');
+  } catch (err) {
+    console.error('[download]', err);
+    toast('Erreur téléchargement : ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalLabel;
+  }
 }
 
 /* ═══ PREVIEW PDF ═══ */

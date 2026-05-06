@@ -1757,7 +1757,11 @@ function renderInvoicesList() {
     html += '<td class="col-actions">';
     html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();editInvoice(\'' + inv.id + '\')">' + (inv.status === 'draft' ? '✏️ Éditer' : '👁️ Voir') + '</button>';
     if (inv.status === 'draft') {
-      html += ' <button class="bill-btn bill-btn-red" onclick="event.stopPropagation();deleteDraft(\'' + inv.id + '\')">🗑️</button>';
+      html += ' <button class="bill-btn bill-btn-red" onclick="event.stopPropagation();deleteDraft(\'' + inv.id + '\')" title="Supprimer le brouillon">🗑️</button>';
+    } else if (inv.pdfHash) {
+      html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();downloadInvoicePdf(\'' + inv.id + '\', \'' + escapeAttr(inv.number || inv.id) + '\')" title="Télécharger PDF">📄</button>';
+    } else if (inv.pdfPending || inv.pdfError) {
+      html += ' <span class="bill-badge individual" title="' + (inv.pdfError ? escapeAttr(inv.pdfError) : 'Génération en cours') + '">⚠️ PDF</span>';
     }
     html += '</td>';
     html += '</tr>';
@@ -1818,6 +1822,39 @@ async function deleteDraft(id) {
     toast('🗑️ Brouillon supprimé');
   } catch (err) {
     toast('Erreur : ' + err.message, true);
+  }
+}
+
+/* Téléchargement PDF d'une facture validée (Step 2B-1)
+   Fetch /api/invoice-pdf avec Bearer token Firebase, puis déclenche un download local */
+async function downloadInvoicePdf(id, number) {
+  if (!id) return;
+  const user = firebase.auth().currentUser;
+  if (!user) return toast('Session expirée — reconnectez-vous', true);
+  toast('⏳ Téléchargement…');
+  try {
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/invoice-pdf?id=' + encodeURIComponent(id), {
+      headers: { 'Authorization': 'Bearer ' + idToken }
+    });
+    if (!response.ok) {
+      let errMsg = 'Erreur HTTP ' + response.status;
+      try { const data = await response.json(); errMsg = data.error || errMsg; } catch(e) {}
+      throw new Error(errMsg);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (number || id) + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast('📄 PDF téléchargé');
+  } catch (err) {
+    console.error('[downloadInvoicePdf]', err);
+    toast('Erreur téléchargement : ' + err.message, true);
   }
 }
 
