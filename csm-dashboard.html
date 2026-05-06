@@ -999,6 +999,16 @@ function getLastSessionDate(coachingDoc){
   return new Date(ss[0].date);
 }
 
+/* ─── RDV 72H : la session d'onboarding faite dans les 72h après inscription ───
+   Convention coaching.html : type === 'rdv72h' OU numero === 0. C'est un
+   signal critique côté CSM — si raté, le client démarre mal. */
+function getRdv72h(coachingDoc){
+  var allSess = getAllCoachingSessions(coachingDoc);
+  return allSess.find(function(s){
+    return s.type === 'rdv72h' || s.numero === 0;
+  }) || null;
+}
+
 /* ─── Calculer la date de début effective d'un client coaching ───
    On combine deux signaux pour ne pas tagger à tort un client comme
    "en retard" sur des mois où il n'avait pas encore commencé :
@@ -1870,7 +1880,23 @@ function renderModal(){
     var subTxt = qN && qN.status === 'miss' ? '🔴 Aucune session ce mois'
                : qN && qN.status === 'partial' ? '🟡 ' + qN.used + '/' + qN.max + ' ce mois'
                : qN && qN.status === 'ok' ? '✓ Quota mensuel OK' : '—';
-    h += '<div class="ov-card ov-coach"><div class="ov-card-label">🎯 Coaching</div>';
+
+    // Mini indicateur RDV 72H : un petit badge en haut à droite de la card
+    var rdv72ov = getRdv72h(coaching);
+    var entryDov = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
+    var entryValOv = entryDov && !isNaN(entryDov.getTime());
+    var rdv72ovBadge = '';
+    if(rdv72ov && rdv72ov.statut === 'fait'){
+      rdv72ovBadge = '<span style="position:absolute;top:8px;right:10px;background:rgba(52,211,153,0.15);color:#34d399;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px" title="RDV 72H effectué">72H ✓</span>';
+    } else if(rdv72ov && rdv72ov.date && new Date(rdv72ov.date) > new Date()){
+      rdv72ovBadge = '<span style="position:absolute;top:8px;right:10px;background:rgba(96,165,250,0.15);color:#93c5fd;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px" title="RDV 72H planifié">72H 📅</span>';
+    } else if(entryValOv && (Date.now() - entryDov)/3600000 > 72){
+      rdv72ovBadge = '<span style="position:absolute;top:8px;right:10px;background:rgba(239,68,68,0.15);color:var(--crit-color);padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px" title="RDV 72H raté — délai dépassé">72H ✗</span>';
+    } else if(entryValOv){
+      rdv72ovBadge = '<span style="position:absolute;top:8px;right:10px;background:rgba(251,191,36,0.15);color:#fbbf24;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px" title="RDV 72H à programmer">72H ⏱</span>';
+    }
+
+    h += '<div class="ov-card ov-coach" style="position:relative">' + rdv72ovBadge + '<div class="ov-card-label">🎯 Coaching</div>';
     h += '<div class="ov-card-main">' + done + '<span class="ov-card-sep">/</span>' + total + '</div>';
     h += '<div class="ov-card-bar"><div class="ov-card-bar-fill" style="width:' + pct + '%;background:var(--csm-accent)"></div></div>';
     h += '<div class="ov-card-sub">' + subTxt + '</div></div>';
@@ -1965,6 +1991,76 @@ function renderModal(){
       h += '<span>📅 Entré le ' + fmtDate(coaching.dateEntree) + '</span>';
     }
     h += '<span>👤 Coach : <strong style="color:var(--ink)">' + esc(coachName) + '</strong></span>';
+    h += '</div></div>';
+
+    // ── Bloc RDV 72H ──
+    // C'est la session d'onboarding faite dans les 72h après l'inscription.
+    // Indicateur critique côté CSM : si raté → mauvais démarrage.
+    var rdv72 = getRdv72h(coaching);
+    var entryD72 = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
+    var entryValid = entryD72 && !isNaN(entryD72.getTime());
+
+    var rdvIcon, rdvBg, rdvBorder, rdvLabel, rdvSubtext;
+    if(rdv72 && rdv72.statut === 'fait' && rdv72.date){
+      // ✅ Fait
+      var d72 = new Date(rdv72.date);
+      var coach72name = rdv72.coach || (coaching.coachAssigned ? (coachMembersMap[coaching.coachAssigned] || coaching.coachAssigned) : '—');
+      var delayInfo = '';
+      if(entryValid){
+        var diffH = (d72 - entryD72) / 3600000;
+        if(diffH <= 72 && diffH >= -24) delayInfo = ' · ✓ dans les délais';
+        else if(diffH > 72){
+          var diffD = Math.round(diffH/24);
+          delayInfo = ' · ⚠️ ' + diffD + 'j après entrée';
+        }
+      }
+      rdvIcon = '✅';
+      rdvBg = 'rgba(52,211,153,0.08)';
+      rdvBorder = 'rgba(52,211,153,0.30)';
+      rdvLabel = 'RDV 72H effectué le ' + fmtDate(d72);
+      rdvSubtext = '👤 Avec ' + esc(coach72name) + delayInfo;
+    } else if(rdv72 && rdv72.date && new Date(rdv72.date) > new Date()){
+      // 📅 Planifié
+      var dPlan = new Date(rdv72.date);
+      var coachPlanName = rdv72.coach || '—';
+      rdvIcon = '📅';
+      rdvBg = 'rgba(96,165,250,0.08)';
+      rdvBorder = 'rgba(96,165,250,0.30)';
+      rdvLabel = 'RDV 72H planifié le ' + fmtDate(dPlan);
+      rdvSubtext = '👤 Avec ' + esc(coachPlanName);
+    } else {
+      // Pas fait — selon délai depuis entrée
+      var hoursSinceEntry = entryValid ? (Date.now() - entryD72) / 3600000 : null;
+      if(hoursSinceEntry !== null && hoursSinceEntry > 72){
+        // 🔴 Raté — délai dépassé
+        rdvIcon = '🔴';
+        rdvBg = 'rgba(239,68,68,0.08)';
+        rdvBorder = 'rgba(239,68,68,0.30)';
+        rdvLabel = 'RDV 72H non effectué';
+        rdvSubtext = '⚠️ Délai dépassé depuis ' + Math.round(hoursSinceEntry/24) + ' jour' + (hoursSinceEntry > 48 ? 's' : '') + ' — à programmer en urgence';
+      } else if(hoursSinceEntry !== null){
+        // 🟡 Dans les délais — à programmer
+        var hRemaining = Math.round(72 - hoursSinceEntry);
+        rdvIcon = '🟡';
+        rdvBg = 'rgba(251,191,36,0.08)';
+        rdvBorder = 'rgba(251,191,36,0.30)';
+        rdvLabel = 'RDV 72H à programmer';
+        rdvSubtext = '⏱ Reste ' + hRemaining + 'h pour rester dans les délais';
+      } else {
+        // Pas de date d'entrée fiable
+        rdvIcon = '⚪';
+        rdvBg = 'rgba(255,255,255,0.04)';
+        rdvBorder = 'var(--border)';
+        rdvLabel = 'RDV 72H — pas d\'info';
+        rdvSubtext = 'Aucune date d\'entrée enregistrée pour calculer le délai';
+      }
+    }
+
+    h += '<div style="background:' + rdvBg + ';border:1px solid ' + rdvBorder + ';border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px">';
+    h += '<div style="font-size:22px">' + rdvIcon + '</div>';
+    h += '<div style="flex:1;min-width:0">';
+    h += '<div style="font-size:12px;font-weight:700;color:var(--ink)">⚡ ' + rdvLabel + '</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">' + rdvSubtext + '</div>';
     h += '</div></div>';
 
     // ── Bloc Avancement programme ──
