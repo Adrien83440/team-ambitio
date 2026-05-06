@@ -290,7 +290,7 @@ body { background: var(--bg); color: var(--ink); }
     <div class="csm-stat crit"><div class="csm-stat-val" id="statCrit">—</div><div class="csm-stat-label">🔴 Critique</div></div>
     <div class="csm-stat warn"><div class="csm-stat-val" id="statWarn">—</div><div class="csm-stat-label">🟠 À relancer</div></div>
     <div class="csm-stat att"><div class="csm-stat-val"  id="statAtt">—</div><div class="csm-stat-label">🟡 Attention</div></div>
-    <div class="csm-stat ok"><div class="csm-stat-val"   id="statTemo">—</div><div class="csm-stat-label">⭐ Témoignages</div></div>
+    <div class="csm-stat warn"><div class="csm-stat-val" id="statCoachLate">—</div><div class="csm-stat-label">🎯 Retards coaching</div></div>
     <div class="csm-stat"><div class="csm-stat-val"      id="statActive">—</div><div class="csm-stat-label">👥 Clients actifs</div></div>
   </div>
 
@@ -373,6 +373,8 @@ var paymentsByLead  = {};     // leadId -> [payments]
 var notesByLead     = {};     // leadId -> [notes]
 var temoByLead      = {};     // leadId -> [temo]
 var temoFlat        = [];
+var coachingByEmail = {};     // email lowercase -> client coaching doc
+var coachMembersMap = {};     // slug -> displayName (pour afficher coach assigné)
 
 var activeTab    = 'retards';
 var levelsActive = { crit:true, warn:true, att:true };
@@ -459,8 +461,6 @@ function computeLevel(c){
   var hasCancelled = pays.some(function(p){ return p.status === 'cancelled'; });
 
   // Détecter retard de prélèvement sur paiement actif
-  // Si on a un paiement 'active' avec installmentsCount > 1, on calcule
-  // les prélèvements théoriquement dus depuis startDate vs paidCount.
   var hasPaymentBehind = false;
   pays.forEach(function(p){
     if(p.status !== 'active') return;
@@ -474,14 +474,41 @@ function computeLevel(c){
     if(actual < expected - 1) hasPaymentBehind = true; // tolérance d'1 mois
   });
 
+  // ─── Retards de coaching (collection clients) ───
+  // Si un client coaching matché existe et qu'il n'est pas inactif/terminé,
+  // on évalue ses 2 derniers mois de quota mensuel.
+  var coachingDoc = getCoachingForLead(c);
+  var hasCoaching2MonthsMissed = false;
+  var hasCoaching1MonthMissed = false;
+  var hasCoachingPartial = false;
+  if(coachingDoc && coachingDoc.statut !== 'inactif'){
+    var done  = coachingDoc.nbCoachingsFaits || 0;
+    var total = coachingDoc.nbCoachingsTotal || 12;
+    if(done < total){ // pas terminé
+      var now = new Date();
+      var qNow = getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
+      var prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      var qPrev = getCoachingQuotaStatus(coachingDoc, prev.getFullYear(), prev.getMonth());
+      if(qNow && qPrev && qNow.status === 'miss' && qPrev.status === 'miss'){
+        hasCoaching2MonthsMissed = true;
+      } else if(qNow && qNow.status === 'miss'){
+        hasCoaching1MonthMissed = true;
+      } else if(qNow && qNow.status === 'partial'){
+        hasCoachingPartial = true;
+      }
+    }
+  }
+
   // Statuts critiques business
   if(status === 'procedure') return 'crit';
   if(hasFailed) return 'crit';
   if(hasPaymentBehind) return 'crit';
+  if(hasCoaching2MonthsMissed) return 'crit';
 
   // Statut paused = à relancer
   if(status === 'paused') return 'warn';
   if(hasCancelled) return 'warn';
+  if(hasCoaching1MonthMissed) return 'warn';
 
   // Pending_mandate depuis +7j = à relancer
   var hasOldPending = pays.some(function(p){
@@ -494,6 +521,8 @@ function computeLevel(c){
 
   // Aucun paiement enregistré sur un client actif
   if(status === 'active' && pays.length === 0) return 'att';
+  // Sessions partielles (en dessous quota mensuel)
+  if(hasCoachingPartial) return 'att';
 
   return 'ok';
 }
@@ -520,6 +549,12 @@ firebase.auth().onAuthStateChanged(function(user){
 
 /* ─── Data loading ─── */
 function loadAllData(){
+  // ─── Charger les clients coaching (collection séparée) en parallèle ───
+  // Match plus tard avec leads par email canonicalisé.
+  loadCoachingClients();
+  // Charger les coachs (pour afficher coach assigné)
+  loadCoachMembers();
+
   // Listener temps réel sur leads clients
   db.collection('leads').where('isClient','==',true).onSnapshot(function(snap){
     allClients = [];
@@ -546,6 +581,93 @@ function loadAllData(){
     document.getElementById('csmBody').innerHTML =
       '<div class="csm-empty"><div class="csm-empty-icon">⚠️</div><div class="csm-empty-title">Erreur de chargement</div><div>' + esc(err.message) + '</div></div>';
   });
+}
+
+/* ─── Coaching collection — match par email avec leads clients ─── */
+// La collection `clients` est utilisée par coaching.html. Elle contient
+// les sessions, programmes, quotas mensuels, coach assigné. On la charge
+// pour enrichir chaque lead client avec ses infos de coaching matchées
+// par email (best-effort : pas tous les leads ont un client coaching).
+function loadCoachingClients(){
+  db.collection('clients').onSnapshot(function(snap){
+    coachingByEmail = {};
+    snap.forEach(function(d){
+      var data = d.data();
+      data._id = d.id;
+      var email = (data.email || '').toLowerCase().trim();
+      if(email) coachingByEmail[email] = data;
+    });
+    // Re-render : les cards affichent maintenant les infos coaching
+    renderAll();
+  }, function(err){
+    console.warn('Coaching clients listener error (non-bloquant):', err.message);
+  });
+}
+
+function loadCoachMembers(){
+  db.collection('_meta').doc('team_members').get().then(function(snap){
+    if(!snap.exists) return;
+    var raw = snap.data().members || {};
+    var list = Array.isArray(raw)
+      ? raw
+      : Object.keys(raw).map(function(k){ var v = raw[k]; v.slug = v.slug||k; return v; });
+    list.forEach(function(m){
+      coachMembersMap[m.slug] = m.shortName || m.displayName || m.fullName || m.slug;
+    });
+  }).catch(function(){});
+}
+
+/* ─── Quota / sessions logic — réplique de coaching.html ─── */
+function getMonthlyQuota(programme){
+  if(!programme) return 1;
+  var p = String(programme).toLowerCase();
+  if(p.indexOf('24c') >= 0) return 2;
+  if(p.indexOf('12c') >= 0) return 1;
+  if(p.indexOf('6c')  >= 0) return 1;
+  return 1;
+}
+function getAllCoachingSessions(coachingDoc){
+  if(!coachingDoc) return [];
+  if(coachingDoc.years && coachingDoc.years.length){
+    var all = [];
+    coachingDoc.years.forEach(function(y){ (y.sessions||[]).forEach(function(s){ all.push(s); }); });
+    return all;
+  }
+  return coachingDoc.sessions || [];
+}
+function getSessionsInMonth(coachingDoc, year, month){
+  return getAllCoachingSessions(coachingDoc).filter(function(s){
+    if(s.statut !== 'fait' || !s.date) return false;
+    if(s.numero === 0 || s.type === 'rdv72h') return false;
+    var d = new Date(s.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+}
+function getCoachingQuotaStatus(coachingDoc, year, month){
+  if(!coachingDoc) return null;
+  var done  = coachingDoc.nbCoachingsFaits || 0;
+  var total = coachingDoc.nbCoachingsTotal || 12;
+  if(done >= total) return { status:'done', used:0, max:0 };
+  var quota = getMonthlyQuota(coachingDoc.programme);
+  var sessions = getSessionsInMonth(coachingDoc, year, month);
+  var used = sessions.length;
+  if(used >= quota)  return { status:'ok', used:used, max:quota };
+  if(used > 0)       return { status:'partial', used:used, max:quota };
+  return { status:'miss', used:0, max:quota };
+}
+function getCoachingForLead(lead){
+  // Match best-effort par email canonicalisé
+  var email = (lead.email || '').toLowerCase().trim();
+  if(!email) return null;
+  return coachingByEmail[email] || null;
+}
+function getLastSessionDate(coachingDoc){
+  var ss = getAllCoachingSessions(coachingDoc).filter(function(s){
+    return s.statut === 'fait' && s.date && s.numero !== 0 && s.type !== 'rdv72h';
+  });
+  if(!ss.length) return null;
+  ss.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+  return new Date(ss[0].date);
 }
 
 function loadPaymentsForClients(){
@@ -633,7 +755,7 @@ function renderAll(){
 }
 
 function computeStats(){
-  var crit = 0, warn = 0, att = 0, active = 0;
+  var crit = 0, warn = 0, att = 0, active = 0, coachLate = 0;
   allClients.forEach(function(c){
     var status = c.clientStatus || 'active';
     if(status === 'active') active++;
@@ -641,11 +763,25 @@ function computeStats(){
     if(lvl === 'crit') crit++;
     else if(lvl === 'warn') warn++;
     else if(lvl === 'att')  att++;
+    // Compteur coaching en retard (au moins 1 mois manqué)
+    var coachingDoc = getCoachingForLead(c);
+    if(coachingDoc && coachingDoc.statut !== 'inactif'){
+      var done  = coachingDoc.nbCoachingsFaits || 0;
+      var total = coachingDoc.nbCoachingsTotal || 12;
+      if(done < total){
+        var nowD = new Date();
+        var qNow = getCoachingQuotaStatus(coachingDoc, nowD.getFullYear(), nowD.getMonth());
+        if(qNow && qNow.status === 'miss') coachLate++;
+      }
+    }
   });
   document.getElementById('statCrit').textContent = crit;
   document.getElementById('statWarn').textContent = warn;
   document.getElementById('statAtt').textContent  = att;
-  document.getElementById('statTemo').textContent = temoFlat.length;
+  var elCoach = document.getElementById('statCoachLate');
+  if(elCoach) elCoach.textContent = coachLate;
+  var elTemo = document.getElementById('statTemo');
+  if(elTemo) elTemo.textContent = temoFlat.length;
   document.getElementById('statActive').textContent = active;
   document.getElementById('cntRetards').textContent = (crit + warn + att);
   document.getElementById('cntAll').textContent     = allClients.length;
@@ -751,11 +887,59 @@ function renderClientCard(c){
   var clientSince = '';
   if(c.clientSince){ clientSince = '<span>📅 Client depuis ' + fmtDate(c.clientSince) + '</span>'; }
 
+  // ─── Badge coaching (collection clients matchée par email) ───
+  var coachingBadge = '';
+  var coachingDoc = getCoachingForLead(c);
+  if(coachingDoc){
+    var done  = coachingDoc.nbCoachingsFaits || 0;
+    var total = coachingDoc.nbCoachingsTotal || 12;
+    var now = new Date();
+    var qNow = getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
+    var prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    var qPrev = getCoachingQuotaStatus(coachingDoc, prev.getFullYear(), prev.getMonth());
+    var coachLbl = '🎯 ' + done + '/' + total;
+    if(coachingDoc.statut === 'inactif'){
+      coachingBadge = '<span class="csm-badge cs-stopped">' + coachLbl + ' inactif</span>';
+    } else if(done >= total){
+      coachingBadge = '<span class="csm-badge cs-completed">' + coachLbl + ' terminé</span>';
+    } else if(qNow && qPrev && qNow.status === 'miss' && qPrev.status === 'miss'){
+      coachingBadge = '<span class="csm-badge crit" title="2 mois sans coaching">' + coachLbl + ' • 2 mois sans</span>';
+    } else if(qNow && qNow.status === 'miss'){
+      coachingBadge = '<span class="csm-badge warn" title="Pas de coaching ce mois">' + coachLbl + ' • retard mois</span>';
+    } else if(qNow && qNow.status === 'partial'){
+      coachingBadge = '<span class="csm-badge att">' + coachLbl + ' • ' + qNow.used + '/' + qNow.max + ' mois</span>';
+    } else if(qNow && qNow.status === 'ok'){
+      coachingBadge = '<span class="csm-badge ok">' + coachLbl + ' ✓ mois</span>';
+    } else {
+      coachingBadge = '<span class="csm-badge cs-active">' + coachLbl + '</span>';
+    }
+  }
+
+  // Badge formation Kajabi (% global si calculable, sinon "🎓 En formation")
+  var kajBadge = '';
+  if(c.kajabiProgress && c.kajabiProgress.byCourse){
+    var totDone = 0, totAll = 0;
+    Object.keys(c.kajabiProgress.byCourse).forEach(function(ck){
+      var crs = c.kajabiProgress.byCourse[ck] || {};
+      Object.keys(crs.modules || {}).forEach(function(mk){
+        var m = crs.modules[mk] || {};
+        totDone += (m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
+        if(m.totalLessons) totAll += m.totalLessons;
+      });
+    });
+    if(totAll > 0){
+      var globalPct = Math.round((totDone/totAll)*100);
+      kajBadge = '<span class="csm-badge ok" title="Progression Kajabi globale">🎓 ' + globalPct + '%</span>';
+    } else if(totDone > 0){
+      kajBadge = '<span class="csm-badge ok" title="Leçons Kajabi terminées">🎓 ' + totDone + ' leçons</span>';
+    }
+  }
+
   var av = '<div class="csm-avatar">' + esc(initials(clientDisplayName(c))) + '</div>';
   var info = '<div class="csm-card-info">' +
     '<div class="csm-card-name">' + esc(clientDisplayName(c)) + (c.commerce ? ' <span style="font-weight:400;color:var(--ink-muted);font-size:12px">— ' + esc(c.commerce) + '</span>' : '') + '</div>' +
     '<div class="csm-card-meta">' +
-      lvlBadge + statusBadge + followBadge +
+      lvlBadge + statusBadge + followBadge + coachingBadge + kajBadge +
       payInfo + clientSince +
     '</div>' +
   '</div>';
@@ -966,6 +1150,65 @@ function renderModal(){
   });
   h += '</div></div>';
 
+  // ─── Coaching (matché par email avec collection clients) ───
+  var coaching = getCoachingForLead(c);
+  if(coaching){
+    var done  = coaching.nbCoachingsFaits || 0;
+    var total = coaching.nbCoachingsTotal || 12;
+    var pct   = total > 0 ? Math.round((done/total)*100) : 0;
+    var lastSess = getLastSessionDate(coaching);
+    var daysSince = lastSess ? Math.floor((Date.now() - lastSess.getTime()) / 86400000) : null;
+    var coachName = coaching.coachAssigned ? (coachMembersMap[coaching.coachAssigned] || coaching.coachAssigned) : 'Non assigné';
+
+    h += '<div class="csm-section">';
+    h += '<div class="csm-section-title">🎯 Coaching</div>';
+    h += '<div class="csm-info-grid">';
+    h += '<div class="csm-info-item"><div class="csm-info-label">Programme</div><div class="csm-info-val">' + esc(coaching.programme||'—') + '</div></div>';
+    h += '<div class="csm-info-item"><div class="csm-info-label">Coach assigné</div><div class="csm-info-val">' + esc(coachName) + '</div></div>';
+    h += '<div class="csm-info-item"><div class="csm-info-label">Coachings effectués</div><div class="csm-info-val">' + done + ' / ' + total + ' (' + pct + '%)</div></div>';
+    h += '<div class="csm-info-item"><div class="csm-info-label">Dernière session</div><div class="csm-info-val">';
+    if(lastSess) h += fmtDate(lastSess) + ' (il y a ' + daysSince + ' jour' + (daysSince>1?'s':'') + ')';
+    else h += 'Aucune session';
+    h += '</div></div>';
+    h += '</div>';
+
+    // Barre progression globale + 6 derniers mois quota
+    h += '<div style="margin-top:10px;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden">';
+    h += '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,var(--csm-accent-dark),var(--csm-accent));"></div>';
+    h += '</div>';
+
+    // Mini-barres des 6 derniers mois
+    h += '<div style="margin-top:10px;display:flex;gap:4px;align-items:flex-end">';
+    var nowD = new Date();
+    var entry = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
+    for(var i = 5; i >= 0; i--){
+      var d = new Date(nowD.getFullYear(), nowD.getMonth() - i, 1);
+      var label = d.toLocaleDateString('fr-FR',{month:'short'});
+      if(entry && !isNaN(entry.getTime()) && d < new Date(entry.getFullYear(), entry.getMonth(), 1)){
+        h += '<div style="flex:1;text-align:center;font-size:9px;color:var(--ink-muted)">' + label + '<div style="height:14px;background:rgba(255,255,255,0.04);border-radius:2px;margin-top:2px"></div></div>';
+        continue;
+      }
+      var q = getCoachingQuotaStatus(coaching, d.getFullYear(), d.getMonth());
+      var col = 'rgba(255,255,255,0.08)';
+      if(q && q.status === 'ok')      col = 'var(--csm-accent)';
+      else if(q && q.status === 'partial') col = 'var(--att-color)';
+      else if(q && q.status === 'miss')    col = 'var(--crit-color)';
+      var title = label + ' : ' + (q ? q.used + '/' + q.max : '—');
+      h += '<div style="flex:1;text-align:center;font-size:9px;color:var(--ink-muted)" title="' + title + '">' + label + '<div style="height:14px;background:' + col + ';border-radius:2px;margin-top:2px"></div></div>';
+    }
+    h += '</div>';
+
+    // Notes coaching brutes (si présentes)
+    if(coaching.clientNotes){
+      h += '<div style="margin-top:10px;font-size:11px;color:var(--ink-muted);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px">';
+      h += '<strong>Note coaching :</strong> ' + esc(coaching.clientNotes);
+      h += '</div>';
+    }
+
+    h += '<div style="margin-top:8px"><a class="csm-btn" href="coaching.html" target="_blank">🎓 Ouvrir fiche coaching →</a></div>';
+    h += '</div>';
+  }
+
   // ─── Paiements ───
   h += '<div class="csm-section">';
   h += '<div class="csm-section-title">💳 Paiements (' + pays.length + ')</div>';
@@ -994,6 +1237,74 @@ function renderModal(){
   }
   h += '<div style="margin-top:8px"><a class="csm-btn" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Gérer les paiements</a></div>';
   h += '</div>';
+
+  // ─── Formation Kajabi (alimenté par api/kajabi-progress-ingest via Make.com) ───
+  // Structure attendue sur leads/{id}.kajabiProgress :
+  //   { byCourse: { [courseId]: { title, lastLessonAt,
+  //       modules: { [moduleId]: { title, totalLessons, completedLessons:{}, pct, completedCount } }
+  //   } } }
+  var kProg = c.kajabiProgress;
+  if (kProg && kProg.byCourse && Object.keys(kProg.byCourse).length) {
+    h += '<div class="csm-section">';
+    h += '<div class="csm-section-title">🎓 Formation Kajabi</div>';
+    Object.keys(kProg.byCourse).forEach(function(courseKey){
+      var crs = kProg.byCourse[courseKey] || {};
+      var modules = crs.modules || {};
+      var modKeys = Object.keys(modules);
+      // Calcul agrégat global du cours
+      var totalLessons = 0, doneLessons = 0, knownTotalsCount = 0;
+      modKeys.forEach(function(mk){
+        var m = modules[mk];
+        var d = (m && m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
+        doneLessons += d;
+        if(m && m.totalLessons){
+          totalLessons += m.totalLessons;
+          knownTotalsCount++;
+        }
+      });
+      var coursePct = (totalLessons > 0) ? Math.round((doneLessons / totalLessons) * 100) : null;
+      // Header cours
+      h += '<div style="margin-bottom:14px">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+      h += '<div style="font-size:13px;font-weight:700">' + esc(crs.title || courseKey) + '</div>';
+      h += '<div style="font-size:11px;color:var(--ink-muted)">';
+      h += doneLessons + ' leçon' + (doneLessons>1?'s':'') + ' faite' + (doneLessons>1?'s':'');
+      if(totalLessons > 0) h += ' / ' + totalLessons + ' · ' + coursePct + '%';
+      h += '</div></div>';
+      if(coursePct !== null){
+        h += '<div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:6px">';
+        h += '<div style="height:100%;width:' + coursePct + '%;background:linear-gradient(90deg,var(--csm-accent-dark),var(--csm-accent));transition:width 0.3s"></div>';
+        h += '</div>';
+      } else if(knownTotalsCount === 0){
+        h += '<div style="font-size:10px;color:var(--ink-muted);margin-bottom:6px;font-style:italic">% global indisponible — Make.com doit envoyer module.totalLessons</div>';
+      }
+      if(crs.lastLessonAt){
+        h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:8px">📅 Dernière leçon : ' + timeAgo(crs.lastLessonAt) + '</div>';
+      }
+      // Modules
+      modKeys.forEach(function(mk){
+        var m = modules[mk] || {};
+        var doneN = (m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
+        var totN = m.totalLessons || null;
+        var modPct = (totN && totN > 0) ? Math.round((doneN/totN)*100) : null;
+        h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:5px">';
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px">';
+        h += '<span style="font-weight:600">' + esc(m.title || mk) + '</span>';
+        h += '<span style="color:var(--ink-muted);font-size:11px">' + doneN + (totN ? '/' + totN : '');
+        if(modPct !== null) h += ' · ' + modPct + '%';
+        h += '</span></div>';
+        if(modPct !== null){
+          h += '<div style="height:4px;background:var(--bg2);border-radius:2px;overflow:hidden">';
+          var barColor = modPct >= 80 ? 'var(--csm-accent)' : modPct >= 40 ? '#fbbf24' : '#fca5a5';
+          h += '<div style="height:100%;width:' + modPct + '%;background:' + barColor + ';transition:width 0.3s"></div>';
+          h += '</div>';
+        }
+        h += '</div>';
+      });
+      h += '</div>';
+    });
+    h += '</div>';
+  }
 
   // ─── Notes (sous-collection partagée) ───
   h += '<div class="csm-section">';
