@@ -54,6 +54,9 @@ var filterCStatus = 'all';
 var filterCoach = 'all';
 var searchQuery = '';
 var viewMode = 'grid';     // 'grid' | 'list'
+var sortKey = 'clientSince';
+var sortDir = 'desc';
+var kpiFilter = null;      // 'active' | 'ending_soon' | 'failed_pay' | 'no_mandate' | 'retracted' | 'no_temo' | 'has_alert' | null
 var openLeadId = null;
 var saveTimer = null;
 
@@ -353,9 +356,71 @@ firebase.auth().onAuthStateChanged(function(user){
   }
 });
 
+/* ═══ Calcul des sets KPIs (pour filtres cliquables) ═══ */
+function computeKpiSets(){
+  var now = new Date();
+  var in30 = new Date(now); in30.setDate(in30.getDate() + 30);
+
+  var sets = {
+    active: {}, ending_soon: {}, failed_pay: {},
+    no_mandate: {}, retracted: {}, no_temo: {}, has_alert: {}
+  };
+  var counts = { active:0, ending_soon:0, failed_pay:0, no_mandate:0, retracted:0, no_temo:0, has_alert:0 };
+  var contracts30 = []; // pour le sub-titre
+
+  allClients.forEach(function(c){
+    if ((c.clientStatus||'active') === 'active') { sets.active[c.id]=true; counts.active++; }
+
+    var endD = toDateObj(c.accompagnementEnd || c.accompagnementFin);
+    if (endD && endD >= now && endD <= in30) {
+      sets.ending_soon[c.id] = true; counts.ending_soon++;
+      contracts30.push(c.nom||'?');
+    }
+
+    if (c.paiementPlateforme === 'GOCARDLESS') {
+      var pays = paymentsCache[c.id] || [];
+      if (!pays.some(function(p){ return p.gcMandateId; })) {
+        sets.no_mandate[c.id] = true; counts.no_mandate++;
+      }
+    }
+
+    if (c.retractation && String(c.retractation).toUpperCase() === 'RENONCÉ') {
+      sets.retracted[c.id] = true; counts.retracted++;
+    }
+
+    var temos = temoCache[c.id] || [];
+    if (temos.length === 0) {
+      var debut = toDateObj(c.accompagnementDebut || c.accompagnementStart);
+      if (debut) {
+        var w = weeksBetween(debut, new Date());
+        if (w !== null && w >= ALERT_WEEKS_TEMO) {
+          sets.no_temo[c.id] = true; counts.no_temo++;
+        }
+      }
+    }
+
+    if (computeAlerts(c).length > 0) { sets.has_alert[c.id]=true; counts.has_alert++; }
+  });
+
+  // Paiements failed (par leadId)
+  Object.keys(paymentsCache).forEach(function(leadId){
+    var hasFailed = paymentsCache[leadId].some(function(p){ return p.status === 'failed'; });
+    if (hasFailed) { sets.failed_pay[leadId] = true; counts.failed_pay++; }
+  });
+
+  // Total collecté
+  var totalCollecte = 0;
+  Object.keys(paymentsCache).forEach(function(k){
+    paymentsCache[k].forEach(function(p){ totalCollecte += (p.paidAmount || 0); });
+  });
+
+  return { sets: sets, counts: counts, totalCollecte: totalCollecte, contracts30: contracts30 };
+}
+
 /* ═══ FILTERING ═══ */
 function getFiltered(){
   var list = allClients.slice();
+
   if(searchQuery){
     var q = searchQuery.toLowerCase();
     list = list.filter(function(c){
@@ -378,11 +443,55 @@ function getFiltered(){
       list = list.filter(function(c){ return (c.clientStatus||'active') === filterCStatus; });
     }
   }
-  // Tri par défaut : clientSince desc (plus récent en premier)
+
+  // Filtre KPI (vient en plus des filtres ci-dessus)
+  if (kpiFilter){
+    var kpiData = computeKpiSets();
+    var allowed = kpiData.sets[kpiFilter] || {};
+    list = list.filter(function(c){ return allowed[c.id]; });
+  }
+
+  // Tri
   list.sort(function(a,b){
-    var va = toDateObj(a.clientSince); var vb = toDateObj(b.clientSince);
-    va = va?va.getTime():0; vb = vb?vb.getTime():0;
-    return vb - va;
+    var va, vb;
+    if (sortKey === 'nom' || sortKey === 'telephone' || sortKey === 'formule'){
+      va = (a[sortKey]||'').toString().toLowerCase();
+      vb = (b[sortKey]||'').toString().toLowerCase();
+    } else if (sortKey === 'closeur'){
+      va = (a.closeurName || a.closeurSlug || '').toLowerCase();
+      vb = (b.closeurName || b.closeurSlug || '').toLowerCase();
+    } else if (sortKey === 'coach'){
+      va = (a.coachAssigned || a.coach || '').toLowerCase();
+      vb = (b.coachAssigned || b.coach || '').toLowerCase();
+    } else if (sortKey === 'clientStatus'){
+      va = (a.clientStatus || 'active');
+      vb = (b.clientStatus || 'active');
+    } else if (sortKey === 'paiement'){
+      var pa = paymentsCache[a.id] || []; var pb = paymentsCache[b.id] || [];
+      va = pa.reduce(function(s,p){ return s + (p.totalAmount||0); }, 0);
+      vb = pb.reduce(function(s,p){ return s + (p.totalAmount||0); }, 0);
+    } else if (sortKey === 'accompagnementEnd' || sortKey === 'accompagnementStart' || sortKey === 'clientSince'){
+      var ka = sortKey === 'accompagnementEnd' ? (a.accompagnementEnd || a.accompagnementFin)
+              : sortKey === 'accompagnementStart' ? (a.accompagnementStart || a.accompagnementDebut)
+              : a.clientSince;
+      var kb = sortKey === 'accompagnementEnd' ? (b.accompagnementEnd || b.accompagnementFin)
+              : sortKey === 'accompagnementStart' ? (b.accompagnementStart || b.accompagnementDebut)
+              : b.clientSince;
+      va = toDateObj(ka); vb = toDateObj(kb);
+      va = va ? va.getTime() : 0; vb = vb ? vb.getTime() : 0;
+    } else if (sortKey === 'temoignages'){
+      va = (temoCache[a.id]||[]).length;
+      vb = (temoCache[b.id]||[]).length;
+    } else if (sortKey === 'alertes'){
+      va = computeAlerts(a).length;
+      vb = computeAlerts(b).length;
+    } else {
+      va = (a[sortKey] || '').toString().toLowerCase();
+      vb = (b[sortKey] || '').toString().toLowerCase();
+    }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ?  1 : -1;
+    return 0;
   });
   return list;
 }
@@ -392,9 +501,49 @@ function renderAll(){
   var list = getFiltered();
   renderKpis();
   renderHeaderCount(list);
+  renderActiveFilters(list);
   renderBody(list);
   updateBulkSyncBtn();
   if(openLeadId) refreshPanel();
+}
+
+/* Bannière des filtres actifs (KPI + statut + coach + KPI filter) */
+function renderActiveFilters(list){
+  var bar = document.getElementById('activeFilters');
+  if (!bar) return;
+  var chips = [];
+
+  if (kpiFilter){
+    var kpiLabels = {
+      ending_soon: '📅 Contrats <30j',
+      failed_pay:  '❌ Paiements échoués',
+      no_mandate:  '💸 Sans mandat GC',
+      retracted:   '↩️ Rétractations',
+      no_temo:     '🟣 Sans témoignage >4sem'
+    };
+    chips.push({ label: kpiLabels[kpiFilter] || kpiFilter, action: 'clearKpi' });
+  }
+  if (filterCStatus !== 'all'){
+    var csLabels = { active:'✅ Actifs', paused:'⏸ En pause', completed:'🎉 Terminés', stopped:'🛑 Stoppés', procedure:'⚖️ Procédure', alerte:'⚠ Alertes' };
+    chips.push({ label: csLabels[filterCStatus] || filterCStatus, action: 'clearCStatus' });
+  }
+  if (filterCoach !== 'all'){
+    var cl = filterCoach === '' ? 'Coach non assigné' : 'Coach : ' + (COACH_MAP[filterCoach] || filterCoach);
+    chips.push({ label: cl, action: 'clearCoach' });
+  }
+  if (searchQuery){
+    chips.push({ label: '🔍 "'+searchQuery+'"', action: 'clearSearch' });
+  }
+
+  if (!chips.length){ bar.style.display = 'none'; bar.innerHTML = ''; return; }
+
+  bar.style.display = '';
+  bar.innerHTML = '<span style="font-size:11px;color:var(--muted);font-weight:600">FILTRES ACTIFS · '+list.length+' résultat'+(list.length>1?'s':'')+'</span>'+
+    chips.map(function(c){
+      return '<span class="cl-active-chip">'+esc(c.label)+
+        ' <button class="cl-chip-x" data-clear="'+c.action+'" title="Retirer">✕</button></span>';
+    }).join('') +
+    (chips.length > 1 ? '<button class="cl-chip-clear-all" data-clear="all">Tout retirer</button>' : '');
 }
 
 function renderHeaderCount(list){
@@ -402,61 +551,29 @@ function renderHeaderCount(list){
   document.getElementById('clientsCountTitle').textContent = n + ' client' + (n>1?'s':'') + (n !== allClients.length ? ' / '+allClients.length+' au total' : '');
 }
 
-/* ═══ KPIs (7 cartes) ═══ */
+/* ═══ KPIs (7 cartes — toutes cliquables sauf Total) ═══ */
 function renderKpis(){
-  var now = new Date();
-  var in30 = new Date(now); in30.setDate(in30.getDate() + 30);
-
-  var nbActifs = allClients.filter(function(c){ return (c.clientStatus||'active')==='active'; }).length;
-
-  var termProche = allClients.filter(function(c){
-    var d = toDateObj(c.accompagnementEnd || c.accompagnementFin);
-    return d && d >= now && d <= in30;
-  });
-
-  var allPays = [];
-  Object.keys(paymentsCache).forEach(function(k){
-    paymentsCache[k].forEach(function(p){ allPays.push(p); });
-  });
-  var failed = allPays.filter(function(p){ return p.status === 'failed'; });
-
-  var sansMandat = allClients.filter(function(c){
-    if (c.paiementPlateforme !== 'GOCARDLESS') return false;
-    var pays = paymentsCache[c.id] || [];
-    return !pays.some(function(p){ return p.gcMandateId; });
-  });
-
-  var retractations = allClients.filter(function(c){
-    return c.retractation && String(c.retractation).toUpperCase() === 'RENONCÉ';
-  });
-
-  var totalCollecte = allPays.reduce(function(s,p){ return s + (p.paidAmount || 0); }, 0);
-
-  var sansTemo = allClients.filter(function(c){
-    var temos = temoCache[c.id] || [];
-    if (temos.length > 0) return false;
-    var debut = toDateObj(c.accompagnementDebut || c.accompagnementStart);
-    if (!debut) return false;
-    var w = weeksBetween(debut, new Date());
-    return w !== null && w >= ALERT_WEEKS_TEMO;
-  });
+  var kd = computeKpiSets();
 
   var kpis = [
-    { icon:'👥', label:'Clients actifs',     val:nbActifs,                       color:'#10b981', click:'active' },
-    { icon:'📅', label:'Contrats <30j',      val:termProche.length,              color:'#f59e0b', urgent: termProche.length>0, urgentCls:'warn',
-      sub: termProche.slice(0,2).map(function(c){return c.nom;}).join(', '), click:null },
-    { icon:'❌', label:'Paiements échoués',  val:failed.length,                  color:'#ef4444', urgent: failed.length>0, click:null },
-    { icon:'💸', label:'Sans mandat GC',     val:sansMandat.length,              color:'#f97316', urgent: sansMandat.length>0, urgentCls:'orange', click:null },
-    { icon:'↩️', label:'Rétractations',      val:retractations.length,           color:'#a78bfa', urgent: retractations.length>0, urgentCls:'purple', click:null },
-    { icon:'💰', label:'Total collecté',     val:EURO(totalCollecte), amount:true, color:'#34d399', click:null },
-    { icon:'🟣', label:'Sans témoignage >4sem', val:sansTemo.length,             color:'#a78bfa', urgent: sansTemo.length>0, urgentCls:'purple', click:'alerte' }
+    { key:'active',      icon:'👥', label:'Clients actifs',     val:kd.counts.active,        color:'#10b981' },
+    { key:'ending_soon', icon:'📅', label:'Contrats <30j',      val:kd.counts.ending_soon,   color:'#f59e0b', urgentCls:'warn',
+      sub: kd.contracts30.slice(0,2).join(', ') },
+    { key:'failed_pay',  icon:'❌', label:'Paiements échoués',  val:kd.counts.failed_pay,    color:'#ef4444' },
+    { key:'no_mandate',  icon:'💸', label:'Sans mandat GC',     val:kd.counts.no_mandate,    color:'#f97316', urgentCls:'orange' },
+    { key:'retracted',   icon:'↩️', label:'Rétractations',      val:kd.counts.retracted,     color:'#a78bfa', urgentCls:'purple' },
+    { key:null,          icon:'💰', label:'Total collecté',     val:EURO(kd.totalCollecte),  color:'#34d399', amount:true },
+    { key:'no_temo',     icon:'🟣', label:'Sans témoignage >4sem', val:kd.counts.no_temo,    color:'#a78bfa', urgentCls:'purple' }
   ];
 
   var html = kpis.map(function(k){
     var cls = 'cl-kpi-card';
-    if (k.urgent) cls += ' urgent' + (k.urgentCls?' '+k.urgentCls:'');
-    if (k.click) cls += ' clickable';
-    return '<div class="'+cls+'"'+(k.click?' onclick="filterByKpi(\''+k.click+'\')"':'')+'>'+
+    var isUrgent = (typeof k.val === 'number' && k.val > 0);
+    if (isUrgent) cls += ' urgent' + (k.urgentCls?' '+k.urgentCls:'');
+    if (k.key) cls += ' clickable';
+    if (k.key && kpiFilter === k.key) cls += ' selected';
+    var attr = k.key ? ' data-kpi="'+k.key+'"' : '';
+    return '<div class="'+cls+'"'+attr+'>'+
       '<div class="cl-kpi-icon">'+k.icon+'</div>'+
       '<div class="cl-kpi-val'+(k.amount?' amount':'')+'" style="color:'+k.color+'">'+esc(k.val)+'</div>'+
       '<div class="cl-kpi-label">'+esc(k.label)+'</div>'+
@@ -466,10 +583,22 @@ function renderKpis(){
   document.getElementById('kpisBar').innerHTML = html;
 }
 
-window.filterByKpi = function(val){
-  filterCStatus = val;
+/* Toggle d'un filtre KPI : si déjà actif → off, sinon → on */
+window.toggleKpiFilter = function(key){
+  if (!key) return;
+  // Si KPI = 'active' ou 'has_alert', on synchronise avec filterCStatus pour cohérence
+  if (key === 'active'){
+    kpiFilter = null;
+    filterCStatus = (filterCStatus === 'active') ? 'all' : 'active';
+  } else if (key === 'has_alert'){
+    kpiFilter = null;
+    filterCStatus = (filterCStatus === 'alerte') ? 'all' : 'alerte';
+  } else {
+    kpiFilter = (kpiFilter === key) ? null : key;
+  }
+  // Sync UI pills statut
   document.querySelectorAll('[data-filter="cstatus"]').forEach(function(p){
-    p.classList.toggle('active', p.dataset.val === val);
+    p.classList.toggle('active', p.dataset.val === filterCStatus);
   });
   renderAll();
 };
@@ -564,18 +693,27 @@ function renderList(list, container){
     return '<option value="'+k+'">'+STATUS_CLIENT[k].label+'</option>';
   }).join('');
 
-  var html = '<div class="cl-table-wrap"><table class="cl-table cl-v2"><thead><tr>'+
-    '<th>Client</th>'+
-    '<th>Téléphone</th>'+
-    '<th>Formule</th>'+
-    '<th>Paiement</th>'+
-    '<th>Closeur</th>'+
-    '<th>Coach</th>'+
-    '<th>Statut</th>'+
-    '<th>Fin accomp.</th>'+
-    '<th>Témoignages</th>'+
-    '<th>Alertes</th>'+
-    '</tr></thead><tbody>';
+  var cols = [
+    { key:'nom',                label:'Client' },
+    { key:'telephone',          label:'Téléphone' },
+    { key:'formule',            label:'Formule' },
+    { key:'paiement',           label:'Paiement' },
+    { key:'closeur',            label:'Closeur' },
+    { key:'coach',              label:'Coach' },
+    { key:'clientStatus',       label:'Statut' },
+    { key:'accompagnementEnd',  label:'Fin accomp.' },
+    { key:'temoignages',        label:'Témoignages' },
+    { key:'alertes',            label:'Alertes' }
+  ];
+
+  var html = '<div class="cl-table-wrap"><table class="cl-table cl-v2"><thead><tr>';
+  cols.forEach(function(col){
+    var isSorted = sortKey === col.key;
+    var arrow = isSorted ? (sortDir === 'asc' ? '↑' : '↓') : '↕';
+    html += '<th data-sortcol="'+col.key+'" class="'+(isSorted?'sorted':'')+'" style="cursor:pointer;user-select:none">'+
+      esc(col.label)+' <span class="sort-arrow">'+arrow+'</span></th>';
+  });
+  html += '</tr></thead><tbody>';
 
   list.forEach(function(c){
     var pays = paymentsCache[c.id] || [];
@@ -592,7 +730,6 @@ function renderList(list, container){
     var coach = c.coachAssigned || c.coach || '';
     var fin = c.accompagnementEnd || c.accompagnementFin;
 
-    // Selects
     var statusSel = '<select data-cid="'+c.id+'" data-field="clientStatus" class="cl-edit-sel cs" onclick="event.stopPropagation()" style="background:'+cs.color+'18;border:1px solid '+cs.color+'44;color:'+cs.color+'">'+
       statusOpts.replace('value="'+(c.clientStatus||'active')+'"','value="'+(c.clientStatus||'active')+'" selected')+
       '</select>';
@@ -636,6 +773,44 @@ document.getElementById('btnGcWarmup').addEventListener('click', function(){
   window.gcWarmup();
 });
 
+/* Click sur une carte KPI cliquable → toggle le filtre */
+document.getElementById('kpisBar').addEventListener('click', function(e){
+  var card = e.target.closest('[data-kpi]');
+  if (!card) return;
+  window.toggleKpiFilter(card.dataset.kpi);
+});
+
+/* Click sur ✕ d'un chip de filtre actif → retire le filtre */
+document.getElementById('activeFilters').addEventListener('click', function(e){
+  var btn = e.target.closest('[data-clear]');
+  if (!btn) return;
+  var act = btn.dataset.clear;
+  if (act === 'clearKpi') kpiFilter = null;
+  else if (act === 'clearCStatus') {
+    filterCStatus = 'all';
+    document.querySelectorAll('[data-filter="cstatus"]').forEach(function(p){
+      p.classList.toggle('active', p.dataset.val === 'all');
+    });
+  }
+  else if (act === 'clearCoach') {
+    filterCoach = 'all';
+    document.getElementById('filterCoach').value = 'all';
+  }
+  else if (act === 'clearSearch') {
+    searchQuery = '';
+    document.getElementById('searchInput').value = '';
+  }
+  else if (act === 'all') {
+    kpiFilter = null; filterCStatus = 'all'; filterCoach = 'all'; searchQuery = '';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('filterCoach').value = 'all';
+    document.querySelectorAll('[data-filter="cstatus"]').forEach(function(p){
+      p.classList.toggle('active', p.dataset.val === 'all');
+    });
+  }
+  renderAll();
+});
+
 document.querySelector('.cl-toolbar').addEventListener('click', function(e){
   var pill = e.target.closest('[data-filter="cstatus"]');
   if(pill){
@@ -660,9 +835,35 @@ document.getElementById('filterCoach').addEventListener('change', function(e){
   renderAll();
 });
 
-/* ═══ EVENTS — BODY (clic + édition inline) ═══ */
+document.getElementById('sortSelect').addEventListener('change', function(e){
+  var parts = e.target.value.split(':');
+  sortKey = parts[0]; sortDir = parts[1] || 'asc';
+  renderAll();
+});
+
+/* ═══ EVENTS — BODY (clic + édition inline + tri par en-tête) ═══ */
 document.getElementById('tableBody').addEventListener('click', function(e){
+  // Tri par clic sur en-tête (vue list)
+  var th = e.target.closest('[data-sortcol]');
+  if (th){
+    var col = th.dataset.sortcol;
+    if (sortKey === col) {
+      // Cycle ASC → DESC → reset (clientSince desc)
+      if (sortDir === 'asc') sortDir = 'desc';
+      else { sortKey = 'clientSince'; sortDir = 'desc'; }
+    } else {
+      sortKey = col;
+      sortDir = 'asc';
+    }
+    // Sync le sélecteur trier-par s'il existe
+    var sel = document.getElementById('sortSelect');
+    if (sel) sel.value = sortKey + ':' + sortDir;
+    renderAll();
+    return;
+  }
+  // Édition inline (bloque l'ouverture du panel)
   if (e.target.closest('.cl-edit-sel')) return;
+  // Clic sur ligne ou carte → ouvre le panel
   var row = e.target.closest('[data-cid]');
   if (row) openPanel(row.dataset.cid);
 });
