@@ -665,7 +665,9 @@ function computeLevel(c){
 
   // ─── Retards de coaching (collection clients) ───
   // Si un client coaching matché existe et qu'il n'est pas inactif/terminé,
-  // on évalue ses 2 derniers mois de quota mensuel.
+  // on évalue ses 2 derniers mois de quota mensuel — MAIS on ignore les
+  // mois antérieurs au "vrai début" du client (cf. getCoachingStartReference)
+  // pour ne pas tagger CRITIQUE un client qui vient juste d'arriver.
   var coachingDoc = getCoachingForLead(c);
   var hasCoaching2MonthsMissed = false;
   var hasCoaching1MonthMissed = false;
@@ -675,9 +677,19 @@ function computeLevel(c){
     var total = coachingDoc.nbCoachingsTotal || 12;
     if(done < total){ // pas terminé
       var now = new Date();
-      var qNow = getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
-      var prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
-      var qPrev = getCoachingQuotaStatus(coachingDoc, prev.getFullYear(), prev.getMonth());
+      var refStart = getCoachingStartReference(coachingDoc);
+      var refMonth = refStart ? new Date(refStart.getFullYear(), refStart.getMonth(), 1) : null;
+      var thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      var prevMonth = new Date(now.getFullYear(), now.getMonth()-1, 1);
+
+      // Si le client est entré ce mois-ci ou plus tard, on ne lui reproche
+      // aucun retard (c'est normal de ne pas avoir encore eu de session).
+      var thisMonthBeforeStart = refMonth && thisMonth < refMonth;
+      var prevMonthBeforeStart = refMonth && prevMonth < refMonth;
+
+      var qNow = thisMonthBeforeStart ? null : getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
+      var qPrev = prevMonthBeforeStart ? null : getCoachingQuotaStatus(coachingDoc, prevMonth.getFullYear(), prevMonth.getMonth());
+
       if(qNow && qPrev && qNow.status === 'miss' && qPrev.status === 'miss'){
         hasCoaching2MonthsMissed = true;
       } else if(qNow && qNow.status === 'miss'){
@@ -957,6 +969,36 @@ function getLastSessionDate(coachingDoc){
   if(!ss.length) return null;
   ss.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
   return new Date(ss[0].date);
+}
+
+/* ─── Calculer la date de début effective d'un client coaching ───
+   On combine deux signaux pour ne pas tagger à tort un client comme
+   "en retard" sur des mois où il n'avait pas encore commencé :
+     • dateEntree (peut être mal saisie, parfois dans le futur)
+     • Date de la PREMIÈRE session réelle (peut précéder l'entrée
+       officielle, ex : RDV 72H avant le contrat)
+   On prend le MINIMUM des deux comme repère réel de début. Si les deux
+   sont absents, retourne null (impossible de déterminer).
+   Cette fonction est utilisée à 2 endroits :
+     1. Affichage de l'historique 4 mois précédents (afficher "Avant
+        début" plutôt que "0/1 ❌")
+     2. computeLevel — un client tout juste arrivé ne peut pas être
+        marqué CRITIQUE pour absence de coaching dans le passé.        */
+function getCoachingStartReference(coachingDoc){
+  if(!coachingDoc) return null;
+  var entry = coachingDoc.dateEntree ? new Date(coachingDoc.dateEntree) : null;
+  if(entry && isNaN(entry.getTime())) entry = null;
+  var firstSess = null;
+  var allSess = getAllCoachingSessions(coachingDoc).filter(function(s){
+    return s.statut === 'fait' && s.date;
+  });
+  if(allSess.length){
+    allSess.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
+    var d = new Date(allSess[0].date);
+    if(!isNaN(d.getTime())) firstSess = d;
+  }
+  if(entry && firstSess) return entry < firstSess ? entry : firstSess;
+  return entry || firstSess;
 }
 
 function loadPaymentsForClients(){
@@ -1904,13 +1946,31 @@ function renderModal(){
     var qThisUsed = qThis ? qThis.used : 0;
     var qThisMax = qThis ? qThis.max : quotaPerMonth;
     var qThisPct = qThisMax > 0 ? Math.round((qThisUsed/qThisMax)*100) : 0;
-    var qThisColor = qThis && qThis.status === 'ok' ? '#34d399'
-                   : qThis && qThis.status === 'partial' ? '#fbbf24'
-                   : qThis && qThis.status === 'miss' ? 'var(--crit-color)' : 'var(--ink-muted)';
-    var qThisLabel = qThis && qThis.status === 'ok' ? '✅ Quota atteint ce mois !'
-                   : qThis && qThis.status === 'partial' ? '🟡 ' + qThisUsed + '/' + qThisMax + ' ce mois'
-                   : qThis && qThis.status === 'miss' ? '🔴 Aucun coaching effectué ce mois'
-                   : '—';
+    // Si client entré dans le mois en cours (ou plus tard), on n'affiche
+    // pas "🔴 Aucun coaching effectué" : c'est normal d'avoir 0 quand on
+    // vient juste d'arriver.
+    var refStartQ = getCoachingStartReference(coaching);
+    var refMonthQ = refStartQ ? new Date(refStartQ.getFullYear(), refStartQ.getMonth(), 1) : null;
+    var thisMonthQ = new Date(nowD2.getFullYear(), nowD2.getMonth(), 1);
+    var justArrivedThisMonth = refMonthQ && refMonthQ.getTime() === thisMonthQ.getTime();
+    var arrivedFutureMonth = refMonthQ && refMonthQ > thisMonthQ;
+
+    var qThisColor, qThisLabel;
+    if(arrivedFutureMonth){
+      qThisColor = 'var(--ink-muted)';
+      qThisLabel = '⏳ Pas encore commencé';
+    } else if(justArrivedThisMonth && qThisUsed === 0){
+      qThisColor = '#5eead4';
+      qThisLabel = '🌱 Vient d\'arriver — quota à venir';
+    } else {
+      qThisColor = qThis && qThis.status === 'ok' ? '#34d399'
+                 : qThis && qThis.status === 'partial' ? '#fbbf24'
+                 : qThis && qThis.status === 'miss' ? 'var(--crit-color)' : 'var(--ink-muted)';
+      qThisLabel = qThis && qThis.status === 'ok' ? '✅ Quota atteint ce mois !'
+                 : qThis && qThis.status === 'partial' ? '🟡 ' + qThisUsed + '/' + qThisMax + ' ce mois'
+                 : qThis && qThis.status === 'miss' ? '🔴 Aucun coaching effectué ce mois'
+                 : '—';
+    }
 
     h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">';
     h += '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">';
@@ -1922,15 +1982,26 @@ function renderModal(){
     h += '<div style="height:100%;width:' + Math.min(100, qThisPct) + '%;background:' + qThisColor + ';transition:width 0.3s"></div>';
     h += '</div>';
 
-    // Historique 4 derniers mois (avant ce mois) — cf. image 3
-    // Note : on n'exclut PAS les mois "avant entrée" car la dateEntree
-    // peut être mal saisie ou le RDV 72H/sessions peuvent précéder l'entrée
-    // officielle. Si pas de session sur le mois, on affiche juste "—".
+    // Historique 4 derniers mois — on affiche "Avant début" pour les
+    // mois antérieurs au vrai début du client (cf. getCoachingStartReference,
+    // qui prend le min entre dateEntree et 1ère session faite). Ça évite
+    // d'afficher "0/1 ❌" pour des mois où le client n'avait pas encore
+    // commencé son contrat (ex : Nathalie TOUAMINE entrée aujourd'hui).
+    var refStart2 = getCoachingStartReference(coaching);
+    var refMonth2 = refStart2 ? new Date(refStart2.getFullYear(), refStart2.getMonth(), 1) : null;
     h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:6px">Historique des 4 mois précédents :</div>';
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
     for(var i = 4; i >= 1; i--){
       var d = new Date(nowD2.getFullYear(), nowD2.getMonth() - i, 1);
       var monthLbl = d.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'});
+      // Mois antérieur au début du client → Avant début
+      if(refMonth2 && d < refMonth2){
+        h += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px;opacity:0.5">';
+        h += '<span style="color:var(--ink-muted);text-transform:capitalize">' + esc(monthLbl) + '</span>';
+        h += '<span style="color:var(--ink-muted);font-size:10px;font-style:italic">avant début</span>';
+        h += '</div>';
+        continue;
+      }
       var q = getCoachingQuotaStatus(coaching, d.getFullYear(), d.getMonth());
       var qUsed = q ? q.used : 0, qMax = q ? q.max : quotaPerMonth;
       var bgC = 'rgba(255,255,255,0.04)', txt = '';
