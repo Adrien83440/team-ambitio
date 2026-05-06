@@ -23,7 +23,7 @@
  * Response 200 : { success, invoiceId, number, issueDate, dueDate, pdfHash, pdfSizeBytes }
  */
 
-const { admin, db, requireAuth, sha256, chunkBufferToBase64, addDays, sendError, setCors } = require('./_billing-helpers');
+const { admin, db, requireAuth, requireAuthOrSystemKey, sha256, chunkBufferToBase64, addDays, sendError, setCors } = require('./_billing-helpers');
 const { loadMontserratFonts } = require('./_billing-fonts');
 const { generateInvoicePdf } = require('./_billing-pdf');
 
@@ -34,7 +34,9 @@ module.exports = async function(req, res) {
 
   try {
     /* ── Auth ── */
-    const user = await requireAuth(req, ['admin']);
+    /* Accepte Bearer admin (cas frontend manuel) OU x-system-key invoiceGeneration
+       (cas Cloud Function scheduledInvoiceGenerator + endpoint subscription-generate-invoice). */
+    const user = await requireAuthOrSystemKey(req, ['admin'], 'invoiceGeneration');
 
     /* ── Body ── */
     const body = req.body || {};
