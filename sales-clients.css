@@ -203,3 +203,120 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
   .cl-temo-add .cl-select{width:100%}
   .cl-date-row{flex-direction:column}
 }
+
+/* ═══ V2 — Refonte Clients consolidée ═══ */
+
+/* Compteur dans le header */
+.cl-clients-count{margin-left:auto;font-size:13px;color:var(--muted);font-weight:600}
+
+/* KPIs bar */
+.cl-kpis-bar{padding:12px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;border-bottom:1px solid var(--border);background:var(--bg)}
+.cl-kpi-card{padding:11px 14px;border-radius:11px;background:var(--bg2);border:1px solid var(--border);transition:all .15s;cursor:default}
+.cl-kpi-card.urgent{border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.05)}
+.cl-kpi-card.urgent.warn{border-color:rgba(245,158,11,.25);background:rgba(245,158,11,.05)}
+.cl-kpi-card.urgent.orange{border-color:rgba(249,115,22,.25);background:rgba(249,115,22,.05)}
+.cl-kpi-card.urgent.purple{border-color:rgba(167,139,250,.25);background:rgba(167,139,250,.05)}
+.cl-kpi-card.clickable{cursor:pointer}
+.cl-kpi-card.clickable:hover{transform:translateY(-1px);border-color:var(--border2)}
+.cl-kpi-icon{font-size:14px;margin-bottom:3px}
+.cl-kpi-val{font-family:var(--fm);font-size:20px;font-weight:800;line-height:1.1}
+.cl-kpi-val.amount{font-size:14px}
+.cl-kpi-label{font-size:10px;color:var(--muted);font-weight:600;margin-top:1px}
+.cl-kpi-sub{font-size:9px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Toolbar separator + view toggle */
+.cl-toolbar-sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+.cl-view-toggle{display:flex;gap:2px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:2px}
+.cl-view-btn{width:30px;height:26px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:var(--muted);cursor:pointer;border-radius:6px;font-size:14px;transition:all .15s}
+.cl-view-btn:hover{color:var(--text)}
+.cl-view-btn.active{background:rgba(185,28,28,.12);color:var(--red3)}
+
+/* Sync info */
+.cl-sync-info{padding:8px 24px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);background:var(--bg2)}
+
+/* GRID VIEW (cards) */
+.cl-grid{padding:18px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.cl-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:all .15s}
+.cl-card:hover{border-color:rgba(185,28,28,.3);transform:translateY(-1px)}
+.cl-card-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px}
+.cl-card-av{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:800;color:#fff;flex-shrink:0}
+.cl-card-info{flex:1;min-width:0}
+.cl-card-name{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-card-email{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-cs-pill{padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;flex-shrink:0;white-space:nowrap}
+.cl-card-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;color:var(--muted)}
+.cl-card-pay{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:6px;margin-top:8px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.12)}
+.cl-card-pay .amount{font-size:12px;font-weight:700;color:#34d399}
+.cl-card-pay .prog{font-size:10px;color:var(--muted)}
+.cl-card-flags{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.cl-card-flag{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:700}
+.cl-card-flag.alert{background:rgba(239,68,68,.12);color:#ef4444}
+.cl-card-flag.warn{background:rgba(245,158,11,.12);color:#f59e0b}
+.cl-card-flag.temo{background:rgba(167,139,250,.12);color:#a78bfa}
+.cl-card-flag.coach{background:var(--subtle-bg);color:var(--item-text)}
+.cl-card-flag.fin{background:rgba(96,165,250,.12);color:#60a5fa}
+
+/* LIST VIEW (table avec colonnes étendues) */
+.cl-table-wrap{padding:0;overflow-x:auto}
+.cl-table.cl-v2 th, .cl-table.cl-v2 td{padding:9px 12px}
+.cl-table.cl-v2 .cl-edit-sel{background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;padding:3px 6px;cursor:pointer;outline:none;font-family:var(--fb)}
+.cl-table.cl-v2 .cl-edit-sel.cs{font-size:10px;font-weight:700;padding:3px 8px}
+
+/* Panel WIDE pour tout afficher */
+.cl-panel.cl-panel-wide{max-width:1100px;width:96vw}
+
+/* 2-col layout dans panel */
+.cl-panel-2col{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+@media (max-width:900px){ .cl-panel-2col{grid-template-columns:1fr} }
+
+/* Status pills selector dans panel */
+.cl-cs-pills{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+.cl-cs-pill-btn{padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;background:transparent;font-family:var(--fb);transition:all .15s}
+
+/* Section header style v2 */
+.cl-sec-h{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.cl-sec-h.mt{margin-top:14px}
+
+/* Édition inline rows */
+.cl-edit-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+.cl-edit-row .e{font-size:13px;flex-shrink:0;width:18px;text-align:center}
+.cl-edit-row .l{font-size:10px;color:var(--muted);min-width:115px;flex-shrink:0}
+.cl-edit-row .v{flex:1;min-width:0}
+.cl-edit-input{width:100%;padding:4px 6px;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.08);color:var(--text);font-size:12px;font-family:var(--fb);outline:none;box-sizing:border-box}
+.cl-edit-input:focus{border-bottom-color:var(--red2)}
+.cl-edit-input[type="date"]{color-scheme:dark}
+.cl-edit-input.txa{resize:none;min-height:34px;padding:6px 8px;border:1px solid rgba(255,255,255,.08);border-radius:6px}
+.cl-edit-select{cursor:pointer;appearance:none}
+
+/* Payment block */
+.cl-pay-block{background:var(--bg3);border-radius:10px;border:1px solid var(--border);padding:12px 14px;margin-bottom:8px}
+.cl-pay-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cl-pay-amount{font-size:14px;font-weight:700}
+.cl-pay-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.cl-pay-collected{font-size:13px;font-weight:700;color:#34d399}
+.cl-progress{background:rgba(255,255,255,.06);border-radius:4px;height:4px;overflow:hidden}
+.cl-progress-fill{background:#34d399;height:100%;transition:width .3s}
+.cl-gc-section{margin-top:10px}
+
+/* Timeline */
+.cl-tl-item{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;background:var(--bg3);border-radius:6px;margin-bottom:4px}
+.cl-tl-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.cl-tl-text{flex:1;font-size:11px}
+.cl-tl-date{font-size:10px;color:var(--muted);white-space:nowrap}
+
+/* Mini buttons inside panel */
+.cl-mini-btn{padding:3px 8px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:6px;color:#60a5fa;font-size:10px;font-weight:600;cursor:pointer;font-family:var(--fb)}
+.cl-mini-btn:hover{background:rgba(96,165,250,.15)}
+
+/* Actions footer */
+.cl-actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:14px;border-top:1px solid var(--border);margin-top:14px}
+.cl-action-btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;cursor:pointer;font-family:var(--fb);border:1px solid}
+.cl-action-btn.green{border-color:rgba(52,211,153,.25);background:rgba(52,211,153,.08);color:#34d399}
+.cl-action-btn.blue{border-color:rgba(96,165,250,.25);background:rgba(96,165,250,.08);color:#60a5fa}
+.cl-action-btn.amber{border-color:rgba(245,158,11,.25);background:rgba(245,158,11,.08);color:#f59e0b}
+.cl-action-btn.red{border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.08);color:#ef4444}
+
+/* Empty state for grid */
+.cl-empty-grid{text-align:center;padding:60px 20px;color:var(--muted)}
+.cl-empty-grid-icon{font-size:48px;margin-bottom:12px}
+
