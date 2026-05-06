@@ -45,6 +45,11 @@ var temoCache = {};       // leadId -> [temos]
 var noteCache = {};       // leadId -> [notes structurées]
 var clientsListenerSet = false;
 
+/* Caches HTML pour les sections "GoCardless live" — évite que le re-render
+   du onSnapshot écrase les détails affichés après un Resync */
+var gcLiveLookupCache = {}; // leadId -> html (résultat lookup)
+var gcLivePayCache = {};    // paymentId -> html (détails par paiement)
+
 var filterCStatus = 'all';
 var filterCoach = 'all';
 var searchQuery = '';
@@ -289,9 +294,58 @@ function updateBulkSyncBtn(){
   btn.style.display = hasGc ? '' : 'none';
 }
 
+/* ═══ Warmup : reconstruit l'index gc_customers_cache (admin only) ═══ */
+window.gcWarmup = async function(){
+  if (!confirm('Reconstruire l\'index des customers GoCardless ?\n\nScanne TOUS les customers GC (peut prendre 1 à 5 min selon le volume).\nÀ lancer une fois, ou après un gros lot de nouveaux mandats.')) return;
+
+  var btn = document.getElementById('btnGcWarmup');
+  var prog = document.getElementById('bulkSyncProgress');
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Indexation…'; }
+  if (prog){
+    prog.style.display = 'block';
+    prog.innerHTML = '<div style="padding:10px 0;font-size:11px;color:var(--muted)">⏳ Scan complet de GoCardless en cours… (cela peut prendre plusieurs minutes)</div>';
+  }
+
+  try {
+    var token = await firebase.auth().currentUser.getIdToken();
+    var resp = await fetch('/api/gocardless-warmup', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body: JSON.stringify({})
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Erreur API');
+
+    var msg = '✅ Index reconstruit — '+data.count+' customers ('+data.withEmail+' avec email) en '+Math.round(data.durationMs/1000)+'s';
+    if (prog) prog.innerHTML = '<div style="padding:10px 0;font-size:11px;color:#34d399">'+esc(msg)+'</div>';
+    toast(msg);
+  } catch (e){
+    if (prog) prog.innerHTML = '<div style="padding:10px 0;font-size:11px;color:#ef4444">❌ '+esc(e.message)+'</div>';
+    toast('❌ '+e.message);
+  } finally {
+    if (btn){ btn.disabled = false; btn.textContent = '🔁 Reconstruire index GC'; }
+  }
+};
+
+/* Affiche le bouton warmup uniquement aux admins */
+function updateWarmupBtn(){
+  var btn = document.getElementById('btnGcWarmup');
+  if (!btn) return;
+  btn.style.display = (window._currentRole === 'admin') ? '' : 'none';
+}
+
 /* ═══ AUTH ═══ */
 firebase.auth().onAuthStateChanged(function(user){
   if(user){
+    // Récupère le rôle pour afficher le bouton warmup admin only
+    db.collection('users').doc(user.uid).get().then(function(snap){
+      var d = snap.exists ? snap.data() : {};
+      window._currentRole = d.role || 'sales';
+      updateWarmupBtn();
+    }).catch(function(){
+      window._currentRole = 'sales';
+      updateWarmupBtn();
+    });
     startClientsListener();
     loadSyncInfo();
   } else {
@@ -576,6 +630,10 @@ document.getElementById('searchInput').addEventListener('input', function(e){
 
 document.getElementById('btnBulkGcSync').addEventListener('click', function(){
   window.gcBulkSync();
+});
+
+document.getElementById('btnGcWarmup').addEventListener('click', function(){
+  window.gcWarmup();
 });
 
 document.querySelector('.cl-toolbar').addEventListener('click', function(e){
@@ -879,6 +937,22 @@ function refreshPanel(){
   h += '</div>'; // fin panel-body
 
   document.getElementById('panelContent').innerHTML = h;
+
+  // Restaure le HTML enrichi GoCardless si présent en cache
+  // (évite que le re-render écrase ce que Resync a affiché)
+  if (gcLiveLookupCache[openLeadId]) {
+    var lkEl = document.getElementById('gcLookupResult_' + openLeadId);
+    if (lkEl) lkEl.innerHTML = gcLiveLookupCache[openLeadId];
+  }
+  pays.forEach(function(p){
+    if (gcLivePayCache[p.id]) {
+      var liveEl = document.getElementById('gcLiveData_' + p.id);
+      if (liveEl) {
+        liveEl.innerHTML = gcLivePayCache[p.id];
+        liveEl.style.display = 'block';
+      }
+    }
+  });
 }
 
 /* Helpers édition inline */
@@ -1099,6 +1173,7 @@ function gcLookupClient(leadId, email){
       html += '</div>';
     }
     if (resultEl) resultEl.innerHTML = html;
+    gcLiveLookupCache[leadId] = html;
     reloadOnePayment(leadId, function(){ /* Cache updated, no full re-render */ });
     toast('✅ GoCardless synchronisé — '+data.payments.length+' paiement(s)');
   }).catch(function(e){
@@ -1141,6 +1216,7 @@ function syncGCPayment(payId, leadId){
       gcHtml += '</div>';
     }
     if (liveEl){ liveEl.innerHTML = gcHtml; liveEl.style.display = gcHtml ? 'block' : 'none'; }
+    if (gcHtml) gcLivePayCache[payId] = gcHtml;
     toast('🔄 GoCardless synchronisé');
     reloadOnePayment(leadId, function(){});
   }).catch(function(e){ toast('❌ '+e.message); });
