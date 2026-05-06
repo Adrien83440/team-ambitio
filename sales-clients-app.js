@@ -204,7 +204,7 @@ function reloadOnePayment(leadId, cb){
 
 /* ═══ Synchro auto GC info ═══ */
 function loadSyncInfo(){
-  db.collection('_meta').doc('sync_status').get().then(function(s){
+  db.collection('_meta').doc('gc_sync').get().then(function(s){
     if (!s.exists) return;
     var d = s.data();
     var ts = d.lastSyncAt && d.lastSyncAt.toDate ? d.lastSyncAt.toDate() : null;
@@ -213,6 +213,80 @@ function loadSyncInfo(){
     el.innerHTML = '🔄 Synchro auto GC : <strong>'+label+'</strong>'+(d.errors?' · <span style="color:#ef4444">⚠ '+d.errors+' erreur(s)</span>':'');
     el.style.display = '';
   }).catch(function(){});
+}
+
+/* ═══ Bulk Sync GC — synchronise tous les clients GoCardless ═══ */
+window.gcBulkSync = async function(){
+  var gcClients = allClients.filter(function(c){
+    return c.paiementPlateforme === 'GOCARDLESS' && c.email;
+  });
+  if (!gcClients.length){ toast('Aucun client GC à synchroniser'); return; }
+
+  if (!confirm('Synchroniser '+gcClients.length+' client(s) GoCardless ?\n\nCela peut prendre quelques minutes.')) return;
+
+  var btn = document.getElementById('btnBulkGcSync');
+  var prog = document.getElementById('bulkSyncProgress');
+  if (btn){ btn.disabled = true; btn.textContent = '⏳ Sync…'; }
+  if (prog) prog.style.display = 'block';
+
+  var done = 0, ok = 0, errCount = 0;
+  var total = gcClients.length;
+
+  function updateProgress(){
+    if (prog){
+      var pct = Math.round((done / total) * 100);
+      prog.innerHTML =
+        '<div style="display:flex;align-items:center;gap:10px;padding:10px 0">' +
+        '<div style="flex:1;background:rgba(255,255,255,.06);border-radius:4px;height:6px;overflow:hidden">' +
+        '<div style="background:#34d399;height:100%;width:'+pct+'%;transition:width .3s"></div></div>' +
+        '<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+done+'/'+total+' · ✅ '+ok+' · ❌ '+errCount+'</span>' +
+        '</div>';
+    }
+  }
+
+  updateProgress();
+  var token = await firebase.auth().currentUser.getIdToken();
+
+  for (var i = 0; i < gcClients.length; i++){
+    var c = gcClients[i];
+    try {
+      var resp = await fetch('/api/gocardless-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ leadId: c.id, email: c.email })
+      });
+      var data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Erreur');
+      ok++;
+      // Update local cache
+      var idx = allClients.findIndex(function(x){ return x.id === c.id; });
+      if (idx >= 0 && data.customer && data.customer.id) allClients[idx].gcCustomerId = data.customer.id;
+    } catch(e){
+      errCount++;
+      console.warn('GC sync failed for', c.nom, ':', e.message);
+    }
+    done++;
+    updateProgress();
+    if (i < gcClients.length - 1) await new Promise(function(r){ setTimeout(r, 200); });
+  }
+
+  if (btn){ btn.disabled = false; btn.textContent = '🔄 Resync GC'; }
+  var msg = '✅ Sync terminée — ' + ok + ' liés, ' + errCount + ' non trouvés';
+  if (prog) prog.innerHTML += '<div style="font-size:11px;color:#34d399;padding:4px 0">'+msg+'</div>';
+  toast(msg);
+
+  // Reload payments cache et re-render
+  loadAllPayments().then(function(){
+    renderAll();
+  });
+};
+
+/* Affiche/cache le bouton bulk sync selon présence de clients GC */
+function updateBulkSyncBtn(){
+  var btn = document.getElementById('btnBulkGcSync');
+  if (!btn) return;
+  var hasGc = allClients.some(function(c){ return c.paiementPlateforme === 'GOCARDLESS'; });
+  btn.style.display = hasGc ? '' : 'none';
 }
 
 /* ═══ AUTH ═══ */
@@ -265,6 +339,7 @@ function renderAll(){
   renderKpis();
   renderHeaderCount(list);
   renderBody(list);
+  updateBulkSyncBtn();
   if(openLeadId) refreshPanel();
 }
 
@@ -497,6 +572,10 @@ function renderList(list, container){
 document.getElementById('searchInput').addEventListener('input', function(e){
   searchQuery = e.target.value.trim();
   renderAll();
+});
+
+document.getElementById('btnBulkGcSync').addEventListener('click', function(){
+  window.gcBulkSync();
 });
 
 document.querySelector('.cl-toolbar').addEventListener('click', function(e){
