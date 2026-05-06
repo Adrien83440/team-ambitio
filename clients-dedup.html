@@ -239,9 +239,13 @@
     // Les docs déjà fusionnés (_merged === true) sont exclus du scan.
     // ============================================================
     function detectClusters(leads){
-      // Exclure les docs déjà fusionnés — ils restent en base mais ne doivent
-      // plus apparaitre dans les clusters auto.
-      leads = leads.filter(function(l){ return l._merged !== true; });
+      // Exclure UNIQUEMENT les vrais secondaires fusionnés (mergé ET invisible).
+      // Les docs avec _merged=true mais isClient=true sont des états
+      // inconsistants (ex: revert d'orphelins) — on les scanne pour permettre
+      // la re-fusion qui les nettoiera (basculera isClient=false).
+      leads = leads.filter(function(l){
+        return !(l._merged === true && l.isClient === false);
+      });
 
       var parent = {};
       leads.forEach(function(l){ parent[l.id] = l.id; });
@@ -270,15 +274,17 @@
         for (var i = 1; i < ids.length; i++) union(ids[0], ids[i]);
       });
 
-      // 2. Tél exact (chiffres + plus uniquement, ≥10 chars)
+      // 2. Tél : matching robuste sur les 9 derniers chiffres
+      //    (gère +33631212932 / 0631212932 / 33631212932 / 0033631212932 → tous match)
       var byTel = {};
       leads.forEach(function(l){
         var t = l.telephone || l.phone;
         if (t && typeof t === 'string') {
-          var n = t.replace(/[^\d+]/g, '');
-          if (n.length >= 10) {
-            if (!byTel[n]) byTel[n] = [];
-            byTel[n].push(l.id);
+          var digits = t.replace(/[^\d]/g, '');
+          if (digits.length >= 9) {
+            var key = digits.slice(-9);
+            if (!byTel[key]) byTel[key] = [];
+            byTel[key].push(l.id);
           }
         }
       });
