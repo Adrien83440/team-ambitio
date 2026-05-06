@@ -310,6 +310,96 @@ body { background: var(--bg); color: var(--ink); }
 .csm-history-meta { font-size: 10px; color: var(--ink-muted); margin-bottom: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
 
 .csm-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+
+/* ─── Modal sticky bar : contact compact + actions rapides ─── */
+.modal-sticky-bar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg2);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 14px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.modal-contact-line {
+  display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft);
+}
+.modal-contact-line span {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+}
+.modal-quick-actions {
+  display: flex; gap: 6px; flex-wrap: wrap;
+}
+.modal-quick-actions .csm-btn { padding: 6px 12px; font-size: 12px; }
+
+/* ─── Modal tabs ─── */
+.modal-tabs {
+  display: flex; gap: 2px; border-bottom: 1px solid var(--border);
+  margin-bottom: 16px; overflow-x: auto;
+}
+.mtab {
+  padding: 9px 14px; font-size: 12px; font-weight: 600; font-family: inherit;
+  background: transparent; border: none; color: var(--ink-muted);
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.mtab:hover { color: var(--ink); background: rgba(255,255,255,0.02); }
+.mtab.active {
+  color: var(--csm-accent); border-bottom-color: var(--csm-accent);
+}
+.mtab-count {
+  background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 8px;
+  font-size: 10px; font-weight: 700;
+}
+.mtab.active .mtab-count { background: var(--csm-bg-soft); color: var(--csm-accent); }
+.mtab-dot {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  vertical-align: middle; margin-left: 2px;
+}
+.mtab-dot.crit { background: var(--crit-color); box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+
+.mtab-body { padding-bottom: 6px; min-height: 100px; }
+
+/* ─── Overview grid : 4 mini-cards synthèse ─── */
+.overview-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px;
+}
+.ov-card {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
+  position: relative; overflow: hidden;
+}
+.ov-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+}
+.ov-coach::before { background: linear-gradient(90deg, var(--csm-accent-dark), var(--csm-accent)); }
+.ov-pay::before   { background: linear-gradient(90deg, #059669, #34d399); }
+.ov-kaj::before   { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.ov-fu::before    { background: linear-gradient(90deg, #6b7280, #94a3b8); }
+.ov-card-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  color: var(--ink-muted); text-transform: uppercase; margin-top: 4px;
+}
+.ov-card-main {
+  font-size: 22px; font-weight: 800; line-height: 1.1;
+}
+.ov-card-main-small { font-size: 16px; }
+.ov-card-sep { color: var(--ink-muted); font-weight: 500; margin: 0 1px; }
+.ov-card-bar { height: 4px; background: var(--bg2); border-radius: 2px; overflow: hidden; margin: 4px 0 2px; }
+.ov-card-bar-fill { height: 100%; transition: width 0.3s; }
+.ov-card-sub {
+  font-size: 11px; color: var(--ink-soft); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.ov-card-empty {
+  font-size: 12px; color: var(--ink-muted); font-style: italic; padding: 8px 0;
+}
+.ov-card.ov-empty .ov-card-label { opacity: 0.6; }
+
+@media (max-width: 900px) {
+  .overview-grid { grid-template-columns: repeat(2, 1fr); }
+  .modal-quick-actions .csm-btn { flex: 1; justify-content: center; }
+}
 .csm-btn {
   padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600;
   border: 1px solid var(--border); background: var(--bg3); color: var(--ink);
@@ -1489,8 +1579,12 @@ function renderModal(){
   var pays = paymentsByLead[c.id] || [];
   var notes = notesByLead[c.id] || [];
   var hist = c.csmFollowupHistory || [];
+  var coaching = getCoachingForLead(c);
+  var kProg = c.kajabiProgress;
 
   var h = '';
+
+  // ───── HEADER ─────
   h += '<div class="csm-modal-h">';
   h += '<div><div class="csm-modal-title">' + esc(clientDisplayName(c)) + lvlBadge + '<span class="csm-badge ' + cs.cls + '">' + cs.label + '</span></div>';
   if(c.commerce) h += '<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">' + esc(c.commerce) + '</div>';
@@ -1498,17 +1592,39 @@ function renderModal(){
   h += '<button class="csm-modal-close" onclick="closeModal()">✕</button>';
   h += '</div>';
 
-  // ─── Infos contact ───
-  h += '<div class="csm-section">';
-  h += '<div class="csm-section-title">📇 Contact</div>';
-  h += '<div class="csm-info-grid">';
-  h += '<div class="csm-info-item"><div class="csm-info-label">📧 Email</div><div class="csm-info-val">' + esc(c.email||'—') + '</div></div>';
-  h += '<div class="csm-info-item"><div class="csm-info-label">📞 Téléphone</div><div class="csm-info-val">' + esc(c.telephone||'—') + '</div></div>';
-  h += '<div class="csm-info-item"><div class="csm-info-label">📅 Client depuis</div><div class="csm-info-val">' + fmtDate(c.clientSince) + '</div></div>';
-  h += '<div class="csm-info-item"><div class="csm-info-label">🏷 Type / Secteur</div><div class="csm-info-val">' + esc((c.type||'') + (c.secteur ? ' · ' + c.secteur : '')) + '</div></div>';
-  h += '</div></div>';
+  // ───── SUB-HEADER STICKY : CONTACT COMPACT + ACTIONS ─────
+  h += '<div class="modal-sticky-bar">';
+  h += '<div class="modal-contact-line">';
+  if(c.email)     h += '<span title="Email">📧 ' + esc(c.email) + '</span>';
+  if(c.telephone) h += '<span title="Téléphone">📞 ' + esc(c.telephone) + '</span>';
+  if(c.clientSince) h += '<span title="Client depuis">📅 ' + fmtDate(c.clientSince) + '</span>';
+  if(c.type || c.secteur) h += '<span title="Type/Secteur">🏷 ' + esc((c.type||'') + (c.secteur ? ' · ' + c.secteur : '')) + '</span>';
+  h += '</div>';
+  h += '<div class="modal-quick-actions">';
+  if(c.telephone) h += '<button class="csm-btn" onclick="quickSms(\'' + c.id + '\')">📱 SMS</button>';
+  if(c.email)     h += '<button class="csm-btn" onclick="quickEmail(\'' + c.id + '\')">📧 Email</button>';
+  h += '<button class="csm-btn primary" onclick="markFollowedUp()">✅ Marquer relancé</button>';
+  h += '</div>';
+  h += '</div>';
 
-  // ─── Statut client (éditable) ───
+  // ───── TABS NAV ─────
+  var crLate = computeReasons(c).filter(function(r){ return r.kind === 'coaching'; }).length;
+  var payLate = computeReasons(c).filter(function(r){ return r.kind === 'payment'; }).length;
+  var kajCount = kProg && kProg.byCourse ? Object.keys(kProg.byCourse).length : 0;
+  h += '<div class="modal-tabs">';
+  h += '<button class="mtab" data-mtab="overview">📊 Vue d\'ensemble</button>';
+  h += '<button class="mtab" data-mtab="coaching">🎯 Coaching' + (coaching ? '' : ' <span style="opacity:0.4">·</span>') + (crLate?' <span class="mtab-dot crit"></span>':'') + '</button>';
+  h += '<button class="mtab" data-mtab="payments">💳 Paiements <span class="mtab-count">' + pays.length + '</span>' + (payLate?' <span class="mtab-dot crit"></span>':'') + '</button>';
+  h += '<button class="mtab" data-mtab="kajabi">🎓 Kajabi' + (kajCount?' <span class="mtab-count">' + kajCount + '</span>':'') + '</button>';
+  h += '<button class="mtab" data-mtab="notes">📝 Notes & historique <span class="mtab-count">' + (notes.length + hist.length) + '</span></button>';
+  h += '</div>';
+
+  // ═══════ CONTENU DES ONGLETS ═══════
+  h += '<div class="modal-tab-bodies">';
+
+  // ─── ONGLET 1 : VUE D'ENSEMBLE ───
+  h += '<div class="mtab-body" data-mtab-body="overview">';
+  // Statut client (boutons radio)
   h += '<div class="csm-section">';
   h += '<div class="csm-section-title">🎯 Statut client</div>';
   h += '<div class="csm-status-row">';
@@ -1525,128 +1641,183 @@ function renderModal(){
   });
   h += '</div></div>';
 
-  // ─── Coaching (matché par email avec collection clients) ───
-  var coaching = getCoachingForLead(c);
+  // 4 mini-cards synthèse
+  h += '<div class="overview-grid">';
+  // Coaching
   if(coaching){
     var done  = coaching.nbCoachingsFaits || 0;
     var total = coaching.nbCoachingsTotal || 12;
     var pct   = total > 0 ? Math.round((done/total)*100) : 0;
+    var nowD = new Date();
+    var qN = getCoachingQuotaStatus(coaching, nowD.getFullYear(), nowD.getMonth());
+    var subTxt = qN && qN.status === 'miss' ? '🔴 Aucune session ce mois'
+               : qN && qN.status === 'partial' ? '🟡 ' + qN.used + '/' + qN.max + ' ce mois'
+               : qN && qN.status === 'ok' ? '✓ Quota mensuel OK' : '—';
+    h += '<div class="ov-card ov-coach"><div class="ov-card-label">🎯 Coaching</div>';
+    h += '<div class="ov-card-main">' + done + '<span class="ov-card-sep">/</span>' + total + '</div>';
+    h += '<div class="ov-card-bar"><div class="ov-card-bar-fill" style="width:' + pct + '%;background:var(--csm-accent)"></div></div>';
+    h += '<div class="ov-card-sub">' + subTxt + '</div></div>';
+  } else {
+    h += '<div class="ov-card ov-coach ov-empty"><div class="ov-card-label">🎯 Coaching</div><div class="ov-card-empty">Pas de fiche coaching</div></div>';
+  }
+
+  // Paiements (synthèse)
+  if(pays.length){
+    var totalAmt = 0, paidAmt = 0;
+    pays.forEach(function(p){ if(p.status !== 'cancelled'){ totalAmt += (p.totalAmount||0); paidAmt += (p.paidAmount||0); } });
+    var nbFailed = pays.filter(function(p){ return p.status === 'failed'; }).length;
+    var payPct = totalAmt > 0 ? Math.round((paidAmt/totalAmt)*100) : 0;
+    var paySubTxt = nbFailed > 0 ? '🔴 ' + nbFailed + ' échec' + (nbFailed>1?'s':'')
+                  : pays[0].status === 'pending_mandate' ? '🟠 Mandat en attente'
+                  : pays[0].status === 'completed' ? '🎉 Soldé' : '✓ Actif';
+    h += '<div class="ov-card ov-pay"><div class="ov-card-label">💳 Paiement</div>';
+    h += '<div class="ov-card-main"><span style="color:var(--csm-accent)">' + fmtEuro(paidAmt) + '</span></div>';
+    h += '<div class="ov-card-bar"><div class="ov-card-bar-fill" style="width:' + payPct + '%;background:#34d399"></div></div>';
+    h += '<div class="ov-card-sub">' + paySubTxt + ' · ' + payPct + '% sur ' + fmtEuro(totalAmt) + '</div></div>';
+  } else {
+    h += '<div class="ov-card ov-pay ov-empty"><div class="ov-card-label">💳 Paiement</div><div class="ov-card-empty">Aucun paiement</div></div>';
+  }
+
+  // Kajabi
+  if(kProg && kProg.byCourse && Object.keys(kProg.byCourse).length){
+    var sumPct = 0, nPct = 0, firstTitle = '';
+    Object.keys(kProg.byCourse).forEach(function(ck){
+      var crs = kProg.byCourse[ck] || {};
+      if(!firstTitle && crs.title) firstTitle = crs.title;
+      if(typeof crs.pct === 'number'){ sumPct += crs.pct; nPct++; }
+    });
+    var avgPct = nPct > 0 ? Math.round(sumPct/nPct) : 0;
+    var kCol = avgPct >= 80 ? 'var(--csm-accent)' : avgPct >= 40 ? '#fbbf24' : 'var(--crit-color)';
+    h += '<div class="ov-card ov-kaj"><div class="ov-card-label">🎓 Kajabi</div>';
+    h += '<div class="ov-card-main">' + avgPct + '<span class="ov-card-sep">%</span></div>';
+    h += '<div class="ov-card-bar"><div class="ov-card-bar-fill" style="width:' + avgPct + '%;background:' + kCol + '"></div></div>';
+    h += '<div class="ov-card-sub">' + esc(firstTitle || 'Programme') + '</div></div>';
+  } else {
+    h += '<div class="ov-card ov-kaj ov-empty"><div class="ov-card-label">🎓 Kajabi</div><div class="ov-card-empty">Pas importé</div></div>';
+  }
+
+  // Dernière relance CSM
+  if(c.lastCsmFollowupAt){
+    h += '<div class="ov-card ov-fu"><div class="ov-card-label">↻ Dernière relance</div>';
+    h += '<div class="ov-card-main ov-card-main-small">' + timeAgo(c.lastCsmFollowupAt) + '</div>';
+    h += '<div class="ov-card-sub">' + fmtDateTime(c.lastCsmFollowupAt) + '</div></div>';
+  } else {
+    h += '<div class="ov-card ov-fu ov-empty"><div class="ov-card-label">↻ Dernière relance</div><div class="ov-card-empty">Jamais relancé</div></div>';
+  }
+  h += '</div>'; // overview-grid
+  h += '</div>'; // overview body
+
+  // ─── ONGLET 2 : COACHING ───
+  h += '<div class="mtab-body" data-mtab-body="coaching" style="display:none">';
+  if(coaching){
+    var done2  = coaching.nbCoachingsFaits || 0;
+    var total2 = coaching.nbCoachingsTotal || 12;
+    var pct2   = total2 > 0 ? Math.round((done2/total2)*100) : 0;
     var lastSess = getLastSessionDate(coaching);
     var daysSince = lastSess ? Math.floor((Date.now() - lastSess.getTime()) / 86400000) : null;
     var coachName = coaching.coachAssigned ? (coachMembersMap[coaching.coachAssigned] || coaching.coachAssigned) : 'Non assigné';
 
     h += '<div class="csm-section">';
-    h += '<div class="csm-section-title">🎯 Coaching</div>';
     h += '<div class="csm-info-grid">';
     h += '<div class="csm-info-item"><div class="csm-info-label">Programme</div><div class="csm-info-val">' + esc(coaching.programme||'—') + '</div></div>';
     h += '<div class="csm-info-item"><div class="csm-info-label">Coach assigné</div><div class="csm-info-val">' + esc(coachName) + '</div></div>';
-    h += '<div class="csm-info-item"><div class="csm-info-label">Coachings effectués</div><div class="csm-info-val">' + done + ' / ' + total + ' (' + pct + '%)</div></div>';
+    h += '<div class="csm-info-item"><div class="csm-info-label">Coachings effectués</div><div class="csm-info-val">' + done2 + ' / ' + total2 + ' (' + pct2 + '%)</div></div>';
     h += '<div class="csm-info-item"><div class="csm-info-label">Dernière session</div><div class="csm-info-val">';
     if(lastSess) h += fmtDate(lastSess) + ' (il y a ' + daysSince + ' jour' + (daysSince>1?'s':'') + ')';
     else h += 'Aucune session';
     h += '</div></div>';
     h += '</div>';
 
-    // Barre progression globale + 6 derniers mois quota
-    h += '<div style="margin-top:10px;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden">';
-    h += '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,var(--csm-accent-dark),var(--csm-accent));"></div>';
+    h += '<div style="margin-top:14px;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden">';
+    h += '<div style="height:100%;width:' + pct2 + '%;background:linear-gradient(90deg,var(--csm-accent-dark),var(--csm-accent))"></div>';
     h += '</div>';
 
-    // Mini-barres des 6 derniers mois
-    h += '<div style="margin-top:10px;display:flex;gap:4px;align-items:flex-end">';
-    var nowD = new Date();
+    // 6 mini-barres derniers mois
+    h += '<div style="margin-top:14px"><div style="font-size:11px;color:var(--ink-muted);margin-bottom:6px">📊 6 derniers mois (vert = quota OK, jaune = partiel, rouge = aucune)</div>';
+    h += '<div style="display:flex;gap:5px;align-items:flex-end">';
+    var nowD2 = new Date();
     var entry = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
     for(var i = 5; i >= 0; i--){
-      var d = new Date(nowD.getFullYear(), nowD.getMonth() - i, 1);
+      var d = new Date(nowD2.getFullYear(), nowD2.getMonth() - i, 1);
       var label = d.toLocaleDateString('fr-FR',{month:'short'});
       if(entry && !isNaN(entry.getTime()) && d < new Date(entry.getFullYear(), entry.getMonth(), 1)){
-        h += '<div style="flex:1;text-align:center;font-size:9px;color:var(--ink-muted)">' + label + '<div style="height:14px;background:rgba(255,255,255,0.04);border-radius:2px;margin-top:2px"></div></div>';
+        h += '<div style="flex:1;text-align:center;font-size:10px;color:var(--ink-muted)">' + label + '<div style="height:18px;background:rgba(255,255,255,0.04);border-radius:3px;margin-top:3px"></div></div>';
         continue;
       }
       var q = getCoachingQuotaStatus(coaching, d.getFullYear(), d.getMonth());
       var col = 'rgba(255,255,255,0.08)';
       if(q && q.status === 'ok')      col = 'var(--csm-accent)';
-      else if(q && q.status === 'partial') col = 'var(--att-color)';
+      else if(q && q.status === 'partial') col = '#fbbf24';
       else if(q && q.status === 'miss')    col = 'var(--crit-color)';
       var title = label + ' : ' + (q ? q.used + '/' + q.max : '—');
-      h += '<div style="flex:1;text-align:center;font-size:9px;color:var(--ink-muted)" title="' + title + '">' + label + '<div style="height:14px;background:' + col + ';border-radius:2px;margin-top:2px"></div></div>';
+      h += '<div style="flex:1;text-align:center;font-size:10px;color:var(--ink-muted)" title="' + title + '">' + label + '<div style="height:18px;background:' + col + ';border-radius:3px;margin-top:3px"></div></div>';
     }
-    h += '</div>';
+    h += '</div></div>';
 
-    // Notes coaching brutes (si présentes)
     if(coaching.clientNotes){
-      h += '<div style="margin-top:10px;font-size:11px;color:var(--ink-muted);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px">';
-      h += '<strong>Note coaching :</strong> ' + esc(coaching.clientNotes);
+      h += '<div style="margin-top:14px;font-size:12px;color:var(--ink-muted);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px">';
+      h += '<strong>📝 Note coaching :</strong> ' + esc(coaching.clientNotes);
       h += '</div>';
     }
-
-    h += '<div style="margin-top:8px"><a class="csm-btn" href="coaching.html" target="_blank">🎓 Ouvrir fiche coaching →</a></div>';
+    h += '<div style="margin-top:12px"><a class="csm-btn" href="coaching.html" target="_blank">🎓 Ouvrir fiche coaching →</a></div>';
+    h += '</div>';
+  } else {
+    h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-top:8px">';
+    h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">🎯</div>';
+    h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:6px">Aucune fiche coaching matchée pour ce client</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted)">Le matching se fait par email — vérifie que <strong>' + esc(c.email||'(non renseigné)') + '</strong> existe dans la collection coaching.</div>';
     h += '</div>';
   }
+  h += '</div>'; // coaching body
 
-  // ─── Paiements ───
-  h += '<div class="csm-section">';
-  h += '<div class="csm-section-title">💳 Paiements (' + pays.length + ')</div>';
-  if(!pays.length){
-    h += '<div style="font-size:12px;color:var(--ink-muted)">Aucun paiement enregistré pour ce client.</div>';
-  } else {
+  // ─── ONGLET 3 : PAIEMENTS ───
+  h += '<div class="mtab-body" data-mtab-body="payments" style="display:none">';
+  if(pays.length){
+    h += '<div style="display:flex;flex-direction:column;gap:8px">';
     pays.forEach(function(p){
       var ps = PAY_STATUS[p.status] || { label: p.status||'?', cls:'pay-draft' };
-      var typeLabel = p.type === 'installments' ? '📅 ' + (p.installmentsCount||1) + ' mois' : '💳 Intégral';
-      var prog = '';
-      if(p.installmentsCount > 1){
-        prog = (p.paidCount || 0) + '/' + p.installmentsCount + ' (' + fmtEuro(p.paidAmount||0) + ' payé)';
-      }
-      var rowClass = p.status === 'failed' ? 'failed' : '';
-      h += '<div class="csm-pay-row ' + rowClass + '">';
-      h += '<div>';
-      h += '<div><span class="csm-pay-amt">' + fmtEuro(p.totalAmount) + '</span> <span class="csm-badge ' + ps.cls + '">' + ps.label + '</span></div>';
-      h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:3px">' + typeLabel;
-      if(prog) h += ' · ' + prog;
-      if(p.paiementPlateforme) h += ' · ' + esc(p.paiementPlateforme);
-      h += '</div></div>';
-      h += '<div style="font-size:11px;color:var(--ink-muted)">' + fmtDate(p.createdAt) + '</div>';
-      h += '<a class="csm-act-btn" title="Détails" href="payments.html" target="_blank">→</a>';
+      var prog = p.installmentsCount > 1 ? (p.paidCount||0) + '/' + p.installmentsCount + ' échéances' : '';
+      var typeLabel = p.installmentsCount > 1 ? '📅 Fractionné' : '💳 Intégral';
+      h += '<div class="csm-card" style="cursor:default">';
+      h += '<div style="font-size:18px;font-weight:800;color:var(--csm-accent)">' + fmtEuro(p.totalAmount) + '</div>';
+      h += '<div class="csm-card-info"><div class="csm-card-meta">';
+      h += '<span class="csm-badge ' + ps.cls + '">' + ps.label + '</span>';
+      h += '<span>' + typeLabel + (prog ? ' · ' + prog : '') + '</span>';
+      if(p.installmentAmount && p.installmentsCount > 1) h += '<span>' + fmtEuro(p.installmentAmount) + '/mois</span>';
+      if(p.paiementPlateforme) h += '<span>🏦 ' + esc(p.paiementPlateforme) + '</span>';
+      h += '<span>' + fmtDate(p.createdAt) + '</span>';
+      h += '</div></div><div></div>';
+      h += '<a class="csm-act-btn" href="payments.html?leadId=' + c.id + '" target="_blank" title="Détail">→</a>';
       h += '</div>';
     });
+    h += '</div>';
+  } else {
+    h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-top:8px">';
+    h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">💳</div>';
+    h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:10px">Aucun paiement enregistré pour ce client</div>';
+    h += '</div>';
   }
-  h += '<div style="margin-top:8px"><a class="csm-btn" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Gérer les paiements</a></div>';
-  h += '</div>';
+  h += '<div style="margin-top:14px"><a class="csm-btn" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Gérer les paiements</a></div>';
+  h += '</div>'; // payments body
 
-  // ─── Formation Kajabi (alimenté par csm-import.html depuis CSV exporté Kajabi) ───
-  // Structure principale : leads/{id}.kajabiProgress = {
-  //   byCourse: { [courseId]: { title, pct, lastImportAt, lastImportBy } },
-  //   lastImportAt: timestamp
-  // }
-  // Compatibilité legacy : si byCourse[id].modules existe (ancien format
-  // par-leçon), on calcule le pct comme avant.
-  var kProg = c.kajabiProgress;
-  // ─── Section toujours affichée (même vide) pour clarté visuelle ───
-  h += '<div class="csm-section">';
-  h += '<div class="csm-section-title">🎓 Formation Kajabi</div>';
-  if (!kProg || !kProg.byCourse || !Object.keys(kProg.byCourse).length) {
-    // État vide explicite + CTA import
-    h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:20px;text-align:center">';
+  // ─── ONGLET 4 : KAJABI ───
+  h += '<div class="mtab-body" data-mtab-body="kajabi" style="display:none">';
+  if(!kProg || !kProg.byCourse || !Object.keys(kProg.byCourse).length){
+    h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-top:8px">';
     h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">🎓</div>';
-    h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:10px">Aucune progression Kajabi importée pour ce client</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:12px">Vérifie que l\'email <strong>' + esc(c.email||'(non renseigné)') + '</strong> matche bien dans le CSV exporté.</div>';
+    h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:6px">Aucune progression Kajabi importée pour ce client</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:14px">Vérifie que l\'email <strong>' + esc(c.email||'(non renseigné)') + '</strong> matche bien dans le CSV exporté.</div>';
     h += '<a class="csm-btn primary" href="csm-import.html" target="_blank">📥 Importer un CSV Kajabi</a>';
-    h += '</div></div>';
-  } else if (true) {
-    // contenu existant ouvert ici
+    h += '</div>';
+  } else {
     Object.keys(kProg.byCourse).forEach(function(courseKey){
       var crs = kProg.byCourse[courseKey] || {};
       var coursePct = null;
       var subInfo = '';
-
       if(typeof crs.pct === 'number'){
-        // Format nouveau : pct fourni directement par le CSV Kajabi
         coursePct = Math.max(0, Math.min(100, Math.round(crs.pct)));
-        if(crs.lastImportAt){
-          subInfo = '📅 Importé ' + timeAgo(crs.lastImportAt);
-        }
+        if(crs.lastImportAt) subInfo = '📅 Importé ' + timeAgo(crs.lastImportAt);
       } else if(crs.modules){
-        // Format legacy : on calcule depuis les modules détaillés
         var modKeys = Object.keys(crs.modules);
         var totL = 0, doneL = 0;
         modKeys.forEach(function(mk){
@@ -1658,101 +1829,95 @@ function renderModal(){
         if(totL > 0) coursePct = Math.round((doneL/totL)*100);
         subInfo = doneL + ' leçon' + (doneL>1?'s':'') + ' faite' + (doneL>1?'s':'');
         if(totL > 0) subInfo += ' / ' + totL;
-        if(crs.lastLessonAt) subInfo += ' · 📅 ' + timeAgo(crs.lastLessonAt);
       }
-
-      // Header cours
-      h += '<div style="margin-bottom:14px">';
-      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:10px">';
-      h += '<div style="font-size:13px;font-weight:700">' + esc(crs.title || courseKey) + '</div>';
-      h += '<div style="font-size:13px;font-weight:700;color:var(--csm-accent)">';
-      if(coursePct !== null) h += coursePct + '%';
-      else h += '—';
-      h += '</div></div>';
-
-      // Barre de progression
+      h += '<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px">';
+      h += '<div style="font-size:14px;font-weight:700">' + esc(crs.title || courseKey) + '</div>';
+      h += '<div style="font-size:18px;font-weight:800;color:var(--csm-accent)">' + (coursePct !== null ? coursePct + '%' : '—') + '</div>';
+      h += '</div>';
       if(coursePct !== null){
-        var pctColor = coursePct >= 80 ? 'var(--csm-accent)'
-                     : coursePct >= 40 ? '#fbbf24'
-                     : '#fca5a5';
-        h += '<div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden;margin-bottom:6px">';
-        h += '<div style="height:100%;width:' + coursePct + '%;background:linear-gradient(90deg,' + pctColor + ',var(--csm-accent));transition:width 0.3s"></div>';
+        var pctColor = coursePct >= 80 ? 'var(--csm-accent)' : coursePct >= 40 ? '#fbbf24' : 'var(--crit-color)';
+        h += '<div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden;margin-bottom:8px">';
+        h += '<div style="height:100%;width:' + coursePct + '%;background:linear-gradient(90deg,' + pctColor + ',var(--csm-accent))"></div>';
         h += '</div>';
       }
-
-      if(subInfo){
-        h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:6px">' + subInfo + '</div>';
-      }
-
-      // Si format legacy : on déroule les modules en plus
-      if(crs.modules){
-        Object.keys(crs.modules).forEach(function(mk){
-          var m = crs.modules[mk] || {};
-          var doneN = (m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
-          var totN = m.totalLessons || null;
-          var modPct = (totN && totN > 0) ? Math.round((doneN/totN)*100) : null;
-          h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:5px">';
-          h += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px">';
-          h += '<span style="font-weight:600">' + esc(m.title || mk) + '</span>';
-          h += '<span style="color:var(--ink-muted);font-size:11px">' + doneN + (totN ? '/' + totN : '');
-          if(modPct !== null) h += ' · ' + modPct + '%';
-          h += '</span></div></div>';
-        });
-      }
+      if(subInfo) h += '<div style="font-size:11px;color:var(--ink-muted)">' + subInfo + '</div>';
       h += '</div>';
     });
     if(kProg.lastImportAt){
-      h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:6px">⏱ Dernier import : ' + fmtDateTime(kProg.lastImportAt) + '</div>';
+      h += '<div style="font-size:11px;color:var(--ink-muted);margin:8px 0">⏱ Dernier import global : ' + fmtDateTime(kProg.lastImportAt) + '</div>';
     }
-    h += '<div style="margin-top:8px"><a class="csm-btn" href="csm-import.html" target="_blank">📥 Mettre à jour depuis Kajabi</a></div>';
-    h += '</div>';
+    h += '<div style="margin-top:8px"><a class="csm-btn primary" href="csm-import.html" target="_blank">📥 Mettre à jour depuis Kajabi</a></div>';
   }
+  h += '</div>'; // kajabi body
 
-  // ─── Notes (sous-collection partagée) ───
-  h += '<div class="csm-section">';
+  // ─── ONGLET 5 : NOTES & HISTORIQUE ───
+  h += '<div class="mtab-body" data-mtab-body="notes" style="display:none">';
+  // Notes
+  h += '<div class="csm-section" style="padding:0;border:none;background:none;margin-bottom:18px">';
   h += '<div class="csm-section-title">📝 Notes (' + notes.length + ')</div>';
   h += '<textarea class="csm-textarea" id="csmNoteInput" placeholder="Ajouter une note interne (visible aussi dans le module Clients du sales)…"></textarea>';
   h += '<div style="margin-top:6px;display:flex;gap:8px"><button class="csm-btn primary" onclick="addNote()">+ Ajouter la note</button></div>';
   if(notes.length){
     h += '<div style="margin-top:10px">';
-    notes.slice(0, 8).forEach(function(n){
-      h += '<div class="csm-note-item">';
-      h += '<div class="csm-note-meta"><span>' + esc(n.auteur||'?') + ' · ' + fmtDateTime(n.createdAt) + '</span>';
-      h += '<button class="csm-act-btn" style="width:24px;height:24px;font-size:11px" title="Supprimer" onclick="deleteNote(\'' + n._id + '\')">🗑</button></div>';
-      h += '<div class="csm-note-text">' + esc(n.contenu||'') + '</div>';
+    notes.forEach(function(n){
+      h += '<div class="csm-note">';
+      h += '<div class="csm-note-meta">' + esc(n.auteur||'?') + ' · ' + fmtDateTime(n.createdAt) + '</div>';
+      h += '<div class="csm-note-content">' + esc(n.contenu||'') + '</div>';
       h += '</div>';
     });
     h += '</div>';
   }
   h += '</div>';
 
-  // ─── Historique relances CSM ───
-  h += '<div class="csm-section">';
+  // Historique relances CSM
+  h += '<div class="csm-section" style="padding:0;border:none;background:none">';
   h += '<div class="csm-section-title">↻ Historique des relances CSM (' + hist.length + ')</div>';
-  if(!hist.length){
-    h += '<div style="font-size:12px;color:var(--ink-muted)">Aucune relance enregistrée.</div>';
-  } else {
-    var sorted = hist.slice().reverse();
-    sorted.slice(0, 6).forEach(function(it){
-      var icon = it.channel === 'sms' ? '📱' : it.channel === 'email' ? '📧' : '📝';
-      h += '<div class="csm-history-item">';
-      h += '<div class="csm-history-meta"><span>' + icon + ' ' + esc(it.channel||'note') + '</span><span>' + fmtDateTime(it.at) + '</span><span>' + esc(it.byName||'') + '</span></div>';
-      if(it.message) h += esc(it.message);
+  if(hist.length){
+    var sorted = hist.slice().sort(function(a,b){ return new Date(b.at||0) - new Date(a.at||0); });
+    h += '<div style="display:flex;flex-direction:column;gap:6px">';
+    sorted.forEach(function(e){
+      h += '<div class="csm-note">';
+      h += '<div class="csm-note-meta">' + (e.byName||e.by||'?') + ' · ' + fmtDateTime(e.at) + (e.channel ? ' · ' + e.channel : '') + '</div>';
+      if(e.message) h += '<div class="csm-note-content">' + esc(e.message) + '</div>';
       h += '</div>';
     });
+    h += '</div>';
+  } else {
+    h += '<div style="color:var(--ink-muted);font-size:12px;font-style:italic">Aucune relance enregistrée.</div>';
   }
   h += '</div>';
 
-  // ─── Actions ───
-  h += '<div class="csm-modal-actions">';
-  if(c.telephone) h += '<button class="csm-btn" onclick="quickSms(\'' + c.id + '\')">📱 SMS</button>';
-  if(c.email)     h += '<button class="csm-btn" onclick="quickEmail(\'' + c.id + '\')">📧 Email</button>';
-  h += '<button class="csm-btn primary" onclick="markFollowedUp()">✅ Marquer relancé</button>';
-  h += '<a class="csm-btn" href="sales-clients.html" target="_blank">👥 Vue Clients →</a>';
-  h += '</div>';
+  h += '</div>'; // notes body
+
+  h += '</div>'; // modal-tab-bodies
 
   document.getElementById('modalContent').innerHTML = h;
+
+  // Restaurer l'onglet actif (default = overview)
+  var activeMTab = window._activeModalTab || 'overview';
+  switchModalTab(activeMTab);
 }
+
+/* Switch onglet interne de la modal client */
+function switchModalTab(tabName){
+  window._activeModalTab = tabName;
+  document.querySelectorAll('.mtab').forEach(function(b){
+    b.classList.toggle('active', b.dataset.mtab === tabName);
+  });
+  document.querySelectorAll('.mtab-body').forEach(function(b){
+    b.style.display = (b.dataset.mtabBody === tabName) ? '' : 'none';
+  });
+}
+window.switchModalTab = switchModalTab;
+
+// Délégation : clic sur les onglets de modal
+document.addEventListener('click', function(e){
+  var btn = e.target.closest && e.target.closest('.mtab');
+  if(!btn) return;
+  var tab = btn.dataset.mtab;
+  if(tab) switchModalTab(tab);
+});
 
 function closeModal(){
   document.getElementById('modalBg').classList.remove('show');
