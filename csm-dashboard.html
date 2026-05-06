@@ -453,80 +453,233 @@ body { background: var(--bg); color: var(--ink); }
   .csm-info-grid { grid-template-columns: 1fr; }
   .csm-pay-row { grid-template-columns: 1fr; }
 }
+/* ═══ REFONTE V2 — LAYOUT SPLIT VIEW (2026-05-06) ═══════════════════════════
+   Architecture : sidebar 320px + détail flex. KPI strip en haut.
+   Le détail est inline (plus de modal qui ouvre/ferme). Sur mobile (<900px)
+   la sidebar passe full-width et le détail s'affiche en overlay.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.csm-btn {
+  padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  background: var(--bg3); border: 1px solid var(--border); color: var(--ink);
+  text-decoration: none; display: inline-flex; align-items: center; gap: 5px;
+  transition: all 0.15s; cursor: pointer; font-family: inherit;
+}
+.csm-btn:hover { border-color: var(--csm-border); }
+.csm-btn.primary { background: var(--csm-accent-dark); border-color: var(--csm-accent); color: white; }
+.csm-btn.primary:hover { background: var(--csm-accent); }
+.csm-btn i.ti { font-size: 14px; }
+
+/* ─── KPI strip (4 cards) ─── */
+.csm-kpi-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px;
+}
+.csm-kpi {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; cursor: pointer; transition: all 0.15s;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.csm-kpi:hover { border-color: var(--csm-border); transform: translateY(-1px); }
+.csm-kpi.active { border-color: var(--csm-accent); background: var(--csm-bg-soft); }
+.csm-kpi-num {
+  font-size: 26px; font-weight: 800; line-height: 1; display: flex;
+  align-items: center; gap: 8px;
+}
+.csm-kpi-num i.ti { font-size: 22px; }
+.csm-kpi-label {
+  font-size: 11px; color: var(--ink-muted); text-transform: uppercase;
+  letter-spacing: 0.5px; font-weight: 700; margin-top: 4px;
+}
+.csm-kpi-trend { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+.csm-kpi-trend.up   { color: #34d399; }
+.csm-kpi-trend.down { color: var(--crit-color); }
+
+/* ─── Split view (sidebar + détail) ─── */
+.csm-split {
+  display: grid; grid-template-columns: 320px 1fr; gap: 12px; height: calc(100vh - 240px);
+  min-height: 600px;
+}
+
+/* ─── SIDEBAR ─── */
+.csm-sidebar {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.csm-sidebar-head {
+  padding: 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.csm-sidebar-search {
+  width: 100%; padding: 8px 12px; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--ink); font-size: 12px; outline: none;
+  font-family: inherit; box-sizing: border-box;
+}
+.csm-sidebar-search:focus { border-color: var(--csm-accent); }
+.csm-sidebar-pills {
+  display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px;
+}
+.csm-sb-pill {
+  font-size: 11px; padding: 4px 9px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--ink-soft);
+  font-family: inherit; transition: all 0.12s;
+}
+.csm-sb-pill:hover { color: var(--ink); border-color: var(--csm-border); }
+.csm-sb-pill.on { background: var(--ink); color: var(--bg2); border-color: var(--ink); }
+.csm-sb-pill.crit.on { background: var(--crit-color); border-color: var(--crit-color); color: white; }
+.csm-sb-pill.warn.on { background: var(--warn-color); border-color: var(--warn-color); color: white; }
+.csm-sb-pill.att.on { background: var(--att-color); border-color: var(--att-color); color: var(--bg1); }
+
+.csm-sidebar-list {
+  flex: 1; overflow-y: auto; min-height: 0;
+}
+.csm-client-row {
+  padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+  transition: background 0.1s;
+}
+.csm-client-row:hover { background: rgba(255,255,255,0.02); }
+.csm-client-row.selected {
+  background: var(--csm-bg-soft);
+  border-left: 3px solid var(--csm-accent);
+  padding-left: 11px;
+}
+.csm-cr-line1 {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.csm-cr-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.csm-cr-dot.crit { background: var(--crit-color); box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+.csm-cr-dot.warn { background: var(--warn-color); }
+.csm-cr-dot.att  { background: var(--att-color); }
+.csm-cr-dot.ok   { background: #34d399; }
+.csm-cr-dot.muted{ background: var(--ink-muted); }
+.csm-cr-name {
+  font-size: 13px; font-weight: 600; flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.csm-cr-time { font-size: 10px; color: var(--ink-muted); flex-shrink: 0; }
+.csm-cr-meta {
+  font-size: 11px; color: var(--ink-soft); display: flex; gap: 6px; flex-wrap: wrap;
+  align-items: center;
+}
+.csm-cr-tag {
+  font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+  white-space: nowrap;
+}
+.csm-cr-tag.crit { background: rgba(239,68,68,0.10); color: var(--crit-color); }
+.csm-cr-tag.warn { background: rgba(251,146,60,0.10); color: var(--warn-color); }
+.csm-cr-tag.att  { background: rgba(251,191,36,0.10); color: var(--att-color); }
+.csm-cr-tag.ok   { background: rgba(52,211,153,0.10); color: #34d399; }
+.csm-cr-tag.muted{ background: rgba(168,85,247,0.10); color: #c4b5fd; }
+.csm-cr-stats { color: var(--ink-muted); font-size: 11px; }
+
+/* ─── DETAIL PANEL ─── */
+.csm-detail-panel {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+  overflow-y: auto; min-height: 0;
+  display: flex; flex-direction: column;
+}
+.csm-detail-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 40px;
+}
+
+/* Section "Signaux à actionner" — la nouveauté clé */
+.csm-signals { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.csm-signal {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg2); border-left: 3px solid var(--csm-accent);
+  transition: all 0.12s;
+}
+.csm-signal.crit { border-left-color: var(--crit-color); background: rgba(239,68,68,0.04); }
+.csm-signal.warn { border-left-color: var(--warn-color); background: rgba(251,146,60,0.04); }
+.csm-signal.att  { border-left-color: var(--att-color); background: rgba(251,191,36,0.04); }
+.csm-signal.info { border-left-color: #60a5fa; background: rgba(96,165,250,0.04); }
+.csm-signal-icon {
+  width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-size: 16px; flex-shrink: 0;
+}
+.csm-signal.crit .csm-signal-icon { background: rgba(239,68,68,0.15); color: var(--crit-color); }
+.csm-signal.warn .csm-signal-icon { background: rgba(251,146,60,0.15); color: var(--warn-color); }
+.csm-signal.att  .csm-signal-icon { background: rgba(251,191,36,0.15); color: var(--att-color); }
+.csm-signal.info .csm-signal-icon { background: rgba(96,165,250,0.15); color: #60a5fa; }
+.csm-signal-text { flex: 1; min-width: 0; }
+.csm-signal-title { font-size: 13px; font-weight: 700; color: var(--ink); }
+.csm-signal-desc { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+.csm-signal-action-btn {
+  font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 7px;
+  background: transparent; border: 1px solid var(--border); color: var(--ink-soft);
+  cursor: pointer; flex-shrink: 0; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.csm-signal-action-btn:hover {
+  background: var(--ink); color: var(--bg2); border-color: var(--ink);
+}
+.csm-signal-action-btn i.ti { font-size: 13px; }
+
+/* Responsive : sur écran < 900px, sidebar prend toute la largeur,
+   détail s'affiche par-dessus en mode overlay */
+@media (max-width: 900px) {
+  .csm-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .csm-split { grid-template-columns: 1fr; height: auto; }
+  .csm-sidebar { max-height: 400px; }
+  .csm-detail-panel.csm-detail-empty-mobile { display: none; }
+}
+
+/* Backwards-compat : éléments anciens à masquer pour pas casser le JS */
+.csm-modal-bg, .csm-tabs, .csm-stats, .csm-toolbar { display: none !important; }
+
 </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.34.0/tabler-icons.min.css">
 </head>
 
 <body>
 
 <div class="csm-app">
+
+  <!-- ─── HEADER ─── -->
   <div class="csm-header">
     <div class="csm-logo">💎</div>
     <div>
       <div class="csm-title">Dashboard Customer Success</div>
       <div class="csm-sub">Suivi clients actifs, paiements, coachings, formation Kajabi</div>
     </div>
-    <a href="csm-import.html" style="margin-left:auto;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;background:var(--bg3);border:1px solid var(--border);color:var(--ink);text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s">📥 Importer CSV Kajabi</a>
-  </div>
-
-  <!-- ─── STATS ─── -->
-  <div class="csm-stats">
-    <div class="csm-stat crit"><div class="csm-stat-val" id="statCrit">—</div><div class="csm-stat-label">🔴 Critique</div></div>
-    <div class="csm-stat warn"><div class="csm-stat-val" id="statWarn">—</div><div class="csm-stat-label">🟠 À relancer</div></div>
-    <div class="csm-stat att"><div class="csm-stat-val"  id="statAtt">—</div><div class="csm-stat-label">🟡 Attention</div></div>
-    <div class="csm-stat warn"><div class="csm-stat-val" id="statCoachLate">—</div><div class="csm-stat-label">🎯 Retards coaching</div></div>
-    <div class="csm-stat"><div class="csm-stat-val"      id="statActive">—</div><div class="csm-stat-label">👥 Clients actifs</div></div>
-  </div>
-
-  <!-- ─── TABS ─── -->
-  <div class="csm-tabs">
-    <button class="csm-tab active" data-tab="retards"   onclick="switchTab('retards', this)">🚨 Retards & alertes <span class="csm-tab-count" id="cntRetards">0</span></button>
-    <button class="csm-tab"        data-tab="payments"  onclick="switchTab('payments', this)">💳 Paiements <span class="csm-tab-count" id="cntPay">0</span></button>
-    <button class="csm-tab"        data-tab="temoignages" onclick="switchTab('temoignages', this)">⭐ Témoignages <span class="csm-tab-count" id="cntTemo">0</span></button>
-    <button class="csm-tab"        data-tab="all"       onclick="switchTab('all', this)">📋 Tous les clients <span class="csm-tab-count" id="cntAll">0</span></button>
-  </div>
-
-  <!-- ─── TOOLBAR (varie selon onglet) ─── -->
-  <div class="csm-toolbar" id="toolbar">
-    <input class="csm-search" id="searchInput" type="text" placeholder="🔍 Rechercher (nom, email, commerce…)"/>
-    <div id="toolbarRetards" class="csm-toolbar" style="padding:0;margin:0;flex:0 0 auto;gap:6px">
-      <button class="csm-pill crit active" data-level="crit" onclick="toggleLevel('crit', this)">🔴 Critique</button>
-      <button class="csm-pill warn active" data-level="warn" onclick="toggleLevel('warn', this)">🟠 Relancer</button>
-      <button class="csm-pill att active"  data-level="att"  onclick="toggleLevel('att', this)">🟡 Attention</button>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <a href="csm-import.html" class="csm-btn"><i class="ti ti-cloud-upload"></i> Importer Kajabi</a>
+      <a href="csm-diagnostic.html" class="csm-btn"><i class="ti ti-search"></i> Diagnostic</a>
     </div>
-    <select class="csm-search" id="filterStatus" style="min-width:160px;flex:0 0 auto">
-      <option value="all">Tous statuts</option>
-      <option value="active">✅ Actif</option>
-      <option value="paused">⏸ En pause</option>
-      <option value="completed">🎉 Terminé</option>
-      <option value="stopped">🛑 Stoppé</option>
-      <option value="procedure">⚖️ Procédure</option>
-    </select>
-    <select class="csm-search" id="filterPayStatus" style="min-width:170px;flex:0 0 auto;display:none">
-      <option value="all">Tous paiements</option>
-      <option value="failed">❌ Échec</option>
-      <option value="cancelled">🚫 Annulé</option>
-      <option value="pending_mandate">⏳ Mandat en attente</option>
-      <option value="active">💸 Actifs</option>
-      <option value="mandate_active">✅ Mandat actif</option>
-      <option value="completed">🎉 Terminé</option>
-      <option value="draft">📝 Brouillon</option>
-    </select>
-    <select class="csm-search" id="filterReason" style="min-width:160px;flex:0 0 auto;display:none">
-      <option value="all">Tous motifs</option>
-      <option value="payment">💳 Paiement uniquement</option>
-      <option value="coaching">🎯 Coaching uniquement</option>
-    </select>
   </div>
 
-  <!-- ─── BODY ─── -->
-  <div id="csmBody">
-    <div class="csm-loading"><div class="csm-spinner"></div>Chargement des données…</div>
+  <!-- ─── KPI STRIP ─── -->
+  <div class="csm-kpi-strip" id="kpiStrip">
+    <!-- Rendu par renderKpiStrip() -->
   </div>
-</div>
 
-<!-- ─── MODAL DETAIL CLIENT ─── -->
-<div class="csm-modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
-  <div class="csm-modal" id="modalContent"></div>
+  <!-- ─── SPLIT VIEW : sidebar + détail ─── -->
+  <div class="csm-split">
+
+    <!-- SIDEBAR : recherche + filtres + liste -->
+    <aside class="csm-sidebar">
+      <div class="csm-sidebar-head">
+        <input class="csm-sidebar-search" id="searchInput" type="text" placeholder="Rechercher (nom, email…)"/>
+        <div class="csm-sidebar-pills" id="filterPills">
+          <!-- Rendu par renderSidebarPills() -->
+        </div>
+      </div>
+      <div class="csm-sidebar-list" id="clientsList">
+        <div class="csm-loading"><div class="csm-spinner"></div>Chargement…</div>
+      </div>
+    </aside>
+
+    <!-- DETAIL : panneau de droite -->
+    <main class="csm-detail-panel" id="detailPanel">
+      <div class="csm-detail-empty">
+        <div style="font-size:42px;opacity:0.3;margin-bottom:14px">💎</div>
+        <div style="font-size:14px;color:var(--ink-muted)">Sélectionne un client dans la liste pour voir son détail</div>
+      </div>
+    </main>
+
+  </div>
 </div>
 
 <!-- ─── TOAST ─── -->
@@ -1140,15 +1293,72 @@ function loadNotesForLead(clientId, cb){
 
 /* ─── Rendering ─── */
 function renderAll(){
-  computeStats();
-  if(activeTab === 'retards')      renderRetards();
-  else if(activeTab === 'payments')renderPayments();
-  else if(activeTab === 'temoignages') renderTemoignages();
-  else if(activeTab === 'all')     renderAllClients();
+  computeStats();              // calcule statsCache (utilisé partout)
+  renderKpiStrip();            // 4 KPI cards en haut
+  renderSidebarPills();        // Pills de filtres (Tous / Critiques / À relancer / etc.)
+  renderSidebarList();         // Liste compacte des clients
+  renderDetailPanel();         // Panneau de droite (détail ou empty state)
+}
+
+/* ─── KPI strip — 4 cards cliquables qui filtrent la liste ─── */
+function renderKpiStrip(){
+  var s = window._statsCache || {};
+  var pendingThisWeek = computePendingFollowups();
+  var doneToday = computeDoneFollowupsToday();
+
+  var html = '';
+  html += '<div class="csm-kpi" onclick="setSidebarFilter(\'crit\')">';
+  html += '<div class="csm-kpi-num" style="color:var(--crit-color)"><i class="ti ti-alert-circle"></i>' + (s.crit||0) + '</div>';
+  html += '<div class="csm-kpi-label">Critiques · à actionner</div>';
+  html += '<div class="csm-kpi-trend">' + (s.crit > 0 ? 'Action urgente requise' : 'RAS pour le moment') + '</div>';
+  html += '</div>';
+
+  html += '<div class="csm-kpi" onclick="setSidebarFilter(\'coachLate\')">';
+  html += '<div class="csm-kpi-num" style="color:#fb923c"><i class="ti ti-target"></i>' + (s.coachLate||0) + '</div>';
+  html += '<div class="csm-kpi-label">Retards coaching</div>';
+  html += '<div class="csm-kpi-trend">2 mois sans session</div>';
+  html += '</div>';
+
+  html += '<div class="csm-kpi" onclick="setSidebarFilter(\'payment\')">';
+  html += '<div class="csm-kpi-num" style="color:#dc2626"><i class="ti ti-credit-card"></i>' + (s.payIssue||0) + '</div>';
+  html += '<div class="csm-kpi-label">Paiements en échec</div>';
+  html += '<div class="csm-kpi-trend">À récupérer</div>';
+  html += '</div>';
+
+  html += '<div class="csm-kpi" onclick="setSidebarFilter(\'warn\')">';
+  html += '<div class="csm-kpi-num" style="color:#60a5fa"><i class="ti ti-phone-call"></i>' + pendingThisWeek + '</div>';
+  html += '<div class="csm-kpi-label">À relancer cette semaine</div>';
+  html += '<div class="csm-kpi-trend up">' + doneToday + ' fait aujourd\'hui</div>';
+  html += '</div>';
+
+  document.getElementById('kpiStrip').innerHTML = html;
+}
+
+function computePendingFollowups(){
+  // À relancer cette semaine = clients warn/att/crit qui n'ont pas été
+  // relancés depuis plus de 7 jours
+  var sevenDaysAgo = Date.now() - 7*86400000;
+  var n = 0;
+  allClients.forEach(function(c){
+    var lvl = computeLevel(c);
+    if(lvl !== 'crit' && lvl !== 'warn' && lvl !== 'att') return;
+    var last = toDate(c.lastCsmFollowupAt);
+    if(!last || last.getTime() < sevenDaysAgo) n++;
+  });
+  return n;
+}
+function computeDoneFollowupsToday(){
+  var startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
+  var n = 0;
+  allClients.forEach(function(c){
+    var last = toDate(c.lastCsmFollowupAt);
+    if(last && last >= startOfDay) n++;
+  });
+  return n;
 }
 
 function computeStats(){
-  var crit = 0, warn = 0, att = 0, active = 0, coachLate = 0;
+  var crit = 0, warn = 0, att = 0, active = 0, coachLate = 0, payIssue = 0;
   allClients.forEach(function(c){
     var status = c.clientStatus || 'active';
     if(status === 'active') active++;
@@ -1167,28 +1377,199 @@ function computeStats(){
         if(qNow && qNow.status === 'miss') coachLate++;
       }
     }
+    // Compteur paiements en échec
+    if(c._leadId){
+      var pays = paymentsByLead[c._leadId] || [];
+      if(pays.some(function(p){ return p.status === 'failed'; })) payIssue++;
+    }
   });
-  document.getElementById('statCrit').textContent = crit;
-  document.getElementById('statWarn').textContent = warn;
-  document.getElementById('statAtt').textContent  = att;
-  var elCoach = document.getElementById('statCoachLate');
-  if(elCoach) elCoach.textContent = coachLate;
-  var elTemo = document.getElementById('statTemo');
-  if(elTemo) elTemo.textContent = temoFlat.length;
-  document.getElementById('statActive').textContent = active;
-  document.getElementById('cntRetards').textContent = (crit + warn + att);
-  document.getElementById('cntAll').textContent     = allClients.length;
-  document.getElementById('cntTemo').textContent    = temoFlat.length;
-  // Cnt payments = nombre de paiements totaux
-  var totalPay = 0;
-  Object.keys(paymentsByLead).forEach(function(k){ totalPay += paymentsByLead[k].length; });
-  document.getElementById('cntPay').textContent = totalPay;
+  // Stocker en cache pour renderKpiStrip et autres
+  window._statsCache = {
+    crit: crit, warn: warn, att: att, active: active,
+    coachLate: coachLate, payIssue: payIssue,
+    total: allClients.length, temoignages: temoFlat.length
+  };
 }
 
 function searchMatch(c, q){
   if(!q) return true;
   var hay = ((c.nom||'') + ' ' + (c.commerce||'') + ' ' + (c.email||'') + ' ' + (c.telephone||'')).toLowerCase();
   return hay.indexOf(q.toLowerCase()) >= 0;
+}
+
+/* ═════ STATE & FILTRES SIDEBAR ═════════════════════════════════════════
+   selectedClientId : id du client affiché dans le panneau de droite.
+   sidebarFilter : 'all' | 'crit' | 'warn' | 'att' | 'coachLate' | 'payment' | 'onboarding'
+   ═══════════════════════════════════════════════════════════════════════ */
+var selectedClientId = null;
+var sidebarFilter = 'all';
+
+function setSidebarFilter(filter){
+  sidebarFilter = filter;
+  renderSidebarPills();
+  renderSidebarList();
+}
+window.setSidebarFilter = setSidebarFilter;
+
+function selectClient(clientId){
+  selectedClientId = clientId;
+  // Pour la rétro-compat avec les fonctions existantes (changeStatus, addNote, etc.)
+  // qui lisent encore openClientId
+  openClientId = clientId;
+  renderSidebarList();    // re-render pour highlight la sélection
+  renderDetailPanel();
+  // Charger les notes pour ce client (asynchrone)
+  loadNotesForLead(clientId, function(){ renderDetailPanel(); });
+}
+window.selectClient = selectClient;
+
+/* ─── Sidebar : pills de filtres ─── */
+function renderSidebarPills(){
+  var s = window._statsCache || {};
+  var pills = [
+    { id: 'all',         label: 'Tous',          count: allClients.length, cls: '' },
+    { id: 'crit',        label: '🔴 Critiques',  count: s.crit||0,         cls: 'crit' },
+    { id: 'warn',        label: '🟠 À relancer', count: s.warn||0,         cls: 'warn' },
+    { id: 'att',         label: '🟡 Attention',  count: s.att||0,          cls: 'att' },
+    { id: 'coachLate',   label: '🎯 Retard coaching', count: s.coachLate||0, cls: '' },
+    { id: 'payment',     label: '💳 Échec paiement', count: s.payIssue||0, cls: '' }
+  ];
+  var html = pills.map(function(p){
+    var on = sidebarFilter === p.id;
+    return '<button class="csm-sb-pill ' + p.cls + (on?' on':'') + '" onclick="setSidebarFilter(\'' + p.id + '\')">'
+         + p.label + ' · ' + p.count + '</button>';
+  }).join('');
+  document.getElementById('filterPills').innerHTML = html;
+}
+
+/* ─── Sidebar : liste compacte filtrée ─── */
+function getFilteredClients(){
+  var q = (document.getElementById('searchInput').value || '').trim();
+  return allClients.filter(function(c){
+    if(!searchMatch(c, q)) return false;
+    var lvl = computeLevel(c);
+    if(sidebarFilter === 'all') return true;
+    if(sidebarFilter === 'crit') return lvl === 'crit';
+    if(sidebarFilter === 'warn') return lvl === 'warn';
+    if(sidebarFilter === 'att')  return lvl === 'att';
+    if(sidebarFilter === 'coachLate'){
+      var co = getCoachingForLead(c);
+      if(!co || co.statut === 'inactif') return false;
+      var done = co.nbCoachingsFaits || 0, total = co.nbCoachingsTotal || 12;
+      if(done >= total) return false;
+      var now = new Date();
+      var q2 = getCoachingQuotaStatus(co, now.getFullYear(), now.getMonth());
+      return q2 && q2.status === 'miss';
+    }
+    if(sidebarFilter === 'payment'){
+      if(!c._leadId) return false;
+      var pays = paymentsByLead[c._leadId] || [];
+      return pays.some(function(p){ return p.status === 'failed'; });
+    }
+    return true;
+  }).sort(function(a, b){
+    // Tri : critiques d'abord, puis warn, puis att, puis ok
+    var order = { crit: 0, warn: 1, att: 2, ok: 3 };
+    var la = order[computeLevel(a)] !== undefined ? order[computeLevel(a)] : 4;
+    var lb = order[computeLevel(b)] !== undefined ? order[computeLevel(b)] : 4;
+    if(la !== lb) return la - lb;
+    // À niveau égal : tri par dernière relance (les jamais relancés en premier)
+    var ta = toDate(a.lastCsmFollowupAt);
+    var tb = toDate(b.lastCsmFollowupAt);
+    if(!ta && tb) return -1;
+    if(ta && !tb) return 1;
+    if(ta && tb) return ta - tb; // plus ancien d'abord
+    return 0;
+  });
+}
+
+function renderSidebarList(){
+  var list = getFilteredClients();
+  var listEl = document.getElementById('clientsList');
+  if(!list.length){
+    listEl.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">🌟</div>'
+                     + '<div class="csm-empty-title">Aucun client</div>'
+                     + '<div>Aucun client ne correspond aux filtres</div></div>';
+    return;
+  }
+  // Auto-sélection du premier client si rien n'est sélectionné
+  if(!selectedClientId || !list.find(function(c){ return c.id === selectedClientId; })){
+    selectedClientId = list[0].id;
+    openClientId = selectedClientId; // rétro-compat
+    setTimeout(renderDetailPanel, 0);
+  }
+  var html = list.map(function(c){
+    return renderSidebarRow(c);
+  }).join('');
+  listEl.innerHTML = html;
+}
+
+function renderSidebarRow(c){
+  var lvl = computeLevel(c) || 'ok';
+  var dotCls = lvl === 'crit' ? 'crit' : lvl === 'warn' ? 'warn' : lvl === 'att' ? 'att' : 'ok';
+  var sel = (c.id === selectedClientId) ? ' selected' : '';
+  var timeText = '—';
+  if(c.lastCsmFollowupAt){
+    timeText = timeAgo(c.lastCsmFollowupAt);
+  } else if(c.clientSince){
+    timeText = '+' + timeAgo(c.clientSince);
+  }
+
+  // Tags : on prend les 1-2 raisons les plus prioritaires
+  var reasons = (c._reasons || computeReasons(c)).slice(0, 1);
+  var tagsHtml = '';
+  if(reasons.length){
+    var r = reasons[0];
+    var tagCls = r.level === 'crit' ? 'crit' : r.level === 'warn' ? 'warn' : 'att';
+    tagsHtml = '<span class="csm-cr-tag ' + tagCls + '">' + esc(r.label) + '</span>';
+  } else if(!c._hasLead){
+    tagsHtml = '<span class="csm-cr-tag muted">Pas de lead CRM</span>';
+  } else if(lvl === 'ok'){
+    tagsHtml = '<span class="csm-cr-tag ok">À jour</span>';
+  }
+
+  // Stats compactes : X/Y coaching · montant
+  var stats = '';
+  var coDoc = getCoachingForLead(c);
+  if(coDoc){
+    stats += (coDoc.nbCoachingsFaits||0) + '/' + (coDoc.nbCoachingsTotal||12);
+  }
+  if(c._leadId){
+    var pays = paymentsByLead[c._leadId] || [];
+    if(pays.length){
+      var paid = 0;
+      pays.forEach(function(p){ if(p.status !== 'cancelled') paid += (p.paidAmount||0); });
+      if(paid > 0) stats += (stats?' · ':'') + fmtEuro(paid);
+    }
+  }
+
+  return '<div class="csm-client-row' + sel + '" onclick="selectClient(\'' + c.id + '\')">'
+       + '<div class="csm-cr-line1">'
+       +   '<span class="csm-cr-dot ' + dotCls + '"></span>'
+       +   '<span class="csm-cr-name">' + esc(clientDisplayName(c)) + '</span>'
+       +   '<span class="csm-cr-time">' + esc(timeText) + '</span>'
+       + '</div>'
+       + '<div class="csm-cr-meta">'
+       +   tagsHtml
+       +   (stats ? '<span class="csm-cr-stats">' + stats + '</span>' : '')
+       + '</div>'
+       + '</div>';
+}
+
+/* ─── Detail panel : remplace l'ancienne modal ─── */
+function renderDetailPanel(){
+  var detailEl = document.getElementById('detailPanel');
+  if(!selectedClientId){
+    detailEl.innerHTML = '<div class="csm-detail-empty">'
+      + '<div style="font-size:42px;opacity:0.3;margin-bottom:14px">💎</div>'
+      + '<div style="font-size:14px;color:var(--ink-muted)">Sélectionne un client dans la liste pour voir son détail</div>'
+      + '</div>';
+    return;
+  }
+  // openClientId est utilisé en interne par renderModal — bridge V1/V2
+  openClientId = selectedClientId;
+  // renderModal écrit dans #detailPanel (cf. patch dans la fonction)
+  renderModal();
 }
 
 function renderRetards(){
@@ -1286,6 +1667,177 @@ function computeReasons(c){
     }
   }
   return reasons;
+}
+
+/* ─── computeSignals(c) ───
+   Produit les "cartes actionnables" pour le bloc Signaux à actionner de
+   la Vue d'ensemble. Chaque signal a :
+     - level : crit | warn | att | info  → couleur
+     - icon : emoji affiché (Adrien préfère emojis sur statuts)
+     - title : phrase courte (gras)
+     - desc : contexte (1 ligne, gris)
+     - actionLabel : verbe d'action ("Programmer", "Contacter"…)
+     - actionFn : code JS à exécuter au clic (string pour onclick inline)
+   Réutilise les helpers existants pour cohérence avec computeReasons.   */
+function computeSignals(c){
+  var signals = [];
+  var pays = paymentsByLead[c._leadId] || [];
+  var coachingDoc = getCoachingForLead(c);
+
+  // 1. Lead non lié → signal info violet
+  if(!c._hasLead){
+    signals.push({
+      level: 'info', icon: '📚',
+      title: 'Pas de lead CRM lié',
+      desc: 'Paiements GoCardless et Kajabi invisibles tant qu\'il n\'y a pas de lead',
+      actionLabel: 'Créer le lead',
+      actionFn: 'csmCreateLeadForClient(\'' + c.id + '\')'
+    });
+  } else if(c._lead && !c._lead.isClient){
+    signals.push({
+      level: 'warn', icon: '⚠️',
+      title: 'Lead trouvé mais pas marqué client',
+      desc: 'Le lead "' + esc(c._lead.nom||c._lead.email) + '" existe mais isClient=false',
+      actionLabel: 'Marquer client',
+      actionFn: 'csmMarkLeadAsClient(\'' + c.id + '\')'
+    });
+  }
+
+  // 2. RDV 72H raté (signal critique côté CSM)
+  var rdv72 = coachingDoc ? getRdv72h(coachingDoc) : null;
+  var entryD = coachingDoc && coachingDoc.dateEntree ? new Date(coachingDoc.dateEntree) : null;
+  if(coachingDoc && (!rdv72 || rdv72.statut !== 'fait')){
+    if(entryD && !isNaN(entryD.getTime())){
+      var hSince = (Date.now() - entryD)/3600000;
+      if(hSince > 72){
+        signals.push({
+          level: 'crit', icon: '🔴',
+          title: 'RDV 72H raté',
+          desc: 'Entré le ' + fmtDate(entryD) + ' · ' + Math.round(hSince/24) + 'j de retard sur l\'onboarding',
+          actionLabel: 'Caller le coach',
+          actionFn: 'switchModalTab(\'coaching\')'
+        });
+      } else if(hSince > 24){
+        signals.push({
+          level: 'warn', icon: '⏱',
+          title: 'RDV 72H à programmer',
+          desc: 'Reste ' + Math.round(72-hSince) + 'h pour rester dans les délais',
+          actionLabel: 'Voir coaching',
+          actionFn: 'switchModalTab(\'coaching\')'
+        });
+      }
+    }
+  }
+
+  // 3. Coaching : 2 mois sans session (critique)
+  if(coachingDoc && coachingDoc.statut !== 'inactif'){
+    var done = coachingDoc.nbCoachingsFaits || 0, total = coachingDoc.nbCoachingsTotal || 12;
+    if(done < total){
+      var now = new Date();
+      var refStart = getCoachingStartReference(coachingDoc);
+      var refMonth = refStart ? new Date(refStart.getFullYear(), refStart.getMonth(), 1) : null;
+      var thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      var prevMonth = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      var nowBefore = refMonth && thisMonth < refMonth;
+      var prevBefore = refMonth && prevMonth < refMonth;
+      var qN = nowBefore ? null : getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
+      var qP = prevBefore ? null : getCoachingQuotaStatus(coachingDoc, prevMonth.getFullYear(), prevMonth.getMonth());
+
+      var lastSess = getLastSessionDate(coachingDoc);
+      var lastInfo = lastSess ? 'Dernière session ' + fmtDate(lastSess) : 'Aucune session effectuée';
+
+      if(qN && qP && qN.status === 'miss' && qP.status === 'miss'){
+        signals.push({
+          level: 'crit', icon: '🎯',
+          title: '2 mois sans coaching',
+          desc: lastInfo + (lastSess && coachingDoc.coachAssigned ? ' avec ' + esc(coachingDoc.coachAssigned) : ''),
+          actionLabel: 'Relancer',
+          actionFn: 'markFollowedUp()'
+        });
+      } else if(qN && qN.status === 'miss'){
+        signals.push({
+          level: 'warn', icon: '🎯',
+          title: 'Aucun coaching ce mois',
+          desc: lastInfo + ' · quota mensuel non atteint',
+          actionLabel: 'Programmer',
+          actionFn: 'switchModalTab(\'coaching\')'
+        });
+      } else if(qN && qN.status === 'partial'){
+        signals.push({
+          level: 'att', icon: '🎯',
+          title: 'Sous quota mensuel',
+          desc: qN.used + '/' + qN.max + ' coachings ce mois — programmer le reste',
+          actionLabel: 'Voir détail',
+          actionFn: 'switchModalTab(\'coaching\')'
+        });
+      }
+    }
+  }
+
+  // 4. Paiements en échec (critique business)
+  pays.forEach(function(p){
+    if(p.status === 'failed'){
+      signals.push({
+        level: 'crit', icon: '💳',
+        title: 'Paiement en échec',
+        desc: fmtEuro(p.totalAmount) + ' · mandat à recréer ou contact direct',
+        actionLabel: 'Voir paiements',
+        actionFn: 'switchModalTab(\'payments\')'
+      });
+    } else if(p.status === 'pending_mandate'){
+      var ts = toDate(p.createdAt);
+      if(ts && (Date.now() - ts.getTime()) > 7*86400000){
+        signals.push({
+          level: 'warn', icon: '⏳',
+          title: 'Mandat non signé depuis +7j',
+          desc: fmtEuro(p.totalAmount) + ' · relancer pour signature GoCardless',
+          actionLabel: 'Voir paiements',
+          actionFn: 'switchModalTab(\'payments\')'
+        });
+      }
+    }
+  });
+
+  // 5. Kajabi peu avancé (signal d'engagement)
+  if(c.kajabiProgress && c.kajabiProgress.byCourse){
+    var courseKeys = Object.keys(c.kajabiProgress.byCourse);
+    if(courseKeys.length){
+      var sumPct = 0, nPct = 0, firstTitle = '';
+      courseKeys.forEach(function(ck){
+        var crs = c.kajabiProgress.byCourse[ck] || {};
+        if(!firstTitle && crs.title) firstTitle = crs.title;
+        if(typeof crs.pct === 'number'){ sumPct += crs.pct; nPct++; }
+      });
+      if(nPct > 0){
+        var avgPct = Math.round(sumPct/nPct);
+        // Si client présent depuis >30j et progression < 20% → signal
+        var since = c.clientSince ? toDate(c.clientSince) : null;
+        if(since && (Date.now() - since.getTime()) > 30*86400000 && avgPct < 20){
+          signals.push({
+            level: 'att', icon: '🎓',
+            title: 'Kajabi peu avancé',
+            desc: avgPct + '% sur ' + esc(firstTitle || 'Programme') + ' — encourager',
+            actionLabel: 'Voir Kajabi',
+            actionFn: 'switchModalTab(\'kajabi\')'
+          });
+        }
+      }
+    }
+  }
+
+  // 6. Jamais relancé alors que client à risque (méta-signal)
+  var lvl = computeLevel(c);
+  if((lvl === 'crit' || lvl === 'warn') && !c.lastCsmFollowupAt){
+    signals.push({
+      level: 'info', icon: '📞',
+      title: 'Jamais relancé',
+      desc: 'Ce client est à risque mais aucune relance enregistrée',
+      actionLabel: 'Marquer relancé',
+      actionFn: 'markFollowedUp()'
+    });
+  }
+
+  return signals;
 }
 
 function renderAllClients(){
@@ -1753,13 +2305,12 @@ function renderTemoignages(){
 
 /* ═══ MODAL DETAIL CLIENT ═══ */
 function openClientModal(id){
+  // V2 : alias vers selectClient (pas de modal, panel inline)
+  // Conservé pour la rétro-compat avec les autres pages qui appellent
+  // openClientModal (csm-clients.html, etc.)
   var c = allClients.find(function(x){ return x.id === id; });
   if(!c){ showToast('Client introuvable', 'error'); return; }
-  openClientId = id;
-  // Charger les notes
-  loadNotesForLead(id, function(){ renderModal(); });
-  renderModal(); // Affiche tout de suite avec les données déjà disponibles
-  document.getElementById('modalBg').classList.add('show');
+  selectClient(id);
 }
 
 function renderModal(){
@@ -1789,7 +2340,10 @@ function renderModal(){
   h += '<div><div class="csm-modal-title">' + esc(clientDisplayName(c)) + lvlBadge + '<span class="csm-badge ' + cs.cls + '">' + cs.label + '</span></div>';
   if(c.commerce) h += '<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">' + esc(c.commerce) + '</div>';
   h += '</div>';
-  h += '<button class="csm-modal-close" onclick="closeModal()">✕</button>';
+  // Le bouton ✕ n'a plus de sens en V2 (panel inline toujours visible)
+  // mais on le garde au cas où renderModal serait appelée en mode modal
+  // sur mobile (responsive). On utilise une classe pour le cacher en V2.
+  h += '<button class="csm-modal-close" onclick="closeModal()" style="display:none">✕</button>';
   h += '</div>';
 
   // ───── SUB-HEADER STICKY : CONTACT COMPACT + ACTIONS ─────
@@ -1948,6 +2502,33 @@ function renderModal(){
     h += '<div class="ov-card ov-fu ov-empty"><div class="ov-card-label">↻ Dernière relance</div><div class="ov-card-empty">Jamais relancé</div></div>';
   }
   h += '</div>'; // overview-grid
+
+  // ───── BLOC "SIGNAUX À ACTIONNER" (la nouveauté V2) ─────
+  // Transforme les raisons (computeReasons) en cartes actionnables avec
+  // une suggestion d'action concrète. C'est le cœur de la refonte UX :
+  // au lieu de consulter des données dispersées, la CSM voit ce qu'il
+  // faut faire MAINTENANT pour ce client.
+  var signals = computeSignals(c);
+  if(signals.length){
+    h += '<div style="font-size:11px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 10px"><i class="ti ti-bolt"></i> Signaux à actionner</div>';
+    h += '<div class="csm-signals">';
+    signals.forEach(function(sig){
+      h += '<div class="csm-signal ' + sig.level + '">';
+      h += '<div class="csm-signal-icon">' + sig.icon + '</div>';
+      h += '<div class="csm-signal-text">';
+      h += '<div class="csm-signal-title">' + esc(sig.title) + '</div>';
+      h += '<div class="csm-signal-desc">' + esc(sig.desc) + '</div>';
+      h += '</div>';
+      if(sig.actionLabel && sig.actionFn){
+        h += '<button class="csm-signal-action-btn" onclick="' + sig.actionFn + '">';
+        h += '<i class="ti ti-arrow-right"></i> ' + esc(sig.actionLabel);
+        h += '</button>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+  }
+
   h += '</div>'; // overview body
 
   // ─── ONGLET 2 : COACHING (enrichi) ───
@@ -2395,7 +2976,11 @@ function renderModal(){
 
   h += '</div>'; // modal-tab-bodies
 
-  document.getElementById('modalContent').innerHTML = h;
+  // V2 split-view : on écrit dans #detailPanel directement (le #modalContent
+  // n'existe plus dans le DOM). On garde le wrap pour que les sticky bar etc.
+  // continuent à fonctionner.
+  var targetEl = document.getElementById('detailPanel') || document.getElementById('modalContent');
+  if(targetEl) targetEl.innerHTML = h;
 
   // Restaurer l'onglet actif (default = overview)
   var activeMTab = window._activeModalTab || 'overview';
@@ -2674,8 +3259,12 @@ document.addEventListener('click', function(e){
 });
 
 function closeModal(){
-  document.getElementById('modalBg').classList.remove('show');
+  // V2 : pas de modal à fermer, on désélectionne juste le client.
+  // Sur mobile, ça remontre l'empty state.
+  selectedClientId = null;
   openClientId = null;
+  renderDetailPanel();
+  renderSidebarList();
 }
 
 function changeStatus(newStatus){
@@ -2828,19 +3417,21 @@ function toggleLevel(level, el){
 }
 document.getElementById('searchInput').addEventListener('input', function(e){
   searchQ = e.target.value.trim();
-  renderAll();
+  renderSidebarList();
 });
-document.getElementById('filterStatus').addEventListener('change', function(e){
-  filterStatus = e.target.value;
-  renderAll();
+// Les anciens filtres status/pay/reason ne sont plus utilisés en V2
+// (gérés via les pills sidebar). On garde les vars pour compat code.
+var _filterStatusEl = document.getElementById('filterStatus');
+if(_filterStatusEl) _filterStatusEl.addEventListener('change', function(e){
+  filterStatus = e.target.value; renderSidebarList();
 });
-document.getElementById('filterPayStatus').addEventListener('change', function(e){
-  filterPayStatus = e.target.value;
-  renderAll();
+var _filterPayStatusEl = document.getElementById('filterPayStatus');
+if(_filterPayStatusEl) _filterPayStatusEl.addEventListener('change', function(e){
+  filterPayStatus = e.target.value; renderSidebarList();
 });
-document.getElementById('filterReason').addEventListener('change', function(e){
-  filterReason = e.target.value;
-  renderAll();
+var _filterReasonEl = document.getElementById('filterReason');
+if(_filterReasonEl) _filterReasonEl.addEventListener('change', function(e){
+  filterReason = e.target.value; renderSidebarList();
 });
 
 // Expose pour onclick inline
