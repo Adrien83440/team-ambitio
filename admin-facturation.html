@@ -211,7 +211,6 @@
     <a class="bill-side-item" data-tab="invoices" onclick="switchTab('invoices')">
       <span class="bsi-icon">📄</span>
       <span>Factures</span>
-      <span class="bsi-soon">S2</span>
     </a>
     <a class="bill-side-item" data-tab="clients" onclick="switchTab('clients')">
       <span class="bsi-icon">👥</span>
@@ -220,7 +219,6 @@
     <a class="bill-side-item" data-tab="products" onclick="switchTab('products')">
       <span class="bsi-icon">📦</span>
       <span>Produits</span>
-      <span class="bsi-soon">S2</span>
     </a>
     <a class="bill-side-item" data-tab="subscriptions" onclick="switchTab('subscriptions')">
       <span class="bsi-icon">🔁</span>
@@ -574,21 +572,88 @@
       </div>
     </div>
 
-    <!-- ============ TAB : INVOICES (placeholder) ============ -->
+    <!-- ============ TAB : INVOICES ============ -->
     <div class="bill-tab" data-tab="invoices">
-      <div class="bill-soon">
-        <div class="bill-soon-icon">📄</div>
-        <h3>Factures — disponible en Step 2</h3>
-        <p>Catalogue produits, génération PDF, workflow brouillon → validée → envoyée,<br/>numérotation séquentielle conforme loi anti-fraude.</p>
+      <div class="bill-stats">
+        <div class="bill-stat">
+          <div class="bill-stat-l">CA encaissé (mois)</div>
+          <div class="bill-stat-v" id="statInvCa">— €</div>
+          <div class="bill-stat-s" id="statInvCaCount">Disponible Step 2B</div>
+        </div>
+        <div class="bill-stat amber">
+          <div class="bill-stat-l">Brouillons</div>
+          <div class="bill-stat-v" id="statInvDrafts">—</div>
+          <div class="bill-stat-s">À finaliser</div>
+        </div>
+        <div class="bill-stat blue">
+          <div class="bill-stat-l">Validées non payées</div>
+          <div class="bill-stat-v" id="statInvPending">—</div>
+          <div class="bill-stat-s" id="statInvPendingAmt">Step 2B</div>
+        </div>
+        <div class="bill-stat purple">
+          <div class="bill-stat-l">Total émises</div>
+          <div class="bill-stat-v" id="statInvTotal">—</div>
+          <div class="bill-stat-s">Toutes années</div>
+        </div>
+      </div>
+
+      <div class="bill-toolbar">
+        <div class="bill-search">
+          <span class="bill-search-icon">🔍</span>
+          <input id="invoicesSearch" placeholder="Rechercher par numéro, client, montant…" oninput="renderInvoicesList()"/>
+        </div>
+        <select class="bill-select" id="invoicesStatusFilter" style="width:auto;min-width:160px" onchange="renderInvoicesList()">
+          <option value="all">Tous les statuts</option>
+          <option value="draft">Brouillons</option>
+          <option value="validated">Validées</option>
+          <option value="sent">Envoyées</option>
+          <option value="paid">Payées</option>
+          <option value="cancelled">Annulées</option>
+        </select>
+        <button class="bill-btn bill-btn-primary bill-btn-lg" onclick="newInvoice()">➕ Nouvelle facture</button>
+      </div>
+
+      <div class="bill-table-wrap" id="invoicesTableWrap">
+        <div class="bill-loader"><span class="bill-spinner"></span> Chargement des factures…</div>
       </div>
     </div>
 
-    <!-- ============ TAB : PRODUCTS (placeholder) ============ -->
+    <!-- ============ TAB : PRODUCTS ============ -->
     <div class="bill-tab" data-tab="products">
-      <div class="bill-soon">
-        <div class="bill-soon-icon">📦</div>
-        <h3>Catalogue produits — disponible en Step 2</h3>
-        <p>Programme Business Phénix, masterclass, accompagnement…<br/>Variations de prix, taux TVA, descriptions réutilisables sur les factures.</p>
+      <div class="bill-stats">
+        <div class="bill-stat">
+          <div class="bill-stat-l">Produits au catalogue</div>
+          <div class="bill-stat-v" id="statProdTotal">—</div>
+        </div>
+        <div class="bill-stat blue">
+          <div class="bill-stat-l">Actifs</div>
+          <div class="bill-stat-v" id="statProdActive">—</div>
+        </div>
+        <div class="bill-stat purple">
+          <div class="bill-stat-l">Archivés</div>
+          <div class="bill-stat-v" id="statProdArchived">—</div>
+        </div>
+        <div class="bill-stat amber">
+          <div class="bill-stat-l">Variantes totales</div>
+          <div class="bill-stat-v" id="statProdVariants">—</div>
+        </div>
+      </div>
+
+      <div class="bill-toolbar">
+        <div class="bill-search">
+          <span class="bill-search-icon">🔍</span>
+          <input id="productsSearch" placeholder="Rechercher par nom, catégorie…" oninput="renderProductsList()"/>
+        </div>
+        <select class="bill-select" id="productsStatusFilter" style="width:auto;min-width:140px" onchange="renderProductsList()">
+          <option value="active">Actifs</option>
+          <option value="archived">Archivés</option>
+          <option value="all">Tous</option>
+        </select>
+        <button class="bill-btn bill-btn-primary bill-btn-lg" onclick="openProductDrawer(null)">➕ Nouveau produit</button>
+      </div>
+
+      <div class="bill-table-wrap" id="productsTableWrap">
+        <div class="bill-loader"><span class="bill-spinner"></span> Chargement du catalogue…</div>
       </div>
     </div>
 
@@ -643,9 +708,12 @@ let currentRole    = null;
 let billingConfig  = null;
 let cgvVersions    = [];
 let clientsCache   = [];
+let invoicesCache  = [];
+let productsCache  = [];
 let activeTab      = 'settings';
 let activeSub      = 'company';
 let editingClientId = null;
+let editingProductId = null;
 let pendingLogoData = null;     // {base64, mimeType} en attente de save
 let pendingLogoMode = null;     // 'wordmark' | 'image'
 
@@ -745,6 +813,8 @@ auth.onAuthStateChanged(async function(user) {
     currentRole = role;
     await initBillingConfig();
     initClientsListener();
+    initProductsListener();
+    initInvoicesListener();
     document.getElementById('bootLoader').style.display = 'none';
     document.getElementById('billApp').style.display = 'grid';
   } catch (err) {
@@ -831,6 +901,8 @@ function switchTab(tab) {
   document.getElementById('billHeaderSubtitle').textContent = titles[tab].s;
 
   if (tab === 'clients') renderClientsList();
+  if (tab === 'invoices') renderInvoicesList();
+  if (tab === 'products') renderProductsList();
   if (tab === 'settings') renderSettingsActiveSub();
 }
 
@@ -1583,11 +1655,479 @@ async function confirmDeleteClient(id) {
   }
 }
 
+/* ═══════════════════════════════════════════════
+   INVOICES — STEP 2A
+   Listing brouillons + redirection vers édition
+   La validation, le PDF et l'envoi arrivent en Step 2B
+   ═══════════════════════════════════════════════ */
+
+function initInvoicesListener() {
+  db.collection('invoices').orderBy('createdAt', 'desc').limit(500).onSnapshot(function(qs) {
+    invoicesCache = [];
+    qs.forEach(function(d) { invoicesCache.push(Object.assign({ id: d.id }, d.data())); });
+    updateInvoicesStats();
+    if (activeTab === 'invoices') renderInvoicesList();
+  }, function(err) {
+    console.error('[billing] invoices listener error', err);
+    if (activeTab === 'invoices') {
+      document.getElementById('invoicesTableWrap').innerHTML = '<div class="bill-empty"><div class="bill-empty-icon">⚠️</div><h4>Erreur de chargement</h4><p>' + escapeHtml(err.message) + '</p></div>';
+    }
+  });
+}
+
+function updateInvoicesStats() {
+  const drafts = invoicesCache.filter(function(i){ return i.status === 'draft'; }).length;
+  const validated = invoicesCache.filter(function(i){ return i.status === 'validated' || i.status === 'sent'; });
+  const total = invoicesCache.filter(function(i){ return i.status !== 'draft'; }).length;
+
+  /* CA encaissé du mois (factures payées sur le mois en cours) */
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  let caMonth = 0;
+  invoicesCache.forEach(function(i) {
+    if (i.status !== 'paid' || !i.paidAt) return;
+    const paidDate = i.paidAt.toDate ? i.paidAt.toDate() : new Date(i.paidAt);
+    if (paidDate >= monthStart && paidDate < monthEnd) {
+      caMonth += (i.totalTtc || 0);
+    }
+  });
+
+  let pendingAmount = 0;
+  validated.forEach(function(i){ pendingAmount += (i.totalTtc || 0); });
+
+  document.getElementById('statInvCa').textContent = formatEur(caMonth);
+  document.getElementById('statInvDrafts').textContent = drafts;
+  document.getElementById('statInvPending').textContent = validated.length;
+  document.getElementById('statInvPendingAmt').textContent = formatEur(pendingAmount);
+  document.getElementById('statInvTotal').textContent = total;
+}
+
+function renderInvoicesList() {
+  const wrap = document.getElementById('invoicesTableWrap');
+  const q = (document.getElementById('invoicesSearch').value || '').toLowerCase().trim();
+  const statusFilter = document.getElementById('invoicesStatusFilter').value;
+
+  let list = invoicesCache;
+  if (statusFilter !== 'all') list = list.filter(function(i){ return i.status === statusFilter; });
+  if (q) {
+    list = list.filter(function(i) {
+      const number = (i.number || '').toLowerCase();
+      const client = ((i.clientSnapshot && i.clientSnapshot.companyName) || (i.clientSnapshot && (i.clientSnapshot.contactFirstName + ' ' + i.clientSnapshot.contactLastName)) || '').toLowerCase();
+      const amount = String(i.totalTtc || '');
+      return number.indexOf(q) > -1 || client.indexOf(q) > -1 || amount.indexOf(q) > -1;
+    });
+  }
+
+  if (!list.length) {
+    wrap.innerHTML = '<div class="bill-empty">' +
+      '<div class="bill-empty-icon">📄</div>' +
+      '<h4>' + (q || statusFilter !== 'all' ? 'Aucun résultat' : 'Aucune facture') + '</h4>' +
+      '<p>' + (q || statusFilter !== 'all' ? 'Essayez avec d\'autres filtres.' : 'Créez votre première facture pour commencer.') + '</p>' +
+      (q || statusFilter !== 'all' ? '' : '<button class="bill-btn bill-btn-primary" onclick="newInvoice()">➕ Nouvelle facture</button>') +
+      '</div>';
+    return;
+  }
+
+  let html = '<table class="bill-table">';
+  html += '<thead><tr>';
+  html += '<th style="width:120px">N°</th>';
+  html += '<th>Client</th>';
+  html += '<th>Date</th>';
+  html += '<th style="text-align:right">Montant TTC</th>';
+  html += '<th>Statut</th>';
+  html += '<th class="col-actions">Actions</th>';
+  html += '</tr></thead><tbody>';
+
+  for (let i = 0; i < list.length; i++) {
+    const inv = list[i];
+    const num = inv.number || '<span style="color:var(--muted)">— Brouillon —</span>';
+    const cs = inv.clientSnapshot || {};
+    const clientName = cs.companyName || ((cs.contactFirstName || '') + ' ' + (cs.contactLastName || '')).trim() || '—';
+    const dt = inv.issueDate && inv.issueDate.toDate ? inv.issueDate.toDate() : (inv.createdAt && inv.createdAt.toDate ? inv.createdAt.toDate() : null);
+    const dateStr = dt ? dt.toLocaleDateString('fr-FR') : '—';
+    const statusBadge = invoiceStatusBadge(inv.status);
+
+    html += '<tr onclick="editInvoice(\'' + inv.id + '\')">';
+    html += '<td><span style="font-family:var(--font-m);font-weight:700;font-size:13px">' + num + '</span></td>';
+    html += '<td>' + escapeHtml(clientName) + '</td>';
+    html += '<td><span style="font-size:12px;color:var(--muted)">' + dateStr + '</span></td>';
+    html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
+    html += '<td>' + statusBadge + '</td>';
+    html += '<td class="col-actions">';
+    html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();editInvoice(\'' + inv.id + '\')">' + (inv.status === 'draft' ? '✏️ Éditer' : '👁️ Voir') + '</button>';
+    if (inv.status === 'draft') {
+      html += ' <button class="bill-btn bill-btn-red" onclick="event.stopPropagation();deleteDraft(\'' + inv.id + '\')">🗑️</button>';
+    }
+    html += '</td>';
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function invoiceStatusBadge(status) {
+  const map = {
+    draft: { c: 'individual', t: '📝 Brouillon' },
+    validated: { c: 'company', t: '✅ Validée' },
+    sent: { c: 'company', t: '📨 Envoyée' },
+    paid: { c: 'exempt', t: '💰 Payée' },
+    cancelled: { c: 'individual', t: '❌ Annulée' }
+  };
+  const m = map[status] || { c: 'individual', t: status || '—' };
+  return '<span class="bill-badge ' + m.c + '">' + m.t + '</span>';
+}
+
+function newInvoice() {
+  /* Vérifier que la config est complète avant d'autoriser une nouvelle facture */
+  if (!billingConfig) return toast('Configuration en cours de chargement…', true);
+  const c = billingConfig;
+  const missing = [];
+  if (!c.companyVatNumber) missing.push('N° TVA intracommunautaire');
+  if (!c.companyRcs) missing.push('RCS');
+  if (!c.companySiret || c.companySiret.length !== 14) missing.push('SIRET');
+  if (missing.length) {
+    toast('⚠️ Complétez d\'abord les paramètres : ' + missing.join(', '), true);
+    setTimeout(function(){ switchTab('settings'); switchSettingsSub('company'); }, 800);
+    return;
+  }
+  if (!productsCache.length) {
+    if (!confirm('Aucun produit dans le catalogue. Souhaitez-vous d\'abord créer un produit ?')) return;
+    switchTab('products');
+    return;
+  }
+  if (!clientsCache.length) {
+    if (!confirm('Aucun client de facturation. Souhaitez-vous d\'abord créer un client ?')) return;
+    switchTab('clients');
+    return;
+  }
+  location.href = 'admin-invoice-edit.html?new=1';
+}
+
+function editInvoice(id) {
+  location.href = 'admin-invoice-edit.html?id=' + encodeURIComponent(id);
+}
+
+async function deleteDraft(id) {
+  const inv = invoicesCache.filter(function(x){ return x.id === id; })[0];
+  if (!inv) return;
+  if (inv.status !== 'draft') return toast('Seuls les brouillons peuvent être supprimés', true);
+  if (!confirm('Supprimer ce brouillon ?\n\nCette action est irréversible.')) return;
+  try {
+    await db.collection('invoices').doc(id).delete();
+    toast('🗑️ Brouillon supprimé');
+  } catch (err) {
+    toast('Erreur : ' + err.message, true);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════
+   PRODUCTS — STEP 2A
+   Catalogue produits avec variantes intégrées
+   ═══════════════════════════════════════════════ */
+
+function initProductsListener() {
+  db.collection('invoice_products').orderBy('sortOrder', 'asc').onSnapshot(function(qs) {
+    productsCache = [];
+    qs.forEach(function(d) { productsCache.push(Object.assign({ id: d.id }, d.data())); });
+    updateProductsStats();
+    if (activeTab === 'products') renderProductsList();
+  }, function(err) {
+    console.error('[billing] products listener error', err);
+    if (activeTab === 'products') {
+      document.getElementById('productsTableWrap').innerHTML = '<div class="bill-empty"><div class="bill-empty-icon">⚠️</div><h4>Erreur de chargement</h4><p>' + escapeHtml(err.message) + '</p></div>';
+    }
+  });
+}
+
+function updateProductsStats() {
+  const total = productsCache.length;
+  const active = productsCache.filter(function(p){ return p.status === 'active'; }).length;
+  const archived = productsCache.filter(function(p){ return p.status === 'archived'; }).length;
+  let variantsTotal = 0;
+  productsCache.forEach(function(p){ variantsTotal += (p.variants && p.variants.length) || 0; });
+  document.getElementById('statProdTotal').textContent = total;
+  document.getElementById('statProdActive').textContent = active;
+  document.getElementById('statProdArchived').textContent = archived;
+  document.getElementById('statProdVariants').textContent = variantsTotal;
+}
+
+function renderProductsList() {
+  const wrap = document.getElementById('productsTableWrap');
+  const q = (document.getElementById('productsSearch').value || '').toLowerCase().trim();
+  const status = document.getElementById('productsStatusFilter').value;
+
+  let list = productsCache;
+  if (status !== 'all') list = list.filter(function(p){ return p.status === status; });
+  if (q) {
+    list = list.filter(function(p) {
+      return (p.name || '').toLowerCase().indexOf(q) > -1
+          || (p.category || '').toLowerCase().indexOf(q) > -1
+          || (p.description || '').toLowerCase().indexOf(q) > -1;
+    });
+  }
+
+  if (!list.length) {
+    wrap.innerHTML = '<div class="bill-empty">' +
+      '<div class="bill-empty-icon">📦</div>' +
+      '<h4>' + (q ? 'Aucun résultat' : 'Aucun produit') + '</h4>' +
+      '<p>' + (q ? 'Essayez avec un autre terme.' : 'Créez votre premier produit pour pouvoir l\'ajouter aux factures.') + '</p>' +
+      (q ? '' : '<button class="bill-btn bill-btn-primary" onclick="openProductDrawer(null)">➕ Nouveau produit</button>') +
+      '</div>';
+    return;
+  }
+
+  let html = '<table class="bill-table">';
+  html += '<thead><tr>';
+  html += '<th>Nom</th>';
+  html += '<th>Catégorie</th>';
+  html += '<th>Variantes</th>';
+  html += '<th style="text-align:right">Prix HT</th>';
+  html += '<th>TVA</th>';
+  html += '<th>Statut</th>';
+  html += '<th class="col-actions">Actions</th>';
+  html += '</tr></thead><tbody>';
+
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i];
+    const variants = p.variants || [];
+    const prices = variants.map(function(v){ return v.priceHt || 0; });
+    const minPrice = prices.length ? Math.min.apply(null, prices) : 0;
+    const maxPrice = prices.length ? Math.max.apply(null, prices) : 0;
+    const priceStr = variants.length === 0 ? '—'
+      : variants.length === 1 ? formatEur(minPrice)
+      : formatEur(minPrice) + ' → ' + formatEur(maxPrice);
+    const vatRates = {};
+    variants.forEach(function(v){ vatRates[v.vatRate != null ? v.vatRate : 20] = true; });
+    const vatStr = Object.keys(vatRates).map(function(r){ return r + ' %'; }).join(' / ') || '—';
+    const statusBadge = p.status === 'active'
+      ? '<span class="bill-badge company">✅ Actif</span>'
+      : '<span class="bill-badge individual">📦 Archivé</span>';
+
+    html += '<tr onclick="openProductDrawer(\'' + p.id + '\')">';
+    html += '<td><div style="font-weight:700">' + escapeHtml(p.name || '—') + '</div>' + (p.description ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(p.description) + '</div>' : '') + '</td>';
+    html += '<td><span style="font-size:11px;color:var(--muted)">' + escapeHtml(p.category || '—') + '</span></td>';
+    html += '<td><span style="font-weight:700">' + variants.length + '</span> <span style="font-size:11px;color:var(--muted)">' + (variants.length > 1 ? 'variantes' : 'variante') + '</span></td>';
+    html += '<td style="text-align:right;font-family:var(--font-m);font-weight:600">' + priceStr + '</td>';
+    html += '<td><span style="font-size:11px;color:var(--muted)">' + vatStr + '</span></td>';
+    html += '<td>' + statusBadge + '</td>';
+    html += '<td class="col-actions"><button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();openProductDrawer(\'' + p.id + '\')">✏️ Éditer</button></td>';
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function openProductDrawer(productId) {
+  editingProductId = productId;
+  const isEdit = !!productId;
+  const p = isEdit ? productsCache.filter(function(x){ return x.id === productId; })[0] : null;
+  if (isEdit && !p) return toast('Produit introuvable', true);
+
+  document.getElementById('drawerTitle').textContent = isEdit ? 'Modifier le produit' : 'Nouveau produit';
+
+  const data = p || {
+    name: '',
+    description: '',
+    category: '',
+    baseUnit: 'forfait',
+    baseUnitCustom: '',
+    status: 'active',
+    sortOrder: productsCache.length,
+    variants: [{ id: 'v_' + Date.now(), label: 'Standard', priceHt: 0, vatRate: 20, sku: '' }]
+  };
+
+  let html = '<div class="bill-form-grid full">';
+  html += '  <div class="bill-form-row"><div class="bill-label">Nom du produit <span class="bill-req">*</span></div><input class="bill-input" id="pdName" value="' + attr(data.name) + '" placeholder="Programme Business Phénix"/></div>';
+  html += '  <div class="bill-form-row"><div class="bill-label">Description</div><textarea class="bill-textarea" id="pdDescription" placeholder="Description courte affichée sur la facture (optionnel — peut être surchargée par ligne)">' + escapeHtml(data.description || '') + '</textarea></div>';
+  html += '</div>';
+
+  html += '<div class="bill-form-grid" style="margin-top:14px">';
+  html += '  <div class="bill-form-row"><div class="bill-label">Catégorie</div><input class="bill-input" id="pdCategory" value="' + attr(data.category || '') + '" placeholder="Coaching, Formation, Masterclass…"/></div>';
+  html += '  <div class="bill-form-row"><div class="bill-label">Unité par défaut</div>';
+  html += '    <select class="bill-select" id="pdBaseUnit" onchange="onBaseUnitChange()">';
+  const units = ['forfait', 'session', 'mois', 'heure', 'jour', 'unité', 'personne'];
+  for (let u = 0; u < units.length; u++) {
+    html += '<option value="' + units[u] + '"' + (data.baseUnit === units[u] ? ' selected' : '') + '>' + units[u] + '</option>';
+  }
+  html += '<option value="custom"' + (units.indexOf(data.baseUnit) === -1 ? ' selected' : '') + '>Personnalisée…</option>';
+  html += '    </select>';
+  html += '    <input class="bill-input" id="pdBaseUnitCustom" style="margin-top:6px;display:' + (units.indexOf(data.baseUnit) === -1 ? 'block' : 'none') + '" value="' + attr(units.indexOf(data.baseUnit) === -1 ? data.baseUnit : '') + '" placeholder="Unité personnalisée"/>';
+  html += '  </div>';
+  html += '</div>';
+
+  html += '<div class="bill-card-h" style="margin-top:18px"><div><h3 style="font-size:12px">Variantes & prix</h3><p>Plusieurs variantes = sélection au moment de l\'ajout à la facture.</p></div></div>';
+  html += '<div id="pdVariantsList"></div>';
+  html += '<button class="bill-btn bill-btn-ghost bill-btn-sm" style="margin-top:8px" onclick="addVariantRow()">➕ Ajouter une variante</button>';
+
+  html += '<div class="bill-card-h" style="margin-top:18px"><div><h3 style="font-size:12px">Statut</h3></div></div>';
+  html += '<div class="bill-type-toggle">';
+  html += '  <button class="bill-type-btn ' + (data.status === 'active' ? 'on' : '') + '" id="pdStatusActive" onclick="setProductStatus(\'active\')">✅ Actif</button>';
+  html += '  <button class="bill-type-btn ' + (data.status === 'archived' ? 'on' : '') + '" id="pdStatusArchived" onclick="setProductStatus(\'archived\')">📦 Archivé</button>';
+  html += '</div>';
+  html += '<div class="bill-help">Les produits archivés n\'apparaissent plus dans la sélection lors de la création de factures (mais restent visibles sur les factures déjà émises).</div>';
+
+  document.getElementById('drawerBody').innerHTML = html;
+  document.getElementById('drawerBody')._currentStatus = data.status;
+  document.getElementById('drawerBody')._variants = JSON.parse(JSON.stringify(data.variants || []));
+  renderVariantsRows();
+
+  let footHtml = '';
+  if (isEdit) footHtml += '<button class="bill-btn bill-btn-red" onclick="confirmDeleteProduct(\'' + productId + '\')">🗑️ Supprimer</button><span style="flex:1"></span>';
+  footHtml += '<button class="bill-btn bill-btn-ghost" onclick="closeDrawer()">Annuler</button>';
+  footHtml += '<button class="bill-btn bill-btn-primary" id="pdSaveBtn" onclick="saveProduct()">💾 ' + (isEdit ? 'Enregistrer' : 'Créer le produit') + '</button>';
+  document.getElementById('drawerFoot').innerHTML = footHtml;
+
+  document.getElementById('drawerBg').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+}
+
+function setProductStatus(s) {
+  document.getElementById('drawerBody')._currentStatus = s;
+  document.getElementById('pdStatusActive').classList.toggle('on', s === 'active');
+  document.getElementById('pdStatusArchived').classList.toggle('on', s === 'archived');
+}
+
+function onBaseUnitChange() {
+  const sel = document.getElementById('pdBaseUnit');
+  document.getElementById('pdBaseUnitCustom').style.display = sel.value === 'custom' ? 'block' : 'none';
+}
+
+function renderVariantsRows() {
+  const list = document.getElementById('pdVariantsList');
+  const variants = document.getElementById('drawerBody')._variants || [];
+  if (!variants.length) {
+    list.innerHTML = '<div class="bill-help warn">⚠️ Au moins une variante est requise.</div>';
+    return;
+  }
+  let html = '';
+  for (let i = 0; i < variants.length; i++) {
+    const v = variants[i];
+    html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">';
+    html += '  <div class="bill-form-grid three">';
+    html += '    <div class="bill-form-row"><div class="bill-label">Libellé <span class="bill-req">*</span></div><input class="bill-input" data-vrow="' + i + '" data-vfield="label" value="' + attr(v.label || '') + '" placeholder="Solo, Duo, Premium…" oninput="updateVariantField(this)"/></div>';
+    html += '    <div class="bill-form-row"><div class="bill-label">Prix HT (€) <span class="bill-req">*</span></div><input class="bill-input" data-vrow="' + i + '" data-vfield="priceHt" type="number" min="0" step="0.01" value="' + attr(v.priceHt != null ? v.priceHt : '') + '" oninput="updateVariantField(this)"/></div>';
+    html += '    <div class="bill-form-row"><div class="bill-label">TVA (%)</div>';
+    html += '      <select class="bill-select" data-vrow="' + i + '" data-vfield="vatRate" onchange="updateVariantField(this)">';
+    const rates = [20, 10, 5.5, 2.1, 0];
+    for (let r = 0; r < rates.length; r++) {
+      html += '<option value="' + rates[r] + '"' + ((v.vatRate != null ? v.vatRate : 20) == rates[r] ? ' selected' : '') + '>' + rates[r] + ' %</option>';
+    }
+    html += '      </select>';
+    html += '    </div>';
+    html += '  </div>';
+    html += '  <div style="display:flex;gap:10px;margin-top:10px;align-items:center">';
+    html += '    <input class="bill-input" data-vrow="' + i + '" data-vfield="sku" value="' + attr(v.sku || '') + '" placeholder="SKU / Référence (optionnel)" style="flex:1" oninput="updateVariantField(this)"/>';
+    html += '    <button class="bill-btn bill-btn-red bill-btn-sm" onclick="removeVariantRow(' + i + ')" ' + (variants.length === 1 ? 'disabled title="Au moins une variante requise"' : '') + '>🗑️</button>';
+    html += '  </div>';
+    html += '</div>';
+  }
+  list.innerHTML = html;
+}
+
+function addVariantRow() {
+  const variants = document.getElementById('drawerBody')._variants || [];
+  variants.push({ id: 'v_' + Date.now() + '_' + variants.length, label: 'Variante ' + (variants.length + 1), priceHt: 0, vatRate: 20, sku: '' });
+  document.getElementById('drawerBody')._variants = variants;
+  renderVariantsRows();
+}
+
+function removeVariantRow(idx) {
+  const variants = document.getElementById('drawerBody')._variants || [];
+  if (variants.length <= 1) return;
+  variants.splice(idx, 1);
+  document.getElementById('drawerBody')._variants = variants;
+  renderVariantsRows();
+}
+
+function updateVariantField(input) {
+  const idx = parseInt(input.getAttribute('data-vrow'), 10);
+  const field = input.getAttribute('data-vfield');
+  const variants = document.getElementById('drawerBody')._variants || [];
+  if (!variants[idx]) return;
+  let val = input.value;
+  if (field === 'priceHt' || field === 'vatRate') val = parseFloat(val || '0');
+  variants[idx][field] = val;
+}
+
+async function saveProduct() {
+  const btn = document.getElementById('pdSaveBtn');
+  const name = (document.getElementById('pdName').value || '').trim();
+  const description = (document.getElementById('pdDescription').value || '').trim();
+  const category = (document.getElementById('pdCategory').value || '').trim();
+  const baseUnitSel = document.getElementById('pdBaseUnit').value;
+  const baseUnit = baseUnitSel === 'custom' ? ((document.getElementById('pdBaseUnitCustom').value || '').trim() || 'unité') : baseUnitSel;
+  const status = document.getElementById('drawerBody')._currentStatus || 'active';
+  const variants = document.getElementById('drawerBody')._variants || [];
+
+  if (!name) return toast('Nom du produit obligatoire', true);
+  if (!variants.length) return toast('Au moins une variante requise', true);
+
+  /* Valider chaque variante */
+  for (let i = 0; i < variants.length; i++) {
+    const v = variants[i];
+    if (!v.label || !v.label.trim()) return toast('Variante ' + (i + 1) + ' : libellé obligatoire', true);
+    const price = parseFloat(v.priceHt);
+    if (isNaN(price) || price < 0) return toast('Variante ' + (i + 1) + ' : prix HT invalide', true);
+    v.priceHt = price;
+    v.vatRate = parseFloat(v.vatRate != null ? v.vatRate : 20);
+  }
+
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try {
+    const doc = {
+      name: name,
+      description: description,
+      category: category,
+      baseUnit: baseUnit,
+      status: status,
+      variants: variants,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.uid
+    };
+    if (editingProductId) {
+      await db.collection('invoice_products').doc(editingProductId).update(doc);
+      toast('✅ Produit mis à jour');
+    } else {
+      doc.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      doc.createdBy = currentUser.uid;
+      doc.sortOrder = productsCache.length;
+      await db.collection('invoice_products').add(doc);
+      toast('✅ Produit créé');
+    }
+    closeDrawer();
+  } catch (err) {
+    console.error(err);
+    toast('Erreur : ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 ' + (editingProductId ? 'Enregistrer' : 'Créer le produit');
+  }
+}
+
+async function confirmDeleteProduct(id) {
+  /* Vérifier si le produit est utilisé dans des factures */
+  if (!confirm('Supprimer ce produit définitivement ?\n\n⚠️ Si des factures déjà émises utilisent ce produit, leurs lignes resteront intactes (snapshot immuable). En revanche, vous ne pourrez plus l\'ajouter à de nouvelles factures.\n\n💡 Pour conserver la traçabilité, l\'archivage est recommandé.')) return;
+  try {
+    await db.collection('invoice_products').doc(id).delete();
+    toast('🗑️ Produit supprimé');
+    closeDrawer();
+  } catch (err) {
+    toast('Erreur : ' + err.message, true);
+  }
+}
+
+
 /* ═══ HELPERS ═══ */
 function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v; }
 function escapeHtml(s) { return (s == null ? '' : String(s)).replace(/[&<>"']/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
 function attr(s) { return escapeHtml(s); }
 function escapeAttr(s) { return (s == null ? '' : String(s)).replace(/[\\'"]/g, '\\$&'); }
+function formatEur(n) {
+  if (n == null || isNaN(n)) return '— €';
+  return Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
 
 let toastTimer = null;
 function toast(msg, isError) {
