@@ -73,8 +73,10 @@
 .inv-modal-row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
 
 /* ═══ LAYOUT ═══ */
+html{scroll-padding-top:130px}  /* nav 56px + topbar ~70px : le scroll-into-view laisse l'espace pour les sticky */
 .inv-app{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,640px);min-height:calc(100vh - 56px - 60px);background:var(--bg)}
 .inv-form{padding:24px 28px 80px;max-width:760px;width:100%;box-sizing:border-box;overflow-x:hidden}
+.inv-section{scroll-margin-top:130px}  /* idem : ancres et focus laissent l'espace */
 .inv-preview-wrap{background:var(--bg);border-left:1px solid var(--border);padding:24px;position:sticky;top:calc(56px + 60px);height:calc(100vh - 56px - 60px);overflow-y:auto;display:flex;align-items:flex-start;justify-content:center}
 
 @media(max-width:1100px){
@@ -415,6 +417,9 @@ auth.onAuthStateChanged(async function(user) {
     await loadOrInitInvoice();
     document.getElementById('bootLoader').style.display = 'none';
     document.getElementById('invApp').style.display = 'block';
+
+    /* Reset scroll au top après load (évite que le topbar sticky masque le titre de la 1ère section) */
+    window.scrollTo({ top: 0, behavior: 'instant' });
 
     /* Step 2B-2 : auto-ouverture modal selon ?action= */
     const action = (new URLSearchParams(window.location.search)).get('action');
