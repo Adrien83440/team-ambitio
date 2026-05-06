@@ -347,6 +347,49 @@
     }
     .pm-save-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
+    /* ── Platform Switch (admin → sales.alteore.com) ── */
+    .nav-platform-switch {
+      position:relative; z-index:1; margin:0 14px 10px;
+      display:flex; align-items:center; gap:10px; padding:10px 12px;
+      border-radius:12px; cursor:pointer; text-decoration:none;
+      background:linear-gradient(135deg, rgba(252,165,165,0.10) 0%, rgba(185,28,28,0.20) 100%);
+      border:1px solid rgba(252,165,165,0.25);
+      transition:all 0.2s cubic-bezier(.4,0,.2,1);
+      overflow:hidden; white-space:nowrap; flex-shrink:0;
+    }
+    .nav-platform-switch:hover {
+      background:linear-gradient(135deg, rgba(252,165,165,0.18) 0%, rgba(185,28,28,0.32) 100%);
+      border-color:rgba(252,165,165,0.45);
+      transform:translateY(-1px);
+      box-shadow:0 6px 20px rgba(185,28,28,0.25);
+    }
+    .nav-ps-icon {
+      font-size:16px; width:32px; height:32px;
+      display:flex; align-items:center; justify-content:center;
+      background:rgba(252,165,165,0.15); border:1px solid rgba(252,165,165,0.25);
+      border-radius:9px; flex-shrink:0;
+    }
+    .nav-ps-text { flex:1; overflow:hidden; transition:opacity 0.2s; min-width:0; }
+    .nav-ps-label { font-size:12px; font-weight:700; color:white; line-height:1.2; letter-spacing:-0.1px; }
+    .nav-ps-sub { font-size:10px; color:rgba(252,165,165,0.85); font-weight:500; margin-top:2px; }
+    .nav-ps-arrow {
+      font-size:14px; color:rgba(252,165,165,0.7); flex-shrink:0;
+      transition:transform 0.2s, color 0.2s;
+    }
+    .nav-platform-switch:hover .nav-ps-arrow { transform:translate(2px,-2px); color:rgba(252,165,165,1); }
+    #ambitio-sidebar.collapsed .nav-platform-switch { justify-content:center; margin:0 10px 10px; padding:10px 0; }
+    #ambitio-sidebar.collapsed .nav-ps-text,
+    #ambitio-sidebar.collapsed .nav-ps-arrow { opacity:0; pointer-events:none; width:0; }
+    #ambitio-sidebar.collapsed .nav-platform-switch:hover::after {
+      content:attr(data-label);
+      position:absolute; left:calc(var(--nav-w-collapsed) + 8px); top:50%;
+      transform:translateY(-50%);
+      background:#1a1f36; color:white; font-size:12px; font-weight:600;
+      padding:6px 12px; border-radius:8px; white-space:nowrap;
+      pointer-events:none; z-index:1000;
+      box-shadow:0 4px 16px rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1);
+    }
+
     @media (max-width:768px) {
       body.has-sidebar { padding-left:0 !important; }
       #ambitio-sidebar { transform:translateX(-100%); transition:transform 0.3s cubic-bezier(.4,0,.2,1),width 0.3s; }
@@ -548,6 +591,16 @@
           </div>
         </div>
       </div>
+      ${role === 'admin' ? `
+      <a class="nav-platform-switch" href="https://sales.alteore.com" target="_blank" rel="noopener noreferrer" data-label="Espace Sales" title="Ouvrir sales.alteore.com dans un nouvel onglet">
+        <span class="nav-ps-icon">📈</span>
+        <div class="nav-ps-text">
+          <div class="nav-ps-label">Espace Sales</div>
+          <div class="nav-ps-sub">sales.alteore.com</div>
+        </div>
+        <span class="nav-ps-arrow">↗</span>
+      </a>
+      ` : ''}
       <div class="nav-items" id="navItems">${navHtml}</div>
       <div class="nav-footer">
         <div class="nav-theme-toggle${isLight ? ' light' : ''}" id="navThemeToggle" title="Thème clair / sombre">
