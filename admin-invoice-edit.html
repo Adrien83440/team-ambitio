@@ -45,9 +45,32 @@
 .inv-btn-primary{background:var(--inv-green);color:#000}
 .inv-btn-primary:hover{filter:brightness(1.08)}
 .inv-btn-primary:disabled{opacity:.4;cursor:not-allowed;filter:none}
+.inv-btn-success{background:#10b981;color:#fff}
+.inv-btn-success:hover{filter:brightness(1.08)}
+.inv-btn-success:disabled{opacity:.4;cursor:not-allowed;filter:none}
 .inv-btn-ghost{background:var(--bg3);border:1px solid var(--border);color:var(--muted)}
 .inv-btn-ghost:hover{border-color:var(--border2);color:var(--text)}
 .inv-btn-red{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:var(--inv-red)}
+
+/* ═══ Modaux Step 2B-2 ═══ */
+.inv-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px}
+.inv-modal-overlay.active{display:flex}
+.inv-modal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:100%;max-width:640px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.inv-modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.inv-modal-title{font-size:16px;font-weight:600;color:var(--text)}
+.inv-modal-close{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:4px;line-height:1}
+.inv-modal-close:hover{color:var(--text)}
+.inv-modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+.inv-modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--bg1)}
+.inv-modal-row{margin-bottom:14px}
+.inv-modal-row label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.inv-modal-row .inv-input,.inv-modal-row .inv-textarea,.inv-modal-row .inv-select{width:100%}
+.inv-modal-row .inv-textarea{font-family:inherit;font-size:13px;line-height:1.55;min-height:160px;resize:vertical}
+.inv-modal-checkbox{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer}
+.inv-modal-checkbox input{accent-color:var(--inv-green)}
+.inv-modal-help{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
+.inv-modal-vars{font-size:11px;color:var(--muted);background:var(--bg1);padding:8px 10px;border-radius:6px;margin-top:6px;font-family:ui-monospace,Menlo,monospace}
+.inv-modal-row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
 
 /* ═══ LAYOUT ═══ */
 .inv-app{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,640px);min-height:calc(100vh - 56px - 60px);background:var(--bg)}
@@ -215,7 +238,8 @@
       <button class="inv-btn inv-btn-ghost" id="btnSaveDraft" onclick="saveDraft(true)">💾 Sauvegarder</button>
       <button class="inv-btn inv-btn-primary" id="btnValidate" onclick="onValidateClick()">✅ Valider</button>
       <button class="inv-btn inv-btn-ghost" id="btnDownload" onclick="downloadPdf()" disabled title="Disponible après validation">⬇️ PDF</button>
-      <button class="inv-btn inv-btn-ghost" id="btnSend" disabled title="Disponible en Step 2B-2">📨 Envoyer</button>
+      <button class="inv-btn inv-btn-ghost" id="btnSend" onclick="openSendModal()" disabled title="Disponible après validation">📨 Envoyer</button>
+      <button class="inv-btn inv-btn-success" id="btnMarkPaid" onclick="openPaidModal()" style="display:none;">💰 Marquer payée</button>
     </div>
   </div>
 
@@ -391,6 +415,14 @@ auth.onAuthStateChanged(async function(user) {
     await loadOrInitInvoice();
     document.getElementById('bootLoader').style.display = 'none';
     document.getElementById('invApp').style.display = 'block';
+
+    /* Step 2B-2 : auto-ouverture modal selon ?action= */
+    const action = (new URLSearchParams(window.location.search)).get('action');
+    if (action === 'send') {
+      setTimeout(function(){ openSendModal(); }, 200);
+    } else if (action === 'paid') {
+      setTimeout(function(){ openPaidModal(); }, 200);
+    }
   } catch (err) {
     console.error('[invoice-edit] auth error', err);
     toast('Erreur : ' + err.message, true);
@@ -560,7 +592,7 @@ function lockAllInputs() {
   document.getElementById('invAddLineBtn').style.display = 'none';
   document.getElementById('invSaveState').style.display = 'none';
 
-  /* Activer le téléchargement PDF si disponible */
+  /* Téléchargement PDF */
   const btnDl = document.getElementById('btnDownload');
   if (invoiceState.pdfHash) {
     btnDl.disabled = false;
@@ -572,10 +604,32 @@ function lockAllInputs() {
       : (invoiceState.pdfError ? 'Échec génération : ' + invoiceState.pdfError : 'PDF non disponible');
   }
 
-  /* Bouton Envoyer : Step 2B-2 */
+  /* Envoi email (Step 2B-2) */
   const btnSend = document.getElementById('btnSend');
-  btnSend.disabled = true;
-  btnSend.title = 'Envoi par email — disponible en Step 2B-2';
+  if (invoiceState.pdfHash) {
+    btnSend.disabled = false;
+    btnSend.removeAttribute('title');
+    btnSend.innerHTML = invoiceState.sentAt ? '📨 Renvoyer' : '📨 Envoyer';
+  } else {
+    btnSend.disabled = true;
+    btnSend.title = 'PDF requis pour l\'envoi';
+  }
+
+  /* Marquer payée (Step 2B-2) */
+  const btnPaid = document.getElementById('btnMarkPaid');
+  if (invoiceState.status === 'paid') {
+    btnPaid.style.display = 'none';
+  } else {
+    btnPaid.style.display = '';
+    btnPaid.disabled = false;
+  }
+
+  /* Inputs textarea modaux : ne pas verrouiller (les modaux sont actifs même en read-only) */
+  const sendInputs = document.querySelectorAll('#sendModal .inv-input, #sendModal .inv-textarea, #sendModal .inv-select, #paidModal .inv-input, #paidModal .inv-select');
+  for (let i = 0; i < sendInputs.length; i++) {
+    sendInputs[i].removeAttribute('readonly');
+    sendInputs[i].removeAttribute('disabled');
+  }
 }
 
 /* ═══ STATUS PILL ═══ */
@@ -1365,7 +1419,331 @@ window.addEventListener('beforeunload', function(e) {
     e.returnValue = '';
   }
 });
+
+/* ═══════════════════════════════════════════════
+   STEP 2B-2 — Envoi email + Marquage paiement
+   ═══════════════════════════════════════════════ */
+
+const DEFAULT_EMAIL_SUBJECT = 'Votre facture {invoiceNumber} — {issuerName}';
+const DEFAULT_EMAIL_BODY =
+'Bonjour {clientFirstName},\n' +
+'\n' +
+'Vous trouverez en pièce jointe votre facture {invoiceNumber} d\'un montant de {totalTtc} TTC.\n' +
+'\n' +
+'Échéance de paiement : {dueDate}\n' +
+'\n' +
+'{paymentInstructions}\n' +
+'\n' +
+'Pour toute question, n\'hésitez pas à nous répondre directement à cet email.\n' +
+'\n' +
+'Bien cordialement,\n' +
+'{issuerName}';
+
+const PAYMENT_METHOD_LABELS_FR = {
+  gocardless: 'Prélèvement automatique (mandat SEPA GoCardless)',
+  transfer: 'Virement bancaire',
+  card: 'Carte bancaire',
+  check: 'Chèque',
+  cash: 'Espèces',
+  other: 'Selon accord'
+};
+
+function buildPaymentInstructionsFr(invoice, billing) {
+  const method = invoice.paymentMethod;
+  switch (method) {
+    case 'gocardless':
+      return 'Le prélèvement automatique sera effectué selon le mandat SEPA enregistré. Aucune action de votre part n\'est requise.';
+    case 'transfer':
+      const lines = ['Merci d\'effectuer un virement vers le compte suivant :'];
+      if (billing.iban) lines.push('IBAN : ' + String(billing.iban).replace(/\s/g, '').toUpperCase().replace(/(.{4})/g, '$1 ').trim());
+      if (billing.bic) lines.push('BIC : ' + billing.bic + (billing.bankName ? ' (' + billing.bankName + ')' : ''));
+      lines.push('Référence à indiquer : ' + (invoice.number || ''));
+      return lines.join('\n');
+    case 'card':
+      return 'Vous pouvez régler par carte bancaire en nous contactant.';
+    case 'check':
+      return 'Merci de faire parvenir votre chèque à l\'ordre de ' + (billing.companyName || '') + '.';
+    case 'cash':
+      return 'Règlement en espèces selon les modalités convenues.';
+    default:
+      return 'Selon les modalités convenues entre nous.';
+  }
+}
+
+function buildEmailVarsFromState(billing) {
+  const c = invoiceState.clientSnapshot || {};
+  const clientFirstName = c.contactFirstName || '';
+  const clientLastName = c.contactLastName || '';
+  const fullName = (clientFirstName + ' ' + clientLastName).trim();
+  const clientName = c.clientType === 'company' ? (c.companyName || fullName || '') : (fullName || c.companyName || '');
+
+  return {
+    invoiceNumber: invoiceState.number || '',
+    issueDate: formatDateFr(invoiceState.issueDate),
+    dueDate: formatDateFr(invoiceState.dueDate),
+    clientFirstName: clientFirstName || 'Madame, Monsieur',
+    clientLastName: clientLastName || '',
+    clientName: clientName || 'Madame, Monsieur',
+    totalTtc: formatEur(invoiceState.totalTtc),
+    totalHt: formatEur(invoiceState.totalHt),
+    paymentMethod: PAYMENT_METHOD_LABELS_FR[invoiceState.paymentMethod] || invoiceState.paymentMethod || '—',
+    paymentInstructions: buildPaymentInstructionsFr(invoiceState, billing || {}),
+    issuerName: (billing && billing.companyName) || '',
+    issuerEmail: (billing && billing.companyEmail) || ''
+  };
+}
+
+function renderEmailTemplate(template, vars) {
+  let out = String(template || '');
+  Object.keys(vars).forEach(function(k) {
+    const re = new RegExp('\\{' + k + '\\}', 'g');
+    out = out.replace(re, vars[k] != null ? String(vars[k]) : '');
+  });
+  return out;
+}
+
+/* ─── Modal envoi email ─── */
+let _billingConfigCache = null;
+
+async function loadBillingConfig() {
+  if (_billingConfigCache) return _billingConfigCache;
+  const snap = await db.collection('_config').doc('billing').get();
+  _billingConfigCache = snap.exists ? snap.data() : {};
+  return _billingConfigCache;
+}
+
+async function openSendModal() {
+  if (invoiceState.status === 'draft') return toast('Validez la facture avant l\'envoi', true);
+  if (!invoiceState.pdfHash) return toast('PDF non disponible', true);
+
+  const billing = await loadBillingConfig();
+  const tmpl = (billing.emailTemplates && billing.emailTemplates.invoice) || {};
+  const subjectTmpl = tmpl.subject || DEFAULT_EMAIL_SUBJECT;
+  const bodyTmpl = tmpl.body || DEFAULT_EMAIL_BODY;
+  const vars = buildEmailVarsFromState(billing);
+
+  /* Pré-remplissage destinataire depuis client */
+  const c = invoiceState.clientSnapshot || {};
+  document.getElementById('sendToInput').value = c.email || '';
+  document.getElementById('sendCcInput').value = '';
+  document.getElementById('sendSubjectInput').value = renderEmailTemplate(subjectTmpl, vars);
+  document.getElementById('sendBodyInput').value = renderEmailTemplate(bodyTmpl, vars);
+
+  const enableBcc = billing.enableBcc != null ? billing.enableBcc : true;
+  document.getElementById('sendBccCheckbox').checked = enableBcc;
+
+  /* Indiquer s'il s'agit d'un renvoi */
+  const isResend = !!invoiceState.sentAt;
+  document.getElementById('sendModalTitle').textContent = isResend ? '📨 Renvoyer la facture' : '📨 Envoyer la facture';
+  document.getElementById('sendModalSubmit').textContent = isResend ? 'Renvoyer' : 'Envoyer';
+
+  document.getElementById('sendModal').classList.add('active');
+}
+
+function closeSendModal() {
+  document.getElementById('sendModal').classList.remove('active');
+}
+
+async function submitSendModal() {
+  const to = document.getElementById('sendToInput').value.trim();
+  const ccRaw = document.getElementById('sendCcInput').value.trim();
+  const subject = document.getElementById('sendSubjectInput').value.trim();
+  const bodyText = document.getElementById('sendBodyInput').value.trim();
+  const useBcc = document.getElementById('sendBccCheckbox').checked;
+
+  if (!to) return toast('Destinataire requis', true);
+  if (!subject) return toast('Sujet requis', true);
+  if (!bodyText) return toast('Corps requis', true);
+
+  /* Parse multi-emails séparés par virgule, point-virgule ou retour ligne */
+  function parseEmails(s) {
+    return s.split(/[,;\n]/).map(function(e){ return e.trim(); }).filter(function(e){ return e; });
+  }
+  const toList = parseEmails(to);
+  const ccList = ccRaw ? parseEmails(ccRaw) : [];
+
+  const btn = document.getElementById('sendModalSubmit');
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Envoi…';
+
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const response = await fetch('/api/invoice-send-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + idToken
+      },
+      body: JSON.stringify({
+        invoiceId: invoiceFirestoreId,
+        to: toList,
+        cc: ccList,
+        subject: subject,
+        bodyText: bodyText,
+        useBcc: useBcc
+      })
+    });
+    let data = {};
+    try { data = await response.json(); } catch(e) {}
+    if (!response.ok) throw new Error(data.error || ('Erreur HTTP ' + response.status));
+
+    toast('📨 Facture envoyée à ' + toList.join(', '));
+    closeSendModal();
+    /* Reload pour afficher status sent + entrée historique */
+    setTimeout(function(){ location.reload(); }, 1000);
+  } catch (err) {
+    console.error('[send]', err);
+    toast('Erreur envoi : ' + err.message, true);
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+/* ─── Modal marquage paiement ─── */
+function openPaidModal() {
+  if (invoiceState.status === 'draft') return toast('Validez la facture avant le marquage', true);
+  if (invoiceState.status === 'paid') return toast('Facture déjà marquée payée', true);
+
+  const today = new Date().toISOString().substring(0, 10);
+  document.getElementById('paidAtInput').value = today;
+  document.getElementById('paidAmountInput').value = (invoiceState.totalTtc || 0).toFixed(2);
+  document.getElementById('paidViaSelect').value = invoiceState.paymentMethod || 'transfer';
+  document.getElementById('paidRefInput').value = '';
+  document.getElementById('paidModal').classList.add('active');
+}
+
+function closePaidModal() {
+  document.getElementById('paidModal').classList.remove('active');
+}
+
+async function submitPaidModal() {
+  const paidAt = document.getElementById('paidAtInput').value;
+  const paidAmount = parseFloat(document.getElementById('paidAmountInput').value);
+  const paidVia = document.getElementById('paidViaSelect').value;
+  const paymentRef = document.getElementById('paidRefInput').value.trim();
+
+  if (!paidAt) return toast('Date requise', true);
+  if (isNaN(paidAmount) || paidAmount <= 0) return toast('Montant invalide', true);
+  if (!paidVia) return toast('Méthode requise', true);
+
+  const btn = document.getElementById('paidModalSubmit');
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Confirmation…';
+
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const response = await fetch('/api/invoice-mark-paid', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + idToken
+      },
+      body: JSON.stringify({
+        invoiceId: invoiceFirestoreId,
+        paidAt: paidAt,
+        paidAmount: paidAmount,
+        paidVia: paidVia,
+        paymentRef: paymentRef || null
+      })
+    });
+    let data = {};
+    try { data = await response.json(); } catch(e) {}
+    if (!response.ok) throw new Error(data.error || ('Erreur HTTP ' + response.status));
+
+    toast('💰 Facture marquée comme payée');
+    closePaidModal();
+    setTimeout(function(){ location.reload(); }, 1000);
+  } catch (err) {
+    console.error('[mark-paid]', err);
+    toast('Erreur : ' + err.message, true);
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
 </script>
+
+<!-- ═══ Modaux Step 2B-2 ═══ -->
+<div class="inv-modal-overlay" id="sendModal">
+  <div class="inv-modal">
+    <div class="inv-modal-header">
+      <span class="inv-modal-title" id="sendModalTitle">📨 Envoyer la facture</span>
+      <button class="inv-modal-close" onclick="closeSendModal()">×</button>
+    </div>
+    <div class="inv-modal-body">
+      <div class="inv-modal-row">
+        <label>Destinataire(s)</label>
+        <input type="text" class="inv-input" id="sendToInput" placeholder="email@exemple.com" />
+        <div class="inv-modal-help">Plusieurs emails séparés par virgule, point-virgule ou retour à la ligne</div>
+      </div>
+      <div class="inv-modal-row">
+        <label>CC (copie)</label>
+        <input type="text" class="inv-input" id="sendCcInput" placeholder="email1@exemple.com, email2@exemple.com" />
+      </div>
+      <div class="inv-modal-row">
+        <label>Sujet</label>
+        <input type="text" class="inv-input" id="sendSubjectInput" />
+      </div>
+      <div class="inv-modal-row">
+        <label>Corps</label>
+        <textarea class="inv-textarea" id="sendBodyInput"></textarea>
+      </div>
+      <div class="inv-modal-row">
+        <label class="inv-modal-checkbox">
+          <input type="checkbox" id="sendBccCheckbox" checked />
+          <span>Recevoir une copie en BCC (compte expéditeur)</span>
+        </label>
+      </div>
+      <div class="inv-modal-help">📎 La facture (PDF) sera attachée automatiquement</div>
+    </div>
+    <div class="inv-modal-footer">
+      <button class="inv-btn inv-btn-ghost" onclick="closeSendModal()">Annuler</button>
+      <button class="inv-btn inv-btn-primary" id="sendModalSubmit" onclick="submitSendModal()">Envoyer</button>
+    </div>
+  </div>
+</div>
+
+<div class="inv-modal-overlay" id="paidModal">
+  <div class="inv-modal">
+    <div class="inv-modal-header">
+      <span class="inv-modal-title">💰 Marquer comme payée</span>
+      <button class="inv-modal-close" onclick="closePaidModal()">×</button>
+    </div>
+    <div class="inv-modal-body">
+      <div class="inv-modal-row-2">
+        <div>
+          <label>Date du paiement</label>
+          <input type="date" class="inv-input" id="paidAtInput" />
+        </div>
+        <div>
+          <label>Montant payé (€)</label>
+          <input type="number" step="0.01" class="inv-input" id="paidAmountInput" />
+        </div>
+      </div>
+      <div class="inv-modal-row">
+        <label>Méthode</label>
+        <select class="inv-select" id="paidViaSelect">
+          <option value="gocardless">Prélèvement GoCardless</option>
+          <option value="transfer">Virement bancaire</option>
+          <option value="card">Carte bancaire</option>
+          <option value="check">Chèque</option>
+          <option value="cash">Espèces</option>
+          <option value="other">Autre</option>
+        </select>
+      </div>
+      <div class="inv-modal-row">
+        <label>Référence (optionnel)</label>
+        <input type="text" class="inv-input" id="paidRefInput" placeholder="N° transaction, n° chèque, etc." />
+        <div class="inv-modal-help">Trace pour retrouver le paiement plus tard</div>
+      </div>
+    </div>
+    <div class="inv-modal-footer">
+      <button class="inv-btn inv-btn-ghost" onclick="closePaidModal()">Annuler</button>
+      <button class="inv-btn inv-btn-success" id="paidModalSubmit" onclick="submitPaidModal()">Confirmer</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

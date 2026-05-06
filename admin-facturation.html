@@ -258,6 +258,7 @@
         <div class="bill-subnav-item" data-sub="logo" onclick="switchSettingsSub('logo')">🎨 Identité visuelle</div>
         <div class="bill-subnav-item" data-sub="bank" onclick="switchSettingsSub('bank')">🏦 Banque & paiement</div>
         <div class="bill-subnav-item" data-sub="numbering" onclick="switchSettingsSub('numbering')">🔢 Numérotation & TVA</div>
+        <div class="bill-subnav-item" data-sub="email" onclick="switchSettingsSub('email')">📨 Email</div>
         <div class="bill-subnav-item" data-sub="cgv" onclick="switchSettingsSub('cgv')">📜 CGV</div>
       </div>
 
@@ -506,6 +507,66 @@
         </div>
       </div>
 
+      <!-- Sub-tab : Email (Step 2B-2) -->
+      <div class="bill-settings-sub" data-sub="email" style="display:none">
+        <div class="bill-card">
+          <div class="bill-card-h">
+            <div>
+              <h3>Compte expéditeur</h3>
+              <p>Compte Gmail OAuth utilisé pour l'envoi des factures par email. Le token doit être présent dans <code>email_tokens/{slug}</code>.</p>
+            </div>
+          </div>
+          <div class="bill-form-grid">
+            <div class="bill-form-row">
+              <div class="bill-label">Slug du compte expéditeur</div>
+              <input class="bill-input" id="cfSenderAccount" value="contact" maxlength="40" placeholder="contact"/>
+              <div class="bill-help">Ce nom correspond à l'identifiant du document Firestore <code>email_tokens/&lt;slug&gt;</code>. Par défaut : <code>contact</code> (= <code>contact@adrienemily.com</code>).</div>
+            </div>
+            <div class="bill-form-row">
+              <div class="bill-label">BCC automatique</div>
+              <label class="bill-checkbox-label" style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                <input type="checkbox" id="cfEnableBcc" checked style="accent-color:#10b981;width:16px;height:16px"/>
+                <span>Recevoir une copie en BCC à chaque envoi (sur le compte expéditeur)</span>
+              </label>
+              <div class="bill-help">Pratique pour avoir la trace dans la boîte de réception du compte expéditeur. Override possible au cas par cas dans le modal.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bill-card">
+          <div class="bill-card-h">
+            <div>
+              <h3>Template email facture</h3>
+              <p>Sujet et corps utilisés par défaut au moment de l'envoi. Tu pourras toujours les modifier au cas par cas dans le modal d'envoi.</p>
+            </div>
+            <div>
+              <button class="bill-btn bill-btn-ghost" onclick="resetEmailTemplate()" title="Réinitialiser le template aux valeurs par défaut">↺ Réinitialiser</button>
+            </div>
+          </div>
+          <div class="bill-form-grid">
+            <div class="bill-form-row">
+              <div class="bill-label">Sujet</div>
+              <input class="bill-input" id="cfEmailSubject" placeholder="Votre facture {invoiceNumber} — {issuerName}"/>
+            </div>
+            <div class="bill-form-row">
+              <div class="bill-label">Corps</div>
+              <textarea class="bill-input" id="cfEmailBody" rows="14" style="font-family:inherit;line-height:1.55"></textarea>
+            </div>
+            <div class="bill-form-row">
+              <div class="bill-label">Variables disponibles</div>
+              <div style="font-size:11px;color:var(--muted);background:var(--bg1);padding:10px 12px;border-radius:6px;font-family:ui-monospace,Menlo,monospace;line-height:1.7">
+                <span style="color:var(--text)">{invoiceNumber}</span> · <span style="color:var(--text)">{clientFirstName}</span> · <span style="color:var(--text)">{clientName}</span> · <span style="color:var(--text)">{issueDate}</span> · <span style="color:var(--text)">{dueDate}</span> · <span style="color:var(--text)">{totalTtc}</span> · <span style="color:var(--text)">{totalHt}</span> · <span style="color:var(--text)">{paymentMethod}</span> · <span style="color:var(--text)">{paymentInstructions}</span> · <span style="color:var(--text)">{issuerName}</span> · <span style="color:var(--text)">{issuerEmail}</span>
+              </div>
+              <div class="bill-help"><code>{paymentInstructions}</code> est généré automatiquement selon le mode de paiement de la facture (IBAN si virement, mention SEPA si GoCardless, etc.).</div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
+            <button class="bill-btn bill-btn-ghost" onclick="loadBillingConfig()">Annuler</button>
+            <button class="bill-btn bill-btn-primary bill-btn-lg" id="emailSaveBtn" onclick="saveEmailSettings()">💾 Enregistrer</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Sub-tab : CGV -->
       <div class="bill-settings-sub" data-sub="cgv" style="display:none">
         <div class="bill-card">
@@ -717,6 +778,21 @@ let editingProductId = null;
 let pendingLogoData = null;     // {base64, mimeType} en attente de save
 let pendingLogoMode = null;     // 'wordmark' | 'image'
 
+const DEFAULT_EMAIL_SUBJECT = 'Votre facture {invoiceNumber} — {issuerName}';
+const DEFAULT_EMAIL_BODY =
+'Bonjour {clientFirstName},\n' +
+'\n' +
+'Vous trouverez en pièce jointe votre facture {invoiceNumber} d\'un montant de {totalTtc} TTC.\n' +
+'\n' +
+'Échéance de paiement : {dueDate}\n' +
+'\n' +
+'{paymentInstructions}\n' +
+'\n' +
+'Pour toute question, n\'hésitez pas à nous répondre directement à cet email.\n' +
+'\n' +
+'Bien cordialement,\n' +
+'{issuerName}';
+
 const DEFAULT_BILLING = {
   companyName: 'Ambitio Corp',
   companyLegalForm: 'SARL',
@@ -750,7 +826,16 @@ const DEFAULT_BILLING = {
   vatRate: 20,
   defaultPaymentTerms: 30,
   defaultLateFeeRate: 3,
-  defaultLateFeePenalty: 40
+  defaultLateFeePenalty: 40,
+  /* Step 2B-2 : email */
+  senderAccount: 'contact',
+  enableBcc: true,
+  emailTemplates: {
+    invoice: {
+      subject: DEFAULT_EMAIL_SUBJECT,
+      body: DEFAULT_EMAIL_BODY
+    }
+  }
 };
 
 /* CGV V2 — pré-embarquée comme version 1.0 par défaut au seed initial */
@@ -925,6 +1010,7 @@ function renderSettingsActiveSub() {
   if (activeSub === 'logo') renderLogoForm();
   if (activeSub === 'bank') renderBankForm();
   if (activeSub === 'numbering') renderNumberingForm();
+  if (activeSub === 'email') renderEmailForm();
   if (activeSub === 'cgv') renderCgvVersions();
 }
 
@@ -1223,6 +1309,64 @@ async function saveNumberingVat() {
   } finally {
     btn.disabled = false; btn.textContent = '💾 Enregistrer';
   }
+}
+
+/* ═══ EMAIL TEMPLATES (Step 2B-2) ═══ */
+function renderEmailForm() {
+  const c = billingConfig;
+  setVal('cfSenderAccount', c.senderAccount || 'contact');
+  document.getElementById('cfEnableBcc').checked = (c.enableBcc != null ? c.enableBcc : true);
+  const tmpl = (c.emailTemplates && c.emailTemplates.invoice) || {};
+  setVal('cfEmailSubject', tmpl.subject || DEFAULT_EMAIL_SUBJECT);
+  setVal('cfEmailBody', tmpl.body || DEFAULT_EMAIL_BODY);
+}
+
+async function saveEmailSettings() {
+  const btn = document.getElementById('emailSaveBtn');
+  const senderAccount = (document.getElementById('cfSenderAccount').value || '').trim() || 'contact';
+  const enableBcc = document.getElementById('cfEnableBcc').checked;
+  const subject = (document.getElementById('cfEmailSubject').value || '').trim() || DEFAULT_EMAIL_SUBJECT;
+  const body = (document.getElementById('cfEmailBody').value || '').trim() || DEFAULT_EMAIL_BODY;
+
+  /* Slug validation : alphanumeric + underscore + dash */
+  if (!/^[a-zA-Z0-9_-]+$/.test(senderAccount)) {
+    return toast('Slug invalide (caractères autorisés : a-z, 0-9, _, -)', true);
+  }
+
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try {
+    /* Vérifier que le token Gmail existe pour ce slug */
+    const tokenSnap = await db.collection('email_tokens').doc(senderAccount).get();
+    if (!tokenSnap.exists) {
+      const ok = confirm('⚠️ Aucun document email_tokens/' + senderAccount + ' trouvé en Firestore.\n\nL\'envoi des factures échouera tant que le token OAuth Gmail n\'aura pas été créé pour ce compte.\n\nEnregistrer quand même ?');
+      if (!ok) {
+        btn.disabled = false; btn.textContent = '💾 Enregistrer';
+        return;
+      }
+    }
+
+    await db.collection('_config').doc('billing').update({
+      senderAccount: senderAccount,
+      enableBcc: enableBcc,
+      'emailTemplates.invoice.subject': subject,
+      'emailTemplates.invoice.body': body,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.uid
+    });
+    toast('✅ Paramètres email enregistrés');
+  } catch (err) {
+    console.error(err);
+    toast('Erreur : ' + err.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Enregistrer';
+  }
+}
+
+function resetEmailTemplate() {
+  if (!confirm('Réinitialiser le sujet et le corps aux valeurs par défaut ?\n\nLes valeurs courantes ne seront pas écrasées tant que tu n\'auras pas cliqué sur "Enregistrer".')) return;
+  setVal('cfEmailSubject', DEFAULT_EMAIL_SUBJECT);
+  setVal('cfEmailBody', DEFAULT_EMAIL_BODY);
+  toast('Template réinitialisé (clique Enregistrer pour confirmer)');
 }
 
 /* ═══ CGV ═══ */
@@ -1689,7 +1833,8 @@ function updateInvoicesStats() {
     if (i.status !== 'paid' || !i.paidAt) return;
     const paidDate = i.paidAt.toDate ? i.paidAt.toDate() : new Date(i.paidAt);
     if (paidDate >= monthStart && paidDate < monthEnd) {
-      caMonth += (i.totalTtc || 0);
+      /* paidAmount fixé au moment du marquage manuel ; fallback totalTtc si absent (factures historiques) */
+      caMonth += (i.paidAmount != null ? i.paidAmount : (i.totalTtc || 0));
     }
   });
 
@@ -1760,6 +1905,12 @@ function renderInvoicesList() {
       html += ' <button class="bill-btn bill-btn-red" onclick="event.stopPropagation();deleteDraft(\'' + inv.id + '\')" title="Supprimer le brouillon">🗑️</button>';
     } else if (inv.pdfHash) {
       html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();downloadInvoicePdf(\'' + inv.id + '\', \'' + escapeAttr(inv.number || inv.id) + '\')" title="Télécharger PDF">📄</button>';
+      /* Renvoi : auto-ouvre le modal envoi */
+      html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();openInvoiceAction(\'' + inv.id + '\', \'send\')" title="' + (inv.sentAt ? 'Renvoyer' : 'Envoyer') + ' par email">📨</button>';
+      /* Marquer payée : auto-ouvre le modal paiement */
+      if (inv.status !== 'paid') {
+        html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();openInvoiceAction(\'' + inv.id + '\', \'paid\')" title="Marquer comme payée" style="color:#10b981">💰</button>';
+      }
     } else if (inv.pdfPending || inv.pdfError) {
       html += ' <span class="bill-badge individual" title="' + (inv.pdfError ? escapeAttr(inv.pdfError) : 'Génération en cours') + '">⚠️ PDF</span>';
     }
@@ -1810,6 +1961,11 @@ function newInvoice() {
 
 function editInvoice(id) {
   location.href = 'admin-invoice-edit.html?id=' + encodeURIComponent(id);
+}
+
+/* Ouvre la page d'édition avec auto-déclenchement du modal envoi ou paiement (Step 2B-2) */
+function openInvoiceAction(id, action) {
+  location.href = 'admin-invoice-edit.html?id=' + encodeURIComponent(id) + '&action=' + encodeURIComponent(action);
 }
 
 async function deleteDraft(id) {
