@@ -657,18 +657,20 @@ function onClientSearch(q) {
   if (isReadOnly) return;
   q = (q || '').toLowerCase().trim();
   const results = document.getElementById('clientResults');
+  /* Filtre : exclure les clients archivés (Step 5) */
+  const eligibleClients = clientsCache.filter(function(c){ return !c.archived; });
   if (!q) {
-    /* Affiche les 8 plus récents */
-    const recent = clientsCache.slice(0, 8);
+    /* Affiche les 8 plus récents non-archivés */
+    const recent = eligibleClients.slice(0, 8);
     if (!recent.length) {
-      results.innerHTML = '<div class="inv-client-result" style="color:var(--muted);cursor:default">Aucun client. <a href="admin-facturation.html#clients" target="_blank" style="color:var(--inv-green);text-decoration:underline">Créer un client</a></div>';
+      results.innerHTML = '<div class="inv-client-result" style="color:var(--muted);cursor:default">Aucun client. <a href="admin-facturation.html?tab=clients" target="_blank" style="color:var(--inv-green);text-decoration:underline">Créer un client</a></div>';
     } else {
       results.innerHTML = recent.map(renderClientResultRow).join('');
     }
     results.classList.add('show');
     return;
   }
-  const matches = clientsCache.filter(function(c) {
+  const matches = eligibleClients.filter(function(c) {
     const name = c.clientType === 'company' ? (c.companyName || '') : ((c.contactFirstName || '') + ' ' + (c.contactLastName || ''));
     return name.toLowerCase().indexOf(q) > -1
         || (c.email || '').toLowerCase().indexOf(q) > -1

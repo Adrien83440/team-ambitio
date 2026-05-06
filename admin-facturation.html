@@ -615,7 +615,7 @@
           <div class="bill-stat-v" id="statClientsIndiv">—</div>
         </div>
         <div class="bill-stat amber">
-          <div class="bill-stat-l">Liés à un lead CRM</div>
+          <div class="bill-stat-l">Liés GoCardless</div>
           <div class="bill-stat-v" id="statClientsLinked">—</div>
         </div>
       </div>
@@ -623,8 +623,25 @@
       <div class="bill-toolbar">
         <div class="bill-search">
           <span class="bill-search-icon">🔍</span>
-          <input id="clientsSearch" placeholder="Rechercher par nom, société, email…" oninput="renderClientsList()"/>
+          <input id="clientsSearch" placeholder="Rechercher par nom, société, email, SIRET…" oninput="renderClientsList()"/>
         </div>
+        <select class="bill-select" id="clientsTypeFilter" onchange="renderClientsList()" style="min-width:140px">
+          <option value="all">Tous types</option>
+          <option value="company">🏢 Sociétés</option>
+          <option value="individual">👤 Particuliers</option>
+        </select>
+        <select class="bill-select" id="clientsOwnerFilter" onchange="renderClientsList()" style="min-width:160px">
+          <option value="all">Tous les sales</option>
+        </select>
+        <select class="bill-select" id="clientsGcFilter" onchange="renderClientsList()" style="min-width:130px">
+          <option value="all">GC : tous</option>
+          <option value="yes">Avec GC</option>
+          <option value="no">Sans GC</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="clientsShowArchived" onchange="renderClientsList()" style="accent-color:var(--inv-green,#10b981)"/>
+          <span>Archivés</span>
+        </label>
         <button class="bill-btn bill-btn-primary bill-btn-lg" onclick="openClientDrawer(null)">➕ Nouveau client</button>
       </div>
 
@@ -902,6 +919,13 @@ auth.onAuthStateChanged(async function(user) {
     initInvoicesListener();
     document.getElementById('bootLoader').style.display = 'none';
     document.getElementById('billApp').style.display = 'grid';
+
+    /* Step 5 : ouverture directe d'un onglet via ?tab=invoices&clientId=... */
+    const urlParams = new URLSearchParams(window.location.search);
+    const requestedTab = urlParams.get('tab');
+    if (requestedTab && ['invoices', 'clients', 'products', 'subscriptions', 'settings', 'export'].indexOf(requestedTab) > -1) {
+      switchTab(requestedTab);
+    }
   } catch (err) {
     console.error('[billing] auth error', err);
     toast('Erreur d\'authentification : ' + err.message, true);
@@ -964,6 +988,14 @@ function initClientsListener() {
 
 /* ═══ TABS ═══ */
 function switchTab(tab) {
+  /* Si on change d'onglet, retirer les query params spécifiques au tab Factures */
+  if (activeTab === 'invoices' && tab !== 'invoices') {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('clientId')) {
+      url.searchParams.delete('clientId');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
   activeTab = tab;
   const items = document.querySelectorAll('.bill-side-item');
   for (let i = 0; i < items.length; i++) {
@@ -1489,35 +1521,73 @@ async function activateCgv(id) {
 
 /* ═══ CLIENTS LIST ═══ */
 function updateClientsStats() {
-  const total = clientsCache.length;
-  const company = clientsCache.filter(function(c){ return c.clientType === 'company'; }).length;
-  const indiv = clientsCache.filter(function(c){ return c.clientType === 'individual'; }).length;
-  const linked = clientsCache.filter(function(c){ return !!c.leadId; }).length;
+  /* Stats sur les clients NON archivés (les archivés ne sont visibles qu'avec le toggle dédié) */
+  const active = clientsCache.filter(function(c){ return !c.archived; });
+  const total = active.length;
+  const company = active.filter(function(c){ return c.clientType === 'company'; }).length;
+  const indiv = active.filter(function(c){ return c.clientType === 'individual'; }).length;
+  const linkedGc = active.filter(function(c){ return !!c.gocardlessCustomerId; }).length;
   document.getElementById('statClientsTotal').textContent = total;
   document.getElementById('statClientsCompany').textContent = company;
   document.getElementById('statClientsIndiv').textContent = indiv;
-  document.getElementById('statClientsLinked').textContent = linked;
+  document.getElementById('statClientsLinked').textContent = linkedGc;
+
+  /* Peuple le filtre Sales owner avec les valeurs distinctes effectivement présentes */
+  const ownerSelect = document.getElementById('clientsOwnerFilter');
+  if (ownerSelect) {
+    const owners = {};
+    active.forEach(function(c){ if (c.salesOwner) owners[c.salesOwner] = true; });
+    const ownerSlugs = Object.keys(owners).sort();
+    const currentVal = ownerSelect.value;
+    let optsHtml = '<option value="all">Tous les sales</option>';
+    optsHtml += '<option value="__none__">— Aucun —</option>';
+    for (let i = 0; i < ownerSlugs.length; i++) {
+      const slug = ownerSlugs[i];
+      const display = (window.TEAM_MEMBERS && window.TEAM_MEMBERS[slug] && window.TEAM_MEMBERS[slug].displayName) || slug;
+      optsHtml += '<option value="' + escapeAttr(slug) + '">' + escapeHtml(display) + '</option>';
+    }
+    ownerSelect.innerHTML = optsHtml;
+    if (currentVal) ownerSelect.value = currentVal;
+  }
 }
 
 function renderClientsList() {
   const wrap = document.getElementById('clientsTableWrap');
   const q = (document.getElementById('clientsSearch').value || '').toLowerCase().trim();
-  let list = clientsCache;
-  if (q) {
-    list = clientsCache.filter(function(c) {
-      return (c.companyName || '').toLowerCase().indexOf(q) > -1
-          || ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')).toLowerCase().indexOf(q) > -1
-          || (c.email || '').toLowerCase().indexOf(q) > -1
-          || (c.siret || '').indexOf(q) > -1;
-    });
-  }
+  const typeFilter = document.getElementById('clientsTypeFilter').value;
+  const ownerFilter = document.getElementById('clientsOwnerFilter').value;
+  const gcFilter = document.getElementById('clientsGcFilter').value;
+  const showArchived = document.getElementById('clientsShowArchived').checked;
+
+  let list = clientsCache.filter(function(c) {
+    if (!showArchived && c.archived) return false;
+    if (typeFilter !== 'all' && c.clientType !== typeFilter) return false;
+    if (ownerFilter === '__none__' && c.salesOwner) return false;
+    if (ownerFilter !== 'all' && ownerFilter !== '__none__' && c.salesOwner !== ownerFilter) return false;
+    if (gcFilter === 'yes' && !c.gocardlessCustomerId) return false;
+    if (gcFilter === 'no' && c.gocardlessCustomerId) return false;
+    if (q) {
+      const hay = (c.companyName || '') + ' ' +
+        ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')) + ' ' +
+        (c.email || '') + ' ' + (c.siret || '') + ' ' + (c.phone || '');
+      if (hay.toLowerCase().indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+
+  /* Compute count factures par client */
+  const invoiceCountByClient = {};
+  invoicesCache.forEach(function(inv) {
+    if (inv.clientId) invoiceCountByClient[inv.clientId] = (invoiceCountByClient[inv.clientId] || 0) + 1;
+  });
 
   if (!list.length) {
+    const hasFilters = q || typeFilter !== 'all' || ownerFilter !== 'all' || gcFilter !== 'all' || showArchived;
     wrap.innerHTML = '<div class="bill-empty">' +
       '<div class="bill-empty-icon">👥</div>' +
-      '<h4>' + (q ? 'Aucun résultat' : 'Aucun client de facturation') + '</h4>' +
-      '<p>' + (q ? 'Essayez avec un autre terme de recherche.' : 'Créez votre premier client de facturation pour commencer à émettre des factures.') + '</p>' +
-      (q ? '' : '<button class="bill-btn bill-btn-primary" onclick="openClientDrawer(null)">➕ Nouveau client</button>') +
+      '<h4>' + (hasFilters ? 'Aucun résultat' : 'Aucun client de facturation') + '</h4>' +
+      '<p>' + (hasFilters ? 'Essayez d\'ajuster les filtres.' : 'Créez votre premier client de facturation pour commencer à émettre des factures.') + '</p>' +
+      (hasFilters ? '' : '<button class="bill-btn bill-btn-primary" onclick="openClientDrawer(null)">➕ Nouveau client</button>') +
       '</div>';
     return;
   }
@@ -1526,10 +1596,10 @@ function renderClientsList() {
   html += '<thead><tr>';
   html += '<th style="width:32px"></th>';
   html += '<th>Nom / Société</th>';
-  html += '<th>Contact</th>';
-  html += '<th>Email</th>';
-  html += '<th>Ville</th>';
-  html += '<th>SIRET</th>';
+  html += '<th>Email · Tél</th>';
+  html += '<th style="width:90px">GC</th>';
+  html += '<th style="width:120px">Sales owner</th>';
+  html += '<th style="width:60px;text-align:right">Fact.</th>';
   html += '<th class="col-actions">Actions</th>';
   html += '</tr></thead><tbody>';
 
@@ -1537,27 +1607,67 @@ function renderClientsList() {
     const c = list[i];
     const name = c.clientType === 'company'
       ? (c.companyName || '—')
-      : ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')).trim() || '—';
+      : ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')).trim() || c.email || '—';
     const contactName = c.clientType === 'company'
       ? ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')).trim()
       : '';
     const badge = c.clientType === 'company'
-      ? '<span class="bill-badge company">🏢 Société</span>'
-      : '<span class="bill-badge individual">👤 Particulier</span>';
+      ? '<span class="bill-badge company">🏢</span>'
+      : '<span class="bill-badge individual">👤</span>';
+    const archivedBadge = c.archived ? ' <span class="bill-badge" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444">Archivé</span>' : '';
     const exempt = c.vatExempt ? ' <span class="bill-badge exempt">Hors TVA</span>' : '';
 
-    html += '<tr onclick="openClientDrawer(\'' + c.id + '\')">';
+    /* GC badge */
+    const gcBadge = c.gocardlessCustomerId
+      ? '<span class="bill-badge" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981" title="' + escapeAttr(c.gocardlessCustomerId) + '">✅ GC</span>'
+      : '<span style="color:var(--muted);font-size:11px">—</span>';
+
+    /* Sales owner display */
+    let ownerDisplay = '<span style="color:var(--muted);font-size:11px">—</span>';
+    if (c.salesOwner) {
+      const member = (window.TEAM_MEMBERS && window.TEAM_MEMBERS[c.salesOwner]);
+      const displayName = (member && member.displayName) || c.salesOwner;
+      ownerDisplay = '<span style="font-size:12px">' + escapeHtml(displayName) + '</span>';
+    }
+
+    const invCount = invoiceCountByClient[c.id] || 0;
+    const invCountDisplay = invCount > 0
+      ? '<span style="font-family:var(--font-m);font-weight:700;color:var(--text)">' + invCount + '</span>'
+      : '<span style="color:var(--muted);font-size:11px">—</span>';
+
+    html += '<tr ' + (c.archived ? 'style="opacity:.5"' : '') + ' onclick="openClientDrawer(\'' + c.id + '\')">';
     html += '<td>' + badge + '</td>';
-    html += '<td><div style="font-weight:700">' + escapeHtml(name) + '</div>' + (c.leadId ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">🔗 Lié à un lead</div>' : '') + '</td>';
-    html += '<td>' + escapeHtml(contactName) + '</td>';
-    html += '<td><span style="font-family:var(--font-m);font-size:12px">' + escapeHtml(c.email || '—') + '</span></td>';
-    html += '<td>' + escapeHtml((c.address && c.address.city) || '—') + '</td>';
-    html += '<td><span style="font-family:var(--font-m);font-size:11px;color:var(--muted)">' + escapeHtml(c.siret || '—') + '</span>' + exempt + '</td>';
-    html += '<td class="col-actions"><button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();openClientDrawer(\'' + c.id + '\')">✏️ Éditer</button></td>';
+    html += '<td><div style="font-weight:700">' + escapeHtml(name) + archivedBadge + exempt + '</div>'
+      + (contactName ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + escapeHtml(contactName) + '</div>' : '')
+      + (c.linkedLeadId ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">🔗 Lead lié</div>' : '')
+      + '</td>';
+    html += '<td><div style="font-family:var(--font-m);font-size:12px">' + escapeHtml(c.email || '—') + '</div>'
+      + (c.phone ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + escapeHtml(c.phone) + '</div>' : '')
+      + '</td>';
+    html += '<td>' + gcBadge + '</td>';
+    html += '<td>' + ownerDisplay + '</td>';
+    html += '<td style="text-align:right">' + invCountDisplay + '</td>';
+    html += '<td class="col-actions">';
+    if (invCount > 0) {
+      html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();showInvoicesForClient(\'' + c.id + '\')" title="Voir les factures de ce client">📄</button> ';
+    }
+    html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();openClientDrawer(\'' + c.id + '\')" title="Éditer">✏️</button>';
+    html += '</td>';
     html += '</tr>';
   }
   html += '</tbody></table>';
   wrap.innerHTML = html;
+}
+
+/* Action : voir les factures d'un client (redirection vers tab Factures avec filtre clientId) */
+function showInvoicesForClient(clientId) {
+  /* On change l'URL pour la rendre partageable + on bascule */
+  const url = new URL(window.location.href);
+  url.searchParams.set('tab', 'invoices');
+  url.searchParams.set('clientId', clientId);
+  window.history.replaceState({}, '', url.toString());
+  switchTab('invoices');
+  /* Le filtre s'applique automatiquement via applyClientIdFilter dans renderInvoicesList */
 }
 
 /* ═══ DRAWER : CLIENT ═══ */
@@ -1572,6 +1682,8 @@ function openClientDrawer(clientId) {
   const data = c || {
     clientType: 'company',
     companyName: '',
+    companyLegalForm: '',
+    companyRcs: '',
     contactFirstName: '',
     contactLastName: '',
     email: '',
@@ -1581,8 +1693,13 @@ function openClientDrawer(clientId) {
     vatExempt: false,
     address: { line1: '', line2: '', postalCode: '', city: '', country: 'France' },
     notes: '',
-    leadId: null
+    linkedLeadId: null,
+    gocardlessCustomerId: null,
+    salesOwner: null,
+    archived: false
   };
+  /* Rétrocompat : ancien champ leadId remplacé par linkedLeadId */
+  const linkedLeadId = data.linkedLeadId || data.leadId || null;
 
   let html = '';
   html += '<div class="bill-type-toggle">';
@@ -1590,22 +1707,33 @@ function openClientDrawer(clientId) {
   html += '  <button class="bill-type-btn ' + (data.clientType === 'individual' ? 'on' : '') + '" id="ctTypeIndiv" onclick="setClientType(\'individual\')">👤 Particulier</button>';
   html += '</div>';
 
+  /* Section société (cachée si individuel) */
   html += '<div id="cfFieldsCompany" ' + (data.clientType === 'individual' ? 'style="display:none"' : '') + '>';
   html += '  <div class="bill-form-grid full">';
   html += '    <div class="bill-form-row"><div class="bill-label">Nom de la société <span class="bill-req">*</span></div><input class="bill-input" id="ctCompanyName" value="' + attr(data.companyName) + '"/></div>';
-  html += '    <div class="bill-form-row"><div class="bill-label">SIRET</div><input class="bill-input" id="ctSiret" value="' + attr(data.siret) + '" maxlength="14"/></div>';
-  html += '    <div class="bill-form-row"><div class="bill-label">N° TVA intracommunautaire</div><input class="bill-input" id="ctVatNumber" value="' + attr(data.vatNumber) + '"/></div>';
+  html += '  </div>';
+  html += '  <div class="bill-form-grid" style="margin-top:14px">';
+  html += '    <div class="bill-form-row"><div class="bill-label">Forme juridique</div><input class="bill-input" id="ctLegalForm" value="' + attr(data.companyLegalForm) + '" placeholder="SARL, SAS, EURL, EI…"/></div>';
+  html += '    <div class="bill-form-row"><div class="bill-label">N° RCS</div><input class="bill-input" id="ctRcs" value="' + attr(data.companyRcs) + '" placeholder="RCS Paris 123 456 789"/></div>';
+  html += '  </div>';
+  html += '  <div class="bill-form-grid" style="margin-top:14px">';
+  html += '    <div class="bill-form-row"><div class="bill-label">SIRET</div><input class="bill-input" id="ctSiret" value="' + attr(data.siret) + '" maxlength="14" oninput="validateSiretSoft(this)"/><div class="bill-help" id="ctSiretHelp" style="display:none;color:#f59e0b;font-size:11px;margin-top:4px"></div></div>';
+  html += '    <div class="bill-form-row"><div class="bill-label">N° TVA intracommunautaire</div><input class="bill-input" id="ctVatNumber" value="' + attr(data.vatNumber) + '" oninput="validateVatSoft(this)"/><div class="bill-help" id="ctVatHelp" style="display:none;color:#f59e0b;font-size:11px;margin-top:4px"></div></div>';
+  html += '  </div>';
+  html += '  <div class="bill-form-grid full" style="margin-top:14px">';
   html += '    <div class="bill-form-row"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;color:var(--text)"><input type="checkbox" id="ctVatExempt" ' + (data.vatExempt ? 'checked' : '') + '/> Client exonéré de TVA (auto-liquidation, hors UE…)</label></div>';
   html += '  </div>';
   html += '</div>';
 
-  html += '<div class="bill-form-grid"' + ' style="margin-top:14px">';
+  /* Contact (toujours visible) */
+  html += '<div class="bill-form-grid" style="margin-top:14px">';
   html += '  <div class="bill-form-row"><div class="bill-label">Prénom contact ' + (data.clientType === 'individual' ? '<span class="bill-req">*</span>' : '') + '</div><input class="bill-input" id="ctFirstName" value="' + attr(data.contactFirstName) + '"/></div>';
   html += '  <div class="bill-form-row"><div class="bill-label">Nom contact ' + (data.clientType === 'individual' ? '<span class="bill-req">*</span>' : '') + '</div><input class="bill-input" id="ctLastName" value="' + attr(data.contactLastName) + '"/></div>';
-  html += '  <div class="bill-form-row"><div class="bill-label">Email <span class="bill-req">*</span></div><input class="bill-input" id="ctEmail" type="email" value="' + attr(data.email) + '"/></div>';
-  html += '  <div class="bill-form-row"><div class="bill-label">Téléphone</div><input class="bill-input" id="ctPhone" value="' + attr(data.phone) + '"/></div>';
+  html += '  <div class="bill-form-row"><div class="bill-label">Email <span class="bill-req">*</span></div><input class="bill-input" id="ctEmail" type="email" value="' + attr(data.email) + '" oninput="validateEmailSoft(this)"/><div class="bill-help" id="ctEmailHelp" style="display:none;color:#f59e0b;font-size:11px;margin-top:4px"></div></div>';
+  html += '  <div class="bill-form-row"><div class="bill-label">Téléphone</div><input class="bill-input" id="ctPhone" value="' + attr(data.phone) + '" oninput="validatePhoneSoft(this)"/><div class="bill-help" id="ctPhoneHelp" style="display:none;color:#f59e0b;font-size:11px;margin-top:4px"></div></div>';
   html += '</div>';
 
+  /* Adresse */
   html += '<div class="bill-card-h" style="margin-top:18px"><div><h3 style="font-size:12px">Adresse de facturation</h3></div></div>';
   const a = data.address || {};
   html += '<div class="bill-form-grid full">';
@@ -1618,24 +1746,69 @@ function openClientDrawer(clientId) {
   html += '  <div class="bill-form-row"><div class="bill-label">Pays</div><input class="bill-input" id="ctAddrCountry" value="' + attr(a.country || 'France') + '"/></div>';
   html += '</div>';
 
-  html += '<div class="bill-card-h" style="margin-top:18px"><div><h3 style="font-size:12px">Lien CRM</h3></div></div>';
+  /* Liens : Lead CRM + GoCardless + Sales owner */
+  html += '<div class="bill-card-h" style="margin-top:18px"><div><h3 style="font-size:12px">Liens & attribution</h3></div></div>';
   html += '<div class="bill-form-grid full">';
-  html += '  <div class="bill-form-row"><div class="bill-label">Lead lié (optionnel)</div>';
+  html += '  <div class="bill-form-row"><div class="bill-label">Lead CRM lié (optionnel)</div>';
   html += '    <input class="bill-input" id="ctLeadSearch" placeholder="Rechercher par nom, email ou téléphone…" oninput="searchLeadsForLink(this.value)"/>';
   html += '    <div id="ctLeadResults" style="margin-top:6px;max-height:180px;overflow-y:auto"></div>';
-  html += '    <div id="ctLeadSelected" style="margin-top:8px">' + (data.leadId ? '<div class="bill-badge company">🔗 Lead ' + escapeHtml(data.leadId) + ' <span style="margin-left:6px;cursor:pointer" onclick="clearLeadLink()">×</span></div>' : '') + '</div>';
+  html += '    <div id="ctLeadSelected" style="margin-top:8px">' + (linkedLeadId ? '<div class="bill-badge company">🔗 Lead ' + escapeHtml(linkedLeadId) + ' <span style="margin-left:6px;cursor:pointer" onclick="clearLeadLink()">×</span></div>' : '') + '</div>';
   html += '  </div>';
+  html += '</div>';
+  html += '<div class="bill-form-grid" style="margin-top:14px">';
+  html += '  <div class="bill-form-row"><div class="bill-label">Sales owner</div>';
+  let ownerOpts = '<option value="">— Aucun —</option>';
+  if (window.TEAM_MEMBERS_LIST) {
+    for (let oi = 0; oi < window.TEAM_MEMBERS_LIST.length; oi++) {
+      const m = window.TEAM_MEMBERS_LIST[oi];
+      const sel = (data.salesOwner === m.slug) ? ' selected' : '';
+      ownerOpts += '<option value="' + escapeAttr(m.slug) + '"' + sel + '>' + escapeHtml(m.displayName || m.slug) + '</option>';
+    }
+  }
+  html += '    <select class="bill-select" id="ctSalesOwner">' + ownerOpts + '</select>';
+  html += '    <div class="bill-help" style="font-size:11px;color:var(--muted);margin-top:4px">Pour traçabilité (Step 3 ouvrira l\'accès aux sales sur leurs clients)</div>';
+  html += '  </div>';
+  html += '  <div class="bill-form-row"><div class="bill-label">ID client GoCardless</div>';
+  html += '    <input class="bill-input" id="ctGcCustomerId" value="' + attr(data.gocardlessCustomerId || '') + '" placeholder="CU000XXXXXX" style="font-family:var(--font-m);font-size:11px"/>';
+  if (data.gocardlessCustomerId) {
+    html += '    <div class="bill-help" style="font-size:11px;margin-top:4px"><a href="https://manage.gocardless.com/customers/' + escapeAttr(data.gocardlessCustomerId) + '" target="_blank" style="color:#10b981">↗ Voir dans GoCardless</a></div>';
+  }
+  html += '  </div>';
+  html += '</div>';
+
+  /* Notes */
+  html += '<div class="bill-form-grid full" style="margin-top:14px">';
   html += '  <div class="bill-form-row"><div class="bill-label">Notes internes</div><textarea class="bill-textarea" id="ctNotes">' + escapeHtml(data.notes || '') + '</textarea></div>';
   html += '</div>';
 
+  /* Statut archivé */
+  if (data.archived) {
+    html += '<div style="margin-top:18px;padding:12px 16px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;color:#ef4444;font-size:12px">⚠️ Ce client est <strong>archivé</strong>. Il n\'apparaît plus dans le sélecteur de nouvelles factures, mais ses anciennes factures restent intactes.</div>';
+  }
+
   document.getElementById('drawerBody').innerHTML = html;
-  document.getElementById('drawerBody')._currentLeadId = data.leadId || null;
+  document.getElementById('drawerBody')._currentLeadId = linkedLeadId;
 
   let footHtml = '';
-  if (isEdit) footHtml += '<button class="bill-btn bill-btn-red" onclick="confirmDeleteClient(\'' + clientId + '\')">🗑️ Supprimer</button><span style="flex:1"></span>';
+  if (isEdit) {
+    if (data.archived) {
+      footHtml += '<button class="bill-btn bill-btn-ghost" onclick="toggleArchiveClient(\'' + clientId + '\', false)">↩️ Désarchiver</button>';
+    } else {
+      footHtml += '<button class="bill-btn bill-btn-ghost" onclick="toggleArchiveClient(\'' + clientId + '\', true)" style="color:#ef4444">🗄️ Archiver</button>';
+    }
+    footHtml += '<span style="flex:1"></span>';
+  }
   footHtml += '<button class="bill-btn bill-btn-ghost" onclick="closeDrawer()">Annuler</button>';
   footHtml += '<button class="bill-btn bill-btn-primary" id="ctSaveBtn" onclick="saveClient()">💾 ' + (isEdit ? 'Enregistrer' : 'Créer le client') + '</button>';
   document.getElementById('drawerFoot').innerHTML = footHtml;
+
+  /* Re-trigger validations sur les champs déjà remplis (pour montrer les warnings éventuels) */
+  setTimeout(function(){
+    if (data.siret) validateSiretSoft(document.getElementById('ctSiret'));
+    if (data.vatNumber) validateVatSoft(document.getElementById('ctVatNumber'));
+    if (data.email) validateEmailSoft(document.getElementById('ctEmail'));
+    if (data.phone) validatePhoneSoft(document.getElementById('ctPhone'));
+  }, 50);
 
   document.getElementById('drawerBg').classList.add('show');
   document.getElementById('drawer').classList.add('show');
@@ -1722,7 +1895,7 @@ function clearLeadLink() {
 
 async function saveClient() {
   const btn = document.getElementById('ctSaveBtn');
-  const v = function(id) { return (document.getElementById(id).value || '').trim(); };
+  const v = function(id) { const el = document.getElementById(id); return el ? (el.value || '').trim() : ''; };
   const type = document.getElementById('drawerBody')._currentType
     || (document.getElementById('ctTypeCompany').classList.contains('on') ? 'company' : 'individual');
 
@@ -1736,23 +1909,25 @@ async function saveClient() {
   const firstName = v('ctFirstName');
   const lastName = v('ctLastName');
 
+  /* Validations BLOQUANTES (champs obligatoires uniquement) */
   if (type === 'company' && !companyName) return toast('Nom de la société obligatoire', true);
   if (type === 'individual' && (!firstName || !lastName)) return toast('Prénom et nom obligatoires pour un particulier', true);
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast('Email invalide', true);
-  if (siret && !/^\d{14}$/.test(siret)) return toast('SIRET invalide (14 chiffres)', true);
-  if (vatNumber && !/^[A-Z]{2}[0-9A-Z]{2,12}$/.test(vatNumber)) return toast('N° TVA invalide', true);
+  if (!email) return toast('Email obligatoire', true);
   if (!addrLine1) return toast('Adresse ligne 1 obligatoire', true);
-  if (!/^\d{4,10}$/.test(postal)) return toast('Code postal invalide', true);
+  if (!postal) return toast('Code postal obligatoire', true);
   if (!city) return toast('Ville obligatoire', true);
+  /* Le SIRET et la TVA ne sont plus bloquants (validation SOUPLE via les warnings inline) */
 
   btn.disabled = true; btn.textContent = 'Enregistrement…';
   try {
     const doc = {
       clientType: type,
       companyName: companyName,
+      companyLegalForm: v('ctLegalForm') || null,
+      companyRcs: v('ctRcs') || null,
       contactFirstName: firstName,
       contactLastName: lastName,
-      email: email,
+      email: email.toLowerCase(),
       phone: v('ctPhone'),
       siret: siret,
       vatNumber: vatNumber,
@@ -1765,7 +1940,9 @@ async function saveClient() {
         country: v('ctAddrCountry') || 'France'
       },
       notes: v('ctNotes'),
-      leadId: document.getElementById('drawerBody')._currentLeadId || null,
+      linkedLeadId: document.getElementById('drawerBody')._currentLeadId || null,
+      gocardlessCustomerId: v('ctGcCustomerId') || null,
+      salesOwner: v('ctSalesOwner') || null,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: currentUser.uid
     };
@@ -1775,6 +1952,7 @@ async function saveClient() {
     } else {
       doc.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       doc.createdBy = currentUser.uid;
+      doc.archived = false;
       await db.collection('invoice_clients').add(doc);
       toast('✅ Client créé');
     }
@@ -1788,14 +1966,82 @@ async function saveClient() {
   }
 }
 
-async function confirmDeleteClient(id) {
-  if (!confirm('Supprimer définitivement ce client ?\n\n⚠️ Cette action est irréversible. Si des factures ont déjà été émises pour ce client, leurs données seront conservées (immutabilité fiscale) mais la fiche client elle-même disparaîtra.')) return;
+/* Archive / désarchive un client (soft delete) */
+async function toggleArchiveClient(id, archive) {
+  const action = archive ? 'archiver' : 'désarchiver';
+  if (archive) {
+    /* Compte les factures pour informer l'utilisateur */
+    const count = invoicesCache.filter(function(inv){ return inv.clientId === id; }).length;
+    let msg = 'Archiver ce client ?\n\nIl ne pourra plus être sélectionné pour de nouvelles factures.';
+    if (count > 0) msg += '\n\nLes ' + count + ' facture(s) déjà émise(s) pour ce client restent intactes (immutabilité fiscale).';
+    if (!confirm(msg)) return;
+  }
   try {
-    await db.collection('invoice_clients').doc(id).delete();
-    toast('🗑️ Client supprimé');
+    await db.collection('invoice_clients').doc(id).update({
+      archived: !!archive,
+      archivedAt: archive ? firebase.firestore.FieldValue.serverTimestamp() : null,
+      archivedBy: archive ? currentUser.uid : null,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.uid
+    });
+    toast(archive ? '🗄️ Client archivé' : '↩️ Client désarchivé');
     closeDrawer();
   } catch (err) {
     toast('Erreur : ' + err.message, true);
+  }
+}
+
+/* ═══ Validation SOUPLE (warnings inline, n'empêche pas le save) ═══ */
+function validateSiretSoft(input) {
+  const help = document.getElementById('ctSiretHelp');
+  if (!help) return;
+  const v = (input.value || '').replace(/\s/g, '');
+  if (!v) { help.style.display = 'none'; return; }
+  if (!/^\d{14}$/.test(v)) {
+    help.textContent = '⚠️ Format inhabituel : un SIRET français fait 14 chiffres (saisie autorisée mais à vérifier)';
+    help.style.display = 'block';
+  } else {
+    help.style.display = 'none';
+  }
+}
+function validateVatSoft(input) {
+  const help = document.getElementById('ctVatHelp');
+  if (!help) return;
+  const v = (input.value || '').replace(/\s/g, '').toUpperCase();
+  if (!v) { help.style.display = 'none'; return; }
+  /* Format générique : 2 lettres pays + 2-13 chars alphanum */
+  if (!/^[A-Z]{2}[0-9A-Z]{2,13}$/.test(v)) {
+    help.textContent = '⚠️ Format inhabituel : commence généralement par 2 lettres (FR, DE, BE…) suivies de chiffres';
+    help.style.display = 'block';
+  } else if (v.startsWith('FR') && !/^FR[0-9A-Z]{2}\d{9}$/.test(v)) {
+    help.textContent = '⚠️ TVA française attendue : FR + 2 caractères + 9 chiffres (saisie autorisée mais à vérifier)';
+    help.style.display = 'block';
+  } else {
+    help.style.display = 'none';
+  }
+}
+function validateEmailSoft(input) {
+  const help = document.getElementById('ctEmailHelp');
+  if (!help) return;
+  const v = (input.value || '').trim();
+  if (!v) { help.style.display = 'none'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+    help.textContent = '⚠️ Format email suspect (vérifie la présence de @ et du domaine)';
+    help.style.display = 'block';
+  } else {
+    help.style.display = 'none';
+  }
+}
+function validatePhoneSoft(input) {
+  const help = document.getElementById('ctPhoneHelp');
+  if (!help) return;
+  const v = (input.value || '').replace(/[\s\-\.\(\)]/g, '');
+  if (!v) { help.style.display = 'none'; return; }
+  if (!/^\+?\d{8,15}$/.test(v)) {
+    help.textContent = '⚠️ Format inhabituel : préférer le format E.164 (+33XXXXXXXXX)';
+    help.style.display = 'block';
+  } else {
+    help.style.display = 'none';
   }
 }
 
@@ -1853,7 +2099,11 @@ function renderInvoicesList() {
   const q = (document.getElementById('invoicesSearch').value || '').toLowerCase().trim();
   const statusFilter = document.getElementById('invoicesStatusFilter').value;
 
+  /* Filtre clientId : lu depuis l'URL (?clientId=...) au moment du render */
+  const clientIdFilter = (new URLSearchParams(window.location.search)).get('clientId') || null;
+
   let list = invoicesCache;
+  if (clientIdFilter) list = list.filter(function(i){ return i.clientId === clientIdFilter; });
   if (statusFilter !== 'all') list = list.filter(function(i){ return i.status === statusFilter; });
   if (q) {
     list = list.filter(function(i) {
@@ -1864,17 +2114,33 @@ function renderInvoicesList() {
     });
   }
 
+  /* Badge filtre client actif (avec bouton × pour retirer) */
+  let filterBadgeHtml = '';
+  if (clientIdFilter) {
+    const c = clientsCache.filter(function(x){ return x.id === clientIdFilter; })[0];
+    const clientLabel = c
+      ? (c.clientType === 'company' ? (c.companyName || '—') : ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')).trim() || c.email || '—')
+      : 'client supprimé';
+    filterBadgeHtml = '<div style="margin-bottom:14px;padding:10px 14px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:8px;display:flex;align-items:center;gap:10px;font-size:12px">'
+      + '<span style="color:var(--muted)">Filtré par client :</span>'
+      + '<strong style="color:var(--text)">' + escapeHtml(clientLabel) + '</strong>'
+      + '<span style="flex:1"></span>'
+      + '<button class="bill-btn bill-btn-ghost" onclick="clearClientIdFilter()" style="font-size:11px;padding:4px 10px">× Retirer le filtre</button>'
+      + '</div>';
+  }
+
   if (!list.length) {
-    wrap.innerHTML = '<div class="bill-empty">' +
+    wrap.innerHTML = filterBadgeHtml + '<div class="bill-empty">' +
       '<div class="bill-empty-icon">📄</div>' +
-      '<h4>' + (q || statusFilter !== 'all' ? 'Aucun résultat' : 'Aucune facture') + '</h4>' +
-      '<p>' + (q || statusFilter !== 'all' ? 'Essayez avec d\'autres filtres.' : 'Créez votre première facture pour commencer.') + '</p>' +
-      (q || statusFilter !== 'all' ? '' : '<button class="bill-btn bill-btn-primary" onclick="newInvoice()">➕ Nouvelle facture</button>') +
+      '<h4>' + (q || statusFilter !== 'all' || clientIdFilter ? 'Aucun résultat' : 'Aucune facture') + '</h4>' +
+      '<p>' + (q || statusFilter !== 'all' || clientIdFilter ? 'Essayez avec d\'autres filtres.' : 'Créez votre première facture pour commencer.') + '</p>' +
+      (q || statusFilter !== 'all' || clientIdFilter ? '' : '<button class="bill-btn bill-btn-primary" onclick="newInvoice()">➕ Nouvelle facture</button>') +
       '</div>';
     return;
   }
 
-  let html = '<table class="bill-table">';
+  let html = filterBadgeHtml;
+  html += '<table class="bill-table">';
   html += '<thead><tr>';
   html += '<th style="width:120px">N°</th>';
   html += '<th>Client</th>';
@@ -1966,6 +2232,14 @@ function editInvoice(id) {
 /* Ouvre la page d'édition avec auto-déclenchement du modal envoi ou paiement (Step 2B-2) */
 function openInvoiceAction(id, action) {
   location.href = 'admin-invoice-edit.html?id=' + encodeURIComponent(id) + '&action=' + encodeURIComponent(action);
+}
+
+/* Retire le filtre clientId du tab Factures (Step 5) */
+function clearClientIdFilter() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('clientId');
+  window.history.replaceState({}, '', url.toString());
+  renderInvoicesList();
 }
 
 async function deleteDraft(id) {
