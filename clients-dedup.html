@@ -236,8 +236,13 @@
     // ============================================================
     // CLUSTER DETECTION (Union-Find) — STRICT MATCHING ONLY
     // Email exact, tél exact (chiffres normalisés), nom complet exact
+    // Les docs déjà fusionnés (_merged === true) sont exclus du scan.
     // ============================================================
     function detectClusters(leads){
+      // Exclure les docs déjà fusionnés — ils restent en base mais ne doivent
+      // plus apparaitre dans les clusters auto.
+      leads = leads.filter(function(l){ return l._merged !== true; });
+
       var parent = {};
       leads.forEach(function(l){ parent[l.id] = l.id; });
       function find(x){
