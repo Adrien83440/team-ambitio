@@ -605,6 +605,9 @@ function runImport(){
       showToast('✅ Import terminé : ' + (total - errors) + ' clients mis à jour');
       // Auto-recharge cours existants
       loadExistingCourses();
+      // Afficher le récap des non-matchés (utile pour debugger pourquoi
+      // certaines progressions n'apparaissent pas dans le dashboard CSM)
+      renderPostImportReport();
       return;
     }
     var batch = db.batch();
@@ -648,8 +651,57 @@ function resetAll(){
   document.getElementById('importStatus').textContent = '';
   document.getElementById('progFill').style.width = '0%';
   document.getElementById('progBar').style.display = 'none';
+  var rep = document.getElementById('postReport'); if(rep) rep.remove();
 }
 window.resetAll = resetAll;
+
+/* ─── Récap post-import : liste des emails non matchés ───
+   Permet à la CSM de voir tout de suite POURQUOI certaines progressions
+   n'apparaissent pas dans le dashboard (= email du CSV ne matche aucun
+   lead client dans ambitio-team). C'est le cas le plus fréquent.        */
+function renderPostImportReport(){
+  // Supprimer ancien rapport
+  var old = document.getElementById('postReport'); if(old) old.remove();
+
+  var noMatch = parsedRows.filter(function(r){ return r.status === 'nomatch'; });
+  var invalid = parsedRows.filter(function(r){ return r.status === 'invalid'; });
+  if(!noMatch.length && !invalid.length) return;
+
+  var step = document.getElementById('previewStep');
+  var div = document.createElement('div');
+  div.id = 'postReport';
+  div.className = 'imp-step';
+  div.style.borderColor = 'rgba(251,146,60,.25)';
+  var html = '<div class="imp-step-h"><div class="imp-step-num" style="background:rgba(251,146,60,.10);color:#fdba74;border-color:rgba(251,146,60,.3)">!</div><div>'
+           + '<div class="imp-step-title">⚠️ Lignes non importées (' + (noMatch.length + invalid.length) + ')</div>'
+           + '<div class="imp-step-sub">Ces clients n\'apparaîtront pas dans le dashboard CSM. Vérifier email/données.</div>'
+           + '</div></div>';
+
+  if(noMatch.length){
+    html += '<div style="font-size:13px;font-weight:700;margin-bottom:6px">⏭ ' + noMatch.length + ' email' + (noMatch.length>1?'s':'') + ' sans correspondance dans le CRM</div>';
+    html += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:8px">Ces emails sont dans le CSV Kajabi mais n\'existent pas dans <code>leads where isClient==true</code>. Cause probable : email différent dans le CRM, ou client non encore marqué client.</div>';
+    html += '<div class="imp-preview" style="max-height:260px"><table class="imp-table"><thead><tr><th>Email Kajabi</th><th>Nom</th><th>Progression</th></tr></thead><tbody>';
+    noMatch.slice(0, 50).forEach(function(r){
+      html += '<tr class="nomatch"><td>' + esc(r.email) + '</td><td>' + esc(r.name||'—') + '</td><td>' + (r.pct!=null?r.pct+'%':'—') + '</td></tr>';
+    });
+    if(noMatch.length > 50){
+      html += '<tr><td colspan="3" style="text-align:center;color:var(--ink-muted);font-style:italic">… ' + (noMatch.length-50) + ' autres</td></tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+  if(invalid.length){
+    html += '<div style="font-size:13px;font-weight:700;margin-top:14px;margin-bottom:6px">❌ ' + invalid.length + ' ligne' + (invalid.length>1?'s':'') + ' invalide' + (invalid.length>1?'s':'') + ' (email ou % manquant)</div>';
+    html += '<div class="imp-preview" style="max-height:200px"><table class="imp-table"><thead><tr><th>Email</th><th>Progression brute</th></tr></thead><tbody>';
+    invalid.slice(0, 30).forEach(function(r){
+      html += '<tr class="invalid"><td>' + esc(r.email||'—') + '</td><td><em>' + esc(r.rawPct||'') + '</em></td></tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+  html += '<div style="margin-top:14px;font-size:12px;color:var(--ink-muted)">💡 <strong>Astuce :</strong> les emails côté CRM sont stockés en minuscules. Si une ligne ne matche pas, vérifie d\'abord l\'orthographe et la casse, puis vérifie que ce client est bien marqué <code>isClient = true</code> dans le CRM.</div>';
+
+  div.innerHTML = html;
+  step.parentNode.insertBefore(div, step.nextSibling);
+}
 </script>
 </body>
 </html>

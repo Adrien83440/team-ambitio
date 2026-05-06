@@ -115,6 +115,93 @@ body { background: var(--bg); color: var(--ink); }
 .csm-card.warn { border-left: 3px solid var(--warn-color); }
 .csm-card.att  { border-left: 3px solid var(--att-color); }
 
+/* ═══ Nouveau layout cards en colonnes par dimension ═══════════════════════
+   Chaque card a 6 cellules visibles : Identité | Paiement | Coaching |
+   Kajabi | Followup | Actions. Permet de scanner une dimension précise
+   sur toute la liste sans être noyé dans des badges à plat.
+*/
+.csm-card2 {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 14px;
+  display: grid; grid-template-columns: minmax(220px,1.4fr) 1.1fr 1.1fr 1.1fr 0.9fr auto;
+  gap: 0; align-items: stretch; transition: all 0.15s; cursor: pointer;
+  margin-bottom: 8px; overflow: hidden; min-height: 84px;
+}
+.csm-card2:hover { border-color: var(--csm-border); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.2); }
+.csm-card2.crit { border-left: 3px solid var(--crit-color); }
+.csm-card2.warn { border-left: 3px solid var(--warn-color); }
+.csm-card2.att  { border-left: 3px solid var(--att-color); }
+
+/* Cellule identité — premier bloc */
+.csm2-id {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-right: 1px solid var(--border); min-width: 0;
+}
+.csm2-id-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.csm2-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.csm2-sub { font-size: 11px; color: var(--ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.csm2-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.csm2-badges .csm-badge { font-size: 9px; padding: 2px 6px; }
+
+/* Cellules de dimension (Paiement / Coaching / Kajabi / Followup) */
+.csm2-cell {
+  padding: 10px 14px; display: flex; flex-direction: column; gap: 3px;
+  border-right: 1px solid var(--border); justify-content: center; min-width: 0;
+}
+.csm2-cell-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.6px; color: var(--ink-muted);
+  text-transform: uppercase; opacity: 0.7;
+}
+.csm2-cell-main {
+  font-size: 16px; font-weight: 800; line-height: 1.1; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.csm2-cell-main-small { font-size: 13px; font-weight: 700; }
+.csm2-amount { color: var(--csm-accent); }
+.csm2-amount-sep { color: var(--ink-muted); font-weight: 500; margin: 0 1px; }
+.csm2-amount-total { color: var(--ink-muted); font-weight: 600; }
+.csm2-cell-sub {
+  font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+}
+.csm2-cell-sub.ok    { color: #34d399; }
+.csm2-cell-sub.att   { color: #fbbf24; }
+.csm2-cell-sub.warn  { color: var(--warn-color); }
+.csm2-cell-sub.crit  { color: var(--crit-color); }
+.csm2-cell-sub.muted { color: var(--ink-muted); }
+.csm2-cell-empty {
+  font-size: 11px; color: var(--ink-muted); font-style: italic; opacity: 0.7;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.csm2-progress-mini {
+  width: 100%; max-width: 90px; height: 4px; background: var(--bg2);
+  border-radius: 2px; overflow: hidden; margin: 2px 0;
+}
+.csm2-progress-mini-fill { height: 100%; transition: width 0.3s; }
+
+/* Cellule actions */
+.csm2-actions {
+  display: flex; align-items: center; gap: 4px;
+  padding: 10px 14px;
+}
+
+/* Backgrounds très subtils pour distinguer les dimensions visuellement */
+.csm2-cell-pay   { background: linear-gradient(180deg, rgba(34,197,94,0.02) 0%, transparent 100%); }
+.csm2-cell-coach { background: linear-gradient(180deg, rgba(94,234,212,0.025) 0%, transparent 100%); }
+.csm2-cell-kaj   { background: linear-gradient(180deg, rgba(251,191,36,0.02) 0%, transparent 100%); }
+
+/* Responsive : sur écran moyen on cache la cellule followup, sur mobile on stack */
+@media (max-width: 1280px) {
+  .csm-card2 { grid-template-columns: minmax(200px,1.4fr) 1.1fr 1.1fr 1.1fr auto; }
+  .csm2-cell-followup { display: none; }
+}
+@media (max-width: 920px) {
+  .csm-card2 { grid-template-columns: 1fr 1fr; gap: 0; }
+  .csm2-id { grid-column: 1 / -1; border-right: none; border-bottom: 1px solid var(--border); }
+  .csm2-cell { border-right: none; border-bottom: 1px solid var(--border); }
+  .csm2-cell-pay, .csm2-cell-coach { border-right: 1px solid var(--border); }
+  .csm2-actions { grid-column: 1 / -1; padding: 8px 14px; justify-content: flex-end; border-top: 1px solid var(--border); background: rgba(0,0,0,0.15); }
+}
+
 .csm-avatar {
   width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center;
   justify-content: center; font-weight: 700; font-size: 15px; color: white;
@@ -943,32 +1030,26 @@ function renderClientCard(c){
   else if(lvl === 'att')  lvlBadge = '<span class="csm-badge att">🟡 Attention</span>';
   else if(lvl === 'ok')   lvlBadge = '<span class="csm-badge ok">✅ OK</span>';
 
-  // Badges motifs (paiement / coaching) — affichés uniquement si on est dans
-  // un état d'alerte. Permet de voir d'un coup d'œil POURQUOI un client
-  // remonte (paiement échoué vs coaching en retard, etc.)
-  var reasonsBadges = '';
-  if(lvl && lvl !== 'ok'){
-    var reasons = c._reasons || computeReasons(c);
-    reasons.forEach(function(r){
-      var rcls = r.kind === 'payment'  ? 'pay-failed'
-               : r.kind === 'coaching' ? 'pay-active'
-               : (r.level === 'crit' ? 'crit' : r.level === 'warn' ? 'warn' : 'att');
-      reasonsBadges += '<span class="csm-badge ' + rcls + '" style="font-size:10px">' + r.label + '</span>';
-    });
-  }
-
   var status = c.clientStatus || 'active';
   var cs = CLIENT_STATUS[status] || CLIENT_STATUS.active;
   var statusBadge = '<span class="csm-badge ' + cs.cls + '">' + cs.label + '</span>';
 
-  var followBadge = '';
-  if(c.lastCsmFollowupAt){
-    followBadge = '<span class="csm-badge followup">↻ Relancé ' + timeAgo(c.lastCsmFollowupAt) + '</span>';
-  }
+  // ───── CELLULE IDENTITÉ ─────
+  var initialsTxt = esc(initials(clientDisplayName(c)));
+  var nameTxt     = esc(clientDisplayName(c));
+  var commerceTxt = c.commerce && c.commerce !== c.nom ? esc(c.commerce) : '';
 
-  // Synthèse paiements
+  var identityCell = '<div class="csm2-id">'
+    + '<div class="csm-avatar">' + initialsTxt + '</div>'
+    + '<div class="csm2-id-text">'
+    + '<div class="csm2-name">' + nameTxt + '</div>'
+    + (commerceTxt ? '<div class="csm2-sub">' + commerceTxt + '</div>' : '')
+    + '<div class="csm2-badges">' + lvlBadge + statusBadge + '</div>'
+    + '</div></div>';
+
+  // ───── CELLULE PAIEMENT ─────
   var pays = paymentsByLead[c.id] || [];
-  var payInfo = '';
+  var payCell;
   if(pays.length){
     var totalAmt = 0, paidAmt = 0;
     pays.forEach(function(p){
@@ -977,92 +1058,147 @@ function renderClientCard(c){
       paidAmt  += (p.paidAmount  || 0);
     });
     var nbFailed = pays.filter(function(p){ return p.status === 'failed'; }).length;
-    payInfo = '<span title="Total payé">💳 ' + fmtEuro(paidAmt) + ' / ' + fmtEuro(totalAmt) + '</span>';
-    if(nbFailed > 0) payInfo += '<span class="csm-badge crit">❌ ' + nbFailed + ' échec' + (nbFailed>1?'s':'') + '</span>';
-  } else {
-    payInfo = '<span style="color:var(--ink-muted)">💳 Aucun paiement</span>';
-  }
+    var nbPending = pays.filter(function(p){ return p.status === 'pending_mandate'; }).length;
+    var mainPay = pays[0];
+    var hasInst = mainPay.installmentsCount > 1;
 
-  var clientSince = '';
-  if(c.clientSince){ clientSince = '<span>📅 Client depuis ' + fmtDate(c.clientSince) + '</span>'; }
-
-  // ─── Badge coaching (collection clients matchée par email) ───
-  var coachingBadge = '';
-  var coachingDoc = getCoachingForLead(c);
-  if(coachingDoc){
-    var done  = coachingDoc.nbCoachingsFaits || 0;
-    var total = coachingDoc.nbCoachingsTotal || 12;
-    var now = new Date();
-    var qNow = getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
-    var prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
-    var qPrev = getCoachingQuotaStatus(coachingDoc, prev.getFullYear(), prev.getMonth());
-    var coachLbl = '🎯 ' + done + '/' + total;
-    if(coachingDoc.statut === 'inactif'){
-      coachingBadge = '<span class="csm-badge cs-stopped">' + coachLbl + ' inactif</span>';
-    } else if(done >= total){
-      coachingBadge = '<span class="csm-badge cs-completed">' + coachLbl + ' terminé</span>';
-    } else if(qNow && qPrev && qNow.status === 'miss' && qPrev.status === 'miss'){
-      coachingBadge = '<span class="csm-badge crit" title="2 mois sans coaching">' + coachLbl + ' • 2 mois sans</span>';
-    } else if(qNow && qNow.status === 'miss'){
-      coachingBadge = '<span class="csm-badge warn" title="Pas de coaching ce mois">' + coachLbl + ' • retard mois</span>';
-    } else if(qNow && qNow.status === 'partial'){
-      coachingBadge = '<span class="csm-badge att">' + coachLbl + ' • ' + qNow.used + '/' + qNow.max + ' mois</span>';
-    } else if(qNow && qNow.status === 'ok'){
-      coachingBadge = '<span class="csm-badge ok">' + coachLbl + ' ✓ mois</span>';
-    } else {
-      coachingBadge = '<span class="csm-badge cs-active">' + coachLbl + '</span>';
-    }
-  }
-
-  // Badge formation Kajabi — moyenne des % par cours si dispo
-  var kajBadge = '';
-  if(c.kajabiProgress && c.kajabiProgress.byCourse){
-    var courseKeys = Object.keys(c.kajabiProgress.byCourse);
-    if(courseKeys.length){
-      var sumPct = 0, nPct = 0, hasLegacyDone = 0, hasLegacyTotal = 0;
-      courseKeys.forEach(function(ck){
-        var crs = c.kajabiProgress.byCourse[ck] || {};
-        if(typeof crs.pct === 'number'){
-          sumPct += crs.pct; nPct++;
-        } else if(crs.modules){
-          // Legacy : agréger les leçons
-          Object.keys(crs.modules).forEach(function(mk){
-            var m = crs.modules[mk] || {};
-            hasLegacyDone += (m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
-            if(m.totalLessons) hasLegacyTotal += m.totalLessons;
-          });
-        }
-      });
-      if(nPct > 0){
-        var avgPct = Math.round(sumPct / nPct);
-        var bcls = avgPct >= 80 ? 'ok' : avgPct >= 40 ? 'att' : 'warn';
-        kajBadge = '<span class="csm-badge ' + bcls + '" title="Progression Kajabi moyenne">🎓 ' + avgPct + '%</span>';
-      } else if(hasLegacyTotal > 0){
-        var legPct = Math.round((hasLegacyDone/hasLegacyTotal)*100);
-        kajBadge = '<span class="csm-badge ok" title="Progression Kajabi globale">🎓 ' + legPct + '%</span>';
-      } else if(hasLegacyDone > 0){
-        kajBadge = '<span class="csm-badge ok" title="Leçons Kajabi terminées">🎓 ' + hasLegacyDone + ' leçons</span>';
+    // Détection retard de prélèvement (pour 1er paiement actif avec installments)
+    var lateMonths = 0;
+    var activePay = pays.find(function(p){ return p.status === 'active' && p.installmentsCount > 1; });
+    if(activePay){
+      var start = toDate(activePay.startDate);
+      if(start){
+        var monthsElapsed = (new Date().getFullYear() - start.getFullYear())*12 + (new Date().getMonth() - start.getMonth()) + 1;
+        var expected = Math.min(monthsElapsed, activePay.installmentsCount);
+        lateMonths = Math.max(0, expected - (activePay.paidCount || 0) - 1);
       }
     }
+
+    var payMain = '<span class="csm2-amount">' + fmtEuro(paidAmt) + '</span><span class="csm2-amount-sep">/</span><span class="csm2-amount-total">' + fmtEuro(totalAmt) + '</span>';
+    var paySubLabel = '';
+    var paySubCls = '';
+    if(nbFailed > 0){
+      paySubLabel = '❌ ' + nbFailed + ' échec' + (nbFailed>1?'s':'');
+      paySubCls = 'crit';
+    } else if(lateMonths > 0){
+      paySubLabel = '⚠️ ' + lateMonths + ' mois de retard';
+      paySubCls = 'crit';
+    } else if(nbPending > 0){
+      paySubLabel = '⏳ Mandat en attente';
+      paySubCls = 'warn';
+    } else if(hasInst){
+      paySubLabel = (mainPay.paidCount || 0) + '/' + mainPay.installmentsCount + ' échéances';
+      paySubCls = 'ok';
+    } else if(mainPay.status === 'completed'){
+      paySubLabel = '🎉 Soldé';
+      paySubCls = 'ok';
+    } else {
+      paySubLabel = PAY_STATUS[mainPay.status] ? PAY_STATUS[mainPay.status].label : (mainPay.status || '—');
+      paySubCls = 'ok';
+    }
+    payCell = '<div class="csm2-cell csm2-cell-pay">'
+      + '<div class="csm2-cell-label">💳 PAIEMENT</div>'
+      + '<div class="csm2-cell-main">' + payMain + '</div>'
+      + '<div class="csm2-cell-sub ' + paySubCls + '">' + paySubLabel + '</div>'
+      + '</div>';
+  } else {
+    payCell = '<div class="csm2-cell csm2-cell-pay">'
+      + '<div class="csm2-cell-label">💳 PAIEMENT</div>'
+      + '<div class="csm2-cell-empty">Aucun paiement enregistré</div>'
+      + '</div>';
   }
 
-  var av = '<div class="csm-avatar">' + esc(initials(clientDisplayName(c))) + '</div>';
-  var info = '<div class="csm-card-info">' +
-    '<div class="csm-card-name">' + esc(clientDisplayName(c)) + (c.commerce ? ' <span style="font-weight:400;color:var(--ink-muted);font-size:12px">— ' + esc(c.commerce) + '</span>' : '') + '</div>' +
-    '<div class="csm-card-meta">' +
-      lvlBadge + reasonsBadges + statusBadge + followBadge + coachingBadge + kajBadge +
-      payInfo + clientSince +
-    '</div>' +
-  '</div>';
+  // ───── CELLULE COACHING ─────
+  var coachingDoc = getCoachingForLead(c);
+  var coachCell;
+  if(coachingDoc){
+    var done = coachingDoc.nbCoachingsFaits || 0;
+    var total = coachingDoc.nbCoachingsTotal || 12;
+    var nowD = new Date();
+    var qNow = getCoachingQuotaStatus(coachingDoc, nowD.getFullYear(), nowD.getMonth());
+    var prevD = new Date(nowD.getFullYear(), nowD.getMonth()-1, 1);
+    var qPrev = getCoachingQuotaStatus(coachingDoc, prevD.getFullYear(), prevD.getMonth());
+    var coachSubLabel = '';
+    var coachSubCls = 'ok';
+    if(coachingDoc.statut === 'inactif'){ coachSubLabel = 'Compte inactif'; coachSubCls = 'muted'; }
+    else if(done >= total){ coachSubLabel = '🎉 Programme terminé'; coachSubCls = 'ok'; }
+    else if(qNow && qPrev && qNow.status === 'miss' && qPrev.status === 'miss'){ coachSubLabel = '🔴 2 mois sans session'; coachSubCls = 'crit'; }
+    else if(qNow && qNow.status === 'miss'){ coachSubLabel = '🟠 Aucune session ce mois'; coachSubCls = 'warn'; }
+    else if(qNow && qNow.status === 'partial'){ coachSubLabel = qNow.used + '/' + qNow.max + ' ce mois'; coachSubCls = 'att'; }
+    else if(qNow && qNow.status === 'ok'){ coachSubLabel = '✓ Quota mensuel OK'; coachSubCls = 'ok'; }
+    else { coachSubLabel = '—'; coachSubCls = 'muted'; }
+    coachCell = '<div class="csm2-cell csm2-cell-coach">'
+      + '<div class="csm2-cell-label">🎯 COACHING</div>'
+      + '<div class="csm2-cell-main">' + done + '<span class="csm2-amount-sep">/</span>' + total + '</div>'
+      + '<div class="csm2-cell-sub ' + coachSubCls + '">' + coachSubLabel + '</div>'
+      + '</div>';
+  } else {
+    coachCell = '<div class="csm2-cell csm2-cell-coach">'
+      + '<div class="csm2-cell-label">🎯 COACHING</div>'
+      + '<div class="csm2-cell-empty">Pas de fiche coaching</div>'
+      + '</div>';
+  }
 
-  var actions = '<div class="csm-actions">';
+  // ───── CELLULE KAJABI ─────
+  var kajCell;
+  if(c.kajabiProgress && c.kajabiProgress.byCourse && Object.keys(c.kajabiProgress.byCourse).length){
+    var courseKeys = Object.keys(c.kajabiProgress.byCourse);
+    var sumPct = 0, nPct = 0;
+    var firstTitle = '';
+    courseKeys.forEach(function(ck){
+      var crs = c.kajabiProgress.byCourse[ck] || {};
+      if(!firstTitle && crs.title) firstTitle = crs.title;
+      if(typeof crs.pct === 'number'){ sumPct += crs.pct; nPct++; }
+    });
+    if(nPct > 0){
+      var avgPct = Math.round(sumPct / nPct);
+      var kajBarColor = avgPct >= 80 ? 'var(--csm-accent)' : avgPct >= 40 ? '#fbbf24' : 'var(--crit-color)';
+      var kajCls = avgPct >= 80 ? 'ok' : avgPct >= 40 ? 'att' : 'warn';
+      var kajSub = courseKeys.length === 1
+                  ? esc(firstTitle || 'Programme')
+                  : courseKeys.length + ' cours suivis';
+      kajCell = '<div class="csm2-cell csm2-cell-kaj">'
+        + '<div class="csm2-cell-label">🎓 KAJABI</div>'
+        + '<div class="csm2-cell-main">' + avgPct + '<span class="csm2-amount-sep">%</span></div>'
+        + '<div class="csm2-progress-mini"><div class="csm2-progress-mini-fill" style="width:' + avgPct + '%;background:' + kajBarColor + '"></div></div>'
+        + '<div class="csm2-cell-sub ' + kajCls + '" title="' + esc(firstTitle) + '">' + kajSub + '</div>'
+        + '</div>';
+    } else {
+      kajCell = '<div class="csm2-cell csm2-cell-kaj">'
+        + '<div class="csm2-cell-label">🎓 KAJABI</div>'
+        + '<div class="csm2-cell-empty">Données importées sans %</div>'
+        + '</div>';
+    }
+  } else {
+    kajCell = '<div class="csm2-cell csm2-cell-kaj">'
+      + '<div class="csm2-cell-label">🎓 KAJABI</div>'
+      + '<div class="csm2-cell-empty">Pas de progression importée</div>'
+      + '</div>';
+  }
+
+  // ───── CELLULE FOLLOWUP ─────
+  var followCell = '<div class="csm2-cell csm2-cell-followup">'
+    + '<div class="csm2-cell-label">↻ DERN. RELANCE</div>';
+  if(c.lastCsmFollowupAt){
+    followCell += '<div class="csm2-cell-main csm2-cell-main-small">' + timeAgo(c.lastCsmFollowupAt) + '</div>';
+  } else {
+    followCell += '<div class="csm2-cell-empty">Jamais relancé</div>';
+  }
+  if(c.clientSince){
+    followCell += '<div class="csm2-cell-sub muted">📅 Depuis ' + fmtDate(c.clientSince) + '</div>';
+  }
+  followCell += '</div>';
+
+  // ───── ACTIONS ─────
+  var actions = '<div class="csm2-actions">';
   if(c.telephone) actions += '<button class="csm-act-btn" title="📱 SMS" onclick="event.stopPropagation();quickSms(\'' + c.id + '\')">📱</button>';
   if(c.email)     actions += '<button class="csm-act-btn" title="📧 Email" onclick="event.stopPropagation();quickEmail(\'' + c.id + '\')">📧</button>';
   actions += '<button class="csm-act-btn" title="📋 Détails" onclick="event.stopPropagation();openClientModal(\'' + c.id + '\')">📋</button>';
   actions += '</div>';
 
-  return '<div class="csm-card ' + lvlClass + '" onclick="openClientModal(\'' + c.id + '\')">' +
-    av + info + '<div></div>' + actions + '</div>';
+  return '<div class="csm-card2 ' + lvlClass + '" onclick="openClientModal(\'' + c.id + '\')">'
+       + identityCell + payCell + coachCell + kajCell + followCell + actions
+       + '</div>';
 }
 
 function renderPayments(){
@@ -1485,9 +1621,19 @@ function renderModal(){
   // Compatibilité legacy : si byCourse[id].modules existe (ancien format
   // par-leçon), on calcule le pct comme avant.
   var kProg = c.kajabiProgress;
-  if (kProg && kProg.byCourse && Object.keys(kProg.byCourse).length) {
-    h += '<div class="csm-section">';
-    h += '<div class="csm-section-title">🎓 Formation Kajabi</div>';
+  // ─── Section toujours affichée (même vide) pour clarté visuelle ───
+  h += '<div class="csm-section">';
+  h += '<div class="csm-section-title">🎓 Formation Kajabi</div>';
+  if (!kProg || !kProg.byCourse || !Object.keys(kProg.byCourse).length) {
+    // État vide explicite + CTA import
+    h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:20px;text-align:center">';
+    h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">🎓</div>';
+    h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:10px">Aucune progression Kajabi importée pour ce client</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:12px">Vérifie que l\'email <strong>' + esc(c.email||'(non renseigné)') + '</strong> matche bien dans le CSV exporté.</div>';
+    h += '<a class="csm-btn primary" href="csm-import.html" target="_blank">📥 Importer un CSV Kajabi</a>';
+    h += '</div></div>';
+  } else if (true) {
+    // contenu existant ouvert ici
     Object.keys(kProg.byCourse).forEach(function(courseKey){
       var crs = kProg.byCourse[courseKey] || {};
       var coursePct = null;
