@@ -38,7 +38,7 @@ module.exports = async (req, res) => {
 
   const auth = await requireAuth(req, res);
   if (!auth) return;
-  if (auth.role !== 'sales' && auth.role !== 'admin') {
+  if (auth.role !== 'sales' && auth.role !== 'admin' && auth.role !== 'csm') {
     res.status(403).json({ error: 'Rôle sales ou admin requis' }); return;
   }
 
