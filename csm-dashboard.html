@@ -795,23 +795,51 @@ function loadCoachingClients(){
   });
 }
 
-/* ─── Listener enrichissement : leads where isClient==true ─── */
+/* ─── Listener enrichissement : leads (tous, pas seulement isClient=true) ───
+   Initialement on filtrait sur `isClient==true` mais ça ratait des matches
+   où le lead correspondait à un coaching mais n'avait pas (encore) le flag
+   isClient. Exemple concret : un lead "sebastien" converti en client (visible
+   dans sa timeline) mais dont le flag isClient n'avait pas été propagé →
+   le coaching BELLE ANNE (même email contact@climabitat.net) apparaissait
+   comme "Pas de lead CRM lié" alors que le lead existait bel et bien.
+
+   On charge donc maintenant TOUS les leads (skip _merged===true) pour le
+   matching par email. C'est un peu plus lourd en lecture Firestore mais
+   beaucoup plus robuste. Si la collection grossit énormément (>20k leads),
+   on pourra optimiser via where('email','in',[...batches]).               */
 var leadsByEmail = {};
 function loadEnrichmentLeads(){
-  db.collection('leads').where('isClient','==',true).onSnapshot(function(snap){
+  db.collection('leads').onSnapshot(function(snap){
     leadsByEmail = {};
     snap.forEach(function(d){
       var data = d.data();
       if(data._merged === true) return;
-      data.id = d.id;
+      // On skip aussi les leads qui n'ont pas d'email (impossibles à matcher).
       var em = (data.email||'').toLowerCase().trim();
-      if(em) leadsByEmail[em] = data;
+      if(!em) return;
+      data.id = d.id;
+      // Si plusieurs leads partagent le même email, on garde celui qui a
+      // isClient=true en priorité (c'est le plus pertinent pour la CSM),
+      // sinon le plus récemment mis à jour.
+      var existing = leadsByEmail[em];
+      if(!existing){
+        leadsByEmail[em] = data;
+      } else {
+        var existingIsClient = !!existing.isClient;
+        var newIsClient = !!data.isClient;
+        if(newIsClient && !existingIsClient){
+          leadsByEmail[em] = data;
+        } else if(newIsClient === existingIsClient){
+          // Même statut isClient → garder le plus récent
+          var existingT = toDate(existing.updatedAt) || toDate(existing.createdAt) || new Date(0);
+          var newT = toDate(data.updatedAt) || toDate(data.createdAt) || new Date(0);
+          if(newT > existingT) leadsByEmail[em] = data;
+        }
+      }
     });
     buildAllClients();
   }, function(err){
     console.warn('Leads enrichment listener error (non-bloquant):', err.message);
-    // Si enrichissement échoue, on rebuild quand même : on perdra juste les
-    // données issues du lead (paiements, kajabi, etc.) sans casser le dashboard.
     buildAllClients();
   });
 }
@@ -1769,9 +1797,12 @@ function renderModal(){
   h += '</div>';
   h += '</div>';
 
-  // ───── BANDEAU "PAS DE LEAD CRM" (clients sans lead lié) ─────
-  // Affiché uniquement si le client coaching n'a pas de lead matché.
-  // CTA pour créer le lead manquant et ainsi débloquer paiements/kajabi.
+  // ───── BANDEAU "PAS DE LEAD CRM" / "LEAD NON MARQUÉ CLIENT" ─────
+  // 3 cas possibles :
+  //  A. Pas de lead du tout → bandeau violet "Pas de lead CRM lié"
+  //  B. Lead matché mais isClient !== true → bandeau orange "Lead trouvé mais
+  //     pas marqué client" avec bouton pour le corriger en 1 clic
+  //  C. Lead matché et isClient === true → pas de bandeau (cas normal)
   if(!c._hasLead){
     h += '<div style="background:linear-gradient(135deg,rgba(168,85,247,0.10),rgba(192,132,252,0.05));border:1px solid rgba(168,85,247,0.30);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">';
     h += '<div style="font-size:18px">📚</div>';
@@ -1780,6 +1811,16 @@ function renderModal(){
     h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">Ce client est en coaching mais n\'a pas de lead correspondant dans le CRM. Sans lead, ni les paiements GoCardless ni la progression Kajabi ne sont visibles ici.</div>';
     h += '</div>';
     h += '<button class="csm-btn primary" onclick="csmCreateLeadForClient(\'' + openClientId + '\')" style="background:#7c3aed;border-color:#a78bfa">+ Créer le lead CRM</button>';
+    h += '</div>';
+  } else if(c._lead && !c._lead.isClient){
+    // Lead trouvé mais pas marqué isClient — propose la correction en 1 clic
+    h += '<div style="background:linear-gradient(135deg,rgba(251,146,60,0.10),rgba(253,186,116,0.05));border:1px solid rgba(251,146,60,0.30);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">';
+    h += '<div style="font-size:18px">⚠️</div>';
+    h += '<div style="flex:1;min-width:200px">';
+    h += '<div style="font-size:12px;font-weight:700;color:#fdba74">Lead CRM trouvé mais pas marqué client</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">Le lead <strong>' + esc(c._lead.nom||c._lead.email) + '</strong> existe dans le CRM mais son flag <code>isClient</code> est faux. Marque-le client pour qu\'il apparaisse dans les vues sales-clients et débloquer les badges associés.</div>';
+    h += '</div>';
+    h += '<button class="csm-btn primary" onclick="csmMarkLeadAsClient(\'' + openClientId + '\')" style="background:#ea580c;border-color:#fb923c">✓ Marquer client</button>';
     h += '</div>';
   }
 
@@ -2397,6 +2438,41 @@ function csmCreateLeadForClient(clientId){
   });
 }
 window.csmCreateLeadForClient = csmCreateLeadForClient;
+
+/* ─── Marquer un lead existant comme client (set isClient=true) ───
+   Utilisé quand le lead matche par email mais n'a pas le flag isClient.
+   Cas typique : un commercial a converti le lead en mode coaching mais
+   le flag CRM n'a pas été propagé. Cette action met juste à jour le
+   flag — le lead conserve toute son histoire CRM (timeline, notes, etc.)
+*/
+function csmMarkLeadAsClient(clientId){
+  var c = allClients.find(function(x){ return x.id === clientId; });
+  if(!c || !c._leadId){
+    showToast('❌ Pas de lead à marquer', 'error');
+    return;
+  }
+  if(c._lead && c._lead.isClient){
+    showToast('Ce lead est déjà marqué client', 'error');
+    return;
+  }
+  if(!confirm('Marquer le lead "' + esc(c._lead.nom||c._lead.email) + '" comme client ?\n\nIl apparaîtra alors dans le module sales-clients.')) return;
+
+  db.collection('leads').doc(c._leadId).update({
+    isClient: true,
+    clientStatus: c.clientStatus || 'active',
+    clientSince: c._lead.clientSince || (c._coaching && c._coaching.dateEntree) || firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    showToast('✅ Lead marqué client');
+    // Le snapshot leads se rafraîchit auto, buildAllClients va remonter
+    // l'info à jour. La modal se met à jour au renderModal suivant.
+    setTimeout(renderModal, 800);
+  }).catch(function(e){
+    console.error('csmMarkLeadAsClient error', e);
+    showToast('❌ Erreur — voir console', 'error');
+  });
+}
+window.csmMarkLeadAsClient = csmMarkLeadAsClient;
 
 /* Rend le détail GoCardless (mandats + paiements passés/futurs) dans #gcLiveContent */
 function renderGcLiveData(data){
