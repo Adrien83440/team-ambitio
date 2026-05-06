@@ -234,7 +234,8 @@
     }
 
     // ============================================================
-    // CLUSTER DETECTION (Union-Find)
+    // CLUSTER DETECTION (Union-Find) — STRICT MATCHING ONLY
+    // Email exact, tél exact (chiffres normalisés), nom complet exact
     // ============================================================
     function detectClusters(leads){
       var parent = {};
@@ -248,12 +249,12 @@
         if (ra !== rb) parent[ra] = rb;
       }
 
-      // Index par email
+      // 1. Email exact (lowercased, trimmed)
       var byEmail = {};
       leads.forEach(function(l){
         if (l.email && typeof l.email === 'string') {
           var e = l.email.toLowerCase().trim();
-          if (e.length > 3 && e.indexOf('@') > 0) {
+          if (e.length > 5 && e.indexOf('@') > 0 && e.indexOf('.') > 0) {
             if (!byEmail[e]) byEmail[e] = [];
             byEmail[e].push(l.id);
           }
@@ -264,13 +265,16 @@
         for (var i = 1; i < ids.length; i++) union(ids[0], ids[i]);
       });
 
-      // Index par tél
+      // 2. Tél exact (chiffres + plus uniquement, ≥10 chars)
       var byTel = {};
       leads.forEach(function(l){
         var t = l.telephone || l.phone;
-        if (t && typeof t === 'string' && t.length >= 10) {
-          if (!byTel[t]) byTel[t] = [];
-          byTel[t].push(l.id);
+        if (t && typeof t === 'string') {
+          var n = t.replace(/[^\d+]/g, '');
+          if (n.length >= 10) {
+            if (!byTel[n]) byTel[n] = [];
+            byTel[n].push(l.id);
+          }
         }
       });
       Object.keys(byTel).forEach(function(t){
@@ -278,37 +282,18 @@
         for (var i = 1; i < ids.length; i++) union(ids[0], ids[i]);
       });
 
-      // Index par nom : tokenisation
-      var leadTokens = {};
+      // 3. Nom complet EXACT (≥2 tokens, normalisé sans accents/casse/ponctuation, tokens triés)
+      var byName = {};
       leads.forEach(function(l){
-        leadTokens[l.id] = normalizeTokens(l.nom);
-      });
-
-      var byToken = {};
-      leads.forEach(function(l){
-        leadTokens[l.id].forEach(function(t){
-          if (!byToken[t]) byToken[t] = [];
-          byToken[t].push(l.id);
-        });
-      });
-
-      // Pour chaque token avec >=2 leads, vérifier paires
-      var checked = {};
-      Object.keys(byToken).forEach(function(tok){
-        var ids = byToken[tok];
-        for (var i = 0; i < ids.length; i++) {
-          for (var j = i+1; j < ids.length; j++) {
-            var a = ids[i], b = ids[j];
-            var key = a < b ? a+'|'+b : b+'|'+a;
-            if (checked[key]) continue;
-            checked[key] = true;
-            var ta = leadTokens[a], tb = leadTokens[b];
-            var setA = {}; ta.forEach(function(t){ setA[t] = true; });
-            var common = 0;
-            tb.forEach(function(t){ if (setA[t]) common++; });
-            if (common >= 2) union(a, b);
-          }
+        var n = normalizeFullName(l.nom);
+        if (n.tokens >= 2) {
+          if (!byName[n.key]) byName[n.key] = [];
+          byName[n.key].push(l.id);
         }
+      });
+      Object.keys(byName).forEach(function(n){
+        var ids = byName[n];
+        for (var i = 1; i < ids.length; i++) union(ids[0], ids[i]);
       });
 
       // Construire clusters
@@ -343,6 +328,17 @@
       });
 
       return clusters;
+    }
+
+    function normalizeFullName(str){
+      if (!str || typeof str !== 'string') return { key: '', tokens: 0 };
+      var tokens = str.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(function(t){ return t.length >= 2; });
+      return { key: tokens.slice().sort().join(' '), tokens: tokens.length };
     }
 
     function normalizeTokens(str){
