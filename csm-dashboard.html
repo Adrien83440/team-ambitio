@@ -281,8 +281,9 @@ body { background: var(--bg); color: var(--ink); }
     <div class="csm-logo">💎</div>
     <div>
       <div class="csm-title">Dashboard Customer Success</div>
-      <div class="csm-sub">Suivi clients actifs, paiements, témoignages et relances</div>
+      <div class="csm-sub">Suivi clients actifs, paiements, coachings, formation Kajabi</div>
     </div>
+    <a href="csm-import.html" style="margin-left:auto;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;background:var(--bg3);border:1px solid var(--border);color:var(--ink);text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:all 0.15s">📥 Importer CSV Kajabi</a>
   </div>
 
   <!-- ─── STATS ─── -->
@@ -915,23 +916,35 @@ function renderClientCard(c){
     }
   }
 
-  // Badge formation Kajabi (% global si calculable, sinon "🎓 En formation")
+  // Badge formation Kajabi — moyenne des % par cours si dispo
   var kajBadge = '';
   if(c.kajabiProgress && c.kajabiProgress.byCourse){
-    var totDone = 0, totAll = 0;
-    Object.keys(c.kajabiProgress.byCourse).forEach(function(ck){
-      var crs = c.kajabiProgress.byCourse[ck] || {};
-      Object.keys(crs.modules || {}).forEach(function(mk){
-        var m = crs.modules[mk] || {};
-        totDone += (m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
-        if(m.totalLessons) totAll += m.totalLessons;
+    var courseKeys = Object.keys(c.kajabiProgress.byCourse);
+    if(courseKeys.length){
+      var sumPct = 0, nPct = 0, hasLegacyDone = 0, hasLegacyTotal = 0;
+      courseKeys.forEach(function(ck){
+        var crs = c.kajabiProgress.byCourse[ck] || {};
+        if(typeof crs.pct === 'number'){
+          sumPct += crs.pct; nPct++;
+        } else if(crs.modules){
+          // Legacy : agréger les leçons
+          Object.keys(crs.modules).forEach(function(mk){
+            var m = crs.modules[mk] || {};
+            hasLegacyDone += (m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
+            if(m.totalLessons) hasLegacyTotal += m.totalLessons;
+          });
+        }
       });
-    });
-    if(totAll > 0){
-      var globalPct = Math.round((totDone/totAll)*100);
-      kajBadge = '<span class="csm-badge ok" title="Progression Kajabi globale">🎓 ' + globalPct + '%</span>';
-    } else if(totDone > 0){
-      kajBadge = '<span class="csm-badge ok" title="Leçons Kajabi terminées">🎓 ' + totDone + ' leçons</span>';
+      if(nPct > 0){
+        var avgPct = Math.round(sumPct / nPct);
+        var bcls = avgPct >= 80 ? 'ok' : avgPct >= 40 ? 'att' : 'warn';
+        kajBadge = '<span class="csm-badge ' + bcls + '" title="Progression Kajabi moyenne">🎓 ' + avgPct + '%</span>';
+      } else if(hasLegacyTotal > 0){
+        var legPct = Math.round((hasLegacyDone/hasLegacyTotal)*100);
+        kajBadge = '<span class="csm-badge ok" title="Progression Kajabi globale">🎓 ' + legPct + '%</span>';
+      } else if(hasLegacyDone > 0){
+        kajBadge = '<span class="csm-badge ok" title="Leçons Kajabi terminées">🎓 ' + hasLegacyDone + ' leçons</span>';
+      }
     }
   }
 
@@ -1238,71 +1251,88 @@ function renderModal(){
   h += '<div style="margin-top:8px"><a class="csm-btn" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Gérer les paiements</a></div>';
   h += '</div>';
 
-  // ─── Formation Kajabi (alimenté par api/kajabi-progress-ingest via Make.com) ───
-  // Structure attendue sur leads/{id}.kajabiProgress :
-  //   { byCourse: { [courseId]: { title, lastLessonAt,
-  //       modules: { [moduleId]: { title, totalLessons, completedLessons:{}, pct, completedCount } }
-  //   } } }
+  // ─── Formation Kajabi (alimenté par csm-import.html depuis CSV exporté Kajabi) ───
+  // Structure principale : leads/{id}.kajabiProgress = {
+  //   byCourse: { [courseId]: { title, pct, lastImportAt, lastImportBy } },
+  //   lastImportAt: timestamp
+  // }
+  // Compatibilité legacy : si byCourse[id].modules existe (ancien format
+  // par-leçon), on calcule le pct comme avant.
   var kProg = c.kajabiProgress;
   if (kProg && kProg.byCourse && Object.keys(kProg.byCourse).length) {
     h += '<div class="csm-section">';
     h += '<div class="csm-section-title">🎓 Formation Kajabi</div>';
     Object.keys(kProg.byCourse).forEach(function(courseKey){
       var crs = kProg.byCourse[courseKey] || {};
-      var modules = crs.modules || {};
-      var modKeys = Object.keys(modules);
-      // Calcul agrégat global du cours
-      var totalLessons = 0, doneLessons = 0, knownTotalsCount = 0;
-      modKeys.forEach(function(mk){
-        var m = modules[mk];
-        var d = (m && m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
-        doneLessons += d;
-        if(m && m.totalLessons){
-          totalLessons += m.totalLessons;
-          knownTotalsCount++;
+      var coursePct = null;
+      var subInfo = '';
+
+      if(typeof crs.pct === 'number'){
+        // Format nouveau : pct fourni directement par le CSV Kajabi
+        coursePct = Math.max(0, Math.min(100, Math.round(crs.pct)));
+        if(crs.lastImportAt){
+          subInfo = '📅 Importé ' + timeAgo(crs.lastImportAt);
         }
-      });
-      var coursePct = (totalLessons > 0) ? Math.round((doneLessons / totalLessons) * 100) : null;
+      } else if(crs.modules){
+        // Format legacy : on calcule depuis les modules détaillés
+        var modKeys = Object.keys(crs.modules);
+        var totL = 0, doneL = 0;
+        modKeys.forEach(function(mk){
+          var m = crs.modules[mk];
+          var d = (m && m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
+          doneL += d;
+          if(m && m.totalLessons) totL += m.totalLessons;
+        });
+        if(totL > 0) coursePct = Math.round((doneL/totL)*100);
+        subInfo = doneL + ' leçon' + (doneL>1?'s':'') + ' faite' + (doneL>1?'s':'');
+        if(totL > 0) subInfo += ' / ' + totL;
+        if(crs.lastLessonAt) subInfo += ' · 📅 ' + timeAgo(crs.lastLessonAt);
+      }
+
       // Header cours
       h += '<div style="margin-bottom:14px">';
-      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:10px">';
       h += '<div style="font-size:13px;font-weight:700">' + esc(crs.title || courseKey) + '</div>';
-      h += '<div style="font-size:11px;color:var(--ink-muted)">';
-      h += doneLessons + ' leçon' + (doneLessons>1?'s':'') + ' faite' + (doneLessons>1?'s':'');
-      if(totalLessons > 0) h += ' / ' + totalLessons + ' · ' + coursePct + '%';
+      h += '<div style="font-size:13px;font-weight:700;color:var(--csm-accent)">';
+      if(coursePct !== null) h += coursePct + '%';
+      else h += '—';
       h += '</div></div>';
+
+      // Barre de progression
       if(coursePct !== null){
-        h += '<div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:6px">';
-        h += '<div style="height:100%;width:' + coursePct + '%;background:linear-gradient(90deg,var(--csm-accent-dark),var(--csm-accent));transition:width 0.3s"></div>';
+        var pctColor = coursePct >= 80 ? 'var(--csm-accent)'
+                     : coursePct >= 40 ? '#fbbf24'
+                     : '#fca5a5';
+        h += '<div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden;margin-bottom:6px">';
+        h += '<div style="height:100%;width:' + coursePct + '%;background:linear-gradient(90deg,' + pctColor + ',var(--csm-accent));transition:width 0.3s"></div>';
         h += '</div>';
-      } else if(knownTotalsCount === 0){
-        h += '<div style="font-size:10px;color:var(--ink-muted);margin-bottom:6px;font-style:italic">% global indisponible — Make.com doit envoyer module.totalLessons</div>';
       }
-      if(crs.lastLessonAt){
-        h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:8px">📅 Dernière leçon : ' + timeAgo(crs.lastLessonAt) + '</div>';
+
+      if(subInfo){
+        h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:6px">' + subInfo + '</div>';
       }
-      // Modules
-      modKeys.forEach(function(mk){
-        var m = modules[mk] || {};
-        var doneN = (m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
-        var totN = m.totalLessons || null;
-        var modPct = (totN && totN > 0) ? Math.round((doneN/totN)*100) : null;
-        h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:5px">';
-        h += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:4px">';
-        h += '<span style="font-weight:600">' + esc(m.title || mk) + '</span>';
-        h += '<span style="color:var(--ink-muted);font-size:11px">' + doneN + (totN ? '/' + totN : '');
-        if(modPct !== null) h += ' · ' + modPct + '%';
-        h += '</span></div>';
-        if(modPct !== null){
-          h += '<div style="height:4px;background:var(--bg2);border-radius:2px;overflow:hidden">';
-          var barColor = modPct >= 80 ? 'var(--csm-accent)' : modPct >= 40 ? '#fbbf24' : '#fca5a5';
-          h += '<div style="height:100%;width:' + modPct + '%;background:' + barColor + ';transition:width 0.3s"></div>';
-          h += '</div>';
-        }
-        h += '</div>';
-      });
+
+      // Si format legacy : on déroule les modules en plus
+      if(crs.modules){
+        Object.keys(crs.modules).forEach(function(mk){
+          var m = crs.modules[mk] || {};
+          var doneN = (m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
+          var totN = m.totalLessons || null;
+          var modPct = (totN && totN > 0) ? Math.round((doneN/totN)*100) : null;
+          h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:5px">';
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px">';
+          h += '<span style="font-weight:600">' + esc(m.title || mk) + '</span>';
+          h += '<span style="color:var(--ink-muted);font-size:11px">' + doneN + (totN ? '/' + totN : '');
+          if(modPct !== null) h += ' · ' + modPct + '%';
+          h += '</span></div></div>';
+        });
+      }
       h += '</div>';
     });
+    if(kProg.lastImportAt){
+      h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:6px">⏱ Dernier import : ' + fmtDateTime(kProg.lastImportAt) + '</div>';
+    }
+    h += '<div style="margin-top:8px"><a class="csm-btn" href="csm-import.html" target="_blank">📥 Mettre à jour depuis Kajabi</a></div>';
     h += '</div>';
   }
 

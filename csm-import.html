@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Import Kajabi — Dashboard CSM</title>
+<link rel="stylesheet" href="sales.css"/>
+
+<!-- Firebase v9 compat -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+      authDomain:        "ambitio-team.firebaseapp.com",
+      projectId:         "ambitio-team",
+      storageBucket:     "ambitio-team.firebasestorage.app",
+      messagingSenderId: "1079366902268",
+      appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+    });
+  }
+</script>
+<!-- PapaParse pour parsing CSV robuste -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+:root {
+  --csm-accent: #5eead4;
+  --csm-accent-2: #14b8a6;
+  --csm-accent-dark: #0f766e;
+  --csm-glow: rgba(94,234,212,0.18);
+  --csm-bg-soft: rgba(94,234,212,0.06);
+  --csm-border: rgba(94,234,212,0.25);
+}
+body { background: var(--bg); color: var(--ink); font-family: 'Plus Jakarta Sans', sans-serif; }
+
+.imp-app { padding: 28px 32px; max-width: 1100px; margin: 0 auto; }
+.imp-header {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+  padding-bottom: 18px; border-bottom: 1px solid var(--border);
+}
+.imp-logo {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--csm-accent), var(--csm-accent-2));
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+  box-shadow: 0 6px 20px var(--csm-glow);
+}
+.imp-title { font-size: 22px; font-weight: 800; }
+.imp-sub   { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
+
+.imp-back { color: var(--ink-muted); text-decoration: none; font-size: 13px; margin-left: auto; }
+.imp-back:hover { color: var(--csm-accent); }
+
+.imp-step {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 14px;
+  padding: 22px; margin-bottom: 16px;
+}
+.imp-step-h {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+}
+.imp-step-num {
+  width: 28px; height: 28px; border-radius: 50%; background: var(--csm-bg-soft);
+  color: var(--csm-accent); display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 13px; border: 1.5px solid var(--csm-border); flex-shrink: 0;
+}
+.imp-step-title { font-size: 16px; font-weight: 700; }
+.imp-step-sub   { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
+
+.imp-input {
+  width: 100%; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 11px 14px; color: var(--ink); font-family: inherit; font-size: 14px;
+}
+.imp-input:focus { outline: none; border-color: var(--csm-accent); box-shadow: 0 0 0 3px var(--csm-bg-soft); }
+
+.imp-drop {
+  border: 2px dashed var(--border); border-radius: 12px; padding: 40px 20px;
+  text-align: center; cursor: pointer; transition: all 0.15s;
+  background: var(--bg2);
+}
+.imp-drop.drag { border-color: var(--csm-accent); background: var(--csm-bg-soft); }
+.imp-drop-icon { font-size: 38px; margin-bottom: 10px; opacity: 0.6; }
+.imp-drop-text { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.imp-drop-hint { font-size: 12px; color: var(--ink-muted); }
+.imp-drop input[type=file] { display: none; }
+
+.imp-preview {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  max-height: 380px; overflow: auto; margin-top: 12px;
+}
+.imp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.imp-table th {
+  position: sticky; top: 0; background: var(--bg3);
+  text-align: left; padding: 10px 12px; font-weight: 700;
+  border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.4px; color: var(--ink-muted);
+}
+.imp-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.imp-table tr.match    td { color: var(--ink); }
+.imp-table tr.nomatch  td { color: rgba(255,255,255,0.35); }
+.imp-table tr.invalid  td { color: var(--crit-color, #fca5a5); }
+
+.imp-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; font-weight: 700;
+}
+.imp-pill.ok   { background: rgba(16,185,129,.12); color: #34d399; border: 1px solid rgba(16,185,129,.25); }
+.imp-pill.skip { background: rgba(148,163,184,.12); color: #94a3b8; border: 1px solid rgba(148,163,184,.25); }
+.imp-pill.err  { background: rgba(239,68,68,.12); color: #fca5a5; border: 1px solid rgba(239,68,68,.25); }
+
+.imp-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin: 14px 0; }
+.imp-stat {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px;
+}
+.imp-stat-val { font-size: 22px; font-weight: 800; }
+.imp-stat-label { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
+.imp-stat.ok   .imp-stat-val { color: #34d399; }
+.imp-stat.skip .imp-stat-val { color: #94a3b8; }
+.imp-stat.err  .imp-stat-val { color: var(--crit-color, #fca5a5); }
+
+.imp-btn {
+  padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 700;
+  border: none; cursor: pointer; font-family: inherit; display: inline-flex;
+  align-items: center; gap: 8px; transition: all 0.15s;
+}
+.imp-btn.primary {
+  background: linear-gradient(135deg, var(--csm-accent-dark), var(--csm-accent-2));
+  color: white; box-shadow: 0 4px 16px var(--csm-glow);
+}
+.imp-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 6px 24px var(--csm-glow); }
+.imp-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.imp-btn.ghost {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--ink);
+}
+.imp-btn.ghost:hover { background: var(--bg3); border-color: var(--csm-border); }
+
+.imp-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.imp-mute { color: var(--ink-muted); font-size: 12px; }
+
+.imp-help {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 16px; font-size: 12px; line-height: 1.5;
+}
+.imp-help-title { font-weight: 700; margin-bottom: 6px; color: var(--ink); }
+.imp-help ol { margin-left: 18px; color: var(--ink-soft); }
+.imp-help li { margin-bottom: 3px; }
+.imp-help code { background: var(--bg3); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+.imp-prog { height: 6px; background: var(--bg2); border-radius: 3px; overflow: hidden; margin-top: 10px; }
+.imp-prog-fill { height: 100%; background: linear-gradient(90deg, var(--csm-accent-dark), var(--csm-accent)); transition: width 0.3s; width: 0%; }
+
+.imp-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+  background: var(--bg3); border: 1px solid var(--csm-border);
+  padding: 12px 22px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  z-index: 2000; transition: transform 0.3s; box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+}
+.imp-toast.show { transform: translateX(-50%) translateY(0); }
+.imp-toast.error { border-color: rgba(239,68,68,.25); color: #fca5a5; }
+
+.imp-history {
+  margin-top: 8px; font-size: 11px; color: var(--ink-muted);
+}
+.imp-history-item {
+  padding: 8px 12px; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 4px; display: flex; justify-content: space-between;
+}
+</style>
+</head>
+
+<body>
+<div class="imp-app">
+  <div class="imp-header">
+    <div class="imp-logo">📥</div>
+    <div>
+      <div class="imp-title">Import progression Kajabi</div>
+      <div class="imp-sub">Upload du CSV exporté depuis Kajabi → mise à jour des fiches clients CSM</div>
+    </div>
+    <a class="imp-back" href="csm-dashboard.html">← Retour dashboard</a>
+  </div>
+
+  <!-- Aide -->
+  <div class="imp-help">
+    <div class="imp-help-title">📋 Comment exporter le CSV depuis Kajabi</div>
+    <ol>
+      <li>Connecte-toi sur Kajabi → <code>Analytics</code> → <code>View</code> sur la carte <code>Product Progress</code></li>
+      <li>Sélectionne le produit/cours dont tu veux extraire la progression</li>
+      <li>Clique sur <code>Export</code> en haut à droite → télécharge le CSV</li>
+      <li>Reviens ici, donne le titre du cours puis dépose le fichier ↓</li>
+    </ol>
+    <div style="margin-top:8px;color:var(--ink-muted)">Le CSV doit contenir au minimum une colonne <code>Email</code> et une colonne <code>Progress</code> (% de complétion).</div>
+  </div>
+
+  <!-- ── Step 1 : Identifier le cours ── -->
+  <div class="imp-step">
+    <div class="imp-step-h">
+      <div class="imp-step-num">1</div>
+      <div>
+        <div class="imp-step-title">Identifier le cours Kajabi</div>
+        <div class="imp-step-sub">Donne un titre clair (ex : "Programme principal Ambitio") et un identifiant stable (ne le change plus jamais après l'import).</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:10px">
+      <div>
+        <label class="imp-mute" style="display:block;margin-bottom:4px">Titre du cours (visible dans le dashboard)</label>
+        <input class="imp-input" id="courseTitle" placeholder="Programme principal Ambitio" oninput="onCourseTitleChange()"/>
+      </div>
+      <div>
+        <label class="imp-mute" style="display:block;margin-bottom:4px">Identifiant (auto-généré, modifiable)</label>
+        <input class="imp-input" id="courseId" placeholder="programme-principal" oninput="onCourseIdManual()"/>
+      </div>
+    </div>
+    <div id="existingCourses" class="imp-history"></div>
+  </div>
+
+  <!-- ── Step 2 : Upload CSV ── -->
+  <div class="imp-step">
+    <div class="imp-step-h">
+      <div class="imp-step-num">2</div>
+      <div>
+        <div class="imp-step-title">Déposer le fichier CSV</div>
+        <div class="imp-step-sub">Drag-and-drop ou clique pour sélectionner.</div>
+      </div>
+    </div>
+    <label class="imp-drop" id="dropZone">
+      <input type="file" id="fileInput" accept=".csv,text/csv,application/vnd.ms-excel"/>
+      <div class="imp-drop-icon">📄</div>
+      <div class="imp-drop-text" id="dropText">Glisse ton CSV Kajabi ici ou clique pour parcourir</div>
+      <div class="imp-drop-hint" id="dropHint">Format attendu : Email + % de progression</div>
+    </label>
+  </div>
+
+  <!-- ── Step 3 : Preview & import ── -->
+  <div class="imp-step" id="previewStep" style="display:none">
+    <div class="imp-step-h">
+      <div class="imp-step-num">3</div>
+      <div>
+        <div class="imp-step-title">Aperçu & import</div>
+        <div class="imp-step-sub">Vérifie les correspondances avant de lancer l'import.</div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="imp-stats">
+      <div class="imp-stat ok"><div class="imp-stat-val" id="statOk">—</div><div class="imp-stat-label">✅ À importer</div></div>
+      <div class="imp-stat skip"><div class="imp-stat-val" id="statSkip">—</div><div class="imp-stat-label">⏭ Sans match</div></div>
+      <div class="imp-stat err"><div class="imp-stat-val" id="statErr">—</div><div class="imp-stat-label">❌ Invalides</div></div>
+    </div>
+
+    <!-- Mapping détecté -->
+    <div id="mappingInfo" class="imp-mute" style="margin-bottom:10px"></div>
+
+    <!-- Preview table -->
+    <div class="imp-preview">
+      <table class="imp-table" id="previewTable"><thead></thead><tbody></tbody></table>
+    </div>
+
+    <!-- Actions -->
+    <div class="imp-row" style="margin-top:14px">
+      <button class="imp-btn primary" id="btnImport" onclick="runImport()">🚀 Importer dans le CSM</button>
+      <button class="imp-btn ghost" onclick="resetAll()">🔄 Recommencer</button>
+      <span class="imp-mute" id="importStatus"></span>
+    </div>
+    <div class="imp-prog" id="progBar" style="display:none"><div class="imp-prog-fill" id="progFill"></div></div>
+  </div>
+</div>
+
+<div class="imp-toast" id="toast"></div>
+
+<script src="nav.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   csm-import.html — Import CSV Kajabi vers Firestore
+   ───────────────────────────────────────────────────────────────────────────
+   Workflow :
+     1. Utilisateur saisit titre + ID du cours
+     2. Drop le CSV exporté depuis Kajabi
+     3. Auto-détection des colonnes Email + Progress
+     4. Preview avec match leads (where isClient==true && !_merged)
+     5. Bouton "Importer" → batch update Firestore par chunks de 400
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var db = firebase.firestore();
+var currentUser = null;
+var currentRole = null;
+var leadsByEmail = {};       // email lowercase -> {id, doc}
+var parsedRows = [];         // résultat du parsing : { email, pct, raw, leadId, status }
+
+/* ─── Helpers ─── */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+});}
+function showToast(msg, kind){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'imp-toast show ' + (kind||'');
+  clearTimeout(showToast._tm);
+  showToast._tm = setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
+function slugify(s){
+  return String(s||'').toLowerCase()
+    .replace(/[àâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[îï]/g,'i')
+    .replace(/[ôö]/g,'o').replace(/[ùûü]/g,'u').replace(/[ç]/g,'c')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0, 60) || 'cours';
+}
+function fmtDate(d){
+  if(!d) return '—';
+  var dt = d.toDate ? d.toDate() : new Date(d);
+  if(isNaN(dt.getTime())) return '—';
+  return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
+}
+
+/* ─── Auth + boot ─── */
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){ window.location.href = 'login.html'; return; }
+  currentUser = user;
+  db.collection('users').doc(user.uid).get().then(function(s){
+    var d = s.exists ? s.data() : {};
+    currentRole = d.role || '';
+    if(['admin','csm','sales'].indexOf(currentRole) < 0){
+      document.body.innerHTML = '<div style="padding:60px;text-align:center;color:#cbd5e1"><h2>⛔ Accès réservé</h2></div>';
+      return;
+    }
+    loadLeads();
+    loadExistingCourses();
+  });
+});
+
+/* ─── Charger les leads clients pour matching ─── */
+function loadLeads(){
+  db.collection('leads').where('isClient','==',true).get().then(function(sn){
+    leadsByEmail = {};
+    sn.forEach(function(d){
+      var data = d.data();
+      if(data._merged === true) return;
+      var em = (data.email||'').toLowerCase().trim();
+      if(em) leadsByEmail[em] = { id: d.id, data: data };
+    });
+    console.log('[csm-import] Leads clients chargés:', Object.keys(leadsByEmail).length);
+  }).catch(function(err){
+    showToast('❌ Erreur chargement leads : ' + err.message, 'error');
+  });
+}
+
+/* ─── Cours déjà importés (suggestions) ─── */
+function loadExistingCourses(){
+  // On scanne quelques docs clients pour récupérer les courseId déjà existants
+  var seen = {};
+  db.collection('leads').where('isClient','==',true).limit(50).get().then(function(sn){
+    sn.forEach(function(d){
+      var kp = d.data().kajabiProgress;
+      if(kp && kp.byCourse){
+        Object.keys(kp.byCourse).forEach(function(cid){
+          var c = kp.byCourse[cid];
+          if(!seen[cid]) seen[cid] = { id: cid, title: c.title || cid, lastImport: c.lastImportAt };
+        });
+      }
+    });
+    var arr = Object.keys(seen).map(function(k){ return seen[k]; });
+    if(!arr.length) return;
+    var html = '<div style="margin-top:10px"><div class="imp-mute" style="margin-bottom:6px">📚 Cours déjà importés (clic pour pré-remplir) :</div>';
+    arr.forEach(function(c){
+      html += '<div class="imp-history-item" style="cursor:pointer" onclick="prefillCourse(\'' + esc(c.id) + '\',\'' + esc(c.title.replace(/'/g,"\\'")) + '\')">';
+      html += '<span><strong>' + esc(c.title) + '</strong> <span style="color:var(--ink-muted)">(' + esc(c.id) + ')</span></span>';
+      html += '<span>Dernier import : ' + fmtDate(c.lastImport) + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+    document.getElementById('existingCourses').innerHTML = html;
+  });
+}
+
+window.prefillCourse = function(id, title){
+  document.getElementById('courseTitle').value = title;
+  document.getElementById('courseId').value = id;
+  document.getElementById('courseId')._manual = true;
+  showToast('✅ Cours pré-rempli : ' + title);
+};
+
+/* ─── Step 1 : auto-slug du courseId ─── */
+function onCourseTitleChange(){
+  var idEl = document.getElementById('courseId');
+  if(idEl._manual) return;
+  idEl.value = slugify(document.getElementById('courseTitle').value);
+}
+function onCourseIdManual(){
+  document.getElementById('courseId')._manual = true;
+}
+window.onCourseTitleChange = onCourseTitleChange;
+window.onCourseIdManual = onCourseIdManual;
+
+/* ─── Step 2 : drop zone CSV ─── */
+var drop = document.getElementById('dropZone');
+var fileInput = document.getElementById('fileInput');
+
+drop.addEventListener('dragover', function(e){
+  e.preventDefault(); drop.classList.add('drag');
+});
+drop.addEventListener('dragleave', function(){ drop.classList.remove('drag'); });
+drop.addEventListener('drop', function(e){
+  e.preventDefault(); drop.classList.remove('drag');
+  if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', function(e){
+  if(e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function handleFile(file){
+  var title = document.getElementById('courseTitle').value.trim();
+  var courseId = document.getElementById('courseId').value.trim();
+  if(!title || !courseId){
+    showToast('❌ Renseigne d\'abord le titre + identifiant du cours (étape 1)', 'error');
+    return;
+  }
+  if(!file.name.toLowerCase().endsWith('.csv')){
+    showToast('❌ Le fichier doit être un .csv', 'error');
+    return;
+  }
+  document.getElementById('dropText').textContent = '📄 ' + file.name;
+  document.getElementById('dropHint').textContent = (file.size/1024).toFixed(1) + ' Ko — parsing en cours…';
+
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: function(h){ return String(h||'').trim(); },
+    complete: function(results){
+      if(results.errors && results.errors.length){
+        console.warn('[csm-import] Erreurs parsing :', results.errors);
+      }
+      processRows(results.data, results.meta.fields || []);
+    },
+    error: function(err){
+      console.error('[csm-import] PapaParse error', err);
+      showToast('❌ Erreur parsing CSV : ' + err.message, 'error');
+    }
+  });
+}
+
+/* ─── Auto-détection des colonnes ─── */
+function detectColumn(fields, candidates){
+  // Candidates : array de strings minuscules à matcher (contains)
+  for(var i = 0; i < fields.length; i++){
+    var lower = String(fields[i]||'').toLowerCase();
+    for(var j = 0; j < candidates.length; j++){
+      if(lower.indexOf(candidates[j]) >= 0) return fields[i];
+    }
+  }
+  return null;
+}
+
+function processRows(rows, fields){
+  var emailCol    = detectColumn(fields, ['email']);
+  var progressCol = detectColumn(fields, ['progress', 'progression', 'completion', '%']);
+  var nameCol     = detectColumn(fields, ['customer name', 'name', 'nom']);
+
+  if(!emailCol){
+    showToast('❌ Aucune colonne Email détectée dans le CSV', 'error');
+    return;
+  }
+  if(!progressCol){
+    showToast('❌ Aucune colonne Progress/Completion détectée', 'error');
+    return;
+  }
+
+  var info = '🔎 Colonnes détectées : <strong>Email</strong> = "' + esc(emailCol) + '" · <strong>Progress</strong> = "' + esc(progressCol) + '"';
+  if(nameCol) info += ' · <strong>Nom</strong> = "' + esc(nameCol) + '"';
+  document.getElementById('mappingInfo').innerHTML = info;
+
+  parsedRows = [];
+  rows.forEach(function(row){
+    var rawEmail = String(row[emailCol]||'').trim();
+    var email = rawEmail.toLowerCase();
+    var rawPct = String(row[progressCol]||'').trim();
+    var name = nameCol ? String(row[nameCol]||'').trim() : '';
+
+    // Parser le %
+    var pct = null;
+    if(rawPct){
+      // Accepte "45%", "45", "0.45", "45.5%"
+      var num = parseFloat(rawPct.replace(/[%\s,]/g, '.').replace(/[^\d.]/g, ''));
+      if(!isNaN(num)){
+        if(num <= 1 && rawPct.indexOf('%') < 0) pct = Math.round(num * 100); // 0.45 → 45
+        else pct = Math.round(num);
+        if(pct < 0) pct = 0;
+        if(pct > 100) pct = 100;
+      }
+    }
+
+    var status = 'ok';
+    var leadId = null;
+    if(!email || !email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)){
+      status = 'invalid';
+    } else if(pct === null){
+      status = 'invalid';
+    } else if(!leadsByEmail[email]){
+      status = 'nomatch';
+    } else {
+      leadId = leadsByEmail[email].id;
+    }
+
+    parsedRows.push({
+      email: email || rawEmail,
+      name: name,
+      pct: pct,
+      rawPct: rawPct,
+      status: status,
+      leadId: leadId
+    });
+  });
+
+  renderPreview();
+  document.getElementById('previewStep').style.display = '';
+  document.getElementById('previewStep').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function renderPreview(){
+  var ok = 0, skip = 0, err = 0;
+  parsedRows.forEach(function(r){
+    if(r.status === 'ok') ok++;
+    else if(r.status === 'nomatch') skip++;
+    else err++;
+  });
+  document.getElementById('statOk').textContent = ok;
+  document.getElementById('statSkip').textContent = skip;
+  document.getElementById('statErr').textContent = err;
+
+  var thead = '<tr><th>Email</th><th>Nom</th><th>Progression</th><th>Match CSM</th><th>Statut</th></tr>';
+  var tbody = '';
+  // On limite l'affichage à 200 lignes pour pas tuer le DOM
+  var rowsToShow = parsedRows.slice(0, 200);
+  rowsToShow.forEach(function(r){
+    var cls = r.status === 'ok' ? 'match' : r.status === 'nomatch' ? 'nomatch' : 'invalid';
+    var pill = '';
+    if(r.status === 'ok') pill = '<span class="imp-pill ok">✅ Sera importé</span>';
+    else if(r.status === 'nomatch') pill = '<span class="imp-pill skip">⏭ Pas de client CSM</span>';
+    else pill = '<span class="imp-pill err">❌ Donnée invalide</span>';
+
+    var matchInfo = '—';
+    if(r.leadId){
+      var lead = leadsByEmail[r.email];
+      var leadName = lead && lead.data ? (lead.data.nom || lead.data.commerce || '?') : '?';
+      matchInfo = esc(leadName);
+    }
+
+    tbody += '<tr class="' + cls + '">';
+    tbody += '<td>' + esc(r.email) + '</td>';
+    tbody += '<td>' + esc(r.name) + '</td>';
+    tbody += '<td>' + (r.pct !== null ? r.pct + '%' : '<em>' + esc(r.rawPct) + '</em>') + '</td>';
+    tbody += '<td>' + matchInfo + '</td>';
+    tbody += '<td>' + pill + '</td>';
+    tbody += '</tr>';
+  });
+  if(parsedRows.length > 200){
+    tbody += '<tr><td colspan="5" style="text-align:center;color:var(--ink-muted);font-style:italic">… ' + (parsedRows.length - 200) + ' autres lignes (affichage limité)</td></tr>';
+  }
+  document.getElementById('previewTable').querySelector('thead').innerHTML = thead;
+  document.getElementById('previewTable').querySelector('tbody').innerHTML = tbody;
+
+  document.getElementById('btnImport').disabled = (ok === 0);
+}
+
+/* ─── Import : batch update Firestore par chunks de 400 ─── */
+function runImport(){
+  var courseId = document.getElementById('courseId').value.trim();
+  var courseTitle = document.getElementById('courseTitle').value.trim();
+  if(!courseId || !courseTitle){
+    showToast('❌ Cours non identifié', 'error');
+    return;
+  }
+
+  var toImport = parsedRows.filter(function(r){ return r.status === 'ok' && r.leadId; });
+  if(!toImport.length){
+    showToast('❌ Aucune ligne valide à importer', 'error');
+    return;
+  }
+
+  document.getElementById('btnImport').disabled = true;
+  document.getElementById('progBar').style.display = '';
+  document.getElementById('importStatus').textContent = 'Import en cours…';
+
+  var now = firebase.firestore.FieldValue.serverTimestamp();
+  var nowDate = new Date();
+  var importedBy = currentUser ? (currentUser.email || currentUser.uid) : 'unknown';
+
+  // On ne peut pas faire d'objet imbriqué profond avec dot notation et FieldValue
+  // sur un batch : on construit un objet imbriqué et on le merge.
+  // Pattern : update partiel par dot-notation `kajabiProgress.byCourse.${courseId}`.
+
+  var BATCH_SIZE = 400;
+  var batches = [];
+  for(var i = 0; i < toImport.length; i += BATCH_SIZE){
+    batches.push(toImport.slice(i, i + BATCH_SIZE));
+  }
+
+  var done = 0, total = toImport.length, errors = 0;
+
+  function processBatch(batchIdx){
+    if(batchIdx >= batches.length){
+      // Fini
+      document.getElementById('progFill').style.width = '100%';
+      document.getElementById('importStatus').textContent =
+        '✅ Import terminé : ' + (total - errors) + '/' + total + ' clients mis à jour';
+      showToast('✅ Import terminé : ' + (total - errors) + ' clients mis à jour');
+      // Auto-recharge cours existants
+      loadExistingCourses();
+      return;
+    }
+    var batch = db.batch();
+    var rows = batches[batchIdx];
+    rows.forEach(function(r){
+      var ref = db.collection('leads').doc(r.leadId);
+      var courseUpdate = {};
+      // Dot notation pour update fine sans écraser les autres cours
+      courseUpdate['kajabiProgress.byCourse.' + courseId + '.title'] = courseTitle;
+      courseUpdate['kajabiProgress.byCourse.' + courseId + '.pct'] = r.pct;
+      courseUpdate['kajabiProgress.byCourse.' + courseId + '.lastImportAt'] = now;
+      courseUpdate['kajabiProgress.byCourse.' + courseId + '.lastImportBy'] = importedBy;
+      courseUpdate['kajabiProgress.lastImportAt'] = now;
+      courseUpdate['updatedAt'] = now;
+      batch.update(ref, courseUpdate);
+    });
+    batch.commit().then(function(){
+      done += rows.length;
+      var pct = Math.round((done/total)*100);
+      document.getElementById('progFill').style.width = pct + '%';
+      document.getElementById('importStatus').textContent = 'Import : ' + done + ' / ' + total + ' (' + pct + '%)';
+      processBatch(batchIdx + 1);
+    }).catch(function(err){
+      console.error('[csm-import] Batch error', err);
+      errors += rows.length;
+      done += rows.length;
+      processBatch(batchIdx + 1);
+    });
+  }
+
+  processBatch(0);
+}
+window.runImport = runImport;
+
+function resetAll(){
+  parsedRows = [];
+  document.getElementById('previewStep').style.display = 'none';
+  document.getElementById('dropText').textContent = 'Glisse ton CSV Kajabi ici ou clique pour parcourir';
+  document.getElementById('dropHint').textContent = 'Format attendu : Email + % de progression';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('importStatus').textContent = '';
+  document.getElementById('progFill').style.width = '0%';
+  document.getElementById('progBar').style.display = 'none';
+}
+window.resetAll = resetAll;
+</script>
+</body>
+</html>
