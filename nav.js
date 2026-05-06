@@ -418,9 +418,25 @@
 
   function getRole() { return window._currentRole || localStorage.getItem('ambitio_role') || 'coach'; }
   function getUserModules() {
+    var role = getRole();
+    var defaults = ROLE_DEFAULTS[role] || ROLE_DEFAULTS.coach;
     var stored = localStorage.getItem('ambitio_modules');
-    if (stored) { try { return JSON.parse(stored); } catch(e) {} }
-    return ROLE_DEFAULTS[getRole()] || ROLE_DEFAULTS.coach;
+    if (stored) {
+      try {
+        var parsed = JSON.parse(stored);
+        // ─── Forward compat ───
+        // Quand on ajoute de nouvelles perm keys (ex: csm_dashboard ajouté
+        // après que les comptes existants ont déjà un snapshot `modules` figé),
+        // on hérite automatiquement de la valeur par défaut du rôle pour les
+        // clés absentes du snapshot. Évite que les nouveaux modules soient
+        // invisibles tant que l'admin n'a pas re-sauvegardé chaque utilisateur.
+        Object.keys(defaults).forEach(function(k){
+          if (!(k in parsed)) parsed[k] = defaults[k];
+        });
+        return parsed;
+      } catch(e) {}
+    }
+    return defaults;
   }
   function getUserInfo() {
     const name = window._currentUserName || localStorage.getItem('ambitio_name') || 'Utilisateur';
