@@ -73,10 +73,11 @@
 .inv-modal-row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
 
 /* ═══ LAYOUT ═══ */
-html{scroll-padding-top:130px}  /* nav 56px + topbar ~70px : le scroll-into-view laisse l'espace pour les sticky */
+html{scroll-padding-top:180px;scroll-behavior:auto}  /* nav 56px + topbar (potentiellement wrappé jusqu'à 120px) : marge généreuse */
 .inv-app{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,640px);min-height:calc(100vh - 56px - 60px);background:var(--bg)}
-.inv-form{padding:24px 28px 80px;max-width:760px;width:100%;box-sizing:border-box;overflow-x:hidden}
-.inv-section{scroll-margin-top:130px}  /* idem : ancres et focus laissent l'espace */
+.inv-form{padding:40px 28px 80px;max-width:760px;width:100%;box-sizing:border-box;overflow-x:hidden}
+.inv-section{scroll-margin-top:180px}  /* idem : ancres et focus laissent l'espace */
+.inv-section:first-of-type{margin-top:8px}  /* petit air supplémentaire pour la 1ère section */
 .inv-preview-wrap{background:var(--bg);border-left:1px solid var(--border);padding:24px;position:sticky;top:calc(56px + 60px);height:calc(100vh - 56px - 60px);overflow-y:auto;display:flex;align-items:flex-start;justify-content:center}
 
 @media(max-width:1100px){
@@ -85,9 +86,9 @@ html{scroll-padding-top:130px}  /* nav 56px + topbar ~70px : le scroll-into-view
 }
 
 /* ═══ FORM ═══ */
-.inv-section{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px}
+.inv-section{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px;scroll-margin-top:130px}
 .inv-section-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
-.inv-section-h h3{font-family:var(--font-d);font-size:13px;font-weight:800;letter-spacing:.2px;margin:0;display:flex;align-items:center;gap:8px}
+.inv-section-h h3{font-family:var(--font-d);font-size:13px;font-weight:800;letter-spacing:.2px;margin:0;display:flex;align-items:center;gap:8px;color:var(--text)}
 .inv-section-h p{font-size:11px;color:var(--muted);margin:2px 0 0}
 
 .inv-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
@@ -418,8 +419,19 @@ auth.onAuthStateChanged(async function(user) {
     document.getElementById('bootLoader').style.display = 'none';
     document.getElementById('invApp').style.display = 'block';
 
-    /* Reset scroll au top après load (évite que le topbar sticky masque le titre de la 1ère section) */
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    /* Désactive la restauration auto du scroll par le browser (Safari notamment) */
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    /* Triple reset : Safari peut ignorer behavior:instant ou bloquer scrollTo si appelé trop tôt */
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    /* Re-reset après le prochain frame pour être sûr (Safari délaye parfois) */
+    requestAnimationFrame(function(){
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+    });
 
     /* Step 2B-2 : auto-ouverture modal selon ?action= */
     const action = (new URLSearchParams(window.location.search)).get('action');
