@@ -45,7 +45,6 @@
 
 body { background: var(--bg); color: var(--ink); }
 
-/* ─── Header ─── */
 .csm-app { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
 .csm-header {
   display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
@@ -60,7 +59,6 @@ body { background: var(--bg); color: var(--ink); }
 .csm-title { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }
 .csm-sub   { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
 
-/* ─── Stats cards ─── */
 .csm-stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; margin-bottom: 24px; }
 .csm-stat {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
@@ -74,8 +72,7 @@ body { background: var(--bg); color: var(--ink); }
 .csm-stat.att  .csm-stat-val { color: var(--att-color); }
 .csm-stat.ok   .csm-stat-val { color: var(--csm-accent); }
 
-/* ─── Tabs ─── */
-.csm-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.csm-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .csm-tab {
   padding: 12px 18px; cursor: pointer; font-size: 14px; font-weight: 600;
   color: var(--ink-muted); border-bottom: 2px solid transparent;
@@ -90,7 +87,6 @@ body { background: var(--bg); color: var(--ink); }
 }
 .csm-tab.active .csm-tab-count { background: var(--csm-bg-soft); color: var(--csm-accent); }
 
-/* ─── Toolbar ─── */
 .csm-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
 .csm-search {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
@@ -100,7 +96,7 @@ body { background: var(--bg); color: var(--ink); }
 .csm-pill {
   padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
   background: var(--bg3); border: 1px solid var(--border); color: var(--ink-muted);
-  cursor: pointer; transition: all 0.15s; font-family: inherit;
+  cursor: pointer; transition: all 0.15s; font-family: inherit; white-space: nowrap;
 }
 .csm-pill:hover { color: var(--ink); }
 .csm-pill.active { background: var(--csm-bg-soft); border-color: var(--csm-border); color: var(--csm-accent); }
@@ -108,12 +104,11 @@ body { background: var(--bg); color: var(--ink); }
 .csm-pill.warn.active { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-color); }
 .csm-pill.att.active  { background: var(--att-bg); border-color: var(--att-border); color: var(--att-color); }
 
-/* ─── Cards list ─── */
 .csm-list { display: flex; flex-direction: column; gap: 8px; }
 .csm-card {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
   padding: 14px 16px; display: grid; grid-template-columns: auto 1fr auto auto;
-  gap: 14px; align-items: center; transition: all 0.15s;
+  gap: 14px; align-items: center; transition: all 0.15s; cursor: pointer;
 }
 .csm-card:hover { border-color: var(--csm-border); transform: translateY(-1px); }
 .csm-card.crit { border-left: 3px solid var(--crit-color); }
@@ -124,10 +119,11 @@ body { background: var(--bg); color: var(--ink); }
   width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center;
   justify-content: center; font-weight: 700; font-size: 15px; color: white;
   background: linear-gradient(135deg, var(--csm-accent-dark), var(--csm-accent-2));
+  flex-shrink: 0;
 }
 .csm-card-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .csm-card-name { font-size: 14px; font-weight: 700; }
-.csm-card-meta { font-size: 12px; color: var(--ink-muted); display: flex; gap: 10px; flex-wrap: wrap; }
+.csm-card-meta { font-size: 12px; color: var(--ink-muted); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .csm-card-meta span { display: inline-flex; align-items: center; gap: 4px; }
 
 .csm-badge { padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
@@ -135,18 +131,19 @@ body { background: var(--bg); color: var(--ink); }
 .csm-badge.warn { background: var(--warn-bg); color: var(--warn-color); border: 1px solid var(--warn-border); }
 .csm-badge.att  { background: var(--att-bg); color: var(--att-color); border: 1px solid var(--att-border); }
 .csm-badge.ok   { background: var(--csm-bg-soft); color: var(--csm-accent); border: 1px solid var(--csm-border); }
-.csm-badge.coach{ background: rgba(167,139,250,0.10); color: #c4b5fd; border: 1px solid rgba(167,139,250,0.20); }
 .csm-badge.followup{ background: rgba(96,165,250,0.10); color: #93c5fd; border: 1px solid rgba(96,165,250,0.20); }
-
-.csm-quota-bar {
-  display: flex; gap: 3px; align-items: flex-end; min-width: 80px;
-}
-.csm-quota-month {
-  width: 10px; height: 22px; border-radius: 2px; background: rgba(255,255,255,0.08);
-}
-.csm-quota-month.ok    { background: var(--csm-accent); }
-.csm-quota-month.partial{ background: var(--att-color); }
-.csm-quota-month.miss  { background: var(--crit-color); }
+.csm-badge.cs-active   { background: rgba(16,185,129,.12); color:#34d399; border:1px solid rgba(16,185,129,.25); }
+.csm-badge.cs-paused   { background: rgba(245,158,11,.12); color:#fbbf24; border:1px solid rgba(245,158,11,.25); }
+.csm-badge.cs-completed{ background: rgba(167,139,250,.12); color:#a78bfa; border:1px solid rgba(167,139,250,.25); }
+.csm-badge.cs-stopped  { background: rgba(239,68,68,.12); color:#fca5a5; border:1px solid rgba(239,68,68,.25); }
+.csm-badge.cs-procedure{ background: rgba(249,115,22,.12); color:#fb923c; border:1px solid rgba(249,115,22,.25); }
+.csm-badge.pay-active     { background: rgba(16,185,129,.10); color:#34d399; border:1px solid rgba(16,185,129,.25); }
+.csm-badge.pay-failed     { background: var(--crit-bg); color: var(--crit-color); border: 1px solid var(--crit-border); }
+.csm-badge.pay-cancelled  { background: rgba(148,163,184,.10); color:#cbd5e1; border:1px solid rgba(148,163,184,.20); }
+.csm-badge.pay-pending    { background: var(--warn-bg); color:var(--warn-color); border:1px solid var(--warn-border); }
+.csm-badge.pay-completed  { background: rgba(167,139,250,.10); color:#a78bfa; border:1px solid rgba(167,139,250,.20); }
+.csm-badge.pay-mandate_active{ background: rgba(16,185,129,.10); color:#34d399; border:1px solid rgba(16,185,129,.25); }
+.csm-badge.pay-draft      { background: rgba(148,163,184,.10); color:#cbd5e1; border:1px solid rgba(148,163,184,.20); }
 
 .csm-actions { display: flex; gap: 6px; }
 .csm-act-btn {
@@ -156,7 +153,6 @@ body { background: var(--bg); color: var(--ink); }
 }
 .csm-act-btn:hover { background: var(--csm-bg-soft); border-color: var(--csm-border); transform: scale(1.05); }
 
-/* ─── Empty state ─── */
 .csm-empty {
   text-align: center; padding: 80px 20px; color: var(--ink-muted);
 }
@@ -166,23 +162,23 @@ body { background: var(--bg); color: var(--ink); }
 /* ─── Modal ─── */
 .csm-modal-bg {
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000;
-  align-items: center; justify-content: center; backdrop-filter: blur(4px);
+  align-items: center; justify-content: center; backdrop-filter: blur(4px); padding: 16px;
 }
 .csm-modal-bg.show { display: flex; }
 .csm-modal {
   background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
-  width: min(620px, 92vw); max-height: 86vh; overflow-y: auto; padding: 24px;
+  width: min(720px, 100%); max-height: 90vh; overflow-y: auto; padding: 24px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
-.csm-modal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
-.csm-modal-title { font-size: 18px; font-weight: 800; }
+.csm-modal-h { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 18px; gap: 12px; }
+.csm-modal-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .csm-modal-close {
   width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
-  background: var(--bg3); cursor: pointer; color: var(--ink); font-size: 16px;
+  background: var(--bg3); cursor: pointer; color: var(--ink); font-size: 16px; flex-shrink: 0;
 }
 .csm-modal-close:hover { background: var(--csm-bg-soft); }
 
-.csm-section { margin-bottom: 18px; }
+.csm-section { margin-bottom: 20px; }
 .csm-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-muted); margin-bottom: 8px; font-weight: 700; }
 .csm-info-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
 .csm-info-item {
@@ -191,25 +187,47 @@ body { background: var(--bg); color: var(--ink); }
 .csm-info-label { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.4px; }
 .csm-info-val { font-size: 13px; font-weight: 600; margin-top: 3px; word-break: break-word; }
 
+.csm-status-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.csm-status-btn {
+  padding: 6px 12px; border-radius: 18px; font-size: 11px; font-weight: 700;
+  border: 1.5px solid var(--border); background: transparent; color: var(--ink-muted);
+  cursor: pointer; transition: all 0.15s; font-family: inherit;
+}
+
+.csm-pay-row {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 6px; display: grid;
+  grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; font-size: 12px;
+}
+.csm-pay-row.failed { border-left: 3px solid var(--crit-color); }
+.csm-pay-amt { font-weight: 700; font-size: 14px; }
+
 .csm-textarea {
   width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
   padding: 10px 12px; color: var(--ink); font-family: inherit; font-size: 13px; resize: vertical;
-  min-height: 80px;
+  min-height: 70px;
 }
 .csm-textarea:focus { outline: none; border-color: var(--csm-accent); box-shadow: 0 0 0 3px var(--csm-bg-soft); }
 
-.csm-history-item {
+.csm-note-item {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
   padding: 10px 12px; margin-bottom: 6px; font-size: 12px;
 }
-.csm-history-meta { font-size: 10px; color: var(--ink-muted); margin-bottom: 4px; display: flex; gap: 8px; }
+.csm-note-meta { font-size: 10px; color: var(--ink-muted); margin-bottom: 4px; display: flex; gap: 8px; justify-content: space-between; align-items: center; }
+.csm-note-text { white-space: pre-wrap; line-height: 1.5; }
 
-.csm-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.csm-history-item {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 12px; margin-bottom: 5px; font-size: 11px;
+}
+.csm-history-meta { font-size: 10px; color: var(--ink-muted); margin-bottom: 3px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.csm-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .csm-btn {
   padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600;
   border: 1px solid var(--border); background: var(--bg3); color: var(--ink);
   cursor: pointer; transition: all 0.15s; font-family: inherit; display: inline-flex;
-  align-items: center; gap: 6px;
+  align-items: center; gap: 6px; text-decoration: none;
 }
 .csm-btn:hover { background: var(--csm-bg-soft); border-color: var(--csm-border); }
 .csm-btn.primary {
@@ -217,10 +235,8 @@ body { background: var(--bg); color: var(--ink); }
   border-color: var(--csm-accent); color: white;
 }
 .csm-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--csm-glow); }
-.csm-btn.danger { color: var(--crit-color); }
-.csm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.csm-btn.danger { color: var(--crit-color); border-color: var(--crit-border); }
 
-/* ─── Témoignages ─── */
 .csm-temo-card {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
   padding: 14px 16px; margin-bottom: 8px;
@@ -230,20 +246,6 @@ body { background: var(--bg); color: var(--ink); }
 .csm-temo-when { font-size: 11px; color: var(--ink-muted); }
 .csm-temo-text { font-size: 13px; line-height: 1.5; color: var(--ink-soft); white-space: pre-wrap; }
 
-/* ─── Activity feed ─── */
-.csm-activity-item {
-  display: flex; gap: 12px; padding: 12px 14px;
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px;
-}
-.csm-activity-icon {
-  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
-  background: var(--csm-bg-soft); color: var(--csm-accent);
-  display: flex; align-items: center; justify-content: center; font-size: 14px;
-}
-.csm-activity-text { font-size: 13px; flex: 1; }
-.csm-activity-when { font-size: 11px; color: var(--ink-muted); }
-
-/* ─── Toast ─── */
 .csm-toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
   background: var(--bg3); border: 1px solid var(--csm-border);
@@ -254,7 +256,6 @@ body { background: var(--bg); color: var(--ink); }
 .csm-toast.error { border-color: var(--crit-border); color: var(--crit-color); }
 .csm-toast.success { border-color: var(--csm-border); color: var(--csm-accent); }
 
-/* ─── Loading ─── */
 .csm-loading { padding: 60px; text-align: center; color: var(--ink-muted); }
 .csm-spinner {
   display: inline-block; width: 32px; height: 32px;
@@ -265,9 +266,10 @@ body { background: var(--bg); color: var(--ink); }
 
 @media (max-width: 768px) {
   .csm-stats { grid-template-columns: repeat(2,1fr); }
-  .csm-card { grid-template-columns: auto 1fr; gap: 10px; }
-  .csm-quota-bar, .csm-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .csm-card { grid-template-columns: auto 1fr; }
+  .csm-actions { grid-column: 1 / -1; justify-content: flex-end; }
   .csm-info-grid { grid-template-columns: 1fr; }
+  .csm-pay-row { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -275,48 +277,56 @@ body { background: var(--bg); color: var(--ink); }
 <body>
 
 <div class="csm-app">
-  <!-- ─── HEADER ─── -->
   <div class="csm-header">
     <div class="csm-logo">💎</div>
     <div>
       <div class="csm-title">Dashboard Customer Success</div>
-      <div class="csm-sub" id="csmSub">Suivi clients, retards de coachings, témoignages et relances</div>
+      <div class="csm-sub">Suivi clients actifs, paiements, témoignages et relances</div>
     </div>
   </div>
 
   <!-- ─── STATS ─── -->
   <div class="csm-stats">
     <div class="csm-stat crit"><div class="csm-stat-val" id="statCrit">—</div><div class="csm-stat-label">🔴 Critique</div></div>
-    <div class="csm-stat warn"><div class="csm-stat-val" id="statWarn">—</div><div class="csm-stat-label">🟠 En retard</div></div>
+    <div class="csm-stat warn"><div class="csm-stat-val" id="statWarn">—</div><div class="csm-stat-label">🟠 À relancer</div></div>
     <div class="csm-stat att"><div class="csm-stat-val"  id="statAtt">—</div><div class="csm-stat-label">🟡 Attention</div></div>
     <div class="csm-stat ok"><div class="csm-stat-val"   id="statTemo">—</div><div class="csm-stat-label">⭐ Témoignages</div></div>
     <div class="csm-stat"><div class="csm-stat-val"      id="statActive">—</div><div class="csm-stat-label">👥 Clients actifs</div></div>
   </div>
 
   <!-- ─── TABS ─── -->
-  <div class="csm-tabs" id="csmTabs">
-    <button class="csm-tab active" data-tab="retards"  onclick="switchTab('retards', this)">🚨 Retards <span class="csm-tab-count" id="cntRetards">0</span></button>
-    <button class="csm-tab"        data-tab="all"      onclick="switchTab('all', this)">📋 Tous les clients <span class="csm-tab-count" id="cntAll">0</span></button>
+  <div class="csm-tabs">
+    <button class="csm-tab active" data-tab="retards"   onclick="switchTab('retards', this)">🚨 Retards & alertes <span class="csm-tab-count" id="cntRetards">0</span></button>
+    <button class="csm-tab"        data-tab="payments"  onclick="switchTab('payments', this)">💳 Paiements <span class="csm-tab-count" id="cntPay">0</span></button>
     <button class="csm-tab"        data-tab="temoignages" onclick="switchTab('temoignages', this)">⭐ Témoignages <span class="csm-tab-count" id="cntTemo">0</span></button>
-    <button class="csm-tab"        data-tab="activity" onclick="switchTab('activity', this)">⚡ Activité récente</button>
+    <button class="csm-tab"        data-tab="all"       onclick="switchTab('all', this)">📋 Tous les clients <span class="csm-tab-count" id="cntAll">0</span></button>
   </div>
 
-  <!-- ─── TOOLBAR ─── -->
-  <div class="csm-toolbar" id="toolbarRetards">
-    <input class="csm-search" id="searchInput" type="text" placeholder="🔍 Rechercher un client…"/>
-    <button class="csm-pill crit active" data-level="crit" onclick="toggleLevel('crit', this)">🔴 Critique</button>
-    <button class="csm-pill warn active" data-level="warn" onclick="toggleLevel('warn', this)">🟠 Retard</button>
-    <button class="csm-pill att active"  data-level="att"  onclick="toggleLevel('att', this)">🟡 Attention</button>
-    <select class="csm-search" id="filterCoach" style="min-width:140px;flex:0 0 auto">
-      <option value="all">Tous les coachs</option>
+  <!-- ─── TOOLBAR (varie selon onglet) ─── -->
+  <div class="csm-toolbar" id="toolbar">
+    <input class="csm-search" id="searchInput" type="text" placeholder="🔍 Rechercher (nom, email, commerce…)"/>
+    <div id="toolbarRetards" class="csm-toolbar" style="padding:0;margin:0;flex:0 0 auto;gap:6px">
+      <button class="csm-pill crit active" data-level="crit" onclick="toggleLevel('crit', this)">🔴 Critique</button>
+      <button class="csm-pill warn active" data-level="warn" onclick="toggleLevel('warn', this)">🟠 Relancer</button>
+      <button class="csm-pill att active"  data-level="att"  onclick="toggleLevel('att', this)">🟡 Attention</button>
+    </div>
+    <select class="csm-search" id="filterStatus" style="min-width:160px;flex:0 0 auto">
+      <option value="all">Tous statuts</option>
+      <option value="active">✅ Actif</option>
+      <option value="paused">⏸ En pause</option>
+      <option value="completed">🎉 Terminé</option>
+      <option value="stopped">🛑 Stoppé</option>
+      <option value="procedure">⚖️ Procédure</option>
     </select>
-    <select class="csm-search" id="filterDays" style="min-width:160px;flex:0 0 auto">
-      <option value="0">Tous</option>
-      <option value="14">+ 14 jours sans session</option>
-      <option value="30" selected>+ 30 jours sans session</option>
-      <option value="45">+ 45 jours sans session</option>
-      <option value="60">+ 60 jours sans session</option>
-      <option value="90">+ 90 jours sans session</option>
+    <select class="csm-search" id="filterPayStatus" style="min-width:170px;flex:0 0 auto;display:none">
+      <option value="all">Tous paiements</option>
+      <option value="failed">❌ Échec</option>
+      <option value="cancelled">🚫 Annulé</option>
+      <option value="pending_mandate">⏳ Mandat en attente</option>
+      <option value="active">💸 Actifs</option>
+      <option value="mandate_active">✅ Mandat actif</option>
+      <option value="completed">🎉 Terminé</option>
+      <option value="draft">📝 Brouillon</option>
     </select>
   </div>
 
@@ -337,32 +347,57 @@ body { background: var(--bg); color: var(--ink); }
 <script src="nav.js"></script>
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
-   csm-dashboard.html — Dashboard Customer Success Manager
+   csm-dashboard.html — Customer Success Manager
    ───────────────────────────────────────────────────────────────────────────
-   Source de données :
-     • clients/{id}                    — fiches coaching (retards quota, sessions)
-     • leads/{id} where isClient==true — fiches CRM client (témoignages, notes)
-     • leads/{id}/client_temoignages/* — témoignages
+   Source UNIQUE de vérité pour les clients : leads where isClient==true
+   (avec dédup _merged===true skipped — pattern aligné avec sales-leads.html)
+
+   Enrichissements :
+     • payments where leadId==id  → tous les paiements du client
+     • leads/{id}/client_temoignages → témoignages
+     • leads/{id}/client_notes      → notes (partagées avec sales-clients.html)
+
+   Statuts client :   active / paused / completed / stopped / procedure
+   Statuts paiement : draft / pending_mandate / mandate_active / active /
+                      completed / failed / cancelled
    ═══════════════════════════════════════════════════════════════════════════ */
 
 var db = firebase.firestore();
 var currentUser = null;
 var currentRole = null;
 var currentUserName = '';
+var currentUserEmail = '';
 
-var allClients     = [];     // collection clients
-var allClientLeads = [];     // leads where isClient==true
-var temoByLead     = {};     // leadId -> [temo]
-var temoFlat       = [];     // tous témoignages aplatis pour vue agrégée
-var coachMap       = {};     // slug -> displayName
-var teamMembers    = [];
+var allClients      = [];     // leads with isClient==true && !_merged
+var paymentsByLead  = {};     // leadId -> [payments]
+var notesByLead     = {};     // leadId -> [notes]
+var temoByLead      = {};     // leadId -> [temo]
+var temoFlat        = [];
 
 var activeTab    = 'retards';
 var levelsActive = { crit:true, warn:true, att:true };
 var searchQ      = '';
-var filterCoach  = 'all';
-var filterDays   = 30;
+var filterStatus = 'all';
+var filterPayStatus = 'all';
 var openClientId = null;
+
+/* ─── Constants ─── */
+var CLIENT_STATUS = {
+  active:    { label:'✅ Actif',     cls:'cs-active' },
+  paused:    { label:'⏸ En pause',   cls:'cs-paused' },
+  completed: { label:'🎉 Terminé',   cls:'cs-completed' },
+  stopped:   { label:'🛑 Stoppé',    cls:'cs-stopped' },
+  procedure: { label:'⚖️ Procédure', cls:'cs-procedure' }
+};
+var PAY_STATUS = {
+  draft:           { label:'📝 Brouillon',         cls:'pay-draft' },
+  pending_mandate: { label:'⏳ Mandat en attente', cls:'pay-pending' },
+  mandate_active:  { label:'✅ Mandat actif',      cls:'pay-mandate_active' },
+  active:          { label:'💸 Actif',             cls:'pay-active' },
+  completed:       { label:'🎉 Terminé',           cls:'pay-completed' },
+  failed:          { label:'❌ Échec',             cls:'pay-failed' },
+  cancelled:       { label:'🚫 Annulé',            cls:'pay-cancelled' }
+};
 
 /* ─── Helpers ─── */
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){
@@ -375,25 +410,24 @@ function showToast(msg, kind){
   clearTimeout(showToast._tm);
   showToast._tm = setTimeout(function(){ t.classList.remove('show'); }, 2800);
 }
-function fmtDate(d){
-  if(!d) return '—';
+function fmtEuro(v){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(v||0); }
+function toDate(d){
+  if(!d) return null;
   var dt = (d && d.toDate) ? d.toDate() : new Date(d);
-  if(isNaN(dt.getTime())) return '—';
+  return isNaN(dt.getTime()) ? null : dt;
+}
+function fmtDate(d){
+  var dt = toDate(d); if(!dt) return '—';
   return dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
 }
 function fmtDateTime(d){
-  if(!d) return '—';
-  var dt = (d && d.toDate) ? d.toDate() : new Date(d);
-  if(isNaN(dt.getTime())) return '—';
+  var dt = toDate(d); if(!dt) return '—';
   return dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'short' }) +
          ' à ' + dt.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
 }
 function timeAgo(d){
-  if(!d) return '—';
-  var dt = (d && d.toDate) ? d.toDate() : new Date(d);
-  if(isNaN(dt.getTime())) return '—';
-  var diffMs = Date.now() - dt.getTime();
-  var diffDays = Math.floor(diffMs / 86400000);
+  var dt = toDate(d); if(!dt) return '—';
+  var diffDays = Math.floor((Date.now() - dt.getTime()) / 86400000);
   if(diffDays === 0) return "aujourd'hui";
   if(diffDays === 1) return 'hier';
   if(diffDays < 7) return 'il y a ' + diffDays + ' jours';
@@ -407,81 +441,60 @@ function initials(name){
   if(parts.length >= 2) return (parts[0][0]+parts[1][0]).toUpperCase();
   return name.slice(0,2).toUpperCase();
 }
-
-/* ─── Quota / sessions logic — réplique de coaching.html ─── */
-function getMonthlyQuota(programme){
-  if(!programme) return 1;
-  var p = programme.toLowerCase();
-  if(p.indexOf('24c') >= 0) return 2;
-  if(p.indexOf('12c') >= 0) return 1;
-  if(p.indexOf('6c')  >= 0) return 1;
-  return 1;
-}
-function getAllSessions(c){
-  if(c.years && c.years.length){
-    var all = [];
-    c.years.forEach(function(y){ (y.sessions||[]).forEach(function(s){ all.push(s); }); });
-    return all;
-  }
-  return c.sessions || [];
-}
-function getSessionsInMonth(c, year, month){
-  return getAllSessions(c).filter(function(s){
-    if(s.statut !== 'fait' || !s.date) return false;
-    if(s.numero === 0 || s.type === 'rdv72h') return false;
-    var d = new Date(s.date);
-    return d.getFullYear() === year && d.getMonth() === month;
-  });
-}
-function getQuotaStatus(c, year, month){
-  var done  = c.nbCoachingsFaits || 0;
-  var total = c.nbCoachingsTotal || 12;
-  if(done >= total) return { status:'done', used:0, max:0 };
-  var quota = getMonthlyQuota(c.programme);
-  var sessions = getSessionsInMonth(c, year, month);
-  var used = sessions.length;
-  if(used >= quota)  return { status:'ok', used:used, max:quota };
-  if(used > 0)       return { status:'partial', used:used, max:quota };
-  return { status:'miss', used:0, max:quota };
-}
-function getLastSessionDate(c){
-  var sessions = getAllSessions(c).filter(function(s){
-    return s.statut === 'fait' && s.date && s.numero !== 0 && s.type !== 'rdv72h';
-  });
-  if(!sessions.length) return null;
-  sessions.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
-  return new Date(sessions[0].date);
-}
-function daysSinceLastSession(c){
-  var d = getLastSessionDate(c);
-  if(!d) {
-    // Pas de session : utiliser dateEntree comme proxy
-    if(c.dateEntree){
-      var entry = new Date(c.dateEntree);
-      if(!isNaN(entry.getTime())) return Math.floor((Date.now() - entry.getTime()) / 86400000);
-    }
-    return 999;
-  }
-  return Math.floor((Date.now() - d.getTime()) / 86400000);
+function clientDisplayName(c){
+  return c.nom || c.commerce || c.email || c.telephone || '?';
 }
 
 /* ─── Compute level (crit / warn / att / ok) ─── */
 function computeLevel(c){
-  // Exclusions : inactifs ou clients ayant terminé leur programme
-  if(c.statut === 'inactif') return null;
-  var done  = c.nbCoachingsFaits || 0;
-  var total = c.nbCoachingsTotal || 12;
-  if(done >= total) return null;
+  // Skip si client n'est plus à suivre
+  var status = c.clientStatus || 'active';
+  if(status === 'completed') return 'ok';
+  if(status === 'stopped')   return null; // exclu de la vue retards
 
-  var now = new Date();
-  var yNow = now.getFullYear(), mNow = now.getMonth();
-  var prev = new Date(yNow, mNow - 1, 1);
-  var qNow  = getQuotaStatus(c, yNow, mNow);
-  var qPrev = getQuotaStatus(c, prev.getFullYear(), prev.getMonth());
+  var pays = paymentsByLead[c.id] || [];
 
-  if(qNow.status === 'miss' && qPrev.status === 'miss') return 'crit';
-  if(qNow.status === 'miss')   return 'warn';
-  if(qNow.status === 'partial')return 'att';
+  // Détecter paiement(s) en échec non résolu(s)
+  var hasFailed = pays.some(function(p){ return p.status === 'failed'; });
+  var hasCancelled = pays.some(function(p){ return p.status === 'cancelled'; });
+
+  // Détecter retard de prélèvement sur paiement actif
+  // Si on a un paiement 'active' avec installmentsCount > 1, on calcule
+  // les prélèvements théoriquement dus depuis startDate vs paidCount.
+  var hasPaymentBehind = false;
+  pays.forEach(function(p){
+    if(p.status !== 'active') return;
+    if(!p.installmentsCount || p.installmentsCount <= 1) return;
+    var start = toDate(p.startDate);
+    if(!start) return;
+    var monthsElapsed = (new Date().getFullYear() - start.getFullYear()) * 12
+                      + (new Date().getMonth() - start.getMonth()) + 1;
+    var expected = Math.min(monthsElapsed, p.installmentsCount);
+    var actual = p.paidCount || 0;
+    if(actual < expected - 1) hasPaymentBehind = true; // tolérance d'1 mois
+  });
+
+  // Statuts critiques business
+  if(status === 'procedure') return 'crit';
+  if(hasFailed) return 'crit';
+  if(hasPaymentBehind) return 'crit';
+
+  // Statut paused = à relancer
+  if(status === 'paused') return 'warn';
+  if(hasCancelled) return 'warn';
+
+  // Pending_mandate depuis +7j = à relancer
+  var hasOldPending = pays.some(function(p){
+    if(p.status !== 'pending_mandate') return false;
+    var ts = toDate(p.createdAt);
+    if(!ts) return false;
+    return (Date.now() - ts.getTime()) > 7 * 86400000;
+  });
+  if(hasOldPending) return 'warn';
+
+  // Aucun paiement enregistré sur un client actif
+  if(status === 'active' && pays.length === 0) return 'att';
+
   return 'ok';
 }
 
@@ -489,115 +502,141 @@ function computeLevel(c){
 firebase.auth().onAuthStateChanged(function(user){
   if(!user){ window.location.href = 'login.html'; return; }
   currentUser = user;
+  currentUserEmail = user.email;
   db.collection('users').doc(user.uid).get().then(function(snap){
     var d = snap.exists ? snap.data() : {};
     currentRole = d.role || 'csm';
     currentUserName = user.displayName || user.email.split('@')[0];
-    if(!['admin','csm','coach'].includes(currentRole)){
-      // Sales et autres : redirect
-      document.body.innerHTML = '<div style="padding:60px;text-align:center;color:#cbd5e1"><h2>⛔ Accès réservé Customer Success</h2></div>';
+    if(['admin','csm','sales'].indexOf(currentRole) < 0){
+      document.body.innerHTML = '<div style="padding:60px;text-align:center;color:#cbd5e1"><h2>⛔ Accès réservé</h2></div>';
       return;
     }
-    loadTeamMembers().then(loadAllData);
+    loadAllData();
   }).catch(function(e){
-    console.error('User doc error', e);
-    loadTeamMembers().then(loadAllData);
+    console.warn('User doc error', e);
+    loadAllData();
   });
 });
 
-function loadTeamMembers(){
-  return db.collection('_meta').doc('team_members').get().then(function(snap){
-    if(!snap.exists) return;
-    var raw = snap.data().members || {};
-    if(Array.isArray(raw)){
-      teamMembers = raw;
-    } else {
-      teamMembers = Object.keys(raw).map(function(k){ var v = raw[k]; v.slug = v.slug || k; return v; });
-    }
-    teamMembers.forEach(function(m){
-      coachMap[m.slug] = m.shortName || m.displayName || m.fullName || m.slug;
-    });
-    // Populate coach filter
-    var sel = document.getElementById('filterCoach');
-    teamMembers.forEach(function(m){
-      if(m.role === 'coach' || m.role === 'admin'){
-        var opt = document.createElement('option');
-        opt.value = m.slug;
-        opt.textContent = coachMap[m.slug];
-        sel.appendChild(opt);
-      }
-    });
-    var optNone = document.createElement('option');
-    optNone.value = ''; optNone.textContent = 'Non assigné';
-    sel.appendChild(optNone);
-  }).catch(function(e){ console.warn('Team members load error', e); });
-}
-
+/* ─── Data loading ─── */
 function loadAllData(){
-  // Charge clients coaching
-  db.collection('clients').onSnapshot(function(snap){
+  // Listener temps réel sur leads clients
+  db.collection('leads').where('isClient','==',true).onSnapshot(function(snap){
     allClients = [];
     snap.forEach(function(d){
       var data = d.data();
-      data._id = d.id;
+      // ─── Dédup : skip _merged===true ───
+      // Pattern aligné avec sales-leads.html (memories : "Always check
+      // _merged===true and skip"). Évite les doublons quand un lead a été
+      // fusionné dans un autre.
+      if(data._merged === true) return;
+      data.id = d.id;
       allClients.push(data);
     });
-    renderAll();
-  }, function(err){ console.error('Clients listener error:', err); });
-
-  // Charge leads clients (pour témoignages)
-  db.collection('leads').where('isClient','==',true).onSnapshot(function(snap){
-    allClientLeads = [];
-    snap.forEach(function(d){
-      var data = d.data();
-      data._id = d.id;
-      allClientLeads.push(data);
+    // Sort : plus récents d'abord
+    allClients.sort(function(a,b){
+      var da = toDate(a.clientSince) || toDate(a.updatedAt) || new Date(0);
+      var db_ = toDate(b.clientSince) || toDate(b.updatedAt) || new Date(0);
+      return db_ - da;
     });
-    loadAllTemoignages();
-  }, function(err){ console.error('Leads listener error:', err); });
+    loadPaymentsForClients();
+    loadTemoignagesForClients();
+  }, function(err){
+    console.error('Clients listener error:', err);
+    document.getElementById('csmBody').innerHTML =
+      '<div class="csm-empty"><div class="csm-empty-icon">⚠️</div><div class="csm-empty-title">Erreur de chargement</div><div>' + esc(err.message) + '</div></div>';
+  });
 }
 
-function loadAllTemoignages(){
-  if(!allClientLeads.length){ renderAll(); return; }
-  var pending = allClientLeads.length;
+function loadPaymentsForClients(){
+  if(!allClients.length){ renderAll(); return; }
+  var ids = allClients.map(function(c){ return c.id; });
+  paymentsByLead = {};
+  // Chunks de 10 (limite Firestore where-in)
+  var chunks = [];
+  for(var i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
+  var pending = chunks.length;
+  if(pending === 0){ renderAll(); return; }
+  chunks.forEach(function(chunk){
+    db.collection('payments').where('leadId','in',chunk).get().then(function(sn){
+      sn.forEach(function(d){
+        var p = d.data(); p.id = d.id;
+        if(!paymentsByLead[p.leadId]) paymentsByLead[p.leadId] = [];
+        paymentsByLead[p.leadId].push(p);
+      });
+      if(--pending <= 0){
+        // Sort each list by createdAt desc
+        Object.keys(paymentsByLead).forEach(function(k){
+          paymentsByLead[k].sort(function(a,b){
+            return (toDate(b.createdAt)||new Date(0)) - (toDate(a.createdAt)||new Date(0));
+          });
+        });
+        renderAll();
+      }
+    }).catch(function(e){
+      console.warn('Payments chunk error', e);
+      if(--pending <= 0) renderAll();
+    });
+  });
+}
+
+function loadTemoignagesForClients(){
   temoByLead = {};
   temoFlat = [];
-  allClientLeads.forEach(function(lead){
-    db.collection('leads').doc(lead._id).collection('client_temoignages')
+  if(!allClients.length) return;
+  var pending = allClients.length;
+  allClients.forEach(function(c){
+    db.collection('leads').doc(c.id).collection('client_temoignages')
       .orderBy('createdAt','desc').get()
       .then(function(snap){
         var arr = [];
         snap.forEach(function(d){
-          var o = d.data(); o._id = d.id; o._leadId = lead._id;
-          o._leadName = lead.nom || lead.commerce || lead.email || '?';
+          var o = d.data(); o._id = d.id; o._leadId = c.id;
+          o._leadName = clientDisplayName(c);
           arr.push(o);
           temoFlat.push(o);
         });
-        temoByLead[lead._id] = arr;
-        if(--pending <= 0) renderAll();
+        temoByLead[c.id] = arr;
+        if(--pending <= 0){
+          temoFlat.sort(function(a,b){
+            return (toDate(b.createdAt)||new Date(0)) - (toDate(a.createdAt)||new Date(0));
+          });
+          renderAll();
+        }
       }).catch(function(){
         if(--pending <= 0) renderAll();
       });
   });
 }
 
+function loadNotesForLead(leadId, cb){
+  db.collection('leads').doc(leadId).collection('client_notes')
+    .orderBy('createdAt','desc').get()
+    .then(function(snap){
+      var arr = [];
+      snap.forEach(function(d){ var o = d.data(); o._id = d.id; arr.push(o); });
+      notesByLead[leadId] = arr;
+      if(cb) cb(arr);
+    }).catch(function(){
+      notesByLead[leadId] = notesByLead[leadId] || [];
+      if(cb) cb(notesByLead[leadId]);
+    });
+}
+
 /* ─── Rendering ─── */
 function renderAll(){
   computeStats();
   if(activeTab === 'retards')      renderRetards();
-  else if(activeTab === 'all')     renderAllClients();
+  else if(activeTab === 'payments')renderPayments();
   else if(activeTab === 'temoignages') renderTemoignages();
-  else if(activeTab === 'activity')renderActivity();
+  else if(activeTab === 'all')     renderAllClients();
 }
 
 function computeStats(){
   var crit = 0, warn = 0, att = 0, active = 0;
   allClients.forEach(function(c){
-    if(c.statut === 'inactif') return;
-    var done  = c.nbCoachingsFaits || 0;
-    var total = c.nbCoachingsTotal || 12;
-    if(done >= total) return;
-    active++;
+    var status = c.clientStatus || 'active';
+    if(status === 'active') active++;
     var lvl = computeLevel(c);
     if(lvl === 'crit') crit++;
     else if(lvl === 'warn') warn++;
@@ -609,50 +648,43 @@ function computeStats(){
   document.getElementById('statTemo').textContent = temoFlat.length;
   document.getElementById('statActive').textContent = active;
   document.getElementById('cntRetards').textContent = (crit + warn + att);
-  document.getElementById('cntAll').textContent = allClients.length;
-  document.getElementById('cntTemo').textContent = temoFlat.length;
+  document.getElementById('cntAll').textContent     = allClients.length;
+  document.getElementById('cntTemo').textContent    = temoFlat.length;
+  // Cnt payments = nombre de paiements totaux
+  var totalPay = 0;
+  Object.keys(paymentsByLead).forEach(function(k){ totalPay += paymentsByLead[k].length; });
+  document.getElementById('cntPay').textContent = totalPay;
 }
 
-function getClientsInRetard(){
+function searchMatch(c, q){
+  if(!q) return true;
+  var hay = ((c.nom||'') + ' ' + (c.commerce||'') + ' ' + (c.email||'') + ' ' + (c.telephone||'')).toLowerCase();
+  return hay.indexOf(q.toLowerCase()) >= 0;
+}
+
+function renderRetards(){
+  document.getElementById('toolbarRetards').style.display = '';
+  document.getElementById('filterStatus').style.display = '';
+  document.getElementById('filterPayStatus').style.display = 'none';
+  var body = document.getElementById('csmBody');
   var list = [];
   allClients.forEach(function(c){
     var lvl = computeLevel(c);
     if(!lvl || lvl === 'ok') return;
     if(!levelsActive[lvl]) return;
-    // Filtre coach
-    if(filterCoach !== 'all'){
-      if(filterCoach === '' && c.coachAssigned) return;
-      if(filterCoach !== '' && c.coachAssigned !== filterCoach) return;
-    }
-    // Filtre jours sans session
-    if(filterDays > 0 && daysSinceLastSession(c) < filterDays) return;
-    // Search
-    if(searchQ){
-      var q = searchQ.toLowerCase();
-      var hay = ((c.nom||'') + ' ' + (c.activite||'') + ' ' + (c.email||'')).toLowerCase();
-      if(hay.indexOf(q) < 0) return;
-    }
+    if(filterStatus !== 'all' && (c.clientStatus || 'active') !== filterStatus) return;
+    if(!searchMatch(c, searchQ)) return;
     c._level = lvl;
-    c._daysSince = daysSinceLastSession(c);
     list.push(c);
   });
-  // Sort: crit > warn > att, puis par jours sans session desc
+  // Sort : crit → warn → att, puis par alerte la plus récente
   var rank = { crit:0, warn:1, att:2 };
-  list.sort(function(a,b){
-    if(rank[a._level] !== rank[b._level]) return rank[a._level] - rank[b._level];
-    return b._daysSince - a._daysSince;
-  });
-  return list;
-}
+  list.sort(function(a,b){ return rank[a._level] - rank[b._level]; });
 
-function renderRetards(){
-  document.getElementById('toolbarRetards').style.display = 'flex';
-  var body = document.getElementById('csmBody');
-  var list = getClientsInRetard();
   if(!list.length){
     body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">🎉</div>' +
-      '<div class="csm-empty-title">Tout est sous contrôle</div>' +
-      '<div>Aucun client ne correspond aux filtres actifs.</div></div>';
+      '<div class="csm-empty-title">Aucune alerte active</div>' +
+      '<div>Tous les clients sont sous contrôle ou hors filtres.</div></div>';
     return;
   }
   var h = '<div class="csm-list">';
@@ -663,16 +695,14 @@ function renderRetards(){
 
 function renderAllClients(){
   document.getElementById('toolbarRetards').style.display = 'none';
+  document.getElementById('filterStatus').style.display = '';
+  document.getElementById('filterPayStatus').style.display = 'none';
   var body = document.getElementById('csmBody');
   var list = allClients.slice();
-  if(searchQ){
-    var q = searchQ.toLowerCase();
-    list = list.filter(function(c){
-      return ((c.nom||'')+' '+(c.activite||'')+' '+(c.email||'')).toLowerCase().indexOf(q) >= 0;
-    });
-  }
-  list.forEach(function(c){ c._level = computeLevel(c); c._daysSince = daysSinceLastSession(c); });
-  list.sort(function(a,b){ return (a.nom||'').localeCompare(b.nom||''); });
+  if(filterStatus !== 'all') list = list.filter(function(c){ return (c.clientStatus||'active') === filterStatus; });
+  if(searchQ) list = list.filter(function(c){ return searchMatch(c, searchQ); });
+  list.forEach(function(c){ c._level = computeLevel(c); });
+
   if(!list.length){
     body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">📋</div><div class="csm-empty-title">Aucun client</div></div>';
     return;
@@ -687,258 +717,310 @@ function renderClientCard(c){
   var lvl = c._level;
   var lvlClass = lvl ? lvl : '';
   var lvlBadge = '';
-  if(lvl === 'crit')  lvlBadge = '<span class="csm-badge crit">🔴 Critique</span>';
-  else if(lvl === 'warn') lvlBadge = '<span class="csm-badge warn">🟠 Retard</span>';
+  if(lvl === 'crit')      lvlBadge = '<span class="csm-badge crit">🔴 Critique</span>';
+  else if(lvl === 'warn') lvlBadge = '<span class="csm-badge warn">🟠 Relancer</span>';
   else if(lvl === 'att')  lvlBadge = '<span class="csm-badge att">🟡 Attention</span>';
   else if(lvl === 'ok')   lvlBadge = '<span class="csm-badge ok">✅ OK</span>';
 
-  var coachLabel = c.coachAssigned ? (coachMap[c.coachAssigned] || c.coachAssigned) : 'Non assigné';
-  var coachBadge = '<span class="csm-badge coach">🎓 ' + esc(coachLabel) + '</span>';
+  var status = c.clientStatus || 'active';
+  var cs = CLIENT_STATUS[status] || CLIENT_STATUS.active;
+  var statusBadge = '<span class="csm-badge ' + cs.cls + '">' + cs.label + '</span>';
 
   var followBadge = '';
   if(c.lastCsmFollowupAt){
     followBadge = '<span class="csm-badge followup">↻ Relancé ' + timeAgo(c.lastCsmFollowupAt) + '</span>';
   }
 
-  var done  = c.nbCoachingsFaits || 0;
-  var total = c.nbCoachingsTotal || 12;
-  var pct   = total > 0 ? Math.round((done/total)*100) : 0;
-
-  var lastSess = getLastSessionDate(c);
-  var daysSince = c._daysSince;
-
-  // Mini barres des 6 derniers mois
-  var bars = '';
-  var now = new Date();
-  for(var i = 5; i >= 0; i--){
-    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    if(c.dateEntree){
-      var entry = new Date(c.dateEntree);
-      if(!isNaN(entry.getTime()) && d < new Date(entry.getFullYear(), entry.getMonth(), 1)){
-        bars += '<div class="csm-quota-month" title="Avant entrée"></div>';
-        continue;
-      }
-    }
-    var q = getQuotaStatus(c, d.getFullYear(), d.getMonth());
-    var cls = q.status === 'ok' ? 'ok' : (q.status === 'partial' ? 'partial' : (q.status === 'miss' ? 'miss' : ''));
-    bars += '<div class="csm-quota-month ' + cls + '" title="' + d.toLocaleDateString('fr-FR',{month:'long'}) + ' : ' + q.used + '/' + q.max + '"></div>';
+  // Synthèse paiements
+  var pays = paymentsByLead[c.id] || [];
+  var payInfo = '';
+  if(pays.length){
+    var totalAmt = 0, paidAmt = 0;
+    pays.forEach(function(p){
+      if(p.status === 'cancelled') return;
+      totalAmt += (p.totalAmount || 0);
+      paidAmt  += (p.paidAmount  || 0);
+    });
+    var nbFailed = pays.filter(function(p){ return p.status === 'failed'; }).length;
+    payInfo = '<span title="Total payé">💳 ' + fmtEuro(paidAmt) + ' / ' + fmtEuro(totalAmt) + '</span>';
+    if(nbFailed > 0) payInfo += '<span class="csm-badge crit">❌ ' + nbFailed + ' échec' + (nbFailed>1?'s':'') + '</span>';
+  } else {
+    payInfo = '<span style="color:var(--ink-muted)">💳 Aucun paiement</span>';
   }
 
-  var av = '<div class="csm-avatar">' + esc(initials(c.nom)) + '</div>';
+  var clientSince = '';
+  if(c.clientSince){ clientSince = '<span>📅 Client depuis ' + fmtDate(c.clientSince) + '</span>'; }
+
+  var av = '<div class="csm-avatar">' + esc(initials(clientDisplayName(c))) + '</div>';
   var info = '<div class="csm-card-info">' +
-    '<div class="csm-card-name">' + esc(c.nom||'?') + '</div>' +
+    '<div class="csm-card-name">' + esc(clientDisplayName(c)) + (c.commerce ? ' <span style="font-weight:400;color:var(--ink-muted);font-size:12px">— ' + esc(c.commerce) + '</span>' : '') + '</div>' +
     '<div class="csm-card-meta">' +
-      lvlBadge + coachBadge + followBadge +
-      '<span>📅 Dernière session : ' + (lastSess ? fmtDate(lastSess) + ' (' + daysSince + 'j)' : 'aucune') + '</span>' +
-      '<span>📊 ' + done + '/' + total + ' coachings (' + pct + '%)</span>' +
+      lvlBadge + statusBadge + followBadge +
+      payInfo + clientSince +
     '</div>' +
   '</div>';
 
-  var quotaBar = '<div class="csm-quota-bar" title="Quota mensuel — 6 derniers mois">' + bars + '</div>';
+  var actions = '<div class="csm-actions">';
+  if(c.telephone) actions += '<button class="csm-act-btn" title="📱 SMS" onclick="event.stopPropagation();quickSms(\'' + c.id + '\')">📱</button>';
+  if(c.email)     actions += '<button class="csm-act-btn" title="📧 Email" onclick="event.stopPropagation();quickEmail(\'' + c.id + '\')">📧</button>';
+  actions += '<button class="csm-act-btn" title="📋 Détails" onclick="event.stopPropagation();openClientModal(\'' + c.id + '\')">📋</button>';
+  actions += '</div>';
 
-  var actions = '<div class="csm-actions">' +
-    '<button class="csm-act-btn" title="📱 SMS" onclick="event.stopPropagation();quickSms(\'' + c._id + '\')">📱</button>' +
-    '<button class="csm-act-btn" title="📧 Email" onclick="event.stopPropagation();quickEmail(\'' + c._id + '\')">📧</button>' +
-    '<button class="csm-act-btn" title="📋 Détails" onclick="event.stopPropagation();openClientModal(\'' + c._id + '\')">📋</button>' +
-  '</div>';
+  return '<div class="csm-card ' + lvlClass + '" onclick="openClientModal(\'' + c.id + '\')">' +
+    av + info + '<div></div>' + actions + '</div>';
+}
 
-  return '<div class="csm-card ' + lvlClass + '" onclick="openClientModal(\'' + c._id + '\')">' +
-    av + info + quotaBar + actions + '</div>';
+function renderPayments(){
+  document.getElementById('toolbarRetards').style.display = 'none';
+  document.getElementById('filterStatus').style.display = 'none';
+  document.getElementById('filterPayStatus').style.display = '';
+  var body = document.getElementById('csmBody');
+
+  // Aplatir tous les paiements avec leurs leads
+  var allPays = [];
+  allClients.forEach(function(c){
+    (paymentsByLead[c.id] || []).forEach(function(p){
+      var item = { _client: c, _payment: p };
+      allPays.push(item);
+    });
+  });
+
+  // Filter by pay status
+  if(filterPayStatus !== 'all'){
+    allPays = allPays.filter(function(item){ return item._payment.status === filterPayStatus; });
+  }
+  // Filter by search (sur le client)
+  if(searchQ) allPays = allPays.filter(function(item){ return searchMatch(item._client, searchQ); });
+
+  // Sort : failed/cancelled d'abord, puis par date desc
+  allPays.sort(function(a, b){
+    var pa = a._payment, pb = b._payment;
+    var rankA = pa.status === 'failed' ? 0 : pa.status === 'cancelled' ? 1 : 2;
+    var rankB = pb.status === 'failed' ? 0 : pb.status === 'cancelled' ? 1 : 2;
+    if(rankA !== rankB) return rankA - rankB;
+    return (toDate(pb.createdAt)||new Date(0)) - (toDate(pa.createdAt)||new Date(0));
+  });
+
+  if(!allPays.length){
+    body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">💳</div><div class="csm-empty-title">Aucun paiement</div><div>Ajustez les filtres pour voir plus de résultats.</div></div>';
+    return;
+  }
+
+  var h = '<div class="csm-list">';
+  allPays.forEach(function(item){
+    var c = item._client, p = item._payment;
+    var ps = PAY_STATUS[p.status] || { label: p.status||'?', cls:'pay-draft' };
+    var prog = '';
+    if(p.installmentsCount > 1){
+      prog = (p.paidCount || 0) + '/' + p.installmentsCount + ' mois';
+    }
+    var typeLabel = p.type === 'installments' ? '📅 Fractionné' : '💳 Intégral';
+    var crit = p.status === 'failed' ? 'crit' : '';
+    h += '<div class="csm-card ' + crit + '" onclick="openClientModal(\'' + c.id + '\')">';
+    h += '<div class="csm-avatar">' + esc(initials(clientDisplayName(c))) + '</div>';
+    h += '<div class="csm-card-info">';
+    h += '<div class="csm-card-name">' + esc(clientDisplayName(c)) + ' — ' + fmtEuro(p.totalAmount) + '</div>';
+    h += '<div class="csm-card-meta">';
+    h += '<span class="csm-badge ' + ps.cls + '">' + ps.label + '</span>';
+    h += '<span>' + typeLabel + (prog ? ' · ' + prog : '') + '</span>';
+    if(p.installmentAmount) h += '<span>' + fmtEuro(p.installmentAmount) + '/mois</span>';
+    if(p.paiementPlateforme) h += '<span>🏦 ' + esc(p.paiementPlateforme) + '</span>';
+    h += '<span>' + fmtDate(p.createdAt) + '</span>';
+    h += '</div></div>';
+    h += '<div></div>';
+    h += '<div class="csm-actions">';
+    h += '<a class="csm-act-btn" title="Voir paiement" href="payments.html?leadId=' + c.id + '" onclick="event.stopPropagation()" target="_blank">→</a>';
+    h += '</div></div>';
+  });
+  h += '</div>';
+  body.innerHTML = h;
 }
 
 function renderTemoignages(){
   document.getElementById('toolbarRetards').style.display = 'none';
+  document.getElementById('filterStatus').style.display = 'none';
+  document.getElementById('filterPayStatus').style.display = 'none';
   var body = document.getElementById('csmBody');
 
-  // Clients sans témoignage
   var withTemo = {};
   Object.keys(temoByLead).forEach(function(id){ if((temoByLead[id]||[]).length) withTemo[id] = true; });
-  var noTemoLeads = allClientLeads.filter(function(l){ return !withTemo[l._id]; });
+  var noTemoClients = allClients.filter(function(c){ return !withTemo[c.id]; });
+
+  // Si search actif, filtrer témoignages flat
+  var filteredTemo = temoFlat;
+  if(searchQ){
+    var q = searchQ.toLowerCase();
+    filteredTemo = temoFlat.filter(function(t){
+      return (t._leadName || '').toLowerCase().indexOf(q) >= 0
+          || (t.contenu || t.text || '').toLowerCase().indexOf(q) >= 0;
+    });
+    noTemoClients = noTemoClients.filter(function(c){ return searchMatch(c, searchQ); });
+  }
 
   var h = '';
-
-  // Liste des témoignages
-  if(temoFlat.length){
-    h += '<div class="csm-section-title">⭐ Témoignages reçus (' + temoFlat.length + ')</div>';
+  if(filteredTemo.length){
+    h += '<div class="csm-section-title">⭐ Témoignages reçus (' + filteredTemo.length + ')</div>';
     h += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px">';
-    var sorted = temoFlat.slice().sort(function(a,b){
-      var da = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
-      var db_ = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
-      return db_ - da;
-    });
-    sorted.forEach(function(t){
+    filteredTemo.forEach(function(t){
       h += '<div class="csm-temo-card">';
       h += '<div class="csm-temo-head">';
       h += '<div class="csm-temo-from">' + esc(t._leadName) + '</div>';
-      h += '<div class="csm-temo-when">' + fmtDate(t.createdAt) + '</div>';
-      h += '</div>';
+      h += '<div class="csm-temo-when" style="display:flex;gap:8px;align-items:center">';
+      h += fmtDate(t.createdAt);
+      h += '<button class="csm-act-btn" title="Voir client" style="width:28px;height:28px;font-size:12px" onclick="openClientModal(\'' + t._leadId + '\')">→</button>';
+      h += '</div></div>';
       h += '<div class="csm-temo-text">' + esc(t.contenu || t.text || '(vide)') + '</div>';
       h += '</div>';
     });
     h += '</div>';
-  } else {
-    h += '<div class="csm-empty"><div class="csm-empty-icon">⭐</div><div class="csm-empty-title">Aucun témoignage pour l\'instant</div></div>';
+  } else if(searchQ){
+    h += '<div class="csm-empty"><div class="csm-empty-icon">🔍</div><div class="csm-empty-title">Aucun résultat</div></div>';
   }
 
-  // Clients à relancer (sans témoignage)
-  if(noTemoLeads.length){
-    h += '<div class="csm-section-title">📩 Clients sans témoignage (' + noTemoLeads.length + ') — à relancer</div>';
-    h += '<div style="display:flex;flex-direction:column;gap:6px">';
-    noTemoLeads.slice(0, 50).forEach(function(l){
-      h += '<div class="csm-card" style="grid-template-columns:auto 1fr auto">';
-      h += '<div class="csm-avatar">' + esc(initials(l.nom||l.commerce||'?')) + '</div>';
-      h += '<div class="csm-card-info"><div class="csm-card-name">' + esc(l.nom || l.commerce || l.email || '?') + '</div>';
-      h += '<div class="csm-card-meta"><span>📧 ' + esc(l.email||'—') + '</span><span>📞 ' + esc(l.telephone||'—') + '</span></div></div>';
-      h += '<div class="csm-actions">';
-      if(l.email)     h += '<button class="csm-act-btn" title="Email" onclick="window.location.href=\'mailto:' + esc(l.email) + '?subject=Votre%20avis%20nous%20int%C3%A9resse\'">📧</button>';
-      if(l.telephone) h += '<button class="csm-act-btn" title="SMS" onclick="window.location.href=\'sms:' + esc(l.telephone) + '\'">📱</button>';
+  if(noTemoClients.length){
+    h += '<div class="csm-section-title">📩 Clients sans témoignage (' + noTemoClients.length + ') — à relancer</div>';
+    h += '<div class="csm-list">';
+    noTemoClients.slice(0, 100).forEach(function(c){
+      h += '<div class="csm-card" onclick="openClientModal(\'' + c.id + '\')">';
+      h += '<div class="csm-avatar">' + esc(initials(clientDisplayName(c))) + '</div>';
+      h += '<div class="csm-card-info"><div class="csm-card-name">' + esc(clientDisplayName(c)) + '</div>';
+      h += '<div class="csm-card-meta">';
+      if(c.email) h += '<span>📧 ' + esc(c.email) + '</span>';
+      if(c.telephone) h += '<span>📞 ' + esc(c.telephone) + '</span>';
+      if(c.clientSince) h += '<span>📅 Depuis ' + fmtDate(c.clientSince) + '</span>';
+      h += '</div></div><div></div><div class="csm-actions">';
+      if(c.email)     h += '<button class="csm-act-btn" title="Email" onclick="event.stopPropagation();quickEmail(\'' + c.id + '\')">📧</button>';
+      if(c.telephone) h += '<button class="csm-act-btn" title="SMS" onclick="event.stopPropagation();quickSms(\'' + c.id + '\')">📱</button>';
       h += '</div></div>';
     });
     h += '</div>';
   }
 
-  body.innerHTML = h || '<div class="csm-empty"><div class="csm-empty-icon">⭐</div><div class="csm-empty-title">Pas de données témoignages</div></div>';
-}
-
-function renderActivity(){
-  document.getElementById('toolbarRetards').style.display = 'none';
-  var body = document.getElementById('csmBody');
-  var feed = [];
-
-  // Sessions faites récentes
-  allClients.forEach(function(c){
-    getAllSessions(c).forEach(function(s){
-      if(s.statut === 'fait' && s.date && s.numero !== 0 && s.type !== 'rdv72h'){
-        feed.push({
-          when: new Date(s.date),
-          icon: '✅',
-          text: '<strong>' + esc(c.nom||'?') + '</strong> — Session ' + (s.numero||'') + ' faite avec ' + esc(coachMap[s.coach]||s.coach||'?')
-        });
-      }
-    });
-  });
-
-  // Témoignages récents
-  temoFlat.forEach(function(t){
-    if(t.createdAt){
-      var d = t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
-      feed.push({
-        when: d,
-        icon: '⭐',
-        text: '<strong>' + esc(t._leadName) + '</strong> a déposé un témoignage'
-      });
-    }
-  });
-
-  // Relances CSM récentes
-  allClients.forEach(function(c){
-    if(c.lastCsmFollowupAt){
-      var d = c.lastCsmFollowupAt.toDate ? c.lastCsmFollowupAt.toDate() : new Date(c.lastCsmFollowupAt);
-      feed.push({
-        when: d,
-        icon: '↻',
-        text: '<strong>' + esc(c.nom||'?') + '</strong> — Relancé par CSM'
-      });
-    }
-  });
-
-  feed.sort(function(a,b){ return b.when - a.when; });
-  feed = feed.slice(0, 80);
-
-  if(!feed.length){
-    body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">⚡</div><div class="csm-empty-title">Pas d\'activité récente</div></div>';
-    return;
+  if(!h){
+    h = '<div class="csm-empty"><div class="csm-empty-icon">⭐</div><div class="csm-empty-title">Pas encore de témoignages</div></div>';
   }
-  var h = '';
-  feed.forEach(function(item){
-    h += '<div class="csm-activity-item">';
-    h += '<div class="csm-activity-icon">' + item.icon + '</div>';
-    h += '<div class="csm-activity-text">' + item.text + '<div class="csm-activity-when">' + fmtDateTime(item.when) + ' (' + timeAgo(item.when) + ')</div></div>';
-    h += '</div>';
-  });
   body.innerHTML = h;
 }
 
-/* ─── Tab switching ─── */
-function switchTab(tab, el){
-  activeTab = tab;
-  document.querySelectorAll('.csm-tab').forEach(function(t){ t.classList.remove('active'); });
-  if(el) el.classList.add('active');
-  renderAll();
-}
-
-function toggleLevel(level, el){
-  levelsActive[level] = !levelsActive[level];
-  el.classList.toggle('active');
-  renderRetards();
-}
-
-document.getElementById('searchInput').addEventListener('input', function(e){
-  searchQ = e.target.value.trim();
-  renderAll();
-});
-document.getElementById('filterCoach').addEventListener('change', function(e){
-  filterCoach = e.target.value;
-  renderAll();
-});
-document.getElementById('filterDays').addEventListener('change', function(e){
-  filterDays = parseInt(e.target.value, 10) || 0;
-  renderAll();
-});
-
 /* ═══ MODAL DETAIL CLIENT ═══ */
 function openClientModal(id){
-  var c = allClients.find(function(x){ return x._id === id; });
+  var c = allClients.find(function(x){ return x.id === id; });
   if(!c){ showToast('Client introuvable', 'error'); return; }
   openClientId = id;
+  // Charger les notes
+  loadNotesForLead(id, function(){ renderModal(); });
+  renderModal(); // Affiche tout de suite avec les données déjà disponibles
+  document.getElementById('modalBg').classList.add('show');
+}
 
-  var coachLabel = c.coachAssigned ? (coachMap[c.coachAssigned] || c.coachAssigned) : 'Non assigné';
+function renderModal(){
+  if(!openClientId) return;
+  var c = allClients.find(function(x){ return x.id === openClientId; });
+  if(!c) return;
+
+  var status = c.clientStatus || 'active';
+  var cs = CLIENT_STATUS[status] || CLIENT_STATUS.active;
   var lvl = computeLevel(c);
   var lvlBadge = '';
   if(lvl === 'crit')      lvlBadge = '<span class="csm-badge crit">🔴 Critique</span>';
-  else if(lvl === 'warn') lvlBadge = '<span class="csm-badge warn">🟠 Retard</span>';
+  else if(lvl === 'warn') lvlBadge = '<span class="csm-badge warn">🟠 Relancer</span>';
   else if(lvl === 'att')  lvlBadge = '<span class="csm-badge att">🟡 Attention</span>';
   else if(lvl === 'ok')   lvlBadge = '<span class="csm-badge ok">✅ OK</span>';
 
-  var lastSess = getLastSessionDate(c);
-  var done  = c.nbCoachingsFaits || 0;
-  var total = c.nbCoachingsTotal || 12;
+  var pays = paymentsByLead[c.id] || [];
+  var notes = notesByLead[c.id] || [];
+  var hist = c.csmFollowupHistory || [];
 
   var h = '';
   h += '<div class="csm-modal-h">';
-  h += '<div><div class="csm-modal-title">' + esc(c.nom||'?') + ' ' + lvlBadge + '</div>';
-  h += '<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">' + esc(c.activite||'') + ' • Coach : ' + esc(coachLabel) + '</div></div>';
+  h += '<div><div class="csm-modal-title">' + esc(clientDisplayName(c)) + lvlBadge + '<span class="csm-badge ' + cs.cls + '">' + cs.label + '</span></div>';
+  if(c.commerce) h += '<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">' + esc(c.commerce) + '</div>';
+  h += '</div>';
   h += '<button class="csm-modal-close" onclick="closeModal()">✕</button>';
   h += '</div>';
 
-  // Infos
+  // ─── Infos contact ───
   h += '<div class="csm-section">';
-  h += '<div class="csm-section-title">Informations</div>';
+  h += '<div class="csm-section-title">📇 Contact</div>';
   h += '<div class="csm-info-grid">';
   h += '<div class="csm-info-item"><div class="csm-info-label">📧 Email</div><div class="csm-info-val">' + esc(c.email||'—') + '</div></div>';
-  h += '<div class="csm-info-item"><div class="csm-info-label">📞 Téléphone</div><div class="csm-info-val">' + esc(c.tel||'—') + '</div></div>';
-  h += '<div class="csm-info-item"><div class="csm-info-label">📅 Entrée</div><div class="csm-info-val">' + fmtDate(c.dateEntree) + '</div></div>';
-  h += '<div class="csm-info-item"><div class="csm-info-label">📋 Programme</div><div class="csm-info-val">' + esc(c.programme||'—') + '</div></div>';
-  h += '<div class="csm-info-item"><div class="csm-info-label">📊 Coachings</div><div class="csm-info-val">' + done + ' / ' + total + '</div></div>';
-  h += '<div class="csm-info-item"><div class="csm-info-label">📅 Dernière session</div><div class="csm-info-val">' + (lastSess ? fmtDate(lastSess) + ' (' + Math.floor((Date.now()-lastSess.getTime())/86400000) + ' jours)' : 'Aucune') + '</div></div>';
+  h += '<div class="csm-info-item"><div class="csm-info-label">📞 Téléphone</div><div class="csm-info-val">' + esc(c.telephone||'—') + '</div></div>';
+  h += '<div class="csm-info-item"><div class="csm-info-label">📅 Client depuis</div><div class="csm-info-val">' + fmtDate(c.clientSince) + '</div></div>';
+  h += '<div class="csm-info-item"><div class="csm-info-label">🏷 Type / Secteur</div><div class="csm-info-val">' + esc((c.type||'') + (c.secteur ? ' · ' + c.secteur : '')) + '</div></div>';
   h += '</div></div>';
 
-  // Note CSM
+  // ─── Statut client (éditable) ───
   h += '<div class="csm-section">';
-  h += '<div class="csm-section-title">📝 Note CSM</div>';
-  h += '<textarea class="csm-textarea" id="csmNoteInput" placeholder="Notes internes CSM (visibles aussi en coaching)…">' + esc(c.csmNotes||'') + '</textarea>';
-  h += '<div style="margin-top:6px"><button class="csm-btn primary" onclick="saveCsmNote()">💾 Enregistrer la note</button></div>';
+  h += '<div class="csm-section-title">🎯 Statut client</div>';
+  h += '<div class="csm-status-row">';
+  Object.keys(CLIENT_STATUS).forEach(function(s){
+    var on = (status === s);
+    var col = '';
+    if(s === 'active')         col = '#10b981';
+    else if(s === 'paused')    col = '#f59e0b';
+    else if(s === 'completed') col = '#a78bfa';
+    else if(s === 'stopped')   col = '#ef4444';
+    else if(s === 'procedure') col = '#f97316';
+    var st = on ? 'border-color:' + col + ';color:' + col + ';background:' + col + '18' : '';
+    h += '<button class="csm-status-btn" style="' + st + '" onclick="changeStatus(\'' + s + '\')">' + CLIENT_STATUS[s].label + '</button>';
+  });
+  h += '</div></div>';
+
+  // ─── Paiements ───
+  h += '<div class="csm-section">';
+  h += '<div class="csm-section-title">💳 Paiements (' + pays.length + ')</div>';
+  if(!pays.length){
+    h += '<div style="font-size:12px;color:var(--ink-muted)">Aucun paiement enregistré pour ce client.</div>';
+  } else {
+    pays.forEach(function(p){
+      var ps = PAY_STATUS[p.status] || { label: p.status||'?', cls:'pay-draft' };
+      var typeLabel = p.type === 'installments' ? '📅 ' + (p.installmentsCount||1) + ' mois' : '💳 Intégral';
+      var prog = '';
+      if(p.installmentsCount > 1){
+        prog = (p.paidCount || 0) + '/' + p.installmentsCount + ' (' + fmtEuro(p.paidAmount||0) + ' payé)';
+      }
+      var rowClass = p.status === 'failed' ? 'failed' : '';
+      h += '<div class="csm-pay-row ' + rowClass + '">';
+      h += '<div>';
+      h += '<div><span class="csm-pay-amt">' + fmtEuro(p.totalAmount) + '</span> <span class="csm-badge ' + ps.cls + '">' + ps.label + '</span></div>';
+      h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:3px">' + typeLabel;
+      if(prog) h += ' · ' + prog;
+      if(p.paiementPlateforme) h += ' · ' + esc(p.paiementPlateforme);
+      h += '</div></div>';
+      h += '<div style="font-size:11px;color:var(--ink-muted)">' + fmtDate(p.createdAt) + '</div>';
+      h += '<a class="csm-act-btn" title="Détails" href="payments.html" target="_blank">→</a>';
+      h += '</div>';
+    });
+  }
+  h += '<div style="margin-top:8px"><a class="csm-btn" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Gérer les paiements</a></div>';
   h += '</div>';
 
-  // Historique relances
-  var hist = c.csmFollowupHistory || [];
+  // ─── Notes (sous-collection partagée) ───
   h += '<div class="csm-section">';
-  h += '<div class="csm-section-title">↻ Historique des relances (' + hist.length + ')</div>';
+  h += '<div class="csm-section-title">📝 Notes (' + notes.length + ')</div>';
+  h += '<textarea class="csm-textarea" id="csmNoteInput" placeholder="Ajouter une note interne (visible aussi dans le module Clients du sales)…"></textarea>';
+  h += '<div style="margin-top:6px;display:flex;gap:8px"><button class="csm-btn primary" onclick="addNote()">+ Ajouter la note</button></div>';
+  if(notes.length){
+    h += '<div style="margin-top:10px">';
+    notes.slice(0, 8).forEach(function(n){
+      h += '<div class="csm-note-item">';
+      h += '<div class="csm-note-meta"><span>' + esc(n.auteur||'?') + ' · ' + fmtDateTime(n.createdAt) + '</span>';
+      h += '<button class="csm-act-btn" style="width:24px;height:24px;font-size:11px" title="Supprimer" onclick="deleteNote(\'' + n._id + '\')">🗑</button></div>';
+      h += '<div class="csm-note-text">' + esc(n.contenu||'') + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
+
+  // ─── Historique relances CSM ───
+  h += '<div class="csm-section">';
+  h += '<div class="csm-section-title">↻ Historique des relances CSM (' + hist.length + ')</div>';
   if(!hist.length){
     h += '<div style="font-size:12px;color:var(--ink-muted)">Aucune relance enregistrée.</div>';
   } else {
     var sorted = hist.slice().reverse();
-    sorted.slice(0, 8).forEach(function(it){
+    sorted.slice(0, 6).forEach(function(it){
       var icon = it.channel === 'sms' ? '📱' : it.channel === 'email' ? '📧' : '📝';
       h += '<div class="csm-history-item">';
       h += '<div class="csm-history-meta"><span>' + icon + ' ' + esc(it.channel||'note') + '</span><span>' + fmtDateTime(it.at) + '</span><span>' + esc(it.byName||'') + '</span></div>';
@@ -948,16 +1030,15 @@ function openClientModal(id){
   }
   h += '</div>';
 
-  // Actions
+  // ─── Actions ───
   h += '<div class="csm-modal-actions">';
-  if(c.tel)   h += '<button class="csm-btn" onclick="quickSms(\'' + c._id + '\')">📱 SMS</button>';
-  if(c.email) h += '<button class="csm-btn" onclick="quickEmail(\'' + c._id + '\')">📧 Email</button>';
+  if(c.telephone) h += '<button class="csm-btn" onclick="quickSms(\'' + c.id + '\')">📱 SMS</button>';
+  if(c.email)     h += '<button class="csm-btn" onclick="quickEmail(\'' + c.id + '\')">📧 Email</button>';
   h += '<button class="csm-btn primary" onclick="markFollowedUp()">✅ Marquer relancé</button>';
-  h += '<a class="csm-btn" href="coaching.html#client-' + esc(c._id) + '" target="_blank">🎓 Ouvrir fiche coaching →</a>';
+  h += '<a class="csm-btn" href="sales-clients.html" target="_blank">👥 Vue Clients →</a>';
   h += '</div>';
 
   document.getElementById('modalContent').innerHTML = h;
-  document.getElementById('modalBg').classList.add('show');
 }
 
 function closeModal(){
@@ -965,24 +1046,58 @@ function closeModal(){
   openClientId = null;
 }
 
-function saveCsmNote(){
+function changeStatus(newStatus){
   if(!openClientId) return;
-  var note = document.getElementById('csmNoteInput').value.trim();
-  db.collection('clients').doc(openClientId).update({
-    csmNotes: note,
-    csmUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  db.collection('leads').doc(openClientId).update({
+    clientStatus: newStatus,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(){
-    showToast('✅ Note enregistrée');
+    var c = allClients.find(function(x){ return x.id === openClientId; });
+    if(c) c.clientStatus = newStatus;
+    showToast('✅ Statut mis à jour');
+    renderModal();
   }).catch(function(e){
-    console.error('saveCsmNote error', e);
-    showToast('❌ Erreur enregistrement', 'error');
+    console.error('changeStatus error', e);
+    showToast('❌ Erreur changement statut', 'error');
   });
+}
+
+function addNote(){
+  if(!openClientId) return;
+  var input = document.getElementById('csmNoteInput');
+  var txt = (input.value || '').trim();
+  if(!txt){ showToast('Note vide', 'error'); return; }
+  db.collection('leads').doc(openClientId).collection('client_notes').add({
+    contenu: txt,
+    auteur: currentUserEmail || currentUserName || 'CSM',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    showToast('📝 Note ajoutée');
+    input.value = '';
+    loadNotesForLead(openClientId, function(){ renderModal(); });
+  }).catch(function(e){
+    console.error('addNote error', e);
+    showToast('❌ Erreur ajout note', 'error');
+  });
+}
+
+function deleteNote(noteId){
+  if(!openClientId) return;
+  if(!confirm('Supprimer cette note ?')) return;
+  db.collection('leads').doc(openClientId).collection('client_notes').doc(noteId).delete()
+    .then(function(){
+      showToast('🗑 Note supprimée');
+      loadNotesForLead(openClientId, function(){ renderModal(); });
+    }).catch(function(e){
+      console.error('deleteNote error', e);
+      showToast('❌ Erreur', 'error');
+    });
 }
 
 function markFollowedUp(){
   if(!openClientId) return;
   var msg = prompt('Note de la relance (facultatif) :', '');
-  if(msg === null) return; // Annulé
+  if(msg === null) return;
   var historyEntry = {
     at: new Date().toISOString(),
     by: currentUser ? currentUser.uid : null,
@@ -990,69 +1105,90 @@ function markFollowedUp(){
     channel: 'note',
     message: msg || ''
   };
-  db.collection('clients').doc(openClientId).update({
+  db.collection('leads').doc(openClientId).update({
     lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
     lastCsmFollowupBy: currentUser ? currentUser.uid : null,
     csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
-    csmUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(){
     showToast('✅ Relance enregistrée');
-    // Réouvrir le modal pour rafraîchir l'historique
-    var id = openClientId;
-    closeModal();
-    setTimeout(function(){ openClientModal(id); }, 100);
+    var c = allClients.find(function(x){ return x.id === openClientId; });
+    if(c){
+      if(!c.csmFollowupHistory) c.csmFollowupHistory = [];
+      c.csmFollowupHistory.push(historyEntry);
+      c.lastCsmFollowupAt = new Date();
+    }
+    renderModal();
   }).catch(function(e){
     console.error('markFollowedUp error', e);
-    showToast('❌ Erreur — vérifier les rules Firestore', 'error');
+    showToast('❌ Erreur — voir les rules Firestore', 'error');
   });
 }
 
 function quickSms(id){
-  var c = allClients.find(function(x){ return x._id === id; });
-  if(!c || !c.tel){ showToast('Pas de numéro pour ce client', 'error'); return; }
-  window.location.href = 'sms:' + c.tel;
-  // Trace
-  var historyEntry = {
-    at: new Date().toISOString(),
-    by: currentUser ? currentUser.uid : null,
-    byName: currentUserName,
-    channel: 'sms',
-    message: 'SMS ouvert'
-  };
-  db.collection('clients').doc(id).update({
-    lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
-    lastCsmFollowupBy: currentUser ? currentUser.uid : null,
-    csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
-    csmUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(function(e){ console.warn('quickSms trace error', e); });
+  var c = allClients.find(function(x){ return x.id === id; });
+  if(!c || !c.telephone){ showToast('Pas de numéro pour ce client', 'error'); return; }
+  window.location.href = 'sms:' + c.telephone;
+  traceFollowup(id, 'sms', 'SMS ouvert');
 }
 
 function quickEmail(id){
-  var c = allClients.find(function(x){ return x._id === id; });
+  var c = allClients.find(function(x){ return x.id === id; });
   if(!c || !c.email){ showToast('Pas d\'email pour ce client', 'error'); return; }
-  var subject = 'Suivi de votre coaching — Ambitio Corp';
+  var subject = 'Suivi de votre accompagnement — Ambitio Corp';
   window.location.href = 'mailto:' + c.email + '?subject=' + encodeURIComponent(subject);
+  traceFollowup(id, 'email', 'Email ouvert');
+}
+
+function traceFollowup(leadId, channel, message){
   var historyEntry = {
     at: new Date().toISOString(),
     by: currentUser ? currentUser.uid : null,
     byName: currentUserName,
-    channel: 'email',
-    message: 'Email ouvert'
+    channel: channel,
+    message: message
   };
-  db.collection('clients').doc(id).update({
+  db.collection('leads').doc(leadId).update({
     lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
     lastCsmFollowupBy: currentUser ? currentUser.uid : null,
     csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
-    csmUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(function(e){ console.warn('quickEmail trace error', e); });
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(function(e){ console.warn('traceFollowup error', e); });
 }
+
+/* ─── Tab + filter listeners ─── */
+function switchTab(tab, el){
+  activeTab = tab;
+  document.querySelectorAll('.csm-tab').forEach(function(t){ t.classList.remove('active'); });
+  if(el) el.classList.add('active');
+  renderAll();
+}
+function toggleLevel(level, el){
+  levelsActive[level] = !levelsActive[level];
+  el.classList.toggle('active');
+  renderRetards();
+}
+document.getElementById('searchInput').addEventListener('input', function(e){
+  searchQ = e.target.value.trim();
+  renderAll();
+});
+document.getElementById('filterStatus').addEventListener('change', function(e){
+  filterStatus = e.target.value;
+  renderAll();
+});
+document.getElementById('filterPayStatus').addEventListener('change', function(e){
+  filterPayStatus = e.target.value;
+  renderAll();
+});
 
 // Expose pour onclick inline
 window.switchTab = switchTab;
 window.toggleLevel = toggleLevel;
 window.openClientModal = openClientModal;
 window.closeModal = closeModal;
-window.saveCsmNote = saveCsmNote;
+window.changeStatus = changeStatus;
+window.addNote = addNote;
+window.deleteNote = deleteNote;
 window.markFollowedUp = markFollowedUp;
 window.quickSms = quickSms;
 window.quickEmail = quickEmail;
