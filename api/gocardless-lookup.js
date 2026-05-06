@@ -48,29 +48,54 @@ module.exports = async (req, res) => {
       res.status(400).json({ error: 'leadId et email requis' }); return;
     }
 
-    // 1. Chercher le customer GC par email (GC ne supporte pas le filtre email,
-    //    on pagine les customers récents et on filtre côté serveur)
+    // 1. Chercher le customer GC par email
     const emailNorm = email.toLowerCase().trim();
     let customers = [];
-    let after = null;
-    let pages = 0;
-    const MAX_PAGES = 5; // 5 × 200 = 1000 customers max
 
-    while (pages < MAX_PAGES) {
-      const url = `/customers?limit=200&sort_field=created_at&sort_direction=desc${after ? `&after=${after}` : ''}`;
-      const page = await gcGet(url);
-      if (!page || !page.customers || !page.customers.length) break;
+    // 1a. Essayer d'abord le cache Firestore gc_customers_cache (rapide)
+    try {
+      const cacheSnap = await db.collection('gc_customers_cache')
+        .where('email', '==', emailNorm)
+        .limit(1)
+        .get();
+      if (!cacheSnap.empty) {
+        const cached = cacheSnap.docs[0].data();
+        const customerId = cached.customerId || cacheSnap.docs[0].id;
+        // Récupère le customer frais depuis l'API
+        const fresh = await gcGet(`/customers/${customerId}`);
+        if (fresh && fresh.customers) {
+          customers = [fresh.customers];
+        } else if (fresh && fresh.id) {
+          // Format alternatif : la GC API renvoie parfois directement l'objet
+          customers = [fresh];
+        }
+      }
+    } catch (cacheErr) {
+      console.warn('[gocardless-lookup] cache lookup failed:', cacheErr.message);
+    }
 
-      const match = page.customers.find(c =>
-        (c.email || '').toLowerCase().trim() === emailNorm
-      );
-      if (match) { customers = [match]; break; }
+    // 1b. Fallback : pagination si rien trouvé dans le cache
+    if (!customers.length) {
+      let after = null;
+      let pages = 0;
+      const MAX_PAGES = 5; // 5 × 200 = 1000 customers max
 
-      // Pagination cursor
-      const meta = page.meta && page.meta.cursors;
-      if (!meta || !meta.after) break;
-      after = meta.after;
-      pages++;
+      while (pages < MAX_PAGES) {
+        const url = `/customers?limit=200&sort_field=created_at&sort_direction=desc${after ? `&after=${after}` : ''}`;
+        const page = await gcGet(url);
+        if (!page || !page.customers || !page.customers.length) break;
+
+        const match = page.customers.find(c =>
+          (c.email || '').toLowerCase().trim() === emailNorm
+        );
+        if (match) { customers = [match]; break; }
+
+        // Pagination cursor
+        const meta = page.meta && page.meta.cursors;
+        if (!meta || !meta.after) break;
+        after = meta.after;
+        pages++;
+      }
     }
 
     if (!customers.length) {
