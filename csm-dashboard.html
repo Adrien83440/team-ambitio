@@ -2867,7 +2867,7 @@ function renderModal(){
       h += '<div style="margin-top:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px" id="gcLiveSection">';
       h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">';
       h += '<div style="font-size:13px;font-weight:700">🏦 Détail GoCardless</div>';
-      h += '<button class="csm-btn" id="gcResyncBtn" onclick="csmGcLookup(\'' + c.id + '\', \'' + esc(c.email||'').replace(/\'/g,"\\'") + '\', true)" style="padding:6px 12px;font-size:11px">🔄 Resync</button>';
+      h += '<button class="csm-btn" id="gcResyncBtn" onclick="csmGcLookup(\'' + (c._leadId || c.id) + '\', \'' + esc(c.email||'').replace(/\'/g,"\\'") + '\', true)" style="padding:6px 12px;font-size:11px">🔄 Resync</button>';
       h += '</div>';
       h += '<div id="gcLiveContent" style="font-size:12px;color:var(--ink-muted)">⏳ Chargement des données live GoCardless…</div>';
       h += '</div>';
@@ -2998,18 +2998,21 @@ function switchModalTab(tabName){
   });
 
   // Auto-sync GoCardless quand on ouvre l'onglet Paiements (avec cache pour
-  // éviter de rappeler l'API à chaque switch d'onglet sur le même client)
+  // éviter de rappeler l'API à chaque switch d'onglet sur le même client).
+  // En V2 le backend attend un vrai leadId — on passe c._leadId si dispo,
+  // fallback sur c.id (coachingId) si pas de lead matché.
   if(tabName === 'payments' && openClientId){
     var c = allClients.find(function(x){ return x.id === openClientId; });
     if(c && c.email && document.getElementById('gcLiveContent')){
+      var lookupId = c._leadId || c.id;
       // Cache : si on a déjà résolu pour ce client dans cette session, ne pas rappeler
       window._gcCsmCache = window._gcCsmCache || {};
-      var cached = window._gcCsmCache[openClientId];
+      var cached = window._gcCsmCache[lookupId];
       if(cached && (Date.now() - cached.at) < 60000){
         // Cache <60s : réutiliser
         renderGcLiveData(cached.data);
       } else {
-        csmGcLookup(openClientId, c.email, false);
+        csmGcLookup(lookupId, c.email, false);
       }
     }
   }
@@ -3387,7 +3390,14 @@ function quickEmail(id){
   traceFollowup(id, 'email', 'Email ouvert');
 }
 
-function traceFollowup(leadId, channel, message){
+function traceFollowup(clientId, channel, message){
+  // V2 : on écrit dans clients/{coachingId} (source de vérité) au lieu de
+  // leads/{leadId}. Cohérent avec la refonte architecturale où tous les
+  // writes (notes, status, followups) vont sur la collection clients.
+  // Le clientId reçu est l'id du document allClients (= coachingId, préfixé cli_).
+  var c = allClients.find(function(x){ return x.id === clientId; });
+  if(!c){ console.warn('traceFollowup : client introuvable', clientId); return; }
+
   var historyEntry = {
     at: new Date().toISOString(),
     by: currentUser ? currentUser.uid : null,
@@ -3395,12 +3405,25 @@ function traceFollowup(leadId, channel, message){
     channel: channel,
     message: message
   };
-  db.collection('leads').doc(leadId).update({
-    lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
-    lastCsmFollowupBy: currentUser ? currentUser.uid : null,
-    csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(function(e){ console.warn('traceFollowup error', e); });
+  // Si le client a un coachingId (cas normal V2), on écrit dans clients/
+  if(c._coachingId){
+    db.collection('clients').doc(c._coachingId).update({
+      lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastCsmFollowupBy: currentUser ? currentUser.uid : null,
+      csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(function(e){ console.warn('traceFollowup (clients) error', e); });
+  }
+  // Si le client a aussi un lead matché, on duplique sur leads/ pour rester
+  // cohérent avec l'historique CRM existant (sales-leads, etc.). Optionnel.
+  if(c._leadId){
+    db.collection('leads').doc(c._leadId).update({
+      lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastCsmFollowupBy: currentUser ? currentUser.uid : null,
+      csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(function(e){ console.warn('traceFollowup (leads) error', e); });
+  }
 }
 
 /* ─── Tab + filter listeners ─── */
