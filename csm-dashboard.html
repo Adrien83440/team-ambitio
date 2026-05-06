@@ -1707,60 +1707,161 @@ function renderModal(){
   h += '</div>'; // overview-grid
   h += '</div>'; // overview body
 
-  // ─── ONGLET 2 : COACHING ───
+  // ─── ONGLET 2 : COACHING (enrichi) ───
+  // Affiche : programme avec badge Premium, quota mensuel + historique 4 mois,
+  // avancement programme avec %, liste des dernières sessions effectuées
+  // (date + coach), et lien vers la fiche complète coaching.html.
+  // Inspiré du module coaching.html (cf. screenshots Adrien).
   h += '<div class="mtab-body" data-mtab-body="coaching" style="display:none">';
   if(coaching){
     var done2  = coaching.nbCoachingsFaits || 0;
     var total2 = coaching.nbCoachingsTotal || 12;
     var pct2   = total2 > 0 ? Math.round((done2/total2)*100) : 0;
-    var lastSess = getLastSessionDate(coaching);
-    var daysSince = lastSess ? Math.floor((Date.now() - lastSess.getTime()) / 86400000) : null;
+    var remaining = Math.max(0, total2 - done2);
+
+    // Détection du tier programme : Elite/Premium/Standard
+    var progRaw = coaching.programme || '';
+    var progLower = progRaw.toLowerCase();
+    var isElite   = progLower.indexOf('elite') >= 0;
+    var isPremium = isElite || progLower.indexOf('premium') >= 0 || progLower.indexOf('vip') >= 0;
+    var quotaPerMonth = getMonthlyQuota(progRaw);
+
+    // ── Header programme avec badge tier + secteur + dates ──
+    var progBadge = '';
+    if(isElite)        progBadge = '<span style="background:linear-gradient(135deg,#a78bfa,#7c3aed);color:white;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase">⭐ Elite</span>';
+    else if(isPremium) progBadge = '<span style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a0a;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase">★ Premium</span>';
+    else               progBadge = '<span style="background:rgba(94,234,212,0.12);color:var(--csm-accent);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;border:1px solid var(--csm-border)">Standard</span>';
+
     var coachName = coaching.coachAssigned ? (coachMembersMap[coaching.coachAssigned] || coaching.coachAssigned) : 'Non assigné';
 
-    h += '<div class="csm-section">';
-    h += '<div class="csm-info-grid">';
-    h += '<div class="csm-info-item"><div class="csm-info-label">Programme</div><div class="csm-info-val">' + esc(coaching.programme||'—') + '</div></div>';
-    h += '<div class="csm-info-item"><div class="csm-info-label">Coach assigné</div><div class="csm-info-val">' + esc(coachName) + '</div></div>';
-    h += '<div class="csm-info-item"><div class="csm-info-label">Coachings effectués</div><div class="csm-info-val">' + done2 + ' / ' + total2 + ' (' + pct2 + '%)</div></div>';
-    h += '<div class="csm-info-item"><div class="csm-info-label">Dernière session</div><div class="csm-info-val">';
-    if(lastSess) h += fmtDate(lastSess) + ' (il y a ' + daysSince + ' jour' + (daysSince>1?'s':'') + ')';
-    else h += 'Aucune session';
+    h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">';
+    h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">';
+    h += progBadge;
+    h += '<div style="font-size:14px;font-weight:700">' + esc(progRaw || '—') + '</div>';
+    h += '<div style="font-size:12px;color:var(--ink-muted)">· ' + quotaPerMonth + ' coaching' + (quotaPerMonth>1?'s':'') + '/mois</div>';
+    h += '</div>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-soft)">';
+    if(coaching.activite || coaching.secteur){
+      h += '<span>🏷 ' + esc(coaching.activite || coaching.secteur) + '</span>';
+    }
+    if(coaching.dateEntree){
+      h += '<span>📅 Entré le ' + fmtDate(coaching.dateEntree) + '</span>';
+    }
+    h += '<span>👤 Coach : <strong style="color:var(--ink)">' + esc(coachName) + '</strong></span>';
     h += '</div></div>';
+
+    // ── Bloc Avancement programme ──
+    h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">';
+    h += '<div><div style="font-size:11px;color:var(--ink-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">📈 Avancement programme</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">' + remaining + ' séance' + (remaining>1?'s':'') + ' restante' + (remaining>1?'s':'') + ' sur ' + total2 + '</div></div>';
+    h += '<div style="font-size:24px;font-weight:800;color:var(--csm-accent);line-height:1">' + done2 + '<span style="color:var(--ink-muted);font-weight:500;font-size:16px">/' + total2 + '</span></div>';
+    h += '</div>';
+    h += '<div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden">';
+    var progBarColor = pct2 >= 80 ? 'var(--csm-accent)' : pct2 >= 40 ? '#fbbf24' : '#fb923c';
+    h += '<div style="height:100%;width:' + pct2 + '%;background:linear-gradient(90deg,' + progBarColor + ',var(--csm-accent));transition:width 0.3s"></div>';
+    h += '</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted);text-align:right;margin-top:4px">' + pct2 + '% complété</div>';
     h += '</div>';
 
-    h += '<div style="margin-top:14px;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden">';
-    h += '<div style="height:100%;width:' + pct2 + '%;background:linear-gradient(90deg,var(--csm-accent-dark),var(--csm-accent))"></div>';
-    h += '</div>';
-
-    // 6 mini-barres derniers mois
-    h += '<div style="margin-top:14px"><div style="font-size:11px;color:var(--ink-muted);margin-bottom:6px">📊 6 derniers mois (vert = quota OK, jaune = partiel, rouge = aucune)</div>';
-    h += '<div style="display:flex;gap:5px;align-items:flex-end">';
+    // ── Bloc Quota mensuel + historique ──
     var nowD2 = new Date();
+    var qThis = getCoachingQuotaStatus(coaching, nowD2.getFullYear(), nowD2.getMonth());
+    var qThisUsed = qThis ? qThis.used : 0;
+    var qThisMax = qThis ? qThis.max : quotaPerMonth;
+    var qThisPct = qThisMax > 0 ? Math.round((qThisUsed/qThisMax)*100) : 0;
+    var qThisColor = qThis && qThis.status === 'ok' ? '#34d399'
+                   : qThis && qThis.status === 'partial' ? '#fbbf24'
+                   : qThis && qThis.status === 'miss' ? 'var(--crit-color)' : 'var(--ink-muted)';
+    var qThisLabel = qThis && qThis.status === 'ok' ? '✅ Quota atteint ce mois !'
+                   : qThis && qThis.status === 'partial' ? '🟡 ' + qThisUsed + '/' + qThisMax + ' ce mois'
+                   : qThis && qThis.status === 'miss' ? '🔴 Aucun coaching effectué ce mois'
+                   : '—';
+
+    h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">';
+    h += '<div><div style="font-size:11px;color:var(--ink-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">📊 Quota mensuel</div>';
+    h += '<div style="font-size:11px;color:' + qThisColor + ';margin-top:2px;font-weight:600">' + qThisLabel + '</div></div>';
+    h += '<div style="font-size:24px;font-weight:800;color:' + qThisColor + ';line-height:1">' + qThisUsed + '<span style="color:var(--ink-muted);font-weight:500;font-size:16px">/' + qThisMax + '</span></div>';
+    h += '</div>';
+    h += '<div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:14px">';
+    h += '<div style="height:100%;width:' + Math.min(100, qThisPct) + '%;background:' + qThisColor + ';transition:width 0.3s"></div>';
+    h += '</div>';
+
+    // Historique 4 derniers mois (avant ce mois) — cf. image 3
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:6px">Historique des 4 mois précédents :</div>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
     var entry = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
-    for(var i = 5; i >= 0; i--){
+    for(var i = 4; i >= 1; i--){
       var d = new Date(nowD2.getFullYear(), nowD2.getMonth() - i, 1);
-      var label = d.toLocaleDateString('fr-FR',{month:'short'});
+      var monthLbl = d.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'});
       if(entry && !isNaN(entry.getTime()) && d < new Date(entry.getFullYear(), entry.getMonth(), 1)){
-        h += '<div style="flex:1;text-align:center;font-size:10px;color:var(--ink-muted)">' + label + '<div style="height:18px;background:rgba(255,255,255,0.04);border-radius:3px;margin-top:3px"></div></div>';
+        h += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--ink-muted);opacity:0.5">' + esc(monthLbl) + ' — avant entrée</div>';
         continue;
       }
       var q = getCoachingQuotaStatus(coaching, d.getFullYear(), d.getMonth());
-      var col = 'rgba(255,255,255,0.08)';
-      if(q && q.status === 'ok')      col = 'var(--csm-accent)';
-      else if(q && q.status === 'partial') col = '#fbbf24';
-      else if(q && q.status === 'miss')    col = 'var(--crit-color)';
-      var title = label + ' : ' + (q ? q.used + '/' + q.max : '—');
-      h += '<div style="flex:1;text-align:center;font-size:10px;color:var(--ink-muted)" title="' + title + '">' + label + '<div style="height:18px;background:' + col + ';border-radius:3px;margin-top:3px"></div></div>';
-    }
-    h += '</div></div>';
-
-    if(coaching.clientNotes){
-      h += '<div style="margin-top:14px;font-size:12px;color:var(--ink-muted);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px">';
-      h += '<strong>📝 Note coaching :</strong> ' + esc(coaching.clientNotes);
+      var qUsed = q ? q.used : 0, qMax = q ? q.max : quotaPerMonth;
+      var bgC = 'rgba(255,255,255,0.04)', txt = '';
+      if(q && q.status === 'ok'){       bgC = 'rgba(52,211,153,0.10)'; txt = '<strong style="color:#34d399">' + qUsed + '/' + qMax + ' ✅</strong>'; }
+      else if(q && q.status === 'partial'){ bgC = 'rgba(251,191,36,0.10)'; txt = '<strong style="color:#fbbf24">' + qUsed + '/' + qMax + ' 🟡</strong>'; }
+      else if(q && q.status === 'miss'){    bgC = 'rgba(239,68,68,0.10)'; txt = '<strong style="color:var(--crit-color)">' + qUsed + '/' + qMax + ' ❌</strong>'; }
+      else { txt = '<span style="color:var(--ink-muted)">—</span>'; }
+      h += '<div style="background:' + bgC + ';border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px">';
+      h += '<span style="color:var(--ink-muted);text-transform:capitalize">' + esc(monthLbl) + '</span>';
+      h += '<span>' + txt + '</span>';
       h += '</div>';
     }
-    h += '<div style="margin-top:12px"><a class="csm-btn" href="coaching.html" target="_blank">🎓 Ouvrir fiche coaching →</a></div>';
     h += '</div>';
+    h += '</div>';
+
+    // ── Bloc Dernières sessions effectuées ──
+    var allSessions = getAllCoachingSessions(coaching);
+    var doneSessions = allSessions.filter(function(s){
+      return s.statut === 'fait' && s.date && s.numero !== 0 && s.type !== 'rdv72h';
+    });
+    doneSessions.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+    var recentSessions = doneSessions.slice(0, 6);
+
+    h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+    h += '<div style="font-size:11px;color:var(--ink-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">📅 Dernières sessions effectuées</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted)">' + doneSessions.length + ' au total</div>';
+    h += '</div>';
+
+    if(recentSessions.length){
+      h += '<div style="display:flex;flex-direction:column;gap:5px">';
+      recentSessions.forEach(function(s){
+        var sCoach = s.coachSession || s.coachAssigned || coaching.coachAssigned || '';
+        var sCoachName = sCoach ? (coachMembersMap[sCoach] || sCoach) : '—';
+        var sDate = new Date(s.date);
+        var daysAgo = Math.floor((Date.now() - sDate.getTime())/86400000);
+        var sLabel = '#' + (s.numero || '?');
+        h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-radius:8px;font-size:12px">';
+        h += '<span style="background:rgba(52,211,153,0.12);color:#34d399;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800;min-width:32px;text-align:center">' + esc(sLabel) + '</span>';
+        h += '<span style="font-weight:600">' + fmtDate(sDate) + '</span>';
+        h += '<span style="color:var(--ink-muted)">il y a ' + daysAgo + 'j</span>';
+        h += '<span style="margin-left:auto;color:var(--ink-soft)">👤 ' + esc(sCoachName) + '</span>';
+        h += '</div>';
+      });
+      h += '</div>';
+      if(doneSessions.length > 6){
+        h += '<div style="text-align:center;font-size:11px;color:var(--ink-muted);margin-top:8px">+ ' + (doneSessions.length - 6) + ' autres sessions — voir la fiche complète</div>';
+      }
+    } else {
+      h += '<div style="font-size:12px;color:var(--ink-muted);font-style:italic;text-align:center;padding:14px">Aucune session effectuée encore</div>';
+    }
+    h += '</div>';
+
+    // ── Note coaching ──
+    if(coaching.clientNotes){
+      h += '<div style="font-size:12px;color:var(--ink-muted);background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px">';
+      h += '<div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">📝 Note coaching</div>';
+      h += '<div style="color:var(--ink-soft)">' + esc(coaching.clientNotes) + '</div>';
+      h += '</div>';
+    }
+
+    // ── Action ──
+    h += '<div><a class="csm-btn primary" href="coaching.html?clientId=' + esc(coaching._id || '') + '" target="_blank">🎓 Ouvrir la fiche coaching complète →</a></div>';
   } else {
     h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-top:8px">';
     h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">🎯</div>';
