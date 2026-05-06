@@ -1318,7 +1318,7 @@
     const uSnap=await getDoc(doc(db,'users',user.uid));
     const uData=uSnap.exists()?uSnap.data():{};
     const role=uData.role||'admin';
-    if(!['coach','sales','admin'].includes(role)){
+    if(!['coach','sales','admin','csm'].includes(role)){
       document.body.innerHTML='<div style="padding:60px;text-align:center"><h2>⛔ Accès réservé</h2></div>';
       return;
     }
@@ -1326,7 +1326,11 @@
     window._userName=user.displayName||user.email.split('@')[0];
     document.getElementById('uName').textContent=window._userName;
     document.getElementById('uAvatar').textContent=window._userName.charAt(0).toUpperCase();
-    document.getElementById('uRole').textContent=role==='admin'?'Administrateur':role==='coach'?'Coach':'Sales';
+    var roleLbl='Sales';
+    if(role==='admin')roleLbl='Administrateur';
+    else if(role==='coach')roleLbl='Coach';
+    else if(role==='csm')roleLbl='Customer Success';
+    document.getElementById('uRole').textContent=roleLbl;
     window._firebaseReady=true;
     window.loadClients();
   });

@@ -80,6 +80,7 @@
     .role-admin{background:rgba(245,158,11,.15);color:var(--gold);border:1px solid rgba(245,158,11,.2)}
     .role-coach{background:rgba(59,130,246,.15);color:var(--accent2);border:1px solid rgba(59,130,246,.2)}
     .role-sales{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.2)}
+    .role-csm{background:rgba(94,234,212,.15);color:#5eead4;border:1px solid rgba(94,234,212,.25)}
     .connected p{font-size:13px;color:var(--muted);margin-bottom:24px}
     .go-btn{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:linear-gradient(135deg,var(--accent),#2563eb);color:white;border:none;border-radius:12px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px rgba(59,130,246,.3);text-decoration:none}
     .go-btn:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(59,130,246,.4)}
@@ -184,7 +185,7 @@
         const snap=await getDoc(doc(db,'users',user.uid));
         const data=snap.exists()?snap.data():{};
         const role=data.role||'';
-        if(!['coach','sales','admin'].includes(role)){
+        if(!['coach','sales','admin','csm'].includes(role)){
           document.getElementById('errorMsg').textContent="⛔ Votre compte n'a pas accès à l'espace équipe.";
           document.getElementById('errorMsg').classList.add('show');
           await signOut(auth);
@@ -195,7 +196,7 @@
         console.error(e);
         // Firestore error: use role from localStorage if available, else show error
         const cachedRole=localStorage.getItem('ambitio_role');
-        if(cachedRole&&['coach','sales','admin'].includes(cachedRole)){
+        if(cachedRole&&['coach','sales','admin','csm'].includes(cachedRole)){
           window.showConnected(user,cachedRole,null);
         } else {
           console.error('Impossible de lire le rôle Firestore:',e);
@@ -211,7 +212,12 @@
     document.getElementById('authSection').style.display='none';
     document.getElementById('connectedSection').classList.add('show');
     const name=user.displayName||user.email.split('@')[0];
-    const labels={admin:['👑 Administrateur','role-admin'],coach:['🎓 Coach','role-coach'],sales:['📈 Commercial','role-sales']};
+    const labels={
+      admin:['👑 Administrateur','role-admin'],
+      coach:['🎓 Coach','role-coach'],
+      sales:['📈 Commercial','role-sales'],
+      csm:['💎 Customer Success','role-csm']
+    };
     const [label,cls]=labels[role]||['Équipe','role-coach'];
     document.getElementById('welcomeName').textContent='Bienvenue, '+name+' !';
     document.getElementById('roleBadge').textContent=label;
@@ -224,7 +230,7 @@
     if(modules) localStorage.setItem('ambitio_modules',JSON.stringify(modules));
     else localStorage.removeItem('ambitio_modules');
     // Redirect button based on role
-    const dest={coach:'coaching.html',sales:'sales-dashboard.html',admin:'coaching.html'};
+    const dest={coach:'coaching.html',sales:'sales-dashboard.html',admin:'coaching.html',csm:'csm-dashboard.html'};
     const goBtn=document.getElementById('goBtn');
     if(goBtn) goBtn.href=dest[role]||'coaching.html';
   };

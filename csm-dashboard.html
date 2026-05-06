@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Dashboard CSM</title>
+<link rel="stylesheet" href="sales.css"/>
+
+<!-- ── Firebase v9 compat ── -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+      authDomain:        "ambitio-team.firebaseapp.com",
+      projectId:         "ambitio-team",
+      storageBucket:     "ambitio-team.firebasestorage.app",
+      messagingSenderId: "1079366902268",
+      appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+    });
+  }
+</script>
+
+<style>
+/* ─── CSM theme — teal/emerald ─── */
+:root {
+  --csm-accent:     #5eead4;
+  --csm-accent-2:   #14b8a6;
+  --csm-accent-dark:#0f766e;
+  --csm-glow:       rgba(94,234,212,0.18);
+  --csm-bg-soft:    rgba(94,234,212,0.06);
+  --csm-border:     rgba(94,234,212,0.25);
+  --crit-bg:        rgba(239,68,68,0.10);
+  --crit-color:     #fca5a5;
+  --crit-border:    rgba(239,68,68,0.25);
+  --warn-bg:        rgba(251,146,60,0.10);
+  --warn-color:     #fdba74;
+  --warn-border:    rgba(251,146,60,0.25);
+  --att-bg:         rgba(250,204,21,0.10);
+  --att-color:      #fde68a;
+  --att-border:     rgba(250,204,21,0.25);
+}
+
+body { background: var(--bg); color: var(--ink); }
+
+/* ─── Header ─── */
+.csm-app { padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+.csm-header {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+  padding-bottom: 18px; border-bottom: 1px solid var(--border);
+}
+.csm-logo {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--csm-accent), var(--csm-accent-2));
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+  box-shadow: 0 6px 20px var(--csm-glow);
+}
+.csm-title { font-size: 22px; font-weight: 800; letter-spacing: -0.3px; }
+.csm-sub   { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
+
+/* ─── Stats cards ─── */
+.csm-stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; margin-bottom: 24px; }
+.csm-stat {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; transition: all 0.15s;
+}
+.csm-stat:hover { border-color: var(--csm-border); }
+.csm-stat-val { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+.csm-stat-label { font-size: 11px; color: var(--ink-muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+.csm-stat.crit .csm-stat-val { color: var(--crit-color); }
+.csm-stat.warn .csm-stat-val { color: var(--warn-color); }
+.csm-stat.att  .csm-stat-val { color: var(--att-color); }
+.csm-stat.ok   .csm-stat-val { color: var(--csm-accent); }
+
+/* ─── Tabs ─── */
+.csm-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+.csm-tab {
+  padding: 12px 18px; cursor: pointer; font-size: 14px; font-weight: 600;
+  color: var(--ink-muted); border-bottom: 2px solid transparent;
+  transition: all 0.15s; background: transparent; border-top: none; border-left: none; border-right: none;
+  font-family: inherit;
+}
+.csm-tab:hover { color: var(--ink); }
+.csm-tab.active { color: var(--csm-accent); border-bottom-color: var(--csm-accent); }
+.csm-tab-count {
+  display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 10px;
+  background: rgba(255,255,255,0.06); font-size: 11px; font-weight: 700; min-width: 22px; text-align: center;
+}
+.csm-tab.active .csm-tab-count { background: var(--csm-bg-soft); color: var(--csm-accent); }
+
+/* ─── Toolbar ─── */
+.csm-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.csm-search {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 12px; color: var(--ink); font-family: inherit; font-size: 13px; min-width: 240px; flex: 1;
+}
+.csm-search:focus { outline: none; border-color: var(--csm-accent); box-shadow: 0 0 0 3px var(--csm-bg-soft); }
+.csm-pill {
+  padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  background: var(--bg3); border: 1px solid var(--border); color: var(--ink-muted);
+  cursor: pointer; transition: all 0.15s; font-family: inherit;
+}
+.csm-pill:hover { color: var(--ink); }
+.csm-pill.active { background: var(--csm-bg-soft); border-color: var(--csm-border); color: var(--csm-accent); }
+.csm-pill.crit.active { background: var(--crit-bg); border-color: var(--crit-border); color: var(--crit-color); }
+.csm-pill.warn.active { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-color); }
+.csm-pill.att.active  { background: var(--att-bg); border-color: var(--att-border); color: var(--att-color); }
+
+/* ─── Cards list ─── */
+.csm-list { display: flex; flex-direction: column; gap: 8px; }
+.csm-card {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; display: grid; grid-template-columns: auto 1fr auto auto;
+  gap: 14px; align-items: center; transition: all 0.15s;
+}
+.csm-card:hover { border-color: var(--csm-border); transform: translateY(-1px); }
+.csm-card.crit { border-left: 3px solid var(--crit-color); }
+.csm-card.warn { border-left: 3px solid var(--warn-color); }
+.csm-card.att  { border-left: 3px solid var(--att-color); }
+
+.csm-avatar {
+  width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center;
+  justify-content: center; font-weight: 700; font-size: 15px; color: white;
+  background: linear-gradient(135deg, var(--csm-accent-dark), var(--csm-accent-2));
+}
+.csm-card-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.csm-card-name { font-size: 14px; font-weight: 700; }
+.csm-card-meta { font-size: 12px; color: var(--ink-muted); display: flex; gap: 10px; flex-wrap: wrap; }
+.csm-card-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+.csm-badge { padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+.csm-badge.crit { background: var(--crit-bg); color: var(--crit-color); border: 1px solid var(--crit-border); }
+.csm-badge.warn { background: var(--warn-bg); color: var(--warn-color); border: 1px solid var(--warn-border); }
+.csm-badge.att  { background: var(--att-bg); color: var(--att-color); border: 1px solid var(--att-border); }
+.csm-badge.ok   { background: var(--csm-bg-soft); color: var(--csm-accent); border: 1px solid var(--csm-border); }
+.csm-badge.coach{ background: rgba(167,139,250,0.10); color: #c4b5fd; border: 1px solid rgba(167,139,250,0.20); }
+.csm-badge.followup{ background: rgba(96,165,250,0.10); color: #93c5fd; border: 1px solid rgba(96,165,250,0.20); }
+
+.csm-quota-bar {
+  display: flex; gap: 3px; align-items: flex-end; min-width: 80px;
+}
+.csm-quota-month {
+  width: 10px; height: 22px; border-radius: 2px; background: rgba(255,255,255,0.08);
+}
+.csm-quota-month.ok    { background: var(--csm-accent); }
+.csm-quota-month.partial{ background: var(--att-color); }
+.csm-quota-month.miss  { background: var(--crit-color); }
+
+.csm-actions { display: flex; gap: 6px; }
+.csm-act-btn {
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg2); cursor: pointer; font-size: 15px; display: flex;
+  align-items: center; justify-content: center; transition: all 0.15s; color: var(--ink);
+}
+.csm-act-btn:hover { background: var(--csm-bg-soft); border-color: var(--csm-border); transform: scale(1.05); }
+
+/* ─── Empty state ─── */
+.csm-empty {
+  text-align: center; padding: 80px 20px; color: var(--ink-muted);
+}
+.csm-empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+.csm-empty-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; color: var(--ink); }
+
+/* ─── Modal ─── */
+.csm-modal-bg {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000;
+  align-items: center; justify-content: center; backdrop-filter: blur(4px);
+}
+.csm-modal-bg.show { display: flex; }
+.csm-modal {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
+  width: min(620px, 92vw); max-height: 86vh; overflow-y: auto; padding: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.csm-modal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.csm-modal-title { font-size: 18px; font-weight: 800; }
+.csm-modal-close {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg3); cursor: pointer; color: var(--ink); font-size: 16px;
+}
+.csm-modal-close:hover { background: var(--csm-bg-soft); }
+
+.csm-section { margin-bottom: 18px; }
+.csm-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-muted); margin-bottom: 8px; font-weight: 700; }
+.csm-info-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+.csm-info-item {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+}
+.csm-info-label { font-size: 10px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+.csm-info-val { font-size: 13px; font-weight: 600; margin-top: 3px; word-break: break-word; }
+
+.csm-textarea {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; color: var(--ink); font-family: inherit; font-size: 13px; resize: vertical;
+  min-height: 80px;
+}
+.csm-textarea:focus { outline: none; border-color: var(--csm-accent); box-shadow: 0 0 0 3px var(--csm-bg-soft); }
+
+.csm-history-item {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 6px; font-size: 12px;
+}
+.csm-history-meta { font-size: 10px; color: var(--ink-muted); margin-bottom: 4px; display: flex; gap: 8px; }
+
+.csm-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.csm-btn {
+  padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--bg3); color: var(--ink);
+  cursor: pointer; transition: all 0.15s; font-family: inherit; display: inline-flex;
+  align-items: center; gap: 6px;
+}
+.csm-btn:hover { background: var(--csm-bg-soft); border-color: var(--csm-border); }
+.csm-btn.primary {
+  background: linear-gradient(135deg, var(--csm-accent-dark), var(--csm-accent-2));
+  border-color: var(--csm-accent); color: white;
+}
+.csm-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--csm-glow); }
+.csm-btn.danger { color: var(--crit-color); }
+.csm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── Témoignages ─── */
+.csm-temo-card {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; margin-bottom: 8px;
+}
+.csm-temo-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.csm-temo-from { font-size: 13px; font-weight: 700; }
+.csm-temo-when { font-size: 11px; color: var(--ink-muted); }
+.csm-temo-text { font-size: 13px; line-height: 1.5; color: var(--ink-soft); white-space: pre-wrap; }
+
+/* ─── Activity feed ─── */
+.csm-activity-item {
+  display: flex; gap: 12px; padding: 12px 14px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px;
+}
+.csm-activity-icon {
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  background: var(--csm-bg-soft); color: var(--csm-accent);
+  display: flex; align-items: center; justify-content: center; font-size: 14px;
+}
+.csm-activity-text { font-size: 13px; flex: 1; }
+.csm-activity-when { font-size: 11px; color: var(--ink-muted); }
+
+/* ─── Toast ─── */
+.csm-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+  background: var(--bg3); border: 1px solid var(--csm-border);
+  padding: 12px 22px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  z-index: 2000; transition: transform 0.3s; box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+}
+.csm-toast.show { transform: translateX(-50%) translateY(0); }
+.csm-toast.error { border-color: var(--crit-border); color: var(--crit-color); }
+.csm-toast.success { border-color: var(--csm-border); color: var(--csm-accent); }
+
+/* ─── Loading ─── */
+.csm-loading { padding: 60px; text-align: center; color: var(--ink-muted); }
+.csm-spinner {
+  display: inline-block; width: 32px; height: 32px;
+  border: 3px solid var(--border); border-top-color: var(--csm-accent);
+  border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 14px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+  .csm-stats { grid-template-columns: repeat(2,1fr); }
+  .csm-card { grid-template-columns: auto 1fr; gap: 10px; }
+  .csm-quota-bar, .csm-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .csm-info-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="csm-app">
+  <!-- ─── HEADER ─── -->
+  <div class="csm-header">
+    <div class="csm-logo">💎</div>
+    <div>
+      <div class="csm-title">Dashboard Customer Success</div>
+      <div class="csm-sub" id="csmSub">Suivi clients, retards de coachings, témoignages et relances</div>
+    </div>
+  </div>
+
+  <!-- ─── STATS ─── -->
+  <div class="csm-stats">
+    <div class="csm-stat crit"><div class="csm-stat-val" id="statCrit">—</div><div class="csm-stat-label">🔴 Critique</div></div>
+    <div class="csm-stat warn"><div class="csm-stat-val" id="statWarn">—</div><div class="csm-stat-label">🟠 En retard</div></div>
+    <div class="csm-stat att"><div class="csm-stat-val"  id="statAtt">—</div><div class="csm-stat-label">🟡 Attention</div></div>
+    <div class="csm-stat ok"><div class="csm-stat-val"   id="statTemo">—</div><div class="csm-stat-label">⭐ Témoignages</div></div>
+    <div class="csm-stat"><div class="csm-stat-val"      id="statActive">—</div><div class="csm-stat-label">👥 Clients actifs</div></div>
+  </div>
+
+  <!-- ─── TABS ─── -->
+  <div class="csm-tabs" id="csmTabs">
+    <button class="csm-tab active" data-tab="retards"  onclick="switchTab('retards', this)">🚨 Retards <span class="csm-tab-count" id="cntRetards">0</span></button>
+    <button class="csm-tab"        data-tab="all"      onclick="switchTab('all', this)">📋 Tous les clients <span class="csm-tab-count" id="cntAll">0</span></button>
+    <button class="csm-tab"        data-tab="temoignages" onclick="switchTab('temoignages', this)">⭐ Témoignages <span class="csm-tab-count" id="cntTemo">0</span></button>
+    <button class="csm-tab"        data-tab="activity" onclick="switchTab('activity', this)">⚡ Activité récente</button>
+  </div>
+
+  <!-- ─── TOOLBAR ─── -->
+  <div class="csm-toolbar" id="toolbarRetards">
+    <input class="csm-search" id="searchInput" type="text" placeholder="🔍 Rechercher un client…"/>
+    <button class="csm-pill crit active" data-level="crit" onclick="toggleLevel('crit', this)">🔴 Critique</button>
+    <button class="csm-pill warn active" data-level="warn" onclick="toggleLevel('warn', this)">🟠 Retard</button>
+    <button class="csm-pill att active"  data-level="att"  onclick="toggleLevel('att', this)">🟡 Attention</button>
+    <select class="csm-search" id="filterCoach" style="min-width:140px;flex:0 0 auto">
+      <option value="all">Tous les coachs</option>
+    </select>
+    <select class="csm-search" id="filterDays" style="min-width:160px;flex:0 0 auto">
+      <option value="0">Tous</option>
+      <option value="14">+ 14 jours sans session</option>
+      <option value="30" selected>+ 30 jours sans session</option>
+      <option value="45">+ 45 jours sans session</option>
+      <option value="60">+ 60 jours sans session</option>
+      <option value="90">+ 90 jours sans session</option>
+    </select>
+  </div>
+
+  <!-- ─── BODY ─── -->
+  <div id="csmBody">
+    <div class="csm-loading"><div class="csm-spinner"></div>Chargement des données…</div>
+  </div>
+</div>
+
+<!-- ─── MODAL DETAIL CLIENT ─── -->
+<div class="csm-modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="csm-modal" id="modalContent"></div>
+</div>
+
+<!-- ─── TOAST ─── -->
+<div class="csm-toast" id="toast"></div>
+
+<script src="nav.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   csm-dashboard.html — Dashboard Customer Success Manager
+   ───────────────────────────────────────────────────────────────────────────
+   Source de données :
+     • clients/{id}                    — fiches coaching (retards quota, sessions)
+     • leads/{id} where isClient==true — fiches CRM client (témoignages, notes)
+     • leads/{id}/client_temoignages/* — témoignages
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var db = firebase.firestore();
+var currentUser = null;
+var currentRole = null;
+var currentUserName = '';
+
+var allClients     = [];     // collection clients
+var allClientLeads = [];     // leads where isClient==true
+var temoByLead     = {};     // leadId -> [temo]
+var temoFlat       = [];     // tous témoignages aplatis pour vue agrégée
+var coachMap       = {};     // slug -> displayName
+var teamMembers    = [];
+
+var activeTab    = 'retards';
+var levelsActive = { crit:true, warn:true, att:true };
+var searchQ      = '';
+var filterCoach  = 'all';
+var filterDays   = 30;
+var openClientId = null;
+
+/* ─── Helpers ─── */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+});}
+function showToast(msg, kind){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'csm-toast show ' + (kind||'success');
+  clearTimeout(showToast._tm);
+  showToast._tm = setTimeout(function(){ t.classList.remove('show'); }, 2800);
+}
+function fmtDate(d){
+  if(!d) return '—';
+  var dt = (d && d.toDate) ? d.toDate() : new Date(d);
+  if(isNaN(dt.getTime())) return '—';
+  return dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+}
+function fmtDateTime(d){
+  if(!d) return '—';
+  var dt = (d && d.toDate) ? d.toDate() : new Date(d);
+  if(isNaN(dt.getTime())) return '—';
+  return dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'short' }) +
+         ' à ' + dt.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+}
+function timeAgo(d){
+  if(!d) return '—';
+  var dt = (d && d.toDate) ? d.toDate() : new Date(d);
+  if(isNaN(dt.getTime())) return '—';
+  var diffMs = Date.now() - dt.getTime();
+  var diffDays = Math.floor(diffMs / 86400000);
+  if(diffDays === 0) return "aujourd'hui";
+  if(diffDays === 1) return 'hier';
+  if(diffDays < 7) return 'il y a ' + diffDays + ' jours';
+  if(diffDays < 30) return 'il y a ' + Math.floor(diffDays/7) + ' sem.';
+  if(diffDays < 365) return 'il y a ' + Math.floor(diffDays/30) + ' mois';
+  return 'il y a ' + Math.floor(diffDays/365) + ' an(s)';
+}
+function initials(name){
+  if(!name) return '?';
+  var parts = name.trim().split(/\s+/);
+  if(parts.length >= 2) return (parts[0][0]+parts[1][0]).toUpperCase();
+  return name.slice(0,2).toUpperCase();
+}
+
+/* ─── Quota / sessions logic — réplique de coaching.html ─── */
+function getMonthlyQuota(programme){
+  if(!programme) return 1;
+  var p = programme.toLowerCase();
+  if(p.indexOf('24c') >= 0) return 2;
+  if(p.indexOf('12c') >= 0) return 1;
+  if(p.indexOf('6c')  >= 0) return 1;
+  return 1;
+}
+function getAllSessions(c){
+  if(c.years && c.years.length){
+    var all = [];
+    c.years.forEach(function(y){ (y.sessions||[]).forEach(function(s){ all.push(s); }); });
+    return all;
+  }
+  return c.sessions || [];
+}
+function getSessionsInMonth(c, year, month){
+  return getAllSessions(c).filter(function(s){
+    if(s.statut !== 'fait' || !s.date) return false;
+    if(s.numero === 0 || s.type === 'rdv72h') return false;
+    var d = new Date(s.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+}
+function getQuotaStatus(c, year, month){
+  var done  = c.nbCoachingsFaits || 0;
+  var total = c.nbCoachingsTotal || 12;
+  if(done >= total) return { status:'done', used:0, max:0 };
+  var quota = getMonthlyQuota(c.programme);
+  var sessions = getSessionsInMonth(c, year, month);
+  var used = sessions.length;
+  if(used >= quota)  return { status:'ok', used:used, max:quota };
+  if(used > 0)       return { status:'partial', used:used, max:quota };
+  return { status:'miss', used:0, max:quota };
+}
+function getLastSessionDate(c){
+  var sessions = getAllSessions(c).filter(function(s){
+    return s.statut === 'fait' && s.date && s.numero !== 0 && s.type !== 'rdv72h';
+  });
+  if(!sessions.length) return null;
+  sessions.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
+  return new Date(sessions[0].date);
+}
+function daysSinceLastSession(c){
+  var d = getLastSessionDate(c);
+  if(!d) {
+    // Pas de session : utiliser dateEntree comme proxy
+    if(c.dateEntree){
+      var entry = new Date(c.dateEntree);
+      if(!isNaN(entry.getTime())) return Math.floor((Date.now() - entry.getTime()) / 86400000);
+    }
+    return 999;
+  }
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+/* ─── Compute level (crit / warn / att / ok) ─── */
+function computeLevel(c){
+  // Exclusions : inactifs ou clients ayant terminé leur programme
+  if(c.statut === 'inactif') return null;
+  var done  = c.nbCoachingsFaits || 0;
+  var total = c.nbCoachingsTotal || 12;
+  if(done >= total) return null;
+
+  var now = new Date();
+  var yNow = now.getFullYear(), mNow = now.getMonth();
+  var prev = new Date(yNow, mNow - 1, 1);
+  var qNow  = getQuotaStatus(c, yNow, mNow);
+  var qPrev = getQuotaStatus(c, prev.getFullYear(), prev.getMonth());
+
+  if(qNow.status === 'miss' && qPrev.status === 'miss') return 'crit';
+  if(qNow.status === 'miss')   return 'warn';
+  if(qNow.status === 'partial')return 'att';
+  return 'ok';
+}
+
+/* ─── Auth + boot ─── */
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){ window.location.href = 'login.html'; return; }
+  currentUser = user;
+  db.collection('users').doc(user.uid).get().then(function(snap){
+    var d = snap.exists ? snap.data() : {};
+    currentRole = d.role || 'csm';
+    currentUserName = user.displayName || user.email.split('@')[0];
+    if(!['admin','csm','coach'].includes(currentRole)){
+      // Sales et autres : redirect
+      document.body.innerHTML = '<div style="padding:60px;text-align:center;color:#cbd5e1"><h2>⛔ Accès réservé Customer Success</h2></div>';
+      return;
+    }
+    loadTeamMembers().then(loadAllData);
+  }).catch(function(e){
+    console.error('User doc error', e);
+    loadTeamMembers().then(loadAllData);
+  });
+});
+
+function loadTeamMembers(){
+  return db.collection('_meta').doc('team_members').get().then(function(snap){
+    if(!snap.exists) return;
+    var raw = snap.data().members || {};
+    if(Array.isArray(raw)){
+      teamMembers = raw;
+    } else {
+      teamMembers = Object.keys(raw).map(function(k){ var v = raw[k]; v.slug = v.slug || k; return v; });
+    }
+    teamMembers.forEach(function(m){
+      coachMap[m.slug] = m.shortName || m.displayName || m.fullName || m.slug;
+    });
+    // Populate coach filter
+    var sel = document.getElementById('filterCoach');
+    teamMembers.forEach(function(m){
+      if(m.role === 'coach' || m.role === 'admin'){
+        var opt = document.createElement('option');
+        opt.value = m.slug;
+        opt.textContent = coachMap[m.slug];
+        sel.appendChild(opt);
+      }
+    });
+    var optNone = document.createElement('option');
+    optNone.value = ''; optNone.textContent = 'Non assigné';
+    sel.appendChild(optNone);
+  }).catch(function(e){ console.warn('Team members load error', e); });
+}
+
+function loadAllData(){
+  // Charge clients coaching
+  db.collection('clients').onSnapshot(function(snap){
+    allClients = [];
+    snap.forEach(function(d){
+      var data = d.data();
+      data._id = d.id;
+      allClients.push(data);
+    });
+    renderAll();
+  }, function(err){ console.error('Clients listener error:', err); });
+
+  // Charge leads clients (pour témoignages)
+  db.collection('leads').where('isClient','==',true).onSnapshot(function(snap){
+    allClientLeads = [];
+    snap.forEach(function(d){
+      var data = d.data();
+      data._id = d.id;
+      allClientLeads.push(data);
+    });
+    loadAllTemoignages();
+  }, function(err){ console.error('Leads listener error:', err); });
+}
+
+function loadAllTemoignages(){
+  if(!allClientLeads.length){ renderAll(); return; }
+  var pending = allClientLeads.length;
+  temoByLead = {};
+  temoFlat = [];
+  allClientLeads.forEach(function(lead){
+    db.collection('leads').doc(lead._id).collection('client_temoignages')
+      .orderBy('createdAt','desc').get()
+      .then(function(snap){
+        var arr = [];
+        snap.forEach(function(d){
+          var o = d.data(); o._id = d.id; o._leadId = lead._id;
+          o._leadName = lead.nom || lead.commerce || lead.email || '?';
+          arr.push(o);
+          temoFlat.push(o);
+        });
+        temoByLead[lead._id] = arr;
+        if(--pending <= 0) renderAll();
+      }).catch(function(){
+        if(--pending <= 0) renderAll();
+      });
+  });
+}
+
+/* ─── Rendering ─── */
+function renderAll(){
+  computeStats();
+  if(activeTab === 'retards')      renderRetards();
+  else if(activeTab === 'all')     renderAllClients();
+  else if(activeTab === 'temoignages') renderTemoignages();
+  else if(activeTab === 'activity')renderActivity();
+}
+
+function computeStats(){
+  var crit = 0, warn = 0, att = 0, active = 0;
+  allClients.forEach(function(c){
+    if(c.statut === 'inactif') return;
+    var done  = c.nbCoachingsFaits || 0;
+    var total = c.nbCoachingsTotal || 12;
+    if(done >= total) return;
+    active++;
+    var lvl = computeLevel(c);
+    if(lvl === 'crit') crit++;
+    else if(lvl === 'warn') warn++;
+    else if(lvl === 'att')  att++;
+  });
+  document.getElementById('statCrit').textContent = crit;
+  document.getElementById('statWarn').textContent = warn;
+  document.getElementById('statAtt').textContent  = att;
+  document.getElementById('statTemo').textContent = temoFlat.length;
+  document.getElementById('statActive').textContent = active;
+  document.getElementById('cntRetards').textContent = (crit + warn + att);
+  document.getElementById('cntAll').textContent = allClients.length;
+  document.getElementById('cntTemo').textContent = temoFlat.length;
+}
+
+function getClientsInRetard(){
+  var list = [];
+  allClients.forEach(function(c){
+    var lvl = computeLevel(c);
+    if(!lvl || lvl === 'ok') return;
+    if(!levelsActive[lvl]) return;
+    // Filtre coach
+    if(filterCoach !== 'all'){
+      if(filterCoach === '' && c.coachAssigned) return;
+      if(filterCoach !== '' && c.coachAssigned !== filterCoach) return;
+    }
+    // Filtre jours sans session
+    if(filterDays > 0 && daysSinceLastSession(c) < filterDays) return;
+    // Search
+    if(searchQ){
+      var q = searchQ.toLowerCase();
+      var hay = ((c.nom||'') + ' ' + (c.activite||'') + ' ' + (c.email||'')).toLowerCase();
+      if(hay.indexOf(q) < 0) return;
+    }
+    c._level = lvl;
+    c._daysSince = daysSinceLastSession(c);
+    list.push(c);
+  });
+  // Sort: crit > warn > att, puis par jours sans session desc
+  var rank = { crit:0, warn:1, att:2 };
+  list.sort(function(a,b){
+    if(rank[a._level] !== rank[b._level]) return rank[a._level] - rank[b._level];
+    return b._daysSince - a._daysSince;
+  });
+  return list;
+}
+
+function renderRetards(){
+  document.getElementById('toolbarRetards').style.display = 'flex';
+  var body = document.getElementById('csmBody');
+  var list = getClientsInRetard();
+  if(!list.length){
+    body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">🎉</div>' +
+      '<div class="csm-empty-title">Tout est sous contrôle</div>' +
+      '<div>Aucun client ne correspond aux filtres actifs.</div></div>';
+    return;
+  }
+  var h = '<div class="csm-list">';
+  list.forEach(function(c){ h += renderClientCard(c); });
+  h += '</div>';
+  body.innerHTML = h;
+}
+
+function renderAllClients(){
+  document.getElementById('toolbarRetards').style.display = 'none';
+  var body = document.getElementById('csmBody');
+  var list = allClients.slice();
+  if(searchQ){
+    var q = searchQ.toLowerCase();
+    list = list.filter(function(c){
+      return ((c.nom||'')+' '+(c.activite||'')+' '+(c.email||'')).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  list.forEach(function(c){ c._level = computeLevel(c); c._daysSince = daysSinceLastSession(c); });
+  list.sort(function(a,b){ return (a.nom||'').localeCompare(b.nom||''); });
+  if(!list.length){
+    body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">📋</div><div class="csm-empty-title">Aucun client</div></div>';
+    return;
+  }
+  var h = '<div class="csm-list">';
+  list.forEach(function(c){ h += renderClientCard(c); });
+  h += '</div>';
+  body.innerHTML = h;
+}
+
+function renderClientCard(c){
+  var lvl = c._level;
+  var lvlClass = lvl ? lvl : '';
+  var lvlBadge = '';
+  if(lvl === 'crit')  lvlBadge = '<span class="csm-badge crit">🔴 Critique</span>';
+  else if(lvl === 'warn') lvlBadge = '<span class="csm-badge warn">🟠 Retard</span>';
+  else if(lvl === 'att')  lvlBadge = '<span class="csm-badge att">🟡 Attention</span>';
+  else if(lvl === 'ok')   lvlBadge = '<span class="csm-badge ok">✅ OK</span>';
+
+  var coachLabel = c.coachAssigned ? (coachMap[c.coachAssigned] || c.coachAssigned) : 'Non assigné';
+  var coachBadge = '<span class="csm-badge coach">🎓 ' + esc(coachLabel) + '</span>';
+
+  var followBadge = '';
+  if(c.lastCsmFollowupAt){
+    followBadge = '<span class="csm-badge followup">↻ Relancé ' + timeAgo(c.lastCsmFollowupAt) + '</span>';
+  }
+
+  var done  = c.nbCoachingsFaits || 0;
+  var total = c.nbCoachingsTotal || 12;
+  var pct   = total > 0 ? Math.round((done/total)*100) : 0;
+
+  var lastSess = getLastSessionDate(c);
+  var daysSince = c._daysSince;
+
+  // Mini barres des 6 derniers mois
+  var bars = '';
+  var now = new Date();
+  for(var i = 5; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    if(c.dateEntree){
+      var entry = new Date(c.dateEntree);
+      if(!isNaN(entry.getTime()) && d < new Date(entry.getFullYear(), entry.getMonth(), 1)){
+        bars += '<div class="csm-quota-month" title="Avant entrée"></div>';
+        continue;
+      }
+    }
+    var q = getQuotaStatus(c, d.getFullYear(), d.getMonth());
+    var cls = q.status === 'ok' ? 'ok' : (q.status === 'partial' ? 'partial' : (q.status === 'miss' ? 'miss' : ''));
+    bars += '<div class="csm-quota-month ' + cls + '" title="' + d.toLocaleDateString('fr-FR',{month:'long'}) + ' : ' + q.used + '/' + q.max + '"></div>';
+  }
+
+  var av = '<div class="csm-avatar">' + esc(initials(c.nom)) + '</div>';
+  var info = '<div class="csm-card-info">' +
+    '<div class="csm-card-name">' + esc(c.nom||'?') + '</div>' +
+    '<div class="csm-card-meta">' +
+      lvlBadge + coachBadge + followBadge +
+      '<span>📅 Dernière session : ' + (lastSess ? fmtDate(lastSess) + ' (' + daysSince + 'j)' : 'aucune') + '</span>' +
+      '<span>📊 ' + done + '/' + total + ' coachings (' + pct + '%)</span>' +
+    '</div>' +
+  '</div>';
+
+  var quotaBar = '<div class="csm-quota-bar" title="Quota mensuel — 6 derniers mois">' + bars + '</div>';
+
+  var actions = '<div class="csm-actions">' +
+    '<button class="csm-act-btn" title="📱 SMS" onclick="event.stopPropagation();quickSms(\'' + c._id + '\')">📱</button>' +
+    '<button class="csm-act-btn" title="📧 Email" onclick="event.stopPropagation();quickEmail(\'' + c._id + '\')">📧</button>' +
+    '<button class="csm-act-btn" title="📋 Détails" onclick="event.stopPropagation();openClientModal(\'' + c._id + '\')">📋</button>' +
+  '</div>';
+
+  return '<div class="csm-card ' + lvlClass + '" onclick="openClientModal(\'' + c._id + '\')">' +
+    av + info + quotaBar + actions + '</div>';
+}
+
+function renderTemoignages(){
+  document.getElementById('toolbarRetards').style.display = 'none';
+  var body = document.getElementById('csmBody');
+
+  // Clients sans témoignage
+  var withTemo = {};
+  Object.keys(temoByLead).forEach(function(id){ if((temoByLead[id]||[]).length) withTemo[id] = true; });
+  var noTemoLeads = allClientLeads.filter(function(l){ return !withTemo[l._id]; });
+
+  var h = '';
+
+  // Liste des témoignages
+  if(temoFlat.length){
+    h += '<div class="csm-section-title">⭐ Témoignages reçus (' + temoFlat.length + ')</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px">';
+    var sorted = temoFlat.slice().sort(function(a,b){
+      var da = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+      var db_ = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
+      return db_ - da;
+    });
+    sorted.forEach(function(t){
+      h += '<div class="csm-temo-card">';
+      h += '<div class="csm-temo-head">';
+      h += '<div class="csm-temo-from">' + esc(t._leadName) + '</div>';
+      h += '<div class="csm-temo-when">' + fmtDate(t.createdAt) + '</div>';
+      h += '</div>';
+      h += '<div class="csm-temo-text">' + esc(t.contenu || t.text || '(vide)') + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  } else {
+    h += '<div class="csm-empty"><div class="csm-empty-icon">⭐</div><div class="csm-empty-title">Aucun témoignage pour l\'instant</div></div>';
+  }
+
+  // Clients à relancer (sans témoignage)
+  if(noTemoLeads.length){
+    h += '<div class="csm-section-title">📩 Clients sans témoignage (' + noTemoLeads.length + ') — à relancer</div>';
+    h += '<div style="display:flex;flex-direction:column;gap:6px">';
+    noTemoLeads.slice(0, 50).forEach(function(l){
+      h += '<div class="csm-card" style="grid-template-columns:auto 1fr auto">';
+      h += '<div class="csm-avatar">' + esc(initials(l.nom||l.commerce||'?')) + '</div>';
+      h += '<div class="csm-card-info"><div class="csm-card-name">' + esc(l.nom || l.commerce || l.email || '?') + '</div>';
+      h += '<div class="csm-card-meta"><span>📧 ' + esc(l.email||'—') + '</span><span>📞 ' + esc(l.telephone||'—') + '</span></div></div>';
+      h += '<div class="csm-actions">';
+      if(l.email)     h += '<button class="csm-act-btn" title="Email" onclick="window.location.href=\'mailto:' + esc(l.email) + '?subject=Votre%20avis%20nous%20int%C3%A9resse\'">📧</button>';
+      if(l.telephone) h += '<button class="csm-act-btn" title="SMS" onclick="window.location.href=\'sms:' + esc(l.telephone) + '\'">📱</button>';
+      h += '</div></div>';
+    });
+    h += '</div>';
+  }
+
+  body.innerHTML = h || '<div class="csm-empty"><div class="csm-empty-icon">⭐</div><div class="csm-empty-title">Pas de données témoignages</div></div>';
+}
+
+function renderActivity(){
+  document.getElementById('toolbarRetards').style.display = 'none';
+  var body = document.getElementById('csmBody');
+  var feed = [];
+
+  // Sessions faites récentes
+  allClients.forEach(function(c){
+    getAllSessions(c).forEach(function(s){
+      if(s.statut === 'fait' && s.date && s.numero !== 0 && s.type !== 'rdv72h'){
+        feed.push({
+          when: new Date(s.date),
+          icon: '✅',
+          text: '<strong>' + esc(c.nom||'?') + '</strong> — Session ' + (s.numero||'') + ' faite avec ' + esc(coachMap[s.coach]||s.coach||'?')
+        });
+      }
+    });
+  });
+
+  // Témoignages récents
+  temoFlat.forEach(function(t){
+    if(t.createdAt){
+      var d = t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt);
+      feed.push({
+        when: d,
+        icon: '⭐',
+        text: '<strong>' + esc(t._leadName) + '</strong> a déposé un témoignage'
+      });
+    }
+  });
+
+  // Relances CSM récentes
+  allClients.forEach(function(c){
+    if(c.lastCsmFollowupAt){
+      var d = c.lastCsmFollowupAt.toDate ? c.lastCsmFollowupAt.toDate() : new Date(c.lastCsmFollowupAt);
+      feed.push({
+        when: d,
+        icon: '↻',
+        text: '<strong>' + esc(c.nom||'?') + '</strong> — Relancé par CSM'
+      });
+    }
+  });
+
+  feed.sort(function(a,b){ return b.when - a.when; });
+  feed = feed.slice(0, 80);
+
+  if(!feed.length){
+    body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">⚡</div><div class="csm-empty-title">Pas d\'activité récente</div></div>';
+    return;
+  }
+  var h = '';
+  feed.forEach(function(item){
+    h += '<div class="csm-activity-item">';
+    h += '<div class="csm-activity-icon">' + item.icon + '</div>';
+    h += '<div class="csm-activity-text">' + item.text + '<div class="csm-activity-when">' + fmtDateTime(item.when) + ' (' + timeAgo(item.when) + ')</div></div>';
+    h += '</div>';
+  });
+  body.innerHTML = h;
+}
+
+/* ─── Tab switching ─── */
+function switchTab(tab, el){
+  activeTab = tab;
+  document.querySelectorAll('.csm-tab').forEach(function(t){ t.classList.remove('active'); });
+  if(el) el.classList.add('active');
+  renderAll();
+}
+
+function toggleLevel(level, el){
+  levelsActive[level] = !levelsActive[level];
+  el.classList.toggle('active');
+  renderRetards();
+}
+
+document.getElementById('searchInput').addEventListener('input', function(e){
+  searchQ = e.target.value.trim();
+  renderAll();
+});
+document.getElementById('filterCoach').addEventListener('change', function(e){
+  filterCoach = e.target.value;
+  renderAll();
+});
+document.getElementById('filterDays').addEventListener('change', function(e){
+  filterDays = parseInt(e.target.value, 10) || 0;
+  renderAll();
+});
+
+/* ═══ MODAL DETAIL CLIENT ═══ */
+function openClientModal(id){
+  var c = allClients.find(function(x){ return x._id === id; });
+  if(!c){ showToast('Client introuvable', 'error'); return; }
+  openClientId = id;
+
+  var coachLabel = c.coachAssigned ? (coachMap[c.coachAssigned] || c.coachAssigned) : 'Non assigné';
+  var lvl = computeLevel(c);
+  var lvlBadge = '';
+  if(lvl === 'crit')      lvlBadge = '<span class="csm-badge crit">🔴 Critique</span>';
+  else if(lvl === 'warn') lvlBadge = '<span class="csm-badge warn">🟠 Retard</span>';
+  else if(lvl === 'att')  lvlBadge = '<span class="csm-badge att">🟡 Attention</span>';
+  else if(lvl === 'ok')   lvlBadge = '<span class="csm-badge ok">✅ OK</span>';
+
+  var lastSess = getLastSessionDate(c);
+  var done  = c.nbCoachingsFaits || 0;
+  var total = c.nbCoachingsTotal || 12;
+
+  var h = '';
+  h += '<div class="csm-modal-h">';
+  h += '<div><div class="csm-modal-title">' + esc(c.nom||'?') + ' ' + lvlBadge + '</div>';
+  h += '<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">' + esc(c.activite||'') + ' • Coach : ' + esc(coachLabel) + '</div></div>';
+  h += '<button class="csm-modal-close" onclick="closeModal()">✕</button>';
+  h += '</div>';
+
+  // Infos
+  h += '<div class="csm-section">';
+  h += '<div class="csm-section-title">Informations</div>';
+  h += '<div class="csm-info-grid">';
+  h += '<div class="csm-info-item"><div class="csm-info-label">📧 Email</div><div class="csm-info-val">' + esc(c.email||'—') + '</div></div>';
+  h += '<div class="csm-info-item"><div class="csm-info-label">📞 Téléphone</div><div class="csm-info-val">' + esc(c.tel||'—') + '</div></div>';
+  h += '<div class="csm-info-item"><div class="csm-info-label">📅 Entrée</div><div class="csm-info-val">' + fmtDate(c.dateEntree) + '</div></div>';
+  h += '<div class="csm-info-item"><div class="csm-info-label">📋 Programme</div><div class="csm-info-val">' + esc(c.programme||'—') + '</div></div>';
+  h += '<div class="csm-info-item"><div class="csm-info-label">📊 Coachings</div><div class="csm-info-val">' + done + ' / ' + total + '</div></div>';
+  h += '<div class="csm-info-item"><div class="csm-info-label">📅 Dernière session</div><div class="csm-info-val">' + (lastSess ? fmtDate(lastSess) + ' (' + Math.floor((Date.now()-lastSess.getTime())/86400000) + ' jours)' : 'Aucune') + '</div></div>';
+  h += '</div></div>';
+
+  // Note CSM
+  h += '<div class="csm-section">';
+  h += '<div class="csm-section-title">📝 Note CSM</div>';
+  h += '<textarea class="csm-textarea" id="csmNoteInput" placeholder="Notes internes CSM (visibles aussi en coaching)…">' + esc(c.csmNotes||'') + '</textarea>';
+  h += '<div style="margin-top:6px"><button class="csm-btn primary" onclick="saveCsmNote()">💾 Enregistrer la note</button></div>';
+  h += '</div>';
+
+  // Historique relances
+  var hist = c.csmFollowupHistory || [];
+  h += '<div class="csm-section">';
+  h += '<div class="csm-section-title">↻ Historique des relances (' + hist.length + ')</div>';
+  if(!hist.length){
+    h += '<div style="font-size:12px;color:var(--ink-muted)">Aucune relance enregistrée.</div>';
+  } else {
+    var sorted = hist.slice().reverse();
+    sorted.slice(0, 8).forEach(function(it){
+      var icon = it.channel === 'sms' ? '📱' : it.channel === 'email' ? '📧' : '📝';
+      h += '<div class="csm-history-item">';
+      h += '<div class="csm-history-meta"><span>' + icon + ' ' + esc(it.channel||'note') + '</span><span>' + fmtDateTime(it.at) + '</span><span>' + esc(it.byName||'') + '</span></div>';
+      if(it.message) h += esc(it.message);
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+
+  // Actions
+  h += '<div class="csm-modal-actions">';
+  if(c.tel)   h += '<button class="csm-btn" onclick="quickSms(\'' + c._id + '\')">📱 SMS</button>';
+  if(c.email) h += '<button class="csm-btn" onclick="quickEmail(\'' + c._id + '\')">📧 Email</button>';
+  h += '<button class="csm-btn primary" onclick="markFollowedUp()">✅ Marquer relancé</button>';
+  h += '<a class="csm-btn" href="coaching.html#client-' + esc(c._id) + '" target="_blank">🎓 Ouvrir fiche coaching →</a>';
+  h += '</div>';
+
+  document.getElementById('modalContent').innerHTML = h;
+  document.getElementById('modalBg').classList.add('show');
+}
+
+function closeModal(){
+  document.getElementById('modalBg').classList.remove('show');
+  openClientId = null;
+}
+
+function saveCsmNote(){
+  if(!openClientId) return;
+  var note = document.getElementById('csmNoteInput').value.trim();
+  db.collection('clients').doc(openClientId).update({
+    csmNotes: note,
+    csmUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    showToast('✅ Note enregistrée');
+  }).catch(function(e){
+    console.error('saveCsmNote error', e);
+    showToast('❌ Erreur enregistrement', 'error');
+  });
+}
+
+function markFollowedUp(){
+  if(!openClientId) return;
+  var msg = prompt('Note de la relance (facultatif) :', '');
+  if(msg === null) return; // Annulé
+  var historyEntry = {
+    at: new Date().toISOString(),
+    by: currentUser ? currentUser.uid : null,
+    byName: currentUserName,
+    channel: 'note',
+    message: msg || ''
+  };
+  db.collection('clients').doc(openClientId).update({
+    lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastCsmFollowupBy: currentUser ? currentUser.uid : null,
+    csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
+    csmUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    showToast('✅ Relance enregistrée');
+    // Réouvrir le modal pour rafraîchir l'historique
+    var id = openClientId;
+    closeModal();
+    setTimeout(function(){ openClientModal(id); }, 100);
+  }).catch(function(e){
+    console.error('markFollowedUp error', e);
+    showToast('❌ Erreur — vérifier les rules Firestore', 'error');
+  });
+}
+
+function quickSms(id){
+  var c = allClients.find(function(x){ return x._id === id; });
+  if(!c || !c.tel){ showToast('Pas de numéro pour ce client', 'error'); return; }
+  window.location.href = 'sms:' + c.tel;
+  // Trace
+  var historyEntry = {
+    at: new Date().toISOString(),
+    by: currentUser ? currentUser.uid : null,
+    byName: currentUserName,
+    channel: 'sms',
+    message: 'SMS ouvert'
+  };
+  db.collection('clients').doc(id).update({
+    lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastCsmFollowupBy: currentUser ? currentUser.uid : null,
+    csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
+    csmUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(function(e){ console.warn('quickSms trace error', e); });
+}
+
+function quickEmail(id){
+  var c = allClients.find(function(x){ return x._id === id; });
+  if(!c || !c.email){ showToast('Pas d\'email pour ce client', 'error'); return; }
+  var subject = 'Suivi de votre coaching — Ambitio Corp';
+  window.location.href = 'mailto:' + c.email + '?subject=' + encodeURIComponent(subject);
+  var historyEntry = {
+    at: new Date().toISOString(),
+    by: currentUser ? currentUser.uid : null,
+    byName: currentUserName,
+    channel: 'email',
+    message: 'Email ouvert'
+  };
+  db.collection('clients').doc(id).update({
+    lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastCsmFollowupBy: currentUser ? currentUser.uid : null,
+    csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
+    csmUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(function(e){ console.warn('quickEmail trace error', e); });
+}
+
+// Expose pour onclick inline
+window.switchTab = switchTab;
+window.toggleLevel = toggleLevel;
+window.openClientModal = openClientModal;
+window.closeModal = closeModal;
+window.saveCsmNote = saveCsmNote;
+window.markFollowedUp = markFollowedUp;
+window.quickSms = quickSms;
+window.quickEmail = quickEmail;
+</script>
+</body>
+</html>

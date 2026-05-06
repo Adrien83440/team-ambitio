@@ -13,29 +13,45 @@
   const PERM_KEYS = [
     'coaching_clients','coaching_dashboard','coaching_communication',
     'sales_crm','sales_dashboard','sales_saisie','sales_dialer',
-    'sales_equipe','sales_commissions','sales_projections','booking'
+    'sales_equipe','sales_commissions','sales_projections','booking',
+    'csm_dashboard','csm_clients'
   ];
 
   const ROLE_DEFAULTS = {
     admin: { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
              sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_dialer:'edit',
-             sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit' },
+             sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit',
+             csm_dashboard:'edit',csm_clients:'edit' },
     coach: { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
              sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_dialer:'none',
-             sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none' },
+             sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',
+             csm_dashboard:'none',csm_clients:'none' },
     sales: { coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',
              sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_dialer:'edit',
-             sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit' },
+             sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit',
+             csm_dashboard:'none',csm_clients:'none' },
+    // ─── CSM (Customer Success Manager) ───
+    // Voit son dashboard CSM, les clients (coaching + sales-clients), la
+    // communication coaching, le coaching dashboard. Les flags signaturesAccess
+    // et l'accès paiements sont gérés ailleurs (rule Firestore + flag user).
+    csm:   { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
+             sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_dialer:'none',
+             sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',
+             csm_dashboard:'edit',csm_clients:'edit' },
   };
 
   const PERM_LABELS = {
     coaching_clients:'Clients (Coaching)',coaching_dashboard:'Dashboard (Coaching)',coaching_communication:'Communication',
     sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'Setting / Closing / EOD',
     sales_dialer:'Dialer',
-    sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking',alteoforms:'AlteoForms'
+    sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking',alteoforms:'AlteoForms',
+    csm_dashboard:'Dashboard CSM',csm_clients:'Clients (CSM)'
   };
 
   const ALL_MODULES = [
+    // ─── CUSTOMER SUCCESS — visible pour le rôle csm + admin ───
+    { id: 'csm-dashboard',     icon: '💎', label: 'Dashboard CSM', href: 'csm-dashboard.html', section: 'Customer Success', perm: 'csm_dashboard' },
+    { id: 'csm-clients',       icon: '👥', label: 'Clients',       href: 'sales-clients.html', section: 'Customer Success', perm: 'csm_clients' },
     { id: 'coach-clients',       icon: '👥', label: 'Coaching',      href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
     { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',     section: 'Coaching', perm: 'coaching_dashboard' },
     { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html', section: 'Coaching', perm: 'coaching_communication' },
@@ -86,9 +102,17 @@
       accentGlow: 'rgba(96,165,250,0.18)',
       roleBg: 'rgba(251,191,36,0.12)', roleBorder: 'rgba(251,191,36,0.25)',
     },
+    // ─── Customer Success Manager — émeraude/teal pour différencier ───
+    csm: {
+      label: 'Customer Success', emoji: '💎',
+      grad1: '#042f2e', grad2: '#0f766e', grad3: '#14b8a6',
+      accent: '#5eead4', accentLight: '#ccfbf1',
+      accentGlow: 'rgba(94,234,212,0.18)',
+      roleBg: 'rgba(94,234,212,0.12)', roleBorder: 'rgba(94,234,212,0.25)',
+    },
   };
 
-  const ROLE_LABELS = { coach: '🎓 Coach', sales: '📈 Commercial', admin: '👑 Administrateur' };
+  const ROLE_LABELS = { coach: '🎓 Coach', sales: '📈 Commercial', admin: '👑 Administrateur', csm: '💎 Customer Success' };
 
   const style = document.createElement('style');
   style.textContent = `
@@ -415,17 +439,22 @@
       // "Mes RDV" (sales-rdv.html) est un module commercial : un coach peut avoir
       // la perm 'booking' (pour gérer ses horaires dans booking-admin) sans devoir
       // accéder au suivi RDV des sales. On masque donc explicitement pour coach.
-      if (m.id === 'sales-rdv' && role === 'coach') return false;
+      // Idem pour la CSM : pas d'accès aux RDV sales.
+      if (m.id === 'sales-rdv' && (role === 'coach' || role === 'csm')) return false;
       if (m.perm === 'alteoforms') {
         if (role === 'admin') return true;
         try { var af=JSON.parse(localStorage.getItem('ambitio_alteoforms_forms')||'[]'); return af.length>0; } catch(e){ return false; }
       }
       if (m.perm === 'payments') {
-        if (role === 'admin') return true;
+        // Admin et CSM ont accès paiements par défaut.
+        // Pour les autres rôles : flag explicite via localStorage.
+        if (role === 'admin' || role === 'csm') return true;
         return localStorage.getItem('ambitio_payments_access') === '1';
       }
       if (m.perm === 'signatures') {
-        if (role === 'admin') return true;
+        // Admin et CSM ont accès signatures par défaut.
+        // Pour les autres rôles (sales) : flag explicite via localStorage.
+        if (role === 'admin' || role === 'csm') return true;
         return localStorage.getItem('ambitio_signatures_access') === '1';
       }
       var p = perms[m.perm];

@@ -43,6 +43,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 .u-b-admin{background:rgba(245,158,11,.12);color:#fbbf24;border:1px solid rgba(245,158,11,.2)}
 .u-b-coach{background:rgba(139,92,246,.12);color:#a78bfa;border:1px solid rgba(139,92,246,.2)}
 .u-b-sales{background:rgba(16,185,129,.12);color:#6ee7b7;border:1px solid rgba(16,185,129,.2)}
+.u-b-csm{background:rgba(94,234,212,.12);color:#5eead4;border:1px solid rgba(94,234,212,.25)}
 .u-b-active{background:rgba(52,211,153,.08);color:#34d399;border:1px solid rgba(52,211,153,.15)}
 .u-b-invited{background:rgba(96,165,250,.08);color:#60a5fa;border:1px solid rgba(96,165,250,.15)}
 .u-b-disabled{background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.15)}
@@ -147,6 +148,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 .tc-role-pill.setter{background:rgba(96,165,250,.18);color:#93c5fd}
 .tc-role-pill.closer{background:rgba(245,158,11,.18);color:#fcd34d}
 .tc-role-pill.admin{background:rgba(245,158,11,.18);color:#fbbf24}
+.tc-role-pill.csm{background:rgba(94,234,212,.18);color:#5eead4}
 .tc-role-pill.other{background:rgba(148,163,184,.15);color:#cbd5e1}
 .tc-save-ind{
   font-size:10px;color:rgba(52,211,153,.9);
@@ -175,10 +177,13 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 .mfr{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
 /* Role selector cards */
-.role-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.role-opts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
 .role-opt{padding:12px 10px;border:1.5px solid rgba(255,255,255,.08);border-radius:12px;text-align:center;cursor:pointer;transition:all .15s;background:rgba(255,255,255,.02)}
 .role-opt:hover{background:rgba(255,255,255,.06)}
 .role-opt.on{border-color:#8b5cf6;background:rgba(139,92,246,.08)}
+.role-opt[data-role="csm"].on{border-color:#5eead4;background:rgba(94,234,212,.08)}
+.role-opt[data-role="sales"].on{border-color:#10b981;background:rgba(16,185,129,.08)}
+.role-opt[data-role="admin"].on{border-color:#f59e0b;background:rgba(245,158,11,.08)}
 .role-opt-icon{font-size:20px;margin-bottom:4px}
 .role-opt-label{font-size:12px;font-weight:700}
 .role-opt-sub{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
@@ -282,6 +287,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
       <option value="admin">👑 Admin</option>
       <option value="coach">🎓 Coach</option>
       <option value="sales">📈 Sales</option>
+      <option value="csm">💎 Customer Success</option>
     </select>
     <select class="bs" id="filterStatus">
       <option value="">Tous les statuts</option>
@@ -355,23 +361,26 @@ const auth=getAuth(app),db=getFirestore(app);
 window._auth=auth;window._signOut=signOut;
 
 // ─── Permission config from nav.js ───
-const PERM_KEYS=window.AmbitioNav?.PERM_KEYS||['coaching_clients','coaching_dashboard','coaching_communication','sales_crm','sales_dashboard','sales_saisie','sales_equipe','sales_commissions','sales_projections','booking'];
+const PERM_KEYS=window.AmbitioNav?.PERM_KEYS||['coaching_clients','coaching_dashboard','coaching_communication','sales_crm','sales_dashboard','sales_saisie','sales_equipe','sales_commissions','sales_projections','booking','csm_dashboard','csm_clients'];
 const ROLE_DEFAULTS=window.AmbitioNav?.ROLE_DEFAULTS||{
   admin:Object.fromEntries(PERM_KEYS.map(k=>[k,'edit'])),
-  coach:{coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none'},
-  sales:{coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit'},
+  coach:{coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',csm_dashboard:'none',csm_clients:'none'},
+  sales:{coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit',csm_dashboard:'none',csm_clients:'none'},
+  csm:{coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',csm_dashboard:'edit',csm_clients:'edit'},
 };
 const PERM_LABELS=window.AmbitioNav?.PERM_LABELS||{
   coaching_clients:'Clients',coaching_dashboard:'Dashboard (Coaching)',coaching_communication:'Communication',
   sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'Setting / Closing / EOD',
-  sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking'
+  sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking',
+  csm_dashboard:'Dashboard CSM',csm_clients:'Clients (CSM)'
 };
 const PERM_SECTIONS={coaching_clients:'Coaching',coaching_dashboard:'Coaching',coaching_communication:'Coaching',
   sales_crm:'Sales',sales_dashboard:'Sales',sales_saisie:'Sales',
-  sales_equipe:'Sales',sales_commissions:'Sales',sales_projections:'Sales',booking:'Booking'};
+  sales_equipe:'Sales',sales_commissions:'Sales',sales_projections:'Sales',booking:'Booking',
+  csm_dashboard:'Customer Success',csm_clients:'Customer Success'};
 
-const ROLE_COLORS={admin:'#f59e0b',coach:'#8b5cf6',sales:'#10b981'};
-const ROLE_EMOJIS={admin:'👑',coach:'🎓',sales:'📈'};
+const ROLE_COLORS={admin:'#f59e0b',coach:'#8b5cf6',sales:'#10b981',csm:'#5eead4'};
+const ROLE_EMOJIS={admin:'👑',coach:'🎓',sales:'📈',csm:'💎'};
 const STATUS_LABELS={active:'✅ Actif',invited:'📩 Invité',disabled:'🚫 Désactivé',archived:'🗄 Archivé'};
 const STATUS_CLS={active:'u-b-active',invited:'u-b-invited',disabled:'u-b-disabled',archived:'u-b-archived'};
 
@@ -707,6 +716,7 @@ function openCreateModal(){
   h+='<div class="role-opts">';
   h+='<div class="role-opt on" data-role="coach" onclick="selectRole(this)"><div class="role-opt-icon">🎓</div><div class="role-opt-label">Coach</div><div class="role-opt-sub">Espace coaching</div></div>';
   h+='<div class="role-opt" data-role="sales" onclick="selectRole(this)"><div class="role-opt-icon">📈</div><div class="role-opt-label">Sales</div><div class="role-opt-sub">Espace commercial</div></div>';
+  h+='<div class="role-opt" data-role="csm" onclick="selectRole(this)"><div class="role-opt-icon">💎</div><div class="role-opt-label">CSM</div><div class="role-opt-sub">Customer Success</div></div>';
   h+='<div class="role-opt" data-role="admin" onclick="selectRole(this)"><div class="role-opt-icon">👑</div><div class="role-opt-label">Admin</div><div class="role-opt-sub">Accès complet</div></div>';
   h+='</div>';
   // Method
@@ -838,6 +848,7 @@ function openEditModal(u){
   h+='<option value="admin"'+(role==='admin'?' selected':'')+'>👑 Admin</option>';
   h+='<option value="coach"'+(role==='coach'?' selected':'')+'>🎓 Coach</option>';
   h+='<option value="sales"'+(role==='sales'?' selected':'')+'>📈 Sales</option>';
+  h+='<option value="csm"'+(role==='csm'?' selected':'')+'>💎 Customer Success</option>';
   h+='</select></div>';
   // Status
   h+='<div class="mf"><label>Statut</label>';
