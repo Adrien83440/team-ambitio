@@ -1789,22 +1789,20 @@ function renderModal(){
     h += '</div>';
 
     // Historique 4 derniers mois (avant ce mois) — cf. image 3
+    // Note : on n'exclut PAS les mois "avant entrée" car la dateEntree
+    // peut être mal saisie ou le RDV 72H/sessions peuvent précéder l'entrée
+    // officielle. Si pas de session sur le mois, on affiche juste "—".
     h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:6px">Historique des 4 mois précédents :</div>';
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
-    var entry = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
     for(var i = 4; i >= 1; i--){
       var d = new Date(nowD2.getFullYear(), nowD2.getMonth() - i, 1);
       var monthLbl = d.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'});
-      if(entry && !isNaN(entry.getTime()) && d < new Date(entry.getFullYear(), entry.getMonth(), 1)){
-        h += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--ink-muted);opacity:0.5">' + esc(monthLbl) + ' — avant entrée</div>';
-        continue;
-      }
       var q = getCoachingQuotaStatus(coaching, d.getFullYear(), d.getMonth());
       var qUsed = q ? q.used : 0, qMax = q ? q.max : quotaPerMonth;
       var bgC = 'rgba(255,255,255,0.04)', txt = '';
       if(q && q.status === 'ok'){       bgC = 'rgba(52,211,153,0.10)'; txt = '<strong style="color:#34d399">' + qUsed + '/' + qMax + ' ✅</strong>'; }
       else if(q && q.status === 'partial'){ bgC = 'rgba(251,191,36,0.10)'; txt = '<strong style="color:#fbbf24">' + qUsed + '/' + qMax + ' 🟡</strong>'; }
-      else if(q && q.status === 'miss'){    bgC = 'rgba(239,68,68,0.10)'; txt = '<strong style="color:var(--crit-color)">' + qUsed + '/' + qMax + ' ❌</strong>'; }
+      else if(q && q.status === 'miss'){    bgC = 'rgba(239,68,68,0.10)'; txt = '<strong style="color:var(--crit-color)">0/' + qMax + ' ❌</strong>'; }
       else { txt = '<span style="color:var(--ink-muted)">—</span>'; }
       h += '<div style="background:' + bgC + ';border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px">';
       h += '<span style="color:var(--ink-muted);text-transform:capitalize">' + esc(monthLbl) + '</span>';
@@ -1831,8 +1829,11 @@ function renderModal(){
     if(recentSessions.length){
       h += '<div style="display:flex;flex-direction:column;gap:5px">';
       recentSessions.forEach(function(s){
-        var sCoach = s.coachSession || s.coachAssigned || coaching.coachAssigned || '';
-        var sCoachName = sCoach ? (coachMembersMap[sCoach] || sCoach) : '—';
+        // Le coach est stocké dans s.coach (cf. coaching.html : sessions[].coach
+        // contient déjà un nom lisible normalisé : "Mickael", "Edouard", "Emily").
+        // Si la session n'a pas de coach individuel, on retombe sur celui assigné
+        // au client globalement.
+        var sCoachName = s.coach || (coaching.coachAssigned ? (coachMembersMap[coaching.coachAssigned] || coaching.coachAssigned) : '');
         var sDate = new Date(s.date);
         var daysAgo = Math.floor((Date.now() - sDate.getTime())/86400000);
         var sLabel = '#' + (s.numero || '?');
@@ -1840,7 +1841,7 @@ function renderModal(){
         h += '<span style="background:rgba(52,211,153,0.12);color:#34d399;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800;min-width:32px;text-align:center">' + esc(sLabel) + '</span>';
         h += '<span style="font-weight:600">' + fmtDate(sDate) + '</span>';
         h += '<span style="color:var(--ink-muted)">il y a ' + daysAgo + 'j</span>';
-        h += '<span style="margin-left:auto;color:var(--ink-soft)">👤 ' + esc(sCoachName) + '</span>';
+        h += '<span style="margin-left:auto;color:var(--ink-soft)">👤 ' + esc(sCoachName || '—') + '</span>';
         h += '</div>';
       });
       h += '</div>';
