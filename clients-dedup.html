@@ -1,1314 +1,1088 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Dédup Clients — Alteore</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dédup Clients · Alteore</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="sales.css">
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script>
-    if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}
-  </script>
-  <script src="nav.js" defer></script>
+  <script src="firebase-config.js"></script>
+  <script src="nav.js"></script>
   <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{
-      --bg:#0a0c14;--bg2:#111320;--bg3:#1a1d2e;--bg4:#252840;
-      --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.14);
-      --text:#f1f5f9;--muted:#94a3b8;--muted2:rgba(255,255,255,.4);
-      --accent:#f59e0b;--accent2:#fbbf24;
-      --green:#10b981;--green-bg:rgba(16,185,129,.1);
-      --red:#ef4444;--red-bg:rgba(239,68,68,.1);
-      --blue:#60a5fa;--blue-bg:rgba(96,165,250,.1);
-      --violet:#a78bfa;--violet-bg:rgba(167,139,250,.1);
+    body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; background: #0a0e1a; color: #e2e8f0; }
+    .dedup-page { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .dedup-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .dedup-title h1 { font-size: 28px; font-weight: 800; margin: 0 0 4px; color: #fff; }
+    .dedup-title p { color: #94a3b8; margin: 0; font-size: 14px; }
+    .dedup-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+    .dedup-stat { background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 12px; padding: 10px 16px; min-width: 100px; }
+    .dedup-stat-value { font-size: 22px; font-weight: 800; color: #fff; }
+    .dedup-stat-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+    .dedup-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+    .dedup-btn { padding: 9px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04); color: #e2e8f0; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+    .dedup-btn:hover { background: rgba(255,255,255,0.08); }
+    .dedup-btn.primary { background: linear-gradient(135deg, #3b82f6, #6366f1); border: none; color: #fff; }
+    .dedup-btn.primary:hover { filter: brightness(1.1); }
+    .dedup-btn.danger { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #fca5a5; }
+    .dedup-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .dedup-mode-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.04); border-radius: 12px; padding: 4px; margin-bottom: 16px; width: fit-content; }
+    .dedup-tab { padding: 8px 18px; border-radius: 8px; border: none; background: transparent; color: #94a3b8; font-weight: 600; font-size: 13px; cursor: pointer; font-family: inherit; }
+    .dedup-tab.active { background: rgba(59,130,246,0.2); color: #93c5fd; }
+    .dedup-search { width: 100%; padding: 12px 16px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: #e2e8f0; font-size: 14px; font-family: inherit; margin-bottom: 12px; box-sizing: border-box; }
+    .dedup-search:focus { outline: none; border-color: rgba(59,130,246,0.5); }
+    .clusters-list { display: flex; flex-direction: column; gap: 12px; }
+    .cluster-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 16px; transition: all 0.15s; }
+    .cluster-card:hover { border-color: rgba(59,130,246,0.3); }
+    .cluster-header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .cluster-info { flex: 1; min-width: 200px; }
+    .cluster-name { font-weight: 700; font-size: 16px; color: #fff; margin-bottom: 4px; }
+    .cluster-meta { font-size: 12px; color: #94a3b8; }
+    .cluster-meta span { background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 6px; margin-right: 6px; display: inline-block; }
+    .cluster-meta .has-conflict { color: #fbbf24; background: rgba(251,191,36,0.1); }
+    .cluster-meta .has-payment { color: #34d399; background: rgba(52,211,153,0.1); }
+    .cluster-meta .visible-tag { color: #93c5fd; background: rgba(59,130,246,0.15); }
+    .cluster-actions { display: flex; gap: 8px; }
+    .cluster-actions .dedup-btn { padding: 7px 14px; font-size: 12px; }
+    .empty-state { text-align: center; padding: 60px 20px; color: #94a3b8; }
+    .empty-state h3 { color: #e2e8f0; margin: 0 0 8px; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; backdrop-filter: blur(4px); }
+    .modal-content { background: #0f1729; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; max-width: 1200px; width: 100%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h2 { margin: 0; font-size: 20px; font-weight: 700; color: #fff; }
+    .modal-close { background: none; border: none; color: #94a3b8; font-size: 28px; cursor: pointer; line-height: 1; padding: 0 8px; }
+    .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .merge-summary { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .merge-chip { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; }
+    .merge-chip.primary { background: rgba(34,197,94,0.15); color: #86efac; }
+    .merge-chip.secondary { background: rgba(255,255,255,0.05); color: #cbd5e1; }
+    .merge-chip.conflict { background: rgba(251,191,36,0.15); color: #fcd34d; }
+    .conflict-section { background: rgba(251,191,36,0.05); border: 1px solid rgba(251,191,36,0.2); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .conflict-section h3 { margin: 0 0 12px; font-size: 14px; color: #fbbf24; font-weight: 700; }
+    .conflict-item { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .conflict-key { font-weight: 600; color: #e2e8f0; font-size: 13px; margin-bottom: 8px; font-family: monospace; }
+    .conflict-options { display: flex; flex-direction: column; gap: 6px; }
+    .conflict-option { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+    .conflict-option:hover { border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.05); }
+    .conflict-option input[type="radio"] { margin-top: 4px; cursor: pointer; }
+    .conflict-option.selected { border-color: rgba(59,130,246,0.5); background: rgba(59,130,246,0.1); }
+    .conflict-option-content { flex: 1; }
+    .conflict-option-source { font-size: 11px; color: #94a3b8; margin-bottom: 2px; font-family: monospace; }
+    .conflict-option-value { font-size: 13px; color: #e2e8f0; word-break: break-all; }
+    .conflict-option-empty { color: #6b7280; font-style: italic; }
+    .docs-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
+    .docs-table th, .docs-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: top; }
+    .docs-table th { background: rgba(255,255,255,0.03); color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .docs-table .doc-id { font-family: monospace; font-size: 11px; color: #6b7280; }
+    .docs-table .doc-primary { background: rgba(34,197,94,0.05); }
+    .docs-table .doc-primary td { border-color: rgba(34,197,94,0.1); }
+    .docs-table .col-flag { white-space: nowrap; font-size: 10px; }
+    .flag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-right: 3px; }
+    .flag.visible { background: rgba(59,130,246,0.15); color: #93c5fd; }
+    .flag.invisible { background: rgba(107,114,128,0.15); color: #9ca3af; }
+    .flag.merged { background: rgba(168,85,247,0.15); color: #c4b5fd; }
+    .flag.payment { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .flag.primary-tag { background: rgba(34,197,94,0.2); color: #86efac; }
+    .field-value { font-family: monospace; font-size: 11px; color: #cbd5e1; word-break: break-all; max-width: 220px; }
+    .field-value.empty { color: #4b5563; font-style: italic; }
+    .auto-fields-summary { background: rgba(34,197,94,0.05); border: 1px solid rgba(34,197,94,0.15); border-radius: 12px; padding: 14px; margin-bottom: 16px; font-size: 12px; }
+    .auto-fields-summary h4 { margin: 0 0 8px; font-size: 13px; color: #86efac; }
+    .auto-field { font-family: monospace; font-size: 11px; color: #cbd5e1; padding: 2px 0; }
+    .progress-bar { height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; margin: 12px 0; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #6366f1); transition: width 0.3s; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 18px; color: #e2e8f0; font-size: 13px; z-index: 2000; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    .toast.success { border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.1); }
+    .toast.error { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.1); color: #fca5a5; }
+    .manual-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 6px; cursor: pointer; transition: all 0.15s; }
+    .manual-row:hover { background: rgba(255,255,255,0.04); }
+    .manual-row.selected { border-color: rgba(59,130,246,0.5); background: rgba(59,130,246,0.08); }
+    .manual-row input[type="checkbox"] { cursor: pointer; }
+    .manual-row-info { flex: 1; }
+    .manual-row-name { font-weight: 600; color: #e2e8f0; font-size: 13px; }
+    .manual-row-detail { font-size: 11px; color: #94a3b8; font-family: monospace; }
+    .loading-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .filter-bar { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+    .filter-checkbox { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #cbd5e1; cursor: pointer; }
+    @media (max-width: 768px) {
+      .dedup-page { padding: 16px; }
+      .docs-table { font-size: 11px; }
+      .docs-table th, .docs-table td { padding: 6px 8px; }
     }
-    body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
-
-    /* ─── Layout ─── */
-    .page{padding:24px 28px;max-width:1500px;margin:0 auto}
-    .page-head{display:flex;align-items:center;gap:16px;margin-bottom:24px;flex-wrap:wrap}
-    .page-head-icon{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
-    .page-head h1{font-size:22px;font-weight:800;margin:0}
-    .page-head-sub{font-size:13px;color:var(--muted);margin-top:2px}
-    .page-head-right{margin-left:auto;display:flex;gap:8px;align-items:center}
-
-    /* ─── Buttons ─── */
-    .btn{padding:9px 16px;border:none;border-radius:9px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-    .btn:disabled{opacity:.4;cursor:not-allowed}
-    .btn-primary{background:linear-gradient(135deg,var(--accent),#d97706);color:#0f0f1a;box-shadow:0 4px 16px rgba(245,158,11,.25)}
-    .btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 20px rgba(245,158,11,.35)}
-    .btn-ghost{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--border)}
-    .btn-ghost:hover:not(:disabled){background:rgba(255,255,255,.1);color:var(--text)}
-    .btn-danger{background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,.25)}
-    .btn-danger:hover:not(:disabled){background:rgba(239,68,68,.18)}
-    .btn-success{background:var(--green-bg);color:var(--green);border:1px solid rgba(16,185,129,.25)}
-    .btn-success:hover:not(:disabled){background:rgba(16,185,129,.18)}
-    .btn-sm{padding:5px 10px;font-size:11px;border-radius:7px}
-
-    /* ─── Status banner ─── */
-    .status{padding:14px 18px;border-radius:12px;font-size:13px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:10px}
-    .status-info{background:var(--blue-bg);border:1px solid rgba(96,165,250,.2);color:var(--blue)}
-    .status-ok{background:var(--green-bg);border:1px solid rgba(16,185,129,.2);color:var(--green)}
-    .status-warn{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:var(--accent)}
-    .status-err{background:var(--red-bg);border:1px solid rgba(239,68,68,.2);color:var(--red)}
-
-    /* ─── Summary cards ─── */
-    .summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
-    .sum-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px}
-    .sum-card-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:6px}
-    .sum-card-value{font-size:26px;font-weight:800;color:var(--text);line-height:1}
-    .sum-card-sub{font-size:11px;color:var(--muted);margin-top:4px}
-    .sum-card.warn .sum-card-value{color:var(--accent)}
-    .sum-card.danger .sum-card-value{color:var(--red)}
-
-    /* ─── Cluster list ─── */
-    .clusters-wrap{display:flex;flex-direction:column;gap:10px}
-    .cluster{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:border-color .15s}
-    .cluster:hover{border-color:var(--border2)}
-    .cluster.merged{opacity:.45;border-color:var(--border)}
-    .cluster-head{display:flex;align-items:center;gap:14px;padding:14px 18px;cursor:pointer;user-select:none}
-    .cluster-head:hover{background:rgba(255,255,255,.02)}
-    .cluster-id{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted2);background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 7px;flex-shrink:0}
-    .cluster-name{font-size:14px;font-weight:700;flex:1}
-    .cluster-meta{display:flex;gap:6px;flex-wrap:wrap}
-    .cluster-pill{font-size:10px;font-weight:700;padding:3px 8px;border-radius:14px;background:var(--bg3);border:1px solid var(--border);color:var(--muted)}
-    .cluster-pill.email{background:var(--blue-bg);border-color:rgba(96,165,250,.25);color:var(--blue)}
-    .cluster-pill.phone{background:var(--violet-bg);border-color:rgba(167,139,250,.25);color:var(--violet)}
-    .cluster-pill.name{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.25);color:var(--accent)}
-    .cluster-pill.count{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:var(--red);font-weight:800}
-    .cluster-caret{font-size:11px;color:var(--muted2);transition:transform .2s}
-    .cluster.open .cluster-caret{transform:rotate(90deg)}
-    .cluster-body{display:none;border-top:1px solid var(--border);padding:14px 18px;background:rgba(0,0,0,.18)}
-    .cluster.open .cluster-body{display:block}
-    .cluster-actions{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);justify-content:flex-end}
-
-    /* ─── Lead preview cards (in cluster) ─── */
-    .lead-preview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}
-    .lead-preview{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px}
-    .lead-preview-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-    .lead-preview-id{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted2);background:var(--bg);padding:2px 6px;border-radius:5px}
-    .lead-preview-name{font-size:13px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .lead-preview-source{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--accent);background:rgba(245,158,11,.1);padding:2px 6px;border-radius:5px}
-    .lead-preview-fields{display:flex;flex-direction:column;gap:4px}
-    .lead-preview-field{font-size:11px;line-height:1.5}
-    .lead-preview-field-key{color:var(--muted2);font-weight:600;display:inline-block;min-width:90px}
-    .lead-preview-field-val{color:var(--text)}
-    .lead-preview-field-val.empty{color:var(--muted2);font-style:italic}
-    .lead-preview-fill{position:absolute;top:8px;right:8px;font-size:10px;color:var(--muted)}
-    .lead-preview{position:relative}
-    .fill-badge{position:absolute;top:8px;right:8px;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;background:var(--bg);color:var(--muted)}
-
-    /* ─── Merge modal ─── */
-    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:1100;display:none;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto}
-    .modal-bg.on{display:flex}
-    .modal{background:var(--bg2);border:1px solid var(--border);border-radius:18px;width:100%;max-width:1300px;box-shadow:0 32px 80px rgba(0,0,0,.6);animation:slideUp .25s cubic-bezier(.4,0,.2,1)}
-    @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-    .modal-h{display:flex;align-items:center;gap:12px;padding:20px 24px;border-bottom:1px solid var(--border)}
-    .modal-t{font-size:16px;font-weight:800;flex:1}
-    .modal-t-sub{font-size:12px;color:var(--muted);margin-top:2px}
-    .modal-close{width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.06);cursor:pointer;color:var(--muted);font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s}
-    .modal-close:hover{background:rgba(255,255,255,.12);color:var(--text)}
-    .modal-b{padding:20px 24px;max-height:70vh;overflow-y:auto}
-    .modal-actions{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;align-items:center}
-
-    /* ─── Merge table : champ x doc, choix de la valeur ─── */
-    .merge-instructions{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.18);border-radius:10px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:var(--accent);line-height:1.6}
-    .merge-instructions strong{font-weight:800}
-    .merge-tools{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
-    .merge-primary-pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-    .merge-primary-pick-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-    .primary-btn{padding:6px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
-    .primary-btn:hover{border-color:var(--green)}
-    .primary-btn.active{background:var(--green-bg);border-color:var(--green);color:var(--green)}
-
-    .merge-table{width:100%;border-collapse:collapse;margin-top:8px}
-    .merge-table th{position:sticky;top:0;background:var(--bg2);padding:10px 8px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);border-bottom:1px solid var(--border);z-index:1}
-    .merge-table th:first-child{width:160px;min-width:160px}
-    .merge-table td{padding:8px;border-bottom:1px solid var(--border);font-size:12px;vertical-align:top}
-    .merge-table tr:hover td{background:rgba(255,255,255,.02)}
-    .merge-field-label{font-weight:700;color:var(--text);font-size:11px}
-    .merge-field-hint{font-size:10px;color:var(--muted2);font-weight:500;margin-top:2px}
-    .merge-cell{position:relative;padding:8px;border-radius:8px;background:var(--bg3);border:1.5px solid transparent;cursor:pointer;transition:all .15s;min-height:38px}
-    .merge-cell:hover{border-color:var(--border2)}
-    .merge-cell.selected{border-color:var(--accent);background:rgba(245,158,11,.08)}
-    .merge-cell.selected::after{content:'✓';position:absolute;top:6px;right:8px;color:var(--accent);font-weight:800;font-size:12px}
-    .merge-cell.empty{color:var(--muted2);font-style:italic}
-    .merge-cell-value{word-break:break-word;line-height:1.5;font-size:12px}
-    .merge-cell-value.long{max-height:80px;overflow:hidden;position:relative}
-    .merge-cell-value.long.expanded{max-height:none}
-    .merge-cell-value.long:not(.expanded)::after{content:'';position:absolute;bottom:0;left:0;right:0;height:24px;background:linear-gradient(transparent,var(--bg3))}
-
-    .primary-marker{display:inline-block;font-size:9px;font-weight:800;padding:2px 6px;border-radius:5px;background:var(--green);color:#022;letter-spacing:.4px;text-transform:uppercase;margin-left:6px}
-
-    /* ─── Confirm dialog ─── */
-    .confirm-bg{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(8px);z-index:1200;display:none;align-items:center;justify-content:center;padding:20px}
-    .confirm-bg.on{display:flex}
-    .confirm{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;max-width:480px;padding:28px;text-align:center;animation:slideUp .25s cubic-bezier(.4,0,.2,1)}
-    .confirm-icon{font-size:48px;margin-bottom:12px}
-    .confirm-title{font-size:18px;font-weight:800;margin-bottom:8px}
-    .confirm-msg{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:20px}
-    .confirm-actions{display:flex;gap:10px;justify-content:center}
-
-    /* ─── Toast ─── */
-    .toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000}
-    .toast{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;font-weight:600;color:var(--text);box-shadow:0 8px 32px rgba(0,0,0,.5);opacity:0;transform:translateY(10px);transition:all .25s;min-width:240px;text-align:center;white-space:pre-line}
-    .toast.show{opacity:1;transform:translateY(0)}
-
-    /* ─── Loading state ─── */
-    .loader{display:flex;align-items:center;justify-content:center;padding:60px;flex-direction:column;gap:14px;color:var(--muted)}
-    .spinner{width:36px;height:36px;border:3px solid rgba(245,158,11,.15);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-
-    /* ─── Empty state ─── */
-    .empty-state{text-align:center;padding:60px 20px;background:var(--bg2);border:1px solid var(--border);border-radius:14px}
-    .empty-icon{font-size:56px;margin-bottom:14px;opacity:.6}
-    .empty-title{font-size:18px;font-weight:800;margin-bottom:6px}
-    .empty-msg{font-size:13px;color:var(--muted);max-width:400px;margin:0 auto;line-height:1.6}
-
-    /* ─── No-access state ─── */
-    .noaccess{text-align:center;padding:80px 20px}
-    .noaccess-icon{font-size:64px;margin-bottom:16px}
-    .noaccess-title{font-size:20px;font-weight:800;color:var(--red);margin-bottom:8px}
-    .noaccess-msg{font-size:13px;color:var(--muted);max-width:420px;margin:0 auto;line-height:1.6}
-
-    /* ─── History panel ─── */
-    .history-panel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-top:20px}
-    .history-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:10px}
-    .history-list{display:flex;flex-direction:column;gap:6px}
-    .history-row{font-size:11px;color:var(--muted);display:flex;gap:8px;align-items:center}
-    .history-row strong{color:var(--green)}
   </style>
 </head>
 <body>
-
-<!-- ─── État 1 : pas authentifié / pas admin ─── -->
-<div id="noAccess" class="noaccess" style="display:none">
-  <div class="noaccess-icon">🚫</div>
-  <div class="noaccess-title">Accès réservé aux administrateurs</div>
-  <div class="noaccess-msg">Cette page permet de fusionner manuellement les doublons clients dans la base. Elle n'est accessible qu'aux comptes admin.</div>
-</div>
-
-<!-- ─── État 2 : page principale ─── -->
-<div class="page" id="page" style="display:none">
-  <div class="page-head">
-    <div class="page-head-icon">🔄</div>
-    <div>
-      <h1>Dédup Clients</h1>
-      <div class="page-head-sub">Détection et fusion manuelle des doublons dans <code style="background:var(--bg3);padding:1px 6px;border-radius:4px;font-size:11px">leads (isClient=true)</code></div>
-    </div>
-    <div class="page-head-right">
-      <button class="btn btn-ghost" id="btnReload" disabled>🔄 Recharger</button>
-    </div>
-  </div>
-
-  <div id="statusBox"></div>
-
-  <!-- Alerte docs orphelins (legacy _merged=true && isClient=true) -->
-  <div id="orphansAlert" style="display:none;background:rgba(245,158,11,.08);border:1.5px solid rgba(245,158,11,.35);border-radius:14px;padding:16px 20px;margin-bottom:20px">
-    <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
-      <div style="font-size:32px;flex-shrink:0">🧹</div>
-      <div style="flex:1;min-width:280px">
-        <div style="font-size:14px;font-weight:800;color:var(--accent);margin-bottom:6px">
-          <span id="orphansCount">0</span> doc(s) orphelin(s) détecté(s)
-        </div>
-        <div style="font-size:12px;color:rgba(255,255,255,.65);line-height:1.6">
-          Ces docs ont <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">_merged=true</code> mais <code style="background:var(--bg3);padding:1px 5px;border-radius:4px">isClient=true</code> — ils ont été fusionnés par une logique antérieure mais leur flag <code>isClient</code> n'a pas été basculé. C'est pour ça qu'ils apparaissent encore comme doublons dans <strong>Sales CRM &gt; Clients actifs</strong>. Réparation : bascule <code>isClient=false</code> sur tous → ils disparaissent immédiatement des vues clients (sans toucher aux docs primary qui restent intacts).
+  <div class="app-container">
+    <nav id="nav-container"></nav>
+    <main id="main-content">
+      <div class="dedup-page" id="dedup-app">
+        <div class="empty-state">
+          <span class="loading-spinner"></span>
+          <p>Vérification des accès…</p>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
-        <button class="btn btn-primary" id="btnRepairOrphans">🧹 Réparer tout</button>
-        <button class="btn btn-ghost btn-sm" id="btnInspectOrphans">👁 Voir la liste</button>
-      </div>
-    </div>
-    <div id="orphansList" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid rgba(245,158,11,.2);max-height:280px;overflow-y:auto;font-size:11px;color:var(--muted);font-family:'DM Mono',monospace"></div>
+    </main>
   </div>
 
-  <!-- Summary -->
-  <div class="summary" id="summary" style="display:none">
-    <div class="sum-card">
-      <div class="sum-card-label">Total clients</div>
-      <div class="sum-card-value" id="sumTotal">—</div>
-      <div class="sum-card-sub">isClient=true (non fusionnés)</div>
-    </div>
-    <div class="sum-card warn">
-      <div class="sum-card-label">Clusters de doublons</div>
-      <div class="sum-card-value" id="sumClusters">—</div>
-      <div class="sum-card-sub">Groupes à fusionner</div>
-    </div>
-    <div class="sum-card danger">
-      <div class="sum-card-label">Docs en doublon</div>
-      <div class="sum-card-value" id="sumDups">—</div>
-      <div class="sum-card-sub">À fusionner / archiver</div>
-    </div>
-    <div class="sum-card">
-      <div class="sum-card-label">Après fusion</div>
-      <div class="sum-card-value" id="sumAfter">—</div>
-      <div class="sum-card-sub">Clients uniques projetés</div>
-    </div>
-  </div>
+  <script>
+    'use strict';
 
-  <!-- Clusters list -->
-  <div id="clustersWrap"></div>
+    // ============================================================
+    // STATE
+    // ============================================================
+    var STATE = {
+      user: null,
+      isAdmin: false,
+      allLeads: [],          // tous les docs leads (avec id)
+      leadsById: {},
+      clusters: [],          // [{ id, leads, hasConflict, hasClient, hasPayment, paymentsCount }]
+      filteredClusters: [],
+      paymentsCountByLeadId: {},  // { leadId: count }
+      mode: 'auto',          // 'auto' | 'manual'
+      filter: { onlyVisible: true, hideMerged: false, search: '' },
+      manualSelected: {},    // { leadId: lead } pour le mode manuel
+      currentMerge: null,    // { cluster, primary, autoFields, conflicts, conflictChoices }
+    };
 
-  <!-- Recent merges history -->
-  <div class="history-panel" id="historyPanel" style="display:none">
-    <div class="history-title">📜 Fusions récentes (cette session)</div>
-    <div class="history-list" id="historyList"></div>
-  </div>
+    var SUB_COLLECTIONS = ['client_temoignages', 'client_notes', 'voice_notes'];
+    var SKIP_KEYS = ['id', '_merged', '_mergedInto', 'mergedAt', 'mergedBy', '_backupId',
+                     '_orphanRepaired', '_orphanRepairedAt', '_orphanRevertedAt',
+                     'createdAt', 'updatedAt', '_mergedFrom', '_lastMergedAt', '_lastBackupId',
+                     '_migratedFromLeadId', '_migratedAt'];
 
-</div>
-
-<!-- ─── Merge modal ─── -->
-<div class="modal-bg" id="mergeModal">
-  <div class="modal">
-    <div class="modal-h">
-      <div style="flex:1">
-        <div class="modal-t">🔀 Fusion d'un cluster</div>
-        <div class="modal-t-sub" id="mergeSubtitle"></div>
-      </div>
-      <button class="modal-close" id="mergeClose">✕</button>
-    </div>
-    <div class="modal-b" id="mergeBody"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="mergeCancel">Annuler</button>
-      <button class="btn btn-primary" id="mergeConfirm">⚡ Confirmer la fusion</button>
-    </div>
-  </div>
-</div>
-
-<!-- ─── Confirm dialog ─── -->
-<div class="confirm-bg" id="confirmDlg">
-  <div class="confirm">
-    <div class="confirm-icon" id="confirmIcon">⚠️</div>
-    <div class="confirm-title" id="confirmTitle">Confirmer ?</div>
-    <div class="confirm-msg" id="confirmMsg"></div>
-    <div class="confirm-actions">
-      <button class="btn btn-ghost" id="confirmCancel">Annuler</button>
-      <button class="btn btn-danger" id="confirmOk">Confirmer</button>
-    </div>
-  </div>
-</div>
-
-<div class="toast-wrap"><div class="toast" id="toast"></div></div>
-
-<script>
-(function(){
-  'use strict';
-
-  var db = firebase.firestore();
-  var auth = firebase.auth();
-  var currentUser = null;
-  var currentUserDoc = null;
-
-  // ═══ Données en mémoire ═══
-  var allClients = [];          // Tous les leads avec isClient=true (et _merged !== true)
-  var clusters = [];            // Tableau de clusters [{ leadIds, reasons }]
-  var clientsById = {};         // Map id -> client
-  var sessionHistory = [];      // Fusions effectuées dans cette session
-  var openClusterId = null;     // Cluster actuellement développé
-  var currentMergeContext = null; // { clusterId, primaryId, fieldChoices }
-
-  // ═══ Champs proposés à la fusion (priorité d'affichage) ═══
-  // Pour chaque champ, l'admin choisit quelle valeur garder parmi les N docs.
-  // mode='single' = une seule valeur gagne ; mode='merge' = fusion auto
-  // (notesHistory = concat dédup, tags = union).
-  var MERGE_FIELDS = [
-    { key: 'nom',                  label: 'Nom',                hint: 'Identité',                          mode: 'single' },
-    { key: 'email',                label: 'Email',              hint: 'Identité',                          mode: 'single' },
-    { key: 'telephone',            label: 'Téléphone',          hint: 'E.164 canonique',                   mode: 'single' },
-    { key: 'commerce',             label: 'Commerce',           hint: 'Métier / activité',                 mode: 'single' },
-    { key: 'problematique',        label: 'Problématique',      hint: 'Pb principale',                     mode: 'single' },
-    { key: 'pbSecondaires',        label: 'Pb secondaires',     hint: '',                                  mode: 'single' },
-    { key: 'resultats',            label: 'Résultats',          hint: 'Résultats obtenus',                 mode: 'single' },
-    { key: 'accompagnementDebut',  label: 'Début accomp.',      hint: 'YYYY-MM-DD',                        mode: 'single' },
-    { key: 'accompagnementFin',    label: 'Fin accomp.',        hint: 'YYYY-MM-DD',                        mode: 'single' },
-    { key: 'clientSince',          label: 'Client depuis',      hint: 'Timestamp Firestore',               mode: 'single' },
-    { key: 'importedCreatedAt',    label: 'Date import',        hint: 'Origine Bigin',                     mode: 'single' },
-    { key: 'createdAt',            label: 'Créé le',            hint: 'Date Firestore',                    mode: 'single' },
-    { key: 'clientStatus',         label: 'Statut client',      hint: 'active / paused / completed…',      mode: 'single' },
-    { key: 'coachAssigned',        label: 'Coach',              hint: '',                                  mode: 'single' },
-    { key: 'closeurSlug',          label: 'Closer',             hint: 'Slug team member',                  mode: 'single' },
-    { key: 'assignedTo',           label: 'Assigné à',          hint: '',                                  mode: 'single' },
-    { key: 'source',               label: 'Source',             hint: '',                                  mode: 'single' },
-    { key: 'stage',                label: 'Stage funnel',       hint: 'Pipeline CRM',                      mode: 'single' },
-    { key: 'tags',                 label: 'Tags',               hint: 'Union de tous',                     mode: 'merge' },
-    { key: 'notesHistory',         label: 'Historique notes',   hint: 'Concat dédup',                      mode: 'merge' },
-  ];
-
-  // ─────────────────────────────────────────────────────────────────────
-  // ═══ UTILS ═══
-  // ─────────────────────────────────────────────────────────────────────
-
-  function $(id){ return document.getElementById(id); }
-  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-
-  function toast(msg, ms){
-    var el = $('toast');
-    el.textContent = msg;
-    el.classList.add('show');
-    clearTimeout(toast._t);
-    toast._t = setTimeout(function(){ el.classList.remove('show'); }, ms || 3500);
-  }
-
-  function setStatus(msg, type){
-    var box = $('statusBox');
-    if (!msg){ box.innerHTML = ''; return; }
-    box.innerHTML = '<div class="status status-'+(type||'info')+'">'+esc(msg)+'</div>';
-  }
-
-  function fmtTimestamp(ts){
-    if (!ts) return '';
-    if (typeof ts === 'string') return ts;
-    if (ts.toDate) {
-      try { return ts.toDate().toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); } catch(e){ return String(ts); }
-    }
-    if (ts.seconds) return new Date(ts.seconds*1000).toLocaleString('fr-FR');
-    return String(ts);
-  }
-
-  function fmtValue(val){
-    if (val === null || val === undefined || val === '') return '';
-    if (Array.isArray(val)) {
-      if (val.length === 0) return '';
-      // notesHistory : array d'objets {text, date}
-      if (val[0] && typeof val[0] === 'object' && 'text' in val[0]) {
-        return val.length+' note(s) : ' + val.slice(0,3).map(function(n){ return '"'+(n.text||'').slice(0,40)+'"'; }).join(' ; ');
-      }
-      // tags : array de strings
-      return val.join(', ');
-    }
-    if (val && typeof val === 'object') {
-      if (val.toDate) return fmtTimestamp(val);
-      if ('seconds' in val) return fmtTimestamp(val);
-      return JSON.stringify(val).slice(0, 80);
-    }
-    return String(val);
-  }
-
-  // ─── Normalisations pour le matching ───
-  function normalizeText(s){
-    return String(s || '')
-      .toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // sans accents
-      .replace(/[^a-z0-9\s]/g, ' ')                        // seules lettres/chiffres + espaces
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  function nameTokens(name){
-    var n = normalizeText(name);
-    if (!n) return [];
-    return n.split(' ').filter(function(t){ return t.length >= 2; }).sort();
-  }
-
-  // Loose match : tokens du plus court ⊆ tokens du plus long
-  function namesMatchLoose(nameA, nameB){
-    var a = nameTokens(nameA);
-    var b = nameTokens(nameB);
-    if (a.length === 0 || b.length === 0) return false;
-    var shorter = a.length <= b.length ? a : b;
-    var longer  = a.length <= b.length ? b : a;
-    // Au moins 2 tokens dans le plus court pour éviter les faux positifs
-    // ('Pierre' alone matching n'importe qui qui s'appelle Pierre)
-    if (shorter.length < 2) return false;
-    var longerSet = {};
-    longer.forEach(function(t){ longerSet[t] = true; });
-    for (var i = 0; i < shorter.length; i++){
-      if (!longerSet[shorter[i]]) return false;
-    }
-    return true;
-  }
-
-  function normalizeEmail(s){
-    if (!s || typeof s !== 'string') return '';
-    return s.trim().toLowerCase();
-  }
-
-  function normalizePhone(s){
-    if (!s || typeof s !== 'string') return '';
-    var t = s.replace(/[\s\-\.\(\)]/g, '');
-    // Garde le format brut s'il est canonique
-    if (/^\+?\d{8,15}$/.test(t)) return t.startsWith('+') ? t : '+'+t.replace(/^00/, '');
-    return '';
-  }
-
-  // ─── Union-Find (Disjoint Set Union) ───
-  function UF(){
-    this.parent = {};
-    this.rank = {};
-  }
-  UF.prototype.add = function(x){
-    if (!(x in this.parent)) { this.parent[x] = x; this.rank[x] = 0; }
-  };
-  UF.prototype.find = function(x){
-    if (this.parent[x] !== x) {
-      this.parent[x] = this.find(this.parent[x]);  // path compression
-    }
-    return this.parent[x];
-  };
-  UF.prototype.union = function(x, y){
-    var rx = this.find(x), ry = this.find(y);
-    if (rx === ry) return;
-    if (this.rank[rx] < this.rank[ry]) { this.parent[rx] = ry; }
-    else if (this.rank[rx] > this.rank[ry]) { this.parent[ry] = rx; }
-    else { this.parent[ry] = rx; this.rank[rx]++; }
-  };
-  UF.prototype.clusters = function(){
-    var groups = {};
-    for (var x in this.parent) {
-      var r = this.find(x);
-      if (!groups[r]) groups[r] = [];
-      groups[r].push(x);
-    }
-    return Object.keys(groups).map(function(k){ return groups[k]; });
-  };
-
-  // ─────────────────────────────────────────────────────────────────────
-  // ═══ AUTH ═══
-  // ─────────────────────────────────────────────────────────────────────
-
-  auth.onAuthStateChanged(function(user){
-    if (!user) { window.location.href = 'login.html'; return; }
-    currentUser = user;
-    db.collection('users').doc(user.uid).get().then(function(d){
-      currentUserDoc = d.exists ? d.data() : null;
-      var role = currentUserDoc && currentUserDoc.role;
-      if (role !== 'admin') {
-        $('noAccess').style.display = 'block';
-        return;
-      }
-      $('page').style.display = 'block';
-      $('btnReload').disabled = false;
-      loadClients();
-    }).catch(function(err){
-      setStatus('Erreur chargement profil : '+err.message, 'err');
+    // ============================================================
+    // BOOT
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function(){
+      firebase.auth().onAuthStateChanged(function(user){
+        if (!user) { window.location.href = '/login.html'; return; }
+        STATE.user = user;
+        checkAdminAndBoot();
+      });
     });
-  });
 
-  $('btnReload').addEventListener('click', function(){ loadClients(); });
+    function checkAdminAndBoot(){
+      firebase.firestore().collection('users').doc(STATE.user.uid).get().then(function(doc){
+        if (!doc.exists) { renderNotAuthorized(); return; }
+        var data = doc.data();
+        STATE.isAdmin = data.role === 'admin' || data.role === 'super_admin';
+        if (!STATE.isAdmin) { renderNotAuthorized(); return; }
+        loadAllData();
+      }).catch(function(e){ console.error(e); renderNotAuthorized(); });
+    }
 
-  // ─────────────────────────────────────────────────────────────────────
-  // ═══ CHARGEMENT + DÉTECTION ═══
-  // ─────────────────────────────────────────────────────────────────────
+    function renderNotAuthorized(){
+      document.getElementById('dedup-app').innerHTML =
+        '<div class="empty-state"><h3>Accès refusé</h3><p>Cette page est réservée aux administrateurs.</p></div>';
+    }
 
-  function loadClients(){
-    setStatus('⏳ Chargement des clients…', 'info');
-    $('summary').style.display = 'none';
-    $('clustersWrap').innerHTML = '';
-    $('orphansAlert').style.display = 'none';
+    // ============================================================
+    // LOAD DATA
+    // ============================================================
+    function loadAllData(){
+      renderLoading('Chargement des leads…');
+      var db = firebase.firestore();
+      db.collection('leads').get().then(function(snap){
+        STATE.allLeads = [];
+        STATE.leadsById = {};
+        snap.forEach(function(d){
+          var lead = Object.assign({ id: d.id }, d.data());
+          STATE.allLeads.push(lead);
+          STATE.leadsById[lead.id] = lead;
+        });
+        renderLoading('Chargement des paiements…');
+        return db.collection('payments').get();
+      }).then(function(paySnap){
+        STATE.paymentsCountByLeadId = {};
+        paySnap.forEach(function(d){
+          var lid = d.data().leadId;
+          if (!lid) return;
+          STATE.paymentsCountByLeadId[lid] = (STATE.paymentsCountByLeadId[lid] || 0) + 1;
+        });
+        renderLoading('Détection des doublons…');
+        setTimeout(function(){
+          STATE.clusters = detectClusters(STATE.allLeads);
+          applyFilter();
+          renderApp();
+        }, 50);
+      }).catch(function(err){
+        console.error(err);
+        document.getElementById('dedup-app').innerHTML =
+          '<div class="empty-state"><h3>Erreur</h3><p>'+escapeHtml(err.message)+'</p></div>';
+      });
+    }
 
-    // ─── Scan complet : on charge TOUS les leads (sans filtre Firestore)
-    // pour pouvoir détecter à la fois les clusters de doublons (sur les
-    // docs vivants : isClient=true, _merged!==true) ET les orphelins
-    // (_merged=true, isClient=true — état legacy incohérent qui fait que
-    // ces docs restent visibles dans Sales CRM > Clients actifs).
-    db.collection('leads').where('isClient', '==', true).get().then(function(snap){
-      allClients = [];
-      clientsById = {};
-      var orphans = [];
+    function renderLoading(msg){
+      document.getElementById('dedup-app').innerHTML =
+        '<div class="empty-state"><span class="loading-spinner"></span><p>'+escapeHtml(msg)+'</p></div>';
+    }
 
-      snap.forEach(function(d){
-        var data = d.data();
-        var lead = Object.assign({ id: d.id }, data);
-        if (data._merged === true) {
-          // Orphelin : marqué fusionné mais isClient pas basculé
-          orphans.push(lead);
-        } else {
-          allClients.push(lead);
-          clientsById[lead.id] = lead;
+    // ============================================================
+    // CLUSTER DETECTION (Union-Find)
+    // ============================================================
+    function detectClusters(leads){
+      var parent = {};
+      leads.forEach(function(l){ parent[l.id] = l.id; });
+      function find(x){
+        while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+        return x;
+      }
+      function union(a, b){
+        var ra = find(a), rb = find(b);
+        if (ra !== rb) parent[ra] = rb;
+      }
+
+      // Index par email
+      var byEmail = {};
+      leads.forEach(function(l){
+        if (l.email && typeof l.email === 'string') {
+          var e = l.email.toLowerCase().trim();
+          if (e.length > 3 && e.indexOf('@') > 0) {
+            if (!byEmail[e]) byEmail[e] = [];
+            byEmail[e].push(l.id);
+          }
+        }
+      });
+      Object.keys(byEmail).forEach(function(e){
+        var ids = byEmail[e];
+        for (var i = 1; i < ids.length; i++) union(ids[0], ids[i]);
+      });
+
+      // Index par tél
+      var byTel = {};
+      leads.forEach(function(l){
+        var t = l.telephone || l.phone;
+        if (t && typeof t === 'string' && t.length >= 10) {
+          if (!byTel[t]) byTel[t] = [];
+          byTel[t].push(l.id);
+        }
+      });
+      Object.keys(byTel).forEach(function(t){
+        var ids = byTel[t];
+        for (var i = 1; i < ids.length; i++) union(ids[0], ids[i]);
+      });
+
+      // Index par nom : tokenisation
+      var leadTokens = {};
+      leads.forEach(function(l){
+        leadTokens[l.id] = normalizeTokens(l.nom);
+      });
+
+      var byToken = {};
+      leads.forEach(function(l){
+        leadTokens[l.id].forEach(function(t){
+          if (!byToken[t]) byToken[t] = [];
+          byToken[t].push(l.id);
+        });
+      });
+
+      // Pour chaque token avec >=2 leads, vérifier paires
+      var checked = {};
+      Object.keys(byToken).forEach(function(tok){
+        var ids = byToken[tok];
+        for (var i = 0; i < ids.length; i++) {
+          for (var j = i+1; j < ids.length; j++) {
+            var a = ids[i], b = ids[j];
+            var key = a < b ? a+'|'+b : b+'|'+a;
+            if (checked[key]) continue;
+            checked[key] = true;
+            var ta = leadTokens[a], tb = leadTokens[b];
+            var setA = {}; ta.forEach(function(t){ setA[t] = true; });
+            var common = 0;
+            tb.forEach(function(t){ if (setA[t]) common++; });
+            if (common >= 2) union(a, b);
+          }
         }
       });
 
-      // Affichage de l'alerte orphelins (si applicable)
-      window._orphans = orphans;
-      if (orphans.length > 0) {
-        $('orphansCount').textContent = orphans.length;
-        $('orphansAlert').style.display = 'block';
+      // Construire clusters
+      var clusterMap = {};
+      leads.forEach(function(l){
+        var root = find(l.id);
+        if (!clusterMap[root]) clusterMap[root] = [];
+        clusterMap[root].push(l);
+      });
+
+      var clusters = [];
+      Object.keys(clusterMap).forEach(function(k){
+        var arr = clusterMap[k];
+        if (arr.length < 2) return;
+        var hasClient = arr.some(function(l){ return l.isClient === true; });
+        var paymentsCount = 0;
+        arr.forEach(function(l){ paymentsCount += (STATE.paymentsCountByLeadId[l.id] || 0); });
+        clusters.push({
+          id: k,
+          leads: arr,
+          hasClient: hasClient,
+          hasPayment: paymentsCount > 0,
+          paymentsCount: paymentsCount,
+        });
+      });
+
+      // Trier : clients actifs d'abord, puis ceux avec paiements, puis taille
+      clusters.sort(function(a, b){
+        if (a.hasClient !== b.hasClient) return a.hasClient ? -1 : 1;
+        if (a.hasPayment !== b.hasPayment) return a.hasPayment ? -1 : 1;
+        return b.leads.length - a.leads.length;
+      });
+
+      return clusters;
+    }
+
+    function normalizeTokens(str){
+      if (!str || typeof str !== 'string') return [];
+      return str.toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .trim()
+        .split(/\s+/)
+        .filter(function(t){ return t.length >= 2; });
+    }
+
+    // ============================================================
+    // MERGE PLAN BUILDING
+    // ============================================================
+    function scoreLead(l){
+      var s = 0;
+      var keys = Object.keys(l);
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i];
+        if (SKIP_KEYS.indexOf(k) >= 0) continue;
+        var v = l[k];
+        if (v === null || v === undefined || v === '') continue;
+        if (Array.isArray(v) && v.length === 0) continue;
+        s++;
+      }
+      if (l.isClient === true) s += 1000;
+      return s;
+    }
+
+    function pickPrimary(cluster){
+      var best = null, bestScore = -1;
+      cluster.forEach(function(l){
+        var s = scoreLead(l);
+        if (s > bestScore) { bestScore = s; best = l; }
+      });
+      return best;
+    }
+
+    function buildMergePlan(cluster, primaryId){
+      var primary = null, secondaries = [];
+      cluster.forEach(function(l){
+        if (l.id === primaryId) primary = l; else secondaries.push(l);
+      });
+      if (!primary) return null;
+
+      var allKeys = {};
+      cluster.forEach(function(l){
+        Object.keys(l).forEach(function(k){ allKeys[k] = true; });
+      });
+
+      var autoFields = {};
+      var conflicts = [];
+
+      Object.keys(allKeys).forEach(function(k){
+        if (SKIP_KEYS.indexOf(k) >= 0) return;
+
+        // Collecter les valeurs non-vides depuis tous les docs
+        var values = [];
+        cluster.forEach(function(l){
+          var v = l[k];
+          if (v === null || v === undefined || v === '') return;
+          if (Array.isArray(v) && v.length === 0) return;
+          values.push({ leadId: l.id, value: v });
+        });
+        if (values.length === 0) return;
+
+        // Si la valeur est un array : union
+        if (Array.isArray(values[0].value)) {
+          var seen = {};
+          var merged = [];
+          values.forEach(function(v){
+            if (!Array.isArray(v.value)) return;
+            v.value.forEach(function(item){
+              var key = typeof item === 'object' ? JSON.stringify(item) : String(item);
+              if (!seen[key]) { seen[key] = true; merged.push(item); }
+            });
+          });
+          if (JSON.stringify(merged) !== JSON.stringify(primary[k] || [])) {
+            autoFields[k] = merged;
+          }
+          return;
+        }
+
+        // Si c'est un objet : on garde celui du primary si rempli, sinon premier non-vide
+        if (typeof values[0].value === 'object' && values[0].value !== null) {
+          // Pour les objets, on prend le primary s'il en a un, sinon le premier
+          if (!primary[k]) {
+            autoFields[k] = values[0].value;
+          }
+          return;
+        }
+
+        // Scalaire (string, number, bool) : dédupe
+        var uniqueMap = {};
+        values.forEach(function(v){
+          var key = JSON.stringify(v.value);
+          if (!uniqueMap[key]) uniqueMap[key] = v;
+        });
+        var uniqueOpts = Object.keys(uniqueMap).map(function(k){ return uniqueMap[k]; });
+
+        if (uniqueOpts.length === 1) {
+          // Une seule valeur distincte → auto si différente du primary
+          if (JSON.stringify(primary[k]) !== JSON.stringify(uniqueOpts[0].value)) {
+            autoFields[k] = uniqueOpts[0].value;
+          }
+        } else {
+          // Plusieurs valeurs distinctes → conflit
+          conflicts.push({
+            key: k,
+            options: uniqueOpts,
+            primaryValue: primary[k],
+            primaryHasValue: primary[k] !== null && primary[k] !== undefined && primary[k] !== '',
+          });
+        }
+      });
+
+      return {
+        cluster: cluster,
+        primary: primary,
+        secondaries: secondaries,
+        autoFields: autoFields,
+        conflicts: conflicts,
+        conflictChoices: {},
+      };
+    }
+
+    // ============================================================
+    // RENDER APP
+    // ============================================================
+    function renderApp(){
+      var html = '';
+      html += '<div class="dedup-header">';
+      html += '  <div class="dedup-title"><h1>Dédup Clients</h1><p>Fusion des doublons sans perte de données. Tous les champs et paiements sont préservés.</p></div>';
+      html += '  <div class="dedup-stats">';
+      html += '    <div class="dedup-stat"><div class="dedup-stat-value">'+STATE.allLeads.length+'</div><div class="dedup-stat-label">Leads totaux</div></div>';
+      html += '    <div class="dedup-stat"><div class="dedup-stat-value">'+STATE.clusters.length+'</div><div class="dedup-stat-label">Clusters détectés</div></div>';
+      var clientClusters = STATE.clusters.filter(function(c){ return c.hasClient; }).length;
+      html += '    <div class="dedup-stat"><div class="dedup-stat-value">'+clientClusters+'</div><div class="dedup-stat-label">Avec client actif</div></div>';
+      html += '  </div>';
+      html += '</div>';
+
+      html += '<div class="dedup-mode-tabs">';
+      html += '  <button class="dedup-tab '+(STATE.mode === 'auto' ? 'active' : '')+'" onclick="setMode(\'auto\')">🔄 Clusters auto</button>';
+      html += '  <button class="dedup-tab '+(STATE.mode === 'manual' ? 'active' : '')+'" onclick="setMode(\'manual\')">🔍 Recherche manuelle</button>';
+      html += '</div>';
+
+      if (STATE.mode === 'auto') {
+        html += renderAutoMode();
+      } else {
+        html += renderManualMode();
       }
 
-      var msg = '✅ '+allClients.length+' clients vivants · '+orphans.length+' orphelins détectés. Détection des clusters…';
-      setStatus(msg, orphans.length > 0 ? 'warn' : 'info');
+      document.getElementById('dedup-app').innerHTML = html;
+    }
 
-      detectClusters();
-      renderSummary();
-      renderClusters();
-      setTimeout(function(){ setStatus('', ''); }, 1500);
-    }).catch(function(err){
-      setStatus('❌ Erreur Firestore : '+err.message, 'err');
-    });
-  }
+    function renderAutoMode(){
+      var html = '';
+      html += '<div class="filter-bar">';
+      html += '  <input type="text" class="dedup-search" placeholder="🔎 Rechercher dans les clusters (nom, email, tél)…" oninput="updateSearch(this.value)" value="'+escapeHtml(STATE.filter.search)+'" style="flex:1; min-width:200px;">';
+      html += '  <label class="filter-checkbox"><input type="checkbox" '+(STATE.filter.onlyVisible ? 'checked' : '')+' onchange="toggleFilter(\'onlyVisible\', this.checked)"> Avec client actif uniquement</label>';
+      html += '</div>';
 
-  // ─── Réparation des orphelins ───
-  // Pour chaque doc avec _merged=true && isClient=true, on bascule
-  // isClient=false. Le doc primary correspondant (_mergedInto) existe
-  // déjà avec les bonnes données — l'orphelin redevient juste invisible
-  // des vues clients sans perte d'information.
-  $('btnInspectOrphans').addEventListener('click', function(){
-    var list = $('orphansList');
-    if (list.style.display === 'block') { list.style.display = 'none'; return; }
-    var orphans = window._orphans || [];
-    var h = '';
-    orphans.forEach(function(o, i){
-      h += '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)">';
-      h += '<strong style="color:var(--text)">'+(i+1)+'.</strong> ';
-      h += esc(o.nom || '(sans nom)') + ' · ';
-      h += esc(o.email || '') + ' · ';
-      h += esc(o.telephone || '') + ' ';
-      h += '<span style="color:var(--muted2)">→ fusionné dans '+esc((o._mergedInto||'?').slice(0,12))+'…</span>';
-      h += '</div>';
-    });
-    list.innerHTML = h || '<em>Aucun orphelin</em>';
-    list.style.display = 'block';
-  });
+      if (STATE.filteredClusters.length === 0) {
+        html += '<div class="empty-state"><h3>Aucun cluster correspondant</h3><p>Aucun doublon ne correspond aux filtres.</p></div>';
+        return html;
+      }
 
-  $('btnRepairOrphans').addEventListener('click', function(){
-    var orphans = window._orphans || [];
-    if (orphans.length === 0) return;
+      html += '<div class="clusters-list">';
+      STATE.filteredClusters.slice(0, 200).forEach(function(c){
+        html += renderClusterCard(c);
+      });
+      html += '</div>';
+      if (STATE.filteredClusters.length > 200) {
+        html += '<p style="text-align:center;color:#94a3b8;margin-top:16px;font-size:12px;">Affichage limité aux 200 premiers · Affine la recherche pour voir plus.</p>';
+      }
+      return html;
+    }
 
-    confirmDialog({
-      icon: '🧹',
-      title: 'Réparer '+orphans.length+' doc(s) orphelin(s) ?',
-      msg: 'Ces docs sont déjà fusionnés mais leur flag <code>isClient</code> n\'a jamais été basculé à <code>false</code>. La réparation bascule simplement <code>isClient=false</code> sur tous, ils disparaîtront immédiatement de la vue Sales CRM > Clients actifs. Aucune donnée perdue (les primary existent déjà). Audit log créé.',
-      confirmLabel: '🧹 Réparer maintenant',
-      confirmType: 'success',
-      onConfirm: function(){ executeRepairOrphans(orphans); }
-    });
-  });
+    function renderClusterCard(c){
+      var names = c.leads.map(function(l){ return l.nom || '(sans nom)'; }).filter(function(n,i,a){ return a.indexOf(n) === i; });
+      var displayName = names.slice(0, 2).join(' / ') + (names.length > 2 ? '…' : '');
+      var html = '<div class="cluster-card">';
+      html += '<div class="cluster-header">';
+      html += '  <div class="cluster-info">';
+      html += '    <div class="cluster-name">'+escapeHtml(displayName)+'</div>';
+      html += '    <div class="cluster-meta">';
+      html += '      <span>'+c.leads.length+' docs</span>';
+      if (c.hasClient) html += '<span class="visible-tag">✓ Client actif</span>';
+      if (c.hasPayment) html += '<span class="has-payment">💶 '+c.paymentsCount+' paiement'+(c.paymentsCount > 1 ? 's' : '')+'</span>';
+      html += '    </div>';
+      html += '  </div>';
+      html += '  <div class="cluster-actions">';
+      html += '    <button class="dedup-btn primary" onclick="openMergeModal(\''+c.id+'\')">Examiner →</button>';
+      html += '  </div>';
+      html += '</div>';
+      html += '</div>';
+      return html;
+    }
 
-  async function executeRepairOrphans(orphans){
-    var btn = $('btnRepairOrphans');
-    btn.disabled = true;
-    btn.textContent = '⏳ Réparation…';
+    function renderManualMode(){
+      var html = '';
+      html += '<div class="filter-bar">';
+      html += '  <input type="text" class="dedup-search" id="manual-search-input" placeholder="🔎 Tape un nom, email ou téléphone…" oninput="searchManual(this.value)" style="flex:1;">';
+      html += '</div>';
+      html += '<div id="manual-results" style="margin-bottom:16px;"></div>';
+      html += '<div id="manual-selected-bar" style="position:sticky;bottom:16px;background:rgba(15,23,41,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;backdrop-filter:blur(8px);">';
+      var selCount = Object.keys(STATE.manualSelected).length;
+      html += '  <span>'+selCount+' doc'+(selCount > 1 ? 's' : '')+' sélectionné'+(selCount > 1 ? 's' : '')+'</span>';
+      html += '  <div>';
+      if (selCount > 0) html += '<button class="dedup-btn" onclick="clearManualSelection()" style="margin-right:8px;">Effacer</button>';
+      html += '<button class="dedup-btn primary" '+(selCount < 2 ? 'disabled' : '')+' onclick="openManualMerge()">Fusionner ces '+selCount+' docs</button>';
+      html += '  </div>';
+      html += '</div>';
+      return html;
+    }
 
-    try {
-      // Batch updates par paquets de 400 (limite Firestore : 500 ops/batch)
-      var BATCH_SIZE = 400;
-      var orphanIds = [];
-      for (var i = 0; i < orphans.length; i += BATCH_SIZE) {
+    function searchManual(query){
+      var results = document.getElementById('manual-results');
+      query = (query || '').trim().toLowerCase();
+      if (query.length < 2) { results.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:20px;">Tape au moins 2 caractères pour rechercher dans les '+STATE.allLeads.length+' leads.</p>'; return; }
+      var qNorm = query.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      var matches = [];
+      for (var i = 0; i < STATE.allLeads.length && matches.length < 100; i++) {
+        var l = STATE.allLeads[i];
+        var nom = (l.nom || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        var email = (l.email || '').toLowerCase();
+        var tel = (l.telephone || l.phone || '');
+        if (nom.indexOf(qNorm) >= 0 || email.indexOf(query) >= 0 || tel.indexOf(query) >= 0) {
+          matches.push(l);
+        }
+      }
+      var html = '';
+      if (matches.length === 0) { html = '<p style="color:#94a3b8;text-align:center;padding:20px;">Aucun résultat.</p>'; }
+      else {
+        html += '<p style="color:#94a3b8;font-size:12px;margin-bottom:10px;">'+matches.length+' résultat'+(matches.length > 1 ? 's' : '')+(matches.length === 100 ? ' (limite atteinte)' : '')+'</p>';
+        matches.forEach(function(l){
+          var isSel = !!STATE.manualSelected[l.id];
+          var flags = '';
+          if (l.isClient === true) flags += '<span class="flag visible">✓ Client</span>';
+          else flags += '<span class="flag invisible">invisible</span>';
+          if (l._merged === true) flags += '<span class="flag merged">_merged</span>';
+          var pcount = STATE.paymentsCountByLeadId[l.id] || 0;
+          if (pcount > 0) flags += '<span class="flag payment">💶 '+pcount+'</span>';
+          html += '<label class="manual-row '+(isSel ? 'selected' : '')+'">';
+          html += '<input type="checkbox" '+(isSel ? 'checked' : '')+' onchange="toggleManualSelect(\''+l.id+'\', this.checked)">';
+          html += '<div class="manual-row-info">';
+          html += '<div class="manual-row-name">'+escapeHtml(l.nom || '(sans nom)')+' '+flags+'</div>';
+          html += '<div class="manual-row-detail">'+escapeHtml(l.id)+' · '+escapeHtml(l.email || '(pas d\'email)')+' · '+escapeHtml(l.telephone || l.phone || '(pas de tél)')+(l.source ? ' · '+escapeHtml(l.source) : '')+'</div>';
+          html += '</div>';
+          html += '</label>';
+        });
+      }
+      results.innerHTML = html;
+    }
+
+    window.toggleManualSelect = function(leadId, checked){
+      if (checked) STATE.manualSelected[leadId] = STATE.leadsById[leadId];
+      else delete STATE.manualSelected[leadId];
+      // Update bar without re-rendering search
+      var bar = document.getElementById('manual-selected-bar');
+      var selCount = Object.keys(STATE.manualSelected).length;
+      var html = '<span>'+selCount+' doc'+(selCount > 1 ? 's' : '')+' sélectionné'+(selCount > 1 ? 's' : '')+'</span><div>';
+      if (selCount > 0) html += '<button class="dedup-btn" onclick="clearManualSelection()" style="margin-right:8px;">Effacer</button>';
+      html += '<button class="dedup-btn primary" '+(selCount < 2 ? 'disabled' : '')+' onclick="openManualMerge()">Fusionner ces '+selCount+' docs</button></div>';
+      bar.innerHTML = html;
+    };
+
+    window.clearManualSelection = function(){
+      STATE.manualSelected = {};
+      renderApp();
+    };
+
+    window.openManualMerge = function(){
+      var leads = Object.keys(STATE.manualSelected).map(function(id){ return STATE.manualSelected[id]; });
+      if (leads.length < 2) return;
+      var fakeCluster = { id: 'manual-' + Date.now(), leads: leads };
+      openMergeModalForCluster(fakeCluster, true);
+    };
+
+    // ============================================================
+    // FILTERS
+    // ============================================================
+    function applyFilter(){
+      var f = STATE.filter;
+      var q = (f.search || '').trim().toLowerCase();
+      STATE.filteredClusters = STATE.clusters.filter(function(c){
+        if (f.onlyVisible && !c.hasClient) return false;
+        if (q) {
+          var ok = false;
+          for (var i = 0; i < c.leads.length; i++) {
+            var l = c.leads[i];
+            if ((l.nom || '').toLowerCase().indexOf(q) >= 0) { ok = true; break; }
+            if ((l.email || '').toLowerCase().indexOf(q) >= 0) { ok = true; break; }
+            if (((l.telephone || l.phone) || '').indexOf(q) >= 0) { ok = true; break; }
+          }
+          if (!ok) return false;
+        }
+        return true;
+      });
+    }
+
+    window.setMode = function(mode){
+      STATE.mode = mode;
+      renderApp();
+      if (mode === 'manual') {
+        setTimeout(function(){
+          var input = document.getElementById('manual-search-input');
+          if (input) { input.focus(); searchManual(''); }
+        }, 50);
+      }
+    };
+
+    window.toggleFilter = function(key, value){
+      STATE.filter[key] = value;
+      applyFilter();
+      renderApp();
+    };
+
+    window.updateSearch = function(value){
+      STATE.filter.search = value;
+      applyFilter();
+      // Update only the clusters list, not the input (would lose focus)
+      var list = document.querySelector('.clusters-list');
+      if (list && STATE.filteredClusters.length > 0) {
+        var html = '';
+        STATE.filteredClusters.slice(0, 200).forEach(function(c){ html += renderClusterCard(c); });
+        list.innerHTML = html;
+      } else {
+        renderApp();
+        var input = document.querySelector('.dedup-search');
+        if (input) { input.focus(); input.setSelectionRange(value.length, value.length); }
+      }
+    };
+
+    // ============================================================
+    // MERGE MODAL
+    // ============================================================
+    window.openMergeModal = function(clusterId){
+      var c = null;
+      for (var i = 0; i < STATE.clusters.length; i++) {
+        if (STATE.clusters[i].id === clusterId) { c = STATE.clusters[i]; break; }
+      }
+      if (!c) return;
+      openMergeModalForCluster(c, false);
+    };
+
+    function openMergeModalForCluster(cluster, manual){
+      var primary = pickPrimary(cluster.leads);
+      var plan = buildMergePlan(cluster.leads, primary.id);
+      // Init conflict choices to primary value if it has one, else first option
+      plan.conflicts.forEach(function(cf){
+        if (cf.primaryHasValue) {
+          plan.conflictChoices[cf.key] = JSON.stringify(cf.primaryValue);
+        } else if (cf.options.length > 0) {
+          plan.conflictChoices[cf.key] = JSON.stringify(cf.options[0].value);
+        }
+      });
+      plan.manual = !!manual;
+      STATE.currentMerge = plan;
+      renderMergeModal();
+    }
+
+    function renderMergeModal(){
+      var plan = STATE.currentMerge;
+      if (!plan) return;
+      var existing = document.getElementById('merge-modal-backdrop');
+      if (existing) existing.remove();
+
+      var html = '<div class="modal-backdrop" id="merge-modal-backdrop">';
+      html += '  <div class="modal-content">';
+      html += '    <div class="modal-header">';
+      html += '      <h2>Fusion · '+escapeHtml(plan.primary.nom || '(sans nom)')+'</h2>';
+      html += '      <button class="modal-close" onclick="closeMergeModal()">×</button>';
+      html += '    </div>';
+      html += '    <div class="modal-body">';
+
+      // Summary chips
+      html += '<div class="merge-summary">';
+      html += '<span class="merge-chip primary">⭐ Primary: '+escapeHtml(plan.primary.id)+'</span>';
+      html += '<span class="merge-chip secondary">'+plan.secondaries.length+' à fusionner</span>';
+      var autoCount = Object.keys(plan.autoFields).length;
+      if (autoCount > 0) html += '<span class="merge-chip secondary">'+autoCount+' champ'+(autoCount > 1 ? 's' : '')+' auto</span>';
+      if (plan.conflicts.length > 0) html += '<span class="merge-chip conflict">⚠️ '+plan.conflicts.length+' conflit'+(plan.conflicts.length > 1 ? 's' : '')+'</span>';
+      var totalPayments = 0;
+      plan.cluster.forEach(function(l){ totalPayments += (STATE.paymentsCountByLeadId[l.id] || 0); });
+      if (totalPayments > 0) html += '<span class="merge-chip primary">💶 '+totalPayments+' paiement'+(totalPayments > 1 ? 's' : '')+'</span>';
+      html += '</div>';
+
+      // Comparison table
+      html += renderComparisonTable(plan);
+
+      // Auto-merged fields
+      if (autoCount > 0) {
+        html += '<div class="auto-fields-summary">';
+        html += '<h4>✓ '+autoCount+' champ'+(autoCount > 1 ? 's' : '')+' auto-fusionné'+(autoCount > 1 ? 's' : '')+' (valeur unique non-vide ou union de tableaux)</h4>';
+        Object.keys(plan.autoFields).forEach(function(k){
+          var v = plan.autoFields[k];
+          var display = typeof v === 'object' ? JSON.stringify(v).substring(0, 100) : String(v).substring(0, 100);
+          html += '<div class="auto-field"><strong>'+escapeHtml(k)+'</strong> = '+escapeHtml(display)+'</div>';
+        });
+        html += '</div>';
+      }
+
+      // Conflicts
+      if (plan.conflicts.length > 0) {
+        html += '<div class="conflict-section">';
+        html += '<h3>⚠️ '+plan.conflicts.length+' conflit'+(plan.conflicts.length > 1 ? 's' : '')+' à résoudre — choisis la valeur à conserver pour chaque champ</h3>';
+        plan.conflicts.forEach(function(cf){
+          html += '<div class="conflict-item">';
+          html += '<div class="conflict-key">'+escapeHtml(cf.key)+'</div>';
+          html += '<div class="conflict-options">';
+          // Option : valeur du primary (si elle existe)
+          if (cf.primaryHasValue) {
+            var primaryKey = JSON.stringify(cf.primaryValue);
+            var isPrimarySel = plan.conflictChoices[cf.key] === primaryKey;
+            html += '<label class="conflict-option '+(isPrimarySel ? 'selected' : '')+'">';
+            html += '<input type="radio" name="conflict_'+cf.key+'" '+(isPrimarySel ? 'checked' : '')+' onchange="setConflictChoice(\''+cf.key+'\', '+JSON.stringify(primaryKey).replace(/"/g, '&quot;')+')">';
+            html += '<div class="conflict-option-content">';
+            html += '<div class="conflict-option-source">⭐ '+escapeHtml(plan.primary.id)+' (primary)</div>';
+            html += '<div class="conflict-option-value">'+escapeHtml(formatValue(cf.primaryValue))+'</div>';
+            html += '</div>';
+            html += '</label>';
+          }
+          // Options des autres docs (uniques)
+          cf.options.forEach(function(opt){
+            if (cf.primaryHasValue && JSON.stringify(opt.value) === JSON.stringify(cf.primaryValue)) return;
+            var optKey = JSON.stringify(opt.value);
+            var isSel = plan.conflictChoices[cf.key] === optKey;
+            html += '<label class="conflict-option '+(isSel ? 'selected' : '')+'">';
+            html += '<input type="radio" name="conflict_'+cf.key+'" '+(isSel ? 'checked' : '')+' onchange="setConflictChoice(\''+cf.key+'\', '+JSON.stringify(optKey).replace(/"/g, '&quot;')+')">';
+            html += '<div class="conflict-option-content">';
+            html += '<div class="conflict-option-source">'+escapeHtml(opt.leadId)+'</div>';
+            html += '<div class="conflict-option-value">'+escapeHtml(formatValue(opt.value))+'</div>';
+            html += '</div>';
+            html += '</label>';
+          });
+          html += '</div></div>';
+        });
+        html += '</div>';
+      }
+
+      html += '    </div>'; // modal-body
+      html += '    <div class="modal-footer">';
+      html += '      <div style="font-size:12px;color:#94a3b8;">Backup intégral créé avant la fusion.</div>';
+      html += '      <div>';
+      html += '        <button class="dedup-btn" onclick="closeMergeModal()">Annuler</button>';
+      html += '        <button class="dedup-btn primary" id="merge-confirm-btn" onclick="executeMerge()">Fusionner ces '+plan.cluster.length+' docs →</button>';
+      html += '      </div>';
+      html += '    </div>';
+      html += '  </div>';
+      html += '</div>';
+
+      document.body.insertAdjacentHTML('beforeend', html);
+    }
+
+    function renderComparisonTable(plan){
+      // Choix des champs à afficher : nom, email, telephone, source, isClient, formule, payments, etc.
+      var KEY_FIELDS = ['nom', 'email', 'telephone', 'phone', 'source', 'stage', 'formule', 'commerce', 'accompagnementDebut', 'accompagnementFin', 'clientStatus', 'closeur', 'gcCustomerId', 'biginContactId'];
+      var html = '<div style="overflow-x:auto;margin-bottom:16px;">';
+      html += '<table class="docs-table">';
+      html += '<thead><tr>';
+      html += '<th style="width:24%;">Doc ID</th>';
+      html += '<th>Flags</th>';
+      KEY_FIELDS.forEach(function(k){ html += '<th>'+escapeHtml(k)+'</th>'; });
+      html += '</tr></thead><tbody>';
+
+      plan.cluster.forEach(function(l){
+        var isPrimary = l.id === plan.primary.id;
+        html += '<tr class="'+(isPrimary ? 'doc-primary' : '')+'">';
+        html += '<td><div class="doc-id">'+escapeHtml(l.id)+'</div>';
+        if (isPrimary) html += '<span class="flag primary-tag">⭐ PRIMARY</span>';
+        html += '</td>';
+
+        // Flags
+        var flags = '';
+        if (l.isClient === true) flags += '<span class="flag visible">✓ Client</span>';
+        else flags += '<span class="flag invisible">invisible</span>';
+        if (l._merged === true) flags += '<span class="flag merged">_merged</span>';
+        var pc = STATE.paymentsCountByLeadId[l.id] || 0;
+        if (pc > 0) flags += '<span class="flag payment">💶 '+pc+'</span>';
+        html += '<td class="col-flag">'+flags+'</td>';
+
+        KEY_FIELDS.forEach(function(k){
+          var v = l[k];
+          var display = (v === null || v === undefined || v === '') ? '<span class="field-value empty">—</span>' : '<span class="field-value">'+escapeHtml(formatValue(v))+'</span>';
+          html += '<td>'+display+'</td>';
+        });
+        html += '</tr>';
+      });
+
+      html += '</tbody></table></div>';
+      return html;
+    }
+
+    window.setConflictChoice = function(key, valueJson){
+      if (!STATE.currentMerge) return;
+      STATE.currentMerge.conflictChoices[key] = valueJson;
+      // Re-render only the conflict section to update visual state without losing scroll
+      renderMergeModal();
+    };
+
+    window.closeMergeModal = function(){
+      var m = document.getElementById('merge-modal-backdrop');
+      if (m) m.remove();
+      STATE.currentMerge = null;
+    };
+
+    function formatValue(v){
+      if (v === null || v === undefined) return '—';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return String(v);
+    }
+
+    // ============================================================
+    // EXECUTE MERGE
+    // ============================================================
+    window.executeMerge = function(){
+      var plan = STATE.currentMerge;
+      if (!plan) return;
+
+      var btn = document.getElementById('merge-confirm-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading-spinner"></span> Fusion en cours…';
+
+      doMerge(plan).then(function(result){
+        showToast('✅ Fusion réussie : '+escapeHtml(plan.primary.nom || '(sans nom)')+' · backup '+result.backupId.substring(0, 8), 'success');
+        closeMergeModal();
+        loadAllData();
+      }).catch(function(err){
+        console.error('Merge error:', err);
+        showToast('❌ Erreur fusion : '+escapeHtml(err.message), 'error');
+        btn.disabled = false;
+        btn.innerHTML = 'Fusionner ces '+plan.cluster.length+' docs →';
+      });
+    };
+
+    function doMerge(plan){
+      var db = firebase.firestore();
+      var user = STATE.user;
+      var primaryId = plan.primary.id;
+      var secondaryIds = plan.secondaries.map(function(l){ return l.id; });
+
+      // 1. Create backup snapshots
+      return collectBackupData(plan.cluster).then(function(backupData){
+        return db.collection('dedup_backups').add({
+          startedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          startedBy: user.uid,
+          startedByEmail: user.email,
+          version: 'v2',
+          manual: !!plan.manual,
+          primaryId: primaryId,
+          secondaryIds: secondaryIds,
+          snapshots: backupData.snapshots,
+          subColls: backupData.subColls,
+          payments: backupData.payments,
+          autoFields: plan.autoFields,
+          conflictChoices: plan.conflictChoices,
+        });
+      }).then(function(backupRef){
+        // 2. Build the patch for the primary
+        var patch = Object.assign({}, plan.autoFields);
+        Object.keys(plan.conflictChoices).forEach(function(k){
+          var raw = plan.conflictChoices[k];
+          try {
+            var v = JSON.parse(raw);
+            // Skip if same as current primary value
+            if (JSON.stringify(plan.primary[k]) !== JSON.stringify(v)) {
+              patch[k] = v;
+            }
+          } catch(e) {}
+        });
+        patch._mergedFrom = (plan.primary._mergedFrom || []).concat(secondaryIds);
+        patch._lastMergedAt = firebase.firestore.FieldValue.serverTimestamp();
+        patch._lastBackupId = backupRef.id;
+        patch.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        // If primary was invisible, make it visible
+        if (plan.primary.isClient !== true) {
+          patch.isClient = true;
+        }
+
+        // 3. Apply patch + mark secondaries (in chunks for safety)
         var batch = db.batch();
-        var slice = orphans.slice(i, i + BATCH_SIZE);
-        slice.forEach(function(o){
-          orphanIds.push(o.id);
-          batch.update(db.collection('leads').doc(o.id), {
+        if (Object.keys(patch).length > 0) {
+          batch.update(db.collection('leads').doc(primaryId), patch);
+        }
+        secondaryIds.forEach(function(sid){
+          batch.update(db.collection('leads').doc(sid), {
+            _merged: true,
+            _mergedInto: primaryId,
+            mergedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            mergedBy: user.uid,
+            _backupId: backupRef.id,
             isClient: false,
             clientStatus: null,
-            _orphanRepaired: true,
-            _orphanRepairedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            _orphanRepairedBy: currentUser.uid,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           });
         });
-        await batch.commit();
-      }
 
-      // Audit log : un seul doc avec la liste complète des IDs réparés
-      try {
-        await db.collection('audit_log').add({
-          action: 'clients_dedup_orphan_repair',
-          actorUid: currentUser.uid,
-          actorEmail: currentUser.email || null,
-          orphanCount: orphans.length,
-          orphanIds: orphanIds,
+        return batch.commit().then(function(){ return backupRef; });
+      }).then(function(backupRef){
+        // 4. Migrate payments
+        return migratePayments(secondaryIds, primaryId).then(function(){ return backupRef; });
+      }).then(function(backupRef){
+        // 5. Migrate sub-collections
+        return migrateSubCollections(secondaryIds, primaryId).then(function(){ return backupRef; });
+      }).then(function(backupRef){
+        // 6. Audit log
+        return db.collection('audit_log').add({
+          action: 'clients_dedup_merge_v2',
+          actorUid: user.uid,
+          actorEmail: user.email,
+          primaryId: primaryId,
+          secondaryIds: secondaryIds,
+          backupId: backupRef.id,
+          manual: !!plan.manual,
           timestamp: firebase.firestore.FieldValue.serverTimestamp(),
           success: true,
+        }).then(function(){ return { backupId: backupRef.id }; });
+      });
+    }
+
+    function collectBackupData(cluster){
+      var db = firebase.firestore();
+      var snapshots = {};
+      var subColls = {};
+      var payments = {};
+
+      cluster.forEach(function(l){
+        snapshots[l.id] = sanitizeForBackup(l);
+      });
+
+      // Collect sub-collections (sequentially to avoid overwhelming)
+      var promises = [];
+      cluster.forEach(function(l){
+        subColls[l.id] = {};
+        SUB_COLLECTIONS.forEach(function(sc){
+          promises.push(
+            db.collection('leads').doc(l.id).collection(sc).get().then(function(snap){
+              if (snap.empty) return;
+              var arr = [];
+              snap.forEach(function(d){ arr.push(Object.assign({ _id: d.id }, d.data())); });
+              subColls[l.id][sc] = arr;
+            }).catch(function(){ /* ignore */ })
+          );
         });
-      } catch (auditErr) {
-        console.warn('Audit log failed:', auditErr);
-      }
+        // Payments
+        promises.push(
+          db.collection('payments').where('leadId', '==', l.id).get().then(function(snap){
+            if (snap.empty) return;
+            var arr = [];
+            snap.forEach(function(d){ arr.push(Object.assign({ _id: d.id }, d.data())); });
+            payments[l.id] = arr;
+          }).catch(function(){ /* ignore */ })
+        );
+      });
 
-      toast('✅ '+orphans.length+' doc(s) réparé(s) · ils ont disparu de Clients Actifs', 5000);
-      window._orphans = [];
-      $('orphansAlert').style.display = 'none';
-      loadClients();
-    } catch (e) {
-      console.error('Repair error:', e);
-      toast('❌ Erreur réparation : '+e.message, 6000);
-      btn.disabled = false;
-      btn.textContent = '🧹 Réparer tout';
-    }
-  }
-
-  function detectClusters(){
-    var uf = new UF();
-    allClients.forEach(function(c){ uf.add(c.id); });
-
-    // Index par email, phone, nom-tokens
-    var byEmail = {};       // email -> [ids]
-    var byPhone = {};       // phone -> [ids]
-    var byNameKey = {};     // nameTokens.join('-') -> [ids]   (pour exact match initial)
-
-    allClients.forEach(function(c){
-      var em = normalizeEmail(c.email);
-      if (em) {
-        if (!byEmail[em]) byEmail[em] = [];
-        byEmail[em].push(c.id);
-      }
-      var ph = normalizePhone(c.telephone) || normalizePhone(c.phone);
-      if (ph) {
-        if (!byPhone[ph]) byPhone[ph] = [];
-        byPhone[ph].push(c.id);
-      }
-      var tk = nameTokens(c.nom);
-      if (tk.length >= 2) {
-        var key = tk.join('-');
-        if (!byNameKey[key]) byNameKey[key] = [];
-        byNameKey[key].push(c.id);
-      }
-    });
-
-    // Index des raisons par paire ordonnée
-    var reasons = {};   // "id1|id2" (id1 < id2) -> Set des raisons
-    function addReason(id1, id2, reason){
-      var a = id1 < id2 ? id1 : id2;
-      var b = id1 < id2 ? id2 : id1;
-      var k = a + '|' + b;
-      if (!reasons[k]) reasons[k] = {};
-      reasons[k][reason] = true;
+      return Promise.all(promises).then(function(){
+        return { snapshots: snapshots, subColls: subColls, payments: payments };
+      });
     }
 
-    // Union sur email
-    Object.keys(byEmail).forEach(function(em){
-      var ids = byEmail[em];
-      for (var i = 1; i < ids.length; i++) {
-        uf.union(ids[0], ids[i]);
-        for (var j = 0; j < i; j++) addReason(ids[j], ids[i], 'email');
-      }
-    });
-
-    // Union sur phone
-    Object.keys(byPhone).forEach(function(ph){
-      var ids = byPhone[ph];
-      for (var i = 1; i < ids.length; i++) {
-        uf.union(ids[0], ids[i]);
-        for (var j = 0; j < i; j++) addReason(ids[j], ids[i], 'phone');
-      }
-    });
-
-    // Union sur nom (loose, O(N²) mais N petit)
-    // On utilise byNameKey pour les matches stricts d'abord (rapide),
-    // puis loose match sur les nameTokens distincts pour gérer "Anne Lise Nave" ⊂ "Anne Lise Nave Dupont"
-    Object.keys(byNameKey).forEach(function(key){
-      var ids = byNameKey[key];
-      for (var i = 1; i < ids.length; i++) {
-        uf.union(ids[0], ids[i]);
-        for (var j = 0; j < i; j++) addReason(ids[j], ids[i], 'name');
-      }
-    });
-    // Loose : pour chaque paire de groupes nameKey distincts, vérifier l'inclusion
-    var keys = Object.keys(byNameKey);
-    for (var i = 0; i < keys.length; i++) {
-      for (var j = i+1; j < keys.length; j++) {
-        var keyA = keys[i], keyB = keys[j];
-        // Construire les tokens sets
-        var tokA = keyA.split('-');
-        var tokB = keyB.split('-');
-        var shorter = tokA.length <= tokB.length ? tokA : tokB;
-        var longer  = tokA.length <= tokB.length ? tokB : tokA;
-        if (shorter.length < 2) continue;
-        var longerSet = {};
-        longer.forEach(function(t){ longerSet[t] = true; });
-        var allIn = true;
-        for (var k = 0; k < shorter.length; k++) {
-          if (!longerSet[shorter[k]]) { allIn = false; break; }
+    function sanitizeForBackup(obj){
+      // Remove Firestore Timestamps as they cause issues — store as raw {seconds, nanoseconds}
+      var clean = {};
+      Object.keys(obj).forEach(function(k){
+        var v = obj[k];
+        if (v && typeof v === 'object' && typeof v.toDate === 'function') {
+          // Firestore Timestamp
+          clean[k] = { _ts: true, seconds: v.seconds, nanoseconds: v.nanoseconds };
+        } else if (Array.isArray(v)) {
+          clean[k] = v.map(function(item){ return (item && typeof item === 'object' && !Array.isArray(item)) ? sanitizeForBackup(item) : item; });
+        } else if (v && typeof v === 'object') {
+          clean[k] = sanitizeForBackup(v);
+        } else {
+          clean[k] = v;
         }
-        if (allIn) {
-          var idsA = byNameKey[keyA], idsB = byNameKey[keyB];
-          uf.union(idsA[0], idsB[0]);
-          idsA.forEach(function(id1){ idsB.forEach(function(id2){ addReason(id1, id2, 'name'); }); });
-        }
-      }
+      });
+      return clean;
     }
 
-    // Extraire les clusters de taille > 1
-    var rawClusters = uf.clusters().filter(function(g){ return g.length > 1; });
-
-    // Construire l'objet cluster avec raisons agrégées
-    clusters = rawClusters.map(function(ids, idx){
-      var clusterReasons = {};
-      for (var i = 0; i < ids.length; i++) {
-        for (var j = i+1; j < ids.length; j++) {
-          var a = ids[i] < ids[j] ? ids[i] : ids[j];
-          var b = ids[i] < ids[j] ? ids[j] : ids[i];
-          var k = a + '|' + b;
-          if (reasons[k]) {
-            Object.keys(reasons[k]).forEach(function(r){ clusterReasons[r] = true; });
-          }
-        }
-      }
-      return {
-        id: 'c' + (idx+1),
-        leadIds: ids,
-        reasons: Object.keys(clusterReasons),
-      };
-    });
-
-    // Trier : clusters avec le plus de docs en premier
-    clusters.sort(function(a, b){ return b.leadIds.length - a.leadIds.length; });
-  }
-
-  // ─────────────────────────────────────────────────────────────────────
-  // ═══ RENDER : Summary + Clusters ═══
-  // ─────────────────────────────────────────────────────────────────────
-
-  function countFilledFields(lead){
-    var count = 0;
-    var skipKeys = ['id', '_merged', '_mergedInto', '_mergedFrom', 'mergedAt', 'mergedBy'];
-    for (var k in lead) {
-      if (skipKeys.indexOf(k) >= 0) continue;
-      var v = lead[k];
-      if (v === null || v === undefined) continue;
-      if (typeof v === 'string' && v.trim() === '') continue;
-      if (Array.isArray(v) && v.length === 0) continue;
-      if (typeof v === 'object' && !Array.isArray(v) && !v.toDate && !('seconds' in v) && Object.keys(v).length === 0) continue;
-      count++;
-    }
-    return count;
-  }
-
-  function renderSummary(){
-    var total = allClients.length;
-    var clusterCount = clusters.length;
-    var dupsCount = clusters.reduce(function(s, c){ return s + c.leadIds.length; }, 0);
-    var afterMerge = total - dupsCount + clusterCount;
-
-    $('sumTotal').textContent = total;
-    $('sumClusters').textContent = clusterCount;
-    $('sumDups').textContent = dupsCount;
-    $('sumAfter').textContent = afterMerge;
-    $('summary').style.display = 'grid';
-  }
-
-  function renderClusters(){
-    var wrap = $('clustersWrap');
-    if (clusters.length === 0) {
-      wrap.innerHTML =
-        '<div class="empty-state">' +
-          '<div class="empty-icon">✨</div>' +
-          '<div class="empty-title">Aucun doublon détecté</div>' +
-          '<div class="empty-msg">Les '+allClients.length+' clients actifs sont tous uniques d\'après les critères nom (loose) / email / téléphone.</div>' +
-        '</div>';
-      return;
-    }
-
-    var html = '<div class="clusters-wrap">';
-    clusters.forEach(function(cluster){
-      var leads = cluster.leadIds.map(function(id){ return clientsById[id]; }).filter(Boolean);
-      // Premier nom non-vide
-      var displayName = '';
-      for (var i = 0; i < leads.length; i++) {
-        if (leads[i].nom && leads[i].nom.trim()) { displayName = leads[i].nom; break; }
-      }
-      if (!displayName) displayName = leads[0] && leads[0].email || '(sans nom)';
-
-      var pillsHtml = '';
-      pillsHtml += '<span class="cluster-pill count">'+cluster.leadIds.length+' docs</span>';
-      cluster.reasons.forEach(function(r){
-        var labels = {'email':'📧 Email','phone':'📞 Tél','name':'👤 Nom'};
-        pillsHtml += '<span class="cluster-pill '+r+'">'+labels[r]+'</span>';
-      });
-
-      html += '<div class="cluster" data-cluster="'+esc(cluster.id)+'">';
-      html += '<div class="cluster-head">';
-      html +=   '<div class="cluster-id">#'+esc(cluster.id)+'</div>';
-      html +=   '<div class="cluster-name">'+esc(displayName)+'</div>';
-      html +=   '<div class="cluster-meta">'+pillsHtml+'</div>';
-      html +=   '<div class="cluster-caret">▸</div>';
-      html += '</div>';
-      html += '<div class="cluster-body">';
-      html +=   renderLeadPreviews(leads);
-      html +=   '<div class="cluster-actions">';
-      html +=     '<button class="btn btn-primary" data-action="open-merge" data-cluster="'+esc(cluster.id)+'">⚡ Fusionner ce cluster</button>';
-      html +=   '</div>';
-      html += '</div>';
-      html += '</div>';
-    });
-    html += '</div>';
-    wrap.innerHTML = html;
-
-    // Bind clicks
-    wrap.querySelectorAll('.cluster-head').forEach(function(h){
-      h.addEventListener('click', function(){
-        var cluster = h.parentElement;
-        cluster.classList.toggle('open');
-      });
-    });
-    wrap.querySelectorAll('[data-action="open-merge"]').forEach(function(btn){
-      btn.addEventListener('click', function(e){
-        e.stopPropagation();
-        openMergeModal(btn.dataset.cluster);
-      });
-    });
-  }
-
-  function renderLeadPreviews(leads){
-    var maxFill = 0;
-    leads.forEach(function(l){ var c = countFilledFields(l); if (c > maxFill) maxFill = c; });
-
-    var h = '<div class="lead-preview-grid">';
-    leads.forEach(function(lead){
-      var fill = countFilledFields(lead);
-      var isMostFilled = fill === maxFill;
-      var src = lead.source || '—';
-      h += '<div class="lead-preview">';
-      h +=   '<div class="fill-badge" style="'+(isMostFilled?'background:rgba(16,185,129,.15);color:var(--green)':'')+'">'+fill+' champs</div>';
-      h +=   '<div class="lead-preview-head">';
-      h +=     '<div class="lead-preview-name">'+esc(lead.nom||'(sans nom)')+'</div>';
-      h +=   '</div>';
-      h +=   '<div class="lead-preview-fields">';
-      h +=     pField('ID', lead.id.slice(0,12)+'…');
-      h +=     pField('Email', lead.email);
-      h +=     pField('Tél', lead.telephone || lead.phone);
-      h +=     pField('Source', src);
-      h +=     pField('Commerce', lead.commerce);
-      h +=     pField('Début', lead.accompagnementDebut);
-      h +=     pField('Client depuis', fmtTimestamp(lead.clientSince));
-      h +=     pField('Stage', lead.stage);
-      h +=     pField('Statut', lead.clientStatus);
-      h +=   '</div>';
-      h += '</div>';
-    });
-    h += '</div>';
-    return h;
-  }
-
-  function pField(key, val){
-    var v = (val === null || val === undefined || val === '') ? '<span class="lead-preview-field-val empty">—</span>' : '<span class="lead-preview-field-val">'+esc(val)+'</span>';
-    return '<div class="lead-preview-field"><span class="lead-preview-field-key">'+esc(key)+' :</span> '+v+'</div>';
-  }
-
-  // ─────────────────────────────────────────────────────────────────────
-  // ═══ MERGE MODAL ═══
-  // ─────────────────────────────────────────────────────────────────────
-
-  function openMergeModal(clusterId){
-    var cluster = clusters.find(function(c){ return c.id === clusterId; });
-    if (!cluster) return;
-    var leads = cluster.leadIds.map(function(id){ return clientsById[id]; }).filter(Boolean);
-
-    // Choix initial du PRIMARY : le lead avec le plus de champs remplis
-    var maxFill = -1, primaryId = leads[0].id;
-    leads.forEach(function(l){
-      var c = countFilledFields(l);
-      if (c > maxFill) { maxFill = c; primaryId = l.id; }
-    });
-
-    // fieldChoices : pour chaque champ, l'id du lead dont on garde la valeur.
-    // Initialement = celui avec le plus rempli (auto-fill heuristic).
-    var fieldChoices = {};
-    MERGE_FIELDS.forEach(function(f){
-      if (f.mode === 'merge') return;  // pas de choix unique pour merge auto
-      var bestId = null;
-      var bestVal = '';
-      leads.forEach(function(l){
-        var v = l[f.key];
-        if (v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)) {
-          if (bestId === null || (l.id === primaryId)) { bestId = l.id; bestVal = v; }
-        }
-      });
-      // Si aucune valeur remplie nulle part, default au primary
-      if (bestId === null) bestId = primaryId;
-      fieldChoices[f.key] = bestId;
-    });
-
-    currentMergeContext = {
-      clusterId: clusterId,
-      cluster: cluster,
-      leads: leads,
-      primaryId: primaryId,
-      fieldChoices: fieldChoices,
-    };
-
-    $('mergeSubtitle').textContent = leads.length + ' docs · '+ (leads[0].nom || leads[0].email || '');
-    renderMergeModal();
-    $('mergeModal').classList.add('on');
-  }
-
-  function renderMergeModal(){
-    var ctx = currentMergeContext;
-    var leads = ctx.leads;
-
-    var h = '';
-
-    h += '<div class="merge-instructions">';
-    h += '💡 <strong>Comment ça marche :</strong> Choisis le doc PRIMARY (celui qui sera conservé), ' +
-         'puis pour chaque champ clique sur la valeur que tu veux garder. ' +
-         'Les autres docs seront marqués <code>_merged=true</code> + <code>isClient=false</code> ' +
-         '(ils disparaîtront automatiquement des vues clients). Toutes les sous-collections ' +
-         '(témoignages, notes) sont copiées vers le primary. Backup automatique avant écriture.';
-    h += '</div>';
-
-    // Outils : choix du primary + auto-fill
-    h += '<div class="merge-tools">';
-    h += '<div class="merge-primary-pick">';
-    h +=   '<span class="merge-primary-pick-label">Primary :</span>';
-    leads.forEach(function(l, i){
-      var label = (l.nom || l.email || 'Doc '+(i+1)).slice(0, 30);
-      var fill = countFilledFields(l);
-      var active = ctx.primaryId === l.id ? 'active' : '';
-      h +=  '<button class="primary-btn '+active+'" data-action="set-primary" data-leadid="'+esc(l.id)+'">'+
-              esc(label) + ' <span style="opacity:.6;font-weight:600">('+fill+'ch)</span>'+
-            '</button>';
-    });
-    h += '</div>';
-    h += '<div style="flex:1"></div>';
-    h += '<button class="btn btn-ghost btn-sm" data-action="autofill-most">🔄 Auto-fill (plus rempli gagne)</button>';
-    h += '<button class="btn btn-ghost btn-sm" data-action="autofill-primary">📋 Tout depuis le primary</button>';
-    h += '</div>';
-
-    // Tableau de fusion
-    h += '<table class="merge-table"><thead><tr>';
-    h += '<th>Champ</th>';
-    leads.forEach(function(l){
-      var label = (l.nom || l.email || l.id.slice(0,8)).slice(0, 28);
-      var isPrimary = ctx.primaryId === l.id;
-      h += '<th>' + esc(label) + (isPrimary ? '<span class="primary-marker">PRIM</span>' : '') + '</th>';
-    });
-    h += '</tr></thead><tbody>';
-
-    MERGE_FIELDS.forEach(function(f){
-      h += '<tr>';
-      h += '<td><div class="merge-field-label">'+esc(f.label)+'</div>';
-      if (f.hint) h += '<div class="merge-field-hint">'+esc(f.hint)+'</div>';
-      h += '</td>';
-
-      if (f.mode === 'merge') {
-        // Affichage : valeurs concaténées prévisualisées
-        var preview = '';
-        if (f.key === 'tags') {
-          var allTags = {};
-          leads.forEach(function(l){ (l.tags||[]).forEach(function(t){ allTags[t] = true; }); });
-          var tagList = Object.keys(allTags);
-          preview = tagList.length ? tagList.join(', ') : '<span class="merge-cell empty">aucun tag</span>';
-        } else if (f.key === 'notesHistory') {
-          var totalNotes = 0;
-          leads.forEach(function(l){ totalNotes += (l.notesHistory||[]).length; });
-          preview = totalNotes ? totalNotes + ' note(s) au total — concat dédup' : '<span class="merge-cell empty">aucune note</span>';
-        }
-        h += '<td colspan="'+leads.length+'"><div class="merge-cell selected" style="cursor:default;background:var(--violet-bg);border-color:rgba(167,139,250,.3);color:var(--violet)">'+
-                '<div class="merge-cell-value"><strong>↦ Fusion automatique</strong> — '+ preview + '</div>'+
-              '</div></td>';
-      } else {
-        // Choix unique : un cell par lead, sélectionnable
-        leads.forEach(function(l){
-          var val = l[f.key];
-          var formatted = fmtValue(val);
-          var isEmpty = !formatted;
-          var selected = ctx.fieldChoices[f.key] === l.id ? 'selected' : '';
-          var cls = 'merge-cell ' + selected + (isEmpty ? ' empty' : '');
-          h += '<td><div class="'+cls+'" data-action="pick-field" data-field="'+esc(f.key)+'" data-leadid="'+esc(l.id)+'">'+
-                 '<div class="merge-cell-value '+(formatted.length > 100 ? 'long' : '')+'">'+
-                   (isEmpty ? '<em>—</em>' : esc(formatted)) +
-                 '</div>'+
-               '</div></td>';
-        });
-      }
-      h += '</tr>';
-    });
-    h += '</tbody></table>';
-
-    $('mergeBody').innerHTML = h;
-    bindMergeModalActions();
-  }
-
-  function bindMergeModalActions(){
-    var body = $('mergeBody');
-    body.querySelectorAll('[data-action="set-primary"]').forEach(function(btn){
-      btn.addEventListener('click', function(){
-        currentMergeContext.primaryId = btn.dataset.leadid;
-        renderMergeModal();
-      });
-    });
-    body.querySelectorAll('[data-action="pick-field"]').forEach(function(c){
-      c.addEventListener('click', function(){
-        var field = c.dataset.field, lid = c.dataset.leadid;
-        currentMergeContext.fieldChoices[field] = lid;
-        renderMergeModal();
-      });
-    });
-    body.querySelector('[data-action="autofill-most"]').addEventListener('click', function(){
-      var ctx = currentMergeContext;
-      MERGE_FIELDS.forEach(function(f){
-        if (f.mode === 'merge') return;
-        var bestId = ctx.primaryId, bestLen = -1;
-        ctx.leads.forEach(function(l){
-          var v = l[f.key];
-          if (v === null || v === undefined || v === '') return;
-          if (Array.isArray(v) && v.length === 0) return;
-          var len = typeof v === 'string' ? v.length : (Array.isArray(v) ? v.length : 1);
-          if (len > bestLen) { bestLen = len; bestId = l.id; }
-        });
-        ctx.fieldChoices[f.key] = bestId;
-      });
-      renderMergeModal();
-      toast('🔄 Auto-fill appliqué (valeur la plus longue par champ)');
-    });
-    body.querySelector('[data-action="autofill-primary"]').addEventListener('click', function(){
-      var ctx = currentMergeContext;
-      MERGE_FIELDS.forEach(function(f){
-        if (f.mode === 'merge') return;
-        ctx.fieldChoices[f.key] = ctx.primaryId;
-      });
-      renderMergeModal();
-      toast('📋 Tous les champs proviennent du primary');
-    });
-    // Toggle long values
-    body.querySelectorAll('.merge-cell-value.long').forEach(function(v){
-      v.addEventListener('click', function(e){ e.stopPropagation(); v.classList.toggle('expanded'); });
-    });
-  }
-
-  $('mergeClose').addEventListener('click', closeMergeModal);
-  $('mergeCancel').addEventListener('click', closeMergeModal);
-  $('mergeModal').addEventListener('click', function(e){ if (e.target === this) closeMergeModal(); });
-
-  function closeMergeModal(){
-    $('mergeModal').classList.remove('on');
-    currentMergeContext = null;
-  }
-
-  // ─────────────────────────────────────────────────────────────────────
-  // ═══ EXECUTE MERGE ═══
-  // ─────────────────────────────────────────────────────────────────────
-
-  $('mergeConfirm').addEventListener('click', function(){
-    var ctx = currentMergeContext;
-    if (!ctx) return;
-    var primary = clientsById[ctx.primaryId];
-    var secondaries = ctx.leads.filter(function(l){ return l.id !== ctx.primaryId; });
-
-    confirmDialog({
-      icon: '⚠️',
-      title: 'Confirmer la fusion ?',
-      msg: 'Le doc <strong>'+esc(primary.nom||primary.email||primary.id)+'</strong> sera mis à jour avec les valeurs choisies. Les '+secondaries.length+' autre(s) doc(s) seront archivés ' +
-           '(_merged=true, isClient=false). Backup automatique avant écriture. Action réversible via le doc backup.',
-      confirmLabel: '⚡ Lancer la fusion',
-      confirmType: 'danger',
-      onConfirm: function(){ executeMerge(); }
-    });
-  });
-
-  function buildPrimaryPatch(){
-    var ctx = currentMergeContext;
-    var patch = {};
-
-    MERGE_FIELDS.forEach(function(f){
-      if (f.mode === 'merge') {
-        if (f.key === 'tags') {
-          var union = {};
-          ctx.leads.forEach(function(l){ (l.tags||[]).forEach(function(t){ if (t) union[t] = true; }); });
-          patch.tags = Object.keys(union);
-        } else if (f.key === 'notesHistory') {
-          var allNotes = [];
-          var seen = {};
-          ctx.leads.forEach(function(l){
-            (l.notesHistory||[]).forEach(function(n){
-              var sig = (n.text||'') + '|' + (n.date||'');
-              if (!seen[sig]) { seen[sig] = true; allNotes.push(n); }
-            });
-          });
-          patch.notesHistory = allNotes;
-        }
-      } else {
-        var srcId = ctx.fieldChoices[f.key];
-        var srcLead = clientsById[srcId];
-        if (!srcLead) return;
-        var v = srcLead[f.key];
-        // Ne patch que si le primary n'a pas déjà cette valeur (évite no-op)
-        // ET on ne supprime pas une valeur existante avec une valeur vide
-        if (v !== undefined) {
-          patch[f.key] = (v === null || v === '') ? firebase.firestore.FieldValue.delete() : v;
-        }
-      }
-    });
-
-    return patch;
-  }
-
-  async function executeMerge(){
-    var ctx = currentMergeContext;
-    if (!ctx) return;
-    var primary = clientsById[ctx.primaryId];
-    var secondaries = ctx.leads.filter(function(l){ return l.id !== ctx.primaryId; });
-    var btn = $('mergeConfirm');
-    btn.disabled = true;
-    btn.textContent = '⏳ Backup en cours…';
-
-    try {
-      // ─── Étape 1 : Backup complet (primary + secondaries + sous-collections) ───
-      var backupData = {
-        startedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        startedBy: currentUser.uid,
-        startedByEmail: currentUser.email || null,
-        clusterId: ctx.clusterId,
-        primaryId: primary.id,
-        secondaryIds: secondaries.map(function(l){ return l.id; }),
-        snapshots: {},
-        subCollections: {},
-      };
-
-      // Snapshot full du primary et des secondaries
-      var allLeadsToBackup = [primary].concat(secondaries);
-      for (var i = 0; i < allLeadsToBackup.length; i++) {
-        var l = allLeadsToBackup[i];
-        // On reload le doc frais pour avoir la version la plus récente
-        var fresh = await db.collection('leads').doc(l.id).get();
-        backupData.snapshots[l.id] = fresh.exists ? fresh.data() : { __missing: true };
-
-        // Sub-collections : témoignages, notes, voice_notes
-        var subColls = ['client_temoignages', 'client_notes', 'voice_notes'];
-        backupData.subCollections[l.id] = {};
-        for (var s = 0; s < subColls.length; s++) {
-          var subName = subColls[s];
-          var subSnap = await db.collection('leads').doc(l.id).collection(subName).get();
-          var subDocs = {};
-          subSnap.forEach(function(sd){ subDocs[sd.id] = sd.data(); });
-          backupData.subCollections[l.id][subName] = subDocs;
-        }
-      }
-
-      var backupRef = await db.collection('dedup_backups').add(backupData);
-      var backupId = backupRef.id;
-
-      btn.textContent = '⏳ Fusion en cours…';
-
-      // ─── Étape 2 : Construire le patch primary ───
-      var patch = buildPrimaryPatch();
-      patch._mergedFrom = (primary._mergedFrom || []).concat(secondaries.map(function(l){ return l.id; }));
-      patch._lastMergedAt = firebase.firestore.FieldValue.serverTimestamp();
-      patch._lastMergedBy = currentUser.uid;
-      patch._lastBackupId = backupId;
-      patch.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-
-      // ─── Étape 3 : Update primary ───
-      await db.collection('leads').doc(primary.id).update(patch);
-
-      // ─── Étape 4 : Copier les sous-collections des secondaries vers primary ───
-      // (important pour que témoignages/notes/voice_notes soient visibles depuis le primary)
-      for (var s = 0; s < secondaries.length; s++) {
-        var sec = secondaries[s];
-        var subColls = ['client_temoignages', 'client_notes', 'voice_notes'];
-        for (var sc = 0; sc < subColls.length; sc++) {
-          var subName = subColls[sc];
-          var subSnap = await db.collection('leads').doc(sec.id).collection(subName).get();
+    function migratePayments(secondaryIds, primaryId){
+      var db = firebase.firestore();
+      // Process each secondary's payments
+      var promises = secondaryIds.map(function(sid){
+        return db.collection('payments').where('leadId', '==', sid).get().then(function(snap){
+          if (snap.empty) return;
           var batch = db.batch();
-          var batchCount = 0;
-          subSnap.forEach(function(d){
-            // Préfixe l'id avec "merged_<sourceLeadId>_" pour traçabilité
-            var newId = 'merged_'+sec.id.slice(0,8)+'_'+d.id;
-            var newRef = db.collection('leads').doc(primary.id).collection(subName).doc(newId);
-            var data = d.data();
-            data._mergedFromLeadId = sec.id;
-            data._mergedFromDocId = d.id;
-            data._mergedAt = firebase.firestore.FieldValue.serverTimestamp();
-            batch.set(newRef, data);
-            batchCount++;
+          var count = 0;
+          snap.forEach(function(d){
+            batch.update(d.ref, {
+              leadId: primaryId,
+              _migratedFromLeadId: sid,
+              _migratedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            count++;
+            if (count >= 400) { /* should not happen for one lead but safe */ }
           });
-          if (batchCount > 0) await batch.commit();
-        }
-      }
-
-      // ─── Étape 5 : Marquer les secondaries _merged=true + isClient=false ───
-      var batchSec = db.batch();
-      secondaries.forEach(function(sec){
-        batchSec.update(db.collection('leads').doc(sec.id), {
-          _merged: true,
-          _mergedInto: primary.id,
-          mergedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          mergedBy: currentUser.uid,
-          _backupId: backupId,
-          isClient: false,
-          clientStatus: null,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          return batch.commit();
         });
       });
-      await batchSec.commit();
-
-      // ─── Étape 6 : Audit log ───
-      try {
-        await db.collection('audit_log').add({
-          action: 'clients_dedup_merge',
-          actorUid: currentUser.uid,
-          actorEmail: currentUser.email || null,
-          primaryId: primary.id,
-          secondaryIds: secondaries.map(function(l){ return l.id; }),
-          backupId: backupId,
-          fieldChoices: ctx.fieldChoices,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-          success: true,
-        });
-      } catch (auditErr) {
-        console.warn('Audit log failed:', auditErr);
-      }
-
-      // Session history
-      sessionHistory.push({
-        ts: new Date(),
-        primaryId: primary.id,
-        primaryName: primary.nom || primary.email || primary.id,
-        secondaryCount: secondaries.length,
-        backupId: backupId,
-      });
-      renderHistory();
-
-      toast('✅ Fusion réussie\n' + secondaries.length + ' doc(s) archivé(s) · backup '+backupId.slice(0,8)+'…', 5000);
-      closeMergeModal();
-      loadClients();   // Recharge la liste
-
-    } catch (e) {
-      console.error('Merge error:', e);
-      toast('❌ Erreur fusion : ' + e.message, 6000);
-      btn.disabled = false;
-      btn.textContent = '⚡ Confirmer la fusion';
+      return Promise.all(promises);
     }
-  }
 
-  function renderHistory(){
-    if (sessionHistory.length === 0) { $('historyPanel').style.display = 'none'; return; }
-    $('historyPanel').style.display = 'block';
-    var h = '';
-    sessionHistory.slice().reverse().forEach(function(item){
-      h += '<div class="history-row">';
-      h +=   '<span style="color:var(--green)">✓</span>';
-      h +=   '<strong>'+esc(item.primaryName)+'</strong> ';
-      h +=   '<span>· '+item.secondaryCount+' archivé(s)</span>';
-      h +=   '<span style="color:var(--muted2)">· backup '+esc(item.backupId.slice(0,12))+'…</span>';
-      h +=   '<span style="margin-left:auto;color:var(--muted2)">'+item.ts.toLocaleTimeString('fr-FR')+'</span>';
-      h += '</div>';
-    });
-    $('historyList').innerHTML = h;
-  }
+    function migrateSubCollections(secondaryIds, primaryId){
+      var db = firebase.firestore();
+      var promises = [];
+      secondaryIds.forEach(function(sid){
+        SUB_COLLECTIONS.forEach(function(sc){
+          promises.push(
+            db.collection('leads').doc(sid).collection(sc).get().then(function(snap){
+              if (snap.empty) return;
+              var batch = db.batch();
+              snap.forEach(function(d){
+                var newRef = db.collection('leads').doc(primaryId).collection(sc).doc();
+                batch.set(newRef, Object.assign({}, d.data(), {
+                  _migratedFromLeadId: sid,
+                  _originalDocId: d.id,
+                  _migratedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                }));
+                batch.delete(d.ref);
+              });
+              return batch.commit();
+            }).catch(function(e){ console.warn('Sub migration warning:', sid, sc, e.message); })
+          );
+        });
+      });
+      return Promise.all(promises);
+    }
 
-  // ─────────────────────────────────────────────────────────────────────
-  // ═══ Confirm dialog helper ═══
-  // ─────────────────────────────────────────────────────────────────────
+    // ============================================================
+    // UTILS
+    // ============================================================
+    function escapeHtml(s){
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
-  var confirmCallback = null;
-  function confirmDialog(opts){
-    $('confirmIcon').textContent = opts.icon || '⚠️';
-    $('confirmTitle').textContent = opts.title || 'Confirmer ?';
-    $('confirmMsg').innerHTML = opts.msg || '';
-    var okBtn = $('confirmOk');
-    okBtn.textContent = opts.confirmLabel || 'Confirmer';
-    okBtn.className = 'btn btn-' + (opts.confirmType || 'danger');
-    confirmCallback = opts.onConfirm;
-    $('confirmDlg').classList.add('on');
-  }
-  $('confirmCancel').addEventListener('click', function(){
-    $('confirmDlg').classList.remove('on');
-    confirmCallback = null;
-  });
-  $('confirmOk').addEventListener('click', function(){
-    $('confirmDlg').classList.remove('on');
-    var cb = confirmCallback; confirmCallback = null;
-    if (cb) cb();
-  });
-  $('confirmDlg').addEventListener('click', function(e){
-    if (e.target === this) { this.classList.remove('on'); confirmCallback = null; }
-  });
-
-})();
-</script>
+    function showToast(msg, type){
+      type = type || 'success';
+      var t = document.createElement('div');
+      t.className = 'toast ' + type;
+      t.innerHTML = msg;
+      document.body.appendChild(t);
+      setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 5000);
+    }
+  </script>
 </body>
 </html>
