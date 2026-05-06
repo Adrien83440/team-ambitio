@@ -223,7 +223,6 @@
     <a class="bill-side-item" data-tab="subscriptions" onclick="switchTab('subscriptions')">
       <span class="bsi-icon">🔁</span>
       <span>Abonnements</span>
-      <span class="bsi-soon">S4</span>
     </a>
     <a class="bill-side-item" data-tab="alerts" onclick="switchTab('alerts')">
       <span class="bsi-icon">🚨</span>
@@ -795,12 +794,46 @@
       </div>
     </div>
 
-    <!-- ============ TAB : SUBSCRIPTIONS (placeholder) ============ -->
+    <!-- ============ TAB : SUBSCRIPTIONS (Step 4A) ============ -->
     <div class="bill-tab" data-tab="subscriptions">
-      <div class="bill-soon">
-        <div class="bill-soon-icon">🔁</div>
-        <h3>Abonnements — disponible en Step 4</h3>
-        <p>Gestion des installments avec génération automatique d'une facture<br/>à chaque prélèvement GoCardless réussi. Mise en pause / reprise.</p>
+      <div class="bill-stats">
+        <div class="bill-stat">
+          <div class="bill-stat-l">Total</div>
+          <div class="bill-stat-v" id="subStatTotal">—</div>
+        </div>
+        <div class="bill-stat">
+          <div class="bill-stat-l">Actifs</div>
+          <div class="bill-stat-v" id="subStatActive">—</div>
+        </div>
+        <div class="bill-stat amber">
+          <div class="bill-stat-l">En pause</div>
+          <div class="bill-stat-v" id="subStatPaused">—</div>
+        </div>
+        <div class="bill-stat">
+          <div class="bill-stat-l">Terminés / annulés</div>
+          <div class="bill-stat-v" id="subStatDone">—</div>
+        </div>
+      </div>
+
+      <div class="bill-toolbar">
+        <div class="bill-search">
+          <span class="bill-search-icon">🔍</span>
+          <input id="subSearch" placeholder="Rechercher par client, description, sales…" oninput="renderSubscriptionsList()"/>
+        </div>
+        <select class="bill-select" id="subStatusFilter" onchange="renderSubscriptionsList()" style="min-width:140px">
+          <option value="active">Actifs</option>
+          <option value="paused">En pause</option>
+          <option value="cancelled">Annulés</option>
+          <option value="completed">Terminés</option>
+          <option value="all">Tous</option>
+        </select>
+        <select class="bill-select" id="subOwnerFilter" onchange="renderSubscriptionsList()" style="min-width:160px">
+          <option value="">Tous les sales</option>
+        </select>
+      </div>
+
+      <div class="bill-table-wrap" id="subTableWrap">
+        <div class="bill-loader"><span class="bill-spinner"></span> Chargement des abonnements…</div>
       </div>
     </div>
 
@@ -1014,6 +1047,7 @@ auth.onAuthStateChanged(async function(user) {
     initProductsListener();
     initInvoicesListener();
     initAlertsListener();
+    initSubscriptionsListener();
     document.getElementById('bootLoader').style.display = 'none';
     document.getElementById('billApp').style.display = 'grid';
 
@@ -1107,7 +1141,7 @@ function switchTab(tab) {
     invoices: { t: 'Factures', s: 'Liste de toutes les factures émises et brouillons.' },
     clients: { t: 'Clients de facturation', s: 'Fiches clients utilisées sur les factures (distinct des leads CRM).' },
     products: { t: 'Catalogue produits', s: 'Produits réutilisables avec prix et taux TVA.' },
-    subscriptions: { t: 'Abonnements', s: 'Génération récurrente automatique de factures.' },
+    subscriptions: { t: 'Abonnements', s: 'Mandats GoCardless avec génération automatique de factures.' },
     alerts: { t: 'Alertes', s: 'Cas non résolus du matching automatique paiements GoCardless → factures.' },
     settings: { t: 'Paramètres', s: 'Configurez votre identité d\'émetteur, votre logo, vos coordonnées bancaires et vos CGV.' },
     export: { t: 'Export', s: 'Exports comptables et factures groupées.' }
@@ -1120,6 +1154,7 @@ function switchTab(tab) {
   if (tab === 'products') renderProductsList();
   if (tab === 'settings') renderSettingsActiveSub();
   if (tab === 'alerts') renderAlertsList();
+  if (tab === 'subscriptions') renderSubscriptionsList();
 }
 
 function switchSettingsSub(sub) {
@@ -1710,6 +1745,204 @@ async function reopenAlert(id) {
   } catch (err) {
     toast('Erreur : ' + err.message, true);
   }
+}
+
+/* ═══ ABONNEMENTS (Step 4A) ═══ */
+let subscriptionsCache = [];
+let _subsUnsub = null;
+
+function initSubscriptionsListener() {
+  if (_subsUnsub) return;
+  _subsUnsub = db.collection('subscriptions')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(function(snap) {
+      subscriptionsCache = [];
+      snap.forEach(function(d){ subscriptionsCache.push(Object.assign({ id: d.id }, d.data())); });
+      if (activeTab === 'subscriptions') renderSubscriptionsList();
+    }, function(err) {
+      console.warn('[subscriptions] listener error', err);
+    });
+}
+
+function populateSubOwnerFilter() {
+  const sel = document.getElementById('subOwnerFilter');
+  if (!sel) return;
+  /* Ne re-populate qu'au premier appel ou si le select est resté à un seul item */
+  if (sel.options.length > 1) return;
+  const owners = {};
+  subscriptionsCache.forEach(function(s) {
+    if (s.closerSlug && s.closerName) owners[s.closerSlug] = s.closerName;
+  });
+  Object.keys(owners).sort().forEach(function(slug) {
+    const opt = document.createElement('option');
+    opt.value = slug;
+    opt.textContent = owners[slug];
+    sel.appendChild(opt);
+  });
+}
+
+const SUB_STATUS_LABELS = {
+  active:    { label: 'Actif',    color: '#10b981', bg: 'rgba(16,185,129,.1)', bd: 'rgba(16,185,129,.3)' },
+  paused:    { label: 'En pause', color: '#f59e0b', bg: 'rgba(245,158,11,.1)', bd: 'rgba(245,158,11,.3)' },
+  cancelled: { label: 'Annulé',   color: '#ef4444', bg: 'rgba(239,68,68,.1)',  bd: 'rgba(239,68,68,.3)' },
+  completed: { label: 'Terminé',  color: '#60a5fa', bg: 'rgba(96,165,250,.1)', bd: 'rgba(96,165,250,.3)' },
+};
+
+function renderSubscriptionsList() {
+  populateSubOwnerFilter();
+  const wrap = document.getElementById('subTableWrap');
+  if (!wrap) return;
+  const q = ((document.getElementById('subSearch') && document.getElementById('subSearch').value) || '').toLowerCase().trim();
+  const statusFilter = (document.getElementById('subStatusFilter') && document.getElementById('subStatusFilter').value) || 'active';
+  const ownerFilter = (document.getElementById('subOwnerFilter') && document.getElementById('subOwnerFilter').value) || '';
+  const all = subscriptionsCache || [];
+
+  /* Stats hero */
+  const elT = document.getElementById('subStatTotal');
+  const elA = document.getElementById('subStatActive');
+  const elP = document.getElementById('subStatPaused');
+  const elD = document.getElementById('subStatDone');
+  if (elT) elT.textContent = all.length;
+  if (elA) elA.textContent = all.filter(function(s){ return s.status === 'active'; }).length;
+  if (elP) elP.textContent = all.filter(function(s){ return s.status === 'paused'; }).length;
+  if (elD) elD.textContent = all.filter(function(s){ return s.status === 'cancelled' || s.status === 'completed'; }).length;
+
+  /* Filtres */
+  let list = all;
+  if (statusFilter !== 'all') {
+    if (statusFilter === 'completed') {
+      list = list.filter(function(s){ return s.status === 'completed' || s.status === 'cancelled'; });
+      /* Note : le bouton "Terminés/annulés" regroupe les deux pour l'aperçu rapide.
+         Le filtre "cancelled" pur reste dispo pour distinguer si besoin */
+    }
+    if (statusFilter === 'active')    list = list.filter(function(s){ return s.status === 'active'; });
+    if (statusFilter === 'paused')    list = list.filter(function(s){ return s.status === 'paused'; });
+    if (statusFilter === 'cancelled') list = list.filter(function(s){ return s.status === 'cancelled'; });
+  }
+  if (ownerFilter) list = list.filter(function(s){ return s.closerSlug === ownerFilter; });
+  if (q) {
+    list = list.filter(function(s) {
+      const blob = ((s.description || '') + ' ' + (s.closerName || '') + ' ' +
+        (clientById(s.clientId) || {}).displayName || '').toLowerCase();
+      return blob.indexOf(q) > -1;
+    });
+  }
+
+  if (!list.length) {
+    wrap.innerHTML = '<div class="bill-empty">' +
+      '<div class="bill-empty-icon">🔁</div>' +
+      '<h4>Aucun abonnement</h4>' +
+      '<p>Lance le script de migration pour importer tes 51 mandats GoCardless.</p>' +
+      '</div>';
+    return;
+  }
+
+  let html = '<table class="bill-table">';
+  html += '<thead><tr>';
+  html += '<th>Client</th>';
+  html += '<th>Description</th>';
+  html += '<th style="text-align:right;width:110px">Mensuel</th>';
+  html += '<th style="text-align:center;width:80px">Mensualités</th>';
+  html += '<th style="width:130px">Prochaine</th>';
+  html += '<th style="width:120px">Sales</th>';
+  html += '<th style="width:90px">Statut</th>';
+  html += '</tr></thead><tbody>';
+
+  list.forEach(function(s) {
+    const cli = clientById(s.clientId) || {};
+    const cliName = cli.displayName || cli.companyName || cli.firstName + ' ' + cli.lastName || '—';
+    const stMeta = SUB_STATUS_LABELS[s.status] || { label: s.status, color: '#999', bg: '#222', bd: '#444' };
+    const next = s.nextScheduledAt && s.nextScheduledAt.toDate
+      ? s.nextScheduledAt.toDate().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+      : '—';
+    const totalLabel = s.totalInstallments ? (s.installmentsPaidOnGC + '/' + s.totalInstallments) : (s.installmentsPaidOnGC + '/?');
+    const amount = formatEur(s.installmentAmount || 0);
+
+    html += '<tr style="cursor:pointer" onclick="openSubscriptionDrawer(\'' + s.id + '\')">';
+    html += '<td><div style="font-weight:700;color:var(--text)">' + escapeHtml(cliName) + '</div>';
+    html += '<div style="font-size:11px;color:var(--muted)">' + escapeHtml(cli.gocardlessCustomerId || s.gcCustomerId || '') + '</div></td>';
+    html += '<td style="font-family:var(--font-m);font-size:12px">' + escapeHtml(s.description || '—') + '</td>';
+    html += '<td style="text-align:right;font-family:var(--font-m);font-weight:700">' + amount + '</td>';
+    html += '<td style="text-align:center;font-family:var(--font-m);font-size:12px">' + totalLabel + '</td>';
+    html += '<td style="font-size:12px">' + next + '</td>';
+    html += '<td style="font-size:12px">' + escapeHtml(s.closerName || '—') + '</td>';
+    html += '<td><span class="bill-badge" style="background:' + stMeta.bg + ';border:1px solid ' + stMeta.bd + ';color:' + stMeta.color + '">' + stMeta.label + '</span></td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function clientById(id) {
+  if (!id) return null;
+  for (let i = 0; i < clientsCache.length; i++) {
+    if (clientsCache[i].id === id) return clientsCache[i];
+  }
+  return null;
+}
+
+function openSubscriptionDrawer(subId) {
+  const sub = subscriptionsCache.find(function(s){ return s.id === subId; });
+  if (!sub) return toast('Abonnement introuvable', true);
+
+  const cli = clientById(sub.clientId) || {};
+  const cliName = cli.displayName || cli.companyName || ((cli.firstName || '') + ' ' + (cli.lastName || '')).trim() || '—';
+  const stMeta = SUB_STATUS_LABELS[sub.status] || { label: sub.status, color: '#999', bg: '#222', bd: '#444' };
+  const startDate = sub.startDate && sub.startDate.toDate
+    ? sub.startDate.toDate().toLocaleDateString('fr-FR', { dateStyle: 'long' })
+    : '—';
+  const nextDate = sub.nextScheduledAt && sub.nextScheduledAt.toDate
+    ? sub.nextScheduledAt.toDate().toLocaleDateString('fr-FR', { dateStyle: 'long' })
+    : '—';
+  const totalLabel = sub.totalInstallments ? (sub.installmentsPaidOnGC + ' / ' + sub.totalInstallments) : (sub.installmentsPaidOnGC + ' / ?');
+
+  document.getElementById('drawerTitle').textContent = '🔁 ' + (sub.description || 'Abonnement');
+
+  let html = '';
+  html += '<div style="margin-bottom:18px"><span class="bill-badge" style="background:' + stMeta.bg + ';border:1px solid ' + stMeta.bd + ';color:' + stMeta.color + ';font-size:12px;padding:4px 10px">' + stMeta.label + '</span></div>';
+
+  html += '<div class="bill-card" style="margin-bottom:14px"><div class="bill-card-h"><h3>Client</h3></div>';
+  html += '<div style="font-size:14px;font-weight:700;color:var(--text)">' + escapeHtml(cliName) + '</div>';
+  if (cli.email) html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">' + escapeHtml(cli.email) + '</div>';
+  html += '<div style="margin-top:10px"><a href="?tab=clients" onclick="closeDrawer();switchTab(\'clients\');return false" style="font-size:12px;color:var(--inv-green,#10b981);text-decoration:none">→ Voir la fiche client</a></div>';
+  html += '</div>';
+
+  html += '<div class="bill-card" style="margin-bottom:14px"><div class="bill-card-h"><h3>Paramètres</h3></div>';
+  html += '<div class="bill-info-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">';
+  html += '<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Montant mensuel</div><div style="font-weight:700;color:var(--text)">' + formatEur(sub.installmentAmount || 0) + ' (' + (sub.vatType || 'ht').toUpperCase() + ')</div></div>';
+  html += '<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Fréquence</div><div style="font-weight:700;color:var(--text)">' + (sub.frequency || 'monthly') + '</div></div>';
+  html += '<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Jour du mois</div><div style="font-weight:700;color:var(--text)">' + (sub.dayOfMonth || '—') + '</div></div>';
+  html += '<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Mensualités totales</div><div style="font-weight:700;color:var(--text)">' + (sub.totalInstallments || 'illimité') + '</div></div>';
+  html += '<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Date de début</div><div style="font-weight:700;color:var(--text)">' + startDate + '</div></div>';
+  html += '<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Avancement GC</div><div style="font-weight:700;color:var(--text)">' + totalLabel + '</div></div>';
+  html += '</div></div>';
+
+  html += '<div class="bill-card" style="margin-bottom:14px"><div class="bill-card-h"><h3>Génération automatique (Step 4B)</h3></div>';
+  html += '<div class="bill-info-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">';
+  html += '<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Factures générées par notre système</div><div style="font-weight:700;color:var(--text)">' + (sub.installmentsGenerated || 0) + '</div></div>';
+  html += '<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Prochaine facture (J-1 prélèvement)</div><div style="font-weight:700;color:var(--text)">' + nextDate + '</div></div>';
+  html += '</div>';
+  html += '<div style="margin-top:10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--muted);line-height:1.5">';
+  html += '⚠️ La génération automatique sera disponible en <strong style="color:var(--text)">Phase 4B</strong>. Pour l\'instant cette page est en lecture seule.';
+  html += '</div>';
+  html += '</div>';
+
+  html += '<div class="bill-card" style="margin-bottom:14px"><div class="bill-card-h"><h3>Mandat GoCardless</h3></div>';
+  html += '<div style="font-family:var(--font-m);font-size:11px;color:var(--muted);line-height:1.6">';
+  html += 'Customer ID : <span style="color:var(--text)">' + escapeHtml(sub.gcCustomerId || '—') + '</span><br/>';
+  html += 'Mandate ID : <span style="color:var(--text)">' + escapeHtml(sub.gcMandateId || '—') + '</span><br/>';
+  html += 'Doc payment : <span style="color:var(--text)">' + escapeHtml(sub.paymentDocId || '—') + '</span>';
+  html += '</div></div>';
+
+  html += '<div class="bill-card" style="margin-bottom:14px"><div class="bill-card-h"><h3>Sales attribution</h3></div>';
+  html += '<div style="font-size:13px;color:var(--text);font-weight:700">' + escapeHtml(sub.closerName || '—') + '</div>';
+  html += '</div>';
+
+  document.getElementById('drawerBody').innerHTML = html;
+  document.getElementById('drawerFoot').innerHTML = '<button class="bill-btn bill-btn-ghost" onclick="closeDrawer()">Fermer</button>';
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerBg').classList.add('open');
 }
 
 /* ═══ CGV ═══ */
