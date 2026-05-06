@@ -329,6 +329,11 @@ body { background: var(--bg); color: var(--ink); }
       <option value="completed">🎉 Terminé</option>
       <option value="draft">📝 Brouillon</option>
     </select>
+    <select class="csm-search" id="filterReason" style="min-width:160px;flex:0 0 auto;display:none">
+      <option value="all">Tous motifs</option>
+      <option value="payment">💳 Paiement uniquement</option>
+      <option value="coaching">🎯 Coaching uniquement</option>
+    </select>
   </div>
 
   <!-- ─── BODY ─── -->
@@ -382,6 +387,7 @@ var levelsActive = { crit:true, warn:true, att:true };
 var searchQ      = '';
 var filterStatus = 'all';
 var filterPayStatus = 'all';
+var filterReason = 'all'; // all | payment | coaching
 var openClientId = null;
 
 /* ─── Constants ─── */
@@ -577,6 +583,17 @@ function loadAllData(){
     });
     loadPaymentsForClients();
     loadTemoignagesForClients();
+
+    // ─── Auto-ouverture modal si ?clientId=X dans l'URL ───
+    // Permet à csm-clients.html (et autres pages) d'ouvrir directement le
+    // détail d'un client via un lien.
+    var openId = (new URLSearchParams(window.location.search)).get('clientId');
+    if(openId && !window._csmClientAutoOpened){
+      window._csmClientAutoOpened = true;
+      // Petit délai pour laisser le temps aux paiements/notes/témoignages de
+      // se charger en arrière-plan et alimenter la modal.
+      setTimeout(function(){ openClientModal(openId); }, 500);
+    }
   }, function(err){
     console.error('Clients listener error:', err);
     document.getElementById('csmBody').innerHTML =
@@ -803,6 +820,9 @@ function renderRetards(){
   document.getElementById('toolbarRetards').style.display = '';
   document.getElementById('filterStatus').style.display = '';
   document.getElementById('filterPayStatus').style.display = 'none';
+  var _fr = document.getElementById('filterReason'); if(_fr) _fr.style.display = 'none';
+  var reasonFilterEl = document.getElementById('filterReason');
+  if(reasonFilterEl) reasonFilterEl.style.display = '';
   var body = document.getElementById('csmBody');
   var list = [];
   allClients.forEach(function(c){
@@ -812,9 +832,15 @@ function renderRetards(){
     if(filterStatus !== 'all' && (c.clientStatus || 'active') !== filterStatus) return;
     if(!searchMatch(c, searchQ)) return;
     c._level = lvl;
+    c._reasons = computeReasons(c);
+    // Filtre par motif (paiement / coaching / autre)
+    if(filterReason && filterReason !== 'all'){
+      if(filterReason === 'payment'  && !c._reasons.some(function(r){ return r.kind === 'payment'; })) return;
+      if(filterReason === 'coaching' && !c._reasons.some(function(r){ return r.kind === 'coaching'; })) return;
+    }
     list.push(c);
   });
-  // Sort : crit → warn → att, puis par alerte la plus récente
+  // Sort : crit → warn → att
   var rank = { crit:0, warn:1, att:2 };
   list.sort(function(a,b){ return rank[a._level] - rank[b._level]; });
 
@@ -830,10 +856,68 @@ function renderRetards(){
   body.innerHTML = h;
 }
 
+/* Calcule la liste des motifs d'alerte pour un client (pour affichage badges
+   et filtrage par motif). Distingue paiement vs coaching. */
+function computeReasons(c){
+  var reasons = [];
+  var status = c.clientStatus || 'active';
+  if(status === 'procedure'){
+    reasons.push({ kind:'payment', level:'crit', label:'⚖️ Procédure' });
+  }
+  var pays = paymentsByLead[c.id] || [];
+  pays.forEach(function(p){
+    if(p.status === 'failed'){
+      reasons.push({ kind:'payment', level:'crit', label:'❌ Paiement en échec' });
+    } else if(p.status === 'cancelled'){
+      reasons.push({ kind:'payment', level:'warn', label:'🚫 Paiement annulé' });
+    } else if(p.status === 'active' && p.installmentsCount > 1){
+      var start = toDate(p.startDate);
+      if(start){
+        var monthsElapsed = (new Date().getFullYear() - start.getFullYear())*12 + (new Date().getMonth() - start.getMonth()) + 1;
+        var expected = Math.min(monthsElapsed, p.installmentsCount);
+        var late = expected - (p.paidCount || 0) - 1;
+        if(late > 0) reasons.push({ kind:'payment', level:'crit', label:'⚠️ ' + late + ' mois de retard prélèv.' });
+      }
+    } else if(p.status === 'pending_mandate'){
+      var ts = toDate(p.createdAt);
+      if(ts && (Date.now() - ts.getTime()) > 7*86400000){
+        reasons.push({ kind:'payment', level:'warn', label:'⏳ Mandat non signé +7j' });
+      }
+    }
+  });
+  if(status === 'active' && pays.length === 0){
+    reasons.push({ kind:'payment', level:'att', label:'💸 Aucun paiement enregistré' });
+  }
+  if(status === 'paused'){
+    reasons.push({ kind:'other', level:'warn', label:'⏸ Compte en pause' });
+  }
+
+  // Coaching
+  var coachingDoc = getCoachingForLead(c);
+  if(coachingDoc && coachingDoc.statut !== 'inactif'){
+    var done = coachingDoc.nbCoachingsFaits || 0, total = coachingDoc.nbCoachingsTotal || 12;
+    if(done < total){
+      var now = new Date();
+      var qN = getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
+      var prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      var qP = getCoachingQuotaStatus(coachingDoc, prev.getFullYear(), prev.getMonth());
+      if(qN && qP && qN.status === 'miss' && qP.status === 'miss'){
+        reasons.push({ kind:'coaching', level:'crit', label:'🎯 2 mois sans coaching' });
+      } else if(qN && qN.status === 'miss'){
+        reasons.push({ kind:'coaching', level:'warn', label:'🎯 Pas de coaching ce mois' });
+      } else if(qN && qN.status === 'partial'){
+        reasons.push({ kind:'coaching', level:'att', label:'🎯 Sous quota mensuel (' + qN.used + '/' + qN.max + ')' });
+      }
+    }
+  }
+  return reasons;
+}
+
 function renderAllClients(){
   document.getElementById('toolbarRetards').style.display = 'none';
   document.getElementById('filterStatus').style.display = '';
   document.getElementById('filterPayStatus').style.display = 'none';
+  var _fr = document.getElementById('filterReason'); if(_fr) _fr.style.display = 'none';
   var body = document.getElementById('csmBody');
   var list = allClients.slice();
   if(filterStatus !== 'all') list = list.filter(function(c){ return (c.clientStatus||'active') === filterStatus; });
@@ -858,6 +942,20 @@ function renderClientCard(c){
   else if(lvl === 'warn') lvlBadge = '<span class="csm-badge warn">🟠 Relancer</span>';
   else if(lvl === 'att')  lvlBadge = '<span class="csm-badge att">🟡 Attention</span>';
   else if(lvl === 'ok')   lvlBadge = '<span class="csm-badge ok">✅ OK</span>';
+
+  // Badges motifs (paiement / coaching) — affichés uniquement si on est dans
+  // un état d'alerte. Permet de voir d'un coup d'œil POURQUOI un client
+  // remonte (paiement échoué vs coaching en retard, etc.)
+  var reasonsBadges = '';
+  if(lvl && lvl !== 'ok'){
+    var reasons = c._reasons || computeReasons(c);
+    reasons.forEach(function(r){
+      var rcls = r.kind === 'payment'  ? 'pay-failed'
+               : r.kind === 'coaching' ? 'pay-active'
+               : (r.level === 'crit' ? 'crit' : r.level === 'warn' ? 'warn' : 'att');
+      reasonsBadges += '<span class="csm-badge ' + rcls + '" style="font-size:10px">' + r.label + '</span>';
+    });
+  }
 
   var status = c.clientStatus || 'active';
   var cs = CLIENT_STATUS[status] || CLIENT_STATUS.active;
@@ -952,7 +1050,7 @@ function renderClientCard(c){
   var info = '<div class="csm-card-info">' +
     '<div class="csm-card-name">' + esc(clientDisplayName(c)) + (c.commerce ? ' <span style="font-weight:400;color:var(--ink-muted);font-size:12px">— ' + esc(c.commerce) + '</span>' : '') + '</div>' +
     '<div class="csm-card-meta">' +
-      lvlBadge + statusBadge + followBadge + coachingBadge + kajBadge +
+      lvlBadge + reasonsBadges + statusBadge + followBadge + coachingBadge + kajBadge +
       payInfo + clientSince +
     '</div>' +
   '</div>';
@@ -973,70 +1071,198 @@ function renderPayments(){
   document.getElementById('filterPayStatus').style.display = '';
   var body = document.getElementById('csmBody');
 
-  // Aplatir tous les paiements avec leurs leads
-  var allPays = [];
+  // ─── Calcul des "échéances" pour chaque paiement actif ────────────────
+  // Comme paymentsHistory[] ne contient QUE les prélèvements RÉUSSIS
+  // (cf. api/gocardless-status.js), on déduit les états :
+  //   - failed / cancelled              → bucket "Échouées"
+  //   - active avec paidCount < expected→ bucket "Échouées" (retard)
+  //   - pending_mandate                 → bucket "Mandat en attente"
+  //   - active avec next dans 7j        → bucket "Prochaines échéances"
+  //   - active sans retard et next > 7j → bucket "À jour"
+  //   - completed                       → ignoré (soldés, pas critiques)
+  //   - draft                           → bucket "À jour" (en cours de création)
+  function buildPayItem(c, p){
+    var item = { _client: c, _payment: p, bucket: null, nextDueDate: null,
+                 monthsLate: 0, expectedCount: 0 };
+    if(p.status === 'completed') return null; // soldés exclus de la vue échéances
+
+    if(p.status === 'failed' || p.status === 'cancelled'){
+      item.bucket = 'failed'; return item;
+    }
+    if(p.status === 'pending_mandate'){
+      item.bucket = 'pending'; return item;
+    }
+    if(p.status === 'draft'){
+      item.bucket = 'draft'; return item;
+    }
+    // active / mandate_active : on calcule le retard et la prochaine échéance
+    var start = toDate(p.startDate) || toDate(p.createdAt);
+    if(!start || !p.installmentsCount || p.installmentsCount <= 1){
+      // Paiement en 1 fois : pas de notion d'échéance, classé "à jour"
+      item.bucket = 'up'; return item;
+    }
+    var now = new Date();
+    var monthsElapsed = (now.getFullYear() - start.getFullYear())*12 + (now.getMonth() - start.getMonth()) + 1;
+    var expected = Math.min(monthsElapsed, p.installmentsCount);
+    item.expectedCount = expected;
+    var actual = p.paidCount || 0;
+    var late = Math.max(0, expected - actual - 1); // tolérance d'1 mois
+    item.monthsLate = late;
+    // Calcul prochaine échéance théorique : startDate + (paidCount+1) mois
+    var next = new Date(start);
+    next.setMonth(next.getMonth() + actual);
+    if(next < now) next = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    item.nextDueDate = next;
+    if(late > 0){ item.bucket = 'failed'; return item; }
+    var diffDays = Math.floor((next - now) / 86400000);
+    if(diffDays >= 0 && diffDays <= 7){ item.bucket = 'next'; return item; }
+    item.bucket = 'up'; return item;
+  }
+
+  // Aplatir et bucketiser
+  var failed = [], pending = [], next = [], up = [];
   allClients.forEach(function(c){
     (paymentsByLead[c.id] || []).forEach(function(p){
-      var item = { _client: c, _payment: p };
-      allPays.push(item);
+      var item = buildPayItem(c, p);
+      if(!item) return;
+      // Filtres recherche
+      if(searchQ && !searchMatch(c, searchQ)) return;
+      if(filterPayStatus !== 'all' && p.status !== filterPayStatus) return;
+      if(item.bucket === 'failed')      failed.push(item);
+      else if(item.bucket === 'pending') pending.push(item);
+      else if(item.bucket === 'next')    next.push(item);
+      else                               up.push(item);
     });
   });
 
-  // Filter by pay status
-  if(filterPayStatus !== 'all'){
-    allPays = allPays.filter(function(item){ return item._payment.status === filterPayStatus; });
-  }
-  // Filter by search (sur le client)
-  if(searchQ) allPays = allPays.filter(function(item){ return searchMatch(item._client, searchQ); });
-
-  // Sort : failed/cancelled d'abord, puis par date desc
-  allPays.sort(function(a, b){
-    var pa = a._payment, pb = b._payment;
-    var rankA = pa.status === 'failed' ? 0 : pa.status === 'cancelled' ? 1 : 2;
-    var rankB = pb.status === 'failed' ? 0 : pb.status === 'cancelled' ? 1 : 2;
-    if(rankA !== rankB) return rankA - rankB;
-    return (toDate(pb.createdAt)||new Date(0)) - (toDate(pa.createdAt)||new Date(0));
+  // Sort interne à chaque bucket
+  failed.sort(function(a,b){
+    // Plus en retard d'abord
+    if(b.monthsLate !== a.monthsLate) return b.monthsLate - a.monthsLate;
+    return (toDate(b._payment.createdAt)||new Date(0)) - (toDate(a._payment.createdAt)||new Date(0));
+  });
+  pending.sort(function(a,b){
+    return (toDate(a._payment.createdAt)||new Date()) - (toDate(b._payment.createdAt)||new Date());
+  });
+  next.sort(function(a,b){
+    return (a.nextDueDate||new Date()) - (b.nextDueDate||new Date());
+  });
+  up.sort(function(a,b){
+    return (toDate(b._payment.createdAt)||new Date(0)) - (toDate(a._payment.createdAt)||new Date(0));
   });
 
-  if(!allPays.length){
+  if(!failed.length && !pending.length && !next.length && !up.length){
     body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">💳</div><div class="csm-empty-title">Aucun paiement</div><div>Ajustez les filtres pour voir plus de résultats.</div></div>';
     return;
   }
 
-  var h = '<div class="csm-list">';
-  allPays.forEach(function(item){
-    var c = item._client, p = item._payment;
-    var ps = PAY_STATUS[p.status] || { label: p.status||'?', cls:'pay-draft' };
-    var prog = '';
-    if(p.installmentsCount > 1){
-      prog = (p.paidCount || 0) + '/' + p.installmentsCount + ' mois';
-    }
-    var typeLabel = p.type === 'installments' ? '📅 Fractionné' : '💳 Intégral';
-    var crit = p.status === 'failed' ? 'crit' : '';
-    h += '<div class="csm-card ' + crit + '" onclick="openClientModal(\'' + c.id + '\')">';
-    h += '<div class="csm-avatar">' + esc(initials(clientDisplayName(c))) + '</div>';
-    h += '<div class="csm-card-info">';
-    h += '<div class="csm-card-name">' + esc(clientDisplayName(c)) + ' — ' + fmtEuro(p.totalAmount) + '</div>';
-    h += '<div class="csm-card-meta">';
-    h += '<span class="csm-badge ' + ps.cls + '">' + ps.label + '</span>';
-    h += '<span>' + typeLabel + (prog ? ' · ' + prog : '') + '</span>';
-    if(p.installmentAmount) h += '<span>' + fmtEuro(p.installmentAmount) + '/mois</span>';
-    if(p.paiementPlateforme) h += '<span>🏦 ' + esc(p.paiementPlateforme) + '</span>';
-    h += '<span>' + fmtDate(p.createdAt) + '</span>';
-    h += '</div></div>';
-    h += '<div></div>';
-    h += '<div class="csm-actions">';
-    h += '<a class="csm-act-btn" title="Voir paiement" href="payments.html?leadId=' + c.id + '" onclick="event.stopPropagation()" target="_blank">→</a>';
-    h += '</div></div>';
-  });
-  h += '</div>';
+  // ─── Render des 4 sections ──────────────────────────────────────────────
+  var h = '';
+  h += renderPaySection('🔴 Échouées & en retard', 'crit', failed,
+       'Prélèvements en échec ou en retard de paiement. Action prioritaire requise.');
+  h += renderPaySection('⏳ En attente de mandat', 'warn', pending,
+       'Mandat GoCardless pas encore signé par le client.');
+  h += renderPaySection('⏰ Prochaines échéances (7 jours)', 'att', next,
+       'Prélèvements prévus dans la semaine.');
+  h += renderPaySection('✅ À jour', 'ok', up,
+       'Paiements en cours sans retard apparent.');
   body.innerHTML = h;
+}
+
+/* Helper : rend une section de paiements avec header coloré + toggle collapse */
+function renderPaySection(title, kind, items, subtitle){
+  if(!items.length) return '';
+  var bg = kind === 'crit' ? 'rgba(239,68,68,.08)'
+         : kind === 'warn' ? 'rgba(251,146,60,.08)'
+         : kind === 'att'  ? 'rgba(250,204,21,.06)'
+         : 'rgba(94,234,212,.05)';
+  var bd = kind === 'crit' ? 'rgba(239,68,68,.25)'
+         : kind === 'warn' ? 'rgba(251,146,60,.25)'
+         : kind === 'att'  ? 'rgba(250,204,21,.20)'
+         : 'rgba(94,234,212,.20)';
+  var col = kind === 'crit' ? 'var(--crit-color)'
+          : kind === 'warn' ? 'var(--warn-color)'
+          : kind === 'att'  ? 'var(--att-color)'
+          : 'var(--csm-accent)';
+
+  var h = '<div style="margin-bottom:18px;border:1px solid ' + bd + ';background:' + bg + ';border-radius:12px;overflow:hidden">';
+  h += '<div style="padding:11px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid ' + bd + '">';
+  h += '<div style="font-size:14px;font-weight:700;color:' + col + '">' + title + '</div>';
+  h += '<div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:2px 10px;font-size:12px;font-weight:700;color:' + col + '">' + items.length + '</div>';
+  if(subtitle){
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-left:auto">' + esc(subtitle) + '</div>';
+  }
+  h += '</div>';
+
+  h += '<div style="display:flex;flex-direction:column;gap:6px;padding:8px">';
+  items.forEach(function(item){
+    h += renderPayCard(item, kind);
+  });
+  h += '</div></div>';
+  return h;
+}
+
+/* Helper : rend une carte paiement avec contexte échéance */
+function renderPayCard(item, kind){
+  var c = item._client, p = item._payment;
+  var ps = PAY_STATUS[p.status] || { label: p.status||'?', cls:'pay-draft' };
+  var prog = '';
+  if(p.installmentsCount > 1){
+    prog = (p.paidCount || 0) + '/' + p.installmentsCount;
+  }
+  var pctBar = '';
+  if(p.installmentsCount > 1){
+    var done = (p.paidCount || 0) / p.installmentsCount;
+    pctBar = '<div style="width:60px;height:4px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden;display:inline-block;vertical-align:middle;margin:0 4px"><div style="height:100%;width:' + Math.round(done*100) + '%;background:' + (kind==='crit'?'var(--crit-color)':'var(--csm-accent)') + '"></div></div>';
+  }
+
+  // Contexte spécifique au bucket
+  var ctxInfo = '';
+  if(item.bucket === 'failed'){
+    if(item.monthsLate > 0){
+      ctxInfo = '<span class="csm-badge crit" title="Retard estimé à partir de startDate">⚠️ ' + item.monthsLate + ' mois de retard</span>';
+    } else if(p.status === 'failed'){
+      ctxInfo = '<span class="csm-badge crit">❌ Prélèvement en échec</span>';
+    } else if(p.status === 'cancelled'){
+      ctxInfo = '<span class="csm-badge muted">🚫 Annulé</span>';
+    }
+  } else if(item.bucket === 'pending'){
+    var createdAt = toDate(p.createdAt);
+    var daysOld = createdAt ? Math.floor((Date.now() - createdAt.getTime())/86400000) : null;
+    if(daysOld !== null && daysOld > 7){
+      ctxInfo = '<span class="csm-badge warn">⏳ Mandat non signé depuis ' + daysOld + ' jours</span>';
+    } else {
+      ctxInfo = '<span class="csm-badge att">⏳ Mandat en cours de signature</span>';
+    }
+  } else if(item.bucket === 'next' && item.nextDueDate){
+    var diffD = Math.floor((item.nextDueDate - new Date()) / 86400000);
+    var lbl = diffD === 0 ? "aujourd'hui" : diffD === 1 ? "demain" : "dans " + diffD + " jours";
+    ctxInfo = '<span class="csm-badge att" title="' + fmtDate(item.nextDueDate) + '">⏰ Prochain prélèvement ' + lbl + '</span>';
+  }
+
+  var h = '<div class="csm-card" onclick="openClientModal(\'' + c.id + '\')" style="cursor:pointer">';
+  h += '<div class="csm-avatar">' + esc(initials(clientDisplayName(c))) + '</div>';
+  h += '<div class="csm-card-info">';
+  h += '<div class="csm-card-name">' + esc(clientDisplayName(c)) + '<span style="color:var(--ink-muted);font-weight:500;margin-left:8px;font-size:13px">' + fmtEuro(p.totalAmount) + '</span></div>';
+  h += '<div class="csm-card-meta">';
+  h += '<span class="csm-badge ' + ps.cls + '">' + ps.label + '</span>';
+  if(prog) h += '<span title="Progression">📊 ' + prog + pctBar + '</span>';
+  if(p.installmentAmount && p.installmentsCount > 1) h += '<span>' + fmtEuro(p.installmentAmount) + '/mois</span>';
+  if(p.paiementPlateforme) h += '<span>🏦 ' + esc(p.paiementPlateforme) + '</span>';
+  if(ctxInfo) h += ctxInfo;
+  h += '</div></div>';
+  h += '<div></div>';
+  h += '<div class="csm-actions">';
+  h += '<a class="csm-act-btn" title="Voir détail paiement" href="payments.html?leadId=' + c.id + '" onclick="event.stopPropagation()" target="_blank">→</a>';
+  h += '</div></div>';
+  return h;
 }
 
 function renderTemoignages(){
   document.getElementById('toolbarRetards').style.display = 'none';
   document.getElementById('filterStatus').style.display = 'none';
   document.getElementById('filterPayStatus').style.display = 'none';
+  var _fr = document.getElementById('filterReason'); if(_fr) _fr.style.display = 'none';
   var body = document.getElementById('csmBody');
 
   var withTemo = {};
@@ -1519,6 +1745,10 @@ document.getElementById('filterStatus').addEventListener('change', function(e){
 });
 document.getElementById('filterPayStatus').addEventListener('change', function(e){
   filterPayStatus = e.target.value;
+  renderAll();
+});
+document.getElementById('filterReason').addEventListener('change', function(e){
+  filterReason = e.target.value;
   renderAll();
 });
 

@@ -51,7 +51,7 @@
   const ALL_MODULES = [
     // ─── CUSTOMER SUCCESS — visible pour le rôle csm + admin ───
     { id: 'csm-dashboard',     icon: '💎', label: 'Dashboard CSM', href: 'csm-dashboard.html', section: 'Customer Success', perm: 'csm_dashboard' },
-    { id: 'csm-clients',       icon: '👥', label: 'Clients',       href: 'sales-clients.html', section: 'Customer Success', perm: 'csm_clients' },
+    { id: 'csm-clients',       icon: '👥', label: 'Clients',       href: 'csm-clients.html',   section: 'Customer Success', perm: 'csm_clients' },
     { id: 'csm-import',        icon: '📥', label: 'Import Kajabi', href: 'csm-import.html',    section: 'Customer Success', perm: 'csm_dashboard' },
     { id: 'coach-clients',       icon: '👥', label: 'Coaching',      href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
     { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',     section: 'Coaching', perm: 'coaching_dashboard' },

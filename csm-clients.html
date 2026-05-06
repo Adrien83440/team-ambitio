@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Clients — CSM</title>
+<link rel="stylesheet" href="sales.css"/>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+  if (!firebase.apps.length) {
+    firebase.initializeApp({
+      apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+      authDomain:"ambitio-team.firebaseapp.com",
+      projectId:"ambitio-team",
+      storageBucket:"ambitio-team.firebasestorage.app",
+      messagingSenderId:"1079366902268",
+      appId:"1:1079366902268:web:b4ec1691dba54230339279"
+    });
+  }
+</script>
+
+<style>
+:root {
+  --csm-accent: #5eead4;
+  --csm-accent-2: #14b8a6;
+  --csm-accent-dark: #0f766e;
+  --csm-glow: rgba(94,234,212,0.18);
+  --csm-bg-soft: rgba(94,234,212,0.06);
+  --csm-border: rgba(94,234,212,0.25);
+  --crit-color: #fca5a5;
+  --warn-color: #fdba74;
+  --att-color: #fde68a;
+}
+body { background: var(--bg); color: var(--ink); font-family: 'Plus Jakarta Sans', sans-serif; }
+
+.cl-app { padding: 24px 28px; max-width: 1600px; margin: 0 auto; }
+.cl-header {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 18px;
+  padding-bottom: 16px; border-bottom: 1px solid var(--border);
+}
+.cl-logo {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--csm-accent), var(--csm-accent-2));
+  display: flex; align-items: center; justify-content: center; font-size: 22px;
+  box-shadow: 0 6px 20px var(--csm-glow);
+}
+.cl-title { font-size: 22px; font-weight: 800; }
+.cl-sub { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
+.cl-count {
+  margin-left: auto; padding: 6px 12px; border-radius: 8px;
+  background: var(--csm-bg-soft); color: var(--csm-accent); font-size: 13px; font-weight: 700;
+}
+
+.cl-toolbar {
+  display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap;
+}
+.cl-search, .cl-select {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 12px; color: var(--ink); font-family: inherit; font-size: 13px;
+}
+.cl-search { min-width: 280px; flex: 1; max-width: 380px; }
+.cl-search:focus, .cl-select:focus { outline: none; border-color: var(--csm-accent); box-shadow: 0 0 0 3px var(--csm-bg-soft); }
+.cl-pill {
+  padding: 7px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  background: var(--bg3); border: 1px solid var(--border); color: var(--ink-muted);
+  cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap;
+}
+.cl-pill:hover { color: var(--ink); }
+.cl-pill.active { background: var(--csm-bg-soft); border-color: var(--csm-border); color: var(--csm-accent); }
+.cl-pill.crit.active { background: rgba(239,68,68,.10); border-color: rgba(239,68,68,.3); color: var(--crit-color); }
+.cl-pill.warn.active { background: rgba(251,146,60,.10); border-color: rgba(251,146,60,.3); color: var(--warn-color); }
+.cl-pill.att.active  { background: rgba(250,204,21,.10); border-color: rgba(250,204,21,.3); color: var(--att-color); }
+
+.cl-table-wrap {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 14px;
+  overflow: hidden;
+}
+.cl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cl-table th {
+  position: sticky; top: 0; background: var(--bg2); z-index: 1;
+  text-align: left; padding: 12px 14px; font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-muted);
+  border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer;
+  user-select: none;
+}
+.cl-table th:hover { color: var(--ink); }
+.cl-table th .sort { margin-left: 4px; opacity: 0.4; font-size: 9px; }
+.cl-table th.sorted .sort { opacity: 1; color: var(--csm-accent); }
+.cl-table td {
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.cl-table tr.row { transition: background 0.1s; }
+.cl-table tr.row:hover { background: rgba(255,255,255,0.025); }
+.cl-table tr.row.lvl-crit { box-shadow: inset 3px 0 0 var(--crit-color); }
+.cl-table tr.row.lvl-warn { box-shadow: inset 3px 0 0 var(--warn-color); }
+.cl-table tr.row.lvl-att  { box-shadow: inset 3px 0 0 var(--att-color); }
+
+.cl-name {
+  display: flex; align-items: center; gap: 10px;
+}
+.cl-av {
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px; color: white;
+  background: linear-gradient(135deg, var(--csm-accent-dark), var(--csm-accent-2));
+}
+.cl-name-text { display: flex; flex-direction: column; min-width: 0; }
+.cl-name-main { font-weight: 600; }
+.cl-name-sub { font-size: 11px; color: var(--ink-muted); }
+
+.cl-badge {
+  display: inline-block; padding: 3px 8px; border-radius: 6px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+.cl-badge.crit { background: rgba(239,68,68,.12); color: var(--crit-color); border: 1px solid rgba(239,68,68,.25); }
+.cl-badge.warn { background: rgba(251,146,60,.12); color: var(--warn-color); border: 1px solid rgba(251,146,60,.25); }
+.cl-badge.att  { background: rgba(250,204,21,.12); color: var(--att-color); border: 1px solid rgba(250,204,21,.25); }
+.cl-badge.ok   { background: var(--csm-bg-soft); color: var(--csm-accent); border: 1px solid var(--csm-border); }
+.cl-badge.muted{ background: rgba(148,163,184,.10); color: #94a3b8; border: 1px solid rgba(148,163,184,.20); }
+
+.cl-status-sel {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--ink); padding: 4px 8px; font-family: inherit; font-size: 11px;
+  font-weight: 700; cursor: pointer; min-width: 110px;
+}
+.cl-status-sel:focus { outline: none; border-color: var(--csm-accent); }
+.cl-status-sel.s-active { color: #34d399; border-color: rgba(16,185,129,.3); }
+.cl-status-sel.s-paused { color: #fbbf24; border-color: rgba(245,158,11,.3); }
+.cl-status-sel.s-completed { color: #a78bfa; border-color: rgba(167,139,250,.3); }
+.cl-status-sel.s-stopped { color: var(--crit-color); border-color: rgba(239,68,68,.3); }
+.cl-status-sel.s-procedure { color: #fb923c; border-color: rgba(249,115,22,.3); }
+
+.cl-progress {
+  display: flex; align-items: center; gap: 8px; min-width: 90px;
+}
+.cl-pct-text { font-size: 12px; font-weight: 600; min-width: 32px; text-align: right; }
+.cl-pct-bar { flex: 1; height: 6px; background: var(--bg2); border-radius: 3px; overflow: hidden; }
+.cl-pct-fill { height: 100%; transition: width 0.3s; }
+
+.cl-actions { display: flex; gap: 5px; justify-content: flex-end; }
+.cl-act {
+  width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--border);
+  background: var(--bg2); cursor: pointer; font-size: 13px; display: inline-flex;
+  align-items: center; justify-content: center; color: var(--ink); transition: all 0.15s;
+}
+.cl-act:hover { background: var(--csm-bg-soft); border-color: var(--csm-border); transform: scale(1.05); }
+.cl-act.disabled { opacity: 0.3; cursor: not-allowed; }
+
+.cl-empty { padding: 80px 20px; text-align: center; color: var(--ink-muted); }
+.cl-empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+
+.cl-loading { padding: 60px; text-align: center; color: var(--ink-muted); }
+.cl-spinner {
+  display: inline-block; width: 32px; height: 32px;
+  border: 3px solid var(--border); border-top-color: var(--csm-accent);
+  border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 14px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Quick note popover */
+.cl-popover {
+  display: none; position: fixed; z-index: 999; background: var(--bg2);
+  border: 1px solid var(--csm-border); border-radius: 12px; padding: 14px;
+  width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+.cl-popover.show { display: block; }
+.cl-popover-h { font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--csm-accent); }
+.cl-pop-textarea {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; color: var(--ink); font-family: inherit; font-size: 12px; resize: vertical;
+  min-height: 60px; margin-bottom: 8px;
+}
+.cl-pop-actions { display: flex; gap: 6px; }
+.cl-pop-btn {
+  padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--bg3); color: var(--ink);
+  cursor: pointer; font-family: inherit;
+}
+.cl-pop-btn.primary {
+  background: linear-gradient(135deg, var(--csm-accent-dark), var(--csm-accent-2));
+  border-color: var(--csm-accent); color: white;
+}
+
+/* Toast */
+.cl-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+  background: var(--bg3); border: 1px solid var(--csm-border);
+  padding: 12px 22px; border-radius: 10px; font-size: 13px; font-weight: 600;
+  z-index: 2000; transition: transform 0.3s; box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+}
+.cl-toast.show { transform: translateX(-50%) translateY(0); }
+.cl-toast.error { border-color: rgba(239,68,68,.25); color: var(--crit-color); }
+
+@media (max-width: 1100px) {
+  .cl-table { font-size: 12px; }
+  .cl-table th, .cl-table td { padding: 8px 10px; }
+  .cl-name-sub, .cl-table .col-coach, .cl-table .col-since { display: none; }
+}
+@media (max-width: 700px) {
+  .cl-search { min-width: 160px; }
+  .cl-table .col-kajabi, .cl-table .col-followup { display: none; }
+}
+</style>
+</head>
+
+<body>
+<div class="cl-app">
+  <div class="cl-header">
+    <div class="cl-logo">👥</div>
+    <div>
+      <div class="cl-title">Clients Customer Success</div>
+      <div class="cl-sub">Liste des clients actifs avec actions de pilotage — synchronisé avec le pipeline et la liste sales</div>
+    </div>
+    <div class="cl-count" id="clCount">— clients</div>
+  </div>
+
+  <div class="cl-toolbar">
+    <input class="cl-search" id="searchInput" type="text" placeholder="🔍 Nom, commerce, email…"/>
+    <button class="cl-pill active" data-lvl="all" onclick="toggleLevel('all', this)">Tous</button>
+    <button class="cl-pill crit" data-lvl="crit" onclick="toggleLevel('crit', this)">🔴 Critique</button>
+    <button class="cl-pill warn" data-lvl="warn" onclick="toggleLevel('warn', this)">🟠 Relancer</button>
+    <button class="cl-pill att" data-lvl="att" onclick="toggleLevel('att', this)">🟡 Attention</button>
+    <select class="cl-select" id="filterStatus">
+      <option value="all">Tous statuts</option>
+      <option value="active">✅ Actif</option>
+      <option value="paused">⏸ En pause</option>
+      <option value="completed">🎉 Terminé</option>
+      <option value="stopped">🛑 Stoppé</option>
+      <option value="procedure">⚖️ Procédure</option>
+    </select>
+    <select class="cl-select" id="filterCoach">
+      <option value="all">Tous coachs</option>
+    </select>
+    <a class="cl-pill" href="csm-dashboard.html" style="text-decoration:none;margin-left:auto">💎 Dashboard</a>
+  </div>
+
+  <div class="cl-table-wrap">
+    <table class="cl-table" id="clientsTable">
+      <thead>
+        <tr>
+          <th data-sort="name">Client <span class="sort">▲▼</span></th>
+          <th data-sort="status" class="col-status">Statut <span class="sort">▲▼</span></th>
+          <th data-sort="coaching">🎯 Coachings <span class="sort">▲▼</span></th>
+          <th data-sort="payment" class="col-pay">💳 Paiement <span class="sort">▲▼</span></th>
+          <th data-sort="kajabi" class="col-kajabi">🎓 Kajabi <span class="sort">▲▼</span></th>
+          <th data-sort="followup" class="col-followup">↻ Dernière relance <span class="sort">▲▼</span></th>
+          <th class="col-coach">Coach</th>
+          <th data-sort="since" class="col-since">📅 Depuis <span class="sort">▲▼</span></th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="9" class="cl-loading"><div class="cl-spinner"></div>Chargement…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Popover note rapide -->
+<div class="cl-popover" id="popover">
+  <div class="cl-popover-h" id="popTitle">Note rapide</div>
+  <textarea class="cl-pop-textarea" id="popText" placeholder="Note interne (visible aussi par sales)…"></textarea>
+  <div class="cl-pop-actions">
+    <button class="cl-pop-btn primary" onclick="savePopNote()">💾 Enregistrer</button>
+    <button class="cl-pop-btn" onclick="closePop()">Annuler</button>
+  </div>
+</div>
+
+<div class="cl-toast" id="toast"></div>
+
+<script src="nav.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   csm-clients.html — Liste gestionnaire clients pour la CSM
+   ───────────────────────────────────────────────────────────────────────────
+   Source unique : leads where isClient==true && !_merged
+   Toutes les actions modifient la collection `leads` → répercussion auto
+   dans sales-crm-app.js (pipeline) et sales-clients.html.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var db = firebase.firestore();
+var currentUser = null;
+var currentRole = null;
+
+var allClients = [];
+var paymentsByLead = {};
+var coachingByEmail = {};
+var coachMembersMap = {};
+
+var levelFilter = 'all';
+var statusFilter = 'all';
+var coachFilter = 'all';
+var searchQ = '';
+var sortKey = 'name';
+var sortDir = 1; // 1 asc, -1 desc
+
+var popLeadId = null;
+
+/* ─── Constants ─── */
+var CLIENT_STATUS = {
+  active:    { label:'✅ Actif',     cls:'s-active' },
+  paused:    { label:'⏸ En pause',   cls:'s-paused' },
+  completed: { label:'🎉 Terminé',   cls:'s-completed' },
+  stopped:   { label:'🛑 Stoppé',    cls:'s-stopped' },
+  procedure: { label:'⚖️ Procédure', cls:'s-procedure' }
+};
+var PAY_STATUS = {
+  draft:           '📝 Brouillon',
+  pending_mandate: '⏳ Mandat en attente',
+  mandate_active:  '✅ Mandat actif',
+  active:          '💸 Actif',
+  completed:       '🎉 Soldé',
+  failed:          '❌ Échec',
+  cancelled:       '🚫 Annulé'
+};
+
+/* ─── Helpers ─── */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+});}
+function showToast(msg, kind){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'cl-toast show ' + (kind||'');
+  clearTimeout(showToast._tm);
+  showToast._tm = setTimeout(function(){ t.classList.remove('show'); }, 2800);
+}
+function fmtEuro(v){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(v||0); }
+function toDate(d){ if(!d) return null; var dt = d.toDate ? d.toDate() : new Date(d); return isNaN(dt.getTime()) ? null : dt; }
+function fmtDate(d){ var dt = toDate(d); if(!dt) return '—'; return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'2-digit'}); }
+function timeAgo(d){
+  var dt = toDate(d); if(!dt) return '—';
+  var diff = Math.floor((Date.now()-dt.getTime())/86400000);
+  if(diff === 0) return "auj.";
+  if(diff === 1) return "hier";
+  if(diff < 7) return diff+'j';
+  if(diff < 30) return Math.floor(diff/7)+'sem';
+  if(diff < 365) return Math.floor(diff/30)+'mois';
+  return Math.floor(diff/365)+'an';
+}
+function initials(name){
+  if(!name) return '?';
+  var parts = String(name).trim().split(/\s+/);
+  if(parts.length >= 2) return (parts[0][0]+parts[1][0]).toUpperCase();
+  return name.slice(0,2).toUpperCase();
+}
+function clientName(c){ return c.nom || c.commerce || c.email || c.telephone || '?'; }
+
+/* Coaching helpers */
+function getMonthlyQuota(programme){
+  if(!programme) return 1;
+  var p = String(programme).toLowerCase();
+  if(p.indexOf('24c') >= 0) return 2;
+  return 1;
+}
+function getAllCoachingSessions(c){
+  if(!c) return [];
+  if(c.years && c.years.length){
+    var all = [];
+    c.years.forEach(function(y){ (y.sessions||[]).forEach(function(s){ all.push(s); }); });
+    return all;
+  }
+  return c.sessions || [];
+}
+function getSessionsInMonth(c, year, month){
+  return getAllCoachingSessions(c).filter(function(s){
+    if(s.statut !== 'fait' || !s.date) return false;
+    if(s.numero === 0 || s.type === 'rdv72h') return false;
+    var d = new Date(s.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+}
+function getCoachingQuotaStatus(c, year, month){
+  if(!c) return null;
+  var done = c.nbCoachingsFaits || 0, total = c.nbCoachingsTotal || 12;
+  if(done >= total) return { status:'done', used:0, max:0 };
+  var quota = getMonthlyQuota(c.programme);
+  var used = getSessionsInMonth(c, year, month).length;
+  if(used >= quota) return { status:'ok', used:used, max:quota };
+  if(used > 0) return { status:'partial', used:used, max:quota };
+  return { status:'miss', used:0, max:quota };
+}
+function getCoachingForLead(lead){
+  var em = (lead.email||'').toLowerCase().trim();
+  return em ? (coachingByEmail[em] || null) : null;
+}
+
+/* ─── Compute level (aligné csm-dashboard) ─── */
+function computeLevel(c){
+  var status = c.clientStatus || 'active';
+  if(status === 'completed') return 'ok';
+  if(status === 'stopped')   return null;
+
+  var pays = paymentsByLead[c.id] || [];
+  var hasFailed = pays.some(function(p){ return p.status === 'failed'; });
+  var hasCancelled = pays.some(function(p){ return p.status === 'cancelled'; });
+
+  var hasPaymentBehind = false;
+  pays.forEach(function(p){
+    if(p.status !== 'active') return;
+    if(!p.installmentsCount || p.installmentsCount <= 1) return;
+    var start = toDate(p.startDate); if(!start) return;
+    var monthsElapsed = (new Date().getFullYear() - start.getFullYear())*12 + (new Date().getMonth() - start.getMonth()) + 1;
+    var expected = Math.min(monthsElapsed, p.installmentsCount);
+    if((p.paidCount||0) < expected - 1) hasPaymentBehind = true;
+  });
+
+  var coaching = getCoachingForLead(c);
+  var coach2 = false, coach1 = false, coachP = false;
+  if(coaching && coaching.statut !== 'inactif'){
+    var done = coaching.nbCoachingsFaits||0, total = coaching.nbCoachingsTotal||12;
+    if(done < total){
+      var now = new Date();
+      var qN = getCoachingQuotaStatus(coaching, now.getFullYear(), now.getMonth());
+      var prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      var qP = getCoachingQuotaStatus(coaching, prev.getFullYear(), prev.getMonth());
+      if(qN && qP && qN.status === 'miss' && qP.status === 'miss') coach2 = true;
+      else if(qN && qN.status === 'miss') coach1 = true;
+      else if(qN && qN.status === 'partial') coachP = true;
+    }
+  }
+
+  if(status === 'procedure' || hasFailed || hasPaymentBehind || coach2) return 'crit';
+  if(status === 'paused' || hasCancelled || coach1) return 'warn';
+  var oldPending = pays.some(function(p){
+    if(p.status !== 'pending_mandate') return false;
+    var ts = toDate(p.createdAt); if(!ts) return false;
+    return (Date.now() - ts.getTime()) > 7*86400000;
+  });
+  if(oldPending) return 'warn';
+  if(status === 'active' && pays.length === 0) return 'att';
+  if(coachP) return 'att';
+  return 'ok';
+}
+
+/* ─── Auth + boot ─── */
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){ window.location.href = 'login.html'; return; }
+  currentUser = user;
+  db.collection('users').doc(user.uid).get().then(function(s){
+    var d = s.exists ? s.data() : {};
+    currentRole = d.role || '';
+    if(['admin','csm','sales'].indexOf(currentRole) < 0){
+      document.body.innerHTML = '<div style="padding:60px;text-align:center;color:#cbd5e1"><h2>⛔ Accès réservé</h2></div>';
+      return;
+    }
+    loadAll();
+  });
+});
+
+function loadAll(){
+  // Coaching
+  db.collection('clients').onSnapshot(function(sn){
+    coachingByEmail = {};
+    sn.forEach(function(d){
+      var data = d.data();
+      var em = (data.email||'').toLowerCase().trim();
+      if(em) coachingByEmail[em] = data;
+    });
+    renderTable();
+  });
+  // Coachs
+  db.collection('_meta').doc('team_members').get().then(function(snap){
+    if(!snap.exists) return;
+    var raw = snap.data().members || {};
+    var list = Array.isArray(raw) ? raw : Object.keys(raw).map(function(k){ var v = raw[k]; v.slug = v.slug||k; return v; });
+    list.forEach(function(m){ coachMembersMap[m.slug] = m.shortName || m.displayName || m.fullName || m.slug; });
+    var sel = document.getElementById('filterCoach');
+    list.forEach(function(m){
+      if(m.role === 'coach' || m.role === 'admin'){
+        var opt = document.createElement('option');
+        opt.value = m.slug; opt.textContent = coachMembersMap[m.slug];
+        sel.appendChild(opt);
+      }
+    });
+  });
+  // Leads clients (live)
+  db.collection('leads').where('isClient','==',true).onSnapshot(function(sn){
+    allClients = [];
+    sn.forEach(function(d){
+      var data = d.data();
+      if(data._merged === true) return;
+      data.id = d.id;
+      allClients.push(data);
+    });
+    loadPayments();
+  });
+}
+function loadPayments(){
+  if(!allClients.length){ renderTable(); return; }
+  var ids = allClients.map(function(c){ return c.id; });
+  paymentsByLead = {};
+  var chunks = [];
+  for(var i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i+10));
+  var pending = chunks.length;
+  if(!pending){ renderTable(); return; }
+  chunks.forEach(function(chunk){
+    db.collection('payments').where('leadId','in',chunk).get().then(function(sn){
+      sn.forEach(function(d){
+        var p = d.data(); p.id = d.id;
+        if(!paymentsByLead[p.leadId]) paymentsByLead[p.leadId] = [];
+        paymentsByLead[p.leadId].push(p);
+      });
+      if(--pending <= 0) renderTable();
+    }).catch(function(){ if(--pending <= 0) renderTable(); });
+  });
+}
+
+/* ─── Filter + sort ─── */
+function getFilteredSorted(){
+  var list = allClients.slice();
+  list.forEach(function(c){
+    c._level = computeLevel(c);
+    c._coaching = getCoachingForLead(c);
+    c._mainPay = (paymentsByLead[c.id]||[])[0] || null;
+  });
+  if(searchQ){
+    var q = searchQ.toLowerCase();
+    list = list.filter(function(c){
+      return ((c.nom||'')+' '+(c.commerce||'')+' '+(c.email||'')+' '+(c.telephone||'')).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  if(levelFilter !== 'all'){
+    list = list.filter(function(c){ return c._level === levelFilter; });
+  }
+  if(statusFilter !== 'all'){
+    list = list.filter(function(c){ return (c.clientStatus||'active') === statusFilter; });
+  }
+  if(coachFilter !== 'all'){
+    list = list.filter(function(c){
+      return c._coaching && c._coaching.coachAssigned === coachFilter;
+    });
+  }
+  // Sort
+  list.sort(function(a, b){
+    var va, vb;
+    if(sortKey === 'name'){ va = clientName(a).toLowerCase(); vb = clientName(b).toLowerCase(); }
+    else if(sortKey === 'status'){ va = a.clientStatus||'active'; vb = b.clientStatus||'active'; }
+    else if(sortKey === 'coaching'){
+      va = a._coaching ? (a._coaching.nbCoachingsFaits||0)/(a._coaching.nbCoachingsTotal||12) : -1;
+      vb = b._coaching ? (b._coaching.nbCoachingsFaits||0)/(b._coaching.nbCoachingsTotal||12) : -1;
+    }
+    else if(sortKey === 'payment'){
+      va = a._mainPay ? a._mainPay.status : 'zzz';
+      vb = b._mainPay ? b._mainPay.status : 'zzz';
+    }
+    else if(sortKey === 'kajabi'){
+      va = avgKajabiPct(a); vb = avgKajabiPct(b);
+    }
+    else if(sortKey === 'followup'){
+      va = toDate(a.lastCsmFollowupAt); vb = toDate(b.lastCsmFollowupAt);
+      va = va ? va.getTime() : 0; vb = vb ? vb.getTime() : 0;
+    }
+    else if(sortKey === 'since'){
+      va = toDate(a.clientSince); vb = toDate(b.clientSince);
+      va = va ? va.getTime() : 0; vb = vb ? vb.getTime() : 0;
+    }
+    if(va < vb) return -1*sortDir;
+    if(va > vb) return 1*sortDir;
+    return 0;
+  });
+  return list;
+}
+
+function avgKajabiPct(c){
+  if(!c.kajabiProgress || !c.kajabiProgress.byCourse) return -1;
+  var keys = Object.keys(c.kajabiProgress.byCourse);
+  if(!keys.length) return -1;
+  var sum = 0, n = 0;
+  keys.forEach(function(k){
+    var crs = c.kajabiProgress.byCourse[k];
+    if(typeof crs.pct === 'number'){ sum += crs.pct; n++; }
+  });
+  return n > 0 ? sum/n : -1;
+}
+
+/* ─── Render ─── */
+function renderTable(){
+  var list = getFilteredSorted();
+  var tbody = document.getElementById('tbody');
+  document.getElementById('clCount').textContent = list.length + ' / ' + allClients.length + ' clients';
+
+  if(!list.length){
+    tbody.innerHTML = '<tr><td colspan="9" class="cl-empty"><div class="cl-empty-icon">🔍</div><div>Aucun client ne correspond aux filtres</div></td></tr>';
+    return;
+  }
+
+  var html = '';
+  list.forEach(function(c){
+    var lvl = c._level;
+    var lvlClass = lvl ? 'lvl-' + lvl : '';
+
+    // Statut client (dropdown inline)
+    var status = c.clientStatus || 'active';
+    var cs = CLIENT_STATUS[status];
+    var statusSel = '<select class="cl-status-sel ' + cs.cls + '" onchange="changeStatus(\'' + c.id + '\', this.value)" onclick="event.stopPropagation()">';
+    Object.keys(CLIENT_STATUS).forEach(function(s){
+      statusSel += '<option value="' + s + '"' + (s===status?' selected':'') + '>' + CLIENT_STATUS[s].label + '</option>';
+    });
+    statusSel += '</select>';
+
+    // Coachings
+    var coachingCell = '<span class="cl-badge muted">—</span>';
+    if(c._coaching){
+      var done = c._coaching.nbCoachingsFaits||0, total = c._coaching.nbCoachingsTotal||12;
+      var now = new Date();
+      var qN = getCoachingQuotaStatus(c._coaching, now.getFullYear(), now.getMonth());
+      var prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      var qP = getCoachingQuotaStatus(c._coaching, prev.getFullYear(), prev.getMonth());
+      var coachLbl = done + '/' + total;
+      var coachCls = 'ok', coachInfo = '';
+      if(c._coaching.statut === 'inactif'){ coachCls = 'muted'; coachInfo = 'inactif'; }
+      else if(done >= total){ coachCls = 'ok'; coachInfo = '✓ terminé'; }
+      else if(qN && qP && qN.status === 'miss' && qP.status === 'miss'){ coachCls = 'crit'; coachInfo = '2 mois sans'; }
+      else if(qN && qN.status === 'miss'){ coachCls = 'warn'; coachInfo = 'retard ce mois'; }
+      else if(qN && qN.status === 'partial'){ coachCls = 'att'; coachInfo = qN.used+'/'+qN.max+' mois'; }
+      else if(qN && qN.status === 'ok'){ coachCls = 'ok'; coachInfo = '✓ ce mois'; }
+      coachingCell = '<span class="cl-badge ' + coachCls + '" title="' + esc(c._coaching.programme||'') + '">' + coachLbl + '</span>';
+      if(coachInfo) coachingCell += ' <span style="font-size:10px;color:var(--ink-muted)">' + coachInfo + '</span>';
+    }
+
+    // Paiement
+    var payCell = '<span class="cl-badge muted">—</span>';
+    var pays = paymentsByLead[c.id] || [];
+    if(pays.length){
+      var failed = pays.filter(function(p){ return p.status === 'failed'; }).length;
+      var mainPay = pays[0];
+      var ps = PAY_STATUS[mainPay.status] || mainPay.status;
+      var payCls = mainPay.status === 'failed' ? 'crit'
+                 : mainPay.status === 'cancelled' ? 'muted'
+                 : (mainPay.status === 'completed' ? 'ok'
+                 : (mainPay.status === 'pending_mandate' ? 'warn' : 'ok'));
+      var prog = mainPay.installmentsCount > 1 ? ' · ' + (mainPay.paidCount||0) + '/' + mainPay.installmentsCount : '';
+      payCell = '<span class="cl-badge ' + payCls + '" title="' + esc(fmtEuro(mainPay.totalAmount)) + '">' + ps + prog + '</span>';
+      if(failed > 0) payCell += ' <span class="cl-badge crit">❌' + failed + '</span>';
+      if(pays.length > 1) payCell += ' <span style="font-size:10px;color:var(--ink-muted)">+' + (pays.length-1) + '</span>';
+    }
+
+    // Kajabi
+    var kajCell = '<span style="color:var(--ink-muted);font-size:11px">—</span>';
+    var kajPct = avgKajabiPct(c);
+    if(kajPct >= 0){
+      var kCol = kajPct >= 80 ? 'var(--csm-accent)' : kajPct >= 40 ? '#fbbf24' : 'var(--crit-color)';
+      kajCell = '<div class="cl-progress">'
+              + '<span class="cl-pct-text" style="color:' + kCol + '">' + Math.round(kajPct) + '%</span>'
+              + '<div class="cl-pct-bar"><div class="cl-pct-fill" style="width:' + Math.round(kajPct) + '%;background:' + kCol + '"></div></div>'
+              + '</div>';
+    }
+
+    // Last followup
+    var followupCell = '<span style="color:var(--ink-muted);font-size:11px">—</span>';
+    if(c.lastCsmFollowupAt){
+      followupCell = '<span class="cl-badge ok">↻ ' + timeAgo(c.lastCsmFollowupAt) + '</span>';
+    }
+
+    // Coach
+    var coachLbl = c._coaching && c._coaching.coachAssigned ? esc(coachMembersMap[c._coaching.coachAssigned] || c._coaching.coachAssigned) : '—';
+    var coachCell = '<span style="font-size:12px;color:var(--ink-muted)">' + coachLbl + '</span>';
+
+    // Since
+    var sinceCell = '<span style="font-size:11px;color:var(--ink-muted)">' + (c.clientSince ? fmtDate(c.clientSince) : '—') + '</span>';
+
+    // Name cell
+    var subInfo = '';
+    if(c.commerce && c.commerce !== c.nom) subInfo = c.commerce;
+    else if(c.email) subInfo = c.email;
+    var nameCell = '<div class="cl-name">'
+                 + '<div class="cl-av">' + esc(initials(clientName(c))) + '</div>'
+                 + '<div class="cl-name-text"><div class="cl-name-main">' + esc(clientName(c)) + '</div>'
+                 + (subInfo ? '<div class="cl-name-sub">' + esc(subInfo) + '</div>' : '')
+                 + '</div></div>';
+
+    // Actions
+    var acts = '<div class="cl-actions">';
+    acts += '<button class="cl-act' + (c.telephone?'':' disabled') + '" title="📱 SMS" onclick="event.stopPropagation();openSms(\'' + c.id + '\')">📱</button>';
+    acts += '<button class="cl-act' + (c.email?'':' disabled') + '" title="📧 Email" onclick="event.stopPropagation();openEmail(\'' + c.id + '\')">📧</button>';
+    acts += '<button class="cl-act" title="📝 Note rapide" onclick="event.stopPropagation();openNote(\'' + c.id + '\', event)">📝</button>';
+    acts += '<button class="cl-act" title="🔍 Détails CSM" onclick="event.stopPropagation();openDetail(\'' + c.id + '\')">🔍</button>';
+    acts += '</div>';
+
+    html += '<tr class="row ' + lvlClass + '" onclick="openDetail(\'' + c.id + '\')">';
+    html += '<td>' + nameCell + '</td>';
+    html += '<td class="col-status">' + statusSel + '</td>';
+    html += '<td>' + coachingCell + '</td>';
+    html += '<td class="col-pay">' + payCell + '</td>';
+    html += '<td class="col-kajabi">' + kajCell + '</td>';
+    html += '<td class="col-followup">' + followupCell + '</td>';
+    html += '<td class="col-coach">' + coachCell + '</td>';
+    html += '<td class="col-since">' + sinceCell + '</td>';
+    html += '<td>' + acts + '</td>';
+    html += '</tr>';
+  });
+
+  tbody.innerHTML = html;
+  // Update sort indicator
+  document.querySelectorAll('.cl-table th').forEach(function(th){
+    th.classList.remove('sorted');
+    if(th.dataset.sort === sortKey) th.classList.add('sorted');
+  });
+}
+
+/* ─── Filter / sort handlers ─── */
+function toggleLevel(lvl, el){
+  levelFilter = lvl;
+  document.querySelectorAll('.cl-pill[data-lvl]').forEach(function(p){ p.classList.remove('active'); });
+  if(el) el.classList.add('active');
+  renderTable();
+}
+window.toggleLevel = toggleLevel;
+
+document.getElementById('searchInput').addEventListener('input', function(e){
+  searchQ = e.target.value.trim(); renderTable();
+});
+document.getElementById('filterStatus').addEventListener('change', function(e){
+  statusFilter = e.target.value; renderTable();
+});
+document.getElementById('filterCoach').addEventListener('change', function(e){
+  coachFilter = e.target.value; renderTable();
+});
+document.querySelectorAll('.cl-table th[data-sort]').forEach(function(th){
+  th.addEventListener('click', function(){
+    var k = th.dataset.sort;
+    if(sortKey === k) sortDir *= -1;
+    else { sortKey = k; sortDir = 1; }
+    renderTable();
+  });
+});
+
+/* ─── Actions ─── */
+function changeStatus(leadId, newStatus){
+  db.collection('leads').doc(leadId).update({
+    clientStatus: newStatus,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    showToast('✅ Statut mis à jour');
+    var c = allClients.find(function(x){ return x.id === leadId; });
+    if(c) c.clientStatus = newStatus;
+    renderTable();
+  }).catch(function(e){
+    showToast('❌ ' + e.message, 'error');
+  });
+}
+window.changeStatus = changeStatus;
+
+function openSms(id){
+  var c = allClients.find(function(x){ return x.id === id; });
+  if(!c || !c.telephone){ showToast('Pas de numéro', 'error'); return; }
+  window.location.href = 'sms:' + c.telephone;
+  traceFollowup(id, 'sms', 'SMS ouvert depuis liste CSM');
+}
+window.openSms = openSms;
+
+function openEmail(id){
+  var c = allClients.find(function(x){ return x.id === id; });
+  if(!c || !c.email){ showToast('Pas d\'email', 'error'); return; }
+  window.location.href = 'mailto:' + c.email + '?subject=' + encodeURIComponent('Suivi de votre accompagnement — Ambitio Corp');
+  traceFollowup(id, 'email', 'Email ouvert depuis liste CSM');
+}
+window.openEmail = openEmail;
+
+function openDetail(id){
+  // Ouvre la modal détail dans csm-dashboard.html via paramètre URL
+  window.open('csm-dashboard.html?clientId=' + encodeURIComponent(id), '_blank');
+}
+window.openDetail = openDetail;
+
+function traceFollowup(leadId, channel, message){
+  var entry = {
+    at: new Date().toISOString(),
+    by: currentUser ? currentUser.uid : null,
+    byName: currentUser ? (currentUser.displayName || currentUser.email.split('@')[0]) : 'CSM',
+    channel: channel,
+    message: message
+  };
+  db.collection('leads').doc(leadId).update({
+    lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
+    lastCsmFollowupBy: currentUser ? currentUser.uid : null,
+    csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(entry),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(function(e){ console.warn(e); });
+}
+
+/* ─── Note rapide via popover ─── */
+function openNote(leadId, evt){
+  popLeadId = leadId;
+  var c = allClients.find(function(x){ return x.id === leadId; });
+  document.getElementById('popTitle').textContent = '📝 Note rapide — ' + (c ? clientName(c) : '?');
+  document.getElementById('popText').value = '';
+  var pop = document.getElementById('popover');
+  pop.classList.add('show');
+  var rect = evt.target.getBoundingClientRect();
+  var top = rect.bottom + 6;
+  var left = rect.left - 280;
+  if(left < 10) left = 10;
+  pop.style.top = top + 'px';
+  pop.style.left = left + 'px';
+  setTimeout(function(){ document.getElementById('popText').focus(); }, 100);
+}
+window.openNote = openNote;
+function closePop(){
+  document.getElementById('popover').classList.remove('show');
+  popLeadId = null;
+}
+window.closePop = closePop;
+function savePopNote(){
+  if(!popLeadId) return;
+  var txt = document.getElementById('popText').value.trim();
+  if(!txt){ showToast('Note vide', 'error'); return; }
+  var auteur = currentUser ? currentUser.email : 'CSM';
+  db.collection('leads').doc(popLeadId).collection('client_notes').add({
+    contenu: txt, auteur: auteur,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(function(){
+    showToast('📝 Note ajoutée');
+    closePop();
+  }).catch(function(e){ showToast('❌ ' + e.message, 'error'); });
+}
+window.savePopNote = savePopNote;
+
+// Fermer popover quand clic ailleurs
+document.addEventListener('click', function(e){
+  var pop = document.getElementById('popover');
+  if(!pop.classList.contains('show')) return;
+  if(pop.contains(e.target)) return;
+  if(e.target.closest('.cl-act')) return;
+  closePop();
+});
+</script>
+</body>
+</html>
