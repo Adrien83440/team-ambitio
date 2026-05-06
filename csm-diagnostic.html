@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnostic CSM — Clients coaching vs leads</title>
+<link rel="stylesheet" href="sales.css">
+<style>
+:root {
+  --csm-accent: #14b8a6;
+  --csm-accent-2: #5eead4;
+  --csm-accent-dark: #0f766e;
+  --csm-bg-soft: rgba(94,234,212,0.10);
+  --csm-border: rgba(94,234,212,0.25);
+  --warn-color: #fb923c;
+  --crit-color: #ef4444;
+}
+.diag-wrap { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.diag-h { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+.diag-icon { width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg, var(--csm-accent-dark), var(--csm-accent-2)); display: flex; align-items: center; justify-content: center; font-size: 28px; }
+.diag-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.diag-stat { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.diag-stat-num { font-size: 28px; font-weight: 800; color: var(--csm-accent); line-height: 1; }
+.diag-stat-num.warn { color: var(--warn-color); }
+.diag-stat-num.crit { color: var(--crit-color); }
+.diag-stat-label { font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-top: 6px; }
+.diag-section { margin-top: 28px; }
+.diag-section-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.diag-table { width: 100%; border-collapse: collapse; background: var(--bg3); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+.diag-table th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-muted); text-align: left; padding: 10px 12px; background: var(--bg2); border-bottom: 1px solid var(--border); }
+.diag-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.diag-table tr:last-child td { border-bottom: none; }
+.diag-table tr:hover { background: rgba(255,255,255,0.02); }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+.tag-warn { background: rgba(251,146,60,0.12); color: var(--warn-color); border: 1px solid rgba(251,146,60,0.25); }
+.tag-ok { background: rgba(52,211,153,0.10); color: #34d399; }
+.tag-muted { background: rgba(255,255,255,0.04); color: var(--ink-muted); }
+.diag-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.diag-btn { padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--bg3); color: var(--ink); cursor: pointer; }
+.diag-btn.primary { background: var(--csm-accent-dark); border-color: var(--csm-accent); color: white; }
+.diag-loading { text-align: center; padding: 40px; color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div id="navContainer"></div>
+
+<div class="diag-wrap">
+  <div class="diag-h">
+    <div class="diag-icon">🔍</div>
+    <div>
+      <h1 style="margin:0;font-size:22px">Diagnostic CSM — Couverture des clients</h1>
+      <div style="color:var(--ink-muted);font-size:13px;margin-top:4px">Compare la collection <code>clients</code> (coaching) avec les <code>leads where isClient==true</code> du CRM</div>
+    </div>
+  </div>
+
+  <div id="diagContent" class="diag-loading">⏳ Chargement des données…</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="nav.js"></script>
+
+<script>
+function esc(s){ return String(s||'').replace(/[<>&"']/g, function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c];}); }
+function fmtDate(d){ if(!d) return '—'; var dt = d.toDate ? d.toDate() : new Date(d); if(isNaN(dt.getTime())) return '—'; return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }
+
+var db = firebase.firestore();
+var allLeadsClients = []; // leads où isClient==true && !_merged
+var allCoachings = [];    // collection clients (coaching)
+var leadsByEmail = {};    // email lowercase -> lead
+var coachingByEmail = {}; // email lowercase -> coaching doc
+
+firebase.auth().onAuthStateChanged(function(user){
+  if(!user){ window.location.href = 'login.html'; return; }
+  loadDiagnostic();
+});
+
+async function loadDiagnostic(){
+  document.getElementById('diagContent').innerHTML = '<div class="diag-loading">⏳ Chargement de la collection <code>leads</code>…</div>';
+
+  // 1. Charger tous les leads clients
+  var leadsSnap = await db.collection('leads').where('isClient','==',true).get();
+  leadsSnap.forEach(function(d){
+    var data = d.data();
+    if(data._merged === true) return;
+    data.id = d.id;
+    allLeadsClients.push(data);
+    var em = (data.email||'').toLowerCase().trim();
+    if(em) leadsByEmail[em] = data;
+  });
+
+  document.getElementById('diagContent').innerHTML = '<div class="diag-loading">⏳ Chargement de la collection <code>clients</code> (coaching)…</div>';
+
+  // 2. Charger toute la collection clients (coaching)
+  var clientsSnap = await db.collection('clients').get();
+  clientsSnap.forEach(function(d){
+    var data = d.data();
+    data._id = d.id;
+    allCoachings.push(data);
+    var em = (data.email||'').toLowerCase().trim();
+    if(em) coachingByEmail[em] = data;
+  });
+
+  // 3. Calculer les diff
+  var coachingsNoLead = []; // coaching mais pas dans leads
+  var leadsNoCoaching = []; // lead client mais pas dans coaching
+  var coachingsNoEmail = []; // coaching sans email (impossible à matcher)
+
+  allCoachings.forEach(function(co){
+    var em = (co.email||'').toLowerCase().trim();
+    if(!em){ coachingsNoEmail.push(co); return; }
+    if(!leadsByEmail[em]) coachingsNoLead.push(co);
+  });
+
+  allLeadsClients.forEach(function(c){
+    var em = (c.email||'').toLowerCase().trim();
+    if(!em) return;
+    // Skip imports historiques
+    if(c.source === 'bigin_import' || c.source === 'migration_suivi_client') return;
+    if(!coachingByEmail[em]) leadsNoCoaching.push(c);
+  });
+
+  renderDiagnostic({
+    totalLeads: allLeadsClients.length,
+    totalCoachings: allCoachings.length,
+    coachingsNoLead: coachingsNoLead,
+    leadsNoCoaching: leadsNoCoaching,
+    coachingsNoEmail: coachingsNoEmail,
+    matched: allLeadsClients.length - leadsNoCoaching.length
+  });
+}
+
+function renderDiagnostic(d){
+  var h = '';
+
+  // Stats top
+  h += '<div class="diag-stats">';
+  h += '<div class="diag-stat"><div class="diag-stat-num">' + d.totalLeads + '</div><div class="diag-stat-label">Leads where isClient</div></div>';
+  h += '<div class="diag-stat"><div class="diag-stat-num">' + d.totalCoachings + '</div><div class="diag-stat-label">Fiches coaching</div></div>';
+  h += '<div class="diag-stat"><div class="diag-stat-num warn">' + d.coachingsNoLead.length + '</div><div class="diag-stat-label">Coaching sans lead</div></div>';
+  h += '<div class="diag-stat"><div class="diag-stat-num crit">' + d.coachingsNoEmail.length + '</div><div class="diag-stat-label">Coaching sans email</div></div>';
+  h += '</div>';
+
+  // Section 1 : Coachings non matchés (le problème principal)
+  h += '<div class="diag-section">';
+  h += '<div class="diag-section-title">⚠️ Fiches coaching SANS lead correspondant (' + d.coachingsNoLead.length + ')</div>';
+  if(d.coachingsNoLead.length){
+    h += '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:10px">Ces clients sont en coaching mais invisibles dans le dashboard CSM car aucun lead avec <code>isClient==true</code> n\'a leur email.</div>';
+    h += '<div class="diag-actions">';
+    h += '<button class="diag-btn" onclick="exportCsv(\'coachings_no_lead\')">📥 Export CSV</button>';
+    h += '<button class="diag-btn primary" onclick="confirmCreateAllLeads()">⚡ Créer tous les leads manquants</button>';
+    h += '</div>';
+    h += '<table class="diag-table"><thead><tr><th>Nom</th><th>Email</th><th>Téléphone</th><th>Programme</th><th>Coachings</th><th>Statut</th><th>Date entrée</th><th></th></tr></thead><tbody>';
+    d.coachingsNoLead.forEach(function(co){
+      var nom = co.nom || co.name || '?';
+      if(co.prenom) nom = co.prenom + ' ' + nom;
+      var done = co.nbCoachingsFaits || 0;
+      var total = co.nbCoachingsTotal || 12;
+      var statutTag = co.statut === 'inactif' ? '<span class="tag tag-muted">⏸ Inactif</span>' : '<span class="tag tag-ok">✅ Actif</span>';
+      h += '<tr>';
+      h += '<td><strong>' + esc(nom) + '</strong></td>';
+      h += '<td style="color:var(--ink-muted)">' + esc(co.email||'—') + '</td>';
+      h += '<td style="color:var(--ink-muted)">' + esc(co.telephone||co.phone||'—') + '</td>';
+      h += '<td>' + esc(co.programme||'—') + '</td>';
+      h += '<td>' + done + '/' + total + '</td>';
+      h += '<td>' + statutTag + '</td>';
+      h += '<td>' + fmtDate(co.dateEntree) + '</td>';
+      h += '<td><button class="diag-btn" onclick="createLeadFromCoaching(\'' + esc(co._id) + '\')">+ Lead</button></td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    window._coachingsNoLead = d.coachingsNoLead;
+  } else {
+    h += '<div style="background:rgba(52,211,153,0.10);border:1px solid rgba(52,211,153,0.30);border-radius:10px;padding:14px;color:#34d399">✅ Tous les coachings ont un lead correspondant.</div>';
+  }
+  h += '</div>';
+
+  // Section 2 : Leads sans coaching (info)
+  h += '<div class="diag-section">';
+  h += '<div class="diag-section-title">ℹ️ Leads clients SANS fiche coaching (' + d.leadsNoCoaching.length + ')</div>';
+  h += '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:10px">Ces clients sont marqués comme clients dans le CRM mais n\'ont pas de fiche coaching. C\'est normal pour les clients sans accompagnement.</div>';
+  if(d.leadsNoCoaching.length){
+    h += '<details><summary style="cursor:pointer;color:var(--ink-soft);font-size:12px;margin-bottom:8px">Voir la liste</summary>';
+    h += '<table class="diag-table"><thead><tr><th>Nom</th><th>Email</th><th>Source</th><th>Client depuis</th></tr></thead><tbody>';
+    d.leadsNoCoaching.slice(0,80).forEach(function(c){
+      h += '<tr>';
+      h += '<td><strong>' + esc(c.nom||c.name||'?') + '</strong></td>';
+      h += '<td style="color:var(--ink-muted)">' + esc(c.email||'—') + '</td>';
+      h += '<td><span class="tag tag-muted">' + esc(c.source||'—') + '</span></td>';
+      h += '<td>' + fmtDate(c.clientSince) + '</td>';
+      h += '</tr>';
+    });
+    if(d.leadsNoCoaching.length > 80){
+      h += '<tr><td colspan="4" style="text-align:center;color:var(--ink-muted);font-style:italic">… et ' + (d.leadsNoCoaching.length - 80) + ' autres</td></tr>';
+    }
+    h += '</tbody></table></details>';
+  }
+  h += '</div>';
+
+  // Section 3 : Coachings sans email (problème de matching)
+  if(d.coachingsNoEmail.length){
+    h += '<div class="diag-section">';
+    h += '<div class="diag-section-title">❌ Fiches coaching SANS email (' + d.coachingsNoEmail.length + ')</div>';
+    h += '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:10px">Ces fiches n\'ont pas d\'email — impossible de les matcher avec un lead.</div>';
+    h += '<table class="diag-table"><thead><tr><th>Nom</th><th>Téléphone</th><th>Programme</th></tr></thead><tbody>';
+    d.coachingsNoEmail.forEach(function(co){
+      var nom = co.nom || co.name || '?';
+      if(co.prenom) nom = co.prenom + ' ' + nom;
+      h += '<tr>';
+      h += '<td><strong>' + esc(nom) + '</strong></td>';
+      h += '<td>' + esc(co.telephone||co.phone||'—') + '</td>';
+      h += '<td>' + esc(co.programme||'—') + '</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+
+  document.getElementById('diagContent').innerHTML = h;
+}
+
+function exportCsv(kind){
+  var rows = window._coachingsNoLead || [];
+  var headers = ['nom','prenom','email','telephone','programme','nbCoachingsFaits','nbCoachingsTotal','statut','dateEntree','coachAssigned','activite','secteur'];
+  var lines = [headers.join(';')];
+  rows.forEach(function(co){
+    var line = headers.map(function(h){
+      var v = co[h];
+      if(v && v.toDate) v = v.toDate().toISOString().slice(0,10);
+      return String(v||'').replace(/;/g,',').replace(/\n/g,' ');
+    });
+    lines.push(line.join(';'));
+  });
+  var blob = new Blob(["\ufeff" + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'coachings_no_lead_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+window.createLeadFromCoaching = async function(coachingId){
+  var co = (window._coachingsNoLead || []).find(function(x){ return x._id === coachingId; });
+  if(!co){ alert('Coaching introuvable'); return; }
+  if(!confirm('Créer un lead client pour ' + (co.nom||'?') + ' ?\n\nEmail : ' + (co.email||'—') + '\nTel : ' + (co.telephone||'—'))) return;
+  await createLeadDoc(co);
+  alert('✅ Lead créé. Recharger la page pour voir le diagnostic mis à jour.');
+};
+
+window.confirmCreateAllLeads = async function(){
+  var rows = window._coachingsNoLead || [];
+  if(!rows.length) return;
+  if(!confirm('⚠️ Créer ' + rows.length + ' nouveaux leads clients depuis les fiches coaching ?\n\nCette action :\n• ajoute les leads dans la collection leads avec isClient=true\n• reprend nom/email/tel/programme depuis le coaching\n• ne crée PAS de doublons (skip si email déjà présent)\n• marque la source = coaching_migration\n\nContinuer ?')) return;
+
+  var btn = document.querySelector('button[onclick="confirmCreateAllLeads()"]');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ En cours…'; }
+
+  var success = 0, errors = 0;
+  for(var i = 0; i < rows.length; i++){
+    try {
+      await createLeadDoc(rows[i]);
+      success++;
+      if(btn) btn.textContent = '⏳ ' + success + '/' + rows.length;
+    } catch(e){
+      console.error('Erreur création lead pour', rows[i]._id, e);
+      errors++;
+    }
+  }
+  alert('✅ Migration terminée : ' + success + ' leads créés, ' + errors + ' erreurs.\n\nRechargement de la page pour voir le diagnostic mis à jour.');
+  location.reload();
+};
+
+async function createLeadDoc(co){
+  // Conversion d'une fiche coaching en lead client
+  var nom = co.nom || co.name || '';
+  if(co.prenom) nom = co.prenom + ' ' + nom;
+
+  var leadData = {
+    nom: nom.trim(),
+    email: (co.email||'').toLowerCase().trim(),
+    telephone: co.telephone || co.phone || '',
+    commerce: co.activite || co.secteur || co.commerce || '',
+    secteur: co.secteur || co.activite || '',
+    isClient: true,
+    clientStatus: co.statut === 'inactif' ? 'paused' : 'active',
+    clientSince: co.dateEntree || firebase.firestore.FieldValue.serverTimestamp(),
+    source: 'coaching_migration',
+    sourceCoachingId: co._id,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    importedCreatedAt: co.dateEntree || null,
+    timeline_history: [{
+      date: new Date().toISOString().slice(0,10),
+      text: 'Lead créé depuis fiche coaching (migration)',
+      color: '#14b8a6'
+    }]
+  };
+
+  // Filtrer les undefined
+  Object.keys(leadData).forEach(function(k){ if(leadData[k] === undefined) delete leadData[k]; });
+
+  return db.collection('leads').add(leadData);
+}
+</script>
+</body>
+</html>

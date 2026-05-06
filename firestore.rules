@@ -24,42 +24,35 @@ service cloud.firestore {
       return isAuth() && getRole() == 'sales';
     }
 
-    // ─── NOUVEAU : Customer Success Manager ───
-    // Rôle dédié pour la personne qui suit la satisfaction client, relance les
-    // clients qui ne prennent pas leurs coachings, recueille les témoignages,
-    // et fait l'interface entre les clients et l'équipe.
+    function isCoachOrAdmin() {
+      return isAuth() && (getRole() == 'coach' || getRole() == 'admin');
+    }
+
     function isCsm() {
       return isAuth() && getRole() == 'csm';
     }
 
-    function isAdminOrCsm() {
-      return isAuth() && (getRole() == 'admin' || getRole() == 'csm');
-    }
-
-    function isCoachOrAdmin() {
-      return isAuth() && (getRole() == 'coach' || getRole() == 'admin');
+    // CSM peut lire/mettre à jour les fiches clients (coaching) pour gérer
+    // les notes CSM et relances sur les "coaching only" (clients qui ont
+    // une fiche coaching mais pas de lead correspondant). Elle ne peut PAS
+    // créer/supprimer de fiche coaching (c'est le rôle des coachs).
+    function isCoachOrAdminOrCsm() {
+      return isAuth() && (getRole() == 'coach' || getRole() == 'admin' || getRole() == 'csm');
     }
 
     function isSalesOrAdmin() {
       return isAuth() && (getRole() == 'sales' || getRole() == 'admin');
     }
 
+    // CSM peut lire les leads (dashboard CSM = leads where isClient) et
+    // update certains champs (notes, relances, statut client). Pour create,
+    // c'est ouvert car rules existantes (allow create: if true).
+    function isSalesOrAdminOrCsm() {
+      return isAuth() && (getRole() == 'sales' || getRole() == 'admin' || getRole() == 'csm');
+    }
+
     function isSelfOrAdmin(userId) {
       return isAuth() && (request.auth.uid == userId || isAdmin());
-    }
-
-    // Helper élargi : peut consulter les clients coaching (admin + coach + csm).
-    // La CSM a besoin d'un accès lecture complet aux fiches coaching pour
-    // détecter les retards, voir les sessions, contacter les clients.
-    function canReadCoaching() {
-      return isAuth() && (getRole() == 'admin' || getRole() == 'coach' || getRole() == 'csm');
-    }
-
-    // Helper élargi : peut consulter les leads en tant que clients
-    // (admin + sales + csm). La CSM accède aux leads avec isClient==true
-    // pour gérer les témoignages et les notes post-vente.
-    function canReadSalesClients() {
-      return isAuth() && (getRole() == 'admin' || getRole() == 'sales' || getRole() == 'csm');
     }
 
     // Helper : utilisateurs habilités à écouter les enregistrements
@@ -76,25 +69,12 @@ service cloud.firestore {
     // Helper : utilisateurs habilités à créer/gérer des templates et des
     // demandes de signature électronique. Un flag booléen signaturesAccess
     // sur users/{uid} accorde l'accès aux sales qui doivent pouvoir envoyer
-    // leurs propres signatures (ex : Élodie). Les admins et la CSM l'ont
-    // automatiquement (la CSM en a besoin par défaut pour relancer les
-    // contrats clients en suspens).
+    // leurs propres signatures (ex : Élodie). Les admins l'ont auto.
     function canSignaturesAdmin() {
       return isAuth() && (
         isAdmin() ||
-        isCsm() ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.signaturesAccess == true
       );
-    }
-
-    // Helper : champs autorisés pour la CSM en update sur clients/{id}.
-    // La CSM peut annoter (notes, tags, priorité, historique relances)
-    // mais ne peut PAS toucher aux sessions, programmes, statuts, dates,
-    // coach assigné, etc. — la donnée métier coaching reste la responsabilité
-    // des coachs et admins.
-    function csmAllowedClientFields() {
-      return ['csmNotes', 'lastCsmFollowupAt', 'lastCsmFollowupBy',
-              'csmFollowupHistory', 'csmTags', 'csmPriority', 'csmUpdatedAt'];
     }
 
     // Helper : l'utilisateur authentifié est-il propriétaire de la fiche
@@ -118,30 +98,28 @@ service cloud.firestore {
 
 
     // ═══ COACHING / CLIENTS ═══
-    // La CSM a un accès lecture complet (pour détecter les retards et
-    // suivre les coachings). En écriture, elle ne peut modifier QUE les
-    // champs csm* (annotations, tags, priorité, historique relances).
-    // Les coachs et admins gardent l'accès complet.
     match /clients/{clientId} {
-      allow read:   if canReadCoaching();
-      allow create: if isCoachOrAdmin();
-      allow update: if isCoachOrAdmin()
-                    || (isCsm() && request.resource.data.diff(resource.data).affectedKeys()
-                          .hasOnly(csmAllowedClientFields()));
-      allow delete: if isAdmin();
+      // CSM peut lire (pour voir tous les clients coaching dans le dashboard
+      // CSM, y compris les "coaching only") et update (pour notes csmNotes,
+      // relances csmFollowupHistory, lastCsmFollowupAt, clientStatus). Le
+      // create reste coach+admin pour préserver l'intégrité des fiches.
+      allow read:    if isCoachOrAdminOrCsm();
+      allow create:  if isCoachOrAdmin();
+      allow update:  if isCoachOrAdminOrCsm();
+      allow delete:  if isAdmin();
     }
 
     match /clients/{clientId}/files/{fileId} {
-      allow read:   if canReadCoaching();
+      allow read:   if isCoachOrAdmin();
       allow create: if isCoachOrAdmin();
       allow delete: if isCoachOrAdmin();
     }
 
     // Plans d'action client (documents HTML attachés à la fiche coaching)
-    // Lecture : coach + admin + csm
+    // Lecture : coach + admin
     // Écriture (create/update/delete) : admin uniquement
     match /clients/{clientId}/plans/{planId} {
-      allow read:           if canReadCoaching();
+      allow read:           if isCoachOrAdmin();
       allow create, update: if isAdmin();
       allow delete:         if isAdmin();
     }
@@ -224,25 +202,23 @@ service cloud.firestore {
 
 
     // ═══ COMMUNICATION (coaching) ═══
-    // La CSM a accès complet à la communication coaching pour pouvoir
-    // dialoguer avec les coachs et signaler les clients à risque.
     match /messages_general/{messageId} {
-      allow read:   if canReadCoaching();
-      allow create: if canReadCoaching();
+      allow read:   if isCoachOrAdmin();
+      allow create: if isCoachOrAdmin();
       allow update: if false;
       allow delete: if isAdmin();
     }
 
     match /messages_alarmes/{messageId} {
-      allow read:   if canReadCoaching();
-      allow create: if canReadCoaching();
+      allow read:   if isCoachOrAdmin();
+      allow create: if isCoachOrAdmin();
       allow update: if false;
       allow delete: if isAdmin();
     }
 
     match /messages_suivi/{messageId} {
-      allow read:   if canReadCoaching();
-      allow create: if canReadCoaching();
+      allow read:   if isCoachOrAdmin();
+      allow create: if isCoachOrAdmin();
       allow update: if false;
       allow delete: if isAdmin();
     }
@@ -255,16 +231,16 @@ service cloud.firestore {
     }
 
     match /messages_annonces/{messageId} {
-      allow read:   if canReadCoaching() || isSalesOrAdmin();
+      allow read:   if isCoachOrAdmin() || isSalesOrAdmin();
       allow create: if isAdmin();
       allow update: if false;
       allow delete: if isAdmin();
     }
 
     match /alarms/{alarmId} {
-      allow read:   if canReadCoaching();
-      allow create: if canReadCoaching();
-      allow update: if canReadCoaching();
+      allow read:   if isCoachOrAdmin();
+      allow create: if isCoachOrAdmin();
+      allow update: if isCoachOrAdmin();
       allow delete: if isAdmin();
     }
 
@@ -278,55 +254,51 @@ service cloud.firestore {
 
 
     // ═══ LEADS ═══
-    // La CSM a accès lecture aux leads marqués isClient==true uniquement
-    // (pour ne pas voir les prospects en cours de prospection commerciale).
-    // Elle peut aussi update sur les champs nécessaires aux relances client
-    // (notes lead, tags, dates relance) — on garde la rule simple : update
-    // autorisé sur lead client.
     match /leads/{leadId} {
-      allow read:   if isSalesOrAdmin()
-                    || (isCsm() && resource.data.isClient == true);
-      allow create: if true;
-      allow update: if isSalesOrAdmin()
-                    || (isCsm() && resource.data.isClient == true);
-      allow delete: if isAdmin();
+      // CSM peut read les leads (dashboard) et update (notes/relances/status)
+      allow read:           if isSalesOrAdminOrCsm();
+      allow create:         if true;
+      allow update:         if isSalesOrAdminOrCsm();
+      allow delete:         if isAdmin();
     }
 
     match /leads/{leadId}/client_temoignages/{temoId} {
-      allow read:           if canReadSalesClients();
-      allow create, update: if canReadSalesClients();
-      allow delete:         if canReadSalesClients();
+      allow read:           if isSalesOrAdminOrCsm();
+      allow create, update: if isSalesOrAdminOrCsm();
+      allow delete:         if isSalesOrAdminOrCsm();
     }
 
     match /leads/{leadId}/client_notes/{noteId} {
-      allow read:           if canReadSalesClients();
-      allow create, update: if canReadSalesClients();
-      allow delete:         if canReadSalesClients();
+      allow read:           if isSalesOrAdminOrCsm();
+      allow create, update: if isSalesOrAdminOrCsm();
+      allow delete:         if isSalesOrAdminOrCsm();
     }
 
 
     // ═══ VOICE NOTES — fil de discussion audio par lead ═══
-    // Lecture : sales + admin + csm (pour les leads clients)
-    // Création : sales + admin + csm (l'auteur authentifié pose authorUid = uid)
-    // Update : auteur du vocal ou admin
+    // Lecture : sales + admin
+    // Création : sales + admin (l'auteur authentifié pose authorUid = uid)
+    // Update : auteur du vocal (pour permettre au backend Vercel d'updater
+    //          via Admin SDK la transcription et le résumé) ou admin
     // Suppression : auteur ou admin
+    //
+    // Note : la Vercel Function api/transcribe-voice.js utilise le Firebase
+    // Admin SDK et bypass naturellement ces rules pour poser transcription
+    // et summary après traitement Whisper + Claude Haiku.
     match /leads/{leadId}/voice_notes/{noteId} {
-      allow read:   if canReadSalesClients();
-      allow create: if canReadSalesClients()
+      allow read:   if isSalesOrAdmin();
+      allow create: if isSalesOrAdmin()
                     && request.resource.data.authorUid == request.auth.uid;
       allow update: if isAdmin()
-                    || (canReadSalesClients() && resource.data.authorUid == request.auth.uid);
+                    || (isSalesOrAdmin() && resource.data.authorUid == request.auth.uid);
       allow delete: if isAdmin()
-                    || (canReadSalesClients() && resource.data.authorUid == request.auth.uid);
+                    || (isSalesOrAdmin() && resource.data.authorUid == request.auth.uid);
     }
 
 
     // ═══ META ═══
-    // La CSM a besoin de _meta/team_members pour afficher les membres
-    // (coachs, sales) dans son dashboard, leurs couleurs, etc.
     match /_meta/{docId} {
-      allow read:  if isSalesOrAdmin() || isCsm() || isCoach();
-      allow write: if isSalesOrAdmin();
+      allow read, write: if isSalesOrAdmin();
     }
 
 
@@ -417,11 +389,10 @@ service cloud.firestore {
 
 
     // ═══ FCM TOKENS ═══
-    // CSM a aussi besoin de pouvoir gérer ses tokens push pour les notifs.
     match /fcm_tokens/{tokenId} {
-      allow read:   if isSalesOrAdmin() || isCsm();
+      allow read:   if isSalesOrAdmin();
       allow create, update: if true;
-      allow delete: if isSalesOrAdmin() || isCsm();
+      allow delete: if isSalesOrAdmin();
     }
 
 
@@ -433,7 +404,7 @@ service cloud.firestore {
     }
 
     match /crm_roles/{roleId} {
-      allow read:  if isSalesOrAdmin() || isCsm();
+      allow read:  if isSalesOrAdmin();
       allow write: if isAdmin();
     }
 
@@ -467,9 +438,9 @@ service cloud.firestore {
 
 
     // ═══ SIGNATURES ═══
-    // canSignaturesAdmin() autorise déjà admin + tout user avec flag
-    // signaturesAccess==true. La CSM peut donc accéder via le même flag,
-    // posé sur son user doc depuis admin-users.html.
+    // Accès admin + sales avec flag signaturesAccess == true sur users/{uid}.
+    // Les lectures + update restent ouvertes (signed_pdf créé par le prospect
+    // non-authentifié côté sign.html).
     match /signature_templates/{tplId} {
       allow read:  if true;
       allow write: if canSignaturesAdmin();
@@ -553,16 +524,10 @@ service cloud.firestore {
 
 
     // ═══ PAYMENTS ═══
-    // La CSM a accès lecture aux paiements (pour suivre les paiements
-    // clients en retard, les remboursements, les contrats à relancer).
-    // Elle peut aussi créer (pour marquer un suivi de paiement client).
-    // L'admin garde update/delete sur les paiements existants.
     match /payments/{paymentId} {
-      allow read:   if isSalesOrAdmin() || isCsm();
-      allow create: if isSalesOrAdmin() || isCsm();
-      allow update: if isAdmin()
-                    || (isSalesOrAdmin() && resource.data.createdBy == request.auth.uid)
-                    || (isCsm() && resource.data.createdBy == request.auth.uid);
+      allow read:   if isSalesOrAdmin();
+      allow create: if isSalesOrAdmin();
+      allow update: if isAdmin() || (isSalesOrAdmin() && resource.data.createdBy == request.auth.uid);
       allow delete: if isAdmin();
     }
 
@@ -574,10 +539,14 @@ service cloud.firestore {
     // Visibilité :
     //   - admin : voit toutes les notifs
     //   - sales : voit uniquement les notifs où ownerUid == son uid
-    //   - csm : voit uniquement les notifs où ownerUid == son uid (si elle
-    //           est destinataire d'un SMS / appel client)
     //   - coach : pas d'accès (le widget ne se monte pas pour eux côté UI,
     //             et ces rules le bloquent aussi côté serveur par sécurité)
+    //
+    // Update : autorisé pour marquer "lu" (écriture dans readBy.{uid}).
+    // Pas de gating fin sur le champ touché — les rules Firestore ne
+    // permettent pas de restreindre proprement les map keys, et le seul
+    // "abus" possible est qu'un sales modifie une notif lui appartenant
+    // déjà : risque acceptable.
     match /inbox_notifications/{notifId} {
       allow read: if isAuth() && (
         isAdmin() ||
