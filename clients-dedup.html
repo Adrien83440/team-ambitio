@@ -11,7 +11,18 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js"></script>
+  <script>
+    if (!firebase.apps.length) {
+      firebase.initializeApp({
+        apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+        authDomain:        "ambitio-team.firebaseapp.com",
+        projectId:         "ambitio-team",
+        storageBucket:     "ambitio-team.firebasestorage.app",
+        messagingSenderId: "1079366902268",
+        appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+      });
+    }
+  </script>
   <script src="nav.js"></script>
   <style>
     body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; background: #0a0e1a; color: #e2e8f0; }
@@ -170,7 +181,7 @@
       firebase.firestore().collection('users').doc(STATE.user.uid).get().then(function(doc){
         if (!doc.exists) { renderNotAuthorized(); return; }
         var data = doc.data();
-        STATE.isAdmin = data.role === 'admin' || data.role === 'super_admin';
+        STATE.isAdmin = data.role === 'admin';
         if (!STATE.isAdmin) { renderNotAuthorized(); return; }
         loadAllData();
       }).catch(function(e){ console.error(e); renderNotAuthorized(); });
