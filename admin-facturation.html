@@ -2059,9 +2059,190 @@ function openSubscriptionDrawer(subId) {
   html += '</div>';
 
   document.getElementById('drawerBody').innerHTML = html;
-  document.getElementById('drawerFoot').innerHTML = '<button class="bill-btn bill-btn-ghost" onclick="closeDrawer()">Fermer</button>';
+  document.getElementById('drawerFoot').innerHTML =
+    '<button class="bill-btn bill-btn-primary" onclick="openSubscriptionEdit(\'' + subId + '\')">✏️ Éditer</button>' +
+    '<button class="bill-btn bill-btn-ghost" onclick="closeDrawer()">Fermer</button>';
   document.getElementById('drawerBg').classList.add('show');
   document.getElementById('drawer').classList.add('show');
+}
+
+function openSubscriptionEdit(subId) {
+  const sub = subscriptionsCache.find(function(s){ return s.id === subId; });
+  if (!sub) return toast('Abonnement introuvable', true);
+
+  const cli = clientById(sub.clientId) || {};
+  const cliName = getClientDisplayName(cli, sub.leadName);
+
+  document.getElementById('drawerTitle').textContent = '✏️ Éditer — ' + cliName;
+
+  /* Auto-extraction de totalInstallments depuis la description (regex /x\s*(\d+)\b/i)
+     pour pré-remplir si la description contient "x12" / "x6" etc. */
+  const SUB_STATUSES = [
+    { v: 'active',    l: '✅ Actif' },
+    { v: 'paused',    l: '⏸ En pause' },
+    { v: 'cancelled', l: '❌ Annulé' },
+    { v: 'completed', l: '✓ Terminé' },
+  ];
+
+  /* Liste des sales depuis TEAM_MEMBERS_LIST si dispo */
+  const closersHtml = (function() {
+    const list = (window.TEAM_MEMBERS_LIST || []).filter(function(m) {
+      return m.role === 'sales' || m.role === 'admin';
+    });
+    let opts = '<option value="">—</option>';
+    list.forEach(function(m) {
+      const sel = (sub.closerSlug === m.slug) ? ' selected' : '';
+      opts += '<option value="' + escapeHtml(m.slug) + '"' + sel + '>' + escapeHtml(m.name) + '</option>';
+    });
+    return opts;
+  })();
+
+  let html = '<div class="bill-form-grid full">';
+
+  html += '<div class="bill-form-row">';
+  html += '<div class="bill-label">Description (visible UI)</div>';
+  html += '<input class="bill-input" id="subEditDescription" value="' + escapeHtml(sub.description || '') + '" placeholder="Ex: BP12 x12, ELITE 10X, etc."/>';
+  html += '<div class="bill-help">Le total des mensualités est auto-extrait du pattern "xN" (BP12 <strong>x12</strong> → 12 mensualités).</div>';
+  html += '</div>';
+
+  html += '<div class="bill-form-row">';
+  html += '<div class="bill-label">Mensualités totales</div>';
+  html += '<input class="bill-input" id="subEditTotalInstallments" type="number" min="1" max="120" value="' + (sub.totalInstallments || '') + '" placeholder="Vide = illimité"/>';
+  html += '<div class="bill-help">Vide = abonnement open-ended (génération illimitée jusqu\'à pause/cancel manuel).</div>';
+  html += '</div>';
+
+  html += '<div class="bill-form-row">';
+  html += '<div class="bill-label">Jour de prélèvement (1-31)</div>';
+  html += '<input class="bill-input" id="subEditDayOfMonth" type="number" min="1" max="31" value="' + (sub.dayOfMonth || 5) + '"/>';
+  html += '</div>';
+
+  html += '<div class="bill-form-row">';
+  html += '<div class="bill-label">Statut</div>';
+  html += '<select class="bill-select" id="subEditStatus">';
+  SUB_STATUSES.forEach(function(s) {
+    const sel = (sub.status === s.v) ? ' selected' : '';
+    html += '<option value="' + s.v + '"' + sel + '>' + s.l + '</option>';
+  });
+  html += '</select>';
+  html += '</div>';
+
+  html += '<div class="bill-form-row">';
+  html += '<div class="bill-label">Sales attribué</div>';
+  html += '<select class="bill-select" id="subEditCloserSlug">' + closersHtml + '</select>';
+  html += '</div>';
+
+  html += '<div class="bill-form-row">';
+  html += '<div class="bill-label">Template description facture</div>';
+  html += '<input class="bill-input" id="subEditDescriptionTemplate" value="' + escapeHtml(sub.descriptionTemplate || 'Coaching mensuel — {month_name} {year}') + '"/>';
+  html += '<div class="bill-help">Variables : <code>{month_name}</code>, <code>{year}</code>, <code>{installment}</code>, <code>{total}</code>.</div>';
+  html += '</div>';
+
+  html += '</div>';
+
+  /* Section Actions rapides */
+  html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">';
+  html += '<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Actions rapides</div>';
+  if (sub.status === 'active') {
+    html += '<button class="bill-btn bill-btn-ghost" onclick="quickStatusChange(\'' + subId + '\', \'paused\')" style="margin-right:6px">⏸ Mettre en pause</button>';
+    html += '<button class="bill-btn bill-btn-ghost" onclick="quickStatusChange(\'' + subId + '\', \'completed\')" style="margin-right:6px">✓ Marquer terminé</button>';
+    html += '<button class="bill-btn bill-btn-ghost" onclick="quickStatusChange(\'' + subId + '\', \'cancelled\')" style="color:#ef4444">❌ Annuler l\'abonnement</button>';
+  } else if (sub.status === 'paused') {
+    html += '<button class="bill-btn bill-btn-ghost" onclick="quickStatusChange(\'' + subId + '\', \'active\')">▶️ Reprendre</button>';
+  } else {
+    html += '<button class="bill-btn bill-btn-ghost" onclick="quickStatusChange(\'' + subId + '\', \'active\')">▶️ Réactiver</button>';
+  }
+  html += '</div>';
+
+  document.getElementById('drawerBody').innerHTML = html;
+  document.getElementById('drawerFoot').innerHTML =
+    '<button class="bill-btn bill-btn-ghost" onclick="openSubscriptionDrawer(\'' + subId + '\')">Annuler</button>' +
+    '<button class="bill-btn bill-btn-primary bill-btn-lg" id="subEditSaveBtn" onclick="saveSubscriptionEdit(\'' + subId + '\')">💾 Enregistrer</button>';
+}
+
+async function saveSubscriptionEdit(subId) {
+  const btn = document.getElementById('subEditSaveBtn');
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try {
+    const description = document.getElementById('subEditDescription').value.trim();
+    const totalInstallmentsRaw = document.getElementById('subEditTotalInstallments').value.trim();
+    const dayOfMonthRaw = document.getElementById('subEditDayOfMonth').value.trim();
+    const status = document.getElementById('subEditStatus').value;
+    const closerSlug = document.getElementById('subEditCloserSlug').value;
+    const descriptionTemplate = document.getElementById('subEditDescriptionTemplate').value.trim();
+
+    /* Auto-extract totalInstallments depuis description si non saisi explicitement */
+    let totalInstallments = totalInstallmentsRaw ? parseInt(totalInstallmentsRaw, 10) : null;
+    if (!totalInstallments && description) {
+      const m = description.match(/x\s*(\d+)\b/i);
+      if (m) totalInstallments = parseInt(m[1], 10);
+    }
+    if (totalInstallments && (totalInstallments <= 0 || totalInstallments > 120)) {
+      throw new Error('Mensualités totales doit être entre 1 et 120');
+    }
+
+    const dayOfMonth = dayOfMonthRaw ? parseInt(dayOfMonthRaw, 10) : 5;
+    if (dayOfMonth < 1 || dayOfMonth > 31) throw new Error('Jour du mois doit être entre 1 et 31');
+
+    /* Récupérer le name du closer pour denormalize */
+    let closerName = null;
+    if (closerSlug) {
+      const m = (window.TEAM_MEMBERS || {})[closerSlug];
+      closerName = m ? m.name : null;
+    }
+
+    const update = {
+      description: description,
+      totalInstallments: totalInstallments,
+      dayOfMonth: dayOfMonth,
+      status: status,
+      closerSlug: closerSlug || null,
+      closerName: closerName,
+      descriptionTemplate: descriptionTemplate || 'Coaching mensuel — {month_name} {year}',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.uid,
+      _editedManually: true,
+      _editedManuallyAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await db.collection('subscriptions').doc(subId).update(update);
+    toast('✅ Abonnement mis à jour');
+    /* Re-render en mode lecture après un petit délai (le listener Firestore va refresh la sub dans cache) */
+    setTimeout(function(){ openSubscriptionDrawer(subId); }, 400);
+  } catch (err) {
+    console.error(err);
+    toast('Erreur : ' + err.message, true);
+    btn.disabled = false; btn.textContent = '💾 Enregistrer';
+  }
+}
+
+async function quickStatusChange(subId, newStatus) {
+  const labels = {
+    active: 'Réactiver',
+    paused: 'Mettre en pause',
+    cancelled: 'Annuler définitivement',
+    completed: 'Marquer comme terminé',
+  };
+  const label = labels[newStatus] || newStatus;
+  if (newStatus === 'cancelled' && !confirm('⚠️ ' + label + ' cet abonnement ?\n\nLe mandat GoCardless n\'est PAS impacté côté GC — ce changement n\'agit que sur la base Alteore. Pour annuler chez GC, va sur le dashboard GoCardless directement.')) return;
+  if (newStatus === 'completed' && !confirm(label + ' ?\n\nL\'abonnement n\'apparaîtra plus dans la liste "Actifs" mais reste dans l\'historique.')) return;
+
+  try {
+    const update = {
+      status: newStatus,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.uid,
+      _statusChangedManuallyAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    /* Si on cancel/complete : on coupe nextScheduledAt pour ne plus déclencher le cron 4B */
+    if (newStatus === 'cancelled' || newStatus === 'completed') {
+      update.nextScheduledAt = null;
+    }
+    await db.collection('subscriptions').doc(subId).update(update);
+    toast('✅ Statut changé : ' + label);
+    setTimeout(function(){ openSubscriptionDrawer(subId); }, 400);
+  } catch (err) {
+    toast('Erreur : ' + err.message, true);
+  }
 }
 
 async function generateInvoiceNow(subscriptionId) {
