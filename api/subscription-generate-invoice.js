@@ -119,7 +119,7 @@ module.exports = async function(req, res) {
     }
 
     const vatRate = client.vatExempt ? 0 : (billing.vatRate != null ? billing.vatRate : 20);
-    const vatType = sub.vatType || 'ht';
+    const vatType = sub.vatType || 'ttc';
     let unitPriceHt;
     if (vatType === 'ttc') {
       /* Le montant subscription est TTC → on rétro-calcule le HT */
