@@ -10,21 +10,10 @@
  * importable que par d'autres fichiers du dossier api/.
  */
 
-const admin = require('firebase-admin');
 const crypto = require('crypto');
 
-/* ─── Firebase Admin init (idempotent) ─── */
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    }),
-  });
-}
-
-const db = admin.firestore();
+/* ─── Firebase Admin init (utilise le module partagé du projet) ─── */
+const { db, admin } = require('./_firebaseAdmin');
 const auth = admin.auth();
 
 /**
