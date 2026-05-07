@@ -52,8 +52,11 @@ module.exports = async function(req, res) {
     }
     /* Cap installmentsGenerated vs totalInstallments */
     const generated = sub.installmentsGenerated || 0;
+    const paidOnGC = sub.installmentsPaidOnGC || 0;
+    /* Numéro réel de la prochaine mensualité = paid sur GC + générées par nous + 1 */
+    const installmentNumber = paidOnGC + generated + 1;
     const total = sub.totalInstallments;
-    if (total != null && generated >= total && !force) {
+    if (total != null && (paidOnGC + generated) >= total && !force) {
       /* Mark completed et retourne sans erreur (idempotent côté cron) */
       await subRef.update({ status: 'completed', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       res.status(200).json({ success: true, completed: true, message: 'Toutes les mensualités ont été générées' });
@@ -106,7 +109,7 @@ module.exports = async function(req, res) {
       .replace(/\{month_name\}/g, FR_MONTHS[prelevement.getMonth()])
       .replace(/\{month_number\}/g, String(prelevement.getMonth() + 1).padStart(2, '0'))
       .replace(/\{year\}/g, prelevement.getFullYear())
-      .replace(/\{installment\}/g, String(generated + 1))
+      .replace(/\{installment\}/g, String(installmentNumber))
       .replace(/\{total\}/g, total != null ? String(total) : '?');
 
     /* ── Calcul de la ligne (TTC ou HT selon vatType subscription) ── */
