@@ -2256,7 +2256,7 @@ async function generateInvoiceNow(subscriptionId) {
     '— Client : ' + cliName + '\n' +
     '— Description : ' + (sub.description || '—') + '\n' +
     '— Montant : ' + formatEur(sub.installmentAmount) + ' (' + (sub.vatType || 'ht').toUpperCase() + ')\n' +
-    '— Mensualité : ' + ((sub.installmentsGenerated || 0) + 1) + ' / ' + (sub.totalInstallments || '?') + '\n\n' +
+    '— Mensualité : ' + ((sub.installmentsPaidOnGC || 0) + (sub.installmentsGenerated || 0) + 1) + ' / ' + (sub.totalInstallments || '?') + '\n\n' +
     'La facture sera créée, validée et numérotée IMMÉDIATEMENT (numéro F-2026-XXXXX, PDF généré). Cette action est irréversible.\n\n' +
     'Continuer ?'
   );
