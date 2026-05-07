@@ -1939,7 +1939,7 @@ function openDetail(id){
       </div>
       <div class="dp-info-grid">
         <div class="dp-info"><div class="dp-info-label">Email</div><div class="dp-info-val">${c.email||'—'}</div></div>
-        <div class="dp-info"><div class="dp-info-label">Téléphone</div><div class="dp-info-val">${c.tel||'—'}</div></div>
+        <div class="dp-info"><div class="dp-info-label">Téléphone</div><div class="dp-info-val">${c.telephone||c.tel||'—'}</div></div>
       </div>
       ${c.clientNotes?`<div style="margin:14px 0 0;padding:12px 14px;background:var(--amber-soft-2);border-radius:12px;border-left:3px solid var(--amber-2);font-size:12px;line-height:1.7;color:var(--ink-soft);white-space:pre-wrap"><span style="font-size:10px;font-weight:600;color:var(--amber-2);text-transform:uppercase;letter-spacing:.7px;display:block;margin-bottom:5px">📌 Notes</span>${escHtml(c.clientNotes)}</div>`:''}
     </div>
@@ -2170,6 +2170,8 @@ async function createClient(){
     _id: id, nom,
     email: document.getElementById('nc-email').value.trim(),
     tel: document.getElementById('nc-tel').value.trim(),
+    /* sync inter-modules : double-write champ canonique. lectures rétrocompat telephone || tel partout. */
+    telephone: document.getElementById('nc-tel').value.trim(),
     activite: document.getElementById('nc-activite').value.trim(),
     programme,
     dateEntree: document.getElementById('nc-date').value||new Date().toISOString().slice(0,10),
@@ -3395,7 +3397,7 @@ function editClient(id){
   document.getElementById('ec-id').value       = id;
   document.getElementById('ec-nom').value      = c.nom       || '';
   document.getElementById('ec-email').value    = c.email     || '';
-  document.getElementById('ec-tel').value      = c.tel       || '';
+  document.getElementById('ec-tel').value      = c.telephone || c.tel       || '';
   document.getElementById('ec-activite').value = c.activite  || '';
   document.getElementById('ec-date').value     = c.dateEntree|| '';
   document.getElementById('ec-notes').value    = c.clientNotes || '';
@@ -3422,6 +3424,8 @@ async function saveEditClient(){
   c.nom          = nom;
   c.email        = document.getElementById('ec-email').value.trim();
   c.tel          = document.getElementById('ec-tel').value.trim();
+  /* sync inter-modules : double-write champ canonique. lectures rétrocompat telephone || tel partout. */
+  c.telephone    = document.getElementById('ec-tel').value.trim();
   c.activite     = document.getElementById('ec-activite').value.trim();
   c.programme    = document.getElementById('ec-programme').value;
   c.dateEntree   = document.getElementById('ec-date').value;

@@ -2420,7 +2420,7 @@ function updateClientsStats() {
   const total = active.length;
   const company = active.filter(function(c){ return c.clientType === 'company'; }).length;
   const indiv = active.filter(function(c){ return c.clientType === 'individual'; }).length;
-  const linkedGc = active.filter(function(c){ return !!c.gocardlessCustomerId; }).length;
+  const linkedGc = active.filter(function(c){ return !!(c.gocardlessCustomerId || c.gcCustomerId); }).length;
   document.getElementById('statClientsTotal').textContent = total;
   document.getElementById('statClientsCompany').textContent = company;
   document.getElementById('statClientsIndiv').textContent = indiv;
@@ -2458,8 +2458,8 @@ function renderClientsList() {
     if (typeFilter !== 'all' && c.clientType !== typeFilter) return false;
     if (ownerFilter === '__none__' && c.salesOwner) return false;
     if (ownerFilter !== 'all' && ownerFilter !== '__none__' && c.salesOwner !== ownerFilter) return false;
-    if (gcFilter === 'yes' && !c.gocardlessCustomerId) return false;
-    if (gcFilter === 'no' && c.gocardlessCustomerId) return false;
+    if (gcFilter === 'yes' && !(c.gocardlessCustomerId || c.gcCustomerId)) return false;
+    if (gcFilter === 'no' && (c.gocardlessCustomerId || c.gcCustomerId)) return false;
     if (q) {
       const hay = (c.companyName || '') + ' ' +
         ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')) + ' ' +
@@ -2512,8 +2512,9 @@ function renderClientsList() {
     const exempt = c.vatExempt ? ' <span class="bill-badge exempt">Hors TVA</span>' : '';
 
     /* GC badge */
-    const gcBadge = c.gocardlessCustomerId
-      ? '<span class="bill-badge" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981" title="' + escapeAttr(c.gocardlessCustomerId) + '">✅ GC</span>'
+    const _gcId = c.gocardlessCustomerId || c.gcCustomerId;
+    const gcBadge = _gcId
+      ? '<span class="bill-badge" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981" title="' + escapeAttr(_gcId) + '">✅ GC</span>'
       : '<span style="color:var(--muted);font-size:11px">—</span>';
 
     /* Sales owner display */
@@ -2663,9 +2664,11 @@ function openClientDrawer(clientId) {
   html += '    <div class="bill-help" style="font-size:11px;color:var(--muted);margin-top:4px">Pour traçabilité (Step 3 ouvrira l\'accès aux sales sur leurs clients)</div>';
   html += '  </div>';
   html += '  <div class="bill-form-row"><div class="bill-label">ID client GoCardless</div>';
-  html += '    <input class="bill-input" id="ctGcCustomerId" value="' + attr(data.gocardlessCustomerId || '') + '" placeholder="CU000XXXXXX" style="font-family:var(--font-m);font-size:11px"/>';
-  if (data.gocardlessCustomerId) {
-    html += '    <div class="bill-help" style="font-size:11px;margin-top:4px"><a href="https://manage.gocardless.com/customers/' + escapeAttr(data.gocardlessCustomerId) + '" target="_blank" style="color:#10b981">↗ Voir dans GoCardless</a></div>';
+  /* Lecture rétrocompat : on lit l'un ou l'autre */
+  const _existingGcId = data.gocardlessCustomerId || data.gcCustomerId || '';
+  html += '    <input class="bill-input" id="ctGcCustomerId" value="' + attr(_existingGcId) + '" placeholder="CU000XXXXXX" style="font-family:var(--font-m);font-size:11px"/>';
+  if (_existingGcId) {
+    html += '    <div class="bill-help" style="font-size:11px;margin-top:4px"><a href="https://manage.gocardless.com/customers/' + escapeAttr(_existingGcId) + '" target="_blank" style="color:#10b981">↗ Voir dans GoCardless</a></div>';
   }
   html += '  </div>';
   html += '</div>';
@@ -2823,6 +2826,8 @@ async function saveClient() {
       contactLastName: lastName,
       email: email.toLowerCase(),
       phone: v('ctPhone'),
+      /* sync inter-modules : double-write champ canonique. lectures rétrocompat phone || telephone partout. */
+      telephone: v('ctPhone'),
       siret: siret,
       vatNumber: vatNumber,
       vatExempt: !!document.getElementById('ctVatExempt') && document.getElementById('ctVatExempt').checked,
@@ -2836,6 +2841,8 @@ async function saveClient() {
       notes: v('ctNotes'),
       linkedLeadId: document.getElementById('drawerBody')._currentLeadId || null,
       gocardlessCustomerId: v('ctGcCustomerId') || null,
+      /* sync inter-modules : double-write nom canonique. lectures rétrocompat gocardlessCustomerId || gcCustomerId partout. */
+      gcCustomerId: v('ctGcCustomerId') || null,
       salesOwner: v('ctSalesOwner') || null,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: currentUser.uid
