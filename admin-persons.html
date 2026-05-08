@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Persons — Ambitio</title>
+<link rel="stylesheet" href="sales.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.5.0/tabler-icons.min.css"/>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="nav.js"></script>
+<style>
+/* ═══ Reset & base ═══ */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#f5f4ee;color:#1a1a1a;min-height:100vh;font-size:14px;line-height:1.5}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+
+/* Palette claire — cohérente avec le mockup validé */
+:root{
+  --ap-bg:#f5f4ee;
+  --ap-surface:#ffffff;
+  --ap-surface-alt:#faf9f4;
+  --ap-border:rgba(0,0,0,.10);
+  --ap-border-strong:rgba(0,0,0,.18);
+  --ap-text:#1a1a1a;
+  --ap-text-muted:#6b6b66;
+  --ap-text-soft:#9c9c95;
+  --ap-accent:#185fa5;
+  --ap-accent-bg:#e6f1fb;
+  --ap-success:#0f6e56;
+  --ap-success-bg:#e1f5ee;
+  --ap-warning:#854f0b;
+  --ap-warning-bg:#faeeda;
+  --ap-danger:#a32d2d;
+  --ap-danger-bg:#fcebeb;
+  --ap-purple:#534ab7;
+  --ap-purple-bg:#eeedfe;
+}
+
+/* ═══ Layout principal ═══ */
+.ap-page{display:flex;height:100vh;overflow:hidden}
+.ap-side{width:340px;background:var(--ap-surface-alt);border-right:1px solid var(--ap-border);display:flex;flex-direction:column;flex-shrink:0}
+.ap-main{flex:1;overflow-y:auto;padding:0}
+.ap-main-inner{max-width:880px;margin:0 auto;padding:28px 32px 60px}
+
+/* ═══ Sidebar (liste) ═══ */
+.ap-side-head{padding:20px 18px 14px;border-bottom:1px solid var(--ap-border)}
+.ap-side-title{font-size:13px;font-weight:600;color:var(--ap-text-muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
+.ap-side-count{font-size:11px;color:var(--ap-text-soft);font-weight:500;margin-bottom:12px}
+.ap-search{position:relative}
+.ap-search input{width:100%;padding:9px 12px 9px 34px;background:var(--ap-surface);border:1px solid var(--ap-border);border-radius:8px;font-size:13px;outline:none;transition:border .15s}
+.ap-search input:focus{border-color:var(--ap-accent)}
+.ap-search i{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--ap-text-soft)}
+
+.ap-side-list{flex:1;overflow-y:auto;padding:8px}
+.ap-side-list::-webkit-scrollbar{width:8px}
+.ap-side-list::-webkit-scrollbar-track{background:transparent}
+.ap-side-list::-webkit-scrollbar-thumb{background:var(--ap-border);border-radius:4px}
+.ap-side-list::-webkit-scrollbar-thumb:hover{background:var(--ap-border-strong)}
+
+.ap-item{padding:11px 12px;border-radius:8px;cursor:pointer;margin-bottom:3px;transition:background .12s;border:1px solid transparent}
+.ap-item:hover{background:rgba(0,0,0,.03)}
+.ap-item.active{background:var(--ap-accent-bg);border-color:rgba(24,95,165,.2)}
+.ap-item-name{font-size:13px;font-weight:600;color:var(--ap-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.ap-item-email{font-size:11.5px;color:var(--ap-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ap-item-badges{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.ap-item-badge{font-size:10px;padding:1px 6px;border-radius:4px;font-weight:500;background:rgba(0,0,0,.05);color:var(--ap-text-muted)}
+.ap-item-badge.ok{background:var(--ap-success-bg);color:var(--ap-success)}
+.ap-item-badge.warn{background:var(--ap-warning-bg);color:var(--ap-warning)}
+
+.ap-empty{text-align:center;padding:40px 20px;color:var(--ap-text-soft);font-size:13px}
+
+/* ═══ Main : page header ═══ */
+.ap-pg-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
+.ap-pg-head h1{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.ap-pg-head .sub{font-size:12.5px;color:var(--ap-text-muted);margin-top:3px}
+.ap-pg-actions{display:flex;gap:8px}
+
+/* ═══ Boutons ═══ */
+.ap-btn{padding:7px 14px;border:1px solid var(--ap-border);border-radius:7px;background:var(--ap-surface);color:var(--ap-text);font-size:12.5px;font-weight:500;cursor:pointer;transition:all .12s;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.ap-btn:hover{background:var(--ap-surface-alt);border-color:var(--ap-border-strong)}
+.ap-btn:active{transform:scale(.98)}
+.ap-btn.primary{background:var(--ap-accent);color:#fff;border-color:var(--ap-accent)}
+.ap-btn.primary:hover{background:#0f4d8b}
+.ap-btn.danger{color:var(--ap-danger);border-color:rgba(163,45,45,.2)}
+.ap-btn.danger:hover{background:var(--ap-danger-bg)}
+.ap-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ═══ Card identité principale ═══ */
+.ap-card{background:var(--ap-surface);border:1px solid var(--ap-border);border-radius:14px;padding:20px;margin-bottom:14px}
+.ap-card-id{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px}
+.ap-avatar{width:52px;height:52px;border-radius:50%;background:var(--ap-accent-bg);display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--ap-accent);font-size:16px;flex-shrink:0}
+.ap-id-info{flex:1;min-width:0}
+.ap-id-name-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap}
+.ap-id-name{font-size:19px;font-weight:600;letter-spacing:-.01em}
+.ap-id-meta{display:flex;gap:18px;font-size:12.5px;color:var(--ap-text-muted);flex-wrap:wrap}
+.ap-id-meta span{display:inline-flex;align-items:center;gap:5px}
+
+/* Badges */
+.ap-badge{font-size:11px;padding:3px 9px;border-radius:6px;font-weight:500;display:inline-flex;align-items:center;gap:4px}
+.ap-badge.success{background:var(--ap-success-bg);color:var(--ap-success)}
+.ap-badge.info{background:var(--ap-accent-bg);color:var(--ap-accent)}
+.ap-badge.warn{background:var(--ap-warning-bg);color:var(--ap-warning)}
+.ap-badge.danger{background:var(--ap-danger-bg);color:var(--ap-danger)}
+.ap-badge.purple{background:var(--ap-purple-bg);color:var(--ap-purple)}
+.ap-badge.neutral{background:rgba(0,0,0,.06);color:var(--ap-text-muted)}
+
+/* Grille attribution */
+.ap-attr{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:13px;background:var(--ap-surface-alt);border-radius:10px}
+.ap-attr-label{font-size:10.5px;color:var(--ap-text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;font-weight:600}
+.ap-attr-value{font-size:13px;color:var(--ap-text)}
+
+/* ═══ Section heading ═══ */
+.ap-sect-head{display:flex;align-items:center;justify-content:space-between;margin:22px 0 10px;gap:10px}
+.ap-sect-head h2{font-size:13.5px;font-weight:600;color:var(--ap-text-muted);letter-spacing:.01em}
+.ap-sect-head .pid{font-size:11px;color:var(--ap-text-soft);font-family:'JetBrains Mono',monospace}
+
+/* ═══ Cards collections liées ═══ */
+.ap-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:11px;margin-bottom:14px}
+.ap-grid-card{background:var(--ap-surface);border:1px solid var(--ap-border);border-radius:10px;padding:13px}
+.ap-grid-card.full{grid-column:1/-1}
+.ap-grid-head{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.ap-grid-head i{font-size:16px;color:var(--ap-text-muted)}
+.ap-grid-head .title{font-size:13px;font-weight:600}
+.ap-grid-head .count{margin-left:auto;font-size:11px;color:var(--ap-text-muted)}
+.ap-grid-line{font-size:12.5px;margin-bottom:4px}
+.ap-grid-line .lbl{color:var(--ap-text-muted)}
+.ap-grid-link{font-size:11.5px;color:var(--ap-accent);cursor:pointer;display:inline-block;margin-top:4px}
+.ap-grid-link:hover{text-decoration:underline}
+.ap-grid-empty{font-size:12px;color:var(--ap-text-soft);font-style:italic}
+
+/* Subscriptions row inline */
+.ap-sub-row{display:flex;gap:24px;font-size:12.5px;flex-wrap:wrap}
+.ap-sub-row .lbl{color:var(--ap-text-muted)}
+
+/* ═══ Card historique ═══ */
+.ap-hist-row{margin-bottom:14px}
+.ap-hist-label{font-size:10.5px;color:var(--ap-text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;font-weight:600}
+.ap-chip{font-size:12px;padding:4px 10px;border-radius:6px;background:var(--ap-accent-bg);color:var(--ap-accent);display:inline-flex;align-items:center;gap:4px;margin:0 5px 5px 0}
+.ap-chip.archived{background:rgba(0,0,0,.06);color:var(--ap-text-muted)}
+.ap-hist-foot{border-top:1px solid var(--ap-border);padding-top:11px;margin-top:6px;display:flex;justify-content:space-between;font-size:11px;color:var(--ap-text-muted);flex-wrap:wrap;gap:8px}
+
+/* ═══ Empty state main ═══ */
+.ap-main-empty{text-align:center;padding:80px 20px;color:var(--ap-text-soft);font-size:14px}
+.ap-main-empty i{font-size:40px;display:block;margin-bottom:12px;color:var(--ap-text-soft)}
+
+/* ═══ Modal édition ═══ */
+.ap-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.ap-modal-bg.show{display:flex}
+.ap-modal{background:var(--ap-surface);border-radius:14px;padding:24px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+.ap-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.ap-modal-head h2{font-size:17px;font-weight:600}
+.ap-modal-head .sub{font-size:11.5px;color:var(--ap-text-muted);margin-top:3px}
+.ap-modal-close{background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;color:var(--ap-text-muted)}
+.ap-modal-close:hover{background:var(--ap-surface-alt)}
+
+.ap-form-row{margin-bottom:14px}
+.ap-form-row label{display:block;font-size:11.5px;font-weight:600;color:var(--ap-text-muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.ap-form-row input,.ap-form-row select,.ap-form-row textarea{width:100%;padding:9px 11px;border:1px solid var(--ap-border);border-radius:7px;background:var(--ap-surface);font-size:13px;outline:none;transition:border .15s}
+.ap-form-row input:focus,.ap-form-row select:focus,.ap-form-row textarea:focus{border-color:var(--ap-accent)}
+.ap-form-row .hint{font-size:10.5px;color:var(--ap-text-soft);margin-top:4px}
+.ap-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.ap-prev-warn{background:var(--ap-warning-bg);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11.5px;color:var(--ap-warning);display:flex;gap:7px;align-items:flex-start}
+
+.ap-propag-card{background:var(--ap-surface-alt);border-radius:10px;padding:12px;margin-bottom:14px}
+.ap-propag-head{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:12px;font-weight:600}
+.ap-propag-row{display:flex;align-items:center;gap:9px;font-size:12px;padding:5px 0}
+.ap-propag-row i{font-size:14px;color:var(--ap-text-muted);width:14px}
+.ap-propag-row .col{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap-propag-row .field{color:var(--ap-text-muted);font-family:'JetBrains Mono',monospace;font-size:11px}
+.ap-propag-row .new{color:var(--ap-success);font-size:11px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ap-propag-foot{border-top:1px solid var(--ap-border);padding-top:9px;margin-top:9px;font-size:11px;color:var(--ap-text-muted);display:flex;align-items:center;gap:6px}
+
+.ap-modal-actions{display:flex;justify-content:flex-end;gap:8px}
+
+/* ═══ Toast ═══ */
+.ap-toast-wrap{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2000;pointer-events:none}
+.ap-toast{background:#1a1a1a;color:#fff;padding:11px 18px;border-radius:8px;font-size:13px;font-weight:500;opacity:0;transform:translateY(10px);transition:all .25s;display:flex;align-items:center;gap:8px}
+.ap-toast.show{opacity:1;transform:translateY(0)}
+.ap-toast.success{background:#0f6e56}
+.ap-toast.error{background:#a32d2d}
+
+/* ═══ Loading ═══ */
+.ap-loading{padding:20px;text-align:center;color:var(--ap-text-soft);font-size:12.5px}
+
+/* ═══ Responsive ═══ */
+@media (max-width:900px){
+  .ap-page{flex-direction:column}
+  .ap-side{width:100%;height:auto;max-height:280px;border-right:0;border-bottom:1px solid var(--ap-border)}
+  .ap-main-inner{padding:18px}
+  .ap-attr{grid-template-columns:1fr}
+  .ap-grid{grid-template-columns:1fr}
+  .ap-form-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="ap-page">
+
+  <aside class="ap-side">
+    <div class="ap-side-head">
+      <div class="ap-side-title">Persons</div>
+      <div class="ap-side-count" id="apCount">— chargement</div>
+      <div class="ap-search">
+        <i class="ti ti-search"></i>
+        <input type="text" id="apSearch" placeholder="Nom, email, téléphone…" autocomplete="off"/>
+      </div>
+    </div>
+    <div class="ap-side-list" id="apList">
+      <div class="ap-loading">Chargement…</div>
+    </div>
+  </aside>
+
+  <main class="ap-main">
+    <div class="ap-main-inner" id="apMain">
+      <div class="ap-main-empty">
+        <i class="ti ti-users"></i>
+        <div>Sélectionne une persons dans la liste de gauche.</div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<!-- Modal édition -->
+<div class="ap-modal-bg" id="apModalBg">
+  <div class="ap-modal" id="apModal">
+    <div class="ap-modal-head">
+      <div>
+        <h2>Modifier l'identité</h2>
+        <div class="sub" id="apModalSub">—</div>
+      </div>
+      <button class="ap-modal-close" onclick="apCloseModal()" aria-label="Fermer"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="apModalBody"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="ap-toast-wrap"><div class="ap-toast" id="apToast"></div></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   ADMIN PERSONS — Vue unifiée 360° d'un humain
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const FBCFG = {
+  apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+  authDomain:"ambitio-team.firebaseapp.com",
+  projectId:"ambitio-team",
+  storageBucket:"ambitio-team.firebasestorage.app",
+  messagingSenderId:"1079366902268",
+  appId:"1:1079366902268:web:b4ec1691dba54230339279"
+};
+firebase.initializeApp(FBCFG);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+/* État */
+var STATE = {
+  persons: [],
+  personsById: {},
+  selectedId: null,
+  searchQuery: '',
+  currentRole: null,
+  canEdit: false,
+  /* caches */
+  leadsByPerson: {},     /* personId → [leadDoc, ...] */
+  clientsByPerson: {},   /* personId → coachingDoc | null */
+  icsByPerson: {},       /* personId → invoiceClientDoc | null */
+  paymentsByPerson: {},  /* personId → [paymentDoc, ...] */
+  subsByPerson: {},      /* personId → [subDoc, ...] */
+  invoicesByIc: {},      /* icId → [invoiceDoc, ...] */
+  /* modal */
+  editFields: {},        /* fieldName → newValue */
+  editPerson: null
+};
+
+/* ═══ Helpers ═══ */
+function esc(s){if(s===null||s===undefined)return '';var d=document.createElement('div');d.textContent=String(s);return d.innerHTML;}
+function attr(s){return esc(s).replace(/"/g,'&quot;');}
+function lower(s){return (s||'').toString().trim().toLowerCase();}
+function digits(s){return (s||'').toString().replace(/\D+/g,'');}
+function phone9(s){var d=digits(s);return d.length>=9?d.slice(-9):'';}
+
+function getInitials(nom){
+  if(!nom) return '?';
+  var parts = nom.trim().split(/\s+/);
+  if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0]+parts[parts.length-1][0]).toUpperCase();
+}
+
+function fmtPhone(p){
+  if(!p) return '—';
+  /* +33632748120 → +33 6 32 74 81 20 */
+  var d = digits(p);
+  if(d.length === 11 && d.startsWith('33')) {
+    var rest = d.slice(2);
+    return '+33 '+rest[0]+' '+rest.slice(1,3)+' '+rest.slice(3,5)+' '+rest.slice(5,7)+' '+rest.slice(7,9);
+  }
+  return p;
+}
+
+function fmtDate(ts){
+  if(!ts) return '—';
+  try {
+    var d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  } catch(e){ return '—'; }
+}
+
+function fmtDateTime(ts){
+  if(!ts) return '—';
+  try {
+    var d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  } catch(e){ return '—'; }
+}
+
+function toast(msg, type){
+  var t = document.getElementById('apToast');
+  t.textContent = msg;
+  t.className = 'ap-toast show '+(type||'');
+  setTimeout(function(){ t.className = 'ap-toast'; }, 3500);
+}
+
+/* ═══ Auth & permissions ═══ */
+auth.onAuthStateChanged(async function(user){
+  if(!user){ window.location.href='login.html'; return; }
+  try{
+    var snap = await db.collection('users').doc(user.uid).get();
+    var data = snap.exists ? snap.data() : {};
+    STATE.currentRole = data.role || 'sales';
+    if(['admin','sales','csm'].indexOf(STATE.currentRole) === -1){
+      window.location.href = 'coaching.html';
+      return;
+    }
+    STATE.canEdit = (STATE.currentRole === 'admin');
+    document.title = 'Persons' + (STATE.canEdit ? '' : ' (lecture seule)') + ' — Ambitio';
+    loadAll();
+  } catch(e){
+    console.error(e);
+    window.location.href = 'login.html';
+  }
+});
+
+/* ═══ Loading ═══ */
+async function loadAll(){
+  try {
+    /* Charge persons puis tous les docs liés en parallèle */
+    var [pSnap, leadsSnap, clientsSnap, icsSnap, paySnap, subsSnap] = await Promise.all([
+      db.collection('persons').get(),
+      db.collection('leads').where('personId','>','').get(),
+      db.collection('clients').get(),
+      db.collection('invoice_clients').get(),
+      db.collection('payments').get(),
+      db.collection('subscriptions').get()
+    ]);
+
+    STATE.persons = [];
+    STATE.personsById = {};
+    pSnap.forEach(function(d){
+      var p = Object.assign({_id:d.id}, d.data());
+      STATE.persons.push(p);
+      STATE.personsById[d.id] = p;
+    });
+
+    /* Index par personId */
+    STATE.leadsByPerson = {};
+    leadsSnap.forEach(function(d){
+      var data = d.data();
+      var pid = data.personId;
+      if(!pid) return;
+      if(!STATE.leadsByPerson[pid]) STATE.leadsByPerson[pid] = [];
+      STATE.leadsByPerson[pid].push(Object.assign({_id:d.id}, data));
+    });
+
+    STATE.clientsByPerson = {};
+    clientsSnap.forEach(function(d){
+      var data = d.data();
+      if(data.personId) STATE.clientsByPerson[data.personId] = Object.assign({_id:d.id}, data);
+    });
+
+    STATE.icsByPerson = {};
+    icsSnap.forEach(function(d){
+      var data = d.data();
+      if(data.personId) STATE.icsByPerson[data.personId] = Object.assign({_id:d.id}, data);
+    });
+
+    STATE.paymentsByPerson = {};
+    paySnap.forEach(function(d){
+      var data = d.data();
+      var pid = data.personId;
+      if(!pid) return;
+      if(!STATE.paymentsByPerson[pid]) STATE.paymentsByPerson[pid] = [];
+      STATE.paymentsByPerson[pid].push(Object.assign({_id:d.id}, data));
+    });
+
+    STATE.subsByPerson = {};
+    subsSnap.forEach(function(d){
+      var data = d.data();
+      var pid = data.personId;
+      if(!pid) return;
+      if(!STATE.subsByPerson[pid]) STATE.subsByPerson[pid] = [];
+      STATE.subsByPerson[pid].push(Object.assign({_id:d.id}, data));
+    });
+
+    /* Sort persons par nom */
+    STATE.persons.sort(function(a,b){
+      return (a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'});
+    });
+
+    /* Pré-sélection via URL ?id= */
+    var urlId = new URLSearchParams(window.location.search).get('id');
+    if(urlId && STATE.personsById[urlId]) STATE.selectedId = urlId;
+
+    renderList();
+    renderDetail();
+  } catch(e){
+    console.error('[admin-persons] loadAll error:', e);
+    document.getElementById('apList').innerHTML = '<div class="ap-empty">Erreur de chargement.<br/>'+esc(e.message)+'</div>';
+  }
+}
+
+/* ═══ Liste (sidebar) ═══ */
+function renderList(){
+  var list = document.getElementById('apList');
+  var q = STATE.searchQuery.trim().toLowerCase();
+  var filtered = STATE.persons;
+
+  if(q){
+    var qd = digits(q);
+    filtered = STATE.persons.filter(function(p){
+      if((p.nom||'').toLowerCase().indexOf(q) >= 0) return true;
+      if((p.email||'').toLowerCase().indexOf(q) >= 0) return true;
+      if(qd && (p.phoneNormalized||'').indexOf(qd) >= 0) return true;
+      if(qd && (p.telephone||'').replace(/\D/g,'').indexOf(qd) >= 0) return true;
+      /* knownEmails */
+      if(p.knownEmails && p.knownEmails.some(function(e){return (e||'').toLowerCase().indexOf(q) >= 0;})) return true;
+      return false;
+    });
+  }
+
+  document.getElementById('apCount').textContent = STATE.persons.length+' persons'+(q?' • '+filtered.length+' affichées':'');
+
+  if(filtered.length === 0){
+    list.innerHTML = '<div class="ap-empty">Aucune personne ne correspond.</div>';
+    return;
+  }
+
+  var html = '';
+  filtered.forEach(function(p){
+    var hasC = STATE.clientsByPerson[p._id];
+    var hasIc = STATE.icsByPerson[p._id];
+    var hasS = STATE.subsByPerson[p._id] && STATE.subsByPerson[p._id].length > 0;
+    var active = (p._id === STATE.selectedId) ? ' active' : '';
+    html += '<div class="ap-item'+active+'" onclick="apSelect(\''+attr(p._id)+'\')">'
+      + '<div class="ap-item-name">'+esc(p.nom||'(sans nom)')+'</div>'
+      + '<div class="ap-item-email">'+esc(p.email||p.telephone||'—')+'</div>'
+      + '<div class="ap-item-badges">'
+      + (p.crmStatus ? '<span class="ap-item-badge '+(p.crmStatus==='active'?'ok':(p.crmStatus==='paused'||p.crmStatus==='churned'?'warn':''))+'">'+esc(p.crmStatus)+'</span>' : '')
+      + (hasC ? '<span class="ap-item-badge">coach</span>' : '')
+      + (hasIc ? '<span class="ap-item-badge">facturation</span>' : '')
+      + (hasS ? '<span class="ap-item-badge">abo</span>' : '')
+      + '</div>'
+      + '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function apSelect(personId){
+  STATE.selectedId = personId;
+  /* Sync URL */
+  var url = new URL(window.location.href);
+  url.searchParams.set('id', personId);
+  window.history.replaceState({}, '', url.toString());
+  renderList();
+  renderDetail();
+}
+window.apSelect = apSelect;
+
+/* ═══ Détail (main) ═══ */
+function renderDetail(){
+  var main = document.getElementById('apMain');
+  if(!STATE.selectedId){
+    main.innerHTML = '<div class="ap-main-empty"><i class="ti ti-users"></i><div>Sélectionne une persons dans la liste de gauche.</div></div>';
+    return;
+  }
+  var p = STATE.personsById[STATE.selectedId];
+  if(!p){
+    main.innerHTML = '<div class="ap-main-empty"><i class="ti ti-error-404"></i><div>Persons introuvable.</div></div>';
+    return;
+  }
+
+  var leads = STATE.leadsByPerson[p._id] || [];
+  var coaching = STATE.clientsByPerson[p._id] || null;
+  var ic = STATE.icsByPerson[p._id] || null;
+  var payments = STATE.paymentsByPerson[p._id] || [];
+  var subs = STATE.subsByPerson[p._id] || [];
+
+  /* Header + identité */
+  var html = ''
+    + '<div class="ap-pg-head">'
+    +   '<div>'
+    +     '<h1>Fiche persons unifiée</h1>'
+    +     '<div class="sub">'+STATE.persons.length+' humains synchronisés sur 5 collections</div>'
+    +   '</div>'
+    +   '<div class="ap-pg-actions">'
+    + (STATE.canEdit ? '<button class="ap-btn primary" onclick="apOpenEditModal()"><i class="ti ti-edit"></i>Modifier</button>' : '<span class="ap-badge neutral"><i class="ti ti-eye"></i>Lecture seule</span>')
+    +   '</div>'
+    + '</div>';
+
+  /* Card identité principale */
+  var initials = getInitials(p.nom);
+  html += '<div class="ap-card">'
+    + '<div class="ap-card-id">'
+    +   '<div class="ap-avatar">'+esc(initials)+'</div>'
+    +   '<div class="ap-id-info">'
+    +     '<div class="ap-id-name-row">'
+    +       '<span class="ap-id-name">'+esc(p.nom||'(sans nom)')+'</span>'
+    + (p.isClient ? '<span class="ap-badge success"><i class="ti ti-check"></i>Client</span>' : '')
+    + (p.crmStatus ? '<span class="ap-badge '+(p.crmStatus==='active'?'success':(p.crmStatus==='paused'||p.crmStatus==='churned'?'warn':'neutral'))+'">'+esc(p.crmStatus)+'</span>' : '')
+    + '<span class="ap-badge info">'+esc(p.clientType||'individual')+'</span>'
+    +     '</div>'
+    +     '<div class="ap-id-meta">'
+    +       '<span><i class="ti ti-mail"></i>'+esc(p.email||'—')+'</span>'
+    +       '<span><i class="ti ti-phone"></i>'+esc(fmtPhone(p.telephone))+'</span>'
+    + (p.gcCustomerId ? '<span><i class="ti ti-credit-card"></i><a href="https://manage.gocardless.com/customers/'+attr(p.gcCustomerId)+'" target="_blank" style="color:inherit">'+esc(p.gcCustomerId)+'</a></span>' : '')
+    +     '</div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="ap-attr">'
+    +   '<div><div class="ap-attr-label">Closeur</div><div class="ap-attr-value">'+esc(p.closeurName||p.closeurSlug||'—')+'</div></div>'
+    +   '<div><div class="ap-attr-label">Coach</div><div class="ap-attr-value">'+esc(p.coachAssigned||'—')+'</div></div>'
+    +   '<div><div class="ap-attr-label">Coaching status</div><div class="ap-attr-value">'+esc(p.coachingStatus||'—')+'</div></div>'
+    + '</div>'
+    + '</div>';
+
+  /* Société (si applicable) */
+  if(p.clientType === 'company' || p.companyName || p.siret){
+    html += '<div class="ap-card">'
+      + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--ap-text-muted)"><i class="ti ti-building"></i>Identité société</div>'
+      + '<div class="ap-attr" style="grid-template-columns:repeat(2,1fr)">'
+      +   '<div><div class="ap-attr-label">Raison sociale</div><div class="ap-attr-value">'+esc(p.companyName||'—')+'</div></div>'
+      +   '<div><div class="ap-attr-label">Forme juridique</div><div class="ap-attr-value">'+esc(p.companyLegalForm||'—')+'</div></div>'
+      +   '<div><div class="ap-attr-label">SIRET</div><div class="ap-attr-value">'+esc(p.siret||'—')+'</div></div>'
+      +   '<div><div class="ap-attr-label">N° TVA</div><div class="ap-attr-value">'+esc(p.vatNumber||'—')+'</div></div>'
+      +   '<div style="grid-column:1/-1"><div class="ap-attr-label">Adresse</div><div class="ap-attr-value">'+formatAddress(p.address)+'</div></div>'
+      + '</div>'
+      + '</div>';
+  }
+
+  /* Section : 5 collections liées */
+  html += '<div class="ap-sect-head">'
+    + '<h2>Données liées dans 5 collections</h2>'
+    + '<div class="pid">personId : '+esc(p._id)+'</div>'
+    + '</div>';
+
+  html += '<div class="ap-grid">';
+
+  /* Lead(s) */
+  html += '<div class="ap-grid-card">'
+    + '<div class="ap-grid-head">'
+    +   '<i class="ti ti-list-details"></i>'
+    +   '<span class="title">Lead'+(leads.length>1?'s':'')+'</span>'
+    +   '<span class="count">'+leads.length+'</span>'
+    + '</div>';
+  if(leads.length === 0){
+    html += '<div class="ap-grid-empty">Aucun lead lié.</div>';
+  } else {
+    leads.forEach(function(l){
+      html += '<div class="ap-grid-line"><span class="lbl">stage :</span> '+esc(l.stage||'—')+'</div>'
+        + '<div class="ap-grid-line"><span class="lbl">source :</span> '+esc(l.source||l.utm||'—')+'</div>'
+        + '<a href="sales-leads.html?leadId='+attr(l._id)+'" class="ap-grid-link">Ouvrir dans le CRM <i class="ti ti-external-link"></i></a>';
+      if(leads.length > 1) html += '<div style="height:8px"></div>';
+    });
+  }
+  html += '</div>';
+
+  /* Coaching */
+  html += '<div class="ap-grid-card">'
+    + '<div class="ap-grid-head">'
+    +   '<i class="ti ti-school"></i>'
+    +   '<span class="title">Coaching</span>'
+    + (coaching ? '<span class="ap-badge '+(coaching.statut==='actif'?'success':'neutral')+'" style="margin-left:auto">'+esc(coaching.statut||'—')+'</span>' : '<span class="count">0</span>')
+    + '</div>';
+  if(!coaching){
+    html += '<div class="ap-grid-empty">Aucun suivi coaching.</div>';
+  } else {
+    html += '<div class="ap-grid-line"><span class="lbl">programme :</span> '+esc(coaching.programme||'—')+'</div>'
+      + '<div class="ap-grid-line"><span class="lbl">date entrée :</span> '+esc(coaching.dateEntree||'—')+'</div>'
+      + '<a href="coaching.html#'+attr(coaching._id)+'" class="ap-grid-link">Voir le suivi <i class="ti ti-external-link"></i></a>';
+  }
+  html += '</div>';
+
+  /* Invoice client */
+  var icInvoices = ic ? (STATE.invoicesByIc[ic._id] || []) : [];
+  html += '<div class="ap-grid-card">'
+    + '<div class="ap-grid-head">'
+    +   '<i class="ti ti-receipt"></i>'
+    +   '<span class="title">Fiche facturation</span>'
+    + (ic ? '<span class="ap-badge info" style="margin-left:auto">linkée</span>' : '<span class="count">—</span>')
+    + '</div>';
+  if(!ic){
+    html += '<div class="ap-grid-empty">Aucune fiche facturation.</div>';
+  } else {
+    html += '<div class="ap-grid-line"><span class="lbl">type :</span> '+esc(ic.clientType||'individual')+'</div>'
+      + '<div class="ap-grid-line"><span class="lbl">nom contact :</span> '+esc(((ic.contactFirstName||'')+' '+(ic.contactLastName||'')).trim()||'—')+'</div>'
+      + '<a href="admin-facturation.html?clientId='+attr(ic._id)+'" class="ap-grid-link">Ouvrir invoice_client <i class="ti ti-external-link"></i></a>';
+  }
+  html += '</div>';
+
+  /* Payments */
+  var totalPaid = 0;
+  payments.forEach(function(pay){ totalPaid += (pay.totalAmount || pay.totalAmountTtc || 0); });
+  html += '<div class="ap-grid-card">'
+    + '<div class="ap-grid-head">'
+    +   '<i class="ti ti-credit-card"></i>'
+    +   '<span class="title">Paiements</span>'
+    +   '<span class="count">'+payments.length+'</span>'
+    + '</div>';
+  if(payments.length === 0){
+    html += '<div class="ap-grid-empty">Aucun paiement enregistré.</div>';
+  } else {
+    html += '<div class="ap-grid-line"><span class="lbl">montant total :</span> '+totalPaid.toFixed(2)+' €</div>'
+      + '<div class="ap-grid-line"><span class="lbl">dernier :</span> '+esc(fmtDate(payments[payments.length-1].createdAt))+'</div>'
+      + '<a href="payments.html?personId='+attr(p._id)+'" class="ap-grid-link">Voir les paiements <i class="ti ti-external-link"></i></a>';
+  }
+  html += '</div>';
+
+  /* Subscriptions */
+  if(subs.length > 0){
+    var sub = subs[0];
+    html += '<div class="ap-grid-card full">'
+      + '<div class="ap-grid-head">'
+      +   '<i class="ti ti-refresh"></i>'
+      +   '<span class="title">Abonnement actif</span>'
+      +   '<span class="ap-badge '+(sub.status==='active'?'success':'neutral')+'" style="margin-left:auto">'+esc(sub.status||'—')+'</span>'
+      + '</div>'
+      + '<div class="ap-sub-row">'
+      +   '<div><span class="lbl">programme :</span> '+esc(sub.description||sub.programme||'—')+'</div>'
+      +   '<div><span class="lbl">échéance :</span> '+(sub.installmentAmount||0)+' € '+(sub.vatType==='ttc'?'TTC':'HT')+' / '+(sub.frequency||'mois')+'</div>'
+      +   '<div><span class="lbl">prochaine :</span> '+esc(fmtDate(sub.nextBillingDate))+'</div>'
+      +   '<div><span class="lbl">restant :</span> '+(sub.installmentsRemaining||'?')+' / '+(sub.totalInstallments||'?')+'</div>'
+      + '</div>'
+      + (subs.length > 1 ? '<div style="margin-top:8px;font-size:11px;color:var(--ap-text-muted)">+ '+(subs.length-1)+' autre(s) abonnement(s)</div>' : '')
+      + '</div>';
+  } else {
+    html += '<div class="ap-grid-card full">'
+      + '<div class="ap-grid-head">'
+      +   '<i class="ti ti-refresh"></i>'
+      +   '<span class="title">Abonnements</span>'
+      +   '<span class="count">0</span>'
+      + '</div>'
+      + '<div class="ap-grid-empty">Aucun abonnement actif.</div>'
+      + '</div>';
+  }
+
+  html += '</div>'; /* end ap-grid */
+
+  /* Historique */
+  html += '<div class="ap-card">'
+    + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--ap-text-muted)"><i class="ti ti-history"></i>Historique d\'identité</div>';
+
+  /* knownEmails */
+  var knownEmails = p.knownEmails || [];
+  var prevEmails = p._previousEmails || [];
+  html += '<div class="ap-hist-row">'
+    + '<div class="ap-hist-label">Emails connus</div>'
+    + '<div>';
+  if(p.email) html += '<span class="ap-chip"><i class="ti ti-check"></i>'+esc(p.email)+'</span>';
+  knownEmails.forEach(function(e){
+    if(e && e !== p.email && prevEmails.indexOf(e) === -1){
+      html += '<span class="ap-chip">'+esc(e)+'</span>';
+    }
+  });
+  prevEmails.forEach(function(e){
+    if(e) html += '<span class="ap-chip archived"><i class="ti ti-archive"></i>'+esc(e)+'</span>';
+  });
+  if(!p.email && knownEmails.length === 0 && prevEmails.length === 0){
+    html += '<span style="color:var(--ap-text-soft);font-size:12px">Aucun email connu</span>';
+  }
+  html += '</div>'
+    + '<div style="font-size:10.5px;color:var(--ap-text-soft);margin-top:5px">L\'email actuel est en bleu. Les anciens (archivés dans _previousEmails) sont en gris — jamais supprimés.</div>'
+    + '</div>';
+
+  /* knownPhones */
+  var knownPhones = p.knownPhones || [];
+  var prevPhones = p._previousTelephone || [];
+  html += '<div class="ap-hist-row">'
+    + '<div class="ap-hist-label">Téléphones connus</div>'
+    + '<div>';
+  if(p.telephone) html += '<span class="ap-chip"><i class="ti ti-check"></i>'+esc(fmtPhone(p.telephone))+'</span>';
+  knownPhones.forEach(function(ph){
+    if(ph && ph !== p.telephone){
+      html += '<span class="ap-chip">'+esc(fmtPhone(ph))+'</span>';
+    }
+  });
+  prevPhones.forEach(function(ph){
+    if(ph) html += '<span class="ap-chip archived">'+esc(fmtPhone(ph))+'</span>';
+  });
+  if(!p.telephone && knownPhones.length === 0){
+    html += '<span style="color:var(--ap-text-soft);font-size:12px">Aucun téléphone connu</span>';
+  }
+  html += '</div></div>';
+
+  /* Footer */
+  html += '<div class="ap-hist-foot">'
+    + '<span>Créée le '+esc(fmtDate(p.createdAt))+(p._createdByBackfill?' — '+esc(p._createdByBackfill):(p._createdBy?' — '+esc(p._createdBy):''))+'</span>'
+    + '<span>Dernière sync '+esc(fmtDateTime(p._lastSyncedAt||p.updatedAt))+'</span>'
+    + '</div>'
+    + '</div>'; /* end card historique */
+
+  document.getElementById('apMain').innerHTML = html;
+}
+
+function formatAddress(addr){
+  if(!addr || typeof addr !== 'object') return '—';
+  var parts = [];
+  if(addr.line1) parts.push(addr.line1);
+  if(addr.line2) parts.push(addr.line2);
+  if(addr.postalCode || addr.city){
+    parts.push((addr.postalCode||'')+' '+(addr.city||'')).trim();
+  }
+  if(addr.country) parts.push(addr.country);
+  return parts.length ? esc(parts.join(', ')) : '—';
+}
+
+/* ═══ Recherche ═══ */
+document.getElementById('apSearch').addEventListener('input', function(e){
+  STATE.searchQuery = e.target.value;
+  renderList();
+});
+
+/* ═══ Modal édition ═══ */
+function apOpenEditModal(){
+  if(!STATE.canEdit){ toast('Lecture seule — édition réservée aux admins','error'); return; }
+  if(!STATE.selectedId) return;
+  var p = STATE.personsById[STATE.selectedId];
+  if(!p) return;
+
+  STATE.editPerson = p;
+  STATE.editFields = {};
+
+  document.getElementById('apModalSub').textContent = (p.nom||'(sans nom)')+' • personId '+p._id;
+
+  var isCompany = (p.clientType === 'company');
+  var html = ''
+    + '<div class="ap-form-grid">'
+    +   '<div class="ap-form-row"><label>Nom complet</label><input type="text" id="ef_nom" value="'+attr(p.nom||'')+'"/></div>'
+    +   '<div class="ap-form-row"><label>Type</label><select id="ef_clientType"><option value="individual"'+(p.clientType!=='company'?' selected':'')+'>Individual</option><option value="company"'+(isCompany?' selected':'')+'>Company</option></select></div>'
+    + '</div>'
+    + '<div class="ap-form-grid">'
+    +   '<div class="ap-form-row"><label>Email</label><input type="email" id="ef_email" value="'+attr(p.email||'')+'"/></div>'
+    +   '<div class="ap-form-row"><label>Téléphone (E.164)</label><input type="text" id="ef_telephone" value="'+attr(p.telephone||'')+'" placeholder="+33612345678"/></div>'
+    + '</div>'
+    + '<div class="ap-form-row"><label>GoCardless customer ID</label><input type="text" id="ef_gcCustomerId" value="'+attr(p.gcCustomerId||'')+'" placeholder="CU000XXX"/></div>'
+    + '<div class="ap-form-grid">'
+    +   '<div class="ap-form-row"><label>Closeur (slug)</label><input type="text" id="ef_closeurSlug" value="'+attr(p.closeurSlug||'')+'"/></div>'
+    +   '<div class="ap-form-row"><label>Coach</label><input type="text" id="ef_coachAssigned" value="'+attr(p.coachAssigned||'')+'"/></div>'
+    + '</div>';
+
+  /* Société */
+  html += '<div style="font-size:11.5px;font-weight:600;color:var(--ap-text-muted);margin:18px 0 8px;text-transform:uppercase;letter-spacing:.05em">Société (si type = company)</div>'
+    + '<div class="ap-form-row"><label>Raison sociale</label><input type="text" id="ef_companyName" value="'+attr(p.companyName||'')+'"/></div>'
+    + '<div class="ap-form-grid">'
+    +   '<div class="ap-form-row"><label>SIRET</label><input type="text" id="ef_siret" value="'+attr(p.siret||'')+'"/></div>'
+    +   '<div class="ap-form-row"><label>N° TVA</label><input type="text" id="ef_vatNumber" value="'+attr(p.vatNumber||'')+'"/></div>'
+    + '</div>'
+    + '<div class="ap-form-row"><label>Adresse — ligne 1</label><input type="text" id="ef_addr_line1" value="'+attr((p.address&&p.address.line1)||'')+'"/></div>'
+    + '<div class="ap-form-grid">'
+    +   '<div class="ap-form-row"><label>Code postal</label><input type="text" id="ef_addr_postalCode" value="'+attr((p.address&&p.address.postalCode)||'')+'"/></div>'
+    +   '<div class="ap-form-row"><label>Ville</label><input type="text" id="ef_addr_city" value="'+attr((p.address&&p.address.city)||'')+'"/></div>'
+    + '</div>'
+    + '<div class="ap-form-row"><label>Pays</label><input type="text" id="ef_addr_country" value="'+attr((p.address&&p.address.country)||'France')+'"/></div>';
+
+  /* Preview de propagation (sera rempli dynamiquement à la validation) */
+  html += '<div id="apPreviewBox"></div>';
+
+  html += '<div class="ap-modal-actions">'
+    + '<button class="ap-btn" onclick="apCloseModal()">Annuler</button>'
+    + '<button class="ap-btn primary" onclick="apPreviewSave()"><i class="ti ti-eye"></i>Prévisualiser</button>'
+    + '</div>';
+
+  document.getElementById('apModalBody').innerHTML = html;
+  document.getElementById('apModalBg').classList.add('show');
+}
+window.apOpenEditModal = apOpenEditModal;
+
+function apCloseModal(){
+  document.getElementById('apModalBg').classList.remove('show');
+  STATE.editPerson = null;
+  STATE.editFields = {};
+}
+window.apCloseModal = apCloseModal;
+
+/* Champs identité dur (génèrent le preview de propagation) */
+var HARD_IDENTITY_FIELDS = ['nom','email','telephone','gcCustomerId'];
+
+/* Mapping champ persons → collections impactées (côté frontend, juste pour le preview) */
+var FIELD_TO_TARGETS = {
+  nom:           [{coll:'leads',field:'nom'},{coll:'clients',field:'nom'},{coll:'payments',field:'leadName'},{coll:'subscriptions',field:'leadName'}],
+  email:         [{coll:'leads',field:'email'},{coll:'clients',field:'email'},{coll:'invoice_clients',field:'email'},{coll:'payments',field:'leadEmail'}],
+  telephone:     [{coll:'leads',field:'telephone'},{coll:'clients',field:'telephone'},{coll:'invoice_clients',field:'telephone'},{coll:'payments',field:'leadPhone'}],
+  gcCustomerId:  [{coll:'leads',field:'gcCustomerId'},{coll:'invoice_clients',field:'gcCustomerId'},{coll:'payments',field:'gcCustomerId'},{coll:'subscriptions',field:'gcCustomerId'}],
+  companyName:   [{coll:'invoice_clients',field:'companyName'}],
+  siret:         [{coll:'invoice_clients',field:'siret'}],
+  vatNumber:     [{coll:'invoice_clients',field:'vatNumber'}]
+};
+
+var ICONS_COLL = {
+  leads:'ti-list-details',
+  clients:'ti-school',
+  invoice_clients:'ti-receipt',
+  payments:'ti-credit-card',
+  subscriptions:'ti-refresh'
+};
+
+function apPreviewSave(){
+  var p = STATE.editPerson;
+  if(!p) return;
+
+  /* Collecter les valeurs du formulaire */
+  function v(id){var el=document.getElementById(id);return el?el.value.trim():'';}
+  var newVals = {
+    nom: v('ef_nom'),
+    email: v('ef_email').toLowerCase(),
+    telephone: v('ef_telephone'),
+    gcCustomerId: v('ef_gcCustomerId') || null,
+    closeurSlug: v('ef_closeurSlug') || null,
+    coachAssigned: v('ef_coachAssigned') || null,
+    clientType: v('ef_clientType'),
+    companyName: v('ef_companyName') || null,
+    siret: v('ef_siret') || null,
+    vatNumber: v('ef_vatNumber') || null,
+    address: {
+      line1: v('ef_addr_line1'),
+      postalCode: v('ef_addr_postalCode'),
+      city: v('ef_addr_city'),
+      country: v('ef_addr_country')||'France'
+    }
+  };
+  /* phoneNormalized recalculé */
+  newVals.phoneNormalized = phone9(newVals.telephone);
+
+  /* Identifier les champs qui ont changé */
+  var changes = [];
+  Object.keys(newVals).forEach(function(k){
+    if(k === 'address'){
+      var oldA = p.address || {};
+      var newA = newVals.address;
+      if(oldA.line1 !== newA.line1 || oldA.postalCode !== newA.postalCode || oldA.city !== newA.city || oldA.country !== newA.country){
+        changes.push({field:'address', oldVal:oldA, newVal:newA});
+      }
+    } else {
+      var oldV = p[k];
+      if((oldV||'') !== (newVals[k]||'')) changes.push({field:k, oldVal:oldV, newVal:newVals[k]});
+    }
+  });
+
+  if(changes.length === 0){
+    toast('Aucun changement détecté');
+    return;
+  }
+
+  /* Construire le preview */
+  var hardChanges = changes.filter(function(c){ return HARD_IDENTITY_FIELDS.indexOf(c.field) >= 0; });
+  var soft = changes.filter(function(c){ return HARD_IDENTITY_FIELDS.indexOf(c.field) < 0; });
+
+  var html = '<div class="ap-propag-card">'
+    + '<div class="ap-propag-head"><i class="ti ti-refresh"></i>Sera propagé automatiquement par la sync</div>';
+
+  /* Pour chaque champ d'identité dur modifié, lister les targets */
+  var targetsListed = 0;
+  hardChanges.forEach(function(c){
+    var targets = FIELD_TO_TARGETS[c.field] || [];
+    targets.forEach(function(t){
+      var hasTarget = false;
+      if(t.coll === 'leads') hasTarget = (STATE.leadsByPerson[p._id] || []).length > 0;
+      else if(t.coll === 'clients') hasTarget = !!STATE.clientsByPerson[p._id];
+      else if(t.coll === 'invoice_clients') hasTarget = !!STATE.icsByPerson[p._id];
+      else if(t.coll === 'payments') hasTarget = (STATE.paymentsByPerson[p._id] || []).length > 0;
+      else if(t.coll === 'subscriptions') hasTarget = (STATE.subsByPerson[p._id] || []).length > 0;
+      if(!hasTarget) return;
+      var newDisp = (c.newVal===null||c.newVal===undefined||c.newVal==='')?'(vide)':String(c.newVal);
+      html += '<div class="ap-propag-row">'
+        + '<i class="ti '+ICONS_COLL[t.coll]+'"></i>'
+        + '<span class="col">'+esc(t.coll)+'</span>'
+        + '<span class="field">.'+esc(t.field)+'</span>'
+        + '<i class="ti ti-arrow-right" style="font-size:11px;color:var(--ap-text-soft)"></i>'
+        + '<span class="new">'+esc(newDisp)+'</span>'
+        + '</div>';
+      targetsListed++;
+    });
+  });
+
+  if(soft.length > 0){
+    html += '<div style="border-top:1px solid var(--ap-border);margin-top:9px;padding-top:9px;font-size:11px;color:var(--ap-text-muted)">'
+      + soft.length+' autre(s) champ(s) modifié(s) (changements internes — non propagés)'
+      + '</div>';
+  }
+
+  html += '<div class="ap-propag-foot">'
+    + '<i class="ti ti-info-circle" style="font-size:12px"></i>'
+    + '<span>Latence ~2-3 sec • anciens valeurs archivées dans _previous… (jamais supprimées)</span>'
+    + '</div>'
+    + '</div>';
+
+  /* Disclaimer drafts d'invoices */
+  var icHasInvoices = false;
+  if(STATE.icsByPerson[p._id]){
+    /* on n'a pas chargé les invoices en amont, mais le disclaimer est générique */
+    if(soft.find(function(c){return c.field==='companyName'||c.field==='siret'||c.field==='vatNumber';}) || hardChanges.find(function(c){return c.field==='nom'||c.field==='email'||c.field==='telephone';})){
+      icHasInvoices = true;
+    }
+  }
+  if(icHasInvoices){
+    html += '<div class="ap-prev-warn">'
+      + '<i class="ti ti-shield-check" style="font-size:14px;flex-shrink:0;margin-top:1px"></i>'
+      + '<span>Si cette persons a des factures émises (validated), leur clientSnapshot reste immuable (loi anti-fraude 2018). Seuls les drafts seront resynchronisés.</span>'
+      + '</div>';
+  }
+
+  /* Stocker pour le save */
+  STATE.editFields = {
+    /* Tous les changements à appliquer */
+    nom: newVals.nom,
+    email: newVals.email,
+    telephone: newVals.telephone,
+    phoneNormalized: newVals.phoneNormalized,
+    gcCustomerId: newVals.gcCustomerId,
+    closeurSlug: newVals.closeurSlug,
+    coachAssigned: newVals.coachAssigned,
+    clientType: newVals.clientType,
+    companyName: newVals.companyName,
+    siret: newVals.siret,
+    vatNumber: newVals.vatNumber,
+    address: newVals.address
+  };
+
+  /* Affichage : remplacer le bouton Prévisualiser par Confirmer */
+  document.getElementById('apPreviewBox').innerHTML = html;
+  document.querySelector('.ap-modal-actions').innerHTML = ''
+    + '<button class="ap-btn" onclick="apCloseModal()">Annuler</button>'
+    + '<button class="ap-btn" onclick="apOpenEditModal()"><i class="ti ti-arrow-left"></i>Modifier</button>'
+    + '<button class="ap-btn primary" onclick="apConfirmSave()"><i class="ti ti-check"></i>Enregistrer et synchroniser</button>';
+}
+window.apPreviewSave = apPreviewSave;
+
+async function apConfirmSave(){
+  var p = STATE.editPerson;
+  if(!p || !STATE.editFields) return;
+
+  var btn = event && event.target ? event.target.closest('button') : null;
+  if(btn){ btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Enregistrement…'; }
+
+  try {
+    var updates = Object.assign({}, STATE.editFields);
+    updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    /* lastSyncedAt sera posé par les Cloud Functions de sync */
+
+    /* Filtrer null pour FieldValue.delete sur les champs vides ne marche que si on veut vraiment delete.
+       Ici on remplace null par null littéral, ce qui pose null en BD. */
+
+    await db.collection('persons').doc(p._id).update(updates);
+
+    toast('Modifications enregistrées. Propagation en cours…', 'success');
+    apCloseModal();
+
+    /* Reload après 3.5s pour voir la propagation */
+    setTimeout(function(){
+      loadAll();
+    }, 3500);
+
+  } catch(e){
+    console.error(e);
+    toast('Erreur : '+e.message, 'error');
+    if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-check"></i>Enregistrer et synchroniser'; }
+  }
+}
+window.apConfirmSave = apConfirmSave;
+
+/* ═══ Click outside modal pour fermer ═══ */
+document.getElementById('apModalBg').addEventListener('click', function(e){
+  if(e.target === e.currentTarget) apCloseModal();
+});
+
+/* ═══ Escape pour fermer modal ═══ */
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape' && document.getElementById('apModalBg').classList.contains('show')) apCloseModal();
+});
+
+</script>
+</body>
+</html>

@@ -77,6 +77,7 @@
     { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
     { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: 'signatures' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
+    { id: 'admin-persons',     icon: '👤', label: 'Persons',      href: 'admin-persons.html',    section: 'Admin', perm: '_admin' },
     { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
     { id: 'admin-billing',     icon: '🧾', label: 'Facturation',  href: 'admin-facturation.html', section: 'Admin', perm: '_admin' },
     { id: 'admin-dedup',       icon: '🔄', label: 'Dédup Clients', href: 'clients-dedup.html',    section: 'Admin', perm: '_admin' },
