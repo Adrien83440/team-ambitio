@@ -473,6 +473,52 @@ service cloud.firestore {
     }
 
 
+    // ═══ PERSONS — identité unifiée inter-modules (Sync Step 2) ═══
+    // Collection canonique de l'identité humaine, partagée entre leads,
+    // clients (coaching), invoice_clients, payments, subscriptions.
+    // Master des champs identité personne (nom, email, telephone) et hub
+    // de la sync inter-modules.
+    //
+    // Lecture : sales + admin + csm (utile pour le dashboard CSM unifié).
+    // Écriture : admin uniquement en Step 2 (la Cloud Function de sync
+    //   utilisera Admin SDK qui bypass les rules).
+    // Suppression : jamais — règle "aucune donnée supprimée" du projet.
+    match /persons/{personId} {
+      allow read:           if isSalesOrAdminOrCsm();
+      allow create, update: if isAdmin();
+      allow delete:         if false;
+    }
+
+
+    // ═══ INVOICE_CLIENTS — fiches clients de facturation (Sync Step 6.1) ═══
+    // Bloc ajouté pour permettre la lecture côté SDK client depuis
+    // admin-persons.html (vue unifiée 360° d'un humain). Les Vercel
+    // Functions de facturation continuent d'utiliser Admin SDK et
+    // bypass naturellement ces rules.
+    //
+    // Lecture : sales + admin + csm.
+    // Écriture : admin uniquement.
+    match /invoice_clients/{clientId} {
+      allow read:           if isSalesOrAdminOrCsm();
+      allow create, update: if isAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
+    // ═══ SUBSCRIPTIONS — abonnements GoCardless (Sync Step 6.1) ═══
+    // Bloc ajouté pour permettre la lecture côté SDK client depuis
+    // admin-persons.html. Les Vercel Functions de facturation continuent
+    // d'écrire via Admin SDK.
+    //
+    // Lecture : sales + admin + csm.
+    // Écriture : admin uniquement.
+    match /subscriptions/{subscriptionId} {
+      allow read:           if isSalesOrAdminOrCsm();
+      allow create, update: if isAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
     // ═══ DIALER — PHONE NUMBERS ═══
     match /phone_numbers/{numberId} {
       allow read:           if isAuth();
