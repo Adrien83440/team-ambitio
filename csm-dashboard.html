@@ -5,34 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Dashboard CSM</title>
 <link rel="stylesheet" href="sales.css"/>
-
-<!-- ── Firebase v9 compat ── -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-<script>
-  if (!firebase.apps.length) {
-    firebase.initializeApp({
-      apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
-      authDomain:        "ambitio-team.firebaseapp.com",
-      projectId:         "ambitio-team",
-      storageBucket:     "ambitio-team.firebasestorage.app",
-      messagingSenderId: "1079366902268",
-      appId:             "1:1079366902268:web:b4ec1691dba54230339279"
-    });
-  }
-</script>
-
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.34.0/iconfont/tabler-icons.min.css"/>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="nav.js"></script>
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
-   CSM Dashboard — refonte style clair (Step 6.2)
-   Cohérent avec admin-persons.html. Préserve toutes les classes utilisées
-   par le JS (csm-*, modal-*, cs-*, csm2-*).
+   Dashboard CSM — page analytique (Step 6.4a)
+   Cohérent avec admin-persons et csm-clients (style clair).
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── Variables ── */
 :root {
-  /* Override des variables sales.css pour cette page uniquement */
   --bg:           #f5f4ee;
   --bg2:          #ffffff;
   --bg3:          #faf9f4;
@@ -41,27 +25,22 @@
   --ink-soft:     #9c9c95;
   --border:       rgba(0,0,0,.10);
 
-  /* CSM accent — passe au teal classique sur clair */
   --csm-accent:     #0f6e56;
   --csm-accent-2:   #14b8a6;
   --csm-accent-dark:#085041;
-  --csm-glow:       rgba(15,110,86,0.10);
   --csm-bg-soft:    rgba(15,110,86,0.06);
   --csm-border:     rgba(15,110,86,0.20);
 
-  /* Sémantique levels — adoucis pour fond clair */
-  --crit-bg:        #fcebeb;
-  --crit-color:     #a32d2d;
-  --crit-border:    rgba(163,45,45,0.20);
-  --warn-bg:        #faeeda;
-  --warn-color:     #854f0b;
-  --warn-border:    rgba(133,79,11,0.20);
-  --att-bg:         #fef3c7;
-  --att-color:      #854f0b;
-  --att-border:     rgba(133,79,11,0.18);
+  --crit-bg:    #fcebeb;  --crit-color: #a32d2d;  --crit-border: rgba(163,45,45,0.20);
+  --warn-bg:    #faeeda;  --warn-color: #854f0b;  --warn-border: rgba(133,79,11,0.20);
+  --att-bg:     #fef3c7;  --att-color:  #854f0b;
+  --info-bg:    #e6f1fb;  --info-color: #185fa5;
+  --purple-bg:  #eeedfe;  --purple-color:#534ab7;
 }
 
+* { box-sizing: border-box; }
 body {
+  margin: 0;
   background: var(--bg);
   color: var(--ink);
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -69,3628 +48,729 @@ body {
   line-height: 1.5;
 }
 
-/* ── Layout général ── */
-.csm-app { padding: 24px 28px 60px; max-width: 1400px; margin: 0 auto; }
+/* ── Layout ── */
+.dash-app { padding: 24px 28px 60px; max-width: 1500px; margin: 0 auto; }
 
-.csm-header {
-  display: flex; align-items: center; gap: 14px; margin-bottom: 22px;
-  padding-bottom: 18px; border-bottom: 1px solid var(--border);
+/* ── Header ── */
+.dash-header {
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 24px; padding-bottom: 18px;
+  border-bottom: 1px solid var(--border); flex-wrap: wrap;
 }
-.csm-logo {
+.dash-logo {
   width: 44px; height: 44px; border-radius: 12px;
-  background: var(--csm-bg-soft);
+  background: var(--csm-bg-soft); border: 1px solid var(--csm-border);
   display: flex; align-items: center; justify-content: center;
   font-size: 22px; flex-shrink: 0;
-  border: 1px solid var(--csm-border);
 }
-.csm-title { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
-.csm-sub   { font-size: 12.5px; color: var(--ink-muted); margin-top: 3px; }
+.dash-title { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+.dash-sub { font-size: 12.5px; color: var(--ink-muted); margin-top: 3px; }
+.dash-header-spacer { flex: 1; }
+.dash-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-/* ── KPI strip ── */
-.csm-kpi-strip {
-  display: grid; grid-template-columns: repeat(4,1fr); gap: 12px;
-  margin-bottom: 22px;
+/* ── Boutons ── */
+.dash-btn {
+  padding: 8px 14px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg2); color: var(--ink);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  font-family: inherit;
+  display: inline-flex; align-items: center; gap: 6px;
+  text-decoration: none; transition: all 0.12s; white-space: nowrap;
 }
-.csm-kpi {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 12px; padding: 16px 18px;
-  cursor: pointer; transition: all 0.15s;
+.dash-btn:hover { background: var(--bg3); border-color: rgba(0,0,0,.18); }
+.dash-btn.primary {
+  background: var(--csm-accent); color: #fff; border-color: var(--csm-accent);
 }
-.csm-kpi:hover { border-color: var(--csm-border); transform: translateY(-1px); }
-.csm-kpi-num {
-  font-size: 26px; font-weight: 600; letter-spacing: -0.5px;
-  display: flex; align-items: center; gap: 8px;
-}
-.csm-kpi-num i { font-size: 22px; opacity: 0.85; }
-.csm-kpi-label {
-  font-size: 11px; color: var(--ink-muted); margin-top: 6px;
-  text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
-}
-.csm-kpi-trend { font-size: 11.5px; color: var(--ink-soft); margin-top: 4px; }
+.dash-btn.primary:hover { background: var(--csm-accent-dark); }
 
-/* ── Toolbar/Stats anciennes — masquées (compat) ── */
-.csm-modal-bg, .csm-tabs, .csm-stats, .csm-toolbar { display: none !important; }
-
-/* ── Split layout ── */
-.csm-split {
+/* ── KPI grid ── */
+.kpi-grid {
   display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: 16px;
-  align-items: start;
-  min-height: 70vh;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
 }
-
-.csm-sidebar {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  display: flex; flex-direction: column;
+.kpi {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px 20px;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
   overflow: hidden;
-  max-height: 80vh;
 }
-.csm-sidebar-head {
-  padding: 14px; border-bottom: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 10px;
-}
-.csm-sidebar-search {
-  width: 100%; padding: 9px 12px;
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 8px; font-size: 13px; outline: none;
-  transition: border-color 0.15s; color: var(--ink);
-  font-family: inherit;
-}
-.csm-sidebar-search:focus { border-color: var(--csm-accent); }
-.csm-sidebar-search::placeholder { color: var(--ink-soft); }
-
-.csm-sidebar-pills { display: flex; flex-wrap: wrap; gap: 5px; }
-.csm-sb-pill {
-  font-size: 11.5px; padding: 5px 10px; border-radius: 6px;
-  background: transparent; color: var(--ink-muted);
-  border: 1px solid var(--border); cursor: pointer;
-  font-weight: 500; transition: all 0.12s;
-  font-family: inherit;
-}
-.csm-sb-pill:hover { background: var(--bg3); color: var(--ink); }
-.csm-sb-pill.active {
-  background: var(--csm-bg-soft); color: var(--csm-accent);
+.kpi:hover {
   border-color: var(--csm-border);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
 }
-
-.csm-sidebar-list {
-  flex: 1; overflow-y: auto; padding: 6px;
-}
-.csm-sidebar-list::-webkit-scrollbar { width: 8px; }
-.csm-sidebar-list::-webkit-scrollbar-track { background: transparent; }
-.csm-sidebar-list::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,.10); border-radius: 4px;
-}
-.csm-sidebar-list::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,.18); }
-
-/* ── Client row (sidebar) ── */
-.csm-client-row {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 11px; border-radius: 8px;
-  cursor: pointer; margin-bottom: 3px;
-  border: 1px solid transparent;
-  transition: all 0.12s;
-}
-.csm-client-row:hover { background: var(--bg3); }
-.csm-client-row.active {
-  background: var(--csm-bg-soft);
-  border-color: var(--csm-border);
-}
-.csm-cr-dot {
-  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-  background: var(--ink-soft);
-}
-.csm-cr-dot.crit { background: #dc2626; }
-.csm-cr-dot.warn { background: #ea580c; }
-.csm-cr-dot.att  { background: #ca8a04; }
-.csm-cr-dot.ok   { background: #16a34a; }
-
-.csm-cr-line { flex: 1; min-width: 0; }
-.csm-cr-name {
-  font-size: 13px; font-weight: 600; color: var(--ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.csm-cr-meta {
-  font-size: 11px; color: var(--ink-muted); margin-top: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.csm-cr-stats { display: flex; gap: 4px; flex-shrink: 0; }
-.csm-cr-tag {
-  font-size: 10px; padding: 1px 6px; border-radius: 4px;
-  background: rgba(0,0,0,.05); color: var(--ink-muted); font-weight: 500;
-}
-.csm-cr-tag.crit { background: var(--crit-bg); color: var(--crit-color); }
-.csm-cr-tag.warn { background: var(--warn-bg); color: var(--warn-color); }
-.csm-cr-tag.att  { background: var(--att-bg); color: var(--att-color); }
-.csm-cr-time { font-size: 10.5px; color: var(--ink-soft); flex-shrink: 0; }
-
-/* ── Detail panel ── */
-.csm-detail-panel {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px 28px;
-  min-height: 70vh;
-}
-.csm-detail-empty {
-  text-align: center; padding: 80px 20px;
-  color: var(--ink-soft); font-size: 14px;
-}
-
-/* ── Modal header / sticky bar ── */
-.csm-modal-h {
-  display: flex; align-items: flex-start;
-  justify-content: space-between; gap: 14px;
-  margin-bottom: 14px;
-}
-.csm-modal-title {
-  font-size: 20px; font-weight: 600;
-  display: flex; align-items: center; gap: 9px;
-  flex-wrap: wrap;
-}
-.csm-modal-close {
-  background: none; border: none; cursor: pointer;
-  padding: 4px 9px; border-radius: 6px;
-  color: var(--ink-muted); font-size: 16px;
-}
-.csm-modal-close:hover { background: var(--bg3); color: var(--ink); }
-
-.modal-sticky-bar {
-  background: var(--bg3);
-  border-radius: 10px; padding: 12px 14px;
-  margin-bottom: 16px;
+.kpi-head {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 14px; flex-wrap: wrap;
-}
-.modal-contact-line {
-  display: flex; gap: 16px; flex-wrap: wrap;
-  font-size: 12.5px; color: var(--ink-muted);
-}
-.modal-contact-line span { display: inline-flex; align-items: center; gap: 4px; }
-.modal-quick-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-
-/* Tabs internes au modal (si utilisés) */
-.modal-tabs {
-  display: flex; gap: 4px; border-bottom: 1px solid var(--border);
-  margin-bottom: 16px; flex-wrap: wrap;
-}
-.modal-tabs > * {
-  padding: 9px 14px; cursor: pointer; font-size: 13px; font-weight: 500;
-  color: var(--ink-muted); border-bottom: 2px solid transparent;
-  background: transparent; border-top: none; border-left: none; border-right: none;
-  font-family: inherit; transition: all 0.12s;
-}
-.modal-tabs > *:hover { color: var(--ink); }
-.modal-tabs > *.active {
-  color: var(--csm-accent); border-bottom-color: var(--csm-accent);
-}
-.modal-tab-bodies { min-height: 200px; }
-
-/* ── Sections dans le détail ── */
-.csm-section {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-}
-.csm-section-title {
-  font-size: 12px; font-weight: 600;
-  color: var(--ink-muted);
-  text-transform: uppercase; letter-spacing: 0.05em;
   margin-bottom: 10px;
-  display: flex; align-items: center; gap: 6px;
 }
-
-/* ── Avatars / cards ── */
-.csm-avatar {
-  width: 40px; height: 40px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 600; font-size: 14px; color: var(--csm-accent);
-  background: var(--csm-bg-soft); border: 1px solid var(--csm-border);
-  flex-shrink: 0;
-}
-.csm-card {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
-  display: flex; align-items: center; gap: 12px;
-  transition: all 0.12s;
-}
-.csm-card:hover { border-color: var(--csm-border); }
-.csm-card-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.csm-card-name { font-size: 14px; font-weight: 600; }
-.csm-card-meta {
-  font-size: 12px; color: var(--ink-muted);
-  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
-}
-.csm-card-meta span { display: inline-flex; align-items: center; gap: 4px; }
-
-/* csm-card2 / csm2-* (cards alternatives plus structurées) */
-.csm-card2 {
-  display: grid;
-  grid-template-columns: minmax(220px,1.5fr) 1.1fr 1.1fr 1.1fr 1fr auto;
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 10px; margin-bottom: 8px;
-  overflow: hidden; transition: all 0.12s;
-}
-.csm-card2:hover { border-color: var(--csm-border); }
-.csm2-cell {
-  padding: 12px 14px; border-right: 1px solid var(--border);
-  display: flex; flex-direction: column; gap: 4px;
-}
-.csm2-cell:last-of-type { border-right: none; }
-.csm2-id {
-  display: flex; align-items: center; gap: 11px;
-  padding: 12px 14px; border-right: 1px solid var(--border);
-}
-.csm2-actions {
-  display: flex; align-items: center; gap: 4px;
-  padding: 10px 14px;
-}
-.csm2-cell-pay   { background: rgba(15,110,86,0.015); }
-.csm2-cell-coach { background: rgba(15,110,86,0.025); }
-.csm2-cell-kaj   { background: rgba(133,79,11,0.015); }
-
-/* csm2 — sous-éléments des cells */
-.csm2-cell-label {
-  font-size: 10.5px; color: var(--ink-muted);
+.kpi-label {
+  font-size: 11.5px; color: var(--ink-muted);
   text-transform: uppercase; letter-spacing: 0.04em;
   font-weight: 600;
 }
-.csm2-cell-main { font-size: 14px; font-weight: 600; color: var(--ink); }
-.csm2-cell-main-small { font-size: 12.5px; font-weight: 500; color: var(--ink); }
-.csm2-cell-sub { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
-.csm2-cell-empty { font-size: 12px; color: var(--ink-soft); font-style: italic; }
-.csm2-id-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.csm2-name {
-  font-size: 13.5px; font-weight: 600; color: var(--ink);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.kpi-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
 }
-.csm2-sub {
+.kpi-icon.green { background: var(--csm-bg-soft); color: var(--csm-accent); }
+.kpi-icon.red   { background: var(--crit-bg);     color: var(--crit-color); }
+.kpi-icon.blue  { background: var(--info-bg);     color: var(--info-color); }
+.kpi-icon.amber { background: var(--warn-bg);     color: var(--warn-color); }
+
+.kpi-value {
+  font-size: 32px; font-weight: 700; letter-spacing: -0.5px;
+  line-height: 1; margin-bottom: 6px;
+}
+.kpi-trend {
+  font-size: 11.5px; color: var(--ink-soft);
+  display: flex; align-items: center; gap: 4px;
+}
+.kpi-trend.up    { color: var(--csm-accent); }
+.kpi-trend.down  { color: var(--crit-color); }
+.kpi-trend.flat  { color: var(--ink-muted); }
+.kpi-suffix {
+  font-size: 14px; color: var(--ink-muted); font-weight: 500;
+  margin-left: 4px;
+}
+
+/* ── Cards grid ── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex; flex-direction: column;
+  min-height: 280px;
+}
+.card-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.card-icon {
+  width: 28px; height: 28px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.card-icon.red    { background: var(--crit-bg);    color: var(--crit-color); }
+.card-icon.amber  { background: var(--warn-bg);    color: var(--warn-color); }
+.card-icon.purple { background: var(--purple-bg);  color: var(--purple-color); }
+.card-icon.blue   { background: var(--info-bg);    color: var(--info-color); }
+.card-title {
+  font-size: 14px; font-weight: 600; flex: 1; min-width: 0;
+}
+.card-count {
   font-size: 11.5px; color: var(--ink-muted);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--bg3); padding: 2px 8px;
+  border-radius: 5px; font-weight: 500;
 }
-.csm2-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
-.csm2-amount { font-size: 13px; font-weight: 600; color: var(--ink); }
-.csm2-amount-sep { color: var(--ink-soft); margin: 0 4px; font-weight: 400; }
-.csm2-amount-total { color: var(--csm-accent); }
-.csm2-progress-mini {
-  width: 100%; height: 4px;
-  background: rgba(0,0,0,0.06); border-radius: 2px;
-  overflow: hidden; margin-top: 5px;
+.card-body { flex: 1; }
+.card-foot {
+  margin-top: auto; padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end;
 }
-.csm2-progress-mini-fill {
-  height: 100%; background: var(--csm-accent);
-  border-radius: 2px; transition: width 0.3s;
+.card-foot a {
+  font-size: 11.5px; color: var(--csm-accent);
+  text-decoration: none; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 3px;
 }
+.card-foot a:hover { text-decoration: underline; }
 
-/* csm-modal (modal complet ancien — masqué) */
-.csm-modal { display: none; }
-
-@media (max-width: 1280px) {
-  .csm-card2 { grid-template-columns: minmax(200px,1.4fr) 1.1fr 1.1fr 1.1fr auto; }
-  .csm2-cell-followup { display: none; }
+/* Item de liste dans une card */
+.card-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
 }
-@media (max-width: 920px) {
-  .csm-card2 { grid-template-columns: 1fr 1fr; gap: 0; }
-  .csm2-id { grid-column: 1 / -1; border-right: none; border-bottom: 1px solid var(--border); }
-  .csm2-cell { border-right: none; border-bottom: 1px solid var(--border); }
-  .csm2-cell-pay, .csm2-cell-coach { border-right: 1px solid var(--border); }
-  .csm2-actions {
-    grid-column: 1 / -1; padding: 8px 14px;
-    justify-content: flex-end; border-top: 1px solid var(--border);
-    background: var(--bg3);
-  }
-}
-
-/* ── Liste & empty ── */
-.csm-list { display: flex; flex-direction: column; gap: 8px; }
-.csm-empty {
-  text-align: center; padding: 60px 20px; color: var(--ink-soft);
-}
-.csm-empty-icon { font-size: 38px; margin-bottom: 12px; opacity: 0.4; }
-.csm-empty-title {
-  font-size: 15px; font-weight: 600; color: var(--ink);
-  margin-bottom: 6px;
-}
-
-/* ── Badges ── */
-.csm-badge {
-  padding: 3px 9px; border-radius: 6px;
-  font-size: 11px; font-weight: 500;
-  letter-spacing: 0;
-  display: inline-flex; align-items: center; gap: 4px;
-  white-space: nowrap;
-}
-.csm-badge.crit { background: var(--crit-bg); color: var(--crit-color); border: 1px solid var(--crit-border); }
-.csm-badge.warn { background: var(--warn-bg); color: var(--warn-color); border: 1px solid var(--warn-border); }
-.csm-badge.att  { background: var(--att-bg); color: var(--att-color); border: 1px solid var(--att-border); }
-.csm-badge.ok   { background: var(--csm-bg-soft); color: var(--csm-accent); border: 1px solid var(--csm-border); }
-.csm-badge.followup {
-  background: #e6f1fb; color: #185fa5; border: 1px solid rgba(24,95,165,0.20);
-}
-.csm-badge-no-lead {
-  background: #eeedfe; color: #534ab7; border: 1px solid rgba(83,74,183,0.25);
-  padding: 3px 9px; border-radius: 6px;
-  font-size: 11px; font-weight: 500;
-}
-
-.csm-badge.cs-active    { background: #e1f5ee; color: #0f6e56; border: 1px solid rgba(15,110,86,.22); }
-.csm-badge.cs-paused    { background: #faeeda; color: #854f0b; border: 1px solid rgba(133,79,11,.22); }
-.csm-badge.cs-completed { background: #eeedfe; color: #534ab7; border: 1px solid rgba(83,74,183,.22); }
-.csm-badge.cs-stopped   { background: var(--crit-bg); color: var(--crit-color); border: 1px solid var(--crit-border); }
-.csm-badge.cs-procedure { background: #fef3c7; color: #92400e; border: 1px solid rgba(146,64,14,.22); }
-
-.csm-badge.pay-active        { background: #e1f5ee; color: #0f6e56; border: 1px solid rgba(15,110,86,.22); }
-.csm-badge.pay-failed        { background: var(--crit-bg); color: var(--crit-color); border: 1px solid var(--crit-border); }
-.csm-badge.pay-cancelled     { background: rgba(0,0,0,.05); color: var(--ink-muted); border: 1px solid var(--border); }
-.csm-badge.pay-pending       { background: var(--warn-bg); color: var(--warn-color); border: 1px solid var(--warn-border); }
-.csm-badge.pay-completed     { background: #eeedfe; color: #534ab7; border: 1px solid rgba(83,74,183,.22); }
-.csm-badge.pay-mandate_active{ background: #e1f5ee; color: #0f6e56; border: 1px solid rgba(15,110,86,.22); }
-.csm-badge.pay-draft         { background: rgba(0,0,0,.05); color: var(--ink-muted); border: 1px solid var(--border); }
-
-/* ── Boutons ── */
-.csm-btn {
-  padding: 7px 13px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg2);
-  color: var(--ink);
-  font-size: 12.5px; font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-  display: inline-flex; align-items: center; gap: 5px;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: all 0.12s;
-}
-.csm-btn:hover { background: var(--bg3); border-color: rgba(0,0,0,.18); }
-.csm-btn:active { transform: scale(0.98); }
-.csm-btn.primary {
-  background: var(--csm-accent); color: #fff; border-color: var(--csm-accent);
-}
-.csm-btn.primary:hover { background: var(--csm-accent-dark); }
-.csm-btn.danger { color: var(--crit-color); border-color: var(--crit-border); }
-.csm-btn.danger:hover { background: var(--crit-bg); }
-.csm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.csm-act-btn {
-  padding: 5px 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg2); color: var(--ink-muted);
-  font-size: 11.5px; font-weight: 500;
-  cursor: pointer; font-family: inherit;
-  display: inline-flex; align-items: center; gap: 4px;
-  transition: all 0.12s;
-}
-.csm-act-btn:hover { background: var(--bg3); color: var(--ink); }
-
-.csm-actions { display: flex; gap: 5px; flex-wrap: wrap; }
-
-.csm-status-row { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; }
-.csm-status-btn {
-  padding: 4px 9px; border-radius: 5px;
-  background: var(--bg3); color: var(--ink-muted);
-  border: 1px solid var(--border);
-  font-size: 10.5px; font-weight: 500;
-  cursor: pointer; font-family: inherit;
-  transition: all 0.12s;
-}
-.csm-status-btn:hover { background: var(--bg2); color: var(--ink); }
-.csm-status-btn.active {
+.card-item:last-child { border-bottom: none; }
+.card-item:hover { background: var(--bg3); margin: 0 -8px; padding: 9px 8px; border-radius: 6px; }
+.ci-av {
+  width: 32px; height: 32px; border-radius: 50%;
   background: var(--csm-bg-soft); color: var(--csm-accent);
-  border-color: var(--csm-border);
-}
-
-/* ── Signals (alertes panneau détail) ── */
-.csm-signals { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
-.csm-signal {
-  display: flex; align-items: flex-start; gap: 10px;
-  padding: 11px 13px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--bg2);
-}
-.csm-signal.crit { background: var(--crit-bg); border-color: var(--crit-border); }
-.csm-signal.warn { background: var(--warn-bg); border-color: var(--warn-border); }
-.csm-signal.att  { background: var(--att-bg);  border-color: var(--att-border); }
-.csm-signal-icon { font-size: 16px; flex-shrink: 0; }
-.csm-signal-text { flex: 1; min-width: 0; }
-.csm-signal-title { font-size: 13px; font-weight: 600; }
-.csm-signal-desc  { font-size: 12px; color: var(--ink-muted); margin-top: 2px; }
-.csm-signal-action-btn {
-  padding: 5px 10px; border-radius: 6px;
-  border: 1px solid currentColor;
-  background: transparent; color: inherit;
-  font-size: 11.5px; font-weight: 500;
-  cursor: pointer; font-family: inherit;
+  border: 1px solid var(--csm-border);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 12px;
   flex-shrink: 0;
 }
-.csm-signal-action-btn:hover { background: rgba(0,0,0,.05); }
-
-/* ── Témoignages ── */
-.csm-temo-card {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 11px 13px; margin-bottom: 8px;
+.ci-text { flex: 1; min-width: 0; }
+.ci-name {
+  font-size: 13px; font-weight: 600; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.csm-temo-head {
-  display: flex; align-items: center; gap: 9px;
-  margin-bottom: 6px;
+.ci-meta {
+  font-size: 11.5px; color: var(--ink-muted); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.csm-temo-from { font-size: 12.5px; font-weight: 600; }
-.csm-temo-when { font-size: 11px; color: var(--ink-soft); margin-left: auto; }
-.csm-temo-text { font-size: 13px; color: var(--ink); line-height: 1.55; }
-
-/* ── Notes ── */
-.csm-note {
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 11px 13px; margin-bottom: 8px;
-}
-.csm-note-meta {
-  font-size: 11px; color: var(--ink-soft);
-  margin-bottom: 5px;
-  display: flex; align-items: center; gap: 8px;
-}
-.csm-note-content { font-size: 13px; color: var(--ink); line-height: 1.55; }
-
-/* ── Form ── */
-.csm-textarea {
-  width: 100%; padding: 10px 12px;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 13px; font-family: inherit;
-  color: var(--ink);
-  outline: none; resize: vertical;
-  min-height: 70px;
-  transition: border-color 0.15s;
-}
-.csm-textarea:focus { border-color: var(--csm-accent); }
-
-/* ── Loading & spinner ── */
-.csm-loading {
-  text-align: center; padding: 30px 20px;
-  color: var(--ink-soft); font-size: 13px;
-  display: flex; align-items: center; justify-content: center; gap: 9px;
-}
-.csm-spinner {
-  width: 16px; height: 16px;
-  border: 2px solid var(--border);
-  border-top-color: var(--csm-accent);
-  border-radius: 50%;
-  animation: csmspin 0.7s linear infinite;
-}
-@keyframes csmspin { to { transform: rotate(360deg); } }
-
-/* ── Toast ── */
-.csm-toast {
-  position: fixed; bottom: 24px; left: 50%;
-  transform: translateX(-50%) translateY(15px);
-  background: #1a1a1a; color: #fff;
-  padding: 11px 18px; border-radius: 9px;
-  font-size: 13px; font-weight: 500;
-  opacity: 0; pointer-events: none; z-index: 2000;
-  transition: all 0.25s;
-}
-.csm-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.csm-toast.success { background: #0f6e56; }
-.csm-toast.error   { background: #a32d2d; }
-
-/* ── Vue 360° persons (NOUVEAU bloc Step 6.2) ── */
-.csm-360 {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 18px;
-  margin-bottom: 14px;
-}
-.csm-360-head {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 12px; gap: 10px; flex-wrap: wrap;
-}
-.csm-360-title {
-  font-size: 12px; font-weight: 600;
-  color: var(--ink-muted);
-  text-transform: uppercase; letter-spacing: 0.05em;
-  display: flex; align-items: center; gap: 6px;
-}
-.csm-360-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-.csm-360-card {
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 9px; padding: 10px 12px;
-}
-.csm-360-card.full { grid-column: 1 / -1; }
-.csm-360-card-h {
-  display: flex; align-items: center; gap: 7px;
-  margin-bottom: 7px; font-size: 12.5px; font-weight: 600;
-}
-.csm-360-card-h i { font-size: 14px; color: var(--ink-muted); }
-.csm-360-card-h .count {
-  margin-left: auto; font-size: 11px; color: var(--ink-soft); font-weight: 500;
-}
-.csm-360-line {
-  font-size: 12px; line-height: 1.5;
-}
-.csm-360-line .lbl { color: var(--ink-muted); }
-.csm-360-empty { font-size: 11.5px; color: var(--ink-soft); font-style: italic; }
-.csm-360-link {
+.ci-action {
   font-size: 11.5px; color: var(--csm-accent);
-  cursor: pointer; display: inline-block; margin-top: 5px;
-  text-decoration: none;
+  text-decoration: none; flex-shrink: 0;
+  padding: 4px 9px; border-radius: 6px;
+  border: 1px solid var(--csm-border); background: var(--csm-bg-soft);
+  font-weight: 500;
 }
-.csm-360-link:hover { text-decoration: underline; }
+.ci-action:hover { background: var(--csm-accent); color: #fff; }
+.ci-amount {
+  font-size: 13px; font-weight: 600; color: var(--ink); flex-shrink: 0;
+}
+.ci-amount.failed { color: var(--crit-color); }
+
+/* Badge */
+.badge {
+  font-size: 10.5px; padding: 2px 7px;
+  border-radius: 4px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 3px;
+  white-space: nowrap;
+}
+.badge.crit  { background: var(--crit-bg);  color: var(--crit-color); }
+.badge.warn  { background: var(--warn-bg);  color: var(--warn-color); }
+.badge.att   { background: var(--att-bg);   color: var(--att-color); }
+.badge.info  { background: var(--info-bg);  color: var(--info-color); }
+
+/* Empty / loading state */
+.card-empty {
+  text-align: center; padding: 30px 14px;
+  color: var(--ink-soft); font-size: 12.5px;
+}
+.card-empty i { font-size: 32px; opacity: 0.35; margin-bottom: 8px; display: block; }
+
+.card-loading {
+  display: flex; align-items: center; justify-content: center;
+  padding: 30px 14px; gap: 8px;
+  color: var(--ink-soft); font-size: 12.5px;
+}
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border); border-top-color: var(--csm-accent);
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Responsive ── */
 @media (max-width: 1100px) {
-  .csm-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .cards-grid { grid-template-columns: 1fr; }
 }
-@media (max-width: 900px) {
-  .csm-split { grid-template-columns: 1fr; }
-  .csm-sidebar { max-height: 320px; }
-  .csm-360-grid { grid-template-columns: 1fr; }
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+  .dash-app { padding: 16px 14px 40px; }
 }
 </style>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.34.0/tabler-icons.min.css">
 </head>
-
 <body>
 
-<div class="csm-app">
+<div class="dash-app">
 
-  <!-- ─── HEADER ─── -->
-  <div class="csm-header">
-    <div class="csm-logo">💎</div>
+  <header class="dash-header">
+    <div class="dash-logo">📊</div>
     <div>
-      <div class="csm-title">Dashboard Customer Success</div>
-      <div class="csm-sub">Suivi clients actifs, paiements, coachings, formation Kajabi</div>
+      <div class="dash-title">Dashboard CSM</div>
+      <div class="dash-sub" id="dashSub">Chargement…</div>
     </div>
-    <div style="margin-left:auto;display:flex;gap:6px">
-      <a href="csm-import.html" class="csm-btn"><i class="ti ti-cloud-upload"></i> Importer Kajabi</a>
-      <a href="csm-diagnostic.html" class="csm-btn"><i class="ti ti-search"></i> Diagnostic</a>
+    <div class="dash-header-spacer"></div>
+    <div class="dash-header-actions">
+      <a href="csm-clients.html" class="dash-btn primary">
+        <i class="ti ti-users"></i>Gérer les clients
+      </a>
     </div>
+  </header>
+
+  <!-- ─── KPIs ─── -->
+  <div class="kpi-grid">
+
+    <div class="kpi" onclick="window.location='csm-clients.html'">
+      <div class="kpi-head">
+        <div class="kpi-label">Clients actifs</div>
+        <div class="kpi-icon green"><i class="ti ti-users"></i></div>
+      </div>
+      <div class="kpi-value" id="kpiActifs">—</div>
+      <div class="kpi-trend flat" id="kpiActifsTrend">&nbsp;</div>
+    </div>
+
+    <div class="kpi" onclick="window.location='csm-clients.html?lvl=crit'">
+      <div class="kpi-head">
+        <div class="kpi-label">Alertes critiques</div>
+        <div class="kpi-icon red"><i class="ti ti-alert-triangle"></i></div>
+      </div>
+      <div class="kpi-value" id="kpiCrit">—</div>
+      <div class="kpi-trend flat" id="kpiCritDetail">&nbsp;</div>
+    </div>
+
+    <div class="kpi">
+      <div class="kpi-head">
+        <div class="kpi-label">MRR récurrent</div>
+        <div class="kpi-icon blue"><i class="ti ti-currency-euro"></i></div>
+      </div>
+      <div class="kpi-value" id="kpiMrr">—<span class="kpi-suffix">€</span></div>
+      <div class="kpi-trend flat" id="kpiMrrDetail">&nbsp;</div>
+    </div>
+
+    <div class="kpi" onclick="window.location='csm-clients.html?relances=due'">
+      <div class="kpi-head">
+        <div class="kpi-label">Relances dues</div>
+        <div class="kpi-icon amber"><i class="ti ti-bell-ringing"></i></div>
+      </div>
+      <div class="kpi-value" id="kpiRelances">—</div>
+      <div class="kpi-trend flat" id="kpiRelancesDetail">&nbsp;</div>
+    </div>
+
   </div>
 
-  <!-- ─── KPI STRIP ─── -->
-  <div class="csm-kpi-strip" id="kpiStrip">
-    <!-- Rendu par renderKpiStrip() -->
+  <!-- ─── Cards ─── -->
+  <div class="cards-grid">
+
+    <!-- Coachings manquants -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-icon amber"><i class="ti ti-calendar-x"></i></div>
+        <div class="card-title">Coachings manquants</div>
+        <div class="card-count" id="card1Count">—</div>
+      </div>
+      <div class="card-body" id="card1Body">
+        <div class="card-loading"><div class="spinner"></div>Chargement…</div>
+      </div>
+      <div class="card-foot">
+        <a href="csm-clients.html?relances=due">Voir tous les retards <i class="ti ti-arrow-right"></i></a>
+      </div>
+    </div>
+
+    <!-- Top 3 à relancer -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-icon red"><i class="ti ti-flame"></i></div>
+        <div class="card-title">Top à relancer</div>
+        <div class="card-count" id="card2Count">—</div>
+      </div>
+      <div class="card-body" id="card2Body">
+        <div class="card-loading"><div class="spinner"></div>Chargement…</div>
+      </div>
+      <div class="card-foot">
+        <a href="csm-clients.html?lvl=crit">Voir toutes les alertes critiques <i class="ti ti-arrow-right"></i></a>
+      </div>
+    </div>
+
+    <!-- Paiements échoués -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-icon purple"><i class="ti ti-credit-card-off"></i></div>
+        <div class="card-title">Paiements échoués</div>
+        <div class="card-count" id="card3Count">—</div>
+      </div>
+      <div class="card-body" id="card3Body">
+        <div class="card-loading"><div class="spinner"></div>Chargement…</div>
+      </div>
+      <div class="card-foot">
+        <a href="admin-facturation.html?tab=payments&filter=failed">Voir tous les paiements <i class="ti ti-arrow-right"></i></a>
+      </div>
+    </div>
+
+    <!-- Programmes expirant -->
+    <div class="card">
+      <div class="card-head">
+        <div class="card-icon blue"><i class="ti ti-clock-exclamation"></i></div>
+        <div class="card-title">Programmes expirant ce mois</div>
+        <div class="card-count" id="card4Count">—</div>
+      </div>
+      <div class="card-body" id="card4Body">
+        <div class="card-loading"><div class="spinner"></div>Chargement…</div>
+      </div>
+      <div class="card-foot">
+        <a href="csm-clients.html">Voir tous les clients <i class="ti ti-arrow-right"></i></a>
+      </div>
+    </div>
+
   </div>
 
-  <!-- ─── SPLIT VIEW : sidebar + détail ─── -->
-  <div class="csm-split">
-
-    <!-- SIDEBAR : recherche + filtres + liste -->
-    <aside class="csm-sidebar">
-      <div class="csm-sidebar-head">
-        <input class="csm-sidebar-search" id="searchInput" type="text" placeholder="Rechercher (nom, email…)"/>
-        <div class="csm-sidebar-pills" id="filterPills">
-          <!-- Rendu par renderSidebarPills() -->
-        </div>
-      </div>
-      <div class="csm-sidebar-list" id="clientsList">
-        <div class="csm-loading"><div class="csm-spinner"></div>Chargement…</div>
-      </div>
-    </aside>
-
-    <!-- DETAIL : panneau de droite -->
-    <main class="csm-detail-panel" id="detailPanel">
-      <div class="csm-detail-empty">
-        <div style="font-size:42px;opacity:0.3;margin-bottom:14px">💎</div>
-        <div style="font-size:14px;color:var(--ink-muted)">Sélectionne un client dans la liste pour voir son détail</div>
-      </div>
-    </main>
-
-  </div>
 </div>
 
-<!-- ─── TOAST ─── -->
-<div class="csm-toast" id="toast"></div>
-
-<script src="nav.js"></script>
 <script>
-/* ═══════════════════════════════════════════════════════════════════════════
-   csm-dashboard.html — Customer Success Manager
-   ───────────────────────────────────────────────────────────────────────────
-   Source UNIQUE de vérité pour les clients : leads where isClient==true
-   (avec dédup _merged===true skipped — pattern aligné avec sales-leads.html)
+/* ═══════════════════════════════════════════════════════════════════════
+   Dashboard CSM — Step 6.4a — page analytique
+   ═══════════════════════════════════════════════════════════════════════ */
 
-   Enrichissements :
-     • payments where leadId==id  → tous les paiements du client
-     • leads/{id}/client_temoignages → témoignages
-     • leads/{id}/client_notes      → notes (partagées avec sales-clients.html)
-
-   Statuts client :   active / paused / completed / stopped / procedure
-   Statuts paiement : draft / pending_mandate / mandate_active / active /
-                      completed / failed / cancelled
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-var db = firebase.firestore();
-var currentUser = null;
-var currentRole = null;
-var currentUserName = '';
-var currentUserEmail = '';
-
-var allClients      = [];     // leads with isClient==true && !_merged
-var paymentsByLead  = {};     // leadId -> [payments]
-var notesByLead     = {};     // leadId -> [notes]
-var temoByLead      = {};     // leadId -> [temo]
-var temoFlat        = [];
-var coachingByEmail = {};     // email lowercase -> client coaching doc
-var coachMembersMap = {};     // slug -> displayName (pour afficher coach assigné)
-
-var activeTab    = 'retards';
-var levelsActive = { crit:true, warn:true, att:true };
-var searchQ      = '';
-var filterStatus = 'all';
-var filterPayStatus = 'all';
-var filterReason = 'all'; // all | payment | coaching
-var openClientId = null;
-
-/* ─── Constants ─── */
-var CLIENT_STATUS = {
-  active:    { label:'✅ Actif',     cls:'cs-active' },
-  paused:    { label:'⏸ En pause',   cls:'cs-paused' },
-  completed: { label:'🎉 Terminé',   cls:'cs-completed' },
-  stopped:   { label:'🛑 Stoppé',    cls:'cs-stopped' },
-  procedure: { label:'⚖️ Procédure', cls:'cs-procedure' }
+const FBCFG = {
+  apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+  authDomain:"ambitio-team.firebaseapp.com",
+  projectId:"ambitio-team",
+  storageBucket:"ambitio-team.firebasestorage.app",
+  messagingSenderId:"1079366902268",
+  appId:"1:1079366902268:web:b4ec1691dba54230339279"
 };
-var PAY_STATUS = {
-  draft:           { label:'📝 Brouillon',         cls:'pay-draft' },
-  pending_mandate: { label:'⏳ Mandat en attente', cls:'pay-pending' },
-  mandate_active:  { label:'✅ Mandat actif',      cls:'pay-mandate_active' },
-  active:          { label:'💸 Actif',             cls:'pay-active' },
-  completed:       { label:'🎉 Terminé',           cls:'pay-completed' },
-  failed:          { label:'❌ Échec',             cls:'pay-failed' },
-  cancelled:       { label:'🚫 Annulé',            cls:'pay-cancelled' }
+firebase.initializeApp(FBCFG);
+var db = firebase.firestore();
+var auth = firebase.auth();
+
+var DATA = {
+  coachings: [],          /* clients (coaching) */
+  leadsByEmail: {},       /* email lowercased → lead */
+  subscriptions: [],
+  paymentsFailed: [],
+  currentRole: null
 };
 
 /* ─── Helpers ─── */
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){
-  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-});}
-function showToast(msg, kind){
-  var t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'csm-toast show ' + (kind||'success');
-  clearTimeout(showToast._tm);
-  showToast._tm = setTimeout(function(){ t.classList.remove('show'); }, 2800);
+function esc(s){ if(s===null||s===undefined) return ''; var d=document.createElement('div'); d.textContent=String(s); return d.innerHTML; }
+function lower(s){ return (s||'').toString().trim().toLowerCase(); }
+function fmtEuro(n){ if(typeof n!=='number') n=parseFloat(n)||0; return n.toLocaleString('fr-FR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function getInitials(nom){
+  if(!nom) return '?';
+  var parts = nom.trim().split(/\s+/);
+  if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0]+parts[parts.length-1][0]).toUpperCase();
 }
-function fmtEuro(v){ return new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR'}).format(v||0); }
-function toDate(d){
-  if(!d) return null;
-  var dt = (d && d.toDate) ? d.toDate() : new Date(d);
-  return isNaN(dt.getTime()) ? null : dt;
+function toDate(v){
+  if(!v) return null;
+  try { return v.toDate ? v.toDate() : new Date(v); } catch(e){ return null; }
 }
-function fmtDate(d){
-  var dt = toDate(d); if(!dt) return '—';
-  return dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'short', year:'numeric' });
+function daysSince(d){
+  var t = toDate(d);
+  if(!t) return null;
+  return Math.floor((Date.now() - t.getTime()) / 86400000);
 }
-function fmtDateTime(d){
-  var dt = toDate(d); if(!dt) return '—';
-  return dt.toLocaleDateString('fr-FR', { day:'2-digit', month:'short' }) +
-         ' à ' + dt.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
-}
-function timeAgo(d){
-  var dt = toDate(d); if(!dt) return '—';
-  var diffDays = Math.floor((Date.now() - dt.getTime()) / 86400000);
-  if(diffDays === 0) return "aujourd'hui";
-  if(diffDays === 1) return 'hier';
-  if(diffDays < 7) return 'il y a ' + diffDays + ' jours';
-  if(diffDays < 30) return 'il y a ' + Math.floor(diffDays/7) + ' sem.';
-  if(diffDays < 365) return 'il y a ' + Math.floor(diffDays/30) + ' mois';
-  return 'il y a ' + Math.floor(diffDays/365) + ' an(s)';
-}
-function initials(name){
-  if(!name) return '?';
-  var parts = name.trim().split(/\s+/);
-  if(parts.length >= 2) return (parts[0][0]+parts[1][0]).toUpperCase();
-  return name.slice(0,2).toUpperCase();
-}
-function clientDisplayName(c){
-  return c.nom || c.commerce || c.email || c.telephone || '?';
+function daysUntil(d){
+  var t = toDate(d);
+  if(!t) return null;
+  return Math.floor((t.getTime() - Date.now()) / 86400000);
 }
 
-/* ─── Compute level (crit / warn / att / ok) ─── */
-function computeLevel(c){
-  // Skip si client n'est plus à suivre
-  var status = c.clientStatus || 'active';
-  if(status === 'completed') return 'ok';
-  if(status === 'stopped')   return null; // exclu de la vue retards
-
-  var pays = paymentsByLead[c._leadId] || [];
-
-  // Détecter paiement(s) en échec non résolu(s)
-  var hasFailed = pays.some(function(p){ return p.status === 'failed'; });
-  var hasCancelled = pays.some(function(p){ return p.status === 'cancelled'; });
-
-  // Détecter retard de prélèvement sur paiement actif
-  var hasPaymentBehind = false;
-  pays.forEach(function(p){
-    if(p.status !== 'active') return;
-    if(!p.installmentsCount || p.installmentsCount <= 1) return;
-    var start = toDate(p.startDate);
-    if(!start) return;
-    var monthsElapsed = (new Date().getFullYear() - start.getFullYear()) * 12
-                      + (new Date().getMonth() - start.getMonth()) + 1;
-    var expected = Math.min(monthsElapsed, p.installmentsCount);
-    var actual = p.paidCount || 0;
-    if(actual < expected - 1) hasPaymentBehind = true; // tolérance d'1 mois
-  });
-
-  // ─── Retards de coaching (collection clients) ───
-  // Si un client coaching matché existe et qu'il n'est pas inactif/terminé,
-  // on évalue ses 2 derniers mois de quota mensuel — MAIS on ignore les
-  // mois antérieurs au "vrai début" du client (cf. getCoachingStartReference)
-  // pour ne pas tagger CRITIQUE un client qui vient juste d'arriver.
-  var coachingDoc = getCoachingForLead(c);
-  var hasCoaching2MonthsMissed = false;
-  var hasCoaching1MonthMissed = false;
-  var hasCoachingPartial = false;
-  if(coachingDoc && coachingDoc.statut !== 'inactif'){
-    var done  = coachingDoc.nbCoachingsFaits || 0;
-    var total = coachingDoc.nbCoachingsTotal || 12;
-    if(done < total){ // pas terminé
-      var now = new Date();
-      var refStart = getCoachingStartReference(coachingDoc);
-      var refMonth = refStart ? new Date(refStart.getFullYear(), refStart.getMonth(), 1) : null;
-      var thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      var prevMonth = new Date(now.getFullYear(), now.getMonth()-1, 1);
-
-      // Si le client est entré ce mois-ci ou plus tard, on ne lui reproche
-      // aucun retard (c'est normal de ne pas avoir encore eu de session).
-      var thisMonthBeforeStart = refMonth && thisMonth < refMonth;
-      var prevMonthBeforeStart = refMonth && prevMonth < refMonth;
-
-      var qNow = thisMonthBeforeStart ? null : getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
-      var qPrev = prevMonthBeforeStart ? null : getCoachingQuotaStatus(coachingDoc, prevMonth.getFullYear(), prevMonth.getMonth());
-
-      if(qNow && qPrev && qNow.status === 'miss' && qPrev.status === 'miss'){
-        hasCoaching2MonthsMissed = true;
-      } else if(qNow && qNow.status === 'miss'){
-        hasCoaching1MonthMissed = true;
-      } else if(qNow && qNow.status === 'partial'){
-        hasCoachingPartial = true;
-      }
+/* ─── Auth ─── */
+auth.onAuthStateChanged(async function(user){
+  if(!user){ window.location.href='login.html'; return; }
+  try{
+    var snap = await db.collection('users').doc(user.uid).get();
+    var data = snap.exists ? snap.data() : {};
+    DATA.currentRole = data.role || 'sales';
+    if(['admin','sales','csm','coach'].indexOf(DATA.currentRole) === -1){
+      window.location.href = 'coaching.html'; return;
     }
+    loadAllData();
+  } catch(e){
+    console.error(e);
+    window.location.href='login.html';
   }
-
-  // Statuts critiques business
-  if(status === 'procedure') return 'crit';
-  if(hasFailed) return 'crit';
-  if(hasPaymentBehind) return 'crit';
-  if(hasCoaching2MonthsMissed) return 'crit';
-
-  // Statut paused = à relancer
-  if(status === 'paused') return 'warn';
-  if(hasCancelled) return 'warn';
-  if(hasCoaching1MonthMissed) return 'warn';
-
-  // Pending_mandate depuis +7j = à relancer
-  var hasOldPending = pays.some(function(p){
-    if(p.status !== 'pending_mandate') return false;
-    var ts = toDate(p.createdAt);
-    if(!ts) return false;
-    return (Date.now() - ts.getTime()) > 7 * 86400000;
-  });
-  if(hasOldPending) return 'warn';
-
-  // Aucun paiement enregistré sur un client actif
-  if(status === 'active' && pays.length === 0) return 'att';
-  // Sessions partielles (en dessous quota mensuel)
-  if(hasCoachingPartial) return 'att';
-
-  return 'ok';
-}
-
-/* ─── Auth + boot ─── */
-firebase.auth().onAuthStateChanged(function(user){
-  if(!user){ window.location.href = 'login.html'; return; }
-  currentUser = user;
-  currentUserEmail = user.email;
-  db.collection('users').doc(user.uid).get().then(function(snap){
-    var d = snap.exists ? snap.data() : {};
-    currentRole = d.role || 'csm';
-    currentUserName = user.displayName || user.email.split('@')[0];
-    if(['admin','csm','sales'].indexOf(currentRole) < 0){
-      document.body.innerHTML = '<div style="padding:60px;text-align:center;color:#cbd5e1"><h2>⛔ Accès réservé</h2></div>';
-      return;
-    }
-    loadAllData();
-  }).catch(function(e){
-    console.warn('User doc error', e);
-    loadAllData();
-  });
 });
 
-/* ─── Data loading ─── */
-/* ──────────────────────────────────────────────────────────────────────
-   ARCHITECTURE DE DONNÉES (refonte 2026-05-06)
-   ──────────────────────────────────────────────────────────────────────
-   Source PRIMAIRE = collection `clients` (coaching). Chaque doc est un
-   client en accompagnement, avec ses sessions, programme, quotas, coach.
-
-   Source d'ENRICHISSEMENT = `leads where isClient==true && !_merged`,
-   matché par email canonicalisé. Apporte au client unifié :
-     • paymentsByLead (indexés par leadId du lead matché)
-     • kajabiProgress (champ stocké sur le lead, alimenté par csm-import)
-     • gcCustomerId, source, importedCreatedAt (champs CRM)
-     • temoByLead (témoignages sous-collection du lead)
-
-   Les writes (notes csmNotes, relances csmFollowupHistory, statut
-   clientStatus) vont TOUJOURS sur clients/{coachingId}, qui est la
-   source de vérité de la CSM. Les leads ne sont plus écrits par la CSM.
-
-   `id` du client unifié = coachingId (doc ID dans `clients`).
-   `_leadId` = leadId du lead matché si trouvé, sinon null.
-   `_hasLead` = booléen pour styler/conditionner.
-   ────────────────────────────────────────────────────────────────────── */
-
-function loadAllData(){
-  loadCoachMembers();
-  loadCoachingClients();   // → déclenche loadEnrichmentLeads() après chaque snap
-  loadVue360Data();        // Step 6.2 : persons + invoice_clients + subscriptions
-}
-
-/* ─── Step 6.2 : Vue 360° persons ─────────────────────────────────────
-   Charge les 3 collections nécessaires à la section "Vue 360° persons"
-   du panneau détail. allSettled tolère les permission-denied (ex. csm
-   sans accès à invoice_clients) — la section sera juste partielle.
-
-   Variables globales remplies :
-     personsById     personId → personDoc
-     icsByPersonId   personId → invoice_client doc
-     subsByPersonId  personId → [subscription docs]
-*/
-var personsById   = {};
-var icsByPersonId = {};
-var subsByPersonId = {};
-function loadVue360Data(){
-  Promise.allSettled([
-    db.collection('persons').get(),
-    db.collection('invoice_clients').get(),
-    db.collection('subscriptions').get()
-  ]).then(function(results){
-    if(results[0].status === 'fulfilled'){
-      personsById = {};
-      results[0].value.forEach(function(d){
-        personsById[d.id] = Object.assign({_id:d.id}, d.data());
-      });
-    } else {
-      console.warn('[csm-360] persons load failed:', results[0].reason && results[0].reason.message);
-    }
-    if(results[1].status === 'fulfilled'){
-      icsByPersonId = {};
-      results[1].value.forEach(function(d){
-        var data = d.data();
-        if(data.personId) icsByPersonId[data.personId] = Object.assign({_id:d.id}, data);
-      });
-    } else {
-      console.warn('[csm-360] invoice_clients load failed:', results[1].reason && results[1].reason.message);
-    }
-    if(results[2].status === 'fulfilled'){
-      subsByPersonId = {};
-      results[2].value.forEach(function(d){
-        var data = d.data();
-        if(!data.personId) return;
-        if(!subsByPersonId[data.personId]) subsByPersonId[data.personId] = [];
-        subsByPersonId[data.personId].push(Object.assign({_id:d.id}, data));
-      });
-    } else {
-      console.warn('[csm-360] subscriptions load failed:', results[2].reason && results[2].reason.message);
-    }
-    /* Si on a déjà un client ouvert, re-render le modal pour faire apparaître la section */
-    if(openClientId) renderModal();
-  });
-}
-
-/* Récupère le personId associé à un client csm — via le lead ou le coaching */
-function getPersonIdForClient(c){
-  if(!c) return null;
-  if(c._lead && c._lead.personId) return c._lead.personId;
-  if(c._coaching && c._coaching.personId) return c._coaching.personId;
-  return null;
-}
-
-/* Render la section Vue 360° pour le client courant. Renvoie le HTML.
-   Si pas de personId trouvé, renvoie une string vide. */
-function renderVue360Section(c){
-  var personId = getPersonIdForClient(c);
-  if(!personId) return '';
-
-  var p = personsById[personId];
-  if(!p) return '';   /* persons pas encore chargé ou pas trouvé */
-
-  var ic     = icsByPersonId[personId] || null;
-  var subs   = subsByPersonId[personId] || [];
-  var pays   = paymentsByLead[c._leadId] || [];   /* déjà indexé par leadId */
-  var leadOk = !!c._leadId;
-  var coachOk = !!c._coaching;
-
-  var h = '<div class="csm-360">';
-  h += '<div class="csm-360-head">';
-  h += '<div class="csm-360-title"><i class="ti ti-hexagon"></i>Vue 360° persons</div>';
-  if(currentRole === 'admin'){
-    h += '<a href="admin-persons.html?id=' + esc(personId) + '" target="_blank" class="csm-btn"><i class="ti ti-external-link"></i>Ouvrir la fiche complète</a>';
-  } else {
-    h += '<span style="font-size:11px;color:var(--ink-soft);font-family:JetBrains Mono,monospace">personId : ' + esc(personId) + '</span>';
-  }
-  h += '</div>';
-
-  h += '<div class="csm-360-grid">';
-
-  /* Lead */
-  h += '<div class="csm-360-card">';
-  h += '<div class="csm-360-card-h"><i class="ti ti-list-details"></i><span>Lead</span><span class="count">' + (leadOk ? '1' : '0') + '</span></div>';
-  if(leadOk){
-    h += '<div class="csm-360-line"><span class="lbl">stage :</span> ' + esc((c._lead && c._lead.stage) || '—') + '</div>';
-    h += '<div class="csm-360-line"><span class="lbl">source :</span> ' + esc((c._lead && (c._lead.source || c._lead.utm)) || '—') + '</div>';
-    h += '<a href="sales-leads.html?leadId=' + esc(c._leadId) + '" target="_blank" class="csm-360-link">Ouvrir CRM <i class="ti ti-external-link"></i></a>';
-  } else {
-    h += '<div class="csm-360-empty">Aucun lead lié.</div>';
-  }
-  h += '</div>';
-
-  /* Coaching */
-  h += '<div class="csm-360-card">';
-  h += '<div class="csm-360-card-h"><i class="ti ti-school"></i><span>Coaching</span>';
-  if(coachOk){
-    var st = (c._coaching && c._coaching.statut) || '—';
-    var stCls = (st === 'actif') ? 'cs-active' : 'neutral';
-    h += '<span class="csm-badge ' + stCls + '" style="margin-left:auto">' + esc(st) + '</span>';
-  } else {
-    h += '<span class="count">0</span>';
-  }
-  h += '</div>';
-  if(coachOk){
-    h += '<div class="csm-360-line"><span class="lbl">programme :</span> ' + esc((c._coaching && c._coaching.programme) || '—') + '</div>';
-    h += '<div class="csm-360-line"><span class="lbl">date entrée :</span> ' + esc((c._coaching && c._coaching.dateEntree) || '—') + '</div>';
-  } else {
-    h += '<div class="csm-360-empty">Aucun suivi coaching.</div>';
-  }
-  h += '</div>';
-
-  /* Invoice client */
-  h += '<div class="csm-360-card">';
-  h += '<div class="csm-360-card-h"><i class="ti ti-receipt"></i><span>Fiche facturation</span>';
-  h += '<span class="' + (ic ? 'csm-badge ok' : 'count') + '" style="margin-left:auto">' + (ic ? 'linkée' : '—') + '</span>';
-  h += '</div>';
-  if(ic){
-    h += '<div class="csm-360-line"><span class="lbl">type :</span> ' + esc(ic.clientType || 'individual') + '</div>';
-    var contactName = ((ic.contactFirstName || '') + ' ' + (ic.contactLastName || '')).trim();
-    h += '<div class="csm-360-line"><span class="lbl">contact :</span> ' + esc(contactName || '—') + '</div>';
-    if(currentRole === 'admin'){
-      h += '<a href="admin-facturation.html?clientId=' + esc(ic._id) + '" target="_blank" class="csm-360-link">Ouvrir IC <i class="ti ti-external-link"></i></a>';
-    }
-  } else {
-    h += '<div class="csm-360-empty">Aucune fiche facturation.</div>';
-  }
-  h += '</div>';
-
-  /* Payments */
-  var totalPaid = 0;
-  pays.forEach(function(pp){ totalPaid += (pp.totalAmount || pp.totalAmountTtc || 0); });
-  h += '<div class="csm-360-card">';
-  h += '<div class="csm-360-card-h"><i class="ti ti-credit-card"></i><span>Paiements</span><span class="count">' + pays.length + '</span></div>';
-  if(pays.length > 0){
-    h += '<div class="csm-360-line"><span class="lbl">total :</span> ' + fmtEuro(totalPaid) + '</div>';
-    h += '<div class="csm-360-line"><span class="lbl">dernier :</span> ' + esc(fmtDate(pays[pays.length-1].createdAt)) + '</div>';
-  } else {
-    h += '<div class="csm-360-empty">Aucun paiement.</div>';
-  }
-  h += '</div>';
-
-  /* Subscriptions */
-  if(subs.length > 0){
-    var sub = subs[0];
-    h += '<div class="csm-360-card full">';
-    h += '<div class="csm-360-card-h"><i class="ti ti-refresh"></i><span>Abonnement actif</span>';
-    h += '<span class="csm-badge ' + (sub.status === 'active' ? 'ok' : 'neutral') + '" style="margin-left:auto">' + esc(sub.status || '—') + '</span>';
-    h += '</div>';
-    h += '<div style="display:flex;gap:24px;font-size:12.5px;flex-wrap:wrap">';
-    h += '<div><span class="lbl" style="color:var(--ink-muted)">programme :</span> ' + esc(sub.description || sub.programme || '—') + '</div>';
-    h += '<div><span class="lbl" style="color:var(--ink-muted)">échéance :</span> ' + (sub.installmentAmount || 0) + ' € ' + (sub.vatType === 'ttc' ? 'TTC' : 'HT') + ' / ' + esc(sub.frequency || 'mois') + '</div>';
-    h += '<div><span class="lbl" style="color:var(--ink-muted)">prochaine :</span> ' + esc(fmtDate(sub.nextBillingDate)) + '</div>';
-    h += '<div><span class="lbl" style="color:var(--ink-muted)">restant :</span> ' + (sub.installmentsRemaining || '?') + ' / ' + (sub.totalInstallments || '?') + '</div>';
-    h += '</div>';
-    if(subs.length > 1){
-      h += '<div style="margin-top:7px;font-size:11px;color:var(--ink-muted)">+ ' + (subs.length - 1) + ' autre(s) abonnement(s)</div>';
-    }
-    h += '</div>';
-  }
-
-  h += '</div>'; /* end grid */
-  h += '</div>'; /* end csm-360 */
-
-  return h;
-}
-
-/* ─── Listener primaire : clients (coaching) ─── */
-function loadCoachingClients(){
-  db.collection('clients').onSnapshot(function(snap){
-    coachingByEmail = {};
-    snap.forEach(function(d){
-      var data = d.data();
-      data._id = d.id;
-      var email = (data.email || '').toLowerCase().trim();
-      if(email) coachingByEmail[email] = data;
+/* ─── Loading ─── */
+async function loadAllData(){
+  try {
+    /* 1. coachings (clients) — listener léger ~70 docs */
+    var cSnap = await db.collection('clients').get();
+    DATA.coachings = [];
+    cSnap.forEach(function(d){
+      DATA.coachings.push(Object.assign({_id:d.id}, d.data()));
     });
-    /* Step 6.2 perf fix : on charge maintenant les leads pertinents
-       uniquement (where email in [...]) plutôt que toute la collection.
-       Réduit le transfert de ~7549 leads à ~80 emails matchants. */
-    loadEnrichmentLeads();
-  }, function(err){
-    console.error('Clients listener error:', err);
-    document.getElementById('csmBody').innerHTML =
-      '<div class="csm-empty"><div class="csm-empty-icon">⚠️</div><div class="csm-empty-title">Erreur de chargement coaching</div><div>' + esc(err.message) + '</div></div>';
-  });
-}
 
-/* ─── Listener enrichissement : leads (tous, pas seulement isClient=true) ───
-   Initialement on filtrait sur `isClient==true` mais ça ratait des matches
-   où le lead correspondait à un coaching mais n'avait pas (encore) le flag
-   isClient. Exemple concret : un lead "sebastien" converti en client (visible
-   dans sa timeline) mais dont le flag isClient n'avait pas été propagé →
-   le coaching BELLE ANNE (même email contact@climabitat.net) apparaissait
-   comme "Pas de lead CRM lié" alors que le lead existait bel et bien.
+    /* 2. enrichissement leads par email matching coachings (perf : where 'in' batches de 10) */
+    var emails = DATA.coachings.map(function(c){ return lower(c.email); }).filter(Boolean);
+    var uniqueEmails = Array.from(new Set(emails));
+    var batches = [];
+    for(var i = 0; i < uniqueEmails.length; i += 10){
+      batches.push(uniqueEmails.slice(i, i + 10));
+    }
+    var leadsResults = await Promise.all(batches.map(function(batch){
+      return db.collection('leads').where('email','in',batch).get().catch(function(e){
+        console.warn('leads enrichment batch failed:', e.message); return null;
+      });
+    }));
 
-   On charge donc maintenant TOUS les leads (skip _merged===true) pour le
-   matching par email. C'est un peu plus lourd en lecture Firestore mais
-   beaucoup plus robuste. Si la collection grossit énormément (>20k leads),
-   on pourra optimiser via where('email','in',[...batches]).               */
-var leadsByEmail = {};
-function loadEnrichmentLeads(){
-  /* Step 6.2 perf fix : au lieu de charger TOUS les leads (7549) via
-     onSnapshot, on ne charge que les leads dont l'email matche un coaching
-     existant via where('email', 'in', batch). Firestore limite 'in' à 10
-     valeurs par query → on batche par 10. ~78 emails = ~8 queries.
-
-     Compromis : pas de temps réel sur les changements de leads (un edit
-     dans sales-leads ne se reflète pas instantanément ici). On préfère
-     ce trade-off vs charger 7549 docs à chaque ouverture de page. */
-
-  var emails = Object.keys(coachingByEmail);
-  if(emails.length === 0){
-    leadsByEmail = {};
-    buildAllClients();
-    return;
-  }
-
-  /* Batch par 10 (limite Firestore .where('email', 'in', [...])) */
-  var batches = [];
-  for(var i = 0; i < emails.length; i += 10){
-    batches.push(emails.slice(i, i + 10));
-  }
-
-  var queries = batches.map(function(batch){
-    return db.collection('leads').where('email', 'in', batch).get();
-  });
-
-  Promise.all(queries).then(function(snapshots){
-    leadsByEmail = {};
-    snapshots.forEach(function(snap){
+    DATA.leadsByEmail = {};
+    leadsResults.forEach(function(snap){
+      if(!snap) return;
       snap.forEach(function(d){
         var data = d.data();
         if(data._merged === true) return;
-        var em = (data.email||'').toLowerCase().trim();
+        var em = lower(data.email);
         if(!em) return;
-        data.id = d.id;
-        /* Si plusieurs leads partagent le même email, on garde celui qui a
-           isClient=true en priorité (c'est le plus pertinent pour la CSM),
-           sinon le plus récemment mis à jour. */
-        var existing = leadsByEmail[em];
-        if(!existing){
-          leadsByEmail[em] = data;
-        } else {
-          var existingIsClient = !!existing.isClient;
-          var newIsClient = !!data.isClient;
-          if(newIsClient && !existingIsClient){
-            leadsByEmail[em] = data;
-          } else if(newIsClient === existingIsClient){
-            var existingT = toDate(existing.updatedAt) || toDate(existing.createdAt) || new Date(0);
-            var newT = toDate(data.updatedAt) || toDate(data.createdAt) || new Date(0);
-            if(newT > existingT) leadsByEmail[em] = data;
-          }
+        data._id = d.id;
+        var existing = DATA.leadsByEmail[em];
+        if(!existing){ DATA.leadsByEmail[em] = data; return; }
+        var existingIsClient = !!existing.isClient;
+        var newIsClient = !!data.isClient;
+        if(newIsClient && !existingIsClient){ DATA.leadsByEmail[em] = data; return; }
+        if(newIsClient === existingIsClient){
+          var eT = toDate(existing.updatedAt) || toDate(existing.createdAt) || new Date(0);
+          var nT = toDate(data.updatedAt) || toDate(data.createdAt) || new Date(0);
+          if(nT > eT) DATA.leadsByEmail[em] = data;
         }
       });
     });
-    buildAllClients();
-  }).catch(function(err){
-    console.warn('Leads enrichment query error (non-bloquant):', err.message);
-    leadsByEmail = {};
-    buildAllClients();
-  });
-}
 
-/* ─── Construction des clients unifiés depuis coaching + enrichissement lead ───
-   Cette fonction est appelée chaque fois que l'un des deux listeners reçoit
-   un snapshot. Elle reconstruit allClients de manière déterministe en
-   prenant clients (coaching) comme source et en mergeant avec leads quand
-   il y a match par email. */
-function buildAllClients(){
-  allClients = [];
-  Object.keys(coachingByEmail).forEach(function(em){
-    var co = coachingByEmail[em];
-    var lead = leadsByEmail[em] || null;
+    /* 3. subscriptions actives + payments failed (en parallèle, allSettled tolérant) */
+    var [subsR, paysR] = await Promise.allSettled([
+      db.collection('subscriptions').get(),
+      db.collection('payments').where('status','==','failed').get()
+    ]);
 
-    // Composer le nom (préfix prénom si dispo et pas déjà dans nom)
-    var nom = co.nom || co.name || '';
-    if(co.prenom && nom.indexOf(co.prenom) < 0){
-      nom = (co.prenom + ' ' + nom).trim();
+    if(subsR.status === 'fulfilled'){
+      DATA.subscriptions = [];
+      subsR.value.forEach(function(d){
+        DATA.subscriptions.push(Object.assign({_id:d.id}, d.data()));
+      });
+    } else {
+      console.warn('subscriptions load failed:', subsR.reason && subsR.reason.message);
     }
-    if(!nom && lead) nom = lead.nom || '';
-    if(!nom) nom = 'Sans nom';
 
-    // Status : la CSM écrit sur clients/, donc clients/.clientStatus prioritaire.
-    // Fallback : statut coaching natif (actif/inactif), puis lead.clientStatus.
-    var status = co.clientStatus
-                || (co.statut === 'inactif' ? 'paused' : null)
-                || (lead && lead.clientStatus)
-                || 'active';
-
-    var client = {
-      id: co._id,                    // toujours coachingId — source primaire
-      _coachingId: co._id,
-      _leadId: lead ? lead.id : null,
-      _hasLead: !!lead,
-      _coaching: co,                 // ref vers le doc coaching pour fonctions helper
-      _lead: lead,                   // ref vers lead matché si présent
-
-      // Champs identité (priorité coaching, fallback lead)
-      nom: nom,
-      email: co.email || em,
-      telephone: co.telephone || co.phone || co.tel || (lead && lead.telephone) || '',
-      commerce: co.activite || co.secteur || (lead && lead.commerce) || '',
-      type: co.type || (lead && lead.type) || '',
-      secteur: co.secteur || co.activite || (lead && lead.secteur) || '',
-
-      // Marqueurs CSM (depuis clients/, source primaire)
-      clientStatus: status,
-      clientSince: co.dateEntree || (lead && lead.clientSince) || null,
-      lastCsmFollowupAt: co.lastCsmFollowupAt || (lead && lead.lastCsmFollowupAt) || null,
-      lastCsmFollowupBy: co.lastCsmFollowupBy || (lead && lead.lastCsmFollowupBy) || null,
-      csmFollowupHistory: co.csmFollowupHistory || (lead && lead.csmFollowupHistory) || [],
-
-      // Champs enrichis depuis le lead (CRM-only)
-      kajabiProgress: lead ? (lead.kajabiProgress || null) : null,
-      gcCustomerId: lead ? (lead.gcCustomerId || null) : null,
-      source: lead ? lead.source : null,
-      importedCreatedAt: lead ? lead.importedCreatedAt : null,
-
-      isClient: true
-    };
-
-    allClients.push(client);
-  });
-
-  // Tri : plus récents (entrée coaching) d'abord
-  allClients.sort(function(a,b){
-    var da = toDate(a.clientSince) || new Date(0);
-    var db_ = toDate(b.clientSince) || new Date(0);
-    return db_ - da;
-  });
-
-  // Recharger paiements/témoignages indexés par _leadId du lead matché
-  loadPaymentsForClients();
-  loadTemoignagesForClients();
-
-  // ─── Auto-ouverture modal si ?clientId=X dans l'URL ───
-  // Tolérant : le clientId peut être un coachingId (recommandé) ou un
-  // ancien leadId (deeplinks anciens). On match les deux cas.
-  var openId = (new URLSearchParams(window.location.search)).get('clientId');
-  if(openId && !window._csmClientAutoOpened){
-    window._csmClientAutoOpened = true;
-    setTimeout(function(){
-      // Cas 1 : coachingId trouvé direct
-      var found = allClients.find(function(x){ return x.id === openId; });
-      // Cas 2 : leadId → remonter au coaching matché
-      if(!found) found = allClients.find(function(x){ return x._leadId === openId; });
-      if(found) openClientModal(found.id);
-    }, 500);
-  }
-}
-
-function loadCoachMembers(){
-  db.collection('_meta').doc('team_members').get().then(function(snap){
-    if(!snap.exists) return;
-    var raw = snap.data().members || {};
-    var list = Array.isArray(raw)
-      ? raw
-      : Object.keys(raw).map(function(k){ var v = raw[k]; v.slug = v.slug||k; return v; });
-    list.forEach(function(m){
-      coachMembersMap[m.slug] = m.shortName || m.displayName || m.fullName || m.slug;
-    });
-  }).catch(function(){});
-}
-
-
-/* ─── Quota / sessions logic — réplique de coaching.html ─── */
-function getMonthlyQuota(programme){
-  if(!programme) return 1;
-  var p = String(programme).toLowerCase();
-  if(p.indexOf('24c') >= 0) return 2;
-  if(p.indexOf('12c') >= 0) return 1;
-  if(p.indexOf('6c')  >= 0) return 1;
-  return 1;
-}
-function getAllCoachingSessions(coachingDoc){
-  if(!coachingDoc) return [];
-  if(coachingDoc.years && coachingDoc.years.length){
-    var all = [];
-    coachingDoc.years.forEach(function(y){ (y.sessions||[]).forEach(function(s){ all.push(s); }); });
-    return all;
-  }
-  return coachingDoc.sessions || [];
-}
-function getSessionsInMonth(coachingDoc, year, month){
-  return getAllCoachingSessions(coachingDoc).filter(function(s){
-    if(s.statut !== 'fait' || !s.date) return false;
-    if(s.numero === 0 || s.type === 'rdv72h') return false;
-    var d = new Date(s.date);
-    return d.getFullYear() === year && d.getMonth() === month;
-  });
-}
-function getCoachingQuotaStatus(coachingDoc, year, month){
-  if(!coachingDoc) return null;
-  var done  = coachingDoc.nbCoachingsFaits || 0;
-  var total = coachingDoc.nbCoachingsTotal || 12;
-  if(done >= total) return { status:'done', used:0, max:0 };
-  var quota = getMonthlyQuota(coachingDoc.programme);
-  var sessions = getSessionsInMonth(coachingDoc, year, month);
-  var used = sessions.length;
-  if(used >= quota)  return { status:'ok', used:used, max:quota };
-  if(used > 0)       return { status:'partial', used:used, max:quota };
-  return { status:'miss', used:0, max:quota };
-}
-function getCoachingForLead(lead){
-  // Match best-effort par email canonicalisé
-  var email = (lead.email || '').toLowerCase().trim();
-  if(!email) return null;
-  return coachingByEmail[email] || null;
-}
-function getLastSessionDate(coachingDoc){
-  var ss = getAllCoachingSessions(coachingDoc).filter(function(s){
-    return s.statut === 'fait' && s.date && s.numero !== 0 && s.type !== 'rdv72h';
-  });
-  if(!ss.length) return null;
-  ss.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
-  return new Date(ss[0].date);
-}
-
-/* ─── RDV 72H : la session d'onboarding faite dans les 72h après inscription ───
-   Convention coaching.html : type === 'rdv72h' OU numero === 0. C'est un
-   signal critique côté CSM — si raté, le client démarre mal. */
-function getRdv72h(coachingDoc){
-  var allSess = getAllCoachingSessions(coachingDoc);
-  return allSess.find(function(s){
-    return s.type === 'rdv72h' || s.numero === 0;
-  }) || null;
-}
-
-/* ─── Calculer la date de début effective d'un client coaching ───
-   On combine deux signaux pour ne pas tagger à tort un client comme
-   "en retard" sur des mois où il n'avait pas encore commencé :
-     • dateEntree (peut être mal saisie, parfois dans le futur)
-     • Date de la PREMIÈRE session réelle (peut précéder l'entrée
-       officielle, ex : RDV 72H avant le contrat)
-   On prend le MINIMUM des deux comme repère réel de début. Si les deux
-   sont absents, retourne null (impossible de déterminer).
-   Cette fonction est utilisée à 2 endroits :
-     1. Affichage de l'historique 4 mois précédents (afficher "Avant
-        début" plutôt que "0/1 ❌")
-     2. computeLevel — un client tout juste arrivé ne peut pas être
-        marqué CRITIQUE pour absence de coaching dans le passé.        */
-function getCoachingStartReference(coachingDoc){
-  if(!coachingDoc) return null;
-  var entry = coachingDoc.dateEntree ? new Date(coachingDoc.dateEntree) : null;
-  if(entry && isNaN(entry.getTime())) entry = null;
-  var firstSess = null;
-  var allSess = getAllCoachingSessions(coachingDoc).filter(function(s){
-    return s.statut === 'fait' && s.date;
-  });
-  if(allSess.length){
-    allSess.sort(function(a,b){ return new Date(a.date) - new Date(b.date); });
-    var d = new Date(allSess[0].date);
-    if(!isNaN(d.getTime())) firstSess = d;
-  }
-  if(entry && firstSess) return entry < firstSess ? entry : firstSess;
-  return entry || firstSess;
-}
-
-function loadPaymentsForClients(){
-  if(!allClients.length){ renderAll(); return; }
-  // Les paiements sont indexés par leadId — on ne charge que pour les
-  // clients qui ont un _leadId (lead matché). Les autres n'auront pas de
-  // paiements visibles, c'est par design.
-  var ids = allClients.filter(function(c){ return c._leadId; })
-                     .map(function(c){ return c._leadId; });
-  paymentsByLead = {};
-  if(!ids.length){ renderAll(); return; }
-  // Chunks de 10 (limite Firestore where-in)
-  var chunks = [];
-  for(var i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
-  var pending = chunks.length;
-  chunks.forEach(function(chunk){
-    db.collection('payments').where('leadId','in',chunk).get().then(function(sn){
-      sn.forEach(function(d){
-        var p = d.data(); p.id = d.id;
-        if(!paymentsByLead[p.leadId]) paymentsByLead[p.leadId] = [];
-        paymentsByLead[p.leadId].push(p);
+    if(paysR.status === 'fulfilled'){
+      DATA.paymentsFailed = [];
+      paysR.value.forEach(function(d){
+        DATA.paymentsFailed.push(Object.assign({_id:d.id}, d.data()));
       });
-      if(--pending <= 0){
-        Object.keys(paymentsByLead).forEach(function(k){
-          paymentsByLead[k].sort(function(a,b){
-            return (toDate(b.createdAt)||new Date(0)) - (toDate(a.createdAt)||new Date(0));
-          });
-        });
-        renderAll();
-      }
-    }).catch(function(e){
-      console.warn('Payments chunk error', e);
-      if(--pending <= 0) renderAll();
-    });
-  });
-}
+    } else {
+      console.warn('payments failed load:', paysR.reason && paysR.reason.message);
+    }
 
-function loadTemoignagesForClients(){
-  temoByLead = {};
-  temoFlat = [];
-  // Témoignages = sous-collection des leads. Donc on ne charge que pour
-  // les clients qui ont un lead matché (_leadId).
-  var clientsWithLead = allClients.filter(function(c){ return c._leadId; });
-  if(!clientsWithLead.length){ renderAll(); return; }
-  var pending = clientsWithLead.length;
-  clientsWithLead.forEach(function(c){
-    db.collection('leads').doc(c._leadId).collection('client_temoignages')
-      .orderBy('createdAt','desc').get()
-      .then(function(snap){
-        var arr = [];
-        snap.forEach(function(d){
-          var o = d.data(); o._id = d.id; o._leadId = c._leadId;
-          o._clientId = c.id;
-          o._leadName = clientDisplayName(c);
-          arr.push(o);
-          temoFlat.push(o);
-        });
-        // Index par clientId (id unifié) pour cohérence avec le reste
-        temoByLead[c.id] = arr;
-        if(--pending <= 0){
-          temoFlat.sort(function(a,b){
-            return (toDate(b.createdAt)||new Date(0)) - (toDate(a.createdAt)||new Date(0));
-          });
-          renderAll();
-        }
-      }).catch(function(){
-        if(--pending <= 0) renderAll();
-      });
-  });
-}
-
-function loadNotesForLead(clientId, cb){
-  // Toutes les notes CSM sont stockées sur clients/{coachingId}.csmNotes
-  // (array). Le clientId passé EST le coachingId (cf. buildAllClients).
-  var c = allClients.find(function(x){ return x.id === clientId; });
-  if(!c){
-    notesByLead[clientId] = [];
-    if(cb) cb([]);
-    return;
+    renderAll();
+  } catch(e){
+    console.error('[dashboard-csm] loadAllData error:', e);
+    document.getElementById('dashSub').textContent = 'Erreur de chargement : '+e.message;
   }
-  // Lire le doc fresh pour avoir les notes les plus récentes (le snapshot
-  // des coachings nous donne déjà les notes mais peut être un poil en
-  // retard après un addNote).
-  db.collection('clients').doc(c.id).get().then(function(snap){
-    var data = snap.data() || {};
-    var arr = (data.csmNotes || []).slice().sort(function(a,b){
-      var da = toDate(a.createdAt) || new Date(0);
-      var dbn = toDate(b.createdAt) || new Date(0);
-      return dbn - da;
-    });
-    notesByLead[clientId] = arr;
-    if(cb) cb(arr);
-  }).catch(function(){
-    // Fallback : utiliser le cache du snapshot
-    var co = c._coaching || {};
-    var arr = (co.csmNotes || []).slice();
-    notesByLead[clientId] = arr;
-    if(cb) cb(arr);
-  });
 }
 
-/* ─── Rendering ─── */
+/* ─── Calculs ─── */
+function isCoachingActif(c){
+  /* statuts considérés "actifs" pour les KPIs */
+  var s = c.statut || '';
+  return s === 'actif' || s === 'en_cours' || s === 'active';
+}
+
+function getLevelForCoaching(c){
+  /* Réimplémentation simplifiée du computeLevel du dashboard original.
+     Niveaux : crit > warn > att > ok */
+  if(!isCoachingActif(c)) return 'ok';
+
+  var d = daysSince(c.lastCsmFollowupAt);
+  var dCreated = daysSince(c.createdAt);
+  /* Si jamais relancé et ancien (>14j) → crit; sinon si >30j → crit */
+  if(d === null && (dCreated || 0) > 14) return 'crit';
+  if(d !== null && d > 30) return 'crit';
+  if(d !== null && d > 14) return 'warn';
+  if(d === null && (dCreated || 0) > 7) return 'att';
+  return 'ok';
+}
+
+function computeKpis(){
+  var actifs = DATA.coachings.filter(isCoachingActif);
+  var nbActifs = actifs.length;
+
+  /* Niveaux */
+  var byLevel = { crit:0, warn:0, att:0, ok:0 };
+  DATA.coachings.forEach(function(c){
+    var l = getLevelForCoaching(c);
+    byLevel[l] = (byLevel[l] || 0) + 1;
+  });
+
+  /* MRR : somme des installmentAmount des subscriptions actives */
+  var mrr = 0;
+  DATA.subscriptions.forEach(function(s){
+    if(s.status === 'active' && s.installmentAmount){
+      mrr += parseFloat(s.installmentAmount) || 0;
+    }
+  });
+
+  /* Relances dues : actifs sans relance depuis >14j ou jamais relancés et créés depuis >7j */
+  var relancesDues = DATA.coachings.filter(function(c){
+    if(!isCoachingActif(c)) return false;
+    var d = daysSince(c.lastCsmFollowupAt);
+    var dCreated = daysSince(c.createdAt) || 0;
+    if(d === null) return dCreated > 7;
+    return d > 14;
+  }).length;
+
+  return { nbActifs:nbActifs, byLevel:byLevel, mrr:mrr, relancesDues:relancesDues };
+}
+
+/* ─── Rendu ─── */
 function renderAll(){
-  computeStats();              // calcule statsCache (utilisé partout)
-  renderKpiStrip();            // 4 KPI cards en haut
-  renderSidebarPills();        // Pills de filtres (Tous / Critiques / À relancer / etc.)
-  renderSidebarList();         // Liste compacte des clients
-  renderDetailPanel();         // Panneau de droite (détail ou empty state)
+  var k = computeKpis();
+
+  /* Sous-titre header */
+  var t = new Date();
+  var hh = String(t.getHours()).padStart(2,'0');
+  var mm = String(t.getMinutes()).padStart(2,'0');
+  document.getElementById('dashSub').textContent =
+    k.nbActifs+' clients actifs · Mis à jour à '+hh+':'+mm;
+
+  /* KPIs */
+  document.getElementById('kpiActifs').textContent = k.nbActifs;
+  document.getElementById('kpiActifsTrend').textContent =
+    DATA.coachings.length+' au total dans la base';
+
+  document.getElementById('kpiCrit').textContent = k.byLevel.crit;
+  var critDetail = [];
+  if(k.byLevel.warn > 0) critDetail.push(k.byLevel.warn+' warn');
+  if(k.byLevel.att > 0)  critDetail.push(k.byLevel.att+' att');
+  document.getElementById('kpiCritDetail').textContent =
+    critDetail.length ? critDetail.join(' · ') : 'Aucune alerte secondaire';
+
+  document.getElementById('kpiMrr').innerHTML = fmtEuro(k.mrr) + '<span class="kpi-suffix">€/mois</span>';
+  var subsActives = DATA.subscriptions.filter(function(s){ return s.status === 'active'; }).length;
+  document.getElementById('kpiMrrDetail').textContent = subsActives+' abonnement(s) actif(s)';
+
+  document.getElementById('kpiRelances').textContent = k.relancesDues;
+  document.getElementById('kpiRelancesDetail').textContent =
+    k.relancesDues > 0 ? 'À traiter cette semaine' : 'Aucune relance en attente';
+
+  /* Card 1 : Coachings manquants — clients actifs sans session récente */
+  renderCard1();
+  /* Card 2 : Top 3 à relancer (crit triés par dernière relance la plus ancienne) */
+  renderCard2();
+  /* Card 3 : Paiements échoués (5 derniers) */
+  renderCard3();
+  /* Card 4 : Programmes expirant ce mois */
+  renderCard4();
 }
 
-/* ─── KPI strip — 4 cards cliquables qui filtrent la liste ─── */
-function renderKpiStrip(){
-  var s = window._statsCache || {};
-  var pendingThisWeek = computePendingFollowups();
-  var doneToday = computeDoneFollowupsToday();
-
-  var html = '';
-  html += '<div class="csm-kpi" onclick="setSidebarFilter(\'crit\')">';
-  html += '<div class="csm-kpi-num" style="color:var(--crit-color)"><i class="ti ti-alert-circle"></i>' + (s.crit||0) + '</div>';
-  html += '<div class="csm-kpi-label">Critiques · à actionner</div>';
-  html += '<div class="csm-kpi-trend">' + (s.crit > 0 ? 'Action urgente requise' : 'RAS pour le moment') + '</div>';
-  html += '</div>';
-
-  html += '<div class="csm-kpi" onclick="setSidebarFilter(\'coachLate\')">';
-  html += '<div class="csm-kpi-num" style="color:#fb923c"><i class="ti ti-target"></i>' + (s.coachLate||0) + '</div>';
-  html += '<div class="csm-kpi-label">Retards coaching</div>';
-  html += '<div class="csm-kpi-trend">2 mois sans session</div>';
-  html += '</div>';
-
-  html += '<div class="csm-kpi" onclick="setSidebarFilter(\'payment\')">';
-  html += '<div class="csm-kpi-num" style="color:#dc2626"><i class="ti ti-credit-card"></i>' + (s.payIssue||0) + '</div>';
-  html += '<div class="csm-kpi-label">Paiements en échec</div>';
-  html += '<div class="csm-kpi-trend">À récupérer</div>';
-  html += '</div>';
-
-  html += '<div class="csm-kpi" onclick="setSidebarFilter(\'warn\')">';
-  html += '<div class="csm-kpi-num" style="color:#60a5fa"><i class="ti ti-phone-call"></i>' + pendingThisWeek + '</div>';
-  html += '<div class="csm-kpi-label">À relancer cette semaine</div>';
-  html += '<div class="csm-kpi-trend up">' + doneToday + ' fait aujourd\'hui</div>';
-  html += '</div>';
-
-  document.getElementById('kpiStrip').innerHTML = html;
-}
-
-function computePendingFollowups(){
-  // À relancer cette semaine = clients warn/att/crit qui n'ont pas été
-  // relancés depuis plus de 7 jours
-  var sevenDaysAgo = Date.now() - 7*86400000;
-  var n = 0;
-  allClients.forEach(function(c){
-    var lvl = computeLevel(c);
-    if(lvl !== 'crit' && lvl !== 'warn' && lvl !== 'att') return;
-    var last = toDate(c.lastCsmFollowupAt);
-    if(!last || last.getTime() < sevenDaysAgo) n++;
+function renderCard1(){
+  /* Coachings manquants : actifs où dernier rdv (lastSessionDate) > 30j ou jamais */
+  var items = DATA.coachings.filter(function(c){
+    if(!isCoachingActif(c)) return false;
+    var d = daysSince(c.lastSessionDate);
+    if(d === null) return (daysSince(c.createdAt) || 0) > 14;
+    return d > 30;
   });
-  return n;
-}
-function computeDoneFollowupsToday(){
-  var startOfDay = new Date(); startOfDay.setHours(0,0,0,0);
-  var n = 0;
-  allClients.forEach(function(c){
-    var last = toDate(c.lastCsmFollowupAt);
-    if(last && last >= startOfDay) n++;
+  /* Tri par ancienneté du retard décroissant */
+  items.sort(function(a,b){
+    var dA = daysSince(a.lastSessionDate); if(dA === null) dA = daysSince(a.createdAt) || 0;
+    var dB = daysSince(b.lastSessionDate); if(dB === null) dB = daysSince(b.createdAt) || 0;
+    return dB - dA;
   });
-  return n;
-}
+  var top = items.slice(0,5);
 
-function computeStats(){
-  var crit = 0, warn = 0, att = 0, active = 0, coachLate = 0, payIssue = 0;
-  allClients.forEach(function(c){
-    var status = c.clientStatus || 'active';
-    if(status === 'active') active++;
-    var lvl = computeLevel(c);
-    if(lvl === 'crit') crit++;
-    else if(lvl === 'warn') warn++;
-    else if(lvl === 'att')  att++;
-    // Compteur coaching en retard (au moins 1 mois manqué)
-    var coachingDoc = getCoachingForLead(c);
-    if(coachingDoc && coachingDoc.statut !== 'inactif'){
-      var done  = coachingDoc.nbCoachingsFaits || 0;
-      var total = coachingDoc.nbCoachingsTotal || 12;
-      if(done < total){
-        var nowD = new Date();
-        var qNow = getCoachingQuotaStatus(coachingDoc, nowD.getFullYear(), nowD.getMonth());
-        if(qNow && qNow.status === 'miss') coachLate++;
-      }
-    }
-    // Compteur paiements en échec
-    if(c._leadId){
-      var pays = paymentsByLead[c._leadId] || [];
-      if(pays.some(function(p){ return p.status === 'failed'; })) payIssue++;
-    }
-  });
-  // Stocker en cache pour renderKpiStrip et autres
-  window._statsCache = {
-    crit: crit, warn: warn, att: att, active: active,
-    coachLate: coachLate, payIssue: payIssue,
-    total: allClients.length, temoignages: temoFlat.length
-  };
-}
-
-function searchMatch(c, q){
-  if(!q) return true;
-  var hay = ((c.nom||'') + ' ' + (c.commerce||'') + ' ' + (c.email||'') + ' ' + (c.telephone||'')).toLowerCase();
-  return hay.indexOf(q.toLowerCase()) >= 0;
-}
-
-/* ═════ STATE & FILTRES SIDEBAR ═════════════════════════════════════════
-   selectedClientId : id du client affiché dans le panneau de droite.
-   sidebarFilter : 'all' | 'crit' | 'warn' | 'att' | 'coachLate' | 'payment' | 'onboarding'
-   ═══════════════════════════════════════════════════════════════════════ */
-var selectedClientId = null;
-var sidebarFilter = 'all';
-
-function setSidebarFilter(filter){
-  sidebarFilter = filter;
-  renderSidebarPills();
-  renderSidebarList();
-}
-window.setSidebarFilter = setSidebarFilter;
-
-function selectClient(clientId){
-  selectedClientId = clientId;
-  // Pour la rétro-compat avec les fonctions existantes (changeStatus, addNote, etc.)
-  // qui lisent encore openClientId
-  openClientId = clientId;
-  renderSidebarList();    // re-render pour highlight la sélection
-  renderDetailPanel();
-  // Charger les notes pour ce client (asynchrone)
-  loadNotesForLead(clientId, function(){ renderDetailPanel(); });
-}
-window.selectClient = selectClient;
-
-/* ─── Sidebar : pills de filtres ─── */
-function renderSidebarPills(){
-  var s = window._statsCache || {};
-  var pills = [
-    { id: 'all',         label: 'Tous',          count: allClients.length, cls: '' },
-    { id: 'crit',        label: '🔴 Critiques',  count: s.crit||0,         cls: 'crit' },
-    { id: 'warn',        label: '🟠 À relancer', count: s.warn||0,         cls: 'warn' },
-    { id: 'att',         label: '🟡 Attention',  count: s.att||0,          cls: 'att' },
-    { id: 'coachLate',   label: '🎯 Retard coaching', count: s.coachLate||0, cls: '' },
-    { id: 'payment',     label: '💳 Échec paiement', count: s.payIssue||0, cls: '' }
-  ];
-  var html = pills.map(function(p){
-    var on = sidebarFilter === p.id;
-    return '<button class="csm-sb-pill ' + p.cls + (on?' on':'') + '" onclick="setSidebarFilter(\'' + p.id + '\')">'
-         + p.label + ' · ' + p.count + '</button>';
+  document.getElementById('card1Count').textContent = items.length;
+  var body = document.getElementById('card1Body');
+  if(top.length === 0){
+    body.innerHTML = '<div class="card-empty"><i class="ti ti-circle-check"></i>Tous les clients ont une session récente</div>';
+    return;
+  }
+  body.innerHTML = top.map(function(c){
+    var d = daysSince(c.lastSessionDate);
+    var label = d === null ? 'jamais' : d+'j sans session';
+    return ''
+      + '<div class="card-item">'
+      + '  <div class="ci-av">'+esc(getInitials(c.nom))+'</div>'
+      + '  <div class="ci-text">'
+      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+'</div>'
+      + '    <div class="ci-meta">'+esc(c.programme||'—')+' · '+label+'</div>'
+      + '  </div>'
+      + '  <a href="csm-clients.html?clientId='+encodeURIComponent(c._id)+'" class="ci-action">Voir</a>'
+      + '</div>';
   }).join('');
-  document.getElementById('filterPills').innerHTML = html;
 }
 
-/* ─── Sidebar : liste compacte filtrée ─── */
-function getFilteredClients(){
-  var q = (document.getElementById('searchInput').value || '').trim();
-  return allClients.filter(function(c){
-    if(!searchMatch(c, q)) return false;
-    var lvl = computeLevel(c);
-    if(sidebarFilter === 'all') return true;
-    if(sidebarFilter === 'crit') return lvl === 'crit';
-    if(sidebarFilter === 'warn') return lvl === 'warn';
-    if(sidebarFilter === 'att')  return lvl === 'att';
-    if(sidebarFilter === 'coachLate'){
-      var co = getCoachingForLead(c);
-      if(!co || co.statut === 'inactif') return false;
-      var done = co.nbCoachingsFaits || 0, total = co.nbCoachingsTotal || 12;
-      if(done >= total) return false;
-      var now = new Date();
-      var q2 = getCoachingQuotaStatus(co, now.getFullYear(), now.getMonth());
-      return q2 && q2.status === 'miss';
-    }
-    if(sidebarFilter === 'payment'){
-      if(!c._leadId) return false;
-      var pays = paymentsByLead[c._leadId] || [];
-      return pays.some(function(p){ return p.status === 'failed'; });
-    }
-    return true;
-  }).sort(function(a, b){
-    // Tri : critiques d'abord, puis warn, puis att, puis ok
-    var order = { crit: 0, warn: 1, att: 2, ok: 3 };
-    var la = order[computeLevel(a)] !== undefined ? order[computeLevel(a)] : 4;
-    var lb = order[computeLevel(b)] !== undefined ? order[computeLevel(b)] : 4;
-    if(la !== lb) return la - lb;
-    // À niveau égal : tri par dernière relance (les jamais relancés en premier)
-    var ta = toDate(a.lastCsmFollowupAt);
-    var tb = toDate(b.lastCsmFollowupAt);
-    if(!ta && tb) return -1;
-    if(ta && !tb) return 1;
-    if(ta && tb) return ta - tb; // plus ancien d'abord
-    return 0;
+function renderCard2(){
+  /* Top 3 à relancer : clients en crit triés par dernière relance la plus ancienne */
+  var items = DATA.coachings.filter(function(c){
+    return isCoachingActif(c) && getLevelForCoaching(c) === 'crit';
   });
-}
+  items.sort(function(a,b){
+    var dA = daysSince(a.lastCsmFollowupAt); if(dA === null) dA = daysSince(a.createdAt) || 99999;
+    var dB = daysSince(b.lastCsmFollowupAt); if(dB === null) dB = daysSince(b.createdAt) || 99999;
+    return dB - dA;  /* le plus ancien (le plus en retard) en premier */
+  });
+  var top = items.slice(0,3);
 
-function renderSidebarList(){
-  var list = getFilteredClients();
-  var listEl = document.getElementById('clientsList');
-  if(!list.length){
-    listEl.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">🌟</div>'
-                     + '<div class="csm-empty-title">Aucun client</div>'
-                     + '<div>Aucun client ne correspond aux filtres</div></div>';
+  document.getElementById('card2Count').textContent = items.length;
+  var body = document.getElementById('card2Body');
+  if(top.length === 0){
+    body.innerHTML = '<div class="card-empty"><i class="ti ti-mood-smile"></i>Aucune relance critique en attente</div>';
     return;
   }
-  // Auto-sélection du premier client si rien n'est sélectionné
-  if(!selectedClientId || !list.find(function(c){ return c.id === selectedClientId; })){
-    selectedClientId = list[0].id;
-    openClientId = selectedClientId; // rétro-compat
-    setTimeout(renderDetailPanel, 0);
-  }
-  var html = list.map(function(c){
-    return renderSidebarRow(c);
+  body.innerHTML = top.map(function(c){
+    var d = daysSince(c.lastCsmFollowupAt);
+    var label = d === null ? 'jamais relancé' : d+'j sans contact';
+    return ''
+      + '<div class="card-item">'
+      + '  <div class="ci-av">'+esc(getInitials(c.nom))+'</div>'
+      + '  <div class="ci-text">'
+      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+'<span class="badge crit" style="margin-left:7px">'+label+'</span></div>'
+      + '    <div class="ci-meta">'+esc(c.programme||'—')+(c.coachAssigned?' · coach '+esc(c.coachAssigned):'')+'</div>'
+      + '  </div>'
+      + '  <a href="csm-clients.html?clientId='+encodeURIComponent(c._id)+'" class="ci-action">Voir</a>'
+      + '</div>';
   }).join('');
-  listEl.innerHTML = html;
 }
 
-function renderSidebarRow(c){
-  var lvl = computeLevel(c) || 'ok';
-  var dotCls = lvl === 'crit' ? 'crit' : lvl === 'warn' ? 'warn' : lvl === 'att' ? 'att' : 'ok';
-  var sel = (c.id === selectedClientId) ? ' selected' : '';
-  var timeText = '—';
-  if(c.lastCsmFollowupAt){
-    timeText = timeAgo(c.lastCsmFollowupAt);
-  } else if(c.clientSince){
-    timeText = '+' + timeAgo(c.clientSince);
-  }
+function renderCard3(){
+  /* Paiements échoués : 5 derniers, triés par date desc */
+  var items = DATA.paymentsFailed.slice();
+  items.sort(function(a,b){
+    var dA = toDate(a.createdAt) || new Date(0);
+    var dB = toDate(b.createdAt) || new Date(0);
+    return dB - dA;
+  });
+  var top = items.slice(0,5);
 
-  // Tags : on prend les 1-2 raisons les plus prioritaires
-  var reasons = (c._reasons || computeReasons(c)).slice(0, 1);
-  var tagsHtml = '';
-  if(reasons.length){
-    var r = reasons[0];
-    var tagCls = r.level === 'crit' ? 'crit' : r.level === 'warn' ? 'warn' : 'att';
-    tagsHtml = '<span class="csm-cr-tag ' + tagCls + '">' + esc(r.label) + '</span>';
-  } else if(!c._hasLead){
-    tagsHtml = '<span class="csm-cr-tag muted">Pas de lead CRM</span>';
-  } else if(lvl === 'ok'){
-    tagsHtml = '<span class="csm-cr-tag ok">À jour</span>';
+  document.getElementById('card3Count').textContent = items.length;
+  var body = document.getElementById('card3Body');
+  if(top.length === 0){
+    body.innerHTML = '<div class="card-empty"><i class="ti ti-circle-check"></i>Aucun paiement en échec</div>';
+    return;
   }
-
-  // Stats compactes : X/Y coaching · montant
-  var stats = '';
-  var coDoc = getCoachingForLead(c);
-  if(coDoc){
-    stats += (coDoc.nbCoachingsFaits||0) + '/' + (coDoc.nbCoachingsTotal||12);
-  }
-  if(c._leadId){
-    var pays = paymentsByLead[c._leadId] || [];
-    if(pays.length){
-      var paid = 0;
-      pays.forEach(function(p){ if(p.status !== 'cancelled') paid += (p.paidAmount||0); });
-      if(paid > 0) stats += (stats?' · ':'') + fmtEuro(paid);
-    }
-  }
-
-  return '<div class="csm-client-row' + sel + '" onclick="selectClient(\'' + c.id + '\')">'
-       + '<div class="csm-cr-line1">'
-       +   '<span class="csm-cr-dot ' + dotCls + '"></span>'
-       +   '<span class="csm-cr-name">' + esc(clientDisplayName(c)) + '</span>'
-       +   '<span class="csm-cr-time">' + esc(timeText) + '</span>'
-       + '</div>'
-       + '<div class="csm-cr-meta">'
-       +   tagsHtml
-       +   (stats ? '<span class="csm-cr-stats">' + stats + '</span>' : '')
-       + '</div>'
-       + '</div>';
-}
-
-/* ─── Detail panel : remplace l'ancienne modal ─── */
-function renderDetailPanel(){
-  var detailEl = document.getElementById('detailPanel');
-  if(!selectedClientId){
-    detailEl.innerHTML = '<div class="csm-detail-empty">'
-      + '<div style="font-size:42px;opacity:0.3;margin-bottom:14px">💎</div>'
-      + '<div style="font-size:14px;color:var(--ink-muted)">Sélectionne un client dans la liste pour voir son détail</div>'
+  body.innerHTML = top.map(function(p){
+    var amount = p.totalAmount || p.totalAmountTtc || p.amount || 0;
+    var d = toDate(p.createdAt);
+    var dStr = d ? d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}) : '—';
+    var name = p.leadName || p.contactName || (p.leadEmail||'(client inconnu)');
+    return ''
+      + '<div class="card-item">'
+      + '  <div class="ci-av">'+esc(getInitials(name))+'</div>'
+      + '  <div class="ci-text">'
+      + '    <div class="ci-name">'+esc(name)+'</div>'
+      + '    <div class="ci-meta">'+dStr+(p.failureReason?' · '+esc(p.failureReason):'')+'</div>'
+      + '  </div>'
+      + '  <div class="ci-amount failed">'+fmtEuro(amount)+' €</div>'
       + '</div>';
+  }).join('');
+}
+
+function renderCard4(){
+  /* Programmes expirant ce mois : clients actifs où finPrevue < 30j */
+  var items = DATA.coachings.filter(function(c){
+    if(!isCoachingActif(c)) return false;
+    /* Le champ d'échéance peut être finPrevue, dateFinPrevue, dateFin */
+    var endDate = c.finPrevue || c.dateFinPrevue || c.dateFin;
+    if(!endDate) return false;
+    var dU = daysUntil(endDate);
+    return dU !== null && dU >= 0 && dU <= 31;
+  });
+  items.sort(function(a,b){
+    var dA = daysUntil(a.finPrevue || a.dateFinPrevue || a.dateFin) || 999;
+    var dB = daysUntil(b.finPrevue || b.dateFinPrevue || b.dateFin) || 999;
+    return dA - dB;
+  });
+  var top = items.slice(0,5);
+
+  document.getElementById('card4Count').textContent = items.length;
+  var body = document.getElementById('card4Body');
+  if(top.length === 0){
+    body.innerHTML = '<div class="card-empty"><i class="ti ti-calendar"></i>Aucun programme n\'expire ce mois</div>';
     return;
   }
-  // openClientId est utilisé en interne par renderModal — bridge V1/V2
-  openClientId = selectedClientId;
-  // renderModal écrit dans #detailPanel (cf. patch dans la fonction)
-  renderModal();
-}
-
-function renderRetards(){
-  document.getElementById('toolbarRetards').style.display = '';
-  document.getElementById('filterStatus').style.display = '';
-  document.getElementById('filterPayStatus').style.display = 'none';
-  var _fr = document.getElementById('filterReason'); if(_fr) _fr.style.display = 'none';
-  var reasonFilterEl = document.getElementById('filterReason');
-  if(reasonFilterEl) reasonFilterEl.style.display = '';
-  var body = document.getElementById('csmBody');
-  var list = [];
-  allClients.forEach(function(c){
-    var lvl = computeLevel(c);
-    if(!lvl || lvl === 'ok') return;
-    if(!levelsActive[lvl]) return;
-    if(filterStatus !== 'all' && (c.clientStatus || 'active') !== filterStatus) return;
-    if(!searchMatch(c, searchQ)) return;
-    c._level = lvl;
-    c._reasons = computeReasons(c);
-    // Filtre par motif (paiement / coaching / autre)
-    if(filterReason && filterReason !== 'all'){
-      if(filterReason === 'payment'  && !c._reasons.some(function(r){ return r.kind === 'payment'; })) return;
-      if(filterReason === 'coaching' && !c._reasons.some(function(r){ return r.kind === 'coaching'; })) return;
-    }
-    list.push(c);
-  });
-  // Sort : crit → warn → att
-  var rank = { crit:0, warn:1, att:2 };
-  list.sort(function(a,b){ return rank[a._level] - rank[b._level]; });
-
-  if(!list.length){
-    body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">🎉</div>' +
-      '<div class="csm-empty-title">Aucune alerte active</div>' +
-      '<div>Tous les clients sont sous contrôle ou hors filtres.</div></div>';
-    return;
-  }
-  var h = '<div class="csm-list">';
-  list.forEach(function(c){ h += renderClientCard(c); });
-  h += '</div>';
-  body.innerHTML = h;
-}
-
-/* Calcule la liste des motifs d'alerte pour un client (pour affichage badges
-   et filtrage par motif). Distingue paiement vs coaching. */
-function computeReasons(c){
-  var reasons = [];
-  var status = c.clientStatus || 'active';
-  if(status === 'procedure'){
-    reasons.push({ kind:'payment', level:'crit', label:'⚖️ Procédure' });
-  }
-  var pays = paymentsByLead[c._leadId] || [];
-  pays.forEach(function(p){
-    if(p.status === 'failed'){
-      reasons.push({ kind:'payment', level:'crit', label:'❌ Paiement en échec' });
-    } else if(p.status === 'cancelled'){
-      reasons.push({ kind:'payment', level:'warn', label:'🚫 Paiement annulé' });
-    } else if(p.status === 'active' && p.installmentsCount > 1){
-      var start = toDate(p.startDate);
-      if(start){
-        var monthsElapsed = (new Date().getFullYear() - start.getFullYear())*12 + (new Date().getMonth() - start.getMonth()) + 1;
-        var expected = Math.min(monthsElapsed, p.installmentsCount);
-        var late = expected - (p.paidCount || 0) - 1;
-        if(late > 0) reasons.push({ kind:'payment', level:'crit', label:'⚠️ ' + late + ' mois de retard prélèv.' });
-      }
-    } else if(p.status === 'pending_mandate'){
-      var ts = toDate(p.createdAt);
-      if(ts && (Date.now() - ts.getTime()) > 7*86400000){
-        reasons.push({ kind:'payment', level:'warn', label:'⏳ Mandat non signé +7j' });
-      }
-    }
-  });
-  if(status === 'active' && pays.length === 0){
-    reasons.push({ kind:'payment', level:'att', label:'💸 Aucun paiement enregistré' });
-  }
-  if(status === 'paused'){
-    reasons.push({ kind:'other', level:'warn', label:'⏸ Compte en pause' });
-  }
-
-  // Coaching
-  var coachingDoc = getCoachingForLead(c);
-  if(coachingDoc && coachingDoc.statut !== 'inactif'){
-    var done = coachingDoc.nbCoachingsFaits || 0, total = coachingDoc.nbCoachingsTotal || 12;
-    if(done < total){
-      var now = new Date();
-      var qN = getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
-      var prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
-      var qP = getCoachingQuotaStatus(coachingDoc, prev.getFullYear(), prev.getMonth());
-      if(qN && qP && qN.status === 'miss' && qP.status === 'miss'){
-        reasons.push({ kind:'coaching', level:'crit', label:'🎯 2 mois sans coaching' });
-      } else if(qN && qN.status === 'miss'){
-        reasons.push({ kind:'coaching', level:'warn', label:'🎯 Pas de coaching ce mois' });
-      } else if(qN && qN.status === 'partial'){
-        reasons.push({ kind:'coaching', level:'att', label:'🎯 Sous quota mensuel (' + qN.used + '/' + qN.max + ')' });
-      }
-    }
-  }
-  return reasons;
-}
-
-/* ─── computeSignals(c) ───
-   Produit les "cartes actionnables" pour le bloc Signaux à actionner de
-   la Vue d'ensemble. Chaque signal a :
-     - level : crit | warn | att | info  → couleur
-     - icon : emoji affiché (Adrien préfère emojis sur statuts)
-     - title : phrase courte (gras)
-     - desc : contexte (1 ligne, gris)
-     - actionLabel : verbe d'action ("Programmer", "Contacter"…)
-     - actionFn : code JS à exécuter au clic (string pour onclick inline)
-   Réutilise les helpers existants pour cohérence avec computeReasons.   */
-function computeSignals(c){
-  var signals = [];
-  var pays = paymentsByLead[c._leadId] || [];
-  var coachingDoc = getCoachingForLead(c);
-
-  // 1. Lead non lié → signal info violet
-  if(!c._hasLead){
-    signals.push({
-      level: 'info', icon: '📚',
-      title: 'Pas de lead CRM lié',
-      desc: 'Paiements GoCardless et Kajabi invisibles tant qu\'il n\'y a pas de lead',
-      actionLabel: 'Créer le lead',
-      actionFn: 'csmCreateLeadForClient(\'' + c.id + '\')'
-    });
-  } else if(c._lead && !c._lead.isClient){
-    signals.push({
-      level: 'warn', icon: '⚠️',
-      title: 'Lead trouvé mais pas marqué client',
-      desc: 'Le lead "' + esc(c._lead.nom||c._lead.email) + '" existe mais isClient=false',
-      actionLabel: 'Marquer client',
-      actionFn: 'csmMarkLeadAsClient(\'' + c.id + '\')'
-    });
-  }
-
-  // 2. RDV 72H raté (signal critique côté CSM)
-  var rdv72 = coachingDoc ? getRdv72h(coachingDoc) : null;
-  var entryD = coachingDoc && coachingDoc.dateEntree ? new Date(coachingDoc.dateEntree) : null;
-  if(coachingDoc && (!rdv72 || rdv72.statut !== 'fait')){
-    if(entryD && !isNaN(entryD.getTime())){
-      var hSince = (Date.now() - entryD)/3600000;
-      if(hSince > 72){
-        signals.push({
-          level: 'crit', icon: '🔴',
-          title: 'RDV 72H raté',
-          desc: 'Entré le ' + fmtDate(entryD) + ' · ' + Math.round(hSince/24) + 'j de retard sur l\'onboarding',
-          actionLabel: 'Caller le coach',
-          actionFn: 'switchModalTab(\'coaching\')'
-        });
-      } else if(hSince > 24){
-        signals.push({
-          level: 'warn', icon: '⏱',
-          title: 'RDV 72H à programmer',
-          desc: 'Reste ' + Math.round(72-hSince) + 'h pour rester dans les délais',
-          actionLabel: 'Voir coaching',
-          actionFn: 'switchModalTab(\'coaching\')'
-        });
-      }
-    }
-  }
-
-  // 3. Coaching : 2 mois sans session (critique)
-  if(coachingDoc && coachingDoc.statut !== 'inactif'){
-    var done = coachingDoc.nbCoachingsFaits || 0, total = coachingDoc.nbCoachingsTotal || 12;
-    if(done < total){
-      var now = new Date();
-      var refStart = getCoachingStartReference(coachingDoc);
-      var refMonth = refStart ? new Date(refStart.getFullYear(), refStart.getMonth(), 1) : null;
-      var thisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      var prevMonth = new Date(now.getFullYear(), now.getMonth()-1, 1);
-      var nowBefore = refMonth && thisMonth < refMonth;
-      var prevBefore = refMonth && prevMonth < refMonth;
-      var qN = nowBefore ? null : getCoachingQuotaStatus(coachingDoc, now.getFullYear(), now.getMonth());
-      var qP = prevBefore ? null : getCoachingQuotaStatus(coachingDoc, prevMonth.getFullYear(), prevMonth.getMonth());
-
-      var lastSess = getLastSessionDate(coachingDoc);
-      var lastInfo = lastSess ? 'Dernière session ' + fmtDate(lastSess) : 'Aucune session effectuée';
-
-      if(qN && qP && qN.status === 'miss' && qP.status === 'miss'){
-        signals.push({
-          level: 'crit', icon: '🎯',
-          title: '2 mois sans coaching',
-          desc: lastInfo + (lastSess && coachingDoc.coachAssigned ? ' avec ' + esc(coachingDoc.coachAssigned) : ''),
-          actionLabel: 'Relancer',
-          actionFn: 'markFollowedUp()'
-        });
-      } else if(qN && qN.status === 'miss'){
-        signals.push({
-          level: 'warn', icon: '🎯',
-          title: 'Aucun coaching ce mois',
-          desc: lastInfo + ' · quota mensuel non atteint',
-          actionLabel: 'Programmer',
-          actionFn: 'switchModalTab(\'coaching\')'
-        });
-      } else if(qN && qN.status === 'partial'){
-        signals.push({
-          level: 'att', icon: '🎯',
-          title: 'Sous quota mensuel',
-          desc: qN.used + '/' + qN.max + ' coachings ce mois — programmer le reste',
-          actionLabel: 'Voir détail',
-          actionFn: 'switchModalTab(\'coaching\')'
-        });
-      }
-    }
-  }
-
-  // 4. Paiements en échec (critique business)
-  pays.forEach(function(p){
-    if(p.status === 'failed'){
-      signals.push({
-        level: 'crit', icon: '💳',
-        title: 'Paiement en échec',
-        desc: fmtEuro(p.totalAmount) + ' · mandat à recréer ou contact direct',
-        actionLabel: 'Voir paiements',
-        actionFn: 'switchModalTab(\'payments\')'
-      });
-    } else if(p.status === 'pending_mandate'){
-      var ts = toDate(p.createdAt);
-      if(ts && (Date.now() - ts.getTime()) > 7*86400000){
-        signals.push({
-          level: 'warn', icon: '⏳',
-          title: 'Mandat non signé depuis +7j',
-          desc: fmtEuro(p.totalAmount) + ' · relancer pour signature GoCardless',
-          actionLabel: 'Voir paiements',
-          actionFn: 'switchModalTab(\'payments\')'
-        });
-      }
-    }
-  });
-
-  // 5. Kajabi peu avancé (signal d'engagement)
-  if(c.kajabiProgress && c.kajabiProgress.byCourse){
-    var courseKeys = Object.keys(c.kajabiProgress.byCourse);
-    if(courseKeys.length){
-      var sumPct = 0, nPct = 0, firstTitle = '';
-      courseKeys.forEach(function(ck){
-        var crs = c.kajabiProgress.byCourse[ck] || {};
-        if(!firstTitle && crs.title) firstTitle = crs.title;
-        if(typeof crs.pct === 'number'){ sumPct += crs.pct; nPct++; }
-      });
-      if(nPct > 0){
-        var avgPct = Math.round(sumPct/nPct);
-        // Si client présent depuis >30j et progression < 20% → signal
-        var since = c.clientSince ? toDate(c.clientSince) : null;
-        if(since && (Date.now() - since.getTime()) > 30*86400000 && avgPct < 20){
-          signals.push({
-            level: 'att', icon: '🎓',
-            title: 'Kajabi peu avancé',
-            desc: avgPct + '% sur ' + esc(firstTitle || 'Programme') + ' — encourager',
-            actionLabel: 'Voir Kajabi',
-            actionFn: 'switchModalTab(\'kajabi\')'
-          });
-        }
-      }
-    }
-  }
-
-  // 6. Jamais relancé alors que client à risque (méta-signal)
-  var lvl = computeLevel(c);
-  if((lvl === 'crit' || lvl === 'warn') && !c.lastCsmFollowupAt){
-    signals.push({
-      level: 'info', icon: '📞',
-      title: 'Jamais relancé',
-      desc: 'Ce client est à risque mais aucune relance enregistrée',
-      actionLabel: 'Marquer relancé',
-      actionFn: 'markFollowedUp()'
-    });
-  }
-
-  return signals;
-}
-
-function renderAllClients(){
-  document.getElementById('toolbarRetards').style.display = 'none';
-  document.getElementById('filterStatus').style.display = '';
-  document.getElementById('filterPayStatus').style.display = 'none';
-  var _fr = document.getElementById('filterReason'); if(_fr) _fr.style.display = 'none';
-  var body = document.getElementById('csmBody');
-  var list = allClients.slice();
-  if(filterStatus !== 'all') list = list.filter(function(c){ return (c.clientStatus||'active') === filterStatus; });
-  if(searchQ) list = list.filter(function(c){ return searchMatch(c, searchQ); });
-  list.forEach(function(c){ c._level = computeLevel(c); });
-
-  if(!list.length){
-    body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">📋</div><div class="csm-empty-title">Aucun client</div></div>';
-    return;
-  }
-  var h = '<div class="csm-list">';
-  list.forEach(function(c){ h += renderClientCard(c); });
-  h += '</div>';
-  body.innerHTML = h;
-}
-
-function renderClientCard(c){
-  var lvl = c._level;
-  var lvlClass = lvl ? lvl : '';
-  var lvlBadge = '';
-  if(lvl === 'crit')      lvlBadge = '<span class="csm-badge crit">🔴 Critique</span>';
-  else if(lvl === 'warn') lvlBadge = '<span class="csm-badge warn">🟠 Relancer</span>';
-  else if(lvl === 'att')  lvlBadge = '<span class="csm-badge att">🟡 Attention</span>';
-  else if(lvl === 'ok')   lvlBadge = '<span class="csm-badge ok">✅ OK</span>';
-
-  var status = c.clientStatus || 'active';
-  var cs = CLIENT_STATUS[status] || CLIENT_STATUS.active;
-  var statusBadge = '<span class="csm-badge ' + cs.cls + '">' + cs.label + '</span>';
-
-  // ───── CELLULE IDENTITÉ ─────
-  var initialsTxt = esc(initials(clientDisplayName(c)));
-  var nameTxt     = esc(clientDisplayName(c));
-  var commerceTxt = c.commerce && c.commerce !== c.nom ? esc(c.commerce) : '';
-
-  var identityCell = '<div class="csm2-id">'
-    + '<div class="csm-avatar">' + initialsTxt + '</div>'
-    + '<div class="csm2-id-text">'
-    + '<div class="csm2-name">' + nameTxt + '</div>'
-    + (commerceTxt ? '<div class="csm2-sub">' + commerceTxt + '</div>' : '')
-    + '<div class="csm2-badges">' + lvlBadge + statusBadge
-    + (!c._hasLead ? '<span class="csm-badge csm-badge-no-lead" title="Ce client coaching n\'a pas de lead CRM lié — paiements et Kajabi non visibles">📚 Pas de lead CRM</span>' : '')
-    + '</div>'
-    + '</div></div>';
-
-  // ───── CELLULE PAIEMENT ─────
-  var pays = paymentsByLead[c._leadId] || [];
-  var payCell;
-  if(pays.length){
-    var totalAmt = 0, paidAmt = 0;
-    pays.forEach(function(p){
-      if(p.status === 'cancelled') return;
-      totalAmt += (p.totalAmount || 0);
-      paidAmt  += (p.paidAmount  || 0);
-    });
-    var nbFailed = pays.filter(function(p){ return p.status === 'failed'; }).length;
-    var nbPending = pays.filter(function(p){ return p.status === 'pending_mandate'; }).length;
-    var mainPay = pays[0];
-    var hasInst = mainPay.installmentsCount > 1;
-
-    // Détection retard de prélèvement (pour 1er paiement actif avec installments)
-    var lateMonths = 0;
-    var activePay = pays.find(function(p){ return p.status === 'active' && p.installmentsCount > 1; });
-    if(activePay){
-      var start = toDate(activePay.startDate);
-      if(start){
-        var monthsElapsed = (new Date().getFullYear() - start.getFullYear())*12 + (new Date().getMonth() - start.getMonth()) + 1;
-        var expected = Math.min(monthsElapsed, activePay.installmentsCount);
-        lateMonths = Math.max(0, expected - (activePay.paidCount || 0) - 1);
-      }
-    }
-
-    var payMain = '<span class="csm2-amount">' + fmtEuro(paidAmt) + '</span><span class="csm2-amount-sep">/</span><span class="csm2-amount-total">' + fmtEuro(totalAmt) + '</span>';
-    var paySubLabel = '';
-    var paySubCls = '';
-    if(nbFailed > 0){
-      paySubLabel = '❌ ' + nbFailed + ' échec' + (nbFailed>1?'s':'');
-      paySubCls = 'crit';
-    } else if(lateMonths > 0){
-      paySubLabel = '⚠️ ' + lateMonths + ' mois de retard';
-      paySubCls = 'crit';
-    } else if(nbPending > 0){
-      paySubLabel = '⏳ Mandat en attente';
-      paySubCls = 'warn';
-    } else if(hasInst){
-      paySubLabel = (mainPay.paidCount || 0) + '/' + mainPay.installmentsCount + ' échéances';
-      paySubCls = 'ok';
-    } else if(mainPay.status === 'completed'){
-      paySubLabel = '🎉 Soldé';
-      paySubCls = 'ok';
-    } else {
-      paySubLabel = PAY_STATUS[mainPay.status] ? PAY_STATUS[mainPay.status].label : (mainPay.status || '—');
-      paySubCls = 'ok';
-    }
-    payCell = '<div class="csm2-cell csm2-cell-pay">'
-      + '<div class="csm2-cell-label">💳 PAIEMENT</div>'
-      + '<div class="csm2-cell-main">' + payMain + '</div>'
-      + '<div class="csm2-cell-sub ' + paySubCls + '">' + paySubLabel + '</div>'
+  body.innerHTML = top.map(function(c){
+    var d = daysUntil(c.finPrevue || c.dateFinPrevue || c.dateFin);
+    var label = d === 0 ? "aujourd'hui" : d === 1 ? 'demain' : 'dans '+d+'j';
+    var critical = d <= 7;
+    return ''
+      + '<div class="card-item">'
+      + '  <div class="ci-av">'+esc(getInitials(c.nom))+'</div>'
+      + '  <div class="ci-text">'
+      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+(critical?'<span class="badge warn" style="margin-left:7px">'+label+'</span>':'')+'</div>'
+      + '    <div class="ci-meta">'+esc(c.programme||'—')+(critical?'':' · '+label)+'</div>'
+      + '  </div>'
+      + '  <a href="csm-clients.html?clientId='+encodeURIComponent(c._id)+'" class="ci-action">Voir</a>'
       + '</div>';
-  } else {
-    payCell = '<div class="csm2-cell csm2-cell-pay">'
-      + '<div class="csm2-cell-label">💳 PAIEMENT</div>'
-      + '<div class="csm2-cell-empty">Aucun paiement enregistré</div>'
-      + '</div>';
-  }
-
-  // ───── CELLULE COACHING ─────
-  var coachingDoc = getCoachingForLead(c);
-  var coachCell;
-  if(coachingDoc){
-    var done = coachingDoc.nbCoachingsFaits || 0;
-    var total = coachingDoc.nbCoachingsTotal || 12;
-    var nowD = new Date();
-    var qNow = getCoachingQuotaStatus(coachingDoc, nowD.getFullYear(), nowD.getMonth());
-    var prevD = new Date(nowD.getFullYear(), nowD.getMonth()-1, 1);
-    var qPrev = getCoachingQuotaStatus(coachingDoc, prevD.getFullYear(), prevD.getMonth());
-    var coachSubLabel = '';
-    var coachSubCls = 'ok';
-    if(coachingDoc.statut === 'inactif'){ coachSubLabel = 'Compte inactif'; coachSubCls = 'muted'; }
-    else if(done >= total){ coachSubLabel = '🎉 Programme terminé'; coachSubCls = 'ok'; }
-    else if(qNow && qPrev && qNow.status === 'miss' && qPrev.status === 'miss'){ coachSubLabel = '🔴 2 mois sans session'; coachSubCls = 'crit'; }
-    else if(qNow && qNow.status === 'miss'){ coachSubLabel = '🟠 Aucune session ce mois'; coachSubCls = 'warn'; }
-    else if(qNow && qNow.status === 'partial'){ coachSubLabel = qNow.used + '/' + qNow.max + ' ce mois'; coachSubCls = 'att'; }
-    else if(qNow && qNow.status === 'ok'){ coachSubLabel = '✓ Quota mensuel OK'; coachSubCls = 'ok'; }
-    else { coachSubLabel = '—'; coachSubCls = 'muted'; }
-    coachCell = '<div class="csm2-cell csm2-cell-coach">'
-      + '<div class="csm2-cell-label">🎯 COACHING</div>'
-      + '<div class="csm2-cell-main">' + done + '<span class="csm2-amount-sep">/</span>' + total + '</div>'
-      + '<div class="csm2-cell-sub ' + coachSubCls + '">' + coachSubLabel + '</div>'
-      + '</div>';
-  } else {
-    coachCell = '<div class="csm2-cell csm2-cell-coach">'
-      + '<div class="csm2-cell-label">🎯 COACHING</div>'
-      + '<div class="csm2-cell-empty">Pas de fiche coaching</div>'
-      + '</div>';
-  }
-
-  // ───── CELLULE KAJABI ─────
-  var kajCell;
-  if(c.kajabiProgress && c.kajabiProgress.byCourse && Object.keys(c.kajabiProgress.byCourse).length){
-    var courseKeys = Object.keys(c.kajabiProgress.byCourse);
-    var sumPct = 0, nPct = 0;
-    var firstTitle = '';
-    courseKeys.forEach(function(ck){
-      var crs = c.kajabiProgress.byCourse[ck] || {};
-      if(!firstTitle && crs.title) firstTitle = crs.title;
-      if(typeof crs.pct === 'number'){ sumPct += crs.pct; nPct++; }
-    });
-    if(nPct > 0){
-      var avgPct = Math.round(sumPct / nPct);
-      var kajBarColor = avgPct >= 80 ? 'var(--csm-accent)' : avgPct >= 40 ? '#fbbf24' : 'var(--crit-color)';
-      var kajCls = avgPct >= 80 ? 'ok' : avgPct >= 40 ? 'att' : 'warn';
-      var kajSub = courseKeys.length === 1
-                  ? esc(firstTitle || 'Programme')
-                  : courseKeys.length + ' cours suivis';
-      kajCell = '<div class="csm2-cell csm2-cell-kaj">'
-        + '<div class="csm2-cell-label">🎓 KAJABI</div>'
-        + '<div class="csm2-cell-main">' + avgPct + '<span class="csm2-amount-sep">%</span></div>'
-        + '<div class="csm2-progress-mini"><div class="csm2-progress-mini-fill" style="width:' + avgPct + '%;background:' + kajBarColor + '"></div></div>'
-        + '<div class="csm2-cell-sub ' + kajCls + '" title="' + esc(firstTitle) + '">' + kajSub + '</div>'
-        + '</div>';
-    } else {
-      kajCell = '<div class="csm2-cell csm2-cell-kaj">'
-        + '<div class="csm2-cell-label">🎓 KAJABI</div>'
-        + '<div class="csm2-cell-empty">Données importées sans %</div>'
-        + '</div>';
-    }
-  } else {
-    kajCell = '<div class="csm2-cell csm2-cell-kaj">'
-      + '<div class="csm2-cell-label">🎓 KAJABI</div>'
-      + '<div class="csm2-cell-empty">Pas de progression importée</div>'
-      + '</div>';
-  }
-
-  // ───── CELLULE FOLLOWUP ─────
-  var followCell = '<div class="csm2-cell csm2-cell-followup">'
-    + '<div class="csm2-cell-label">↻ DERN. RELANCE</div>';
-  if(c.lastCsmFollowupAt){
-    followCell += '<div class="csm2-cell-main csm2-cell-main-small">' + timeAgo(c.lastCsmFollowupAt) + '</div>';
-  } else {
-    followCell += '<div class="csm2-cell-empty">Jamais relancé</div>';
-  }
-  if(c.clientSince){
-    followCell += '<div class="csm2-cell-sub muted">📅 Depuis ' + fmtDate(c.clientSince) + '</div>';
-  }
-  followCell += '</div>';
-
-  // ───── ACTIONS ─────
-  var actions = '<div class="csm2-actions">';
-  if(c.telephone) actions += '<button class="csm-act-btn" title="📱 SMS" onclick="event.stopPropagation();quickSms(\'' + c.id + '\')">📱</button>';
-  if(c.email)     actions += '<button class="csm-act-btn" title="📧 Email" onclick="event.stopPropagation();quickEmail(\'' + c.id + '\')">📧</button>';
-  actions += '<button class="csm-act-btn" title="📋 Détails" onclick="event.stopPropagation();openClientModal(\'' + c.id + '\')">📋</button>';
-  actions += '</div>';
-
-  return '<div class="csm-card2 ' + lvlClass + '" onclick="openClientModal(\'' + c.id + '\')">'
-       + identityCell + payCell + coachCell + kajCell + followCell + actions
-       + '</div>';
+  }).join('');
 }
 
-function renderPayments(){
-  document.getElementById('toolbarRetards').style.display = 'none';
-  document.getElementById('filterStatus').style.display = 'none';
-  document.getElementById('filterPayStatus').style.display = '';
-  var body = document.getElementById('csmBody');
-
-  // ─── Calcul des "échéances" pour chaque paiement actif ────────────────
-  // Comme paymentsHistory[] ne contient QUE les prélèvements RÉUSSIS
-  // (cf. api/gocardless-status.js), on déduit les états :
-  //   - failed / cancelled              → bucket "Échouées"
-  //   - active avec paidCount < expected→ bucket "Échouées" (retard)
-  //   - pending_mandate                 → bucket "Mandat en attente"
-  //   - active avec next dans 7j        → bucket "Prochaines échéances"
-  //   - active sans retard et next > 7j → bucket "À jour"
-  //   - completed                       → ignoré (soldés, pas critiques)
-  //   - draft                           → bucket "À jour" (en cours de création)
-  function buildPayItem(c, p){
-    var item = { _client: c, _payment: p, bucket: null, nextDueDate: null,
-                 monthsLate: 0, expectedCount: 0 };
-    if(p.status === 'completed') return null; // soldés exclus de la vue échéances
-
-    if(p.status === 'failed' || p.status === 'cancelled'){
-      item.bucket = 'failed'; return item;
-    }
-    if(p.status === 'pending_mandate'){
-      item.bucket = 'pending'; return item;
-    }
-    if(p.status === 'draft'){
-      item.bucket = 'draft'; return item;
-    }
-    // active / mandate_active : on calcule le retard et la prochaine échéance
-    var start = toDate(p.startDate) || toDate(p.createdAt);
-    if(!start || !p.installmentsCount || p.installmentsCount <= 1){
-      // Paiement en 1 fois : pas de notion d'échéance, classé "à jour"
-      item.bucket = 'up'; return item;
-    }
-    var now = new Date();
-    var monthsElapsed = (now.getFullYear() - start.getFullYear())*12 + (now.getMonth() - start.getMonth()) + 1;
-    var expected = Math.min(monthsElapsed, p.installmentsCount);
-    item.expectedCount = expected;
-    var actual = p.paidCount || 0;
-    var late = Math.max(0, expected - actual - 1); // tolérance d'1 mois
-    item.monthsLate = late;
-    // Calcul prochaine échéance théorique : startDate + (paidCount+1) mois
-    var next = new Date(start);
-    next.setMonth(next.getMonth() + actual);
-    if(next < now) next = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    item.nextDueDate = next;
-    if(late > 0){ item.bucket = 'failed'; return item; }
-    var diffDays = Math.floor((next - now) / 86400000);
-    if(diffDays >= 0 && diffDays <= 7){ item.bucket = 'next'; return item; }
-    item.bucket = 'up'; return item;
-  }
-
-  // Aplatir et bucketiser
-  var failed = [], pending = [], next = [], up = [];
-  allClients.forEach(function(c){
-    (paymentsByLead[c._leadId] || []).forEach(function(p){
-      var item = buildPayItem(c, p);
-      if(!item) return;
-      // Filtres recherche
-      if(searchQ && !searchMatch(c, searchQ)) return;
-      if(filterPayStatus !== 'all' && p.status !== filterPayStatus) return;
-      if(item.bucket === 'failed')      failed.push(item);
-      else if(item.bucket === 'pending') pending.push(item);
-      else if(item.bucket === 'next')    next.push(item);
-      else                               up.push(item);
-    });
-  });
-
-  // Sort interne à chaque bucket
-  failed.sort(function(a,b){
-    // Plus en retard d'abord
-    if(b.monthsLate !== a.monthsLate) return b.monthsLate - a.monthsLate;
-    return (toDate(b._payment.createdAt)||new Date(0)) - (toDate(a._payment.createdAt)||new Date(0));
-  });
-  pending.sort(function(a,b){
-    return (toDate(a._payment.createdAt)||new Date()) - (toDate(b._payment.createdAt)||new Date());
-  });
-  next.sort(function(a,b){
-    return (a.nextDueDate||new Date()) - (b.nextDueDate||new Date());
-  });
-  up.sort(function(a,b){
-    return (toDate(b._payment.createdAt)||new Date(0)) - (toDate(a._payment.createdAt)||new Date(0));
-  });
-
-  if(!failed.length && !pending.length && !next.length && !up.length){
-    body.innerHTML = '<div class="csm-empty"><div class="csm-empty-icon">💳</div><div class="csm-empty-title">Aucun paiement</div><div>Ajustez les filtres pour voir plus de résultats.</div></div>';
-    return;
-  }
-
-  // ─── Render des 4 sections ──────────────────────────────────────────────
-  var h = '';
-  h += renderPaySection('🔴 Échouées & en retard', 'crit', failed,
-       'Prélèvements en échec ou en retard de paiement. Action prioritaire requise.');
-  h += renderPaySection('⏳ En attente de mandat', 'warn', pending,
-       'Mandat GoCardless pas encore signé par le client.');
-  h += renderPaySection('⏰ Prochaines échéances (7 jours)', 'att', next,
-       'Prélèvements prévus dans la semaine.');
-  h += renderPaySection('✅ À jour', 'ok', up,
-       'Paiements en cours sans retard apparent.');
-  body.innerHTML = h;
-}
-
-/* Helper : rend une section de paiements avec header coloré + toggle collapse */
-function renderPaySection(title, kind, items, subtitle){
-  if(!items.length) return '';
-  var bg = kind === 'crit' ? 'rgba(239,68,68,.08)'
-         : kind === 'warn' ? 'rgba(251,146,60,.08)'
-         : kind === 'att'  ? 'rgba(250,204,21,.06)'
-         : 'rgba(94,234,212,.05)';
-  var bd = kind === 'crit' ? 'rgba(239,68,68,.25)'
-         : kind === 'warn' ? 'rgba(251,146,60,.25)'
-         : kind === 'att'  ? 'rgba(250,204,21,.20)'
-         : 'rgba(94,234,212,.20)';
-  var col = kind === 'crit' ? 'var(--crit-color)'
-          : kind === 'warn' ? 'var(--warn-color)'
-          : kind === 'att'  ? 'var(--att-color)'
-          : 'var(--csm-accent)';
-
-  var h = '<div style="margin-bottom:18px;border:1px solid ' + bd + ';background:' + bg + ';border-radius:12px;overflow:hidden">';
-  h += '<div style="padding:11px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid ' + bd + '">';
-  h += '<div style="font-size:14px;font-weight:700;color:' + col + '">' + title + '</div>';
-  h += '<div style="background:rgba(255,255,255,0.05);border-radius:10px;padding:2px 10px;font-size:12px;font-weight:700;color:' + col + '">' + items.length + '</div>';
-  if(subtitle){
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-left:auto">' + esc(subtitle) + '</div>';
-  }
-  h += '</div>';
-
-  h += '<div style="display:flex;flex-direction:column;gap:6px;padding:8px">';
-  items.forEach(function(item){
-    h += renderPayCard(item, kind);
-  });
-  h += '</div></div>';
-  return h;
-}
-
-/* Helper : rend une carte paiement avec contexte échéance */
-function renderPayCard(item, kind){
-  var c = item._client, p = item._payment;
-  var ps = PAY_STATUS[p.status] || { label: p.status||'?', cls:'pay-draft' };
-  var prog = '';
-  if(p.installmentsCount > 1){
-    prog = (p.paidCount || 0) + '/' + p.installmentsCount;
-  }
-  var pctBar = '';
-  if(p.installmentsCount > 1){
-    var done = (p.paidCount || 0) / p.installmentsCount;
-    pctBar = '<div style="width:60px;height:4px;background:rgba(255,255,255,0.07);border-radius:2px;overflow:hidden;display:inline-block;vertical-align:middle;margin:0 4px"><div style="height:100%;width:' + Math.round(done*100) + '%;background:' + (kind==='crit'?'var(--crit-color)':'var(--csm-accent)') + '"></div></div>';
-  }
-
-  // Contexte spécifique au bucket
-  var ctxInfo = '';
-  if(item.bucket === 'failed'){
-    if(item.monthsLate > 0){
-      ctxInfo = '<span class="csm-badge crit" title="Retard estimé à partir de startDate">⚠️ ' + item.monthsLate + ' mois de retard</span>';
-    } else if(p.status === 'failed'){
-      ctxInfo = '<span class="csm-badge crit">❌ Prélèvement en échec</span>';
-    } else if(p.status === 'cancelled'){
-      ctxInfo = '<span class="csm-badge muted">🚫 Annulé</span>';
-    }
-  } else if(item.bucket === 'pending'){
-    var createdAt = toDate(p.createdAt);
-    var daysOld = createdAt ? Math.floor((Date.now() - createdAt.getTime())/86400000) : null;
-    if(daysOld !== null && daysOld > 7){
-      ctxInfo = '<span class="csm-badge warn">⏳ Mandat non signé depuis ' + daysOld + ' jours</span>';
-    } else {
-      ctxInfo = '<span class="csm-badge att">⏳ Mandat en cours de signature</span>';
-    }
-  } else if(item.bucket === 'next' && item.nextDueDate){
-    var diffD = Math.floor((item.nextDueDate - new Date()) / 86400000);
-    var lbl = diffD === 0 ? "aujourd'hui" : diffD === 1 ? "demain" : "dans " + diffD + " jours";
-    ctxInfo = '<span class="csm-badge att" title="' + fmtDate(item.nextDueDate) + '">⏰ Prochain prélèvement ' + lbl + '</span>';
-  }
-
-  var h = '<div class="csm-card" onclick="openClientModal(\'' + c.id + '\')" style="cursor:pointer">';
-  h += '<div class="csm-avatar">' + esc(initials(clientDisplayName(c))) + '</div>';
-  h += '<div class="csm-card-info">';
-  h += '<div class="csm-card-name">' + esc(clientDisplayName(c)) + '<span style="color:var(--ink-muted);font-weight:500;margin-left:8px;font-size:13px">' + fmtEuro(p.totalAmount) + '</span></div>';
-  h += '<div class="csm-card-meta">';
-  h += '<span class="csm-badge ' + ps.cls + '">' + ps.label + '</span>';
-  if(prog) h += '<span title="Progression">📊 ' + prog + pctBar + '</span>';
-  if(p.installmentAmount && p.installmentsCount > 1) h += '<span>' + fmtEuro(p.installmentAmount) + '/mois</span>';
-  if(p.paiementPlateforme) h += '<span>🏦 ' + esc(p.paiementPlateforme) + '</span>';
-  if(ctxInfo) h += ctxInfo;
-  h += '</div></div>';
-  h += '<div></div>';
-  h += '<div class="csm-actions">';
-  h += '<a class="csm-act-btn" title="Voir détail paiement" href="payments.html?leadId=' + c.id + '" onclick="event.stopPropagation()" target="_blank">→</a>';
-  h += '</div></div>';
-  return h;
-}
-
-function renderTemoignages(){
-  document.getElementById('toolbarRetards').style.display = 'none';
-  document.getElementById('filterStatus').style.display = 'none';
-  document.getElementById('filterPayStatus').style.display = 'none';
-  var _fr = document.getElementById('filterReason'); if(_fr) _fr.style.display = 'none';
-  var body = document.getElementById('csmBody');
-
-  var withTemo = {};
-  Object.keys(temoByLead).forEach(function(id){ if((temoByLead[id]||[]).length) withTemo[id] = true; });
-  var noTemoClients = allClients.filter(function(c){ return !withTemo[c.id]; });
-
-  // Si search actif, filtrer témoignages flat
-  var filteredTemo = temoFlat;
-  if(searchQ){
-    var q = searchQ.toLowerCase();
-    filteredTemo = temoFlat.filter(function(t){
-      return (t._leadName || '').toLowerCase().indexOf(q) >= 0
-          || (t.contenu || t.text || '').toLowerCase().indexOf(q) >= 0;
-    });
-    noTemoClients = noTemoClients.filter(function(c){ return searchMatch(c, searchQ); });
-  }
-
-  var h = '';
-  if(filteredTemo.length){
-    h += '<div class="csm-section-title">⭐ Témoignages reçus (' + filteredTemo.length + ')</div>';
-    h += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px">';
-    filteredTemo.forEach(function(t){
-      h += '<div class="csm-temo-card">';
-      h += '<div class="csm-temo-head">';
-      h += '<div class="csm-temo-from">' + esc(t._leadName) + '</div>';
-      h += '<div class="csm-temo-when" style="display:flex;gap:8px;align-items:center">';
-      h += fmtDate(t.createdAt);
-      h += '<button class="csm-act-btn" title="Voir client" style="width:28px;height:28px;font-size:12px" onclick="openClientModal(\'' + t._leadId + '\')">→</button>';
-      h += '</div></div>';
-      h += '<div class="csm-temo-text">' + esc(t.contenu || t.text || '(vide)') + '</div>';
-      h += '</div>';
-    });
-    h += '</div>';
-  } else if(searchQ){
-    h += '<div class="csm-empty"><div class="csm-empty-icon">🔍</div><div class="csm-empty-title">Aucun résultat</div></div>';
-  }
-
-  if(noTemoClients.length){
-    h += '<div class="csm-section-title">📩 Clients sans témoignage (' + noTemoClients.length + ') — à relancer</div>';
-    h += '<div class="csm-list">';
-    noTemoClients.slice(0, 100).forEach(function(c){
-      h += '<div class="csm-card" onclick="openClientModal(\'' + c.id + '\')">';
-      h += '<div class="csm-avatar">' + esc(initials(clientDisplayName(c))) + '</div>';
-      h += '<div class="csm-card-info"><div class="csm-card-name">' + esc(clientDisplayName(c)) + '</div>';
-      h += '<div class="csm-card-meta">';
-      if(c.email) h += '<span>📧 ' + esc(c.email) + '</span>';
-      if(c.telephone) h += '<span>📞 ' + esc(c.telephone) + '</span>';
-      if(c.clientSince) h += '<span>📅 Depuis ' + fmtDate(c.clientSince) + '</span>';
-      h += '</div></div><div></div><div class="csm-actions">';
-      if(c.email)     h += '<button class="csm-act-btn" title="Email" onclick="event.stopPropagation();quickEmail(\'' + c.id + '\')">📧</button>';
-      if(c.telephone) h += '<button class="csm-act-btn" title="SMS" onclick="event.stopPropagation();quickSms(\'' + c.id + '\')">📱</button>';
-      h += '</div></div>';
-    });
-    h += '</div>';
-  }
-
-  if(!h){
-    h = '<div class="csm-empty"><div class="csm-empty-icon">⭐</div><div class="csm-empty-title">Pas encore de témoignages</div></div>';
-  }
-  body.innerHTML = h;
-}
-
-/* ═══ MODAL DETAIL CLIENT ═══ */
-function openClientModal(id){
-  // V2 : alias vers selectClient (pas de modal, panel inline)
-  // Conservé pour la rétro-compat avec les autres pages qui appellent
-  // openClientModal (csm-clients.html, etc.)
-  var c = allClients.find(function(x){ return x.id === id; });
-  if(!c){ showToast('Client introuvable', 'error'); return; }
-  selectClient(id);
-}
-
-function renderModal(){
-  if(!openClientId) return;
-  var c = allClients.find(function(x){ return x.id === openClientId; });
-  if(!c) return;
-
-  var status = c.clientStatus || 'active';
-  var cs = CLIENT_STATUS[status] || CLIENT_STATUS.active;
-  var lvl = computeLevel(c);
-  var lvlBadge = '';
-  if(lvl === 'crit')      lvlBadge = '<span class="csm-badge crit">🔴 Critique</span>';
-  else if(lvl === 'warn') lvlBadge = '<span class="csm-badge warn">🟠 Relancer</span>';
-  else if(lvl === 'att')  lvlBadge = '<span class="csm-badge att">🟡 Attention</span>';
-  else if(lvl === 'ok')   lvlBadge = '<span class="csm-badge ok">✅ OK</span>';
-
-  var pays = paymentsByLead[c._leadId] || [];
-  var notes = notesByLead[c.id] || [];
-  var hist = c.csmFollowupHistory || [];
-  var coaching = getCoachingForLead(c);
-  var kProg = c.kajabiProgress;
-
-  var h = '';
-
-  // ───── HEADER ─────
-  h += '<div class="csm-modal-h">';
-  h += '<div><div class="csm-modal-title">' + esc(clientDisplayName(c)) + lvlBadge + '<span class="csm-badge ' + cs.cls + '">' + cs.label + '</span></div>';
-  if(c.commerce) h += '<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">' + esc(c.commerce) + '</div>';
-  h += '</div>';
-  // Le bouton ✕ n'a plus de sens en V2 (panel inline toujours visible)
-  // mais on le garde au cas où renderModal serait appelée en mode modal
-  // sur mobile (responsive). On utilise une classe pour le cacher en V2.
-  h += '<button class="csm-modal-close" onclick="closeModal()" style="display:none">✕</button>';
-  h += '</div>';
-
-  // ───── SUB-HEADER STICKY : CONTACT COMPACT + ACTIONS ─────
-  h += '<div class="modal-sticky-bar">';
-  h += '<div class="modal-contact-line">';
-  if(c.email)     h += '<span title="Email">📧 ' + esc(c.email) + '</span>';
-  if(c.telephone) h += '<span title="Téléphone">📞 ' + esc(c.telephone) + '</span>';
-  if(c.clientSince) h += '<span title="Client depuis">📅 ' + fmtDate(c.clientSince) + '</span>';
-  if(c.type || c.secteur) h += '<span title="Type/Secteur">🏷 ' + esc((c.type||'') + (c.secteur ? ' · ' + c.secteur : '')) + '</span>';
-  h += '</div>';
-  h += '<div class="modal-quick-actions">';
-  if(c.telephone) h += '<button class="csm-btn" onclick="quickSms(\'' + c.id + '\')">📱 SMS</button>';
-  if(c.email)     h += '<button class="csm-btn" onclick="quickEmail(\'' + c.id + '\')">📧 Email</button>';
-  h += '<button class="csm-btn primary" onclick="markFollowedUp()">✅ Marquer relancé</button>';
-  h += '</div>';
-  h += '</div>';
-
-  // ───── VUE 360° PERSONS (Step 6.2) ─────
-  // Section condensée qui affiche les liens vers les 5 collections (lead,
-  // coaching, IC, payments, abonnement) via le hub persons. Visible uniquement
-  // si le client a un personId rattaché (via lead.personId ou coaching.personId).
-  // Si rules permission-denied sur invoice_clients ou subscriptions, la section
-  // s'affiche partielle (les cards correspondantes seront vides). Pour les
-  // admins, un bouton "Ouvrir la fiche complète" pointe vers admin-persons.html.
-  h += renderVue360Section(c);
-
-  // ───── BANDEAU "PAS DE LEAD CRM" / "LEAD NON MARQUÉ CLIENT" ─────
-  // 3 cas possibles :
-  //  A. Pas de lead du tout → bandeau violet "Pas de lead CRM lié"
-  //  B. Lead matché mais isClient !== true → bandeau orange "Lead trouvé mais
-  //     pas marqué client" avec bouton pour le corriger en 1 clic
-  //  C. Lead matché et isClient === true → pas de bandeau (cas normal)
-  if(!c._hasLead){
-    h += '<div style="background:linear-gradient(135deg,rgba(168,85,247,0.10),rgba(192,132,252,0.05));border:1px solid rgba(168,85,247,0.30);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">';
-    h += '<div style="font-size:18px">📚</div>';
-    h += '<div style="flex:1;min-width:200px">';
-    h += '<div style="font-size:12px;font-weight:700;color:#c4b5fd">Pas de lead CRM lié</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">Ce client est en coaching mais n\'a pas de lead correspondant dans le CRM. Sans lead, ni les paiements GoCardless ni la progression Kajabi ne sont visibles ici.</div>';
-    h += '</div>';
-    h += '<button class="csm-btn primary" onclick="csmCreateLeadForClient(\'' + openClientId + '\')" style="background:#7c3aed;border-color:#a78bfa">+ Créer le lead CRM</button>';
-    h += '</div>';
-  } else if(c._lead && !c._lead.isClient){
-    // Lead trouvé mais pas marqué isClient — propose la correction en 1 clic
-    h += '<div style="background:linear-gradient(135deg,rgba(251,146,60,0.10),rgba(253,186,116,0.05));border:1px solid rgba(251,146,60,0.30);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">';
-    h += '<div style="font-size:18px">⚠️</div>';
-    h += '<div style="flex:1;min-width:200px">';
-    h += '<div style="font-size:12px;font-weight:700;color:#fdba74">Lead CRM trouvé mais pas marqué client</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">Le lead <strong>' + esc(c._lead.nom||c._lead.email) + '</strong> existe dans le CRM mais son flag <code>isClient</code> est faux. Marque-le client pour qu\'il apparaisse dans les vues sales-clients et débloquer les badges associés.</div>';
-    h += '</div>';
-    h += '<button class="csm-btn primary" onclick="csmMarkLeadAsClient(\'' + openClientId + '\')" style="background:#ea580c;border-color:#fb923c">✓ Marquer client</button>';
-    h += '</div>';
-  }
-
-  // ───── TABS NAV ─────
-  var crLate = computeReasons(c).filter(function(r){ return r.kind === 'coaching'; }).length;
-  var payLate = computeReasons(c).filter(function(r){ return r.kind === 'payment'; }).length;
-  var kajCount = kProg && kProg.byCourse ? Object.keys(kProg.byCourse).length : 0;
-  h += '<div class="modal-tabs">';
-  h += '<button class="mtab" data-mtab="overview">📊 Vue d\'ensemble</button>';
-  h += '<button class="mtab" data-mtab="coaching">🎯 Coaching' + (coaching ? '' : ' <span style="opacity:0.4">·</span>') + (crLate?' <span class="mtab-dot crit"></span>':'') + '</button>';
-  h += '<button class="mtab" data-mtab="payments">💳 Paiements <span class="mtab-count">' + pays.length + '</span>' + (payLate?' <span class="mtab-dot crit"></span>':'') + '</button>';
-  h += '<button class="mtab" data-mtab="kajabi">🎓 Kajabi' + (kajCount?' <span class="mtab-count">' + kajCount + '</span>':'') + '</button>';
-  h += '<button class="mtab" data-mtab="notes">📝 Notes & historique <span class="mtab-count">' + (notes.length + hist.length) + '</span></button>';
-  h += '</div>';
-
-  // ═══════ CONTENU DES ONGLETS ═══════
-  h += '<div class="modal-tab-bodies">';
-
-  // ─── ONGLET 1 : VUE D'ENSEMBLE ───
-  h += '<div class="mtab-body" data-mtab-body="overview">';
-  // Statut client (boutons radio)
-  h += '<div class="csm-section">';
-  h += '<div class="csm-section-title">🎯 Statut client</div>';
-  h += '<div class="csm-status-row">';
-  Object.keys(CLIENT_STATUS).forEach(function(s){
-    var on = (status === s);
-    var col = '';
-    if(s === 'active')         col = '#10b981';
-    else if(s === 'paused')    col = '#f59e0b';
-    else if(s === 'completed') col = '#a78bfa';
-    else if(s === 'stopped')   col = '#ef4444';
-    else if(s === 'procedure') col = '#f97316';
-    var st = on ? 'border-color:' + col + ';color:' + col + ';background:' + col + '18' : '';
-    h += '<button class="csm-status-btn" style="' + st + '" onclick="changeStatus(\'' + s + '\')">' + CLIENT_STATUS[s].label + '</button>';
-  });
-  h += '</div></div>';
-
-  // 4 mini-cards synthèse
-  h += '<div class="overview-grid">';
-  // Coaching
-  if(coaching){
-    var done  = coaching.nbCoachingsFaits || 0;
-    var total = coaching.nbCoachingsTotal || 12;
-    var pct   = total > 0 ? Math.round((done/total)*100) : 0;
-    var nowD = new Date();
-    var qN = getCoachingQuotaStatus(coaching, nowD.getFullYear(), nowD.getMonth());
-    var subTxt = qN && qN.status === 'miss' ? '🔴 Aucune session ce mois'
-               : qN && qN.status === 'partial' ? '🟡 ' + qN.used + '/' + qN.max + ' ce mois'
-               : qN && qN.status === 'ok' ? '✓ Quota mensuel OK' : '—';
-
-    // Mini indicateur RDV 72H : un petit badge en haut à droite de la card
-    var rdv72ov = getRdv72h(coaching);
-    var entryDov = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
-    var entryValOv = entryDov && !isNaN(entryDov.getTime());
-    var rdv72ovBadge = '';
-    if(rdv72ov && rdv72ov.statut === 'fait'){
-      rdv72ovBadge = '<span style="position:absolute;top:8px;right:10px;background:rgba(52,211,153,0.15);color:#34d399;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px" title="RDV 72H effectué">72H ✓</span>';
-    } else if(rdv72ov && rdv72ov.date && new Date(rdv72ov.date) > new Date()){
-      rdv72ovBadge = '<span style="position:absolute;top:8px;right:10px;background:rgba(96,165,250,0.15);color:#93c5fd;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px" title="RDV 72H planifié">72H 📅</span>';
-    } else if(entryValOv && (Date.now() - entryDov)/3600000 > 72){
-      rdv72ovBadge = '<span style="position:absolute;top:8px;right:10px;background:rgba(239,68,68,0.15);color:var(--crit-color);padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px" title="RDV 72H raté — délai dépassé">72H ✗</span>';
-    } else if(entryValOv){
-      rdv72ovBadge = '<span style="position:absolute;top:8px;right:10px;background:rgba(251,191,36,0.15);color:#fbbf24;padding:2px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:0.3px" title="RDV 72H à programmer">72H ⏱</span>';
-    }
-
-    h += '<div class="ov-card ov-coach" style="position:relative">' + rdv72ovBadge + '<div class="ov-card-label">🎯 Coaching</div>';
-    h += '<div class="ov-card-main">' + done + '<span class="ov-card-sep">/</span>' + total + '</div>';
-    h += '<div class="ov-card-bar"><div class="ov-card-bar-fill" style="width:' + pct + '%;background:var(--csm-accent)"></div></div>';
-    h += '<div class="ov-card-sub">' + subTxt + '</div></div>';
-  } else {
-    h += '<div class="ov-card ov-coach ov-empty"><div class="ov-card-label">🎯 Coaching</div><div class="ov-card-empty">Pas de fiche coaching</div></div>';
-  }
-
-  // Paiements (synthèse)
-  if(pays.length){
-    var totalAmt = 0, paidAmt = 0;
-    pays.forEach(function(p){ if(p.status !== 'cancelled'){ totalAmt += (p.totalAmount||0); paidAmt += (p.paidAmount||0); } });
-    var nbFailed = pays.filter(function(p){ return p.status === 'failed'; }).length;
-    var payPct = totalAmt > 0 ? Math.round((paidAmt/totalAmt)*100) : 0;
-    var paySubTxt = nbFailed > 0 ? '🔴 ' + nbFailed + ' échec' + (nbFailed>1?'s':'')
-                  : pays[0].status === 'pending_mandate' ? '🟠 Mandat en attente'
-                  : pays[0].status === 'completed' ? '🎉 Soldé' : '✓ Actif';
-    h += '<div class="ov-card ov-pay"><div class="ov-card-label">💳 Paiement</div>';
-    h += '<div class="ov-card-main"><span style="color:var(--csm-accent)">' + fmtEuro(paidAmt) + '</span></div>';
-    h += '<div class="ov-card-bar"><div class="ov-card-bar-fill" style="width:' + payPct + '%;background:#34d399"></div></div>';
-    h += '<div class="ov-card-sub">' + paySubTxt + ' · ' + payPct + '% sur ' + fmtEuro(totalAmt) + '</div></div>';
-  } else {
-    h += '<div class="ov-card ov-pay ov-empty"><div class="ov-card-label">💳 Paiement</div><div class="ov-card-empty">Aucun paiement</div></div>';
-  }
-
-  // Kajabi
-  if(kProg && kProg.byCourse && Object.keys(kProg.byCourse).length){
-    var sumPct = 0, nPct = 0, firstTitle = '';
-    Object.keys(kProg.byCourse).forEach(function(ck){
-      var crs = kProg.byCourse[ck] || {};
-      if(!firstTitle && crs.title) firstTitle = crs.title;
-      if(typeof crs.pct === 'number'){ sumPct += crs.pct; nPct++; }
-    });
-    var avgPct = nPct > 0 ? Math.round(sumPct/nPct) : 0;
-    var kCol = avgPct >= 80 ? 'var(--csm-accent)' : avgPct >= 40 ? '#fbbf24' : 'var(--crit-color)';
-    h += '<div class="ov-card ov-kaj"><div class="ov-card-label">🎓 Kajabi</div>';
-    h += '<div class="ov-card-main">' + avgPct + '<span class="ov-card-sep">%</span></div>';
-    h += '<div class="ov-card-bar"><div class="ov-card-bar-fill" style="width:' + avgPct + '%;background:' + kCol + '"></div></div>';
-    h += '<div class="ov-card-sub">' + esc(firstTitle || 'Programme') + '</div></div>';
-  } else {
-    h += '<div class="ov-card ov-kaj ov-empty"><div class="ov-card-label">🎓 Kajabi</div><div class="ov-card-empty">Pas importé</div></div>';
-  }
-
-  // Dernière relance CSM
-  if(c.lastCsmFollowupAt){
-    h += '<div class="ov-card ov-fu"><div class="ov-card-label">↻ Dernière relance</div>';
-    h += '<div class="ov-card-main ov-card-main-small">' + timeAgo(c.lastCsmFollowupAt) + '</div>';
-    h += '<div class="ov-card-sub">' + fmtDateTime(c.lastCsmFollowupAt) + '</div></div>';
-  } else {
-    h += '<div class="ov-card ov-fu ov-empty"><div class="ov-card-label">↻ Dernière relance</div><div class="ov-card-empty">Jamais relancé</div></div>';
-  }
-  h += '</div>'; // overview-grid
-
-  // ───── BLOC "SIGNAUX À ACTIONNER" (la nouveauté V2) ─────
-  // Transforme les raisons (computeReasons) en cartes actionnables avec
-  // une suggestion d'action concrète. C'est le cœur de la refonte UX :
-  // au lieu de consulter des données dispersées, la CSM voit ce qu'il
-  // faut faire MAINTENANT pour ce client.
-  var signals = computeSignals(c);
-  if(signals.length){
-    h += '<div style="font-size:11px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 10px"><i class="ti ti-bolt"></i> Signaux à actionner</div>';
-    h += '<div class="csm-signals">';
-    signals.forEach(function(sig){
-      h += '<div class="csm-signal ' + sig.level + '">';
-      h += '<div class="csm-signal-icon">' + sig.icon + '</div>';
-      h += '<div class="csm-signal-text">';
-      h += '<div class="csm-signal-title">' + esc(sig.title) + '</div>';
-      h += '<div class="csm-signal-desc">' + esc(sig.desc) + '</div>';
-      h += '</div>';
-      if(sig.actionLabel && sig.actionFn){
-        h += '<button class="csm-signal-action-btn" onclick="' + sig.actionFn + '">';
-        h += '<i class="ti ti-arrow-right"></i> ' + esc(sig.actionLabel);
-        h += '</button>';
-      }
-      h += '</div>';
-    });
-    h += '</div>';
-  }
-
-  h += '</div>'; // overview body
-
-  // ─── ONGLET 2 : COACHING (enrichi) ───
-  // Affiche : programme avec badge Premium, quota mensuel + historique 4 mois,
-  // avancement programme avec %, liste des dernières sessions effectuées
-  // (date + coach), et lien vers la fiche complète coaching.html.
-  // Inspiré du module coaching.html (cf. screenshots Adrien).
-  h += '<div class="mtab-body" data-mtab-body="coaching" style="display:none">';
-  if(coaching){
-    var done2  = coaching.nbCoachingsFaits || 0;
-    var total2 = coaching.nbCoachingsTotal || 12;
-    var pct2   = total2 > 0 ? Math.round((done2/total2)*100) : 0;
-    var remaining = Math.max(0, total2 - done2);
-
-    // Détection du tier programme : Elite/Premium/Standard
-    var progRaw = coaching.programme || '';
-    var progLower = progRaw.toLowerCase();
-    var isElite   = progLower.indexOf('elite') >= 0;
-    var isPremium = isElite || progLower.indexOf('premium') >= 0 || progLower.indexOf('vip') >= 0;
-    var quotaPerMonth = getMonthlyQuota(progRaw);
-
-    // ── Header programme avec badge tier + secteur + dates ──
-    var progBadge = '';
-    if(isElite)        progBadge = '<span style="background:linear-gradient(135deg,#a78bfa,#7c3aed);color:white;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase">⭐ Elite</span>';
-    else if(isPremium) progBadge = '<span style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#0a0a0a;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase">★ Premium</span>';
-    else               progBadge = '<span style="background:rgba(94,234,212,0.12);color:var(--csm-accent);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;border:1px solid var(--csm-border)">Standard</span>';
-
-    var coachName = coaching.coachAssigned ? (coachMembersMap[coaching.coachAssigned] || coaching.coachAssigned) : 'Non assigné';
-
-    h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">';
-    h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">';
-    h += progBadge;
-    h += '<div style="font-size:14px;font-weight:700">' + esc(progRaw || '—') + '</div>';
-    h += '<div style="font-size:12px;color:var(--ink-muted)">· ' + quotaPerMonth + ' coaching' + (quotaPerMonth>1?'s':'') + '/mois</div>';
-    h += '</div>';
-    h += '<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink-soft)">';
-    if(coaching.activite || coaching.secteur){
-      h += '<span>🏷 ' + esc(coaching.activite || coaching.secteur) + '</span>';
-    }
-    if(coaching.dateEntree){
-      h += '<span>📅 Entré le ' + fmtDate(coaching.dateEntree) + '</span>';
-    }
-    h += '<span>👤 Coach : <strong style="color:var(--ink)">' + esc(coachName) + '</strong></span>';
-    h += '</div></div>';
-
-    // ── Bloc RDV 72H ──
-    // C'est la session d'onboarding faite dans les 72h après l'inscription.
-    // Indicateur critique côté CSM : si raté → mauvais démarrage.
-    var rdv72 = getRdv72h(coaching);
-    var entryD72 = coaching.dateEntree ? new Date(coaching.dateEntree) : null;
-    var entryValid = entryD72 && !isNaN(entryD72.getTime());
-
-    var rdvIcon, rdvBg, rdvBorder, rdvLabel, rdvSubtext;
-    if(rdv72 && rdv72.statut === 'fait' && rdv72.date){
-      // ✅ Fait
-      var d72 = new Date(rdv72.date);
-      var coach72name = rdv72.coach || (coaching.coachAssigned ? (coachMembersMap[coaching.coachAssigned] || coaching.coachAssigned) : '—');
-      var delayInfo = '';
-      if(entryValid){
-        var diffH = (d72 - entryD72) / 3600000;
-        if(diffH <= 72 && diffH >= -24) delayInfo = ' · ✓ dans les délais';
-        else if(diffH > 72){
-          var diffD = Math.round(diffH/24);
-          delayInfo = ' · ⚠️ ' + diffD + 'j après entrée';
-        }
-      }
-      rdvIcon = '✅';
-      rdvBg = 'rgba(52,211,153,0.08)';
-      rdvBorder = 'rgba(52,211,153,0.30)';
-      rdvLabel = 'RDV 72H effectué le ' + fmtDate(d72);
-      rdvSubtext = '👤 Avec ' + esc(coach72name) + delayInfo;
-    } else if(rdv72 && rdv72.date && new Date(rdv72.date) > new Date()){
-      // 📅 Planifié
-      var dPlan = new Date(rdv72.date);
-      var coachPlanName = rdv72.coach || '—';
-      rdvIcon = '📅';
-      rdvBg = 'rgba(96,165,250,0.08)';
-      rdvBorder = 'rgba(96,165,250,0.30)';
-      rdvLabel = 'RDV 72H planifié le ' + fmtDate(dPlan);
-      rdvSubtext = '👤 Avec ' + esc(coachPlanName);
-    } else {
-      // Pas fait — selon délai depuis entrée
-      var hoursSinceEntry = entryValid ? (Date.now() - entryD72) / 3600000 : null;
-      if(hoursSinceEntry !== null && hoursSinceEntry > 72){
-        // 🔴 Raté — délai dépassé
-        rdvIcon = '🔴';
-        rdvBg = 'rgba(239,68,68,0.08)';
-        rdvBorder = 'rgba(239,68,68,0.30)';
-        rdvLabel = 'RDV 72H non effectué';
-        rdvSubtext = '⚠️ Délai dépassé depuis ' + Math.round(hoursSinceEntry/24) + ' jour' + (hoursSinceEntry > 48 ? 's' : '') + ' — à programmer en urgence';
-      } else if(hoursSinceEntry !== null){
-        // 🟡 Dans les délais — à programmer
-        var hRemaining = Math.round(72 - hoursSinceEntry);
-        rdvIcon = '🟡';
-        rdvBg = 'rgba(251,191,36,0.08)';
-        rdvBorder = 'rgba(251,191,36,0.30)';
-        rdvLabel = 'RDV 72H à programmer';
-        rdvSubtext = '⏱ Reste ' + hRemaining + 'h pour rester dans les délais';
-      } else {
-        // Pas de date d'entrée fiable
-        rdvIcon = '⚪';
-        rdvBg = 'rgba(255,255,255,0.04)';
-        rdvBorder = 'var(--border)';
-        rdvLabel = 'RDV 72H — pas d\'info';
-        rdvSubtext = 'Aucune date d\'entrée enregistrée pour calculer le délai';
-      }
-    }
-
-    h += '<div style="background:' + rdvBg + ';border:1px solid ' + rdvBorder + ';border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px">';
-    h += '<div style="font-size:22px">' + rdvIcon + '</div>';
-    h += '<div style="flex:1;min-width:0">';
-    h += '<div style="font-size:12px;font-weight:700;color:var(--ink)">⚡ ' + rdvLabel + '</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">' + rdvSubtext + '</div>';
-    h += '</div></div>';
-
-    // ── Bloc Avancement programme ──
-    h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">';
-    h += '<div><div style="font-size:11px;color:var(--ink-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">📈 Avancement programme</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">' + remaining + ' séance' + (remaining>1?'s':'') + ' restante' + (remaining>1?'s':'') + ' sur ' + total2 + '</div></div>';
-    h += '<div style="font-size:24px;font-weight:800;color:var(--csm-accent);line-height:1">' + done2 + '<span style="color:var(--ink-muted);font-weight:500;font-size:16px">/' + total2 + '</span></div>';
-    h += '</div>';
-    h += '<div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden">';
-    var progBarColor = pct2 >= 80 ? 'var(--csm-accent)' : pct2 >= 40 ? '#fbbf24' : '#fb923c';
-    h += '<div style="height:100%;width:' + pct2 + '%;background:linear-gradient(90deg,' + progBarColor + ',var(--csm-accent));transition:width 0.3s"></div>';
-    h += '</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);text-align:right;margin-top:4px">' + pct2 + '% complété</div>';
-    h += '</div>';
-
-    // ── Bloc Quota mensuel + historique ──
-    var nowD2 = new Date();
-    var qThis = getCoachingQuotaStatus(coaching, nowD2.getFullYear(), nowD2.getMonth());
-    var qThisUsed = qThis ? qThis.used : 0;
-    var qThisMax = qThis ? qThis.max : quotaPerMonth;
-    var qThisPct = qThisMax > 0 ? Math.round((qThisUsed/qThisMax)*100) : 0;
-    // Si client entré dans le mois en cours (ou plus tard), on n'affiche
-    // pas "🔴 Aucun coaching effectué" : c'est normal d'avoir 0 quand on
-    // vient juste d'arriver.
-    var refStartQ = getCoachingStartReference(coaching);
-    var refMonthQ = refStartQ ? new Date(refStartQ.getFullYear(), refStartQ.getMonth(), 1) : null;
-    var thisMonthQ = new Date(nowD2.getFullYear(), nowD2.getMonth(), 1);
-    var justArrivedThisMonth = refMonthQ && refMonthQ.getTime() === thisMonthQ.getTime();
-    var arrivedFutureMonth = refMonthQ && refMonthQ > thisMonthQ;
-
-    var qThisColor, qThisLabel;
-    if(arrivedFutureMonth){
-      qThisColor = 'var(--ink-muted)';
-      qThisLabel = '⏳ Pas encore commencé';
-    } else if(justArrivedThisMonth && qThisUsed === 0){
-      qThisColor = '#5eead4';
-      qThisLabel = '🌱 Vient d\'arriver — quota à venir';
-    } else {
-      qThisColor = qThis && qThis.status === 'ok' ? '#34d399'
-                 : qThis && qThis.status === 'partial' ? '#fbbf24'
-                 : qThis && qThis.status === 'miss' ? 'var(--crit-color)' : 'var(--ink-muted)';
-      qThisLabel = qThis && qThis.status === 'ok' ? '✅ Quota atteint ce mois !'
-                 : qThis && qThis.status === 'partial' ? '🟡 ' + qThisUsed + '/' + qThisMax + ' ce mois'
-                 : qThis && qThis.status === 'miss' ? '🔴 Aucun coaching effectué ce mois'
-                 : '—';
-    }
-
-    h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px">';
-    h += '<div><div style="font-size:11px;color:var(--ink-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">📊 Quota mensuel</div>';
-    h += '<div style="font-size:11px;color:' + qThisColor + ';margin-top:2px;font-weight:600">' + qThisLabel + '</div></div>';
-    h += '<div style="font-size:24px;font-weight:800;color:' + qThisColor + ';line-height:1">' + qThisUsed + '<span style="color:var(--ink-muted);font-weight:500;font-size:16px">/' + qThisMax + '</span></div>';
-    h += '</div>';
-    h += '<div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;margin-bottom:14px">';
-    h += '<div style="height:100%;width:' + Math.min(100, qThisPct) + '%;background:' + qThisColor + ';transition:width 0.3s"></div>';
-    h += '</div>';
-
-    // Historique 4 derniers mois — on affiche "Avant début" pour les
-    // mois antérieurs au vrai début du client (cf. getCoachingStartReference,
-    // qui prend le min entre dateEntree et 1ère session faite). Ça évite
-    // d'afficher "0/1 ❌" pour des mois où le client n'avait pas encore
-    // commencé son contrat (ex : Nathalie TOUAMINE entrée aujourd'hui).
-    var refStart2 = getCoachingStartReference(coaching);
-    var refMonth2 = refStart2 ? new Date(refStart2.getFullYear(), refStart2.getMonth(), 1) : null;
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:6px">Historique des 4 mois précédents :</div>';
-    h += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
-    for(var i = 4; i >= 1; i--){
-      var d = new Date(nowD2.getFullYear(), nowD2.getMonth() - i, 1);
-      var monthLbl = d.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'});
-      // Mois antérieur au début du client → Avant début
-      if(refMonth2 && d < refMonth2){
-        h += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px;opacity:0.5">';
-        h += '<span style="color:var(--ink-muted);text-transform:capitalize">' + esc(monthLbl) + '</span>';
-        h += '<span style="color:var(--ink-muted);font-size:10px;font-style:italic">avant début</span>';
-        h += '</div>';
-        continue;
-      }
-      var q = getCoachingQuotaStatus(coaching, d.getFullYear(), d.getMonth());
-      var qUsed = q ? q.used : 0, qMax = q ? q.max : quotaPerMonth;
-      var bgC = 'rgba(255,255,255,0.04)', txt = '';
-      if(q && q.status === 'ok'){       bgC = 'rgba(52,211,153,0.10)'; txt = '<strong style="color:#34d399">' + qUsed + '/' + qMax + ' ✅</strong>'; }
-      else if(q && q.status === 'partial'){ bgC = 'rgba(251,191,36,0.10)'; txt = '<strong style="color:#fbbf24">' + qUsed + '/' + qMax + ' 🟡</strong>'; }
-      else if(q && q.status === 'miss'){    bgC = 'rgba(239,68,68,0.10)'; txt = '<strong style="color:var(--crit-color)">0/' + qMax + ' ❌</strong>'; }
-      else { txt = '<span style="color:var(--ink-muted)">—</span>'; }
-      h += '<div style="background:' + bgC + ';border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px">';
-      h += '<span style="color:var(--ink-muted);text-transform:capitalize">' + esc(monthLbl) + '</span>';
-      h += '<span>' + txt + '</span>';
-      h += '</div>';
-    }
-    h += '</div>';
-    h += '</div>';
-
-    // ── Bloc Dernières sessions effectuées ──
-    var allSessions = getAllCoachingSessions(coaching);
-    var doneSessions = allSessions.filter(function(s){
-      return s.statut === 'fait' && s.date && s.numero !== 0 && s.type !== 'rdv72h';
-    });
-    doneSessions.sort(function(a,b){ return new Date(b.date) - new Date(a.date); });
-    var recentSessions = doneSessions.slice(0, 6);
-
-    h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
-    h += '<div style="font-size:11px;color:var(--ink-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">📅 Dernières sessions effectuées</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted)">' + doneSessions.length + ' au total</div>';
-    h += '</div>';
-
-    if(recentSessions.length){
-      h += '<div style="display:flex;flex-direction:column;gap:5px">';
-      recentSessions.forEach(function(s){
-        // Le coach est stocké dans s.coach (cf. coaching.html : sessions[].coach
-        // contient déjà un nom lisible normalisé : "Mickael", "Edouard", "Emily").
-        // Si la session n'a pas de coach individuel, on retombe sur celui assigné
-        // au client globalement.
-        var sCoachName = s.coach || (coaching.coachAssigned ? (coachMembersMap[coaching.coachAssigned] || coaching.coachAssigned) : '');
-        var sDate = new Date(s.date);
-        var daysAgo = Math.floor((Date.now() - sDate.getTime())/86400000);
-        var sLabel = '#' + (s.numero || '?');
-        h += '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border-radius:8px;font-size:12px">';
-        h += '<span style="background:rgba(52,211,153,0.12);color:#34d399;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800;min-width:32px;text-align:center">' + esc(sLabel) + '</span>';
-        h += '<span style="font-weight:600">' + fmtDate(sDate) + '</span>';
-        h += '<span style="color:var(--ink-muted)">il y a ' + daysAgo + 'j</span>';
-        h += '<span style="margin-left:auto;color:var(--ink-soft)">👤 ' + esc(sCoachName || '—') + '</span>';
-        h += '</div>';
-      });
-      h += '</div>';
-      if(doneSessions.length > 6){
-        h += '<div style="text-align:center;font-size:11px;color:var(--ink-muted);margin-top:8px">+ ' + (doneSessions.length - 6) + ' autres sessions — voir la fiche complète</div>';
-      }
-    } else {
-      h += '<div style="font-size:12px;color:var(--ink-muted);font-style:italic;text-align:center;padding:14px">Aucune session effectuée encore</div>';
-    }
-    h += '</div>';
-
-    // ── Note coaching ──
-    if(coaching.clientNotes){
-      h += '<div style="font-size:12px;color:var(--ink-muted);background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:14px">';
-      h += '<div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">📝 Note coaching</div>';
-      h += '<div style="color:var(--ink-soft)">' + esc(coaching.clientNotes) + '</div>';
-      h += '</div>';
-    }
-
-    // ── Action ──
-    h += '<div><a class="csm-btn primary" href="coaching.html?clientId=' + esc(coaching._id || '') + '" target="_blank">🎓 Ouvrir la fiche coaching complète →</a></div>';
-  } else {
-    h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-top:8px">';
-    h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">🎯</div>';
-    h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:6px">Aucune fiche coaching matchée pour ce client</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted)">Le matching se fait par email — vérifie que <strong>' + esc(c.email||'(non renseigné)') + '</strong> existe dans la collection coaching.</div>';
-    h += '</div>';
-  }
-  h += '</div>'; // coaching body
-
-  // ─── ONGLET 3 : PAIEMENTS ───
-  // Affichage en deux niveaux :
-  //   1. Liste des paiements Firestore (totalAmount + status global + cycle)
-  //   2. Détail GoCardless (chargé en async via api/gocardless-lookup) avec
-  //      la liste des mandats et de TOUTES les échéances passées+futures
-  //      avec leur status (💰 payé, ⌛ à venir, ❌ échoué).
-  // Cf. screenshots Adrien : exactement le même rendu que sales-clients.html
-  h += '<div class="mtab-body" data-mtab-body="payments" style="display:none">';
-
-  if(!c._hasLead){
-    // Pas de lead CRM lié → pas de paiements indexés. Inviter à créer le lead.
-    h += '<div style="background:rgba(168,85,247,0.08);border:1px dashed rgba(168,85,247,0.30);border-radius:10px;padding:24px;text-align:center">';
-    h += '<div style="font-size:32px;opacity:0.6;margin-bottom:6px">📚</div>';
-    h += '<div style="font-size:13px;color:#c4b5fd;font-weight:600;margin-bottom:6px">Aucun lead CRM lié à ce client</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:12px">Les paiements sont stockés au niveau du lead CRM. Créer le lead permettra de matcher et synchroniser GoCardless.</div>';
-    h += '<button class="csm-btn primary" onclick="csmCreateLeadForClient(\'' + openClientId + '\')" style="background:#7c3aed;border-color:#a78bfa">+ Créer le lead CRM</button>';
-    h += '</div></div>';
-  } else if(pays.length){
-    var globalPaid = 0, globalTotal = 0;
-    pays.forEach(function(p){
-      if(p.status !== 'cancelled'){
-        globalTotal += (p.totalAmount || 0);
-        globalPaid  += (p.paidAmount  || 0);
-      }
-    });
-    var globalPct = globalTotal > 0 ? Math.round((globalPaid/globalTotal)*100) : 0;
-
-    // Bandeau récap global (tous paiements confondus)
-    h += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">';
-    h += '<div><div style="font-size:11px;color:var(--ink-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.5px">Total collecté</div>';
-    h += '<div style="font-size:20px;font-weight:800;color:var(--csm-accent)">' + fmtEuro(globalPaid) + ' <span style="font-size:13px;color:var(--ink-muted);font-weight:600">/ ' + fmtEuro(globalTotal) + '</span></div></div>';
-    h += '<div style="flex:1;max-width:240px"><div style="font-size:10px;color:var(--ink-muted);text-align:right;margin-bottom:3px">' + globalPct + '%</div>';
-    h += '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="height:100%;width:' + globalPct + '%;background:linear-gradient(90deg,var(--csm-accent-dark),var(--csm-accent))"></div></div></div>';
-    h += '</div>';
-
-    // Liste des paiements Firestore (vue compacte)
-    h += '<div style="display:flex;flex-direction:column;gap:8px">';
-    pays.forEach(function(p){
-      var ps = PAY_STATUS[p.status] || { label: p.status||'?', cls:'pay-draft' };
-      var prog = p.installmentsCount > 1 ? (p.paidCount||0) + '/' + p.installmentsCount : '';
-      var typeLabel = p.installmentsCount > 1 ? '📅 Fractionné' : '💳 Intégral';
-      var progPct = p.installmentsCount > 1 ? Math.round(((p.paidCount||0)/p.installmentsCount)*100) : (p.status==='completed' ? 100 : 0);
-      h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px">';
-      h += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:8px">';
-      h += '<div><div style="font-size:18px;font-weight:800;color:var(--csm-accent)">' + fmtEuro(p.totalAmount);
-      if(p.vatType) h += ' <span style="font-size:10px;opacity:0.5">' + esc(p.vatType.toUpperCase()) + '</span>';
-      h += '</div>';
-      h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">';
-      h += '<span class="csm-badge ' + ps.cls + '" style="font-size:10px;padding:2px 7px">' + ps.label + '</span> · ';
-      h += typeLabel + (prog ? ' · ' + prog + ' échéances' : '');
-      if(p.installmentAmount && p.installmentsCount > 1) h += ' · ' + fmtEuro(p.installmentAmount) + '/mois';
-      h += '</div></div>';
-      h += '<div style="text-align:right">';
-      if(p.paidAmount) h += '<div style="font-size:13px;font-weight:700;color:#34d399">' + fmtEuro(p.paidAmount) + ' collecté</div>';
-      if(p.gcMandateId) h += '<div style="font-size:10px;color:var(--ink-muted);font-family:monospace;margin-top:2px">Mandat: ' + esc(p.gcMandateId.slice(-10)) + '</div>';
-      h += '</div></div>';
-      // Barre de progression
-      if(p.installmentsCount > 1){
-        h += '<div style="height:4px;background:var(--bg2);border-radius:2px;overflow:hidden">';
-        h += '<div style="height:100%;width:' + progPct + '%;background:linear-gradient(90deg,#059669,#34d399);transition:width 0.3s"></div>';
-        h += '</div>';
-      }
-      h += '</div>';
-    });
-    h += '</div>';
-
-    // Section GoCardless live (auto-sync au switch)
-    var hasGc = c.gcCustomerId || pays.some(function(p){ return p.gcMandateId || p.gcCustomerId; });
-    if(hasGc){
-      h += '<div style="margin-top:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px" id="gcLiveSection">';
-      h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">';
-      h += '<div style="font-size:13px;font-weight:700">🏦 Détail GoCardless</div>';
-      h += '<button class="csm-btn" id="gcResyncBtn" onclick="csmGcLookup(\'' + (c._leadId || c.id) + '\', \'' + esc(c.email||'').replace(/\'/g,"\\'") + '\', true)" style="padding:6px 12px;font-size:11px">🔄 Resync</button>';
-      h += '</div>';
-      h += '<div id="gcLiveContent" style="font-size:12px;color:var(--ink-muted)">⏳ Chargement des données live GoCardless…</div>';
-      h += '</div>';
-    } else {
-      h += '<div style="margin-top:14px;font-size:11px;color:var(--ink-muted);font-style:italic">💡 Ce client n\'a pas de lien GoCardless connu. <a href="payments.html?leadId=' + c.id + '" target="_blank" style="color:var(--csm-accent)">Lier dans la page Paiements →</a></div>';
-    }
-  } else {
-    h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-top:8px">';
-    h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">💳</div>';
-    h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:10px">Aucun paiement enregistré pour ce client</div>';
-    h += '<a class="csm-btn primary" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Créer un paiement</a>';
-    h += '</div>';
-  }
-  h += '<div style="margin-top:14px"><a class="csm-btn" href="payments.html?leadId=' + c.id + '" target="_blank">💳 Gérer dans le module Paiements →</a></div>';
-  h += '</div>'; // payments body
-
-  // ─── ONGLET 4 : KAJABI ───
-  h += '<div class="mtab-body" data-mtab-body="kajabi" style="display:none">';
-  if(!kProg || !kProg.byCourse || !Object.keys(kProg.byCourse).length){
-    h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-top:8px">';
-    h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">🎓</div>';
-    h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:6px">Aucune progression Kajabi importée pour ce client</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:14px">Vérifie que l\'email <strong>' + esc(c.email||'(non renseigné)') + '</strong> matche bien dans le CSV exporté.</div>';
-    h += '<a class="csm-btn primary" href="csm-import.html" target="_blank">📥 Importer un CSV Kajabi</a>';
-    h += '</div>';
-  } else {
-    Object.keys(kProg.byCourse).forEach(function(courseKey){
-      var crs = kProg.byCourse[courseKey] || {};
-      var coursePct = null;
-      var subInfo = '';
-      if(typeof crs.pct === 'number'){
-        coursePct = Math.max(0, Math.min(100, Math.round(crs.pct)));
-        if(crs.lastImportAt) subInfo = '📅 Importé ' + timeAgo(crs.lastImportAt);
-      } else if(crs.modules){
-        var modKeys = Object.keys(crs.modules);
-        var totL = 0, doneL = 0;
-        modKeys.forEach(function(mk){
-          var m = crs.modules[mk];
-          var d = (m && m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
-          doneL += d;
-          if(m && m.totalLessons) totL += m.totalLessons;
-        });
-        if(totL > 0) coursePct = Math.round((doneL/totL)*100);
-        subInfo = doneL + ' leçon' + (doneL>1?'s':'') + ' faite' + (doneL>1?'s':'');
-        if(totL > 0) subInfo += ' / ' + totL;
-      }
-      h += '<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">';
-      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px">';
-      h += '<div style="font-size:14px;font-weight:700">' + esc(crs.title || courseKey) + '</div>';
-      h += '<div style="font-size:18px;font-weight:800;color:var(--csm-accent)">' + (coursePct !== null ? coursePct + '%' : '—') + '</div>';
-      h += '</div>';
-      if(coursePct !== null){
-        var pctColor = coursePct >= 80 ? 'var(--csm-accent)' : coursePct >= 40 ? '#fbbf24' : 'var(--crit-color)';
-        h += '<div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden;margin-bottom:8px">';
-        h += '<div style="height:100%;width:' + coursePct + '%;background:linear-gradient(90deg,' + pctColor + ',var(--csm-accent))"></div>';
-        h += '</div>';
-      }
-      if(subInfo) h += '<div style="font-size:11px;color:var(--ink-muted)">' + subInfo + '</div>';
-      h += '</div>';
-    });
-    if(kProg.lastImportAt){
-      h += '<div style="font-size:11px;color:var(--ink-muted);margin:8px 0">⏱ Dernier import global : ' + fmtDateTime(kProg.lastImportAt) + '</div>';
-    }
-    h += '<div style="margin-top:8px"><a class="csm-btn primary" href="csm-import.html" target="_blank">📥 Mettre à jour depuis Kajabi</a></div>';
-  }
-  h += '</div>'; // kajabi body
-
-  // ─── ONGLET 5 : NOTES & HISTORIQUE ───
-  h += '<div class="mtab-body" data-mtab-body="notes" style="display:none">';
-  // Notes
-  h += '<div class="csm-section" style="padding:0;border:none;background:none;margin-bottom:18px">';
-  h += '<div class="csm-section-title">📝 Notes (' + notes.length + ')</div>';
-  h += '<textarea class="csm-textarea" id="csmNoteInput" placeholder="Ajouter une note interne (visible aussi dans le module Clients du sales)…"></textarea>';
-  h += '<div style="margin-top:6px;display:flex;gap:8px"><button class="csm-btn primary" onclick="addNote()">+ Ajouter la note</button></div>';
-  if(notes.length){
-    h += '<div style="margin-top:10px">';
-    notes.forEach(function(n){
-      h += '<div class="csm-note">';
-      h += '<div class="csm-note-meta">' + esc(n.auteur||'?') + ' · ' + fmtDateTime(n.createdAt) + '</div>';
-      h += '<div class="csm-note-content">' + esc(n.contenu||'') + '</div>';
-      h += '</div>';
-    });
-    h += '</div>';
-  }
-  h += '</div>';
-
-  // Historique relances CSM
-  h += '<div class="csm-section" style="padding:0;border:none;background:none">';
-  h += '<div class="csm-section-title">↻ Historique des relances CSM (' + hist.length + ')</div>';
-  if(hist.length){
-    var sorted = hist.slice().sort(function(a,b){ return new Date(b.at||0) - new Date(a.at||0); });
-    h += '<div style="display:flex;flex-direction:column;gap:6px">';
-    sorted.forEach(function(e){
-      h += '<div class="csm-note">';
-      h += '<div class="csm-note-meta">' + (e.byName||e.by||'?') + ' · ' + fmtDateTime(e.at) + (e.channel ? ' · ' + e.channel : '') + '</div>';
-      if(e.message) h += '<div class="csm-note-content">' + esc(e.message) + '</div>';
-      h += '</div>';
-    });
-    h += '</div>';
-  } else {
-    h += '<div style="color:var(--ink-muted);font-size:12px;font-style:italic">Aucune relance enregistrée.</div>';
-  }
-  h += '</div>';
-
-  h += '</div>'; // notes body
-
-  h += '</div>'; // modal-tab-bodies
-
-  // V2 split-view : on écrit dans #detailPanel directement (le #modalContent
-  // n'existe plus dans le DOM). On garde le wrap pour que les sticky bar etc.
-  // continuent à fonctionner.
-  var targetEl = document.getElementById('detailPanel') || document.getElementById('modalContent');
-  if(targetEl) targetEl.innerHTML = h;
-
-  // Restaurer l'onglet actif (default = overview)
-  var activeMTab = window._activeModalTab || 'overview';
-  switchModalTab(activeMTab);
-}
-
-/* Switch onglet interne de la modal client */
-function switchModalTab(tabName){
-  window._activeModalTab = tabName;
-  document.querySelectorAll('.mtab').forEach(function(b){
-    b.classList.toggle('active', b.dataset.mtab === tabName);
-  });
-  document.querySelectorAll('.mtab-body').forEach(function(b){
-    b.style.display = (b.dataset.mtabBody === tabName) ? '' : 'none';
-  });
-
-  // Auto-sync GoCardless quand on ouvre l'onglet Paiements (avec cache pour
-  // éviter de rappeler l'API à chaque switch d'onglet sur le même client).
-  // En V2 le backend attend un vrai leadId — on passe c._leadId si dispo,
-  // fallback sur c.id (coachingId) si pas de lead matché.
-  if(tabName === 'payments' && openClientId){
-    var c = allClients.find(function(x){ return x.id === openClientId; });
-    if(c && c.email && document.getElementById('gcLiveContent')){
-      var lookupId = c._leadId || c.id;
-      // Cache : si on a déjà résolu pour ce client dans cette session, ne pas rappeler
-      window._gcCsmCache = window._gcCsmCache || {};
-      var cached = window._gcCsmCache[lookupId];
-      if(cached && (Date.now() - cached.at) < 60000){
-        // Cache <60s : réutiliser
-        renderGcLiveData(cached.data);
-      } else {
-        csmGcLookup(lookupId, c.email, false);
-      }
-    }
-  }
-}
-window.switchModalTab = switchModalTab;
-
-/* ─── GoCardless lookup pour la modal CSM ───
-   Appelle /api/gocardless-lookup et rend dans #gcLiveContent la liste des
-   mandats + échéances (passées payées + à venir) avec icônes 💰 / ⌛.
-   Réplique de la logique gcLookupClient() de sales-crm-app.js mais
-   adaptée à la modal CSM. forceRefresh=true ignore le cache.            */
-function csmGcLookup(leadId, email, forceRefresh){
-  var resultEl = document.getElementById('gcLiveContent');
-  var btn = document.getElementById('gcResyncBtn');
-  if(!resultEl) return;
-  if(!email){
-    resultEl.innerHTML = '<span style="color:var(--crit-color)">❌ Email manquant — impossible de chercher dans GoCardless</span>';
-    return;
-  }
-  if(btn){ btn.disabled = true; btn.textContent = '⏳ Sync…'; }
-  resultEl.innerHTML = '⏳ Synchronisation GoCardless en cours…';
-
-  firebase.auth().currentUser.getIdToken().then(function(token){
-    return fetch('/api/gocardless-lookup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ leadId: leadId, email: email })
-    });
-  }).then(function(resp){
-    return resp.json().then(function(data){ return { ok: resp.ok, data: data }; });
-  }).then(function(r){
-    if(btn){ btn.disabled = false; btn.textContent = '🔄 Resync'; }
-    if(!r.ok){
-      resultEl.innerHTML = '<span style="color:var(--crit-color)">❌ ' + esc(r.data.error || 'Erreur API') + '</span>';
-      return;
-    }
-    // Cache pour éviter rappels trop fréquents
-    window._gcCsmCache = window._gcCsmCache || {};
-    window._gcCsmCache[leadId] = { at: Date.now(), data: r.data };
-    renderGcLiveData(r.data);
-  }).catch(function(err){
-    if(btn){ btn.disabled = false; btn.textContent = '🔄 Resync'; }
-    console.error('[csmGcLookup] error', err);
-    resultEl.innerHTML = '<span style="color:var(--crit-color)">❌ ' + esc(err.message) + '</span>';
-  });
-}
-window.csmGcLookup = csmGcLookup;
-
-/* ─── Créer un lead CRM lié à un client coaching qui n'en a pas ───
-   Cette fonction est appelée depuis le bandeau ou l'onglet Paiements de
-   la modal pour les clients sans _hasLead. Elle crée un doc dans `leads`
-   avec isClient=true, copiant les champs depuis la fiche coaching. Le
-   `sourceCoachingId` permet de tracer l'origine. Au prochain snapshot
-   leads, le client se retrouvera enrichi automatiquement (cf.
-   buildAllClients qui fait le match par email).
-   Note : pour migrer en BULK, utiliser plutôt csm-diagnostic.html.       */
-function csmCreateLeadForClient(clientId){
-  var c = allClients.find(function(x){ return x.id === clientId; });
-  if(!c){
-    showToast('❌ Client introuvable', 'error');
-    return;
-  }
-  if(c._hasLead){
-    showToast('Ce client a déjà un lead CRM lié', 'error');
-    return;
-  }
-  if(!c.email){
-    showToast('❌ Impossible de créer un lead sans email', 'error');
-    return;
-  }
-  if(!confirm('Créer un lead CRM lié pour ' + (c.nom||'?') + ' ?\n\nEmail : ' + (c.email||'—') + '\nTel : ' + (c.telephone||'—'))) return;
-
-  var co = c._coaching || {};
-  var leadData = {
-    nom: (c.nom||'').trim(),
-    email: (c.email||'').toLowerCase().trim(),
-    telephone: c.telephone || '',
-    commerce: c.commerce || '',
-    secteur: c.secteur || '',
-    isClient: true,
-    clientStatus: c.clientStatus || 'active',
-    clientSince: co.dateEntree || firebase.firestore.FieldValue.serverTimestamp(),
-    source: 'coaching_migration',
-    sourceCoachingId: co._id || c._coachingId,
-    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    importedCreatedAt: co.dateEntree || null,
-    timeline_history: [{
-      date: new Date().toISOString().slice(0,10),
-      text: 'Lead créé depuis fiche coaching (CSM)',
-      color: '#14b8a6'
-    }]
-  };
-  Object.keys(leadData).forEach(function(k){ if(leadData[k] === undefined) delete leadData[k]; });
-
-  db.collection('leads').add(leadData).then(function(){
-    showToast('✅ Lead CRM créé et lié');
-    // Le snapshot leads va se rafraîchir et buildAllClients va matcher
-    // automatiquement par email. Pas besoin de fermer la modal — elle
-    // se mettra à jour au prochain renderModal.
-    setTimeout(function(){
-      var refreshed = allClients.find(function(x){ return x.id === clientId; });
-      if(refreshed && refreshed._hasLead) renderModal();
-    }, 1200);
-  }).catch(function(e){
-    console.error('csmCreateLeadForClient error', e);
-    showToast('❌ Erreur création lead — voir console', 'error');
-  });
-}
-window.csmCreateLeadForClient = csmCreateLeadForClient;
-
-/* ─── Marquer un lead existant comme client (set isClient=true) ───
-   Utilisé quand le lead matche par email mais n'a pas le flag isClient.
-   Cas typique : un commercial a converti le lead en mode coaching mais
-   le flag CRM n'a pas été propagé. Cette action met juste à jour le
-   flag — le lead conserve toute son histoire CRM (timeline, notes, etc.)
-*/
-function csmMarkLeadAsClient(clientId){
-  var c = allClients.find(function(x){ return x.id === clientId; });
-  if(!c || !c._leadId){
-    showToast('❌ Pas de lead à marquer', 'error');
-    return;
-  }
-  if(c._lead && c._lead.isClient){
-    showToast('Ce lead est déjà marqué client', 'error');
-    return;
-  }
-  if(!confirm('Marquer le lead "' + esc(c._lead.nom||c._lead.email) + '" comme client ?\n\nIl apparaîtra alors dans le module sales-clients.')) return;
-
-  db.collection('leads').doc(c._leadId).update({
-    isClient: true,
-    clientStatus: c.clientStatus || 'active',
-    clientSince: c._lead.clientSince || (c._coaching && c._coaching.dateEntree) || firebase.firestore.FieldValue.serverTimestamp(),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){
-    showToast('✅ Lead marqué client');
-    // Le snapshot leads se rafraîchit auto, buildAllClients va remonter
-    // l'info à jour. La modal se met à jour au renderModal suivant.
-    setTimeout(renderModal, 800);
-  }).catch(function(e){
-    console.error('csmMarkLeadAsClient error', e);
-    showToast('❌ Erreur — voir console', 'error');
-  });
-}
-window.csmMarkLeadAsClient = csmMarkLeadAsClient;
-
-/* Rend le détail GoCardless (mandats + paiements passés/futurs) dans #gcLiveContent */
-function renderGcLiveData(data){
-  var resultEl = document.getElementById('gcLiveContent');
-  if(!resultEl) return;
-  var html = '';
-
-  // Customer GC (lien)
-  if(data.customer){
-    html += '<div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.20);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:8px">';
-    html += '<span>👤</span>';
-    html += '<span>' + esc(data.customer.name || '?') + '</span>';
-    if(data.customer.id){
-      html += ' <span>—</span> <span style="font-family:monospace;color:#60a5fa;font-size:11px">' + esc(data.customer.id) + '</span>';
-    }
-    html += '</div>';
-  }
-
-  // Mandats
-  if(data.mandates && data.mandates.length){
-    var mLabels = { pending_submission:'⏳ En attente', submitted:'📤 Soumis', active:'✅ Actif', failed:'❌ Échoué', cancelled:'🚫 Annulé', expired:'⌛ Expiré' };
-    html += '<div style="font-size:11px;font-weight:700;color:var(--ink-muted);margin-bottom:6px">Mandats (' + data.mandates.length + ')</div>';
-    data.mandates.forEach(function(m){
-      html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px">';
-      html += '<span style="font-family:monospace">' + esc(m.id) + '</span>';
-      html += '<span>' + (mLabels[m.status] || m.status) + '</span>';
-      html += '</div>';
-    });
-  } else if(data.mandate){
-    var mLabel = ({ pending_submission:'⏳ En attente', submitted:'📤 Soumis', active:'✅ Actif', failed:'❌ Échoué', cancelled:'🚫 Annulé', expired:'⌛ Expiré' })[data.mandate.status] || data.mandate.status;
-    html += '<div style="font-size:11px;font-weight:700;color:var(--ink-muted);margin-bottom:6px">Mandat</div>';
-    html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px">';
-    html += '<span style="font-family:monospace">' + esc(data.mandate.id) + '</span>';
-    html += '<span>' + mLabel + '</span>';
-    html += '</div>';
-  }
-
-  // Paiements à venir + passés combinés et triés par date desc
-  var paymentList = [];
-  // Passés (paid_out, confirmed, etc.) depuis data.payments
-  if(data.payments && data.payments.length){
-    data.payments.forEach(function(p){
-      paymentList.push({
-        date: p.chargeDate,
-        amount: p.amount,
-        status: p.status,
-        kind: 'past'
-      });
-    });
-  }
-  // Futurs depuis data.subscription.upcomingPayments
-  if(data.subscription && data.subscription.upcomingPayments){
-    data.subscription.upcomingPayments.forEach(function(up){
-      paymentList.push({
-        date: up.charge_date || up.chargeDate,
-        amount: (up.amount/100), // GC retourne en centimes pour upcoming
-        status: 'upcoming',
-        kind: 'upcoming'
-      });
-    });
-  }
-  // Tri par date desc (plus récent en premier comme dans l'image 2)
-  paymentList.sort(function(a,b){
-    return (b.date||'').localeCompare(a.date||'');
-  });
-
-  if(paymentList.length){
-    var pIcons = {
-      pending_submission:'⏳', submitted:'📤', confirmed:'✅', paid_out:'💰',
-      cancelled:'🚫', failed:'❌', charged_back:'↩', upcoming:'⏳'
-    };
-    var pColor = function(st){
-      if(st === 'paid_out' || st === 'confirmed') return '#34d399';
-      if(st === 'failed' || st === 'charged_back') return 'var(--crit-color)';
-      if(st === 'cancelled') return 'var(--ink-muted)';
-      return 'var(--ink-soft)';
-    };
-    html += '<div style="font-size:11px;font-weight:700;color:var(--ink-muted);margin:10px 0 6px">Paiements (' + paymentList.length + ')</div>';
-    html += '<div style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg2)">';
-    paymentList.forEach(function(p){
-      var icon = pIcons[p.status] || '?';
-      var col  = pColor(p.status);
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px">';
-      html += '<span style="display:flex;align-items:center;gap:6px"><span style="font-size:14px">' + icon + '</span><span>' + esc(p.date || '—') + '</span></span>';
-      html += '<span style="font-weight:700;color:' + col + '">' + fmtEuro(p.amount) + '</span>';
-      html += '</div>';
-    });
-    html += '</div>';
-  } else {
-    html += '<div style="font-size:12px;color:var(--ink-muted);font-style:italic">Aucun paiement trouvé dans GoCardless.</div>';
-  }
-
-  resultEl.innerHTML = html;
-}
-window.renderGcLiveData = renderGcLiveData;
-
-// Délégation : clic sur les onglets de modal
-document.addEventListener('click', function(e){
-  var btn = e.target.closest && e.target.closest('.mtab');
-  if(!btn) return;
-  var tab = btn.dataset.mtab;
-  if(tab) switchModalTab(tab);
-});
-
-function closeModal(){
-  // V2 : pas de modal à fermer, on désélectionne juste le client.
-  // Sur mobile, ça remontre l'empty state.
-  selectedClientId = null;
-  openClientId = null;
-  renderDetailPanel();
-  renderSidebarList();
-}
-
-function changeStatus(newStatus){
-  if(!openClientId) return;
-  // Source de vérité = clients/{coachingId}
-  db.collection('clients').doc(openClientId).update({
-    clientStatus: newStatus,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){
-    var c = allClients.find(function(x){ return x.id === openClientId; });
-    if(c) c.clientStatus = newStatus;
-    showToast('✅ Statut mis à jour');
-    renderModal();
-  }).catch(function(e){
-    console.error('changeStatus error', e);
-    showToast('❌ Erreur changement statut', 'error');
-  });
-}
-
-function addNote(){
-  if(!openClientId) return;
-  var input = document.getElementById('csmNoteInput');
-  var txt = (input.value || '').trim();
-  if(!txt){ showToast('Note vide', 'error'); return; }
-  var noteObj = {
-    contenu: txt,
-    auteur: currentUserEmail || currentUserName || 'CSM',
-    // ISO car arrayUnion ne supporte pas serverTimestamp dans un objet
-    createdAt: new Date().toISOString()
-  };
-  db.collection('clients').doc(openClientId).update({
-    csmNotes: firebase.firestore.FieldValue.arrayUnion(noteObj),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){
-    showToast('📝 Note ajoutée');
-    input.value = '';
-    // Mettre à jour le cache local
-    var c = allClients.find(function(x){ return x.id === openClientId; });
-    if(c && c._coaching){
-      c._coaching.csmNotes = c._coaching.csmNotes || [];
-      c._coaching.csmNotes.push(noteObj);
-    }
-    loadNotesForLead(openClientId, function(){ renderModal(); });
-  }).catch(function(e){
-    console.error('addNote error', e);
-    showToast('❌ Erreur ajout note', 'error');
-  });
-}
-
-function deleteNote(noteId){
-  // noteId est le createdAt ISO de la note (cf. addNote — pas de doc id Firestore
-  // car les notes sont en array, pas en sous-collection).
-  if(!openClientId) return;
-  if(!confirm('Supprimer cette note ?')) return;
-  var c = allClients.find(function(x){ return x.id === openClientId; });
-  if(!c){ showToast('❌ Client introuvable', 'error'); return; }
-  var current = (c._coaching && c._coaching.csmNotes) ? c._coaching.csmNotes.slice() : [];
-  var newArr = current.filter(function(n){ return n.createdAt !== noteId; });
-  db.collection('clients').doc(openClientId).update({
-    csmNotes: newArr,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){
-    if(c._coaching) c._coaching.csmNotes = newArr;
-    showToast('🗑 Note supprimée');
-    loadNotesForLead(openClientId, function(){ renderModal(); });
-  }).catch(function(e){
-    console.error('deleteNote error', e);
-    showToast('❌ Erreur', 'error');
-  });
-}
-
-function markFollowedUp(){
-  if(!openClientId) return;
-  var msg = prompt('Note de la relance (facultatif) :', '');
-  if(msg === null) return;
-  var historyEntry = {
-    at: new Date().toISOString(),
-    by: currentUser ? currentUser.uid : null,
-    byName: currentUserName,
-    channel: 'note',
-    message: msg || ''
-  };
-  db.collection('clients').doc(openClientId).update({
-    lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
-    lastCsmFollowupBy: currentUser ? currentUser.uid : null,
-    csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){
-    showToast('✅ Relance enregistrée');
-    var c = allClients.find(function(x){ return x.id === openClientId; });
-    if(c){
-      if(!c.csmFollowupHistory) c.csmFollowupHistory = [];
-      c.csmFollowupHistory.push(historyEntry);
-      c.lastCsmFollowupAt = new Date();
-      if(c._coaching){
-        c._coaching.csmFollowupHistory = c._coaching.csmFollowupHistory || [];
-        c._coaching.csmFollowupHistory.push(historyEntry);
-        c._coaching.lastCsmFollowupAt = new Date();
-      }
-    }
-    renderModal();
-  }).catch(function(e){
-    console.error('markFollowedUp error', e);
-    showToast('❌ Erreur — voir les rules Firestore', 'error');
-  });
-}
-
-function quickSms(id){
-  var c = allClients.find(function(x){ return x.id === id; });
-  if(!c || !c.telephone){ showToast('Pas de numéro pour ce client', 'error'); return; }
-  window.location.href = 'sms:' + c.telephone;
-  traceFollowup(id, 'sms', 'SMS ouvert');
-}
-
-function quickEmail(id){
-  var c = allClients.find(function(x){ return x.id === id; });
-  if(!c || !c.email){ showToast('Pas d\'email pour ce client', 'error'); return; }
-  var subject = 'Suivi de votre accompagnement — Ambitio Corp';
-  window.location.href = 'mailto:' + c.email + '?subject=' + encodeURIComponent(subject);
-  traceFollowup(id, 'email', 'Email ouvert');
-}
-
-function traceFollowup(clientId, channel, message){
-  // V2 : on écrit dans clients/{coachingId} (source de vérité) au lieu de
-  // leads/{leadId}. Cohérent avec la refonte architecturale où tous les
-  // writes (notes, status, followups) vont sur la collection clients.
-  // Le clientId reçu est l'id du document allClients (= coachingId, préfixé cli_).
-  var c = allClients.find(function(x){ return x.id === clientId; });
-  if(!c){ console.warn('traceFollowup : client introuvable', clientId); return; }
-
-  var historyEntry = {
-    at: new Date().toISOString(),
-    by: currentUser ? currentUser.uid : null,
-    byName: currentUserName,
-    channel: channel,
-    message: message
-  };
-  // Si le client a un coachingId (cas normal V2), on écrit dans clients/
-  if(c._coachingId){
-    db.collection('clients').doc(c._coachingId).update({
-      lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
-      lastCsmFollowupBy: currentUser ? currentUser.uid : null,
-      csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(function(e){ console.warn('traceFollowup (clients) error', e); });
-  }
-  // Si le client a aussi un lead matché, on duplique sur leads/ pour rester
-  // cohérent avec l'historique CRM existant (sales-leads, etc.). Optionnel.
-  if(c._leadId){
-    db.collection('leads').doc(c._leadId).update({
-      lastCsmFollowupAt: firebase.firestore.FieldValue.serverTimestamp(),
-      lastCsmFollowupBy: currentUser ? currentUser.uid : null,
-      csmFollowupHistory: firebase.firestore.FieldValue.arrayUnion(historyEntry),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(function(e){ console.warn('traceFollowup (leads) error', e); });
-  }
-}
-
-/* ─── Tab + filter listeners ─── */
-function switchTab(tab, el){
-  activeTab = tab;
-  document.querySelectorAll('.csm-tab').forEach(function(t){ t.classList.remove('active'); });
-  if(el) el.classList.add('active');
-  renderAll();
-}
-function toggleLevel(level, el){
-  levelsActive[level] = !levelsActive[level];
-  el.classList.toggle('active');
-  renderRetards();
-}
-document.getElementById('searchInput').addEventListener('input', function(e){
-  searchQ = e.target.value.trim();
-  renderSidebarList();
-});
-// Les anciens filtres status/pay/reason ne sont plus utilisés en V2
-// (gérés via les pills sidebar). On garde les vars pour compat code.
-var _filterStatusEl = document.getElementById('filterStatus');
-if(_filterStatusEl) _filterStatusEl.addEventListener('change', function(e){
-  filterStatus = e.target.value; renderSidebarList();
-});
-var _filterPayStatusEl = document.getElementById('filterPayStatus');
-if(_filterPayStatusEl) _filterPayStatusEl.addEventListener('change', function(e){
-  filterPayStatus = e.target.value; renderSidebarList();
-});
-var _filterReasonEl = document.getElementById('filterReason');
-if(_filterReasonEl) _filterReasonEl.addEventListener('change', function(e){
-  filterReason = e.target.value; renderSidebarList();
-});
-
-// Expose pour onclick inline
-window.switchTab = switchTab;
-window.toggleLevel = toggleLevel;
-window.openClientModal = openClientModal;
-window.closeModal = closeModal;
-window.changeStatus = changeStatus;
-window.addNote = addNote;
-window.deleteNote = deleteNote;
-window.markFollowedUp = markFollowedUp;
-window.quickSms = quickSms;
-window.quickEmail = quickEmail;
 </script>
 </body>
 </html>
