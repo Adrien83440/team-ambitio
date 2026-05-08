@@ -960,8 +960,12 @@ function openEmail(id){
 window.openEmail = openEmail;
 
 function openDetail(id){
-  // Ouvre la modal détail dans csm-dashboard.html via paramètre URL
-  window.open('csm-dashboard.html?clientId=' + encodeURIComponent(id), '_blank');
+  // Navigation directe vers csm-dashboard avec le clientId pré-sélectionné.
+  // Safari bloque window.open(..., '_blank') quand le call vient via une
+  // chaîne de fonctions (popup blocker). On reste donc dans le même onglet :
+  // c'est plus fiable et cohérent avec l'UX (csm-clients = liste, csm-dashboard
+  // = fiche détail). Le bouton retour navigateur ramène à la liste.
+  window.location.href = 'csm-dashboard.html?clientId=' + encodeURIComponent(id);
 }
 window.openDetail = openDetail;
 
