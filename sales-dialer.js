@@ -292,7 +292,14 @@
     setStatus('Récupération du token…');
     try {
       const { token } = await SalesDialerAPI.voiceToken();
+      // Edge média : route le WebRTC via Europe (Dublin > Frankfurt) avec
+      // Ashburn US en failover. Sans cette config, le SDK route par défaut
+      // sur l'edge le plus proche du compte (US1 → Ashburn), ce qui ajoute
+      // ~150ms de RTT depuis la France et provoque jitter, blancs, voix
+      // hachée. L'edge média est INDÉPENDANTE du realm REST (us1 reste
+      // imposé pour les credentials API Key, voir mémoire IE1 invalide).
       device = new Twilio.Device(token, {
+        edge: ['dublin', 'frankfurt', 'ashburn'],
         codecPreferences: ['opus', 'pcmu'],
         logLevel: 'warn',
       });
@@ -645,6 +652,38 @@
     activeConn.on('cancel', () => endCall());
     activeConn.on('reject', () => endCall());
     activeConn.on('error', (e) => { toast(e.message || 'Erreur appel', 'error'); endCall(); });
+
+    // ── Monitoring qualité réseau ─────────────────────────────────────────
+    // Le SDK Twilio remonte des events `warning` quand un seuil de qualité
+    // est dépassé sur le RTC peer connection. Sans ces listeners, les
+    // problèmes "ça coupe" / "voix hachée" / "blancs" sont invisibles côté
+    // dev — on doit attendre qu'un closer signale verbalement. On log dans
+    // la console pour diagnostic (pas d'indicateur UI dans ce premier jet).
+    //
+    // Warnings possibles (Voice SDK v2) :
+    //   - high-rtt              : round-trip time élevé (réseau lent)
+    //   - high-jitter           : variation latence (instable)
+    //   - high-packet-loss-percentage : perte de paquets (coupures)
+    //   - low-mos               : Mean Opinion Score audio dégradé
+    //   - low-bytes-sent        : pas d'audio sortant détecté
+    //   - low-bytes-received    : pas d'audio entrant détecté
+    //   - constant-audio-input-level  : micro muet/coupé suspecté
+    //   - constant-audio-output-level : speaker muet/coupé suspecté
+    //
+    // Pour debug : ouvrir la DevTools console pendant un appel, filtrer
+    // sur "[dialer-quality]". Si on voit beaucoup de high-rtt/high-jitter,
+    // c'est un problème de routage média (edge). Si packet-loss seul,
+    // c'est plutôt la connexion locale du closer.
+    activeConn.on('warning', (warningName, warningData) => {
+      try {
+        console.warn('[dialer-quality] warning →', warningName, warningData || '');
+      } catch (e) { /* ignore */ }
+    });
+    activeConn.on('warning-cleared', (warningName) => {
+      try {
+        console.info('[dialer-quality] cleared →', warningName);
+      } catch (e) { /* ignore */ }
+    });
   }
 
   function enterInCallView(phone) {
