@@ -937,8 +937,7 @@ firebase.auth().onAuthStateChanged(function(user){
 
 function loadAllData(){
   loadCoachMembers();
-  loadCoachingClients();   // listener primaire → déclenche buildAllClients
-  loadEnrichmentLeads();   // listener enrichissement → déclenche aussi buildAllClients
+  loadCoachingClients();   // → déclenche loadEnrichmentLeads() après chaque snap
   loadVue360Data();        // Step 6.2 : persons + invoice_clients + subscriptions
 }
 
@@ -1125,7 +1124,10 @@ function loadCoachingClients(){
       var email = (data.email || '').toLowerCase().trim();
       if(email) coachingByEmail[email] = data;
     });
-    buildAllClients();
+    /* Step 6.2 perf fix : on charge maintenant les leads pertinents
+       uniquement (where email in [...]) plutôt que toute la collection.
+       Réduit le transfert de ~7549 leads à ~80 emails matchants. */
+    loadEnrichmentLeads();
   }, function(err){
     console.error('Clients listener error:', err);
     document.getElementById('csmBody').innerHTML =
@@ -1147,37 +1149,64 @@ function loadCoachingClients(){
    on pourra optimiser via where('email','in',[...batches]).               */
 var leadsByEmail = {};
 function loadEnrichmentLeads(){
-  db.collection('leads').onSnapshot(function(snap){
+  /* Step 6.2 perf fix : au lieu de charger TOUS les leads (7549) via
+     onSnapshot, on ne charge que les leads dont l'email matche un coaching
+     existant via where('email', 'in', batch). Firestore limite 'in' à 10
+     valeurs par query → on batche par 10. ~78 emails = ~8 queries.
+
+     Compromis : pas de temps réel sur les changements de leads (un edit
+     dans sales-leads ne se reflète pas instantanément ici). On préfère
+     ce trade-off vs charger 7549 docs à chaque ouverture de page. */
+
+  var emails = Object.keys(coachingByEmail);
+  if(emails.length === 0){
     leadsByEmail = {};
-    snap.forEach(function(d){
-      var data = d.data();
-      if(data._merged === true) return;
-      // On skip aussi les leads qui n'ont pas d'email (impossibles à matcher).
-      var em = (data.email||'').toLowerCase().trim();
-      if(!em) return;
-      data.id = d.id;
-      // Si plusieurs leads partagent le même email, on garde celui qui a
-      // isClient=true en priorité (c'est le plus pertinent pour la CSM),
-      // sinon le plus récemment mis à jour.
-      var existing = leadsByEmail[em];
-      if(!existing){
-        leadsByEmail[em] = data;
-      } else {
-        var existingIsClient = !!existing.isClient;
-        var newIsClient = !!data.isClient;
-        if(newIsClient && !existingIsClient){
+    buildAllClients();
+    return;
+  }
+
+  /* Batch par 10 (limite Firestore .where('email', 'in', [...])) */
+  var batches = [];
+  for(var i = 0; i < emails.length; i += 10){
+    batches.push(emails.slice(i, i + 10));
+  }
+
+  var queries = batches.map(function(batch){
+    return db.collection('leads').where('email', 'in', batch).get();
+  });
+
+  Promise.all(queries).then(function(snapshots){
+    leadsByEmail = {};
+    snapshots.forEach(function(snap){
+      snap.forEach(function(d){
+        var data = d.data();
+        if(data._merged === true) return;
+        var em = (data.email||'').toLowerCase().trim();
+        if(!em) return;
+        data.id = d.id;
+        /* Si plusieurs leads partagent le même email, on garde celui qui a
+           isClient=true en priorité (c'est le plus pertinent pour la CSM),
+           sinon le plus récemment mis à jour. */
+        var existing = leadsByEmail[em];
+        if(!existing){
           leadsByEmail[em] = data;
-        } else if(newIsClient === existingIsClient){
-          // Même statut isClient → garder le plus récent
-          var existingT = toDate(existing.updatedAt) || toDate(existing.createdAt) || new Date(0);
-          var newT = toDate(data.updatedAt) || toDate(data.createdAt) || new Date(0);
-          if(newT > existingT) leadsByEmail[em] = data;
+        } else {
+          var existingIsClient = !!existing.isClient;
+          var newIsClient = !!data.isClient;
+          if(newIsClient && !existingIsClient){
+            leadsByEmail[em] = data;
+          } else if(newIsClient === existingIsClient){
+            var existingT = toDate(existing.updatedAt) || toDate(existing.createdAt) || new Date(0);
+            var newT = toDate(data.updatedAt) || toDate(data.createdAt) || new Date(0);
+            if(newT > existingT) leadsByEmail[em] = data;
+          }
         }
-      }
+      });
     });
     buildAllClients();
-  }, function(err){
-    console.warn('Leads enrichment listener error (non-bloquant):', err.message);
+  }).catch(function(err){
+    console.warn('Leads enrichment query error (non-bloquant):', err.message);
+    leadsByEmail = {};
     buildAllClients();
   });
 }
