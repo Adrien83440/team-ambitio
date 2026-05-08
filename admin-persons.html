@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Persons — Ambitio</title>
 <link rel="stylesheet" href="sales.css"/>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.5.0/tabler-icons.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.34.0/iconfont/tabler-icons.min.css"/>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -350,8 +350,10 @@ auth.onAuthStateChanged(async function(user){
 /* ═══ Loading ═══ */
 async function loadAll(){
   try {
-    /* Charge persons puis tous les docs liés en parallèle */
-    var [pSnap, leadsSnap, clientsSnap, icsSnap, paySnap, subsSnap] = await Promise.all([
+    /* Charge persons puis tous les docs liés en parallèle.
+       allSettled : si une collection est interdite par les rules, on continue
+       avec les autres au lieu de planter tout. */
+    var results = await Promise.allSettled([
       db.collection('persons').get(),
       db.collection('leads').where('personId','>','').get(),
       db.collection('clients').get(),
@@ -359,6 +361,31 @@ async function loadAll(){
       db.collection('payments').get(),
       db.collection('subscriptions').get()
     ]);
+
+    var labels = ['persons','leads','clients','invoice_clients','payments','subscriptions'];
+    var failures = [];
+    results.forEach(function(r, i){
+      if(r.status === 'rejected'){
+        console.warn('[admin-persons] '+labels[i]+' failed:', r.reason && r.reason.message);
+        failures.push(labels[i]);
+      }
+    });
+
+    /* persons obligatoire — si lui échoue, on plante */
+    if(results[0].status === 'rejected'){
+      throw new Error('persons : '+(results[0].reason && results[0].reason.message || 'permission-denied'));
+    }
+
+    var pSnap = results[0].value;
+    var leadsSnap = results[1].status === 'fulfilled' ? results[1].value : { forEach: function(){} };
+    var clientsSnap = results[2].status === 'fulfilled' ? results[2].value : { forEach: function(){} };
+    var icsSnap = results[3].status === 'fulfilled' ? results[3].value : { forEach: function(){} };
+    var paySnap = results[4].status === 'fulfilled' ? results[4].value : { forEach: function(){} };
+    var subsSnap = results[5].status === 'fulfilled' ? results[5].value : { forEach: function(){} };
+
+    if(failures.length > 0){
+      toast('Données partielles (rules) : '+failures.join(', '), 'error');
+    }
 
     STATE.persons = [];
     STATE.personsById = {};
