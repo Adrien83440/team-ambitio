@@ -442,11 +442,20 @@ async function loadAll(){
 
     STATE.persons = [];
     STATE.personsById = {};
+    var skippedMerged = 0;
     pSnap.forEach(function(d){
       var p = Object.assign({_id:d.id}, d.data());
+      /* Skip les persons absorbées par un merge précédent.
+         Elles restent en base (règle "jamais supprimer") mais on ne les
+         affiche pas dans la liste : elles ne sont plus l'identité courante
+         d'un humain réel. */
+      if(p._merged === true){ skippedMerged++; return; }
       STATE.persons.push(p);
       STATE.personsById[d.id] = p;
     });
+    if(skippedMerged > 0){
+      console.log('[admin-persons] '+skippedMerged+' persons mergées masquées de la liste.');
+    }
 
     /* Index par personId */
     STATE.leadsByPerson = {};
