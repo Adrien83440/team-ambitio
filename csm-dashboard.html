@@ -588,6 +588,26 @@ async function loadAllData(){
       DATA.paymentsFailed = [];
     }
 
+    /* 4. Leads isClient — pour la card "Programmes expirant" qui se base
+       sur accompagnementEnd des leads (source de vérité = sales-clients.html).
+       Certains clients sont leads isClient=true SANS coaching dans clients/ —
+       ces leads sont absents de DATA.leadsByEmail (qui ne charge que les
+       emails matchant un coaching). On les ajoute ici. */
+    try {
+      var clientsLeadsSnap = await db.collection('leads').where('isClient','==',true).get();
+      clientsLeadsSnap.forEach(function(d){
+        var data = d.data();
+        if(data._merged === true) return;
+        var em = lower(data.email);
+        if(!em) return;
+        data._id = d.id;
+        /* Ne pas écraser si déjà présent (logique merge déjà appliquée) */
+        if(!DATA.leadsByEmail[em]) DATA.leadsByEmail[em] = data;
+      });
+    } catch(e){
+      console.warn('clients leads load failed:', e.message);
+    }
+
     renderAll();
   } catch(e){
     console.error('[dashboard-csm] loadAllData error:', e);
@@ -742,21 +762,41 @@ function renderCard3(){
 }
 
 function renderCard4(){
-  /* Programmes expirant ce mois : clients actifs où la date de fin <= 31j
-     Source de la date : leads.accompagnementFin (Clients CRM)
-     Fallback : dateEntree + nbCoachingsTotal mois */
-  var items = DATA.coachings.filter(function(c){
-    if(!isActif(c) || isTermine(c)) return false;
-    var endDate = getEndDate(c);
-    if(!endDate) return false;
-    var dU = daysUntil(endDate);
-    return dU !== null && dU >= 0 && dU <= 31;
+  /* Programmes expirant ce mois.
+     Source de vérité = leads.accompagnementEnd (alias accompagnementFin),
+     comme dans sales-clients.html. On part des leads isClient=true
+     enrichis dans DATA.leadsByEmail. */
+  var now = new Date();
+  var in31 = new Date(now.getTime() + 31*86400000);
+
+  /* Construire la liste des candidats depuis tous les leads enrichis */
+  var seen = {};
+  var items = [];
+  Object.keys(DATA.leadsByEmail).forEach(function(em){
+    var l = DATA.leadsByEmail[em];
+    if(l.isClient !== true) return;
+    var endRaw = l.accompagnementEnd || l.accompagnementFin;
+    if(!endRaw) return;
+    var endD = toDate(endRaw);
+    if(!endD || isNaN(endD.getTime())) return;
+    if(endD < now || endD > in31) return;
+    /* Match côté coaching (par email) si présent — sinon on prend le lead seul */
+    var coaching = DATA.coachings.find(function(c){ return lower(c.email) === em; });
+    var nom = (coaching && coaching.nom) || l.nom || em;
+    if(seen[em]) return;
+    seen[em] = true;
+    items.push({
+      _id: coaching ? coaching._id : l._id,
+      nom: nom,
+      programme: (coaching && coaching.programme) || l.programme || l.formule || '—',
+      coachAssigned: coaching && coaching.coachAssigned,
+      _isCoaching: !!coaching,
+      endDate: endD
+    });
   });
-  items.sort(function(a,b){
-    var dA = daysUntil(getEndDate(a)); if(dA === null) dA = 999;
-    var dB = daysUntil(getEndDate(b)); if(dB === null) dB = 999;
-    return dA - dB;
-  });
+
+  /* Tri : la fin la plus proche en premier */
+  items.sort(function(a,b){ return a.endDate - b.endDate; });
   var top = items.slice(0,5);
 
   document.getElementById('card4Count').textContent = items.length;
@@ -765,18 +805,20 @@ function renderCard4(){
     body.innerHTML = '<div class="card-empty"><span class="card-empty-emoji">📆</span>Aucun programme n\'expire ce mois</div>';
     return;
   }
-  body.innerHTML = top.map(function(c){
-    var d = daysUntil(getEndDate(c));
-    var label = d === 0 ? "aujourd'hui" : d === 1 ? 'demain' : 'dans '+d+'j';
-    var critical = d <= 7;
+  body.innerHTML = top.map(function(it){
+    var dU = Math.floor((it.endDate.getTime() - Date.now()) / 86400000);
+    var label = dU === 0 ? "aujourd'hui" : dU === 1 ? 'demain' : 'dans '+dU+'j';
+    var critical = dU <= 7;
+    /* Lien vers Clients CRM (sales-clients) qui est la source */
+    var href = 'sales-clients.html#' + it._id;
     return ''
       + '<div class="card-item">'
-      + '  <div class="ci-av">'+esc(getInitials(c.nom))+'</div>'
+      + '  <div class="ci-av">'+esc(getInitials(it.nom))+'</div>'
       + '  <div class="ci-text">'
-      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+(critical?' <span class="badge warn">'+label+'</span>':'')+'</div>'
-      + '    <div class="ci-meta">'+esc(c.programme||'—')+(critical?'':' · '+label)+'</div>'
+      + '    <div class="ci-name">'+esc(it.nom||'(sans nom)')+(critical?' <span class="badge warn">'+label+'</span>':'')+'</div>'
+      + '    <div class="ci-meta">'+esc(it.programme||'—')+(critical?'':' · '+label)+'</div>'
       + '  </div>'
-      + '  <a href="csm-clients.html?clientId='+encodeURIComponent(c._id)+'" class="ci-action">Voir</a>'
+      + '  <a href="'+href+'" class="ci-action">Voir</a>'
       + '</div>';
   }).join('');
 }
