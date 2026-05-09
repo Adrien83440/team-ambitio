@@ -53,6 +53,31 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 .ap-search input:focus{border-color:var(--ap-accent)}
 .ap-search i{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--ap-text-soft)}
 
+/* Pills filtres */
+.ap-side-pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:11px}
+.ap-side-pill{
+  background:var(--ap-surface);border:1px solid var(--ap-border);
+  color:var(--ap-text-muted);font-size:11px;font-weight:500;
+  padding:4px 9px;border-radius:6px;cursor:pointer;
+  font-family:inherit;display:inline-flex;align-items:center;gap:4px;
+  transition:all .12s;white-space:nowrap;
+}
+.ap-side-pill:hover{background:var(--ap-surface-alt);color:var(--ap-text)}
+.ap-side-pill.active{background:var(--ap-accent-bg);color:var(--ap-accent);border-color:rgba(24,95,165,.25)}
+.ap-side-pill.warn{color:var(--ap-warning)}
+.ap-side-pill.warn.active{background:var(--ap-warning-bg);color:var(--ap-warning);border-color:rgba(133,79,11,.25)}
+.ap-side-pill > span{
+  font-size:10px;font-weight:600;opacity:.7;
+  background:rgba(0,0,0,.05);padding:1px 5px;border-radius:3px;
+}
+.ap-side-pill.active > span{background:rgba(0,0,0,.10);opacity:.9}
+
+/* Badge "doublon ?" */
+.ap-item-badge.dup{
+  background:var(--ap-warning-bg);color:var(--ap-warning);
+  font-weight:600;font-size:9.5px;
+}
+
 .ap-side-list{flex:1;overflow-y:auto;padding:8px}
 .ap-side-list::-webkit-scrollbar{width:8px}
 .ap-side-list::-webkit-scrollbar-track{background:transparent}
@@ -208,6 +233,16 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
         <i class="ti ti-search"></i>
         <input type="text" id="apSearch" placeholder="Nom, email, téléphone…" autocomplete="off"/>
       </div>
+      <div class="ap-side-pills">
+        <button class="ap-side-pill active" data-status="all" onclick="apSetFilter('all')">Tous <span id="apPillCount-all">0</span></button>
+        <button class="ap-side-pill" data-status="active" onclick="apSetFilter('active')">Active <span id="apPillCount-active">0</span></button>
+        <button class="ap-side-pill" data-status="procedure" onclick="apSetFilter('procedure')">Procedure <span id="apPillCount-procedure">0</span></button>
+        <button class="ap-side-pill" data-status="paused" onclick="apSetFilter('paused')">Paused <span id="apPillCount-paused">0</span></button>
+        <button class="ap-side-pill" data-status="stopped" onclick="apSetFilter('stopped')">Stopped <span id="apPillCount-stopped">0</span></button>
+        <button class="ap-side-pill" data-status="completed" onclick="apSetFilter('completed')">Completed <span id="apPillCount-completed">0</span></button>
+        <button class="ap-side-pill" data-status="no-status" onclick="apSetFilter('no-status')">Sans statut <span id="apPillCount-no-status">0</span></button>
+        <button class="ap-side-pill warn" data-status="duplicates" onclick="apSetFilter('duplicates')">⚠️ Doublons <span id="apPillCount-duplicates">0</span></button>
+      </div>
     </div>
     <div class="ap-side-list" id="apList">
       <div class="ap-loading">Chargement…</div>
@@ -265,6 +300,8 @@ var STATE = {
   personsById: {},
   selectedId: null,
   searchQuery: '',
+  filterStatus: 'all',   /* 'all' | 'active' | 'procedure' | 'stopped' | 'completed' | 'paused' | 'no-status' | 'duplicates' */
+  duplicatePersonIds: {},  /* personId → true si détecté comme doublon potentiel */
   currentRole: null,
   canEdit: false,
   /* caches */
@@ -440,6 +477,9 @@ async function loadAll(){
       return (a.nom||'').localeCompare(b.nom||'','fr',{sensitivity:'base'});
     });
 
+    /* Détection automatique des doublons potentiels */
+    detectDuplicates();
+
     /* Pré-sélection via URL ?id= */
     var urlId = new URLSearchParams(window.location.search).get('id');
     if(urlId && STATE.personsById[urlId]) STATE.selectedId = urlId;
@@ -452,26 +492,146 @@ async function loadAll(){
   }
 }
 
+/* ═══ Détection des doublons potentiels ═══
+   Heuristiques :
+   1. Téléphone normalisé (9 derniers chiffres) identique entre 2 persons
+   2. Nom très similaire (Levenshtein ≤ 2) ET (l'un sans email OU emails très proches)
+   3. Email présent dans knownEmails d'une autre persons (cas archivage croisé)
+
+   Marque les persons concernées dans STATE.duplicatePersonIds.
+   Le badge ⚠️ est affiché dans la sidebar et un filtre dédié les groupe. */
+function detectDuplicates(){
+  STATE.duplicatePersonIds = {};
+
+  var byPhone = {};
+  var byEmail = {};
+  STATE.persons.forEach(function(p){
+    var ph = (p.phoneNormalized||'').trim();
+    if(ph){
+      if(!byPhone[ph]) byPhone[ph] = [];
+      byPhone[ph].push(p._id);
+    }
+    var em = (p.email||'').toLowerCase().trim();
+    if(em){
+      if(!byEmail[em]) byEmail[em] = [];
+      byEmail[em].push(p._id);
+    }
+  });
+
+  /* 1. Téléphones identiques */
+  Object.keys(byPhone).forEach(function(ph){
+    if(byPhone[ph].length > 1){
+      byPhone[ph].forEach(function(id){ STATE.duplicatePersonIds[id] = true; });
+    }
+  });
+
+  /* 2. Emails identiques (les 3 cas connus boutiqueenscene/belleensoie/boucheriebabe) */
+  Object.keys(byEmail).forEach(function(em){
+    if(byEmail[em].length > 1){
+      byEmail[em].forEach(function(id){ STATE.duplicatePersonIds[id] = true; });
+    }
+  });
+
+  /* 3. Noms très similaires (Levenshtein ≤ 2) */
+  for(var i = 0; i < STATE.persons.length; i++){
+    for(var j = i+1; j < STATE.persons.length; j++){
+      var a = STATE.persons[i];
+      var b = STATE.persons[j];
+      var nA = (a.nom||'').toLowerCase().trim();
+      var nB = (b.nom||'').toLowerCase().trim();
+      if(!nA || !nB) continue;
+      if(Math.abs(nA.length - nB.length) > 4) continue;  /* perf : skip si trop différents en longueur */
+      var d = levenshtein(nA, nB);
+      if(d <= 2 && d > 0){
+        STATE.duplicatePersonIds[a._id] = true;
+        STATE.duplicatePersonIds[b._id] = true;
+        continue;
+      }
+      /* Cas spécifique : un nom court contenu dans l'autre + email vide d'un côté */
+      if((!a.email || !b.email) && (nA.indexOf(nB) >= 0 || nB.indexOf(nA) >= 0)){
+        STATE.duplicatePersonIds[a._id] = true;
+        STATE.duplicatePersonIds[b._id] = true;
+      }
+    }
+  }
+
+  /* 4. Emails proches (typo) entre 2 persons : Levenshtein ≤ 2 sur la partie locale (avant @) */
+  var emailList = STATE.persons.filter(function(p){ return p.email; }).map(function(p){
+    return { id: p._id, local: p.email.split('@')[0].toLowerCase(), domain: p.email.split('@')[1] };
+  });
+  for(var k = 0; k < emailList.length; k++){
+    for(var l = k+1; l < emailList.length; l++){
+      var eA = emailList[k];
+      var eB = emailList[l];
+      if(eA.domain !== eB.domain) continue;  /* domaine différent → on ne compare pas */
+      if(Math.abs(eA.local.length - eB.local.length) > 3) continue;
+      var d2 = levenshtein(eA.local, eB.local);
+      if(d2 > 0 && d2 <= 2){
+        STATE.duplicatePersonIds[eA.id] = true;
+        STATE.duplicatePersonIds[eB.id] = true;
+      }
+    }
+  }
+
+  console.log('[admin-persons] Doublons potentiels détectés:', Object.keys(STATE.duplicatePersonIds).length);
+}
+
+/* Distance de Levenshtein (DP O(n*m)) — pour comparaison de noms/emails */
+function levenshtein(a, b){
+  if(a === b) return 0;
+  if(!a.length) return b.length;
+  if(!b.length) return a.length;
+  var prev = new Array(b.length + 1);
+  var curr = new Array(b.length + 1);
+  for(var j = 0; j <= b.length; j++) prev[j] = j;
+  for(var i = 1; i <= a.length; i++){
+    curr[0] = i;
+    for(var j2 = 1; j2 <= b.length; j2++){
+      var cost = (a.charAt(i-1) === b.charAt(j2-1)) ? 0 : 1;
+      curr[j2] = Math.min(curr[j2-1] + 1, prev[j2] + 1, prev[j2-1] + cost);
+    }
+    var tmp = prev; prev = curr; curr = tmp;
+  }
+  return prev[b.length];
+}
+
 /* ═══ Liste (sidebar) ═══ */
 function renderList(){
   var list = document.getElementById('apList');
   var q = STATE.searchQuery.trim().toLowerCase();
   var filtered = STATE.persons;
 
+  /* Filtre statut */
+  if(STATE.filterStatus !== 'all'){
+    if(STATE.filterStatus === 'duplicates'){
+      filtered = filtered.filter(function(p){ return STATE.duplicatePersonIds[p._id]; });
+    } else if(STATE.filterStatus === 'no-status'){
+      filtered = filtered.filter(function(p){ return !p.crmStatus; });
+    } else {
+      filtered = filtered.filter(function(p){ return p.crmStatus === STATE.filterStatus; });
+    }
+  }
+
+  /* Recherche textuelle */
   if(q){
     var qd = digits(q);
-    filtered = STATE.persons.filter(function(p){
+    filtered = filtered.filter(function(p){
       if((p.nom||'').toLowerCase().indexOf(q) >= 0) return true;
       if((p.email||'').toLowerCase().indexOf(q) >= 0) return true;
       if(qd && (p.phoneNormalized||'').indexOf(qd) >= 0) return true;
       if(qd && (p.telephone||'').replace(/\D/g,'').indexOf(qd) >= 0) return true;
-      /* knownEmails */
       if(p.knownEmails && p.knownEmails.some(function(e){return (e||'').toLowerCase().indexOf(q) >= 0;})) return true;
       return false;
     });
   }
 
-  document.getElementById('apCount').textContent = STATE.persons.length+' persons'+(q?' • '+filtered.length+' affichées':'');
+  /* Compteurs : volume affiché vs total */
+  var label = STATE.persons.length+' persons';
+  if(filtered.length !== STATE.persons.length) label += ' • '+filtered.length+' affichées';
+  document.getElementById('apCount').textContent = label;
+
+  /* Pills count */
+  updatePillCounts();
 
   if(filtered.length === 0){
     list.innerHTML = '<div class="ap-empty">Aucune personne ne correspond.</div>';
@@ -483,12 +643,15 @@ function renderList(){
     var hasC = STATE.clientsByPerson[p._id];
     var hasIc = STATE.icsByPerson[p._id];
     var hasS = STATE.subsByPerson[p._id] && STATE.subsByPerson[p._id].length > 0;
+    var isDup = STATE.duplicatePersonIds[p._id];
     var active = (p._id === STATE.selectedId) ? ' active' : '';
     html += '<div class="ap-item'+active+'" onclick="apSelect(\''+attr(p._id)+'\')">'
-      + '<div class="ap-item-name">'+esc(p.nom||'(sans nom)')+'</div>'
+      + '<div class="ap-item-name">'+esc(p.nom||'(sans nom)')
+      + (isDup ? ' <span class="ap-item-badge dup" title="Doublon potentiel détecté">⚠️ dup</span>' : '')
+      + '</div>'
       + '<div class="ap-item-email">'+esc(p.email||p.telephone||'—')+'</div>'
       + '<div class="ap-item-badges">'
-      + (p.crmStatus ? '<span class="ap-item-badge '+(p.crmStatus==='active'?'ok':(p.crmStatus==='paused'||p.crmStatus==='churned'?'warn':''))+'">'+esc(p.crmStatus)+'</span>' : '')
+      + (p.crmStatus ? '<span class="ap-item-badge '+(p.crmStatus==='active'?'ok':(p.crmStatus==='paused'||p.crmStatus==='churned'||p.crmStatus==='stopped'?'warn':''))+'">'+esc(p.crmStatus)+'</span>' : '')
       + (hasC ? '<span class="ap-item-badge">coach</span>' : '')
       + (hasIc ? '<span class="ap-item-badge">facturation</span>' : '')
       + (hasS ? '<span class="ap-item-badge">abo</span>' : '')
@@ -497,6 +660,34 @@ function renderList(){
   });
   list.innerHTML = html;
 }
+
+/* Met à jour les compteurs sur les pills de filtres */
+function updatePillCounts(){
+  var counts = {
+    all: STATE.persons.length,
+    active: 0, procedure: 0, stopped: 0, completed: 0, paused: 0, 'no-status': 0,
+    duplicates: Object.keys(STATE.duplicatePersonIds).length
+  };
+  STATE.persons.forEach(function(p){
+    if(!p.crmStatus){ counts['no-status']++; return; }
+    if(counts[p.crmStatus] !== undefined) counts[p.crmStatus]++;
+  });
+  ['all','active','procedure','stopped','completed','paused','no-status','duplicates'].forEach(function(k){
+    var el = document.getElementById('apPillCount-'+k);
+    if(el) el.textContent = counts[k];
+  });
+}
+
+/* Click handler sur les pills de filtre */
+function apSetFilter(status){
+  STATE.filterStatus = status;
+  /* MAJ visuelle des pills */
+  document.querySelectorAll('.ap-side-pill').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-status') === status);
+  });
+  renderList();
+}
+window.apSetFilter = apSetFilter;
 
 function apSelect(personId){
   STATE.selectedId = personId;
