@@ -110,6 +110,8 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
 .ap-btn.primary:hover{background:#0f4d8b}
 .ap-btn.danger{color:var(--ap-danger);border-color:rgba(163,45,45,.2)}
 .ap-btn.danger:hover{background:var(--ap-danger-bg)}
+.ap-btn.warn{color:var(--ap-warning);border-color:rgba(133,79,11,.25)}
+.ap-btn.warn:hover{background:var(--ap-warning-bg)}
 .ap-btn:disabled{opacity:.5;cursor:not-allowed}
 
 /* ═══ Card identité principale ═══ */
@@ -271,6 +273,20 @@ button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit
       <button class="ap-modal-close" onclick="apCloseModal()" aria-label="Fermer"><i class="ti ti-x"></i></button>
     </div>
     <div id="apModalBody"></div>
+  </div>
+</div>
+
+<!-- Modal merge -->
+<div class="ap-modal-bg" id="apMergeModalBg">
+  <div class="ap-modal" id="apMergeModal" style="max-width:640px">
+    <div class="ap-modal-head">
+      <div>
+        <h2>Fusionner deux fiches persons</h2>
+        <div class="sub" id="apMergeSub">—</div>
+      </div>
+      <button class="ap-modal-close" onclick="apCloseMergeModal()" aria-label="Fermer"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="apMergeBody"></div>
   </div>
 </div>
 
@@ -727,6 +743,7 @@ function renderDetail(){
     +     '<div class="sub">'+STATE.persons.length+' humains synchronisés sur 5 collections</div>'
     +   '</div>'
     +   '<div class="ap-pg-actions">'
+    + (STATE.canEdit && STATE.duplicatePersonIds[p._id] ? '<button class="ap-btn warn" onclick="apOpenMergeModal()"><i class="ti ti-git-merge"></i>Fusionner…</button>' : '')
     + (STATE.canEdit ? '<button class="ap-btn primary" onclick="apOpenEditModal()"><i class="ti ti-edit"></i>Modifier</button>' : '<span class="ap-badge neutral"><i class="ti ti-eye"></i>Lecture seule</span>')
     +   '</div>'
     + '</div>';
@@ -1200,6 +1217,274 @@ async function apConfirmSave(){
   }
 }
 window.apConfirmSave = apConfirmSave;
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MODAL MERGE — fusion de 2 persons
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Trouve les "candidats merge" pour la persons courante : les autres
+   persons détectées comme doublons potentiels et qui partagent un
+   téléphone, un email ou un nom proche. */
+function apFindMergeCandidates(p){
+  if(!p) return [];
+  var candidates = [];
+  STATE.persons.forEach(function(other){
+    if(other._id === p._id) return;
+    if(!STATE.duplicatePersonIds[other._id]) return;
+
+    /* Score de proximité pour trier les meilleurs candidats en haut */
+    var score = 0;
+    var reasons = [];
+
+    /* Téléphone normalisé identique → match très fort */
+    if(p.phoneNormalized && other.phoneNormalized && p.phoneNormalized === other.phoneNormalized){
+      score += 100;
+      reasons.push('même téléphone');
+    }
+    /* Email identique */
+    var pEmail = (p.email||'').toLowerCase();
+    var oEmail = (other.email||'').toLowerCase();
+    if(pEmail && oEmail && pEmail === oEmail){
+      score += 100;
+      reasons.push('même email');
+    }
+    /* Email proche (typo) sur même domaine */
+    if(pEmail && oEmail && pEmail !== oEmail){
+      var pParts = pEmail.split('@');
+      var oParts = oEmail.split('@');
+      if(pParts[1] === oParts[1]){
+        var d = levenshtein(pParts[0], oParts[0]);
+        if(d > 0 && d <= 2){
+          score += 60;
+          reasons.push('email proche (' + d + ' lettre' + (d>1?'s':'') + ' diff)');
+        }
+      }
+    }
+    /* Nom similaire */
+    var pNom = (p.nom||'').toLowerCase().trim();
+    var oNom = (other.nom||'').toLowerCase().trim();
+    if(pNom && oNom){
+      var dN = levenshtein(pNom, oNom);
+      if(dN === 0){
+        score += 80; reasons.push('même nom');
+      } else if(dN <= 2){
+        score += 40; reasons.push('nom très proche');
+      } else if(pNom.indexOf(oNom) >= 0 || oNom.indexOf(pNom) >= 0){
+        score += 30; reasons.push('un nom contenu dans l\'autre');
+      }
+    }
+
+    if(score > 0){
+      candidates.push({ person: other, score: score, reasons: reasons });
+    }
+  });
+
+  /* Tri par score décroissant */
+  candidates.sort(function(a,b){ return b.score - a.score; });
+  return candidates;
+}
+
+function apOpenMergeModal(){
+  if(!STATE.canEdit){ toast('Lecture seule — édition réservée aux admins','error'); return; }
+  if(!STATE.selectedId) return;
+  var p = STATE.personsById[STATE.selectedId];
+  if(!p) return;
+
+  var candidates = apFindMergeCandidates(p);
+
+  document.getElementById('apMergeSub').textContent = (p.nom||'(sans nom)') + ' • personId ' + p._id;
+
+  if(candidates.length === 0){
+    document.getElementById('apMergeBody').innerHTML = ''
+      + '<div style="text-align:center;padding:30px 20px;color:var(--ap-text-soft);font-size:13px">'
+      +   '<i class="ti ti-circle-check" style="font-size:32px;display:block;margin-bottom:10px;opacity:0.5"></i>'
+      +   'Aucun candidat de fusion détecté pour cette persons.<br/>'
+      +   'Si tu en vois un manuellement, ouvre-le et utilise son bouton Fusionner.'
+      + '</div>'
+      + '<div class="ap-modal-actions"><button class="ap-btn" onclick="apCloseMergeModal()">Fermer</button></div>';
+    document.getElementById('apMergeModalBg').classList.add('show');
+    return;
+  }
+
+  /* Liste des candidats — l'admin sélectionne un avec radio */
+  var html = ''
+    + '<p style="margin:0 0 16px;font-size:13px;color:var(--ap-text-muted)">'
+    +   'Choisis avec quelle persons fusionner. Tu pourras ensuite décider laquelle survit.'
+    + '</p>';
+
+  html += '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;max-height:340px;overflow-y:auto">';
+  candidates.forEach(function(c, idx){
+    var o = c.person;
+    var hasC = STATE.clientsByPerson[o._id];
+    var hasIc = STATE.icsByPerson[o._id];
+    var hasS = STATE.subsByPerson[o._id] && STATE.subsByPerson[o._id].length > 0;
+    html += '<label style="display:flex;align-items:flex-start;gap:11px;padding:11px 13px;border:1px solid var(--ap-border);border-radius:9px;cursor:pointer;background:var(--ap-surface)">'
+      + '<input type="radio" name="apMergePartner" value="'+attr(o._id)+'"'+(idx===0?' checked':'')+' style="margin-top:3px"/>'
+      + '<div style="flex:1;min-width:0">'
+      + '  <div style="font-weight:600;font-size:13px;margin-bottom:3px">'+esc(o.nom||'(sans nom)')+'</div>'
+      + '  <div style="font-size:11.5px;color:var(--ap-text-muted);margin-bottom:5px">'+esc(o.email||o.telephone||'—')+'</div>'
+      + '  <div style="display:flex;gap:5px;flex-wrap:wrap">'
+      + (hasC ? '<span class="ap-item-badge">coach</span>' : '')
+      + (hasIc ? '<span class="ap-item-badge">facturation</span>' : '')
+      + (hasS ? '<span class="ap-item-badge">abo</span>' : '')
+      + (o.crmStatus ? '<span class="ap-item-badge">'+esc(o.crmStatus)+'</span>' : '')
+      + '  </div>'
+      + '  <div style="font-size:11px;color:var(--ap-warning);margin-top:5px">'
+      +    '<i class="ti ti-alert-triangle"></i> Raison(s) : '+esc(c.reasons.join(', '))
+      + '  </div>'
+      + '</div>'
+      + '</label>';
+  });
+  html += '</div>';
+
+  html += '<div class="ap-modal-actions">'
+    + '<button class="ap-btn" onclick="apCloseMergeModal()">Annuler</button>'
+    + '<button class="ap-btn primary" onclick="apMergeStep2()"><i class="ti ti-arrow-right"></i>Étape suivante</button>'
+    + '</div>';
+
+  document.getElementById('apMergeBody').innerHTML = html;
+  document.getElementById('apMergeModalBg').classList.add('show');
+}
+window.apOpenMergeModal = apOpenMergeModal;
+
+function apCloseMergeModal(){
+  document.getElementById('apMergeModalBg').classList.remove('show');
+}
+window.apCloseMergeModal = apCloseMergeModal;
+
+/* Étape 2 : choix du survivant + récap merge */
+function apMergeStep2(){
+  var radio = document.querySelector('input[name="apMergePartner"]:checked');
+  if(!radio){ toast('Choisis une persons à fusionner', 'error'); return; }
+  var partnerId = radio.value;
+
+  var current = STATE.personsById[STATE.selectedId];
+  var partner = STATE.personsById[partnerId];
+  if(!current || !partner) return;
+
+  /* Calcul de "qui devrait survivre" — recommandation, pas obligatoire */
+  var currentScore = apComputePersonScore(current);
+  var partnerScore = apComputePersonScore(partner);
+  var recommendedSurvivor = currentScore >= partnerScore ? current : partner;
+
+  document.getElementById('apMergeSub').textContent = 'Choisis qui survit : '+(current.nom||'?')+' vs '+(partner.nom||'?');
+
+  var html = ''
+    + '<p style="margin:0 0 16px;font-size:13px;color:var(--ap-text-muted)">'
+    +   'Choisis la persons qui <strong>survit</strong>. L\'autre sera marquée comme fusionnée et tous ses leads / coachings / paiements / IC / abonnements seront réaffectés à la survivante.'
+    + '</p>';
+
+  html += '<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">';
+  [current, partner].forEach(function(p){
+    var isReco = (p._id === recommendedSurvivor._id);
+    var leadsCount  = (STATE.leadsByPerson[p._id] || []).length;
+    var hasC  = STATE.clientsByPerson[p._id];
+    var hasIc = STATE.icsByPerson[p._id];
+    var paysCount = (STATE.paymentsByPerson[p._id] || []).length;
+    var subsCount = (STATE.subsByPerson[p._id] || []).length;
+
+    html += '<label style="display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid var(--ap-border);border-radius:9px;cursor:pointer;background:var(--ap-surface)">'
+      + '<input type="radio" name="apMergeSurvivor" value="'+attr(p._id)+'"'+(isReco?' checked':'')+' style="margin-top:3px"/>'
+      + '<div style="flex:1;min-width:0">'
+      + '  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+      +    '<div style="font-weight:600;font-size:14px">'+esc(p.nom||'(sans nom)')+'</div>'
+      + (isReco ? '<span class="ap-badge info" style="font-size:10px">recommandé</span>' : '')
+      + '  </div>'
+      + '  <div style="font-size:11.5px;color:var(--ap-text-muted);margin-bottom:7px">'+esc(p.email||p.telephone||'—')+'</div>'
+      + '  <div style="display:flex;gap:14px;font-size:11.5px;color:var(--ap-text-muted)">'
+      +    '<span>📋 '+leadsCount+' lead'+(leadsCount>1?'s':'')+'</span>'
+      +    '<span>🎓 '+(hasC?'coaching':'pas de coaching')+'</span>'
+      +    '<span>🧾 '+(hasIc?'fiche IC':'pas de fiche IC')+'</span>'
+      +    '<span>💳 '+paysCount+'</span>'
+      +    '<span>🔁 '+subsCount+'</span>'
+      + '  </div>'
+      + '</div>'
+      + '</label>';
+  });
+  html += '</div>';
+
+  html += '<div style="background:var(--ap-warning-bg);border-radius:8px;padding:11px 13px;margin-bottom:16px;font-size:11.5px;color:var(--ap-warning);display:flex;gap:7px;align-items:flex-start">'
+    + '<i class="ti ti-shield-check" style="font-size:14px;margin-top:1px;flex-shrink:0"></i>'
+    + '<div>Aucune donnée n\'est supprimée. La persons absorbée sera marquée <code>_merged: true</code> et ses anciennes valeurs (email, téléphone, nom) seront archivées dans <code>_previousEmails / _previousTelephone / _previousNom</code> sur la survivante.</div>'
+    + '</div>';
+
+  html += '<div class="ap-modal-actions">'
+    + '<button class="ap-btn" onclick="apOpenMergeModal()"><i class="ti ti-arrow-left"></i>Retour</button>'
+    + '<button class="ap-btn warn" onclick="apMergeConfirm(\''+attr(partnerId)+'\')"><i class="ti ti-git-merge"></i>Fusionner</button>'
+    + '</div>';
+
+  document.getElementById('apMergeBody').innerHTML = html;
+}
+window.apMergeStep2 = apMergeStep2;
+
+/* Score de richesse d'une persons (pour suggestion du survivant) */
+function apComputePersonScore(p){
+  var s = 0;
+  s += (STATE.leadsByPerson[p._id] || []).length * 5;
+  if(STATE.clientsByPerson[p._id]) s += 30;
+  if(STATE.icsByPerson[p._id]) s += 30;
+  s += (STATE.paymentsByPerson[p._id] || []).length * 10;
+  s += (STATE.subsByPerson[p._id] || []).length * 15;
+  if(p.email) s += 5;
+  if(p.telephone) s += 5;
+  if(p.gcCustomerId) s += 10;
+  return s;
+}
+
+/* Confirmation et exécution du merge */
+async function apMergeConfirm(partnerId){
+  var radio = document.querySelector('input[name="apMergeSurvivor"]:checked');
+  if(!radio){ toast('Choisis qui survit', 'error'); return; }
+  var survivorId = radio.value;
+  var mergedId = (survivorId === STATE.selectedId) ? partnerId : STATE.selectedId;
+
+  /* UI feedback */
+  var btn = event && event.target ? event.target.closest('button') : null;
+  if(btn){ btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2"></i>Fusion en cours…'; }
+
+  try {
+    /* Récupérer un ID token pour auth de la Vercel Function */
+    var idToken = await firebase.auth().currentUser.getIdToken();
+
+    var resp = await fetch('/api/persons-merge', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + idToken,
+      },
+      body: JSON.stringify({ survivorId: survivorId, mergedId: mergedId }),
+    });
+
+    var data = await resp.json();
+    if(!resp.ok){
+      throw new Error(data.error || ('HTTP '+resp.status));
+    }
+
+    toast('Fusion réussie : '+(data.reassignedDocsCount || 0)+' doc(s) réaffecté(s)', 'success');
+    apCloseMergeModal();
+
+    /* Naviguer vers le survivant */
+    STATE.selectedId = survivorId;
+    var url = new URL(window.location.href);
+    url.searchParams.set('id', survivorId);
+    window.history.replaceState({}, '', url.toString());
+
+    /* Reload pour voir le nouvel état (les Cloud Functions auront aussi
+       propagé entre temps, on attend 2s) */
+    setTimeout(function(){ loadAll(); }, 2000);
+
+  } catch(e){
+    console.error(e);
+    toast('Erreur fusion : '+e.message, 'error');
+    if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-git-merge"></i>Fusionner'; }
+  }
+}
+window.apMergeConfirm = apMergeConfirm;
+
+/* Click outside merge modal pour fermer */
+document.getElementById('apMergeModalBg').addEventListener('click', function(e){
+  if(e.target === e.currentTarget) apCloseMergeModal();
+});
 
 /* ═══ Click outside modal pour fermer ═══ */
 document.getElementById('apModalBg').addEventListener('click', function(e){
