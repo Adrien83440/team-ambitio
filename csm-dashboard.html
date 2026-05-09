@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Dashboard CSM</title>
 <link rel="stylesheet" href="sales.css"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.34.0/iconfont/tabler-icons.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.34.0/iconfont/tabler-icons.min.css?v=2"/>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -537,19 +537,47 @@ async function loadAllData(){
 
 /* ─── Calculs ─── */
 function isCoachingActif(c){
-  /* statuts considérés "actifs" pour les KPIs */
-  var s = c.statut || '';
-  return s === 'actif' || s === 'en_cours' || s === 'active';
+  /* Logique inversée : un coaching est "actif" SAUF s'il est explicitement
+     marqué churned / stopped / terminé / abandonné / arrêté.
+     Robuste à toutes les variantes de casse, accents, et synonymes.
+     Un statut absent ou null compte comme actif. */
+  var s = (c.statut || '').toString().toLowerCase().trim();
+  if(!s) return true;  /* pas de statut = actif par défaut */
+  /* Détection blocklist (sous-chaîne) — couvre tous les variants */
+  if(s.indexOf('churn') >= 0)    return false;
+  if(s.indexOf('stop')  >= 0)    return false;
+  if(s.indexOf('arret') >= 0)    return false;   /* arrêté, arret, arreté */
+  if(s.indexOf('arrêt') >= 0)    return false;
+  if(s.indexOf('abandon') >= 0)  return false;   /* abandon, abandonné */
+  if(s.indexOf('termin') >= 0)   return false;   /* terminé, terminée, termine */
+  if(s.indexOf('fini')   >= 0)   return false;
+  if(s.indexOf('cancel') >= 0)   return false;
+  if(s.indexOf('inactif') >= 0)  return false;
+  if(s === 'no' || s === 'non' || s === 'fin') return false;
+  return true;
+}
+
+/* Helpers résilients aux variations de noms de champs.
+   On essaie une liste de candidats et on garde la première valeur non-null. */
+function getLastSession(c){
+  return c.lastSessionDate || c.lastSession || c.derniereSession ||
+         c.dernierRdv || c.lastRdvDate || c.lastSessionAt || null;
+}
+function getLastFollowup(c){
+  return c.lastCsmFollowupAt || c.lastCsmFollowup || c.lastFollowupAt ||
+         c.derniereRelance || c.lastRelance || null;
+}
+function getEndDate(c){
+  return c.finPrevue || c.dateFinPrevue || c.dateFin ||
+         c.endDate || c.dateFinProgramme || null;
 }
 
 function getLevelForCoaching(c){
-  /* Réimplémentation simplifiée du computeLevel du dashboard original.
-     Niveaux : crit > warn > att > ok */
+  /* Niveaux : crit > warn > att > ok */
   if(!isCoachingActif(c)) return 'ok';
 
-  var d = daysSince(c.lastCsmFollowupAt);
+  var d = daysSince(getLastFollowup(c));
   var dCreated = daysSince(c.createdAt);
-  /* Si jamais relancé et ancien (>14j) → crit; sinon si >30j → crit */
   if(d === null && (dCreated || 0) > 14) return 'crit';
   if(d !== null && d > 30) return 'crit';
   if(d !== null && d > 14) return 'warn';
@@ -579,7 +607,7 @@ function computeKpis(){
   /* Relances dues : actifs sans relance depuis >14j ou jamais relancés et créés depuis >7j */
   var relancesDues = DATA.coachings.filter(function(c){
     if(!isCoachingActif(c)) return false;
-    var d = daysSince(c.lastCsmFollowupAt);
+    var d = daysSince(getLastFollowup(c));
     var dCreated = daysSince(c.createdAt) || 0;
     if(d === null) return dCreated > 7;
     return d > 14;
@@ -630,17 +658,17 @@ function renderAll(){
 }
 
 function renderCard1(){
-  /* Coachings manquants : actifs où dernier rdv (lastSessionDate) > 30j ou jamais */
+  /* Coachings manquants : actifs où dernier rdv > 30j ou jamais */
   var items = DATA.coachings.filter(function(c){
     if(!isCoachingActif(c)) return false;
-    var d = daysSince(c.lastSessionDate);
+    var d = daysSince(getLastSession(c));
     if(d === null) return (daysSince(c.createdAt) || 0) > 14;
     return d > 30;
   });
   /* Tri par ancienneté du retard décroissant */
   items.sort(function(a,b){
-    var dA = daysSince(a.lastSessionDate); if(dA === null) dA = daysSince(a.createdAt) || 0;
-    var dB = daysSince(b.lastSessionDate); if(dB === null) dB = daysSince(b.createdAt) || 0;
+    var dA = daysSince(getLastSession(a)); if(dA === null) dA = daysSince(a.createdAt) || 0;
+    var dB = daysSince(getLastSession(b)); if(dB === null) dB = daysSince(b.createdAt) || 0;
     return dB - dA;
   });
   var top = items.slice(0,5);
@@ -652,7 +680,7 @@ function renderCard1(){
     return;
   }
   body.innerHTML = top.map(function(c){
-    var d = daysSince(c.lastSessionDate);
+    var d = daysSince(getLastSession(c));
     var label = d === null ? 'jamais' : d+'j sans session';
     return ''
       + '<div class="card-item">'
@@ -672,9 +700,9 @@ function renderCard2(){
     return isCoachingActif(c) && getLevelForCoaching(c) === 'crit';
   });
   items.sort(function(a,b){
-    var dA = daysSince(a.lastCsmFollowupAt); if(dA === null) dA = daysSince(a.createdAt) || 99999;
-    var dB = daysSince(b.lastCsmFollowupAt); if(dB === null) dB = daysSince(b.createdAt) || 99999;
-    return dB - dA;  /* le plus ancien (le plus en retard) en premier */
+    var dA = daysSince(getLastFollowup(a)); if(dA === null) dA = daysSince(a.createdAt) || 99999;
+    var dB = daysSince(getLastFollowup(b)); if(dB === null) dB = daysSince(b.createdAt) || 99999;
+    return dB - dA;
   });
   var top = items.slice(0,3);
 
@@ -685,7 +713,7 @@ function renderCard2(){
     return;
   }
   body.innerHTML = top.map(function(c){
-    var d = daysSince(c.lastCsmFollowupAt);
+    var d = daysSince(getLastFollowup(c));
     var label = d === null ? 'jamais relancé' : d+'j sans contact';
     return ''
       + '<div class="card-item">'
@@ -733,18 +761,17 @@ function renderCard3(){
 }
 
 function renderCard4(){
-  /* Programmes expirant ce mois : clients actifs où finPrevue < 30j */
+  /* Programmes expirant ce mois : clients actifs où la date de fin <= 31j */
   var items = DATA.coachings.filter(function(c){
     if(!isCoachingActif(c)) return false;
-    /* Le champ d'échéance peut être finPrevue, dateFinPrevue, dateFin */
-    var endDate = c.finPrevue || c.dateFinPrevue || c.dateFin;
+    var endDate = getEndDate(c);
     if(!endDate) return false;
     var dU = daysUntil(endDate);
     return dU !== null && dU >= 0 && dU <= 31;
   });
   items.sort(function(a,b){
-    var dA = daysUntil(a.finPrevue || a.dateFinPrevue || a.dateFin) || 999;
-    var dB = daysUntil(b.finPrevue || b.dateFinPrevue || b.dateFin) || 999;
+    var dA = daysUntil(getEndDate(a)) || 999;
+    var dB = daysUntil(getEndDate(b)) || 999;
     return dA - dB;
   });
   var top = items.slice(0,5);
@@ -756,7 +783,7 @@ function renderCard4(){
     return;
   }
   body.innerHTML = top.map(function(c){
-    var d = daysUntil(c.finPrevue || c.dateFinPrevue || c.dateFin);
+    var d = daysUntil(getEndDate(c));
     var label = d === 0 ? "aujourd'hui" : d === 1 ? 'demain' : 'dans '+d+'j';
     var critical = d <= 7;
     return ''
