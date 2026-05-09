@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Ambitio — Dashboard CSM</title>
 <link rel="stylesheet" href="sales.css"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.34.0/iconfont/tabler-icons.min.css?v=2"/>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script src="nav.js"></script>
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
-   Dashboard CSM — page analytique (Step 6.4a)
-   Cohérent avec admin-persons et csm-clients (style clair).
+   Dashboard CSM — Step 6.4b
+   Logique alignée EXACTEMENT sur Coaching (source de vérité métier).
+   Emojis natifs uniquement. Pas de dépendance CDN icônes.
    ═══════════════════════════════════════════════════════════════════════ */
 
 :root {
@@ -112,27 +112,14 @@ body {
   text-transform: uppercase; letter-spacing: 0.04em;
   font-weight: 600;
 }
-.kpi-icon {
-  width: 32px; height: 32px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
-}
-.kpi-icon.green { background: var(--csm-bg-soft); color: var(--csm-accent); }
-.kpi-icon.red   { background: var(--crit-bg);     color: var(--crit-color); }
-.kpi-icon.blue  { background: var(--info-bg);     color: var(--info-color); }
-.kpi-icon.amber { background: var(--warn-bg);     color: var(--warn-color); }
-
+.kpi-emoji { font-size: 22px; line-height: 1; }
 .kpi-value {
   font-size: 32px; font-weight: 700; letter-spacing: -0.5px;
   line-height: 1; margin-bottom: 6px;
 }
 .kpi-trend {
   font-size: 11.5px; color: var(--ink-soft);
-  display: flex; align-items: center; gap: 4px;
 }
-.kpi-trend.up    { color: var(--csm-accent); }
-.kpi-trend.down  { color: var(--crit-color); }
-.kpi-trend.flat  { color: var(--ink-muted); }
 .kpi-suffix {
   font-size: 14px; color: var(--ink-muted); font-weight: 500;
   margin-left: 4px;
@@ -153,26 +140,16 @@ body {
   min-height: 280px;
 }
 .card-head {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 9px;
   margin-bottom: 12px; padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
 }
-.card-icon {
-  width: 28px; height: 28px; border-radius: 7px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px;
-}
-.card-icon.red    { background: var(--crit-bg);    color: var(--crit-color); }
-.card-icon.amber  { background: var(--warn-bg);    color: var(--warn-color); }
-.card-icon.purple { background: var(--purple-bg);  color: var(--purple-color); }
-.card-icon.blue   { background: var(--info-bg);    color: var(--info-color); }
-.card-title {
-  font-size: 14px; font-weight: 600; flex: 1; min-width: 0;
-}
+.card-emoji { font-size: 20px; line-height: 1; flex-shrink: 0; }
+.card-title { font-size: 14px; font-weight: 600; flex: 1; min-width: 0; }
 .card-count {
   font-size: 11.5px; color: var(--ink-muted);
-  background: var(--bg3); padding: 2px 8px;
-  border-radius: 5px; font-weight: 500;
+  background: var(--bg3); padding: 2px 9px;
+  border-radius: 5px; font-weight: 600;
 }
 .card-body { flex: 1; }
 .card-foot {
@@ -193,7 +170,7 @@ body {
   padding: 9px 0; border-bottom: 1px solid var(--border);
 }
 .card-item:last-child { border-bottom: none; }
-.card-item:hover { background: var(--bg3); margin: 0 -8px; padding: 9px 8px; border-radius: 6px; }
+.card-item:hover { background: var(--bg3); margin: 0 -8px; padding: 9px 8px; border-radius: 6px; border-bottom: 1px solid transparent; }
 .ci-av {
   width: 32px; height: 32px; border-radius: 50%;
   background: var(--csm-bg-soft); color: var(--csm-accent);
@@ -226,7 +203,7 @@ body {
 
 /* Badge */
 .badge {
-  font-size: 10.5px; padding: 2px 7px;
+  font-size: 10.5px; padding: 2px 8px;
   border-radius: 4px; font-weight: 500;
   display: inline-flex; align-items: center; gap: 3px;
   white-space: nowrap;
@@ -241,7 +218,7 @@ body {
   text-align: center; padding: 30px 14px;
   color: var(--ink-soft); font-size: 12.5px;
 }
-.card-empty i { font-size: 32px; opacity: 0.35; margin-bottom: 8px; display: block; }
+.card-empty-emoji { font-size: 28px; opacity: 0.5; margin-bottom: 8px; display: block; }
 
 .card-loading {
   display: flex; align-items: center; justify-content: center;
@@ -279,7 +256,7 @@ body {
     <div class="dash-header-spacer"></div>
     <div class="dash-header-actions">
       <a href="csm-clients.html" class="dash-btn primary">
-        <i class="ti ti-users"></i>Gérer les clients
+        <span style="font-size:14px">👥</span> Gérer les clients
       </a>
     </div>
   </header>
@@ -287,40 +264,40 @@ body {
   <!-- ─── KPIs ─── -->
   <div class="kpi-grid">
 
-    <div class="kpi" onclick="window.location='csm-clients.html'">
+    <div class="kpi" onclick="window.location='csm-clients.html?lvl=crit'" title="Clients en retard ou attention nécessitant un suivi">
       <div class="kpi-head">
-        <div class="kpi-label">Clients actifs</div>
-        <div class="kpi-icon green"><i class="ti ti-users"></i></div>
-      </div>
-      <div class="kpi-value" id="kpiActifs">—</div>
-      <div class="kpi-trend flat" id="kpiActifsTrend">&nbsp;</div>
-    </div>
-
-    <div class="kpi" onclick="window.location='csm-clients.html?lvl=crit'">
-      <div class="kpi-head">
-        <div class="kpi-label">Alertes critiques</div>
-        <div class="kpi-icon red"><i class="ti ti-alert-triangle"></i></div>
+        <div class="kpi-label">Critiques · à actionner</div>
+        <div class="kpi-emoji">🚨</div>
       </div>
       <div class="kpi-value" id="kpiCrit">—</div>
-      <div class="kpi-trend flat" id="kpiCritDetail">&nbsp;</div>
+      <div class="kpi-trend" id="kpiCritDetail">&nbsp;</div>
     </div>
 
-    <div class="kpi">
+    <div class="kpi" onclick="window.location='coaching.html'" title="Voir le module coaching complet">
       <div class="kpi-head">
-        <div class="kpi-label">MRR récurrent</div>
-        <div class="kpi-icon blue"><i class="ti ti-currency-euro"></i></div>
+        <div class="kpi-label">Retards coaching</div>
+        <div class="kpi-emoji">🎯</div>
       </div>
-      <div class="kpi-value" id="kpiMrr">—<span class="kpi-suffix">€</span></div>
-      <div class="kpi-trend flat" id="kpiMrrDetail">&nbsp;</div>
+      <div class="kpi-value" id="kpiRetards">—</div>
+      <div class="kpi-trend" id="kpiRetardsDetail">&nbsp;</div>
     </div>
 
-    <div class="kpi" onclick="window.location='csm-clients.html?relances=due'">
+    <div class="kpi" onclick="window.location='admin-facturation.html?tab=payments&filter=failed'" title="Paiements échoués à récupérer">
       <div class="kpi-head">
-        <div class="kpi-label">Relances dues</div>
-        <div class="kpi-icon amber"><i class="ti ti-bell-ringing"></i></div>
+        <div class="kpi-label">Paiements en échec</div>
+        <div class="kpi-emoji">💳</div>
+      </div>
+      <div class="kpi-value" id="kpiPay">—</div>
+      <div class="kpi-trend" id="kpiPayDetail">&nbsp;</div>
+    </div>
+
+    <div class="kpi" onclick="window.location='csm-clients.html'" title="Clients à relancer cette semaine">
+      <div class="kpi-head">
+        <div class="kpi-label">À relancer cette semaine</div>
+        <div class="kpi-emoji">📞</div>
       </div>
       <div class="kpi-value" id="kpiRelances">—</div>
-      <div class="kpi-trend flat" id="kpiRelancesDetail">&nbsp;</div>
+      <div class="kpi-trend" id="kpiRelancesDetail">&nbsp;</div>
     </div>
 
   </div>
@@ -328,55 +305,55 @@ body {
   <!-- ─── Cards ─── -->
   <div class="cards-grid">
 
-    <!-- Coachings manquants -->
+    <!-- Card 1 : Top à relancer (critiques en retard) -->
     <div class="card">
       <div class="card-head">
-        <div class="card-icon amber"><i class="ti ti-calendar-x"></i></div>
-        <div class="card-title">Coachings manquants</div>
+        <div class="card-emoji">🚨</div>
+        <div class="card-title">Top à relancer (En retard)</div>
         <div class="card-count" id="card1Count">—</div>
       </div>
       <div class="card-body" id="card1Body">
         <div class="card-loading"><div class="spinner"></div>Chargement…</div>
       </div>
       <div class="card-foot">
-        <a href="csm-clients.html?relances=due">Voir tous les retards <i class="ti ti-arrow-right"></i></a>
+        <a href="csm-clients.html">Voir tous les retards →</a>
       </div>
     </div>
 
-    <!-- Top 3 à relancer -->
+    <!-- Card 2 : Quota manqué ce mois -->
     <div class="card">
       <div class="card-head">
-        <div class="card-icon red"><i class="ti ti-flame"></i></div>
-        <div class="card-title">Top à relancer</div>
+        <div class="card-emoji">📅</div>
+        <div class="card-title">Quota manqué ce mois</div>
         <div class="card-count" id="card2Count">—</div>
       </div>
       <div class="card-body" id="card2Body">
         <div class="card-loading"><div class="spinner"></div>Chargement…</div>
       </div>
       <div class="card-foot">
-        <a href="csm-clients.html?lvl=crit">Voir toutes les alertes critiques <i class="ti ti-arrow-right"></i></a>
+        <a href="coaching.html">Voir dans Coaching →</a>
       </div>
     </div>
 
-    <!-- Paiements échoués -->
+    <!-- Card 3 : Paiements échoués -->
     <div class="card">
       <div class="card-head">
-        <div class="card-icon purple"><i class="ti ti-credit-card-off"></i></div>
-        <div class="card-title">Paiements échoués</div>
+        <div class="card-emoji">💳</div>
+        <div class="card-title">Paiements échoués (récents)</div>
         <div class="card-count" id="card3Count">—</div>
       </div>
       <div class="card-body" id="card3Body">
         <div class="card-loading"><div class="spinner"></div>Chargement…</div>
       </div>
       <div class="card-foot">
-        <a href="admin-facturation.html?tab=payments&filter=failed">Voir tous les paiements <i class="ti ti-arrow-right"></i></a>
+        <a href="admin-facturation.html?tab=payments&filter=failed">Voir tous les paiements →</a>
       </div>
     </div>
 
-    <!-- Programmes expirant -->
+    <!-- Card 4 : Programmes expirant ce mois -->
     <div class="card">
       <div class="card-head">
-        <div class="card-icon blue"><i class="ti ti-clock-exclamation"></i></div>
+        <div class="card-emoji">⏳</div>
         <div class="card-title">Programmes expirant ce mois</div>
         <div class="card-count" id="card4Count">—</div>
       </div>
@@ -384,7 +361,7 @@ body {
         <div class="card-loading"><div class="spinner"></div>Chargement…</div>
       </div>
       <div class="card-foot">
-        <a href="csm-clients.html">Voir tous les clients <i class="ti ti-arrow-right"></i></a>
+        <a href="sales-clients.html">Voir Clients CRM →</a>
       </div>
     </div>
 
@@ -394,7 +371,20 @@ body {
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════════
-   Dashboard CSM — Step 6.4a — page analytique
+   Dashboard CSM — Step 6.4b
+   Logique alignée sur coaching.html (source de vérité métier).
+
+   Constantes Coaching :
+     ALERT_DAYS = 21   → "En retard" (>21j sans séance)
+     WARN_DAYS  = 14   → "Attention" (>14j sans séance)
+
+   Catégorisation client :
+     isInactive      = statut === 'inactif'
+     isActif         = !isInactive (= 44 sur tes données : 6 actif + 38 absent)
+     isTermine       = nbCoachingsFaits >= nbCoachingsTotal
+     isEnRetard      = !isInactive && !isTermine && (lastSessionDate vide OU >21j)
+     isAttention     = !isInactive && !isTermine && lastSessionDate >14j ET <=21j
+     isQuotaManqueMois = !isInactive && !isTermine && sessions du mois courant = 0
    ═══════════════════════════════════════════════════════════════════════ */
 
 const FBCFG = {
@@ -409,10 +399,13 @@ firebase.initializeApp(FBCFG);
 var db = firebase.firestore();
 var auth = firebase.auth();
 
+/* Constantes (alignées sur coaching.html) */
+var ALERT_DAYS = 21;
+var WARN_DAYS  = 14;
+
 var DATA = {
-  coachings: [],          /* clients (coaching) */
-  leadsByEmail: {},       /* email lowercased → lead */
-  subscriptions: [],
+  coachings: [],
+  leadsByEmail: {},      /* lead enrichissement par email (pour récupérer accompagnementFin) */
   paymentsFailed: [],
   currentRole: null
 };
@@ -433,13 +426,90 @@ function toDate(v){
 }
 function daysSince(d){
   var t = toDate(d);
-  if(!t) return null;
+  if(!t || isNaN(t.getTime())) return null;
   return Math.floor((Date.now() - t.getTime()) / 86400000);
 }
 function daysUntil(d){
   var t = toDate(d);
-  if(!t) return null;
+  if(!t || isNaN(t.getTime())) return null;
   return Math.floor((t.getTime() - Date.now()) / 86400000);
+}
+
+/* ─── Logique Coaching (source de vérité) ─── */
+function isInactive(c){ return c.statut === 'inactif'; }
+function isActif(c){ return !isInactive(c); }
+function isTermine(c){
+  var done = c.nbCoachingsFaits || 0;
+  var total = c.nbCoachingsTotal || 12;
+  return done >= total;
+}
+function getAlertStatus(c){
+  /* Reproduit fidèlement coaching.html → getAlertStatus */
+  if(isTermine(c)) return 'ok';
+  if(!c.lastSessionDate) return 'alert';
+  var d = daysSince(c.lastSessionDate);
+  if(d === null) return 'alert';
+  if(d > ALERT_DAYS) return 'alert';   /* En retard */
+  if(d > WARN_DAYS)  return 'warning'; /* Attention */
+  return 'ok';
+}
+function isEnRetard(c)  { return !isInactive(c) && getAlertStatus(c) === 'alert'; }
+function isAttention(c) { return !isInactive(c) && getAlertStatus(c) === 'warning'; }
+
+function getMonthlyQuota(programme){
+  if(!programme) return 1;
+  var p = programme.toLowerCase();
+  if(p.indexOf('24c') >= 0) return 2;
+  if(p.indexOf('12c') >= 0) return 1;
+  if(p.indexOf('6c')  >= 0) return 1;
+  return 1;
+}
+function getAllSessions(c){
+  if(c.years && c.years.length){
+    var all = [];
+    c.years.forEach(function(y){ (y.sessions||[]).forEach(function(s){ all.push(s); }); });
+    return all;
+  }
+  return c.sessions || [];
+}
+function getSessionsInMonth(c, year, month){
+  return getAllSessions(c).filter(function(s){
+    if(s.statut !== 'fait' || !s.date) return false;
+    if(s.numero === 0 || s.type === 'rdv72h') return false;
+    var d = new Date(s.date);
+    return d.getFullYear() === year && d.getMonth() === month;
+  });
+}
+function isQuotaManqueMois(c){
+  if(isInactive(c) || isTermine(c)) return false;
+  var now = new Date();
+  var sessions = getSessionsInMonth(c, now.getFullYear(), now.getMonth());
+  return sessions.length === 0;
+}
+
+/* Date de fin d'accompagnement — depuis le lead via accompagnementFin (champ Clients CRM)
+   Fallback : depuis le coaching.dateEntree + nbCoachingsTotal mois (1 coaching/mois) */
+function getEndDate(c){
+  /* 1. Champ direct sur le coaching (rare mais possible) */
+  if(c.accompagnementFin) return c.accompagnementFin;
+  if(c.accompagnementEnd) return c.accompagnementEnd;
+  if(c.finPrevue) return c.finPrevue;
+  /* 2. Depuis le lead enrichi (par email) */
+  var em = lower(c.email);
+  if(em && DATA.leadsByEmail[em]){
+    var l = DATA.leadsByEmail[em];
+    if(l.accompagnementFin) return l.accompagnementFin;
+    if(l.accompagnementEnd) return l.accompagnementEnd;
+  }
+  /* 3. Calcul approximatif depuis dateEntree + nbCoachingsTotal (1 coaching/mois en moyenne) */
+  if(c.dateEntree && c.nbCoachingsTotal){
+    var d = new Date(c.dateEntree);
+    if(!isNaN(d.getTime())){
+      d.setMonth(d.getMonth() + parseInt(c.nbCoachingsTotal, 10));
+      return d;
+    }
+  }
+  return null;
 }
 
 /* ─── Auth ─── */
@@ -462,14 +532,14 @@ auth.onAuthStateChanged(async function(user){
 /* ─── Loading ─── */
 async function loadAllData(){
   try {
-    /* 1. coachings (clients) — listener léger ~70 docs */
+    /* 1. Coachings (clients) — ~70 docs */
     var cSnap = await db.collection('clients').get();
     DATA.coachings = [];
     cSnap.forEach(function(d){
       DATA.coachings.push(Object.assign({_id:d.id}, d.data()));
     });
 
-    /* 2. enrichissement leads par email matching coachings (perf : where 'in' batches de 10) */
+    /* 2. Enrichissement leads par email (batch where 'in' max 10) — pour accompagnementFin */
     var emails = DATA.coachings.map(function(c){ return lower(c.email); }).filter(Boolean);
     var uniqueEmails = Array.from(new Set(emails));
     var batches = [];
@@ -497,35 +567,25 @@ async function loadAllData(){
         var newIsClient = !!data.isClient;
         if(newIsClient && !existingIsClient){ DATA.leadsByEmail[em] = data; return; }
         if(newIsClient === existingIsClient){
-          var eT = toDate(existing.updatedAt) || toDate(existing.createdAt) || new Date(0);
-          var nT = toDate(data.updatedAt) || toDate(data.createdAt) || new Date(0);
+          var eT = toDate(existing.updatedAt) || new Date(0);
+          var nT = toDate(data.updatedAt) || new Date(0);
           if(nT > eT) DATA.leadsByEmail[em] = data;
         }
       });
     });
 
-    /* 3. subscriptions actives + payments failed (en parallèle, allSettled tolérant) */
-    var [subsR, paysR] = await Promise.allSettled([
-      db.collection('subscriptions').get(),
+    /* 3. Paiements échoués (allSettled, peut être bloqué par rules pour csm) */
+    var paysR = await Promise.allSettled([
       db.collection('payments').where('status','==','failed').get()
     ]);
-
-    if(subsR.status === 'fulfilled'){
-      DATA.subscriptions = [];
-      subsR.value.forEach(function(d){
-        DATA.subscriptions.push(Object.assign({_id:d.id}, d.data()));
-      });
-    } else {
-      console.warn('subscriptions load failed:', subsR.reason && subsR.reason.message);
-    }
-
-    if(paysR.status === 'fulfilled'){
+    if(paysR[0].status === 'fulfilled'){
       DATA.paymentsFailed = [];
-      paysR.value.forEach(function(d){
+      paysR[0].value.forEach(function(d){
         DATA.paymentsFailed.push(Object.assign({_id:d.id}, d.data()));
       });
     } else {
-      console.warn('payments failed load:', paysR.reason && paysR.reason.message);
+      console.warn('payments failed load:', paysR[0].reason && paysR[0].reason.message);
+      DATA.paymentsFailed = [];
     }
 
     renderAll();
@@ -535,159 +595,81 @@ async function loadAllData(){
   }
 }
 
-/* ─── Calculs ─── */
-function isCoachingActif(c){
-  /* Logique inversée : un coaching est "actif" SAUF s'il est explicitement
-     marqué churned / stopped / terminé / abandonné / arrêté.
-     Robuste à toutes les variantes de casse, accents, et synonymes.
-     Un statut absent ou null compte comme actif. */
-  var s = (c.statut || '').toString().toLowerCase().trim();
-  if(!s) return true;  /* pas de statut = actif par défaut */
-  /* Détection blocklist (sous-chaîne) — couvre tous les variants */
-  if(s.indexOf('churn') >= 0)    return false;
-  if(s.indexOf('stop')  >= 0)    return false;
-  if(s.indexOf('arret') >= 0)    return false;   /* arrêté, arret, arreté */
-  if(s.indexOf('arrêt') >= 0)    return false;
-  if(s.indexOf('abandon') >= 0)  return false;   /* abandon, abandonné */
-  if(s.indexOf('termin') >= 0)   return false;   /* terminé, terminée, termine */
-  if(s.indexOf('fini')   >= 0)   return false;
-  if(s.indexOf('cancel') >= 0)   return false;
-  if(s.indexOf('inactif') >= 0)  return false;
-  if(s === 'no' || s === 'non' || s === 'fin') return false;
-  return true;
-}
-
-/* Helpers résilients aux variations de noms de champs.
-   On essaie une liste de candidats et on garde la première valeur non-null. */
-function getLastSession(c){
-  return c.lastSessionDate || c.lastSession || c.derniereSession ||
-         c.dernierRdv || c.lastRdvDate || c.lastSessionAt || null;
-}
-function getLastFollowup(c){
-  return c.lastCsmFollowupAt || c.lastCsmFollowup || c.lastFollowupAt ||
-         c.derniereRelance || c.lastRelance || null;
-}
-function getEndDate(c){
-  return c.finPrevue || c.dateFinPrevue || c.dateFin ||
-         c.endDate || c.dateFinProgramme || null;
-}
-
-function getLevelForCoaching(c){
-  /* Niveaux : crit > warn > att > ok */
-  if(!isCoachingActif(c)) return 'ok';
-
-  var d = daysSince(getLastFollowup(c));
-  var dCreated = daysSince(c.createdAt);
-  if(d === null && (dCreated || 0) > 14) return 'crit';
-  if(d !== null && d > 30) return 'crit';
-  if(d !== null && d > 14) return 'warn';
-  if(d === null && (dCreated || 0) > 7) return 'att';
-  return 'ok';
-}
-
-function computeKpis(){
-  var actifs = DATA.coachings.filter(isCoachingActif);
-  var nbActifs = actifs.length;
-
-  /* Niveaux */
-  var byLevel = { crit:0, warn:0, att:0, ok:0 };
-  DATA.coachings.forEach(function(c){
-    var l = getLevelForCoaching(c);
-    byLevel[l] = (byLevel[l] || 0) + 1;
-  });
-
-  /* MRR : somme des installmentAmount des subscriptions actives */
-  var mrr = 0;
-  DATA.subscriptions.forEach(function(s){
-    if(s.status === 'active' && s.installmentAmount){
-      mrr += parseFloat(s.installmentAmount) || 0;
-    }
-  });
-
-  /* Relances dues : actifs sans relance depuis >14j ou jamais relancés et créés depuis >7j */
-  var relancesDues = DATA.coachings.filter(function(c){
-    if(!isCoachingActif(c)) return false;
-    var d = daysSince(getLastFollowup(c));
-    var dCreated = daysSince(c.createdAt) || 0;
-    if(d === null) return dCreated > 7;
-    return d > 14;
-  }).length;
-
-  return { nbActifs:nbActifs, byLevel:byLevel, mrr:mrr, relancesDues:relancesDues };
-}
-
 /* ─── Rendu ─── */
 function renderAll(){
-  var k = computeKpis();
+  var actifs = DATA.coachings.filter(isActif);
+  var enRetard = DATA.coachings.filter(isEnRetard);
+  var attention = DATA.coachings.filter(isAttention);
+  var quotaManque = DATA.coachings.filter(isQuotaManqueMois);
 
   /* Sous-titre header */
   var t = new Date();
   var hh = String(t.getHours()).padStart(2,'0');
   var mm = String(t.getMinutes()).padStart(2,'0');
   document.getElementById('dashSub').textContent =
-    k.nbActifs+' clients actifs · Mis à jour à '+hh+':'+mm;
+    actifs.length+' clients actifs · Mis à jour à '+hh+':'+mm;
 
-  /* KPIs */
-  document.getElementById('kpiActifs').textContent = k.nbActifs;
-  document.getElementById('kpiActifsTrend').textContent =
-    DATA.coachings.length+' au total dans la base';
-
-  document.getElementById('kpiCrit').textContent = k.byLevel.crit;
+  /* KPI 1 : Critiques · à actionner = en retard + attention */
+  var critTotal = enRetard.length + attention.length;
+  document.getElementById('kpiCrit').textContent = critTotal;
   var critDetail = [];
-  if(k.byLevel.warn > 0) critDetail.push(k.byLevel.warn+' warn');
-  if(k.byLevel.att > 0)  critDetail.push(k.byLevel.att+' att');
+  if(enRetard.length > 0)  critDetail.push(enRetard.length+' en retard');
+  if(attention.length > 0) critDetail.push(attention.length+' attention');
   document.getElementById('kpiCritDetail').textContent =
-    critDetail.length ? critDetail.join(' · ') : 'Aucune alerte secondaire';
+    critDetail.length ? critDetail.join(' · ') : 'Aucune alerte';
 
-  document.getElementById('kpiMrr').innerHTML = fmtEuro(k.mrr) + '<span class="kpi-suffix">€/mois</span>';
-  var subsActives = DATA.subscriptions.filter(function(s){ return s.status === 'active'; }).length;
-  document.getElementById('kpiMrrDetail').textContent = subsActives+' abonnement(s) actif(s)';
+  /* KPI 2 : Retards coaching (quota manqué ce mois) */
+  document.getElementById('kpiRetards').textContent = quotaManque.length;
+  document.getElementById('kpiRetardsDetail').textContent =
+    quotaManque.length > 0 ? 'Aucune séance ce mois' : 'Tous OK ce mois';
 
-  document.getElementById('kpiRelances').textContent = k.relancesDues;
+  /* KPI 3 : Paiements échoués */
+  var nbFailed = DATA.paymentsFailed.length;
+  var totalFailed = 0;
+  DATA.paymentsFailed.forEach(function(p){
+    totalFailed += (p.totalAmount || p.totalAmountTtc || p.amount || 0);
+  });
+  document.getElementById('kpiPay').textContent = nbFailed;
+  document.getElementById('kpiPayDetail').textContent =
+    nbFailed > 0 ? fmtEuro(totalFailed)+' € à récupérer' : 'Tous les paiements OK';
+
+  /* KPI 4 : À relancer cette semaine = actifs en retard ou attention */
+  document.getElementById('kpiRelances').textContent = critTotal;
   document.getElementById('kpiRelancesDetail').textContent =
-    k.relancesDues > 0 ? 'À traiter cette semaine' : 'Aucune relance en attente';
+    critTotal > 0 ? critTotal+' actions à mener' : 'Aucune relance en attente';
 
-  /* Card 1 : Coachings manquants — clients actifs sans session récente */
+  /* Cards */
   renderCard1();
-  /* Card 2 : Top 3 à relancer (crit triés par dernière relance la plus ancienne) */
   renderCard2();
-  /* Card 3 : Paiements échoués (5 derniers) */
   renderCard3();
-  /* Card 4 : Programmes expirant ce mois */
   renderCard4();
 }
 
 function renderCard1(){
-  /* Coachings manquants : actifs où dernier rdv > 30j ou jamais */
-  var items = DATA.coachings.filter(function(c){
-    if(!isCoachingActif(c)) return false;
-    var d = daysSince(getLastSession(c));
-    if(d === null) return (daysSince(c.createdAt) || 0) > 14;
-    return d > 30;
-  });
-  /* Tri par ancienneté du retard décroissant */
+  /* Top à relancer : actifs en retard, triés par ancienneté de la dernière séance */
+  var items = DATA.coachings.filter(isEnRetard);
   items.sort(function(a,b){
-    var dA = daysSince(getLastSession(a)); if(dA === null) dA = daysSince(a.createdAt) || 0;
-    var dB = daysSince(getLastSession(b)); if(dB === null) dB = daysSince(b.createdAt) || 0;
-    return dB - dA;
+    var dA = daysSince(a.lastSessionDate); if(dA === null) dA = 99999;
+    var dB = daysSince(b.lastSessionDate); if(dB === null) dB = 99999;
+    return dB - dA;  /* plus ancien d'abord */
   });
   var top = items.slice(0,5);
 
   document.getElementById('card1Count').textContent = items.length;
   var body = document.getElementById('card1Body');
   if(top.length === 0){
-    body.innerHTML = '<div class="card-empty"><i class="ti ti-circle-check"></i>Tous les clients ont une session récente</div>';
+    body.innerHTML = '<div class="card-empty"><span class="card-empty-emoji">✅</span>Aucun client en retard</div>';
     return;
   }
   body.innerHTML = top.map(function(c){
-    var d = daysSince(getLastSession(c));
-    var label = d === null ? 'jamais' : d+'j sans session';
+    var d = daysSince(c.lastSessionDate);
+    var label = d === null ? 'jamais' : d+'j sans séance';
     return ''
       + '<div class="card-item">'
       + '  <div class="ci-av">'+esc(getInitials(c.nom))+'</div>'
       + '  <div class="ci-text">'
-      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+'</div>'
-      + '    <div class="ci-meta">'+esc(c.programme||'—')+' · '+label+'</div>'
+      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+' <span class="badge crit" style="margin-left:6px">'+label+'</span></div>'
+      + '    <div class="ci-meta">'+esc(c.programme||'—')+(c.coachAssigned?' · '+esc(c.coachAssigned):'')+'</div>'
       + '  </div>'
       + '  <a href="csm-clients.html?clientId='+encodeURIComponent(c._id)+'" class="ci-action">Voir</a>'
       + '</div>';
@@ -695,32 +677,31 @@ function renderCard1(){
 }
 
 function renderCard2(){
-  /* Top 3 à relancer : clients en crit triés par dernière relance la plus ancienne */
-  var items = DATA.coachings.filter(function(c){
-    return isCoachingActif(c) && getLevelForCoaching(c) === 'crit';
-  });
+  /* Quota manqué ce mois : actifs sans séance ce mois calendaire */
+  var items = DATA.coachings.filter(isQuotaManqueMois);
   items.sort(function(a,b){
-    var dA = daysSince(getLastFollowup(a)); if(dA === null) dA = daysSince(a.createdAt) || 99999;
-    var dB = daysSince(getLastFollowup(b)); if(dB === null) dB = daysSince(b.createdAt) || 99999;
+    var dA = daysSince(a.lastSessionDate); if(dA === null) dA = 99999;
+    var dB = daysSince(b.lastSessionDate); if(dB === null) dB = 99999;
     return dB - dA;
   });
-  var top = items.slice(0,3);
+  var top = items.slice(0,5);
 
   document.getElementById('card2Count').textContent = items.length;
   var body = document.getElementById('card2Body');
   if(top.length === 0){
-    body.innerHTML = '<div class="card-empty"><i class="ti ti-mood-smile"></i>Aucune relance critique en attente</div>';
+    body.innerHTML = '<div class="card-empty"><span class="card-empty-emoji">🎯</span>Tous les clients ont leur quota ce mois</div>';
     return;
   }
   body.innerHTML = top.map(function(c){
-    var d = daysSince(getLastFollowup(c));
-    var label = d === null ? 'jamais relancé' : d+'j sans contact';
+    var done = c.nbCoachingsFaits || 0;
+    var total = c.nbCoachingsTotal || 12;
+    var quota = getMonthlyQuota(c.programme);
     return ''
       + '<div class="card-item">'
       + '  <div class="ci-av">'+esc(getInitials(c.nom))+'</div>'
       + '  <div class="ci-text">'
-      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+'<span class="badge crit" style="margin-left:7px">'+label+'</span></div>'
-      + '    <div class="ci-meta">'+esc(c.programme||'—')+(c.coachAssigned?' · coach '+esc(c.coachAssigned):'')+'</div>'
+      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+' <span class="badge att">0/'+quota+'</span></div>'
+      + '    <div class="ci-meta">'+esc(c.programme||'—')+' · '+done+'/'+total+' total</div>'
       + '  </div>'
       + '  <a href="csm-clients.html?clientId='+encodeURIComponent(c._id)+'" class="ci-action">Voir</a>'
       + '</div>';
@@ -728,7 +709,7 @@ function renderCard2(){
 }
 
 function renderCard3(){
-  /* Paiements échoués : 5 derniers, triés par date desc */
+  /* Paiements échoués (5 derniers, triés par date desc) */
   var items = DATA.paymentsFailed.slice();
   items.sort(function(a,b){
     var dA = toDate(a.createdAt) || new Date(0);
@@ -740,7 +721,7 @@ function renderCard3(){
   document.getElementById('card3Count').textContent = items.length;
   var body = document.getElementById('card3Body');
   if(top.length === 0){
-    body.innerHTML = '<div class="card-empty"><i class="ti ti-circle-check"></i>Aucun paiement en échec</div>';
+    body.innerHTML = '<div class="card-empty"><span class="card-empty-emoji">💚</span>Aucun paiement en échec</div>';
     return;
   }
   body.innerHTML = top.map(function(p){
@@ -761,17 +742,19 @@ function renderCard3(){
 }
 
 function renderCard4(){
-  /* Programmes expirant ce mois : clients actifs où la date de fin <= 31j */
+  /* Programmes expirant ce mois : clients actifs où la date de fin <= 31j
+     Source de la date : leads.accompagnementFin (Clients CRM)
+     Fallback : dateEntree + nbCoachingsTotal mois */
   var items = DATA.coachings.filter(function(c){
-    if(!isCoachingActif(c)) return false;
+    if(!isActif(c) || isTermine(c)) return false;
     var endDate = getEndDate(c);
     if(!endDate) return false;
     var dU = daysUntil(endDate);
     return dU !== null && dU >= 0 && dU <= 31;
   });
   items.sort(function(a,b){
-    var dA = daysUntil(getEndDate(a)) || 999;
-    var dB = daysUntil(getEndDate(b)) || 999;
+    var dA = daysUntil(getEndDate(a)); if(dA === null) dA = 999;
+    var dB = daysUntil(getEndDate(b)); if(dB === null) dB = 999;
     return dA - dB;
   });
   var top = items.slice(0,5);
@@ -779,7 +762,7 @@ function renderCard4(){
   document.getElementById('card4Count').textContent = items.length;
   var body = document.getElementById('card4Body');
   if(top.length === 0){
-    body.innerHTML = '<div class="card-empty"><i class="ti ti-calendar"></i>Aucun programme n\'expire ce mois</div>';
+    body.innerHTML = '<div class="card-empty"><span class="card-empty-emoji">📆</span>Aucun programme n\'expire ce mois</div>';
     return;
   }
   body.innerHTML = top.map(function(c){
@@ -790,7 +773,7 @@ function renderCard4(){
       + '<div class="card-item">'
       + '  <div class="ci-av">'+esc(getInitials(c.nom))+'</div>'
       + '  <div class="ci-text">'
-      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+(critical?'<span class="badge warn" style="margin-left:7px">'+label+'</span>':'')+'</div>'
+      + '    <div class="ci-name">'+esc(c.nom||'(sans nom)')+(critical?' <span class="badge warn">'+label+'</span>':'')+'</div>'
       + '    <div class="ci-meta">'+esc(c.programme||'—')+(critical?'':' · '+label)+'</div>'
       + '  </div>'
       + '  <a href="csm-clients.html?clientId='+encodeURIComponent(c._id)+'" class="ci-action">Voir</a>'
