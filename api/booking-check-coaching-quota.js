@@ -35,8 +35,20 @@
 // -----------------------------------
 //   used = sessions "fait" du mois (depuis c.sessions OU c.years[].sessions)
 //        + bookings confirmed isCoaching=true du mois (matchés par email)
-//   quota = 2 si c.programme contient "24c" (case-insensitive), sinon 1
+//          excluant ceux flaggés excludeFromQuota === true
+//   quota = clientData.quotaOverrides[monthYear] si présent (override admin)
+//         | sinon 2 si c.programme contient "24c" (case-insensitive), sinon 1
 //   → cohérent avec coaching-shared.js (getMonthlyQuota / getSessionsInMonth)
+//
+// Overrides manuels (gérés depuis coaching.html, fiche client)
+// ------------------------------------------------------------
+//   c.quotaOverrides : { "2026-05": 2, "2026-06": 1, ... }
+//     Map mois → quota effectif pour ce mois précis. Permet à l'admin/coach
+//     d'accorder une exception (ex: passer un client 12C à 2 séances pour
+//     un mois donné, suite à paiement supplémentaire ou rattrapage).
+//   b.excludeFromQuota : true sur un booking pour le sortir du décompte
+//     (typiquement booking erroné/doublon/test qui ne doit pas compter).
+//     Réversible — le doc reste en base.
 //
 // Cas particulier : si plusieurs fiches clients ont le même email (anomalie
 // de données), on prend la première trouvée et on logge un warning.
@@ -164,8 +176,8 @@ module.exports = async (req, res) => {
 
     // ── 3. Compte les bookings confirmed isCoaching=true du mois ───────────
     // On filtre par prospect.email puis on raffine en mémoire sur isCoaching,
-    // status et date du mois. Volume très faible (1-2 bookings max par mois
-    // par email), pas d'enjeu de pagination.
+    // status, excludeFromQuota et date du mois. Volume très faible (1-2
+    // bookings max par mois par email), pas d'enjeu de pagination.
     let bookingsCount = 0;
     try {
       const bSnap = await db.collection('bookings')
@@ -175,6 +187,7 @@ module.exports = async (req, res) => {
         const b = doc.data();
         if (b.isCoaching !== true) return;
         if (b.status !== 'confirmed') return;
+        if (b.excludeFromQuota === true) return; // exclu manuellement
         if (!b.date || typeof b.date !== 'string') return;
         if (b.date.slice(0, 7) !== monthYear) return;
         bookingsCount++;
@@ -185,7 +198,14 @@ module.exports = async (req, res) => {
     }
 
     const used = sessionsCount + bookingsCount;
-    const quota = getMonthlyQuota(clientData.programme);
+    // Quota effectif : override mensuel sur la fiche client si présent,
+    // sinon dérivé du programme. Permet à l'admin/coach d'accorder une
+    // exception ponctuelle depuis coaching.html (fiche client → section
+    // "Gestion du quota").
+    const quotaDerived = getMonthlyQuota(clientData.programme);
+    const overrideRaw = (clientData.quotaOverrides && clientData.quotaOverrides[monthYear]);
+    const quotaOverride = (typeof overrideRaw === 'number' && overrideRaw >= 0) ? overrideRaw : null;
+    const quota = quotaOverride !== null ? quotaOverride : quotaDerived;
     const allowed = used < quota;
 
     res.status(200).json({
@@ -194,6 +214,8 @@ module.exports = async (req, res) => {
       clientFound: true,
       used: used,
       quota: quota,
+      quotaDerived: quotaDerived,
+      quotaOverride: quotaOverride,
       sessionsCount: sessionsCount,
       bookingsCount: bookingsCount,
       programme: clientData.programme || null
