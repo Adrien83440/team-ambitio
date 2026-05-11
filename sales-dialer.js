@@ -292,14 +292,12 @@
     setStatus('Récupération du token…');
     try {
       const { token } = await SalesDialerAPI.voiceToken();
-      // Edge média : route le WebRTC via Europe (Dublin > Frankfurt) avec
-      // Ashburn US en failover. Sans cette config, le SDK route par défaut
-      // sur l'edge le plus proche du compte (US1 → Ashburn), ce qui ajoute
-      // ~150ms de RTT depuis la France et provoque jitter, blancs, voix
-      // hachée. L'edge média est INDÉPENDANTE du realm REST (us1 reste
-      // imposé pour les credentials API Key, voir mémoire IE1 invalide).
+      // ⚠️ NE PAS ajouter `edge: ['dublin', ...]` ici. Les credentials Twilio
+      // sont US1 et toute config edge IE1 (Dublin/Frankfurt) provoque l'erreur
+      // 31005 "Error sent from gateway in HANGUP" — la gateway Twilio ne sait
+      // pas router cross-realm. Tentative documentée et échouée (voir mémoire
+      // projet : "no edge:'dublin' in Device").
       device = new Twilio.Device(token, {
-        edge: ['dublin', 'frankfurt', 'ashburn'],
         codecPreferences: ['opus', 'pcmu'],
         logLevel: 'warn',
       });
