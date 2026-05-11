@@ -1298,7 +1298,7 @@
 <script type="module">
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc,query,where}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   const app=initializeApp({
     apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
     authDomain:"ambitio-team.firebaseapp.com",
@@ -1311,6 +1311,7 @@
   window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
   window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
   window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._signOut=signOut;
+  window._query=query;window._where=where;
 
   onAuthStateChanged(auth,async user=>{
     if(!user){window.location.href='index.html';return;}
@@ -1920,6 +1921,18 @@ function openDetail(id){
   const qBadgeCls = q.status==='ok'?'ok':q.status==='partial'?'partial':q.status==='empty'?'empty':q.status==='done'?'done':'ok';
   const qBarPct = q.max>0 ? Math.min(q.used/q.max*100,100) : 0;
   const qBarColor = q.status==='ok'?'var(--green)':q.status==='partial'?'var(--orange)':'var(--red)';
+
+  // Quota override management : on calcule le quota effectif pour le mois
+  // courant (réel, en utilisant la date du jour, pas _viewYear/_viewMonth
+  // qui peuvent être utilisés pour l'historique). Le quota effectif intègre
+  // un éventuel override stocké dans c.quotaOverrides["YYYY-MM"].
+  const _now = new Date();
+  const _curMonthKey = _now.getFullYear() + '-' + String(_now.getMonth() + 1).padStart(2, '0');
+  const _curMonthLabel = _now.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  const _quotaDerived = getMonthlyQuota(c.programme);
+  const _overrideRaw = (c.quotaOverrides && c.quotaOverrides[_curMonthKey]);
+  const _quotaOverrideVal = (typeof _overrideRaw === 'number' && _overrideRaw >= 0) ? _overrideRaw : null;
+  const _quotaEffective = _quotaOverrideVal !== null ? _quotaOverrideVal : _quotaDerived;
   
   const panel = document.getElementById('detailPanel');
   panel.innerHTML = `
@@ -1984,6 +1997,26 @@ function openDetail(id){
       <div class="dp-quota-history">
         <span style="font-size:10px;font-weight:700;color:var(--muted);padding:4px 0">Historique :</span>
         ${qHistory.map(m=>`<div class="dp-quota-month ${m.status}">${m.label} ${m.status==='ok'?'✅':m.status==='partial'?'🟡':'❌'} ${m.label!=='Terminé'?m.used+'/'+m.max:''}</div>`).join('')}
+      </div>
+    </div>
+
+    <!-- QUOTA OVERRIDE / EXCEPTIONS MANUELLES -->
+    <div class="dp-quota-override-section" style="margin-top:12px;padding:14px 16px;background:linear-gradient(135deg,#faf5ff,#f3e8ff);border:1px solid #d8b4fe;border-radius:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:13px;font-weight:700;color:#6b21a8;display:flex;align-items:center;gap:6px">🎛️ Gestion du quota — ${_curMonthLabel}</div>
+          <div style="font-size:11px;color:#7c3aed;margin-top:4px;line-height:1.6">
+            Quota dérivé du programme : <strong>${_quotaDerived}/mois</strong>
+            ${_quotaOverrideVal!==null ? `<br>Exception accordée : <strong style="color:#a21caf">${_quotaEffective}/mois</strong> ce mois` : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm" style="background:#a855f7;color:#fff;border:none;font-weight:600" onclick="addQuotaException('${id}','${_curMonthKey}')">+1 exception</button>
+          ${_quotaOverrideVal!==null ? `<button class="btn btn-sm btn-outline" onclick="resetQuotaException('${id}','${_curMonthKey}')">Reset</button>` : ''}
+        </div>
+      </div>
+      <div id="bookingsOfMonth-${id}" style="margin-top:12px;padding-top:12px;border-top:1px dashed #d8b4fe">
+        <div style="font-size:11px;color:#7c3aed;padding:6px 0">⏳ Chargement des RDV du mois…</div>
       </div>
     </div>
 
@@ -2080,9 +2113,158 @@ function openDetail(id){
 
   // Lazy-load des plans (sous-collection Firestore)
   loadClientPlans(id);
+
+  // Lazy-load des bookings du mois pour la section "Gestion du quota"
+  loadBookingsOfMonth(c, _curMonthKey, id);
 }
 
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('show');}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QUOTA OVERRIDE / EXCEPTIONS MANUELLES
+// ───────────────────────────────────────────────────────────────────────────
+// Permet à l'admin/coach d'accorder une exception mensuelle de quota à un
+// client (ex: 12C qui aurait droit à 2 séances ce mois pour rattrapage) et
+// d'exclure un booking erroné/doublon du décompte.
+//
+// Stockage Firestore :
+//   - clients/{id}.quotaOverrides : { "YYYY-MM": number }
+//     Quota effectif pour le mois donné. Override le calcul dérivé du programme.
+//   - bookings/{id}.excludeFromQuota : true pour sortir le booking du décompte.
+//
+// La Vercel Function /api/booking-check-coaching-quota lit ces deux champs
+// pour calculer le quota effectif quand un client retente une prise de RDV.
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function addQuotaException(clientId, monthKey){
+  const c = _clients.find(x => x._id === clientId);
+  if(!c) return;
+  const overrides = (c.quotaOverrides && typeof c.quotaOverrides === 'object') ? Object.assign({}, c.quotaOverrides) : {};
+  const derived = getMonthlyQuota(c.programme);
+  const current = (typeof overrides[monthKey] === 'number') ? overrides[monthKey] : derived;
+  const newVal = current + 1;
+  if(!confirm(`Accorder +1 coaching exceptionnel à ${c.nom} pour ${monthKey} ?\n\nQuota mois passera de ${current} à ${newVal}.`)) return;
+  overrides[monthKey] = newVal;
+  try {
+    await window._updateDoc(window._doc(window._db, 'clients', clientId), {
+      quotaOverrides: overrides,
+      _updatedAt: Date.now()
+    });
+    c.quotaOverrides = overrides;
+    showToast(`✅ Exception accordée : ${newVal}/mois pour ${monthKey}`, 'success');
+    openDetail(clientId); // re-render
+  } catch(e) {
+    showToast('Erreur : ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+async function resetQuotaException(clientId, monthKey){
+  const c = _clients.find(x => x._id === clientId);
+  if(!c) return;
+  if(!c.quotaOverrides || typeof c.quotaOverrides[monthKey] !== 'number') return;
+  const derived = getMonthlyQuota(c.programme);
+  if(!confirm(`Réinitialiser le quota de ${c.nom} pour ${monthKey} au quota normal (${derived}/mois) ?`)) return;
+  const overrides = Object.assign({}, c.quotaOverrides);
+  delete overrides[monthKey];
+  try {
+    await window._updateDoc(window._doc(window._db, 'clients', clientId), {
+      quotaOverrides: overrides,
+      _updatedAt: Date.now()
+    });
+    c.quotaOverrides = overrides;
+    showToast(`✅ Quota réinitialisé à ${derived}/mois`, 'success');
+    openDetail(clientId); // re-render
+  } catch(e) {
+    showToast('Erreur : ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+async function loadBookingsOfMonth(c, monthKey, clientId){
+  const wrap = document.getElementById('bookingsOfMonth-' + clientId);
+  if(!wrap) return;
+  const email = (c.email || '').trim().toLowerCase();
+  if(!email){
+    wrap.innerHTML = '<div style="font-size:11px;color:#7c3aed;padding:6px 0">⚠️ Pas d\'email sur la fiche — impossible de matcher les RDV.</div>';
+    return;
+  }
+  try {
+    // Query bookings par email puis filtre côté JS (volume très faible).
+    const snap = await window._getDocs(
+      window._query(
+        window._collection(window._db, 'bookings'),
+        window._where('prospect.email', '==', email)
+      )
+    );
+    const monthBookings = [];
+    snap.forEach(d => {
+      const b = d.data();
+      if(b.isCoaching !== true) return;
+      if(!b.date || typeof b.date !== 'string') return;
+      if(b.date.slice(0,7) !== monthKey) return;
+      if(b.status !== 'confirmed' && b.status !== 'cancelled') return;
+      monthBookings.push({ id: d.id, ...b });
+    });
+    // Tri par date+heure
+    monthBookings.sort((a,b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+
+    if(!monthBookings.length){
+      wrap.innerHTML = '<div style="font-size:11px;color:#7c3aed;padding:6px 0">Aucun RDV coaching pris pour ce mois.</div>';
+      return;
+    }
+
+    let html = '<div style="font-size:10px;font-weight:700;color:#6b21a8;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">📋 RDV coaching du mois (' + monthBookings.length + ')</div>';
+    monthBookings.forEach(b => {
+      const isExcluded = b.excludeFromQuota === true;
+      const isCancelled = b.status === 'cancelled';
+      const dateLabel = formatDate(b.date) + (b.time ? ' à ' + b.time : '');
+      const personLabel = escHtml(b.personName || '—');
+      const statusBadge = isCancelled
+        ? '<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#fee2e2;color:#991b1b;font-weight:600">Annulé</span>'
+        : (isExcluded
+            ? '<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#fef3c7;color:#92400e;font-weight:600">Exclu du décompte</span>'
+            : '<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#dcfce7;color:#166534;font-weight:600">Comptabilisé</span>');
+      const actionBtn = isCancelled
+        ? ''
+        : (isExcluded
+            ? `<button class="btn btn-sm btn-outline" style="font-size:10px;padding:4px 8px" onclick="toggleExcludeBooking('${b.id}', false, '${clientId}')">⊙ Réintégrer</button>`
+            : `<button class="btn btn-sm" style="font-size:10px;padding:4px 8px;background:#fff;border:1px solid #d8b4fe;color:#6b21a8" onclick="toggleExcludeBooking('${b.id}', true, '${clientId}')">⊘ Exclure</button>`);
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:rgba(255,255,255,.6);border-radius:8px;margin-bottom:6px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px;font-size:12px;color:var(--ink-soft)">
+          <div style="font-weight:600">${dateLabel}</div>
+          <div style="font-size:11px;color:var(--muted)">avec ${personLabel}</div>
+        </div>
+        ${statusBadge}
+        ${actionBtn}
+      </div>`;
+    });
+    wrap.innerHTML = html;
+  } catch(e){
+    console.error('[loadBookingsOfMonth]', e);
+    wrap.innerHTML = '<div style="font-size:11px;color:#dc2626;padding:6px 0">Erreur de chargement : ' + escHtml(e.message) + '</div>';
+  }
+}
+
+async function toggleExcludeBooking(bookingId, exclude, clientId){
+  if(!bookingId) return;
+  try {
+    await window._updateDoc(window._doc(window._db, 'bookings', bookingId), {
+      excludeFromQuota: exclude === true
+    });
+    showToast(exclude ? '⊘ RDV exclu du décompte' : '⊙ RDV réintégré au décompte', 'success');
+    // Re-render la section bookings du client
+    const c = _clients.find(x => x._id === clientId);
+    if(c){
+      const _now = new Date();
+      const monthKey = _now.getFullYear() + '-' + String(_now.getMonth() + 1).padStart(2, '0');
+      loadBookingsOfMonth(c, monthKey, clientId);
+    }
+  } catch(e){
+    showToast('Erreur : ' + e.message, 'error');
+    console.error(e);
+  }
+}
 function toggleSession(el){el.closest('.session-item').classList.toggle('open');}
 function toggleNewSession(){document.getElementById('newSessionForm').classList.toggle('show');}
 
