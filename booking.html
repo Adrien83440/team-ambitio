@@ -205,6 +205,26 @@ body.bk-embed .bk-progress{position:relative}
 .bk-mobile-summary{display:none;flex-wrap:wrap;gap:6px;margin-bottom:16px}
 @media(max-width:860px){.bk-mobile-summary{display:flex}}
 .bk-mobile-chip{font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px;background:var(--primary-pale);color:var(--primary);border:1px solid rgba(109,40,217,0.1)}
+
+/* ── QUOTA COACHING MODAL ── */
+.bk-quota-overlay{position:fixed;inset:0;background:rgba(20,16,40,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:1000;display:none;align-items:center;justify-content:center;padding:20px;animation:bkQuotaFade .2s ease}
+.bk-quota-overlay.show{display:flex}
+@keyframes bkQuotaFade{from{opacity:0}to{opacity:1}}
+.bk-quota-modal{background:var(--card);border-radius:18px;max-width:480px;width:100%;padding:36px 32px;box-shadow:var(--shadow-lg);border:1px solid var(--border);animation:bkQuotaPop .25s var(--ease-bounce)}
+@keyframes bkQuotaPop{from{opacity:0;transform:scale(.92) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.bk-quota-icon{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#fef3c7,#fde68a);display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 20px;box-shadow:0 6px 20px rgba(217,119,6,0.15)}
+.bk-quota-title{font-family:var(--fh);font-size:22px;font-weight:700;color:var(--text);text-align:center;margin-bottom:12px;line-height:1.3}
+.bk-quota-text{font-size:14px;color:var(--muted);text-align:center;line-height:1.6;margin-bottom:24px}
+.bk-quota-text strong{color:var(--text);font-weight:600}
+.bk-quota-stat{background:var(--primary-pale);border:1px solid rgba(109,40,217,0.12);border-radius:12px;padding:16px;text-align:center;margin-bottom:24px}
+.bk-quota-stat-num{font-family:var(--fh);font-size:32px;font-weight:800;color:var(--primary);line-height:1}
+.bk-quota-stat-lbl{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:6px;font-weight:600}
+.bk-quota-actions{display:flex;gap:10px;flex-direction:column}
+.bk-quota-btn{padding:13px 22px;border-radius:11px;font-family:var(--fb);font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .2s var(--ease);width:100%}
+.bk-quota-btn-primary{background:var(--primary);color:#fff}
+.bk-quota-btn-primary:hover{background:#5b21b6;transform:translateY(-1px);box-shadow:0 4px 14px rgba(109,40,217,0.3)}
+.bk-quota-btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.bk-quota-btn-ghost:hover{background:var(--primary-pale);color:var(--text)}
 </style>
 </head>
 <body>
@@ -1068,7 +1088,7 @@ function prefillFromForm() {
 /* ═══════════════════════════════════════════════════
    STEP 5 — SUBMIT BOOKING
    ═══════════════════════════════════════════════════ */
-function handleSubmit() {
+async function handleSubmit() {
   var prenomEl = document.getElementById('fPrenom');
   var nomEl = document.getElementById('fNom');
   var prenom = prenomEl ? prenomEl.value.trim() : '';
@@ -1132,6 +1152,41 @@ function handleSubmit() {
   // et le matching automatique avec les fiches clients par email).
   if (S.selType && S.selType.isCoaching === true) booking.isCoaching = true;
 
+  /* ── CHECK QUOTA COACHING MENSUEL ───────────────────────────────────────
+     Si le type de consultation est marqué isCoaching et qu'on a un email,
+     on demande à la Vercel Function /api/booking-check-coaching-quota si
+     ce client a déjà atteint son quota mensuel (1/mois pour 12C/6C, 2/mois
+     pour 24C). En cas de dépassement → modal de blocage. Si la fiche client
+     n'est pas trouvée (anomalie email ou nouveau client) → on laisse passer
+     mais on pose le flag coachingClientNotFound:true sur le booking pour
+     que le coach soit averti dans son agenda.
+     Fail-open : en cas d'erreur réseau ou serveur, on laisse passer pour
+     ne pas bloquer un RDV légitime sur un problème transitoire.
+  ─────────────────────────────────────────────────────────────────────── */
+  if (booking.isCoaching === true && email && S.selDate) {
+    var monthYear = S.selDate.slice(0, 7); // "YYYY-MM"
+    try {
+      var resp = await fetch('/api/booking-check-coaching-quota', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, monthYear: monthYear })
+      });
+      var quotaData = await resp.json();
+      if (quotaData && quotaData.allowed === false) {
+        // Bloqué → afficher modal et abort. Ne pas créer le booking.
+        showQuotaModal(quotaData);
+        return;
+      }
+      if (quotaData && quotaData.clientFound === false) {
+        // Email non trouvé en base coaching → flag pour avertir le coach.
+        booking.coachingClientNotFound = true;
+      }
+    } catch (err) {
+      // Fail-open : log et continue
+      console.warn('[booking] quota check failed, fail-open:', err);
+    }
+  }
+
   var btn = document.getElementById('confirmBtn');
   btn.disabled = true;
   btn.textContent = 'Réservation en cours…';
@@ -1173,6 +1228,32 @@ function handleSubmit() {
     btn.textContent = 'Confirmer le rendez-vous';
     alert('Erreur : ' + err.message);
   });
+}
+
+/* ═══════════════════════════════════════════════════
+   QUOTA COACHING MODAL — helpers
+   ═══════════════════════════════════════════════════ */
+function showQuotaModal(quotaData) {
+  // Affiche le modal de blocage avec les chiffres du quota.
+  // quotaData = { allowed:false, used, quota, programme, ... }
+  var num = (quotaData && typeof quotaData.used === 'number' && typeof quotaData.quota === 'number')
+    ? quotaData.used + '/' + quotaData.quota
+    : '—';
+  document.getElementById('quotaStatNum').textContent = num;
+  var text;
+  if (quotaData && quotaData.quota === 1) {
+    text = 'Tu as déjà pris ton coaching individuel pour ce mois-ci. Tu pourras en reprendre un dès le mois prochain.';
+  } else if (quotaData && quotaData.quota === 2) {
+    text = 'Tu as déjà pris tes <strong>2 coachings individuels</strong> pour ce mois-ci. Tu pourras en reprendre dès le mois prochain.';
+  } else {
+    text = 'Tu as atteint ton quota de coachings individuels pour ce mois-ci.';
+  }
+  document.getElementById('quotaText').innerHTML = text;
+  document.getElementById('quotaOverlay').classList.add('show');
+}
+
+function closeQuotaModal() {
+  document.getElementById('quotaOverlay').classList.remove('show');
 }
 
 function showConfirmation(prenom, email) {
@@ -1386,5 +1467,23 @@ firebase.auth().onAuthStateChanged(function(u) {
   }
 });
 </script>
+
+<!-- Modal quota coaching dépassé (affiché uniquement si quota atteint) -->
+<div class="bk-quota-overlay" id="quotaOverlay" onclick="if(event.target===this)closeQuotaModal()">
+  <div class="bk-quota-modal">
+    <div class="bk-quota-icon">🚫</div>
+    <div class="bk-quota-title">Quota mensuel atteint</div>
+    <div class="bk-quota-text" id="quotaText">Tu as déjà utilisé tous tes coachings individuels pour ce mois.</div>
+    <div class="bk-quota-stat">
+      <div class="bk-quota-stat-num" id="quotaStatNum">—</div>
+      <div class="bk-quota-stat-lbl">coachings ce mois</div>
+    </div>
+    <div class="bk-quota-actions">
+      <button class="bk-quota-btn bk-quota-btn-primary" onclick="closeQuotaModal()">J'ai compris</button>
+      <button class="bk-quota-btn bk-quota-btn-ghost" onclick="window.location.href='mailto:coaching@adrienemily.com?subject=Demande d%27exception coaching'">Contacter mon coach</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
