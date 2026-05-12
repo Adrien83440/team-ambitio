@@ -6,14 +6,59 @@
 var db = firebase.firestore();
 
 /* ═══ CONFIG ═══ */
-var COACHES = [
-  {key:'mickael',label:'Mickael'},
-  {key:'edouard',label:'Edouard'},
-  {key:'emily',label:'Emily'},
-  {key:'adrien',label:'Adrien'}
-];
+/*
+ * COACHES + COACH_MAP — source unique _meta/team_members via nav.js
+ * (window.TEAM_MEMBERS_ACTIVE). Rebuilt dynamiquement par refreshCoaches() au
+ * load initial puis à chaque event `team-members-loaded`. Inclut tous les
+ * membres actifs role coach OR admin (cohérence avec coaching.html).
+ */
+var COACHES = [];
 var COACH_MAP = {};
-COACHES.forEach(function(c){ COACH_MAP[c.key] = c.label; });
+
+function refreshCoaches(){
+  COACHES.length = 0;
+  Object.keys(COACH_MAP).forEach(function(k){ delete COACH_MAP[k]; });
+  if(window.TEAM_MEMBERS_ACTIVE && window.TEAM_MEMBERS_ACTIVE.length){
+    window.TEAM_MEMBERS_ACTIVE.forEach(function(m){
+      if(m.role !== 'coach' && m.role !== 'admin') return;
+      var label = m.displayName || m.shortName || m.slug;
+      COACHES.push({ key: m.slug, label: label });
+      COACH_MAP[m.slug] = label;
+    });
+  }
+  populateClientsCoachFilter();
+}
+
+// Peuple le <select id="filterCoach"> dans sales-clients.html.
+// Insère les <option> entre "Tous les coachs" (value=all) et "Non assigné" (value="").
+// Préserve la valeur sélectionnée si encore présente après refresh.
+function populateClientsCoachFilter(){
+  var sel = document.getElementById('filterCoach');
+  if(!sel) return;
+  var prev = sel.value;
+  // Conserve les 2 sentinels (Tous + Non assigné) en début et fin de liste
+  var html = '<option value="all">Tous les coachs</option>';
+  COACHES.forEach(function(c){
+    html += '<option value="'+c.key.replace(/"/g,'&quot;')+'">'+c.label.replace(/</g,'&lt;')+'</option>';
+  });
+  html += '<option value="">Non assigné</option>';
+  sel.innerHTML = html;
+  if(prev && Array.prototype.some.call(sel.options, function(o){ return o.value === prev; })){
+    sel.value = prev;
+  }
+}
+
+// Tente un premier remplissage synchrone : si TEAM_MEMBERS est déjà chargé
+// (cache mémoire d'un nav.js déjà exécuté sur une autre page), on est bons
+// immédiatement. Sinon refresh quand team-members-loaded fire.
+refreshCoaches();
+window.addEventListener('team-members-loaded', function(){
+  refreshCoaches();
+  // Re-render les vues affectées si déjà rendues
+  try {
+    if(typeof renderAll === 'function') renderAll();
+  } catch(e){ console.warn('[sales-clients] re-render after team-members-loaded failed', e); }
+});
 
 var TEMO_TYPES = [
   {key:'trustpilot',label:'Trustpilot',icon:'⭐'},

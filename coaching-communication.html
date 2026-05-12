@@ -370,10 +370,7 @@
         <label>Assigner à</label>
         <select id="alarm-assign">
           <option value="">— Toute l'équipe —</option>
-          <option>Mickael</option>
-          <option>Edouard</option>
-          <option>Emily</option>
-          <option>Adrien</option>
+          <!-- options peuplées dynamiquement par populateAlarmAssign() depuis window.TEAM_MEMBERS -->
         </select>
       </div>
     </div>
@@ -537,16 +534,18 @@ const CHANNELS = [
   { id:'annonces',    icon:'📢', name:'Annonces',         desc:'Informations importantes de la direction', color:'green' },
 ];
 
-const COACH_COLORS = {
-  adrien:  { bg:'#fef3c7', color:'#92400e', cls:'adrien' },
-  emily:   { bg:'#d1fae5', color:'#065f46', cls:'emily' },
-  mickael: { bg:'#ede9fe', color:'#5b21b6', cls:'mickael' },
-  edouard: { bg:'#fee2e2', color:'#991b1b', cls:'edouard' },
-};
-
+// ── COACH STYLES — 100% dynamique depuis _meta/team_members ──
+// Plus aucune palette hardcodée. La couleur de chaque coach vient de
+// window.TEAM_MEMBERS via nav.js. Si la couleur n'est pas posée (cas
+// limite : membre fraîchement créé sans champ color), fallback neutre.
 function getCoachStyle(name){
-  const key = (name||'').toLowerCase().split(' ')[0];
-  return COACH_COLORS[key] || { bg:'#f0f4ff', color:'#1a3dce', cls:'' };
+  if(!name) return { bg:'#f0f4ff', color:'#1a3dce', cls:'' };
+  // 1. Couleur depuis TEAM_MEMBERS via getCoachColor (déjà gère la normalisation)
+  var color = (typeof window.getCoachColor === 'function') ? window.getCoachColor(name) : '#94a3b8';
+  // 2. Génère un bg pastel cohérent à partir de la couleur principale (alpha 18 hex ~ 9%)
+  var bg = color + '22'; // hex alpha 22 = ~13%
+  // 3. cls reste vide (CSS dépend du nom — désormais on style en inline via les valeurs ci-dessus)
+  return { bg: bg, color: color, cls: '' };
 }
 
 // ── LOAD CLIENTS ──
@@ -740,8 +739,34 @@ function setMsgType(type){
 }
 
 // ── ALARM MODAL ──
-function openAlarmModal(){ document.getElementById('alarmModal').classList.add('show'); }
+// Peuple le <select id="alarm-assign"> depuis _meta/team_members (role coach OR admin).
+function populateAlarmAssign(){
+  const sel = document.getElementById('alarm-assign');
+  if(!sel) return;
+  const prev = sel.value;
+  const opts = (typeof window.getCoachOptions === 'function') ? window.getCoachOptions() : [];
+  let html = '<option value="">— Toute l\'équipe —</option>';
+  opts.forEach(o => {
+    html += '<option value="'+o.label.replace(/"/g,'&quot;')+'">'+o.label+'</option>';
+  });
+  sel.innerHTML = html;
+  if(prev && Array.prototype.some.call(sel.options, o => o.value === prev)) sel.value = prev;
+}
+
+function openAlarmModal(){
+  populateAlarmAssign();
+  document.getElementById('alarmModal').classList.add('show');
+}
 function closeAlarmModal(){ document.getElementById('alarmModal').classList.remove('show'); }
+
+// Re-render le panneau "membres" et re-peuple le select alarm-assign
+// quand TEAM_MEMBERS finit de charger (race condition au premier paint).
+window.addEventListener('team-members-loaded', function(){
+  try {
+    populateAlarmAssign();
+    if(typeof renderContextPanel === 'function') renderContextPanel();
+  } catch(e){ console.warn('[coaching-communication] team-members-loaded handler failed', e); }
+});
 
 function selectAlarmType(type, el){
   _alarmType = type;
@@ -854,18 +879,25 @@ function renderContextPanel(){
       </div>
     `).join('');
   } else if(_ctxTab === 'membres'){
-    const members = ['Mickael','Edouard','Emily','Adrien'];
-    body.innerHTML = '<div class="ctx-section-title">Équipe Coaching</div>'+members.map(m=>{
-      const s = getCoachStyle(m);
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
-        <div style="width:32px;height:32px;border-radius:9px;background:${s.bg};color:${s.color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${m[0]}</div>
-        <div>
-          <div style="font-size:12px;font-weight:700">${m}</div>
-          <div style="font-size:11px;color:var(--muted)">Coach</div>
-        </div>
-        <div style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--green)"></div>
-      </div>`;
-    }).join('');
+    // Liste dynamique des coachs depuis _meta/team_members (role coach OR admin, actifs).
+    const coachOpts = (typeof window.getCoachOptions === 'function') ? window.getCoachOptions() : [];
+    if(!coachOpts.length){
+      body.innerHTML = '<div class="ctx-section-title">Équipe Coaching</div><div style="font-size:11px;color:var(--muted);padding:10px 0">Chargement…</div>';
+    } else {
+      body.innerHTML = '<div class="ctx-section-title">Équipe Coaching</div>'+coachOpts.map(o=>{
+        const m = o.label;
+        const s = getCoachStyle(m);
+        const roleLbl = o.role === 'admin' ? 'Admin' : 'Coach';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">
+          <div style="width:32px;height:32px;border-radius:9px;background:${s.bg};color:${s.color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0">${m[0]}</div>
+          <div>
+            <div style="font-size:12px;font-weight:700">${m}</div>
+            <div style="font-size:11px;color:var(--muted)">${roleLbl}</div>
+          </div>
+          <div style="margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--green)"></div>
+        </div>`;
+      }).join('');
+    }
   }
 }
 

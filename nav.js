@@ -935,6 +935,111 @@
     };
   };
 
+  /**
+   * Retourne les options "coach" pour les dropdowns coaching.
+   *
+   * Source de vérité : _meta/team_members via window.TEAM_MEMBERS_ACTIVE.
+   * Inclut tous les membres actifs dont le rôle est `coach` OU `admin`
+   * (les admins comme Adrien/Emily restent éligibles comme coach par
+   * design — alignement avec l'état historique).
+   *
+   * Tri par `order` (déjà appliqué sur TEAM_MEMBERS_ACTIVE par
+   * loadTeamMembers).
+   *
+   * Format de retour : array d'objets normalisés
+   *   [{ slug, label, color, shortName, displayName, role }, ...]
+   *
+   * Utilisation typique :
+   *   var coaches = window.getCoachOptions();
+   *   coaches.forEach(function(c){
+   *     h += '<option value="'+c.slug+'">'+c.label+'</option>';
+   *   });
+   *
+   * Si TEAM_MEMBERS n'est pas encore chargé (premier render avant
+   * onAuthStateChanged), retourne un array vide. Les pages doivent
+   * écouter l'event `team-members-loaded` pour re-render.
+   */
+  window.getCoachOptions = function () {
+    if (!window.TEAM_MEMBERS_ACTIVE || !window.TEAM_MEMBERS_ACTIVE.length) return [];
+    return window.TEAM_MEMBERS_ACTIVE
+      .filter(function (m) { return m.role === 'coach' || m.role === 'admin'; })
+      .map(function (m) {
+        return {
+          slug: m.slug,
+          label: m.displayName || m.shortName || m.slug,
+          color: m.color || '#6b7280',
+          shortName: m.shortName || m.displayName || m.slug,
+          displayName: m.displayName || m.shortName || m.slug,
+          role: m.role
+        };
+      });
+  };
+
+  /**
+   * Normalise un nom de coach brut vers son `displayName` canonique
+   * tel que défini dans _meta/team_members.
+   *
+   * Remplace les anciennes regex hardcodées (mick/edou/emil/adri)
+   * éparpillées dans coaching.html, coaching-dashboard.html, etc.
+   * Pivote dynamiquement sur TEAM_MEMBERS : si on ajoute "Flore" dans
+   * admin-users.html, elle est reconnue automatiquement partout.
+   *
+   * Algorithme :
+   *   1. Strip + lowercase + retire accents pour comparaison.
+   *   2. Pour chaque membre actif : compare avec displayName, shortName
+   *      et slug (chacun aussi normalisé). Match exact OU préfixe d'un
+   *      côté ou de l'autre (ex: "Mick" matche "Mickael", "Edouard C"
+   *      matche "Edouard").
+   *   3. Si match → retourne le `displayName` canonique du membre.
+   *   4. Sinon → fallback historique : capitalize le premier mot
+   *      (préserve les valeurs legacy stockées dans Firestore qui
+   *      référencent un membre supprimé ou un nom libre).
+   */
+  window.normalizeCoach = function (raw) {
+    if (!raw) return '';
+    var s = String(raw).trim();
+    if (!s) return '';
+    var sl = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length) {
+      for (var i = 0; i < window.TEAM_MEMBERS_LIST.length; i++) {
+        var m = window.TEAM_MEMBERS_LIST[i];
+        if (m.active === false) continue;
+        var candidates = [m.displayName, m.shortName, m.slug].filter(Boolean);
+        for (var j = 0; j < candidates.length; j++) {
+          var c = String(candidates[j]).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          if (!c) continue;
+          if (c === sl || c.startsWith(sl) || sl.startsWith(c)) {
+            return m.displayName || m.shortName || m.slug;
+          }
+        }
+      }
+    }
+    var first = s.split(/[\s.]/)[0];
+    return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+  };
+
+  /**
+   * Retourne la couleur canonique d'un coach par son displayName / shortName / slug.
+   * Source unique : _meta/team_members. Fallback gris si non trouvé.
+   *
+   * Utile pour les pastilles coach affichées dans les modules qui ne
+   * stockent que le nom (legacy sessions/messages) et pas le slug.
+   */
+  window.getCoachColor = function (rawName) {
+    if (!rawName) return '#94a3b8';
+    var canon = window.normalizeCoach(rawName);
+    if (!canon) return '#94a3b8';
+    if (window.TEAM_MEMBERS_LIST) {
+      for (var i = 0; i < window.TEAM_MEMBERS_LIST.length; i++) {
+        var m = window.TEAM_MEMBERS_LIST[i];
+        if (!m) continue;
+        var label = m.displayName || m.shortName || m.slug;
+        if (label === canon) return m.color || '#94a3b8';
+      }
+    }
+    return '#94a3b8';
+  };
+
   // Auto-load au DOMContentLoaded si Firebase est prêt
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {

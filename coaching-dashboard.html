@@ -218,18 +218,19 @@ function onClientsLoaded(clients) {
   const now = new Date();
   const curY = now.getFullYear(), curM = now.getMonth();
 
-  // ── COACHS OFFICIELS (même liste que coaching.html) ──
-  const COACHES = ['Mickael','Edouard','Emily','Adrien'];
-  const coachColors = {'Mickael':'#3b82f6','Edouard':'#10b981','Emily':'#f59e0b','Adrien':'#6366f1'};
+  // ── COACHS OFFICIELS — source unique _meta/team_members via nav.js ──
+  // window.getCoachOptions() retourne tous les membres actifs role coach OR admin.
+  // window.normalizeCoach() pivote sur TEAM_MEMBERS pour normaliser les noms libres
+  // stockés dans les sessions legacy.
+  const _coachOpts = (typeof window.getCoachOptions === 'function') ? window.getCoachOptions() : [];
+  const COACHES = _coachOpts.map(o => o.label);
+  const coachColors = {};
+  _coachOpts.forEach(o => { coachColors[o.label] = o.color || '#6b7280'; });
 
   function normalizeCoach(raw){
+    if(typeof window.normalizeCoach === 'function') return window.normalizeCoach(raw);
     if(!raw) return '';
-    const s = raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-    if(/^mick|^micha|^mik/.test(s)) return 'Mickael';
-    if(/^edou|^edw|^edo/.test(s)) return 'Edouard';
-    if(/^emil/.test(s)) return 'Emily';
-    if(/^adri/.test(s)) return 'Adrien';
-    const first = raw.trim().split(/[\s.]/)[0];
+    const first = String(raw).trim().split(/[\s.]/)[0];
     return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
   }
 
@@ -562,6 +563,17 @@ function onClientsLoaded(clients) {
     +'</div></div>':''}
   `;
 }
+
+// Si TEAM_MEMBERS arrive APRÈS le chargement initial des clients
+// (loadTeamMembers est async dans nav.js), on re-render le dashboard
+// pour intégrer les nouveaux coachs / couleurs.
+window.addEventListener('team-members-loaded', function(){
+  try {
+    if(Array.isArray(window._clients) && window._clients.length){
+      onClientsLoaded(window._clients);
+    }
+  } catch(e){ console.warn('[coaching-dashboard] re-render team-members failed', e); }
+});
 
 </script>
 </body>
