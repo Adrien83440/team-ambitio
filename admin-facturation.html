@@ -1773,7 +1773,20 @@ function renderAlertsList() {
     html += '</div>';
     if (meta.desc) html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + escapeHtml(meta.desc) + '</div>';
     html += '</td>';
-    html += '<td style="font-family:var(--font-m);font-size:11px;color:var(--muted);max-width:380px;overflow:hidden;text-overflow:ellipsis">';
+    html += '<td style="font-family:var(--font-m);font-size:11px;color:var(--muted);max-width:420px;overflow:hidden;text-overflow:ellipsis">';
+    /* Step 4B — champs prioritaires (subscription_overdue, generation_failed, etc.) */
+    if (a.leadName) html += '<div style="font-family:inherit;font-size:13px;color:var(--text);font-weight:600;margin-bottom:4px">' + escapeHtml(a.leadName) + '</div>';
+    if (a.daysPast != null && a.nextScheduledAt) {
+      var nextDate = new Date(a.nextScheduledAt);
+      var nextStr = nextDate.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+      html += '<div style="color:#f59e0b;font-weight:600">' + a.daysPast + ' jour' + (a.daysPast > 1 ? 's' : '') + ' de retard <span style="font-weight:400;color:var(--muted)">(échéance ' + nextStr + ')</span></div>';
+    }
+    if (a.installmentsGenerated != null && a.totalInstallments != null) {
+      html += '<div>Mensualités générées : <span style="color:var(--text)">' + a.installmentsGenerated + ' / ' + a.totalInstallments + '</span></div>';
+    }
+    if (a.subscriptionId) html += '<div>Sub ID : <span style="color:var(--text)">' + escapeHtml(a.subscriptionId) + '</span></div>';
+    if (a.httpStatus) html += '<div style="color:#ef4444">HTTP ' + a.httpStatus + '</div>';
+    /* Step 3 — champs existants (matching paiement GC ↔ facture) */
     if (a.gcPaymentId) html += '<div>GC paiement : <span style="color:var(--text)">' + escapeHtml(a.gcPaymentId) + '</span></div>';
     if (a.gcCustomerId) html += '<div>GC client : <span style="color:var(--text)">' + escapeHtml(a.gcCustomerId) + '</span></div>';
     if (a.clientId) html += '<div>Client invoice : <span style="color:var(--text)">' + escapeHtml(a.clientId) + '</span></div>';
@@ -1781,7 +1794,8 @@ function renderAlertsList() {
     if (a.candidateClientIds && a.candidateClientIds.length) html += '<div>' + a.candidateClientIds.length + ' candidats client</div>';
     if (a.candidateIds && a.candidateIds.length) html += '<div>' + a.candidateIds.length + ' candidates facture</div>';
     if (a.error) html += '<div style="color:#ef4444">Err : ' + escapeHtml(String(a.error).substring(0, 100)) + '</div>';
-    if (a.hint) html += '<div style="color:#f59e0b">' + escapeHtml(a.hint) + '</div>';
+    /* Hint affiché en dernier, masqué si déjà couvert par daysPast (= Step 4B) */
+    if (a.hint && a.daysPast == null) html += '<div style="color:#f59e0b">' + escapeHtml(a.hint) + '</div>';
     html += '</td>';
     html += '<td style="text-align:right;font-family:var(--font-m);font-weight:700">' + amount + '</td>';
     html += '<td style="font-size:11px;color:var(--muted)">' + dateStr + '</td>';
