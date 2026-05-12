@@ -18,9 +18,17 @@ var COACH_MAP = {};
 function refreshCoaches(){
   COACHES.length = 0;
   Object.keys(COACH_MAP).forEach(function(k){ delete COACH_MAP[k]; });
+  // Stratégie inclusive : on garde tout membre actif SAUF ceux dont le rôle
+  // est explicitement non-coach (sales/setter/closer/closing/csm).
+  // Voir nav.js getCoachOptions() pour la justification (data legacy sans
+  // champ role dans _meta/team_members.members[slug]).
+  var EXCLUDED = { sales:1, setter:1, closer:1, closing:1, csm:1 };
   if(window.TEAM_MEMBERS_ACTIVE && window.TEAM_MEMBERS_ACTIVE.length){
     window.TEAM_MEMBERS_ACTIVE.forEach(function(m){
-      if(m.role !== 'coach' && m.role !== 'admin') return;
+      if(m.role){
+        var r = String(m.role).toLowerCase();
+        if(EXCLUDED[r]) return;
+      }
       var label = m.displayName || m.shortName || m.slug;
       COACHES.push({ key: m.slug, label: label });
       COACH_MAP[m.slug] = label;

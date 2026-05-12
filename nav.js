@@ -961,8 +961,23 @@
    */
   window.getCoachOptions = function () {
     if (!window.TEAM_MEMBERS_ACTIVE || !window.TEAM_MEMBERS_ACTIVE.length) return [];
+    var EXCLUDED_ROLES = { sales: 1, setter: 1, closer: 1, closing: 1, csm: 1 };
     return window.TEAM_MEMBERS_ACTIVE
-      .filter(function (m) { return m.role === 'coach' || m.role === 'admin'; })
+      .filter(function (m) {
+        // Stratégie inclusive : on ACCEPTE par défaut, on EXCLUT seulement
+        // les rôles explicitement non-coach (sales/setter/closer/closing/csm).
+        // Justification : le champ `role` n'est pas toujours persisté dans
+        // _meta/team_members.members[slug] (data legacy — il est posé dans
+        // users/{uid}.role mais la sync vers _meta n'est pas systématique).
+        // Du coup un filtre strict `role === 'coach' || role === 'admin'`
+        // rejette tous les membres legacy et casse les dropdowns.
+        // Cette logique inclusive aligne le comportement sur l'état pré-patch
+        // (les hardcoded lists incluaient Mickael/Edouard/Emily/Adrien sans
+        // référence à un champ role).
+        if (!m.role) return true;
+        var r = String(m.role).toLowerCase();
+        return !EXCLUDED_ROLES[r];
+      })
       .map(function (m) {
         return {
           slug: m.slug,
@@ -970,7 +985,7 @@
           color: m.color || '#6b7280',
           shortName: m.shortName || m.displayName || m.slug,
           displayName: m.displayName || m.shortName || m.slug,
-          role: m.role
+          role: m.role || ''
         };
       });
   };
