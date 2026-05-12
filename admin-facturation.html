@@ -3079,9 +3079,26 @@ function renderInvoicesList() {
     const dateStr = dt ? dt.toLocaleDateString('fr-FR') : '—';
     const statusBadge = invoiceStatusBadge(inv.status);
 
+    /* Description de la première ligne (utile pour différencier visuellement
+       les factures du même client/montant — typiquement les mensualités
+       successives d'une subscription : "Coaching mensuel — janvier 2026",
+       "— février 2026", etc.) */
+    const firstLine = inv.lines && inv.lines.length ? inv.lines[0] : null;
+    let lineDesc = firstLine ? (firstLine.description || firstLine.productName || '') : '';
+    if (lineDesc.length > 80) lineDesc = lineDesc.substring(0, 77) + '…';
+    /* Badge discret si rattrapage historique */
+    const catchUpBadge = inv._isHistoricalCatchUp
+      ? ' <span style="font-size:9px;padding:1px 6px;background:rgba(96,165,250,.12);color:#60a5fa;border-radius:4px;font-weight:600;letter-spacing:.3px">RÉTRO</span>'
+      : '';
+
     html += '<tr onclick="editInvoice(\'' + inv.id + '\')">';
     html += '<td><span style="font-family:var(--font-m);font-weight:700;font-size:13px">' + num + '</span></td>';
-    html += '<td>' + escapeHtml(clientName) + '</td>';
+    html += '<td>';
+    html += '<div>' + escapeHtml(clientName) + catchUpBadge + '</div>';
+    if (lineDesc) {
+      html += '<div style="font-size:11px;color:var(--muted);margin-top:3px">' + escapeHtml(lineDesc) + '</div>';
+    }
+    html += '</td>';
     html += '<td><span style="font-size:12px;color:var(--muted)">' + dateStr + '</span></td>';
     html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
     html += '<td>' + statusBadge + '</td>';
