@@ -15,13 +15,23 @@ var db = firebase.firestore();
 var COACHES = [];
 var COACH_MAP = {};
 
+// Fallback hardcoded — utilisé si TEAM_MEMBERS_ACTIVE n'a pas pu être chargé
+// (race au premier paint, rules Firestore, erreur réseau). Garantit que les
+// dropdowns coach de sales-clients ne sont JAMAIS vides.
+var _COACH_FALLBACK_SC = [
+  { key: 'mickael', label: 'Mickael' },
+  { key: 'edouard', label: 'Edouard' },
+  { key: 'flore',   label: 'Flore'   },
+  { key: 'emily',   label: 'Emily'   },
+  { key: 'adrien',  label: 'Adrien'  }
+];
+
 function refreshCoaches(){
   COACHES.length = 0;
   Object.keys(COACH_MAP).forEach(function(k){ delete COACH_MAP[k]; });
-  // Stratégie inclusive : on garde tout membre actif SAUF ceux dont le rôle
-  // est explicitement non-coach (sales/setter/closer/closing/csm).
-  // Voir nav.js getCoachOptions() pour la justification (data legacy sans
-  // champ role dans _meta/team_members.members[slug]).
+  var used = false;
+  // 1. Mode normal : TEAM_MEMBERS chargé, filtrage inclusif
+  //    (exclut sales/setter/closer/closing/csm)
   var EXCLUDED = { sales:1, setter:1, closer:1, closing:1, csm:1 };
   if(window.TEAM_MEMBERS_ACTIVE && window.TEAM_MEMBERS_ACTIVE.length){
     window.TEAM_MEMBERS_ACTIVE.forEach(function(m){
@@ -32,6 +42,14 @@ function refreshCoaches(){
       var label = m.displayName || m.shortName || m.slug;
       COACHES.push({ key: m.slug, label: label });
       COACH_MAP[m.slug] = label;
+      used = true;
+    });
+  }
+  // 2. Fallback : si rien n'a été ajouté (data legacy ou échec chargement)
+  if(!used){
+    _COACH_FALLBACK_SC.forEach(function(c){
+      COACHES.push({ key: c.key, label: c.label });
+      COACH_MAP[c.key] = c.label;
     });
   }
   populateClientsCoachFilter();

@@ -959,35 +959,44 @@
    * onAuthStateChanged), retourne un array vide. Les pages doivent
    * écouter l'event `team-members-loaded` pour re-render.
    */
+  // Fallback hardcoded — équipe coaching connue au 12 mai 2026.
+  // Sert de filet de sécurité si TEAM_MEMBERS n'a pas pu être chargé
+  // (race au premier paint, rules Firestore pas encore propagées,
+  // erreur réseau transitoire, etc.). Permet aux dropdowns de ne JAMAIS
+  // être vides en production. Lorsque le dynamique fonctionne, c'est
+  // toujours lui qui prime.
+  var _COACH_FALLBACK = [
+    { slug: 'mickael', label: 'Mickael', color: '#3b82f6', shortName: 'Mickael', displayName: 'Mickael', role: 'coach' },
+    { slug: 'edouard', label: 'Edouard', color: '#10b981', shortName: 'Edouard', displayName: 'Edouard', role: 'coach' },
+    { slug: 'flore',   label: 'Flore',   color: '#a855f7', shortName: 'Flore',   displayName: 'Flore',   role: 'coach' },
+    { slug: 'emily',   label: 'Emily',   color: '#f59e0b', shortName: 'Emily',   displayName: 'Emily',   role: 'admin' },
+    { slug: 'adrien',  label: 'Adrien',  color: '#6366f1', shortName: 'Adrien',  displayName: 'Adrien',  role: 'admin' }
+  ];
+
   window.getCoachOptions = function () {
-    if (!window.TEAM_MEMBERS_ACTIVE || !window.TEAM_MEMBERS_ACTIVE.length) return [];
-    var EXCLUDED_ROLES = { sales: 1, setter: 1, closer: 1, closing: 1, csm: 1 };
-    return window.TEAM_MEMBERS_ACTIVE
-      .filter(function (m) {
-        // Stratégie inclusive : on ACCEPTE par défaut, on EXCLUT seulement
-        // les rôles explicitement non-coach (sales/setter/closer/closing/csm).
-        // Justification : le champ `role` n'est pas toujours persisté dans
-        // _meta/team_members.members[slug] (data legacy — il est posé dans
-        // users/{uid}.role mais la sync vers _meta n'est pas systématique).
-        // Du coup un filtre strict `role === 'coach' || role === 'admin'`
-        // rejette tous les membres legacy et casse les dropdowns.
-        // Cette logique inclusive aligne le comportement sur l'état pré-patch
-        // (les hardcoded lists incluaient Mickael/Edouard/Emily/Adrien sans
-        // référence à un champ role).
+    // 1. Mode normal : TEAM_MEMBERS chargé avec succès
+    if (window.TEAM_MEMBERS_ACTIVE && window.TEAM_MEMBERS_ACTIVE.length) {
+      var EXCLUDED_ROLES = { sales: 1, setter: 1, closer: 1, closing: 1, csm: 1 };
+      var filtered = window.TEAM_MEMBERS_ACTIVE.filter(function (m) {
         if (!m.role) return true;
         var r = String(m.role).toLowerCase();
         return !EXCLUDED_ROLES[r];
-      })
-      .map(function (m) {
-        return {
-          slug: m.slug,
-          label: m.displayName || m.shortName || m.slug,
-          color: m.color || '#6b7280',
-          shortName: m.shortName || m.displayName || m.slug,
-          displayName: m.displayName || m.shortName || m.slug,
-          role: m.role || ''
-        };
       });
+      if (filtered.length) {
+        return filtered.map(function (m) {
+          return {
+            slug: m.slug,
+            label: m.displayName || m.shortName || m.slug,
+            color: m.color || '#6b7280',
+            shortName: m.shortName || m.displayName || m.slug,
+            displayName: m.displayName || m.shortName || m.slug,
+            role: m.role || ''
+          };
+        });
+      }
+    }
+    // 2. Fallback : équipe hardcoded — débloque toujours l'UX
+    return _COACH_FALLBACK.slice();
   };
 
   /**
@@ -1015,6 +1024,7 @@
     var s = String(raw).trim();
     if (!s) return '';
     var sl = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    // 1. Lookup dynamique sur TEAM_MEMBERS (mode normal)
     if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length) {
       for (var i = 0; i < window.TEAM_MEMBERS_LIST.length; i++) {
         var m = window.TEAM_MEMBERS_LIST[i];
@@ -1029,28 +1039,33 @@
         }
       }
     }
+    // 2. Fallback : match contre l'équipe hardcoded (Mickael/Edouard/Flore/Emily/Adrien)
+    for (var k = 0; k < _COACH_FALLBACK.length; k++) {
+      var fb = _COACH_FALLBACK[k];
+      var fbc = fb.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (fbc === sl || fbc.startsWith(sl) || sl.startsWith(fbc)) return fb.label;
+    }
+    // 3. Capitalize first word (legacy / nom libre)
     var first = s.split(/[\s.]/)[0];
     return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
   };
 
-  /**
-   * Retourne la couleur canonique d'un coach par son displayName / shortName / slug.
-   * Source unique : _meta/team_members. Fallback gris si non trouvé.
-   *
-   * Utile pour les pastilles coach affichées dans les modules qui ne
-   * stockent que le nom (legacy sessions/messages) et pas le slug.
-   */
   window.getCoachColor = function (rawName) {
     if (!rawName) return '#94a3b8';
     var canon = window.normalizeCoach(rawName);
     if (!canon) return '#94a3b8';
-    if (window.TEAM_MEMBERS_LIST) {
+    // 1. Couleur depuis TEAM_MEMBERS
+    if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length) {
       for (var i = 0; i < window.TEAM_MEMBERS_LIST.length; i++) {
         var m = window.TEAM_MEMBERS_LIST[i];
         if (!m) continue;
         var label = m.displayName || m.shortName || m.slug;
-        if (label === canon) return m.color || '#94a3b8';
+        if (label === canon && m.color) return m.color;
       }
+    }
+    // 2. Couleur depuis fallback hardcoded
+    for (var k = 0; k < _COACH_FALLBACK.length; k++) {
+      if (_COACH_FALLBACK[k].label === canon) return _COACH_FALLBACK[k].color;
     }
     return '#94a3b8';
   };
