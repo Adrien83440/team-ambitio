@@ -1691,6 +1691,7 @@ function updateSidebarAlertsBadge() {
 }
 
 const ALERT_TYPE_LABELS = {
+  /* Step 3 — matching paiement GoCardless → facture */
   no_invoice_client_for_gc: { icon: '👤', label: 'Aucun client trouvé', desc: 'Le gcCustomerId n\'est lié à aucun invoice_client' },
   multiple_invoice_clients_for_gc: { icon: '👥', label: 'Plusieurs clients trouvés', desc: 'Plusieurs invoice_clients ont le même gocardlessCustomerId' },
   no_invoice_match: { icon: '📄', label: 'Aucune facture trouvée', desc: 'Pas de facture validated/sent du client avec ce montant TTC' },
@@ -1698,6 +1699,10 @@ const ALERT_TYPE_LABELS = {
   missing_gc_customer_id: { icon: '⚠️', label: 'gcCustomerId manquant', desc: 'Le doc payment n\'a pas de gcCustomerId' },
   invalid_payment_amount: { icon: '⚠️', label: 'Montant invalide', desc: 'Le paiement a un montant nul ou non numérique' },
   processing_error: { icon: '💥', label: 'Erreur de traitement', desc: 'Exception lors du matching' },
+  /* Step 4B — génération auto de factures depuis subscriptions */
+  subscription_overdue: { icon: '🔄', label: 'Subscription en retard', desc: 'nextScheduledAt > 3 jours dans le passé — vérifier mandat GC actif' },
+  generation_failed: { icon: '⚠️', label: 'Génération de facture échouée', desc: 'Erreur HTTP côté API subscription-generate-invoice' },
+  missing_system_key: { icon: '🔑', label: 'Clé système manquante', desc: '_config/system_keys.invoiceGeneration non configurée' },
 };
 
 function renderAlertsList() {
