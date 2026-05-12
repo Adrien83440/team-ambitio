@@ -853,6 +853,14 @@
     const db = firebase.firestore();
     window._teamMembersLastLoadAt = now;
     window._teamMembersLoadPromise = (async () => {
+      var dispatched = false;
+      var fireEvent = function (count, ok, error) {
+        if (dispatched) return;
+        dispatched = true;
+        window.dispatchEvent(new CustomEvent('team-members-loaded', {
+          detail: { count: count || 0, activeCount: (window.TEAM_MEMBERS_ACTIVE || []).length, ok: !!ok, error: error || null }
+        }));
+      };
       try {
         const snap = await db.collection('_meta').doc('team_members').get();
         if (!snap.exists) {
@@ -860,6 +868,7 @@
           window.TEAM_MEMBERS = {};
           window.TEAM_MEMBERS_LIST = [];
           window.TEAM_MEMBERS_ACTIVE = [];
+          fireEvent(0, false, 'doc-not-found');
           return [];
         }
         const data = snap.data() || {};
@@ -902,13 +911,19 @@
         window.TEAM_MEMBERS = map;
         window.TEAM_MEMBERS_LIST = list;
         window.TEAM_MEMBERS_ACTIVE = list.filter(function (m) { return m.active !== false; });
-        // Notifier les pages qu'elles peuvent re-rendre
-        window.dispatchEvent(new CustomEvent('team-members-loaded', {
-          detail: { count: list.length, activeCount: window.TEAM_MEMBERS_ACTIVE.length }
-        }));
+        fireEvent(list.length, true);
         return list;
       } catch (e) {
         console.error('[loadTeamMembers] erreur', e);
+        // Init structures vides pour que les helpers downstream fonctionnent
+        if (!window.TEAM_MEMBERS) window.TEAM_MEMBERS = {};
+        if (!window.TEAM_MEMBERS_LIST) window.TEAM_MEMBERS_LIST = [];
+        if (!window.TEAM_MEMBERS_ACTIVE) window.TEAM_MEMBERS_ACTIVE = [];
+        // CRITIQUE : fire l'event MÊME en cas d'erreur, sinon les pages
+        // qui attendent team-members-loaded restent bloquées à vie sans
+        // jamais déclencher leur logique de fallback. La présence de
+        // detail.ok === false leur permet de réagir spécifiquement.
+        fireEvent(0, false, e && e.message ? e.message : String(e));
         return [];
       }
     })();
@@ -1070,19 +1085,47 @@
     return '#94a3b8';
   };
 
-  // Auto-load au DOMContentLoaded si Firebase est prêt
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      if (typeof firebase !== 'undefined' && firebase.firestore) {
+  // Auto-load : attend que Firebase Auth soit prêt avant de query Firestore.
+  // Pattern critique : sans cette attente, loadTeamMembers() peut être appelé
+  // alors que firebase.auth().currentUser est encore null (restauration depuis
+  // IndexedDB en cours). La requête Firestore échoue alors avec permission-denied
+  // (les rules check request.auth.uid), le catch swallow, et TEAM_MEMBERS reste
+  // définitivement vide. Le fix : on déclenche le load uniquement quand un
+  // utilisateur est authentifié, et on retry à chaque changement d'état d'auth.
+  function _startTeamMembersLoad() {
+    if (typeof firebase === 'undefined' || !firebase.firestore || !firebase.auth) {
+      // Firebase pas encore initialisé — réessaye dans 100ms (cold start)
+      setTimeout(_startTeamMembersLoad, 100);
+      return;
+    }
+    var _hasLoaded = false;
+    var doLoad = function (user) {
+      if (!user) return; // Pas connecté → on attend
+      if (_hasLoaded) return;
+      _hasLoaded = true;
+      window.loadTeamMembers();
+      initAlteoFormsAccessWatch();
+    };
+    // Si déjà connecté au moment où on s'abonne, onAuthStateChanged fire
+    // immédiatement avec l'user. Sinon il fire dès que la restauration est finie.
+    firebase.auth().onAuthStateChanged(doLoad);
+    // Sécurité : retry après 2s si rien ne s'est passé (auth en panne /
+    // utilisateur jamais loggé). On force loadTeamMembers quand même —
+    // le pire cas est un permission-denied silencieux côté Firestore, dans
+    // quel cas getCoachOptions() utilisera son fallback hardcoded.
+    setTimeout(function () {
+      if (!_hasLoaded && firebase.auth().currentUser) {
+        _hasLoaded = true;
         window.loadTeamMembers();
         initAlteoFormsAccessWatch();
       }
-    });
+    }, 2000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _startTeamMembersLoad);
   } else {
-    if (typeof firebase !== 'undefined' && firebase.firestore) {
-      window.loadTeamMembers();
-      initAlteoFormsAccessWatch();
-    }
+    _startTeamMembersLoad();
   }
 
   function initAlteoFormsAccessWatch() {
