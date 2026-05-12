@@ -54,6 +54,64 @@
   // Contexte Web Audio partagé (créé paresseusement au premier usage)
   let audioCtx = null;
 
+  // ─── Screen Wake Lock (empêcher la mise en veille en cours d'appel) ──────
+  // Sur Android Chrome (et iOS 16.4+), quand l'écran s'éteint, l'onglet est
+  // mis en arrière-plan et le flux WebRTC est dégradé voire coupé. L'usager
+  // doit alors rallumer l'écran pour récupérer l'audio. La Screen Wake Lock
+  // API permet de demander explicitement à l'OS de garder l'écran allumé
+  // tant qu'un appel est actif.
+  //
+  // Cycle de vie :
+  // - acquireWakeLock() au démarrage d'un appel (sortant accepté ou entrant
+  //   décroché)
+  // - releaseWakeLock() à la fin de l'appel (endCall, cancel, reject)
+  // - Auto-relâché par le navigateur quand l'onglet passe en background
+  //   (swipe app, lock screen). On le re-demande au retour foreground via
+  //   l'event visibilitychange tant qu'un appel reste actif.
+  //
+  // Compatibilité : Chrome Android 84+, Safari iOS 16.4+, Chrome/Edge/Firefox
+  // desktop. Sur les navigateurs non supportés, navigator.wakeLock est
+  // undefined et on no-op silencieusement (pas d'impact).
+  let wakeLockSentinel = null;
+  function hasActiveCall() {
+    return !!activeConn;
+  }
+  async function acquireWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    if (wakeLockSentinel) return; // déjà actif
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request('screen');
+      wakeLockSentinel.addEventListener('release', () => {
+        // L'OS ou le navigateur peut relâcher (par exemple si onglet caché).
+        // On retient l'info pour permettre le ré-acquittement au retour.
+        console.info('[dialer-wakelock] released by system');
+        wakeLockSentinel = null;
+      });
+      console.info('[dialer-wakelock] acquired');
+    } catch (err) {
+      console.warn('[dialer-wakelock] request failed', err);
+      wakeLockSentinel = null;
+    }
+  }
+  async function releaseWakeLock() {
+    if (!wakeLockSentinel) return;
+    try {
+      await wakeLockSentinel.release();
+      console.info('[dialer-wakelock] released');
+    } catch (err) {
+      console.warn('[dialer-wakelock] release failed', err);
+    } finally {
+      wakeLockSentinel = null;
+    }
+  }
+  // Le wake lock est auto-relâché quand l'onglet passe en background. Au
+  // retour foreground, si un appel est toujours actif, on le re-demande.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && hasActiveCall() && !wakeLockSentinel) {
+      acquireWakeLock();
+    }
+  });
+
   // ─── Audio routing (mobile earpiece ↔ haut-parleur) ──────────────────────
   // Sur mobile, par défaut Twilio route le flux audio vers le speaker, ce qui
   // n'est pas le comportement attendu d'un appel téléphonique (l'utilisateur
@@ -627,6 +685,9 @@
       // Audio routing : applique la préférence utilisateur (earpiece par
       // défaut sur mobile, speaker sur desktop). No-op sur desktop.
       applyOutputMode(getStoredOutputPref());
+      // Garde l'écran allumé pendant l'appel (évite la mise en veille qui
+      // dégrade ou coupe le flux WebRTC sur mobile).
+      acquireWakeLock();
       if (autoSession) {
         autoSession.connectedLeadSeenForCurrentWave = true;
         autoSession.status = 'incall';
@@ -716,6 +777,9 @@
 
   function endCall() {
     if (callTimer) { clearInterval(callTimer); callTimer = null; }
+    // Libère le wake lock écran (l'appel est terminé, on laisse le téléphone
+    // se mettre en veille normalement).
+    releaseWakeLock();
     // ── Embed mode : notifier la page parent que l'appel est terminé
     // (retire le point rouge de la bulle réduite).
     try {
