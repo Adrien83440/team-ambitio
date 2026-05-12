@@ -846,11 +846,20 @@
     if (!force && window._teamMembersLoadPromise && (now - window._teamMembersLastLoadAt) < CACHE_MS) {
       return window._teamMembersLoadPromise;
     }
-    if (typeof firebase === 'undefined' || !firebase.firestore) {
-      console.warn('[loadTeamMembers] Firebase not initialized');
+    // Détection du SDK Firebase utilisé par la page :
+    //   - "compat" : sales-* et certaines pages admin (v9.23 compat) →
+    //     firebase.firestore() global est dispo.
+    //   - "modular" : coaching-*, admin-users/persons, csm-*, login.html (v10) →
+    //     les pages exposent window._db, window._doc, window._getDoc, etc.
+    var sdkMode = null;
+    if (typeof firebase !== 'undefined' && firebase.firestore) {
+      sdkMode = 'compat';
+    } else if (window._db && window._getDoc && window._doc) {
+      sdkMode = 'modular';
+    } else {
+      console.warn('[loadTeamMembers] Aucun SDK Firebase détecté (ni compat global, ni modular via window._db).');
       return null;
     }
-    const db = firebase.firestore();
     window._teamMembersLastLoadAt = now;
     window._teamMembersLoadPromise = (async () => {
       var dispatched = false;
@@ -858,12 +867,21 @@
         if (dispatched) return;
         dispatched = true;
         window.dispatchEvent(new CustomEvent('team-members-loaded', {
-          detail: { count: count || 0, activeCount: (window.TEAM_MEMBERS_ACTIVE || []).length, ok: !!ok, error: error || null }
+          detail: { count: count || 0, activeCount: (window.TEAM_MEMBERS_ACTIVE || []).length, ok: !!ok, error: error || null, sdk: sdkMode }
         }));
       };
       try {
-        const snap = await db.collection('_meta').doc('team_members').get();
-        if (!snap.exists) {
+        var snap;
+        if (sdkMode === 'compat') {
+          const db = firebase.firestore();
+          snap = await db.collection('_meta').doc('team_members').get();
+        } else {
+          // modular : snap.exists est une METHODE (pas une propriété comme en compat)
+          snap = await window._getDoc(window._doc(window._db, '_meta', 'team_members'));
+        }
+        // Compat : snap.exists (boolean). Modular : snap.exists() (function).
+        var docExists = (typeof snap.exists === 'function') ? snap.exists() : snap.exists;
+        if (!docExists) {
           console.warn('[loadTeamMembers] Doc _meta/team_members introuvable. Lance migrate-team-members.js.');
           window.TEAM_MEMBERS = {};
           window.TEAM_MEMBERS_LIST = [];
@@ -1085,41 +1103,60 @@
     return '#94a3b8';
   };
 
-  // Auto-load : attend que Firebase Auth soit prêt avant de query Firestore.
-  // Pattern critique : sans cette attente, loadTeamMembers() peut être appelé
-  // alors que firebase.auth().currentUser est encore null (restauration depuis
-  // IndexedDB en cours). La requête Firestore échoue alors avec permission-denied
-  // (les rules check request.auth.uid), le catch swallow, et TEAM_MEMBERS reste
-  // définitivement vide. Le fix : on déclenche le load uniquement quand un
-  // utilisateur est authentifié, et on retry à chaque changement d'état d'auth.
+  // Auto-load dual-SDK : attend qu'un des deux SDK Firebase soit prêt
+  // ET qu'un utilisateur soit authentifié avant de query Firestore.
+  //
+  // - Compat (sales-*) : `firebase.auth().currentUser` + `firebase.firestore()`
+  // - Modular (coaching-*, admin-*, csm-*) : pages exposent window._db et
+  //   posent window._firebaseReady = true APRÈS leur onAuthStateChanged.
+  //   On poll ce flag.
+  //
+  // Sans cette attente, loadTeamMembers() peut tourner alors que l'auth n'est
+  // pas encore montée → permission-denied côté Firestore → fail silencieux.
   function _startTeamMembersLoad() {
-    if (typeof firebase === 'undefined' || !firebase.firestore || !firebase.auth) {
-      // Firebase pas encore initialisé — réessaye dans 100ms (cold start)
-      setTimeout(_startTeamMembersLoad, 100);
-      return;
-    }
     var _hasLoaded = false;
-    var doLoad = function (user) {
-      if (!user) return; // Pas connecté → on attend
-      if (_hasLoaded) return;
-      _hasLoaded = true;
-      window.loadTeamMembers();
-      initAlteoFormsAccessWatch();
-    };
-    // Si déjà connecté au moment où on s'abonne, onAuthStateChanged fire
-    // immédiatement avec l'user. Sinon il fire dès que la restauration est finie.
-    firebase.auth().onAuthStateChanged(doLoad);
-    // Sécurité : retry après 2s si rien ne s'est passé (auth en panne /
-    // utilisateur jamais loggé). On force loadTeamMembers quand même —
-    // le pire cas est un permission-denied silencieux côté Firestore, dans
-    // quel cas getCoachOptions() utilisera son fallback hardcoded.
-    setTimeout(function () {
-      if (!_hasLoaded && firebase.auth().currentUser) {
+    var tryLoad = function (reason) {
+      if (_hasLoaded) return false;
+      // Cas A : SDK compat avec auth prête
+      if (typeof firebase !== 'undefined' && firebase.firestore && firebase.auth && firebase.auth().currentUser) {
         _hasLoaded = true;
         window.loadTeamMembers();
         initAlteoFormsAccessWatch();
+        return true;
       }
-    }, 2000);
+      // Cas B : SDK modulaire avec auth confirmée (flag posé par la page)
+      if (window._db && window._getDoc && window._doc && window._firebaseReady) {
+        _hasLoaded = true;
+        window.loadTeamMembers();
+        initAlteoFormsAccessWatch();
+        return true;
+      }
+      return false;
+    };
+
+    // Premier essai immédiat (cas où tout est déjà prêt au moment du DOMContentLoaded)
+    if (tryLoad('initial')) return;
+
+    // S'abonner à onAuthStateChanged côté compat si dispo
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      try { firebase.auth().onAuthStateChanged(function () { tryLoad('compat-auth-change'); }); } catch (_) {}
+    }
+
+    // Poll régulier — couvre :
+    //   - Le cas modulaire (qui n'expose pas d'API global pour s'abonner à l'auth
+    //     sans avoir importé onAuthStateChanged dans cette IIFE).
+    //   - Le cas compat où Firebase n'est pas encore initialisé.
+    // S'arrête dès que _hasLoaded = true. Timeout dur à 15s pour éviter un poll infini.
+    var pollStart = Date.now();
+    var pollId = setInterval(function () {
+      if (tryLoad('poll')) { clearInterval(pollId); return; }
+      if (Date.now() - pollStart > 15000) {
+        clearInterval(pollId);
+        console.warn('[nav.js] team-members non chargé après 15s. SDK détecté:',
+          (typeof firebase !== 'undefined' && firebase.firestore) ? 'compat' :
+          (window._db ? 'modular (auth en attente)' : 'aucun'));
+      }
+    }, 200);
   }
 
   if (document.readyState === 'loading') {
