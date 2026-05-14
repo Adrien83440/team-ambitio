@@ -519,6 +519,35 @@ service cloud.firestore {
     }
 
 
+    // ═══ INVOICES — factures ═══
+    // Collection lue et éditée côté SDK client depuis admin-facturation.html
+    // (listing + suppression de brouillon) et admin-invoice-edit.html
+    // (création + édition de brouillon). Ces deux pages sont réservées au
+    // rôle admin (perm '_admin' dans nav.js + garde role==='admin' dans
+    // admin-invoice-edit.html). Les Vercel Functions de facturation
+    // (invoice-validate, invoice-pdf, subscription-generate-invoice, etc.)
+    // écrivent via Admin SDK et bypassent naturellement ces rules.
+    //
+    // Lecture + écriture : admin uniquement.
+    match /invoices/{invoiceId} {
+      allow read:           if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
+    // ═══ INVOICE_PRODUCTS — catalogue produits de facturation ═══
+    // Lu et géré côté SDK client depuis l'onglet Produits de
+    // admin-facturation.html (et lu par admin-invoice-edit.html pour le
+    // sélecteur de produits). Pages réservées au rôle admin.
+    //
+    // Lecture + écriture : admin uniquement.
+    match /invoice_products/{productId} {
+      allow read:  if isAdmin();
+      allow write: if isAdmin();
+    }
+
+
     // ═══ DIALER — PHONE NUMBERS ═══
     match /phone_numbers/{numberId} {
       allow read:           if isAuth();
