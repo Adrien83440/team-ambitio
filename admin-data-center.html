@@ -396,7 +396,6 @@
     var db, currentUser;
     var REF_DOC = null;
     var refUnsub = null;
-    var usersCache = [];
     var bookingTypes = [];        // [{id,label,...}] depuis booking_config/_types
     var liveMonth = null;         // 'YYYY-MM'
     var liveAgg = {};             // { 'closing.lives': somme, ... }
@@ -597,7 +596,13 @@
       }
     }
 
-    /* ── Agrégats SAISIES : somme d'un champ section.field sur 6 semaines × équipe ── */
+    /* ── Agrégats SAISIES : somme d'un champ section.field sur l'équipe ──
+       IMPORTANT : les documents saisies/{id} sont indexés par SLUG
+       (guillaume, elodie…), PAS par UID Firebase — cf. sales-setting.html
+       (MEMBERS[].uid contient en réalité un slug). On ne peut donc pas
+       dériver les IDs depuis la collection users : on liste directement
+       la collection 'saisies', puis on lit le sous-doc mois/{liveMonth}
+       de chaque membre, quel que soit son ID. ── */
     async function loadLiveAggregates() {
       liveAgg = {};
       if (!REF_DOC) return;
@@ -606,11 +611,27 @@
         if (k.source === 'firestore' && k.fsField) fsFields[k.fsField] = 0;
       });
       var fieldList = Object.keys(fsFields);
-      if (!fieldList.length || !usersCache.length) { liveAgg = fsFields; return; }
+      if (!fieldList.length) { liveAgg = fsFields; return; }
 
       var WEEKS = ['s1','s2','s3','s4','s5','s6'];
-      var reads = usersCache.map(function (u) {
-        return db.collection('saisies').doc(u.uid).collection('mois').doc(liveMonth).get()
+
+      // 1) lister tous les "dossiers membre" de la collection saisies
+      var memberIds = [];
+      try {
+        var rootSnap = await db.collection('saisies').get();
+        rootSnap.forEach(function (d) { memberIds.push(d.id); });
+      } catch (e) {
+        console.error('[data-center] lecture collection saisies échouée', e);
+        liveAgg = fsFields; return;
+      }
+      if (!memberIds.length) {
+        console.warn('[data-center] collection saisies vide');
+        liveAgg = fsFields; return;
+      }
+
+      // 2) lire le doc mois/{liveMonth} de chaque membre
+      var reads = memberIds.map(function (mid) {
+        return db.collection('saisies').doc(mid).collection('mois').doc(liveMonth).get()
           .then(function (s) { return s.exists ? s.data() : null; })
           .catch(function () { return null; });
       });
@@ -620,22 +641,35 @@
         if (!data) return;
         fieldList.forEach(function (path) {
           var parts = path.split('.');
-          var section = parts[0], field = parts[1];
-          var sum = 0;
+          var section = parts[0], field = parts[1];   // ex: 'closing','lives'
+
+          // ── Structure réelle Ambitio : les mois sont stockés en bloc total
+          //    'closing_total' / 'setting_total' (cf. sales-setting.html /
+          //    sales-closing.html qui lisent fbData.<section>_total).
+          //    On lit donc le total EN PRIORITÉ. ──
+          var totObj = data[section + '_total'];
+          if (totObj && typeof totObj[field] === 'number') {
+            fsFields[path] += totObj[field];
+            return;
+          }
+          // Variante : un seul bloc _total générique sur le doc.
+          if (data._total && typeof data._total[field] === 'number') {
+            fsFields[path] += data._total[field];
+            return;
+          }
+          // ── Repli : mois découpé en semaines s1..s6 sous data[section]. ──
           var weeklyObj = data[section];
           if (weeklyObj && typeof weeklyObj === 'object') {
             WEEKS.forEach(function (w) {
               var wd = weeklyObj[w];
-              if (wd && typeof wd[field] === 'number') sum += wd[field];
+              if (wd && typeof wd[field] === 'number') fsFields[path] += wd[field];
             });
           }
-          // total historique éventuel (mois sans découpage hebdo)
-          var totObj = data[section + '_total'];
-          if (totObj && typeof totObj[field] === 'number' && sum === 0) sum += totObj[field];
-          fsFields[path] += sum;
         });
       });
       liveAgg = fsFields;
+      console.log('[data-center] agrégats saisies ' + liveMonth + ' :', JSON.stringify(liveAgg),
+                  '· membres avec données : ' + docs.filter(Boolean).length + '/' + memberIds.length);
     }
 
     /* ── Agrégats BOOKING : Call Booked / Kept Call depuis la collection bookings ──
@@ -1192,12 +1226,9 @@
             setTimeout(function () { window.location.href = 'sales-dashboard.html'; }, 1500);
             return;
           }
-          // users (pour agréger les saisies) + types de consultation (Booking)
-          try {
-            var us = await db.collection('users').get();
-            usersCache = [];
-            us.forEach(function (d) { usersCache.push(Object.assign({ uid: d.id }, d.data())); });
-          } catch (e) { console.warn('[data-center] users', e); }
+          // Types de consultation (pour les paramètres Module Booking).
+          // Les saisies sont lues directement via la collection 'saisies'
+          // (indexée par slug) — pas besoin de la collection users ici.
           await loadBookingTypes();
 
           $('#dc-app').style.display = '';
