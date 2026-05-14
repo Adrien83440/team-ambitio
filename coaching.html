@@ -2864,22 +2864,31 @@ async function scanDriveForClient(clientId){
   log(`🔍 Recherche pour "${c.nom}" → mots-clés: ${nameParts.join(', ')}`);
 
   // Search Drive by client name parts
-  // On récupère les Google Docs (notes Gemini) ET les fichiers vidéo
-  // (enregistrements Meet) : chaque coaching génère un Doc "Notes par Gemini"
-  // et un fichier "Recording". On a besoin des deux pour lier résumé + vidéo.
+  // On fait DEUX requêtes distinctes par mot-clé : une pour les Google Docs
+  // (notes Gemini), une pour les fichiers vidéo (enregistrements Meet).
+  // Raison : la requête combinée "(mimeType='...document' or mimeType contains
+  // 'video/')" est mal interprétée par l'API Drive — le second terme du OR est
+  // souvent ignoré et les vidéos ne remontent jamais. Deux requêtes séparées
+  // sont fiables.
   let allDocs = [];
   for(const part of nameParts){
-    const q = encodeURIComponent(
-      `name contains '${part}' and (mimeType='application/vnd.google-apps.document' or mimeType contains 'video/')`
-    );
-    const res = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime,mimeType,webViewLink)&pageSize=100&orderBy=createdTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`);
-    if(res && res.files){
-      res.files.forEach(f=>{
-        if(!allDocs.find(d=>d.id===f.id)) allDocs.push(f);
-      });
-    }
+    const qDoc = encodeURIComponent(`name contains '${part}' and mimeType='application/vnd.google-apps.document'`);
+    const qVid = encodeURIComponent(`name contains '${part}' and mimeType contains 'video/'`);
+    const base = 'https://www.googleapis.com/drive/v3/files?fields=files(id,name,createdTime,mimeType,webViewLink)&pageSize=100&orderBy=createdTime%20desc&supportsAllDrives=true&includeItemsFromAllDrives=true&q=';
+    const [resDoc, resVid] = await Promise.all([
+      driveApi(base + qDoc),
+      driveApi(base + qVid)
+    ]);
+    [resDoc, resVid].forEach(res=>{
+      if(res && res.files){
+        res.files.forEach(f=>{
+          if(!allDocs.find(d=>d.id===f.id)) allDocs.push(f);
+        });
+      }
+    });
   }
-  log(`📄 ${allDocs.length} fichier(s) trouvé(s) dans Drive (docs + vidéos)`);
+  const _nbVid = allDocs.filter(f=>(f.mimeType||'').indexOf('video/')===0).length;
+  log(`📄 ${allDocs.length} fichier(s) trouvé(s) dans Drive (dont ${_nbVid} vidéo(s))`);
 
   // Filter: only coaching/rdv docs that match this client
   // On traite séparément les Google Docs (résumés) et les fichiers vidéo
@@ -2992,9 +3001,20 @@ async function scanDriveForClient(clientId){
 
   for(const doc of matchedDocs){
     // Check if already linked to a session (by URL)
-    const alreadyInSession = sessions.some(s=>s.driveUrl===doc.url);
-    if(alreadyInSession){
-      log(`⏩ Déjà lié à une session: ${doc.date}`,'dsl-skip');
+    const alreadyLinkedSession = sessions.find(s=>s.driveUrl===doc.url);
+    if(alreadyLinkedSession){
+      /* Le résumé est déjà lié — mais on profite quand même de ce passage
+         pour COMPLÉTER la vidéo si elle manque. Cas typique : au scan
+         précédent l'enregistrement n'était pas encore généré (ou pas
+         récupéré), donc visioUrl est resté vide. On ne touche jamais un
+         visioUrl déjà renseigné (valeur manuelle prioritaire). */
+      if(doc.videoUrl && !alreadyLinkedSession.visioUrl){
+        alreadyLinkedSession.visioUrl = doc.videoUrl;
+        changed = true;
+        log(`🎥 Vidéo ajoutée à session #${alreadyLinkedSession.numero} (résumé déjà lié)`,'dsl-match');
+      } else {
+        log(`⏩ Déjà lié à une session: ${doc.date}`,'dsl-skip');
+      }
       continue;
     }
 
