@@ -10,23 +10,20 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
   <style>
-    /* ═══ Data Center — styles spécifiques à la page (extension de sales.css) ═══ */
+    /* ═══ Data Center — styles spécifiques (extension de sales.css) ═══ */
     .dc-main { padding: 24px 28px; max-width: 1400px; }
 
-    /* Header */
     .dc-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
     .dc-title { font-size: 22px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.2; display: flex; align-items: center; gap: 10px; }
     .dc-title-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 3px 8px; border-radius: 6px; background: rgba(96,165,250,0.12); color: var(--blue); border: 1px solid rgba(96,165,250,0.25); }
     .dc-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
     .dc-head-actions { display: flex; gap: 8px; align-items: center; }
 
-    /* Sync pill */
     .dc-sync { font-size: 11px; font-family: var(--font-m); color: var(--muted); display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; }
     .dc-sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted2); }
     .dc-sync-dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(52,211,153,0.6); }
     .dc-sync-dot.err { background: var(--red2); }
 
-    /* Toolbar */
     .dc-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
     .dc-search { flex: 1; min-width: 220px; max-width: 360px; position: relative; }
     .dc-search input { width: 100%; padding: 8px 12px 8px 32px; background: var(--bg3); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: var(--font-b); font-size: 13px; outline: none; transition: border-color .15s; }
@@ -37,7 +34,6 @@
     .dc-filter button:hover { color: var(--text); }
     .dc-filter button.active { background: var(--bg4); color: var(--text); font-weight: 600; }
 
-    /* Family section */
     .dc-family { margin-bottom: 26px; }
     .dc-family-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
     .dc-family-num { width: 24px; height: 24px; border-radius: 7px; background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.22); color: var(--blue); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -47,12 +43,9 @@
     .dc-family:hover .dc-family-edit { opacity: 1; }
     .dc-mini-btn { width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg3); color: var(--muted); cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; transition: all .15s; }
     .dc-mini-btn:hover { border-color: var(--border2); color: var(--text); }
-    .dc-mini-btn.danger:hover { border-color: rgba(239,68,68,0.4); color: var(--red2); }
 
-    /* KPI grid */
     .dc-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 
-    /* KPI card — référentiel */
     .dc-kpi {
       background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius2);
       padding: 15px 16px; position: relative; transition: border-color .2s; cursor: pointer;
@@ -71,12 +64,14 @@
     }
     .dc-kpi-formula .fx { color: var(--blue); font-weight: 600; flex-shrink: 0; }
     .dc-kpi-src { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; margin-top: 9px; align-self: flex-start; }
-    .dc-src-manual   { background: rgba(245,158,11,0.10);  color: var(--gold);  --src-color: var(--gold); }
-    .dc-src-firestore{ background: rgba(52,211,153,0.10);  color: var(--green); --src-color: var(--green); }
-    .dc-src-derived  { background: rgba(96,165,250,0.10);  color: var(--blue);  --src-color: var(--blue); }
-    .dc-kpi.s-manual { --src-color: var(--gold); }
+    .dc-src-manual    { background: rgba(245,158,11,0.10);  color: var(--gold);  --src-color: var(--gold); }
+    .dc-src-firestore { background: rgba(52,211,153,0.10);  color: var(--green); --src-color: var(--green); }
+    .dc-src-derived   { background: rgba(96,165,250,0.10);  color: var(--blue);  --src-color: var(--blue); }
+    .dc-src-booking   { background: rgba(167,139,250,0.12); color: #a78bfa;      --src-color: #a78bfa; }
+    .dc-kpi.s-manual    { --src-color: var(--gold); }
     .dc-kpi.s-firestore { --src-color: var(--green); }
-    .dc-kpi.s-derived { --src-color: var(--blue); }
+    .dc-kpi.s-derived   { --src-color: var(--blue); }
+    .dc-kpi.s-booking   { --src-color: #a78bfa; }
 
     .dc-add-kpi {
       background: transparent; border: 1.5px dashed var(--border2); border-radius: var(--radius2);
@@ -85,14 +80,13 @@
     }
     .dc-add-kpi:hover { border-color: var(--blue); color: var(--blue); background: rgba(96,165,250,0.03); }
 
-    /* Empty / loading */
     .dc-empty { text-align: center; padding: 60px 20px; color: var(--muted); }
     .dc-empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.5; }
     .dc-empty h3 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-    .dc-empty p { font-size: 13px; max-width: 420px; margin: 0 auto 16px; line-height: 1.6; }
+    .dc-empty p { font-size: 13px; max-width: 460px; margin: 0 auto 16px; line-height: 1.6; }
 
     /* ─── Live tab ─── */
-    .dc-live-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+    .dc-live-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
     .dc-month {
       display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px;
       background: var(--bg3); border: 1px solid var(--border); font-weight: 600; font-size: 14px;
@@ -100,16 +94,22 @@
     .dc-month button { width: 24px; height: 24px; border: none; background: var(--bg4); color: var(--muted); cursor: pointer; font-size: 11px; border-radius: 6px; transition: color .15s; }
     .dc-month button:hover { color: var(--text); }
     .dc-month-label { min-width: 110px; text-align: center; letter-spacing: -0.2px; }
-    .dc-live-note { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .dc-live-note { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    /* Booking config card */
+    .dc-bcfg { margin-bottom: 18px; }
+    .dc-bcfg-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+    .dc-bcfg-row > div { flex: 1; min-width: 200px; }
 
     .dc-live-kpi {
       background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius2);
       padding: 15px 16px; position: relative; overflow: hidden;
     }
     .dc-live-kpi::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--src-color, var(--muted2)); opacity: 0.7; }
-    .dc-live-kpi.s-manual { --src-color: var(--gold); }
+    .dc-live-kpi.s-manual    { --src-color: var(--gold); }
     .dc-live-kpi.s-firestore { --src-color: var(--green); }
-    .dc-live-kpi.s-derived { --src-color: var(--blue); }
+    .dc-live-kpi.s-derived   { --src-color: var(--blue); }
+    .dc-live-kpi.s-booking   { --src-color: #a78bfa; }
     .dc-live-label { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .dc-live-label .tag { font-size: 9px; font-family: var(--font-m); padding: 1px 5px; border-radius: 4px; flex-shrink: 0; }
     .dc-live-value { font-size: 25px; font-weight: 700; letter-spacing: -1px; line-height: 1; font-family: var(--font-d); }
@@ -126,9 +126,9 @@
     /* Modal extensions */
     .modal.dc-modal { max-width: 540px; }
     .dc-form-help { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
-    .dc-seg { display: flex; gap: 4px; }
+    .dc-seg { display: flex; gap: 4px; flex-wrap: wrap; }
     .dc-seg label {
-      flex: 1; text-align: center; padding: 9px 6px; border-radius: 9px; cursor: pointer;
+      flex: 1; min-width: 110px; text-align: center; padding: 9px 6px; border-radius: 9px; cursor: pointer;
       border: 1.5px solid var(--border); background: var(--bg3); font-size: 12px; font-weight: 600;
       color: var(--muted); transition: all .15s;
     }
@@ -136,9 +136,12 @@
     .dc-seg input { display: none; }
     .dc-seg input:checked + span { color: var(--text); }
     .dc-seg label:has(input:checked) { background: var(--bg4); }
-    .dc-seg label:has(input[value="manual"]:checked) { border-color: rgba(245,158,11,0.5); }
+    .dc-seg label:has(input[value="manual"]:checked)    { border-color: rgba(245,158,11,0.5); }
     .dc-seg label:has(input[value="firestore"]:checked) { border-color: rgba(52,211,153,0.5); }
-    .dc-seg label:has(input[value="derived"]:checked) { border-color: rgba(96,165,250,0.5); }
+    .dc-seg label:has(input[value="derived"]:checked)   { border-color: rgba(96,165,250,0.5); }
+    .dc-seg label:has(input[value="booking"]:checked)   { border-color: rgba(167,139,250,0.6); }
+    .dc-seg label:has(input[value="rdv"]:checked)       { border-color: rgba(167,139,250,0.6); }
+    .dc-seg label:has(input[value="created"]:checked)   { border-color: rgba(167,139,250,0.6); }
     .dc-modal textarea.form-input { resize: vertical; min-height: 60px; line-height: 1.5; }
     .dc-modal-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
     .dc-modal-foot .spacer { flex: 1; }
@@ -162,7 +165,6 @@
   <div id="nav-container"></div>
 
   <main class="dc-main" id="dc-app" style="display:none">
-    <!-- Header -->
     <div class="dc-head">
       <div>
         <h1 class="dc-title">Data Center <span class="dc-title-badge">Sales Ops</span></h1>
@@ -173,7 +175,6 @@
       </div>
     </div>
 
-    <!-- Tabs -->
     <div class="tabs mb" style="margin-bottom:18px">
       <div class="tab active" data-tab="ref">📚 Référentiel</div>
       <div class="tab" data-tab="live">📊 Suivi Live</div>
@@ -187,6 +188,7 @@
           <button class="active" data-src="all">Tous</button>
           <button data-src="manual">🟡 Manuel</button>
           <button data-src="firestore">🟢 Firestore</button>
+          <button data-src="booking">🟣 Booking</button>
           <button data-src="derived">🔵 Calculé</button>
         </div>
         <div style="flex:1"></div>
@@ -208,12 +210,40 @@
         </div>
         <div class="dc-live-note">
           <span class="dc-kpi-src dc-src-manual" style="margin:0">🟡 Saisie manuelle</span>
-          <span class="dc-kpi-src dc-src-firestore" style="margin:0">🟢 Agrégé Firestore</span>
+          <span class="dc-kpi-src dc-src-firestore" style="margin:0">🟢 Agrégé saisies</span>
+          <span class="dc-kpi-src dc-src-booking" style="margin:0">🟣 Module Booking</span>
           <span class="dc-kpi-src dc-src-derived" style="margin:0">🔵 Calculé</span>
         </div>
         <div style="flex:1"></div>
         <button class="btn btn-primary" id="dc-save-manual">💾 Enregistrer les saisies</button>
       </div>
+
+      <!-- Paramètres Module Booking -->
+      <div class="card dc-bcfg" id="dc-bcfg" style="display:none">
+        <div class="card-header">
+          <span class="card-title">⚙️ Paramètres Module Booking</span>
+          <span class="card-action" id="dc-bcfg-save" style="font-weight:600;color:var(--blue)">Enregistrer les paramètres</span>
+        </div>
+        <div class="dc-bcfg-row">
+          <div>
+            <label class="form-label">Type de consultation compté</label>
+            <select class="form-input" id="dc-bcfg-type"><option value="">— Choisir —</option></select>
+          </div>
+          <div>
+            <label class="form-label">Base de comptage</label>
+            <div class="dc-seg" id="dc-bcfg-basis">
+              <label><input type="radio" name="dc-basis" value="rdv"><span>Date du RDV</span></label>
+              <label><input type="radio" name="dc-basis" value="created"><span>Date de prise</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="dc-form-help" style="margin-top:10px">
+          <strong>Call Booked</strong> et <strong>Kept Call</strong> sont comptés depuis la collection <code>bookings</code> :
+          uniquement le type de consultation choisi, RDV de coaching exclus.
+          <strong>Kept Call</strong> = tous les RDV du mois sauf les annulés.
+        </div>
+      </div>
+
       <div id="dc-live-body">
         <div class="dc-empty"><div class="dc-empty-icon">⏳</div><p>Chargement…</p></div>
       </div>
@@ -254,15 +284,16 @@
         <div class="form-field">
           <label class="form-label">Source de la donnée</label>
           <div class="dc-seg" id="dc-f-source">
-            <label><input type="radio" name="dc-src" value="manual"><span>🟡 Saisie manuelle</span></label>
-            <label><input type="radio" name="dc-src" value="firestore"><span>🟢 Agrégé Firestore</span></label>
-            <label><input type="radio" name="dc-src" value="derived"><span>🔵 Calculé (formule)</span></label>
+            <label><input type="radio" name="dc-src" value="manual"><span>🟡 Manuel</span></label>
+            <label><input type="radio" name="dc-src" value="firestore"><span>🟢 Saisies</span></label>
+            <label><input type="radio" name="dc-src" value="booking"><span>🟣 Booking</span></label>
+            <label><input type="radio" name="dc-src" value="derived"><span>🔵 Calculé</span></label>
           </div>
           <div class="dc-form-help" id="dc-src-help"></div>
         </div>
-        <!-- Champ conditionnel : Firestore -->
+        <!-- conditionnel : Firestore (saisies) -->
         <div class="form-field" id="dc-f-fsfield-wrap" style="display:none">
-          <label class="form-label">Champ Firestore agrégé (somme sur l'équipe / mois)</label>
+          <label class="form-label">Champ agrégé (somme équipe / 6 semaines)</label>
           <select class="form-input" id="dc-f-fsfield">
             <optgroup label="Closing">
               <option value="closing.calls">closing · calls</option>
@@ -287,15 +318,24 @@
               <option value="setting.collecte">setting · collecté (€)</option>
             </optgroup>
           </select>
-          <div class="dc-form-help">Le suivi Live additionne ce champ sur les 6 semaines (s1→s6) de tous les membres de l'équipe pour le mois sélectionné.</div>
+          <div class="dc-form-help">Le suivi Live additionne ce champ sur les 6 semaines (s1→s6) de tous les membres pour le mois sélectionné.</div>
         </div>
-        <!-- Champ conditionnel : formule -->
+        <!-- conditionnel : Module Booking -->
+        <div class="form-field" id="dc-f-booking-wrap" style="display:none">
+          <label class="form-label">Métrique Booking</label>
+          <select class="form-input" id="dc-f-bookingmetric">
+            <option value="booked">RDV pris (Call Booked) — tous les RDV du mois</option>
+            <option value="kept">RDV honorés (Kept Call) — hors annulés</option>
+          </select>
+          <div class="dc-form-help">Compté depuis la collection <code>bookings</code>, selon le type de consultation et la base de comptage définis dans « Paramètres Module Booking » (onglet Suivi Live). RDV de coaching toujours exclus.</div>
+        </div>
+        <!-- conditionnel : formule -->
         <div class="form-field" id="dc-f-expr-wrap" style="display:none">
           <label class="form-label">Formule (lisible)</label>
           <input type="text" class="form-input" id="dc-f-formula" placeholder="Ex : Closes / Call Live × 100" style="margin-bottom:8px">
           <label class="form-label">Expression calculable</label>
           <input type="text" class="form-input" id="dc-f-expr" placeholder="Ex : closes / call_live * 100" style="font-family:var(--font-m);font-size:12px">
-          <div class="dc-form-help" id="dc-expr-help">Utilise les identifiants des autres KPIs. Opérateurs autorisés : <code>+ − * / ( )</code>. Une division par zéro renvoie « — ».</div>
+          <div class="dc-form-help">Utilise les identifiants des autres KPIs. Opérateurs autorisés : <code>+ − * / ( )</code>. Une division par zéro renvoie « — ».</div>
         </div>
       </div>
       <div class="modal-body" style="padding-top:0">
@@ -340,11 +380,13 @@
 
     /* ════════════════════════════════════════════════════════════════
        Data Center — contrôleur
-       Stockage : un document unique  _config/kpi_referentiel
-         { families:[...], kpis:[...], manualData:{ 'YYYY-MM':{kpiId:val} },
-           updatedAt, updatedBy }
-       → couvert par la règle Firestore existante  match /_config/{docId}
+       Stockage : document unique  _config/kpi_referentiel
+         { families:[], kpis:[], manualData:{'YYYY-MM':{kpiId:val}},
+           bookingConfig:{typeId,typeLabel,dateBasis}, updatedAt, updatedBy }
+       → couvert par la règle existante  match /_config/{docId}
          (allow read/write: if isAdmin()) — aucune modif de firestore.rules.
+       Lecture bookings : règle existante  match /bookings  allow read: if true.
+       Lecture booking_config : règle existante  allow read: if true.
        ════════════════════════════════════════════════════════════════ */
 
     var $  = function (s, r) { return (r || document).querySelector(s); };
@@ -352,17 +394,18 @@
     var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
 
     var db, currentUser;
-    var REF_DOC = null;          // contenu du référentiel (live)
+    var REF_DOC = null;
     var refUnsub = null;
-    var usersCache = [];         // [{uid,...}]
-    var liveMonth = null;        // 'YYYY-MM'
-    var liveAgg = {};            // { fsField : somme } pour le mois courant
-    var manualDraft = {};        // saisies en cours d'édition (mois courant)
+    var usersCache = [];
+    var bookingTypes = [];        // [{id,label,...}] depuis booking_config/_types
+    var liveMonth = null;         // 'YYYY-MM'
+    var liveAgg = {};             // { 'closing.lives': somme, ... }
+    var bookingAgg = { booked: null, kept: null };
+    var manualDraft = {};
     var editingKpiId = null, editingFamilyId = null;
 
     var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
-    /* ─── Helpers format ─── */
     function euro(v)  { return (v == null || isNaN(v)) ? '—' : '€\u202f' + Math.round(v).toLocaleString('fr-FR'); }
     function fmtVal(v, unit) {
       if (v == null || isNaN(v) || !isFinite(v)) return '—';
@@ -388,8 +431,12 @@
 
     /* ════════════════════════════════════════════════════════════════
        SEED — référentiel KPI Sales Ops (source : Référentiel KPI WonderQueen)
-       Chaque KPI : id, familyId, label, definition, formula (lisible),
-       unit, source ('manual'|'firestore'|'derived'), expr / fsField.
+       Sources pré-câblées d'après le mapping validé :
+         🟢 firestore : call_live, offer, deposits, closes, total_lead,
+                        nbr_sets, total_collecte_reel
+         🟣 booking   : total_call_booked (booked), kept_call (kept)
+         🟡 manual    : le reste des "saisie directe"
+         🔵 derived   : tous les ratios
        ════════════════════════════════════════════════════════════════ */
     function buildSeed() {
       var families = [
@@ -407,20 +454,20 @@
       };
       var kpis = [
         /* ── 1. Inputs & volumes bruts ── */
-        K('budget_pub','inputs','Budget PUB','Budget marketing dépensé sur la période.','Saisie directe (€)','€','manual'),
+        K('budget_pub','inputs','Budget PUB','Budget marketing dépensé sur la période.','Saisie directe','€','manual'),
         K('cac_market_only','inputs','CAC Market Only','Coût d\'acquisition client basé uniquement sur la dépense média.','Budget PUB / Closes','€','derived',{ expr:'budget_pub / closes' }),
         K('cpr','inputs','CPR','Coût Par Rendez-vous.','Budget PUB / Total Call Booked','€','derived',{ expr:'budget_pub / total_call_booked' }),
         K('call_to_close','inputs','Call to Close','Nombre de calls nécessaires en moyenne pour générer un close.','Call Live / Closes','nombre','derived',{ expr:'call_live / closes' }),
         K('break_even_calls','inputs','Break-Even Calls','Nombre de calls live nécessaires pour atteindre le seuil de rentabilité.','Budget PUB / Cash per call live','nombre','derived',{ expr:'budget_pub / cash_per_call_live' }),
         K('break_even_closing_pct','inputs','Break Even Closing (live) %','Taux de closing live minimum pour être rentable.','Break-Even Calls / Call Live × 100','%','derived',{ expr:'break_even_calls / call_live * 100' }),
         K('nombre_slots','inputs','Nombre de slots','Nombre de créneaux ouverts dans l\'agenda closer sur la période.','Saisie directe','nombre','manual'),
-        K('total_lead','inputs','Total Lead','Nombre total de leads entrés dans le funnel.','Saisie directe','nombre','manual'),
-        K('total_call_booked','inputs','Total Call Booked','Nombre total de RDV pris dans l\'agenda.','Saisie directe','nombre','manual'),
-        K('kept_call','inputs','Kept Call','Nombre de RDV honorés (présent au call, non annulé / no-show).','Saisie directe','nombre','manual'),
-        K('call_live','inputs','Call Live','Nombre de calls effectivement tenus en live avec un closer.','Saisie directe','nombre','manual'),
-        K('offer','inputs','Offer','Nombre de calls où une offre a été présentée (pitch + offre).','Saisie directe','nombre','manual'),
-        K('deposits','inputs','Deposits','Nombre d\'acomptes / paiements partiels reçus.','Saisie directe','nombre','manual'),
-        K('closes','inputs','Closes','Nombre total de ventes signées (contrats fermés).','Saisie directe','nombre','manual'),
+        K('total_lead','inputs','Total Lead','Nombre total de leads entrés dans le funnel.','Σ setting.leads · équipe','nombre','firestore',{ fsField:'setting.leads' }),
+        K('total_call_booked','inputs','Total Call Booked','Nombre total de RDV pris dans l\'agenda.','Comptage RDV pris · Module Booking','nombre','booking',{ bookingMetric:'booked' }),
+        K('kept_call','inputs','Kept Call','Nombre de RDV honorés (présent au call, non annulé / no-show).','RDV du mois hors annulés · Module Booking','nombre','booking',{ bookingMetric:'kept' }),
+        K('call_live','inputs','Call Live','Nombre de calls effectivement tenus en live avec un closer.','Σ closing.lives · équipe','nombre','firestore',{ fsField:'closing.lives' }),
+        K('offer','inputs','Offer','Nombre de calls où une offre a été présentée (pitch + offre).','Σ closing.offres · équipe','nombre','firestore',{ fsField:'closing.offres' }),
+        K('deposits','inputs','Deposits','Nombre d\'acomptes / paiements partiels reçus.','Σ closing.deposits · équipe','nombre','firestore',{ fsField:'closing.deposits' }),
+        K('closes','inputs','Closes','Nombre total de ventes signées (contrats fermés).','Σ closing.closes · équipe','nombre','firestore',{ fsField:'closing.closes' }),
         K('occ','inputs','OCC','One Call Close — ventes conclues dès le 1er call.','Saisie directe (comptage)','nombre','manual'),
         K('fuc','inputs','FUC','Follow-Up Close — ventes conclues après follow-up.','Saisie directe (comptage)','nombre','manual'),
 
@@ -442,19 +489,19 @@
         K('ltb_pct','cash','LTB %','Lead To Booking — taux de transformation lead → RDV.','Total Call Booked / Total Lead × 100','%','derived',{ expr:'total_call_booked / total_lead * 100' }),
         K('cancelled_rate','cash','Cancelled Rate','Taux d\'annulation des RDV.','(Total Call Booked − Kept Call) / Total Call Booked × 100','%','derived',{ expr:'(total_call_booked - kept_call) / total_call_booked * 100' }),
         K('total_contacte','cash','Total contacté','Nombre total de leads contactés par le setting.','Saisie directe','nombre','manual'),
-        K('total_collecte_p','cash','Total Collecté P','Cash total contractualisé (prévu selon les contrats signés).','Saisie directe (€)','€','manual'),
-        K('total_collecte_reel','cash','Total Collecté Réel','Cash réellement encaissé sur la période.','Saisie directe (€)','€','manual'),
+        K('total_collecte_p','cash','Total Collecté P','Cash total contractualisé (prévu selon les contrats signés).','Saisie directe','€','manual'),
+        K('total_collecte_reel','cash','Total Collecté Réel','Cash réellement encaissé sur la période.','Σ closing.collecte · équipe','€','firestore',{ fsField:'closing.collecte' }),
         K('collecte_reel_pct','cash','Collecté Réel %','Part du contractualisé effectivement encaissée.','Collecté Réel / Collecté P × 100','%','derived',{ expr:'total_collecte_reel / total_collecte_p * 100' }),
         K('aov','cash','AOV','Average Order Value — panier moyen par client.','Collecté Réel / Closes','€','derived',{ expr:'total_collecte_reel / closes' }),
 
         /* ── 4. Setting ── */
-        K('nbr_sets','setting','Nbr de Sets','Nombre total de RDV pris par les setters.','Saisie directe','nombre','manual'),
+        K('nbr_sets','setting','Nbr de Sets','Nombre total de RDV pris par les setters.','Σ setting.sets · équipe','nombre','firestore',{ fsField:'setting.sets' }),
         K('nbr_sets_live','setting','Nbr de Sets Live','Nombre de RDV setters honorés en live (call tenu).','Saisie directe','nombre','manual'),
         K('showup_sets_pct','setting','Show-Up sur Sets (NB) %','Taux de présentation sur les sets posés.','Nbr de Sets Live / Nbr de Sets × 100','%','derived',{ expr:'nbr_sets_live / nbr_sets * 100' }),
         K('closes_sets_nb','setting','Closes (Sets NB)','Nombre de ventes attribuables au setting.','Saisie directe (comptage)','nombre','manual'),
         K('tx_decroche','setting','Tx de décroché','Taux de décroché — saisie directe par le setter.','Saisie directe (renseigné par le setter)','%','manual'),
         K('closing_live_sets_pct','setting','Closing Live (Sets) %','Taux de close sur les sets passés en live.','Closes (Sets NB) / Nbr de Sets Live × 100','%','derived',{ expr:'closes_sets_nb / nbr_sets_live * 100' }),
-        K('cash_collecte_setting_nb','setting','Cash collecté R Setting NB','Cash réellement collecté attribuable au setting.','Saisie directe (€)','€','manual'),
+        K('cash_collecte_setting_nb','setting','Cash collecté R Setting NB','Cash réellement collecté attribuable au setting.','Saisie directe','€','manual'),
 
         /* ── 5. Performance globale ── */
         K('sales_velocity','global','Sales Velocity','Vitesse de génération de cash sur la période.','(Total Lead × Closing Live % × AOV) / TTS','€','derived',{ expr:'total_lead * closing_live_pct / 100 * aov / tts' }),
@@ -462,7 +509,7 @@
       ];
       kpis.forEach(function (k, i) { k.order = i; });
       families.forEach(function (f, i) { f.order = i; });
-      return { families: families, kpis: kpis, manualData: {} };
+      return { families: families, kpis: kpis, manualData: {}, bookingConfig: { typeId: '', typeLabel: '', dateBasis: 'rdv' } };
     }
 
     /* ════════════════════════════════════════════════════════════════
@@ -481,20 +528,19 @@
       } catch (e) { return null; }
     }
 
-    /* Calcule toutes les valeurs du mois courant.
-       Base = saisie manuelle + agrégats Firestore. Puis passes itératives
-       pour résoudre les KPIs dérivés (qui peuvent dépendre d'autres dérivés). */
     function computeLiveValues() {
       if (!REF_DOC) return {};
       var ctx = {};
       var kpis = REF_DOC.kpis || [];
-      // 1) bases : manuel + firestore
+      // 1) bases : manuel + firestore + booking
       kpis.forEach(function (k) {
         if (k.source === 'manual') {
           var raw = manualDraft[k.id];
           ctx[k.id] = (raw === '' || raw == null || isNaN(raw)) ? null : Number(raw);
         } else if (k.source === 'firestore') {
-          ctx[k.id] = k.fsField && liveAgg[k.fsField] != null ? liveAgg[k.fsField] : null;
+          ctx[k.id] = (k.fsField && liveAgg[k.fsField] != null) ? liveAgg[k.fsField] : null;
+        } else if (k.source === 'booking') {
+          ctx[k.id] = (k.bookingMetric === 'kept') ? bookingAgg.kept : bookingAgg.booked;
         }
       });
       // 2) dérivés — passes itératives
@@ -511,7 +557,7 @@
     }
 
     /* ════════════════════════════════════════════════════════════════
-       FIRESTORE — chargement du référentiel + agrégats saisies
+       FIRESTORE — référentiel
        ════════════════════════════════════════════════════════════════ */
     function refRef() { return db.collection('_config').doc('kpi_referentiel'); }
 
@@ -523,6 +569,7 @@
           if (!REF_DOC.families) REF_DOC.families = [];
           if (!REF_DOC.kpis) REF_DOC.kpis = [];
           if (!REF_DOC.manualData) REF_DOC.manualData = {};
+          if (!REF_DOC.bookingConfig) REF_DOC.bookingConfig = { typeId: '', typeLabel: '', dateBasis: 'rdv' };
           setSync('ok', 'Synchronisé · ' + new Date().toLocaleTimeString('fr-FR'));
         } else {
           REF_DOC = null;
@@ -550,9 +597,7 @@
       }
     }
 
-    /* Agrège un champ "section.field" sur les 6 semaines, pour tous les
-       membres, sur le mois sélectionné. Gère aussi les totaux historiques
-       (_total / closing_total / setting_total). */
+    /* ── Agrégats SAISIES : somme d'un champ section.field sur 6 semaines × équipe ── */
     async function loadLiveAggregates() {
       liveAgg = {};
       if (!REF_DOC) return;
@@ -574,11 +619,9 @@
       docs.forEach(function (data) {
         if (!data) return;
         fieldList.forEach(function (path) {
-          var parts = path.split('.');           // ex : ['closing','closes']
+          var parts = path.split('.');
           var section = parts[0], field = parts[1];
           var sum = 0;
-          // total historique éventuel
-          var totObj = data[section + '_total'] || (data._total && section ? data._total : null);
           var weeklyObj = data[section];
           if (weeklyObj && typeof weeklyObj === 'object') {
             WEEKS.forEach(function (w) {
@@ -586,14 +629,81 @@
               if (wd && typeof wd[field] === 'number') sum += wd[field];
             });
           }
-          if (totObj && typeof totObj[field] === 'number') {
-            // si pas de découpage hebdo trouvé, on prend le total
-            if (sum === 0) sum += totObj[field];
-          }
+          // total historique éventuel (mois sans découpage hebdo)
+          var totObj = data[section + '_total'];
+          if (totObj && typeof totObj[field] === 'number' && sum === 0) sum += totObj[field];
           fsFields[path] += sum;
         });
       });
       liveAgg = fsFields;
+    }
+
+    /* ── Agrégats BOOKING : Call Booked / Kept Call depuis la collection bookings ──
+       Règles (validées) :
+         • un seul type de consultation (bookingConfig.typeId / typeLabel)
+         • RDV de coaching (isCoaching === true) exclus
+         • Call Booked = tous les RDV du mois de ce type
+         • Kept Call   = idem, sauf status === 'cancelled'
+         • base de comptage : date du RDV ('date') ou date de prise ('createdAt')
+       Requête à champ unique en range → pas d'index composite requis ; le reste
+       des filtres (type, coaching, status) est appliqué en JS.
+    ──────────────────────────────────────────────────────────────────────────── */
+    async function loadBookingAggregates() {
+      bookingAgg = { booked: null, kept: null };
+      if (!REF_DOC) return;
+      var hasBooking = (REF_DOC.kpis || []).some(function (k) { return k.source === 'booking'; });
+      if (!hasBooking) return;
+
+      var cfg = REF_DOC.bookingConfig || {};
+      if (!cfg.typeId && !cfg.typeLabel) { bookingAgg = { booked: null, kept: null, _noType: true }; return; }
+
+      var dateBasis = cfg.dateBasis || 'rdv';
+      var p = liveMonth.split('-'); var y = parseInt(p[0], 10), m = parseInt(p[1], 10);
+      var docs = [];
+      try {
+        var col = db.collection('bookings');
+        if (dateBasis === 'created') {
+          var startTs = new Date(y, m - 1, 1, 0, 0, 0);
+          var endTs   = new Date(y, m, 1, 0, 0, 0); // début du mois suivant (exclusif)
+          var snapC = await col.where('createdAt', '>=', startTs).where('createdAt', '<', endTs).get();
+          snapC.forEach(function (d) { docs.push(d.data()); });
+        } else {
+          var start = liveMonth + '-01';
+          var end   = liveMonth + '-31';
+          var snapD = await col.where('date', '>=', start).where('date', '<=', end).get();
+          snapD.forEach(function (d) { docs.push(d.data()); });
+        }
+      } catch (e) {
+        console.warn('[data-center] booking aggregates', e);
+        bookingAgg = { booked: null, kept: null, _error: true };
+        return;
+      }
+
+      var booked = 0, kept = 0;
+      docs.forEach(function (b) {
+        if (b.isCoaching === true) return; // coaching exclu
+        var typeMatch = cfg.typeId
+          ? (b.type === cfg.typeId)
+          : (String(b.typeLabel || '').trim().toLowerCase() === String(cfg.typeLabel || '').trim().toLowerCase());
+        if (!typeMatch) return;
+        booked++;
+        if (b.status !== 'cancelled') kept++;
+      });
+      bookingAgg = { booked: booked, kept: kept };
+    }
+
+    /* Charge la liste des types de consultation depuis booking_config/_types */
+    async function loadBookingTypes() {
+      bookingTypes = [];
+      try {
+        var snap = await db.collection('booking_config').get();
+        snap.forEach(function (d) {
+          if (d.id === '_types') {
+            var v = d.data();
+            bookingTypes = (v && v.list) ? v.list : [];
+          }
+        });
+      } catch (e) { console.warn('[data-center] booking types', e); }
     }
 
     /* ════════════════════════════════════════════════════════════════
@@ -602,7 +712,8 @@
     var refFilter = { src: 'all', q: '' };
     var SRC_META = {
       manual:    { cls: 'dc-src-manual',    icon: '🟡', label: 'Saisie manuelle' },
-      firestore: { cls: 'dc-src-firestore', icon: '🟢', label: 'Agrégé Firestore' },
+      firestore: { cls: 'dc-src-firestore', icon: '🟢', label: 'Agrégé saisies' },
+      booking:   { cls: 'dc-src-booking',   icon: '🟣', label: 'Module Booking' },
       derived:   { cls: 'dc-src-derived',   icon: '🔵', label: 'Calculé' }
     };
 
@@ -614,7 +725,8 @@
           '<div class="dc-empty-icon">📚</div>' +
           '<h3>Aucun référentiel pour l\'instant</h3>' +
           '<p>Initialise le data center avec les 44 KPIs Sales Ops du référentiel WonderQueen ' +
-          '(5 familles : volumes, ratios funnel, cash, setting, performance). Tu pourras tout éditer ensuite.</p>' +
+          '(5 familles : volumes, ratios funnel, cash, setting, performance). ' +
+          'Les sources sont déjà pré-câblées : saisies, Module Booking, formules. Tu pourras tout éditer ensuite.</p>' +
           '<button class="btn btn-primary" id="dc-init-seed">Initialiser le référentiel</button>' +
           '</div>';
         $('#dc-init-seed').onclick = doSeed;
@@ -657,6 +769,7 @@
           }
           html += '<div class="dc-kpi-src ' + sm.cls + '">' + sm.icon + ' ' + sm.label;
           if (k.source === 'firestore' && k.fsField) html += ' · ' + esc(k.fsField);
+          if (k.source === 'booking') html += ' · ' + (k.bookingMetric === 'kept' ? 'RDV honorés' : 'RDV pris');
           html += '</div>';
           html += '</div>';
         });
@@ -684,10 +797,7 @@
     }
 
     async function doSeed() {
-      var seed = buildSeed();
-      try {
-        await saveReferentiel(seed, 'Référentiel initialisé — 44 KPIs');
-      } catch (e) {}
+      try { await saveReferentiel(buildSeed(), 'Référentiel initialisé — 44 KPIs'); } catch (e) {}
     }
 
     /* ════════════════════════════════════════════════════════════════
@@ -701,11 +811,13 @@
 
     function syncSourceFields() {
       var src = ($('input[name="dc-src"]:checked') || {}).value;
-      $('#dc-f-fsfield-wrap').style.display = src === 'firestore' ? '' : 'none';
-      $('#dc-f-expr-wrap').style.display    = src === 'derived'   ? '' : 'none';
+      $('#dc-f-fsfield-wrap').style.display  = src === 'firestore' ? '' : 'none';
+      $('#dc-f-booking-wrap').style.display  = src === 'booking'   ? '' : 'none';
+      $('#dc-f-expr-wrap').style.display     = src === 'derived'   ? '' : 'none';
       var help = {
         manual:    'Valeur saisie chaque mois à la main dans l\'onglet « Suivi Live ».',
-        firestore: 'Valeur agrégée automatiquement depuis les saisies de l\'équipe (collection saisies).',
+        firestore: 'Valeur agrégée automatiquement depuis les saisies de l\'équipe (collection saisies, 6 semaines).',
+        booking:   'Valeur comptée automatiquement depuis la collection bookings (paramètres dans l\'onglet Suivi Live).',
         derived:   'Valeur calculée à partir d\'autres KPIs via une formule.'
       };
       $('#dc-src-help').textContent = src ? help[src] : '';
@@ -727,7 +839,8 @@
       var src = k ? k.source : 'manual';
       var radio = $('input[name="dc-src"][value="' + src + '"]');
       if (radio) radio.checked = true;
-      $('#dc-f-fsfield').value = k && k.fsField ? k.fsField : 'closing.closes';
+      $('#dc-f-fsfield').value = (k && k.fsField) ? k.fsField : 'closing.closes';
+      $('#dc-f-bookingmetric').value = (k && k.bookingMetric) ? k.bookingMetric : 'booked';
       syncSourceFields();
       $('#dc-kpi-delete').style.display = k ? '' : 'none';
       $('#dc-kpi-modal').style.display = 'flex';
@@ -764,15 +877,10 @@
       obj.formula = $('#dc-f-formula').value.trim();
       obj.expr = src === 'derived' ? $('#dc-f-expr').value.trim() : '';
       obj.fsField = src === 'firestore' ? $('#dc-f-fsfield').value : '';
-      if (src === 'firestore' && !obj.formula) obj.formula = 'Agrégé · ' + obj.fsField;
-      if (src === 'manual') obj.formula = obj.formula || 'Saisie directe';
-
-      if (src === 'derived' && obj.expr) {
-        var test = evalExpr(obj.expr, {});
-        if (test === null && !/^[0-9a-zA-Z_.+\-*/()\s]+$/.test(obj.expr)) {
-          toast('Expression invalide — vérifie les opérateurs', true); return;
-        }
-      }
+      obj.bookingMetric = src === 'booking' ? $('#dc-f-bookingmetric').value : '';
+      if (src === 'firestore' && !obj.formula) obj.formula = 'Σ ' + obj.fsField + ' · équipe';
+      if (src === 'booking'   && !obj.formula) obj.formula = (obj.bookingMetric === 'kept' ? 'RDV honorés' : 'RDV pris') + ' · Module Booking';
+      if (src === 'manual'    && !obj.formula) obj.formula = 'Saisie directe';
 
       if (existing) {
         kpis = kpis.map(function (x) { return x.id === existing.id ? obj : x; });
@@ -789,11 +897,10 @@
       if (!editingKpiId || !REF_DOC) return;
       var k = (REF_DOC.kpis || []).filter(function (x) { return x.id === editingKpiId; })[0];
       if (!k) return;
-      // avertir si d'autres KPIs dépendent de celui-ci
       var deps = (REF_DOC.kpis || []).filter(function (x) {
         return x.source === 'derived' && x.expr && new RegExp('\\b' + editingKpiId + '\\b').test(x.expr);
       });
-      var msg = 'Supprimer « ' + k.label +' » ?';
+      var msg = 'Supprimer « ' + k.label + ' » ?';
       if (deps.length) msg += '\n\n⚠️ ' + deps.length + ' KPI(s) calculé(s) utilisent ce KPI dans leur formule : ' +
         deps.map(function (d) { return d.label; }).join(', ') + '. Leur calcul renverra « — ».';
       if (!confirm(msg)) return;
@@ -841,7 +948,7 @@
       if (!f) return;
       var inFam = (REF_DOC.kpis || []).filter(function (k) { return k.familyId === editingFamilyId; });
       if (inFam.length) {
-        toast('Impossible : ' + inFam.length + ' KPI(s) sont dans cette famille. Déplace-les d\'abord.', true);
+        toast('Impossible : ' + inFam.length + ' KPI(s) dans cette famille. Déplace-les d\'abord.', true);
         return;
       }
       if (!confirm('Supprimer la famille « ' + f.label + ' » ?')) return;
@@ -853,25 +960,74 @@
     }
 
     /* ════════════════════════════════════════════════════════════════
+       PARAMÈTRES MODULE BOOKING (onglet Live)
+       ════════════════════════════════════════════════════════════════ */
+    function renderBookingConfig() {
+      var hasBooking = REF_DOC && (REF_DOC.kpis || []).some(function (k) { return k.source === 'booking'; });
+      var card = $('#dc-bcfg');
+      if (!hasBooking) { card.style.display = 'none'; return; }
+      card.style.display = '';
+
+      var cfg = (REF_DOC && REF_DOC.bookingConfig) || { typeId: '', typeLabel: '', dateBasis: 'rdv' };
+      var sel = $('#dc-bcfg-type');
+      var opts = '<option value="">— Choisir le type de consultation —</option>';
+      var found = false;
+      bookingTypes.forEach(function (t) {
+        if (t.id === cfg.typeId) found = true;
+        opts += '<option value="' + esc(t.id) + '"' + (t.id === cfg.typeId ? ' selected' : '') + '>' + esc(t.label) + '</option>';
+      });
+      // type sauvegardé mais absent de la liste (renommé / supprimé) → on le garde visible
+      if (cfg.typeId && !found) {
+        opts += '<option value="' + esc(cfg.typeId) + '" selected>' + esc(cfg.typeLabel || cfg.typeId) + ' (type introuvable)</option>';
+      }
+      sel.innerHTML = opts;
+
+      var basis = cfg.dateBasis || 'rdv';
+      var r = $('input[name="dc-basis"][value="' + basis + '"]');
+      if (r) r.checked = true;
+    }
+
+    async function saveBookingConfig() {
+      if (!REF_DOC) return;
+      var typeId = $('#dc-bcfg-type').value;
+      var typeLabel = '';
+      var t = bookingTypes.filter(function (x) { return x.id === typeId; })[0];
+      if (t) typeLabel = t.label;
+      else if (typeId && REF_DOC.bookingConfig && REF_DOC.bookingConfig.typeId === typeId) {
+        typeLabel = REF_DOC.bookingConfig.typeLabel || '';
+      }
+      var dateBasis = ($('input[name="dc-basis"]:checked') || {}).value || 'rdv';
+      try {
+        await saveReferentiel({ bookingConfig: { typeId: typeId, typeLabel: typeLabel, dateBasis: dateBasis } },
+          'Paramètres Booking enregistrés');
+        renderLive();
+      } catch (e) {}
+    }
+
+    /* ════════════════════════════════════════════════════════════════
        RENDER — onglet Suivi Live
        ════════════════════════════════════════════════════════════════ */
     async function renderLive() {
       var body = $('#dc-live-body');
       $('#dc-month-label').textContent = liveMonth ? monthLabel(liveMonth) : '—';
       if (!REF_DOC || !REF_DOC.kpis.length) {
+        $('#dc-bcfg').style.display = 'none';
         body.innerHTML = '<div class="dc-empty"><div class="dc-empty-icon">📊</div>' +
           '<h3>Référentiel requis</h3><p>Initialise d\'abord le référentiel dans l\'onglet « Référentiel ».</p></div>';
         return;
       }
-      body.innerHTML = '<div class="dc-empty"><div class="dc-empty-icon">⏳</div><p>Agrégation des saisies de l\'équipe…</p></div>';
+      renderBookingConfig();
+      body.innerHTML = '<div class="dc-empty"><div class="dc-empty-icon">⏳</div><p>Agrégation des saisies et des RDV…</p></div>';
 
-      // saisie manuelle du mois → brouillon éditable
       manualDraft = Object.assign({}, (REF_DOC.manualData && REF_DOC.manualData[liveMonth]) || {});
-      try { await loadLiveAggregates(); } catch (e) { console.warn('[data-center] aggregates', e); }
+      try { await Promise.all([loadLiveAggregates(), loadBookingAggregates()]); }
+      catch (e) { console.warn('[data-center] aggregates', e); }
 
       var ctx = computeLiveValues();
       var families = (REF_DOC.families || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
       var kpis = (REF_DOC.kpis || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      var cfg = REF_DOC.bookingConfig || {};
+      var bookingUnconfigured = !cfg.typeId && !cfg.typeLabel;
 
       var html = '';
       families.forEach(function (fam, idx) {
@@ -899,6 +1055,13 @@
               html += '<div class="dc-live-formula">ƒ ' + esc(k.formula) + '</div>';
             } else if (k.source === 'firestore' && k.fsField) {
               html += '<div class="dc-live-formula">Σ ' + esc(k.fsField) + ' · équipe</div>';
+            } else if (k.source === 'booking') {
+              if (bookingUnconfigured) {
+                html += '<div class="dc-live-formula" style="color:var(--gold)">⚙️ Choisis le type de consultation ci-dessus</div>';
+              } else {
+                html += '<div class="dc-live-formula">RDV · ' + esc(cfg.typeLabel || 'type') + ' · ' +
+                        (cfg.dateBasis === 'created' ? 'date de prise' : 'date du RDV') + '</div>';
+              }
             }
           }
           html += '</div>';
@@ -907,24 +1070,18 @@
       });
       body.innerHTML = html;
 
-      // recalcul à la volée quand on tape une saisie manuelle
       $$('[data-manual]', body).forEach(function (input) {
         input.oninput = function () {
-          var id = input.getAttribute('data-manual');
-          manualDraft[id] = input.value;
+          manualDraft[input.getAttribute('data-manual')] = input.value;
           recomputeDerivedDisplay();
         };
       });
     }
 
-    // met à jour uniquement l'affichage des KPIs dérivés (sans re-render complet)
     function recomputeDerivedDisplay() {
       var ctx = computeLiveValues();
       var body = $('#dc-live-body');
       var kpis = REF_DOC.kpis || [];
-      $$('.dc-live-kpi.s-derived', body).forEach(function (card, i) {});
-      // on retrouve les cartes dérivées dans l'ordre du DOM
-      var derivedCards = $$('.dc-live-kpi.s-derived .dc-live-value', body);
       var derivedKpis = [];
       (REF_DOC.families || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); })
         .forEach(function (fam) {
@@ -932,7 +1089,7 @@
             .filter(function (k) { return k.familyId === fam.id; })
             .forEach(function (k) { if (k.source === 'derived') derivedKpis.push(k); });
         });
-      derivedCards.forEach(function (el, i) {
+      $$('.dc-live-kpi.s-derived .dc-live-value', body).forEach(function (el, i) {
         var k = derivedKpis[i];
         if (!k) return;
         var display = fmtVal(ctx[k.id], k.unit);
@@ -950,9 +1107,7 @@
       });
       var patch = { manualData: {} };
       patch.manualData[liveMonth] = clean;
-      try {
-        await saveReferentiel(patch, 'Saisies enregistrées · ' + monthLabel(liveMonth));
-      } catch (e) {}
+      try { await saveReferentiel(patch, 'Saisies enregistrées · ' + monthLabel(liveMonth)); } catch (e) {}
     }
 
     function shiftMonth(delta) {
@@ -963,7 +1118,7 @@
     }
 
     /* ════════════════════════════════════════════════════════════════
-       NAVIGATION / TABS / BINDINGS
+       BINDINGS / TABS
        ════════════════════════════════════════════════════════════════ */
     function bindUI() {
       $$('.tab').forEach(function (t) {
@@ -989,7 +1144,7 @@
 
       $('#dc-add-family').onclick = function () { openFamilyModal(null); };
       $('#dc-reset-pdf').onclick = function () {
-        if (!confirm('Réinitialiser tout le référentiel avec les 44 KPIs du PDF ?\n\n⚠️ Cela écrase les familles et KPIs actuels. Les saisies mensuelles (manualData) sont conservées.')) return;
+        if (!confirm('Réinitialiser tout le référentiel avec les 44 KPIs du PDF ?\n\n⚠️ Cela écrase les familles et KPIs actuels. Les saisies mensuelles et les paramètres Booking sont conservés.')) return;
         var seed = buildSeed();
         saveReferentiel({ families: seed.families, kpis: seed.kpis }, 'Référentiel réinitialisé').catch(function () {});
       };
@@ -1011,6 +1166,7 @@
       $('#dc-month-prev').onclick = function () { shiftMonth(-1); };
       $('#dc-month-next').onclick = function () { shiftMonth(1); };
       $('#dc-save-manual').onclick = saveManualData;
+      $('#dc-bcfg-save').onclick = saveBookingConfig;
 
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') { closeKpiModal(); closeFamilyModal(); }
@@ -1036,12 +1192,13 @@
             setTimeout(function () { window.location.href = 'sales-dashboard.html'; }, 1500);
             return;
           }
-          // chargement liste users (pour agréger les saisies)
+          // users (pour agréger les saisies) + types de consultation (Booking)
           try {
             var us = await db.collection('users').get();
             usersCache = [];
             us.forEach(function (d) { usersCache.push(Object.assign({ uid: d.id }, d.data())); });
           } catch (e) { console.warn('[data-center] users', e); }
+          await loadBookingTypes();
 
           $('#dc-app').style.display = '';
           bindUI();
