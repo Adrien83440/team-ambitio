@@ -211,6 +211,15 @@ function startClientsListener(){
       // Charge paiements + témoignages en parallèle
       Promise.all([loadAllPayments(), loadAllTemoignages()]).then(function(){
         renderAll();
+      }).catch(function(err){
+        // Les paiements et témoignages sont des données SECONDAIRES
+        // (enrichissement de la fiche client). Si leur chargement échoue
+        // — typiquement une rule Firestore manquante sur 'payments' après
+        // un redéploiement de règles — on affiche quand même la liste des
+        // clients plutôt que de rester bloqué indéfiniment sur le spinner.
+        // L'erreur réelle est loguée en console pour diagnostic.
+        console.error('Clients — chargement données secondaires échoué:', err && (err.code || err.message), err);
+        renderAll();
       });
     }, function(err){
       console.error('Clients listener error:', err);
@@ -231,6 +240,11 @@ function loadAllPayments(){
         if (!paymentsCache[p.leadId]) paymentsCache[p.leadId] = [];
         paymentsCache[p.leadId].push(p);
       });
+    }).catch(function(err){
+      // Échec de lecture (ex : rule Firestore manquante sur 'payments').
+      // On dégrade proprement : ce chunk reste sans paiements en cache,
+      // les autres chunks et la liste clients ne sont pas bloqués.
+      console.error('Clients — lecture payments échouée:', err && (err.code || err.message));
     });
   });
   return Promise.all(promises);
