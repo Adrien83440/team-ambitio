@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Center · Ambitio</title>
+  <link rel="stylesheet" href="sales.css">
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+  <style>
+    /* ═══ Data Center — styles spécifiques à la page (extension de sales.css) ═══ */
+    .dc-main { padding: 24px 28px; max-width: 1400px; }
+
+    /* Header */
+    .dc-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+    .dc-title { font-size: 22px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.2; display: flex; align-items: center; gap: 10px; }
+    .dc-title-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 3px 8px; border-radius: 6px; background: rgba(96,165,250,0.12); color: var(--blue); border: 1px solid rgba(96,165,250,0.25); }
+    .dc-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .dc-head-actions { display: flex; gap: 8px; align-items: center; }
+
+    /* Sync pill */
+    .dc-sync { font-size: 11px; font-family: var(--font-m); color: var(--muted); display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; }
+    .dc-sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted2); }
+    .dc-sync-dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(52,211,153,0.6); }
+    .dc-sync-dot.err { background: var(--red2); }
+
+    /* Toolbar */
+    .dc-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+    .dc-search { flex: 1; min-width: 220px; max-width: 360px; position: relative; }
+    .dc-search input { width: 100%; padding: 8px 12px 8px 32px; background: var(--bg3); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: var(--font-b); font-size: 13px; outline: none; transition: border-color .15s; }
+    .dc-search input:focus { border-color: var(--border2); }
+    .dc-search::before { content: '⌕'; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
+    .dc-filter { display: flex; gap: 3px; padding: 3px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; }
+    .dc-filter button { padding: 6px 11px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--muted); background: none; border: none; transition: all .15s; }
+    .dc-filter button:hover { color: var(--text); }
+    .dc-filter button.active { background: var(--bg4); color: var(--text); font-weight: 600; }
+
+    /* Family section */
+    .dc-family { margin-bottom: 26px; }
+    .dc-family-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .dc-family-num { width: 24px; height: 24px; border-radius: 7px; background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.22); color: var(--blue); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .dc-family-name { font-size: 14px; font-weight: 700; letter-spacing: -0.3px; }
+    .dc-family-count { font-size: 11px; color: var(--muted); font-family: var(--font-m); }
+    .dc-family-edit { margin-left: auto; display: flex; gap: 6px; opacity: 0; transition: opacity .15s; }
+    .dc-family:hover .dc-family-edit { opacity: 1; }
+    .dc-mini-btn { width: 24px; height: 24px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg3); color: var(--muted); cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; transition: all .15s; }
+    .dc-mini-btn:hover { border-color: var(--border2); color: var(--text); }
+    .dc-mini-btn.danger:hover { border-color: rgba(239,68,68,0.4); color: var(--red2); }
+
+    /* KPI grid */
+    .dc-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+
+    /* KPI card — référentiel */
+    .dc-kpi {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius2);
+      padding: 15px 16px; position: relative; transition: border-color .2s; cursor: pointer;
+      display: flex; flex-direction: column; min-height: 132px;
+    }
+    .dc-kpi:hover { border-color: var(--border2); }
+    .dc-kpi::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; border-radius: var(--radius2) var(--radius2) 0 0; background: var(--src-color, var(--muted2)); opacity: 0.7; }
+    .dc-kpi-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+    .dc-kpi-name { font-size: 13.5px; font-weight: 700; letter-spacing: -0.2px; line-height: 1.3; }
+    .dc-kpi-unit { font-size: 10px; font-family: var(--font-m); color: var(--muted); background: var(--bg3); border: 1px solid var(--border); padding: 2px 6px; border-radius: 5px; flex-shrink: 0; white-space: nowrap; }
+    .dc-kpi-def { font-size: 12px; color: var(--muted); line-height: 1.5; flex: 1; }
+    .dc-kpi-formula {
+      margin-top: 10px; padding: 7px 9px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; font-family: var(--font-m); font-size: 11px; color: rgba(255,255,255,0.62);
+      display: flex; align-items: center; gap: 6px; word-break: break-word;
+    }
+    .dc-kpi-formula .fx { color: var(--blue); font-weight: 600; flex-shrink: 0; }
+    .dc-kpi-src { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; margin-top: 9px; align-self: flex-start; }
+    .dc-src-manual   { background: rgba(245,158,11,0.10);  color: var(--gold);  --src-color: var(--gold); }
+    .dc-src-firestore{ background: rgba(52,211,153,0.10);  color: var(--green); --src-color: var(--green); }
+    .dc-src-derived  { background: rgba(96,165,250,0.10);  color: var(--blue);  --src-color: var(--blue); }
+    .dc-kpi.s-manual { --src-color: var(--gold); }
+    .dc-kpi.s-firestore { --src-color: var(--green); }
+    .dc-kpi.s-derived { --src-color: var(--blue); }
+
+    .dc-add-kpi {
+      background: transparent; border: 1.5px dashed var(--border2); border-radius: var(--radius2);
+      color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 600; min-height: 132px;
+      display: flex; align-items: center; justify-content: center; gap: 7px; transition: all .15s;
+    }
+    .dc-add-kpi:hover { border-color: var(--blue); color: var(--blue); background: rgba(96,165,250,0.03); }
+
+    /* Empty / loading */
+    .dc-empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .dc-empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.5; }
+    .dc-empty h3 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .dc-empty p { font-size: 13px; max-width: 420px; margin: 0 auto 16px; line-height: 1.6; }
+
+    /* ─── Live tab ─── */
+    .dc-live-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+    .dc-month {
+      display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px;
+      background: var(--bg3); border: 1px solid var(--border); font-weight: 600; font-size: 14px;
+    }
+    .dc-month button { width: 24px; height: 24px; border: none; background: var(--bg4); color: var(--muted); cursor: pointer; font-size: 11px; border-radius: 6px; transition: color .15s; }
+    .dc-month button:hover { color: var(--text); }
+    .dc-month-label { min-width: 110px; text-align: center; letter-spacing: -0.2px; }
+    .dc-live-note { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+
+    .dc-live-kpi {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius2);
+      padding: 15px 16px; position: relative; overflow: hidden;
+    }
+    .dc-live-kpi::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--src-color, var(--muted2)); opacity: 0.7; }
+    .dc-live-kpi.s-manual { --src-color: var(--gold); }
+    .dc-live-kpi.s-firestore { --src-color: var(--green); }
+    .dc-live-kpi.s-derived { --src-color: var(--blue); }
+    .dc-live-label { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .dc-live-label .tag { font-size: 9px; font-family: var(--font-m); padding: 1px 5px; border-radius: 4px; flex-shrink: 0; }
+    .dc-live-value { font-size: 25px; font-weight: 700; letter-spacing: -1px; line-height: 1; font-family: var(--font-d); }
+    .dc-live-value.muted { color: var(--muted2); font-weight: 600; }
+    .dc-live-formula { font-size: 10px; font-family: var(--font-m); color: var(--muted2); margin-top: 7px; word-break: break-word; }
+    .dc-live-input {
+      width: 100%; margin-top: 4px; padding: 7px 10px; background: rgba(245,158,11,0.05);
+      border: 1.5px solid rgba(245,158,11,0.22); border-radius: 8px; color: var(--text);
+      font-family: var(--font-m); font-size: 16px; font-weight: 700; outline: none; transition: border-color .15s;
+    }
+    .dc-live-input:focus { border-color: var(--gold); }
+    .dc-live-input::placeholder { color: var(--muted2); font-weight: 400; }
+
+    /* Modal extensions */
+    .modal.dc-modal { max-width: 540px; }
+    .dc-form-help { font-size: 11px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .dc-seg { display: flex; gap: 4px; }
+    .dc-seg label {
+      flex: 1; text-align: center; padding: 9px 6px; border-radius: 9px; cursor: pointer;
+      border: 1.5px solid var(--border); background: var(--bg3); font-size: 12px; font-weight: 600;
+      color: var(--muted); transition: all .15s;
+    }
+    .dc-seg label:hover { border-color: var(--border2); }
+    .dc-seg input { display: none; }
+    .dc-seg input:checked + span { color: var(--text); }
+    .dc-seg label:has(input:checked) { background: var(--bg4); }
+    .dc-seg label:has(input[value="manual"]:checked) { border-color: rgba(245,158,11,0.5); }
+    .dc-seg label:has(input[value="firestore"]:checked) { border-color: rgba(52,211,153,0.5); }
+    .dc-seg label:has(input[value="derived"]:checked) { border-color: rgba(96,165,250,0.5); }
+    .dc-modal textarea.form-input { resize: vertical; min-height: 60px; line-height: 1.5; }
+    .dc-modal-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .dc-modal-foot .spacer { flex: 1; }
+    .dc-del-btn { background: none; border: 1px solid var(--border); color: var(--muted); padding: 8px 14px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+    .dc-del-btn:hover { border-color: rgba(239,68,68,0.4); color: var(--red2); }
+
+    .dc-toast {
+      position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: var(--bg4); border: 1px solid var(--border2); color: var(--text);
+      padding: 11px 20px; border-radius: 11px; font-size: 13px; font-weight: 600;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5); z-index: 2000; opacity: 0; transition: all .25s cubic-bezier(.4,0,.2,1);
+    }
+    .dc-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .dc-toast.err { border-color: rgba(239,68,68,0.4); }
+
+    @media(max-width: 1100px) { .dc-kpi-grid { grid-template-columns: repeat(2,1fr); } }
+    @media(max-width: 760px)  { .dc-kpi-grid { grid-template-columns: 1fr; } .dc-main { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <div id="nav-container"></div>
+
+  <main class="dc-main" id="dc-app" style="display:none">
+    <!-- Header -->
+    <div class="dc-head">
+      <div>
+        <h1 class="dc-title">Data Center <span class="dc-title-badge">Sales Ops</span></h1>
+        <p class="dc-sub">Référentiel des KPIs — définitions, formules de calcul et suivi mensuel</p>
+      </div>
+      <div class="dc-head-actions">
+        <div class="dc-sync" id="dc-sync"><span class="dc-sync-dot" id="dc-sync-dot"></span><span id="dc-sync-text">Connexion…</span></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs mb" style="margin-bottom:18px">
+      <div class="tab active" data-tab="ref">📚 Référentiel</div>
+      <div class="tab" data-tab="live">📊 Suivi Live</div>
+    </div>
+
+    <!-- ════ TAB : RÉFÉRENTIEL ════ -->
+    <section id="tab-ref">
+      <div class="dc-toolbar">
+        <div class="dc-search"><input type="text" id="dc-search-input" placeholder="Rechercher un KPI…"></div>
+        <div class="dc-filter" id="dc-src-filter">
+          <button class="active" data-src="all">Tous</button>
+          <button data-src="manual">🟡 Manuel</button>
+          <button data-src="firestore">🟢 Firestore</button>
+          <button data-src="derived">🔵 Calculé</button>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" id="dc-add-family">+ Famille</button>
+        <button class="btn btn-ghost" id="dc-reset-pdf">↻ Réinitialiser (PDF)</button>
+      </div>
+      <div id="dc-ref-body">
+        <div class="dc-empty"><div class="dc-empty-icon">⏳</div><p>Chargement du référentiel…</p></div>
+      </div>
+    </section>
+
+    <!-- ════ TAB : LIVE ════ -->
+    <section id="tab-live" style="display:none">
+      <div class="dc-live-bar">
+        <div class="dc-month">
+          <button id="dc-month-prev">‹</button>
+          <span class="dc-month-label" id="dc-month-label">—</span>
+          <button id="dc-month-next">›</button>
+        </div>
+        <div class="dc-live-note">
+          <span class="dc-kpi-src dc-src-manual" style="margin:0">🟡 Saisie manuelle</span>
+          <span class="dc-kpi-src dc-src-firestore" style="margin:0">🟢 Agrégé Firestore</span>
+          <span class="dc-kpi-src dc-src-derived" style="margin:0">🔵 Calculé</span>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn btn-primary" id="dc-save-manual">💾 Enregistrer les saisies</button>
+      </div>
+      <div id="dc-live-body">
+        <div class="dc-empty"><div class="dc-empty-icon">⏳</div><p>Chargement…</p></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ════ MODALE : éditer / créer un KPI ════ -->
+  <div class="modal-backdrop" id="dc-kpi-modal" style="display:none">
+    <div class="modal dc-modal">
+      <div class="modal-header">
+        <div class="modal-title" id="dc-kpi-modal-title">Nouveau KPI</div>
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label">Nom du KPI</label>
+          <input type="text" class="form-input" id="dc-f-label" placeholder="Ex : Closing Live %">
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Famille</label>
+            <select class="form-input" id="dc-f-family"></select>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Unité</label>
+            <select class="form-input" id="dc-f-unit">
+              <option value="nombre">Nombre</option>
+              <option value="%">Pourcentage (%)</option>
+              <option value="€">Euro (€)</option>
+              <option value="jours">Jours</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Définition</label>
+          <textarea class="form-input" id="dc-f-def" placeholder="À quoi sert ce KPI, ce qu'il mesure…"></textarea>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Source de la donnée</label>
+          <div class="dc-seg" id="dc-f-source">
+            <label><input type="radio" name="dc-src" value="manual"><span>🟡 Saisie manuelle</span></label>
+            <label><input type="radio" name="dc-src" value="firestore"><span>🟢 Agrégé Firestore</span></label>
+            <label><input type="radio" name="dc-src" value="derived"><span>🔵 Calculé (formule)</span></label>
+          </div>
+          <div class="dc-form-help" id="dc-src-help"></div>
+        </div>
+        <!-- Champ conditionnel : Firestore -->
+        <div class="form-field" id="dc-f-fsfield-wrap" style="display:none">
+          <label class="form-label">Champ Firestore agrégé (somme sur l'équipe / mois)</label>
+          <select class="form-input" id="dc-f-fsfield">
+            <optgroup label="Closing">
+              <option value="closing.calls">closing · calls</option>
+              <option value="closing.lives">closing · lives (calls live)</option>
+              <option value="closing.offres">closing · offres</option>
+              <option value="closing.deposits">closing · deposits</option>
+              <option value="closing.closes">closing · closes</option>
+              <option value="closing.hardClose">closing · hardClose</option>
+              <option value="closing.followUp">closing · followUp</option>
+              <option value="closing.contracte">closing · contracté (€)</option>
+              <option value="closing.collecte">closing · collecté (€)</option>
+            </optgroup>
+            <optgroup label="Setting">
+              <option value="setting.leads">setting · leads</option>
+              <option value="setting.calls">setting · calls</option>
+              <option value="setting.decroches">setting · décrochés</option>
+              <option value="setting.propRdv">setting · propositions RDV</option>
+              <option value="setting.sets">setting · sets</option>
+              <option value="setting.presents">setting · présents</option>
+              <option value="setting.deposits">setting · deposits</option>
+              <option value="setting.closes">setting · closes</option>
+              <option value="setting.collecte">setting · collecté (€)</option>
+            </optgroup>
+          </select>
+          <div class="dc-form-help">Le suivi Live additionne ce champ sur les 6 semaines (s1→s6) de tous les membres de l'équipe pour le mois sélectionné.</div>
+        </div>
+        <!-- Champ conditionnel : formule -->
+        <div class="form-field" id="dc-f-expr-wrap" style="display:none">
+          <label class="form-label">Formule (lisible)</label>
+          <input type="text" class="form-input" id="dc-f-formula" placeholder="Ex : Closes / Call Live × 100" style="margin-bottom:8px">
+          <label class="form-label">Expression calculable</label>
+          <input type="text" class="form-input" id="dc-f-expr" placeholder="Ex : closes / call_live * 100" style="font-family:var(--font-m);font-size:12px">
+          <div class="dc-form-help" id="dc-expr-help">Utilise les identifiants des autres KPIs. Opérateurs autorisés : <code>+ − * / ( )</code>. Une division par zéro renvoie « — ».</div>
+        </div>
+      </div>
+      <div class="modal-body" style="padding-top:0">
+        <div class="dc-modal-foot">
+          <button class="dc-del-btn" id="dc-kpi-delete" style="display:none">Supprimer</button>
+          <div class="spacer"></div>
+          <button class="btn btn-ghost" data-close>Annuler</button>
+          <button class="btn btn-primary" id="dc-kpi-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ MODALE : famille ════ -->
+  <div class="modal-backdrop" id="dc-family-modal" style="display:none">
+    <div class="modal dc-modal" style="max-width:420px">
+      <div class="modal-header">
+        <div class="modal-title" id="dc-family-modal-title">Nouvelle famille</div>
+        <button class="modal-close" data-close>✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label">Nom de la famille</label>
+          <input type="text" class="form-input" id="dc-fam-label" placeholder="Ex : Cash & ARPU">
+        </div>
+        <div class="dc-modal-foot">
+          <button class="dc-del-btn" id="dc-fam-delete" style="display:none">Supprimer</button>
+          <div class="spacer"></div>
+          <button class="btn btn-ghost" data-close>Annuler</button>
+          <button class="btn btn-primary" id="dc-fam-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dc-toast" id="dc-toast"></div>
+
+  <script src="nav.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    /* ════════════════════════════════════════════════════════════════
+       Data Center — contrôleur
+       Stockage : un document unique  _config/kpi_referentiel
+         { families:[...], kpis:[...], manualData:{ 'YYYY-MM':{kpiId:val} },
+           updatedAt, updatedBy }
+       → couvert par la règle Firestore existante  match /_config/{docId}
+         (allow read/write: if isAdmin()) — aucune modif de firestore.rules.
+       ════════════════════════════════════════════════════════════════ */
+
+    var $  = function (s, r) { return (r || document).querySelector(s); };
+    var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+    var esc = function (s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+
+    var db, currentUser;
+    var REF_DOC = null;          // contenu du référentiel (live)
+    var refUnsub = null;
+    var usersCache = [];         // [{uid,...}]
+    var liveMonth = null;        // 'YYYY-MM'
+    var liveAgg = {};            // { fsField : somme } pour le mois courant
+    var manualDraft = {};        // saisies en cours d'édition (mois courant)
+    var editingKpiId = null, editingFamilyId = null;
+
+    var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+    /* ─── Helpers format ─── */
+    function euro(v)  { return (v == null || isNaN(v)) ? '—' : '€\u202f' + Math.round(v).toLocaleString('fr-FR'); }
+    function fmtVal(v, unit) {
+      if (v == null || isNaN(v) || !isFinite(v)) return '—';
+      if (unit === '€')     return euro(v);
+      if (unit === '%')     return (Math.round(v * 10) / 10).toLocaleString('fr-FR') + ' %';
+      if (unit === 'jours') return (Math.round(v * 10) / 10).toLocaleString('fr-FR') + ' j';
+      return (Math.round(v * 100) / 100).toLocaleString('fr-FR');
+    }
+    function monthKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+    function monthLabel(key) { var p = key.split('-'); return MONTHS_FR[parseInt(p[1], 10) - 1] + ' ' + p[0]; }
+
+    function toast(msg, isErr) {
+      var t = $('#dc-toast');
+      t.textContent = msg;
+      t.className = 'dc-toast show' + (isErr ? ' err' : '');
+      clearTimeout(t._t);
+      t._t = setTimeout(function () { t.className = 'dc-toast'; }, 3200);
+    }
+    function setSync(state, txt) {
+      $('#dc-sync-dot').className = 'dc-sync-dot' + (state ? ' ' + state : '');
+      $('#dc-sync-text').textContent = txt;
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       SEED — référentiel KPI Sales Ops (source : Référentiel KPI WonderQueen)
+       Chaque KPI : id, familyId, label, definition, formula (lisible),
+       unit, source ('manual'|'firestore'|'derived'), expr / fsField.
+       ════════════════════════════════════════════════════════════════ */
+    function buildSeed() {
+      var families = [
+        { id: 'inputs',  label: 'Inputs & volumes bruts' },
+        { id: 'funnel',  label: 'Ratios funnel (closing & conversion)' },
+        { id: 'cash',    label: 'Cash & ARPU' },
+        { id: 'setting', label: 'Setting' },
+        { id: 'global',  label: 'Performance globale' }
+      ];
+      var K = function (id, familyId, label, definition, formula, unit, source, extra) {
+        var o = { id: id, familyId: familyId, label: label, definition: definition,
+                  formula: formula || '', unit: unit, source: source };
+        if (extra) for (var k in extra) o[k] = extra[k];
+        return o;
+      };
+      var kpis = [
+        /* ── 1. Inputs & volumes bruts ── */
+        K('budget_pub','inputs','Budget PUB','Budget marketing dépensé sur la période.','Saisie directe (€)','€','manual'),
+        K('cac_market_only','inputs','CAC Market Only','Coût d\'acquisition client basé uniquement sur la dépense média.','Budget PUB / Closes','€','derived',{ expr:'budget_pub / closes' }),
+        K('cpr','inputs','CPR','Coût Par Rendez-vous.','Budget PUB / Total Call Booked','€','derived',{ expr:'budget_pub / total_call_booked' }),
+        K('call_to_close','inputs','Call to Close','Nombre de calls nécessaires en moyenne pour générer un close.','Call Live / Closes','nombre','derived',{ expr:'call_live / closes' }),
+        K('break_even_calls','inputs','Break-Even Calls','Nombre de calls live nécessaires pour atteindre le seuil de rentabilité.','Budget PUB / Cash per call live','nombre','derived',{ expr:'budget_pub / cash_per_call_live' }),
+        K('break_even_closing_pct','inputs','Break Even Closing (live) %','Taux de closing live minimum pour être rentable.','Break-Even Calls / Call Live × 100','%','derived',{ expr:'break_even_calls / call_live * 100' }),
+        K('nombre_slots','inputs','Nombre de slots','Nombre de créneaux ouverts dans l\'agenda closer sur la période.','Saisie directe','nombre','manual'),
+        K('total_lead','inputs','Total Lead','Nombre total de leads entrés dans le funnel.','Saisie directe','nombre','manual'),
+        K('total_call_booked','inputs','Total Call Booked','Nombre total de RDV pris dans l\'agenda.','Saisie directe','nombre','manual'),
+        K('kept_call','inputs','Kept Call','Nombre de RDV honorés (présent au call, non annulé / no-show).','Saisie directe','nombre','manual'),
+        K('call_live','inputs','Call Live','Nombre de calls effectivement tenus en live avec un closer.','Saisie directe','nombre','manual'),
+        K('offer','inputs','Offer','Nombre de calls où une offre a été présentée (pitch + offre).','Saisie directe','nombre','manual'),
+        K('deposits','inputs','Deposits','Nombre d\'acomptes / paiements partiels reçus.','Saisie directe','nombre','manual'),
+        K('closes','inputs','Closes','Nombre total de ventes signées (contrats fermés).','Saisie directe','nombre','manual'),
+        K('occ','inputs','OCC','One Call Close — ventes conclues dès le 1er call.','Saisie directe (comptage)','nombre','manual'),
+        K('fuc','inputs','FUC','Follow-Up Close — ventes conclues après follow-up.','Saisie directe (comptage)','nombre','manual'),
+
+        /* ── 2. Ratios funnel ── */
+        K('occ_pct','funnel','OCC %','Part des ventes faites au 1er call.','OCC / Closes × 100','%','derived',{ expr:'occ / closes * 100' }),
+        K('closing_booked_pct','funnel','Closing Booked %','Taux de close sur la base des RDV pris.','Closes / Total Call Booked × 100','%','derived',{ expr:'closes / total_call_booked * 100' }),
+        K('closing_live_pct','funnel','Closing Live %','Taux de close sur la base des calls live.','Closes / Call Live × 100','%','derived',{ expr:'closes / call_live * 100' }),
+        K('closing_offer_pct','funnel','Closing Offer %','Taux de close sur la base des offres présentées.','Closes / Offer × 100','%','derived',{ expr:'closes / offer * 100' }),
+        K('kept_pct','funnel','Kept %','Taux de RDV honorés.','Kept Call / Total Call Booked × 100','%','derived',{ expr:'kept_call / total_call_booked * 100' }),
+        K('btcl_pct','funnel','BTCL %','Booking To Call Live — passage du booking au call live.','Call Live / Total Call Booked × 100','%','derived',{ expr:'call_live / total_call_booked * 100' }),
+        K('showup_pct','funnel','Show-up %','Taux de présentation au call.','Call Live / Kept Call × 100','%','derived',{ expr:'call_live / kept_call * 100' }),
+        K('epr_pct','funnel','EPR %','Efficiency Pitch Rate — efficacité de pitch sur les bookings.','Offer / Total Call Booked × 100','%','derived',{ expr:'offer / total_call_booked * 100' }),
+        K('osr_pct','funnel','OSR %','Offer Slot Rate — part des slots utilisés pour pitcher.','Nombre de slots / Offer × 100','%','derived',{ expr:'nombre_slots / offer * 100' }),
+        K('offer_pct','funnel','Offer %','Taux de présentation d\'offre sur les calls live.','Offer / Call Live × 100','%','derived',{ expr:'offer / call_live * 100' }),
+
+        /* ── 3. Cash & ARPU ── */
+        K('cash_per_call_booked','cash','Cash per call booked','Cash généré par RDV pris.','Collecté Réel / Total Call Booked','€','derived',{ expr:'total_collecte_reel / total_call_booked' }),
+        K('cash_per_call_live','cash','Cash per call live','Cash généré par call live.','Collecté Réel / Call Live','€','derived',{ expr:'total_collecte_reel / call_live' }),
+        K('ltb_pct','cash','LTB %','Lead To Booking — taux de transformation lead → RDV.','Total Call Booked / Total Lead × 100','%','derived',{ expr:'total_call_booked / total_lead * 100' }),
+        K('cancelled_rate','cash','Cancelled Rate','Taux d\'annulation des RDV.','(Total Call Booked − Kept Call) / Total Call Booked × 100','%','derived',{ expr:'(total_call_booked - kept_call) / total_call_booked * 100' }),
+        K('total_contacte','cash','Total contacté','Nombre total de leads contactés par le setting.','Saisie directe','nombre','manual'),
+        K('total_collecte_p','cash','Total Collecté P','Cash total contractualisé (prévu selon les contrats signés).','Saisie directe (€)','€','manual'),
+        K('total_collecte_reel','cash','Total Collecté Réel','Cash réellement encaissé sur la période.','Saisie directe (€)','€','manual'),
+        K('collecte_reel_pct','cash','Collecté Réel %','Part du contractualisé effectivement encaissée.','Collecté Réel / Collecté P × 100','%','derived',{ expr:'total_collecte_reel / total_collecte_p * 100' }),
+        K('aov','cash','AOV','Average Order Value — panier moyen par client.','Collecté Réel / Closes','€','derived',{ expr:'total_collecte_reel / closes' }),
+
+        /* ── 4. Setting ── */
+        K('nbr_sets','setting','Nbr de Sets','Nombre total de RDV pris par les setters.','Saisie directe','nombre','manual'),
+        K('nbr_sets_live','setting','Nbr de Sets Live','Nombre de RDV setters honorés en live (call tenu).','Saisie directe','nombre','manual'),
+        K('showup_sets_pct','setting','Show-Up sur Sets (NB) %','Taux de présentation sur les sets posés.','Nbr de Sets Live / Nbr de Sets × 100','%','derived',{ expr:'nbr_sets_live / nbr_sets * 100' }),
+        K('closes_sets_nb','setting','Closes (Sets NB)','Nombre de ventes attribuables au setting.','Saisie directe (comptage)','nombre','manual'),
+        K('tx_decroche','setting','Tx de décroché','Taux de décroché — saisie directe par le setter.','Saisie directe (renseigné par le setter)','%','manual'),
+        K('closing_live_sets_pct','setting','Closing Live (Sets) %','Taux de close sur les sets passés en live.','Closes (Sets NB) / Nbr de Sets Live × 100','%','derived',{ expr:'closes_sets_nb / nbr_sets_live * 100' }),
+        K('cash_collecte_setting_nb','setting','Cash collecté R Setting NB','Cash réellement collecté attribuable au setting.','Saisie directe (€)','€','manual'),
+
+        /* ── 5. Performance globale ── */
+        K('sales_velocity','global','Sales Velocity','Vitesse de génération de cash sur la période.','(Total Lead × Closing Live % × AOV) / TTS','€','derived',{ expr:'total_lead * closing_live_pct / 100 * aov / tts' }),
+        K('tts','global','TTS','Time To Sale — délai moyen entre lead entrant et close (en jours).','Σ (date close − date lead) / Closes','jours','manual')
+      ];
+      kpis.forEach(function (k, i) { k.order = i; });
+      families.forEach(function (f, i) { f.order = i; });
+      return { families: families, kpis: kpis, manualData: {} };
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       Évaluateur de formule — sûr (whitelist d'opérateurs)
+       ════════════════════════════════════════════════════════════════ */
+    function evalExpr(expr, ctx) {
+      if (!expr) return null;
+      var replaced = String(expr).replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, function (id) {
+        var v = ctx[id];
+        return (typeof v === 'number' && isFinite(v)) ? '(' + v + ')' : '(0)';
+      });
+      if (!/^[0-9.+\-*/()\s]*$/.test(replaced)) return null;
+      try {
+        var v = Function('"use strict";return (' + replaced + ');')();
+        return (typeof v === 'number' && isFinite(v)) ? v : null;
+      } catch (e) { return null; }
+    }
+
+    /* Calcule toutes les valeurs du mois courant.
+       Base = saisie manuelle + agrégats Firestore. Puis passes itératives
+       pour résoudre les KPIs dérivés (qui peuvent dépendre d'autres dérivés). */
+    function computeLiveValues() {
+      if (!REF_DOC) return {};
+      var ctx = {};
+      var kpis = REF_DOC.kpis || [];
+      // 1) bases : manuel + firestore
+      kpis.forEach(function (k) {
+        if (k.source === 'manual') {
+          var raw = manualDraft[k.id];
+          ctx[k.id] = (raw === '' || raw == null || isNaN(raw)) ? null : Number(raw);
+        } else if (k.source === 'firestore') {
+          ctx[k.id] = k.fsField && liveAgg[k.fsField] != null ? liveAgg[k.fsField] : null;
+        }
+      });
+      // 2) dérivés — passes itératives
+      for (var pass = 0; pass < 8; pass++) {
+        var changed = false;
+        kpis.forEach(function (k) {
+          if (k.source !== 'derived') return;
+          var v = evalExpr(k.expr, ctx);
+          if (ctx[k.id] !== v) { ctx[k.id] = v; changed = true; }
+        });
+        if (!changed) break;
+      }
+      return ctx;
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       FIRESTORE — chargement du référentiel + agrégats saisies
+       ════════════════════════════════════════════════════════════════ */
+    function refRef() { return db.collection('_config').doc('kpi_referentiel'); }
+
+    function watchReferentiel() {
+      if (refUnsub) refUnsub();
+      refUnsub = refRef().onSnapshot(function (snap) {
+        if (snap.exists) {
+          REF_DOC = snap.data();
+          if (!REF_DOC.families) REF_DOC.families = [];
+          if (!REF_DOC.kpis) REF_DOC.kpis = [];
+          if (!REF_DOC.manualData) REF_DOC.manualData = {};
+          setSync('ok', 'Synchronisé · ' + new Date().toLocaleTimeString('fr-FR'));
+        } else {
+          REF_DOC = null;
+          setSync('', 'Référentiel vide');
+        }
+        renderRef();
+        if ($('#tab-live').style.display !== 'none') renderLive();
+      }, function (err) {
+        console.error('[data-center] referentiel snapshot', err);
+        setSync('err', 'Erreur de synchronisation');
+        toast('Erreur de synchronisation Firestore', true);
+      });
+    }
+
+    async function saveReferentiel(patch, okMsg) {
+      patch.updatedAt = Date.now();
+      patch.updatedBy = currentUser ? (currentUser.email || currentUser.uid) : '';
+      try {
+        await refRef().set(patch, { merge: true });
+        if (okMsg) toast(okMsg);
+      } catch (e) {
+        console.error('[data-center] save', e);
+        toast('Échec de l\'enregistrement : ' + e.message, true);
+        throw e;
+      }
+    }
+
+    /* Agrège un champ "section.field" sur les 6 semaines, pour tous les
+       membres, sur le mois sélectionné. Gère aussi les totaux historiques
+       (_total / closing_total / setting_total). */
+    async function loadLiveAggregates() {
+      liveAgg = {};
+      if (!REF_DOC) return;
+      var fsFields = {};
+      (REF_DOC.kpis || []).forEach(function (k) {
+        if (k.source === 'firestore' && k.fsField) fsFields[k.fsField] = 0;
+      });
+      var fieldList = Object.keys(fsFields);
+      if (!fieldList.length || !usersCache.length) { liveAgg = fsFields; return; }
+
+      var WEEKS = ['s1','s2','s3','s4','s5','s6'];
+      var reads = usersCache.map(function (u) {
+        return db.collection('saisies').doc(u.uid).collection('mois').doc(liveMonth).get()
+          .then(function (s) { return s.exists ? s.data() : null; })
+          .catch(function () { return null; });
+      });
+      var docs = await Promise.all(reads);
+
+      docs.forEach(function (data) {
+        if (!data) return;
+        fieldList.forEach(function (path) {
+          var parts = path.split('.');           // ex : ['closing','closes']
+          var section = parts[0], field = parts[1];
+          var sum = 0;
+          // total historique éventuel
+          var totObj = data[section + '_total'] || (data._total && section ? data._total : null);
+          var weeklyObj = data[section];
+          if (weeklyObj && typeof weeklyObj === 'object') {
+            WEEKS.forEach(function (w) {
+              var wd = weeklyObj[w];
+              if (wd && typeof wd[field] === 'number') sum += wd[field];
+            });
+          }
+          if (totObj && typeof totObj[field] === 'number') {
+            // si pas de découpage hebdo trouvé, on prend le total
+            if (sum === 0) sum += totObj[field];
+          }
+          fsFields[path] += sum;
+        });
+      });
+      liveAgg = fsFields;
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       RENDER — onglet Référentiel
+       ════════════════════════════════════════════════════════════════ */
+    var refFilter = { src: 'all', q: '' };
+    var SRC_META = {
+      manual:    { cls: 'dc-src-manual',    icon: '🟡', label: 'Saisie manuelle' },
+      firestore: { cls: 'dc-src-firestore', icon: '🟢', label: 'Agrégé Firestore' },
+      derived:   { cls: 'dc-src-derived',   icon: '🔵', label: 'Calculé' }
+    };
+
+    function renderRef() {
+      var body = $('#dc-ref-body');
+      if (!REF_DOC || !REF_DOC.kpis.length) {
+        body.innerHTML =
+          '<div class="dc-empty">' +
+          '<div class="dc-empty-icon">📚</div>' +
+          '<h3>Aucun référentiel pour l\'instant</h3>' +
+          '<p>Initialise le data center avec les 44 KPIs Sales Ops du référentiel WonderQueen ' +
+          '(5 familles : volumes, ratios funnel, cash, setting, performance). Tu pourras tout éditer ensuite.</p>' +
+          '<button class="btn btn-primary" id="dc-init-seed">Initialiser le référentiel</button>' +
+          '</div>';
+        $('#dc-init-seed').onclick = doSeed;
+        return;
+      }
+      var families = (REF_DOC.families || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      var kpis = (REF_DOC.kpis || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      var q = refFilter.q.toLowerCase().trim();
+
+      var html = '';
+      families.forEach(function (fam, idx) {
+        var famKpis = kpis.filter(function (k) {
+          if (k.familyId !== fam.id) return false;
+          if (refFilter.src !== 'all' && k.source !== refFilter.src) return false;
+          if (q && (k.label + ' ' + k.definition + ' ' + k.formula).toLowerCase().indexOf(q) === -1) return false;
+          return true;
+        });
+        if (q || refFilter.src !== 'all') { if (!famKpis.length) return; }
+
+        html += '<div class="dc-family" data-fam="' + esc(fam.id) + '">';
+        html += '<div class="dc-family-head">';
+        html += '<div class="dc-family-num">' + (idx + 1) + '</div>';
+        html += '<div class="dc-family-name">' + esc(fam.label) + '</div>';
+        html += '<div class="dc-family-count">' + famKpis.length + ' KPI' + (famKpis.length > 1 ? 's' : '') + '</div>';
+        html += '<div class="dc-family-edit">';
+        html += '<button class="dc-mini-btn" data-edit-fam="' + esc(fam.id) + '" title="Renommer la famille">✎</button>';
+        html += '</div></div>';
+        html += '<div class="dc-kpi-grid">';
+
+        famKpis.forEach(function (k) {
+          var sm = SRC_META[k.source] || SRC_META.manual;
+          html += '<div class="dc-kpi s-' + esc(k.source) + '" data-kpi="' + esc(k.id) + '">';
+          html += '<div class="dc-kpi-top">';
+          html += '<div class="dc-kpi-name">' + esc(k.label) + '</div>';
+          html += '<div class="dc-kpi-unit">' + esc(k.unit) + '</div>';
+          html += '</div>';
+          html += '<div class="dc-kpi-def">' + esc(k.definition) + '</div>';
+          if (k.formula) {
+            html += '<div class="dc-kpi-formula"><span class="fx">ƒ</span><span>' + esc(k.formula) + '</span></div>';
+          }
+          html += '<div class="dc-kpi-src ' + sm.cls + '">' + sm.icon + ' ' + sm.label;
+          if (k.source === 'firestore' && k.fsField) html += ' · ' + esc(k.fsField);
+          html += '</div>';
+          html += '</div>';
+        });
+
+        if (!q && refFilter.src === 'all') {
+          html += '<button class="dc-add-kpi" data-add-kpi="' + esc(fam.id) + '">+ Ajouter un KPI</button>';
+        }
+        html += '</div></div>';
+      });
+
+      if (!html) {
+        html = '<div class="dc-empty"><div class="dc-empty-icon">🔍</div><p>Aucun KPI ne correspond à la recherche.</p></div>';
+      }
+      body.innerHTML = html;
+
+      $$('[data-kpi]', body).forEach(function (el) {
+        el.onclick = function () { openKpiModal(el.getAttribute('data-kpi')); };
+      });
+      $$('[data-add-kpi]', body).forEach(function (el) {
+        el.onclick = function (e) { e.stopPropagation(); openKpiModal(null, el.getAttribute('data-add-kpi')); };
+      });
+      $$('[data-edit-fam]', body).forEach(function (el) {
+        el.onclick = function (e) { e.stopPropagation(); openFamilyModal(el.getAttribute('data-edit-fam')); };
+      });
+    }
+
+    async function doSeed() {
+      var seed = buildSeed();
+      try {
+        await saveReferentiel(seed, 'Référentiel initialisé — 44 KPIs');
+      } catch (e) {}
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       MODALE KPI
+       ════════════════════════════════════════════════════════════════ */
+    function fillFamilySelect() {
+      var sel = $('#dc-f-family');
+      var fams = (REF_DOC && REF_DOC.families || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      sel.innerHTML = fams.map(function (f) { return '<option value="' + esc(f.id) + '">' + esc(f.label) + '</option>'; }).join('');
+    }
+
+    function syncSourceFields() {
+      var src = ($('input[name="dc-src"]:checked') || {}).value;
+      $('#dc-f-fsfield-wrap').style.display = src === 'firestore' ? '' : 'none';
+      $('#dc-f-expr-wrap').style.display    = src === 'derived'   ? '' : 'none';
+      var help = {
+        manual:    'Valeur saisie chaque mois à la main dans l\'onglet « Suivi Live ».',
+        firestore: 'Valeur agrégée automatiquement depuis les saisies de l\'équipe (collection saisies).',
+        derived:   'Valeur calculée à partir d\'autres KPIs via une formule.'
+      };
+      $('#dc-src-help').textContent = src ? help[src] : '';
+    }
+
+    function openKpiModal(kpiId, presetFamily) {
+      if (!REF_DOC) return;
+      editingKpiId = kpiId;
+      fillFamilySelect();
+      var k = kpiId ? (REF_DOC.kpis || []).filter(function (x) { return x.id === kpiId; })[0] : null;
+
+      $('#dc-kpi-modal-title').textContent = k ? 'Éditer : ' + k.label : 'Nouveau KPI';
+      $('#dc-f-label').value   = k ? k.label : '';
+      $('#dc-f-family').value  = k ? k.familyId : (presetFamily || ($('#dc-f-family').options[0] || {}).value || '');
+      $('#dc-f-unit').value    = k ? k.unit : 'nombre';
+      $('#dc-f-def').value     = k ? k.definition : '';
+      $('#dc-f-formula').value = k ? (k.formula || '') : '';
+      $('#dc-f-expr').value    = k ? (k.expr || '') : '';
+      var src = k ? k.source : 'manual';
+      var radio = $('input[name="dc-src"][value="' + src + '"]');
+      if (radio) radio.checked = true;
+      $('#dc-f-fsfield').value = k && k.fsField ? k.fsField : 'closing.closes';
+      syncSourceFields();
+      $('#dc-kpi-delete').style.display = k ? '' : 'none';
+      $('#dc-kpi-modal').style.display = 'flex';
+    }
+    function closeKpiModal() { $('#dc-kpi-modal').style.display = 'none'; editingKpiId = null; }
+
+    function slugify(s) {
+      return String(s).toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'kpi';
+    }
+
+    async function saveKpi() {
+      if (!REF_DOC) return;
+      var label = $('#dc-f-label').value.trim();
+      if (!label) { toast('Le nom du KPI est requis', true); return; }
+      var src = ($('input[name="dc-src"]:checked') || {}).value || 'manual';
+      var kpis = (REF_DOC.kpis || []).slice();
+      var existing = editingKpiId ? kpis.filter(function (x) { return x.id === editingKpiId; })[0] : null;
+
+      var obj = existing ? Object.assign({}, existing) : {
+        id: (function () {
+          var base = slugify(label), id = base, n = 2;
+          while (kpis.some(function (x) { return x.id === id; })) id = base + '_' + (n++);
+          return id;
+        })(),
+        order: kpis.length
+      };
+      obj.label = label;
+      obj.familyId = $('#dc-f-family').value;
+      obj.unit = $('#dc-f-unit').value;
+      obj.definition = $('#dc-f-def').value.trim();
+      obj.source = src;
+      obj.formula = $('#dc-f-formula').value.trim();
+      obj.expr = src === 'derived' ? $('#dc-f-expr').value.trim() : '';
+      obj.fsField = src === 'firestore' ? $('#dc-f-fsfield').value : '';
+      if (src === 'firestore' && !obj.formula) obj.formula = 'Agrégé · ' + obj.fsField;
+      if (src === 'manual') obj.formula = obj.formula || 'Saisie directe';
+
+      if (src === 'derived' && obj.expr) {
+        var test = evalExpr(obj.expr, {});
+        if (test === null && !/^[0-9a-zA-Z_.+\-*/()\s]+$/.test(obj.expr)) {
+          toast('Expression invalide — vérifie les opérateurs', true); return;
+        }
+      }
+
+      if (existing) {
+        kpis = kpis.map(function (x) { return x.id === existing.id ? obj : x; });
+      } else {
+        kpis.push(obj);
+      }
+      try {
+        await saveReferentiel({ kpis: kpis }, existing ? 'KPI mis à jour' : 'KPI ajouté');
+        closeKpiModal();
+      } catch (e) {}
+    }
+
+    async function deleteKpi() {
+      if (!editingKpiId || !REF_DOC) return;
+      var k = (REF_DOC.kpis || []).filter(function (x) { return x.id === editingKpiId; })[0];
+      if (!k) return;
+      // avertir si d'autres KPIs dépendent de celui-ci
+      var deps = (REF_DOC.kpis || []).filter(function (x) {
+        return x.source === 'derived' && x.expr && new RegExp('\\b' + editingKpiId + '\\b').test(x.expr);
+      });
+      var msg = 'Supprimer « ' + k.label +' » ?';
+      if (deps.length) msg += '\n\n⚠️ ' + deps.length + ' KPI(s) calculé(s) utilisent ce KPI dans leur formule : ' +
+        deps.map(function (d) { return d.label; }).join(', ') + '. Leur calcul renverra « — ».';
+      if (!confirm(msg)) return;
+      var kpis = (REF_DOC.kpis || []).filter(function (x) { return x.id !== editingKpiId; });
+      try {
+        await saveReferentiel({ kpis: kpis }, 'KPI supprimé');
+        closeKpiModal();
+      } catch (e) {}
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       MODALE FAMILLE
+       ════════════════════════════════════════════════════════════════ */
+    function openFamilyModal(famId) {
+      editingFamilyId = famId;
+      var f = famId ? (REF_DOC.families || []).filter(function (x) { return x.id === famId; })[0] : null;
+      $('#dc-family-modal-title').textContent = f ? 'Renommer la famille' : 'Nouvelle famille';
+      $('#dc-fam-label').value = f ? f.label : '';
+      $('#dc-fam-delete').style.display = f ? '' : 'none';
+      $('#dc-family-modal').style.display = 'flex';
+    }
+    function closeFamilyModal() { $('#dc-family-modal').style.display = 'none'; editingFamilyId = null; }
+
+    async function saveFamily() {
+      if (!REF_DOC) return;
+      var label = $('#dc-fam-label').value.trim();
+      if (!label) { toast('Le nom de la famille est requis', true); return; }
+      var families = (REF_DOC.families || []).slice();
+      if (editingFamilyId) {
+        families = families.map(function (f) { return f.id === editingFamilyId ? Object.assign({}, f, { label: label }) : f; });
+      } else {
+        var base = slugify(label), id = base, n = 2;
+        while (families.some(function (f) { return f.id === id; })) id = base + '_' + (n++);
+        families.push({ id: id, label: label, order: families.length });
+      }
+      try {
+        await saveReferentiel({ families: families }, editingFamilyId ? 'Famille renommée' : 'Famille ajoutée');
+        closeFamilyModal();
+      } catch (e) {}
+    }
+
+    async function deleteFamily() {
+      if (!editingFamilyId || !REF_DOC) return;
+      var f = (REF_DOC.families || []).filter(function (x) { return x.id === editingFamilyId; })[0];
+      if (!f) return;
+      var inFam = (REF_DOC.kpis || []).filter(function (k) { return k.familyId === editingFamilyId; });
+      if (inFam.length) {
+        toast('Impossible : ' + inFam.length + ' KPI(s) sont dans cette famille. Déplace-les d\'abord.', true);
+        return;
+      }
+      if (!confirm('Supprimer la famille « ' + f.label + ' » ?')) return;
+      var families = (REF_DOC.families || []).filter(function (x) { return x.id !== editingFamilyId; });
+      try {
+        await saveReferentiel({ families: families }, 'Famille supprimée');
+        closeFamilyModal();
+      } catch (e) {}
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       RENDER — onglet Suivi Live
+       ════════════════════════════════════════════════════════════════ */
+    async function renderLive() {
+      var body = $('#dc-live-body');
+      $('#dc-month-label').textContent = liveMonth ? monthLabel(liveMonth) : '—';
+      if (!REF_DOC || !REF_DOC.kpis.length) {
+        body.innerHTML = '<div class="dc-empty"><div class="dc-empty-icon">📊</div>' +
+          '<h3>Référentiel requis</h3><p>Initialise d\'abord le référentiel dans l\'onglet « Référentiel ».</p></div>';
+        return;
+      }
+      body.innerHTML = '<div class="dc-empty"><div class="dc-empty-icon">⏳</div><p>Agrégation des saisies de l\'équipe…</p></div>';
+
+      // saisie manuelle du mois → brouillon éditable
+      manualDraft = Object.assign({}, (REF_DOC.manualData && REF_DOC.manualData[liveMonth]) || {});
+      try { await loadLiveAggregates(); } catch (e) { console.warn('[data-center] aggregates', e); }
+
+      var ctx = computeLiveValues();
+      var families = (REF_DOC.families || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+      var kpis = (REF_DOC.kpis || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+
+      var html = '';
+      families.forEach(function (fam, idx) {
+        var famKpis = kpis.filter(function (k) { return k.familyId === fam.id; });
+        if (!famKpis.length) return;
+        html += '<div class="dc-family">';
+        html += '<div class="dc-family-head"><div class="dc-family-num">' + (idx + 1) + '</div>' +
+                '<div class="dc-family-name">' + esc(fam.label) + '</div>' +
+                '<div class="dc-family-count">' + famKpis.length + ' KPI' + (famKpis.length > 1 ? 's' : '') + '</div></div>';
+        html += '<div class="dc-kpi-grid">';
+        famKpis.forEach(function (k) {
+          var sm = SRC_META[k.source] || SRC_META.manual;
+          var val = ctx[k.id];
+          html += '<div class="dc-live-kpi s-' + esc(k.source) + '">';
+          html += '<div class="dc-live-label"><span>' + esc(k.label) + '</span>' +
+                  '<span class="tag ' + sm.cls + '">' + sm.icon + '</span></div>';
+          if (k.source === 'manual') {
+            var dv = manualDraft[k.id];
+            html += '<input class="dc-live-input" type="number" step="any" data-manual="' + esc(k.id) + '" ' +
+                    'value="' + (dv == null ? '' : esc(dv)) + '" placeholder="—">';
+          } else {
+            var display = fmtVal(val, k.unit);
+            html += '<div class="dc-live-value' + (display === '—' ? ' muted' : '') + '">' + display + '</div>';
+            if (k.source === 'derived' && k.formula) {
+              html += '<div class="dc-live-formula">ƒ ' + esc(k.formula) + '</div>';
+            } else if (k.source === 'firestore' && k.fsField) {
+              html += '<div class="dc-live-formula">Σ ' + esc(k.fsField) + ' · équipe</div>';
+            }
+          }
+          html += '</div>';
+        });
+        html += '</div></div>';
+      });
+      body.innerHTML = html;
+
+      // recalcul à la volée quand on tape une saisie manuelle
+      $$('[data-manual]', body).forEach(function (input) {
+        input.oninput = function () {
+          var id = input.getAttribute('data-manual');
+          manualDraft[id] = input.value;
+          recomputeDerivedDisplay();
+        };
+      });
+    }
+
+    // met à jour uniquement l'affichage des KPIs dérivés (sans re-render complet)
+    function recomputeDerivedDisplay() {
+      var ctx = computeLiveValues();
+      var body = $('#dc-live-body');
+      var kpis = REF_DOC.kpis || [];
+      $$('.dc-live-kpi.s-derived', body).forEach(function (card, i) {});
+      // on retrouve les cartes dérivées dans l'ordre du DOM
+      var derivedCards = $$('.dc-live-kpi.s-derived .dc-live-value', body);
+      var derivedKpis = [];
+      (REF_DOC.families || []).slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); })
+        .forEach(function (fam) {
+          kpis.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0); })
+            .filter(function (k) { return k.familyId === fam.id; })
+            .forEach(function (k) { if (k.source === 'derived') derivedKpis.push(k); });
+        });
+      derivedCards.forEach(function (el, i) {
+        var k = derivedKpis[i];
+        if (!k) return;
+        var display = fmtVal(ctx[k.id], k.unit);
+        el.textContent = display;
+        el.className = 'dc-live-value' + (display === '—' ? ' muted' : '');
+      });
+    }
+
+    async function saveManualData() {
+      if (!REF_DOC || !liveMonth) return;
+      var clean = {};
+      Object.keys(manualDraft).forEach(function (id) {
+        var v = manualDraft[id];
+        if (v !== '' && v != null && !isNaN(v)) clean[id] = Number(v);
+      });
+      var patch = { manualData: {} };
+      patch.manualData[liveMonth] = clean;
+      try {
+        await saveReferentiel(patch, 'Saisies enregistrées · ' + monthLabel(liveMonth));
+      } catch (e) {}
+    }
+
+    function shiftMonth(delta) {
+      var p = liveMonth.split('-');
+      var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1 + delta, 1);
+      liveMonth = monthKey(d);
+      renderLive();
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       NAVIGATION / TABS / BINDINGS
+       ════════════════════════════════════════════════════════════════ */
+    function bindUI() {
+      $$('.tab').forEach(function (t) {
+        t.onclick = function () {
+          $$('.tab').forEach(function (x) { x.classList.remove('active'); });
+          t.classList.add('active');
+          var tab = t.getAttribute('data-tab');
+          $('#tab-ref').style.display  = tab === 'ref'  ? '' : 'none';
+          $('#tab-live').style.display = tab === 'live' ? '' : 'none';
+          if (tab === 'live') renderLive();
+        };
+      });
+
+      $('#dc-search-input').oninput = function () { refFilter.q = this.value; renderRef(); };
+      $$('#dc-src-filter button').forEach(function (b) {
+        b.onclick = function () {
+          $$('#dc-src-filter button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          refFilter.src = b.getAttribute('data-src');
+          renderRef();
+        };
+      });
+
+      $('#dc-add-family').onclick = function () { openFamilyModal(null); };
+      $('#dc-reset-pdf').onclick = function () {
+        if (!confirm('Réinitialiser tout le référentiel avec les 44 KPIs du PDF ?\n\n⚠️ Cela écrase les familles et KPIs actuels. Les saisies mensuelles (manualData) sont conservées.')) return;
+        var seed = buildSeed();
+        saveReferentiel({ families: seed.families, kpis: seed.kpis }, 'Référentiel réinitialisé').catch(function () {});
+      };
+
+      // modale KPI
+      $$('#dc-kpi-modal [data-close]').forEach(function (b) { b.onclick = closeKpiModal; });
+      $('#dc-kpi-modal').onclick = function (e) { if (e.target === this) closeKpiModal(); };
+      $('#dc-kpi-save').onclick = saveKpi;
+      $('#dc-kpi-delete').onclick = deleteKpi;
+      $$('input[name="dc-src"]').forEach(function (r) { r.onchange = syncSourceFields; });
+
+      // modale famille
+      $$('#dc-family-modal [data-close]').forEach(function (b) { b.onclick = closeFamilyModal; });
+      $('#dc-family-modal').onclick = function (e) { if (e.target === this) closeFamilyModal(); };
+      $('#dc-fam-save').onclick = saveFamily;
+      $('#dc-fam-delete').onclick = deleteFamily;
+
+      // live
+      $('#dc-month-prev').onclick = function () { shiftMonth(-1); };
+      $('#dc-month-next').onclick = function () { shiftMonth(1); };
+      $('#dc-save-manual').onclick = saveManualData;
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { closeKpiModal(); closeFamilyModal(); }
+      });
+    }
+
+    /* ════════════════════════════════════════════════════════════════
+       INIT — garde admin (même schéma que admin-numbers.js)
+       ════════════════════════════════════════════════════════════════ */
+    function init() {
+      if (typeof firebase === 'undefined') { console.error('[data-center] Firebase non chargé'); return; }
+      db = firebase.firestore();
+      liveMonth = monthKey(new Date());
+
+      firebase.auth().onAuthStateChanged(async function (user) {
+        if (!user) { window.location.href = 'login.html'; return; }
+        currentUser = user;
+        try {
+          var snap = await db.collection('users').doc(user.uid).get();
+          var data = snap.exists ? snap.data() : {};
+          if (data.role !== 'admin') {
+            toast('Accès réservé aux administrateurs', true);
+            setTimeout(function () { window.location.href = 'sales-dashboard.html'; }, 1500);
+            return;
+          }
+          // chargement liste users (pour agréger les saisies)
+          try {
+            var us = await db.collection('users').get();
+            usersCache = [];
+            us.forEach(function (d) { usersCache.push(Object.assign({ uid: d.id }, d.data())); });
+          } catch (e) { console.warn('[data-center] users', e); }
+
+          $('#dc-app').style.display = '';
+          bindUI();
+          watchReferentiel();
+        } catch (e) {
+          console.error('[data-center] init', e);
+          setSync('err', 'Erreur de chargement');
+          toast('Erreur de chargement initial', true);
+        }
+      });
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+  })();
+  </script>
+</body>
+</html>
