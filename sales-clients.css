@@ -144,7 +144,7 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
 .cl-alert-item.ok{background:rgba(52,211,153,0.08);color:#34d399;border:1px solid rgba(52,211,153,0.15)}
 
 /* ── Témoignages ── */
-.cl-temo-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px}
+.cl-temo-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;min-width:0}
 .cl-temo-type{font-size:10px;font-weight:800;text-transform:uppercase;padding:2px 6px;border-radius:4px;flex-shrink:0}
 .cl-temo-type.trustpilot{background:rgba(0,182,122,0.12);color:#00b67a}
 .cl-temo-type.video{background:rgba(239,68,68,0.12);color:#ef4444}
@@ -266,7 +266,12 @@ html,body{min-height:100vh;background:var(--bg);color:var(--text);font-family:va
 .cl-panel.cl-panel-wide{max-width:1100px;width:96vw}
 
 /* 2-col layout dans panel */
-.cl-panel-2col{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+/* minmax(0,1fr) au lieu de 1fr : empêche le "grid blowout" — sans ça, une
+   URL de témoignage très longue et insécable étire sa colonne, écrase la
+   colonne d'en face et déborde le panneau. min-width:0 sur les colonnes
+   permet à leur contenu (lignes témoignages) de se tronquer correctement. */
+.cl-panel-2col{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-bottom:18px}
+.cl-panel-2col > div{min-width:0}
 @media (max-width:900px){ .cl-panel-2col{grid-template-columns:1fr} }
 
 /* Status pills selector dans panel */
