@@ -2885,10 +2885,29 @@ async function scanDriveForClient(clientId){
     // Skip group coaching
     if(/coaching gr/i.test(title)) continue;
 
-    // Extract client name from title
-    const withMatch = title.match(/with\s+(.+?)\s*-\s*\d{4}/i) || title.match(/with\s+(.+?)(?:\s*-|$)/i);
-    if(!withMatch) continue;
-    const driveClient = normName(withMatch[1]);
+    /* ── Extraction du nom du client depuis le titre du document ──────────
+       Deux formats de nommage coexistent selon l'ancienneté du Google Meet :
+         • Ancien : "Coaching 1:1 Business with Belinda GIANGIULIO - 2026/05/12…"
+                    → le nom suit le mot-clé "with"
+         • Nouveau : "Coaching 1:1 Business Elite — Sébastien BELLE ANNE - 2026/05/13…"
+                     "Coaching 1:1 Business Phénix — … - …/…/…"
+                    → plus de "with", un tiret (—, –, ou -) sépare le libellé
+                      de formation (Elite / Phénix / Business) du nom client
+       On tente d'abord "with", puis le format à tiret. normName() nettoie
+       ensuite la ponctuation, donc le type exact de tiret n'a pas d'importance. */
+    let clientNameRaw = null;
+    let withMatch = title.match(/with\s+(.+?)\s*-\s*\d{4}/i) || title.match(/with\s+(.+?)(?:\s*-|$)/i);
+    if (withMatch) {
+      clientNameRaw = withMatch[1];
+    } else {
+      // Format à tiret : on prend ce qui suit le dernier tiret cadratin/demi-cadratin
+      // (—, –) avant la date. Ces tirets sont réservés au séparateur libellé/nom ;
+      // la date utilise un tiret simple " - ", ce qui évite toute ambiguïté.
+      let dashMatch = title.match(/[—–]\s*(.+?)\s*-\s*\d{4}/) || title.match(/[—–]\s*(.+?)(?:\s*-\s*\d|$)/);
+      if (dashMatch) clientNameRaw = dashMatch[1];
+    }
+    if (!clientNameRaw) continue;
+    const driveClient = normName(clientNameRaw);
 
     // Check if this Drive doc matches our client
     const clientNorm = normName(c.nom);
