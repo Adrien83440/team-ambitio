@@ -2864,26 +2864,42 @@ async function scanDriveForClient(clientId){
   log(`🔍 Recherche pour "${c.nom}" → mots-clés: ${nameParts.join(', ')}`);
 
   // Search Drive by client name parts
+  // On récupère les Google Docs (notes Gemini) ET les fichiers vidéo
+  // (enregistrements Meet) : chaque coaching génère un Doc "Notes par Gemini"
+  // et un fichier "Recording". On a besoin des deux pour lier résumé + vidéo.
   let allDocs = [];
   for(const part of nameParts){
-    const q = encodeURIComponent(`name contains '${part}' and mimeType='application/vnd.google-apps.document'`);
-    const res = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime)&pageSize=50&orderBy=createdTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`);
+    const q = encodeURIComponent(
+      `name contains '${part}' and (mimeType='application/vnd.google-apps.document' or mimeType contains 'video/')`
+    );
+    const res = await driveApi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime,mimeType,webViewLink)&pageSize=100&orderBy=createdTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`);
     if(res && res.files){
       res.files.forEach(f=>{
         if(!allDocs.find(d=>d.id===f.id)) allDocs.push(f);
       });
     }
   }
-  log(`📄 ${allDocs.length} document(s) trouvé(s) dans Drive`);
+  log(`📄 ${allDocs.length} fichier(s) trouvé(s) dans Drive (docs + vidéos)`);
 
   // Filter: only coaching/rdv docs that match this client
+  // On traite séparément les Google Docs (résumés) et les fichiers vidéo
+  // (enregistrements). Les vidéos matchées sont stockées à part puis
+  // appariées à leur Doc par nom de base + date.
   const matchedDocs = [];
+  const matchedVideos = [];   // {date, baseTitle, videoUrl}
+
   for(const doc of allDocs){
     const title = doc.name||'';
-    // Must be a coaching or RDV doc
+    const isVideo = (doc.mimeType||'').indexOf('video/') === 0;
+
+    // Must be a coaching or RDV doc/video
     if(!/coaching 1:1|rdv urgent|post inscription/i.test(title)) continue;
     // Skip group coaching
     if(/coaching gr/i.test(title)) continue;
+    // Skip le fichier "Chat" : c'est un Google Doc lié au call (transcript du
+    // chat Meet) mais ce n'est PAS le résumé. Seul le "Notes par Gemini" est
+    // le doc de résumé à lier.
+    if(/-\s*chat\s*$/i.test(title)) continue;
 
     /* ── Extraction du nom du client depuis le titre du document ──────────
        Deux formats de nommage coexistent selon l'ancienneté du Google Meet :
@@ -2927,10 +2943,32 @@ async function scanDriveForClient(clientId){
     // Extract date
     const dateMatch = title.match(/(\d{4})\/(\d{2})\/(\d{2})/);
     const date = dateMatch ? `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}` : null;
-    const type = /rdv urgent|post inscription/i.test(title) ? 'rdv72h' : 'coaching';
 
-    matchedDocs.push({id:doc.id, title, date, type, url:`https://docs.google.com/document/d/${doc.id}/edit`});
+    /* Titre de base = titre sans le suffixe " - Notes par Gemini" / " - Recording"
+       / " - Chat". Sert de clé d'appariement Doc ↔ vidéo (les trois fichiers
+       d'un même call partagent le même titre de base). */
+    const baseTitle = title.replace(/\s*-\s*(notes par gemini|recording|chat)\s*$/i, '').trim();
+
+    if(isVideo){
+      // On ne garde que les enregistrements ("Recording") — pas un éventuel
+      // autre fichier vidéo qui traînerait avec le nom du client.
+      if(!/recording/i.test(title)) continue;
+      matchedVideos.push({date, baseTitle, videoUrl: doc.webViewLink || `https://drive.google.com/file/d/${doc.id}/view`});
+      log(`🎥 Vidéo trouvée: "${title.substring(0,60)}..." (${date})`,'dsl-match');
+      continue;
+    }
+
+    const type = /rdv urgent|post inscription/i.test(title) ? 'rdv72h' : 'coaching';
+    matchedDocs.push({id:doc.id, title, baseTitle, date, type, url:`https://docs.google.com/document/d/${doc.id}/edit`});
     log(`✅ Match: "${title.substring(0,70)}..." (${date})`,'dsl-match');
+  }
+
+  /* Apparier chaque vidéo à son Doc : priorité au titre de base identique,
+     repli sur la date exacte si le titre de base diffère légèrement. */
+  for(const doc of matchedDocs){
+    let vid = matchedVideos.find(v => v.baseTitle && doc.baseTitle && v.baseTitle === doc.baseTitle);
+    if(!vid && doc.date) vid = matchedVideos.find(v => v.date && v.date === doc.date);
+    if(vid) doc.videoUrl = vid.videoUrl;
   }
 
   if(matchedDocs.length===0){
@@ -2993,6 +3031,17 @@ async function scanDriveForClient(clientId){
       if(!matchedSession.resume || matchedSession.resume.length<20){
         matchedSession.resume = summary;
       }
+      /* Lien de l'enregistrement vidéo : on ne l'écrit QUE si la session
+         n'a pas déjà un visioUrl. Une valeur saisie à la main par le coach
+         est prioritaire et ne doit jamais être écrasée par la synchro. */
+      if(doc.videoUrl){
+        if(!matchedSession.visioUrl){
+          matchedSession.visioUrl = doc.videoUrl;
+          log(`🎥 Vidéo liée à session #${matchedSession.numero}`,'dsl-match');
+        } else {
+          log(`⏩ Vidéo ignorée (visioUrl déjà renseigné sur session #${matchedSession.numero})`,'dsl-skip');
+        }
+      }
       // Remove from driveDocs if it was previously unlinked
       if(wasPrevUnlinked) c.driveDocs.splice(prevIdx, 1);
       linked++;
@@ -3005,7 +3054,8 @@ async function scanDriveForClient(clientId){
         docUrl: doc.url,
         docTitle: doc.title,
         type: doc.type,
-        summary: summary
+        summary: summary,
+        videoUrl: doc.videoUrl || ''
       });
       unlinked++;
       changed = true;
