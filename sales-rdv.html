@@ -269,6 +269,8 @@ var db = firebase.firestore();
 var STATE = {
   uid: null,
   role: null,
+  readOnly: false,      // true pour le rôle csm : lecture seule (voit tous
+                        // les RDV pris par les clients, sans action possible)
   bookings: [],
   filter: 'all',
   view: 'list',         // 'list' | 'grid'
@@ -358,8 +360,8 @@ function startListener() {
       var d = doc.data();
       d.id = doc.id;
       if (d.status !== 'confirmed' && d.status !== 'pending') return;
-      // Filtrage par owner si sales (admin voit tout)
-      if (STATE.role !== 'admin') {
+      // Filtrage par owner si sales (admin + csm voient tout)
+      if (STATE.role !== 'admin' && STATE.role !== 'csm') {
         var matchesOwner =
           (d.ownerSlug && STATE.ownerSlug && d.ownerSlug === STATE.ownerSlug) ||
           (d.personId && STATE.ownerSlug && d.personId === STATE.ownerSlug) ||
@@ -565,14 +567,19 @@ function renderGrid() {
     ev.className = cls;
     ev.style.top = topOffset + 'px';
     ev.style.height = heightPx + 'px';
-    ev.title = name + ' — ' + b.time + ' (' + dur + ' min)\n' + statusLabel + ' (cliquer pour ' + (b.slotOpen ? 'fermer' : 'ouvrir') + ')';
+    ev.title = name + ' — ' + b.time + ' (' + dur + ' min)\n' + statusLabel
+      + (STATE.readOnly ? '' : ' (cliquer pour ' + (b.slotOpen ? 'fermer' : 'ouvrir') + ')');
     ev.innerHTML =
       '<div class="rdv-grid-event-time">' + escapeHtml(b.time) + '</div>' +
       '<div class="rdv-grid-event-name">' + escapeHtml(name) + '</div>' +
       (heightPx > 48 ? '<div class="rdv-grid-event-status">' + statusLabel + '</div>' : '');
-    ev.addEventListener('click', function() {
-      openConfirmModal(b.id, b.slotOpen ? 'close' : 'open');
-    });
+    if (STATE.readOnly) {
+      ev.style.cursor = 'default';
+    } else {
+      ev.addEventListener('click', function() {
+        openConfirmModal(b.id, b.slotOpen ? 'close' : 'open');
+      });
+    }
     cell.appendChild(ev);
   });
 
@@ -619,16 +626,18 @@ function renderCard(b, doubleBooked) {
   }
 
   var actions = '';
-  if (b.slotOpen) {
-    actions += '<button class="rdv-btn primary" onclick="openConfirmModal(\'' + b.id + '\', \'close\')">🔒 Fermer</button>';
-  } else {
-    actions += '<button class="rdv-btn warn" onclick="openConfirmModal(\'' + b.id + '\', \'open\')">🟠 Ouvrir</button>';
-  }
-  if (b.leadId) {
-    actions += '<a class="rdv-btn icon" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Fiche prospect">👁</a>';
-  }
-  if (phone) {
-    actions += '<a class="rdv-btn icon" href="tel:' + encodeURIComponent(phone) + '" title="Appeler">📞</a>';
+  if (!STATE.readOnly) {
+    if (b.slotOpen) {
+      actions += '<button class="rdv-btn primary" onclick="openConfirmModal(\'' + b.id + '\', \'close\')">🔒 Fermer</button>';
+    } else {
+      actions += '<button class="rdv-btn warn" onclick="openConfirmModal(\'' + b.id + '\', \'open\')">🟠 Ouvrir</button>';
+    }
+    if (b.leadId) {
+      actions += '<a class="rdv-btn icon" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Fiche prospect">👁</a>';
+    }
+    if (phone) {
+      actions += '<a class="rdv-btn icon" href="tel:' + encodeURIComponent(phone) + '" title="Appeler">📞</a>';
+    }
   }
 
   return (
@@ -772,9 +781,19 @@ firebase.auth().onAuthStateChanged(async function(user) {
     STATE.ownerSlug = udata.slug || udata.bookingSlug || null;
   } catch (e) { STATE.role = 'sales'; }
 
-  if (STATE.role !== 'sales' && STATE.role !== 'admin') {
-    document.body.innerHTML = '<div style="padding:60px;text-align:center;color:var(--red)">Accès réservé aux sales et admins.</div>';
+  if (STATE.role !== 'sales' && STATE.role !== 'admin' && STATE.role !== 'csm') {
+    document.body.innerHTML = '<div style="padding:60px;text-align:center;color:var(--red)">Accès réservé aux sales, CSM et admins.</div>';
     return;
+  }
+
+  // La CSM accède en lecture seule : elle voit tous les RDV pris par les
+  // clients (comme un admin) mais ne peut pas ouvrir/fermer les créneaux.
+  STATE.readOnly = (STATE.role === 'csm');
+  if (STATE.readOnly) {
+    var _t = document.querySelector('.rdv-title');
+    var _s = document.querySelector('.rdv-subtitle');
+    if (_t) _t.textContent = 'Rendez-vous des clients';
+    if (_s) _s.textContent = 'Tous les RDV pris par les clients';
   }
 
   // Récup config max bookings

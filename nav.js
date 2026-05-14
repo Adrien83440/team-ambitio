@@ -73,7 +73,7 @@
       { id: 'sales-equipe',       icon: '👥', label: 'Équipe Sales', href: 'sales-equipe.html' },
     ]},
     { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
-    { id: 'sales-rdv',         icon: '🗓️', label: 'Mes RDV',     href: 'sales-rdv.html',         section: 'Sales', perm: 'booking' },
+    { id: 'sales-rdv',         icon: '🗓️', label: 'Rendez-vous',  href: 'sales-rdv.html',         section: 'Sales', perm: 'booking' },
     { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
     { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: 'signatures' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
@@ -500,11 +500,17 @@
     const perms   = getUserModules();
     const modules = ALL_MODULES.filter(m => {
       if (m.perm === '_admin') return role === 'admin';
-      // "Mes RDV" (sales-rdv.html) est un module commercial : un coach peut avoir
-      // la perm 'booking' (pour gérer ses horaires dans booking-admin) sans devoir
-      // accéder au suivi RDV des sales. On masque donc explicitement pour coach.
-      // Idem pour la CSM : pas d'accès aux RDV sales.
-      if (m.id === 'sales-rdv' && (role === 'coach' || role === 'csm')) return false;
+      // "Rendez-vous" (sales-rdv.html) : liste des RDV pris par les clients.
+      //  - coach : masqué (pas concerné par le suivi des RDV)
+      //  - csm   : visible — la CSM doit voir tous les RDV pris par les
+      //            clients (accès lecture seule, géré côté page)
+      //  - sales/admin : selon la permission 'booking'
+      if (m.id === 'sales-rdv') {
+        if (role === 'coach') return false;
+        if (role === 'csm') return true;
+        var pRdv = perms.booking;
+        return pRdv && pRdv !== 'none';
+      }
       if (m.perm === 'alteoforms') {
         if (role === 'admin') return true;
         try { var af=JSON.parse(localStorage.getItem('ambitio_alteoforms_forms')||'[]'); return af.length>0; } catch(e){ return false; }

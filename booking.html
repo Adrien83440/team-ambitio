@@ -1196,6 +1196,55 @@ async function handleSubmit() {
     S.confirmedBookingId = docRef.id;
     S.confirmedBooking = booking;
     S.confirmedMeetLink = null;
+
+    /* ── REDIRECTION PERSONNALISÉE ──────────────────────────────────────
+       Si la consultation a une page de confirmation personnalisée activée
+       (booking-admin → onglet Détails), on redirige le client immédiatement
+       vers l'URL configurée, sans afficher l'écran de confirmation interne.
+       Le lien Meet (généré async par Cloud Function) reste disponible dans
+       l'email de confirmation et l'invitation calendrier.
+    ─────────────────────────────────────────────────────────────────────── */
+    var _redirectUrl = (S.selType && S.selType.confirmationRedirect === true && S.selType.confirmationRedirectUrl)
+      ? String(S.selType.confirmationRedirectUrl).trim()
+      : '';
+    if (_redirectUrl) {
+      // Compteur round-robin mis à jour avant de quitter la page
+      if (S.selType && S.selType.eventType === 'roundrobin' && S.selPerson) {
+        db.collection('_meta').doc('booking_rr').set(
+          { lastAssigned: S.selPerson.id, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+      }
+      // Mode embed : notifier la fenêtre parente avant la redirection
+      if (_embedMode && window.parent !== window) {
+        try {
+          window.parent.postMessage({
+            type: 'booking_confirmed',
+            leadId: _formLeadId,
+            date: S.selDate,
+            time: S.selTime,
+            personName: S.selPerson ? S.selPerson.name : '',
+            personId: S.selPerson ? S.selPerson.id : '',
+            typeLabel: S.selType ? S.selType.label : '',
+            duration: S.selType ? S.selType.duration : 30
+          }, '*');
+        } catch (e) { console.warn('postMessage error:', e); }
+      }
+      // En mode embed on redirige la fenêtre hôte (la page qui contient
+      // l'iframe). Repli sur la fenêtre courante si l'accès au top est
+      // bloqué (iframe cross-origin sandboxée sans allow-top-navigation).
+      try {
+        if (_embedMode && window.top && window.top !== window.self) {
+          window.top.location.href = _redirectUrl;
+        } else {
+          window.location.href = _redirectUrl;
+        }
+      } catch (e) {
+        window.location.href = _redirectUrl;
+      }
+      return;
+    }
+
     // Lead update/creation is handled by Cloud Function onBookingCreated
     // Listen for Meet link (Cloud Function generates it async)
     if (S.selPerson && S.selPerson.calendarConnected) {
