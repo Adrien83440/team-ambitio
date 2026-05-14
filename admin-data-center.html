@@ -597,12 +597,38 @@
     }
 
     /* ── Agrégats SAISIES : somme d'un champ section.field sur l'équipe ──
-       IMPORTANT : les documents saisies/{id} sont indexés par SLUG
-       (guillaume, elodie…), PAS par UID Firebase — cf. sales-setting.html
-       (MEMBERS[].uid contient en réalité un slug). On ne peut donc pas
-       dériver les IDs depuis la collection users : on liste directement
-       la collection 'saisies', puis on lit le sous-doc mois/{liveMonth}
-       de chaque membre, quel que soit son ID. ── */
+       Les documents saisies/{slug} sont indexés par SLUG (guillaume, elodie…)
+       ET ce sont des documents "fantômes" : ils n'ont pas de champs propres,
+       seulement la sous-collection mois/. Firestore NE LES RENVOIE PAS dans
+       une requête de collection (db.collection('saisies').get() → vide).
+       On récupère donc la liste des slugs depuis _meta/team_members — la
+       même source que sales-setting.html / sales-closing.html — puis on lit
+       le sous-doc mois/{liveMonth} de chaque slug. ── */
+    var teamSlugs = null;   // cache : ['guillaume','elodie',...]
+
+    async function loadTeamSlugs() {
+      if (teamSlugs) return teamSlugs;
+      var slugs = [];
+      try {
+        var snap = await db.collection('_meta').doc('team_members').get();
+        if (snap.exists) {
+          var members = (snap.data() || {}).members;
+          if (Array.isArray(members)) {
+            members.forEach(function (m, i) { if (m && typeof m === 'object') slugs.push(m.slug || ('m' + i)); });
+          } else if (members && typeof members === 'object') {
+            Object.keys(members).forEach(function (key) {
+              var m = members[key];
+              if (m && typeof m === 'object') slugs.push(m.slug || key);
+            });
+          }
+        }
+      } catch (e) {
+        console.error('[data-center] lecture _meta/team_members échouée', e);
+      }
+      teamSlugs = slugs;
+      return slugs;
+    }
+
     async function loadLiveAggregates() {
       liveAgg = {};
       if (!REF_DOC) return;
@@ -615,17 +641,10 @@
 
       var WEEKS = ['s1','s2','s3','s4','s5','s6'];
 
-      // 1) lister tous les "dossiers membre" de la collection saisies
-      var memberIds = [];
-      try {
-        var rootSnap = await db.collection('saisies').get();
-        rootSnap.forEach(function (d) { memberIds.push(d.id); });
-      } catch (e) {
-        console.error('[data-center] lecture collection saisies échouée', e);
-        liveAgg = fsFields; return;
-      }
+      // 1) liste des slugs membres depuis _meta/team_members
+      var memberIds = await loadTeamSlugs();
       if (!memberIds.length) {
-        console.warn('[data-center] collection saisies vide');
+        console.warn('[data-center] aucun membre trouvé dans _meta/team_members — agrégats à 0');
         liveAgg = fsFields; return;
       }
 
