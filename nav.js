@@ -501,17 +501,26 @@
     const perms   = getUserModules();
     const modules = ALL_MODULES.filter(m => {
       if (m.perm === '_admin') return role === 'admin';
-      // "Rendez-vous" (sales-rdv.html) : liste des RDV pris par les clients.
+      // "Rendez-vous" (sales-rdv.html) : liste des RDV pris par les clients
+      // — module STRICTEMENT commercial.
       //  - coach : masqué (pas concerné par le suivi des RDV)
-      //  - csm   : visible — la CSM doit voir tous les RDV pris par les
-      //            clients (accès lecture seule, géré côté page)
+      //  - csm   : masqué — la CSM voit les RDV depuis booking-admin.html
+      //            (vue globale équipe) et n'a rien à faire dans le module
+      //            "Mes RDV" qui est l'agenda perso d'un commercial.
       //  - sales/admin : selon la permission 'booking'
       if (m.id === 'sales-rdv') {
-        if (role === 'coach') return false;
-        if (role === 'csm') return true;
+        if (role === 'coach' || role === 'csm') return false;
         var pRdv = perms.booking;
         return pRdv && pRdv !== 'none';
       }
+      // "Booking" (booking-admin.html) : vue admin globale de l'agenda équipe
+      // (tous les RDV de tous les experts + consultations + experts + pages
+      // + réglages). La CSM y a accès en lecture seule pour gérer les RDV
+      // côté Customer Success (voir les RDV des clients/coachs, annuler ou
+      // replanifier à la demande d'un client). Le mode lecture seule est
+      // géré dans booking-admin.html côté UI (gating des écritures) et côté
+      // Firestore rules (booking_config en read:true, update:admin only).
+      if (m.id === 'booking' && role === 'csm') return true;
       if (m.perm === 'alteoforms') {
         if (role === 'admin') return true;
         try { var af=JSON.parse(localStorage.getItem('ambitio_alteoforms_forms')||'[]'); return af.length>0; } catch(e){ return false; }

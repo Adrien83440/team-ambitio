@@ -196,6 +196,17 @@
 .ex-readonly .cd-save-bar{display:none !important}
 .ex-readonly [data-ro-hide]{display:none !important}
 .ex-readonly .ex-head-av,.ex-readonly [onclick*="exPhotoInput"]{pointer-events:none !important;cursor:default !important}
+/* ── Mode Customer Success (lecture seule globale sauf RDV) ── */
+/* Bandeau CSM (or doux pour distinguer du bandeau expert orange) */
+body.csm-mode #csmRoBanner{background:linear-gradient(90deg,rgba(167,139,250,.14),rgba(167,139,250,.04));border-color:rgba(167,139,250,.28);color:#c4b5fd}
+/* Désactive les inputs des onglets Réglages et Consultations-détail */
+body.csm-mode #p-st input,body.csm-mode #p-st select,body.csm-mode #p-st textarea,
+body.csm-mode #cdContent input,body.csm-mode #cdContent select,body.csm-mode #cdContent textarea{pointer-events:none !important;opacity:.55 !important;filter:grayscale(.2)}
+/* Masque les boutons de création/sauvegarde/suppression dans config */
+body.csm-mode #addT,body.csm-mode #addTF,body.csm-mode #addE,body.csm-mode #addEF{display:none !important}
+body.csm-mode #cdContent .cd-save-bar,body.csm-mode #cdContent [data-ro-hide]{display:none !important}
+/* Masque l'action "Supprimer" dans la carte de consultation (rCs) */
+body.csm-mode #csG [data-action="delT"]{display:none !important}
 .ec-locked{position:relative;opacity:.62}
 .ec-locked::after{content:'🔒 Fiche verrouillée';position:absolute;top:10px;right:10px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:10px;font-weight:700;padding:4px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.35);pointer-events:none}
 .ec-self{border:2px solid rgba(99,102,241,.55) !important;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
@@ -494,13 +505,17 @@ document.querySelectorAll('.bn-i').forEach(function(t){t.addEventListener('click
 function loadAll(){CR.get().then(function(sn){var _oldCdId=cdType?cdType.id:null;var _oldExId=(typeof exPerson!=='undefined'&&exPerson)?exPerson.id:null;T=[];P=[];S={};sn.forEach(function(d){var v=d.data();if(d.id==='_types')T=v.list||[];else if(d.id==='_settings')S=v;else if(v.__type==='person'){v.id=d.id;P.push(v);}});P.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});window._selfPersonId=null;if(window._currentUid){var _sp=P.find(function(p){return p.firebaseUid===window._currentUid;});if(_sp)window._selfPersonId=_sp.id;}if(_oldCdId){var _fresh=T.find(function(t){return t.id===_oldCdId;});if(_fresh)cdType=_fresh;}if(_oldExId){var _freshEx=P.find(function(p){return p.id===_oldExId;});if(_freshEx)exPerson=_freshEx;}renderAll();loadB();var _calPid=sessionStorage.getItem('_calConnectPid');if(_calPid){sessionStorage.removeItem('_calConnectPid');setTimeout(function(){document.querySelectorAll('.bn-i').forEach(function(x){x.classList.remove('on');});document.querySelector('[data-p="ex"]').classList.add('on');document.querySelectorAll('.bp').forEach(function(p){p.classList.remove('on');});document.getElementById('p-ex').classList.add('on');openExDetail(_calPid);exSection='calendar';renderExNav();renderExSection();},500);}}).catch(function(e){console.error(e);});}
 function loadB(){
 var isAdmin=window._currentRole==='admin';
+// La CSM (Customer Success) voit tous les RDV de l'équipe comme un admin
+// (vue globale pour gérer le support client), mais elle ne peut pas
+// éditer les paramètres (cf. UI gating + Firestore rules).
+var canViewAll=(window._currentRole==='admin'||window._currentRole==='csm');
 var selfId=window._selfPersonId;
 // Détache l'ancien listener si on en attache un nouveau (évite les doublons
 // si loadB est rappelée, ex. après changement de rôle ou mutation manuelle).
 if(_bUnsub){try{_bUnsub();}catch(e){}_bUnsub=null;}
-// Non-admin sans selfId résolu : rien charger (évite d'exposer tous les RDV)
-if(!isAdmin&&!selfId){B=[];rRdv();return;}
-var q=isAdmin?db.collection('bookings'):db.collection('bookings').where('personId','==',selfId);
+// Non-admin/non-csm sans selfId résolu : rien charger (évite d'exposer tous les RDV)
+if(!canViewAll&&!selfId){B=[];rRdv();return;}
+var q=canViewAll?db.collection('bookings'):db.collection('bookings').where('personId','==',selfId);
 // Listener temps réel : B et la vue se rafraîchissent automatiquement à
 // chaque création / mise à jour / annulation / suppression de booking,
 // sans rechargement de page.
@@ -519,14 +534,14 @@ _bUnsub=q.onSnapshot(function(sn){
 function renderAll(){rRdv();rCs();rEx();rPg();lSt();pFlt();}
 function pFlt(){
 var a=document.getElementById('rFP'),b=document.getElementById('rFT');
-var isAdmin=window._currentRole==='admin';
-// Person filter: admin sees all, others see only themselves
-if(isAdmin){
+var canViewAll=(window._currentRole==='admin'||window._currentRole==='csm');
+// Person filter: admin et csm voient tous les experts; sales ne voit que lui
+if(canViewAll){
 a.innerHTML='<option value="">Tous les experts</option>';
 P.forEach(function(p){a.innerHTML+='<option value="'+p.id+'">'+esc(p.name)+'</option>';});
 a.style.display='';
 }else{
-// Hide person filter for non-admin, pre-select self
+// Hide person filter for non-admin/non-csm, pre-select self
 a.style.display='none';
 if(window._selfPersonId)a.value=window._selfPersonId;
 }
@@ -535,17 +550,19 @@ T.forEach(function(t){b.innerHTML+='<option value="'+t.id+'">'+esc(t.label)+'</o
 }
 document.querySelectorAll('[data-rt]').forEach(function(t){t.addEventListener('click',function(){document.querySelectorAll('[data-rt]').forEach(function(x){x.classList.remove('on');});t.classList.add('on');aRT=t.dataset.rt;rRdv();});});
 document.getElementById('rFP').addEventListener('change',rRdv);document.getElementById('rFT').addEventListener('change',rRdv);document.getElementById('rQ').addEventListener('input',rRdv);
-function rRdv(){var td=tISO(),fP=document.getElementById('rFP').value,fT=document.getElementById('rFT').value;if(window._currentRole!=='admin'&&window._selfPersonId)fP=window._selfPersonId;var q=(document.getElementById('rQ').value||'').toLowerCase();var fl=B.filter(function(b){if(fP&&b.personId!==fP)return false;if(fT&&b.type!==fT)return false;if(q){var n=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')):b.personName||'';if(n.toLowerCase().indexOf(q)<0&&(b.typeLabel||'').toLowerCase().indexOf(q)<0)return false;}return true;});var up=fl.filter(function(b){return b.date>=td&&b.status==='confirmed';}),pa=fl.filter(function(b){return(b.date<td&&b.status!=='cancelled')||b.status==='completed';}),ca=fl.filter(function(b){return b.status==='cancelled';});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML='<div class="rv-stat"><div class="rv-sn" style="color:#a78bfa">'+up.length+'</div><div class="rv-sl">À venir</div></div><div class="rv-stat"><div class="rv-sn" style="color:#34d399">'+tl.length+'</div><div class="rv-sl">Aujourd\'hui</div></div><div class="rv-stat"><div class="rv-sn" style="color:#60a5fa">'+tw.length+'</div><div class="rv-sl">Cette semaine</div></div><div class="rv-stat"><div class="rv-sn" style="color:#fca5a5">'+ca.length+'</div><div class="rv-sl">Annulés</div></div>';var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='past'?function(a,b){return b.localeCompare(a);}:undefined);var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){var tO=T.find(function(t){return t.id===b.type;}),pO=P.find(function(p){return p.id===b.personId;}),tc=tO?tO.color:'#8b5cf6',pc=pO?pO.color:'#666',pN=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')).trim():'Inconnu',du=b.duration||30,sm=parseInt((b.time||'09:00').split(':')[0])*60+parseInt((b.time||'09:00').split(':')[1]),et=mToT(sm+du);h+='<div class="rv-r" style="cursor:pointer" onclick="openRdvDetail(\''+b._id+'\')"><div class="rv-t">'+(b.time||'—')+' - '+et+'</div><div class="rv-tp"><span class="rv-tb" style="background:'+tc+'">'+(tO?tO.label[0].toUpperCase():'?')+'</span><span class="rv-tn">'+esc(b.typeLabel||'—')+'</span></div><div class="rv-ex"><span class="rv-ea" style="background:'+pc+'">'+(pO?(pO.name||'?')[0].toUpperCase():'?')+'</span><span class="rv-en">'+esc(pO?pO.name:'—')+'</span></div><div class="rv-cl">👤 '+esc(pN)+'</div><select class="rv-ss" data-action="chSt" data-bid="'+b._id+'" onclick="event.stopPropagation()"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option></select></div>';});});el.innerHTML=h;}
+function rRdv(){var td=tISO(),fP=document.getElementById('rFP').value,fT=document.getElementById('rFT').value;var _canViewAll=(window._currentRole==='admin'||window._currentRole==='csm');if(!_canViewAll&&window._selfPersonId)fP=window._selfPersonId;var q=(document.getElementById('rQ').value||'').toLowerCase();var fl=B.filter(function(b){if(fP&&b.personId!==fP)return false;if(fT&&b.type!==fT)return false;if(q){var n=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')):b.personName||'';if(n.toLowerCase().indexOf(q)<0&&(b.typeLabel||'').toLowerCase().indexOf(q)<0)return false;}return true;});var up=fl.filter(function(b){return b.date>=td&&b.status==='confirmed';}),pa=fl.filter(function(b){return(b.date<td&&b.status!=='cancelled')||b.status==='completed';}),ca=fl.filter(function(b){return b.status==='cancelled';});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML='<div class="rv-stat"><div class="rv-sn" style="color:#a78bfa">'+up.length+'</div><div class="rv-sl">À venir</div></div><div class="rv-stat"><div class="rv-sn" style="color:#34d399">'+tl.length+'</div><div class="rv-sl">Aujourd\'hui</div></div><div class="rv-stat"><div class="rv-sn" style="color:#60a5fa">'+tw.length+'</div><div class="rv-sl">Cette semaine</div></div><div class="rv-stat"><div class="rv-sn" style="color:#fca5a5">'+ca.length+'</div><div class="rv-sl">Annulés</div></div>';var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='past'?function(a,b){return b.localeCompare(a);}:undefined);var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){var tO=T.find(function(t){return t.id===b.type;}),pO=P.find(function(p){return p.id===b.personId;}),tc=tO?tO.color:'#8b5cf6',pc=pO?pO.color:'#666',pN=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')).trim():'Inconnu',du=b.duration||30,sm=parseInt((b.time||'09:00').split(':')[0])*60+parseInt((b.time||'09:00').split(':')[1]),et=mToT(sm+du);h+='<div class="rv-r" style="cursor:pointer" onclick="openRdvDetail(\''+b._id+'\')"><div class="rv-t">'+(b.time||'—')+' - '+et+'</div><div class="rv-tp"><span class="rv-tb" style="background:'+tc+'">'+(tO?tO.label[0].toUpperCase():'?')+'</span><span class="rv-tn">'+esc(b.typeLabel||'—')+'</span></div><div class="rv-ex"><span class="rv-ea" style="background:'+pc+'">'+(pO?(pO.name||'?')[0].toUpperCase():'?')+'</span><span class="rv-en">'+esc(pO?pO.name:'—')+'</span></div><div class="rv-cl">👤 '+esc(pN)+'</div><select class="rv-ss" data-action="chSt" data-bid="'+b._id+'" onclick="event.stopPropagation()"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option></select></div>';});});el.innerHTML=h;}
 function rCs(){var EVT_LABELS={private:'👤 En privé',group:'👥 Groupe',roundrobin:'🔄 Round-robin',collective:'🤝 Collectif'};
-// Non-admin : ne montrer que les types qui lui sont assignés
+// CSM voit toutes les consultations comme admin (vue Customer Success).
+// Sales ne voit que celles qui lui sont assignées.
 var isAdmin=window._currentRole==='admin';
-var visibleT=isAdmin?T:T.filter(function(t){
+var canViewAll=(window._currentRole==='admin'||window._currentRole==='csm');
+var visibleT=canViewAll?T:T.filter(function(t){
 var selfId=window._selfPersonId;
 if(!selfId)return false;
 return P.some(function(p){return p.id===selfId&&(p.types||[]).indexOf(t.id)>=0;});
 });
 document.getElementById('cC').textContent=visibleT.length;document.getElementById('cC2').textContent=visibleT.length;
-// Masquer le bouton "Créer" pour non-admin
+// Masquer le bouton "Créer" pour tout non-admin (sales, coach, csm)
 var addTBtn=document.getElementById('addT');if(addTBtn)addTBtn.style.display=isAdmin?'':'none';
 var el=document.getElementById('csG');if(!visibleT.length){el.innerHTML='<div class="rv-em" style="grid-column:1/-1">'+(isAdmin?'Aucune consultation. Créez-en une !':'Aucune consultation assignée.')+'</div>';return;}var h='';visibleT.forEach(function(t,i){var as=P.filter(function(p){return(p.types||[]).indexOf(t.id)>=0;});var evtLabel=EVT_LABELS[t.eventType||'private']||'👤 En privé';h+='<div class="cc" style="cursor:pointer" data-action="openCs" data-tid="'+t.id+'">';
 h+='<div class="cc-bar" style="background:'+t.color+'"></div>';
@@ -1176,11 +1193,12 @@ h+='</div>';
 
 // Actions
 h+='<div class="rdv-p-actions">';
+var _canDeleteRdv=(window._currentRole==='admin');
 if(b.status==='confirmed'){
 h+='<button class="bb bb-o" onclick="closeRdvDetail();toast(\'🔜 Replanification — prochaine version\')">📅 Replanifier</button>';
 h+='<button class="bb bb-r" onclick="cancelRdv(\''+b._id+'\')">Annuler le RDV</button>';
 }
-if(b.status==='cancelled'||b.status==='completed'){
+if((b.status==='cancelled'||b.status==='completed')&&_canDeleteRdv){
 h+='<button class="bb bb-r" onclick="if(confirm(\'Supprimer définitivement ?\')){db.collection(\'bookings\').doc(\''+b._id+'\').delete().then(function(){closeRdvDetail();loadB();toast(\'🗑 Supprimé\');});}">🗑 Supprimer</button>';
 }
 h+='</div>';
@@ -1217,13 +1235,19 @@ function applyExReadOnly(){
   if(!exPerson)return;
   if(!exIsReadOnly(exPerson.id))return;
   view.classList.add('ex-readonly');
-  // Injecte un bandeau au début de exContent
+  // Injecte un bandeau au début de exContent. Texte adapté au rôle :
+  //  - csm : vue Customer Success (toutes les fiches sont en lecture seule)
+  //  - sales/coach : fiche d'un autre expert (la sienne reste éditable)
   var content=document.getElementById('exContent');
   if(content){
     var banner=document.createElement('div');
     banner.id='exRoBanner';
     banner.className='ex-ro-banner';
-    banner.innerHTML='<span class="ex-ro-icon">🔒</span><span>Vue lecture seule — cette fiche appartient à <strong>'+esc(exPerson.name||'un autre expert')+'</strong>. Seul un administrateur ou l\'expert concerné peut la modifier.</span>';
+    if(window._currentRole==='csm'){
+      banner.innerHTML='<span class="ex-ro-icon">💎</span><span>Vue <strong>Customer Success</strong> — consultation de la fiche de '+esc(exPerson.name||'cet expert')+'. L\'édition des fiches expert est réservée aux administrateurs.</span>';
+    }else{
+      banner.innerHTML='<span class="ex-ro-icon">🔒</span><span>Vue lecture seule — cette fiche appartient à <strong>'+esc(exPerson.name||'un autre expert')+'</strong>. Seul un administrateur ou l\'expert concerné peut la modifier.</span>';
+    }
     content.insertBefore(banner,content.firstChild);
   }
   // Masque tous les éléments marqués data-ro-hide (bouton Supprimer expert,
@@ -2587,6 +2611,9 @@ document.getElementById('intCal').innerHTML=h2;
 }
 var _stAutoTimer=null;
 function saveSettingsAuto(){
+// Réglages globaux : écriture admin uniquement (rule Firestore _config/_settings
+// + cohérence UX). La CSM voit la page mais ne peut pas sauvegarder.
+if(window._currentRole!=='admin')return;
 var ind=document.getElementById('st-autosave-status');
 if(ind)autoSaveIndicator(ind);
 var u={};
@@ -2714,6 +2741,31 @@ firebase.auth().onAuthStateChanged(function(u){
     if(role!=='admin'){
       var addE=document.getElementById('addE');if(addE)addE.style.display='none';
       var addEF=document.getElementById('addEF');if(addEF)addEF.style.display='none';
+    }
+    // ─── Mode Customer Success (CSM) ───
+    // La CSM voit toute la page comme un admin (RDV, consultations, experts,
+    // pages, réglages) mais en lecture seule sur tout SAUF les actions sur
+    // les RDV (annuler/changer statut). Les écritures côté config sont
+    // bloquées par les Firestore rules (CR = booking_config en update admin
+    // only) + désactivation visuelle via la classe body.csm-mode.
+    if(role==='csm'){
+      document.body.classList.add('csm-mode');
+      // Bandeau discret en haut de la page (réutilise le style existant
+      // ex-ro-banner pour rester cohérent visuellement)
+      var bk=document.querySelector('.bk');
+      if(bk&&!document.getElementById('csmRoBanner')){
+        var rb=document.createElement('div');
+        rb.id='csmRoBanner';
+        rb.className='ex-ro-banner';
+        rb.style.cssText='margin:0 0 18px';
+        rb.innerHTML='<span class="ex-ro-icon">💎</span><span>Vue <strong>Customer Success</strong> — accès complet aux rendez-vous (annulation autorisée). Édition des consultations, experts, pages et réglages réservée aux administrateurs.</span>';
+        bk.insertBefore(rb,bk.firstChild.nextSibling);
+      }
+      // Masquer les boutons d'édition globaux
+      var nRdv=document.getElementById('newRdv');
+      // newRdv reste accessible : utile pour replanifier (annuler + créer)
+      // mais on peut le masquer si tu préfères. Laissé visible par défaut.
+      void nRdv;
     }
     // Précharge le cache des users Firebase Auth (admin only) — utilisé par le
     // dropdown "Compte Firebase" dans la fiche expert.
