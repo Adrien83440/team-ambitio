@@ -314,14 +314,19 @@ service cloud.firestore {
     }
 
     match /bookings/{bookingId} {
+      // CSM accède au module booking-admin en lecture seule globale mais
+      // peut annuler / changer le statut d'un RDV à la demande d'un client
+      // (rôle Customer Success). Cf. booking-admin.html mode csm.
       allow read:   if true;
       allow create: if true;
-      allow update: if isSalesOrAdmin();
+      allow update: if isSalesOrAdminOrCsm();
       allow delete: if isAdmin();
     }
 
     match /booking_events/{eventId} {
-      allow read:   if isSalesOrAdmin();
+      // Lecture étendue à la CSM pour afficher la timeline d'audit d'un RDV
+      // dans le panel détail (booking-admin.html → openRdvDetail → tab audit).
+      allow read:   if isSalesOrAdminOrCsm();
       allow create: if true;
       allow update: if isSalesOrAdmin();
       allow delete: if isAdmin();
