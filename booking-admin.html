@@ -2890,11 +2890,24 @@ var holder=document.getElementById('mAvailFrame');
 holder.innerHTML='';
 var ifr=document.createElement('iframe');
 ifr.id='mAvailIframe';
-ifr.src='booking.html?embed=1&agent=1&type='+encodeURIComponent(ti)+'&person='+encodeURIComponent(pi);
+// clientId passé en URL (identifiant non sensible) → la fiche est liée même
+// si le postMessage d'identité échoue. L'identité (nom/email/tél) reste
+// transmise par postMessage pour ne pas exposer de données perso dans l'URL.
+ifr.src='booking.html?embed=1&agent=1&type='+encodeURIComponent(ti)+'&person='+encodeURIComponent(pi)+'&clientId='+encodeURIComponent(_selectedClientId);
+// Déclencheur fiable : dès que booking.html a fini de charger, on lui
+// transmet l'identité du client (en plus du handshake bk_agent_ready).
+ifr.addEventListener('load',function(){postAgentPrefill(ifr);});
 holder.appendChild(ifr);
 document.getElementById('mShowAvail').style.display='none';
 document.getElementById('mAvailHint').style.display='none';
 var mo=document.querySelector('#cMo .mo');if(mo)mo.classList.add('mo-wide');
+}
+// Transmet l'identité du client sélectionné à l'iframe booking.html.
+function postAgentPrefill(ifr){
+if(!ifr||!ifr.contentWindow||!_selectedClientObj)return;
+var nom=_selectedClientObj.nom||'',prenom='';
+if(nom.indexOf(' ')>0){var parts=nom.split(' ');prenom=parts[0];nom=parts.slice(1).join(' ');}
+ifr.contentWindow.postMessage({type:'bk_agent_prefill',prenom:prenom,nom:nom,email:_selectedClientObj.email||'',tel:_selectedClientObj.telephone||_selectedClientObj.tel||'',clientId:_selectedClientId},window.location.origin);
 }
 function teardownAvailIframe(){
 var holder=document.getElementById('mAvailFrame');if(holder)holder.innerHTML='';
@@ -2909,12 +2922,8 @@ window.addEventListener('message',function(e){
 if(e.origin!==window.location.origin)return;
 var d=e.data||{};
 if(d.type==='bk_agent_ready'){
-// L'iframe est prête → on lui transmet l'identité du client sélectionné.
-var ifr=document.getElementById('mAvailIframe');
-if(!ifr||!ifr.contentWindow||!_selectedClientObj)return;
-var nom=_selectedClientObj.nom||'',prenom='';
-if(nom.indexOf(' ')>0){var parts=nom.split(' ');prenom=parts[0];nom=parts.slice(1).join(' ');}
-ifr.contentWindow.postMessage({type:'bk_agent_prefill',prenom:prenom,nom:nom,email:_selectedClientObj.email||'',tel:_selectedClientObj.telephone||_selectedClientObj.tel||'',clientId:_selectedClientId},window.location.origin);
+// L'iframe signale qu'elle est prête → on (re)transmet l'identité du client.
+postAgentPrefill(document.getElementById('mAvailIframe'));
 }else if(d.type==='bk_agent_booked'){
 // RDV créé dans l'iframe → toast, rafraîchissement, fermeture du modal.
 toast('✅ RDV créé pour le client');

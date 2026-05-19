@@ -516,6 +516,42 @@ if (_embedMode) {
   if (adminGear) adminGear.style.display = 'none';
 }
 
+/* ═══ MODE AGENT — réservation pilotée depuis booking-admin pour un client ═══
+   Activé quand booking.html est embarquée en iframe par booking-admin.html
+   (?embed=1&agent=1). La page reste 100 % identique pour le visiteur public :
+   le mode agent ne s'active réellement qu'après réception d'un message
+   bk_agent_prefill d'un parent same-origin. Sans parent (visiteur lambda qui
+   ajouterait ?agent=1 à la main), le mode reste inactif → comportement public
+   normal, quota bloquant compris. */
+var _agentRequested = params.has('agent');
+// Mode agent activé DÈS LE CHARGEMENT si la page est embarquée en iframe avec
+// ?agent=1. Ne dépend plus du handshake postMessage (fiabilité). Garde de
+// sécurité : window.parent !== window → impossible à activer pour un visiteur
+// public qui ouvrirait booking.html en top-level avec ?agent=1.
+var _agentMode = _agentRequested && _embedMode && window.parent !== window;
+var _agentClientId = params.get('clientId') || '';
+if (_agentMode) {
+  // L'identité du client est transmise par booking-admin via postMessage
+  // (pas dans l'URL → aucune donnée perso exposée). Best-effort : si le
+  // message n'arrive pas, le mode agent reste actif (quota non bloquant,
+  // clientId déjà connu via l'URL) — l'opérateur saisira juste l'identité.
+  window.addEventListener('message', function(ev) {
+    if (ev.origin !== window.location.origin) return;
+    var m = ev.data || {};
+    if (m.type !== 'bk_agent_prefill') return;
+    if (m.clientId) _agentClientId = m.clientId;
+    if (m.prenom) _formPrenom = m.prenom;
+    if (m.nom)    _formNom    = m.nom;
+    if (m.email)  _formEmail  = m.email;
+    if (m.tel)    _formTel    = m.tel;
+    // Si l'étape formulaire est déjà affichée, on la pré-remplit tout de suite.
+    try { prefillFromForm(); } catch (e) {}
+  });
+  // Handshake : on signale au parent qu'on est prêt (déclencheur secondaire ;
+  // le parent envoie aussi l'identité sur l'événement load de l'iframe).
+  try { window.parent.postMessage({ type: 'bk_agent_ready' }, window.location.origin); } catch (e) {}
+}
+
 db.collection('booking_config').get().then(function(snap) {
   snap.forEach(function(doc) {
     var d = doc.data();
@@ -599,7 +635,7 @@ function renderTypeCards() {
 function renderPersonCards() {
   var el = document.getElementById('personCards');
   var rrEl = document.getElementById('rrBanner');
-  var isRR = S.selType && S.selType.eventType === 'roundrobin';
+  var isRR = S.selType && S.selType.eventType === 'roundrobin' && S.selType.isCoaching !== true;
 
   // Filter persons who handle this type
   var filtered = S.persons.filter(function(p) {
@@ -1148,6 +1184,21 @@ async function handleSubmit() {
   if (_formLeadId) booking.leadId = _formLeadId;
   if (_fromForm) booking.formId = _fromForm;
   if (_formLeadId) booking.source = 'self_booking';
+  // Mode agent : RDV pris par la CSM/un admin à la place d'un client coaching.
+  //  - source 'csm_manual' pour distinguer des réservations self-service.
+  //  - clientId / clientNom : lien explicite vers la fiche coaching.
+  //  - skipLeadCreation : aucun lead ne doit être créé (client existant, pas
+  //    un prospect). NB : si la Cloud Function onBookingCreated crée elle-même
+  //    un lead pour chaque booking, ajouter en tête de son bloc lead :
+  //      if (booking.skipLeadCreation === true || booking.clientId) return;
+  if (_agentMode) {
+    booking.source = 'csm_manual';
+    booking.skipLeadCreation = true;
+    if (_agentClientId) {
+      booking.clientId = _agentClientId;
+      booking.clientNom = ((prenom || '') + ' ' + (nom || '')).trim();
+    }
+  }
   // Propage le flag isCoaching depuis la consultation (utilisé par le calendrier coaching
   // et le matching automatique avec les fiches clients par email).
   if (S.selType && S.selType.isCoaching === true) booking.isCoaching = true;
@@ -1173,9 +1224,17 @@ async function handleSubmit() {
       });
       var quotaData = await resp.json();
       if (quotaData && quotaData.allowed === false) {
-        // Bloqué → afficher modal et abort. Ne pas créer le booking.
-        showQuotaModal(quotaData);
-        return;
+        if (_agentMode) {
+          // Mode agent (CSM) : on n'interrompt PAS la réservation. Choix
+          // métier — le RDV est créé malgré le quota mensuel atteint. On pose
+          // un flag d'audit (visible côté coach) et on prévient sans modal.
+          booking.coachingQuotaExceeded = true;
+          showAgentQuotaNotice(quotaData);
+        } else {
+          // Visiteur public : blocage comme avant.
+          showQuotaModal(quotaData);
+          return;
+        }
       }
       if (quotaData && quotaData.clientFound === false) {
         // Email non trouvé en base coaching → flag pour avertir le coach.
@@ -1197,6 +1256,20 @@ async function handleSubmit() {
     S.confirmedBooking = booking;
     S.confirmedMeetLink = null;
 
+    // Mode agent : on prévient booking-admin (fenêtre parente) que le RDV
+    // est créé → fermeture du modal + toast + rafraîchissement de la liste.
+    if (_agentMode && window.parent !== window) {
+      try {
+        window.parent.postMessage({
+          type: 'bk_agent_booked',
+          bookingId: docRef.id,
+          date: S.selDate,
+          time: S.selTime,
+          personName: S.selPerson ? S.selPerson.name : ''
+        }, window.location.origin);
+      } catch (e) { console.warn('postMessage bk_agent_booked:', e); }
+    }
+
     /* ── REDIRECTION PERSONNALISÉE ──────────────────────────────────────
        Si la consultation a une page de confirmation personnalisée activée
        (booking-admin → onglet Détails), on redirige le client immédiatement
@@ -1209,7 +1282,7 @@ async function handleSubmit() {
       : '';
     if (_redirectUrl) {
       // Compteur round-robin mis à jour avant de quitter la page
-      if (S.selType && S.selType.eventType === 'roundrobin' && S.selPerson) {
+      if (S.selType && S.selType.eventType === 'roundrobin' && S.selType.isCoaching !== true && S.selPerson) {
         db.collection('_meta').doc('booking_rr').set(
           { lastAssigned: S.selPerson.id, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
           { merge: true }
@@ -1264,7 +1337,7 @@ async function handleSubmit() {
     // Lead creation/dedup is handled by Cloud Function onBookingCreated (server-side, with admin access)
 
     // Update round-robin counter
-    if (S.selType && S.selType.eventType === 'roundrobin' && S.selPerson) {
+    if (S.selType && S.selType.eventType === 'roundrobin' && S.selType.isCoaching !== true && S.selPerson) {
       db.collection('_meta').doc('booking_rr').set(
         { lastAssigned: S.selPerson.id, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
         { merge: true }
@@ -1299,6 +1372,22 @@ function showQuotaModal(quotaData) {
   }
   document.getElementById('quotaText').innerHTML = text;
   document.getElementById('quotaOverlay').classList.add('show');
+}
+
+// Avertissement quota NON bloquant — mode agent uniquement. Le RDV est créé
+// quand même ; on informe simplement l'opérateur via un bandeau discret.
+function showAgentQuotaNotice(quotaData) {
+  var used = (quotaData && typeof quotaData.used === 'number') ? quotaData.used : '—';
+  var quota = (quotaData && typeof quotaData.quota === 'number') ? quotaData.quota : '—';
+  var n = document.getElementById('agentQuotaNotice');
+  if (!n) {
+    n = document.createElement('div');
+    n.id = 'agentQuotaNotice';
+    n.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9999;max-width:92%;background:#fef3c7;border:1.5px solid #f59e0b;color:#92400e;font-size:12.5px;font-weight:600;padding:9px 16px;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.18);text-align:center';
+    document.body.appendChild(n);
+  }
+  n.textContent = '⚠️ Quota coaching du mois atteint pour ce client (' + used + '/' + quota + ') — le rendez-vous est tout de même enregistré.';
+  n.style.display = 'block';
 }
 
 function closeQuotaModal() {
