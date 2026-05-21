@@ -189,6 +189,38 @@
 .rule-cond-row select,.rule-cond-row input{font-size:11px;padding:6px 8px}
 .rule-logic-tag{font-size:10px;font-weight:800;color:#60a5fa;padding:2px 8px;background:rgba(96,165,250,.1);border-radius:4px;margin:4px 0}
 @media(max-width:768px){.ed.on{flex-direction:column}.ed-palette{width:100%;border-right:0;border-bottom:1px solid rgba(255,255,255,.07);max-height:220px}.ed-right{padding:16px 0}}
+
+/* ═══ Vue Témoignages ═══ */
+.tw-dd{position:relative;display:inline-block}
+.tw-menu{position:absolute;top:calc(100% + 6px);right:0;background:#0e0e1a;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:6px;min-width:240px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:100;display:none}
+.tw-menu.on{display:block}
+.tw-item{padding:10px 14px;border-radius:6px;font-size:13px;color:rgba(255,255,255,.85);cursor:pointer;display:flex;align-items:center;gap:10px;transition:background .12s}
+.tw-item:hover{background:rgba(245,158,11,.1);color:#f59e0b}
+.tw-item-ic{font-size:16px;width:20px;text-align:center}
+
+/* Modal aperçu PNG témoignages */
+.tw-mo{position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);z-index:9999;display:none;align-items:center;justify-content:center;padding:24px}
+.tw-mo.on{display:flex}
+.tw-mo-box{background:#0a0a14;border:1px solid rgba(255,255,255,.1);border-radius:14px;max-width:1200px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+.tw-mo-head{padding:18px 24px;border-bottom:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.tw-mo-title{font-size:16px;font-weight:700;color:#fff;display:flex;align-items:center;gap:10px}
+.tw-mo-sub{font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;font-weight:500}
+.tw-mo-close{background:none;border:none;color:rgba(255,255,255,.45);font-size:22px;cursor:pointer;padding:4px;line-height:1}
+.tw-mo-close:hover{color:#fff}
+.tw-mo-body{padding:24px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:20px;justify-content:center;background:linear-gradient(180deg,#0a0a14 0%,#13131f 100%)}
+.tw-card-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.tw-card-thumb{max-width:340px;max-height:340px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6);cursor:pointer;transition:transform .2s}
+.tw-card-thumb:hover{transform:scale(1.02)}
+.tw-card-thumb.story{max-width:200px;max-height:355px}
+.tw-card-dl{padding:6px 14px;background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:5px}
+.tw-card-dl:hover{background:rgba(245,158,11,.25)}
+.tw-mo-foot{padding:14px 24px;border-top:1px solid rgba(255,255,255,.07);display:flex;justify-content:space-between;align-items:center;gap:10px;background:#0a0a14}
+.tw-mo-foot-info{font-size:11px;color:rgba(255,255,255,.45)}
+.tw-mo-dl-all{padding:9px 18px;background:#f59e0b;color:#000;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer}
+.tw-mo-dl-all:hover{background:#d97706}
+
+/* Conteneur off-screen pour le rendu html2canvas */
+#twRenderHost{position:fixed;left:-99999px;top:0;pointer-events:none}
 </style>
 </head>
 <body>
@@ -831,10 +863,25 @@ window._currentResponses=[];
 sn.forEach(function(d){var r=d.data();r._id=d.id;window._currentResponses.push(r);});
 
 var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">';
-h+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
 h+='<button class="bb bb-g" onclick="exportRespXlsx()" title="Tableau Excel — 1 ligne par réponse">📥 Excel</button>';
 h+='<button class="bb bb-o" onclick="exportRespPdfRecap()" title="PDF récapitulatif tableau">📄 PDF récap</button>';
 h+='<button class="bb bb-o" onclick="exportRespPdfFiches()" title="PDF — une fiche détaillée par réponse">📑 PDF fiches</button>';
+// Vue Témoignages : visible uniquement si le form a un champ rating détecté.
+// Auto-détection silencieuse (pas de toast) à l'affichage du bouton.
+var _twDetected=_detectTestimonialFields(fields);
+if(_twDetected.rating){
+h+='<div class="tw-dd">';
+h+='<button class="bb bb-o" onclick="toggleTestimonialsMenu(event)" title="Vue témoignages pour les réseaux sociaux (≥4★)" style="border-color:rgba(245,158,11,.3);color:#f59e0b">💎 Témoignages ▾</button>';
+h+='<div class="tw-menu" id="twMenu">';
+h+='<div class="tw-item" onclick="hideTestimonialsMenu();twExportPng(\'square\')"><span class="tw-item-ic">📷</span>Posts carrés (1080×1080)</div>';
+h+='<div class="tw-item" onclick="hideTestimonialsMenu();twExportPng(\'story\')"><span class="tw-item-ic">📱</span>Stories (1080×1920)</div>';
+h+='<div class="tw-item" onclick="hideTestimonialsMenu();twExportMosaic()"><span class="tw-item-ic">🖼️</span>Mosaïque 4 en 1</div>';
+h+='<div class="tw-item" onclick="hideTestimonialsMenu();twExportPdf()"><span class="tw-item-ic">📄</span>PDF page A4</div>';
+h+='<div class="tw-item" onclick="hideTestimonialsMenu();twOpenHtml()"><span class="tw-item-ic">🌐</span>Page HTML</div>';
+h+='</div>';
+h+='</div>';
+}
 h+='</div>';
 h+='<div style="font-size:13px;color:rgba(255,255,255,.5);font-weight:600">'+sn.size+' réponse'+(sn.size>1?'s':'')+'</div>';
 h+='</div>';
@@ -984,6 +1031,110 @@ var n=parseInt(h,16);
 return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};
 }
 
+// Assombrit une couleur hex (pour les gradients de fond témoignages).
+// amount entre 0 et 1 : 0 = identité, 1 = noir.
+function _darken(hex,amount){
+var c=_hexToRgb(hex);
+var k=1-Math.max(0,Math.min(1,amount));
+return '#'+[Math.round(c.r*k),Math.round(c.g*k),Math.round(c.b*k)]
+  .map(function(v){return ('0'+v.toString(16)).slice(-2);}).join('');
+}
+
+// ─── PDF — Formatage rating ────────────────────────────────────────────
+// jsPDF (helvetica) ne supporte pas les emojis (⭐, 🔥, ❤️…) mais supporte
+// les caractères Unicode étoile pleine/vide. On rend "★★★★☆ (4/5)" pour
+// les exports PDF (récap, fiches, fiche individuelle). Cohérent avec le
+// caractère formel d'un PDF et fonctionne sans embarquer de police lourde.
+function _respFormatRatingPdf(val,field){
+var max=parseInt(field&&field.ratingMax)||5;
+var n=parseInt(val)||0;
+if(n<0)n=0;if(n>max)n=max;
+var full='',empty='';
+for(var i=0;i<n;i++)full+='\u2605';        // ★ U+2605
+for(var j=0;j<max-n;j++)empty+='\u2606';   // ☆ U+2606
+return full+empty+' ('+n+'/'+max+')';
+}
+
+// Renvoie la valeur d'un champ pour l'affichage PDF : reformate les ratings
+// en ★★★★☆ (4/5) et laisse le reste passer via _respValToString.
+function _respValForPdf(r,field){
+if(!field)return '';
+if(field.type==='rating'){
+var raw=_respGetValue(r,field.id);
+if(raw===''||raw===null||raw===undefined)return '—';
+return _respFormatRatingPdf(raw,field);
+}
+return _respValToString(_respGetValue(r,field.id));
+}
+
+// ─── Témoignages — auto-détection des champs du formulaire ────────────
+// Heuristique : on attend un form de feedback typique avec
+//   - 1 champ rating (note)
+//   - 1 champ texte/textarea (commentaire ouvert)
+//   - éventuellement contactMapping prenom (nom du répondant)
+//   - éventuellement un radio "Avec qui ?" (coach/closer associé)
+// Tout est optionnel sauf rating + commentaire ouvert.
+function _detectTestimonialFields(fields){
+var rating=null,comment=null,prenom=null,withWho=null;
+(fields||[]).forEach(function(f){
+if(!rating&&f.type==='rating')rating=f;
+if(!comment&&(f.type==='textarea'||f.type==='text')&&f.contactMapping!=='prenom'&&f.contactMapping!=='nom'&&f.contactMapping!=='email'&&f.contactMapping!=='telephone')comment=f;
+if(!prenom&&f.contactMapping==='prenom')prenom=f;
+if(!withWho&&f.type==='radio'&&f.options&&f.options.length>=2)withWho=f;
+});
+return {rating:rating,comment:comment,prenom:prenom,withWho:withWho};
+}
+
+// Extrait un témoignage normalisé depuis une réponse Firestore.
+function _extractTestimonial(r,detected){
+var rating=detected.rating?(parseInt(_respGetValue(r,detected.rating.id))||0):0;
+var comment=detected.comment?String(_respGetValue(r,detected.comment.id)||'').trim():'';
+var prenom=detected.prenom?String(_respGetValue(r,detected.prenom.id)||'').trim():'';
+var withWho=detected.withWho?String(_respGetValue(r,detected.withWho.id)||'').trim():'';
+return {
+rating:rating,
+comment:comment,
+prenom:prenom||'Un client',
+withWho:withWho,
+date:_respDateFR(r),
+ratingMax:(detected.rating&&parseInt(detected.rating.ratingMax))||5,
+ratingIcon:(detected.rating&&detected.rating.ratingIcon)||'\u2B50' // ⭐ U+2B50
+};
+}
+
+// Filtre éligibilité témoignages : ≥4★ ET commentaire non vide.
+// Retourne {testimonials, detected, color, formTitle} ou null si pas de
+// champ rating (le form n'est pas un form de feedback).
+function _getEligibleTestimonials(){
+var responses=window._currentResponses||[];
+var fields=(currentForm&&currentForm.fields)||[];
+var detected=_detectTestimonialFields(fields);
+if(!detected.rating){toast('❌ Ce formulaire n\'a pas de champ Note — pas de témoignages à extraire',true);return null;}
+var list=[];
+responses.forEach(function(r){
+var t=_extractTestimonial(r,detected);
+if(t.rating>=4&&t.comment.length>0)list.push(t);
+});
+if(!list.length){toast('❌ Aucun témoignage éligible (≥4★ avec commentaire)',true);return null;}
+return {
+testimonials:list,
+detected:detected,
+color:(currentForm&&currentForm.color)||'#f59e0b',
+formTitle:(currentForm&&currentForm.title)||'Formulaire'
+};
+}
+
+// Charge html2canvas à la volée (utilisé par les exports PNG témoignages).
+// Cache la lib une fois chargée. Callback appelé même si déjà présente.
+function _loadHtml2Canvas(callback){
+if(window.html2canvas){callback();return;}
+var s=document.createElement('script');
+s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+s.onload=function(){callback();};
+s.onerror=function(){toast('❌ Impossible de charger html2canvas (vérifie ta connexion)',true);};
+document.head.appendChild(s);
+}
+
 // ─── XLSX ──────────────────────────────────────────────────────────────
 function exportRespXlsx(){
 if(!currentForm){toast('❌ Aucun formulaire sélectionné');return;}
@@ -1096,9 +1247,9 @@ var head=[['Date'].concat(fields.map(function(f){return f.label||f.id;}))];
 var body=responses.map(function(r){
 var row=[_respDateFR(r)];
 fields.forEach(function(f){
-var v=_respValToString(_respGetValue(r,f.id));
-// Tronque les longues valeurs textarea pour rester lisible en mode tableau.
-if(v.length>80)v=v.substring(0,77)+'…';
+// Ratings → ★★★★☆ (4/5) ; autres → texte brut tronqué à 80 chars.
+var v=_respValForPdf(r,f);
+if(f.type!=='rating'&&v.length>80)v=v.substring(0,77)+'…';
 row.push(v);
 });
 return row;
@@ -1160,7 +1311,7 @@ y+=4;
 // Pour chaque champ du form, dessine label + valeur.
 fields.forEach(function(f){
 var label=(f.label||f.id||'').toUpperCase();
-var val=_respValToString(_respGetValue(r,f.id))||'—';
+var val=_respValForPdf(r,f)||'—';
 
 // Wrap du texte sur la largeur disponible.
 doc.setFont('helvetica','bold');
@@ -1299,7 +1450,7 @@ y+=4;
 
 fields.forEach(function(f){
 var label=(f.label||f.id||'').toUpperCase();
-var val=_respValToString(_respGetValue(r,f.id))||'—';
+var val=_respValForPdf(r,f)||'—';
 
 doc.setFont('helvetica','bold');
 doc.setFontSize(8);
@@ -1346,6 +1497,411 @@ doc.save(_slug(currentForm.title)+'_reponse-'+idShort+'_'+date+'.pdf');
 toast('✅ PDF exporté');
 }
 window.exportSingleRespPdf=exportSingleRespPdf;
+
+// ═══════════════════════════════════════════════════════════════════════
+// VUE TÉMOIGNAGES — Export pour les réseaux sociaux
+// ─────────────────────────────────────────────────────────────────────
+// 5 formats : posts carrés (1080×1080), stories (1080×1920), mosaïque 4-en-1,
+// PDF page A4 grille, et page HTML standalone à screenshotter.
+// Filtre : ≥4★ + commentaire ouvert non vide.
+// ═══════════════════════════════════════════════════════════════════════
+
+function toggleTestimonialsMenu(ev){
+if(ev)ev.stopPropagation();
+var m=document.getElementById('twMenu');
+if(!m)return;
+m.classList.toggle('on');
+// Fermeture au clic hors menu (binding 1-shot).
+setTimeout(function(){
+document.addEventListener('click',function _off(e){
+var menu=document.getElementById('twMenu');
+if(menu&&!menu.contains(e.target)&&!e.target.closest('.tw-dd')){
+menu.classList.remove('on');
+document.removeEventListener('click',_off);
+}
+},{once:true});
+},10);
+}
+window.toggleTestimonialsMenu=toggleTestimonialsMenu;
+function hideTestimonialsMenu(){var m=document.getElementById('twMenu');if(m)m.classList.remove('on');}
+window.hideTestimonialsMenu=hideTestimonialsMenu;
+
+// ─── Render HTML d'un témoignage en card visuelle ─────────────────────
+// Sert au rendu html2canvas (carré, story) ET à la page HTML standalone.
+// `format` ∈ {'square','story','mosaic-cell','html'} pilote dimensions + typo.
+function _twRenderCardHtml(t,color,format){
+var dims;
+if(format==='square')dims={w:1080,h:1080,padTop:96,padX:80,quoteFs:54,starFs:64,nameFs:32,brandFs:24,brandTop:60};
+else if(format==='story')dims={w:1080,h:1920,padTop:280,padX:90,quoteFs:62,starFs:80,nameFs:38,brandFs:28,brandTop:120};
+else if(format==='mosaic-cell')dims={w:540,h:540,padTop:48,padX:42,quoteFs:26,starFs:32,nameFs:18,brandFs:13,brandTop:30};
+else dims={w:560,h:420,padTop:42,padX:38,quoteFs:22,starFs:28,nameFs:16,brandFs:11,brandTop:24};
+
+// Étoiles : pleines × rating + grisées × (max-rating).
+var icon=t.ratingIcon||'⭐';
+var stars='';
+for(var i=0;i<t.rating;i++)stars+='<span>'+icon+'</span>';
+var emptyStars='';
+for(var j=0;j<t.ratingMax-t.rating;j++)emptyStars+='<span style="opacity:.22">'+icon+'</span>';
+
+// Citation : tronque à ~280 chars (mode square) ou 420 (story).
+var maxCh=format==='story'?440:(format==='mosaic-cell'?180:280);
+var quote=t.comment;
+if(quote.length>maxCh)quote=quote.substring(0,maxCh-1).trim()+'…';
+quote=esc(quote);
+
+// "— Prénom, Session avec X" ou juste "— Prénom".
+var attribution='— '+esc(t.prenom);
+if(t.withWho)attribution+=', Session avec '+esc(t.withWho);
+
+// Fond : gradient diagonal couleur form → assombri.
+var dark=_darken(color,0.5);
+var darker=_darken(color,0.78);
+
+var html=''+
+'<div style="width:'+dims.w+'px;height:'+dims.h+'px;'+
+'background:linear-gradient(135deg, '+dark+' 0%, '+darker+' 100%);'+
+'padding:'+dims.padTop+'px '+dims.padX+'px;'+
+'box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;'+
+'font-family:\'Inter\',\'Helvetica Neue\',Helvetica,Arial,sans-serif;color:#fff;position:relative;overflow:hidden">'+
+
+// Halo coloré (décoratif)
+'<div style="position:absolute;top:-30%;right:-20%;width:60%;height:60%;'+
+'background:radial-gradient(circle, '+color+'66 0%, transparent 65%);pointer-events:none"></div>'+
+
+// Bloc supérieur : étoiles + citation
+'<div style="position:relative;z-index:1">'+
+'<div style="font-size:'+dims.starFs+'px;line-height:1;letter-spacing:6px;margin-bottom:'+(dims.starFs*0.6)+'px">'+stars+emptyStars+'</div>'+
+'<div style="font-size:'+dims.quoteFs+'px;font-weight:500;line-height:1.35;color:#fff;letter-spacing:-.01em">'+
+'<span style="font-size:'+(dims.quoteFs*1.4)+'px;color:'+color+';opacity:.7;font-family:Georgia,serif;line-height:.4;display:inline-block;margin-right:8px;vertical-align:-12px">"</span>'+
+quote+
+'</div>'+
+'</div>'+
+
+// Bloc inférieur : attribution + branding
+'<div style="position:relative;z-index:1;margin-top:'+dims.brandTop+'px">'+
+'<div style="font-size:'+dims.nameFs+'px;font-weight:600;color:rgba(255,255,255,.85);letter-spacing:.3px;margin-bottom:'+(dims.nameFs*0.4)+'px">'+attribution+'</div>'+
+'<div style="display:flex;align-items:center;gap:10px">'+
+'<div style="width:'+(dims.brandFs*1.6)+'px;height:'+(dims.brandFs*1.6)+'px;border-radius:'+(dims.brandFs*0.45)+'px;background:linear-gradient(135deg,'+color+',#d97706);display:flex;align-items:center;justify-content:center;font-size:'+(dims.brandFs*0.95)+'px">⭐</div>'+
+'<div style="font-size:'+dims.brandFs+'px;font-weight:700;letter-spacing:1.5px;color:rgba(255,255,255,.65);text-transform:uppercase">Alteore</div>'+
+'</div>'+
+'</div>'+
+
+'</div>';
+return html;
+}
+
+// ─── Rendu d'une mosaïque 2x2 (1080×1080) ─────────────────────────────
+function _twRenderMosaicHtml(testimonials,color){
+// On prend les 4 premiers témoignages.
+var picks=testimonials.slice(0,4);
+while(picks.length<4)picks.push(null); // padding pour grille fixe
+
+var dark=_darken(color,0.55);
+var html=''+
+'<div style="width:1080px;height:1080px;background:linear-gradient(135deg,'+dark+' 0%,'+_darken(color,0.82)+' 100%);'+
+'padding:30px;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:30px;'+
+'font-family:\'Inter\',\'Helvetica Neue\',Helvetica,Arial,sans-serif">';
+
+picks.forEach(function(t){
+if(!t){html+='<div style="opacity:0"></div>';return;}
+html+='<div style="border-radius:24px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.4)">'+_twRenderCardHtml(t,color,'mosaic-cell')+'</div>';
+});
+
+html+='</div>';
+return html;
+}
+
+// ─── Helper : rend du HTML via html2canvas et renvoie un blob PNG ─────
+function _twHtmlToPng(htmlStr,w,h,callback){
+_loadHtml2Canvas(function(){
+var host=document.getElementById('twRenderHost');
+if(!host){
+host=document.createElement('div');
+host.id='twRenderHost';
+document.body.appendChild(host);
+}
+host.innerHTML=htmlStr;
+var node=host.firstElementChild;
+// On laisse 50ms aux fonts/emojis pour se rendre avant la capture.
+setTimeout(function(){
+window.html2canvas(node,{width:w,height:h,scale:1,backgroundColor:null,useCORS:true,logging:false}).then(function(canvas){
+canvas.toBlob(function(blob){
+host.innerHTML='';
+callback(blob);
+},'image/png');
+}).catch(function(err){
+console.error('[twHtmlToPng] html2canvas error:',err);
+toast('❌ Erreur de génération PNG : '+err.message,true);
+host.innerHTML='';
+callback(null);
+});
+},80);
+});
+}
+
+// ─── Modal d'aperçu PNG (carrés ou stories) ───────────────────────────
+function _twShowPreviewModal(title,subtitle,blobs,filenamePrefix,isStory){
+// blobs = [{blob, prenom, rating}]
+var box=document.createElement('div');
+box.className='tw-mo on';
+box.id='twPreviewMo';
+
+var foot=blobs.length>1?'<button class="tw-mo-dl-all" onclick="twDownloadAllBlobs()">⬇️ Tout télécharger ('+blobs.length+')</button>':'<div></div>';
+var thumbCls=isStory?'tw-card-thumb story':'tw-card-thumb';
+
+var html='<div class="tw-mo-box">'+
+'<div class="tw-mo-head">'+
+'<div><div class="tw-mo-title">'+esc(title)+'</div><div class="tw-mo-sub">'+esc(subtitle)+'</div></div>'+
+'<button class="tw-mo-close" onclick="twClosePreview()">×</button>'+
+'</div>'+
+'<div class="tw-mo-body" id="twPreviewBody"></div>'+
+'<div class="tw-mo-foot"><div class="tw-mo-foot-info">Astuce : clique sur une image pour la télécharger individuellement</div>'+foot+'</div>'+
+'</div>';
+box.innerHTML=html;
+document.body.appendChild(box);
+
+// Génère les vignettes (object URL).
+var body=document.getElementById('twPreviewBody');
+window._twPendingBlobs=[];
+blobs.forEach(function(item,idx){
+if(!item.blob)return;
+var url=URL.createObjectURL(item.blob);
+var fname=filenamePrefix+'-'+(idx+1)+'-'+_slug(item.prenom||'temoignage')+'.png';
+window._twPendingBlobs.push({url:url,fname:fname});
+var card=document.createElement('div');
+card.className='tw-card-wrap';
+card.innerHTML='<img src="'+url+'" class="'+thumbCls+'" alt="Témoignage" onclick="twDownloadBlob('+idx+')"/>'+
+'<a class="tw-card-dl" href="'+url+'" download="'+esc(fname)+'">⬇ '+esc(item.prenom||'Téléchargement')+' · '+item.rating+'★</a>';
+body.appendChild(card);
+});
+}
+window.twClosePreview=function(){
+var box=document.getElementById('twPreviewMo');
+if(box){
+(window._twPendingBlobs||[]).forEach(function(b){URL.revokeObjectURL(b.url);});
+window._twPendingBlobs=[];
+box.remove();
+}
+};
+window.twDownloadBlob=function(idx){
+var b=(window._twPendingBlobs||[])[idx];
+if(!b)return;
+var a=document.createElement('a');a.href=b.url;a.download=b.fname;document.body.appendChild(a);a.click();a.remove();
+};
+window.twDownloadAllBlobs=function(){
+var blobs=window._twPendingBlobs||[];
+blobs.forEach(function(b,i){
+setTimeout(function(){
+var a=document.createElement('a');a.href=b.url;a.download=b.fname;document.body.appendChild(a);a.click();a.remove();
+},i*220);
+});
+toast('⬇️ Téléchargement de '+blobs.length+' images…');
+};
+
+// ─── Action : Posts carrés / Stories ──────────────────────────────────
+function twExportPng(format){
+var data=_getEligibleTestimonials();
+if(!data)return;
+var dims=format==='story'?{w:1080,h:1920}:{w:1080,h:1080};
+toast('⏳ Génération de '+data.testimonials.length+' image'+(data.testimonials.length>1?'s':'')+'…');
+
+var blobs=[];
+var i=0;
+function next(){
+if(i>=data.testimonials.length){
+_twShowPreviewModal(
+format==='story'?'📱 Stories Instagram / Reels':'📷 Posts carrés Instagram / LinkedIn',
+data.testimonials.length+' témoignage'+(data.testimonials.length>1?'s':'')+' · ≥4★ · '+dims.w+'×'+dims.h+'px',
+blobs,
+_slug(data.formTitle)+'-'+format,
+format==='story'
+);
+return;
+}
+var t=data.testimonials[i];
+var html=_twRenderCardHtml(t,data.color,format);
+_twHtmlToPng(html,dims.w,dims.h,function(blob){
+blobs.push({blob:blob,prenom:t.prenom,rating:t.rating});
+i++;next();
+});
+}
+next();
+}
+window.twExportPng=twExportPng;
+
+// ─── Action : Mosaïque 2×2 (1080×1080) ────────────────────────────────
+function twExportMosaic(){
+var data=_getEligibleTestimonials();
+if(!data)return;
+if(data.testimonials.length<2){toast('❌ Il faut au moins 2 témoignages éligibles pour une mosaïque',true);return;}
+toast('⏳ Génération de la mosaïque…');
+var html=_twRenderMosaicHtml(data.testimonials,data.color);
+_twHtmlToPng(html,1080,1080,function(blob){
+if(!blob)return;
+var url=URL.createObjectURL(blob);
+var a=document.createElement('a');
+a.href=url;a.download=_slug(data.formTitle)+'-mosaique-'+new Date().toISOString().substring(0,10).replace(/-/g,'')+'.png';
+document.body.appendChild(a);a.click();a.remove();
+setTimeout(function(){URL.revokeObjectURL(url);},1000);
+toast('✅ Mosaïque téléchargée');
+});
+}
+window.twExportMosaic=twExportMosaic;
+
+// ─── Action : PDF page A4 (grille de témoignages) ─────────────────────
+function twExportPdf(){
+var data=_getEligibleTestimonials();
+if(!data)return;
+if(typeof window.jspdf==='undefined'||!window.jspdf.jsPDF){toast('❌ Bibliothèque PDF non chargée',true);return;}
+
+var jsPDF=window.jspdf.jsPDF;
+var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+var pageW=doc.internal.pageSize.getWidth();
+var pageH=doc.internal.pageSize.getHeight();
+var color=data.color;
+var rgb=_hexToRgb(color);
+
+// Header.
+var subtitle=data.testimonials.length+' témoignage'+(data.testimonials.length>1?'s':'')+' · ≥4★';
+var y=_drawPdfHeader(doc,color,'Témoignages — '+data.formTitle,subtitle);
+y+=4;
+
+// Layout : 2 colonnes × N lignes. Carte = 90×60mm environ.
+var marginX=12;
+var gutter=6;
+var colW=(pageW-marginX*2-gutter)/2;
+var cardH=68;
+var rowGap=6;
+var col=0;
+
+data.testimonials.forEach(function(t,idx){
+// Saut de page si la prochaine carte dépasse.
+if(y+cardH>pageH-15){
+doc.addPage();
+y=_drawPdfHeader(doc,color,'Témoignages — '+data.formTitle,subtitle+' (suite)');
+y+=4;
+col=0;
+}
+var x=marginX+col*(colW+gutter);
+
+// Fond carte.
+doc.setFillColor(249,249,252);
+doc.roundedRect(x,y,colW,cardH,3,3,'F');
+// Bordure couleur form.
+doc.setDrawColor(rgb.r,rgb.g,rgb.b);
+doc.setLineWidth(0.3);
+doc.roundedRect(x,y,colW,cardH,3,3);
+
+// Étoiles.
+doc.setFont('helvetica','bold');
+doc.setFontSize(14);
+doc.setTextColor(rgb.r,rgb.g,rgb.b);
+var stars='';
+for(var i=0;i<t.rating;i++)stars+='\u2605';
+for(var j=0;j<t.ratingMax-t.rating;j++)stars+='\u2606';
+doc.text(stars,x+5,y+9);
+
+// Commentaire (tronqué pour tenir).
+doc.setFont('helvetica','italic');
+doc.setFontSize(9);
+doc.setTextColor(50,50,60);
+var quote=t.comment.length>260?t.comment.substring(0,259).trim()+'…':t.comment;
+var lines=doc.splitTextToSize('« '+quote+' »',colW-10);
+// Limite à 7 lignes pour tenir dans la carte.
+if(lines.length>7)lines=lines.slice(0,7).concat(['…']);
+doc.text(lines,x+5,y+15);
+
+// Attribution en bas de carte.
+doc.setFont('helvetica','bold');
+doc.setFontSize(8);
+doc.setTextColor(80,80,90);
+var attribution='— '+t.prenom+(t.withWho?', Session avec '+t.withWho:'');
+doc.text(attribution,x+5,y+cardH-4);
+
+// Position suivante.
+col++;
+if(col>=2){col=0;y+=cardH+rowGap;}
+});
+
+// Footer.
+var pageCount=doc.internal.getNumberOfPages();
+for(var p=1;p<=pageCount;p++){
+doc.setPage(p);
+doc.setFont('helvetica','normal');
+doc.setFontSize(8);
+doc.setTextColor(160,160,170);
+doc.text('Alteore — Témoignages clients',12,pageH-6);
+doc.text('Page '+p+' / '+pageCount,pageW-12,pageH-6,{align:'right'});
+}
+
+var date=new Date().toISOString().substring(0,10).replace(/-/g,'');
+doc.save(_slug(data.formTitle)+'-temoignages-'+date+'.pdf');
+toast('✅ PDF témoignages téléchargé');
+}
+window.twExportPdf=twExportPdf;
+
+// ─── Action : Page HTML standalone (nouvel onglet) ────────────────────
+function twOpenHtml(){
+var data=_getEligibleTestimonials();
+if(!data)return;
+var dark=_darken(data.color,0.55);
+var darker=_darken(data.color,0.85);
+
+var cards='';
+data.testimonials.forEach(function(t){
+var icon=t.ratingIcon||'⭐';
+var stars='';
+for(var i=0;i<t.rating;i++)stars+=icon;
+var emptyStars='';
+for(var j=0;j<t.ratingMax-t.rating;j++)emptyStars+='<span style="opacity:.22">'+icon+'</span>';
+var attribution='— '+esc(t.prenom)+(t.withWho?', Session avec '+esc(t.withWho):'');
+cards+='<article class="tw-html-card">'+
+'<div class="tw-html-stars">'+stars+emptyStars+'</div>'+
+'<blockquote>'+esc(t.comment)+'</blockquote>'+
+'<footer>'+attribution+'</footer>'+
+'</article>';
+});
+
+var doc=''+
+'<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/>'+
+'<meta name="viewport" content="width=device-width,initial-scale=1.0"/>'+
+'<title>Témoignages — '+esc(data.formTitle)+'</title>'+
+'<link rel="preconnect" href="https://fonts.googleapis.com">'+
+'<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">'+
+'<style>'+
+'*{box-sizing:border-box;margin:0;padding:0}'+
+'body{background:linear-gradient(160deg,'+dark+' 0%,'+darker+' 100%);min-height:100vh;font-family:\'Inter\',sans-serif;color:#fff;padding:60px 24px}'+
+'.tw-html-head{max-width:1200px;margin:0 auto 50px;text-align:center}'+
+'.tw-html-head h1{font-family:\'Playfair Display\',Georgia,serif;font-size:48px;font-weight:700;margin-bottom:12px;letter-spacing:-.02em}'+
+'.tw-html-head p{font-size:16px;color:rgba(255,255,255,.55);font-weight:500;letter-spacing:.5px;text-transform:uppercase}'+
+'.tw-html-grid{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:24px}'+
+'.tw-html-card{background:rgba(255,255,255,.05);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:36px 32px;position:relative;overflow:hidden;transition:transform .3s ease,border-color .3s ease}'+
+'.tw-html-card:hover{transform:translateY(-4px);border-color:'+data.color+'55}'+
+'.tw-html-card::before{content:"";position:absolute;top:0;left:0;width:60px;height:3px;background:'+data.color+';border-radius:0 0 6px 0}'+
+'.tw-html-stars{font-size:28px;letter-spacing:4px;margin-bottom:20px;line-height:1}'+
+'.tw-html-card blockquote{font-size:18px;line-height:1.55;color:rgba(255,255,255,.92);font-weight:400;margin-bottom:24px;letter-spacing:-.005em}'+
+'.tw-html-card blockquote::before{content:"\u201C";font-family:\'Playfair Display\',Georgia,serif;font-size:56px;color:'+data.color+';opacity:.6;line-height:.1;position:relative;top:18px;margin-right:4px}'+
+'.tw-html-card footer{font-size:14px;font-weight:600;color:rgba(255,255,255,.7);letter-spacing:.3px}'+
+'.tw-html-brand{max-width:1200px;margin:60px auto 0;text-align:center;padding-top:40px;border-top:1px solid rgba(255,255,255,.08)}'+
+'.tw-html-brand span{font-size:13px;font-weight:700;letter-spacing:3px;color:rgba(255,255,255,.5);text-transform:uppercase}'+
+'@media print{body{background:#fff;color:#000}.tw-html-card{background:#f8f8fc;border-color:#e5e5ea;color:#000}.tw-html-card blockquote{color:#222}.tw-html-card footer{color:#555}.tw-html-head h1{color:#000}.tw-html-head p{color:#666}.tw-html-stars{color:'+data.color+'}.tw-html-brand span{color:#888}}'+
+'</style></head><body>'+
+'<header class="tw-html-head">'+
+'<h1>Témoignages clients</h1>'+
+'<p>'+esc(data.formTitle)+' &middot; '+data.testimonials.length+' avis &middot; \u2605 4+ &eacute;toiles</p>'+
+'</header>'+
+'<main class="tw-html-grid">'+cards+'</main>'+
+'<footer class="tw-html-brand"><span>Alteore</span></footer>'+
+'</body></html>';
+
+var blob=new Blob([doc],{type:'text/html;charset=utf-8'});
+var url=URL.createObjectURL(blob);
+window.open(url,'_blank');
+// Revoke après ouverture (laisse temps au navigateur de charger).
+setTimeout(function(){URL.revokeObjectURL(url);},5000);
+toast('✅ Page HTML ouverte dans un nouvel onglet');
+}
+window.twOpenHtml=twOpenHtml;
 
 function openFldFromPalette(opts){
 // Pre-fill the modal with palette defaults and open
