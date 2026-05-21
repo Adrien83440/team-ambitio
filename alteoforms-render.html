@@ -435,8 +435,11 @@ var selBtn=el.querySelector('.af-scale-btn.selected');
 return selBtn?selBtn.dataset.value:'';
 }
 if(el.classList.contains('af-rating')){
-var selR=el.querySelector('.af-rating-btn.active');
-return selR?selR.dataset.value:'';
+// Rating en mode cumulatif : cliquer la N-ième étoile active TOUTES les
+// étoiles 1..N (effet barre). On lit donc la valeur de la DERNIÈRE
+// étoile active, pas la première (querySelector renverrait toujours "1").
+var actR=el.querySelectorAll('.af-rating-btn.active');
+return actR.length?actR[actR.length-1].dataset.value:'';
 }
 return el.value||'';
 }
@@ -740,8 +743,10 @@ var selBtn=el.querySelector('.af-scale-btn.selected');
 answers[fld.id]=selBtn?selBtn.dataset.value:'';
 }
 else if(fld.type==='rating'){
-var selRating=el.querySelector('.af-rating-btn.active');
-answers[fld.id]=selRating?selRating.dataset.value:'';
+// Cf. pfGetValue : on lit la DERNIÈRE étoile active (la valeur cliquée),
+// pas la première (qui serait toujours "1" en mode cumulatif).
+var actsRating=el.querySelectorAll('.af-rating-btn.active');
+answers[fld.id]=actsRating.length?actsRating[actsRating.length-1].dataset.value:'';
 }
 else if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'){
 answers[fld.id]=el.value;

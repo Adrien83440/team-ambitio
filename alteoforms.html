@@ -846,9 +846,19 @@ var answers=r.answers||[];
 var aMap=r.answersMap||{};
 
 // Preview: first 2 answers
+// Pour les ratings, on injecte les icônes via _respRenderValue (rendu HTML).
+// Pour les autres types, on tronque à 40 caractères comme avant pour ne
+// pas exploser la ligne de preview.
 var preview='';
 answers.slice(0,2).forEach(function(a){
-if(a.value)preview+='<span style="color:rgba(255,255,255,.5)">'+esc(a.label)+':</span> '+esc(String(a.value).substring(0,40))+' ';
+if(a.value===undefined||a.value===null||a.value==='')return;
+preview+='<span style="color:rgba(255,255,255,.5)">'+esc(a.label)+':</span> ';
+if(a.type==='rating'){
+preview+=_respRenderValue(a.value,'rating',a.fieldId,fields);
+}else{
+preview+=esc(String(a.value).substring(0,40));
+}
+preview+=' ';
 });
 
 h+='<div style="margin-bottom:10px">';
@@ -865,20 +875,22 @@ h+='</div>';
 h+='<div class="resp-detail" style="display:none;background:#0e0e1a;border:1px solid rgba(255,255,255,.07);border-top:0;border-radius:0 0 10px 10px;padding:16px 18px;margin-top:-8px">';
 if(answers.length){
 answers.forEach(function(a){
-var val=a.value||'—';
+var val=(a.value===null||a.value===undefined||a.value==='')?'—':a.value;
 h+='<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.04)">';
 h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">'+esc(a.label)+'</div>';
-h+='<div style="font-size:14px;color:rgba(255,255,255,.85);line-height:1.5">'+esc(String(val))+'</div>';
+h+='<div style="font-size:14px;color:rgba(255,255,255,.85);line-height:1.5">'+_respRenderValue(val,a.type,a.fieldId,fields)+'</div>';
 h+='</div>';
 });
 }else{
-// Fallback to answersMap
+// Fallback to answersMap (anciennes réponses sans answers[]).
+// On retrouve le type via fields pour formater correctement les ratings.
 for(var key in aMap){
 var fld=fields.find(function(f){return f.id===key;});
 var label=fld?fld.label:key;
+var fType=fld?fld.type:'';
 h+='<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.04)">';
 h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">'+esc(label)+'</div>';
-h+='<div style="font-size:14px;color:rgba(255,255,255,.85);line-height:1.5">'+esc(String(aMap[key]))+'</div>';
+h+='<div style="font-size:14px;color:rgba(255,255,255,.85);line-height:1.5">'+_respRenderValue(aMap[key],fType,key,fields)+'</div>';
 h+='</div>';
 }
 }
@@ -926,6 +938,34 @@ if(r.answers[i].fieldId===fieldId)return r.answers[i].value;
 }
 }
 return '';
+}
+
+// Rendu HTML d'une valeur de réponse selon le type de champ.
+// - Rating : affiche les icônes pleines (selon value) + icônes grisées
+//   (jusqu'à ratingMax) + petit compteur "(N/max)". Idéal pour la liste
+//   admin des réponses où la lisibilité prime sur le chiffre brut.
+// - Autres types : esc(String(val)) classique.
+// `fields` est currentForm.fields (pour retrouver ratingIcon / ratingMax).
+function _respRenderValue(val,fieldType,fieldId,fields){
+if(val===null||val===undefined||val==='')return '—';
+if(fieldType==='rating'){
+var fld=(fields||[]).find(function(f){return f.id===fieldId;})||{};
+var max=parseInt(fld.ratingMax)||5;
+var icon=fld.ratingIcon||'⭐';
+var n=parseInt(val)||0;
+if(n<0)n=0;if(n>max)n=max;
+var html='<span style="font-size:18px;line-height:1;letter-spacing:1px">';
+for(var i=0;i<n;i++)html+=esc(icon);
+if(max>n){
+html+='<span style="opacity:.25">';
+for(var j=0;j<max-n;j++)html+=esc(icon);
+html+='</span>';
+}
+html+='</span>';
+html+=' <span style="font-size:12px;color:rgba(255,255,255,.4);margin-left:6px">('+n+'/'+max+')</span>';
+return html;
+}
+return esc(String(val));
 }
 
 // Date FR lisible pour les exports.
