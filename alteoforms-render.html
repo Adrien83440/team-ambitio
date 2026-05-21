@@ -776,10 +776,6 @@ container.querySelectorAll('.af-rating-btn').forEach(function(b){
 b.classList.toggle('active',parseInt(b.dataset.value)<=val);
 });
 }
-function pfSelectScale(btn){
-btn.closest('.af-scale').querySelectorAll('.af-scale-btn').forEach(function(b){b.classList.remove('selected');});
-btn.classList.add('selected');
-}
 
 function selectRadio(el){
 el.closest('.af-options').querySelectorAll('.af-option').forEach(function(o){o.classList.remove('selected');});
@@ -850,6 +846,16 @@ submitAnswers(answersMap);
 function submitAnswers(answersMap){
 if(submitted)return;
 submitted=true;
+
+// ── Mode page : les handlers pfSelect* (radio/check/scale/rating)
+//    n'écrivent pas dans la variable globale `answers`. submitPageForm()
+//    nous passe un answersMap propre (collecté via pfGetValue), on le merge
+//    ici pour que tout le code downstream (ansArr ci-dessous,
+//    executePostSubmit contact mapping, doPostActions rules) puisse lire
+//    `answers` global comme en mode cards. Sans ce merge, les soumissions
+//    en mode page étaient enregistrées avec 0 champs dans Firestore et la
+//    sync CRM ne déclenchait jamais.
+if(answersMap)Object.keys(answersMap).forEach(function(k){answers[k]=answersMap[k];});
 
 // Collect last answer
 var visible=getVisibleGroups();
@@ -1029,17 +1035,29 @@ function findAndUpdateLead(contact, callback) {
 }
 
 function showThankYou(msg){
-document.querySelectorAll('.card').forEach(function(c){c.classList.remove('active');c.classList.add('exit-up');});
 var ty=document.getElementById('card-thankyou');
-// Update message
+if(ty){
+// ── Mode cards (Typeform-style) ─────────────────────────────
+document.querySelectorAll('.card').forEach(function(c){c.classList.remove('active');c.classList.add('exit-up');});
 var msgEl=ty.querySelector('.thankyou-msg');
 if(msgEl)msgEl.textContent=msg;
 ty.classList.add('active');
-document.getElementById('navBar').style.display='none';
-document.getElementById('navHint').style.display='none';
-document.getElementById('progressBar').style.width='100%';
+var navBar=document.getElementById('navBar');if(navBar)navBar.style.display='none';
+var navHint=document.getElementById('navHint');if(navHint)navHint.style.display='none';
+var pb=document.getElementById('progressBar');if(pb)pb.style.width='100%';
 // Recalcule la hauteur pour la card thank-you et notifie le parent
 requestAnimationFrame(function(){updateCardWrapHeight();setTimeout(updateCardWrapHeight,80);});
+}else{
+// ── Mode page (single-page) ─────────────────────────────────
+// Pas de card-thankyou pré-rendue par buildPageForm() : on remplace
+// le contenu du formContainer par le même visuel que la thank-you
+// card du mode cards, pour cohérence stylistique.
+var container=document.getElementById('formContainer');
+if(container){
+container.innerHTML='<div class="card active" style="display:block"><div class="thankyou"><div class="thankyou-icon">✅</div><div class="thankyou-title">Envoyé !</div><div class="thankyou-msg">'+esc(msg||'Merci pour vos réponses !')+'</div></div></div>';
+}
+setTimeout(notifyParentHeight,50);
+}
 }
 
 // Shake animation
