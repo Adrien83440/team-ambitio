@@ -1,24 +1,8 @@
-// ============================================================================
-// api/ringover-call-initiate.js
-// ----------------------------------------------------------------------------
-// Initie un appel via l'API Ringover (API-initiated click-to-call).
-// Ringover sonne l'app d'Élodie → elle décroche → Ringover compose le lead.
-//
-// URL  : POST /api/ringover-call-initiate
-// Auth : Bearer Firebase ID token (rôle sales ou admin)
-// Body : {
-//   leadId?       : string   — résout phone + nom depuis Firestore si phone absent
-//   phone?        : string   — numéro E.164 (override leadId si fourni)
-//   leadName?     : string
-//   autoCampaignId? : string
-//   waveIndex?    : number
-//   queueSize?    : number
-// }
-// Réponse : { campaignId, callId, status: 'initiated' }
-// ============================================================================
+// api/ringover-call-initiate.js  (v2 — endpoint /v2/callbacks)
+// Ringover click-to-call : sonne l'app de l'agent → elle décroche → Ringover compose le lead
 
 const { db, admin } = require('./_firebaseAdmin');
-const { requireAuth } = require('./_verifyFirebaseAuth');
+const { requireAuth }  = require('./_verifyFirebaseAuth');
 const { getRingoverCreds, ringoverFetch } = require('./_ringoverClient');
 const parseBody = require('./_parseBody');
 
@@ -44,133 +28,125 @@ module.exports = async (req, res) => {
   try {
     const body = parseBody(req);
     const { leadId, autoCampaignId, waveIndex, queueSize } = body;
-    let phone = body.phone ? normalizePhone(body.phone) : null;
+    let phone    = body.phone ? normalizePhone(body.phone) : null;
     let leadName = body.leadName || null;
 
-    // Résolution depuis le lead Firestore si phone pas fourni directement
     if (leadId && !phone) {
-      const leadSnap = await db.collection('leads').doc(leadId).get();
-      if (!leadSnap.exists) return res.status(404).json({ error: 'Lead introuvable' });
-      const ld = leadSnap.data();
-      phone = normalizePhone(ld.telephone || ld.phone);
+      const snap = await db.collection('leads').doc(leadId).get();
+      if (!snap.exists) return res.status(404).json({ error: 'Lead introuvable' });
+      const ld = snap.data();
+      phone    = normalizePhone(ld.telephone || ld.phone);
       if (!leadName) leadName = ld.nom || ld.fullName || null;
     }
-
-    if (!phone) return res.status(400).json({ error: 'Numéro de téléphone manquant ou invalide' });
+    if (!phone) return res.status(400).json({ error: 'Numéro manquant ou invalide' });
 
     const creds = await getRingoverCreds();
-    if (!creds.fromNumber) {
-      return res.status(500).json({ error: 'ringover.fromNumber non configuré dans _config/telco_credentials' });
-    }
-    if (!creds.userId) {
-      return res.status(500).json({ error: 'ringover.userId non configuré dans _config/telco_credentials' });
-    }
+    if (!creds.fromNumber) return res.status(500).json({ error: 'ringover.fromNumber manquant' });
+    if (!creds.userId)     return res.status(500).json({ error: 'ringover.userId manquant' });
 
-    // ─── Créer le doc campaign AVANT l'appel (les webhooks en ont besoin) ─
-    const campaignRef = db.collection('dialer_campaigns').doc();
-    const campaignId = campaignRef.id;
-
-    const campaignDoc = {
-      createdBy: auth.uid,
+    // ── Créer le doc campaign AVANT l'appel ────────────────────────────────
+    const campRef = db.collection('dialer_campaigns').doc();
+    const campDoc = {
+      createdBy:       auth.uid,
       assignedUserIds: [auth.uid],
-      userId: auth.uid,
-      fromNumber: creds.fromNumber,
-      provider: 'ringover',
-      status: 'dialing',
-      leadCount: 1,
+      userId:          auth.uid,
+      fromNumber:      creds.fromNumber,
+      provider:        'ringover',
+      status:          'dialing',
+      leadCount:       1,
       legs: [{
-        leadId: leadId || null,
+        leadId:   leadId || null,
         leadName: leadName || null,
         phone,
-        callId: null,
-        callSid: null, // compat champ legacy
-        status: 'queuing',
+        callId:   null,
+        callSid:  null,
+        status:   'queuing',
       }],
-      connectedCallId: null,
-      connectedCallSid: null, // compat legacy
-      connectedLeadId: null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      connectedCallId:  null,
+      connectedCallSid: null,
+      connectedLeadId:  null,
+      createdAt:        admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
     };
-    if (typeof autoCampaignId === 'string' && autoCampaignId.length <= 64) {
-      campaignDoc.autoCampaignId = autoCampaignId;
-    }
-    if (Number.isInteger(waveIndex) && waveIndex >= 0) campaignDoc.waveIndex = waveIndex;
-    if (Number.isInteger(queueSize) && queueSize > 0) campaignDoc.queueSize = queueSize;
+    if (autoCampaignId) campDoc.autoCampaignId = autoCampaignId;
+    if (Number.isInteger(waveIndex)) campDoc.waveIndex = waveIndex;
+    if (Number.isInteger(queueSize)) campDoc.queueSize = queueSize;
+    await campRef.set(campDoc);
 
-    await campaignRef.set(campaignDoc);
-
-    // ─── Initier l'appel Ringover ──────────────────────────────────────────
+    // ── Appel Ringover via /v2/callbacks (click-to-call) ──────────────────
+    // Fonctionnement : Ringover sonne l'app de l'agent (user_id)
+    // → agent décroche → Ringover compose to_number
     let ringoverResp;
     try {
-      ringoverResp = await ringoverFetch('/calls', {
+      ringoverResp = await ringoverFetch('/callbacks', {
         method: 'POST',
         body: {
-          to_number: phone,
+          to_number:   phone,
           from_number: creds.fromNumber,
-          user_id: Number(creds.userId),
+          user_id:     Number(creds.userId),
         },
       });
+      console.log('[ringover-call-initiate] Ringover response:', JSON.stringify(ringoverResp));
     } catch (ringoverErr) {
-      console.error('[ringover-call-initiate] Ringover API error:', ringoverErr.message, ringoverErr.ringoverData);
-      await campaignRef.update({
+      console.error('[ringover-call-initiate] Ringover error:', ringoverErr.message, '| raw:', ringoverErr.rawResponse);
+      await campRef.update({
         status: 'cancelled',
-        error: ringoverErr.message,
+        error:  ringoverErr.message,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      return res.status(502).json({
-        error: ringoverErr.message || 'Échec appel Ringover',
-        ringoverStatus: ringoverErr.status || null,
-      });
+      return res.status(502).json({ error: ringoverErr.message || 'Échec Ringover' });
     }
 
-    // Ringover retourne call_id ou id selon la version de l'API
-    const callId = (ringoverResp && (ringoverResp.call_id || ringoverResp.id)) || null;
+    // Extraire le callId depuis la réponse Ringover
+    // Ringover peut retourner : { call_id, id, callback_id, ... }
+    const callId = ringoverResp
+      ? (ringoverResp.call_id || ringoverResp.id || ringoverResp.callback_id || ringoverResp.callId || null)
+      : null;
 
-    // ─── Update leg avec callId ────────────────────────────────────────────
+    console.log('[ringover-call-initiate] callId extrait:', callId, '| keys:', ringoverResp ? Object.keys(ringoverResp) : 'null');
+
+    // ── Update leg avec callId ─────────────────────────────────────────────
     const updatedLegs = [{
-      ...campaignDoc.legs[0],
+      ...campDoc.legs[0],
       callId,
-      callSid: callId, // compat legacy (call_logs utilise callSid)
-      status: 'initiated',
+      callSid:  callId,
+      status:   'initiated',
     }];
-    await campaignRef.update({
-      legs: updatedLegs,
+    await campRef.update({
+      legs:      updatedLegs,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // ─── Pré-créer call_logs/{callId} ─────────────────────────────────────
+    // ── Pré-créer call_logs si on a un callId ────────────────────────────
     if (callId) {
       await db.collection('call_logs').doc(callId).set({
-        providerCallSid: callId,
-        providerCallId: callId,
-        provider: 'ringover',
-        userId: auth.uid,
-        campaignId,
-        leadId: leadId || null,
-        leadNameSnapshot: leadName || null,
-        fromNumber: creds.fromNumber,
-        toNumber: phone,
-        direction: 'outbound',
-        status: 'initiated',
-        initiatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        recordingStatus: 'pending',
-        transcriptionStatus: 'pending',
-        aiAnalysisStatus: 'pending',
-        disposition: null,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        providerCallId:    callId,
+        providerCallSid:   callId,
+        provider:          'ringover',
+        userId:            auth.uid,
+        campaignId:        campRef.id,
+        leadId:            leadId || null,
+        leadNameSnapshot:  leadName || null,
+        fromNumber:        creds.fromNumber,
+        toNumber:          phone,
+        direction:         'outbound',
+        status:            'initiated',
+        initiatedAt:       admin.firestore.FieldValue.serverTimestamp(),
+        recordingStatus:   'pending',
+        createdAt:         admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
     }
 
     res.status(200).json({
-      campaignId,
+      campaignId: campRef.id,
       callId,
-      calls: [{ leadId: leadId || null, callId, status: 'initiated' }], // compat legacy
+      calls:  [{ leadId: leadId || null, callId, status: 'initiated' }],
       status: 'initiated',
     });
+
   } catch (err) {
-    console.error('[ringover-call-initiate] error:', err);
+    console.error('[ringover-call-initiate] error:', err.message);
     res.status(500).json({ error: err.message || 'Erreur interne' });
   }
 };
