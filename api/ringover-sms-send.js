@@ -66,10 +66,10 @@ module.exports = async (req, res) => {
     }
 
     const now    = admin.firestore.FieldValue.serverTimestamp();
-    const nowIso = new Date().toISOString();
-    const d = new Date();
-    const pad = n => String(n).padStart(2, '0');
-    const tlDate = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const smsDate = new Date();
+    const nowIso  = smsDate.toISOString();
+    const pad     = n => String(n).padStart(2, '0');
+    const tlDate  = `${pad(smsDate.getDate())}/${pad(smsDate.getMonth()+1)}/${smsDate.getFullYear()} ${pad(smsDate.getHours())}:${pad(smsDate.getMinutes())}`;
 
     await db.collection('leads').doc(leadId).update({
       communications: admin.firestore.FieldValue.arrayUnion({

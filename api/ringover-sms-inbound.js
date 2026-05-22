@@ -98,10 +98,12 @@ module.exports = async (req, res) => {
     }
 
     const now    = admin.firestore.FieldValue.serverTimestamp();
-    const nowIso = new Date().toISOString();
-    const dp     = new Date();
+    // Utiliser l'heure réelle du SMS (d.time = timestamp Unix Ringover)
+    // Fallback sur l'heure courante si absent
+    const smsDate = (d.time && d.time > 0) ? new Date(d.time * 1000) : new Date();
+    const nowIso = smsDate.toISOString();
     const pad    = n => String(n).padStart(2, '0');
-    const tlDate = `${pad(dp.getDate())}/${pad(dp.getMonth()+1)}/${dp.getFullYear()} ${pad(dp.getHours())}:${pad(dp.getMinutes())}`;
+    const tlDate = `${pad(smsDate.getDate())}/${pad(smsDate.getMonth()+1)}/${smsDate.getFullYear()} ${pad(smsDate.getHours())}:${pad(smsDate.getMinutes())}`;
 
     const commEntry = {
       type: 'sms', direction: 'inbound', content: text, source: 'ringover-sms',
