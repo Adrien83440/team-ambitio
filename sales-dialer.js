@@ -379,7 +379,14 @@
       i.value = i.value.slice(0, -1);
     });
     $('sd-btn-call').addEventListener('click', () => ringoverPlaceCall());
-    $('sd-btn-hangup').addEventListener('click', async () => { const cid = $('sd-btn-hangup').dataset.cid; try { await SalesDialerAPI.hangupCall({ campaignId: cid || activeCampaignIdActive, callId: activeCampaignCallId || undefined }); } catch (e) { toast(e.message || 'Erreur raccrocher', 'error'); } });
+    $('sd-btn-hangup').addEventListener('click', async () => {
+      const cid = $('sd-btn-hangup').dataset.cid;
+      try {
+        await SalesDialerAPI.hangupCall({ campaignId: cid || activeCampaignIdActive, callId: activeCampaignCallId || undefined });
+        // Forcer le reset UI si onSnapshot ne réagit pas (Safari)
+        setTimeout(() => { if (activeCampaignConnected || activeCampaignIdActive) endCall(); }, 1500);
+      } catch (e) { toast(e.message || 'Erreur raccrocher', 'error'); }
+    });
     const muteBtn = $('sd-btn-mute'); if (muteBtn) muteBtn.style.opacity = '0.4';
     const speakerBtn = $('sd-btn-speaker'); if (speakerBtn) speakerBtn.style.display = 'none';
     const acceptBtn = $('sd-btn-accept'); if (acceptBtn) acceptBtn.style.display = 'none';
@@ -695,6 +702,36 @@
       if (autoMode) { handleAutoCampaignUpdate(c, campaignId); }
       else if ((c.status === 'ended' || c.status === 'cancelled') && !activeCampaignConnected) { setTimeout(() => showView('idle'), 1500); }
     });
+
+    // ── Polling secours Safari (onSnapshot bloqué) ──────────────────────────
+    let _pollConnected = false;
+    let _pollCount = 0;
+    const _pollTimer = setInterval(async () => {
+      _pollCount++;
+      if (_pollCount > 40 || !activeCampaignIdActive) { clearInterval(_pollTimer); return; }
+      try {
+        const snap = await db.collection('dialer_campaigns').doc(campaignId).get();
+        if (!snap.exists) { clearInterval(_pollTimer); return; }
+        const c = snap.data();
+        if (c.status === 'connected' && !_pollConnected) {
+          _pollConnected = true;
+          // onSnapshot devrait aussi déclencher, mais au cas où :
+          if (!activeCampaignConnected) {
+            const leg = c.legs && c.legs[0];
+            activeCampaignConnected = true;
+            activeCampaignCallId = c.connectedCallId || (leg && leg.callId) || null;
+            activeCampaignIdActive = campaignId;
+            enterInCallView(leg ? (leg.phone || '') : '');
+            startTimerFromNow();
+          }
+        }
+        if ((c.status === 'ended' || c.status === 'cancelled') && activeCampaignIdActive === campaignId) {
+          clearInterval(_pollTimer);
+          if (_pollConnected || activeCampaignConnected) { endCall(); }
+          else { setTimeout(() => showView('idle'), 500); }
+        }
+      } catch (_) {}
+    }, 3000);
   }
 
   async function cancelCampaign() {
@@ -704,6 +741,12 @@
       await SalesDialerAPI.cancelCampaign(cid);
       toast('Campagne annulée', 'success');
     } catch (e) { toast(e.message || 'Erreur annulation', 'error'); }
+    // Forcer le reset UI immédiatement (Safari onSnapshot non fiable)
+    activeCampaignConnected = false;
+    activeCampaignIdActive  = null;
+    activeCampaignCallId    = null;
+    if (callTimer) { clearInterval(callTimer); callTimer = null; }
+    showView('idle');
   }
 
   function escapeHtml(s) {
