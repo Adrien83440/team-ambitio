@@ -25,8 +25,16 @@ async function ringoverFetch(path, { method = 'GET', body = null } = {}) {
     if (body !== null) opts.body = JSON.stringify(body);
     const res  = await fetch(`${RINGOVER_API_BASE}${path}`, opts);
     const text = await res.text();
+    // Convertir les gros entiers (uint64) en strings AVANT JSON.parse
+    // pour éviter la perte de précision JS sur call_id, message_id, etc.
+    const safeText = text.replace(
+      /"(call_id|id|channel_id|conversation_id|message_id|cdr_id|user_id|team_id)"\s*:\s*(\d{15,})/g,
+      '"$1":"$2"'
+    );
     let data = null;
-    try { data = JSON.parse(text); } catch (_) {}
+    try { data = JSON.parse(safeText); } catch (_) {
+      try { data = JSON.parse(text); } catch (_) {}
+    }
     return { res, text, data };
   };
 
