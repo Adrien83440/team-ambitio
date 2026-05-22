@@ -1,36 +1,16 @@
-// ============================================================================
-// api/call-detail.js
+// api/call-detail.js  — v2 Ringover support
 // ----------------------------------------------------------------------------
 // Retourne le détail complet d'un appel (call_logs/{callSid}) avec :
-//   - URL signée du .mp3 Firebase Storage (TTL 1h)
-//   - transcription Whisper
-//   - analyse Claude (interestLevel, objections, nextSteps, summary...)
-//
-// URL : POST https://team.alteore.com/api/call-detail
-// Auth: Bearer Firebase ID token (sales ou admin)
-// Body: { "callLogId": "CAxxx..." }
-//
-// Réponse 200 :
-//   {
-//     callLogId, direction, status, leadId, leadNameSnapshot,
-//     fromNumber, toNumber, initiatedAt, durationSec, userId, userName,
-//     recordingStatus, recordingSignedUrl, recordingDurationSec,
-//     transcriptionStatus, transcriptionText, transcriptionLanguage,
-//     aiAnalysisStatus, aiAnalysis: { interestLevel, objections, nextSteps,
-//                                     summary, suggestedFollowUps }
-//   }
-//
-// Stratégie : on ne renvoie que ce qu'on a. Si le pipeline n'est pas terminé,
-// recordingSignedUrl / transcriptionText / aiAnalysis peuvent être null et
-// le frontend affiche l'état (processing, pending, failed).
+//   - URL signée du .mp3 Firebase Storage (TTL 1h)  [Twilio]
+//   - URL directe de l'enregistrement Ringover       [Ringover]
+//   - transcription Whisper / Ringover
+//   - analyse Claude / Ringover aiSummary
 // ============================================================================
 
 const { db, storage } = require('./_firebaseAdmin');
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 
-// TTL de l'URL signée : 1 heure. Suffisant pour écouter l'appel, trop court
-// pour être partagé publiquement.
 const SIGNED_URL_TTL_MS = 60 * 60 * 1000;
 
 module.exports = async (req, res) => {
@@ -41,8 +21,6 @@ module.exports = async (req, res) => {
 
   const auth = await requireAuth(req, res);
   if (!auth) return;
-  // Pas de guard role ici — on fait le contrôle fin plus bas pour matcher
-  // exactement la règle Firestore call_logs (admin || canListenCalls || owner).
 
   const { callLogId } = parseBody(req);
   if (!callLogId || typeof callLogId !== 'string') {
@@ -59,20 +37,19 @@ module.exports = async (req, res) => {
 
     const log = snap.data();
 
-    // ────────────────────────────────────────────────────────────────────
-    // Permissions — doit répliquer les Firestore rules côté serveur
+    // ────────────────────────────────────────────────────────────────────────
+    // Permissions — réplique les Firestore rules côté serveur
     // (Admin SDK bypass les rules, donc on re-vérifie manuellement).
     //
     // Rules call_logs : allow read if
     //   canListenCalls()  (admin OR users/{uid}.canListenCalls == true)
     //   OR  resource.data.userId == request.auth.uid  (ses propres appels)
-    // ────────────────────────────────────────────────────────────────────
-    const isAdmin = auth.role === 'admin';
+    // ────────────────────────────────────────────────────────────────────────
+    const isAdmin   = auth.role === 'admin';
     const isOwnCall = log.userId && log.userId === auth.uid;
     let canListenAll = isAdmin;
 
     if (!canListenAll && !isOwnCall) {
-      // Lookup du flag canListenCalls sur users/{uid}
       try {
         const userSnap = await db.collection('users').doc(auth.uid).get();
         if (userSnap.exists && userSnap.data().canListenCalls === true) {
@@ -86,33 +63,27 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // Génère une URL signée V4 pour le .mp3 (si disponible)
-    // On force le bucket Firebase Storage au bon format (.firebasestorage.app)
-    // — cf commentaire dans callAnalysisPipeline.js sur le mismatch
-    // .appspot.com / .firebasestorage.app.
+    // ── URL signée Firebase Storage (pipeline Twilio uniquement) ────────────
+    // Pour Ringover, l'URL est déjà publique dans ringoverRecordingUrl.
     let recordingSignedUrl = null;
     if (log.recordingStoragePath) {
       try {
-        const BUCKET_NAME =
-          process.env.STORAGE_BUCKET || 'ambitio-team.firebasestorage.app';
+        const BUCKET_NAME = process.env.STORAGE_BUCKET || 'ambitio-team.firebasestorage.app';
         const bucket = storage.bucket(BUCKET_NAME);
-        const file = bucket.file(log.recordingStoragePath);
-        const [url] = await file.getSignedUrl({
+        const file   = bucket.file(log.recordingStoragePath);
+        const [url]  = await file.getSignedUrl({
           version: 'v4',
-          action: 'read',
+          action:  'read',
           expires: Date.now() + SIGNED_URL_TTL_MS,
         });
         recordingSignedUrl = url;
       } catch (err) {
-        console.error(
-          `[call-detail] getSignedUrl failed for ${log.recordingStoragePath}:`,
-          err.message
-        );
+        console.error(`[call-detail] getSignedUrl failed for ${log.recordingStoragePath}:`, err.message);
         // Non-bloquant : on renvoie quand même les autres champs
       }
     }
 
-    // Résolution optionnelle du userName depuis _meta/team_members
+    // ── Résolution du userName depuis _meta/team_members ────────────────────
     let userName = log.userName || null;
     if (!userName && log.userId) {
       try {
@@ -125,32 +96,51 @@ module.exports = async (req, res) => {
       } catch (_) { /* non-bloquant */ }
     }
 
-    // Sérialisation des Timestamps en ISO (JSON-safe)
+    // Sérialisation des Timestamps Firestore en ISO
     const toIso = t => (t && t.toDate ? t.toDate().toISOString() : null);
 
     res.status(200).json({
       callLogId,
-      direction: log.direction || null,
-      status: log.status || null,
-      leadId: log.leadId || null,
+      direction:        log.direction  || null,
+      status:           log.status     || null,
+      leadId:           log.leadId     || null,
       leadNameSnapshot: log.leadNameSnapshot || log.leadName || null,
-      fromNumber: log.fromNumber || null,
-      toNumber: log.toNumber || null,
-      initiatedAt: toIso(log.initiatedAt),
-      answeredAt: toIso(log.answeredAt),
-      endedAt: toIso(log.endedAt),
-      durationSec: log.durationSec || null,
-      userId: log.userId || null,
+      fromNumber:       log.fromNumber || null,
+      toNumber:         log.toNumber   || null,
+      initiatedAt:      toIso(log.initiatedAt),
+      answeredAt:       toIso(log.answeredAt),
+      endedAt:          toIso(log.endedAt),
+      durationSec:      log.durationSec || null,
+      userId:           log.userId     || null,
       userName,
-      recordingStatus: log.recordingStatus || 'pending',
+
+      // ── Enregistrement ──────────────────────────────────────────────────
+      // Twilio  : recordingSignedUrl  (URL signée Firebase Storage, TTL 1h)
+      // Ringover: ringoverRecordingUrl (URL directe Ringover)
+      // Le modal lit : detail.recordingSignedUrl || detail.ringoverRecordingUrl
+      recordingStatus:      log.recordingStatus      || 'pending',
       recordingSignedUrl,
-      recordingDurationSec: log.recordingDurationSec || null,
-      transcriptionStatus: log.transcriptionStatus || 'pending',
-      transcriptionText: log.transcriptionText || null,
+      ringoverRecordingUrl: log.ringoverRecordingUrl  || null,
+      recordingDurationSec: log.recordingDurationSec  || null,
+
+      // ── Transcription ────────────────────────────────────────────────────
+      // Twilio  : transcriptionText  (Whisper via api/transcribe-voice.js)
+      // Ringover: transcriptText     (GET /transcriptions/{callId} dans aftercall)
+      // Le modal lit : detail.transcriptionText || detail.transcriptText
+      transcriptionStatus:   log.transcriptionStatus  || 'pending',
+      transcriptionText:     log.transcriptionText    || null,
+      transcriptText:        log.transcriptText       || null,
       transcriptionLanguage: log.transcriptionLanguage || null,
+
+      // ── Analyse IA ───────────────────────────────────────────────────────
+      // Twilio  : aiAnalysis  (objet structuré : interestLevel, objections…)
+      // Ringover: aiSummary   (string, issu de summary_available webhook)
+      // Le modal lit : detail.aiAnalysis || (detail.aiSummary ? {summary:…} : null)
       aiAnalysisStatus: log.aiAnalysisStatus || 'pending',
-      aiAnalysis: log.aiAnalysis || null,
+      aiAnalysis:       log.aiAnalysis       || null,
+      aiSummary:        log.aiSummary        || null,
     });
+
   } catch (err) {
     console.error('[call-detail] Error:', err);
     res.status(500).json({ error: err.message || 'Internal error' });
