@@ -45,7 +45,7 @@
   const QUERY_LIMIT = 50;          // dernières N notifs chargées en mémoire
   const TOAST_TTL_MS = 6000;       // durée d'affichage d'un toast
   const SOUND_DEBOUNCE_MS = 1500;  // ne pas spammer le son
-  const SMS_SEND_ENDPOINT = '/api/twilio-sms-send';
+  const SMS_SEND_ENDPOINT = '/api/ringover-sms-send';
 
   // ---------- ÉTAT ----------
   let firebaseAuth = null;
@@ -658,9 +658,9 @@
           'Authorization': 'Bearer ' + idToken,
         },
         body: JSON.stringify({
-          to: toNumber,
-          body: text,
-          leadId: composerLeadId || null,
+          leadId:  composerLeadId || null,
+          message: text,
+          to:      toNumber,
         }),
       });
     }).then(async resp => {
