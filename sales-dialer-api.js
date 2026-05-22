@@ -1,83 +1,56 @@
 /**
- * sales-dialer-api.js
- * Helper frontend partagé pour appeler les Vercel Functions du module Dialer.
+ * sales-dialer-api.js  (v2 — Ringover)
+ * Helper frontend pour appeler les Vercel Functions du module Dialer.
  * Gère l'authentification Firebase (idToken) et les erreurs en français.
- *
- * Usage :
- *   const token = await SalesDialerAPI.voiceToken();
- *   const results = await SalesDialerAPI.searchNumbers({ areaCode: '04', country: 'FR' });
- *   await SalesDialerAPI.purchaseNumber({ phoneNumber: '+33411...', assignedTo: 'elodie' });
- *
- * Toutes les méthodes retournent une Promise. En cas d'erreur, throw une Error
- * avec un message FR lisible (à afficher direct dans une notification toast).
  */
 
 (function () {
   'use strict';
 
-  // ─── Configuration ─────────────────────────────────────────────────────────
-  const API_BASE = '/api'; // Vercel Functions servies sous /api/*
+  const API_BASE = '/api';
   const ENDPOINTS = {
-    voiceToken:     `${API_BASE}/dialer-voice-token`,
+    ringoverCall:   `${API_BASE}/ringover-call-initiate`,
+    ringoverHangup: `${API_BASE}/ringover-call-hangup`,
+    cancelCampaign: `${API_BASE}/dialer-cancel-campaign`,
+    callDetail:     `${API_BASE}/call-detail`,
+    smsSend:        `${API_BASE}/ringover-sms-send`,
+    // Admin (gestion des numéros — conservés pour l'UI admin-numbers.html)
     searchNumbers:  `${API_BASE}/dialer-search-numbers`,
     purchaseNumber: `${API_BASE}/dialer-purchase-number`,
     releaseNumber:  `${API_BASE}/dialer-release-number`,
     syncNumbers:    `${API_BASE}/dialer-sync-numbers`,
-    multiCall:      `${API_BASE}/dialer-multi-call`,
-    cancelCampaign: `${API_BASE}/dialer-cancel-campaign`,
-    callDetail:     `${API_BASE}/call-detail`,
-    smsSend:        `${API_BASE}/twilio-sms-send`,
   };
 
-  // ─── Auth helper ───────────────────────────────────────────────────────────
   async function getIdToken() {
     if (typeof firebase === 'undefined' || !firebase.auth) {
       throw new Error("Firebase n'est pas initialisé sur cette page.");
     }
     const user = firebase.auth().currentUser;
-    if (!user) {
-      throw new Error("Vous devez être connecté pour effectuer cette action.");
-    }
+    if (!user) throw new Error("Vous devez être connecté pour effectuer cette action.");
     try {
-      return await user.getIdToken(/* forceRefresh */ false);
+      return await user.getIdToken(false);
     } catch (e) {
-      console.error('[SalesDialerAPI] getIdToken failed:', e);
       throw new Error("Impossible de vérifier votre session. Veuillez vous reconnecter.");
     }
   }
 
-  // ─── Mapping des erreurs HTTP → messages FR ────────────────────────────────
   function frenchErrorMessage(status, payload) {
     const serverMsg = (payload && (payload.error || payload.message)) || '';
-
-    // Messages spécifiques renvoyés par nos Vercel Functions
-    const map = {
-      'TWILIO_INSUFFICIENT_FUNDS': "Solde Twilio insuffisant pour acheter ce numéro.",
-      'TWILIO_NUMBER_UNAVAILABLE': "Ce numéro n'est plus disponible chez Twilio.",
-      'TWILIO_INVALID_NUMBER':     "Le numéro fourni est invalide.",
-      'NUMBER_NOT_FOUND':          "Numéro introuvable dans la base.",
-      'NUMBER_IN_USE':             "Ce numéro est actuellement utilisé sur un appel actif.",
-      'PERMISSION_DENIED':         "Vous n'avez pas les droits pour effectuer cette action.",
-      'BUNDLE_REQUIRED':           "Un Bundle réglementaire FR est requis pour ce type de numéro.",
-    };
-    if (map[serverMsg]) return map[serverMsg];
-
     switch (status) {
       case 400: return serverMsg || "Requête invalide.";
       case 401: return "Session expirée. Veuillez vous reconnecter.";
-      case 403: return "Accès refusé. Action réservée aux administrateurs.";
+      case 403: return "Accès refusé.";
       case 404: return "Ressource introuvable.";
       case 409: return serverMsg || "Conflit : cette action n'est pas possible actuellement.";
       case 429: return "Trop de requêtes. Patientez quelques secondes.";
       case 500: return "Erreur serveur. Réessayez dans un instant.";
       case 502:
       case 503:
-      case 504: return "Service temporairement indisponible (Twilio ou Vercel).";
+      case 504: return "Service temporairement indisponible (Ringover ou Vercel).";
       default:  return serverMsg || `Erreur inattendue (${status}).`;
     }
   }
 
-  // ─── Wrapper fetch authentifié ─────────────────────────────────────────────
   async function authedFetch(url, { method = 'GET', body = null, query = null } = {}) {
     const token = await getIdToken();
 
@@ -100,14 +73,13 @@
     };
     if (body !== null) {
       opts.headers['Content-Type'] = 'application/json';
-      opts.body = JSON.stringify(body);
+      opts.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
 
     let response;
     try {
       response = await fetch(finalUrl, opts);
     } catch (networkErr) {
-      console.error('[SalesDialerAPI] Network error:', networkErr);
       throw new Error("Connexion réseau impossible. Vérifiez votre connexion internet.");
     }
 
@@ -128,49 +100,55 @@
     return payload;
   }
 
-  // ─── API publique ──────────────────────────────────────────────────────────
   const SalesDialerAPI = {
 
     /**
-     * Génère un Twilio Voice Access Token (JWT) pour le SDK Voice côté browser.
-     * @returns {Promise<{token: string, identity: string, ttl: number}>}
-     */
-    async voiceToken() {
-      return authedFetch(ENDPOINTS.voiceToken, { method: 'POST' });
-    },
-
-    /**
-     * Lance une campagne d'appels parallèles (max 5 leads par vague).
-     * Le premier qui décroche bridge le browser de l'utilisateur, les autres
-     * sont annulés automatiquement côté serveur.
+     * Initie un appel via Ringover (API-initiated click-to-call).
+     * Ringover sonne l'app de l'agent → elle décroche → Ringover compose le lead.
      *
-     * @param {Array<{id: string, phone: string, name?: string}>} leads
-     * @param {string} [fromNumberId] - id du doc phone_numbers à utiliser. Si omis,
-     *                                  utilise le premier numéro assigné à l'utilisateur.
-     * @param {Object} [options] - Options avancées Power Dialer (optionnel)
-     * @param {string} [options.autoCampaignId] - UUID client qui groupe les vagues
-     *                                             d'une même session Power Dialer
-     * @param {number} [options.waveIndex]      - Index 0-based de cette vague dans
-     *                                             la session auto
-     * @param {number} [options.queueSize]      - Taille totale de la queue (pour
-     *                                             audit / stats)
-     * @returns {Promise<{campaignId: string, calls: Array}>}
+     * @param {{ leadId?: string, phone?: string, leadName?: string }} lead
+     * @param {Object} [options]
+     * @param {string} [options.autoCampaignId]
+     * @param {number} [options.waveIndex]
+     * @param {number} [options.queueSize]
+     * @returns {Promise<{ campaignId: string, callId: string, status: string }>}
      */
-    async multiCall(leads, fromNumberId = null, options = {}) {
-      const body = { leads, fromNumberId };
+    async ringoverCall(lead, options = {}) {
+      const body = {
+        leadId: lead.leadId || lead.id || null,
+        phone: lead.phone || null,
+        leadName: lead.leadName || lead.name || null,
+      };
       if (options.autoCampaignId) body.autoCampaignId = options.autoCampaignId;
       if (Number.isInteger(options.waveIndex)) body.waveIndex = options.waveIndex;
       if (Number.isInteger(options.queueSize)) body.queueSize = options.queueSize;
-      return authedFetch(ENDPOINTS.multiCall, {
+      return authedFetch(ENDPOINTS.ringoverCall, { method: 'POST', body });
+    },
+
+    /**
+     * Compat alias legacy — identique à ringoverCall mais accepte un tableau de leads.
+     * Ringover ne faisant qu'un appel à la fois, seul le 1er lead du tableau est utilisé.
+     */
+    async multiCall(leads, _fromNumberId = null, options = {}) {
+      const lead = Array.isArray(leads) ? leads[0] : leads;
+      if (!lead) throw new Error('Aucun lead fourni');
+      return this.ringoverCall(lead, options);
+    },
+
+    /**
+     * Raccroche un appel Ringover actif.
+     * @param {{ campaignId?: string, callId?: string }} params
+     */
+    async hangupCall({ campaignId, callId } = {}) {
+      return authedFetch(ENDPOINTS.ringoverHangup, {
         method: 'POST',
-        body: JSON.stringify(body),
+        body: { campaignId, callId },
       });
     },
 
     /**
-     * Annule une campagne en cours (cancel tous les legs Twilio actifs).
+     * Annule une campagne en cours (raccroche les legs Ringover actifs).
      * @param {string} campaignId
-     * @returns {Promise<{ok: boolean, cancelledLegs?: number}>}
      */
     async cancelCampaign(campaignId) {
       return authedFetch(ENDPOINTS.cancelCampaign, {
@@ -180,71 +158,11 @@
     },
 
     /**
-     * Recherche des numéros disponibles à l'achat sur Twilio.
-     * @param {Object} params
-     * @param {string} params.country     - Code pays ISO (ex: 'FR')
-     * @param {string} [params.areaCode]  - Indicatif local (ex: '04', '01')
-     * @param {string} [params.type]      - 'local' | 'mobile' | 'tollFree' | 'national'
-     * @param {string} [params.contains]  - Pattern (ex: '*411*')
-     * @param {number} [params.limit=20]  - Max 30
-     * @returns {Promise<{available: Array<{phoneNumber, friendlyName, locality, region, capabilities, monthlyPrice}>}>}
-     */
-    async searchNumbers({ country = 'FR', areaCode, type, contains, limit = 20 } = {}) {
-      return authedFetch(ENDPOINTS.searchNumbers, {
-        method: 'GET',
-        query: { country, areaCode, type, contains, limit },
-      });
-    },
-
-    /**
-     * Achète un numéro chez Twilio et l'enregistre dans Firestore phone_numbers.
-     * @param {Object} params
-     * @param {string} params.phoneNumber  - E.164 (ex: '+33411223344')
-     * @param {string} params.assignedTo   - ID team member (ex: 'elodie')
-     * @param {string} [params.friendlyName]
-     * @param {string} [params.bundleSid]  - SID du Bundle FR si requis
-     * @returns {Promise<{success: true, sid: string, phoneNumber: string, firestoreId: string}>}
-     */
-    async purchaseNumber({ phoneNumber, assignedTo, friendlyName, bundleSid } = {}) {
-      if (!phoneNumber) throw new Error("Numéro de téléphone manquant.");
-      if (!assignedTo)  throw new Error("Vous devez assigner le numéro à un membre.");
-      return authedFetch(ENDPOINTS.purchaseNumber, {
-        method: 'POST',
-        body: { phoneNumber, assignedTo, friendlyName, bundleSid },
-      });
-    },
-
-    /**
-     * Libère un numéro chez Twilio et le supprime de Firestore phone_numbers.
-     * @param {Object} params
-     * @param {string} params.sid  - Twilio IncomingPhoneNumber SID
-     * @returns {Promise<{success: true, released: string}>}
-     */
-    async releaseNumber({ sid } = {}) {
-      if (!sid) throw new Error("SID Twilio manquant.");
-      return authedFetch(ENDPOINTS.releaseNumber, {
-        method: 'POST',
-        body: { sid },
-      });
-    },
-
-    /**
-     * Re-synchronise tous les numéros depuis Twilio vers Firestore phone_numbers.
-     * Met à jour les webhooks et corrige les divergences.
-     * @returns {Promise<{success: true, synced: number, added: number, updated: number, removed: number}>}
-     */
-    async syncNumbers() {
-      return authedFetch(ENDPOINTS.syncNumbers, { method: 'POST' });
-    },
-
-    /**
-     * Récupère le détail complet d'un appel (enregistrement signé, transcription,
-     * analyse IA).
-     * @param {string} callLogId - SID Twilio de l'appel (doc ID call_logs)
-     * @returns {Promise<Object>}
+     * Détail d'un appel (enregistrement, transcription, analyse IA).
+     * @param {string} callLogId - ID du doc call_logs (= callId Ringover)
      */
     async callDetail(callLogId) {
-      if (!callLogId) throw new Error("callLogId manquant.");
+      if (!callLogId) throw new Error('callLogId manquant.');
       return authedFetch(ENDPOINTS.callDetail, {
         method: 'POST',
         body: JSON.stringify({ callLogId }),
@@ -252,22 +170,45 @@
     },
 
     /**
-     * Envoie un SMS à un lead via Twilio.
-     * @param {Object} params
-     * @param {string} params.leadId  - ID du lead destinataire
-     * @param {string} params.message - Contenu du SMS (max 1530 chars)
-     * @returns {Promise<{ok: true, messageSid: string, from: string, to: string}>}
+     * Envoie un SMS à un lead via Ringover.
+     * @param {{ leadId: string, message: string }} params
      */
     async sendSms({ leadId, message } = {}) {
-      if (!leadId)  throw new Error("leadId manquant.");
-      if (!message) throw new Error("Message vide.");
+      if (!leadId)  throw new Error('leadId manquant.');
+      if (!message) throw new Error('Message vide.');
       return authedFetch(ENDPOINTS.smsSend, {
         method: 'POST',
         body: JSON.stringify({ leadId, message }),
       });
     },
+
+    // ── Admin : gestion numéros (conservé pour admin-numbers.html) ──────────
+
+    async searchNumbers({ country = 'FR', areaCode, type, contains, limit = 20 } = {}) {
+      return authedFetch(ENDPOINTS.searchNumbers, {
+        method: 'GET',
+        query: { country, areaCode, type, contains, limit },
+      });
+    },
+
+    async purchaseNumber({ phoneNumber, assignedTo, friendlyName, bundleSid } = {}) {
+      if (!phoneNumber) throw new Error('Numéro de téléphone manquant.');
+      if (!assignedTo)  throw new Error('Vous devez assigner le numéro à un membre.');
+      return authedFetch(ENDPOINTS.purchaseNumber, {
+        method: 'POST',
+        body: { phoneNumber, assignedTo, friendlyName, bundleSid },
+      });
+    },
+
+    async releaseNumber({ sid } = {}) {
+      if (!sid) throw new Error('SID manquant.');
+      return authedFetch(ENDPOINTS.releaseNumber, { method: 'POST', body: { sid } });
+    },
+
+    async syncNumbers() {
+      return authedFetch(ENDPOINTS.syncNumbers, { method: 'POST' });
+    },
   };
 
-  // ─── Export global ─────────────────────────────────────────────────────────
   window.SalesDialerAPI = SalesDialerAPI;
 })();
