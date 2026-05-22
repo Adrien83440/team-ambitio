@@ -1,128 +1,121 @@
-// api/ringover-aftercall.js
-// Gère les webhooks Ringover "aftercall" :
-//   - record_available        → stocke record_link dans call_logs
-//   - transcription_available → récupère la transcription via GET /transcriptions/{callId}
-//   - summary_available       → stocke le résumé Empower dans call_logs
-//
-// À configurer dans Ringover Dashboard → Webhooks → section After-call
-// URL : https://team.alteore.com/api/ringover-aftercall
-
+// api/ringover-aftercall.js  (v2 — écritures Firestore AVANT res.end)
 const { db, admin } = require('./_firebaseAdmin');
 const { ringoverFetch } = require('./_ringoverClient');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
-  res.status(200).end(); // Répondre immédiatement à Ringover
 
+  // Écriture Firestore AVANT de répondre (évite que Vercel kill la fonction)
   try {
     const payload = req.body || {};
-    const event   = (payload.event || '').toLowerCase(); // record_available | transcription_available | summary_available
+    const event   = (payload.event || '').toLowerCase();
     const d       = payload.data || {};
     const callId  = d.call_id ? String(d.call_id) : null;
 
-    console.log('[ringover-aftercall]', event, 'callId:', callId);
+    console.log('[aftercall] event:', event, 'callId:', callId);
 
     if (!callId || callId === '0') {
-      console.warn('[ringover-aftercall] No callId in payload');
+      console.warn('[aftercall] No callId');
+      res.status(200).end();
       return;
     }
 
     const now = admin.firestore.FieldValue.serverTimestamp();
+    const ref = db.collection('call_logs').doc(callId);
 
     // ── record_available ────────────────────────────────────────────────────
     if (event === 'record_available') {
-      const recordLink     = d.record_link || null;
-      const recordDuration = d.record_duration || null;
-
+      const recordLink = d.record_link || null;
       if (recordLink) {
-        await db.collection('call_logs').doc(callId).set({
+        await ref.set({
           ringoverRecordingUrl: recordLink,
-          durationFormatted:    recordDuration || null,
           recordingStatus:      'available',
+          durationFormatted:    d.record_duration || null,
           updatedAt:            now,
         }, { merge: true });
-        console.log('[ringover-aftercall] record stored:', callId, recordLink);
+        console.log('[aftercall] ✓ record stored:', callId, recordLink.substring(0,60));
+      } else {
+        console.warn('[aftercall] record_available sans record_link');
       }
+      res.status(200).end();
       return;
     }
 
     // ── transcription_available ─────────────────────────────────────────────
     if (event === 'transcription_available') {
       const transcriptionUrl = d.transcription_url || null;
+      let transcriptText  = null;
+      let speeches        = null;
 
-      // Tenter de récupérer la transcription via l'API Ringover
-      let transcriptText = null;
-      let speeches       = null;
+      // Fetch transcription via API Ringover
       try {
-        const resp = await ringoverFetch(`/transcriptions/${callId}`);
-        // resp = tableau de transcription_list items
-        const items = Array.isArray(resp) ? resp : (resp ? [resp] : []);
-        if (items.length > 0) {
-          const item = items[0];
-          transcriptText = item?.transcription_data?.text || null;
-          speeches       = item?.transcription_data?.speeches || null;
+        const tr    = await ringoverFetch(`/transcriptions/${callId}`);
+        const items = Array.isArray(tr) ? tr : (tr ? [tr] : []);
+        if (items.length > 0 && items[0]?.transcription_data) {
+          const td = items[0].transcription_data;
+          transcriptText = td.text     || null;
+          speeches       = td.speeches || null;
+          console.log('[aftercall] transcription fetched, chars:', transcriptText?.length || 0);
         }
-        console.log('[ringover-aftercall] transcription fetched for', callId,
-          '— chars:', transcriptText?.length || 0);
       } catch (e) {
-        console.warn('[ringover-aftercall] GET /transcriptions failed:', e.message);
-        // fallback : stocker juste l'URL
+        console.warn('[aftercall] GET /transcriptions failed:', e.message);
       }
 
-      await db.collection('call_logs').doc(callId).set({
+      await ref.set({
         transcriptionStatus:  'done',
         transcriptText:       transcriptText || null,
-        transcriptSpeeches:   speeches || null,
+        transcriptSpeeches:   speeches       || null,
         transcriptionUrl:     transcriptionUrl || null,
         transcribedAt:        now,
         updatedAt:            now,
       }, { merge: true });
+      console.log('[aftercall] ✓ transcription stored:', callId, 'text:', !!transcriptText);
 
-      // Si transcription dispo → lancer l'analyse Claude
+      // Déclencher analyse IA si transcription dispo
       if (transcriptText) {
-        // Écrire dans webhook_inbox pour déclencher l'analyse IA
-        // (le handler ~/index.js traitera ça comme une analyse post-call)
-        await db.collection('webhook_inbox').add({
+        db.collection('webhook_inbox').add({
           source:        'ringover_transcript_ready',
-          callId,
-          transcriptText,
-          speeches,
-          receivedAt:    now,
-          processed:     false,
-        });
+          callId, transcriptText, speeches,
+          receivedAt:    now, processed: false,
+        }).catch(() => {});
       }
+      res.status(200).end();
       return;
     }
 
-    // ── summary_available (Empower) ─────────────────────────────────────────
+    // ── summary_available ───────────────────────────────────────────────────
     if (event === 'summary_available') {
-      const summary    = d.summary || null;
-      const channelId  = d.channel_id ? String(d.channel_id) : null;
-
+      const summary = d.summary || null;
       if (summary) {
-        await db.collection('call_logs').doc(callId).set({
+        await ref.set({
           aiSummary:        summary,
           aiAnalysisStatus: 'done',
           aiAnalyzedAt:     now,
           updatedAt:        now,
         }, { merge: true });
-        console.log('[ringover-aftercall] summary stored for', callId);
+        console.log('[aftercall] ✓ summary stored:', callId, summary.substring(0,80));
       }
+      res.status(200).end();
       return;
     }
 
-    // ── empower (summary + transcription combinés) ──────────────────────────
+    // ── empower ──────────────────────────────────────────────────────────────
     if (event === 'empower') {
-      await db.collection('call_logs').doc(callId).set({
+      await ref.set({
         empowerPayload:   d,
         aiAnalysisStatus: 'done',
         updatedAt:        now,
       }, { merge: true });
+      console.log('[aftercall] ✓ empower stored:', callId);
+      res.status(200).end();
       return;
     }
 
-    console.log('[ringover-aftercall] Unknown event ignored:', event);
+    console.log('[aftercall] event ignoré:', event);
+    res.status(200).end();
+
   } catch (err) {
-    console.error('[ringover-aftercall] error:', err.message);
+    console.error('[aftercall] FATAL:', err.code || err.message);
+    res.status(200).end();
   }
 };
