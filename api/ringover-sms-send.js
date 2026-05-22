@@ -20,18 +20,30 @@ module.exports = async (req, res) => {
   if (!auth) return;
   if (auth.role !== 'sales' && auth.role !== 'admin') return res.status(403).json({ error: 'Rôle requis' });
 
-  const { leadId, message } = parseBody(req);
-  if (!leadId)  return res.status(400).json({ error: 'leadId requis' });
-  if (!message || !message.trim()) return res.status(400).json({ error: 'Message vide' });
-  const trimmed = message.trim();
+  const body = parseBody(req);
+  const { leadId, message, to } = body;
+  if (!message || !String(message).trim()) return res.status(400).json({ error: 'message requis (string)' });
+  const trimmed = String(message).trim();
 
   try {
-    const leadSnap = await db.collection('leads').doc(leadId).get();
-    if (!leadSnap.exists) return res.status(404).json({ error: 'Lead introuvable' });
-    const lead = leadSnap.data();
+    let lead = null;
+    let toNumber = null;
 
-    const toNumber = normalizeE164(lead.telephone);
-    if (!toNumber) return res.status(400).json({ error: 'Lead sans téléphone E.164' });
+    // Cas 1 : leadId fourni → récupérer le numéro du lead
+    if (leadId) {
+      const leadSnap = await db.collection('leads').doc(leadId).get();
+      if (leadSnap.exists) {
+        lead = leadSnap.data();
+        toNumber = normalizeE164(lead.telephone);
+      }
+    }
+
+    // Cas 2 : pas de lead → utiliser le numéro "to" passé directement (réponse rapide depuis cloche)
+    if (!toNumber && to) {
+      toNumber = normalizeE164(to);
+    }
+
+    if (!toNumber) return res.status(400).json({ error: 'Numéro destinataire manquant ou invalide' });
 
     const creds = await getRingoverCreds();
     const fromNumber = creds.fromNumber; // E.164 string : "+33755546371"
@@ -71,7 +83,7 @@ module.exports = async (req, res) => {
     const pad     = n => String(n).padStart(2, '0');
     const tlDate  = `${pad(smsDate.getDate())}/${pad(smsDate.getMonth()+1)}/${smsDate.getFullYear()} ${pad(smsDate.getHours())}:${pad(smsDate.getMinutes())}`;
 
-    await db.collection('leads').doc(leadId).update({
+    if (leadId && lead) await db.collection('leads').doc(leadId).update({
       communications: admin.firestore.FieldValue.arrayUnion({
         type: 'sms', direction: 'outbound', content: trimmed,
         source: 'ringover-sms', date: nowIso, createdAt: nowIso,
