@@ -1,134 +1,94 @@
-// ============================================================================
-// api/ringover-sms-send.js
-// ----------------------------------------------------------------------------
-// Envoi d'un SMS à un lead via l'API Ringover.
-// Remplace twilio-sms-send.js — même schéma de réponse et de persistance
-// dans leads.communications[] pour compatibilité frontend zéro-modif.
-//
-// URL  : POST /api/ringover-sms-send
-// Auth : Bearer Firebase ID token (rôle sales ou admin)
-// Body : { leadId: string, message: string }
-// ============================================================================
-
+// api/ringover-sms-send.js  (v2 — endpoint /push/sms correct)
 const { db, admin } = require('./_firebaseAdmin');
-const { requireAuth } = require('./_verifyFirebaseAuth');
+const { requireAuth }  = require('./_verifyFirebaseAuth');
 const { getRingoverCreds, ringoverFetch } = require('./_ringoverClient');
 const parseBody = require('./_parseBody');
 
-function normalizePhone(raw) {
+function normalizeE164(raw) {
   if (!raw) return null;
-  const cleaned = String(raw).replace(/[\s\-().]/g, '');
-  if (cleaned.startsWith('+')) return cleaned;
-  if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
-  if (cleaned.startsWith('0') && cleaned.length === 10) return '+33' + cleaned.slice(1);
-  if (cleaned.startsWith('33') && cleaned.length >= 11) return '+' + cleaned;
+  const c = String(raw).replace(/[\s\-().]/g, '');
+  if (c.startsWith('+')) return c;
+  if (c.startsWith('00')) return '+' + c.slice(2);
+  if (c.startsWith('0') && c.length === 10) return '+33' + c.slice(1);
+  if (c.startsWith('33') && c.length >= 11) return '+' + c;
   return null;
 }
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
   const auth = await requireAuth(req, res);
   if (!auth) return;
-  if (auth.role !== 'sales' && auth.role !== 'admin') {
-    return res.status(403).json({ error: 'Rôle sales ou admin requis' });
-  }
+  if (auth.role !== 'sales' && auth.role !== 'admin') return res.status(403).json({ error: 'Rôle requis' });
 
   const { leadId, message } = parseBody(req);
-  if (!leadId || typeof leadId !== 'string') return res.status(400).json({ error: 'leadId requis' });
-  if (!message || typeof message !== 'string') return res.status(400).json({ error: 'message requis' });
+  if (!leadId)  return res.status(400).json({ error: 'leadId requis' });
+  if (!message || !message.trim()) return res.status(400).json({ error: 'Message vide' });
   const trimmed = message.trim();
-  if (!trimmed) return res.status(400).json({ error: 'Message vide' });
-  if (trimmed.length > 1530) return res.status(400).json({ error: 'Message trop long (max 1530 chars)' });
 
   try {
-    // ─── Charger le lead ────────────────────────────────────────────────────
-    const leadRef = db.collection('leads').doc(leadId);
-    const leadSnap = await leadRef.get();
+    const leadSnap = await db.collection('leads').doc(leadId).get();
     if (!leadSnap.exists) return res.status(404).json({ error: 'Lead introuvable' });
     const lead = leadSnap.data();
 
-    const toNumber = normalizePhone(lead.telephone);
-    if (!toNumber) return res.status(400).json({ error: 'Lead sans téléphone E.164 valide' });
+    const toNumber = normalizeE164(lead.telephone);
+    if (!toNumber) return res.status(400).json({ error: 'Lead sans téléphone E.164' });
 
-    // ─── Credentials Ringover ───────────────────────────────────────────────
     const creds = await getRingoverCreds();
-    const smsFrom = creds.fromNumber || creds.smsFromNumber;
-    if (!smsFrom) return res.status(500).json({ error: 'ringover.fromNumber non configuré' });
+    const fromNumber = creds.fromNumber; // E.164 string : "+33755546371"
+    if (!fromNumber) return res.status(500).json({ error: 'ringover.fromNumber manquant' });
 
-    // ─── Nom expéditeur ─────────────────────────────────────────────────────
+    // Nom expéditeur (non-bloquant)
     let ownerName = null;
     try {
       const metaSnap = await db.collection('_meta').doc('team_members').get();
       if (metaSnap.exists) {
-        const members = metaSnap.data().members || [];
-        const list = Array.isArray(members) ? members : Object.values(members);
+        const list = Object.values(metaSnap.data().members || {});
         const me = list.find(m => m.firebaseUid === auth.uid);
         if (me) ownerName = me.shortName || me.displayName || null;
       }
-    } catch (_) { /* non-bloquant */ }
-    ownerName = ownerName || auth.email || 'Équipe';
+    } catch (_) {}
 
-    // ─── Envoi via Ringover ─────────────────────────────────────────────────
-    let ringoverResp;
+    // POST /push/sms — champs E.164 strings, body.content (pas text)
+    let resp;
     try {
-      ringoverResp = await ringoverFetch('/sms', {
+      resp = await ringoverFetch('/push/sms', {
         method: 'POST',
         body: {
-          to_number: toNumber,
-          from_number: smsFrom,
-          text: trimmed,
+          from_number: fromNumber,  // E.164 string "+33..."
+          to_number:   toNumber,    // E.164 string "+33..."
+          content:     trimmed,     // champ "content" (pas "text")
         },
       });
-    } catch (ringoverErr) {
-      console.error('[ringover-sms-send] Ringover error:', ringoverErr.message);
-      return res.status(502).json({
-        error: ringoverErr.message || 'Échec envoi SMS Ringover',
-        ringoverStatus: ringoverErr.status || null,
-      });
+      console.log('[ringover-sms-send] sent:', JSON.stringify(resp));
+    } catch (e) {
+      console.error('[ringover-sms-send] Ringover error:', e.message, e.rawResponse);
+      return res.status(502).json({ error: e.message });
     }
 
+    const now    = admin.firestore.FieldValue.serverTimestamp();
     const nowIso = new Date().toISOString();
-    const commEntry = {
-      type: 'sms',
-      direction: 'outbound',
-      content: trimmed,
-      source: 'ringover-sms',
-      date: nowIso,
-      createdAt: nowIso,
-      ownerUid: auth.uid,
-      ownerName,
-      providerMessageId: (ringoverResp && (ringoverResp.message_id || ringoverResp.id)) || null,
-      fromNumber: smsFrom,
-      toNumber,
-    };
-
     const d = new Date();
     const pad = n => String(n).padStart(2, '0');
-    const tlDate = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    const timelineEntry = {
-      text: '💬 SMS sortant (ringover) — ' + trimmed.substring(0, 100),
-      date: tlDate,
-      color: '#60a5fa',
-    };
+    const tlDate = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 
-    await leadRef.update({
-      communications: admin.firestore.FieldValue.arrayUnion(commEntry),
-      timeline_history: admin.firestore.FieldValue.arrayUnion(timelineEntry),
-      lastContactAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastContactType: 'sms',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    await db.collection('leads').doc(leadId).update({
+      communications: admin.firestore.FieldValue.arrayUnion({
+        type: 'sms', direction: 'outbound', content: trimmed,
+        source: 'ringover-sms', date: nowIso, createdAt: nowIso,
+        ownerUid: auth.uid, ownerName: ownerName || auth.email,
+        providerMessageId: String(resp?.message_id || ''),
+        fromNumber, toNumber,
+      }),
+      timeline_history: admin.firestore.FieldValue.arrayUnion({
+        text: '💬 SMS sortant (ringover) — ' + trimmed.substring(0,100),
+        date: tlDate, color: '#60a5fa',
+      }),
+      lastContactAt: now, lastContactType: 'sms', updatedAt: now,
     });
 
-    res.status(200).json({
-      ok: true,
-      messageId: (ringoverResp && (ringoverResp.message_id || ringoverResp.id)) || null,
-      leadId,
-      from: smsFrom,
-      to: toNumber,
-    });
+    res.status(200).json({ ok: true, messageId: resp?.message_id || null, from: fromNumber, to: toNumber });
   } catch (err) {
-    console.error('[ringover-sms-send] Error:', err);
-    res.status(500).json({ error: err.message || 'Erreur interne' });
+    console.error('[ringover-sms-send] error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 };

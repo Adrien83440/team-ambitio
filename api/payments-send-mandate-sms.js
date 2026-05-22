@@ -1,38 +1,24 @@
-// ============================================================================
-// api/payments-send-mandate-sms.js  (v2 — Ringover)
-// ----------------------------------------------------------------------------
-// Envoie au client un SMS contenant le lien mandat GoCardless (IBAN).
-// Même logique que v1 mais via l'API Ringover au lieu de Twilio.
-//
-// Body : { paymentId }
-// Auth : Bearer Firebase ID token (rôle sales ou admin)
-// Réponse : { ok: true, messageId, from, to }
-// ============================================================================
-
+// api/payments-send-mandate-sms.js  (v3 — endpoint /push/sms correct)
 const { db, admin } = require('./_firebaseAdmin');
-const { requireAuth } = require('./_verifyFirebaseAuth');
+const { requireAuth }  = require('./_verifyFirebaseAuth');
 const { getRingoverCreds, ringoverFetch } = require('./_ringoverClient');
 const parseBody = require('./_parseBody');
 
-function normalizePhone(raw) {
+function normalizeE164(raw) {
   if (!raw) return null;
-  const cleaned = String(raw).replace(/[\s\-().]/g, '');
-  if (cleaned.startsWith('+')) return cleaned;
-  if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
-  if (cleaned.startsWith('0') && cleaned.length === 10) return '+33' + cleaned.slice(1);
-  if (cleaned.startsWith('33') && cleaned.length >= 11) return '+' + cleaned;
+  const c = String(raw).replace(/[\s\-().]/g, '');
+  if (c.startsWith('+')) return c;
+  if (c.startsWith('00')) return '+' + c.slice(2);
+  if (c.startsWith('0') && c.length === 10) return '+33' + c.slice(1);
+  if (c.startsWith('33') && c.length >= 11) return '+' + c;
   return null;
 }
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
-
   const auth = await requireAuth(req, res);
   if (!auth) return;
-  if (auth.role !== 'sales' && auth.role !== 'admin') {
-    res.status(403).json({ error: 'Rôle sales ou admin requis' });
-    return;
-  }
+  if (auth.role !== 'sales' && auth.role !== 'admin') { res.status(403).json({ error: 'Rôle requis' }); return; }
 
   try {
     const { paymentId } = parseBody(req);
@@ -42,94 +28,50 @@ module.exports = async (req, res) => {
     if (!paySnap.exists) { res.status(404).json({ error: 'Paiement introuvable' }); return; }
     const pay = paySnap.data();
 
-    if (auth.role !== 'admin' && pay.createdBy !== auth.uid) {
-      res.status(403).json({ error: 'Accès non autorisé à ce paiement' });
-      return;
-    }
-    if (!pay.gcBillingRequestFlowUrl) {
-      res.status(400).json({ error: "Aucun lien mandat généré — crée-le d'abord" });
-      return;
-    }
+    if (auth.role !== 'admin' && pay.createdBy !== auth.uid) { res.status(403).json({ error: 'Accès refusé' }); return; }
+    if (!pay.gcBillingRequestFlowUrl) { res.status(400).json({ error: 'Aucun lien mandat généré' }); return; }
 
-    const toNumber = normalizePhone(pay.leadPhone);
-    if (!toNumber) {
-      res.status(400).json({ error: 'Numéro de téléphone invalide ou manquant sur le paiement' });
-      return;
-    }
+    const toNumber = normalizeE164(pay.leadPhone);
+    if (!toNumber) { res.status(400).json({ error: 'Numéro invalide' }); return; }
 
     const creds = await getRingoverCreds();
-    const smsFrom = creds.fromNumber || creds.smsFromNumber;
-    if (!smsFrom) {
-      res.status(500).json({ error: 'ringover.fromNumber non configuré dans _config/telco_credentials' });
-      return;
-    }
+    if (!creds.fromNumber) { res.status(500).json({ error: 'ringover.fromNumber manquant' }); return; }
 
-    // ─── Corps du SMS ────────────────────────────────────────────────────────
     const firstName = String(pay.leadName || 'Bonjour').trim().split(/\s+/)[0];
-    const message = `Bonjour ${firstName},\n\nPour finaliser la mise en place de votre prélèvement (${pay.description || 'Programme'}), merci de renseigner votre IBAN via ce lien sécurisé :\n\n${pay.gcBillingRequestFlowUrl}\n\nL'équipe Ambitio`;
+    const content = `Bonjour ${firstName},\n\nPour finaliser votre prélèvement (${pay.description || 'Programme'}), renseignez votre IBAN ici :\n\n${pay.gcBillingRequestFlowUrl}\n\nL'équipe Ambitio`;
 
-    // ─── Nom expéditeur ──────────────────────────────────────────────────────
-    let ownerName = null;
+    let resp;
     try {
-      const metaSnap = await db.collection('_meta').doc('team_members').get();
-      if (metaSnap.exists) {
-        const raw = metaSnap.data().members || {};
-        const list = Array.isArray(raw) ? raw : Object.values(raw);
-        const me = list.find(m => m.firebaseUid === auth.uid);
-        if (me) ownerName = me.shortName || me.displayName || null;
-      }
-    } catch (_) { /* non-bloquant */ }
-    ownerName = ownerName || auth.email || 'Équipe';
-
-    // ─── Envoi via Ringover ──────────────────────────────────────────────────
-    let ringoverResp;
-    try {
-      ringoverResp = await ringoverFetch('/sms', {
+      resp = await ringoverFetch('/push/sms', {
         method: 'POST',
-        body: { to_number: toNumber, from_number: smsFrom, text: message },
+        body: { from_number: creds.fromNumber, to_number: toNumber, content },
       });
-    } catch (ringoverErr) {
-      console.error('[payments-send-mandate-sms] Ringover error:', ringoverErr.message);
-      res.status(502).json({ error: ringoverErr.message || "Échec de l'envoi Ringover" });
+    } catch (e) {
+      console.error('[payments-send-mandate-sms] Ringover error:', e.message);
+      res.status(502).json({ error: e.message });
       return;
     }
 
-    // ─── Log sur le lead (best-effort) ───────────────────────────────────────
     if (pay.leadId) {
-      try {
-        const nowIso = new Date().toISOString();
-        const d = new Date();
-        const pad = n => String(n).padStart(2, '0');
-        const tlDate = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
-        await db.collection('leads').doc(pay.leadId).update({
-          communications: admin.firestore.FieldValue.arrayUnion({
-            type: 'sms', direction: 'outbound', content: message,
-            source: 'ringover-sms', date: nowIso, createdAt: nowIso,
-            ownerUid: auth.uid, ownerName,
-            providerMessageId: (ringoverResp && (ringoverResp.message_id || ringoverResp.id)) || null,
-            fromNumber: smsFrom, toNumber,
-          }),
-          timeline_history: admin.firestore.FieldValue.arrayUnion({
-            text: '💬 SMS mandat envoyé (ringover) — ' + message.substring(0, 80),
-            date: tlDate, color: '#60a5fa',
-          }),
-          lastContactAt: admin.firestore.FieldValue.serverTimestamp(),
-          lastContactType: 'sms',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      } catch (logErr) {
-        console.warn('[payments-send-mandate-sms] log lead failed (non-bloquant):', logErr.message);
-      }
+      const now = admin.firestore.FieldValue.serverTimestamp();
+      const nowIso = new Date().toISOString();
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const tlDate = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      db.collection('leads').doc(pay.leadId).update({
+        communications: admin.firestore.FieldValue.arrayUnion({
+          type: 'sms', direction: 'outbound', content, source: 'ringover-sms',
+          date: nowIso, createdAt: nowIso, ownerUid: auth.uid,
+          fromNumber: creds.fromNumber, toNumber,
+        }),
+        timeline_history: admin.firestore.FieldValue.arrayUnion({
+          text: '💬 SMS mandat envoyé', date: tlDate, color: '#60a5fa',
+        }),
+        lastContactAt: now, lastContactType: 'sms', updatedAt: now,
+      }).catch(e => console.warn('[payments-mandate-sms] log lead:', e.message));
     }
 
-    res.json({
-      ok: true,
-      messageId: (ringoverResp && (ringoverResp.message_id || ringoverResp.id)) || null,
-      from: smsFrom,
-      to: toNumber,
-    });
-
+    res.json({ ok: true, messageId: resp?.message_id || null, from: creds.fromNumber, to: toNumber });
   } catch (e) {
     console.error('[payments-send-mandate-sms]', e.message);
     res.status(500).json({ error: e.message });
