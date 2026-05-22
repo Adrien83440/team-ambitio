@@ -17,32 +17,34 @@ async function getRingoverCreds() {
 async function ringoverFetch(path, { method = 'GET', body = null } = {}) {
   const creds = await getRingoverCreds();
 
-  // Ringover v2 : essayer Bearer en premier, fallback sans Bearer
-  // (les deux formats existent selon les comptes)
-  const tryFetch = async (authHeader) => {
+  const doFetch = async (authValue) => {
     const opts = {
       method,
-      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': authValue, 'Content-Type': 'application/json' },
     };
     if (body !== null) opts.body = JSON.stringify(body);
-    return fetch(`${RINGOVER_API_BASE}${path}`, opts);
+    const res  = await fetch(`${RINGOVER_API_BASE}${path}`, opts);
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (_) {}
+    return { res, text, data };
   };
 
-  let res = await tryFetch(`Bearer ${creds.apiKey}`);
+  // Essai 1 : sans Bearer (format documenté Ringover v2)
+  let { res, text, data } = await doFetch(creds.apiKey);
 
-  // Si 401 avec Bearer → réessayer sans
+  // Essai 2 : avec Bearer si 401
   if (res.status === 401) {
-    res = await tryFetch(creds.apiKey);
+    console.warn(`[ringoverClient] 401 sans Bearer, retry avec Bearer. Body: ${text}`);
+    ({ res, text, data } = await doFetch(`Bearer ${creds.apiKey}`));
   }
 
-  let data = null;
-  try { data = await res.json(); } catch (_) {}
-
   if (!res.ok) {
-    const msg = (data && (data.message || data.error)) || `Ringover API error ${res.status}`;
+    const msg = (data && (data.message || data.error || data.detail)) || text || `Ringover API error ${res.status}`;
+    console.error(`[ringoverClient] ${method} ${path} → ${res.status}: ${text}`);
     const err = new Error(msg);
     err.status = res.status;
-    err.ringoverData = data;
+    err.rawResponse = text;
     throw err;
   }
   return data;
