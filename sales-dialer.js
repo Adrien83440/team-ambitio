@@ -307,11 +307,16 @@
         snap.forEach(d => items.push({ id: d.id, ...d.data() }));
         renderHistory(items);
       }, err => {
-        console.error('history', err);
-        const list = $('sd-history-list');
-        if (list) {
-          list.innerHTML = '<div class="sd-empty">Erreur historique (voir console)</div>';
-        }
+        console.error('history onSnapshot', err.code || err.message);
+        // Fallback Safari : charge une seule fois via get()
+        q.get().then(snap => {
+          const items = [];
+          snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+          renderHistory(items);
+        }).catch(() => {
+          const list = $('sd-history-list');
+          if (list) list.innerHTML = '<div class="sd-empty">Erreur historique</div>';
+        });
       });
   }
   function renderHistory(items) {
@@ -338,11 +343,16 @@
       const closerLabel = canViewAllCalls
         ? (c.userName || uidToShortName[c.userId] || (c.userId ? c.userId.substring(0, 6) : '?'))
         : '';
-      const hasDetail = c.recordingStoragePath || c.transcriptionText || (c.aiAnalysis && c.aiAnalysis.summary);
+      // Supporte Twilio legacy (recordingStoragePath, transcriptionText, aiAnalysis.summary)
+      // et Ringover (ringoverRecordingUrl, transcriptText, aiSummary)
+      const hasRec   = c.recordingStoragePath || c.ringoverRecordingUrl;
+      const hasTransc = c.transcriptionText || c.transcriptText;
+      const hasAI    = (c.aiAnalysis && c.aiAnalysis.summary) || c.aiSummary;
+      const hasDetail = hasRec || hasTransc || hasAI;
       let badges = '';
-      if (c.recordingStoragePath)               badges += '🎙';
-      if (c.transcriptionText)                  badges += '📄';
-      if (c.aiAnalysis && c.aiAnalysis.summary) badges += '🤖';
+      if (hasRec)    badges += '🎙';
+      if (hasTransc) badges += '📄';
+      if (hasAI)     badges += '🤖';
       const playBtn = hasDetail
         ? `<button class="sd-history-play" data-cid="${c.id}" title="Écouter / Voir détail" style="background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.2);color:#34d399;border-radius:8px;padding:4px 8px;font-size:12px;cursor:pointer;margin-left:8px">${badges}</button>`
         : '';

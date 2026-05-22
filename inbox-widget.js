@@ -729,13 +729,43 @@
       updateBadge();
       renderList();
     }, err => {
-      console.warn('[InboxWidget] Listener error:', err);
-      // Si l'index composite manque, Firestore renvoie une erreur explicite.
-      // L'utilisateur verra un fallback vide ; les logs guideront le diagnostic.
+      console.warn('[InboxWidget] Listener error (onSnapshot):', err.code || err);
+      // Fallback Safari : onSnapshot bloqué par ITP → polling toutes les 15s
+      _startPolling(q);
     });
   }
 
+  // ── Polling secours (Safari ITP bloque les WebChannel Firestore) ──────────
+  let _pollTimerId = null;
+  let _lastPollIds = new Set();
+
+  function _startPolling(q) {
+    if (_pollTimerId) return; // déjà en cours
+    console.log('[InboxWidget] Fallback polling actif (15s)');
+    const doPoll = () => {
+      q.get().then(snap => {
+        const newNotifs = [];
+        snap.forEach(doc => newNotifs.push(Object.assign({ id: doc.id }, doc.data())));
+        // Détecter les nouvelles notifs
+        newNotifs.forEach(notif => {
+          if (!_lastPollIds.has(notif.id) && isUnreadByMe(notif)) {
+            playDing();
+            showToast(notif);
+          }
+        });
+        _lastPollIds = new Set(newNotifs.map(n => n.id));
+        notifications = newNotifs;
+        initialSnapshotDone = true;
+        updateBadge();
+        renderList();
+      }).catch(e => console.warn('[InboxWidget] Poll error:', e));
+    };
+    doPoll(); // Immédiatement
+    _pollTimerId = setInterval(doPoll, 15000);
+  }
+
   function stopListening() {
+    if (_pollTimerId) { clearInterval(_pollTimerId); _pollTimerId = null; }
     if (unsubscribeListener) { unsubscribeListener(); unsubscribeListener = null; }
     notifications = [];
     initialSnapshotDone = false;
