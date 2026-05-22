@@ -1,27 +1,34 @@
 /**
- * sales-dialer.js — Dialer Ambitio (v2 Ringover)
- * API-initiated click-to-call via Ringover + Firestore live (call_logs, dialer_campaigns)
+ * sales-dialer.js — Softphone Ambitio
+ * Twilio Voice SDK browser + Firestore live (call_logs, dialer_campaigns, dialer_sessions)
  * Bridge CRM via sessionStorage.dialer_pending_call / dialer_pending_campaign
  *                                  / dialer_pending_auto_campaign (Power Dialer)
  *
- * Modèle d'appel Ringover :
- *   L'agent clique → API Ringover sonne son app → il décroche → Ringover compose le lead.
- *   L'état de l'appel est tracé via webhooks Ringover → webhook_inbox → Cloud Function
- *   → dialer_campaigns/{id} onSnapshot drive l'UI (plus de Twilio.Device côté browser).
+ * Ergonomie sonore :
+ *   - Les bips Twilio "outgoing" (début d'appel sortant) et "disconnect" (fin
+ *     d'appel) sont désactivés en permanence : la UI change déjà visuellement,
+ *     ces bips sont inutiles et fatigants sur une journée.
+ *   - Le ringtone "incoming" reste actif en mode normal (appels entrants
+ *     imprévus) mais est désactivé pendant une session Power Dialer : dans ce
+ *     contexte, on auto-accept le call dès qu'un lead décroche, et on joue un
+ *     court "ding" custom (150ms, 880Hz, Web Audio) pour signaler au closer
+ *     qu'il doit parler. Le ding peut être coupé via la pref dingOnAnswer.
  *
  * Power Dialer :
- *   Une session auto = queue complète [leads], 1 lead par vague (Ringover séquentiel).
- *   Chaque vague crée un doc dialer_campaigns avec autoCampaignId + waveIndex.
- *   Quand la vague se termine (HANGUP reçu OU no-answer) :
+ *   Une session auto = queue complète [leads] + waveSize (3/4/5).
+ *   Chaque vague crée un doc dialer_campaigns classique (même format),
+ *   relié par un champ autoCampaignId (UUID client) + waveIndex.
+ *   Quand la vague se termine (connectedCallSid raccroché OU tous no-answer) :
  *     - si connecté + raccroché → countdown 3s puis vague suivante
- *     - si pas de décroche      → enchaînement immédiat
+ *     - si aucun décroche       → enchainement immédiat (pas de countdown)
+ *   Stop = cancel vague en cours + reset state + toast récap.
  */
 (function () {
   'use strict';
 
   const db = firebase.firestore();
   let currentUser = null;
-  // Ringover : pas de Twilio.Device — appel dans l'app Ringover
+  // Ringover : plus de Twilio.Device
   let activeCampaignConnected = false;
   let activeCampaignCallId = null;
   let activeCampaignIdActive = null;
@@ -105,6 +112,163 @@
       acquireWakeLock();
     }
   });
+
+  // ─── Utilitaires ─────────────────────────────────────────────────────────
+  const $ = (id) => document.getElementById(id);
+  const toast = (msg, type = '') => {
+    const t = $('sd-toast');
+    t.textContent = msg;
+    t.className = `sd-toast show ${type}`;
+    setTimeout(() => t.classList.remove('show'), 3500);
+  };
+  const setStatus = (text, cls = '') => {
+    $('sd-status-text').textContent = text;
+    $('sd-status-dot').className = `sd-status-dot ${cls}`;
+  };
+  const showView = (name) => {
+    document.querySelectorAll('.sd-view').forEach(v => v.classList.remove('sd-view-active'));
+    $(`sd-view-${name}`).classList.add('sd-view-active');
+  };
+  const fmtTimer = (s) => {
+    const m = Math.floor(s / 60), r = s % 60;
+    return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+  };
+  const normalizePhone = (raw) => {
+    if (!raw) return '';
+    let p = String(raw).replace(/[^\d+]/g, '');
+    if (p.startsWith('00')) p = '+' + p.slice(2);
+    if (p.startsWith('0') && p.length === 10) p = '+33' + p.slice(1);
+    if (!p.startsWith('+')) p = '+' + p;
+    return p;
+  };
+  const uuid = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+
+  // ─── Sons Twilio : helpers de mute/restore ──────────────────────────────
+  // device.audio est un AudioHelper (SDK v2). Les méthodes .incoming(),
+  // .outgoing(), .disconnect() sans argument retournent l'état courant ;
+  // avec un bool elles l'affectent. Elles peuvent throw si le SDK change
+  // d'API → toujours wrappé dans un try/catch.
+
+  // Petit "ding" (880Hz, ~150ms) via Web Audio. Non bloquant, ignore les erreurs
+  // (ex. AudioContext bloqué tant que l'user n'a pas interagi avec la page).
+  function playDing() {
+    if (!dingOnAnswer) return;
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      // Certains browsers suspendent l'AudioContext → resume si besoin
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      // Enveloppe courte avec attack/decay pour éviter le clic
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.25, now + 0.015);
+      gain.gain.linearRampToValueAtTime(0, now + 0.18);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.2);
+    } catch (e) {
+      // Silencieux : pas critique
+    }
+  }
+
+  // ─── Audio routing helpers ───────────────────────────────────────────────
+  // Twilio Voice SDK v2 expose device.audio.availableOutputDevices (Map de
+  // deviceId → MediaDeviceInfo) et device.audio.speakerDevices.set([ids]).
+  // On identifie l'écouteur (earpiece) et le haut-parleur (speaker) par le
+  // label exposé par enumerateDevices(). Sur Android, les labels typiques
+  // contiennent "earpiece" ou "receiver" pour l'écouteur et "speaker" pour
+  // le haut-parleur. Si on ne trouve qu'un seul output (cas iOS Safari où
+  // l'OS gère le routing en interne), le toggle devient un no-op visuel.
+  function detectAudioOutputs() {
+    if (!device || !device.audio || !device.audio.availableOutputDevices) return;
+    earpieceDeviceId = null;
+    speakerDeviceId = null;
+    const all = [];
+    device.audio.availableOutputDevices.forEach((info, deviceId) => {
+      const label = String(info.label || '').toLowerCase();
+      all.push({ deviceId, label });
+      if (!speakerDeviceId && (label.includes('speaker') || label.includes('haut-parleur') || label.includes('speakerphone'))) {
+        speakerDeviceId = deviceId;
+      }
+      if (!earpieceDeviceId && (label.includes('earpiece') || label.includes('receiver') || label.includes('écouteur'))) {
+        earpieceDeviceId = deviceId;
+      }
+    });
+    // Fallbacks si labels non explicites (cas fréquent avant interaction
+    // utilisateur où enumerateDevices retourne des labels vides)
+    if (!earpieceDeviceId) {
+      const def = all.find(d => d.deviceId === 'default');
+      earpieceDeviceId = def ? def.deviceId : (all[0] && all[0].deviceId);
+    }
+    if (!speakerDeviceId) {
+      const other = all.find(d => d.deviceId !== earpieceDeviceId);
+      speakerDeviceId = other ? other.deviceId : earpieceDeviceId;
+    }
+    console.log('[dialer-audio] outputs detected', { earpieceDeviceId, speakerDeviceId, all });
+  }
+
+
+
+  // Applique le mode (earpiece/speaker) au flux audio Twilio. Idempotent et
+  // safe : peut être appelé avant ou pendant un appel. Sur desktop c'est un
+  // no-op (on laisse l'OS gérer le routing).
+
+  // Initialise le bouton speaker : visible mobile uniquement, état initial
+  // depuis la préférence stockée. À appeler une fois le Device registered.
+
+  // ─── Auth + bootstrap ────────────────────────────────────────────────────
+  firebase.auth().onAuthStateChanged(async (user) => {
+    if (!user) { window.location.href = 'login.html'; return; }
+    currentUser = user;
+    sessionDocRef = db.collection('dialer_sessions').doc(user.uid);
+    await loadUserPermissions();
+    setStatus('Prêt', 'ready'); // Ringover
+    await loadFromNumbers();
+    subscribeHistory();
+    bindUI();
+    await initSession();
+    await loadPowerPrefs();
+    bindPowerPrefsUI();
+    handlePendingCall();
+  });
+
+  // ─── Permissions & team lookup ──────────────────────────────────────────
+  async function loadUserPermissions() {
+    try {
+      const userSnap = await db.collection('users').doc(currentUser.uid).get();
+      if (userSnap.exists) {
+        const u = userSnap.data();
+        canViewAllCalls = (u.role === 'admin') || (u.canListenCalls === true);
+      }
+    } catch (e) {
+      console.warn('loadUserPermissions users:', e);
+    }
+    if (canViewAllCalls) {
+      try {
+        const metaSnap = await db.collection('_meta').doc('team_members').get();
+        if (metaSnap.exists) {
+          const members = metaSnap.data().members || [];
+          members.forEach(m => {
+            if (m.firebaseUid) {
+              uidToShortName[m.firebaseUid] = m.shortName || m.displayName || '?';
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('loadUserPermissions team_members:', e);
+      }
+    }
+  }
 
   // ─── Numéros émetteurs ──────────────────────────────────────────────────
   async function loadFromNumbers() {
@@ -206,28 +370,15 @@
 
   // ─── UI bindings ────────────────────────────────────────────────────────
   function bindUI() {
-    document.querySelectorAll('.sd-key').forEach(k => k.addEventListener('click', () => {
-      $('sd-phone-input').value += k.dataset.k;
-    }));
+    document.querySelectorAll('.sd-key').forEach(k => k.addEventListener('click', () => { $('sd-phone-input').value += k.dataset.k; }));
     $('sd-btn-clear').addEventListener('click', () => {
       const i = $('sd-phone-input');
       i.value = i.value.slice(0, -1);
     });
     $('sd-btn-call').addEventListener('click', () => ringoverPlaceCall());
-    $('sd-btn-hangup').addEventListener('click', async () => {
-      const cid = $('sd-btn-hangup').dataset.cid;
-      try {
-        await SalesDialerAPI.hangupCall({ campaignId: cid || activeCampaignIdActive, callId: activeCampaignCallId || undefined });
-      } catch (e) { toast(e.message || 'Erreur raccrocher', 'error'); }
-    });
-    // Mute géré dans l'app Ringover (pas de contrôle API)
-    const muteBtn = $('sd-btn-mute');
-    if (muteBtn) muteBtn.style.opacity = '0.4';
-    // Speaker routing géré par l'OS/Ringover app
-    const speakerBtn = $('sd-btn-speaker');
-    if (speakerBtn) speakerBtn.style.display = 'none';
-    // Accept/Reject : appels entrants gérés dans l'app Ringover
-    // Les boutons sont conservés dans le DOM mais cachés
+    $('sd-btn-hangup').addEventListener('click', async () => { const cid = $('sd-btn-hangup').dataset.cid; try { await SalesDialerAPI.hangupCall({ campaignId: cid || activeCampaignIdActive, callId: activeCampaignCallId || undefined }); } catch (e) { toast(e.message || 'Erreur raccrocher', 'error'); } });
+    const muteBtn = $('sd-btn-mute'); if (muteBtn) muteBtn.style.opacity = '0.4';
+    const speakerBtn = $('sd-btn-speaker'); if (speakerBtn) speakerBtn.style.display = 'none';
     const acceptBtn = $('sd-btn-accept'); if (acceptBtn) acceptBtn.style.display = 'none';
     const rejectBtn = $('sd-btn-reject'); if (rejectBtn) rejectBtn.style.display = 'none';
     $('sd-btn-cancel-campaign').addEventListener('click', cancelCampaign);
@@ -316,7 +467,6 @@
         sessionStorage.removeItem('dialer_pending_auto_campaign');
         const payload = JSON.parse(rawAuto);
         if (payload && Array.isArray(payload.queue) && payload.queue.length > 0) {
-          // Ringover : pas de Device à attendre
           setTimeout(() => startAutoCampaign(payload), 400);
           return;
         }
@@ -342,33 +492,28 @@
     } catch (e) { console.error(e); }
   }
 
-  // ─── Single call sortant (Ringover click-to-call) ─────────────────────────
+  // ─── Single call sortant (Ringover) ──────────────────────────────────────
   async function ringoverPlaceCall() {
     const phone = normalizePhone($('sd-phone-input').value);
     if (!phone || phone.length < 8) { toast('Numéro invalide', 'error'); return; }
     try {
       if (!activeLeadId) await tryAttachLeadByPhone(phone);
       const resp = await SalesDialerAPI.ringoverCall({
-        leadId: activeLeadId || null,
-        phone,
+        leadId: activeLeadId || null, phone,
         leadName: activeLeadData ? (activeLeadData.nom || activeLeadData.fullName || null) : null,
       });
-      // subscribeCampaign gère la transition vers la vue in-call via onSnapshot
       activeCampaignIdActive = resp.campaignId;
       $('sd-campaign-title').textContent = 'Appel en cours';
       $('sd-btn-cancel-campaign').style.display = 'inline-block';
       $('sd-btn-cancel-campaign').dataset.cid = resp.campaignId;
       subscribeCampaign(resp.campaignId, false);
       showView('campaign');
-    } catch (e) {
-      console.error(e);
-      toast(e.message || "Échec de l'appel", 'error');
-    }
+    } catch (e) { console.error(e); toast(e.message || "Echec appel", 'error'); }
   }
 
     function enterInCallView(phone) {
     showView('incall');
-    $('sd-incall-phone').textContent = phone || '—';
+    $('sd-incall-phone').textContent = phone;
     if (activeLeadData) {
       $('sd-incall-name').textContent = activeLeadData.fullName || activeLeadData.firstName || activeLeadData.nom || 'Lead';
       const init = (activeLeadData.firstName || activeLeadData.nom || '?')[0];
@@ -516,17 +661,14 @@
 
   function subscribeCampaign(campaignId, autoMode = false) {
     if (campaignUnsub) campaignUnsub();
-    let wasConnected = false; // tracker local pour détecter la transition connected→ended
-
+    let wasConnected = false;
     campaignUnsub = db.collection('dialer_campaigns').doc(campaignId).onSnapshot(doc => {
       if (!doc.exists) return;
       const c = doc.data();
-
       $('sd-campaign-status').textContent = c.status;
       $('sd-campaign-status').className = `sd-badge ${c.status}`;
       $('sd-btn-cancel-campaign').dataset.cid = campaignId;
       $('sd-btn-hangup').dataset.cid = campaignId;
-
       const html = (c.legs || []).map(l => `
         <div class="sd-leg ${l.status}">
           <div style="flex:1">
@@ -536,54 +678,19 @@
           <div class="sd-leg-status">${escapeHtml(l.status || '')}</div>
         </div>`).join('');
       $('sd-campaign-legs').innerHTML = html || '<div class="sd-empty">Aucun leg</div>';
-
-      // ── Transition vers l'état "connected" (appel décroché) ────────────────
       if (c.status === 'connected' && !wasConnected) {
-        wasConnected = true;
-        activeCampaignConnected = true;
+        wasConnected = true; activeCampaignConnected = true;
         activeCampaignCallId = c.connectedCallId || c.connectedCallSid || (c.legs && c.legs[0] && c.legs[0].callId) || null;
         activeCampaignIdActive = campaignId;
-
-        // Charger le lead connecté
         const leg = c.legs && c.legs[0];
         const phone = leg ? (leg.phone || '') : '';
         if (leg && leg.leadId && leg.leadId !== activeLeadId) loadLead(leg.leadId);
-
-        if (autoSession) {
-          autoSession.connectedLeadSeenForCurrentWave = true;
-          autoSession.status = 'incall';
-          autoSession.stats.connected += 1;
-          renderAutoStats();
-        }
-        enterInCallView(phone);
-        startTimerFromNow();
-        acquireWakeLock();
-        updateSession('incall');
-
-        // Embed mode
-        try {
-          if (window.IS_DIALER_EMBED && window.parent && window.parent !== window) {
-            window.parent.postMessage({ type: 'dialer:lead-connected', leadId: activeLeadId || null, phone }, window.location.origin);
-            window.parent.postMessage({ type: 'dialer:bubble-badge', active: true }, window.location.origin);
-          }
-        } catch (e) {}
+        if (autoSession) { autoSession.connectedLeadSeenForCurrentWave = true; autoSession.status = 'incall'; autoSession.stats.connected += 1; renderAutoStats(); }
+        enterInCallView(phone); startTimerFromNow(); acquireWakeLock(); updateSession('incall');
       }
-
-      // ── Transition vers la fin de l'appel ─────────────────────────────────
-      if ((c.status === 'ended' || c.status === 'cancelled') && wasConnected) {
-        wasConnected = false;
-        endCall();
-        return; // endCall gère la suite (countdown en auto mode, showView idle sinon)
-      }
-
-      if (autoMode) {
-        handleAutoCampaignUpdate(c, campaignId);
-      } else {
-        // Mode one-shot : retour idle si terminé sans connexion
-        if ((c.status === 'ended' || c.status === 'cancelled') && !activeCampaignConnected) {
-          setTimeout(() => showView('idle'), 1500);
-        }
-      }
+      if ((c.status === 'ended' || c.status === 'cancelled') && wasConnected) { wasConnected = false; endCall(); return; }
+      if (autoMode) { handleAutoCampaignUpdate(c, campaignId); }
+      else if ((c.status === 'ended' || c.status === 'cancelled') && !activeCampaignConnected) { setTimeout(() => showView('idle'), 1500); }
     });
   }
 
@@ -611,8 +718,7 @@
       toast('Aucun lead avec téléphone valide', 'error');
       return;
     }
-    // Ringover : 1 seul appel à la fois (API séquentielle)
-    const waveSize = 1;
+    const waveSize = 1; // Ringover : 1 appel à la fois
     const fromId = payload.fromNumberId || null;
 
     autoSession = {
@@ -659,16 +765,11 @@
     autoSession.connectedLeadSeenForCurrentWave = false;
     autoSession.status = 'running';
 
-    // Ringover : 1 seul lead par appel (API séquentielle)
     const lead = slice[0];
     renderAutoStats();
 
     try {
-      const resp = await SalesDialerAPI.ringoverCall({
-        leadId: lead.leadId || null,
-        phone: lead.phone,
-        leadName: lead.leadName || null,
-      }, {
+      const resp = await SalesDialerAPI.ringoverCall({ leadId: lead.leadId || null, phone: lead.phone, leadName: lead.leadName || null }, {
         autoCampaignId: autoSession.id,
         waveIndex: autoSession.waveIndex,
         queueSize: autoSession.queue.length,
@@ -807,6 +908,8 @@
     }
     if (campaignUnsub) { campaignUnsub(); campaignUnsub = null; }
 
+    // Restaure le ringtone incoming pour les appels normaux après la session
+
     const msg = reason === 'manual'
       ? `🛑 Power Dialer arrêté · ${session.stats.dialed}/${session.queue.length} appelés · ${session.stats.connected} décrochés`
       : `Power Dialer terminé · ${session.stats.dialed} appelés · ${session.stats.connected} décrochés`;
@@ -863,7 +966,9 @@
             navigator.sendBeacon('/api/dialer-cancel-campaign', blob);
           } catch (_) {}
         }
-        sessionDocRef.delete().catch(()=>{});
+        // Par bonne hygiène, restaurer le ringtone avant fermeture (au cas où
+        // l'onglet serait réutilisé via bfcache)
+            sessionDocRef.delete().catch(()=>{});
       });
     } catch (e) { console.error('initSession', e); }
   }
