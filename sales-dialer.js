@@ -274,10 +274,13 @@
   async function loadFromNumbers() {
     try {
       const snap = await db.collection('phone_numbers')
-        .where('active', '==', true).get();
+        .where('active', '==', true)
+        .where('provider', '==', 'ringover')
+        .get();
       fromNumbers = [];
       snap.forEach(d => {
         const x = d.data();
+        // Afficher uniquement les numéros Ringover assignés à l'utilisateur courant
         if (x.assignedTo === currentUser.uid || (x.assignedUserIds || []).includes(currentUser.uid) || x.assignedTo === 'all') {
           fromNumbers.push({ id: d.id, ...x });
         }
@@ -285,7 +288,7 @@
       const sel = $('sd-from-number');
       sel.innerHTML = fromNumbers.length
         ? fromNumbers.map(n => `<option value="${n.id}">${n.friendlyName || n.phoneNumber}</option>`).join('')
-        : '<option value="">Aucun numéro</option>';
+        : '<option value="">Aucun numéro Ringover</option>';
     } catch (e) { console.error('loadFromNumbers', e); }
   }
 
