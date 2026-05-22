@@ -1,40 +1,38 @@
-// api/ringover-debug.js  — TEMPORAIRE, supprimer après diagnostic
-// Teste la clé Ringover et retourne la réponse brute
-
+// api/ringover-debug.js — TEMPORAIRE diagnostic
 const { db } = require('./_firebaseAdmin');
 const { requireAuth } = require('./_verifyFirebaseAuth');
+
+async function t(label, url, headers) {
+  const r = await fetch(url, { headers });
+  const body = await r.text();
+  return { label, status: r.status, body: body.substring(0, 200) };
+}
 
 module.exports = async (req, res) => {
   const auth = await requireAuth(req, res);
   if (!auth) return;
   if (auth.role !== 'admin') return res.status(403).json({ error: 'admin only' });
 
-  try {
-    const snap = await db.collection('_config').doc('telco_credentials').get();
-    const apiKey = snap.data()?.ringover?.apiKey;
+  const snap   = await db.collection('_config').doc('telco_credentials').get();
+  const apiKey = snap.data()?.ringover?.apiKey;
+  const BASE1  = 'https://public-api.ringover.com/v2';
+  const BASE2  = 'https://public-api.ringover.com';
 
-    const results = {};
+  const tests = await Promise.all([
+    // Formats Authorization
+    t('1_plain',         `${BASE1}/users`,            { 'Authorization': apiKey }),
+    t('2_bearer',        `${BASE1}/users`,            { 'Authorization': `Bearer ${apiKey}` }),
+    t('3_token',         `${BASE1}/users`,            { 'Authorization': `Token ${apiKey}` }),
+    t('4_apikey_header', `${BASE1}/users`,            { 'x-api-key': apiKey }),
+    // Sans Content-Type (parfois ça change tout)
+    t('5_no_ct',         `${BASE1}/users`,            { 'Authorization': apiKey, 'Accept': 'application/json' }),
+    // Endpoints alternatifs
+    t('6_user_singular', `${BASE1}/user`,             { 'Authorization': apiKey }),
+    t('7_me',            `${BASE1}/me`,               { 'Authorization': apiKey }),
+    t('8_base_ping',     `${BASE2}/v2/users`,         { 'Authorization': apiKey }),
+    // Query param
+    t('9_query_param',   `${BASE1}/users?api_key=${apiKey}`, {}),
+  ]);
 
-    // Test 1 : GET /v2/users sans Bearer
-    const r1 = await fetch('https://public-api.ringover.com/v2/users', {
-      headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' }
-    });
-    results.test1_noBearer = { status: r1.status, body: await r1.text() };
-
-    // Test 2 : GET /v2/users avec Bearer
-    const r2 = await fetch('https://public-api.ringover.com/v2/users', {
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
-    });
-    results.test2_bearer = { status: r2.status, body: await r2.text() };
-
-    // Test 3 : GET sur URL alternative
-    const r3 = await fetch('https://public-api.ringover.com/v2/team', {
-      headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' }
-    });
-    results.test3_team = { status: r3.status, body: await r3.text() };
-
-    res.json({ apiKeyLength: apiKey?.length, apiKeyPrefix: apiKey?.substring(0,8), results });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  res.json({ apiKeyLength: apiKey?.length, tests });
 };
