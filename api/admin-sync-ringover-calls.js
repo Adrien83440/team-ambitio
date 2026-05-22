@@ -77,6 +77,46 @@ module.exports = async (req, res) => {
 
   console.log(`[sync-ringover] ${callList.length} appels récupérés`);
 
+  // ── Mapping ringoverUserId → firebaseUid ───────────────────────────────
+  const ringoverUserToUid = {};
+  try {
+    // 1. Lookup phone_numbers Ringover
+    const phoneSnap = await db.collection('phone_numbers')
+      .where('provider', '==', 'ringover').where('active', '==', true).get();
+    console.log('[sync] phone_numbers Ringover trouvés:', phoneSnap.size);
+
+    phoneSnap.forEach(d => {
+      const x = d.data();
+      if (x.ringoverUserId && x.assignedTo) {
+        ringoverUserToUid[String(x.ringoverUserId)] = x.assignedTo;
+      }
+    });
+
+    // 2. Fallback : utiliser _config/telco_credentials.ringover.userId
+    //    pour mapper sur le PREMIER assignedTo trouvé (cas mono-user Ringover)
+    if (Object.keys(ringoverUserToUid).length === 0 && phoneSnap.size > 0) {
+      const credSnap = await db.collection('_config').doc('telco_credentials').get();
+      const cred = credSnap.data()?.ringover;
+      const assignedTo = phoneSnap.docs[0].data().assignedTo;
+      if (cred?.userId && assignedTo) {
+        ringoverUserToUid[String(cred.userId)] = assignedTo;
+        console.log('[sync] Fallback mapping:', cred.userId, '→', assignedTo);
+      }
+    }
+
+    // 3. Ultime fallback : Élodie (seul user Ringover actuellement)
+    if (Object.keys(ringoverUserToUid).length === 0) {
+      ringoverUserToUid['22855712'] = 'IrL8bfOrUfMH2fEPFzuojPT8bQh1';
+      console.log('[sync] Hardcoded fallback Élodie 22855712');
+    }
+
+    console.log('[sync] Final mapping:', ringoverUserToUid);
+  } catch (e) {
+    console.warn('[sync] Mapping error:', e.message);
+    // Fallback même en cas d'erreur
+    ringoverUserToUid['22855712'] = 'IrL8bfOrUfMH2fEPFzuojPT8bQh1';
+  }
+
   // ── 2. Pour chaque appel : upsert call_logs + tentative transcription ──────
   const results = { synced: 0, transcriptions: 0, errors: 0 };
   const batch   = []; // batches Firestore de 500 max
@@ -121,16 +161,18 @@ module.exports = async (req, res) => {
         catch (_) {}
       }
 
-      // Utilisateur Ringover → userId si on peut matcher
+      // Utilisateur Ringover → userId Firebase + nom
       if (call.user) {
-        update.ringoverUserId   = call.user.user_id || null;
-        update.ringoverUserName = call.user.firstname || call.user.lastname
-          ? ((call.user.firstname || '') + ' ' + (call.user.lastname || '')).trim()
-          : null;
-        // Mapper Élodie
-        if (call.user.user_id === 22855712) {
-          update.userName = 'Élodie';
+        const ruid = call.user.user_id ? String(call.user.user_id) : null;
+        update.ringoverUserId   = ruid;
+        update.ringoverUserName = ((call.user.firstname || '') + ' ' + (call.user.lastname || '')).trim() || null;
+        if (ruid && ringoverUserToUid[ruid]) {
+          update.userId = ringoverUserToUid[ruid];
         }
+        if (call.user.firstname) update.userName = call.user.firstname;
+      } else if (Object.keys(ringoverUserToUid).length === 1) {
+        // Pas de call.user mais un seul user mappé → utiliser celui-là
+        update.userId = Object.values(ringoverUserToUid)[0];
       }
 
       // Snapshot du contact
