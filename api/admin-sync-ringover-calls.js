@@ -19,45 +19,61 @@ module.exports = async (req, res) => {
   const { days = 30 } = (req.body || {});
   const daysN = Math.min(Math.max(1, parseInt(days) || 30), 90); // max 90 jours
 
-  const now       = new Date();
-  const startDate = new Date(now.getTime() - daysN * 24 * 60 * 60 * 1000);
+  const now = new Date();
 
-  // Format Ringover : "2026-05-01T00:00:00Z"
-  const fmt = d => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  // Ringover : max 15 jours par requête, format "YYYY-MM-DD HH:MM:SS"
+  // Pour éviter les erreurs, on découpe en tranches de 7 jours max
+  const maxDaysPerChunk = 7;
+  const totalMs = daysN * 24 * 60 * 60 * 1000;
 
-  console.log(`[sync-ringover] Syncing ${daysN} days: ${fmt(startDate)} → ${fmt(now)}`);
+  // Format Ringover : "2026-05-22 00:00:00" (espace, pas T, pas Z)
+  const fmtRingover = d => {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
 
-  // ── 1. Récupérer la liste des appels ──────────────────────────────────────
+  console.log(`[sync-ringover] Syncing ${daysN} days`);
+
+  // ── 1. Récupérer la liste des appels (tranches de 7 jours) ──────────────
   let callList = [];
   try {
-    // POST /calls : corps de filtre avec plage de dates
-    // Ringover limite à 15 jours par requête → on pagine si nécessaire
-    let offset = 0;
-    const limit = 200;
-    let total = null;
+    let chunkEnd = new Date(now);
+    const globalStart = new Date(now.getTime() - totalMs);
 
-    while (true) {
-      const resp = await ringoverFetch('/calls', {
-        method: 'POST',
-        body: {
-          start_date:   fmt(startDate),
-          end_date:     fmt(now),
-          limit_count:  limit,
-          limit_offset: offset,
-          intra:        false,
-        },
-      });
+    while (chunkEnd > globalStart) {
+      const chunkStart = new Date(Math.max(
+        chunkEnd.getTime() - maxDaysPerChunk * 24 * 60 * 60 * 1000,
+        globalStart.getTime()
+      ));
 
-      const list = resp?.call_list || [];
-      callList = callList.concat(list);
-      if (total === null) total = resp?.total_call_count || 0;
+      let offset = 0;
+      const limit = 200;
 
-      if (list.length < limit || callList.length >= total) break;
-      offset += limit;
+      while (true) {
+        const resp = await ringoverFetch('/calls', {
+          method: 'POST',
+          body: {
+            start_date:   fmtRingover(chunkStart),
+            end_date:     fmtRingover(chunkEnd),
+            limit_count:  limit,
+            limit_offset: offset,
+            intra:        false,
+          },
+        });
+
+        const list = resp?.call_list || [];
+        callList = callList.concat(list);
+        const total = resp?.total_call_count || 0;
+
+        if (list.length < limit || callList.length >= total || list.length === 0) break;
+        offset += limit;
+      }
+
+      chunkEnd = new Date(chunkStart.getTime() - 1); // reculer d'1ms
     }
   } catch (e) {
-    console.error('[sync-ringover] Fetch calls error:', e.message);
-    return res.status(502).json({ error: 'Erreur API Ringover calls: ' + e.message });
+    console.error('[sync-ringover] Fetch calls error:', e.message, e.rawResponse);
+    return res.status(502).json({ error: 'Erreur API Ringover calls: ' + (e.rawResponse || e.message) });
   }
 
   console.log(`[sync-ringover] ${callList.length} appels récupérés`);
