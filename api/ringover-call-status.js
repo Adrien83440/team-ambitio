@@ -1,62 +1,135 @@
-// ============================================================================
-// api/ringover-call-status.js
-// ----------------------------------------------------------------------------
-// Webhook Ringover pour les événements d'appel (ringing, answered, hangup, missed).
-//
-// URL publique : https://team.alteore.com/api/ringover-call-status
-// À configurer : Ringover Dashboard → Integrations → Webhooks
-//
-// Pattern : répondre 200 immédiatement → écrire dans webhook_inbox →
-// Cloud Function onWebhookInbox met à jour call_logs + dialer_campaigns.
-//
-// Payload Ringover typique :
-// {
-//   event: "ANSWERED" | "RINGING" | "HANGUP" | "MISSED",
-//   call_id: "xxx",
-//   from_number: "+33755546371",
-//   to_number: "+33600000000",
-//   user_id: 22855712,
-//   direction: "OUTBOUND",
-//   start_time: 1234567890,       // epoch ms ou s selon version API
-//   answered_time: 1234567890,
-//   end_time: 1234567890,
-//   duration_secs: 65,
-//   recording: { available: true, url: "https://..." }
-// }
-// ============================================================================
+// api/ringover-call-status.js  (v3 — direct processing, correct payload parsing)
+// Ringover webhook format : { event, timestamp, data: { id, from_number, to_number, ... } }
 
 const { db, admin } = require('./_firebaseAdmin');
 
-module.exports = async (req, res) => {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+let _webhookKey = null;
+async function getWebhookKey() {
+  if (_webhookKey) return _webhookKey;
+  try {
+    const snap = await db.collection('_config').doc('telco_credentials').get();
+    if (snap.exists) _webhookKey = ((snap.data().ringover) || {}).webhookKey || null;
+  } catch (_) {}
+  return _webhookKey;
+}
 
-  // Répondre immédiatement à Ringover (évite les retries sur timeout)
-  res.status(200).send('');
+const STATUS_MAP = {
+  RINGING: 'ringing', ANSWERED: 'in-progress', HANGUP: 'completed', MISSED: 'no-answer',
+  ringing: 'ringing', answered: 'in-progress', hangup: 'completed', missed: 'no-answer',
+};
+const TERMINAL = new Set(['HANGUP', 'MISSED', 'hangup', 'missed']);
+
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') return res.status(405).end();
+
+  // Vérif clé webhook (optionnelle — ne bloque pas si pas configurée)
+  const expectedKey = await getWebhookKey().catch(() => null);
+  if (expectedKey) {
+    const sentKey = req.headers['authorization'] || req.headers['x-ringover-token'] || '';
+    if (sentKey !== expectedKey && `Bearer ${expectedKey}` !== sentKey) {
+      console.warn('[ringover-call-status] Invalid webhook key');
+      return res.status(401).end();
+    }
+  }
+
+  res.status(200).end(); // Répondre immédiatement à Ringover
 
   try {
     const payload = req.body || {};
 
-    // Normalisation event (Ringover peut envoyer en majuscules ou minuscules)
-    const event = (payload.event || payload.type || '').toUpperCase();
-    const callId = payload.call_id || payload.id || null;
+    // ── Parsing payload Ringover ──────────────────────────────────────────
+    // Format Ringover : { event: "RINGING", timestamp: 123, data: { id: "xxx", ... } }
+    const event  = (payload.event || '').toUpperCase();
+    const d      = payload.data || {};                          // nested data
+    const callId = d.id || d.call_id || payload.call_id || null;
 
-    if (!event && !callId) {
-      console.warn('[ringover-call-status] Payload vide ou non reconnu:', JSON.stringify(payload).substring(0, 300));
+    console.log('[ringover-call-status]', event, callId);
+
+    if (!callId) {
+      console.warn('[ringover-call-status] No callId. Raw payload keys:', Object.keys(payload), 'data keys:', Object.keys(d));
       return;
     }
 
-    // Log complet dans webhook_inbox → Cloud Function gère le reste
-    await db.collection('webhook_inbox').add({
-      source: 'ringover_call_status',
-      payload,
-      event,
-      callId,
-      receivedAt: admin.firestore.FieldValue.serverTimestamp(),
-      processed: false,
-    });
+    const mappedStatus = STATUS_MAP[event] || event.toLowerCase();
+    const isTerminal   = TERMINAL.has(event);
+    const now          = admin.firestore.FieldValue.serverTimestamp();
 
-    console.log('[ringover-call-status] queued', event, callId);
+    // ── 1. call_logs ─────────────────────────────────────────────────────
+    const clUpdate = { status: mappedStatus, updatedAt: now };
+    if (event === 'ANSWERED') clUpdate.answeredAt = now;
+    if (isTerminal) {
+      clUpdate.endedAt = now;
+      const dur = d.duration_secs || d.duration || payload.duration || null;
+      if (dur !== null) clUpdate.durationSec = Number(dur);
+      const recUrl = d.recording_url || d.recording
+        || (d.recording && typeof d.recording === 'object' ? d.recording.url : null)
+        || null;
+      if (recUrl) { clUpdate.ringoverRecordingUrl = recUrl; clUpdate.recordingStatus = 'available'; }
+    }
+    db.collection('call_logs').doc(callId).set(clUpdate, { merge: true })
+      .catch(e => console.warn('[ringover-call-status] call_logs:', e.message));
+
+    // ── 2. dialer_campaigns ───────────────────────────────────────────────
+    try {
+      const campSnap = await db.collection('dialer_campaigns')
+        .where('provider', '==', 'ringover')
+        .where('status', 'in', ['dialing', 'connected'])
+        .orderBy('createdAt', 'desc')
+        .limit(10)
+        .get();
+
+      for (const campDoc of campSnap.docs) {
+        const camp = campDoc.data();
+        const legs = camp.legs || [];
+        const idx  = legs.findIndex(l => l.callId === callId || l.callSid === callId);
+        if (idx === -1) continue;
+
+        const upd = { updatedAt: now };
+        const updLegs = legs.map(l => Object.assign({}, l));
+
+        if (event === 'ANSWERED') {
+          upd.status          = 'connected';
+          upd.connectedCallId  = callId;
+          upd.connectedCallSid = callId;
+          upd.connectedLeadId  = legs[idx].leadId || null;
+          upd.connectedAt      = now;
+          updLegs[idx].status  = 'in-progress';
+        }
+        if (isTerminal) {
+          if (camp.connectedCallId === callId || !camp.connectedCallId) {
+            upd.status = 'ended'; upd.endedAt = now;
+          }
+          updLegs[idx].status = event === 'MISSED' ? 'no-answer' : 'completed';
+          const leadId = legs[idx].leadId;
+          if (leadId) {
+            db.collection('leads').doc(leadId).update({
+              dialer_attempts:    admin.firestore.FieldValue.increment(1),
+              dialer_last_attempt: now,
+              dialer_last_status:  mappedStatus,
+            }).catch(() => {});
+          }
+        }
+        upd.legs = updLegs;
+        await campDoc.ref.update(upd);
+        console.log('[ringover-call-status] campaign', campDoc.id, '→', upd.status || camp.status);
+        break;
+      }
+    } catch (e) {
+      console.warn('[ringover-call-status] campaign update:', e.message);
+    }
+
+    // ── 3. Recording pipeline (si URL dans le HANGUP) ─────────────────────
+    if (isTerminal) {
+      const recUrl = d.recording_url || d.recording || null;
+      if (recUrl && typeof recUrl === 'string') {
+        db.collection('webhook_inbox').add({
+          source: 'ringover_recording_ready', payload,
+          callId, recordingUrl: recUrl,
+          receivedAt: now, processed: false,
+        }).catch(() => {});
+      }
+    }
   } catch (err) {
-    console.error('[ringover-call-status] Error writing webhook_inbox:', err);
+    console.error('[ringover-call-status] error:', err.message);
   }
 };

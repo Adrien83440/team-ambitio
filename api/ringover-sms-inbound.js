@@ -1,189 +1,115 @@
-// ============================================================================
-// api/ringover-sms-inbound.js
-// ----------------------------------------------------------------------------
-// Webhook Ringover pour les SMS entrants (réponses des leads).
-//
-// URL publique : https://team.alteore.com/api/ringover-sms-inbound
-// À configurer : Ringover Dashboard → Integrations → Webhooks
-//
-// Reprend la logique directe de twilio-sms-inbound.js v3 :
-//   1. Trouver le lead par phoneVariants
-//   2. Écrire dans leads.communications[] + timeline_history[]
-//   3. Créer inbox_notifications pour le widget temps réel
-//   4. Auto opt-out si STOP
-// ============================================================================
+// api/ringover-sms-inbound.js  (v2 — correct payload parsing)
+// Ringover SMS format : { event: "received", data: { id, conversation_id, message_id,
+//                          from_number, to_number, content, ... } }
 
 const { db, admin } = require('./_firebaseAdmin');
 
-const OPT_OUT_KEYWORDS = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit']);
+const OPT_OUT = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit']);
 
 function normalizePhone(raw) {
   if (!raw) return null;
-  const cleaned = String(raw).replace(/[\s\-().]/g, '');
-  if (cleaned.startsWith('+')) return cleaned;
-  if (cleaned.startsWith('00')) return '+' + cleaned.slice(2);
-  if (cleaned.startsWith('0') && cleaned.length === 10) return '+33' + cleaned.slice(1);
-  return cleaned;
+  const c = String(raw).replace(/[\s\-().]/g, '');
+  if (c.startsWith('+')) return c;
+  if (c.startsWith('00')) return '+' + c.slice(2);
+  if (c.startsWith('0') && c.length === 10) return '+33' + c.slice(1);
+  return null;
 }
 
 function phoneVariants(raw) {
   if (!raw) return [];
-  const cleaned = String(raw).replace(/[\s\-().]/g, '');
-  const variants = new Set([cleaned]);
-  if (cleaned.startsWith('+33')) {
-    variants.add('0' + cleaned.slice(3));
-    variants.add('33' + cleaned.slice(3));
-    variants.add(cleaned.slice(3));
-  }
-  if (cleaned.startsWith('33') && !cleaned.startsWith('+') && cleaned.length >= 11) {
-    variants.add('0' + cleaned.slice(2));
-    variants.add('+' + cleaned);
-  }
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
-    variants.add('+33' + cleaned.slice(1));
-    variants.add('33' + cleaned.slice(1));
-  }
-  return Array.from(variants).filter(Boolean);
+  const c = String(raw).replace(/[\s\-().]/g, '');
+  const v = new Set([c]);
+  if (c.startsWith('+33')) { v.add('0' + c.slice(3)); v.add('33' + c.slice(3)); }
+  if (c.startsWith('0') && c.length === 10) { v.add('+33' + c.slice(1)); v.add('33' + c.slice(1)); }
+  return Array.from(v).filter(Boolean);
 }
 
-async function findBestLeadByPhone(fromNumber) {
-  const variants = phoneVariants(fromNumber);
-  for (const v of variants) {
-    try {
-      const q = await db.collection('leads')
-        .where('telephone', '==', v)
-        .limit(3).get();
-      if (!q.empty) {
-        const docs = q.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(d => !d._merged);
-        if (docs.length === 0) continue;
-        docs.sort((a, b) => {
-          const aT = a.updatedAt ? (a.updatedAt.toMillis ? a.updatedAt.toMillis() : 0) : 0;
-          const bT = b.updatedAt ? (b.updatedAt.toMillis ? b.updatedAt.toMillis() : 0) : 0;
-          return bT - aT;
-        });
-        return docs[0];
-      }
-    } catch (_) { /* continuer avec le variant suivant */ }
+async function findLead(fromNumber) {
+  for (const variant of phoneVariants(fromNumber)) {
+    const q = await db.collection('leads').where('telephone', '==', variant).limit(3).get().catch(() => null);
+    if (!q || q.empty) continue;
+    const docs = q.docs.map(d => ({ id: d.id, ...d.data() })).filter(d => !d._merged);
+    if (!docs.length) continue;
+    docs.sort((a, b) => {
+      const at = a.updatedAt?.toMillis?.() || 0;
+      const bt = b.updatedAt?.toMillis?.() || 0;
+      return bt - at;
+    });
+    return docs[0];
   }
   return null;
 }
 
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  // Répondre immédiatement à Ringover
-  res.status(200).send('');
+  if (req.method !== 'POST') return res.status(405).end();
+  res.status(200).end();
 
   try {
     const payload = req.body || {};
 
-    // Normalisation event
-    const event = (payload.event || payload.type || '').toUpperCase();
-
-    // Filtrer : ne traiter que les SMS entrants
-    // Ringover envoie SMS_RECEIVED, SMS_INBOUND, ou juste un payload avec text
-    const isSmsEvent = event.includes('SMS') || event.includes('MESSAGE') || event.includes('RECEIVED');
-    const hasTextContent = !!(payload.text || payload.message || payload.body);
-    if (!isSmsEvent && !hasTextContent) {
-      console.log('[ringover-sms-inbound] Ignored non-SMS event:', event);
-      return;
-    }
-
-    const fromNumber = normalizePhone(payload.from_number || payload.from || null);
-    const toNumber = normalizePhone(payload.to_number || payload.to || null);
-    const text = (payload.text || payload.message || payload.body || '').trim();
-    const messageId = payload.message_id || payload.id || null;
+    // ── Parsing payload Ringover ──────────────────────────────────────────
+    // Format : { resource: "sms", event: "received", timestamp, data: { ... } }
+    const d          = payload.data || {};
+    const event      = (payload.event || d.event || '').toLowerCase();
+    const fromNumber = normalizePhone(d.from_number || d.from || payload.from_number || null);
+    const toNumber   = normalizePhone(d.to_number   || d.to   || payload.to_number   || null);
+    const text       = (d.content || d.text || d.message || d.body || payload.text || '').trim();
+    const messageId  = d.id || d.message_id || payload.id || null;
 
     if (!fromNumber || !text) {
-      console.warn('[ringover-sms-inbound] Missing fromNumber or text, payload:', JSON.stringify(payload).substring(0, 200));
+      console.warn('[ringover-sms-inbound] Missing fromNumber or text. data keys:', Object.keys(d));
       return;
     }
 
-    // ─── Auto opt-out ────────────────────────────────────────────────────────
-    if (OPT_OUT_KEYWORDS.has(text.toLowerCase())) {
-      try {
-        const lead = await findBestLeadByPhone(fromNumber);
-        if (lead) {
-          await db.collection('leads').doc(lead.id).update({
-            smsOptOut: true,
-            smsOptOutAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-          console.log('[ringover-sms-inbound] opt-out lead', lead.id);
-        }
-      } catch (e) { console.warn('[ringover-sms-inbound] opt-out failed:', e.message); }
+    // Auto opt-out
+    if (OPT_OUT.has(text.toLowerCase())) {
+      const lead = await findLead(fromNumber);
+      if (lead) {
+        await db.collection('leads').doc(lead.id).update({
+          smsOptOut: true, smsOptOutAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
       return;
     }
 
-    // ─── Lookup lead ─────────────────────────────────────────────────────────
-    const lead = await findBestLeadByPhone(fromNumber);
-
-    // ─── Lookup ownerUid (numéro toNumber assigné dans phone_numbers) ────────
+    const lead   = await findLead(fromNumber);
     let ownerUid = null;
     if (toNumber) {
-      try {
-        const numSnap = await db.collection('phone_numbers')
-          .where('phoneNumber', '==', toNumber)
-          .where('active', '==', true)
-          .limit(1).get();
-        if (!numSnap.empty) ownerUid = numSnap.docs[0].data().assignedTo || null;
-      } catch (_) {}
+      const numSnap = await db.collection('phone_numbers')
+        .where('phoneNumber', '==', toNumber).where('active', '==', true).limit(1).get().catch(() => null);
+      if (numSnap && !numSnap.empty) ownerUid = numSnap.docs[0].data().assignedTo || null;
     }
 
     const nowIso = new Date().toISOString();
-    const d = new Date();
-    const pad = n => String(n).padStart(2, '0');
-    const tlDate = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const now    = admin.firestore.FieldValue.serverTimestamp();
+    const dp     = new Date();
+    const pad    = n => String(n).padStart(2, '0');
+    const tlDate = `${pad(dp.getDate())}/${pad(dp.getMonth()+1)}/${dp.getFullYear()} ${pad(dp.getHours())}:${pad(dp.getMinutes())}`;
 
     const commEntry = {
-      type: 'sms',
-      direction: 'inbound',
-      content: text,
-      source: 'ringover-sms',
-      date: nowIso,
-      createdAt: nowIso,
-      fromNumber,
-      toNumber: toNumber || null,
-      providerMessageId: messageId,
+      type: 'sms', direction: 'inbound', content: text, source: 'ringover-sms',
+      date: nowIso, createdAt: nowIso, fromNumber, toNumber, providerMessageId: messageId,
     };
 
-    const timelineEntry = {
-      text: '💬 SMS entrant (ringover) — ' + text.substring(0, 100),
-      date: tlDate,
-      color: '#60a5fa',
-    };
-
-    // ─── Écriture directe sur le lead ────────────────────────────────────────
     if (lead) {
       await db.collection('leads').doc(lead.id).update({
-        communications: admin.firestore.FieldValue.arrayUnion(commEntry),
-        timeline_history: admin.firestore.FieldValue.arrayUnion(timelineEntry),
-        lastContactAt: admin.firestore.FieldValue.serverTimestamp(),
-        lastContactType: 'sms',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        communications:   admin.firestore.FieldValue.arrayUnion(commEntry),
+        timeline_history: admin.firestore.FieldValue.arrayUnion({ text: '💬 SMS entrant (ringover) — ' + text.substring(0,100), date: tlDate, color: '#60a5fa' }),
+        lastContactAt:    now, lastContactType: 'sms',
+        updatedAt:        now,
       });
     }
 
-    // ─── Inbox notification (widget SMS temps réel) ──────────────────────────
     await db.collection('inbox_notifications').add({
-      type: 'sms',
-      direction: 'inbound',
-      fromNumber,
-      toNumber: toNumber || null,
-      text,
-      leadId: lead ? lead.id : null,
-      leadName: lead ? (lead.nom || lead.fullName || null) : null,
-      ownerUid,
-      source: 'ringover',
-      providerMessageId: messageId,
-      read: false,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      type: 'sms', direction: 'inbound', fromNumber, toNumber, text,
+      leadId: lead?.id || null, leadName: lead ? (lead.nom || lead.fullName || null) : null,
+      ownerUid, source: 'ringover', providerMessageId: messageId,
+      read: false, createdAt: now,
     });
 
-    console.log('[ringover-sms-inbound] processed from:', fromNumber, '→ lead:', lead ? lead.id : 'unknown');
+    console.log('[ringover-sms-inbound] from:', fromNumber, '→ lead:', lead?.id || 'unknown');
   } catch (err) {
-    console.error('[ringover-sms-inbound] Error:', err);
+    console.error('[ringover-sms-inbound] error:', err.message);
   }
 };
