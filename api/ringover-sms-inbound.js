@@ -1,23 +1,23 @@
-// api/ringover-sms-inbound.js  (v3 — format webhook correct)
-// Webhook Ringover SMS :
-// { event: "received"|"sent", resource: "sms", timestamp, data: {
-//   id, message_id, conversation_id, time, direction: "inbound"|"outbound",
-//   from_number: "33601020304" (sans +), to_number: "33101020304" (sans +),
-//   body: "contenu...", is_internal, is_collaborative, user_id } }
+// api/ringover-sms-inbound.js  (v4 — fetch message API si body absent)
+// Format webhook Ringover SMS :
+// { event: "received", resource: "sms", timestamp, data: {
+//   id, conversation_id, message_id, time, direction,
+//   from_number? (string sans +), to_number? (string sans +), body? } }
+//
+// Si body/from_number absents → fetch via GET /conversations/{convId}/messages
 
 const { db, admin } = require('./_firebaseAdmin');
+const { ringoverFetch } = require('./_ringoverClient');
 
 const OPT_OUT = new Set(['stop', 'stopall', 'unsubscribe', 'cancel', 'end', 'quit']);
 
-// Ringover SMS webhooks : numéros sans + → normaliser en E.164
 function normalizeE164(raw) {
   if (!raw) return null;
   const c = String(raw).replace(/[\s\-().]/g, '');
   if (c.startsWith('+')) return c;
   if (c.startsWith('00')) return '+' + c.slice(2);
   if (c.startsWith('0') && c.length === 10) return '+33' + c.slice(1);
-  // Format Ringover : "33601020304" → "+33601020304"
-  if (/^\d{10,}$/.test(c)) return '+' + c;
+  if (/^\d{10,}$/.test(c)) return '+' + c; // "33601020304" → "+33601020304"
   return null;
 }
 
@@ -44,31 +44,80 @@ async function findLead(fromNumber) {
   return null;
 }
 
+// Fetch le message depuis l'API Ringover si le webhook ne contient pas le contenu
+async function fetchMessageContent(convId, messageId) {
+  try {
+    const resp = await ringoverFetch(`/conversations/${convId}/messages?limit_count=20`);
+    const messages = resp?.message_list || resp?.list || resp?.messages || resp || [];
+    const arr = Array.isArray(messages) ? messages : [];
+    // Chercher le message par ID
+    const msgIdStr = String(messageId);
+    const msg = arr.find(m =>
+      String(m.message_id) === msgIdStr ||
+      String(m.id) === msgIdStr ||
+      String(m.msg_id) === msgIdStr
+    ) || arr[0]; // fallback : prendre le plus récent
+
+    if (msg) {
+      return {
+        body:        msg.body || msg.content || msg.text || null,
+        from_number: msg.from_number || msg.from || null,
+        to_number:   msg.to_number   || msg.to   || null,
+        direction:   msg.direction   || null,
+        time:        msg.time        || msg.created_at || null,
+      };
+    }
+  } catch (e) {
+    console.warn('[ringover-sms-inbound] fetchMessageContent error:', e.message);
+  }
+  return null;
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
-  res.status(200).end(); // Répondre immédiatement
+  res.status(200).end();
 
   try {
     const payload = req.body || {};
-    const event   = (payload.event || '').toLowerCase();     // "received" | "sent"
-    const d       = payload.data || {};                       // objet imbriqué
-    const dir     = (d.direction || '').toLowerCase();        // "inbound" | "outbound"
 
-    // Ne traiter que les SMS entrants
-    if (event !== 'received' && dir !== 'inbound') {
-      console.log('[ringover-sms-inbound] Ignored event:', event, 'direction:', dir);
+    // ── Log complet pour diagnostic ────────────────────────────────────────
+    console.log('[ringover-sms-inbound] payload:', JSON.stringify(payload));
+
+    const event = (payload.event || '').toLowerCase();
+    const d     = payload.data || {};
+    const dir   = (d.direction || '').toLowerCase();
+
+    // Ignorer les SMS sortants
+    if (event === 'sent' || dir === 'outbound') {
+      console.log('[ringover-sms-inbound] Ignored outbound/sent');
       return;
     }
 
-    // Numéros : Ringover envoie "33601020304" → normaliser en "+33601020304"
-    const fromNumber = normalizeE164(d.from_number || null);
-    const toNumber   = normalizeE164(d.to_number   || null);
-    const text       = (d.body || '').trim();   // champ "body" dans le spec
-    const messageId  = String(d.message_id || d.id || '');
+    // ── Extraire les champs du webhook ─────────────────────────────────────
+    let fromRaw   = d.from_number || null;
+    let toRaw     = d.to_number   || null;
+    let text      = (d.body || d.content || d.text || d.message || '').trim();
+    const convId  = d.conversation_id || null;
+    const msgId   = d.message_id || null;
+    const msgTime = d.time || null;
+
+    // ── Fallback API si body/from_number manquants ─────────────────────────
+    if ((!text || !fromRaw) && convId) {
+      console.log('[ringover-sms-inbound] body/from_number manquants → fetch API', convId, msgId);
+      const fetched = await fetchMessageContent(convId, msgId);
+      if (fetched) {
+        if (!text)    text    = (fetched.body || '').trim();
+        if (!fromRaw) fromRaw = fetched.from_number;
+        if (!toRaw)   toRaw   = fetched.to_number;
+      }
+    }
+
+    const fromNumber = normalizeE164(fromRaw);
+    const toNumber   = normalizeE164(toRaw);
 
     if (!fromNumber || !text) {
-      console.warn('[ringover-sms-inbound] Missing fromNumber or text.',
-        'from:', d.from_number, 'body:', d.body,
+      console.warn('[ringover-sms-inbound] Toujours manquant après fallback.',
+        'from:', fromRaw, 'body:', text,
         'data keys:', Object.keys(d));
       return;
     }
@@ -89,7 +138,6 @@ module.exports = async (req, res) => {
 
     const lead = await findLead(fromNumber);
 
-    // Trouver l'ownerUid via phone_numbers
     let ownerUid = null;
     if (toNumber) {
       const numSnap = await db.collection('phone_numbers')
@@ -98,17 +146,16 @@ module.exports = async (req, res) => {
     }
 
     const now    = admin.firestore.FieldValue.serverTimestamp();
-    // Utiliser l'heure réelle du SMS (d.time = timestamp Unix Ringover)
-    // Fallback sur l'heure courante si absent
-    const smsDate = (d.time && d.time > 0) ? new Date(d.time * 1000) : new Date();
-    const nowIso = smsDate.toISOString();
-    const pad    = n => String(n).padStart(2, '0');
-    const tlDate = `${pad(smsDate.getDate())}/${pad(smsDate.getMonth()+1)}/${smsDate.getFullYear()} ${pad(smsDate.getHours())}:${pad(smsDate.getMinutes())}`;
+    // Heure réelle du SMS (timestamp Unix Ringover)
+    const smsDate = (msgTime && msgTime > 0) ? new Date(msgTime * 1000) : new Date();
+    const nowIso  = smsDate.toISOString();
+    const pad     = n => String(n).padStart(2, '0');
+    const tlDate  = `${pad(smsDate.getDate())}/${pad(smsDate.getMonth()+1)}/${smsDate.getFullYear()} ${pad(smsDate.getHours())}:${pad(smsDate.getMinutes())}`;
 
     const commEntry = {
       type: 'sms', direction: 'inbound', content: text, source: 'ringover-sms',
       date: nowIso, createdAt: nowIso, fromNumber, toNumber: toNumber || null,
-      providerMessageId: messageId,
+      providerMessageId: String(msgId || ''),
     };
 
     if (lead) {
@@ -124,13 +171,15 @@ module.exports = async (req, res) => {
 
     await db.collection('inbox_notifications').add({
       type: 'sms', direction: 'inbound', fromNumber, toNumber: toNumber || null,
-      text, content: text, leadId: lead?.id || null,
+      text,            // champ legacy
+      content: text,   // champ lu par inbox-widget.js
+      leadId:   lead?.id   || null,
       leadName: lead ? (lead.nom || lead.fullName || null) : null,
-      ownerUid, source: 'ringover', providerMessageId: messageId,
+      ownerUid, source: 'ringover', providerMessageId: String(msgId || ''),
       read: false, createdAt: now,
     });
 
-    console.log('[ringover-sms-inbound] ✓ from:', fromNumber, '→ lead:', lead?.id || 'unknown');
+    console.log('[ringover-sms-inbound] ✓ notification created, lead:', lead?.id || 'unknown');
   } catch (err) {
     console.error('[ringover-sms-inbound] error:', err.message);
   }
