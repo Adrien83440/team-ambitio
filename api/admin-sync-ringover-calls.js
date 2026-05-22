@@ -34,7 +34,8 @@ module.exports = async (req, res) => {
 
   console.log(`[sync-ringover] Syncing ${daysN} days`);
 
-  // ── 1. Récupérer la liste des appels (tranches de 7 jours) ──────────────
+  // ── 1. Récupérer la liste des appels ─────────────────────────────────────
+  // GET /calls : dates en query params ISO 8601, max 15 jours par tranche
   let callList = [];
   try {
     let chunkEnd = new Date(now);
@@ -50,16 +51,14 @@ module.exports = async (req, res) => {
       const limit = 200;
 
       while (true) {
-        const resp = await ringoverFetch('/calls', {
-          method: 'POST',
-          body: {
-            start_date:   fmtRingover(chunkStart),
-            end_date:     fmtRingover(chunkEnd),
-            limit_count:  limit,
-            limit_offset: offset,
-            intra:        false,
-          },
-        });
+        const qs = new URLSearchParams({
+          start_date:   chunkStart.toISOString(),
+          end_date:     chunkEnd.toISOString(),
+          limit_count:  String(limit),
+          limit_offset: String(offset),
+        }).toString();
+
+        const resp = await ringoverFetch(`/calls?${qs}`, { method: 'GET' });
 
         const list = resp?.call_list || [];
         callList = callList.concat(list);
@@ -69,7 +68,7 @@ module.exports = async (req, res) => {
         offset += limit;
       }
 
-      chunkEnd = new Date(chunkStart.getTime() - 1); // reculer d'1ms
+      chunkEnd = new Date(chunkStart.getTime() - 1);
     }
   } catch (e) {
     console.error('[sync-ringover] Fetch calls error:', e.message, e.rawResponse);
