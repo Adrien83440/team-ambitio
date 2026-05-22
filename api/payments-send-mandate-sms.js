@@ -1,23 +1,17 @@
-// ==========================================================================
-// api/payments-send-mandate-sms.js
-// --------------------------------------------------------------------------
+// ============================================================================
+// api/payments-send-mandate-sms.js  (v2 — Ringover)
+// ----------------------------------------------------------------------------
 // Envoie au client un SMS contenant le lien mandat GoCardless (IBAN).
-//
-// Symétrique à payments-send-mandate-email. Contrairement à twilio-sms-send
-// qui exige un leadId (source de vérité = fiche lead), ici on travaille au
-// niveau du doc payment : le téléphone vient directement de pay.leadPhone
-// et le leadId n'est pas requis (le paiement peut avoir été créé en saisie
-// manuelle sans lien avec un lead). Si leadId existe, on logge quand même
-// la communication sur la fiche pour le tracking.
+// Même logique que v1 mais via l'API Ringover au lieu de Twilio.
 //
 // Body : { paymentId }
 // Auth : Bearer Firebase ID token (rôle sales ou admin)
-// Réponse : { ok: true, messageSid, from, to }
-// ==========================================================================
+// Réponse : { ok: true, messageId, from, to }
+// ============================================================================
 
 const { db, admin } = require('./_firebaseAdmin');
 const { requireAuth } = require('./_verifyFirebaseAuth');
-const { getTwilioClient, getTwilioCreds } = require('./_twilioClient');
+const { getRingoverCreds, ringoverFetch } = require('./_ringoverClient');
 const parseBody = require('./_parseBody');
 
 function normalizePhone(raw) {
@@ -44,7 +38,6 @@ module.exports = async (req, res) => {
     const { paymentId } = parseBody(req);
     if (!paymentId) { res.status(400).json({ error: 'paymentId requis' }); return; }
 
-    // ─── Load payment ───
     const paySnap = await db.collection('payments').doc(paymentId).get();
     if (!paySnap.exists) { res.status(404).json({ error: 'Paiement introuvable' }); return; }
     const pay = paySnap.data();
@@ -54,7 +47,7 @@ module.exports = async (req, res) => {
       return;
     }
     if (!pay.gcBillingRequestFlowUrl) {
-      res.status(400).json({ error: 'Aucun lien mandat généré — crée-le d\'abord' });
+      res.status(400).json({ error: "Aucun lien mandat généré — crée-le d'abord" });
       return;
     }
 
@@ -64,29 +57,18 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // ─── Load SMS "from" ───
-    // Pour les SMS mandat on préfère un Sender ID alphanumérique
-    // ("AdrienEmily") plutôt que le numéro 2-way : meilleure reconnaissance
-    // côté destinataire, moins de risque spam. Ordre de résolution :
-    //   1. smsMandateFrom   → override spécifique mandat (si un jour on
-    //                         veut dissocier du Sender ID signature OTP)
-    //   2. smsSignatureFrom → Sender ID partagé ("adrienemily") déjà en
-    //                         place pour les OTP → réutilisé par défaut
-    //   3. smsFromNumber    → numéro 2-way fallback (+33939240397)
-    const creds = await getTwilioCreds();
-    const smsFrom = creds.smsMandateFrom || creds.smsSignatureFrom || creds.smsFromNumber || creds.smsFrom || null;
+    const creds = await getRingoverCreds();
+    const smsFrom = creds.fromNumber || creds.smsFromNumber;
     if (!smsFrom) {
-      res.status(500).json({
-        error: 'Aucun expéditeur SMS configuré (smsMandateFrom / smsSignatureFrom / smsFromNumber manquants dans _config/telco_credentials.twilio).'
-      });
+      res.status(500).json({ error: 'ringover.fromNumber non configuré dans _config/telco_credentials' });
       return;
     }
 
-    // ─── Build SMS body ───
+    // ─── Corps du SMS ────────────────────────────────────────────────────────
     const firstName = String(pay.leadName || 'Bonjour').trim().split(/\s+/)[0];
     const message = `Bonjour ${firstName},\n\nPour finaliser la mise en place de votre prélèvement (${pay.description || 'Programme'}), merci de renseigner votre IBAN via ce lien sécurisé :\n\n${pay.gcBillingRequestFlowUrl}\n\nL'équipe Ambitio`;
 
-    // ─── Resolve ownerName ───
+    // ─── Nom expéditeur ──────────────────────────────────────────────────────
     let ownerName = null;
     try {
       const metaSnap = await db.collection('_meta').doc('team_members').get();
@@ -99,75 +81,53 @@ module.exports = async (req, res) => {
     } catch (_) { /* non-bloquant */ }
     ownerName = ownerName || auth.email || 'Équipe';
 
-    // ─── Send via Twilio ───
-    const client = await getTwilioClient();
-    let twilioMsg;
+    // ─── Envoi via Ringover ──────────────────────────────────────────────────
+    let ringoverResp;
     try {
-      twilioMsg = await client.messages.create({
-        from: smsFrom,
-        to: toNumber,
-        body: message
+      ringoverResp = await ringoverFetch('/sms', {
+        method: 'POST',
+        body: { to_number: toNumber, from_number: smsFrom, text: message },
       });
-    } catch (twilioErr) {
-      console.error('[payments-send-mandate-sms] Twilio error:', twilioErr);
-      res.status(502).json({
-        error: twilioErr.message || 'Échec de l\'envoi Twilio',
-        twilioCode: twilioErr.code || null
-      });
+    } catch (ringoverErr) {
+      console.error('[payments-send-mandate-sms] Ringover error:', ringoverErr.message);
+      res.status(502).json({ error: ringoverErr.message || "Échec de l'envoi Ringover" });
       return;
     }
 
-    // ─── Log sur le lead SI leadId présent (best-effort, non bloquant) ───
+    // ─── Log sur le lead (best-effort) ───────────────────────────────────────
     if (pay.leadId) {
       try {
         const nowIso = new Date().toISOString();
-        const commEntry = {
-          type: 'sms',
-          direction: 'outbound',
-          content: message,
-          source: 'twilio-sms',
-          date: nowIso,
-          createdAt: nowIso,
-          ownerUid: auth.uid,
-          ownerName,
-          providerMessageSid: twilioMsg.sid,
-          fromNumber: smsFrom,
-          toNumber
-        };
-
         const d = new Date();
         const pad = n => String(n).padStart(2, '0');
         const tlDate = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        const timelineEntry = {
-          text: '💬 SMS mandat envoyé — ' + message.substring(0, 100),
-          date: tlDate,
-          color: '#60a5fa'
-        };
 
         await db.collection('leads').doc(pay.leadId).update({
-          communications: admin.firestore.FieldValue.arrayUnion(commEntry),
-          timeline_history: admin.firestore.FieldValue.arrayUnion(timelineEntry),
+          communications: admin.firestore.FieldValue.arrayUnion({
+            type: 'sms', direction: 'outbound', content: message,
+            source: 'ringover-sms', date: nowIso, createdAt: nowIso,
+            ownerUid: auth.uid, ownerName,
+            providerMessageId: (ringoverResp && (ringoverResp.message_id || ringoverResp.id)) || null,
+            fromNumber: smsFrom, toNumber,
+          }),
+          timeline_history: admin.firestore.FieldValue.arrayUnion({
+            text: '💬 SMS mandat envoyé (ringover) — ' + message.substring(0, 80),
+            date: tlDate, color: '#60a5fa',
+          }),
           lastContactAt: admin.firestore.FieldValue.serverTimestamp(),
           lastContactType: 'sms',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       } catch (logErr) {
         console.warn('[payments-send-mandate-sms] log lead failed (non-bloquant):', logErr.message);
       }
     }
 
-    console.log('[payments-send-mandate-sms] ✅ sent', {
-      paymentId,
-      to: toNumber,
-      from: smsFrom,
-      messageSid: twilioMsg.sid
-    });
-
     res.json({
       ok: true,
-      messageSid: twilioMsg.sid,
+      messageId: (ringoverResp && (ringoverResp.message_id || ringoverResp.id)) || null,
       from: smsFrom,
-      to: toNumber
+      to: toNumber,
     });
 
   } catch (e) {
