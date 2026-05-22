@@ -176,10 +176,12 @@
 
     // — Recording player
     h += '<div class="cdm-section">';
+    // Support Twilio (recordingSignedUrl) + Ringover (ringoverRecordingUrl)
+    const recUrl = detail.recordingSignedUrl || detail.ringoverRecordingUrl;
     h += '<div class="cdm-section-title">🎙 Enregistrement ' + statusPill(detail.recordingStatus) + '</div>';
-    if (detail.recordingSignedUrl) {
+    if (recUrl) {
       h += '<div class="cdm-audio-wrap">';
-      h += '<audio controls preload="metadata" src="' + escHtml(detail.recordingSignedUrl) + '"></audio>';
+      h += '<audio controls preload="metadata" src="' + escHtml(recUrl) + '"></audio>';
       h += '</div>';
     } else if (detail.recordingStatus === 'processing') {
       h += '<div class="cdm-audio-empty">Traitement en cours…</div>';
@@ -193,8 +195,9 @@
     // — Transcription
     h += '<div class="cdm-section">';
     h += '<div class="cdm-section-title">📄 Transcription ' + statusPill(detail.transcriptionStatus) + '</div>';
-    if (detail.transcriptionText) {
-      h += '<div class="cdm-transcript">' + escHtml(detail.transcriptionText) + '</div>';
+    const transcText = detail.transcriptionText || detail.transcriptText;
+    if (transcText) {
+      h += '<div class="cdm-transcript">' + escHtml(transcText) + '</div>';
     } else if (detail.transcriptionStatus === 'processing') {
       h += '<div class="cdm-audio-empty">Transcription en cours (Whisper)…</div>';
     } else if (detail.transcriptionStatus === 'failed') {
@@ -207,7 +210,8 @@
     // — AI Analysis
     h += '<div class="cdm-section">';
     h += '<div class="cdm-section-title">🤖 Analyse IA ' + statusPill(detail.aiAnalysisStatus) + '</div>';
-    const a = detail.aiAnalysis;
+    // Support Twilio (aiAnalysis.summary) + Ringover (aiSummary)
+    const a = detail.aiAnalysis || (detail.aiSummary ? { summary: detail.aiSummary } : null);
     if (a && a.summary) {
       h += '<div class="cdm-ai-grid">';
 
