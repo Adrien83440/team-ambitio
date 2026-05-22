@@ -124,7 +124,7 @@ module.exports = async (req, res) => {
 
     await db.collection('inbox_notifications').add({
       type: 'sms', direction: 'inbound', fromNumber, toNumber: toNumber || null,
-      text, leadId: lead?.id || null,
+      text, content: text, leadId: lead?.id || null,
       leadName: lead ? (lead.nom || lead.fullName || null) : null,
       ownerUid, source: 'ringover', providerMessageId: messageId,
       read: false, createdAt: now,
