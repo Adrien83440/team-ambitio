@@ -76,6 +76,11 @@
 .af-card-badge{position:absolute;top:12px;right:12px;font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px}
 .af-card-badge.live{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.15)}
 .af-card-badge.draft{background:rgba(255,255,255,.04);color:rgba(255,255,255,.3);border:1px solid rgba(255,255,255,.06)}
+.af-card-actions{position:absolute;bottom:12px;right:12px;display:flex;gap:6px;opacity:0;transition:opacity .15s}
+.af-card:hover .af-card-actions{opacity:1}
+.af-card-action-btn{width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.55);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all .15s}
+.af-card-action-btn:hover{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.35);color:#fbbf24}
+.af-card-action-btn.del:hover{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.35);color:#fca5a5}
 /* Empty */
 .af-empty{text-align:center;padding:60px 20px;color:rgba(255,255,255,.35)}
 .af-empty-icon{font-size:48px;margin-bottom:12px}
@@ -410,6 +415,23 @@
 <div style="text-align:right;margin-top:14px"><button class="bb bb-p" onclick="createForm()">Créer le formulaire</button></div>
 </div></div>
 
+<!-- Duplicate form modal -->
+<div class="ed-mo-bg" id="dupModal"><div class="ed-mo">
+<div class="ed-mo-title"><span>Dupliquer le formulaire</span><button onclick="closeDupModal()" style="border:none;background:0;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer">✕</button></div>
+<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.15);border-radius:8px;padding:10px 14px;font-size:12px;color:rgba(255,255,255,.55);margin-bottom:16px;line-height:1.5">Le clone reprend tous les champs, règles conditionnelles et paramètres du formulaire source. Il est créé en <strong style="color:#fbbf24">brouillon</strong> avec un nouveau lien public — les réponses du formulaire original ne sont pas copiées.</div>
+<div class="ed-field-row"><div class="ed-group-label">Nom du formulaire</div><input class="bi" id="dup-title" style="width:100%"/></div>
+<div class="ed-field-row"><div class="ed-group-label">Description</div><input class="bi" id="dup-desc" style="width:100%"/></div>
+<div class="ed-field-row"><div class="ed-group-label">Couleur</div><input type="color" id="dup-color" style="width:50px;height:36px;border:0;border-radius:8px;cursor:pointer"/></div>
+<div style="text-align:right;margin-top:14px"><button class="bb bb-o" onclick="closeDupModal()">Annuler</button> <button class="bb bb-p" onclick="duplicateForm()" id="dupBtn">Dupliquer</button></div>
+</div></div>
+
+<!-- Delete form modal -->
+<div class="ed-mo-bg" id="delModal"><div class="ed-mo" style="max-width:440px">
+<div class="ed-mo-title"><span style="color:#fca5a5">Supprimer le formulaire</span><button onclick="closeDelModal()" style="border:none;background:0;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer">✕</button></div>
+<div id="del-body" style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.6;margin-bottom:18px"></div>
+<div style="text-align:right;display:flex;gap:8px;justify-content:flex-end"><button class="bb bb-o" onclick="closeDelModal()">Annuler</button><button class="bb bb-r" onclick="deleteForm()" id="delBtn">Supprimer définitivement</button></div>
+</div></div>
+
 <div class="af-toast" id="afToast"></div>
 
 <script>
@@ -474,6 +496,10 @@ h+='<div class="af-card-badge '+status+'">'+(status==='live'?'● Publié':'Brou
 h+='<div class="af-card-top"><div class="af-card-color" style="background:'+(f.color||'#f59e0b')+'"></div><div class="af-card-title">'+esc(f.title||'Sans titre')+'</div></div>';
 if(f.description)h+='<div class="af-card-desc">'+esc(f.description)+'</div>';
 h+='<div class="af-card-stats"><div class="af-card-stat">📋 '+fc+' champ'+(fc>1?'s':'')+'</div><div class="af-card-stat">📊 '+rc+' réponse'+(rc>1?'s':'')+'</div></div>';
+h+='<div class="af-card-actions">';
+h+='<button class="af-card-action-btn" title="Dupliquer" onclick="event.stopPropagation();openDupModal(\''+f._id+'\')">⎘</button>';
+h+='<button class="af-card-action-btn del" title="Supprimer" onclick="event.stopPropagation();openDelModal(\''+f._id+'\')">🗑</button>';
+h+='</div>';
 h+='</div>';
 });
 el.innerHTML=h;
@@ -509,6 +535,140 @@ doc._id=ref.id;
 FORMS.unshift(doc);
 openEditor(ref.id);
 toast('✅ Formulaire créé');
+});
+}
+
+// ═══ DUPLICATE FORM ═══
+// Crée une copie d'un formulaire existant. Les IDs internes (fld_xxx,
+// rule_xxx) sont conservés tels quels : ils sont scopés au document
+// parent, donc aucun risque de collision cross-form, et les références
+// croisées (condition.fieldId, rule.conditions[].fieldId, actionValue)
+// restent cohérentes sans rebranchement. Le clone est toujours créé en
+// brouillon, repart à 0 réponse, et reçoit un nouveau Firestore ID donc
+// une nouvelle URL publique : le source reste intact à 100%.
+//
+// Les responses de la subcollection NE sont PAS copiées (côté métier
+// ça n'a aucun sens — chaque formulaire vit ses propres réponses).
+var _dupSourceId=null;
+function openDupModal(id){
+var src=FORMS.find(function(f){return f._id===id;});
+if(!src)return;
+_dupSourceId=id;
+document.getElementById('dup-title').value='Copie de '+(src.title||'Sans titre');
+document.getElementById('dup-desc').value=src.description||'';
+document.getElementById('dup-color').value=src.color||'#f59e0b';
+document.getElementById('dupModal').classList.add('show');
+}
+function closeDupModal(){document.getElementById('dupModal').classList.remove('show');_dupSourceId=null;}
+document.getElementById('dupModal').addEventListener('click',function(e){if(e.target===this)closeDupModal();});
+
+function duplicateForm(){
+if(!_dupSourceId)return;
+var src=FORMS.find(function(f){return f._id===_dupSourceId;});
+if(!src){toast('❌ Formulaire source introuvable');return;}
+var title=document.getElementById('dup-title').value.trim();
+if(!title){toast('❌ Le nom est requis');return;}
+
+var btn=document.getElementById('dupBtn');
+btn.disabled=true;btn.textContent='Duplication…';
+
+// Deep clone des structures imbriquées (fields, rules, settings).
+// JSON parse/stringify suffit : aucune Date / Function / undefined
+// dans ces objets, et on veut justement détacher les références.
+var fields=src.fields?JSON.parse(JSON.stringify(src.fields)):[];
+var rules=src.rules?JSON.parse(JSON.stringify(src.rules)):[];
+var settings=src.settings?JSON.parse(JSON.stringify(src.settings)):{};
+
+var doc={
+title:title,
+description:document.getElementById('dup-desc').value.trim(),
+color:document.getElementById('dup-color').value,
+status:'draft', // toujours brouillon, même si la source était en live
+fields:fields,
+rules:rules,
+settings:settings,
+responseCount:0,
+createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+};
+
+db.collection('alteo_forms').add(doc).then(function(ref){
+closeDupModal();
+btn.disabled=false;btn.textContent='Dupliquer';
+doc._id=ref.id;
+FORMS.unshift(doc);
+openEditor(ref.id);
+toast('✅ Formulaire dupliqué (brouillon)');
+}).catch(function(err){
+console.error('[duplicateForm]',err);
+btn.disabled=false;btn.textContent='Dupliquer';
+toast('❌ Erreur : '+(err&&err.message?err.message:'duplication échouée'));
+});
+}
+
+// ═══ DELETE FORM ═══
+// Suppression d'un formulaire et de toutes ses réponses associées.
+// Cascade manuelle de la subcollection /responses (Firestore JS SDK ne
+// fait pas de cascade automatique). Batch de 400 par sécurité (limite
+// Firestore : 500 ops/batch).
+//
+// Note : les références à ce formId dans users/{uid}.alteoformsFormIds
+// ne sont PAS nettoyées ici. Un id orphelin dans cet array n'a aucun
+// impact négatif côté nav (la résolution se fait par lookup direct).
+// Si besoin, nettoyer via admin-users.html.
+var _delSourceId=null;
+function openDelModal(id){
+var src=FORMS.find(function(f){return f._id===id;});
+if(!src)return;
+_delSourceId=id;
+var rc=(typeof src._respCount==='number')?src._respCount:(src.responseCount||0);
+var statusBadge=src.status==='live'?'<span style="background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.15);font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-left:6px">● Publié</span>':'';
+var body='Vous êtes sur le point de supprimer <strong style="color:#fff">'+esc(src.title||'Sans titre')+'</strong>'+statusBadge+'.';
+body+='<div style="margin-top:14px;padding:12px 14px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.18);border-radius:8px;color:#fca5a5;font-size:12px;line-height:1.55">';
+body+='⚠️ Cette action est <strong>irréversible</strong>.<br/>';
+body+='Le formulaire et ses <strong>'+rc+' réponse'+(rc>1?'s':'')+'</strong> seront supprimés définitivement.';
+if(src.status==='live')body+='<br/>Le lien public deviendra inaccessible immédiatement.';
+body+='</div>';
+document.getElementById('del-body').innerHTML=body;
+document.getElementById('delModal').classList.add('show');
+}
+function closeDelModal(){document.getElementById('delModal').classList.remove('show');_delSourceId=null;}
+document.getElementById('delModal').addEventListener('click',function(e){if(e.target===this)closeDelModal();});
+
+function deleteForm(){
+if(!_delSourceId)return;
+var id=_delSourceId;
+var btn=document.getElementById('delBtn');
+btn.disabled=true;btn.textContent='Suppression…';
+
+// Étape 1 : récupérer et supprimer toutes les réponses par batchs.
+var respCol=db.collection('alteo_forms').doc(id).collection('responses');
+function deleteResponsesBatch(){
+return respCol.limit(400).get().then(function(sn){
+if(sn.empty)return Promise.resolve(0);
+var batch=db.batch();
+sn.forEach(function(d){batch.delete(d.ref);});
+return batch.commit().then(function(){
+// Si on a atteint la limite, il reste potentiellement des docs.
+if(sn.size>=400)return deleteResponsesBatch();
+return sn.size;
+});
+});
+}
+
+deleteResponsesBatch().then(function(){
+// Étape 2 : supprimer le document du formulaire.
+return db.collection('alteo_forms').doc(id).delete();
+}).then(function(){
+closeDelModal();
+btn.disabled=false;btn.textContent='Supprimer définitivement';
+FORMS=FORMS.filter(function(f){return f._id!==id;});
+renderGrid();
+toast('🗑 Formulaire supprimé');
+}).catch(function(err){
+console.error('[deleteForm]',err);
+btn.disabled=false;btn.textContent='Supprimer définitivement';
+toast('❌ Erreur : '+(err&&err.message?err.message:'suppression échouée'));
 });
 }
 
