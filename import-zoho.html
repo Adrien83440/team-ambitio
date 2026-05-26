@@ -85,6 +85,11 @@
   }
   .panel.warn { background: var(--warning-bg); border-color: #e8c684; }
   .panel.warn h2 { color: var(--warning); }
+  .panel.diag {
+    background: linear-gradient(180deg, var(--ivory) 0%, #fbf6e8 100%);
+    border-color: #e0d2a8;
+  }
+  .panel.diag h2 { color: var(--gold-deep); }
 
   h2 {
     font-family: var(--serif); font-weight: 500;
@@ -96,6 +101,20 @@
     background: var(--cream-soft); padding: 1px 6px;
     border-radius: 4px; color: var(--gold-deep);
   }
+
+  /* INPUTS */
+  input[type="text"], input[type="email"] {
+    border: 1px solid var(--line); background: var(--ivory);
+    border-radius: 8px; padding: 11px 14px;
+    font-family: var(--sans); font-size: 14px;
+    color: var(--ink); transition: border-color 0.15s, box-shadow 0.15s;
+    flex: 1;
+  }
+  input[type="text"]:focus, input[type="email"]:focus {
+    outline: none; border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(184, 137, 61, 0.12);
+  }
+  .input-row { display: flex; gap: 10px; align-items: stretch; }
 
   /* DROPZONE */
   .drop {
@@ -146,6 +165,7 @@
     font-size: 14px; font-weight: 500; cursor: pointer;
     transition: transform 0.1s, background 0.15s;
     display: inline-flex; align-items: center; gap: 8px;
+    white-space: nowrap;
   }
   .btn:hover { background: var(--ink-soft); }
   .btn:active { transform: translateY(1px); }
@@ -162,6 +182,72 @@
   .btn-danger { background: var(--danger); border-color: var(--danger); }
   .btn-danger:hover { background: #8a2828; border-color: #8a2828; }
 
+  /* DIAG RESULT */
+  .diag-result {
+    margin-top: 20px;
+    display: none;
+  }
+  .diag-result.on { display: block; }
+  .diag-section {
+    background: var(--cream); border: 1px solid var(--line);
+    border-radius: 10px; padding: 18px 22px; margin-bottom: 14px;
+  }
+  .diag-section-title {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--gold-deep); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .diag-section-title .pill {
+    background: var(--gold); color: var(--ivory);
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 600;
+  }
+  .diag-note {
+    background: var(--ivory); border: 1px solid var(--line);
+    border-radius: 8px; padding: 14px 18px; margin-bottom: 10px;
+  }
+  .diag-note.is-import {
+    background: #fbf6e8; border-color: #e0d2a8;
+  }
+  .diag-note-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 8px; font-size: 13px;
+  }
+  .diag-note-id {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--gold-deep);
+  }
+  .diag-tag {
+    background: var(--gold-soft); color: var(--ink);
+    padding: 1px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .diag-pre {
+    font-family: var(--mono); font-size: 11.5px;
+    background: var(--cream-soft); padding: 10px 12px;
+    border-radius: 6px; overflow-x: auto;
+    color: var(--ink-soft); line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 280px; overflow-y: auto;
+  }
+  .diag-fields-list {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-top: 6px;
+  }
+  .diag-field-pill {
+    background: var(--cream-soft); color: var(--ink-soft);
+    padding: 3px 10px; border-radius: 999px;
+    font-family: var(--mono); font-size: 11px;
+    border: 1px solid var(--line);
+  }
+  .diag-field-pill.text-field {
+    background: var(--success-bg); color: var(--success);
+    border-color: var(--success);
+  }
+
+  /* TABLE */
   .results-head {
     display: flex; padding: 12px 16px;
     background: var(--cream-soft); border-bottom: 1px solid var(--line);
@@ -301,11 +387,17 @@
   }
 
   .hidden { display: none !important; }
+  .empty-state {
+    text-align: center; padding: 24px; color: var(--ink-mute);
+    font-style: italic;
+  }
+  .empty-state strong { color: var(--danger); font-style: normal; }
 
   @media (max-width: 720px) {
     .wrap { padding: 28px 16px 60px; }
     h1 { font-size: 26px; }
     .panel { padding: 20px 18px; }
+    .input-row { flex-direction: column; }
   }
 </style>
 </head>
@@ -328,11 +420,23 @@
 
   <section class="panel warn hidden" id="authPanel">
     <h2>Connexion requise</h2>
-    <p class="sub">Tu dois être connecté à Team Ambitio avec un compte <code>admin</code> ou <code>sales</code>. Ouvre ton app dans un autre onglet, connecte-toi, puis reviens ici — l'auth se détecte toute seule.</p>
+    <p class="sub">Tu dois être connecté à Team Ambitio avec un compte <code>admin</code> ou <code>sales</code>. Ouvre ton app dans un autre onglet, connecte-toi, puis reviens ici.</p>
   </section>
 
   <section id="mainPanel" class="hidden">
 
+    <!-- ============ DIAGNOSTIC ============ -->
+    <div class="panel diag">
+      <h2>🔍 Diagnostic d'un lead</h2>
+      <p class="sub">Tape un email (ou un Lead ID Firestore) pour inspecter le lead et toutes ses <code>client_notes</code>. Utile pour comprendre ce qui s'est passé après un import, ou pour aligner le schéma sur tes notes existantes.</p>
+      <div class="input-row">
+        <input type="text" id="diagInput" placeholder="europesurplusmilitaire@gmail.com">
+        <button class="btn" id="btnDiag">Inspecter</button>
+      </div>
+      <div id="diagResult" class="diag-result"></div>
+    </div>
+
+    <!-- ============ IMPORT ============ -->
     <div class="panel">
       <h2>1. Charger le CSV Zoho</h2>
       <p class="sub">Dépose <code>Pipelines_2026_05_26.csv</code> (ou tout export Zoho au même format).</p>
@@ -354,7 +458,7 @@
 
     <div class="panel hidden" id="execPanel">
       <h2>3. Exécution</h2>
-      <p class="sub">Écriture additive uniquement dans <code>leads/{leadId}/client_notes/</code>. Aucun champ racine du lead n'est touché. ID de note déterministe (<code>import_zoho_{affaireId}</code>) — relançable sans risque de doublon.</p>
+      <p class="sub">Écriture additive uniquement dans <code>leads/{leadId}/client_notes/</code>. Aucun champ racine du lead n'est touché. ID de note déterministe — relançable sans risque de doublon.</p>
 
       <div class="exec-bar">
         <label class="toggle">
@@ -393,7 +497,7 @@
 <script type="module">
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
 import {
-  getFirestore, collection, getDocs, doc, setDoc, serverTimestamp
+  getFirestore, collection, getDocs, doc, getDoc, setDoc, serverTimestamp, query, where, limit
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 
@@ -424,7 +528,7 @@ const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;'
 
 $('now').textContent = new Date().toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
 
-// ===== AUTH automatique via session existante =====
+// ===== AUTH =====
 onAuthStateChanged(auth, (user) => {
   if (!user) {
     $('authDot').classList.remove('on', 'spin');
@@ -442,7 +546,7 @@ onAuthStateChanged(auth, (user) => {
   $('mainPanel').classList.remove('hidden');
 });
 
-// ===== UTILITAIRES =====
+// ===== UTILS =====
 function log(msg, level = 'info') {
   const el = $('log');
   el.classList.add('on');
@@ -480,6 +584,226 @@ function fmtZohoDate(s) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
 }
 
+// Format un timestamp Firestore en chaîne lisible
+function fmtTs(v) {
+  if (!v) return '—';
+  if (v.toDate) {
+    try { return v.toDate().toLocaleString('fr-FR'); } catch {}
+  }
+  if (v.seconds !== undefined) {
+    try { return new Date(v.seconds * 1000).toLocaleString('fr-FR'); } catch {}
+  }
+  if (typeof v === 'string') return v;
+  return JSON.stringify(v);
+}
+
+// ===========================================================================
+// DIAGNOSTIC — Inspecter un lead et ses notes
+// ===========================================================================
+
+$('btnDiag').addEventListener('click', runDiagnostic);
+$('diagInput').addEventListener('keydown', e => { if (e.key === 'Enter') runDiagnostic(); });
+
+async function runDiagnostic() {
+  const input = $('diagInput').value.trim();
+  if (!input) return;
+
+  $('diagResult').classList.add('on');
+  $('diagResult').innerHTML = '<div class="empty-state">Recherche en cours…</div>';
+
+  try {
+    // 1. Trouver le lead par email, téléphone ou ID direct
+    let lead = null, leadId = null;
+
+    // Essai 1 : ID direct (si l'input ressemble à un docId Firestore)
+    if (!input.includes('@') && !input.includes(' ') && input.length > 8) {
+      try {
+        const directDoc = await getDoc(doc(db, 'leads', input));
+        if (directDoc.exists()) {
+          lead = directDoc.data();
+          leadId = directDoc.id;
+        }
+      } catch {}
+    }
+
+    // Essai 2 : par email
+    if (!lead && input.includes('@')) {
+      const emailN = normalizeEmail(input);
+      for (const field of ['email', 'mail', 'emailAddress']) {
+        const snap = await getDocs(query(collection(db, 'leads'), where(field, '==', emailN), limit(1)));
+        if (!snap.empty) {
+          lead = snap.docs[0].data();
+          leadId = snap.docs[0].id;
+          break;
+        }
+        // Essai aussi avec la casse originale au cas où ton schéma ne lowercase pas
+        const snap2 = await getDocs(query(collection(db, 'leads'), where(field, '==', input.trim()), limit(1)));
+        if (!snap2.empty) {
+          lead = snap2.docs[0].data();
+          leadId = snap2.docs[0].id;
+          break;
+        }
+      }
+    }
+
+    // Essai 3 : par téléphone normalisé
+    if (!lead) {
+      const phoneN = normalizePhone(input);
+      if (phoneN) {
+        for (const field of ['telephone', 'phone', 'portable', 'mobile', 'tel']) {
+          const snap = await getDocs(query(collection(db, 'leads'), where(field, '==', phoneN), limit(1)));
+          if (!snap.empty) {
+            lead = snap.docs[0].data();
+            leadId = snap.docs[0].id;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!lead) {
+      $('diagResult').innerHTML = `<div class="empty-state"><strong>Aucun lead trouvé</strong> pour "${escapeHtml(input)}".<br>Essaie un autre email, un téléphone, ou un ID Firestore direct.</div>`;
+      return;
+    }
+
+    // 2. Récupérer toutes les client_notes du lead
+    const notesSnap = await getDocs(collection(db, 'leads', leadId, 'client_notes'));
+    const notes = notesSnap.docs.map(d => ({ id: d.id, data: d.data() }));
+
+    // 3. Identifier les notes d'import vs notes normales
+    const importNotes = notes.filter(n => n.id.startsWith('import_zoho_') || n.data?.type === 'import_zoho' || n.data?.source?.startsWith?.('import_zoho'));
+    const otherNotes  = notes.filter(n => !importNotes.includes(n));
+
+    // 4. Identifier les champs texte probables dans les notes normales
+    const textFieldsFromNormal = new Set();
+    for (const n of otherNotes) {
+      for (const [k, v] of Object.entries(n.data)) {
+        if (typeof v === 'string' && v.length > 30) {
+          textFieldsFromNormal.add(k);
+        }
+      }
+    }
+
+    // 5. Rendu du résultat
+    let html = '';
+
+    // --- Section lead ---
+    html += `
+      <div class="diag-section">
+        <div class="diag-section-title">
+          Lead trouvé
+          <span class="pill">leads/${escapeHtml(leadId)}</span>
+        </div>
+        <div class="diag-fields-list">
+          ${Object.keys(lead).sort().map(k => `<span class="diag-field-pill">${escapeHtml(k)}</span>`).join('')}
+        </div>
+        <details style="margin-top: 10px;">
+          <summary>Voir tous les champs du lead (JSON)</summary>
+          <div class="diag-pre">${escapeHtml(JSON.stringify(serializeForDisplay(lead), null, 2))}</div>
+        </details>
+      </div>
+    `;
+
+    // --- Section notes import_zoho ---
+    if (importNotes.length === 0) {
+      html += `
+        <div class="diag-section">
+          <div class="diag-section-title">Notes d'import Zoho</div>
+          <div class="empty-state">
+            <strong>Aucune note d'import trouvée</strong> sur ce lead.<br>
+            Si tu pensais avoir fait l'import → soit le dry-run était activé (rien écrit), soit l'écriture a échoué silencieusement.
+          </div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="diag-section">
+          <div class="diag-section-title">
+            Notes d'import Zoho
+            <span class="pill">${importNotes.length}</span>
+          </div>
+          ${importNotes.map(n => renderNote(n, true)).join('')}
+        </div>
+      `;
+    }
+
+    // --- Section notes normales ---
+    if (otherNotes.length > 0) {
+      html += `
+        <div class="diag-section">
+          <div class="diag-section-title">
+            Notes existantes (créées via ton UI Team Ambitio)
+            <span class="pill">${otherNotes.length}</span>
+          </div>
+          ${textFieldsFromNormal.size > 0 ? `
+            <div style="margin-bottom: 12px; font-size: 12px; color: var(--ink-mute);">
+              <strong style="color: var(--success);">Champs texte détectés</strong> dans tes notes existantes (probablement ce que ton UI affiche) :
+              <div class="diag-fields-list" style="margin-top: 6px;">
+                ${[...textFieldsFromNormal].map(f => `<span class="diag-field-pill text-field">${escapeHtml(f)}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+          ${otherNotes.slice(0, 3).map(n => renderNote(n, false)).join('')}
+          ${otherNotes.length > 3 ? `<div style="font-size: 12px; color: var(--ink-mute); margin-top: 8px;">… et ${otherNotes.length - 3} autre(s) note(s)</div>` : ''}
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="diag-section">
+          <div class="diag-section-title">Notes existantes (UI)</div>
+          <div class="empty-state">
+            Aucune note "normale" sur ce lead (rien de créé via ton UI Team Ambitio).<br>
+            On ne peut donc pas auto-détecter le schéma attendu.
+          </div>
+        </div>
+      `;
+    }
+
+    $('diagResult').innerHTML = html;
+  } catch (e) {
+    $('diagResult').innerHTML = `<div class="empty-state"><strong>Erreur</strong> : ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function serializeForDisplay(obj) {
+  // Sérialise un objet en remplaçant les Timestamps Firestore par leur valeur lisible
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(serializeForDisplay);
+  if (typeof obj !== 'object') return obj;
+  if (obj.toDate) return fmtTs(obj);
+  if (obj.seconds !== undefined && obj.nanoseconds !== undefined) return fmtTs(obj);
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) out[k] = serializeForDisplay(v);
+  return out;
+}
+
+function renderNote(note, isImport) {
+  const data = serializeForDisplay(note.data);
+  return `
+    <div class="diag-note ${isImport ? 'is-import' : ''}">
+      <div class="diag-note-header">
+        <span class="diag-note-id">${escapeHtml(note.id)}</span>
+        ${isImport ? '<span class="diag-tag">IMPORT</span>' : ''}
+      </div>
+      <div class="diag-fields-list">
+        ${Object.keys(note.data).sort().map(k => {
+          const v = note.data[k];
+          const isText = typeof v === 'string' && v.length > 30;
+          return `<span class="diag-field-pill ${isText ? 'text-field' : ''}">${escapeHtml(k)}</span>`;
+        }).join('')}
+      </div>
+      <details style="margin-top: 10px;">
+        <summary>Voir le contenu complet</summary>
+        <div class="diag-pre">${escapeHtml(JSON.stringify(data, null, 2))}</div>
+      </details>
+    </div>
+  `;
+}
+
+// ===========================================================================
+// IMPORT — CSV → matching → écriture
+// ===========================================================================
+
 function buildNoteText(row) {
   const lines = ['[Import Zoho — ' + new Date().toLocaleDateString('fr-FR') + ']'];
   if (row.origine)        lines.push('Origine : ' + row.origine);
@@ -503,9 +827,13 @@ function buildNoteText(row) {
 function buildNoteDoc(row) {
   const text = buildNoteText(row);
   return {
-    text, content: text, body: text, note: text,
+    // Plusieurs alias pour maximiser la compatibilité avec ton UI Team Ambitio
+    text, content: text, body: text, note: text, texte: text, contenu: text,
+    message: text, comment: text, commentaire: text, description: text,
+    // Typage
     type: 'import_zoho',
     source: 'import_zoho_2026_05_26',
+    // Métadonnées Zoho structurées
     zoho: {
       affaireId: row.affaireId,
       contactId: row.contactId,
@@ -523,6 +851,7 @@ function buildNoteDoc(row) {
       nomContact: row.nomContact,
       nomAffaire: row.nomAffaire,
     },
+    // Tracking
     author: 'Import Zoho',
     authorName: 'Import Zoho',
     authorUid: state.user?.uid || null,
@@ -532,7 +861,6 @@ function buildNoteDoc(row) {
   };
 }
 
-// ===== ÉTAPE 1 : CSV =====
 const drop = $('dropzone');
 drop.addEventListener('click', () => $('csvFile').click());
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
@@ -592,7 +920,6 @@ function handleCsv(file) {
   });
 }
 
-// ===== ÉTAPE 2 : Leads + matching =====
 async function loadLeadsAndMatch() {
   try {
     const snap = await getDocs(collection(db, 'leads'));
@@ -724,7 +1051,6 @@ function openPreview(idx) {
 $('btnCloseModal').addEventListener('click', () => $('modalBg').classList.remove('on'));
 $('modalBg').addEventListener('click', e => { if (e.target === $('modalBg')) $('modalBg').classList.remove('on'); });
 
-// ===== ÉTAPE 3 : Exécution =====
 $('dryRun').addEventListener('change', () => {
   const isDry = $('dryRun').checked;
   $('btnRun').textContent = isDry ? 'Lancer la simulation' : '⚠ Lancer l\'import RÉEL';
@@ -737,8 +1063,6 @@ $('btnRun').addEventListener('click', async () => {
   if (!isDry) {
     const sure = confirm(
       'Tu vas écrire en RÉEL dans Firestore.\n\n' +
-      'Création / mise à jour de notes dans leads/{leadId}/client_notes/.\n' +
-      'Aucun champ racine du lead n\'est touché.\n\n' +
       'Opération idempotente : relançable sans risque de doublon.\n\n' +
       'Continuer ?'
     );
@@ -750,7 +1074,7 @@ $('btnRun').addEventListener('click', async () => {
   log(isDry ? '=== DRY-RUN (aucune écriture) ===' : '=== IMPORT RÉEL EN COURS ===', isDry ? 'info' : 'warn');
 
   const toProcess = state.matches.filter(m => m.matchType === 'email' || m.matchType === 'phone');
-  log('Lignes à traiter : ' + toProcess.length + ' (ambigus et non matchés exclus)', 'info');
+  log('Lignes à traiter : ' + toProcess.length, 'info');
 
   const total = toProcess.length;
   let done = 0, errors = 0;
@@ -762,7 +1086,7 @@ $('btnRun').addEventListener('click', async () => {
     const path = `leads/${m.leadId}/client_notes/${noteId}`;
 
     if (isDry) {
-      log('[SIM] ' + path + (r.description ? '  (avec description)' : '  (métadonnées seules)'), 'ok');
+      log('[SIM] ' + path, 'ok');
       m.execStatus = 'simulated';
     } else {
       try {
