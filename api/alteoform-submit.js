@@ -203,6 +203,22 @@ module.exports = async (req, res) => {
   if (existing) {
     const noteTxt = '🔄 Re-soumission formulaire' + (formTitle ? ' : ' + formTitle : '');
     const dateFR = dateNowFR();
+
+    // ── Archivage de la soumission précédente dans formSubmissionsHistory
+    // À chaque re-soumission, on snapshot l'état "form" actuel du lead AVANT
+    // de l'écraser. Permet de voir l'évolution des réponses dans le temps
+    // (sales-leads.html et sales-contact.html exposent un bouton "Voir N
+    // soumissions précédentes" alimenté par ce champ).
+    //
+    // On n'archive QUE si le lead avait déjà des formAnswers significatifs :
+    // un lead matché par email/tel mais qui n'avait jamais rempli de form
+    // ne doit pas produire une entrée d'historique vide.
+    const prevData = existing.data() || {};
+    const prevAnswers = prevData.formAnswers;
+    const hadPrevForm =
+      (Array.isArray(prevAnswers) && prevAnswers.length > 0) ||
+      (prevAnswers && typeof prevAnswers === 'object' && !Array.isArray(prevAnswers) && Object.keys(prevAnswers).length > 0);
+
     const update = {
       formId,
       formTitle,
@@ -224,6 +240,15 @@ module.exports = async (req, res) => {
       }),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
+
+    if (hadPrevForm) {
+      update.formSubmissionsHistory = admin.firestore.FieldValue.arrayUnion({
+        submittedAt: prevData.formSubmittedAt || null,
+        formId:      prevData.formId         || null,
+        formTitle:   prevData.formTitle      || null,
+        formAnswers: prevAnswers
+      });
+    }
     try {
       await existing.ref.update(update);
     } catch (e) {
