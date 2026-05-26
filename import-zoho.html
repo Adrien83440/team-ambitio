@@ -2,508 +2,212 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Import Zoho → Team Ambitio</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
 <style>
-  :root {
-    --cream: #faf6ef;
-    --cream-soft: #f4ecdc;
-    --ivory: #fffdf8;
-    --ink: #1f1a14;
-    --ink-soft: #3d362c;
-    --ink-mute: #7a7060;
-    --gold: #b8893d;
-    --gold-soft: #d4a85a;
-    --gold-deep: #8c6526;
-    --line: #e8dfc8;
-    --line-soft: #efe9d8;
-    --success: #2f7a4f;
-    --success-bg: #e8f3eb;
-    --warning: #b67817;
-    --warning-bg: #fbf1de;
-    --danger: #a83232;
-    --danger-bg: #f8e8e8;
-    --info: #2c5f8d;
-    --info-bg: #e6eff7;
-    --mono: 'JetBrains Mono', ui-monospace, monospace;
-    --serif: 'Playfair Display', Georgia, serif;
-    --sans: 'DM Sans', system-ui, sans-serif;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body {
-    background: var(--cream); color: var(--ink);
-    font-family: var(--sans); font-size: 15px; line-height: 1.55;
-    -webkit-font-smoothing: antialiased; min-height: 100vh;
-  }
-  body {
-    background-image:
-      radial-gradient(circle at 8% 12%, rgba(184, 137, 61, 0.06), transparent 35%),
-      radial-gradient(circle at 92% 88%, rgba(184, 137, 61, 0.04), transparent 40%);
-    background-attachment: fixed;
-  }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 48px 32px 80px; }
-  header {
-    display: flex; align-items: flex-end; justify-content: space-between;
-    margin-bottom: 36px; padding-bottom: 24px;
-    border-bottom: 1px solid var(--line);
-    flex-wrap: wrap; gap: 16px;
-  }
-  .brand-eyebrow {
-    font-family: var(--mono); font-size: 11px;
-    letter-spacing: 0.16em; text-transform: uppercase;
-    color: var(--gold); font-weight: 500; margin-bottom: 4px;
-  }
-  h1 {
-    font-family: var(--serif); font-weight: 500;
-    font-size: 36px; letter-spacing: -0.015em; line-height: 1.1;
-  }
-  h1 em { font-style: italic; color: var(--gold-deep); font-weight: 500; }
-  .header-meta {
-    font-family: var(--mono); font-size: 12px;
-    color: var(--ink-mute); text-align: right;
-  }
-  .auth-status {
-    margin-top: 6px; display: inline-flex;
-    align-items: center; gap: 8px;
-  }
-  .auth-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--ink-mute);
-  }
-  .auth-dot.on { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
-  .auth-dot.warn { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
-  .auth-dot.spin { animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-  .panel {
-    background: var(--ivory); border: 1px solid var(--line);
-    border-radius: 14px; padding: 28px 32px; margin-bottom: 20px;
-  }
-  .panel.warn { background: var(--warning-bg); border-color: #e8c684; }
-  .panel.warn h2 { color: var(--warning); }
-  .panel.diag {
-    background: linear-gradient(180deg, var(--ivory) 0%, #fbf6e8 100%);
-    border-color: #e0d2a8;
-  }
-  .panel.diag h2 { color: var(--gold-deep); }
-
-  h2 {
-    font-family: var(--serif); font-weight: 500;
-    font-size: 20px; margin-bottom: 6px;
-  }
-  .sub { font-size: 13px; color: var(--ink-mute); margin-bottom: 18px; }
-  .sub code {
-    font-family: var(--mono); font-size: 11.5px;
-    background: var(--cream-soft); padding: 1px 6px;
-    border-radius: 4px; color: var(--gold-deep);
-  }
-
-  /* INPUTS */
-  input[type="text"], input[type="email"] {
-    border: 1px solid var(--line); background: var(--ivory);
-    border-radius: 8px; padding: 11px 14px;
-    font-family: var(--sans); font-size: 14px;
-    color: var(--ink); transition: border-color 0.15s, box-shadow 0.15s;
-    flex: 1;
-  }
-  input[type="text"]:focus, input[type="email"]:focus {
-    outline: none; border-color: var(--gold);
-    box-shadow: 0 0 0 3px rgba(184, 137, 61, 0.12);
-  }
-  .input-row { display: flex; gap: 10px; align-items: stretch; }
-
-  /* DROPZONE */
-  .drop {
-    border: 2px dashed var(--line); border-radius: 12px;
-    padding: 44px 24px; text-align: center; background: var(--cream);
-    transition: all 0.2s; cursor: pointer;
-  }
-  .drop:hover, .drop.over {
-    border-color: var(--gold); background: var(--cream-soft);
-  }
-  .drop-icon {
-    font-family: var(--serif); font-size: 36px;
-    color: var(--gold); margin-bottom: 8px; font-style: italic;
-  }
-  .drop-text { font-size: 15px; color: var(--ink-soft); }
-  .drop-hint {
-    font-size: 12px; color: var(--ink-mute);
-    font-family: var(--mono); margin-top: 4px;
-  }
-  #csvFile { display: none; }
-
-  .stats {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 12px;
-  }
-  .stat {
-    background: var(--cream); border: 1px solid var(--line);
-    border-radius: 10px; padding: 14px 16px;
-  }
-  .stat-label {
-    font-size: 11px; letter-spacing: 0.06em;
-    text-transform: uppercase; color: var(--ink-mute);
-    margin-bottom: 6px;
-  }
-  .stat-value {
-    font-family: var(--serif); font-size: 26px;
-    line-height: 1; color: var(--ink);
-  }
-  .stat.success .stat-value { color: var(--success); }
-  .stat.warning .stat-value { color: var(--warning); }
-  .stat.danger .stat-value { color: var(--danger); }
-  .stat.info .stat-value { color: var(--info); }
-
-  .btn {
-    border: 1px solid var(--ink); background: var(--ink);
-    color: var(--cream); padding: 11px 22px;
-    border-radius: 8px; font-family: var(--sans);
-    font-size: 14px; font-weight: 500; cursor: pointer;
-    transition: transform 0.1s, background 0.15s;
-    display: inline-flex; align-items: center; gap: 8px;
-    white-space: nowrap;
-  }
-  .btn:hover { background: var(--ink-soft); }
-  .btn:active { transform: translateY(1px); }
-  .btn:disabled {
-    background: var(--line); border-color: var(--line);
-    color: var(--ink-mute); cursor: not-allowed;
-  }
-  .btn-ghost { background: transparent; color: var(--ink); }
-  .btn-ghost:hover { background: var(--cream-soft); }
-  .btn-gold {
-    background: var(--gold); border-color: var(--gold); color: var(--ivory);
-  }
-  .btn-gold:hover { background: var(--gold-deep); border-color: var(--gold-deep); }
-  .btn-danger { background: var(--danger); border-color: var(--danger); }
-  .btn-danger:hover { background: #8a2828; border-color: #8a2828; }
-
-  /* DIAG RESULT */
-  .diag-result {
-    margin-top: 20px;
-    display: none;
-  }
-  .diag-result.on { display: block; }
-  .diag-section {
-    background: var(--cream); border: 1px solid var(--line);
-    border-radius: 10px; padding: 18px 22px; margin-bottom: 14px;
-  }
-  .diag-section-title {
-    font-family: var(--mono); font-size: 11px;
-    letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--gold-deep); margin-bottom: 10px;
-    display: flex; align-items: center; gap: 10px;
-  }
-  .diag-section-title .pill {
-    background: var(--gold); color: var(--ivory);
-    padding: 2px 8px; border-radius: 999px;
-    font-size: 10px; font-weight: 600;
-  }
-  .diag-note {
-    background: var(--ivory); border: 1px solid var(--line);
-    border-radius: 8px; padding: 14px 18px; margin-bottom: 10px;
-  }
-  .diag-note.is-import {
-    background: #fbf6e8; border-color: #e0d2a8;
-  }
-  .diag-note-header {
-    display: flex; align-items: center; gap: 10px;
-    margin-bottom: 8px; font-size: 13px;
-  }
-  .diag-note-id {
-    font-family: var(--mono); font-size: 11px;
-    color: var(--gold-deep);
-  }
-  .diag-tag {
-    background: var(--gold-soft); color: var(--ink);
-    padding: 1px 8px; border-radius: 999px;
-    font-size: 10px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.04em;
-  }
-  .diag-pre {
-    font-family: var(--mono); font-size: 11.5px;
-    background: var(--cream-soft); padding: 10px 12px;
-    border-radius: 6px; overflow-x: auto;
-    color: var(--ink-soft); line-height: 1.5;
-    white-space: pre-wrap; word-break: break-word;
-    max-height: 280px; overflow-y: auto;
-  }
-  .diag-fields-list {
-    display: flex; flex-wrap: wrap; gap: 6px;
-    margin-top: 6px;
-  }
-  .diag-field-pill {
-    background: var(--cream-soft); color: var(--ink-soft);
-    padding: 3px 10px; border-radius: 999px;
-    font-family: var(--mono); font-size: 11px;
-    border: 1px solid var(--line);
-  }
-  .diag-field-pill.text-field {
-    background: var(--success-bg); color: var(--success);
-    border-color: var(--success);
-  }
-
-  /* TABLE */
-  .results-head {
-    display: flex; padding: 12px 16px;
-    background: var(--cream-soft); border-bottom: 1px solid var(--line);
-    align-items: center; gap: 10px; flex-wrap: wrap;
-    border-radius: 10px 10px 0 0;
-  }
-  .filter-btn {
-    background: transparent; border: 1px solid var(--line);
-    padding: 5px 12px; border-radius: 999px;
-    font-size: 12px; cursor: pointer; color: var(--ink-soft);
-    font-family: var(--sans); transition: all 0.15s;
-  }
-  .filter-btn:hover { border-color: var(--gold); }
-  .filter-btn.on {
-    background: var(--ink); color: var(--cream); border-color: var(--ink);
-  }
-  .results-body {
-    max-height: 480px; overflow-y: auto;
-    border: 1px solid var(--line); border-top: none;
-    border-radius: 0 0 10px 10px; background: var(--cream);
-  }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  thead { position: sticky; top: 0; background: var(--ivory); z-index: 1; }
-  th {
-    text-align: left; padding: 10px 14px;
-    font-weight: 500; font-size: 11px;
-    letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--ink-mute); border-bottom: 1px solid var(--line);
-  }
-  td {
-    padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
-    color: var(--ink-soft); vertical-align: top;
-  }
-  tr:hover td { background: var(--cream-soft); }
-  td.mono { font-family: var(--mono); font-size: 11.5px; }
-  .badge {
-    display: inline-block; padding: 2px 8px;
-    border-radius: 999px; font-size: 11px;
-    font-weight: 500; letter-spacing: 0.02em;
-  }
-  .badge-email { background: var(--success-bg); color: var(--success); }
-  .badge-phone { background: var(--info-bg); color: var(--info); }
-  .badge-none  { background: var(--warning-bg); color: var(--warning); }
-  .badge-ambig { background: var(--danger-bg); color: var(--danger); }
-
-  .exec-bar {
-    display: flex; align-items: center; gap: 18px;
-    padding: 18px 22px; background: var(--cream-soft);
-    border: 1px solid var(--line); border-radius: 10px;
-    margin-top: 20px; flex-wrap: wrap;
-  }
-  .toggle {
-    display: inline-flex; align-items: center;
-    gap: 10px; cursor: pointer; user-select: none;
-    font-size: 14px; color: var(--ink-soft);
-  }
-  .toggle input { display: none; }
-  .toggle-track {
-    width: 38px; height: 22px;
-    background: var(--line); border-radius: 999px;
-    position: relative; transition: background 0.2s;
-  }
-  .toggle-track::after {
-    content: ''; position: absolute;
-    top: 3px; left: 3px;
-    width: 16px; height: 16px;
-    background: var(--ivory); border-radius: 50%;
-    transition: transform 0.2s;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-  }
-  .toggle input:checked + .toggle-track { background: var(--gold); }
-  .toggle input:checked + .toggle-track::after { transform: translateX(16px); }
-
-  .progress {
-    height: 8px; background: var(--line);
-    border-radius: 999px; overflow: hidden; margin-top: 16px;
-  }
-  .progress-bar {
-    height: 100%;
-    background: linear-gradient(90deg, var(--gold-soft), var(--gold));
-    width: 0%; transition: width 0.2s;
-  }
-  .log {
-    margin-top: 14px; background: var(--ink); color: #d8d2c4;
-    padding: 14px 18px; border-radius: 10px;
-    font-family: var(--mono); font-size: 12px;
-    max-height: 280px; overflow-y: auto;
-    line-height: 1.6; white-space: pre-wrap; display: none;
-  }
-  .log.on { display: block; }
-  .log-line { display: block; }
-  .log-info { color: #d8d2c4; }
-  .log-ok   { color: #8fce9e; }
-  .log-warn { color: #e6c277; }
-  .log-err  { color: #e89090; }
-  .log-dim  { color: #7a7060; }
-
-  .modal-bg {
-    position: fixed; inset: 0;
-    background: rgba(31, 26, 20, 0.55);
-    backdrop-filter: blur(3px); z-index: 100;
-    display: none; align-items: center; justify-content: center;
-    padding: 32px;
-  }
-  .modal-bg.on { display: flex; }
-  .modal {
-    background: var(--ivory); border-radius: 14px;
-    padding: 28px 32px; max-width: 720px; width: 100%;
-    max-height: 88vh; overflow-y: auto;
-  }
-  .modal h3 {
-    font-family: var(--serif); font-size: 22px;
-    font-weight: 500; margin-bottom: 4px;
-  }
-  .modal-sub { font-size: 13px; color: var(--ink-mute); margin-bottom: 18px; }
-  .mono-inline { font-family: var(--mono); font-size: 12.5px; color: var(--gold-deep); }
-  .preview-box {
-    background: var(--cream); border: 1px solid var(--line);
-    border-radius: 8px; padding: 16px 20px;
-    font-family: var(--mono); font-size: 12.5px;
-    line-height: 1.6; white-space: pre-wrap;
-    color: var(--ink-soft); margin-bottom: 14px;
-  }
-  details summary {
-    cursor: pointer; font-size: 13px; color: var(--ink-mute);
-    padding: 6px 0; user-select: none;
-  }
-  details summary:hover { color: var(--gold-deep); }
-  .schema-pre {
-    font-family: var(--mono); font-size: 11.5px;
-    background: var(--cream-soft); padding: 12px 14px;
-    border-radius: 6px; overflow-x: auto; color: var(--ink-soft);
-  }
-  .modal-footer {
-    display: flex; justify-content: flex-end;
-    gap: 10px; margin-top: 12px;
-  }
-
-  .hidden { display: none !important; }
-  .empty-state {
-    text-align: center; padding: 24px; color: var(--ink-mute);
-    font-style: italic;
-  }
-  .empty-state strong { color: var(--danger); font-style: normal; }
-
-  @media (max-width: 720px) {
-    .wrap { padding: 28px 16px 60px; }
-    h1 { font-size: 26px; }
-    .panel { padding: 20px 18px; }
-    .input-row { flex-direction: column; }
-  }
+:root{
+  --cream:#FAF6EF;
+  --cream-2:#F4ECDD;
+  --gold:#B8945A;
+  --gold-dark:#8B6E3F;
+  --ink:#1F1A12;
+  --muted:#6B5D47;
+  --line:#E5D9BF;
+  --green:#5B8A4A;
+  --red:#B5453A;
+  --amber:#C68A3B;
+  --shadow:0 1px 2px rgba(31,26,18,.04), 0 8px 24px rgba(31,26,18,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:0;font-family:'DM Sans',system-ui,sans-serif;background:var(--cream);color:var(--ink);line-height:1.5}
+.wrap{max-width:1120px;margin:0 auto;padding:40px 28px 80px}
+header{text-align:center;margin-bottom:40px;padding-bottom:32px;border-bottom:1px solid var(--line)}
+.brand{font-family:'Playfair Display',serif;font-size:14px;letter-spacing:.4em;color:var(--gold);text-transform:uppercase;margin-bottom:14px}
+h1{font-family:'Playfair Display',serif;font-size:38px;font-weight:700;margin:0 0 8px;letter-spacing:-.5px}
+.subtitle{color:var(--muted);font-size:15px;max-width:620px;margin:0 auto}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px;margin-bottom:20px;box-shadow:var(--shadow)}
+.card h2{font-family:'Playfair Display',serif;font-size:22px;margin:0 0 6px;font-weight:700}
+.card .lead{color:var(--muted);font-size:14px;margin-bottom:18px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;font-size:13px;font-weight:500}
+.pill.ok{background:#EFF5EB;color:var(--green)}
+.pill.ko{background:#FBEAE7;color:var(--red)}
+.pill.wait{background:#FCF3E0;color:var(--amber)}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 22px;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;transition:all .15s;text-decoration:none}
+.btn:hover:not(:disabled){border-color:var(--gold);background:var(--cream)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--gold);color:#fff;border-color:var(--gold)}
+.btn.primary:hover:not(:disabled){background:var(--gold-dark);border-color:var(--gold-dark)}
+.btn.danger{background:#fff;color:var(--red);border-color:var(--red)}
+.btn.danger:hover:not(:disabled){background:var(--red);color:#fff}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+.btn.ghost:hover:not(:disabled){background:var(--cream);color:var(--ink);border-color:var(--line)}
+.dropzone{border:2px dashed var(--line);border-radius:14px;padding:48px 24px;text-align:center;background:var(--cream);cursor:pointer;transition:all .2s}
+.dropzone:hover,.dropzone.over{border-color:var(--gold);background:var(--cream-2)}
+.dropzone .ico{font-size:38px;margin-bottom:10px;opacity:.6}
+.dropzone .hint{color:var(--muted);font-size:13px;margin-top:6px}
+.dropzone input{display:none}
+.file-info{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;background:var(--cream);border:1px solid var(--line);border-radius:10px;font-size:14px}
+.diag-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.diag-row input{flex:1;min-width:240px;padding:11px 14px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:14px;background:#fff}
+.diag-row input:focus{outline:none;border-color:var(--gold)}
+.diag-result{margin-top:16px;background:var(--cream);border:1px solid var(--line);border-radius:10px;padding:16px 18px;font-size:13px;display:none}
+.diag-result.shown{display:block}
+.diag-result h4{margin:0 0 8px;font-family:'Playfair Display',serif;font-size:16px}
+.diag-result .kv{display:grid;grid-template-columns:160px 1fr;gap:6px 14px;margin:8px 0}
+.diag-result .kv .k{color:var(--muted);font-size:12px}
+.diag-result .kv .v{font-family:'JetBrains Mono','Menlo',monospace;font-size:12px;word-break:break-all}
+.diag-result .note-block{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-top:8px}
+.diag-result .note-block .schema{font-family:'JetBrains Mono','Menlo',monospace;font-size:11px;color:var(--muted);margin-bottom:6px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:18px 0 4px}
+.stat{background:var(--cream);border:1px solid var(--line);border-radius:10px;padding:14px 16px;text-align:center;cursor:pointer;transition:all .15s}
+.stat:hover{border-color:var(--gold)}
+.stat.active{background:var(--gold);color:#fff;border-color:var(--gold)}
+.stat .n{font-size:26px;font-weight:700;font-family:'Playfair Display',serif}
+.stat .l{font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;color:inherit;opacity:.75}
+.stat.active .l{opacity:.9}
+.tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:14px;max-height:560px}
+table{width:100%;border-collapse:collapse;font-size:13px;background:#fff}
+thead{position:sticky;top:0;background:var(--cream);z-index:1}
+th{text-align:left;padding:11px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;color:var(--muted);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--cream-2);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--cream)}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.02em}
+.badge.match{background:#EFF5EB;color:var(--green)}
+.badge.nomatch{background:#FBEAE7;color:var(--red)}
+.badge.ambig{background:#FCF3E0;color:var(--amber)}
+.row-name{font-weight:600}
+.row-meta{color:var(--muted);font-size:11px;margin-top:2px}
+.row-action{background:transparent;border:none;color:var(--gold);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;padding:0;text-decoration:underline;text-decoration-color:transparent;transition:text-decoration-color .15s}
+.row-action:hover{text-decoration-color:var(--gold)}
+.action-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding-top:20px;margin-top:24px;border-top:1px solid var(--line)}
+.action-bar .spacer{flex:1}
+.toggle-line{display:flex;align-items:center;gap:10px;padding:11px 18px;background:var(--cream);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--muted)}
+.toggle{position:relative;width:42px;height:24px;background:var(--line);border-radius:999px;cursor:pointer;transition:background .15s}
+.toggle.on{background:var(--gold)}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.toggle.on::after{transform:translateX(18px)}
+.modal-bg{position:fixed;inset:0;background:rgba(31,26,18,.5);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal-bg.shown{display:flex}
+.modal{background:#fff;border-radius:14px;max-width:680px;width:100%;max-height:88vh;overflow:auto;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal h3{font-family:'Playfair Display',serif;margin:0 0 4px;font-size:22px}
+.modal .sub{color:var(--muted);font-size:13px;margin-bottom:18px}
+.modal pre{background:var(--cream);padding:14px;border-radius:8px;font-family:'JetBrains Mono','Menlo',monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;margin:0;line-height:1.6}
+.modal-section{margin-bottom:20px}
+.modal-section h4{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.field-grid{display:grid;grid-template-columns:160px 1fr;gap:4px 14px;font-size:13px}
+.field-grid .k{color:var(--muted)}
+.field-grid .v{font-weight:500}
+.field-grid .v.skip{color:var(--muted);font-style:italic}
+.field-grid .v.add{color:var(--green);font-weight:600}
+.log{background:#1F1A12;color:#E5D9BF;font-family:'JetBrains Mono','Menlo',monospace;font-size:12px;padding:18px;border-radius:10px;max-height:300px;overflow:auto;margin-top:16px;line-height:1.6}
+.log .ts{color:#8B6E3F}
+.log .ok{color:#7BB069}
+.log .err{color:#E07A6E}
+.log .info{color:#D4B373}
+.hidden{display:none!important}
+.row-flex{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+@media(max-width:640px){.wrap{padding:24px 16px 60px}h1{font-size:28px}.card{padding:20px}}
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <header>
-    <div>
-      <div class="brand-eyebrow">Outil interne — Migration CRM</div>
-      <h1>Import <em>Zoho</em> → Team Ambitio</h1>
+<header>
+  <div class="brand">Adrien &amp; Emily</div>
+  <h1>Import Zoho → Team Ambitio</h1>
+  <p class="subtitle">Migration des affaires Bigin/Zoho vers le pipeline Team. Enrichissement des leads existants (5 champs) et ajout d'une note de suivi par affaire, sans écraser aucune donnée Team déjà saisie.</p>
+</header>
+
+<div class="card">
+  <h2>1. Authentification</h2>
+  <p class="lead">Connecté via la session Team Ambitio déjà active dans ce navigateur.</p>
+  <div id="authBox"><span class="pill wait"><span class="dot"></span>Vérification…</span></div>
+  <div id="authActions" class="row-flex hidden" style="margin-top:14px">
+    <a class="btn" href="login.html" target="_blank">Se connecter sur team-ambitio</a>
+    <button class="btn ghost" onclick="location.reload()">Rafraîchir cette page</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2. Diagnostic d'un lead <span style="color:var(--muted);font-size:13px;font-weight:400">(optionnel)</span></h2>
+  <p class="lead">Pour vérifier l'état actuel d'un lead avant import : entre son email ou téléphone, on regarde quels champs et quelles notes sont déjà présents.</p>
+  <div class="diag-row">
+    <input id="diagInput" placeholder="email ou téléphone (ex: europesurplusmilitaire@gmail.com)" />
+    <button class="btn" onclick="runDiag()">Inspecter</button>
+  </div>
+  <div id="diagResult" class="diag-result"></div>
+</div>
+
+<div class="card">
+  <h2>3. Charger l'export CSV Zoho</h2>
+  <p class="lead">Fichier "Pipelines.csv" exporté depuis Bigin (toutes les colonnes incluses).</p>
+  <div id="dropzone" class="dropzone">
+    <div class="ico">📄</div>
+    <div><strong>Glisse le CSV ici</strong> ou clique pour sélectionner</div>
+    <div class="hint">Format attendu : Affaire Id, Nom du Contact, Email, Portable, Heure de création, Étape, Description, etc.</div>
+    <input type="file" id="fileInput" accept=".csv">
+  </div>
+  <div id="fileInfo" class="file-info hidden" style="margin-top:14px">
+    <div><span id="fileName"></span> · <span id="fileRows" style="color:var(--muted)"></span></div>
+    <button class="btn ghost" onclick="resetFile()">Changer de fichier</button>
+  </div>
+</div>
+
+<div id="resultsCard" class="card hidden">
+  <h2>4. Résultats du matching</h2>
+  <p class="lead">Chaque affaire Zoho est rapprochée des leads Team par email exact, puis téléphone normalisé (+33XXXXXXXXX).</p>
+  <div class="stats">
+    <div class="stat active" data-filter="all"><div class="n" id="statAll">0</div><div class="l">Total</div></div>
+    <div class="stat" data-filter="match"><div class="n" id="statMatch">0</div><div class="l">Matchés</div></div>
+    <div class="stat" data-filter="ambig"><div class="n" id="statAmbig">0</div><div class="l">Ambigus</div></div>
+    <div class="stat" data-filter="nomatch"><div class="n" id="statNoMatch">0</div><div class="l">Sans match</div></div>
+  </div>
+  <div class="tbl-wrap">
+    <table id="tbl">
+      <thead><tr>
+        <th>Contact</th><th>Email / Tél</th><th>Étape Zoho</th><th>Gestionnaire</th><th>Statut match</th><th>Détail</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="action-bar">
+    <div class="toggle-line">
+      <div id="dryToggle" class="toggle on" onclick="toggleDry()"></div>
+      <span id="dryLabel">Dry-run (aucune écriture)</span>
     </div>
-    <div class="header-meta">
-      <div id="now"></div>
-      <div class="auth-status">
-        <span class="auth-dot spin" id="authDot"></span>
-        <span id="authText">Initialisation…</span>
-      </div>
-    </div>
-  </header>
-
-  <section class="panel warn hidden" id="authPanel">
-    <h2>Connexion requise</h2>
-    <p class="sub">Tu dois être connecté à Team Ambitio avec un compte <code>admin</code> ou <code>sales</code>. Ouvre ton app dans un autre onglet, connecte-toi, puis reviens ici.</p>
-  </section>
-
-  <section id="mainPanel" class="hidden">
-
-    <!-- ============ DIAGNOSTIC ============ -->
-    <div class="panel diag">
-      <h2>🔍 Diagnostic d'un lead</h2>
-      <p class="sub">Tape un email (ou un Lead ID Firestore) pour inspecter le lead et toutes ses <code>client_notes</code>. Utile pour comprendre ce qui s'est passé après un import, ou pour aligner le schéma sur tes notes existantes.</p>
-      <div class="input-row">
-        <input type="text" id="diagInput" placeholder="europesurplusmilitaire@gmail.com">
-        <button class="btn" id="btnDiag">Inspecter</button>
-      </div>
-      <div id="diagResult" class="diag-result"></div>
-    </div>
-
-    <!-- ============ IMPORT ============ -->
-    <div class="panel">
-      <h2>1. Charger le CSV Zoho</h2>
-      <p class="sub">Dépose <code>Pipelines_2026_05_26.csv</code> (ou tout export Zoho au même format).</p>
-      <div class="drop" id="dropzone">
-        <div class="drop-icon">↓</div>
-        <div class="drop-text">Glisse ton CSV ici ou clique pour parcourir</div>
-        <div class="drop-hint">.csv – format Zoho Sales Pipeline</div>
-        <input type="file" id="csvFile" accept=".csv">
-      </div>
-      <div id="csvStats" class="stats hidden" style="margin-top: 18px;"></div>
-    </div>
-
-    <div class="panel hidden" id="matchPanel">
-      <h2>2. Matching avec ta base Team Ambitio</h2>
-      <p class="sub">Lecture en direct de <code>leads</code>, matching par <strong>email exact</strong> en priorité, puis par <strong>téléphone normalisé</strong> en repli. Ambigus exclus de l'écriture.</p>
-      <div id="matchStats" class="stats" style="margin-bottom: 18px;"></div>
-      <div id="matchResults"></div>
-    </div>
-
-    <div class="panel hidden" id="execPanel">
-      <h2>3. Exécution</h2>
-      <p class="sub">Écriture additive uniquement dans <code>leads/{leadId}/client_notes/</code>. Aucun champ racine du lead n'est touché. ID de note déterministe — relançable sans risque de doublon.</p>
-
-      <div class="exec-bar">
-        <label class="toggle">
-          <input type="checkbox" id="dryRun" checked>
-          <span class="toggle-track"></span>
-          <span><strong>Mode dry-run</strong> (simulation, aucune écriture)</span>
-        </label>
-        <div style="flex: 1;"></div>
-        <button class="btn btn-gold" id="btnRun">Lancer la simulation</button>
-        <button class="btn btn-ghost" id="btnExport" disabled>Exporter le rapport CSV</button>
-      </div>
-
-      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
-      <div class="log" id="log"></div>
-    </div>
-
-  </section>
+    <div class="spacer"></div>
+    <button class="btn" onclick="exportReport()">📊 Exporter le rapport CSV</button>
+    <button id="runBtn" class="btn primary" onclick="runImport()" disabled>Lancer l'import</button>
+  </div>
+  <div id="log" class="log hidden"></div>
+</div>
 
 </div>
 
-<div class="modal-bg" id="modalBg">
+<div id="modalBg" class="modal-bg" onclick="if(event.target===this)closeModal()">
   <div class="modal">
-    <h3>Aperçu de la note qui sera créée</h3>
-    <div class="modal-sub" id="modalSub"></div>
-    <div class="preview-box" id="previewText"></div>
-    <details>
-      <summary>Voir le document Firestore complet (JSON)</summary>
-      <pre class="schema-pre" id="previewJson"></pre>
-    </details>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" id="btnCloseModal">Fermer</button>
+    <h3 id="modalTitle">Détail</h3>
+    <div class="sub" id="modalSub"></div>
+    <div id="modalBody"></div>
+    <div style="text-align:right;margin-top:18px">
+      <button class="btn" onclick="closeModal()">Fermer</button>
     </div>
   </div>
 </div>
 
-<script type="module">
-import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
-import {
-  getFirestore, collection, getDocs, doc, getDoc, setDoc, serverTimestamp, query, where, limit
-} from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
-// ============================================================================
-// CONFIG FIREBASE — Team Ambitio (projet ambitio-team)
-// ============================================================================
+<script>
+/* CONFIG FIREBASE — project ambitio-team */
 const firebaseConfig = {
   apiKey: "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
   authDomain: "ambitio-team.firebaseapp.com",
@@ -512,645 +216,477 @@ const firebaseConfig = {
   messagingSenderId: "1079366902268",
   appId: "1:1079366902268:web:b4ec1691dba54230339279"
 };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
-const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-const db   = getFirestore(app);
-const auth = getAuth(app);
+let currentUser = null;
+let csvRows = [];
+let matchResults = [];
+let allLeads = [];
+let dryRun = true;
+let currentFilter = 'all';
 
-const state = {
-  user: null, csvRows: [], leads: [],
-  emailIndex: new Map(), phoneIndex: new Map(),
-  matches: [], filter: 'all',
-};
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-const $ = (id) => document.getElementById(id);
-const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function normPhone(raw){
+  if(!raw) return '';
+  let s = String(raw).replace(/[^\d+]/g,'');
+  if(s.startsWith('+')) return s;
+  if(s.startsWith('33') && (s.length===11 || s.length===12)) return '+' + s;
+  if(s.length===9) return '+33' + s;
+  if(s.length===10 && s.startsWith('0')) return '+33' + s.substring(1);
+  return s ? '+' + s.replace(/^\+/,'') : '';
+}
+function normEmail(raw){ return String(raw||'').trim().toLowerCase(); }
 
-$('now').textContent = new Date().toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+function parseZohoDate(raw){
+  if(!raw) return null;
+  const s = String(raw).trim();
+  if(!s) return null;
+  const iso = s.includes('T') ? s : s.replace(' ','T');
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return null;
+  return d;
+}
 
-// ===== AUTH =====
-onAuthStateChanged(auth, (user) => {
-  if (!user) {
-    $('authDot').classList.remove('on', 'spin');
-    $('authDot').classList.add('warn');
-    $('authText').textContent = 'Non connecté';
-    $('authPanel').classList.remove('hidden');
-    $('mainPanel').classList.add('hidden');
-    return;
+function fmtDate(d){
+  if(!d) return '—';
+  let dt;
+  if(d.toDate) dt = d.toDate();
+  else if(d instanceof Date) dt = d;
+  else dt = new Date(d);
+  if(isNaN(dt.getTime())) return '—';
+  return dt.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+function logLine(msg, type){
+  const log = el('log');
+  log.classList.remove('hidden');
+  const ts = new Date().toLocaleTimeString('fr-FR');
+  log.innerHTML += '<div><span class="ts">[' + ts + ']</span> <span class="' + (type||'info') + '">' + esc(msg) + '</span></div>';
+  log.scrollTop = log.scrollHeight;
+}
+
+/* AUTH */
+auth.onAuthStateChanged(function(user){
+  currentUser = user;
+  const box = el('authBox');
+  const actions = el('authActions');
+  if(user){
+    box.innerHTML = '<span class="pill ok"><span class="dot"></span>Connecté en tant que <strong style="margin-left:4px">' + esc(user.email) + '</strong></span>';
+    actions.classList.add('hidden');
+  } else {
+    box.innerHTML = '<span class="pill ko"><span class="dot"></span>Non connecté — ouvre team-ambitio dans un autre onglet et connecte-toi</span>';
+    actions.classList.remove('hidden');
   }
-  state.user = user;
-  $('authDot').classList.remove('warn', 'spin');
-  $('authDot').classList.add('on');
-  $('authText').textContent = user.email || user.uid;
-  $('authPanel').classList.add('hidden');
-  $('mainPanel').classList.remove('hidden');
 });
 
-// ===== UTILS =====
-function log(msg, level = 'info') {
-  const el = $('log');
-  el.classList.add('on');
-  const span = document.createElement('span');
-  span.className = `log-line log-${level}`;
-  const ts = new Date().toLocaleTimeString('fr-FR', { hour12: false });
-  span.textContent = `[${ts}] ${msg}`;
-  el.appendChild(span);
-  el.scrollTop = el.scrollHeight;
-}
-
-function normalizePhone(raw) {
-  if (raw === null || raw === undefined) return null;
-  let p = String(raw).trim();
-  if (!p) return null;
-  p = p.replace(/[\s\-\.\(\)\/]/g, '');
-  if (p.startsWith('00')) p = '+' + p.slice(2);
-  if (p.startsWith('+')) return p;
-  if (/^33[1-9]\d{8}$/.test(p)) return '+' + p;
-  if (/^0[1-9]\d{8}$/.test(p)) return '+33' + p.slice(1);
-  if (/^[1-9]\d{8}$/.test(p)) return '+33' + p;
-  if (/^\d{10,15}$/.test(p)) return '+' + p;
-  return p;
-}
-
-function normalizeEmail(raw) {
-  if (!raw) return null;
-  const e = String(raw).trim().toLowerCase();
-  return e.includes('@') ? e : null;
-}
-
-function fmtZohoDate(s) {
-  if (!s) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
-}
-
-// Format un timestamp Firestore en chaîne lisible
-function fmtTs(v) {
-  if (!v) return '—';
-  if (v.toDate) {
-    try { return v.toDate().toLocaleString('fr-FR'); } catch {}
-  }
-  if (v.seconds !== undefined) {
-    try { return new Date(v.seconds * 1000).toLocaleString('fr-FR'); } catch {}
-  }
-  if (typeof v === 'string') return v;
-  return JSON.stringify(v);
-}
-
-// ===========================================================================
-// DIAGNOSTIC — Inspecter un lead et ses notes
-// ===========================================================================
-
-$('btnDiag').addEventListener('click', runDiagnostic);
-$('diagInput').addEventListener('keydown', e => { if (e.key === 'Enter') runDiagnostic(); });
-
-async function runDiagnostic() {
-  const input = $('diagInput').value.trim();
-  if (!input) return;
-
-  $('diagResult').classList.add('on');
-  $('diagResult').innerHTML = '<div class="empty-state">Recherche en cours…</div>';
-
+/* DIAGNOSTIC */
+async function runDiag(){
+  if(!currentUser){ alert('Connecte-toi d\'abord'); return; }
+  const q = el('diagInput').value.trim();
+  if(!q){ alert('Email ou téléphone requis'); return; }
+  const box = el('diagResult');
+  box.classList.add('shown');
+  box.innerHTML = '<div style="color:var(--muted)">Recherche…</div>';
   try {
-    // 1. Trouver le lead par email, téléphone ou ID direct
-    let lead = null, leadId = null;
-
-    // Essai 1 : ID direct (si l'input ressemble à un docId Firestore)
-    if (!input.includes('@') && !input.includes(' ') && input.length > 8) {
-      try {
-        const directDoc = await getDoc(doc(db, 'leads', input));
-        if (directDoc.exists()) {
-          lead = directDoc.data();
-          leadId = directDoc.id;
-        }
-      } catch {}
+    const isEmail = q.includes('@');
+    let snap;
+    if(isEmail){
+      snap = await db.collection('leads').where('email','==', normEmail(q)).limit(5).get();
+    } else {
+      snap = await db.collection('leads').where('telephone','==', normPhone(q)).limit(5).get();
     }
-
-    // Essai 2 : par email
-    if (!lead && input.includes('@')) {
-      const emailN = normalizeEmail(input);
-      for (const field of ['email', 'mail', 'emailAddress']) {
-        const snap = await getDocs(query(collection(db, 'leads'), where(field, '==', emailN), limit(1)));
-        if (!snap.empty) {
-          lead = snap.docs[0].data();
-          leadId = snap.docs[0].id;
-          break;
-        }
-        // Essai aussi avec la casse originale au cas où ton schéma ne lowercase pas
-        const snap2 = await getDocs(query(collection(db, 'leads'), where(field, '==', input.trim()), limit(1)));
-        if (!snap2.empty) {
-          lead = snap2.docs[0].data();
-          leadId = snap2.docs[0].id;
-          break;
-        }
-      }
-    }
-
-    // Essai 3 : par téléphone normalisé
-    if (!lead) {
-      const phoneN = normalizePhone(input);
-      if (phoneN) {
-        for (const field of ['telephone', 'phone', 'portable', 'mobile', 'tel']) {
-          const snap = await getDocs(query(collection(db, 'leads'), where(field, '==', phoneN), limit(1)));
-          if (!snap.empty) {
-            lead = snap.docs[0].data();
-            leadId = snap.docs[0].id;
-            break;
-          }
-        }
-      }
-    }
-
-    if (!lead) {
-      $('diagResult').innerHTML = `<div class="empty-state"><strong>Aucun lead trouvé</strong> pour "${escapeHtml(input)}".<br>Essaie un autre email, un téléphone, ou un ID Firestore direct.</div>`;
+    if(snap.empty){
+      box.innerHTML = '<div style="color:var(--red);font-weight:600">Aucun lead trouvé pour "' + esc(q) + '"</div>';
       return;
     }
+    let html = '<h4>' + snap.size + ' lead(s) trouvé(s)</h4>';
+    for(const doc of snap.docs){
+      const d = doc.data();
+      const notesSnap = await db.collection('leads').doc(doc.id).collection('client_notes').orderBy('createdAt','desc').limit(20).get();
+      html += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">';
+      html += '<div style="font-weight:700;font-size:14px;margin-bottom:8px">' + esc(d.nom || '(sans nom)') + ' <span style="color:var(--muted);font-weight:400;font-size:11px">· ' + doc.id + '</span></div>';
+      html += '<div class="kv">';
+      html += '<div class="k">Email</div><div class="v">' + esc(d.email || '—') + '</div>';
+      html += '<div class="k">Téléphone</div><div class="v">' + esc(d.telephone || '—') + '</div>';
+      html += '<div class="k">UTM / Source</div><div class="v">' + esc(d.utm || '—') + '</div>';
+      html += '<div class="k">Statut</div><div class="v">' + esc(d.status || '—') + '</div>';
+      html += '<div class="k">createdAt (Team)</div><div class="v">' + fmtDate(d.createdAt) + '</div>';
+      const zohoFields = ['zohoCreatedAt','zohoModifiedAt','zohoLastActivityAt','zohoGestionnaire','zohoOrigine'];
+      const hasZoho = zohoFields.some(f => d[f]);
+      if(hasZoho){
+        html += '<div class="k" style="color:var(--gold)">— Champs Zoho —</div><div class="v"></div>';
+        zohoFields.forEach(f => {
+          if(d[f]){
+            const val = (f.endsWith('At')) ? fmtDate(d[f]) : esc(d[f]);
+            html += '<div class="k">' + f + '</div><div class="v" style="color:var(--green)">' + val + '</div>';
+          }
+        });
+      } else {
+        html += '<div class="k" style="color:var(--muted)">Champs Zoho</div><div class="v" style="color:var(--muted);font-style:italic">aucun (lead non encore importé)</div>';
+      }
+      html += '</div>';
+      html += '<div style="font-weight:600;font-size:12px;margin-top:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">📝 client_notes (' + notesSnap.size + ')</div>';
+      if(notesSnap.empty){
+        html += '<div style="font-size:12px;color:var(--muted);font-style:italic;margin-top:6px">Aucune note</div>';
+      } else {
+        notesSnap.docs.forEach(n => {
+          const nd = n.data();
+          const keys = Object.keys(nd);
+          const textVal = nd.contenu || nd.text || nd.content || nd.body || nd.note || '(pas de champ texte)';
+          html += '<div class="note-block">';
+          html += '<div class="schema">id=' + esc(n.id) + ' · keys=[' + esc(keys.join(', ')) + ']</div>';
+          html += '<div style="font-size:11px;color:var(--muted);margin-bottom:4px">' + esc(nd.auteur || nd.author || '?') + ' · ' + fmtDate(nd.createdAt) + '</div>';
+          html += '<div style="white-space:pre-wrap">' + esc(textVal.substring(0,400)) + (textVal.length>400?'…':'') + '</div>';
+          html += '</div>';
+        });
+      }
+      html += '</div>';
+    }
+    box.innerHTML = html;
+  } catch(err){
+    box.innerHTML = '<div style="color:var(--red)">Erreur : ' + esc(err.message) + '</div>';
+  }
+}
 
-    // 2. Récupérer toutes les client_notes du lead
-    const notesSnap = await getDocs(collection(db, 'leads', leadId, 'client_notes'));
-    const notes = notesSnap.docs.map(d => ({ id: d.id, data: d.data() }));
+/* DROPZONE */
+const dz = el('dropzone');
+const fi = el('fileInput');
+dz.addEventListener('click', () => fi.click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+fi.addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]); });
 
-    // 3. Identifier les notes d'import vs notes normales
-    const importNotes = notes.filter(n => n.id.startsWith('import_zoho_') || n.data?.type === 'import_zoho' || n.data?.source?.startsWith?.('import_zoho'));
-    const otherNotes  = notes.filter(n => !importNotes.includes(n));
+function handleFile(f){
+  if(!currentUser){ alert('Connecte-toi d\'abord sur team-ambitio'); return; }
+  el('fileName').textContent = f.name;
+  el('fileInfo').classList.remove('hidden');
+  dz.classList.add('hidden');
+  Papa.parse(f, {
+    header:true,
+    skipEmptyLines:true,
+    complete: function(res){
+      csvRows = res.data;
+      el('fileRows').textContent = csvRows.length + ' lignes';
+      logLine('CSV chargé : ' + csvRows.length + ' lignes', 'ok');
+      processMatching();
+    },
+    error: function(err){ alert('Erreur de parsing : ' + err.message); }
+  });
+}
 
-    // 4. Identifier les champs texte probables dans les notes normales
-    const textFieldsFromNormal = new Set();
-    for (const n of otherNotes) {
-      for (const [k, v] of Object.entries(n.data)) {
-        if (typeof v === 'string' && v.length > 30) {
-          textFieldsFromNormal.add(k);
+function resetFile(){
+  csvRows = []; matchResults = [];
+  fi.value = '';
+  el('fileInfo').classList.add('hidden');
+  dz.classList.remove('hidden');
+  el('resultsCard').classList.add('hidden');
+}
+
+/* MATCHING */
+async function processMatching(){
+  el('resultsCard').classList.remove('hidden');
+  logLine('Chargement de tous les leads pour matching…', 'info');
+  try {
+    const snap = await db.collection('leads').get();
+    allLeads = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    logLine('→ ' + allLeads.length + ' leads chargés', 'ok');
+    const byEmail = new Map();
+    const byPhone = new Map();
+    allLeads.forEach(l => {
+      if(l.email){
+        const k = normEmail(l.email);
+        if(!byEmail.has(k)) byEmail.set(k, []);
+        byEmail.get(k).push(l);
+      }
+      if(l.telephone){
+        const k = normPhone(l.telephone);
+        if(k){
+          if(!byPhone.has(k)) byPhone.set(k, []);
+          byPhone.get(k).push(l);
         }
       }
-    }
-
-    // 5. Rendu du résultat
-    let html = '';
-
-    // --- Section lead ---
-    html += `
-      <div class="diag-section">
-        <div class="diag-section-title">
-          Lead trouvé
-          <span class="pill">leads/${escapeHtml(leadId)}</span>
-        </div>
-        <div class="diag-fields-list">
-          ${Object.keys(lead).sort().map(k => `<span class="diag-field-pill">${escapeHtml(k)}</span>`).join('')}
-        </div>
-        <details style="margin-top: 10px;">
-          <summary>Voir tous les champs du lead (JSON)</summary>
-          <div class="diag-pre">${escapeHtml(JSON.stringify(serializeForDisplay(lead), null, 2))}</div>
-        </details>
-      </div>
-    `;
-
-    // --- Section notes import_zoho ---
-    if (importNotes.length === 0) {
-      html += `
-        <div class="diag-section">
-          <div class="diag-section-title">Notes d'import Zoho</div>
-          <div class="empty-state">
-            <strong>Aucune note d'import trouvée</strong> sur ce lead.<br>
-            Si tu pensais avoir fait l'import → soit le dry-run était activé (rien écrit), soit l'écriture a échoué silencieusement.
-          </div>
-        </div>
-      `;
-    } else {
-      html += `
-        <div class="diag-section">
-          <div class="diag-section-title">
-            Notes d'import Zoho
-            <span class="pill">${importNotes.length}</span>
-          </div>
-          ${importNotes.map(n => renderNote(n, true)).join('')}
-        </div>
-      `;
-    }
-
-    // --- Section notes normales ---
-    if (otherNotes.length > 0) {
-      html += `
-        <div class="diag-section">
-          <div class="diag-section-title">
-            Notes existantes (créées via ton UI Team Ambitio)
-            <span class="pill">${otherNotes.length}</span>
-          </div>
-          ${textFieldsFromNormal.size > 0 ? `
-            <div style="margin-bottom: 12px; font-size: 12px; color: var(--ink-mute);">
-              <strong style="color: var(--success);">Champs texte détectés</strong> dans tes notes existantes (probablement ce que ton UI affiche) :
-              <div class="diag-fields-list" style="margin-top: 6px;">
-                ${[...textFieldsFromNormal].map(f => `<span class="diag-field-pill text-field">${escapeHtml(f)}</span>`).join('')}
-              </div>
-            </div>
-          ` : ''}
-          ${otherNotes.slice(0, 3).map(n => renderNote(n, false)).join('')}
-          ${otherNotes.length > 3 ? `<div style="font-size: 12px; color: var(--ink-mute); margin-top: 8px;">… et ${otherNotes.length - 3} autre(s) note(s)</div>` : ''}
-        </div>
-      `;
-    } else {
-      html += `
-        <div class="diag-section">
-          <div class="diag-section-title">Notes existantes (UI)</div>
-          <div class="empty-state">
-            Aucune note "normale" sur ce lead (rien de créé via ton UI Team Ambitio).<br>
-            On ne peut donc pas auto-détecter le schéma attendu.
-          </div>
-        </div>
-      `;
-    }
-
-    $('diagResult').innerHTML = html;
-  } catch (e) {
-    $('diagResult').innerHTML = `<div class="empty-state"><strong>Erreur</strong> : ${escapeHtml(e.message)}</div>`;
+    });
+    matchResults = csvRows.map(row => {
+      const email = normEmail(row['Email']);
+      const phone = normPhone(row['Portable']);
+      let candidates = [];
+      let matchBy = null;
+      if(email && byEmail.has(email)){ candidates = byEmail.get(email); matchBy = 'email'; }
+      else if(phone && byPhone.has(phone)){ candidates = byPhone.get(phone); matchBy = 'phone'; }
+      let status, leadId = null, leadData = null;
+      if(candidates.length === 0) status = 'nomatch';
+      else if(candidates.length === 1){ status = 'match'; leadId = candidates[0].id; leadData = candidates[0]; }
+      else { status = 'ambig'; leadId = candidates[0].id; leadData = candidates[0]; }
+      return { row, status, leadId, leadData, candidates, matchBy };
+    });
+    renderResults();
+    el('runBtn').disabled = false;
+    const m = matchResults.filter(r => r.status === 'match').length;
+    const a = matchResults.filter(r => r.status === 'ambig').length;
+    const n = matchResults.filter(r => r.status === 'nomatch').length;
+    logLine('Matching terminé : ' + m + ' matchs, ' + a + ' ambigus, ' + n + ' sans match', 'info');
+  } catch(err){
+    logLine('Erreur matching : ' + err.message, 'err');
   }
 }
 
-function serializeForDisplay(obj) {
-  // Sérialise un objet en remplaçant les Timestamps Firestore par leur valeur lisible
-  if (obj === null || obj === undefined) return obj;
-  if (Array.isArray(obj)) return obj.map(serializeForDisplay);
-  if (typeof obj !== 'object') return obj;
-  if (obj.toDate) return fmtTs(obj);
-  if (obj.seconds !== undefined && obj.nanoseconds !== undefined) return fmtTs(obj);
-  const out = {};
-  for (const [k, v] of Object.entries(obj)) out[k] = serializeForDisplay(v);
-  return out;
+function renderResults(){
+  el('statAll').textContent = matchResults.length;
+  el('statMatch').textContent = matchResults.filter(r => r.status === 'match').length;
+  el('statAmbig').textContent = matchResults.filter(r => r.status === 'ambig').length;
+  el('statNoMatch').textContent = matchResults.filter(r => r.status === 'nomatch').length;
+  const tbody = el('tbody');
+  tbody.innerHTML = '';
+  const filtered = currentFilter === 'all' ? matchResults : matchResults.filter(r => r.status === currentFilter);
+  filtered.forEach((r) => {
+    const realIdx = matchResults.indexOf(r);
+    const row = r.row;
+    const tr = document.createElement('tr');
+    let badge;
+    if(r.status === 'match') badge = '<span class="badge match">✓ Match (' + r.matchBy + ')</span>';
+    else if(r.status === 'ambig') badge = '<span class="badge ambig">⚠ Ambigu (' + r.candidates.length + ')</span>';
+    else badge = '<span class="badge nomatch">✗ Sans match</span>';
+    tr.innerHTML =
+      '<td><div class="row-name">' + esc(row['Nom du Contact'] || '—') + '</div><div class="row-meta">' + esc(row['Affaire Id'] || '') + '</div></td>' +
+      '<td><div>' + esc(row['Email'] || '—') + '</div><div class="row-meta">' + esc(normPhone(row['Portable']) || '—') + '</div></td>' +
+      '<td>' + esc(row['Étape'] || '—') + '</td>' +
+      '<td>' + esc(row['Gestionnaire de l\'Affaire'] || '—') + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td><button class="row-action" onclick="showDetail(' + realIdx + ')">Voir →</button></td>';
+    tbody.appendChild(tr);
+  });
 }
 
-function renderNote(note, isImport) {
-  const data = serializeForDisplay(note.data);
-  return `
-    <div class="diag-note ${isImport ? 'is-import' : ''}">
-      <div class="diag-note-header">
-        <span class="diag-note-id">${escapeHtml(note.id)}</span>
-        ${isImport ? '<span class="diag-tag">IMPORT</span>' : ''}
-      </div>
-      <div class="diag-fields-list">
-        ${Object.keys(note.data).sort().map(k => {
-          const v = note.data[k];
-          const isText = typeof v === 'string' && v.length > 30;
-          return `<span class="diag-field-pill ${isText ? 'text-field' : ''}">${escapeHtml(k)}</span>`;
-        }).join('')}
-      </div>
-      <details style="margin-top: 10px;">
-        <summary>Voir le contenu complet</summary>
-        <div class="diag-pre">${escapeHtml(JSON.stringify(data, null, 2))}</div>
-      </details>
-    </div>
-  `;
-}
+document.querySelectorAll('.stat').forEach(s => {
+  s.addEventListener('click', () => {
+    document.querySelectorAll('.stat').forEach(x => x.classList.remove('active'));
+    s.classList.add('active');
+    currentFilter = s.dataset.filter;
+    renderResults();
+  });
+});
 
-// ===========================================================================
-// IMPORT — CSV → matching → écriture
-// ===========================================================================
-
-function buildNoteText(row) {
-  const lines = ['[Import Zoho — ' + new Date().toLocaleDateString('fr-FR') + ']'];
-  if (row.origine)        lines.push('Origine : ' + row.origine);
-  if (row.etape)          lines.push('Étape Zoho : ' + row.etape);
-  if (row.statut)         lines.push('Statut : ' + row.statut);
-  if (row.etat)           lines.push('État : ' + row.etat);
-  if (row.gestionnaire)   lines.push('Gestionnaire : ' + row.gestionnaire);
-  if (row.heureCreation)  lines.push('Créé dans Zoho : ' + fmtZohoDate(row.heureCreation));
-  if (row.derniereActivite) lines.push('Dernière activité Zoho : ' + fmtZohoDate(row.derniereActivite));
-  if (row.modifiePar && row.modifiePar !== row.gestionnaire)
-    lines.push('Modifié par : ' + row.modifiePar);
-  if (row.description) {
-    lines.push('');
-    lines.push('—————————————————');
-    lines.push('');
-    lines.push(row.description);
+/* DETAIL */
+function showDetail(idx){
+  const r = matchResults[idx];
+  const row = r.row;
+  const lead = r.leadData;
+  el('modalTitle').textContent = row['Nom du Contact'] || '(sans nom)';
+  el('modalSub').textContent = row['Affaire Id'] || '';
+  let body = '';
+  body += '<div class="modal-section"><h4>📋 Données Zoho (CSV)</h4>';
+  body += '<div class="field-grid">';
+  body += '<div class="k">Affaire ID</div><div class="v">' + esc(row['Affaire Id'] || '—') + '</div>';
+  body += '<div class="k">Email</div><div class="v">' + esc(row['Email'] || '—') + '</div>';
+  body += '<div class="k">Portable</div><div class="v">' + esc(normPhone(row['Portable']) || '—') + '</div>';
+  body += '<div class="k">Étape</div><div class="v">' + esc(row['Étape'] || '—') + '</div>';
+  body += '<div class="k">Statut</div><div class="v">' + esc(row['Statut'] || '—') + '</div>';
+  body += '<div class="k">État</div><div class="v">' + esc(row['État'] || '—') + '</div>';
+  body += '<div class="k">Gestionnaire</div><div class="v">' + esc(row['Gestionnaire de l\'Affaire'] || '—') + '</div>';
+  body += '<div class="k">Origine</div><div class="v">' + esc(row['Origine du Prospect'] || '—') + '</div>';
+  body += '<div class="k">Création</div><div class="v">' + fmtDate(parseZohoDate(row['Heure de création'])) + '</div>';
+  body += '<div class="k">Modification</div><div class="v">' + fmtDate(parseZohoDate(row['Heure de modification'])) + '</div>';
+  body += '<div class="k">Dernière activité</div><div class="v">' + fmtDate(parseZohoDate(row['Date de la dernière activité'])) + '</div>';
+  body += '</div></div>';
+  if(r.status === 'nomatch'){
+    body += '<div class="modal-section"><h4>🎯 Lead Team Ambitio</h4>';
+    body += '<div style="color:var(--red);font-style:italic">Aucun lead correspondant trouvé. L\'affaire sera ignorée à l\'import.</div></div>';
+  } else {
+    body += '<div class="modal-section"><h4>🎯 Lead Team Ambitio matché' + (r.status==='ambig' ? ' (' + r.candidates.length + ' candidats)' : '') + '</h4>';
+    body += '<div class="field-grid">';
+    body += '<div class="k">Lead ID</div><div class="v">' + esc(r.leadId) + '</div>';
+    body += '<div class="k">Nom</div><div class="v">' + esc(lead.nom || '—') + '</div>';
+    body += '<div class="k">Email</div><div class="v">' + esc(lead.email || '—') + '</div>';
+    body += '<div class="k">Téléphone</div><div class="v">' + esc(lead.telephone || '—') + '</div>';
+    body += '<div class="k">Statut Team</div><div class="v">' + esc(lead.status || '—') + '</div>';
+    body += '<div class="k">UTM Team</div><div class="v">' + esc(lead.utm || '—') + '</div>';
+    body += '</div></div>';
+    const updates = computeUpdates(row, lead);
+    body += '<div class="modal-section"><h4>✏️ Écriture proposée (no-overwrite strict)</h4>';
+    body += '<div class="field-grid">';
+    ['zohoOrigine','zohoGestionnaire','zohoCreatedAt','zohoModifiedAt','zohoLastActivityAt'].forEach(f => {
+      const u = updates.fieldDecisions[f];
+      let cls = 'v', txt;
+      if(u.action === 'skip-exists'){ cls = 'v skip'; txt = 'gardé (déjà : ' + (f.endsWith('At') ? fmtDate(lead[f]) : esc(lead[f])) + ')'; }
+      else if(u.action === 'skip-empty'){ cls = 'v skip'; txt = 'pas de valeur CSV'; }
+      else if(u.action === 'add'){ cls = 'v add'; txt = '+ ' + (f.endsWith('At') ? fmtDate(u.value) : esc(u.value)); }
+      body += '<div class="k">' + f + '</div><div class="' + cls + '">' + txt + '</div>';
+    });
+    body += '</div>';
+    body += '<h4 style="margin-top:18px">📝 Note ajoutée dans client_notes</h4>';
+    body += '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">id = <code>zoho_' + esc((row['Affaire Id']||'').replace('zcrm_','')) + '</code> · schéma <code>{ contenu, auteur, createdAt, source, zohoAffaireId }</code></div>';
+    body += '<pre>' + esc(updates.noteContent) + '</pre>';
+    body += '</div>';
   }
-  return lines.join('\n');
+  el('modalBody').innerHTML = body;
+  el('modalBg').classList.add('shown');
 }
 
-function buildNoteDoc(row) {
-  const text = buildNoteText(row);
+function closeModal(){ el('modalBg').classList.remove('shown'); }
+
+/* COMPUTE UPDATES */
+function computeUpdates(row, lead){
+  const decisions = {};
+  const updates = {};
+  const mapping = {
+    zohoOrigine:         { csv: 'Origine du Prospect',          isDate: false },
+    zohoGestionnaire:    { csv: 'Gestionnaire de l\'Affaire',   isDate: false },
+    zohoCreatedAt:       { csv: 'Heure de création',            isDate: true },
+    zohoModifiedAt:      { csv: 'Heure de modification',        isDate: true },
+    zohoLastActivityAt:  { csv: 'Date de la dernière activité', isDate: true }
+  };
+  for(const [field, def] of Object.entries(mapping)){
+    const csvRaw = row[def.csv];
+    if(lead[field]){ decisions[field] = { action: 'skip-exists' }; continue; }
+    if(!csvRaw || !String(csvRaw).trim()){ decisions[field] = { action: 'skip-empty' }; continue; }
+    let value;
+    if(def.isDate){
+      const d = parseZohoDate(csvRaw);
+      if(!d){ decisions[field] = { action: 'skip-empty' }; continue; }
+      value = d;
+    } else {
+      value = String(csvRaw).trim();
+    }
+    decisions[field] = { action: 'add', value };
+    updates[field] = value;
+  }
+  const lines = [];
+  lines.push('📦 Import depuis Zoho/Bigin');
+  lines.push('Affaire : ' + (row['Affaire Id'] || '—'));
+  if(row['Étape']) lines.push('Étape Zoho : ' + row['Étape']);
+  if(row['Statut']) lines.push('Statut Zoho : ' + row['Statut']);
+  if(row['État']) lines.push('État : ' + row['État']);
+  if(row['Gestionnaire de l\'Affaire']) lines.push('Gestionnaire : ' + row['Gestionnaire de l\'Affaire']);
+  if(row['Origine du Prospect']) lines.push('Origine : ' + row['Origine du Prospect']);
+  if(row['Modifié Par']) lines.push('Modifié par : ' + row['Modifié Par']);
+  const dCreat = parseZohoDate(row['Heure de création']);
+  if(dCreat) lines.push('Créé sur Zoho le : ' + fmtDate(dCreat));
+  const dLast = parseZohoDate(row['Date de la dernière activité']);
+  if(dLast) lines.push('Dernière activité Zoho : ' + fmtDate(dLast));
+  if(row['Description'] && row['Description'].trim()){
+    lines.push('');
+    lines.push('— Description (Bigin) —');
+    lines.push(row['Description'].trim());
+  }
   return {
-    // Plusieurs alias pour maximiser la compatibilité avec ton UI Team Ambitio
-    text, content: text, body: text, note: text, texte: text, contenu: text,
-    message: text, comment: text, commentaire: text, description: text,
-    // Typage
-    type: 'import_zoho',
-    source: 'import_zoho_2026_05_26',
-    // Métadonnées Zoho structurées
-    zoho: {
-      affaireId: row.affaireId,
-      contactId: row.contactId,
-      pipeline: row.pipeline,
-      sousPipeline: row.sousPipeline,
-      etape: row.etape || null,
-      statut: row.statut || null,
-      etat: row.etat || null,
-      origine: row.origine || null,
-      gestionnaire: row.gestionnaire || null,
-      modifiePar: row.modifiePar || null,
-      createdAt: row.heureCreation || null,
-      modifiedAt: row.heureModification || null,
-      lastActivityAt: row.derniereActivite || null,
-      nomContact: row.nomContact,
-      nomAffaire: row.nomAffaire,
-    },
-    // Tracking
-    author: 'Import Zoho',
-    authorName: 'Import Zoho',
-    authorUid: state.user?.uid || null,
-    createdAt: serverTimestamp(),
-    importedAt: serverTimestamp(),
-    importedAtClient: new Date().toISOString(),
+    fieldDecisions: decisions,
+    fieldUpdates: updates,
+    noteContent: lines.join('\n'),
+    noteDocId: 'zoho_' + (row['Affaire Id']||'unknown').replace('zcrm_','')
   };
 }
 
-const drop = $('dropzone');
-drop.addEventListener('click', () => $('csvFile').click());
-drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
-drop.addEventListener('dragleave', () => drop.classList.remove('over'));
-drop.addEventListener('drop', e => {
-  e.preventDefault(); drop.classList.remove('over');
-  if (e.dataTransfer.files.length) handleCsv(e.dataTransfer.files[0]);
-});
-$('csvFile').addEventListener('change', e => {
-  if (e.target.files.length) handleCsv(e.target.files[0]);
-});
-
-function handleCsv(file) {
-  Papa.parse(file, {
-    header: true, skipEmptyLines: true,
-    complete: async (results) => {
-      const raw = results.data;
-      state.csvRows = raw.map(r => ({
-        affaireId:        r['Affaire Id'],
-        contactId:        r['Nom du Contact.id'],
-        nomContact:       r['Nom du Contact'],
-        gestionnaire:     r['Gestionnaire de l’Affaire'] || r['Gestionnaire de l\'Affaire'],
-        origine:          r['Origine du Prospect'],
-        portable:         r['Portable'],
-        nomAffaire:       r['Nom de l’Affaire'] || r['Nom de l\'Affaire'],
-        etat:             r['État'],
-        statut:           r['Statut'],
-        sousPipeline:     r['Sous-pipeline'],
-        etape:            r['Étape'],
-        modifiePar:       r['Modifié Par'],
-        heureCreation:    r['Heure de création'],
-        heureModification:r['Heure de modification'],
-        derniereActivite: r['Date de la dernière activité'],
-        pipeline:         r['Pipeline'],
-        description:      r['Description'],
-        email:            r['Email'],
-        emailN: normalizeEmail(r['Email']),
-        phoneN: normalizePhone(r['Portable']),
-      })).filter(r => r.affaireId);
-
-      const withEmail = state.csvRows.filter(r => r.emailN).length;
-      const withPhone = state.csvRows.filter(r => r.phoneN).length;
-      const withDesc  = state.csvRows.filter(r => r.description && r.description.trim()).length;
-
-      $('csvStats').classList.remove('hidden');
-      $('csvStats').innerHTML = `
-        <div class="stat"><div class="stat-label">Lignes CSV</div><div class="stat-value">${state.csvRows.length}</div></div>
-        <div class="stat success"><div class="stat-label">Avec email</div><div class="stat-value">${withEmail}</div></div>
-        <div class="stat info"><div class="stat-label">Avec téléphone</div><div class="stat-value">${withPhone}</div></div>
-        <div class="stat warning"><div class="stat-label">Avec description</div><div class="stat-value">${withDesc}</div></div>
-      `;
-      $('matchPanel').classList.remove('hidden');
-      $('matchStats').innerHTML = '<div class="stat"><div class="stat-label">Chargement…</div><div class="stat-value">…</div></div>';
-      await loadLeadsAndMatch();
-    },
-    error: (err) => alert('Erreur de lecture CSV : ' + err.message),
-  });
-}
-
-async function loadLeadsAndMatch() {
-  try {
-    const snap = await getDocs(collection(db, 'leads'));
-    state.leads = [];
-    state.emailIndex.clear();
-    state.phoneIndex.clear();
-
-    snap.forEach(d => {
-      const data = d.data() || {};
-      const rawEmail = data.email || data.mail || data.emailAddress || null;
-      const rawPhone = data.telephone || data.phone || data.portable || data.mobile || data.tel || null;
-      const emailN = normalizeEmail(rawEmail);
-      const phoneN = normalizePhone(rawPhone);
-      state.leads.push({ id: d.id, emailN, phoneN, raw: data });
-      if (emailN) {
-        if (!state.emailIndex.has(emailN)) state.emailIndex.set(emailN, []);
-        state.emailIndex.get(emailN).push(d.id);
-      }
-      if (phoneN) {
-        if (!state.phoneIndex.has(phoneN)) state.phoneIndex.set(phoneN, []);
-        state.phoneIndex.get(phoneN).push(d.id);
-      }
-    });
-    runMatching();
-    $('execPanel').classList.remove('hidden');
-  } catch (e) {
-    alert('Erreur de chargement Firestore : ' + e.message + '\n\nVérifie que ton compte a le rôle admin ou sales.');
+/* IMPORT */
+function toggleDry(){
+  dryRun = !dryRun;
+  const t = el('dryToggle'), l = el('dryLabel'), btn = el('runBtn');
+  if(dryRun){
+    t.classList.add('on');
+    l.textContent = 'Dry-run (aucune écriture)';
+    btn.textContent = 'Lancer l\'import';
+    btn.classList.remove('danger'); btn.classList.add('primary');
+  } else {
+    t.classList.remove('on');
+    l.textContent = '⚠ Écriture RÉELLE en Firestore';
+    btn.textContent = '⚠ Lancer l\'écriture RÉELLE';
+    btn.classList.remove('primary'); btn.classList.add('danger');
   }
 }
 
-function runMatching() {
-  state.matches = state.csvRows.map(row => {
-    const match = { row, matchType: 'none', leadIds: [], leadId: null };
-    if (row.emailN && state.emailIndex.has(row.emailN)) {
-      match.leadIds = state.emailIndex.get(row.emailN);
-      match.matchType = match.leadIds.length === 1 ? 'email' : 'email_ambig';
-      match.leadId = match.leadIds[0];
-    } else if (row.phoneN && state.phoneIndex.has(row.phoneN)) {
-      match.leadIds = state.phoneIndex.get(row.phoneN);
-      match.matchType = match.leadIds.length === 1 ? 'phone' : 'phone_ambig';
-      match.leadId = match.leadIds[0];
+async function runImport(){
+  if(!currentUser){ alert('Connecte-toi'); return; }
+  const toProcess = matchResults.filter(r => r.status === 'match' || r.status === 'ambig');
+  if(toProcess.length === 0){ alert('Aucun lead à traiter'); return; }
+  if(!dryRun){
+    const ok = confirm('⚠ ÉCRITURE RÉELLE\n\n' + toProcess.length + ' leads vont être enrichis dans Firestore (project ambitio-team).\n\nPolitique no-overwrite : aucun champ existant ne sera écrasé.\n\nContinuer ?');
+    if(!ok) return;
+  }
+  el('runBtn').disabled = true;
+  logLine('━━━ ' + (dryRun ? 'DRY-RUN' : 'ÉCRITURE RÉELLE') + ' — ' + toProcess.length + ' leads ━━━', 'info');
+  let countFieldsWritten = 0;
+  let countNotesWritten = 0;
+  let countLeadsSkipped = 0;
+  let countErrors = 0;
+  for(let i = 0; i < toProcess.length; i++){
+    const r = toProcess[i];
+    const row = r.row;
+    const lead = r.leadData;
+    const updates = computeUpdates(row, lead);
+    const nFields = Object.keys(updates.fieldUpdates).length;
+    try {
+      if(dryRun){
+        if(nFields > 0) countFieldsWritten += nFields;
+        countNotesWritten++;
+        logLine('[' + (i+1) + '/' + toProcess.length + '] DRY · ' + (lead.nom || lead.email) + ' · ' + nFields + ' champs + 1 note', 'ok');
+      } else {
+        if(nFields > 0){
+          await db.collection('leads').doc(r.leadId).update(updates.fieldUpdates);
+          countFieldsWritten += nFields;
+        } else {
+          countLeadsSkipped++;
+        }
+        const noteRef = db.collection('leads').doc(r.leadId).collection('client_notes').doc(updates.noteDocId);
+        const existing = await noteRef.get();
+        if(existing.exists){
+          logLine('[' + (i+1) + '/' + toProcess.length + '] · ' + (lead.nom || lead.email) + ' · note déjà présente (skip)', 'info');
+        } else {
+          await noteRef.set({
+            contenu:    updates.noteContent,
+            auteur:     'import-zoho (' + currentUser.email + ')',
+            createdAt:  firebase.firestore.FieldValue.serverTimestamp(),
+            source:     'zoho_import',
+            zohoAffaireId: row['Affaire Id'] || null
+          });
+          countNotesWritten++;
+          logLine('[' + (i+1) + '/' + toProcess.length + '] ✓ ' + (lead.nom || lead.email) + ' · ' + nFields + ' champs + note', 'ok');
+        }
+      }
+    } catch(err){
+      countErrors++;
+      logLine('[' + (i+1) + '/' + toProcess.length + '] ✗ ' + (lead.nom || lead.email) + ' · ' + err.message, 'err');
     }
-    return match;
-  });
-
-  const byEmail = state.matches.filter(m => m.matchType === 'email').length;
-  const byPhone = state.matches.filter(m => m.matchType === 'phone').length;
-  const ambig   = state.matches.filter(m => m.matchType.endsWith('_ambig')).length;
-  const none    = state.matches.filter(m => m.matchType === 'none').length;
-
-  $('matchStats').innerHTML = `
-    <div class="stat"><div class="stat-label">Leads en base</div><div class="stat-value">${state.leads.length}</div></div>
-    <div class="stat success"><div class="stat-label">Match par email</div><div class="stat-value">${byEmail}</div></div>
-    <div class="stat info"><div class="stat-label">Match par téléphone</div><div class="stat-value">${byPhone}</div></div>
-    <div class="stat danger"><div class="stat-label">Ambigus</div><div class="stat-value">${ambig}</div></div>
-    <div class="stat warning"><div class="stat-label">Non matchés</div><div class="stat-value">${none}</div></div>
-  `;
-  renderResultsTable();
+  }
+  logLine('━━━ Terminé ━━━', 'info');
+  logLine('Champs écrits : ' + countFieldsWritten + ' · Notes ajoutées : ' + countNotesWritten + ' · Leads sans nouveau champ : ' + countLeadsSkipped + ' · Erreurs : ' + countErrors, 'ok');
+  el('runBtn').disabled = false;
 }
 
-function renderResultsTable() {
-  const filtered = state.matches.filter(m => {
-    if (state.filter === 'all') return true;
-    if (state.filter === 'matched') return m.matchType === 'email' || m.matchType === 'phone';
-    if (state.filter === 'ambig')   return m.matchType.endsWith('_ambig');
-    if (state.filter === 'none')    return m.matchType === 'none';
-    return true;
+/* EXPORT */
+function exportReport(){
+  const rows = [['Affaire ID','Nom','Email','Téléphone','Étape Zoho','Gestionnaire','Origine','Statut Match','Match par','Lead ID Team','Nom Team']];
+  matchResults.forEach(r => {
+    rows.push([
+      r.row['Affaire Id'] || '',
+      r.row['Nom du Contact'] || '',
+      r.row['Email'] || '',
+      normPhone(r.row['Portable']) || '',
+      r.row['Étape'] || '',
+      r.row['Gestionnaire de l\'Affaire'] || '',
+      r.row['Origine du Prospect'] || '',
+      r.status,
+      r.matchBy || '',
+      r.leadId || '',
+      (r.leadData && r.leadData.nom) || ''
+    ]);
   });
-
-  const badge = (m) => {
-    if (m.matchType === 'email') return '<span class="badge badge-email">EMAIL</span>';
-    if (m.matchType === 'phone') return '<span class="badge badge-phone">TÉL</span>';
-    if (m.matchType.endsWith('_ambig')) return `<span class="badge badge-ambig">AMBIGU ×${m.leadIds.length}</span>`;
-    return '<span class="badge badge-none">AUCUN</span>';
-  };
-
-  const rows = filtered.map((m) => {
-    const r = m.row;
-    const contactDisplay = [r.nomContact, r.nomAffaire].filter(Boolean).join(' / ');
-    return `
-      <tr>
-        <td>${badge(m)}</td>
-        <td>${escapeHtml(contactDisplay)}</td>
-        <td class="mono">${escapeHtml(r.emailN || '—')}</td>
-        <td class="mono">${escapeHtml(r.phoneN || '—')}</td>
-        <td>${escapeHtml(r.etape || '—')}</td>
-        <td class="mono">${escapeHtml(m.leadId || '—')}</td>
-        <td><button class="filter-btn" data-idx="${state.matches.indexOf(m)}">Aperçu</button></td>
-      </tr>`;
-  }).join('');
-
-  $('matchResults').innerHTML = `
-    <div class="results-head">
-      <button class="filter-btn ${state.filter==='all'?'on':''}" data-f="all">Tous (${state.matches.length})</button>
-      <button class="filter-btn ${state.filter==='matched'?'on':''}" data-f="matched">Matchés (${state.matches.filter(m=>m.matchType==='email'||m.matchType==='phone').length})</button>
-      <button class="filter-btn ${state.filter==='ambig'?'on':''}" data-f="ambig">Ambigus</button>
-      <button class="filter-btn ${state.filter==='none'?'on':''}" data-f="none">Non matchés</button>
-    </div>
-    <div class="results-body">
-      <table>
-        <thead><tr>
-          <th>Type</th><th>Contact / Affaire</th><th>Email</th><th>Téléphone</th><th>Étape Zoho</th><th>Lead ID</th><th></th>
-        </tr></thead>
-        <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--ink-mute);">Aucune ligne pour ce filtre.</td></tr>'}</tbody>
-      </table>
-    </div>`;
-
-  $('matchResults').querySelectorAll('[data-f]').forEach(b => {
-    b.addEventListener('click', () => { state.filter = b.dataset.f; renderResultsTable(); });
-  });
-  $('matchResults').querySelectorAll('[data-idx]').forEach(b => {
-    b.addEventListener('click', () => openPreview(parseInt(b.dataset.idx)));
-  });
-}
-
-function openPreview(idx) {
-  const m = state.matches[idx];
-  const r = m.row;
-  $('modalSub').innerHTML = m.leadId
-    ? `Sera écrite dans <span class="mono-inline">leads/${escapeHtml(m.leadId)}/client_notes/import_zoho_${escapeHtml(r.affaireId)}</span>`
-    : `<span style="color:var(--danger);">Aucun lead trouvé — pas d'écriture pour cette ligne.</span>`;
-  $('previewText').textContent = buildNoteText(r);
-  $('previewJson').textContent = JSON.stringify(buildNoteDoc(r), (k, v) => {
-    if (v && typeof v === 'object' && v._methodName === 'serverTimestamp') return '<serverTimestamp()>';
-    return v;
-  }, 2);
-  $('modalBg').classList.add('on');
-}
-$('btnCloseModal').addEventListener('click', () => $('modalBg').classList.remove('on'));
-$('modalBg').addEventListener('click', e => { if (e.target === $('modalBg')) $('modalBg').classList.remove('on'); });
-
-$('dryRun').addEventListener('change', () => {
-  const isDry = $('dryRun').checked;
-  $('btnRun').textContent = isDry ? 'Lancer la simulation' : '⚠ Lancer l\'import RÉEL';
-  $('btnRun').classList.toggle('btn-danger', !isDry);
-  $('btnRun').classList.toggle('btn-gold', isDry);
-});
-
-$('btnRun').addEventListener('click', async () => {
-  const isDry = $('dryRun').checked;
-  if (!isDry) {
-    const sure = confirm(
-      'Tu vas écrire en RÉEL dans Firestore.\n\n' +
-      'Opération idempotente : relançable sans risque de doublon.\n\n' +
-      'Continuer ?'
-    );
-    if (!sure) return;
-  }
-
-  $('btnRun').disabled = true;
-  $('log').innerHTML = '';
-  log(isDry ? '=== DRY-RUN (aucune écriture) ===' : '=== IMPORT RÉEL EN COURS ===', isDry ? 'info' : 'warn');
-
-  const toProcess = state.matches.filter(m => m.matchType === 'email' || m.matchType === 'phone');
-  log('Lignes à traiter : ' + toProcess.length, 'info');
-
-  const total = toProcess.length;
-  let done = 0, errors = 0;
-  const startedAt = Date.now();
-
-  for (const m of toProcess) {
-    const r = m.row;
-    const noteId = 'import_zoho_' + r.affaireId;
-    const path = `leads/${m.leadId}/client_notes/${noteId}`;
-
-    if (isDry) {
-      log('[SIM] ' + path, 'ok');
-      m.execStatus = 'simulated';
-    } else {
-      try {
-        const docRef = doc(db, 'leads', m.leadId, 'client_notes', noteId);
-        await setDoc(docRef, buildNoteDoc(r), { merge: true });
-        log('[OK]  ' + path, 'ok');
-        m.execStatus = 'written';
-      } catch (e) {
-        log('[ERR] ' + path + ' → ' + e.message, 'err');
-        m.execStatus = 'error';
-        m.execError = e.message;
-        errors++;
-      }
-    }
-    done++;
-    $('progressBar').style.width = Math.round(100 * done / total) + '%';
-  }
-
-  state.matches.filter(m => m.matchType === 'none').forEach(m => m.execStatus = 'no_match');
-  state.matches.filter(m => m.matchType.endsWith('_ambig')).forEach(m => m.execStatus = 'ambiguous');
-
-  const dur = ((Date.now() - startedAt) / 1000).toFixed(1);
-  log('', 'info');
-  log('=== TERMINÉ en ' + dur + 's ===', 'info');
-  log('Notes traitées : ' + done + ' / ' + total + (errors ? ' (avec ' + errors + ' erreur(s))' : ''), errors ? 'warn' : 'ok');
-  if (isDry) log('→ Décoche "Mode dry-run" pour écrire pour de vrai.', 'warn');
-
-  $('btnRun').disabled = false;
-  $('btnExport').disabled = false;
-});
-
-$('btnExport').addEventListener('click', () => {
-  if (!state.matches.length) return;
-  const headers = [
-    'matchType','execStatus','leadId','zohoAffaireId','nomContact','nomAffaire',
-    'email','emailNormalized','portable','phoneNormalized',
-    'origine','etape','statut','etat','gestionnaire',
-    'heureCreation','derniereActivite','hasDescription','descriptionLength','execError'
-  ];
-  const lines = [headers.join(',')];
-  for (const m of state.matches) {
-    const r = m.row;
-    const row = [
-      m.matchType, m.execStatus || 'pending', m.leadId || '', r.affaireId,
-      r.nomContact || '', r.nomAffaire || '', r.email || '', r.emailN || '',
-      r.portable || '', r.phoneN || '', r.origine || '', r.etape || '',
-      r.statut || '', r.etat || '', r.gestionnaire || '',
-      r.heureCreation || '', r.derniereActivite || '',
-      r.description ? 'yes' : 'no', r.description ? r.description.length : 0,
-      m.execError || ''
-    ].map(v => {
-      const s = String(v ?? '');
-      return /[,"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-    });
-    lines.push(row.join(','));
-  }
-  const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type:'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'import-zoho-rapport-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.download = 'rapport-import-zoho-' + new Date().toISOString().slice(0,10) + '.csv';
   a.click();
   URL.revokeObjectURL(url);
-});
+}
 </script>
 </body>
 </html>

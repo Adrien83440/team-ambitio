@@ -2320,6 +2320,17 @@ function renderCard(l) {
   if (l.disponibilite) h += '<div class="ld-detail-row"><span class="ld-detail-label">Dispo</span><span class="ld-detail-val">' + escHtml(l.disponibilite) + '</span></div>';
   if (l.timeline) h += '<div class="ld-detail-row"><span class="ld-detail-label">Mise en place</span><span class="ld-detail-val">' + escHtml(l.timeline) + '</span></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(l.createdAt) + '</span></div>';
+
+  // 📦 Historique Zoho — n'apparaît QUE pour les leads importés depuis l'ancien CRM Zoho/Bigin
+  if (l.zohoCreatedAt || l.zohoModifiedAt || l.zohoLastActivityAt || l.zohoGestionnaire || l.zohoOrigine) {
+    h += '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">📦 Historique Zoho</div>';
+    if (l.zohoOrigine)         h += '<div class="ld-detail-row"><span class="ld-detail-label">Origine Zoho</span><span class="ld-detail-val">' + escHtml(l.zohoOrigine) + '</span></div>';
+    if (l.zohoGestionnaire)    h += '<div class="ld-detail-row"><span class="ld-detail-label">Gestionnaire</span><span class="ld-detail-val">' + escHtml(l.zohoGestionnaire) + '</span></div>';
+    if (l.zohoCreatedAt)       h += '<div class="ld-detail-row"><span class="ld-detail-label">Créé sur Zoho</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoCreatedAt) + '</span></div>';
+    if (l.zohoModifiedAt)      h += '<div class="ld-detail-row"><span class="ld-detail-label">Modifié Zoho</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoModifiedAt) + '</span></div>';
+    if (l.zohoLastActivityAt)  h += '<div class="ld-detail-row"><span class="ld-detail-label">Dernière activité</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoLastActivityAt) + '</span></div>';
+  }
+
   h += '</div>';
 
   // RDV à venir (lus en temps réel depuis bookings — voir attachLeadRdvListener)
