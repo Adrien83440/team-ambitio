@@ -219,11 +219,47 @@ module.exports = async (req, res) => {
       (Array.isArray(prevAnswers) && prevAnswers.length > 0) ||
       (prevAnswers && typeof prevAnswers === 'object' && !Array.isArray(prevAnswers) && Object.keys(prevAnswers).length > 0);
 
+    // ── Soft-reset (Q1.B) : si le lead est dans un stage "abandonné", on le
+    // remet en file d'attente comme un lead neuf — stage→lead, status→nouveau.
+    // L'ancien statut est mémorisé dans previousStatus (le badge "⚠️ Avant : X"
+    // de sales-leads.html l'affiche déjà automatiquement).
+    //
+    // CLIENTS protégés : on n'inclut PAS closed_won_setting / closed_won_self
+    // dans la liste resetable. Un client coaching qui re-remplit un formulaire
+    // d'audit business doit rester client — il ne doit pas être rétrogradé.
+    // Double garde via isClient pour la robustesse.
+    const RESETABLE_STAGES = [
+      'closed_lost',
+      'poubelle',
+      'disqualification',
+      'pas_interesse',
+      'rdv_annules_prospect',
+      'rdv_annules_equipe',
+      'no_show_self',
+      'no_show_setting',
+      'disqualifie_closing'
+    ];
+    const currentStage = prevData.stage || '';
+    const isClient = prevData.isClient === true
+                  || currentStage === 'closed_won_setting'
+                  || currentStage === 'closed_won_self';
+    const shouldReset = !isClient && RESETABLE_STAGES.indexOf(currentStage) >= 0;
+
     const update = {
+      // Rafraîchissement du contenu form (déjà en place)
       formId,
       formTitle,
       formAnswers: formAnswersArr,
       formSubmittedAt: new Date().toISOString(),
+
+      // Q3 : écrase source/UTM/sourceDetail/type pour refléter la dernière
+      // action du lead. L'ancien UTM reste retrouvable via formSubmissionsHistory
+      // (snapshot ci-dessous) si jamais on en a besoin pour audit.
+      type:         'alteoform',
+      source:       'alteoform',
+      sourceDetail: formTitle,
+      utm:          'AlteoForm' + (formTitle ? ' - ' + formTitle : ''),
+
       // Déclencheur de la résurrection côté Lead Live
       // (startOptinResurrectListening écoute ce champ).
       lastOptinAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -241,12 +277,27 @@ module.exports = async (req, res) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
 
+    // Q2.A : assignedTo n'est PAS touché — continuité commerciale (le closer
+    // qui suivait le lead avant le reprend).
+
+    if (shouldReset) {
+      update.previousStatus = prevData.status || null;
+      update.previousStage  = currentStage   || null;
+      update.stage  = 'lead';
+      update.status = 'nouveau';
+    }
+
     if (hadPrevForm) {
       update.formSubmissionsHistory = admin.firestore.FieldValue.arrayUnion({
         submittedAt: prevData.formSubmittedAt || null,
         formId:      prevData.formId         || null,
         formTitle:   prevData.formTitle      || null,
-        formAnswers: prevAnswers
+        formAnswers: prevAnswers,
+        // Snapshot des champs "source" précédents pour audit complet
+        type:         prevData.type         || null,
+        source:       prevData.source       || null,
+        sourceDetail: prevData.sourceDetail || null,
+        utm:          prevData.utm          || null
       });
     }
     try {
