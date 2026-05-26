@@ -35,13 +35,9 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
-    background: var(--cream);
-    color: var(--ink);
-    font-family: var(--sans);
-    font-size: 15px;
-    line-height: 1.55;
-    -webkit-font-smoothing: antialiased;
-    min-height: 100vh;
+    background: var(--cream); color: var(--ink);
+    font-family: var(--sans); font-size: 15px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; min-height: 100vh;
   }
   body {
     background-image:
@@ -80,18 +76,14 @@
   }
   .auth-dot.on { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
   .auth-dot.warn { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
+  .auth-dot.spin { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
   .panel {
-    background: var(--ivory);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 28px 32px;
-    margin-bottom: 20px;
+    background: var(--ivory); border: 1px solid var(--line);
+    border-radius: 14px; padding: 28px 32px; margin-bottom: 20px;
   }
-  .panel.warn {
-    background: var(--warning-bg);
-    border-color: #e8c684;
-  }
+  .panel.warn { background: var(--warning-bg); border-color: #e8c684; }
   .panel.warn h2 { color: var(--warning); }
 
   h2 {
@@ -107,9 +99,8 @@
 
   /* DROPZONE */
   .drop {
-    border: 2px dashed var(--line);
-    border-radius: 12px; padding: 44px 24px;
-    text-align: center; background: var(--cream);
+    border: 2px dashed var(--line); border-radius: 12px;
+    padding: 44px 24px; text-align: center; background: var(--cream);
     transition: all 0.2s; cursor: pointer;
   }
   .drop:hover, .drop.over {
@@ -126,18 +117,13 @@
   }
   #csvFile { display: none; }
 
-  /* STATS */
   .stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 12px;
-    margin-top: 8px;
   }
   .stat {
-    background: var(--cream);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px 16px;
+    background: var(--cream); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px;
   }
   .stat-label {
     font-size: 11px; letter-spacing: 0.06em;
@@ -153,7 +139,6 @@
   .stat.danger .stat-value { color: var(--danger); }
   .stat.info .stat-value { color: var(--info); }
 
-  /* BUTTONS */
   .btn {
     border: 1px solid var(--ink); background: var(--ink);
     color: var(--cream); padding: 11px 22px;
@@ -177,11 +162,9 @@
   .btn-danger { background: var(--danger); border-color: var(--danger); }
   .btn-danger:hover { background: #8a2828; border-color: #8a2828; }
 
-  /* TABLE */
   .results-head {
     display: flex; padding: 12px 16px;
-    background: var(--cream-soft);
-    border-bottom: 1px solid var(--line);
+    background: var(--cream-soft); border-bottom: 1px solid var(--line);
     align-items: center; gap: 10px; flex-wrap: wrap;
     border-radius: 10px 10px 0 0;
   }
@@ -198,8 +181,7 @@
   .results-body {
     max-height: 480px; overflow-y: auto;
     border: 1px solid var(--line); border-top: none;
-    border-radius: 0 0 10px 10px;
-    background: var(--cream);
+    border-radius: 0 0 10px 10px; background: var(--cream);
   }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead { position: sticky; top: 0; background: var(--ivory); z-index: 1; }
@@ -210,8 +192,7 @@
     color: var(--ink-mute); border-bottom: 1px solid var(--line);
   }
   td {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--line-soft);
+    padding: 10px 14px; border-bottom: 1px solid var(--line-soft);
     color: var(--ink-soft); vertical-align: top;
   }
   tr:hover td { background: var(--cream-soft); }
@@ -226,11 +207,9 @@
   .badge-none  { background: var(--warning-bg); color: var(--warning); }
   .badge-ambig { background: var(--danger-bg); color: var(--danger); }
 
-  /* EXEC BAR */
   .exec-bar {
     display: flex; align-items: center; gap: 18px;
-    padding: 18px 22px;
-    background: var(--cream-soft);
+    padding: 18px 22px; background: var(--cream-soft);
     border: 1px solid var(--line); border-radius: 10px;
     margin-top: 20px; flex-wrap: wrap;
   }
@@ -266,12 +245,11 @@
     width: 0%; transition: width 0.2s;
   }
   .log {
-    margin-top: 14px; background: var(--ink);
-    color: #d8d2c4; padding: 14px 18px;
-    border-radius: 10px; font-family: var(--mono);
-    font-size: 12px; max-height: 280px; overflow-y: auto;
-    line-height: 1.6; white-space: pre-wrap;
-    display: none;
+    margin-top: 14px; background: var(--ink); color: #d8d2c4;
+    padding: 14px 18px; border-radius: 10px;
+    font-family: var(--mono); font-size: 12px;
+    max-height: 280px; overflow-y: auto;
+    line-height: 1.6; white-space: pre-wrap; display: none;
   }
   .log.on { display: block; }
   .log-line { display: block; }
@@ -281,13 +259,11 @@
   .log-err  { color: #e89090; }
   .log-dim  { color: #7a7060; }
 
-  /* MODAL */
   .modal-bg {
     position: fixed; inset: 0;
     background: rgba(31, 26, 20, 0.55);
-    backdrop-filter: blur(3px);
-    z-index: 100; display: none;
-    align-items: center; justify-content: center;
+    backdrop-filter: blur(3px); z-index: 100;
+    display: none; align-items: center; justify-content: center;
     padding: 32px;
   }
   .modal-bg.on { display: flex; }
@@ -300,12 +276,8 @@
     font-family: var(--serif); font-size: 22px;
     font-weight: 500; margin-bottom: 4px;
   }
-  .modal-sub {
-    font-size: 13px; color: var(--ink-mute); margin-bottom: 18px;
-  }
-  .mono-inline {
-    font-family: var(--mono); font-size: 12.5px; color: var(--gold-deep);
-  }
+  .modal-sub { font-size: 13px; color: var(--ink-mute); margin-bottom: 18px; }
+  .mono-inline { font-family: var(--mono); font-size: 12.5px; color: var(--gold-deep); }
   .preview-box {
     background: var(--cream); border: 1px solid var(--line);
     border-radius: 8px; padding: 16px 20px;
@@ -328,7 +300,6 @@
     gap: 10px; margin-top: 12px;
   }
 
-  /* HIDE */
   .hidden { display: none !important; }
 
   @media (max-width: 720px) {
@@ -349,24 +320,22 @@
     <div class="header-meta">
       <div id="now"></div>
       <div class="auth-status">
-        <span class="auth-dot" id="authDot"></span>
+        <span class="auth-dot spin" id="authDot"></span>
         <span id="authText">Initialisation…</span>
       </div>
     </div>
   </header>
 
-  <!-- Panel auth error : visible si pas connecté -->
   <section class="panel warn hidden" id="authPanel">
     <h2>Connexion requise</h2>
-    <p class="sub">Tu dois être connecté à Team Ambitio avec un compte ayant le rôle <code>admin</code> ou <code>sales</code>. Ouvre une autre page de l'app, connecte-toi, puis reviens sur cette page (l'onglet reste ouvert).</p>
+    <p class="sub">Tu dois être connecté à Team Ambitio avec un compte <code>admin</code> ou <code>sales</code>. Ouvre ton app dans un autre onglet, connecte-toi, puis reviens ici — l'auth se détecte toute seule.</p>
   </section>
 
-  <!-- Panel principal : visible quand connecté -->
   <section id="mainPanel" class="hidden">
 
     <div class="panel">
       <h2>1. Charger le CSV Zoho</h2>
-      <p class="sub">Dépose <code>Pipelines_2026_05_26.csv</code> (ou tout export Zoho au même format, 24 colonnes).</p>
+      <p class="sub">Dépose <code>Pipelines_2026_05_26.csv</code> (ou tout export Zoho au même format).</p>
       <div class="drop" id="dropzone">
         <div class="drop-icon">↓</div>
         <div class="drop-text">Glisse ton CSV ici ou clique pour parcourir</div>
@@ -406,7 +375,6 @@
 
 </div>
 
-<!-- MODAL preview -->
 <div class="modal-bg" id="modalBg">
   <div class="modal">
     <h3>Aperçu de la note qui sera créée</h3>
@@ -425,40 +393,30 @@
 <script type="module">
 import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
 import {
-  getFirestore, collection, getDocs, doc, setDoc, serverTimestamp, query, limit
+  getFirestore, collection, getDocs, doc, setDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
 
-/* =================================================================
-   CONFIG FIREBASE
-   -----------------------------------------------------------------
-   Colle ici l'objet firebaseConfig que tu utilises déjà dans tes
-   autres pages du repo team-ambitio-main (cherche "firebaseConfig"
-   ou "initializeApp" dans tes fichiers JS existants — c'est le même).
-   ================================================================= */
+// ============================================================================
+// CONFIG FIREBASE — Team Ambitio (projet ambitio-team)
+// ============================================================================
 const firebaseConfig = {
-  apiKey: "REMPLACE_MOI",
-  authDomain: "REMPLACE_MOI.firebaseapp.com",
-  projectId: "REMPLACE_MOI",
-  storageBucket: "REMPLACE_MOI.appspot.com",
-  messagingSenderId: "REMPLACE_MOI",
-  appId: "REMPLACE_MOI"
+  apiKey: "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+  authDomain: "ambitio-team.firebaseapp.com",
+  projectId: "ambitio-team",
+  storageBucket: "ambitio-team.firebasestorage.app",
+  messagingSenderId: "1079366902268",
+  appId: "1:1079366902268:web:b4ec1691dba54230339279"
 };
-
-/* ================================================================= */
 
 const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const db   = getFirestore(app);
 const auth = getAuth(app);
 
 const state = {
-  user: null,
-  csvRows: [],
-  leads: [],
-  emailIndex: new Map(),
-  phoneIndex: new Map(),
-  matches: [],
-  filter: 'all',
+  user: null, csvRows: [], leads: [],
+  emailIndex: new Map(), phoneIndex: new Map(),
+  matches: [], filter: 'all',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -467,8 +425,9 @@ const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;'
 $('now').textContent = new Date().toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
 
 // ===== AUTH automatique via session existante =====
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, (user) => {
   if (!user) {
+    $('authDot').classList.remove('on', 'spin');
     $('authDot').classList.add('warn');
     $('authText').textContent = 'Non connecté';
     $('authPanel').classList.remove('hidden');
@@ -476,6 +435,7 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
   state.user = user;
+  $('authDot').classList.remove('warn', 'spin');
   $('authDot').classList.add('on');
   $('authText').textContent = user.email || user.uid;
   $('authPanel').classList.add('hidden');
@@ -578,8 +538,7 @@ drop.addEventListener('click', () => $('csvFile').click());
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
 drop.addEventListener('dragleave', () => drop.classList.remove('over'));
 drop.addEventListener('drop', e => {
-  e.preventDefault();
-  drop.classList.remove('over');
+  e.preventDefault(); drop.classList.remove('over');
   if (e.dataTransfer.files.length) handleCsv(e.dataTransfer.files[0]);
 });
 $('csvFile').addEventListener('change', e => {
@@ -588,8 +547,7 @@ $('csvFile').addEventListener('change', e => {
 
 function handleCsv(file) {
   Papa.parse(file, {
-    header: true,
-    skipEmptyLines: true,
+    header: true, skipEmptyLines: true,
     complete: async (results) => {
       const raw = results.data;
       state.csvRows = raw.map(r => ({
@@ -626,7 +584,6 @@ function handleCsv(file) {
         <div class="stat info"><div class="stat-label">Avec téléphone</div><div class="stat-value">${withPhone}</div></div>
         <div class="stat warning"><div class="stat-label">Avec description</div><div class="stat-value">${withDesc}</div></div>
       `;
-
       $('matchPanel').classList.remove('hidden');
       $('matchStats').innerHTML = '<div class="stat"><div class="stat-label">Chargement…</div><div class="stat-value">…</div></div>';
       await loadLeadsAndMatch();
@@ -635,7 +592,7 @@ function handleCsv(file) {
   });
 }
 
-// ===== ÉTAPE 2 : Charger leads + matcher =====
+// ===== ÉTAPE 2 : Leads + matching =====
 async function loadLeadsAndMatch() {
   try {
     const snap = await getDocs(collection(db, 'leads'));
@@ -662,7 +619,7 @@ async function loadLeadsAndMatch() {
     runMatching();
     $('execPanel').classList.remove('hidden');
   } catch (e) {
-    alert('Erreur de chargement Firestore : ' + e.message + '\n\nVérifie que ton compte a bien le rôle admin ou sales.');
+    alert('Erreur de chargement Firestore : ' + e.message + '\n\nVérifie que ton compte a le rôle admin ou sales.');
   }
 }
 
@@ -837,7 +794,6 @@ $('btnRun').addEventListener('click', async () => {
   $('btnExport').disabled = false;
 });
 
-// ===== EXPORT RAPPORT CSV =====
 $('btnExport').addEventListener('click', () => {
   if (!state.matches.length) return;
   const headers = [
