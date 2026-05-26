@@ -3868,21 +3868,63 @@ function startBookingBridge() {
               if (be[f] && !cur[f]) update[f] = be[f];
             });
 
-            // Stage : ne pas écraser si terminal
+            // ── Rafraîchir source / UTM / sourceDetail pour refléter la dernière
+            //    action du lead (cohérent avec le soft-reset appliqué côté
+            //    api/alteoform-submit.js). L'ancien UTM reste consultable dans
+            //    timeline_history et formSubmissionsHistory si jamais besoin.
+            update.source       = 'forms_self_booking';
+            update.sourceDetail = be.type || 'Forms Self Booking';
+            update.utm          = be.type || 'Forms Self Booking';
+
+            // ── Soft-reset (aligné sur api/alteoform-submit.js) ─────────────
+            // Listes synchronisées : tout changement ici doit être répercuté
+            // dans api/alteoform-submit.js et inversement.
+            //   - CLIENT_STAGES   : protégés, ne pas rétrograder.
+            //   - RESETABLE_STAGES: stages "abandonnés" → lead remonte fresh
+            //                       avec previousStatus + previousStage archivés
+            //                       (badge "⚠️ Avant : X" dans Lead Live).
+            //   - autres (actifs) : comportement classique → on passe le stage
+            //                       à rdv_self_booking puisqu'un RDV est pris.
+            var CLIENT_STAGES_BRIDGE = ['closed_won_setting', 'closed_won_self'];
+            var RESETABLE_STAGES_BRIDGE = [
+              'closed_lost',
+              'poubelle',
+              'disqualification',
+              'pas_interesse',
+              'rdv_annules_prospect',
+              'rdv_annules_equipe',
+              'no_show_self',
+              'no_show_setting',
+              'disqualifie_closing'
+            ];
+
             var curStage = cur.stage || 'lead';
-            if (TERMINAL_STAGES.indexOf(curStage) < 0) {
-              update.stage = 'rdv_self_booking';
-              update.status = 'rdv_pose';
-            }
+            var isClientBridge = cur.isClient === true || CLIENT_STAGES_BRIDGE.indexOf(curStage) >= 0;
+            var isResetable    = !isClientBridge && RESETABLE_STAGES_BRIDGE.indexOf(curStage) >= 0;
 
             var tlText;
-            if (curStage === 'rdv_self_booking' || curStage === 'rdv_confirmes' || curStage === 'set') {
-              tlText = '🔄 RDV Self-Booking reporté (form externe)';
-            } else if (TERMINAL_STAGES.indexOf(curStage) >= 0) {
-              tlText = '📅 Nouveau RDV Self-Booking reçu (lead déjà en ' + curStage + ')';
+            if (isClientBridge) {
+              // Client : on ne rétrograde rien. On note juste l'évènement.
+              tlText = '📅 Nouveau RDV Self-Booking pour un client existant';
+            } else if (isResetable) {
+              // Stage abandonné → remise en file fresh + archivage état précédent.
+              update.previousStatus = cur.status || null;
+              update.previousStage  = curStage   || null;
+              update.stage  = 'rdv_self_booking';
+              update.status = 'rdv_pose';
+              tlText = '🔁 Lead remonté via RDV Self-Booking (était : ' + curStage + ')';
             } else {
-              tlText = '📅 RDV Self-Booking pris (form externe)';
+              // Stage actif (lead, nrp*, set, rdv_*, follow_up_*, etc.)
+              // Comportement classique : on passe le stage au RDV pris.
+              update.stage  = 'rdv_self_booking';
+              update.status = 'rdv_pose';
+              if (curStage === 'rdv_self_booking' || curStage === 'rdv_confirmes' || curStage === 'set') {
+                tlText = '🔄 RDV Self-Booking reporté (form externe)';
+              } else {
+                tlText = '📅 RDV Self-Booking pris (form externe)';
+              }
             }
+
             var tlEntry = { text: tlText, date: nowFr, color: '#34d399' };
             update.timeline_history = (cur.timeline_history || []).concat([tlEntry]);
 
