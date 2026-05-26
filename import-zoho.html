@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Import Zoho → Team Ambitio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --cream: #faf6ef;
+    --cream-soft: #f4ecdc;
+    --ivory: #fffdf8;
+    --ink: #1f1a14;
+    --ink-soft: #3d362c;
+    --ink-mute: #7a7060;
+    --gold: #b8893d;
+    --gold-soft: #d4a85a;
+    --gold-deep: #8c6526;
+    --line: #e8dfc8;
+    --line-soft: #efe9d8;
+    --success: #2f7a4f;
+    --success-bg: #e8f3eb;
+    --warning: #b67817;
+    --warning-bg: #fbf1de;
+    --danger: #a83232;
+    --danger-bg: #f8e8e8;
+    --info: #2c5f8d;
+    --info-bg: #e6eff7;
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --serif: 'Playfair Display', Georgia, serif;
+    --sans: 'DM Sans', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--cream);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  body {
+    background-image:
+      radial-gradient(circle at 8% 12%, rgba(184, 137, 61, 0.06), transparent 35%),
+      radial-gradient(circle at 92% 88%, rgba(184, 137, 61, 0.04), transparent 40%);
+    background-attachment: fixed;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 48px 32px 80px; }
+  header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    margin-bottom: 36px; padding-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap; gap: 16px;
+  }
+  .brand-eyebrow {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--gold); font-weight: 500; margin-bottom: 4px;
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 500;
+    font-size: 36px; letter-spacing: -0.015em; line-height: 1.1;
+  }
+  h1 em { font-style: italic; color: var(--gold-deep); font-weight: 500; }
+  .header-meta {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--ink-mute); text-align: right;
+  }
+  .auth-status {
+    margin-top: 6px; display: inline-flex;
+    align-items: center; gap: 8px;
+  }
+  .auth-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--ink-mute);
+  }
+  .auth-dot.on { background: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
+  .auth-dot.warn { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
+
+  .panel {
+    background: var(--ivory);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+  }
+  .panel.warn {
+    background: var(--warning-bg);
+    border-color: #e8c684;
+  }
+  .panel.warn h2 { color: var(--warning); }
+
+  h2 {
+    font-family: var(--serif); font-weight: 500;
+    font-size: 20px; margin-bottom: 6px;
+  }
+  .sub { font-size: 13px; color: var(--ink-mute); margin-bottom: 18px; }
+  .sub code {
+    font-family: var(--mono); font-size: 11.5px;
+    background: var(--cream-soft); padding: 1px 6px;
+    border-radius: 4px; color: var(--gold-deep);
+  }
+
+  /* DROPZONE */
+  .drop {
+    border: 2px dashed var(--line);
+    border-radius: 12px; padding: 44px 24px;
+    text-align: center; background: var(--cream);
+    transition: all 0.2s; cursor: pointer;
+  }
+  .drop:hover, .drop.over {
+    border-color: var(--gold); background: var(--cream-soft);
+  }
+  .drop-icon {
+    font-family: var(--serif); font-size: 36px;
+    color: var(--gold); margin-bottom: 8px; font-style: italic;
+  }
+  .drop-text { font-size: 15px; color: var(--ink-soft); }
+  .drop-hint {
+    font-size: 12px; color: var(--ink-mute);
+    font-family: var(--mono); margin-top: 4px;
+  }
+  #csvFile { display: none; }
+
+  /* STATS */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .stat {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat-label {
+    font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-mute);
+    margin-bottom: 6px;
+  }
+  .stat-value {
+    font-family: var(--serif); font-size: 26px;
+    line-height: 1; color: var(--ink);
+  }
+  .stat.success .stat-value { color: var(--success); }
+  .stat.warning .stat-value { color: var(--warning); }
+  .stat.danger .stat-value { color: var(--danger); }
+  .stat.info .stat-value { color: var(--info); }
+
+  /* BUTTONS */
+  .btn {
+    border: 1px solid var(--ink); background: var(--ink);
+    color: var(--cream); padding: 11px 22px;
+    border-radius: 8px; font-family: var(--sans);
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: transform 0.1s, background 0.15s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn:hover { background: var(--ink-soft); }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled {
+    background: var(--line); border-color: var(--line);
+    color: var(--ink-mute); cursor: not-allowed;
+  }
+  .btn-ghost { background: transparent; color: var(--ink); }
+  .btn-ghost:hover { background: var(--cream-soft); }
+  .btn-gold {
+    background: var(--gold); border-color: var(--gold); color: var(--ivory);
+  }
+  .btn-gold:hover { background: var(--gold-deep); border-color: var(--gold-deep); }
+  .btn-danger { background: var(--danger); border-color: var(--danger); }
+  .btn-danger:hover { background: #8a2828; border-color: #8a2828; }
+
+  /* TABLE */
+  .results-head {
+    display: flex; padding: 12px 16px;
+    background: var(--cream-soft);
+    border-bottom: 1px solid var(--line);
+    align-items: center; gap: 10px; flex-wrap: wrap;
+    border-radius: 10px 10px 0 0;
+  }
+  .filter-btn {
+    background: transparent; border: 1px solid var(--line);
+    padding: 5px 12px; border-radius: 999px;
+    font-size: 12px; cursor: pointer; color: var(--ink-soft);
+    font-family: var(--sans); transition: all 0.15s;
+  }
+  .filter-btn:hover { border-color: var(--gold); }
+  .filter-btn.on {
+    background: var(--ink); color: var(--cream); border-color: var(--ink);
+  }
+  .results-body {
+    max-height: 480px; overflow-y: auto;
+    border: 1px solid var(--line); border-top: none;
+    border-radius: 0 0 10px 10px;
+    background: var(--cream);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { position: sticky; top: 0; background: var(--ivory); z-index: 1; }
+  th {
+    text-align: left; padding: 10px 14px;
+    font-weight: 500; font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ink-mute); border-bottom: 1px solid var(--line);
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--ink-soft); vertical-align: top;
+  }
+  tr:hover td { background: var(--cream-soft); }
+  td.mono { font-family: var(--mono); font-size: 11.5px; }
+  .badge {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 999px; font-size: 11px;
+    font-weight: 500; letter-spacing: 0.02em;
+  }
+  .badge-email { background: var(--success-bg); color: var(--success); }
+  .badge-phone { background: var(--info-bg); color: var(--info); }
+  .badge-none  { background: var(--warning-bg); color: var(--warning); }
+  .badge-ambig { background: var(--danger-bg); color: var(--danger); }
+
+  /* EXEC BAR */
+  .exec-bar {
+    display: flex; align-items: center; gap: 18px;
+    padding: 18px 22px;
+    background: var(--cream-soft);
+    border: 1px solid var(--line); border-radius: 10px;
+    margin-top: 20px; flex-wrap: wrap;
+  }
+  .toggle {
+    display: inline-flex; align-items: center;
+    gap: 10px; cursor: pointer; user-select: none;
+    font-size: 14px; color: var(--ink-soft);
+  }
+  .toggle input { display: none; }
+  .toggle-track {
+    width: 38px; height: 22px;
+    background: var(--line); border-radius: 999px;
+    position: relative; transition: background 0.2s;
+  }
+  .toggle-track::after {
+    content: ''; position: absolute;
+    top: 3px; left: 3px;
+    width: 16px; height: 16px;
+    background: var(--ivory); border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .toggle input:checked + .toggle-track { background: var(--gold); }
+  .toggle input:checked + .toggle-track::after { transform: translateX(16px); }
+
+  .progress {
+    height: 8px; background: var(--line);
+    border-radius: 999px; overflow: hidden; margin-top: 16px;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold-soft), var(--gold));
+    width: 0%; transition: width 0.2s;
+  }
+  .log {
+    margin-top: 14px; background: var(--ink);
+    color: #d8d2c4; padding: 14px 18px;
+    border-radius: 10px; font-family: var(--mono);
+    font-size: 12px; max-height: 280px; overflow-y: auto;
+    line-height: 1.6; white-space: pre-wrap;
+    display: none;
+  }
+  .log.on { display: block; }
+  .log-line { display: block; }
+  .log-info { color: #d8d2c4; }
+  .log-ok   { color: #8fce9e; }
+  .log-warn { color: #e6c277; }
+  .log-err  { color: #e89090; }
+  .log-dim  { color: #7a7060; }
+
+  /* MODAL */
+  .modal-bg {
+    position: fixed; inset: 0;
+    background: rgba(31, 26, 20, 0.55);
+    backdrop-filter: blur(3px);
+    z-index: 100; display: none;
+    align-items: center; justify-content: center;
+    padding: 32px;
+  }
+  .modal-bg.on { display: flex; }
+  .modal {
+    background: var(--ivory); border-radius: 14px;
+    padding: 28px 32px; max-width: 720px; width: 100%;
+    max-height: 88vh; overflow-y: auto;
+  }
+  .modal h3 {
+    font-family: var(--serif); font-size: 22px;
+    font-weight: 500; margin-bottom: 4px;
+  }
+  .modal-sub {
+    font-size: 13px; color: var(--ink-mute); margin-bottom: 18px;
+  }
+  .mono-inline {
+    font-family: var(--mono); font-size: 12.5px; color: var(--gold-deep);
+  }
+  .preview-box {
+    background: var(--cream); border: 1px solid var(--line);
+    border-radius: 8px; padding: 16px 20px;
+    font-family: var(--mono); font-size: 12.5px;
+    line-height: 1.6; white-space: pre-wrap;
+    color: var(--ink-soft); margin-bottom: 14px;
+  }
+  details summary {
+    cursor: pointer; font-size: 13px; color: var(--ink-mute);
+    padding: 6px 0; user-select: none;
+  }
+  details summary:hover { color: var(--gold-deep); }
+  .schema-pre {
+    font-family: var(--mono); font-size: 11.5px;
+    background: var(--cream-soft); padding: 12px 14px;
+    border-radius: 6px; overflow-x: auto; color: var(--ink-soft);
+  }
+  .modal-footer {
+    display: flex; justify-content: flex-end;
+    gap: 10px; margin-top: 12px;
+  }
+
+  /* HIDE */
+  .hidden { display: none !important; }
+
+  @media (max-width: 720px) {
+    .wrap { padding: 28px 16px 60px; }
+    h1 { font-size: 26px; }
+    .panel { padding: 20px 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="brand-eyebrow">Outil interne — Migration CRM</div>
+      <h1>Import <em>Zoho</em> → Team Ambitio</h1>
+    </div>
+    <div class="header-meta">
+      <div id="now"></div>
+      <div class="auth-status">
+        <span class="auth-dot" id="authDot"></span>
+        <span id="authText">Initialisation…</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Panel auth error : visible si pas connecté -->
+  <section class="panel warn hidden" id="authPanel">
+    <h2>Connexion requise</h2>
+    <p class="sub">Tu dois être connecté à Team Ambitio avec un compte ayant le rôle <code>admin</code> ou <code>sales</code>. Ouvre une autre page de l'app, connecte-toi, puis reviens sur cette page (l'onglet reste ouvert).</p>
+  </section>
+
+  <!-- Panel principal : visible quand connecté -->
+  <section id="mainPanel" class="hidden">
+
+    <div class="panel">
+      <h2>1. Charger le CSV Zoho</h2>
+      <p class="sub">Dépose <code>Pipelines_2026_05_26.csv</code> (ou tout export Zoho au même format, 24 colonnes).</p>
+      <div class="drop" id="dropzone">
+        <div class="drop-icon">↓</div>
+        <div class="drop-text">Glisse ton CSV ici ou clique pour parcourir</div>
+        <div class="drop-hint">.csv – format Zoho Sales Pipeline</div>
+        <input type="file" id="csvFile" accept=".csv">
+      </div>
+      <div id="csvStats" class="stats hidden" style="margin-top: 18px;"></div>
+    </div>
+
+    <div class="panel hidden" id="matchPanel">
+      <h2>2. Matching avec ta base Team Ambitio</h2>
+      <p class="sub">Lecture en direct de <code>leads</code>, matching par <strong>email exact</strong> en priorité, puis par <strong>téléphone normalisé</strong> en repli. Ambigus exclus de l'écriture.</p>
+      <div id="matchStats" class="stats" style="margin-bottom: 18px;"></div>
+      <div id="matchResults"></div>
+    </div>
+
+    <div class="panel hidden" id="execPanel">
+      <h2>3. Exécution</h2>
+      <p class="sub">Écriture additive uniquement dans <code>leads/{leadId}/client_notes/</code>. Aucun champ racine du lead n'est touché. ID de note déterministe (<code>import_zoho_{affaireId}</code>) — relançable sans risque de doublon.</p>
+
+      <div class="exec-bar">
+        <label class="toggle">
+          <input type="checkbox" id="dryRun" checked>
+          <span class="toggle-track"></span>
+          <span><strong>Mode dry-run</strong> (simulation, aucune écriture)</span>
+        </label>
+        <div style="flex: 1;"></div>
+        <button class="btn btn-gold" id="btnRun">Lancer la simulation</button>
+        <button class="btn btn-ghost" id="btnExport" disabled>Exporter le rapport CSV</button>
+      </div>
+
+      <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="log" id="log"></div>
+    </div>
+
+  </section>
+
+</div>
+
+<!-- MODAL preview -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>Aperçu de la note qui sera créée</h3>
+    <div class="modal-sub" id="modalSub"></div>
+    <div class="preview-box" id="previewText"></div>
+    <details>
+      <summary>Voir le document Firestore complet (JSON)</summary>
+      <pre class="schema-pre" id="previewJson"></pre>
+    </details>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btnCloseModal">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
+import {
+  getFirestore, collection, getDocs, doc, setDoc, serverTimestamp, query, limit
+} from "https://www.gstatic.com/firebasejs/10.14.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
+
+/* =================================================================
+   CONFIG FIREBASE
+   -----------------------------------------------------------------
+   Colle ici l'objet firebaseConfig que tu utilises déjà dans tes
+   autres pages du repo team-ambitio-main (cherche "firebaseConfig"
+   ou "initializeApp" dans tes fichiers JS existants — c'est le même).
+   ================================================================= */
+const firebaseConfig = {
+  apiKey: "REMPLACE_MOI",
+  authDomain: "REMPLACE_MOI.firebaseapp.com",
+  projectId: "REMPLACE_MOI",
+  storageBucket: "REMPLACE_MOI.appspot.com",
+  messagingSenderId: "REMPLACE_MOI",
+  appId: "REMPLACE_MOI"
+};
+
+/* ================================================================= */
+
+const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const db   = getFirestore(app);
+const auth = getAuth(app);
+
+const state = {
+  user: null,
+  csvRows: [],
+  leads: [],
+  emailIndex: new Map(),
+  phoneIndex: new Map(),
+  matches: [],
+  filter: 'all',
+};
+
+const $ = (id) => document.getElementById(id);
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+$('now').textContent = new Date().toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+
+// ===== AUTH automatique via session existante =====
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    $('authDot').classList.add('warn');
+    $('authText').textContent = 'Non connecté';
+    $('authPanel').classList.remove('hidden');
+    $('mainPanel').classList.add('hidden');
+    return;
+  }
+  state.user = user;
+  $('authDot').classList.add('on');
+  $('authText').textContent = user.email || user.uid;
+  $('authPanel').classList.add('hidden');
+  $('mainPanel').classList.remove('hidden');
+});
+
+// ===== UTILITAIRES =====
+function log(msg, level = 'info') {
+  const el = $('log');
+  el.classList.add('on');
+  const span = document.createElement('span');
+  span.className = `log-line log-${level}`;
+  const ts = new Date().toLocaleTimeString('fr-FR', { hour12: false });
+  span.textContent = `[${ts}] ${msg}`;
+  el.appendChild(span);
+  el.scrollTop = el.scrollHeight;
+}
+
+function normalizePhone(raw) {
+  if (raw === null || raw === undefined) return null;
+  let p = String(raw).trim();
+  if (!p) return null;
+  p = p.replace(/[\s\-\.\(\)\/]/g, '');
+  if (p.startsWith('00')) p = '+' + p.slice(2);
+  if (p.startsWith('+')) return p;
+  if (/^33[1-9]\d{8}$/.test(p)) return '+' + p;
+  if (/^0[1-9]\d{8}$/.test(p)) return '+33' + p.slice(1);
+  if (/^[1-9]\d{8}$/.test(p)) return '+33' + p;
+  if (/^\d{10,15}$/.test(p)) return '+' + p;
+  return p;
+}
+
+function normalizeEmail(raw) {
+  if (!raw) return null;
+  const e = String(raw).trim().toLowerCase();
+  return e.includes('@') ? e : null;
+}
+
+function fmtZohoDate(s) {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+}
+
+function buildNoteText(row) {
+  const lines = ['[Import Zoho — ' + new Date().toLocaleDateString('fr-FR') + ']'];
+  if (row.origine)        lines.push('Origine : ' + row.origine);
+  if (row.etape)          lines.push('Étape Zoho : ' + row.etape);
+  if (row.statut)         lines.push('Statut : ' + row.statut);
+  if (row.etat)           lines.push('État : ' + row.etat);
+  if (row.gestionnaire)   lines.push('Gestionnaire : ' + row.gestionnaire);
+  if (row.heureCreation)  lines.push('Créé dans Zoho : ' + fmtZohoDate(row.heureCreation));
+  if (row.derniereActivite) lines.push('Dernière activité Zoho : ' + fmtZohoDate(row.derniereActivite));
+  if (row.modifiePar && row.modifiePar !== row.gestionnaire)
+    lines.push('Modifié par : ' + row.modifiePar);
+  if (row.description) {
+    lines.push('');
+    lines.push('—————————————————');
+    lines.push('');
+    lines.push(row.description);
+  }
+  return lines.join('\n');
+}
+
+function buildNoteDoc(row) {
+  const text = buildNoteText(row);
+  return {
+    text, content: text, body: text, note: text,
+    type: 'import_zoho',
+    source: 'import_zoho_2026_05_26',
+    zoho: {
+      affaireId: row.affaireId,
+      contactId: row.contactId,
+      pipeline: row.pipeline,
+      sousPipeline: row.sousPipeline,
+      etape: row.etape || null,
+      statut: row.statut || null,
+      etat: row.etat || null,
+      origine: row.origine || null,
+      gestionnaire: row.gestionnaire || null,
+      modifiePar: row.modifiePar || null,
+      createdAt: row.heureCreation || null,
+      modifiedAt: row.heureModification || null,
+      lastActivityAt: row.derniereActivite || null,
+      nomContact: row.nomContact,
+      nomAffaire: row.nomAffaire,
+    },
+    author: 'Import Zoho',
+    authorName: 'Import Zoho',
+    authorUid: state.user?.uid || null,
+    createdAt: serverTimestamp(),
+    importedAt: serverTimestamp(),
+    importedAtClient: new Date().toISOString(),
+  };
+}
+
+// ===== ÉTAPE 1 : CSV =====
+const drop = $('dropzone');
+drop.addEventListener('click', () => $('csvFile').click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  if (e.dataTransfer.files.length) handleCsv(e.dataTransfer.files[0]);
+});
+$('csvFile').addEventListener('change', e => {
+  if (e.target.files.length) handleCsv(e.target.files[0]);
+});
+
+function handleCsv(file) {
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: async (results) => {
+      const raw = results.data;
+      state.csvRows = raw.map(r => ({
+        affaireId:        r['Affaire Id'],
+        contactId:        r['Nom du Contact.id'],
+        nomContact:       r['Nom du Contact'],
+        gestionnaire:     r['Gestionnaire de l’Affaire'] || r['Gestionnaire de l\'Affaire'],
+        origine:          r['Origine du Prospect'],
+        portable:         r['Portable'],
+        nomAffaire:       r['Nom de l’Affaire'] || r['Nom de l\'Affaire'],
+        etat:             r['État'],
+        statut:           r['Statut'],
+        sousPipeline:     r['Sous-pipeline'],
+        etape:            r['Étape'],
+        modifiePar:       r['Modifié Par'],
+        heureCreation:    r['Heure de création'],
+        heureModification:r['Heure de modification'],
+        derniereActivite: r['Date de la dernière activité'],
+        pipeline:         r['Pipeline'],
+        description:      r['Description'],
+        email:            r['Email'],
+        emailN: normalizeEmail(r['Email']),
+        phoneN: normalizePhone(r['Portable']),
+      })).filter(r => r.affaireId);
+
+      const withEmail = state.csvRows.filter(r => r.emailN).length;
+      const withPhone = state.csvRows.filter(r => r.phoneN).length;
+      const withDesc  = state.csvRows.filter(r => r.description && r.description.trim()).length;
+
+      $('csvStats').classList.remove('hidden');
+      $('csvStats').innerHTML = `
+        <div class="stat"><div class="stat-label">Lignes CSV</div><div class="stat-value">${state.csvRows.length}</div></div>
+        <div class="stat success"><div class="stat-label">Avec email</div><div class="stat-value">${withEmail}</div></div>
+        <div class="stat info"><div class="stat-label">Avec téléphone</div><div class="stat-value">${withPhone}</div></div>
+        <div class="stat warning"><div class="stat-label">Avec description</div><div class="stat-value">${withDesc}</div></div>
+      `;
+
+      $('matchPanel').classList.remove('hidden');
+      $('matchStats').innerHTML = '<div class="stat"><div class="stat-label">Chargement…</div><div class="stat-value">…</div></div>';
+      await loadLeadsAndMatch();
+    },
+    error: (err) => alert('Erreur de lecture CSV : ' + err.message),
+  });
+}
+
+// ===== ÉTAPE 2 : Charger leads + matcher =====
+async function loadLeadsAndMatch() {
+  try {
+    const snap = await getDocs(collection(db, 'leads'));
+    state.leads = [];
+    state.emailIndex.clear();
+    state.phoneIndex.clear();
+
+    snap.forEach(d => {
+      const data = d.data() || {};
+      const rawEmail = data.email || data.mail || data.emailAddress || null;
+      const rawPhone = data.telephone || data.phone || data.portable || data.mobile || data.tel || null;
+      const emailN = normalizeEmail(rawEmail);
+      const phoneN = normalizePhone(rawPhone);
+      state.leads.push({ id: d.id, emailN, phoneN, raw: data });
+      if (emailN) {
+        if (!state.emailIndex.has(emailN)) state.emailIndex.set(emailN, []);
+        state.emailIndex.get(emailN).push(d.id);
+      }
+      if (phoneN) {
+        if (!state.phoneIndex.has(phoneN)) state.phoneIndex.set(phoneN, []);
+        state.phoneIndex.get(phoneN).push(d.id);
+      }
+    });
+    runMatching();
+    $('execPanel').classList.remove('hidden');
+  } catch (e) {
+    alert('Erreur de chargement Firestore : ' + e.message + '\n\nVérifie que ton compte a bien le rôle admin ou sales.');
+  }
+}
+
+function runMatching() {
+  state.matches = state.csvRows.map(row => {
+    const match = { row, matchType: 'none', leadIds: [], leadId: null };
+    if (row.emailN && state.emailIndex.has(row.emailN)) {
+      match.leadIds = state.emailIndex.get(row.emailN);
+      match.matchType = match.leadIds.length === 1 ? 'email' : 'email_ambig';
+      match.leadId = match.leadIds[0];
+    } else if (row.phoneN && state.phoneIndex.has(row.phoneN)) {
+      match.leadIds = state.phoneIndex.get(row.phoneN);
+      match.matchType = match.leadIds.length === 1 ? 'phone' : 'phone_ambig';
+      match.leadId = match.leadIds[0];
+    }
+    return match;
+  });
+
+  const byEmail = state.matches.filter(m => m.matchType === 'email').length;
+  const byPhone = state.matches.filter(m => m.matchType === 'phone').length;
+  const ambig   = state.matches.filter(m => m.matchType.endsWith('_ambig')).length;
+  const none    = state.matches.filter(m => m.matchType === 'none').length;
+
+  $('matchStats').innerHTML = `
+    <div class="stat"><div class="stat-label">Leads en base</div><div class="stat-value">${state.leads.length}</div></div>
+    <div class="stat success"><div class="stat-label">Match par email</div><div class="stat-value">${byEmail}</div></div>
+    <div class="stat info"><div class="stat-label">Match par téléphone</div><div class="stat-value">${byPhone}</div></div>
+    <div class="stat danger"><div class="stat-label">Ambigus</div><div class="stat-value">${ambig}</div></div>
+    <div class="stat warning"><div class="stat-label">Non matchés</div><div class="stat-value">${none}</div></div>
+  `;
+  renderResultsTable();
+}
+
+function renderResultsTable() {
+  const filtered = state.matches.filter(m => {
+    if (state.filter === 'all') return true;
+    if (state.filter === 'matched') return m.matchType === 'email' || m.matchType === 'phone';
+    if (state.filter === 'ambig')   return m.matchType.endsWith('_ambig');
+    if (state.filter === 'none')    return m.matchType === 'none';
+    return true;
+  });
+
+  const badge = (m) => {
+    if (m.matchType === 'email') return '<span class="badge badge-email">EMAIL</span>';
+    if (m.matchType === 'phone') return '<span class="badge badge-phone">TÉL</span>';
+    if (m.matchType.endsWith('_ambig')) return `<span class="badge badge-ambig">AMBIGU ×${m.leadIds.length}</span>`;
+    return '<span class="badge badge-none">AUCUN</span>';
+  };
+
+  const rows = filtered.map((m) => {
+    const r = m.row;
+    const contactDisplay = [r.nomContact, r.nomAffaire].filter(Boolean).join(' / ');
+    return `
+      <tr>
+        <td>${badge(m)}</td>
+        <td>${escapeHtml(contactDisplay)}</td>
+        <td class="mono">${escapeHtml(r.emailN || '—')}</td>
+        <td class="mono">${escapeHtml(r.phoneN || '—')}</td>
+        <td>${escapeHtml(r.etape || '—')}</td>
+        <td class="mono">${escapeHtml(m.leadId || '—')}</td>
+        <td><button class="filter-btn" data-idx="${state.matches.indexOf(m)}">Aperçu</button></td>
+      </tr>`;
+  }).join('');
+
+  $('matchResults').innerHTML = `
+    <div class="results-head">
+      <button class="filter-btn ${state.filter==='all'?'on':''}" data-f="all">Tous (${state.matches.length})</button>
+      <button class="filter-btn ${state.filter==='matched'?'on':''}" data-f="matched">Matchés (${state.matches.filter(m=>m.matchType==='email'||m.matchType==='phone').length})</button>
+      <button class="filter-btn ${state.filter==='ambig'?'on':''}" data-f="ambig">Ambigus</button>
+      <button class="filter-btn ${state.filter==='none'?'on':''}" data-f="none">Non matchés</button>
+    </div>
+    <div class="results-body">
+      <table>
+        <thead><tr>
+          <th>Type</th><th>Contact / Affaire</th><th>Email</th><th>Téléphone</th><th>Étape Zoho</th><th>Lead ID</th><th></th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--ink-mute);">Aucune ligne pour ce filtre.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('matchResults').querySelectorAll('[data-f]').forEach(b => {
+    b.addEventListener('click', () => { state.filter = b.dataset.f; renderResultsTable(); });
+  });
+  $('matchResults').querySelectorAll('[data-idx]').forEach(b => {
+    b.addEventListener('click', () => openPreview(parseInt(b.dataset.idx)));
+  });
+}
+
+function openPreview(idx) {
+  const m = state.matches[idx];
+  const r = m.row;
+  $('modalSub').innerHTML = m.leadId
+    ? `Sera écrite dans <span class="mono-inline">leads/${escapeHtml(m.leadId)}/client_notes/import_zoho_${escapeHtml(r.affaireId)}</span>`
+    : `<span style="color:var(--danger);">Aucun lead trouvé — pas d'écriture pour cette ligne.</span>`;
+  $('previewText').textContent = buildNoteText(r);
+  $('previewJson').textContent = JSON.stringify(buildNoteDoc(r), (k, v) => {
+    if (v && typeof v === 'object' && v._methodName === 'serverTimestamp') return '<serverTimestamp()>';
+    return v;
+  }, 2);
+  $('modalBg').classList.add('on');
+}
+$('btnCloseModal').addEventListener('click', () => $('modalBg').classList.remove('on'));
+$('modalBg').addEventListener('click', e => { if (e.target === $('modalBg')) $('modalBg').classList.remove('on'); });
+
+// ===== ÉTAPE 3 : Exécution =====
+$('dryRun').addEventListener('change', () => {
+  const isDry = $('dryRun').checked;
+  $('btnRun').textContent = isDry ? 'Lancer la simulation' : '⚠ Lancer l\'import RÉEL';
+  $('btnRun').classList.toggle('btn-danger', !isDry);
+  $('btnRun').classList.toggle('btn-gold', isDry);
+});
+
+$('btnRun').addEventListener('click', async () => {
+  const isDry = $('dryRun').checked;
+  if (!isDry) {
+    const sure = confirm(
+      'Tu vas écrire en RÉEL dans Firestore.\n\n' +
+      'Création / mise à jour de notes dans leads/{leadId}/client_notes/.\n' +
+      'Aucun champ racine du lead n\'est touché.\n\n' +
+      'Opération idempotente : relançable sans risque de doublon.\n\n' +
+      'Continuer ?'
+    );
+    if (!sure) return;
+  }
+
+  $('btnRun').disabled = true;
+  $('log').innerHTML = '';
+  log(isDry ? '=== DRY-RUN (aucune écriture) ===' : '=== IMPORT RÉEL EN COURS ===', isDry ? 'info' : 'warn');
+
+  const toProcess = state.matches.filter(m => m.matchType === 'email' || m.matchType === 'phone');
+  log('Lignes à traiter : ' + toProcess.length + ' (ambigus et non matchés exclus)', 'info');
+
+  const total = toProcess.length;
+  let done = 0, errors = 0;
+  const startedAt = Date.now();
+
+  for (const m of toProcess) {
+    const r = m.row;
+    const noteId = 'import_zoho_' + r.affaireId;
+    const path = `leads/${m.leadId}/client_notes/${noteId}`;
+
+    if (isDry) {
+      log('[SIM] ' + path + (r.description ? '  (avec description)' : '  (métadonnées seules)'), 'ok');
+      m.execStatus = 'simulated';
+    } else {
+      try {
+        const docRef = doc(db, 'leads', m.leadId, 'client_notes', noteId);
+        await setDoc(docRef, buildNoteDoc(r), { merge: true });
+        log('[OK]  ' + path, 'ok');
+        m.execStatus = 'written';
+      } catch (e) {
+        log('[ERR] ' + path + ' → ' + e.message, 'err');
+        m.execStatus = 'error';
+        m.execError = e.message;
+        errors++;
+      }
+    }
+    done++;
+    $('progressBar').style.width = Math.round(100 * done / total) + '%';
+  }
+
+  state.matches.filter(m => m.matchType === 'none').forEach(m => m.execStatus = 'no_match');
+  state.matches.filter(m => m.matchType.endsWith('_ambig')).forEach(m => m.execStatus = 'ambiguous');
+
+  const dur = ((Date.now() - startedAt) / 1000).toFixed(1);
+  log('', 'info');
+  log('=== TERMINÉ en ' + dur + 's ===', 'info');
+  log('Notes traitées : ' + done + ' / ' + total + (errors ? ' (avec ' + errors + ' erreur(s))' : ''), errors ? 'warn' : 'ok');
+  if (isDry) log('→ Décoche "Mode dry-run" pour écrire pour de vrai.', 'warn');
+
+  $('btnRun').disabled = false;
+  $('btnExport').disabled = false;
+});
+
+// ===== EXPORT RAPPORT CSV =====
+$('btnExport').addEventListener('click', () => {
+  if (!state.matches.length) return;
+  const headers = [
+    'matchType','execStatus','leadId','zohoAffaireId','nomContact','nomAffaire',
+    'email','emailNormalized','portable','phoneNormalized',
+    'origine','etape','statut','etat','gestionnaire',
+    'heureCreation','derniereActivite','hasDescription','descriptionLength','execError'
+  ];
+  const lines = [headers.join(',')];
+  for (const m of state.matches) {
+    const r = m.row;
+    const row = [
+      m.matchType, m.execStatus || 'pending', m.leadId || '', r.affaireId,
+      r.nomContact || '', r.nomAffaire || '', r.email || '', r.emailN || '',
+      r.portable || '', r.phoneN || '', r.origine || '', r.etape || '',
+      r.statut || '', r.etat || '', r.gestionnaire || '',
+      r.heureCreation || '', r.derniereActivite || '',
+      r.description ? 'yes' : 'no', r.description ? r.description.length : 0,
+      m.execError || ''
+    ].map(v => {
+      const s = String(v ?? '');
+      return /[,"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    });
+    lines.push(row.join(','));
+  }
+  const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'import-zoho-rapport-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
