@@ -320,6 +320,28 @@ html, body {
 .ld-form-history-entry { padding: 10px 12px; border: 1px solid rgba(96,165,250,0.12); background: rgba(96,165,250,0.025); border-radius: 8px; }
 .ld-form-history-entry-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(147,197,253,0.75); margin-bottom: 6px; }
 
+/* Historique des passages / opt-ins (alimenté par optinHistory[]) */
+.ld-optin-history-wrap { margin: 6px 0 12px; padding: 10px 12px; border: 1px solid rgba(167,139,250,0.18); background: rgba(167,139,250,0.04); border-radius: 8px; }
+.ld-optin-history-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(196,181,253,0.85); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.ld-optin-history-list { display: flex; flex-direction: column; gap: 6px; }
+.ld-optin-entry { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 11px; }
+.ld-optin-entry-date { color: var(--muted); font-family: var(--fm); font-size: 10px; min-width: 95px; }
+.ld-optin-entry-badge { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 4px; }
+.ld-optin-entry-badge.vsl { background: rgba(167,139,250,0.16); color: #c4b5fd; }
+.ld-optin-entry-badge.self { background: rgba(245,158,11,0.16); color: #fcd34d; }
+.ld-optin-entry-badge.business { background: rgba(239,68,68,0.16); color: #fca5a5; }
+.ld-optin-entry-badge.other { background: rgba(96,165,250,0.16); color: #93bbfd; }
+.ld-optin-entry-desc { color: var(--text); font-family: var(--fb); flex: 1; word-break: break-word; }
+.ld-optin-entry-action { font-size: 9px; color: var(--muted); padding: 1px 5px; border: 1px solid var(--border); border-radius: 3px; }
+
+/* Bandeau d'avertissement quand les formAnswers sont antérieures au dernier opt-in */
+.ld-form-stale-banner {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px; margin-bottom: 8px;
+  background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.22);
+  border-radius: 6px; font-size: 11px; color: #fcd34d; line-height: 1.45;
+}
+
 /* Edit mode */
 .ld-edit-toggle {
   display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px;
@@ -2109,6 +2131,24 @@ function renderFormAnswersBlock(l, id) {
   var h = '<div class="ld-form-answers has-answers" data-form-answers="' + id + '">';
   var headTitle = '📋 Réponses au formulaire' + (l.formTitle ? ' — ' + escHtml(l.formTitle) : '') + datePart;
   h += '<div class="ld-form-answers-title">' + headTitle + '</div>';
+
+  // Bandeau d'avertissement si le lead s'est ré-engagé après cette
+  // soumission sans repasser par le formulaire (ex : nouvel opt-in VSL
+  // Business postérieur). Les réponses affichées datent d'avant — utile
+  // pour le sales qui rappelle pour ne pas être surpris si le prospect
+  // donne d'autres infos.
+  if (isFormAnswersStale(l)) {
+    var optinDateLbl = '';
+    if (l.lastOptinAt) {
+      var oDate = l.lastOptinAt.toDate ? l.lastOptinAt.toDate() : new Date(l.lastOptinAt);
+      optinDateLbl = formatDateTimeFr(oDate);
+    }
+    h += '<div class="ld-form-stale-banner">';
+    h += '<span>⚠️</span>';
+    h += '<span>Le prospect s\'est ré-engagé' + (optinDateLbl ? ' le ' + escHtml(optinDateLbl) : '') + ' sans repasser par ce formulaire. Ces réponses datent d\'avant — consultez l\'historique des passages ci-dessus pour le détail.</span>';
+    h += '</div>';
+  }
+
   h += ldRenderFormRows(rows);
   h += '</div>';
   return h;
@@ -2156,6 +2196,118 @@ function renderFormHistoryBlock(l, id) {
   h += '</div>';
   h += '</div>';
   return h;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// HISTORIQUE DES PASSAGES (optinHistory[])
+// ─────────────────────────────────────────────────────────────────────────
+// Affiche une timeline propre de tous les opt-ins / passages du prospect
+// dans le CRM : VSL Élite, VSL Business, soumissions AlteoForm, bookings.
+//
+// Pourquoi ce bloc :
+//   Avant, quand un lead existant re-engageait (ex : opt-in VSL Business
+//   après avoir déjà opt VSL Élite), seul son `type` actuel était visible
+//   et l'historique se perdait. Désormais, chaque webhook d'opt-in et
+//   chaque soumission AlteoForm pousse une entry dans `optinHistory[]`,
+//   et le bridge booking pousse aussi quand un RDV est pris.
+//
+// Schéma d'une entry :
+//   {
+//     date: ISO string,
+//     type: 'vsl_elite' | 'business' | 'self_booking' | 'alteoform',
+//     action: 'optin' | 'form' | 'booking',  // optionnel
+//     source: string,            // ex: 'webhook', 'alteoform', 'forms_self_booking'
+//     sourceDetail: string,      // optionnel
+//     utm: string,
+//     hasFormSubmission: boolean,
+//     formId: string,            // si form
+//     formTitle: string          // si form
+//   }
+// ═══════════════════════════════════════════════════════════════════════
+function renderOptinHistoryBlock(l, id) {
+  var hist = l.optinHistory;
+  if (!Array.isArray(hist) || hist.length === 0) return '';
+
+  // Tri : plus récent d'abord
+  var sorted = hist.slice().sort(function(a, b){
+    var ta = a && a.date ? new Date(a.date).getTime() : 0;
+    var tb = b && b.date ? new Date(b.date).getTime() : 0;
+    return tb - ta;
+  });
+
+  // Mapping type → classe CSS badge (reprend LEAD_TYPES.badgeClass)
+  function badgeClassFor(t) {
+    var lt = LEAD_TYPES[t];
+    if (lt && lt.badgeClass) return lt.badgeClass;
+    return 'other';
+  }
+  function labelFor(t) {
+    var lt = LEAD_TYPES[t];
+    if (lt && lt.label) return lt.label;
+    if (t === 'alteoform') return 'AlteoForm';
+    return t || 'Lead';
+  }
+  function iconForAction(a) {
+    if (a === 'form')    return '📋';
+    if (a === 'booking') return '📅';
+    if (a === 'optin')   return '🔄';
+    return '•';
+  }
+
+  var entriesHtml = '';
+  sorted.forEach(function(e){
+    if (!e) return;
+    var dateLbl = e.date ? formatDateTimeFr(e.date) : 'date inconnue';
+    var bc = badgeClassFor(e.type);
+    var lbl = labelFor(e.type);
+    var act = e.action || (e.hasFormSubmission ? 'form' : 'optin');
+    var icon = iconForAction(act);
+    var desc = '';
+    if (e.formTitle) {
+      desc = escHtml(e.formTitle);
+    } else if (e.sourceDetail) {
+      desc = escHtml(e.sourceDetail);
+    } else if (e.utm) {
+      desc = escHtml(e.utm);
+    } else if (e.source) {
+      desc = escHtml(e.source);
+    }
+    entriesHtml += '<div class="ld-optin-entry">';
+    entriesHtml += '<span class="ld-optin-entry-date">' + escHtml(dateLbl) + '</span>';
+    entriesHtml += '<span class="ld-optin-entry-badge ' + bc + '">' + escHtml(lbl) + '</span>';
+    entriesHtml += '<span class="ld-optin-entry-desc">' + icon + ' ' + (desc || '—') + '</span>';
+    if (e.action) {
+      entriesHtml += '<span class="ld-optin-entry-action">' + escHtml(e.action) + '</span>';
+    }
+    entriesHtml += '</div>';
+  });
+
+  var h = '<div class="ld-optin-history-wrap">';
+  h += '<div class="ld-optin-history-title">🕓 Historique des passages (' + sorted.length + ')</div>';
+  h += '<div class="ld-optin-history-list">' + entriesHtml + '</div>';
+  h += '</div>';
+  return h;
+}
+
+// Détecte si les formAnswers affichées sont antérieures au dernier opt-in
+// du lead (cas typique : lead a rempli le formulaire il y a 3 semaines,
+// puis vient de se ré-inscrire sur la VSL Business sans repasser par le
+// formulaire — les réponses sont obsolètes et potentiellement trompeuses).
+// Retourne true si on doit afficher un bandeau d'avertissement.
+function isFormAnswersStale(l) {
+  if (!l || !l.formAnswers) return false;
+  if (!l.formSubmittedAt) return false;
+  // Si pas de lastOptinAt, rien à comparer
+  var lastOptin = l.lastOptinAt;
+  if (!lastOptin) return false;
+  var optinMs = lastOptin.toMillis ? lastOptin.toMillis() : (lastOptin.toDate ? lastOptin.toDate().getTime() : new Date(lastOptin).getTime());
+  var formMs = new Date(l.formSubmittedAt).getTime();
+  if (!optinMs || !formMs) return false;
+  // Marge de 5 minutes : un opt-in qui précède le formulaire de quelques
+  // secondes (cas normal d'un même flux d'inscription) ne déclenche pas
+  // le bandeau. Au-delà, on considère que le prospect a re-engagé sans
+  // refaire le formulaire.
+  return optinMs > (formMs + 5 * 60 * 1000);
 }
 
 /* ── SMS composer (envoi via SalesDialerAPI) ── */
@@ -2339,6 +2491,9 @@ function renderCard(l) {
   h += '<div class="ld-rdv-list" data-rdv-list="' + id + '"></div>';
   h += '</div>';
 
+  // Historique des passages / opt-ins (alimenté par optinHistory[])
+  // Affiché en premier : c'est le contexte chronologique global du lead.
+  h += renderOptinHistoryBlock(l, id);
   // Réponses du formulaire (rendu statique au render — alimenté par AlteoForms)
   h += renderFormAnswersBlock(l, id);
   // Historique des soumissions précédentes (si formSubmissionsHistory présent)
@@ -3862,10 +4017,15 @@ function startBookingBridge() {
               lastBookingAt: firebase.firestore.FieldValue.serverTimestamp()
             };
 
-            // Type : on force self_booking (lead plus engagé)
-            if (cur.type !== 'self_booking') {
-              update.type = 'self_booking';
-            }
+            // Type : on NE TOUCHE PLUS au type lors d'un booking event.
+            // Règle métier : le `type` reflète le tunnel d'origine (dernier
+            // opt-in via VSL Elite, VSL Business, etc.), pas l'action de
+            // booking. Si on a besoin de savoir qu'un RDV a été pris,
+            // c'est `stage = rdv_self_booking` qui le porte. Avant cette
+            // modification, ce code écrasait `type` vers 'self_booking',
+            // ce qui faisait disparaître le tunnel d'origine (problème
+            // observé sur les leads VSL Business qui retombaient en
+            // Self-Booking dès qu'ils prenaient un RDV).
 
             // Si phoneNormalized manque côté master, le calculer maintenant
             if (!cur.phoneNormalized) {
@@ -3886,6 +4046,22 @@ function startBookingBridge() {
             update.source       = 'forms_self_booking';
             update.sourceDetail = be.type || 'Forms Self Booking';
             update.utm          = be.type || 'Forms Self Booking';
+
+            // ── Tracer ce booking dans optinHistory[] (timeline des passages
+            //    visible dans la fiche détail Lead Live). Le type d'origine
+            //    du lead (cur.type) est conservé pour montrer dans l'historique
+            //    qu'un lead VSL Business / VSL Élite a pris un RDV self-booking,
+            //    sans pour autant écraser son tunnel d'origine.
+            update.optinHistory = firebase.firestore.FieldValue.arrayUnion({
+              date: new Date().toISOString(),
+              type: cur.type || 'self_booking',
+              action: 'booking',
+              source: 'forms_self_booking',
+              sourceDetail: be.type || 'Forms Self Booking',
+              utm: be.type || 'Forms Self Booking',
+              hasFormSubmission: false,
+              bookingEventId: beId
+            });
 
             // ── Soft-reset (aligné sur api/alteoform-submit.js) ─────────────
             // Listes synchronisées : tout changement ici doit être répercuté
