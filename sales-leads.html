@@ -305,6 +305,21 @@ html, body {
 .ld-form-answer-label { color: var(--muted); min-width: 130px; max-width: 280px; flex-shrink: 0; font-weight: 600; font-size: 11px; word-break: break-word; white-space: normal; line-height: 1.35; }
 .ld-form-answer-val { color: var(--text); word-break: break-word; white-space: pre-wrap; flex: 1; }
 
+/* Historique des soumissions formulaire (alimenté par formSubmissionsHistory) */
+.ld-form-history-wrap { margin: -2px 0 10px; }
+.ld-form-history-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 8px;
+  border: 1px dashed rgba(96,165,250,0.25); background: transparent;
+  color: #93c5fd; font-family: var(--fb); font-size: 11px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+}
+.ld-form-history-toggle:hover { background: rgba(96,165,250,0.06); border-color: rgba(96,165,250,0.4); }
+.ld-form-history-toggle.open { background: rgba(96,165,250,0.08); border-style: solid; }
+.ld-form-history-content { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.ld-form-history-entry { padding: 10px 12px; border: 1px solid rgba(96,165,250,0.12); background: rgba(96,165,250,0.025); border-radius: 8px; }
+.ld-form-history-entry-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(147,197,253,0.75); margin-bottom: 6px; }
+
 /* Edit mode */
 .ld-edit-toggle {
   display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px;
@@ -2034,11 +2049,13 @@ function paintLeadRdvBox(leadId, items) {
 // brut en libellé — transparent et non-mensonger.
 var SKIP_CONTACT_MAPPINGS_LD = { prenom: 1, nom: 1, email: 1, telephone: 1 };
 
-function renderFormAnswersBlock(l, id) {
-  var fa = l.formAnswers;
-  if (!fa) return '';
-  var fieldIndex = (l.formId && window.__formsLabels && window.__formsLabels[l.formId]) || {};
+// Helper : transforme un formAnswers (array enrichi OU map legacy) en liste
+// de rows {fieldId, label, value} prêtes à être rendues, en filtrant les
+// champs déjà affichés en haut de carte (prenom/nom/email/telephone).
+function ldExtractFormRows(fa, fieldIndex) {
   var rows = [];
+  if (!fa) return rows;
+  fieldIndex = fieldIndex || {};
   if (Array.isArray(fa)) {
     fa.forEach(function(a){
       if (!a || a.value === '' || a.value == null) return;
@@ -2055,16 +2072,88 @@ function renderFormAnswersBlock(l, id) {
       rows.push({ fieldId: k, label: (meta && meta.label) || k, value: v });
     });
   }
-  if (rows.length === 0) return '';
-  var h = '<div class="ld-form-answers has-answers" data-form-answers="' + id + '">';
-  var headTitle = '📋 Réponses au formulaire' + (l.formTitle ? ' — ' + escHtml(l.formTitle) : '');
-  h += '<div class="ld-form-answers-title">' + headTitle + '</div>';
+  return rows;
+}
+
+// Helper : rend en HTML une liste de rows d'un formulaire
+function ldRenderFormRows(rows) {
+  var h = '';
   rows.forEach(function(r){
     h += '<div class="ld-form-answer-row">';
     h += '<span class="ld-form-answer-label">' + escHtml(r.label || r.fieldId || '') + '</span>';
     h += '<span class="ld-form-answer-val">' + escHtml(String(r.value)) + '</span>';
     h += '</div>';
   });
+  return h;
+}
+
+function renderFormAnswersBlock(l, id) {
+  var fa = l.formAnswers;
+  if (!fa) return '';
+  var fieldIndex = (l.formId && window.__formsLabels && window.__formsLabels[l.formId]) || {};
+  var rows = ldExtractFormRows(fa, fieldIndex);
+  if (rows.length === 0) return '';
+
+  // Date dans le titre (option A choisie) :
+  //  - re-soumission (formSubmissionsHistory non-vide)  → "Dernière soumission le …"
+  //  - première soumission via AlteoForm                → "Soumis le …"
+  //  - fallback si formSubmittedAt absent (legacy)      → "Reçu le …" sur createdAt
+  var hasHistory = Array.isArray(l.formSubmissionsHistory) && l.formSubmissionsHistory.length > 0;
+  var datePart = '';
+  if (l.formSubmittedAt) {
+    datePart = ' · ' + (hasHistory ? 'Dernière soumission le ' : 'Soumis le ') + formatDateTimeFr(l.formSubmittedAt);
+  } else if (l.createdAt) {
+    datePart = ' · Reçu le ' + formatDateTimeFr(l.createdAt);
+  }
+
+  var h = '<div class="ld-form-answers has-answers" data-form-answers="' + id + '">';
+  var headTitle = '📋 Réponses au formulaire' + (l.formTitle ? ' — ' + escHtml(l.formTitle) : '') + datePart;
+  h += '<div class="ld-form-answers-title">' + headTitle + '</div>';
+  h += ldRenderFormRows(rows);
+  h += '</div>';
+  return h;
+}
+
+// Bloc historique : bouton "Voir N soumissions précédentes" + accordéon.
+// Alimenté par le champ formSubmissionsHistory (array d'entries
+// {submittedAt, formId, formTitle, formAnswers}) archivé côté backend
+// par api/alteoform-submit.js à chaque re-soumission AlteoForm.
+function renderFormHistoryBlock(l, id) {
+  var hist = l.formSubmissionsHistory;
+  if (!Array.isArray(hist) || hist.length === 0) return '';
+
+  // Tri : plus récent d'abord
+  var sorted = hist.slice().sort(function(a, b){
+    var ta = a && a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+    var tb = b && b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+    return tb - ta;
+  });
+
+  var entriesHtml = '';
+  var nValid = 0;
+  sorted.forEach(function(entry){
+    if (!entry || !entry.formAnswers) return;
+    var entryFormId = entry.formId || l.formId;
+    var fieldIndex  = (entryFormId && window.__formsLabels && window.__formsLabels[entryFormId]) || {};
+    var rows        = ldExtractFormRows(entry.formAnswers, fieldIndex);
+    if (rows.length === 0) return;
+    var dateLbl = entry.submittedAt ? formatDateTimeFr(entry.submittedAt) : 'date inconnue';
+    entriesHtml += '<div class="ld-form-history-entry">';
+    entriesHtml += '<div class="ld-form-history-entry-title">📝 Soumission du ' + escHtml(dateLbl) + (entry.formTitle ? ' — ' + escHtml(entry.formTitle) : '') + '</div>';
+    entriesHtml += ldRenderFormRows(rows);
+    entriesHtml += '</div>';
+    nValid++;
+  });
+
+  if (!nValid) return '';
+
+  var h = '<div class="ld-form-history-wrap">';
+  h += '<button class="ld-form-history-toggle" data-action="toggleFormHistory" data-id="' + id + '">';
+  h += '↩️ Voir ' + nValid + ' soumission' + (nValid > 1 ? 's' : '') + ' précédente' + (nValid > 1 ? 's' : '');
+  h += '</button>';
+  h += '<div class="ld-form-history-content" data-form-history-content="' + id + '" style="display:none">';
+  h += entriesHtml;
+  h += '</div>';
   h += '</div>';
   return h;
 }
@@ -2241,6 +2330,8 @@ function renderCard(l) {
 
   // Réponses du formulaire (rendu statique au render — alimenté par AlteoForms)
   h += renderFormAnswersBlock(l, id);
+  // Historique des soumissions précédentes (si formSubmissionsHistory présent)
+  h += renderFormHistoryBlock(l, id);
 
   // ── EDIT MODE (hidden by default) ──
   h += '<div class="ld-details" data-edit-mode="' + id + '" style="display:none">';
@@ -2615,6 +2706,19 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
       var isOpen = commList.style.display !== 'none';
       commList.style.display = isOpen ? 'none' : 'flex';
       commToggle.classList.toggle('open', !isOpen);
+    }
+    return;
+  }
+
+  // Toggle form submissions history accordion
+  var fhToggle = e.target.closest('[data-action="toggleFormHistory"]');
+  if (fhToggle) {
+    var fhId = fhToggle.dataset.id;
+    var fhContent = document.querySelector('[data-form-history-content="' + fhId + '"]');
+    if (fhContent) {
+      var fhOpen = fhContent.style.display !== 'none';
+      fhContent.style.display = fhOpen ? 'none' : 'block';
+      fhToggle.classList.toggle('open', !fhOpen);
     }
     return;
   }
