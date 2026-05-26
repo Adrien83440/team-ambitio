@@ -263,6 +263,24 @@ module.exports = async (req, res) => {
       // Déclencheur de la résurrection côté Lead Live
       // (startOptinResurrectListening écoute ce champ).
       lastOptinAt: admin.firestore.FieldValue.serverTimestamp(),
+
+      // Entry dans optinHistory[] — timeline globale des passages visible
+      // dans la fiche détail (bloc "🕓 Historique des passages"). Permet
+      // de tracer chaque ré-engagement du prospect dans les différents
+      // tunnels (VSL Élite, VSL Business, AlteoForm, etc.) sans perdre
+      // l'historique au fil des soft-resets.
+      optinHistory: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        type: 'alteoform',
+        action: 'form',
+        source: 'alteoform',
+        sourceDetail: formTitle,
+        utm: 'AlteoForm' + (formTitle ? ' - ' + formTitle : ''),
+        hasFormSubmission: true,
+        formId: formId,
+        formTitle: formTitle
+      }),
+
       // Timeline orange #fb923c — cohérent avec le pattern webhook.
       timeline_history: admin.firestore.FieldValue.arrayUnion({
         text: noteTxt,
@@ -347,6 +365,19 @@ module.exports = async (req, res) => {
     formTitle,
     formAnswers: formAnswersArr,
     formSubmittedAt: new Date().toISOString(),
+    // optinHistory[] : timeline globale des passages. Pour un lead créé
+    // via formulaire, on initialise avec une première entry "form".
+    optinHistory: [{
+      date: new Date().toISOString(),
+      type: 'alteoform',
+      action: 'form',
+      source: 'alteoform',
+      sourceDetail: formTitle,
+      utm: 'AlteoForm' + (formTitle ? ' - ' + formTitle : ''),
+      hasFormSubmission: true,
+      formId: formId,
+      formTitle: formTitle
+    }],
     tags: [],
     notesHistory: [{ text: noteTxt, date: dateFR }],
     timeline_history: [{ text: '✨ ' + noteTxt, date: dateFR, color: '#f59e0b' }],
