@@ -320,27 +320,107 @@ html, body {
 .ld-form-history-entry { padding: 10px 12px; border: 1px solid rgba(96,165,250,0.12); background: rgba(96,165,250,0.025); border-radius: 8px; }
 .ld-form-history-entry-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(147,197,253,0.75); margin-bottom: 6px; }
 
-/* Historique des passages / opt-ins (alimenté par optinHistory[]) */
-.ld-optin-history-wrap { margin: 6px 0 12px; padding: 10px 12px; border: 1px solid rgba(167,139,250,0.18); background: rgba(167,139,250,0.04); border-radius: 8px; }
-.ld-optin-history-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(196,181,253,0.85); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
-.ld-optin-history-list { display: flex; flex-direction: column; gap: 6px; }
-.ld-optin-entry { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(255,255,255,0.02); border-radius: 6px; font-size: 11px; }
-.ld-optin-entry-date { color: var(--muted); font-family: var(--fm); font-size: 10px; min-width: 95px; }
-.ld-optin-entry-badge { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 4px; }
-.ld-optin-entry-badge.vsl { background: rgba(167,139,250,0.16); color: #c4b5fd; }
-.ld-optin-entry-badge.self { background: rgba(245,158,11,0.16); color: #fcd34d; }
-.ld-optin-entry-badge.business { background: rgba(239,68,68,0.16); color: #fca5a5; }
-.ld-optin-entry-badge.other { background: rgba(96,165,250,0.16); color: #93bbfd; }
-.ld-optin-entry-desc { color: var(--text); font-family: var(--fb); flex: 1; word-break: break-word; }
-.ld-optin-entry-action { font-size: 9px; color: var(--muted); padding: 1px 5px; border: 1px solid var(--border); border-radius: 3px; }
-
-/* Bandeau d'avertissement quand les formAnswers sont antérieures au dernier opt-in */
-.ld-form-stale-banner {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 8px 10px; margin-bottom: 8px;
-  background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.22);
-  border-radius: 6px; font-size: 11px; color: #fcd34d; line-height: 1.45;
+/* ═══════════════════════════════════════════════════════════════════
+   HISTORIQUE DES PASSAGES — engagementHistory[]
+   Affiche en bas de fiche un accordéon listant chaque ré-engagement
+   précédent du lead (opt-in webhook, soumission formulaire, RDV).
+   Chaque entry est dépliable et révèle l'état complet à l'époque.
+   ═══════════════════════════════════════════════════════════════════ */
+.ld-eng-history-wrap {
+  margin: 14px 0 8px;
+  padding: 12px 14px;
+  border: 1px solid rgba(167,139,250,0.2);
+  background: rgba(167,139,250,0.04);
+  border-radius: 10px;
 }
+.ld-eng-history-title {
+  font-size: 10px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.6px; color: rgba(196,181,253,0.85);
+  margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.ld-eng-history-list { display: flex; flex-direction: column; gap: 6px; }
+.ld-eng-entry {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 7px;
+  overflow: hidden;
+  transition: border-color .15s;
+}
+.ld-eng-entry:hover { border-color: rgba(167,139,250,0.18); }
+.ld-eng-entry-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.ld-eng-entry-head:hover { background: rgba(255,255,255,0.02); }
+.ld-eng-entry-chevron {
+  font-size: 10px; color: rgba(255,255,255,0.4);
+  width: 12px; transition: transform .15s;
+}
+.ld-eng-entry.open .ld-eng-entry-chevron { transform: rotate(90deg); }
+.ld-eng-entry-date {
+  color: var(--muted); font-family: var(--fm); font-size: 10px;
+  min-width: 110px;
+}
+.ld-eng-entry-badge {
+  font-size: 9px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.4px; padding: 2px 7px; border-radius: 4px;
+}
+.ld-eng-entry-badge.vsl      { background: rgba(167,139,250,0.16); color: #c4b5fd; }
+.ld-eng-entry-badge.self     { background: rgba(245,158,11,0.16);  color: #fcd34d; }
+.ld-eng-entry-badge.business { background: rgba(239,68,68,0.16);   color: #fca5a5; }
+.ld-eng-entry-badge.other    { background: rgba(96,165,250,0.16);  color: #93bbfd; }
+.ld-eng-entry-trigger {
+  font-size: 9px; color: var(--muted);
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  text-transform: uppercase; letter-spacing: 0.4px;
+}
+.ld-eng-entry-summary {
+  flex: 1; color: rgba(255,255,255,0.5);
+  font-size: 11px; font-family: var(--fb);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ld-eng-entry-body {
+  display: none;
+  padding: 10px 12px 12px 32px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  background: rgba(0,0,0,0.15);
+}
+.ld-eng-entry.open .ld-eng-entry-body { display: block; }
+.ld-eng-detail-row {
+  display: flex; gap: 10px; padding: 4px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.04);
+  font-size: 11px;
+}
+.ld-eng-detail-row:last-child { border-bottom: 0; }
+.ld-eng-detail-lbl {
+  color: var(--muted); font-family: var(--fb);
+  font-weight: 600; min-width: 100px;
+  text-transform: uppercase; font-size: 10px; letter-spacing: 0.4px;
+  padding-top: 2px;
+}
+.ld-eng-detail-val { color: var(--text); font-family: var(--fb); flex: 1; word-break: break-word; }
+.ld-eng-form-block {
+  margin-top: 8px; padding: 8px 10px;
+  background: rgba(96,165,250,0.04);
+  border: 1px solid rgba(96,165,250,0.12);
+  border-radius: 6px;
+}
+.ld-eng-form-block-title {
+  font-size: 9px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.5px; color: rgba(147,197,253,0.75);
+  margin-bottom: 6px;
+}
+.ld-eng-form-row {
+  display: flex; gap: 10px; padding: 3px 0;
+  font-size: 11px;
+}
+.ld-eng-form-row-q { color: var(--muted); min-width: 140px; font-size: 10px; }
+.ld-eng-form-row-a { color: var(--text); flex: 1; word-break: break-word; }
 
 /* Edit mode */
 .ld-edit-toggle {
@@ -2131,24 +2211,6 @@ function renderFormAnswersBlock(l, id) {
   var h = '<div class="ld-form-answers has-answers" data-form-answers="' + id + '">';
   var headTitle = '📋 Réponses au formulaire' + (l.formTitle ? ' — ' + escHtml(l.formTitle) : '') + datePart;
   h += '<div class="ld-form-answers-title">' + headTitle + '</div>';
-
-  // Bandeau d'avertissement si le lead s'est ré-engagé après cette
-  // soumission sans repasser par le formulaire (ex : nouvel opt-in VSL
-  // Business postérieur). Les réponses affichées datent d'avant — utile
-  // pour le sales qui rappelle pour ne pas être surpris si le prospect
-  // donne d'autres infos.
-  if (isFormAnswersStale(l)) {
-    var optinDateLbl = '';
-    if (l.lastOptinAt) {
-      var oDate = l.lastOptinAt.toDate ? l.lastOptinAt.toDate() : new Date(l.lastOptinAt);
-      optinDateLbl = formatDateTimeFr(oDate);
-    }
-    h += '<div class="ld-form-stale-banner">';
-    h += '<span>⚠️</span>';
-    h += '<span>Le prospect s\'est ré-engagé' + (optinDateLbl ? ' le ' + escHtml(optinDateLbl) : '') + ' sans repasser par ce formulaire. Ces réponses datent d\'avant — consultez l\'historique des passages ci-dessus pour le détail.</span>';
-    h += '</div>';
-  }
-
   h += ldRenderFormRows(rows);
   h += '</div>';
   return h;
@@ -2199,43 +2261,43 @@ function renderFormHistoryBlock(l, id) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// HISTORIQUE DES PASSAGES (optinHistory[])
+// HISTORIQUE DES PASSAGES (engagementHistory[])
 // ─────────────────────────────────────────────────────────────────────────
-// Affiche une timeline propre de tous les opt-ins / passages du prospect
-// dans le CRM : VSL Élite, VSL Business, soumissions AlteoForm, bookings.
-//
-// Pourquoi ce bloc :
-//   Avant, quand un lead existant re-engageait (ex : opt-in VSL Business
-//   après avoir déjà opt VSL Élite), seul son `type` actuel était visible
-//   et l'historique se perdait. Désormais, chaque webhook d'opt-in et
-//   chaque soumission AlteoForm pousse une entry dans `optinHistory[]`,
-//   et le bridge booking pousse aussi quand un RDV est pris.
+// À chaque ré-engagement d'un lead existant (opt-in webhook, re-soumission
+// formulaire, RDV pris), un snapshot complet de l'état ANTÉRIEUR est
+// archivé dans engagementHistory[]. La vue principale de la fiche affiche
+// les nouvelles infos "fraîches". Cet historique permet de retrouver tout
+// le parcours du lead : anciens types, anciennes étapes, anciennes
+// réponses de formulaire, anciens UTM.
 //
 // Schéma d'une entry :
 //   {
-//     date: ISO string,
-//     type: 'vsl_elite' | 'business' | 'self_booking' | 'alteoform',
-//     action: 'optin' | 'form' | 'booking',  // optionnel
-//     source: string,            // ex: 'webhook', 'alteoform', 'forms_self_booking'
-//     sourceDetail: string,      // optionnel
-//     utm: string,
-//     hasFormSubmission: boolean,
-//     formId: string,            // si form
-//     formTitle: string          // si form
+//     archivedAt:      ISO,
+//     archivedFor:     'optin' | 'form' | 'booking',
+//     type:            string,         // tunnel d'origine de l'époque
+//     stage:           string,         // étape commerciale de l'époque
+//     status:          string,         // statut de l'époque
+//     utm:             string,
+//     source:          string,
+//     sourceDetail:    string,
+//     formId:          string|null,
+//     formTitle:       string|null,
+//     formAnswers:     array|object|null,
+//     formSubmittedAt: ISO|null,
+//     bookingEventId:  string|null     // si archivedFor=='booking'
 //   }
 // ═══════════════════════════════════════════════════════════════════════
-function renderOptinHistoryBlock(l, id) {
-  var hist = l.optinHistory;
+function renderEngagementHistoryBlock(l, id) {
+  var hist = l.engagementHistory;
   if (!Array.isArray(hist) || hist.length === 0) return '';
 
   // Tri : plus récent d'abord
   var sorted = hist.slice().sort(function(a, b){
-    var ta = a && a.date ? new Date(a.date).getTime() : 0;
-    var tb = b && b.date ? new Date(b.date).getTime() : 0;
+    var ta = a && a.archivedAt ? new Date(a.archivedAt).getTime() : 0;
+    var tb = b && b.archivedAt ? new Date(b.archivedAt).getTime() : 0;
     return tb - ta;
   });
 
-  // Mapping type → classe CSS badge (reprend LEAD_TYPES.badgeClass)
   function badgeClassFor(t) {
     var lt = LEAD_TYPES[t];
     if (lt && lt.badgeClass) return lt.badgeClass;
@@ -2245,69 +2307,88 @@ function renderOptinHistoryBlock(l, id) {
     var lt = LEAD_TYPES[t];
     if (lt && lt.label) return lt.label;
     if (t === 'alteoform') return 'AlteoForm';
-    return t || 'Lead';
+    return t || '—';
   }
-  function iconForAction(a) {
-    if (a === 'form')    return '📋';
-    if (a === 'booking') return '📅';
-    if (a === 'optin')   return '🔄';
-    return '•';
+  function triggerLabel(a) {
+    if (a === 'optin')   return 'opt-in';
+    if (a === 'form')    return 'formulaire';
+    if (a === 'booking') return 'RDV pris';
+    return a || 'engagement';
   }
+
+  // Map des stages → labels lisibles (extrait de la config existante)
+  var STAGE_LABELS = {
+    lead: 'Nouveau', nrp1: 'NRP 1', nrp2: 'NRP 2', nrp3: 'NRP 3',
+    all_nrp: 'All NRP', follow_up_pm: 'Follow Up PM', set: 'SET',
+    rdv_self_booking: 'RDV Self Booking', rdv_pose: 'RDV posé',
+    rdv_confirmes: 'RDV confirmé', rdv_annules_prospect: 'RDV annulé prospect',
+    rdv_annules_equipe: 'RDV annulé équipe', no_show_self: 'No-show self',
+    no_show_setting: 'No-show setting', follow_up_closing: 'Follow Up Closing',
+    disqualifie_closing: 'Disqualifié closing', disqualification: 'Disqualifié',
+    pas_interesse: 'Pas intéressé', poubelle: 'Poubelle',
+    closed_won_setting: 'Closed Won Setting', closed_won_self: 'Closed Won Self',
+    closed_lost: 'Closed Lost', partenariats: 'Partenariats'
+  };
 
   var entriesHtml = '';
-  sorted.forEach(function(e){
+  sorted.forEach(function(e, idx){
     if (!e) return;
-    var dateLbl = e.date ? formatDateTimeFr(e.date) : 'date inconnue';
-    var bc = badgeClassFor(e.type);
-    var lbl = labelFor(e.type);
-    var act = e.action || (e.hasFormSubmission ? 'form' : 'optin');
-    var icon = iconForAction(act);
-    var desc = '';
-    if (e.formTitle) {
-      desc = escHtml(e.formTitle);
-    } else if (e.sourceDetail) {
-      desc = escHtml(e.sourceDetail);
-    } else if (e.utm) {
-      desc = escHtml(e.utm);
-    } else if (e.source) {
-      desc = escHtml(e.source);
-    }
-    entriesHtml += '<div class="ld-optin-entry">';
-    entriesHtml += '<span class="ld-optin-entry-date">' + escHtml(dateLbl) + '</span>';
-    entriesHtml += '<span class="ld-optin-entry-badge ' + bc + '">' + escHtml(lbl) + '</span>';
-    entriesHtml += '<span class="ld-optin-entry-desc">' + icon + ' ' + (desc || '—') + '</span>';
-    if (e.action) {
-      entriesHtml += '<span class="ld-optin-entry-action">' + escHtml(e.action) + '</span>';
-    }
+    var dateLbl = e.archivedAt ? formatDateTimeFr(e.archivedAt) : 'date inconnue';
+    var bc      = badgeClassFor(e.type);
+    var lbl     = labelFor(e.type);
+    var trig    = triggerLabel(e.archivedFor);
+    var stageLbl = STAGE_LABELS[e.stage] || e.stage || '—';
+
+    // Résumé sur la ligne (visible avant dépliage)
+    var summary = stageLbl;
+    if (e.formTitle) summary += ' · ' + e.formTitle;
+    else if (e.utm) summary += ' · ' + e.utm;
+
+    var entryId = id + '_eng_' + idx;
+    entriesHtml += '<div class="ld-eng-entry" data-eng-entry="' + entryId + '">';
+    // Header cliquable
+    entriesHtml += '<div class="ld-eng-entry-head" data-action="toggleEngEntry" data-entry="' + entryId + '">';
+    entriesHtml += '<span class="ld-eng-entry-chevron">▶</span>';
+    entriesHtml += '<span class="ld-eng-entry-date">' + escHtml(dateLbl) + '</span>';
+    entriesHtml += '<span class="ld-eng-entry-badge ' + bc + '">' + escHtml(lbl) + '</span>';
+    entriesHtml += '<span class="ld-eng-entry-trigger">' + escHtml(trig) + '</span>';
+    entriesHtml += '<span class="ld-eng-entry-summary">' + escHtml(summary) + '</span>';
     entriesHtml += '</div>';
+    // Body dépliable
+    entriesHtml += '<div class="ld-eng-entry-body">';
+    if (e.type)         entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Tunnel</span><span class="ld-eng-detail-val">' + escHtml(lbl) + '</span></div>';
+    if (e.stage)        entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Étape</span><span class="ld-eng-detail-val">' + escHtml(stageLbl) + '</span></div>';
+    if (e.status)       entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Statut</span><span class="ld-eng-detail-val">' + escHtml(e.status) + '</span></div>';
+    if (e.utm)          entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">UTM</span><span class="ld-eng-detail-val">' + escHtml(e.utm) + '</span></div>';
+    if (e.source)       entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Source</span><span class="ld-eng-detail-val">' + escHtml(e.source) + (e.sourceDetail ? ' — ' + escHtml(e.sourceDetail) : '') + '</span></div>';
+    if (e.formSubmittedAt) entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Soumis le</span><span class="ld-eng-detail-val">' + escHtml(formatDateTimeFr(e.formSubmittedAt)) + '</span></div>';
+
+    // Bloc formulaire (si présent)
+    if (e.formAnswers) {
+      var fieldIndex = (e.formId && window.__formsLabels && window.__formsLabels[e.formId]) || {};
+      var rows = ldExtractFormRows(e.formAnswers, fieldIndex);
+      if (rows.length > 0) {
+        entriesHtml += '<div class="ld-eng-form-block">';
+        entriesHtml += '<div class="ld-eng-form-block-title">📋 Réponses au formulaire' + (e.formTitle ? ' — ' + escHtml(e.formTitle) : '') + '</div>';
+        rows.forEach(function(r){
+          entriesHtml += '<div class="ld-eng-form-row">';
+          entriesHtml += '<span class="ld-eng-form-row-q">' + escHtml(r.label || r.id || '—') + '</span>';
+          entriesHtml += '<span class="ld-eng-form-row-a">' + escHtml(r.value || '—') + '</span>';
+          entriesHtml += '</div>';
+        });
+        entriesHtml += '</div>';
+      }
+    }
+
+    entriesHtml += '</div>'; // body
+    entriesHtml += '</div>'; // entry
   });
 
-  var h = '<div class="ld-optin-history-wrap">';
-  h += '<div class="ld-optin-history-title">🕓 Historique des passages (' + sorted.length + ')</div>';
-  h += '<div class="ld-optin-history-list">' + entriesHtml + '</div>';
+  var h = '<div class="ld-eng-history-wrap">';
+  h += '<div class="ld-eng-history-title">📜 Historique des passages (' + sorted.length + ')</div>';
+  h += '<div class="ld-eng-history-list">' + entriesHtml + '</div>';
   h += '</div>';
   return h;
-}
-
-// Détecte si les formAnswers affichées sont antérieures au dernier opt-in
-// du lead (cas typique : lead a rempli le formulaire il y a 3 semaines,
-// puis vient de se ré-inscrire sur la VSL Business sans repasser par le
-// formulaire — les réponses sont obsolètes et potentiellement trompeuses).
-// Retourne true si on doit afficher un bandeau d'avertissement.
-function isFormAnswersStale(l) {
-  if (!l || !l.formAnswers) return false;
-  if (!l.formSubmittedAt) return false;
-  // Si pas de lastOptinAt, rien à comparer
-  var lastOptin = l.lastOptinAt;
-  if (!lastOptin) return false;
-  var optinMs = lastOptin.toMillis ? lastOptin.toMillis() : (lastOptin.toDate ? lastOptin.toDate().getTime() : new Date(lastOptin).getTime());
-  var formMs = new Date(l.formSubmittedAt).getTime();
-  if (!optinMs || !formMs) return false;
-  // Marge de 5 minutes : un opt-in qui précède le formulaire de quelques
-  // secondes (cas normal d'un même flux d'inscription) ne déclenche pas
-  // le bandeau. Au-delà, on considère que le prospect a re-engagé sans
-  // refaire le formulaire.
-  return optinMs > (formMs + 5 * 60 * 1000);
 }
 
 /* ── SMS composer (envoi via SalesDialerAPI) ── */
@@ -2491,13 +2572,14 @@ function renderCard(l) {
   h += '<div class="ld-rdv-list" data-rdv-list="' + id + '"></div>';
   h += '</div>';
 
-  // Historique des passages / opt-ins (alimenté par optinHistory[])
-  // Affiché en premier : c'est le contexte chronologique global du lead.
-  h += renderOptinHistoryBlock(l, id);
   // Réponses du formulaire (rendu statique au render — alimenté par AlteoForms)
+  // Affichées en haut de la zone détail : c'est le formulaire DU dernier
+  // engagement uniquement. Les anciennes soumissions sont dans engagementHistory.
   h += renderFormAnswersBlock(l, id);
-  // Historique des soumissions précédentes (si formSubmissionsHistory présent)
-  h += renderFormHistoryBlock(l, id);
+
+  // 📜 Historique des passages (engagementHistory[])
+  // Accordéon en bas listant tous les ré-engagements précédents.
+  h += renderEngagementHistoryBlock(l, id);
 
   // ── EDIT MODE (hidden by default) ──
   h += '<div class="ld-details" data-edit-mode="' + id + '" style="display:none">';
@@ -2886,6 +2968,15 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
       fhContent.style.display = fhOpen ? 'none' : 'block';
       fhToggle.classList.toggle('open', !fhOpen);
     }
+    return;
+  }
+
+  // Toggle engagement history entry (accordéon d'un passage précédent)
+  var engHead = e.target.closest('[data-action="toggleEngEntry"]');
+  if (engHead) {
+    var engEntryId = engHead.dataset.entry;
+    var engEntry = document.querySelector('[data-eng-entry="' + engEntryId + '"]');
+    if (engEntry) engEntry.classList.toggle('open');
     return;
   }
 
@@ -4017,15 +4108,59 @@ function startBookingBridge() {
               lastBookingAt: firebase.firestore.FieldValue.serverTimestamp()
             };
 
-            // Type : on NE TOUCHE PLUS au type lors d'un booking event.
-            // Règle métier : le `type` reflète le tunnel d'origine (dernier
-            // opt-in via VSL Elite, VSL Business, etc.), pas l'action de
-            // booking. Si on a besoin de savoir qu'un RDV a été pris,
-            // c'est `stage = rdv_self_booking` qui le porte. Avant cette
-            // modification, ce code écrasait `type` vers 'self_booking',
-            // ce qui faisait disparaître le tunnel d'origine (problème
-            // observé sur les leads VSL Business qui retombaient en
-            // Self-Booking dès qu'ils prenaient un RDV).
+            // ═══════════════════════════════════════════════════════════════
+            // RDV pris sur lead existant → archivage de l'état actuel dans
+            // engagementHistory[] puis reset des champs déclaratifs.
+            //
+            // Philosophie (validée avec Adrien) :
+            //   - Vue Lead Live = état FRAIS du dernier engagement
+            //   - À chaque nouveau RDV (ou opt-in, ou re-soumission form), on
+            //     archive l'état précédent et on présente la fiche comme un
+            //     nouveau lead avec les infos du moment.
+            //   - L'historique reste accessible via le bloc accordéon
+            //     "📜 Historique des passages" en bas de la fiche.
+            //
+            // Ce qui est ARCHIVÉ (et donc retiré de la vue principale) :
+            //   type, stage, status, utm, source, sourceDetail,
+            //   formId/formTitle/formAnswers/formSubmittedAt
+            //
+            // Ce qui PERSISTE (R1+R2+R3) :
+            //   assignedTo, notesHistory (audit du closer), bookings (RDV
+            //   passés et futurs gardent leur propre collection).
+            // ═══════════════════════════════════════════════════════════════
+
+            // 1. Snapshot l'état actuel (avant écrasement) dans engagementHistory[]
+            //    On ne snapshot que si le lead avait quelque chose à archiver
+            //    (un type/stage différent du booking qui arrive).
+            var hadPrevState = cur.type || cur.stage || cur.formAnswers || cur.utm;
+            if (hadPrevState) {
+              update.engagementHistory = firebase.firestore.FieldValue.arrayUnion({
+                archivedAt:       new Date().toISOString(),
+                archivedFor:      'booking',
+                type:             cur.type             || null,
+                stage:            cur.stage            || null,
+                status:           cur.status           || null,
+                utm:              cur.utm              || null,
+                source:           cur.source           || null,
+                sourceDetail:     cur.sourceDetail     || null,
+                formId:           cur.formId           || null,
+                formTitle:        cur.formTitle        || null,
+                formAnswers:      cur.formAnswers      || null,
+                formSubmittedAt:  cur.formSubmittedAt  || null,
+                bookingEventId:   beId
+              });
+            }
+
+            // 2. Type : NE PAS écraser. Le `type` reflète le tunnel d'origine
+            //    (VSL Élite, VSL Business, etc.). Le fait qu'un RDV soit pris
+            //    est porté par `stage = rdv_self_booking`.
+
+            // 3. Reset des champs déclaratifs de formulaire (les anciennes
+            //    réponses partent dans l'historique, plus dans la vue principale).
+            update.formId           = firebase.firestore.FieldValue.delete();
+            update.formTitle        = firebase.firestore.FieldValue.delete();
+            update.formAnswers      = firebase.firestore.FieldValue.delete();
+            update.formSubmittedAt  = firebase.firestore.FieldValue.delete();
 
             // Si phoneNormalized manque côté master, le calculer maintenant
             if (!cur.phoneNormalized) {
@@ -4046,22 +4181,6 @@ function startBookingBridge() {
             update.source       = 'forms_self_booking';
             update.sourceDetail = be.type || 'Forms Self Booking';
             update.utm          = be.type || 'Forms Self Booking';
-
-            // ── Tracer ce booking dans optinHistory[] (timeline des passages
-            //    visible dans la fiche détail Lead Live). Le type d'origine
-            //    du lead (cur.type) est conservé pour montrer dans l'historique
-            //    qu'un lead VSL Business / VSL Élite a pris un RDV self-booking,
-            //    sans pour autant écraser son tunnel d'origine.
-            update.optinHistory = firebase.firestore.FieldValue.arrayUnion({
-              date: new Date().toISOString(),
-              type: cur.type || 'self_booking',
-              action: 'booking',
-              source: 'forms_self_booking',
-              sourceDetail: be.type || 'Forms Self Booking',
-              utm: be.type || 'Forms Self Booking',
-              hasFormSubmission: false,
-              bookingEventId: beId
-            });
 
             // ── Soft-reset (aligné sur api/alteoform-submit.js) ─────────────
             // Listes synchronisées : tout changement ici doit être répercuté
