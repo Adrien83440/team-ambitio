@@ -45,6 +45,21 @@ module.exports = async function(req, res) {
       const e = new Error('invoiceId requis'); e.status = 400; throw e;
     }
 
+    /* Date d'émission optionnelle (cas sync GoCardless rétroactive).
+       Si fournie, elle remplace la date du jour pour issueDate/dueDate/year.
+       Format accepté : 'YYYY-MM-DD' (interprété en heure locale midi pour
+       éviter les décalages timezone). Le validatedAt reste serverTimestamp(). */
+    let customIssueDate = null;
+    if (body.issueDate && typeof body.issueDate === 'string') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.issueDate)) {
+        const e = new Error('issueDate doit être au format YYYY-MM-DD'); e.status = 400; throw e;
+      }
+      customIssueDate = new Date(body.issueDate + 'T12:00:00');
+      if (isNaN(customIssueDate.getTime())) {
+        const e = new Error('issueDate invalide'); e.status = 400; throw e;
+      }
+    }
+
     /* ── Lecture facture ── */
     const invRef = db.collection('invoices').doc(invoiceId);
     const invSnap = await invRef.get();
@@ -141,10 +156,13 @@ module.exports = async function(req, res) {
 
     /* ── Transaction atomique : compteur + facture ── */
     const now = new Date();
-    const year = now.getFullYear();
+    /* Si une date d'émission custom est fournie (sync rétroactive),
+       on l'utilise pour issueDate, dueDate et le calcul d'année du
+       compteur. Sinon, date du jour. */
+    const issueDateJs = customIssueDate || now;
+    const year = issueDateJs.getFullYear();
     const paymentTermsDays = invoice.paymentTermsDays != null ? invoice.paymentTermsDays : 30;
-    const issueDateJs = now;
-    const dueDateJs = addDays(now, paymentTermsDays);
+    const dueDateJs = addDays(issueDateJs, paymentTermsDays);
 
     const txResult = await db.runTransaction(async function(tx) {
       const counterRef = db.collection('invoice_counters').doc(String(year));

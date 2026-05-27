@@ -160,25 +160,40 @@ async function createInvoiceForGcPayment(gcPayment, billing, systemKey, validate
 
   const client = await findOrCreateInvoiceClient(gcCustomerId);
 
-  let description = 'Paiement intégral';
+  /* Description : ordre de priorité
+     1. gcPayment.description (libellé que voit le client sur son relevé bancaire)
+     2. Template subscription Firestore si dispo
+     3. Fallback générique */
+  let description = '';
   let firestoreSub = null;
+  const gcPaymentDescription = (gcPayment.description || '').trim();
+
   if (subscriptionGcId) {
     const subSnap = await db.collection('subscriptions').where('gcSubscriptionId', '==', subscriptionGcId).limit(1).get();
     if (!subSnap.empty) {
       firestoreSub = Object.assign({ id: subSnap.docs[0].id }, subSnap.docs[0].data());
-      const FR_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-        'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-      const dt = new Date(chargeDateStr + 'T12:00:00');
-      const tpl = firestoreSub.descriptionTemplate || (firestoreSub.description || 'Mensualité {month_name} {year}');
-      description = tpl
-        .replace(/\{month_name\}/g, FR_MONTHS[dt.getMonth()])
-        .replace(/\{month_number\}/g, String(dt.getMonth() + 1).padStart(2, '0'))
-        .replace(/\{year\}/g, dt.getFullYear())
-        .replace(/\{installment\}/g, String((firestoreSub.installmentsPaidOnGC || 0) + 1))
-        .replace(/\{total\}/g, firestoreSub.totalInstallments != null ? String(firestoreSub.totalInstallments) : '?');
-    } else {
-      description = 'Mensualité ' + chargeDateStr;
     }
+  }
+
+  if (gcPaymentDescription) {
+    /* Priorité 1 : ce que GC affiche au client sur son relevé */
+    description = gcPaymentDescription;
+  } else if (firestoreSub) {
+    /* Priorité 2 : template subscription Firestore */
+    const FR_MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+    const dt = new Date(chargeDateStr + 'T12:00:00');
+    const tpl = firestoreSub.descriptionTemplate || (firestoreSub.description || 'Mensualité {month_name} {year}');
+    description = tpl
+      .replace(/\{month_name\}/g, FR_MONTHS[dt.getMonth()])
+      .replace(/\{month_number\}/g, String(dt.getMonth() + 1).padStart(2, '0'))
+      .replace(/\{year\}/g, dt.getFullYear())
+      .replace(/\{installment\}/g, String((firestoreSub.installmentsPaidOnGC || 0) + 1))
+      .replace(/\{total\}/g, firestoreSub.totalInstallments != null ? String(firestoreSub.totalInstallments) : '?');
+  } else if (subscriptionGcId) {
+    description = 'Mensualité ' + chargeDateStr;
+  } else {
+    description = 'Paiement intégral';
   }
 
   const vatRate = client.vatExempt ? 0 : (billing.vatRate != null ? billing.vatRate : 20);
@@ -254,7 +269,7 @@ async function createInvoiceForGcPayment(gcPayment, billing, systemKey, validate
     const resp = await fetchFn(validateUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-system-key': systemKey },
-      body: JSON.stringify({ invoiceId: invoiceId }),
+      body: JSON.stringify({ invoiceId: invoiceId, issueDate: chargeDateStr }),
     });
     const respData = await resp.json().catch(function(){ return {}; });
 
