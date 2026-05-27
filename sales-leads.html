@@ -1415,7 +1415,11 @@ function processPopupQueue() {
   if (lead.telephone) {
     callBtn.style.display = '';
     callBtn.onclick = function() {
-      window.open('tel:' + lead.telephone.replace(/\s/g, ''), '_self');
+      if (window.DialerBridge) {
+        window.DialerBridge.callLead(lead.id || null, lead.telephone, lead.nom || null);
+      } else {
+        console.warn('[DialerBridge] non chargé');
+      }
     };
   } else {
     callBtn.style.display = 'none';
@@ -2544,7 +2548,7 @@ function renderCard(l) {
   // ── VIEW MODE ──
   h += '<div class="ld-details" data-view-mode="' + id + '">';
   if (l.nom) h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><span class="ld-detail-val">' + escHtml(l.nom) + '</span></div>';
-  if (l.telephone) h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><span class="ld-detail-val"><a href="tel:' + normalizeTel(l.telephone).replace(/\s/g, '') + '">' + escHtml(normalizeTel(l.telephone)) + '</a></span></div>';
+  if (l.telephone) h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><span class="ld-detail-val"><a href="#" data-action="dialerCall" data-phone="' + normalizeTel(l.telephone).replace(/\s/g, '') + '" data-lead-id="' + id + '" data-name="' + escAttr(l.nom || '') + '" title="Appeler via Ringover">' + escHtml(normalizeTel(l.telephone)) + '</a></span></div>';
   if (l.email) h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><span class="ld-detail-val"><a href="mailto:' + escHtml(l.email) + '">' + escHtml(l.email) + '</a></span></div>';
   if (l.utm) h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><span class="ld-detail-val">' + escHtml(l.utm) + '</span></div>';
   if (l.secteur) h += '<div class="ld-detail-row"><span class="ld-detail-label">Secteur</span><span class="ld-detail-val">' + escHtml(l.secteur) + '</span></div>';
@@ -2894,6 +2898,23 @@ function renderCard(l) {
 
 /* ═══ FEED EVENTS ═══ */
 document.getElementById('ldFeed').addEventListener('click', function(e) {
+  // Appel via Ringover (DialerBridge) — numéro de tél du détail
+  var dcTarget = e.target.closest('[data-action="dialerCall"]');
+  if (dcTarget) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (window.DialerBridge && dcTarget.dataset.phone) {
+      window.DialerBridge.callLead(
+        dcTarget.dataset.leadId || null,
+        dcTarget.dataset.phone,
+        dcTarget.dataset.name || null
+      );
+    } else if (!window.DialerBridge) {
+      console.warn('[DialerBridge] non chargé');
+    }
+    return;
+  }
+
   // Call detail modal (click on a call row with callLogId)
   var cdTarget = e.target.closest('[data-action="callDetail"]');
   if (cdTarget) {

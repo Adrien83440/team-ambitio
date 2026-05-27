@@ -208,6 +208,7 @@ body { min-height: 100vh; }
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="nav.js" defer></script>
+<script src="dialer-bridge.js" defer></script>
 </head>
 
 <body>
@@ -284,6 +285,18 @@ var MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août
 function escapeHtml(s) {
   if (s == null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function rdvDialerCall(btn) {
+  if (!btn) return;
+  var phone = btn.getAttribute('data-phone') || '';
+  if (!phone) { toast('❌ Aucun numéro', 'error'); return; }
+  if (!window.DialerBridge) { toast('❌ Dialer Bridge non chargé', 'error'); return; }
+  window.DialerBridge.callLead(
+    btn.getAttribute('data-lead-id') || null,
+    phone,
+    btn.getAttribute('data-name') || null
+  );
 }
 
 function toast(msg, type) {
@@ -629,7 +642,7 @@ function renderCard(b, doubleBooked) {
     actions += '<a class="rdv-btn icon" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Fiche prospect">👁</a>';
   }
   if (phone) {
-    actions += '<a class="rdv-btn icon" href="tel:' + encodeURIComponent(phone) + '" title="Appeler">📞</a>';
+    actions += '<button class="rdv-btn icon" type="button" onclick="rdvDialerCall(this)" data-phone="' + escapeHtml(phone) + '" data-lead-id="' + escapeHtml(b.leadId || '') + '" data-name="' + escapeHtml(name || '') + '" title="Appeler via Ringover">📞</button>';
   }
 
   return (

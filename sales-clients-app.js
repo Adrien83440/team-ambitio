@@ -1206,7 +1206,7 @@ function refreshPanel(){
   /* ACTIONS */
   h += '<div class="cl-actions">';
   if (client.telephone){
-    h += '<a class="cl-action-btn green" href="tel:'+escA(String(client.telephone).replace(/\s/g,''))+'">📞 Appeler</a>';
+    h += '<button type="button" class="cl-action-btn green" data-action="dialerCall" data-phone="'+escA(String(client.telephone).replace(/\s/g,''))+'" data-name="'+escA(client.nom||'')+'">📞 Appeler</button>';
   }
   if (client.email){
     h += '<a class="cl-action-btn blue" href="mailto:'+escA(client.email)+'">✉️ Email</a>';
@@ -1262,6 +1262,19 @@ document.getElementById('panelBg').addEventListener('click', function(e){
   // Backdrop close
   if(e.target === this){ closePanel(); return; }
   if(e.target.closest('[data-action="closePanel"]')){ closePanel(); return; }
+
+  // Appel via Ringover (DialerBridge)
+  var dcBtn = e.target.closest('[data-action="dialerCall"]');
+  if (dcBtn){
+    e.preventDefault();
+    e.stopPropagation();
+    if (window.DialerBridge && dcBtn.dataset.phone){
+      window.DialerBridge.callLead(openLeadId || null, dcBtn.dataset.phone, dcBtn.dataset.name || null);
+    } else if (!window.DialerBridge){
+      toast('❌ Dialer Bridge non chargé');
+    }
+    return;
+  }
 
   // Status pill change
   var csBtn = e.target.closest('[data-action="setCStatus"]');

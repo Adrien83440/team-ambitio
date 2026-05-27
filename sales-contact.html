@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="call-detail-modal.css">
 <script src="call-detail-modal.js" defer></script>
 <script src="sales-dialer-api.js" defer></script>
+<script src="dialer-bridge.js" defer></script>
 <script>
 if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}
 </script>
@@ -349,7 +350,7 @@ var l=lead,st=SM[l.stage||'lead']||STAGES[0],ci=st._i||0,sc=l.assignedTo==='guil
 var h='';
 // Top
 h+='<div class="fiche-top"><a class="fiche-back" href="sales-crm.html">\u2190</a><div class="fiche-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><span class="fiche-name">'+esc(l.nom||'\u2014')+'</span><span class="fiche-badge '+(isC?'client':'lead')+'">'+(isC?'\u2705 Client':'\ud83d\udccb Lead')+'</span><div class="fiche-top-actions">';
-if(l.telephone)h+='<a class="fiche-top-btn" href="tel:'+l.telephone.replace(/\s/g,'')+'">\ud83d\udcde Appeler</a>';
+if(l.telephone)h+='<button class="fiche-top-btn" onclick="dialerCallFromFiche()">\ud83d\udcde Appeler</button>';
 if(l.email)h+='<a class="fiche-top-btn" href="mailto:'+escA(l.email)+'">\u2709\ufe0f Email</a>';
 h+='<button class="fiche-top-btn" style="color:#a78bfa;border-color:rgba(167,139,250,.25)" onclick="openBookingFromFiche()">\ud83d\udcc5 RDV</button>';
 h+='<button class="fiche-top-btn" style="color:#fb923c;border-color:rgba(251,146,60,.3)" onclick="openRemonterModal()" title="Faire remonter dans Leads Live">\ud83d\udd01 Remonter</button>';
@@ -841,6 +842,13 @@ sv(u);var m=document.getElementById('flS');if(m){m.style.opacity='1';setTimeout(
 }
 function sv(u){u.updatedAt=firebase.firestore.FieldValue.serverTimestamp();db.collection('leads').doc(leadId).update(u).catch(function(e){toast('\u274c '+e.message);});}
 function addTL(t,c){lead.timeline_history=(lead.timeline_history||[]);lead.timeline_history.push({text:t,date:fmtNow(),color:c||'var(--muted)'});db.collection('leads').doc(leadId).update({timeline_history:lead.timeline_history}).catch(function(){});}
+
+/* ── APPEL RINGOVER VIA DIALER BRIDGE ── */
+function dialerCallFromFiche(){
+  if(!lead||!lead.telephone){toast('\u274c Aucun num\u00e9ro de t\u00e9l\u00e9phone');return;}
+  if(!window.DialerBridge){toast('\u274c Dialer Bridge non charg\u00e9');return;}
+  window.DialerBridge.callLead(leadId||null, lead.telephone, lead.nom||null);
+}
 
 /* ── BOOKING FROM FICHE ── */
 function openBookingFromFiche(){

@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+<script src="dialer-bridge.js" defer></script>
 <link rel="stylesheet" href="sales.css"/>
 <style>
 .bk{padding:20px 24px 80px;max-width:1100px;margin:0 auto}
@@ -510,6 +511,17 @@ var JR=['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'],JS=['
 function toast(m){var t=document.getElementById('bkT');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 function escA(s){return esc(s).replace(/"/g,'&quot;');}
+function bookingDialerCall(el){
+  if(!el)return;
+  var phone=el.getAttribute('data-phone')||'';
+  if(!phone){toast('❌ Aucun numéro');return;}
+  if(!window.DialerBridge){toast('❌ Dialer Bridge non chargé');return;}
+  window.DialerBridge.callLead(
+    el.getAttribute('data-lead-id')||null,
+    phone,
+    el.getAttribute('data-name')||null
+  );
+}
 function gid(){return Math.random().toString(36).slice(2,10);}
 function tISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function dFR(ds){var d=new Date(ds+'T12:00:00');return JF[d.getDay()]+' '+d.getDate()+' '+MF[d.getMonth()]+' '+d.getFullYear();}
@@ -1182,7 +1194,7 @@ else if(rdvTab==='client'){
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Prénom</span><span class="rdv-p-val">'+esc(pr.prenom||'—')+'</span></div>';
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Nom</span><span class="rdv-p-val">'+esc(pr.nom||'—')+'</span></div>';
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Email</span><span class="rdv-p-val">'+(pr.email?'<a href="mailto:'+esc(pr.email)+'" style="color:#60a5fa">'+esc(pr.email)+'</a>':'—')+'</span></div>';
-h+='<div class="rdv-p-row"><span class="rdv-p-label">Téléphone</span><span class="rdv-p-val">'+(pr.telephone?'<a href="tel:'+esc(pr.telephone)+'" style="color:#60a5fa">'+esc(pr.telephone)+'</a>':'—')+'</span></div>';
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Téléphone</span><span class="rdv-p-val">'+(pr.telephone?'<a href="#" onclick="bookingDialerCall(this);return false" data-phone="'+escA(pr.telephone)+'" data-name="'+escA(clientName)+'" data-lead-id="'+escA(b.leadId||'')+'" style="color:#60a5fa" title="Appeler via Ringover">'+esc(pr.telephone)+'</a>':'—')+'</span></div>';
 if(pr.secteur)h+='<div class="rdv-p-row"><span class="rdv-p-label">Secteur</span><span class="rdv-p-val">'+esc(pr.secteur)+'</span></div>';
 if(pr.message)h+='<div class="rdv-p-row"><span class="rdv-p-label">Message</span><span class="rdv-p-val">'+esc(pr.message)+'</span></div>';
 // Form data
