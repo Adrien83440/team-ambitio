@@ -35,6 +35,57 @@ const COLOR_LINE_DARK = rgb(0.10, 0.10, 0.10);
 const COLOR_BG_HEADER = rgb(0.96, 0.96, 0.96);
 const COLOR_AMBER = rgb(0.85, 0.46, 0.02);
 
+/* ─── Sanitization WinAnsi ─────────────────────────────────────────────
+   Helvetica (StandardFonts) supporte uniquement WinAnsi (Latin-1 + extras).
+   Si Montserrat n'a pas pu charger et qu'on tombe en fallback Helvetica,
+   les caractères Unicode étendus (apostrophe typo, guillemets typo, œ, etc.)
+   font planter drawText avec "WinAnsi cannot encode <char>".
+   
+   sanitizeForPdf() remplace systématiquement les caractères problématiques
+   par leurs équivalents WinAnsi-safe AVANT tout drawText. Appliqué à toutes
+   les strings clients (noms, descriptions, adresses) qui peuvent contenir
+   des apostrophes typographiques (Land'Ocean, etc.).
+   ──────────────────────────────────────────────────────────────────── */
+const _PDF_SANITIZE_MAP = {
+  /* Apostrophes et guillemets typographiques → ASCII */
+  '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u201B': "'",
+  '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"',
+  '\u2032': "'", '\u2033': '"', '\u2035': "'", '\u2036': '"',
+  /* Tirets typographiques → ASCII */
+  '\u2010': '-', '\u2011': '-', '\u2012': '-', '\u2013': '-', '\u2014': '-', '\u2015': '-',
+  /* Ellipsis → trois points */
+  '\u2026': '...',
+  /* Espaces non-cassables et spéciaux → espace normal */
+  '\u00A0': ' ', '\u2007': ' ', '\u2009': ' ', '\u200A': ' ', '\u202F': ' ',
+  /* Ligatures latines → décomposées */
+  '\u0153': 'oe', '\u0152': 'OE',
+  '\u00E6': 'ae', '\u00C6': 'AE',
+  /* Caractères de contrôle invisibles → vide */
+  '\u200B': '', '\u200C': '', '\u200D': '', '\uFEFF': '',
+  /* Symboles divers à approximer */
+  '\u2022': '-', '\u2023': '-', '\u25E6': '-', '\u2043': '-',
+  '\u2122': '(TM)', '\u00AE': '(R)', '\u00A9': '(C)',
+};
+
+function sanitizeForPdf(str) {
+  if (str == null) return '';
+  let s = String(str);
+  /* Remplacement caractère par caractère via la map */
+  for (const k in _PDF_SANITIZE_MAP) {
+    if (s.indexOf(k) >= 0) s = s.split(k).join(_PDF_SANITIZE_MAP[k]);
+  }
+  /* Filet de sécurité : tout caractère hors plage WinAnsi (U+0000-U+00FF
+     plus quelques extras supportés) → remplacé par '?'. C'est ce qui
+     causait HTTP 502. Mieux vaut un '?' que un crash. */
+  s = s.replace(/[\u0100-\uFFFF]/g, function(ch) {
+    /* Quelques caractères au-delà de 0xFF restent supportés par WinAnsi :
+       Latin Extended-A (œ, OE) qu'on a déjà gérés ci-dessus.
+       Le reste : on remplace par '?'. */
+    return '?';
+  });
+  return s;
+}
+
 /* ─── Helpers de tracé ─── */
 
 /** Convertit y "depuis le haut" en y pdf-lib (origine bas-gauche). */
@@ -55,9 +106,10 @@ function rect(page, x, yTop, w, h, color) {
   page.drawRectangle({ x: x, y: yFromTop(yTop + h), width: w, height: h, color: color });
 }
 
-/** Trace du texte simple à la position (depuis le haut). */
+/** Trace du texte simple à la position (depuis le haut).
+    Applique sanitizeForPdf systématiquement pour éviter les crashs Helvetica. */
 function text(page, str, x, yTop, font, size, color) {
-  page.drawText(String(str || ''), { x: x, y: yFromTop(yTop + size * 0.85), font: font, size: size, color: color || COLOR_TEXT });
+  page.drawText(sanitizeForPdf(str), { x: x, y: yFromTop(yTop + size * 0.85), font: font, size: size, color: color || COLOR_TEXT });
 }
 
 /**
@@ -65,10 +117,11 @@ function text(page, str, x, yTop, font, size, color) {
  * Utilisé pour le wordmark.
  */
 function textSpaced(page, str, x, yTop, font, size, color, spacing) {
+  const safeStr = sanitizeForPdf(str);
   let cx = x;
   const yPdf = yFromTop(yTop + size * 0.85);
-  for (let i = 0; i < str.length; i++) {
-    const ch = str[i];
+  for (let i = 0; i < safeStr.length; i++) {
+    const ch = safeStr[i];
     page.drawText(ch, { x: cx, y: yPdf, font: font, size: size, color: color || COLOR_TEXT });
     cx += font.widthOfTextAtSize(ch, size) + (spacing || 0);
   }
@@ -80,7 +133,9 @@ function textSpaced(page, str, x, yTop, font, size, color, spacing) {
  */
 function wrapText(str, font, size, maxWidth) {
   if (!str) return [''];
-  const paragraphs = String(str).split(/\r?\n/);
+  /* Sanitization en entrée pour que le calcul de largeur soit cohérent
+     avec ce qui sera réellement affiché par text() (qui sanitize aussi). */
+  const paragraphs = sanitizeForPdf(str).split(/\r?\n/);
   const out = [];
   for (let p = 0; p < paragraphs.length; p++) {
     const para = paragraphs[p];
