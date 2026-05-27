@@ -387,6 +387,19 @@ module.exports = async function(req, res) {
     }, maxPages);
     if (pag.truncated) warnings.push('payments pagination truncated at ' + pag.pages + ' pages');
 
+    /* Tri chronologique ASC par charge_date pour numérotation séquentielle propre :
+       F2026-00001 = paiement le plus ancien, F2026-00153 = plus récent.
+       Tie-break par created_at puis par id pour stabilité. */
+    pag.items.sort(function(a, b) {
+      const da = (a.charge_date || '9999-99-99');
+      const db = (b.charge_date || '9999-99-99');
+      if (da !== db) return da < db ? -1 : 1;
+      const ca = (a.created_at || '');
+      const cb = (b.created_at || '');
+      if (ca !== cb) return ca < cb ? -1 : 1;
+      return (a.id || '').localeCompare(b.id || '');
+    });
+
     const result = {
       success: true,
       dryRun: dryRun,
