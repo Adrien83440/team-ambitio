@@ -263,24 +263,6 @@ module.exports = async (req, res) => {
       // Déclencheur de la résurrection côté Lead Live
       // (startOptinResurrectListening écoute ce champ).
       lastOptinAt: admin.firestore.FieldValue.serverTimestamp(),
-
-      // Entry dans optinHistory[] — timeline globale des passages visible
-      // dans la fiche détail (bloc "🕓 Historique des passages"). Permet
-      // de tracer chaque ré-engagement du prospect dans les différents
-      // tunnels (VSL Élite, VSL Business, AlteoForm, etc.) sans perdre
-      // l'historique au fil des soft-resets.
-      optinHistory: admin.firestore.FieldValue.arrayUnion({
-        date: new Date().toISOString(),
-        type: 'alteoform',
-        action: 'form',
-        source: 'alteoform',
-        sourceDetail: formTitle,
-        utm: 'AlteoForm' + (formTitle ? ' - ' + formTitle : ''),
-        hasFormSubmission: true,
-        formId: formId,
-        formTitle: formTitle
-      }),
-
       // Timeline orange #fb923c — cohérent avec le pattern webhook.
       timeline_history: admin.firestore.FieldValue.arrayUnion({
         text: noteTxt,
@@ -298,20 +280,49 @@ module.exports = async (req, res) => {
     // Q2.A : assignedTo n'est PAS touché — continuité commerciale (le closer
     // qui suivait le lead avant le reprend).
 
-    if (shouldReset) {
+    // ─── Soft-reset SYSTÉMATIQUE (sauf clients) ──────────────────────────
+    // Validé avec Adrien : à chaque ré-engagement (opt-in, formulaire, RDV),
+    // la fiche Lead Live doit afficher l'état FRAIS du dernier engagement.
+    // Donc stage='lead', status='nouveau' sur toute re-soumission, sauf
+    // pour un client coaching protégé (qui ne doit JAMAIS être rétrogradé).
+    // L'ancien stage est snapshotté dans engagementHistory (cf. plus bas).
+    if (!isClient) {
       update.previousStatus = prevData.status || null;
       update.previousStage  = currentStage   || null;
       update.stage  = 'lead';
       update.status = 'nouveau';
     }
 
+    // ─── Archivage dans engagementHistory[] ──────────────────────────────
+    // Snapshot complet de l'état AVANT cette re-soumission. Sera affiché
+    // dans le bloc accordéon "📜 Historique des passages" de Lead Live.
+    // On archive systématiquement (même sans formAnswers précédents) car
+    // un lead qui re-remplit a forcément un type/stage/utm d'avant qui
+    // mérite d'être tracé.
+    update.engagementHistory = admin.firestore.FieldValue.arrayUnion({
+      archivedAt:      new Date().toISOString(),
+      archivedFor:     'form',
+      type:            prevData.type            || null,
+      stage:           prevData.stage           || null,
+      status:          prevData.status          || null,
+      utm:             prevData.utm             || null,
+      source:          prevData.source          || null,
+      sourceDetail:    prevData.sourceDetail    || null,
+      formId:          prevData.formId          || null,
+      formTitle:       prevData.formTitle       || null,
+      formAnswers:     prevAnswers              || null,
+      formSubmittedAt: prevData.formSubmittedAt || null
+    });
+
+    // ─── Legacy : formSubmissionsHistory (conservé pour compatibilité
+    //     avec sales-contact.html qui l'utilise encore). À retirer plus
+    //     tard quand tous les modules auront migré vers engagementHistory.
     if (hadPrevForm) {
       update.formSubmissionsHistory = admin.firestore.FieldValue.arrayUnion({
         submittedAt: prevData.formSubmittedAt || null,
         formId:      prevData.formId         || null,
         formTitle:   prevData.formTitle      || null,
         formAnswers: prevAnswers,
-        // Snapshot des champs "source" précédents pour audit complet
         type:         prevData.type         || null,
         source:       prevData.source       || null,
         sourceDetail: prevData.sourceDetail || null,
@@ -365,19 +376,6 @@ module.exports = async (req, res) => {
     formTitle,
     formAnswers: formAnswersArr,
     formSubmittedAt: new Date().toISOString(),
-    // optinHistory[] : timeline globale des passages. Pour un lead créé
-    // via formulaire, on initialise avec une première entry "form".
-    optinHistory: [{
-      date: new Date().toISOString(),
-      type: 'alteoform',
-      action: 'form',
-      source: 'alteoform',
-      sourceDetail: formTitle,
-      utm: 'AlteoForm' + (formTitle ? ' - ' + formTitle : ''),
-      hasFormSubmission: true,
-      formId: formId,
-      formTitle: formTitle
-    }],
     tags: [],
     notesHistory: [{ text: noteTxt, date: dateFR }],
     timeline_history: [{ text: '✨ ' + noteTxt, date: dateFR, color: '#f59e0b' }],
