@@ -911,57 +911,28 @@
       </div>
     </div>
 
-    <!-- ============ TAB : SYNC (Step 6) ============ -->
+    <!-- ============ TAB : SYNC (refonte 2026-05-27) ============ -->
     <div class="bill-tab" data-tab="sync">
 
-      <!-- Hero stats -->
-      <div class="bill-stats">
-        <div class="bill-stat">
-          <div class="bill-stat-l">Persons clients</div>
-          <div class="bill-stat-v" id="syncStatPersonsClient">—</div>
-          <div class="bill-stat-s">Total marqués isClient</div>
-        </div>
-        <div class="bill-stat amber">
-          <div class="bill-stat-l">Sans invoice_clients</div>
-          <div class="bill-stat-v" id="syncStatPersonsOrphan">—</div>
-          <div class="bill-stat-s">À rattraper</div>
-        </div>
-        <div class="bill-stat blue">
-          <div class="bill-stat-l">Dernière sync GC</div>
-          <div class="bill-stat-v" id="syncStatLastGcRun" style="font-size:16px">—</div>
-          <div class="bill-stat-s" id="syncStatLastGcDate">—</div>
-        </div>
-      </div>
-
-      <!-- Card 1 : Backfill invoice_clients manquants -->
-      <div class="bill-card" style="margin-top:18px">
+      <div class="bill-card" style="background:rgba(96,165,250,.04);border-color:rgba(96,165,250,.2)">
         <div class="bill-card-h">
           <div>
-            <h3>👥 Rétroactif clients facturation</h3>
-            <p>Crée les fiches <code>invoice_clients</code> manquantes pour les personnes déjà marquées
-              <code>isClient</code> dans le hub <code>persons</code>. Utile pour rattraper les clients convertis
-              avant le déploiement de la création automatique.</p>
+            <h3>ℹ️ Nouvelle architecture (2026-05-27)</h3>
           </div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
-          <button class="bill-btn" id="bfDryRunBtn" onclick="runBackfillDryRun()">🔍 Aperçu (dry-run)</button>
-          <button class="bill-btn bill-btn-primary" id="bfExecuteBtn" onclick="runBackfillExecute()" disabled>
-            ✅ Exécuter — créer les fiches
-          </button>
-          <button class="bill-btn" onclick="document.getElementById('bfResults').innerHTML=''">🧹 Effacer</button>
+        <div style="font-size:13px;line-height:1.7;color:var(--muted)">
+          <p><strong>Règle unique</strong> : 1 paiement GoCardless effectivement encaissé = 1 facture team, créée à la date du paiement, marquée payée d'emblée.</p>
+          <p>Plus de cron auto en avance (Step 4B désactivé), plus de matching montant. La création de factures est <strong>pilotée par le webhook GoCardless</strong> sur l'event <code>payment_paid_out</code>. Idempotence par <code>gcPaymentId</code> : <strong>zéro doublon possible</strong>.</p>
+          <p>La sync manuelle ci-dessous sert au rattrapage de l'historique et des events webhook perdus.</p>
         </div>
-        <div id="bfResults" style="margin-top:14px"></div>
       </div>
 
-      <!-- Card 2 : Sync GoCardless -->
+      <!-- ════ Card 1 : Sync GoCardless ════ -->
       <div class="bill-card" style="margin-top:18px">
         <div class="bill-card-h">
           <div>
             <h3>🔄 Synchroniser GoCardless</h3>
-            <p>Scanne l'API GoCardless live et réconcilie l'état Firestore :
-              identifie les mandats orphelins, met à jour les compteurs d'abonnements,
-              et <strong>crée les factures manquantes pour les paiements en une fois</strong>
-              (one-shot) qui n'auraient pas été facturés.</p>
+            <p>Scanne tous les paiements GoCardless <code>paid_out</code> sur une fenêtre et crée les factures manquantes. Auto-création des fiches clients depuis GC si manquantes.</p>
           </div>
         </div>
 
@@ -969,65 +940,55 @@
           <div class="bill-form-row">
             <div class="bill-label">Depuis</div>
             <input class="bill-input" type="date" id="syncSince" value="2026-01-01"/>
-            <div class="bill-help">Date de début de la fenêtre (par défaut : démarrage SARL).</div>
           </div>
           <div class="bill-form-row">
             <div class="bill-label">Jusqu'au</div>
             <input class="bill-input" type="date" id="syncUntil"/>
-            <div class="bill-help">Date de fin (par défaut : aujourd'hui).</div>
           </div>
-        </div>
-
-        <div class="bill-label" style="margin-top:14px">Actions à exécuter</div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="syncActionCustomers" checked style="accent-color:#10b981"/>
-            <span><strong>Customers</strong> — détecter les clients GoCardless sans <code>invoice_clients</code> matching (alertes)</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="syncActionSubscriptions" checked style="accent-color:#10b981"/>
-            <span><strong>Subscriptions</strong> — détecter les abonnements GC orphelins + sync <code>installmentsPaidOnGC</code></span>
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="syncActionPayments" checked style="accent-color:#10b981"/>
-            <span><strong>Payments</strong> — réconcilier paiements GC ↔ factures team + <strong>créer les factures one-shot manquantes</strong></span>
-          </label>
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
           <button class="bill-btn" id="gcSyncDryRunBtn" onclick="runGcSyncDryRun()">🔍 Aperçu (dry-run)</button>
           <button class="bill-btn bill-btn-primary" id="gcSyncExecuteBtn" onclick="runGcSyncExecute()" disabled>
-            ✅ Exécuter — appliquer les changements
+            ✅ Exécuter — créer les factures
           </button>
           <button class="bill-btn" onclick="document.getElementById('gcSyncResults').innerHTML=''">🧹 Effacer</button>
         </div>
 
         <div style="margin-top:10px;padding:10px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:6px;font-size:12px;color:var(--muted)">
-          ⚠️ <strong>Garde-fou Vercel</strong> : maximum 50 factures one-shot créées par run (timeout 60s).
-          Si plus, relancer pour traiter le reste.
+          ⚠️ <strong>Garde-fou</strong> : maximum 100 factures créées par run (timeout 60s). Si plus, relancer pour traiter le reste.
         </div>
 
         <div id="gcSyncResults" style="margin-top:14px"></div>
       </div>
 
-      <!-- Card 3 : Aide -->
-      <div class="bill-card" style="margin-top:18px;background:rgba(96,165,250,.04);border-color:rgba(96,165,250,.2)">
+      <!-- ════ Card 2 : Purge totale ════ -->
+      <div class="bill-card" style="margin-top:18px;border-color:rgba(239,68,68,.3)">
         <div class="bill-card-h">
           <div>
-            <h3>ℹ️ Comment ça marche</h3>
+            <h3 style="color:#ef4444">⚠️ Purge totale + reset compteur</h3>
+            <p><strong>Opération sensible</strong> : archive toutes les factures actuelles (les rend invisibles dans l'UI mais conservées en base 10 ans) et remet le compteur F2026-XXXXX à 1. À utiliser une seule fois pour repartir d'une base propre avant resync GoCardless complète.</p>
           </div>
         </div>
-        <div style="font-size:13px;line-height:1.7;color:var(--muted)">
-          <p><strong>Rétroactif clients</strong> : utilise une seule fois après déploiement pour rattraper
-          les clients déjà convertis (isClient=true sans invoice_clients lié). Idempotent — peut être
-          relancé sans risque.</p>
-          <p><strong>Sync GoCardless</strong> : à lancer en cas de doute (event webhook manqué,
-          paiement intégral invisible, abonnement importé hors-pipeline). Toujours faire un dry-run
-          d'abord pour vérifier ce qui sera créé/modifié.</p>
-          <p><strong>Clients EI</strong> : la liste <code>_config/billing.eiCustomerIds</code> exclut
-          les <code>gcCustomerId</code> ne devant pas être facturés sur SARL. Pour ajouter/retirer,
-          modifier le document Firestore directement.</p>
+
+        <div style="margin-top:14px;padding:12px;background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.3);border-radius:6px;font-size:12px;color:#ef4444">
+          ⚠️ <strong>Effets</strong> :
+          <ul style="margin:6px 0 0 18px;padding:0">
+            <li>Toutes les factures actuelles passent en <code>_archived=true</code> (cachées de l'UI, gardées en base)</li>
+            <li>Le compteur <code>invoice_counters/2026.invoiceNextSeq</code> est remis à 1</li>
+            <li>La prochaine facture créée par sync GoCardless sera <strong>F2026-00001</strong></li>
+            <li>Action journalisée dans <code>audit_log</code></li>
+          </ul>
         </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+          <button class="bill-btn" id="purgeDryRunBtn" onclick="runPurgeDryRun()">🔍 Aperçu (dry-run)</button>
+          <button class="bill-btn" id="purgeExecuteBtn" onclick="runPurgeExecute()" disabled style="background:#ef4444;color:#fff;border-color:#ef4444">
+            🗑️ ARCHIVER + RESET (double confirm)
+          </button>
+        </div>
+
+        <div id="purgeResults" style="margin-top:14px"></div>
       </div>
 
     </div>
@@ -1307,7 +1268,7 @@ function switchTab(tab) {
     products: { t: 'Catalogue produits', s: 'Produits réutilisables avec prix et taux TVA.' },
     subscriptions: { t: 'Abonnements', s: 'Mandats GoCardless avec génération automatique de factures.' },
     alerts: { t: 'Alertes', s: 'Cas non résolus du matching automatique paiements GoCardless → factures.' },
-    sync: { t: 'Synchronisation', s: 'Outils de réconciliation : rétroactif clients facturation + sync GoCardless manuelle.' },
+    sync: { t: 'Synchronisation', s: 'Sync manuelle GoCardless + purge totale (admin).' },
     settings: { t: 'Paramètres', s: 'Configurez votre identité d\'émetteur, votre logo, vos coordonnées bancaires et vos CGV.' },
     export: { t: 'Export', s: 'Exports comptables et factures groupées.' }
   };
@@ -3101,7 +3062,13 @@ function validatePhoneSoft(input) {
 function initInvoicesListener() {
   db.collection('invoices').orderBy('createdAt', 'desc').limit(500).onSnapshot(function(qs) {
     invoicesCache = [];
-    qs.forEach(function(d) { invoicesCache.push(Object.assign({ id: d.id }, d.data())); });
+    qs.forEach(function(d) {
+      const data = d.data();
+      /* Filtrer les factures archivées (purge du 2026-05-27). Elles restent
+         en base pour conformité CGI (10 ans) mais sont invisibles dans l'UI. */
+      if (data._archived === true) return;
+      invoicesCache.push(Object.assign({ id: d.id }, data));
+    });
     updateInvoicesStats();
     if (activeTab === 'invoices') renderInvoicesList();
   }, function(err) {
@@ -3671,219 +3638,46 @@ function toast(msg, isError) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   ONGLET SYNC — Step 6
-   ═══════════════════════════════════════════════════════════════════════
-   Deux outils admin :
-   1. Backfill invoice_clients → POST /api/admin-backfill-invoice-clients
-   2. Sync GoCardless          → POST /api/admin-gocardless-sync
-   
-   Workflow : dry-run d'abord (bouton bleu), examiner le résultat,
-   puis exécuter (bouton vert activé après dry-run uniquement).
+   ONGLET SYNC — refonte 2026-05-27
    ═══════════════════════════════════════════════════════════════════════ */
 
-let _lastBfDryRun = null;       /* dernier résultat dry-run backfill */
-let _lastGcSyncDryRun = null;   /* dernier résultat dry-run sync GC */
+let _lastGcSyncDryRun = null;
+let _lastPurgeDryRun = null;
 
-async function initSyncTab() {
-  /* Init valeurs par défaut date 'until' = aujourd'hui */
+function initSyncTab() {
   const untilInput = document.getElementById('syncUntil');
   if (untilInput && !untilInput.value) {
     untilInput.value = new Date().toISOString().substring(0, 10);
   }
-  /* Stats hero — compteur persons.isClient sans invoice_clients */
-  try {
-    const personsSnap = await db.collection('persons').where('isClient', '==', true).get();
-    let total = 0, orphans = 0;
-    personsSnap.forEach(function(d) {
-      const p = d.data();
-      if (p._merged === true) return;
-      total++;
-      if (!p.invoiceClientId) orphans++;
-    });
-    document.getElementById('syncStatPersonsClient').textContent = total;
-    document.getElementById('syncStatPersonsOrphan').textContent = orphans;
-  } catch (e) {
-    document.getElementById('syncStatPersonsClient').textContent = '?';
-    document.getElementById('syncStatPersonsOrphan').textContent = '?';
-  }
-  /* Dernière sync GC depuis audit_log */
-  try {
-    const lastSnap = await db.collection('audit_log')
-      .where('type', '==', 'gocardless_sync')
-      .orderBy('createdAt', 'desc')
-      .limit(1)
-      .get();
-    if (!lastSnap.empty) {
-      const d = lastSnap.docs[0].data();
-      const ts = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate() : null;
-      if (ts) {
-        document.getElementById('syncStatLastGcRun').textContent =
-          ts.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
-        document.getElementById('syncStatLastGcDate').textContent =
-          ts.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) +
-          ' · ' + (d.oneOffInvoicesCreated || 0) + ' fact. one-shot';
-      }
-    } else {
-      document.getElementById('syncStatLastGcRun').textContent = 'Jamais';
-    }
-  } catch (e) {
-    document.getElementById('syncStatLastGcRun').textContent = '?';
-  }
-}
-
-/* ─── BACKFILL invoice_clients ─── */
-
-async function runBackfillDryRun() {
-  const btn = document.getElementById('bfDryRunBtn');
-  const execBtn = document.getElementById('bfExecuteBtn');
-  const out = document.getElementById('bfResults');
-  btn.disabled = true; btn.textContent = '⏳ Analyse…';
-  out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> Scan des persons.isClient en cours…</div>';
-  try {
-    const idToken = await firebase.auth().currentUser.getIdToken();
-    const resp = await fetch('/api/admin-backfill-invoice-clients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify({ dryRun: true, limit: 500 })
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
-    _lastBfDryRun = data;
-    renderBackfillResults(data, /*isDryRun=*/true);
-    if (data.created > 0 || data.reusedOrphans > 0) {
-      execBtn.disabled = false;
-      execBtn.textContent = '✅ Exécuter — créer ' + (data.created + data.reusedOrphans) + ' fiche(s)';
-    } else {
-      execBtn.disabled = true;
-      execBtn.textContent = '✅ Rien à créer';
-    }
-  } catch (err) {
-    out.innerHTML = '<div style="padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:#ef4444">❌ ' + escapeHtml(err.message) + '</div>';
-    toast('Erreur dry-run : ' + err.message, true);
-  } finally {
-    btn.disabled = false; btn.textContent = '🔍 Aperçu (dry-run)';
-  }
-}
-
-async function runBackfillExecute() {
-  const ok = confirm('Créer ' + ((_lastBfDryRun && _lastBfDryRun.created) || 0) + ' nouvelle(s) fiche(s) invoice_clients ' +
-    'et rattacher ' + ((_lastBfDryRun && _lastBfDryRun.reusedOrphans) || 0) + ' orphelin(s) ?\n\n' +
-    'Cette action est journalisée dans audit_log.');
-  if (!ok) return;
-  const btn = document.getElementById('bfExecuteBtn');
-  const out = document.getElementById('bfResults');
-  btn.disabled = true; btn.textContent = '⏳ Création en cours…';
-  out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> Création des fiches…</div>';
-  try {
-    const idToken = await firebase.auth().currentUser.getIdToken();
-    const resp = await fetch('/api/admin-backfill-invoice-clients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify({ dryRun: false, limit: 500 })
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
-    renderBackfillResults(data, /*isDryRun=*/false);
-    toast('✅ ' + data.created + ' fiche(s) créée(s), ' + data.reusedOrphans + ' orphelin(s) rattaché(s)');
-    /* Refresh stats */
-    setTimeout(initSyncTab, 500);
-  } catch (err) {
-    out.innerHTML = '<div style="padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:#ef4444">❌ ' + escapeHtml(err.message) + '</div>';
-    toast('Erreur exécution : ' + err.message, true);
-  } finally {
-    btn.disabled = true; btn.textContent = '✅ Exécuter — créer les fiches';
-  }
-}
-
-function renderBackfillResults(data, isDryRun) {
-  const out = document.getElementById('bfResults');
-  const banner = isDryRun
-    ? '<div style="padding:10px 12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:6px;margin-bottom:12px;font-size:13px;color:#f59e0b"><strong>🔍 DRY-RUN</strong> — aucune écriture effectuée. Examine ci-dessous puis clique "Exécuter".</div>'
-    : '<div style="padding:10px 12px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:6px;margin-bottom:12px;font-size:13px;color:#10b981"><strong>✅ EXÉCUTÉ</strong> — les écritures ont été appliquées.</div>';
-
-  let html = banner;
-  html += '<div class="bill-stats" style="margin:0 0 12px">';
-  html += '<div class="bill-stat"><div class="bill-stat-l">Persons scannés</div><div class="bill-stat-v">' + data.scanned + '</div></div>';
-  html += '<div class="bill-stat blue"><div class="bill-stat-l">Déjà liés</div><div class="bill-stat-v">' + data.alreadyLinked + '</div></div>';
-  html += '<div class="bill-stat amber"><div class="bill-stat-l">Orphelins réutilisés</div><div class="bill-stat-v">' + data.reusedOrphans + '</div></div>';
-  html += '<div class="bill-stat" style="background:rgba(16,185,129,.05);border-color:rgba(16,185,129,.3)"><div class="bill-stat-l">' + (isDryRun ? 'À créer' : 'Créés') + '</div><div class="bill-stat-v" style="color:#10b981">' + data.created + '</div></div>';
-  if (data.skippedNoEmail > 0) {
-    html += '<div class="bill-stat"><div class="bill-stat-l">Ignorés (no email)</div><div class="bill-stat-v">' + data.skippedNoEmail + '</div></div>';
-  }
-  html += '</div>';
-
-  if (data.items && data.items.length > 0) {
-    html += '<details><summary style="cursor:pointer;font-size:13px;color:var(--muted);margin-bottom:8px">📋 Voir le détail (' + data.items.length + ' lignes)</summary>';
-    html += '<table class="bill-table" style="margin-top:8px"><thead><tr>';
-    html += '<th>Person</th><th>Email</th><th>Action</th><th>Détail</th>';
-    html += '</tr></thead><tbody>';
-    data.items.slice(0, 200).forEach(function(it) {
-      const actionBadge = {
-        create: '<span class="bill-badge" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981">Créer</span>',
-        reuse: '<span class="bill-badge" style="background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);color:#60a5fa">Réutiliser</span>',
-        skip: '<span class="bill-badge" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b">Ignorer</span>',
-      }[it.action] || it.action;
-      html += '<tr>';
-      html += '<td><div style="font-weight:600">' + escapeHtml(it.nom || '—') + '</div><div style="font-size:10px;color:var(--muted);font-family:var(--font-m)">' + escapeHtml(it.personId) + '</div></td>';
-      html += '<td style="font-size:12px">' + escapeHtml(it.email || '—') + '</td>';
-      html += '<td>' + actionBadge + '</td>';
-      html += '<td style="font-size:12px;color:var(--muted)">' + escapeHtml(it.reason || it.invoiceClientId || '') + '</td>';
-      html += '</tr>';
-    });
-    if (data.items.length > 200) {
-      html += '<tr><td colspan="4" style="text-align:center;color:var(--muted);font-size:11px">… et ' + (data.items.length - 200) + ' autres lignes</td></tr>';
-    }
-    html += '</tbody></table></details>';
-  }
-
-  out.innerHTML = html;
 }
 
 /* ─── SYNC GOCARDLESS ─── */
 
-function gatherGcSyncBody(dryRun) {
-  return {
-    since: document.getElementById('syncSince').value || '2026-01-01',
-    until: document.getElementById('syncUntil').value || new Date().toISOString().substring(0, 10),
-    dryRun: !!dryRun,
-    actions: {
-      customers: document.getElementById('syncActionCustomers').checked,
-      subscriptions: document.getElementById('syncActionSubscriptions').checked,
-      payments: document.getElementById('syncActionPayments').checked,
-    }
-  };
-}
-
 async function runGcSyncDryRun() {
-  const body = gatherGcSyncBody(true);
-  if (!body.actions.customers && !body.actions.subscriptions && !body.actions.payments) {
-    toast('Sélectionne au moins une action', true); return;
-  }
+  const since = document.getElementById('syncSince').value || '2026-01-01';
+  const until = document.getElementById('syncUntil').value || new Date().toISOString().substring(0, 10);
   const btn = document.getElementById('gcSyncDryRunBtn');
   const execBtn = document.getElementById('gcSyncExecuteBtn');
   const out = document.getElementById('gcSyncResults');
-  btn.disabled = true; btn.textContent = '⏳ Scan GoCardless…';
-  out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> Scan GoCardless en cours (peut prendre 30-60s)…</div>';
+  btn.disabled = true; btn.textContent = '⏳ Scan…';
+  out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> Scan GoCardless en cours (30-60s)…</div>';
   try {
     const idToken = await firebase.auth().currentUser.getIdToken();
     const resp = await fetch('/api/admin-gocardless-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ since: since, until: until, dryRun: true })
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
     _lastGcSyncDryRun = data;
-    renderGcSyncResults(data, /*isDryRun=*/true);
-    const hasChanges = (data.customers.orphans.length + data.subscriptions.orphans.length +
-      data.subscriptions.updated + data.payments.subscriptionPaymentsMatched +
-      data.payments.oneOffInvoicesCreated.length) > 0;
-    if (hasChanges) {
+    renderGcSyncResults(data, true);
+    if (data.payments.wouldCreate > 0) {
       execBtn.disabled = false;
-      execBtn.textContent = '✅ Exécuter — appliquer les changements';
+      execBtn.textContent = '✅ Exécuter — créer ' + data.payments.wouldCreate + ' facture(s)';
     } else {
       execBtn.disabled = true;
-      execBtn.textContent = '✅ Rien à appliquer';
+      execBtn.textContent = '✅ Rien à créer';
     }
   } catch (err) {
     out.innerHTML = '<div style="padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:#ef4444">❌ ' + escapeHtml(err.message) + '</div>';
@@ -3896,149 +3690,186 @@ async function runGcSyncDryRun() {
 async function runGcSyncExecute() {
   if (!_lastGcSyncDryRun) { toast('Lance d\'abord un dry-run', true); return; }
   const summary = _lastGcSyncDryRun;
-  const ok = confirm('Appliquer les changements ?\n\n' +
-    '• Alertes créées : ' + (summary.customers.orphans.length + summary.subscriptions.orphans.length) + '\n' +
-    '• Subscriptions à update : ' + summary.subscriptions.updated + '\n' +
-    '• Factures à marquer paid : ' + summary.payments.subscriptionPaymentsMatched + '\n' +
-    '• Factures one-shot à créer : ' + summary.payments.oneOffInvoicesCreated.length + '\n\n' +
+  const ok = confirm('Créer ' + summary.payments.wouldCreate + ' facture(s) à partir des paiements GoCardless ?\n\n' +
+    'Période : ' + summary.window.since + ' → ' + summary.window.until + '\n\n' +
     'Cette action est journalisée dans audit_log.');
   if (!ok) return;
-  const body = gatherGcSyncBody(false);
+  const since = document.getElementById('syncSince').value || '2026-01-01';
+  const until = document.getElementById('syncUntil').value || new Date().toISOString().substring(0, 10);
   const btn = document.getElementById('gcSyncExecuteBtn');
   const out = document.getElementById('gcSyncResults');
-  btn.disabled = true; btn.textContent = '⏳ Application en cours…';
-  out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> Application en cours (création factures + écritures Firestore)…</div>';
+  btn.disabled = true; btn.textContent = '⏳ Création en cours…';
+  out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> Création des factures (création + numérotation + PDF + mark paid)…</div>';
   try {
     const idToken = await firebase.auth().currentUser.getIdToken();
     const resp = await fetch('/api/admin-gocardless-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ since: since, until: until, dryRun: false })
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
-    renderGcSyncResults(data, /*isDryRun=*/false);
-    toast('✅ Sync terminée : ' + data.payments.oneOffInvoicesCreated.length + ' fact. one-shot, ' +
-      data.payments.subscriptionPaymentsMatched + ' match. abo.');
-    setTimeout(initSyncTab, 500);
+    renderGcSyncResults(data, false);
+    toast('✅ ' + data.payments.created + ' facture(s) créée(s)' + (data.payments.pdfPending > 0 ? ' (dont ' + data.payments.pdfPending + ' PDF à régénérer)' : ''));
   } catch (err) {
     out.innerHTML = '<div style="padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:#ef4444">❌ ' + escapeHtml(err.message) + '</div>';
-    toast('Erreur exécution : ' + err.message, true);
+    toast('Erreur : ' + err.message, true);
   } finally {
-    btn.disabled = true; btn.textContent = '✅ Exécuter — appliquer les changements';
+    btn.disabled = true; btn.textContent = '✅ Exécuter — créer les factures';
   }
 }
 
 function renderGcSyncResults(data, isDryRun) {
   const out = document.getElementById('gcSyncResults');
   const banner = isDryRun
-    ? '<div style="padding:10px 12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:6px;margin-bottom:12px;font-size:13px;color:#f59e0b"><strong>🔍 DRY-RUN</strong> — aucune écriture. Examine puis "Exécuter".</div>'
-    : '<div style="padding:10px 12px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:6px;margin-bottom:12px;font-size:13px;color:#10b981"><strong>✅ EXÉCUTÉ</strong> — changements appliqués (' + data.durationMs + ' ms).</div>';
+    ? '<div style="padding:10px 12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:6px;margin-bottom:12px;font-size:13px;color:#f59e0b"><strong>🔍 DRY-RUN</strong> — aucune écriture.</div>'
+    : '<div style="padding:10px 12px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:6px;margin-bottom:12px;font-size:13px;color:#10b981"><strong>✅ EXÉCUTÉ</strong> (' + data.durationMs + ' ms)</div>';
 
   let html = banner;
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px">';
-
-  /* Bloc Customers */
-  html += '<div style="padding:10px;background:var(--card-bg,#1a1a1a);border:1px solid var(--border);border-radius:8px">';
-  html += '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">👤 Customers</div>';
-  html += '<div style="font-size:22px;font-weight:700">' + data.customers.scanned + '</div>';
-  html += '<div style="font-size:12px;color:#f59e0b">' + data.customers.orphans.length + ' orphelin(s)</div>';
+  html += '<div class="bill-stats" style="margin:0 0 12px">';
+  html += '<div class="bill-stat"><div class="bill-stat-l">Paiements GC scannés</div><div class="bill-stat-v">' + data.payments.scanned + '</div></div>';
+  html += '<div class="bill-stat blue"><div class="bill-stat-l">Déjà facturés</div><div class="bill-stat-v">' + data.payments.alreadyHaveInvoice + '</div></div>';
+  html += '<div class="bill-stat" style="background:rgba(16,185,129,.05);border-color:rgba(16,185,129,.3)"><div class="bill-stat-l">' + (isDryRun ? 'À créer' : 'Créées') + '</div><div class="bill-stat-v" style="color:#10b981">' + (isDryRun ? data.payments.wouldCreate : data.payments.created) + '</div></div>';
+  if (data.payments.skippedEI > 0) {
+    html += '<div class="bill-stat"><div class="bill-stat-l">Ignorés (EI)</div><div class="bill-stat-v">' + data.payments.skippedEI + '</div></div>';
+  }
+  if (data.payments.pdfPending > 0) {
+    html += '<div class="bill-stat amber"><div class="bill-stat-l">PDF à régénérer</div><div class="bill-stat-v">' + data.payments.pdfPending + '</div></div>';
+  }
+  if (data.payments.errors.length > 0) {
+    html += '<div class="bill-stat" style="background:rgba(239,68,68,.05);border-color:rgba(239,68,68,.3)"><div class="bill-stat-l">Erreurs</div><div class="bill-stat-v" style="color:#ef4444">' + data.payments.errors.length + '</div></div>';
+  }
   html += '</div>';
 
-  /* Bloc Subscriptions */
-  html += '<div style="padding:10px;background:var(--card-bg,#1a1a1a);border:1px solid var(--border);border-radius:8px">';
-  html += '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">🔁 Subscriptions</div>';
-  html += '<div style="font-size:22px;font-weight:700">' + data.subscriptions.scanned + '</div>';
-  html += '<div style="font-size:12px;color:#f59e0b">' + data.subscriptions.orphans.length + ' orphelin(s) · ' + data.subscriptions.updated + ' mis à jour</div>';
-  html += '</div>';
-
-  /* Bloc Payments */
-  html += '<div style="padding:10px;background:var(--card-bg,#1a1a1a);border:1px solid var(--border);border-radius:8px">';
-  html += '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">💳 Payments</div>';
-  html += '<div style="font-size:22px;font-weight:700">' + data.payments.scanned + '</div>';
-  html += '<div style="font-size:12px;color:#10b981">' + data.payments.subscriptionPaymentsMatched + ' abo. matché(s)</div>';
-  html += '<div style="font-size:12px;color:#10b981">' + data.payments.oneOffInvoicesCreated.length + ' one-shot ' + (isDryRun ? 'à créer' : 'créés') + '</div>';
-  html += '</div>';
-
-  html += '</div>';
-
-  /* Détail one-shot */
-  if (data.payments.oneOffInvoicesCreated.length > 0) {
-    html += '<details open><summary style="cursor:pointer;font-size:13px;color:#10b981;font-weight:600;margin:8px 0">💳 Factures one-shot ' + (isDryRun ? 'à créer' : 'créées') + ' (' + data.payments.oneOffInvoicesCreated.length + ')</summary>';
+  if (data.payments.invoicesCreated.length > 0) {
+    html += '<details open><summary style="cursor:pointer;font-size:13px;color:#10b981;font-weight:600;margin:8px 0">💳 ' + (isDryRun ? 'Factures à créer' : 'Factures créées') + ' (' + data.payments.invoicesCreated.length + ')</summary>';
     html += '<table class="bill-table" style="margin-top:6px"><thead><tr>';
-    html += '<th>Client</th><th>Montant</th><th>Date</th><th>GC payment</th>' + (isDryRun ? '' : '<th>N°</th>');
+    html += '<th>Client</th><th>Montant</th><th>Date</th>' + (isDryRun ? '' : '<th>N°</th>') + '<th>GC payment</th>';
     html += '</tr></thead><tbody>';
-    data.payments.oneOffInvoicesCreated.forEach(function(it) {
+    data.payments.invoicesCreated.forEach(function(it) {
       html += '<tr>';
       html += '<td>' + escapeHtml(it.clientName || '—') + '</td>';
       html += '<td style="font-family:var(--font-m);font-weight:600">' + formatEur(it.amount || 0) + '</td>';
       html += '<td style="font-size:12px">' + escapeHtml(it.chargeDate || '—') + '</td>';
+      if (!isDryRun) {
+        html += '<td style="font-family:var(--font-m);color:#10b981">' + escapeHtml(it.number || '—');
+        if (it.pdfPending) html += ' <span style="color:#f59e0b" title="PDF à régénérer">⚠️</span>';
+        html += '</td>';
+      }
       html += '<td style="font-size:11px;font-family:var(--font-m);color:var(--muted)">' + escapeHtml(it.gcPaymentId || '—') + '</td>';
-      if (!isDryRun) html += '<td style="font-family:var(--font-m);color:#10b981">' + escapeHtml(it.number || '—') + '</td>';
       html += '</tr>';
     });
     html += '</tbody></table></details>';
   }
 
-  /* Détail orphelins customers */
-  if (data.customers.orphans.length > 0) {
-    html += '<details><summary style="cursor:pointer;font-size:13px;color:#f59e0b;margin:8px 0">👤 Customers GoCardless sans invoice_clients (' + data.customers.orphans.length + ')</summary>';
-    html += '<table class="bill-table" style="margin-top:6px"><thead><tr>';
-    html += '<th>Nom</th><th>Email</th><th>GC customer</th><th>Créé</th>';
-    html += '</tr></thead><tbody>';
-    data.customers.orphans.slice(0, 100).forEach(function(it) {
-      html += '<tr>';
-      html += '<td>' + escapeHtml(it.name || '—') + '</td>';
-      html += '<td style="font-size:12px">' + escapeHtml(it.email || '—') + '</td>';
-      html += '<td style="font-size:11px;font-family:var(--font-m);color:var(--muted)"><a href="https://manage.gocardless.com/customers/' + escapeAttr(it.gcCustomerId) + '" target="_blank" style="color:#10b981">' + escapeHtml(it.gcCustomerId) + ' ↗</a></td>';
-      html += '<td style="font-size:12px">' + escapeHtml((it.createdAt || '').substring(0, 10)) + '</td>';
-      html += '</tr>';
+  if (data.payments.errors.length > 0) {
+    html += '<details open><summary style="cursor:pointer;font-size:13px;color:#ef4444;font-weight:600;margin:8px 0">❌ Erreurs (' + data.payments.errors.length + ')</summary>';
+    html += '<div style="font-family:var(--font-m);font-size:11px;background:rgba(239,68,68,.05);padding:10px;border-radius:6px;max-height:300px;overflow:auto">';
+    data.payments.errors.forEach(function(e) {
+      html += '<div style="margin-bottom:4px"><strong>' + escapeHtml(e.gcPaymentId) + '</strong> : ' + escapeHtml(e.error) + '</div>';
     });
-    html += '</tbody></table></details>';
+    html += '</div></details>';
   }
 
-  /* Détail orphelins subscriptions */
-  if (data.subscriptions.orphans.length > 0) {
-    html += '<details><summary style="cursor:pointer;font-size:13px;color:#f59e0b;margin:8px 0">🔁 Subscriptions GC sans correspondance Firestore (' + data.subscriptions.orphans.length + ')</summary>';
-    html += '<table class="bill-table" style="margin-top:6px"><thead><tr>';
-    html += '<th>GC subscription</th><th>GC customer</th><th>Montant</th><th>Mensualités</th><th>Statut</th>';
-    html += '</tr></thead><tbody>';
-    data.subscriptions.orphans.slice(0, 100).forEach(function(it) {
-      html += '<tr>';
-      html += '<td style="font-size:11px;font-family:var(--font-m)"><a href="https://manage.gocardless.com/subscriptions/' + escapeAttr(it.gcSubscriptionId) + '" target="_blank" style="color:#10b981">' + escapeHtml(it.gcSubscriptionId) + ' ↗</a></td>';
-      html += '<td style="font-size:11px;font-family:var(--font-m);color:var(--muted)">' + escapeHtml(it.gcCustomerId || '—') + '</td>';
-      html += '<td style="font-family:var(--font-m);font-weight:600">' + formatEur((it.amount || 0) / 100) + '</td>';
-      html += '<td style="text-align:center">' + (it.count || '?') + '</td>';
-      html += '<td>' + escapeHtml(it.status || '—') + '</td>';
-      html += '</tr>';
-    });
-    html += '</tbody></table></details>';
-  }
-
-  /* Détail unmatched subscription payments */
-  if (data.payments.subscriptionPaymentsUnmatched && data.payments.subscriptionPaymentsUnmatched.length > 0) {
-    html += '<details><summary style="cursor:pointer;font-size:13px;color:#f59e0b;margin:8px 0">⚠️ Paiements d\'abonnement sans facture team correspondante (' + data.payments.subscriptionPaymentsUnmatched.length + ')</summary>';
-    html += '<table class="bill-table" style="margin-top:6px"><thead><tr>';
-    html += '<th>GC payment</th><th>Subscription</th><th>Montant</th><th>Date</th><th>Raison</th>';
-    html += '</tr></thead><tbody>';
-    data.payments.subscriptionPaymentsUnmatched.slice(0, 100).forEach(function(it) {
-      html += '<tr>';
-      html += '<td style="font-size:11px;font-family:var(--font-m)">' + escapeHtml(it.gcPaymentId) + '</td>';
-      html += '<td style="font-size:11px;font-family:var(--font-m);color:var(--muted)">' + escapeHtml(it.gcSubscriptionId || '—') + '</td>';
-      html += '<td style="font-family:var(--font-m)">' + formatEur(it.amount || 0) + '</td>';
-      html += '<td style="font-size:12px">' + escapeHtml(it.chargeDate || '—') + '</td>';
-      html += '<td style="font-size:11px;color:var(--muted)">' + escapeHtml(it.reason || '') + '</td>';
-      html += '</tr>';
-    });
-    html += '</tbody></table></details>';
-  }
-
-  /* Warnings */
   if (data.warnings && data.warnings.length > 0) {
-    html += '<details><summary style="cursor:pointer;font-size:13px;color:#f59e0b;margin:8px 0">⚠️ Warnings techniques (' + data.warnings.length + ')</summary>';
+    html += '<details><summary style="cursor:pointer;font-size:13px;color:#f59e0b;margin:8px 0">⚠️ Warnings (' + data.warnings.length + ')</summary>';
     html += '<div style="font-family:var(--font-m);font-size:11px;color:var(--muted);background:rgba(245,158,11,.05);padding:10px;border-radius:6px;max-height:200px;overflow:auto">';
     data.warnings.forEach(function(w) { html += '• ' + escapeHtml(w) + '<br>'; });
     html += '</div></details>';
+  }
+
+  out.innerHTML = html;
+}
+
+/* ─── PURGE TOTALE ─── */
+
+async function runPurgeDryRun() {
+  const btn = document.getElementById('purgeDryRunBtn');
+  const execBtn = document.getElementById('purgeExecuteBtn');
+  const out = document.getElementById('purgeResults');
+  btn.disabled = true; btn.textContent = '⏳ Analyse…';
+  out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> Scan factures actuelles…</div>';
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const resp = await fetch('/api/admin-purge-invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ dryRun: true, resetCounter: true })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+    _lastPurgeDryRun = data;
+    renderPurgeResults(data, true);
+    if (data.toArchive > 0) {
+      execBtn.disabled = false;
+    } else {
+      execBtn.disabled = true;
+    }
+  } catch (err) {
+    out.innerHTML = '<div style="padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:#ef4444">❌ ' + escapeHtml(err.message) + '</div>';
+    toast('Erreur : ' + err.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 Aperçu (dry-run)';
+  }
+}
+
+async function runPurgeExecute() {
+  if (!_lastPurgeDryRun) { toast('Lance d\'abord un dry-run', true); return; }
+  const ok1 = confirm('⚠️ CONFIRMATION 1/2\n\nArchiver ' + _lastPurgeDryRun.toArchive + ' facture(s) et remettre le compteur F' +
+    _lastPurgeDryRun.year + ' à 1 ?\n\nLes factures restent en base (conformité 10 ans CGI) mais deviennent invisibles dans l\'UI.');
+  if (!ok1) return;
+  const typed = prompt('⚠️ CONFIRMATION 2/2\n\nTape exactement YES_PURGE_AND_RESET pour confirmer définitivement :');
+  if (typed !== 'YES_PURGE_AND_RESET') { toast('Confirmation invalide, annulé', true); return; }
+  const btn = document.getElementById('purgeExecuteBtn');
+  const out = document.getElementById('purgeResults');
+  btn.disabled = true; btn.textContent = '⏳ Archivage…';
+  out.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> Archivage des factures + reset compteur…</div>';
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const resp = await fetch('/api/admin-purge-invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ dryRun: false, resetCounter: true, confirm: 'YES_PURGE_AND_RESET' })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
+    renderPurgeResults(data, false);
+    toast('✅ ' + data.archived + ' facture(s) archivée(s), compteur reset à 1');
+  } catch (err) {
+    out.innerHTML = '<div style="padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;color:#ef4444">❌ ' + escapeHtml(err.message) + '</div>';
+    toast('Erreur : ' + err.message, true);
+  } finally {
+    btn.disabled = true; btn.textContent = '🗑️ ARCHIVER + RESET (double confirm)';
+  }
+}
+
+function renderPurgeResults(data, isDryRun) {
+  const out = document.getElementById('purgeResults');
+  const banner = isDryRun
+    ? '<div style="padding:10px 12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:6px;margin-bottom:12px;font-size:13px;color:#f59e0b"><strong>🔍 DRY-RUN</strong> — aucune écriture.</div>'
+    : '<div style="padding:10px 12px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:6px;margin-bottom:12px;font-size:13px;color:#10b981"><strong>✅ EXÉCUTÉ</strong></div>';
+
+  let html = banner;
+  html += '<div class="bill-stats" style="margin:0 0 12px">';
+  html += '<div class="bill-stat"><div class="bill-stat-l">' + (isDryRun ? 'À archiver' : 'Archivées') + '</div><div class="bill-stat-v">' + (isDryRun ? data.toArchive : data.archived) + '</div></div>';
+  if (data.counterReset) {
+    html += '<div class="bill-stat blue"><div class="bill-stat-l">Compteur F' + data.counterReset.year + '</div><div class="bill-stat-v">' + data.counterReset.previousNextSeq + ' → ' + data.counterReset.newNextSeq + '</div></div>';
+  }
+  html += '</div>';
+
+  if (isDryRun && data.archivePreview && data.archivePreview.length > 0) {
+    html += '<details><summary style="cursor:pointer;font-size:13px;color:var(--muted);margin:8px 0">📋 Aperçu (20 premières factures à archiver)</summary>';
+    html += '<table class="bill-table" style="margin-top:6px"><thead><tr>';
+    html += '<th>ID</th><th>Numéro</th><th>Statut</th>';
+    html += '</tr></thead><tbody>';
+    data.archivePreview.forEach(function(it) {
+      html += '<tr>';
+      html += '<td style="font-size:11px;font-family:var(--font-m);color:var(--muted)">' + escapeHtml(it.id) + '</td>';
+      html += '<td style="font-family:var(--font-m)">' + escapeHtml(it.number || '—') + '</td>';
+      html += '<td style="font-size:12px">' + escapeHtml(it.status || '—') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></details>';
   }
 
   out.innerHTML = html;
