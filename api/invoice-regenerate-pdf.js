@@ -155,6 +155,10 @@ module.exports = async function(req, res) {
 
     const invoiceId = body.invoiceId || null;
     const all = body.all === true;
+    /* mode: 'pending' (défaut) = seulement les PDF échoués/en attente
+             'all'              = TOUTES les factures validées/payées (régénération
+                                  complète après changement de template/présentation) */
+    const mode = body.mode === 'all' ? 'all' : 'pending';
     const max = Math.min(parseInt(body.max, 10) || 50, 200);
 
     if (!invoiceId && !all) {
@@ -172,11 +176,20 @@ module.exports = async function(req, res) {
     /* Config partagée (logo, issuer, cgv) chargée à la demande, réutilisée pour tout le batch */
     const sharedConfig = {};
 
-    const result = { success: true, processed: 0, regenerated: [], errors: [] };
+    const result = { success: true, mode: invoiceId ? 'single' : mode, processed: 0, regenerated: [], errors: [] };
 
     let targets = [];
     if (invoiceId) {
       targets = [invoiceId];
+    } else if (mode === 'all') {
+      /* Toutes les factures non-draft, non archivées (régénération complète) */
+      const snap = await db.collection('invoices').orderBy('number').limit(max).get();
+      snap.forEach(function(d) {
+        const data = d.data();
+        if (data._archived !== true && data.status !== 'draft' && data.number) {
+          targets.push(d.id);
+        }
+      });
     } else {
       /* Toutes les factures pdfPending=true, non archivées */
       const snap = await db.collection('invoices').where('pdfPending', '==', true).limit(max).get();

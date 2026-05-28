@@ -579,10 +579,22 @@ function drawPaymentBlock(page, F, invoice, issuer, yStart) {
   text(page, paymentLabels[invoice.paymentMethod] || invoice.paymentMethod || '—', M_LEFT + 12 + widthOf(F.helvBold, 'Mode de paiement : ', 9), py, F.helv, 9, COLOR_TEXT);
   py += 12;
 
-  text(page, 'Échéance : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
-  const echeStr = formatDateFr(invoice.dueDate) + (invoice.paymentTermsDays != null ? ' (' + invoice.paymentTermsDays + ' jours)' : '');
-  text(page, echeStr, M_LEFT + 12 + widthOf(F.helvBold, 'Échéance : ', 9), py, F.helv, 9, COLOR_TEXT);
-  py += 12;
+  /* Échéance vs Règlement :
+     - Facture déjà payée (prélèvement SEPA encaissé) → pas d'échéance future,
+       on affiche la date de règlement effective.
+     - Facture à terme non réglée (ex: virement en attente) → échéance classique. */
+  const isSettled = invoice.status === 'paid' || invoice.paymentMethod === 'gocardless';
+  if (isSettled) {
+    const paidDate = formatDateFr(invoice.paidAt || invoice.issueDate);
+    text(page, 'Règlement : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
+    text(page, 'payé le ' + paidDate + ' par prélèvement SEPA', M_LEFT + 12 + widthOf(F.helvBold, 'Règlement : ', 9), py, F.helv, 9, COLOR_TEXT);
+    py += 12;
+  } else {
+    text(page, 'Échéance : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
+    const echeStr = formatDateFr(invoice.dueDate) + (invoice.paymentTermsDays != null ? ' (' + invoice.paymentTermsDays + ' jours)' : '');
+    text(page, echeStr, M_LEFT + 12 + widthOf(F.helvBold, 'Échéance : ', 9), py, F.helv, 9, COLOR_TEXT);
+    py += 12;
+  }
 
   if (invoice.paymentMethod === 'transfer' && issuer.iban) {
     text(page, 'IBAN : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
