@@ -51,8 +51,8 @@ const _PDF_SANITIZE_MAP = {
   '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u201B': "'",
   '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"',
   '\u2032': "'", '\u2033': '"', '\u2035': "'", '\u2036': '"',
-  /* Tirets typographiques → ASCII */
-  '\u2010': '-', '\u2011': '-', '\u2012': '-', '\u2013': '-', '\u2014': '-', '\u2015': '-',
+  /* Tirets typographiques → ASCII (inclut U+2212 signe moins mathématique) */
+  '\u2010': '-', '\u2011': '-', '\u2012': '-', '\u2013': '-', '\u2014': '-', '\u2015': '-', '\u2212': '-',
   /* Ellipsis → trois points */
   '\u2026': '...',
   /* Espaces non-cassables et spéciaux → espace normal */
@@ -67,6 +67,11 @@ const _PDF_SANITIZE_MAP = {
   '\u2122': '(TM)', '\u00AE': '(R)', '\u00A9': '(C)',
 };
 
+/* Codepoints Unicode > U+00FF qui restent encodables par WinAnsi (CP1252).
+   On les préserve tels quels (le reste de la map les convertit en ASCII).
+   Le € est le cas critique des factures. */
+const _WINANSI_EXTRA = ['\u20AC' /* € */, '\u0192' /* ƒ */, '\u2020' /* † */, '\u2021' /* ‡ */, '\u2030' /* ‰ */];
+
 function sanitizeForPdf(str) {
   if (str == null) return '';
   let s = String(str);
@@ -74,16 +79,28 @@ function sanitizeForPdf(str) {
   for (const k in _PDF_SANITIZE_MAP) {
     if (s.indexOf(k) >= 0) s = s.split(k).join(_PDF_SANITIZE_MAP[k]);
   }
-  /* Filet de sécurité : tout caractère hors plage WinAnsi (U+0000-U+00FF
-     plus quelques extras supportés) → remplacé par '?'. C'est ce qui
-     causait HTTP 502. Mieux vaut un '?' que un crash. */
+  /* Filet de sécurité : tout caractère hors WinAnsi (Windows-1252) → '?'.
+     C'est ce qui causait le crash "WinAnsi cannot encode". Mieux vaut un '?'
+     qu'un PDF qui ne se génère pas.
+     ATTENTION : certains codepoints > U+00FF SONT encodables en WinAnsi
+     (positions 0x80-0x9F de CP1252) — il ne faut surtout PAS les détruire.
+     Le plus important : € (U+20AC). On les préserve explicitement. */
   s = s.replace(/[\u0100-\uFFFF]/g, function(ch) {
-    /* Quelques caractères au-delà de 0xFF restent supportés par WinAnsi :
-       Latin Extended-A (œ, OE) qu'on a déjà gérés ci-dessus.
-       Le reste : on remplace par '?'. */
-    return '?';
+    return _WINANSI_EXTRA.indexOf(ch) >= 0 ? ch : '?';
   });
   return s;
+}
+
+
+/**
+ * Mesure de largeur SÛRE : sanitize la chaîne avant de la mesurer.
+ * pdf-lib lève "WinAnsi cannot encode <char>" dès qu'on mesure (ou dessine)
+ * une chaîne contenant un caractère hors WinAnsi avec une StandardFont
+ * (Helvetica). Tous les widthOfTextAtSize du fichier passent par ici pour
+ * garantir une cohérence parfaite avec ce que text() dessinera réellement.
+ */
+function widthOf(font, str, size) {
+  return font.widthOfTextAtSize(sanitizeForPdf(str == null ? '' : String(str)), size);
 }
 
 /* ─── Helpers de tracé ─── */
@@ -123,7 +140,7 @@ function textSpaced(page, str, x, yTop, font, size, color, spacing) {
   for (let i = 0; i < safeStr.length; i++) {
     const ch = safeStr[i];
     page.drawText(ch, { x: cx, y: yPdf, font: font, size: size, color: color || COLOR_TEXT });
-    cx += font.widthOfTextAtSize(ch, size) + (spacing || 0);
+    cx += widthOf(font, ch, size) + (spacing || 0);
   }
   return cx - x;
 }
@@ -145,7 +162,7 @@ function wrapText(str, font, size, maxWidth) {
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
       const test = line ? line + ' ' + word : word;
-      const w = font.widthOfTextAtSize(test, size);
+      const w = widthOf(font, test, size);
       if (w > maxWidth && line) {
         out.push(line);
         line = word;
@@ -171,7 +188,17 @@ function textBlock(page, str, x, yTop, font, size, color, maxWidth, lineHeight) 
 /* ─── Format helpers ─── */
 function formatEur(n) {
   if (n == null || isNaN(n)) return '0,00 €';
-  return Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  /* Formatage manuel : séparateur de milliers = ESPACE NORMAL (U+0020).
+     On évite toLocaleString('fr-FR') qui insère une espace fine insécable
+     (U+202F), non encodable par Helvetica/WinAnsi → "WinAnsi cannot encode 0x202f". */
+  const num = Number(n);
+  const neg = num < 0;
+  const fixed = Math.abs(num).toFixed(2);
+  const dot = fixed.indexOf('.');
+  const intPart = fixed.slice(0, dot);
+  const decPart = fixed.slice(dot + 1);
+  const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return (neg ? '-' : '') + withThousands + ',' + decPart + ' \u20AC';
 }
 
 function formatDateFr(d) {
@@ -302,12 +329,12 @@ function drawInvoicePage(page, F, invoice, issuer, cgv, logoImg, logoDims, isCon
         cx += wordmarkSpacing * 2.5;
         const ampSize = wordmarkSize * 1.05;
         page.drawText('&', { x: cx, y: yFromTop(baseY + ampSize * 0.85), font: F.light, size: ampSize, color: COLOR_TEXT });
-        cx += F.light.widthOfTextAtSize('&', ampSize) + wordmarkSpacing * 2.5;
+        cx += widthOf(F.light, '&', ampSize) + wordmarkSpacing * 2.5;
       }
       for (let j = 0; j < part.length; j++) {
         const ch = part[j];
         page.drawText(ch, { x: cx, y: yFromTop(baseY + wordmarkSize * 0.85), font: F.medium, size: wordmarkSize, color: COLOR_TEXT });
-        cx += F.medium.widthOfTextAtSize(ch, wordmarkSize) + wordmarkSpacing;
+        cx += widthOf(F.medium, ch, wordmarkSize) + wordmarkSpacing;
       }
     }
   }
@@ -380,18 +407,18 @@ function drawInvoicePage(page, F, invoice, issuer, cgv, logoImg, logoDims, isCon
 
   if (invoice.totalDiscount && invoice.totalDiscount > 0) {
     text(page, 'Sous-total brut HT', totalsX, y, F.helv, 9.5, COLOR_MUTED);
-    text(page, formatEur(invoice.totalGrossHt), totalsX + totalsW - F.helvBold.widthOfTextAtSize(formatEur(invoice.totalGrossHt), 9.5), y, F.helvBold, 9.5, COLOR_TEXT);
+    text(page, formatEur(invoice.totalGrossHt), totalsX + totalsW - widthOf(F.helvBold, formatEur(invoice.totalGrossHt), 9.5), y, F.helvBold, 9.5, COLOR_TEXT);
     y += lh;
     text(page, 'Remise', totalsX, y, F.helv, 9.5, COLOR_MUTED);
     const discStr = '−' + formatEur(invoice.totalDiscount);
-    text(page, discStr, totalsX + totalsW - F.helvBold.widthOfTextAtSize(discStr, 9.5), y, F.helvBold, 9.5, COLOR_AMBER);
+    text(page, discStr, totalsX + totalsW - widthOf(F.helvBold, discStr, 9.5), y, F.helvBold, 9.5, COLOR_AMBER);
     y += lh;
   }
 
   hLine(page, totalsX, totalsX + totalsW, y, COLOR_LINE);
   y += 6;
   text(page, 'Total HT', totalsX, y, F.helvBold, 10, COLOR_TEXT);
-  text(page, formatEur(invoice.totalHt), totalsX + totalsW - F.helvBold.widthOfTextAtSize(formatEur(invoice.totalHt), 10), y, F.helvBold, 10, COLOR_TEXT);
+  text(page, formatEur(invoice.totalHt), totalsX + totalsW - widthOf(F.helvBold, formatEur(invoice.totalHt), 10), y, F.helvBold, 10, COLOR_TEXT);
   y += lh;
 
   /* Ventilation TVA */
@@ -400,7 +427,7 @@ function drawInvoicePage(page, F, invoice, issuer, cgv, logoImg, logoDims, isCon
     const v = vatBreakdown[i];
     text(page, 'TVA ' + v.rate + ' %', totalsX, y, F.helv, 9.5, COLOR_MUTED);
     const vStr = formatEur(v.vat);
-    text(page, vStr, totalsX + totalsW - F.helvBold.widthOfTextAtSize(vStr, 9.5), y, F.helvBold, 9.5, COLOR_TEXT);
+    text(page, vStr, totalsX + totalsW - widthOf(F.helvBold, vStr, 9.5), y, F.helvBold, 9.5, COLOR_TEXT);
     y += lh;
   }
 
@@ -409,7 +436,7 @@ function drawInvoicePage(page, F, invoice, issuer, cgv, logoImg, logoDims, isCon
   y += 8;
   text(page, 'Total TTC', totalsX, y, F.helvBold, 13, COLOR_TEXT);
   const ttcStr = formatEur(invoice.totalTtc);
-  text(page, ttcStr, totalsX + totalsW - F.helvBold.widthOfTextAtSize(ttcStr, 13), y, F.helvBold, 13, COLOR_TEXT);
+  text(page, ttcStr, totalsX + totalsW - widthOf(F.helvBold, ttcStr, 13), y, F.helvBold, 13, COLOR_TEXT);
   y += 22;
 
   /* BLOC PAIEMENT */
@@ -459,14 +486,14 @@ function drawInvoiceLines(page, F, invoice, yStart) {
   text(page, 'Description', colDescX + 6, y + 7, F.helvBold, 8, COLOR_TEXT);
   /* Right-aligned headers */
   const hQty = 'Qté';
-  text(page, hQty, colQtyX + colQtyW - F.helvBold.widthOfTextAtSize(hQty, 8) - 4, y + 7, F.helvBold, 8, COLOR_TEXT);
+  text(page, hQty, colQtyX + colQtyW - widthOf(F.helvBold, hQty, 8) - 4, y + 7, F.helvBold, 8, COLOR_TEXT);
   text(page, 'Unité', colUnitX + 4, y + 7, F.helvBold, 8, COLOR_TEXT);
   const hPu = 'PU HT';
-  text(page, hPu, colPuX + colPuW - F.helvBold.widthOfTextAtSize(hPu, 8) - 4, y + 7, F.helvBold, 8, COLOR_TEXT);
+  text(page, hPu, colPuX + colPuW - widthOf(F.helvBold, hPu, 8) - 4, y + 7, F.helvBold, 8, COLOR_TEXT);
   const hVat = 'TVA';
-  text(page, hVat, colVatX + colVatW - F.helvBold.widthOfTextAtSize(hVat, 8) - 4, y + 7, F.helvBold, 8, COLOR_TEXT);
+  text(page, hVat, colVatX + colVatW - widthOf(F.helvBold, hVat, 8) - 4, y + 7, F.helvBold, 8, COLOR_TEXT);
   const hTot = 'Total HT';
-  text(page, hTot, colTotalX + colTotalW - F.helvBold.widthOfTextAtSize(hTot, 8) - 4, y + 7, F.helvBold, 8, COLOR_TEXT);
+  text(page, hTot, colTotalX + colTotalW - widthOf(F.helvBold, hTot, 8) - 4, y + 7, F.helvBold, 8, COLOR_TEXT);
 
   y += 26;
 
@@ -495,19 +522,19 @@ function drawInvoiceLines(page, F, invoice, yStart) {
 
     /* Cellules right-aligned */
     const qtyStr = String(l.qty != null ? l.qty : 0);
-    text(page, qtyStr, colQtyX + colQtyW - F.helv.widthOfTextAtSize(qtyStr, 9.5) - 4, y, F.helv, 9.5, COLOR_TEXT);
+    text(page, qtyStr, colQtyX + colQtyW - widthOf(F.helv, qtyStr, 9.5) - 4, y, F.helv, 9.5, COLOR_TEXT);
 
     text(page, l.unit || 'forfait', colUnitX + 4, y, F.helv, 9.5, COLOR_TEXT);
 
     const puStr = formatEur(l.unitPriceHt || 0);
-    text(page, puStr, colPuX + colPuW - F.helv.widthOfTextAtSize(puStr, 9.5) - 4, y, F.helv, 9.5, COLOR_TEXT);
+    text(page, puStr, colPuX + colPuW - widthOf(F.helv, puStr, 9.5) - 4, y, F.helv, 9.5, COLOR_TEXT);
 
     const vatStr = (l.vatRate != null ? l.vatRate : 20) + ' %';
-    text(page, vatStr, colVatX + colVatW - F.helv.widthOfTextAtSize(vatStr, 9.5) - 4, y, F.helv, 9.5, COLOR_TEXT);
+    text(page, vatStr, colVatX + colVatW - widthOf(F.helv, vatStr, 9.5) - 4, y, F.helv, 9.5, COLOR_TEXT);
 
     const lineHt = (l.lineHtAfterDiscount != null ? l.lineHtAfterDiscount : computeLineHtFallback(l));
     const totStr = formatEur(lineHt);
-    text(page, totStr, colTotalX + colTotalW - F.helvBold.widthOfTextAtSize(totStr, 9.5) - 4, y, F.helvBold, 9.5, COLOR_TEXT);
+    text(page, totStr, colTotalX + colTotalW - widthOf(F.helvBold, totStr, 9.5) - 4, y, F.helvBold, 9.5, COLOR_TEXT);
 
     y += lineHeight;
     hLine(page, M_LEFT, PAGE_W - M_RIGHT, y - 4, COLOR_LINE);
@@ -549,22 +576,22 @@ function drawPaymentBlock(page, F, invoice, issuer, yStart) {
     other: 'Selon accord',
   };
   text(page, 'Mode de paiement : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
-  text(page, paymentLabels[invoice.paymentMethod] || invoice.paymentMethod || '—', M_LEFT + 12 + F.helvBold.widthOfTextAtSize('Mode de paiement : ', 9), py, F.helv, 9, COLOR_TEXT);
+  text(page, paymentLabels[invoice.paymentMethod] || invoice.paymentMethod || '—', M_LEFT + 12 + widthOf(F.helvBold, 'Mode de paiement : ', 9), py, F.helv, 9, COLOR_TEXT);
   py += 12;
 
   text(page, 'Échéance : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
   const echeStr = formatDateFr(invoice.dueDate) + (invoice.paymentTermsDays != null ? ' (' + invoice.paymentTermsDays + ' jours)' : '');
-  text(page, echeStr, M_LEFT + 12 + F.helvBold.widthOfTextAtSize('Échéance : ', 9), py, F.helv, 9, COLOR_TEXT);
+  text(page, echeStr, M_LEFT + 12 + widthOf(F.helvBold, 'Échéance : ', 9), py, F.helv, 9, COLOR_TEXT);
   py += 12;
 
   if (invoice.paymentMethod === 'transfer' && issuer.iban) {
     text(page, 'IBAN : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
-    text(page, formatIban(issuer.iban), M_LEFT + 12 + F.helvBold.widthOfTextAtSize('IBAN : ', 9), py, F.helv, 9, COLOR_TEXT);
+    text(page, formatIban(issuer.iban), M_LEFT + 12 + widthOf(F.helvBold, 'IBAN : ', 9), py, F.helv, 9, COLOR_TEXT);
     py += 12;
     if (issuer.bic) {
       text(page, 'BIC : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
       const bicStr = issuer.bic + (issuer.bankName ? ' · ' + issuer.bankName : '');
-      text(page, bicStr, M_LEFT + 12 + F.helvBold.widthOfTextAtSize('BIC : ', 9), py, F.helv, 9, COLOR_TEXT);
+      text(page, bicStr, M_LEFT + 12 + widthOf(F.helvBold, 'BIC : ', 9), py, F.helv, 9, COLOR_TEXT);
       py += 12;
     }
   }
@@ -609,7 +636,7 @@ function drawLegalFooter(page, F, issuer) {
   }
 
   for (let i = 0; i < lines.length; i++) {
-    const w = F.helv.widthOfTextAtSize(lines[i], 7.5);
+    const w = widthOf(F.helv, lines[i], 7.5);
     text(page, lines[i], M_LEFT + (CONTENT_W - w) / 2, y, F.helv, 7.5, COLOR_LIGHT);
     y += 9;
   }
