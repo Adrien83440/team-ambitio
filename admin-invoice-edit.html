@@ -1421,6 +1421,13 @@ function formatEur(n) {
   return Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 }
 
+function formatDateFr(d) {
+  if (!d) return '';
+  const dt = d instanceof Date ? d : (d && d.toDate ? d.toDate() : new Date(d));
+  if (isNaN(dt.getTime())) return '';
+  return dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 let toastTimer = null;
 function toast(msg, isError) {
   const t = document.getElementById('toast');
