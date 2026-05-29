@@ -212,6 +212,11 @@
       <span class="bsi-icon">📄</span>
       <span>Factures</span>
     </a>
+    <a class="bill-side-item" data-tab="validate" onclick="switchTab('validate')">
+      <span class="bsi-icon">✅</span>
+      <span>À valider</span>
+      <span id="sideBadgeValidate" style="display:none;margin-left:auto;background:#f59e0b;color:#fff;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700">0</span>
+    </a>
     <a class="bill-side-item" data-tab="clients" onclick="switchTab('clients')">
       <span class="bsi-icon">👥</span>
       <span>Clients</span>
@@ -795,6 +800,21 @@
       </div>
     </div>
 
+    <!-- ============ TAB : À VALIDER (contrôle manuel encaissement GoCardless) ============ -->
+    <div class="bill-tab" data-tab="validate">
+      <div class="bill-card" style="background:rgba(245,158,11,.04);border-color:rgba(245,158,11,.25);margin-bottom:16px">
+        <div class="bill-card-h"><div><h3>✅ Factures à valider</h3></div></div>
+        <div style="font-size:13px;line-height:1.7;color:var(--muted)">
+          <p>Chaque prélèvement GoCardless encaissé génère ici un <strong>brouillon pré-rempli</strong>. Rien n'est facturé ni envoyé tant que <strong>tu</strong> ne valides pas — si un paiement ne passe pas, il n'apparaît simplement pas ici.</p>
+          <p>Pour chaque ligne : vérifie/ajuste la <strong>date d'encaissement</strong> (utile en cas de représentation), puis <strong>Valider + encaisser</strong> (numérote la facture à cette date et la marque payée), et enfin <strong>Envoyer</strong> au client.</p>
+        </div>
+      </div>
+
+      <div class="bill-table-wrap" id="validateTableWrap">
+        <div class="bill-loader"><span class="bill-spinner"></span> Chargement…</div>
+      </div>
+    </div>
+
     <!-- ============ TAB : PRODUCTS ============ -->
     <div class="bill-tab" data-tab="products">
       <div class="bill-stats">
@@ -946,6 +966,11 @@
             <input class="bill-input" type="date" id="syncUntil"/>
           </div>
         </div>
+
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--muted);cursor:pointer">
+          <input type="checkbox" id="syncAutoPaid" checked style="width:16px;height:16px"/>
+          <span>Marquer les factures payées d'office (rattrapage historique). Décoche pour les envoyer dans « À valider ».</span>
+        </label>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
           <button class="bill-btn" id="gcSyncDryRunBtn" onclick="runGcSyncDryRun()">🔍 Aperçu (dry-run)</button>
@@ -1264,6 +1289,7 @@ function switchTab(tab) {
   /* Header */
   const titles = {
     invoices: { t: 'Factures', s: 'Liste de toutes les factures émises et brouillons.' },
+    validate: { t: 'À valider', s: 'Brouillons issus des encaissements GoCardless, en attente de ta validation manuelle.' },
     clients: { t: 'Clients de facturation', s: 'Fiches clients utilisées sur les factures (distinct des leads CRM).' },
     products: { t: 'Catalogue produits', s: 'Produits réutilisables avec prix et taux TVA.' },
     subscriptions: { t: 'Abonnements', s: 'Mandats GoCardless avec génération automatique de factures.' },
@@ -1277,6 +1303,7 @@ function switchTab(tab) {
 
   if (tab === 'clients') renderClientsList();
   if (tab === 'invoices') renderInvoicesList();
+  if (tab === 'validate') renderValidateQueue();
   if (tab === 'products') renderProductsList();
   if (tab === 'settings') renderSettingsActiveSub();
   if (tab === 'alerts') renderAlertsList();
@@ -3070,7 +3097,9 @@ function initInvoicesListener() {
       invoicesCache.push(Object.assign({ id: d.id }, data));
     });
     updateInvoicesStats();
+    updateValidateBadge();
     if (activeTab === 'invoices') renderInvoicesList();
+    if (activeTab === 'validate') renderValidateQueue();
   }, function(err) {
     console.error('[billing] invoices listener error', err);
     if (activeTab === 'invoices') {
@@ -3254,6 +3283,134 @@ function newInvoice() {
     return;
   }
   location.href = 'admin-invoice-edit.html?new=1';
+}
+
+/* ═══════════════════════════════════════════════
+   À VALIDER — contrôle manuel des encaissements GoCardless
+   Brouillons _pendingValidation : l'admin fixe la date d'encaissement,
+   valide (numéro + PDF à cette date) puis marque payée, et envoie.
+   ═══════════════════════════════════════════════ */
+function pendingValidationInvoices() {
+  return invoicesCache.filter(function(i) {
+    return i.status === 'draft' && i._pendingValidation === true;
+  }).sort(function(a, b) {
+    var da = a.gcChargeDate || '';
+    var db2 = b.gcChargeDate || '';
+    if (da !== db2) return da < db2 ? -1 : 1;
+    return 0;
+  });
+}
+
+function updateValidateBadge() {
+  var badge = document.getElementById('sideBadgeValidate');
+  if (!badge) return;
+  var n = pendingValidationInvoices().length;
+  badge.textContent = n;
+  badge.style.display = n > 0 ? 'inline-block' : 'none';
+}
+
+function renderValidateQueue() {
+  var wrap = document.getElementById('validateTableWrap');
+  if (!wrap) return;
+  var list = pendingValidationInvoices();
+  if (!list.length) {
+    wrap.innerHTML = '<div class="bill-empty"><div class="bill-empty-icon">✅</div><h4>Aucune facture à valider</h4><p>Les nouveaux encaissements GoCardless apparaîtront ici automatiquement.</p></div>';
+    return;
+  }
+  var html = '<table class="bill-table"><thead><tr>' +
+    '<th>Client</th><th>Description</th><th style="text-align:right">Montant TTC</th>' +
+    '<th>Date d\'encaissement</th><th class="col-actions"></th>' +
+    '</tr></thead><tbody>';
+  list.forEach(function(inv) {
+    var cs = inv.clientSnapshot || {};
+    var cliName = cs.companyName ||
+      ((cs.contactFirstName || '') + ' ' + (cs.contactLastName || '')).trim() ||
+      cs.email || '—';
+    var firstLine = inv.lines && inv.lines.length ? inv.lines[0] : null;
+    var desc = firstLine ? (firstLine.description || '') : '';
+    if (desc.length > 70) desc = desc.substring(0, 67) + '…';
+    var dateVal = inv.gcChargeDate ||
+      (inv.suggestedPaidAt && inv.suggestedPaidAt.toDate
+        ? inv.suggestedPaidAt.toDate().toISOString().substring(0, 10)
+        : new Date().toISOString().substring(0, 10));
+    html += '<tr>';
+    html += '<td><div style="font-weight:600">' + escapeHtml(cliName) + '</div>';
+    if (cs.email) html += '<div style="font-size:11px;color:var(--muted)">' + escapeHtml(cs.email) + '</div>';
+    html += '</td>';
+    html += '<td style="font-size:12px">' + escapeHtml(desc) + '</td>';
+    html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
+    html += '<td><input type="date" class="bill-input" id="valDate_' + inv.id + '" value="' + dateVal + '" style="min-width:150px;padding:6px 8px"/></td>';
+    html += '<td class="col-actions" style="white-space:nowrap">';
+    html += '<button class="bill-btn bill-btn-primary" id="valBtn_' + inv.id + '" onclick="validateAndCollect(\'' + inv.id + '\')">✅ Valider + encaisser</button>';
+    html += '</td></tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+async function validateAndCollect(invoiceId) {
+  var inv = invoicesCache.filter(function(x){ return x.id === invoiceId; })[0];
+  if (!inv) return toast('Facture introuvable', true);
+
+  var dateInput = document.getElementById('valDate_' + invoiceId);
+  var paidAt = dateInput ? dateInput.value : '';
+  if (!paidAt || !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) return toast('Date d\'encaissement invalide', true);
+
+  var amount = inv.totalTtc || inv.suggestedPaidAmount || 0;
+  if (!amount || amount <= 0) return toast('Montant invalide sur cette facture', true);
+
+  var ok = confirm('Valider la facture pour ' + formatEur(amount) + ' et la marquer encaissée le ' +
+    new Date(paidAt + 'T12:00:00').toLocaleDateString('fr-FR') + ' ?\n\n' +
+    'La facture sera numérotée (définitif, irréversible) à cette date.');
+  if (!ok) return;
+
+  var btn = document.getElementById('valBtn_' + invoiceId);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Validation…'; }
+
+  try {
+    var idToken = await firebase.auth().currentUser.getIdToken();
+
+    /* 1. Validation (numéro + PDF) — date d'émission = date d'encaissement choisie */
+    var vResp = await fetch('/api/invoice-validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ invoiceId: invoiceId, issueDate: paidAt })
+    });
+    var vData = await vResp.json().catch(function(){ return {}; });
+    if (!vResp.ok) {
+      var em = vData.error || ('HTTP ' + vResp.status);
+      /* Cas "validée mais PDF échouée" : la facture EST numérotée, on continue. */
+      if (em.indexOf('Facture validée') < 0) throw new Error('Validation : ' + em);
+      toast('⚠️ Facture validée, PDF à régénérer plus tard', true);
+    }
+
+    /* 2. Marquage encaissé à la date choisie */
+    var pResp = await fetch('/api/invoice-mark-paid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({
+        invoiceId: invoiceId,
+        paidAmount: amount,
+        paidAt: paidAt,
+        paidVia: 'gocardless',
+        paymentRef: inv.gcPaymentId || null
+      })
+    });
+    var pData = await pResp.json().catch(function(){ return {}; });
+    if (!pResp.ok) throw new Error('Facture validée ' + (vData.number || '') + ' mais marquage payée échoué : ' + (pData.error || 'HTTP ' + pResp.status));
+
+    /* 3. Sortir de la file « À valider » */
+    try { await db.collection('invoices').doc(invoiceId).update({ _pendingValidation: false }); } catch (_) {}
+
+    toast('✅ Facture ' + (vData.number || '') + ' validée et encaissée');
+
+    if (confirm('Facture ' + (vData.number || '') + ' validée et encaissée.\n\nEnvoyer la facture au client par email maintenant ?')) {
+      location.href = 'admin-invoice-edit.html?id=' + encodeURIComponent(invoiceId) + '&action=send';
+    }
+  } catch (err) {
+    toast('Erreur : ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = '✅ Valider + encaisser'; }
+  }
 }
 
 function editInvoice(id) {
@@ -3705,7 +3862,7 @@ async function runGcSyncExecute() {
     const resp = await fetch('/api/admin-gocardless-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify({ since: since, until: until, dryRun: false })
+      body: JSON.stringify({ since: since, until: until, dryRun: false, autoPaid: (document.getElementById('syncAutoPaid') ? document.getElementById('syncAutoPaid').checked : true) })
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'HTTP ' + resp.status);
