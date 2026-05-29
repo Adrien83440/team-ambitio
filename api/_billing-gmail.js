@@ -33,30 +33,27 @@ async function getOAuthCreds() {
       clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
     };
   }
-  /* Priority 2 : Firestore _config/google_oauth */
-  try {
-    const snap = await db.collection('_config').doc('google_oauth').get();
-    if (snap.exists) {
-      const data = snap.data();
-      if (data.clientId && data.clientSecret) {
-        return { clientId: data.clientId, clientSecret: data.clientSecret };
+  /* Priority 2 : Firestore _config — même source que le helper _gmailSend qui
+     fonctionne déjà (emails de mandat). On essaie plusieurs docs et on accepte
+     aussi bien snake_case (client_id/client_secret) que camelCase
+     (clientId/clientSecret). */
+  const tries = ['oauth', 'oauth_calendar', 'google_oauth'];
+  for (let i = 0; i < tries.length; i++) {
+    try {
+      const snap = await db.collection('_config').doc(tries[i]).get();
+      if (snap.exists) {
+        const d = snap.data();
+        if (d.client_id && d.client_secret) {
+          return { clientId: d.client_id, clientSecret: d.client_secret };
+        }
+        if (d.clientId && d.clientSecret) {
+          return { clientId: d.clientId, clientSecret: d.clientSecret };
+        }
       }
-    }
-  } catch (e) {
-    /* fall through */
+    } catch (e) { /* doc suivant */ }
   }
-  /* Priority 3 : _config/oauth_calendar (réutilisable si scope inclut Gmail) */
-  try {
-    const snap = await db.collection('_config').doc('oauth_calendar').get();
-    if (snap.exists) {
-      const data = snap.data();
-      if (data.clientId && data.clientSecret) {
-        return { clientId: data.clientId, clientSecret: data.clientSecret };
-      }
-    }
-  } catch (e) { /* fall through */ }
 
-  const e = new Error('Google OAuth credentials introuvables (env GOOGLE_OAUTH_CLIENT_ID/SECRET ou _config/google_oauth)');
+  const e = new Error('Google OAuth credentials introuvables (_config/oauth, _config/oauth_calendar ou _config/google_oauth — besoin client_id + client_secret)');
   e.status = 500;
   throw e;
 }
