@@ -286,14 +286,16 @@ html{scroll-padding-top:180px;scroll-behavior:auto}  /* nav 56px + topbar (poten
             <input class="inv-input" id="invIssueDate" readonly value="— à la validation —"/>
             <div class="inv-help">Fixée automatiquement au moment de valider la facture.</div>
           </div>
-          <div class="inv-row">
+          <!-- Délai/échéance masqués : paiement immédiat (prélèvement SEPA). Inputs conservés cachés pour la mécanique dueDate côté backend. -->
+          <div class="inv-row" style="display:none">
             <div class="inv-label">Délai de paiement (jours)</div>
             <input class="inv-input" id="invPaymentTerms" type="number" min="0" max="120" value="30" oninput="onMetaChange()"/>
           </div>
+          <input type="hidden" id="invDueDate"/>
           <div class="inv-row">
-            <div class="inv-label">Date d'échéance</div>
-            <input class="inv-input" id="invDueDate" readonly/>
-            <div class="inv-help">Calculée auto = émission + délai de paiement.</div>
+            <div class="inv-label">Paiement</div>
+            <input class="inv-input" readonly value="Immédiat — prélèvement SEPA"/>
+            <div class="inv-help">Aucune échéance : le prélèvement est immédiat à sa date d'exécution.</div>
           </div>
           <div class="inv-row">
             <div class="inv-label">N° bon de commande client (optionnel)</div>
@@ -1363,7 +1365,7 @@ function refreshPreview() {
     other: 'Selon accord'
   };
   html += '  <div class="pdf-payment-line"><strong>Mode de paiement :</strong> ' + escapeHtml(paymentLabels[invoiceState.paymentMethod] || invoiceState.paymentMethod) + '</div>';
-  html += '  <div class="pdf-payment-line"><strong>Échéance :</strong> ' + escapeHtml(dueStr) + (invoiceState.paymentTermsDays != null ? ' (' + invoiceState.paymentTermsDays + ' jours)' : '') + '</div>';
+  html += '  <div class="pdf-payment-line"><strong>Paiement :</strong> ' + (invoiceState.paymentMethod === 'gocardless' ? 'prélèvement automatique immédiat (aucune échéance)' : 'à réception de la facture') + '</div>';
   if (invoiceState.paymentMethod === 'transfer' && issuer.iban) {
     html += '  <div class="pdf-payment-line" style="margin-top:6px"><strong>IBAN :</strong> ' + escapeHtml(formatIbanDisplay(issuer.iban)) + '</div>';
     if (issuer.bic) html += '  <div class="pdf-payment-line"><strong>BIC :</strong> ' + escapeHtml(issuer.bic) + (issuer.bankName ? ' · ' + escapeHtml(issuer.bankName) : '') + '</div>';
@@ -1456,8 +1458,6 @@ const DEFAULT_EMAIL_BODY =
 '\n' +
 'Vous trouverez en pièce jointe votre facture {invoiceNumber} d\'un montant de {totalTtc} TTC.\n' +
 '\n' +
-'Échéance de paiement : {dueDate}\n' +
-'\n' +
 '{paymentInstructions}\n' +
 '\n' +
 'Pour toute question, n\'hésitez pas à nous répondre directement à cet email.\n' +
@@ -1478,7 +1478,7 @@ function buildPaymentInstructionsFr(invoice, billing) {
   const method = invoice.paymentMethod;
   switch (method) {
     case 'gocardless':
-      return 'Le prélèvement automatique sera effectué selon le mandat SEPA enregistré. Aucune action de votre part n\'est requise.';
+      return 'Paiement : prélèvement automatique immédiat, aucune action requise.';
     case 'transfer':
       const lines = ['Merci d\'effectuer un virement vers le compte suivant :'];
       if (billing.iban) lines.push('IBAN : ' + String(billing.iban).replace(/\s/g, '').toUpperCase().replace(/(.{4})/g, '$1 ').trim());
