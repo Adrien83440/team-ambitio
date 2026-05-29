@@ -347,7 +347,6 @@ function drawInvoicePage(page, F, invoice, issuer, cgv, logoImg, logoDims, isCon
   const num = invoice.number || 'BROUILLON';
   text(page, 'N° ' + num, metaX, metaY, F.helvBold, 10, COLOR_TEXT); metaY += 14;
   text(page, 'Émise le ' + formatDateFr(invoice.issueDate), metaX, metaY, F.helv, 9, COLOR_MUTED); metaY += 11;
-  text(page, 'Échéance ' + formatDateFr(invoice.dueDate), metaX, metaY, F.helv, 9, COLOR_MUTED); metaY += 11;
   if (invoice.poNumber) { text(page, 'N° commande : ' + invoice.poNumber, metaX, metaY, F.helv, 9, COLOR_MUTED); metaY += 11; }
 
   y += headerHeight;
@@ -579,10 +578,9 @@ function drawPaymentBlock(page, F, invoice, issuer, yStart) {
   text(page, paymentLabels[invoice.paymentMethod] || invoice.paymentMethod || '—', M_LEFT + 12 + widthOf(F.helvBold, 'Mode de paiement : ', 9), py, F.helv, 9, COLOR_TEXT);
   py += 12;
 
-  /* Échéance vs Règlement :
-     - Facture déjà payée (prélèvement SEPA encaissé) → pas d'échéance future,
-       on affiche la date de règlement effective.
-     - Facture à terme non réglée (ex: virement en attente) → échéance classique. */
+  /* Paiement immédiat — aucune échéance :
+     - Facture déjà réglée (prélèvement SEPA encaissé) → date de règlement effective.
+     - Sinon → "à réception de la facture" (pas d'échéance, paiement immédiat). */
   const isSettled = invoice.status === 'paid' || invoice.paymentMethod === 'gocardless';
   if (isSettled) {
     const paidDate = formatDateFr(invoice.paidAt || invoice.issueDate);
@@ -590,9 +588,8 @@ function drawPaymentBlock(page, F, invoice, issuer, yStart) {
     text(page, 'payé le ' + paidDate + ' par prélèvement SEPA', M_LEFT + 12 + widthOf(F.helvBold, 'Règlement : ', 9), py, F.helv, 9, COLOR_TEXT);
     py += 12;
   } else {
-    text(page, 'Échéance : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
-    const echeStr = formatDateFr(invoice.dueDate) + (invoice.paymentTermsDays != null ? ' (' + invoice.paymentTermsDays + ' jours)' : '');
-    text(page, echeStr, M_LEFT + 12 + widthOf(F.helvBold, 'Échéance : ', 9), py, F.helv, 9, COLOR_TEXT);
+    text(page, 'Paiement : ', M_LEFT + 12, py, F.helvBold, 9, COLOR_TEXT);
+    text(page, 'à réception de la facture', M_LEFT + 12 + widthOf(F.helvBold, 'Paiement : ', 9), py, F.helv, 9, COLOR_TEXT);
     py += 12;
   }
 
