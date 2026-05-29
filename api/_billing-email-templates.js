@@ -16,8 +16,6 @@ const DEFAULT_INVOICE_BODY =
 '\n' +
 'Vous trouverez en pièce jointe votre facture {invoiceNumber} d\'un montant de {totalTtc} TTC.\n' +
 '\n' +
-'Échéance de paiement : {dueDate}\n' +
-'\n' +
 '{paymentInstructions}\n' +
 '\n' +
 'Pour toute question, n\'hésitez pas à nous répondre directement à cet email.\n' +
@@ -62,7 +60,7 @@ function buildPaymentInstructions(invoice, issuer) {
   const method = invoice.paymentMethod;
   switch (method) {
     case 'gocardless':
-      return 'Le prélèvement automatique sera effectué selon le mandat SEPA enregistré. Aucune action de votre part n\'est requise.';
+      return 'Paiement : prélèvement automatique immédiat, aucune action requise.';
     case 'transfer':
       const lines = ['Merci d\'effectuer un virement vers le compte suivant :'];
       if (issuer.iban) lines.push('IBAN : ' + formatIban(issuer.iban));
