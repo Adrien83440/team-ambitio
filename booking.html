@@ -858,6 +858,26 @@ function getEffectiveSlotsForDate(person, dateStr) {
   return slots;
 }
 
+/* ── MAX BOOKING WINDOW ──
+   Borne SUPÉRIEURE de réservation (« Plage de dates dans le futur »).
+   Réglée dans la consultation : rules.maxNoticeDays + rules.maxNoticeDaysUnit
+   (unité : jours | heures | minutes). Repli éventuel sur l'expert.
+   0 / absent  → aucune limite (comportement historique préservé).
+   Renvoie un timestamp ms (now + fenêtre), ou null si pas de limite. */
+function getMaxBookingTs() {
+  var raw = (S.selType && S.selType.rules && S.selType.rules.maxNoticeDays != null)
+    ? S.selType.rules.maxNoticeDays
+    : (S.selPerson && S.selPerson.maxNoticeDays);
+  var val = parseInt(raw, 10);
+  if (!val || val <= 0) return null;
+  var unit = (S.selType && S.selType.rules && S.selType.rules.maxNoticeDaysUnit)
+    || (S.selPerson && S.selPerson.maxNoticeDaysUnit) || 'jours';
+  var ms = unit === 'heures' ? val * 3600000
+         : unit === 'minutes' ? val * 60000
+         : val * 86400000; // jours par défaut
+  return Date.now() + ms;
+}
+
 /* ── AVAILABILITY CHECK ── */
 function hasAvailableSlots(dateStr) {
   if (!S.selPerson) return false;
@@ -881,6 +901,15 @@ function hasAvailableSlots(dateStr) {
     var earliest = new Date(now.getTime() + minNotice * 3600000);
     var dayEnd = new Date(dateStr + 'T23:59:59');
     if (dayEnd < earliest) return false;
+  }
+
+  // Max booking window check — borne haute « dans le futur ».
+  // Si le tout début de la journée est déjà au-delà de la fenêtre, aucun
+  // créneau de ce jour n'est réservable → jour non disponible (non cliquable).
+  var maxTs = getMaxBookingTs();
+  if (maxTs) {
+    var dayStart = new Date(dateStr + 'T00:00:00').getTime();
+    if (dayStart > maxTs) return false;
   }
 
   // Max per day check (Consultation > Expert > 0)
@@ -1000,6 +1029,16 @@ function renderSlots() {
       var eMin = earliest.getHours() * 60 + earliest.getMinutes();
       available = available.filter(function(t) { return timeToMin(t) >= eMin; });
     }
+  }
+
+  // Max booking window — retire les créneaux dont le DÉBUT dépasse la borne
+  // haute. Sur les jours pleinement dans la fenêtre, tout passe ; sur le jour
+  // limite, seuls les créneaux <= cutoff restent.
+  var maxTsSlots = getMaxBookingTs();
+  if (maxTsSlots) {
+    available = available.filter(function(t) {
+      return new Date(S.selDate + 'T' + t + ':00').getTime() <= maxTsSlots;
+    });
   }
 
   // Max per day (already checked in hasAvailableSlots, but double-check)
@@ -1156,6 +1195,18 @@ async function handleSubmit() {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     alert('Veuillez entrer un email valide.');
     return;
+  }
+
+  // Garde-fou borne haute : empêche une réservation au-delà de la fenêtre
+  // autorisée même si l'état client a été manipulé ou l'onglet laissé ouvert
+  // longtemps (le cutoff étant glissant, un créneau valide à l'ouverture peut
+  // sortir de la fenêtre avant la confirmation).
+  var _maxTs = getMaxBookingTs();
+  if (_maxTs && S.selDate && S.selTime) {
+    if (new Date(S.selDate + 'T' + S.selTime + ':00').getTime() > _maxTs) {
+      alert('Ce créneau dépasse la période de réservation autorisée. Merci de choisir une date plus proche.');
+      return;
+    }
   }
 
   var booking = {
