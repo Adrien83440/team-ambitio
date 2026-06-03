@@ -1856,8 +1856,15 @@ CR.doc(pid).update({dateOverrides:p.dateOverrides}).then(function(){renderExSect
 // Toggle form visibility
 function toggleArForm(){
 var w=document.getElementById('arFormWrap');
-if(!w)return;
-w.style.display=w.style.display==='none'?'block':'none';
+if(!w){console.warn('[booking-admin] toggleArForm: #arFormWrap introuvable dans le DOM');return;}
+// On considère le formulaire « fermé » si display vaut 'none' OU '' (cas où
+// l'inline style aurait été perdu par un re-render) → premier clic = ouverture.
+var willOpen=(w.style.display==='none'||w.style.display==='');
+w.style.display=willOpen?'block':'none';
+// Le formulaire est tout en bas d'une section planning longue (7 jours +
+// liste des règles). Sans scroll il peut s'ouvrir sous la zone visible et
+// donner l'impression que « rien ne se passe ».
+if(willOpen){try{w.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(e){}}
 }
 // Toggle button groups
 function setArToggle(groupId,btn){
