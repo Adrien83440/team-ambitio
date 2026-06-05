@@ -275,6 +275,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
       <h1>Utilisateurs</h1>
       <div class="pg-head-sub">Gestion des accès et permissions</div>
     </div>
+    <button class="bb bb-o" id="btnSyncBooking" title="Créer les fiches expert Booking manquantes pour les membres existants">📅 Synchroniser Booking</button>
     <button class="bb bb-p" id="btnAdd">+ Nouvel utilisateur</button>
   </div>
 
@@ -437,6 +438,208 @@ const COLOR_SUGGESTIONS = [
 ];
 function hashStr(s){let h=0;for(let i=0;i<s.length;i++){h=((h<<5)-h+s.charCodeAt(i))|0;}return Math.abs(h);}
 function suggestColorFor(slug){ return COLOR_SUGGESTIONS[hashStr(slug||'x') % COLOR_SUGGESTIONS.length]; }
+
+// ══════════════════════════════════════════════════════════════════
+// ─── PROPAGATION VERS BOOKING (fiche expert booking_config) ───
+// ══════════════════════════════════════════════════════════════════
+// Quand un membre d'équipe est créé dans cette page, on crée
+// automatiquement sa fiche expert dans booking_config/{id} (doc avec
+// __type:'person') pour qu'il apparaisse dans Booking et puisse
+// recevoir/gérer des RDV. La fiche est "inerte" au départ (aucune
+// consultation assignée, aucun horaire) : aucun risque, elle se configure
+// ensuite dans booking-admin.html.
+//
+// Liaison : firebaseUid = uid du membre → il pourra éditer SA fiche et
+// connecter SON Google Agenda (cf. ownsBookingPerson dans firestore.rules).
+// isCoach = true si le rôle est 'coach'.
+//
+// Règle Firestore : booking_config allow create:if isAdmin() → l'admin
+// authentifié sur cette page écrit directement (pas de Cloud Function).
+
+// Libellé "Rôle" lisible affiché sur la fiche expert
+const BOOKING_ROLE_LABELS = { coach:'Coach', sales:'Closer', csm:'Customer Success', admin:'Admin' };
+
+// Slug alpha minuscule (sans accents) pour la base de l'ID de fiche
+function _bkSlugFromName(name){
+  var base = (name||'expert').toString()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,15);
+  return base || 'expert';
+}
+function _bkRandSuffix(){
+  return Math.random().toString(36).slice(2,6) + Date.now().toString(36).slice(-2);
+}
+
+// Construit l'objet fiche expert booking_config à partir d'un user
+function buildBookingExpertDoc(opts){
+  var role = opts.role || 'coach';
+  return {
+    __type: 'person',
+    name: opts.displayName || (opts.email ? opts.email.split('@')[0] : 'Expert'),
+    role: BOOKING_ROLE_LABELS[role] || 'Expert',
+    color: suggestColorFor(opts.displayName || opts.uid || opts.email || 'x'),
+    types: [],
+    schedule: {},
+    blockedDates: [],
+    isCoach: role === 'coach',
+    firebaseUid: opts.uid || null,
+    personalEmail: opts.email || '',
+    createdAt: new Date().toISOString(),
+    createdVia: 'admin-users-auto'
+  };
+}
+
+// Charge toutes les fiches expert (docs __type==='person') de booking_config
+async function loadBookingExperts(){
+  var snap = await getDocs(collection(db,'booking_config'));
+  var list = [];
+  snap.forEach(function(d){
+    var v = d.data();
+    if(v && v.__type==='person'){ v.id = d.id; list.push(v); }
+  });
+  return list;
+}
+
+// Cherche une fiche expert déjà associée à un user, pour éviter les
+// doublons avec des fiches créées manuellement (coachs déjà présents non
+// liés à un firebaseUid). Match prioritaire par firebaseUid, sinon par
+// nom normalisé ou email de notification.
+function _findExistingExpert(experts, user){
+  var uid = user.uid;
+  var nm  = _normName(user.displayName||'');
+  var em  = (user.email||'').trim().toLowerCase();
+  var byNameEmail = null;
+  for(var i=0;i<experts.length;i++){
+    var e = experts[i];
+    if(uid && e.firebaseUid===uid) return {matched:true, byUid:true, byNameOrEmail:false, expert:e};
+    if(!byNameEmail){
+      var enm=_normName(e.name||'');
+      var eem=(e.personalEmail||'').trim().toLowerCase();
+      if((nm && enm && enm===nm) || (em && eem && eem===em)) byNameEmail=e;
+    }
+  }
+  if(byNameEmail) return {matched:true, byUid:false, byNameOrEmail:true, expert:byNameEmail};
+  return {matched:false};
+}
+
+// Crée (ou lie) la fiche expert pour un user si nécessaire.
+// opts.experts : liste préchargée (optionnel). opts.linkExisting : lie une
+// fiche trouvée par nom/email au lieu de la laisser non liée.
+// Renvoie { created, linked, id, reason }
+async function ensureBookingExpert(user, opts){
+  opts = opts || {};
+  var experts = opts.experts || await loadBookingExperts();
+  var found = _findExistingExpert(experts, user);
+  if(found.matched && found.byUid){
+    return { created:false, linked:false, id:found.expert.id, reason:'already-linked' };
+  }
+  if(found.matched && found.byNameOrEmail){
+    if(opts.linkExisting){
+      var patch = { firebaseUid:user.uid };
+      if(!found.expert.personalEmail && user.email) patch.personalEmail = user.email;
+      await updateDoc(doc(db,'booking_config',found.expert.id), patch);
+      return { created:false, linked:true, id:found.expert.id, reason:'linked-existing' };
+    }
+    return { created:false, linked:false, id:found.expert.id, reason:'exists-unlinked' };
+  }
+  // Aucune fiche → création
+  var id = _bkSlugFromName(user.displayName||user.email) + '_' + _bkRandSuffix();
+  var guard=0;
+  while(experts.some(function(e){return e.id===id;}) && guard<5){
+    id = _bkSlugFromName(user.displayName||user.email)+'_'+_bkRandSuffix(); guard++;
+  }
+  await setDoc(doc(db,'booking_config',id), buildBookingExpertDoc({
+    uid:user.uid, displayName:user.displayName, email:user.email, role:user.role
+  }));
+  return { created:true, linked:false, id:id, reason:'created' };
+}
+
+// ─── Backfill : synchronise les membres existants vers Booking ───
+async function openBookingSyncModal(){
+  openModal('📅 Synchroniser Booking');
+  var body=document.getElementById('moBody');
+  body.innerHTML='<div style="padding:24px;text-align:center;color:rgba(255,255,255,.5)">⏳ Analyse en cours…</div>';
+  try{
+    var experts=await loadBookingExperts();
+    var members=USERS.filter(function(u){return (u.status||'active')!=='archived';});
+    var toCreate=[], unlinked=[], linked=[];
+    members.forEach(function(u){
+      var f=_findExistingExpert(experts,u);
+      if(f.matched && f.byUid) linked.push({u:u,e:f.expert});
+      else if(f.matched && f.byNameOrEmail) unlinked.push({u:u,e:f.expert});
+      else toCreate.push({u:u});
+    });
+    window.__bkSync={toCreate:toCreate,unlinked:unlinked,linked:linked};
+    renderBookingSyncReport();
+  }catch(e){
+    body.innerHTML='<div class="arch-warn" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#fca5a5;padding:12px;border-radius:10px">❌ Erreur analyse : '+esc(e.message)+'</div>';
+  }
+}
+
+function renderBookingSyncReport(){
+  var d=window.__bkSync||{toCreate:[],unlinked:[],linked:[]};
+  var h='';
+  h+='<div style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:16px">Comparaison des membres d\'équipe (hors archivés) avec les fiches expert <code style="color:#a78bfa">booking_config</code>. Aperçu avant écriture — <b>rien n\'est modifié</b> tant que tu ne valides pas.</div>';
+
+  // À créer
+  h+='<div style="margin-bottom:14px;padding:12px;background:rgba(34,211,153,.06);border:1px solid rgba(34,211,153,.2);border-radius:10px">';
+  h+='<div style="font-size:13px;font-weight:800;color:#34d399;margin-bottom:8px">➕ Fiches à créer ('+d.toCreate.length+')</div>';
+  if(d.toCreate.length){
+    d.toCreate.forEach(function(it){ var role=it.u.role||'coach'; h+='<div style="font-size:12px;color:rgba(255,255,255,.82);padding:3px 0">• '+esc(it.u.displayName||it.u.email)+' <span style="color:rgba(255,255,255,.4)">— '+(BOOKING_ROLE_LABELS[role]||'Expert')+(role==='coach'?' · 🎯 coach':'')+'</span></div>'; });
+  } else h+='<div style="font-size:12px;color:rgba(255,255,255,.4)">Aucune — tout le monde a déjà une fiche.</div>';
+  h+='</div>';
+
+  // Existantes non liées
+  h+='<div style="margin-bottom:14px;padding:12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:10px">';
+  h+='<div style="font-size:13px;font-weight:800;color:#fbbf24;margin-bottom:8px">🔗 Fiche existante non liée ('+d.unlinked.length+')</div>';
+  h+='<div style="font-size:11px;color:rgba(255,255,255,.45);margin-bottom:8px;line-height:1.45">Une fiche expert au même nom/email existe déjà (créée manuellement) mais n\'est pas liée au compte. La lier donne au membre le droit d\'éditer SA fiche et de connecter SON agenda. Sans liaison, aucun doublon n\'est créé.</div>';
+  if(d.unlinked.length){
+    d.unlinked.forEach(function(it){ h+='<div style="font-size:12px;color:rgba(255,255,255,.82);padding:3px 0">• '+esc(it.u.displayName||it.u.email)+' <span style="color:rgba(255,255,255,.4)">↔ fiche « '+esc(it.e.name||it.e.id)+' »</span></div>'; });
+    h+='<label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:12px;color:rgba(255,255,255,.85)"><input type="checkbox" id="bkLinkExisting" style="width:15px;height:15px;accent-color:#fbbf24"/> Lier aussi ces fiches existantes aux comptes</label>';
+  } else h+='<div style="font-size:12px;color:rgba(255,255,255,.4)">Aucune.</div>';
+  h+='</div>';
+
+  // Déjà liés
+  h+='<div style="margin-bottom:18px;padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px">';
+  h+='<div style="font-size:13px;font-weight:800;color:rgba(255,255,255,.6);margin-bottom:6px">✅ Déjà liés ('+d.linked.length+')</div>';
+  h+='<div style="font-size:11px;color:rgba(255,255,255,.4);line-height:1.5">'+(d.linked.length?d.linked.map(function(it){return esc(it.u.displayName||it.u.email);}).join(', '):'—')+'</div>';
+  h+='</div>';
+
+  var nothingToDo=(d.toCreate.length===0 && d.unlinked.length===0);
+  h+='<div style="display:flex;gap:10px"><button class="bb bb-o" onclick="closeModal()">Fermer</button><button class="bb bb-p" id="bkApply" style="flex:1"'+(nothingToDo?' disabled':'')+'>'+(d.toCreate.length?('Créer '+d.toCreate.length+' fiche'+(d.toCreate.length>1?'s':'')):'Appliquer')+'</button></div>';
+
+  document.getElementById('moBody').innerHTML=h;
+  var ap=document.getElementById('bkApply');
+  if(ap) ap.addEventListener('click',applyBookingSync);
+}
+
+async function applyBookingSync(){
+  var d=window.__bkSync||{toCreate:[],unlinked:[],linked:[]};
+  var linkExisting=!!(document.getElementById('bkLinkExisting')||{}).checked;
+  var btn=document.getElementById('bkApply'); if(btn){btn.disabled=true;btn.textContent='⏳ Application…';}
+  try{
+    var experts=await loadBookingExperts(); // fraîche pour l'anti-collision d'ID
+    var nCreated=0,nLinked=0,nErr=0;
+    for(var i=0;i<d.toCreate.length;i++){
+      try{
+        var r=await ensureBookingExpert(d.toCreate[i].u,{experts:experts});
+        if(r.created){ nCreated++; experts.push({id:r.id,__type:'person',firebaseUid:d.toCreate[i].u.uid,name:d.toCreate[i].u.displayName,personalEmail:d.toCreate[i].u.email}); }
+      }catch(e){ console.error('[bkSync] create failed',d.toCreate[i].u,e); nErr++; }
+    }
+    if(linkExisting){
+      for(var j=0;j<d.unlinked.length;j++){
+        try{ var rr=await ensureBookingExpert(d.unlinked[j].u,{experts:experts,linkExisting:true}); if(rr.linked)nLinked++; }
+        catch(e){ console.error('[bkSync] link failed',d.unlinked[j].u,e); nErr++; }
+      }
+    }
+    toast('✅ Booking : '+nCreated+' créée(s)'+(nLinked?', '+nLinked+' liée(s)':'')+(nErr?' · '+nErr+' erreur(s)':''));
+    await openBookingSyncModal(); // re-scan → rapport rafraîchi
+  }catch(e){
+    console.error('[bkSync] apply error',e);
+    toast('❌ '+e.message);
+    if(btn){btn.disabled=false;btn.textContent='Appliquer';}
+  }
+}
 
 async function loadTeamColors(){
   const body = document.getElementById('teamColorsBody');
@@ -655,6 +858,10 @@ document.getElementById('userList').addEventListener('click',function(e){
 // ─── Event: add button ───
 document.getElementById('btnAdd').addEventListener('click',openCreateModal);
 
+// ─── Event: synchroniser Booking (backfill fiches expert manquantes) ───
+var _btnSyncBk=document.getElementById('btnSyncBooking');
+if(_btnSyncBk)_btnSyncBk.addEventListener('click',openBookingSyncModal);
+
 // ─── Modal controls ───
 function openModal(title){
   editUid=null;
@@ -809,12 +1016,27 @@ async function handleCreate(){
     };
     await setDoc(doc(db,'users',uid),userData);
 
+    // ─── Propagation automatique vers Booking (fiche expert booking_config) ───
+    // Crée la fiche expert pour que le membre apparaisse dans Booking et
+    // puisse recevoir/gérer des RDV. N'interrompt jamais la création du
+    // compte si elle échoue (Booking pourra être synchronisé après coup
+    // via le bouton « Synchroniser Booking »).
+    var bkMsg='';
+    try{
+      var bkRes=await ensureBookingExpert({uid:uid,displayName:displayName,email:email,role:role});
+      if(bkRes.created) bkMsg=' · 📅 fiche Booking créée';
+      else if(bkRes.reason==='exists-unlinked') bkMsg=' · 📅 fiche Booking existante (non liée)';
+    }catch(bkErr){
+      console.error('[handleCreate] booking expert auto-create failed:',bkErr);
+      bkMsg=' · ⚠️ fiche Booking à créer manuellement';
+    }
+
     // Send password reset for invitation
     if(method==='invite'){
       await sendPasswordResetEmail(auth,email);
     }
 
-    toast(method==='invite'?'✅ Invitation envoyée à '+email:'✅ Utilisateur créé');
+    toast((method==='invite'?'✅ Invitation envoyée à '+email:'✅ Utilisateur créé')+bkMsg);
     closeModal();
     await loadUsers();
   }catch(e){
