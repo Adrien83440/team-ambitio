@@ -1615,8 +1615,10 @@ async function submitSendModal() {
 
     toast('📨 Facture envoyée à ' + toList.join(', '));
     closeSendModal();
-    /* Reload pour afficher status sent + entrée historique */
-    setTimeout(function(){ location.reload(); }, 1000);
+    /* Retour à la liste des factures après envoi.
+       NB : ne PAS faire location.reload() ici — l'URL contient encore ?action=send,
+       ce qui rouvrirait automatiquement le modal d'envoi (bug de réouverture). */
+    setTimeout(function(){ location.href = 'admin-facturation.html?tab=invoices'; }, 1000);
   } catch (err) {
     console.error('[send]', err);
     toast('Erreur envoi : ' + err.message, true);
