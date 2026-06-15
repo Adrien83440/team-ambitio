@@ -34,11 +34,22 @@
 // Logique de comptage du mois courant
 // -----------------------------------
 //   used = sessions "fait" du mois (depuis c.sessions OU c.years[].sessions)
-//        + bookings confirmed isCoaching=true du mois (matchés par email)
-//          excluant ceux flaggés excludeFromQuota === true
+//        + bookings confirmed isCoaching=true du mois, MAIS uniquement ceux
+//          dont la date est >= aujourd'hui (RDV à venir), en excluant ceux
+//          flaggés excludeFromQuota === true
 //   quota = clientData.quotaOverrides[monthYear] si présent (override admin)
 //         | sinon 2 si c.programme contient "24c" (case-insensitive), sinon 1
-//   → cohérent avec coaching-shared.js (getMonthlyQuota / getSessionsInMonth)
+//   → la partie "sessions fait" est strictement alignée sur coaching-shared.js
+//     (getMonthlyQuota / getSessionsInMonth)
+//
+// Pourquoi "RDV à venir uniquement"
+// ---------------------------------
+//   Une séance déjà réalisée existe simultanément (1) en booking confirmed
+//   (le statut ne bascule jamais en "done") et (2) en session "fait" saisie
+//   dans coaching.html. Sommer les deux la comptait deux fois (quota 2/2 alors
+//   que la fiche coaching affiche 1/2). En ne comptant que les bookings futurs,
+//   un RDV passé n'est compté qu'une fois (via sessionsCount) et un RDV futur
+//   réservé reste décompté pour empêcher le surbooking.
 //
 // Overrides manuels (gérés depuis coaching.html, fiche client)
 // ------------------------------------------------------------
@@ -94,6 +105,13 @@ function countSessionsInMonth(c, monthYear /* "YYYY-MM" */) {
     if (!s.date || typeof s.date !== 'string') return false;
     return s.date.slice(0, 7) === monthYear;
   }).length;
+}
+
+// Date du jour au format "YYYY-MM-DD" dans le fuseau métier (Europe/Paris).
+// Le serveur Vercel tourne en UTC : on ancre explicitement sur Paris pour ne
+// pas exclure à tort un RDV daté d'aujourd'hui aux abords de minuit.
+function parisToday() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris' }).format(new Date());
 }
 
 module.exports = async (req, res) => {
@@ -180,6 +198,7 @@ module.exports = async (req, res) => {
     // bookings max par mois par email), pas d'enjeu de pagination.
     let bookingsCount = 0;
     try {
+      const today = parisToday(); // "YYYY-MM-DD" — borne basse des RDV à venir
       const bSnap = await db.collection('bookings')
         .where('prospect.email', '==', email)
         .get();
@@ -190,6 +209,12 @@ module.exports = async (req, res) => {
         if (b.excludeFromQuota === true) return; // exclu manuellement
         if (!b.date || typeof b.date !== 'string') return;
         if (b.date.slice(0, 7) !== monthYear) return;
+        // Ne compter QUE les RDV à venir (date >= aujourd'hui). Un RDV déjà
+        // passé correspond à une séance qui est (ou sera) enregistrée en
+        // "fait" et donc déjà comptée dans sessionsCount : l'inclure ici la
+        // compterait deux fois (bug du quota 2/2 alors que coaching affiche
+        // 1/2). Le décompte vaut donc : séances faites + RDV à venir réservés.
+        if (b.date.slice(0, 10) < today) return;
         bookingsCount++;
       });
     } catch (e) {
