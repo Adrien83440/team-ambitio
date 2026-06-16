@@ -3483,6 +3483,31 @@ function assignLeadRoundRobin(leadId, callback) {
   });
 }
 
+/* Leads déjà tentés en auto-attribution depuis les listeners parallèles
+   (re-optin / re-booking). Évite de relancer un round-robin à chaque tick
+   tant que l'écriture assignedTo ne s'est pas propagée. */
+var _resurrectAssignAttempted = {};
+
+/* Attribue en round-robin un lead "ressuscité" (re-optin ou re-booking) qui
+   n'a pas d'assignee. Les listeners parallèles (startOptinResurrectListening /
+   startResurrectListening) surfacent ces leads "Déjà CRM" dans le feed MAIS
+   ne passaient pas par le round-robin — contrairement au listener principal
+   pour les nouveaux leads. Résultat : un lead dont la fiche existante n'avait
+   pas d'assignedTo (ancien import, lead pré-attribution) restait sur "?" et
+   devait être attribué à la main.
+   Garde-fou course : si le pool n'est pas encore prêt (TEAM_MEMBERS_LIST pas
+   chargé), on NE marque PAS "tenté" → un tick ultérieur réessaiera, plutôt
+   que de geler définitivement le lead sur "?". */
+function maybeAutoAssignResurrect(d) {
+  if (!d || !d.id) return;
+  if (d.assignedTo) return;                 // déjà attribué → rien à faire
+  if (d._merged === true) return;           // doc fusionné → ignoré
+  if (_resurrectAssignAttempted[d.id]) return;
+  if (getRoundRobinPool().length === 0) return; // pool pas prêt → retry au prochain tick
+  _resurrectAssignAttempted[d.id] = true;
+  assignLeadRoundRobin(d.id);
+}
+
 /* ═══ FIRESTORE LISTENER ═══ */
 // Guard anti-double-listener : Firebase re-fire onAuthStateChanged à chaque
 // refresh de token (~1h), ce qui empile les listeners sans cleanup → doublons
@@ -3831,6 +3856,9 @@ function startResurrectListening() {
         d.id = change.doc.id;
         if (d._merged === true) return;
 
+        // Auto-attribution si re-booking non assigné (cf maybeAutoAssignResurrect).
+        maybeAutoAssignResurrect(d);
+
         // Détecte un lead "ressuscité" : son createdAt est plus ancien que
         // la fenêtre du listener principal. Il faut le forcer dans allLeads.
         var createdAtMs = (d.createdAt && d.createdAt.toMillis) ? d.createdAt.toMillis() : 0;
@@ -3921,6 +3949,9 @@ function startOptinResurrectListening() {
 
         // Tout lead avec lastOptinAt → est par définition un re-optin sur lead existant.
         optinResurrectedLeadIds[d.id] = true;
+
+        // Auto-attribution si re-optin non assigné (cf maybeAutoAssignResurrect).
+        maybeAutoAssignResurrect(d);
 
         var idx = -1;
         for (var i = 0; i < allLeads.length; i++) {
