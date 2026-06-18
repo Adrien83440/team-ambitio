@@ -302,10 +302,14 @@
         if (notif) handleNotifAction(notif, action);
         return;
       }
-      // Clic sur item
+      // Clic sur item (conversation groupée)
       const item = e.target.closest('.iw-item');
       if (item) {
         const notifId = item.dataset.notifId;
+        const groupIds = (item.dataset.groupIds || notifId).split(',').filter(Boolean);
+        // Marque toutes les notifs de la conversation comme lues (pas seulement
+        // la représentative) pour que le compteur retombe à zéro.
+        markGroupAsRead(groupIds);
         const notif = notifications.find(n => n.id === notifId);
         if (notif) handleNotifClick(notif);
       }
@@ -393,7 +397,88 @@
       return;
     }
 
-    listEl.innerHTML = filtered.map(renderItem).join('');
+    // Regroupement par conversation : clé = leadId si présent, sinon fromNumber.
+    // Une seule ligne par interlocuteur, montrant le dernier message + un
+    // compteur de non-lus. Le clic ouvre le fil complet (composer).
+    const groups = groupNotifs(filtered);
+    listEl.innerHTML = groups.map(renderGroupItem).join('');
+  }
+
+  // Regroupe une liste de notifs par conversation, triée par activité récente.
+  // Chaque groupe : { rep (notif la plus récente), count, unreadCount, ids[] }.
+  function groupNotifs(list) {
+    const map = new Map();
+    list.forEach(n => {
+      const key = n.leadId ? ('lead:' + n.leadId) : (n.fromNumber ? ('num:' + n.fromNumber) : ('id:' + n.id));
+      let g = map.get(key);
+      if (!g) {
+        g = { key: key, rep: n, count: 0, unreadCount: 0, ids: [] };
+        map.set(key, g);
+      }
+      g.count++;
+      g.ids.push(n.id);
+      if (isUnreadByMe(n)) g.unreadCount++;
+      // rep = notif la plus récente du groupe
+      if (tsToMs(n.createdAt) > tsToMs(g.rep.createdAt)) g.rep = n;
+    });
+    const arr = Array.from(map.values());
+    arr.sort((a, b) => tsToMs(b.rep.createdAt) - tsToMs(a.rep.createdAt));
+    return arr;
+  }
+
+  // Rend une ligne de conversation groupée. On réutilise data-notif-id avec
+  // l'id de la notif représentative : tout le câblage clic/actions existant
+  // continue de fonctionner sans changement.
+  function renderGroupItem(group) {
+    const notif = group.rep;
+    const icon = getIconForType(notif.type);
+    const unread = group.unreadCount > 0;
+    const leadLabel = notif.leadName || notif.fromNumber || 'Numéro inconnu';
+    const leadCls = notif.leadName ? '' : ' no-lead';
+    const sourceLabel = getSourceLabel(notif.source);
+    const typeLabel = getTypeLabel(notif.type);
+
+    const actions = [];
+    if (notif.type === 'sms' && notif.leadId) {
+      actions.push('<button class="iw-action-btn" data-action="reply" title="Répondre">💬</button>');
+    }
+    if (notif.fromNumber) {
+      actions.push('<button class="iw-action-btn" data-action="call" title="Rappeler">📞</button>');
+    }
+    if (notif.leadId) {
+      actions.push('<button class="iw-action-btn" data-action="open" title="Ouvrir fiche">👁</button>');
+    }
+
+    // Badge compteur : nombre de messages non lus dans la conversation (ou
+    // nombre total de messages si tout est lu, pour signaler un fil multi-SMS).
+    const countBadge = group.unreadCount > 0
+      ? '<span class="iw-item-count unread">' + group.unreadCount + '</span>'
+      : (group.count > 1 ? '<span class="iw-item-count">' + group.count + '</span>' : '');
+
+    const previewText = notif.preview || notif.text || notif.content ||
+      (notif.type === 'call_missed' ? 'Appel manqué' : '');
+
+    return (
+      '<div class="iw-item' + (unread ? ' unread' : '') + '" data-notif-id="' + escapeHtml(notif.id) + '" data-group-ids="' + escapeHtml(group.ids.join(',')) + '">' +
+        '<div class="iw-item-icon ' + icon.cls + '">' + icon.glyph + '</div>' +
+        '<div class="iw-item-body">' +
+          '<div class="iw-item-row1">' +
+            '<div class="iw-item-name' + leadCls + '">' + escapeHtml(leadLabel) + '</div>' +
+            '<div class="iw-item-time">' + escapeHtml(relativeTime(notif.createdAt)) + '</div>' +
+          '</div>' +
+          (previewText
+            ? '<div class="iw-item-preview' + (notif.type === 'call_missed' ? '" style="color:#ef4444;font-style:italic;' : '') + '">' + escapeHtml(previewText) + '</div>'
+            : '') +
+          '<div class="iw-item-meta">' +
+            '<span>' + escapeHtml(typeLabel) + '</span>' +
+            (sourceLabel ? '<span class="iw-meta-dot">·</span><span>' + escapeHtml(sourceLabel) + '</span>' : '') +
+            (notif.fromNumber ? '<span class="iw-meta-dot">·</span><span>' + escapeHtml(notif.fromNumber) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        (countBadge ? '<div class="iw-item-countwrap">' + countBadge + '</div>' : '') +
+        (actions.length ? '<div class="iw-item-actions">' + actions.join('') + '</div>' : '') +
+      '</div>'
+    );
   }
 
   function renderItem(notif) {
@@ -533,6 +618,16 @@
     update['readBy.' + currentUid] = firebase.firestore.FieldValue.serverTimestamp();
     firebaseDb.collection(COLLECTION).doc(notif.id).update(update).catch(err => {
       console.warn('[InboxWidget] markAsRead failed:', err);
+    });
+  }
+
+  // Marque comme lues toutes les notifs dont l'id est dans la liste (utilisé
+  // au clic sur une conversation groupée). S'appuie sur markAsRead unitaire.
+  function markGroupAsRead(ids) {
+    if (!Array.isArray(ids)) return;
+    ids.forEach(id => {
+      const n = notifications.find(x => x.id === id);
+      if (n) markAsRead(n);
     });
   }
 
