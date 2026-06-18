@@ -25,6 +25,38 @@ function phoneVariants(e164) {
   return Array.from(v).filter(Boolean);
 }
 
+// Retire le préfixe « Message: » / « Message : » que Ringover place parfois en
+// tête du corps SMS (artefact du payload, absent du SMS réel). On ne touche
+// qu'au tout début de la chaîne et on préserve le reste tel quel.
+function cleanSmsText(raw) {
+  if (!raw) return '';
+  return String(raw).replace(/^\s*message\s*:\s*/i, '').trim();
+}
+
+// Idempotence : un même SMS peut arriver via plusieurs webhooks Ringover (ou un
+// éventuel scénario Make résiduel). On déduplique sur providerMessageId :
+//   - si le lead a déjà une communication avec ce providerMessageId → déjà traité
+//   - sinon, si une notif inbox récente porte ce providerMessageId → déjà traité
+// Retourne true si le SMS a déjà été enregistré (donc à ignorer).
+async function alreadyProcessed(msgId, lead) {
+  if (!msgId) return false; // sans identifiant fiable, on ne peut pas dédupliquer ici
+  const pid = String(msgId);
+  try {
+    if (lead && Array.isArray(lead.communications)) {
+      if (lead.communications.some(c => c && String(c.providerMessageId || '') === pid)) {
+        return true;
+      }
+    }
+    const dup = await db.collection('inbox_notifications')
+      .where('providerMessageId', '==', pid)
+      .limit(1).get();
+    if (!dup.empty) return true;
+  } catch (e) {
+    console.warn('[sms-inbound] alreadyProcessed check error:', e.message);
+  }
+  return false;
+}
+
 async function findLead(fromNumber) {
   for (const variant of phoneVariants(fromNumber)) {
     try {
@@ -92,6 +124,10 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // Nettoyage du préfixe « Message: » avant tout stockage/affichage.
+    text = cleanSmsText(text);
+    if (!text) { res.status(200).end(); return; }
+
     console.log('[sms-inbound] from:', fromNumber, 'to:', toNumber, 'body:', text.substring(0,40));
 
     if (OPT_OUT.has(text.toLowerCase())) {
@@ -110,6 +146,14 @@ module.exports = async (req, res) => {
     console.log('[sms-inbound] findLead...');
     const lead = await findLead(fromNumber).catch(() => null);
     console.log('[sms-inbound] lead:', lead?.id || 'null');
+
+    // Idempotence : si ce SMS (providerMessageId) a déjà été enregistré, on sort
+    // sans dupliquer ni en base lead ni en notification inbox.
+    if (await alreadyProcessed(msgId, lead)) {
+      console.log('[sms-inbound] duplicate ignored, msgId:', String(msgId || ''));
+      res.status(200).end();
+      return;
+    }
 
     // ── Trouver ownerUid ───────────────────────────────────────────────────
     let ownerUid = null;
