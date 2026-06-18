@@ -80,6 +80,46 @@ module.exports = async (req, res) => {
   if (!auth) return;
   if (auth.role !== 'admin') return res.status(403).json({ error: 'admin only' });
 
+  // ── MODE INSPECTION ───────────────────────────────────────────────────
+  // { inspectPhone: "+33672141355" } → dump brut des communications du lead
+  // correspondant (toutes formes du numéro testées), sans rien modifier.
+  // Sert à diagnostiquer la vraie structure des doublons/préfixes.
+  if (req.body && req.body.inspectPhone) {
+    const raw = String(req.body.inspectPhone);
+    const variants = new Set([raw]);
+    const c = raw.replace(/[\s\-().]/g, '');
+    variants.add(c);
+    if (c.startsWith('+33')) { variants.add('0' + c.slice(3)); variants.add('33' + c.slice(3)); variants.add(c.slice(3)); }
+    if (c.startsWith('0') && c.length === 10) { variants.add('+33' + c.slice(1)); variants.add('33' + c.slice(1)); }
+    const out = [];
+    for (const v of variants) {
+      try {
+        const q = await db.collection('leads').where('telephone', '==', v).limit(5).get();
+        q.forEach(doc => {
+          const d = doc.data();
+          const comms = Array.isArray(d.communications) ? d.communications : [];
+          out.push({
+            leadId: doc.id,
+            matchedVariant: v,
+            name: d.nom || d.fullName || null,
+            telephone: d.telephone || null,
+            totalComms: comms.length,
+            communications: comms.map(x => ({
+              type: x && x.type, direction: x && x.direction,
+              content: x && x.content,
+              contentLen: x && x.content ? String(x.content).length : 0,
+              first30Codes: x && x.content ? Array.from(String(x.content).slice(0,30)).map(ch => ch.charCodeAt(0)) : [],
+              source: x && x.source,
+              date: x && x.date, createdAt: x && x.createdAt,
+              providerMessageId: x && x.providerMessageId,
+            })),
+          });
+        });
+      } catch (e) { out.push({ variant: v, error: e.message }); }
+    }
+    return res.json({ ok: true, mode: 'inspect', inspectPhone: raw, variantsTried: Array.from(variants), results: out });
+  }
+
   // dryRun par défaut TRUE : il faut explicitement { dryRun: false } pour écrire.
   const dryRun = !(req.body && req.body.dryRun === false);
   const limit = (req.body && Number(req.body.limit)) || 2000;
