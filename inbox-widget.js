@@ -485,8 +485,11 @@
     if (target) {
       window.location.href = target;
     } else if (notif.fromNumber) {
-      // Pas de lead → on suggère de créer la fiche depuis retargeting/leads
-      alert('Aucune fiche prospect liée à ce numéro (' + notif.fromNumber + '). Créez la fiche depuis "Leads".');
+      // Pas de fiche lead liée à ce numéro : on ouvre quand même le composer
+      // pour LIRE le SMS (porté par la notif via notif.text/content/preview)
+      // et pouvoir répondre. Avant, on bloquait l'utilisateur avec une alerte
+      // et le SMS restait invisible — alors que le contenu est disponible.
+      openComposer(notif);
     }
   }
 
@@ -575,7 +578,24 @@
     if (notif.leadId) {
       loadThreadForLead(notif.leadId);
     } else {
-      threadEl.innerHTML = '<div class="iw-comp-thread-empty">Pas d\'historique (lead non identifié)</div>';
+      // Numéro sans fiche lead : on affiche au moins le SMS porté par la notif
+      // (ringover-sms-inbound stocke le texte dans notif.text ET notif.content ;
+      //  fallback preview). L'utilisateur peut le lire et répondre directement.
+      var smsText = notif.text || notif.content || notif.preview || '';
+      var banner = '<div class="iw-comp-thread-banner">Numéro non enregistré' +
+        (notif.fromNumber ? ' (' + escapeHtml(notif.fromNumber) + ')' : '') +
+        ' — aucune fiche lead. Vous pouvez lire et répondre ici.</div>';
+      if (smsText) {
+        var t = formatTime(notif.date || notif.createdAt);
+        threadEl.innerHTML = banner +
+          '<div class="iw-comp-bubble in">' + escapeHtml(smsText) +
+            '<span class="iw-comp-bubble-time">' + escapeHtml(t) + '</span>' +
+          '</div>';
+      } else {
+        threadEl.innerHTML = banner +
+          '<div class="iw-comp-thread-empty">SMS sans contenu lisible</div>';
+      }
+      threadEl.scrollTop = threadEl.scrollHeight;
     }
   }
 
