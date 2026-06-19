@@ -931,6 +931,14 @@ doPostActions(settings,contact,null);
 function doPostActions(settings,contact,leadData){
 // Build booking URL params
 var _bkParams='&fromForm='+FORM._id;
+// Propage le mode embed vers booking.html. Quand ce formulaire tourne dans
+// une iframe (tunnel intégré sur la VSL), booking.html — chargé dans la MÊME
+// iframe lors de la redirection — doit le savoir pour : (1) afficher sa mise
+// en page compacte sans branding, et surtout (2) rediriger l'ONGLET du
+// visiteur (window.top) vers la page de confirmation personnalisée à la fin
+// du RDV, et non la seule iframe. Sans ce marqueur, booking.html se croit en
+// plein écran et la page de confirmation s'affiche coincée dans le cadre.
+if(EMBED.enabled)_bkParams+='&embed=1';
 if(contact.prenom)_bkParams+='&prenom='+encodeURIComponent(contact.prenom);
 if(contact.nom)_bkParams+='&nom='+encodeURIComponent(contact.nom);
 if(contact.email)_bkParams+='&email='+encodeURIComponent(contact.email);
