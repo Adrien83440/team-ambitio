@@ -83,7 +83,7 @@ const Timestamp = admin.firestore.Timestamp;
 const SELECT_FIELDS = [
   'createdAt', 'updatedAt', 'lastOptinAt', 'lastBookingAt',
   'importedCreatedAt', 'communications', 'timeline_history',
-  '_merged', 'source', 'stage', 'isClient', 'nom', 'email', 'telephone',
+  '_merged', '_mergedInto', 'source', 'stage', 'isClient', 'nom', 'email', 'telephone',
 ];
 
 const CLIENT_STAGES = ['closed_won_setting', 'closed_won_self'];
