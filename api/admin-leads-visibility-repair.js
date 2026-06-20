@@ -286,6 +286,12 @@ module.exports = async (req, res) => {
     const items = []; // pour le rapport (échantillon ou complet)
     const ITEM_CAP = verbose ? Infinity : 300;
 
+    // Originaux à résurrecter parce qu'un doublon _merged a reçu un re-opt-in
+    // récent (lastOptinAt/booking/comm) que Leads Live masque (doc _merged).
+    // Clé = id de l'originale (_mergedInto). Valeur = id du doublon source.
+    const mergeResurrectTargets = new Map();
+    let skippedMergedStale = 0; // doublons _merged sans re-engagement récent
+
     let lastDocId = afterId;
     let hasMore = false;
     let stopForApplyCap = false;
@@ -306,8 +312,28 @@ module.exports = async (req, res) => {
         scanned++;
         const d = doc.data() || {};
 
-        // Exclusions structurelles (jamais affichées dans Lead Live)
-        if (d._merged === true) { skippedMerged++; continue; }
+        // Doublons _merged : jamais affichés tels quels. MAIS si un doublon a
+        // reçu un re-engagement récent (le dédup d'opt-in a posé lastOptinAt sur
+        // le doublon par erreur), on doit propager la résurrection à l'ORIGINALE.
+        if (d._merged === true) {
+          skippedMerged++;
+          const mergedEngagementMs = maxDef(
+            (fieldType(d.lastOptinAt) === 'timestamp' || d.lastOptinAt) ? toMillisLenient(d.lastOptinAt) : null,
+            (fieldType(d.lastBookingAt) === 'timestamp' || d.lastBookingAt) ? toMillisLenient(d.lastBookingAt) : null,
+            extremeArrayMs(d.communications, 'max')
+          );
+          const orig = d._mergedInto;
+          if (orig && mergedEngagementMs != null && mergedEngagementMs >= resCutoff) {
+            // On garde la trace de l'engagement le plus récent par originale.
+            const prev = mergeResurrectTargets.get(orig);
+            if (!prev || mergedEngagementMs > prev.engagementMs) {
+              mergeResurrectTargets.set(orig, { fromMergedId: doc.id, engagementMs: mergedEngagementMs });
+            }
+          } else {
+            skippedMergedStale++;
+          }
+          continue;
+        }
         if (EXCLUDED_SOURCES.indexOf(d.source) >= 0) { skippedExcludedSource++; continue; }
 
         const c = classify(d, cutoff, resCutoff);
@@ -410,6 +436,46 @@ module.exports = async (req, res) => {
       if (scanned >= scanCap) { hasMore = true; break; }
     }
 
+    // ─── Propagation des résurrections depuis les doublons _merged ───
+    // Pour chaque originale ciblée par un doublon ré-optiné récemment : on la
+    // charge, et si elle est bien cachée (visibilité 30j) et non-cliente, on la
+    // résurrecte. C'est ce qui rattrape les « Sarah » (re-opt-in atterri sur le
+    // doublon _merged que Leads Live masque).
+    let resurrectedFromMerged = 0;
+    const alreadyMutated = new Set(mutations.map((m) => m.id));
+    const targetIds = Array.from(mergeResurrectTargets.keys())
+      .filter((id) => !alreadyMutated.has(id));
+    for (const origId of targetIds) {
+      if (mutations.length >= applyLimit) { hasMore = true; break; }
+      let snapDoc;
+      try {
+        snapDoc = await db.collection('leads').doc(origId).get();
+      } catch (e) { continue; }
+      if (!snapDoc.exists) continue;
+      const od = snapDoc.data() || {};
+      if (od._merged === true) continue; // l'originale ne devrait pas être elle-même un doublon
+      const oc = classify(od, cutoff, resCutoff);
+      const oClient = isClientLead(od);
+      if (oc.visibleNow || oClient) continue; // déjà visible ou cliente → on laisse
+      const src = mergeResurrectTargets.get(origId);
+      const update = {
+        lastOptinAt: admin.firestore.FieldValue.serverTimestamp(),
+        visibilityResurrectedAt: admin.firestore.FieldValue.serverTimestamp(),
+        resurrectedFromMergedTwin: src ? src.fromMergedId : true,
+      };
+      const item = {
+        id: origId, nom: od.nom || null, email: od.email || null, telephone: od.telephone || null,
+        stage: od.stage || null, createdAtType: fieldType(od.createdAt),
+        action: 'resurrect_from_merged', reason: 'reoptin_landed_on_merged_twin(' + (src ? src.fromMergedId : '?') + ')',
+        derivedCreatedAt: null, becomesVisible: true,
+        lastActivity: isoOrNull(src ? src.engagementMs : null),
+      };
+      if (items.length < ITEM_CAP) items.push(item);
+      mutations.push({ id: origId, ref: snapDoc.ref, update, kind: 'resurrect', item });
+      bump('resurrect_from_merged_twin');
+      resurrectedFromMerged++;
+    }
+
     const normalizeCount = mutations.filter((m) => m.kind.indexOf('normalize') >= 0).length;
     const resurrectCount = mutations.filter((m) => m.kind.indexOf('resurrect') >= 0).length;
 
@@ -422,6 +488,9 @@ module.exports = async (req, res) => {
       resurrectCutoffISO: new Date(resCutoff).toISOString(),
       scanned,
       skippedMerged,
+      skippedMergedStale,
+      mergeReoptinTargets: mergeResurrectTargets.size,
+      resurrectedFromMerged,
       skippedExcludedSource,
       visibleAlready,
       candidates: mutations.length,
