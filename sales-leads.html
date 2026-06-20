@@ -1239,6 +1239,16 @@ var isFirstLoad = true;
 var openCardId = null;
 var isEditingLead = false;
 
+/* ── Masquage clients coaching (RDV consultation isCoaching) + clients ──────
+   Un lead qui a un RDV coaching (booking.isCoaching === true) OU qui est déjà
+   client (status/isClient/closed_won) ne doit pas remonter dans Leads Live :
+   pas de carte par défaut, pas de popup, pas de son, pas de résurrection.
+   Il reste consultable via le filtre statut « 🏆 Client » ou la recherche.
+   Sets alimentés en live par startCoachingBookingsListening(). */
+var coachingLeadIds = {};   // { leadId: true }            (via booking.leadId)
+var coachingEmails  = {};   // { emailLowerCase: true }    (via booking.prospect.email)
+var _coachingBookingsUnsub = null;
+
 /* ── Personal mode via URL param ── */
 var personalUser = null;
 (function detectPersonalMode() {
@@ -1386,6 +1396,8 @@ var popupQueue = [];
 var popupShowing = false;
 
 function showLeadPopup(lead) {
+  // Clients coaching / clients : jamais de popup ni de son dans Leads Live.
+  if (isCoachingOrClientLead(lead)) return;
   popupQueue.push(lead);
   if (!popupShowing) processPopupQueue();
 }
@@ -1808,6 +1820,10 @@ function getBaseLeads() {
   cutoff.setDate(cutoff.getDate() - 30);
   return allLeads.filter(function(l) {
     if (l.source === 'migration_suivi_client') return false;
+    // Masquage des clients coaching / clients : retirés du feed par défaut ET
+    // des compteurs. Réapparaissent si on filtre explicitement sur le statut
+    // « Client » ou via la recherche.
+    if (isCoachingOrClientLead(l) && filterStatus !== 'client' && !filterSearch) return false;
     // Utilise la date effective (max createdAt/lastOptinAt/lastBookingAt)
     // pour ne PAS exclure les leads ressuscités via re-optin ou booking récent.
     var cd = _getLeadEffectiveDate(l);
@@ -3502,6 +3518,7 @@ function maybeAutoAssignResurrect(d) {
   if (!d || !d.id) return;
   if (d.assignedTo) return;                 // déjà attribué → rien à faire
   if (d._merged === true) return;           // doc fusionné → ignoré
+  if (isCoachingOrClientLead(d)) return;    // client coaching / client → pas d'auto-attribution
   if (_resurrectAssignAttempted[d.id]) return;
   if (getRoundRobinPool().length === 0) return; // pool pas prêt → retry au prochain tick
   _resurrectAssignAttempted[d.id] = true;
@@ -3720,6 +3737,48 @@ document.addEventListener('focusout', function(e) {
     }, 200);
   }
 });
+
+/* ═══ MASQUAGE COACHING / CLIENT ═══
+   Prédicat central : ce lead doit-il être masqué de Leads Live ?
+   - client  : status 'client' OU isClient===true OU stage closed_won_*
+   - coaching: possède un RDV de consultation coaching (booking.isCoaching),
+               repéré par leadId ou par email. */
+function isCoachingOrClientLead(l) {
+  if (!l) return false;
+  if (l.status === 'client') return true;
+  if (l.isClient === true) return true;
+  if (l.stage === 'closed_won_setting' || l.stage === 'closed_won_self') return true;
+  if (l.id && coachingLeadIds[l.id] === true) return true;
+  var em = (l.email || '').trim().toLowerCase();
+  if (em && coachingEmails[em] === true) return true;
+  return false;
+}
+
+/* Listener live des RDV coaching : alimente coachingLeadIds + coachingEmails.
+   where('isCoaching','==',true) → index simple (pas de composite). Volume
+   faible (RDV coaching internes). On garde le flag même si un RDV est supprimé
+   (un client reste un client). Re-render au fil de l'eau pour qu'une fiche
+   déjà affichée disparaisse dès qu'on apprend qu'elle est coaching/cliente. */
+function startCoachingBookingsListening() {
+  if (_coachingBookingsUnsub) { _coachingBookingsUnsub(); _coachingBookingsUnsub = null; }
+  _coachingBookingsUnsub = db.collection('bookings')
+    .where('isCoaching', '==', true)
+    .onSnapshot(function(snap) {
+      var changed = false;
+      snap.docChanges().forEach(function(ch) {
+        if (ch.type === 'removed') return;
+        var b = ch.doc.data();
+        if (b.leadId && coachingLeadIds[b.leadId] !== true) { coachingLeadIds[b.leadId] = true; changed = true; }
+        var em = '';
+        if (b.prospect && b.prospect.email) em = String(b.prospect.email).trim().toLowerCase();
+        else if (b.email) em = String(b.email).trim().toLowerCase();
+        if (em && coachingEmails[em] !== true) { coachingEmails[em] = true; changed = true; }
+      });
+      if (changed && !isEditingLead && typeof renderFeed === 'function') renderFeed();
+    }, function(err) {
+      console.warn('[leads-coaching] listener error (index isCoaching manquant ?):', err.message);
+    });
+}
 
 function startListening() {
   // Cleanup si re-appel (défensif)
@@ -4413,6 +4472,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
           startResurrectListening();
           startOptinResurrectListening();
           startBookingBridge();
+          startCoachingBookingsListening();
         }
       }).catch(function() {
         if (!_leadsListenersStarted) {
@@ -4421,6 +4481,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
           startResurrectListening();
           startOptinResurrectListening();
           startBookingBridge();
+          startCoachingBookingsListening();
         }
       });
     } else {
@@ -4428,6 +4489,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
       if (_leadsListenerUnsub) { _leadsListenerUnsub(); _leadsListenerUnsub = null; }
       if (_leadsResurrectListenerUnsub) { _leadsResurrectListenerUnsub(); _leadsResurrectListenerUnsub = null; }
       if (_bookingBridgeUnsub) { _bookingBridgeUnsub(); _bookingBridgeUnsub = null; }
+      if (_coachingBookingsUnsub) { _coachingBookingsUnsub(); _coachingBookingsUnsub = null; }
       _leadsListenersStarted = false;
       // Show login overlay
       var overlay = document.getElementById('appLoginOverlay');
