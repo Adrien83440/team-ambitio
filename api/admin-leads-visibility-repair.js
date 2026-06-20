@@ -188,7 +188,11 @@ function isClientLead(d) {
 
 // ─── Cœur : classe une fiche et décide de l'action ──────────────────────────
 
-function classify(d, cutoff) {
+// visCutoff = fenêtre de VISIBILITÉ réelle de Leads Live (par défaut 30j, celle
+//   des listeners onSnapshot) → sert à décider si une fiche est « affichée ».
+// resCutoff = fenêtre d'ÉLIGIBILITÉ à la résurrection (paramétrable, ex 7j) →
+//   sert à décider si on rattrape la fiche. Les deux sont distinctes exprès.
+function classify(d, visCutoff, resCutoff) {
   const caType = fieldType(d.createdAt);
   const caGood = caType === 'timestamp';
   const caMs = toMillisLenient(d.createdAt);
@@ -202,35 +206,38 @@ function classify(d, cutoff) {
   const commMs = extremeArrayMs(d.communications, 'max');
   const tlMs = timelineExtremeMs(d.timeline_history, 'max');
 
-  // Reproduit la visibilité ACTUELLE dans Leads Live :
+  // Reproduit la visibilité ACTUELLE dans Leads Live (TOUJOURS sur visCutoff) :
   //   - un listener doit charger la fiche
   //   - puis le filtre client (effectiveDate = max(createdAt,lastOptin,lastBooking)
   //     parsé lenient) doit la garder dans la fenêtre.
   // NB : une string createdAt passe le where serveur (string > timestamp) donc
   // la fiche EST chargée, puis le filtre client tranche sur la vraie date.
-  const loadedMain = (caGood && caMs != null && caMs >= cutoff) || caType === 'string';
-  const loadedOptin = loGood && loMs != null && loMs >= cutoff;
-  const loadedBooking = lbGood && lbMs != null && lbMs >= cutoff;
+  const loadedMain = (caGood && caMs != null && caMs >= visCutoff) || caType === 'string';
+  const loadedOptin = loGood && loMs != null && loMs >= visCutoff;
+  const loadedBooking = lbGood && lbMs != null && lbMs >= visCutoff;
   const loaded = loadedMain || loadedOptin || loadedBooking;
 
   const clientEffMs = maxDef(caMs, loMs, lbMs);
-  const clientKeeps = clientEffMs != null && clientEffMs >= cutoff;
+  const clientKeeps = clientEffMs != null && clientEffMs >= visCutoff;
   const visibleNow = loaded && clientKeeps;
 
-  // Engagement réel récent (déclencheur de résurrection) : opt-in / booking /
-  // communication / création datée < 30j (lenient).
+  // Engagement réel (opt-in / booking / communication / création datée, lenient).
   const engagementMs = maxDef(loMs, lbMs, commMs, caMs);
-  const hasRecentEngagement = engagementMs != null && engagementMs >= cutoff;
+  // Déclencheur de résurrection : engagement dans la fenêtre resCutoff (ex 7j).
+  const hasRecentEngagement = engagementMs != null && engagementMs >= resCutoff;
+  // Engagement présent dans la fenêtre de visibilité (ex 30j) mais hors fenêtre de
+  // résurrection → fiche qu'on choisit délibérément de NE PAS rattraper (reporting).
+  const engagementWithinVis = engagementMs != null && engagementMs >= visCutoff;
 
   // Activité récente au sens large (reporting) : + timeline + updatedAt.
   const anyRecentMs = maxDef(engagementMs, tlMs, updMs);
-  const hasRecentActivity = anyRecentMs != null && anyRecentMs >= cutoff;
+  const hasRecentActivity = anyRecentMs != null && anyRecentMs >= visCutoff;
 
   return {
     caType, caGood, caMs,
     loMs, lbMs, updMs, commMs, tlMs,
     visibleNow, clientKeeps, loaded,
-    hasRecentEngagement, hasRecentActivity,
+    hasRecentEngagement, engagementWithinVis, hasRecentActivity,
     engagementMs, anyRecentMs,
   };
 }
@@ -253,12 +260,17 @@ module.exports = async (req, res) => {
     const apply = String(q.apply || '') === '1';
     const verbose = String(q.verbose || '') === '1';
     const windowDays = Math.max(1, parseInt(q.windowDays, 10) || 30);
+    // Fenêtre de résurrection (rattrapage). Par défaut = windowDays (rétrocompat).
+    // Ex : windowDays=30 (visibilité Leads Live) + resurrectDays=7 (on ne rattrape
+    // que les fiches non affichées dont l'activité date de < 7 jours).
+    const resurrectDays = Math.max(1, parseInt(q.resurrectDays, 10) || windowDays);
     const scanCap = Math.max(1, parseInt(q.max, 10) || 50000);
     const applyLimit = Math.max(1, parseInt(q.applyLimit, 10) || 1500);
     const afterId = (q.after && String(q.after)) || null;
     const pageSize = 300;
 
-    const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;       // visibilité
+    const resCutoff = Date.now() - resurrectDays * 24 * 60 * 60 * 1000; // résurrection
 
     // ─── Stats ───
     let scanned = 0;
@@ -298,7 +310,7 @@ module.exports = async (req, res) => {
         if (d._merged === true) { skippedMerged++; continue; }
         if (EXCLUDED_SOURCES.indexOf(d.source) >= 0) { skippedExcludedSource++; continue; }
 
-        const c = classify(d, cutoff);
+        const c = classify(d, cutoff, resCutoff);
 
         if (c.visibleNow && c.caGood) {
           // Déjà visible ET createdAt sain → rien à faire.
@@ -326,16 +338,23 @@ module.exports = async (req, res) => {
         const needResurrect = !visibleAfterNormalize && c.hasRecentEngagement && !client;
 
         if (!needNormalize && !needResurrect) {
-          // Caché mais aucune action sûre (ex : vieux lead simplement édité,
-          // sans engagement récent). On le signale sans le toucher.
+          // Caché mais aucune action. Trois cas distincts pour la transparence :
+          //  - client → on ne touche pas (feed sales)
+          //  - engagement présent mais HORS fenêtre de résurrection (ex : activité
+          //    entre 7 et 30j alors que resurrectDays=7) → délibérément non rattrapé
+          //  - aucun engagement récent → vieux lead, correctement hors fenêtre
           if (!c.visibleNow) {
             hiddenNoAction++;
-            bump(client ? 'hidden_client_no_action' : 'hidden_no_recent_engagement');
+            let reasonKey;
+            if (client) reasonKey = 'client_no_action';
+            else if (c.engagementWithinVis && !c.hasRecentEngagement) reasonKey = 'engagement_beyond_resurrect_window';
+            else reasonKey = 'no_recent_engagement';
+            bump('hidden_' + reasonKey);
             if (items.length < ITEM_CAP) {
               items.push({
                 id: doc.id, nom: d.nom || null, email: d.email || null, telephone: d.telephone || null,
                 stage: d.stage || null, createdAtType: c.caType,
-                action: 'none', reason: client ? 'client_no_action' : 'no_recent_engagement',
+                action: 'none', reason: reasonKey,
                 updatedAt: isoOrNull(c.updMs), lastActivity: isoOrNull(c.anyRecentMs),
               });
             }
@@ -398,7 +417,9 @@ module.exports = async (req, res) => {
       ok: true,
       mode: apply ? 'apply' : 'dry-run',
       windowDays,
+      resurrectDays,
       cutoffISO: new Date(cutoff).toISOString(),
+      resurrectCutoffISO: new Date(resCutoff).toISOString(),
       scanned,
       skippedMerged,
       skippedExcludedSource,
@@ -432,6 +453,7 @@ module.exports = async (req, res) => {
       actorUid: auth.uid,
       actorEmail: auth.email || null,
       windowDays,
+      resurrectDays,
       cutoffISO: summary.cutoffISO,
       scanned,
       toNormalize: normalizeCount,
