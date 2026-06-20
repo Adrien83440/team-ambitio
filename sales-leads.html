@@ -4133,6 +4133,29 @@ function findExistingLead(email, phone) {
   });
 }
 
+/* ── Coercition createdAt (fix « leads qui ne remontent pas ») ──────────
+   Un createdAt qui n'est pas un Timestamp Firestore (nombre, string, absent)
+   casse le listener Leads Live : where('createdAt','>=',Timestamp) combiné à
+   orderBy('createdAt') exclut SILENCIEUSEMENT tout ce qui n'est pas un vrai
+   Timestamp. Le booking_event vient de Make → on ne fait JAMAIS confiance à
+   be.createdAt : on convertit en Timestamp si exploitable, sinon serverTimestamp(). */
+function _coerceCreatedAtTs(raw) {
+  try {
+    if (raw && typeof raw.toDate === 'function') return raw;                 // déjà un Timestamp
+    if (raw && typeof raw.seconds === 'number')                              // Timestamp-like (objet)
+      return firebase.firestore.Timestamp.fromMillis(raw.seconds * 1000);
+    if (typeof raw === 'number' && isFinite(raw)) {
+      var ms = raw < 1e12 ? raw * 1000 : raw;                                // secondes vs millis
+      return firebase.firestore.Timestamp.fromMillis(ms);
+    }
+    if (typeof raw === 'string' && raw.trim()) {
+      var d = new Date(raw);
+      if (!isNaN(d.getTime())) return firebase.firestore.Timestamp.fromDate(d);
+    }
+  } catch (e) {}
+  return firebase.firestore.FieldValue.serverTimestamp();
+}
+
 function startBookingBridge() {
   // Cleanup si re-appel (défensif — l'onAuth peut re-fire)
   if (_bookingBridgeUnsub) { _bookingBridgeUnsub(); _bookingBridgeUnsub = null; }
@@ -4316,7 +4339,7 @@ function startBookingBridge() {
               notesHistory:   [],
               timeline_history: [{ text: '✨ Lead créé via form Self-Booking', date: nowFr, color: '#a78bfa' }],
               bookingEventId: beId,
-              createdAt:      be.createdAt || firebase.firestore.FieldValue.serverTimestamp(),
+              createdAt:      _coerceCreatedAtTs(be.createdAt),
               updatedAt:      firebase.firestore.FieldValue.serverTimestamp()
             };
 
