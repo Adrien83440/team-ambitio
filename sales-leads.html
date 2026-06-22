@@ -1694,19 +1694,6 @@ function _getLeadEffectiveDate(l) {
   return new Date(Math.max.apply(null, dates.map(function(d){ return d.getTime(); })));
 }
 
-// Helper : date d'ARRIVÉE d'un lead = createdAt (immuable). C'est la SEULE clé
-// de tri du feed Leads Live → aucune action (message, RDV, optin, statut) ne
-// peut déplacer un lead. Fallback sur la date effective uniquement si createdAt
-// est absent (cas marginal).
-function _getLeadCreatedDate(l) {
-  if (!l) return null;
-  if (l.createdAt) {
-    var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
-    if (d && !isNaN(d.getTime())) return d;
-  }
-  return _getLeadEffectiveDate(l);
-}
-
 function getFilteredLeads() {
   var list = getBaseLeads();
   var searching = !!filterSearch;
@@ -1719,14 +1706,14 @@ function getFilteredLeads() {
       var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
       var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
       list = list.filter(function(l) {
-        var d = _getLeadCreatedDate(l);
+        var d = _getLeadEffectiveDate(l);
         if (!d) return false;
         return d >= todayStart && d <= todayEnd;
       });
     } else if (filterPeriod === 'week') {
       var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
       list = list.filter(function(l) {
-        var d = _getLeadCreatedDate(l);
+        var d = _getLeadEffectiveDate(l);
         if (!d) return false;
         return d >= weekAgo;
       });
@@ -1736,7 +1723,7 @@ function getFilteredLeads() {
       var cFrom = customDateFrom;
       var cTo = customDateTo || new Date(customDateFrom.getFullYear(), customDateFrom.getMonth(), customDateFrom.getDate(), 23, 59, 59, 999);
       list = list.filter(function(l) {
-        var d = _getLeadCreatedDate(l);
+        var d = _getLeadEffectiveDate(l);
         if (!d) return false;
         return d >= cFrom && d <= cTo;
       });
@@ -1806,13 +1793,13 @@ function getFilteredLeads() {
     });
   }
 
-  // Tri STRICT par date de création (date d'arrivée du lead), décroissant.
-  // createdAt étant immuable, AUCUNE action de la setteuse (message, RDV, optin,
-  // changement de statut…) ne peut déplacer un lead dans le feed. Demande
-  // explicite Adrien : l'ordre ne doit jamais bouger quand on travaille un lead.
+  // Tri par "date d'activité" décroissante : on prend le max entre createdAt,
+  // lastOptinAt et lastBookingAt. Garantit que les leads les plus récemment
+  // actifs (création OU re-optin OU re-booking) remontent en haut, et qu'un
+  // lead ressuscité ne reste pas coincé en tête au-delà de sa date d'activité.
   list.sort(function(a, b) {
-    var da = _getLeadCreatedDate(a);
-    var db = _getLeadCreatedDate(b);
+    var da = _getLeadEffectiveDate(a);
+    var db = _getLeadEffectiveDate(b);
     if (!da && !db) return 0;
     if (!da) return 1;
     if (!db) return -1;
@@ -1950,7 +1937,7 @@ function updatePeriodCounts() {
     var l = base[i];
     if (!matchesCommonFilters(l)) continue;
     counts.all++;
-    var d = _getLeadCreatedDate(l);
+    var d = _getLeadEffectiveDate(l);
     if (d) {
       if (d >= todayStart && d <= todayEnd) counts.today++;
       if (d >= weekAgo) counts.week++;
@@ -1992,7 +1979,7 @@ function rebuildTypeFilters() {
   function inPeriod(l) {
     if (searching) return true; // la recherche bypass la période
     if (filterPeriod === 'all') return true;
-    var d = _getLeadCreatedDate(l);
+    var d = _getLeadEffectiveDate(l);
     if (filterPeriod === 'unprocessed') return !l.status || l.status === 'nouveau';
     if (!d) return false;
     if (filterPeriod === 'today')  return d >= todayStart && d <= todayEnd;
@@ -2506,7 +2493,8 @@ function renderCard(l) {
   var statusObj = getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
   var isNew = l._isNew;
-  var ago = timeAgo(_getLeadCreatedDate(l) || l.createdAt);
+  var effectiveD = _getLeadEffectiveDate(l);
+  var ago = timeAgo(effectiveD || l.createdAt);
 
   var _tel = (l.telephone || '').toString().replace(/\s/g, '');
   var h = '<div class="ld-card' + (isNew ? ' new' : '') + '" data-lead-id="' + id + '" data-phone="' + escAttr(_tel) + '" data-name="' + escAttr(l.nom || '') + '">';
