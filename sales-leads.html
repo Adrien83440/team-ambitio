@@ -1694,6 +1694,19 @@ function _getLeadEffectiveDate(l) {
   return new Date(Math.max.apply(null, dates.map(function(d){ return d.getTime(); })));
 }
 
+// Helper : date d'ARRIVÉE d'un lead = createdAt (immuable). C'est la SEULE clé
+// de tri du feed Leads Live → aucune action (message, RDV, optin, statut) ne
+// peut déplacer un lead. Fallback sur la date effective uniquement si createdAt
+// est absent (cas marginal).
+function _getLeadCreatedDate(l) {
+  if (!l) return null;
+  if (l.createdAt) {
+    var d = l.createdAt.toDate ? l.createdAt.toDate() : new Date(l.createdAt);
+    if (d && !isNaN(d.getTime())) return d;
+  }
+  return _getLeadEffectiveDate(l);
+}
+
 function getFilteredLeads() {
   var list = getBaseLeads();
   var searching = !!filterSearch;
@@ -1793,13 +1806,13 @@ function getFilteredLeads() {
     });
   }
 
-  // Tri par "date d'activité" décroissante : on prend le max entre createdAt,
-  // lastOptinAt et lastBookingAt. Garantit que les leads les plus récemment
-  // actifs (création OU re-optin OU re-booking) remontent en haut, et qu'un
-  // lead ressuscité ne reste pas coincé en tête au-delà de sa date d'activité.
+  // Tri STRICT par date de création (date d'arrivée du lead), décroissant.
+  // createdAt étant immuable, AUCUNE action de la setteuse (message, RDV, optin,
+  // changement de statut…) ne peut déplacer un lead dans le feed. Demande
+  // explicite Adrien : l'ordre ne doit jamais bouger quand on travaille un lead.
   list.sort(function(a, b) {
-    var da = _getLeadEffectiveDate(a);
-    var db = _getLeadEffectiveDate(b);
+    var da = _getLeadCreatedDate(a);
+    var db = _getLeadCreatedDate(b);
     if (!da && !db) return 0;
     if (!da) return 1;
     if (!db) return -1;
