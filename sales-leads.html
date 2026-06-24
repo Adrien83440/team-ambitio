@@ -4236,11 +4236,16 @@ function startBookingBridge() {
             // bridge-fix-2026-05-05 : poser lastBookingAt pour que le lead
             // remonte dans Leads Live via startResurrectListening (sinon le lead
             // gardait son ancienne position et le sales ne voyait pas le nouveau RDV).
+            // Exception : setter_booking = c'est la setteuse qui a posé le RDV depuis
+            // sales-contact.html → le lead ne doit PAS changer de position dans le feed.
+            var isSetterBooking = (be.source === 'setter_booking');
             var update = {
               bookingEventId: beId,
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-              lastBookingAt: firebase.firestore.FieldValue.serverTimestamp()
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
+            if (!isSetterBooking) {
+              update.lastBookingAt = firebase.firestore.FieldValue.serverTimestamp();
+            }
 
             // ═══════════════════════════════════════════════════════════════
             // RDV pris sur lead existant → archivage de l'état actuel dans
