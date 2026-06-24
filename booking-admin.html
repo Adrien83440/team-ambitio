@@ -871,9 +871,11 @@ inp.addEventListener('change',function(){autoSaveCd(true);});
 });
 // Toggle isCoaching : force re-render après save pour rafraîchir couleurs/knob.
 var _tIsCoaching=document.getElementById('cd-isCoaching');
-// Toggle isSetterOnly : idem.
 var _tIsSetterOnly=document.getElementById('cd-isSetterOnly');
 if(_tIsCoaching){_tIsCoaching.addEventListener('change',function(){
+  setTimeout(function(){if(cdSection==='details')renderCdSection();},900);
+});}
+if(_tIsSetterOnly){_tIsSetterOnly.addEventListener('change',function(){
   setTimeout(function(){if(cdSection==='details')renderCdSection();},900);
 });}
 }
