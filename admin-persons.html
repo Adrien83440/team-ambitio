@@ -783,6 +783,18 @@ function renderDetail(){
     + '</div>'
     + '</div>';
 
+  /* Contrat signé (détecté à la conversion client — sert de source au programme coaching) */
+  if(p.signedContractTemplateName){
+    html += '<div class="ap-card">'
+      + '<div style="display:flex;align-items:center;gap:7px;margin-bottom:14px;font-size:13px;font-weight:600;color:var(--ap-text-muted)"><i class="ti ti-file-text"></i>Contrat signé</div>'
+      + '<div class="ap-attr" style="grid-template-columns:repeat(3,1fr)">'
+      +   '<div><div class="ap-attr-label">Contrat</div><div class="ap-attr-value">'+esc(p.signedContractTemplateName)+'</div></div>'
+      +   '<div><div class="ap-attr-label">Programme coaching</div><div class="ap-attr-value">'+esc(p.detectedProgramme||'— (à compléter)')+'</div></div>'
+      +   '<div><div class="ap-attr-label">Signé le</div><div class="ap-attr-value">'+fmtDate(p.signedContractSignedAt)+'</div></div>'
+      + '</div>'
+      + '</div>';
+  }
+
   /* Société (si applicable) */
   if(p.clientType === 'company' || p.companyName || p.siret){
     html += '<div class="ap-card">'
