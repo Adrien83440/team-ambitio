@@ -69,7 +69,21 @@ module.exports = async (req, res) => {
 
     if (pay.type === 'installments' && pay.installmentsCount > 1) {
       // Abonnement mensuel
-      const startDate = pay.startDate || new Date().toISOString().slice(0, 10);
+      let startDate = pay.startDate || new Date().toISOString().slice(0, 10);
+
+      // GoCardless refuse une start_date antérieure à la première date de
+      // prélèvement possible du mandat (préavis SEPA). On lit
+      // next_possible_charge_date et on cale la start_date dessus si la date
+      // voulue est trop tôt, pour éviter le 422
+      // "must be on or after mandate's next_possible_charge_date".
+      try {
+        const mandateResp = await gcRequest('GET', `/mandates/${pay.gcMandateId}`);
+        const npcd = mandateResp && mandateResp.mandates && mandateResp.mandates.next_possible_charge_date;
+        if (npcd && startDate < npcd) startDate = npcd;
+      } catch (mErr) {
+        console.warn('[gocardless-payment] lecture mandat impossible, start_date conservée:', mErr.message);
+      }
+
       const subResp = await gcRequest('POST', '/subscriptions', {
         subscriptions: {
           amount: amountCents,
