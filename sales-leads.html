@@ -1712,6 +1712,58 @@ function _getLeadEffectiveDate(l) {
   return new Date(Math.max.apply(null, dates.map(function(d){ return d.getTime(); })));
 }
 
+// ── Dates "réelles" d'un lead (cf. api/_leadDates.js côté serveur) ──────────
+// Pour les leads importés de Bigin, createdAt = date d'import (pas la vraie).
+// La vraie date vit dans dateWebinaire / importedCreatedAt. On parse souple.
+function _parseFlexDate(v) {
+  if (v == null) return null;
+  if (typeof v === 'object') {
+    if (v.toDate) { try { return v.toDate(); } catch (e) { return null; } }
+    if (typeof v.seconds === 'number') return new Date(v.seconds * 1000);
+    var dx = new Date(v); return isNaN(dx.getTime()) ? null : dx;
+  }
+  if (typeof v === 'number') return new Date(v < 1e12 ? v * 1000 : v);
+  if (typeof v !== 'string') return null;
+  var s = v.trim(); if (!s) return null;
+  var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (iso) {
+    var d = new Date(+iso[1], +iso[2] - 1, +iso[3], +(iso[4] || 0), +(iso[5] || 0), +(iso[6] || 0));
+    return isNaN(d.getTime()) ? null : d;
+  }
+  var fr = s.match(/(\d{1,2})\s+([A-Za-zàâäéèêëïîôöûüç]+)\.?\s+(\d{4})/);
+  if (fr) {
+    var table = [['janv',0],['févr',1],['fevr',1],['mars',2],['avri',3],['mai',4],['juin',5],['juil',6],['aout',7],['août',7],['sept',8],['octo',9],['nove',10],['déce',11],['dece',11]];
+    var mn = fr[2].toLowerCase(), idx = -1;
+    for (var i = 0; i < table.length; i++) { if (mn.indexOf(table[i][0]) === 0) { idx = table[i][1]; break; } }
+    if (idx >= 0) { var d2 = new Date(+fr[3], idx, +fr[1]); return isNaN(d2.getTime()) ? null : d2; }
+  }
+  var p = Date.parse(s); return isNaN(p) ? null : new Date(p);
+}
+
+// Vraie date d'entrée = la PLUS ANCIENNE parmi webinaire / Bigin / createdAt.
+function _realEntryDate(l) {
+  if (!l) return null;
+  var cands = [];
+  [l.dateWebinaire, l.importedCreatedAt, l.createdAt].forEach(function(v) {
+    var d = _parseFlexDate(v); if (d) cands.push(d.getTime());
+  });
+  if (!cands.length) return null;
+  return new Date(Math.min.apply(null, cands));
+}
+
+// Comme formatDateTimeFr mais AVEC l'année (utile pour les dates anciennes)
+// et SANS l'heure quand elle vaut minuit (ex : date de webinaire sans heure).
+function formatSmartFr(ts) {
+  if (!ts) return '—';
+  var d = ts && ts.toDate ? ts.toDate() : (ts instanceof Date ? ts : new Date(ts));
+  if (!d || isNaN(d.getTime())) return '—';
+  var jours = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+  var base = jours[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1) + '/' + d.getFullYear();
+  if (d.getHours() === 0 && d.getMinutes() === 0) return base;
+  var hh = ('0' + d.getHours()).slice(-2), mm = ('0' + d.getMinutes()).slice(-2);
+  return base + ' à ' + hh + ':' + mm;
+}
+
 function getFilteredLeads() {
   var list = getBaseLeads();
   var searching = !!filterSearch;
@@ -2371,7 +2423,10 @@ function renderEngagementHistoryBlock(l, id) {
   var entriesHtml = '';
   sorted.forEach(function(e, idx){
     if (!e) return;
-    var dateLbl = e.archivedAt ? formatDateTimeFr(e.archivedAt) : 'date inconnue';
+    // Date du passage : occurredAt (posé à l'archivage) ; à défaut, pour la
+    // plus ancienne entrée, la vraie date d'entrée du lead ; sinon archivedAt.
+    var _occ = e.occurredAt || (idx === sorted.length - 1 ? _realEntryDate(l) : null);
+    var dateLbl = _occ ? formatSmartFr(_occ) : (e.archivedAt ? formatSmartFr(e.archivedAt) : 'date inconnue');
     var bc      = badgeClassFor(e.type);
     var lbl     = labelFor(e.type);
     var trig    = triggerLabel(e.archivedFor);
@@ -2590,7 +2645,12 @@ function renderCard(l) {
   if (l.defi) h += '<div class="ld-detail-row"><span class="ld-detail-label">Défi</span><span class="ld-detail-val">' + escHtml(l.defi) + '</span></div>';
   if (l.disponibilite) h += '<div class="ld-detail-row"><span class="ld-detail-label">Dispo</span><span class="ld-detail-val">' + escHtml(l.disponibilite) + '</span></div>';
   if (l.timeline) h += '<div class="ld-detail-row"><span class="ld-detail-label">Mise en place</span><span class="ld-detail-val">' + escHtml(l.timeline) + '</span></div>';
-  h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(_getLeadEffectiveDate(l) || l.createdAt) + '</span></div>';
+  var _effRecu = _getLeadEffectiveDate(l) || (l.createdAt ? _parseFlexDate(l.createdAt) : null);
+  var _entryInit = _realEntryDate(l);
+  if (_entryInit && (!_effRecu || _effRecu.getTime() - _entryInit.getTime() > 86400000)) {
+    h += '<div class="ld-detail-row"><span class="ld-detail-label">Entrée initiale</span><span class="ld-detail-val">' + formatSmartFr(_entryInit) + '</span></div>';
+  }
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(_effRecu || l.createdAt) + '</span></div>';
 
   // 📦 Historique Zoho — n'apparaît QUE pour les leads importés depuis l'ancien CRM Zoho/Bigin
   if (l.zohoCreatedAt || l.zohoModifiedAt || l.zohoLastActivityAt || l.zohoGestionnaire || l.zohoOrigine) {
