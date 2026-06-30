@@ -1292,6 +1292,24 @@ function escAttr(s) {
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Décode les UTM percent-encodés (ex: "3%29NEW-%C3%A9t%C3%A9" -> "3)NEW-été").
+// Certains leads arrivent via le webhook opt-in avec un utm_campaign brut,
+// non décodé. Décodage défensif : si la valeur n'est pas/plus encodée, ou si
+// une séquence % est invalide (ex: "Promo 50%"), on retourne la valeur telle
+// quelle sans jamais planter.
+function decodeUtm(v) {
+  if (v == null) return v;
+  var s = String(v);
+  if (s.indexOf('%') === -1) return s;
+  try {
+    return decodeURIComponent(s);
+  } catch (e) {
+    return s.replace(/(?:%[0-9A-Fa-f]{2})+/g, function (m) {
+      try { return decodeURIComponent(m); } catch (_) { return m; }
+    });
+  }
+}
+
 function sanitizeCommContent(raw) {
   if (!raw) return '';
   var s = raw;
@@ -1414,7 +1432,7 @@ function processPopupQueue() {
   h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Nom</span><span class="ld-popup-field-val">' + escHtml(lead.nom) + '</span></div>';
   if (lead.telephone) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Téléphone</span><span class="ld-popup-field-val">' + escHtml(lead.telephone) + '</span></div>';
   if (lead.email) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Email</span><span class="ld-popup-field-val">' + escHtml(lead.email) + '</span></div>';
-  if (lead.utm) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Source</span><span class="ld-popup-field-val">' + escHtml(lead.utm) + '</span></div>';
+  if (lead.utm) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Source</span><span class="ld-popup-field-val">' + escHtml(decodeUtm(lead.utm)) + '</span></div>';
   if (lead.secteur) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Secteur</span><span class="ld-popup-field-val">' + escHtml(lead.secteur) + '</span></div>';
   if (lead.ca) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">CA</span><span class="ld-popup-field-val">' + escHtml(lead.ca) + '</span></div>';
   if (setterObj) {
@@ -1766,7 +1784,7 @@ function getFilteredLeads() {
       var statusLabel = statusObj ? (statusObj.label || '') : '';
       var typeLabel = (typeof LEAD_TYPES !== 'undefined' && LEAD_TYPES[l.type]) ? (LEAD_TYPES[l.type].label || '') : '';
       var hay = _normForSearch([
-        l.nom, l.email, l.utm, l.secteur, l.ca, l.defi,
+        l.nom, l.email, decodeUtm(l.utm), l.secteur, l.ca, l.defi,
         l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
         l.status, statusLabel, assigned, memberFull, l.id
       ].filter(Boolean).join(' \u0001 '));
@@ -1903,7 +1921,7 @@ function updatePeriodCounts() {
       var statusLabel = statusObj ? (statusObj.label || '') : '';
       var typeLabel = (typeof LEAD_TYPES !== 'undefined' && LEAD_TYPES[l.type]) ? (LEAD_TYPES[l.type].label || '') : '';
       var hay = _normForSearch([
-        l.nom, l.email, l.utm, l.secteur, l.ca, l.defi,
+        l.nom, l.email, decodeUtm(l.utm), l.secteur, l.ca, l.defi,
         l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
         l.status, statusLabel, assigned, memberFull, l.id
       ].filter(Boolean).join(' \u0001 '));
@@ -2000,7 +2018,7 @@ function rebuildTypeFilters() {
     var statusLabel = statusObj ? (statusObj.label || '') : '';
     var typeLabel = (typeof LEAD_TYPES !== 'undefined' && LEAD_TYPES[l.type]) ? (LEAD_TYPES[l.type].label || '') : '';
     var hay = _normForSearch([
-      l.nom, l.email, l.utm, l.secteur, l.ca, l.defi,
+      l.nom, l.email, decodeUtm(l.utm), l.secteur, l.ca, l.defi,
       l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
       l.status, statusLabel, assigned, memberFull, l.id
     ].filter(Boolean).join(' \u0001 '));
@@ -2362,7 +2380,7 @@ function renderEngagementHistoryBlock(l, id) {
     // Résumé sur la ligne (visible avant dépliage)
     var summary = stageLbl;
     if (e.formTitle) summary += ' · ' + e.formTitle;
-    else if (e.utm) summary += ' · ' + e.utm;
+    else if (e.utm) summary += ' · ' + decodeUtm(e.utm);
 
     var entryId = id + '_eng_' + idx;
     entriesHtml += '<div class="ld-eng-entry" data-eng-entry="' + entryId + '">';
@@ -2379,7 +2397,7 @@ function renderEngagementHistoryBlock(l, id) {
     if (e.type)         entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Tunnel</span><span class="ld-eng-detail-val">' + escHtml(lbl) + '</span></div>';
     if (e.stage)        entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Étape</span><span class="ld-eng-detail-val">' + escHtml(stageLbl) + '</span></div>';
     if (e.status)       entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Statut</span><span class="ld-eng-detail-val">' + escHtml(e.status) + '</span></div>';
-    if (e.utm)          entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">UTM</span><span class="ld-eng-detail-val">' + escHtml(e.utm) + '</span></div>';
+    if (e.utm)          entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">UTM</span><span class="ld-eng-detail-val">' + escHtml(decodeUtm(e.utm)) + '</span></div>';
     if (e.source)       entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Source</span><span class="ld-eng-detail-val">' + escHtml(e.source) + (e.sourceDetail ? ' — ' + escHtml(e.sourceDetail) : '') + '</span></div>';
     if (e.formSubmittedAt) entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Soumis le</span><span class="ld-eng-detail-val">' + escHtml(formatDateTimeFr(e.formSubmittedAt)) + '</span></div>';
 
@@ -2566,13 +2584,13 @@ function renderCard(l) {
   if (l.nom) h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><span class="ld-detail-val">' + escHtml(l.nom) + '</span></div>';
   if (l.telephone) h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><span class="ld-detail-val"><a href="#" data-action="dialerCall" data-phone="' + normalizeTel(l.telephone).replace(/\s/g, '') + '" data-lead-id="' + id + '" data-name="' + escAttr(l.nom || '') + '" title="Appeler via Ringover">' + escHtml(normalizeTel(l.telephone)) + '</a></span></div>';
   if (l.email) h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><span class="ld-detail-val"><a href="mailto:' + escHtml(l.email) + '">' + escHtml(l.email) + '</a></span></div>';
-  if (l.utm) h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><span class="ld-detail-val">' + escHtml(l.utm) + '</span></div>';
+  if (l.utm) h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><span class="ld-detail-val">' + escHtml(decodeUtm(l.utm)) + '</span></div>';
   if (l.secteur) h += '<div class="ld-detail-row"><span class="ld-detail-label">Secteur</span><span class="ld-detail-val">' + escHtml(l.secteur) + '</span></div>';
   if (l.ca) h += '<div class="ld-detail-row"><span class="ld-detail-label">CA actuel</span><span class="ld-detail-val">' + escHtml(l.ca) + '</span></div>';
   if (l.defi) h += '<div class="ld-detail-row"><span class="ld-detail-label">Défi</span><span class="ld-detail-val">' + escHtml(l.defi) + '</span></div>';
   if (l.disponibilite) h += '<div class="ld-detail-row"><span class="ld-detail-label">Dispo</span><span class="ld-detail-val">' + escHtml(l.disponibilite) + '</span></div>';
   if (l.timeline) h += '<div class="ld-detail-row"><span class="ld-detail-label">Mise en place</span><span class="ld-detail-val">' + escHtml(l.timeline) + '</span></div>';
-  h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(l.createdAt) + '</span></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(_getLeadEffectiveDate(l) || l.createdAt) + '</span></div>';
 
   // 📦 Historique Zoho — n'apparaît QUE pour les leads importés depuis l'ancien CRM Zoho/Bigin
   if (l.zohoCreatedAt || l.zohoModifiedAt || l.zohoLastActivityAt || l.zohoGestionnaire || l.zohoOrigine) {
@@ -2606,7 +2624,7 @@ function renderCard(l) {
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><input class="ld-detail-input" data-edit="nom" data-id="' + id + '" value="' + escAttr(l.nom || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><input class="ld-detail-input" data-edit="telephone" data-id="' + id + '" value="' + escAttr(normalizeTel(l.telephone || '')) + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><input class="ld-detail-input" data-edit="email" data-id="' + id + '" type="email" value="' + escAttr(l.email || '') + '"/></div>';
-  h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><input class="ld-detail-input" data-edit="utm" data-id="' + id + '" value="' + escAttr(l.utm || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><input class="ld-detail-input" data-edit="utm" data-id="' + id + '" value="' + escAttr(decodeUtm(l.utm) || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Type</span><select class="ld-detail-select" data-edit="type" data-id="' + id + '">';
   h += '<option value="vsl_elite"' + (l.type === 'vsl_elite' ? ' selected' : '') + '>VSL ÉLITE</option>';
   h += '<option value="self_booking"' + (l.type === 'self_booking' ? ' selected' : '') + '>Self-Booking</option>';
