@@ -953,15 +953,51 @@ function renderCompleted(){
     var dt=d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
     h+='<tr>';
     h+='<td style="font-weight:600">'+esc(r.clientName)+_autoBadge(r)+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail)+'</div></td>';
-    h+='<td>'+esc(r.templateName||'—')+'</td>';
+    h+='<td>'+esc(r.templateName||'—')+_academyPill(r)+'</td>';
     h+='<td style="font-size:12px">'+dt+'</td>';
     h+='<td style="white-space:nowrap">';
     h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="downloadSignedPdf(\''+r.id+'\')">📥 PDF</button> ';
-    h+='<a href="sign-certificate.html?id='+r.id+'" target="_blank" class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px;text-decoration:none">📜 Certificat</a>';
+    h+='<a href="sign-certificate.html?id='+r.id+'" target="_blank" class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px;text-decoration:none">📜 Certificat</a>'+_academyBtn(r);
     h+='</td></tr>';
   });
   el.innerHTML=h;
 }
+/* ═══ AE ACADEMY (V11b) : accès formation sur contrat signé ═══ */
+// Pastille d'état par contrat signé — lue depuis r.academyGrant, rafraîchie
+// en temps réel par le onSnapshot existant.
+function _academyPill(r){
+  var g=r.academyGrant;
+  if(!g)return '';
+  var css='display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;margin-left:6px;';
+  if(g.status==='ok')return '<span style="'+css+'color:#34d399;background:rgba(52,211,153,.12)" title="Accès Academy ouvert'+(g.courseName?(' — '+esc(g.courseName)):'')+'">🎓 Accès ouvert</span>';
+  if(g.status==='not_found')return '<span style="'+css+'color:#f59e0b;background:rgba(245,158,11,.12)" title="Aucune formation Academy ne correspond au nom de ce contrat — crée-la ou renomme-la, puis re-tente">🎓 Formation introuvable</span>';
+  if(g.status==='ambiguous')return '<span style="'+css+'color:#f59e0b;background:rgba(245,158,11,.12)" title="Plusieurs formations possibles : '+esc((g.candidates||[]).join(' / '))+'">🎓 Nom ambigu</span>';
+  return '<span style="'+css+'color:#ef4444;background:rgba(239,68,68,.12)" title="'+esc(g.error||'échec')+'">🎓 Échec — re-tente</span>';
+}
+// Bouton d'ouverture / de rattrapage — masqué quand l'accès est déjà ouvert.
+function _academyBtn(r){
+  var g=r.academyGrant;
+  if(g&&g.status==='ok')return '';
+  return ' <button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" onclick="academyGrantRetry(\''+r.id+'\')">🎓 Ouvrir l\'accès</button>';
+}
+function academyGrantRetry(id){
+  var r=REQ.find(function(x){return x.id===id;});
+  if(!r)return;
+  var tok=r.token||(r.signers&&r.signers[0]&&r.signers[0].token)||'';
+  if(!tok){toast('❌ Token introuvable sur cette demande');return;}
+  toast('🎓 Ouverture de l\'accès Academy…');
+  fetch('/api/academy-grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:id,token:tok})})
+    .then(function(res){return res.json();})
+    .then(function(j){
+      if(j&&j.granted){toast('✅ Accès ouvert : '+(j.courseName||'formation')+(j.already?' (déjà ouvert)':''));}
+      else if(j&&j.reason==='not_found'){toast('⚠️ Aucune formation ne correspond à « '+(r.templateName||'')+' »');}
+      else if(j&&j.reason==='ambiguous'){toast('⚠️ Nom ambigu — plusieurs formations possibles');}
+      else if(j&&j.error==='not_signed_yet'){toast('⏳ Le contrat n\'est pas encore signé');}
+      else{toast('❌ Pont Academy indisponible — re-tente plus tard');}
+    })
+    .catch(function(){toast('❌ Pont Academy indisponible — re-tente plus tard');});
+}
+
 function resendRequest(id){
   var r=REQ.find(function(x){return x.id===id;});
   if(!r)return;
