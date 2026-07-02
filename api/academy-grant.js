@@ -22,6 +22,11 @@
 //     l'appel n'a aucun effet de bord.
 // Le secret du pont (ACADEMY_BRIDGE_KEY) ne quitte jamais ce serveur.
 //
+// CHOIX SUR LE MODÈLE (V11b) : signature_templates/{templateId}.academyCourseId
+//   ''          → automatique (correspondance par nom du contrat, défaut)
+//   '__none__'  → ce contrat n'ouvre volontairement AUCUN accès
+//   '<id>'      → formation précise, transmise telle quelle au pont
+//
 // EFFETS :
 //   • forward serveur → serveur vers l'Academy (/api/bridge/grant-access) ;
 //   • tamponne le résultat sur la demande : academyGrant:{status, courseId,
@@ -93,6 +98,20 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // Le choix explicite posé sur le modèle de contrat, s'il existe.
+    let templateCourseId = '';
+    if (r.templateId) {
+      try {
+        const tSnap = await db.collection('signature_templates').doc(r.templateId).get();
+        if (tSnap.exists) templateCourseId = (tSnap.data().academyCourseId || '').toString();
+      } catch (e) { /* illisible → on retombe sur l'automatique */ }
+    }
+    if (templateCourseId === '__none__') {
+      // Volontaire : pas de tampon sur la demande, pas d'événement — silence propre.
+      res.status(200).json({ ok: true, granted: false, reason: 'disabled_by_template' });
+      return;
+    }
+
     const clientEmail = ((Array.isArray(r.signers) && r.signers[0] && r.signers[0].email) || r.clientEmail || '').toString().trim().toLowerCase();
     const clientName = ((Array.isArray(r.signers) && r.signers[0] && r.signers[0].name) || r.clientName || '').toString().trim();
     const templateName = (r.templateName || '').toString().trim();
@@ -117,7 +136,7 @@ module.exports = async (req, res) => {
       const fRes = await fetch(ACADEMY_URL + '/api/bridge/grant-access', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-bridge-key': key },
-        body: JSON.stringify({ email: clientEmail, name: clientName, contractName: templateName, signedAt: signedAtIso }),
+        body: JSON.stringify({ email: clientEmail, name: clientName, contractName: templateName, signedAt: signedAtIso, courseId: templateCourseId || undefined }),
       });
       j = await fRes.json().catch(() => null);
     } catch (e) {
