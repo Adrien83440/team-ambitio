@@ -202,6 +202,16 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
       </div>
       <div style="border-top:1px solid var(--border);margin:8px 0 12px"></div>
       <div class="ep-section">
+        <div class="ep-title">🎓 Formation AE Academy</div>
+        <div class="ep-label">Formation ouverte à la signature de ce contrat</div>
+        <select class="ep-input" id="edAcademyCourse" style="width:100%">
+          <option value="">🤖 Automatique (d'après le nom du contrat)</option>
+          <option value="__none__">🚫 Aucune — ce contrat n'ouvre pas d'accès</option>
+        </select>
+        <div id="edAcademyHint" style="margin-top:6px;font-size:11px;color:var(--muted)"></div>
+      </div>
+      <div style="border-top:1px solid var(--border);margin:8px 0 12px"></div>
+      <div class="ep-section">
         <div class="ep-title">📋 Champs du modèle</div>
         <div id="fieldsList" style="font-size:12px"></div>
       </div>
@@ -320,6 +330,8 @@ function renderTemplates(){
     h+='<div class="tpl-card" onclick="openTpl(\''+t.id+'\')">';
     h+='<div class="tpl-card-name">'+esc(t.name||'Sans nom')+'</div>';
     h+='<div class="tpl-card-meta">'+((t.fields||[]).length)+' champs · '+(t.pages||0)+' pages</div>';
+    if(t.academyCourseId==='__none__'){h+='<div class="tpl-card-meta" style="color:#f59e0b">🚫 Sans accès Academy</div>';}
+    else if(t.academyCourseId){h+='<div class="tpl-card-meta" style="color:#34d399">🎓 '+esc(t.academyCourseName||'Formation liée')+'</div>';}
     h+='<div style="display:flex;gap:6px;margin-top:10px">';
     h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();sendForSignatureFromList(\''+t.id+'\')">📨 Envoyer</button>';
     h+='<button class="sig-btn sig-btn-r" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();deleteTpl(\''+t.id+'\')">🗑</button>';
@@ -375,6 +387,7 @@ function openEditorWithPdf(dataUrl){
   document.getElementById('edAutoFields').style.display=autoEn?'block':'none';
   document.getElementById('edAutoUrl').value=currentTpl.automationWebhookUrl||'';
   document.getElementById('edAutoNote').value=currentTpl.automationNote||'';
+  _fillAcademySelect(currentTpl.academyCourseId||''); // AE Academy (V11b)
   document.getElementById('edAutoTestResult').innerHTML='';
   selectedField=null;
   renderFieldPalette();
@@ -701,8 +714,15 @@ function saveTpl(){
     automationEnabled:autoEnabled,
     automationWebhookUrl:autoEnabled?autoUrl:'',
     automationNote:autoEnabled?autoNote:'',
+    // AE Academy (V11b) : formation liée à ce modèle ('' = auto, '__none__' = aucune)
+    academyCourseId:(document.getElementById('edAcademyCourse')||{}).value||'',
+    academyCourseName:'',
     updatedAt:firebase.firestore.FieldValue.serverTimestamp()
   };
+  if(data.academyCourseId&&data.academyCourseId!=='__none__'&&_ACAD_COURSES){
+    var _ac=_ACAD_COURSES.find(function(c){return c.id===data.academyCourseId;});
+    if(_ac)data.academyCourseName=_ac.name;
+  }
   // Store PDF as base64 (check size)
   var pdfB64=currentTpl.pdfBase64||'';
   var pdfSizeKB=Math.round(pdfB64.length*0.75/1024);
@@ -963,6 +983,33 @@ function renderCompleted(){
   el.innerHTML=h;
 }
 /* ═══ AE ACADEMY (V11b) : accès formation sur contrat signé ═══ */
+// Formations Academy (id + nom), chargées une fois par session pour l'éditeur.
+var _ACAD_COURSES=null;
+function _fillAcademySelect(selectedId){
+  var sel=document.getElementById('edAcademyCourse');
+  var hint=document.getElementById('edAcademyHint');
+  if(!sel)return;
+  function render(){
+    var h='<option value="">🤖 Automatique (d\'après le nom du contrat)</option>'
+        +'<option value="__none__">🚫 Aucune — ce contrat n\'ouvre pas d\'accès</option>';
+    (_ACAD_COURSES||[]).forEach(function(c){h+='<option value="'+esc(c.id)+'">🎓 '+esc(c.name)+'</option>';});
+    sel.innerHTML=h;
+    sel.value=selectedId||'';
+    if(sel.value!==(selectedId||'')){sel.value='';if(hint)hint.textContent='⚠️ La formation liée à ce modèle n\'existe plus — repassé en Automatique.';}
+  }
+  if(_ACAD_COURSES){render();return;}
+  render(); // les deux options de base tout de suite, les formations arrivent après
+  if(hint)hint.textContent='Chargement des formations…';
+  var u=firebase.auth().currentUser;
+  if(!u){if(hint)hint.textContent='Session expirée — recharge la page pour lister les formations.';return;}
+  u.getIdToken().then(function(tok){
+    return fetch('/api/academy-courses',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:'{}'});
+  }).then(function(r){return r.json();}).then(function(j){
+    _ACAD_COURSES=(j&&j.ok&&Array.isArray(j.courses))?j.courses:[];
+    if(hint)hint.textContent=_ACAD_COURSES.length?'':'Formations indisponibles pour le moment — le mode Automatique reste actif.';
+    render();
+  }).catch(function(){_ACAD_COURSES=[];if(hint)hint.textContent='Formations indisponibles pour le moment — le mode Automatique reste actif.';render();});
+}
 // Pastille d'état par contrat signé — lue depuis r.academyGrant, rafraîchie
 // en temps réel par le onSnapshot existant.
 function _academyPill(r){
@@ -978,6 +1025,8 @@ function _academyPill(r){
 function _academyBtn(r){
   var g=r.academyGrant;
   if(g&&g.status==='ok')return '';
+  var t=TPL.find(function(x){return x.id===r.templateId;});
+  if(t&&t.academyCourseId==='__none__')return ''; // choix du modèle : pas d'accès
   return ' <button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" onclick="academyGrantRetry(\''+r.id+'\')">🎓 Ouvrir l\'accès</button>';
 }
 function academyGrantRetry(id){
@@ -992,6 +1041,7 @@ function academyGrantRetry(id){
       if(j&&j.granted){toast('✅ Accès ouvert : '+(j.courseName||'formation')+(j.already?' (déjà ouvert)':''));}
       else if(j&&j.reason==='not_found'){toast('⚠️ Aucune formation ne correspond à « '+(r.templateName||'')+' »');}
       else if(j&&j.reason==='ambiguous'){toast('⚠️ Nom ambigu — plusieurs formations possibles');}
+      else if(j&&j.reason==='disabled_by_template'){toast('🚫 Ce modèle de contrat n\'ouvre aucun accès (réglage du modèle)');}
       else if(j&&j.error==='not_signed_yet'){toast('⏳ Le contrat n\'est pas encore signé');}
       else{toast('❌ Pont Academy indisponible — re-tente plus tard');}
     })
