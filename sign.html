@@ -527,6 +527,14 @@ async function doSubmit(){
         templateName:REQ.templateName,
         createdAt:firebase.firestore.FieldValue.serverTimestamp()
       });
+
+      // AE ACADEMY (V11b) : ouvre l'accès à la formation correspondant au
+      // contrat signé, via le pont. Fire-and-forget — token et statut « signed »
+      // sont revérifiés côté serveur, et le rattrapage existe dans
+      // sales-signatures : un échec ici ne gêne JAMAIS la signature.
+      try{
+        fetch('/api/academy-grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:REQ_ID,token:new URLSearchParams(location.search).get('t')||''})}).catch(function(e){console.warn('[academy-grant]',e&&e.message);});
+      }catch(e){}
     } else {
       // Trigger SMS vers le signataire 2 — action gérée côté backend (cf. snippet L2)
       await db.collection('webhook_inbox').add({
