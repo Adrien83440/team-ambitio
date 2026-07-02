@@ -1898,6 +1898,41 @@ function setView(v, btn){
   render();
 }
 
+// ── AE ACADEMY (V11a) ──
+// Avancement du client sur la plateforme de formation, via notre endpoint
+// /api/academy-progress (auth Alteor) → pont → academy.adrienemily.com.
+// Fail-soft : toute indisponibilité se résume à une ligne grise dans la fiche.
+async function loadAcademyBlock(c, id){
+  const box = document.getElementById('acadBlock-'+id);
+  if(!box) return;
+  const em = (c.email||'').trim();
+  if(!em){ box.innerHTML = "🎓 Academy — pas d'e-mail sur la fiche, impossible de faire le lien."; return; }
+  try{
+    const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/academy-progress', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ email: em }) });
+    const j = await r.json().catch(()=>null);
+    if(!j){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; return; }
+    if(j.ok === false){ box.innerHTML = '🎓 ' + (j.error==='bridge_not_configured' ? 'Pont Academy non configuré (variables Vercel).' : 'Academy indisponible pour le moment.'); return; }
+    if(!j.found){ box.innerHTML = '🎓 Aucun compte Academy pour cet e-mail.'; return; }
+    const d = j.dossier;
+    let y2 = 0, names = [], rows = '';
+    d.courses.forEach(co=>{
+      rows += `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;margin:3px 0"><b>${escHtml(co.name)}</b><span style="background:#ecebfa;color:#4338ca;border-radius:999px;padding:1px 8px;font-weight:600;font-size:11px">${co.pct} %</span><span style="color:#6b7194">${co.done}/${co.total} leçons</span>${co.milestones.total?`<span style="color:#6b7194">★ ${co.milestones.reached}/${co.milestones.total}</span>`:''}${co.building?`<span style="color:#6b7194">🏗️ ${co.building.roomsDone}/${co.building.roomsTotal} pièces</span>`:''}</div>`;
+      const locked = co.lockedLeft || [];
+      y2 += locked.length;
+      locked.slice(0, Math.max(0, 3-names.length)).forEach(m=>names.push(m.name));
+    });
+    box.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><b>🎓 AE Academy</b><span style="background:#ecebfa;color:#4338ca;border-radius:999px;padding:1px 8px;font-weight:600;font-size:11px">${d.totals.pct} %</span><span style="color:#6b7194">${d.totals.done}/${d.totals.total} leçons${d.lastActivity?` · dernier signe : ${escHtml(d.lastActivity)}`:''}</span></div>
+      <div style="height:6px;border-radius:999px;background:#e7e5f4;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:${Math.max(0,Math.min(100,d.totals.pct))}%;background:linear-gradient(90deg,#6d5ae0,#8b7cf0)"></div></div>
+      ${rows}
+      ${y2>0?`<div style="margin-top:7px;padding:7px 9px;background:#fffaf0;border:1px solid #f3e3c3;border-radius:8px">🔒 <b>Année 2 :</b> ${y2} module${y2>1?'s':''} encore verrouillé${y2>1?'s':''}${names.length?` <span style="color:#6b7194">(${escHtml(names.join(' · '))}${y2>names.length?'…':''})</span>`:''}</div>`:''}
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-outline btn-sm" data-acad-copy>📋 Copier le dossier</button><a class="btn btn-outline btn-sm" style="text-decoration:none" href="https://academy.adrienemily.com/suivi/${encodeURIComponent(d.email)}" target="_blank" rel="noreferrer">Fiche Academy ↗</a></div>`;
+    const copyBtn = box.querySelector('[data-acad-copy]');
+    if(copyBtn) copyBtn.addEventListener('click', ()=>{ navigator.clipboard.writeText(j.text||'').then(()=>showToast('📋 Dossier Academy copié')); });
+  }catch(e){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; }
+}
+
 // ── DETAIL PANEL ──
 function openDetail(id){
   const c = _clients.find(x=>x._id===id);
@@ -1974,6 +2009,9 @@ function openDetail(id){
       <span id="driveScanStatus-${id}" style="margin-left:auto;font-size:11px;opacity:.8"></span>
     </div>
     <div class="drive-scan-log" id="driveScanLog-${id}"></div>
+
+    <!-- AE ACADEMY (V11a) : avancement formation du client -->
+    <div id="acadBlock-${id}" style="margin-top:12px;padding:12px 14px;background:#f8f7ff;border:1px solid #e4e1f7;border-radius:12px;font-size:12px;line-height:1.6;color:#1f2340">🎓 Academy — chargement…</div>
 
     <!-- QUOTA SECTION -->
     <div class="dp-quota-section" style="margin-top:12px">
@@ -2104,6 +2142,7 @@ function openDetail(id){
     </div>
   `;
   document.getElementById('detailOverlay').classList.add('show');
+  loadAcademyBlock(c, id);
 
   // Lazy-load des plans (sous-collection Firestore)
   loadClientPlans(id);

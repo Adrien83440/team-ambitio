@@ -2100,7 +2100,9 @@ function renderClientCard(c){
     + (commerceTxt ? '<div class="csm2-sub">' + commerceTxt + '</div>' : '')
     + '<div class="csm2-badges">' + lvlBadge + statusBadge
     + (!c._hasLead ? '<span class="csm-badge csm-badge-no-lead" title="Ce client coaching n\'a pas de lead CRM lié — paiements et Kajabi non visibles">📚 Pas de lead CRM</span>' : '')
+    + (c.email ? '<button type="button" data-academy-btn data-em="' + esc(c.email) + '" title="Avancement formation AE Academy">🎓 Academy</button>' : '')
     + '</div>'
+    + (c.email ? '<div data-academy-panel data-em="' + esc(c.email) + '" style="display:none"></div>' : '')
     + '</div></div>';
 
   // ───── CELLULE PAIEMENT ─────
@@ -3692,5 +3694,6 @@ window.markFollowedUp = markFollowedUp;
 window.quickSms = quickSms;
 window.quickEmail = quickEmail;
 </script>
+<script src="academy-widget.js"></script>
 </body>
 </html>
