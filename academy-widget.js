@@ -43,7 +43,18 @@
     + '.acad-btn2{border:1px solid #d9d6ee;background:#fff;border-radius:8px;padding:4px 10px;font-size:11.5px;cursor:pointer;font-weight:600;color:#3f3a75}'
     + '.acad-btn2:hover{background:#f3f1ff}'
     + 'button[data-academy-btn]{border:1px solid #d9d6ee;background:#fff;border-radius:999px;padding:2px 9px;font-size:11px;cursor:pointer;font-weight:600;color:#4338ca}'
-    + 'button[data-academy-btn]:hover{background:#f3f1ff}';
+    + 'button[data-academy-btn]:hover{background:#f3f1ff}'
+    + '.acad-win{border:1px solid #d7ecd0;background:#fbfef9;border-radius:8px;padding:6px 9px;margin-top:5px}'
+    + '.acad-win .wt{font-weight:700}'
+    + '.acad-win .wq{display:block;font-style:italic;color:#4b6147;margin-top:2px}'
+    + '.acad-chip{display:inline-block;margin:2px 4px 0 0;padding:1px 7px;border-radius:999px;background:#eef7ea;color:#3d7a34;font-weight:600;font-size:10.5px}'
+    + '.acad-sec{margin-top:8px}'
+    + '.acad-sec > b{font-size:12px}'
+    + '.acad-ms{display:inline-block;margin:3px 5px 0 0;padding:1px 8px;border-radius:999px;font-size:10.5px;font-weight:600;background:#efeff4;color:#6b7194}'
+    + '.acad-ms.on{background:#e8f5e5;color:#3d7a34}'
+    + '.acad-wb{display:flex;align-items:center;gap:7px;flex-wrap:wrap;border:1px solid #e4e1f7;background:#fff;border-radius:8px;padding:5px 9px;margin-top:5px;font-size:11.5px}'
+    + '.acad-wb .t{font-weight:700;color:#1f2340}'
+    + '.acad-more{border:none;background:none;color:#4338ca;font-weight:700;font-size:11px;cursor:pointer;padding:2px 0;margin-top:4px}';
 
   function injectCss() {
     if (document.getElementById('acad-widget-css')) return;
@@ -103,14 +114,37 @@
         if (it && it.text && (!lastWin || (it.at || 0) > (lastWin.at || 0))) lastWin = it;
       }
     }
-    if (wl || lastWin) {
-      var q = '';
-      if (lastWin && lastWin.text) {
-        var t = String(lastWin.text);
-        if (t.length > 110) t = t.slice(0, 108) + '…';
-        q = '<span class="q">« ' + esc(t) + ' »' + (lastWin.title ? ' <span class="acad-muted">— ' + esc(lastWin.title) + '</span>' : '') + '</span>';
+    if (wl) {
+      h += '<div class="acad-wins">🏆 <b>Total des victoires :</b> ' + esc(wl) + '</div>';
+    }
+
+    // V12c — CSM : TOUTES les victoires (« j'ai gagné X temps / X € » en fin
+    // de sujet), chacune avec la citation de l'élève et ses chiffres.
+    var allWins = [];
+    for (var awi = 0; awi < d.courses.length; awi++) {
+      var cwx = d.courses[awi].wins;
+      var arr = (cwx && (cwx.items || cwx.last)) || [];
+      for (var awj = 0; awj < arr.length; awj++) {
+        var w2 = arr[awj];
+        if (w2 && (w2.text || (w2.summary && w2.summary.length))) allWins.push(w2);
       }
-      h += '<div class="acad-wins">🏆 <b>Victoires :</b> ' + (wl ? esc(wl) : '') + q + '</div>';
+    }
+    allWins.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+    if (allWins.length) {
+      var winsHtml = '';
+      for (var vw = 0; vw < allWins.length; vw++) {
+        var it2 = allWins[vw];
+        var dt = it2.at ? new Date(it2.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '';
+        winsHtml += '<div class="acad-win" ' + (vw >= 4 ? 'data-acad-morewin style="display:none"' : '') + '>'
+          + '<span class="wt">🏆 ' + esc(it2.title || 'Victoire') + '</span>'
+          + (dt ? ' <span class="acad-muted">· ' + dt + '</span>' : '')
+          + (it2.text ? '<span class="wq">« ' + esc(it2.text) + ' »</span>' : '')
+          + ((it2.summary && it2.summary.length) ? '<span>' + it2.summary.map(function (sm) { return '<span class="acad-chip">' + esc(sm) + '</span>'; }).join('') + '</span>' : '')
+          + '</div>';
+      }
+      h += '<div class="acad-sec"><b>🏆 Victoires racontées (' + allWins.length + ')</b>' + winsHtml
+        + (allWins.length > 4 ? '<button type="button" class="acad-more" data-acad-showwins>Voir les ' + (allWins.length - 4) + ' autres ↓</button>' : '')
+        + '</div>';
     }
 
     var y2total = 0, y2names = [];
@@ -123,6 +157,28 @@
         + (c.building ? '<span class="acad-muted">🏗️ ' + esc(c.building.roomsDone) + '/' + esc(c.building.roomsTotal) + ' pièces</span>' : '')
         + (c.wins && c.wins.count ? '<span class="acad-muted">🏆 ' + esc(c.wins.count) + '</span>' : '')
         + '</div>';
+      // V12c — CSM : jalons détaillés (label + atteint) de la formation.
+      var msItems = (c.milestones && c.milestones.items) || [];
+      if (msItems.length) {
+        h += '<div style="margin:2px 0 4px">';
+        for (var mi = 0; mi < msItems.length; mi++) {
+          var ms = msItems[mi];
+          h += '<span class="acad-ms' + (ms.reached ? ' on' : '') + '">' + (ms.reached ? '✓ ' : '') + esc(ms.label)
+            + (ms.reached && ms.at ? ' · ' + new Date(ms.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '') + '</span>';
+        }
+        h += '</div>';
+      }
+      // V12c — CSM : workbooks IA du client (révision, mise à jour, remplissage).
+      var wbs = c.workbooks || [];
+      if (wbs.length) {
+        for (var wbi = 0; wbi < wbs.length; wbi++) {
+          var wb = wbs[wbi];
+          h += '<div class="acad-wb"><span>📓</span><span class="t">' + esc(wb.title) + '</span>'
+            + '<span class="acad-muted">rév. ' + esc(wb.revision) + (wb.updatedAt ? ' · ' + new Date(wb.updatedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '') + '</span>'
+            + (wb.answered ? '<span class="acad-pill">✍️ ' + esc(wb.answered) + ' réponse' + (wb.answered > 1 ? 's' : '') + '</span>' : '<span class="acad-muted">pas encore rempli</span>')
+            + '</div>';
+        }
+      }
       var lockedN = (c.lockedLeft && c.lockedLeft.length) || 0;
       y2total += lockedN;
       for (var k = 0; k < Math.min(lockedN, 3 - y2names.length); k++) y2names.push(c.lockedLeft[k].name);
@@ -140,6 +196,12 @@
       + '</div>';
 
     panel.innerHTML = h;
+    var moreBtn = panel.querySelector('[data-acad-showwins]');
+    if (moreBtn) moreBtn.addEventListener('click', function () {
+      var hiddenWins = panel.querySelectorAll('[data-acad-morewin]');
+      for (var hw = 0; hw < hiddenWins.length; hw++) hiddenWins[hw].style.display = 'block';
+      moreBtn.style.display = 'none';
+    });
     var btn = panel.querySelector('[data-acad-copy]');
     if (btn) btn.addEventListener('click', function () {
       try {
