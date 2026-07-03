@@ -54,7 +54,14 @@
     + '.acad-ms.on{background:#e8f5e5;color:#3d7a34}'
     + '.acad-wb{display:flex;align-items:center;gap:7px;flex-wrap:wrap;border:1px solid #e4e1f7;background:#fff;border-radius:8px;padding:5px 9px;margin-top:5px;font-size:11.5px}'
     + '.acad-wb .t{font-weight:700;color:#1f2340}'
-    + '.acad-more{border:none;background:none;color:#4338ca;font-weight:700;font-size:11px;cursor:pointer;padding:2px 0;margin-top:4px}';
+    + '.acad-more{border:none;background:none;color:#4338ca;font-weight:700;font-size:11px;cursor:pointer;padding:2px 0;margin-top:4px}'
+    + '.acad-mgr{margin-top:10px;padding:9px 11px;border:1px solid #e4e1f7;background:#fff;border-radius:10px}'
+    + '.acad-mgr .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}'
+    + '.acad-mgr select{border:1px solid #d9d6ee;border-radius:8px;padding:4px 8px;font-size:11.5px;max-width:220px}'
+    + '.acad-btn-danger{border:1px solid #f3c9bd;background:#fdeeea;color:#c2410c;border-radius:8px;padding:4px 10px;font-size:11.5px;cursor:pointer;font-weight:700}'
+    + '.acad-btn-ok{border:1px solid #cfe8c9;background:#f4faf1;color:#3d7a34;border-radius:8px;padding:4px 10px;font-size:11.5px;cursor:pointer;font-weight:700}'
+    + '.acad-status-on{color:#3d7a34;font-weight:700}'
+    + '.acad-status-off{color:#c2410c;font-weight:700}';
 
   function injectCss() {
     if (document.getElementById('acad-widget-css')) return;
@@ -213,6 +220,101 @@
     });
   }
 
+  // ── LES CLÉS (V12d) : gestion d'accès depuis le canal CSM ──
+  // Rendu APRÈS le panneau d'avancement. Rôles admin/csm uniquement : si
+  // l'endpoint répond 'forbidden' (coach), la section n'apparaît pas.
+  function apiAccess(payload) {
+    return getToken().then(function (token) {
+      if (!token) return null;
+      return fetch('/api/academy-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(payload),
+      }).then(function (r) { return r.json().catch(function () { return null; }); });
+    });
+  }
+
+  function clientIdFor(panel) {
+    var host = panel.closest('[data-client-id]');
+    return host ? (host.getAttribute('data-client-id') || '') : '';
+  }
+
+  function renderManager(panel, email, st) {
+    var box = panel.querySelector('[data-acad-mgr]');
+    if (!box) { box = document.createElement('div'); box.className = 'acad-mgr'; box.setAttribute('data-acad-mgr', '1'); panel.appendChild(box); }
+    var authTxt = !st.auth.exists
+      ? '<span class="acad-muted">pas de compte de connexion créé</span>'
+      : st.auth.disabled
+        ? '<span class="acad-status-off">🔴 désactivé — le client ne peut plus se connecter</span>'
+        : '<span class="acad-status-on">🟢 actif</span>';
+    var h = '<b>⚙️ Gérer l\'accès</b><div class="row">Compte : ' + authTxt
+      + (st.auth.exists ? (st.auth.disabled
+        ? ' <button type="button" class="acad-btn-ok" data-acad-platform="on">Réactiver</button>'
+        : ' <button type="button" class="acad-btn-danger" data-acad-platform="off">Désactiver l\'accès</button>') : '')
+      + '</div>';
+    if (st.access.length) {
+      h += '<div class="row">Formations ouvertes :</div>';
+      for (var i = 0; i < st.access.length; i++) {
+        var a = st.access[i];
+        h += '<div class="row">• <b>' + esc(a.name) + '</b> <span class="acad-muted">(' + esc(a.mode === 'all' ? 'accès complet' : a.mode) + ')</span>'
+          + ' <button type="button" class="acad-btn-danger" data-acad-revoke="' + esc(a.id) + '" data-nm="' + esc(a.name) + '">Retirer</button></div>';
+      }
+    } else {
+      h += '<div class="row acad-muted">Aucune formation ouverte.</div>';
+    }
+    var opts = '';
+    for (var ci = 0; ci < st.catalog.length; ci++) {
+      var has = false;
+      for (var ai = 0; ai < st.access.length; ai++) if (st.access[ai].id === st.catalog[ci].id) { has = true; break; }
+      if (!has) opts += '<option value="' + esc(st.catalog[ci].id) + '">' + esc(st.catalog[ci].name) + '</option>';
+    }
+    if (opts) {
+      h += '<div class="row"><select data-acad-grant-sel>' + opts + '</select>'
+        + '<button type="button" class="acad-btn-ok" data-acad-grant>➕ Donner l\'accès</button></div>';
+    }
+    h += '<div class="row acad-muted" style="font-size:10.5px">Retirer un accès ou désactiver le compte ne supprime rien : progression, victoires et workbooks restent — tout revient si tu ré-ouvres.</div>';
+    box.innerHTML = h;
+
+    function refresh() { loadManager(panel, email, true); }
+    var offBtn = box.querySelector('[data-acad-platform="off"]');
+    if (offBtn) offBtn.addEventListener('click', function () {
+      if (!confirm('Désactiver le compte Academy de ' + email + ' ?\nIl ne pourra plus se connecter (réversible à tout moment).')) return;
+      offBtn.disabled = true;
+      apiAccess({ action: 'platform', email: email, disabled: true, clientId: clientIdFor(panel) }).then(refresh);
+    });
+    var onBtn = box.querySelector('[data-acad-platform="on"]');
+    if (onBtn) onBtn.addEventListener('click', function () {
+      onBtn.disabled = true;
+      apiAccess({ action: 'platform', email: email, disabled: false, clientId: clientIdFor(panel) }).then(refresh);
+    });
+    var revokes = box.querySelectorAll('[data-acad-revoke]');
+    for (var rv = 0; rv < revokes.length; rv++) (function (btn) {
+      btn.addEventListener('click', function () {
+        var nm = btn.getAttribute('data-nm') || 'cette formation';
+        if (!confirm('Retirer l\'accès à « ' + nm + ' » pour ' + email + ' ?\nSa progression est conservée.')) return;
+        btn.disabled = true;
+        apiAccess({ action: 'revoke', email: email, courseId: btn.getAttribute('data-acad-revoke'), clientId: clientIdFor(panel) }).then(refresh);
+      });
+    })(revokes[rv]);
+    var grantBtn = box.querySelector('[data-acad-grant]');
+    if (grantBtn) grantBtn.addEventListener('click', function () {
+      var sel = box.querySelector('[data-acad-grant-sel]');
+      if (!sel || !sel.value) return;
+      grantBtn.disabled = true;
+      apiAccess({ action: 'grant', email: email, courseId: sel.value, clientId: clientIdFor(panel) }).then(refresh);
+    });
+  }
+
+  function loadManager(panel, email, force) {
+    if (!force && panel.dataset.acadMgrLoaded === '1') return;
+    panel.dataset.acadMgrLoaded = '1';
+    apiAccess({ action: 'status', email: email }).then(function (j) {
+      if (!j || j.ok !== true) return;               // forbidden / indispo → pas de section
+      if (!j.found) return;                          // pas de compte Academy
+      renderManager(panel, email, j);
+    }).catch(function () { /* fail-soft */ });
+  }
+
   function load(panel, email) {
     if (!panel || panel.dataset.acadLoaded === '1') return;
     panel.dataset.acadLoaded = '1';
@@ -241,6 +343,7 @@
           }
           if (!j.found) { panel.innerHTML = '<span class="acad-muted">🎓 Aucun compte Academy pour cet e-mail.</span>'; return; }
           render(panel, j);
+          loadManager(panel, email); // V12d : section ⚙️ Gérer l'accès (admin/csm)
         })
         .catch(function () {
           panel.innerHTML = '<span class="acad-muted">🎓 Academy indisponible pour le moment.</span>';
