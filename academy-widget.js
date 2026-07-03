@@ -110,6 +110,25 @@
       + '</div>';
     h += '<div class="acad-bar"><i style="width:' + Math.max(0, Math.min(100, d.totals.pct)) + '%"></i></div>';
 
+    // V13 « Les Braises » : points + niveau, et les récompenses réclamées.
+    if (d.points) {
+      h += '<div class="acad-wins" style="background:#fff7ed;border-color:#f3dcc3">🔥 <b>' + Number(d.points.total || 0).toLocaleString('fr-FR') + ' pts</b>'
+        + (d.points.level && d.points.level.name ? ' · <b>' + esc(d.points.level.name) + '</b>' : '') + '</div>';
+      var claims = d.points.claims || [];
+      for (var pc = 0; pc < claims.length; pc++) {
+        var cl = claims[pc];
+        var when = cl.at ? new Date(cl.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '';
+        h += '<div class="acad-win" style="border-color:#f3dcc3;background:#fffaf3">'
+          + '<span class="wt">🎁 ' + esc(cl.name) + (cl.reward ? ' — ' + esc(cl.reward) : '') + '</span>'
+          + (when ? ' <span class="acad-muted">· réclamée le ' + when + '</span>' : '')
+          + (cl.status === 'done'
+            ? ' <span style="color:#3d7a34;font-weight:700">✓ honorée</span>'
+            : ' <span style="color:#c2410c;font-weight:700">à honorer</span>'
+              + '<button type="button" class="acad-btn-ok" style="display:none;margin-left:8px" data-acad-honor="' + esc(cl.palierId) + '" data-nm="' + esc(cl.name) + '">Marquer honorée</button>')
+          + '</div>';
+      }
+    }
+
     // Victoires (Vague B) : les chiffres réels de l'élève + sa dernière citation.
     var wl = winsLine(d.totals.winsKpis);
     var lastWin = null;
@@ -240,6 +259,22 @@
   }
 
   function renderManager(panel, email, st) {
+    // V13 : révèle et branche les boutons « Marquer honorée » (réservés
+    // admin/csm — l'endpoint refuse de toute façon les autres rôles).
+    var honors = panel.querySelectorAll('[data-acad-honor]');
+    for (var hb = 0; hb < honors.length; hb++) (function (btn) {
+      if (btn.dataset.wired === '1') return;
+      btn.dataset.wired = '1';
+      btn.style.display = 'inline-block';
+      btn.addEventListener('click', function () {
+        if (!confirm('Marquer la récompense « ' + (btn.getAttribute('data-nm') || '') + ' » comme honorée pour ' + email + ' ?')) return;
+        btn.disabled = true;
+        apiAccess({ action: 'reward-done', email: email, palierId: btn.getAttribute('data-acad-honor'), palierName: btn.getAttribute('data-nm') || '', clientId: clientIdFor(panel) }).then(function () {
+          btn.outerHTML = ' <span style="color:#3d7a34;font-weight:700">✓ honorée</span>';
+        });
+      });
+    })(honors[hb]);
+
     var box = panel.querySelector('[data-acad-mgr]');
     if (!box) { box = document.createElement('div'); box.className = 'acad-mgr'; box.setAttribute('data-acad-mgr', '1'); panel.appendChild(box); }
     var authTxt = !st.auth.exists
