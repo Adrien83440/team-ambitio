@@ -653,7 +653,7 @@ body {
     <div class="csm-logo">💎</div>
     <div>
       <div class="csm-title">Clients CSM</div>
-      <div class="csm-sub">Gestion individuelle, suivi paiements, coachings, formation Kajabi</div>
+      <div class="csm-sub">Gestion individuelle, suivi paiements, coachings, formation AE Academy</div>
     </div>
     <div style="margin-left:auto;display:flex;gap:6px">
       <a href="csm-import.html" class="csm-btn"><i class="ti ti-cloud-upload"></i> Importer Kajabi</a>
@@ -1903,7 +1903,7 @@ function computeSignals(c){
     signals.push({
       level: 'info', icon: '📚',
       title: 'Pas de lead CRM lié',
-      desc: 'Paiements GoCardless et Kajabi invisibles tant qu\'il n\'y a pas de lead',
+      desc: 'Paiements GoCardless invisibles tant qu\'il n\'y a pas de lead',
       actionLabel: 'Créer le lead',
       actionFn: 'csmCreateLeadForClient(\'' + c.id + '\')'
     });
@@ -2031,8 +2031,8 @@ function computeSignals(c){
             level: 'att', icon: '🎓',
             title: 'Kajabi peu avancé',
             desc: avgPct + '% sur ' + esc(firstTitle || 'Programme') + ' — encourager',
-            actionLabel: 'Voir Kajabi',
-            actionFn: 'switchModalTab(\'kajabi\')'
+            actionLabel: 'Voir Academy',
+            actionFn: 'switchModalTab(\'academy\')'
           });
         }
       }
@@ -2099,8 +2099,7 @@ function renderClientCard(c){
     + '<div class="csm2-name">' + nameTxt + '</div>'
     + (commerceTxt ? '<div class="csm2-sub">' + commerceTxt + '</div>' : '')
     + '<div class="csm2-badges">' + lvlBadge + statusBadge
-    + (!c._hasLead ? '<span class="csm-badge csm-badge-no-lead" title="Ce client coaching n\'a pas de lead CRM lié — paiements et Kajabi non visibles">📚 Pas de lead CRM</span>' : '')
-    + (c.email ? '<button type="button" data-academy-btn data-em="' + esc(c.email) + '" title="Avancement formation AE Academy">🎓 Academy</button>' : '')
+    + (!c._hasLead ? '<span class="csm-badge csm-badge-no-lead" title="Ce client coaching n\'a pas de lead CRM lié — paiements non visibles">📚 Pas de lead CRM</span>' : '')
     + '</div>'
     + (c.email ? '<div data-academy-panel data-em="' + esc(c.email) + '" style="display:none"></div>' : '')
     + '</div></div>';
@@ -2197,40 +2196,18 @@ function renderClientCard(c){
       + '</div>';
   }
 
-  // ───── CELLULE KAJABI ─────
+  // ───── CELLULE ACADEMY (remplace Kajabi : avancement AE Academy en direct) ─────
   var kajCell;
-  if(c.kajabiProgress && c.kajabiProgress.byCourse && Object.keys(c.kajabiProgress.byCourse).length){
-    var courseKeys = Object.keys(c.kajabiProgress.byCourse);
-    var sumPct = 0, nPct = 0;
-    var firstTitle = '';
-    courseKeys.forEach(function(ck){
-      var crs = c.kajabiProgress.byCourse[ck] || {};
-      if(!firstTitle && crs.title) firstTitle = crs.title;
-      if(typeof crs.pct === 'number'){ sumPct += crs.pct; nPct++; }
-    });
-    if(nPct > 0){
-      var avgPct = Math.round(sumPct / nPct);
-      var kajBarColor = avgPct >= 80 ? 'var(--csm-accent)' : avgPct >= 40 ? '#fbbf24' : 'var(--crit-color)';
-      var kajCls = avgPct >= 80 ? 'ok' : avgPct >= 40 ? 'att' : 'warn';
-      var kajSub = courseKeys.length === 1
-                  ? esc(firstTitle || 'Programme')
-                  : courseKeys.length + ' cours suivis';
-      kajCell = '<div class="csm2-cell csm2-cell-kaj">'
-        + '<div class="csm2-cell-label">🎓 KAJABI</div>'
-        + '<div class="csm2-cell-main">' + avgPct + '<span class="csm2-amount-sep">%</span></div>'
-        + '<div class="csm2-progress-mini"><div class="csm2-progress-mini-fill" style="width:' + avgPct + '%;background:' + kajBarColor + '"></div></div>'
-        + '<div class="csm2-cell-sub ' + kajCls + '" title="' + esc(firstTitle) + '">' + kajSub + '</div>'
-        + '</div>';
-    } else {
-      kajCell = '<div class="csm2-cell csm2-cell-kaj">'
-        + '<div class="csm2-cell-label">🎓 KAJABI</div>'
-        + '<div class="csm2-cell-empty">Données importées sans %</div>'
-        + '</div>';
-    }
+  if(c.email){
+    kajCell = '<div class="csm2-cell csm2-cell-kaj">'
+      + '<div class="csm2-cell-label">🎓 ACADEMY</div>'
+      + '<div style="margin-top:6px"><button type="button" data-academy-btn data-em="' + esc(c.email) + '" title="Avancement AE Academy en direct (progression, victoires, année 2)">Voir l\'avancement</button></div>'
+      + '<div class="csm2-cell-sub" style="margin-top:6px">progression · 🏆 victoires · année 2</div>'
+      + '</div>';
   } else {
     kajCell = '<div class="csm2-cell csm2-cell-kaj">'
-      + '<div class="csm2-cell-label">🎓 KAJABI</div>'
-      + '<div class="csm2-cell-empty">Pas de progression importée</div>'
+      + '<div class="csm2-cell-label">🎓 ACADEMY</div>'
+      + '<div class="csm2-cell-empty">Pas d\'e-mail sur la fiche</div>'
       + '</div>';
   }
 
@@ -2621,7 +2598,7 @@ function renderModal(){
   h += '<button class="mtab" data-mtab="overview">📊 Vue d\'ensemble</button>';
   h += '<button class="mtab" data-mtab="coaching">🎯 Coaching' + (coaching ? '' : ' <span style="opacity:0.4">·</span>') + (crLate?' <span class="mtab-dot crit"></span>':'') + '</button>';
   h += '<button class="mtab" data-mtab="payments">💳 Paiements <span class="mtab-count">' + pays.length + '</span>' + (payLate?' <span class="mtab-dot crit"></span>':'') + '</button>';
-  h += '<button class="mtab" data-mtab="kajabi">🎓 Kajabi' + (kajCount?' <span class="mtab-count">' + kajCount + '</span>':'') + '</button>';
+  h += '<button class="mtab" data-mtab="academy">🎓 Academy</button>';
   h += '<button class="mtab" data-mtab="notes">📝 Notes & historique <span class="mtab-count">' + (notes.length + hist.length) + '</span></button>';
   h += '</div>';
 
@@ -2700,22 +2677,13 @@ function renderModal(){
     h += '<div class="ov-card ov-pay ov-empty"><div class="ov-card-label">💳 Paiement</div><div class="ov-card-empty">Aucun paiement</div></div>';
   }
 
-  // Kajabi
-  if(kProg && kProg.byCourse && Object.keys(kProg.byCourse).length){
-    var sumPct = 0, nPct = 0, firstTitle = '';
-    Object.keys(kProg.byCourse).forEach(function(ck){
-      var crs = kProg.byCourse[ck] || {};
-      if(!firstTitle && crs.title) firstTitle = crs.title;
-      if(typeof crs.pct === 'number'){ sumPct += crs.pct; nPct++; }
-    });
-    var avgPct = nPct > 0 ? Math.round(sumPct/nPct) : 0;
-    var kCol = avgPct >= 80 ? 'var(--csm-accent)' : avgPct >= 40 ? '#fbbf24' : 'var(--crit-color)';
-    h += '<div class="ov-card ov-kaj"><div class="ov-card-label">🎓 Kajabi</div>';
-    h += '<div class="ov-card-main">' + avgPct + '<span class="ov-card-sep">%</span></div>';
-    h += '<div class="ov-card-bar"><div class="ov-card-bar-fill" style="width:' + avgPct + '%;background:' + kCol + '"></div></div>';
-    h += '<div class="ov-card-sub">' + esc(firstTitle || 'Programme') + '</div></div>';
+  // Academy (avancement en direct — le détail vit dans l'onglet 🎓 Academy)
+  if(c.email){
+    h += '<div class="ov-card ov-kaj"><div class="ov-card-label">🎓 Academy</div>';
+    h += '<div class="ov-card-sub" style="margin-top:6px">Progression, victoires et année 2 en direct depuis la plateforme.</div>';
+    h += '<div class="ov-card-sub" style="margin-top:8px"><a href="#" style="color:var(--csm-accent);font-weight:700" onclick="event.preventDefault();switchModalTab(\'academy\')">Voir l\'onglet Academy →</a></div></div>';
   } else {
-    h += '<div class="ov-card ov-kaj ov-empty"><div class="ov-card-label">🎓 Kajabi</div><div class="ov-card-empty">Pas importé</div></div>';
+    h += '<div class="ov-card ov-kaj ov-empty"><div class="ov-card-label">🎓 Academy</div><div class="ov-card-empty">Pas d\'e-mail</div></div>';
   }
 
   // Dernière relance CSM
@@ -3110,55 +3078,20 @@ function renderModal(){
   h += '</div>'; // payments body
 
   // ─── ONGLET 4 : KAJABI ───
-  h += '<div class="mtab-body" data-mtab-body="kajabi" style="display:none">';
-  if(!kProg || !kProg.byCourse || !Object.keys(kProg.byCourse).length){
+  h += '<div class="mtab-body" data-mtab-body="academy" style="display:none">';
+  if(c.email){
+    // Le widget Academy (academy-widget.js, déjà chargé sur cette page) remplit
+    // ce panneau à l'ouverture de l'onglet : progression, 🏆 victoires (les mots
+    // et les chiffres de l'élève), année 2, bouton « Copier le dossier » et lien
+    // vers la fiche Academy. Données live via le pont — plus d'import CSV.
+    h += '<div data-academy-modal data-em="' + esc(c.email) + '" style="margin-top:10px"></div>';
+  } else {
     h += '<div style="background:var(--bg3);border:1px dashed var(--border);border-radius:10px;padding:30px;text-align:center;margin-top:8px">';
     h += '<div style="font-size:32px;opacity:0.4;margin-bottom:6px">🎓</div>';
-    h += '<div style="font-size:13px;color:var(--ink-muted);margin-bottom:6px">Aucune progression Kajabi importée pour ce client</div>';
-    h += '<div style="font-size:11px;color:var(--ink-muted);margin-bottom:14px">Vérifie que l\'email <strong>' + esc(c.email||'(non renseigné)') + '</strong> matche bien dans le CSV exporté.</div>';
-    h += '<a class="csm-btn primary" href="csm-import.html" target="_blank">📥 Importer un CSV Kajabi</a>';
+    h += '<div style="font-size:13px;color:var(--ink-muted)">Pas d\'e-mail sur la fiche — impossible de lier AE Academy.</div>';
     h += '</div>';
-  } else {
-    Object.keys(kProg.byCourse).forEach(function(courseKey){
-      var crs = kProg.byCourse[courseKey] || {};
-      var coursePct = null;
-      var subInfo = '';
-      if(typeof crs.pct === 'number'){
-        coursePct = Math.max(0, Math.min(100, Math.round(crs.pct)));
-        if(crs.lastImportAt) subInfo = '📅 Importé ' + timeAgo(crs.lastImportAt);
-      } else if(crs.modules){
-        var modKeys = Object.keys(crs.modules);
-        var totL = 0, doneL = 0;
-        modKeys.forEach(function(mk){
-          var m = crs.modules[mk];
-          var d = (m && m.completedLessons) ? Object.keys(m.completedLessons).length : 0;
-          doneL += d;
-          if(m && m.totalLessons) totL += m.totalLessons;
-        });
-        if(totL > 0) coursePct = Math.round((doneL/totL)*100);
-        subInfo = doneL + ' leçon' + (doneL>1?'s':'') + ' faite' + (doneL>1?'s':'');
-        if(totL > 0) subInfo += ' / ' + totL;
-      }
-      h += '<div style="margin-bottom:14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">';
-      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px">';
-      h += '<div style="font-size:14px;font-weight:700">' + esc(crs.title || courseKey) + '</div>';
-      h += '<div style="font-size:18px;font-weight:800;color:var(--csm-accent)">' + (coursePct !== null ? coursePct + '%' : '—') + '</div>';
-      h += '</div>';
-      if(coursePct !== null){
-        var pctColor = coursePct >= 80 ? 'var(--csm-accent)' : coursePct >= 40 ? '#fbbf24' : 'var(--crit-color)';
-        h += '<div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden;margin-bottom:8px">';
-        h += '<div style="height:100%;width:' + coursePct + '%;background:linear-gradient(90deg,' + pctColor + ',var(--csm-accent))"></div>';
-        h += '</div>';
-      }
-      if(subInfo) h += '<div style="font-size:11px;color:var(--ink-muted)">' + subInfo + '</div>';
-      h += '</div>';
-    });
-    if(kProg.lastImportAt){
-      h += '<div style="font-size:11px;color:var(--ink-muted);margin:8px 0">⏱ Dernier import global : ' + fmtDateTime(kProg.lastImportAt) + '</div>';
-    }
-    h += '<div style="margin-top:8px"><a class="csm-btn primary" href="csm-import.html" target="_blank">📥 Mettre à jour depuis Kajabi</a></div>';
   }
-  h += '</div>'; // kajabi body
+  h += '</div>'; // academy body
 
   // ─── ONGLET 5 : NOTES & HISTORIQUE ───
   h += '<div class="mtab-body" data-mtab-body="notes" style="display:none">';
@@ -3221,6 +3154,13 @@ function switchModalTab(tabName){
   document.querySelectorAll('.mtab-body').forEach(function(b){
     b.style.display = (b.dataset.mtabBody === tabName) ? '' : 'none';
   });
+
+  // Onglet Academy : le widget charge le panneau (une seule fois par client,
+  // il gère lui-même son état « déjà chargé »).
+  if(tabName === 'academy' && window.AcademyWidget){
+    var ap = document.querySelector('[data-academy-modal]');
+    if(ap) window.AcademyWidget.load(ap, ap.getAttribute('data-em') || '');
+  }
 
   // Auto-sync GoCardless quand on ouvre l'onglet Paiements (avec cache pour
   // éviter de rappeler l'API à chaque switch d'onglet sur le même client).
