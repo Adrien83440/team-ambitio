@@ -1908,7 +1908,7 @@ async function loadAcademyBlock(c, id){
   const em = (c.email||'').trim();
   if(!em){ box.innerHTML = "🎓 Academy — pas d'e-mail sur la fiche, impossible de faire le lien."; return; }
   try{
-    const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
     const r = await fetch('/api/academy-progress', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ email: em }) });
     const j = await r.json().catch(()=>null);
     if(!j){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; return; }
@@ -2046,7 +2046,7 @@ async function pcPropose(){
   const S=_pc; if(!S||S.busy) return;
   S.busy=true; S.proposal=null; renderPathCopilot();
   try{
-    const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
     const r = await fetch('/api/academy-path', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'propose', email:(S.c.email||'').trim().toLowerCase(), courseId:S.courseId, clientId:S.clientId }) });
     const j = await r.json().catch(()=>null);
     S.busy=false;
@@ -2062,7 +2062,7 @@ async function pcApply(){
   const S=_pc; if(!S||!S.proposal||S.busy) return;
   S.busy=true; renderPathCopilot();
   try{
-    const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
     const r = await fetch('/api/academy-path', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'apply', email:(S.c.email||'').trim().toLowerCase(), courseId:S.courseId, clientId:S.clientId, objectif:S.proposal.objectif||'', steps:S.proposal.steps, resume:S.proposal.resume||'' }) });
     const j = await r.json().catch(()=>null);
     if(!j || j.ok!==true || !j.found){ S.busy=false; showToast('🧭 Validation impossible pour le moment.','error'); renderPathCopilot(); return; }
