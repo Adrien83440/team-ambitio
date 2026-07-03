@@ -1929,11 +1929,13 @@ async function loadAcademyBlock(c, id){
       ${acadWinsBox(d)}
       ${rows}
       ${y2>0?`<div style="margin-top:7px;padding:7px 9px;background:#fffaf0;border:1px solid #f3e3c3;border-radius:8px">🔒 <b>Année 2 :</b> ${y2} module${y2>1?'s':''} encore verrouillé${y2>1?'s':''}${names.length?` <span style="color:#6b7194">(${escHtml(names.join(' · '))}${y2>names.length?'…':''})</span>`:''}</div>`:''}
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-outline btn-sm" data-acad-path>🧭 Parcours IA</button><button type="button" class="btn btn-outline btn-sm" data-acad-copy>📋 Copier le dossier</button><a class="btn btn-outline btn-sm" style="text-decoration:none" href="https://academy.adrienemily.com/suivi/${encodeURIComponent(d.email)}" target="_blank" rel="noreferrer">Fiche Academy ↗</a></div>`;
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-outline btn-sm" data-acad-path>🧭 Parcours IA</button><button type="button" class="btn btn-outline btn-sm" data-acad-wb>📓 Workbooks</button><button type="button" class="btn btn-outline btn-sm" data-acad-copy>📋 Copier le dossier</button><a class="btn btn-outline btn-sm" style="text-decoration:none" href="https://academy.adrienemily.com/suivi/${encodeURIComponent(d.email)}" target="_blank" rel="noreferrer">Fiche Academy ↗</a></div>`;
     const copyBtn = box.querySelector('[data-acad-copy]');
     if(copyBtn) copyBtn.addEventListener('click', ()=>{ navigator.clipboard.writeText(j.text||'').then(()=>showToast('📋 Dossier Academy copié')); });
     const pathBtn = box.querySelector('[data-acad-path]');
     if(pathBtn) pathBtn.addEventListener('click', ()=>openPathCopilot(c, id, d));
+    const wbBtn = box.querySelector('[data-acad-wb]');
+    if(wbBtn) wbBtn.addEventListener('click', ()=>openWorkbookPanel(c, id, d));
   }catch(e){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; }
 }
 
@@ -2080,6 +2082,171 @@ async function pcApply(){
     closePathCopilot();
     openDetail(id); // rafraîchit la fiche (bannière consommée + bloc Academy)
   }catch(e){ S.busy=false; showToast('🧭 Validation impossible pour le moment.','error'); renderPathCopilot(); }
+}
+
+// ── LE SCRIBE (V12a) : WORKBOOKS IA PERSONNALISÉS ──
+// L'IA rédige, par SUJET de la route, un workbook d'exercices ancré sur la
+// fiche coaching (style Elite Phénix). Écrit dans l'Academy via le pont ;
+// l'élève le voit sur sa route et dans le bâtiment. Pas de validation :
+// le prompt est cadré, tout est tracé ici, et un workbook où l'élève a
+// commencé à répondre est GELÉ (seule une régénération manuelle le remplace).
+let _wb = null; // { c, clientId, dossier, courseId, ctx, busySub }
+
+function openWorkbookPanel(c, clientId, dossier){
+  const withPath = (dossier.courses||[]).filter(co=>co.path && (co.path.steps||[]).length);
+  if(!withPath.length){ showToast('Aucune formation avec des sujets pour ce client','error'); return; }
+  _wb = { c, clientId, dossier, courseId: withPath[0].id, ctx: null, busySub: null };
+  renderWorkbookPanel();
+  loadWorkbookCtx();
+}
+function closeWorkbookPanel(){ const ov=document.getElementById('wbOverlay'); if(ov) ov.remove(); _wb=null; }
+function wbSelectCourse(cid){ if(!_wb) return; _wb.courseId=cid; _wb.ctx=null; _wb.busySub=null; renderWorkbookPanel(); loadWorkbookCtx(); }
+
+async function loadWorkbookCtx(){
+  const S=_wb; if(!S) return;
+  try{
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/academy-workbook', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'context', email:(S.c.email||'').trim().toLowerCase(), courseId:S.courseId }) });
+    const j = await r.json().catch(()=>null);
+    if(!_wb || _wb.courseId!==S.courseId) return; // le coach a changé de formation entre-temps
+    if(!j || j.ok!==true){ showToast('📓 Academy injoignable pour le moment','error'); return; }
+    S.ctx = j;
+    renderWorkbookPanel();
+  }catch(e){ showToast('📓 Academy injoignable pour le moment','error'); }
+}
+
+// Cibles de la génération : le sujet EN COURS (premier ouvert non terminé)
+// + le SUIVANT non terminé (anticipation : l'élève qui avance trouve toujours
+// son workbook). steps = route ordonnée renvoyée par le pont.
+function wbAutoTargets(steps){
+  const st = steps||[];
+  let curIdx = -1;
+  for(let i=0;i<st.length;i++){ if(st[i].status==='open' && !st[i].done){ curIdx=i; break; } }
+  if(curIdx<0) return [];
+  const out=[st[curIdx].key];
+  for(let i=curIdx+1;i<st.length;i++){ if(!st[i].done && st[i].status!=='done'){ out.push(st[i].key); break; } }
+  return out;
+}
+
+function wbWhen(ms){ return ms ? new Date(ms).toLocaleDateString('fr-FR',{ day:'numeric', month:'short' }) : ''; }
+
+function renderWorkbookPanel(){
+  if(!_wb) return;
+  let ov = document.getElementById('wbOverlay');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id='wbOverlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:2000;background:rgba(12,12,28,.55);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto';
+    ov.addEventListener('click', e=>{ if(e.target===ov) closeWorkbookPanel(); });
+    document.body.appendChild(ov);
+  }
+  const S=_wb;
+  const opts = (S.dossier.courses||[]).filter(x=>x.path&&(x.path.steps||[]).length)
+    .map(x=>`<option value="${escHtml(x.id)}" ${x.id===S.courseId?'selected':''}>${escHtml(x.name)}</option>`).join('');
+  let bodyHtml;
+  if(!S.ctx){
+    bodyHtml = `<div style="padding:26px 10px;text-align:center;color:#6b7194;font-size:12.5px">📓 Lecture de la route et des workbooks de l'élève…</div>`;
+  } else {
+    const steps = (S.ctx.learner && S.ctx.learner.steps) || [];
+    const wbs = (S.ctx.learner && S.ctx.learner.workbooks) || {};
+    const targets = wbAutoTargets(steps);
+    const rows = steps.map((st,i)=>{
+      const w = wbs[st.key];
+      const busy = S.busySub===st.key;
+      let stateTxt = '<span style="color:#6b7194">— pas encore de workbook</span>';
+      if(w) stateTxt = `<span style="color:#4b6147">rév. ${w.revision}${w.updatedAt?` · ${wbWhen(w.updatedAt)}`:''}</span>${w.frozen?' <span title="L\'élève a commencé à répondre : gelé — seule une régénération manuelle le remplace" style="color:#8a6d1f">✍️ commencé</span>':''}`;
+      let btn;
+      if(busy) btn = `<span style="color:#6b7194;font-size:12px">✨ rédaction…</span>`;
+      else if(!w) btn = `<button class="btn btn-primary btn-sm" onclick="wbGenerate('${escHtml(st.key)}',false)">Générer</button>`;
+      else if(w.frozen) btn = `<button class="btn btn-outline btn-sm" title="Remplace le workbook commencé par l'élève" onclick="wbGenerate('${escHtml(st.key)}',true)">Régénérer ⚠️</button>`;
+      else btn = `<button class="btn btn-outline btn-sm" onclick="wbGenerate('${escHtml(st.key)}',false)">Régénérer</button>`;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #ececf4;flex-wrap:wrap">
+        <span style="color:#6b7194;font-size:11.5px;width:18px;flex-shrink:0">${i+1}.</span>
+        <span style="flex:1;min-width:170px;font-size:12.5px"><b>${escHtml(st.title)}</b>${targets[0]===st.key?' <span style="font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 7px;background:#fdf5e3;color:#8a6d1f">en cours</span>':''}<br>${stateTxt}</span>
+        ${pcBadge(st.status)}
+        <span style="flex-shrink:0">${btn}</span>
+      </div>`;
+    }).join('');
+    const learnerMissing = S.ctx.learner && S.ctx.learner.found===false;
+    bodyHtml = learnerMissing
+      ? `<div style="padding:20px 10px;text-align:center;color:#6b7194;font-size:12.5px">Aucun compte Academy pour cet e-mail.</div>`
+      : `${targets.length?`<div style="display:flex;justify-content:flex-end;margin:4px 0 8px"><button class="btn btn-primary btn-sm" ${S.busySub?'disabled':''} onclick="wbGenerateAuto()">⚡ Sujet en cours + suivant</button></div>`:''}
+         <div>${rows||'<div style="padding:14px;color:#6b7194;font-size:12.5px">Aucun sujet dans cette formation.</div>'}</div>
+         <div style="margin-top:10px;font-size:11.5px;color:#6b7194;line-height:1.5">📓 Chaque workbook est rédigé par l'IA à partir de la fiche coaching (plan d'action, dernières séances, synthèses, questionnaire, victoires) et strictement cadré sur le sujet. Il se met à jour après chaque sync Drive tant que l'élève n'a pas commencé à y répondre.</div>`;
+  }
+  ov.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:640px;width:100%;padding:20px 22px;box-shadow:0 18px 60px rgba(20,16,60,.25)" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <b style="font-size:15px">📓 Workbooks IA</b>
+      <select class="inp" style="flex:1;min-width:180px;max-width:280px" onchange="wbSelectCourse(this.value)">${opts}</select>
+      <button class="btn btn-outline btn-sm" onclick="closeWorkbookPanel()">Fermer</button>
+    </div>
+    ${bodyHtml}
+  </div>`;
+}
+
+async function wbGenerate(subId, force){
+  const S=_wb; if(!S || S.busySub) return;
+  if(force && !confirm("L'élève a commencé à remplir ce workbook : le régénérer efface ses zones actuelles au profit d'une nouvelle version. Continuer ?")) return;
+  S.busySub=subId; renderWorkbookPanel();
+  try{
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/academy-workbook', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'generate', email:(S.c.email||'').trim().toLowerCase(), courseId:S.courseId, clientId:S.clientId, subId:subId, force:!!force, trigger:'manuel' }) });
+    const j = await r.json().catch(()=>null);
+    S.busySub=null;
+    if(!j || j.ok!==true){
+      const msg = j&&j.error==='anthropic_not_configured' ? 'Clé ANTHROPIC_API_KEY manquante dans les variables Vercel.' : j&&j.error==='ia_invalid_response' ? "L'IA n'a pas réussi cette fois — réessaie." : 'Génération impossible pour le moment.';
+      showToast('📓 '+msg,'error'); renderWorkbookPanel(); return;
+    }
+    if(j.frozen){ showToast('📓 Workbook gelé : l\'élève a commencé à répondre'); }
+    else if(j.found===false){ showToast('📓 Aucun compte Academy pour cet e-mail','error'); }
+    else showToast(`📓 Workbook « ${j.subjectTitle||''} » en ligne (rév. ${j.applied&&j.applied.revision||'—'})`);
+    loadWorkbookCtx();
+  }catch(e){ S.busySub=null; showToast('📓 Génération impossible pour le moment.','error'); renderWorkbookPanel(); }
+}
+
+async function wbGenerateAuto(){
+  const S=_wb; if(!S || !S.ctx || S.busySub) return;
+  const targets = wbAutoTargets((S.ctx.learner && S.ctx.learner.steps)||[]);
+  for(const subId of targets){
+    if(!_wb || _wb!==S) return; // panneau fermé entre-temps
+    await wbGenerate(subId, false);
+  }
+}
+
+// Génération AUTOMATIQUE après un sync Drive qui a lié une nouvelle synthèse :
+// même sélection de formation que le copilote auto, puis sujet en cours
+// (mis à jour avec la dernière séance, sauf gel) + sujet suivant (créé s'il
+// manque). Silencieux et fail-soft : ne bloque jamais le sync.
+async function autoGenerateWorkbooks(clientId){
+  try{
+    const c = _clients.find(x=>x._id===clientId);
+    const em = c ? (c.email||'').trim().toLowerCase() : '';
+    if(!em) return;
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    if(!token) return;
+    const pr = await fetch('/api/academy-progress',{ method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ email: em }) });
+    const pj = await pr.json().catch(()=>null);
+    if(!pj || pj.ok!==true || !pj.found) return;
+    const withPath = (pj.dossier.courses||[]).filter(co=>co.path && (co.path.steps||[]).length);
+    if(!withPath.length) return;
+    const course = withPath.find(co=>co.path.guided && co.pct<100) || withPath.find(co=>co.pct<100) || withPath[0];
+    const cr = await fetch('/api/academy-workbook',{ method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'context', email: em, courseId: course.id }) });
+    const cj = await cr.json().catch(()=>null);
+    if(!cj || cj.ok!==true || !cj.learner || cj.learner.found===false) return;
+    const steps = cj.learner.steps||[], wbs = cj.learner.workbooks||{};
+    const targets = wbAutoTargets(steps);
+    let done = 0;
+    for(let i=0;i<targets.length;i++){
+      const subId = targets[i];
+      const w = wbs[subId];
+      if(w && w.frozen) continue;              // gelé : on ne touche pas
+      if(i>0 && w) continue;                    // le "suivant" n'est créé que s'il manque
+      const r = await fetch('/api/academy-workbook',{ method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'generate', email: em, courseId: course.id, clientId: clientId, subId: subId, trigger:'sync' }) });
+      const j = await r.json().catch(()=>null);
+      if(j && j.ok===true && j.applied) done++;
+    }
+    if(done>0) showToast(`📓 ${done} workbook${done>1?'s':''} mis à jour à partir de la dernière séance`);
+  }catch(e){ console.warn('[scribe auto]', e && e.message); }
 }
 
 // ── COPILOTE AUTOMATIQUE (Vague C+) ──
@@ -3468,6 +3635,9 @@ async function scanDriveForClient(clientId){
   // Copilote automatique (Vague C+) : une nouvelle synthèse vient d'arriver →
   // l'IA prépare sa proposition de parcours en arrière-plan.
   if(linked>0) autoProposePath(clientId);
+  // Le Scribe (V12a) : nouvelle synthèse liée → workbooks du sujet en cours
+  // (+ suivant) régénérés en arrière-plan.
+  if(linked>0) autoGenerateWorkbooks(clientId);
 }
 
 // ── TOGGLE CLIENT STATUS (actif / inactif) ──
