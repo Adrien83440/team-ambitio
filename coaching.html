@@ -1917,20 +1917,160 @@ async function loadAcademyBlock(c, id){
     const d = j.dossier;
     let y2 = 0, names = [], rows = '';
     d.courses.forEach(co=>{
-      rows += `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;margin:3px 0"><b>${escHtml(co.name)}</b><span style="background:#ecebfa;color:#4338ca;border-radius:999px;padding:1px 8px;font-weight:600;font-size:11px">${co.pct} %</span><span style="color:#6b7194">${co.done}/${co.total} leçons</span>${co.milestones.total?`<span style="color:#6b7194">★ ${co.milestones.reached}/${co.milestones.total}</span>`:''}${co.building?`<span style="color:#6b7194">🏗️ ${co.building.roomsDone}/${co.building.roomsTotal} pièces</span>`:''}</div>`;
+      rows += `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;margin:3px 0"><b>${escHtml(co.name)}</b><span style="background:#ecebfa;color:#4338ca;border-radius:999px;padding:1px 8px;font-weight:600;font-size:11px">${co.pct} %</span><span style="color:#6b7194">${co.done}/${co.total} leçons</span>${co.milestones.total?`<span style="color:#6b7194">★ ${co.milestones.reached}/${co.milestones.total}</span>`:''}${co.building?`<span style="color:#6b7194">🏗️ ${co.building.roomsDone}/${co.building.roomsTotal} pièces</span>`:''}${co.wins&&co.wins.count?`<span style="color:#6b7194">🏆 ${co.wins.count}</span>`:''}</div>`;
       const locked = co.lockedLeft || [];
       y2 += locked.length;
       locked.slice(0, Math.max(0, 3-names.length)).forEach(m=>names.push(m.name));
     });
     box.innerHTML = `
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><b>🎓 AE Academy</b><span style="background:#ecebfa;color:#4338ca;border-radius:999px;padding:1px 8px;font-weight:600;font-size:11px">${d.totals.pct} %</span><span style="color:#6b7194">${d.totals.done}/${d.totals.total} leçons${d.lastActivity?` · dernier signe : ${escHtml(d.lastActivity)}`:''}</span></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><b>🎓 AE Academy</b><span style="background:#ecebfa;color:#4338ca;border-radius:999px;padding:1px 8px;font-weight:600;font-size:11px">${d.totals.pct} %</span><span style="color:#6b7194">${d.totals.done}/${d.totals.total} leçons${d.lastActivity?` · dernier signe : ${escHtml(d.lastActivity)}`:''}</span>${d.totals.winsCount?`<span style="background:#f4faf1;color:#3d7a34;border:1px solid #d7ecd0;border-radius:999px;padding:1px 8px;font-weight:600;font-size:11px">🏆 ${d.totals.winsCount} victoire${d.totals.winsCount>1?'s':''}</span>`:''}</div>
       <div style="height:6px;border-radius:999px;background:#e7e5f4;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:${Math.max(0,Math.min(100,d.totals.pct))}%;background:linear-gradient(90deg,#6d5ae0,#8b7cf0)"></div></div>
+      ${acadWinsBox(d)}
       ${rows}
       ${y2>0?`<div style="margin-top:7px;padding:7px 9px;background:#fffaf0;border:1px solid #f3e3c3;border-radius:8px">🔒 <b>Année 2 :</b> ${y2} module${y2>1?'s':''} encore verrouillé${y2>1?'s':''}${names.length?` <span style="color:#6b7194">(${escHtml(names.join(' · '))}${y2>names.length?'…':''})</span>`:''}</div>`:''}
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-outline btn-sm" data-acad-copy>📋 Copier le dossier</button><a class="btn btn-outline btn-sm" style="text-decoration:none" href="https://academy.adrienemily.com/suivi/${encodeURIComponent(d.email)}" target="_blank" rel="noreferrer">Fiche Academy ↗</a></div>`;
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-outline btn-sm" data-acad-path>🧭 Parcours IA</button><button type="button" class="btn btn-outline btn-sm" data-acad-copy>📋 Copier le dossier</button><a class="btn btn-outline btn-sm" style="text-decoration:none" href="https://academy.adrienemily.com/suivi/${encodeURIComponent(d.email)}" target="_blank" rel="noreferrer">Fiche Academy ↗</a></div>`;
     const copyBtn = box.querySelector('[data-acad-copy]');
     if(copyBtn) copyBtn.addEventListener('click', ()=>{ navigator.clipboard.writeText(j.text||'').then(()=>showToast('📋 Dossier Academy copié')); });
+    const pathBtn = box.querySelector('[data-acad-path]');
+    if(pathBtn) pathBtn.addEventListener('click', ()=>openPathCopilot(c, id, d));
   }catch(e){ box.innerHTML = '🎓 Academy indisponible pour le moment.'; }
+}
+
+// Encadré victoires du bloc Academy : totaux réels + dernière citation de l'élève.
+function acadWinsBox(d){
+  const ks = (d.totals.winsKpis||[]).filter(k=>k&&k.total);
+  let lastWin = null;
+  (d.courses||[]).forEach(co=>{
+    if(!co.wins||!co.wins.last) return;
+    co.wins.last.forEach(w=>{ if(w&&w.text&&(!lastWin||(w.at||0)>(lastWin.at||0))) lastWin=w; });
+  });
+  if(!ks.length && !lastWin) return '';
+  const tl = ks.map(k=>{
+    const n=(k.total>0?'+':'')+Number(k.total).toLocaleString('fr-FR');
+    const unit = k.unit && String(k.short||'').toLowerCase().indexOf(String(k.unit).toLowerCase())<0 ? ' '+k.unit : '';
+    return n+unit+' '+(k.short||k.label||'');
+  }).join(' · ');
+  let q='';
+  if(lastWin){ let t=String(lastWin.text); if(t.length>110) t=t.slice(0,108)+'…'; q=`<span style="display:block;margin-top:3px;font-style:italic;color:#4b6147">« ${escHtml(t)} »${lastWin.title?` <span style="color:#6b7194">— ${escHtml(lastWin.title)}</span>`:''}</span>`; }
+  return `<div style="margin:2px 0 8px;padding:7px 9px;background:#f4faf1;border:1px solid #d7ecd0;border-radius:8px">🏆 <b>Victoires :</b> ${escHtml(tl)}${q}</div>`;
+}
+
+// ── COPILOTE DE PARCOURS (Vague C) ──
+// L'IA lit la fiche coaching + la route actuelle et PROPOSE ; l'humain valide
+// en un clic → le parcours s'écrit dans l'Academy via le pont set-path.
+let _pc = null; // { c, clientId, dossier, courseId, proposal, busy }
+
+function openPathCopilot(c, clientId, dossier){
+  const withPath = (dossier.courses||[]).filter(co=>co.path && (co.path.steps||[]).length);
+  if(!withPath.length){ showToast('Aucune formation avec des sujets pour ce client','error'); return; }
+  _pc = { c, clientId, dossier, courseId: withPath[0].id, proposal: null, busy: false };
+  renderPathCopilot();
+}
+function closePathCopilot(){ const ov=document.getElementById('pcOverlay'); if(ov) ov.remove(); _pc=null; }
+function pcSelectCourse(cid){ if(!_pc) return; _pc.courseId=cid; _pc.proposal=null; _pc.busy=false; renderPathCopilot(); }
+
+function pcBadge(st){
+  const m = { done:['✓ terminé','#e8f5e5','#3d7a34'], open:['ouvert','#fdf5e3','#8a6d1f'], locked:['verrouillé','#efeff4','#6b7194'] };
+  const x = m[st]||m.locked;
+  return `<span style="font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 7px;background:${x[1]};color:${x[2]}">${x[0]}</span>`;
+}
+function pcForceBadge(f){
+  if(f==='open') return ' <span title="Forcé ouvert" style="font-size:10.5px">🔓</span>';
+  if(f==='lock') return ' <span title="Repoussé" style="font-size:10.5px">🔒</span>';
+  return '';
+}
+
+function renderPathCopilot(){
+  if(!_pc) return;
+  let ov = document.getElementById('pcOverlay');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id='pcOverlay';
+    ov.style.cssText='position:fixed;inset:0;z-index:2000;background:rgba(12,12,28,.55);backdrop-filter:blur(3px);display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto';
+    ov.addEventListener('click', e=>{ if(e.target===ov) closePathCopilot(); });
+    document.body.appendChild(ov);
+  }
+  const S=_pc;
+  const co = (S.dossier.courses||[]).find(x=>x.id===S.courseId);
+  const cur = (co&&co.path&&co.path.steps)||[];
+  const curIdx = {}; cur.forEach((st,i)=>{ curIdx[st.key]=i; });
+  const titles = {}; cur.forEach(st=>{ titles[st.key]=st.title; });
+  const opts = (S.dossier.courses||[]).filter(x=>x.path&&(x.path.steps||[]).length)
+    .map(x=>`<option value="${escHtml(x.id)}" ${x.id===S.courseId?'selected':''}>${escHtml(x.name)}</option>`).join('');
+
+  const curRows = cur.map((st,i)=>`<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border:1px solid #e7e5f4;border-radius:8px;margin-bottom:5px;font-size:12px${st.status==='done'?';opacity:.65':''}"><span style="width:18px;text-align:center;font-weight:700;color:#6b7194">${i+1}</span><span style="flex:1;font-weight:600">${escHtml(st.title)}</span>${pcBadge(st.status)}${pcForceBadge(st.force)}</div>`).join('');
+
+  let right='';
+  if(S.busy){
+    right = `<div style="padding:26px 10px;text-align:center;color:#6b7194;font-size:12.5px">✨ L'IA lit la fiche coaching et la route de l'élève…<br><span style="font-size:11px">(plan d'action, dernières séances, synthèse du dernier coaching)</span></div>`;
+  } else if(S.proposal){
+    const P=S.proposal;
+    const rows = P.steps.map((st,i)=>{
+      const was = curIdx[st.subId];
+      let mv='';
+      if(typeof was==='number' && was!==i) mv = was>i ? ` <span title="Avancé" style="color:#3d7a34;font-weight:700">↑${was-i}</span>` : ` <span title="Repoussé" style="color:#c2410c;font-weight:700">↓${i-was}</span>`;
+      return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border:1px solid ${(typeof was==='number'&&was!==i)||st.force?'#c9bff2':'#e7e5f4'};border-radius:8px;margin-bottom:5px;font-size:12px;background:${(typeof was==='number'&&was!==i)||st.force?'#f6f4ff':'#fff'}"><span style="width:18px;text-align:center;font-weight:700;color:#6b7194">${i+1}</span><span style="flex:1;font-weight:600">${escHtml(titles[st.subId]||st.subId)}</span>${mv}${pcForceBadge(st.force)}</div>`;
+    }).join('');
+    const changes = (P.changes||[]).map(ch=>`<li style="margin-bottom:4px"><b>${escHtml(ch.titre||titles[ch.subId]||ch.subId||'')}</b> — ${escHtml(ch.action||'')}${ch.pourquoi?` : <span style="color:#4b4f6b">${escHtml(ch.pourquoi)}</span>`:''}</li>`).join('');
+    right = `
+      ${P.objectif?`<div style="margin-bottom:8px;padding:7px 9px;background:#fdf5e3;border:1px solid #f3e3c3;border-radius:8px;font-size:12px">🎯 <b>Objectif proposé :</b> ${escHtml(P.objectif)}</div>`:''}
+      ${rows}
+      ${changes?`<div style="margin-top:8px;font-size:12px"><b>Pourquoi :</b><ul style="margin:5px 0 0 16px;padding:0">${changes}</ul></div>`:''}
+      ${P.resume?`<div style="margin-top:8px;font-size:11.5px;color:#6b7194;font-style:italic">${escHtml(P.resume)}</div>`:''}
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="pcApply()">✅ Valider ce parcours</button>
+        <button class="btn btn-outline btn-sm" onclick="pcPropose()">↺ Reproposer</button>
+      </div>`;
+  } else {
+    right = `<div style="padding:14px 6px;font-size:12.5px;color:#4b4f6b">L'IA lit le plan d'action, les dernières séances et la synthèse du dernier coaching individuel, puis propose l'ordre des sujets le plus utile pour ce client.<br><br><button class="btn btn-primary btn-sm" onclick="pcPropose()">✨ Proposer avec l'IA</button></div>`;
+  }
+
+  const guided = co&&co.path&&co.path.guided;
+  ov.innerHTML = `
+    <div onclick="event.stopPropagation()" style="width:100%;max-width:680px;background:#fff;border-radius:14px;box-shadow:0 24px 70px rgba(20,20,60,.35);padding:18px 20px 20px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <b style="font-size:15px">🧭 Copilote de parcours</b>
+        <select onchange="pcSelectCourse(this.value)" style="font-size:12px;padding:4px 8px;border:1px solid #d9d6ee;border-radius:8px">${opts}</select>
+        <span style="font-size:11.5px;color:#6b7194">${guided?`Parcours guidé · rév. ${co.path.revision||0} · ${co.path.source==='ia'?'IA':'manuel'}`:'Parcours libre — la première validation activera le guidage.'}</span>
+        <button onclick="closePathCopilot()" style="margin-left:auto;background:none;border:none;font-size:16px;cursor:pointer;color:#6b7194">✕</button>
+      </div>
+      ${guided&&co.path.objectif?`<div style="font-size:12px;color:#4b4f6b;margin-top:4px">Objectif actuel : « ${escHtml(co.path.objectif)} »</div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+        <div><div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#6b7194;margin-bottom:7px">ROUTE ACTUELLE</div>${curRows||'<span style="font-size:12px;color:#6b7194">—</span>'}</div>
+        <div><div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:#6b7194;margin-bottom:7px">PROPOSITION DE L'IA</div>${right}</div>
+      </div>
+    </div>`;
+}
+
+async function pcPropose(){
+  const S=_pc; if(!S||S.busy) return;
+  S.busy=true; S.proposal=null; renderPathCopilot();
+  try{
+    const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/academy-path', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'propose', email:(S.c.email||'').trim().toLowerCase(), courseId:S.courseId, clientId:S.clientId }) });
+    const j = await r.json().catch(()=>null);
+    S.busy=false;
+    if(!j || j.ok!==true || !j.proposal){
+      const msg = j&&j.error==='anthropic_not_configured' ? 'Clé ANTHROPIC_API_KEY manquante dans les variables Vercel.' : j&&j.error==='course_path_not_found' ? 'Cette formation n\'a pas encore de sujets.' : 'Proposition impossible pour le moment.';
+      showToast('🧭 '+msg,'error'); renderPathCopilot(); return;
+    }
+    S.proposal=j.proposal; renderPathCopilot();
+  }catch(e){ S.busy=false; showToast('🧭 Proposition impossible pour le moment.','error'); renderPathCopilot(); }
+}
+
+async function pcApply(){
+  const S=_pc; if(!S||!S.proposal||S.busy) return;
+  S.busy=true; renderPathCopilot();
+  try{
+    const token = auth.currentUser ? await auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/academy-path', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'apply', email:(S.c.email||'').trim().toLowerCase(), courseId:S.courseId, clientId:S.clientId, objectif:S.proposal.objectif||'', steps:S.proposal.steps, resume:S.proposal.resume||'' }) });
+    const j = await r.json().catch(()=>null);
+    if(!j || j.ok!==true || !j.found){ S.busy=false; showToast('🧭 Validation impossible pour le moment.','error'); renderPathCopilot(); return; }
+    showToast(`🧭 Parcours appliqué (rév. ${j.applied&&j.applied.revision||'—'}) — la route de l'élève est à jour`);
+    const c=S.c, id=S.clientId;
+    closePathCopilot();
+    loadAcademyBlock(c, id); // rafraîchit le bloc (révision, route)
+  }catch(e){ S.busy=false; showToast('🧭 Validation impossible pour le moment.','error'); renderPathCopilot(); }
 }
 
 // ── DETAIL PANEL ──
@@ -2855,7 +2995,7 @@ async function fetchDocText(docId){
       {headers:{'Authorization':'Bearer '+_driveToken}}
     );
     if(!res.ok) return '';
-    return (await res.text()).substring(0, 2500);
+    return (await res.text()).substring(0, 9000); // Vague C : l'IA du copilote lit la synthèse — on garde bien plus que l'aperçu
   }catch(e){ return ''; }
 }
 
@@ -2877,7 +3017,7 @@ function extractSummary(text){
     }
   }
   if(!summary) summary = lines.filter(l=>l.length>20).slice(0,4).join('\n');
-  return summary.substring(0,800);
+  return summary.substring(0,6000); // Vague C : stocké dans la fiche, consommé par le copilote de parcours
 }
 
 // Normalize name for matching
