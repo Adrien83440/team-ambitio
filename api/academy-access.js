@@ -72,6 +72,7 @@ module.exports = async (req, res) => {
     const payload = { action: action, email: email };
     if (action === 'platform') payload.disabled = body.disabled === true;
     if (action === 'grant' || action === 'revoke') payload.courseId = String(body.courseId || '').trim();
+    if (action === 'reward-done') payload.palierId = String(body.palierId || '').trim(); // V13
 
     const j = await bridge(key, payload);
     if (!j || j.ok !== true) {
@@ -86,6 +87,7 @@ module.exports = async (req, res) => {
         if (action === 'platform') resume = payload.disabled ? '🔴 Compte Academy désactivé' : '🟢 Compte Academy réactivé';
         if (action === 'grant') resume = '➕ Accès ouvert : ' + cap((j.granted && j.granted.name) || payload.courseId, 120);
         if (action === 'revoke') resume = '➖ Accès retiré : ' + cap((j.revoked && j.revoked.name) || payload.courseId, 120);
+        if (action === 'reward-done') resume = '🎁 Récompense honorée : ' + cap(String(body.palierName || payload.palierId), 120); // V13
         await db.collection('clients').doc(clientId).update({
           academyAccessHistory: admin.firestore.FieldValue.arrayUnion({
             at: Date.now(),
