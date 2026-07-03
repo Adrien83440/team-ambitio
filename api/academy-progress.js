@@ -56,7 +56,9 @@ function shape(d) {
         milestones: c.milestones || { reached: 0, total: 0 },
         building: c.building ? { roomsDone: c.building.roomsDone || 0, roomsTotal: c.building.roomsTotal || 0 } : null,
         lockedLeft: (c.lockedLeft || []).map(function (t) { return { name: t }; }),
-        wins: c.wins || null, // { count, totals, kpis, last:[{title,text,at,summary}] }
+        wins: c.wins || null, // { count, totals, kpis, last, items:[{title,text,at,summary}] }
+        // V12c : workbooks IA (le remodelage jetait ce champ — le canal CSM en a besoin).
+        workbooks: c.workbooks || [],
         path: c.path || null, // Vague C : route de l'élève { guided, objectif, revision, source, steps:[{key,title,status,…}] }
       };
     }),
