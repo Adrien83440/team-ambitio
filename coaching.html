@@ -2095,12 +2095,12 @@ let _wb = null; // { c, clientId, dossier, courseId, ctx, busySub }
 function openWorkbookPanel(c, clientId, dossier){
   const withPath = (dossier.courses||[]).filter(co=>co.path && (co.path.steps||[]).length);
   if(!withPath.length){ showToast('Aucune formation avec des sujets pour ce client','error'); return; }
-  _wb = { c, clientId, dossier, courseId: withPath[0].id, ctx: null, busySub: null };
+  _wb = { c, clientId, dossier, courseId: withPath[0].id, ctx: null, busySub: null, view: null };
   renderWorkbookPanel();
   loadWorkbookCtx();
 }
 function closeWorkbookPanel(){ const ov=document.getElementById('wbOverlay'); if(ov) ov.remove(); _wb=null; }
-function wbSelectCourse(cid){ if(!_wb) return; _wb.courseId=cid; _wb.ctx=null; _wb.busySub=null; renderWorkbookPanel(); loadWorkbookCtx(); }
+function wbSelectCourse(cid){ if(!_wb) return; _wb.courseId=cid; _wb.ctx=null; _wb.busySub=null; _wb.view=null; renderWorkbookPanel(); loadWorkbookCtx(); }
 
 async function loadWorkbookCtx(){
   const S=_wb; if(!S) return;
@@ -2144,7 +2144,11 @@ function renderWorkbookPanel(){
   const opts = (S.dossier.courses||[]).filter(x=>x.path&&(x.path.steps||[]).length)
     .map(x=>`<option value="${escHtml(x.id)}" ${x.id===S.courseId?'selected':''}>${escHtml(x.name)}</option>`).join('');
   let bodyHtml;
-  if(!S.ctx){
+  if(S.view){
+    bodyHtml = S.view.wb
+      ? `<div style="display:flex;align-items:center;gap:10px;margin:2px 0 10px"><button class="btn btn-outline btn-sm" onclick="wbCloseView()">← Retour à la liste</button><span style="font-size:11.5px;color:#6b7194">rév. ${S.view.wb.meta&&S.view.wb.meta.revision||'—'}${S.view.frozen?' · ✍️ l\'élève a commencé à répondre':''}</span></div>${wbPreviewHtml(S.view.wb)}`
+      : `<div style="padding:24px 10px;text-align:center;color:#6b7194;font-size:12.5px">📓 Lecture du workbook…</div>`;
+  } else if(!S.ctx){
     bodyHtml = `<div style="padding:26px 10px;text-align:center;color:#6b7194;font-size:12.5px">📓 Lecture de la route et des workbooks de l'élève…</div>`;
   } else {
     const steps = (S.ctx.learner && S.ctx.learner.steps) || [];
@@ -2158,8 +2162,8 @@ function renderWorkbookPanel(){
       let btn;
       if(busy) btn = `<span style="color:#6b7194;font-size:12px">✨ rédaction…</span>`;
       else if(!w) btn = `<button class="btn btn-primary btn-sm" onclick="wbGenerate('${escHtml(st.key)}',false)">Générer</button>`;
-      else if(w.frozen) btn = `<button class="btn btn-outline btn-sm" title="Remplace le workbook commencé par l'élève" onclick="wbGenerate('${escHtml(st.key)}',true)">Régénérer ⚠️</button>`;
-      else btn = `<button class="btn btn-outline btn-sm" onclick="wbGenerate('${escHtml(st.key)}',false)">Régénérer</button>`;
+      else if(w.frozen) btn = `<button class="btn btn-outline btn-sm" onclick="wbView('${escHtml(st.key)}')">👁 Voir</button> <button class="btn btn-outline btn-sm" title="Remplace le workbook commencé par l'élève" onclick="wbGenerate('${escHtml(st.key)}',true)">Régénérer ⚠️</button>`;
+      else btn = `<button class="btn btn-outline btn-sm" onclick="wbView('${escHtml(st.key)}')">👁 Voir</button> <button class="btn btn-outline btn-sm" onclick="wbGenerate('${escHtml(st.key)}',false)">Régénérer</button>`;
       return `<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid #ececf4;flex-wrap:wrap">
         <span style="color:#6b7194;font-size:11.5px;width:18px;flex-shrink:0">${i+1}.</span>
         <span style="flex:1;min-width:170px;font-size:12.5px"><b>${escHtml(st.title)}</b>${targets[0]===st.key?' <span style="font-size:10.5px;font-weight:600;border-radius:999px;padding:1px 7px;background:#fdf5e3;color:#8a6d1f">en cours</span>':''}<br>${stateTxt}</span>
@@ -2181,6 +2185,51 @@ function renderWorkbookPanel(){
       <button class="btn btn-outline btn-sm" onclick="closeWorkbookPanel()">Fermer</button>
     </div>
     ${bodyHtml}
+  </div>`;
+}
+
+// Aperçu coach : lit le workbook stocké côté Academy et l'affiche dans le panneau.
+async function wbView(subId){
+  const S=_wb; if(!S || S.busySub) return;
+  S.view = { subId, wb: null, frozen: false };
+  renderWorkbookPanel();
+  try{
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/academy-workbook', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'get', email:(S.c.email||'').trim().toLowerCase(), courseId:S.courseId, subId:subId }) });
+    const j = await r.json().catch(()=>null);
+    if(!_wb || !_wb.view || _wb.view.subId!==subId) return; // fermé / changé entre-temps
+    if(!j || j.ok!==true || !j.workbook){ S.view=null; showToast('📓 Aperçu indisponible pour le moment','error'); renderWorkbookPanel(); return; }
+    S.view.wb = j.workbook; S.view.frozen = !!j.frozen;
+    renderWorkbookPanel();
+  }catch(e){ if(_wb){ _wb.view=null; renderWorkbookPanel(); } showToast('📓 Aperçu indisponible pour le moment','error'); }
+}
+function wbCloseView(){ if(_wb){ _wb.view=null; renderWorkbookPanel(); } }
+
+function wbPreviewHtml(w){
+  const zone = '<div style="border:1px dashed #c9c5da;border-radius:8px;min-height:30px;margin-top:6px;background:#fafafd"></div>';
+  const secs = (w.sections||[]).map((sec,si)=>{
+    const blocks = (sec.blocks||[]).map(b=>{
+      if(b.kind==='texte') return `<div style="font-size:12.5px;color:#33364f;line-height:1.6;white-space:pre-wrap">${escHtml(b.text)}</div>`;
+      if(b.kind==='citation') return `<div style="font-size:12.5px;color:#6b7194;font-style:italic;border-left:3px solid #c9bff2;padding-left:10px">« ${escHtml(b.text)} »</div>`;
+      if(b.kind==='question'||b.kind==='engagement') return `<div><div style="font-size:12.5px;font-weight:700;color:#1e2038">${b.kind==='engagement'?'🎯 ':''}${escHtml(b.label)}</div>${b.hint?`<div style="font-size:11.5px;color:#6b7194;margin-top:2px">${escHtml(b.hint)}</div>`:''}${zone}</div>`;
+      if(b.kind==='formulation') return `<div><div style="font-size:10.5px;font-weight:800;letter-spacing:.04em;color:#6d5ae0">FORMULATION</div><div style="font-size:12.5px;font-style:italic;color:#33364f;margin-top:3px">${escHtml(b.template)}</div>${zone}</div>`;
+      if(b.kind==='tableau'){
+        const head = `<tr><th></th>${(b.cols||[]).map(c=>`<th style="text-align:left;font-size:10.5px;color:#6b7194;text-transform:uppercase;padding:2px 6px">${escHtml(c)}</th>`).join('')}</tr>`;
+        const rows = (b.rows||[]).map(r=>`<tr><td style="font-size:11.5px;font-weight:700;color:#1e2038;padding:3px 6px;vertical-align:top">${escHtml(r.label)}</td>${(b.cols||[]).map(()=>'<td><div style="border:1px dashed #c9c5da;border-radius:5px;min-height:22px;min-width:70px"></div></td>').join('')}</tr>`).join('');
+        return `<div>${b.intro?`<div style="font-size:12.5px;color:#33364f;margin-bottom:6px">${escHtml(b.intro)}</div>`:''}<div style="overflow-x:auto"><table style="border-collapse:separate;border-spacing:4px;width:100%">${head}${rows}</table></div></div>`;
+      }
+      return '';
+    }).map(h=>`<div style="background:#fff;border:1px solid #e7e5f4;border-radius:10px;padding:10px 12px">${h}</div>`).join('<div style="height:8px"></div>');
+    return `<div style="margin-top:16px"><div style="font-size:13.5px;font-weight:800;color:#1e2038">${String(si+1).padStart(2,'0')} · ${escHtml(sec.title)}</div>${sec.objectif?`<div style="font-size:11.5px;color:#6b7194;margin:3px 0 8px"><b>Objectif :</b> ${escHtml(sec.objectif)}</div>`:'<div style="height:8px"></div>'}${blocks}</div>`;
+  }).join('');
+  const synth = w.synthese ? `<div style="margin-top:16px"><div style="font-size:13.5px;font-weight:800;color:#1e2038">🧩 ${escHtml(w.synthese.title||'Synthèse')}</div><div style="background:#fff;border:1px solid #e7e5f4;border-radius:10px;padding:6px 12px;margin-top:8px">${(w.synthese.rows||[]).map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #f0eff7"><div style="width:42%;font-size:11.5px;font-weight:700;color:#1e2038">${escHtml(r.label)}</div><div style="flex:1;border:1px dashed #c9c5da;border-radius:5px;min-height:22px"></div></div>`).join('')}</div></div>` : '';
+  return `<div style="max-height:60vh;overflow:auto;background:#f7f6fc;border:1px solid #e7e5f4;border-radius:12px;padding:14px 14px 18px">
+    <div style="text-align:center"><div style="font-size:10.5px;font-weight:800;letter-spacing:.12em;color:#6d5ae0">📓 WORKBOOK · ${escHtml(w.meta&&w.meta.courseName||'')}</div>
+    <div style="font-size:16px;font-weight:800;color:#1e2038;margin-top:4px">${escHtml(w.title)}</div>
+    ${w.subtitle?`<div style="font-size:11.5px;color:#6b7194;margin-top:3px">${escHtml(w.subtitle)}</div>`:''}</div>
+    ${w.perso?`<div style="margin-top:10px;background:#f6f4ff;border:1px solid #c9bff2;border-radius:10px;padding:9px 11px;font-size:12.5px;color:#33364f;white-space:pre-wrap">${escHtml(w.perso)}</div>`:''}
+    ${w.intro?`<div style="margin-top:8px;background:#fff;border:1px solid #e7e5f4;border-radius:10px;padding:9px 11px;font-size:12px;color:#4b4f6b;white-space:pre-wrap"><b style="font-size:10.5px;letter-spacing:.05em;color:#6b7194">COMMENT L'UTILISER</b><br>${escHtml(w.intro)}</div>`:''}
+    ${secs}${synth}
   </div>`;
 }
 
