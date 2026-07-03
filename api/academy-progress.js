@@ -48,6 +48,7 @@ function shape(d) {
     lastActivity: d.lastActivity ? fmtD(d.lastActivity) : '',
     courses: (d.courses || []).map(function (c) {
       return {
+        id: c.id || '',
         name: c.name || 'Formation',
         pct: c.pct || 0,
         done: c.done || 0,
@@ -56,6 +57,7 @@ function shape(d) {
         building: c.building ? { roomsDone: c.building.roomsDone || 0, roomsTotal: c.building.roomsTotal || 0 } : null,
         lockedLeft: (c.lockedLeft || []).map(function (t) { return { name: t }; }),
         wins: c.wins || null, // { count, totals, kpis, last:[{title,text,at,summary}] }
+        path: c.path || null, // Vague C : route de l'élève { guided, objectif, revision, source, steps:[{key,title,status,…}] }
       };
     }),
   };
