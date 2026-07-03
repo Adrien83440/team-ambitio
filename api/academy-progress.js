@@ -46,6 +46,7 @@ function shape(d) {
       winsKpis: (d.totals && d.totals.winsKpis) || [],
     },
     lastActivity: d.lastActivity ? fmtD(d.lastActivity) : '',
+    points: d.points || null, // V13 : { total, level:{name}, claims:[{palierId,name,reward,at,status}] }
     courses: (d.courses || []).map(function (c) {
       return {
         id: c.id || '',
