@@ -242,7 +242,7 @@ module.exports = async (req, res) => {
       if (!subId) { res.status(200).json({ ok: false, error: 'subId_required' }); return; }
       const j = await bridgeWorkbook(key, { action: 'get', courseId: courseId, email: email, subId: subId });
       if (!j || j.ok !== true) { res.status(200).json({ ok: false, error: 'academy_unreachable' }); return; }
-      res.status(200).json({ ok: true, found: j.found !== false, workbook: j.workbook || null, frozen: !!j.frozen });
+      res.status(200).json({ ok: true, found: j.found !== false, workbook: j.workbook || null, frozen: !!j.frozen, answers: j.answers || {} });
       return;
     }
 
