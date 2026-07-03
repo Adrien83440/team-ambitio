@@ -236,6 +236,16 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // ───────────────────────── GET (aperçu coach) ─────────────────────────
+    if (action === 'get') {
+      const subId = String(body.subId || '').trim();
+      if (!subId) { res.status(200).json({ ok: false, error: 'subId_required' }); return; }
+      const j = await bridgeWorkbook(key, { action: 'get', courseId: courseId, email: email, subId: subId });
+      if (!j || j.ok !== true) { res.status(200).json({ ok: false, error: 'academy_unreachable' }); return; }
+      res.status(200).json({ ok: true, found: j.found !== false, workbook: j.workbook || null, frozen: !!j.frozen });
+      return;
+    }
+
     // ───────────────────────── GENERATE ─────────────────────────
     if (action === 'generate') {
       if (!process.env.ANTHROPIC_API_KEY) {
