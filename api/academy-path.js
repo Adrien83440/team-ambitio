@@ -51,8 +51,13 @@ function coachingContext(c) {
   L.push('- Programme : ' + (c.programme || '(non renseigné)'));
   L.push('- Plan d\'action : ' + (c.planAction ? cap(c.planAction, 4000) : '(non renseigné)'));
   if (c.questionnaire) {
-    const q = typeof c.questionnaire === 'string' ? c.questionnaire : JSON.stringify(c.questionnaire);
-    L.push('- Questionnaire : ' + cap(q, 4000));
+    let q;
+    if (Array.isArray(c.questionnaire.answers)) {
+      q = c.questionnaire.answers.map(function (x) { return 'Q: ' + x.q + ' — R: ' + x.a; }).join('\n    ');
+    } else {
+      q = typeof c.questionnaire === 'string' ? c.questionnaire : JSON.stringify(c.questionnaire);
+    }
+    L.push('- Questionnaire' + (c.questionnaire.formTitle ? ' (' + c.questionnaire.formTitle + ')' : '') + ' :\n    ' + cap(q, 4000));
   } else {
     L.push('- Questionnaire : (pas encore rempli)');
   }
