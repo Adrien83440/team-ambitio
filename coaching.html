@@ -1331,6 +1331,7 @@
     document.getElementById('uRole').textContent=roleLbl;
     window._firebaseReady=true;
     window.loadClients();
+    setTimeout(function(){ if(window.autoLinkQuestionnaires) window.autoLinkQuestionnaires(); }, 1200);
   });
 </script>
 
@@ -2162,6 +2163,96 @@ async function pcDismissStored(id){
   }catch(e){ showToast('Impossible pour le moment','error'); }
 }
 
+// ── QUESTIONNAIRE ALTEOFORMS ──
+// Le formulaire « Audit Business - Post inscriptions » (AlteoForms) contient
+// le nom et le prénom du client : au chargement de la page, l'admin lie
+// automatiquement chaque réponse à sa fiche coaching et en COPIE le contenu
+// dans la fiche (les réponses AlteoForms ne sont lisibles que par les admins ;
+// la copie, elle, est visible des coachs/CSM et lue par le copilote IA).
+// Prudence maximale : liaison uniquement sur correspondance UNIQUE et sûre.
+const QFORM_MATCH = 'audit business';
+let _qLinkRan = false;
+
+function qNorm(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]+/g,' ').trim();
+}
+function qTokens(s){ return qNorm(s).split(' ').filter(t=>t.length>1); }
+function qSameName(a, b){
+  if(!a.length || !b.length) return false;
+  const A = new Set(a), B = new Set(b);
+  let common = 0; A.forEach(t=>{ if(B.has(t)) common++; });
+  if(common < 2) return false;                    // au moins prénom + nom en commun
+  return common === A.size || common === B.size;  // l'un contient l'autre (2e prénom ok)
+}
+function qNameFromResponse(r){
+  const parts = [];
+  (r.answers||[]).forEach(a=>{
+    const l = qNorm(a.label);
+    if(!l || a.value==null || a.value==='') return;
+    const isPrenom = l.includes('prenom');
+    const isNom = /\bnom\b/.test(l) && !/entreprise|societe|marque|business|activite|domaine|projet|boite/.test(l);
+    if(isPrenom || isNom) parts.push(String(a.value));
+  });
+  return qTokens(parts.join(' '));
+}
+
+async function autoLinkQuestionnaires(){
+  if(_qLinkRan || window._role!=='admin') return;
+  _qLinkRan = true;
+  try{
+    // 1) Trouver le formulaire par son titre (les définitions sont publiques).
+    const fs = await window._getDocs(window._collection(window._db,'alteo_forms'));
+    let form = null;
+    fs.forEach(d=>{ const f=d.data(); if(!form && qNorm(f.title).includes(QFORM_MATCH)) form = { _id:d.id, title:f.title||'' }; });
+    if(!form) return;
+    // 2) Réponses déjà consommées + fiches encore sans questionnaire.
+    const used = new Set();
+    _clients.forEach(c=>{ if(c.questionnaire && c.questionnaire.responseId) used.add(c.questionnaire.responseId); });
+    const open = _clients.filter(c=>!c.questionnaire && (c.nom||'').trim());
+    if(!open.length) return;
+    const keys = open.map(c=>({ c, t: qTokens(c.nom) }));
+    // 3) Parcourir les réponses et lier les correspondances uniques.
+    const rs = await window._getDocs(window._collection(window._db,'alteo_forms',form._id,'responses'));
+    let linked = 0;
+    for (const d of rs.docs){
+      if(used.has(d.id)) continue;
+      const r = d.data();
+      const nameT = qNameFromResponse(r);
+      if(nameT.length < 2) continue;
+      const hits = keys.filter(k=>!k.c.questionnaire && qSameName(nameT, k.t));
+      if(hits.length !== 1) continue; // ambigu ou introuvable → on ne force jamais
+      const c = hits[0].c;
+      const answers = (r.answers||[]).filter(a=>a.value!=null&&a.value!=='').map(a=>({ q: String(a.label||a.fieldId||''), a: String(a.value) }));
+      const q = {
+        formId: form._id, formTitle: form.title, responseId: d.id,
+        submittedAt: r.submittedAt && r.submittedAt.toMillis ? r.submittedAt.toMillis() : Date.now(),
+        answers: answers, linkedAt: Date.now(), linkedBy: window._userName||'admin',
+      };
+      await window._updateDoc(window._doc(window._db,'clients',c._id), { questionnaire: q });
+      c.questionnaire = q; used.add(d.id); linked++;
+    }
+    if(linked){ showToast(`📋 ${linked} questionnaire(s) lié(s) aux fiches`); render(); }
+  }catch(e){ console.warn('[questionnaires]', e && e.message); }
+}
+
+// Bloc « Questionnaire » de la fiche (dépliable).
+function questionnaireBlock(c, id){
+  const q = c && c.questionnaire;
+  if(!q) return '';
+  const when = q.submittedAt ? new Date(q.submittedAt).toLocaleDateString('fr-FR',{ day:'numeric', month:'short', year:'numeric' }) : '';
+  const rows = (q.answers||[]).map(x=>`<div style="padding:7px 0;border-bottom:1px solid #f0eff8"><div style="font-size:11px;font-weight:700;color:#6b7194">${escHtml(x.q)}</div><div style="font-size:12.5px;color:#1f2340;white-space:pre-wrap">${escHtml(x.a)}</div></div>`).join('');
+  return `
+      <!-- QUESTIONNAIRE (AlteoForms) -->
+      <div style="margin:0 0 16px;background:#fff;border:1px solid #e4e1f7;border-radius:12px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;cursor:pointer" onclick="const b=document.getElementById('qBody-${id}');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.q-arr').style.transform=b.style.display==='none'?'':'rotate(180deg)'">
+          <span>📋</span><b style="font-size:13px">Questionnaire — ${escHtml(q.formTitle||'AlteoForms')}</b>
+          <span style="font-size:11px;color:#6b7194">${when?`reçu le ${when} · `:''}${(q.answers||[]).length} réponse(s)</span>
+          <span class="q-arr" style="margin-left:auto;font-size:11px;color:#6b7194;transition:transform .2s">▼</span>
+        </div>
+        <div id="qBody-${id}" style="display:none;padding:4px 14px 12px;max-height:420px;overflow:auto">${rows||'<div style="font-size:12px;color:#6b7194;padding:8px 0">—</div>'}</div>
+      </div>`;
+}
+
 // ── DETAIL PANEL ──
 function openDetail(id){
   const c = _clients.find(x=>x._id===id);
@@ -2300,6 +2391,7 @@ function openDetail(id){
         <button class="btn btn-primary btn-sm" onclick="openAddYearModal('${id}')">🔄 Renouveler</button>
       </div>
 
+      ${questionnaireBlock(c, id)}
       <!-- PLAN D'ACTION -->
       <div class="dp-plan-section" style="margin: 0 0 16px">
         <div class="dp-plan-header">
