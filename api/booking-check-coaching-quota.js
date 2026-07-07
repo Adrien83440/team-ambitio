@@ -33,14 +33,16 @@
 //
 // Logique de comptage du mois courant
 // -----------------------------------
-//   used = sessions "fait" du mois (depuis c.sessions OU c.years[].sessions)
+//   used = sessions "fait" du mois (depuis c.sessions OU c.years[].sessions),
+//          en EXCLUANT la séance d'accueil (numero 0) et le RDV 72h éclair
+//          (type 'rdv72h') qui ne comptent pas dans le quota mensuel
 //        + bookings confirmed isCoaching=true du mois, MAIS uniquement ceux
 //          dont la date est >= aujourd'hui (RDV à venir), en excluant ceux
 //          flaggés excludeFromQuota === true
 //   quota = clientData.quotaOverrides[monthYear] si présent (override admin)
 //         | sinon 2 si c.programme contient "24c" (case-insensitive), sinon 1
-//   → la partie "sessions fait" est strictement alignée sur coaching-shared.js
-//     (getMonthlyQuota / getSessionsInMonth)
+//   → la partie "sessions fait" est strictement alignée sur coaching.html
+//     (getSessionsInMonth) : même exclusion numero 0 / rdv72h.
 //
 // Pourquoi "RDV à venir uniquement"
 // ---------------------------------
@@ -102,6 +104,14 @@ function countSessionsInMonth(c, monthYear /* "YYYY-MM" */) {
   const sessions = flattenSessions(c);
   return sessions.filter((s) => {
     if (!s || s.statut !== 'fait') return false;
+    // Exclure la séance d'accueil (numero === 0) et le RDV 72h éclair
+    // (type === 'rdv72h') : ce sont des séances d'onboarding offertes qui ne
+    // comptent PAS dans le quota mensuel de coachings. Sans cette exclusion, un
+    // client qui a fait son 72h en début de mois se voit refuser son 1er vrai
+    // coaching du mois (used 1/1). Alignement strict avec coaching.html
+    // (getSessionsInMonth ~ligne 1380), academy-client-info.js,
+    // csm-dashboard.html et coaching-dashboard.html.
+    if (s.numero === 0 || s.type === 'rdv72h') return false;
     if (!s.date || typeof s.date !== 'string') return false;
     return s.date.slice(0, 7) === monthYear;
   }).length;
