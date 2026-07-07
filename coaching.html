@@ -1467,6 +1467,14 @@ window.loadClients = async function(){
     snap.forEach(d=>{
       const data = d.data();
       data._id = d.id;
+      // ── FIX plans qui disparaissent ──
+      // Un ancien bug sérialisait la sous-collection plans comme CHAMP sur le
+      // doc parent (via _setDoc(doc, c)). Ce champ parasite, figé et souvent
+      // incomplet, masquait ensuite la vraie sous-collection clients/{id}/plans
+      // au chargement (le garde-fou de loadClientPlans court-circuitait la
+      // relecture). On le supprime toujours : la sous-collection reste l'unique
+      // source de vérité des plans d'action.
+      if('plans' in data) delete data.plans;
       // Normalize all coach names in sessions
       if(data.sessions){
         data.sessions = data.sessions.map(s=>({...s, coach: normalizeCoach(s.coach)}));
@@ -2843,6 +2851,21 @@ function toggleSession(el){el.closest('.session-item').classList.toggle('open');
 function toggleNewSession(){document.getElementById('newSessionForm').classList.toggle('show');}
 
 // ── ADD SESSION ──
+// ── Sauvegarde d'une fiche client (document PARENT uniquement) ──
+// Réécrit clients/{id} depuis l'objet en mémoire, en retirant les champs qui
+// n'ont RIEN à faire sur le doc parent :
+//   • plans : vit dans la sous-collection clients/{id}/plans. L'écrire ici
+//     gonfle le doc (HTML jusqu'à 750 Ko → risque de dépasser la limite
+//     Firestore de 1 Mo) ET le fige en doublon qui masque la sous-collection.
+//   • _id : identifiant local ajouté au chargement, redondant avec l'ID du doc.
+// Tous les autres champs (planAction, sessions, years, quotaOverrides, files…)
+// sont préservés à l'identique. À utiliser partout à la place de _setDoc(doc, c).
+function saveClientDoc(clientId, c){
+  const { plans, _id, ...clean } = c;
+  const ref = window._doc(window._db, 'clients', clientId);
+  return window._setDoc(ref, clean);
+}
+
 async function addSession(clientId){
   const date = document.getElementById('ns-date').value;
   const coach = normalizeCoach(document.getElementById('ns-coach').value.trim());
@@ -2869,7 +2892,7 @@ async function addSession(clientId){
   
   try{
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    await saveClientDoc(clientId, c);
     showToast('✅ Séance ajoutée !','success');
     openDetail(clientId);
     applyFilters(); renderRecentActivity();
@@ -2942,7 +2965,7 @@ async function createClient(){
 
   try{
     client._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',id),client);
+    await saveClientDoc(id, client);
     _clients.push(client);
     closeNewClientModal();
     applyFilters(); renderRecentActivity();
@@ -3275,7 +3298,7 @@ async function quickMarkDone(clientId, sessionNum){
 
   try{
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    await saveClientDoc(clientId, c);
     showToast('✅ Séance enregistrée !','success');
     applyFilters(); renderRecentActivity();
     openDetail(clientId);
@@ -3316,7 +3339,7 @@ async function saveSessionEdit(clientId, sessionNum){
 
   try{
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    await saveClientDoc(clientId, c);
     showToast('✅ Séance mise à jour !','success');
     applyFilters(); renderRecentActivity();
     openDetail(clientId);
@@ -3669,7 +3692,7 @@ async function scanDriveForClient(clientId){
   if(changed){
     try{
       c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    await saveClientDoc(clientId, c);
       log(`💾 Sauvegardé: ${linked} liés, ${unlinked} non-liés`,'dsl-match');
     }catch(e){
       log(`❌ Erreur sauvegarde: ${e.message}`,'dsl-err');
@@ -3756,7 +3779,7 @@ async function confirmAddYear(){
   c.nbCoachingsTotal=(c.years||[]).reduce(function(s,y){return s+(y.sessions||[]).filter(function(x){return x.type!=='rdv72h';}).length;},0);
   try{
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',cid),c);
+    await saveClientDoc(cid, c);
     closeAddYearModal();applyFilters(); renderRecentActivity();openDetail(cid);
     showToast('Année '+yn+' créée !','success');
   }catch(e){showToast('Erreur: '+e.message,'error');}
@@ -3779,7 +3802,7 @@ async function addSessToYear(clientId,yi){
   syncYearStats(c);
   try{
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    await saveClientDoc(clientId, c);
     showToast('Séance ajoutée !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -3812,7 +3835,7 @@ async function markYrDone(clientId,yi,sn){
   syncYearStats(c);
   try{
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    await saveClientDoc(clientId, c);
     showToast('Séance validée !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -3826,7 +3849,7 @@ async function unmarkYrDone(clientId,yi,sn){
   syncYearStats(c);
   try{
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    await saveClientDoc(clientId, c);
     showToast('Séance annulée','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -3848,7 +3871,7 @@ async function saveYrEdit(clientId,yi,sn){
   syncYearStats(c);
   try{
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',clientId),c);
+    await saveClientDoc(clientId, c);
     showToast('Séance mise à jour !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -3979,7 +4002,7 @@ async function upload72hFiles(clientId, yi, sn) {
   // Sauvegarder le client (avec les métadonnées fichiers)
   try {
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db, 'clients', clientId), c);
+    await saveClientDoc(clientId, c);
     showToast(done + ' fichier(s) ajouté(s) !', 'success');
   } catch (e) {
     showToast('Erreur sauvegarde: ' + e.message, 'error');
@@ -4069,7 +4092,7 @@ async function delete72hFile(clientId, yi, sn, fileIdx) {
   // Sauvegarder le client
   try {
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db, 'clients', clientId), c);
+    await saveClientDoc(clientId, c);
     showToast('Fichier supprimé', 'success');
   } catch (e) {
     showToast('Erreur: ' + e.message, 'error');
@@ -4294,7 +4317,7 @@ async function saveEditClient(){
 
   try{
     c._updatedAt = Date.now();
-    await window._setDoc(window._doc(window._db,'clients',id), c);
+    await saveClientDoc(id, c);
     closeEditClientModal();
     applyFilters(); renderRecentActivity();
     openDetail(id);
