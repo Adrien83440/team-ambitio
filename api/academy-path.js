@@ -87,6 +87,7 @@ function routeText(path) {
     let line = (i + 1) + '. [' + s.key + '] « ' + s.title + ' » — ' + (st[s.status] || s.status) + ' (' + (s.done || 0) + '/' + (s.total || 0) + ' leçons)';
     if (s.force === 'open') line += ' [forcé ouvert]';
     if (s.force === 'lock') line += ' [repoussé]';
+    if (s.aiPinned) line += ' [ÉPINGLÉ — ne jamais déplacer]';
     return line;
   }).join('\n');
 }
@@ -110,6 +111,21 @@ function repairSteps(proposedSteps, currentSteps) {
   currentSteps.forEach(function (s) {
     if (!seen[s.key]) { seen[s.key] = true; out.push({ subId: s.key, force: s.force === 'open' || s.force === 'lock' ? s.force : null }); }
   });
+  // Ré-ancrage des sujets ÉPINGLÉS (Réglages Academy > Copilote IA) : quoi que
+  // propose l'IA, chacun reste à SA position actuelle, forçage actuel conservé —
+  // miroir exact du garde-fou serveur d'Academy (bridge set-path). L'aperçu
+  // affiché est donc identique au parcours réellement appliqué.
+  const pinnedIds = {};
+  currentSteps.forEach(function (s) { if (s.aiPinned) pinnedIds[s.key] = true; });
+  if (Object.keys(pinnedIds).length > 0) {
+    const movable = out.filter(function (st) { return !pinnedIds[st.subId]; });
+    let mi = 0;
+    return currentSteps.map(function (cur) {
+      if (pinnedIds[cur.key]) return { subId: cur.key, force: cur.force === 'open' || cur.force === 'lock' ? cur.force : null };
+      const st = movable[mi]; mi++;
+      return st || { subId: cur.key, force: null };
+    });
+  }
   return out;
 }
 
@@ -181,6 +197,7 @@ function buildPrompt(courseName, ctx, path, wins) {
     '- Réponds UNIQUEMENT avec un objet JSON valide, sans texte autour, sans balises markdown.',
     '- "steps" contient EXACTEMENT les subId listés ci-dessus (ceux entre crochets), chacun UNE seule fois. Les sujets terminés restent listés, en général en tête.',
     '- Ne mets jamais "force":"lock" sur un sujet terminé.',
+    '- Les sujets marqués [ÉPINGLÉ] ne doivent JAMAIS changer de position ni recevoir de "force" : recopie-les exactement à leur place actuelle et ne les mentionne pas dans "changes".',
     '- Si la route actuelle est déjà la bonne, renvoie-la telle quelle avec "changes": [].',
     '',
     'FORMAT DE RÉPONSE :',
@@ -272,6 +289,8 @@ module.exports = async (req, res) => {
           steps: steps,
           changes: Array.isArray(parsed.changes) ? parsed.changes.slice(0, 12) : [],
           resume: cap(parsed.resume || '', 500),
+          // Sujets épinglés (badge 📌 côté UI) — jamais déplacés ni forcés.
+          pinned: (course.path.steps || []).filter(function (s) { return s.aiPinned; }).map(function (s) { return s.key; }),
         },
         current: course.path,
         courseName: course.name,
