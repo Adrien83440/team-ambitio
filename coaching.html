@@ -1178,6 +1178,7 @@
     <button class="view-tab active" onclick="setView('kanban',this)">◫ Kanban</button>
     <button class="view-tab" onclick="setView('list',this)">≡ Liste</button>
   </div>
+  <button id="batchProposeBtn" class="btn btn-outline" style="display:none;white-space:nowrap" onclick="batchProposePaths()" title="L'IA prépare une proposition de parcours (badge 🧭, à valider fiche par fiche) pour chaque client actif qui a de la matière coaching et n'a pas encore de proposition en attente">🧭 Proposer pour tous</button>
 </div>
 
 <!-- RECENT STRIP (activité récente) -->
@@ -1321,6 +1322,7 @@
       return;
     }
     window._role=role;
+    if(role==='admin'){ var bpb=document.getElementById('batchProposeBtn'); if(bpb) bpb.style.display=''; }
     window._userName=user.displayName||user.email.split('@')[0];
     document.getElementById('uName').textContent=window._userName;
     document.getElementById('uAvatar').textContent=window._userName.charAt(0).toUpperCase();
@@ -2343,6 +2345,72 @@ async function autoProposePath(clientId){
     if(document.getElementById('acadBlock-'+clientId)) openDetail(clientId); // fiche ouverte → montrer la bannière
     showToast('🧭 L\'IA a préparé une proposition de parcours — à valider dans la fiche');
   }catch(e){ console.warn('[copilote auto]', e && e.message); }
+}
+
+// ── Passe en masse (rattrapage) : une proposition IA pour chaque client ────
+// Pour les clients d'AVANT le copilote (jamais de sync Drive depuis), l'IA
+// prépare sa proposition en se basant sur ce que la fiche contient déjà :
+// plan d'action, questionnaire, séances passées, synthèses — pour les anciens,
+// c'est donc leur dernier coaching qui guide. Chaque proposition est STOCKÉE
+// (badge 🧭 + bannière) : la validation reste humaine, fiche par fiche.
+// Ignorés : sans e-mail, sans matière coaching, proposition déjà en attente,
+// parcours déjà guidé (ils ont déjà leur ordre), et clients inactifs.
+async function batchProposePaths(){
+  if(window._role!=='admin'){ showToast('Réservé aux administrateurs.','error'); return; }
+  const btn = document.getElementById('batchProposeBtn');
+  const hasCoachingInfo = (c)=>{
+    if((c.planAction||'').trim()) return true;
+    if(c.questionnaire) return true;
+    const yearsSess = (c.years||[]).some(y=>(y.sessions||[]).some(s=>s && s.statut==='fait'));
+    const flatSess = (c.sessions||[]).some(s=>s && s.statut==='fait');
+    return yearsSess || flatSess;
+  };
+  const candidates = _clients.filter(c=>{
+    if(c.actif===false) return false;
+    if(!((c.email||'').trim())) return false;
+    if(c.academyPathProposal && c.academyPathProposal.status==='pending') return false;
+    return hasCoachingInfo(c);
+  });
+  if(!candidates.length){ showToast('🧭 Personne à traiter : chaque client actif a déjà sa proposition en attente, son parcours guidé, ou pas encore de matière coaching.'); return; }
+  if(!window.confirm('🧭 Préparer une proposition de parcours IA pour '+candidates.length+' client(s) ?\n\nRien ne sera appliqué : chaque proposition attendra ta validation dans la fiche (badge 🧭). Les clients au parcours déjà guidé seront ignorés automatiquement. Compte ~10 s par client — laisse cet onglet ouvert.')) return;
+  if(btn){ btn.disabled=true; }
+  const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+  let done=0, skippedGuided=0, skippedNoPath=0, failed=[];
+  for(let i=0;i<candidates.length;i++){
+    const c = candidates[i];
+    if(btn) btn.textContent = '🧭 '+(i+1)+'/'+candidates.length+' — '+((c.nom||c.email||'').slice(0,18))+'…';
+    try{
+      const em = (c.email||'').trim().toLowerCase();
+      // 1) La route actuelle — même choix de formation que le copilote auto.
+      const pr = await fetch('/api/academy-progress',{ method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ email: em }) });
+      const pj = await pr.json().catch(()=>null);
+      if(!pj || pj.ok!==true || !pj.found){ skippedNoPath++; continue; }
+      const withPath = (pj.dossier.courses||[]).filter(co=>co.path && (co.path.steps||[]).length);
+      if(!withPath.length){ skippedNoPath++; continue; }
+      // Rattrapage = donner un ordre à ceux qui n'en ont pas : parcours déjà
+      // guidé (peu importe la formation en cours) → on n'y touche pas.
+      if(withPath.some(co=>co.path.guided && co.pct<100)){ skippedGuided++; continue; }
+      const course = withPath.find(co=>co.pct<100) || withPath[0];
+      // 2) La proposition (rien n'est écrit côté Academy à ce stade).
+      const r = await fetch('/api/academy-path',{ method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ action:'propose', email: em, courseId: course.id, clientId: c._id }) });
+      const j = await r.json().catch(()=>null);
+      if(!j || j.ok!==true || !j.proposal){ failed.push((c.nom||c.email||'?')+(j&&j.error?' ('+j.error+')':'')); continue; }
+      // 3) Rangée dans la fiche, en attente de validation humaine.
+      const prop = { at: Date.now(), trigger:'batch', status:'pending', courseId: course.id, courseName: course.name,
+        objectif: j.proposal.objectif||'', steps: j.proposal.steps||[], changes: j.proposal.changes||[], resume: j.proposal.resume||'' };
+      await window._updateDoc(window._doc(window._db,'clients',c._id), { academyPathProposal: prop });
+      c.academyPathProposal = prop;
+      done++;
+    }catch(e){ failed.push((c.nom||c.email||'?')); }
+    await new Promise(rs=>setTimeout(rs, 800));
+  }
+  if(btn){ btn.disabled=false; btn.textContent='🧭 Proposer pour tous'; }
+  render();
+  let bilan = '🧭 Terminé : '+done+' proposition(s) préparée(s) (badge 🧭 sur les fiches)';
+  if(skippedGuided) bilan += ' · '+skippedGuided+' déjà guidés (ignorés)';
+  if(skippedNoPath) bilan += ' · '+skippedNoPath+' sans route Academy';
+  if(failed.length) bilan += ' · '+failed.length+' échec(s) : '+failed.slice(0,5).join(', ')+(failed.length>5?'…':'');
+  showToast(bilan, failed.length? 'error':'success');
 }
 
 function pcPendingBadge(c){
