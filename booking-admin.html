@@ -952,6 +952,109 @@ function insertTplVar(fieldId,val){if(!val)return;var el=document.getElementById
 window.openTplModal=openTplModal;window.closeTplModal=closeTplModal;window.saveTplModal=saveTplModal;window.insertTplVar=insertTplVar;
 
 // ═══ SHARE MODAL ═══
+/* ═══ TRANSFERT DE RDV ENTRE EXPERTS + DÉSACTIVATION COMPLÈTE (07/2026) ═══
+   Départ d'un coach : recrée chaque RDV à venir chez l'expert cible (la
+   Cloud Function onBookingCreated fabrique l'événement Google + Meet +
+   invitation), annule l'ancien (motif coach_transfer) et retire l'ancien
+   événement de l'ancien agenda. Backend : api/booking-transfer.js (admin). */
+function bkTransferApi(payload){
+return firebase.auth().currentUser.getIdToken().then(function(t){
+return fetch('/api/booking-transfer',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+t},body:JSON.stringify(payload)});
+}).then(function(r){return r.json().then(function(j){j.__status=r.status;return j;});});
+}
+var _tfState=null;
+function openTransferModal(pid){
+var p=P.find(function(x){return x.id===pid;});if(!p)return;
+var targets=P.filter(function(x){return x.id!==pid&&x.calendarConnected;});
+var existing=document.getElementById('tfModal');if(existing)existing.remove();
+var d=document.createElement('div');d.id='tfModal';
+d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+d.innerHTML='<div style="background:#1a1a2e;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:26px;max-width:640px;width:94%;max-height:88vh;overflow-y:auto">'
++'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:16px;font-weight:800">\U0001F501 Transférer les RDV — '+esc(p.name||pid)+'</div><button onclick="document.getElementById(\'tfModal\').remove()" style="border:none;background:transparent;color:rgba(255,255,255,.5);font-size:20px;cursor:pointer">✕</button></div>'
++'<div style="font-size:11.5px;color:rgba(255,255,255,.45);line-height:1.5;margin-bottom:14px">Chaque RDV coché est recréé chez l\'expert cible (nouvel événement Google + Meet + invitation client automatiques). L\'ancien RDV est annulé avec le motif « transfert coach » et son événement est retiré de l\'ancien agenda — le client reçoit l\'annulation Google de l\'ancien créneau et la nouvelle invitation.</div>'
++'<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.7)">Vers :</div><select id="tfTarget" class="bs" style="flex:1">'+(targets.length?targets.map(function(t){return '<option value="'+escA(t.id)+'">'+esc(t.name||t.id)+'</option>';}).join(''):'<option value="">— aucun expert avec Google Calendar connecté —</option>')+'</select></div>'
++'<div id="tfList" style="border:1px solid rgba(255,255,255,.08);border-radius:10px;max-height:320px;overflow-y:auto;margin-bottom:14px"><div style="padding:18px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Chargement des RDV à venir…</div></div>'
++'<div style="display:flex;gap:8px;justify-content:flex-end;align-items:center"><span id="tfStatus" style="font-size:11.5px;color:rgba(255,255,255,.5);margin-right:auto"></span><button class="bb" onclick="document.getElementById(\'tfModal\').remove()">Fermer</button><button class="bb bb-p" id="tfGo" disabled>Transférer</button></div>'
++'</div>';
+document.body.appendChild(d);
+_tfState={pid:pid,rows:[],targetBusy:{}};
+var td=new Date();var todayIso=td.getFullYear()+'-'+String(td.getMonth()+1).padStart(2,'0')+'-'+String(td.getDate()).padStart(2,'0');
+db.collection('bookings').where('date','>=',todayIso).get().then(function(sn){
+var mine=[],busy={};
+sn.forEach(function(doc){var b=doc.data();
+if(b.status!=='confirmed'&&b.status!=='pending')return;
+var ts=NaN;try{ts=new Date(b.date+'T'+(b.time||'00:00')+':00').getTime();}catch(e){}
+if(!(ts>Date.now()-30*60000))return;
+if(b.personId===pid){mine.push({id:doc.id,b:b});}
+else{busy[b.personId+'|'+b.date+'|'+b.time]=true;}
+});
+mine.sort(function(a,c){var ka=a.b.date+'T'+(a.b.time||'');var kb=c.b.date+'T'+(c.b.time||'');return ka<kb?-1:1;});
+_tfState.rows=mine;_tfState.targetBusy=busy;
+renderTfList();
+}).catch(function(e){var el=document.getElementById('tfList');if(el)el.innerHTML='<div style="padding:18px;color:#f87171;font-size:12px">Erreur : '+esc(e.message)+'</div>';});
+var sel=document.getElementById('tfTarget');if(sel)sel.onchange=renderTfList;
+var go=document.getElementById('tfGo');if(go)go.onclick=runTransfer;
+}
+function renderTfList(){
+if(!_tfState)return;
+var el=document.getElementById('tfList');if(!el)return;
+var target=(document.getElementById('tfTarget')||{}).value||'';
+if(!_tfState.rows.length){el.innerHTML='<div style="padding:18px;text-align:center;color:rgba(255,255,255,.4);font-size:12px">Aucun RDV à venir pour cet expert \U0001F44D</div>';updateTfGo();return;}
+var h='';
+_tfState.rows.forEach(function(r){
+var b=r.b;var pr=b.prospect||{};
+var who=((pr.prenom||'')+' '+(pr.nom||'')).trim()||b.clientNom||pr.email||'—';
+var conflict=target&&_tfState.targetBusy[target+'|'+b.date+'|'+b.time];
+h+='<label style="display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;font-size:12px">'
++'<input type="checkbox" class="tf-cb" data-bid="'+escA(r.id)+'" checked/>'
++'<span style="font-family:monospace;font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap">'+esc(b.date)+' '+esc(b.time||'')+'</span>'
++'<span style="flex:1;font-weight:600">'+esc(who)+'</span>'
++'<span style="font-size:10.5px;color:rgba(255,255,255,.4)">'+esc(b.typeLabel||b.type||'')+'</span>'
++(conflict?'<span style="font-size:10px;font-weight:700;color:#fbbf24">⚠ conflit créneau</span>':'')
++'</label>';
+});
+el.innerHTML=h;
+el.querySelectorAll('.tf-cb').forEach(function(cb){cb.onchange=updateTfGo;});
+updateTfGo();
+}
+function updateTfGo(){
+var go=document.getElementById('tfGo');if(!go)return;
+var n=document.querySelectorAll('#tfList .tf-cb:checked').length;
+var target=(document.getElementById('tfTarget')||{}).value||'';
+go.disabled=!n||!target;
+var tp=P.find(function(x){return x.id===target;});
+go.textContent='Transférer '+n+' RDV'+(tp?' → '+(tp.name||''):'');
+}
+function runTransfer(){
+var target=(document.getElementById('tfTarget')||{}).value||'';if(!target)return;
+var ids=[];document.querySelectorAll('#tfList .tf-cb:checked').forEach(function(cb){ids.push(cb.dataset.bid);});
+if(!ids.length)return;
+var tp=P.find(function(x){return x.id===target;});
+if(!confirm('Transférer '+ids.length+' RDV vers '+(tp?tp.name:target)+' ?\n\nChaque client recevra la nouvelle invitation (nouveau lien Meet) + l\'annulation de l\'ancienne.'))return;
+var go=document.getElementById('tfGo');go.disabled=true;go.textContent='Transfert en cours…';
+var st=document.getElementById('tfStatus');if(st)st.textContent='';
+bkTransferApi({action:'transfer',bookingIds:ids,targetPersonId:target}).then(function(j){
+if(j.__status!==200){if(st)st.textContent='❌ '+(j.error||'Erreur');go.disabled=false;updateTfGo();return;}
+var warn=(j.results||[]).filter(function(r){return r.warning||(!r.ok&&r.error);});
+if(st)st.textContent='✅ '+j.transferred+'/'+j.total+' RDV transférés'+(warn.length?' · ⚠ '+warn.length+' avertissement(s) — détail en console':'');
+console.log('[transfert RDV]',j);
+toast('✅ '+j.transferred+' RDV transférés');
+loadB();
+var pid=_tfState.pid;var m=document.getElementById('tfModal');if(m)m.remove();openTransferModal(pid);
+}).catch(function(e){if(st)st.textContent='❌ '+e.message;go.disabled=false;updateTfGo();});
+}
+function deactivateExpert(pid){
+var p=P.find(function(x){return x.id===pid;});var nm=p?(p.name||pid):pid;
+if(!confirm('Désactiver complètement '+nm+' ?\n\n• Supprime sa fiche expert, ses tokens Google et ses disponibilités\n• L\'archive dans l\'équipe (inactif)\n• Les RDV passés restent dans l\'historique\n• Refusé s\'il reste des RDV à venir (transfère-les d\'abord)\n\nContinuer ?'))return;
+bkTransferApi({action:'deactivate',personId:pid}).then(function(j){
+if(j.__status===409){alert('⚠ Il reste '+j.remaining+' RDV à venir pour '+nm+'.\nUtilise « \U0001F501 Transférer les RDV » d\'abord.');return;}
+if(j.__status!==200){alert('❌ '+(j.error||'Erreur'));return;}
+var w=(j.warnings||[]);
+toast('\U0001F5D1 '+nm+' désactivé'+(w.length?' (⚠ voir console)':''));
+if(w.length)console.warn('[désactivation expert]',j);
+closeExDetail();loadAll();
+}).catch(function(e){alert('❌ '+e.message);});
+}
 function openShareModal(id,kind){
 var base=window.location.origin+'/booking.html';
 var url=kind==='type'?base+'?type='+id:base+'?person='+id;
@@ -1672,7 +1775,7 @@ h+='</div>';
 
 // Bouton suppression : admin only (data-ro-hide pour cacher en read-only, display:none pour non-admin sur sa propre fiche aussi car seul l'admin crée/supprime les experts)
 if(window._currentRole==='admin'){
-  h+='<div class="cd-save-bar" style="margin-top:20px"><button class="bb bb-r" data-ro-hide onclick="if(confirm(\'Supprimer cet expert ?\')){CR.doc(\''+exPerson.id+'\').delete().then(function(){closeExDetail();loadAll();toast(\'🗑 Expert supprimé\');});}" style="margin-right:auto">🗑 Supprimer cet expert</button><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
+  h+='<div class="cd-save-bar" style="margin-top:20px"><button class="bb bb-p" data-ro-hide onclick="openTransferModal(\''+exPerson.id+'\')" style="margin-right:8px">🔁 Transférer les RDV</button><button class="bb bb-r" data-ro-hide onclick="deactivateExpert(\''+exPerson.id+'\')" style="margin-right:auto">🗑 Désactiver l\'expert</button><span id="ex-autosave-status" style="font-size:11px;font-weight:600"></span></div>';
 }else{
   h+='<div class="cd-save-bar" style="margin-top:20px"><span id="ex-autosave-status" style="font-size:11px;font-weight:600;margin-left:auto"></span></div>';
 }
