@@ -324,6 +324,13 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     if (h < 48) return (Math.round(h * 10) / 10).toLocaleString('fr-FR') + ' h';
     return (Math.round(ms / 86400000 * 10) / 10).toLocaleString('fr-FR') + ' j';
   }
+  function fmtSec(sec) {
+    if (sec == null || isNaN(sec) || !isFinite(sec)) return '—';
+    var sInt = Math.round(sec);
+    if (sInt < 60) return sInt + ' s';
+    var mInt = Math.floor(sInt / 60);
+    return mInt + ' min ' + String(sInt % 60).padStart(2, '0') + ' s';
+  }
   function median(arr) {
     if (!arr || !arr.length) return null;
     var a = arr.slice().sort(function (x, y) { return x - y; });
@@ -374,6 +381,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     kept:        { min: 80, max: null, label: 'Kept — RDV maintenus (%)' },
     showup:      { min: 75, max: null, label: 'Show-up (%)' },
     decroche:    { min: 10, max: null, label: 'Taux de décroché (%)' },
+    reach:       { min: 40, max: null, label: 'Joignabilité — leads joints (%)' },
     closingLive: { min: 20, max: null, label: 'Closing live (%)' }
   };
 
@@ -803,17 +811,19 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     DATA.calls.forEach(function (c) {
       if (c.direction !== 'outbound' || !c._p9 || c._ms == null) return;
       if (!callsByP9[c._p9]) callsByP9[c._p9] = [];
-      callsByP9[c._p9].push(c._ms);
+      callsByP9[c._p9].push({ ms: c._ms, ans: (Number(c.durationSec) || 0) >= ANSWERED_MIN_SEC });
     });
     var ttcArr = [], ttbArr = [];
     cohort.forEach(function (l) {
       l._nbCalls = 0; l._ttc = null;
+      l._nbAnswered = 0;
       if (l._p9 && callsByP9[l._p9]) {
         var arr = callsByP9[l._p9];
         l._nbCalls = arr.length;
         for (var i = 0; i < arr.length; i++) {
-          if (l._entry != null && arr[i] >= l._entry) {
-            if (l._ttc == null || arr[i] - l._entry < l._ttc) l._ttc = arr[i] - l._entry;
+          if (arr[i].ans) l._nbAnswered++;
+          if (l._entry != null && arr[i].ms >= l._entry) {
+            if (l._ttc == null || arr[i].ms - l._entry < l._ttc) l._ttc = arr[i].ms - l._entry;
           }
         }
       }
@@ -833,6 +843,47 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     k.ttcCount = ttcArr.length;
     k.ttbMedian = median(ttbArr);
     k.ttbCount = ttbArr.length;
+
+    /* Joignabilité & tentatives — sur la cohorte de leads de la période */
+    var leadsCalled = 0, leadsReached = 0, attemptsSum = 0;
+    cohort.forEach(function (l) {
+      if ((l._nbCalls || 0) > 0) {
+        leadsCalled++;
+        attemptsSum += l._nbCalls;
+        if ((l._nbAnswered || 0) > 0) leadsReached++;
+      }
+    });
+    k.leadsCalled = leadsCalled;
+    k.leadsReached = leadsReached;
+    k.reachRate = leadsCalled > 0 ? leadsReached / leadsCalled * 100 : null;
+    k.attemptsAvg = leadsCalled > 0 ? attemptsSum / leadsCalled : null;
+
+    /* Durée moyenne des appels décrochés (tous appels sortants période) */
+    var ansDurSum = 0, ansDurN = 0;
+    callsOut.forEach(function (c) {
+      var dSec = Number(c.durationSec) || 0;
+      if (dSec >= ANSWERED_MIN_SEC) { ansDurSum += dSec; ansDurN++; }
+    });
+    k.avgAnsweredDurSec = ansDurN > 0 ? ansDurSum / ansDurN : null;
+
+    /* Répartition par closer (userId du call_log → nom d'équipe) */
+    var byUser = {};
+    callsOut.forEach(function (c) {
+      var uid = c.userId || c.ringoverUserId || 'unknown';
+      if (!byUser[uid]) byUser[uid] = { name: null, out: 0, ans: 0, rawName: c.userName || c.ringoverUserName || null };
+      byUser[uid].out++;
+      if ((Number(c.durationSec) || 0) >= ANSWERED_MIN_SEC) byUser[uid].ans++;
+      if (!byUser[uid].rawName && (c.userName || c.ringoverUserName)) byUser[uid].rawName = c.userName || c.ringoverUserName;
+    });
+    var tmList = window.TEAM_MEMBERS_LIST || [];
+    Object.keys(byUser).forEach(function (uid) {
+      var nm = null;
+      for (var i2 = 0; i2 < tmList.length; i2++) {
+        if (tmList[i2].firebaseUid === uid) { nm = tmList[i2].shortName || tmList[i2].displayName; break; }
+      }
+      byUser[uid].name = nm || byUser[uid].rawName || (uid === 'unknown' ? 'Non attribué' : uid.slice(0, 8) + '…');
+    });
+    k.callsByUser = Object.keys(byUser).map(function (uid) { return byUser[uid]; }).sort(function (a, b) { return b.out - a.out; });
 
     /* ── Closing (saisies — mois calendaire uniquement) ── */
     k.saisies = DATA.saisies;
@@ -963,7 +1014,20 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += kpiCard(fmtPct(k.answerRate), 'Taux de décroché', null, targetBadge('decroche', k.answerRate));
     h += kpiCard(fmtDelay(k.ttcMedian), '⏱ Time-to-contact médian', 'entrée lead → 1er appel · ' + k.ttcCount + ' leads');
     h += kpiCard(fmtDelay(k.ttbMedian), '⏱ Time-to-book médian', 'entrée lead → RDV pris · ' + k.ttbCount + ' leads');
-    h += '</div></div>';
+    h += kpiCard(fmtPct(k.reachRate, 0), 'Taux de joignabilité', fmtNum(k.leadsReached) + ' leads joints / ' + fmtNum(k.leadsCalled) + ' appelés', targetBadge('reach', k.reachRate));
+    h += kpiCard(k.attemptsAvg != null ? (Math.round(k.attemptsAvg * 10) / 10).toLocaleString('fr-FR') : '—', 'Tentatives / lead appelé', 'appels moyens par lead touché');
+    h += kpiCard(fmtSec(k.avgAnsweredDurSec), 'Durée moy. décroché', 'conversation moyenne (≥ ' + ANSWERED_MIN_SEC + ' s)');
+    h += '</div>';
+    if (k.callsByUser && k.callsByUser.length) {
+      var maxOut = k.callsByUser[0].out || 1;
+      h += '<div style="margin-top:12px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">Par closer</div><div class="fn-minibars">';
+      k.callsByUser.forEach(function (u) {
+        var rate = u.out > 0 ? u.ans / u.out * 100 : 0;
+        h += '<div class="fn-minibar"><span class="mb-l" title="' + escAttr(u.name) + '">' + esc(u.name) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + (u.out / maxOut * 100).toFixed(1) + '%;background:#f472b6"></span></span><span class="mb-v" style="width:170px">' + fmtNum(u.out) + ' app. · ' + fmtNum(u.ans) + ' déc. · ' + fmtPct(rate, 0) + '</span></div>';
+      });
+      h += '</div></div>';
+    }
+    h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
     /* 7. Closing */
