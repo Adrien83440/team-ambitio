@@ -56,6 +56,7 @@
 const { google } = require('googleapis');
 const { admin, db } = require('./_firebaseAdmin');
 const { sendEmailFromAccount } = require('./_gmailSend');
+const { buildClientEmail, frLongDate } = require('./_replayEmail');
 
 const GRACE_DAYS  = 5;   // jours après le RDV avant d'abandonner la recherche
 const MAX_CHECKS  = 8;   // tentatives max par RDV
@@ -73,13 +74,6 @@ function isoAddDays(iso, delta) {
   const d = new Date(iso + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + delta);
   return d.toISOString().slice(0, 10);
-}
-function frLongDate(isoDate) {
-  try {
-    return new Date(isoDate + 'T12:00:00').toLocaleDateString('fr-FR', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-    });
-  } catch (_) { return isoDate; }
 }
 // Fin du créneau en ms (interprété UTC côté Vercel → ~2 h de marge vs Paris,
 // exactement ce qu'on veut : jamais pendant le meet).
@@ -191,42 +185,6 @@ async function pushMeetToLead(booking, video) {
   return { pushed: true };
 }
 
-// ─── Email client coaching ────────────────────────────────────────────────
-function buildClientEmail(opts) {
-  const prenom = opts.prenom || '';
-  const dateFr = opts.dateFr;
-  const coach = opts.coachName || 'ton coach';
-  const hasNotes = !!opts.notesUrl;
-
-  const subject = '🎥 Ton replay de séance du ' + dateFr;
-
-  const btn = (url, label, bg) =>
-    '<a href="' + url + '" target="_blank" style="display:inline-block;padding:12px 22px;margin:6px 8px 6px 0;' +
-    'background:' + bg + ';color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">' +
-    label + '</a>';
-
-  const bodyHtml =
-    '<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1f2340;font-size:14px;line-height:1.7">' +
-    '<p>Bonjour' + (prenom ? ' ' + prenom : '') + ' 👋</p>' +
-    '<p>Ta séance du <strong>' + dateFr + '</strong> avec ' + coach + ' est disponible :</p>' +
-    '<div style="margin:18px 0">' +
-    btn(opts.videoUrl, '▶️ Regarder le replay', '#4f46e5') +
-    (hasNotes ? btn(opts.notesUrl, '📝 Lire le résumé de la séance', '#059669') : '') +
-    '</div>' +
-    '<p style="font-size:12.5px;color:#6b7194">Garde ces liens précieusement : replay et résumé restent accessibles à tout moment pour revoir les points clés et avancer entre deux séances.</p>' +
-    '<p>À très vite,<br><strong>L\'équipe Alteore</strong></p>' +
-    '</div>';
-
-  const bodyText =
-    'Bonjour' + (prenom ? ' ' + prenom : '') + ',\n\n' +
-    'Ta séance du ' + dateFr + ' avec ' + coach + ' est disponible :\n\n' +
-    '▶️ Replay : ' + opts.videoUrl + '\n' +
-    (hasNotes ? '📝 Résumé : ' + opts.notesUrl + '\n' : '') +
-    '\nÀ très vite,\nL\'équipe Alteore';
-
-  return { subject, bodyHtml, bodyText };
-}
-
 // Résout l'email + le prénom du client d'un booking coaching.
 async function resolveClient(b) {
   let email = (b.prospect && b.prospect.email) ? String(b.prospect.email).trim() : '';
@@ -253,18 +211,25 @@ async function resolveClient(b) {
 // d'archive meetRecordings[]. N'écrase JAMAIS un visioUrl existant (saisie
 // coach prioritaire) et ne touche pas driveUrl/resume (réservés au scan
 // Drive manuel + pipeline IA de coaching.html).
-async function linkToClientSession(clientDoc, b, videoUrl, notesUrl) {
+async function linkToClientSession(clientDoc, b, videoUrl, notesUrl, emailedTo) {
   if (!clientDoc) return { linked: false, reason: 'no_client_doc' };
   const c = clientDoc.data;
   const patch = {};
   let linked = false;
 
-  const matchInList = (list) => {
+  const applyToList = (list) => {
     if (!Array.isArray(list)) return false;
     for (const s of list) {
       if (!s || s.date !== b.date) continue;
-      if (s.visioUrl) continue; // déjà renseigné (main du coach) → on ne touche pas
-      s.visioUrl = videoUrl;
+      // visioUrl : seulement si vide (une saisie coach est prioritaire)
+      if (videoUrl && !s.visioUrl) s.visioUrl = videoUrl;
+      // Marqueur d'envoi client — affiché dans la fiche ("✉️ envoyé le …")
+      // et repris par le bouton manuel (→ "Renvoyer").
+      if (emailedTo) {
+        s.replaySentAt = new Date().toISOString();
+        s.replaySentTo = emailedTo;
+        s.replaySentBy = 'cron';
+      }
       return true;
     }
     return false;
@@ -272,11 +237,11 @@ async function linkToClientSession(clientDoc, b, videoUrl, notesUrl) {
 
   if (Array.isArray(c.years) && c.years.length) {
     for (const y of c.years) {
-      if (matchInList(y && y.sessions)) { linked = true; break; }
+      if (applyToList(y && y.sessions)) { linked = true; break; }
     }
     if (linked) patch.years = c.years;
   } else if (Array.isArray(c.sessions)) {
-    if (matchInList(c.sessions)) { linked = true; patch.sessions = c.sessions; }
+    if (applyToList(c.sessions)) { linked = true; patch.sessions = c.sessions; }
   }
 
   patch.meetRecordings = admin.firestore.FieldValue.arrayUnion({
@@ -343,7 +308,7 @@ async function deliverToCoachingClient(ctx, bookingId, b, atts) {
   let linked = false;
   try {
     if (b.clientId) {
-      const r = await linkToClientSession(clientDoc, Object.assign({ _id: bookingId }, b), video.fileUrl, notes ? notes.fileUrl : null);
+      const r = await linkToClientSession(clientDoc, Object.assign({ _id: bookingId }, b), video.fileUrl, notes ? notes.fileUrl : null, email);
       linked = r.linked;
     }
   } catch (e) {
