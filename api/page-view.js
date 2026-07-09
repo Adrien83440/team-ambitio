@@ -1,31 +1,41 @@
 // ============================================================================
-// api/page-view.js
+// api/page-view.js — v2 (vues + variantes A/B + conversions opt-in)
 // ----------------------------------------------------------------------------
-// Beacon de comptage des VUES des pages d'opt-in (system.io) pour le taux
-// d'opt-in réel du Funnel Sales : taux = leads / vues.
+// Beacon des pages d'opt-in system.io pour le Funnel Sales :
+//   • VUES par page (taux d'opt-in réel = leads / vues)
+//   • VUES et OPT-INS par VARIANTE A/B (bloc 🧪 A/B test du funnel, avec
+//     significativité statistique calculée côté Alteore)
 //
 // URL  : POST https://team.alteore.com/api/page-view
-// Auth : AUCUNE — beacon navigateur public (comme un pixel). Le snippet
-//        côté page (voir SNIPPET-PAGEVIEW-SYSTEMIO.html) dédoublonne par
-//        session via sessionStorage : 1 vue max / page / session.
-// CORS : ouvert (*) — la page system.io n'est pas sur team.alteore.com.
+// Auth : AUCUNE — beacon navigateur public (comme un pixel). Les snippets
+//        côté page (voir SNIPPETS-SYSTEMIO-OPTIN-AB.html) dédoublonnent par
+//        session : 1 vue max / page / session, 1 opt-in max / session.
+// CORS : ouvert (*) — les pages system.io ne sont pas sur team.alteore.com.
 //
-// Body (JSON) : { "page": "elite" }        // "elite" | "business"
+// Body (JSON) :
+//   { "page": "elite" }                                  → +1 vue page
+//   { "page": "elite", "variant": "b" }                  → +1 vue variante B
+//   { "page": "elite", "variant": "b", "event": "optin" }→ +1 opt-in variante B
+//   { "page": "elite", "event": "optin" }                → +1 opt-in page (sans test)
 //
 // Écriture : incrément atomique Firestore (Admin SDK)
-//   page_views_daily/{YYYY-MM-DD}_{page}  →  { date, page, views: +1 }
-//   Jour calculé en Europe/Paris (cohérent avec le reste du système).
+//   page_views_daily/{YYYY-MM-DD}_{page}                 (page sans variante)
+//   page_views_daily/{YYYY-MM-DD}_{page}--{variant}      (variante A/B)
+//   → { date, page, variant|null, views: n, optins: n }
+//   Jour calculé en Europe/Paris.
+//
+// ─── IMPORTANT — PAS DE DOUBLE COMPTAGE ──────────────────────────────
+// Un hit incrémente UN SEUL document (celui de sa variante, ou celui de
+// la page si pas de variante). Le total « Vues page opt-in » du funnel
+// = somme de tous les docs de la page → reste exact avec ou sans test.
 //
 // ─── ANTI-ABUS (léger, assumé) ────────────────────────────────────────
-//   - slug forcé dans la whitelist ALLOWED_PAGES (tout le reste → 'other')
-//     → nombre de documents borné, pas de pollution de collection.
-//   - payload minuscule, aucune donnée personnelle, aucun retour de data.
-//   - c'est un compteur indicatif de tunnel : la précision "analytics"
-//     n'est pas l'objectif (les bots éventuels gonflent marginalement).
+//   - page forcée dans ALLOWED_PAGES (sinon 'other') → docs bornés.
+//   - variant nettoyée [a-z0-9_-], 20 car. max.
+//   - payload minuscule, aucune donnée personnelle, compteur indicatif.
 //
-// ─── LECTURE ──────────────────────────────────────────────────────────
-// sales-funnel.html (admin only) lit page_views_daily sur la période.
-// Rule Firestore : read isAdmin(), write false (Admin SDK uniquement).
+// Rétrocompatible v1 : les anciens snippets (page seule) continuent de
+// fonctionner à l'identique.
 // ============================================================================
 
 const { db, admin } = require('./_firebaseAdmin');
@@ -59,28 +69,38 @@ module.exports = async (req, res) => {
   }
 
   let page = 'other';
+  let variant = null;
+  let event = 'view';
   try {
     const body = parseBody(req) || {};
-    const raw = String(body.page || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
-    if (ALLOWED_PAGES.indexOf(raw) >= 0) page = raw;
+    const rawPage = String(body.page || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+    if (ALLOWED_PAGES.indexOf(rawPage) >= 0) page = rawPage;
+
+    const rawVariant = String(body.variant || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, 20);
+    if (rawVariant) variant = rawVariant;
+
+    if (String(body.event || '').toLowerCase().trim() === 'optin') event = 'optin';
   } catch (e) {
-    // body illisible → compté en 'other'
+    // body illisible → vue 'other'
   }
 
   const date = todayIsoParis();
-  const docId = date + '_' + page;
+  const docId = date + '_' + page + (variant ? '--' + variant : '');
+
+  const patch = {
+    date,
+    page,
+    variant: variant || null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (event === 'optin') patch.optins = admin.firestore.FieldValue.increment(1);
+  else patch.views = admin.firestore.FieldValue.increment(1);
 
   try {
-    await db.collection('page_views_daily').doc(docId).set({
-      date,
-      page,
-      views: admin.firestore.FieldValue.increment(1),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await db.collection('page_views_daily').doc(docId).set(patch, { merge: true });
   } catch (e) {
     console.error('[page-view] firestore error:', e.message);
-    // On répond 200 quand même : un beacon ne doit jamais faire d'erreur
-    // visible côté page marketing.
+    // Un beacon ne doit jamais faire d'erreur visible côté page marketing.
   }
 
   res.status(200).json({ ok: true });
