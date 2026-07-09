@@ -1240,7 +1240,9 @@ async function handleSubmit() {
   //   - self_booking   : lead prend lui-même son RDV (lien public VSL)
   // _agentMode (csm_manual) est traité séparément ci-dessous et écrase cette valeur.
   var _typeIsSetterOnly = !!(S.selType && S.selType.isSetterOnly === true);
-  if (_formLeadId) booking.source = (_typeIsSetterOnly && !_agentMode) ? 'setter_booking' : 'self_booking';
+  // source posé sur TOUTES les résas publiques (avec ou sans leadId) —
+  // requis par le Funnel Sales pour la ventilation self vs setter (07/2026).
+  booking.source = (_typeIsSetterOnly && !_agentMode) ? 'setter_booking' : 'self_booking';
   // Mode agent : RDV pris par la CSM/un admin à la place d'un client coaching.
   //  - source 'csm_manual' pour distinguer des réservations self-service.
   //  - clientId / clientNom : lien explicite vers la fiche coaching.

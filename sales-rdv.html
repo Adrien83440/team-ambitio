@@ -201,6 +201,21 @@ body { min-height: 100vh; }
 .rdv-modal-info { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 12px; margin-bottom: 16px; }
 .rdv-modal-info strong { color: var(--text); }
 .rdv-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* MAIN VIEW TABS (À venir / Passés) */
+.rdv-mtabs { display: flex; gap: 6px; padding: 4px; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px; width: fit-content; margin-bottom: 18px; }
+.rdv-mtab { background: transparent; border: none; color: var(--text-muted); padding: 8px 16px; border-radius: 7px; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all 0.15s; font-family: inherit; display: inline-flex; align-items: center; gap: 7px; }
+.rdv-mtab:hover { color: var(--text); }
+.rdv-mtab.active { background: rgba(239,68,68,0.15); color: var(--red); }
+.rdv-mtab-badge { background: var(--orange); color: #1a1005; font-size: 10px; font-weight: 800; min-width: 17px; height: 17px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+.rdv-mtab-badge:empty { display: none; }
+
+/* PASSÉS — statut Tenu / No-show / Annulé */
+.rdv-status-badge.tostatus { background: rgba(245,158,11,0.15); color: var(--orange); border: 1px solid rgba(245,158,11,0.3); }
+.rdv-card.past-card { opacity: 1; }
+.rdv-card.past-card.tostatus { border-left-color: var(--orange); background: linear-gradient(90deg, rgba(245,158,11,0.05), var(--bg-elev) 30%); }
+.rdv-btn.st-btn { padding: 6px 10px; font-size: 11.5px; }
+.rdv-btn.st-active { border-color: rgba(74,222,128,0.5); background: rgba(74,222,128,0.1); cursor: default; opacity: 1; }
 </style>
 
 <!-- Firebase -->
@@ -231,6 +246,11 @@ body { min-height: 100vh; }
       <button class="rdv-vt active" data-view="list" title="Vue liste">📋</button>
       <button class="rdv-vt" data-view="grid" title="Vue calendrier">🗓️</button>
     </div>
+  </div>
+
+  <div class="rdv-mtabs" id="rdvMainTabs">
+    <button class="rdv-mtab active" data-mview="upcoming" onclick="switchMainView('upcoming')">📅 À venir</button>
+    <button class="rdv-mtab" data-mview="past" onclick="switchMainView('past')">🕓 Passés (7 j) <span class="rdv-mtab-badge" id="rdvPastBadge"></span></button>
   </div>
 
   <div class="rdv-stats" id="rdvStats"></div>
@@ -270,11 +290,15 @@ var db = firebase.firestore();
 var STATE = {
   uid: null,
   role: null,
+  userName: null,       // pour les stamps cancelledByName / noShowByName
   bookings: [],
+  past: [],             // RDV passés (7 j) — à statuer Tenu / No-show / Annulé
   filter: 'all',
   view: 'list',         // 'list' | 'grid'
+  mainView: 'upcoming', // 'upcoming' | 'past'
   weekStart: null,      // Date du lundi de la semaine affichée en grid
   unsub: null,
+  unsubPast: null,
   ownerSlug: null,
   maxOpen: 2,
 };
@@ -351,6 +375,30 @@ function fmtFullDate(dateKey) {
   return d.getDate() + ' ' + MOIS_FR[d.getMonth()] + ' ' + d.getFullYear();
 }
 
+/* ── TYPES DE CONSULTATION (booking_config/_types) ──
+   Sert à exclure les RDV coaching, y compris les anciens bookings sans
+   flag isCoaching sur le doc, via le flag du type de consultation. */
+var TYPE_MAP = {};
+function loadTypes() {
+  return db.collection('booking_config').doc('_types').get().then(function(snap) {
+    TYPE_MAP = {};
+    var list = (snap.exists && snap.data().list) || [];
+    list.forEach(function(t) {
+      if (t && t.id) TYPE_MAP[t.id] = { isCoaching: t.isCoaching === true, isSetterOnly: t.isSetterOnly === true };
+    });
+  }).catch(function(e) { console.warn('[sales-rdv] types:', e.message); });
+}
+
+/* RDV client / coaching / CSM → exclu de cette page. La page Rendez-vous
+   ne montre QUE les RDV prospects setting/closing (validé Adrien 07/2026). */
+function isClientBooking(b) {
+  if (b.isCoaching === true) return true;
+  if (b.source === 'csm_manual' || b.skipLeadCreation === true || b.clientId) return true;
+  var t = TYPE_MAP[b.type];
+  if (t && t.isCoaching === true) return true;
+  return false;
+}
+
 /* ── LOAD ── */
 function startListener() {
   if (STATE.unsub) STATE.unsub();
@@ -371,6 +419,7 @@ function startListener() {
       var d = doc.data();
       d.id = doc.id;
       if (d.status !== 'confirmed' && d.status !== 'pending') return;
+      if (isClientBooking(d)) return; // RDV clients/coaching exclus
       // Filtrage par owner si sales (admin voit tout)
       if (STATE.role !== 'admin') {
         var matchesOwner =
@@ -396,9 +445,52 @@ function startListener() {
   });
 }
 
+/* ── LOAD — RDV PASSÉS (7 derniers jours) ──
+   Tous statuts (confirmed passé = à statuer, completed, cancelled,
+   no_show). Mêmes exclusions clients/coaching et même filtre owner
+   que la vue à venir. Alimente les stats du Funnel Sales. */
+function startPastListener() {
+  if (STATE.unsubPast) STATE.unsubPast();
+  var today = new Date(); today.setHours(0,0,0,0);
+  var fromStr = fmtDateKey(new Date(today.getTime() - 7*86400000));
+  var todayStr = fmtDateKey(today);
+
+  var q = db.collection('bookings')
+    .where('date', '>=', fromStr)
+    .where('date', '<=', todayStr);
+
+  STATE.unsubPast = q.onSnapshot(function(snap) {
+    var all = [];
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      d.id = doc.id;
+      if (isClientBooking(d)) return; // RDV clients/coaching exclus
+      if (STATE.role !== 'admin') {
+        var matchesOwner =
+          (d.ownerSlug && STATE.ownerSlug && d.ownerSlug === STATE.ownerSlug) ||
+          (d.personId && STATE.ownerSlug && d.personId === STATE.ownerSlug) ||
+          (d.assignedToUid && d.assignedToUid === STATE.uid);
+        if (!matchesOwner) return;
+      }
+      if (!isPast(d)) return; // seulement les RDV dont l'heure de fin est dépassée
+      all.push(d);
+    });
+    all.sort(function(a,b) {
+      var ka = (a.date||'') + 'T' + (a.time||'');
+      var kb = (b.date||'') + 'T' + (b.time||'');
+      return ka > kb ? -1 : (ka < kb ? 1 : 0);
+    });
+    STATE.past = all;
+    render();
+  }, function(err) {
+    console.error('[sales-rdv] past snapshot error:', err);
+  });
+}
+
 /* ── RENDER ── */
 function render() {
   renderStats();
+  if (STATE.mainView === 'past') { renderPast(); return; }
   if (STATE.view === 'grid') {
     renderGrid();
   } else {
@@ -671,11 +763,129 @@ function renderStats() {
   var today = STATE.bookings.filter(function(b) { return b.date === todayKey; }).length;
   var imminent = STATE.bookings.filter(isImminent).length;
 
+  var toStatus = STATE.past.filter(pastNeedsStatus).length;
+
   document.getElementById('rdvStats').innerHTML =
     '<div class="rdv-stat"><div class="rdv-stat-label">Total à venir</div><div class="rdv-stat-value">' + total + '</div></div>' +
     '<div class="rdv-stat"><div class="rdv-stat-label">Aujourd\'hui</div><div class="rdv-stat-value">' + today + '</div></div>' +
     '<div class="rdv-stat"><div class="rdv-stat-label">Slots ouverts</div><div class="rdv-stat-value warn">' + open + '</div></div>' +
-    '<div class="rdv-stat"><div class="rdv-stat-label">Imminents (&lt; 4h)</div><div class="rdv-stat-value' + (imminent > 0 ? ' warn' : '') + '">' + imminent + '</div></div>';
+    '<div class="rdv-stat"><div class="rdv-stat-label">Imminents (&lt; 4h)</div><div class="rdv-stat-value' + (imminent > 0 ? ' warn' : '') + '">' + imminent + '</div></div>' +
+    '<div class="rdv-stat"><div class="rdv-stat-label">⏳ À statuer (7 j)</div><div class="rdv-stat-value' + (toStatus > 0 ? ' warn' : ' ok') + '">' + toStatus + '</div></div>';
+
+  var badge = document.getElementById('rdvPastBadge');
+  if (badge) badge.textContent = toStatus > 0 ? String(toStatus) : '';
+}
+
+/* ── VUE PASSÉS — cartes + statut Tenu / No-show / Annulé ── */
+function pastNeedsStatus(b) { return b.status === 'confirmed' || b.status === 'pending'; }
+
+function pastStatusBadge(b) {
+  if (b.status === 'completed') return '<span class="rdv-status-badge closed">✅ Tenu</span>';
+  if (b.status === 'no_show')   return '<span class="rdv-status-badge open">🚫 No-show</span>';
+  if (b.status === 'cancelled') return '<span class="rdv-status-badge double">🔴 Annulé</span>';
+  return '<span class="rdv-status-badge tostatus">⏳ À statuer</span>';
+}
+
+function renderPast() {
+  var listEl = document.getElementById('rdvList');
+  var list = STATE.past;
+  if (!list.length) {
+    listEl.innerHTML = '<div class="rdv-empty"><div class="rdv-empty-icon">🕓</div><div class="rdv-empty-text">Aucun RDV setting/closing sur les 7 derniers jours</div></div>';
+    return;
+  }
+  var byDate = {};
+  list.forEach(function(b) { if (!byDate[b.date]) byDate[b.date] = []; byDate[b.date].push(b); });
+  var dates = Object.keys(byDate).sort().reverse();
+
+  var html = '<div style="font-size:12px;color:var(--text-muted);margin:0 4px 14px">Marque chaque RDV passé — <strong style="color:var(--text)">✅ Tenu</strong>, <strong style="color:var(--text)">🚫 No-show</strong> ou <strong style="color:var(--text)">🔴 Annulé</strong> — un clic suffit (modifiable), les stats du funnel se mettent à jour automatiquement.</div>';
+  dates.forEach(function(dateKey) {
+    var items = byDate[dateKey];
+    html += '<div class="rdv-day-group">' +
+      '<div class="rdv-day-header">' +
+        '<div class="rdv-day-name">' + escapeHtml(relDay(dateKey)) + '</div>' +
+        '<div class="rdv-day-date">' + escapeHtml(fmtFullDate(dateKey)) + '</div>' +
+        '<div class="rdv-day-count">' + items.length + ' RDV</div>' +
+      '</div>';
+    items.forEach(function(b) { html += renderPastCard(b); });
+    html += '</div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function renderPastCard(b) {
+  var prospect = b.prospect || {};
+  var name = ((prospect.prenom || '') + ' ' + (prospect.nom || '')).trim() || prospect.email || 'Prospect inconnu';
+  var phone = prospect.telephone || prospect.phone || '';
+  var typeName = (b.consultation && b.consultation.label) || b.typeLabel || b.typeName || b.type || '';
+  var needs = pastNeedsStatus(b);
+
+  var classes = ['rdv-card', 'past-card'];
+  if (needs) classes.push('tostatus');
+
+  var actions = '';
+  actions += statusBtn(b, 'completed', '✅ Tenu');
+  actions += statusBtn(b, 'no_show', '🚫 No-show');
+  actions += statusBtn(b, 'cancelled', '🔴 Annulé');
+  if (b.leadId) {
+    actions += '<a class="rdv-btn icon" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Fiche prospect">👁</a>';
+  }
+  if (phone) {
+    actions += '<button class="rdv-btn icon" type="button" onclick="rdvDialerCall(this)" data-phone="' + escapeHtml(phone) + '" data-lead-id="' + escapeHtml(b.leadId || '') + '" data-name="' + escapeHtml(name || '') + '" title="Appeler via Ringover">📞</button>';
+  }
+
+  return (
+    '<div class="' + classes.join(' ') + '">' +
+      '<div class="rdv-time">' +
+        '<div class="rdv-time-h">' + escapeHtml(b.time || '--:--') + '</div>' +
+        '<div class="rdv-time-dur">' + (b.duration || 30) + ' min</div>' +
+      '</div>' +
+      '<div class="rdv-info">' +
+        '<div class="rdv-name">' + escapeHtml(name) + '</div>' +
+        '<div class="rdv-meta">' +
+          (typeName ? '<span>' + escapeHtml(typeName) + '</span><span class="rdv-meta-dot">·</span>' : '') +
+          (phone ? '<span>' + escapeHtml(phone) + '</span><span class="rdv-meta-dot">·</span>' : '') +
+          pastStatusBadge(b) +
+        '</div>' +
+      '</div>' +
+      '<div class="rdv-actions">' + actions + '</div>' +
+    '</div>'
+  );
+}
+
+function statusBtn(b, status, label) {
+  var active = b.status === status;
+  return '<button class="rdv-btn st-btn' + (active ? ' st-active' : '') + '" onclick="setBookingStatus(\'' + b.id + '\',\'' + status + '\')"' + (active ? ' disabled' : '') + '>' + label + '</button>';
+}
+
+/* Écrit le statut + les stamps d'audit lus par le Funnel Sales :
+   cancelledAt/cancelledBy(Name), noShowAt/noShowBy(Name), completedAt. */
+function setBookingStatus(bookingId, status) {
+  var ts = firebase.firestore.FieldValue.serverTimestamp();
+  var patch = {
+    status: status,
+    statusUpdatedAt: ts,
+    statusUpdatedBy: STATE.uid,
+    statusUpdatedByName: STATE.userName || null
+  };
+  if (status === 'cancelled') { patch.cancelledAt = ts; patch.cancelledBy = STATE.uid; patch.cancelledByName = STATE.userName || null; }
+  if (status === 'no_show')   { patch.noShowAt = ts;   patch.noShowBy = STATE.uid;   patch.noShowByName = STATE.userName || null; }
+  if (status === 'completed') { patch.completedAt = ts; }
+  db.collection('bookings').doc(bookingId).update(patch).then(function() {
+    var lbl = status === 'completed' ? '✅ RDV marqué Tenu' : status === 'no_show' ? '🚫 RDV marqué No-show' : '🔴 RDV marqué Annulé';
+    toast(lbl, 'ok');
+  }).catch(function(e) {
+    toast('❌ ' + (e.message || 'Erreur'), 'error');
+  });
+}
+
+function switchMainView(v) {
+  STATE.mainView = v;
+  document.querySelectorAll('.rdv-mtab').forEach(function(b) { b.classList.toggle('active', b.dataset.mview === v); });
+  var f = document.querySelector('.rdv-filters');
+  var vt = document.querySelector('.rdv-view-toggle');
+  if (f) f.style.display = v === 'past' ? 'none' : 'flex';
+  if (vt) vt.style.display = v === 'past' ? 'none' : 'flex';
+  render();
 }
 
 /* ── ACTIONS ── */
@@ -784,6 +994,7 @@ firebase.auth().onAuthStateChanged(async function(user) {
     var udata = udoc.exists ? udoc.data() : {};
     STATE.role = udata.role || 'sales';
     STATE.ownerSlug = udata.slug || udata.bookingSlug || null;
+    STATE.userName = udata.displayName || udata.name || (user.email || '').split('@')[0];
   } catch (e) { STATE.role = 'sales'; }
 
   if (STATE.role !== 'sales' && STATE.role !== 'admin') {
@@ -810,7 +1021,10 @@ firebase.auth().onAuthStateChanged(async function(user) {
     }
   } catch(e) {}
 
-  startListener();
+  loadTypes().then(function() {
+    startListener();
+    startPastListener();
+  });
 });
 </script>
 </body>
