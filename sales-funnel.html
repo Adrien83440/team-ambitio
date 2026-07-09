@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ambitio — Funnel Sales</title>
+<link rel="stylesheet" href="sales.css">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
+<style>
+/* ═══ Funnel Sales — styles spécifiques (extension de sales.css) ═══ */
+.fn-main { padding: 24px 28px; max-width: 1480px; }
+.fn-head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+.fn-title { font-size:22px; font-weight:700; letter-spacing:-0.6px; display:flex; align-items:center; gap:10px; }
+.fn-title-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; padding:3px 8px; border-radius:6px; background:rgba(251,191,36,0.12); color:#fbbf24; border:1px solid rgba(251,191,36,0.25); }
+.fn-sub { font-size:13px; color:var(--muted); margin-top:4px; }
+.fn-sync { font-size:11px; font-family:var(--font-m); color:var(--muted); display:flex; align-items:center; gap:6px; padding:5px 10px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; }
+.fn-sync-dot { width:6px; height:6px; border-radius:50%; background:var(--muted2); }
+.fn-sync-dot.ok { background:var(--green); box-shadow:0 0 6px rgba(52,211,153,0.6); }
+.fn-sync-dot.err { background:var(--red2); }
+
+.fn-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.fn-seg { display:flex; gap:3px; padding:3px; background:var(--bg3); border:1px solid var(--border); border-radius:10px; }
+.fn-seg button { padding:6px 11px; border-radius:8px; font-size:12px; font-weight:500; cursor:pointer; color:var(--muted); background:none; border:none; transition:all .15s; }
+.fn-seg button:hover { color:var(--text); }
+.fn-seg button.active { background:var(--bg4); color:var(--text); font-weight:600; }
+.fn-mnav { display:flex; align-items:center; gap:6px; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:3px; }
+.fn-mnav button { background:none; border:none; color:var(--muted); font-size:14px; cursor:pointer; padding:5px 9px; border-radius:7px; }
+.fn-mnav button:hover { color:var(--text); background:var(--bg4); }
+.fn-mnav .fn-mlabel { font-size:12.5px; font-weight:600; min-width:120px; text-align:center; }
+.fn-custom { display:none; align-items:center; gap:6px; }
+.fn-custom.show { display:flex; }
+.fn-custom input { background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:6px 8px; font-size:12px; font-family:var(--font-b); color-scheme:dark; }
+.fn-sel { background:var(--bg3); border:1px solid var(--border); border-radius:10px; color:var(--text); padding:7px 10px; font-size:12.5px; font-family:var(--font-b); cursor:pointer; }
+.fn-btn { padding:7px 12px; border-radius:9px; font-size:12.5px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--bg3); color:var(--text); transition:all .15s; }
+.fn-btn:hover { background:var(--bg4); border-color:var(--border2); }
+.fn-btn.primary { background:rgba(96,165,250,0.14); border-color:rgba(96,165,250,0.3); color:var(--blue); }
+.fn-btn.danger { color:var(--red3); }
+.fn-btn:disabled { opacity:.45; cursor:not-allowed; }
+
+.fn-tabs { display:flex; gap:3px; padding:3px; background:var(--bg3); border:1px solid var(--border); border-radius:12px; margin-bottom:20px; width:fit-content; }
+.fn-tabs .fn-tab { padding:8px 16px; border-radius:9px; font-size:13px; font-weight:600; cursor:pointer; color:var(--muted); transition:all .15s; }
+.fn-tabs .fn-tab:hover { color:var(--text); }
+.fn-tabs .fn-tab.active { background:var(--bg4); color:var(--text); }
+
+/* Hero */
+.fn-hero { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:18px; }
+.fn-hero-kpi { background:linear-gradient(160deg,var(--bg3),var(--bg2)); border:1px solid var(--border); border-radius:14px; padding:14px 16px; }
+.fn-hero-kpi .v { font-size:24px; font-weight:800; letter-spacing:-0.8px; font-family:var(--font-m); }
+.fn-hero-kpi .l { font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.7px; font-weight:700; margin-top:3px; }
+.fn-hero-kpi .s { font-size:11px; color:var(--muted); margin-top:3px; }
+
+/* Blocs étage funnel */
+.fn-stage { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:16px 18px; margin-bottom:14px; }
+.fn-stage-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.fn-stage-title { font-size:14px; font-weight:700; letter-spacing:-0.3px; display:flex; align-items:center; gap:8px; }
+.fn-stage-note { font-size:11px; color:var(--muted); }
+.fn-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(158px,1fr)); gap:10px; }
+.fn-kpi { background:var(--bg3); border:1px solid var(--border); border-radius:11px; padding:11px 13px; position:relative; }
+.fn-kpi .v { font-size:19px; font-weight:700; font-family:var(--font-m); letter-spacing:-0.5px; }
+.fn-kpi .v.muted { color:var(--muted2); }
+.fn-kpi .l { font-size:10.5px; color:var(--muted); font-weight:600; margin-top:3px; line-height:1.35; }
+.fn-kpi .s { font-size:10.5px; color:var(--muted2); margin-top:2px; }
+.fn-badge { display:inline-block; font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:20px; margin-top:6px; letter-spacing:0.3px; }
+.fn-badge.ok   { background:rgba(52,211,153,0.12); color:var(--green); border:1px solid rgba(52,211,153,0.25); }
+.fn-badge.warn { background:rgba(245,158,11,0.12); color:var(--gold); border:1px solid rgba(245,158,11,0.25); }
+.fn-badge.bad  { background:rgba(239,68,68,0.12);  color:var(--red3);  border:1px solid rgba(239,68,68,0.25); }
+.fn-arrow { text-align:center; color:var(--muted2); font-size:15px; margin:2px 0 12px; }
+.fn-alert { background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:11px; padding:10px 14px; font-size:12.5px; color:var(--gold); margin-top:10px; }
+.fn-alert a { color:var(--gold); text-decoration:underline; }
+.fn-minibars { display:flex; flex-direction:column; gap:6px; margin-top:4px; }
+.fn-minibar { display:flex; align-items:center; gap:8px; font-size:11.5px; }
+.fn-minibar .mb-l { width:78px; color:var(--muted); }
+.fn-minibar .mb-track { flex:1; height:7px; background:var(--bg4); border-radius:6px; overflow:hidden; }
+.fn-minibar .mb-fill { height:100%; border-radius:6px; }
+.fn-minibar .mb-v { width:70px; text-align:right; font-family:var(--font-m); font-size:11px; }
+
+/* Journal encart */
+.fn-jr-item { display:flex; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:12.5px; align-items:flex-start; }
+.fn-jr-item:last-child { border-bottom:none; }
+.fn-jr-date { font-family:var(--font-m); font-size:11px; color:var(--muted); white-space:nowrap; padding-top:2px; }
+.fn-jr-cat { font-size:10px; font-weight:700; padding:2px 8px; border-radius:12px; background:var(--bg4); border:1px solid var(--border); white-space:nowrap; }
+.fn-jr-text { flex:1; line-height:1.45; }
+.fn-jr-author { font-size:10.5px; color:var(--muted2); white-space:nowrap; padding-top:2px; }
+
+/* Table leads */
+.fn-lt-toolbar { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+.fn-lt-search { flex:1; min-width:200px; max-width:340px; position:relative; }
+.fn-lt-search input { width:100%; padding:8px 12px 8px 30px; background:var(--bg3); border:1px solid var(--border); border-radius:9px; color:var(--text); font-size:13px; outline:none; }
+.fn-lt-search::before { content:'⌕'; position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--muted); }
+.fn-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:14px; background:var(--bg2); }
+table.fn-table { width:100%; border-collapse:collapse; font-size:12px; min-width:1150px; }
+.fn-table th { text-align:left; padding:10px 12px; font-size:10px; text-transform:uppercase; letter-spacing:0.7px; color:var(--muted); border-bottom:1px solid var(--border2); white-space:nowrap; cursor:pointer; user-select:none; position:sticky; top:0; background:var(--bg2); z-index:1; }
+.fn-table th:hover { color:var(--text); }
+.fn-table td { padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.fn-table tr:hover td { background:rgba(255,255,255,0.02); }
+.fn-table .num { font-family:var(--font-m); font-size:11.5px; }
+.fn-tbadge { display:inline-block; font-size:9.5px; font-weight:700; padding:2px 8px; border-radius:12px; white-space:nowrap; }
+.fn-tbadge.elite { background:rgba(167,139,250,0.13); color:#a78bfa; border:1px solid rgba(167,139,250,0.25); }
+.fn-tbadge.business { background:rgba(96,165,250,0.13); color:var(--blue); border:1px solid rgba(96,165,250,0.25); }
+.fn-tbadge.other { background:var(--bg4); color:var(--muted); border:1px solid var(--border); }
+.fn-tbadge.self { background:rgba(52,211,153,0.12); color:var(--green); border:1px solid rgba(52,211,153,0.25); }
+.fn-tbadge.setter { background:rgba(245,158,11,0.12); color:var(--gold); border:1px solid rgba(245,158,11,0.25); }
+.fn-tbadge.st-confirmed { background:rgba(96,165,250,0.12); color:var(--blue); border:1px solid rgba(96,165,250,0.25); }
+.fn-tbadge.st-completed { background:rgba(52,211,153,0.12); color:var(--green); border:1px solid rgba(52,211,153,0.25); }
+.fn-tbadge.st-cancelled { background:rgba(239,68,68,0.12); color:var(--red3); border:1px solid rgba(239,68,68,0.25); }
+.fn-tbadge.st-no_show { background:rgba(245,158,11,0.12); color:var(--gold); border:1px solid rgba(245,158,11,0.25); }
+.fn-utm { max-width:210px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle; color:var(--muted); }
+.fn-lead-link { color:var(--text); text-decoration:none; font-weight:600; }
+.fn-lead-link:hover { color:var(--blue); }
+.fn-reopt { color:#fb923c; font-weight:700; }
+
+/* Grille Ads */
+.fn-ads-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:14px; background:var(--bg2); }
+table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width:1080px; }
+.fn-ads th { padding:8px 10px; font-size:10px; text-transform:uppercase; letter-spacing:0.6px; color:var(--muted); border-bottom:1px solid var(--border2); text-align:right; white-space:nowrap; background:var(--bg2); }
+.fn-ads th.grp { text-align:center; border-left:1px solid var(--border2); font-weight:800; }
+.fn-ads th:first-child, .fn-ads td:first-child { text-align:left; position:sticky; left:0; background:var(--bg2); }
+.fn-ads td { padding:5px 8px; border-bottom:1px solid var(--border); text-align:right; font-family:var(--font-m); }
+.fn-ads td.day { font-family:var(--font-b); font-size:11.5px; color:var(--muted); white-space:nowrap; }
+.fn-ads td.sep { border-left:1px solid var(--border2); }
+.fn-ads input { width:76px; background:var(--bg3); border:1px solid var(--border); border-radius:7px; color:var(--text); padding:4px 6px; font-size:11px; font-family:var(--font-m); text-align:right; outline:none; }
+.fn-ads input:focus { border-color:var(--blue); }
+.fn-ads input.dirty { border-color:var(--gold); background:rgba(245,158,11,0.07); }
+.fn-ads tr.totals td { border-top:2px solid var(--border2); font-weight:700; background:var(--bg3); }
+.fn-src { font-size:9px; padding:1px 6px; border-radius:10px; margin-left:4px; vertical-align:middle; font-family:var(--font-b); }
+.fn-src.make { background:rgba(52,211,153,0.12); color:var(--green); }
+.fn-src.manual { background:rgba(245,158,11,0.12); color:var(--gold); }
+
+/* Journal tab */
+.fn-jform { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-start; background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:16px; }
+.fn-jform input[type=date] { background:var(--bg3); border:1px solid var(--border); border-radius:9px; color:var(--text); padding:8px 10px; font-size:12.5px; color-scheme:dark; }
+.fn-jform select { background:var(--bg3); border:1px solid var(--border); border-radius:9px; color:var(--text); padding:8px 10px; font-size:12.5px; }
+.fn-jform textarea { flex:1; min-width:260px; background:var(--bg3); border:1px solid var(--border); border-radius:9px; color:var(--text); padding:8px 10px; font-size:13px; font-family:var(--font-b); resize:vertical; min-height:38px; outline:none; }
+.fn-jform textarea:focus { border-color:var(--border2); }
+.fn-jlist { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:6px 16px; }
+.fn-jmonth { font-size:11px; text-transform:uppercase; letter-spacing:0.8px; font-weight:800; color:var(--muted); padding:12px 0 4px; }
+.fn-jdel { background:none; border:none; color:var(--muted2); cursor:pointer; font-size:13px; padding:2px 6px; border-radius:6px; }
+.fn-jdel:hover { color:var(--red3); background:rgba(239,68,68,0.1); }
+
+/* Modal cibles */
+.fn-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(3px); z-index:200; display:none; align-items:center; justify-content:center; }
+.fn-modal-bg.show { display:flex; }
+.fn-modal { background:var(--bg2); border:1px solid var(--border2); border-radius:18px; width:100%; max-width:520px; max-height:86vh; overflow-y:auto; margin:20px; padding:20px 22px; box-shadow:0 32px 80px rgba(0,0,0,0.65); }
+.fn-modal h3 { font-size:16px; font-weight:700; margin-bottom:6px; }
+.fn-modal .hint { font-size:12px; color:var(--muted); margin-bottom:14px; }
+.fn-trow { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px; }
+.fn-trow:last-child { border-bottom:none; }
+.fn-trow .tl { flex:1; }
+.fn-trow input { width:76px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:6px 8px; font-size:12px; font-family:var(--font-m); text-align:right; outline:none; }
+.fn-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+
+.fn-empty { text-align:center; color:var(--muted); padding:34px 10px; font-size:13px; }
+.fn-loading { text-align:center; color:var(--muted); padding:44px 10px; font-size:13px; }
+.fn-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--bg4); border:1px solid var(--border2); color:var(--text); padding:10px 18px; border-radius:12px; font-size:13px; opacity:0; pointer-events:none; transition:all .25s; z-index:300; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
+.fn-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.fn-toast.err { border-color:rgba(239,68,68,0.4); color:var(--red3); }
+@media (max-width: 760px) { .fn-main { padding:16px 12px; } .fn-hero-kpi .v { font-size:19px; } }
+</style>
+</head>
+<body>
+<script src="nav.js"></script>
+
+<div class="fn-main" id="fnApp" style="display:none">
+
+  <div class="fn-head">
+    <div>
+      <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
+      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · RDV setting/closing uniquement (coaching &amp; CSM exclus)</div>
+    </div>
+    <div class="fn-sync"><span class="fn-sync-dot" id="fnSyncDot"></span><span id="fnSyncText">Chargement…</span></div>
+  </div>
+
+  <div class="fn-toolbar">
+    <div class="fn-seg" id="fnModeSeg">
+      <button data-mode="month" class="active">Mois</button>
+      <button data-mode="7d">7 jours</button>
+      <button data-mode="30d">30 jours</button>
+      <button data-mode="custom">Plage</button>
+    </div>
+    <div class="fn-mnav" id="fnMonthNav">
+      <button id="fnPrevM">‹</button>
+      <span class="fn-mlabel" id="fnMonthLabel">—</span>
+      <button id="fnNextM">›</button>
+    </div>
+    <div class="fn-custom" id="fnCustom">
+      <input type="date" id="fnCustA"> <span style="color:var(--muted)">→</span> <input type="date" id="fnCustB">
+      <button class="fn-btn" id="fnCustOk">OK</button>
+    </div>
+    <select class="fn-sel" id="fnTunnel">
+      <option value="all">Tous les tunnels</option>
+      <option value="elite">Élite</option>
+      <option value="business">Business</option>
+      <option value="other">Autres</option>
+    </select>
+    <div style="flex:1"></div>
+    <button class="fn-btn" id="fnTargetsBtn">🎯 Cibles</button>
+    <button class="fn-btn" id="fnRefreshBtn">⟳ Actualiser</button>
+  </div>
+
+  <div class="fn-tabs" id="fnTabs">
+    <div class="fn-tab active" data-tab="funnel">🎯 Funnel</div>
+    <div class="fn-tab" data-tab="leads">👥 Leads</div>
+    <div class="fn-tab" data-tab="ads">💶 Données Ads</div>
+    <div class="fn-tab" data-tab="journal">📒 Journal</div>
+  </div>
+
+  <section id="fnTabFunnel"><div class="fn-loading">Chargement du funnel…</div></section>
+  <section id="fnTabLeads" style="display:none"></section>
+  <section id="fnTabAds" style="display:none"></section>
+  <section id="fnTabJournal" style="display:none"></section>
+
+</div>
+
+<!-- Modal cibles -->
+<div class="fn-modal-bg" id="fnTargetsModal">
+  <div class="fn-modal">
+    <h3>🎯 Cibles &amp; repères</h3>
+    <div class="hint">Bornes utilisées pour les badges vert / orange / rouge sous les KPIs. Laisser vide = pas de repère. Stocké dans <code>_config/funnel_targets</code>.</div>
+    <div id="fnTargetsBody"></div>
+    <div class="fn-modal-actions">
+      <button class="fn-btn" id="fnTargetsCancel">Annuler</button>
+      <button class="fn-btn primary" id="fnTargetsSave">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="fn-toast" id="fnToast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ════════════════════════════════════════════════════════════════
+     Funnel Sales — page ADMIN ONLY
+     Sources : ads_insights (Make/manuel), page_views_daily (beacon),
+     leads, bookings, call_logs, saisies (mois calendaire), 
+     marketing_journal, _config/funnel_targets, booking_config/_types.
+     Aucune écriture serveur : SDK client (rules admin) uniquement.
+     Convention : seuls les RDV self_booking / setter_booking comptent
+     dans le funnel. Coaching, csm_manual, clientId → exclus.
+     admin_manual → compté à part, hors LTB.
+     ════════════════════════════════════════════════════════════════ */
+
+  var $  = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function escAttr(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  var db, currentUser;
+  var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  var ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
+  var LEADS_QUERY_LIMIT = 6000;
+  var CALLS_QUERY_LIMIT = 5000;
+  var ANSWERED_MIN_SEC  = 5; // même seuil que le Dashboard Sales
+
+  /* ── Décodage UTM défensif (identique sales-leads.html) ── */
+  function decodeUtm(v) {
+    if (v == null) return v;
+    var s = String(v);
+    if (s.indexOf('%') === -1) return s;
+    try { return decodeURIComponent(s); }
+    catch (e) {
+      return s.replace(/(?:%[0-9A-Fa-f]{2})+/g, function (m) {
+        try { return decodeURIComponent(m); } catch (_) { return m; }
+      });
+    }
+  }
+
+  /* ── Dates "réelles" lead — portage ES5 de api/_leadDates.js ── */
+  function parseFlexMs(v) {
+    if (v == null) return null;
+    if (typeof v === 'object') {
+      if (typeof v.toMillis === 'function') { try { return v.toMillis(); } catch (e) { return null; } }
+      if (typeof v.seconds === 'number') return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
+      if (typeof v._seconds === 'number') return v._seconds * 1000 + (v._nanoseconds ? Math.floor(v._nanoseconds / 1e6) : 0);
+      return null;
+    }
+    if (typeof v === 'number' && isFinite(v)) return v < 1e12 ? v * 1000 : v;
+    if (typeof v !== 'string') return null;
+    var s = v.trim();
+    if (!s) return null;
+    var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (iso) {
+      var d = new Date(+iso[1], +iso[2] - 1, +iso[3], +(iso[4] || 0), +(iso[5] || 0), +(iso[6] || 0));
+      return isNaN(d.getTime()) ? null : d.getTime();
+    }
+    var fr = s.match(/(\d{1,2})\s+([A-Za-zàâäéèêëïîôöûüç]+)\.?\s+(\d{4})/);
+    if (fr) {
+      var table = [['janv',0],['févr',1],['fevr',1],['mars',2],['avri',3],['mai',4],['juin',5],['juil',6],['aout',7],['août',7],['sept',8],['octo',9],['nove',10],['déce',11],['dece',11]];
+      var mn = fr[2].toLowerCase(); var idx = -1;
+      for (var i = 0; i < table.length; i++) { if (mn.indexOf(table[i][0]) === 0) { idx = table[i][1]; break; } }
+      if (idx >= 0) { var d2 = new Date(+fr[3], idx, +fr[1]); return isNaN(d2.getTime()) ? null : d2.getTime(); }
+    }
+    var p = Date.parse(s);
+    return isNaN(p) ? null : p;
+  }
+  function minDef() {
+    var best = null;
+    for (var i = 0; i < arguments.length; i++) { var m = arguments[i]; if (m != null && (best == null || m < best)) best = m; }
+    return best;
+  }
+  function realEntryMs(d) {
+    if (!d) return null;
+    return minDef(parseFlexMs(d.dateWebinaire), parseFlexMs(d.importedCreatedAt), parseFlexMs(d.createdAt));
+  }
+
+  /* ── Formats ── */
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function isoDate(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function frDate(ms) { if (ms == null) return '—'; var d = new Date(ms); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+  function frDay(iso) { if (!iso) return '—'; var p = iso.split('-'); return p[2] + '/' + p[1]; }
+  function fmtNum(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return Math.round(v).toLocaleString('fr-FR'); }
+  function fmtEuro(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return Math.round(v).toLocaleString('fr-FR') + ' €'; }
+  function fmtEuro2(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return (Math.round(v * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+  function fmtPct(v, dec) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; var f = dec == null ? 1 : dec; return (Math.round(v * Math.pow(10, f)) / Math.pow(10, f)).toLocaleString('fr-FR') + ' %'; }
+  function fmtDelay(ms) {
+    if (ms == null || isNaN(ms) || ms < 0) return '—';
+    var min = Math.round(ms / 60000);
+    if (min < 60) return min + ' min';
+    var h = ms / 3600000;
+    if (h < 48) return (Math.round(h * 10) / 10).toLocaleString('fr-FR') + ' h';
+    return (Math.round(ms / 86400000 * 10) / 10).toLocaleString('fr-FR') + ' j';
+  }
+  function median(arr) {
+    if (!arr || !arr.length) return null;
+    var a = arr.slice().sort(function (x, y) { return x - y; });
+    var mid = Math.floor(a.length / 2);
+    return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+  }
+  function phone9(raw) {
+    if (!raw) return null;
+    var d = String(raw).replace(/[^\d]/g, '');
+    if (d.length < 6) return null;
+    return d.length >= 9 ? d.slice(-9) : d;
+  }
+  function toast(msg, isErr) {
+    var t = $('#fnToast');
+    t.textContent = msg;
+    t.className = 'fn-toast show' + (isErr ? ' err' : '');
+    clearTimeout(t._t);
+    t._t = setTimeout(function () { t.className = 'fn-toast'; }, 3200);
+  }
+  function setSync(state, txt) {
+    $('#fnSyncDot').className = 'fn-sync-dot' + (state ? ' ' + state : '');
+    $('#fnSyncText').textContent = txt;
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     ÉTAT — période, filtre tunnel, données, KPIs calculés
+     ════════════════════════════════════════════════════════════════ */
+  var P = { mode: 'month', y: 0, m: 0, start: null, end: null };  // end inclusif (23:59:59.999)
+  var tunnelFilter = 'all';
+  var activeTab = 'funnel';
+  var TYPE_MAP = {};           // booking_config/_types → {id:{isSetterOnly,isCoaching,label}}
+  var TARGETS = {};            // _config/funnel_targets
+  var DATA = { ads: [], views: [], leads: [], reoptins: [], bookings: [], calls: [], saisies: null, journalPeriod: [], leadsTruncated: false, callsTruncated: false };
+  var K = null;                // KPIs calculés
+  var adsDraft = {};           // édition grille ads {docId:{field:val}}
+  var journalAll = [];         // tab journal (indépendant de la période)
+  var leadsSort = { key: 'entry', dir: -1 };
+  var leadsSearch = '';
+  var leadsRdvFilter = 'all';
+
+  var DEFAULT_TARGETS = {
+    ctr:         { min: 1,  max: null, label: 'CTR (%)' },
+    cpl:         { min: null, max: 10, label: 'CPL (€)' },
+    optin:       { min: 25, max: null, label: "Taux d'opt-in (%)" },
+    ltb:         { min: 10, max: null, label: 'LTB — Lead to Booking (%)' },
+    selfShare:   { min: 60, max: 70,   label: 'Part self-booking / VSL (%)' },
+    recovery:    { min: 15, max: 35,   label: 'Taux de récupération setting (%)' },
+    kept:        { min: 80, max: null, label: 'Kept — RDV maintenus (%)' },
+    showup:      { min: 75, max: null, label: 'Show-up (%)' },
+    decroche:    { min: 10, max: null, label: 'Taux de décroché (%)' },
+    closingLive: { min: 20, max: null, label: 'Closing live (%)' }
+  };
+
+  function targetBadge(key, val) {
+    var t = TARGETS[key] || {};
+    var hasMin = t.min != null && t.min !== '' && !isNaN(t.min);
+    var hasMax = t.max != null && t.max !== '' && !isNaN(t.max);
+    if ((!hasMin && !hasMax) || val == null || isNaN(val) || !isFinite(val)) return '';
+    var min = hasMin ? Number(t.min) : null, max = hasMax ? Number(t.max) : null;
+    var cls, txt;
+    if (min != null && max != null) {
+      if (val >= min && val <= max) { cls = 'ok'; txt = 'cible ' + min + '–' + max; }
+      else if (val >= min * 0.8 && val <= max * 1.2) { cls = 'warn'; txt = 'cible ' + min + '–' + max; }
+      else { cls = 'bad'; txt = 'cible ' + min + '–' + max; }
+    } else if (min != null) {
+      cls = val >= min ? 'ok' : (val >= min * 0.75 ? 'warn' : 'bad');
+      txt = '≥ ' + min;
+    } else {
+      cls = val <= max ? 'ok' : (val <= max * 1.25 ? 'warn' : 'bad');
+      txt = '≤ ' + max;
+    }
+    return '<span class="fn-badge ' + cls + '">' + txt + '</span>';
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     PÉRIODE
+     ════════════════════════════════════════════════════════════════ */
+  function applyMonth(y, m) {
+    P.mode = 'month'; P.y = y; P.m = m;
+    P.start = new Date(y, m, 1, 0, 0, 0, 0);
+    P.end   = new Date(y, m + 1, 0, 23, 59, 59, 999);
+  }
+  function applyPreset(days) {
+    P.mode = days + 'd';
+    var now = new Date();
+    P.end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    var s = new Date(P.end.getTime() - (days - 1) * 86400000);
+    P.start = new Date(s.getFullYear(), s.getMonth(), s.getDate(), 0, 0, 0, 0);
+  }
+  function applyCustom(aIso, bIso) {
+    var a = aIso.split('-'), b = bIso.split('-');
+    P.mode = 'custom';
+    P.start = new Date(+a[0], +a[1] - 1, +a[2], 0, 0, 0, 0);
+    P.end   = new Date(+b[0], +b[1] - 1, +b[2], 23, 59, 59, 999);
+  }
+  function periodIsCalendarMonth() { return P.mode === 'month'; }
+  function periodLabel() {
+    if (P.mode === 'month') return MONTHS_FR[P.m] + ' ' + P.y;
+    return frDay(isoDate(P.start)) + '/' + String(P.start.getFullYear()).slice(2) + ' → ' + frDay(isoDate(P.end)) + '/' + String(P.end.getFullYear()).slice(2);
+  }
+  function updateToolbar() {
+    $$('#fnModeSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-mode') === (P.mode === 'month' ? 'month' : P.mode === 'custom' ? 'custom' : P.mode === '7d' ? '7d' : '30d')); });
+    $('#fnMonthNav').style.display = P.mode === 'month' ? 'flex' : 'none';
+    $('#fnCustom').className = 'fn-custom' + (P.mode === 'custom' ? ' show' : '');
+    $('#fnMonthLabel').textContent = P.mode === 'month' ? (MONTHS_FR[P.m] + ' ' + P.y) : '—';
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     TUNNELS
+     ════════════════════════════════════════════════════════════════ */
+  function leadTunnel(l) {
+    var t = String(l.type || '').toLowerCase();
+    if (t.indexOf('business') >= 0) return 'business';
+    if (t.indexOf('elite') >= 0 || t.indexOf('élite') >= 0 || t === 'vsl_elite') return 'elite';
+    return 'other';
+  }
+  function tunnelLabel(t) { return t === 'elite' ? 'Élite' : t === 'business' ? 'Business' : 'Autres'; }
+  function tunnelMatch(t) { return tunnelFilter === 'all' || t === tunnelFilter; }
+
+  /* ── Classification d'un booking (règle validée Adrien) ──
+     'excluded' → coaching / csm_manual / clientId / skipLeadCreation
+     'admin'    → admin_manual (compté à part, hors LTB)
+     'setter'   → setter_booking, ou fallback type isSetterOnly
+     'self'     → self_booking, ou résa publique par défaut          */
+  function classifyBooking(b) {
+    var t = TYPE_MAP[b.type] || {};
+    if (b.isCoaching === true || t.isCoaching === true) return 'excluded';
+    if (b.source === 'csm_manual' || b.skipLeadCreation === true || b.clientId) return 'excluded';
+    if (b.source === 'admin_manual') return 'admin';
+    if (b.source === 'setter_booking') return 'setter';
+    if (b.source === 'self_booking') return 'self';
+    if (t.isSetterOnly === true) return 'setter';
+    return 'self';
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     LOADERS — toutes les requêtes sont single-field (aucun index composite)
+     ════════════════════════════════════════════════════════════════ */
+  function loadTypes() {
+    return db.collection('booking_config').doc('_types').get().then(function (snap) {
+      TYPE_MAP = {};
+      var list = (snap.exists && snap.data().list) || [];
+      list.forEach(function (t) { if (t && t.id) TYPE_MAP[t.id] = { isSetterOnly: t.isSetterOnly === true, isCoaching: t.isCoaching === true, label: t.label || t.id }; });
+    }).catch(function (e) { console.warn('[funnel] types', e.message); });
+  }
+
+  function loadTargets() {
+    return db.collection('_config').doc('funnel_targets').get().then(function (snap) {
+      TARGETS = {};
+      var saved = snap.exists ? (snap.data().targets || {}) : {};
+      Object.keys(DEFAULT_TARGETS).forEach(function (k) {
+        TARGETS[k] = { min: DEFAULT_TARGETS[k].min, max: DEFAULT_TARGETS[k].max, label: DEFAULT_TARGETS[k].label };
+        if (saved[k]) {
+          if (saved[k].min !== undefined) TARGETS[k].min = saved[k].min;
+          if (saved[k].max !== undefined) TARGETS[k].max = saved[k].max;
+        }
+      });
+    }).catch(function (e) { console.warn('[funnel] targets', e.message); TARGETS = JSON.parse(JSON.stringify(DEFAULT_TARGETS)); });
+  }
+
+  function loadAds() {
+    var sIso = isoDate(P.start), eIso = isoDate(P.end);
+    return db.collection('ads_insights').where('date', '>=', sIso).where('date', '<=', eIso).get().then(function (snap) {
+      DATA.ads = [];
+      snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.ads.push(d); });
+    }).catch(function (e) { console.warn('[funnel] ads', e.message); DATA.ads = []; });
+  }
+
+  function loadViews() {
+    var sIso = isoDate(P.start), eIso = isoDate(P.end);
+    return db.collection('page_views_daily').where('date', '>=', sIso).where('date', '<=', eIso).get().then(function (snap) {
+      DATA.views = [];
+      snap.forEach(function (doc) { DATA.views.push(doc.data()); });
+    }).catch(function (e) { console.warn('[funnel] views', e.message); DATA.views = []; });
+  }
+
+  /* Leads "entrés" dans la période = realEntry ∈ [start,end].
+     realEntry ≤ createdAt toujours → on requête createdAt ≥ start.
+     Borne haute createdAt = end + 45 j (attrape les imports tardifs)
+     puis filtrage client-side sur realEntry. _merged exclus. */
+  function loadLeads() {
+    var startTs = firebase.firestore.Timestamp.fromDate(P.start);
+    var capMs = Math.min(P.end.getTime() + 45 * 86400000, Date.now() + 60000);
+    var capTs = firebase.firestore.Timestamp.fromDate(new Date(capMs));
+    var q = db.collection('leads')
+      .where('createdAt', '>=', startTs)
+      .where('createdAt', '<=', capTs)
+      .limit(LEADS_QUERY_LIMIT);
+    var pLeads = q.get().then(function (snap) {
+      DATA.leadsTruncated = snap.size >= LEADS_QUERY_LIMIT;
+      var out = [];
+      snap.forEach(function (doc) {
+        var d = doc.data(); d._id = doc.id;
+        if (d._merged === true) return;
+        var re = realEntryMs(d);
+        if (re == null || re < P.start.getTime() || re > P.end.getTime()) return;
+        d._entry = re;
+        d._tunnel = leadTunnel(d);
+        d._p9 = phone9(d.telephone || d.phone);
+        out.push(d);
+      });
+      DATA.leads = out;
+    });
+    var startTs2 = firebase.firestore.Timestamp.fromDate(P.start);
+    var endTs2 = firebase.firestore.Timestamp.fromDate(P.end);
+    var pReopt = db.collection('leads')
+      .where('lastOptinAt', '>=', startTs2)
+      .where('lastOptinAt', '<=', endTs2)
+      .limit(2000)
+      .get().then(function (snap) {
+        var out = [];
+        snap.forEach(function (doc) {
+          var d = doc.data(); d._id = doc.id;
+          if (d._merged === true) return;
+          var re = realEntryMs(d);
+          if (re != null && re >= P.start.getTime()) return; // déjà dans la cohorte "nouveaux"
+          d._entry = re;
+          d._tunnel = leadTunnel(d);
+          d._p9 = phone9(d.telephone || d.phone);
+          out.push(d);
+        });
+        DATA.reoptins = out;
+      }).catch(function (e) { console.warn('[funnel] reoptins', e.message); DATA.reoptins = []; });
+    return Promise.all([pLeads, pReopt]);
+  }
+
+  /* Bookings : 2 requêtes fusionnées —
+     A) créés dans la période (createdAt)  → prise de RDV / LTB / CPR
+     B) dont le RDV tombe dans la période (date string) → tenue (kept/annulé/no-show) */
+  function loadBookings() {
+    var startTs = firebase.firestore.Timestamp.fromDate(P.start);
+    var endTs = firebase.firestore.Timestamp.fromDate(P.end);
+    var sIso = isoDate(P.start), eIso = isoDate(P.end);
+    var byId = {};
+    var qA = db.collection('bookings').where('createdAt', '>=', startTs).where('createdAt', '<=', endTs).get();
+    var qB = db.collection('bookings').where('date', '>=', sIso).where('date', '<=', eIso).get();
+    return Promise.all([qA, qB]).then(function (res) {
+      res.forEach(function (snap, idx) {
+        snap.forEach(function (doc) {
+          var d = byId[doc.id];
+          if (!d) { d = doc.data(); d._id = doc.id; d._inCreated = false; d._inDue = false; byId[doc.id] = d; }
+          if (idx === 0) d._inCreated = true; else d._inDue = true;
+        });
+      });
+      DATA.bookings = Object.keys(byId).map(function (k) {
+        var b = byId[k];
+        b._class = classifyBooking(b);
+        b._p9 = phone9(b.prospect && (b.prospect.telephone || b.prospect.phone));
+        b._createdMs = parseFlexMs(b.createdAt);
+        return b;
+      });
+    }).catch(function (e) { console.warn('[funnel] bookings', e.message); DATA.bookings = []; });
+  }
+
+  function loadCalls() {
+    var startTs = firebase.firestore.Timestamp.fromDate(P.start);
+    var endTs = firebase.firestore.Timestamp.fromDate(P.end);
+    return db.collection('call_logs')
+      .where('initiatedAt', '>=', startTs)
+      .where('initiatedAt', '<=', endTs)
+      .orderBy('initiatedAt', 'asc')
+      .limit(CALLS_QUERY_LIMIT)
+      .get().then(function (snap) {
+        DATA.callsTruncated = snap.size >= CALLS_QUERY_LIMIT;
+        var out = [];
+        snap.forEach(function (doc) {
+          var d = doc.data();
+          d._ms = parseFlexMs(d.initiatedAt) || parseFlexMs(d.startTime);
+          d._p9 = phone9(d.direction === 'inbound' ? d.fromNumber : d.toNumber);
+          out.push(d);
+        });
+        DATA.calls = out;
+      }).catch(function (e) { console.warn('[funnel] calls', e.message); DATA.calls = []; });
+  }
+
+  /* Saisies closing (mois calendaire uniquement) — même lecture que le
+     Dashboard : saisies/{slug}/mois/{YYYY-MM}, closing_total sinon Σ semaines. */
+  function loadSaisies() {
+    DATA.saisies = null;
+    if (!periodIsCalendarMonth()) return Promise.resolve();
+    var members = (window.TEAM_MEMBERS_LIST || []).slice();
+    if (!members.length) return Promise.resolve();
+    var fsKey = P.y + '-' + pad2(P.m + 1);
+    var CKEYS = ['calls', 'lives', 'offres', 'closes', 'contracte', 'collecte'];
+    var SKEYS = ['leads', 'calls', 'decroches', 'propRdv', 'sets', 'presents', 'closes'];
+    var agg = { closing: { calls: 0, lives: 0, offres: 0, closes: 0, contracte: 0, collecte: 0 }, setting: { leads: 0, calls: 0, decroches: 0, propRdv: 0, sets: 0, presents: 0, closes: 0 }, members: 0 };
+    var proms = members.map(function (m) {
+      if (!m || !m.slug) return Promise.resolve();
+      return db.collection('saisies').doc(m.slug).collection('mois').doc(fsKey).get().then(function (snap) {
+        if (!snap.exists) return;
+        var raw = snap.data();
+        agg.members++;
+        var c = null;
+        if (raw.closing_total) c = raw.closing_total;
+        else if (raw.closing) {
+          c = {};
+          CKEYS.forEach(function (k) { c[k] = 0; });
+          ALL_WEEKS.forEach(function (w) { if (raw.closing[w]) CKEYS.forEach(function (k) { c[k] += (raw.closing[w][k] || 0); }); });
+        }
+        if (c) CKEYS.forEach(function (k) { agg.closing[k] += (c[k] || 0); });
+        var s = null;
+        if (raw.setting_total) s = raw.setting_total;
+        else if (raw.setting) {
+          s = {};
+          SKEYS.forEach(function (k) { s[k] = 0; });
+          ALL_WEEKS.forEach(function (w) { if (raw.setting[w]) SKEYS.forEach(function (k) { s[k] += (raw.setting[w][k] || 0); }); });
+        }
+        if (s) SKEYS.forEach(function (k) { agg.setting[k] += (s[k] || 0); });
+      }).catch(function () {});
+    });
+    return Promise.all(proms).then(function () { DATA.saisies = agg; });
+  }
+
+  function loadJournalPeriod() {
+    var sIso = isoDate(P.start), eIso = isoDate(P.end);
+    return db.collection('marketing_journal').where('date', '>=', sIso).where('date', '<=', eIso).orderBy('date', 'desc').limit(120).get().then(function (snap) {
+      DATA.journalPeriod = [];
+      snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.journalPeriod.push(d); });
+    }).catch(function (e) { console.warn('[funnel] journal periode', e.message); DATA.journalPeriod = []; });
+  }
+
+  function loadJournalAll() {
+    return db.collection('marketing_journal').orderBy('date', 'desc').limit(250).get().then(function (snap) {
+      journalAll = [];
+      snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; journalAll.push(d); });
+    }).catch(function (e) { console.warn('[funnel] journal all', e.message); journalAll = []; });
+  }
+
+  function waitForTeamMembers() {
+    return new Promise(function (resolve) {
+      if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length) { resolve(); return; }
+      var done = false;
+      var to = setTimeout(function () { if (!done) { done = true; resolve(); } }, 4000);
+      window.addEventListener('team-members-loaded', function () {
+        if (!done) { done = true; clearTimeout(to); resolve(); }
+      }, { once: true });
+    });
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     COMPUTE — agrège tout selon le filtre tunnel
+     ════════════════════════════════════════════════════════════════ */
+  function compute() {
+    var k = {};
+    var todayIso = isoDate(new Date());
+
+    /* ── Index leads (cohorte + ré-optins) ── */
+    var leadsById = {}, leadsByP9 = {}, leadsByEmail = {};
+    function idxLead(l, inCohort) {
+      l._inCohort = inCohort;
+      leadsById[l._id] = l;
+      if (l._p9 && !leadsByP9[l._p9]) leadsByP9[l._p9] = l;
+      var em = (l.email || '').toLowerCase().trim();
+      if (em && !leadsByEmail[em]) leadsByEmail[em] = l;
+    }
+    DATA.leads.forEach(function (l) { idxLead(l, true); });
+    DATA.reoptins.forEach(function (l) { idxLead(l, false); });
+
+    var cohort = DATA.leads.filter(function (l) { return tunnelMatch(l._tunnel); });
+    var reopt  = DATA.reoptins.filter(function (l) { return tunnelMatch(l._tunnel); });
+
+    k.leads = cohort.length;
+    k.reoptins = reopt.length;
+    k.leadsByTunnel = { elite: 0, business: 0, other: 0 };
+    DATA.leads.forEach(function (l) { k.leadsByTunnel[l._tunnel]++; });
+
+    /* ── Ads ── */
+    var ads = DATA.ads.filter(function (a) { return tunnelMatch(a.tunnel || 'other'); });
+    k.spend = 0; k.impressions = 0; k.clicks = 0; k.leadsFb = 0; k.adsDays = 0;
+    ads.forEach(function (a) {
+      k.spend += Number(a.spend) || 0;
+      k.impressions += Number(a.impressions) || 0;
+      k.clicks += Number(a.clicks) || 0;
+      k.leadsFb += Number(a.leads) || 0;
+      if ((Number(a.spend) || 0) > 0 || (Number(a.impressions) || 0) > 0) k.adsDays++;
+    });
+    k.hasAds = k.spend > 0 || k.impressions > 0 || k.clicks > 0;
+    k.cpm = k.impressions > 0 ? k.spend / k.impressions * 1000 : null;
+    k.ctr = k.impressions > 0 ? k.clicks / k.impressions * 100 : null;
+    k.cpc = k.clicks > 0 ? k.spend / k.clicks : null;
+    k.cpl = k.leads > 0 && k.spend > 0 ? k.spend / k.leads : null;
+
+    /* ── Vues opt-in (beacon) ── */
+    var views = DATA.views.filter(function (v) {
+      var t = v.page === 'elite' ? 'elite' : v.page === 'business' ? 'business' : 'other';
+      return tunnelMatch(t);
+    });
+    k.views = 0;
+    views.forEach(function (v) { k.views += Number(v.views) || 0; });
+    k.optinReal = k.views > 0 ? k.leads / k.views * 100 : null;
+    k.optinClicks = k.clicks > 0 ? k.leads / k.clicks * 100 : null;
+
+    /* ── Bookings — tunnel via lead (leadId → phone → email) ── */
+    function bookingLead(b) {
+      if (b.leadId && leadsById[b.leadId]) return leadsById[b.leadId];
+      if (b._p9 && leadsByP9[b._p9]) return leadsByP9[b._p9];
+      var em = (b.prospect && b.prospect.email || '').toLowerCase().trim();
+      if (em && leadsByEmail[em]) return leadsByEmail[em];
+      return null;
+    }
+    function bookingMatches(b) {
+      if (tunnelFilter === 'all') return true;
+      var l = bookingLead(b);
+      return !!(l && l._tunnel === tunnelFilter);
+    }
+
+    var created = DATA.bookings.filter(function (b) { return b._inCreated && b._class !== 'excluded' && bookingMatches(b); });
+    var createdFunnel = created.filter(function (b) { return b._class === 'self' || b._class === 'setter'; });
+    k.booked = createdFunnel.length;
+    k.bookedSelf = createdFunnel.filter(function (b) { return b._class === 'self'; }).length;
+    k.bookedSetter = k.booked - k.bookedSelf;
+    k.bookedAdmin = created.filter(function (b) { return b._class === 'admin'; }).length;
+    k.selfShare = k.booked > 0 ? k.bookedSelf / k.booked * 100 : null;
+    k.setterShare = k.booked > 0 ? k.bookedSetter / k.booked * 100 : null;
+    k.ltb = k.leads > 0 ? k.booked / k.leads * 100 : null;
+    k.cpr = k.spend > 0 && k.booked > 0 ? k.spend / k.booked : null;
+
+    /* Récupération setting — cohorte : leads période avec RDV setter /
+       (leads période − leads période avec self-booking). */
+    var selfLeadIds = {}, setterLeadIds = {};
+    var setterOld = 0, unknownLeadBookings = 0;
+    createdFunnel.forEach(function (b) {
+      var l = bookingLead(b);
+      if (!l) { unknownLeadBookings++; return; }
+      if (!l._inCohort) { if (b._class === 'setter') setterOld++; return; }
+      if (b._class === 'self') selfLeadIds[l._id] = 1;
+      else setterLeadIds[l._id] = 1;
+      var ms = b._createdMs;
+      if (ms != null && l._entry != null && ms >= l._entry) {
+        if (l._ttb == null || ms - l._entry < l._ttb) l._ttb = ms - l._entry;
+      }
+      l._bk = l._bk || [];
+      l._bk.push(b);
+    });
+    var cohortSelf = 0, cohortSetter = 0;
+    cohort.forEach(function (l) {
+      if (selfLeadIds[l._id]) cohortSelf++;
+      else if (setterLeadIds[l._id]) cohortSetter++;
+    });
+    k.cohortSelf = cohortSelf;
+    k.cohortSetter = cohortSetter;
+    k.recovery = (k.leads - cohortSelf) > 0 ? cohortSetter / (k.leads - cohortSelf) * 100 : null;
+    k.setterOldLeads = setterOld;
+    k.unknownLeadBookings = unknownLeadBookings;
+
+    /* ── Tenue — RDV dont la date tombe dans la période ── */
+    var due = DATA.bookings.filter(function (b) { return b._inDue && (b._class === 'self' || b._class === 'setter') && bookingMatches(b); });
+    k.due = due.length;
+    k.dueCancelled = due.filter(function (b) { return b.status === 'cancelled'; }).length;
+    k.dueNoShow = due.filter(function (b) { return b.status === 'no_show'; }).length;
+    k.dueCompleted = due.filter(function (b) { return b.status === 'completed'; }).length;
+    k.dueToStatus = due.filter(function (b) { return b.status === 'confirmed' && b.date < todayIso; }).length;
+    k.dueUpcoming = due.filter(function (b) { return b.status === 'confirmed' && b.date >= todayIso; }).length;
+    k.kept = k.due - k.dueCancelled - k.dueNoShow;
+    k.keptPct = k.due > 0 ? k.kept / k.due * 100 : null;
+    k.cancelRate = k.due > 0 ? (k.dueCancelled + k.dueNoShow) / k.due * 100 : null;
+    k.cancelledByMap = {};
+    due.forEach(function (b) {
+      if (b.status !== 'cancelled' && b.status !== 'no_show') return;
+      var who = b.cancelledByName || b.noShowByName || (b.status === 'no_show' ? 'No-show' : 'Non renseigné');
+      k.cancelledByMap[who] = (k.cancelledByMap[who] || 0) + 1;
+    });
+
+    /* ── Téléphonie (call_logs) ── */
+    function callMatches(c) {
+      if (tunnelFilter === 'all') return true;
+      var l = c._p9 ? leadsByP9[c._p9] : null;
+      return !!(l && l._tunnel === tunnelFilter);
+    }
+    var callsOut = DATA.calls.filter(function (c) { return c.direction === 'outbound' && callMatches(c); });
+    k.callsOut = callsOut.length;
+    k.callsAnswered = callsOut.filter(function (c) { return (Number(c.durationSec) || 0) >= ANSWERED_MIN_SEC; }).length;
+    k.answerRate = k.callsOut > 0 ? k.callsAnswered / k.callsOut * 100 : null;
+
+    /* time-to-first-contact — premier appel sortant vers chaque lead cohorte */
+    var callsByP9 = {};
+    DATA.calls.forEach(function (c) {
+      if (c.direction !== 'outbound' || !c._p9 || c._ms == null) return;
+      if (!callsByP9[c._p9]) callsByP9[c._p9] = [];
+      callsByP9[c._p9].push(c._ms);
+    });
+    var ttcArr = [], ttbArr = [];
+    cohort.forEach(function (l) {
+      l._nbCalls = 0; l._ttc = null;
+      if (l._p9 && callsByP9[l._p9]) {
+        var arr = callsByP9[l._p9];
+        l._nbCalls = arr.length;
+        for (var i = 0; i < arr.length; i++) {
+          if (l._entry != null && arr[i] >= l._entry) {
+            if (l._ttc == null || arr[i] - l._entry < l._ttc) l._ttc = arr[i] - l._entry;
+          }
+        }
+      }
+      /* SMS sortants depuis l'entrée du lead (communications[]) */
+      l._nbSms = 0;
+      var comms = l.communications || [];
+      for (var j = 0; j < comms.length; j++) {
+        var cm = comms[j];
+        if (!cm || cm.type !== 'sms' || cm.direction !== 'outbound') continue;
+        var ms = parseFlexMs(cm.date || cm.createdAt);
+        if (ms != null && l._entry != null && ms >= l._entry && ms <= P.end.getTime()) l._nbSms++;
+      }
+      if (l._ttc != null) ttcArr.push(l._ttc);
+      if (l._ttb != null) ttbArr.push(l._ttb);
+    });
+    k.ttcMedian = median(ttcArr);
+    k.ttcCount = ttcArr.length;
+    k.ttbMedian = median(ttbArr);
+    k.ttbCount = ttbArr.length;
+
+    /* ── Closing (saisies — mois calendaire uniquement) ── */
+    k.saisies = DATA.saisies;
+    if (DATA.saisies) {
+      var c2 = DATA.saisies.closing;
+      k.callsLive = c2.lives;
+      k.offers = c2.offres;
+      k.closes = c2.closes;
+      k.contracte = c2.contracte;
+      k.collecte = c2.collecte;
+      k.closingLive = c2.lives > 0 ? c2.closes / c2.lives * 100 : null;
+      k.offerPct = c2.lives > 0 ? c2.offres / c2.lives * 100 : null;
+      k.callToClose = c2.closes > 0 ? c2.lives / c2.closes : null;
+      k.showup = k.kept > 0 ? c2.lives / k.kept * 100 : null;
+      k.setsDeclared = DATA.saisies.setting.sets;
+      k.cac = k.spend > 0 && c2.closes > 0 ? k.spend / c2.closes : null;
+      k.roas = k.spend > 0 ? c2.collecte / k.spend : null;
+      k.cashPerLive = c2.lives > 0 ? c2.collecte / c2.lives : null;
+    }
+
+    K = k;
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     RENDER — ONGLET FUNNEL
+     ════════════════════════════════════════════════════════════════ */
+  function kpiCard(value, label, sub, badgeHtml, muted) {
+    return '<div class="fn-kpi"><div class="v' + (muted ? ' muted' : '') + '">' + value + '</div><div class="l">' + label + '</div>'
+      + (sub ? '<div class="s">' + sub + '</div>' : '')
+      + (badgeHtml || '') + '</div>';
+  }
+  function stageOpen(icon, title, note) {
+    return '<div class="fn-stage"><div class="fn-stage-head"><div class="fn-stage-title">' + icon + ' ' + title + '</div>'
+      + (note ? '<div class="fn-stage-note">' + note + '</div>' : '') + '</div>';
+  }
+
+  function renderFunnel() {
+    var el = $('#fnTabFunnel');
+    if (!K) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
+    var k = K;
+    var h = '';
+
+    /* Hero */
+    h += '<div class="fn-hero">';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : '&nbsp;') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.booked) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) : '&nbsp;') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (k.keptPct != null ? fmtPct(k.keptPct, 0) : '—') + '</div><div class="l">Kept</div><div class="s">' + fmtNum(k.kept) + ' / ' + fmtNum(k.due) + ' RDV</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (k.saisies ? fmtNum(k.closes) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.saisies && k.closingLive != null ? fmtPct(k.closingLive, 0) + ' live' : 'maille mois') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (k.saisies ? fmtEuro(k.collecte) : '—') + '</div><div class="l">Collecté</div><div class="s">' + (k.saisies ? 'Contracté ' + fmtEuro(k.contracte) : 'maille mois') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (k.roas != null ? (Math.round(k.roas * 100) / 100).toLocaleString('fr-FR') + '×' : '—') + '</div><div class="l">ROAS</div><div class="s">' + (k.spend > 0 ? 'Dépense ' + fmtEuro(k.spend) : 'pas de data pub') + '</div></div>';
+    h += '</div>';
+
+    /* 1. Publicité */
+    h += stageOpen('💰', 'Publicité (Meta)', k.hasAds ? k.adsDays + ' jour(s) de data · source Make / saisie' : 'Aucune donnée — onglet « Données Ads » ou scénario Make');
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtEuro2(k.spend || null), 'Dépense pub', null, null, !k.hasAds);
+    h += kpiCard(fmtNum(k.impressions || null), 'Impressions', null, null, !k.hasAds);
+    h += kpiCard(fmtEuro2(k.cpm), 'CPM', 'coût / 1000 impressions');
+    h += kpiCard(fmtNum(k.clicks || null), 'Clics sortants', null, null, !k.hasAds);
+    h += kpiCard(fmtPct(k.ctr, 2), 'CTR', 'clics / impressions', targetBadge('ctr', k.ctr));
+    h += kpiCard(fmtEuro2(k.cpc), 'CPC', 'coût / clic');
+    h += '</div></div>';
+    h += '<div class="fn-arrow">▼</div>';
+
+    /* 2. Opt-in */
+    h += stageOpen('📄', 'Page d\'opt-in', k.views > 0 ? 'Vues réelles via beacon' : 'Vues : pose le snippet sur les pages system.io pour le taux réel');
+    h += '<div class="fn-grid">';
+    h += kpiCard(k.views > 0 ? fmtNum(k.views) : '—', 'Vues page opt-in', k.views > 0 ? null : 'beacon non actif', null, k.views === 0);
+    h += kpiCard(fmtNum(k.leads), 'Leads (réels)', 'entrés sur la période');
+    if (k.views > 0) h += kpiCard(fmtPct(k.optinReal), 'Taux d\'opt-in réel', 'leads / vues', targetBadge('optin', k.optinReal));
+    h += kpiCard(fmtPct(k.optinClicks), 'Taux d\'opt-in / clics', 'leads / clics Meta', k.views > 0 ? '' : targetBadge('optin', k.optinClicks));
+    h += kpiCard(fmtEuro2(k.cpl), 'CPL réel', 'dépense / leads réels', targetBadge('cpl', k.cpl));
+    h += kpiCard(k.leadsFb > 0 ? fmtNum(k.leadsFb) : '—', 'Leads pixel Meta', k.leadsFb > 0 && k.leads > 0 ? 'écart ' + fmtNum(k.leadsFb - k.leads) + ' vs réels' : 'reporté par Meta', null, k.leadsFb === 0);
+    h += '</div></div>';
+    h += '<div class="fn-arrow">▼</div>';
+
+    /* 3. Leads */
+    var totalT = k.leadsByTunnel.elite + k.leadsByTunnel.business + k.leadsByTunnel.other;
+    h += stageOpen('👥', 'Leads', DATA.leadsTruncated ? '⚠ liste tronquée à ' + LEADS_QUERY_LIMIT : null);
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtNum(k.leads), 'Nouveaux leads', 'date d\'entrée réelle dans la période');
+    h += kpiCard('<span class="fn-reopt">' + fmtNum(k.reoptins) + '</span>', 'Ré-optins 🔄', 'leads antérieurs revenus via opt-in');
+    h += '<div class="fn-kpi" style="grid-column:span 2;min-width:280px"><div class="l" style="margin-top:0;margin-bottom:6px">Répartition par tunnel (tous)</div><div class="fn-minibars">';
+    [['elite', '#a78bfa'], ['business', '#60a5fa'], ['other', '#6b7280']].forEach(function (row) {
+      var t = row[0], color = row[1], n = k.leadsByTunnel[t];
+      var pct = totalT > 0 ? n / totalT * 100 : 0;
+      h += '<div class="fn-minibar"><span class="mb-l">' + tunnelLabel(t) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></span></span><span class="mb-v">' + fmtNum(n) + ' · ' + fmtPct(pct, 0) + '</span></div>';
+    });
+    h += '</div></div>';
+    h += '</div></div>';
+    h += '<div class="fn-arrow">▼</div>';
+
+    /* 4. Prise de RDV */
+    h += stageOpen('📅', 'Prise de RDV — setting / closing', 'RDV créés sur la période · coaching &amp; CSM exclus');
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtNum(k.booked), 'Total Call Booked', 'self + setter');
+    h += kpiCard(fmtNum(k.bookedSelf) + ' <span style="font-size:12px;color:var(--muted)">(' + fmtPct(k.selfShare, 0) + ')</span>', '🔗 Self-booking (VSL)', null, targetBadge('selfShare', k.selfShare));
+    h += kpiCard(fmtNum(k.bookedSetter) + ' <span style="font-size:12px;color:var(--muted)">(' + fmtPct(k.setterShare, 0) + ')</span>', '📞 Setting', k.setterOldLeads ? 'dont ' + k.setterOldLeads + ' sur leads antérieurs' : null);
+    h += kpiCard(fmtPct(k.ltb), 'LTB — Lead to Booking', 'RDV pris / leads', targetBadge('ltb', k.ltb));
+    h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
+    h += kpiCard(fmtEuro2(k.cpr), 'CPR', 'dépense / RDV pris');
+    if (k.bookedAdmin > 0) h += kpiCard(fmtNum(k.bookedAdmin), 'RDV manuels (admin)', 'hors LTB / hors funnel', null, true);
+    h += '</div>';
+    if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.unknownLeadBookings + ' RDV de leads hors période (non rattachés à la cohorte) — inclus dans les totaux « Tous », hors taux de récupération.</div>';
+    h += '</div>';
+    h += '<div class="fn-arrow">▼</div>';
+
+    /* 5. Tenue des RDV */
+    h += stageOpen('✅', 'Tenue des RDV', 'RDV dont la date tombe dans la période');
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtNum(k.due), 'RDV planifiés', null);
+    h += kpiCard(fmtNum(k.kept), 'Kept Call', 'maintenus (ni annulé, ni no-show)', targetBadge('kept', k.keptPct));
+    h += kpiCard(fmtPct(k.keptPct, 0), 'Kept %', null);
+    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.dueCancelled) + '</span>', '🔴 Annulés', cancelByLabel(k));
+    h += kpiCard('<span style="color:var(--gold)">' + fmtNum(k.dueNoShow) + '</span>', '🚫 No-show', null);
+    h += kpiCard(fmtNum(k.dueCompleted), 'Tenus (statués)', k.dueUpcoming ? '+ ' + k.dueUpcoming + ' à venir' : null);
+    if (k.saisies) h += kpiCard(fmtPct(k.showup, 0), 'Show-up', 'calls live / kept', targetBadge('showup', k.showup));
+    h += '</div>';
+    if (k.dueToStatus > 0) h += '<div class="fn-alert">⚠ <strong>' + k.dueToStatus + ' RDV passé(s) sans statut</strong> — à marquer Tenu / Annulé / No-show dans <a href="sales-rdv.html">Rendez-vous</a> ou <a href="booking-admin.html">Booking</a> pour des stats fiables.</div>';
+    h += '</div>';
+    h += '<div class="fn-arrow">▼</div>';
+
+    /* 6. Téléphonie */
+    h += stageOpen('☎️', 'Activité téléphonique (Ringover — auto)', DATA.callsTruncated ? '⚠ tronqué à ' + CALLS_QUERY_LIMIT + ' appels' : null);
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtNum(k.callsOut), 'Appels sortants', null);
+    h += kpiCard(fmtNum(k.callsAnswered), 'Décrochés', '≥ ' + ANSWERED_MIN_SEC + ' s');
+    h += kpiCard(fmtPct(k.answerRate), 'Taux de décroché', null, targetBadge('decroche', k.answerRate));
+    h += kpiCard(fmtDelay(k.ttcMedian), '⏱ Time-to-contact médian', 'entrée lead → 1er appel · ' + k.ttcCount + ' leads');
+    h += kpiCard(fmtDelay(k.ttbMedian), '⏱ Time-to-book médian', 'entrée lead → RDV pris · ' + k.ttbCount + ' leads');
+    h += '</div></div>';
+    h += '<div class="fn-arrow">▼</div>';
+
+    /* 7. Closing */
+    if (k.saisies) {
+      h += stageOpen('🎯', 'Closing (saisies équipe)', k.saisies.members + ' membre(s) · ' + MONTHS_FR[P.m] + ' ' + P.y);
+      h += '<div class="fn-grid">';
+      h += kpiCard(fmtNum(k.callsLive), 'Calls live', null);
+      h += kpiCard(fmtNum(k.offers), 'Offres', k.offerPct != null ? fmtPct(k.offerPct, 0) + ' des lives' : null);
+      h += kpiCard(fmtNum(k.closes), 'Closes', k.callToClose != null ? (Math.round(k.callToClose * 10) / 10).toLocaleString('fr-FR') + ' calls / close' : null);
+      h += kpiCard(fmtPct(k.closingLive), 'Closing live %', 'closes / calls live', targetBadge('closingLive', k.closingLive));
+      h += kpiCard(fmtEuro(k.contracte), 'Contracté', null);
+      h += kpiCard(fmtEuro(k.collecte), 'Collecté', k.cashPerLive != null ? fmtEuro2(k.cashPerLive) + ' / call live' : null);
+      h += '</div>';
+      if (k.setsDeclared != null) h += '<div class="fn-stage-note" style="margin-top:8px">Recoupement : <strong>' + fmtNum(k.setsDeclared) + ' sets déclarés</strong> en saisie setting vs <strong>' + fmtNum(k.bookedSetter) + ' RDV setter détectés</strong> automatiquement.</div>';
+      h += '</div>';
+    } else {
+      h += '<div class="fn-stage"><div class="fn-stage-title">🎯 Closing (saisies équipe)</div><div class="fn-stage-note" style="margin-top:8px">Disponible uniquement à la maille <strong>mois calendaire</strong> (les saisies setting/closing sont mensuelles). Sélectionne « Mois » pour afficher cette section, CAC et ROAS.</div></div>';
+    }
+    h += '<div class="fn-arrow">▼</div>';
+
+    /* 8. Rentabilité */
+    h += stageOpen('💶', 'Coûts &amp; rentabilité', null);
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense / lead', targetBadge('cpl', k.cpl));
+    h += kpiCard(fmtEuro2(k.cpr), 'CPR', 'dépense / RDV');
+    h += kpiCard(k.saisies ? fmtEuro2(k.cac) : '—', 'CAC', 'dépense / close', null, !k.saisies);
+    h += kpiCard(k.roas != null ? (Math.round(k.roas * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS', 'collecté / dépense', null, k.roas == null);
+    h += '</div></div>';
+
+    /* Journal de la période */
+    h += '<div class="fn-stage"><div class="fn-stage-head"><div class="fn-stage-title">📒 Actions de la période</div><div class="fn-stage-note"><a href="#" id="fnGoJournal" style="color:var(--blue)">Ouvrir le journal →</a></div></div>';
+    if (!DATA.journalPeriod.length) h += '<div class="fn-empty" style="padding:14px">Aucune action consignée sur la période.</div>';
+    else {
+      h += '<div>';
+      DATA.journalPeriod.forEach(function (j) { h += journalItemHtml(j, false); });
+      h += '</div>';
+    }
+    h += '</div>';
+
+    el.innerHTML = h;
+    var go = $('#fnGoJournal');
+    if (go) go.onclick = function (e) { e.preventDefault(); switchTab('journal'); };
+  }
+
+  function cohortLabelRecovery(k) {
+    var base = k.leads - k.cohortSelf;
+    return k.cohortSetter + ' récupérés / ' + base + ' sans self-booking';
+  }
+  function cancelByLabel(k) {
+    var keys = Object.keys(k.cancelledByMap || {});
+    if (!keys.length) return null;
+    var parts = [];
+    keys.forEach(function (who) { if (who !== 'No-show') parts.push(who + ' : ' + k.cancelledByMap[who]); });
+    return parts.length ? parts.join(' · ') : null;
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     RENDER — ONGLET LEADS (détail par lead)
+     ════════════════════════════════════════════════════════════════ */
+  var SORTERS = {
+    name:    function (l) { return (l.nom || '').toLowerCase(); },
+    tunnel:  function (l) { return l._tunnel; },
+    utm:     function (l) { return (decodeUtm(l.utm) || '').toLowerCase(); },
+    entry:   function (l) { return l._entry || 0; },
+    calls:   function (l) { return l._nbCalls || 0; },
+    sms:     function (l) { return l._nbSms || 0; },
+    ttc:     function (l) { return l._ttc == null ? Infinity : l._ttc; },
+    rdv:     function (l) { return l._bk && l._bk.length ? (l._bk[0]._class === 'self' ? 1 : 2) : 0; },
+    status:  function (l) { return l._bk && l._bk.length ? (l._bk[0].status || '') : ''; },
+    ttb:     function (l) { return l._ttb == null ? Infinity : l._ttb; }
+  };
+
+  function leadRdvInfo(l) {
+    if (!l._bk || !l._bk.length) return null;
+    var best = l._bk.slice().sort(function (a, b) { return (a._createdMs || 0) - (b._createdMs || 0); })[0];
+    return best;
+  }
+
+  function renderLeads() {
+    var el = $('#fnTabLeads');
+    if (!K) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
+    var h = '';
+    h += '<div class="fn-lt-toolbar">';
+    h += '<div class="fn-lt-search"><input type="text" id="fnLeadsSearch" placeholder="Nom, email, téléphone, UTM…" value="' + escAttr(leadsSearch) + '"></div>';
+    h += '<select class="fn-sel" id="fnLeadsRdvF">';
+    h += '<option value="all"' + (leadsRdvFilter === 'all' ? ' selected' : '') + '>Tous</option>';
+    h += '<option value="with"' + (leadsRdvFilter === 'with' ? ' selected' : '') + '>Avec RDV</option>';
+    h += '<option value="without"' + (leadsRdvFilter === 'without' ? ' selected' : '') + '>Sans RDV</option>';
+    h += '<option value="nocontact"' + (leadsRdvFilter === 'nocontact' ? ' selected' : '') + '>Sans contact</option>';
+    h += '</select>';
+    h += '<div style="flex:1"></div>';
+    h += '<span class="fn-stage-note" id="fnLeadsCount"></span>';
+    h += '<button class="fn-btn" id="fnLeadsCsv">⬇ Export CSV</button>';
+    h += '</div>';
+    h += '<div class="fn-table-wrap"><table class="fn-table"><thead><tr>';
+    var cols = [['name', 'Lead'], ['tunnel', 'Tunnel'], ['utm', 'UTM'], ['entry', 'Entrée réelle'], ['calls', '📞'], ['sms', '💬'], ['ttc', '1er contact'], ['rdv', 'RDV'], ['status', 'Statut RDV'], ['ttb', '⏱ Book']];
+    cols.forEach(function (c) {
+      var arrow = leadsSort.key === c[0] ? (leadsSort.dir > 0 ? ' ▲' : ' ▼') : '';
+      h += '<th data-sort="' + c[0] + '">' + c[1] + arrow + '</th>';
+    });
+    h += '</tr></thead><tbody id="fnLeadsBody"></tbody></table></div>';
+    el.innerHTML = h;
+
+    $('#fnLeadsSearch').oninput = function () { leadsSearch = this.value; renderLeadsBody(); };
+    $('#fnLeadsRdvF').onchange = function () { leadsRdvFilter = this.value; renderLeadsBody(); };
+    $('#fnLeadsCsv').onclick = exportLeadsCsv;
+    $$('th[data-sort]', el).forEach(function (th) {
+      th.onclick = function () {
+        var kk = th.getAttribute('data-sort');
+        if (leadsSort.key === kk) leadsSort.dir = -leadsSort.dir;
+        else { leadsSort.key = kk; leadsSort.dir = kk === 'entry' ? -1 : 1; }
+        renderLeads();
+      };
+    });
+    renderLeadsBody();
+  }
+
+  function filteredLeads() {
+    var q = leadsSearch.trim().toLowerCase();
+    return DATA.leads.filter(function (l) {
+      if (!tunnelMatch(l._tunnel)) return false;
+      var bk = leadRdvInfo(l);
+      if (leadsRdvFilter === 'with' && !bk) return false;
+      if (leadsRdvFilter === 'without' && bk) return false;
+      if (leadsRdvFilter === 'nocontact' && ((l._nbCalls || 0) > 0 || (l._nbSms || 0) > 0 || bk)) return false;
+      if (q) {
+        var hay = ((l.nom || '') + ' ' + (l.email || '') + ' ' + (l.telephone || '') + ' ' + (decodeUtm(l.utm) || '')).toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderLeadsBody() {
+    var body = $('#fnLeadsBody');
+    if (!body) return;
+    var list = filteredLeads();
+    var sorter = SORTERS[leadsSort.key] || SORTERS.entry;
+    list.sort(function (a, b) {
+      var va = sorter(a), vb = sorter(b);
+      if (va < vb) return -1 * leadsSort.dir;
+      if (va > vb) return 1 * leadsSort.dir;
+      return 0;
+    });
+    $('#fnLeadsCount').textContent = list.length + ' lead(s)';
+    if (!list.length) { body.innerHTML = '<tr><td colspan="10"><div class="fn-empty">Aucun lead ne correspond.</div></td></tr>'; return; }
+    var rows = '';
+    var shown = list.slice(0, 800);
+    shown.forEach(function (l) {
+      var bk = leadRdvInfo(l);
+      var reopt = (l.engagementHistory && l.engagementHistory.length) ? ' <span class="fn-reopt" title="' + l.engagementHistory.length + ' passage(s) archivé(s)">🔄</span>' : '';
+      var utm = decodeUtm(l.utm) || '—';
+      rows += '<tr>';
+      rows += '<td><a class="fn-lead-link" href="sales-contact.html?id=' + encodeURIComponent(l._id) + '" target="_blank">' + esc(l.nom || l.email || '—') + '</a>' + reopt + '</td>';
+      rows += '<td><span class="fn-tbadge ' + l._tunnel + '">' + tunnelLabel(l._tunnel) + '</span></td>';
+      rows += '<td><span class="fn-utm" title="' + escAttr(utm) + '">' + esc(utm) + '</span></td>';
+      rows += '<td class="num">' + frDate(l._entry) + '</td>';
+      rows += '<td class="num">' + (l._nbCalls || 0) + '</td>';
+      rows += '<td class="num">' + (l._nbSms || 0) + '</td>';
+      rows += '<td class="num">' + fmtDelay(l._ttc) + '</td>';
+      if (bk) {
+        rows += '<td><span class="fn-tbadge ' + (bk._class === 'self' ? 'self">🔗 Self' : 'setter">📞 Setter') + '</span></td>';
+        var st = bk.status || 'confirmed';
+        var stLabel = st === 'confirmed' ? 'À venir' : st === 'completed' ? 'Tenu' : st === 'cancelled' ? 'Annulé' : st === 'no_show' ? 'No-show' : st;
+        rows += '<td><span class="fn-tbadge st-' + esc(st) + '">' + esc(stLabel) + '</span> <span style="color:var(--muted2);font-size:10px">' + esc(frDay(bk.date)) + '</span></td>';
+      } else {
+        rows += '<td><span style="color:var(--muted2)">—</span></td><td><span style="color:var(--muted2)">—</span></td>';
+      }
+      rows += '<td class="num">' + fmtDelay(l._ttb) + '</td>';
+      rows += '</tr>';
+    });
+    if (list.length > shown.length) rows += '<tr><td colspan="10" style="text-align:center;color:var(--muted);font-size:11.5px;padding:10px">Affichage limité à 800 lignes — affine la recherche ou exporte en CSV (complet).</td></tr>';
+    body.innerHTML = rows;
+  }
+
+  function exportLeadsCsv() {
+    var list = filteredLeads();
+    var sep = ';';
+    var head = ['Nom', 'Email', 'Telephone', 'Tunnel', 'UTM', 'Entree reelle', 'Re-optins', 'Appels', 'SMS', '1er contact (h)', 'RDV', 'Statut RDV', 'Date RDV', 'Time-to-book (h)'];
+    var lines = [head.join(sep)];
+    list.forEach(function (l) {
+      var bk = leadRdvInfo(l);
+      function cell(v) { v = v == null ? '' : String(v); return '"' + v.replace(/"/g, '""') + '"'; }
+      function hours(ms) { return ms == null ? '' : (Math.round(ms / 3600000 * 10) / 10); }
+      lines.push([
+        cell(l.nom || ''), cell(l.email || ''), cell(l.telephone || l.phone || ''),
+        cell(tunnelLabel(l._tunnel)), cell(decodeUtm(l.utm) || ''),
+        cell(l._entry ? new Date(l._entry).toISOString() : ''),
+        cell(l.engagementHistory ? l.engagementHistory.length : 0),
+        cell(l._nbCalls || 0), cell(l._nbSms || 0), cell(hours(l._ttc)),
+        cell(bk ? (bk._class === 'self' ? 'self' : 'setter') : ''),
+        cell(bk ? (bk.status || 'confirmed') : ''), cell(bk ? bk.date : ''),
+        cell(hours(l._ttb))
+      ].join(sep));
+    });
+    var blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'funnel-leads-' + isoDate(P.start) + '_' + isoDate(P.end) + (tunnelFilter !== 'all' ? '-' + tunnelFilter : '') + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    toast('⬇ Export CSV (' + list.length + ' leads)');
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     RENDER — ONGLET DONNÉES ADS (grille jour × tunnel, saisie admin)
+     ════════════════════════════════════════════════════════════════ */
+  var ADS_FIELDS = [['spend', 'Dépense €'], ['impressions', 'Impr.'], ['clicks', 'Clics'], ['leads', 'Leads FB']];
+  var ADS_TUNNELS = [['elite', 'Élite'], ['business', 'Business']];
+
+  function adsDocMap() {
+    var map = {};
+    DATA.ads.forEach(function (a) { map[(a.date || '') + '_' + (a.tunnel || 'other')] = a; });
+    return map;
+  }
+
+  function renderAds() {
+    var el = $('#fnTabAds');
+    if (!periodIsCalendarMonth()) {
+      el.innerHTML = '<div class="fn-stage"><div class="fn-stage-title">💶 Données Ads</div><div class="fn-stage-note" style="margin-top:8px">La grille de saisie s\'affiche à la maille <strong>mois calendaire</strong>. Sélectionne « Mois » dans la barre de période.</div></div>';
+      return;
+    }
+    var map = adsDocMap();
+    var daysInMonth = new Date(P.y, P.m + 1, 0).getDate();
+    var lastMake = null;
+    DATA.ads.forEach(function (a) {
+      if (a.source === 'make' && a.receivedAt) {
+        var ms = parseFlexMs(a.receivedAt);
+        if (ms && (!lastMake || ms > lastMake)) lastMake = ms;
+      }
+    });
+    var h = '';
+    h += '<div class="fn-stage" style="margin-bottom:12px"><div class="fn-stage-head"><div class="fn-stage-title">💶 Données Ads — ' + MONTHS_FR[P.m] + ' ' + P.y + '</div>';
+    h += '<div class="fn-stage-note">' + (lastMake ? '⚙️ Dernière data Make : ' + frDate(lastMake) : '⚙️ Aucune donnée Make reçue — scénario à brancher (doc fournie)') + '</div></div>';
+    h += '<div class="fn-stage-note">Saisie manuelle : modifie les cellules puis 💾. Une cellule éditée passe la journée en <span class="fn-src manual">manuel</span> (Make ne l\'écrasera plus, sa valeur restera proposée via ↩).</div>';
+    h += '</div>';
+    h += '<div class="fn-ads-wrap"><table class="fn-ads"><thead>';
+    h += '<tr><th></th>';
+    ADS_TUNNELS.forEach(function (t) { h += '<th class="grp" colspan="' + (ADS_FIELDS.length + 1) + '">' + t[1] + '</th>'; });
+    h += '</tr><tr><th>Jour</th>';
+    ADS_TUNNELS.forEach(function () {
+      ADS_FIELDS.forEach(function (f, i) { h += '<th' + (i === 0 ? ' class="sep"' : '') + '>' + f[1] + '</th>'; });
+      h += '<th>Src</th>';
+    });
+    h += '</tr></thead><tbody>';
+
+    for (var d = 1; d <= daysInMonth; d++) {
+      var dIso = P.y + '-' + pad2(P.m + 1) + '-' + pad2(d);
+      h += '<tr><td class="day">' + pad2(d) + '/' + pad2(P.m + 1) + '</td>';
+      ADS_TUNNELS.forEach(function (t) {
+        var docId = dIso + '_' + t[0];
+        var doc = map[docId] || {};
+        ADS_FIELDS.forEach(function (f, i) {
+          var val = doc[f[0]];
+          var draft = adsDraft[docId] && adsDraft[docId][f[0]] !== undefined ? adsDraft[docId][f[0]] : null;
+          var shown = draft !== null ? draft : (val == null ? '' : val);
+          h += '<td' + (i === 0 ? ' class="sep"' : '') + '><input type="number" step="any" min="0" data-doc="' + escAttr(docId) + '" data-field="' + f[0] + '" value="' + escAttr(shown) + '"' + (draft !== null ? ' class="dirty"' : '') + '></td>';
+        });
+        var src = '';
+        if (doc.source === 'make') src = '<span class="fn-src make">make</span>';
+        else if (doc.source === 'manual') {
+          src = '<span class="fn-src manual">man.</span>';
+          if (doc.makeSuggested) {
+            var ms2 = doc.makeSuggested;
+            var tip = 'Make propose — dépense: ' + (ms2.spend != null ? ms2.spend : '—') + ' · impr: ' + (ms2.impressions != null ? ms2.impressions : '—') + ' · clics: ' + (ms2.clicks != null ? ms2.clicks : '—') + ' · leads: ' + (ms2.leads != null ? ms2.leads : '—');
+            src += ' <button class="fn-jdel" data-restore="' + escAttr(docId) + '" title="' + escAttr(tip) + '">↩</button>';
+          }
+        }
+        h += '<td>' + src + '</td>';
+      });
+      h += '</tr>';
+    }
+
+    /* Totaux + dérivés */
+    h += '<tr class="totals"><td class="day">TOTAL</td>';
+    ADS_TUNNELS.forEach(function (t) {
+      var tot = { spend: 0, impressions: 0, clicks: 0, leads: 0 };
+      DATA.ads.forEach(function (a) {
+        if (a.tunnel !== t[0]) return;
+        tot.spend += Number(a.spend) || 0; tot.impressions += Number(a.impressions) || 0;
+        tot.clicks += Number(a.clicks) || 0; tot.leads += Number(a.leads) || 0;
+      });
+      h += '<td class="sep">' + (Math.round(tot.spend * 100) / 100).toLocaleString('fr-FR') + '</td><td>' + fmtNum(tot.impressions) + '</td><td>' + fmtNum(tot.clicks) + '</td><td>' + fmtNum(tot.leads) + '</td>';
+      var cpm = tot.impressions > 0 ? tot.spend / tot.impressions * 1000 : null;
+      var ctr = tot.impressions > 0 ? tot.clicks / tot.impressions * 100 : null;
+      h += '<td style="font-family:var(--font-b);font-size:9.5px;color:var(--muted);text-align:left;white-space:nowrap">CPM ' + (cpm != null ? fmtEuro2(cpm) : '—') + '<br>CTR ' + fmtPct(ctr, 2) + '</td>';
+    });
+    h += '</tr>';
+    h += '</tbody></table></div>';
+    h += '<div style="display:flex;gap:10px;margin-top:12px;align-items:center">';
+    h += '<button class="fn-btn primary" id="fnAdsSave">💾 Enregistrer les modifications</button>';
+    h += '<span class="fn-stage-note" id="fnAdsDirtyCount"></span>';
+    h += '</div>';
+    el.innerHTML = h;
+
+    $$('input[data-doc]', el).forEach(function (inp) {
+      inp.addEventListener('input', function () {
+        var docId = inp.getAttribute('data-doc'), field = inp.getAttribute('data-field');
+        if (!adsDraft[docId]) adsDraft[docId] = {};
+        adsDraft[docId][field] = inp.value;
+        inp.classList.add('dirty');
+        updateAdsDirtyCount();
+      });
+    });
+    $$('button[data-restore]', el).forEach(function (btn) {
+      btn.onclick = function () { restoreMakeValues(btn.getAttribute('data-restore')); };
+    });
+    $('#fnAdsSave').onclick = saveAdsDraft;
+    updateAdsDirtyCount();
+  }
+
+  function updateAdsDirtyCount() {
+    var n = 0;
+    Object.keys(adsDraft).forEach(function (id) { n += Object.keys(adsDraft[id]).length; });
+    var el = $('#fnAdsDirtyCount');
+    if (el) el.textContent = n ? n + ' cellule(s) modifiée(s) non enregistrée(s)' : '';
+    var btn = $('#fnAdsSave');
+    if (btn) btn.disabled = n === 0;
+  }
+
+  function saveAdsDraft() {
+    var ids = Object.keys(adsDraft);
+    if (!ids.length) return;
+    var batch = db.batch();
+    var now = firebase.firestore.FieldValue.serverTimestamp();
+    ids.forEach(function (docId) {
+      var parts = docId.split('_');
+      var date = parts[0], tunnel = parts.slice(1).join('_');
+      var patch = { date: date, tunnel: tunnel, source: 'manual', updatedAt: now, updatedBy: currentUser ? (currentUser.email || currentUser.uid) : null };
+      Object.keys(adsDraft[docId]).forEach(function (f) {
+        var raw = adsDraft[docId][f];
+        patch[f] = (raw === '' || raw == null || isNaN(raw)) ? null : Number(raw);
+      });
+      batch.set(db.collection('ads_insights').doc(docId), patch, { merge: true });
+    });
+    batch.commit().then(function () {
+      adsDraft = {};
+      toast('💾 Données Ads enregistrées');
+      loadAds().then(function () { compute(); renderAds(); });
+    }).catch(function (e) { toast('Erreur : ' + e.message, true); });
+  }
+
+  function restoreMakeValues(docId) {
+    var map = adsDocMap();
+    var doc = map[docId];
+    if (!doc || !doc.makeSuggested) return;
+    var ms = doc.makeSuggested;
+    var patch = { source: 'make', updatedAt: firebase.firestore.FieldValue.serverTimestamp(), makeSuggested: firebase.firestore.FieldValue.delete(), makeSuggestedAt: firebase.firestore.FieldValue.delete() };
+    ['spend', 'impressions', 'clicks', 'leads', 'reach'].forEach(function (f) { if (ms[f] !== undefined) patch[f] = ms[f]; });
+    db.collection('ads_insights').doc(docId).set(patch, { merge: true }).then(function () {
+      toast('↩ Valeurs Make restaurées');
+      loadAds().then(function () { compute(); renderAds(); });
+    }).catch(function (e) { toast('Erreur : ' + e.message, true); });
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     RENDER — ONGLET JOURNAL (tableau d'actions marketing)
+     ════════════════════════════════════════════════════════════════ */
+  var JCATS = [['budget', '💰 Budget'], ['crea', '🎨 Créa'], ['vsl', '🎬 VSL'], ['optin', '📄 Page opt-in'], ['ciblage', '🎯 Ciblage'], ['offre', '💼 Offre'], ['autre', '🔧 Autre']];
+  function jcatLabel(c) {
+    for (var i = 0; i < JCATS.length; i++) if (JCATS[i][0] === c) return JCATS[i][1];
+    return '🔧 Autre';
+  }
+  function journalItemHtml(j, withDelete) {
+    var h = '<div class="fn-jr-item">';
+    h += '<span class="fn-jr-date">' + esc(frDay(j.date)) + '/' + esc(String((j.date || '').slice(2, 4))) + '</span>';
+    h += '<span class="fn-jr-cat">' + jcatLabel(j.category) + '</span>';
+    h += '<span class="fn-jr-text">' + esc(j.text || '') + '</span>';
+    h += '<span class="fn-jr-author">' + esc(j.author || '') + '</span>';
+    if (withDelete) h += '<button class="fn-jdel" data-jdel="' + escAttr(j._id) + '" title="Supprimer">🗑</button>';
+    h += '</div>';
+    return h;
+  }
+
+  function renderJournal() {
+    var el = $('#fnTabJournal');
+    var h = '';
+    h += '<div class="fn-jform">';
+    h += '<input type="date" id="fnJDate" value="' + isoDate(new Date()) + '">';
+    h += '<select id="fnJCat">';
+    JCATS.forEach(function (c) { h += '<option value="' + c[0] + '">' + c[1] + '</option>'; });
+    h += '</select>';
+    h += '<textarea id="fnJText" placeholder="Ex : Lancement nouvelle créa Élite « hook garage » · budget 50→80 €/j · changement d\'audience…"></textarea>';
+    h += '<button class="fn-btn primary" id="fnJAdd">➕ Consigner</button>';
+    h += '</div>';
+    h += '<div class="fn-jlist" id="fnJList"></div>';
+    el.innerHTML = h;
+    $('#fnJAdd').onclick = addJournalEntry;
+    renderJournalList();
+  }
+
+  function renderJournalList() {
+    var el = $('#fnJList');
+    if (!el) return;
+    if (!journalAll.length) { el.innerHTML = '<div class="fn-empty">Aucune action consignée. Chaque changement marketing (créa, budget, cible, VSL…) noté ici permet de relire les variations du funnel.</div>'; return; }
+    var h = '';
+    var lastMonth = '';
+    journalAll.forEach(function (j) {
+      var mk = (j.date || '').slice(0, 7);
+      if (mk !== lastMonth) {
+        lastMonth = mk;
+        var p = mk.split('-');
+        h += '<div class="fn-jmonth">' + (MONTHS_FR[parseInt(p[1], 10) - 1] || '') + ' ' + p[0] + '</div>';
+      }
+      h += journalItemHtml(j, true);
+    });
+    el.innerHTML = h;
+    $$('button[data-jdel]', el).forEach(function (btn) {
+      btn.onclick = function () {
+        if (!confirm('Supprimer cette entrée du journal ?')) return;
+        db.collection('marketing_journal').doc(btn.getAttribute('data-jdel')).delete().then(function () {
+          toast('🗑 Entrée supprimée');
+          return Promise.all([loadJournalAll(), loadJournalPeriod()]);
+        }).then(function () { renderJournalList(); }).catch(function (e) { toast('Erreur : ' + e.message, true); });
+      };
+    });
+  }
+
+  function addJournalEntry() {
+    var date = $('#fnJDate').value;
+    var cat = $('#fnJCat').value;
+    var text = $('#fnJText').value.trim();
+    if (!date || !text) { toast('Date et texte requis', true); return; }
+    var authorName = null;
+    try {
+      var tm = window.TEAM_MEMBERS_LIST || [];
+      for (var i = 0; i < tm.length; i++) if (tm[i].firebaseUid === currentUser.uid) { authorName = tm[i].shortName || tm[i].displayName; break; }
+    } catch (e) {}
+    var entry = {
+      date: date,
+      category: cat,
+      text: text,
+      author: authorName || (currentUser.email || '').split('@')[0],
+      authorUid: currentUser.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    db.collection('marketing_journal').add(entry).then(function () {
+      $('#fnJText').value = '';
+      toast('📒 Action consignée');
+      return Promise.all([loadJournalAll(), loadJournalPeriod()]);
+    }).then(function () { renderJournalList(); }).catch(function (e) { toast('Erreur : ' + e.message, true); });
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     MODAL CIBLES
+     ════════════════════════════════════════════════════════════════ */
+  function openTargetsModal() {
+    var body = $('#fnTargetsBody');
+    var h = '';
+    Object.keys(DEFAULT_TARGETS).forEach(function (kk) {
+      var t = TARGETS[kk] || DEFAULT_TARGETS[kk];
+      h += '<div class="fn-trow"><span class="tl">' + esc(DEFAULT_TARGETS[kk].label) + '</span>';
+      h += '<span style="color:var(--muted);font-size:11px">min</span><input type="number" step="any" data-tkey="' + kk + '" data-bound="min" value="' + (t.min != null ? escAttr(t.min) : '') + '">';
+      h += '<span style="color:var(--muted);font-size:11px">max</span><input type="number" step="any" data-tkey="' + kk + '" data-bound="max" value="' + (t.max != null ? escAttr(t.max) : '') + '">';
+      h += '</div>';
+    });
+    body.innerHTML = h;
+    $('#fnTargetsModal').classList.add('show');
+  }
+
+  function saveTargets() {
+    var out = {};
+    $$('#fnTargetsBody input[data-tkey]').forEach(function (inp) {
+      var kk = inp.getAttribute('data-tkey'), bound = inp.getAttribute('data-bound');
+      if (!out[kk]) out[kk] = { min: null, max: null };
+      var v = inp.value;
+      out[kk][bound] = (v === '' || v == null || isNaN(v)) ? null : Number(v);
+    });
+    db.collection('_config').doc('funnel_targets').set({
+      targets: out,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser ? (currentUser.email || currentUser.uid) : null
+    }, { merge: true }).then(function () {
+      $('#fnTargetsModal').classList.remove('show');
+      toast('🎯 Cibles enregistrées');
+      return loadTargets();
+    }).then(function () { if (activeTab === 'funnel') renderFunnel(); }).catch(function (e) { toast('Erreur : ' + e.message, true); });
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     ORCHESTRATION
+     ════════════════════════════════════════════════════════════════ */
+  function renderActiveTab() {
+    if (activeTab === 'funnel') renderFunnel();
+    else if (activeTab === 'leads') renderLeads();
+    else if (activeTab === 'ads') renderAds();
+    else if (activeTab === 'journal') renderJournal();
+  }
+
+  function switchTab(tab) {
+    activeTab = tab;
+    $$('#fnTabs .fn-tab').forEach(function (t) { t.classList.toggle('active', t.getAttribute('data-tab') === tab); });
+    $('#fnTabFunnel').style.display  = tab === 'funnel'  ? '' : 'none';
+    $('#fnTabLeads').style.display   = tab === 'leads'   ? '' : 'none';
+    $('#fnTabAds').style.display     = tab === 'ads'     ? '' : 'none';
+    $('#fnTabJournal').style.display = tab === 'journal' ? '' : 'none';
+    renderActiveTab();
+  }
+
+  var _loading = false;
+  function refresh() {
+    if (_loading) return;
+    _loading = true;
+    adsDraft = {};
+    setSync('', 'Chargement ' + periodLabel() + '…');
+    updateToolbar();
+    $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';
+    var t0 = Date.now();
+    Promise.all([loadAds(), loadViews(), loadLeads(), loadBookings(), loadCalls(), loadSaisies(), loadJournalPeriod()])
+      .then(function () {
+        compute();
+        renderActiveTab();
+        setSync('ok', periodLabel() + ' · ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s');
+      })
+      .catch(function (e) {
+        console.error('[funnel] refresh', e);
+        setSync('err', 'Erreur de chargement');
+        toast('Erreur : ' + e.message, true);
+      })
+      .then(function () { _loading = false; });
+  }
+
+  function bindUI() {
+    $$('#fnModeSeg button').forEach(function (b) {
+      b.onclick = function () {
+        var mode = b.getAttribute('data-mode');
+        if (mode === 'month') { var now = new Date(); applyMonth(P.mode === 'month' ? P.y : now.getFullYear(), P.mode === 'month' ? P.m : now.getMonth()); refresh(); }
+        else if (mode === '7d') { applyPreset(7); refresh(); }
+        else if (mode === '30d') { applyPreset(30); refresh(); }
+        else { P.mode = 'custom'; $('#fnCustA').value = isoDate(P.start); $('#fnCustB').value = isoDate(P.end); updateToolbar(); }
+      };
+    });
+    $('#fnPrevM').onclick = function () { var d = new Date(P.y, P.m - 1, 1); applyMonth(d.getFullYear(), d.getMonth()); refresh(); };
+    $('#fnNextM').onclick = function () { var d = new Date(P.y, P.m + 1, 1); applyMonth(d.getFullYear(), d.getMonth()); refresh(); };
+    $('#fnCustOk').onclick = function () {
+      var a = $('#fnCustA').value, b = $('#fnCustB').value;
+      if (!a || !b) { toast('Choisis les deux dates', true); return; }
+      if (a > b) { toast('Plage invalide', true); return; }
+      applyCustom(a, b); refresh();
+    };
+    $('#fnTunnel').onchange = function () { tunnelFilter = this.value; compute(); renderActiveTab(); };
+    $('#fnRefreshBtn').onclick = refresh;
+    $('#fnTargetsBtn').onclick = openTargetsModal;
+    $('#fnTargetsCancel').onclick = function () { $('#fnTargetsModal').classList.remove('show'); };
+    $('#fnTargetsSave').onclick = saveTargets;
+    $('#fnTargetsModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
+    $$('#fnTabs .fn-tab').forEach(function (t) { t.onclick = function () { switchTab(t.getAttribute('data-tab')); }; });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('#fnTargetsModal').classList.remove('show'); });
+  }
+
+  /* ── INIT — garde admin (même schéma que admin-data-center) ── */
+  function init() {
+    if (typeof firebase === 'undefined') { console.error('[funnel] Firebase non chargé'); return; }
+    db = firebase.firestore();
+    var now = new Date();
+    applyMonth(now.getFullYear(), now.getMonth());
+
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (!user) { window.location.href = 'login.html'; return; }
+      currentUser = user;
+      db.collection('users').doc(user.uid).get().then(function (snap) {
+        var data = snap.exists ? snap.data() : {};
+        if (data.role !== 'admin') {
+          toast('Accès réservé aux administrateurs', true);
+          setTimeout(function () { window.location.href = 'sales-dashboard.html'; }, 1500);
+          return;
+        }
+        $('#fnApp').style.display = '';
+        bindUI();
+        updateToolbar();
+        Promise.all([loadTypes(), loadTargets(), loadJournalAll(), waitForTeamMembers()]).then(function () {
+          refresh();
+        });
+      }).catch(function (e) {
+        console.error('[funnel] init', e);
+        setSync('err', 'Erreur de chargement');
+        toast('Erreur de chargement initial', true);
+      });
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>
