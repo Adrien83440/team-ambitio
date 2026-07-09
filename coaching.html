@@ -3800,6 +3800,42 @@ async function toggleClientStatus(clientId, isActive){
 // Expose
 window.handleDriveAuth=connectDriveThen;window.connectDriveThen=connectDriveThen;window.scanDriveForClient=scanDriveForClient;
 
+// ── ENVOI MANUEL DU REPLAY AU CLIENT (CSM / coach / admin) ──
+// Bouton "✉️ Envoyer au client" sur chaque séance ayant un lien visio/doc.
+// Le serveur (api/coaching-send-replay) relit la fiche (source de vérité),
+// envoie depuis la boîte coaching@ avec le MÊME template que le cron auto,
+// puis pose replaySentAt/To/By sur la séance. Renvoi autorisé (confirm).
+async function sendReplayToClient(clientId, yi, numero, btnEl){
+  const c=_clients.find(x=>x._id===clientId);
+  if(!c){showToast('Client introuvable','error');return;}
+  let s=null;
+  if(Array.isArray(c.years)&&c.years[yi])s=(c.years[yi].sessions||[]).find(x=>x&&x.numero===numero);
+  if(!s&&Array.isArray(c.years))for(const y of c.years){s=((y&&y.sessions)||[]).find(x=>x&&x.numero===numero);if(s)break;}
+  if(!s&&Array.isArray(c.sessions))s=c.sessions.find(x=>x&&x.numero===numero);
+  if(!s){showToast('Séance introuvable','error');return;}
+  const to=(c.email||'').trim();
+  if(!to){showToast('❌ Aucun email sur la fiche client','error');return;}
+  const quoi=(s.visioUrl?'le replay':'')+((s.visioUrl&&(s.driveUrl||s.resumeUrl))?' + ':'')+((s.driveUrl||s.resumeUrl)?'le résumé':'');
+  if(!confirm('Envoyer '+quoi+' de la séance'+(s.date?' du '+formatDate(s.date):'')+' à '+to+' ?'))return;
+  const oldTxt=btnEl?btnEl.textContent:'';
+  if(btnEl){btnEl.disabled=true;btnEl.textContent='⏳ Envoi…';}
+  try{
+    const token=(window._auth&&window._auth.currentUser)?await window._auth.currentUser.getIdToken():'';
+    const r=await fetch('/api/coaching-send-replay',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify({clientId:clientId,yearIndex:yi,sessionNumero:numero,sessionDate:s.date||null})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok)throw new Error(j.error||('HTTP '+r.status));
+    // État local + re-render du dossier → le badge "envoyé le…" apparaît
+    s.replaySentAt=j.sentAt||new Date().toISOString();
+    s.replaySentTo=j.to||to;
+    showToast('✉️ Envoyé à '+(j.to||to),'success');
+    setTimeout(()=>openDetail(clientId),250);
+  }catch(e){
+    showToast('❌ '+e.message,'error');
+    if(btnEl){btnEl.disabled=false;btnEl.textContent=oldTxt||'✉️ Envoyer au client';}
+  }
+}
+window.sendReplayToClient=sendReplayToClient;
+
 // ═══════════════════════════════════════════
 // YEAR TABS SYSTEM
 // ═══════════════════════════════════════════
@@ -4276,6 +4312,10 @@ function renderYearTabs(c,id){
           h+='<div class="si-links">';
           if(s.visioUrl)h+='<a class="si-link-pill visio" href="'+s.visioUrl+'" target="_blank">🎥 Visio ↗</a>';
           if(s.driveUrl||s.resumeUrl)h+='<a class="si-link-pill gdoc" href="'+(s.driveUrl||s.resumeUrl)+'" target="_blank">📄 Doc ↗</a>';
+          // ✉️ Envoi manuel au client (CSM/coach/admin) — replay + résumé par email.
+          // Le cron auto pose replaySentAt/'cron' ; ici on peut déclencher ou RENVOYER.
+          h+='<button class="si-link-pill" style="border:1px dashed var(--blue-main);background:transparent;color:var(--blue-main);cursor:pointer;font:inherit" onclick="sendReplayToClient(\''+id+'\','+yi+','+s.numero+',this)">'+(s.replaySentAt?'✉️ Renvoyer au client':'✉️ Envoyer au client')+'</button>';
+          if(s.replaySentAt)h+='<span style="font-size:10.5px;color:#94a3b8;align-self:center">envoyé le '+formatDate(String(s.replaySentAt).slice(0,10))+(s.replaySentTo?' → '+escHtml(s.replaySentTo):'')+'</span>';
           h+='</div>';
         }
         if(s.resume||s.driveSummary)h+='<div class="si-resume">'+escHtml(s.resume||s.driveSummary||'')+'</div>';
