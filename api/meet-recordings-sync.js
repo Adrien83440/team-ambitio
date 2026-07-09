@@ -1,62 +1,70 @@
 // ============================================================================
-// api/meet-recordings-sync.js
+// api/meet-recordings-sync.js — v2 (coaching : email client + fiche)
 // ----------------------------------------------------------------------------
-// Import AUTOMATIQUE des enregistrements Google Meet dans les RDV (bookings)
-// et dans les fiches prospects (leads) — demande Vincent, meeting 01/07.
+// Import AUTOMATIQUE des enregistrements Google Meet dans les RDV (bookings),
+// les fiches prospects (leads) ET, pour les RDV COACHING : envoi d'un email
+// au client avec son replay + le résumé de séance, et liaison du replay à la
+// séance correspondante de sa fiche coaching (clients/{id}).
 //
 // URL  : GET/POST /api/meet-recordings-sync
 // Auth : • Authorization: Bearer <CRON_SECRET>  (envoyé par Vercel Cron)
 //        • x-api-key: <CRON_SECRET>             (test manuel via curl)
 // Cron : tous les jours à 04:00 UTC (06:00 Paris été) — voir vercel.json.
 //
-// ─── COMMENT ÇA MARCHE ────────────────────────────────────────────────────
-// Quand un expert enregistre un Google Meet (Workspace), Google dépose le
-// fichier dans son Drive ET l'attache automatiquement à l'ÉVÉNEMENT Calendar
-// (event.attachments[]). Or chaque RDV créé par onBookingCreated stocke
-// calendarEventId + calendarIdUsed, et on a les tokens OAuth de chaque
-// expert dans calendar_tokens/{personId}. Le scope calendar suffit pour lire
-// les attachments (métadonnées de l'event) → on récupère le LIEN Drive de
-// l'enregistrement sans scope Drive supplémentaire. V1 = lien cliquable ;
-// (transcription Whisper = V2, nécessiterait drive.readonly pour télécharger).
+// ─── RAPPEL DU MÉCANISME (v1) ─────────────────────────────────────────────
+// Quand un expert enregistre un Meet (Workspace), Google dépose le fichier
+// dans son Drive ET l'attache à l'ÉVÉNEMENT Calendar (event.attachments[]) —
+// idem pour le doc "Notes de réunion" Gemini. Chaque RDV créé par
+// onBookingCreated porte calendarEventId + calendarIdUsed, et on a les tokens
+// OAuth calendar de chaque expert (calendar_tokens/{personId}) → le scope
+// calendar suffit pour lire les LIENS des attachments.
 //
-// ─── CE QUE FAIT CHAQUE RUN ───────────────────────────────────────────────
-// 1. Scanne les bookings des ?days derniers jours (défaut 7, cap 30) dont le
-//    créneau est PASSÉ (fin + 60 min de marge), avec un calendarEventId,
-//    sans meetRecordingUrl ni meetRecordingNone, status confirmed/completed.
-// 2. Pour chacun : calendar.events.get (tokens de SON expert, calendarIdUsed)
-//    → attachments[].
-//    • Trouvé  → pose sur le booking : meetRecordingUrl (la vidéo),
-//      meetRecordingTitle/Mime, meetAttachments[] (tout : vidéo + notes
-//      Gemini + chat éventuels), meetRecordingFoundAt.
-//      Si le RDV a un leadId → pousse dans la fiche prospect une entrée
-//      communications[] (bulle "appel" source meet avec lien 🎧) + une
-//      entrée timeline_history — même pipeline d'affichage que Ringover,
-//      zéro modif front nécessaire. Marqueur meetPushedToLead (une seule fois).
-//    • Rien encore → meetRecordingChecks++ (le recording apparaît quelques
-//      minutes à quelques heures après le call). Au-delà de GRACE_DAYS jours
-//      ou MAX_CHECKS tentatives → meetRecordingNone:true (on arrête, RDV non
-//      enregistré). Event supprimé (404/410) → meetRecordingNone aussi.
+// ─── NOUVEAU EN v2 : LIVRAISON CLIENT (RDV coaching uniquement) ───────────
+// Pour chaque RDV coaching (isCoaching sur le doc OU sur son type
+// booking_config) dont l'enregistrement est trouvé :
+//   1. Email au client (boîte 'coaching' via _gmailSend / email_tokens) :
+//      lien replay vidéo + lien résumé Gemini si présent. JAMAIS pour les
+//      RDV prospects setting/closing (décision Adrien 07/2026).
+//      ⚠️ Prérequis d'accès : le dossier Drive "Meet Recordings" de chaque
+//      coach doit être partagé "Tous les utilisateurs disposant du lien —
+//      Lecteur" (réglage une fois par coach), sinon liens inaccessibles.
+//   2. Fiche coaching clients/{clientId} :
+//      • session correspondante (même date) → pose visioUrl si vide.
+//        On ne touche NI driveUrl NI resume : le scan Drive manuel du coach
+//        (coaching.html) reste responsable de lier le doc + extraire le
+//        résumé + déclencher le pipeline IA (parcours/workbooks) — poser
+//        driveUrl ici ferait sauter ce pipeline (le scan skip les sessions
+//        déjà liées).
+//      • trace d'archive meetRecordings[] (arrayUnion) : bookingId, date,
+//        liens — audit + affichages futurs.
+//   3. Idempotence at-most-once : meetClientEmailSentAt posé AVANT l'envoi
+//      (convention repo — jamais de doublon client). Si la boîte 'coaching'
+//      n'est pas connectée, AUCUN flag n'est posé : le run suivant rattrape
+//      automatiquement dès la connexion (fenêtre ?days).
+//   Rattrapage : les RDV coaching déjà découverts (meetRecordingUrl posé par
+//   la v1) mais jamais livrés au client sont traités aussi.
 //
 // ─── PARAMÈTRES (query string) ────────────────────────────────────────────
 //   days=<n>   fenêtre de scan en jours (défaut 7, cap 30)
-//   dry=1      dry-run : liste ce qui serait fait, n'écrit RIEN
+//   dry=1      dry-run : liste ce qui serait fait, n'écrit RIEN, n'envoie RIEN
 //
-// ─── TEST MANUEL (terminal) ───────────────────────────────────────────────
+// ─── TEST MANUEL ──────────────────────────────────────────────────────────
 //   curl -H "x-api-key: <CRON_SECRET>" \
 //     "https://team.alteore.com/api/meet-recordings-sync?days=14&dry=1"
 // ============================================================================
 
 const { google } = require('googleapis');
 const { admin, db } = require('./_firebaseAdmin');
+const { sendEmailFromAccount } = require('./_gmailSend');
 
 const GRACE_DAYS  = 5;   // jours après le RDV avant d'abandonner la recherche
 const MAX_CHECKS  = 8;   // tentatives max par RDV
 const QUERY_LIMIT = 800; // garde-fou sur le scan
 const PAST_MARGIN_MS = 60 * 60000; // le RDV doit être fini depuis ≥ 1 h
+const EMAIL_ACCOUNT = 'coaching';  // email_tokens/coaching (admin-email-auth.html)
 
 // ─── Dates ──────────────────────────────────────────────────────────────
 function parisTodayIso() {
-  // fr-CA → format YYYY-MM-DD directement
   return new Intl.DateTimeFormat('fr-CA', {
     timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date());
@@ -66,9 +74,15 @@ function isoAddDays(iso, delta) {
   d.setUTCDate(d.getUTCDate() + delta);
   return d.toISOString().slice(0, 10);
 }
-// Fin du créneau en ms. Interprété en UTC côté Vercel → ~2 h de marge
-// supplémentaire vs Paris, ce qui est exactement ce qu'on veut (jamais
-// pendant le meet).
+function frLongDate(isoDate) {
+  try {
+    return new Date(isoDate + 'T12:00:00').toLocaleDateString('fr-FR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    });
+  } catch (_) { return isoDate; }
+}
+// Fin du créneau en ms (interprété UTC côté Vercel → ~2 h de marge vs Paris,
+// exactement ce qu'on veut : jamais pendant le meet).
 function bookingEndMs(b) {
   try {
     const t = b.time || '23:59';
@@ -102,12 +116,43 @@ async function getAuthClientForPerson(conf, personId) {
   return client;
 }
 
-// ─── Push dans la fiche prospect ─────────────────────────────────────────
-// Réutilise le pipeline d'affichage existant de sales-contact.html :
-// communications[] type 'call' avec recordingUrl → bulle appel + lien
-// "🎧 Écouter l'enregistrement", et timeline_history[] pour l'onglet
-// Chronologie. `date` = ISO naïf local du créneau (YYYY-MM-DDTHH:MM:00) :
-// la fiche le parse en heure locale → l'heure affichée = l'heure du RDV.
+// ─── Types de consultation (booking_config/_types) ───────────────────────
+// Pour classer "coaching" les anciens bookings sans flag isCoaching sur le
+// doc — même logique que sales-rdv.html.
+async function loadTypeMap() {
+  const map = {};
+  try {
+    const snap = await db.collection('booking_config').doc('_types').get();
+    if (snap.exists) {
+      const list = (snap.data() || {}).list || [];
+      list.forEach((t) => { if (t && t.id) map[t.id] = t; });
+    }
+  } catch (e) { console.warn('[meet-sync] typeMap', e.message); }
+  return map;
+}
+function isCoachingBooking(b, typeMap) {
+  if (b.isCoaching === true) return true;
+  const t = b.type && typeMap[b.type];
+  return !!(t && t.isCoaching === true);
+}
+
+// ─── Attachments : vidéo + doc "Notes" Gemini ────────────────────────────
+function pickVideo(atts) {
+  return atts.find((a) => /video/i.test(a.mimeType || '') || /\.(mp4|webm|mkv)$/i.test(a.title || '')) || null;
+}
+function pickNotesDoc(atts) {
+  const docs = atts.filter((a) => (a.mimeType || '') === 'application/vnd.google-apps.document');
+  if (!docs.length) return null;
+  // Le doc "Notes de réunion / Notes by Gemini" est LE résumé ; le doc
+  // "Chat" (transcript du chat Meet) ne l'est pas — même filtre que le scan
+  // Drive manuel de coaching.html.
+  const notes = docs.find((a) => /notes/i.test(a.title || '') && !/chat/i.test(a.title || ''));
+  if (notes) return notes;
+  const nonChat = docs.find((a) => !/chat/i.test(a.title || ''));
+  return nonChat || null;
+}
+
+// ─── Push dans la fiche PROSPECT (leads) — inchangé v1 ───────────────────
 async function pushMeetToLead(booking, video) {
   const leadRef = db.collection('leads').doc(booking.leadId);
   const snap = await leadRef.get();
@@ -126,7 +171,7 @@ async function pushMeetToLead(booking, video) {
     date: whenIso,
     createdAt: admin.firestore.Timestamp.now(),
     recordingUrl: video.fileUrl || null,
-    duration: Number(booking.duration) ? Number(booking.duration) * 60 : null, // secondes (durée du créneau)
+    duration: Number(booking.duration) ? Number(booking.duration) * 60 : null,
     ownerName: booking.personName || null,
     note: null,
     transcription: null,
@@ -138,14 +183,173 @@ async function pushMeetToLead(booking, video) {
     color: '#a78bfa',
   };
 
-  // Pas de lastContactAt : l'enregistrement n'est pas un nouveau contact,
-  // c'est un enrichissement a posteriori d'un RDV déjà tenu.
   await leadRef.update({
     communications: (lead.communications || []).concat([commEntry]),
     timeline_history: (lead.timeline_history || []).concat([timelineEntry]),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   return { pushed: true };
+}
+
+// ─── Email client coaching ────────────────────────────────────────────────
+function buildClientEmail(opts) {
+  const prenom = opts.prenom || '';
+  const dateFr = opts.dateFr;
+  const coach = opts.coachName || 'ton coach';
+  const hasNotes = !!opts.notesUrl;
+
+  const subject = '🎥 Ton replay de séance du ' + dateFr;
+
+  const btn = (url, label, bg) =>
+    '<a href="' + url + '" target="_blank" style="display:inline-block;padding:12px 22px;margin:6px 8px 6px 0;' +
+    'background:' + bg + ';color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:14px">' +
+    label + '</a>';
+
+  const bodyHtml =
+    '<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1f2340;font-size:14px;line-height:1.7">' +
+    '<p>Bonjour' + (prenom ? ' ' + prenom : '') + ' 👋</p>' +
+    '<p>Ta séance du <strong>' + dateFr + '</strong> avec ' + coach + ' est disponible :</p>' +
+    '<div style="margin:18px 0">' +
+    btn(opts.videoUrl, '▶️ Regarder le replay', '#4f46e5') +
+    (hasNotes ? btn(opts.notesUrl, '📝 Lire le résumé de la séance', '#059669') : '') +
+    '</div>' +
+    '<p style="font-size:12.5px;color:#6b7194">Garde ces liens précieusement : replay et résumé restent accessibles à tout moment pour revoir les points clés et avancer entre deux séances.</p>' +
+    '<p>À très vite,<br><strong>L\'équipe Alteore</strong></p>' +
+    '</div>';
+
+  const bodyText =
+    'Bonjour' + (prenom ? ' ' + prenom : '') + ',\n\n' +
+    'Ta séance du ' + dateFr + ' avec ' + coach + ' est disponible :\n\n' +
+    '▶️ Replay : ' + opts.videoUrl + '\n' +
+    (hasNotes ? '📝 Résumé : ' + opts.notesUrl + '\n' : '') +
+    '\nÀ très vite,\nL\'équipe Alteore';
+
+  return { subject, bodyHtml, bodyText };
+}
+
+// Résout l'email + le prénom du client d'un booking coaching.
+async function resolveClient(b) {
+  let email = (b.prospect && b.prospect.email) ? String(b.prospect.email).trim() : '';
+  let prenom = (b.prospect && b.prospect.prenom) ? String(b.prospect.prenom).trim() : '';
+  let clientDoc = null;
+  if (b.clientId) {
+    try {
+      const snap = await db.collection('clients').doc(b.clientId).get();
+      if (snap.exists) {
+        clientDoc = { id: snap.id, data: snap.data() || {} };
+        if (!email && clientDoc.data.email) email = String(clientDoc.data.email).trim();
+        if (!prenom) {
+          const nom = clientDoc.data.nom || b.clientNom || '';
+          prenom = String(nom).trim().split(/\s+/)[0] || '';
+        }
+      }
+    } catch (e) { console.warn('[meet-sync] client', b.clientId, e.message); }
+  }
+  if (!prenom && b.clientNom) prenom = String(b.clientNom).trim().split(/\s+/)[0] || '';
+  return { email: email || null, prenom, clientDoc };
+}
+
+// Lie le replay à la séance correspondante de la fiche coaching + trace
+// d'archive meetRecordings[]. N'écrase JAMAIS un visioUrl existant (saisie
+// coach prioritaire) et ne touche pas driveUrl/resume (réservés au scan
+// Drive manuel + pipeline IA de coaching.html).
+async function linkToClientSession(clientDoc, b, videoUrl, notesUrl) {
+  if (!clientDoc) return { linked: false, reason: 'no_client_doc' };
+  const c = clientDoc.data;
+  const patch = {};
+  let linked = false;
+
+  const matchInList = (list) => {
+    if (!Array.isArray(list)) return false;
+    for (const s of list) {
+      if (!s || s.date !== b.date) continue;
+      if (s.visioUrl) continue; // déjà renseigné (main du coach) → on ne touche pas
+      s.visioUrl = videoUrl;
+      return true;
+    }
+    return false;
+  };
+
+  if (Array.isArray(c.years) && c.years.length) {
+    for (const y of c.years) {
+      if (matchInList(y && y.sessions)) { linked = true; break; }
+    }
+    if (linked) patch.years = c.years;
+  } else if (Array.isArray(c.sessions)) {
+    if (matchInList(c.sessions)) { linked = true; patch.sessions = c.sessions; }
+  }
+
+  patch.meetRecordings = admin.firestore.FieldValue.arrayUnion({
+    bookingId: b._id || null,
+    date: b.date || null,
+    time: b.time || null,
+    typeLabel: b.typeLabel || b.type || null,
+    coachName: b.personName || null,
+    videoUrl: videoUrl || null,
+    notesUrl: notesUrl || null,
+    addedAt: admin.firestore.Timestamp.now(),
+  });
+
+  await db.collection('clients').doc(clientDoc.id).update(patch);
+  return { linked };
+}
+
+// Livraison complète côté client coaching : flag (at-most-once) → email →
+// liaison fiche. `atts` = meetAttachments (depuis l'event ou déjà stockés).
+async function deliverToCoachingClient(ctx, bookingId, b, atts) {
+  const video = pickVideo(atts);
+  if (!video || !video.fileUrl) return { status: 'no_video' };
+  const notes = pickNotesDoc(atts);
+
+  const { email, prenom, clientDoc } = await resolveClient(b);
+  const ref = db.collection('bookings').doc(bookingId);
+
+  if (!email) {
+    if (!ctx.dry) await ref.set({ meetClientEmailSkipped: 'no_email', meetClientEmailCheckedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    return { status: 'no_email' };
+  }
+  if (ctx.dry) return { status: 'would_email', to: email };
+
+  // At-most-once : flag AVANT l'envoi (convention repo pour tout ce qui part
+  // vers un client — un doublon est pire qu'un manque relançable).
+  await ref.set({
+    meetClientEmailSentAt: admin.firestore.FieldValue.serverTimestamp(),
+    meetClientEmailTo: email,
+  }, { merge: true });
+
+  const mail = buildClientEmail({
+    prenom,
+    dateFr: frLongDate(b.date),
+    coachName: b.personName || null,
+    videoUrl: video.fileUrl,
+    notesUrl: notes ? notes.fileUrl : null,
+  });
+
+  try {
+    await sendEmailFromAccount({
+      accountKey: EMAIL_ACCOUNT,
+      to: email,
+      subject: mail.subject,
+      bodyHtml: mail.bodyHtml,
+      bodyText: mail.bodyText,
+    });
+  } catch (e) {
+    console.error('[meet-sync] email', bookingId, e.message);
+    await ref.set({ meetClientEmailError: e.message }, { merge: true });
+    return { status: 'email_error', error: e.message };
+  }
+
+  // Fiche coaching (non bloquant)
+  let linked = false;
+  try {
+    if (b.clientId) {
+      const r = await linkToClientSession(clientDoc, Object.assign({ _id: bookingId }, b), video.fileUrl, notes ? notes.fileUrl : null);
+      linked = r.linked;
+    }
+  } catch (e) {
+    console.warn('[meet-sync] link client', bookingId, e.message);
+  }
+  return { status: 'emailed', to: email, linked };
 }
 
 // ─── Handler ─────────────────────────────────────────────────────────────
@@ -176,12 +380,23 @@ module.exports = async (req, res) => {
   const out = {
     ok: true, dry, window: { from: startIso, to: todayIso },
     scanned: 0, eligible: 0, found: 0, pushedToLead: 0,
+    clientEmails: 0, clientEmailsPending: 0, clientLinked: 0,
     retries: 0, gaveUp: 0, noTokens: 0, errors: [],
     items: [],
   };
 
   try {
-    // 2. Bookings de la fenêtre (range sur un seul champ → pas d'index composite)
+    // 2. Boîte 'coaching' connectée ? Si non : on découvre quand même les
+    // recordings mais on ne pose AUCUN flag d'envoi → rattrapage auto au
+    // prochain run une fois la boîte connectée (admin-email-auth.html).
+    let emailReady = false;
+    try {
+      const tok = await db.collection('email_tokens').doc(EMAIL_ACCOUNT).get();
+      emailReady = tok.exists && !!(tok.data() || {}).refreshToken;
+    } catch (_) { /* emailReady reste false */ }
+    if (!emailReady) out.coachingAccountConnected = false;
+
+    // 3. Bookings de la fenêtre (range sur un seul champ → pas d'index composite)
     const snap = await db.collection('bookings')
       .where('date', '>=', startIso)
       .where('date', '<=', todayIso)
@@ -189,26 +404,56 @@ module.exports = async (req, res) => {
       .get();
     out.scanned = snap.size;
 
-    // 3. Filtres métier côté code
-    const eligible = [];
+    const typeMap = await loadTypeMap();
+
+    // 4. Filtres métier côté code
+    const discover = [];      // recordings à chercher (v1)
+    const deliverLate = [];   // coaching déjà découverts, email jamais parti (rattrapage)
     snap.forEach((doc) => {
       const b = doc.data() || {};
       const st = b.status || 'confirmed';
-      if (st !== 'confirmed' && st !== 'completed') return; // annulé / no-show : rien à chercher
-      if (!b.calendarEventId) return;                        // pas d'event Google
-      if (b.meetRecordingUrl) return;                        // déjà importé
-      if (b.meetRecordingNone) return;                       // recherche abandonnée
+      if (st !== 'confirmed' && st !== 'completed') return;
+      if (!b.calendarEventId) return;
+      if (bookingEndMs(b) + PAST_MARGIN_MS > nowMs) return;
+
+      const coaching = isCoachingBooking(b, typeMap);
+      if (b.meetRecordingUrl) {
+        if (coaching && !b.meetClientEmailSentAt && !b.meetClientEmailSkipped) {
+          deliverLate.push({ id: doc.id, b });
+        }
+        return;
+      }
+      if (b.meetRecordingNone) return;
       if ((b.meetRecordingChecks || 0) >= MAX_CHECKS) return;
-      if (bookingEndMs(b) + PAST_MARGIN_MS > nowMs) return;  // pas encore fini
-      eligible.push({ id: doc.id, b });
+      discover.push({ id: doc.id, b, coaching });
     });
-    out.eligible = eligible.length;
+    out.eligible = discover.length;
+    out.lateDeliveries = deliverLate.length;
 
-    if (!eligible.length) { res.status(200).json(out); return; }
+    const ctx = { dry };
 
-    // 4. Clients OAuth par expert (cache)
+    // 5. Rattrapage : coaching déjà découverts par la v1 mais jamais livrés
+    for (const item of deliverLate) {
+      if (!emailReady) { out.clientEmailsPending++; continue; }
+      try {
+        const atts = Array.isArray(item.b.meetAttachments) && item.b.meetAttachments.length
+          ? item.b.meetAttachments
+          : [{ title: item.b.meetRecordingTitle || null, fileUrl: item.b.meetRecordingUrl, mimeType: item.b.meetRecordingMime || 'video/mp4' }];
+        const r = await deliverToCoachingClient(ctx, item.id, item.b, atts);
+        out.items.push({ id: item.id, action: 'late_' + r.status, to: r.to || null });
+        if (r.status === 'emailed' || r.status === 'would_email') out.clientEmails++;
+        if (r.linked) out.clientLinked++;
+        if (r.status === 'email_error') out.errors.push({ id: item.id, error: r.error });
+      } catch (e) {
+        out.errors.push({ id: item.id, error: e.message });
+      }
+    }
+
+    if (!discover.length) { res.status(200).json(out); return; }
+
+    // 6. Clients OAuth par expert (cache)
     const conf = await getOAuthConfig();
-    const clientCache = {}; // personId → OAuth2 client | null
+    const clientCache = {};
     async function clientFor(pid) {
       if (!(pid in clientCache)) {
         try { clientCache[pid] = await getAuthClientForPerson(conf, pid); }
@@ -217,15 +462,15 @@ module.exports = async (req, res) => {
       return clientCache[pid];
     }
 
-    // 5. Traitement séquentiel (volumes faibles ; évite le rate-limit Google)
-    for (const item of eligible) {
+    // 7. Découverte (séquentiel : volumes faibles, pas de rate-limit Google)
+    for (const item of discover) {
       const b = item.b;
       const ref = db.collection('bookings').doc(item.id);
       try {
         const pid = b.personId;
         if (!pid) { out.errors.push({ id: item.id, error: 'no_personId' }); continue; }
         const client = await clientFor(pid);
-        if (!client) { out.noTokens++; continue; } // pas de check consommé : le pb n'est pas le recording
+        if (!client) { out.noTokens++; continue; }
 
         const calendar = google.calendar({ version: 'v3', auth: client });
         let ev;
@@ -237,7 +482,6 @@ module.exports = async (req, res) => {
         } catch (e) {
           const code = e && (e.code || (e.response && e.response.status));
           if (code === 404 || code === 410) {
-            // Event supprimé → il n'y aura jamais d'attachment
             out.gaveUp++;
             out.items.push({ id: item.id, action: 'gave_up_event_deleted' });
             if (!dry) await ref.set({ meetRecordingNone: true, meetRecordingCheckedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
@@ -248,10 +492,9 @@ module.exports = async (req, res) => {
 
         const atts = (ev.data && ev.data.attachments) || [];
         if (atts.length) {
-          // La vidéo d'abord ; à défaut le premier attachment (lien Drive quand même)
-          const video = atts.find((a) => /video/i.test(a.mimeType || '') || /\.(mp4|webm|mkv)$/i.test(a.title || '')) || atts[0];
+          const video = pickVideo(atts) || atts[0];
           out.found++;
-          out.items.push({ id: item.id, action: 'found', title: video.title || null, lead: b.leadId || null });
+          out.items.push({ id: item.id, action: 'found', title: video.title || null, lead: b.leadId || null, coaching: item.coaching });
           if (!dry) {
             const patch = {
               meetRecordingUrl: video.fileUrl || null,
@@ -260,6 +503,7 @@ module.exports = async (req, res) => {
               meetAttachments: atts.map((a) => ({ title: a.title || null, fileUrl: a.fileUrl || null, mimeType: a.mimeType || null })),
               meetRecordingFoundAt: admin.firestore.FieldValue.serverTimestamp(),
             };
+            // Fiche PROSPECT (leads) — RDV setting/closing avec leadId
             if (b.leadId && !b.meetPushedToLead) {
               try {
                 const pr = await pushMeetToLead(b, video);
@@ -272,8 +516,22 @@ module.exports = async (req, res) => {
             }
             await ref.set(patch, { merge: true });
           }
+          // Livraison CLIENT coaching (email + fiche)
+          if (item.coaching) {
+            if (!emailReady) { out.clientEmailsPending++; }
+            else {
+              try {
+                const r = await deliverToCoachingClient(ctx, item.id, b, atts);
+                out.items.push({ id: item.id, action: 'client_' + r.status, to: r.to || null });
+                if (r.status === 'emailed' || r.status === 'would_email') out.clientEmails++;
+                if (r.linked) out.clientLinked++;
+                if (r.status === 'email_error') out.errors.push({ id: item.id, error: r.error });
+              } catch (ce) {
+                out.errors.push({ id: item.id, error: 'client_delivery: ' + ce.message });
+              }
+            }
+          }
         } else {
-          // Rien encore : on retente demain, ou on abandonne si trop vieux
           const ageDays = (nowMs - bookingEndMs(b)) / 86400000;
           const checks = (b.meetRecordingChecks || 0) + 1;
           if (ageDays > GRACE_DAYS || checks >= MAX_CHECKS) {
