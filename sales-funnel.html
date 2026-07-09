@@ -331,6 +331,27 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     var mInt = Math.floor(sInt / 60);
     return mInt + ' min ' + String(sInt % 60).padStart(2, '0') + ' s';
   }
+  /* Loi normale (approx. Zelen & Severo) + z-test 2 proportions pour la
+     significativité des A/B tests opt-in. Garde-fou : ≥ 30 vues / variante. */
+  function normCdf(z) {
+    var t = 1 / (1 + 0.2316419 * Math.abs(z));
+    var d = 0.3989423 * Math.exp(-z * z / 2);
+    var pr = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return z > 0 ? 1 - pr : pr;
+  }
+  function abSignif(vRef, oRef, vChal, oChal) {
+    if (vRef < 30 || vChal < 30) return null;
+    var pp = (oRef + oChal) / (vRef + vChal);
+    var se = Math.sqrt(pp * (1 - pp) * (1 / vRef + 1 / vChal));
+    if (!se || !isFinite(se)) return null;
+    var z = (oChal / vChal - oRef / vRef) / se;
+    return { z: z, p: 2 * (1 - normCdf(Math.abs(z))) };
+  }
+  function fmtPts(d) {
+    if (d == null || isNaN(d) || !isFinite(d)) return '—';
+    var r = Math.round(d * 10) / 10;
+    return (r >= 0 ? '+' : '') + r.toLocaleString('fr-FR') + ' pts';
+  }
   function median(arr) {
     if (!arr || !arr.length) return null;
     var a = arr.slice().sort(function (x, y) { return x - y; });
@@ -724,6 +745,27 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     k.optinReal = k.views > 0 ? k.leads / k.views * 100 : null;
     k.optinClicks = k.clicks > 0 ? k.leads / k.clicks * 100 : null;
 
+    /* A/B tests opt-in — agrégation par page × variante (docs beacon
+       page_views_daily avec champ variant). Affiché si ≥ 2 variantes. */
+    var abByPage = {};
+    DATA.views.forEach(function (v) {
+      if (!v.variant) return;
+      var t = v.page === 'elite' ? 'elite' : v.page === 'business' ? 'business' : 'other';
+      if (!tunnelMatch(t)) return;
+      var pg = v.page || 'other';
+      if (!abByPage[pg]) abByPage[pg] = {};
+      if (!abByPage[pg][v.variant]) abByPage[pg][v.variant] = { variant: v.variant, views: 0, optins: 0 };
+      abByPage[pg][v.variant].views += Number(v.views) || 0;
+      abByPage[pg][v.variant].optins += Number(v.optins) || 0;
+    });
+    k.abTests = [];
+    Object.keys(abByPage).forEach(function (pg) {
+      var vars = Object.keys(abByPage[pg]).map(function (kk) { return abByPage[pg][kk]; });
+      if (vars.length < 2) return;
+      vars.sort(function (a, b) { return a.variant < b.variant ? -1 : 1; });
+      k.abTests.push({ page: pg, variants: vars });
+    });
+
     /* ── Bookings — tunnel via lead (leadId → phone → email) ── */
     function bookingLead(b) {
       if (b.leadId && leadsById[b.leadId]) return leadsById[b.leadId];
@@ -957,7 +999,31 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += kpiCard(fmtPct(k.optinClicks), 'Taux d\'opt-in / clics', 'leads / clics Meta', k.views > 0 ? '' : targetBadge('optin', k.optinClicks));
     h += kpiCard(fmtEuro2(k.cpl), 'CPL réel', 'dépense / leads réels', targetBadge('cpl', k.cpl));
     h += kpiCard(k.leadsFb > 0 ? fmtNum(k.leadsFb) : '—', 'Leads pixel Meta', k.leadsFb > 0 && k.leads > 0 ? 'écart ' + fmtNum(k.leadsFb - k.leads) + ' vs réels' : 'reporté par Meta', null, k.leadsFb === 0);
-    h += '</div></div>';
+    h += '</div>';
+    /* 🧪 A/B tests opt-in (beacon par variante — significativité z-test) */
+    if (k.abTests && k.abTests.length) {
+      k.abTests.forEach(function (test) {
+        var ref = test.variants[0];
+        var refRate = ref.views > 0 ? ref.optins / ref.views * 100 : null;
+        h += '<div style="margin-top:14px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">🧪 A/B test — page ' + esc(test.page) + ' <span style="font-weight:500;text-transform:none;letter-spacing:0">(mesure beacon, variante ' + esc(ref.variant.toUpperCase()) + ' = référence)</span></div>';
+        h += '<div class="fn-table-wrap" style="border-radius:11px"><table class="fn-table" style="min-width:680px"><thead><tr><th>Variante</th><th>Vues</th><th>Opt-ins</th><th>Taux</th><th>Δ vs ' + esc(ref.variant.toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead><tbody>';
+        test.variants.forEach(function (v, idx) {
+          var rate = v.views > 0 ? v.optins / v.views * 100 : null;
+          var delta = '—';
+          var sig = '<span style="color:var(--muted2)">référence</span>';
+          if (idx > 0) {
+            delta = (rate != null && refRate != null) ? fmtPts(rate - refRate) : '—';
+            var st = abSignif(ref.views, ref.optins, v.views, v.optins);
+            if (!st) sig = '<span style="color:var(--muted2)">échantillon insuffisant (≥ 30 vues/variante)</span>';
+            else if (st.p < 0.05) sig = '<span class="fn-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '" style="margin-top:0">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
+            else sig = '<span class="fn-badge warn" style="margin-top:0">en cours · p = ' + st.p.toFixed(2) + '</span>';
+          }
+          h += '<tr><td><strong>' + esc(v.variant.toUpperCase()) + '</strong></td><td class="num">' + fmtNum(v.views) + '</td><td class="num">' + fmtNum(v.optins) + '</td><td class="num">' + fmtPct(rate) + '</td><td class="num">' + delta + '</td><td>' + sig + '</td></tr>';
+        });
+        h += '</tbody></table></div></div>';
+      });
+    }
+    h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
     /* 3. Leads */
