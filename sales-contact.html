@@ -334,6 +334,54 @@ if(m2)return m2[1];
 return'';
 }
 function fmtNow(){var d=new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+/* ── Parse "souple" d'une date de communication/timeline → millis (ou null).
+   Les entrées communications[]/timeline_history[] viennent de sources
+   hétérogènes (webhooks Ringover/Make, SMS externes, saisies front) avec des
+   formats mélangés : ISO "2026-07-09T14:30:00Z", ISO à espace
+   "2026-07-09 14:30:00" (invalide pour new Date() sous Safari), FR
+   "09/07/2026 14:30", Timestamp Firestore, epoch. new Date(string) cassait le
+   tri ET l'affichage (Invalid Date → tri à 0 → l'événement remontait tout en
+   haut, AVANT l'arrivée du lead — bug chronologie / 1er contact). */
+function ctParseMs(v){
+  if(v==null)return null;
+  if(typeof v==='object'){
+    if(typeof v.toMillis==='function'){try{return v.toMillis();}catch(e){return null;}}
+    if(typeof v.toDate==='function'){try{return v.toDate().getTime();}catch(e){return null;}}
+    if(typeof v.seconds==='number')return v.seconds*1000;
+    return null;
+  }
+  if(typeof v==='number'&&isFinite(v))return v<1e12?v*1000:v;
+  if(typeof v!=='string')return null;
+  var s=v.trim();if(!s)return null;
+  // ISO strict avec T + timezone -> parseur natif (fiable partout, Safari inclus)
+  if(s.indexOf('T')>0&&/(Z|[+\-]\d{2}:?\d{2})$/.test(s)){var dn=new Date(s);if(!isNaN(dn.getTime()))return dn.getTime();}
+  // ISO-ish "YYYY-MM-DD[ T]HH:MM[:SS]" -> construction manuelle en heure locale
+  var iso=s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if(iso){var d1=new Date(+iso[1],+iso[2]-1,+iso[3],+(iso[4]||0),+(iso[5]||0),+(iso[6]||0));if(!isNaN(d1.getTime()))return d1.getTime();}
+  // FR "DD/MM/YYYY[ HH:MM[:SS]]" / "DD/MM/YYYY à 14h30"
+  var fr=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[\s,àa]+(\d{1,2})[:hH](\d{2})(?::(\d{2}))?)?/);
+  if(fr){var d2=new Date(+fr[3],+fr[2]-1,+fr[1],+(fr[4]||0),+(fr[5]||0),+(fr[6]||0));return isNaN(d2.getTime())?null:d2.getTime();}
+  var p=Date.parse(s);return isNaN(p)?null:p;
+}
+/* Vraie date d'entrée du lead = la PLUS ANCIENNE parmi dateWebinaire /
+   importedCreatedAt / createdAt — même convention que api/_leadDates.js et
+   Leads Live (createdAt seul ment pour les leads importés de Bigin). */
+function ctRealEntryMs(l){
+  if(!l)return null;var best=null;
+  [l.dateWebinaire,l.importedCreatedAt,l.createdAt].forEach(function(v){var m=ctParseMs(v);if(m!=null&&(best==null||m<best))best=m;});
+  return best;
+}
+function ctFmtDayFr(ms){try{return new Date(ms).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});}catch(e){return '';}}
+function ctFmtTime(ms){try{return new Date(ms).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+/* Bouton retour : revient à la page d'où l'on vient (Leads Live, Pipeline,
+   Funnel, Dialer...) au lieu de forcer sales-crm.html — history.back()
+   préserve la position/le state du feed Leads Live. Fallback : href. */
+function ficheBack(){
+  try{
+    if(document.referrer&&document.referrer.indexOf(window.location.origin)===0&&window.history.length>1){window.history.back();return false;}
+  }catch(e){}
+  return true; // navigation normale vers sales-crm.html
+}
 function isClient(l){return l.stage==='closed_won_setting'||l.stage==='closed_won_self';}
 function sName(k){var s=SM[k];return s?s.label:k;}
 
@@ -349,7 +397,7 @@ function renderAll(){
 var l=lead,st=SM[l.stage||'lead']||STAGES[0],ci=st._i||0,sc=l.assignedTo==='guillaume'?'#ef4444':'#60a5fa',ini=(l.nom||'?')[0].toUpperCase(),isC=isClient(l);
 var h='';
 // Top
-h+='<div class="fiche-top"><a class="fiche-back" href="sales-crm.html">\u2190</a><div class="fiche-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><span class="fiche-name">'+esc(l.nom||'\u2014')+'</span><span class="fiche-badge '+(isC?'client':'lead')+'">'+(isC?'\u2705 Client':'\ud83d\udccb Lead')+'</span><div class="fiche-top-actions">';
+h+='<div class="fiche-top"><a class="fiche-back" href="sales-crm.html" onclick="return ficheBack()" title="Retour">\u2190</a><div class="fiche-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><span class="fiche-name">'+esc(l.nom||'\u2014')+'</span><span class="fiche-badge '+(isC?'client':'lead')+'">'+(isC?'\u2705 Client':'\ud83d\udccb Lead')+'</span><div class="fiche-top-actions">';
 if(l.telephone)h+='<button class="fiche-top-btn" onclick="dialerCallFromFiche()">\ud83d\udcde Appeler</button>';
 if(l.email)h+='<a class="fiche-top-btn" href="mailto:'+escA(l.email)+'">\u2709\ufe0f Email</a>';
 h+='<button class="fiche-top-btn" style="color:#a78bfa;border-color:rgba(167,139,250,.25)" onclick="openBookingFromFiche()">\ud83d\udcc5 RDV</button>';
@@ -412,8 +460,20 @@ h+='</div>';
 // Chrono
 h+='<div class="fr-panel active" id="pChrono">';
 var tl=l.timeline_history||[];
-if(!tl.length)h+='<div class="fr-empty">Aucun \u00e9v\u00e9nement</div>';
-else for(var i=tl.length-1;i>=0;i--){var ev=tl[i];h+='<div class="tl-item"><span class="tl-dot" style="background:'+(ev.color||'var(--muted)')+'"></span><span class="tl-date">'+esc(ev.date)+'</span><span class="tl-text">'+sanitizeComm(ev.text)+'</span></div>';}
+// Tri par date RÉELLE (parse souple, formats FR + ISO mélangés) et non par
+// ordre d'insertion — un webhook en retard ou un backfill ne casse plus la
+// chronologie. Tableau d'index (zéro mutation : addTL() réécrit ce tableau
+// en base, on ne doit surtout pas y injecter de champs volatils). Dates
+// illisibles : position d'origine conservée (tri stable par index).
+var tlOrder=tl.map(function(ev,ix){var m=ctParseMs(ev.date);return {ix:ix,ms:m};});
+tlOrder.sort(function(a,b){var ma=a.ms==null?a.ix:a.ms,mb=b.ms==null?b.ix:b.ms;if(ma===mb)return a.ix-b.ix;return ma-mb;});
+var _tlEntry=ctRealEntryMs(l);
+if(!tl.length&&!_tlEntry)h+='<div class="fr-empty">Aucun \u00e9v\u00e9nement</div>';
+else{
+for(var i=tlOrder.length-1;i>=0;i--){var ev=tl[tlOrder[i].ix];h+='<div class="tl-item"><span class="tl-dot" style="background:'+(ev.color||'var(--muted)')+'"></span><span class="tl-date">'+esc(ev.date)+'</span><span class="tl-text">'+sanitizeComm(ev.text)+'</span></div>';}
+// Point d'origine (tout en bas, l'onglet est antéchronologique) : arrivée réelle du lead
+if(_tlEntry)h+='<div class="tl-item"><span class="tl-dot" style="background:#f59e0b"></span><span class="tl-date">'+esc(new Date(_tlEntry).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}))+'</span><span class="tl-text">📥 <strong>Arrivée du lead</strong> · webinaire / import / création</span></div>';
+}
 h+='</div>';
 // Notes
 h+='<div class="fr-panel" id="pNotes">';
@@ -454,7 +514,10 @@ var convoAll=(l.communications||[]).filter(function(c){return c.type==='sms'||c.
 if(!convoAll.length){h+='<div class="conv-empty"><div class="conv-empty-icon">\ud83d\udcac</div>Aucun SMS ni appel synchronis\u00e9<br/><span style="font-size:11px;color:var(--muted2)">Les communications appara\u00eetront ici automatiquement via Ringover</span></div>';}
 else{
 // Tri chronologique ASCENDANT (du plus vieux en haut au plus récent en bas, comme iMessage)
-convoAll.sort(function(a,b){var da=a.date?new Date(a.date).getTime():0;var db=b.date?new Date(b.date).getTime():0;return da-db;});
+// Millis fiables pour tri + affichage : date parsée souple, fallback
+// createdAt (Timestamp Firestore posé par la Cloud Function), sinon 0.
+convoAll.forEach(function(c){var m=ctParseMs(c.date);if(m==null)m=ctParseMs(c.createdAt);c._ms=m==null?0:m;});
+convoAll.sort(function(a,b){return a._ms-b._ms;});
 // Helper : déduit la classe owner depuis ownerName / ownerUid
 function ownerKey(c){
   var n=(c.ownerName||'').toLowerCase();
@@ -472,15 +535,18 @@ function convSide(c){
   return 'in';
 }
 h+='<div class="conv-thread">';
+// 📥 Point de départ du fil : la vraie arrivée du lead — situe le 1er
+// contact PAR RAPPORT à l'entrée (fini les appels affichés "avant" l'arrivée).
+var _entryMs=ctRealEntryMs(lead);
+if(_entryMs){var _eD=new Date(_entryMs);h+='<div class="conv-date-sep" style="color:#f59e0b;opacity:.92">📥 Lead entré — '+esc(ctFmtDayFr(_entryMs))+((_eD.getHours()||_eD.getMinutes())?' à '+esc(ctFmtTime(_entryMs)):'')+'</div>';}
 var lastDay='';
 for(var ki=0;ki<convoAll.length;ki++){
   var cm=convoAll[ki];
-  var cmDate=cm.date?new Date(cm.date):null;
-  var dayKey=cmDate?cmDate.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
+  var dayKey=cm._ms?ctFmtDayFr(cm._ms):'';
   if(dayKey&&dayKey!==lastDay){h+='<div class="conv-date-sep">'+esc(dayKey)+'</div>';lastDay=dayKey;}
   var side=convSide(cm);
   var ow=ownerKey(cm);
-  var timeStr=cmDate?cmDate.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}):'';
+  var timeStr=cm._ms?ctFmtTime(cm._ms):'';
   h+='<div class="conv-row '+side+'">';
   // Auteur (uniquement côté équipe, et si on connaît l'owner)
   if(side==='out'&&cm.ownerName){
