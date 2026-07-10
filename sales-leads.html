@@ -2620,15 +2620,6 @@ function renderCard(l) {
   h += '<span class="ld-card-arrow">▼</span>';
   h += '</div>';
 
-  // Actions rapides Alteore 2.0 — positionnées en absolu HORS du head
-  // (le head porte data-action="toggle" : des boutons descendants seraient
-  // avalés par le handler toggle, prioritaire dans la délégation).
-  h += '<div class="ld-qa">';
-  if (_tel) h += '<button data-action="dialerCall" data-phone="' + escAttr(_tel) + '" data-lead-id="' + id + '" data-name="' + escAttr(l.nom || '') + '" title="Appeler via Ringover">📞</button>';
-  h += '<button data-action="openBooking" data-id="' + id + '" title="Prendre RDV">📅</button>';
-  h += '<a href="sales-contact.html?id=' + id + '" title="Fiche CRM">↗</a>';
-  h += '</div>';
-
   // Body
   h += '<div class="ld-card-body">';
 
@@ -2713,33 +2704,12 @@ function renderCard(l) {
 
   // Actions
   h += '<div class="ld-actions">';
-  h += '<div class="ld-actions-title">Parcours</div>';
-  // ═══ Alteore 2.0 : stepper de parcours ═══
-  // Le chemin nominal en avant, les étapes franchies barrées, les statuts
-  // d'exception (NRP, messagerie, disqualifié…) repliés derrière « ⋯ ».
-  // Chaque bouton garde data-action="setStatus" : handler existant inchangé.
-  var MAIN_PATH = ['nouveau', 'appele', 'decroche', 'set', 'rdv_pose', 'client'];
-  var curKey = l.status || 'nouveau';
-  var curIdx = MAIN_PATH.indexOf(curKey);
-  var isOtherStatus = curIdx < 0;
-  h += '<div class="ld-stepper">';
-  for (var si = 0; si < MAIN_PATH.length; si++) {
-    var s = getStatusObj(MAIN_PATH[si]);
-    var stepCls = 'ld-step';
-    if (!isOtherStatus && si < curIdx) stepCls += ' done';
-    if (s.key === curKey) stepCls += ' cur';
-    var stepStyle = (s.key === curKey) ? ' style="color:' + s.color + ';border-color:' + s.color + ';background:' + s.bg + '"' : '';
-    h += '<button class="' + stepCls + '"' + stepStyle + ' data-action="setStatus" data-id="' + id + '" data-status="' + s.key + '">' + s.icon + ' ' + s.label + '</button>';
-  }
-  var curObj = getStatusObj(curKey);
-  h += '<button class="ld-step-more' + (isOtherStatus ? ' active' : '') + '" data-action="toggleAltStatus" data-id="' + id + '">' + (isOtherStatus ? curObj.icon + ' ' + curObj.label + ' ▾' : '⋯ Autres') + '</button>';
-  h += '</div>';
-  h += '<div class="ld-alt-status" data-alt-status="' + id + '"' + (isOtherStatus ? ' style="display:flex"' : '') + '>';
-  for (var sj = 0; sj < STATUSES.length; sj++) {
-    var sAlt = STATUSES[sj];
-    if (MAIN_PATH.indexOf(sAlt.key) >= 0) continue;
-    var altActive = curKey === sAlt.key;
-    h += '<button class="ld-status-btn ld-alt-btn' + (altActive ? ' active' : '') + '" style="' + (altActive ? 'color:' + sAlt.color + ';border-color:' + sAlt.color : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + sAlt.key + '">' + sAlt.icon + ' ' + sAlt.label + '</button>';
+  h += '<div class="ld-actions-title">Statut</div>';
+  h += '<div class="ld-status-grid">';
+  for (var si = 0; si < STATUSES.length; si++) {
+    var s = STATUSES[si];
+    var isActive = (l.status || 'nouveau') === s.key;
+    h += '<button class="ld-status-btn' + (isActive ? ' active' : '') + '" style="' + (isActive ? 'color:' + s.color + ';border-color:' + s.color : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + s.key + '">' + s.icon + ' ' + s.label + '</button>';
   }
   h += '</div>';
 
@@ -3045,14 +3015,6 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     e.stopPropagation();
     var cid = cdTarget.dataset.cid;
     if (cid && window.CallDetailModal) window.CallDetailModal.open(cid);
-    return;
-  }
-
-  // Déplier / replier les statuts d'exception (stepper Alteore 2.0)
-  var altToggle = e.target.closest('[data-action="toggleAltStatus"]');
-  if (altToggle) {
-    var altPanel = document.querySelector('[data-alt-status="' + altToggle.dataset.id + '"]');
-    if (altPanel) altPanel.style.display = (altPanel.style.display === 'flex') ? 'none' : 'flex';
     return;
   }
 
