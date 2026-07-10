@@ -735,6 +735,13 @@ function _mToFs(monthLabel) {
   if (mi < 0) return null;
   return p[1] + '-' + String(mi + 1).padStart(2, '0');
 }
+function _fsToM(fsKey) {
+  // '2026-05' → 'Mai 2026'
+  var p = String(fsKey || '').split('-');
+  var mi = parseInt(p[1], 10) - 1;
+  if (!p[0] || isNaN(mi) || mi < 0 || mi > 11) return null;
+  return MONTHS_FR[mi] + ' ' + p[0];
+}
 let _cm = (() => {
   const s = localStorage.getItem('comm_month') || 'Février 2026';
   const p = s.split(' ');
@@ -803,15 +810,30 @@ function calcPoints(deals) {
 }
 
 function calcTotalPoints(uid) {
-  // Sum all months points + historical base points
+  // Total carrière = base historique + points de TOUS les mois connus :
+  //   - mois hardcodés (MEMBERS_COMM[].data)
+  //   - mois chargés depuis Firestore (_fsDealsCache, rempli intégralement
+  //     par loadAllCommFromFirestore au boot)
+  //   - mois présents dans le localStorage de ce navigateur
+  // Fix 07/2026 : l'ancienne version n'itérait que les mois hardcodés →
+  // les points cessaient de monter dès que les deals passaient en Firestore.
   const m = MEMBERS_COMM.find(m => m.uid === uid);
   if (!m) return 0;
-  const allMonths = [...Object.keys(m.data)];
-  // Also check localStorage months
+  const monthsSet = {};
+  Object.keys(m.data || {}).forEach(mo => { monthsSet[mo] = true; });
+  Object.keys(_fsDealsCache).forEach(ck => {
+    if (ck.indexOf(uid + '_') === 0) monthsSet[ck.slice(uid.length + 1)] = true;
+  });
+  try {
+    const prefix = 'comm_deals_' + uid + '_';
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf(prefix) === 0) monthsSet[k.slice(prefix.length)] = true;
+    }
+  } catch(e) {}
   let total = m.careerPtsBase || 0; // Points historiques
-  allMonths.forEach(mo => {
-    const deals = getDeals(uid, mo);
-    total += calcPoints(deals);
+  Object.keys(monthsSet).forEach(mo => {
+    total += calcPoints(getDeals(uid, mo));
   });
   return total;
 }
@@ -1285,6 +1307,28 @@ async function loadCommFromFirestore(month) {
   console.log('[Comm] Firestore: ' + loaded + ' membres chargés pour ' + month);
 }
 
+/* Charge TOUS les mois de commissions/{uid}/mois/* en une requête par
+   membre — nécessaire pour que le total carrière (points, milestones)
+   soit juste sur n'importe quel poste, pas seulement celui qui a saisi. */
+async function loadAllCommFromFirestore() {
+  if (!_fsDb) return;
+  for (var i = 0; i < MEMBERS_COMM.length; i++) {
+    var m = MEMBERS_COMM[i];
+    try {
+      var snap = await _fsDb.collection('commissions').doc(m.uid).collection('mois').get();
+      snap.forEach(function(doc) {
+        var d = doc.data();
+        if (!d || !d.deals) return;
+        var month = _fsToM(doc.id);
+        if (!month) return;
+        _fsDealsCache[m.uid + '_' + month] = d.deals;
+        try { localStorage.setItem('comm_deals_' + m.uid + '_' + month, JSON.stringify(d.deals)); } catch(e) {}
+      });
+    } catch(e) { console.warn('[Comm] Firestore loadAll error', m.uid, e.message); }
+  }
+  console.log('[Comm] Firestore: historique complet chargé (' + Object.keys(_fsDealsCache).length + ' mois×membres en cache)');
+}
+
 async function migrateCommToFirestore() {
   if (!_fsDb) return;
   var migrated = 0;
@@ -1329,8 +1373,9 @@ document.addEventListener('DOMContentLoaded', function() {
       _fsDb = firebase.firestore();
       console.log('[Comm] Firebase Auth OK:', fbUser.email);
 
-      // Charger le mois courant depuis Firestore
-      await loadCommFromFirestore(cmk());
+      // Charger TOUT l'historique Firestore (points carrière + milestones),
+      // le mois courant est inclus.
+      await loadAllCommFromFirestore();
       renderAll();
 
       // Migration en arrière-plan
