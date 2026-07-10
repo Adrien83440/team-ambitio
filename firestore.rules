@@ -297,8 +297,15 @@ service cloud.firestore {
 
 
     // ═══ META ═══
+    // Lecture ouverte à tout utilisateur authentifié : _meta/team_members
+    // est la source de vérité du roster équipe (nav.js → loadTeamMembers)
+    // et doit être lisible par TOUS les rôles (coach, csm inclus). Sinon
+    // les pages coaching retombent sur le fallback hardcodé de nav.js
+    // (roster périmé — ex : Thomas voyait encore Mickael).
+    // Écriture inchangée : sales + admin.
     match /_meta/{docId} {
-      allow read, write: if isSalesOrAdmin();
+      allow read:  if isAuth();
+      allow write: if isSalesOrAdmin();
     }
 
 
@@ -638,6 +645,39 @@ service cloud.firestore {
         resource.data.ownerUid == request.auth.uid
       );
       allow delete: if isAdmin();
+    }
+
+
+    // ═══ ADS INSIGHTS — métriques pub Meta (Funnel Sales) ═══
+    // 1 doc / jour / tunnel : ads_insights/{YYYY-MM-DD}_{tunnel}.
+    // Écrit par : api/ads-metrics-ingest.js (Make → Admin SDK, bypass
+    // naturel des rules) ET par la grille de saisie manuelle de
+    // sales-funnel.html (SDK client, rôle admin). Page admin only.
+    match /ads_insights/{docId} {
+      allow read:           if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
+    // ═══ MARKETING JOURNAL — tableau d'actions marketing (Funnel) ═══
+    // Journal « telle date, tel changement » : consigné et lu depuis
+    // sales-funnel.html (admin only).
+    match /marketing_journal/{docId} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+
+    // ═══ PAGE VIEWS — vues des pages d'opt-in (beacon system.io) ═══
+    // Compteurs journaliers page_views_daily/{YYYY-MM-DD}_{page},
+    // incrémentés UNIQUEMENT par api/page-view.js (Admin SDK, bypass).
+    // Aucune écriture SDK client possible.
+    match /page_views_daily/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
     }
 
   }
