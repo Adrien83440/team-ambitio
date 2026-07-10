@@ -173,22 +173,36 @@
     }
     .nav-collapse-btn:hover { background:rgba(255,255,255,0.16); color:white; }
 
-    .nav-role-section { position:relative; z-index:1; padding:10px 14px; flex-shrink:0; }
-    .nav-role-badge {
-      display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px;
+    /* Pill rôle intégrée au header (remplace l'ancien gros bloc rôle) */
+    .nav-rolepill {
+      display:inline-flex; align-items:center; gap:5px; margin-top:3px;
+      padding:2px 8px; border-radius:20px;
       background:var(--nav-role-bg); border:1px solid var(--nav-role-border);
-      overflow:hidden; transition:all 0.2s;
+      font-size:10px; font-weight:700; color:var(--nav-accent);
+      letter-spacing:0.3px; white-space:nowrap;
     }
-    .nav-role-icon { font-size:16px; flex-shrink:0; width:20px; text-align:center; }
-    .nav-role-text { overflow:hidden; transition:opacity 0.2s; }
-    .nav-role-label { font-size:10px; font-weight:700; color:var(--nav-accent); text-transform:uppercase; letter-spacing:0.8px; white-space:nowrap; }
-    .nav-role-name { font-size:12px; font-weight:600; color:rgba(255,255,255,0.8); white-space:nowrap; margin-top:1px; }
 
-    .nav-section-label {
-      position:relative; z-index:1; padding:8px 18px 4px;
-      font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px;
-      color:rgba(255,255,255,0.3); overflow:hidden; transition:opacity 0.2s; flex-shrink:0;
+    /* ── Sections repliables (accordéons) ── */
+    .nav-sec-group { margin-top:6px; }
+    .nav-sec-group:first-child { margin-top:0; }
+    .nav-sec-head {
+      display:flex; align-items:center; gap:7px; padding:7px 8px 7px 10px;
+      border-radius:8px; cursor:pointer; user-select:none; transition:background 0.15s;
     }
+    .nav-sec-head:hover { background:rgba(255,255,255,0.05); }
+    .nav-sec-label {
+      font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1.3px;
+      color:rgba(255,255,255,0.42); white-space:nowrap; overflow:hidden; transition:opacity 0.2s;
+    }
+    .nav-sec-count {
+      font-size:9px; font-weight:700; color:rgba(255,255,255,0.28);
+      background:rgba(255,255,255,0.07); padding:1px 6px; border-radius:10px; flex-shrink:0;
+    }
+    .nav-sec-caret { margin-left:auto; font-size:9px; color:rgba(255,255,255,0.3); transition:transform 0.2s; flex-shrink:0; }
+    .nav-sec-group.open .nav-sec-caret { transform:rotate(90deg); }
+    .nav-sec-body { display:none; }
+    .nav-sec-group.open .nav-sec-body { display:block; animation:navSecReveal 0.18s ease; }
+    @keyframes navSecReveal { from { opacity:0; transform:translateY(-3px); } to { opacity:1; transform:none; } }
 
     .nav-items {
       position:relative; z-index:1; padding:4px 10px; flex:1;
@@ -221,7 +235,7 @@
     .nav-parent { cursor:pointer; }
     .nav-parent-caret { font-size:10px; color:rgba(255,255,255,0.35); flex-shrink:0; transition:transform 0.2s; }
     .nav-parent.open .nav-parent-caret { transform:rotate(90deg); }
-    .nav-children { display:none; padding-left:12px; }
+    .nav-children { display:none; margin-left:19px; padding-left:10px; border-left:1px solid rgba(255,255,255,0.10); }
     .nav-children.open { display:block; }
     .nav-children .nav-item { font-size:12px; padding:7px 10px; opacity:0.85; }
     .nav-children .nav-item.active { opacity:1; }
@@ -230,10 +244,11 @@
 
     #ambitio-sidebar.collapsed .nav-item-label,
     #ambitio-sidebar.collapsed .nav-item-badge,
-    #ambitio-sidebar.collapsed .nav-brand,
-    #ambitio-sidebar.collapsed .nav-role-text,
-    #ambitio-sidebar.collapsed .nav-section-label { opacity:0; pointer-events:none; }
-    #ambitio-sidebar.collapsed .nav-role-badge { justify-content:center; }
+    #ambitio-sidebar.collapsed .nav-brand { opacity:0; pointer-events:none; }
+    /* Mode réduit : les accordéons n'ont plus de sens (icônes seules + tooltips)
+       → en-têtes masqués, tous les items visibles quel que soit l'état plié. */
+    #ambitio-sidebar.collapsed .nav-sec-head { display:none; }
+    #ambitio-sidebar.collapsed .nav-sec-body { display:block !important; animation:none; }
     #ambitio-sidebar.collapsed .nav-collapse-btn { margin-left:0; }
     #ambitio-sidebar.collapsed .nav-header { justify-content:center; padding:22px 10px 16px; }
 
@@ -349,40 +364,22 @@
     }
     .pm-save-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
-    /* ── Platform Switch (admin → sales.alteore.com) ── */
-    .nav-platform-switch {
-      position:relative; z-index:1; margin:0 14px 10px;
-      display:flex; align-items:center; gap:10px; padding:10px 12px;
-      border-radius:12px; cursor:pointer; text-decoration:none;
-      background:linear-gradient(135deg, rgba(252,165,165,0.10) 0%, rgba(185,28,28,0.20) 100%);
-      border:1px solid rgba(252,165,165,0.25);
-      transition:all 0.2s cubic-bezier(.4,0,.2,1);
-      overflow:hidden; white-space:nowrap; flex-shrink:0;
+    /* ── Platform Switch slim (admin → sales.alteore.com, footer) ── */
+    .nav-ps-slim {
+      display:flex; align-items:center; gap:8px; padding:7px 10px; margin-bottom:6px;
+      border-radius:9px; cursor:pointer; text-decoration:none;
+      font-size:11.5px; font-weight:600; color:rgba(255,255,255,0.55);
+      border:1px dashed rgba(255,255,255,0.14); transition:all 0.15s;
+      overflow:hidden; white-space:nowrap; position:relative;
     }
-    .nav-platform-switch:hover {
-      background:linear-gradient(135deg, rgba(252,165,165,0.18) 0%, rgba(185,28,28,0.32) 100%);
-      border-color:rgba(252,165,165,0.45);
-      transform:translateY(-1px);
-      box-shadow:0 6px 20px rgba(185,28,28,0.25);
-    }
-    .nav-ps-icon {
-      font-size:16px; width:32px; height:32px;
-      display:flex; align-items:center; justify-content:center;
-      background:rgba(252,165,165,0.15); border:1px solid rgba(252,165,165,0.25);
-      border-radius:9px; flex-shrink:0;
-    }
-    .nav-ps-text { flex:1; overflow:hidden; transition:opacity 0.2s; min-width:0; }
-    .nav-ps-label { font-size:12px; font-weight:700; color:white; line-height:1.2; letter-spacing:-0.1px; }
-    .nav-ps-sub { font-size:10px; color:rgba(252,165,165,0.85); font-weight:500; margin-top:2px; }
-    .nav-ps-arrow {
-      font-size:14px; color:rgba(252,165,165,0.7); flex-shrink:0;
-      transition:transform 0.2s, color 0.2s;
-    }
-    .nav-platform-switch:hover .nav-ps-arrow { transform:translate(2px,-2px); color:rgba(252,165,165,1); }
-    #ambitio-sidebar.collapsed .nav-platform-switch { justify-content:center; margin:0 10px 10px; padding:10px 0; }
-    #ambitio-sidebar.collapsed .nav-ps-text,
-    #ambitio-sidebar.collapsed .nav-ps-arrow { opacity:0; pointer-events:none; width:0; }
-    #ambitio-sidebar.collapsed .nav-platform-switch:hover::after {
+    .nav-ps-slim:hover { color:#fca5a5; border-color:rgba(252,165,165,0.4); background:rgba(252,165,165,0.06); }
+    .nav-ps-slim-label { flex:1; overflow:hidden; transition:opacity 0.2s; }
+    .nav-ps-slim-arrow { font-size:11px; flex-shrink:0; transition:transform 0.15s, opacity 0.2s; }
+    .nav-ps-slim:hover .nav-ps-slim-arrow { transform:translate(1px,-1px); }
+    #ambitio-sidebar.collapsed .nav-ps-slim { justify-content:center; padding:7px 0; }
+    #ambitio-sidebar.collapsed .nav-ps-slim-label,
+    #ambitio-sidebar.collapsed .nav-ps-slim-arrow { opacity:0; width:0; pointer-events:none; }
+    #ambitio-sidebar.collapsed .nav-ps-slim:hover::after {
       content:attr(data-label);
       position:absolute; left:calc(var(--nav-w-collapsed) + 8px); top:50%;
       transform:translateY(-50%);
@@ -555,71 +552,97 @@
     sidebar.style.background = `linear-gradient(180deg,${theme.grad1} 0%,${theme.grad2} 50%,${theme.grad3} 100%)`;
     if (isCollapsed) sidebar.classList.add('collapsed');
 
-    let navHtml = '', lastSection = null;
-    modules.forEach(m => {
-      if (m.section && m.section !== lastSection) {
-        navHtml += `<div class="nav-section-label" style="margin-top:${lastSection?'12px':'0'}">${m.section}</div>`;
-        lastSection = m.section;
-      }
+    /* ─── Sections repliables ───────────────────────────────────────────
+       Les modules sont regroupés par section et rendus en accordéons :
+         - la section contenant la page active est TOUJOURS ouverte ;
+         - les autres suivent l'état mémorisé par l'utilisateur dans
+           localStorage ('nav_sections_open'), fermées par défaut ;
+         - un rôle qui ne voit qu'une seule section (ex : coach) a une
+           liste directe, sans en-tête repliable ;
+         - en mode réduit, les en-têtes disparaissent et tous les items
+           restent accessibles en icônes + tooltips (géré en CSS).       */
+    let secState = {};
+    try { secState = JSON.parse(localStorage.getItem('nav_sections_open') || '{}') || {}; } catch (e) { secState = {}; }
 
+    const groups = [];
+    modules.forEach(m => {
+      const secName = m.section || 'Autres';
+      let g = groups.find(x => x.name === secName);
+      if (!g) { g = { name: secName, items: [] }; groups.push(g); }
+      g.items.push(m);
+    });
+
+    const renderModule = m => {
       if (m.children) {
-        // Parent with sub-items
         const childActive = m.children.some(c => path === c.href.split('#')[0]);
-        navHtml += `<div class="nav-item nav-parent${childActive?' open':''}" data-id="${m.id}" data-label="${m.label}">
+        let h = `<div class="nav-item nav-parent${childActive?' open':''}" data-id="${m.id}" data-label="${m.label}">
           <span class="nav-item-icon">${m.icon}</span>
           <span class="nav-item-label">${m.label}</span>
           <span class="nav-parent-caret">▸</span>
         </div>`;
-        navHtml += `<div class="nav-children${childActive?' open':''}" data-parent="${m.id}">`;
+        h += `<div class="nav-children${childActive?' open':''}" data-parent="${m.id}">`;
         m.children.forEach(c => {
           const cActive = path === c.href.split('#')[0];
-          navHtml += `<a class="nav-item${cActive?' active':''}" href="${c.href}" data-id="${c.id}" data-label="${c.label}">
+          h += `<a class="nav-item${cActive?' active':''}" href="${c.href}" data-id="${c.id}" data-label="${c.label}">
             <span class="nav-item-icon">${c.icon}</span>
             <span class="nav-item-label">${c.label}</span>
           </a>`;
         });
-        navHtml += `</div>`;
-      } else {
-        const isActive   = path === m.href.split('#')[0];
-        const badgeClass = m.badge && /^\d+$/.test(m.badge) ? 'nav-item-badge num' : 'nav-item-badge';
-        navHtml += `<a class="nav-item${isActive?' active':''}" href="${m.href}" data-id="${m.id}" data-label="${m.label}">
-          <span class="nav-item-icon">${m.icon}</span>
-          <span class="nav-item-label">${m.label}</span>
-          ${m.badge?`<span class="${badgeClass}">${m.badge}</span>`:''}
-        </a>`;
+        h += `</div>`;
+        return h;
       }
-    });
+      const isActive   = path === m.href.split('#')[0];
+      const badgeClass = m.badge && /^\d+$/.test(m.badge) ? 'nav-item-badge num' : 'nav-item-badge';
+      return `<a class="nav-item${isActive?' active':''}" href="${m.href}" data-id="${m.id}" data-label="${m.label}">
+        <span class="nav-item-icon">${m.icon}</span>
+        <span class="nav-item-label">${m.label}</span>
+        ${m.badge?`<span class="${badgeClass}">${m.badge}</span>`:''}
+      </a>`;
+    };
+
+    const moduleHasActive = m => m.children
+      ? m.children.some(c => path === c.href.split('#')[0])
+      : path === m.href.split('#')[0];
+
+    let navHtml = '';
+    if (groups.length <= 1) {
+      // Une seule section visible : liste directe, pas d'accordéon.
+      (groups[0] ? groups[0].items : []).forEach(m => { navHtml += renderModule(m); });
+    } else {
+      groups.forEach(g => {
+        const slug = g.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const hasActive = g.items.some(moduleHasActive);
+        const isOpen = hasActive || secState[slug] === true;
+        navHtml += `<div class="nav-sec-group${isOpen?' open':''}" data-sec="${slug}">
+          <div class="nav-sec-head">
+            <span class="nav-sec-label">${g.name}</span>
+            <span class="nav-sec-count">${g.items.length}</span>
+            <span class="nav-sec-caret">▸</span>
+          </div>
+          <div class="nav-sec-body">`;
+        g.items.forEach(m => { navHtml += renderModule(m); });
+        navHtml += `</div></div>`;
+      });
+    }
 
     sidebar.innerHTML = `
       <div class="nav-header">
         <div class="nav-logo">A</div>
         <div class="nav-brand">
           <div class="nav-brand-title">Ambitio <span style="opacity:.6">Corp</span></div>
-          <div class="nav-brand-sub">${theme.label}</div>
+          <div class="nav-rolepill">${ROLE_LABELS[role]||role}</div>
         </div>
         <button class="nav-collapse-btn" id="navCollapseBtn" title="Réduire">◀</button>
       </div>
-      <div class="nav-role-section">
-        <div class="nav-role-badge">
-          <span class="nav-role-icon">${theme.emoji}</span>
-          <div class="nav-role-text">
-            <div class="nav-role-label">${theme.label}</div>
-            <div class="nav-role-name">${ROLE_LABELS[role]||role}</div>
-          </div>
-        </div>
-      </div>
-      ${role === 'admin' ? `
-      <a class="nav-platform-switch" href="https://sales.alteore.com" target="_blank" rel="noopener noreferrer" data-label="Espace Sales" title="Ouvrir sales.alteore.com dans un nouvel onglet">
-        <span class="nav-ps-icon">📈</span>
-        <div class="nav-ps-text">
-          <div class="nav-ps-label">Espace Sales</div>
-          <div class="nav-ps-sub">sales.alteore.com</div>
-        </div>
-        <span class="nav-ps-arrow">↗</span>
-      </a>
-      ` : ''}
       <div class="nav-items" id="navItems">${navHtml}</div>
       <div class="nav-footer">
+        ${role === 'admin' ? `
+        <a class="nav-ps-slim" href="https://sales.alteore.com" target="_blank" rel="noopener noreferrer" data-label="Espace Sales" title="Ouvrir sales.alteore.com dans un nouvel onglet">
+          <span>📈</span>
+          <span class="nav-ps-slim-label">Espace Sales</span>
+          <span class="nav-ps-slim-arrow">↗</span>
+        </a>
+        ` : ''}
         <div class="nav-theme-toggle${isLight ? ' light' : ''}" id="navThemeToggle" title="Thème clair / sombre">
           <div class="nav-theme-switch"></div>
           <span class="nav-theme-label">${isLight ? '☀️ Clair' : '🌙 Sombre'}</span>
@@ -661,6 +684,21 @@
     });
 
     document.getElementById('navProfileBtn').addEventListener('click', openProfileModal);
+
+    // Toggle sections repliables — état mémorisé par section (localStorage).
+    // NB : la section de la page active est ré-ouverte de force au prochain
+    // rendu même si l'utilisateur l'a fermée (voir génération navHtml).
+    sidebar.querySelectorAll('.nav-sec-head').forEach(head => {
+      head.addEventListener('click', () => {
+        const grp = head.parentElement;
+        const open = grp.classList.toggle('open');
+        try {
+          const st = JSON.parse(localStorage.getItem('nav_sections_open') || '{}') || {};
+          st[grp.dataset.sec] = open;
+          localStorage.setItem('nav_sections_open', JSON.stringify(st));
+        } catch (e) {}
+      });
+    });
 
     // Toggle sub-nav parents
     sidebar.querySelectorAll('.nav-parent').forEach(parent => {
