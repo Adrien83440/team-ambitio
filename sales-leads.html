@@ -4305,6 +4305,8 @@ function startBookingBridge() {
         var beId = change.doc.id;
         var beRef = change.doc.ref;
         var nowFr = new Date().toLocaleString('fr-FR');
+        // RDV posé par l'équipe (setteuse/sales) depuis le CRM — ≠ self-booking.
+        var isSetterBooking = (be.source === 'setter_booking');
 
         findExistingLead(be.email, be.telephone).then(function(existing) {
           if (existing) {
@@ -4314,15 +4316,48 @@ function startBookingBridge() {
             // bridge-fix-2026-05-05 : poser lastBookingAt pour que le lead
             // remonte dans Leads Live via startResurrectListening (sinon le lead
             // gardait son ancienne position et le sales ne voyait pas le nouveau RDV).
-            // Exception : setter_booking = c'est la setteuse qui a posé le RDV depuis
-            // sales-contact.html → le lead ne doit PAS changer de position dans le feed.
-            var isSetterBooking = (be.source === 'setter_booking');
+            // Exception : setter_booking = RDV posé par l'équipe depuis le CRM
+            // (Leads Live / fiche CRM) → traité par la branche dédiée ci-dessous.
             var update = {
               bookingEventId: beId,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             };
             if (!isSetterBooking) {
               update.lastBookingAt = firebase.firestore.FieldValue.serverTimestamp();
+            }
+
+            // ═══ RDV POSÉ PAR LE SETTING (setter_booking) ═══
+            // C'est une action ÉQUIPE, pas un ré-engagement client :
+            //   - PAS d'archivage engagementHistory ni de soft-reset des
+            //     champs déclaratifs (la fiche reste telle quelle) ;
+            //   - PAS de réécriture source / UTM / sourceDetail (le lead
+            //     garde son tunnel d'origine — il n'a PAS self-booké) ;
+            //   - lastBookingAt déjà exclu → position inchangée dans le feed ;
+            //   - stage → 'set' (SET = RDV posé par le setting, ≠ RDV Self
+            //     Booking), status → 'rdv_pose' — sauf lead déjà client
+            //     (aucune rétrogradation).
+            if (isSetterBooking) {
+              var CLIENT_STAGES_SETTER = ['closed_won_setting', 'closed_won_self'];
+              var curStageSetter = cur.stage || 'lead';
+              var isClientSetter = cur.isClient === true || CLIENT_STAGES_SETTER.indexOf(curStageSetter) >= 0;
+              var tlSetter;
+              if (isClientSetter) {
+                tlSetter = '📞 RDV posé par le setting pour un client existant';
+              } else {
+                update.stage  = 'set';
+                update.status = 'rdv_pose';
+                tlSetter = '📞 RDV posé par le setting' + (curStageSetter !== 'set' && curStageSetter !== 'lead' ? ' (était : ' + curStageSetter + ')' : '');
+              }
+              update.timeline_history = (cur.timeline_history || []).concat([{ text: tlSetter, date: nowFr, color: '#fbbf24' }]);
+              var batchSetter = db.batch();
+              batchSetter.update(leadRef, update);
+              batchSetter.update(beRef, { processed: true, mergedIntoLeadId: existing.id });
+              batchSetter.commit().then(function() {
+                console.log('[bridge] booking_event ' + beId + ' (setter) → merged into ' + existing.id);
+              }).catch(function(err) {
+                console.error('[bridge] setter merge error for ' + beId + ':', err);
+              });
+              return;
             }
 
             // ═══════════════════════════════════════════════════════════════
@@ -4472,14 +4507,14 @@ function startBookingBridge() {
               defi:           be.defi || '',
               disponibilite:  be.disponibilite || '',
               timeline:       be.timeline || '',
-              type:           'self_booking',
-              source:         'forms_self_booking',
-              utm:            be.type || 'Forms Self Booking',
-              stage:          'lead',
-              status:         'nouveau',
+              type:           isSetterBooking ? '' : 'self_booking',
+              source:         isSetterBooking ? 'setter_booking' : 'forms_self_booking',
+              utm:            isSetterBooking ? '' : (be.type || 'Forms Self Booking'),
+              stage:          isSetterBooking ? 'set' : 'lead',
+              status:         isSetterBooking ? 'rdv_pose' : 'nouveau',
               assignedTo:     '',
               notesHistory:   [],
-              timeline_history: [{ text: '✨ Lead créé via form Self-Booking', date: nowFr, color: '#a78bfa' }],
+              timeline_history: [{ text: isSetterBooking ? '📞 Lead créé via RDV posé par le setting' : '✨ Lead créé via form Self-Booking', date: nowFr, color: isSetterBooking ? '#fbbf24' : '#a78bfa' }],
               bookingEventId: beId,
               createdAt:      _coerceCreatedAtTs(be.createdAt),
               updatedAt:      firebase.firestore.FieldValue.serverTimestamp()
@@ -4692,7 +4727,7 @@ window.addEventListener('message', function(e) {
   var dateFr = data.date ? data.date.split('-').reverse().join('/') : '';
   var updates = {
     status: 'rdv_pose',
-    stage: 'rdv_confirmes',
+    stage: 'set',
     rdvDate: data.date || '',
     rdvHeure: data.time || '',
     dateRdv: dateFr + ' à ' + (data.time || ''),
@@ -4703,7 +4738,7 @@ window.addEventListener('message', function(e) {
   var lead = allLeads.find(function(l) { return l.id === leadId; });
   if (lead) {
     lead.status = 'rdv_pose';
-    lead.stage = 'rdv_confirmes';
+    lead.stage = 'set';
     lead.rdvDate = data.date || '';
     lead.rdvHeure = data.time || '';
     // Add note

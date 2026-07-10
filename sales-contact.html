@@ -937,13 +937,13 @@ window.addEventListener('message',function(e){
   if(!e.data||e.data.type!=='booking_confirmed')return;
   var data=e.data;
   var dateFr=data.date?data.date.split('-').reverse().join('/'):'';
-  lead.status='rdv_pose';lead.stage='rdv_confirmes';
+  lead.status='rdv_pose';lead.stage='set';
   lead.rdvDate=data.date||'';lead.rdvHeure=data.time||'';
   lead.dateRdv=dateFr+' \u00e0 '+(data.time||'');
   var noteText='\ud83d\udcc5 RDV pos\u00e9 \u2014 '+(data.typeLabel||'')+' avec '+(data.personName||'')+' le '+dateFr+' \u00e0 '+(data.time||'')+' ('+(data.duration||30)+'min)';
   lead.notesHistory=(lead.notesHistory||[]);lead.notesHistory.push({text:noteText,date:fmtNow()});
   addTL('\ud83d\udcc5 RDV pos\u00e9 avec '+(data.personName||''),'#a78bfa');
-  sv({status:'rdv_pose',stage:'rdv_confirmes',rdvDate:data.date||'',rdvHeure:data.time||'',dateRdv:lead.dateRdv,notesHistory:lead.notesHistory});
+  sv({status:'rdv_pose',stage:'set',rdvDate:data.date||'',rdvHeure:data.time||'',dateRdv:lead.dateRdv,notesHistory:lead.notesHistory});
   toast('\u2705 RDV confirm\u00e9 \u2014 '+(data.personName||'')+' le '+dateFr+' \u00e0 '+(data.time||''));
   renderAll();
   setTimeout(closeBookingFiche,1500);
