@@ -1,0 +1,96 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   brand.css — COUCHE DE REBRANDING ALTEORE (phase 1)
+   ─────────────────────────────────────────────────────────────────────────
+   Principe : ce fichier ne contient AUCUN sélecteur de composant applicatif.
+   Il ne fait que redéfinir les variables CSS (:root) que les pages utilisent
+   déjà, plus quelques primitives sûres (police, scrollbars, focus, sélection).
+   Les layouts, tailles, comportements sont STRICTEMENT intouchés.
+
+   Activation : opt-in par page. nav.js pose la classe `al-rebrand` sur <body>
+   uniquement pour les pages listées dans AL_REBRAND_PAGES (nav.js). Retirer
+   une page de la liste restaure son apparence d'origine à l'identique.
+
+   Chargé par : nav.js (injection <link>, après sales.css et les <style>
+   inline des pages → ces redéfinitions gagnent la cascade).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+body.al-rebrand {
+  /* ── Base neutre « ardoise » Alteore (remplace le noir pur) ──
+     Superset des noms de variables rencontrés dans les pages : chaque page
+     n'utilise que les siens, les autres sont simplement ignorés. */
+  --bg:      #0a0b12;
+  --bg2:     #10121c;
+  --bg3:     #161927;
+  --bg4:     #1d2132;
+  --bg-elev: #10121c;   /* alias sales-rdv */
+  --bg-card: #161927;   /* alias sales-rdv */
+
+  --border:       rgba(148,163,214,0.10);
+  --border2:      rgba(148,163,214,0.20);
+  --border-soft:  rgba(148,163,214,0.06);
+
+  --text:        #eef0f8;
+  --muted:       #8b93ad;
+  --muted2:      #565e78;
+  --text-muted:  #8b93ad;   /* alias sales-rdv */
+  --text-dim:    #565e78;   /* alias sales-rdv */
+
+  /* ── Marque : l'indigo Alteore remplace le bleu générique ── */
+  --blue:      #5b7cfa;
+  --blue-soft: rgba(91,124,250,0.13);
+
+  /* ── Typographie : 2 familles pour tout le logiciel ──
+     Tous les alias de variables de police connus pointent vers le duo
+     Plus Jakarta Sans (UI) / DM Mono (chiffres & données). */
+  --font-d:    'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-b:    'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-h:    'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-m:    'DM Mono', ui-monospace, monospace;
+  --font-head: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+  --fh:        'Plus Jakarta Sans', system-ui, sans-serif;
+  --fb:        'Plus Jakarta Sans', system-ui, sans-serif;
+  --fm:        'DM Mono', ui-monospace, monospace;
+
+  /* ── Géométrie & profondeur ── */
+  --radius:  12px;
+  --radius2: 16px;
+  --shadow:  0 8px 28px rgba(0, 0, 0, 0.35);
+
+  /* Filet de sécurité typo : les pages qui ont posé la police en dur sur
+     body (sans variable) sont rattrapées ici. Les font-family posées au
+     niveau des composants (ex : blocs mono) restent prioritaires. */
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Sélection de texte aux couleurs de la marque ── */
+body.al-rebrand ::selection {
+  background: rgba(91, 124, 250, 0.32);
+  color: #ffffff;
+}
+
+/* ── Scrollbars fines et discrètes, thème ardoise ── */
+body.al-rebrand ::-webkit-scrollbar { width: 9px; height: 9px; }
+body.al-rebrand ::-webkit-scrollbar-track { background: transparent; }
+body.al-rebrand ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 214, 0.16);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+body.al-rebrand ::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 214, 0.30);
+  background-clip: content-box;
+}
+
+/* ── Focus clavier visible et cohérent (accessibilité) ── */
+body.al-rebrand :focus-visible {
+  outline: 2px solid rgba(91, 124, 250, 0.55);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
