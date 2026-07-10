@@ -19,7 +19,7 @@ var COACH_MAP = {};
 // (race au premier paint, rules Firestore, erreur réseau). Garantit que les
 // dropdowns coach de sales-clients ne sont JAMAIS vides.
 var _COACH_FALLBACK_SC = [
-  { key: 'mickael', label: 'Mickael' },
+  { key: 'thomas',  label: 'Thomas'  },
   { key: 'edouard', label: 'Edouard' },
   { key: 'flore',   label: 'Flore'   },
   { key: 'emily',   label: 'Emily'   },

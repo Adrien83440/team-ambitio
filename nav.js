@@ -1013,7 +1013,7 @@
   // être vides en production. Lorsque le dynamique fonctionne, c'est
   // toujours lui qui prime.
   var _COACH_FALLBACK = [
-    { slug: 'mickael', label: 'Mickael', color: '#3b82f6', shortName: 'Mickael', displayName: 'Mickael', role: 'coach' },
+    { slug: 'thomas',  label: 'Thomas',  color: '#3b82f6', shortName: 'Thomas',  displayName: 'Thomas',  role: 'coach' },
     { slug: 'edouard', label: 'Edouard', color: '#10b981', shortName: 'Edouard', displayName: 'Edouard', role: 'coach' },
     { slug: 'flore',   label: 'Flore',   color: '#a855f7', shortName: 'Flore',   displayName: 'Flore',   role: 'coach' },
     { slug: 'emily',   label: 'Emily',   color: '#f59e0b', shortName: 'Emily',   displayName: 'Emily',   role: 'admin' },
@@ -1059,7 +1059,7 @@
    *   1. Strip + lowercase + retire accents pour comparaison.
    *   2. Pour chaque membre actif : compare avec displayName, shortName
    *      et slug (chacun aussi normalisé). Match exact OU préfixe d'un
-   *      côté ou de l'autre (ex: "Mick" matche "Mickael", "Edouard C"
+   *      côté ou de l'autre (ex: "Edou" matche "Edouard", "Edouard C"
    *      matche "Edouard").
    *   3. Si match → retourne le `displayName` canonique du membre.
    *   4. Sinon → fallback historique : capitalize le premier mot
@@ -1086,7 +1086,7 @@
         }
       }
     }
-    // 2. Fallback : match contre l'équipe hardcoded (Mickael/Edouard/Flore/Emily/Adrien)
+    // 2. Fallback : match contre l'équipe hardcoded (Thomas/Edouard/Flore/Emily/Adrien)
     for (var k = 0; k < _COACH_FALLBACK.length; k++) {
       var fb = _COACH_FALLBACK[k];
       var fbc = fb.label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
