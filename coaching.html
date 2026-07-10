@@ -2603,6 +2603,18 @@ function openDetail(id){
 
     ${alert==='alert'?`<div class="dp-alert-box red">🔴 ${alertText} — Relancez ce client !</div>`:alert==='warning'?`<div class="dp-alert-box orange">🟡 ${alertText}</div>`:`<div class="dp-alert-box green">✅ Client à jour</div>`}
 
+    <!-- BRIEF COACH — continuité entre séances (dernier coaching + synthèse IA) -->
+    <div style="margin-top:12px;padding:14px 16px;background:linear-gradient(135deg,#eff6ff,#eef2ff);border:1px solid #c7d2fe;border-radius:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:16px">🧭</span>
+        <b style="font-size:13px;color:#3730a3">Brief coach — continuité</b>
+        <button class="btn btn-sm btn-outline" style="margin-left:auto;font-size:11px;padding:4px 10px" onclick="loadCoachBrief('${id}', true)" title="Régénérer la synthèse IA">🔄 Régénérer</button>
+      </div>
+      ${renderLastCoaching(c)}
+      <div id="coachBrief-${id}" style="margin-top:10px;font-size:12px;line-height:1.7;color:#1f2340;white-space:pre-wrap">${c.aiBrief && c.aiBrief.text ? escHtml(c.aiBrief.text) : '<span style="color:#6b7194">⏳ Synthèse IA en préparation…</span>'}</div>
+      <div id="coachBriefMeta-${id}" style="margin-top:6px;font-size:10px;color:#818cf8">${c.aiBrief && c.aiBrief.generatedAt ? 'Synthèse générée le ' + new Date(c.aiBrief.generatedAt).toLocaleDateString('fr-FR') + ' (' + (c.aiBrief.sessionsCount||0) + ' séance(s) analysée(s))' : ''}</div>
+    </div>
+
     <!-- STATUT ACTIF / INACTIF -->
     <div class="status-toggle-wrap">
       <div>
@@ -2761,11 +2773,106 @@ function openDetail(id){
   document.getElementById('detailOverlay').classList.add('show');
   loadAcademyBlock(c, id);
 
+  // Brief coach : régénère la synthèse IA seulement si une nouvelle séance
+  // a été faite depuis la dernière génération (stale check local, 0 appel
+  // réseau sinon — le brief en cache est déjà rendu ci-dessus).
+  loadCoachBrief(id, false);
+
   // Lazy-load des plans (sous-collection Firestore)
   loadClientPlans(id);
 
   // Lazy-load des bookings du mois pour la section "Gestion du quota"
   loadBookingsOfMonth(c, _curMonthKey, id);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BRIEF COACH — continuité entre séances
+// ───────────────────────────────────────────────────────────────────────────
+// Encart en haut de fiche : dernier coaching fait (rendu local, instantané)
+// + synthèse IA globale de toutes les séances (Claude Haiku via la Vercel
+// Function /api/coaching-client-brief). La synthèse est cachée sur le doc
+// client (aiBrief) et régénérée automatiquement seulement quand une nouvelle
+// séance passe en statut « fait » (empreinte computeBriefKey, identique côté
+// serveur). Bouton 🔄 pour forcer une régénération manuelle.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Séances faites, triées chronologiquement (date puis numéro).
+function getDoneSessionsChrono(c){
+  return getAllSessions(c)
+    .filter(s => s && s.statut === 'fait')
+    .sort((a,b) => {
+      const da = String(a.date||''), db = String(b.date||'');
+      if(da !== db) return da < db ? -1 : 1;
+      return (a.numero||0) - (b.numero||0);
+    });
+}
+
+// Empreinte de fraîcheur — DOIT rester identique à briefKey() côté
+// api/coaching-client-brief.js.
+function computeBriefKey(c){
+  const done = getDoneSessionsChrono(c);
+  if(!done.length) return 'none';
+  const last = done[done.length-1];
+  return done.length + ':' + (last.numero||0) + ':' + String(last.date||'') + ':' + String(last.resume||'').length;
+}
+
+// Bloc « Dernier coaching » — rendu local instantané, sans IA.
+function renderLastCoaching(c){
+  const done = getDoneSessionsChrono(c);
+  if(!done.length){
+    return `<div style="font-size:12px;color:#6b7194;padding:6px 0">Aucune séance faite pour l'instant — première rencontre avec ce client.</div>`;
+  }
+  const s = done[done.length-1];
+  return `
+    <div style="padding:10px 12px;background:rgba(255,255,255,.7);border:1px solid #e0e7ff;border-radius:10px">
+      <div style="font-size:11px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px">
+        Dernier coaching — #${s.numero||'?'}${s.date ? ' · ' + formatDate(s.date) : ''}${s.coach ? ' · ' + escHtml(normalizeCoach(s.coach)) : ''}
+      </div>
+      ${s.resume ? `<div style="font-size:12px;line-height:1.65;color:#1f2340;white-space:pre-wrap">${escHtml(s.resume)}</div>` : `<div style="font-size:12px;color:#6b7194">Pas de résumé saisi pour cette séance.</div>`}
+      ${s.devoirs ? `<div style="margin-top:6px;font-size:12px;line-height:1.6;color:#1f2340"><b style="color:#4f46e5">📝 Devoirs donnés :</b> ${escHtml(s.devoirs)}</div>` : ''}
+    </div>`;
+}
+
+// Charge / régénère la synthèse IA. force=false : ne contacte le serveur que
+// si le brief en cache est périmé (nouvelle séance faite depuis).
+async function loadCoachBrief(clientId, force){
+  const c = _clients.find(x => x._id === clientId);
+  const box = document.getElementById('coachBrief-'+clientId);
+  const meta = document.getElementById('coachBriefMeta-'+clientId);
+  if(!c || !box) return;
+
+  const done = getDoneSessionsChrono(c);
+  if(!done.length){
+    box.innerHTML = '<span style="color:#6b7194">La synthèse IA apparaîtra après la première séance faite.</span>';
+    return;
+  }
+
+  // Stale check local : cache à jour et pas de force → rien à faire.
+  const localKey = computeBriefKey(c);
+  if(!force && c.aiBrief && c.aiBrief.key === localKey && c.aiBrief.text) return;
+
+  box.innerHTML = '<span style="color:#6b7194">✨ Génération de la synthèse IA en cours…</span>';
+  try{
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/coaching-client-brief', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+      body: JSON.stringify({ clientId: clientId, force: force === true })
+    });
+    const j = await r.json().catch(() => null);
+    if(j && j.ok && j.brief && j.brief.text){
+      c.aiBrief = j.brief; // met à jour le cache local (évite un recall au prochain openDetail)
+      box.innerHTML = escHtml(j.brief.text);
+      if(meta) meta.textContent = 'Synthèse générée le ' + new Date(j.brief.generatedAt).toLocaleDateString('fr-FR') + ' (' + (j.brief.sessionsCount||0) + ' séance(s) analysée(s))';
+    } else if(j && j.ok && j.empty){
+      box.innerHTML = '<span style="color:#6b7194">La synthèse IA apparaîtra après la première séance faite.</span>';
+    } else {
+      box.innerHTML = '<span style="color:#b45309">⚠️ Synthèse indisponible' + (j && j.error ? ' (' + escHtml(j.error) + ')' : '') + ' — réessayez avec 🔄.</span>';
+    }
+  }catch(e){
+    console.error('[coachBrief]', e);
+    box.innerHTML = '<span style="color:#b45309">⚠️ Erreur réseau — réessayez avec 🔄.</span>';
+  }
 }
 
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('show');}
