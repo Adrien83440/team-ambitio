@@ -530,6 +530,14 @@ var _agentRequested = params.has('agent');
 // public qui ouvrirait booking.html en top-level avec ?agent=1.
 var _agentMode = _agentRequested && _embedMode && window.parent !== window;
 var _agentClientId = params.get('clientId') || '';
+// Mode setter : RDV posé PAR un membre de l'équipe sales depuis le CRM
+// (bouton « Prendre RDV » de Leads Live / fiche CRM → ?by=setter). Le RDV
+// doit être classé setter_booking même si le type de consultation n'est pas
+// isSetterOnly (ex : Audit Stratégique réservable aussi en self par le lead).
+// Même garde de sécurité que _agentMode : impossible à activer pour un
+// visiteur public qui ouvrirait booking.html en top-level avec ?by=setter.
+var _setterRequested = params.get('by') === 'setter';
+var _setterMode = _setterRequested && _embedMode && window.parent !== window;
 if (_agentMode) {
   // L'identité du client est transmise par booking-admin via postMessage
   // (pas dans l'URL → aucune donnée perso exposée). Best-effort : si le
@@ -1242,7 +1250,9 @@ async function handleSubmit() {
   var _typeIsSetterOnly = !!(S.selType && S.selType.isSetterOnly === true);
   // source posé sur TOUTES les résas publiques (avec ou sans leadId) —
   // requis par le Funnel Sales pour la ventilation self vs setter (07/2026).
-  booking.source = (_typeIsSetterOnly && !_agentMode) ? 'setter_booking' : 'self_booking';
+  // setter_booking si : RDV posé depuis le CRM par l'équipe (_setterMode,
+  // quel que soit le type de consultation) OU type marqué isSetterOnly.
+  booking.source = ((_setterMode || _typeIsSetterOnly) && !_agentMode) ? 'setter_booking' : 'self_booking';
   // Mode agent : RDV pris par la CSM/un admin à la place d'un client coaching.
   //  - source 'csm_manual' pour distinguer des réservations self-service.
   //  - clientId / clientNom : lien explicite vers la fiche coaching.
