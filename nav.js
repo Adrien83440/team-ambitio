@@ -118,6 +118,41 @@
 
   const ROLE_LABELS = { coach: '🎓 Coach', sales: '📈 Commercial', admin: '👑 Administrateur', csm: '💎 Customer Success' };
 
+  /* ═══ REBRANDING ALTEORE (phase 1 — pilote) ═══════════════════════════
+     brand.css redéfinit uniquement les variables CSS (:root) des pages +
+     police/scrollbars/focus. Opt-in par page via la liste ci-dessous :
+     ajouter un nom de fichier active le rebranding sur cette page, le
+     retirer restaure l'apparence d'origine à l'identique. Aucun layout,
+     aucune donnée, aucun comportement modifiés. */
+  /* Déployé partout SAUF :
+       - coaching*.html (exclusion demandée — univers clair conservé)
+       - csm-clients.html / csm-dashboard.html (design clair crème par
+         construction : basculer en sombre demande un mapping dédié)
+       - login.html (écran d'accueil brandé à part) */
+  const AL_REBRAND_PAGES = [
+    'admin-data-center.html', 'admin-facturation.html', 'admin-invoice-edit.html',
+    'admin-numbers.html', 'admin-persons.html', 'admin-users.html',
+    'alteoforms.html', 'booking-admin.html', 'clients-dedup.html',
+    'csm-diagnostic.html', 'csm-import.html', 'payments.html',
+    'sales-clients.html', 'sales-closing.html', 'sales-commissions.html',
+    'sales-contact.html', 'sales-crm.html', 'sales-dashboard.html',
+    'sales-dialer.html', 'sales-eod.html', 'sales-equipe.html',
+    'sales-funnel.html', 'sales-leads.html', 'sales-projections.html',
+    'sales-rdv.html', 'sales-retargeting.html', 'sales-saisie.html',
+    'sales-setting.html', 'sales-signatures.html', 'sales-suivi-client.html',
+  ];
+  (function injectBrand() {
+    const page = window.location.pathname.split('/').pop() || 'index.html';
+    if (AL_REBRAND_PAGES.indexOf(page) < 0) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'brand.css';
+    document.head.appendChild(link);
+    document.body
+      ? document.body.classList.add('al-rebrand')
+      : document.addEventListener('DOMContentLoaded', function () { document.body.classList.add('al-rebrand'); });
+  })();
+
   const style = document.createElement('style');
   style.textContent = `
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');

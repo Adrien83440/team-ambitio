@@ -1,80 +1,89 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   brand.css — COUCHE DE REBRANDING ALTEORE (phase 1)
+   brand.css — COUCHE DE REBRANDING ALTEORE (v2)
    ─────────────────────────────────────────────────────────────────────────
-   Principe : ce fichier ne contient AUCUN sélecteur de composant applicatif.
-   Il ne fait que redéfinir les variables CSS (:root) que les pages utilisent
-   déjà, plus quelques primitives sûres (police, scrollbars, focus, sélection).
-   Les layouts, tailles, comportements sont STRICTEMENT intouchés.
+   100 % design : variables (:root), peinture (fonds, bordures, ombres,
+   couleurs), micro-interactions (hover, transitions). AUCUNE propriété de
+   layout (padding, margin, display, tailles) n'est modifiée nulle part.
 
-   Activation : opt-in par page. nav.js pose la classe `al-rebrand` sur <body>
-   uniquement pour les pages listées dans AL_REBRAND_PAGES (nav.js). Retirer
-   une page de la liste restaure son apparence d'origine à l'identique.
+   Activation : opt-in par page — nav.js pose la classe `al-rebrand` sur
+   <body> pour les pages listées dans AL_REBRAND_PAGES. Retirer une page de
+   la liste restaure son apparence d'origine à l'identique.
 
-   Chargé par : nav.js (injection <link>, après sales.css et les <style>
-   inline des pages → ces redéfinitions gagnent la cascade).
+   Structure du fichier :
+     §1  Tokens (superset des variables des pages)
+     §2  Atmosphère (fond ambiant, sélection, scrollbars, focus)
+     §3  Polish des composants partagés (sales.css : topbar)
+     §4  Polish par page pilote (funnel, commissions) — peinture uniquement
    ═══════════════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 
+/* ═══ §1 — TOKENS ═══════════════════════════════════════════════════════ */
 body.al-rebrand {
-  /* ── Base neutre « ardoise » Alteore (remplace le noir pur) ──
-     Superset des noms de variables rencontrés dans les pages : chaque page
-     n'utilise que les siens, les autres sont simplement ignorés. */
-  --bg:      #0a0b12;
-  --bg2:     #10121c;
-  --bg3:     #161927;
-  --bg4:     #1d2132;
-  --bg-elev: #10121c;   /* alias sales-rdv */
-  --bg-card: #161927;   /* alias sales-rdv */
+  /* Base neutre « ardoise » — plus profonde, cartes plus lisibles */
+  --bg:      #07080f;
+  --bg2:     #0e111c;
+  --bg3:     #151928;
+  --bg4:     #1c2136;
+  --bg-elev: #0e111c;
+  --bg-card: #151928;
 
-  --border:       rgba(148,163,214,0.10);
-  --border2:      rgba(148,163,214,0.20);
-  --border-soft:  rgba(148,163,214,0.06);
+  --border:       rgba(148, 163, 214, 0.11);
+  --border2:      rgba(148, 163, 214, 0.22);
+  --border-soft:  rgba(148, 163, 214, 0.06);
 
   --text:        #eef0f8;
-  --muted:       #8b93ad;
-  --muted2:      #565e78;
-  --text-muted:  #8b93ad;   /* alias sales-rdv */
-  --text-dim:    #565e78;   /* alias sales-rdv */
+  --muted:       #8f97b2;
+  --muted2:      #596180;
+  --text-muted:  #8f97b2;   /* alias sales-rdv */
+  --text-dim:    #596180;   /* alias sales-rdv */
+  --text-2:      #8f97b2;   /* alias sales-suivi-client */
+  --text-3:      #596180;   /* alias sales-suivi-client */
+  --fg:          #eef0f8;   /* alias sales-signatures */
 
-  /* ── Marque : l'indigo Alteore remplace le bleu générique ── */
+  /* Marque — indigo Alteore */
   --blue:      #5b7cfa;
-  --blue-soft: rgba(91,124,250,0.13);
+  --blue-soft: rgba(91, 124, 250, 0.13);
 
-  /* ── Typographie : 2 familles pour tout le logiciel ──
-     Tous les alias de variables de police connus pointent vers le duo
-     Plus Jakarta Sans (UI) / DM Mono (chiffres & données). */
-  --font-d:    'Plus Jakarta Sans', system-ui, sans-serif;
+  /* Typographie — trio : Space Grotesk (titres) · Jakarta (UI) · DM Mono (data) */
+  --font-d:    'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  --font-h:    'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  --font-head: 'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
+  --fh:        'Space Grotesk', 'Plus Jakarta Sans', sans-serif;
   --font-b:    'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-h:    'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-m:    'DM Mono', ui-monospace, monospace;
-  --font-head: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
-  --font-mono: 'DM Mono', ui-monospace, monospace;
-  --fh:        'Plus Jakarta Sans', system-ui, sans-serif;
   --fb:        'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-m:    'DM Mono', ui-monospace, monospace;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
   --fm:        'DM Mono', ui-monospace, monospace;
 
-  /* ── Géométrie & profondeur ── */
   --radius:  12px;
   --radius2: 16px;
-  --shadow:  0 8px 28px rgba(0, 0, 0, 0.35);
+  --shadow:  0 12px 36px rgba(3, 5, 14, 0.55);
 
-  /* Filet de sécurité typo : les pages qui ont posé la police en dur sur
-     body (sans variable) sont rattrapées ici. Les font-family posées au
-     niveau des composants (ex : blocs mono) restent prioritaires. */
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Sélection de texte aux couleurs de la marque ── */
+/* ═══ §2 — ATMOSPHÈRE ═══════════════════════════════════════════════════ */
+
+/* Fond ambiant : deux halos indigo/violet très diffus, fixes au scroll.
+   Peinture pure sur le body — les surfaces des cartes passent au-dessus. */
+body.al-rebrand {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(900px 520px at 8% -10%, rgba(91, 124, 250, 0.10), transparent 62%),
+    radial-gradient(760px 460px at 100% 6%, rgba(157, 123, 250, 0.07), transparent 60%),
+    radial-gradient(1000px 600px at 50% 110%, rgba(45, 212, 191, 0.045), transparent 65%);
+  background-attachment: fixed;
+}
+
 body.al-rebrand ::selection {
-  background: rgba(91, 124, 250, 0.32);
+  background: rgba(91, 124, 250, 0.34);
   color: #ffffff;
 }
 
-/* ── Scrollbars fines et discrètes, thème ardoise ── */
 body.al-rebrand ::-webkit-scrollbar { width: 9px; height: 9px; }
 body.al-rebrand ::-webkit-scrollbar-track { background: transparent; }
 body.al-rebrand ::-webkit-scrollbar-thumb {
@@ -84,13 +93,89 @@ body.al-rebrand ::-webkit-scrollbar-thumb {
   background-clip: content-box;
 }
 body.al-rebrand ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 214, 0.30);
+  background: rgba(148, 163, 214, 0.32);
   background-clip: content-box;
 }
 
-/* ── Focus clavier visible et cohérent (accessibilité) ── */
 body.al-rebrand :focus-visible {
   outline: 2px solid rgba(91, 124, 250, 0.55);
   outline-offset: 2px;
   border-radius: 4px;
 }
+
+/* ═══ §3 — COMPOSANTS PARTAGÉS (sales.css) ══════════════════════════════ */
+
+/* Topbar : verre teinté ardoise + hairline dégradée sous la barre */
+body.al-rebrand .topbar {
+  background: rgba(10, 12, 22, 0.82);
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, rgba(91, 124, 250, 0.35), rgba(157, 123, 250, 0.25), transparent) 1;
+  backdrop-filter: blur(22px) saturate(1.3);
+}
+
+/* ═══ §4 — POLISH PAR PAGE PILOTE (peinture uniquement) ═════════════════ */
+
+/* ── sales-funnel.html ── */
+body.al-rebrand .fn-title { font-family: var(--font-d); letter-spacing: -0.4px; }
+body.al-rebrand .fn-hero-kpi {
+  background:
+    linear-gradient(160deg, rgba(91, 124, 250, 0.07), transparent 45%),
+    linear-gradient(160deg, var(--bg3), var(--bg2));
+  border-color: var(--border);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 26px rgba(3, 5, 14, 0.35);
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+}
+body.al-rebrand .fn-hero-kpi:hover {
+  border-color: rgba(91, 124, 250, 0.35);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px rgba(91, 124, 250, 0.13);
+  transform: translateY(-2px);
+}
+body.al-rebrand .fn-hero-kpi .v {
+  background: linear-gradient(120deg, #ffffff 20%, #b9c6ff 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+body.al-rebrand .fn-stage {
+  background: linear-gradient(180deg, rgba(148, 163, 214, 0.035), transparent 34%), var(--bg2);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025) inset;
+}
+body.al-rebrand .fn-kpi { transition: border-color 0.15s, background 0.15s; }
+body.al-rebrand .fn-kpi:hover { border-color: var(--border2); background: var(--bg4); }
+body.al-rebrand .fn-btn.primary {
+  background: linear-gradient(135deg, rgba(91, 124, 250, 0.22), rgba(91, 124, 250, 0.10));
+  border-color: rgba(91, 124, 250, 0.38);
+  color: #aebdfd;
+}
+body.al-rebrand .fn-btn.primary:hover {
+  box-shadow: 0 6px 18px rgba(91, 124, 250, 0.22);
+  border-color: rgba(91, 124, 250, 0.55);
+}
+body.al-rebrand .fn-seg button.active,
+body.al-rebrand .fn-tabs .fn-tab.active {
+  background: linear-gradient(180deg, var(--bg4), var(--bg3));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 2px 8px rgba(3, 5, 14, 0.4);
+}
+body.al-rebrand .mb-track { background: rgba(148, 163, 214, 0.08); }
+body.al-rebrand .mb-fill { box-shadow: 0 0 10px rgba(91, 124, 250, 0.25); }
+
+/* ── sales-commissions.html ── */
+body.al-rebrand .dash-kpi,
+body.al-rebrand .member-card {
+  background:
+    linear-gradient(165deg, rgba(148, 163, 214, 0.05), transparent 42%),
+    var(--bg2);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 10px 26px rgba(3, 5, 14, 0.3);
+}
+body.al-rebrand .member-card:hover {
+  border-color: rgba(91, 124, 250, 0.32);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 16px 38px rgba(91, 124, 250, 0.12);
+}
+body.al-rebrand .dash-kpi-val,
+body.al-rebrand .kpi-card .v {
+  background: linear-gradient(120deg, #ffffff 20%, #b9c6ff 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+body.al-rebrand .mc-name { font-family: var(--font-d); }
