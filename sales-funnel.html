@@ -193,7 +193,6 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <option value="all">Tous les tunnels</option>
       <option value="elite">Élite</option>
       <option value="business">Business</option>
-      <option value="other">Autres</option>
     </select>
     <div style="flex:1"></div>
     <button class="fn-btn" id="fnTargetsBtn">🎯 Cibles</button>
@@ -463,13 +462,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   /* ════════════════════════════════════════════════════════════════
      TUNNELS
      ════════════════════════════════════════════════════════════════ */
+  /* Tunnel binaire (règle Adrien 07/2026) : il n'existe que DEUX tunnels.
+     Un lead est Business si « business » apparaît dans son type, son utm ou
+     son sourceDetail — sinon il est Élite. Aucune catégorie « Autres ». */
   function leadTunnel(l) {
-    var t = String(l.type || '').toLowerCase();
+    var t = (String(l.type || '') + ' ' + String(l.utm || '') + ' ' + String(l.sourceDetail || '')).toLowerCase();
     if (t.indexOf('business') >= 0) return 'business';
-    if (t.indexOf('elite') >= 0 || t.indexOf('élite') >= 0 || t === 'vsl_elite') return 'elite';
-    return 'other';
+    return 'elite';
   }
-  function tunnelLabel(t) { return t === 'elite' ? 'Élite' : t === 'business' ? 'Business' : 'Autres'; }
+  function tunnelLabel(t) { return t === 'business' ? 'Business' : 'Élite'; }
   function tunnelMatch(t) { return tunnelFilter === 'all' || t === tunnelFilter; }
 
   /* ── Classification d'un booking (règle validée Adrien) ──
@@ -716,11 +717,11 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
 
     k.leads = cohort.length;
     k.reoptins = reopt.length;
-    k.leadsByTunnel = { elite: 0, business: 0, other: 0 };
+    k.leadsByTunnel = { elite: 0, business: 0 };
     DATA.leads.forEach(function (l) { k.leadsByTunnel[l._tunnel]++; });
 
     /* ── Ads ── */
-    var ads = DATA.ads.filter(function (a) { return tunnelMatch(a.tunnel || 'other'); });
+    var ads = DATA.ads.filter(function (a) { return tunnelMatch(a.tunnel === 'business' ? 'business' : 'elite'); });
     k.spend = 0; k.impressions = 0; k.clicks = 0; k.leadsFb = 0; k.adsDays = 0;
     ads.forEach(function (a) {
       k.spend += Number(a.spend) || 0;
@@ -737,7 +738,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
 
     /* ── Vues opt-in (beacon) ── */
     var views = DATA.views.filter(function (v) {
-      var t = v.page === 'elite' ? 'elite' : v.page === 'business' ? 'business' : 'other';
+      var t = v.page === 'business' ? 'business' : 'elite';
       return tunnelMatch(t);
     });
     k.views = 0;
@@ -750,7 +751,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     var abByPage = {};
     DATA.views.forEach(function (v) {
       if (!v.variant) return;
-      var t = v.page === 'elite' ? 'elite' : v.page === 'business' ? 'business' : 'other';
+      var t = v.page === 'business' ? 'business' : 'elite';
       if (!tunnelMatch(t)) return;
       var pg = v.page || 'other';
       if (!abByPage[pg]) abByPage[pg] = {};
@@ -1027,13 +1028,13 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-arrow">▼</div>';
 
     /* 3. Leads */
-    var totalT = k.leadsByTunnel.elite + k.leadsByTunnel.business + k.leadsByTunnel.other;
+    var totalT = k.leadsByTunnel.elite + k.leadsByTunnel.business;
     h += stageOpen('👥', 'Leads', DATA.leadsTruncated ? '⚠ liste tronquée à ' + LEADS_QUERY_LIMIT : null);
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.leads), 'Nouveaux leads', 'date d\'entrée réelle dans la période');
     h += kpiCard('<span class="fn-reopt">' + fmtNum(k.reoptins) + '</span>', 'Ré-optins 🔄', 'leads antérieurs revenus via opt-in');
     h += '<div class="fn-kpi" style="grid-column:span 2;min-width:280px"><div class="l" style="margin-top:0;margin-bottom:6px">Répartition par tunnel (tous)</div><div class="fn-minibars">';
-    [['elite', '#a78bfa'], ['business', '#60a5fa'], ['other', '#6b7280']].forEach(function (row) {
+    [['elite', '#a78bfa'], ['business', '#60a5fa']].forEach(function (row) {
       var t = row[0], color = row[1], n = k.leadsByTunnel[t];
       var pct = totalT > 0 ? n / totalT * 100 : 0;
       h += '<div class="fn-minibar"><span class="mb-l">' + tunnelLabel(t) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></span></span><span class="mb-v">' + fmtNum(n) + ' · ' + fmtPct(pct, 0) + '</span></div>';
@@ -1305,7 +1306,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
 
   function adsDocMap() {
     var map = {};
-    DATA.ads.forEach(function (a) { map[(a.date || '') + '_' + (a.tunnel || 'other')] = a; });
+    DATA.ads.forEach(function (a) { map[(a.date || '') + '_' + (a.tunnel === 'business' ? 'business' : 'elite')] = a; });
     return map;
   }
 
