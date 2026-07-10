@@ -52,11 +52,9 @@
     // ─── CUSTOMER SUCCESS — visible pour le rôle csm + admin ───
     { id: 'csm-dashboard',     icon: '💎', label: 'Dashboard CSM', href: 'csm-dashboard.html', section: 'Customer Success', perm: 'csm_dashboard' },
     { id: 'csm-clients',       icon: '👥', label: 'Clients',       href: 'csm-clients.html',   section: 'Customer Success', perm: 'csm_clients' },
-    { id: 'csm-import',        icon: '📥', label: 'Import Kajabi', href: 'csm-import.html',    section: 'Customer Success', perm: 'csm_dashboard' },
     { id: 'csm-diagnostic',    icon: '🔍', label: 'Diagnostic',    href: 'csm-diagnostic.html', section: 'Customer Success', perm: 'csm_dashboard' },
     { id: 'coach-clients',       icon: '👥', label: 'Coaching',      href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
     { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',     section: 'Coaching', perm: 'coaching_dashboard' },
-    { id: 'coach-communication', icon: '💬', label: 'Communication', href: 'coaching-communication.html', section: 'Coaching', perm: 'coaching_communication' },
     { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html',   section: 'Sales', perm: 'sales_dashboard' },
     { id: 'sales-funnel',      icon: '🎯', label: 'Funnel',            href: 'sales-funnel.html',      section: 'Sales', perm: '_admin' },
     { id: 'sales-crm', icon: '🧩', label: 'CRM', href: '#', section: 'Sales', perm: 'sales_crm', children: [
@@ -81,7 +79,6 @@
     { id: 'admin-persons',     icon: '👤', label: 'Persons',      href: 'admin-persons.html',    section: 'Admin', perm: '_admin' },
     { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },
     { id: 'admin-billing',     icon: '🧾', label: 'Facturation',  href: 'admin-facturation.html', section: 'Admin', perm: '_admin' },
-    { id: 'admin-data-center', icon: '📊', label: 'Data Center',  href: 'admin-data-center.html', section: 'Admin', perm: '_admin' },
     { id: 'admin-dedup',       icon: '🔄', label: 'Dédup Clients', href: 'clients-dedup.html',    section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
