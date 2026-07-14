@@ -841,6 +841,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     k.bookedSetter = k.booked - k.bookedSelf;
     k.bookedAdmin = created.filter(function (b) { return b._class === 'admin'; }).length;
     k.rescheduledCreated = createdFunnelAll.length - createdFunnel.length;
+    /* RDV pris par tunnel Élite / Business (demande head of sales 14/07) —
+       calculé sur TOUS les tunnels comme leadsByTunnel, via le lead du RDV. */
+    k.bookedByTunnel = { elite: 0, business: 0 };
+    DATA.bookings.forEach(function (b) {
+      if (!b._inCreated || b.rescheduledFromId) return;
+      if (b._class !== 'self' && b._class !== 'setter') return;
+      var lbt = bookingLead(b);
+      if (lbt && k.bookedByTunnel[lbt._tunnel] != null) k.bookedByTunnel[lbt._tunnel]++;
+    });
     k.selfShare = k.booked > 0 ? k.bookedSelf / k.booked * 100 : null;
     k.setterShare = k.booked > 0 ? k.bookedSetter / k.booked * 100 : null;
     k.ltb = k.leads > 0 ? k.booked / k.leads * 100 : null;
@@ -1084,6 +1093,22 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       k.cashPerLive = c2.lives > 0 ? c2.collecte / c2.lives : null;
     }
 
+    /* ── Totaux « toutes sources » : résultats RDV (auto) prioritaires,
+       repli saisies manuelles pour les mois passés. Alimentent le héro,
+       CAC Market Only et AOV (demande head of sales 14/07). ── */
+    k.closesAll    = k.ocHasData ? k.ocTotal.closes    : (k.saisies ? (k.closes || 0)    : null);
+    k.collecteAll  = k.ocHasData ? k.ocTotal.collecte  : (k.saisies ? (k.collecte || 0)  : null);
+    k.contracteAll = k.ocHasData ? k.ocTotal.contracte : (k.saisies ? (k.contracte || 0) : null);
+    /* CAC Market Only : dépense pub / client acquis — nommé ainsi pour ne pas
+       confondre avec le « CPA » du Business Manager Meta (qui peut être un
+       achat, un RDV, un lead selon la campagne). */
+    k.cacMarketOnly = (k.spend > 0 && k.closesAll > 0) ? k.spend / k.closesAll : null;
+    k.aovAll = (k.closesAll > 0 && k.collecteAll > 0) ? k.collecteAll / k.closesAll : null;
+    /* Coût d'un RDV setting (NB) : dépense pub / RDV posés par le setting. */
+    k.cprNB = (k.spend > 0 && k.bookedSetter > 0) ? k.spend / k.bookedSetter : null;
+    /* Leads restants côté setting = cohorte − leads ayant self-booké. */
+    k.leadsNoSB = Math.max(0, k.leads - k.cohortSelf);
+
     K = k;
   }
 
@@ -1106,20 +1131,16 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     var k = K;
     var h = '';
 
-    /* Hero */
+    /* Hero — LA TOTALITÉ, une seule ligne (demande head of sales 14/07) :
+       leads, RDV pris, kept, closes, collecté — tous périmètres confondus.
+       Le détail SB / NB vit dans « Prise de RDV », le ROAS dans « Publicité ». */
+    var heroRoas = k.roasOutcome != null ? k.roasOutcome : k.roas;
     h += '<div class="fn-hero">';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : '&nbsp;') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.booked) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) : '&nbsp;') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (k.keptPct != null ? fmtPct(k.keptPct, 0) : '—') + '</div><div class="l">Kept</div><div class="s">' + fmtNum(k.kept) + ' / ' + fmtNum(k.due) + ' RDV</div></div>';
-    /* Hero Closes/Collecté/ROAS : priorité aux résultats d'appel automatiques
-       (refonte 07/2026), repli sur les saisies manuelles pour les mois passés. */
-    var heroCloses = k.ocHasData ? k.ocTotal.closes : (k.saisies ? k.closes : null);
-    var heroCollecte = k.ocHasData ? k.ocTotal.collecte : (k.saisies ? k.collecte : null);
-    var heroContracte = k.ocHasData ? k.ocTotal.contracte : (k.saisies ? k.contracte : null);
-    var heroRoas = k.roasOutcome != null ? k.roasOutcome : k.roas;
-    h += '<div class="fn-hero-kpi"><div class="v">' + (heroCloses != null ? fmtNum(heroCloses) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.ocHasData ? 'résultats RDV (auto)' : (k.saisies && k.closingLive != null ? fmtPct(k.closingLive, 0) + ' live' : 'maille mois')) + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (heroCollecte != null ? fmtEuro(heroCollecte) : '—') + '</div><div class="l">Collecté</div><div class="s">' + (heroContracte != null ? 'Contracté ' + fmtEuro(heroContracte) : 'maille mois') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (heroRoas != null ? (Math.round(heroRoas * 100) / 100).toLocaleString('fr-FR') + '×' : '—') + '</div><div class="l">ROAS</div><div class="s">' + (k.spend > 0 ? 'Dépense ' + fmtEuro(k.spend) : 'pas de data pub') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.kept) + '</div><div class="l">Kept</div><div class="s">' + (k.keptPct != null ? fmtPct(k.keptPct, 0) + ' · ' : '') + fmtNum(k.due) + ' planifiés</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.ocHasData ? 'résultats RDV (auto)' : (k.saisies ? 'saisies (héritage)' : 'maille mois')) + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + '</div><div class="l">Collecté</div><div class="s">' + (k.contracteAll != null ? 'Contracté ' + fmtEuro(k.contracteAll) : 'maille mois') + '</div></div>';
     h += '</div>';
 
     /* 1. Publicité */
@@ -1131,6 +1152,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += kpiCard(fmtNum(k.clicks || null), 'Clics sortants', null, null, !k.hasAds);
     h += kpiCard(fmtPct(k.ctr, 2), 'CTR', 'clics / impressions', targetBadge('ctr', k.ctr));
     h += kpiCard(fmtEuro2(k.cpc), 'CPC', 'coût / clic');
+    h += kpiCard(heroRoas != null ? (Math.round(heroRoas * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS', 'collecté / dépense pub', null, heroRoas == null);
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
 
@@ -1142,7 +1164,10 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     if (k.views > 0) h += kpiCard(fmtPct(k.optinReal), 'Taux d\'opt-in réel', 'leads / vues', targetBadge('optin', k.optinReal));
     h += kpiCard(fmtPct(k.optinClicks), 'Taux d\'opt-in / clics', 'leads / clics Meta', k.views > 0 ? '' : targetBadge('optin', k.optinClicks));
     h += kpiCard(fmtEuro2(k.cpl), 'CPL réel', 'dépense / leads réels', targetBadge('cpl', k.cpl));
-    h += kpiCard(k.leadsFb > 0 ? fmtNum(k.leadsFb) : '—', 'Leads pixel Meta', k.leadsFb > 0 && k.leads > 0 ? 'écart ' + fmtNum(k.leadsFb - k.leads) + ' vs réels' : 'reporté par Meta', null, k.leadsFb === 0);
+    h += kpiCard(k.leadsFb > 0 ? fmtNum(k.leadsFb) : '—', 'Leads pixel Meta',
+      k.leadsFb > 0 && k.leads > 0
+        ? 'comptage Meta (attribution) vs ' + fmtNum(k.leads) + ' réels en base — l\'écart (' + fmtNum(k.leadsFb - k.leads) + ') vient des doublons, des ré-optins (déjà en CRM, non recomptés) et de la fenêtre d\'attribution Meta'
+        : 'leads comptés par le pixel Meta (attribution)', null, k.leadsFb === 0);
     h += '</div>';
     /* 🧪 A/B tests opt-in (beacon par variante — significativité z-test) */
     if (k.abTests && k.abTests.length) {
@@ -1176,28 +1201,59 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.leads), 'Nouveaux leads', 'date d\'entrée réelle dans la période');
     h += kpiCard('<span class="fn-reopt">' + fmtNum(k.reoptins) + '</span>', 'Ré-optins 🔄', 'leads antérieurs revenus via opt-in');
-    h += '<div class="fn-kpi" style="grid-column:span 2;min-width:280px"><div class="l" style="margin-top:0;margin-bottom:6px">Répartition par tunnel (tous)</div><div class="fn-minibars">';
+    h += '<div class="fn-kpi" style="grid-column:span 2;min-width:320px"><div class="l" style="margin-top:0;margin-bottom:6px">Répartition par tunnel (tous) — leads &amp; RDV pris</div><div class="fn-minibars">';
     [['elite', '#a78bfa'], ['business', '#60a5fa']].forEach(function (row) {
       var t = row[0], color = row[1], n = k.leadsByTunnel[t];
       var pct = totalT > 0 ? n / totalT * 100 : 0;
-      h += '<div class="fn-minibar"><span class="mb-l">' + tunnelLabel(t) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></span></span><span class="mb-v">' + fmtNum(n) + ' · ' + fmtPct(pct, 0) + '</span></div>';
+      var rdvT = (k.bookedByTunnel && k.bookedByTunnel[t]) || 0;
+      h += '<div class="fn-minibar"><span class="mb-l">' + tunnelLabel(t) + '</span><span class="mb-track"><span class="mb-fill" style="width:' + pct.toFixed(1) + '%;background:' + color + '"></span></span><span class="mb-v" style="width:190px">' + fmtNum(n) + ' leads · ' + fmtPct(pct, 0) + ' · <strong>' + fmtNum(rdvT) + ' RDV pris</strong></span></div>';
     });
     h += '</div></div>';
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 4. Prise de RDV */
-    h += stageOpen('📅', 'Prise de RDV — setting / closing', 'RDV créés sur la période · coaching &amp; CSM exclus');
+    /* 4. Prise de RDV — DEUX LIGNES Self Booking / No Booking (head of sales
+       14/07) : ligne 1 = les leads qui ont pris RDV seuls (SB) avec l'échelle
+       de coûts CPR ; ligne 2 = les leads restants, travaillés par le setting
+       (NB) avec le coût d'un RDV setting. Les résultats (kept, live, closes,
+       collecté) viennent des statuts RDV — plus aucune section doublon. */
+    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'RDV créés sur la période · kept, live, closes et collecté = résultats saisis sur les RDV · coaching &amp; CSM exclus');
+    if (!k.ocHasData) {
+      h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="sales-rdv.html" style="color:var(--blue)">Rendez-vous</a> ou la fiche prospect : kept / live / closes / collecté se rempliront tout seuls.</div>';
+    }
+    /* — Ligne 1 : SELF BOOKING — */
+    var sbKeptN = k.ocSB.due - k.ocSB.cancelled - k.ocSB.resched;
+    h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:12px 0 8px">🔗 Self Booking — le lead prend RDV seul</div>';
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.booked), 'Total Call Booked', 'self + setter');
-    h += kpiCard(fmtNum(k.bookedSelf) + ' <span style="font-size:12px;color:var(--muted)">(' + fmtPct(k.selfShare, 0) + ')</span>', '🔗 Self-booking (VSL)', null, targetBadge('selfShare', k.selfShare));
-    h += kpiCard(fmtNum(k.bookedSetter) + ' <span style="font-size:12px;color:var(--muted)">(' + fmtPct(k.setterShare, 0) + ')</span>', '📞 Setting', k.setterOldLeads ? 'dont ' + k.setterOldLeads + ' sur leads antérieurs' : null);
-    h += kpiCard(fmtPct(k.ltb), 'LTB — Lead to Booking', 'RDV pris / leads', targetBadge('ltb', k.ltb));
-    h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
-    h += kpiCard(fmtEuro2(k.cpr), 'Coût / RDV pris (tous)', 'dépense / RDV self + setter — voir échelle CPR (SB) en bas');
-    if (k.bookedAdmin > 0) h += kpiCard(fmtNum(k.bookedAdmin), 'RDV manuels (admin)', 'hors LTB / hors funnel', null, true);
+    h += kpiCard(fmtNum(k.leads), 'Leads (total)', 'cohorte de la période');
+    h += kpiCard(fmtNum(k.bookedSelf), 'RDV pris SB', 'LTB (SB) ' + fmtPct(k.ltbSB) + ' · ' + fmtPct(k.selfShare, 0) + ' des RDV', targetBadge('selfShare', k.selfShare));
+    h += kpiCard(fmtNum(sbKeptN), 'Kept SB', '<span style="color:var(--red3)">' + fmtNum(k.ocSB.cancelled) + ' annulés</span> · <span style="color:var(--gold)">' + fmtNum(k.ocSB.noshow) + ' no-show</span>' + (k.ocSB.resched ? ' · ' + k.ocSB.resched + ' replanifiés' : ''));
+    h += kpiCard(fmtNum(k.ocSB.present), 'Live SB (présents)', sbKeptN > 0 ? 'show-up ' + fmtPct(k.ocSB.present / sbKeptN * 100, 0) : null);
+    h += kpiCard(fmtNum(k.ocSB.pitched), 'Pitchés SB', k.ocSB.disqua ? k.ocSB.disqua + ' disqualifiés' : null);
+    h += kpiCard(fmtNum(k.ocSB.closes), 'Closes SB', (k.ocSB.pitched > 0 ? fmtPct(k.ocSB.closes / k.ocSB.pitched * 100, 0) + ' des offres · ' : '') + k.ocSB.nonCloses + ' non closes');
+    h += kpiCard(fmtEuro(k.ocSB.collecte), 'Collecté SB', 'contracté ' + fmtEuro(k.ocSB.contracte));
+    h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dép. / RDV SB (annulés inclus)');
+    h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dép. / RDV SB sans annulation');
+    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Live', 'dép. / RDV SB présents');
+    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Offre', 'dép. / RDV SB pitchés');
     h += '</div>';
+    /* — Ligne 2 : NO BOOKING (setting) — */
+    var nbKeptN = k.ocNB.due - k.ocNB.cancelled - k.ocNB.resched;
+    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 No Booking — leads sans RDV, travaillés par le setting</div>';
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtNum(k.leadsNoSB), 'Leads à travailler', fmtNum(k.leads) + ' − ' + fmtNum(k.cohortSelf) + ' self-bookés');
+    h += kpiCard(fmtNum(k.actLeadsWorked), 'Leads travaillés', '1ʳᵉ action fiche (journal setting)');
+    h += kpiCard(fmtNum(k.bookedSetter), 'RDV pris NB', 'sets actions : ' + fmtNum(k.actSets) + (k.setterOldLeads ? ' · dont ' + k.setterOldLeads + ' leads antérieurs' : ''));
+    h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
+    h += kpiCard(fmtNum(nbKeptN), 'Kept NB', '<span style="color:var(--red3)">' + fmtNum(k.ocNB.cancelled) + ' annulés</span> · <span style="color:var(--gold)">' + fmtNum(k.ocNB.noshow) + ' no-show</span>' + (k.ocNB.resched ? ' · ' + k.ocNB.resched + ' replanifiés' : ''));
+    h += kpiCard(fmtNum(k.ocNB.present), 'Live NB (présents)', nbKeptN > 0 ? 'show-up ' + fmtPct(k.ocNB.present / nbKeptN * 100, 0) : null);
+    h += kpiCard(fmtNum(k.ocNB.closes), 'Closes NB', fmtEuro(k.ocNB.collecte) + ' collecté');
+    h += kpiCard(fmtEuro2(k.cprNB), 'Coût / RDV NB', 'dép. / RDV pris par le setting');
+    h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'coût d\'un lead (dépense / leads)', targetBadge('cpl', k.cpl));
+    h += '</div>';
+    if (k.bookedAdmin > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.bookedAdmin + ' RDV manuels (admin) — hors LTB / hors funnel.</div>';
     if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.unknownLeadBookings + ' RDV de leads hors période (non rattachés à la cohorte) — inclus dans les totaux « Tous », hors taux de récupération.</div>';
+    if (k.ocTotal.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocTotal.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="sales-rdv.html">Rendez-vous</a> ou depuis la fiche prospect pour des lignes SB / NB exactes.</div>';
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
@@ -1241,39 +1297,12 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 6bis. SETTING / CLOSING — résultats d'appel automatiques (refonte 07/2026) */
-    h += stageOpen('🧲', 'SETTING / CLOSING — résultats d\'appel (auto)',
-      'RDV de la période statués depuis le module RDV / la fiche prospect · <span style="color:var(--gold)">SB = Self Booking</span> · <span style="color:#c4b5fd">NB = Setting</span>');
-    if (!k.ocHasData) {
-      h += '<div class="fn-stage-note" style="margin-top:6px">Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="sales-rdv.html" style="color:var(--blue)">Rendez-vous</a> ou la fiche prospect. Cette section s\'alimente toute seule.</div>';
-    }
-    /* — ligne Close SB — */
-    h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:10px 0 8px">Close SB — Closing Self Booking</div>';
-    h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.ocSB.due), 'RDV SB', 'LTB (SB) ' + fmtPct(k.ltbSB));
-    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.ocSB.cancelled) + '</span> / <span style="color:var(--gold)">' + fmtNum(k.ocSB.noshow) + '</span>', 'Annulés / No-show SB', k.ocSB.resched ? '+ ' + k.ocSB.resched + ' replanifiés' : null);
-    h += kpiCard(fmtNum(k.ocSB.present), 'Présents (Live)', k.ocSB.due - k.ocSB.cancelled - k.ocSB.resched > 0 ? 'show-up ' + fmtPct(k.ocSB.present / (k.ocSB.due - k.ocSB.cancelled - k.ocSB.resched) * 100, 0) : null);
-    h += kpiCard(fmtNum(k.ocSB.pitched), 'Offres pitchées', k.ocSB.disqua ? k.ocSB.disqua + ' disqualifiés' : null);
-    h += kpiCard(fmtNum(k.ocSB.closes), 'Closes SB', k.ocSB.pitched > 0 ? fmtPct(k.ocSB.closes / k.ocSB.pitched * 100, 0) + ' des offres · ' + k.ocSB.nonCloses + ' non closes' : (k.ocSB.nonCloses ? k.ocSB.nonCloses + ' non closes' : null));
-    h += kpiCard(fmtEuro(k.ocSB.collecte), 'Collecté SB', 'contracté ' + fmtEuro(k.ocSB.contracte));
-    h += '</div>';
-    /* — ligne Set NB — */
-    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:14px 0 8px">Set NB — Setting No Booking</div>';
-    h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.actLeadsWorked), 'Leads travaillés', '1ʳᵉ action fiche (journal setting)');
-    h += kpiCard(fmtNum(k.actSets), 'Sets (actions)', 'vs ' + fmtNum(k.bookedSetter) + ' RDV setter créés');
-    h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', 'sets / leads non self-bookés', targetBadge('recovery', k.recovery));
-    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.ocNB.cancelled) + '</span> / <span style="color:var(--gold)">' + fmtNum(k.ocNB.noshow) + '</span>', 'Annulés / No-show NB', k.ocNB.resched ? '+ ' + k.ocNB.resched + ' replanifiés' : null);
-    h += kpiCard(fmtNum(k.ocNB.present), 'Présents NB', k.ocNB.due > 0 ? 'sur ' + fmtNum(k.ocNB.due) + ' RDV NB' : null);
-    h += kpiCard(fmtNum(k.ocNB.closes), 'Closes NB', fmtEuro(k.ocNB.collecte) + ' collecté');
-    h += '</div>';
-    if (k.ocTotal.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocTotal.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="sales-rdv.html">Rendez-vous</a> pour des chiffres SETTING / CLOSING exacts.</div>';
-    h += '</div>';
-    h += '<div class="fn-arrow">▼</div>';
+    /* (section SETTING/CLOSING supprimée le 14/07 — doublon : tout vit
+       désormais dans les deux lignes SB / NB de « Prise de RDV ». ) */
 
-    /* 7. Closing */
+    /* 7. Saisies manuelles (héritage) */
     if (k.saisies) {
-      h += stageOpen('🎯', 'Closing (saisies équipe)', k.saisies.members + ' membre(s) · ' + MONTHS_FR[P.m] + ' ' + P.y);
+      h += stageOpen('🗒', 'Saisies manuelles (héritage — comparaison)', k.saisies.members + ' membre(s) · ' + MONTHS_FR[P.m] + ' ' + P.y + ' · source déclarative — les résultats RDV (auto) font foi');
       h += '<div class="fn-grid">';
       h += kpiCard(fmtNum(k.callsLive), 'Calls live', null);
       h += kpiCard(fmtNum(k.offers), 'Offres', k.offerPct != null ? fmtPct(k.offerPct, 0) + ' des lives' : null);
@@ -1284,23 +1313,17 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       h += '</div>';
       if (k.setsDeclared != null) h += '<div class="fn-stage-note" style="margin-top:8px">Recoupement : <strong>' + fmtNum(k.setsDeclared) + ' sets déclarés</strong> en saisie setting vs <strong>' + fmtNum(k.bookedSetter) + ' RDV setter détectés</strong> automatiquement.</div>';
       h += '</div>';
-    } else {
-      h += '<div class="fn-stage"><div class="fn-stage-title">🎯 Closing (saisies équipe)</div><div class="fn-stage-note" style="margin-top:8px">Disponible uniquement à la maille <strong>mois calendaire</strong> (les saisies setting/closing sont mensuelles). Sélectionne « Mois » pour afficher cette section, CAC et ROAS.</div></div>';
     }
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 8. Rentabilité — échelle CPR (SB) validée 07/2026 */
-    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'échelle CPR = RDV Self Booking de la période');
+    /* 8. Rentabilité — l'échelle CPR vit dans la ligne SB de « Prise de
+       RDV », le ROAS dans « Publicité » : ici, uniquement ce qui n'existe
+       nulle part ailleurs (CPL, CAC Market Only, AOV). */
+    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'closes &amp; collecté = résultats RDV (auto), repli saisies pour les mois passés');
     h += '<div class="fn-grid">';
     h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense / lead', targetBadge('cpl', k.cpl));
-    h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dép. / RDV SB (annulés inclus)');
-    h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dép. / RDV SB sans annulation');
-    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Live', 'dép. / RDV SB présents (disqua &amp; hors offre inclus)');
-    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Offre', 'dép. / RDV SB pitchés');
-    h += kpiCard(fmtEuro2(k.cpa), 'CPA', 'dépense / client acquis (closes SB + NB)', null, k.cpa == null);
-    h += kpiCard(k.aov != null ? fmtEuro2(k.aov) : '—', 'AOV', 'collecté / nb clients', null, k.aov == null);
-    h += kpiCard(k.saisies ? fmtEuro2(k.cac) : '—', 'CAC (saisies)', 'dépense / close déclaré', null, !k.saisies);
-    h += kpiCard(k.roasOutcome != null ? (Math.round(k.roasOutcome * 100) / 100).toLocaleString('fr-FR') + '×' : (k.roas != null ? (Math.round(k.roas * 100) / 100).toLocaleString('fr-FR') + '×' : '—'), 'ROAS', k.roasOutcome != null ? 'collecté (résultats RDV) / dépense' : 'collecté (saisies) / dépense', null, k.roasOutcome == null && k.roas == null);
+    h += kpiCard(fmtEuro2(k.cacMarketOnly), 'CAC Market Only', 'dépense pub / client acquis — nommé ainsi pour ne pas confondre avec le « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacMarketOnly == null);
+    h += kpiCard(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV', 'collecté ' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + ' / ' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + ' client(s)', null, k.aovAll == null);
     h += '</div></div>';
 
     /* Journal de la période */

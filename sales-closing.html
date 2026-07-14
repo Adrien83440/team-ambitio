@@ -386,6 +386,12 @@
     var aStatuerNote = tot.aStatuer > 0
       ? '<div style="padding:12px 18px;font-size:12px;color:var(--gold)">⏳ <strong>' + tot.aStatuer + ' RDV passés sans résultat</strong> — statue-les depuis <a href="sales-rdv.html" style="color:#b6c3ff">Mes RDV</a> ou la fiche prospect pour des chiffres exacts.</div>'
       : '';
+    /* Chiffres d'avant la refonte : ils vivaient dans la saisie manuelle
+       hebdo (offres, closes…) — pas dans les statuts RDV. On le dit au lieu
+       de laisser croire que des données ont « sauté ». */
+    if (S.mode === 'month' && S.legacy && tot.offres === 0 && tot.closes === 0) {
+      aStatuerNote += '<div style="padding:0 18px 14px;font-size:12px;color:var(--muted)">📜 Les offres/closes saisies à la main avant la refonte ne sont pas dans les statuts RDV — consulte-les via <strong>« Ancienne saisie hebdo »</strong> en haut de page.</div>';
+    }
 
     var h =
       '<div class="au-kpis">' + kpis + '</div>' +

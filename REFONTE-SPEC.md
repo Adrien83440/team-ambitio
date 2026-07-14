@@ -84,6 +84,25 @@ Compat : `sales-saisie.html`, `sales-eod.html`, dashboard inchangés (lecture de
 préservée). Les rapports auto démarrent à la mise en ligne ; appels et RDV passés remontent
 automatiquement (recalcul à la volée), les compteurs d'actions (NRP/jour) démarrent vides.
 
+## 7sexies. Funnel v2 — retours head of sales (14/07, vocal)
+
+- **Héro = la totalité, une ligne** : Leads · RDV pris (LTB) · Kept · Closes · Collecté (résultats
+  RDV auto, repli saisies). Le **ROAS descend dans Publicité**.
+- **Prise de RDV = deux lignes** : ligne **Self Booking** (leads total, RDV SB + LTB SB, kept SB,
+  live SB, pitchés SB, closes SB, collecté SB + échelle **CPR / KEPT / Live / Offre**) et ligne
+  **No Booking** (leads à travailler = cohorte − self-bookés, leads travaillés (journal), RDV NB,
+  taux de récupération, kept/live/closes NB + **coût / RDV NB** et rappel **CPL**). L'ancienne
+  section SETTING/CLOSING est supprimée (doublon) — ses infos uniques ont migré ici.
+- **Leads** : répartition par tunnel enrichie du **nombre de RDV pris Élite / Business** ;
+  carte « pixel Meta » expliquée (attribution, doublons, ré-optins).
+- **Rentabilité** allégée : CPL · **CAC Market Only** (ex-CPA, renommé pour ne pas confondre avec
+  le CPA Meta) · **AOV** (repli saisies quand pas de résultats RDV). Section saisies retitrée
+  « Saisies manuelles (héritage — comparaison) ».
+- **Booking** : bouton 🎯 Résultat + lien 👤 fiche prospect directement sur chaque ligne
+  Setting & Sales de la liste.
+- Close SB : note explicite quand les offres/closes d'une période vivent dans l'ancienne
+  saisie manuelle (📜) et non dans les statuts RDV.
+
 ## 7quinquies. Journal d'actions — chaque clic compte + zéros honnêtes (retours test 14/07)
 
 - **Chaque clic de statut compte une action** (NRP1 re-cliqué à la 2ᵉ tentative = un NRP1 ce
