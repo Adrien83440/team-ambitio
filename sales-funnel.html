@@ -51,6 +51,11 @@
 .fn-hero-kpi .v { font-size:24px; font-weight:800; letter-spacing:-0.8px; font-family:var(--font-m); }
 .fn-hero-kpi .l { font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.7px; font-weight:700; margin-top:3px; }
 .fn-hero-kpi .s { font-size:11px; color:var(--muted); margin-top:3px; }
+.fn-hero-kpi .s .pct { color:var(--blue); font-weight:700; }
+.fn-hero-lbl { grid-column:1 / -1; font-size:10.5px; font-weight:800; letter-spacing:0.7px; text-transform:uppercase; color:var(--muted); margin:2px 0 -3px; }
+.fn-rates { display:flex; flex-wrap:wrap; gap:8px 26px; background:linear-gradient(160deg,var(--bg3),var(--bg2)); border:1px solid var(--border); border-radius:14px; padding:12px 16px; margin:-8px 0 18px; align-items:center; }
+.fn-rates .rt { font-size:11.5px; color:var(--muted); }
+.fn-rates .rt strong { font-size:16px; color:var(--text); font-family:var(--font-m); margin-right:6px; letter-spacing:-0.4px; }
 
 /* Blocs étage funnel */
 .fn-stage { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:16px 18px; margin-bottom:14px; }
@@ -170,7 +175,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
       <!-- Marqueur de build : incrémenté à chaque livraison pour vérifier
            d'un coup d'œil quelle version est réellement déployée/chargée. -->
-      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · RDV setting/closing uniquement (coaching &amp; CSM exclus) · <span style="color:var(--muted2);font-family:var(--font-m)">build 14.07-g</span></div>
+      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 15.07-a</span></div>
     </div>
     <div class="fn-sync"><span class="fn-sync-dot" id="fnSyncDot"></span><span id="fnSyncText">Chargement…</span></div>
   </div>
@@ -204,6 +209,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <option value="business">Business</option>
     </select>
     <div style="flex:1"></div>
+    <button class="fn-btn" id="fnCostsBtn">💶 Coûts</button>
     <button class="fn-btn" id="fnTargetsBtn">🎯 Cibles</button>
     <button class="fn-btn" id="fnRefreshBtn">⟳ Actualiser</button>
   </div>
@@ -235,6 +241,19 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   </div>
 </div>
 
+<!-- Modal coûts setting -->
+<div class="fn-modal-bg" id="fnCostsModal">
+  <div class="fn-modal">
+    <h3>💶 Coûts setting (réels)</h3>
+    <div class="hint">Alimente le <strong>Coût / RDV NB</strong> : (fixe + commissions Setting + outils) ÷ RDV posés par le setting. Les <strong>commissions</strong> viennent automatiquement du module Commissions (deals Setting datés dans la période) — seuls le fixe (salaire setter) et les outils (Ringover, Twilio…) sont à renseigner ici, en €/mois. Une valeur saisie pour un mois est <strong>reportée automatiquement sur les mois suivants</strong> tant qu'une valeur plus récente n'est pas saisie. Stocké dans <code>_config/funnel_costs</code>.</div>
+    <div id="fnCostsBody"></div>
+    <div class="fn-modal-actions">
+      <button class="fn-btn" id="fnCostsCancel">Annuler</button>
+      <button class="fn-btn primary" id="fnCostsSave">💾 Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div class="fn-toast" id="fnToast"></div>
 
 <script>
@@ -244,7 +263,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   /* ════════════════════════════════════════════════════════════════
      Funnel Sales — page ADMIN ONLY
      Sources : ads_insights (Make/manuel), page_views_daily (beacon),
-     leads, bookings, call_logs, saisies (mois calendaire), 
+     leads, bookings (+ chaînes replanif), call_logs, payments, commissions,
+     _config/funnel_costs, lead_actions,
      marketing_journal, _config/funnel_targets, booking_config/_types.
      Aucune écriture serveur : SDK client (rules admin) uniquement.
      Convention : seuls les RDV self_booking / setter_booking comptent
@@ -263,6 +283,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   var LEADS_QUERY_LIMIT = 6000;
   var CALLS_QUERY_LIMIT = 5000;
   var ANSWERED_MIN_SEC  = 5; // même seuil que le Dashboard Sales
+  var JOURNAL_GOLIVE    = '2026-07-14'; // mise en ligne du journal d'actions (lead_actions) — le passé n'existe pas
 
   /* ── Décodage UTM défensif (identique sales-leads.html) ── */
   function decodeUtm(v) {
@@ -392,7 +413,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   var activeTab = 'funnel';
   var TYPE_MAP = {};           // booking_config/_types → {id:{isSetterOnly,isCoaching,label}}
   var TARGETS = {};            // _config/funnel_targets
-  var DATA = { ads: [], views: [], leads: [], reoptins: [], bookings: [], calls: [], saisies: null, journalPeriod: [], leadsTruncated: false, callsTruncated: false };
+  var DATA = { ads: [], views: [], leads: [], reoptins: [], bookings: [], bookingsById: {}, calls: [], costs: null, settingDeals: [], journalPeriod: [], leadsTruncated: false, callsTruncated: false };
   var K = null;                // KPIs calculés
   var adsDraft = {};           // édition grille ads {docId:{field:val}}
   var journalAll = [];         // tab journal (indépendant de la période)
@@ -626,11 +647,13 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
           if (idx === 0) d._inCreated = true; else d._inDue = true;
         });
       });
+      DATA.bookingsById = {};
       DATA.bookings = Object.keys(byId).map(function (k) {
         var b = byId[k];
         b._class = classifyBooking(b);
         b._p9 = phone9(b.prospect && (b.prospect.telephone || b.prospect.phone));
         b._createdMs = parseFlexMs(b.createdAt);
+        DATA.bookingsById[b._id] = b;
         return b;
       });
     }).catch(function (e) { console.warn('[funnel] bookings', e.message); DATA.bookings = []; });
@@ -691,42 +714,169 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       }).catch(function (e) { console.warn('[funnel] calls', e.message); DATA.calls = []; });
   }
 
-  /* Saisies closing (mois calendaire uniquement) — même lecture que le
-     Dashboard : saisies/{slug}/mois/{YYYY-MM}, closing_total sinon Σ semaines. */
-  function loadSaisies() {
-    DATA.saisies = null;
-    if (!periodIsCalendarMonth()) return Promise.resolve();
-    var members = (window.TEAM_MEMBERS_LIST || []).slice();
-    if (!members.length) return Promise.resolve();
-    var fsKey = P.y + '-' + pad2(P.m + 1);
-    var CKEYS = ['calls', 'lives', 'offres', 'closes', 'contracte', 'collecte'];
-    var SKEYS = ['leads', 'calls', 'decroches', 'propRdv', 'sets', 'presents', 'closes', 'collecte'];
-    var agg = { closing: { calls: 0, lives: 0, offres: 0, closes: 0, contracte: 0, collecte: 0 }, setting: { leads: 0, calls: 0, decroches: 0, propRdv: 0, sets: 0, presents: 0, closes: 0, collecte: 0 }, members: 0 };
-    var proms = members.map(function (m) {
-      if (!m || !m.slug) return Promise.resolve();
-      return db.collection('saisies').doc(m.slug).collection('mois').doc(fsKey).get().then(function (snap) {
-        if (!snap.exists) return;
-        var raw = snap.data();
-        agg.members++;
-        var c = null;
-        if (raw.closing_total) c = raw.closing_total;
-        else if (raw.closing) {
-          c = {};
-          CKEYS.forEach(function (k) { c[k] = 0; });
-          ALL_WEEKS.forEach(function (w) { if (raw.closing[w]) CKEYS.forEach(function (k) { c[k] += (raw.closing[w][k] || 0); }); });
-        }
-        if (c) CKEYS.forEach(function (k) { agg.closing[k] += (c[k] || 0); });
-        var s = null;
-        if (raw.setting_total) s = raw.setting_total;
-        else if (raw.setting) {
-          s = {};
-          SKEYS.forEach(function (k) { s[k] = 0; });
-          ALL_WEEKS.forEach(function (w) { if (raw.setting[w]) SKEYS.forEach(function (k) { s[k] += (raw.setting[w][k] || 0); }); });
-        }
-        if (s) SKEYS.forEach(function (k) { agg.setting[k] += (s[k] || 0); });
-      }).catch(function () {});
+  /* Date FR 'DD/MM/YYYY' → ms (deals Commissions). */
+  function frDateMs(v) {
+    var m = String(v || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return parseFlexMs(v);
+    var d = new Date(+m[3], +m[2] - 1, +m[1], 12, 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  /* Coûts setting RÉELS — _config/funnel_costs : { months: { 'YYYY-MM':
+     { fixe, outils } } }. Une valeur vaut pour son mois ET les suivants
+     (report automatique) tant qu'aucune valeur plus récente n'existe.
+     Zéro invention : sans entrée couvrant la période → « — » à l'écran. */
+  function loadFunnelCosts() {
+    return db.collection('_config').doc('funnel_costs').get().then(function (snap) {
+      DATA.costs = (snap.exists && snap.data().months) || {};
+    }).catch(function (e) { console.warn('[funnel] costs', e.message); DATA.costs = null; });
+  }
+  function effectiveCosts(mKey) {
+    var months = DATA.costs || {};
+    var best = null, bestKey = null;
+    Object.keys(months).forEach(function (mk) {
+      if (mk <= mKey && (bestKey == null || mk > bestKey)) { bestKey = mk; best = months[mk]; }
     });
-    return Promise.all(proms).then(function () { DATA.saisies = agg; });
+    return best ? { fixe: Number(best.fixe) || 0, outils: Number(best.outils) || 0, src: bestKey } : null;
+  }
+
+  /* Commissions Setting RÉELLES — deals du module Commissions
+     (commissions/{slug}/mois/{YYYY-MM} → deals[] de type 'Setting') datés
+     dans la fenêtre. Comm + bonus ; deals validés (ok) comme en attente
+     d'encaissement — la commission est due dès le close. Membres partis
+     inclus (l'historique reste un coût réel). */
+  function loadSettingDeals() {
+    DATA.settingDeals = [];
+    return waitForTeamMembers().then(function () {
+      var slugs = { elodie: 1, guillaume: 1 };
+      (window.TEAM_MEMBERS_LIST || []).forEach(function (m) {
+        if (m && m.slug && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter')) slugs[m.slug] = 1;
+      });
+      var mks = {};
+      var d = new Date(P.start.getFullYear(), P.start.getMonth(), 1);
+      while (d.getTime() <= P.end.getTime()) {
+        mks[d.getFullYear() + '-' + pad2(d.getMonth() + 1)] = 1;
+        d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      }
+      var proms = [];
+      Object.keys(slugs).forEach(function (slug) {
+        Object.keys(mks).forEach(function (mk) {
+          proms.push(db.collection('commissions').doc(slug).collection('mois').doc(mk).get().then(function (snap) {
+            if (!snap.exists) return;
+            (snap.data().deals || []).forEach(function (dl) {
+              if (!dl || dl.type !== 'Setting') return;
+              var ms = frDateMs(dl.date);
+              if (ms == null || ms < P.start.getTime() || ms > P.end.getTime()) return;
+              DATA.settingDeals.push({ slug: slug, comm: (Number(dl.comm) || 0) + (Number(dl.bonus) || 0), ok: dl.ok === true, client: dl.client || '' });
+            });
+          }).catch(function () {}));
+        });
+      });
+      return Promise.all(proms);
+    });
+  }
+
+  /* Chaînes de replanification — un RDV replanifié pointe vers son
+     remplaçant (rescheduledToId). Pour statuer une chaîne créée dans la
+     période il faut son RDV TERMINAL, qui peut avoir été créé après la fin
+     de la période (absent des 2 requêtes bookings) → on va chercher les
+     chaînons manquants un par un (rarissime : quelques docs max). Ils vont
+     dans bookingsById UNIQUEMENT (jamais dans les compteurs pris/tenue). */
+  function resolveChains() {
+    function missingTargets() {
+      var ids = [];
+      Object.keys(DATA.bookingsById).forEach(function (bid) {
+        var cur = DATA.bookingsById[bid], guard = 0;
+        while (cur && cur.rescheduledToId && guard++ < 10) {
+          var nxt = DATA.bookingsById[cur.rescheduledToId];
+          if (!nxt) { if (ids.indexOf(cur.rescheduledToId) < 0) ids.push(cur.rescheduledToId); break; }
+          cur = nxt;
+        }
+      });
+      return ids;
+    }
+    function fetchRound(depth) {
+      var ids = missingTargets();
+      if (!ids.length || depth > 4) return Promise.resolve();
+      var proms = ids.slice(0, 20).map(function (id) {
+        return db.collection('bookings').doc(id).get().then(function (snap) {
+          if (!snap.exists) return;
+          var d = snap.data(); d._id = snap.id; d._inCreated = false; d._inDue = false;
+          d._class = classifyBooking(d);
+          d._p9 = phone9(d.prospect && (d.prospect.telephone || d.prospect.phone));
+          d._createdMs = parseFlexMs(d.createdAt);
+          DATA.bookingsById[d._id] = d;
+        }).catch(function () {});
+      });
+      return Promise.all(proms).then(function () { return fetchRound(depth + 1); });
+    }
+    return fetchRound(0);
+  }
+
+  /* Paiements de la période SANS client gagné correspondant — règle Adrien
+     14/07 : un paiement créé dans la période EST un close commercial, sauf
+     s'il rattrape un client déjà gagné dans une autre période. On résout la
+     fiche (leadId → email → téléphone) AVANT le calcul :
+       · fiche gagnée dans la période      → matchée normalement (rien à faire)
+       · fiche gagnée dans une AUTRE période → paiement tardif (diagnostic)
+       · fiche jamais gagnée, ou introuvable → close compté via Paiements. */
+  function resolvePaymentLeads() {
+    var ps = P.start.getTime(), pe = P.end.getTime();
+    var wonById = {}, wonByEmail = {}, wonByP9 = {};
+    (DATA.closedLeads || []).forEach(function (l) {
+      wonById[l._id] = 1;
+      var em = (l.email || '').toLowerCase().trim();
+      if (em) wonByEmail[em] = 1;
+      var p9 = phone9(l.telephone || l.phone);
+      if (p9) wonByP9[p9] = 1;
+    });
+    var todo = [];
+    (DATA.payments || []).forEach(function (p) {
+      p._payClose = null;
+      if (!p || p.status === 'cancelled' || p.status === 'draft') return;
+      var cms = parseFlexMs(p.createdAt);
+      if (cms == null || cms < ps || cms > pe) return;
+      var em = (p.leadEmail || '').toLowerCase().trim();
+      var p9 = phone9(p.leadPhone);
+      if ((p.leadId && wonById[p.leadId]) || (em && wonByEmail[em]) || (p9 && wonByP9[p9])) return;
+      todo.push(p);
+    });
+    if (!todo.length) return Promise.resolve();
+    function leadFromSnap(snap) {
+      var out = [];
+      snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; if (d._merged !== true) out.push(d); });
+      return out;
+    }
+    function resolveOne(p) {
+      var em = (p.leadEmail || '').toLowerCase().trim();
+      var p9 = phone9(p.leadPhone);
+      var pr;
+      if (p.leadId) {
+        pr = db.collection('leads').doc(p.leadId).get().then(function (snap) {
+          if (!snap.exists) return [];
+          var d = snap.data(); d._id = snap.id; return [d];
+        }).catch(function () { return []; });
+      } else pr = Promise.resolve([]);
+      return pr.then(function (list) {
+        if (list.length || !em) return list;
+        return db.collection('leads').where('email', '==', em).limit(3).get().then(leadFromSnap).catch(function () { return []; });
+      }).then(function (list) {
+        if (list.length || !p9) return list;
+        return db.collection('leads').where('phoneNormalized', '==', p9).limit(3).get().then(leadFromSnap).catch(function () { return []; });
+      }).then(function (list) {
+        var name = p.leadName || em || '—';
+        if (!list.length) { p._payClose = { kind: 'count', name: name, sb: false, tunnel: null, noLead: true }; return; }
+        var l = list[0];
+        var since = parseFlexMs(l.clientSince);
+        var isWon = l.isClient === true || since != null || String(l.stage || '').indexOf('closed_won') === 0;
+        if (isWon && (since == null || since < ps || since > pe)) {
+          p._payClose = { kind: 'other', name: l.nom || name };
+        } else {
+          p._payClose = { kind: 'count', name: l.nom || name, sb: l.stage === 'closed_won_self', tunnel: leadTunnel(l), noLead: false };
+        }
+      }).catch(function () { p._payClose = null; });
+    }
+    return Promise.all(todo.map(resolveOne));
   }
 
   function loadJournalPeriod() {
@@ -906,6 +1056,10 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       var ms = b._createdMs;
       if (ms != null && l._entry != null && ms >= l._entry) {
         if (l._ttb == null || ms - l._entry < l._ttb) l._ttb = ms - l._entry;
+        /* TTB séparés self / setting (audit 14/07 : la médiane globale était
+           écrasée par les self-bookings pris en quelques minutes). */
+        if (b._class === 'self') { if (l._ttbSelf == null || ms - l._entry < l._ttbSelf) l._ttbSelf = ms - l._entry; }
+        else if (l._ttbSet == null || ms - l._entry < l._ttbSet) l._ttbSet = ms - l._entry;
       }
       l._bk = l._bk || [];
       l._bk.push(b);
@@ -952,73 +1106,112 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     k.reschedSB = dueSelf.filter(dueRescheduledF).length;
     k.reschedNB = dueSetter.filter(dueRescheduledF).length;
 
-    /* ══ SETTING / CLOSING — résultats d'appel (outcome, refonte 07/2026) ══
-       Ventilation stricte validée Adrien : le rapport Closing = RDV SELF
-       BOOKING uniquement ; le Setting NB = RDV posés par les setters.
-       présent (live) = offre|close|non_close|disqualifie ·
-       pitché = offre|close|non_close · replanifié = exclu (remplacé). */
+    /* ══ RÉSULTATS D'APPEL — helpers outcome (refonte 07/2026) ══
+       présent (live) = offre|close|non_close|disqualifie (repli : status
+       completed pour les RDV d'avant la refonte) · pitché = offre|close|
+       non_close · replanifié = remplacé par un autre RDV (chaîne). */
     function ocOf(b) { return b.outcome || null; }
     function ocCancelled(b) { var o = ocOf(b); return o === 'annule' || (!o && b.status === 'cancelled' && b.rescheduled !== true); }
     function ocNoShow(b) { var o = ocOf(b); return o === 'no_show' || (!o && b.status === 'no_show'); }
-    function ocResched(b) { var o = ocOf(b); return o === 'replanifie' || (!o && b.status === 'cancelled' && b.rescheduled === true); }
     function ocPresent(b) { var o = ocOf(b); return o ? (o === 'offre' || o === 'close' || o === 'non_close' || o === 'disqualifie') : b.status === 'completed'; }
     function ocPitched(b) { var o = ocOf(b); return o === 'offre' || o === 'close' || o === 'non_close'; }
 
-    function ocAgg(list) {
-      var a = { due: 0, cancelled: 0, noshow: 0, resched: 0, present: 0, disqua: 0, pitched: 0, closes: 0, nonCloses: 0, aStatuer: 0, contracte: 0, collecte: 0 };
-      list.forEach(function (b) {
-        a.due++;
-        if (ocCancelled(b)) a.cancelled++;
-        else if (ocNoShow(b)) a.noshow++;
-        else if (ocResched(b)) a.resched++;
+    /* Fin de chaîne : un RDV replanifié est représenté par son remplaçant —
+       le résultat d'une chaîne créée dans la période compte dans la période,
+       même si le RDV final se tient plus tard (axe « RDV créés »). */
+    function chainTerminal(b) {
+      var cur = b, guard = 0;
+      while (cur && cur.rescheduledToId && guard++ < 10) {
+        var nxt = DATA.bookingsById[cur.rescheduledToId];
+        if (!nxt) break;
+        cur = nxt;
+      }
+      return cur;
+    }
+
+    /* Agrégat sur l'axe « RDV créés » : une entrée = une chaîne (RDV initial
+       créé dans la période), statuée par son RDV terminal.
+       KEPT (lignes) = pris − annulés — règle Vincent 14/07 : le no-show
+       reste DANS le kept (le RDV était maintenu), affiché à part. */
+    function chainAgg(list) {
+      var a = { n: 0, cancelled: 0, noshow: 0, resched: 0, present: 0, disqua: 0, pitched: 0, closesOc: 0, nonCloses: 0, aStatuer: 0, aVenir: 0, sansDetail: 0 };
+      list.forEach(function (b0) {
+        var b = chainTerminal(b0);
+        a.n++;
+        if (b !== b0) a.resched++;
+        if (ocCancelled(b)) { a.cancelled++; return; }
+        if (ocNoShow(b)) a.noshow++;
         if (ocPresent(b)) a.present++;
         if (ocOf(b) === 'disqualifie') a.disqua++;
         if (ocPitched(b)) a.pitched++;
-        if (ocOf(b) === 'close') {
-          a.closes++;
-          a.contracte += (b.closeData && Number(b.closeData.contracte)) || 0;
-          a.collecte += (b.closeData && Number(b.closeData.collecte)) || 0;
-        }
+        if (ocOf(b) === 'close') a.closesOc++;
         if (ocOf(b) === 'non_close') a.nonCloses++;
-        if (!ocOf(b) && (b.status === 'confirmed' || b.status === 'pending') && b.date < todayIso) a.aStatuer++;
+        if (!ocOf(b)) {
+          if ((b.status === 'confirmed' || b.status === 'pending') && b.date >= todayIso) a.aVenir++;
+          else if (b.status === 'completed') a.sansDetail++;          // tenu, mais offre/close inconnus (avant refonte)
+          else if (b.status === 'confirmed' || b.status === 'pending') a.aStatuer++;
+        }
+      });
+      a.kept = a.n - a.cancelled;
+      return a;
+    }
+    k.chSB  = chainAgg(createdFunnel.filter(function (b) { return b._class === 'self'; }));
+    k.chNB  = chainAgg(createdFunnel.filter(function (b) { return b._class === 'setter'; }));
+    k.chAll = chainAgg(createdFunnel);
+
+    /* Résultats sur l'axe « date de RDV » — le mois en totalité (héro L2,
+       Tenue, show-up, taux de close). */
+    function dueAgg(list) {
+      var a = { n: 0, present: 0, disqua: 0, pitched: 0, closesOc: 0, nonCloses: 0, aStatuer: 0, sansDetail: 0 };
+      list.forEach(function (b) {
+        a.n++;
+        if (ocPresent(b)) a.present++;
+        if (ocOf(b) === 'disqualifie') a.disqua++;
+        if (ocPitched(b)) a.pitched++;
+        if (ocOf(b) === 'close') a.closesOc++;
+        if (ocOf(b) === 'non_close') a.nonCloses++;
+        if (!ocOf(b)) {
+          if ((b.status === 'confirmed' || b.status === 'pending') && b.date < todayIso) a.aStatuer++;
+          else if (b.status === 'completed') a.sansDetail++;
+        }
       });
       return a;
     }
-    k.ocSB = ocAgg(due.filter(function (b) { return b._class === 'self'; }));
-    k.ocNB = ocAgg(due.filter(function (b) { return b._class === 'setter'; }));
-    k.ocTotal = {
-      closes: k.ocSB.closes + k.ocNB.closes,
-      collecte: k.ocSB.collecte + k.ocNB.collecte,
-      contracte: k.ocSB.contracte + k.ocNB.contracte,
-      aStatuer: k.ocSB.aStatuer + k.ocNB.aStatuer
-    };
-    k.ocHasData = (k.ocSB.due + k.ocNB.due) > 0 &&
-      (k.ocSB.closes + k.ocNB.closes + k.ocSB.pitched + k.ocSB.cancelled + k.ocSB.noshow + k.ocNB.cancelled + k.ocNB.noshow + k.ocSB.present + k.ocNB.present) > 0;
+    k.ocDue = dueAgg(due);
+    k.ocHasData = due.length > 0 && (k.ocDue.present + k.ocDue.pitched + k.ocDue.closesOc + k.dueCancelled + k.dueNoShow) > 0;
 
-    /* Échelle CPR (validée) — base RDV SB de la période :
-       CPR (annulés inclus) → KEPT (sans annulation) → Live (présents,
-       disqua & sans offre inclus) → Offre (pitchés). */
-    var sbKept = k.ocSB.due - k.ocSB.cancelled - k.ocSB.resched;
+    /* Échelle CPR — MÊME AXE que la carte « RDV pris SB » (RDV SB créés
+       dans la période, chaînes dédupliquées, résultat de fin de chaîne) :
+       plus jamais deux dénominateurs différents entre la carte et l'échelle. */
     k.ltbSB = k.leads > 0 ? k.bookedSelf / k.leads * 100 : null;
-    k.cprSB      = k.spend > 0 && k.ocSB.due > 0 ? k.spend / k.ocSB.due : null;
-    k.cprKept    = k.spend > 0 && sbKept > 0 ? k.spend / sbKept : null;
-    k.cprLive    = k.spend > 0 && k.ocSB.present > 0 ? k.spend / k.ocSB.present : null;
-    k.cprOffre   = k.spend > 0 && k.ocSB.pitched > 0 ? k.spend / k.ocSB.pitched : null;
-    k.cpa        = k.spend > 0 && k.ocTotal.closes > 0 ? k.spend / k.ocTotal.closes : null;
-    k.aov        = k.ocTotal.closes > 0 ? k.ocTotal.collecte / k.ocTotal.closes : null;
-    k.roasOutcome = k.spend > 0 && k.ocTotal.collecte > 0 ? k.ocTotal.collecte / k.spend : null;
+    k.cprSB    = k.spend > 0 && k.chSB.n > 0 ? k.spend / k.chSB.n : null;
+    k.cprKept  = k.spend > 0 && k.chSB.kept > 0 ? k.spend / k.chSB.kept : null;
+    k.cprLive  = k.spend > 0 && k.chSB.present > 0 ? k.spend / k.chSB.present : null;
+    k.cprOffre = k.spend > 0 && k.chSB.pitched > 0 ? k.spend / k.chSB.pitched : null;
 
-    /* Actions setting (lead_actions) — leads travaillés + sets déclarés auto */
+    /* Journal d'actions setting (lead_actions) — décomposition honnête :
+       le journal compte le 1er contact de la période sur TOUS les leads
+       (anciens, ré-optins et self-bookés inclus) → ventilation affichée pour
+       que « travaillés > cohorte » soit lisible, jamais suspect.
+       Avant la mise en ligne du journal (14/07/2026) : « — », le passé
+       n'existe pas et ne sera pas inventé. */
     var acts = DATA.actions || [];
-    k.actLeadsWorked = 0;
+    k.actLeadsWorked = 0; k.actWorkedReopt = 0; k.actWorkedOld = 0; k.actWorkedSelf = 0;
     var setKeys = {};
     acts.forEach(function (a) {
-      if (a.firstTouch) k.actLeadsWorked++;
+      if (a.firstTouch) {
+        k.actLeadsWorked++;
+        var la = a.leadId ? leadsById[a.leadId] : null;
+        if (la && la._inCohort) { if (selfLeadIds[la._id]) k.actWorkedSelf++; }
+        else if (la) k.actWorkedReopt++;
+        else k.actWorkedOld++;
+      }
       if (a.action === 'set' || a.action === 'set_booking' || a.action === 'rdv_pose') {
         setKeys[(a.leadId || a._id) + '_' + a.day] = 1;
       }
     });
     k.actSets = Object.keys(setKeys).length;
+    k.journalLive = isoDate(P.end) >= JOURNAL_GOLIVE;
 
     /* ── Téléphonie (call_logs) ── */
     function callMatches(c) {
@@ -1038,7 +1231,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       if (!callsByP9[c._p9]) callsByP9[c._p9] = [];
       callsByP9[c._p9].push({ ms: c._ms, ans: (Number(c.durationSec) || 0) >= ANSWERED_MIN_SEC });
     });
-    var ttcArr = [], ttbArr = [];
+    var ttcArr = [], ttbArr = [], ttbSelfArr = [], ttbSetArr = [];
     cohort.forEach(function (l) {
       l._nbCalls = 0; l._ttc = null;
       l._nbAnswered = 0;
@@ -1063,11 +1256,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       }
       if (l._ttc != null) ttcArr.push(l._ttc);
       if (l._ttb != null) ttbArr.push(l._ttb);
+      if (l._ttbSelf != null) ttbSelfArr.push(l._ttbSelf);
+      if (l._ttbSet != null) ttbSetArr.push(l._ttbSet);
     });
     k.ttcMedian = median(ttcArr);
     k.ttcCount = ttcArr.length;
     k.ttbMedian = median(ttbArr);
     k.ttbCount = ttbArr.length;
+    k.ttbSelfMedian = median(ttbSelfArr); k.ttbSelfCount = ttbSelfArr.length;
+    k.ttbSetMedian  = median(ttbSetArr);  k.ttbSetCount  = ttbSetArr.length;
 
     /* Joignabilité & tentatives — sur la cohorte de leads de la période */
     var leadsCalled = 0, leadsReached = 0, attemptsSum = 0;
@@ -1110,45 +1307,18 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     });
     k.callsByUser = Object.keys(byUser).map(function (uid) { return byUser[uid]; }).sort(function (a, b) { return b.out - a.out; });
 
-    /* ── Closing (saisies — mois calendaire uniquement) ── */
-    k.saisies = DATA.saisies;
-    if (DATA.saisies) {
-      var c2 = DATA.saisies.closing;
-      k.callsLive = c2.lives;
-      k.offers = c2.offres;
-      k.closes = c2.closes;
-      k.contracte = c2.contracte;
-      k.collecte = c2.collecte;
-      k.closingLive = c2.lives > 0 ? c2.closes / c2.lives * 100 : null;
-      k.offerPct = c2.lives > 0 ? c2.offres / c2.lives * 100 : null;
-      k.callToClose = c2.closes > 0 ? c2.lives / c2.closes : null;
-      k.showup = k.kept > 0 ? c2.lives / k.kept * 100 : null;
-      k.setsDeclared = DATA.saisies.setting.sets;
-      k.cac = k.spend > 0 && c2.closes > 0 ? k.spend / c2.closes : null;
-      k.roas = k.spend > 0 ? c2.collecte / k.spend : null;
-      k.cashPerLive = c2.lives > 0 ? c2.collecte / c2.lives : null;
-    }
+    /* ── Show-up RÉEL : présents du mois (résultats RDV) / kept — plus
+       aucune saisie manuelle nulle part (décision Adrien 14/07). ── */
+    k.showup = (k.kept > 0 && k.ocHasData) ? k.ocDue.present / k.kept * 100 : null;
 
-    /* ── Lignes SB / NB — repli saisies par métrique (retour Adrien 14/07) :
-       tant que les résultats RDV n'existent pas, on affiche les chiffres des
-       anciennes saisies manuelles. Règle métier : la saisie CLOSING ≈ Self
-       Booking (le rapport closing ne vient que du SB), la saisie SETTING ≈
-       No Booking. Marqués « saisies » dans l'UI. ── */
-    function pickLine(ocVal, saisieVal) {
-      if (ocVal > 0) return { v: ocVal, legacy: false };
-      var sv = Number(saisieVal) || 0;
-      if (k.saisies && sv > 0) return { v: sv, legacy: true };
-      return { v: ocVal || 0, legacy: false };
-    }
-    var _sc = k.saisies ? DATA.saisies.closing : {};
-    var _ss = k.saisies ? DATA.saisies.setting : {};
-
-    /* ── Closes « clients gagnés » — multi-chemins (fix 14/07, retour Adrien :
-       un close fait depuis la fiche AVANT le déploiement du bouton Résultat
-       doit compter). Source : leads passés clients (clientSince) dans la
-       période — tous les chemins de close posent clientSince (résultat RDV,
-       fiche CRM stage Won, pipeline). Complété par les closes RDV sans fiche
-       liée. SB = closed_won_self · NB = le reste. ── */
+    /* ── Closes « clients gagnés » — 100 % logiciel, trois chemins :
+       ① fiches passées clientes dans la période (clientSince — posé par le
+          résultat RDV, les cartes du Close, la fiche CRM) ;
+       ② closes RDV sans fiche liée ;
+       ③ paiements créés dans la période sans client gagné correspondant
+          (règle Adrien 14/07 : un paiement = un close commercial, sauf
+          rattrapage d'un client gagné dans une autre période — résolu au
+          chargement par resolvePaymentLeads). ── */
     var closedLeads = (DATA.closedLeads || []).filter(function (l) { return tunnelMatch(leadTunnel(l)); });
     var closesNoLeadSB = 0, closesNoLeadNB = 0;
     due.forEach(function (b) {
@@ -1156,21 +1326,20 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       if (b._class === 'self') closesNoLeadSB++; else closesNoLeadNB++;
     });
     var wonSelfLeads = closedLeads.filter(function (l) { return l.stage === 'closed_won_self'; }).length;
-    k.wonSelf = wonSelfLeads + closesNoLeadSB;
-    k.wonSetting = (closedLeads.length - wonSelfLeads) + closesNoLeadNB;
-    k.closesWonTotal = k.wonSelf + k.wonSetting;
 
-    /* ── Collecté / Contracté des closes — croisés avec le MODULE PAIEMENTS
-       (validé Adrien 14/07 : « tu trouves le collecté dans le module
-       paiement, croise les données pour que tout concorde »). Pour CHAQUE
-       client gagné de la période :
-         collecté  = ① paidAmount de ses paiements GoCardless (TTC → HT)
-                     ② sinon l'encaissé DÉCLARÉ aux cartes du Close
-                     ③ sinon « close sans montant » compté et affiché
-         contracté = ① totalAmount de ses contrats (hors annulés/brouillons)
-                     ② sinon le tarif officiel posé par les cartes
-       Rattachement paiement → client : leadId, sinon email. Jamais de
-       double compte : un client = une résolution. ── */
+    /* ── Montants — MODULE PAIEMENTS d'abord (règle Adrien 14/07) :
+       collecté  = ① prélèvements passés (paidAmount) s'il y en a
+                   ② sinon, dès que le paiement existe (hors annulé /
+                     brouillon) : 1 mensualité pour un fractionné (« la
+                     mensualité correspond à l'encaissé »), la totalité pour
+                     un intégral — suivi « à prélever (mandat) »
+                   ③ sinon l'encaissé DÉCLARÉ aux cartes du Close
+                   ④ sinon « close sans montant » — alerte nominative, jamais
+                     un zéro muet
+       contracté = totalAmount (hors annulés/brouillons), sinon tarif des
+                   cartes. TTC → HT ÷ 1,2 (sauf vatType 'ht').
+       Rattachement paiement → client : leadId → email → téléphone.
+       Un paiement déjà rattaché ne compte JAMAIS deux fois (_matched). ── */
     function payHT(p, amount) {
       var a = Number(amount) || 0;
       return p && p.vatType === 'ht' ? a : a / 1.2; // module Paiements = TTC par défaut
@@ -1180,119 +1349,151 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       if (b.outcome !== 'close' || !b.closeData || !b.leadId) return;
       declByLead[b.leadId] = { col: Number(b.closeData.collecte) || 0, con: Number(b.closeData.contracte) || 0 };
     });
-    var paysByLead = {}, paysByEmail = {};
+    var paysByLead = {}, paysByEmail = {}, paysByP9 = {};
     (DATA.payments || []).forEach(function (p) {
       if (!p) return;
       p._matched = false;
       if (p.leadId) { (paysByLead[p.leadId] = paysByLead[p.leadId] || []).push(p); }
       var pem = (p.leadEmail || '').toLowerCase().trim();
       if (pem) { (paysByEmail[pem] = paysByEmail[pem] || []).push(p); }
+      var pp9 = phone9(p.leadPhone);
+      if (pp9) { (paysByP9[pp9] = paysByP9[pp9] || []).push(p); }
     });
-    function payForClient(leadId, email) {
-      /* !p._matched : un paiement déjà rattaché à un client ne compte jamais
-         deux fois (fiches en doublon avec le même email, etc.). */
+    /* Contribution d'UN paiement : {col, con, mandat}. */
+    function payMoney(p) {
+      var out = { col: 0, con: 0, mandat: 0 };
+      var active = p.status !== 'cancelled' && p.status !== 'draft';
+      var paid = payHT(p, p.paidAmount);
+      if (paid > 0) out.col = paid;
+      else if (active) {
+        var due1 = p.type === 'installments' ? (Number(p.installmentAmount) || 0) : (Number(p.totalAmount) || 0);
+        out.col = payHT(p, due1);
+        out.mandat = out.col;
+      }
+      if (active) out.con = payHT(p, p.totalAmount);
+      return out;
+    }
+    function payForClient(leadId, email, p9) {
       var seen = {}, list = [];
-      (paysByLead[leadId] || []).forEach(function (p) { if (!seen[p._id] && !p._matched) { seen[p._id] = 1; list.push(p); } });
-      ((email ? paysByEmail[email] : null) || []).forEach(function (p) { if (!seen[p._id] && !p._matched) { seen[p._id] = 1; list.push(p); } });
-      var paid = 0, contracted = 0;
+      function add(arr) { (arr || []).forEach(function (p) { if (!seen[p._id] && !p._matched) { seen[p._id] = 1; list.push(p); } }); }
+      add(paysByLead[leadId]);
+      if (email) add(paysByEmail[email]);
+      if (p9) add(paysByP9[p9]);
+      var col = 0, con = 0, mandat = 0;
       list.forEach(function (p) {
         p._matched = true;
-        paid += payHT(p, p.paidAmount);                     // cash réellement prélevé (tous statuts)
-        if (p.status !== 'cancelled' && p.status !== 'draft') contracted += payHT(p, p.totalAmount);
+        var m = payMoney(p);
+        col += m.col; con += m.con; mandat += m.mandat;
       });
-      return { n: list.length, paid: Math.round(paid * 100) / 100, contracted: Math.round(contracted * 100) / 100 };
+      return { n: list.length, col: Math.round(col * 100) / 100, con: Math.round(con * 100) / 100, mandat: Math.round(mandat * 100) / 100 };
     }
-    var wonColSB = 0, wonConSB = 0, wonColNB = 0, wonConNB = 0, colMissing = 0, noPayCount = 0;
+    var wonColSB = 0, wonConSB = 0, wonColNB = 0, wonConNB = 0;
+    var colMissing = 0, noPayCount = 0, mandatSum = 0, colMissingNames = [];
     closedLeads.forEach(function (l) {
       var sb2 = l.stage === 'closed_won_self';
       var lem = (l.email || '').toLowerCase().trim();
-      var pay = payForClient(l._id, lem);
+      var pay = payForClient(l._id, lem, phone9(l.telephone || l.phone));
       var decl = declByLead[l._id] || (l.closedData ? { col: Number(l.closedData.collecte) || 0, con: Number(l.closedData.contracte) || 0 } : null);
       if (!pay.n) noPayCount++;
       var col = null, con = 0;
-      if (pay.paid > 0) col = pay.paid;
-      else if (decl) col = decl.col;
-      if (pay.contracted > 0) con = pay.contracted;
+      if (pay.n && pay.col > 0) { col = pay.col; mandatSum += pay.mandat; }
+      else if (decl && decl.col > 0) col = decl.col;
+      if (pay.con > 0) con = pay.con;
       else if (decl) con = decl.con;
-      if (col == null) { colMissing++; return; }
-      if (sb2) { wonColSB += col; wonConSB += con; } else { wonColNB += col; wonConNB += con; }
+      if (col == null) { colMissing++; colMissingNames.push(l.nom || lem || l._id); }
+      if (sb2) { wonColSB += (col || 0); wonConSB += con; } else { wonColNB += (col || 0); wonConNB += con; }
     });
-    /* Closes RDV sans fiche liée : encaissé déclaré, sinon paiement par email. */
+    /* Closes RDV sans fiche liée : Paiements par email/téléphone, repli cartes. */
     due.forEach(function (b) {
       if (b.outcome !== 'close' || b.leadId) return;
       var bem = (b.prospect && b.prospect.email || '').toLowerCase().trim();
-      var pay3 = payForClient('__none__', bem);
+      var pay3 = payForClient('__none__', bem, phone9(b.prospect && (b.prospect.telephone || b.prospect.phone)));
       var col3 = null, con3 = 0;
-      if (pay3.paid > 0) col3 = pay3.paid;
-      else if (b.closeData) col3 = Number(b.closeData.collecte) || 0;
-      if (pay3.contracted > 0) con3 = pay3.contracted;
+      if (pay3.n && pay3.col > 0) { col3 = pay3.col; mandatSum += pay3.mandat; }
+      else if (b.closeData && Number(b.closeData.collecte) > 0) col3 = Number(b.closeData.collecte);
+      if (pay3.con > 0) con3 = pay3.con;
       else if (b.closeData) con3 = Number(b.closeData.contracte) || 0;
-      if (col3 == null) { colMissing++; return; }
-      if (b._class === 'self') { wonColSB += col3; wonConSB += con3; } else { wonColNB += col3; wonConNB += con3; }
+      if (col3 == null) { colMissing++; colMissingNames.push((b.prospect && b.prospect.nom) || bem || b._id); }
+      if (b._class === 'self') { wonColSB += (col3 || 0); wonConSB += con3; } else { wonColNB += (col3 || 0); wonConNB += con3; }
     });
-    k.wonCollecteSB = wonColSB; k.wonCollecteNB = wonColNB;
-    k.wonContracteSB = wonConSB; k.wonContracteNB = wonConNB;
+    /* ③ Closes détectés via Paiements (fiche jamais gagnée / introuvable). */
+    k.payCloseNames = []; k.payCloseOther = [];
+    var payClosesSB = 0, payClosesNB = 0;
+    (DATA.payments || []).forEach(function (p) {
+      if (!p || !p._payClose || p._matched) return;
+      var pc = p._payClose;
+      if (pc.kind === 'other') { if (tunnelFilter === 'all') k.payCloseOther.push(pc.name); return; }
+      if (pc.tunnel && !tunnelMatch(pc.tunnel)) return;
+      if (!pc.tunnel && tunnelFilter !== 'all') return;
+      p._matched = true;
+      var m3 = payMoney(p);
+      mandatSum += m3.mandat;
+      if (pc.sb) { payClosesSB++; wonColSB += m3.col; wonConSB += m3.con; }
+      else { payClosesNB++; wonColNB += m3.col; wonConNB += m3.con; }
+      k.payCloseNames.push(pc.name + (pc.noLead ? ' (aucune fiche trouvée)' : ''));
+    });
+
+    k.wonSelf = wonSelfLeads + closesNoLeadSB + payClosesSB;
+    k.wonSetting = (closedLeads.length - wonSelfLeads) + closesNoLeadNB + payClosesNB;
+    k.closesWonTotal = k.wonSelf + k.wonSetting;
+    k.wonCollecteSB = Math.round(wonColSB * 100) / 100; k.wonCollecteNB = Math.round(wonColNB * 100) / 100;
+    k.wonContracteSB = Math.round(wonConSB * 100) / 100; k.wonContracteNB = Math.round(wonConNB * 100) / 100;
     k.wonCollecte = Math.round((wonColSB + wonColNB) * 100) / 100;
     k.wonContracte = Math.round((wonConSB + wonConNB) * 100) / 100;
+    k.collecteMandat = Math.round(mandatSum * 100) / 100;
     k.collecteMissing = colMissing;
+    k.collecteMissingNames = colMissingNames;
     k.closesNoPayment = noPayCount;
-    /* Diagnostics croisés (vue « Tous ») :
-       - paiements créés dans la période sans client gagné correspondant
-         (email de fiche différent, ou fiche jamais passée en Closing) */
-    k.paymentsUnmatched = 0;
-    if (tunnelFilter === 'all') {
-      var _ps2 = P.start.getTime(), _pe2 = P.end.getTime();
-      (DATA.payments || []).forEach(function (p) {
-        if (!p || p._matched) return;
-        var cms = parseFlexMs(p.createdAt);
-        if (cms != null && cms >= _ps2 && cms <= _pe2) k.paymentsUnmatched++;
-      });
-    }
-    /* Le ROAS résultats suit le collecté consolidé (Paiements + déclaré). */
-    if (k.spend > 0 && k.wonCollecte > 0) k.roasOutcome = k.wonCollecte / k.spend;
 
-    k.sbLine = {
-      present:   pickLine(k.ocSB.present,   _sc.lives),
-      pitched:   pickLine(k.ocSB.pitched,   _sc.offres),
-      closes:    pickLine(k.wonSelf,        _sc.closes),
-      collecte:  pickLine(k.wonCollecteSB,  _sc.collecte),
-      contracte: pickLine(k.wonContracteSB, _sc.contracte)
-    };
-    k.nbLine = {
-      leadsWorked: pickLine(k.actLeadsWorked, _ss.leads),
-      present:     pickLine(k.ocNB.present,   _ss.presents),
-      closes:      pickLine(k.wonSetting,     _ss.closes),
-      collecte:    pickLine(k.wonCollecteNB,  _ss.collecte)
-    };
-    /* L'échelle CPR Live / Offre suit les valeurs affichées (repli inclus). */
-    k.cprLive  = (k.spend > 0 && k.sbLine.present.v > 0) ? k.spend / k.sbLine.present.v : null;
-    k.cprOffre = (k.spend > 0 && k.sbLine.pitched.v > 0) ? k.spend / k.sbLine.pitched.v : null;
+    /* ROAS résultats = collecté réel (HT) / dépense — rien d'autre. */
+    k.roasOutcome = (k.spend > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.spend : null;
 
-    /* ── Totaux « toutes sources » — repli MÉTRIQUE PAR MÉTRIQUE (fix 14/07) :
-       pendant la transition, on peut avoir des annulations/no-show statués
-       sur les RDV (résultats partiels) alors que les closes/collecté du mois
-       vivent encore dans les saisies manuelles. Un repli global aurait montré
-       0 close / AOV vide malgré des données réelles → chaque métrique prend
-       les résultats RDV si non nuls, sinon les saisies. ── */
-    function pickAll(ocVal, saisieVal) {
-      if (ocVal > 0) return { v: ocVal, src: 'auto' };
-      if (k.saisies) return { v: saisieVal || 0, src: 'saisies' };
-      return { v: k.ocHasData ? 0 : null, src: 'auto' };
-    }
-    /* Closes = clients gagnés (multi-chemins), jamais moins que les saisies. */
-    var _pc = pickAll(k.closesWonTotal, k.closes);
-    var _pcol = pickAll(k.wonCollecte, k.collecte);
-    var _pcon = pickAll(k.wonContracte, k.contracte);
-    k.closesAll = _pc.v; k.closesSrc = _pc.src;
-    k.collecteAll = _pcol.v; k.collecteSrc = _pcol.src;
-    k.contracteAll = _pcon.v;
-    /* CAC Market Only : dépense pub / client acquis — nommé ainsi pour ne pas
-       confondre avec le « CPA » du Business Manager Meta (qui peut être un
-       achat, un RDV, un lead selon la campagne). */
-    k.cacMarketOnly = (k.spend > 0 && k.closesAll > 0) ? k.spend / k.closesAll : null;
-    k.aovAll = (k.closesAll > 0 && k.collecteAll > 0) ? k.collecteAll / k.closesAll : null;
-    /* Coût d'un RDV setting (NB) : dépense pub / RDV posés par le setting. */
-    k.cprNB = (k.spend > 0 && k.bookedSetter > 0) ? k.spend / k.bookedSetter : null;
+    /* ── Taux de close du mois (bandeau héro — demande Vincent 14/07) :
+       dénominateurs = le mois en totalité (axe date de RDV, replanifiés
+       remplacés déduits), numérateur = clients gagnés de la période. ── */
+    k.rdvMois = Math.max(0, k.due - k.dueRescheduled);
+    k.closeRateRdv   = k.rdvMois > 0 ? k.closesWonTotal / k.rdvMois * 100 : null;
+    k.closeRateLive  = k.ocDue.present > 0 ? k.closesWonTotal / k.ocDue.present * 100 : null;
+    k.closeRateOffre = k.ocDue.pitched > 0 ? k.closesWonTotal / k.ocDue.pitched * 100 : null;
+
+    /* ── Rentabilité — 100 % réel ── */
+    k.cacMarketOnly = (k.spend > 0 && k.closesWonTotal > 0) ? k.spend / k.closesWonTotal : null;
+    k.aovAll = (k.closesWonTotal > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.closesWonTotal : null;
+
+    /* ── Coût setting RÉEL (remplace « dépense pub / RDV NB » — décision
+       Vincent + Adrien 14/07) : (fixe + commissions Setting + outils)
+       ÷ RDV NB créés.
+       · fixe & outils : _config/funnel_costs, proratisés au nombre de jours
+         de la fenêtre (report auto du dernier mois saisi)
+       · commissions : deals Setting RÉELS du module Commissions datés dans
+         la fenêtre (comm + bonus, validés ou en attente)
+       Coûts non renseignés → « — », jamais un chiffre inventé. ── */
+    k.commSetting = 0; k.commSettingN = 0;
+    (DATA.settingDeals || []).forEach(function (dl) { k.commSetting += dl.comm; k.commSettingN++; });
+    k.commSetting = Math.round(k.commSetting * 100) / 100;
+    var fixeSum = 0, outilsSum = 0, daysMissing = 0, costSrc = null;
+    if (DATA.costs) {
+      var dIt = new Date(P.start.getFullYear(), P.start.getMonth(), P.start.getDate());
+      while (dIt.getTime() <= P.end.getTime()) {
+        var mk2 = dIt.getFullYear() + '-' + pad2(dIt.getMonth() + 1);
+        var eff = effectiveCosts(mk2);
+        if (!eff) daysMissing++;
+        else {
+          var dim = new Date(dIt.getFullYear(), dIt.getMonth() + 1, 0).getDate();
+          fixeSum += eff.fixe / dim;
+          outilsSum += eff.outils / dim;
+          costSrc = eff.src;
+        }
+        dIt = new Date(dIt.getFullYear(), dIt.getMonth(), dIt.getDate() + 1);
+      }
+    } else daysMissing = 1;
+    k.costFixe = Math.round(fixeSum * 100) / 100;
+    k.costOutils = Math.round(outilsSum * 100) / 100;
+    k.costConfigured = daysMissing === 0 && DATA.costs && Object.keys(DATA.costs).length > 0;
+    k.costSrcMonth = costSrc;
+    k.costSetting = k.costConfigured ? Math.round((k.costFixe + k.costOutils + k.commSetting) * 100) / 100 : null;
+    k.costPerRdvNB = (k.costSetting != null && k.chNB.n > 0) ? k.costSetting / k.chNB.n : null;
+
     /* Leads restants côté setting = cohorte − leads ayant self-booké. */
     k.leadsNoSB = Math.max(0, k.leads - k.cohortSelf);
 
@@ -1318,18 +1519,41 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     var k = K;
     var h = '';
 
-    /* Hero — LA TOTALITÉ, une seule ligne (demande head of sales 14/07) :
-       leads, RDV pris, kept, closes, collecté — tous périmètres confondus.
-       Le détail SB / NB vit dans « Prise de RDV », le ROAS dans « Publicité ». */
-    var heroRoas = k.roasOutcome != null ? k.roasOutcome : k.roas;
+    /* Hero — DEUX LIGNES (retour Vincent + Adrien 14/07) :
+       L1 = les leads de la période et LEURS RDV (axe « RDV créés », chaînes
+            de replanification dédupliquées, résultat de fin de chaîne) ;
+       L2 = le mois en TOTALITÉ (axe « date de RDV » + business gagné) — se
+            recoupe exactement avec la section « Tenue des RDV ».
+       + bandeau des taux de close. Chaque carte porte sa formule. */
+    function numOrDash(v, unknown) { return (v === 0 && unknown > 0) ? '—' : fmtNum(v); }
+    var ch = k.chAll;
     h += '<div class="fn-hero">';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : '&nbsp;') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.booked) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) : '&nbsp;') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.kept) + '</div><div class="l">Kept</div><div class="s">' + (k.keptPct != null ? fmtPct(k.keptPct, 0) + ' · ' : '') + fmtNum(k.due) + ' planifiés</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.closesAll == null ? 'maille mois' : (k.closesSrc === 'auto' ? 'clients gagnés (auto — fiches + RDV)' : 'saisies (héritage)')) + '</div></div>';
-    var heroColSub = k.contracteAll != null ? 'Contracté ' + fmtEuro(k.contracteAll) : 'maille mois';
-    if (k.collecteMissing > 0 && k.collecteSrc === 'auto') heroColSub += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' close(s) sans montant</span>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + '</div><div class="l">Collecté</div><div class="s">' + heroColSub + '</div></div>';
+    h += '<div class="fn-hero-lbl">📥 Ligne 1 — Leads de la période → leurs RDV (créés sur la période, fin de chaîne)</div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : 'entrés sur la période') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.n) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) + ' (RDV ÷ leads)' : 'SB + NB, replanif. dédupliqués') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.kept) + '</div><div class="l">Kept</div><div class="s">pris − ' + fmtNum(ch.cancelled) + ' annulés' + (ch.n > 0 ? ' · <span class="pct">' + fmtPct(ch.kept / ch.n * 100, 0) + '</span>' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(ch.present, ch.sansDetail) + '</div><div class="l">Live (présents)</div><div class="s">' + (ch.kept > 0 && ch.present > 0 ? '<span class="pct">' + fmtPct(ch.present / ch.kept * 100, 0) + '</span> des kept' : 'résultats RDV') + (ch.aVenir ? ' · ' + ch.aVenir + ' à venir' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(ch.pitched, ch.sansDetail) + '</div><div class="l">Pitchés (offres)</div><div class="s">' + (ch.pitched > 0 && ch.present > 0 ? '<span class="pct">' + fmtPct(ch.pitched / ch.present * 100, 0) + '</span> des live' : 'offre · close · non close') + (ch.sansDetail ? ' · ⚠ ' + ch.sansDetail + ' tenus sans détail' : '') + '</div></div>';
+    h += '</div>';
+
+    h += '<div class="fn-hero" style="margin-top:-8px">';
+    h += '<div class="fn-hero-lbl">📆 Ligne 2 — Le mois en totalité (par date de RDV) + business gagné de la période</div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.rdvMois) + '</div><div class="l">RDV du mois</div><div class="s">SB ' + fmtNum(k.dueSB - k.reschedSB) + ' · NB ' + fmtNum(k.dueNB - k.reschedNB) + (k.dueRescheduled ? ' · ' + k.dueRescheduled + ' replanifiés déduits' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.kept) + '</div><div class="l">Kept Call</div><div class="s">RDV − annulés − no-show − replanifiés' + (k.keptPct != null ? ' · <span class="pct">' + fmtPct(k.keptPct, 0) + '</span>' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(k.ocDue.present, k.ocDue.sansDetail) + '</div><div class="l">Live du mois</div><div class="s">présents (résultats RDV)' + (k.ocDue.sansDetail ? ' · ⚠ ' + k.ocDue.sansDetail + ' sans détail' : '') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(k.ocDue.pitched, k.ocDue.sansDetail) + '</div><div class="l">Pitchés du mois</div><div class="s">offres faites (résultats RDV)</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.closesWonTotal) + '</div><div class="l">Closes</div><div class="s">clients gagnés — fiches + RDV + Paiements</div></div>';
+    var heroColSub = 'contracté ' + fmtEuro(k.wonContracte);
+    if (k.collecteMandat > 0) heroColSub += ' · dont ' + fmtEuro(k.collecteMandat) + ' à prélever (mandat)';
+    if (k.collecteMissing > 0) heroColSub += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' close(s) sans montant</span>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtEuro(k.wonCollecte) + '</div><div class="l">Collecté (HT)</div><div class="s">' + heroColSub + '</div></div>';
+    h += '</div>';
+
+    /* Bandeau — taux de close du mois (demande Vincent 14/07) */
+    h += '<div class="fn-rates">';
+    h += '<div class="rt"><strong>' + fmtPct(k.closeRateRdv, 1) + '</strong>Taux de close / RDV du mois <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' closes ÷ ' + fmtNum(k.rdvMois) + ' RDV)</span></div>';
+    h += '<div class="rt"><strong>' + fmtPct(k.closeRateLive, 1) + '</strong>Taux de close / live <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' ÷ ' + fmtNum(k.ocDue.present) + ' présents)</span></div>';
+    h += '<div class="rt"><strong>' + fmtPct(k.closeRateOffre, 1) + '</strong>Taux de close / offre <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' ÷ ' + fmtNum(k.ocDue.pitched) + ' pitchés)</span></div>';
     h += '</div>';
 
     /* 1. Publicité */
@@ -1341,7 +1565,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += kpiCard(fmtNum(k.clicks || null), 'Clics sortants', null, null, !k.hasAds);
     h += kpiCard(fmtPct(k.ctr, 2), 'CTR', 'clics / impressions', targetBadge('ctr', k.ctr));
     h += kpiCard(fmtEuro2(k.cpc), 'CPC', 'coût / clic');
-    h += kpiCard(heroRoas != null ? (Math.round(heroRoas * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS', 'collecté / dépense pub', null, heroRoas == null);
+    h += kpiCard(k.roasOutcome != null ? (Math.round(k.roasOutcome * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS', 'collecté réel (HT) ÷ dépense pub', null, k.roasOutcome == null);
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
 
@@ -1401,68 +1625,77 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 4. Prise de RDV — DEUX LIGNES Self Booking / No Booking (head of sales
-       14/07) : ligne 1 = les leads qui ont pris RDV seuls (SB) avec l'échelle
-       de coûts CPR ; ligne 2 = les leads restants, travaillés par le setting
-       (NB) avec le coût d'un RDV setting. Les résultats (kept, live, closes,
-       collecté) viennent des statuts RDV — plus aucune section doublon. */
-    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'RDV créés sur la période · kept &amp; live = résultats RDV · collecté = module Paiements (HT), repli cartes du Close · coaching &amp; CSM exclus');
+    /* 4. Prise de RDV — DEUX LIGNES Self Booking / No Booking.
+       Refonte 14/07 (retour Vincent) : TOUT est sur l'axe « RDV créés sur
+       la période », chaînes de replanification dédupliquées, résultat de
+       FIN DE CHAÎNE — kept ne peut plus dépasser pris. Plus aucune saisie
+       manuelle : données logiciel uniquement, « — » + explication sinon. */
+    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'axe « RDV créés sur la période » (replanif. dédupliqués, résultat de fin de chaîne) · collecté = module Paiements (HT), repli cartes du Close · coaching &amp; CSM exclus');
     if (!k.ocHasData) {
       h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="sales-rdv.html" style="color:var(--blue)">Rendez-vous</a> ou la fiche prospect : kept / live / closes / collecté se rempliront tout seuls.</div>';
     }
-    /* — Ligne 1 : SELF BOOKING — (repli saisies marqué « 🗒 saisies ») */
-    var sbKeptN = k.ocSB.due - k.ocSB.cancelled - k.ocSB.resched;
-    function legTag(p) { return p.legacy ? ' · <span style="color:var(--muted2)">🗒 saisies</span>' : ''; }
+    /* — Ligne 1 : SELF BOOKING — */
     h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:12px 0 8px">🔗 Self Booking — le lead prend RDV seul</div>';
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.leads), 'Leads (total)', 'cohorte de la période');
-    h += kpiCard(fmtNum(k.bookedSelf), 'RDV pris SB', 'LTB (SB) ' + fmtPct(k.ltbSB) + ' · ' + fmtPct(k.selfShare, 0) + ' des RDV', targetBadge('selfShare', k.selfShare));
-    h += kpiCard(fmtNum(sbKeptN), 'Kept SB', '<span style="color:var(--red3)">' + fmtNum(k.ocSB.cancelled) + ' annulés</span> · <span style="color:var(--gold)">' + fmtNum(k.ocSB.noshow) + ' no-show</span>' + (k.ocSB.resched ? ' · ' + k.ocSB.resched + ' replanifiés' : ''));
-    h += kpiCard(fmtNum(k.sbLine.present.v), 'Live SB (présents)', (sbKeptN > 0 && !k.sbLine.present.legacy ? 'show-up ' + fmtPct(k.sbLine.present.v / sbKeptN * 100, 0) : 'appels live') + legTag(k.sbLine.present));
-    h += kpiCard(fmtNum(k.sbLine.pitched.v), 'Pitchés SB', (k.ocSB.disqua ? k.ocSB.disqua + ' disqualifiés' : 'offres faites') + legTag(k.sbLine.pitched));
-    h += kpiCard(fmtNum(k.sbLine.closes.v), 'Closes SB', (k.sbLine.pitched.v > 0 ? fmtPct(k.sbLine.closes.v / k.sbLine.pitched.v * 100, 0) + ' des offres' : '') + (k.ocSB.nonCloses ? ' · ' + k.ocSB.nonCloses + ' non closes' : '') + legTag(k.sbLine.closes));
-    h += kpiCard(fmtEuro(k.sbLine.collecte.v), 'Collecté SB', 'contracté ' + fmtEuro(k.sbLine.contracte.v) + legTag(k.sbLine.collecte));
-    h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dép. / RDV SB (annulés inclus)');
-    h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dép. / RDV SB sans annulation');
-    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Live', 'dép. / RDV SB présents' + legTag(k.sbLine.present));
-    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Offre', 'dép. / RDV SB pitchés' + legTag(k.sbLine.pitched));
+    h += kpiCard(fmtNum(k.chSB.n), 'RDV pris SB', 'LTB (SB) ' + fmtPct(k.ltbSB) + ' · ' + fmtPct(k.selfShare, 0) + ' des RDV pris', targetBadge('selfShare', k.selfShare));
+    h += kpiCard(fmtNum(k.chSB.kept), 'Kept SB', 'pris − <span style="color:var(--red3)">' + fmtNum(k.chSB.cancelled) + ' annulés</span> · <span style="color:var(--gold)">' + fmtNum(k.chSB.noshow) + ' no-show</span> (dans kept)' + (k.chSB.aVenir ? ' · ' + k.chSB.aVenir + ' à venir' : ''));
+    h += kpiCard(numOrDash(k.chSB.present, k.chSB.sansDetail), 'Live SB (présents)', (k.chSB.kept > 0 && k.chSB.present > 0 ? 'show-up ' + fmtPct(k.chSB.present / k.chSB.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV') + (k.chSB.sansDetail ? ' · ⚠ ' + k.chSB.sansDetail + ' sans détail' : ''));
+    h += kpiCard(numOrDash(k.chSB.pitched, k.chSB.sansDetail), 'Pitchés SB', 'offres faites' + (k.chSB.disqua ? ' · ' + k.chSB.disqua + ' disqualifiés' : '') + (k.chSB.nonCloses ? ' · ' + k.chSB.nonCloses + ' non closes' : ''));
+    h += kpiCard(fmtNum(k.wonSelf), 'Closes SB', 'clients gagnés SB' + (k.chSB.pitched > 0 ? ' · ' + fmtPct(k.wonSelf / k.chSB.pitched * 100, 0) + ' des offres' : ''));
+    h += kpiCard(fmtEuro(k.wonCollecteSB), 'Collecté SB (HT)', 'contracté ' + fmtEuro(k.wonContracteSB) + ' · Paiements, repli cartes du Close');
+    h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dépense ÷ ' + fmtNum(k.chSB.n) + ' RDV SB pris (annulés inclus)');
+    h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dépense ÷ ' + fmtNum(k.chSB.kept) + ' RDV SB kept');
+    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Live', 'dépense ÷ ' + fmtNum(k.chSB.present) + ' RDV SB présents');
+    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Offre', 'dépense ÷ ' + fmtNum(k.chSB.pitched) + ' RDV SB pitchés');
     h += '</div>';
     /* — Ligne 2 : NO BOOKING (setting) — */
-    var nbKeptN = k.ocNB.due - k.ocNB.cancelled - k.ocNB.resched;
     h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 No Booking — leads sans RDV, travaillés par le setting</div>';
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.leadsNoSB), 'Leads à travailler', fmtNum(k.leads) + ' − ' + fmtNum(k.cohortSelf) + ' self-bookés');
-    h += kpiCard(fmtNum(k.nbLine.leadsWorked.v), 'Leads travaillés', (k.nbLine.leadsWorked.legacy ? 'total leads (saisie setting)' : '1ʳᵉ action fiche (journal setting)') + legTag(k.nbLine.leadsWorked));
-    h += kpiCard(fmtNum(k.bookedSetter), 'RDV pris NB', 'sets actions : ' + fmtNum(k.actSets) + (k.setterOldLeads ? ' · dont ' + k.setterOldLeads + ' leads antérieurs' : ''));
-    h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
-    h += kpiCard(fmtNum(nbKeptN), 'Kept NB', '<span style="color:var(--red3)">' + fmtNum(k.ocNB.cancelled) + ' annulés</span> · <span style="color:var(--gold)">' + fmtNum(k.ocNB.noshow) + ' no-show</span>' + (k.ocNB.resched ? ' · ' + k.ocNB.resched + ' replanifiés' : ''));
-    h += kpiCard(fmtNum(k.nbLine.present.v), 'Live NB (présents)', (nbKeptN > 0 && !k.nbLine.present.legacy ? 'show-up ' + fmtPct(k.nbLine.present.v / nbKeptN * 100, 0) : 'prospects présents') + legTag(k.nbLine.present));
-    h += kpiCard(fmtNum(k.nbLine.closes.v), 'Closes NB', fmtEuro(k.nbLine.collecte.v) + ' collecté' + legTag(k.nbLine.closes));
-    h += kpiCard(fmtEuro2(k.cprNB), 'Coût / RDV NB', 'dép. / RDV pris par le setting');
-    h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'coût d\'un lead (dépense / leads)', targetBadge('cpl', k.cpl));
-    h += '</div>';
-    if (k.sbLine.present.legacy || k.nbLine.present.legacy || k.sbLine.closes.legacy || k.nbLine.closes.legacy) {
-      h += '<div class="fn-stage-note" style="margin-top:8px">🗒 Les valeurs marquées « saisies » viennent des anciennes saisies manuelles Setting/Closing du mois — elles seront remplacées automatiquement par les résultats RDV dès qu\'ils seront statués.</div>';
+    h += kpiCard(fmtNum(k.leadsNoSB), 'Leads à travailler', fmtNum(k.leads) + ' leads − ' + fmtNum(k.cohortSelf) + ' self-bookés');
+    var lwVal, lwSub;
+    if (!k.journalLive) { lwVal = '—'; lwSub = 'journal d\'actions inexistant avant le 14/07/2026 — le passé n\'est pas reconstituable'; }
+    else {
+      lwVal = fmtNum(k.actLeadsWorked);
+      var lwParts = ['1ʳᵉ action fiche (journal)'];
+      if (k.actWorkedOld) lwParts.push(k.actWorkedOld + ' hors période');
+      if (k.actWorkedReopt) lwParts.push(k.actWorkedReopt + ' ré-optins');
+      if (k.actWorkedSelf) lwParts.push(k.actWorkedSelf + ' self-bookés');
+      lwSub = lwParts.join(' · ');
     }
+    h += kpiCard(lwVal, 'Leads travaillés', lwSub);
+    h += kpiCard(fmtNum(k.chNB.n), 'RDV pris NB', 'posés par le setting' + (k.journalLive ? ' · sets journal : ' + fmtNum(k.actSets) : '') + (k.setterOldLeads ? ' · dont ' + k.setterOldLeads + ' leads antérieurs' : ''));
+    h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
+    h += kpiCard(fmtNum(k.chNB.kept), 'Kept NB', 'pris − <span style="color:var(--red3)">' + fmtNum(k.chNB.cancelled) + ' annulés</span> · <span style="color:var(--gold)">' + fmtNum(k.chNB.noshow) + ' no-show</span> (dans kept)' + (k.chNB.aVenir ? ' · ' + k.chNB.aVenir + ' à venir' : ''));
+    h += kpiCard(numOrDash(k.chNB.present, k.chNB.sansDetail), 'Live NB (présents)', (k.chNB.kept > 0 && k.chNB.present > 0 ? 'show-up ' + fmtPct(k.chNB.present / k.chNB.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV') + (k.chNB.sansDetail ? ' · ⚠ ' + k.chNB.sansDetail + ' sans détail' : ''));
+    h += kpiCard(fmtNum(k.wonSetting), 'Closes NB', fmtEuro(k.wonCollecteNB) + ' collecté HT · contracté ' + fmtEuro(k.wonContracteNB));
+    var csSub;
+    if (k.costPerRdvNB != null) csSub = '(fixe ' + fmtEuro(k.costFixe) + ' + comm ' + fmtEuro(k.commSetting) + (k.commSettingN ? ' — ' + k.commSettingN + ' deal(s)' : '') + ' + outils ' + fmtEuro(k.costOutils) + ') ÷ ' + fmtNum(k.chNB.n) + ' RDV NB';
+    else if (k.costSetting != null) csSub = 'coût setting ' + fmtEuro(k.costSetting) + ' — aucun RDV NB créé sur la période';
+    else csSub = 'coûts non renseignés — bouton 💶 Coûts (fixe &amp; outils, €/mois)';
+    h += kpiCard(k.costPerRdvNB != null ? fmtEuro2(k.costPerRdvNB) : '—', 'Coût / RDV NB (réel)', csSub, null, k.costPerRdvNB == null);
+    h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense ÷ ' + fmtNum(k.leads) + ' leads', targetBadge('cpl', k.cpl));
+    h += '</div>';
     if (k.bookedAdmin > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.bookedAdmin + ' RDV manuels (admin) — hors LTB / hors funnel.</div>';
     if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.unknownLeadBookings + ' RDV de leads hors période (non rattachés à la cohorte) — inclus dans les totaux « Tous », hors taux de récupération.</div>';
-    if (k.ocTotal.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocTotal.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="sales-rdv.html">Rendez-vous</a> ou depuis la fiche prospect pour des lignes SB / NB exactes.</div>';
-    if (k.collecteMissing > 0 && k.collecteSrc === 'auto') h += '<div class="fn-alert">💶 <strong>' + k.collecteMissing + ' close(s) sans montant</strong> — le client est compté mais aucun paiement (module Paiements) ni encaissé déclaré (cartes du Close) ne lui correspond. Valide les cartes du close (statut « Closing » ou 🎯 Résultat) ou crée le paiement GoCardless : le collecté remontera ici automatiquement.</div>';
-    if (k.closesNoPayment > 0 && k.collecteSrc === 'auto') h += '<div class="fn-stage-note" style="margin-top:8px">💳 ' + k.closesNoPayment + ' client(s) gagné(s) sans paiement GoCardless créé — leur collecté vient de l\'encaissé déclaré aux cartes. Crée le paiement dans le module Paiements pour que le réel prenne le relais.</div>';
+    if (k.ocDue.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocDue.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="sales-rdv.html">Rendez-vous</a> ou depuis la fiche prospect pour des lignes SB / NB exactes.</div>';
+    if (k.collecteMissing > 0) h += '<div class="fn-alert">💶 <strong>' + k.collecteMissing + ' close(s) sans montant</strong>' + (k.collecteMissingNames.length ? ' (' + esc(k.collecteMissingNames.join(', ')) + ')' : '') + ' — le client est compté mais aucun paiement (module Paiements) ni encaissé déclaré (cartes du Close) ne lui correspond. Valide les cartes du close ou crée le paiement GoCardless : le collecté remontera automatiquement.</div>';
+    if (k.payCloseNames && k.payCloseNames.length) h += '<div class="fn-alert">💳 <strong>' + k.payCloseNames.length + ' close(s) compté(s) via le module Paiements</strong> (' + esc(k.payCloseNames.join(', ')) + ') — paiement créé dans la période sans fiche gagnée correspondante. Valide les cartes du close sur la fiche pour un rattachement propre.</div>';
+    if (k.closesNoPayment > 0) h += '<div class="fn-stage-note" style="margin-top:8px">💳 ' + k.closesNoPayment + ' client(s) gagné(s) sans paiement GoCardless créé — leur collecté vient de l\'encaissé déclaré aux cartes du Close. Crée le paiement dans le module Paiements pour que le réel prenne le relais.</div>';
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
     /* 5. Tenue des RDV — ventilation SB/NB, replanifiés à part (14/07/2026) */
     h += stageOpen('✅', 'Tenue des RDV', 'RDV setting/closing dont la date tombe dans la période · coaching &amp; CSM exclus');
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.due), 'RDV planifiés', 'SB ' + fmtNum(k.dueSB) + ' · NB ' + fmtNum(k.dueNB));
-    h += kpiCard(fmtNum(k.kept), 'Kept Call', 'ni annulé, ni no-show, ni replanifié', targetBadge('kept', k.keptPct));
+    h += kpiCard(fmtNum(k.due), 'RDV planifiés', 'date dans la période · SB ' + fmtNum(k.dueSB) + ' · NB ' + fmtNum(k.dueNB));
+    h += kpiCard(fmtNum(k.kept), 'Kept Call', 'planifiés − annulés − no-show − replanifiés', targetBadge('kept', k.keptPct));
     h += kpiCard(fmtPct(k.keptPct, 0), 'Kept %', null);
     h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.dueCancelled) + '</span>', '🔴 Annulés', 'SB ' + fmtNum(k.cancSB) + ' · NB ' + fmtNum(k.cancNB));
     h += kpiCard('<span style="color:var(--gold)">' + fmtNum(k.dueNoShow) + '</span>', '🚫 No-show', 'SB ' + fmtNum(k.noshowSB) + ' · NB ' + fmtNum(k.noshowNB));
     h += kpiCard(fmtNum(k.dueRescheduled), '📅 Replanifiés', k.dueRescheduled ? 'SB ' + fmtNum(k.reschedSB) + ' · NB ' + fmtNum(k.reschedNB) + ' — remplacés, hors annulés' : 'remplacés, hors annulés', null, k.dueRescheduled === 0);
     h += kpiCard(fmtNum(k.dueCompleted), 'Tenus (statués)', k.dueUpcoming ? '+ ' + k.dueUpcoming + ' à venir' : null);
-    if (k.saisies) h += kpiCard(fmtPct(k.showup, 0), 'Show-up', 'calls live / kept', targetBadge('showup', k.showup));
+    if (k.showup != null) h += kpiCard(fmtPct(k.showup, 0), 'Show-up', 'présents du mois ÷ kept (résultats RDV)', targetBadge('showup', k.showup));
     h += '</div>';
     if (k.dueToStatus > 0) h += '<div class="fn-alert">⚠ <strong>' + k.dueToStatus + ' RDV passé(s) sans statut</strong> — à marquer Tenu / Annulé / No-show dans <a href="sales-rdv.html">Rendez-vous</a> ou <a href="booking-admin.html">Booking</a> pour des stats fiables.</div>';
     h += '</div>';
@@ -1475,7 +1708,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += kpiCard(fmtNum(k.callsAnswered), 'Décrochés', '≥ ' + ANSWERED_MIN_SEC + ' s');
     h += kpiCard(fmtPct(k.answerRate), 'Taux de décroché', null, targetBadge('decroche', k.answerRate));
     h += kpiCard(fmtDelay(k.ttcMedian), '⏱ Time-to-contact médian', 'entrée lead → 1er appel · ' + k.ttcCount + ' leads');
-    h += kpiCard(fmtDelay(k.ttbMedian), '⏱ Time-to-book médian', 'entrée lead → RDV pris · ' + k.ttbCount + ' leads');
+    h += kpiCard(fmtDelay(k.ttbSetMedian), '⏱ Time-to-book setting', 'entrée lead → RDV posé par le setting · ' + k.ttbSetCount + ' leads', null, k.ttbSetMedian == null);
+    h += kpiCard(fmtDelay(k.ttbSelfMedian), '⏱ Time-to-book self', 'entrée lead → self-booking · ' + k.ttbSelfCount + ' leads', null, k.ttbSelfMedian == null);
     h += kpiCard(fmtPct(k.reachRate, 0), 'Taux de joignabilité', fmtNum(k.leadsReached) + ' leads joints / ' + fmtNum(k.leadsCalled) + ' appelés', targetBadge('reach', k.reachRate));
     h += kpiCard(k.attemptsAvg != null ? (Math.round(k.attemptsAvg * 10) / 10).toLocaleString('fr-FR') : '—', 'Tentatives / lead appelé', 'appels moyens par lead touché');
     h += kpiCard(fmtSec(k.avgAnsweredDurSec), 'Durée moy. décroché', 'conversation moyenne (≥ ' + ANSWERED_MIN_SEC + ' s)');
@@ -1492,42 +1726,30 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
-    /* (section SETTING/CLOSING supprimée le 14/07 — doublon : tout vit
-       désormais dans les deux lignes SB / NB de « Prise de RDV ». ) */
-
-    /* 7. Saisies manuelles (héritage) */
-    if (k.saisies) {
-      h += stageOpen('🗒', 'Saisies manuelles (héritage — comparaison)', k.saisies.members + ' membre(s) · ' + MONTHS_FR[P.m] + ' ' + P.y + ' · source déclarative — les résultats RDV (auto) font foi');
-      h += '<div class="fn-grid">';
-      h += kpiCard(fmtNum(k.callsLive), 'Calls live', null);
-      h += kpiCard(fmtNum(k.offers), 'Offres', k.offerPct != null ? fmtPct(k.offerPct, 0) + ' des lives' : null);
-      h += kpiCard(fmtNum(k.closes), 'Closes', k.callToClose != null ? (Math.round(k.callToClose * 10) / 10).toLocaleString('fr-FR') + ' calls / close' : null);
-      h += kpiCard(fmtPct(k.closingLive), 'Closing live %', 'closes / calls live', targetBadge('closingLive', k.closingLive));
-      h += kpiCard(fmtEuro(k.contracte), 'Contracté', null);
-      h += kpiCard(fmtEuro(k.collecte), 'Collecté', k.cashPerLive != null ? fmtEuro2(k.cashPerLive) + ' / call live' : null);
-      h += '</div>';
-      if (k.setsDeclared != null) h += '<div class="fn-stage-note" style="margin-top:8px">Recoupement : <strong>' + fmtNum(k.setsDeclared) + ' sets déclarés</strong> en saisie setting vs <strong>' + fmtNum(k.bookedSetter) + ' RDV setter détectés</strong> automatiquement.</div>';
-      h += '</div>';
-    }
-    h += '<div class="fn-arrow">▼</div>';
+    /* (sections SETTING/CLOSING et Saisies manuelles supprimées les 14-15/07
+       — décision Adrien : 100 % données logiciel, zéro saisie déclarative.) */
 
     /* 8. Rentabilité — l'échelle CPR vit dans la ligne SB de « Prise de
        RDV », le ROAS dans « Publicité » : ici, uniquement ce qui n'existe
-       nulle part ailleurs (CPL, CAC Market Only, AOV). */
-    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'collecté = module Paiements (HT), repli encaissé déclaré aux cartes du Close · saisies pour les mois passés');
+       nulle part ailleurs (CPL, CAC Market Only, AOV, coût setting). */
+    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'collecté = module Paiements (HT), repli encaissé déclaré aux cartes du Close — 100 % logiciel, zéro saisie manuelle');
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense / lead', targetBadge('cpl', k.cpl));
-    h += kpiCard(fmtEuro2(k.cacMarketOnly), 'CAC Market Only', 'dépense pub / client acquis — nommé ainsi pour ne pas confondre avec le « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacMarketOnly == null);
+    h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense ÷ ' + fmtNum(k.leads) + ' leads', targetBadge('cpl', k.cpl));
+    h += kpiCard(fmtEuro2(k.cacMarketOnly), 'CAC Market Only', 'dépense pub ÷ ' + fmtNum(k.closesWonTotal) + ' client(s) acquis — ≠ « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacMarketOnly == null);
     var aovHint;
-    if (k.closesAll > 0 && !k.collecteAll) {
-      aovHint = fmtNum(k.closesAll) + ' client(s) mais collecté manquant — valide les cartes du Close (statut « Closing ») ou crée le paiement GoCardless (module Paiements)';
+    if (k.closesWonTotal > 0 && !k.wonCollecte) {
+      aovHint = fmtNum(k.closesWonTotal) + ' client(s) mais collecté manquant — valide les cartes du Close ou crée le paiement GoCardless (module Paiements)';
     } else {
-      aovHint = 'collecté ' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + ' / ' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + ' client(s)';
-      if (k.collecteMissing > 0 && k.collecteSrc === 'auto') aovHint += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' sans montant (AOV sous-estimé)</span>';
+      aovHint = 'collecté ' + fmtEuro(k.wonCollecte) + ' ÷ ' + fmtNum(k.closesWonTotal) + ' client(s)';
+      if (k.collecteMissing > 0) aovHint += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' sans montant (AOV sous-estimé)</span>';
     }
     h += kpiCard(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV', aovHint, null, k.aovAll == null);
+    var cs2;
+    if (k.costSetting != null) cs2 = 'fixe ' + fmtEuro(k.costFixe) + ' + commissions ' + fmtEuro(k.commSetting) + ' + outils ' + fmtEuro(k.costOutils) + (k.costSrcMonth ? ' · base saisie ' + esc(k.costSrcMonth) : '');
+    else cs2 = 'fixe &amp; outils non renseignés — bouton 💶 Coûts';
+    h += kpiCard(k.costSetting != null ? fmtEuro2(k.costSetting) : '—', 'Coût setting (période)', cs2, null, k.costSetting == null);
     h += '</div>';
-    if (k.paymentsUnmatched > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.paymentsUnmatched + ' paiement(s) créé(s) dans la période sans client gagné correspondant — vérifie que l\'email du paiement correspond à celui de la fiche, et que la fiche est bien passée en Closing.</div>';
+    if (k.payCloseOther && k.payCloseOther.length) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.payCloseOther.length + ' paiement(s) de la période rattaché(s) à un client gagné dans une AUTRE période (' + esc(k.payCloseOther.join(', ')) + ') — encaissement tardif, le close reste compté à sa propre période.</div>';
     h += '</div>';
 
     /* Journal de la période */
@@ -1555,14 +1777,6 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     var extra = k.setterOldLeads ? ' · +' + k.setterOldLeads + ' RDV setting sur des leads plus anciens (hors calcul)' : '';
     return k.cohortSetter + ' des ' + base + ' leads sans RDV self ont eu un RDV posé par le setting' + extra;
   }
-  function cancelByLabel(k) {
-    var keys = Object.keys(k.cancelledByMap || {});
-    if (!keys.length) return null;
-    var parts = [];
-    keys.forEach(function (who) { if (who !== 'No-show') parts.push(who + ' : ' + k.cancelledByMap[who]); });
-    return parts.length ? parts.join(' · ') : null;
-  }
-
   /* ════════════════════════════════════════════════════════════════
      RENDER — ONGLET LEADS (détail par lead)
      ════════════════════════════════════════════════════════════════ */
@@ -1986,6 +2200,55 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   }
 
   /* ════════════════════════════════════════════════════════════════
+     MODAL COÛTS SETTING — _config/funnel_costs (report auto mois suivants)
+     ════════════════════════════════════════════════════════════════ */
+  function openCostsModal() {
+    var mk = P.start.getFullYear() + '-' + pad2(P.start.getMonth() + 1);
+    var months = DATA.costs || {};
+    var cur = months[mk] || null;
+    var eff = effectiveCosts(mk);
+    var h = '';
+    h += '<div class="fn-trow"><span class="tl">Mois concerné</span><input type="month" id="fnCostMonth" value="' + mk + '" style="width:150px;text-align:left"></div>';
+    h += '<div class="fn-trow"><span class="tl">Fixe setting (salaire, €/mois)</span><input type="number" step="any" min="0" id="fnCostFixe" value="' + (cur && cur.fixe != null ? escAttr(cur.fixe) : (eff ? escAttr(eff.fixe) : '')) + '" placeholder="0"></div>';
+    h += '<div class="fn-trow"><span class="tl">Outils (Ringover, Twilio…, €/mois)</span><input type="number" step="any" min="0" id="fnCostOutils" value="' + (cur && cur.outils != null ? escAttr(cur.outils) : (eff ? escAttr(eff.outils) : '')) + '" placeholder="0"></div>';
+    if (!cur && eff) h += '<div class="hint" style="margin-top:10px">Valeurs pré-remplies = report du mois <strong>' + esc(eff.src) + '</strong> (dernier saisi). Enregistrer crée une entrée propre à ce mois.</div>';
+    else if (!cur && !eff) h += '<div class="hint" style="margin-top:10px">Aucune valeur saisie pour l\'instant — le Coût / RDV NB affiche « — » tant que rien n\'est renseigné.</div>';
+    var body = $('#fnCostsBody');
+    body.innerHTML = h;
+    var mIn = $('#fnCostMonth');
+    if (mIn) mIn.onchange = function () {
+      var mk2 = this.value;
+      if (!/^\d{4}-\d{2}$/.test(mk2 || '')) return;
+      var c2 = (DATA.costs || {})[mk2] || null;
+      var e2 = effectiveCosts(mk2);
+      $('#fnCostFixe').value = c2 && c2.fixe != null ? c2.fixe : (e2 ? e2.fixe : '');
+      $('#fnCostOutils').value = c2 && c2.outils != null ? c2.outils : (e2 ? e2.outils : '');
+    };
+    $('#fnCostsModal').classList.add('show');
+  }
+
+  function saveCosts() {
+    var mk = ($('#fnCostMonth') && $('#fnCostMonth').value) || '';
+    if (!/^\d{4}-\d{2}$/.test(mk)) { toast('Mois invalide', true); return; }
+    var fx = $('#fnCostFixe').value, ot = $('#fnCostOutils').value;
+    var entry = { fixe: fx === '' ? 0 : Number(fx), outils: ot === '' ? 0 : Number(ot) };
+    if (isNaN(entry.fixe) || isNaN(entry.outils) || entry.fixe < 0 || entry.outils < 0) { toast('Montant invalide', true); return; }
+    var mo = {}; mo[mk] = entry;
+    db.collection('_config').doc('funnel_costs').set({
+      months: mo,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser ? (currentUser.email || currentUser.uid) : null
+    }, { merge: true }).then(function () {
+      $('#fnCostsModal').classList.remove('show');
+      toast('💶 Coûts ' + mk + ' enregistrés — reportés sur les mois suivants');
+      return loadFunnelCosts();
+    }).then(function () {
+      compute();
+      if (activeTab === 'funnel') renderFunnel();
+    }).catch(function (e) { toast('Erreur : ' + e.message, true); });
+  }
+
+  /* ════════════════════════════════════════════════════════════════
      ORCHESTRATION
      ════════════════════════════════════════════════════════════════ */
   function renderActiveTab() {
@@ -2014,7 +2277,9 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     updateToolbar();
     $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';
     var t0 = Date.now();
-    Promise.all([loadAds(), loadViews(), loadLeads(), loadBookings(), loadCalls(), loadSaisies(), loadJournalPeriod(), loadActionsAll(), loadClosedLeads(), loadPayments()])
+    Promise.all([loadAds(), loadViews(), loadLeads(), loadBookings(), loadCalls(), loadFunnelCosts(), loadSettingDeals(), loadJournalPeriod(), loadActionsAll(), loadClosedLeads(), loadPayments()])
+      .then(function () { return resolveChains(); })
+      .then(function () { return resolvePaymentLeads(); })
       .then(function () {
         compute();
         renderActiveTab();
@@ -2053,11 +2318,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     $('#fnTunnel').onchange = function () { tunnelFilter = this.value; compute(); renderActiveTab(); };
     $('#fnRefreshBtn').onclick = refresh;
     $('#fnTargetsBtn').onclick = openTargetsModal;
+    $('#fnCostsBtn').onclick = openCostsModal;
+    $('#fnCostsCancel').onclick = function () { $('#fnCostsModal').classList.remove('show'); };
+    $('#fnCostsSave').onclick = saveCosts;
+    $('#fnCostsModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
     $('#fnTargetsCancel').onclick = function () { $('#fnTargetsModal').classList.remove('show'); };
     $('#fnTargetsSave').onclick = saveTargets;
     $('#fnTargetsModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
     $$('#fnTabs .fn-tab').forEach(function (t) { t.onclick = function () { switchTab(t.getAttribute('data-tab')); }; });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('#fnTargetsModal').classList.remove('show'); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { $('#fnTargetsModal').classList.remove('show'); $('#fnCostsModal').classList.remove('show'); } });
   }
 
   /* ── INIT — garde admin (même schéma que admin-data-center) ── */
