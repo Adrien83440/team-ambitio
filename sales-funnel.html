@@ -170,7 +170,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
       <!-- Marqueur de build : incrémenté à chaque livraison pour vérifier
            d'un coup d'œil quelle version est réellement déployée/chargée. -->
-      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · RDV setting/closing uniquement (coaching &amp; CSM exclus) · <span style="color:var(--muted2);font-family:var(--font-m)">build 14.07-c</span></div>
+      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · RDV setting/closing uniquement (coaching &amp; CSM exclus) · <span style="color:var(--muted2);font-family:var(--font-m)">build 14.07-d</span></div>
     </div>
     <div class="fn-sync"><span class="fn-sync-dot" id="fnSyncDot"></span><span id="fnSyncText">Chargement…</span></div>
   </div>
@@ -636,6 +636,23 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     }).catch(function (e) { console.warn('[funnel] bookings', e.message); DATA.bookings = []; });
   }
 
+  /* Leads devenus CLIENTS dans la période (clientSince) — source de vérité
+     des closes QUEL QUE SOIT le chemin : résultat RDV, fiche CRM (stage Won),
+     pipeline. Un close fait depuis la fiche, même sans outcome sur le RDV,
+     apparaît ici. SB/NB via closed_won_self / closed_won_setting. */
+  function loadClosedLeads() {
+    var startTs = firebase.firestore.Timestamp.fromDate(P.start);
+    var endTs = firebase.firestore.Timestamp.fromDate(P.end);
+    return db.collection('leads')
+      .where('clientSince', '>=', startTs)
+      .where('clientSince', '<=', endTs)
+      .limit(500)
+      .get().then(function (snap) {
+        DATA.closedLeads = [];
+        snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.closedLeads.push(d); });
+      }).catch(function (e) { console.warn('[funnel] closedLeads', e.message); DATA.closedLeads = []; });
+  }
+
   function loadCalls() {
     var startTs = firebase.firestore.Timestamp.fromDate(P.start);
     var endTs = firebase.firestore.Timestamp.fromDate(P.end);
@@ -666,8 +683,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     if (!members.length) return Promise.resolve();
     var fsKey = P.y + '-' + pad2(P.m + 1);
     var CKEYS = ['calls', 'lives', 'offres', 'closes', 'contracte', 'collecte'];
-    var SKEYS = ['leads', 'calls', 'decroches', 'propRdv', 'sets', 'presents', 'closes'];
-    var agg = { closing: { calls: 0, lives: 0, offres: 0, closes: 0, contracte: 0, collecte: 0 }, setting: { leads: 0, calls: 0, decroches: 0, propRdv: 0, sets: 0, presents: 0, closes: 0 }, members: 0 };
+    var SKEYS = ['leads', 'calls', 'decroches', 'propRdv', 'sets', 'presents', 'closes', 'collecte'];
+    var agg = { closing: { calls: 0, lives: 0, offres: 0, closes: 0, contracte: 0, collecte: 0 }, setting: { leads: 0, calls: 0, decroches: 0, propRdv: 0, sets: 0, presents: 0, closes: 0, collecte: 0 }, members: 0 };
     var proms = members.map(function (m) {
       if (!m || !m.slug) return Promise.resolve();
       return db.collection('saisies').doc(m.slug).collection('mois').doc(fsKey).get().then(function (snap) {
@@ -1095,6 +1112,54 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       k.cashPerLive = c2.lives > 0 ? c2.collecte / c2.lives : null;
     }
 
+    /* ── Lignes SB / NB — repli saisies par métrique (retour Adrien 14/07) :
+       tant que les résultats RDV n'existent pas, on affiche les chiffres des
+       anciennes saisies manuelles. Règle métier : la saisie CLOSING ≈ Self
+       Booking (le rapport closing ne vient que du SB), la saisie SETTING ≈
+       No Booking. Marqués « saisies » dans l'UI. ── */
+    function pickLine(ocVal, saisieVal) {
+      if (ocVal > 0) return { v: ocVal, legacy: false };
+      var sv = Number(saisieVal) || 0;
+      if (k.saisies && sv > 0) return { v: sv, legacy: true };
+      return { v: ocVal || 0, legacy: false };
+    }
+    var _sc = k.saisies ? DATA.saisies.closing : {};
+    var _ss = k.saisies ? DATA.saisies.setting : {};
+
+    /* ── Closes « clients gagnés » — multi-chemins (fix 14/07, retour Adrien :
+       un close fait depuis la fiche AVANT le déploiement du bouton Résultat
+       doit compter). Source : leads passés clients (clientSince) dans la
+       période — tous les chemins de close posent clientSince (résultat RDV,
+       fiche CRM stage Won, pipeline). Complété par les closes RDV sans fiche
+       liée. SB = closed_won_self · NB = le reste. ── */
+    var closedLeads = (DATA.closedLeads || []).filter(function (l) { return tunnelMatch(leadTunnel(l)); });
+    var closesNoLeadSB = 0, closesNoLeadNB = 0;
+    due.forEach(function (b) {
+      if (b.outcome !== 'close' || b.leadId) return;
+      if (b._class === 'self') closesNoLeadSB++; else closesNoLeadNB++;
+    });
+    var wonSelfLeads = closedLeads.filter(function (l) { return l.stage === 'closed_won_self'; }).length;
+    k.wonSelf = wonSelfLeads + closesNoLeadSB;
+    k.wonSetting = (closedLeads.length - wonSelfLeads) + closesNoLeadNB;
+    k.closesWonTotal = k.wonSelf + k.wonSetting;
+
+    k.sbLine = {
+      present:   pickLine(k.ocSB.present,   _sc.lives),
+      pitched:   pickLine(k.ocSB.pitched,   _sc.offres),
+      closes:    pickLine(k.wonSelf,        _sc.closes),
+      collecte:  pickLine(k.ocSB.collecte,  _sc.collecte),
+      contracte: pickLine(k.ocSB.contracte, _sc.contracte)
+    };
+    k.nbLine = {
+      leadsWorked: pickLine(k.actLeadsWorked, _ss.leads),
+      present:     pickLine(k.ocNB.present,   _ss.presents),
+      closes:      pickLine(k.wonSetting,     _ss.closes),
+      collecte:    pickLine(k.ocNB.collecte,  _ss.collecte)
+    };
+    /* L'échelle CPR Live / Offre suit les valeurs affichées (repli inclus). */
+    k.cprLive  = (k.spend > 0 && k.sbLine.present.v > 0) ? k.spend / k.sbLine.present.v : null;
+    k.cprOffre = (k.spend > 0 && k.sbLine.pitched.v > 0) ? k.spend / k.sbLine.pitched.v : null;
+
     /* ── Totaux « toutes sources » — repli MÉTRIQUE PAR MÉTRIQUE (fix 14/07) :
        pendant la transition, on peut avoir des annulations/no-show statués
        sur les RDV (résultats partiels) alors que les closes/collecté du mois
@@ -1106,7 +1171,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       if (k.saisies) return { v: saisieVal || 0, src: 'saisies' };
       return { v: k.ocHasData ? 0 : null, src: 'auto' };
     }
-    var _pc = pickAll(k.ocTotal.closes, k.closes);
+    /* Closes = clients gagnés (multi-chemins), jamais moins que les saisies. */
+    var _pc = pickAll(k.closesWonTotal, k.closes);
     var _pcol = pickAll(k.ocTotal.collecte, k.collecte);
     var _pcon = pickAll(k.ocTotal.contracte, k.contracte);
     k.closesAll = _pc.v; k.closesSrc = _pc.src;
@@ -1152,7 +1218,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : '&nbsp;') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.booked) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) : '&nbsp;') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.kept) + '</div><div class="l">Kept</div><div class="s">' + (k.keptPct != null ? fmtPct(k.keptPct, 0) + ' · ' : '') + fmtNum(k.due) + ' planifiés</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.closesAll == null ? 'maille mois' : (k.closesSrc === 'auto' ? 'résultats RDV (auto)' : 'saisies (héritage)')) + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.closesAll == null ? 'maille mois' : (k.closesSrc === 'auto' ? 'clients gagnés (auto — fiches + RDV)' : 'saisies (héritage)')) + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + '</div><div class="l">Collecté</div><div class="s">' + (k.contracteAll != null ? 'Contracté ' + fmtEuro(k.contracteAll) : 'maille mois') + '</div></div>';
     h += '</div>';
 
@@ -1234,36 +1300,40 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     if (!k.ocHasData) {
       h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="sales-rdv.html" style="color:var(--blue)">Rendez-vous</a> ou la fiche prospect : kept / live / closes / collecté se rempliront tout seuls.</div>';
     }
-    /* — Ligne 1 : SELF BOOKING — */
+    /* — Ligne 1 : SELF BOOKING — (repli saisies marqué « 🗒 saisies ») */
     var sbKeptN = k.ocSB.due - k.ocSB.cancelled - k.ocSB.resched;
+    function legTag(p) { return p.legacy ? ' · <span style="color:var(--muted2)">🗒 saisies</span>' : ''; }
     h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:12px 0 8px">🔗 Self Booking — le lead prend RDV seul</div>';
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.leads), 'Leads (total)', 'cohorte de la période');
     h += kpiCard(fmtNum(k.bookedSelf), 'RDV pris SB', 'LTB (SB) ' + fmtPct(k.ltbSB) + ' · ' + fmtPct(k.selfShare, 0) + ' des RDV', targetBadge('selfShare', k.selfShare));
     h += kpiCard(fmtNum(sbKeptN), 'Kept SB', '<span style="color:var(--red3)">' + fmtNum(k.ocSB.cancelled) + ' annulés</span> · <span style="color:var(--gold)">' + fmtNum(k.ocSB.noshow) + ' no-show</span>' + (k.ocSB.resched ? ' · ' + k.ocSB.resched + ' replanifiés' : ''));
-    h += kpiCard(fmtNum(k.ocSB.present), 'Live SB (présents)', sbKeptN > 0 ? 'show-up ' + fmtPct(k.ocSB.present / sbKeptN * 100, 0) : null);
-    h += kpiCard(fmtNum(k.ocSB.pitched), 'Pitchés SB', k.ocSB.disqua ? k.ocSB.disqua + ' disqualifiés' : null);
-    h += kpiCard(fmtNum(k.ocSB.closes), 'Closes SB', (k.ocSB.pitched > 0 ? fmtPct(k.ocSB.closes / k.ocSB.pitched * 100, 0) + ' des offres · ' : '') + k.ocSB.nonCloses + ' non closes');
-    h += kpiCard(fmtEuro(k.ocSB.collecte), 'Collecté SB', 'contracté ' + fmtEuro(k.ocSB.contracte));
+    h += kpiCard(fmtNum(k.sbLine.present.v), 'Live SB (présents)', (sbKeptN > 0 && !k.sbLine.present.legacy ? 'show-up ' + fmtPct(k.sbLine.present.v / sbKeptN * 100, 0) : 'appels live') + legTag(k.sbLine.present));
+    h += kpiCard(fmtNum(k.sbLine.pitched.v), 'Pitchés SB', (k.ocSB.disqua ? k.ocSB.disqua + ' disqualifiés' : 'offres faites') + legTag(k.sbLine.pitched));
+    h += kpiCard(fmtNum(k.sbLine.closes.v), 'Closes SB', (k.sbLine.pitched.v > 0 ? fmtPct(k.sbLine.closes.v / k.sbLine.pitched.v * 100, 0) + ' des offres' : '') + (k.ocSB.nonCloses ? ' · ' + k.ocSB.nonCloses + ' non closes' : '') + legTag(k.sbLine.closes));
+    h += kpiCard(fmtEuro(k.sbLine.collecte.v), 'Collecté SB', 'contracté ' + fmtEuro(k.sbLine.contracte.v) + legTag(k.sbLine.collecte));
     h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dép. / RDV SB (annulés inclus)');
     h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dép. / RDV SB sans annulation');
-    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Live', 'dép. / RDV SB présents');
-    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Offre', 'dép. / RDV SB pitchés');
+    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Live', 'dép. / RDV SB présents' + legTag(k.sbLine.present));
+    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Offre', 'dép. / RDV SB pitchés' + legTag(k.sbLine.pitched));
     h += '</div>';
     /* — Ligne 2 : NO BOOKING (setting) — */
     var nbKeptN = k.ocNB.due - k.ocNB.cancelled - k.ocNB.resched;
     h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 No Booking — leads sans RDV, travaillés par le setting</div>';
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.leadsNoSB), 'Leads à travailler', fmtNum(k.leads) + ' − ' + fmtNum(k.cohortSelf) + ' self-bookés');
-    h += kpiCard(fmtNum(k.actLeadsWorked), 'Leads travaillés', '1ʳᵉ action fiche (journal setting)');
+    h += kpiCard(fmtNum(k.nbLine.leadsWorked.v), 'Leads travaillés', (k.nbLine.leadsWorked.legacy ? 'total leads (saisie setting)' : '1ʳᵉ action fiche (journal setting)') + legTag(k.nbLine.leadsWorked));
     h += kpiCard(fmtNum(k.bookedSetter), 'RDV pris NB', 'sets actions : ' + fmtNum(k.actSets) + (k.setterOldLeads ? ' · dont ' + k.setterOldLeads + ' leads antérieurs' : ''));
     h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
     h += kpiCard(fmtNum(nbKeptN), 'Kept NB', '<span style="color:var(--red3)">' + fmtNum(k.ocNB.cancelled) + ' annulés</span> · <span style="color:var(--gold)">' + fmtNum(k.ocNB.noshow) + ' no-show</span>' + (k.ocNB.resched ? ' · ' + k.ocNB.resched + ' replanifiés' : ''));
-    h += kpiCard(fmtNum(k.ocNB.present), 'Live NB (présents)', nbKeptN > 0 ? 'show-up ' + fmtPct(k.ocNB.present / nbKeptN * 100, 0) : null);
-    h += kpiCard(fmtNum(k.ocNB.closes), 'Closes NB', fmtEuro(k.ocNB.collecte) + ' collecté');
+    h += kpiCard(fmtNum(k.nbLine.present.v), 'Live NB (présents)', (nbKeptN > 0 && !k.nbLine.present.legacy ? 'show-up ' + fmtPct(k.nbLine.present.v / nbKeptN * 100, 0) : 'prospects présents') + legTag(k.nbLine.present));
+    h += kpiCard(fmtNum(k.nbLine.closes.v), 'Closes NB', fmtEuro(k.nbLine.collecte.v) + ' collecté' + legTag(k.nbLine.closes));
     h += kpiCard(fmtEuro2(k.cprNB), 'Coût / RDV NB', 'dép. / RDV pris par le setting');
     h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'coût d\'un lead (dépense / leads)', targetBadge('cpl', k.cpl));
     h += '</div>';
+    if (k.sbLine.present.legacy || k.nbLine.present.legacy || k.sbLine.closes.legacy || k.nbLine.closes.legacy) {
+      h += '<div class="fn-stage-note" style="margin-top:8px">🗒 Les valeurs marquées « saisies » viennent des anciennes saisies manuelles Setting/Closing du mois — elles seront remplacées automatiquement par les résultats RDV dès qu\'ils seront statués.</div>';
+    }
     if (k.bookedAdmin > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.bookedAdmin + ' RDV manuels (admin) — hors LTB / hors funnel.</div>';
     if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.unknownLeadBookings + ' RDV de leads hors période (non rattachés à la cohorte) — inclus dans les totaux « Tous », hors taux de récupération.</div>';
     if (k.ocTotal.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocTotal.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="sales-rdv.html">Rendez-vous</a> ou depuis la fiche prospect pour des lignes SB / NB exactes.</div>';
@@ -1336,7 +1406,11 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-grid">';
     h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense / lead', targetBadge('cpl', k.cpl));
     h += kpiCard(fmtEuro2(k.cacMarketOnly), 'CAC Market Only', 'dépense pub / client acquis — nommé ainsi pour ne pas confondre avec le « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacMarketOnly == null);
-    h += kpiCard(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV', 'collecté ' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + ' / ' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + ' client(s)', null, k.aovAll == null);
+    h += kpiCard(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV',
+      (k.closesAll > 0 && !k.collecteAll)
+        ? fmtNum(k.closesAll) + ' client(s) mais collecté manquant — renseigne le montant au Close (modale RDV) ou en saisie'
+        : 'collecté ' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + ' / ' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + ' client(s)',
+      null, k.aovAll == null);
     h += '</div></div>';
 
     /* Journal de la période */
@@ -1823,7 +1897,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     updateToolbar();
     $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';
     var t0 = Date.now();
-    Promise.all([loadAds(), loadViews(), loadLeads(), loadBookings(), loadCalls(), loadSaisies(), loadJournalPeriod(), loadActionsAll()])
+    Promise.all([loadAds(), loadViews(), loadLeads(), loadBookings(), loadCalls(), loadSaisies(), loadJournalPeriod(), loadActionsAll(), loadClosedLeads()])
       .then(function () {
         compute();
         renderActiveTab();
