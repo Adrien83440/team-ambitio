@@ -15,6 +15,7 @@
 <!-- Refonte 07/2026 : journal d'actions setting + résultats RDV -->
 <script src="alteore-flow.js"></script>
 <script src="rdv-outcome.js"></script>
+<script src="close-wizard.js"></script>
 <script>
 if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
 </script>
@@ -299,8 +300,13 @@ db.collection('alteo_forms').get().then(function(sn){
     window.__formsLabels[doc.id]=map;
   });
 }).catch(function(e){console.warn('[FormsLabels] preload failed:',e);});
-var STAGES=[{key:'lead',label:'Lead',color:'#34d399',s:'P'},{key:'nrp1',label:'NRP 1',color:'#f59e0b',s:'P'},{key:'nrp2',label:'NRP 2',color:'#e67e22',s:'P'},{key:'nrp3',label:'NRP 3',color:'#ef4444',s:'P'},{key:'all_nrp',label:'All NRP',color:'#6b7280',s:'P'},{key:'faux_numero',label:'Faux numéro',color:'#64748b',s:'P'},{key:'poubelle',label:'Poubelle',color:'#374151',s:'P'},{key:'disqualification',label:'Disqualification',color:'#6b7280',s:'P'},{key:'follow_up_pm',label:'Follow Up (PM)',color:'#60a5fa',s:'P'},{key:'set',label:'SET',color:'#a78bfa',s:'P'},{key:'rdv_self_booking',label:'RDV Self Booking',color:'#fbbf24',s:'P'},{key:'rdv_confirmes',label:'RDV confirmés',color:'#34d399',s:'C'},{key:'rdv_annules_prospect',label:'Annulés Prospect',color:'#ef4444',s:'C'},{key:'rdv_annules_equipe',label:'Annulés Équipe',color:'#f87171',s:'C'},{key:'no_show_self',label:'No Show Self',color:'#f59e0b',s:'C'},{key:'no_show_setting',label:'No Show Setting',color:'#e67e22',s:'C'},{key:'partenariats',label:'Partenariats',color:'#8b5cf6',s:'C'},{key:'closed_won_setting',label:'Won Setting',color:'#10b981',s:'C'},{key:'closed_won_self',label:'Won Self B.',color:'#059669',s:'C'},{key:'closed_lost',label:'Closed Lost',color:'#ef4444',s:'C'},{key:'follow_up_closing',label:'Follow-Up',color:'#60a5fa',s:'C'},{key:'disqualifie_closing',label:'Disqualifié',color:'#6b7280',s:'C'}];
+var STAGES=[{key:'lead',label:'Lead',color:'#34d399',s:'P'},{key:'nrp1',label:'NRP 1',color:'#f59e0b',s:'P'},{key:'nrp2',label:'NRP 2',color:'#e67e22',s:'P'},{key:'nrp3',label:'NRP 3',color:'#ef4444',s:'P'},{key:'all_nrp',label:'All NRP',color:'#6b7280',s:'P'},{key:'faux_numero',label:'Faux numéro',color:'#64748b',s:'P'},{key:'poubelle',label:'Poubelle',color:'#374151',s:'P'},{key:'disqualification',label:'Disqualification',color:'#6b7280',s:'P'},{key:'follow_up_pm',label:'Follow Up (PM)',color:'#60a5fa',s:'P'},{key:'set',label:'SET',color:'#a78bfa',s:'P'},{key:'rdv_self_booking',label:'RDV Self Booking',color:'#fbbf24',s:'P'},{key:'rdv_confirmes',label:'RDV confirmés',color:'#34d399',s:'C'},{key:'rdv_annules_prospect',label:'Annulés Prospect',color:'#ef4444',s:'C'},{key:'rdv_annules_equipe',label:'Annulés Équipe',color:'#f87171',s:'C'},{key:'no_show_self',label:'No Show Self',color:'#f59e0b',s:'C'},{key:'no_show_setting',label:'No Show Setting',color:'#e67e22',s:'C'},{key:'partenariats',label:'Partenariats',color:'#8b5cf6',s:'C'},{key:'closing',label:'Closing',color:'#10b981',s:'C',virtual:1},{key:'closed_lost',label:'Closed Lost',color:'#ef4444',s:'C'},{key:'follow_up_closing',label:'Follow-Up',color:'#60a5fa',s:'C'},{key:'disqualifie_closing',label:'Disqualifié',color:'#6b7280',s:'C'}];
 var SM={};STAGES.forEach(function(s,i){s._i=i;SM[s.key]=s;});
+/* Refonte 14/07 : statut unique « Closing » — les stages internes
+   closed_won_self / closed_won_setting existent toujours en base (rapports
+   SB/NB, funnel, commissions) mais s'affichent tous deux « Closing » et
+   pointent sur la même pastille du pipeline. */
+SM['closed_won_setting']=SM['closing'];SM['closed_won_self']=SM['closing'];
 function toast(m){var t=document.getElementById('ctToast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 function escA(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
@@ -864,6 +870,10 @@ document.getElementById('ctApp').addEventListener('click',function(e){
 var cdTarget=e.target.closest('[data-action="callDetail"]');if(cdTarget){e.stopPropagation();var ccid=cdTarget.dataset.cid;if(ccid&&window.CallDetailModal)window.CallDetailModal.open(ccid);return;}
 var fhBtn=e.target.closest('[data-action="toggleFormHistory"]');if(fhBtn){var fhBox=document.querySelector('[data-fl-form-history-content]');if(fhBox){var fhOpen=fhBox.style.display!=='none';fhBox.style.display=fhOpen?'none':'block';fhBtn.classList.toggle('open',!fhOpen);}return;}
 var dot=e.target.closest('[data-action="setStage"]');if(dot){var o=lead.stage||'lead',n=dot.dataset.stage;if(o===n)return;
+/* ── Refonte 14/07 : la pastille « Closing » ouvre les CARTES du close
+   (contrat → PIF/MENS → SB/NB → encaissé → confirmer). Le wizard pose
+   stage interne (closed_won_self/setting), timeline, RDV et commissions. */
+if(n==='closing'){if(window.CloseWizard){var _tm0=window._fcTypeMap;window.CloseWizard.open({leadId:leadId,lead:lead,bookings:window._fcRdvCache||null,typeMap:(_tm0&&Object.keys(_tm0).length)?_tm0:null,onDone:function(res){lead.stage=(res&&res.sb)?'closed_won_self':'closed_won_setting';lead.status='client';lead.isClient=true;renderAll();}});}else{toast('❌ close-wizard.js manquant — recharge la page');}return;}
 /* \u2500\u2500 Journal d'actions setting (refonte 07/2026) \u2014 captur\u00e9 AVANT la maj.
    Seules les \u00e9tapes de prospection (axe setter) comptent comme actions. */
 var stSync={lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'all_nrp',faux_numero:'faux_numero',poubelle:'poubelle',disqualification:'disqualifie',follow_up_pm:'follow_up_pm',set:'set',rdv_self_booking:'rdv_self_booking',rdv_confirmes:'rdv_pose',rdv_annules_prospect:'pas_interesse',rdv_annules_equipe:'pas_interesse',no_show_self:'pas_interesse',no_show_setting:'pas_interesse',closed_won_setting:'rdv_pose',closed_won_self:'rdv_pose',closed_lost:'pas_interesse',follow_up_closing:'appele',disqualifie_closing:'disqualifie'};
@@ -1038,6 +1048,9 @@ function ctResched(bookingId){
   if(!b||!window.RdvOutcome){toast('❌ RDV introuvable');return;}
   window.RdvOutcome.openReschedule(b,{});
 }
+
+/* Refonte 14/07 : l'ancien « nudge collecté » est remplacé par les CARTES du
+   close (close-wizard.js) — ouvertes par la pastille Closing du pipeline. */
 
 function paintRdvBox(items){
   var box=document.getElementById('fcRdvBox');

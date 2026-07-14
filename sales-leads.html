@@ -29,6 +29,7 @@
 <!-- Refonte 07/2026 : journal d'actions setting + résultats RDV -->
 <script src="alteore-flow.js" defer></script>
 <script src="rdv-outcome.js" defer></script>
+<script src="close-wizard.js" defer></script>
 <script>
   if (!firebase.apps.length) {
     firebase.initializeApp({
@@ -1243,7 +1244,11 @@ var STATUSES = [
   { key: 'pas_interesse',    label: 'Pas intéressé',    icon: '👎',  color: '#ef4444', bg: 'rgba(239,68,68,0.1)'   },
   { key: 'disqualifie',      label: 'Disqualifié',      icon: '🚫',  color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
   { key: 'poubelle',         label: 'Poubelle',         icon: '🗑️', color: '#374151', bg: 'rgba(55,65,81,0.18)'   },
-  { key: 'client',           label: 'Client',           icon: '🏆',  color: '#fbbf24', bg: 'rgba(251,191,36,0.18)' }
+  /* Refonte 14/07 : statut unique « Closing » (plus de Closing SB / NB
+     visibles) — cliquer ouvre les CARTES du close (contrat → PIF/MENS →
+     SB/NB → encaissé → confirmation) qui règlent stage, commissions et
+     rapports automatiquement. */
+  { key: 'client',           label: 'Closing',          icon: '🏆',  color: '#fbbf24', bg: 'rgba(251,191,36,0.18)' }
 ];
 
 function getStatusObj(key) {
@@ -2480,7 +2485,7 @@ function renderEngagementHistoryBlock(l, id) {
     no_show_setting: 'No-show setting', follow_up_closing: 'Follow Up Closing',
     disqualifie_closing: 'Disqualifié closing', disqualification: 'Disqualifié',
     pas_interesse: 'Pas intéressé', poubelle: 'Poubelle',
-    closed_won_setting: 'Closed Won Setting', closed_won_self: 'Closed Won Self',
+    closed_won_setting: 'Closing', closed_won_self: 'Closing',
     closed_lost: 'Closed Lost', partenariats: 'Partenariats'
   };
 
@@ -2650,7 +2655,7 @@ function renderCard(l) {
   h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
   if (setterObj) h += '<span class="ld-assigned">' + setterObj.name + '</span>';
   if (l.stage && l.stage !== 'lead') {
-    var stageNames = {nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',all_nrp:'All NRP',faux_numero:'Faux n°',poubelle:'Poubelle',disqualification:'Disqualif.',follow_up_pm:'Follow Up',set:'SET',rdv_self_booking:'RDV Self',rdv_confirmes:'RDV Conf.',rdv_annules_prospect:'Annulé',rdv_annules_equipe:'Annulé Éq.',no_show_self:'No Show',no_show_setting:'No Show S.',partenariats:'Partenariat',closed_won_setting:'Won Setting',closed_won_self:'Won Self',closed_lost:'Lost',follow_up_closing:'Follow Up',disqualifie_closing:'Disqualif.'};
+    var stageNames = {nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',all_nrp:'All NRP',faux_numero:'Faux n°',poubelle:'Poubelle',disqualification:'Disqualif.',follow_up_pm:'Follow Up',set:'SET',rdv_self_booking:'RDV Self',rdv_confirmes:'RDV Conf.',rdv_annules_prospect:'Annulé',rdv_annules_equipe:'Annulé Éq.',no_show_self:'No Show',no_show_setting:'No Show S.',partenariats:'Partenariat',closed_won_setting:'Closing',closed_won_self:'Closing',closed_lost:'Lost',follow_up_closing:'Follow Up',disqualifie_closing:'Disqualif.'};
     var stName = stageNames[l.stage] || l.stage;
     h += '<span class="ld-assigned" style="color:var(--purple);border-color:rgba(167,139,250,0.25)">🔀 ' + stName + '</span>';
   }
@@ -3213,6 +3218,27 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
   if (statusBtn) {
     var leadId = statusBtn.dataset.id;
     var newStatus = statusBtn.dataset.status;
+    /* ── Refonte 14/07 : « Closing » n'écrit rien directement — il ouvre les
+       CARTES du close (contrat → PIF/MENS → SB/NB → encaissé → confirmer).
+       C'est le wizard qui pose stage/status/clientSince + commissions ; le
+       onSnapshot rafraîchit la carte tout seul. ── */
+    if (newStatus === 'client') {
+      if (!window.CloseWizard) {
+        /* Pas d'écriture directe en secours : status 'client' seul (sans
+           stage/clientSince/commissions) = client invisible du funnel. */
+        toast('❌ close-wizard.js manquant — recharge la page (Ctrl+Shift+R)');
+        return;
+      }
+      var wzLead = null;
+      for (var wi = 0; wi < allLeads.length; wi++) { if (allLeads[wi].id === leadId) { wzLead = allLeads[wi]; break; } }
+      window.CloseWizard.open({
+        leadId: leadId,
+        lead: wzLead,
+        bookings: _ldRdvCache[leadId] || null,
+        typeMap: (_ldTypeMap && Object.keys(_ldTypeMap).length) ? _ldTypeMap : null
+      });
+      return;
+    }
     // Visual update
     var card2 = statusBtn.closest('.ld-card');
     card2.querySelectorAll('.ld-status-btn').forEach(function(b) {

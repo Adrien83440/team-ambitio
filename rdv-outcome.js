@@ -312,6 +312,21 @@
       openResched();
       return;
     }
+    if (k === 'close' && window.CloseWizard) {
+      /* Refonte 14/07 : le close passe par les CARTES enchaînées (contrat →
+         PIF/MENS → SB/NB → encaissé → confirmation). Plus de formulaire ici :
+         closer/setter résolus automatiquement, montants = encaissé déclaré,
+         la vérité du cash reste le module Paiements. */
+      var bk = state.booking, ld = state.lead, cb0 = state.opts.onDone;
+      var tm = state.opts.typeMap;
+      tm = (tm && Object.keys(tm).length) ? tm : null; /* {} en attente de fetch → le wizard recharge */
+      close();
+      window.CloseWizard.open({
+        booking: bk, typeMap: tm, lead: ld, leadId: bk.leadId || null,
+        onDone: function (res) { if (typeof cb0 === 'function') cb0({ ok: true, outcome: 'close', result: res }); }
+      });
+      return;
+    }
     renderPanel();
     $('rvoOk').disabled = false;
   }

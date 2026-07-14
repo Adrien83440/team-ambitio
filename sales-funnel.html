@@ -170,7 +170,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
       <!-- Marqueur de build : incrémenté à chaque livraison pour vérifier
            d'un coup d'œil quelle version est réellement déployée/chargée. -->
-      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · RDV setting/closing uniquement (coaching &amp; CSM exclus) · <span style="color:var(--muted2);font-family:var(--font-m)">build 14.07-d</span></div>
+      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · RDV setting/closing uniquement (coaching &amp; CSM exclus) · <span style="color:var(--muted2);font-family:var(--font-m)">build 14.07-f</span></div>
     </div>
     <div class="fn-sync"><span class="fn-sync-dot" id="fnSyncDot"></span><span id="fnSyncText">Chargement…</span></div>
   </div>
@@ -651,6 +651,23 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
         DATA.closedLeads = [];
         snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.closedLeads.push(d); });
       }).catch(function (e) { console.warn('[funnel] closedLeads', e.message); DATA.closedLeads = []; });
+  }
+
+  /* MODULE PAIEMENTS (collection payments — GoCardless) : LA vérité du cash
+     (validé Adrien 14/07). Chaque doc : totalAmount (contrat TTC),
+     paidAmount (encaissé réel à date), paymentsHistory[] (chaque
+     prélèvement daté), leadId / leadEmail, closerSlug, status.
+     Croisement par client gagné : collecté = paidAmount du client (→ HT),
+     repli sur l'encaissé déclaré aux cartes du Close. La collection est
+     petite (dizaines de docs) → chargée en entier, croisée côté client. */
+  function loadPayments() {
+    DATA.payments = [];
+    return db.collection('payments').get().then(function (snap) {
+      snap.forEach(function (doc) {
+        var d = doc.data(); d._id = doc.id;
+        DATA.payments.push(d);
+      });
+    }).catch(function (e) { console.warn('[funnel] payments', e.message); DATA.payments = []; });
   }
 
   function loadCalls() {
@@ -1143,18 +1160,109 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     k.wonSetting = (closedLeads.length - wonSelfLeads) + closesNoLeadNB;
     k.closesWonTotal = k.wonSelf + k.wonSetting;
 
+    /* ── Collecté / Contracté des closes — croisés avec le MODULE PAIEMENTS
+       (validé Adrien 14/07 : « tu trouves le collecté dans le module
+       paiement, croise les données pour que tout concorde »). Pour CHAQUE
+       client gagné de la période :
+         collecté  = ① paidAmount de ses paiements GoCardless (TTC → HT)
+                     ② sinon l'encaissé DÉCLARÉ aux cartes du Close
+                     ③ sinon « close sans montant » compté et affiché
+         contracté = ① totalAmount de ses contrats (hors annulés/brouillons)
+                     ② sinon le tarif officiel posé par les cartes
+       Rattachement paiement → client : leadId, sinon email. Jamais de
+       double compte : un client = une résolution. ── */
+    function payHT(p, amount) {
+      var a = Number(amount) || 0;
+      return p && p.vatType === 'ht' ? a : a / 1.2; // module Paiements = TTC par défaut
+    }
+    var declByLead = {};   // encaissé/contracté déclarés aux cartes (closeData des RDV)
+    (DATA.bookings || []).forEach(function (b) {
+      if (b.outcome !== 'close' || !b.closeData || !b.leadId) return;
+      declByLead[b.leadId] = { col: Number(b.closeData.collecte) || 0, con: Number(b.closeData.contracte) || 0 };
+    });
+    var paysByLead = {}, paysByEmail = {};
+    (DATA.payments || []).forEach(function (p) {
+      if (!p) return;
+      p._matched = false;
+      if (p.leadId) { (paysByLead[p.leadId] = paysByLead[p.leadId] || []).push(p); }
+      var pem = (p.leadEmail || '').toLowerCase().trim();
+      if (pem) { (paysByEmail[pem] = paysByEmail[pem] || []).push(p); }
+    });
+    function payForClient(leadId, email) {
+      /* !p._matched : un paiement déjà rattaché à un client ne compte jamais
+         deux fois (fiches en doublon avec le même email, etc.). */
+      var seen = {}, list = [];
+      (paysByLead[leadId] || []).forEach(function (p) { if (!seen[p._id] && !p._matched) { seen[p._id] = 1; list.push(p); } });
+      ((email ? paysByEmail[email] : null) || []).forEach(function (p) { if (!seen[p._id] && !p._matched) { seen[p._id] = 1; list.push(p); } });
+      var paid = 0, contracted = 0;
+      list.forEach(function (p) {
+        p._matched = true;
+        paid += payHT(p, p.paidAmount);                     // cash réellement prélevé (tous statuts)
+        if (p.status !== 'cancelled' && p.status !== 'draft') contracted += payHT(p, p.totalAmount);
+      });
+      return { n: list.length, paid: Math.round(paid * 100) / 100, contracted: Math.round(contracted * 100) / 100 };
+    }
+    var wonColSB = 0, wonConSB = 0, wonColNB = 0, wonConNB = 0, colMissing = 0, noPayCount = 0;
+    closedLeads.forEach(function (l) {
+      var sb2 = l.stage === 'closed_won_self';
+      var lem = (l.email || '').toLowerCase().trim();
+      var pay = payForClient(l._id, lem);
+      var decl = declByLead[l._id] || (l.closedData ? { col: Number(l.closedData.collecte) || 0, con: Number(l.closedData.contracte) || 0 } : null);
+      if (!pay.n) noPayCount++;
+      var col = null, con = 0;
+      if (pay.paid > 0) col = pay.paid;
+      else if (decl) col = decl.col;
+      if (pay.contracted > 0) con = pay.contracted;
+      else if (decl) con = decl.con;
+      if (col == null) { colMissing++; return; }
+      if (sb2) { wonColSB += col; wonConSB += con; } else { wonColNB += col; wonConNB += con; }
+    });
+    /* Closes RDV sans fiche liée : encaissé déclaré, sinon paiement par email. */
+    due.forEach(function (b) {
+      if (b.outcome !== 'close' || b.leadId) return;
+      var bem = (b.prospect && b.prospect.email || '').toLowerCase().trim();
+      var pay3 = payForClient('__none__', bem);
+      var col3 = null, con3 = 0;
+      if (pay3.paid > 0) col3 = pay3.paid;
+      else if (b.closeData) col3 = Number(b.closeData.collecte) || 0;
+      if (pay3.contracted > 0) con3 = pay3.contracted;
+      else if (b.closeData) con3 = Number(b.closeData.contracte) || 0;
+      if (col3 == null) { colMissing++; return; }
+      if (b._class === 'self') { wonColSB += col3; wonConSB += con3; } else { wonColNB += col3; wonConNB += con3; }
+    });
+    k.wonCollecteSB = wonColSB; k.wonCollecteNB = wonColNB;
+    k.wonContracteSB = wonConSB; k.wonContracteNB = wonConNB;
+    k.wonCollecte = Math.round((wonColSB + wonColNB) * 100) / 100;
+    k.wonContracte = Math.round((wonConSB + wonConNB) * 100) / 100;
+    k.collecteMissing = colMissing;
+    k.closesNoPayment = noPayCount;
+    /* Diagnostics croisés (vue « Tous ») :
+       - paiements créés dans la période sans client gagné correspondant
+         (email de fiche différent, ou fiche jamais passée en Closing) */
+    k.paymentsUnmatched = 0;
+    if (tunnelFilter === 'all') {
+      var _ps2 = P.start.getTime(), _pe2 = P.end.getTime();
+      (DATA.payments || []).forEach(function (p) {
+        if (!p || p._matched) return;
+        var cms = parseFlexMs(p.createdAt);
+        if (cms != null && cms >= _ps2 && cms <= _pe2) k.paymentsUnmatched++;
+      });
+    }
+    /* Le ROAS résultats suit le collecté consolidé (Paiements + déclaré). */
+    if (k.spend > 0 && k.wonCollecte > 0) k.roasOutcome = k.wonCollecte / k.spend;
+
     k.sbLine = {
       present:   pickLine(k.ocSB.present,   _sc.lives),
       pitched:   pickLine(k.ocSB.pitched,   _sc.offres),
       closes:    pickLine(k.wonSelf,        _sc.closes),
-      collecte:  pickLine(k.ocSB.collecte,  _sc.collecte),
-      contracte: pickLine(k.ocSB.contracte, _sc.contracte)
+      collecte:  pickLine(k.wonCollecteSB,  _sc.collecte),
+      contracte: pickLine(k.wonContracteSB, _sc.contracte)
     };
     k.nbLine = {
       leadsWorked: pickLine(k.actLeadsWorked, _ss.leads),
       present:     pickLine(k.ocNB.present,   _ss.presents),
       closes:      pickLine(k.wonSetting,     _ss.closes),
-      collecte:    pickLine(k.ocNB.collecte,  _ss.collecte)
+      collecte:    pickLine(k.wonCollecteNB,  _ss.collecte)
     };
     /* L'échelle CPR Live / Offre suit les valeurs affichées (repli inclus). */
     k.cprLive  = (k.spend > 0 && k.sbLine.present.v > 0) ? k.spend / k.sbLine.present.v : null;
@@ -1173,8 +1281,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     }
     /* Closes = clients gagnés (multi-chemins), jamais moins que les saisies. */
     var _pc = pickAll(k.closesWonTotal, k.closes);
-    var _pcol = pickAll(k.ocTotal.collecte, k.collecte);
-    var _pcon = pickAll(k.ocTotal.contracte, k.contracte);
+    var _pcol = pickAll(k.wonCollecte, k.collecte);
+    var _pcon = pickAll(k.wonContracte, k.contracte);
     k.closesAll = _pc.v; k.closesSrc = _pc.src;
     k.collecteAll = _pcol.v; k.collecteSrc = _pcol.src;
     k.contracteAll = _pcon.v;
@@ -1219,7 +1327,9 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.booked) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) : '&nbsp;') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.kept) + '</div><div class="l">Kept</div><div class="s">' + (k.keptPct != null ? fmtPct(k.keptPct, 0) + ' · ' : '') + fmtNum(k.due) + ' planifiés</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.closesAll == null ? 'maille mois' : (k.closesSrc === 'auto' ? 'clients gagnés (auto — fiches + RDV)' : 'saisies (héritage)')) + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + '</div><div class="l">Collecté</div><div class="s">' + (k.contracteAll != null ? 'Contracté ' + fmtEuro(k.contracteAll) : 'maille mois') + '</div></div>';
+    var heroColSub = k.contracteAll != null ? 'Contracté ' + fmtEuro(k.contracteAll) : 'maille mois';
+    if (k.collecteMissing > 0 && k.collecteSrc === 'auto') heroColSub += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' close(s) sans montant</span>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + '</div><div class="l">Collecté</div><div class="s">' + heroColSub + '</div></div>';
     h += '</div>';
 
     /* 1. Publicité */
@@ -1296,7 +1406,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
        de coûts CPR ; ligne 2 = les leads restants, travaillés par le setting
        (NB) avec le coût d'un RDV setting. Les résultats (kept, live, closes,
        collecté) viennent des statuts RDV — plus aucune section doublon. */
-    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'RDV créés sur la période · kept, live, closes et collecté = résultats saisis sur les RDV · coaching &amp; CSM exclus');
+    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'RDV créés sur la période · kept &amp; live = résultats RDV · collecté = module Paiements (HT), repli cartes du Close · coaching &amp; CSM exclus');
     if (!k.ocHasData) {
       h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="sales-rdv.html" style="color:var(--blue)">Rendez-vous</a> ou la fiche prospect : kept / live / closes / collecté se rempliront tout seuls.</div>';
     }
@@ -1337,6 +1447,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     if (k.bookedAdmin > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.bookedAdmin + ' RDV manuels (admin) — hors LTB / hors funnel.</div>';
     if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.unknownLeadBookings + ' RDV de leads hors période (non rattachés à la cohorte) — inclus dans les totaux « Tous », hors taux de récupération.</div>';
     if (k.ocTotal.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocTotal.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="sales-rdv.html">Rendez-vous</a> ou depuis la fiche prospect pour des lignes SB / NB exactes.</div>';
+    if (k.collecteMissing > 0 && k.collecteSrc === 'auto') h += '<div class="fn-alert">💶 <strong>' + k.collecteMissing + ' close(s) sans montant</strong> — le client est compté mais aucun paiement (module Paiements) ni encaissé déclaré (cartes du Close) ne lui correspond. Valide les cartes du close (statut « Closing » ou 🎯 Résultat) ou crée le paiement GoCardless : le collecté remontera ici automatiquement.</div>';
+    if (k.closesNoPayment > 0 && k.collecteSrc === 'auto') h += '<div class="fn-stage-note" style="margin-top:8px">💳 ' + k.closesNoPayment + ' client(s) gagné(s) sans paiement GoCardless créé — leur collecté vient de l\'encaissé déclaré aux cartes. Crée le paiement dans le module Paiements pour que le réel prenne le relais.</div>';
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
@@ -1402,16 +1514,21 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     /* 8. Rentabilité — l'échelle CPR vit dans la ligne SB de « Prise de
        RDV », le ROAS dans « Publicité » : ici, uniquement ce qui n'existe
        nulle part ailleurs (CPL, CAC Market Only, AOV). */
-    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'closes &amp; collecté = résultats RDV (auto), repli saisies pour les mois passés');
+    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'collecté = module Paiements (HT), repli encaissé déclaré aux cartes du Close · saisies pour les mois passés');
     h += '<div class="fn-grid">';
     h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense / lead', targetBadge('cpl', k.cpl));
     h += kpiCard(fmtEuro2(k.cacMarketOnly), 'CAC Market Only', 'dépense pub / client acquis — nommé ainsi pour ne pas confondre avec le « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacMarketOnly == null);
-    h += kpiCard(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV',
-      (k.closesAll > 0 && !k.collecteAll)
-        ? fmtNum(k.closesAll) + ' client(s) mais collecté manquant — renseigne le montant au Close (modale RDV) ou en saisie'
-        : 'collecté ' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + ' / ' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + ' client(s)',
-      null, k.aovAll == null);
-    h += '</div></div>';
+    var aovHint;
+    if (k.closesAll > 0 && !k.collecteAll) {
+      aovHint = fmtNum(k.closesAll) + ' client(s) mais collecté manquant — valide les cartes du Close (statut « Closing ») ou crée le paiement GoCardless (module Paiements)';
+    } else {
+      aovHint = 'collecté ' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + ' / ' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + ' client(s)';
+      if (k.collecteMissing > 0 && k.collecteSrc === 'auto') aovHint += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' sans montant (AOV sous-estimé)</span>';
+    }
+    h += kpiCard(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV', aovHint, null, k.aovAll == null);
+    h += '</div>';
+    if (k.paymentsUnmatched > 0) h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.paymentsUnmatched + ' paiement(s) créé(s) dans la période sans client gagné correspondant — vérifie que l\'email du paiement correspond à celui de la fiche, et que la fiche est bien passée en Closing.</div>';
+    h += '</div>';
 
     /* Journal de la période */
     h += '<div class="fn-stage"><div class="fn-stage-head"><div class="fn-stage-title">📒 Actions de la période</div><div class="fn-stage-note"><a href="#" id="fnGoJournal" style="color:var(--blue)">Ouvrir le journal →</a></div></div>';
@@ -1897,7 +2014,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     updateToolbar();
     $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';
     var t0 = Date.now();
-    Promise.all([loadAds(), loadViews(), loadLeads(), loadBookings(), loadCalls(), loadSaisies(), loadJournalPeriod(), loadActionsAll(), loadClosedLeads()])
+    Promise.all([loadAds(), loadViews(), loadLeads(), loadBookings(), loadCalls(), loadSaisies(), loadJournalPeriod(), loadActionsAll(), loadClosedLeads(), loadPayments()])
       .then(function () {
         compute();
         renderActiveTab();

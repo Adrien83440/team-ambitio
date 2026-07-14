@@ -185,3 +185,64 @@ membres Commissions construits depuis le roster (deals AUTO d'un nouveau membre 
 slug email de secours jamais utilisé comme clé de données (roster obligatoire) ·
 sélecteurs closer/setter reconstruits à l'arrivée du roster · SB/NB fiable dans
 booking-admin (typeMap auto-chargé) · héro du Tunnel : priorité résultats RDV sur saisies.
+
+## 10. Collecté / contracté multi-sources (fix 14/07 — build 14.07-e)
+
+Constat Adrien : « j'ai les 2 closes dans les 7 jours mais pas le collecté ». Les closes
+sont comptés depuis les fiches (`clientSince`, tous chemins), mais le montant n'existait
+que si la modale Close du RDV avait été utilisée → collecté 0 €, AOV faux.
+
+**Règle (funnel)** — pour CHAQUE client gagné de la période, le montant vient de,
+dans l'ordre, sans jamais doubler :
+1. **Modale Close du RDV** (`bookings.closeData.collecte/contracte`) — prioritaire ;
+2. **Deal Commissions type Closing** daté dans la période (`collecteHT/contracteHT`),
+   rattaché par `leadId` puis par email (si deux deals pour le même client, celui
+   encaissé > 0 € gagne) ;
+3. sinon compté « **close sans montant** » : alerte 💶 dans Prise de RDV, ⚠ dans le héro
+   et sur l'AOV (« sous-estimé ») — jamais un 0 silencieux qui fausse les chiffres.
+
+Ventilation SB/NB par le stage de la fiche (`closed_won_self` = SB). Le ROAS résultats
+suit ce collecté consolidé. Diagnostic (vue « Tous ») : deals Closing de la période sans
+client gagné correspondant (email de fiche différent, fiche jamais passée en Won).
+
+**Capture à la source (fiche CRM)** : passer une fiche en Won ouvre automatiquement la
+modale Résultat pré-réglée sur **Close** s'il existe un RDV sales non statué (montants +
+commissions saisis au bon moment) ; sinon rappel toast — on n'écrase jamais un résultat
+déjà saisi. Le chemin recommandé reste : statuer le RDV en Close via 🎯 Résultat.
+
+## 11. Cartes du Close + croisement module Paiements (14/07 — build 14.07-f)
+
+**Les CARTES du Close** (`close-wizard.js`, validé Adrien) — passer un lead en
+« Closing » (Leads Live · pipeline CRM · fiche) ou choisir Close sur un RDV
+enchaîne 4 cartes cliquables + un récap :
+① Contrat signé : **Elite / Business** · ② **PIF / MENS** · ③ **Self Booking /
+No Booking** (suggestion auto, mais c'est LA réponse qui fait foi — elle prime
+sur la classification du RDV) · ④ **Encaissé à la signature (HT)** — chips aux
+tarifs officiels : Elite PIF 12 000 · Elite MENS 13 000 (≤ 4×, chips 3 250/6 500) ·
+Business PIF 5 000 · Business MENS 6 000 (≤ 10×, chips 600/1 000/1 500) + saisie
+libre · ⑤ Récap (chaque ligne recliquable) → Confirmer.
+
+À la confirmation : résultat « close » posé sur le RDV du lead s'il en reste un
+à statuer (sinon close direct sur la fiche), stage interne `closed_won_self/
+setting` selon la carte ③, timeline, `closedData` copié sur la fiche, et
+**commissions auto** (closer/setter résolus automatiquement — Business = BP 12).
+Bouton « 💳 Créer le paiement GoCardless » → `payments.html?leadId=` prérempli.
+Anti-doublon : dealKey par RDV (`<bookingId>_…`) ou par fiche (`lead_<id>_…`),
+mois du deal = mois du PREMIER close, re-close d'une fiche déjà cliente = mise à
+jour sans nouvelle commission ni réécriture de `clientSince`.
+
+**Statut unique « Closing »** — Closed Won Setting / Closed Won Self disparaissent
+des choix visibles (Leads Live : le bouton 🏆 s'appelle « Closing » ; CRM : une
+seule colonne/pastille ; fiche : une seule pastille). Les stages internes restent
+en base et s'affichent « Closing ». Aucun chemin n'écrit un stage `closing`
+littéral ; le close en masse est bloqué (un close = un contrat).
+
+**Collecté / contracté = MODULE PAIEMENTS (HT)** — le funnel croise, par client
+gagné de la période : collecté = `paidAmount` GoCardless du client (TTC → HT
+÷ 1,2, rattaché par leadId puis email, anti double compte) → sinon l'encaissé
+déclaré à la carte ④ → sinon « close sans montant » affiché. Contracté =
+`totalAmount` (hors annulés/brouillons) → sinon tarif officiel de la carte.
+Diagnostics croisés : clients sans paiement GoCardless créé, paiements de la
+période sans client gagné correspondant. La modale RDV ne demande plus aucun
+montant. L'ancienne source « deals Commissions » est abandonnée (le collecté
+n'a rien à voir avec les commissions).

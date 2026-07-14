@@ -73,6 +73,24 @@
     { key: 'autre',       label: '📎 Autre' }
   ];
 
+  /* ═══ Tarifs officiels (HT) — cartes du Close (validé Adrien 14/07) ═══
+     La carte 1 propose Elite / Business. « Business » = BP 12 pour les
+     commissions. Le PIF est moins cher que le mensualisé (remise comptant).
+     encaisse = suggestions de la carte « Encaissé à la signature » :
+     PIF → la totalité · MENS → 1 échéance (nb d'échéances libre ≤ maxX). */
+  var WIZARD_PRICING = {
+    'Elite': {
+      commOffre: 'Elite',
+      pif:        { contracte: 12000, encaisse: [12000] },
+      mensualise: { contracte: 13000, maxX: 4, encaisse: [3250, 6500] }
+    },
+    'Business': {
+      commOffre: 'BP 12',
+      pif:        { contracte: 5000, encaisse: [5000] },
+      mensualise: { contracte: 6000, maxX: 10, encaisse: [600, 1000, 1500] }
+    }
+  };
+
   /* Statuts fiche comptés comme « SET » dans le rapport Setting.
      set_booking = action posée quand un RDV setter est réellement créé. */
   var SET_ACTIONS = { set: 1, set_booking: 1, rdv_pose: 1 };
@@ -291,7 +309,12 @@
     var _db = db();
     var m = me() || { uid: null, name: null, slug: null };
     var now = new Date();
-    var sb = isSB(booking, opts.typeMap);
+    /* SB/NB : la réponse EXPLICITE des cartes du Close (closeData.sb) prime
+       sur la classification du RDV — ex. RDV self_booking mais prospect en
+       réalité travaillé par le setting (fix revue 14/07). */
+    var sb = (opts.closeData && typeof opts.closeData.sb === 'boolean')
+      ? opts.closeData.sb
+      : isSB(booking, opts.typeMap);
 
     /* — 1. patch booking — */
     var legacy = OUTCOME_TO_BOOKING_STATUS[outcome];
@@ -301,7 +324,9 @@
       outcomeBy: m.uid,
       outcomeByName: m.name,
       outcomeNote: opts.note || null,
-      outcomeDay: dayKey(now),
+      /* Modifier un résultat SANS le changer (ex. corriger le close) garde
+         le JOUR d'origine — les rapports par jour ne bougent pas. */
+      outcomeDay: (booking.outcome === outcome && booking.outcomeDay) ? booking.outcomeDay : dayKey(now),
       outcomeHistory: arrayUnion({
         outcome: outcome, note: opts.note || null, at: now.toISOString(),
         by: m.uid, byName: m.name
@@ -336,7 +361,7 @@
     return _db.collection('bookings').doc(booking.id).update(patch).then(function () {
       /* — 2. propagation fiche — */
       var pLead = Promise.resolve();
-      if (booking.leadId) pLead = propagateOutcomeToLead(booking, outcome, sb, opts, m);
+      if (booking.leadId) pLead = propagateOutcomeToLead(booking, outcome, sb, opts, m, patch.closeData || null);
       /* — 3. commissions — */
       var pDeals = Promise.resolve([]);
       if (outcome === 'close' && patch.closeData && !opts.skipCommissions) {
@@ -352,7 +377,7 @@
      + status (axe setter Leads Live) + timeline + conversion client.
      Annulé / no-show ⇒ retour périmètre Setting (follow_up_pm, à récupérer)
      — règle validée : l'annulation SB alimente le taux de récupération. */
-  function propagateOutcomeToLead(booking, outcome, sb, opts, m) {
+  function propagateOutcomeToLead(booking, outcome, sb, opts, m, cdNorm) {
     var _db = db();
     var leadId = booking.leadId;
     var prospect = booking.prospect || {};
@@ -366,7 +391,13 @@
         stage = sb ? 'closed_won_self' : 'closed_won_setting';
         status = 'client';
         extra.isClient = true;
-        extra.clientSince = ts();
+        /* clientSince = date du PREMIER close — jamais réécrit quand on
+           modifie/re-valide un close (le funnel compte par clientSince) :
+           RDV déjà closé (✎ Modifier) ou fiche déjà cliente → on n'y touche pas. */
+        if (booking.outcome !== 'close' && !(opts.lead && (opts.lead.isClient === true || opts.lead.clientSince))) extra.clientSince = ts();
+        /* Copie du closeData sur la fiche : le funnel retrouve l'encaissé
+           déclaré même quand le RDV closé est hors de la période chargée. */
+        if (cdNorm) extra.closedData = cdNorm;
         break;
       case 'non_close':   stage = 'closed_lost';                                    status = 'pas_interesse'; break;
       case 'offre':       stage = 'follow_up_closing';                              status = null;            break;
@@ -431,8 +462,16 @@
     var clientName = ((prospect.prenom || '') + ' ' + (prospect.nom || '')).trim() || (lead && lead.nom) || 'Client';
     var email = prospect.email || (lead && lead.email) || '';
     var sb = closeData.sb === true;
+    /* Mois du deal = mois du PREMIER close : re-valider en août un close de
+       juillet ne recrée pas les deals dans un doc d'août vierge (l'anti-
+       doublon par dealKey ne regarde qu'un seul doc mensuel). */
     var mk = monthKey();
     var dateFr = frDate();
+    if (booking.outcome === 'close' && booking.outcomeDay && /^\d{4}-\d{2}/.test(String(booking.outcomeDay))) {
+      mk = String(booking.outcomeDay).slice(0, 7);
+      var odp = String(booking.outcomeDay).split('-');
+      dateFr = odp[2] + '/' + odp[1] + '/' + odp[0];
+    }
     var jobs = [];
 
     if (closeData.closerSlug) {
@@ -471,6 +510,113 @@
       }));
     }
     return Promise.all(jobs); // chaque job catch ses erreurs et les remonte ({error})
+  }
+
+  /* ═══ 4bis. CLOSE DEPUIS LA FICHE / LEADS LIVE (cartes du Close) ════════
+     Résolution automatique closer/setter pour les commissions — plus aucun
+     sélecteur à remplir : closer = membre sales connecté (sinon le seul
+     closer actif) · setter = poseur du RDV, sinon gestionnaire de la fiche,
+     sinon le seul setter actif. Jamais un membre hors équipe sales. */
+  function resolveClosingActors(lead, booking) {
+    var team = salesMembers();
+    var m = me();
+    var closer = null;
+    if (m && m.resolved && isSalesMember(m.slug) && (m.role === 'closer' || m.role === 'closer_setter')) closer = m.slug;
+    if (!closer) {
+      var closers = team.filter(function (x) { return x.role === 'closer' || x.role === 'closer_setter'; });
+      if (closers.length === 1) closer = closers[0].slug;
+      else if (m && m.resolved && isSalesMember(m.slug)) closer = m.slug;
+    }
+    var setter = null;
+    if (booking && booking.bookedBySlug && isSalesMember(booking.bookedBySlug)) setter = booking.bookedBySlug;
+    if (!setter && lead && lead.assignedTo && isSalesMember(lead.assignedTo)) setter = lead.assignedTo;
+    if (!setter) {
+      var setters = team.filter(function (x) { return x.role === 'setter' || x.role === 'closer_setter'; });
+      if (setters.length === 1) setter = setters[0].slug;
+    }
+    return { closerSlug: closer, setterSlug: setter };
+  }
+
+  /* Close validé par les cartes SANS passer par un RDV : on cherche d'abord
+     un RDV sales du lead encore SANS résultat (le close « appartient » à ce
+     RDV → rapports Close SB / Set NB exacts) ; si tous les RDV sont déjà
+     statués — ou s'il n'y en a aucun — on ferme la fiche en direct et les
+     commissions prennent un dealKey lead_<id> (idempotent : re-valider les
+     cartes sur le même lead ne duplique rien). On n'écrase JAMAIS un
+     résultat de RDV déjà saisi. */
+  function applyFicheClose(leadId, lead, closeData, opts) {
+    opts = opts || {};
+    var _db = db();
+    /* Un typeMap vide ({} posé en attendant le fetch) ne compte pas : on
+       recharge — sinon un RDV coaching détectable par son type, ou un type
+       setter-only, serait mal classé (fix revue 14/07). */
+    var pTypeMap = (opts.typeMap && Object.keys(opts.typeMap).length)
+      ? Promise.resolve(opts.typeMap) : loadTypeMap();
+    var pBookings = opts.bookings ? Promise.resolve(opts.bookings)
+      : _db.collection('bookings').where('leadId', '==', leadId).get()
+          .then(function (snap) {
+            var out = [];
+            snap.forEach(function (doc) { var d = doc.data(); d.id = doc.id; out.push(d); });
+            return out;
+          }).catch(function () { return []; });
+
+    return Promise.all([pTypeMap, pBookings]).then(function (res) {
+      var typeMap = res[0] || {}, bookings = res[1] || [];
+      /* Re-close d'une fiche DÉJÀ cliente (pastille restée cliquable, correction
+         des cartes…) : on met à jour le close SANS dupliquer les commissions ni
+         réécrire clientSince — promesse du récap « aucune commission dupliquée ». */
+      var alreadyClient = !!(lead && (lead.isClient === true || lead.clientSince ||
+        lead.stage === 'closed_won_self' || lead.stage === 'closed_won_setting'));
+      var cands = bookings.filter(function (b) {
+        return classifyBooking(b, typeMap) !== 'excluded' && classifyBooking(b, typeMap) !== 'admin'
+          && !b.outcome && b.status !== 'cancelled' && b.status !== 'no_show';
+      });
+      cands.sort(function (a, b2) {
+        var ka = (a.date || '') + 'T' + (a.time || ''), kb = (b2.date || '') + 'T' + (b2.time || '');
+        return ka < kb ? 1 : (ka > kb ? -1 : 0); // plus récent d'abord
+      });
+      if (cands.length) {
+        /* Le RDV porte le close — pipeline complet (patch RDV + fiche + commissions).
+           Si la fiche était déjà cliente, les commissions du close initial existent :
+           on ne les recrée pas. */
+        return setOutcome(cands[0], 'close', { closeData: closeData, lead: lead, typeMap: typeMap, note: opts.note, skipCommissions: alreadyClient || opts.skipCommissions })
+          .then(function (r) { r.viaBookingId = cands[0].id; return r; });
+      }
+      /* — Close direct sur la fiche — */
+      var m = me() || { uid: null, name: null };
+      var sb = closeData.sb === true;
+      var cd = {
+        offre: closeData.offre || 'BP 12',
+        subtype: closeData.subtype === 'pif' ? 'pif' : 'mensualise',
+        contracte: Number(closeData.contracte) || 0,
+        collecte: Number(closeData.collecte) || 0,
+        paiement: closeData.paiement || null,
+        closerSlug: closeData.closerSlug || null,
+        setterSlug: closeData.setterSlug || null,
+        sb: sb
+      };
+      var updates = {
+        stage: sb ? 'closed_won_self' : 'closed_won_setting',
+        status: 'client',
+        isClient: true,
+        closedData: cd,           // trace du close fiche (offre/encaissé déclaré)
+        closedBy: m.uid, closedByName: m.name,
+        updatedAt: ts(),
+        timeline_history: arrayUnion({
+          text: (alreadyClient ? '✎ Close mis à jour ' : '🏆 Close ') + (sb ? '(Self Booking)' : '(Setting NB)') + ' — ' + cd.offre + ' · '
+            + (cd.subtype === 'pif' ? 'PIF' : 'Mensualisé') + ' · encaissé ' + cd.collecte + ' € HT',
+          date: frDateTime(), color: '#10b981'
+        })
+      };
+      if (!alreadyClient) updates.clientSince = ts();
+      return _db.collection('leads').doc(leadId).update(updates).then(function () {
+        var pseudo = { id: 'lead_' + leadId, prospect: {}, leadId: leadId };
+        if (opts.skipCommissions || alreadyClient) return { ok: true, sb: sb, deals: [], direct: true, updated: alreadyClient };
+        return createCommissionDeals(pseudo, cd, lead || null).then(function (deals) {
+          return { ok: true, sb: sb, deals: deals || [], direct: true };
+        });
+      });
+    });
   }
 
   /* ═══ Overrides rapports journaliers ═══════════════════════════════════
@@ -621,6 +767,9 @@
     applyLeadStatus: applyLeadStatus,
     addLeadTimeline: addLeadTimeline,
     setOutcome: setOutcome,
+    WIZARD_PRICING: WIZARD_PRICING,
+    resolveClosingActors: resolveClosingActors,
+    applyFicheClose: applyFicheClose,
     createCommissionDeals: createCommissionDeals,
     calcClosingComm: calcClosingComm,
     calcClosingBonus: calcClosingBonus,
