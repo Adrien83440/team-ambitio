@@ -84,6 +84,18 @@ Compat : `sales-saisie.html`, `sales-eod.html`, dashboard inchangés (lecture de
 préservée). Les rapports auto démarrent à la mise en ligne ; appels et RDV passés remontent
 automatiquement (recalcul à la volée), les compteurs d'actions (NRP/jour) démarrent vides.
 
+## 7quater. Vues Jour / 3 jours / 7 jours / Mois sur Set NB & Close SB (retours test 14/07)
+
+Les deux rapports ont un sélecteur de période **Jour · 3 jours · 7 jours · Mois** : tous les
+KPIs (cartes, funnel, tableau) se calculent sur la fenêtre choisie. Jour = une journée
+naviguable ‹ › ; 3/7 jours = fenêtre glissante se terminant au jour de référence (‹ › déplace
+la fenêtre de sa propre taille) ; Mois = comportement d'origine avec lignes Semaine.
+L'ancienne saisie hebdo et sa consultation restent liées à la vue Mois. Le mode et la date
+sont mémorisés par poste. Noms exacts entérinés : **Set NB** et **Close SB** (nav, titres,
+lignes du Funnel). Close SB : l'onglet « Équipe » n'apparaît qu'à partir de 2 closers — avec
+Élodie seule, sa vue couvre d'office tout le périmètre Self Booking (aucun RDV perdu faute
+de mapping expert→membre).
+
 ## 7ter. Périmètre équipe + renommage + cohérence Funnel (retours test 14/07)
 
 - **Équipe sales uniquement** dans SET NB / Close SB / Commissions et dans les sélecteurs

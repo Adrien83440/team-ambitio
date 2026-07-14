@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <meta name="theme-color" content="#07080f"/>
-<title>Alteore — Close SB (rapport journalier)</title>
+<title>Alteore — Close SB (rapport Closing)</title>
 <link rel="stylesheet" href="alteore-ui.css"/>
 
 <!-- ── Firebase v9 compat ── -->
@@ -34,7 +34,7 @@
   <div class="au-head">
     <div class="au-head-ico">🎯</div>
     <div>
-      <h1 class="au-title">Close SB <span style="color:var(--muted);font-weight:500">· rapport Closing journalier</span></h1>
+      <h1 class="au-title">Close SB <span style="color:var(--muted);font-weight:500">· rapport Closing</span></h1>
       <div class="au-sub">Équipe sales uniquement — RDV <strong>Self Booking</strong> : les résultats saisis sur les RDV remontent automatiquement. RDV coaching &amp; clients exclus.</div>
     </div>
     <div class="au-head-right">
@@ -44,12 +44,18 @@
   </div>
 
   <div class="au-toolbar">
-    <div class="au-mnav">
-      <button id="btnPrev" title="Mois précédent">‹</button>
-      <span class="au-mlabel" id="monthLbl">—</span>
-      <button id="btnNext" title="Mois suivant">›</button>
+    <div class="au-seg" id="periodSeg">
+      <button data-mode="day">Jour</button>
+      <button data-mode="3d">3 jours</button>
+      <button data-mode="7d">7 jours</button>
+      <button data-mode="month" class="active">Mois</button>
     </div>
-    <button class="au-btn" id="btnToday">Ce mois-ci</button>
+    <div class="au-mnav">
+      <button id="btnPrev" title="Période précédente">‹</button>
+      <span class="au-mlabel" id="monthLbl">—</span>
+      <button id="btnNext" title="Période suivante">›</button>
+    </div>
+    <button class="au-btn" id="btnToday">Aujourd'hui</button>
     <div style="flex:1"></div>
     <button class="au-btn ghost" id="btnLegacy" style="display:none">📜 Ancienne saisie hebdo</button>
     <button class="au-btn" id="btnRefresh">⟳ Actualiser</button>
@@ -108,23 +114,46 @@
   var OV_KEYS = ['rdvSb','annules','noshow','replanifies','presents','disqua','offres','closes','nonCloses','contracte','collecte'];
 
   var S = {
-    y: 0, m: 0,
+    mode: 'month',          // 'day' | '3d' | '7d' | 'month' — tous les KPIs suivent la période
+    anchor: null,           // Date de référence (jour affiché / fin de fenêtre / mois)
+    range: null,            // {from, to, days[]} — recalculé à chaque refresh
     members: [], slug: '_all',
     role: localStorage.getItem('ambitio_role') || 'sales',
     typeMap: {}, personsMap: {},
     data: null, overrides: {},
     legacy: null, legacyOpen: false, loading: false
   };
-  (function initMonth() {
-    var saved = localStorage.getItem('closing_v2_month');
+  (function initPeriod() {
     var now = new Date();
-    if (saved && /^\d{4}-\d{2}$/.test(saved)) { S.y = +saved.slice(0, 4); S.m = +saved.slice(5, 7) - 1; }
-    else { S.y = now.getFullYear(); S.m = now.getMonth(); }
+    S.anchor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    try {
+      var m = localStorage.getItem('closing_v2_mode');
+      if (m === 'day' || m === '3d' || m === '7d' || m === 'month') S.mode = m;
+      var a = localStorage.getItem('closing_v2_anchor');
+      if (a && /^\d{4}-\d{2}-\d{2}$/.test(a)) { var p = a.split('-'); S.anchor = new Date(+p[0], +p[1] - 1, +p[2]); }
+    } catch (e) {}
   })();
 
-  function monthKey() { return S.y + '-' + pad2(S.m + 1); }
-  function daysInMonth() { return new Date(S.y, S.m + 1, 0).getDate(); }
-  function dayIso(d) { return S.y + '-' + pad2(S.m + 1) + '-' + pad2(d); }
+  function monthKey() { return S.anchor.getFullYear() + '-' + pad2(S.anchor.getMonth() + 1); }
+  function isoOf(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  /* Fenêtre de la période courante : Jour = 1 jour, 3/7 jours = fenêtre
+     glissante se terminant au jour de référence, Mois = mois calendaire. */
+  function period() {
+    var a = S.anchor, from, to;
+    if (S.mode === 'month') { from = new Date(a.getFullYear(), a.getMonth(), 1); to = new Date(a.getFullYear(), a.getMonth() + 1, 0); }
+    else if (S.mode === 'day') { from = new Date(a); to = new Date(a); }
+    else { var n = S.mode === '3d' ? 3 : 7; to = new Date(a); from = new Date(a.getFullYear(), a.getMonth(), a.getDate() - (n - 1)); }
+    var days = [];
+    for (var d = new Date(from); d <= to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) days.push(isoOf(d));
+    return { from: from, to: to, days: days };
+  }
+  function periodLabel() {
+    if (S.mode === 'month') return MONTHS_FR[S.anchor.getMonth()] + ' ' + S.anchor.getFullYear();
+    var R = S.range || period();
+    var f = function (iso) { var d = new Date(iso + 'T12:00:00'); return JOURS_FR[d.getDay()] + ' ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1); };
+    if (S.mode === 'day') return f(R.days[0]);
+    return f(R.days[0]) + ' → ' + f(R.days[R.days.length - 1]);
+  }
   function toast(msg, err) {
     var t = $('#auToast'); t.textContent = msg; t.className = err ? 'err show' : 'show';
     clearTimeout(window.__auTo); window.__auTo = setTimeout(function () { t.className = ''; }, 3200);
@@ -139,6 +168,11 @@
     var closers = AF.salesMembers().filter(function (m) { return m.role === 'closer' || m.role === 'closer_setter'; });
     if (!closers.length) closers = AF.salesMembers();
     S.members = closers;
+    if (closers.length === 1) {
+      // Une seule closeuse : pas d'onglet Équipe, on ouvre directement sa vue.
+      S.slug = closers[0].slug;
+      return;
+    }
     var saved = localStorage.getItem('closing_v2_member');
     if (saved === '_all' || closers.some(function (m) { return m.slug === saved; })) S.slug = saved;
     else S.slug = '_all';
@@ -146,8 +180,13 @@
   function currentMember() { return S.members.find(function (m) { return m.slug === S.slug; }) || null; }
 
   function renderMembers() {
-    var h = '<button class="au-member' + (S.slug === '_all' ? ' active' : '') + '" style="--au-mc:#5b7cfa" data-slug="_all">' +
-      '<span class="au-member-av">Σ</span><span><span class="au-member-n">Équipe</span><br/><span class="au-member-r">tous les closers</span></span></button>';
+    /* L'onglet « Équipe » n'a de sens qu'à partir de 2 closers — avec une
+       seule closeuse (Élodie), on affiche directement son onglet. */
+    var h = '';
+    if (S.members.length > 1) {
+      h += '<button class="au-member' + (S.slug === '_all' ? ' active' : '') + '" style="--au-mc:#5b7cfa" data-slug="_all">' +
+        '<span class="au-member-av">Σ</span><span><span class="au-member-n">Équipe</span><br/><span class="au-member-r">tous les closers</span></span></button>';
+    }
     S.members.forEach(function (m) {
       var name = m.shortName || m.displayName || m.slug;
       var initials = (m.initials || name.slice(0, 2)).toUpperCase();
@@ -176,6 +215,10 @@
 
   function memberMatchesBooking(b, member) {
     if (!member) return true; // Équipe
+    /* Une seule closeuse dans l'équipe sales : tout le périmètre Self
+       Booking est à elle — aucun RDV ne doit disparaître faute de mapping
+       personId → membre (RDV portés par un expert non relié, etc.). */
+    if (S.members.length === 1) return true;
     if (b.closeData && b.closeData.closerSlug) return b.closeData.closerSlug === member.slug;
     if (b.personId && b.personId === member.slug) return true;
     var p = S.personsMap[b.personId];
@@ -187,12 +230,16 @@
     if (S.loading) return;
     S.loading = true;
     $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>Agrégation des RDV Self Booking…</div>';
-    localStorage.setItem('closing_v2_month', monthKey());
-    $('#monthLbl').textContent = MONTHS_FR[S.m] + ' ' + S.y;
+    try { localStorage.setItem('closing_v2_mode', S.mode); localStorage.setItem('closing_v2_anchor', isoOf(S.anchor)); } catch (e) {}
+    S.range = period();
+    var R = S.range;
+    document.querySelectorAll('#periodSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.mode === S.mode); });
+    $('#monthLbl').textContent = periodLabel();
+    $('#btnToday').textContent = S.mode === 'month' ? 'Ce mois-ci' : 'Aujourd\'hui';
 
-    var from = new Date(S.y, S.m, 1, 0, 0, 0, 0);
-    var to = new Date(S.y, S.m, daysInMonth(), 23, 59, 59, 999);
-    var fromDay = dayIso(1), toDay = dayIso(daysInMonth());
+    var from = new Date(R.from.getFullYear(), R.from.getMonth(), R.from.getDate(), 0, 0, 0, 0);
+    var to = new Date(R.to.getFullYear(), R.to.getMonth(), R.to.getDate(), 23, 59, 59, 999);
+    var fromDay = R.days[0], toDay = R.days[R.days.length - 1];
     var member = currentMember();
     var ovSlug = member ? member.slug : '_all';
 
@@ -201,7 +248,9 @@
       AF.loadTypeMap(),
       AF.loadPersonsMap(),
       AF.loadOverrides(ovSlug, fromDay, toDay),
-      member ? db.collection('saisies').doc(member.slug).collection('mois').doc(monthKey()).get().catch(function () { return { exists: false }; }) : Promise.resolve({ exists: false })
+      (member && S.mode === 'month')
+        ? db.collection('saisies').doc(member.slug).collection('mois').doc(monthKey()).get().catch(function () { return { exists: false }; })
+        : Promise.resolve({ exists: false })
     ]).then(function (res) {
       var bookings = res[0];
       S.typeMap = res[1] || {};
@@ -210,7 +259,7 @@
       S.legacy = (res[4] && res[4].exists) ? res[4].data() : null;
 
       var days = {};
-      for (var d = 1; d <= daysInMonth(); d++) days[dayIso(d)] = emptyDay();
+      R.days.forEach(function (dk) { days[dk] = emptyDay(); });
       var todayIso = AF.dayKey(new Date());
       var createdSb = 0;
 
@@ -266,11 +315,12 @@
   }
 
   function render() {
-    var nbDays = daysInMonth();
+    var R = S.range || period();
     var todayIso = AF.dayKey(new Date());
     var tot = emptyDay();
-    var weekAgg = emptyDay(), weekStartD = 1, weekIdx = 1;
+    var weekAgg = emptyDay(), weekStartIdx = 0, weekIdx = 1;
     var rowsH = '';
+    var showWeeks = S.mode === 'month'; // lignes Semaine uniquement en vue Mois
 
     function addTo(agg, dk) { COLS.forEach(function (c) { agg[c.key] += eff(dk, c.key).v; }); }
     function aggRow(agg, label, cls) {
@@ -283,13 +333,13 @@
       return h;
     }
 
-    for (var d = 1; d <= nbDays; d++) {
-      var dk = dayIso(d);
-      var dt = new Date(S.y, S.m, d);
+    R.days.forEach(function (dk, di) {
+      var dt = new Date(dk + 'T12:00:00');
       var dow = dt.getDay();
       var isFuture = dk > todayIso;
       var cls = (dk === todayIso ? 'today ' : '') + (dow === 0 || dow === 6 ? 'weekend ' : '') + (isFuture ? 'future' : '');
-      rowsH += '<tr class="' + cls + '"><td>' + JOURS_FR[dow] + ' ' + pad2(d) + '</td>';
+      var dayLbl = JOURS_FR[dow] + ' ' + dk.slice(8) + (S.mode === 'month' ? '' : '/' + dk.slice(5, 7));
+      rowsH += '<tr class="' + cls + '"><td>' + dayLbl + '</td>';
       COLS.forEach(function (c, i) {
         var e = eff(dk, c.key);
         var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
@@ -298,11 +348,11 @@
       rowsH += '<td><button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button></td></tr>';
       addTo(tot, dk);
       addTo(weekAgg, dk);
-      if (dow === 0 || d === nbDays) {
-        rowsH += aggRow(weekAgg, 'Semaine ' + weekIdx + ' <span style="opacity:.6;font-weight:500">(' + pad2(weekStartD) + '→' + pad2(d) + ')</span>', 'au-week');
-        weekAgg = emptyDay(); weekStartD = d + 1; weekIdx++;
+      if (showWeeks && (dow === 0 || di === R.days.length - 1)) {
+        rowsH += aggRow(weekAgg, 'Semaine ' + weekIdx + ' <span style="opacity:.6;font-weight:500">(' + R.days[weekStartIdx].slice(8) + '→' + dk.slice(8) + ')</span>', 'au-week');
+        weekAgg = emptyDay(); weekStartIdx = di + 1; weekIdx++;
       }
-    }
+    });
 
     var kept = tot.rdvSb - tot.annules - tot.replanifies;
     var txShow = kept > 0 ? tot.presents / kept * 100 : null;
@@ -312,7 +362,7 @@
     var aov = tot.closes > 0 ? tot.collecte / tot.closes : null;
 
     var kpis =
-      kpi(String(tot.rdvSb), 'RDV SB du mois', S.data.createdSb + ' pris (créés) sur la période', '#fbbf24') +
+      kpi(String(tot.rdvSb), 'RDV SB — ' + (S.mode === 'month' ? 'mois' : S.mode === 'day' ? 'jour' : (S.mode === '3d' ? '3 jours' : '7 jours')), S.data.createdSb + ' pris (créés) sur la période', '#fbbf24') +
       kpi(String(tot.annules + tot.noshow), 'Annulés + No-show', tot.annules + ' annulés · ' + tot.noshow + ' no-show · ' + tot.replanifies + ' replanifiés', '#ef4444') +
       kpi(String(tot.presents), 'Présents (Live)', 'Show-up ' + fmtPct(txShow), '#5b7cfa') +
       kpi(String(tot.offres), 'Offres pitchées', fmtPct(txOffre) + ' des présents', '#a78bfa') +
@@ -339,19 +389,19 @@
 
     var h =
       '<div class="au-kpis">' + kpis + '</div>' +
-      '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel Closing — ' + MONTHS_FR[S.m] + '</div>' +
+      '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel Close SB — ' + periodLabel() + '</div>' +
         '<div class="au-card-note">résultats saisis sur les RDV (module RDV / fiche prospect) — Self Booking uniquement</div></div>' + fun + '</div>' +
       '<div class="au-card" style="padding:0;overflow:hidden">' +
         '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Jour par jour <span style="color:var(--muted);font-weight:500;font-size:12px">(par date du RDV)</span></div>' +
           '<div class="right"><span class="au-chip sb">Self Booking</span></div></div>' +
         '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead>' + headH + '</thead><tbody>' +
-        rowsH + aggRow(tot, 'TOTAL ' + MONTHS_FR[S.m].toUpperCase(), 'au-total') +
+        rowsH + (R.days.length > 1 ? aggRow(tot, 'TOTAL — ' + periodLabel().toUpperCase(), 'au-total') : '') +
         '</tbody></table></div>' + aStatuerNote +
       '</div>' +
       legacyBlock();
 
     $('#content').innerHTML = h;
-    $('#btnLegacy').style.display = S.legacy ? '' : 'none';
+    $('#btnLegacy').style.display = (S.legacy && S.mode === 'month') ? '' : 'none';
     document.querySelectorAll('.au-day-edit').forEach(function (b) {
       b.addEventListener('click', function () { openOverride(b.getAttribute('data-day')); });
     });
@@ -373,7 +423,7 @@
   }
 
   function legacyBlock() {
-    if (!S.legacy || !S.legacyOpen) return '';
+    if (!S.legacy || !S.legacyOpen || S.mode !== 'month') return '';
     var raw = S.legacy.closing_total ? { _total: S.legacy.closing_total } : (S.legacy.closing || null);
     if (!raw) return '';
     var FIELDS = [
@@ -381,7 +431,7 @@
       ['closes', 'Closes'], ['hardClose', 'Hard close'], ['followUp', 'Follow-up'], ['contracte', 'Contracté €'], ['collecte', 'Collecté €']
     ];
     var weeks = Object.keys(raw).sort();
-    var h = '<div class="au-card au-legacy"><div class="au-legacy-title">📜 Ancienne saisie hebdomadaire — ' + MONTHS_FR[S.m] + ' ' + S.y + ' (lecture seule, conservée)</div>';
+    var h = '<div class="au-card au-legacy"><div class="au-legacy-title">📜 Ancienne saisie hebdomadaire — ' + MONTHS_FR[S.anchor.getMonth()] + ' ' + S.anchor.getFullYear() + ' (lecture seule, conservée)</div>';
     h += '<div class="au-twrap" style="background:transparent"><table class="au-table" style="min-width:600px"><thead><tr><th>Semaine</th>';
     FIELDS.forEach(function (f) { h += '<th>' + f[1] + '</th>'; });
     h += '</tr></thead><tbody>';
@@ -399,7 +449,7 @@
   function openOverride(dk) {
     ovDay = dk;
     var d = new Date(dk + 'T12:00:00');
-    $('#ovTitle').textContent = '✎ Corriger le ' + JOURS_FR[d.getDay()] + ' ' + pad2(d.getDate()) + ' ' + MONTHS_FR[S.m];
+    $('#ovTitle').textContent = '✎ Corriger le ' + JOURS_FR[d.getDay()] + ' ' + pad2(d.getDate()) + ' ' + MONTHS_FR[d.getMonth()];
     var ov = (S.overrides[dk] && S.overrides[dk].closing) || {};
     var h = '';
     COLS.forEach(function (c) {
@@ -444,9 +494,21 @@
   });
 
   /* ══ NAV / INIT ═══════════════════════════════════════════════════════ */
-  $('#btnPrev').addEventListener('click', function () { S.m--; if (S.m < 0) { S.m = 11; S.y--; } refresh(); });
-  $('#btnNext').addEventListener('click', function () { S.m++; if (S.m > 11) { S.m = 0; S.y++; } refresh(); });
-  $('#btnToday').addEventListener('click', function () { var n = new Date(); S.y = n.getFullYear(); S.m = n.getMonth(); refresh(); });
+  function shiftPeriod(dir) {
+    var a = S.anchor;
+    if (S.mode === 'month') S.anchor = new Date(a.getFullYear(), a.getMonth() + dir, 1);
+    else {
+      var n = S.mode === 'day' ? 1 : (S.mode === '3d' ? 3 : 7);
+      S.anchor = new Date(a.getFullYear(), a.getMonth(), a.getDate() + dir * n);
+    }
+    refresh();
+  }
+  $('#btnPrev').addEventListener('click', function () { shiftPeriod(-1); });
+  $('#btnNext').addEventListener('click', function () { shiftPeriod(1); });
+  $('#btnToday').addEventListener('click', function () { var n = new Date(); S.anchor = new Date(n.getFullYear(), n.getMonth(), n.getDate()); refresh(); });
+  document.querySelectorAll('#periodSeg button').forEach(function (b) {
+    b.addEventListener('click', function () { if (S.mode !== b.dataset.mode) { S.mode = b.dataset.mode; refresh(); } });
+  });
   $('#btnRefresh').addEventListener('click', refresh);
   $('#btnLegacy').addEventListener('click', function () { S.legacyOpen = !S.legacyOpen; render(); });
 
