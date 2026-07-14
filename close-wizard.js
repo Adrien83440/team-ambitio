@@ -7,7 +7,10 @@
      ② Paiement                : PIF / MENS
      ③ Booking                 : Self Booking / No Booking
      ④ Encaissé à la signature : montants suggérés (tarifs officiels HT)
-     ⑤ Récap cliquable → Confirmer
+                                 + bouton Confirmer (pas de carte récap —
+                                 chaque réponse est déjà une validation
+                                 manuelle, cette carte = la signature ;
+                                 fil d'Ariane ✎ pour corriger une réponse)
    À la confirmation : stage fiche (closed_won_self / closed_won_setting),
    timeline, résultat « close » posé sur le RDV du lead s'il en reste un à
    statuer, et commissions auto (closer + setter résolus tout seuls).
@@ -144,7 +147,10 @@
   function euro(n) { return (Number(n) || 0).toLocaleString('fr-FR') + ' €'; }
 
   /* ── Rendu des cartes ── */
-  var STEPS = ['contrat', 'paiement', 'booking', 'encaisse', 'recap'];
+  /* 4 cartes, pas de récap (demande Adrien 14/07) : chaque réponse est déjà
+     une validation manuelle — la carte Encaissé fait office de signature,
+     avec le bouton Confirmer directement dessus. */
+  var STEPS = ['contrat', 'paiement', 'booking', 'encaisse'];
 
   function render() {
     var dots = '';
@@ -186,8 +192,20 @@
         h += '<div class="cw-sugg">💡 Suggestion : ' + (state.sbSuggest ? 'Self Booking' : 'No Booking') + ' (détecté depuis ' + (state.booking ? 'le RDV' : 'la fiche') + ')</div>';
       }
     } else if (key === 'encaisse') {
-      document.getElementById('cwTitle').textContent = 'Close — encaissé';
+      document.getElementById('cwTitle').textContent = 'Close — encaissé & signature';
       var pc = payCfg();
+      var AF2 = window.AlteoreFlow;
+      var commOffre = offerCfg() ? offerCfg().commOffre : 'BP 12';
+      var cComm = AF2 ? AF2.calcClosingComm(commOffre, state.a.paiement) : 0;
+      var cBonus = AF2 ? AF2.calcClosingBonus(commOffre, state.a.paiement) : 0;
+      var sComm = AF2 ? AF2.calcSettingComm(commOffre, state.a.booking === 'sb') : 0;
+      /* fil d'Ariane cliquable — remplace la carte récap (chaque réponse
+         reste modifiable d'un clic, sans étape en plus) */
+      h += '<div class="cw-chips" style="margin-bottom:14px">'
+        + '<button class="cw-chip sel" data-goto="0">' + (state.a.contrat === 'Elite' ? '👑 Elite' : '🚀 Business') + '<small>✎</small></button>'
+        + '<button class="cw-chip sel" data-goto="1">' + (state.a.paiement === 'pif' ? '💎 PIF' : '📅 MENS') + '<small>✎</small></button>'
+        + '<button class="cw-chip sel" data-goto="2">' + (state.a.booking === 'sb' ? '🔗 Self Booking' : '📞 No Booking') + '<small>✎</small></button>'
+        + '</div>';
       h += '<div class="cw-q">Combien a été encaissé à la signature ? <small>Montant HT — ' + (state.a.paiement === 'pif' ? 'PIF : la totalité' : '1ʳᵉ échéance (mensualité)') + '. La vérité du cash reste le module Paiements, le funnel croisera.</small></div>';
       h += '<div class="cw-chips">';
       (pc ? pc.encaisse : []).forEach(function (v) {
@@ -196,37 +214,20 @@
       });
       h += '</div>';
       h += '<div class="cw-input-row"><input class="cw-input" id="cwEnc" type="number" min="0" step="50" placeholder="Autre montant HT…" value="' + (state.a.encaisse != null && !(payCfg() && payCfg().encaisse.indexOf(state.a.encaisse) >= 0) ? state.a.encaisse : '') + '"><span style="font-weight:800">€ HT</span></div>';
-      h += '<div class="cw-hint">Contracté auto : <strong>' + (pc ? euro(pc.contracte) : '—') + ' HT</strong> (' + (state.a.contrat || '') + ' ' + (state.a.paiement === 'pif' ? 'PIF' : 'MENS') + ')</div>';
-    } else if (key === 'recap') {
-      document.getElementById('cwTitle').textContent = 'Close — confirmation';
-      var pc2 = payCfg();
-      var AF = window.AlteoreFlow;
-      var commOffre = offerCfg() ? offerCfg().commOffre : 'BP 12';
-      var cComm = AF ? AF.calcClosingComm(commOffre, state.a.paiement) : 0;
-      var cBonus = AF ? AF.calcClosingBonus(commOffre, state.a.paiement) : 0;
-      var sComm = AF ? AF.calcSettingComm(commOffre, state.a.booking === 'sb') : 0;
-      h += '<div class="cw-recap">';
-      h += rrow(0, 'Contrat', (state.a.contrat === 'Elite' ? '👑 Elite' : '🚀 Business'));
-      h += rrow(1, 'Paiement', (state.a.paiement === 'pif' ? '💎 PIF' : '📅 Mensualisé') + ' — contracté ' + (pc2 ? euro(pc2.contracte) : '—') + ' HT');
-      h += rrow(2, 'Booking', state.a.booking === 'sb' ? '🔗 Self Booking' : '📞 No Booking');
-      h += rrow(3, 'Encaissé à la signature', euro(state.a.encaisse) + ' HT');
-      h += '<div class="cw-comm">⚡ Commissions auto — Closing <strong>' + euro(cComm) + '</strong>'
+      h += '<div class="cw-hint">Contracté auto : <strong>' + (pc ? euro(pc.contracte) : '—') + ' HT</strong> · ⚡ Commissions — Closing <strong>' + euro(cComm) + '</strong>'
         + (cBonus ? ' + prime PIF <strong>' + euro(cBonus) + '</strong>' : '')
-        + ' · Setting ' + (state.a.booking === 'sb' ? 'SB' : 'NB') + ' <strong>' + euro(sComm) + '</strong>'
-        + '<br><span style="color:#5fae8d">Validées à l\'encaissement dans le module Commissions.</span></div>';
+        + ' · Setting ' + (state.a.booking === 'sb' ? 'SB' : 'NB') + ' <strong>' + euro(sComm) + '</strong> (validées à l\'encaissement)</div>';
       if (state.lead && (state.lead.isClient || state.lead.stage === 'closed_won_self' || state.lead.stage === 'closed_won_setting')) {
         h += '<div class="cw-warn">⚠ Cette fiche est déjà marquée client — confirmer mettra à jour le close (aucune commission ne sera dupliquée).</div>';
       }
-      h += '</div>';
     }
 
     body.innerHTML = h;
 
-    /* footer */
+    /* footer — la carte Encaissé porte la confirmation (= la signature) */
     var f = '';
     f += state.step > 0 ? '<button class="cw-back" id="cwBack">← Retour</button>' : '<span></span>';
-    if (key === 'encaisse') f += '<button class="cw-ok" id="cwNext" ' + (state.a.encaisse == null ? 'disabled' : '') + '>Continuer →</button>';
-    else if (key === 'recap') f += '<button class="cw-ok" id="cwConfirm">✅ Confirmer le close</button>';
+    if (key === 'encaisse') f += '<button class="cw-ok" id="cwConfirm" ' + (state.a.encaisse == null ? 'disabled' : '') + '>✅ Confirmer le close</button>';
     else f += '<span></span>';
     foot.innerHTML = f;
 
@@ -246,7 +247,7 @@
     body.querySelectorAll('[data-enc]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.a.encaisse = Number(btn.getAttribute('data-enc'));
-        state.step++; render();
+        render(); /* sélection visible + bouton Confirmer activé — pas d'étape en plus */
       });
     });
     var encIn = document.getElementById('cwEnc');
@@ -254,18 +255,18 @@
       encIn.addEventListener('input', function () {
         var v = parseFloat(encIn.value);
         state.a.encaisse = isNaN(v) ? null : v;
-        var nx = document.getElementById('cwNext');
-        if (nx) nx.disabled = state.a.encaisse == null;
+        var ok = document.getElementById('cwConfirm');
+        if (ok) ok.disabled = state.a.encaisse == null;
+        /* désélectionne visuellement les chips si saisie libre */
+        body.querySelectorAll('[data-enc]').forEach(function (c) { c.classList.toggle('sel', Number(c.getAttribute('data-enc')) === state.a.encaisse); });
       });
-      encIn.addEventListener('keydown', function (e) { if (e.key === 'Enter' && state.a.encaisse != null) { state.step++; render(); } });
+      encIn.addEventListener('keydown', function (e) { if (e.key === 'Enter' && state.a.encaisse != null) confirmClose(); });
     }
     body.querySelectorAll('[data-goto]').forEach(function (row) {
       row.addEventListener('click', function () { state.step = Number(row.getAttribute('data-goto')); render(); });
     });
     var back = document.getElementById('cwBack');
     if (back) back.addEventListener('click', function () { state.step = Math.max(0, state.step - 1); render(); });
-    var next = document.getElementById('cwNext');
-    if (next) next.addEventListener('click', function () { if (state.a.encaisse != null) { state.step++; render(); } });
     var conf = document.getElementById('cwConfirm');
     if (conf) conf.addEventListener('click', confirmClose);
   }
@@ -273,9 +274,6 @@
   function opt(field, val, ic, lb, pr) {
     var sel = state.a[field] === val ? ' sel' : '';
     return '<button class="cw-opt' + sel + '" data-pick="' + field + '" data-val="' + val + '"><span class="ic">' + ic + '</span><span class="lb">' + lb + '</span><div class="pr">' + pr + '</div></button>';
-  }
-  function rrow(step, k, v) {
-    return '<div class="cw-r" data-goto="' + step + '"><span class="k">' + k + '</span><span><span class="v">' + v + '</span><span class="e">✎ modifier</span></span></div>';
   }
 
   /* ── Confirmation ── */
@@ -405,8 +403,9 @@
     /* Lead pas encore chargé → on va le chercher (nom + setter pour les commissions). */
     if (!state.lead && state.leadId && window.firebase && firebase.firestore) {
       firebase.firestore().collection('leads').doc(state.leadId).get().then(function (s) {
-        /* garde d'identité : le wizard a pu être rouvert pour un autre lead */
-        if (s.exists && state && state.leadId === s.id) { state.lead = s.data(); state.lead.id = s.id; if (STEPS[state.step] !== 'recap') render(); }
+        /* garde d'identité : le wizard a pu être rouvert pour un autre lead ;
+           pas de re-render sur la carte Encaissé (saisie en cours) */
+        if (s.exists && state && state.leadId === s.id) { state.lead = s.data(); state.lead.id = s.id; if (STEPS[state.step] !== 'encaisse') render(); }
       }).catch(function () {});
     }
 

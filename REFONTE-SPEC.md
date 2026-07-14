@@ -220,7 +220,9 @@ No Booking** (suggestion auto, mais c'est LA réponse qui fait foi — elle prim
 sur la classification du RDV) · ④ **Encaissé à la signature (HT)** — chips aux
 tarifs officiels : Elite PIF 12 000 · Elite MENS 13 000 (≤ 4×, chips 3 250/6 500) ·
 Business PIF 5 000 · Business MENS 6 000 (≤ 10×, chips 600/1 000/1 500) + saisie
-libre · ⑤ Récap (chaque ligne recliquable) → Confirmer.
+libre. PAS de carte récap (retiré 14/07) : chaque réponse est déjà une validation
+manuelle — la carte Encaissé fait office de signature, avec le fil d'Ariane ✎
+(Elite · PIF · SB recliquables) et le bouton **Confirmer** directement dessus.
 
 À la confirmation : résultat « close » posé sur le RDV du lead s'il en reste un
 à statuer (sinon close direct sur la fiche), stage interne `closed_won_self/
