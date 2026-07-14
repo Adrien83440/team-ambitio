@@ -962,10 +962,14 @@ html, body {
       <div style="font-size:12px;color:var(--muted);margin-top:4px">Connectez-vous pour accéder aux leads</div>
     </div>
     <div style="margin-bottom:12px">
-      <input type="email" id="appLoginEmail" placeholder="Email" style="width:100%;padding:12px 14px;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:14px;outline:none"/>
+      <!-- autocomplete username/current-password : cible PRÉCISÉMENT l'autofill
+           Chrome sur ce formulaire de connexion — sans ça, la présence d'un champ
+           mot de passe fait déborder l'autofill sur les autres champs email de la
+           page (création de lead, édition de fiche). -->
+      <input type="email" id="appLoginEmail" placeholder="Email" autocomplete="username" style="width:100%;padding:12px 14px;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:14px;outline:none"/>
     </div>
     <div style="margin-bottom:16px">
-      <input type="password" id="appLoginPassword" placeholder="Mot de passe" style="width:100%;padding:12px 14px;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:14px;outline:none"/>
+      <input type="password" id="appLoginPassword" placeholder="Mot de passe" autocomplete="current-password" style="width:100%;padding:12px 14px;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--fb);font-size:14px;outline:none"/>
     </div>
     <button id="appLoginBtn" style="width:100%;padding:13px;border:none;border-radius:10px;background:linear-gradient(135deg,#b91c1c,#ef4444);color:white;font-family:var(--fb);font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(185,28,28,0.3)">Se connecter</button>
     <div id="appLoginError" style="text-align:center;font-size:12px;color:#ef4444;margin-top:10px;display:none"></div>
@@ -1002,11 +1006,15 @@ html, body {
       <button onclick="closeCreateLead()" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px">✕</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Prénom *</label><input id="clPrenom" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="Prénom"></div>
-      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Nom</label><input id="clNom" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="Nom"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Prénom *</label><input id="clPrenom" autocomplete="off" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="Prénom"></div>
+      <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Nom</label><input id="clNom" autocomplete="off" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="Nom"></div>
     </div>
-    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Email *</label><input id="clEmail" type="email" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="email@exemple.com"></div>
-    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Téléphone</label><input id="clTel" type="tel" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="06 12 34 56 78"></div>
+    <!-- Anti-autofill (14/07/2026) : readonly jusqu'au focus + autocomplete off +
+         name neutre — Chrome remplissait automatiquement l'email du compte
+         connecté ici à chaque ouverture (pénible + risque de créer des leads
+         avec le mauvais email). -->
+    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Email *</label><input id="clEmail" type="email" name="cl-email-nofill" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="email@exemple.com"></div>
+    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Téléphone</label><input id="clTel" type="tel" name="cl-tel-nofill" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="06 12 34 56 78"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
       <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Type</label><select id="clType" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="vsl_elite">VSL Élite</option><option value="self_booking">Self Booking</option><option value="business">Business</option><option value="webinaire">Webinaire</option></select></div>
       <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Attribuer à</label><select id="clAssign" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="">Non attribué</option></select></div>
@@ -2737,9 +2745,12 @@ function renderCard(l) {
 
   // ── EDIT MODE (hidden by default) ──
   h += '<div class="ld-details" data-edit-mode="' + id + '" style="display:none">';
-  h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><input class="ld-detail-input" data-edit="nom" data-id="' + id + '" value="' + escAttr(l.nom || '') + '"/></div>';
-  h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><input class="ld-detail-input" data-edit="telephone" data-id="' + id + '" value="' + escAttr(normalizeTel(l.telephone || '')) + '"/></div>';
-  h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><input class="ld-detail-input" data-edit="email" data-id="' + id + '" type="email" value="' + escAttr(l.email || '') + '"/></div>';
+  /* Anti-autofill (14/07/2026) : sans ces attributs, Chrome pouvait écraser
+     l'email/téléphone du LEAD avec ceux du compte connecté à l'ouverture du
+     mode édition — et l'auto-save les aurait enregistrés. */
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><input class="ld-detail-input" autocomplete="off" data-edit="nom" data-id="' + id + '" value="' + escAttr(l.nom || '') + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><input class="ld-detail-input" autocomplete="off" name="ld-tel-nofill-' + id + '" readonly onfocus="this.removeAttribute(\'readonly\')" data-edit="telephone" data-id="' + id + '" value="' + escAttr(normalizeTel(l.telephone || '')) + '"/></div>';
+  h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><input class="ld-detail-input" autocomplete="off" name="ld-email-nofill-' + id + '" readonly onfocus="this.removeAttribute(\'readonly\')" data-edit="email" data-id="' + id + '" type="email" value="' + escAttr(l.email || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><input class="ld-detail-input" data-edit="utm" data-id="' + id + '" value="' + escAttr(decodeUtm(l.utm) || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Type</span><select class="ld-detail-select" data-edit="type" data-id="' + id + '">';
   h += '<option value="vsl_elite"' + (l.type === 'vsl_elite' ? ' selected' : '') + '>VSL ÉLITE</option>';
@@ -4776,6 +4787,19 @@ function openCreateLead() {
   document.getElementById('clUtm').value = '';
   document.getElementById('clSubmit').disabled = false;
   document.getElementById('clSubmit').textContent = 'Créer la fiche';
+  // Anti-autofill : les champs email/tel repassent en readonly à chaque
+  // ouverture (le focus le retire), et un balayage différé efface ce que
+  // Chrome aurait rempli tout seul APRÈS l'ouverture (l'autofill est asynchrone).
+  ['clEmail', 'clTel'].forEach(function (fid) {
+    var f = document.getElementById(fid);
+    if (f) f.setAttribute('readonly', 'readonly');
+  });
+  setTimeout(function () {
+    ['clEmail', 'clTel'].forEach(function (fid) {
+      var f = document.getElementById(fid);
+      if (f && f.value && document.activeElement !== f) f.value = '';
+    });
+  }, 400);
   setTimeout(function() { document.getElementById('clPrenom').focus(); }, 100);
 }
 function closeCreateLead() {
