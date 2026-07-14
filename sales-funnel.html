@@ -675,6 +675,25 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     }).catch(function (e) { console.warn('[funnel] journal periode', e.message); DATA.journalPeriod = []; });
   }
 
+  /* Journal d'actions setting (lead_actions/{slug}/items — refonte 07/2026).
+     Une requête par membre (sous-collections par slug, plage sur `day`). */
+  function loadActionsAll() {
+    DATA.actions = [];
+    return waitForTeamMembers().then(function () {
+      var members = (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.slug; });
+      if (!members.length) return;
+      var sIso = isoDate(P.start), eIso = isoDate(P.end);
+      var proms = members.map(function (m) {
+        return db.collection('lead_actions').doc(m.slug).collection('items')
+          .where('day', '>=', sIso).where('day', '<=', eIso).get()
+          .then(function (snap) {
+            snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.actions.push(d); });
+          }).catch(function () {});
+      });
+      return Promise.all(proms);
+    });
+  }
+
   function loadJournalAll() {
     return db.collection('marketing_journal').orderBy('date', 'desc').limit(250).get().then(function (snap) {
       journalAll = [];
@@ -782,11 +801,16 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     }
 
     var created = DATA.bookings.filter(function (b) { return b._inCreated && b._class !== 'excluded' && bookingMatches(b); });
-    var createdFunnel = created.filter(function (b) { return b._class === 'self' || b._class === 'setter'; });
+    var createdFunnelAll = created.filter(function (b) { return b._class === 'self' || b._class === 'setter'; });
+    /* Replanifications exclues des « pris » : le RDV de remplacement porte
+       rescheduledFromId — le compter regonflerait LTB/CPR à chaque report
+       (refonte 07/2026). Il reste compté dans la tenue (date due). */
+    var createdFunnel = createdFunnelAll.filter(function (b) { return !b.rescheduledFromId; });
     k.booked = createdFunnel.length;
     k.bookedSelf = createdFunnel.filter(function (b) { return b._class === 'self'; }).length;
     k.bookedSetter = k.booked - k.bookedSelf;
     k.bookedAdmin = created.filter(function (b) { return b._class === 'admin'; }).length;
+    k.rescheduledCreated = createdFunnelAll.length - createdFunnel.length;
     k.selfShare = k.booked > 0 ? k.bookedSelf / k.booked * 100 : null;
     k.setterShare = k.booked > 0 ? k.bookedSetter / k.booked * 100 : null;
     k.ltb = k.leads > 0 ? k.booked / k.leads * 100 : null;
@@ -796,7 +820,9 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
        (leads période − leads période avec self-booking). */
     var selfLeadIds = {}, setterLeadIds = {};
     var setterOld = 0, unknownLeadBookings = 0;
-    createdFunnel.forEach(function (b) {
+    /* Récupération / TTB : dédupliqué par lead → on garde TOUS les RDV créés
+       (replanifications incluses) pour ne pas perdre le marquage SB/NB du lead. */
+    createdFunnelAll.forEach(function (b) {
       var l = bookingLead(b);
       if (!l) { unknownLeadBookings++; return; }
       if (!l._inCohort) { if (b._class === 'setter') setterOld++; return; }
@@ -837,6 +863,74 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       var who = b.cancelledByName || b.noShowByName || (b.status === 'no_show' ? 'No-show' : 'Non renseigné');
       k.cancelledByMap[who] = (k.cancelledByMap[who] || 0) + 1;
     });
+
+    /* ══ SETTING / CLOSING — résultats d'appel (outcome, refonte 07/2026) ══
+       Ventilation stricte validée Adrien : le rapport Closing = RDV SELF
+       BOOKING uniquement ; le Setting NB = RDV posés par les setters.
+       présent (live) = offre|close|non_close|disqualifie ·
+       pitché = offre|close|non_close · replanifié = exclu (remplacé). */
+    function ocOf(b) { return b.outcome || null; }
+    function ocCancelled(b) { var o = ocOf(b); return o === 'annule' || (!o && b.status === 'cancelled' && b.rescheduled !== true); }
+    function ocNoShow(b) { var o = ocOf(b); return o === 'no_show' || (!o && b.status === 'no_show'); }
+    function ocResched(b) { var o = ocOf(b); return o === 'replanifie' || (!o && b.status === 'cancelled' && b.rescheduled === true); }
+    function ocPresent(b) { var o = ocOf(b); return o ? (o === 'offre' || o === 'close' || o === 'non_close' || o === 'disqualifie') : b.status === 'completed'; }
+    function ocPitched(b) { var o = ocOf(b); return o === 'offre' || o === 'close' || o === 'non_close'; }
+
+    function ocAgg(list) {
+      var a = { due: 0, cancelled: 0, noshow: 0, resched: 0, present: 0, disqua: 0, pitched: 0, closes: 0, nonCloses: 0, aStatuer: 0, contracte: 0, collecte: 0 };
+      list.forEach(function (b) {
+        a.due++;
+        if (ocCancelled(b)) a.cancelled++;
+        else if (ocNoShow(b)) a.noshow++;
+        else if (ocResched(b)) a.resched++;
+        if (ocPresent(b)) a.present++;
+        if (ocOf(b) === 'disqualifie') a.disqua++;
+        if (ocPitched(b)) a.pitched++;
+        if (ocOf(b) === 'close') {
+          a.closes++;
+          a.contracte += (b.closeData && Number(b.closeData.contracte)) || 0;
+          a.collecte += (b.closeData && Number(b.closeData.collecte)) || 0;
+        }
+        if (ocOf(b) === 'non_close') a.nonCloses++;
+        if (!ocOf(b) && (b.status === 'confirmed' || b.status === 'pending') && b.date < todayIso) a.aStatuer++;
+      });
+      return a;
+    }
+    k.ocSB = ocAgg(due.filter(function (b) { return b._class === 'self'; }));
+    k.ocNB = ocAgg(due.filter(function (b) { return b._class === 'setter'; }));
+    k.ocTotal = {
+      closes: k.ocSB.closes + k.ocNB.closes,
+      collecte: k.ocSB.collecte + k.ocNB.collecte,
+      contracte: k.ocSB.contracte + k.ocNB.contracte,
+      aStatuer: k.ocSB.aStatuer + k.ocNB.aStatuer
+    };
+    k.ocHasData = (k.ocSB.due + k.ocNB.due) > 0 &&
+      (k.ocSB.closes + k.ocNB.closes + k.ocSB.pitched + k.ocSB.cancelled + k.ocSB.noshow + k.ocNB.cancelled + k.ocNB.noshow + k.ocSB.present + k.ocNB.present) > 0;
+
+    /* Échelle CPR (validée) — base RDV SB de la période :
+       CPR (annulés inclus) → KEPT (sans annulation) → Live (présents,
+       disqua & sans offre inclus) → Offre (pitchés). */
+    var sbKept = k.ocSB.due - k.ocSB.cancelled - k.ocSB.resched;
+    k.ltbSB = k.leads > 0 ? k.bookedSelf / k.leads * 100 : null;
+    k.cprSB      = k.spend > 0 && k.ocSB.due > 0 ? k.spend / k.ocSB.due : null;
+    k.cprKept    = k.spend > 0 && sbKept > 0 ? k.spend / sbKept : null;
+    k.cprLive    = k.spend > 0 && k.ocSB.present > 0 ? k.spend / k.ocSB.present : null;
+    k.cprOffre   = k.spend > 0 && k.ocSB.pitched > 0 ? k.spend / k.ocSB.pitched : null;
+    k.cpa        = k.spend > 0 && k.ocTotal.closes > 0 ? k.spend / k.ocTotal.closes : null;
+    k.aov        = k.ocTotal.closes > 0 ? k.ocTotal.collecte / k.ocTotal.closes : null;
+    k.roasOutcome = k.spend > 0 && k.ocTotal.collecte > 0 ? k.ocTotal.collecte / k.spend : null;
+
+    /* Actions setting (lead_actions) — leads travaillés + sets déclarés auto */
+    var acts = DATA.actions || [];
+    k.actLeadsWorked = 0;
+    var setKeys = {};
+    acts.forEach(function (a) {
+      if (a.firstTouch) k.actLeadsWorked++;
+      if (a.action === 'set' || a.action === 'set_booking' || a.action === 'rdv_pose') {
+        setKeys[(a.leadId || a._id) + '_' + a.day] = 1;
+      }
+    });
+    k.actSets = Object.keys(setKeys).length;
 
     /* ── Téléphonie (call_logs) ── */
     function callMatches(c) {
@@ -974,9 +1068,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : '&nbsp;') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.booked) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) : '&nbsp;') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + (k.keptPct != null ? fmtPct(k.keptPct, 0) : '—') + '</div><div class="l">Kept</div><div class="s">' + fmtNum(k.kept) + ' / ' + fmtNum(k.due) + ' RDV</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (k.saisies ? fmtNum(k.closes) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.saisies && k.closingLive != null ? fmtPct(k.closingLive, 0) + ' live' : 'maille mois') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (k.saisies ? fmtEuro(k.collecte) : '—') + '</div><div class="l">Collecté</div><div class="s">' + (k.saisies ? 'Contracté ' + fmtEuro(k.contracte) : 'maille mois') + '</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (k.roas != null ? (Math.round(k.roas * 100) / 100).toLocaleString('fr-FR') + '×' : '—') + '</div><div class="l">ROAS</div><div class="s">' + (k.spend > 0 ? 'Dépense ' + fmtEuro(k.spend) : 'pas de data pub') + '</div></div>';
+    /* Hero Closes/Collecté/ROAS : priorité aux résultats d'appel automatiques
+       (refonte 07/2026), repli sur les saisies manuelles pour les mois passés. */
+    var heroCloses = k.ocHasData ? k.ocTotal.closes : (k.saisies ? k.closes : null);
+    var heroCollecte = k.ocHasData ? k.ocTotal.collecte : (k.saisies ? k.collecte : null);
+    var heroContracte = k.ocHasData ? k.ocTotal.contracte : (k.saisies ? k.contracte : null);
+    var heroRoas = k.roasOutcome != null ? k.roasOutcome : k.roas;
+    h += '<div class="fn-hero-kpi"><div class="v">' + (heroCloses != null ? fmtNum(heroCloses) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.ocHasData ? 'résultats RDV (auto)' : (k.saisies && k.closingLive != null ? fmtPct(k.closingLive, 0) + ' live' : 'maille mois')) + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (heroCollecte != null ? fmtEuro(heroCollecte) : '—') + '</div><div class="l">Collecté</div><div class="s">' + (heroContracte != null ? 'Contracté ' + fmtEuro(heroContracte) : 'maille mois') + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (heroRoas != null ? (Math.round(heroRoas * 100) / 100).toLocaleString('fr-FR') + '×' : '—') + '</div><div class="l">ROAS</div><div class="s">' + (k.spend > 0 ? 'Dépense ' + fmtEuro(k.spend) : 'pas de data pub') + '</div></div>';
     h += '</div>';
 
     /* 1. Publicité */
@@ -1051,7 +1151,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += kpiCard(fmtNum(k.bookedSetter) + ' <span style="font-size:12px;color:var(--muted)">(' + fmtPct(k.setterShare, 0) + ')</span>', '📞 Setting', k.setterOldLeads ? 'dont ' + k.setterOldLeads + ' sur leads antérieurs' : null);
     h += kpiCard(fmtPct(k.ltb), 'LTB — Lead to Booking', 'RDV pris / leads', targetBadge('ltb', k.ltb));
     h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
-    h += kpiCard(fmtEuro2(k.cpr), 'CPR', 'dépense / RDV pris');
+    h += kpiCard(fmtEuro2(k.cpr), 'Coût / RDV pris (tous)', 'dépense / RDV self + setter — voir échelle CPR (SB) en bas');
     if (k.bookedAdmin > 0) h += kpiCard(fmtNum(k.bookedAdmin), 'RDV manuels (admin)', 'hors LTB / hors funnel', null, true);
     h += '</div>';
     if (k.unknownLeadBookings > 0 && tunnelFilter === 'all') h += '<div class="fn-stage-note" style="margin-top:8px">ℹ ' + k.unknownLeadBookings + ' RDV de leads hors période (non rattachés à la cohorte) — inclus dans les totaux « Tous », hors taux de récupération.</div>';
@@ -1097,6 +1197,36 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
+    /* 6bis. SETTING / CLOSING — résultats d'appel automatiques (refonte 07/2026) */
+    h += stageOpen('🧲', 'SETTING / CLOSING — résultats d\'appel (auto)',
+      'RDV de la période statués depuis le module RDV / la fiche prospect · <span style="color:var(--gold)">SB = Self Booking</span> · <span style="color:#c4b5fd">NB = Setting</span>');
+    if (!k.ocHasData) {
+      h += '<div class="fn-stage-note" style="margin-top:6px">Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="sales-rdv.html" style="color:var(--blue)">Rendez-vous</a> ou la fiche prospect. Cette section s\'alimente toute seule.</div>';
+    }
+    /* — ligne CLOSING (Close SB) — */
+    h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;text-transform:uppercase;letter-spacing:0.7px;margin:10px 0 8px">Closing — Self Booking</div>';
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtNum(k.ocSB.due), 'RDV SB', 'LTB (SB) ' + fmtPct(k.ltbSB));
+    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.ocSB.cancelled) + '</span> / <span style="color:var(--gold)">' + fmtNum(k.ocSB.noshow) + '</span>', 'Annulés / No-show SB', k.ocSB.resched ? '+ ' + k.ocSB.resched + ' replanifiés' : null);
+    h += kpiCard(fmtNum(k.ocSB.present), 'Présents (Live)', k.ocSB.due - k.ocSB.cancelled - k.ocSB.resched > 0 ? 'show-up ' + fmtPct(k.ocSB.present / (k.ocSB.due - k.ocSB.cancelled - k.ocSB.resched) * 100, 0) : null);
+    h += kpiCard(fmtNum(k.ocSB.pitched), 'Offres pitchées', k.ocSB.disqua ? k.ocSB.disqua + ' disqualifiés' : null);
+    h += kpiCard(fmtNum(k.ocSB.closes), 'Closes SB', k.ocSB.pitched > 0 ? fmtPct(k.ocSB.closes / k.ocSB.pitched * 100, 0) + ' des offres · ' + k.ocSB.nonCloses + ' non closes' : (k.ocSB.nonCloses ? k.ocSB.nonCloses + ' non closes' : null));
+    h += kpiCard(fmtEuro(k.ocSB.collecte), 'Collecté SB', 'contracté ' + fmtEuro(k.ocSB.contracte));
+    h += '</div>';
+    /* — ligne SETTING (Set NB) — */
+    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;margin:14px 0 8px">Setting — No Booking</div>';
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtNum(k.actLeadsWorked), 'Leads travaillés', '1ʳᵉ action fiche (journal setting)');
+    h += kpiCard(fmtNum(k.actSets), 'Sets (actions)', 'vs ' + fmtNum(k.bookedSetter) + ' RDV setter créés');
+    h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', 'sets / leads non self-bookés', targetBadge('recovery', k.recovery));
+    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.ocNB.cancelled) + '</span> / <span style="color:var(--gold)">' + fmtNum(k.ocNB.noshow) + '</span>', 'Annulés / No-show NB', k.ocNB.resched ? '+ ' + k.ocNB.resched + ' replanifiés' : null);
+    h += kpiCard(fmtNum(k.ocNB.present), 'Présents NB', k.ocNB.due > 0 ? 'sur ' + fmtNum(k.ocNB.due) + ' RDV NB' : null);
+    h += kpiCard(fmtNum(k.ocNB.closes), 'Closes NB', fmtEuro(k.ocNB.collecte) + ' collecté');
+    h += '</div>';
+    if (k.ocTotal.aStatuer > 0) h += '<div class="fn-alert">⏳ <strong>' + k.ocTotal.aStatuer + ' RDV passé(s) sans résultat</strong> — à statuer dans <a href="sales-rdv.html">Rendez-vous</a> pour des chiffres SETTING / CLOSING exacts.</div>';
+    h += '</div>';
+    h += '<div class="fn-arrow">▼</div>';
+
     /* 7. Closing */
     if (k.saisies) {
       h += stageOpen('🎯', 'Closing (saisies équipe)', k.saisies.members + ' membre(s) · ' + MONTHS_FR[P.m] + ' ' + P.y);
@@ -1115,13 +1245,18 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     }
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 8. Rentabilité */
-    h += stageOpen('💶', 'Coûts &amp; rentabilité', null);
+    /* 8. Rentabilité — échelle CPR (SB) validée 07/2026 */
+    h += stageOpen('💶', 'Coûts &amp; rentabilité', 'échelle CPR = RDV Self Booking de la période');
     h += '<div class="fn-grid">';
     h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense / lead', targetBadge('cpl', k.cpl));
-    h += kpiCard(fmtEuro2(k.cpr), 'CPR', 'dépense / RDV');
-    h += kpiCard(k.saisies ? fmtEuro2(k.cac) : '—', 'CAC', 'dépense / close', null, !k.saisies);
-    h += kpiCard(k.roas != null ? (Math.round(k.roas * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS', 'collecté / dépense', null, k.roas == null);
+    h += kpiCard(fmtEuro2(k.cprSB), 'CPR', 'dép. / RDV SB (annulés inclus)');
+    h += kpiCard(fmtEuro2(k.cprKept), 'CPR KEPT', 'dép. / RDV SB sans annulation');
+    h += kpiCard(fmtEuro2(k.cprLive), 'CPR Live', 'dép. / RDV SB présents (disqua &amp; hors offre inclus)');
+    h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Offre', 'dép. / RDV SB pitchés');
+    h += kpiCard(fmtEuro2(k.cpa), 'CPA', 'dépense / client acquis (closes SB + NB)', null, k.cpa == null);
+    h += kpiCard(k.aov != null ? fmtEuro2(k.aov) : '—', 'AOV', 'collecté / nb clients', null, k.aov == null);
+    h += kpiCard(k.saisies ? fmtEuro2(k.cac) : '—', 'CAC (saisies)', 'dépense / close déclaré', null, !k.saisies);
+    h += kpiCard(k.roasOutcome != null ? (Math.round(k.roasOutcome * 100) / 100).toLocaleString('fr-FR') + '×' : (k.roas != null ? (Math.round(k.roas * 100) / 100).toLocaleString('fr-FR') + '×' : '—'), 'ROAS', k.roasOutcome != null ? 'collecté (résultats RDV) / dépense' : 'collecté (saisies) / dépense', null, k.roasOutcome == null && k.roas == null);
     h += '</div></div>';
 
     /* Journal de la période */
@@ -1602,7 +1737,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     updateToolbar();
     $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';
     var t0 = Date.now();
-    Promise.all([loadAds(), loadViews(), loadLeads(), loadBookings(), loadCalls(), loadSaisies(), loadJournalPeriod()])
+    Promise.all([loadAds(), loadViews(), loadLeads(), loadBookings(), loadCalls(), loadSaisies(), loadJournalPeriod(), loadActionsAll()])
       .then(function () {
         compute();
         renderActiveTab();

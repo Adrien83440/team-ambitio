@@ -538,6 +538,40 @@ var _agentClientId = params.get('clientId') || '';
 // visiteur public qui ouvrirait booking.html en top-level avec ?by=setter.
 var _setterRequested = params.get('by') === 'setter';
 var _setterMode = _setterRequested && _embedMode && window.parent !== window;
+
+/* ═══ ATTRIBUTION SETTER (refonte 07/2026) ═══
+   Quand le RDV est posé par un setter depuis Leads Live / fiche CRM, la page
+   parente passe &setter={slug}&setterUid=&setterName= → posés sur le booking
+   (bookedBySlug/Uid/Name). Alimente le rapport Setting journalier (sets réels)
+   et le pré-remplissage des commissions Setting NB au close. */
+var _setterSlug = params.get('setter') || '';
+var _setterUid  = params.get('setterUid') || '';
+var _setterName = params.get('setterName') || '';
+
+/* ═══ MODE REPLANIFICATION (refonte 07/2026) ═══
+   ?reschedule={bookingId} (embed, iframe interne authentifiée — RdvOutcome).
+   On charge l'ancien RDV pour forcer type + expert + prospect + lead, puis à
+   la confirmation : nouveau booking COPIANT source (SB/NB) / leadId / setter,
+   lien croisé rescheduledFromId/ToId, et l'ancien passe outcome=replanifie.
+   La ventilation Self Booking / Setting NB ne change JAMAIS lors d'un report. */
+var _rescheduleId = params.get('reschedule') || '';
+var _rescheduleOld = null;
+var _reschedulePromise = Promise.resolve();
+if (_rescheduleId && _embedMode && window.parent !== window) {
+  _reschedulePromise = db.collection('bookings').doc(_rescheduleId).get().then(function (s) {
+    if (!s.exists) { console.warn('[booking] reschedule: RDV introuvable', _rescheduleId); return; }
+    var old = s.data(); old.id = s.id;
+    _rescheduleOld = old;
+    presetType = old.type || presetType;
+    presetPerson = old.personId || presetPerson;
+    var p = old.prospect || {};
+    if (p.prenom) _formPrenom = p.prenom;
+    if (p.nom) _formNom = p.nom;
+    if (p.email) _formEmail = p.email;
+    if (p.telephone) _formTel = p.telephone;
+    if (old.leadId) _formLeadId = old.leadId;
+  }).catch(function (e) { console.warn('[booking] reschedule load:', e && e.message); });
+}
 if (_agentMode) {
   // L'identité du client est transmise par booking-admin via postMessage
   // (pas dans l'URL → aucune donnée perso exposée). Best-effort : si le
@@ -579,6 +613,10 @@ db.collection('booking_config').get().then(function(snap) {
     // Permission denied for public users — that's OK, slots just won't filter
     console.log('Bookings not accessible (public mode):', err.code || err.message);
     S.bookings = [];
+  }).then(function() {
+    // Attendre le chargement de l'ancien RDV en mode replanification
+    // (force type/expert/prospect AVANT initBooking).
+    return _reschedulePromise;
   }).then(function() {
     // Always show the page regardless of bookings access
     document.getElementById('bkLoading').style.display = 'none';
@@ -1272,6 +1310,36 @@ async function handleSubmit() {
   // et le matching automatique avec les fiches clients par email).
   if (S.selType && S.selType.isCoaching === true) booking.isCoaching = true;
 
+  // ── Attribution setter (refonte 07/2026) ──
+  if (booking.source === 'setter_booking' && _setterSlug) {
+    booking.bookedBySlug = _setterSlug;
+    if (_setterUid)  booking.bookedByUid  = _setterUid;
+    if (_setterName) booking.bookedByName = _setterName;
+  }
+
+  // ── Replanification : copie STRICTE de l'attribution d'origine ──
+  // Un report ne change JAMAIS la nature du RDV : un Self Booking reste SB,
+  // un RDV setter reste NB, et un RDV coaching/client reste coaching/client
+  // (isCoaching, clientId, skipLeadCreation copiés — sinon il basculerait
+  // dans le périmètre Setting & Sales du funnel et des rapports).
+  if (_rescheduleOld) {
+    if (_rescheduleOld.source) booking.source = _rescheduleOld.source;
+    if (_rescheduleOld.leadId) booking.leadId = _rescheduleOld.leadId;
+    if (_rescheduleOld.formId && !booking.formId) booking.formId = _rescheduleOld.formId;
+    if (_rescheduleOld.bookedBySlug) {
+      booking.bookedBySlug = _rescheduleOld.bookedBySlug;
+      if (_rescheduleOld.bookedByUid)  booking.bookedByUid  = _rescheduleOld.bookedByUid;
+      if (_rescheduleOld.bookedByName) booking.bookedByName = _rescheduleOld.bookedByName;
+    }
+    if (_rescheduleOld.isCoaching === true) booking.isCoaching = true;
+    if (_rescheduleOld.skipLeadCreation === true) booking.skipLeadCreation = true;
+    if (_rescheduleOld.clientId) {
+      booking.clientId = _rescheduleOld.clientId;
+      if (_rescheduleOld.clientNom) booking.clientNom = _rescheduleOld.clientNom;
+    }
+    booking.rescheduledFromId = _rescheduleId;
+  }
+
   /* ── CHECK QUOTA COACHING MENSUEL ───────────────────────────────────────
      Si le type de consultation est marqué isCoaching et qu'on a un email,
      on demande à la Vercel Function /api/booking-check-coaching-quota si
@@ -1283,7 +1351,10 @@ async function handleSubmit() {
      Fail-open : en cas d'erreur réseau ou serveur, on laisse passer pour
      ne pas bloquer un RDV légitime sur un problème transitoire.
   ─────────────────────────────────────────────────────────────────────── */
-  if (booking.isCoaching === true && email && S.selDate) {
+  // Quota NON re-vérifié en replanification : on DÉPLACE un coaching existant,
+  // on n'en consomme pas un nouveau (sinon le report d'un RDV déjà comptabilisé
+  // dans le quota mensuel serait bloqué à tort).
+  if (booking.isCoaching === true && email && S.selDate && !_rescheduleOld) {
     var monthYear = S.selDate.slice(0, 7); // "YYYY-MM"
     try {
       var resp = await fetch('/api/booking-check-coaching-quota', {
@@ -1325,6 +1396,52 @@ async function handleSubmit() {
     S.confirmedBooking = booking;
     S.confirmedMeetLink = null;
 
+    // ── Replanification : l'ancien RDV passe en outcome "replanifie" ──
+    // (status legacy 'cancelled' + rescheduled:true → exclu des annulations,
+    //  le nouveau RDV le remplace dans tous les rapports).
+    if (_rescheduleOld) {
+      var _now = new Date();
+      var _me = firebase.auth().currentUser;
+      db.collection('bookings').doc(_rescheduleId).update({
+        outcome: 'replanifie',
+        outcomeAt: firebase.firestore.FieldValue.serverTimestamp(),
+        outcomeBy: _me ? _me.uid : null,
+        outcomeByName: _me ? (_me.displayName || _me.email || null) : null,
+        outcomeNote: 'Replanifié au ' + S.selDate + ' ' + S.selTime,
+        outcomeDay: _now.getFullYear() + '-' + String(_now.getMonth() + 1).padStart(2, '0') + '-' + String(_now.getDate()).padStart(2, '0'),
+        outcomeHistory: firebase.firestore.FieldValue.arrayUnion({
+          outcome: 'replanifie',
+          note: 'Replanifié au ' + S.selDate + ' ' + S.selTime,
+          at: _now.toISOString(),
+          by: _me ? _me.uid : null,
+          byName: _me ? (_me.displayName || _me.email || null) : null
+        }),
+        status: 'cancelled',
+        statusUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        statusUpdatedBy: _me ? _me.uid : null,
+        statusUpdatedByName: _me ? (_me.displayName || _me.email || null) : null,
+        cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
+        cancelledBy: _me ? _me.uid : null,
+        cancelledByName: _me ? (_me.displayName || _me.email || null) : null,
+        rescheduled: true,
+        rescheduledToId: docRef.id
+      }).then(function () {
+        // Trace sur la fiche prospect
+        if (booking.leadId) {
+          var _d2 = new Date();
+          var _pad = function (n) { return String(n).padStart(2, '0'); };
+          db.collection('leads').doc(booking.leadId).update({
+            timeline_history: firebase.firestore.FieldValue.arrayUnion({
+              text: '📅 RDV replanifié → ' + S.selDate.split('-').reverse().join('/') + ' à ' + S.selTime,
+              date: _pad(_d2.getDate()) + '/' + _pad(_d2.getMonth() + 1) + '/' + _d2.getFullYear() + ' ' + _pad(_d2.getHours()) + ':' + _pad(_d2.getMinutes()),
+              color: '#a78bfa'
+            }),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }).catch(function (e) { console.warn('[booking] timeline replanif:', e && e.message); });
+        }
+      }).catch(function (e) { console.warn('[booking] update ancien RDV replanifié:', e && e.message); });
+    }
+
     // Mode agent : on prévient booking-admin (fenêtre parente) que le RDV
     // est créé → fermeture du modal + toast + rafraîchissement de la liste.
     if (_agentMode && window.parent !== window) {
@@ -1346,7 +1463,7 @@ async function handleSubmit() {
        Le lien Meet (généré async par Cloud Function) reste disponible dans
        l'email de confirmation et l'invitation calendrier.
     ─────────────────────────────────────────────────────────────────────── */
-    var _redirectUrl = (S.selType && S.selType.confirmationRedirect === true && S.selType.confirmationRedirectUrl)
+    var _redirectUrl = (S.selType && S.selType.confirmationRedirect === true && S.selType.confirmationRedirectUrl && !_rescheduleOld)
       ? String(S.selType.confirmationRedirectUrl).trim()
       : '';
     if (_redirectUrl) {
@@ -1362,6 +1479,8 @@ async function handleSubmit() {
         try {
           window.parent.postMessage({
             type: 'booking_confirmed',
+            bookingId: S.confirmedBookingId || null,
+            rescheduledFromId: _rescheduleOld ? _rescheduleId : null,
             leadId: _formLeadId,
             date: S.selDate,
             time: S.selTime,
@@ -1488,6 +1607,8 @@ function showConfirmation(prenom, email) {
     try {
       window.parent.postMessage({
         type: 'booking_confirmed',
+        bookingId: S.confirmedBookingId || null,
+        rescheduledFromId: _rescheduleOld ? _rescheduleId : null,
         leadId: _formLeadId,
         date: S.selDate,
         time: S.selTime,

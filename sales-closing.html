@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Ambitio — Closing</title>
-<link rel="stylesheet" href="sales.css"/>
+<meta name="theme-color" content="#07080f"/>
+<title>Alteore — Closing (rapport journalier)</title>
+<link rel="stylesheet" href="alteore-ui.css"/>
+
 <!-- ── Firebase v9 compat ── -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -18,1290 +20,457 @@
       storageBucket:     "ambitio-team.firebasestorage.app",
       messagingSenderId: "1079366902268",
       appId:             "1:1079366902268:web:b4ec1691dba54230339279"
-    }); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }
+    }); try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { console.warn('[firestore]', e && e.message); }
   }
 </script>
-
-<script>
-/* === sales-data.js inlined === */
-/**
- * sales-data.js — Data Store + Firebase + Utilitaires
- * Les données "a" (actuelles) viennent de Firestore en temps réel.
- * Les données "p" (projections) sont les références fixes.
- */
-
-/* ═══════════════════════════════════════════════════════════
-   PROJECTIONS FIXES — modifier ici pour changer les cibles
-═══════════════════════════════════════════════════════════ */
-const PROJECTIONS = {
-  closing: {
-    s1: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s2: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s3: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s4: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    livesP:0.75, offresP:0.667, engP:0.5, cOffP:0.4, cCallP:0.2, cashLive:666.7,
-  },
-  setting: {
-    s1: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s2: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s3: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s4: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    decrochesP:0.12, engP:0.222, setP:0.5, showupP:0.8, cCallP:0.8,
-  },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   DATA STORE
-═══════════════════════════════════════════════════════════ */
-const ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
-
-const DB = {
-  months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-
-  // Données brutes saisies (remplacées par Firestore)
-  _raw: {
-    closing: {
-      s1: { calls:8,  lives:2, offres:1, closes:0, hc:0, fu:0, contracte:0,     collecte:0    },
-      s2: { calls:8,  lives:4, offres:2, closes:2, hc:2, fu:0, contracte:12000, collecte:1000 },
-      s3: { calls:9,  lives:6, offres:3, closes:1, hc:1, fu:0, contracte:5400,  collecte:400  },
-      s4: { calls:9,  lives:7, offres:2, closes:0, hc:0, fu:0, contracte:1800,  collecte:200  },
-    },
-    setting: {
-      s1: { leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, closes:0 },
-      s2: { leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, closes:2 },
-      s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
-      s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
-    },
-    deals: [
-      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
-      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
-      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-    ],
-  },
-
-  // Calculé depuis _raw
-  closing: null,
-  setting: null,
-  commissions: {
-    'Janvier 2026': { contracte:12000, collecte:0,    totalComm:0,    statut:'Validé',     deals:[] },
-    'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
-    'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
-  },
-  team: {
-    week: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:33020, collecte:3342,  calls:23, lives:20, offres:14, closes:6, showup:0.87, txOffre:0.70,  txTransfoShow:0.30,  txTransfoOffre:0.429, caCall:1435.7 },
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
-    ],
-    month: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:48469, collecte:4686, calls:56, lives:33, offres:17, closes:9, showup:0.589, txOffre:0.515, txTransfoShow:0.273, txTransfoOffre:0.529, caCall:721.3 },
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
-    ],
-  },
-
-  // Recalcule toutes les métriques depuis _raw
-  compute() {
-    const rc = DB._raw.closing;
-    const rs = DB._raw.setting;
-    const pc = PROJECTIONS.closing;
-    const ps = PROJECTIONS.setting;
-
-    const sumC  = k => ALL_WEEKS.reduce((t,w) => t + ((rc[w]||{})[k]||0), 0);
-    const sumS  = k => ALL_WEEKS.reduce((t,w) => t + ((rs[w]||{})[k]||0), 0);
-    const projC = k => ALL_WEEKS.reduce((t,w) => t + ((pc[w]||{})[k]||0), 0);
-    const projS = k => ALL_WEEKS.reduce((t,w) => t + ((ps[w]||{})[k]||0), 0);
-
-    const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
-    const cta=sumC('contracte'), cola=sumC('collecte');
-    const cp=projC('calls'), lp=projC('lives'), op=projC('offres'), clp=projC('closes');
-    const ctp=projC('contracte'), colp=projC('collecte');
-
-    DB.closing = {
-      mois: {
-        calls:     {a:ca,  p:cp  },
-        lives:     {a:la,  p:lp  },
-        offres:    {a:oa,  p:op  },
-        closes:    {a:cla, p:clp },
-        hc:        {a:sumC('hc'), p:clp},
-        fu:        {a:sumC('fu'), p:0  },
-        contracte: {a:cta, p:ctp },
-        collecte:  {a:cola,p:colp},
-        livesP:  {a:ca>0  ? la/ca   : 0, p:pc.livesP  },
-        offresP: {a:la>0  ? oa/la   : 0, p:pc.offresP },
-        engP:    {a:oa>0  ? cla/oa  : 0, p:pc.engP    },
-        cOffP:   {a:oa>0  ? cla/oa  : 0, p:pc.cOffP   },
-        cCallP:  {a:ca>0  ? cla/ca  : 0, p:pc.cCallP  },
-        cashLive:{a:la>0  ? cta/la  : 0, p:pc.cashLive},
-        atteinte: ctp>0 ? cta/ctp : 0,
-        delta:    Math.max(0, ctp-cta),
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rc[w]).map(w => [w, DB._cw(w)])),
-    };
-
-    const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
-    const sa=sumS('sets'), pra=sumS('presents'), sca2=sumS('closes');
-
-    DB.setting = {
-      mois: {
-        leads:     {a:sumS('leads'),  p:projS('leads')    },
-        calls:     {a:sca,            p:projS('calls')    },
-        decroches: {a:da,             p:projS('decroches')},
-        propRdv:   {a:pa,             p:projS('propRdv')  },
-        sets:      {a:sa,             p:projS('sets')     },
-        presents:  {a:pra,            p:projS('presents') },
-        closes:    {a:sca2,           p:projS('closes')   },
-        decrochesP:{a:sca>0?da/sca:0,  p:ps.decrochesP },
-        engP:      {a:da>0 ?pa/da:0,    p:ps.engP       },
-        setP:      {a:pa>0 ?sa/pa:0,    p:ps.setP       },
-        showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
-        cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rs[w]).map(w => [w, DB._sw(w)])),
-    };
-
-    // Sync deals dans commissions
-    try {
-      const cmk = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-      if (DB.commissions[cmk]) DB.commissions[cmk].deals = DB._raw.deals;
-    } catch(e) {}
-  },
-
-  _cw(w) {
-    const d=DB._raw.closing[w]||{}, p=PROJECTIONS.closing[w]||PROJECTIONS.closing.s1||{};
-    return {
-      calls:{a:d.calls||0,p:p.calls||0}, lives:{a:d.lives||0,p:p.lives||0},
-      offres:{a:d.offres||0,p:p.offres||0}, closes:{a:d.closes||0,p:p.closes||0},
-      hc:{a:d.hc||0,p:p.closes||0}, fu:{a:d.fu||0,p:0},
-      contracte:{a:d.contracte||0,p:p.contracte||0}, collecte:{a:d.collecte||0,p:p.collecte||0},
-    };
-  },
-  _sw(w) {
-    const d=DB._raw.setting[w]||{}, p=PROJECTIONS.setting[w]||PROJECTIONS.setting.s1||{};
-    return {
-      leads:{a:d.leads||0,p:p.leads||0}, calls:{a:d.calls||0,p:p.calls||0},
-      decroches:{a:d.decroches||0,p:p.decroches||0}, propRdv:{a:d.propRdv||0,p:p.propRdv||0},
-      sets:{a:d.sets||0,p:p.sets||0}, presents:{a:d.presents||0,p:p.presents||0},
-      closes:{a:d.closes||0,p:p.closes||0},
-    };
-  },
-};
-
-DB.compute();
-
-/* ═══════════════════════════════════════════════════════════
-   FIREBASE — couche temps réel
-   Initialisé après que firebase SDK soit chargé + auth ready
-═══════════════════════════════════════════════════════════ */
-const Fire = {
-  db:  null,
-  uid: null,
-  _unsubs: [],
-
-  init(firestore, uid) {
-    Fire.db  = firestore;
-    Fire.uid = uid;
-  },
-
-  _key(label) {
-    const p = label.split(' ');
-    const m = DB.months.indexOf(p[0]);
-    return `${p[1]}-${String(m+1).padStart(2,'0')}`;
-  },
-
-  // Écoute en temps réel les données d'un user pour un mois
-  watchUser(userId, monthLabel, callback) {
-    if (!Fire.db) return () => {};
-    const ref = Fire.db
-      .collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const unsub = ref.onSnapshot(snap => callback(snap.exists ? snap.data() : null));
-    Fire._unsubs.push(unsub);
-    return unsub;
-  },
-
-  // Sauvegarde une semaine de closing
-  async saveClosing(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ closing: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde une semaine de setting
-  async saveSetting(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ setting: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde un deal (append)
-  async saveDeal(userId, monthLabel, deal) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const snap = await ref.get();
-    const deals = snap.exists ? (snap.data().deals || []) : [];
-    deals.push({ ...deal, _ts: Date.now() });
-    await ref.set({ deals }, { merge: true });
-  },
-
-  // Applique un snapshot Firestore dans DB puis recalcule
-  apply(data) {
-    if (!data) return;
-    if (data.closing) ALL_WEEKS.forEach(w => {
-      if (data.closing[w]) Object.assign(DB._raw.closing[w]||(DB._raw.closing[w]={}), data.closing[w]);
-    });
-    if (data.setting) ALL_WEEKS.forEach(w => {
-      if (data.setting[w]) Object.assign(DB._raw.setting[w]||(DB._raw.setting[w]={}), data.setting[w]);
-    });
-    if (data.deals) DB._raw.deals = data.deals;
-    DB.compute();
-    document.dispatchEvent(new CustomEvent('db:updated'));
-  },
-
-  stop() { Fire._unsubs.forEach(u => u()); Fire._unsubs = []; },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════════════════════════ */
-const U = {
-  euro:  v => v == null ? '—' : '€\u202f' + Number(v).toLocaleString('fr-FR'),
-  pct:   v => v == null ? '—' : (v * 100).toFixed(1) + '%',
-  num:   v => v == null ? '—' : Number(v).toLocaleString('fr-FR'),
-  pp:  (a, p) => p > 0 ? Math.min((a / p) * 100, 200) : 0,
-  ppv: (a, p) => p > 0 ? ((a / p) * 100).toFixed(0) + '%' : '—',
-  cb:  (a, p) => { const r = p > 0 ? a / p : 0; return r >= 1 ? '#34d399' : r >= 0.65 ? '#f59e0b' : '#ef4444'; },
-  g:   id => document.getElementById(id),
-  getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
-  getCurrentUser:  () => ({
-    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || 'guillaume',
-    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Guillaume',
-    role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
-  }),
-
-  progRow: (label, a, p, isEuro = false) => {
-    const col = U.cb(a, p);
-    return `<div class="pr">
-      <div class="pr-l">${label}</div>
-      <div class="pr-track"><div class="pr-fill" style="width:${Math.min(U.pp(a,p),100)}%;background:${col}"></div></div>
-      <div class="pr-val">${isEuro ? `${U.euro(a)} / ${U.euro(p)}` : `${a} / ${p}`}</div>
-      <div class="pr-pct" style="color:${col}">${U.ppv(a,p)}</div>
-    </div>`;
-  },
-
-  kpiCard: ({ label, val, sub, rawA, proj, color='#ef4444', pct:fp }) => {
-    const pc = fp!=null ? fp : (proj!=null ? U.pp(rawA??0, proj) : null);
-    return `<div class="kpi" style="--kc:${color}">
-      <div class="kpi-label">${label}</div>
-      <div class="kpi-value">${val}</div>
-      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
-      ${pc!=null ? `<div class="kpi-prog">
-        <div class="kpi-prog-row"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div>
-        <div class="kpi-prog-track"><div class="kpi-prog-fill" style="width:${Math.min(pc,100)}%;background:${color}"></div></div>
-      </div>` : ''}
-    </div>`;
-  },
-
-  funnelStep: (label, val, max, isFirst=false, isEuro=false) => {
-    const ratio = max > 0 ? val / max : 0;
-    return `<div class="fs">
-      <div class="fs-label">${label}</div>
-      <div class="fs-track"><div class="fs-fill" style="width:${Math.min(ratio*100,100)}%"></div></div>
-      <div class="fs-val">${isEuro ? U.euro(val) : val}</div>
-      <div class="fs-rate">${!isFirst ? U.pct(ratio) : ''}</div>
-    </div>`;
-  },
-
-  weekCard: (label, mainVal, mainLabel, minis, isCurrent, dateRange) => `
-    <div class="wc${isCurrent?' wc-active':''}">
-      <div class="wc-label">${label}</div>
-      ${dateRange ? `<div class="wc-dates">${dateRange}</div>` : ''}
-      <div class="wc-main">${mainVal}</div>
-      <div class="wc-sub">${mainLabel}</div>
-      <div class="wc-grid">${minis.map(m=>`
-        <div class="wc-mini">
-          <div class="wc-mini-v"${m.color?` style="color:${m.color}"`:''} >${m.val}</div>
-          <div class="wc-mini-l">${m.label}</div>
-        </div>`).join('')}</div>
-    </div>`,
-
-  barChart: (labels, actuals, projs, unit='') => {
-    const mx = Math.max(...actuals, ...projs, 1);
-    return `<div class="chart-legend">
-        <span class="cl-dot cl-real"></span>Réel
-        <span class="cl-dot cl-proj" style="margin-left:14px"></span>Projection
-      </div>
-      <div class="chart-bars">
-        ${labels.map((l,i)=>`<div class="chart-col">
-          <div class="chart-pair">
-            <div class="chart-bar bar-real" style="height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}${unit}"></div>
-            <div class="chart-bar bar-proj" style="height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj:${projs[i]}${unit}"></div>
-          </div>
-          <div class="chart-lbl">${l}</div>
-        </div>`).join('')}
-      </div>`;
-  },
-
-  toast: (msg, type='success') => {
-    let t = document.getElementById('_toast');
-    if (!t) { t=document.createElement('div'); t.id='_toast'; document.body.appendChild(t); }
-    const s = { success:'background:#1a2e1a;border:1px solid rgba(52,211,153,.3);color:#6ee7b7', error:'background:#2e1a1a;border:1px solid rgba(239,68,68,.3);color:#fca5a5', info:'background:#1a1a2e;border:1px solid rgba(96,165,250,.3);color:#93c5fd' };
-    t.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(0);font-size:12px;font-weight:600;padding:9px 18px;border-radius:10px;z-index:9999;opacity:1;transition:all .28s;white-space:nowrap;font-family:var(--font-b);${s[type]||s.success}`;
-    t.textContent = msg;
-    clearTimeout(t._t);
-    t._t = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
-  },
-};
-
-
-/* ═══════════════════════════════════════════════════════════
-   SEMAINES DU MOIS
-   Avant Mars 2026 : semaines lun→dim classiques (peuvent déborder)
-   À partir de Mars 2026 : semaines strictement dans le mois
-     - Segments ≤ 3 jours fusionnés avec la semaine adjacente
-═══════════════════════════════════════════════════════════ */
-function getMonthWeeks(monthLabel) {
-  const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                     'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const parts = monthLabel.split(' ');
-  const month = MONTHS_FR.indexOf(parts[0]);
-  const year  = parseInt(parts[1]);
-  if (month === -1 || isNaN(year)) return [];
-
-  const pad = n => String(n).padStart(2,'0');
-  function fmt(d) { return pad(d.getDate()) + '/' + pad(d.getMonth()+1); }
-  function fmtShort(d) {
-    const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
-    return d.getDate() + ' ' + M[d.getMonth()];
-  }
-  function dayCount(a, b) { return Math.round((b - a) / 86400000) + 1; }
-
-  /* ── Ancien mode (avant Mars 2026) : semaines lun→dim, débordement OK ── */
-  if (year < 2026 || (year === 2026 && month < 2)) {
-    const firstOfMonth = new Date(year, month, 1);
-    const dayOfWeek = firstOfMonth.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    let monday = new Date(year, month, 1 + daysToMonday);
-    const weeks = [];
-    while (true) {
-      const sunday = new Date(monday.getTime() + 6 * 86400000);
-      if (monday.getMonth() === month || sunday.getMonth() === month) {
-        weeks.push({
-          id: 's' + (weeks.length + 1), label: 'S' + (weeks.length + 1),
-          start: new Date(monday), end: new Date(sunday),
-          range: fmt(monday) + ' \u2192 ' + fmt(sunday),
-          short: fmtShort(monday) + ' \u2013 ' + fmtShort(sunday),
-          tab:   fmt(monday) + '\u2192' + fmt(sunday),
-        });
-      }
-      monday = new Date(monday.getTime() + 7 * 86400000);
-      if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
-        if (monday.getMonth() !== month) break;
-      }
-      if (monday.getFullYear() > year + 1) break;
-      if (weeks.length >= 6) break;
-    }
-    return weeks;
-  }
-
-  /* ── Nouveau mode (Mars 2026+) : semaines dans le mois, fusion si ≤ 3j ── */
-  const lastDay = new Date(year, month + 1, 0);
-  const segs    = [];
-  let cursor    = new Date(year, month, 1);
-
-  while (cursor <= lastDay) {
-    const dow = cursor.getDay();
-    let end;
-    if (dow === 1) { end = new Date(cursor.getTime() + 6 * 86400000); }
-    else { end = new Date(cursor.getTime() + (dow === 0 ? 0 : 7 - dow) * 86400000); }
-    if (end > lastDay) end = new Date(lastDay);
-    segs.push({ start: new Date(cursor), end: new Date(end) });
-    cursor = new Date(end.getTime() + 86400000);
-  }
-
-  // Fusion début si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[0].start, segs[0].end) <= 3) {
-    segs[1].start = segs[0].start;
-    segs.shift();
-  }
-  // Fusion fin si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[segs.length-1].start, segs[segs.length-1].end) <= 3) {
-    segs[segs.length-2].end = segs[segs.length-1].end;
-    segs.pop();
-  }
-
-  return segs.map((s, i) => ({
-    id:    's' + (i + 1),
-    label: 'S' + (i + 1),
-    start: s.start,
-    end:   s.end,
-    range: fmt(s.start) + ' \u2192 ' + fmt(s.end),
-    short: fmtShort(s.start) + ' \u2013 ' + fmtShort(s.end),
-    tab:   fmt(s.start) + '\u2192' + fmt(s.end),
-  }));
-}
-
-window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
-window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
-
-/* === end sales-data.js === */
-</script>
-<script src="nav.js"></script>
-<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
-<style>
-.members-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:8px}
-.member-card{background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:24px;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden}
-.member-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--mc,#ef4444);opacity:0.8}
-.member-card:hover{border-color:var(--mc,#ef4444);background:var(--bg3);transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.3)}
-.mc-avatar{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:#fff;margin-bottom:14px}
-.mc-name{font-size:20px;font-weight:700;letter-spacing:-0.5px;margin-bottom:3px}
-.mc-role{font-size:12px;color:var(--muted);margin-bottom:16px}
-.mc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.mc-stat{background:var(--bg3);border-radius:9px;padding:9px 10px}
-.mc-stat-v{font-size:18px;font-weight:700;letter-spacing:-0.5px}
-.mc-stat-l{font-size:10px;color:var(--muted);margin-top:2px}
-.mc-arrow{position:absolute;top:20px;right:20px;width:32px;height:32px;border-radius:9px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--muted);transition:all 0.15s}
-.member-card:hover .mc-arrow{background:rgba(255,255,255,0.12);color:var(--text)}
-#view-fiche{display:none}
-.fiche-header{display:flex;align-items:center;gap:16px;margin-bottom:22px;flex-wrap:wrap}
-.fiche-back{display:flex;align-items:center;gap:7px;padding:7px 14px;border-radius:9px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;color:var(--muted);font-size:13px;font-weight:500;transition:all 0.15s}
-.fiche-back:hover{border-color:var(--border2);color:var(--text)}
-.fiche-av{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff}
-.fiche-name{font-size:22px;font-weight:700;letter-spacing:-0.5px}
-.fiche-role{font-size:12px;color:var(--muted);margin-top:1px}
-.save-status{font-size:11px;color:var(--muted)}
-.week-tabs-row{display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap}
-.wtab{padding:6px 14px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--muted);transition:all 0.15s;user-select:none}
-.wtab:hover{color:var(--text);border-color:var(--border2)}
-.wtab.active{background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.35);color:#fff}
-.saisie-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-.saisie-bloc{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px}
-.saisie-bloc-title{font-size:11px;font-weight:600;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
-.saisie-field{margin-bottom:10px}
-.saisie-label{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px}
-.proj-tag{font-size:10px;font-weight:400;color:var(--muted2);font-family:var(--font-m)}
-.saisie-input{width:100%;padding:8px 12px;background:rgba(255,255,255,0.04);border:1.5px solid rgba(255,255,255,0.07);border-radius:9px;color:var(--text);font-family:var(--font-m);font-size:14px;outline:none;transition:border-color 0.15s}
-.saisie-input:focus{border-color:var(--red2);background:rgba(239,68,68,0.04)}
-.saisie-input.above{border-color:rgba(52,211,153,0.5)}
-.saisie-input.filled{border-color:rgba(52,211,153,0.3)}
-.rep-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px 14px}
-.rep-label{font-size:11px;font-weight:500;color:var(--muted);margin-bottom:6px}
-.rep-value{font-size:22px;font-weight:700;letter-spacing:-0.7px}
-.rep-sub{font-size:11px;color:var(--muted);margin-top:3px;font-family:var(--font-m)}
-.rates-table{width:100%;border-collapse:collapse}
-.rates-table th{font-size:11px;font-weight:600;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--border);text-align:left}
-.rates-table td{padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px}
-.rates-table tr:last-child td{border-bottom:none}
-.rate-bar-cell{width:160px}
-.rate-bar-wrap{height:5px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden}
-.rate-bar-fill{height:100%;border-radius:99px;transition:width 0.8s ease}
-.week-reports{display:flex;flex-direction:column;gap:12px}
-.week-report-section{background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden;transition:border-color 0.2s}
-.week-report-section:hover{border-color:var(--border2)}
-.week-empty{opacity:0.55}
-.week-empty:hover{opacity:0.8}
-.wrs-header{display:flex;align-items:center;gap:16px;padding:16px 18px;cursor:pointer;background:var(--bg3);border-bottom:1px solid var(--border);transition:background 0.15s}
-.wrs-header:hover{background:var(--bg4)}
-.wrs-left{display:flex;align-items:center;gap:12px;flex-shrink:0}
-.wrs-num{width:32px;height:32px;border-radius:9px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--red3);flex-shrink:0}
-.wrs-range{font-size:13px;font-weight:600;letter-spacing:-0.2px}
-.wrs-short{font-size:11px;color:var(--muted);margin-top:1px;font-family:var(--font-m)}
-.wrs-summary{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap}
-.wrs-pill{display:flex;align-items:baseline;gap:4px;padding:5px 10px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)}
-.wrs-pill-v{font-size:14px;font-weight:700;font-family:var(--font-m);letter-spacing:-0.4px}
-.wrs-pill-l{font-size:10px;color:var(--muted)}
-.wrs-edit{font-size:11px;font-weight:600;color:var(--muted);padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.03);white-space:nowrap;flex-shrink:0;transition:all 0.15s}
-.wrs-header:hover .wrs-edit{color:var(--text);border-color:var(--border2)}
-.wrs-body{padding:16px 18px;display:grid;grid-template-columns:1fr 280px;gap:20px}
-.wrs-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.wrs-kpi{background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:12px 13px}
-.wrs-kpi-label{font-size:11px;color:var(--muted);margin-bottom:5px;font-weight:500}
-.wrs-kpi-val{font-size:20px;font-weight:700;letter-spacing:-0.7px;line-height:1}
-.wrs-kpi-proj{font-size:10px;color:var(--muted2);margin-top:3px;font-family:var(--font-m)}
-.wrs-rates{background:var(--bg3);border:1px solid var(--border);border-radius:11px;padding:14px 16px;display:flex;flex-direction:column}
-.wrs-rate-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
-.wrs-rate-row:last-child{border-bottom:none}
-.wrs-rate-label{font-size:12px;color:var(--muted);flex:1;font-weight:500}
-.wrs-rate-proj{font-size:10px;color:var(--muted2);font-family:var(--font-m);min-width:55px;text-align:right}
-.wrs-no-data{padding:16px 18px;font-size:13px;color:var(--muted);font-style:italic}
-@media(max-width:1100px){.members-grid{grid-template-columns:1fr}.saisie-grid{grid-template-columns:1fr}.wrs-body{grid-template-columns:1fr}.wrs-summary{display:none}}
-@media(max-width:768px){.wrs-kpis{grid-template-columns:repeat(2,1fr)}}
-/* ── Membres archivés (visibles admin seulement, marqués d'une pill) ── */
-.archived-pill{display:inline-block;margin-left:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);vertical-align:middle;text-transform:uppercase;letter-spacing:.3px}
-.member-archived-admin{opacity:.55;filter:grayscale(.65);transition:opacity .2s,filter .2s}
-.member-archived-admin:hover{opacity:.88;filter:grayscale(.25)}
-tr.member-archived-admin td{opacity:.55;filter:grayscale(.65)}
-tr.member-archived-admin:hover td{opacity:.88;filter:grayscale(.25)}
-</style>
+<script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
+<script src="alteore-flow.js"></script>
+<script src="nav.js" defer></script>
 </head>
-<body>
 
-<div class="topbar">
-  <div class="tb-logo">S</div>
-  <div class="tb-title">Ambitio <em>Sales</em></div>
-  <div class="tb-sep"></div>
-  <div class="tb-page">🎯 Closing</div>
-  <div class="tb-right">
-    <div class="tb-month">
-      <button onclick="prevMonth()">&#9664;</button>
-      <span id="month-lbl">Février 2026</span>
-      <button onclick="nextMonth()">&#9654;</button>
+<body class="au-page">
+<div class="au-main" id="app">
+
+  <div class="au-head">
+    <div class="au-head-ico">🎯</div>
+    <div>
+      <h1 class="au-title">Closing <span style="color:var(--muted);font-weight:500">· rapport journalier</span></h1>
+      <div class="au-sub">Close SB — uniquement les RDV <strong>Self Booking</strong> : les résultats saisis sur les RDV remontent automatiquement. RDV coaching &amp; clients exclus.</div>
     </div>
-    <div class="tb-user">
-      <div class="tb-av" id="tb-av">G</div>
-      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
+    <div class="au-head-right">
+      <span class="au-chip sb">Self Booking</span>
+      <span class="au-badge-auto"><span class="dot"></span> Données automatiques</span>
     </div>
   </div>
+
+  <div class="au-toolbar">
+    <div class="au-mnav">
+      <button id="btnPrev" title="Mois précédent">‹</button>
+      <span class="au-mlabel" id="monthLbl">—</span>
+      <button id="btnNext" title="Mois suivant">›</button>
+    </div>
+    <button class="au-btn" id="btnToday">Ce mois-ci</button>
+    <div style="flex:1"></div>
+    <button class="au-btn ghost" id="btnLegacy" style="display:none">📜 Ancienne saisie hebdo</button>
+    <button class="au-btn" id="btnRefresh">⟳ Actualiser</button>
+  </div>
+
+  <div class="au-members" id="memberTabs"></div>
+
+  <div id="content"><div class="au-loading"><div class="au-spinner"></div>Chargement du rapport…</div></div>
+
 </div>
 
-<div class="page">
-  <div id="view-liste">
-    <div class="page-header-row">
-      <div>
-        <div class="page-title">Closing — Équipe</div>
-        <div class="page-sub">Sélectionne un commercial · <span id="sub-month">Février 2026</span></div>
-      </div>
+<div id="auToast"></div>
+
+<!-- ── Modal correction manuelle par jour ── -->
+<div class="au-modal-bg" id="ovModal">
+  <div class="au-modal">
+    <h3 id="ovTitle">✎ Corriger la journée</h3>
+    <div class="hint">Correction ponctuelle par jour et par champ — vider un champ = retour à la valeur automatique. <span style="color:var(--gold)">●</span> = valeur corrigée.</div>
+    <div class="au-modal-grid" id="ovGrid"></div>
+    <div class="au-modal-f" style="margin-bottom:12px">
+      <label>Note (raison de la correction)</label>
+      <input type="text" id="ovNote" placeholder="optionnel"/>
     </div>
-    <div class="members-grid" id="members-grid"></div>
-  </div>
-  <div id="view-fiche">
-    <div class="fiche-header">
-      <button class="fiche-back" onclick="backToListe()">← Retour</button>
-      <div class="fiche-av" id="fiche-av">G</div>
-      <div>
-        <div class="fiche-name" id="fiche-name">Guillaume</div>
-        <div class="fiche-role" id="fiche-role">Closing</div>
-      </div>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <span class="save-status" id="save-status"></span>
-        <button class="btn btn-primary" onclick="saveCurrentWeek()">💾 Sauvegarder</button>
-      </div>
+    <div class="au-modal-actions">
+      <button class="au-btn" id="ovCancel">Annuler</button>
+      <button class="au-btn primary" id="ovSave">💾 Enregistrer</button>
     </div>
-    <div class="week-tabs-row" id="week-tabs-row"></div>
-    <div id="reporting-mois"></div>
-    <div id="saisie-week" style="display:none"></div>
   </div>
 </div>
 
 <script>
-const MONTHS = DB.months;
-let _cm = (() => {
-  const s = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-  const p = s.split(' ');
-  return { month: MONTHS.indexOf(p[0]), year: parseInt(p[1]) || 2026 };
-})();
-function cmk() { return MONTHS[_cm.month] + ' ' + _cm.year; }
-function prevMonth() { _cm.month--; if (_cm.month < 0) { _cm.month = 11; _cm.year--; } _sm(); loadMonthFromFirebaseC().then(renderAll); }
-function nextMonth() { _cm.month++; if (_cm.month > 11) { _cm.month = 0; _cm.year++; } _sm(); loadMonthFromFirebaseC().then(renderAll); }
-function _sm() {
-  if (typeof localStorage !== 'undefined') localStorage.setItem('sales_month', cmk());
-  document.getElementById('month-lbl').textContent = cmk();
-  document.getElementById('sub-month').textContent = cmk();
-}
+(function () {
+  'use strict';
+  var AF = window.AlteoreFlow;
+  var db = firebase.firestore();
+  var $ = function (s) { return document.querySelector(s); };
 
-const PROJ_S = { calls:20, lives:15, offres:10, deposits:1, closes:4, hardClose:4, followUp:0, contracte:24000, collecte:2000 };
+  var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  var JOURS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  var pad2 = function (n) { return String(n).padStart(2, '0'); };
 
-const MEMBERS_C = [
-  {
-    uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke',
-    role: 'Setting + Closing', color: '#ef4444',
-    data: {
-      'Juillet 2025':   { _total: { calls:23, lives:20, offres:14, deposits:0, closes:6, hardClose:6, followUp:0, contracte:33020.4, collecte:3342.4   } },
-      'Août 2025':      { _total: { calls:39, lives:25, offres:20, deposits:0, closes:4, hardClose:4, followUp:0, contracte:30282.0, collecte:1998.75  } },
-      'Septembre 2025': { _total: { calls:18, lives:11, offres:8,  deposits:0, closes:2, hardClose:2, followUp:0, contracte:11512.8, collecte:959.4    } },
-      'Octobre 2025':   { _total: { calls:9,  lives:9,  offres:8,  deposits:0, closes:1, hardClose:1, followUp:0, contracte:5756.4,  collecte:479.7    } },
-      'Novembre 2025':  { _total: { calls:5,  lives:2,  offres:1,  deposits:0, closes:1, hardClose:1, followUp:0, contracte:2300.0,  collecte:1149.0   } },
-      'Décembre 2025':  { _total: { calls:0,  lives:0,  offres:0,  deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,       collecte:0        } },
-      'Janvier 2026':   { _total: { calls:10, lives:5,  offres:4,  deposits:0, closes:2, hardClose:2, followUp:0, contracte:14400,   collecte:720      } },
-      'Février 2026': {
-        s1: { calls:8,  lives:2, offres:1, deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,     collecte:0    },
-        s2: { calls:8,  lives:4, offres:2, deposits:0, closes:2, hardClose:2, followUp:0, contracte:12000, collecte:1000 },
-        s3: { calls:8,  lives:6, offres:2, deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,     collecte:0    },
-        s4: { calls:10, lives:7, offres:3, deposits:0, closes:1, hardClose:1, followUp:0, contracte:7200,  collecte:600  },
-        s5: { calls:0,  lives:0, offres:0, deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,     collecte:0    },
-      }
-    }
-  },
-  {
-    uid: 'elodie', name: 'Elodie', surname: '',
-    role: 'Closing', color: '#60a5fa',
-    data: {
-      'Juillet 2025':   { _total: { calls:29, lives:24, offres:19, deposits:0, closes:7, hardClose:7, followUp:0, contracte:22748.6, collecte:13629.0  } },
-      'Août 2025':      { _total: { calls:28, lives:19, offres:14, deposits:0, closes:5, hardClose:5, followUp:0, contracte:28782.0, collecte:799.5    } },
-      'Septembre 2025': { _total: { calls:24, lives:17, offres:10, deposits:0, closes:2, hardClose:2, followUp:0, contracte:11512.8, collecte:959.4    } },
-      'Octobre 2025':   { _total: { calls:8,  lives:2,  offres:2,  deposits:0, closes:1, hardClose:1, followUp:0, contracte:5756.4,  collecte:239.85   } },
-      'Novembre 2025':  { _total: { calls:13, lives:7,  offres:3,  deposits:0, closes:0, hardClose:0, followUp:0, contracte:0,       collecte:0        } },
-      'Décembre 2025':  { _total: { calls:16, lives:10, offres:8,  deposits:0, closes:1, hardClose:1, followUp:0, contracte:5756.4,  collecte:399.75   } },
-      'Janvier 2026':   { _total: { calls:46, lives:28, offres:13, deposits:0, closes:7, hardClose:7, followUp:0, contracte:34069.2, collecte:3966.12  } },
-      'Février 2026': {
-        s1:{calls:11,lives:2,offres:1,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
-        s2:{calls:14,lives:7,offres:2,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
-        s3:{calls:15,lives:2,offres:2,deposits:0,closes:1,hardClose:0,followUp:0,contracte:6000,collecte:6000},
-        s4:{calls:9,lives:5,offres:0,deposits:0,closes:2,hardClose:0,followUp:0,contracte:9600,collecte:1400},
-        s5:{calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0},
-      }
-    }
-  }
-];
-
-function emptyWeek()  { return {calls:0,lives:0,offres:0,deposits:0,closes:0,hardClose:0,followUp:0,contracte:0,collecte:0}; }
-function emptyMonth() { return {s1:emptyWeek(),s2:emptyWeek(),s3:emptyWeek(),s4:emptyWeek(),s5:emptyWeek(),s6:emptyWeek()}; }
-
-function sumMonth(md) {
-  // Si le mois a un _total (données historiques sans découpage hebdo), on l'utilise directement
-  if (md._total) return { ...emptyWeek(), ...md._total };
-  const t = emptyWeek();
-  ALL_WEEKS.forEach(w => { const d = md[w]||{}; Object.keys(t).forEach(k => { t[k] += (d[k]||0); }); });
-  return t;
-}
-
-function computeRatesC(d) {
-  return {
-    livesPct:     d.calls    > 0 ? d.lives               / d.calls     : 0,
-    offresPct:    d.lives    > 0 ? d.offres              / d.lives     : 0,
-    engOffresPct: d.offres   > 0 ? (d.deposits+d.closes) / d.offres    : 0,
-    closeOffrPct: d.offres   > 0 ? d.closes              / d.offres    : 0,
-    closeCallPct: d.calls    > 0 ? d.closes              / d.calls     : 0,
-    closeLivePct: d.lives    > 0 ? d.closes              / d.lives     : 0,
-    cashPerLive:  d.lives    > 0 ? d.collecte            / d.lives     : 0,
-    collectePct:  d.contracte> 0 ? d.collecte            / d.contracte : 0,
-  };
-}
-
-const RATE_DEFS_C = [
-  { key:'livesPct',    label:'Lives / Calls',          proj:0.75,  isEuro:false },
-  { key:'offresPct',   label:'Offres / Lives',          proj:0.667, isEuro:false },
-  { key:'engOffresPct',label:'Engagement / Offres',     proj:0.5,   isEuro:false },
-  { key:'closeOffrPct',label:'Close / Offres',          proj:0.4,   isEuro:false },
-  { key:'closeCallPct',label:'Close / Calls',           proj:null,  isEuro:false },
-  { key:'closeLivePct',label:'Close / Lives',           proj:null,  isEuro:false },
-  { key:'cashPerLive', label:'Cash collecté / Live',    proj:133,   isEuro:true  },
-  { key:'collectePct', label:'Collecté / Contracté',   proj:null,  isEuro:false },
-];
-
-const SAISIE_FIELDS = [
-  { key:'calls',     label:'Calls passés',        bloc:'a', proj:PROJ_S.calls     },
-  { key:'lives',     label:'Lives (appel live)',   bloc:'a', proj:PROJ_S.lives     },
-  { key:'offres',    label:'Offres faites',        bloc:'a', proj:PROJ_S.offres    },
-  { key:'deposits',  label:'Deposits',             bloc:'r', proj:PROJ_S.deposits  },
-  { key:'closes',    label:'Closes',               bloc:'r', proj:PROJ_S.closes    },
-  { key:'hardClose', label:'Hard closing',         bloc:'r', proj:PROJ_S.hardClose },
-  { key:'followUp',  label:'Follow-up closing',    bloc:'r', proj:PROJ_S.followUp  },
-  { key:'contracte', label:'Contracté (€)',        bloc:'r', proj:PROJ_S.contracte },
-  { key:'collecte',  label:'Collecté (€)',         bloc:'r', proj:PROJ_S.collecte  },
-];
-
-function loadDataC(uid) {
-  // Données hardcodées = source de vérité pour mois historiques
-  const member = MEMBERS_C.find(m => m.uid === uid);
-  const hardcoded = member && member.data[cmk()];
-  if (hardcoded && hardcoded._total) return hardcoded; // mois historique → ignorer localStorage
-  try { const v = localStorage.getItem('closing_'+uid+'_'+cmk()); return v ? JSON.parse(v) : null; } catch(e) { return null; }
-}
-function saveDataC(uid, md) {
-  try {
-    const key = 'closing_' + uid + '_' + cmk();
-    localStorage.setItem(key, JSON.stringify(md));
-    // Notifier les autres onglets (dashboard/projections) via storage event
-    // Note: storage event ne se déclenche pas dans le même onglet, on dispatch manuellement
-    document.dispatchEvent(new CustomEvent('closing:saved', { detail: { uid, month: cmk(), data: md } }));
-  } catch(e) {}
-}
-
-let currentMember = null, currentWeek = 'mois';
-
-function miniBar(a, p) {
-  const pct = p > 0 ? Math.min(a/p*100, 100) : 0;
-  const col = pct>=100 ? '#34d399' : pct>=65 ? '#f59e0b' : '#ef4444';
-  return `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-    <div style="flex:1;height:3px;background:rgba(255,255,255,0.07);border-radius:99px;overflow:hidden">
-      <div style="width:${pct}%;height:100%;background:${col};border-radius:99px"></div>
-    </div>
-    <span style="font-size:10px;font-family:var(--font-m);color:${col};min-width:30px">${p>0?pct.toFixed(0)+'%':'—'}</span>
-  </div>`;
-}
-function pill(val, proj, isEuro) {
-  const pct = proj ? Math.min(val/proj*100, 200) : 0;
-  const col = pct>=100 ? '#34d399' : pct>=65 ? '#f59e0b' : '#ef4444';
-  const v = isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
-  return `<span style="font-weight:700;color:${proj?col:'var(--text)'};font-family:var(--font-m)">${v}</span>`;
-}
-function rateTableRows(r) {
-  return RATE_DEFS_C.map(rd => {
-    const val = r[rd.key]; const prj = rd.proj;
-    const pct = prj ? Math.min(val/prj*100, 200) : 0;
-    const col = pct>=100?'#34d399':pct>=65?'#f59e0b':'#ef4444';
-    const vd = rd.isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
-    const pd = prj ? (rd.isEuro ? U.euro(prj) : (prj*100).toFixed(1)+'%') : '—';
-    return `<tr>
-      <td style="font-weight:500;font-size:13px">${rd.label}</td>
-      <td class="td-mono" style="font-size:14px;font-weight:700;color:${prj?col:'var(--text)'}">${vd}</td>
-      <td class="td-mono" style="color:var(--muted)">${pd}</td>
-      <td class="rate-bar-cell"><div style="display:flex;align-items:center;gap:8px">
-        <div class="rate-bar-wrap" style="flex:1"><div class="rate-bar-fill" style="width:${Math.min(pct,100)}%;background:${prj?col:'rgba(255,255,255,0.2)'}"></div></div>
-        <span style="font-size:11px;font-family:var(--font-m);color:${prj?col:'var(--muted)'};min-width:36px;text-align:right">${prj?pct.toFixed(0)+'%':'—'}</span>
-      </div></td>
-    </tr>`;
-  }).join('');
-}
-
-/* ── LISTE ── */
-function renderListe() {
-  document.getElementById('members-grid').innerHTML = _visibleMembers().map(m => {
-    const hardcoded = m.data[cmk()];
-    const md = (hardcoded && hardcoded._total) ? hardcoded : (loadDataC(m.uid) || hardcoded || emptyMonth());
-    const t = sumMonth(md);
-    return `<div class="member-card${m.archived ? ' member-archived-admin' : ''}" style="--mc:${m.color}${m.archived ? ';opacity:.5;filter:grayscale(.65)' : ''}" onclick="openFiche('${m.uid}')">
-      <div class="mc-arrow">→</div>
-      <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
-      <div class="mc-name">${m.name} ${m.surname}${m.archived ? ' <span class="archived-pill">📦 Archivé</span>' : ''}</div>
-      <div class="mc-role">${m.role}</div>
-      <div class="mc-stats">
-        <div class="mc-stat"><div class="mc-stat-v" style="color:${m.color}">${t.calls}</div><div class="mc-stat-l">Calls</div></div>
-        <div class="mc-stat"><div class="mc-stat-v" style="color:#a78bfa">${t.lives}</div><div class="mc-stat-l">Lives</div></div>
-        <div class="mc-stat"><div class="mc-stat-v" style="color:#f59e0b">${t.offres}</div><div class="mc-stat-l">Offres</div></div>
-        <div class="mc-stat"><div class="mc-stat-v" style="color:#34d399">${t.closes}</div><div class="mc-stat-l">Closes</div></div>
-        <div class="mc-stat"><div class="mc-stat-v" style="color:var(--gold)">${U.euro(t.contracte)}</div><div class="mc-stat-l">Contracté</div></div>
-        <div class="mc-stat"><div class="mc-stat-v" style="color:var(--gold)">${U.euro(t.collecte)}</div><div class="mc-stat-l">Collecté</div></div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-/* ── FICHE ── */
-function openFiche(uid) {
-  currentMember = MEMBERS_C.find(m => m.uid === uid);
-  currentWeek = 'mois';
-  const hardcoded = currentMember.data[cmk()];
-  if (hardcoded && hardcoded._total) {
-    // Mois historique — données hardcodées, pas de localStorage
-  } else {
-    const saved = loadDataC(uid);
-    if (saved) currentMember.data[cmk()] = saved;
-    else if (!hardcoded) currentMember.data[cmk()] = emptyMonth();
-  }
-  document.getElementById('view-liste').style.display = 'none';
-  document.getElementById('view-fiche').style.display = 'block';
-  document.getElementById('fiche-av').textContent = currentMember.name[0];
-  document.getElementById('fiche-av').style.background = `linear-gradient(135deg,${currentMember.color}88,${currentMember.color})`;
-  document.getElementById('fiche-name').textContent = currentMember.name + (currentMember.surname ? ' '+currentMember.surname : '');
-  document.getElementById('fiche-role').textContent = currentMember.role + ' · ' + cmk();
-  renderFiche();
-}
-function backToListe() {
-  document.getElementById('view-liste').style.display = 'block';
-  document.getElementById('view-fiche').style.display = 'none';
-  currentMember = null;
-  renderListe();
-}
-
-/* ── TABS ── */
-function buildWeekTabs(isHistorical) {
-  const weeks = getMonthWeeks(cmk());
-  const row = document.getElementById('week-tabs-row');
-  if (!row) return;
-  let html = `<div class="wtab${currentWeek==='mois'?' active':''}" onclick="setWeek('mois')">Mois complet</div>`;
-  if (!isHistorical) {
-    html += weeks.map(wk => `<div class="wtab${currentWeek===wk.id?' active':''}" onclick="setWeek('${wk.id}')" title="${wk.range}">
-        <span style="font-weight:600">S${wk.id.replace('s','')}</span>
-        <span style="font-size:10px;color:var(--muted);margin-left:4px;font-family:var(--font-m)">${wk.range}</span>
-      </div>`).join('');
-  } else {
-    html += `<span style="font-size:11px;color:var(--muted);margin-left:8px;font-style:italic">Données mensuelles globales</span>`;
-  }
-  row.innerHTML = html;
-}
-function setWeek(w) { currentWeek = w; renderFiche(); }
-
-function renderFiche() {
-  const md = currentMember && currentMember.data[cmk()];
-  const isHistorical = !!(md && md._total);
-  if (isHistorical && currentWeek !== 'mois') currentWeek = 'mois';
-  buildWeekTabs(isHistorical);
-  if (currentWeek === 'mois') {
-    document.getElementById('reporting-mois').style.display = 'block';
-    document.getElementById('saisie-week').style.display = 'none';
-    renderReportingMois();
-  } else {
-    document.getElementById('reporting-mois').style.display = 'none';
-    document.getElementById('saisie-week').style.display = 'block';
-    renderSaisieWeek();
-  }
-}
-
-/* ── REPORTING MOIS ── */
-function renderReportingMois() {
-  const md = currentMember.data[cmk()] || emptyMonth();
-  const tot = sumMonth(md);
-  const nW = getMonthWeeks(cmk()).length || 4;
-  const proj = Object.keys(PROJ_S).reduce((a,k) => { a[k] = PROJ_S[k]*nW; return a; }, {});
-  const r = computeRatesC(tot);
-  const allWeeks = getMonthWeeks(cmk());
-  const color = currentMember.color;
-  const isHistorical = !!(md._total);
-
-  const sumKpis = [
-    { label:'Calls',     val:tot.calls,    proj:proj.calls,    color:'#60a5fa', euro:false },
-    { label:'Lives',     val:tot.lives,    proj:proj.lives,    color:'#a78bfa', euro:false },
-    { label:'Closes',    val:tot.closes,   proj:proj.closes,   color:'#34d399', euro:false },
-    { label:'Contracté', val:tot.contracte,proj:proj.contracte,color:color,     euro:true  },
+  var COLS = [
+    { key: 'rdvSb',      label: 'RDV SB',    grp: 'a', fmt: 'n' },
+    { key: 'annules',    label: 'Annulé',    grp: 'a', fmt: 'bad' },
+    { key: 'noshow',     label: 'No-show',   grp: 'a', fmt: 'bad' },
+    { key: 'replanifies',label: 'Replan.',   grp: 'a', fmt: 'n' },
+    { key: 'presents',   label: 'Présents',  grp: 'b', fmt: 'good', title: 'Live — prospect présent (offre, close, non close, disqua)' },
+    { key: 'disqua',     label: 'Disqua',    grp: 'b', fmt: 'n' },
+    { key: 'offres',     label: 'Offres',    grp: 'b', fmt: 'hot', title: 'RDV pitchés (offre + close + non close)' },
+    { key: 'closes',     label: 'Closes',    grp: 'c', fmt: 'good' },
+    { key: 'nonCloses',  label: 'Non close', grp: 'c', fmt: 'bad' },
+    { key: 'aStatuer',   label: '⏳',        grp: 'c', fmt: 'warn', title: 'RDV passés sans résultat — à statuer' },
+    { key: 'contracte',  label: 'Contracté', grp: 'd', fmt: 'eur' },
+    { key: 'collecte',   label: 'Collecté',  grp: 'd', fmt: 'eur' }
   ];
+  var OV_KEYS = ['rdvSb','annules','noshow','replanifies','presents','disqua','offres','closes','nonCloses','contracte','collecte'];
 
-  const weekSections = allWeeks.map((wk, i) => {
-    const w = wk.id;
-    const d = md[w] || emptyWeek();
-    const hasData = d.calls > 0 || d.lives > 0;
-    const wr = computeRatesC(d);
-
-    const kpis = [
-      { label:'Calls',     val:d.calls,    proj:PROJ_S.calls,    color:'#60a5fa', euro:false },
-      { label:'Lives',     val:d.lives,    proj:PROJ_S.lives,    color:'#a78bfa', euro:false },
-      { label:'Offres',    val:d.offres,   proj:PROJ_S.offres,   color:'#f59e0b', euro:false },
-      { label:'Closes',    val:d.closes,   proj:PROJ_S.closes,   color:'#34d399', euro:false },
-      { label:'Hard close',val:d.hardClose,proj:PROJ_S.hardClose,color:'#ef4444', euro:false },
-      { label:'Follow-up', val:d.followUp, proj:PROJ_S.followUp, color:'#ef4444', euro:false },
-      { label:'Contracté', val:d.contracte,proj:PROJ_S.contracte,color:color,     euro:true  },
-      { label:'Collecté',  val:d.collecte, proj:PROJ_S.collecte, color:'var(--gold)',euro:true },
-    ];
-    const rateRows = [
-      { label:'Lives / Calls',    v:wr.livesPct,    p:0.75,  euro:false },
-      { label:'Offres / Lives',   v:wr.offresPct,   p:0.667, euro:false },
-      { label:'Engagement offres',v:wr.engOffresPct,p:0.5,   euro:false },
-      { label:'Close / Offres',   v:wr.closeOffrPct,p:0.4,   euro:false },
-      { label:'Close / Calls',    v:wr.closeCallPct,p:null,  euro:false },
-      { label:'Cash / Live',      v:wr.cashPerLive, p:133,   euro:true  },
-    ];
-    return `
-    <div class="week-report-section${hasData?'':' week-empty'}">
-      <div class="wrs-header" onclick="setWeek('${w}')">
-        <div class="wrs-left">
-          <span class="wrs-num">S${i+1}</span>
-          <div><div class="wrs-range">${wk.range}</div><div class="wrs-short">${wk.short}</div></div>
-        </div>
-        <div class="wrs-summary">
-          <div class="wrs-pill"><span class="wrs-pill-v">${d.calls}</span><span class="wrs-pill-l">calls</span></div>
-          <div class="wrs-pill"><span class="wrs-pill-v" style="color:#a78bfa">${d.lives}</span><span class="wrs-pill-l">lives</span></div>
-          <div class="wrs-pill"><span class="wrs-pill-v" style="color:#f59e0b">${d.offres}</span><span class="wrs-pill-l">offres</span></div>
-          <div class="wrs-pill"><span class="wrs-pill-v" style="color:#34d399">${d.closes}</span><span class="wrs-pill-l">closes</span></div>
-          <div class="wrs-pill"><span class="wrs-pill-v" style="color:var(--gold)">${U.euro(d.contracte)}</span><span class="wrs-pill-l">contracté</span></div>
-          <div class="wrs-pill"><span class="wrs-pill-v" style="color:var(--gold)">${U.euro(d.collecte)}</span><span class="wrs-pill-l">collecté</span></div>
-        </div>
-        <div class="wrs-edit">✏️ Saisir</div>
-      </div>
-      ${hasData ? `
-      <div class="wrs-body">
-        <div class="wrs-kpis">
-          ${kpis.map(k => `<div class="wrs-kpi">
-            <div class="wrs-kpi-label">${k.label}</div>
-            <div class="wrs-kpi-val" style="color:${k.color}">${k.euro?U.euro(k.val):k.val}</div>
-            <div class="wrs-kpi-proj">/ ${k.euro?U.euro(k.proj):k.proj} proj</div>
-            ${miniBar(k.val, k.proj)}
-          </div>`).join('')}
-        </div>
-        <div class="wrs-rates">
-          ${rateRows.map(row => `<div class="wrs-rate-row">
-            <span class="wrs-rate-label">${row.label}</span>
-            ${pill(row.v, row.p, row.euro)}
-            <span class="wrs-rate-proj">${row.p?(row.euro?U.euro(row.p):(row.p*100).toFixed(0)+'%'):''}</span>
-          </div>`).join('')}
-        </div>
-      </div>` : `<div class="wrs-no-data">Aucune donnée — <span onclick="setWeek('${w}')" style="color:var(--red3);cursor:pointer;text-decoration:underline">saisir les données</span></div>`}
-    </div>`;
-  }).join('');
-
-  document.getElementById('reporting-mois').innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
-      ${sumKpis.map(k => {
-        const pct = k.proj>0 ? k.val/k.proj*100 : 0;
-        return `<div class="rep-card">
-          <div class="rep-label">${k.label}</div>
-          <div class="rep-value" style="color:${k.color}">${k.euro?U.euro(k.val):k.val}</div>
-          <div class="rep-sub">/ ${k.euro?U.euro(k.proj):k.proj} proj</div>
-          ${miniBar(k.val, k.proj)}
-        </div>`;
-      }).join('')}
-    </div>
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-header">
-        <span class="card-title">Taux de conversion — Mois complet</span>
-        <span style="font-size:11px;color:var(--muted)">${tot.calls} calls · ${tot.lives} lives · ${tot.offres} offres · ${tot.closes} closes</span>
-      </div>
-      <table class="rates-table">
-        <thead><tr><th>Métrique</th><th>Réel</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th></tr></thead>
-        <tbody>${rateTableRows(r)}</tbody>
-      </table>
-    </div>
-    ${isHistorical
-      ? '<div style=\"padding:20px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--muted);font-size:13px;text-align:center\">Données mensuelles globales — découpage hebdomadaire non disponible</div>'
-      : '<div style=\"font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px\">Détail par semaine</div><div class=\"week-reports\">' + weekSections + '</div>'
-    }`;
-}
-
-/* ── SAISIE SEMAINE ── */
-function renderSaisieWeek() {
-  const md = currentMember.data[cmk()] || emptyMonth();
-  const d = md[currentWeek] || emptyWeek();
-  const allWeeks = getMonthWeeks(cmk());
-  const wkMeta = allWeeks.find(w => w.id === currentWeek);
-
-  const fieldHtml = f => {
-    const v = d[f.key] !== undefined && d[f.key] !== 0 ? d[f.key] : '';
-    const proj = f.proj || 0;
-    const isEuro = f.key === 'contracte' || f.key === 'collecte';
-    let cls = 'saisie-input';
-    if (v !== '' && proj > 0) cls += v >= proj ? ' above' : ' filled';
-    return `<div class="saisie-field">
-      <label class="saisie-label">${f.label}<span class="proj-tag">Proj: ${isEuro?U.euro(proj):proj}</span></label>
-      <input class="${cls}" type="number" id="f-${f.key}" value="${v}" placeholder="0" step="${isEuro?100:1}"/>
-    </div>`;
+  var S = {
+    y: 0, m: 0,
+    members: [], slug: '_all',
+    role: localStorage.getItem('ambitio_role') || 'sales',
+    typeMap: {}, personsMap: {},
+    data: null, overrides: {},
+    legacy: null, legacyOpen: false, loading: false
   };
+  (function initMonth() {
+    var saved = localStorage.getItem('closing_v2_month');
+    var now = new Date();
+    if (saved && /^\d{4}-\d{2}$/.test(saved)) { S.y = +saved.slice(0, 4); S.m = +saved.slice(5, 7) - 1; }
+    else { S.y = now.getFullYear(); S.m = now.getMonth(); }
+  })();
 
-  document.getElementById('saisie-week').innerHTML = `
-    <div class="saisie-grid">
-      <div class="saisie-bloc">
-        <div class="saisie-bloc-title">Activité
-          <span style="font-size:10px;color:var(--muted2);font-family:var(--font-m)">${wkMeta?wkMeta.range:''} · ${cmk()}</span>
-        </div>
-        ${SAISIE_FIELDS.filter(f=>f.bloc==='a').map(fieldHtml).join('')}
-      </div>
-      <div class="saisie-bloc">
-        <div class="saisie-bloc-title">Résultats</div>
-        ${SAISIE_FIELDS.filter(f=>f.bloc==='r').map(fieldHtml).join('')}
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Taux calculés en temps réel</span></div>
-      <div id="rates-live"></div>
-    </div>`;
-
-  SAISIE_FIELDS.forEach(f => {
-    const el = document.getElementById('f-'+f.key);
-    if (!el) return;
-    el.oninput = () => {
-      const v = parseFloat(el.value) || 0;
-      el.className = 'saisie-input' + (f.proj>0 ? (v>=f.proj?' above':v>0?' filled':'') : (v>0?' filled':''));
-      renderRatesLive(readForm());
-      scheduleAutoSave();
-    };
-  });
-  renderRatesLive(d);
-}
-
-function readForm() {
-  const v = {};
-  SAISIE_FIELDS.forEach(f => { const el = document.getElementById('f-'+f.key); v[f.key] = parseFloat(el?.value)||0; });
-  return v;
-}
-
-function renderRatesLive(d) {
-  const r = computeRatesC(d);
-  const el = document.getElementById('rates-live');
-  if (!el) return;
-  el.innerHTML = `<table class="rates-table">
-    <thead><tr><th>Taux</th><th>Valeur</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th></tr></thead>
-    <tbody>${rateTableRows(r)}</tbody>
-  </table>`;
-}
-
-/* ── SAVE ── */
-let _autoSaveTimer = null;
-function scheduleAutoSave() {
-  clearTimeout(_autoSaveTimer);
-  const st = document.getElementById('save-status');
-  if (st) { st.textContent = '...'; st.style.color = 'var(--muted)'; }
-  _autoSaveTimer = setTimeout(() => saveCurrentWeek(true), 2000);
-}
-
-async function saveCurrentWeek(auto = false) {
-  if (!currentMember || currentWeek === 'mois') return;
-  const data = readForm();
-  if (!currentMember.data[cmk()]) currentMember.data[cmk()] = emptyMonth();
-  currentMember.data[cmk()][currentWeek] = { ...data };
-  saveDataC(currentMember.uid, currentMember.data[cmk()]);
-
-  const st = document.getElementById('save-status');
-  if (st) { st.textContent = '⏳ Sauvegarde...'; st.style.color = 'var(--muted)'; }
-
-  if (!window.Fire || !Fire.db) {
-    console.warn('[Ambitio] Fire.db est null — sauvegarde locale uniquement. Firebase Auth actif?', typeof firebase !== 'undefined' ? firebase.auth().currentUser : 'SDK absent');
-    if (st) { st.textContent = '⚠️ Local seulement'; st.style.color = '#f59e0b'; }
-    if (!auto && U.toast) U.toast('⚠️ Sauvegarde locale — Firebase non connecté', 'info');
-    renderFiche();
-    return;
+  function monthKey() { return S.y + '-' + pad2(S.m + 1); }
+  function daysInMonth() { return new Date(S.y, S.m + 1, 0).getDate(); }
+  function dayIso(d) { return S.y + '-' + pad2(S.m + 1) + '-' + pad2(d); }
+  function toast(msg, err) {
+    var t = $('#auToast'); t.textContent = msg; t.className = err ? 'err show' : 'show';
+    clearTimeout(window.__auTo); window.__auTo = setTimeout(function () { t.className = ''; }, 3200);
   }
+  function fmtEuro(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR') + ' €'; }
+  function fmtPct(n) { return n == null ? '—' : (Math.round(n * 10) / 10).toLocaleString('fr-FR') + ' %'; }
 
-  try {
-    await Fire.saveClosing(currentMember.uid, cmk(), currentWeek, data);
-    console.log('[Firebase] ✅ Sauvé closing', currentMember.uid, cmk(), currentWeek);
-    if (st) { st.textContent = '✅ ' + new Date().toLocaleTimeString('fr-FR'); st.style.color = '#34d399'; }
-    if (!auto && U.toast) U.toast('✅ Données sauvegardées !');
-  } catch(e) {
-    console.error('[Firebase] ❌ Erreur sauvegarde closing:', e.code || e.message, e);
-    if (st) { st.textContent = '⚠️ Local seulement'; st.style.color = '#f59e0b'; }
-    if (!auto && U.toast) U.toast('⚠️ Erreur Firebase: ' + (e.code || e.message), 'error');
+  /* ── Membres : closers + onglet Équipe ── */
+  function computeMembers() {
+    var list = (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.slug; });
+    var closers = list.filter(function (m) { return m.role === 'closer' || m.role === 'closer_setter'; });
+    if (!closers.length) closers = list;
+    if (!closers.length) closers = [
+      { slug: 'elodie', shortName: 'Elodie', role: 'closer_setter', color: '#60a5fa', firebaseUid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', active: true },
+      { slug: 'guillaume', shortName: 'Guillaume', role: 'closer_setter', color: '#ef4444', firebaseUid: null, active: true }
+    ];
+    if (S.role !== 'admin') closers = closers.filter(function (m) { return m.active !== false; });
+    S.members = closers;
+    var saved = localStorage.getItem('closing_v2_member');
+    if (saved === '_all' || closers.some(function (m) { return m.slug === saved; })) S.slug = saved;
+    else S.slug = '_all';
   }
-  renderFiche();
-}
+  function currentMember() { return S.members.find(function (m) { return m.slug === S.slug; }) || null; }
 
-/* ─── ARCHIVED FLAG + VIEW FILTER (source : _meta/team_members via nav.js) ─── */
-function _markArchivedMembers() {
-  var tm = window.TEAM_MEMBERS || {};
-  MEMBERS_C.forEach(function(m) {
-    var meta = tm[m.uid];
-    m.archived = !!(meta && meta.active === false);
-  });
-}
-function _isAdminView() {
-  var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
-  return role === 'admin';
-}
-function _visibleMembers() {
-  _markArchivedMembers();
-  if (_isAdminView()) return MEMBERS_C;
-  return MEMBERS_C.filter(function(m) { return !m.archived; });
-}
-if (window.TEAM_MEMBERS) _markArchivedMembers();
-window.addEventListener('team-members-loaded', function() {
-  _markArchivedMembers();
-  if (typeof renderAll === 'function') renderAll();
-});
-
-function renderAll() {
-  _markArchivedMembers();
-  if (currentMember) {
-    const s = loadDataC(currentMember.uid);
-    if (s) currentMember.data[cmk()] = s;
-    renderFiche();
-  } else { renderListe(); }
-}
-
-/* ─── FIREBASE: charger un mois depuis Firestore ─── */
-async function loadMonthFromFirebaseC() {
-  if (!Fire.db) return;
-  const monthLabel = cmk();
-
-  for (const m of MEMBERS_C) {
-    if (m.data[monthLabel] && m.data[monthLabel]._total) continue;
-
-    const key = Fire._key(monthLabel);
-    const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(key);
-
-    try {
-      const snap = await ref.get();
-      if (snap.exists) {
-        const fbData = snap.data();
-        if (fbData.closing) {
-          m.data[monthLabel] = emptyMonth();
-          ALL_WEEKS.forEach(w => {
-            if (fbData.closing[w]) {
-              m.data[monthLabel][w] = { ...emptyWeek(), ...fbData.closing[w] };
-            }
-          });
-          // Sync vers localStorage
-          var lsKey = 'closing_' + m.uid + '_' + monthLabel;
-          try { localStorage.setItem(lsKey, JSON.stringify(m.data[monthLabel])); } catch(e) {}
-        }
-        if (fbData.closing_total) {
-          m.data[monthLabel] = { _total: fbData.closing_total };
-        }
-        console.log('[Firebase] Chargé closing ' + m.name + ' ' + monthLabel);
-      }
-    } catch(e) {
-      console.warn('[Firebase] Erreur chargement closing ' + m.name + ' ' + monthLabel + ':', e.message);
-    }
-  }
-
-  // Relancer le watch sur le nouveau mois
-  Fire.stop();
-  MEMBERS_C.forEach(m => {
-    Fire.watchUser(m.uid, monthLabel, (data) => {
-      if (!data) return;
-      var md = m.data[monthLabel];
-      if (md && md._total) return;
-      if (data.closing) {
-        if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
-        ALL_WEEKS.forEach(w => {
-          if (data.closing[w]) m.data[monthLabel][w] = { ...m.data[monthLabel][w], ...data.closing[w] };
-        });
-        var lsk = 'closing_' + m.uid + '_' + monthLabel;
-        try { localStorage.setItem(lsk, JSON.stringify(m.data[monthLabel])); } catch(e) {}
-      }
-      renderAll();
+  function renderMembers() {
+    var h = '<button class="au-member' + (S.slug === '_all' ? ' active' : '') + '" style="--au-mc:#5b7cfa" data-slug="_all">' +
+      '<span class="au-member-av">Σ</span><span><span class="au-member-n">Équipe</span><br/><span class="au-member-r">tous les closers</span></span></button>';
+    S.members.forEach(function (m) {
+      var name = m.shortName || m.displayName || m.slug;
+      var initials = (m.initials || name.slice(0, 2)).toUpperCase();
+      var roleLbl = m.role === 'closer_setter' ? 'Setting + Closing' : m.role === 'closer' ? 'Closing' : (m.role || '');
+      h += '<button class="au-member' + (m.slug === S.slug ? ' active' : '') + '" style="--au-mc:' + (m.color || '#5b7cfa') + '" data-slug="' + m.slug + '">' +
+        '<span class="au-member-av">' + initials + '</span>' +
+        '<span><span class="au-member-n">' + name + (m.active === false ? ' 🔒' : '') + '</span><br/><span class="au-member-r">' + roleLbl + '</span></span></button>';
     });
-  });
-}
-
-/* ─── FIREBASE SYNC: migrate hardcoded → Firestore + watch real-time ─── */
-async function firebaseSyncMembersC() {
-  if (!Fire.db) return;
-
-  const curMonth = cmk();
-  const curKey = Fire._key(curMonth);
-  console.log('[Firebase] Chargement mois courant closing:', curMonth, '(' + curKey + ')');
-
-  // ══ PRIORITÉ 1: Charger le mois courant pour TOUS les membres ══
-  for (const m of MEMBERS_C) {
-    try {
-      const curSnap = await Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(curKey).get();
-      if (curSnap.exists) {
-        const fbData = curSnap.data();
-        if (fbData.closing) {
-          m.data[curMonth] = emptyMonth(); // toujours écraser avec les données Firebase
-          ALL_WEEKS.forEach(w => {
-            if (fbData.closing[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...fbData.closing[w] };
-          });
-          // Sync vers localStorage
-          var lsKey = 'closing_' + m.uid + '_' + curMonth;
-          try { localStorage.setItem(lsKey, JSON.stringify(m.data[curMonth])); } catch(e) {}
-          console.log('[Firebase] ✅ Chargé + synced LS closing ' + m.name + ' ' + curMonth);
-        }
-        if (fbData.closing_total) {
-          m.data[curMonth] = { _total: fbData.closing_total };
-          console.log('[Firebase] ✅ Chargé total closing ' + m.name + ' ' + curMonth);
-        }
-      } else {
-        console.log('[Firebase] ℹ️ Pas de données closing Firestore pour ' + m.name + ' ' + curMonth);
-      }
-    } catch(e) {
-      console.warn('[Firebase] ❌ Erreur chargement closing ' + m.name + ' ' + curMonth + ':', e.message);
-    }
-
-    Fire.watchUser(m.uid, curMonth, (data) => {
-      if (!data) return;
-      var md = m.data[curMonth];
-      if (md && md._total) return;
-      if (data.closing) {
-        if (!m.data[curMonth]) m.data[curMonth] = emptyMonth();
-        ALL_WEEKS.forEach(w => {
-          if (data.closing[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...data.closing[w] };
-        });
-        // Sync vers localStorage
-        var lsk = 'closing_' + m.uid + '_' + curMonth;
-        try { localStorage.setItem(lsk, JSON.stringify(m.data[curMonth])); } catch(e) {}
-      }
-      renderAll();
+    $('#memberTabs').innerHTML = h;
+    document.querySelectorAll('#memberTabs .au-member').forEach(function (b) {
+      b.addEventListener('click', function () {
+        S.slug = b.getAttribute('data-slug');
+        localStorage.setItem('closing_v2_member', S.slug);
+        renderMembers();
+        refresh();
+      });
     });
   }
 
-  // ── Afficher immédiatement ──
-  renderAll();
-  console.log('[Firebase] Mois courant closing chargé. Migrations en arrière-plan...');
-
-  // ══ PRIORITÉ 2: Migrations en arrière-plan ══
-  setTimeout(() => { firebaseMigrateBgC().catch(e => console.warn('[Firebase] Migration bg error:', e)); }, 500);
-}
-
-async function firebaseMigrateBgC() {
-  if (!Fire.db) return;
-  const MONTHS_ALL = DB.months;
-  const YEARS_CHECK = [2025, 2026];
-
-  for (const m of MEMBERS_C) {
-    for (const yr of YEARS_CHECK) {
-      for (const mo of MONTHS_ALL) {
-        const monthLabel = mo + ' ' + yr;
-        const lsKey = 'closing_' + m.uid + '_' + monthLabel;
-        let lsData = null;
-        try { const v = localStorage.getItem(lsKey); lsData = v ? JSON.parse(v) : null; } catch(e) {}
-        if (!lsData) continue;
-        const fsKey = Fire._key(monthLabel);
-        if (!fsKey) continue;
-        const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(fsKey);
-        try {
-          const snap = await ref.get();
-          if (!snap.exists || !snap.data().closing) {
-            const closingData = {};
-            ALL_WEEKS.forEach(w => { if (lsData[w]) closingData[w] = lsData[w]; });
-            if (Object.keys(closingData).length > 0) {
-              await ref.set({ closing: closingData, _ls_migrated: true }, { merge: true });
-            }
-          }
-        } catch(e) { /* ignore */ }
-      }
-    }
+  /* ══ CHARGEMENT + AGRÉGATION ══════════════════════════════════════════ */
+  function emptyDay() {
+    var o = {};
+    COLS.forEach(function (c) { o[c.key] = 0; });
+    return o;
   }
 
-  for (const m of MEMBERS_C) {
-    for (const [monthLabel, monthData] of Object.entries(m.data)) {
-      if (monthLabel === cmk()) continue;
-      const key = Fire._key(monthLabel);
-      const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(key);
-      try {
-        const snap = await ref.get();
-        if (!snap.exists) {
-          if (monthData._total) {
-            await ref.set({ closing_total: monthData._total, _migrated: true }, { merge: true });
-          } else {
-            const closingData = {};
-            ALL_WEEKS.forEach(w => { if (monthData[w]) closingData[w] = monthData[w]; });
-            await ref.set({ closing: closingData, _migrated: true }, { merge: true });
-          }
-        } else {
-          const fbData = snap.data();
-          if (fbData.closing && !monthData._total) {
-            ALL_WEEKS.forEach(w => {
-              if (fbData.closing[w]) {
-                if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
-                m.data[monthLabel][w] = { ...m.data[monthLabel][w], ...fbData.closing[w] };
-              }
-            });
-          }
-          if (fbData.closing_total && monthData._total) {
-            m.data[monthLabel]._total = { ...monthData._total, ...fbData.closing_total };
-          }
+  function memberMatchesBooking(b, member) {
+    if (!member) return true; // Équipe
+    if (b.closeData && b.closeData.closerSlug) return b.closeData.closerSlug === member.slug;
+    if (b.personId && b.personId === member.slug) return true;
+    var p = S.personsMap[b.personId];
+    if (p && p.firebaseUid && member.firebaseUid) return p.firebaseUid === member.firebaseUid;
+    return false;
+  }
+
+  function refresh() {
+    if (S.loading) return;
+    S.loading = true;
+    $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>Agrégation des RDV Self Booking…</div>';
+    localStorage.setItem('closing_v2_month', monthKey());
+    $('#monthLbl').textContent = MONTHS_FR[S.m] + ' ' + S.y;
+
+    var from = new Date(S.y, S.m, 1, 0, 0, 0, 0);
+    var to = new Date(S.y, S.m, daysInMonth(), 23, 59, 59, 999);
+    var fromDay = dayIso(1), toDay = dayIso(daysInMonth());
+    var member = currentMember();
+    var ovSlug = member ? member.slug : '_all';
+
+    Promise.all([
+      AF.loadBookingsRange(fromDay, toDay, from, to),
+      AF.loadTypeMap(),
+      AF.loadPersonsMap(),
+      AF.loadOverrides(ovSlug, fromDay, toDay),
+      member ? db.collection('saisies').doc(member.slug).collection('mois').doc(monthKey()).get().catch(function () { return { exists: false }; }) : Promise.resolve({ exists: false })
+    ]).then(function (res) {
+      var bookings = res[0];
+      S.typeMap = res[1] || {};
+      S.personsMap = res[2] || {};
+      S.overrides = res[3] || {};
+      S.legacy = (res[4] && res[4].exists) ? res[4].data() : null;
+
+      var days = {};
+      for (var d = 1; d <= daysInMonth(); d++) days[dayIso(d)] = emptyDay();
+      var todayIso = AF.dayKey(new Date());
+      var createdSb = 0;
+
+      bookings.forEach(function (b) {
+        if (AF.classifyBooking(b, S.typeMap) !== 'self') return;
+        if (!memberMatchesBooking(b, member)) return;
+        /* Replanifications exclues des « pris » (le RDV remplacé a déjà compté) */
+        if (b._inCreated && !b.rescheduledFromId) createdSb++;
+        if (!b._inDue || !days[b.date]) return;
+        var row = days[b.date];
+        row.rdvSb++;
+        var oc = b.outcome || null;
+        if (oc === 'annule' || (!oc && b.status === 'cancelled' && b.rescheduled !== true)) row.annules++;
+        else if (oc === 'no_show' || (!oc && b.status === 'no_show')) row.noshow++;
+        else if (oc === 'replanifie' || (!oc && b.status === 'cancelled' && b.rescheduled === true)) row.replanifies++;
+        if (oc ? AF.isPresent(oc) : b.status === 'completed') row.presents++;
+        if (oc === 'disqualifie') row.disqua++;
+        if (oc ? AF.isPitched(oc) : false) row.offres++;
+        if (oc === 'close') {
+          row.closes++;
+          row.contracte += (b.closeData && Number(b.closeData.contracte)) || 0;
+          row.collecte += (b.closeData && Number(b.closeData.collecte)) || 0;
         }
-      } catch(e) { /* ignore */ }
-    }
+        if (oc === 'non_close') row.nonCloses++;
+        var isPastNoResult = !oc && (b.status === 'confirmed' || b.status === 'pending') && b.date < todayIso;
+        if (isPastNoResult) row.aStatuer++;
+      });
+
+      S.data = { days: days, createdSb: createdSb };
+      S.loading = false;
+      render();
+    }).catch(function (e) {
+      S.loading = false;
+      $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>' + (e && e.message || 'Erreur de chargement') + '</div>';
+    });
   }
-  console.log('[Firebase] Migrations closing arrière-plan terminées');
-}
 
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('month-lbl').textContent = cmk();
-  document.getElementById('sub-month').textContent = cmk();
-  const nm = (typeof localStorage !== 'undefined' && localStorage.getItem('ambitio_name')) || 'Guillaume';
-  document.getElementById('tb-nm').textContent = nm;
-  document.getElementById('tb-av').textContent = nm[0].toUpperCase();
-  MEMBERS_C.forEach(m => {
-    const hardcoded = m.data[cmk()];
-    if (hardcoded && hardcoded._total) return; // garder données historiques
-    const key = `closing_${m.uid}_${cmk()}`;
-    const s = loadDataC(m.uid);
-    if (s) {
-      m.data[cmk()] = s;
-    } else if (hardcoded) {
-      // Données hardcodées présentes mais pas dans localStorage → les écrire pour syncBridge
-      try { localStorage.setItem(key, JSON.stringify(hardcoded)); } catch(e) {}
+  function eff(dk, key) {
+    var ov = S.overrides[dk] && S.overrides[dk].closing;
+    if (ov && ov[key] != null && ov[key] !== '') return { v: Number(ov[key]) || 0, ov: true };
+    return { v: (S.data.days[dk] && S.data.days[dk][key]) || 0, ov: false };
+  }
+
+  /* ══ RENDER ═══════════════════════════════════════════════════════════ */
+  function fmtCell(c, val) {
+    if (c.fmt === 'eur') return val > 0 ? '<span class="eur">' + fmtEuro(val) + '</span>' : '<span class="z">·</span>';
+    if (val === 0) return '<span class="z">·</span>';
+    if (c.fmt === 'hot') return '<span class="hot">' + val + '</span>';
+    if (c.fmt === 'good') return '<span class="good">' + val + '</span>';
+    if (c.fmt === 'bad') return '<span class="bad">' + val + '</span>';
+    if (c.fmt === 'warn') return '<span class="hot">' + val + '</span>';
+    return String(val);
+  }
+
+  function render() {
+    var nbDays = daysInMonth();
+    var todayIso = AF.dayKey(new Date());
+    var tot = emptyDay();
+    var weekAgg = emptyDay(), weekStartD = 1, weekIdx = 1;
+    var rowsH = '';
+
+    function addTo(agg, dk) { COLS.forEach(function (c) { agg[c.key] += eff(dk, c.key).v; }); }
+    function aggRow(agg, label, cls) {
+      var h = '<tr class="' + cls + '"><td>' + label + '</td>';
+      COLS.forEach(function (c, i) {
+        var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
+        h += '<td class="' + (grpStart ? 'grp' : '') + '">' + fmtCell(c, agg[c.key]) + '</td>';
+      });
+      h += '<td></td></tr>';
+      return h;
     }
-  });
-  document.addEventListener('db:updated', renderAll);
 
-  // Firebase init + sync (attente auth)
-  if (typeof firebase !== 'undefined' && firebase.auth) {
-    console.log('[Ambitio] Firebase SDK détecté, en attente auth...');
-    firebase.auth().onAuthStateChanged(async function(fbUser) {
-      if (!fbUser) {
-        console.warn('[Ambitio] ❌ Aucun utilisateur Firebase Auth — données locales uniquement');
-        return;
+    for (var d = 1; d <= nbDays; d++) {
+      var dk = dayIso(d);
+      var dt = new Date(S.y, S.m, d);
+      var dow = dt.getDay();
+      var isFuture = dk > todayIso;
+      var cls = (dk === todayIso ? 'today ' : '') + (dow === 0 || dow === 6 ? 'weekend ' : '') + (isFuture ? 'future' : '');
+      rowsH += '<tr class="' + cls + '"><td>' + JOURS_FR[dow] + ' ' + pad2(d) + '</td>';
+      COLS.forEach(function (c, i) {
+        var e = eff(dk, c.key);
+        var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
+        rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' + fmtCell(c, e.v) + '</td>';
+      });
+      rowsH += '<td><button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button></td></tr>';
+      addTo(tot, dk);
+      addTo(weekAgg, dk);
+      if (dow === 0 || d === nbDays) {
+        rowsH += aggRow(weekAgg, 'Semaine ' + weekIdx + ' <span style="opacity:.6;font-weight:500">(' + pad2(weekStartD) + '→' + pad2(d) + ')</span>', 'au-week');
+        weekAgg = emptyDay(); weekStartD = d + 1; weekIdx++;
       }
-      console.log('[Ambitio] ✅ Firebase Auth OK:', fbUser.email, 'UID:', fbUser.uid);
-      const uid = fbUser.uid;
-      localStorage.setItem('ambitio_auth_uid', uid);
-      if (window.Fire && !Fire.db) {
-        Fire.init(firebase.firestore(), uid);
-        console.log('[Ambitio] Fire.db initialisé, lancement sync...');
-        firebaseSyncMembersC();
+    }
+
+    var kept = tot.rdvSb - tot.annules - tot.replanifies;
+    var txShow = kept > 0 ? tot.presents / kept * 100 : null;
+    var txOffre = tot.presents > 0 ? tot.offres / tot.presents * 100 : null;
+    var txCloseOffre = tot.offres > 0 ? tot.closes / tot.offres * 100 : null;
+    var txCloseLive = tot.presents > 0 ? tot.closes / tot.presents * 100 : null;
+    var aov = tot.closes > 0 ? tot.collecte / tot.closes : null;
+
+    var kpis =
+      kpi(String(tot.rdvSb), 'RDV SB du mois', S.data.createdSb + ' pris (créés) sur la période', '#fbbf24') +
+      kpi(String(tot.annules + tot.noshow), 'Annulés + No-show', tot.annules + ' annulés · ' + tot.noshow + ' no-show · ' + tot.replanifies + ' replanifiés', '#ef4444') +
+      kpi(String(tot.presents), 'Présents (Live)', 'Show-up ' + fmtPct(txShow), '#5b7cfa') +
+      kpi(String(tot.offres), 'Offres pitchées', fmtPct(txOffre) + ' des présents', '#a78bfa') +
+      kpi(String(tot.closes), 'Closes SB', fmtPct(txCloseOffre) + ' / offres · ' + fmtPct(txCloseLive) + ' / live', '#34d399') +
+      kpi(fmtEuro(tot.collecte), 'Collecté', 'Contracté ' + fmtEuro(tot.contracte) + (aov != null ? ' · AOV ' + fmtEuro(aov) : ''), '#34d399');
+
+    var fun = funnel([
+      { l: 'RDV SB', v: tot.rdvSb },
+      { l: 'Présents (Live)', v: tot.presents },
+      { l: 'Offres', v: tot.offres },
+      { l: 'Closes', v: tot.closes }
+    ]);
+
+    var headH = '<tr><th>Jour</th>';
+    COLS.forEach(function (c, i) {
+      var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
+      headH += '<th class="' + (grpStart ? 'grp' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' + c.label + '</th>';
+    });
+    headH += '<th></th></tr>';
+
+    var aStatuerNote = tot.aStatuer > 0
+      ? '<div style="padding:12px 18px;font-size:12px;color:var(--gold)">⏳ <strong>' + tot.aStatuer + ' RDV passés sans résultat</strong> — statue-les depuis <a href="sales-rdv.html" style="color:#b6c3ff">Mes RDV</a> ou la fiche prospect pour des chiffres exacts.</div>'
+      : '';
+
+    var h =
+      '<div class="au-kpis">' + kpis + '</div>' +
+      '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel Closing — ' + MONTHS_FR[S.m] + '</div>' +
+        '<div class="au-card-note">résultats saisis sur les RDV (module RDV / fiche prospect) — Self Booking uniquement</div></div>' + fun + '</div>' +
+      '<div class="au-card" style="padding:0;overflow:hidden">' +
+        '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Jour par jour <span style="color:var(--muted);font-weight:500;font-size:12px">(par date du RDV)</span></div>' +
+          '<div class="right"><span class="au-chip sb">Self Booking</span></div></div>' +
+        '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead>' + headH + '</thead><tbody>' +
+        rowsH + aggRow(tot, 'TOTAL ' + MONTHS_FR[S.m].toUpperCase(), 'au-total') +
+        '</tbody></table></div>' + aStatuerNote +
+      '</div>' +
+      legacyBlock();
+
+    $('#content').innerHTML = h;
+    $('#btnLegacy').style.display = S.legacy ? '' : 'none';
+    document.querySelectorAll('.au-day-edit').forEach(function (b) {
+      b.addEventListener('click', function () { openOverride(b.getAttribute('data-day')); });
+    });
+  }
+
+  function kpi(v, l, s, color) {
+    return '<div class="au-kpi accent" style="--au-kc:' + color + '"><div class="v">' + v + '</div><div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+  }
+  function funnel(steps) {
+    var max = Math.max.apply(null, steps.map(function (s) { return s.v; }).concat([1]));
+    var h = '<div class="au-funnel">';
+    steps.forEach(function (s, i) {
+      var pct = i > 0 && steps[i - 1].v > 0 ? (s.v / steps[i - 1].v * 100) : null;
+      h += '<div class="au-fstep"><div class="v">' + s.v.toLocaleString('fr-FR') + '</div><div class="l">' + s.l + '</div>' +
+        '<div class="p">' + (pct != null ? fmtPct(pct) + ' de l\'étape préc.' : '&nbsp;') + '</div>' +
+        '<div class="au-fbar"><i style="width:' + Math.max(3, s.v / max * 100) + '%"></i></div></div>';
+    });
+    return h + '</div>';
+  }
+
+  function legacyBlock() {
+    if (!S.legacy || !S.legacyOpen) return '';
+    var raw = S.legacy.closing_total ? { _total: S.legacy.closing_total } : (S.legacy.closing || null);
+    if (!raw) return '';
+    var FIELDS = [
+      ['calls', 'Calls'], ['lives', 'Lives'], ['offres', 'Offres'], ['deposits', 'Deposits'],
+      ['closes', 'Closes'], ['hardClose', 'Hard close'], ['followUp', 'Follow-up'], ['contracte', 'Contracté €'], ['collecte', 'Collecté €']
+    ];
+    var weeks = Object.keys(raw).sort();
+    var h = '<div class="au-card au-legacy"><div class="au-legacy-title">📜 Ancienne saisie hebdomadaire — ' + MONTHS_FR[S.m] + ' ' + S.y + ' (lecture seule, conservée)</div>';
+    h += '<div class="au-twrap" style="background:transparent"><table class="au-table" style="min-width:600px"><thead><tr><th>Semaine</th>';
+    FIELDS.forEach(function (f) { h += '<th>' + f[1] + '</th>'; });
+    h += '</tr></thead><tbody>';
+    weeks.forEach(function (w) {
+      h += '<tr><td>' + (w === '_total' ? 'Total mois' : w.toUpperCase()) + '</td>';
+      FIELDS.forEach(function (f) { var v = (raw[w] && raw[w][f[0]]) || 0; h += '<td>' + (v || '<span class="z">·</span>') + '</td>'; });
+      h += '</tr>';
+    });
+    h += '</tbody></table></div></div>';
+    return h;
+  }
+
+  /* ══ OVERRIDE MODAL ═══════════════════════════════════════════════════ */
+  var ovDay = null;
+  function openOverride(dk) {
+    ovDay = dk;
+    var d = new Date(dk + 'T12:00:00');
+    $('#ovTitle').textContent = '✎ Corriger le ' + JOURS_FR[d.getDay()] + ' ' + pad2(d.getDate()) + ' ' + MONTHS_FR[S.m];
+    var ov = (S.overrides[dk] && S.overrides[dk].closing) || {};
+    var h = '';
+    COLS.forEach(function (c) {
+      if (OV_KEYS.indexOf(c.key) < 0) return;
+      var auto = (S.data.days[dk] && S.data.days[dk][c.key]) || 0;
+      var autoLbl = c.fmt === 'eur' ? fmtEuro(auto) : auto;
+      var cur = ov[c.key] != null ? ov[c.key] : '';
+      h += '<div class="au-modal-f"><label>' + c.label + '</label>' +
+        '<input type="number" step="any" min="0" data-ovkey="' + c.key + '" value="' + cur + '" placeholder="auto"/>' +
+        '<div class="auto-hint">auto : ' + autoLbl + '</div></div>';
+    });
+    $('#ovGrid').innerHTML = h;
+    $('#ovNote').value = (S.overrides[dk] && S.overrides[dk].note) || '';
+    $('#ovModal').classList.add('show');
+  }
+  $('#ovCancel').addEventListener('click', function () { $('#ovModal').classList.remove('show'); });
+  $('#ovModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
+  $('#ovSave').addEventListener('click', function () {
+    if (!ovDay) return;
+    var values = {};
+    document.querySelectorAll('#ovGrid input[data-ovkey]').forEach(function (inp) {
+      var v = inp.value.trim();
+      if (v !== '') values[inp.getAttribute('data-ovkey')] = Number(v) || 0;
+    });
+    var member = currentMember();
+    var ovSlug = member ? member.slug : '_all';
+    var btn = this;
+    btn.disabled = true;
+    AF.saveDayOverride(ovSlug, ovDay, 'closing', values, $('#ovNote').value.trim())
+      .then(function () {
+        if (Object.keys(values).length) {
+          S.overrides[ovDay] = S.overrides[ovDay] || {};
+          S.overrides[ovDay].closing = values;
+          S.overrides[ovDay].note = $('#ovNote').value.trim() || null;
+        } else if (S.overrides[ovDay]) { delete S.overrides[ovDay].closing; }
+        $('#ovModal').classList.remove('show');
+        toast('💾 Correction enregistrée');
+        render();
+      })
+      .catch(function (e) { toast('❌ ' + (e && e.message || 'Erreur'), true); })
+      .then(function () { btn.disabled = false; });
+  });
+
+  /* ══ NAV / INIT ═══════════════════════════════════════════════════════ */
+  $('#btnPrev').addEventListener('click', function () { S.m--; if (S.m < 0) { S.m = 11; S.y--; } refresh(); });
+  $('#btnNext').addEventListener('click', function () { S.m++; if (S.m > 11) { S.m = 0; S.y++; } refresh(); });
+  $('#btnToday').addEventListener('click', function () { var n = new Date(); S.y = n.getFullYear(); S.m = n.getMonth(); refresh(); });
+  $('#btnRefresh').addEventListener('click', refresh);
+  $('#btnLegacy').addEventListener('click', function () { S.legacyOpen = !S.legacyOpen; render(); });
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (!user) { window.location.href = 'login.html'; return; }
+    db.collection('users').doc(user.uid).get().then(function (s) {
+      var d = s.exists ? s.data() : {};
+      S.role = d.role || S.role;
+      localStorage.setItem('ambitio_role', S.role);
+    }).catch(function () {}).then(function () {
+      var start = function () { computeMembers(); renderMembers(); refresh(); };
+      if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length) start();
+      else {
+        var done = false;
+        window.addEventListener('team-members-loaded', function () { if (!done) { done = true; start(); } }, { once: true });
+        setTimeout(function () { if (!done) { done = true; start(); } }, 3500);
       }
     });
-  } else {
-    console.warn('[Ambitio] Firebase SDK non disponible — mode hors-ligne');
-  }
-
-  renderListe();
-});
+  });
+})();
 </script>
 </body>
 </html>

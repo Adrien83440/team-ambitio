@@ -26,6 +26,9 @@
 <link rel="stylesheet" href="voice-notes.css">
 <script src="call-detail-modal.js" defer></script>
 <script src="voice-notes.js" defer></script>
+<!-- Refonte 07/2026 : journal d'actions setting + résultats RDV -->
+<script src="alteore-flow.js" defer></script>
+<script src="rdv-outcome.js" defer></script>
 <script>
   if (!firebase.apps.length) {
     firebase.initializeApp({
@@ -295,6 +298,21 @@ html, body {
 .ld-rdv-when { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 700; color: #c4b5fd; min-width: 130px; }
 .ld-rdv-when .d { font-size: 11px; color: var(--muted); font-weight: 600; }
 .ld-rdv-meta { font-size: 11px; color: var(--muted); flex: 1; min-width: 0; }
+/* ── Refonte 07/2026 : parcours RDV complet (passés + à venir + résultat) ── */
+.ld-rdvx-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12px; color: var(--text); flex-wrap: wrap; }
+.ld-rdvx-row + .ld-rdvx-row { border-top: 1px dashed rgba(255,255,255,0.06); }
+.ld-rdvx-row.past { opacity: 0.85; }
+.ld-rdvx-when { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 700; color: #c4b5fd; min-width: 128px; }
+.ld-rdvx-when .d { font-size: 11px; color: var(--muted); font-weight: 600; }
+.ld-rdvx-meta { font-size: 11px; color: var(--muted); flex: 1; min-width: 90px; }
+.ld-rdvx-btn {
+  background: rgba(91,124,250,0.12); border: 1px solid rgba(91,124,250,0.35); color: #b6c3ff;
+  padding: 4px 10px; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer;
+  font-family: inherit; transition: all 0.13s; white-space: nowrap;
+}
+.ld-rdvx-btn:hover { border-color: rgba(91,124,250,0.6); box-shadow: 0 3px 10px rgba(91,124,250,0.2); }
+.ld-rdvx-btn.ghost { background: transparent; border-color: rgba(255,255,255,0.12); color: var(--muted); }
+.ld-rdvx-sep { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 8px 0 2px; opacity: 0.8; }
 
 /* Réponses du formulaire AlteoForm */
 .ld-form-answers { margin: 10px 0 4px; padding: 10px 12px; border: 1px solid rgba(96,165,250,0.22); background: rgba(96,165,250,0.05); border-radius: 8px; display: none; }
@@ -2155,35 +2173,41 @@ function renderFeed() {
   }
 }
 
-/* ── RDV box (lue temps réel depuis bookings) ── */
+/* ── RDV box (lue temps réel depuis bookings) ──
+   Refonte 07/2026 : la fiche est la RACINE → on affiche TOUT le parcours RDV
+   du prospect (à venir + passés), avec le résultat (outcome) sur chaque RDV
+   et le bouton 🎯 Résultat / ✎ qui ouvre la modale partagée RdvOutcome. */
 var _ldRdvUnsubs = {};   // leadId -> unsubscribe fn
+var _ldRdvCache = {};    // leadId -> [bookings]
+var _ldTypeMap = null;   // booking_config/_types (SB/NB + exclusion coaching)
+
+function _ldEnsureTypeMap() {
+  if (_ldTypeMap || !window.AlteoreFlow) return;
+  _ldTypeMap = {};
+  window.AlteoreFlow.loadTypeMap().then(function (m) { _ldTypeMap = m || {}; });
+}
 
 function attachLeadRdvListener(leadId) {
   if (!leadId) return;
   // Si déjà attaché, ne rien faire
   if (_ldRdvUnsubs[leadId]) return;
-  var todayStr = (function(){
-    var d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  })();
+  _ldEnsureTypeMap();
   try {
     _ldRdvUnsubs[leadId] = db.collection('bookings')
       .where('leadId', '==', leadId)
-      .where('date', '>=', todayStr)
       .onSnapshot(function(snap){
         var items = [];
         snap.forEach(function(doc){
           var d = doc.data();
-          if (d.status === 'confirmed' || d.status === 'pending') {
-            d.id = doc.id;
-            items.push(d);
-          }
+          d.id = doc.id;
+          items.push(d);
         });
         items.sort(function(a, b){
           var ka = (a.date||'') + 'T' + (a.time||'');
           var kb = (b.date||'') + 'T' + (b.time||'');
           return ka < kb ? -1 : (ka > kb ? 1 : 0);
         });
+        _ldRdvCache[leadId] = items;
         paintLeadRdvBox(leadId, items);
       }, function(err){
         console.warn('[ldRdv] snapshot error', leadId, err);
@@ -2203,25 +2227,57 @@ function paintLeadRdvBox(leadId, items) {
   var block = document.querySelector('[data-rdv-block="' + leadId + '"]');
   var list  = document.querySelector('[data-rdv-list="'  + leadId + '"]');
   if (!block || !list) return;
-  if (!items || items.length === 0) {
+  /* On exclut les RDV coaching/CSM du parcours commercial */
+  var AF = window.AlteoreFlow;
+  var visible = (items || []).filter(function (b) {
+    return !AF || AF.classifyBooking(b, _ldTypeMap || {}) !== 'excluded';
+  });
+  if (visible.length === 0) {
     block.classList.remove('has-rdv');
     list.innerHTML = '';
     return;
   }
   var JOURS = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
   var MOIS  = ['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
-  var html = '';
-  items.forEach(function(b){
+  var isPast = function (b) { return window.RdvOutcome ? window.RdvOutcome.isPastBooking(b) : false; };
+
+  function rdvRow(b, past) {
     var dt = new Date((b.date || '') + 'T' + (b.time || '00:00') + ':00');
     var when = JOURS[dt.getDay()] + ' ' + dt.getDate() + ' ' + MOIS[dt.getMonth()];
     var typeName = (b.consultation && b.consultation.label) || b.typeName || b.typeLabel || b.type || 'RDV';
     var personName = b.personName || '';
+    var sb = AF ? AF.isSB(b, _ldTypeMap || {}) : (b.source === 'self_booking');
     var meta = escHtml(typeName) + (personName ? ' · ' + escHtml(personName) : '');
-    html += '<div class="ld-rdv-row">';
-    html += '<span class="ld-rdv-when">' + escHtml(when) + ' <span class="d">à</span> ' + escHtml(b.time || '') + '</span>';
-    html += '<span class="ld-rdv-meta">' + meta + '</span>';
-    html += '</div>';
-  });
+    var chip = window.RdvOutcome ? window.RdvOutcome.chip(b) : '';
+    var h = '<div class="ld-rdvx-row' + (past ? ' past' : '') + '">';
+    h += '<span class="ld-rdvx-when">' + escHtml(when) + ' <span class="d">à</span> ' + escHtml(b.time || '') + '</span>';
+    h += chip;
+    h += '<span class="au-chip" style="color:' + (sb ? '#fbbf24' : '#a78bfa') + ';border:1px solid ' + (sb ? 'rgba(251,191,36,.4)' : 'rgba(167,139,250,.4)') + ';background:' + (sb ? 'rgba(251,191,36,.08)' : 'rgba(167,139,250,.08)') + ';border-radius:999px;padding:1px 8px;font-size:9.5px;font-weight:800">' + (sb ? 'SB' : 'NB') + '</span>';
+    h += '<span class="ld-rdvx-meta">' + meta + (b.outcomeNote ? ' — <em>' + escHtml(b.outcomeNote) + '</em>' : '') + '</span>';
+    if (past) {
+      h += '<button class="ld-rdvx-btn" data-action="rdvOutcome" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '">' + (b.outcome ? '✎' : '🎯 Résultat') + '</button>';
+    } else {
+      h += '<button class="ld-rdvx-btn ghost" data-action="rdvResched" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '" title="Replanifier">📅 Replanifier</button>';
+      h += '<button class="ld-rdvx-btn ghost" data-action="rdvOutcome" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '" title="Statuer (annulation anticipée...)">✎</button>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  var upcoming = visible.filter(function (b) { return !isPast(b) && (b.status === 'confirmed' || b.status === 'pending'); });
+  var past = visible.filter(function (b) { return isPast(b) || (b.status !== 'confirmed' && b.status !== 'pending'); }).reverse();
+  var toStatus = past.filter(function (b) { return !b.outcome && (b.status === 'confirmed' || b.status === 'pending'); }).length;
+
+  var html = '';
+  if (upcoming.length) {
+    html += '<div class="ld-rdvx-sep">À venir</div>';
+    upcoming.forEach(function (b) { html += rdvRow(b, false); });
+  }
+  if (past.length) {
+    html += '<div class="ld-rdvx-sep">Passés' + (toStatus > 0 ? ' · <span style="color:#fbbf24">' + toStatus + ' à statuer</span>' : '') + '</div>';
+    past.slice(0, 5).forEach(function (b) { html += rdvRow(b, true); });
+    if (past.length > 5) html += '<div style="font-size:10.5px;color:var(--muted);padding:4px 0">+ ' + (past.length - 5) + ' autre(s) RDV — voir fiche CRM</div>';
+  }
   list.innerHTML = html;
   block.classList.add('has-rdv');
 }
@@ -3119,6 +3175,28 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     return;
   }
 
+  // ── Résultat / replanification d'un RDV depuis la fiche (refonte 07/2026) ──
+  var rdvOutBtn = e.target.closest('[data-action="rdvOutcome"]');
+  if (rdvOutBtn) {
+    e.stopPropagation();
+    var roLead = rdvOutBtn.dataset.leadId, roBk = rdvOutBtn.dataset.bookingId;
+    var roList = _ldRdvCache[roLead] || [];
+    var roB = roList.find(function (x) { return x.id === roBk; });
+    if (roB && window.RdvOutcome) window.RdvOutcome.open(roB, { typeMap: _ldTypeMap || {} });
+    else toast('❌ RDV introuvable');
+    return;
+  }
+  var rdvReschedBtn = e.target.closest('[data-action="rdvResched"]');
+  if (rdvReschedBtn) {
+    e.stopPropagation();
+    var rrLead = rdvReschedBtn.dataset.leadId, rrBk = rdvReschedBtn.dataset.bookingId;
+    var rrList = _ldRdvCache[rrLead] || [];
+    var rrB = rrList.find(function (x) { return x.id === rrBk; });
+    if (rrB && window.RdvOutcome) window.RdvOutcome.openReschedule(rrB, {});
+    else toast('❌ RDV introuvable');
+    return;
+  }
+
   // Status button
   var statusBtn = e.target.closest('[data-action="setStatus"]');
   if (statusBtn) {
@@ -3135,6 +3213,17 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     var sObj = getStatusObj(newStatus);
     statusBtn.style.color = sObj.color;
     statusBtn.style.borderColor = sObj.color;
+    // ── Journal d'actions setting (refonte 07/2026) ──
+    // Enregistré AVANT la mise à jour locale pour capturer l'ancien statut.
+    // Alimente le rapport Setting journalier : Total Leads (1ʳᵉ action),
+    // NRP1/2/3, sets… Fire-and-forget : ne bloque jamais l'UI.
+    var prevLeadObj = allLeads.find(function (l) { return l.id === leadId; });
+    if (window.AlteoreFlow && prevLeadObj && prevLeadObj.status !== newStatus) {
+      window.AlteoreFlow.recordLeadAction(leadId, prevLeadObj, newStatus, {
+        prevStatus: prevLeadObj.status || null,
+        origin: 'leads_live'
+      });
+    }
     // Update local state
     for (var i = 0; i < allLeads.length; i++) {
       if (allLeads[i].id === leadId) { allLeads[i].status = newStatus; break; }
@@ -4702,6 +4791,12 @@ function openBookingModal(lead) {
 
   var url = 'booking.html?embed=1&by=setter&leadId=' + leadId + '&prenom=' + prenom + '&nom=' + nomF + '&email=' + email + '&tel=' + tel;
 
+  // Attribution setter sur le booking (rapport Setting + commission NB au close)
+  var vu = (typeof getCurrentVoiceUser === 'function') ? getCurrentVoiceUser() : null;
+  if (vu && vu.slug) {
+    url += '&setter=' + encodeURIComponent(vu.slug) + '&setterUid=' + encodeURIComponent(vu.uid || '') + '&setterName=' + encodeURIComponent(vu.name || '');
+  }
+
   document.getElementById('bookingLeadInfo').textContent = lead.nom || '—';
   document.getElementById('bookingIframe').src = url;
   document.getElementById('bookingOverlay').classList.add('show');
@@ -4720,8 +4815,22 @@ function closeBookingModal() {
 window.addEventListener('message', function(e) {
   if (!e.data || e.data.type !== 'booking_confirmed') return;
   var data = e.data;
+  // Replanification (RdvOutcome) : booking.html a déjà tout mis à jour
+  // (nouveau RDV, ancien en `replanifie`, timeline) — ne pas écraser le
+  // statut du lead (un SB doit rester SB, pas devenir 'set').
+  if (data.rescheduledFromId) return;
   var leadId = data.leadId || _bookingLeadId;
   if (!leadId) return;
+
+  // ── Journal : un RDV posé par le setter = un SET réel (refonte 07/2026) ──
+  var bkLead = allLeads.find(function (l) { return l.id === leadId; });
+  if (window.AlteoreFlow) {
+    window.AlteoreFlow.recordLeadAction(leadId, bkLead || null, 'set_booking', {
+      prevStatus: bkLead ? (bkLead.status || null) : null,
+      origin: 'leads_live',
+      bookingId: data.bookingId || null
+    });
+  }
 
   // Update lead: status → rdv_pose, stage → rdv_confirmes, add RDV info + note
   var dateFr = data.date ? data.date.split('-').reverse().join('/') : '';

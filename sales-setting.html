@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Ambitio — Setting</title>
-<link rel="stylesheet" href="sales.css"/>
+<meta name="theme-color" content="#07080f"/>
+<title>Alteore — Setting (rapport journalier)</title>
+<link rel="stylesheet" href="alteore-ui.css"/>
+
 <!-- ── Firebase v9 compat ── -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -18,1724 +20,529 @@
       storageBucket:     "ambitio-team.firebasestorage.app",
       messagingSenderId: "1079366902268",
       appId:             "1:1079366902268:web:b4ec1691dba54230339279"
-    }); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }
+    }); try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { console.warn('[firestore]', e && e.message); }
   }
 </script>
-
-<script>
-/* === sales-data.js inlined === */
-/**
- * sales-data.js — Data Store + Firebase + Utilitaires
- * Les données "a" (actuelles) viennent de Firestore en temps réel.
- * Les données "p" (projections) sont les références fixes.
- */
-
-/* ═══════════════════════════════════════════════════════════
-   PROJECTIONS FIXES — modifier ici pour changer les cibles
-═══════════════════════════════════════════════════════════ */
-const PROJECTIONS = {
-  closing: {
-    s1: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s2: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s3: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    s4: { calls:20, lives:15, offres:10, closes:4, contracte:24000, collecte:2000 },
-    livesP:0.75, offresP:0.667, engP:0.5, cOffP:0.4, cCallP:0.2, cashLive:666.7,
-  },
-  setting: {
-    s1: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s2: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s3: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    s4: { leads:130, calls:375, decroches:45, propRdv:10, sets:5, presents:4, closes:4 },
-    decrochesP:0.12, engP:0.222, setP:0.5, showupP:0.8, cCallP:0.8,
-  },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   DATA STORE
-═══════════════════════════════════════════════════════════ */
-const ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
-
-const DB = {
-  months: ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'],
-
-  // Données brutes saisies (remplacées par Firestore)
-  _raw: {
-    closing: {
-      s1: { calls:8,  lives:2, offres:1, closes:0, hc:0, fu:0, contracte:0,     collecte:0    },
-      s2: { calls:8,  lives:4, offres:2, closes:2, hc:2, fu:0, contracte:12000, collecte:1000 },
-      s3: { calls:9,  lives:6, offres:3, closes:1, hc:1, fu:0, contracte:5400,  collecte:400  },
-      s4: { calls:9,  lives:7, offres:2, closes:0, hc:0, fu:0, contracte:1800,  collecte:200  },
-    },
-    setting: {
-      s1: { leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, closes:0 },
-      s2: { leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, closes:2 },
-      s3: { leads:127, calls:178, decroches:38, propRdv:16, sets:11, presents:4, closes:1 },
-      s4: { leads:100, calls:150, decroches:28, propRdv:15, sets:10, presents:4, closes:0 },
-    },
-    deals: [
-      { client:'Julie Berchoux',     email:'julieberchoux@icloud.com',         offre:'BP 12', type:'Closing', date:'24/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting après self booking', ok:true  },
-      { client:'Corinne Alaga',      email:'contact@lestabliersgourmands.com', offre:'BP 12', type:'Setting', date:'27/01/2026', cHT:null, coHT:null,  comm:125, bonus:0, notes:"Setting d'un close d'Elodie", ok:true  },
-      { client:'Belinda Giangiulio', email:'lesdemoisellesduvrac@gmail.com',   offre:'BP 12', type:'Closing', date:'30/01/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Cecile Auneau',      email:'domcecile@gmail.com',              offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-      { client:'Justine Biton',      email:'lephildesidees@hotmail.com',       offre:'BP 12', type:'Closing', date:'09/02/2026', cHT:6000, coHT:500,  comm:500, bonus:0, notes:'Setting no-booking',         ok:true  },
-    ],
-  },
-
-  // Calculé depuis _raw
-  closing: null,
-  setting: null,
-  commissions: {
-    'Janvier 2026': { contracte:12000, collecte:0,    totalComm:0,    statut:'Validé',     deals:[] },
-    'Février 2026': { contracte:24000, collecte:2000, totalComm:2125, statut:'En attente', deals:[] },
-    'Mars 2026':    { contracte:0,     collecte:0,    totalComm:1625, statut:'En attente', deals:[] },
-  },
-  team: {
-    week: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:33020, collecte:3342,  calls:23, lives:20, offres:14, closes:6, showup:0.87, txOffre:0.70,  txTransfoShow:0.30,  txTransfoOffre:0.429, caCall:1435.7 },
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
-    ],
-    month: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:48469, collecte:4686, calls:56, lives:33, offres:17, closes:9, showup:0.589, txOffre:0.515, txTransfoShow:0.273, txTransfoOffre:0.529, caCall:721.3 },
-      { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
-    ],
-  },
-
-  // Recalcule toutes les métriques depuis _raw
-  compute() {
-    const rc = DB._raw.closing;
-    const rs = DB._raw.setting;
-    const pc = PROJECTIONS.closing;
-    const ps = PROJECTIONS.setting;
-
-    const sumC  = k => ALL_WEEKS.reduce((t,w) => t + ((rc[w]||{})[k]||0), 0);
-    const sumS  = k => ALL_WEEKS.reduce((t,w) => t + ((rs[w]||{})[k]||0), 0);
-    const projC = k => ALL_WEEKS.reduce((t,w) => t + ((pc[w]||{})[k]||0), 0);
-    const projS = k => ALL_WEEKS.reduce((t,w) => t + ((ps[w]||{})[k]||0), 0);
-
-    const ca=sumC('calls'), la=sumC('lives'), oa=sumC('offres'), cla=sumC('closes');
-    const cta=sumC('contracte'), cola=sumC('collecte');
-    const cp=projC('calls'), lp=projC('lives'), op=projC('offres'), clp=projC('closes');
-    const ctp=projC('contracte'), colp=projC('collecte');
-
-    DB.closing = {
-      mois: {
-        calls:     {a:ca,  p:cp  },
-        lives:     {a:la,  p:lp  },
-        offres:    {a:oa,  p:op  },
-        closes:    {a:cla, p:clp },
-        hc:        {a:sumC('hc'), p:clp},
-        fu:        {a:sumC('fu'), p:0  },
-        contracte: {a:cta, p:ctp },
-        collecte:  {a:cola,p:colp},
-        livesP:  {a:ca>0  ? la/ca   : 0, p:pc.livesP  },
-        offresP: {a:la>0  ? oa/la   : 0, p:pc.offresP },
-        engP:    {a:oa>0  ? cla/oa  : 0, p:pc.engP    },
-        cOffP:   {a:oa>0  ? cla/oa  : 0, p:pc.cOffP   },
-        cCallP:  {a:ca>0  ? cla/ca  : 0, p:pc.cCallP  },
-        cashLive:{a:la>0  ? cta/la  : 0, p:pc.cashLive},
-        atteinte: ctp>0 ? cta/ctp : 0,
-        delta:    Math.max(0, ctp-cta),
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rc[w]).map(w => [w, DB._cw(w)])),
-    };
-
-    const sca=sumS('calls'), da=sumS('decroches'), pa=sumS('propRdv');
-    const sa=sumS('sets'), pra=sumS('presents'), sca2=sumS('closes');
-
-    DB.setting = {
-      mois: {
-        leads:     {a:sumS('leads'),  p:projS('leads')    },
-        calls:     {a:sca,            p:projS('calls')    },
-        decroches: {a:da,             p:projS('decroches')},
-        propRdv:   {a:pa,             p:projS('propRdv')  },
-        sets:      {a:sa,             p:projS('sets')     },
-        presents:  {a:pra,            p:projS('presents') },
-        closes:    {a:sca2,           p:projS('closes')   },
-        decrochesP:{a:sca>0?da/sca:0,  p:ps.decrochesP },
-        engP:      {a:da>0 ?pa/da:0,    p:ps.engP       },
-        setP:      {a:pa>0 ?sa/pa:0,    p:ps.setP       },
-        showupP:   {a:sa>0 ?pra/sa:0,   p:ps.showupP    },
-        cCallP:    {a:sca>0?sca2/sca:0, p:ps.cCallP     },
-      },
-      ...Object.fromEntries(ALL_WEEKS.filter(w => rs[w]).map(w => [w, DB._sw(w)])),
-    };
-
-    // Sync deals dans commissions
-    try {
-      const cmk = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-      if (DB.commissions[cmk]) DB.commissions[cmk].deals = DB._raw.deals;
-    } catch(e) {}
-  },
-
-  _cw(w) {
-    const d=DB._raw.closing[w]||{}, p=PROJECTIONS.closing[w]||PROJECTIONS.closing.s1||{};
-    return {
-      calls:{a:d.calls||0,p:p.calls||0}, lives:{a:d.lives||0,p:p.lives||0},
-      offres:{a:d.offres||0,p:p.offres||0}, closes:{a:d.closes||0,p:p.closes||0},
-      hc:{a:d.hc||0,p:p.closes||0}, fu:{a:d.fu||0,p:0},
-      contracte:{a:d.contracte||0,p:p.contracte||0}, collecte:{a:d.collecte||0,p:p.collecte||0},
-    };
-  },
-  _sw(w) {
-    const d=DB._raw.setting[w]||{}, p=PROJECTIONS.setting[w]||PROJECTIONS.setting.s1||{};
-    return {
-      leads:{a:d.leads||0,p:p.leads||0}, calls:{a:d.calls||0,p:p.calls||0},
-      decroches:{a:d.decroches||0,p:p.decroches||0}, propRdv:{a:d.propRdv||0,p:p.propRdv||0},
-      sets:{a:d.sets||0,p:p.sets||0}, presents:{a:d.presents||0,p:p.presents||0},
-      closes:{a:d.closes||0,p:p.closes||0},
-    };
-  },
-};
-
-DB.compute();
-
-/* ═══════════════════════════════════════════════════════════
-   FIREBASE — couche temps réel
-   Initialisé après que firebase SDK soit chargé + auth ready
-═══════════════════════════════════════════════════════════ */
-const Fire = {
-  db:  null,
-  uid: null,
-  _unsubs: [],
-
-  init(firestore, uid) {
-    Fire.db  = firestore;
-    Fire.uid = uid;
-  },
-
-  _key(label) {
-    const p = label.split(' ');
-    const m = DB.months.indexOf(p[0]);
-    return `${p[1]}-${String(m+1).padStart(2,'0')}`;
-  },
-
-  // Écoute en temps réel les données d'un user pour un mois
-  watchUser(userId, monthLabel, callback) {
-    if (!Fire.db) return () => {};
-    const ref = Fire.db
-      .collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const unsub = ref.onSnapshot(snap => callback(snap.exists ? snap.data() : null));
-    Fire._unsubs.push(unsub);
-    return unsub;
-  },
-
-  // Sauvegarde une semaine de closing
-  async saveClosing(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ closing: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde une semaine de setting
-  async saveSetting(userId, monthLabel, week, data) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    await ref.set({ setting: { [week]: data } }, { merge: true });
-  },
-
-  // Sauvegarde un deal (append)
-  async saveDeal(userId, monthLabel, deal) {
-    if (!Fire.db) throw new Error('Firebase non init');
-    const ref = Fire.db.collection('saisies').doc(userId)
-      .collection('mois').doc(Fire._key(monthLabel));
-    const snap = await ref.get();
-    const deals = snap.exists ? (snap.data().deals || []) : [];
-    deals.push({ ...deal, _ts: Date.now() });
-    await ref.set({ deals }, { merge: true });
-  },
-
-  // Applique un snapshot Firestore dans DB puis recalcule
-  apply(data) {
-    if (!data) return;
-    if (data.closing) ALL_WEEKS.forEach(w => {
-      if (data.closing[w]) Object.assign(DB._raw.closing[w]||(DB._raw.closing[w]={}), data.closing[w]);
-    });
-    if (data.setting) ALL_WEEKS.forEach(w => {
-      if (data.setting[w]) Object.assign(DB._raw.setting[w]||(DB._raw.setting[w]={}), data.setting[w]);
-    });
-    if (data.deals) DB._raw.deals = data.deals;
-    DB.compute();
-    document.dispatchEvent(new CustomEvent('db:updated'));
-  },
-
-  stop() { Fire._unsubs.forEach(u => u()); Fire._unsubs = []; },
-};
-
-/* ═══════════════════════════════════════════════════════════
-   UTILITIES
-═══════════════════════════════════════════════════════════ */
-const U = {
-  euro:  v => v == null ? '—' : '€\u202f' + Number(v).toLocaleString('fr-FR'),
-  pct:   v => v == null ? '—' : (v * 100).toFixed(1) + '%',
-  num:   v => v == null ? '—' : Number(v).toLocaleString('fr-FR'),
-  pp:  (a, p) => p > 0 ? Math.min((a / p) * 100, 200) : 0,
-  ppv: (a, p) => p > 0 ? ((a / p) * 100).toFixed(0) + '%' : '—',
-  cb:  (a, p) => { const r = p > 0 ? a / p : 0; return r >= 1 ? '#34d399' : r >= 0.65 ? '#f59e0b' : '#ef4444'; },
-  g:   id => document.getElementById(id),
-  getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
-  getCurrentUser:  () => ({
-    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || 'guillaume',
-    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Guillaume',
-    role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
-  }),
-
-  progRow: (label, a, p, isEuro = false) => {
-    const col = U.cb(a, p);
-    return `<div class="pr">
-      <div class="pr-l">${label}</div>
-      <div class="pr-track"><div class="pr-fill" style="width:${Math.min(U.pp(a,p),100)}%;background:${col}"></div></div>
-      <div class="pr-val">${isEuro ? `${U.euro(a)} / ${U.euro(p)}` : `${a} / ${p}`}</div>
-      <div class="pr-pct" style="color:${col}">${U.ppv(a,p)}</div>
-    </div>`;
-  },
-
-  kpiCard: ({ label, val, sub, rawA, proj, color='#ef4444', pct:fp }) => {
-    const pc = fp!=null ? fp : (proj!=null ? U.pp(rawA??0, proj) : null);
-    return `<div class="kpi" style="--kc:${color}">
-      <div class="kpi-label">${label}</div>
-      <div class="kpi-value">${val}</div>
-      ${sub ? `<div class="kpi-sub">${sub}</div>` : ''}
-      ${pc!=null ? `<div class="kpi-prog">
-        <div class="kpi-prog-row"><span>Atteinte</span><span>${pc.toFixed(0)}%</span></div>
-        <div class="kpi-prog-track"><div class="kpi-prog-fill" style="width:${Math.min(pc,100)}%;background:${color}"></div></div>
-      </div>` : ''}
-    </div>`;
-  },
-
-  funnelStep: (label, val, max, isFirst=false, isEuro=false) => {
-    const ratio = max > 0 ? val / max : 0;
-    return `<div class="fs">
-      <div class="fs-label">${label}</div>
-      <div class="fs-track"><div class="fs-fill" style="width:${Math.min(ratio*100,100)}%"></div></div>
-      <div class="fs-val">${isEuro ? U.euro(val) : val}</div>
-      <div class="fs-rate">${!isFirst ? U.pct(ratio) : ''}</div>
-    </div>`;
-  },
-
-  weekCard: (label, mainVal, mainLabel, minis, isCurrent, dateRange) => `
-    <div class="wc${isCurrent?' wc-active':''}">
-      <div class="wc-label">${label}</div>
-      ${dateRange ? `<div class="wc-dates">${dateRange}</div>` : ''}
-      <div class="wc-main">${mainVal}</div>
-      <div class="wc-sub">${mainLabel}</div>
-      <div class="wc-grid">${minis.map(m=>`
-        <div class="wc-mini">
-          <div class="wc-mini-v"${m.color?` style="color:${m.color}"`:''} >${m.val}</div>
-          <div class="wc-mini-l">${m.label}</div>
-        </div>`).join('')}</div>
-    </div>`,
-
-  barChart: (labels, actuals, projs, unit='') => {
-    const mx = Math.max(...actuals, ...projs, 1);
-    return `<div class="chart-legend">
-        <span class="cl-dot cl-real"></span>Réel
-        <span class="cl-dot cl-proj" style="margin-left:14px"></span>Projection
-      </div>
-      <div class="chart-bars">
-        ${labels.map((l,i)=>`<div class="chart-col">
-          <div class="chart-pair">
-            <div class="chart-bar bar-real" style="height:${(actuals[i]/mx*100).toFixed(1)}%" title="${actuals[i]}${unit}"></div>
-            <div class="chart-bar bar-proj" style="height:${(projs[i]/mx*100).toFixed(1)}%" title="Proj:${projs[i]}${unit}"></div>
-          </div>
-          <div class="chart-lbl">${l}</div>
-        </div>`).join('')}
-      </div>`;
-  },
-
-  toast: (msg, type='success') => {
-    let t = document.getElementById('_toast');
-    if (!t) { t=document.createElement('div'); t.id='_toast'; document.body.appendChild(t); }
-    const s = { success:'background:#1a2e1a;border:1px solid rgba(52,211,153,.3);color:#6ee7b7', error:'background:#2e1a1a;border:1px solid rgba(239,68,68,.3);color:#fca5a5', info:'background:#1a1a2e;border:1px solid rgba(96,165,250,.3);color:#93c5fd' };
-    t.style.cssText = `position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(0);font-size:12px;font-weight:600;padding:9px 18px;border-radius:10px;z-index:9999;opacity:1;transition:all .28s;white-space:nowrap;font-family:var(--font-b);${s[type]||s.success}`;
-    t.textContent = msg;
-    clearTimeout(t._t);
-    t._t = setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateX(-50%) translateY(20px)'; }, 2800);
-  },
-};
-
-
-/* ═══════════════════════════════════════════════════════════
-   SEMAINES DU MOIS
-   Avant Mars 2026 : semaines lun→dim classiques (peuvent déborder)
-   À partir de Mars 2026 : semaines strictement dans le mois
-     - Segments ≤ 3 jours fusionnés avec la semaine adjacente
-═══════════════════════════════════════════════════════════ */
-function getMonthWeeks(monthLabel) {
-  const MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                     'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-  const parts = monthLabel.split(' ');
-  const month = MONTHS_FR.indexOf(parts[0]);
-  const year  = parseInt(parts[1]);
-  if (month === -1 || isNaN(year)) return [];
-
-  const pad = n => String(n).padStart(2,'0');
-  function fmt(d) { return pad(d.getDate()) + '/' + pad(d.getMonth()+1); }
-  function fmtShort(d) {
-    const M = ['jan','fév','mar','avr','mai','juin','juil','août','sep','oct','nov','déc'];
-    return d.getDate() + ' ' + M[d.getMonth()];
-  }
-  function dayCount(a, b) { return Math.round((b - a) / 86400000) + 1; }
-
-  /* ── Ancien mode (avant Mars 2026) : semaines lun→dim, débordement OK ── */
-  if (year < 2026 || (year === 2026 && month < 2)) {
-    const firstOfMonth = new Date(year, month, 1);
-    const dayOfWeek = firstOfMonth.getDay();
-    const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    let monday = new Date(year, month, 1 + daysToMonday);
-    const weeks = [];
-    while (true) {
-      const sunday = new Date(monday.getTime() + 6 * 86400000);
-      if (monday.getMonth() === month || sunday.getMonth() === month) {
-        weeks.push({
-          id: 's' + (weeks.length + 1), label: 'S' + (weeks.length + 1),
-          start: new Date(monday), end: new Date(sunday),
-          range: fmt(monday) + ' \u2192 ' + fmt(sunday),
-          short: fmtShort(monday) + ' \u2013 ' + fmtShort(sunday),
-          tab:   fmt(monday) + '\u2192' + fmt(sunday),
-        });
-      }
-      monday = new Date(monday.getTime() + 7 * 86400000);
-      if (monday.getMonth() !== month && monday.getMonth() !== (month === 0 ? 11 : month - 1)) {
-        if (monday.getMonth() !== month) break;
-      }
-      if (monday.getFullYear() > year + 1) break;
-      if (weeks.length >= 6) break;
-    }
-    return weeks;
-  }
-
-  /* ── Nouveau mode (Mars 2026+) : semaines dans le mois, fusion si ≤ 3j ── */
-  const lastDay = new Date(year, month + 1, 0);
-  const segs    = [];
-  let cursor    = new Date(year, month, 1);
-
-  while (cursor <= lastDay) {
-    const dow = cursor.getDay();
-    let end;
-    if (dow === 1) { end = new Date(cursor.getTime() + 6 * 86400000); }
-    else { end = new Date(cursor.getTime() + (dow === 0 ? 0 : 7 - dow) * 86400000); }
-    if (end > lastDay) end = new Date(lastDay);
-    segs.push({ start: new Date(cursor), end: new Date(end) });
-    cursor = new Date(end.getTime() + 86400000);
-  }
-
-  // Fusion début si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[0].start, segs[0].end) <= 3) {
-    segs[1].start = segs[0].start;
-    segs.shift();
-  }
-  // Fusion fin si ≤ 3 jours
-  if (segs.length >= 2 && dayCount(segs[segs.length-1].start, segs[segs.length-1].end) <= 3) {
-    segs[segs.length-2].end = segs[segs.length-1].end;
-    segs.pop();
-  }
-
-  return segs.map((s, i) => ({
-    id:    's' + (i + 1),
-    label: 'S' + (i + 1),
-    start: s.start,
-    end:   s.end,
-    range: fmt(s.start) + ' \u2192 ' + fmt(s.end),
-    short: fmtShort(s.start) + ' \u2013 ' + fmtShort(s.end),
-    tab:   fmt(s.start) + '\u2192' + fmt(s.end),
-  }));
-}
-
-window.DB=DB; window.U=U; window.Fire=Fire; window.PROJECTIONS=PROJECTIONS;
-window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
-
-/* === end sales-data.js === */
-</script>
-<script src="nav.js"></script>
-<script>(function(){var r=localStorage.getItem('ambitio_role');if(r==='coach')window.location.href='coaching.html';if(!r)window.location.href='login.html';})();</script>
-<style>
-
-/* ── Vue liste commerciaux ── */
-.members-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-top: 8px;
-}
-.member-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 24px;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-  overflow: hidden;
-}
-.member-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  background: var(--mc, #ef4444);
-  opacity: 0.8;
-}
-.member-card:hover {
-  border-color: var(--mc, #ef4444);
-  background: var(--bg3);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-}
-.mc-avatar {
-  width: 52px; height: 52px;
-  border-radius: 14px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px; font-weight: 800; color: #fff;
-  margin-bottom: 14px;
-  font-family: var(--font-d);
-}
-.mc-name { font-size: 20px; font-weight: 800; font-family: var(--font-d); margin-bottom: 3px; }
-.mc-role { font-size: 11px; color: var(--muted); margin-bottom: 16px; }
-.mc-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
-.mc-stat { background: var(--bg3); border-radius: 9px; padding: 9px 10px; }
-.mc-stat-v { font-size: 18px; font-weight: 700; font-family: var(--font-d); }
-.mc-stat-l { font-size: 9px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
-.mc-arrow {
-  position: absolute; top: 20px; right: 20px;
-  width: 32px; height: 32px; border-radius: 9px;
-  background: rgba(255,255,255,0.06);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; color: var(--muted);
-  transition: all 0.15s;
-}
-.member-card:hover .mc-arrow { background: rgba(255,255,255,0.12); color: var(--text); }
-
-/* ── Vue fiche individuelle ── */
-#view-fiche { display: none; }
-
-.fiche-header {
-  display: flex; align-items: center; gap: 16px;
-  margin-bottom: 22px;
-}
-.fiche-back {
-  display: flex; align-items: center; gap: 7px;
-  padding: 7px 14px; border-radius: 9px;
-  background: var(--bg3); border: 1px solid var(--border);
-  cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 600;
-  transition: all 0.15s;
-}
-.fiche-back:hover { border-color: var(--border2); color: var(--text); }
-.fiche-av {
-  width: 44px; height: 44px; border-radius: 12px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 18px; font-weight: 800; color: #fff; font-family: var(--font-d);
-}
-.fiche-name { font-size: 22px; font-weight: 800; font-family: var(--font-d); }
-.fiche-role { font-size: 11px; color: var(--muted); margin-top: 1px; }
-
-/* ── Semaine tabs ── */
-.week-tabs-row {
-  display: flex; gap: 8px; margin-bottom: 16px;
-  align-items: center; flex-wrap: wrap;
-}
-.wtab {
-  padding: 6px 14px; border-radius: 9px; font-size: 12px; font-weight: 600;
-  cursor: pointer; border: 1px solid var(--border); background: var(--bg3);
-  color: var(--muted); transition: all 0.15s; user-select: none;
-}
-.wtab:hover { color: var(--text); border-color: var(--border2); }
-.wtab.active {
-  background: rgba(239,68,68,0.1);
-  border-color: rgba(239,68,68,0.35);
-  color: #fff;
-}
-.wtab.mois { background: var(--bg4); border-color: var(--border2); color: var(--text); }
-.wtab.mois.active { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.5); }
-
-/* ── Saisie semaine ── */
-.saisie-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.saisie-bloc {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 14px; padding: 18px;
-}
-.saisie-bloc-title {
-  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px;
-  color: var(--muted); margin-bottom: 14px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.saisie-field { margin-bottom: 10px; }
-.saisie-field label {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 10px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.6px; color: var(--muted); margin-bottom: 4px;
-}
-.saisie-field label .proj-tag {
-  font-size: 9px; font-weight: 500; color: var(--muted2);
-  font-family: var(--font-m); text-transform: none; letter-spacing: 0;
-}
-.saisie-input {
-  width: 100%; padding: 8px 12px;
-  background: rgba(255,255,255,0.04);
-  border: 1.5px solid rgba(255,255,255,0.07);
-  border-radius: 9px; color: var(--text);
-  font-family: var(--font-m); font-size: 14px; font-weight: 500;
-  outline: none; transition: border-color 0.15s, background 0.15s;
-}
-.saisie-input:focus { border-color: var(--red2); background: rgba(239,68,68,0.04); }
-.saisie-input.filled { border-color: rgba(52,211,153,0.3); }
-.saisie-input.above { border-color: rgba(52,211,153,0.5); }
-.saisie-input.below { border-color: rgba(239,68,68,0.4); }
-
-/* ── Reporting calculé ── */
-.reporting-grid {
-  display: grid;
-  grid-template-columns: repeat(4,1fr);
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.rep-card {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
-  padding: 13px 14px;
-}
-.rep-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); margin-bottom: 6px; }
-.rep-value { font-size: 20px; font-weight: 700; font-family: var(--font-d); }
-.rep-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
-.rep-delta { font-size: 10px; margin-top: 4px; font-weight: 600; }
-.rep-delta.good { color: var(--green); }
-.rep-delta.warn { color: var(--gold); }
-.rep-delta.bad  { color: var(--red2); }
-
-/* ── Taux calculés ── */
-.rates-table {
-  width: 100%; border-collapse: collapse;
-}
-.rates-table th {
-  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
-  color: var(--muted); padding: 6px 12px; border-bottom: 1px solid var(--border);
-  text-align: left;
-}
-.rates-table td {
-  padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,0.04);
-  font-size: 12px;
-}
-.rates-table tr:last-child td { border-bottom: none; }
-.rate-bar-cell { width: 160px; }
-.rate-bar-wrap { height: 5px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
-.rate-bar-fill { height: 100%; border-radius: 99px; transition: width 0.8s ease; }
-
-/* ── Save button row ── */
-.save-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 0;
-}
-.save-status { font-size: 11px; color: var(--muted); }
-
-@media(max-width:900px) {
-  .members-grid { grid-template-columns: 1fr; }
-  .saisie-grid  { grid-template-columns: 1fr; }
-  .reporting-grid { grid-template-columns: repeat(2,1fr); }
-}
-
-/* ── Week report sections ── */
-.week-reports { display: flex; flex-direction: column; gap: 12px; }
-
-.week-report-section {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  overflow: hidden;
-  transition: border-color 0.2s;
-}
-.week-report-section:hover { border-color: var(--border2); }
-.week-empty { opacity: 0.55; }
-.week-empty:hover { opacity: 0.8; }
-
-.wrs-header {
-  display: flex; align-items: center; gap: 16px;
-  padding: 16px 18px;
-  cursor: pointer;
-  background: var(--bg3);
-  border-bottom: 1px solid var(--border);
-  transition: background 0.15s;
-}
-.wrs-header:hover { background: var(--bg4); }
-
-.wrs-left {
-  display: flex; align-items: center; gap: 12px;
-  flex-shrink: 0;
-}
-.wrs-num {
-  width: 32px; height: 32px; border-radius: 9px;
-  background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 700; color: var(--red3);
-  flex-shrink: 0;
-}
-.wrs-range { font-size: 13px; font-weight: 600; letter-spacing: -0.2px; }
-.wrs-short { font-size: 11px; color: var(--muted); margin-top: 1px; font-family: var(--font-m); }
-
-.wrs-summary {
-  display: flex; align-items: center; gap: 6px;
-  margin-left: auto; flex-wrap: wrap;
-}
-.wrs-pill {
-  display: flex; align-items: baseline; gap: 4px;
-  padding: 5px 10px; border-radius: 8px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
-}
-.wrs-pill-v { font-size: 14px; font-weight: 700; font-family: var(--font-m); letter-spacing: -0.4px; }
-.wrs-pill-l { font-size: 10px; color: var(--muted); }
-
-.wrs-edit {
-  font-size: 11px; font-weight: 600; color: var(--muted);
-  padding: 5px 10px; border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.03);
-  white-space: nowrap; flex-shrink: 0;
-  transition: all 0.15s;
-}
-.wrs-header:hover .wrs-edit { color: var(--text); border-color: var(--border2); }
-
-.wrs-body {
-  padding: 16px 18px;
-  display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 20px;
-}
-
-.wrs-kpis {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-.wrs-kpi {
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 11px; padding: 12px 13px;
-}
-.wrs-kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
-.wrs-kpi-val   { font-size: 22px; font-weight: 700; letter-spacing: -0.7px; line-height: 1; }
-.wrs-kpi-proj  { font-size: 10px; color: var(--muted2); margin-top: 3px; font-family: var(--font-m); }
-
-.wrs-rates {
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 11px; padding: 14px 16px;
-  display: flex; flex-direction: column; gap: 0;
-}
-.wrs-rate-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-.wrs-rate-row:last-child { border-bottom: none; }
-.wrs-rate-label { font-size: 12px; color: var(--muted); flex: 1; font-weight: 500; }
-.wrs-rate-proj  { font-size: 10px; color: var(--muted2); font-family: var(--font-m); min-width: 55px; text-align: right; }
-
-.wrs-no-data {
-  padding: 16px 18px;
-  font-size: 13px; color: var(--muted);
-  font-style: italic;
-}
-
-@media(max-width: 1100px) {
-  .wrs-body { grid-template-columns: 1fr; }
-  .wrs-kpis { grid-template-columns: repeat(4,1fr); }
-  .wrs-summary { display: none; }
-}
-@media(max-width: 768px) {
-  .wrs-kpis { grid-template-columns: repeat(2,1fr); }
-/* ── Membres archivés (visibles admin seulement, marqués d'une pill) ── */
-.archived-pill{display:inline-block;margin-left:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);vertical-align:middle;text-transform:uppercase;letter-spacing:.3px}
-.member-archived-admin{opacity:.55;filter:grayscale(.65);transition:opacity .2s,filter .2s}
-.member-archived-admin:hover{opacity:.88;filter:grayscale(.25)}
-tr.member-archived-admin td{opacity:.55;filter:grayscale(.65)}
-tr.member-archived-admin:hover td{opacity:.88;filter:grayscale(.25)}
-</style>
+<script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
+<script src="alteore-flow.js"></script>
+<script src="nav.js" defer></script>
 </head>
-<body>
 
-<div class="topbar">
-  <div class="tb-logo">S</div>
-  <div class="tb-title">Ambitio <em>Sales</em></div>
-  <div class="tb-sep"></div>
-  <div class="tb-page">📞 Setting</div>
-  <div class="tb-right">
-    <div class="tb-month">
-      <button onclick="prevMonth()">&#9664;</button>
-      <span id="month-lbl">Février 2026</span>
-      <button onclick="nextMonth()">&#9654;</button>
+<body class="au-page">
+<div class="au-main" id="app">
+
+  <div class="au-head">
+    <div class="au-head-ico">📞</div>
+    <div>
+      <h1 class="au-title">Setting <span style="color:var(--muted);font-weight:500">· rapport journalier</span></h1>
+      <div class="au-sub">Set NB — appels Ringover, actions fiche Leads Live et RDV remontent automatiquement, jour après jour. RDV coaching &amp; clients exclus.</div>
     </div>
-    <div class="tb-user">
-      <div class="tb-av" id="tb-av">G</div>
-      <div><div class="tb-nm" id="tb-nm">Guillaume</div></div>
+    <div class="au-head-right">
+      <span class="au-badge-auto"><span class="dot"></span> Données automatiques</span>
     </div>
   </div>
+
+  <div class="au-toolbar">
+    <div class="au-mnav">
+      <button id="btnPrev" title="Mois précédent">‹</button>
+      <span class="au-mlabel" id="monthLbl">—</span>
+      <button id="btnNext" title="Mois suivant">›</button>
+    </div>
+    <button class="au-btn" id="btnToday">Ce mois-ci</button>
+    <div style="flex:1"></div>
+    <button class="au-btn ghost" id="btnLegacy" style="display:none">📜 Ancienne saisie hebdo</button>
+    <button class="au-btn" id="btnRefresh">⟳ Actualiser</button>
+  </div>
+
+  <div class="au-members" id="memberTabs"></div>
+
+  <div id="content"><div class="au-loading"><div class="au-spinner"></div>Chargement du rapport…</div></div>
+
 </div>
 
-<div class="page">
+<div id="auToast"></div>
 
-  <!-- ═══ VUE LISTE ═══ -->
-  <div id="view-liste">
-    <div class="page-header-row">
-      <div>
-        <div class="page-title">Setting — Équipe</div>
-        <div class="page-sub">Clique sur un commercial pour accéder à sa fiche</div>
-      </div>
+<!-- ── Modal correction manuelle par jour ── -->
+<div class="au-modal-bg" id="ovModal">
+  <div class="au-modal">
+    <h3 id="ovTitle">✎ Corriger la journée</h3>
+    <div class="hint">Les valeurs automatiques restent la référence — une correction ne s'applique qu'à ce jour et ce champ. Vider un champ = retour à l'auto. <span style="color:var(--gold)">●</span> = valeur corrigée.</div>
+    <div class="au-modal-grid" id="ovGrid"></div>
+    <div class="au-modal-f" style="margin-bottom:12px">
+      <label>Note (raison de la correction)</label>
+      <input type="text" id="ovNote" placeholder="optionnel"/>
     </div>
-
-    <div class="members-grid" id="members-grid"></div>
+    <div class="au-modal-actions">
+      <button class="au-btn" id="ovCancel">Annuler</button>
+      <button class="au-btn primary" id="ovSave">💾 Enregistrer</button>
+    </div>
   </div>
-
-  <!-- ═══ VUE FICHE INDIVIDUELLE ═══ -->
-  <div id="view-fiche">
-
-    <!-- Header fiche -->
-    <div class="fiche-header">
-      <button class="fiche-back" onclick="backToListe()">← Retour</button>
-      <div class="fiche-av" id="fiche-av">G</div>
-      <div>
-        <div class="fiche-name" id="fiche-name">Guillaume</div>
-        <div class="fiche-role" id="fiche-role">Setting</div>
-      </div>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
-        <span class="save-status" id="save-status"></span>
-        <button class="btn btn-primary" onclick="saveCurrentWeek()">💾 Sauvegarder</button>
-      </div>
-    </div>
-
-    <!-- Semaine tabs — générés dynamiquement avec vraies dates -->
-    <div class="week-tabs-row" id="week-tabs-row"></div>
-
-    <!-- Reporting mensuel (visible en mode Mois) -->
-    <div id="reporting-mois"></div>
-
-    <!-- Saisie semaine (visible en mode semaine) -->
-    <div id="saisie-week" style="display:none">
-      <div class="saisie-grid">
-        <!-- Bloc Activité -->
-        <div class="saisie-bloc">
-          <div class="saisie-bloc-title">
-            Activité
-            <span id="week-proj-hint" style="color:var(--muted2);font-size:9px"></span>
-          </div>
-
-          <div class="saisie-field">
-            <label>Temps d'appel (h) <span class="proj-tag" id="p-tempsAppel"></span></label>
-            <input class="saisie-input" type="number" step="0.5" id="f-tempsAppel" placeholder="0"/>
-          </div>
-          <div class="saisie-field">
-            <label>Total Leads <span class="proj-tag" id="p-leads"></span></label>
-            <input class="saisie-input" type="number" id="f-leads" placeholder="0"/>
-          </div>
-          <div class="saisie-field">
-            <label>Calls passés <span class="proj-tag" id="p-calls"></span></label>
-            <input class="saisie-input" type="number" id="f-calls" placeholder="0"/>
-          </div>
-          <div class="saisie-field">
-            <label>Décrochés <span class="proj-tag" id="p-decroches"></span></label>
-            <input class="saisie-input" type="number" id="f-decroches" placeholder="0"/>
-          </div>
-          <div class="saisie-field">
-            <label>Proposition RDV <span class="proj-tag" id="p-propRdv"></span></label>
-            <input class="saisie-input" type="number" id="f-propRdv" placeholder="0"/>
-          </div>
-        </div>
-
-        <!-- Bloc Résultats -->
-        <div class="saisie-bloc">
-          <div class="saisie-bloc-title">Résultats</div>
-
-          <div class="saisie-field">
-            <label>Nbr de Sets <span class="proj-tag" id="p-sets"></span></label>
-            <input class="saisie-input" type="number" id="f-sets" placeholder="0"/>
-          </div>
-          <div class="saisie-field">
-            <label>Prospects présents (show-up) <span class="proj-tag" id="p-presents"></span></label>
-            <input class="saisie-input" type="number" id="f-presents" placeholder="0"/>
-          </div>
-          <div class="saisie-field">
-            <label>Deposits <span class="proj-tag" id="p-deposits"></span></label>
-            <input class="saisie-input" type="number" id="f-deposits" placeholder="0"/>
-          </div>
-          <div class="saisie-field">
-            <label>Closes <span class="proj-tag" id="p-closes"></span></label>
-            <input class="saisie-input" type="number" id="f-closes" placeholder="0"/>
-          </div>
-          <div class="saisie-field">
-            <label>Collecté (€) <span class="proj-tag" id="p-collecte"></span></label>
-            <input class="saisie-input" type="number" id="f-collecte" placeholder="0"/>
-          </div>
-        </div>
-      </div>
-
-      <!-- Reporting calculé de la semaine -->
-      <div class="card">
-        <div class="card-header"><span class="card-title">Taux calculés — Semaine en cours</span></div>
-        <div id="rates-week"></div>
-      </div>
-    </div>
-
-  </div>
-
 </div>
 
 <script>
-/* ─── DONNÉES ─── */
-const MONTHS = DB.months;
-let _cm = (() => {
-  const s = (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026';
-  const p = s.split(' ');
-  return { month: MONTHS.indexOf(p[0]), year: parseInt(p[1]) || 2026 };
-})();
-function cmk() { return MONTHS[_cm.month] + ' ' + _cm.year; }
-function prevMonth() { _cm.month--; if(_cm.month<0){_cm.month=11;_cm.year--;} _saveM(); loadMonthFromFirebase().then(renderAll); }
-function nextMonth() { _cm.month++; if(_cm.month>11){_cm.month=0;_cm.year++;} _saveM(); loadMonthFromFirebase().then(renderAll); }
-function _saveM() { localStorage.setItem('sales_month', cmk()); document.getElementById('month-lbl').textContent = cmk(); }
+(function () {
+  'use strict';
+  var AF = window.AlteoreFlow;
+  var db = firebase.firestore();
+  var $ = function (s) { return document.querySelector(s); };
 
-/* ─── COMMERCIAUX ─── */
-const MEMBERS = [
-  {
-    uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke', role: 'Setting + Closing',
-    color: '#ef4444', type: 'setting',
-    data: {
-      'Janvier 2026':   { _total: { tempsAppel:0, leads:0, calls:225, decroches:51, propRdv:8,  sets:8,  presents:6,  deposits:0, closes:2, collecte:0 } },
-      'Février 2026': {
-        s1: { tempsAppel:5,   leads:133, calls:231, decroches:56, propRdv:13, sets:9,  presents:2, deposits:0, closes:0, collecte:0    },
-        s2: { tempsAppel:7,   leads:191, calls:324, decroches:54, propRdv:17, sets:11, presents:4, deposits:0, closes:2, collecte:1000 },
-        s3: { tempsAppel:3,   leads:178, calls:312, decroches:43, propRdv:24, sets:17, presents:7, deposits:0, closes:0, collecte:0    },
-        s4: { tempsAppel:3,   leads:49,  calls:16,  decroches:23, propRdv:7,  sets:4,  presents:7, deposits:0, closes:1, collecte:600  },
-        s5: { tempsAppel:0,   leads:0,   calls:0,   decroches:0,  propRdv:0,  sets:0,  presents:0, deposits:0, closes:0, collecte:0    },
-      }
-    }
-  },
-  {
-    uid: 'elodie', name: 'Elodie', surname: '', role: 'Setting',
-    color: '#60a5fa', type: 'setting',
-    data: {
-      'Décembre 2025':  { _total: { tempsAppel:0, leads:0, calls:81,  decroches:27, propRdv:15, sets:15, presents:4,  deposits:0, closes:0, collecte:0 } },
-      'Janvier 2026':   { _total: { tempsAppel:0, leads:0, calls:470, decroches:112,propRdv:64, sets:39, presents:17, deposits:0, closes:6, collecte:0 } },
-      'Février 2026': {
-        s1: { tempsAppel:9,  leads:33, calls:165, decroches:30, propRdv:10, sets:7,  presents:0, deposits:0, closes:0, collecte:0 },
-        s2: { tempsAppel:8,  leads:50, calls:162, decroches:20, propRdv:10, sets:8,  presents:2, deposits:0, closes:0, collecte:0 },
-        s3: { tempsAppel:0,  leads:56, calls:122, decroches:15, propRdv:13, sets:11, presents:5, deposits:0, closes:0, collecte:0 },
-        s4: { tempsAppel:0,  leads:22, calls:65,  decroches:7,  propRdv:3,  sets:2,  presents:2, deposits:0, closes:1, collecte:0 },
-        s5: { tempsAppel:0,  leads:0,  calls:0,   decroches:0,  propRdv:0,  sets:0,  presents:0, deposits:0, closes:0, collecte:0 },
-      }
-    }
-  },
-];
+  var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  var JOURS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+  var pad2 = function (n) { return String(n).padStart(2, '0'); };
 
-const PROJECTIONS_S = {
-  tempsAppel: 7, leads: 130, calls: 375, decroches: 45, propRdv: 10,
-  sets: 5, presents: 4, deposits: 0, closes: 4, collecte: 2000,
-};
-
-const FIELDS = [
-  { key:'tempsAppel', label:"Temps d'appel (h)" },
-  { key:'leads',      label:'Total Leads' },
-  { key:'calls',      label:'Calls passés' },
-  { key:'decroches',  label:'Décrochés' },
-  { key:'propRdv',    label:'Proposition RDV' },
-  { key:'sets',       label:'Nbr de Sets' },
-  { key:'presents',   label:'Prospects présents' },
-  { key:'deposits',   label:'Deposits' },
-  { key:'closes',     label:'Closes' },
-  { key:'collecte',   label:'Collecté (€)' },
-];
-
-/* ─── STATE ─── */
-let currentMember = null;
-let currentWeek   = 'mois';
-
-/* ─── LOAD / SAVE depuis localStorage ─── */
-function loadMemberData(uid) {
-  // Données hardcodées = source de vérité pour mois historiques
-  const member = MEMBERS.find(m => m.uid === uid);
-  const hardcoded = member && member.data[cmk()];
-  if (hardcoded && hardcoded._total) return hardcoded; // mois historique → ignorer localStorage
-  const key = `setting_${uid}_${cmk()}`;
-  try {
-    const saved = localStorage.getItem(key);
-    if (saved) return JSON.parse(saved);
-  } catch(e) {}
-  return null;
-}
-
-function saveMemberData(uid, weekData) {
-  const key = `setting_${uid}_${cmk()}`;
-  // Merge dans les données existantes
-  const member = MEMBERS.find(m => m.uid === uid);
-  if (!member.data[cmk()]) member.data[cmk()] = emptyMonth();
-  member.data[cmk()][currentWeek] = { ...weekData };
-  try {
-    localStorage.setItem(key, JSON.stringify(member.data[cmk()]));
-    // Notifier les autres modules
-    document.dispatchEvent(new CustomEvent('setting:saved', { detail: { uid, month: cmk() } }));
-  } catch(e) {}
-}
-
-function emptyMonth() {
-  const empty = { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 };
-  return { s1:{...empty}, s2:{...empty}, s3:{...empty}, s4:{...empty}, s5:{...empty}, s6:{...empty} };
-}
-
-/* ─── CALCULS ─── */
-function computeMonthTotals(monthData) {
-  const empty = { tempsAppel:0, leads:0, calls:0, decroches:0, propRdv:0, sets:0, presents:0, deposits:0, closes:0, collecte:0 };
-  // Données mensuelles historiques sans découpage hebdo
-  if (monthData._total) return { ...empty, ...monthData._total };
-  const t = { ...empty };
-  ALL_WEEKS.forEach(w => {
-    const d = monthData[w] || {};
-    Object.keys(t).forEach(k => { t[k] += (d[k] || 0); });
-  });
-  return t;
-}
-
-function computeRates(d) {
-  return {
-    appelUnique:  d.calls    > 0 ? d.leads    / d.calls    : 0,
-    decrochesPct: d.calls    > 0 ? d.decroches/ d.calls    : 0,
-    engagementPct:d.decroches> 0 ? d.propRdv  / d.decroches: 0,
-    setPct:       d.propRdv  > 0 ? d.sets     / d.propRdv  : 0,
-    showupPct:    d.sets     > 0 ? d.presents / d.sets     : 0,
-    closeCallsPct:d.presents > 0 ? d.closes   / d.presents : 0,
-    collecteBook: d.sets     > 0 ? d.collecte / d.sets     : 0,
-    collecteLive: d.presents > 0 ? d.collecte / d.presents : 0,
-  };
-}
-
-const RATE_DEFS = [
-  { key:'appelUnique',   label:"Appel unique %",      proj:0.347, isEuro:false },
-  { key:'decrochesPct',  label:"Décrochés %",          proj:0.12,  isEuro:false },
-  { key:'engagementPct', label:"Engagement %",         proj:0.222, isEuro:false },
-  { key:'setPct',        label:"Set %",                proj:0.5,   isEuro:false },
-  { key:'showupPct',     label:"Show-Up %",            proj:0.8,   isEuro:false },
-  { key:'closeCallsPct', label:"Close / Calls Book %", proj:null,  isEuro:false },
-  { key:'collecteBook',  label:"Collecté / Call Book", proj:400,   isEuro:true  },
-  { key:'collecteLive',  label:"Collecté / Call Live", proj:500,   isEuro:true  },
-];
-
-/* ─── RENDER LISTE ─── */
-function renderListe() {
-  document.getElementById('members-grid').innerHTML = _visibleMembers().map(m => {
-    // Charger données locales
-    const hardcoded = m.data[cmk()];
-    const saved = (hardcoded && hardcoded._total) ? null : loadMemberData(m.uid);
-    const monthData = saved || hardcoded || emptyMonth();
-    const tot = computeMonthTotals(monthData);
-    const rates = computeRates(tot);
-
-    return `
-      <div class="member-card${m.archived ? ' member-archived-admin' : ''}" style="--mc:${m.color}${m.archived ? ';opacity:.5;filter:grayscale(.65)' : ''}" onclick="openFiche('${m.uid}')">
-        <div class="mc-arrow">→</div>
-        <div class="mc-avatar" style="background:linear-gradient(135deg,${m.color}88,${m.color})">${m.name[0]}</div>
-        <div class="mc-name">${m.name} ${m.surname}${m.archived ? ' <span class="archived-pill">📦 Archivé</span>' : ''}</div>
-        <div class="mc-role">${m.role}</div>
-        <div class="mc-stats">
-          <div class="mc-stat">
-            <div class="mc-stat-v" style="color:${m.color}">${tot.calls}</div>
-            <div class="mc-stat-l">Calls</div>
-          </div>
-          <div class="mc-stat">
-            <div class="mc-stat-v" style="color:${m.color}">${tot.sets}</div>
-            <div class="mc-stat-l">Sets</div>
-          </div>
-          <div class="mc-stat">
-            <div class="mc-stat-v" style="color:${m.color}">${tot.closes}</div>
-            <div class="mc-stat-l">Closes</div>
-          </div>
-          <div class="mc-stat">
-            <div class="mc-stat-v" style="color:${m.color}">${tot.presents}</div>
-            <div class="mc-stat-l">Show-up</div>
-          </div>
-          <div class="mc-stat">
-            <div class="mc-stat-v" style="color:${m.color}">${(rates.showupPct*100).toFixed(0)}%</div>
-            <div class="mc-stat-l">Tx Show-up</div>
-          </div>
-          <div class="mc-stat">
-            <div class="mc-stat-v" style="color:${m.color}">${U.euro(tot.collecte)}</div>
-            <div class="mc-stat-l">Collecté</div>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-/* ─── OPEN FICHE ─── */
-function openFiche(uid) {
-  currentMember = MEMBERS.find(m => m.uid === uid);
-  currentWeek = 'mois';
-
-  // Load saved data — historique: priorité aux données hardcodées
-  const hardcoded = currentMember.data[cmk()];
-  if (hardcoded && hardcoded._total) {
-    // Mois historique — données hardcodées, on ne touche à rien
-  } else {
-    const saved = loadMemberData(uid);
-    if (saved) currentMember.data[cmk()] = saved;
-    else if (!hardcoded) currentMember.data[cmk()] = emptyMonth();
-  }
-
-  // UI
-  document.getElementById('view-liste').style.display = 'none';
-  document.getElementById('view-fiche').style.display = 'block';
-  document.getElementById('fiche-av').textContent  = currentMember.name[0];
-  document.getElementById('fiche-av').style.background = `linear-gradient(135deg,${currentMember.color}88,${currentMember.color})`;
-  document.getElementById('fiche-name').textContent = currentMember.name + (currentMember.surname ? ' ' + currentMember.surname : '');
-  document.getElementById('fiche-role').textContent = currentMember.role + ' · ' + cmk();
-
-  renderFiche();
-}
-
-function backToListe() {
-  document.getElementById('view-liste').style.display = 'block';
-  document.getElementById('view-fiche').style.display = 'none';
-  currentMember = null;
-  renderListe();
-}
-
-/* ─── RENDER FICHE ─── */
-function renderFiche() {
-  const md = currentMember && currentMember.data[cmk()];
-  const isHistorical = !!(md && md._total);
-  if (isHistorical && currentWeek !== 'mois') currentWeek = 'mois';
-  buildWeekTabs(isHistorical);
-
-  if (currentWeek === 'mois') {
-    document.getElementById('reporting-mois').style.display = 'block';
-    document.getElementById('saisie-week').style.display    = 'none';
-    renderReportingMois();
-  } else {
-    document.getElementById('reporting-mois').style.display = 'none';
-    document.getElementById('saisie-week').style.display    = 'block';
-    renderSaisieWeek();
-  }
-}
-
-/* ─── REPORTING MOIS ─── */
-function renderReportingMois() {
-  const monthData = currentMember.data[cmk()] || emptyMonth();
-  const tot   = computeMonthTotals(monthData);
-  const nWeeks = getMonthWeeks(cmk()).length || 4;
-  const proj  = Object.keys(PROJECTIONS_S).reduce((acc, k) => {
-    acc[k] = PROJECTIONS_S[k] * nWeeks; return acc;
-  }, {});
-  const rates     = computeRates(tot);
-  const allWeeks  = getMonthWeeks(cmk());
-  const color     = currentMember.color;
-  const isHistorical = !!(monthData._total);
-
-  /* ── Helper: mini barre progress ── */
-  function miniBar(a, p) {
-    const pct = p > 0 ? Math.min(a/p*100, 100) : 0;
-    const col = pct >= 100 ? '#34d399' : pct >= 65 ? '#f59e0b' : '#ef4444';
-    return `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
-      <div style="flex:1;height:3px;background:rgba(255,255,255,0.07);border-radius:99px;overflow:hidden">
-        <div style="width:${pct}%;height:100%;background:${col};border-radius:99px"></div>
-      </div>
-      <span style="font-size:10px;font-family:var(--font-m);color:${col};min-width:30px">${p>0?pct.toFixed(0)+'%':'—'}</span>
-    </div>`;
-  }
-
-  /* ── Helper: taux pill ── */
-  function pill(val, proj, isEuro) {
-    const pct = proj ? Math.min(val/proj*100,200) : 0;
-    const col = pct>=100?'#34d399':pct>=65?'#f59e0b':'#ef4444';
-    const v   = isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
-    return `<span style="font-weight:700;color:${col};font-family:var(--font-m)">${v}</span>`;
-  }
-
-  /* ── Résumé mensuel en haut ── */
-  const summaryKpis = [
-    { label:'Calls',       val:tot.calls,     proj:proj.calls,     color:'#60a5fa' },
-    { label:'Sets',        val:tot.sets,       proj:proj.sets,      color:color     },
-    { label:'Show-up',     val:tot.presents,   proj:proj.presents,  color:color     },
-    { label:'Closes',      val:tot.closes,     proj:proj.closes,    color:'#34d399' },
+  /* Champs du rapport (ordre des colonnes). type: auto source pour le hint. */
+  var COLS = [
+    { key: 'tempsAppelSec', label: '⏱ Temps',   grp: 'tel', fmt: 'dur',  ovKey: 'tempsAppelMin', ovLabel: "Temps d'appel (min)" },
+    { key: 'calls',         label: 'Calls',      grp: 'tel', fmt: 'n' },
+    { key: 'decroches',     label: 'Décro.',     grp: 'tel', fmt: 'n' },
+    { key: 'leads',         label: 'Leads',      grp: 'act', fmt: 'n' },
+    { key: 'nrp1',          label: 'NRP1',       grp: 'act', fmt: 'n' },
+    { key: 'nrp2',          label: 'NRP2',       grp: 'act', fmt: 'n' },
+    { key: 'nrp3',          label: 'NRP3',       grp: 'act', fmt: 'n' },
+    { key: 'all_nrp',       label: 'AllNRP',     grp: 'act', fmt: 'n' },
+    { key: 'messagerie',    label: 'Msg.',       grp: 'act', fmt: 'n' },
+    { key: 'follow_up',     label: 'FU',         grp: 'act', fmt: 'n' },
+    { key: 'out',           label: 'Out',        grp: 'act', fmt: 'n', title: 'Faux numéro + pas intéressé + disqualifié + poubelle' },
+    { key: 'sets',          label: 'Sets',       grp: 'act', fmt: 'hot' },
+    { key: 'annulesNb',     label: 'Annulé',     grp: 'rdv', fmt: 'bad' },
+    { key: 'noshowNb',      label: 'No-show',    grp: 'rdv', fmt: 'bad' },
+    { key: 'presentsNb',    label: 'Présents',   grp: 'rdv', fmt: 'good' },
+    { key: 'closesNb',      label: 'Closes',     grp: 'rdv', fmt: 'good' },
+    { key: 'collecteNb',    label: 'Collecté',   grp: 'rdv', fmt: 'eur' }
   ];
 
-  /* ── Sections semaine ── */
-  const weekSections = allWeeks.map((wk, i) => {
-    const w  = wk.id;
-    const d  = monthData[w] || {};
-    const p  = PROJECTIONS_S;
-    const r  = computeRates(d);
-    const hasData = (d.calls||0) > 0 || (d.sets||0) > 0;
+  var S = {
+    y: 0, m: 0,             // mois affiché
+    members: [],            // setters affichés
+    slug: null,             // membre sélectionné
+    role: localStorage.getItem('ambitio_role') || 'sales',
+    typeMap: {},
+    data: null,             // { days: {day: {…}}, callsOk: bool }
+    overrides: {},
+    legacy: null,           // doc saisies/{slug}/mois/{key} si existant
+    legacyOpen: false,
+    loading: false
+  };
+  (function initMonth() {
+    var saved = localStorage.getItem('setting_v2_month');
+    var now = new Date();
+    if (saved && /^\d{4}-\d{2}$/.test(saved)) { S.y = +saved.slice(0, 4); S.m = +saved.slice(5, 7) - 1; }
+    else { S.y = now.getFullYear(); S.m = now.getMonth(); }
+  })();
 
-    const kpis = [
-      { label:"Tps d'appel", val:d.tempsAppel||0, proj:p.tempsAppel, unit:'h',  color:'#a78bfa' },
-      { label:'Leads',       val:d.leads||0,       proj:p.leads,      unit:'',   color:'#60a5fa' },
-      { label:'Calls',       val:d.calls||0,       proj:p.calls,      unit:'',   color:'#60a5fa' },
-      { label:'Décrochés',   val:d.decroches||0,   proj:p.decroches,  unit:'',   color:'#f59e0b' },
-      { label:'Prop. RDV',   val:d.propRdv||0,     proj:p.propRdv,    unit:'',   color:'#f59e0b' },
-      { label:'Sets',        val:d.sets||0,         proj:p.sets,       unit:'',   color:color     },
-      { label:'Show-up',     val:d.presents||0,     proj:p.presents,   unit:'',   color:color     },
-      { label:'Closes',      val:d.closes||0,       proj:p.closes,     unit:'',   color:'#34d399' },
+  function monthKey() { return S.y + '-' + pad2(S.m + 1); }
+  function daysInMonth() { return new Date(S.y, S.m + 1, 0).getDate(); }
+  function dayIso(d) { return S.y + '-' + pad2(S.m + 1) + '-' + pad2(d); }
+  function toast(msg, err) {
+    var t = $('#auToast'); t.textContent = msg; t.className = err ? 'err show' : 'show';
+    clearTimeout(window.__auTo); window.__auTo = setTimeout(function () { t.className = ''; }, 3200);
+  }
+  function fmtEuro(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR') + ' €'; }
+  function fmtPct(n) { return n == null ? '—' : (Math.round(n * 10) / 10).toLocaleString('fr-FR') + ' %'; }
+
+  /* ── Membres : setters (role setter / closer_setter) ── */
+  function computeMembers() {
+    var list = (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.slug; });
+    var setters = list.filter(function (m) { return m.role === 'setter' || m.role === 'closer_setter'; });
+    if (!setters.length) setters = list;
+    if (!setters.length) setters = [
+      { slug: 'elodie', shortName: 'Elodie', role: 'closer_setter', color: '#60a5fa', firebaseUid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', active: true },
+      { slug: 'guillaume', shortName: 'Guillaume', role: 'closer_setter', color: '#ef4444', firebaseUid: null, active: true }
     ];
-
-    return `
-      <div class="week-report-section${!hasData?' week-empty':''}">
-        <!-- En-tête semaine -->
-        <div class="wrs-header" onclick="setWeek('${w}')">
-          <div class="wrs-left">
-            <span class="wrs-num">S${i+1}</span>
-            <div>
-              <div class="wrs-range">${wk.range}</div>
-              <div class="wrs-short">${wk.short}</div>
-            </div>
-          </div>
-          <div class="wrs-summary">
-            <div class="wrs-pill"><span class="wrs-pill-v">${d.calls||0}</span><span class="wrs-pill-l">calls</span></div>
-            <div class="wrs-pill"><span class="wrs-pill-v" style="color:${color}">${d.sets||0}</span><span class="wrs-pill-l">sets</span></div>
-            <div class="wrs-pill"><span class="wrs-pill-v" style="color:${color}">${d.presents||0}</span><span class="wrs-pill-l">présents</span></div>
-            <div class="wrs-pill"><span class="wrs-pill-v" style="color:#34d399">${d.closes||0}</span><span class="wrs-pill-l">closes</span></div>
-            <div class="wrs-pill"><span class="wrs-pill-v" style="color:var(--gold)">${U.euro(d.collecte||0)}</span><span class="wrs-pill-l">collecté</span></div>
-          </div>
-          <div class="wrs-edit">✏️ Saisir</div>
-        </div>
-
-        ${hasData ? `
-        <!-- Détail KPIs -->
-        <div class="wrs-body">
-          <div class="wrs-kpis">
-            ${kpis.map(k => `
-              <div class="wrs-kpi">
-                <div class="wrs-kpi-label">${k.label}</div>
-                <div class="wrs-kpi-val" style="color:${k.color}">${k.val}${k.unit}</div>
-                <div class="wrs-kpi-proj">/ ${k.proj}${k.unit} proj</div>
-                ${miniBar(k.val, k.proj)}
-              </div>`).join('')}
-          </div>
-
-          <!-- Taux clés -->
-          <div class="wrs-rates">
-            <div class="wrs-rate-row">
-              <span class="wrs-rate-label">Décrochés %</span>
-              ${pill(r.decrochesPct, 0.12)}
-              <span class="wrs-rate-proj">proj 12%</span>
-            </div>
-            <div class="wrs-rate-row">
-              <span class="wrs-rate-label">Engagement %</span>
-              ${pill(r.engagementPct, 0.222)}
-              <span class="wrs-rate-proj">proj 22%</span>
-            </div>
-            <div class="wrs-rate-row">
-              <span class="wrs-rate-label">Set %</span>
-              ${pill(r.setPct, 0.5)}
-              <span class="wrs-rate-proj">proj 50%</span>
-            </div>
-            <div class="wrs-rate-row">
-              <span class="wrs-rate-label">Show-Up %</span>
-              ${pill(r.showupPct, 0.8)}
-              <span class="wrs-rate-proj">proj 80%</span>
-            </div>
-            <div class="wrs-rate-row">
-              <span class="wrs-rate-label">Close / Présent</span>
-              ${pill(r.closeCallsPct, null)}
-              <span class="wrs-rate-proj"></span>
-            </div>
-          </div>
-        </div>` : `
-        <div class="wrs-no-data">Aucune donnée — <span onclick="setWeek('${w}')" style="color:var(--red3);cursor:pointer;text-decoration:underline">saisir les données</span></div>
-        `}
-      </div>`;
-  }).join('');
-
-  document.getElementById('reporting-mois').innerHTML = `
-
-    <!-- ── Résumé mensuel ── -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
-      ${summaryKpis.map(k => {
-        const pct = k.proj > 0 ? (k.val/k.proj*100) : 0;
-        const col = pct >= 100 ? 'var(--green)' : pct >= 65 ? 'var(--gold)' : 'var(--red2)';
-        return `<div class="rep-card">
-          <div class="rep-label">${k.label}</div>
-          <div class="rep-value" style="color:${k.color}">${k.val}</div>
-          <div class="rep-sub">/ ${k.proj} projeté</div>
-          ${miniBar(k.val, k.proj)}
-        </div>`;
-      }).join('')}
-    </div>
-
-    <!-- ── Taux mois complet ── -->
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-header">
-        <span class="card-title">Taux de conversion — Mois complet</span>
-        <span style="font-size:11px;color:var(--muted)">${tot.calls} calls · ${tot.sets} sets · ${tot.presents} présents · ${tot.closes} closes</span>
-      </div>
-      <table class="rates-table">
-        <thead><tr><th>Métrique</th><th>Réel</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th></tr></thead>
-        <tbody>
-          ${RATE_DEFS.map(r => {
-            const val = rates[r.key];
-            const prj = r.proj;
-            const pct = prj ? Math.min(val/prj*100,200) : 0;
-            const col = pct>=100?'#34d399':pct>=65?'#f59e0b':'#ef4444';
-            const vd  = r.isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
-            const pd  = prj ? (r.isEuro ? U.euro(prj) : (prj*100).toFixed(1)+'%') : '—';
-            return `<tr>
-              <td style="font-weight:500;font-size:13px">${r.label}</td>
-              <td class="td-mono" style="font-size:14px;font-weight:700;color:${col}">${vd}</td>
-              <td class="td-mono" style="color:var(--muted)">${pd}</td>
-              <td class="rate-bar-cell">
-                <div style="display:flex;align-items:center;gap:8px">
-                  <div class="rate-bar-wrap" style="flex:1"><div class="rate-bar-fill" style="width:${Math.min(pct,100)}%;background:${col}"></div></div>
-                  <span style="font-size:11px;font-family:var(--font-m);color:${col};min-width:36px;text-align:right">${prj?pct.toFixed(0)+'%':'—'}</span>
-                </div>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-
-    <!-- ── Reporting semaine par semaine ── -->
-    ${isHistorical
-      ? `<div style="padding:20px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;color:var(--muted);font-size:13px;text-align:center">Données mensuelles globales — découpage hebdomadaire non disponible pour ce mois</div>`
-      : `<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:12px;letter-spacing:0.1px">Détail par semaine</div>
-    <div class="week-reports">
-      ${weekSections}
-    </div>`
-    }`;
-}
-
-/* ─── SAISIE SEMAINE ─── */
-function renderSaisieWeek() {
-  const monthData = currentMember.data[cmk()] || emptyMonth();
-  const d = monthData[currentWeek] || {};
-  const p = PROJECTIONS_S;
-
-  // Fill form
-  FIELDS.forEach(f => {
-    const input = document.getElementById('f-' + f.key);
-    const projEl = document.getElementById('p-' + f.key);
-    if (!input) return;
-    input.value = d[f.key] || '';
-    // Projection hint
-    if (projEl) projEl.textContent = 'Proj: ' + (f.key === 'collecte' ? U.euro(p[f.key]) : p[f.key]);
-    // Color based on vs projection
-    if (d[f.key] != null && p[f.key] > 0) {
-      const ratio = d[f.key] / p[f.key];
-      input.className = 'saisie-input ' + (ratio >= 1 ? 'above' : d[f.key] > 0 ? 'filled' : '');
-    } else {
-      input.className = 'saisie-input';
+    if (S.role !== 'admin') setters = setters.filter(function (m) { return m.active !== false; });
+    S.members = setters;
+    if (!S.slug || !setters.some(function (m) { return m.slug === S.slug; })) {
+      var meM = AF.me();
+      S.slug = (meM && setters.some(function (m) { return m.slug === meM.slug; })) ? meM.slug : (setters[0] && setters[0].slug);
     }
-  });
+  }
+  function currentMember() { return S.members.find(function (m) { return m.slug === S.slug; }) || null; }
 
-  // Semaine label
-  const wNum = currentWeek.replace('s','');
-  const _weeks = getMonthWeeks(cmk());
-  const _wkInfo = _weeks.find(w => w.id === currentWeek);
-  document.getElementById('week-proj-hint').textContent = _wkInfo ? _wkInfo.range + ' · ' + cmk() : cmk();
-
-  // Live rates calculation
-  renderRatesWeek(d);
-
-  // Add live update listeners
-  FIELDS.forEach(f => {
-    const input = document.getElementById('f-' + f.key);
-    if (!input) return;
-    input.onchange = input.oninput = () => {
-      const currentVals = readForm();
-      renderRatesWeek(currentVals);
-      // Color feedback
-      const v = parseFloat(input.value) || 0;
-      const proj = PROJECTIONS_S[f.key] || 0;
-      if (proj > 0) {
-        input.className = 'saisie-input ' + (v >= proj ? 'above' : v > 0 ? 'filled' : '');
-      }
-      scheduleAutoSave();
-    };
-  });
-}
-
-function readForm() {
-  const vals = {};
-  FIELDS.forEach(f => {
-    const el = document.getElementById('f-' + f.key);
-    vals[f.key] = parseFloat(el?.value) || 0;
-  });
-  return vals;
-}
-
-function renderRatesWeek(d) {
-  const rates = computeRates(d);
-  const p = PROJECTIONS_S;
-
-  document.getElementById('rates-week').innerHTML = `
-    <table class="rates-table">
-      <thead><tr><th>Taux</th><th>Valeur</th><th>Projection</th><th class="rate-bar-cell">Atteinte</th></tr></thead>
-      <tbody>
-        ${RATE_DEFS.map(r => {
-          const val  = rates[r.key];
-          const proj = r.proj;
-          const pct  = proj ? Math.min(val/proj*100,200) : 0;
-          const col  = pct>=100?'#34d399':pct>=65?'#f59e0b':'#ef4444';
-          const vd   = r.isEuro ? U.euro(val) : (val*100).toFixed(1)+'%';
-          const pd   = proj ? (r.isEuro ? U.euro(proj) : (proj*100).toFixed(1)+'%') : '—';
-          return `<tr>
-            <td style="font-weight:600;font-size:12px">${r.label}</td>
-            <td class="td-mono" style="color:${col};font-weight:700;font-size:13px">${vd}</td>
-            <td class="td-mono" style="color:var(--muted)">${pd}</td>
-            <td class="rate-bar-cell">
-              <div style="display:flex;align-items:center;gap:8px">
-                <div class="rate-bar-wrap" style="flex:1">
-                  <div class="rate-bar-fill" style="width:${Math.min(pct,100)}%;background:${col}"></div>
-                </div>
-                <span style="font-size:10px;font-family:var(--font-m);color:${col};min-width:34px;text-align:right">${proj?pct.toFixed(0)+'%':'—'}</span>
-              </div>
-            </td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`;
-}
-
-/* ─── TABS DYNAMIQUES AVEC DATES RÉELLES ─── */
-function buildWeekTabs(isHistorical) {
-  const weeks = getMonthWeeks(cmk());
-  const row   = document.getElementById('week-tabs-row');
-  if (!row) return;
-
-  let html = `<div class="wtab mois${currentWeek==='mois'?' active':''}" onclick="setWeek('mois')">Mois complet</div>`;
-  if (!isHistorical) {
-    weeks.forEach(wk => {
-      html += `<div class="wtab${currentWeek===wk.id?' active':''}" onclick="setWeek('${wk.id}')" title="${wk.range}">
-        <span style="font-weight:600">S${wk.id.replace('s','')}</span>
-        <span style="font-size:10px;color:var(--muted);margin-left:5px;font-family:var(--font-m)">${wk.range}</span>
-      </div>`;
+  function renderMembers() {
+    var h = '';
+    S.members.forEach(function (m) {
+      var name = m.shortName || m.displayName || m.slug;
+      var initials = (m.initials || name.slice(0, 2)).toUpperCase();
+      var roleLbl = m.role === 'closer_setter' ? 'Setting + Closing' : m.role === 'setter' ? 'Setting' : (m.role || '');
+      h += '<button class="au-member' + (m.slug === S.slug ? ' active' : '') + '" style="--au-mc:' + (m.color || '#5b7cfa') + '" data-slug="' + m.slug + '">' +
+        '<span class="au-member-av">' + initials + '</span>' +
+        '<span><span class="au-member-n">' + name + (m.active === false ? ' 🔒' : '') + '</span><br/><span class="au-member-r">' + roleLbl + '</span></span></button>';
     });
-  } else {
-    html += `<span style="font-size:11px;color:var(--muted);margin-left:8px;font-style:italic">Données mensuelles globales</span>`;
-  }
-  row.innerHTML = html;
-}
-
-/* ─── SET WEEK ─── */
-function setWeek(w) {
-  currentWeek = w;
-  renderFiche();
-}
-
-/* ─── SAVE ─── */
-let _autoSaveTimer = null;
-function scheduleAutoSave() {
-  clearTimeout(_autoSaveTimer);
-  const st = document.getElementById('save-status');
-  if (st) { st.textContent = '...'; st.style.color = 'var(--muted)'; }
-  _autoSaveTimer = setTimeout(() => saveCurrentWeek(true), 2000);
-}
-
-async function saveCurrentWeek(auto = false) {
-  if (!currentMember) return;
-  if (currentWeek === 'mois') { if (!auto) U.toast('ℹ️ Sélectionne une semaine pour saisir des données', 'info'); return; }
-
-  const data = readForm();
-  saveMemberData(currentMember.uid, data);
-
-  const st = document.getElementById('save-status');
-  if (st) { st.textContent = '⏳ Sauvegarde...'; st.style.color = 'var(--muted)'; }
-
-  if (!window.Fire || !Fire.db) {
-    console.warn('[Ambitio] Fire.db est null — sauvegarde locale uniquement. Firebase Auth actif?', typeof firebase !== 'undefined' ? firebase.auth().currentUser : 'SDK absent');
-    if (st) { st.textContent = '⚠️ Local seulement'; st.style.color = '#f59e0b'; }
-    if (!auto) U.toast('⚠️ Sauvegarde locale — Firebase non connecté', 'info');
-    renderFiche();
-    return;
+    $('#memberTabs').innerHTML = h;
+    document.querySelectorAll('#memberTabs .au-member').forEach(function (b) {
+      b.addEventListener('click', function () {
+        S.slug = b.getAttribute('data-slug');
+        renderMembers();
+        refresh();
+      });
+    });
   }
 
-  try {
-    await Fire.saveSetting(currentMember.uid, cmk(), currentWeek, data);
-    console.log('[Firebase] ✅ Sauvé setting', currentMember.uid, cmk(), currentWeek);
-    if (st) { st.textContent = '✅ ' + new Date().toLocaleTimeString('fr-FR'); st.style.color = '#34d399'; }
-    if (!auto) U.toast('✅ Données sauvegardées !');
-    renderFiche();
-  } catch(e) {
-    console.error('[Firebase] ❌ Erreur sauvegarde setting:', e.code || e.message, e);
-    if (st) { st.textContent = '⚠️ Local seulement'; st.style.color = '#f59e0b'; }
-    if (!auto) U.toast('⚠️ Erreur Firebase: ' + (e.code || e.message), 'error');
-  }
-}
-
-/* ─── ARCHIVED FLAG + VIEW FILTER (source : _meta/team_members via nav.js) ─── */
-function _markArchivedMembers() {
-  var tm = window.TEAM_MEMBERS || {};
-  MEMBERS.forEach(function(m) {
-    var meta = tm[m.uid];
-    m.archived = !!(meta && meta.active === false);
-  });
-}
-function _isAdminView() {
-  var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
-  return role === 'admin';
-}
-// Retourne la liste des membres visibles pour l'utilisateur courant :
-// - Admin : tout le monde (incluant archivés)
-// - Sales/autre : uniquement les actifs
-function _visibleMembers() {
-  _markArchivedMembers();
-  if (_isAdminView()) return MEMBERS;
-  return MEMBERS.filter(function(m) { return !m.archived; });
-}
-if (window.TEAM_MEMBERS) _markArchivedMembers();
-window.addEventListener('team-members-loaded', function() {
-  _markArchivedMembers();
-  // Toujours rafraîchir la liste pour appliquer le greying archived
-  if (typeof renderListe === 'function') renderListe();
-  // Et la fiche si ouverte
-  if (typeof renderAll === 'function' && currentMember) renderAll();
-});
-
-/* ─── RENDER ALL ─── */
-function renderAll() {
-  _markArchivedMembers();
-  if (currentMember) {
-    // Reload from localStorage
-    const saved = loadMemberData(currentMember.uid);
-    if (saved) currentMember.data[cmk()] = saved;
-    renderFiche();
-  } else {
-    renderListe();
-  }
-}
-
-/* ─── FIREBASE: charger un mois depuis Firestore ─── */
-async function loadMonthFromFirebase() {
-  if (!Fire.db) return;
-  const monthLabel = cmk();
-
-  for (const m of MEMBERS) {
-    if (m.data[monthLabel] && m.data[monthLabel]._total) continue;
-
-    const key = Fire._key(monthLabel);
-    const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(key);
-
-    try {
-      const snap = await ref.get();
-      if (snap.exists) {
-        const fbData = snap.data();
-        if (fbData.setting) {
-          m.data[monthLabel] = emptyMonth();
-          ALL_WEEKS.forEach(w => {
-            if (fbData.setting[w]) {
-              m.data[monthLabel][w] = { ...emptyMonth().s1, ...fbData.setting[w] };
-            }
-          });
-          // Sync vers localStorage
-          var lsKey = 'setting_' + m.uid + '_' + monthLabel;
-          try { localStorage.setItem(lsKey, JSON.stringify(m.data[monthLabel])); } catch(e) {}
-        }
-        if (fbData.setting_total) {
-          m.data[monthLabel] = { _total: fbData.setting_total };
-        }
-        console.log('[Firebase] Chargé ' + m.name + ' ' + monthLabel);
-      }
-    } catch(e) {
-      console.warn('[Firebase] Erreur chargement ' + m.name + ' ' + monthLabel + ':', e.message);
-    }
+  /* ══ CHARGEMENT + AGRÉGATION ══════════════════════════════════════════ */
+  function emptyDay() {
+    var o = {};
+    COLS.forEach(function (c) { o[c.key] = 0; });
+    o._setLeadIds = {};
+    return o;
   }
 
-  // Relancer le watch sur le nouveau mois
-  Fire.stop();
-  MEMBERS.forEach(m => {
-    Fire.watchUser(m.uid, monthLabel, (data) => {
-      if (!data) return;
-      var md = m.data[monthLabel];
-      if (md && md._total) return;
-      if (data.setting) {
-        if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
-        ALL_WEEKS.forEach(w => {
-          if (data.setting[w]) m.data[monthLabel][w] = { ...m.data[monthLabel][w], ...data.setting[w] };
+  function refresh() {
+    if (S.loading) return;
+    S.loading = true;
+    $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>Agrégation Ringover · actions · RDV…</div>';
+    localStorage.setItem('setting_v2_month', monthKey());
+    $('#monthLbl').textContent = MONTHS_FR[S.m] + ' ' + S.y;
+
+    var member = currentMember();
+    if (!member) { $('#content').innerHTML = '<div class="au-empty"><span class="i">👤</span>Aucun membre setting.</div>'; S.loading = false; return; }
+
+    var from = new Date(S.y, S.m, 1, 0, 0, 0, 0);
+    var to = new Date(S.y, S.m, daysInMonth(), 23, 59, 59, 999);
+    var fromDay = dayIso(1), toDay = dayIso(daysInMonth());
+    var isAdminRole = S.role === 'admin';
+    var meM = AF.me();
+    var canSeeCalls = isAdminRole || (meM && member.firebaseUid && meM.uid === member.firebaseUid);
+
+    Promise.all([
+      member.firebaseUid ? AF.loadCallsForMember(member.firebaseUid, from, to, isAdminRole) : Promise.resolve([]),
+      AF.loadActions(member.slug, fromDay, toDay),
+      AF.loadBookingsRange(fromDay, toDay, from, to),
+      AF.loadOverrides(member.slug, fromDay, toDay),
+      AF.loadTypeMap(),
+      db.collection('saisies').doc(member.slug).collection('mois').doc(monthKey()).get().catch(function () { return { exists: false }; })
+    ]).then(function (res) {
+      var calls = res[0], actions = res[1], bookings = res[2];
+      S.overrides = res[3] || {};
+      S.typeMap = res[4] || {};
+      S.legacy = (res[5] && res[5].exists) ? res[5].data() : null;
+
+      /* — Attribution NB legacy : RDV setter sans bookedBySlug (antérieurs à
+         la refonte, ou pris via un lien public de type setter-only) → on
+         retombe sur le setter attribué du lead (leads.assignedTo).
+         Nécessaire dès qu'il y a ≥ 2 setters actifs. — */
+      var _needLead = {};
+      bookings.forEach(function (b) {
+        if (AF.classifyBooking(b, S.typeMap) !== 'setter') return;
+        if (b.bookedBySlug || (b.closeData && b.closeData.setterSlug)) return;
+        if (b.leadId) _needLead[b.leadId] = 1;
+      });
+      var _leadIds = Object.keys(_needLead).slice(0, 150);
+      return Promise.all(_leadIds.map(function (id) {
+        return db.collection('leads').doc(id).get().catch(function () { return null; });
+      })).then(function (snaps) {
+        var leadSetter = {};
+        snaps.forEach(function (s) {
+          if (s && s.exists) { var d0 = s.data() || {}; if (d0.assignedTo) leadSetter[s.id] = d0.assignedTo; }
         });
-        var lsk = 'setting_' + m.uid + '_' + monthLabel;
-        try { localStorage.setItem(lsk, JSON.stringify(m.data[monthLabel])); } catch(e) {}
+
+      var days = {};
+      for (var d = 1; d <= daysInMonth(); d++) days[dayIso(d)] = emptyDay();
+
+      /* — Ringover : calls / décrochés / temps — */
+      calls.forEach(function (c) {
+        if (c.direction !== 'outbound') return;
+        var ms = c.initiatedAt && c.initiatedAt.toMillis ? c.initiatedAt.toMillis() : null;
+        if (ms == null) return;
+        var dk = AF.dayKey(new Date(ms));
+        var row = days[dk];
+        if (!row) return;
+        row.calls++;
+        var dur = Number(c.durationSec) || 0;
+        if (dur >= AF.ANSWERED_MIN_SEC) { row.decroches++; row.tempsAppelSec += dur; }
+      });
+
+      /* — Actions fiche : leads (1ʳᵉ action), NRP, sets… — */
+      actions.forEach(function (a) {
+        var row = days[a.day];
+        if (!row) return;
+        if (a.firstTouchMember) row.leads++;
+        var act = a.action;
+        if (act === 'nrp1') row.nrp1++;
+        else if (act === 'nrp2') row.nrp2++;
+        else if (act === 'nrp3') row.nrp3++;
+        else if (act === 'all_nrp') row.all_nrp++;
+        else if (act === 'messagerie') row.messagerie++;
+        else if (act === 'follow_up_pm') row.follow_up++;
+        else if (act === 'faux_numero' || act === 'pas_interesse' || act === 'disqualifie' || act === 'poubelle') row.out++;
+        if (AF.SET_ACTIONS[act] && a.leadId) row._setLeadIds[a.leadId] = 1; // unique lead / jour
+      });
+
+      /* — RDV NB du setter : sets réels + tenue + closes — */
+      var visibleSetters = S.members.filter(function (m) { return m.active !== false; });
+      function attributedToMember(b) {
+        if (b.bookedBySlug) return b.bookedBySlug === member.slug;
+        if (b.closeData && b.closeData.setterSlug) return b.closeData.setterSlug === member.slug;
+        /* legacy : setter attribué du lead, sinon attribué si un seul setter actif */
+        if (b.leadId && leadSetter[b.leadId]) return leadSetter[b.leadId] === member.slug;
+        return visibleSetters.length === 1 && visibleSetters[0].slug === member.slug;
       }
-      renderAll();
+      bookings.forEach(function (b) {
+        if (AF.classifyBooking(b, S.typeMap) !== 'setter') return;
+        if (!attributedToMember(b)) return;
+        /* Set réel : compté le jour de CRÉATION du RDV (action de set).
+           Replanifications exclues — le set initial a déjà compté. */
+        if (b._inCreated && !b.rescheduledFromId && b.createdAt && b.createdAt.toMillis) {
+          var ck = AF.dayKey(new Date(b.createdAt.toMillis()));
+          if (days[ck] && b.leadId) days[ck]._setLeadIds[b.leadId] = 1;
+          else if (days[ck]) days[ck]._setLeadIds['bk_' + b.id] = 1;
+        }
+        /* Tenue : comptée le jour du RDV */
+        if (!b._inDue || !days[b.date]) return;
+        var row = days[b.date];
+        var oc = b.outcome || null;
+        if (oc === 'annule' || (!oc && b.status === 'cancelled' && b.rescheduled !== true)) row.annulesNb++;
+        else if (oc === 'no_show' || (!oc && b.status === 'no_show')) row.noshowNb++;
+        if (oc ? AF.isPresent(oc) : b.status === 'completed') row.presentsNb++;
+        if (oc === 'close') {
+          row.closesNb++;
+          row.collecteNb += (b.closeData && Number(b.closeData.collecte)) || 0;
+        }
+      });
+
+      Object.keys(days).forEach(function (dk) {
+        days[dk].sets = Object.keys(days[dk]._setLeadIds).length;
+      });
+
+      S.data = { days: days, callsOk: canSeeCalls || calls.length > 0 };
+      S.loading = false;
+      render();
+      }); // fin .then(leadSetter)
+    }).catch(function (e) {
+      S.loading = false;
+      $('#content').innerHTML = '<div class="au-empty"><span class="i">⚠️</span>' + (e && e.message || 'Erreur de chargement') + '</div>';
+    });
+  }
+
+  /* Valeur effective (override > auto). Temps : override saisi en minutes. */
+  function eff(dk, key) {
+    var ov = S.overrides[dk] && S.overrides[dk].setting;
+    if (ov) {
+      var ovKey = key === 'tempsAppelSec' ? 'tempsAppelMin' : key;
+      if (ov[ovKey] != null && ov[ovKey] !== '') {
+        var v = Number(ov[ovKey]) || 0;
+        return { v: key === 'tempsAppelSec' ? v * 60 : v, ov: true };
+      }
+    }
+    return { v: (S.data.days[dk] && S.data.days[dk][key]) || 0, ov: false };
+  }
+
+  /* ══ RENDER ═══════════════════════════════════════════════════════════ */
+  function fmtCell(c, val) {
+    if (c.fmt === 'dur') return val > 0 ? AF.fmtDuration(val) : '<span class="z">—</span>';
+    if (c.fmt === 'eur') return val > 0 ? '<span class="eur">' + fmtEuro(val) + '</span>' : '<span class="z">·</span>';
+    if (val === 0) return '<span class="z">·</span>';
+    if (c.fmt === 'hot') return '<span class="hot">' + val + '</span>';
+    if (c.fmt === 'good') return '<span class="good">' + val + '</span>';
+    if (c.fmt === 'bad') return '<span class="bad">' + val + '</span>';
+    return String(val);
+  }
+
+  function render() {
+    var member = currentMember();
+    var nbDays = daysInMonth();
+    var todayIso = AF.dayKey(new Date());
+    var tot = emptyDay();
+    var weekAgg = emptyDay(), weekStartD = 1, weekIdx = 1;
+    var rowsH = '';
+
+    function addTo(agg, dk) {
+      COLS.forEach(function (c) { agg[c.key] += eff(dk, c.key).v; });
+    }
+    function aggRow(agg, label, cls) {
+      var h = '<tr class="' + cls + '"><td>' + label + '</td>';
+      COLS.forEach(function (c, i) {
+        var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
+        h += '<td class="' + (grpStart ? 'grp' : '') + '">' + fmtCell(c, agg[c.key]) + '</td>';
+      });
+      h += '<td></td></tr>';
+      return h;
+    }
+
+    for (var d = 1; d <= nbDays; d++) {
+      var dk = dayIso(d);
+      var dt = new Date(S.y, S.m, d);
+      var dow = dt.getDay();
+      var isFuture = dk > todayIso;
+      var cls = (dk === todayIso ? 'today ' : '') + (dow === 0 || dow === 6 ? 'weekend ' : '') + (isFuture ? 'future' : '');
+
+      rowsH += '<tr class="' + cls + '"><td>' + JOURS_FR[dow] + ' ' + pad2(d) + '</td>';
+      COLS.forEach(function (c, i) {
+        var e = eff(dk, c.key);
+        var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
+        rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' + fmtCell(c, e.v) + '</td>';
+      });
+      rowsH += '<td><button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button></td></tr>';
+
+      addTo(tot, dk);
+      addTo(weekAgg, dk);
+      if (dow === 0 || d === nbDays) { // fin de semaine (dimanche) ou fin de mois
+        rowsH += aggRow(weekAgg, 'Semaine ' + weekIdx + ' <span style="opacity:.6;font-weight:500">(' + pad2(weekStartD) + '→' + pad2(d) + ')</span>', 'au-week');
+        weekAgg = emptyDay(); weekStartD = d + 1; weekIdx++;
+      }
+    }
+
+    /* — KPIs du mois — */
+    var txDecro = tot.calls > 0 ? tot.decroches / tot.calls * 100 : null;
+    var txSet = tot.decroches > 0 ? tot.sets / tot.decroches * 100 : null;
+    var txShow = tot.sets > 0 ? tot.presentsNb / tot.sets * 100 : null;
+    var kpis =
+      kpi(AF.fmtDuration(tot.tempsAppelSec), "Temps d'appel", 'Ringover · auto', '#2dd4bf') +
+      kpi(tot.calls.toLocaleString('fr-FR'), 'Calls passés', tot.decroches + ' décrochés · ' + fmtPct(txDecro), '#5b7cfa') +
+      kpi(String(tot.leads), 'Leads travaillés', '1ʳᵉ action fiche · jamais recomptés', '#5b7cfa') +
+      kpi(String(tot.sets), 'Sets (NB)', 'Set % décro ' + fmtPct(txSet), '#a78bfa') +
+      kpi(String(tot.presentsNb), 'Présents NB', 'Show-up ' + fmtPct(txShow) + ' · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
+      kpi(String(tot.closesNb), 'Closes NB', fmtEuro(tot.collecteNb) + ' collecté', '#34d399');
+
+    /* — Funnel — */
+    var fun = funnel([
+      { l: 'Leads', v: tot.leads },
+      { l: 'Décrochés', v: tot.decroches },
+      { l: 'Sets', v: tot.sets },
+      { l: 'Présents', v: tot.presentsNb },
+      { l: 'Closes', v: tot.closesNb }
+    ]);
+
+    /* — Table — */
+    var headH = '<tr><th>Jour</th>';
+    COLS.forEach(function (c, i) {
+      var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
+      headH += '<th class="' + (grpStart ? 'grp' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' + c.label + '</th>';
+    });
+    headH += '<th></th></tr>';
+
+    var callsNote = S.data.callsOk ? '' :
+      '<div style="font-size:11.5px;color:var(--gold);margin-top:10px">🔒 Les appels Ringover d\'un autre membre ne sont visibles que par un admin — colonnes ⏱/Calls/Décro. limitées à ton propre rapport.</div>';
+
+    var h =
+      '<div class="au-kpis">' + kpis + '</div>' +
+      '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel Setting — ' + MONTHS_FR[S.m] + '</div>' +
+        '<div class="au-card-note">sets = statuts SET/RDV posé + RDV setter créés (uniques par lead/jour)</div></div>' + fun + '</div>' +
+      '<div class="au-card" style="padding:0;overflow:hidden">' +
+        '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Jour par jour</div>' +
+          '<div class="au-card-note">téléphonie · actions fiche · RDV setting (NB)</div>' +
+          '<div class="right"><span class="au-chip nb">Setting NB</span></div></div>' +
+        '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead>' + headH + '</thead><tbody>' +
+        rowsH + aggRow(tot, 'TOTAL ' + MONTHS_FR[S.m].toUpperCase(), 'au-total') +
+        '</tbody></table></div>' + (callsNote ? '<div style="padding:0 18px 14px">' + callsNote + '</div>' : '') +
+      '</div>' +
+      legacyBlock();
+
+    $('#content').innerHTML = h;
+    $('#btnLegacy').style.display = S.legacy ? '' : 'none';
+    document.querySelectorAll('.au-day-edit').forEach(function (b) {
+      b.addEventListener('click', function () { openOverride(b.getAttribute('data-day')); });
+    });
+  }
+
+  function kpi(v, l, s, color) {
+    return '<div class="au-kpi accent" style="--au-kc:' + color + '"><div class="v">' + v + '</div><div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+  }
+  function funnel(steps) {
+    var max = Math.max.apply(null, steps.map(function (s) { return s.v; }).concat([1]));
+    var h = '<div class="au-funnel">';
+    steps.forEach(function (s, i) {
+      var pct = i > 0 && steps[i - 1].v > 0 ? (s.v / steps[i - 1].v * 100) : null;
+      h += '<div class="au-fstep"><div class="v">' + s.v.toLocaleString('fr-FR') + '</div><div class="l">' + s.l + '</div>' +
+        '<div class="p">' + (pct != null ? fmtPct(pct) + ' de l\'étape préc.' : '&nbsp;') + '</div>' +
+        '<div class="au-fbar"><i style="width:' + Math.max(3, s.v / max * 100) + '%"></i></div></div>';
+    });
+    return h + '</div>';
+  }
+
+  /* — Bloc ancienne saisie hebdo (lecture seule) — */
+  function legacyBlock() {
+    if (!S.legacy || !S.legacyOpen) return '';
+    var raw = S.legacy.setting_total ? { _total: S.legacy.setting_total } : (S.legacy.setting || null);
+    if (!raw) return '';
+    var FIELDS = [
+      ['tempsAppel', "Temps d'appel (h)"], ['leads', 'Total Leads'], ['calls', 'Calls'], ['decroches', 'Décrochés'],
+      ['propRdv', 'Prop. RDV'], ['sets', 'Sets'], ['presents', 'Présents'], ['deposits', 'Deposits'], ['closes', 'Closes'], ['collecte', 'Collecté €']
+    ];
+    var weeks = Object.keys(raw).sort();
+    var h = '<div class="au-card au-legacy"><div class="au-legacy-title">📜 Ancienne saisie hebdomadaire — ' + MONTHS_FR[S.m] + ' ' + S.y + ' (lecture seule, conservée)</div>';
+    h += '<div class="au-twrap" style="background:transparent"><table class="au-table" style="min-width:640px"><thead><tr><th>Semaine</th>';
+    FIELDS.forEach(function (f) { h += '<th>' + f[1] + '</th>'; });
+    h += '</tr></thead><tbody>';
+    weeks.forEach(function (w) {
+      h += '<tr><td>' + (w === '_total' ? 'Total mois' : w.toUpperCase()) + '</td>';
+      FIELDS.forEach(function (f) { var v = (raw[w] && raw[w][f[0]]) || 0; h += '<td>' + (v || '<span class="z">·</span>') + '</td>'; });
+      h += '</tr>';
+    });
+    h += '</tbody></table></div></div>';
+    return h;
+  }
+
+  /* ══ OVERRIDE MODAL ═══════════════════════════════════════════════════ */
+  var ovDay = null;
+  function openOverride(dk) {
+    ovDay = dk;
+    var d = new Date(dk + 'T12:00:00');
+    $('#ovTitle').textContent = '✎ Corriger le ' + JOURS_FR[d.getDay()] + ' ' + pad2(d.getDate()) + ' ' + MONTHS_FR[S.m];
+    var ov = (S.overrides[dk] && S.overrides[dk].setting) || {};
+    var h = '';
+    COLS.forEach(function (c) {
+      var ovKey = c.ovKey || c.key;
+      var auto = (S.data.days[dk] && S.data.days[dk][c.key]) || 0;
+      var autoLbl = c.fmt === 'dur' ? AF.fmtDuration(auto) : (c.fmt === 'eur' ? fmtEuro(auto) : auto);
+      var cur = ov[ovKey] != null ? ov[ovKey] : '';
+      h += '<div class="au-modal-f"><label>' + (c.ovLabel || c.label.replace(/^[^\w]*/, '')) + '</label>' +
+        '<input type="number" step="any" min="0" data-ovkey="' + ovKey + '" value="' + cur + '" placeholder="auto"/>' +
+        '<div class="auto-hint">auto : ' + autoLbl + '</div></div>';
+    });
+    $('#ovGrid').innerHTML = h;
+    $('#ovNote').value = (S.overrides[dk] && S.overrides[dk].note) || '';
+    $('#ovModal').classList.add('show');
+  }
+  $('#ovCancel').addEventListener('click', function () { $('#ovModal').classList.remove('show'); });
+  $('#ovModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
+  $('#ovSave').addEventListener('click', function () {
+    if (!ovDay) return;
+    var values = {};
+    document.querySelectorAll('#ovGrid input[data-ovkey]').forEach(function (inp) {
+      var v = inp.value.trim();
+      if (v !== '') values[inp.getAttribute('data-ovkey')] = Number(v) || 0;
+    });
+    var btn = this;
+    btn.disabled = true;
+    AF.saveDayOverride(S.slug, ovDay, 'setting', values, $('#ovNote').value.trim())
+      .then(function () {
+        if (Object.keys(values).length) {
+          S.overrides[ovDay] = S.overrides[ovDay] || {};
+          S.overrides[ovDay].setting = values;
+          S.overrides[ovDay].note = $('#ovNote').value.trim() || null;
+        } else if (S.overrides[ovDay]) { delete S.overrides[ovDay].setting; }
+        $('#ovModal').classList.remove('show');
+        toast('💾 Correction enregistrée');
+        render();
+      })
+      .catch(function (e) { toast('❌ ' + (e && e.message || 'Erreur'), true); })
+      .then(function () { btn.disabled = false; });
+  });
+
+  /* ══ NAV / INIT ═══════════════════════════════════════════════════════ */
+  $('#btnPrev').addEventListener('click', function () { S.m--; if (S.m < 0) { S.m = 11; S.y--; } refresh(); });
+  $('#btnNext').addEventListener('click', function () { S.m++; if (S.m > 11) { S.m = 0; S.y++; } refresh(); });
+  $('#btnToday').addEventListener('click', function () { var n = new Date(); S.y = n.getFullYear(); S.m = n.getMonth(); refresh(); });
+  $('#btnRefresh').addEventListener('click', refresh);
+  $('#btnLegacy').addEventListener('click', function () { S.legacyOpen = !S.legacyOpen; render(); });
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (!user) { window.location.href = 'login.html'; return; }
+    db.collection('users').doc(user.uid).get().then(function (s) {
+      var d = s.exists ? s.data() : {};
+      S.role = d.role || S.role;
+      localStorage.setItem('ambitio_role', S.role);
+    }).catch(function () {}).then(function () {
+      var start = function () { computeMembers(); renderMembers(); refresh(); };
+      if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length) start();
+      else {
+        var done = false;
+        window.addEventListener('team-members-loaded', function () { if (!done) { done = true; start(); } }, { once: true });
+        setTimeout(function () { if (!done) { done = true; start(); } }, 3500);
+      }
     });
   });
-}
-
-/* ─── FIREBASE SYNC: load current month first, then migrate in background ─── */
-async function firebaseSyncMembers() {
-  if (!Fire.db) return;
-
-  const curMonth = cmk();
-  const curKey = Fire._key(curMonth);
-  console.log('[Firebase] Chargement mois courant:', curMonth, '(' + curKey + ')');
-
-  // ══ PRIORITÉ 1: Charger le mois courant pour TOUS les membres ══
-  for (const m of MEMBERS) {
-    try {
-      const curSnap = await Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(curKey).get();
-      if (curSnap.exists) {
-        const fbData = curSnap.data();
-        if (fbData.setting) {
-          m.data[curMonth] = emptyMonth(); // toujours écraser avec les données Firebase
-          ALL_WEEKS.forEach(w => {
-            if (fbData.setting[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...fbData.setting[w] };
-          });
-          // Sync vers localStorage pour que renderListe/loadMemberData retrouve les données
-          var lsKey = 'setting_' + m.uid + '_' + curMonth;
-          try { localStorage.setItem(lsKey, JSON.stringify(m.data[curMonth])); } catch(e) {}
-          console.log('[Firebase] ✅ Chargé + synced LS ' + m.name + ' ' + curMonth, 's1:', JSON.stringify(m.data[curMonth].s1));
-        }
-        if (fbData.setting_total) {
-          m.data[curMonth] = { _total: fbData.setting_total };
-          console.log('[Firebase] ✅ Chargé total ' + m.name + ' ' + curMonth);
-        }
-      } else {
-        console.log('[Firebase] ℹ️ Pas de données Firestore pour ' + m.name + ' ' + curMonth);
-      }
-    } catch(e) {
-      console.warn('[Firebase] ❌ Erreur chargement ' + m.name + ' ' + curMonth + ':', e.message);
-    }
-
-    // Écouter les changements en temps réel pour le mois courant
-    Fire.watchUser(m.uid, curMonth, (data) => {
-      if (!data) return;
-      var md = m.data[curMonth];
-      if (md && md._total) return;
-      if (data.setting) {
-        if (!m.data[curMonth]) m.data[curMonth] = emptyMonth();
-        ALL_WEEKS.forEach(w => {
-          if (data.setting[w]) m.data[curMonth][w] = { ...m.data[curMonth][w], ...data.setting[w] };
-        });
-        // Sync vers localStorage
-        var lsk = 'setting_' + m.uid + '_' + curMonth;
-        try { localStorage.setItem(lsk, JSON.stringify(m.data[curMonth])); } catch(e) {}
-      }
-      renderAll();
-    });
-  }
-
-  // ── Afficher immédiatement les données chargées ──
-  console.log('[Firebase] Avant renderAll — MEMBERS[0] s1:', JSON.stringify(MEMBERS[0].data[curMonth]?.s1));
-  renderAll();
-  console.log('[Firebase] Après renderAll — MEMBERS[0] s1:', JSON.stringify(MEMBERS[0].data[curMonth]?.s1));
-  console.log('[Firebase] Mois courant chargé et affiché. Migrations en arrière-plan...');
-
-  // ══ PRIORITÉ 2: Migrations en arrière-plan (non-bloquantes) ══
-  setTimeout(() => { firebaseMigrateBackground().catch(e => console.warn('[Firebase] Migration bg error:', e)); }, 500);
-}
-
-/* ─── Migrations arrière-plan: localStorage + hardcoded → Firestore ─── */
-async function firebaseMigrateBackground() {
-  if (!Fire.db) return;
-  const MONTHS_ALL = DB.months;
-  const YEARS_CHECK = [2025, 2026];
-
-  // Migration localStorage → Firestore
-  for (const m of MEMBERS) {
-    for (const yr of YEARS_CHECK) {
-      for (const mo of MONTHS_ALL) {
-        const monthLabel = mo + ' ' + yr;
-        const lsKey = 'setting_' + m.uid + '_' + monthLabel;
-        let lsData = null;
-        try { const v = localStorage.getItem(lsKey); lsData = v ? JSON.parse(v) : null; } catch(e) {}
-        if (!lsData) continue;
-
-        const fsKey = Fire._key(monthLabel);
-        if (!fsKey) continue;
-        const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(fsKey);
-        try {
-          const snap = await ref.get();
-          if (!snap.exists || !snap.data().setting) {
-            const settingData = {};
-            ALL_WEEKS.forEach(w => { if (lsData[w]) settingData[w] = lsData[w]; });
-            if (Object.keys(settingData).length > 0) {
-              await ref.set({ setting: settingData, _ls_migrated: true }, { merge: true });
-              console.log('[Firebase] Migration LS → FS: ' + m.name + ' ' + monthLabel);
-            }
-          }
-        } catch(e) { /* ignore migration errors */ }
-      }
-    }
-  }
-
-  // Migration hardcoded → Firestore
-  for (const m of MEMBERS) {
-    for (const [monthLabel, monthData] of Object.entries(m.data)) {
-      if (monthLabel === cmk()) continue; // déjà traité
-      const key = Fire._key(monthLabel);
-      const ref = Fire.db.collection('saisies').doc(m.uid).collection('mois').doc(key);
-      try {
-        const snap = await ref.get();
-        if (!snap.exists) {
-          if (monthData._total) {
-            await ref.set({ setting_total: monthData._total, _migrated: true }, { merge: true });
-          } else {
-            const settingData = {};
-            ALL_WEEKS.forEach(w => { if (monthData[w]) settingData[w] = monthData[w]; });
-            await ref.set({ setting: settingData, _migrated: true }, { merge: true });
-          }
-        } else {
-          const fbData = snap.data();
-          if (fbData.setting && !monthData._total) {
-            ALL_WEEKS.forEach(w => {
-              if (fbData.setting[w]) {
-                if (!m.data[monthLabel]) m.data[monthLabel] = emptyMonth();
-                m.data[monthLabel][w] = { ...m.data[monthLabel][w], ...fbData.setting[w] };
-              }
-            });
-          }
-          if (fbData.setting_total && monthData._total) {
-            m.data[monthLabel]._total = { ...monthData._total, ...fbData.setting_total };
-          }
-        }
-      } catch(e) { /* ignore migration errors */ }
-    }
-  }
-  console.log('[Firebase] Migrations arrière-plan terminées');
-}
-
-/* ─── INIT ─── */
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('month-lbl').textContent = cmk();
-  const nm = (typeof localStorage !== 'undefined' && localStorage.getItem('ambitio_name')) || 'Guillaume';
-  document.getElementById('tb-nm').textContent = nm;
-  document.getElementById('tb-av').textContent  = nm[0].toUpperCase();
-
-  // Charger données sauvegardées dans les membres
-  // ET bootstrapper les données hardcodées dans localStorage pour syncBridge
-  MEMBERS.forEach(m => {
-    const key = `setting_${m.uid}_${cmk()}`;
-    const saved = loadMemberData(m.uid);
-    if (saved) {
-      m.data[cmk()] = saved;
-    } else if (m.data[cmk()] && !m.data[cmk()]._total) {
-      // Données hardcodées présentes mais pas dans localStorage → les écrire
-      try { localStorage.setItem(key, JSON.stringify(m.data[cmk()])); } catch(e) {}
-    }
-  });
-
-  // Firebase : init + sync (attente auth)
-  if (typeof firebase !== 'undefined' && firebase.auth) {
-    console.log('[Ambitio] Firebase SDK détecté, en attente auth...');
-    firebase.auth().onAuthStateChanged(async function(fbUser) {
-      if (!fbUser) {
-        console.warn('[Ambitio] ❌ Aucun utilisateur Firebase Auth — données locales uniquement');
-        return;
-      }
-      console.log('[Ambitio] ✅ Firebase Auth OK:', fbUser.email, 'UID:', fbUser.uid);
-      const uid = fbUser.uid;
-      localStorage.setItem('ambitio_auth_uid', uid);
-      if (window.Fire && !Fire.db) {
-        Fire.init(firebase.firestore(), uid);
-        console.log('[Ambitio] Fire.db initialisé, lancement sync...');
-        firebaseSyncMembers();
-      }
-    });
-  } else {
-    console.warn('[Ambitio] Firebase SDK non disponible — mode hors-ligne');
-  }
-
-  document.addEventListener('db:updated', renderAll);
-  renderListe();
-});
+})();
 </script>
-
 </body>
 </html>

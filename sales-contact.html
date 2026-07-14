@@ -12,6 +12,9 @@
 <script src="call-detail-modal.js" defer></script>
 <script src="sales-dialer-api.js" defer></script>
 <script src="dialer-bridge.js" defer></script>
+<!-- Refonte 07/2026 : journal d'actions setting + résultats RDV -->
+<script src="alteore-flow.js"></script>
+<script src="rdv-outcome.js"></script>
 <script>
 if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
 </script>
@@ -844,7 +847,14 @@ document.getElementById('ctApp').addEventListener('change',function(e){if(e.targ
 document.getElementById('ctApp').addEventListener('click',function(e){
 var cdTarget=e.target.closest('[data-action="callDetail"]');if(cdTarget){e.stopPropagation();var ccid=cdTarget.dataset.cid;if(ccid&&window.CallDetailModal)window.CallDetailModal.open(ccid);return;}
 var fhBtn=e.target.closest('[data-action="toggleFormHistory"]');if(fhBtn){var fhBox=document.querySelector('[data-fl-form-history-content]');if(fhBox){var fhOpen=fhBox.style.display!=='none';fhBox.style.display=fhOpen?'none':'block';fhBtn.classList.toggle('open',!fhOpen);}return;}
-var dot=e.target.closest('[data-action="setStage"]');if(dot){var o=lead.stage||'lead',n=dot.dataset.stage;if(o===n)return;lead.stage=n;addTL(sName(o)+' \u2192 '+sName(n),SM[n]?SM[n].color:'var(--muted)');if(n==='closed_won_setting'||n==='closed_won_self')addTL('\ud83c\udf89 Converti en client !','#10b981');var stSync={lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'all_nrp',faux_numero:'faux_numero',poubelle:'poubelle',disqualification:'disqualifie',follow_up_pm:'follow_up_pm',set:'set',rdv_self_booking:'rdv_self_booking',rdv_confirmes:'rdv_pose',rdv_annules_prospect:'pas_interesse',rdv_annules_equipe:'pas_interesse',no_show_self:'pas_interesse',no_show_setting:'pas_interesse',closed_won_setting:'rdv_pose',closed_won_self:'rdv_pose',closed_lost:'pas_interesse',follow_up_closing:'appele',disqualifie_closing:'disqualifie'};var svData={stage:n};if(stSync[n]){svData.status=stSync[n];lead.status=stSync[n];}if(n==='closed_won_setting'||n==='closed_won_self'){svData.isClient=true;svData.clientSince=firebase.firestore.FieldValue.serverTimestamp();lead.isClient=true;}sv(svData);renderAll();return;}
+var dot=e.target.closest('[data-action="setStage"]');if(dot){var o=lead.stage||'lead',n=dot.dataset.stage;if(o===n)return;
+/* \u2500\u2500 Journal d'actions setting (refonte 07/2026) \u2014 captur\u00e9 AVANT la maj.
+   Seules les \u00e9tapes de prospection (axe setter) comptent comme actions. */
+var stSync={lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'all_nrp',faux_numero:'faux_numero',poubelle:'poubelle',disqualification:'disqualifie',follow_up_pm:'follow_up_pm',set:'set',rdv_self_booking:'rdv_self_booking',rdv_confirmes:'rdv_pose',rdv_annules_prospect:'pas_interesse',rdv_annules_equipe:'pas_interesse',no_show_self:'pas_interesse',no_show_setting:'pas_interesse',closed_won_setting:'rdv_pose',closed_won_self:'rdv_pose',closed_lost:'pas_interesse',follow_up_closing:'appele',disqualifie_closing:'disqualifie'};
+var SETTING_ACTIONS={nouveau:1,appele:1,decroche:1,messagerie:1,nrp1:1,nrp2:1,nrp3:1,all_nrp:1,faux_numero:1,follow_up_pm:1,set:1,rdv_self_booking:1,rdv_pose:1,pas_interesse:1,disqualifie:1,poubelle:1};
+var actKey=stSync[n];
+if(window.AlteoreFlow&&actKey&&SETTING_ACTIONS[actKey]&&(SM[n]&&SM[n].s==='P')){window.AlteoreFlow.recordLeadAction(leadId,lead,actKey,{prevStatus:lead.status||null,origin:'fiche_crm'});}
+lead.stage=n;addTL(sName(o)+' \u2192 '+sName(n),SM[n]?SM[n].color:'var(--muted)');if(n==='closed_won_setting'||n==='closed_won_self')addTL('\ud83c\udf89 Converti en client !','#10b981');var svData={stage:n};if(stSync[n]){svData.status=stSync[n];lead.status=stSync[n];}if(n==='closed_won_setting'||n==='closed_won_self'){svData.isClient=true;svData.clientSince=firebase.firestore.FieldValue.serverTimestamp();lead.isClient=true;}sv(svData);renderAll();return;}
 var dt=e.target.closest('[data-action="delTag"]');if(dt){lead.tags=(lead.tags||[]);lead.tags.splice(+dt.dataset.idx,1);sv({tags:lead.tags});renderAll();return;}
 var dn=e.target.closest('[data-action="delNote"]');if(dn){lead.notesHistory=(lead.notesHistory||[]);lead.notesHistory.splice(+dn.dataset.idx,1);sv({notesHistory:lead.notesHistory});renderAll();return;}
 var ta=e.target.closest('[data-action="togAct"]');if(ta){lead.activities=(lead.activities||[]);var ai=+ta.dataset.idx;if(lead.activities[ai])lead.activities[ai].done=!lead.activities[ai].done;sv({activities:lead.activities});renderAll();return;}
@@ -925,6 +935,9 @@ function openBookingFromFiche(){
   var email=encodeURIComponent(lead.email||'');
   var tel=encodeURIComponent((lead.telephone||'').replace(/\s/g,''));
   var url='booking.html?embed=1&by=setter&leadId='+encodeURIComponent(leadId)+'&prenom='+prenom+'&nom='+nom+'&email='+email+'&tel='+tel;
+  // Attribution setter sur le booking (rapport Setting + commission NB au close)
+  var me=window.AlteoreFlow?window.AlteoreFlow.me():null;
+  if(me&&me.slug){url+='&setter='+encodeURIComponent(me.slug)+'&setterUid='+encodeURIComponent(me.uid||'')+'&setterName='+encodeURIComponent(me.name||'');}
   document.getElementById('ctBookingInfo').textContent=lead.nom||'\u2014';
   document.getElementById('ctBookingIframe').src=url;
   document.getElementById('ctBookingOverlay').classList.add('show');
@@ -936,6 +949,13 @@ function closeBookingFiche(){
 window.addEventListener('message',function(e){
   if(!e.data||e.data.type!=='booking_confirmed')return;
   var data=e.data;
+  // Replanification (RdvOutcome) : booking.html a déjà tout mis à jour —
+  // ne pas écraser le statut du lead (un SB doit rester SB).
+  if(data.rescheduledFromId)return;
+  // Journal : un RDV posé par le setter = un SET réel (refonte 07/2026)
+  if(window.AlteoreFlow&&lead){
+    window.AlteoreFlow.recordLeadAction(leadId,lead,'set_booking',{prevStatus:lead.status||null,origin:'fiche_crm',bookingId:data.bookingId||null});
+  }
   var dateFr=data.date?data.date.split('-').reverse().join('/'):'';
   lead.status='rdv_pose';lead.stage='set';
   lead.rdvDate=data.date||'';lead.rdvHeure=data.time||'';
@@ -961,69 +981,109 @@ window._fcRdvCache = [];
 function fmtRdvDateKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function isRdvPast(b){if(!b.date||!b.time)return true;var d=new Date(b.date+'T'+b.time+':00');var dur=b.duration||30;return Date.now()>d.getTime()+dur*60000;}
 
+window._fcTypeMap=null;
+function _fcEnsureTypeMap(){
+  if(window._fcTypeMap||!window.AlteoreFlow)return;
+  window._fcTypeMap={};
+  window.AlteoreFlow.loadTypeMap().then(function(m){window._fcTypeMap=m||{};});
+}
 function renderRdvBoxForLead(leadId){
   var box=document.getElementById('fcRdvBox');
   if(!box||!leadId)return;
   // Clean previous listener
   if(window._fcRdvUnsub){try{window._fcRdvUnsub();}catch(e){}window._fcRdvUnsub=null;}
-  var todayStr=fmtRdvDateKey(new Date());
-  // Listen real-time (réactif si toggle ailleurs)
+  _fcEnsureTypeMap();
+  // Refonte 07/2026 : la fiche = racine → TOUT le parcours RDV (passés inclus),
+  // avec résultat (outcome) et boutons Résultat / Replanifier.
   window._fcRdvUnsub=db.collection('bookings')
     .where('leadId','==',leadId)
-    .where('date','>=',todayStr)
     .onSnapshot(function(snap){
       var items=[];
       snap.forEach(function(doc){
         var d=doc.data();d.id=doc.id;
-        if(d.status==='confirmed'||d.status==='pending')items.push(d);
+        items.push(d);
       });
       items.sort(function(a,b){var ka=(a.date||'')+'T'+(a.time||'');var kb=(b.date||'')+'T'+(b.time||'');return ka<kb?-1:(ka>kb?1:0);});
       window._fcRdvCache=items;
       paintRdvBox(items);
     },function(err){
       console.warn('[fcRdv] snapshot error:',err);
-      box.innerHTML='<div class="fl-title">📅 RDV à venir</div><div style="font-size:11px;color:var(--red);padding:6px 0">Erreur : '+esc(err.message||'')+'</div>';
+      box.innerHTML='<div class="fl-title">📅 Rendez-vous</div><div style="font-size:11px;color:var(--red);padding:6px 0">Erreur : '+esc(err.message||'')+'</div>';
     });
+}
+
+function ctOpenOutcome(bookingId){
+  var b=(window._fcRdvCache||[]).find(function(x){return x.id===bookingId;});
+  if(!b||!window.RdvOutcome){toast('❌ RDV introuvable');return;}
+  window.RdvOutcome.open(b,{typeMap:window._fcTypeMap||{}});
+}
+function ctResched(bookingId){
+  var b=(window._fcRdvCache||[]).find(function(x){return x.id===bookingId;});
+  if(!b||!window.RdvOutcome){toast('❌ RDV introuvable');return;}
+  window.RdvOutcome.openReschedule(b,{});
 }
 
 function paintRdvBox(items){
   var box=document.getElementById('fcRdvBox');
   if(!box)return;
-  var h='<div class="fl-title">📅 RDV à venir <span style="font-size:10px;color:var(--muted);font-weight:500;margin-left:4px">'+items.length+'</span></div>';
-  if(items.length===0){
-    h+='<div style="font-size:11px;color:var(--muted);padding:6px 0;font-style:italic">Aucun RDV programmé</div>';
+  var AF=window.AlteoreFlow;
+  var visible=(items||[]).filter(function(b){return !AF||AF.classifyBooking(b,window._fcTypeMap||{})!=='excluded';});
+  var h='<div class="fl-title">📅 Rendez-vous <span style="font-size:10px;color:var(--muted);font-weight:500;margin-left:4px">'+visible.length+'</span></div>';
+  if(visible.length===0){
+    h+='<div style="font-size:11px;color:var(--muted);padding:6px 0;font-style:italic">Aucun RDV</div>';
     box.innerHTML=h;return;
   }
   var JOURS=['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
   var MOIS_FR=['janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'];
-  items.forEach(function(b){
-    var dt=new Date(b.date+'T'+b.time+':00');
+  var upcoming=visible.filter(function(b){return !isRdvPast(b)&&(b.status==='confirmed'||b.status==='pending');});
+  var past=visible.filter(function(b){return isRdvPast(b)||(b.status!=='confirmed'&&b.status!=='pending');}).reverse();
+  var btnStyle='background:rgba(91,124,250,.12);border:1px solid rgba(91,124,250,.35);color:#b6c3ff;padding:4px 9px;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap';
+  var btnGhost='background:transparent;border:1px solid rgba(255,255,255,.12);color:var(--muted);padding:4px 9px;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap';
+
+  function row(b,past){
+    var dt=new Date(b.date+'T'+(b.time||'00:00')+':00');
     var dayName=JOURS[dt.getDay()];
     var dayNum=dt.getDate();
     var monthShort=MOIS_FR[dt.getMonth()];
-    var typeName=(b.consultation&&b.consultation.label)||b.typeName||b.type||'RDV';
+    var typeName=(b.consultation&&b.consultation.label)||b.typeName||b.typeLabel||b.type||'RDV';
     var personName=b.personName||'';
+    var sb=AF?AF.isSB(b,window._fcTypeMap||{}):(b.source==='self_booking');
     var subInfo=typeName+(personName?' · '+personName:'');
     var open=b.slotOpen===true;
-    var past=isRdvPast(b);
-    var classes='fl-rdv-card'+(open?' open':'')+(past?' past':'');
-    var statusLabel=open?'🟠 Ouvert':'🔒 Confirmé';
-    var statusCls=open?'open':'closed';
-    var btnLabel=open?'🔒 Fermer':'🟠 Ouvrir';
-    var btnCls=open?'primary':'warn';
-    h+='<div class="'+classes+'">'+
+    var chip=window.RdvOutcome?window.RdvOutcome.chip(b):'';
+    var sbChip='<span style="display:inline-block;color:'+(sb?'#fbbf24':'#a78bfa')+';border:1px solid '+(sb?'rgba(251,191,36,.4)':'rgba(167,139,250,.4)')+';background:'+(sb?'rgba(251,191,36,.08)':'rgba(167,139,250,.08)')+';border-radius:999px;padding:0 7px;font-size:9px;font-weight:800;margin-left:5px">'+(sb?'SB':'NB')+'</span>';
+    var hh='<div class="fl-rdv-card'+(open?' open':'')+(past?' past':'')+'">'+
       '<div class="fl-rdv-when">'+
         '<div class="fl-rdv-day">'+dayName+' '+monthShort+'</div>'+
         '<div class="fl-rdv-date">'+dayNum+'</div>'+
         '<div class="fl-rdv-time">'+esc(b.time||'')+'</div>'+
       '</div>'+
       '<div class="fl-rdv-info">'+
-        '<div class="fl-rdv-type">'+esc(subInfo)+'</div>'+
-        '<div class="fl-rdv-status '+statusCls+'">'+statusLabel+'</div>'+
+        '<div class="fl-rdv-type">'+esc(subInfo)+sbChip+'</div>'+
+        '<div style="margin-top:3px">'+chip+(b.outcomeNote?' <span style="font-size:10px;color:var(--muted);font-style:italic">'+esc(b.outcomeNote)+'</span>':'')+'</div>'+
+        (past?'':'<div class="fl-rdv-status '+(open?'open':'closed')+'" style="margin-top:3px">'+(open?'🟠 Slot ouvert':'🔒 Slot fermé')+'</div>')+
       '</div>'+
-      (past?'':'<button class="fl-rdv-toggle '+btnCls+'" onclick="toggleSlotFromFiche(\''+esc(b.id)+'\',\''+(open?'close':'open')+'\',this)">'+btnLabel+'</button>')+
+      '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">'+
+        (past
+          ?'<button style="'+btnStyle+'" onclick="ctOpenOutcome(\''+esc(b.id)+'\')">'+(b.outcome?'✎ Modifier':'🎯 Résultat')+'</button>'
+          :'<button style="'+btnGhost+'" onclick="ctResched(\''+esc(b.id)+'\')">📅 Replanifier</button>'+
+           '<button style="'+btnGhost+'" onclick="toggleSlotFromFiche(\''+esc(b.id)+'\',\''+(open?'close':'open')+'\',this)">'+(open?'🔒 Fermer':'🟠 Ouvrir')+'</button>'+
+           '<button style="'+btnGhost+'" onclick="ctOpenOutcome(\''+esc(b.id)+'\')" title="Statuer (annulation anticipée…)">✎</button>')+
+      '</div>'+
     '</div>';
-  });
+    return hh;
+  }
+
+  if(upcoming.length){
+    h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:6px 0 2px">À venir</div>';
+    upcoming.forEach(function(b){h+=row(b,false);});
+  }
+  if(past.length){
+    var toStatus=past.filter(function(b){return !b.outcome&&(b.status==='confirmed'||b.status==='pending');}).length;
+    h+='<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:8px 0 2px">Passés'+(toStatus?' · <span style="color:#fbbf24">'+toStatus+' à statuer</span>':'')+'</div>';
+    past.slice(0,6).forEach(function(b){h+=row(b,true);});
+    if(past.length>6)h+='<div style="font-size:10px;color:var(--muted);padding:4px 0">+ '+(past.length-6)+' RDV plus anciens</div>';
+  }
   box.innerHTML=h;
 }
 

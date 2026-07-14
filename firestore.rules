@@ -253,6 +253,32 @@ service cloud.firestore {
     }
 
 
+    // ═══ LEAD ACTIONS — journal des actions setting (refonte 07/2026) ═══
+    // Une action = un événement immuable écrit par alteore-flow.js à chaque
+    // changement de statut sur la fiche prospect (NRP1, SET, RDV posé…).
+    // Alimente le rapport Setting journalier (Total Leads, NRP1/2/3, Sets)
+    // et l'agrégat SETTING/CLOSING du Funnel.
+    // Path : lead_actions/{memberSlug}/items/{actionId}
+    match /lead_actions/{memberSlug}/items/{actionId} {
+      allow read:   if isSalesOrAdmin();
+      allow create: if isSalesOrAdmin();
+      allow update: if false;   // journal immuable — on corrige via rapport_overrides
+      allow delete: if isAdmin();
+    }
+
+
+    // ═══ RAPPORT OVERRIDES — corrections manuelles par jour ═══
+    // Les rapports Setting/Closing sont calculés automatiquement (Ringover,
+    // lead_actions, bookings). En cas d'anomalie, une correction ponctuelle
+    // par jour et par champ est stockée ici (jamais dans les données brutes).
+    // Path : rapport_overrides/{memberSlug}/jours/{YYYY-MM-DD}
+    match /rapport_overrides/{memberSlug}/jours/{dayKey} {
+      allow read:           if isSalesOrAdmin();
+      allow create, update: if isSalesOrAdmin();
+      allow delete:         if isAdmin();
+    }
+
+
     // ═══ LEADS ═══
     match /leads/{leadId} {
       // CSM peut read les leads (dashboard) et update (notes/relances/status)

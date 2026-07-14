@@ -10,6 +10,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
 <script src="dialer-bridge.js" defer></script>
+<!-- Refonte 07/2026 : résultats d'appel + replanification -->
+<script src="alteore-flow.js" defer></script>
+<script src="rdv-outcome.js" defer></script>
 <link rel="stylesheet" href="sales.css"/>
 <style>
 .bk{padding:20px 24px 80px;max-width:1100px;margin:0 auto}
@@ -290,7 +293,7 @@ body.csm-mode #csG [data-action="delT"]{display:none !important}
 <div class="bk">
 <div class="bk-top"><div class="bk-ic">📅</div><div><h1>Booking</h1><small>Gestion des rendez-vous</small></div><div class="sp"></div><button class="bb bb-p" id="newRdv">+ Nouveau rendez-vous</button></div>
 <div class="bn"><div class="bn-i on" data-p="rdv"><span>📋</span> Rendez-vous <span class="bn-c" id="cR">0</span></div><div class="bn-i" data-p="cs"><span>🏷</span> Consultations <span class="bn-c" id="cC">0</span></div><div class="bn-i" data-p="ex"><span>👥</span> Experts <span class="bn-c" id="cE">0</span></div><div class="bn-i" data-p="pg"><span>🔗</span> Pages de réservation</div><div class="bn-i" data-p="st"><span>⚙️</span> Réglages</div></div>
-<div class="bp on" id="p-rdv"><div class="rv-st"><div class="on" data-rt="up">À venir</div><div data-rt="past">Passé</div><div data-rt="cancel">Annulé</div></div><div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap"><input type="text" class="bi" id="rQ" placeholder="🔍 Rechercher…" style="width:200px"/><select class="bs" id="rFP"><option value="">Tous les experts</option></select><select class="bs" id="rFT"><option value="">Toutes les consultations</option></select></div><div class="rv-stats" id="rSt"></div><div id="rL"></div></div>
+<div class="bp on" id="p-rdv"><div class="rv-st"><div class="on" data-rt="up">À venir</div><div data-rt="past">Passé</div><div data-rt="cancel">Annulé</div></div><div class="rv-st" id="rScope" style="margin-top:-4px"><div data-sc="sales">🎯 Setting &amp; Sales</div><div data-sc="coaching">🎓 Coaching &amp; Clients</div><div data-sc="all">Tous</div></div><div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap"><input type="text" class="bi" id="rQ" placeholder="🔍 Rechercher…" style="width:200px"/><select class="bs" id="rFP"><option value="">Tous les experts</option></select><select class="bs" id="rFT"><option value="">Toutes les consultations</option></select></div><div class="rv-stats" id="rSt"></div><div id="rL"></div></div>
 <div class="bp" id="p-cs">
 <!-- GRID VIEW -->
 <div id="csGridView"><div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700;flex:1">Consultations actives <span class="bn-c" id="cC2">0</span></div><button class="bb bb-g" id="addT">+ Nouvelle Consultation</button></div><div class="cg" id="csG"></div><div id="addTF" style="display:none;margin-top:16px;padding:16px;background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-radius:14px"><div style="font-family:'Bricolage Grotesque',sans-serif;font-size:14px;font-weight:700;margin-bottom:12px">Nouvelle consultation</div><div class="mf" style="margin-bottom:12px"><label>Type d'événement</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px"><div class="evt-type-opt on" data-evt="private" onclick="selectEvtType(this)"><div style="font-size:16px">👤</div><div style="font-size:12px;font-weight:700">En privé</div><div style="font-size:10px;color:rgba(255,255,255,.38)">1:1 · Un seul invité</div></div><div class="evt-type-opt" data-evt="group" onclick="selectEvtType(this)"><div style="font-size:16px">👥</div><div style="font-size:12px;font-weight:700">Groupe</div><div style="font-size:10px;color:rgba(255,255,255,.38)">Plusieurs invités</div></div><div class="evt-type-opt" data-evt="roundrobin" onclick="selectEvtType(this)"><div style="font-size:16px">🔄</div><div style="font-size:12px;font-weight:700">Round-robin</div><div style="font-size:10px;color:rgba(255,255,255,.38)">Attribution tournante</div></div><div class="evt-type-opt" data-evt="collective" onclick="selectEvtType(this)"><div style="font-size:16px">🤝</div><div style="font-size:12px;font-weight:700">Collectif</div><div style="font-size:10px;color:rgba(255,255,255,.38)">Tous les experts présents</div></div></div></div><div class="mfr" style="margin-bottom:10px"><div class="mf"><label>Nom</label><input class="bi" id="tN" placeholder="Ex: Coaching 1:1 Business"/></div><div class="mf"><label>Durée</label><select class="bs" id="tD" style="width:100%"><option value="15">15 min</option><option value="30" selected>30 min</option><option value="45">45 min</option><option value="60">1h</option><option value="90">1h30</option><option value="120">2h</option></select></div></div><div class="mfr" style="margin-bottom:10px"><div class="mf"><label>Couleur</label><input type="color" id="tCo" value="#8b5cf6" style="width:100%;height:36px;border:0;border-radius:8px;cursor:pointer"/></div><div class="mf"><label>Description</label><input class="bi" id="tDs" placeholder="Optionnel"/></div></div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="bb bb-o" onclick="document.getElementById('addTF').style.display='none'">Annuler</button><button class="bb bb-p" id="tSub">Créer</button></div></div></div>
@@ -575,7 +578,40 @@ T.forEach(function(t){b.innerHTML+='<option value="'+t.id+'">'+esc(t.label)+'</o
 }
 document.querySelectorAll('[data-rt]').forEach(function(t){t.addEventListener('click',function(){document.querySelectorAll('[data-rt]').forEach(function(x){x.classList.remove('on');});t.classList.add('on');aRT=t.dataset.rt;rRdv();});});
 document.getElementById('rFP').addEventListener('change',rRdv);document.getElementById('rFT').addEventListener('change',rRdv);document.getElementById('rQ').addEventListener('input',rRdv);
-function rRdv(){var td=tISO(),fP=document.getElementById('rFP').value,fT=document.getElementById('rFT').value;var _canViewAll=(window._currentRole==='admin'||window._currentRole==='csm');if(!_canViewAll&&window._selfPersonId)fP=window._selfPersonId;var q=(document.getElementById('rQ').value||'').toLowerCase();var fl=B.filter(function(b){if(fP&&b.personId!==fP)return false;if(fT&&b.type!==fT)return false;if(q){var n=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')):b.personName||'';if(n.toLowerCase().indexOf(q)<0&&(b.typeLabel||'').toLowerCase().indexOf(q)<0)return false;}return true;});var up=fl.filter(function(b){return b.date>=td&&b.status==='confirmed';}),pa=fl.filter(function(b){return(b.date<td&&b.status!=='cancelled')||b.status==='completed';}),ca=fl.filter(function(b){return b.status==='cancelled';});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML='<div class="rv-stat"><div class="rv-sn" style="color:#a78bfa">'+up.length+'</div><div class="rv-sl">À venir</div></div><div class="rv-stat"><div class="rv-sn" style="color:#34d399">'+tl.length+'</div><div class="rv-sl">Aujourd\'hui</div></div><div class="rv-stat"><div class="rv-sn" style="color:#60a5fa">'+tw.length+'</div><div class="rv-sl">Cette semaine</div></div><div class="rv-stat"><div class="rv-sn" style="color:#fca5a5">'+ca.length+'</div><div class="rv-sl">Annulés</div></div>';var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='past'?function(a,b){return b.localeCompare(a);}:undefined);var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){var tO=T.find(function(t){return t.id===b.type;}),pO=P.find(function(p){return p.id===b.personId;}),tc=tO?tO.color:'#8b5cf6',pc=pO?pO.color:'#666',pN=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')).trim():'Inconnu',du=b.duration||30,sm=parseInt((b.time||'09:00').split(':')[0])*60+parseInt((b.time||'09:00').split(':')[1]),et=mToT(sm+du);h+='<div class="rv-r" style="cursor:pointer" onclick="openRdvDetail(\''+b._id+'\')"><div class="rv-t">'+(b.time||'—')+' - '+et+'</div><div class="rv-tp"><span class="rv-tb" style="background:'+tc+'">'+(tO?tO.label[0].toUpperCase():'?')+'</span><span class="rv-tn">'+esc(b.typeLabel||'—')+'</span></div><div class="rv-ex"><span class="rv-ea" style="background:'+pc+'">'+(pO?(pO.name||'?')[0].toUpperCase():'?')+'</span><span class="rv-en">'+esc(pO?pO.name:'—')+'</span></div><div class="rv-cl">👤 '+esc(pN)+'</div><select class="rv-ss" data-action="chSt" data-bid="'+b._id+'" onclick="event.stopPropagation()"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option><option value="no_show"'+(b.status==='no_show'?' selected':'')+'>No-show</option></select></div>';});});el.innerHTML=h;}
+
+/* ═══ PÉRIMÈTRE RDV — Setting/Sales vs Coaching/Clients (refonte 07/2026) ═══
+   L'équipe sales n'agit QUE sur les RDV setting/closing. Un RDV est
+   « coaching/clients » si : flag isCoaching (doc ou type de consultation),
+   source csm_manual, skipLeadCreation, ou clientId. Le résultat d'appel
+   (outcome) et les commissions ne s'appliquent JAMAIS au coaching. */
+var aScope=null,aScopeChosen=false;
+(function(){try{var s=localStorage.getItem('bk_scope');if(s==='sales'||s==='coaching'||s==='all'){aScope=s;aScopeChosen=true;}}catch(e){}})();
+function bkScope(b){
+  if(b.isCoaching===true)return 'coaching';
+  if(b.source==='csm_manual'||b.skipLeadCreation===true||b.clientId)return 'coaching';
+  var tO=T.find(function(t){return t.id===b.type;});
+  if(tO&&tO.isCoaching===true)return 'coaching';
+  return 'sales';
+}
+function bkScopeBadge(b){
+  if(bkScope(b)==='coaching'){
+    return ' <span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;padding:1px 7px;border-radius:999px;background:rgba(167,139,250,.14);color:#c4b5fd;border:1px solid rgba(167,139,250,.35);vertical-align:middle">🎓 COACHING</span>';
+  }
+  var sb=b.source!=='setter_booking';
+  var tO=T.find(function(t){return t.id===b.type;});
+  if(!b.source&&tO&&tO.isSetterOnly===true)sb=false;
+  return ' <span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;padding:1px 7px;border-radius:999px;background:'+(sb?'rgba(251,191,36,.12)':'rgba(167,139,250,.12)')+';color:'+(sb?'#fbbf24':'#c4b5fd')+';border:1px solid '+(sb?'rgba(251,191,36,.35)':'rgba(167,139,250,.35)')+';vertical-align:middle">'+(sb?'SB':'NB')+'</span>';
+}
+function syncScopeUI(){
+  if(!aScopeChosen)aScope=(window._currentRole==='csm')?'all':'sales';
+  document.querySelectorAll('#rScope [data-sc]').forEach(function(x){x.classList.toggle('on',x.dataset.sc===aScope);});
+}
+document.querySelectorAll('#rScope [data-sc]').forEach(function(t){t.addEventListener('click',function(){
+  aScope=t.dataset.sc;aScopeChosen=true;
+  try{localStorage.setItem('bk_scope',aScope);}catch(e){}
+  syncScopeUI();rRdv();
+});});
+function rRdv(){syncScopeUI();var td=tISO(),fP=document.getElementById('rFP').value,fT=document.getElementById('rFT').value;var _canViewAll=(window._currentRole==='admin'||window._currentRole==='csm');if(!_canViewAll&&window._selfPersonId)fP=window._selfPersonId;var q=(document.getElementById('rQ').value||'').toLowerCase();var fl=B.filter(function(b){if(aScope!=='all'&&bkScope(b)!==aScope)return false;if(fP&&b.personId!==fP)return false;if(fT&&b.type!==fT)return false;if(q){var n=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')):b.personName||'';if(n.toLowerCase().indexOf(q)<0&&(b.typeLabel||'').toLowerCase().indexOf(q)<0)return false;}return true;});var up=fl.filter(function(b){return b.date>=td&&b.status==='confirmed';}),pa=fl.filter(function(b){return(b.date<td&&b.status!=='cancelled')||b.status==='completed';}),ca=fl.filter(function(b){return b.status==='cancelled';});up.sort(function(a,b){return(a.date+a.time).localeCompare(b.date+b.time);});pa.sort(function(a,b){return(b.date+b.time).localeCompare(a.date+a.time);});document.getElementById('cR').textContent=up.length;var wE=new Date();wE.setDate(wE.getDate()+7);var ws=wE.getFullYear()+'-'+String(wE.getMonth()+1).padStart(2,'0')+'-'+String(wE.getDate()).padStart(2,'0');var tw=up.filter(function(b){return b.date<=ws;}),tl=up.filter(function(b){return b.date===td;});document.getElementById('rSt').innerHTML='<div class="rv-stat"><div class="rv-sn" style="color:#a78bfa">'+up.length+'</div><div class="rv-sl">À venir</div></div><div class="rv-stat"><div class="rv-sn" style="color:#34d399">'+tl.length+'</div><div class="rv-sl">Aujourd\'hui</div></div><div class="rv-stat"><div class="rv-sn" style="color:#60a5fa">'+tw.length+'</div><div class="rv-sl">Cette semaine</div></div><div class="rv-stat"><div class="rv-sn" style="color:#fca5a5">'+ca.length+'</div><div class="rv-sl">Annulés</div></div>';var ls=aRT==='up'?up:aRT==='past'?pa:ca,el=document.getElementById('rL');if(!ls.length){el.innerHTML='<div class="rv-em">Aucun rendez-vous '+(aRT==='up'?'à venir':aRT==='past'?'passé':'annulé')+'</div>';return;}var gr={};ls.forEach(function(b){if(!gr[b.date])gr[b.date]=[];gr[b.date].push(b);});var dk=Object.keys(gr).sort(aRT==='past'?function(a,b){return b.localeCompare(a);}:undefined);var h='';dk.forEach(function(dt){var its=gr[dt];h+='<div class="rv-dh"><span>📅</span><span class="rv-dl">'+dFR(dt)+'</span><span class="rv-dc">'+its.length+' Rendez-vous</span></div>';its.forEach(function(b){var tO=T.find(function(t){return t.id===b.type;}),pO=P.find(function(p){return p.id===b.personId;}),tc=tO?tO.color:'#8b5cf6',pc=pO?pO.color:'#666',pN=b.prospect?((b.prospect.prenom||'')+' '+(b.prospect.nom||'')).trim():'Inconnu',du=b.duration||30,sm=parseInt((b.time||'09:00').split(':')[0])*60+parseInt((b.time||'09:00').split(':')[1]),et=mToT(sm+du);h+='<div class="rv-r" style="cursor:pointer" onclick="openRdvDetail(\''+b._id+'\')"><div class="rv-t">'+(b.time||'—')+' - '+et+'</div><div class="rv-tp"><span class="rv-tb" style="background:'+tc+'">'+(tO?tO.label[0].toUpperCase():'?')+'</span><span class="rv-tn">'+esc(b.typeLabel||'—')+bkScopeBadge(b)+'</span></div><div class="rv-ex"><span class="rv-ea" style="background:'+pc+'">'+(pO?(pO.name||'?')[0].toUpperCase():'?')+'</span><span class="rv-en">'+esc(pO?pO.name:'—')+'</span></div><div class="rv-cl">👤 '+esc(pN)+(b.outcome&&window.RdvOutcome&&bkScope(b)==='sales'?' '+window.RdvOutcome.chip(b):'')+'</div><select class="rv-ss" data-action="chSt" data-bid="'+b._id+'" onclick="event.stopPropagation()"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option><option value="no_show"'+(b.status==='no_show'?' selected':'')+'>No-show</option></select></div>';});});el.innerHTML=h;}
 function rCs(){var EVT_LABELS={private:'👤 En privé',group:'👥 Groupe',roundrobin:'🔄 Round-robin',collective:'🤝 Collectif'};
 // CSM voit toutes les consultations comme admin (vue Customer Success).
 // Sales ne voit que celles qui lui sont assignées.
@@ -1273,6 +1309,13 @@ h+='<div class="rdv-p-head"><div style="flex:1"><div class="rdv-p-date">'+dFR(b.
 
 // Client info bar
 h+='<div class="rdv-p-client"><div class="rdv-p-client-av">'+clientName[0].toUpperCase()+'</div><div style="flex:1"><div class="rdv-p-client-nm">'+esc(clientName)+'</div><div class="rdv-p-client-em">'+esc(pr.email||'')+'</div></div></div>';
+/* Refonte 07/2026 : périmètre + résultat d'appel visibles dans le panneau détail.
+   Coaching/clients = hors périmètre setting/closing (pas d'outcome, pas de commission). */
+if(bkScope(b)==='coaching'){
+h+='<div style="margin:10px 2px 0;font-size:11px;color:#c4b5fd">🎓 <strong>RDV Coaching / Client</strong> — hors périmètre Setting &amp; Sales (pas de résultat d\'appel ni de commission).</div>';
+}else{
+h+='<div style="margin:10px 2px 0">'+bkScopeBadge(b)+(b.outcome&&window.RdvOutcome?' '+window.RdvOutcome.chip(b):'')+(b.outcomeNote?' <span style="font-size:11px;color:rgba(255,255,255,.5);font-style:italic">'+esc(b.outcomeNote)+'</span>':'')+'</div>';
+}
 
 // Meet button
 if(meetUrl){
@@ -1328,8 +1371,16 @@ h+='</div>';
 // Actions
 h+='<div class="rdv-p-actions">';
 var _canDeleteRdv=(window._currentRole==='admin');
+/* Refonte 07/2026 : résultat d'appel + replanification réelle (RdvOutcome).
+   Le résultat d'appel est réservé au périmètre Setting & Sales — jamais
+   proposé sur un RDV coaching/client. La replanification reste dispo pour
+   les deux (booking.html copie tous les flags d'origine). */
+window._bkDetailB=Object.assign({},b,{id:b._id});
+if(bkScope(b)!=='coaching'){
+h+='<button class="bb bb-p" onclick="bkOutcomeModal()">'+(b.outcome?'✎ Modifier le résultat':'🎯 Résultat de l\'appel')+'</button>';
+}
 if(b.status==='confirmed'){
-h+='<button class="bb bb-o" onclick="closeRdvDetail();toast(\'🔜 Replanification — prochaine version\')">📅 Replanifier</button>';
+h+='<button class="bb bb-o" onclick="bkRescheduleModal()">📅 Replanifier</button>';
 h+='<button class="bb bb-r" onclick="cancelRdv(\''+b._id+'\')">Annuler le RDV</button>';
 }
 if((b.status==='cancelled'||b.status==='completed')&&_canDeleteRdv){
@@ -1342,6 +1393,20 @@ document.getElementById('rdvBg').classList.add('show');
 document.getElementById('rdvPanel').classList.add('show');
 }
 function closeRdvDetail(){rdvTab='info';document.getElementById('rdvBg').classList.remove('show');document.getElementById('rdvPanel').classList.remove('show');}
+/* Refonte 07/2026 : modale résultat + replanification (composants partagés) */
+function bkOutcomeModal(){
+  var b=window._bkDetailB;
+  if(!b||!window.RdvOutcome){toast('❌ Module résultat non chargé');return;}
+  closeRdvDetail();
+  window.RdvOutcome.open(b,{onDone:function(){if(typeof loadB==='function')loadB();}});
+}
+function bkRescheduleModal(){
+  var b=window._bkDetailB;
+  if(!b||!window.RdvOutcome){toast('❌ Module résultat non chargé');return;}
+  closeRdvDetail();
+  window.RdvOutcome.openReschedule(b,{onDone:function(){if(typeof loadB==='function')loadB();}});
+}
+window.bkOutcomeModal=bkOutcomeModal;window.bkRescheduleModal=bkRescheduleModal;
 /* Stamps d'audit statut RDV (lus par le Funnel Sales) : qui / quand pour annulé & no-show */
 function _bkStatusStamps(st){var ts=firebase.firestore.FieldValue.serverTimestamp();var u=firebase.auth().currentUser;var nm=null;try{var tm=window.TEAM_MEMBERS_LIST||[];for(var i=0;i<tm.length;i++){if(u&&tm[i].firebaseUid===u.uid){nm=tm[i].shortName||tm[i].displayName;break;}}}catch(e){}if(!nm&&u)nm=(u.email||'').split('@')[0]||null;var p={status:st,statusUpdatedAt:ts,statusUpdatedBy:u?u.uid:null,statusUpdatedByName:nm};if(st==='cancelled'){p.cancelledAt=ts;p.cancelledBy=u?u.uid:null;p.cancelledByName=nm;}if(st==='no_show'){p.noShowAt=ts;p.noShowBy=u?u.uid:null;p.noShowByName=nm;}if(st==='completed'){p.completedAt=ts;}return p;}
 function cancelRdv(bid){if(!confirm('Annuler ce rendez-vous ?'))return;db.collection('bookings').doc(bid).update(_bkStatusStamps('cancelled')).then(function(){closeRdvDetail();loadB();toast('🔴 RDV annulé');});}

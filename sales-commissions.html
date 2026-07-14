@@ -779,17 +779,36 @@ function getDeals(uid, month) {
 
 function saveDeals(uid, month, deals) {
   const key = `comm_deals_${uid}_${month}`;
+  const cacheKey = uid + '_' + month;
+  // dealKeys connus de CETTE session AVANT l'écriture — sert à distinguer
+  // « deal supprimé volontairement ici » d'un « deal arrivé en base pendant
+  // l'édition » (ex : commission AUTO créée au Close depuis Mes RDV).
+  const knownKeys = {};
+  (_fsDealsCache[cacheKey] || []).forEach(d => { if (d && d.dealKey) knownKeys[d.dealKey] = true; });
+  deals.forEach(d => { if (d && d.dealKey) knownKeys[d.dealKey] = true; });
   localStorage.setItem(key, JSON.stringify(deals));
   // Sync cache
-  _fsDealsCache[uid + '_' + month] = deals;
-  // Firestore
+  _fsDealsCache[cacheKey] = deals;
+  // Firestore — transaction anti « lost update » (refonte 07/2026) :
+  // les deals distants inconnus de cette session sont PRÉSERVÉS.
   if (_fsDb) {
     const fsKey = _mToFs(month);
     if (fsKey) {
-      _fsDb.collection('commissions').doc(uid).collection('mois').doc(fsKey)
-        .set({ deals: deals }, { merge: true })
-        .then(function() { console.log('[Comm] Firestore saved', uid, month); })
-        .catch(function(e) { console.warn('[Comm] Firestore save error:', e.message); });
+      const ref = _fsDb.collection('commissions').doc(uid).collection('mois').doc(fsKey);
+      _fsDb.runTransaction(tx => tx.get(ref).then(snap => {
+        const remote = (snap.exists && snap.data().deals) || [];
+        const incoming = remote.filter(d => d && d.dealKey && !knownKeys[d.dealKey]);
+        const finalDeals = deals.concat(incoming);
+        tx.set(ref, { deals: finalDeals }, { merge: true });
+        return finalDeals;
+      })).then(function(finalDeals) {
+        if (finalDeals.length !== deals.length) {
+          _fsDealsCache[cacheKey] = finalDeals;
+          try { localStorage.setItem(key, JSON.stringify(finalDeals)); } catch(e) {}
+          if (typeof renderFiche === 'function' && currentMember && currentMember.uid === uid) renderFiche();
+        }
+        console.log('[Comm] Firestore saved', uid, month);
+      }).catch(function(e) { console.warn('[Comm] Firestore save error:', e.message); });
     }
   }
   document.dispatchEvent(new CustomEvent('comm:saved', { detail: { uid, month } }));
@@ -1124,14 +1143,15 @@ function renderDealsTable(deals) {
   if (!deals.length) {
     tbody.innerHTML = `<tr><td colspan="9"><div class="deals-empty">Aucun deal ce mois — ajoute le premier ↑</div></td></tr>`;
   } else {
+    const subLabel = { mensualise: 'Mensualisé', pif: 'PIF', noBooking: 'No-Booking', selfBooking: 'Self-Booking' };
     tbody.innerHTML = deals.map((d, i) => `
       <tr>
         <td>
-          <div class="deal-client">${d.client}</div>
+          <div class="deal-client">${d.client}${d.auto ? ' <span style="display:inline-block;margin-left:5px;font-size:8.5px;font-weight:800;letter-spacing:.5px;color:#2dd4bf;border:1px solid rgba(45,212,191,.4);background:rgba(45,212,191,.08);border-radius:999px;padding:1px 7px;vertical-align:middle" title="Créé automatiquement au Close (RDV)">⚡ AUTO</span>' : ''}</div>
           <div class="deal-email">${d.email}</div>
         </td>
         <td><span class="deal-offre ${offreClass(d.offre)}">${d.offre}</span></td>
-        <td><span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}">${d.type}</span></td>
+        <td><span class="deal-type-tag ${d.type === 'Closing' ? 'tag-closing' : 'tag-setting'}">${d.type}</span>${d.subtype ? `<div style="font-size:9.5px;color:var(--muted);margin-top:3px">${subLabel[d.subtype] || d.subtype}</div>` : ''}</td>
         <td style="font-size:12px;color:var(--muted)">${d.date || '—'}</td>
         <td>
           <div class="deal-comm">${fmtDec(d.comm)}${d.bonus ? ` <span style="font-size:11px;color:var(--gold)">+${d.bonus}€</span>` : ''}</div>
@@ -1246,10 +1266,35 @@ function toggleDealOk(i) {
 /* ─── ARCHIVED FLAG + VIEW FILTER (source : _meta/team_members via nav.js) ─── */
 function _markArchivedMembers() {
   var tm = window.TEAM_MEMBERS || {};
+  _syncRosterMembers();
   MEMBERS_COMM.forEach(function(m) {
     var meta = tm[m.uid];
     m.archived = !!(meta && meta.active === false);
   });
+}
+
+/* Refonte 07/2026 : les commissions AUTO (Close) peuvent viser n'importe quel
+   membre du roster — on ajoute dynamiquement à MEMBERS_COMM ceux qui manquent
+   (sinon leurs deals seraient invisibles sur cette page). */
+function _syncRosterMembers() {
+  var list = window.TEAM_MEMBERS_LIST || [];
+  var added = 0;
+  list.forEach(function(m) {
+    if (!m || !m.slug) return;
+    if (MEMBERS_COMM.some(function(x) { return x.uid === m.slug; })) return;
+    if (m.role !== 'closer' && m.role !== 'setter' && m.role !== 'closer_setter') return;
+    MEMBERS_COMM.push({
+      uid: m.slug,
+      name: m.shortName || m.displayName || m.slug,
+      surname: '',
+      role: m.role === 'closer' ? 'Closing' : m.role === 'setter' ? 'Setting' : 'Closing + Setting',
+      color: m.color || '#6b7280',
+      careerPtsBase: 0,
+      data: {}
+    });
+    added++;
+  });
+  return added;
 }
 function _isAdminView() {
   var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
@@ -1262,8 +1307,15 @@ function _visibleMembers() {
 }
 if (window.TEAM_MEMBERS) _markArchivedMembers();
 window.addEventListener('team-members-loaded', function() {
+  var added = _syncRosterMembers();
   _markArchivedMembers();
-  if (typeof renderAll === 'function') renderAll();
+  // Nouveaux membres découverts après l'auth → charger leur historique
+  // Firestore (deals AUTO compris) avant de re-render.
+  if (added > 0 && _fsDb) {
+    loadAllCommFromFirestore().then(function() { if (typeof renderAll === 'function') renderAll(); });
+  } else if (typeof renderAll === 'function') {
+    renderAll();
+  }
 });
 
 /* ══════════════════════════════════════════════════════════

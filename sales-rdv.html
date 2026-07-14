@@ -210,12 +210,18 @@ body { min-height: 100vh; }
 .rdv-mtab-badge { background: var(--orange); color: #1a1005; font-size: 10px; font-weight: 800; min-width: 17px; height: 17px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
 .rdv-mtab-badge:empty { display: none; }
 
-/* PASSÉS — statut Tenu / No-show / Annulé */
+/* PASSÉS — résultat d'appel (outcome) */
 .rdv-status-badge.tostatus { background: rgba(245,158,11,0.15); color: var(--orange); border: 1px solid rgba(245,158,11,0.3); }
 .rdv-card.past-card { opacity: 1; }
 .rdv-card.past-card.tostatus { border-left-color: var(--orange); background: linear-gradient(90deg, rgba(245,158,11,0.05), var(--bg-elev) 30%); }
 .rdv-btn.st-btn { padding: 6px 10px; font-size: 11.5px; }
 .rdv-btn.st-active { border-color: rgba(74,222,128,0.5); background: rgba(74,222,128,0.1); cursor: default; opacity: 1; }
+.rdv-btn.outcome {
+  background: linear-gradient(135deg, rgba(91,124,250,0.28), rgba(91,124,250,0.12));
+  border: 1px solid rgba(91,124,250,0.5); color: #c3cdff;
+}
+.rdv-btn.outcome:hover { box-shadow: 0 4px 14px rgba(91,124,250,0.28); border-color: rgba(91,124,250,0.7); }
+.rdv-outcome-note { font-size: 11px; color: var(--text-muted); font-style: italic; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
 
 <!-- Firebase -->
@@ -224,6 +230,9 @@ body { min-height: 100vh; }
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="nav.js" defer></script>
 <script src="dialer-bridge.js" defer></script>
+<!-- Refonte 07/2026 : résultats d'appel (outcome) + replanification -->
+<script src="alteore-flow.js" defer></script>
+<script src="rdv-outcome.js" defer></script>
 </head>
 
 <body>
@@ -730,6 +739,7 @@ function renderCard(b, doubleBooked) {
   } else {
     actions += '<button class="rdv-btn warn" onclick="openConfirmModal(\'' + b.id + '\', \'open\')">🟠 Ouvrir</button>';
   }
+  actions += '<button class="rdv-btn icon" type="button" onclick="openRescheduleModal(\'' + b.id + '\')" title="Replanifier ce RDV (nouveau créneau, l\'ancien passe en Replanifié)">📅</button>';
   if (b.leadId) {
     actions += '<a class="rdv-btn icon" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Fiche prospect">👁</a>';
   }
@@ -776,14 +786,35 @@ function renderStats() {
   if (badge) badge.textContent = toStatus > 0 ? String(toStatus) : '';
 }
 
-/* ── VUE PASSÉS — cartes + statut Tenu / No-show / Annulé ── */
-function pastNeedsStatus(b) { return b.status === 'confirmed' || b.status === 'pending'; }
+/* ── VUE PASSÉS — résultat d'appel (refonte 07/2026) ──
+   Le résultat riche (Close / Non close / Offre / Disqua / No-show / Annulé /
+   Replanifié) vit dans bookings.outcome et se saisit via la modale partagée
+   RdvOutcome (rdv-outcome.js) → propagation fiche + rapports + commissions. */
+function pastNeedsStatus(b) { return !b.outcome && (b.status === 'confirmed' || b.status === 'pending'); }
 
 function pastStatusBadge(b) {
+  if (window.RdvOutcome) return window.RdvOutcome.chip(b);
   if (b.status === 'completed') return '<span class="rdv-status-badge closed">✅ Tenu</span>';
   if (b.status === 'no_show')   return '<span class="rdv-status-badge open">🚫 No-show</span>';
   if (b.status === 'cancelled') return '<span class="rdv-status-badge double">🔴 Annulé</span>';
   return '<span class="rdv-status-badge tostatus">⏳ À statuer</span>';
+}
+
+function openOutcomeModal(bookingId, preselect) {
+  var b = STATE.past.find(function (x) { return x.id === bookingId; })
+       || STATE.bookings.find(function (x) { return x.id === bookingId; });
+  if (!b) { toast('❌ RDV introuvable', 'error'); return; }
+  if (!window.RdvOutcome || !window.AlteoreFlow) { toast('❌ Module résultat non chargé', 'error'); return; }
+  window.RdvOutcome.open(b, { preselect: preselect || null, typeMap: TYPE_MAP });
+  /* le onSnapshot met l'UI à jour automatiquement après enregistrement */
+}
+
+function openRescheduleModal(bookingId) {
+  var b = STATE.bookings.find(function (x) { return x.id === bookingId; })
+       || STATE.past.find(function (x) { return x.id === bookingId; });
+  if (!b) { toast('❌ RDV introuvable', 'error'); return; }
+  if (!window.RdvOutcome) { toast('❌ Module résultat non chargé', 'error'); return; }
+  window.RdvOutcome.openReschedule(b, {});
 }
 
 function renderPast() {
@@ -797,7 +828,7 @@ function renderPast() {
   list.forEach(function(b) { if (!byDate[b.date]) byDate[b.date] = []; byDate[b.date].push(b); });
   var dates = Object.keys(byDate).sort().reverse();
 
-  var html = '<div style="font-size:12px;color:var(--text-muted);margin:0 4px 14px">Marque chaque RDV passé — <strong style="color:var(--text)">✅ Tenu</strong>, <strong style="color:var(--text)">🚫 No-show</strong> ou <strong style="color:var(--text)">🔴 Annulé</strong> — un clic suffit (modifiable), les stats du funnel se mettent à jour automatiquement.</div>';
+  var html = '<div style="font-size:12px;color:var(--text-muted);margin:0 4px 14px">Statue chaque RDV passé avec <strong style="color:var(--text)">🎯 Résultat</strong> — Close, Non close, Offre, Disqua, No-show, Annulé ou Replanifié. Tout se propage automatiquement : fiche prospect, rapports Setting/Closing, tunnel et commissions.</div>';
   dates.forEach(function(dateKey) {
     var items = byDate[dateKey];
     html += '<div class="rdv-day-group">' +
@@ -823,9 +854,7 @@ function renderPastCard(b) {
   if (needs) classes.push('tostatus');
 
   var actions = '';
-  actions += statusBtn(b, 'completed', '✅ Tenu');
-  actions += statusBtn(b, 'no_show', '🚫 No-show');
-  actions += statusBtn(b, 'cancelled', '🔴 Annulé');
+  actions += '<button class="rdv-btn outcome" onclick="openOutcomeModal(\'' + b.id + '\')">' + (b.outcome ? '✎ Modifier' : '🎯 Résultat') + '</button>';
   if (b.leadId) {
     actions += '<a class="rdv-btn icon" href="sales-contact.html?id=' + encodeURIComponent(b.leadId) + '" title="Fiche prospect">👁</a>';
   }
@@ -845,6 +874,7 @@ function renderPastCard(b) {
           (typeName ? '<span>' + escapeHtml(typeName) + '</span><span class="rdv-meta-dot">·</span>' : '') +
           (phone ? '<span>' + escapeHtml(phone) + '</span><span class="rdv-meta-dot">·</span>' : '') +
           pastStatusBadge(b) +
+          (b.outcomeNote ? '<span class="rdv-meta-dot">·</span><span class="rdv-outcome-note" title="' + escapeHtml(b.outcomeNote) + '">' + escapeHtml(b.outcomeNote) + '</span>' : '') +
         '</div>' +
       '</div>' +
       '<div class="rdv-actions">' + actions + '</div>' +
