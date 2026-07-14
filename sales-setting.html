@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <meta name="theme-color" content="#07080f"/>
-<title>Alteore — Setting (rapport journalier)</title>
+<title>Alteore — SET NB (rapport journalier)</title>
 <link rel="stylesheet" href="alteore-ui.css"/>
 
 <!-- ── Firebase v9 compat ── -->
@@ -34,8 +34,8 @@
   <div class="au-head">
     <div class="au-head-ico">📞</div>
     <div>
-      <h1 class="au-title">Setting <span style="color:var(--muted);font-weight:500">· rapport journalier</span></h1>
-      <div class="au-sub">Set NB — appels Ringover, actions fiche Leads Live et RDV remontent automatiquement, jour après jour. RDV coaching &amp; clients exclus.</div>
+      <h1 class="au-title">SET NB <span style="color:var(--muted);font-weight:500">· rapport Setting journalier</span></h1>
+      <div class="au-sub">Équipe sales uniquement — appels Ringover, actions fiche Leads Live et RDV remontent automatiquement, jour après jour. RDV coaching &amp; clients exclus.</div>
     </div>
     <div class="au-head-right">
       <span class="au-badge-auto"><span class="dot"></span> Données automatiques</span>
@@ -140,16 +140,12 @@
   function fmtEuro(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR') + ' €'; }
   function fmtPct(n) { return n == null ? '—' : (Math.round(n * 10) / 10).toLocaleString('fr-FR') + ' %'; }
 
-  /* ── Membres : setters (role setter / closer_setter) ── */
+  /* ── Membres : ÉQUIPE SALES uniquement (validé Adrien 14/07/2026) ──
+     AF.salesMembers() = rôles setter/closer/closer_setter, actifs, membres
+     partis exclus. Ni admins, ni coachs, ni CSM ici. */
   function computeMembers() {
-    var list = (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.slug; });
-    var setters = list.filter(function (m) { return m.role === 'setter' || m.role === 'closer_setter'; });
-    if (!setters.length) setters = list;
-    if (!setters.length) setters = [
-      { slug: 'elodie', shortName: 'Elodie', role: 'closer_setter', color: '#60a5fa', firebaseUid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', active: true },
-      { slug: 'guillaume', shortName: 'Guillaume', role: 'closer_setter', color: '#ef4444', firebaseUid: null, active: true }
-    ];
-    if (S.role !== 'admin') setters = setters.filter(function (m) { return m.active !== false; });
+    var setters = AF.salesMembers().filter(function (m) { return m.role === 'setter' || m.role === 'closer_setter'; });
+    if (!setters.length) setters = AF.salesMembers();
     S.members = setters;
     if (!S.slug || !setters.some(function (m) { return m.slug === S.slug; })) {
       var meM = AF.me();

@@ -658,10 +658,15 @@ const BONUS_MILESTONES = [
 /* ══════════════════════════════════════════════════════════
    HISTORICAL DATA
 ══════════════════════════════════════════════════════════ */
+/* Membres partis de la société — masqués PARTOUT (dashboard, fiches,
+   comparatifs) mais données historiques conservées. Validé Adrien 14/07/2026. */
+const DEPARTED_COMM = { guillaume: true };
+
 const MEMBERS_COMM = [
   {
     uid: 'guillaume', name: 'Guillaume', surname: 'Bilcke',
     role: 'Closing + Setting', color: '#ef4444',
+    departed: true, // n'appartient plus à la société (07/2026)
     careerPtsBase: 10, // Points bonus historiques (avant données trackées)
     data: {
       'Janvier 2026': [
@@ -921,9 +926,9 @@ function renderDashboard() {
   const month = cmk();
   const lbl = document.getElementById('dash-month-label'); if (lbl) lbl.textContent = month;
 
-  // Aggregate all members
+  // Aggregate — équipe sales active uniquement (membres partis exclus)
   let totalComm = 0, totalContracte = 0, totalCollecte = 0, allDeals = [];
-  MEMBERS_COMM.forEach(m => {
+  _visibleMembers().forEach(m => {
     const deals = getDeals(m.uid, month);
     totalComm      += calcComm(deals);
     totalContracte += calcContracte(deals);
@@ -934,16 +939,16 @@ function renderDashboard() {
   // KPIs row
   const nClos = allDeals.filter(d => d.type === 'Closing').length;
   const nSet  = allDeals.filter(d => d.type === 'Setting').length;
-  const totPtsMonth = MEMBERS_COMM.reduce((t, m) => t + calcPoints(getDeals(m.uid, month)), 0);
+  const totPtsMonth = _visibleMembers().reduce((t, m) => t + calcPoints(getDeals(m.uid, month)), 0);
 
   document.getElementById('dash-comm').textContent      = fmtDec(totalComm);
   document.getElementById('dash-contracte').textContent = fmt(totalContracte);
   document.getElementById('dash-collecte').textContent  = fmt(totalCollecte);
   document.getElementById('dash-deals').textContent     = nClos + ' closes · ' + nSet + ' sets';
 
-  // Comparatif members
-  const maxComm = Math.max(...MEMBERS_COMM.map(m => calcComm(getDeals(m.uid, month))), 1);
-  const compHtml = MEMBERS_COMM.map(m => {
+  // Comparatif members — équipe sales active uniquement
+  const maxComm = Math.max(..._visibleMembers().map(m => calcComm(getDeals(m.uid, month))), 1);
+  const compHtml = _visibleMembers().map(m => {
     const deals = getDeals(m.uid, month);
     const comm = calcComm(deals);
     const pts  = calcPoints(deals);
@@ -1281,6 +1286,8 @@ function _syncRosterMembers() {
   var added = 0;
   list.forEach(function(m) {
     if (!m || !m.slug) return;
+    if (DEPARTED_COMM[m.slug]) return;       // parti de la société
+    if (m.active === false) return;          // archivé dans le roster
     if (MEMBERS_COMM.some(function(x) { return x.uid === m.slug; })) return;
     if (m.role !== 'closer' && m.role !== 'setter' && m.role !== 'closer_setter') return;
     MEMBERS_COMM.push({
@@ -1302,8 +1309,9 @@ function _isAdminView() {
 }
 function _visibleMembers() {
   _markArchivedMembers();
-  if (_isAdminView()) return MEMBERS_COMM;
-  return MEMBERS_COMM.filter(function(m) { return !m.archived; });
+  /* Équipe sales active uniquement : les membres partis (departed) et
+     archivés sont masqués pour TOUT LE MONDE, admin compris (14/07/2026). */
+  return MEMBERS_COMM.filter(function(m) { return !m.departed && !m.archived && !DEPARTED_COMM[m.uid]; });
 }
 if (window.TEAM_MEMBERS) _markArchivedMembers();
 window.addEventListener('team-members-loaded', function() {

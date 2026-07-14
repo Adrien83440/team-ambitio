@@ -42,7 +42,7 @@
 
   const PERM_LABELS = {
     coaching_clients:'Clients (Coaching)',coaching_dashboard:'Dashboard (Coaching)',coaching_communication:'Communication',
-    sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'Setting / Closing / EOD',
+    sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'SET NB / Close SB / EOD',
     sales_dialer:'Dialer',
     sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking',alteoforms:'AlteoForms',
     csm_dashboard:'Dashboard CSM',csm_clients:'Clients (CSM)'
@@ -63,9 +63,9 @@
       { id: 'sales-retargeting', icon: '🔄', label: 'Retargeting',   href: 'sales-retargeting.html' },
       { id: 'sales-suivi',       icon: '📋', label: 'Clients', href: 'sales-clients.html' },
     ]},
-    { id: 'sales-saisie',      icon: '✏️', label: 'Setting / Closing', href: '#',                      section: 'Sales', perm: 'sales_saisie', children: [
-      { id: 'sales-setting',      icon: '📞', label: 'Setting',      href: 'sales-setting.html' },
-      { id: 'sales-closing',      icon: '🎯', label: 'Closing',      href: 'sales-closing.html' },
+    { id: 'sales-saisie',      icon: '✏️', label: 'SET NB / Close SB', href: '#',                      section: 'Sales', perm: 'sales_saisie', children: [
+      { id: 'sales-setting',      icon: '📞', label: 'SET NB',       href: 'sales-setting.html' },
+      { id: 'sales-closing',      icon: '🎯', label: 'Close SB',     href: 'sales-closing.html' },
       { id: 'sales-eod',          icon: '📝', label: 'EOD',          href: 'sales-eod.html' },
       { id: 'sales-commissions',  icon: '💰', label: 'Commissions',  href: 'sales-commissions.html' },
       { id: 'sales-projections',  icon: '📈', label: 'Projections',  href: 'sales-projections.html' },

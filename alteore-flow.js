@@ -118,6 +118,31 @@
     for (var i = 0; i < members.length; i++) { if (members[i] && members[i].slug === slug) return members[i]; }
     return null;
   }
+
+  /* ═══ ÉQUIPE SALES — source de vérité unique (validé Adrien 14/07/2026) ═══
+     Les modules SET NB / Close SB / Commissions et les sélecteurs
+     closer/setter ne concernent QUE l'équipe sales : rôles setter, closer,
+     closer_setter, membres actifs. Les admins, coachs et la CSM n'y
+     apparaissent jamais. DEPARTED : membres partis de la société, exclus en
+     dur même si le roster _meta/team_members n'est pas encore à jour. */
+  var DEPARTED = { guillaume: 1 }; // Guillaume Bilcke — parti (07/2026)
+  var SALES_ROLES = { setter: 1, closer: 1, closer_setter: 1 };
+
+  function salesMembers() {
+    var list = (window.TEAM_MEMBERS_LIST || []).filter(function (m) {
+      return m && m.slug && !DEPARTED[m.slug] && m.active !== false && SALES_ROLES[m.role];
+    });
+    if (!list.length) {
+      /* Repli : Élodie — seule membre sales connue si le roster est vide ou
+         si les rôles n'y sont pas renseignés. */
+      list = [{ slug: 'elodie', shortName: 'Elodie', displayName: 'Elodie Vidotto Siarri', role: 'closer_setter', color: '#60a5fa', firebaseUid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', active: true }];
+    }
+    return list;
+  }
+  function isSalesMember(slug) {
+    if (!slug || DEPARTED[slug]) return false;
+    return salesMembers().some(function (m) { return m.slug === slug; });
+  }
   function memberByFirebaseUid(uid) {
     var members = window.TEAM_MEMBERS_LIST || [];
     for (var i = 0; i < members.length; i++) { if (members[i] && members[i].firebaseUid === uid) return members[i]; }
@@ -577,6 +602,9 @@
     me: me,
     memberBySlug: memberBySlug,
     memberByFirebaseUid: memberByFirebaseUid,
+    salesMembers: salesMembers,
+    isSalesMember: isSalesMember,
+    DEPARTED: DEPARTED,
     dayKey: dayKey,
     monthKey: monthKey,
     frDate: frDate,

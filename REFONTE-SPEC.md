@@ -84,6 +84,25 @@ Compat : `sales-saisie.html`, `sales-eod.html`, dashboard inchangés (lecture de
 préservée). Les rapports auto démarrent à la mise en ligne ; appels et RDV passés remontent
 automatiquement (recalcul à la volée), les compteurs d'actions (NRP/jour) démarrent vides.
 
+## 7ter. Périmètre équipe + renommage + cohérence Funnel (retours test 14/07)
+
+- **Équipe sales uniquement** dans SET NB / Close SB / Commissions et dans les sélecteurs
+  closer/setter : rôles setter/closer/closer_setter actifs — jamais d'admin, de coach ni de
+  CSM. Source unique `AlteoreFlow.salesMembers()`. **Guillaume (parti) est exclu en dur**
+  (`DEPARTED`) partout, y compris du dashboard Commissions (historique conservé en données,
+  masqué à l'affichage) et du sélecteur Gestionnaire de la fiche CRM (leads encore attribués
+  à lui : visible « inactif », plus proposable).
+- **Renommage** : les modules s'appellent désormais **SET NB** (ex-Setting) et **Close SB**
+  (ex-Closing) — nav, titres de pages et lignes du Funnel alignés.
+- **Funnel · Tenue des RDV — chiffres cohérents** : les replanifiés sortent des annulés
+  (carte dédiée), kept = planifiés − annulés − no-show − replanifiés, et la répartition
+  « par personne » (qui affichait l'opérateur du clic, ex. la CSM) est remplacée par la
+  ventilation métier **SB / NB** sur chaque carte (annulés, no-show, replanifiés) — mêmes
+  prédicats que la section SETTING/CLOSING, donc totaux toujours égaux.
+- **Funnel · vue par jour** : nouveau mode « Jour » (‹ › + sélecteur de date) — tout le
+  funnel se calcule sur la journée choisie, mêmes sources. Les sections basées sur les
+  saisies mensuelles (Closing saisies, CAC saisies) restent réservées à la maille mois.
+
 ## 7bis. Séparation Setting/Sales vs Coaching dans Booking (ajout 14/07)
 
 Un RDV est « coaching/clients » si `isCoaching` (sur le doc OU sur le type de consultation),

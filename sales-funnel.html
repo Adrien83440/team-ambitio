@@ -175,6 +175,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
 
   <div class="fn-toolbar">
     <div class="fn-seg" id="fnModeSeg">
+      <button data-mode="day">Jour</button>
       <button data-mode="month" class="active">Mois</button>
       <button data-mode="7d">7 jours</button>
       <button data-mode="30d">30 jours</button>
@@ -184,6 +185,12 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <button id="fnPrevM">‹</button>
       <span class="fn-mlabel" id="fnMonthLabel">—</span>
       <button id="fnNextM">›</button>
+    </div>
+    <div class="fn-mnav" id="fnDayNav" style="display:none">
+      <button id="fnPrevD" title="Jour précédent">‹</button>
+      <span class="fn-mlabel" id="fnDayLabel">—</span>
+      <button id="fnNextD" title="Jour suivant">›</button>
+      <input type="date" id="fnDayPick" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:5px 8px;font-size:12px;font-family:var(--font-m);outline:none;margin-left:4px"/>
     </div>
     <div class="fn-custom" id="fnCustom">
       <input type="date" id="fnCustA"> <span style="color:var(--muted)">→</span> <input type="date" id="fnCustB">
@@ -441,6 +448,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     var s = new Date(P.end.getTime() - (days - 1) * 86400000);
     P.start = new Date(s.getFullYear(), s.getMonth(), s.getDate(), 0, 0, 0, 0);
   }
+  /* Vue « par jour » (demande Adrien 14/07/2026) : tout le funnel sur une
+     seule journée — mêmes sources, mêmes calculs, plage start=end=jour. */
+  function applyDay(iso) {
+    var p = iso.split('-');
+    P.mode = 'day';
+    P.day = iso;
+    P.start = new Date(+p[0], +p[1] - 1, +p[2], 0, 0, 0, 0);
+    P.end   = new Date(+p[0], +p[1] - 1, +p[2], 23, 59, 59, 999);
+  }
   function applyCustom(aIso, bIso) {
     var a = aIso.split('-'), b = bIso.split('-');
     P.mode = 'custom';
@@ -450,13 +466,23 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   function periodIsCalendarMonth() { return P.mode === 'month'; }
   function periodLabel() {
     if (P.mode === 'month') return MONTHS_FR[P.m] + ' ' + P.y;
+    if (P.mode === 'day') {
+      try { return P.start.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+      catch (e) { return P.day || isoDate(P.start); }
+    }
     return frDay(isoDate(P.start)) + '/' + String(P.start.getFullYear()).slice(2) + ' → ' + frDay(isoDate(P.end)) + '/' + String(P.end.getFullYear()).slice(2);
   }
   function updateToolbar() {
-    $$('#fnModeSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-mode') === (P.mode === 'month' ? 'month' : P.mode === 'custom' ? 'custom' : P.mode === '7d' ? '7d' : '30d')); });
+    $$('#fnModeSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-mode') === (P.mode === 'month' ? 'month' : P.mode === 'day' ? 'day' : P.mode === 'custom' ? 'custom' : P.mode === '7d' ? '7d' : '30d')); });
     $('#fnMonthNav').style.display = P.mode === 'month' ? 'flex' : 'none';
+    $('#fnDayNav').style.display = P.mode === 'day' ? 'flex' : 'none';
     $('#fnCustom').className = 'fn-custom' + (P.mode === 'custom' ? ' show' : '');
     $('#fnMonthLabel').textContent = P.mode === 'month' ? (MONTHS_FR[P.m] + ' ' + P.y) : '—';
+    if (P.mode === 'day') {
+      var dl = $('#fnDayLabel'), dp = $('#fnDayPick');
+      if (dl) { try { dl.textContent = P.start.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }); } catch (e) { dl.textContent = P.day || '—'; } }
+      if (dp && P.day) dp.value = P.day;
+    }
   }
 
   /* ════════════════════════════════════════════════════════════════
@@ -676,12 +702,16 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   }
 
   /* Journal d'actions setting (lead_actions/{slug}/items — refonte 07/2026).
-     Une requête par membre (sous-collections par slug, plage sur `day`). */
+     Une requête par membre — ÉQUIPE SALES uniquement (setter/closer/
+     closer_setter actifs, membres partis exclus — validé Adrien 14/07). */
   function loadActionsAll() {
     DATA.actions = [];
     return waitForTeamMembers().then(function () {
-      var members = (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.slug; });
-      if (!members.length) return;
+      var members = (window.TEAM_MEMBERS_LIST || []).filter(function (m) {
+        return m && m.slug && m.slug !== 'guillaume' && m.active !== false
+          && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter');
+      });
+      if (!members.length) members = [{ slug: 'elodie' }];
       var sIso = isoDate(P.start), eIso = isoDate(P.end);
       var proms = members.map(function (m) {
         return db.collection('lead_actions').doc(m.slug).collection('items')
@@ -846,23 +876,36 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     k.setterOldLeads = setterOld;
     k.unknownLeadBookings = unknownLeadBookings;
 
-    /* ── Tenue — RDV dont la date tombe dans la période ── */
+    /* ── Tenue — RDV dont la date tombe dans la période ──
+       Cohérence 14/07/2026 : les REPLANIFIÉS sont sortis des annulés (le RDV
+       de remplacement les remplace), et la ventilation se fait par nature
+       SB / NB — plus jamais « par personne » (le nom de l'opérateur qui
+       clique Annuler, ex. la CSM, n'est pas une donnée métier setting). */
     var due = DATA.bookings.filter(function (b) { return b._inDue && (b._class === 'self' || b._class === 'setter') && bookingMatches(b); });
+    function dueRescheduledF(b) { return b.outcome === 'replanifie' || (b.status === 'cancelled' && b.rescheduled === true); }
+    function dueCancelledF(b) { return !dueRescheduledF(b) && (b.outcome === 'annule' || b.status === 'cancelled'); }
     k.due = due.length;
-    k.dueCancelled = due.filter(function (b) { return b.status === 'cancelled'; }).length;
+    k.dueRescheduled = due.filter(dueRescheduledF).length;
+    k.dueCancelled = due.filter(dueCancelledF).length;
     k.dueNoShow = due.filter(function (b) { return b.status === 'no_show'; }).length;
     k.dueCompleted = due.filter(function (b) { return b.status === 'completed'; }).length;
-    k.dueToStatus = due.filter(function (b) { return b.status === 'confirmed' && b.date < todayIso; }).length;
-    k.dueUpcoming = due.filter(function (b) { return b.status === 'confirmed' && b.date >= todayIso; }).length;
-    k.kept = k.due - k.dueCancelled - k.dueNoShow;
+    k.dueToStatus = due.filter(function (b) { return (b.status === 'confirmed' || b.status === 'pending') && b.date < todayIso; }).length;
+    k.dueUpcoming = due.filter(function (b) { return (b.status === 'confirmed' || b.status === 'pending') && b.date >= todayIso; }).length;
+    k.kept = k.due - k.dueCancelled - k.dueNoShow - k.dueRescheduled;
     k.keptPct = k.due > 0 ? k.kept / k.due * 100 : null;
     k.cancelRate = k.due > 0 ? (k.dueCancelled + k.dueNoShow) / k.due * 100 : null;
-    k.cancelledByMap = {};
-    due.forEach(function (b) {
-      if (b.status !== 'cancelled' && b.status !== 'no_show') return;
-      var who = b.cancelledByName || b.noShowByName || (b.status === 'no_show' ? 'No-show' : 'Non renseigné');
-      k.cancelledByMap[who] = (k.cancelledByMap[who] || 0) + 1;
-    });
+    /* Ventilation SB / NB (demande Adrien : « combien annulation SB et
+       combien annulé du NB ») — mêmes prédicats, sous-ensembles du même due. */
+    var dueSelf = due.filter(function (b) { return b._class === 'self'; });
+    var dueSetter = due.filter(function (b) { return b._class === 'setter'; });
+    k.dueSB = dueSelf.length;
+    k.dueNB = dueSetter.length;
+    k.cancSB = dueSelf.filter(dueCancelledF).length;
+    k.cancNB = dueSetter.filter(dueCancelledF).length;
+    k.noshowSB = dueSelf.filter(function (b) { return b.status === 'no_show'; }).length;
+    k.noshowNB = dueSetter.filter(function (b) { return b.status === 'no_show'; }).length;
+    k.reschedSB = dueSelf.filter(dueRescheduledF).length;
+    k.reschedNB = dueSetter.filter(dueRescheduledF).length;
 
     /* ══ SETTING / CLOSING — résultats d'appel (outcome, refonte 07/2026) ══
        Ventilation stricte validée Adrien : le rapport Closing = RDV SELF
@@ -1158,14 +1201,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '</div>';
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 5. Tenue des RDV */
-    h += stageOpen('✅', 'Tenue des RDV', 'RDV dont la date tombe dans la période');
+    /* 5. Tenue des RDV — ventilation SB/NB, replanifiés à part (14/07/2026) */
+    h += stageOpen('✅', 'Tenue des RDV', 'RDV setting/closing dont la date tombe dans la période · coaching &amp; CSM exclus');
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.due), 'RDV planifiés', null);
-    h += kpiCard(fmtNum(k.kept), 'Kept Call', 'maintenus (ni annulé, ni no-show)', targetBadge('kept', k.keptPct));
+    h += kpiCard(fmtNum(k.due), 'RDV planifiés', 'SB ' + fmtNum(k.dueSB) + ' · NB ' + fmtNum(k.dueNB));
+    h += kpiCard(fmtNum(k.kept), 'Kept Call', 'ni annulé, ni no-show, ni replanifié', targetBadge('kept', k.keptPct));
     h += kpiCard(fmtPct(k.keptPct, 0), 'Kept %', null);
-    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.dueCancelled) + '</span>', '🔴 Annulés', cancelByLabel(k));
-    h += kpiCard('<span style="color:var(--gold)">' + fmtNum(k.dueNoShow) + '</span>', '🚫 No-show', null);
+    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.dueCancelled) + '</span>', '🔴 Annulés', 'SB ' + fmtNum(k.cancSB) + ' · NB ' + fmtNum(k.cancNB));
+    h += kpiCard('<span style="color:var(--gold)">' + fmtNum(k.dueNoShow) + '</span>', '🚫 No-show', 'SB ' + fmtNum(k.noshowSB) + ' · NB ' + fmtNum(k.noshowNB));
+    h += kpiCard(fmtNum(k.dueRescheduled), '📅 Replanifiés', k.dueRescheduled ? 'SB ' + fmtNum(k.reschedSB) + ' · NB ' + fmtNum(k.reschedNB) + ' — remplacés, hors annulés' : 'remplacés, hors annulés', null, k.dueRescheduled === 0);
     h += kpiCard(fmtNum(k.dueCompleted), 'Tenus (statués)', k.dueUpcoming ? '+ ' + k.dueUpcoming + ' à venir' : null);
     if (k.saisies) h += kpiCard(fmtPct(k.showup, 0), 'Show-up', 'calls live / kept', targetBadge('showup', k.showup));
     h += '</div>';
@@ -1203,8 +1247,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     if (!k.ocHasData) {
       h += '<div class="fn-stage-note" style="margin-top:6px">Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="sales-rdv.html" style="color:var(--blue)">Rendez-vous</a> ou la fiche prospect. Cette section s\'alimente toute seule.</div>';
     }
-    /* — ligne CLOSING (Close SB) — */
-    h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;text-transform:uppercase;letter-spacing:0.7px;margin:10px 0 8px">Closing — Self Booking</div>';
+    /* — ligne CLOSE SB — */
+    h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;text-transform:uppercase;letter-spacing:0.7px;margin:10px 0 8px">CLOSE SB — Closing Self Booking</div>';
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.ocSB.due), 'RDV SB', 'LTB (SB) ' + fmtPct(k.ltbSB));
     h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.ocSB.cancelled) + '</span> / <span style="color:var(--gold)">' + fmtNum(k.ocSB.noshow) + '</span>', 'Annulés / No-show SB', k.ocSB.resched ? '+ ' + k.ocSB.resched + ' replanifiés' : null);
@@ -1213,8 +1257,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += kpiCard(fmtNum(k.ocSB.closes), 'Closes SB', k.ocSB.pitched > 0 ? fmtPct(k.ocSB.closes / k.ocSB.pitched * 100, 0) + ' des offres · ' + k.ocSB.nonCloses + ' non closes' : (k.ocSB.nonCloses ? k.ocSB.nonCloses + ' non closes' : null));
     h += kpiCard(fmtEuro(k.ocSB.collecte), 'Collecté SB', 'contracté ' + fmtEuro(k.ocSB.contracte));
     h += '</div>';
-    /* — ligne SETTING (Set NB) — */
-    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;margin:14px 0 8px">Setting — No Booking</div>';
+    /* — ligne SET NB — */
+    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;margin:14px 0 8px">SET NB — Setting No Booking</div>';
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.actLeadsWorked), 'Leads travaillés', '1ʳᵉ action fiche (journal setting)');
     h += kpiCard(fmtNum(k.actSets), 'Sets (actions)', 'vs ' + fmtNum(k.bookedSetter) + ' RDV setter créés');
@@ -1756,6 +1800,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       b.onclick = function () {
         var mode = b.getAttribute('data-mode');
         if (mode === 'month') { var now = new Date(); applyMonth(P.mode === 'month' ? P.y : now.getFullYear(), P.mode === 'month' ? P.m : now.getMonth()); refresh(); }
+        else if (mode === 'day') { applyDay(P.mode === 'day' && P.day ? P.day : isoDate(new Date())); refresh(); }
         else if (mode === '7d') { applyPreset(7); refresh(); }
         else if (mode === '30d') { applyPreset(30); refresh(); }
         else { P.mode = 'custom'; $('#fnCustA').value = isoDate(P.start); $('#fnCustB').value = isoDate(P.end); updateToolbar(); }
@@ -1763,6 +1808,9 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     });
     $('#fnPrevM').onclick = function () { var d = new Date(P.y, P.m - 1, 1); applyMonth(d.getFullYear(), d.getMonth()); refresh(); };
     $('#fnNextM').onclick = function () { var d = new Date(P.y, P.m + 1, 1); applyMonth(d.getFullYear(), d.getMonth()); refresh(); };
+    $('#fnPrevD').onclick = function () { var d = new Date(P.start.getFullYear(), P.start.getMonth(), P.start.getDate() - 1); applyDay(isoDate(d)); refresh(); };
+    $('#fnNextD').onclick = function () { var d = new Date(P.start.getFullYear(), P.start.getMonth(), P.start.getDate() + 1); applyDay(isoDate(d)); refresh(); };
+    $('#fnDayPick').onchange = function () { if (this.value) { applyDay(this.value); refresh(); } };
     $('#fnCustOk').onclick = function () {
       var a = $('#fnCustA').value, b = $('#fnCustB').value;
       if (!a || !b) { toast('Choisis les deux dates', true); return; }

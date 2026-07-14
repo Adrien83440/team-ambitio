@@ -161,7 +161,11 @@
   }
 
   function membersOptions(selected, withNone, noneLabel) {
-    var list = (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.slug && m.active !== false; });
+    /* ÉQUIPE SALES uniquement (setter/closer/closer_setter actifs, membres
+       partis exclus) — jamais d'admin, de coach ni de CSM dans les
+       commissions. Source unique : AlteoreFlow.salesMembers(). */
+    var AF = window.AlteoreFlow;
+    var list = AF ? AF.salesMembers() : (window.TEAM_MEMBERS_LIST || []).filter(function (m) { return m && m.slug && m.active !== false; });
     var h = withNone ? '<option value=""' + (!selected ? ' selected' : '') + '>' + esc(noneLabel || '— aucun —') + '</option>' : '';
     list.forEach(function (m) {
       var name = m.shortName || m.displayName || m.slug;
@@ -333,22 +337,25 @@
   function prefillCloser() {
     var AF = window.AlteoreFlow;
     var b = state.booking || {};
-    if (b.closeData && b.closeData.closerSlug) return b.closeData.closerSlug;
+    if (b.closeData && b.closeData.closerSlug && AF.isSalesMember(b.closeData.closerSlug)) return b.closeData.closerSlug;
     if (state.personsMap && b.personId && state.personsMap[b.personId]) {
       var fu = state.personsMap[b.personId].firebaseUid;
       var m = fu ? AF.memberByFirebaseUid(fu) : null;
-      if (m) return m.slug;
+      if (m && AF.isSalesMember(m.slug)) return m.slug;
     }
     var meM = AF.me();
-    /* Jamais de slug fallback email : une commission écrite sous un slug
-       inconnu du module Commissions serait invisible. */
-    return (meM && meM.resolved !== false) ? meM.slug : '';
+    /* Jamais de slug fallback email ni de membre hors équipe sales : une
+       commission écrite sous un slug inconnu serait invisible. */
+    if (meM && meM.resolved !== false && AF.isSalesMember(meM.slug)) return meM.slug;
+    var sales = AF.salesMembers();
+    return sales.length === 1 ? sales[0].slug : '';
   }
   function prefillSetter() {
+    var AF = window.AlteoreFlow;
     var b = state.booking || {};
-    if (b.closeData && b.closeData.setterSlug) return b.closeData.setterSlug;
-    if (b.bookedBySlug) return b.bookedBySlug;
-    if (state.lead && state.lead.assignedTo) return state.lead.assignedTo;
+    if (b.closeData && b.closeData.setterSlug && AF.isSalesMember(b.closeData.setterSlug)) return b.closeData.setterSlug;
+    if (b.bookedBySlug && AF.isSalesMember(b.bookedBySlug)) return b.bookedBySlug;
+    if (state.lead && state.lead.assignedTo && AF.isSalesMember(state.lead.assignedTo)) return state.lead.assignedTo;
     return '';
   }
 

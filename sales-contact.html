@@ -387,6 +387,22 @@ function ficheBack(){
 }
 function isClient(l){return l.stage==='closed_won_setting'||l.stage==='closed_won_self';}
 function sName(k){var s=SM[k];return s?s.label:k;}
+/* Sélecteur « Gestionnaire (setter) » — ÉQUIPE SALES uniquement, dynamique
+   depuis le roster (refonte 14/07/2026). L'ancienne valeur d'un lead attribué
+   à un membre parti reste visible (inactif) mais plus proposable. */
+function ctAssignOptions(cur){
+  var AF=window.AlteoreFlow;
+  var list=AF?AF.salesMembers():[{slug:'elodie',displayName:'Elodie Vidotto Siarri'}];
+  var h='<option value=""'+(!cur?' selected':'')+'>— Non attribué —</option>';
+  list.forEach(function(m){
+    var nm=m.displayName||m.shortName||m.slug;
+    h+='<option value="'+escA(m.slug)+'"'+(cur===m.slug?' selected':'')+'>'+esc(nm)+'</option>';
+  });
+  if(cur&&!list.some(function(m){return m.slug===cur;})){
+    h+='<option value="'+escA(cur)+'" selected>🔒 '+esc(cur)+' (inactif)</option>';
+  }
+  return h;
+}
 
 if(!leadId){document.getElementById('ctLoading').textContent='Aucun ID';}else{
 db.collection('leads').doc(leadId).onSnapshot(function(snap){
@@ -419,7 +435,7 @@ h+='</div></div>';
 h+='<div class="fiche-split">';
 // LEFT
 h+='<div class="fiche-left">';
-h+='<div class="fl-section"><div class="fl-row"><span class="fl-icon">\u2b50</span><select class="fl-select" data-f="assignedTo"><option value="guillaume"'+(l.assignedTo==='guillaume'?' selected':'')+'>Guillaume Bilcke</option><option value="elodie"'+(l.assignedTo==='elodie'?' selected':'')+'>Elodie Vidotto Siarri</option></select></div></div>';
+h+='<div class="fl-section"><div class="fl-row"><span class="fl-icon">\u2b50</span><select class="fl-select" data-f="assignedTo">'+ctAssignOptions(l.assignedTo)+'</select></div></div>';
 h+='<div class="fl-section"><div class="fl-title">Informations de base</div>';
 h+=flR('\u2709\ufe0f','Email','email',l.email);h+=flR('\ud83d\udcf1','T\u00e9l\u00e9phone','telephone',l.telephone);h+=flR('\ud83c\udf10','Source / UTM','utm',l.utm);
 h+='</div>';
