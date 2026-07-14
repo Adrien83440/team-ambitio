@@ -175,7 +175,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
       <!-- Marqueur de build : incrémenté à chaque livraison pour vérifier
            d'un coup d'œil quelle version est réellement déployée/chargée. -->
-      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 15.07-b</span></div>
+      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 15.07-d</span></div>
     </div>
     <div class="fn-sync"><span class="fn-sync-dot" id="fnSyncDot"></span><span id="fnSyncText">Chargement…</span></div>
   </div>
@@ -522,19 +522,25 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   function tunnelLabel(t) { return t === 'business' ? 'Business' : 'Élite'; }
   function tunnelMatch(t) { return tunnelFilter === 'all' || t === tunnelFilter; }
 
-  /* ── Classification d'un booking (règle validée Adrien) ──
+  /* ── Classification d'un booking — règle « deux liens » (Adrien 15/07) :
+     Self Booking = le lead prend RDV seul via le lien PUBLIC
+       (booking.html?type=call_strat_phenix_all)
+     No Booking   = RDV posé par le setting via le lien SETTER
+       (booking.html?type=call_strat_phenix_elodie — type marqué
+        « RDV setter » / isSetterOnly dans Booking admin)
+     → le TYPE prime sur un vieux source 'self_booking' : un RDV historique
+       pris sur le lien setter avant que booking.html ne pose le bon source
+       est quand même NB. Même règle dans alteore-flow.js (toute la plateforme).
      'excluded' → coaching / csm_manual / clientId / skipLeadCreation
-     'admin'    → admin_manual (compté à part, hors LTB)
-     'setter'   → setter_booking, ou fallback type isSetterOnly
-     'self'     → self_booking, ou résa publique par défaut          */
+     'admin'    → admin_manual (compté à part, hors LTB)               */
   function classifyBooking(b) {
     var t = TYPE_MAP[b.type] || {};
     if (b.isCoaching === true || t.isCoaching === true) return 'excluded';
     if (b.source === 'csm_manual' || b.skipLeadCreation === true || b.clientId) return 'excluded';
     if (b.source === 'admin_manual') return 'admin';
     if (b.source === 'setter_booking') return 'setter';
+    if (t.isSetterOnly === true) return 'setter';   // type setter = NB, quel que soit le source
     if (b.source === 'self_booking') return 'self';
-    if (t.isSetterOnly === true) return 'setter';
     return 'self';
   }
 
@@ -1561,7 +1567,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     function numOrDash(v, unknown) { return (v === 0 && unknown > 0) ? '—' : fmtNum(v); }
     var ch = k.chAll;
     h += '<div class="fn-hero">';
-    h += '<div class="fn-hero-lbl">📥 Ligne 1 — Leads de la période → leurs RDV (créés sur la période, fin de chaîne)</div>';
+    h += '<div class="fn-hero-lbl">📥 Ligne 1 — Leads entrés sur la période → les RDV PRIS sur la période</div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : 'entrés sur la période') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.n) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) + ' (RDV ÷ leads)' : 'SB + NB, replanif. dédupliqués') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(ch.kept) + '</div><div class="l">Kept</div><div class="s">pris − ' + fmtNum(ch.cancelled) + ' annulés' + (ch.n > 0 ? ' · <span class="pct">' + fmtPct(ch.kept / ch.n * 100, 0) + '</span>' : '') + '</div></div>';
@@ -1570,7 +1576,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '</div>';
 
     h += '<div class="fn-hero" style="margin-top:-8px">';
-    h += '<div class="fn-hero-lbl">📆 Ligne 2 — Le mois en totalité (par date de RDV) + business gagné de la période</div>';
+    h += '<div class="fn-hero-lbl">📆 Ligne 2 — Le mois en totalité : RDV qui ONT LIEU dans la période + business gagné</div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.rdvMois) + '</div><div class="l">RDV du mois</div><div class="s">SB ' + fmtNum(k.dueSB - k.reschedSB) + ' · NB ' + fmtNum(k.dueNB - k.reschedNB) + (k.dueCreatedBefore ? ' · dont ' + fmtNum(k.dueCreatedBefore) + ' posés avant la période' : '') + (k.dueRescheduled ? ' · ' + k.dueRescheduled + ' replanifiés déduits' : '') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.kept) + '</div><div class="l">Kept Call</div><div class="s">RDV − annulés − no-show − replanifiés' + (k.keptPct != null ? ' · <span class="pct">' + fmtPct(k.keptPct, 0) + '</span>' : '') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(k.ocDue.present, k.ocDue.sansDetail) + '</div><div class="l">Live du mois</div><div class="s">présents (résultats RDV)' + (k.ocDue.sansDetail ? ' · ⚠ ' + k.ocDue.sansDetail + ' sans détail' : '') + '</div></div>';
@@ -1663,18 +1669,18 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
        la période », chaînes de replanification dédupliquées, résultat de
        FIN DE CHAÎNE — kept ne peut plus dépasser pris. Plus aucune saisie
        manuelle : données logiciel uniquement, « — » + explication sinon. */
-    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'axe « RDV créés sur la période » (replanif. dédupliqués, résultat de fin de chaîne) · collecté = module Paiements (HT), repli cartes du Close · coaching &amp; CSM exclus');
+    h += stageOpen('📅', 'Prise de RDV — Self Booking / No Booking', 'RDV <strong>pris</strong> sur la période, peu importe quand ils ont lieu (replanif. dédupliqués, résultat de fin de chaîne) · collecté = module Paiements (HT), repli cartes du Close · coaching &amp; CSM exclus');
     if (k.dueCreatedBefore > 0 || k.createdDueLater > 0) {
-      h += '<div class="fn-stage-note" style="margin-top:6px">🔁 <strong>Deux axes, deux totaux — normal :</strong> ici, ' + fmtNum(k.chAll.n) + ' RDV <strong>créés</strong> sur la période' + (k.createdDueLater ? ' (dont ' + fmtNum(k.createdDueLater) + ' à échéance après la période)' : '') + ' · le héro L2 et « Tenue » comptent ' + fmtNum(k.rdvMois) + ' RDV <strong>du mois</strong> (par date), qui incluent ' + fmtNum(k.dueCreatedBefore) + ' RDV posés avant la période.</div>';
+      h += '<div class="fn-stage-note" style="margin-top:6px">🔁 <strong>Deux questions, deux totaux — les deux sont justes.</strong> « Combien de RDV a-t-on <strong>pris</strong> sur la période ? » → ' + fmtNum(k.chAll.n) + (k.createdDueLater ? ' (dont ' + fmtNum(k.createdDueLater) + ' qui auront lieu après)' : '') + ' · « Combien de RDV <strong>ont lieu</strong> sur la période ? » (héro L2 · Tenue) → ' + fmtNum(k.rdvMois) + ', dont ' + fmtNum(k.dueCreatedBefore) + ' pris avant la période. Un RDV pris le mois dernier pour cette période compte dans le 2ᵉ total, pas dans le 1ᵉʳ.</div>';
     }
     if (!k.ocHasData) {
       h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Aucun résultat d\'appel saisi sur la période — statue les RDV (Close, Non close, Offre, Disqua, No-show, Annulé, Replanifié) depuis <a href="sales-rdv.html" style="color:var(--blue)">Rendez-vous</a> ou la fiche prospect : kept / live / closes / collecté se rempliront tout seuls.</div>';
     }
     /* — Ligne 1 : SELF BOOKING — */
-    h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:12px 0 8px">🔗 Self Booking — le lead prend RDV seul</div>';
+    h += '<div style="font-size:10.5px;color:var(--gold);font-weight:800;letter-spacing:0.7px;margin:12px 0 8px">🔗 Self Booking — le lead prend RDV seul (lien public)</div>';
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.leads), 'Leads (total)', 'cohorte de la période');
-    h += kpiCard(fmtNum(k.chSB.n), 'RDV pris SB', 'LTB (SB) ' + fmtPct(k.ltbSB) + ' · ' + 'dont ' + fmtNum(k.orgSB.cohort) + ' cohorte' + (k.orgSB.reopt ? ' · ' + k.orgSB.reopt + ' ré-optins' : '') + (k.orgSB.old ? ' · ' + k.orgSB.old + ' hors période' : ''), targetBadge('selfShare', k.selfShare));
+    h += kpiCard(fmtNum(k.leads), 'Leads (total)', 'entrés sur la période');
+    h += kpiCard(fmtNum(k.chSB.n), 'RDV pris SB', 'LTB (SB) ' + fmtPct(k.ltbSB) + ' · ' + 'dont ' + fmtNum(k.orgSB.cohort) + ' leads de la période' + (k.orgSB.reopt ? ' · ' + k.orgSB.reopt + ' ré-optins' : '') + (k.orgSB.old ? ' · ' + k.orgSB.old + ' leads plus anciens' : ''), targetBadge('selfShare', k.selfShare));
     h += kpiCard(fmtNum(k.chSB.kept), 'Kept SB', 'pris − <span style="color:var(--red3)">' + fmtNum(k.chSB.cancelled) + ' annulés</span>' + (k.chSB.noshow ? ' · <span style="color:var(--gold)">' + fmtNum(k.chSB.noshow) + ' no-show</span> (dans kept)' : '') + (k.chSB.aVenir ? ' · ' + k.chSB.aVenir + ' à venir' : ''));
     h += kpiCard(numOrDash(k.chSB.present, k.chSB.sansDetail), 'Live SB (présents)', (k.chSB.kept > 0 && k.chSB.present > 0 ? 'show-up ' + fmtPct(k.chSB.present / k.chSB.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV') + (k.chSB.sansDetail ? ' · ⚠ ' + k.chSB.sansDetail + ' sans détail' : ''));
     h += kpiCard(numOrDash(k.chSB.pitched, k.chSB.sansDetail), 'Pitchés SB', 'offres faites' + (k.chSB.disqua ? ' · ' + k.chSB.disqua + ' disqualifiés' : '') + (k.chSB.nonCloses ? ' · ' + k.chSB.nonCloses + ' non closes' : ''));
@@ -1686,9 +1692,9 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += kpiCard(fmtEuro2(k.cprOffre), 'CPR Offre', 'dépense ÷ ' + fmtNum(k.chSB.pitched) + ' RDV SB pitchés');
     h += '</div>';
     /* — Ligne 2 : NO BOOKING (setting) — */
-    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 No Booking — leads sans RDV, travaillés par le setting</div>';
+    h += '<div style="font-size:10.5px;color:#c4b5fd;font-weight:800;letter-spacing:0.7px;margin:16px 0 8px">📞 No Booking — RDV posés par le setting (lien setter)</div>';
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.leadsNoSB), 'Leads à travailler', fmtNum(k.leads) + ' leads − ' + fmtNum(k.cohortSelf) + ' self-bookés');
+    h += kpiCard(fmtNum(k.leadsNoSB), 'Leads à travailler', fmtNum(k.leads) + ' leads de la période − ' + fmtNum(k.cohortSelf) + ' self-bookés');
     var lwVal, lwSub;
     if (!k.journalLive) { lwVal = '—'; lwSub = 'journal d\'actions inexistant avant le 14/07/2026 — le passé n\'est pas reconstituable'; }
     else if (k.actLeadsWorked === 0) {
@@ -1703,7 +1709,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       lwSub = lwParts.join(' · ');
     }
     h += kpiCard(lwVal, 'Leads travaillés', lwSub);
-    h += kpiCard(fmtNum(k.chNB.n), 'RDV pris NB', 'posés par le setting · ' + 'dont ' + fmtNum(k.orgNB.cohort) + ' cohorte' + (k.orgNB.reopt ? ' · ' + k.orgNB.reopt + ' ré-optins' : '') + (k.orgNB.old ? ' · ' + k.orgNB.old + ' hors période' : '') + (k.journalLive && k.actSets > 0 ? ' · sets journal : ' + fmtNum(k.actSets) : ''));
+    h += kpiCard(fmtNum(k.chNB.n), 'RDV pris NB', 'posés par le setting · ' + 'dont ' + fmtNum(k.orgNB.cohort) + ' leads de la période' + (k.orgNB.reopt ? ' · ' + k.orgNB.reopt + ' ré-optins' : '') + (k.orgNB.old ? ' · ' + k.orgNB.old + ' leads plus anciens' : '') + (k.journalLive && k.actSets > 0 ? ' · sets journal : ' + fmtNum(k.actSets) : ''));
     h += kpiCard(fmtPct(k.recovery), 'Taux de récupération', cohortLabelRecovery(k), targetBadge('recovery', k.recovery));
     h += kpiCard(fmtNum(k.chNB.kept), 'Kept NB', 'pris − <span style="color:var(--red3)">' + fmtNum(k.chNB.cancelled) + ' annulés</span>' + (k.chNB.noshow ? ' · <span style="color:var(--gold)">' + fmtNum(k.chNB.noshow) + ' no-show</span> (dans kept)' : '') + (k.chNB.aVenir ? ' · ' + k.chNB.aVenir + ' à venir' : ''));
     h += kpiCard(numOrDash(k.chNB.present, k.chNB.sansDetail), 'Live NB (présents)', (k.chNB.kept > 0 && k.chNB.present > 0 ? 'show-up ' + fmtPct(k.chNB.present / k.chNB.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV') + (k.chNB.sansDetail ? ' · ⚠ ' + k.chNB.sansDetail + ' sans détail' : ''));
@@ -1726,7 +1732,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-arrow">▼</div>';
 
     /* 5. Tenue des RDV — ventilation SB/NB, replanifiés à part (14/07/2026) */
-    h += stageOpen('✅', 'Tenue des RDV', 'RDV setting/closing dont la date tombe dans la période · coaching &amp; CSM exclus');
+    h += stageOpen('✅', 'Tenue des RDV', 'RDV setting/closing qui ont lieu dans la période (par date) · coaching &amp; CSM exclus');
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.due), 'RDV planifiés', 'date dans la période · SB ' + fmtNum(k.dueSB) + ' · NB ' + fmtNum(k.dueNB));
     h += kpiCard(fmtNum(k.kept), 'Kept Call', 'planifiés − annulés − no-show − replanifiés', targetBadge('kept', k.keptPct));
