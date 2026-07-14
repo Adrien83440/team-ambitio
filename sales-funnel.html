@@ -56,6 +56,13 @@
 .fn-rates { display:flex; flex-wrap:wrap; gap:8px 26px; background:linear-gradient(160deg,var(--bg3),var(--bg2)); border:1px solid var(--border); border-radius:14px; padding:12px 16px; margin:-8px 0 18px; align-items:center; }
 .fn-rates .rt { font-size:11.5px; color:var(--muted); }
 .fn-rates .rt strong { font-size:16px; color:var(--text); font-family:var(--font-m); margin-right:6px; letter-spacing:-0.4px; }
+.fn-help { background:linear-gradient(160deg,var(--bg3),var(--bg2)); border:1px solid var(--border); border-radius:14px; padding:2px 16px; margin-bottom:16px; }
+.fn-help summary { cursor:pointer; font-size:12px; font-weight:800; color:var(--muted); padding:10px 0; letter-spacing:0.3px; list-style:none; user-select:none; }
+.fn-help summary::-webkit-details-marker { display:none; }
+.fn-help[open] summary { color:var(--text); border-bottom:1px solid var(--border); margin-bottom:10px; }
+.fn-help .hb { font-size:12px; color:var(--muted); line-height:1.6; padding:0 0 12px; }
+.fn-help .hb p { margin:0 0 10px; }
+.fn-help .hb strong { color:var(--text); }
 
 /* Blocs étage funnel */
 .fn-stage { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:16px 18px; margin-bottom:14px; }
@@ -175,7 +182,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
       <!-- Marqueur de build : incrémenté à chaque livraison pour vérifier
            d'un coup d'œil quelle version est réellement déployée/chargée. -->
-      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 15.07-d</span></div>
+      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 15.07-e</span></div>
     </div>
     <div class="fn-sync"><span class="fn-sync-dot" id="fnSyncDot"></span><span id="fnSyncText">Chargement…</span></div>
   </div>
@@ -1566,6 +1573,18 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
        + bandeau des taux de close. Chaque carte porte sa formule. */
     function numOrDash(v, unknown) { return (v === 0 && unknown > 0) ? '—' : fmtNum(v); }
     var ch = k.chAll;
+
+    /* ❓ Mode d'emploi — SUR la page, pas dans la tête de quelqu'un.
+       Replié par défaut, statique, zéro jargon (demande Adrien 15/07). */
+    h += '<details class="fn-help"><summary>❓ Comment lire ce funnel — les 6 règles (clique pour déplier)</summary><div class="hb">'
+      + '<p><strong>1 · Un RDV a deux dates</strong> — le jour où on le <strong>prend</strong> et le jour où il <strong>a lieu</strong> (comme une résa de resto prise le 28/06 pour dîner le 03/07). D\'où deux totaux, tous les deux justes : la <strong>Ligne 1</strong> et « Prise de RDV » comptent les RDV <strong>pris</strong> sur la période → ce que la pub et le setting du mois ont produit (LTB, CPR). La <strong>Ligne 2</strong> et « Tenue » comptent les RDV qui <strong>ont lieu</strong> sur la période → l\'agenda réel du mois (kept, live, closes). Le pont chiffré entre les deux s\'affiche dans « Prise de RDV ».</p>'
+      + '<p><strong>2 · Self Booking / No Booking = les deux liens.</strong> SB : le lead prend RDV seul sur le lien public. NB : RDV posé par le setting sur le lien setter (type marqué « RDV setter » dans Booking admin). Le type de consultation fait foi, même sur les vieux RDV.</p>'
+      + '<p><strong>3 · « Leads » = les leads entrés sur la période.</strong> Mais des leads plus anciens et des ré-optins prennent aussi RDV pendant la période → « RDV pris » peut dépasser le nombre de leads de la période self-bookés. Chaque carte RDV affiche la ventilation (« dont X leads de la période · Y plus anciens »).</p>'
+      + '<p><strong>4 · Les € (collecté / contracté), en HT.</strong> Priorité au module <strong>Paiements</strong> : prélèvements réels, sinon 1 mensualité pour un fractionné / la totalité pour un intégral — marqué « à prélever (mandat) ». Sinon l\'encaissé déclaré aux <strong>cartes du Close</strong>. Sinon le close est compté « <strong>sans montant</strong> » avec une alerte nominative — jamais un zéro muet. TTC → HT ÷ 1,2.</p>'
+      + '<p><strong>5 · Kept, deux définitions, écrites sur les cartes.</strong> Lignes SB/NB : kept = pris − annulés (le no-show reste dedans : le RDV était maintenu). Tenue et Ligne 2 : Kept Call = planifiés − annulés − no-show − replanifiés.</p>'
+      + '<p><strong>6 · « — » = pas de donnée, jamais un chiffre inventé.</strong> RDV passés non statués, journal d\'actions inexistant avant le 14/07/2026, coûts non renseignés (💶) : le funnel affiche un tiret et l\'explication, et les chiffres se remplissent tout seuls dès que la donnée existe (statuer les RDV via 🎯 Résultat).</p>'
+      + '</div></details>';
+
     h += '<div class="fn-hero">';
     h += '<div class="fn-hero-lbl">📥 Ligne 1 — Leads entrés sur la période → les RDV PRIS sur la période</div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : 'entrés sur la période') + '</div></div>';
