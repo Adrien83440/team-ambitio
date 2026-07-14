@@ -1093,12 +1093,23 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       k.cashPerLive = c2.lives > 0 ? c2.collecte / c2.lives : null;
     }
 
-    /* ── Totaux « toutes sources » : résultats RDV (auto) prioritaires,
-       repli saisies manuelles pour les mois passés. Alimentent le héro,
-       CAC Market Only et AOV (demande head of sales 14/07). ── */
-    k.closesAll    = k.ocHasData ? k.ocTotal.closes    : (k.saisies ? (k.closes || 0)    : null);
-    k.collecteAll  = k.ocHasData ? k.ocTotal.collecte  : (k.saisies ? (k.collecte || 0)  : null);
-    k.contracteAll = k.ocHasData ? k.ocTotal.contracte : (k.saisies ? (k.contracte || 0) : null);
+    /* ── Totaux « toutes sources » — repli MÉTRIQUE PAR MÉTRIQUE (fix 14/07) :
+       pendant la transition, on peut avoir des annulations/no-show statués
+       sur les RDV (résultats partiels) alors que les closes/collecté du mois
+       vivent encore dans les saisies manuelles. Un repli global aurait montré
+       0 close / AOV vide malgré des données réelles → chaque métrique prend
+       les résultats RDV si non nuls, sinon les saisies. ── */
+    function pickAll(ocVal, saisieVal) {
+      if (ocVal > 0) return { v: ocVal, src: 'auto' };
+      if (k.saisies) return { v: saisieVal || 0, src: 'saisies' };
+      return { v: k.ocHasData ? 0 : null, src: 'auto' };
+    }
+    var _pc = pickAll(k.ocTotal.closes, k.closes);
+    var _pcol = pickAll(k.ocTotal.collecte, k.collecte);
+    var _pcon = pickAll(k.ocTotal.contracte, k.contracte);
+    k.closesAll = _pc.v; k.closesSrc = _pc.src;
+    k.collecteAll = _pcol.v; k.collecteSrc = _pcol.src;
+    k.contracteAll = _pcon.v;
     /* CAC Market Only : dépense pub / client acquis — nommé ainsi pour ne pas
        confondre avec le « CPA » du Business Manager Meta (qui peut être un
        achat, un RDV, un lead selon la campagne). */
@@ -1139,7 +1150,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">' + (k.reoptins ? '+ ' + k.reoptins + ' ré-optins 🔄' : '&nbsp;') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.booked) + '</div><div class="l">RDV pris</div><div class="s">' + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) : '&nbsp;') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.kept) + '</div><div class="l">Kept</div><div class="s">' + (k.keptPct != null ? fmtPct(k.keptPct, 0) + ' · ' : '') + fmtNum(k.due) + ' planifiés</div></div>';
-    h += '<div class="fn-hero-kpi"><div class="v">' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.ocHasData ? 'résultats RDV (auto)' : (k.saisies ? 'saisies (héritage)' : 'maille mois')) + '</div></div>';
+    h += '<div class="fn-hero-kpi"><div class="v">' + (k.closesAll != null ? fmtNum(k.closesAll) : '—') + '</div><div class="l">Closes</div><div class="s">' + (k.closesAll == null ? 'maille mois' : (k.closesSrc === 'auto' ? 'résultats RDV (auto)' : 'saisies (héritage)')) + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + (k.collecteAll != null ? fmtEuro(k.collecteAll) : '—') + '</div><div class="l">Collecté</div><div class="s">' + (k.contracteAll != null ? 'Contracté ' + fmtEuro(k.contracteAll) : 'maille mois') + '</div></div>';
     h += '</div>';
 
@@ -1341,9 +1352,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     if (go) go.onclick = function (e) { e.preventDefault(); switchTab('journal'); };
   }
 
+  /* Libellé récupération — explicite (retour Adrien 14/07) :
+     « récupéré » = un lead DE LA PÉRIODE qui n'avait pas self-booké et à qui
+     le setting a posé un RDV. Les RDV setting posés sur des leads plus
+     anciens (hors cohorte) ne comptent pas dans ce taux — d'où l'écart
+     possible avec le nombre total de RDV setting créés. */
   function cohortLabelRecovery(k) {
     var base = k.leads - k.cohortSelf;
-    return k.cohortSetter + ' récupérés / ' + base + ' sans self-booking';
+    var extra = k.setterOldLeads ? ' · +' + k.setterOldLeads + ' RDV setting sur des leads plus anciens (hors calcul)' : '';
+    return k.cohortSetter + ' des ' + base + ' leads sans RDV self ont eu un RDV posé par le setting' + extra;
   }
   function cancelByLabel(k) {
     var keys = Object.keys(k.cancelledByMap || {});
