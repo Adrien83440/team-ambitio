@@ -240,12 +240,20 @@
       AF.loadTypeMap(),
       S.mode === 'month'
         ? db.collection('saisies').doc(member.slug).collection('mois').doc(monthKey()).get().catch(function () { return { exists: false }; })
-        : Promise.resolve({ exists: false })
+        : Promise.resolve({ exists: false }),
+      /* Date de la 1ʳᵉ action du journal (pour distinguer « 0 action » de
+         « journal pas encore actif ce jour-là » — les clics de statut d'avant
+         la mise en ligne n'ont laissé aucune trace, non reconstituable). */
+      db.collection('lead_actions').doc(member.slug).collection('items')
+        .orderBy('createdAt', 'asc').limit(1).get()
+        .then(function (s) { var d0 = null; s.forEach(function (doc) { d0 = (doc.data() || {}).day || null; }); return d0; })
+        .catch(function () { return null; })
     ]).then(function (res) {
       var calls = res[0], actions = res[1], bookings = res[2];
       S.overrides = res[3] || {};
       S.typeMap = res[4] || {};
       S.legacy = (res[5] && res[5].exists) ? res[5].data() : null;
+      S.journalStart = res[6] || null;
 
       /* — Attribution NB legacy : RDV setter sans bookedBySlug (antérieurs à
          la refonte, ou pris via un lien public de type setter-only) → on
@@ -401,7 +409,13 @@
       COLS.forEach(function (c, i) {
         var e = eff(dk, c.key);
         var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
-        rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' + fmtCell(c, e.v) + '</td>';
+        /* Colonnes issues du journal d'actions (Leads, NRP, Msg, FU, Out) :
+           avant la 1ʳᵉ action enregistrée, on affiche — (données inexistantes,
+           pas « zéro activité »). Sets exclu : il vient aussi des RDV. */
+        var preJournal = c.grp === 'act' && c.key !== 'sets' && !e.ov && e.v === 0 &&
+          (!S.journalStart || dk < S.journalStart);
+        rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' +
+          (preJournal ? '<span class="z" title="Journal d\'actions pas encore actif ce jour-là">—</span>' : fmtCell(c, e.v)) + '</td>';
       });
       rowsH += '<td><button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button></td></tr>';
 
@@ -445,7 +459,27 @@
     var callsNote = S.data.callsOk ? '' :
       '<div style="font-size:11.5px;color:var(--gold);margin-top:10px">🔒 Les appels Ringover d\'un autre membre ne sont visibles que par un admin — colonnes ⏱/Calls/Décro. limitées à ton propre rapport.</div>';
 
+    /* — Bannière journal d'actions : zéros trompeurs interdits — */
+    var journalNote = '';
+    var lastDay = R.days[R.days.length - 1];
+    if (!S.journalStart) {
+      journalNote =
+        '<div class="au-card" style="border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.05);padding:14px 16px;font-size:12.5px;line-height:1.6">' +
+        '📒 <strong>Journal d\'actions encore vide.</strong> Les colonnes <strong>Leads · NRP1/2/3 · AllNRP · Msg · FU · Out</strong> comptent chaque clic de statut sur les fiches Leads Live <strong>à partir de la mise en ligne (14/07/2026)</strong> — les clics d\'avant n\'ont laissé aucune trace datée en base, ils ne peuvent pas être reconstitués (contrairement aux appels Ringover et aux RDV, recalculés sur le passé).<br/>' +
+        '<span style="color:var(--gold)">🧪 Test rapide : change un statut sur une fiche dans Leads Live puis ⟳ Actualiser ici. Si tout reste à 0, les règles Firestore ne sont pas déployées → <code>firebase deploy --only firestore:rules</code>.</span></div>';
+    } else if (R.days[0] < S.journalStart) {
+      var jd = new Date(S.journalStart + 'T12:00:00');
+      var jdFr = pad2(jd.getDate()) + '/' + pad2(jd.getMonth() + 1) + '/' + jd.getFullYear();
+      journalNote =
+        '<div class="au-card" style="border-color:rgba(91,124,250,.3);background:rgba(91,124,250,.05);padding:12px 16px;font-size:12px">' +
+        (lastDay < S.journalStart
+          ? '📒 Période entièrement antérieure au journal d\'actions (actif depuis le <strong>' + jdFr + '</strong>) — colonnes Leads · NRP · Msg · FU · Out : « — », données inexistantes. Appels et RDV, eux, couvrent tout le passé.'
+          : '📒 Les colonnes d\'actions (Leads · NRP · Msg · FU · Out) comptent depuis le <strong>' + jdFr + '</strong> (1ʳᵉ action enregistrée) — avant cette date : « — », données inexistantes. Appels et RDV, eux, couvrent tout le passé.') +
+        '</div>';
+    }
+
     var h =
+      journalNote +
       '<div class="au-kpis">' + kpis + '</div>' +
       '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel Set NB — ' + periodLabel() + '</div>' +
         '<div class="au-card-note">sets = statuts SET/RDV posé + RDV setter créés (uniques par lead/jour)</div></div>' + fun + '</div>' +

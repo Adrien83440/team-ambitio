@@ -84,6 +84,18 @@ Compat : `sales-saisie.html`, `sales-eod.html`, dashboard inchangés (lecture de
 préservée). Les rapports auto démarrent à la mise en ligne ; appels et RDV passés remontent
 automatiquement (recalcul à la volée), les compteurs d'actions (NRP/jour) démarrent vides.
 
+## 7quinquies. Journal d'actions — chaque clic compte + zéros honnêtes (retours test 14/07)
+
+- **Chaque clic de statut compte une action** (NRP1 re-cliqué à la 2ᵉ tentative = un NRP1 ce
+  jour-là), plus seulement les changements de statut. Anti double-clic 5 s par lead+statut.
+  « Total Leads » reste au premier contact unique par lead (jamais recompté).
+- **Le passé du journal n'existe pas** : les clics d'avant la mise en ligne (14/07/2026)
+  n'ont laissé aucune trace datée — non reconstituable, contrairement aux appels Ringover et
+  aux RDV (recalculés sur tout le passé). Le rapport Set NB l'affiche désormais explicitement :
+  bannière (journal vide → procédure de test + rappel du deploy des rules ; sinon « actif
+  depuis le JJ/MM ») et « — » dans les colonnes d'actions pour les jours antérieurs au journal,
+  au lieu de zéros trompeurs.
+
 ## 7quater. Vues Jour / 3 jours / 7 jours / Mois sur Set NB & Close SB (retours test 14/07)
 
 Les deux rapports ont un sélecteur de période **Jour · 3 jours · 7 jours · Mois** : tous les

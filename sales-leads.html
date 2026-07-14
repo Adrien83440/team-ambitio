@@ -3215,10 +3215,18 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     statusBtn.style.borderColor = sObj.color;
     // ── Journal d'actions setting (refonte 07/2026) ──
     // Enregistré AVANT la mise à jour locale pour capturer l'ancien statut.
-    // Alimente le rapport Setting journalier : Total Leads (1ʳᵉ action),
-    // NRP1/2/3, sets… Fire-and-forget : ne bloque jamais l'UI.
+    // CHAQUE clic de statut = une action comptée (validé Adrien : « remontée
+    // du nombre de NRP1, NRP2 etc de chaque action faite ») — y compris
+    // re-cliquer le MÊME statut (ex. 2ᵉ tentative NRP1 un autre jour).
+    // Anti double-clic : 5 s par lead+statut. Fire-and-forget : ne bloque
+    // jamais l'UI.
     var prevLeadObj = allLeads.find(function (l) { return l.id === leadId; });
-    if (window.AlteoreFlow && prevLeadObj && prevLeadObj.status !== newStatus) {
+    window.__ldActDebounce = window.__ldActDebounce || {};
+    var _actKey = leadId + '|' + newStatus;
+    var _actNow = Date.now();
+    if (window.AlteoreFlow && prevLeadObj &&
+        (!window.__ldActDebounce[_actKey] || _actNow - window.__ldActDebounce[_actKey] > 5000)) {
+      window.__ldActDebounce[_actKey] = _actNow;
       window.AlteoreFlow.recordLeadAction(leadId, prevLeadObj, newStatus, {
         prevStatus: prevLeadObj.status || null,
         origin: 'leads_live'
