@@ -44,32 +44,45 @@
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   LEADS LIVE v2 — refonte visuelle 07/2026 (cockpit setter)
+   Surfaces alteore-ui + identité rouge Leads Live conservée.
+   Les classes historiques (ld-*) sont conservées partout où le JS moteur,
+   DialerBridge, VoiceNotes ou RdvOutcome s'y accrochent — seul le style change.
+   ═══════════════════════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:     #08080f;
-  --bg2:    #0f0f1a;
-  --bg3:    #14141f;
-  --bg4:    #1a1a28;
-  --border: rgba(255,255,255,0.07);
-  --border2:rgba(255,255,255,0.13);
+  --bg:     #07080f;
+  --bg2:    #0e111c;
+  --bg3:    #151928;
+  --bg4:    #1c2136;
+  --border:      rgba(148,163,214,0.11);
+  --border2:     rgba(148,163,214,0.22);
+  --border-soft: rgba(148,163,214,0.06);
   --red:    #b91c1c;
   --red2:   #ef4444;
   --red3:   #fca5a5;
-  --gold:   #f59e0b;
+  --gold:   #fbbf24;
+  --amber:  #f59e0b;
   --green:  #34d399;
   --blue:   #60a5fa;
+  --indigo: #5b7cfa;
   --purple: #a78bfa;
-  --text:   rgba(255,255,255,0.92);
-  --muted:  rgba(255,255,255,0.48);
-  --muted2: rgba(255,255,255,0.22);
+  --teal:   #2dd4bf;
+  --text:   #eef0f8;
+  --fg:     #eef0f8;
+  --muted:  #8f97b2;
+  --muted2: #596180;
   --radius: 12px;
   --radius2:16px;
-  --fh:     'Syne', sans-serif;
-  --fb:     'Inter', sans-serif;
-  --fm:     'DM Mono', monospace;
+  --fh: 'Space Grotesk', sans-serif;
+  --fb: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --fm: 'DM Mono', ui-monospace, monospace;
+  --l2-hd: 128px;
+  --sab: env(safe-area-inset-bottom, 0px);
 }
 
 html, body {
@@ -82,830 +95,843 @@ html, body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
-
-.page { max-width: 680px; margin: 0 auto; padding: 0 0 100px; }
-
-/* ── Header ── */
-.ld-header {
-  position: sticky; top: 0; z-index: 100;
-  padding: 14px 16px;
-  background: rgba(8,8,15,0.95);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border);
+body {
+  background-image:
+    radial-gradient(820px 460px at 6% -8%, rgba(239,68,68,0.07), transparent 60%),
+    radial-gradient(700px 420px at 100% 4%, rgba(91,124,250,0.06), transparent 58%);
+  background-attachment: fixed;
 }
-.ld-header-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.ld-logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg,#ef4444,#b91c1c); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: white; box-shadow: 0 3px 12px rgba(239,68,68,0.3); flex-shrink: 0; }
-.ld-title { font-family: var(--fh); font-size: 18px; font-weight: 800; flex: 1; }
-.ld-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #34d399; animation: pulse 2s infinite; flex-shrink: 0; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-.ld-live-label { font-size: 11px; font-weight: 700; color: #34d399; text-transform: uppercase; letter-spacing: 0.5px; }
-.ld-count { font-family: var(--fm); font-size: 13px; font-weight: 600; color: var(--muted); margin-left: auto; }
+body.l2-lock { overflow: hidden; }
 
-/* ── Filters ── */
-.ld-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; padding-right: 12px; }
-.ld-filters::-webkit-scrollbar { display: none; }
-.ld-filter {
-  padding: 6px 12px; border-radius: 20px; border: 1.5px solid var(--border);
+button { font-family: inherit; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 2px solid var(--red2); outline-offset: 2px; border-radius: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+.page { max-width: 1440px; margin: 0 auto; }
+
+/* ═══ HEADER ═══ */
+.l2hd {
+  position: sticky; top: 0; z-index: 120;
+  background: rgba(7,8,15,0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+}
+.l2hd-row1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.ld-logo {
+  width: 34px; height: 34px; border-radius: 10px; flex: none;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--fh); font-weight: 700; font-size: 15px; color: #fff;
+  box-shadow: 0 4px 14px rgba(239,68,68,0.28);
+}
+.ld-title { font-family: var(--fh); font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+.ld-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; flex: none; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+.ld-live-label { font-size: 10px; font-weight: 800; color: var(--green); text-transform: uppercase; letter-spacing: 1px; }
+#ldPersonalBadge {
+  font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 999px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border2);
+}
+.ld-count { margin-left: auto; font-family: var(--fm); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.l2more {
+  width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg2); color: var(--muted); font-size: 17px; cursor: pointer; flex: none;
+  display: flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.l2more:hover { border-color: var(--border2); color: var(--text); }
+
+.l2hd-row2 { display: flex; gap: 8px; margin-top: 9px; }
+
+/* Recherche (ids/classes historiques conservés) */
+.ld-search {
+  position: relative; flex: 1; display: flex; align-items: center; min-width: 0;
+  background: var(--bg3); border: 1.5px solid var(--border); border-radius: 11px;
+  transition: border-color .15s, background .15s;
+}
+.ld-search:focus-within { border-color: rgba(239,68,68,0.45); background: var(--bg4); }
+.ld-search.has-value { border-color: rgba(239,68,68,0.3); }
+.ld-search-icon { display: flex; align-items: center; justify-content: center; width: 32px; height: 34px; flex: none; color: var(--muted2); font-size: 13px; }
+.ld-search-input { flex: 1; min-width: 0; background: none; border: none; outline: none; color: var(--text); font-family: var(--fb); font-size: 13px; font-weight: 500; padding: 8px 2px; }
+.ld-search-input::placeholder { color: var(--muted2); }
+.ld-search-hint { font-size: 10px; font-weight: 600; color: var(--muted2); padding: 0 8px; font-family: var(--fm); flex: none; }
+.ld-search-clear {
+  display: none; align-items: center; justify-content: center;
+  width: 28px; height: 28px; margin-right: 3px; border: none; border-radius: 7px;
+  background: none; color: var(--muted); font-size: 15px; cursor: pointer; flex: none;
+}
+.ld-search-clear:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.ld-search.has-value .ld-search-clear { display: flex; }
+
+.l2filters-btn {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 13px; border-radius: 11px; border: 1.5px solid var(--border);
+  background: var(--bg3); color: var(--muted); font-size: 12px; font-weight: 800; cursor: pointer;
+  transition: all .15s;
+}
+.l2filters-btn:hover { border-color: var(--border2); color: var(--text); }
+.l2filters-btn .n {
+  font-family: var(--fm); font-size: 10px; min-width: 17px; height: 17px; border-radius: 999px;
+  background: linear-gradient(135deg,#ef4444,#b91c1c); color: #fff;
+  display: none; align-items: center; justify-content: center; padding: 0 4px;
+}
+.l2filters-btn.on { border-color: rgba(239,68,68,0.45); color: var(--red3); background: rgba(239,68,68,0.07); }
+.l2filters-btn.on .n { display: inline-flex; }
+
+/* Triage */
+.l2tri-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 9px; }
+.l2tri {
+  position: relative; border: 1.5px solid var(--border); border-radius: 13px;
+  background: var(--bg2); padding: 7px 4px 6px; cursor: pointer; text-align: center;
+  transition: all .15s; overflow: hidden; color: var(--text);
+}
+.l2tri:hover { border-color: var(--border2); }
+.l2tri .n { font-family: var(--fh); font-size: 19px; font-weight: 700; line-height: 1.1; }
+.l2tri .n .warn { color: var(--red2); font-size: 14px; }
+.l2tri .l { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-top: 1px; }
+.l2tri.active { border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.07); box-shadow: 0 4px 18px rgba(239,68,68,0.12); }
+.l2tri.active .l { color: var(--red3); }
+
+/* ═══ LAYOUT : file + panneau ═══ */
+.l2cols { display: block; }
+.ld-feed { padding: 10px 12px calc(120px + var(--sab)); max-width: 680px; margin: 0 auto; }
+@media (min-width: 980px) {
+  .l2cols { display: grid; grid-template-columns: minmax(380px, 460px) 1fr; align-items: start; }
+  .ld-feed { max-width: none; margin: 0; min-height: calc(100vh - var(--l2-hd)); border-right: 1px solid var(--border-soft); padding-bottom: 40px; }
+}
+.ld-empty { text-align: center; padding: 56px 20px; color: var(--muted); font-size: 13px; }
+
+.l2grp { margin: 14px 2px 7px; display: flex; align-items: center; gap: 8px; }
+.l2grp:first-child { margin-top: 4px; }
+.l2grp .t { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.9px; color: var(--muted); }
+.l2grp .n { font-family: var(--fm); font-size: 10px; color: var(--muted2); }
+.l2grp .line { flex: 1; height: 1px; background: var(--border-soft); }
+.l2grp.hot .t { color: var(--red3); }
+.l2grp.hot .line { background: rgba(239,68,68,0.18); }
+
+/* ═══ CARTE (file) ═══ */
+.ld-feed .ld-card {
+  position: relative;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius2);
+  margin-bottom: 8px; overflow: hidden;
+  transition: border-color .18s, box-shadow .18s;
+}
+.ld-feed .ld-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--sc, transparent); opacity: 0.9; z-index: 1;
+}
+.ld-feed .ld-card:hover { border-color: var(--border2); }
+.ld-feed .ld-card.is-open { border-color: rgba(239,68,68,0.5); box-shadow: 0 6px 22px rgba(239,68,68,0.1); }
+.ld-feed .ld-card.new { border-color: rgba(52,211,153,0.45); animation: cardGlow 2.2s ease-out; }
+@keyframes cardGlow { 0% { box-shadow: 0 0 24px rgba(52,211,153,0.35); } 100% { box-shadow: none; } }
+.ld-feed .ld-card.l2done { opacity: 0.55; }
+
+.ld-card-head { padding: 11px 12px 11px 14px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.ld-card-avatar {
+  width: 38px; height: 38px; border-radius: 11px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--fh); font-size: 14px; font-weight: 700; color: #fff;
+}
+.ld-card-info { flex: 1; min-width: 0; }
+.ld-card-name { font-family: var(--fh); font-size: 14.5px; font-weight: 700; letter-spacing: -0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 7px; }
+.ld-card-name .l2ago { font-family: var(--fm); font-size: 10px; font-weight: 400; color: var(--muted2); flex: none; }
+.ld-card-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.l2last { margin-top: 4px; font-size: 10.5px; font-family: var(--fm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-card-time { display: none; }
+.ld-card-arrow { display: none; }
+
+.l2side { flex: none; display: flex; align-items: center; gap: 7px; }
+.l2quick {
+  width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--muted); font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.l2quick:hover { border-color: rgba(251,191,36,0.5); color: var(--gold); }
+.l2quick.on { border-color: rgba(251,191,36,0.55); color: var(--gold); background: rgba(251,191,36,0.08); }
+.l2cta { display: inline-flex; }
+
+/* Bouton d'appel injecté par DialerBridge — surclassé au look v2 */
+.ld-feed .l2cta .dbr-call-btn {
+  height: 34px; padding: 0 13px; border-radius: 10px;
+  background: linear-gradient(135deg, #059669, #10b981);
+  font-size: 12px; font-weight: 800;
+  box-shadow: 0 3px 12px rgba(16,185,129,0.25);
+}
+@media (max-width: 430px) { .ld-feed .l2cta .dbr-call-btn { padding: 0 11px; } }
+
+/* Badges (classes historiques) */
+.ld-badge {
+  font-size: 9.5px; font-weight: 800; padding: 2.5px 7px; border-radius: 6px;
+  text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+}
+.ld-badge.vsl      { background: rgba(167,139,250,0.13); color: #c4b5fd; }
+.ld-badge.self     { background: rgba(251,191,36,0.13);  color: #fcd34d; }
+.ld-badge.business { background: rgba(239,68,68,0.12);   color: var(--red3); }
+.ld-badge.other    { background: rgba(91,124,250,0.13);  color: #a9bcff; }
+.ld-badge-status {
+  font-size: 10px; font-weight: 800; padding: 2.5px 8px; border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+}
+.ld-badge-status .sd { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.ld-assigned {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px;
+  background: rgba(255,255,255,0.05); border: 1px solid var(--border); white-space: nowrap;
+}
+.ld-fu-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+  background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.35); color: var(--gold);
+  font-family: var(--fm); white-space: nowrap;
+}
+.ld-fu-badge.overdue { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.45); color: var(--red3); }
+
+/* Statuts rapides ⚡ */
+.l2qrow { display: none; gap: 6px; padding: 0 12px 11px 47px; flex-wrap: wrap; }
+.ld-feed .ld-card.l2qopen .l2qrow { display: flex; }
+.l2qrow .ld-status-btn { min-height: 0; padding: 6px 11px; font-size: 11px; border-radius: 9px; }
+
+/* ═══ FICHE : bottom-sheet mobile / panneau desktop ═══ */
+.l2backdrop { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(3,4,10,0.6); }
+.l2backdrop.on { display: block; }
+.l2sheet {
+  position: fixed; z-index: 210; left: 0; right: 0; bottom: 0;
+  height: min(92dvh, 92vh);
+  background: var(--bg2); border: 1px solid var(--border2); border-bottom: none;
+  border-radius: 22px 22px 0 0;
+  transform: translateY(103%);
+  transition: transform .28s cubic-bezier(.32,.72,.25,1);
+  display: flex; flex-direction: column;
+  box-shadow: 0 -18px 60px rgba(0,0,0,0.55);
+}
+.l2sheet.on { transform: translateY(0); }
+.l2grab { flex: none; padding: 9px 0 3px; display: flex; justify-content: center; cursor: pointer; }
+.l2grab::before { content: ''; width: 42px; height: 4px; border-radius: 999px; background: rgba(255,255,255,0.14); }
+.l2ph {
+  display: none; flex: 1; align-items: center; justify-content: center; flex-direction: column; gap: 10px;
+  color: var(--muted2); font-size: 13px; text-align: center; padding: 20px;
+}
+.l2ph .big { font-size: 34px; opacity: 0.5; }
+.l2inner { flex: 1; display: none; flex-direction: column; min-height: 0; }
+.l2sheet.has-lead .l2inner { display: flex; }
+@media (min-width: 980px) {
+  .l2backdrop.on { display: none; }
+  .l2sheet {
+    position: sticky; top: var(--l2-hd); left: auto; right: auto; bottom: auto;
+    height: calc(100dvh - var(--l2-hd));
+    transform: none; transition: none;
+    border-radius: 0; border: none; border-left: 1px solid var(--border-soft);
+    background: transparent; box-shadow: none;
+  }
+  .l2grab { display: none; }
+  .l2ph { display: flex; }
+  .l2sheet.has-lead .l2ph { display: none; }
+}
+
+.l2sh-head { flex: none; padding: 4px 16px 12px; border-bottom: 1px solid var(--border); }
+@media (min-width: 980px) { .l2sh-head { padding-top: 14px; } }
+.l2sh-top { display: flex; align-items: flex-start; gap: 11px; }
+.l2sh-id { flex: 1; min-width: 0; }
+.l2sh-name { font-family: var(--fh); font-size: 19px; font-weight: 700; letter-spacing: -0.3px; }
+.l2sh-phone { font-family: var(--fm); font-size: 12.5px; color: var(--muted); margin-top: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.l2sh-phone a { text-decoration: none; }
+.l2sh-phone a[data-action="dialerCall"] { color: #86efac; }
+.l2sh-phone a[href^="mailto"] { color: #a9bcff; }
+.l2sh-phone .sep { color: var(--muted2); }
+.l2sh-close {
+  flex: none; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--muted); font-size: 14px; cursor: pointer;
+}
+.l2sh-close:hover { color: var(--text); border-color: var(--border2); }
+.l2sh-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.l2act-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 11px; }
+.l2act {
+  border: 1px solid var(--border); border-radius: 12px; background: var(--bg3);
+  padding: 9px 4px 7px; cursor: pointer; text-align: center; transition: all .14s;
+  color: var(--text); text-decoration: none; display: block;
+}
+.l2act .i { font-size: 16px; display: block; }
+.l2act .t { font-size: 10px; font-weight: 800; letter-spacing: 0.3px; color: var(--muted); display: block; margin-top: 2px; }
+.l2act:hover { transform: translateY(-1px); }
+.l2act.call { border-color: rgba(16,185,129,0.4);  background: rgba(16,185,129,0.08); }
+.l2act.sms  { border-color: rgba(91,124,250,0.4);  background: rgba(91,124,250,0.08); }
+.l2act.rdv  { border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.08); }
+.l2act.crm  { border-color: rgba(45,212,191,0.35); background: rgba(45,212,191,0.06); }
+
+.l2segs { flex: none; display: flex; gap: 5px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.l2seg {
+  flex: 1; padding: 8px 4px; border-radius: 10px; border: 1.5px solid var(--border);
+  background: transparent; color: var(--muted); font-size: 12px; font-weight: 800; cursor: pointer;
+  transition: all .14s; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.l2seg .b { font-family: var(--fm); font-size: 9.5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: rgba(239,68,68,0.15); color: var(--red3); display: inline-flex; align-items: center; justify-content: center; font-weight: 500; }
+.l2seg .b.blue { background: rgba(91,124,250,0.15); color: #a9bcff; }
+.l2seg.active { border-color: rgba(239,68,68,0.5); color: var(--red3); background: rgba(239,68,68,0.07); }
+
+.l2body { flex: 1; overflow-y: auto; padding: 14px 16px calc(26px + var(--sab)); -webkit-overflow-scrolling: touch; }
+.l2body::-webkit-scrollbar { width: 8px; }
+.l2body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+
+/* ── Détails (classes historiques) ── */
+.ld-details { padding: 2px 0 10px; }
+.ld-detail-row { display: flex; gap: 10px; padding: 6px 0; font-size: 12.5px; align-items: center; border-bottom: 1px solid var(--border-soft); }
+.ld-detail-row:last-child { border-bottom: 0; }
+.ld-detail-label { color: var(--muted); min-width: 96px; flex: none; font-weight: 600; font-size: 11.5px; }
+.ld-detail-val { color: var(--text); word-break: break-word; flex: 1; }
+.ld-detail-val a { color: #a9bcff; text-decoration: none; }
+.ld-detail-val a[data-action="dialerCall"] { color: #86efac; font-family: var(--fm); }
+.ld-detail-input, .ld-detail-select {
+  flex: 1; padding: 6px 9px; background: var(--bg3); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: var(--fb); font-size: 12.5px; outline: none;
+  transition: border-color .15s; min-width: 0;
+}
+.ld-detail-input:focus, .ld-detail-select:focus { border-color: rgba(239,68,68,0.5); }
+.ld-detail-select option { background: var(--bg2); }
+
+.ld-edit-toggle, .ld-booking-btn, .ld-reassign-btn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 7px 13px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--bg3); color: var(--muted);
+  font-family: var(--fb); font-size: 11.5px; font-weight: 800; cursor: pointer; transition: all .15s;
+  text-decoration: none;
+}
+.ld-edit-toggle:hover, .ld-booking-btn:hover, .ld-reassign-btn:hover { color: var(--text); border-color: var(--border2); }
+.ld-edit-toggle.editing { color: var(--gold); border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.06); }
+.ld-booking-btn { color: #c4b5fd; border-color: rgba(167,139,250,0.35); background: rgba(167,139,250,0.07); }
+.ld-reassign-btn { color: var(--gold); border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.06); }
+
+/* ── Clavier de statuts groupés (signature v2) ── */
+.ld-actions { padding: 0; border-top: none; }
+.ld-actions-title {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.9px;
+  color: var(--muted); margin: 14px 0 8px;
+}
+.ld-actions-title:first-child { margin-top: 0; }
+.l2fam { margin-bottom: 9px; }
+.l2fam-l { font-size: 9px; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; color: var(--muted2); margin: 0 0 5px 2px; }
+.l2fam-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.ld-status-btn {
+  border: 1.5px solid var(--border); background: var(--bg3); color: var(--muted);
+  font-family: var(--fb); font-size: 11.5px; font-weight: 700; padding: 8px 12px;
+  border-radius: 10px; cursor: pointer; transition: all .13s;
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+}
+.ld-status-btn:hover { border-color: var(--border2); color: var(--text); }
+.ld-status-btn.active { border-color: currentColor; background: rgba(255,255,255,0.05); box-shadow: 0 0 0 1px currentColor inset; }
+.ld-status-btn[data-status="client"] {
+  width: 100%; justify-content: center; min-height: 42px; font-size: 12.5px;
+  border-color: rgba(251,191,36,0.4); color: var(--gold); background: rgba(251,191,36,0.06);
+}
+.ld-status-btn[data-status="client"]:hover { background: rgba(251,191,36,0.12); box-shadow: 0 5px 18px rgba(251,191,36,0.15); }
+.ld-status-grid { display: contents; }
+
+.ld-rdv-section { margin-top: 10px; }
+.ld-rdv-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.ld-rdv-row input {
+  flex: 1; padding: 9px 10px; background: var(--bg3); border: 1.5px solid var(--border);
+  border-radius: 9px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none;
+  color-scheme: dark; min-width: 0;
+}
+.ld-rdv-row input:focus { border-color: rgba(239,68,68,0.5); }
+
+/* ── Parcours RDV (RdvOutcome) ── */
+.ld-rdv-block { margin: 12px 0 4px; padding: 10px 12px; border: 1px solid rgba(167,139,250,0.28); background: rgba(167,139,250,0.05); border-radius: var(--radius); display: none; }
+.ld-rdv-block.has-rdv { display: block; }
+.ld-rdv-block-title { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #c4b5fd; margin-bottom: 6px; }
+.ld-rdvx-row { display: flex; align-items: center; gap: 9px; padding: 6px 0; font-size: 12px; color: var(--text); flex-wrap: wrap; }
+.ld-rdvx-row + .ld-rdvx-row { border-top: 1px dashed rgba(255,255,255,0.06); }
+.ld-rdvx-row.past { opacity: 0.85; }
+.ld-rdvx-when { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 700; color: #c4b5fd; min-width: 122px; }
+.ld-rdvx-when .d { font-size: 10.5px; color: var(--muted); font-weight: 600; font-family: var(--fm); }
+.ld-rdvx-meta { font-size: 11px; color: var(--muted); flex: 1; min-width: 84px; }
+.ld-rdvx-btn {
+  background: rgba(91,124,250,0.12); border: 1px solid rgba(91,124,250,0.4); color: #b6c3ff;
+  padding: 5px 11px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer;
+  font-family: inherit; transition: all .13s; white-space: nowrap;
+}
+.ld-rdvx-btn:hover { border-color: rgba(91,124,250,0.6); box-shadow: 0 4px 12px rgba(91,124,250,0.2); }
+.ld-rdvx-btn.ghost { background: transparent; border-color: rgba(255,255,255,0.12); color: var(--muted); }
+.ld-rdvx-sep { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted2); margin: 7px 0 2px; opacity: 0.9; }
+
+/* ── Réponses formulaire (AlteoForms) ── */
+.ld-form-answers { margin: 12px 0 4px; padding: 10px 12px; border: 1px solid rgba(91,124,250,0.25); background: rgba(91,124,250,0.05); border-radius: var(--radius); display: none; }
+.ld-form-answers.has-answers { display: block; }
+.ld-form-answers-title { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #a9bcff; margin-bottom: 6px; }
+.ld-form-answer-row { display: flex; gap: 10px; padding: 5px 0; font-size: 12px; align-items: flex-start; }
+.ld-form-answer-row + .ld-form-answer-row { border-top: 1px dashed rgba(255,255,255,0.06); margin-top: 2px; padding-top: 7px; }
+.ld-form-answer-label { color: var(--muted); min-width: 128px; max-width: 280px; flex: none; font-weight: 600; font-size: 11px; word-break: break-word; white-space: normal; line-height: 1.35; }
+.ld-form-answer-val { color: var(--text); word-break: break-word; white-space: pre-wrap; flex: 1; }
+
+.ld-form-history-wrap { margin: 2px 0 10px; }
+.ld-form-history-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 9px;
+  border: 1px dashed rgba(91,124,250,0.3); background: transparent;
+  color: #a9bcff; font-family: var(--fb); font-size: 11px; font-weight: 800;
+  cursor: pointer; transition: all .15s;
+}
+.ld-form-history-toggle:hover { background: rgba(91,124,250,0.06); border-color: rgba(91,124,250,0.45); }
+.ld-form-history-toggle.open { background: rgba(91,124,250,0.08); border-style: solid; }
+.ld-form-history-content { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.ld-form-history-entry { padding: 10px 12px; border: 1px solid rgba(91,124,250,0.14); background: rgba(91,124,250,0.03); border-radius: 9px; }
+.ld-form-history-entry-title { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px; color: rgba(169,188,255,0.8); margin-bottom: 6px; }
+
+/* ── Historique des passages (engagementHistory) ── */
+.ld-eng-history-wrap {
+  margin: 14px 0 8px; padding: 12px 13px;
+  border: 1px solid rgba(167,139,250,0.2);
+  background: rgba(167,139,250,0.035);
+  border-radius: var(--radius);
+}
+.ld-eng-history-title {
+  font-size: 9.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.8px; color: rgba(196,181,253,0.85);
+  margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+}
+.ld-eng-history-list { display: flex; flex-direction: column; gap: 6px; }
+.ld-eng-entry {
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 9px; overflow: hidden; transition: border-color .15s;
+}
+.ld-eng-entry:hover { border-color: rgba(167,139,250,0.2); }
+.ld-eng-entry-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; user-select: none; }
+.ld-eng-entry-head:hover { background: rgba(255,255,255,0.02); }
+.ld-eng-entry-chevron { font-size: 10px; color: rgba(255,255,255,0.4); width: 12px; transition: transform .15s; }
+.ld-eng-entry.open .ld-eng-entry-chevron { transform: rotate(90deg); }
+.ld-eng-entry-date { color: var(--muted); font-family: var(--fm); font-size: 10px; min-width: 110px; }
+.ld-eng-entry-badge { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 5px; }
+.ld-eng-entry-badge.vsl      { background: rgba(167,139,250,0.16); color: #c4b5fd; }
+.ld-eng-entry-badge.self     { background: rgba(251,191,36,0.16);  color: #fcd34d; }
+.ld-eng-entry-badge.business { background: rgba(239,68,68,0.16);   color: var(--red3); }
+.ld-eng-entry-badge.other    { background: rgba(91,124,250,0.16);  color: #a9bcff; }
+.ld-eng-entry-trigger { font-size: 9px; color: var(--muted); padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
+.ld-eng-entry-summary { flex: 1; color: rgba(255,255,255,0.5); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-eng-entry-body { display: none; padding: 10px 12px 12px 30px; border-top: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.15); }
+.ld-eng-entry.open .ld-eng-entry-body { display: block; }
+.ld-eng-detail-row { display: flex; gap: 10px; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,0.04); font-size: 11px; }
+.ld-eng-detail-row:last-child { border-bottom: 0; }
+.ld-eng-detail-lbl { color: var(--muted); font-weight: 600; min-width: 100px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.4px; padding-top: 2px; }
+.ld-eng-detail-val { color: var(--text); flex: 1; word-break: break-word; }
+.ld-eng-form-block { margin-top: 8px; padding: 8px 10px; background: rgba(91,124,250,0.04); border: 1px solid rgba(91,124,250,0.12); border-radius: 7px; }
+.ld-eng-form-block-title { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: rgba(169,188,255,0.75); margin-bottom: 6px; }
+.ld-eng-form-row { display: flex; gap: 10px; padding: 3px 0; font-size: 11px; }
+.ld-eng-form-row-q { color: var(--muted); min-width: 140px; font-size: 10px; }
+.ld-eng-form-row-a { color: var(--text); flex: 1; word-break: break-word; }
+
+/* ── Notes ── */
+.ld-notes-add-row { display: flex; gap: 7px; margin-bottom: 10px; align-items: flex-end; }
+.ld-notes-area {
+  flex: 1; width: 100%; padding: 9px 11px; background: var(--bg3); border: 1.5px solid var(--border);
+  border-radius: 11px; color: var(--text); font-family: var(--fb); font-size: 13px;
+  resize: none; min-height: 40px; max-height: 90px; outline: none;
+}
+.ld-notes-area:focus { border-color: rgba(251,191,36,0.45); }
+.ld-notes-area::placeholder { color: var(--muted2); }
+.ld-notes-add-btn {
+  flex: none; height: 40px; padding: 0 14px; border-radius: 11px; border: none; cursor: pointer;
+  background: linear-gradient(135deg, rgba(251,191,36,0.92), rgba(217,119,6,0.92)); color: #1c1403;
+  font-family: var(--fb); font-weight: 800; font-size: 12px; transition: all .15s; white-space: nowrap;
+}
+.ld-notes-add-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(251,191,36,0.25); }
+.ld-notes-history { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; max-height: 240px; overflow-y: auto; }
+.ld-notes-history::-webkit-scrollbar { width: 3px; }
+.ld-notes-history::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.ld-note-item {
+  padding: 8px 11px; background: var(--bg3); border: 1px solid var(--border);
+  border-left: 3px solid rgba(251,191,36,0.5); border-radius: 10px; font-size: 12.5px; line-height: 1.5;
+}
+.ld-note-item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; gap: 8px; }
+.ld-note-item-date { font-size: 10px; font-weight: 500; font-family: var(--fm); color: var(--muted2); }
+.ld-note-item-del { font-size: 11px; color: var(--muted2); cursor: pointer; background: none; border: none; padding: 0 2px; transition: color .15s; }
+.ld-note-item-del:hover { color: var(--red2); }
+.ld-note-item-text { color: rgba(255,255,255,0.86); white-space: pre-wrap; }
+
+/* ── Follow-up ── */
+.ld-fu-section { margin-top: 14px; }
+.ld-fu-toggle {
+  display: flex; align-items: center; gap: 7px; width: 100%;
+  padding: 9px 12px; border-radius: 10px; border: 1px dashed var(--border2);
   background: transparent; color: var(--muted); font-family: var(--fb);
-  font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap;
-  transition: all 0.15s; flex-shrink: 0;
+  font-size: 11.5px; font-weight: 800; cursor: pointer; transition: all .15s; text-align: left;
+}
+.ld-fu-toggle:hover { color: var(--text); }
+.ld-fu-toggle.open { border-style: solid; color: var(--text); }
+.ld-fu-toggle .ct-arrow { margin-left: auto; transition: transform .18s; font-size: 10px; }
+.ld-fu-toggle.open .ct-arrow { transform: rotate(180deg); }
+.ld-fu-count { font-family: var(--fm); font-size: 10px; padding: 1px 7px; border-radius: 999px; font-weight: 500; }
+.ld-fu-body { padding-top: 9px; }
+.ld-fu-add {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 7px;
+  border: 1px dashed rgba(251,191,36,0.35); border-radius: var(--radius);
+  padding: 10px; background: rgba(251,191,36,0.03);
+}
+.ld-fu-add input, .ld-fu-add textarea, .ld-fu-duration-select {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 9px;
+  color: var(--text); font-family: var(--fb); font-size: 12px; padding: 8px 9px;
+  color-scheme: dark; width: 100%; outline: none;
+}
+.ld-fu-add input:focus, .ld-fu-add textarea:focus { border-color: rgba(251,191,36,0.45); }
+.ld-fu-add textarea { grid-column: 1 / -1; resize: none; }
+.ld-fu-add-btn {
+  grid-column: 1 / -1; padding: 10px; border: none; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(135deg, rgba(251,191,36,0.92), rgba(217,119,6,0.92)); color: #1c1403;
+  font-family: var(--fb); font-size: 12px; font-weight: 800; transition: all .15s;
+}
+.ld-fu-add-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(251,191,36,0.22); }
+.ld-fu-add-row2 { display: flex; align-items: center; gap: 9px; margin-top: 8px; flex-wrap: wrap; }
+.ld-fu-duration-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted2); }
+.ld-fu-duration-select { width: auto; }
+.ld-fu-cal-switch { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; margin-left: auto; }
+.ld-fu-cal-switch input { display: none; }
+.ld-fu-cal-switch .sw-track { width: 32px; height: 18px; border-radius: 999px; background: var(--bg4); border: 1px solid var(--border2); position: relative; transition: all .18s; flex: none; }
+.ld-fu-cal-switch .sw-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: all .18s; }
+.ld-fu-cal-switch input:checked + .sw-track { background: rgba(91,124,250,0.35); border-color: var(--indigo); }
+.ld-fu-cal-switch input:checked + .sw-track::after { left: 16px; background: #fff; }
+.ld-fu-cal-switch .sw-label { font-size: 11px; font-weight: 700; color: var(--muted); }
+.ld-fu-list { display: flex; flex-direction: column; gap: 7px; margin-top: 9px; }
+.ld-fu-empty { text-align: center; font-size: 11.5px; color: var(--muted2); padding: 10px 0 2px; }
+.ld-fu-item {
+  display: flex; align-items: flex-start; gap: 9px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--bg3);
+}
+.ld-fu-item.overdue { border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.05); }
+.ld-fu-item.due-soon { border-color: rgba(251,191,36,0.4); }
+.ld-fu-item.done { opacity: 0.5; }
+.ld-fu-check {
+  flex: none; width: 20px; height: 20px; margin-top: 1px; border-radius: 7px;
+  border: 1.5px solid var(--border2); background: none; color: var(--green);
+  cursor: pointer; font-size: 12px; line-height: 1;
+}
+.ld-fu-item.done .ld-fu-check { border-color: var(--green); background: rgba(52,211,153,0.12); }
+.ld-fu-info { flex: 1; min-width: 0; }
+.ld-fu-datetime { font-family: var(--fm); font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ld-fu-item.overdue .ld-fu-datetime { color: var(--red3); }
+.ld-fu-note { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.ld-fu-by { font-size: 10px; color: var(--muted2); margin-top: 1px; }
+.ld-fu-cal-badge { font-size: 10px; color: #a9bcff; text-decoration: none; font-family: var(--fb); font-weight: 700; }
+.ld-fu-del { flex: none; background: none; border: none; color: var(--muted2); cursor: pointer; font-size: 12px; padding: 2px; }
+.ld-fu-del:hover { color: var(--red2); }
+
+/* ── SMS composer ── */
+.ld-sms-composer { margin: 14px 0 0; padding: 10px 12px; background: rgba(91,124,250,0.04); border: 1px solid rgba(91,124,250,0.3); border-radius: var(--radius); }
+.ld-sms-composer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ld-sms-composer-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px; color: #a9bcff; flex: 1; }
+.ld-sms-composer-from { font-family: var(--fm); font-size: 10.5px; color: var(--muted); }
+.ld-sms-composer textarea {
+  width: 100%; min-height: 62px; padding: 9px 11px; background: var(--bg3);
+  border: 1.5px solid var(--border); border-radius: 10px; color: var(--text);
+  font-family: var(--fb); font-size: 13px; outline: none; resize: vertical; line-height: 1.45;
+}
+.ld-sms-composer textarea:focus { border-color: rgba(91,124,250,0.5); }
+.ld-sms-composer textarea:disabled { opacity: 0.55; cursor: not-allowed; }
+.l2tpl-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+.l2tpl {
+  border: 1px dashed rgba(91,124,250,0.35); background: none; color: #a9bcff;
+  font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  transition: all .13s;
+}
+.l2tpl:hover { background: rgba(91,124,250,0.1); }
+.ld-sms-composer-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; gap: 10px; }
+.ld-sms-composer-counter { font-family: var(--fm); font-size: 10.5px; color: var(--muted2); white-space: nowrap; }
+.ld-sms-composer-counter.warn { color: var(--gold); }
+.ld-sms-composer-counter.over { color: var(--red2); }
+.ld-sms-send-btn {
+  height: 34px; padding: 0 15px; border: none; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(135deg, #4f6ef7, #5b7cfa); color: #fff;
+  font-family: var(--fb); font-weight: 800; font-size: 12px; transition: all .15s;
+  box-shadow: 0 3px 12px rgba(91,124,250,0.25);
+}
+.ld-sms-send-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.ld-sms-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.ld-sms-composer-error { font-size: 11px; color: var(--red2); margin-top: 6px; }
+.ld-sms-composer-blocked { padding: 9px 11px; background: rgba(251,191,36,0.07); border: 1px dashed rgba(251,191,36,0.4); border-radius: 10px; color: var(--gold); font-size: 11.5px; font-weight: 600; text-align: center; }
+
+/* ── Fil appels / SMS ── */
+.ld-comm-section { padding: 14px 0 0; }
+.ld-comm-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 9px 12px; border-radius: 10px; border: 1px dashed var(--border2);
+  background: transparent; color: var(--muted); font-family: var(--fb);
+  font-size: 11.5px; font-weight: 800; cursor: pointer; transition: all .15s;
+}
+.ld-comm-toggle:hover { color: var(--text); }
+.ld-comm-toggle.open { border-style: solid; color: var(--text); }
+.ld-comm-toggle .ct-arrow { transition: transform .18s; font-size: 10px; margin-left: auto; }
+.ld-comm-toggle.open .ct-arrow { transform: rotate(180deg); }
+.ld-comm-count { font-family: var(--fm); font-size: 10px; padding: 1px 6px; border-radius: 5px; }
+.ld-comm-list { margin-top: 9px; max-height: 380px; overflow-y: auto; flex-direction: column; gap: 6px; padding: 4px 2px; }
+.ld-comm-list::-webkit-scrollbar { width: 4px; }
+.ld-comm-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.ld-comm-empty { text-align: center; font-size: 11.5px; color: var(--muted2); padding: 18px 6px; line-height: 1.6; }
+.ld-conv-date-sep { text-align: center; font-family: var(--fm); font-size: 10px; color: var(--muted2); margin: 8px 0 2px; text-transform: capitalize; }
+.ld-conv-row { display: flex; flex-direction: column; max-width: 84%; }
+.ld-conv-row.in { align-self: flex-start; align-items: flex-start; }
+.ld-conv-row.out { align-self: flex-end; align-items: flex-end; }
+.ld-conv-author { font-size: 9.5px; font-weight: 800; padding: 0 10px 2px; letter-spacing: 0.2px; color: var(--muted); }
+.ld-conv-bubble { padding: 8px 12px; border-radius: 14px; font-size: 12.5px; line-height: 1.45; word-wrap: break-word; border: 1px solid transparent; }
+.ld-conv-bubble.in { background: var(--bg4); border-color: var(--border); border-bottom-left-radius: 5px; color: rgba(255,255,255,0.88); }
+.ld-conv-bubble.out { border-bottom-right-radius: 5px; color: rgba(255,255,255,0.95); background: linear-gradient(135deg, rgba(185,28,28,0.55), rgba(239,68,68,0.4)); border-color: rgba(239,68,68,0.3); }
+.ld-conv-call {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 12px;
+  border: 1px solid var(--border); background: var(--bg3); font-size: 12px;
+}
+.ld-conv-call.has-detail:hover { border-color: rgba(91,124,250,0.45); }
+.ld-conv-call.missed { border-color: rgba(239,68,68,0.35); color: var(--red3); }
+.ld-conv-call-icon { font-size: 12px; }
+.ld-conv-call-title { font-weight: 600; }
+.ld-conv-call-dur { font-family: var(--fm); font-size: 11px; color: var(--muted); }
+.ld-conv-meta { font-family: var(--fm); font-size: 9.5px; color: var(--muted2); margin: 3px 5px 0; }
+
+/* Vocaux */
+.vn-container { margin-top: 4px; }
+
+/* Suppression */
+.ld-delete-btn {
+  width: 100%; padding: 10px; border: 1px solid rgba(239,68,68,0.3); border-radius: 11px;
+  background: rgba(239,68,68,0.04); color: rgba(252,165,165,0.85);
+  font-family: var(--fb); font-size: 12px; font-weight: 800; cursor: pointer;
+  transition: all .2s; margin-top: 18px;
+}
+.ld-delete-btn:hover { background: rgba(239,68,68,0.1); color: var(--red3); border-color: rgba(239,68,68,0.5); }
+.ld-delete-btn.confirming { background: rgba(239,68,68,0.15); color: var(--red3); border-color: var(--red2); animation: deletePulse 1s infinite; }
+@keyframes deletePulse { 0%,100% { border-color: var(--red2); } 50% { border-color: rgba(239,68,68,0.4); } }
+
+/* ═══ FEUILLE FILTRES ═══ */
+.l2fs-backdrop { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(3,4,10,0.6); }
+.l2fs-backdrop.on { display: block; }
+.l2fs {
+  position: fixed; z-index: 310; left: 0; right: 0; bottom: 0; max-height: 86dvh;
+  background: var(--bg2); border: 1px solid var(--border2); border-bottom: none;
+  border-radius: 22px 22px 0 0; transform: translateY(103%);
+  transition: transform .26s cubic-bezier(.32,.72,.25,1);
+  display: flex; flex-direction: column; box-shadow: 0 -18px 60px rgba(0,0,0,0.55);
+}
+.l2fs.on { transform: translateY(0); }
+@media (min-width: 980px) {
+  .l2fs { left: auto; right: auto; width: 480px; margin: 0 auto; border-radius: 18px; bottom: 40px; border-bottom: 1px solid var(--border2); }
+}
+.l2fs-head { display: flex; align-items: center; padding: 16px 18px 8px; }
+.l2fs-head .t { font-family: var(--fh); font-size: 16px; font-weight: 700; }
+.l2fs-reset { margin-left: auto; background: none; border: none; color: var(--muted); font-size: 11.5px; font-weight: 800; cursor: pointer; }
+.l2fs-reset:hover { color: var(--red3); }
+.l2fs-body { overflow-y: auto; padding: 4px 18px calc(18px + var(--sab)); }
+.l2fs-l { font-size: 9.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--muted2); margin: 13px 0 7px; }
+.l2fs-apply {
+  width: 100%; margin-top: 16px; padding: 12px; border: none; border-radius: 12px; cursor: pointer;
+  background: linear-gradient(135deg, #b91c1c, #ef4444); color: #fff;
+  font-family: var(--fb); font-weight: 800; font-size: 13px;
+  box-shadow: 0 6px 18px rgba(239,68,68,0.25);
+}
+
+/* Chips historiques (période / type / statut) restylées */
+.ld-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.ld-filter {
+  padding: 7px 12px; border-radius: 999px; border: 1.5px solid var(--border);
+  background: var(--bg3); color: var(--muted); font-family: var(--fb);
+  font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  transition: all .13s; flex: none;
 }
 .ld-filter:hover { border-color: var(--border2); color: var(--text); }
-.ld-filter.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
+.ld-filter.active { border-color: rgba(239,68,68,0.55); color: var(--red3); background: rgba(239,68,68,0.08); }
+.ld-period-count { display: inline; margin-left: 5px; color: var(--muted); font-family: var(--fm); font-size: 10px; font-weight: 500; opacity: 0.6; }
+.ld-filter.active .ld-period-count { color: var(--red3); opacity: 0.8; }
+.ld-period-count.zero { opacity: 0.3; }
 
-/* Count badge inline inside period filter buttons — discret, sans fond */
-.ld-period-count {
-  display: inline;
-  margin-left: 5px;
-  color: var(--muted);
-  font-family: var(--fm);
-  font-size: 10px;
-  font-weight: 500;
-  opacity: 0.55;
-  transition: opacity 0.15s, color 0.15s;
+/* Pills membres */
+.ld-members { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+#ldMemberPillsDynamic { display: contents; }
+.ld-member-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 999px; border: 1.5px solid var(--border);
+  background: var(--bg3); color: var(--muted); font-family: var(--fb);
+  font-size: 11.5px; font-weight: 700; cursor: pointer; transition: all .13s;
+  white-space: nowrap; flex: none;
 }
-.ld-filter.active .ld-period-count {
-  color: var(--red3);
-  opacity: 0.75;
-}
-.ld-period-count.zero {
-  opacity: 0.3;
-}
+.ld-member-pill:hover { border-color: var(--border2); }
+.ld-member-pill.active { border-color: rgba(239,68,68,0.55); color: var(--red3); background: rgba(239,68,68,0.08); }
+.ld-member-pill .mp-dot, .ld-member-pill .ld-member-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.ld-member-pill .mp-count { font-family: var(--fm); font-size: 10px; opacity: 0.7; }
 
-/* ── Date range popover ── */
-.ld-date-wrap { position: relative; display: inline-block; flex-shrink: 0; }
+/* Popover date (déplacé sur <body>, position: fixed) */
+.ld-date-wrap { position: relative; display: inline-block; flex: none; }
 .ld-date-pop {
   position: fixed; z-index: 9999;
-  background: #14141f; border: 1px solid var(--border2); border-radius: 10px;
-  padding: 12px; width: 240px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  background: var(--bg3); border: 1px solid var(--border2); border-radius: 12px;
+  padding: 12px; width: 244px;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.6);
 }
 .ld-date-pop-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.ld-date-pop-row label {
-  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-  color: var(--muted); width: 28px; flex-shrink: 0;
-}
+.ld-date-pop-row label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); width: 28px; flex: none; }
 .ld-date-pop input[type="date"] {
-  flex: 1; padding: 6px 8px; background: var(--bg3); border: 1.5px solid var(--border);
-  border-radius: 6px; color: var(--text); font-family: var(--fb); font-size: 12px;
-  color-scheme: dark;
+  flex: 1; padding: 7px 8px; background: var(--bg2); border: 1.5px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: var(--fb); font-size: 12px; color-scheme: dark; min-width: 0;
 }
 .ld-date-pop input[type="date"]:focus { outline: none; border-color: var(--gold); }
 .ld-date-pop-actions { display: flex; gap: 6px; margin-top: 4px; }
 .ld-date-pop-actions button {
-  flex: 1; padding: 7px 10px; border-radius: 7px; border: 1.5px solid var(--border);
+  flex: 1; padding: 8px 10px; border-radius: 8px; border: 1.5px solid var(--border);
   background: transparent; color: var(--muted); font-family: var(--fb);
-  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+  font-size: 11px; font-weight: 700; cursor: pointer; transition: all .15s;
 }
 .ld-date-pop-actions button:hover { border-color: var(--border2); color: var(--text); }
-.ld-date-pop-actions button.primary {
-  border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08);
-}
-.ld-date-pop-actions button.primary:hover { background: rgba(185,28,28,0.16); }
-.ld-date-pop-hint { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+.ld-date-pop-actions button.primary { border-color: rgba(239,68,68,0.5); color: var(--red3); background: rgba(239,68,68,0.08); }
+.ld-date-pop-actions button.primary:hover { background: rgba(239,68,68,0.16); }
+.ld-date-pop-hint { font-size: 10px; color: var(--muted2); margin-top: 6px; line-height: 1.4; }
 
-/* ── Member pills ── */
-.ld-members {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
+/* ═══ Menu ⋯ (partage / push / créer) ═══ */
+.l2menu {
+  display: none; position: fixed; z-index: 400; top: 56px; right: 12px; width: 268px;
+  background: var(--bg3); border: 1px solid var(--border2); border-radius: 14px; padding: 6px;
+  box-shadow: 0 16px 50px rgba(0,0,0,0.55);
 }
-#ldMemberPillsDynamic {
-  display: contents;  /* le span ne casse pas le flex-wrap du parent */
+.l2menu.on { display: block; }
+.l2menu .l2mi {
+  width: 100%; text-align: left; background: none; border: none; color: var(--text);
+  font-family: var(--fb); font-size: 12.5px; font-weight: 600; padding: 10px 11px;
+  border-radius: 9px; cursor: pointer; display: flex; gap: 9px; align-items: center;
 }
-.ld-member-pill {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border-radius: 20px; border: 1.5px solid var(--border);
-  background: transparent; color: var(--muted); font-family: var(--fb);
-  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-.ld-member-pill:hover { border-color: var(--border2); }
-.ld-member-pill.active { border-color: var(--red2); color: var(--red3); background: rgba(185,28,28,0.08); }
-.ld-member-pill .mp-dot { width: 7px; height: 7px; border-radius: 50%; }
-.ld-member-pill .mp-count { font-family: var(--fm); font-size: 10px; opacity: 0.7; }
+.l2menu .l2mi:hover { background: rgba(255,255,255,0.05); }
+#sharePanel { padding: 10px 11px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; margin: 6px 4px 4px; }
 
-/* ── Search bar ── */
-.ld-search {
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  background: var(--bg3);
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  transition: border-color 0.15s, background 0.15s;
-}
-.ld-search:focus-within {
-  border-color: rgba(239,68,68,0.4);
-  background: var(--bg4);
-}
-.ld-search.has-value {
-  border-color: rgba(239,68,68,0.3);
-}
-.ld-search-icon {
-  display: flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; flex-shrink: 0;
-  color: var(--muted); font-size: 14px;
-}
-.ld-search-input {
-  flex: 1; min-width: 0;
-  background: transparent; border: none; outline: none;
-  color: var(--text); font-family: var(--fb);
-  font-size: 13px; font-weight: 500;
-  padding: 8px 4px;
-}
-.ld-search-input::placeholder { color: var(--muted2); }
-.ld-search-clear {
-  display: none;
-  align-items: center; justify-content: center;
-  width: 28px; height: 28px; margin-right: 4px;
-  background: transparent; border: none; border-radius: 6px;
-  color: var(--muted); font-size: 16px; cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  flex-shrink: 0;
-}
-.ld-search-clear:hover { background: rgba(255,255,255,0.06); color: var(--text); }
-.ld-search.has-value .ld-search-clear { display: flex; }
-.ld-search-hint {
-  font-size: 10px; font-weight: 600; color: var(--muted2);
-  padding: 0 10px; font-family: var(--fm);
-  flex-shrink: 0;
-}
-
-/* ── Feed ── */
-.ld-feed { padding: 12px 12px; }
-.ld-empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 13px; }
-
-/* ── Lead Card ── */
-.ld-card {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius2);
-  margin-bottom: 10px; overflow: hidden; transition: border-color 0.2s;
-}
-.ld-card.new { border-color: rgba(52,211,153,0.4); animation: cardGlow 2s ease-out; }
-@keyframes cardGlow { 0% { box-shadow: 0 0 20px rgba(52,211,153,0.3); } 100% { box-shadow: none; } }
-.ld-card-head {
-  padding: 14px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer;
-}
-.ld-card-avatar {
-  width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center;
-  justify-content: center; font-family: var(--fh); font-size: 15px; font-weight: 800; color: white; flex-shrink: 0;
-}
-.ld-card-info { flex: 1; min-width: 0; }
-.ld-card-name { font-family: var(--fh); font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ld-card-meta { font-size: 11px; color: var(--muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
-.ld-card-badges { display: flex; gap: 4px; flex-shrink: 0; }
-.ld-badge {
-  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
-  text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
-}
-.ld-badge.vsl { background: rgba(167,139,250,0.12); color: #c4b5fd; }
-.ld-badge.self { background: rgba(245,158,11,0.12); color: #fcd34d; }
-.ld-badge.business { background: rgba(239,68,68,0.12); color: #fca5a5; }
-.ld-badge.other { background: rgba(96,165,250,0.12); color: #93bbfd; }
-.ld-badge-status {
-  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
-  display: flex; align-items: center; gap: 4px;
-}
-.ld-badge-status .sd { width: 6px; height: 6px; border-radius: 50%; }
-.ld-assigned {
-  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
-  background: rgba(255,255,255,0.06); border: 1px solid var(--border);
-}
-.ld-card-time { font-size: 10px; color: var(--muted2); white-space: nowrap; flex-shrink: 0; }
-.ld-card-arrow { font-size: 10px; color: var(--muted2); flex-shrink: 0; transition: transform 0.2s; }
-.ld-card.open .ld-card-arrow { transform: rotate(180deg); }
-
-/* ── Card Body (expanded) ── */
-.ld-card-body { display: none; padding: 0 16px 16px; border-top: 1px solid var(--border); }
-.ld-card.open .ld-card-body { display: block; }
-
-.ld-details { padding: 12px 0; }
-.ld-detail-row { display: flex; gap: 8px; padding: 5px 0; font-size: 12px; align-items: center; }
-.ld-detail-label { color: var(--muted); min-width: 90px; flex-shrink: 0; font-weight: 600; }
-.ld-detail-val { color: var(--text); word-break: break-all; }
-.ld-detail-val a { color: var(--blue); text-decoration: none; }
-
-/* RDV pris (lus en temps réel depuis bookings) */
-.ld-rdv-block { margin: 10px 0 4px; padding: 10px 12px; border: 1px solid rgba(167,139,250,0.25); background: rgba(167,139,250,0.06); border-radius: 8px; display: none; }
-.ld-rdv-block.has-rdv { display: block; }
-.ld-rdv-block-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #c4b5fd; margin-bottom: 6px; }
-.ld-rdv-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 12px; color: var(--text); }
-.ld-rdv-row + .ld-rdv-row { border-top: 1px dashed rgba(255,255,255,0.06); margin-top: 2px; padding-top: 7px; }
-.ld-rdv-when { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 700; color: #c4b5fd; min-width: 130px; }
-.ld-rdv-when .d { font-size: 11px; color: var(--muted); font-weight: 600; }
-.ld-rdv-meta { font-size: 11px; color: var(--muted); flex: 1; min-width: 0; }
-/* ── Refonte 07/2026 : parcours RDV complet (passés + à venir + résultat) ── */
-.ld-rdvx-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12px; color: var(--text); flex-wrap: wrap; }
-.ld-rdvx-row + .ld-rdvx-row { border-top: 1px dashed rgba(255,255,255,0.06); }
-.ld-rdvx-row.past { opacity: 0.85; }
-.ld-rdvx-when { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 700; color: #c4b5fd; min-width: 128px; }
-.ld-rdvx-when .d { font-size: 11px; color: var(--muted); font-weight: 600; }
-.ld-rdvx-meta { font-size: 11px; color: var(--muted); flex: 1; min-width: 90px; }
-.ld-rdvx-btn {
-  background: rgba(91,124,250,0.12); border: 1px solid rgba(91,124,250,0.35); color: #b6c3ff;
-  padding: 4px 10px; border-radius: 7px; font-size: 11px; font-weight: 700; cursor: pointer;
-  font-family: inherit; transition: all 0.13s; white-space: nowrap;
-}
-.ld-rdvx-btn:hover { border-color: rgba(91,124,250,0.6); box-shadow: 0 3px 10px rgba(91,124,250,0.2); }
-.ld-rdvx-btn.ghost { background: transparent; border-color: rgba(255,255,255,0.12); color: var(--muted); }
-.ld-rdvx-sep { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 8px 0 2px; opacity: 0.8; }
-
-/* Réponses du formulaire AlteoForm */
-.ld-form-answers { margin: 10px 0 4px; padding: 10px 12px; border: 1px solid rgba(96,165,250,0.22); background: rgba(96,165,250,0.05); border-radius: 8px; display: none; }
-.ld-form-answers.has-answers { display: block; }
-.ld-form-answers-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #93c5fd; margin-bottom: 6px; }
-.ld-form-answer-row { display: flex; gap: 10px; padding: 5px 0; font-size: 12px; align-items: flex-start; }
-.ld-form-answer-row + .ld-form-answer-row { border-top: 1px dashed rgba(255,255,255,0.06); margin-top: 2px; padding-top: 7px; }
-.ld-form-answer-label { color: var(--muted); min-width: 130px; max-width: 280px; flex-shrink: 0; font-weight: 600; font-size: 11px; word-break: break-word; white-space: normal; line-height: 1.35; }
-.ld-form-answer-val { color: var(--text); word-break: break-word; white-space: pre-wrap; flex: 1; }
-
-/* Historique des soumissions formulaire (alimenté par formSubmissionsHistory) */
-.ld-form-history-wrap { margin: -2px 0 10px; }
-.ld-form-history-toggle {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border-radius: 8px;
-  border: 1px dashed rgba(96,165,250,0.25); background: transparent;
-  color: #93c5fd; font-family: var(--fb); font-size: 11px; font-weight: 700;
-  cursor: pointer; transition: all .15s;
-}
-.ld-form-history-toggle:hover { background: rgba(96,165,250,0.06); border-color: rgba(96,165,250,0.4); }
-.ld-form-history-toggle.open { background: rgba(96,165,250,0.08); border-style: solid; }
-.ld-form-history-content { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
-.ld-form-history-entry { padding: 10px 12px; border: 1px solid rgba(96,165,250,0.12); background: rgba(96,165,250,0.025); border-radius: 8px; }
-.ld-form-history-entry-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: rgba(147,197,253,0.75); margin-bottom: 6px; }
-
-/* ═══════════════════════════════════════════════════════════════════
-   HISTORIQUE DES PASSAGES — engagementHistory[]
-   Affiche en bas de fiche un accordéon listant chaque ré-engagement
-   précédent du lead (opt-in webhook, soumission formulaire, RDV).
-   Chaque entry est dépliable et révèle l'état complet à l'époque.
-   ═══════════════════════════════════════════════════════════════════ */
-.ld-eng-history-wrap {
-  margin: 14px 0 8px;
-  padding: 12px 14px;
-  border: 1px solid rgba(167,139,250,0.2);
-  background: rgba(167,139,250,0.04);
-  border-radius: 10px;
-}
-.ld-eng-history-title {
-  font-size: 10px; font-weight: 800; text-transform: uppercase;
-  letter-spacing: 0.6px; color: rgba(196,181,253,0.85);
-  margin-bottom: 10px;
-  display: flex; align-items: center; gap: 6px;
-}
-.ld-eng-history-list { display: flex; flex-direction: column; gap: 6px; }
-.ld-eng-entry {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.05);
-  border-radius: 7px;
-  overflow: hidden;
-  transition: border-color .15s;
-}
-.ld-eng-entry:hover { border-color: rgba(167,139,250,0.18); }
-.ld-eng-entry-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px;
-  cursor: pointer;
-  user-select: none;
-}
-.ld-eng-entry-head:hover { background: rgba(255,255,255,0.02); }
-.ld-eng-entry-chevron {
-  font-size: 10px; color: rgba(255,255,255,0.4);
-  width: 12px; transition: transform .15s;
-}
-.ld-eng-entry.open .ld-eng-entry-chevron { transform: rotate(90deg); }
-.ld-eng-entry-date {
-  color: var(--muted); font-family: var(--fm); font-size: 10px;
-  min-width: 110px;
-}
-.ld-eng-entry-badge {
-  font-size: 9px; font-weight: 800; text-transform: uppercase;
-  letter-spacing: 0.4px; padding: 2px 7px; border-radius: 4px;
-}
-.ld-eng-entry-badge.vsl      { background: rgba(167,139,250,0.16); color: #c4b5fd; }
-.ld-eng-entry-badge.self     { background: rgba(245,158,11,0.16);  color: #fcd34d; }
-.ld-eng-entry-badge.business { background: rgba(239,68,68,0.16);   color: #fca5a5; }
-.ld-eng-entry-badge.other    { background: rgba(96,165,250,0.16);  color: #93bbfd; }
-.ld-eng-entry-trigger {
-  font-size: 9px; color: var(--muted);
-  padding: 1px 6px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  text-transform: uppercase; letter-spacing: 0.4px;
-}
-.ld-eng-entry-summary {
-  flex: 1; color: rgba(255,255,255,0.5);
-  font-size: 11px; font-family: var(--fb);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.ld-eng-entry-body {
-  display: none;
-  padding: 10px 12px 12px 32px;
-  border-top: 1px solid rgba(255,255,255,0.05);
-  background: rgba(0,0,0,0.15);
-}
-.ld-eng-entry.open .ld-eng-entry-body { display: block; }
-.ld-eng-detail-row {
-  display: flex; gap: 10px; padding: 4px 0;
-  border-bottom: 1px dashed rgba(255,255,255,0.04);
-  font-size: 11px;
-}
-.ld-eng-detail-row:last-child { border-bottom: 0; }
-.ld-eng-detail-lbl {
-  color: var(--muted); font-family: var(--fb);
-  font-weight: 600; min-width: 100px;
-  text-transform: uppercase; font-size: 10px; letter-spacing: 0.4px;
-  padding-top: 2px;
-}
-.ld-eng-detail-val { color: var(--text); font-family: var(--fb); flex: 1; word-break: break-word; }
-.ld-eng-form-block {
-  margin-top: 8px; padding: 8px 10px;
-  background: rgba(96,165,250,0.04);
-  border: 1px solid rgba(96,165,250,0.12);
-  border-radius: 6px;
-}
-.ld-eng-form-block-title {
-  font-size: 9px; font-weight: 800; text-transform: uppercase;
-  letter-spacing: 0.5px; color: rgba(147,197,253,0.75);
-  margin-bottom: 6px;
-}
-.ld-eng-form-row {
-  display: flex; gap: 10px; padding: 3px 0;
-  font-size: 11px;
-}
-.ld-eng-form-row-q { color: var(--muted); min-width: 140px; font-size: 10px; }
-.ld-eng-form-row-a { color: var(--text); flex: 1; word-break: break-word; }
-
-/* Edit mode */
-.ld-edit-toggle {
-  display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px;
-  border: 1px solid var(--border); background: transparent; color: var(--muted);
-  font-family: var(--fb); font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
-  margin-bottom: 4px;
-}
-.ld-edit-toggle:hover { color: var(--text); border-color: var(--border2); }
-.ld-edit-toggle.editing { color: var(--gold); border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.06); }
-.ld-detail-input {
-  flex: 1; padding: 5px 8px; background: var(--bg3); border: 1.5px solid var(--border);
-  border-radius: 6px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none;
-  transition: border-color 0.15s;
-}
-.ld-detail-input:focus { border-color: var(--red2); }
-.ld-detail-select {
-  flex: 1; padding: 5px 8px; background: var(--bg3); border: 1.5px solid var(--border);
-  border-radius: 6px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none;
-}
-.ld-detail-select option { background: var(--bg2); }
-.ld-save-info-btn {
-  width: 100%; padding: 8px; border: none; border-radius: 8px;
-  background: rgba(245,158,11,0.15); color: #fcd34d;
-  font-family: var(--fb); font-size: 12px; font-weight: 700; cursor: pointer;
-  transition: all 0.15s; margin-top: 6px;
-}
-.ld-save-info-btn:hover { background: rgba(245,158,11,0.25); }
-
-/* Actions */
-.ld-actions { padding: 12px 0 0; border-top: 1px solid var(--border); }
-.ld-actions-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 8px; }
-.ld-status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
-@media (max-width: 400px) { .ld-status-grid { grid-template-columns: repeat(2, 1fr); } }
-.ld-status-btn {
-  padding: 8px 6px; border-radius: 8px; border: 1.5px solid var(--border);
-  background: transparent; color: var(--muted); font-family: var(--fb);
-  font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-align: center;
-}
-.ld-status-btn:hover { border-color: var(--border2); color: var(--text); }
-.ld-status-btn.active { border-color: currentColor; background: rgba(255,255,255,0.04); }
-
-.ld-rdv-row { display: flex; gap: 8px; margin-bottom: 10px; }
-.ld-rdv-row input {
-  flex: 1; padding: 8px 10px; background: var(--bg3); border: 1.5px solid var(--border);
-  border-radius: 8px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none;
-}
-.ld-rdv-row input:focus { border-color: var(--red2); }
-
-.ld-notes-area {
-  width: 100%; padding: 10px 12px; background: var(--bg3); border: 1.5px solid var(--border);
-  border-radius: 10px; color: var(--text); font-family: var(--fb); font-size: 12px;
-  resize: none; min-height: 40px; max-height: 80px; outline: none;
-}
-.ld-notes-area:focus { border-color: var(--red2); }
-.ld-notes-area::placeholder { color: var(--muted2); }
-.ld-notes-add-row { display: flex; gap: 6px; margin-bottom: 10px; }
-.ld-notes-add-btn {
-  padding: 8px 14px; border: none; border-radius: 8px; background: var(--bg4);
-  border: 1px solid var(--border); color: var(--muted); font-family: var(--fb);
-  font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 0.15s;
-}
-.ld-notes-add-btn:hover { background: rgba(52,211,153,0.1); color: #34d399; border-color: rgba(52,211,153,0.3); }
-.ld-notes-history { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; max-height: 200px; overflow-y: auto; }
-.ld-notes-history::-webkit-scrollbar { width: 3px; }
-.ld-notes-history::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-.ld-note-item {
-  padding: 8px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border);
-  border-radius: 8px; font-size: 12px; line-height: 1.5;
-}
-.ld-note-item-head { display: flex; justify-content: space-between; margin-bottom: 3px; }
-.ld-note-item-date { font-size: 10px; font-weight: 700; color: var(--muted); }
-.ld-note-item-del {
-  font-size: 10px; color: var(--muted2); cursor: pointer; background: none; border: none;
-  padding: 0 2px; transition: color 0.15s;
-}
-.ld-note-item-del:hover { color: #ef4444; }
-.ld-note-item-text { color: rgba(255,255,255,0.8); }
-
-.ld-save-btn {
-  width: 100%; padding: 10px; border: none; border-radius: 10px;
-  background: linear-gradient(135deg,#b91c1c,#ef4444); color: white;
-  font-family: var(--fb); font-size: 13px; font-weight: 700; cursor: pointer;
-  transition: all 0.15s; box-shadow: 0 3px 12px rgba(185,28,28,0.3);
-}
-.ld-save-btn:hover { transform: translateY(-1px); }
-.ld-save-btn:active { transform: scale(0.98); }
-
-/* Delete lead */
-.ld-delete-btn {
-  width: 100%; padding: 9px; border: 1.5px solid rgba(239,68,68,0.25); border-radius: 10px;
-  background: transparent; color: rgba(239,68,68,0.7);
-  font-family: var(--fb); font-size: 12px; font-weight: 700; cursor: pointer;
-  transition: all 0.2s; margin-top: 14px;
-}
-.ld-delete-btn:hover { background: rgba(239,68,68,0.08); color: #ef4444; border-color: rgba(239,68,68,0.4); }
-.ld-delete-btn.confirming {
-  background: rgba(239,68,68,0.15); color: #fca5a5; border-color: #ef4444;
-  animation: deletePulse 1s infinite;
-}
-@keyframes deletePulse { 0%,100% { border-color: #ef4444; } 50% { border-color: rgba(239,68,68,0.4); } }
-
-/* ── SMS composer (envoi depuis la card Leads Live) ── */
-.ld-sms-composer { margin: 12px 0 0; padding: 10px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; }
-.ld-sms-composer-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.ld-sms-composer-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #93c5fd; flex: 1; }
-.ld-sms-composer-from { font-family: var(--fm); font-size: 10px; color: var(--muted2); }
-.ld-sms-composer textarea { width: 100%; min-height: 60px; padding: 8px 10px; background: var(--bg2); border: 1.5px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none; resize: vertical; line-height: 1.45; box-sizing: border-box; }
-.ld-sms-composer textarea:focus { border-color: #60a5fa; }
-.ld-sms-composer textarea:disabled { opacity: 0.55; cursor: not-allowed; }
-.ld-sms-composer-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 10px; }
-.ld-sms-composer-counter { font-family: var(--fm); font-size: 10px; color: var(--muted); white-space: nowrap; }
-.ld-sms-composer-counter.warn { color: #fbbf24; }
-.ld-sms-composer-counter.over { color: #ef4444; }
-.ld-sms-send-btn { padding: 7px 14px; background: linear-gradient(135deg, rgba(96,165,250,0.28), rgba(96,165,250,0.14)); border: 1px solid rgba(96,165,250,0.45); border-radius: 8px; color: #bfdbfe; font-family: var(--fb); font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s; letter-spacing: 0.2px; }
-.ld-sms-send-btn:hover:not(:disabled) { background: linear-gradient(135deg, rgba(96,165,250,0.38), rgba(96,165,250,0.22)); color: #fff; }
-.ld-sms-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.ld-sms-composer-error { font-size: 11px; color: #ef4444; margin-top: 6px; }
-.ld-sms-composer-blocked { padding: 8px 10px; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.28); border-radius: 8px; color: #fbbf24; font-size: 11px; font-weight: 600; text-align: center; }
-
-/* ── Communications history ── */
-.ld-comm-section { padding: 12px 0 0; border-top: 1px solid var(--border); }
-.ld-comm-toggle {
-  display: flex; align-items: center; gap: 6px; width: 100%;
-  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
-  background: transparent; color: var(--muted); font-family: var(--fb);
-  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
-}
-.ld-comm-toggle:hover { color: var(--text); border-color: var(--border2); }
-.ld-comm-toggle .ct-arrow { transition: transform 0.2s; font-size: 9px; margin-left: auto; }
-.ld-comm-toggle.open .ct-arrow { transform: rotate(180deg); }
-.ld-comm-count { font-family: var(--fm); font-size: 10px; padding: 1px 5px; border-radius: 4px; }
-.ld-comm-list {
-  display: none; margin-top: 8px; max-height: 320px; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 6px; padding: 4px 2px;
-}
-/* ── Bulles iMessage compactes (Leads Live cards) ── */
-.ld-conv-row { display: flex; flex-direction: column; max-width: 82%; }
-.ld-conv-row.in { align-self: flex-start; align-items: flex-start; }
-.ld-conv-row.out { align-self: flex-end; align-items: flex-end; }
-.ld-conv-author { font-size: 9px; font-weight: 700; padding: 0 10px 2px; letter-spacing: 0.2px; color: var(--muted); }
-.ld-conv-author.elodie { color: #60a5fa; }
-.ld-conv-author.guillaume { color: #f87171; }
-.ld-conv-bubble {
-  padding: 7px 11px; border-radius: 13px; font-size: 12px; line-height: 1.4;
-  word-wrap: break-word; border: 1px solid transparent;
-}
-.ld-conv-bubble.in {
-  background: rgba(255,255,255,0.04); border-color: var(--border);
-  border-bottom-left-radius: 4px; color: rgba(255,255,255,0.86);
-}
-.ld-conv-bubble.out { border-bottom-right-radius: 4px; color: rgba(255,255,255,0.94); }
-.ld-conv-bubble.out.elodie {
-  background: linear-gradient(135deg, rgba(96,165,250,0.30), rgba(96,165,250,0.14));
-  border-color: rgba(96,165,250,0.32);
-}
-.ld-conv-bubble.out.guillaume {
-  background: linear-gradient(135deg, rgba(248,113,113,0.30), rgba(248,113,113,0.14));
-  border-color: rgba(248,113,113,0.32);
-}
-.ld-conv-bubble.out.unknown {
-  background: linear-gradient(135deg, rgba(167,139,250,0.26), rgba(167,139,250,0.12));
-  border-color: rgba(167,139,250,0.30);
-}
-.ld-conv-call {
-  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
-  border: 1px solid var(--border); background: rgba(255,255,255,0.04);
-  border-radius: 13px; min-width: 180px; font-size: 11px;
-}
-.ld-conv-call.in { border-bottom-left-radius: 4px; }
-.ld-conv-call.out { border-bottom-right-radius: 4px; }
-.ld-conv-call.out.elodie { background: rgba(96,165,250,0.10); border-color: rgba(96,165,250,0.26); }
-.ld-conv-call.out.guillaume { background: rgba(248,113,113,0.10); border-color: rgba(248,113,113,0.26); }
-.ld-conv-call.missed { background: rgba(239,68,68,0.10); border-color: rgba(239,68,68,0.28); }
-.ld-conv-call-icon { font-size: 12px; }
-.ld-conv-call-title { font-weight: 600; color: rgba(255,255,255,0.9); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ld-conv-call-dur { font-family: var(--fm); font-size: 10px; color: var(--muted); flex-shrink: 0; }
-.ld-conv-meta { font-size: 9px; color: var(--muted); margin-top: 2px; padding: 0 10px; }
-.ld-conv-date-sep {
-  align-self: center; font-size: 9px; font-weight: 700; color: var(--muted);
-  padding: 8px 0 2px; letter-spacing: 0.4px; text-transform: uppercase;
-}
-.ld-comm-empty { text-align: center; padding: 16px; color: var(--muted2); font-size: 11px; }
-
-/* ── Follow-Up Section ── */
-.ld-fu-section { padding: 12px 0 0; border-top: 1px solid var(--border); }
-.ld-fu-toggle {
-  display: flex; align-items: center; gap: 6px; width: 100%;
-  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
-  background: transparent; color: var(--muted); font-family: var(--fb);
-  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s;
-}
-.ld-fu-toggle:hover { color: var(--text); border-color: var(--border2); }
-.ld-fu-toggle .ct-arrow { transition: transform 0.2s; font-size: 9px; margin-left: auto; }
-.ld-fu-toggle.open .ct-arrow { transform: rotate(180deg); }
-.ld-fu-count { font-family: var(--fm); font-size: 10px; padding: 1px 5px; border-radius: 4px; }
-.ld-fu-body { margin-top: 8px; }
-.ld-fu-add { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
-.ld-fu-add input[type="date"], .ld-fu-add input[type="time"] {
-  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
-  background: var(--bg3); color: var(--text); font-family: var(--fm); font-size: 12px;
-  flex: 1; min-width: 100px;
-}
-.ld-fu-add input:focus { border-color: var(--gold); }
-.ld-fu-add textarea {
-  width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
-  background: var(--bg3); color: var(--text); font-family: var(--fb); font-size: 12px;
-  resize: none; line-height: 1.4;
-}
-.ld-fu-add textarea::placeholder { color: var(--muted2); }
-.ld-fu-add-btn {
-  padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(245,158,11,0.3);
-  background: rgba(245,158,11,0.1); color: #f59e0b; font-family: var(--fb);
-  font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s; white-space: nowrap;
-}
-.ld-fu-add-btn:hover { background: rgba(245,158,11,0.15); color: #fbbf24; border-color: rgba(245,158,11,0.5); }
-.ld-fu-list { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
-.ld-fu-list::-webkit-scrollbar { width: 3px; }
-.ld-fu-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-.ld-fu-item {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 8px 10px; background: rgba(255,255,255,0.02); border: 1px solid var(--border);
-  border-radius: 8px; font-size: 12px; line-height: 1.4; transition: all 0.15s;
-}
-.ld-fu-item.done { opacity: 0.45; }
-.ld-fu-item.overdue { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.04); }
-.ld-fu-item.due-soon { border-color: rgba(245,158,11,0.3); background: rgba(245,158,11,0.04); }
-.ld-fu-check {
-  width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border2);
-  background: transparent; cursor: pointer; flex-shrink: 0; margin-top: 1px;
-  display: flex; align-items: center; justify-content: center; font-size: 10px;
-  color: transparent; transition: all 0.15s;
-}
-.ld-fu-check:hover { border-color: var(--green); color: var(--green); }
-.ld-fu-item.done .ld-fu-check { border-color: var(--green); color: var(--green); background: rgba(52,211,153,0.1); }
-.ld-fu-info { flex: 1; min-width: 0; }
-.ld-fu-datetime { font-weight: 700; font-size: 11px; color: var(--gold); }
-.ld-fu-item.done .ld-fu-datetime { color: var(--muted); }
-.ld-fu-item.overdue .ld-fu-datetime { color: #ef4444; }
-.ld-fu-note { font-size: 11px; color: rgba(255,255,255,0.65); margin-top: 2px; }
-.ld-fu-by { font-size: 9px; color: var(--muted2); margin-top: 2px; }
-.ld-fu-del {
-  background: none; border: none; color: var(--muted2); cursor: pointer;
-  font-size: 11px; padding: 2px; flex-shrink: 0; transition: color 0.15s;
-}
-.ld-fu-del:hover { color: #ef4444; }
-.ld-fu-empty { text-align: center; padding: 12px; color: var(--muted2); font-size: 11px; }
-
-/* ── FU add form : durée + switch calendrier ── */
-.ld-fu-add-row2 {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  margin-top: -4px; margin-bottom: 10px;
-  padding: 8px 10px; border-radius: 8px;
-  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
-}
-.ld-fu-duration-label {
-  font-family: var(--fb); font-size: 11px; font-weight: 700;
-  color: var(--muted); letter-spacing: 0.02em;
-}
-.ld-fu-duration-select {
-  padding: 6px 8px; border-radius: 6px;
-  border: 1px solid var(--border); background: var(--bg3);
-  color: var(--text); font-family: var(--fm); font-size: 11px;
-  cursor: pointer;
-}
-.ld-fu-duration-select:focus { border-color: var(--gold); outline: none; }
-.ld-fu-cal-switch {
-  display: inline-flex; align-items: center; gap: 6px;
-  cursor: pointer; user-select: none;
-  font-family: var(--fb); font-size: 11px; color: var(--text);
-  margin-left: auto;
-}
-.ld-fu-cal-switch input { display: none; }
-.ld-fu-cal-switch .sw-track {
-  width: 30px; height: 16px; border-radius: 9px;
-  background: var(--bg3); border: 1px solid var(--border);
-  position: relative; transition: all 0.15s;
-}
-.ld-fu-cal-switch .sw-track::after {
-  content: ''; position: absolute; top: 1px; left: 1px;
-  width: 12px; height: 12px; border-radius: 50%;
-  background: var(--muted2); transition: all 0.15s;
-}
-.ld-fu-cal-switch input:checked + .sw-track {
-  background: rgba(167,139,250,0.2); border-color: rgba(167,139,250,0.5);
-}
-.ld-fu-cal-switch input:checked + .sw-track::after {
-  left: 16px; background: #a78bfa;
-}
-.ld-fu-cal-switch .sw-label { white-space: nowrap; }
-
-/* ── FU item : pastille "event Google Calendar" ── */
-.ld-fu-cal-badge {
-  display: inline-flex; align-items: center; gap: 3px;
-  margin-left: 6px; padding: 1px 6px; border-radius: 4px;
-  background: rgba(167,139,250,0.14); color: #a78bfa;
-  font-family: var(--fm); font-size: 10px; font-weight: 700;
-  text-decoration: none; cursor: pointer;
-  transition: all 0.15s;
-}
-.ld-fu-cal-badge:hover {
-  background: rgba(167,139,250,0.22); color: #c4b5fd;
-}
-
-/* ── FU badge on card header ── */
-.ld-fu-badge {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-family: var(--fm); font-size: 10px; font-weight: 700;
-  padding: 1px 6px; border-radius: 4px;
-  background: rgba(245,158,11,0.12); color: #f59e0b;
-}
-.ld-fu-badge.overdue { background: rgba(239,68,68,0.12); color: #ef4444; animation: fuPulse 2s ease-in-out infinite; }
-@keyframes fuPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-/* ── Reassign button ── */
-.ld-reassign-btn {
-  display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
-  border-radius: 8px; font-size: 12px; font-weight: 700; font-family: var(--fm);
-  background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2);
-  color: #f59e0b; text-decoration: none; cursor: pointer; transition: all 0.15s;
-}
-.ld-reassign-btn:hover { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); }
-
-/* ── Booking button ── */
-.ld-booking-btn {
-  display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px;
-  border-radius: 8px; font-size: 12px; font-weight: 700; font-family: var(--fm);
-  background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.2);
-  color: #a78bfa; cursor: pointer; transition: all 0.15s;
-}
-.ld-booking-btn:hover { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.4); }
-
-/* ── Booking modal ── */
-.ld-booking-overlay {
-  display: none; position: fixed; inset: 0; z-index: 1500;
-  background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
-  align-items: center; justify-content: center; padding: 16px;
-}
-.ld-booking-overlay.show { display: flex; }
-.ld-booking-modal {
-  background: var(--bg2); border: 1px solid var(--border2);
-  border-radius: 16px; width: 100%; max-width: 800px; height: 85vh;
-  display: flex; flex-direction: column; overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
-  animation: popIn 0.3s cubic-bezier(.4,0,.2,1);
-}
-.ld-booking-modal-header {
-  display: flex; align-items: center; gap: 10px; padding: 14px 18px;
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
-}
-.ld-booking-modal-header .title {
-  font-family: var(--fh); font-size: 15px; font-weight: 800; flex: 1;
-}
-.ld-booking-modal-header .lead-info {
-  font-size: 11px; color: var(--muted); font-family: var(--fm);
-}
-.ld-booking-close {
-  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
-  background: var(--bg3); color: var(--muted); font-size: 16px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
-}
-.ld-booking-close:hover { color: var(--text); border-color: var(--border2); }
-.ld-booking-iframe {
-  flex: 1; border: none; width: 100%; background: white; border-radius: 0 0 16px 16px;
-}
-
-@media (max-width: 640px) {
-  .ld-booking-modal { max-width: 100%; height: 95vh; border-radius: 12px; }
-}
-
-/* ── New Lead Popup ── */
+/* ═══ Popup nouveau lead ═══ */
 .ld-popup-overlay {
   display: none; position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
-  align-items: center; justify-content: center; padding: 20px;
+  background: rgba(3,4,10,0.7); align-items: center; justify-content: center; padding: 20px;
 }
 .ld-popup-overlay.show { display: flex; }
 .ld-popup {
-  background: var(--bg2); border: 2px solid rgba(52,211,153,0.4);
-  border-radius: 20px; width: 100%; max-width: 380px; overflow: hidden;
-  animation: popIn 0.3s cubic-bezier(.4,0,.2,1);
-  box-shadow: 0 24px 60px rgba(0,0,0,0.5), 0 0 40px rgba(52,211,153,0.15);
+  width: 100%; max-width: 380px; background: var(--bg2);
+  border: 1px solid rgba(52,211,153,0.4); border-radius: 20px; padding: 20px;
+  box-shadow: 0 24px 70px rgba(0,0,0,0.6), 0 0 40px rgba(52,211,153,0.12);
+  animation: popIn .3s cubic-bezier(.34,1.4,.44,1);
 }
-@keyframes popIn { from { transform: scale(0.9) translateY(20px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
-.ld-popup-header {
-  padding: 20px; text-align: center;
-  background: linear-gradient(135deg, rgba(52,211,153,0.1), rgba(96,165,250,0.05));
-}
-.ld-popup-icon { font-size: 40px; margin-bottom: 8px; }
-.ld-popup-title { font-family: var(--fh); font-size: 18px; font-weight: 800; }
-.ld-popup-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
-.ld-popup-body { padding: 16px 20px; }
-.ld-popup-field { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
-.ld-popup-field:last-child { border-bottom: none; }
-.ld-popup-field-label { color: var(--muted); font-weight: 600; }
-.ld-popup-field-val { font-weight: 700; text-align: right; max-width: 60%; word-break: break-all; }
-.ld-popup-assigned {
-  margin: 12px 0 0; padding: 10px 14px; border-radius: 10px; text-align: center;
-  font-size: 13px; font-weight: 700;
-  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
-}
-.ld-popup-actions { padding: 12px 20px 20px; display: flex; gap: 8px; }
-.ld-popup-btn {
-  flex: 1; padding: 12px; border: none; border-radius: 12px;
-  font-family: var(--fb); font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.15s;
-}
-.ld-popup-btn.primary { background: linear-gradient(135deg,#059669,#34d399); color: #0f0f1a; }
-.ld-popup-btn.ghost { background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid var(--border); }
-.ld-popup-btn:active { transform: scale(0.97); }
+@keyframes popIn { from { transform: scale(0.92); opacity: 0; } }
+.ld-popup-header { display: flex; align-items: center; gap: 10px; margin-bottom: 13px; flex-wrap: wrap; }
+.ld-popup-icon { width: 40px; height: 40px; border-radius: 12px; background: rgba(52,211,153,0.12); display: flex; align-items: center; justify-content: center; font-size: 19px; }
+.ld-popup-title { font-family: var(--fh); font-size: 17px; font-weight: 700; }
+.ld-popup-sub { font-size: 11px; color: var(--muted); width: 100%; }
+.ld-popup-body { margin-bottom: 4px; }
+.ld-popup-field { display: flex; gap: 10px; padding: 6px 0; font-size: 12.5px; border-bottom: 1px solid var(--border-soft); }
+.ld-popup-field:last-child { border-bottom: 0; }
+.ld-popup-field-label { color: var(--muted); min-width: 88px; flex: none; font-weight: 600; font-size: 11.5px; }
+.ld-popup-field-val { color: var(--text); word-break: break-word; }
+.ld-popup-assigned { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.ld-popup-actions { display: flex; gap: 8px; margin-top: 15px; }
+.ld-popup-btn { flex: 1; padding: 11px; border-radius: 11px; font-family: var(--fb); font-weight: 800; font-size: 12.5px; cursor: pointer; }
+.ld-popup-btn.ghost { background: none; border: 1.5px solid var(--border2); color: var(--muted); }
+.ld-popup-btn.primary { border: none; background: linear-gradient(135deg, #059669, #10b981); color: #fff; box-shadow: 0 5px 16px rgba(16,185,129,0.3); }
 
-/* ── Toast ── */
+/* ═══ Toast ═══ */
 .ld-toast {
-  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
-  background: #1a2e1a; border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7;
-  font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 10px;
-  z-index: 2000; opacity: 0; transition: all 0.3s; white-space: nowrap; pointer-events: none;
+  position: fixed; z-index: 1600; bottom: calc(24px + var(--sab)); left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--bg4); border: 1px solid var(--border2); border-radius: 12px;
+  padding: 10px 16px; font-size: 12.5px; font-weight: 700; color: var(--text);
+  opacity: 0; pointer-events: none; transition: all .22s;
+  box-shadow: 0 12px 34px rgba(0,0,0,0.5); max-width: 88vw; text-align: center;
 }
 .ld-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* ── Responsive helpers ── */
-@media (min-width: 769px) {
-  .page { padding-top: 16px; }
+/* ═══ Booking modal (iframe booking.html) ═══ */
+.ld-booking-overlay {
+  display: none; position: fixed; inset: 0; z-index: 1500;
+  background: rgba(3,4,10,0.75); align-items: center; justify-content: center; padding: 14px;
 }
+.ld-booking-overlay.show { display: flex; }
+.ld-booking-modal {
+  width: 100%; max-width: 860px; height: min(92dvh, 860px);
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 18px;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+}
+.ld-booking-modal-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.ld-booking-modal-header .title { font-family: var(--fh); font-size: 15px; font-weight: 700; }
+.ld-booking-modal-header .lead-info { font-size: 11.5px; color: var(--muted); font-family: var(--fm); flex: 1; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ld-booking-close { flex: none; width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg3); color: var(--muted); font-size: 13px; cursor: pointer; }
+.ld-booking-iframe { flex: 1; width: 100%; border: none; background: var(--bg); }
+
 </style>
 </head>
 <body>
 
 <div class="page">
 
-  <!-- ── HEADER ── -->
-  <div class="ld-header">
-    <div class="ld-header-top">
+  <!-- ── HEADER v2 ── -->
+  <header class="l2hd" id="l2hd">
+    <div class="l2hd-row1">
       <div class="ld-logo">A</div>
       <div class="ld-title" id="ldTitle">Leads Live</div>
       <span class="ld-live-dot"></span>
       <span class="ld-live-label">Live</span>
-      <span id="ldPersonalBadge" style="display:none;font-size:12px;font-weight:800;padding:3px 10px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid var(--border)"></span>
+      <span id="ldPersonalBadge" style="display:none"></span>
       <span class="ld-count" id="ldCount">— leads</span>
-      <button id="shareBtn" title="Liens app mobile" style="margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0" onclick="toggleSharePanel()">🔗</button>
-      <button id="pushBtn" title="Activer les notifications" style="width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0" onclick="requestPush()">🔕</button>
-      <button title="Créer une fiche" style="width:34px;height:34px;border-radius:9px;border:1px solid rgba(52,211,153,.3);background:rgba(52,211,153,.1);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;color:#34d399;font-weight:700" onclick="openCreateLead()">+</button>
+      <button class="l2more" id="l2MoreBtn" type="button" title="Menu" aria-label="Menu">⋯</button>
     </div>
-    <!-- Share panel -->
-    <div id="sharePanel" style="display:none;padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin:8px 0">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:8px">📱 Liens app mobile — ajouter à l'écran d'accueil</div>
-      <div id="shareLinksList"></div>
+    <div class="l2hd-row2">
+      <div class="ld-search" id="ldSearch">
+        <span class="ld-search-icon">🔍</span>
+        <input type="text" id="ldSearchInput" class="ld-search-input" placeholder="Nom, téléphone, email, secteur…" autocomplete="off" spellcheck="false"/>
+        <span class="ld-search-hint" id="ldSearchHint" style="display:none"></span>
+        <button type="button" id="ldSearchClear" class="ld-search-clear" aria-label="Effacer la recherche">×</button>
+      </div>
+      <button class="l2filters-btn" id="l2FiltersBtn" type="button">⛃ Filtres <span class="n" id="l2FiltersCount">0</span></button>
     </div>
-    <!-- Search bar -->
-    <div class="ld-search" id="ldSearch">
-      <span class="ld-search-icon">🔍</span>
-      <input type="text" id="ldSearchInput" class="ld-search-input" placeholder="Chercher un lead (nom, tel, email, secteur…)" autocomplete="off" spellcheck="false"/>
-      <span class="ld-search-hint" id="ldSearchHint" style="display:none"></span>
-      <button type="button" id="ldSearchClear" class="ld-search-clear" aria-label="Effacer la recherche">×</button>
-    </div>
+    <div class="l2tri-row" id="l2Triage"></div>
+  </header>
+
+  <!-- ── FILE + FICHE ── -->
+  <div class="l2cols">
+    <main class="ld-feed" id="ldFeed" aria-label="File de leads">
+      <div class="ld-empty">Chargement des leads...</div>
+    </main>
+
+    <section class="l2sheet" id="ldSheet" aria-label="Fiche lead">
+      <div class="l2grab" id="l2Grab"></div>
+      <div class="l2ph"><span class="big">🎧</span><span>Sélectionne un lead dans la file<br/>pour ouvrir sa fiche ici.</span></div>
+      <div class="l2inner" id="ldSheetInner"></div>
+    </section>
+  </div>
+
+</div>
+
+<div class="l2backdrop" id="ldSheetBackdrop"></div>
+
+<!-- ── MENU ⋯ (partage / notifications / créer) ── -->
+<div class="l2menu" id="l2Menu">
+  <button class="l2mi" id="pushBtn" title="Activer les notifications" onclick="requestPush()">🔕 <span>Activer les notifications</span></button>
+  <button class="l2mi" id="shareBtn" title="Liens app mobile" onclick="toggleSharePanel()">🔗 <span>Liens app mobile</span></button>
+  <button class="l2mi" onclick="openCreateLead()" style="color:#34d399">➕ <span>Créer une fiche</span></button>
+  <div id="sharePanel" style="display:none">
+    <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:8px">📱 Liens app mobile — ajouter à l'écran d'accueil</div>
+    <div id="shareLinksList"></div>
+  </div>
+</div>
+
+<!-- ── FEUILLE FILTRES (les éléments/ids historiques vivent ici) ── -->
+<div class="l2fs-backdrop" id="l2fsBackdrop"></div>
+<section class="l2fs" id="l2fs" aria-label="Filtres">
+  <div class="l2fs-head">
+    <span class="t">Filtres</span>
+    <button class="l2fs-reset" id="l2fsReset" type="button">Tout réinitialiser</button>
+  </div>
+  <div class="l2fs-body">
+
+    <div class="l2fs-l">Attribution</div>
     <div class="ld-members" id="ldMembers">
       <button class="ld-member-pill active" data-member="all">
         <span>Tous</span> <span class="mp-count" id="countAll">0</span>
       </button>
-      <!-- Les pills par membre sont injectées dynamiquement par renderMemberPillsCounters() -->
       <span id="ldMemberPillsDynamic"></span>
     </div>
-    <div class="ld-filters" id="ldPeriodFilters" style="margin-bottom:4px">
-      <button class="ld-filter active" data-period="today">📅 Aujourd'hui <span class="ld-period-count" data-period-count="today">0</span></button>
+
+    <div class="l2fs-l">Période</div>
+    <div class="ld-filters" id="ldPeriodFilters">
+      <button class="ld-filter" data-period="today">📅 Aujourd'hui <span class="ld-period-count" data-period-count="today">0</span></button>
       <button class="ld-filter" data-period="week">🗓 7 jours <span class="ld-period-count" data-period-count="week">0</span></button>
       <button class="ld-filter" data-period="unprocessed">🆕 Non traités <span class="ld-period-count" data-period-count="unprocessed">0</span></button>
-      <button class="ld-filter" data-period="all">📋 Tout <span class="ld-period-count" data-period-count="all">0</span></button>
+      <button class="ld-filter active" data-period="all">📋 Tout <span class="ld-period-count" data-period-count="all">0</span></button>
       <div class="ld-date-wrap">
         <button class="ld-filter" id="ldDateBtn" type="button">📆 Date</button>
         <div class="ld-date-pop" id="ldDatePop" style="display:none">
@@ -925,7 +951,11 @@ html, body {
         </div>
       </div>
     </div>
-    <div class="ld-filters" id="ldTypeFilters" style="margin-bottom:4px"></div>
+
+    <div class="l2fs-l">Tunnel</div>
+    <div class="ld-filters" id="ldTypeFilters"></div>
+
+    <div class="l2fs-l">Statut</div>
     <div class="ld-filters" id="ldFilters">
       <button class="ld-filter active" data-status="all">Tous</button>
       <button class="ld-filter" data-status="nouveau">🆕 Nouveau</button>
@@ -944,15 +974,13 @@ html, body {
       <button class="ld-filter" data-status="pas_interesse">👎 Pas intéressé</button>
       <button class="ld-filter" data-status="disqualifie">🚫 Disqualifié</button>
       <button class="ld-filter" data-status="poubelle">🗑️ Poubelle</button>
+      <button class="ld-filter" data-status="client">🏆 Closing</button>
     </div>
-  </div>
 
-  <!-- ── FEED ── -->
-  <div class="ld-feed" id="ldFeed">
-    <div class="ld-empty">Chargement des leads...</div>
+    <button class="l2fs-apply" id="l2fsApply" type="button">Voir les résultats</button>
   </div>
+</section>
 
-</div>
 
 <!-- ── APP LOGIN ── -->
 <div id="appLoginOverlay" style="display:none;position:fixed;inset:0;z-index:2000;background:var(--bg);padding:20px;display:none;flex-direction:column;align-items:center;justify-content:center">
@@ -1261,7 +1289,7 @@ var allLeads = [];
 var filterMember = 'all';
 var filterStatus = 'all';
 var filterType = 'all';
-var filterPeriod = 'today';
+var filterPeriod = 'all'; /* v2 : « À traiter » remplace le focus jour ; la période vit dans ⛃ Filtres */
 var filterSearch = '';
 var customDateFrom = null; // Date object (start of day) ou null
 var customDateTo = null;   // Date object (end of day) ou null
@@ -1644,10 +1672,10 @@ document.getElementById('ldDateClear').addEventListener('click', function() {
   document.getElementById('ldDateFrom').value = '';
   document.getElementById('ldDateTo').value = '';
   document.getElementById('ldDatePop').style.display = 'none';
-  // Retour à "Aujourd'hui" par défaut
-  filterPeriod = 'today';
+  // Retour à "Tout" par défaut (v2)
+  filterPeriod = 'all';
   document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period]').forEach(function(b) {
-    b.classList.toggle('active', b.dataset.period === 'today');
+    b.classList.toggle('active', b.dataset.period === 'all');
   });
   refreshDateBtnLabel();
   renderFeed();
@@ -2147,44 +2175,175 @@ function rebuildTypeFilters() {
   container.innerHTML = h;
 }
 
+/* ═══ RENDER FEED v2 — cockpit setter (refonte visuelle 07/2026) ═══════════
+   Le moteur est inchangé : renderFeed garde son nom et ses appels (snapshots,
+   filtres, résurrection, checkFollowUpReminders…). Seul le RENDU change :
+   - triage en tête (À traiter / Nouveaux / Follow-ups / Tous)
+   - file groupée (FU en retard → jamais traités → à rappeler → en cours)
+   - la fiche ne s'ouvre plus en accordéon : panneau #ldSheet
+     (bottom-sheet mobile / colonne droite ≥980px) — cf. l2OpenLead. */
+
+function l2El(id) { return document.getElementById(id); }
+
+var l2View = 'atraiter';
+try { l2View = localStorage.getItem('ll2_view') || 'atraiter'; } catch (e) {}
+var l2Seg = 'action';          // segment actif de la fiche (action|infos|ech)
+var l2QuickOpenId = null;      // carte dont la rangée ⚡ est dépliée
+
+var L2_TERMINAL = { pas_interesse: 1, disqualifie: 1, faux_numero: 1, poubelle: 1, client: 1 };
+var L2_RECALL   = { nrp1: 1, nrp2: 1, nrp3: 1, all_nrp: 1, messagerie: 1 };
+
+function l2FuStats(l) {
+  var fus = l.followUps || [];
+  var now = Date.now(), pending = 0, overdue = 0;
+  for (var i = 0; i < fus.length; i++) {
+    if (fus[i].done) continue;
+    pending++;
+    if (new Date(fus[i].dateTime).getTime() <= now) overdue++;
+  }
+  return { pending: pending, overdue: overdue };
+}
+function l2HasOverdueFu(l) { return l2FuStats(l).overdue > 0; }
+function l2HasPendingFu(l) { return l2FuStats(l).pending > 0; }
+
+/* Groupes de la vue « À traiter » (pur tri client, aucune écriture). */
+function l2Groups(leads) {
+  var gFu = [], gNew = [], gRecall = [], gCours = [];
+  for (var i = 0; i < leads.length; i++) {
+    var l = leads[i];
+    var st = l.status || 'nouveau';
+    if (L2_TERMINAL[st]) continue;
+    if (l2HasOverdueFu(l)) gFu.push(l);
+    else if (st === 'nouveau') gNew.push(l);
+    else if (L2_RECALL[st]) gRecall.push(l);
+    else gCours.push(l);
+  }
+  return [
+    { t: '🔔 Follow-ups en retard', hot: true, list: gFu },
+    { t: '🆕 Jamais traités',                 list: gNew },
+    { t: '📵 À rappeler',                     list: gRecall },
+    { t: '⏳ En cours',                       list: gCours }
+  ];
+}
+
+function l2ViewCounts(leads) {
+  var c = { atraiter: 0, nouveaux: 0, fu: 0, fuOver: 0, tous: leads.length };
+  var groups = l2Groups(leads);
+  for (var g = 0; g < groups.length; g++) c.atraiter += groups[g].list.length;
+  for (var i = 0; i < leads.length; i++) {
+    if ((leads[i].status || 'nouveau') === 'nouveau') c.nouveaux++;
+    var fs = l2FuStats(leads[i]);
+    if (fs.pending > 0) c.fu++;
+    if (fs.overdue > 0) c.fuOver++;
+  }
+  return c;
+}
+
+function l2FiltersActiveCount() {
+  var n = 0;
+  var memberDefault = personalUser || 'all';
+  if (filterMember !== memberDefault && filterMember !== 'all') n++;
+  if (filterPeriod !== 'all') n++;
+  if (filterType !== 'all') n++;
+  if (filterStatus !== 'all') n++;
+  return n;
+}
+
+function l2RenderTriage(leads) {
+  var host = l2El('l2Triage');
+  if (!host) return;
+  var c = l2ViewCounts(leads);
+  var defs = [
+    { v: 'atraiter', l: 'À traiter', n: String(c.atraiter) },
+    { v: 'new',      l: 'Nouveaux',  n: String(c.nouveaux) },
+    { v: 'fu',       l: 'Follow-ups', n: c.fuOver > 0 ? c.fu + ' <span class="warn">·' + c.fuOver + '</span>' : String(c.fu) },
+    { v: 'all',      l: 'Tous',      n: String(c.tous) }
+  ];
+  var h = '';
+  for (var i = 0; i < defs.length; i++) {
+    var d = defs[i];
+    h += '<button type="button" class="l2tri' + (l2View === d.v ? ' active' : '') + '" data-l2="view" data-view="' + d.v + '">' +
+         '<div class="n">' + d.n + '</div><div class="l">' + d.l + '</div></button>';
+  }
+  host.innerHTML = h;
+
+  // Badge « filtres actifs » sur le bouton Filtres
+  var fc = l2FiltersActiveCount();
+  var fb = l2El('l2FiltersBtn');
+  if (fb) {
+    fb.classList.toggle('on', fc > 0);
+    var fn = l2El('l2FiltersCount');
+    if (fn) fn.textContent = fc;
+  }
+}
+
+/* Hauteur réelle du header sticky → alignement du panneau desktop. */
+function l2SyncHdH() {
+  var hd = l2El('l2hd');
+  if (hd) document.documentElement.style.setProperty('--l2-hd', hd.offsetHeight + 'px');
+}
+window.addEventListener('resize', l2SyncHdH);
+window.addEventListener('load', l2SyncHdH);
+
 function renderFeed() {
   var leads = getFilteredLeads();
   updateCounts();
   updatePeriodCounts();
   rebuildTypeFilters();
-  var feed = document.getElementById('ldFeed');
+  l2RenderTriage(leads);
+  var feed = l2El('ldFeed');
 
-  if (leads.length === 0) {
-    feed.innerHTML = '<div class="ld-empty">Aucun lead ' + (filterSearch ? 'ne correspond à « ' + escHtml(filterSearch) + ' »' : (filterStatus !== 'all' ? 'avec ce statut' : '')) + '</div>';
-    return;
+  // Découpage selon la vue active
+  var sections = [];
+  if (l2View === 'atraiter') {
+    sections = l2Groups(leads);
+  } else if (l2View === 'new') {
+    var ln = leads.filter(function (l) { return (l.status || 'nouveau') === 'nouveau'; });
+    sections = [{ t: '🆕 Jamais traités', list: ln }];
+  } else if (l2View === 'fu') {
+    var lf = leads.filter(l2HasPendingFu);
+    lf.sort(function (a, b) { return (l2HasOverdueFu(b) ? 1 : 0) - (l2HasOverdueFu(a) ? 1 : 0); });
+    sections = [{ t: '🔔 Follow-ups programmés', hot: true, list: lf }];
+  } else {
+    sections = [{ t: '📋 Tous les leads', list: leads }];
   }
 
-  var h = '';
-  for (var i = 0; i < leads.length; i++) {
-    h += renderCard(leads[i]);
+  var h = '', total = 0;
+  for (var s = 0; s < sections.length; s++) {
+    var sec = sections[s];
+    if (!sec.list.length) continue;
+    total += sec.list.length;
+    h += '<div class="l2grp' + (sec.hot ? ' hot' : '') + '"><span class="t">' + sec.t + '</span><span class="n">' + sec.list.length + '</span><span class="line"></span></div>';
+    for (var i = 0; i < sec.list.length; i++) h += renderCard(sec.list[i]);
   }
-  feed.innerHTML = h;
 
-  // Dialer bridge : boutons d'appel + multi-sélection campagne
+  if (total === 0) {
+    var msg = 'Aucun lead ' + (filterSearch ? 'ne correspond à « ' + escHtml(filterSearch) + ' »' : (filterStatus !== 'all' ? 'avec ce statut' : (l2View !== 'all' ? 'dans cette vue' : '')));
+    if (!filterSearch && l2View !== 'all' && leads.length > 0) msg += '<br/><span style="font-size:11px;color:var(--muted2)">Essaie la vue 📋 Tous ou le bouton ⛃ Filtres.</span>';
+    feed.innerHTML = '<div class="ld-empty">' + msg + '</div>';
+  } else {
+    feed.innerHTML = h;
+  }
+
+  // Dialer bridge : bouton d'appel dans la zone .l2cta + multi-sélection vagues
   if (window.DialerBridge) {
     try {
-      window.DialerBridge.attachButtons('#ldFeed', { cardSelector: '.ld-card' });
+      window.DialerBridge.attachButtons('#ldFeed', { cardSelector: '.ld-card', insertTarget: '.l2cta' });
       window.DialerBridge.enableMultiSelect('#ldFeed', { cardSelector: '.ld-card', maxSelection: 5 });
     } catch (e) { console.warn('[DialerBridge] attach failed', e); }
   }
 
-  // Restore open card
+  // Fiche ouverte : rafraîchir le panneau avec les données fraîches
+  // (brouillons note/SMS/FU et scroll préservés — cf. l2RenderSheet).
   if (openCardId) {
-    var el = document.querySelector('[data-lead-id="' + openCardId + '"]');
-    if (el) {
-      el.classList.add('open');
-      // Re-render a recréé le DOM des cards : on force un repaint du RDV box
-      // (l'ancien snapshot a peint un DOM qui n'existe plus).
-      detachLeadRdvListener(openCardId);
-      attachLeadRdvListener(openCardId);
-    }
+    var openEl = document.querySelector('#ldFeed .ld-card[data-lead-id="' + openCardId + '"]');
+    if (openEl) openEl.classList.add('is-open');
+    l2RenderSheet(openCardId, true);
   }
+
+  l2SyncHdH();
 }
+
 
 /* ── RDV box (lue temps réel depuis bookings) ──
    Refonte 07/2026 : la fiche est la RACINE → on affiche TOUT le parcours RDV
@@ -2629,42 +2788,43 @@ function getFuBadge(l) {
   return '<span class="ld-fu-badge">🔔 ' + nStr + '</span>';
 }
 
-function renderCard(l) {
-  var id = l.id;
+/* ═══ CARTE v2 + FICHE (panneau / bottom-sheet) — refonte 07/2026 ═══════════
+   Les sections de l'ancienne carte accordéon sont reprises À L'IDENTIQUE
+   (mêmes classes, mêmes data-action, mêmes hooks data-*) : le gestionnaire
+   d'événements historique, DialerBridge, VoiceNotes, RdvOutcome, CloseWizard,
+   l'auto-save édition et le journal d'actions continuent de fonctionner tels
+   quels. Seule l'ORGANISATION change : carte compacte dans la file + fiche en
+   3 segments (⚡ Action · 👤 Infos · 💬 Échanges). */
+
+var L2_FAMILIES = [
+  { l: 'Contact',  k: ['nouveau', 'appele', 'decroche', 'messagerie'] },
+  { l: 'Relances', k: ['nrp1', 'nrp2', 'nrp3', 'all_nrp', 'follow_up_pm'] },
+  { l: 'Avancée',  k: ['set', 'rdv_pose', 'rdv_self_booking'] },
+  { l: 'Sortie',   k: ['pas_interesse', 'disqualifie', 'faux_numero', 'poubelle'] },
+  { l: 'Closing',  k: ['client'] }
+];
+var L2_QUICK = ['nrp1', 'nrp2', 'nrp3', 'messagerie', 'set', 'pas_interesse'];
+
+var L2_STAGE_NAMES = { nrp1:'NRP1', nrp2:'NRP2', nrp3:'NRP3', all_nrp:'All NRP', faux_numero:'Faux n°', poubelle:'Poubelle', disqualification:'Disqualif.', follow_up_pm:'Follow Up', set:'SET', rdv_self_booking:'RDV Self', rdv_confirmes:'RDV Conf.', rdv_annules_prospect:'Annulé', rdv_annules_equipe:'Annulé Éq.', no_show_self:'No Show', no_show_setting:'No Show S.', partenariats:'Partenariat', closed_won_setting:'Closing', closed_won_self:'Closing', closed_lost:'Lost', follow_up_closing:'Follow Up', disqualifie_closing:'Disqualif.' };
+
+/* Badges d'une fiche (type, statut, setter, stage, réactivé, re-optin, FU). */
+function renderLeadTags(l, compact) {
   var typeObj = LEAD_TYPES[l.type] || { label: l.type || 'Lead', badgeClass: 'other' };
   var statusObj = getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
-  var isNew = l._isNew;
-  var effectiveD = _getLeadEffectiveDate(l);
-  var ago = timeAgo(effectiveD || l.createdAt);
-
-  var _tel = (l.telephone || '').toString().replace(/\s/g, '');
-  var h = '<div class="ld-card' + (isNew ? ' new' : '') + '" data-lead-id="' + id + '" data-phone="' + escAttr(_tel) + '" data-name="' + escAttr(l.nom || '') + '">';
-
-  // Head
-  h += '<div class="ld-card-head" data-action="toggle" data-id="' + id + '">';
-  if (setterObj) {
-    h += '<div class="ld-card-avatar" style="background:linear-gradient(135deg,' + setterObj.color + ',' + setterObj.color + '99)">' + setterObj.initials + '</div>';
-  } else {
-    h += '<div class="ld-card-avatar" style="background:var(--bg4)">?</div>';
-  }
-  h += '<div class="ld-card-info">';
-  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + '</div>';
-  h += '<div class="ld-card-meta">';
+  var h = '';
   h += '<span class="ld-badge ' + typeObj.badgeClass + '">' + typeObj.label + '</span>';
   h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
-  if (setterObj) h += '<span class="ld-assigned">' + setterObj.name + '</span>';
-  if (l.stage && l.stage !== 'lead') {
-    var stageNames = {nrp1:'NRP1',nrp2:'NRP2',nrp3:'NRP3',all_nrp:'All NRP',faux_numero:'Faux n°',poubelle:'Poubelle',disqualification:'Disqualif.',follow_up_pm:'Follow Up',set:'SET',rdv_self_booking:'RDV Self',rdv_confirmes:'RDV Conf.',rdv_annules_prospect:'Annulé',rdv_annules_equipe:'Annulé Éq.',no_show_self:'No Show',no_show_setting:'No Show S.',partenariats:'Partenariat',closed_won_setting:'Closing',closed_won_self:'Closing',closed_lost:'Lost',follow_up_closing:'Follow Up',disqualifie_closing:'Disqualif.'};
-    var stName = stageNames[l.stage] || l.stage;
-    h += '<span class="ld-assigned" style="color:var(--purple);border-color:rgba(167,139,250,0.25)">🔀 ' + stName + '</span>';
+  if (setterObj && !(compact && personalUser && l.assignedTo === personalUser)) {
+    h += '<span class="ld-assigned" style="color:' + setterObj.color + '">' + escHtml(setterObj.name) + '</span>';
   }
-  // Badge "Réactivé" : lead ressuscité par un nouveau RDV ou activité récente
-  // alors que createdAt est ancien (au-delà de la fenêtre du listener principal).
+  if (l.stage && l.stage !== 'lead') {
+    var stName = L2_STAGE_NAMES[l.stage] || l.stage;
+    h += '<span class="ld-assigned" style="color:var(--purple);border-color:rgba(167,139,250,0.25)">🔀 ' + escHtml(stName) + '</span>';
+  }
   if (l._resurrected) {
     h += '<span class="ld-assigned" style="color:#fbbf24;border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.1)">🔄 Réactivé</span>';
   }
-  // Badge "Déjà CRM" : lead qui a re-optin via webhook alors qu'il existait déjà.
   if (l._resurrectedOptin) {
     if (l.lastOptinSource === 'manual') {
       h += '<span class="ld-assigned" style="color:#fb923c;border-color:rgba(251,146,60,0.35);background:rgba(251,146,60,0.15);font-weight:700">🔁 Remonté manuel</span>';
@@ -2672,32 +2832,236 @@ function renderCard(l) {
       h += '<span class="ld-assigned" style="color:#fb923c;border-color:rgba(251,146,60,0.35);background:rgba(251,146,60,0.1)">🔄 Déjà CRM</span>';
     }
   }
-  // Badge "Avant : <previousStatus>" : pour les ressuscités dont le statut historique
-  // n'était pas 'nouveau' (ex : lead disqualifié qui re-optin → repassé à 'nouveau' par
-  // le backend, mais on garde la trace de l'ancien statut pour alerter le setter).
   if (l.previousStatus && l.previousStatus !== 'nouveau') {
-    var prevStatusObj = (typeof getStatusObj === 'function') ? getStatusObj(l.previousStatus) : null;
-    var prevLabel = prevStatusObj ? prevStatusObj.label : l.previousStatus;
-    h += '<span class="ld-assigned" style="color:#fbbf24;border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.1)" title="Ancien statut avant re-optin">⚠️ Avant : ' + escHtml(prevLabel) + '</span>';
+    var prevObj = getStatusObj(l.previousStatus);
+    h += '<span class="ld-assigned" style="color:#fbbf24;border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.1)" title="Ancien statut avant re-optin">⚠️ Avant : ' + escHtml(prevObj ? prevObj.label : l.previousStatus) + '</span>';
+  }
+  var fuBadge = getFuBadge(l);
+  if (fuBadge) h += fuBadge;
+  return h;
+}
+
+/* « Dernière activité » : dernier appel/SMS + volumes (communications[]). */
+function l2LastActivity(l) {
+  var comms = l.communications || [];
+  var calls = 0, sms = 0, last = null, lastT = 0;
+  for (var i = 0; i < comms.length; i++) {
+    var c = comms[i];
+    if (c.type !== 'call' && c.type !== 'sms') continue;
+    if (c.type === 'call') calls++; else sms++;
+    var t = c.date ? new Date(c.date).getTime() : 0;
+    if (t >= lastT) { lastT = t; last = c; }
+  }
+  if (!last) return '';
+  var out = (last.ownerName || String(last.direction || '').toLowerCase().indexOf('out') === 0 || String(last.direction || '').toLowerCase() === 'sortant');
+  var d = '';
+  if (last.type === 'call') {
+    if (last.duration) {
+      var dm = Math.floor(last.duration / 60), ds = last.duration % 60;
+      d = '📞 Appel ' + (dm > 0 ? dm + 'm' + (ds ? String(ds).padStart(2, '0') : '') : ds + 's');
+    } else {
+      d = out ? '📞 Sans réponse' : '📞 Manqué';
+    }
+  } else {
+    d = out ? '💬 SMS envoyé' : '💬 SMS reçu';
+  }
+  if (lastT) d += ' · ' + timeAgo(new Date(lastT));
+  var vol = [];
+  if (calls) vol.push(calls + ' appel' + (calls > 1 ? 's' : ''));
+  if (sms) vol.push(sms + ' SMS');
+  if (vol.length) d += ' · ' + vol.join(' · ');
+  return d;
+}
+
+/* ═══ CARTE COMPACTE (file) ═══ */
+function renderCard(l) {
+  var id = l.id;
+  var statusObj = getStatusObj(l.status || 'nouveau');
+  var setterObj = SETTERS[l.assignedTo] || null;
+  var effectiveD = _getLeadEffectiveDate(l);
+  var ago = timeAgo(effectiveD || l.createdAt);
+  var _tel = (l.telephone || '').toString().replace(/\s/g, '');
+  var isTerm = L2_TERMINAL[l.status] && l.status !== 'client';
+
+  var h = '<div class="ld-card' + (l._isNew ? ' new' : '') + (openCardId === id ? ' is-open' : '') + (isTerm ? ' l2done' : '') + (l2QuickOpenId === id ? ' l2qopen' : '') + '" style="--sc:' + statusObj.color + '" data-lead-id="' + id + '" data-phone="' + escAttr(_tel) + '" data-name="' + escAttr(l.nom || '') + '">';
+
+  h += '<div class="ld-card-head" data-action="toggle" data-id="' + id + '">';
+  if (setterObj) {
+    h += '<div class="ld-card-avatar" style="background:linear-gradient(135deg,' + setterObj.color + ',' + setterObj.color + '99)">' + setterObj.initials + '</div>';
+  } else {
+    h += '<div class="ld-card-avatar" style="background:var(--bg4);color:var(--muted)">?</div>';
+  }
+  h += '<div class="ld-card-info">';
+  h += '<div class="ld-card-name">' + escHtml(l.nom || '—') + '<span class="l2ago">' + ago + '</span></div>';
+  h += '<div class="ld-card-meta">' + renderLeadTags(l, true) + '</div>';
+  var lastAct = l2LastActivity(l);
+  if (lastAct) h += '<div class="l2last">' + escHtml(lastAct) + '</div>';
+  h += '</div>';
+  h += '<div class="l2side">';
+  h += '<button type="button" class="l2quick' + (l2QuickOpenId === id ? ' on' : '') + '" data-l2="quick" data-id="' + id + '" title="Statut rapide" aria-label="Statut rapide">⚡</button>';
+  h += '<span class="l2cta"></span>';
+  h += '</div>';
+  h += '</div>';
+
+  // ⚡ Statuts rapides : mêmes boutons/data-action que le clavier de la fiche
+  // → même chemin d'écriture (journal d'actions, stage sync, toast).
+  h += '<div class="l2qrow">';
+  for (var qi = 0; qi < L2_QUICK.length; qi++) {
+    var qs = getStatusObj(L2_QUICK[qi]);
+    var qActive = (l.status || 'nouveau') === qs.key;
+    h += '<button class="ld-status-btn' + (qActive ? ' active' : '') + '" style="' + (qActive ? 'color:' + qs.color + ';border-color:' + qs.color : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + qs.key + '">' + qs.icon + ' ' + qs.label + '</button>';
+  }
+  h += '</div>';
+
+  h += '</div>';
+  return h;
+}
+
+/* ═══ FICHE — construction des segments ═══ */
+function l2SegAction(l, id) {
+  var h = '<div class="ld-actions">';
+  h += '<div class="ld-actions-title">Statut</div>';
+  h += '<div class="ld-status-grid">';
+  for (var f = 0; f < L2_FAMILIES.length; f++) {
+    var fam = L2_FAMILIES[f];
+    h += '<div class="l2fam"><div class="l2fam-l">' + fam.l + '</div><div class="l2fam-row">';
+    for (var si = 0; si < fam.k.length; si++) {
+      var s = getStatusObj(fam.k[si]);
+      var isActive = (l.status || 'nouveau') === s.key;
+      h += '<button class="ld-status-btn' + (isActive ? ' active' : '') + '" style="' + (isActive ? 'color:' + s.color + ';border-color:' + s.color : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + s.key + '">' + s.icon + ' ' + s.label + '</button>';
+    }
+    h += '</div></div>';
+  }
+  h += '</div>';
+
+  // RDV fields (hidden unless rdv_pose)
+  var showRdv = (l.status || 'nouveau') === 'rdv_pose';
+  h += '<div class="ld-rdv-section" data-rdv-section="' + id + '" style="display:' + (showRdv ? 'block' : 'none') + '">';
+  h += '<div class="ld-actions-title">📅 Rendez-vous</div>';
+  h += '<div class="ld-rdv-row">';
+  h += '<input type="date" data-field="rdvDate" data-id="' + id + '" value="' + (l.rdvDate || '') + '"/>';
+  h += '<input type="time" data-field="rdvHeure" data-id="' + id + '" value="' + (l.rdvHeure || '') + '"/>';
+  h += '</div>';
+  h += '</div>';
+
+  // Parcours RDV (temps réel bookings — peint par paintLeadRdvBox)
+  h += '<div class="ld-rdv-block" data-rdv-block="' + id + '">';
+  h += '<div class="ld-rdv-block-title">📅 Rendez-vous</div>';
+  h += '<div class="ld-rdv-list" data-rdv-list="' + id + '"></div>';
+  h += '</div>';
+
+  // Notes (saisie en premier : geste le plus fréquent après appel)
+  h += '<div class="ld-actions-title">Notes</div>';
+  h += '<div class="ld-notes-add-row">';
+  h += '<textarea class="ld-notes-area" data-field="newNote" data-id="' + id + '" placeholder="Ajouter une note... (@prénom pour notifier)" rows="2"></textarea>';
+  h += '<button class="ld-notes-add-btn" data-action="addNote" data-id="' + id + '">+ Ajouter</button>';
+  h += '</div>';
+  var notesArr = l.notesHistory || [];
+  if (notesArr.length > 0) {
+    h += '<div class="ld-notes-history">';
+    for (var ni = notesArr.length - 1; ni >= 0; ni--) {
+      var n = notesArr[ni];
+      var nDate = n.date || '';
+      var nBy = n.authorName ? ' · ' + escHtml(n.authorName) : '';
+      h += '<div class="ld-note-item">';
+      h += '<div class="ld-note-item-head">';
+      h += '<span class="ld-note-item-date">' + escHtml(nDate) + nBy + '</span>';
+      h += '<button class="ld-note-item-del" data-action="delNote" data-id="' + id + '" data-note-idx="' + ni + '" title="Supprimer">✕</button>';
+      h += '</div>';
+      h += '<div class="ld-note-item-text">' + highlightMentions(n.text || '') + '</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+
+  // Follow-Up (ouvert par défaut dans la fiche v2)
+  var fus = l.followUps || [];
+  var fuPending = 0, fuOverdue = 0;
+  var nowTs = Date.now();
+  for (var fi = 0; fi < fus.length; fi++) {
+    if (!fus[fi].done) {
+      fuPending++;
+      if (new Date(fus[fi].dateTime).getTime() <= nowTs) fuOverdue++;
+    }
+  }
+  h += '<div class="ld-fu-section">';
+  h += '<button class="ld-fu-toggle open" data-action="toggleFu" data-id="' + id + '">';
+  h += '🔔 Follow-Up';
+  if (fuOverdue > 0) {
+    h += ' <span class="ld-fu-count" style="background:rgba(239,68,68,0.12);color:#ef4444">' + fuOverdue + ' en retard</span>';
+  } else if (fuPending > 0) {
+    h += ' <span class="ld-fu-count" style="background:rgba(245,158,11,0.12);color:#f59e0b">' + fuPending + '</span>';
+  }
+  h += '<span class="ct-arrow">▼</span></button>';
+  h += '<div class="ld-fu-body" data-fu-body="' + id + '" style="display:block">';
+  h += '<div class="ld-fu-add">';
+  h += '<input type="date" data-fu-field="date" data-id="' + id + '"/>';
+  h += '<input type="time" data-fu-field="time" data-id="' + id + '"/>';
+  h += '<textarea data-fu-field="note" data-id="' + id + '" placeholder="Note du FU (optionnel)..." rows="1"></textarea>';
+  h += '<button class="ld-fu-add-btn" data-action="addFu" data-id="' + id + '">🔔 Programmer</button>';
+  h += '</div>';
+  h += '<div class="ld-fu-add-row2">';
+  h += '<span class="ld-fu-duration-label">Durée</span>';
+  h += '<select class="ld-fu-duration-select" data-fu-field="duration" data-id="' + id + '">';
+  h += '<option value="15">15 min</option>';
+  h += '<option value="30" selected>30 min</option>';
+  h += '<option value="45">45 min</option>';
+  h += '<option value="60">1h</option>';
+  h += '</select>';
+  h += '<label class="ld-fu-cal-switch" title="Crée un événement sur le calendrier Google du closer assigné">';
+  h += '<input type="checkbox" data-fu-field="pushCal" data-id="' + id + '" checked/>';
+  h += '<span class="sw-track"></span>';
+  h += '<span class="sw-label">📅 Calendrier Stratégie</span>';
+  h += '</label>';
+  h += '</div>';
+  if (fus.length === 0) {
+    h += '<div class="ld-fu-empty">Aucun follow-up programmé</div>';
+  } else {
+    h += '<div class="ld-fu-list">';
+    var fuSorted = fus.map(function (f, idx) { f._idx = idx; return f; }).sort(function (a, b) {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
+    });
+    for (var fj = 0; fj < fuSorted.length; fj++) {
+      var fu = fuSorted[fj];
+      var fuDate = new Date(fu.dateTime);
+      var fuTimeDiff = fuDate.getTime() - nowTs;
+      var fuClass = '';
+      if (!fu.done) {
+        if (fuTimeDiff <= 0) fuClass = ' overdue';
+        else if (fuTimeDiff <= 3600000) fuClass = ' due-soon';
+      }
+      var fuDateStr = String(fuDate.getDate()).padStart(2, '0') + '/' + String(fuDate.getMonth() + 1).padStart(2, '0') + '/' + fuDate.getFullYear();
+      var fuTimeStr = String(fuDate.getHours()).padStart(2, '0') + ':' + String(fuDate.getMinutes()).padStart(2, '0');
+      h += '<div class="ld-fu-item' + (fu.done ? ' done' : '') + fuClass + '">';
+      h += '<button class="ld-fu-check" data-action="toggleFuDone" data-id="' + id + '" data-fu-idx="' + fu._idx + '">' + (fu.done ? '✓' : '') + '</button>';
+      h += '<div class="ld-fu-info">';
+      h += '<div class="ld-fu-datetime">' + (fu.done ? '✅ ' : (fuTimeDiff <= 0 && !fu.done ? '⚠️ ' : '🔔 ')) + fuDateStr + ' à ' + fuTimeStr;
+      if (fu.calendarEventId && fu.calendarEventLink) {
+        h += '<a class="ld-fu-cal-badge" href="' + escHtml(fu.calendarEventLink) + '" target="_blank" rel="noopener" title="Ouvrir l\'événement Google Calendar" onclick="event.stopPropagation()">📅 Calendrier</a>';
+      } else if (fu.calendarEventId) {
+        h += '<span class="ld-fu-cal-badge" title="Événement Google Calendar associé">📅</span>';
+      }
+      h += '</div>';
+      if (fu.note) h += '<div class="ld-fu-note">' + escHtml(fu.note) + '</div>';
+      if (fu.createdBy) h += '<div class="ld-fu-by">par ' + escHtml(fu.createdBy) + '</div>';
+      h += '</div>';
+      h += '<button class="ld-fu-del" data-action="delFu" data-id="' + id + '" data-fu-idx="' + fu._idx + '">✕</button>';
+      h += '</div>';
+    }
+    h += '</div>';
   }
   h += '</div>';
   h += '</div>';
-  h += '<span class="ld-card-time">' + ago + '</span>';
-  // FU badge on card
-  var fuBadge = getFuBadge(l);
-  if (fuBadge) h += fuBadge;
-  h += '<span class="ld-card-arrow">▼</span>';
-  h += '</div>';
 
-  // Body
-  h += '<div class="ld-card-body">';
+  h += '</div>'; // ld-actions
+  return h;
+}
 
-  // Edit toggle + CRM link + reassign
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+function l2SegInfos(l, id) {
+  var h = '';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
   h += '<button class="ld-edit-toggle" data-action="toggleEdit" data-id="' + id + '">✏️ Modifier les infos</button>';
-  h += '<a href="sales-contact.html?id=' + id + '" style="display:inline-flex;align-items:center;gap:4px;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;font-family:var(--fm);background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.2);color:#818cf8;text-decoration:none;cursor:pointer;transition:all .15s">📋 Fiche CRM</a>';
-  h += '<button class="ld-booking-btn" data-action="openBooking" data-id="' + id + '">📅 Prendre RDV</button>';
-  // Reassign button: show if viewing someone else's lead in personal mode
   if (personalUser && l.assignedTo && l.assignedTo !== personalUser) {
     h += '<button class="ld-reassign-btn" data-action="reassign" data-id="' + id + '">📥 M\'attribuer</button>';
   }
@@ -2721,38 +3085,25 @@ function renderCard(l) {
   }
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(_effRecu || l.createdAt) + '</span></div>';
 
-  // 📦 Historique Zoho — n'apparaît QUE pour les leads importés depuis l'ancien CRM Zoho/Bigin
+  // 📦 Historique Zoho — leads importés depuis l'ancien CRM uniquement
   if (l.zohoCreatedAt || l.zohoModifiedAt || l.zohoLastActivityAt || l.zohoGestionnaire || l.zohoOrigine) {
     h += '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">📦 Historique Zoho</div>';
-    if (l.zohoOrigine)         h += '<div class="ld-detail-row"><span class="ld-detail-label">Origine Zoho</span><span class="ld-detail-val">' + escHtml(l.zohoOrigine) + '</span></div>';
-    if (l.zohoGestionnaire)    h += '<div class="ld-detail-row"><span class="ld-detail-label">Gestionnaire</span><span class="ld-detail-val">' + escHtml(l.zohoGestionnaire) + '</span></div>';
-    if (l.zohoCreatedAt)       h += '<div class="ld-detail-row"><span class="ld-detail-label">Créé sur Zoho</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoCreatedAt) + '</span></div>';
-    if (l.zohoModifiedAt)      h += '<div class="ld-detail-row"><span class="ld-detail-label">Modifié Zoho</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoModifiedAt) + '</span></div>';
-    if (l.zohoLastActivityAt)  h += '<div class="ld-detail-row"><span class="ld-detail-label">Dernière activité</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoLastActivityAt) + '</span></div>';
+    if (l.zohoOrigine)        h += '<div class="ld-detail-row"><span class="ld-detail-label">Origine Zoho</span><span class="ld-detail-val">' + escHtml(l.zohoOrigine) + '</span></div>';
+    if (l.zohoGestionnaire)   h += '<div class="ld-detail-row"><span class="ld-detail-label">Gestionnaire</span><span class="ld-detail-val">' + escHtml(l.zohoGestionnaire) + '</span></div>';
+    if (l.zohoCreatedAt)      h += '<div class="ld-detail-row"><span class="ld-detail-label">Créé sur Zoho</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoCreatedAt) + '</span></div>';
+    if (l.zohoModifiedAt)     h += '<div class="ld-detail-row"><span class="ld-detail-label">Modifié Zoho</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoModifiedAt) + '</span></div>';
+    if (l.zohoLastActivityAt) h += '<div class="ld-detail-row"><span class="ld-detail-label">Dernière activité</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoLastActivityAt) + '</span></div>';
   }
-
   h += '</div>';
 
-  // RDV à venir (lus en temps réel depuis bookings — voir attachLeadRdvListener)
-  h += '<div class="ld-rdv-block" data-rdv-block="' + id + '">';
-  h += '<div class="ld-rdv-block-title">📅 Rendez-vous</div>';
-  h += '<div class="ld-rdv-list" data-rdv-list="' + id + '"></div>';
-  h += '</div>';
-
-  // Réponses du formulaire (rendu statique au render — alimenté par AlteoForms)
-  // Affichées en haut de la zone détail : c'est le formulaire DU dernier
-  // engagement uniquement. Les anciennes soumissions sont dans engagementHistory.
+  // Réponses du formulaire (AlteoForms) + historique des soumissions
   h += renderFormAnswersBlock(l, id);
 
   // 📜 Historique des passages (engagementHistory[])
-  // Accordéon en bas listant tous les ré-engagements précédents.
   h += renderEngagementHistoryBlock(l, id);
 
-  // ── EDIT MODE (hidden by default) ──
+  // ── EDIT MODE (masqué par défaut — anti-autofill conservé) ──
   h += '<div class="ld-details" data-edit-mode="' + id + '" style="display:none">';
-  /* Anti-autofill (14/07/2026) : sans ces attributs, Chrome pouvait écraser
-     l'email/téléphone du LEAD avec ceux du compte connecté à l'ouverture du
-     mode édition — et l'auto-save les aurait enregistrés. */
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Nom</span><input class="ld-detail-input" autocomplete="off" data-edit="nom" data-id="' + id + '" value="' + escAttr(l.nom || '') + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><input class="ld-detail-input" autocomplete="off" name="ld-tel-nofill-' + id + '" readonly onfocus="this.removeAttribute(\'readonly\')" data-edit="telephone" data-id="' + id + '" value="' + escAttr(normalizeTel(l.telephone || '')) + '"/></div>';
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><input class="ld-detail-input" autocomplete="off" name="ld-email-nofill-' + id + '" readonly onfocus="this.removeAttribute(\'readonly\')" data-edit="email" data-id="' + id + '" type="email" value="' + escAttr(l.email || '') + '"/></div>';
@@ -2774,147 +3125,18 @@ function renderCard(l) {
   h += '<div class="ld-autosave-msg" data-autosave-msg="' + id + '" style="font-size:11px;color:var(--green);text-align:center;padding:6px 0;opacity:0;transition:opacity 0.3s">✅ Sauvegardé automatiquement</div>';
   h += '</div>';
 
-  // Actions
-  h += '<div class="ld-actions">';
-  h += '<div class="ld-actions-title">Statut</div>';
-  h += '<div class="ld-status-grid">';
-  for (var si = 0; si < STATUSES.length; si++) {
-    var s = STATUSES[si];
-    var isActive = (l.status || 'nouveau') === s.key;
-    h += '<button class="ld-status-btn' + (isActive ? ' active' : '') + '" style="' + (isActive ? 'color:' + s.color + ';border-color:' + s.color : '') + '" data-action="setStatus" data-id="' + id + '" data-status="' + s.key + '">' + s.icon + ' ' + s.label + '</button>';
-  }
-  h += '</div>';
+  h += '<button class="ld-delete-btn" data-action="deleteLead" data-id="' + id + '">🗑 Supprimer cette fiche</button>';
+  return h;
+}
 
-  // RDV fields (hidden unless rdv_pose)
-  var showRdv = (l.status || 'nouveau') === 'rdv_pose';
-  h += '<div class="ld-rdv-section" data-rdv-section="' + id + '" style="display:' + (showRdv ? 'block' : 'none') + '">';
-  h += '<div class="ld-actions-title">📅 Rendez-vous</div>';
-  h += '<div class="ld-rdv-row">';
-  h += '<input type="date" data-field="rdvDate" data-id="' + id + '" value="' + (l.rdvDate || '') + '"/>';
-  h += '<input type="time" data-field="rdvHeure" data-id="' + id + '" value="' + (l.rdvHeure || '') + '"/>';
-  h += '</div>';
-  h += '</div>';
+function l2SegEch(l, id) {
+  var h = '';
 
-  // Notes history
-  h += '<div class="ld-actions-title">Notes</div>';
-  var notesArr = l.notesHistory || [];
-  if (notesArr.length > 0) {
-    h += '<div class="ld-notes-history">';
-    for (var ni = notesArr.length - 1; ni >= 0; ni--) {
-      var n = notesArr[ni];
-      var nDate = n.date || '';
-      h += '<div class="ld-note-item">';
-      h += '<div class="ld-note-item-head">';
-      h += '<span class="ld-note-item-date">' + escHtml(nDate) + '</span>';
-      h += '<button class="ld-note-item-del" data-action="delNote" data-id="' + id + '" data-note-idx="' + ni + '" title="Supprimer">✕</button>';
-      h += '</div>';
-      h += '<div class="ld-note-item-text">' + highlightMentions(n.text || '') + '</div>';
-      h += '</div>';
-    }
-    h += '</div>';
-  }
-  h += '<div class="ld-notes-add-row">';
-  h += '<textarea class="ld-notes-area" data-field="newNote" data-id="' + id + '" placeholder="Ajouter une note..." rows="2"></textarea>';
-  h += '<button class="ld-notes-add-btn" data-action="addNote" data-id="' + id + '">+ Ajouter</button>';
-  h += '</div>';
-
-  // ── Vocaux (fil de discussion audio) ──
-  // Le conteneur est présent dans le HTML, mais le module VoiceNotes
-  // ne s'attache qu'au moment où la card est ouverte (cf. listener
-  // toggle plus bas) pour éviter des dizaines d'onSnapshot inutiles.
-  h += '<div class="ld-actions-title" style="margin-top:14px">🎙️ Vocaux</div>';
-  h += '<div class="vn-container" data-vn-mount="' + id + '"></div>';
-
-  // ── Follow-Up section ──
-  var fus = l.followUps || [];
-  var fuPending = 0, fuOverdue = 0;
-  var nowTs = Date.now();
-  for (var fi = 0; fi < fus.length; fi++) {
-    if (!fus[fi].done) {
-      fuPending++;
-      var fuTs = new Date(fus[fi].dateTime).getTime();
-      if (fuTs <= nowTs) fuOverdue++;
-    }
-  }
-  h += '<div class="ld-fu-section">';
-  h += '<button class="ld-fu-toggle" data-action="toggleFu" data-id="' + id + '">';
-  h += '🔔 Follow-Up';
-  if (fuOverdue > 0) {
-    h += ' <span class="ld-fu-count" style="background:rgba(239,68,68,0.12);color:#ef4444">' + fuOverdue + ' en retard</span>';
-  } else if (fuPending > 0) {
-    h += ' <span class="ld-fu-count" style="background:rgba(245,158,11,0.12);color:#f59e0b">' + fuPending + '</span>';
-  }
-  h += '<span class="ct-arrow">▼</span></button>';
-  h += '<div class="ld-fu-body" data-fu-body="' + id + '" style="display:none">';
-  // Add form
-  h += '<div class="ld-fu-add">';
-  h += '<input type="date" data-fu-field="date" data-id="' + id + '"/>';
-  h += '<input type="time" data-fu-field="time" data-id="' + id + '"/>';
-  h += '<textarea data-fu-field="note" data-id="' + id + '" placeholder="Note du FU (optionnel)..." rows="1"></textarea>';
-  h += '<button class="ld-fu-add-btn" data-action="addFu" data-id="' + id + '">🔔 Programmer</button>';
-  h += '</div>';
-  // Row 2 : durée + switch "ajouter au calendrier Stratégie"
-  h += '<div class="ld-fu-add-row2">';
-  h += '<span class="ld-fu-duration-label">Durée</span>';
-  h += '<select class="ld-fu-duration-select" data-fu-field="duration" data-id="' + id + '">';
-  h += '<option value="15">15 min</option>';
-  h += '<option value="30" selected>30 min</option>';
-  h += '<option value="45">45 min</option>';
-  h += '<option value="60">1h</option>';
-  h += '</select>';
-  h += '<label class="ld-fu-cal-switch" title="Crée un événement sur le calendrier Google du closer assigné">';
-  h += '<input type="checkbox" data-fu-field="pushCal" data-id="' + id + '" checked/>';
-  h += '<span class="sw-track"></span>';
-  h += '<span class="sw-label">📅 Calendrier Stratégie</span>';
-  h += '</label>';
-  h += '</div>';
-  // List
-  if (fus.length === 0) {
-    h += '<div class="ld-fu-empty">Aucun follow-up programmé</div>';
-  } else {
-    h += '<div class="ld-fu-list">';
-    // Sort: pending first (overdue first), then done
-    var fuSorted = fus.map(function(f, idx) { f._idx = idx; return f; }).sort(function(a, b) {
-      if (a.done !== b.done) return a.done ? 1 : -1;
-      return new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime();
-    });
-    for (var fj = 0; fj < fuSorted.length; fj++) {
-      var fu = fuSorted[fj];
-      var fuDate = new Date(fu.dateTime);
-      var fuTimeDiff = fuDate.getTime() - nowTs;
-      var fuClass = '';
-      if (!fu.done) {
-        if (fuTimeDiff <= 0) fuClass = ' overdue';
-        else if (fuTimeDiff <= 3600000) fuClass = ' due-soon'; // 1h
-      }
-      var fuDateStr = String(fuDate.getDate()).padStart(2,'0') + '/' + String(fuDate.getMonth()+1).padStart(2,'0') + '/' + fuDate.getFullYear();
-      var fuTimeStr = String(fuDate.getHours()).padStart(2,'0') + ':' + String(fuDate.getMinutes()).padStart(2,'0');
-      h += '<div class="ld-fu-item' + (fu.done ? ' done' : '') + fuClass + '">';
-      h += '<button class="ld-fu-check" data-action="toggleFuDone" data-id="' + id + '" data-fu-idx="' + fu._idx + '">' + (fu.done ? '✓' : '') + '</button>';
-      h += '<div class="ld-fu-info">';
-      h += '<div class="ld-fu-datetime">' + (fu.done ? '✅ ' : (fuTimeDiff <= 0 && !fu.done ? '⚠️ ' : '🔔 ')) + fuDateStr + ' à ' + fuTimeStr;
-      if (fu.calendarEventId && fu.calendarEventLink) {
-        h += '<a class="ld-fu-cal-badge" href="' + escHtml(fu.calendarEventLink) + '" target="_blank" rel="noopener" title="Ouvrir l\'événement Google Calendar" onclick="event.stopPropagation()">📅 Calendrier</a>';
-      } else if (fu.calendarEventId) {
-        h += '<span class="ld-fu-cal-badge" title="Événement Google Calendar associé">📅</span>';
-      }
-      h += '</div>';
-      if (fu.note) h += '<div class="ld-fu-note">' + escHtml(fu.note) + '</div>';
-      if (fu.createdBy) h += '<div class="ld-fu-by">par ' + escHtml(fu.createdBy) + '</div>';
-      h += '</div>';
-      h += '<button class="ld-fu-del" data-action="delFu" data-id="' + id + '" data-fu-idx="' + fu._idx + '">✕</button>';
-      h += '</div>';
-    }
-    h += '</div>';
-  }
-  h += '</div>'; // fu-body
-  h += '</div>'; // fu-section
-
-  // ── SMS composer (envoi vers le prospect) ──
+  // ── SMS composer ──
   var smsOptedOut = !!l.smsOptedOut;
   var smsHasPhone = !!(l.telephone && String(l.telephone).trim());
   if (smsOptedOut || !smsHasPhone) {
-    h += '<div class="ld-sms-composer">';
+    h += '<div class="ld-sms-composer" style="margin-top:0">';
     h += '<div class="ld-sms-composer-head"><div class="ld-sms-composer-title">💬 Envoyer un SMS</div></div>';
     if (smsOptedOut) {
       h += '<div class="ld-sms-composer-blocked">⚠️ Ce lead s\'est désabonné des SMS (STOP reçu). Impossible d\'envoyer.</div>';
@@ -2923,12 +3145,17 @@ function renderCard(l) {
     }
     h += '</div>';
   } else {
-    h += '<div class="ld-sms-composer">';
+    h += '<div class="ld-sms-composer" style="margin-top:0">';
     h += '<div class="ld-sms-composer-head">';
     h += '<div class="ld-sms-composer-title">💬 Envoyer un SMS</div>';
     h += '<div class="ld-sms-composer-from">→ ' + escHtml(l.telephone) + '</div>';
     h += '</div>';
     h += '<textarea data-sms-input="' + id + '" placeholder="Votre message (signez avec votre prénom)..." maxlength="1530"></textarea>';
+    h += '<div class="l2tpl-row">';
+    h += '<button type="button" class="l2tpl" data-l2="tpl" data-tpl="rate" data-id="' + id + '">📞 Vous ai manqué</button>';
+    h += '<button type="button" class="l2tpl" data-l2="tpl" data-tpl="confirm" data-id="' + id + '">✅ Confirmation RDV</button>';
+    h += '<button type="button" class="l2tpl" data-l2="tpl" data-tpl="veille" data-id="' + id + '">🌙 Rappel veille</button>';
+    h += '</div>';
     h += '<div class="ld-sms-composer-footer">';
     h += '<div class="ld-sms-composer-counter" data-sms-counter="' + id + '">0 / 160</div>';
     h += '<button class="ld-sms-send-btn" data-action="sendSms" data-id="' + id + '">💬 Envoyer SMS</button>';
@@ -2937,7 +3164,11 @@ function renderCard(l) {
     h += '</div>';
   }
 
-  // ── Communications history (calls + SMS) ──
+  // ── Vocaux (module VoiceNotes, attaché au rendu du segment) ──
+  h += '<div class="ld-actions-title" style="margin-top:14px">🎙️ Vocaux</div>';
+  h += '<div class="vn-container" data-vn-mount="' + id + '"></div>';
+
+  // ── Fil appels + SMS (ouvert par défaut dans la fiche v2) ──
   var comms = l.communications || [];
   var callsAndSms = [];
   for (var ci = 0; ci < comms.length; ci++) {
@@ -2948,31 +3179,28 @@ function renderCard(l) {
     if (callsAndSms[cci].type === 'call') callCount++; else smsCount++;
   }
   h += '<div class="ld-comm-section">';
-  h += '<button class="ld-comm-toggle" data-action="toggleComm" data-id="' + id + '">';
+  h += '<button class="ld-comm-toggle open" data-action="toggleComm" data-id="' + id + '">';
   h += '📞 Appels';
   if (callCount) h += ' <span class="ld-comm-count" style="background:rgba(52,211,153,0.12);color:#34d399">' + callCount + '</span>';
   h += ' &nbsp;💬 SMS';
   if (smsCount) h += ' <span class="ld-comm-count" style="background:rgba(96,165,250,0.12);color:#60a5fa">' + smsCount + '</span>';
   h += '<span class="ct-arrow">▼</span></button>';
-  h += '<div class="ld-comm-list" data-comm-list="' + id + '" style="display:none">';
+  h += '<div class="ld-comm-list" data-comm-list="' + id + '" style="display:flex">';
   if (callsAndSms.length === 0) {
     h += '<div class="ld-comm-empty">Aucun appel ou SMS synchronisé<br/>Les données apparaîtront via Ringover</div>';
   } else {
-    // Tri chronologique ASC (du plus vieux en haut, comme iMessage)
-    callsAndSms.sort(function(a, b) {
+    callsAndSms.sort(function (a, b) {
       var da = a.date ? new Date(a.date).getTime() : 0;
       var db2 = b.date ? new Date(b.date).getTime() : 0;
       return da - db2;
     });
-    var ldOwnerKey = function(c) {
-      // 1. Si on a ownerUid (Cloud Function moderne), match direct sur firebaseUid
+    var ldOwnerKey = function (c) {
       if (c.ownerUid) {
         var listU = window.TEAM_MEMBERS_LIST || [];
         for (var iu = 0; iu < listU.length; iu++) {
           if (listU[iu].firebaseUid === c.ownerUid) return listU[iu].slug;
         }
       }
-      // 2. Fallback : match texte sur ownerName contre shortName/displayName
       var n = (c.ownerName || '').toLowerCase();
       if (n) {
         var listN = window.TEAM_MEMBERS_LIST || [];
@@ -2986,10 +3214,7 @@ function renderCard(l) {
       }
       return 'unknown';
     };
-    // Détermine si la comm vient de l'équipe (out) ou du prospect (in).
-    // Règle : si ownerName est défini → forcément équipe (out).
-    // Sinon on regarde direction (qui peut être 'out', 'outbound', 'sortant', etc.).
-    var ldSide = function(c) {
+    var ldSide = function (c) {
       if (c.ownerName) return 'out';
       var d = String(c.direction || '').toLowerCase();
       if (d === 'out' || d === 'outbound' || d === 'sortant') return 'out';
@@ -3009,7 +3234,6 @@ function renderCard(l) {
       }
       var timeStr = cmDate ? cmDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
       h += '<div class="ld-conv-row ' + side + '">';
-      // Auteur (côté équipe seulement)
       if (side === 'out' && cm.ownerName) {
         h += '<div class="ld-conv-author ' + ow + '">' + escHtml(cm.ownerName) + '</div>';
       }
@@ -3023,7 +3247,6 @@ function renderCard(l) {
         var clIcon = side === 'out' ? '📞↗' : (clMissed ? '❌' : '📞↙');
         var clTitle = (side === 'out' ? 'Appel sortant' : 'Appel entrant') + (clMissed && side === 'in' ? ' (manqué)' : '');
         var callClass = 'ld-conv-call ' + side + (side === 'out' ? ' ' + ow : '') + (clMissed && side === 'in' ? ' missed' : '');
-        // Bouton détail cliquable si l'appel a un callLogId (Twilio Dialer) ou un recordingUrl legacy (Ringover)
         var hasDetail = !!cm.callLogId;
         if (hasDetail) callClass += ' has-detail';
         h += '<div class="' + callClass + '"' + (hasDetail ? ' data-action="callDetail" data-cid="' + escAttr(cm.callLogId) + '" style="cursor:pointer"' : '') + '>';
@@ -3039,31 +3262,295 @@ function renderCard(l) {
         }
         h += '</div>';
       } else {
-        // SMS bubble
         h += '<div class="ld-conv-bubble ' + side + (side === 'out' ? ' ' + ow : '') + '">';
         if (cm.content) h += sanitizeCommContent(cm.content);
         else h += '<span style="color:var(--muted);font-style:italic">Contenu non disponible</span>';
         h += '</div>';
       }
       h += '<div class="ld-conv-meta">' + escHtml(timeStr) + (cm.source ? ' · ' + escHtml(cm.source) : '') + '</div>';
-      h += '</div>'; // ld-conv-row
+      h += '</div>';
     }
   }
   h += '</div>';
   h += '</div>';
-
-  // Delete button
-  h += '<button class="ld-delete-btn" data-action="deleteLead" data-id="' + id + '">🗑 Supprimer cette fiche</button>';
-
-  h += '</div>'; // actions
-  h += '</div>'; // body
-  h += '</div>'; // card
-
   return h;
 }
 
+/* ═══ FICHE — assemblage, ouverture, fermeture, brouillons ═══ */
+var L2_SMS_TPL = {
+  rate:    'Bonjour {prenom}, c\u2019est {moi} d\u2019Ambitio 😊 Je viens d\u2019essayer de vous joindre suite à votre demande. Quand puis-je vous rappeler ?',
+  confirm: 'Bonjour {prenom}, votre rendez-vous est bien confirmé ✅ Vous recevrez le lien par email. À très vite ! {moi} — Ambitio',
+  veille:  'Bonsoir {prenom}, petit rappel pour notre échange de demain 😊 Pensez à être au calme avec un ordinateur. À demain ! {moi}'
+};
+
+function l2IsMobile() { return window.matchMedia('(max-width: 979px)').matches; }
+
+function l2SheetHeadHTML(l, id) {
+  var _tel = (l.telephone || '').toString().replace(/\s/g, '');
+  var h = '<div class="l2sh-head"><div class="l2sh-top"><div class="l2sh-id">';
+  h += '<div class="l2sh-name">' + escHtml(l.nom || '—') + '</div>';
+  h += '<div class="l2sh-phone">';
+  if (l.telephone) {
+    h += '<a href="#" data-action="dialerCall" data-phone="' + escAttr(_tel) + '" data-lead-id="' + id + '" data-name="' + escAttr(l.nom || '') + '" title="Appeler via Ringover">' + escHtml(normalizeTel(l.telephone)) + '</a>';
+  } else {
+    h += '<span style="color:var(--muted2)">Aucun téléphone</span>';
+  }
+  if (l.email) h += '<span class="sep">·</span><a href="mailto:' + escHtml(l.email) + '">' + escHtml(l.email) + '</a>';
+  h += '</div></div>';
+  h += '<button type="button" class="l2sh-close" data-l2="close" aria-label="Fermer la fiche">✕</button></div>';
+  h += '<div class="l2sh-tags">' + renderLeadTags(l, false) + '</div>';
+  h += '<div class="l2act-row">';
+  if (l.telephone) {
+    h += '<a class="l2act call" href="#" data-action="dialerCall" data-phone="' + escAttr(_tel) + '" data-lead-id="' + id + '" data-name="' + escAttr(l.nom || '') + '"><span class="i">📞</span><span class="t">Appeler</span></a>';
+  } else {
+    h += '<span class="l2act call" style="opacity:0.4;cursor:not-allowed"><span class="i">📞</span><span class="t">Appeler</span></span>';
+  }
+  h += '<button type="button" class="l2act sms" data-l2="gosms" data-id="' + id + '"><span class="i">💬</span><span class="t">SMS</span></button>';
+  h += '<button type="button" class="l2act rdv ld-booking-btn-v2" data-action="openBooking" data-id="' + id + '"><span class="i">📅</span><span class="t">RDV</span></button>';
+  h += '<a class="l2act crm" href="sales-contact.html?id=' + id + '"><span class="i">📋</span><span class="t">Fiche CRM</span></a>';
+  h += '</div></div>';
+  return h;
+}
+
+function l2CaptureDrafts(root) {
+  var d = { note: '', sms: '', fuDate: '', fuTime: '', fuNote: '', fuDur: '', fuCal: null };
+  if (!root) return d;
+  var q = function (sel) { return root.querySelector(sel); };
+  var el;
+  el = q('[data-field="newNote"]');       if (el) d.note = el.value;
+  el = q('[data-sms-input]');             if (el) d.sms = el.value;
+  el = q('[data-fu-field="date"]');       if (el) d.fuDate = el.value;
+  el = q('[data-fu-field="time"]');       if (el) d.fuTime = el.value;
+  el = q('[data-fu-field="note"]');       if (el) d.fuNote = el.value;
+  el = q('[data-fu-field="duration"]');   if (el) d.fuDur = el.value;
+  el = q('[data-fu-field="pushCal"]');    if (el) d.fuCal = el.checked;
+  return d;
+}
+function l2RestoreDrafts(root, d, id) {
+  if (!root || !d) return;
+  var q = function (sel) { return root.querySelector(sel); };
+  var el;
+  el = q('[data-field="newNote"]');     if (el && d.note) el.value = d.note;
+  el = q('[data-sms-input]');           if (el && d.sms) { el.value = d.sms; updateSmsCounter(id); }
+  el = q('[data-fu-field="date"]');     if (el && d.fuDate) el.value = d.fuDate;
+  el = q('[data-fu-field="time"]');     if (el && d.fuTime) el.value = d.fuTime;
+  el = q('[data-fu-field="note"]');     if (el && d.fuNote) el.value = d.fuNote;
+  el = q('[data-fu-field="duration"]'); if (el && d.fuDur) el.value = d.fuDur;
+  el = q('[data-fu-field="pushCal"]');  if (el && d.fuCal !== null) el.checked = d.fuCal;
+}
+
+function l2DetachSheetModules(leadId) {
+  var inner = l2El('ldSheetInner');
+  if (inner) {
+    var vn = inner.querySelector('.vn-container');
+    if (vn && window.VoiceNotes) { try { window.VoiceNotes.detach(vn); } catch (e) {} }
+  }
+  if (leadId) detachLeadRdvListener(leadId);
+}
+
+function l2RenderSheet(id, preserve) {
+  var sheet = l2El('ldSheet');
+  var inner = l2El('ldSheetInner');
+  if (!sheet || !inner) return;
+  var l = null;
+  for (var i = 0; i < allLeads.length; i++) { if (allLeads[i].id === id) { l = allLeads[i]; break; } }
+  if (!l) { l2CloseSheet(); return; }
+
+  var drafts = preserve ? l2CaptureDrafts(inner) : null;
+  var oldBody = inner.querySelector('.l2body');
+  var scrollPos = (preserve && oldBody) ? oldBody.scrollTop : 0;
+
+  // Détacher le module Vocaux avant de recréer le DOM
+  var oldVn = inner.querySelector('.vn-container');
+  if (oldVn && window.VoiceNotes) { try { window.VoiceNotes.detach(oldVn); } catch (e) {} }
+
+  // Badges des segments
+  var fuOver = l2FuStats(l).overdue;
+  var commN = 0;
+  var comms = l.communications || [];
+  for (var c = 0; c < comms.length; c++) { if (comms[c].type === 'call' || comms[c].type === 'sms') commN++; }
+
+  var h = l2SheetHeadHTML(l, id);
+  h += '<div class="l2segs">';
+  h += '<button type="button" class="l2seg' + (l2Seg === 'action' ? ' active' : '') + '" data-l2="seg" data-seg="action">⚡ Action' + (fuOver ? ' <span class="b">' + fuOver + '</span>' : '') + '</button>';
+  h += '<button type="button" class="l2seg' + (l2Seg === 'infos' ? ' active' : '') + '" data-l2="seg" data-seg="infos">👤 Infos</button>';
+  h += '<button type="button" class="l2seg' + (l2Seg === 'ech' ? ' active' : '') + '" data-l2="seg" data-seg="ech">💬 Échanges' + (commN ? ' <span class="b blue">' + commN + '</span>' : '') + '</button>';
+  h += '</div>';
+  h += '<div class="l2body ld-card" data-lead-id="' + id + '">';
+  if (l2Seg === 'action') h += l2SegAction(l, id);
+  else if (l2Seg === 'infos') h += l2SegInfos(l, id);
+  else h += l2SegEch(l, id);
+  h += '</div>';
+
+  inner.innerHTML = h;
+  sheet.classList.add('has-lead');
+
+  if (drafts) l2RestoreDrafts(inner, drafts, id);
+  var body = inner.querySelector('.l2body');
+  if (body) body.scrollTop = scrollPos;
+
+  // RDV temps réel : (ré)attache le listener + repeint depuis le cache
+  attachLeadRdvListener(id);
+  if (typeof _ldRdvCache !== 'undefined' && _ldRdvCache[id]) {
+    paintLeadRdvBox(id, _ldRdvCache[id]);
+  }
+
+  // Vocaux : uniquement quand le segment Échanges est affiché
+  if (l2Seg === 'ech' && window.VoiceNotes) {
+    var mount = inner.querySelector('[data-vn-mount="' + id + '"]');
+    if (mount) window.VoiceNotes.attach(mount, id, getCurrentVoiceUser());
+  }
+}
+
+function l2OpenLead(id) {
+  if (!id) return;
+  var switching = openCardId !== id;
+  if (switching && openCardId) l2DetachSheetModules(openCardId);
+  if (switching) l2Seg = 'action';
+  openCardId = id;
+  l2RenderSheet(id, !switching);
+  var sheet = l2El('ldSheet');
+  if (l2IsMobile()) {
+    sheet.classList.add('on');
+    var bd = l2El('ldSheetBackdrop');
+    if (bd) bd.classList.add('on');
+    document.body.classList.add('l2-lock');
+  }
+  // Marquage visuel de la carte ouverte
+  document.querySelectorAll('#ldFeed .ld-card.is-open').forEach(function (c) { c.classList.remove('is-open'); });
+  var card = document.querySelector('#ldFeed .ld-card[data-lead-id="' + id + '"]');
+  if (card) card.classList.add('is-open');
+  if (switching) {
+    var body = l2El('ldSheetInner') ? l2El('ldSheetInner').querySelector('.l2body') : null;
+    if (body) body.scrollTop = 0;
+  }
+}
+
+function l2CloseSheet() {
+  if (openCardId) l2DetachSheetModules(openCardId);
+  openCardId = null;
+  isEditingLead = false;
+  var sheet = l2El('ldSheet');
+  if (sheet) { sheet.classList.remove('on'); sheet.classList.remove('has-lead'); }
+  var bd = l2El('ldSheetBackdrop');
+  if (bd) bd.classList.remove('on');
+  document.body.classList.remove('l2-lock');
+  var inner = l2El('ldSheetInner');
+  if (inner) inner.innerHTML = '';
+  document.querySelectorAll('#ldFeed .ld-card.is-open').forEach(function (c) { c.classList.remove('is-open'); });
+}
+
+/* ═══ Feuille FILTRES + menu ⋯ ═══ */
+function l2OpenFilters() {
+  l2El('l2fs').classList.add('on');
+  l2El('l2fsBackdrop').classList.add('on');
+  document.body.classList.add('l2-lock');
+}
+function l2CloseFilters() {
+  l2El('l2fs').classList.remove('on');
+  l2El('l2fsBackdrop').classList.remove('on');
+  if (!(openCardId && l2IsMobile())) document.body.classList.remove('l2-lock');
+}
+function l2ResetFilters() {
+  filterMember = personalUser || 'all';
+  filterPeriod = 'all';
+  filterType = 'all';
+  filterStatus = 'all';
+  customDateFrom = null;
+  customDateTo = null;
+  document.querySelectorAll('#ldMembers .ld-member-pill').forEach(function (p) {
+    p.classList.toggle('active', p.dataset.member === filterMember);
+  });
+  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period]').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.period === 'all');
+  });
+  document.querySelectorAll('#ldFilters .ld-filter').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.status === 'all');
+  });
+  if (typeof refreshDateBtnLabel === 'function') refreshDateBtnLabel();
+  renderFeed();
+}
+
+/* ═══ Écouteur v2 (data-l2) — indépendant du gestionnaire historique ═══ */
+document.addEventListener('click', function (e) {
+  // Fermeture du menu ⋯ au clic extérieur
+  var menu = l2El('l2Menu');
+  if (menu && menu.classList.contains('on') && !e.target.closest('#l2Menu') && !e.target.closest('#l2MoreBtn')) {
+    menu.classList.remove('on');
+  }
+  var t = e.target.closest ? e.target.closest('[data-l2]') : null;
+  if (!t) return;
+  var a = t.getAttribute('data-l2');
+  var id = t.getAttribute('data-id');
+
+  if (a === 'view') {
+    l2View = t.getAttribute('data-view') || 'atraiter';
+    try { localStorage.setItem('ll2_view', l2View); } catch (e2) {}
+    renderFeed();
+    return;
+  }
+  if (a === 'quick') {
+    e.stopPropagation();
+    l2QuickOpenId = (l2QuickOpenId === id) ? null : id;
+    document.querySelectorAll('#ldFeed .ld-card.l2qopen').forEach(function (c) { c.classList.remove('l2qopen'); });
+    document.querySelectorAll('#ldFeed .l2quick.on').forEach(function (b) { b.classList.remove('on'); });
+    if (l2QuickOpenId) {
+      var card = document.querySelector('#ldFeed .ld-card[data-lead-id="' + id + '"]');
+      if (card) { card.classList.add('l2qopen'); var qb = card.querySelector('.l2quick'); if (qb) qb.classList.add('on'); }
+    }
+    return;
+  }
+  if (a === 'close') { l2CloseSheet(); return; }
+  if (a === 'seg') {
+    l2Seg = t.getAttribute('data-seg') || 'action';
+    if (openCardId) l2RenderSheet(openCardId, true);
+    return;
+  }
+  if (a === 'gosms') {
+    l2Seg = 'ech';
+    if (openCardId) l2RenderSheet(openCardId, true);
+    var ta = document.querySelector('#ldSheetInner [data-sms-input]');
+    if (ta && !ta.disabled) ta.focus();
+    return;
+  }
+  if (a === 'tpl') {
+    var tplKey = t.getAttribute('data-tpl');
+    var lead = null;
+    for (var i = 0; i < allLeads.length; i++) { if (allLeads[i].id === id) { lead = allLeads[i]; break; } }
+    var ta2 = document.querySelector('#ldSheetInner [data-sms-input="' + id + '"]');
+    if (ta2 && L2_SMS_TPL[tplKey]) {
+      var prenom = lead && lead.nom ? String(lead.nom).trim().split(/\s+/)[0] : '';
+      var vu = (typeof getCurrentVoiceUser === 'function') ? getCurrentVoiceUser() : null;
+      var moi = vu && vu.name ? String(vu.name).split(/\s+/)[0] : '';
+      ta2.value = L2_SMS_TPL[tplKey].replace(/\{prenom\}/g, prenom).replace(/\{moi\}/g, moi || 'l\u2019équipe');
+      updateSmsCounter(id);
+      ta2.focus();
+    }
+    return;
+  }
+});
+
+/* Bindings statiques v2 (les éléments existent : script en fin de body). */
+(function l2Bind() {
+  var b;
+  b = l2El('l2FiltersBtn');    if (b) b.addEventListener('click', l2OpenFilters);
+  b = l2El('l2fsApply');       if (b) b.addEventListener('click', function () { l2CloseFilters(); renderFeed(); });
+  b = l2El('l2fsBackdrop');    if (b) b.addEventListener('click', l2CloseFilters);
+  b = l2El('l2fsReset');       if (b) b.addEventListener('click', l2ResetFilters);
+  b = l2El('ldSheetBackdrop'); if (b) b.addEventListener('click', l2CloseSheet);
+  b = l2El('l2Grab');          if (b) b.addEventListener('click', l2CloseSheet);
+  b = l2El('l2MoreBtn');       if (b) b.addEventListener('click', function (e) { e.stopPropagation(); l2El('l2Menu').classList.toggle('on'); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var fs = l2El('l2fs');
+    if (fs && fs.classList.contains('on')) { l2CloseFilters(); return; }
+    if (openCardId && l2IsMobile()) l2CloseSheet();
+  });
+})();
+
+
 /* ═══ FEED EVENTS ═══ */
-document.getElementById('ldFeed').addEventListener('click', function(e) {
+document.addEventListener('click', function(e) {
   // Appel via Ringover (DialerBridge) — numéro de tél du détail
   var dcTarget = e.target.closest('[data-action="dialerCall"]');
   if (dcTarget) {
@@ -3090,37 +3577,14 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
     return;
   }
 
-  // Toggle card
+  // Toggle card → v2 : ouvre la fiche dans le panneau (bottom-sheet mobile /
+  // colonne droite ≥980px). Les boutons latéraux (⚡, appel DialerBridge) et
+  // la rangée de statuts rapides ne déclenchent pas l'ouverture.
   var toggle = e.target.closest('[data-action="toggle"]');
   if (toggle) {
-    var card = toggle.closest('.ld-card');
-    var id = card.dataset.leadId;
-    if (card.classList.contains('open')) {
-      card.classList.remove('open');
-      openCardId = null;
-      // Cleanup vocaux + listener RDV de la card qui se ferme
-      var vnC = card.querySelector('.vn-container');
-      if (vnC && window.VoiceNotes) window.VoiceNotes.detach(vnC);
-      detachLeadRdvListener(id);
-    } else {
-      document.querySelectorAll('.ld-card.open').forEach(function(c) {
-        c.classList.remove('open');
-        // Cleanup vocaux + listener RDV des cards qui se ferment
-        var oldVn = c.querySelector('.vn-container');
-        if (oldVn && window.VoiceNotes) window.VoiceNotes.detach(oldVn);
-        var oldId = c.dataset.leadId;
-        if (oldId) detachLeadRdvListener(oldId);
-      });
-      card.classList.add('open');
-      openCardId = id;
-      // Attacher le module Vocaux pour la fiche qui vient de s'ouvrir
-      var vnMount = card.querySelector('[data-vn-mount="' + id + '"]');
-      if (vnMount && window.VoiceNotes) {
-        window.VoiceNotes.attach(vnMount, id, getCurrentVoiceUser());
-      }
-      // Attacher le listener RDV (lit bookings.where('leadId','==',id) en temps réel)
-      attachLeadRdvListener(id);
-    }
+    if (e.target.closest('.l2side') || e.target.closest('.l2qrow')) return;
+    var tCard = toggle.closest('.ld-card');
+    if (tCard && tCard.dataset.leadId) l2OpenLead(tCard.dataset.leadId);
     return;
   }
 
@@ -3575,11 +4039,12 @@ document.getElementById('ldFeed').addEventListener('click', function(e) {
 });
 
 /* ═══ AUTO-SAVE RDV FIELDS ═══ */
-document.getElementById('ldFeed').addEventListener('change', function(e) {
+document.addEventListener('change', function(e) {
   var rdvEl = e.target.closest('[data-field="rdvDate"], [data-field="rdvHeure"]');
   if (!rdvEl) return;
   var leadId = rdvEl.dataset.id;
-  var card = document.querySelector('[data-lead-id="' + leadId + '"]');
+  var card = document.querySelector('#ldSheetInner [data-lead-id="' + leadId + '"]')
+          || document.querySelector('[data-lead-id="' + leadId + '"]');
   if (!card) return;
   var rdvDate = card.querySelector('[data-field="rdvDate"]');
   var rdvHeure = card.querySelector('[data-field="rdvHeure"]');
@@ -3603,7 +4068,8 @@ function autoSaveField(leadId, field, value) {
   if (autoSaveTimers[leadId]) clearTimeout(autoSaveTimers[leadId]);
   autoSaveTimers[leadId] = setTimeout(function() {
     // Gather ALL edit fields for this lead (not just the changed one)
-    var card = document.querySelector('[data-lead-id="' + leadId + '"]');
+    var card = document.querySelector('#ldSheetInner [data-lead-id="' + leadId + '"]')
+            || document.querySelector('[data-lead-id="' + leadId + '"]');
     if (!card) return;
     var fields = ['nom', 'telephone', 'email', 'utm', 'type', 'assignedTo', 'secteur', 'ca', 'defi', 'disponibilite', 'timeline'];
     var updates = {};
@@ -3639,14 +4105,14 @@ function autoSaveField(leadId, field, value) {
 }
 
 // Listen on input (text fields) and change (selects)
-document.getElementById('ldFeed').addEventListener('input', function(e) {
+document.addEventListener('input', function(e) {
   var el = e.target.closest('[data-edit]');
   if (el) autoSaveField(el.dataset.id, el.dataset.edit, el.value);
   // Compteur dynamique du composer SMS
   var smsTa = e.target.closest('[data-sms-input]');
   if (smsTa) updateSmsCounter(smsTa.dataset.smsInput);
 });
-document.getElementById('ldFeed').addEventListener('change', function(e) {
+document.addEventListener('change', function(e) {
   var el = e.target.closest('[data-edit]');
   if (el) autoSaveField(el.dataset.id, el.dataset.edit, el.value);
 });
