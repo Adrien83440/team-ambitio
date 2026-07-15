@@ -197,6 +197,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .l2tri.active { border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.07); box-shadow: 0 4px 18px rgba(239,68,68,0.12); }
 .l2tri.active .l { color: var(--red3); }
 
+/* Barre de période (header) — mêmes chips que la feuille Filtres */
+.l2periodbar { margin-top: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 1px; }
+.l2periodbar::-webkit-scrollbar { display: none; }
+.l2periodbar .ld-filter { padding: 6px 11px; font-size: 11px; background: var(--bg2); }
+
 /* ═══ LAYOUT : file + panneau ═══ */
 .l2cols { display: block; }
 .ld-feed { padding: 10px 12px calc(120px + var(--sab)); max-width: 680px; margin: 0 auto; }
@@ -879,6 +884,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
       <button class="l2filters-btn" id="l2FiltersBtn" type="button">⛃ Filtres <span class="n" id="l2FiltersCount">0</span></button>
     </div>
     <div class="l2tri-row" id="l2Triage"></div>
+    <div class="ld-filters l2periodbar" id="l2PeriodBar">
+      <button class="ld-filter" data-period="today">📅 Aujourd'hui <span class="ld-period-count" data-period-count="today">0</span></button>
+      <button class="ld-filter" data-period="days3">3 jours <span class="ld-period-count" data-period-count="days3">0</span></button>
+      <button class="ld-filter" data-period="week">7 jours <span class="ld-period-count" data-period-count="week">0</span></button>
+      <button class="ld-filter active" data-period="all">Mois <span class="ld-period-count" data-period-count="all">0</span></button>
+    </div>
   </header>
 
   <!-- ── FILE + FICHE ── -->
@@ -929,9 +940,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
     <div class="l2fs-l">Période</div>
     <div class="ld-filters" id="ldPeriodFilters">
       <button class="ld-filter" data-period="today">📅 Aujourd'hui <span class="ld-period-count" data-period-count="today">0</span></button>
+      <button class="ld-filter" data-period="days3">🗓 3 jours <span class="ld-period-count" data-period-count="days3">0</span></button>
       <button class="ld-filter" data-period="week">🗓 7 jours <span class="ld-period-count" data-period-count="week">0</span></button>
       <button class="ld-filter" data-period="unprocessed">🆕 Non traités <span class="ld-period-count" data-period-count="unprocessed">0</span></button>
-      <button class="ld-filter active" data-period="all">📋 Tout <span class="ld-period-count" data-period-count="all">0</span></button>
+      <button class="ld-filter active" data-period="all">🗓 Mois (30 j) <span class="ld-period-count" data-period-count="all">0</span></button>
       <div class="ld-date-wrap">
         <button class="ld-filter" id="ldDateBtn" type="button">📆 Date</button>
         <div class="ld-date-pop" id="ldDatePop" style="display:none">
@@ -1542,8 +1554,7 @@ document.getElementById('ldMembers').addEventListener('click', function(e) {
 document.getElementById('ldPeriodFilters').addEventListener('click', function(e) {
   var btn = e.target.closest('.ld-filter');
   if (!btn || !btn.dataset.period) return; // ignore le bouton 📆 Date (pas de data-period)
-  document.querySelectorAll('#ldPeriodFilters .ld-filter').forEach(function(b) { b.classList.remove('active'); });
-  btn.classList.add('active');
+  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period], #l2PeriodBar .ld-filter[data-period]').forEach(function(b) { b.classList.toggle('active', b.dataset.period === btn.dataset.period); });
   filterPeriod = btn.dataset.period;
   // Reset custom date si on quitte le mode date
   customDateFrom = null;
@@ -1660,7 +1671,7 @@ document.getElementById('ldDateApply').addEventListener('click', function() {
     return;
   }
   filterPeriod = 'custom';
-  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period]').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period], #l2PeriodBar .ld-filter[data-period]').forEach(function(b) { b.classList.remove('active'); });
   refreshDateBtnLabel();
   document.getElementById('ldDatePop').style.display = 'none';
   renderFeed();
@@ -1674,7 +1685,7 @@ document.getElementById('ldDateClear').addEventListener('click', function() {
   document.getElementById('ldDatePop').style.display = 'none';
   // Retour à "Tout" par défaut (v2)
   filterPeriod = 'all';
-  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period]').forEach(function(b) {
+  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period], #l2PeriodBar .ld-filter[data-period]').forEach(function(b) {
     b.classList.toggle('active', b.dataset.period === 'all');
   });
   refreshDateBtnLabel();
@@ -1845,6 +1856,14 @@ function getFilteredLeads() {
         var d = _getLeadEffectiveDate(l);
         if (!d) return false;
         return d >= weekAgo;
+      });
+    } else if (filterPeriod === 'days3') {
+      var d3n = new Date();
+      var d3Start = new Date(d3n.getFullYear(), d3n.getMonth(), d3n.getDate() - 2, 0, 0, 0);
+      list = list.filter(function(l) {
+        var d = _getLeadEffectiveDate(l);
+        if (!d) return false;
+        return d >= d3Start;
       });
     } else if (filterPeriod === 'unprocessed') {
       list = list.filter(function(l) { return !l.status || l.status === 'nouveau'; });
@@ -2060,8 +2079,9 @@ function updatePeriodCounts() {
   var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   var todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   var weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  var days3Start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2, 0, 0, 0);
 
-  var counts = { today: 0, week: 0, unprocessed: 0, all: 0 };
+  var counts = { today: 0, days3: 0, week: 0, unprocessed: 0, all: 0 };
   for (var i = 0; i < base.length; i++) {
     var l = base[i];
     if (!matchesCommonFilters(l)) continue;
@@ -2070,18 +2090,22 @@ function updatePeriodCounts() {
     if (d) {
       if (d >= todayStart && d <= todayEnd) counts.today++;
       if (d >= weekAgo) counts.week++;
+      if (d >= days3Start) counts.days3++;
     }
     if (!l.status || l.status === 'nouveau') counts.unprocessed++;
   }
 
-  var keys = ['today', 'week', 'unprocessed', 'all'];
+  var keys = ['today', 'days3', 'week', 'unprocessed', 'all'];
   for (var k = 0; k < keys.length; k++) {
-    var el = document.querySelector('[data-period-count="' + keys[k] + '"]');
-    if (!el) continue;
-    var c = counts[keys[k]];
-    el.textContent = c;
-    if (c === 0) el.classList.add('zero');
-    else         el.classList.remove('zero');
+    /* v2b : le compteur existe en double (barre header + feuille Filtres) */
+    var els = document.querySelectorAll('[data-period-count="' + keys[k] + '"]');
+    for (var ke = 0; ke < els.length; ke++) {
+      var el = els[ke];
+      var c = counts[keys[k]];
+      el.textContent = c;
+      if (c === 0) el.classList.add('zero');
+      else         el.classList.remove('zero');
+    }
   }
 }
 
@@ -2102,6 +2126,7 @@ function rebuildTypeFilters() {
   var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   var todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
   var weekAgo    = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+  var days3Start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2, 0, 0, 0);
   var customFrom = customDateFrom;
   var customTo   = customDateFrom ? (customDateTo || new Date(customDateFrom.getFullYear(), customDateFrom.getMonth(), customDateFrom.getDate(), 23, 59, 59, 999)) : null;
 
@@ -2113,6 +2138,7 @@ function rebuildTypeFilters() {
     if (!d) return false;
     if (filterPeriod === 'today')  return d >= todayStart && d <= todayEnd;
     if (filterPeriod === 'week')   return d >= weekAgo;
+    if (filterPeriod === 'days3')  return d >= days3Start;
     if (filterPeriod === 'custom' && customFrom) return d >= customFrom && d <= customTo;
     return true;
   }
@@ -2185,8 +2211,11 @@ function rebuildTypeFilters() {
 
 function l2El(id) { return document.getElementById(id); }
 
-var l2View = 'atraiter';
-try { l2View = localStorage.getItem('ll2_view') || 'atraiter'; } catch (e) {}
+var l2View = 'arrivees';
+try {
+  var _l2v = localStorage.getItem('ll2_view');
+  if (_l2v === 'arrivees' || _l2v === 'atraiter' || _l2v === 'new' || _l2v === 'fu') l2View = _l2v;
+} catch (e) {}
 var l2Seg = 'action';          // segment actif de la fiche (action|infos|ech)
 var l2QuickOpenId = null;      // carte dont la rangée ⚡ est dépliée
 
@@ -2226,6 +2255,46 @@ function l2Groups(leads) {
   ];
 }
 
+/* ── Vue « Arrivées » : chronologie stricte (tri hérité de getFilteredLeads :
+   date effective desc → les derniers arrivés en tête), regroupée par jour. ── */
+function l2DayLabel(d) {
+  if (!d) return 'Date inconnue';
+  var now = new Date();
+  var d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  var diff = Math.round((d0 - dd) / 86400000);
+  if (diff === 0) return 'Aujourd\u2019hui';
+  if (diff === 1) return 'Hier';
+  var str = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+function l2ArrivalLabel(raw) {
+  var d = raw && raw.toDate ? raw.toDate() : (raw instanceof Date ? raw : (raw ? new Date(raw) : null));
+  if (!d || isNaN(d.getTime())) return '';
+  var hh = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  var now = new Date();
+  var d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  var diff = Math.round((d0 - dd) / 86400000);
+  if (diff === 0) return hh;
+  if (diff === 1) return 'hier ' + hh;
+  return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + hh;
+}
+function l2ArriveesSections(leads) {
+  var out = [], cur = null, curKey = '';
+  for (var i = 0; i < leads.length; i++) {
+    var d = _getLeadEffectiveDate(leads[i]);
+    var key = d ? (d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate()) : 'inconnue';
+    if (key !== curKey) {
+      curKey = key;
+      cur = { t: '📥 ' + l2DayLabel(d), list: [] };
+      out.push(cur);
+    }
+    cur.list.push(leads[i]);
+  }
+  return out;
+}
+
 function l2ViewCounts(leads) {
   var c = { atraiter: 0, nouveaux: 0, fu: 0, fuOver: 0, tous: leads.length };
   var groups = l2Groups(leads);
@@ -2254,10 +2323,10 @@ function l2RenderTriage(leads) {
   if (!host) return;
   var c = l2ViewCounts(leads);
   var defs = [
+    { v: 'arrivees', l: 'Arrivées',  n: String(c.tous) },
     { v: 'atraiter', l: 'À traiter', n: String(c.atraiter) },
     { v: 'new',      l: 'Nouveaux',  n: String(c.nouveaux) },
-    { v: 'fu',       l: 'Follow-ups', n: c.fuOver > 0 ? c.fu + ' <span class="warn">·' + c.fuOver + '</span>' : String(c.fu) },
-    { v: 'all',      l: 'Tous',      n: String(c.tous) }
+    { v: 'fu',       l: 'Follow-ups', n: c.fuOver > 0 ? c.fu + ' <span class="warn">·' + c.fuOver + '</span>' : String(c.fu) }
   ];
   var h = '';
   for (var i = 0; i < defs.length; i++) {
@@ -2305,7 +2374,8 @@ function renderFeed() {
     lf.sort(function (a, b) { return (l2HasOverdueFu(b) ? 1 : 0) - (l2HasOverdueFu(a) ? 1 : 0); });
     sections = [{ t: '🔔 Follow-ups programmés', hot: true, list: lf }];
   } else {
-    sections = [{ t: '📋 Tous les leads', list: leads }];
+    // 📥 Arrivées (défaut) : ordre strict d'arrivée + séparateurs par jour.
+    sections = l2ArriveesSections(leads);
   }
 
   var h = '', total = 0;
@@ -2318,8 +2388,8 @@ function renderFeed() {
   }
 
   if (total === 0) {
-    var msg = 'Aucun lead ' + (filterSearch ? 'ne correspond à « ' + escHtml(filterSearch) + ' »' : (filterStatus !== 'all' ? 'avec ce statut' : (l2View !== 'all' ? 'dans cette vue' : '')));
-    if (!filterSearch && l2View !== 'all' && leads.length > 0) msg += '<br/><span style="font-size:11px;color:var(--muted2)">Essaie la vue 📋 Tous ou le bouton ⛃ Filtres.</span>';
+    var msg = 'Aucun lead ' + (filterSearch ? 'ne correspond à « ' + escHtml(filterSearch) + ' »' : (filterStatus !== 'all' ? 'avec ce statut' : (l2View !== 'arrivees' ? 'dans cette vue' : '')));
+    if (!filterSearch && l2View !== 'arrivees' && leads.length > 0) msg += '<br/><span style="font-size:11px;color:var(--muted2)">Essaie la vue 📥 Arrivées, une autre période, ou ⛃ Filtres.</span>';
     feed.innerHTML = '<div class="ld-empty">' + msg + '</div>';
   } else {
     feed.innerHTML = h;
@@ -2879,7 +2949,7 @@ function renderCard(l) {
   var statusObj = getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
   var effectiveD = _getLeadEffectiveDate(l);
-  var ago = timeAgo(effectiveD || l.createdAt);
+  var ago = l2ArrivalLabel(effectiveD || l.createdAt) || timeAgo(effectiveD || l.createdAt);
   var _tel = (l.telephone || '').toString().replace(/\s/g, '');
   var isTerm = L2_TERMINAL[l.status] && l.status !== 'client';
 
@@ -3461,7 +3531,7 @@ function l2ResetFilters() {
   document.querySelectorAll('#ldMembers .ld-member-pill').forEach(function (p) {
     p.classList.toggle('active', p.dataset.member === filterMember);
   });
-  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period]').forEach(function (b) {
+  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period], #l2PeriodBar .ld-filter[data-period]').forEach(function (b) {
     b.classList.toggle('active', b.dataset.period === 'all');
   });
   document.querySelectorAll('#ldFilters .ld-filter').forEach(function (b) {
@@ -3548,6 +3618,22 @@ document.addEventListener('click', function (e) {
   });
 })();
 
+
+/* Barre de période du header (v2b) — même filterPeriod que la feuille Filtres. */
+document.getElementById('l2PeriodBar').addEventListener('click', function (e) {
+  var btn = e.target.closest('.ld-filter');
+  if (!btn || !btn.dataset.period) return;
+  filterPeriod = btn.dataset.period;
+  customDateFrom = null;
+  customDateTo = null;
+  if (typeof refreshDateBtnLabel === 'function') refreshDateBtnLabel();
+  var pop = document.getElementById('ldDatePop');
+  if (pop) pop.style.display = 'none';
+  document.querySelectorAll('#ldPeriodFilters .ld-filter[data-period], #l2PeriodBar .ld-filter[data-period]').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.period === filterPeriod);
+  });
+  renderFeed();
+});
 
 /* ═══ FEED EVENTS ═══ */
 document.addEventListener('click', function(e) {
