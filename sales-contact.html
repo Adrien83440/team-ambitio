@@ -382,6 +382,15 @@ function ctRealEntryMs(l){
 }
 function ctFmtDayFr(ms){try{return new Date(ms).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'});}catch(e){return '';}}
 function ctFmtTime(ms){try{return new Date(ms).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+/* Date « jour seul » (minuit UTC pile) — écrite par Make sans heure avant le
+   fix serveur du 15/07 : on n'invente jamais « 02:00 », on affiche le jour. */
+function ctDayOnlyDate(raw){
+  if(raw==null)return false;
+  var s=String(raw).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return true;
+  var ms=Date.parse(s);
+  return !isNaN(ms)&&ms%86400000===0;
+}
 /* Bouton retour : revient à la page d'où l'on vient (Leads Live, Pipeline,
    Funnel, Dialer...) au lieu de forcer sales-crm.html — history.back()
    préserve la position/le state du feed Leads Live. Fallback : href. */
@@ -571,7 +580,7 @@ for(var ki=0;ki<convoAll.length;ki++){
   if(dayKey&&dayKey!==lastDay){h+='<div class="conv-date-sep">'+esc(dayKey)+'</div>';lastDay=dayKey;}
   var side=convSide(cm);
   var ow=ownerKey(cm);
-  var timeStr=cm._ms?ctFmtTime(cm._ms):'';
+  var timeStr=(cm._ms&&!ctDayOnlyDate(cm.date))?ctFmtTime(cm._ms):'';
   h+='<div class="conv-row '+side+'">';
   // Auteur (uniquement côté équipe, et si on connaît l'owner)
   if(side==='out'&&cm.ownerName){

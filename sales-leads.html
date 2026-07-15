@@ -2911,6 +2911,16 @@ function renderLeadTags(l, compact) {
   return h;
 }
 
+/* Date « jour seul » (minuit UTC pile) — écrite par Make sans heure avant le
+   fix serveur du 15/07 : on n'invente jamais « 02:00 », on affiche le jour. */
+function ldDayOnlyDate(raw) {
+  if (raw == null) return false;
+  var s = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return true;
+  var ms = Date.parse(s);
+  return !isNaN(ms) && ms % 86400000 === 0;
+}
+
 /* « Dernière activité » : dernier appel/SMS + volumes (communications[]). */
 function l2LastActivity(l) {
   var comms = l.communications || [];
@@ -2935,7 +2945,7 @@ function l2LastActivity(l) {
   } else {
     d = out ? '💬 SMS envoyé' : '💬 SMS reçu';
   }
-  if (lastT) d += ' · ' + timeAgo(new Date(lastT));
+  if (lastT) d += ' · ' + (ldDayOnlyDate(last.date) ? new Date(lastT).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : timeAgo(new Date(lastT)));
   var vol = [];
   if (calls) vol.push(calls + ' appel' + (calls > 1 ? 's' : ''));
   if (sms) vol.push(sms + ' SMS');
@@ -3302,7 +3312,7 @@ function l2SegEch(l, id) {
         h += '<div class="ld-conv-date-sep">' + escHtml(cmDayKey) + '</div>';
         ldLastDay = cmDayKey;
       }
-      var timeStr = cmDate ? cmDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
+      var timeStr = (cmDate && !ldDayOnlyDate(cm.date)) ? cmDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '';
       h += '<div class="ld-conv-row ' + side + '">';
       if (side === 'out' && cm.ownerName) {
         h += '<div class="ld-conv-author ' + ow + '">' + escHtml(cm.ownerName) + '</div>';
