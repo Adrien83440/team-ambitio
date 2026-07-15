@@ -142,7 +142,9 @@ module.exports = async (req, res) => {
         fromNumber:        fromNum,
         toNumber:          toNum,
         status:            call.is_answered ? 'completed' : (call.last_state === 'MISSED' ? 'no-answer' : 'completed'),
-        durationSec:       call.incall_duration || call.total_duration || null,
+        /* Fix 15/07 (aligné cron) : conversation stricte, jamais la sonnerie. */
+        durationSec:       (function () { var n = Number(call.incall_duration); return isFinite(n) && n > 0 ? Math.round(n) : 0; })(),
+        totalDurationSec:  (function () { var n = Number(call.total_duration); return isFinite(n) && n > 0 ? Math.round(n) : null; })(),
         startTime:         call.start_time || null,
         endTime:           call.end_time   || null,
         syncedAt:          admin.firestore.FieldValue.serverTimestamp(),
