@@ -61,12 +61,46 @@ module.exports = async (req, res) => {
     const now          = admin.firestore.FieldValue.serverTimestamp();
 
     // ── 1. call_logs ─────────────────────────────────────────────────────
+    /* Durées (fix 15/07) — trois vérités, jamais mélangées :
+       · durationSec       = CONVERSATION (0 si non décroché)
+       · totalDurationSec  = totale, sonnerie incluse
+       Sources par ordre de fiabilité : champs du payload s'ils existent
+       (noms défensifs, Ringover ne les documente pas), sinon calcul depuis
+       nos propres timestamps (answeredAt/initiatedAt du doc). Un HANGUP
+       sans answeredAt ni champ payload N'ÉCRIT PAS durationSec : le
+       record_available (aftercall) ou le cron trancheront — on ne pose
+       jamais un 0 sur un appel potentiellement décroché. */
+    const numOrNull = v => { const n = Number(v); return isFinite(n) && n > 0 ? Math.round(n) : null; };
     const clUpdate = { status: mappedStatus, updatedAt: now };
     if (event === 'ANSWERED') clUpdate.answeredAt = now;
     if (isTerminal) {
       clUpdate.endedAt = now;
-      const dur = d.duration_secs || d.duration || payload.duration || null;
-      if (dur !== null) clUpdate.durationSec = Number(dur);
+      console.log('[ringover-call-status] terminal payload keys — data:', Object.keys(d).join(','), '| root:', Object.keys(payload).join(','));
+      const incallP = numOrNull(d.incall_duration) ?? numOrNull(payload.incall_duration)
+                   ?? numOrNull(d.duration_secs)   ?? numOrNull(payload.duration_secs)
+                   ?? numOrNull(d.talk_duration);
+      const totalP  = numOrNull(d.total_duration)  ?? numOrNull(payload.total_duration)
+                   ?? numOrNull(d.duration)        ?? numOrNull(payload.duration);
+      let answeredMs = null, initiatedMs = null;
+      try {
+        const prev = await db.collection('call_logs').doc(callId).get();
+        if (prev.exists) {
+          const p = prev.data() || {};
+          if (p.answeredAt && p.answeredAt.toMillis)   answeredMs  = p.answeredAt.toMillis();
+          if (p.initiatedAt && p.initiatedAt.toMillis) initiatedMs = p.initiatedAt.toMillis();
+        }
+      } catch (e) { console.warn('[ringover-call-status] read prev:', e.message); }
+      const nowMs = Date.now();
+      if (event === 'MISSED' || event === 'missed') {
+        clUpdate.durationSec = 0;
+      } else if (incallP != null) {
+        clUpdate.durationSec = incallP;
+      } else if (answeredMs != null) {
+        clUpdate.durationSec = Math.max(0, Math.round((nowMs - answeredMs) / 1000));
+      }
+      const totalC = totalP != null ? totalP
+        : (initiatedMs != null ? Math.max(0, Math.round((nowMs - initiatedMs) / 1000)) : null);
+      if (totalC != null) clUpdate.totalDurationSec = totalC;
       const recUrl = d.recording_url || d.recording
         || (d.recording && typeof d.recording === 'object' ? d.recording.url : null)
         || null;

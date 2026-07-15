@@ -2,6 +2,21 @@
 const { db, admin } = require('./_firebaseAdmin');
 const { ringoverFetch } = require('./_ringoverClient');
 
+/* parseDurationSec-fix-2026-07-15 : record_duration arrive en "SS",
+   "MM:SS" ou "HH:MM:SS" selon les payloads — normalise en secondes. */
+function parseDurationSec(v) {
+  if (v == null) return null;
+  if (typeof v === 'number' && isFinite(v)) return v > 0 ? Math.round(v) : null;
+  const s = String(v).trim();
+  if (!s) return null;
+  if (/^\d+$/.test(s)) { const n = parseInt(s, 10); return n > 0 ? n : null; }
+  const parts = s.split(':').map(Number);
+  if (!parts.length || parts.some(isNaN)) return null;
+  let sec = 0;
+  for (const p of parts) sec = sec * 60 + p;
+  return sec > 0 ? Math.round(sec) : null;
+}
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
 
@@ -27,12 +42,21 @@ module.exports = async (req, res) => {
     if (event === 'record_available') {
       const recordLink = d.record_link || null;
       if (recordLink) {
-        await ref.set({
+        /* Fix 15/07 : la durée d'enregistrement = durée de CONVERSATION,
+           disponible en TEMPS RÉEL (le webhook HANGUP n'envoie pas de durée
+           fiable, et le cron n'écrit que le lendemain 03h30 — Set NB et le
+           Funnel affichaient 0 min / 0 décroché toute la journée). Un
+           enregistrement n'existe que si l'appel a été décroché. Le cron
+           du lendemain raffine avec incall_duration (autoritatif). */
+        const recSec = parseDurationSec(d.record_duration);
+        const recUpdate = {
           ringoverRecordingUrl: recordLink,
           recordingStatus:      'available',
           durationFormatted:    d.record_duration || null,
           updatedAt:            now,
-        }, { merge: true });
+        };
+        if (recSec != null) recUpdate.durationSec = recSec;
+        await ref.set(recUpdate, { merge: true });
         console.log('[aftercall] ✓ record stored:', callId, recordLink.substring(0,60));
       } else {
         console.warn('[aftercall] record_available sans record_link');

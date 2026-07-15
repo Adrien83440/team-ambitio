@@ -160,7 +160,13 @@ module.exports = async (req, res) => {
         fromNumber:     fromNum,
         toNumber:       toNum,
         status:         call.is_answered ? 'completed' : (call.last_state === 'MISSED' ? 'no-answer' : 'completed'),
-        durationSec:    call.incall_duration || call.total_duration || null,
+        /* Durées (fix 15/07) : durationSec = CONVERSATION stricte
+           (incall_duration ; 0 si non décroché — plus jamais le repli
+           total_duration qui transformait la sonnerie d'un appel non
+           décroché en « conversation » au sync suivant).
+           totalDurationSec = durée totale, sonnerie incluse. */
+        durationSec:    (function () { var n = Number(call.incall_duration); return isFinite(n) && n > 0 ? Math.round(n) : 0; })(),
+        totalDurationSec: (function () { var n = Number(call.total_duration); return isFinite(n) && n > 0 ? Math.round(n) : null; })(),
         startTime:      call.start_time || null,
         endTime:        call.end_time   || null,
         syncedAt:       admin.firestore.FieldValue.serverTimestamp(),
