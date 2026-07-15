@@ -276,6 +276,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .ld-badge.vsl      { background: rgba(167,139,250,0.13); color: #c4b5fd; }
 .ld-badge.self     { background: rgba(251,191,36,0.13);  color: #fcd34d; }
+.ld-badge.nb       { background: rgba(251,146,60,0.15);  color: #fb923c; }
 .ld-badge.business { background: rgba(239,68,68,0.12);   color: var(--red3); }
 .ld-badge.other    { background: rgba(91,124,250,0.13);  color: #a9bcff; }
 .ld-badge-status {
@@ -1266,6 +1267,13 @@ var LEAD_TYPES = {
   self_booking: { label: 'Self-Booking',   badgeClass: 'self' },
   business:     { label: 'Business',       badgeClass: 'business' }
 };
+
+/* Situation « No Booking » : le RDV du lead vient du SETTING — statut ou
+   stage set / rdv_pose / no_show_setting (posés par booking ?by=setter et
+   par la propagation des résultats RDV). Badge NO BOOKING orange demandé
+   Adrien 15/07 : ne plus afficher « Self-Booking » (simple tunnel d'entrée)
+   quand la réalité du RDV est NB. */
+var NB_SITUATION = { set: 1, rdv_pose: 1, no_show_setting: 1 };
 
 var STATUSES = [
   { key: 'nouveau',          label: 'Nouveau',          icon: '🆕',  color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
@@ -2882,8 +2890,14 @@ function renderLeadTags(l, compact) {
   var typeObj = LEAD_TYPES[l.type] || { label: l.type || 'Lead', badgeClass: 'other' };
   var statusObj = getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
+  var nbSituation = NB_SITUATION[l.status] || NB_SITUATION[l.stage];
   var h = '';
-  h += '<span class="ld-badge ' + typeObj.badgeClass + '">' + typeObj.label + '</span>';
+  /* NB : « Self-Booking » (tunnel d'entrée) contredirait la réalité → on le
+     remplace par NO BOOKING. Élite/Business gardent leur badge tunnel + NB. */
+  if (!(nbSituation && l.type === 'self_booking')) {
+    h += '<span class="ld-badge ' + typeObj.badgeClass + '">' + typeObj.label + '</span>';
+  }
+  if (nbSituation) h += '<span class="ld-badge nb">No Booking</span>';
   h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
   if (setterObj && !(compact && personalUser && l.assignedTo === personalUser)) {
     h += '<span class="ld-assigned" style="color:' + setterObj.color + '">' + escHtml(setterObj.name) + '</span>';
