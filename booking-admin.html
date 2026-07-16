@@ -3173,7 +3173,10 @@ document.getElementById('mD').addEventListener('change',refreshClientQuota);
 
 document.getElementById('newRdv').addEventListener('click',function(){fillTypeSelect();fillExpertSelect();document.getElementById('mD').value=tISO();['mFn','mLn','mEm','mPh','mNo'].forEach(function(id){document.getElementById(id).value='';});document.getElementById('mLeadSearch').value='';document.getElementById('mLeadResults').classList.remove('open');document.getElementById('mLeadSelected').style.display='none';_selectedLeadId=null;document.getElementById('mClientSearch').value='';document.getElementById('mClientResults').classList.remove('open');document.getElementById('mClientSelected').style.display='none';document.getElementById('mClientQuota').style.display='none';_selectedClientId=null;_selectedClientObj=null;teardownAvailIframe();loadLeadCache();
 // Onglet Client coaching réservé aux rôles CSM et admin.
-var _role=window._currentRole;var _canClient=(_role==='csm'||_role==='admin');
+/* Fix 16/07 : window._currentRole n'existe qu'apres onAuthStateChanged — sur
+   mobile (auth lente 15-30 s) la modale s'ouvrait avant, et l'onglet
+   « Client coaching » restait masque. Repli sur le role persiste. */
+var _role=window._currentRole||localStorage.getItem('ambitio_role');var _canClient=(_role==='csm'||_role==='admin');
 document.getElementById('mEntTabs').style.display=_canClient?'flex':'none';
 if(_canClient)loadClientCache();
 // La CSM travaille avant tout sur les clients coaching → onglet par défaut
@@ -3205,6 +3208,17 @@ firebase.auth().onAuthStateChanged(function(u){
     window._currentUserName=u.displayName||u.email.split('@')[0];
     localStorage.setItem('ambitio_role',role);
     localStorage.setItem('ambitio_name',window._currentUserName);
+    /* Rattrapage modale « Nouveau rendez-vous » (fix 16/07) : ouverte avant
+       la resolution du role → on ajuste l'onglet Client coaching a la volee. */
+    try{
+      var _cmOpen=document.getElementById('cMo').classList.contains('show');
+      var _tabs=document.getElementById('mEntTabs');
+      if(_cmOpen&&_tabs){
+        var _cc=(role==='csm'||role==='admin');
+        if(_cc&&_tabs.style.display==='none'){_tabs.style.display='flex';loadClientCache();}
+        else if(!_cc&&_tabs.style.display!=='none'){_tabs.style.display='none';setEntTab('lead');}
+      }
+    }catch(_e){}
     // Gating UI non-admin : on masque immédiatement les contrôles d'ajout/création d'expert
     if(role!=='admin'){
       var addE=document.getElementById('addE');if(addE)addE.style.display='none';
