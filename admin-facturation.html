@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
 <style>
 :root{
@@ -792,6 +793,12 @@
           <option value="paid">Payées</option>
           <option value="cancelled">Annulées</option>
         </select>
+        <span style="display:inline-flex;align-items:center;gap:6px;margin-left:4px">
+          <input type="date" class="bill-input" id="expFrom" style="width:auto;padding:8px 10px" title="Exporter du"/>
+          <span style="color:var(--muted);font-size:12px">→</span>
+          <input type="date" class="bill-input" id="expTo" style="width:auto;padding:8px 10px" title="Exporter au"/>
+          <button class="bill-btn" id="expZipBtn" onclick="exportInvoicesZip()" title="ZIP de tous les PDF + CSV récapitulatif sur la plage (brouillons exclus)">📦 Exporter ZIP</button>
+        </span>
         <button class="bill-btn bill-btn-primary bill-btn-lg" onclick="newInvoice()">➕ Nouvelle facture</button>
       </div>
 
@@ -3440,6 +3447,140 @@ async function deleteDraft(id) {
     toast('Erreur : ' + err.message, true);
   }
 }
+
+/* ═══════════════════════════════════════════════
+   EXPORT ZIP — toutes les factures d'une plage (16/07)
+   ZIP construit côté client (JSZip) : les PDF viennent un par un de
+   /api/invoice-pdf (chunks Firestore réassemblés serveur), + un CSV
+   récapitulatif (Excel FR : BOM, séparateur ;, décimale virgule).
+   Brouillons exclus (aucun PDF n'existe avant validation). Les PDF
+   manquants/en échec sont listés dans ERREURS.txt sans bloquer le reste.
+   ═══════════════════════════════════════════════ */
+function _expClientLabel(i) {
+  const cs = i.clientSnapshot || {};
+  return cs.companyName
+    || ((cs.contactFirstName || '') + ' ' + (cs.contactLastName || '')).trim()
+    || cs.email || '—';
+}
+function _expSafeName(n) {
+  return String(n || '').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'facture';
+}
+function _expEur(v) {
+  const n = Number(v);
+  return isFinite(n) ? n.toFixed(2).replace('.', ',') : '';
+}
+function _expDate(i) {
+  return i.issueDate && i.issueDate.toDate ? i.issueDate.toDate()
+       : (i.createdAt && i.createdAt.toDate ? i.createdAt.toDate() : null);
+}
+async function exportInvoicesZip() {
+  const btn = document.getElementById('expZipBtn');
+  const from = document.getElementById('expFrom').value;
+  const to = document.getElementById('expTo').value;
+  if (!from || !to) return toast('Choisis la plage de dates (du → au)', true);
+  if (from > to) return toast('Plage invalide : « du » est après « au »', true);
+  if (typeof JSZip === 'undefined') return toast('JSZip non chargé — recharge la page', true);
+  const user = firebase.auth().currentUser;
+  if (!user) return toast('Session expirée — reconnectez-vous', true);
+
+  const fromD = new Date(from + 'T00:00:00');
+  const toD = new Date(to + 'T23:59:59');
+  const inRange = invoicesCache.filter(function(i) {
+    const dt = _expDate(i);
+    return dt && dt >= fromD && dt <= toD;
+  });
+  const draftsN = inRange.filter(function(i){ return i.status === 'draft'; }).length;
+  const list = inRange.filter(function(i){ return i.status !== 'draft'; })
+    .sort(function(a, b){ return (a.number || '').localeCompare(b.number || ''); });
+  if (!list.length) return toast('Aucune facture (hors brouillons) sur cette plage', true);
+
+  btn.disabled = true;
+  const origLabel = btn.textContent;
+  try {
+    const zip = new JSZip();
+
+    /* CSV récapitulatif */
+    const SEP = ';';
+    const rows = [['Numéro','Date','Client','Total HT','TVA','Total TTC','Statut','Paiement'].join(SEP)];
+    list.forEach(function(i) {
+      const dt = _expDate(i);
+      const dateFr = dt ? (String(dt.getDate()).padStart(2,'0') + '/' + String(dt.getMonth()+1).padStart(2,'0') + '/' + dt.getFullYear()) : '';
+      const ht = Number(i.totalHt) || 0;
+      const ttc = Number(i.totalTtc) || 0;
+      const tva = (i.totalTva != null) ? Number(i.totalTva) : (ttc - ht);
+      const cells = [i.number || i.id, dateFr, _expClientLabel(i), _expEur(ht), _expEur(tva), _expEur(ttc), i.status || '', i.paymentMethod || ''];
+      rows.push(cells.map(function(c){
+        c = String(c);
+        return (c.indexOf(SEP) > -1 || c.indexOf('"') > -1 || c.indexOf('\n') > -1) ? '"' + c.replace(/"/g, '""') + '"' : c;
+      }).join(SEP));
+    });
+    zip.file('recapitulatif_' + from + '_' + to + '.csv', '\ufeff' + rows.join('\r\n'));
+
+    /* PDF — 3 téléchargements en parallèle */
+    const idToken = await user.getIdToken();
+    const errors = [];
+    const queue = list.slice();
+    let done = 0;
+    async function worker() {
+      while (queue.length) {
+        const inv = queue.shift();
+        try {
+          const r = await fetch('/api/invoice-pdf?id=' + encodeURIComponent(inv.id), {
+            headers: { 'Authorization': 'Bearer ' + idToken }
+          });
+          if (!r.ok) {
+            let m = 'HTTP ' + r.status;
+            try { m = (await r.json()).error || m; } catch (e) {}
+            throw new Error(m);
+          }
+          zip.file(_expSafeName(inv.number || inv.id) + '.pdf', await r.arrayBuffer());
+        } catch (err) {
+          errors.push((inv.number || inv.id) + ' — ' + err.message);
+        }
+        done++;
+        btn.textContent = '⏳ ' + done + '/' + list.length + '…';
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);
+
+    if (errors.length) {
+      zip.file('ERREURS.txt',
+        'PDF manquants ou en échec (' + errors.length + ') :\n\n' + errors.join('\n') +
+        '\n\nRemède : ouvrir la facture → « Régénérer le PDF », puis relancer l\'export.');
+    }
+
+    btn.textContent = '⏳ Compression…';
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'factures_' + from + '_' + to + '.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    let msg = '📦 ' + (list.length - errors.length) + '/' + list.length + ' factures exportées';
+    if (errors.length) msg += ' · ' + errors.length + ' en échec (ERREURS.txt)';
+    if (draftsN) msg += ' · ' + draftsN + ' brouillon(s) exclu(s)';
+    toast(msg, errors.length > 0);
+  } catch (err) {
+    console.error('[exportInvoicesZip]', err);
+    toast('Erreur export : ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+}
+/* Plage par défaut : le mois en cours */
+(function initExportRange() {
+  const f = document.getElementById('expFrom'), t = document.getElementById('expTo');
+  if (!f || !t) return;
+  const now = new Date();
+  const iso = function(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  f.value = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+  t.value = iso(now);
+})();
 
 /* Téléchargement PDF d'une facture validée (Step 2B-1)
    Fetch /api/invoice-pdf avec Bearer token Firebase, puis déclenche un download local */
