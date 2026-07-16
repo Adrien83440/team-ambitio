@@ -435,8 +435,18 @@ auth.onAuthStateChanged(async function(user) {
       document.documentElement.scrollTop = 0;
     });
 
-    /* Step 2B-2 : auto-ouverture modal selon ?action= */
+    /* Step 2B-2 : auto-ouverture modal selon ?action= — le paramètre est
+       CONSOMMÉ immédiatement (replaceState) : « action=send » est un ordre
+       à usage unique. Sans ça, chaque rechargement (validation → reload,
+       F5, retour arrière) rouvrait la modale d'envoi en boucle (bug 16/07). */
     const action = (new URLSearchParams(window.location.search)).get('action');
+    if (action === 'send' || action === 'paid') {
+      try {
+        const _u = new URL(window.location.href);
+        _u.searchParams.delete('action');
+        window.history.replaceState({}, '', _u.pathname + _u.search + _u.hash);
+      } catch (e) {}
+    }
     if (action === 'send') {
       setTimeout(function(){ openSendModal(); }, 200);
     } else if (action === 'paid') {
@@ -1170,9 +1180,16 @@ async function onValidateClick() {
     if (!response.ok) throw new Error(data.error || ('Erreur HTTP ' + response.status));
 
     toast('✅ Facture ' + data.number + ' validée — PDF généré (' + Math.round(data.pdfSizeBytes / 1024) + ' KB)');
-    /* Recharger la page : le listener Firestore va aussi détecter le changement
-       et basculer en read-only, mais reload garantit un état propre */
-    setTimeout(function(){ location.reload(); }, 1200);
+    /* Recharge en ordonnant l'ouverture de la modale d'envoi (ordre à usage
+       unique, consommé au boot). Parcours identique quel que soit le point
+       d'entrée : valider → envoyer → retour Factures clients. */
+    setTimeout(function(){
+      try {
+        const _u = new URL(window.location.href);
+        _u.searchParams.set('action', 'send');
+        location.href = _u.pathname + _u.search + _u.hash;
+      } catch (e) { location.reload(); }
+    }, 1200);
   } catch (err) {
     console.error('[validate]', err);
     toast('Erreur validation : ' + err.message, true);
