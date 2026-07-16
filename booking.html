@@ -349,8 +349,9 @@ var S = {
   currentStep: 1,
   busyTimes: {},
   busyLoading: false,
-  busyUnsub: null,        // unsubscribe fn du listener calendar_busy actif
-  busyUnsubPid: null      // personId pour lequel le listener est actif
+  busyUnsubs: {},         // listeners calendar_busy actifs, par personId (RR v2)
+  rrPool: null,           // round-robin v2 : experts eligibles (union des creneaux)
+  slotOwners: null        // round-robin v2 : heure -> [experts libres] pour selDate
 };
 
 var MOIS = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
@@ -370,50 +371,44 @@ function minToTime(m) { return String(Math.floor(m/60)).padStart(2,'0') + ':' + 
    Calendar, etc.), le frontend reçoit la nouvelle version et re-render
    les créneaux automatiquement. Évite le bug du cache stale qui laissait
    réserver des slots déjà occupés si la page restait ouverte longtemps. */
+/* Round-robin v2 (16/07) : on ecoute le calendar_busy de TOUS les experts du
+   pool (union des creneaux) — sinon celui de l'expert selectionne. Un
+   listener par personne, conserve toute la session (changement de date sans
+   re-souscription). */
 function fetchFreeBusy() {
-  if (!S.selPerson || !S.selPerson.calendarConnected) return;
-  var pid = S.selPerson.id;
-
-  // Listener déjà actif pour cette personne ? Rien à faire.
-  if (S.busyUnsub && S.busyUnsubPid === pid) return;
-
-  // Cleanup ancien listener (changement de personne sélectionnée)
-  if (S.busyUnsub) {
-    try { S.busyUnsub(); } catch (e) {}
-    S.busyUnsub = null;
-    S.busyUnsubPid = null;
-  }
-
-  S.busyLoading = true;
-  S.busyUnsubPid = pid;
-
-  S.busyUnsub = db.collection('calendar_busy').doc(pid).onSnapshot(
-    function(doc) {
-      S.busyTimes[pid] = (doc.exists && doc.data().busy) ? doc.data().busy : [];
-      S.busyLoading = false;
-      renderCalendar();
-    },
-    function(e) {
-      console.log('FreeBusy listener error:', e);
-      S.busyTimes[pid] = [];
-      S.busyLoading = false;
-    }
-  );
-
-  // Trigger refresh côté serveur (resync Google Calendar via Cloud Function)
-  db.collection('calendar_sync_requests').doc(pid).set({
-    requestedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).catch(function() {});
+  var people = (S.rrPool && S.rrPool.length) ? S.rrPool : (S.selPerson ? [S.selPerson] : []);
+  people.forEach(function(p) {
+    if (!p || !p.calendarConnected) return;
+    if (S.busyUnsubs[p.id]) return;
+    var pid = p.id;
+    S.busyLoading = true;
+    S.busyUnsubs[pid] = db.collection('calendar_busy').doc(pid).onSnapshot(
+      function(doc) {
+        S.busyTimes[pid] = (doc.exists && doc.data().busy) ? doc.data().busy : [];
+        S.busyLoading = false;
+        renderCalendar();
+      },
+      function(e) {
+        console.log('FreeBusy listener error:', e);
+        S.busyTimes[pid] = [];
+        S.busyLoading = false;
+      }
+    );
+    // Trigger refresh cote serveur (resync Google Calendar via Cloud Function)
+    db.collection('calendar_sync_requests').doc(pid).set({
+      requestedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).catch(function() {});
+  });
 }
 
 /**
  * Get busy time ranges for a specific date (from cache).
  * Returns array of {start, end} in minutes since midnight.
  */
-function getBusyForDate(dateStr) {
-  if (!S.selPerson) return [];
-  var pid = S.selPerson.id;
-  var busyList = S.busyTimes[pid];
+function getBusyForDate(dateStr, person) {
+  var _p = person || S.selPerson;
+  if (!_p) return [];
+  var busyList = S.busyTimes[_p.id];
   if (!busyList || !busyList.length) return [];
 
   var result = [];
@@ -462,6 +457,8 @@ function updateInfoPanel() {
   }
   if (S.selPerson) {
     h += '<div class="bk-info-item visible"><div class="bk-info-icon"><span>👤</span></div><div><div class="bk-info-label">Avec</div><div class="bk-info-value">' + esc(S.selPerson.name) + '</div></div></div>';
+  } else if (S.rrPool && S.rrPool.length) {
+    h += '<div class="bk-info-item visible"><div class="bk-info-icon"><span>👤</span></div><div><div class="bk-info-label">Avec</div><div class="bk-info-value">Selon le créneau choisi</div></div></div>';
   }
   if (S.selDate) {
     var d = new Date(S.selDate + 'T12:00:00');
@@ -484,6 +481,7 @@ function updateMobileSummary() {
   var chips = '';
   if (S.selType) chips += '<span class="bk-mobile-chip">' + esc(S.selType.label) + '</span>';
   if (S.selPerson) chips += '<span class="bk-mobile-chip">' + esc(S.selPerson.name) + '</span>';
+  else if (S.rrPool && S.rrPool.length) chips += '<span class="bk-mobile-chip">Attribution auto</span>';
   if (S.selDate) {
     var d = new Date(S.selDate + 'T12:00:00');
     chips += '<span class="bk-mobile-chip">' + d.getDate() + ' ' + MOIS_FR[d.getMonth()] + '</span>';
@@ -688,13 +686,18 @@ function renderPersonCards() {
     return !S.selType || (p.types || []).indexOf(S.selType.id) >= 0;
   });
 
-  if (isRR && filtered.length > 1) {
-    // Round-robin: auto-assign
-    rrEl.innerHTML = '<div class="bk-rr-banner"><div style="font-size:24px;margin-bottom:8px">🎯</div><div style="font-family:var(--fh);font-size:16px;font-weight:700">Attribution automatique</div><p>Nous vous attribuons le meilleur interlocuteur disponible selon les disponibilités.</p></div>';
-    autoAssignRoundRobin(filtered);
+  if (isRR && filtered.length) {
+    /* Round-robin v2 (16/07) : plus d'expert fige d'avance — le client voit
+       l'UNION des creneaux de tous les experts assignes, et l'expert sera le
+       proprietaire du creneau choisi (equilibrage si creneau partage). */
+    S.rrPool = filtered;
+    S.selPerson = null;
+    rrEl.innerHTML = '<div class="bk-rr-banner"><div style="font-size:24px;margin-bottom:8px">🎯</div><div style="font-family:var(--fh);font-size:16px;font-weight:700">Attribution automatique</div><p>Choisissez le créneau qui vous arrange — nous vous attribuons l\'expert disponible sur ce créneau.</p></div>';
     el.innerHTML = '';
+    setTimeout(function() { goStep(3); }, 800);
     return;
   }
+  S.rrPool = null;
 
   rrEl.innerHTML = '';
   if (!filtered.length) {
@@ -716,24 +719,25 @@ function renderPersonCards() {
   el.innerHTML = h;
 }
 
-function autoAssignRoundRobin(filtered) {
-  // Simple: pick person with least bookings in the next 7 days
-  var counts = {};
-  filtered.forEach(function(p) { counts[p.id] = 0; });
-  var today = new Date(); today.setHours(0,0,0,0);
-  var weekLater = new Date(today); weekLater.setDate(weekLater.getDate() + 7);
-
+/* Round-robin v2 : proprietaire d'un creneau partage — le moins de RDV a
+   venir sur CETTE consultation (S.bookings = confirmes futurs), puis le
+   moins de RDV toutes consultations, puis ordre alphabetique (deterministe).
+   Resultat : un sur deux quand les agendas sont identiques. */
+function rrPickOwner(cands) {
+  if (!cands || !cands.length) return null;
+  if (cands.length === 1) return cands[0];
+  var typeCounts = {}, allCounts = {};
+  cands.forEach(function(p) { typeCounts[p.id] = 0; allCounts[p.id] = 0; });
   S.bookings.forEach(function(b) {
-    if (counts[b.personId] !== undefined) {
-      var bd = new Date(b.date + 'T12:00:00');
-      if (bd >= today && bd <= weekLater) counts[b.personId]++;
-    }
+    if (typeCounts[b.personId] === undefined) return;
+    allCounts[b.personId]++;
+    if (S.selType && b.type === S.selType.id) typeCounts[b.personId]++;
   });
-
-  var sorted = filtered.slice().sort(function(a, b) { return (counts[a.id] || 0) - (counts[b.id] || 0); });
-  S.selPerson = sorted[0];
-  updateInfoPanel();
-  setTimeout(function() { goStep(3); }, 800);
+  return cands.slice().sort(function(a, b) {
+    return (typeCounts[a.id] - typeCounts[b.id])
+        || (allCounts[a.id] - allCounts[b.id])
+        || String(a.name || '').localeCompare(String(b.name || ''));
+  })[0];
 }
 
 /* ═══════════════════════════════════════════════════
@@ -910,14 +914,15 @@ function getEffectiveSlotsForDate(person, dateStr) {
    (unité : jours | heures | minutes). Repli éventuel sur l'expert.
    0 / absent  → aucune limite (comportement historique préservé).
    Renvoie un timestamp ms (now + fenêtre), ou null si pas de limite. */
-function getMaxBookingTs() {
+function getMaxBookingTs(person) {
+  var _p = person || S.selPerson;
   var raw = (S.selType && S.selType.rules && S.selType.rules.maxNoticeDays != null)
     ? S.selType.rules.maxNoticeDays
-    : (S.selPerson && S.selPerson.maxNoticeDays);
+    : (_p && _p.maxNoticeDays);
   var val = parseInt(raw, 10);
   if (!val || val <= 0) return null;
   var unit = (S.selType && S.selType.rules && S.selType.rules.maxNoticeDaysUnit)
-    || (S.selPerson && S.selPerson.maxNoticeDaysUnit) || 'jours';
+    || (_p && _p.maxNoticeDaysUnit) || 'jours';
   var ms = unit === 'heures' ? val * 3600000
          : unit === 'minutes' ? val * 60000
          : val * 86400000; // jours par défaut
@@ -925,23 +930,33 @@ function getMaxBookingTs() {
 }
 
 /* ── AVAILABILITY CHECK ── */
+/* Round-robin v2 : un jour est disponible si AU MOINS UN expert du pool a
+   un creneau (union). Hors pool : comportement historique (expert choisi). */
 function hasAvailableSlots(dateStr) {
-  if (!S.selPerson) return false;
+  var people = (S.rrPool && S.rrPool.length) ? S.rrPool : (_p ? [_p] : []);
+  for (var i = 0; i < people.length; i++) {
+    if (hasAvailableSlotsFor(people[i], dateStr)) return true;
+  }
+  return false;
+}
+
+function hasAvailableSlotsFor(_p, dateStr) {
+  if (!_p) return false;
   var d = new Date(dateStr + 'T12:00:00');
 
   // Slots effectifs (schedule + dateOverrides + availabilityRules)
-  var daySlots = getEffectiveSlotsForDate(S.selPerson, dateStr);
+  var daySlots = getEffectiveSlotsForDate(_p, dateStr);
   if (!daySlots.length) return false;
 
   // Blocked dates
-  var blocked = S.selPerson.blockedDates || [];
+  var blocked = _p.blockedDates || [];
   if (blocked.indexOf(dateStr) >= 0) return false;
 
   // Holiday check
   if (isHolidayDate(dateStr)) return false;
 
   // Min notice check (Consultation > Expert > 0)
-  var minNotice = (S.selType && S.selType.rules && S.selType.rules.minNoticeHours) || S.selPerson.minNoticeHours || 0;
+  var minNotice = (S.selType && S.selType.rules && S.selType.rules.minNoticeHours) || _p.minNoticeHours || 0;
   if (minNotice > 0) {
     var now = new Date();
     var earliest = new Date(now.getTime() + minNotice * 3600000);
@@ -952,21 +967,21 @@ function hasAvailableSlots(dateStr) {
   // Max booking window check — borne haute « dans le futur ».
   // Si le tout début de la journée est déjà au-delà de la fenêtre, aucun
   // créneau de ce jour n'est réservable → jour non disponible (non cliquable).
-  var maxTs = getMaxBookingTs();
+  var maxTs = getMaxBookingTs(_p);
   if (maxTs) {
     var dayStart = new Date(dateStr + 'T00:00:00').getTime();
     if (dayStart > maxTs) return false;
   }
 
   // Max per day check (Consultation > Expert > 0)
-  var maxPerDay = (S.selType && S.selType.rules && S.selType.rules.maxPerDay) || S.selPerson.maxPerDay || 0;
+  var maxPerDay = (S.selType && S.selType.rules && S.selType.rules.maxPerDay) || _p.maxPerDay || 0;
   if (maxPerDay > 0) {
-    var dayBookings = S.bookings.filter(function(b) { return b.personId === S.selPerson.id && b.date === dateStr; });
+    var dayBookings = S.bookings.filter(function(b) { return b.personId === _p.id && b.date === dateStr; });
     if (dayBookings.length >= maxPerDay) return false;
   }
 
   // Google Calendar busy check — if ALL schedule slots are fully covered by busy times, day is unavailable
-  var gcBusy = getBusyForDate(dateStr);
+  var gcBusy = getBusyForDate(dateStr, _p);
   if (gcBusy.length > 0 && daySlots.length > 0) {
     var dur = S.selType ? S.selType.duration : 30;
     var anyFree = false;
@@ -988,22 +1003,17 @@ function hasAvailableSlots(dateStr) {
 }
 
 /* ── SLOT GENERATION ── */
-function renderSlots() {
-  var wrap = document.getElementById('slotsWrap');
-  if (!S.selDate || !S.selPerson) { wrap.innerHTML = ''; return; }
-
-  var d = new Date(S.selDate + 'T12:00:00');
-  var dayName = JOURS_FULL[d.getDay()];
-  var sched = S.selPerson.schedule || {};
+/* Round-robin v2 : creneaux d'UN expert pour une date (ancienne logique de
+   renderSlots, parametree par personne — schedule, RDV existants + buffers,
+   Google Calendar busy, preavis, fenetre max, max/jour). */
+function computeSlotsFor(person, dateStr) {
   var dur = S.selType ? S.selType.duration : 30;
-  var bufBefore = (S.selType && S.selType.rules && S.selType.rules.bufferBefore) || S.selPerson.bufferBefore || 0;
-  var bufAfter = (S.selType && S.selType.rules && S.selType.rules.bufferAfter) || S.selPerson.bufferAfter || 0;
-  var minNotice = (S.selType && S.selType.rules && S.selType.rules.minNoticeHours) || S.selPerson.minNoticeHours || 0;
-
-  // Generate all possible slots from schedule ranges
+  var bufBefore = (S.selType && S.selType.rules && S.selType.rules.bufferBefore) || person.bufferBefore || 0;
+  var bufAfter = (S.selType && S.selType.rules && S.selType.rules.bufferAfter) || person.bufferAfter || 0;
+  var minNotice = (S.selType && S.selType.rules && S.selType.rules.minNoticeHours) || person.minNoticeHours || 0;
   var interval = (S.selType && S.selType.rules && S.selType.rules.slotInterval) ? S.selType.rules.slotInterval : dur;
-  // Slots effectifs (schedule + dateOverrides legacy + availabilityRules)
-  var usedSlots = getEffectiveSlotsForDate(S.selPerson, S.selDate);
+
+  var usedSlots = getEffectiveSlotsForDate(person, dateStr);
   var allSlots = [];
   for (var si = 0; si < usedSlots.length; si++) {
     var range = usedSlots[si];
@@ -1014,13 +1024,11 @@ function renderSlots() {
     }
   }
 
-  // Get booked times for this person on this date (with buffer)
-  // Pour chaque booking conflictuel, on track son slotOpen pour permettre
-  // le double-booking sur des slots ouverts par le setter (compensation no-show).
-  // Limite : (S.settings.maxBookingsPerOpenSlot || 2) bookings par créneau ouvert.
+  // RDV existants de CET expert (avec buffers) + regle slotOpen (double
+  // booking limite sur les creneaux ouverts par le setter).
   var bookedRanges = [];
   S.bookings.forEach(function(b) {
-    if (b.personId === S.selPerson.id && b.date === S.selDate) {
+    if (b.personId === person.id && b.date === dateStr) {
       var bStart = timeToMin(b.time);
       var bDur = b.duration || 30;
       bookedRanges.push({
@@ -1031,8 +1039,8 @@ function renderSlots() {
     }
   });
 
-  // Add Google Calendar busy times (toujours bloquant — pas d'override possible)
-  var gcBusy = getBusyForDate(S.selDate);
+  // Google Calendar busy (toujours bloquant)
+  var gcBusy = getBusyForDate(dateStr, person);
   for (var gi = 0; gi < gcBusy.length; gi++) {
     bookedRanges.push({ start: gcBusy[gi].start, end: gcBusy[gi].end, slotOpen: false });
   }
@@ -1041,11 +1049,6 @@ function renderSlots() {
     ? S.settings.maxBookingsPerOpenSlot
     : 2;
 
-  // Filter: remove conflicting slots
-  // Logique :
-  //   - si AU MOINS UN booking conflictuel est fermé (slotOpen=false)  → slot bloqué
-  //   - si TOUS les bookings conflictuels sont ouverts ET count < maxOpen → slot dispo
-  //   - sinon (tous ouverts mais count >= maxOpen) → slot bloqué
   var available = allSlots.filter(function(time) {
     var slotStart = timeToMin(time);
     var slotEnd = slotStart + dur;
@@ -1053,7 +1056,7 @@ function renderSlots() {
     for (var i = 0; i < bookedRanges.length; i++) {
       var br = bookedRanges[i];
       if (slotStart < br.end && slotEnd > br.start) {
-        if (!br.slotOpen) return false;        // un booking fermé / busy GCal → bloqué
+        if (!br.slotOpen) return false;
         openCount++;
       }
     }
@@ -1061,38 +1064,56 @@ function renderSlots() {
     return true;
   });
 
-  // Filter: remove past times if today
+  // Passe / preavis minimum
   var now = new Date();
-  if (S.selDate === fmtDate(now)) {
+  if (dateStr === fmtDate(now)) {
     var nowMin = now.getHours() * 60 + now.getMinutes();
-    // Also apply min notice for today
     var noticeMin = nowMin + (minNotice * 60);
     available = available.filter(function(t) { return timeToMin(t) > noticeMin; });
   } else if (minNotice > 0) {
-    // For future dates, check if min notice cuts into early slots
     var earliest = new Date(now.getTime() + minNotice * 3600000);
-    if (S.selDate === fmtDate(earliest)) {
+    if (dateStr === fmtDate(earliest)) {
       var eMin = earliest.getHours() * 60 + earliest.getMinutes();
       available = available.filter(function(t) { return timeToMin(t) >= eMin; });
     }
   }
 
-  // Max booking window — retire les créneaux dont le DÉBUT dépasse la borne
-  // haute. Sur les jours pleinement dans la fenêtre, tout passe ; sur le jour
-  // limite, seuls les créneaux <= cutoff restent.
-  var maxTsSlots = getMaxBookingTs();
+  // Fenetre max de reservation
+  var maxTsSlots = getMaxBookingTs(person);
   if (maxTsSlots) {
     available = available.filter(function(t) {
-      return new Date(S.selDate + 'T' + t + ':00').getTime() <= maxTsSlots;
+      return new Date(dateStr + 'T' + t + ':00').getTime() <= maxTsSlots;
     });
   }
 
-  // Max per day (already checked in hasAvailableSlots, but double-check)
-  var maxPerDay = (S.selType && S.selType.rules && S.selType.rules.maxPerDay) || S.selPerson.maxPerDay || 0;
+  // Max par jour
+  var maxPerDay = (S.selType && S.selType.rules && S.selType.rules.maxPerDay) || person.maxPerDay || 0;
   if (maxPerDay > 0) {
-    var existing = S.bookings.filter(function(b) { return b.personId === S.selPerson.id && b.date === S.selDate; }).length;
+    var existing = S.bookings.filter(function(b) { return b.personId === person.id && b.date === dateStr; }).length;
     if (existing >= maxPerDay) available = [];
   }
+
+  return available;
+}
+
+function renderSlots() {
+  var wrap = document.getElementById('slotsWrap');
+  var people = (S.rrPool && S.rrPool.length) ? S.rrPool : (S.selPerson ? [S.selPerson] : []);
+  if (!S.selDate || !people.length) { wrap.innerHTML = ''; S.slotOwners = null; return; }
+
+  var d = new Date(S.selDate + 'T12:00:00');
+
+  /* Union des creneaux du pool : heure -> experts libres. Un creneau deja
+     reserve chez A reste propose tant que B est libre — c'est alors B qui
+     le porte (round-robin v2, demande Adrien 16/07). */
+  var owners = {};
+  people.forEach(function(p) {
+    computeSlotsFor(p, S.selDate).forEach(function(t) {
+      (owners[t] = owners[t] || []).push(p);
+    });
+  });
+  S.slotOwners = owners;
+  var available = Object.keys(owners).sort(function(a, b) { return timeToMin(a) - timeToMin(b); });
 
   // Render date label
   var dateFr = JOURS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_FR[d.getMonth()];
@@ -1772,11 +1793,17 @@ document.addEventListener('click', function(e) {
   if (action === 'selectDate') {
     S.selDate = a.dataset.date;
     S.selTime = null;
+    if (S.rrPool && S.rrPool.length) S.selPerson = null; // RR v2 : l'expert suit le creneau
     renderCalendar();
     updateInfoPanel();
   }
   if (action === 'selectTime') {
     S.selTime = a.dataset.time;
+    /* RR v2 : l'expert = proprietaire du creneau ; si plusieurs experts sont
+       libres sur cette heure, equilibrage un sur deux (rrPickOwner). */
+    if (S.rrPool && S.rrPool.length && S.slotOwners) {
+      S.selPerson = rrPickOwner(S.slotOwners[S.selTime] || []) || S.selPerson;
+    }
     renderSlots();
     updateInfoPanel();
   }
