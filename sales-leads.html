@@ -1272,8 +1272,17 @@ var LEAD_TYPES = {
    stage set / rdv_pose / no_show_setting (posés par booking ?by=setter et
    par la propagation des résultats RDV). Badge NO BOOKING orange demandé
    Adrien 15/07 : ne plus afficher « Self-Booking » (simple tunnel d'entrée)
-   quand la réalité du RDV est NB. */
+   quand la réalité du RDV est NB.
+   Garde SB (fix 17/07) : un lead dont le stage OU le statut est
+   rdv_self_booking a pris son RDV seul → JAMAIS de badge No Booking, même
+   si un statut rdv_pose traîne en base (fiches d'avant le fix du bridge,
+   qui écrivait stage rdv_self_booking + status rdv_pose). */
 var NB_SITUATION = { set: 1, rdv_pose: 1, no_show_setting: 1 };
+function isNbSituation(l) {
+  if (!l) return false;
+  if (l.stage === 'rdv_self_booking' || l.status === 'rdv_self_booking') return false;
+  return !!(NB_SITUATION[l.status] || NB_SITUATION[l.stage]);
+}
 
 var STATUSES = [
   { key: 'nouveau',          label: 'Nouveau',          icon: '🆕',  color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
@@ -2890,7 +2899,7 @@ function renderLeadTags(l, compact) {
   var typeObj = LEAD_TYPES[l.type] || { label: l.type || 'Lead', badgeClass: 'other' };
   var statusObj = getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
-  var nbSituation = NB_SITUATION[l.status] || NB_SITUATION[l.stage];
+  var nbSituation = isNbSituation(l);
   var h = '';
   /* NB : « Self-Booking » (tunnel d'entrée) contredirait la réalité → on le
      remplace par NO BOOKING. Élite/Business gardent leur badge tunnel + NB. */
@@ -5176,16 +5185,19 @@ function startBookingBridge() {
               tlText = '📅 Nouveau RDV Self-Booking pour un client existant';
             } else if (isResetable) {
               // Stage abandonné → remise en file fresh + archivage état précédent.
+              // status rdv_self_booking (fix 17/07) : le statut dédié SB —
+              // rdv_pose est réservé aux RDV posés par le setting (badge NB).
               update.previousStatus = cur.status || null;
               update.previousStage  = curStage   || null;
               update.stage  = 'rdv_self_booking';
-              update.status = 'rdv_pose';
+              update.status = 'rdv_self_booking';
               tlText = '🔁 Lead remonté via RDV Self-Booking (était : ' + curStage + ')';
             } else {
               // Stage actif (lead, nrp*, set, rdv_*, follow_up_*, etc.)
               // Comportement classique : on passe le stage au RDV pris.
+              // status rdv_self_booking (fix 17/07) — pas rdv_pose (= NB).
               update.stage  = 'rdv_self_booking';
-              update.status = 'rdv_pose';
+              update.status = 'rdv_self_booking';
               if (curStage === 'rdv_self_booking' || curStage === 'rdv_confirmes' || curStage === 'set') {
                 tlText = '🔄 RDV Self-Booking reporté (form externe)';
               } else {
@@ -5220,8 +5232,12 @@ function startBookingBridge() {
               type:           isSetterBooking ? '' : 'self_booking',
               source:         isSetterBooking ? 'setter_booking' : 'forms_self_booking',
               utm:            isSetterBooking ? '' : (be.type || 'Forms Self Booking'),
-              stage:          isSetterBooking ? 'set' : 'lead',
-              status:         isSetterBooking ? 'rdv_pose' : 'nouveau',
+              // Fiche créée par un self-booking (fix 17/07, validé Adrien) :
+              // elle naît en « RDV Self Booking » (stage + status) — pas en
+              // « Nouveau » (elle a déjà son RDV, rien à travailler côté
+              // setting) et surtout pas en rdv_pose (= badge No Booking).
+              stage:          isSetterBooking ? 'set' : 'rdv_self_booking',
+              status:         isSetterBooking ? 'rdv_pose' : 'rdv_self_booking',
               assignedTo:     '',
               notesHistory:   [],
               timeline_history: [{ text: isSetterBooking ? '📞 Lead créé via RDV posé par le setting' : '✨ Lead créé via form Self-Booking', date: nowFr, color: isSetterBooking ? '#fbbf24' : '#a78bfa' }],
