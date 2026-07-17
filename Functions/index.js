@@ -120,7 +120,9 @@ function fmtNow() {
 const S2S = {
   lead: "nouveau", nrp1: "nrp1", nrp2: "nrp2", nrp3: "nrp3",
   all_nrp: "nrp3", poubelle: "disqualifie", disqualification: "disqualifie",
-  follow_up_pm: "appele", set: "rdv_pose", rdv_self_booking: "rdv_pose",
+  // rdv_self_booking → statut dédié SB (fix 17/07) : rdv_pose est réservé
+  // aux RDV posés par le setting (il déclenche le badge No Booking).
+  follow_up_pm: "appele", set: "rdv_pose", rdv_self_booking: "rdv_self_booking",
   rdv_confirmes: "rdv_pose", rdv_annules_prospect: "pas_interesse",
   rdv_annules_equipe: "pas_interesse", no_show_self: "pas_interesse",
   no_show_setting: "pas_interesse", partenariats: "rdv_pose",
