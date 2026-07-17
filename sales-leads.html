@@ -1284,6 +1284,53 @@ function isNbSituation(l) {
   return !!(NB_SITUATION[l.status] || NB_SITUATION[l.stage]);
 }
 
+/* ═══ SB/NB fiche = classification RÉELLE des RDV (règle Adrien 17/07) ═══
+   « C'est pas l'un ou l'autre, ça doit être idem au RDV » : le badge de la
+   fiche lit les bookings du lead avec EXACTEMENT la même règle que la chip
+   SB/NB affichée sur chaque RDV (AlteoreFlow.classifyBooking + typeMap).
+   Le statut/stage ne sert plus que de REPLI quand aucun RDV n'est connu
+   (RDV posé hors système, ou plus ancien que la fenêtre du listener).
+   Données : _ldRdvCache (fiche ouverte, temps réel) sinon les maps globales
+   _sbnbByLead/_sbnbByEmail (listener bookings récents). */
+var _sbnbByLead = {};    // leadId -> [bookings récents]
+var _sbnbByEmail = {};   // email normalisé -> [bookings récents]
+
+/* RDV « de référence » d'une fiche — même sélection que l'œil dans le bloc
+   Rendez-vous : coaching exclu, annulés/replanifiés ignorés s'il reste des
+   RDV vivants, prochain à venir sinon le plus récent. */
+function l2RelevantSalesBooking(items, tm) {
+  var AF = window.AlteoreFlow;
+  if (!AF || !items || !items.length) return null;
+  tm = tm || _ldTypeMap || {};
+  var vis = items.filter(function (b) { return AF.classifyBooking(b, tm) !== 'excluded'; });
+  if (!vis.length) return null;
+  var alive = vis.filter(function (b) {
+    return b.outcome !== 'replanifie' && b.outcome !== 'annule' && b.status !== 'cancelled';
+  });
+  var pool = alive.length ? alive : vis;
+  pool = pool.slice().sort(function (a, b) {
+    var ka = (a.date || '') + 'T' + (a.time || ''), kb = (b.date || '') + 'T' + (b.time || '');
+    return ka < kb ? -1 : (ka > kb ? 1 : 0);
+  });
+  for (var i = 0; i < pool.length; i++) {
+    if (!(window.RdvOutcome && window.RdvOutcome.isPastBooking(pool[i]))) return pool[i];
+  }
+  return pool[pool.length - 1];
+}
+
+/* → 'self' | 'setter' | 'admin' | null (aucun RDV connu → repli heuristique) */
+function l2RdvClassification(l) {
+  var AF = window.AlteoreFlow;
+  if (!AF || !l) return null;
+  var items = _ldRdvCache[l.id] || _sbnbByLead[l.id];
+  if (!items || !items.length) {
+    var em = (l.email || '').trim().toLowerCase();
+    if (em) items = _sbnbByEmail[em];
+  }
+  var b = l2RelevantSalesBooking(items || []);
+  return b ? AF.classifyBooking(b, _ldTypeMap || {}) : null;
+}
+
 var STATUSES = [
   { key: 'nouveau',          label: 'Nouveau',          icon: '🆕',  color: '#34d399', bg: 'rgba(52,211,153,0.12)' },
   { key: 'appele',           label: 'Appelé',           icon: '📞',  color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
@@ -2443,7 +2490,12 @@ var _ldTypeMap = null;   // booking_config/_types (SB/NB + exclusion coaching)
 function _ldEnsureTypeMap() {
   if (_ldTypeMap || !window.AlteoreFlow) return;
   _ldTypeMap = {};
-  window.AlteoreFlow.loadTypeMap().then(function (m) { _ldTypeMap = m || {}; });
+  window.AlteoreFlow.loadTypeMap().then(function (m) {
+    _ldTypeMap = m || {};
+    /* La classification SB/NB des badges dépend du typeMap (types
+       setter-only) → re-render du feed quand il arrive. */
+    if (!isEditingLead && typeof renderFeed === 'function') renderFeed();
+  });
 }
 
 function attachLeadRdvListener(leadId) {
@@ -2899,7 +2951,20 @@ function renderLeadTags(l, compact) {
   var typeObj = LEAD_TYPES[l.type] || { label: l.type || 'Lead', badgeClass: 'other' };
   var statusObj = getStatusObj(l.status || 'nouveau');
   var setterObj = SETTERS[l.assignedTo] || null;
-  var nbSituation = isNbSituation(l);
+  /* SB/NB « idem au RDV » (Adrien 17/07) : la classification RÉELLE du RDV
+     de référence prime TOUJOURS (même règle que la chip SB/NB du bloc
+     Rendez-vous). Le statut/stage de la fiche ne sert que de repli quand
+     aucun RDV n'est connu — il a pu être corrompu par le bridge (events
+     Make sans source) dans les deux sens. */
+  var rdvClass = l2RdvClassification(l);   // 'self' | 'setter' | 'admin' | null
+  var nbSituation, sbSituation;
+  if (rdvClass) {
+    nbSituation = rdvClass !== 'self';     // setter + admin = RDV posé par l'équipe
+    sbSituation = rdvClass === 'self';
+  } else {
+    nbSituation = isNbSituation(l);
+    sbSituation = !nbSituation && (l.stage === 'rdv_self_booking' || l.status === 'rdv_self_booking');
+  }
   var h = '';
   /* NB : « Self-Booking » (tunnel d'entrée) contredirait la réalité → on le
      remplace par NO BOOKING. Élite/Business gardent leur badge tunnel + NB. */
@@ -2907,6 +2972,9 @@ function renderLeadTags(l, compact) {
     h += '<span class="ld-badge ' + typeObj.badgeClass + '">' + typeObj.label + '</span>';
   }
   if (nbSituation) h += '<span class="ld-badge nb">No Booking</span>';
+  /* Symétrique : RDV réellement self-booké sur un lead d'un autre tunnel
+     (Élite/Business…) → badge doré Self Booking, idem à la chip du RDV. */
+  if (sbSituation && l.type !== 'self_booking') h += '<span class="ld-badge self">Self Booking</span>';
   h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
   if (setterObj && !(compact && personalUser && l.assignedTo === personalUser)) {
     h += '<span class="ld-assigned" style="color:' + setterObj.color + '">' + escHtml(setterObj.name) + '</span>';
@@ -4556,6 +4624,36 @@ function isCoachingOrClientLead(l) {
    faible (RDV coaching internes). On garde le flag même si un RDV est supprimé
    (un client reste un client). Re-render au fil de l'eau pour qu'une fiche
    déjà affichée disparaisse dès qu'on apprend qu'elle est coaching/cliente. */
+/* ═══ Listener SB/NB : bookings récents → maps _sbnbByLead/_sbnbByEmail ═══
+   Alimente la classification « idem au RDV » des badges de fiche (feed +
+   drawer). Fenêtre 45 jours (createdAt) : couvre la fenêtre 30 jours du feed
+   + les résurrections (déclenchées par un booking récent par définition).
+   Volume : quelques centaines de docs — même ordre que le listener coaching.
+   where single-field → aucun index composite requis. */
+var _sbnbBookingsUnsub = null;
+function startSbNbBookingsListening() {
+  if (_sbnbBookingsUnsub) { _sbnbBookingsUnsub(); _sbnbBookingsUnsub = null; }
+  _ldEnsureTypeMap(); // typeMap nécessaire à classifyBooking (types setter-only)
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 45);
+  _sbnbBookingsUnsub = db.collection('bookings')
+    .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(cutoff))
+    .onSnapshot(function (snap) {
+      var byLead = {}, byEmail = {};
+      snap.forEach(function (doc) {
+        var b = doc.data(); b.id = doc.id;
+        if (b.leadId) (byLead[b.leadId] = byLead[b.leadId] || []).push(b);
+        var em = ((b.prospect && b.prospect.email) || b.email || '').trim().toLowerCase();
+        if (em) (byEmail[em] = byEmail[em] || []).push(b);
+      });
+      _sbnbByLead = byLead;
+      _sbnbByEmail = byEmail;
+      if (!isEditingLead && typeof renderFeed === 'function') renderFeed();
+    }, function (err) {
+      console.warn('[sbnb-bookings] listener error:', err && err.message);
+    });
+}
+
 function startCoachingBookingsListening() {
   if (_coachingBookingsUnsub) { _coachingBookingsUnsub(); _coachingBookingsUnsub = null; }
   _coachingBookingsUnsub = db.collection('bookings')
@@ -5012,6 +5110,36 @@ function _coerceCreatedAtTs(raw) {
   return firebase.firestore.FieldValue.serverTimestamp();
 }
 
+/* ── Classification RÉELLE d'un booking_event (fix Delphine 17/07) ──────
+   Les events Make arrivent souvent SANS champ source : un RDV posé par le
+   setting était alors traité comme un self-booking (soft-reset + stage
+   rdv_self_booking + source/UTM réécrits, à tort). On classe désormais
+   l'event d'après les BOOKINGS RÉELS du lead (même règle classifyBooking
+   que la chip SB/NB du RDV) : par leadId, sinon par email. be.source ne
+   sert plus que de repli quand aucun booking n'est (encore) trouvé. */
+function resolveEventBookingClass(leadId, email) {
+  var AF = window.AlteoreFlow;
+  if (!AF) return Promise.resolve(null);
+  var pTm = _ldTypeMap ? Promise.resolve(_ldTypeMap) : AF.loadTypeMap().catch(function () { return {}; });
+  return pTm.then(function (tm) {
+    function classify(snap) {
+      var items = [];
+      snap.forEach(function (doc) { var d = doc.data(); d.id = doc.id; items.push(d); });
+      var b = l2RelevantSalesBooking(items, tm);
+      return b ? AF.classifyBooking(b, tm) : null;
+    }
+    var pLead = leadId
+      ? db.collection('bookings').where('leadId', '==', leadId).get().then(classify).catch(function () { return null; })
+      : Promise.resolve(null);
+    return pLead.then(function (cls) {
+      if (cls) return cls;
+      var em = (email || '').trim().toLowerCase();
+      if (!em) return null;
+      return db.collection('bookings').where('prospect.email', '==', em).get().then(classify).catch(function () { return null; });
+    });
+  }).catch(function () { return null; });
+}
+
 function startBookingBridge() {
   // Cleanup si re-appel (défensif — l'onAuth peut re-fire)
   if (_bookingBridgeUnsub) { _bookingBridgeUnsub(); _bookingBridgeUnsub = null; }
@@ -5024,10 +5152,19 @@ function startBookingBridge() {
         var beId = change.doc.id;
         var beRef = change.doc.ref;
         var nowFr = new Date().toLocaleString('fr-FR');
-        // RDV posé par l'équipe (setteuse/sales) depuis le CRM — ≠ self-booking.
-        var isSetterBooking = (be.source === 'setter_booking');
 
         findExistingLead(be.email, be.telephone).then(function(existing) {
+          return resolveEventBookingClass(existing ? existing.id : null, be.email).then(function (bkClass) {
+          // RDV coaching / client : hors périmètre Setting & Sales — aucune
+          // mutation de fiche, on marque juste l'event traité.
+          if (bkClass === 'excluded') {
+            return beRef.update({ processed: true, skippedCoaching: true, mergedIntoLeadId: existing ? existing.id : null })
+              .catch(function (err) { console.error('[bridge] skip coaching error for ' + beId + ':', err); });
+          }
+          // RDV posé par l'équipe (setter/admin) — ≠ self-booking. Classé
+          // d'après le RDV réel ; be.source en repli si aucun RDV trouvé.
+          var isSetterBooking = bkClass ? (bkClass !== 'self') : (be.source === 'setter_booking');
+
           if (existing) {
             // ───── UPDATE lead existant ─────
             var leadRef = db.collection('leads').doc(existing.id);
@@ -5256,8 +5393,9 @@ function startBookingBridge() {
               console.error('[bridge] create error for ' + beId + ':', err);
             });
           }
+          }); // fin resolveEventBookingClass().then(bkClass ⇒ …)
         }).catch(function(err) {
-          console.error('[bridge] findExistingLead error for ' + beId + ':', err);
+          console.error('[bridge] booking_event ' + beId + ' error:', err);
         });
       });
     }, function(err) {
@@ -5317,6 +5455,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
           startOptinResurrectListening();
           startBookingBridge();
           startCoachingBookingsListening();
+          startSbNbBookingsListening();
         }
       }).catch(function() {
         if (!_leadsListenersStarted) {
@@ -5326,6 +5465,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
           startOptinResurrectListening();
           startBookingBridge();
           startCoachingBookingsListening();
+          startSbNbBookingsListening();
         }
       });
     } else {
@@ -5334,6 +5474,7 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
       if (_leadsResurrectListenerUnsub) { _leadsResurrectListenerUnsub(); _leadsResurrectListenerUnsub = null; }
       if (_bookingBridgeUnsub) { _bookingBridgeUnsub(); _bookingBridgeUnsub = null; }
       if (_coachingBookingsUnsub) { _coachingBookingsUnsub(); _coachingBookingsUnsub = null; }
+      if (_sbnbBookingsUnsub) { _sbnbBookingsUnsub(); _sbnbBookingsUnsub = null; }
       _leadsListenersStarted = false;
       // Show login overlay
       var overlay = document.getElementById('appLoginOverlay');
