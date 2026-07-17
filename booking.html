@@ -933,7 +933,14 @@ function getMaxBookingTs(person) {
 /* Round-robin v2 : un jour est disponible si AU MOINS UN expert du pool a
    un creneau (union). Hors pool : comportement historique (expert choisi). */
 function hasAvailableSlots(dateStr) {
-  var people = (S.rrPool && S.rrPool.length) ? S.rrPool : (_p ? [_p] : []);
+  /* Fix 17/07 : `_p` n'existait pas ici (reliquat du refactor RR v2 du
+     16/07) → ReferenceError dès qu'une consultation NON round-robin était
+     choisie (expert sélectionné à l'étape 2), donc renderCalendar mourait
+     avant d'afficher la grille — calendrier bloqué sur « Sélectionnez un
+     jour » partout (fiche Leads Live, fiche CRM, lien public d'un type
+     classique). Les types round-robin n'étaient pas touchés (branche
+     rrPool). Même repli que fetchFreeBusy : l'expert sélectionné. */
+  var people = (S.rrPool && S.rrPool.length) ? S.rrPool : (S.selPerson ? [S.selPerson] : []);
   for (var i = 0; i < people.length; i++) {
     if (hasAvailableSlotsFor(people[i], dateStr)) return true;
   }
