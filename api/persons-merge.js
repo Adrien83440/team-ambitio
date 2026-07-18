@@ -187,6 +187,7 @@ module.exports = async (req, res) => {
     // Si survivor n'a pas certains champs et que merged les a → on récupère
     // (sauf identité dur déjà gérée par knownEmails/Phones/PrevNom)
     const FILL_IF_EMPTY = [
+      'billingEmail',
       'companyName', 'companyLegalForm', 'companyRcs',
       'siret', 'vatNumber', 'vatExempt', 'address',
       'gcCustomerId', 'closeurSlug', 'closeurName', 'coachAssigned',
@@ -198,6 +199,13 @@ module.exports = async (req, res) => {
       const mvNotEmpty = !(mv === null || mv === undefined || mv === '');
       if (svEmpty && mvNotEmpty) survivorUpdates[field] = mv;
     });
+
+    // Email de facturation : si les deux en ont un différent, celui du fusionné
+    // est archivé dans _previousBillingEmail (jamais dans knownEmails : un email
+    // comptable partagé entre deux clients ne doit pas créer de faux doublons).
+    if (merged.billingEmail && survivor.billingEmail && merged.billingEmail !== survivor.billingEmail) {
+      survivorUpdates._previousBillingEmail = admin.firestore.FieldValue.arrayUnion(merged.billingEmail);
+    }
 
     // 4. Construire le patch merged (marquer comme fusionné)
     const mergedUpdates = {

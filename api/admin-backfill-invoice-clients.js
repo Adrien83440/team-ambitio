@@ -57,9 +57,16 @@ function parseContactName(fullName) {
   return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
 }
 
-async function findExistingInvoiceClient(email, gcCustomerId) {
-  if (email) {
-    const snap = await db.collection('invoice_clients').where('email', '==', email).limit(1).get();
+async function findExistingInvoiceClient(emailBilling, emailMain, gcCustomerId) {
+  /* invoice_clients.email contient l'email de FACTURATION effectif — on matche
+     d'abord dessus, puis sur l'email principal (cas d'un IC orphelin créé avant
+     que le billingEmail ne soit posé), puis par GoCardless. */
+  if (emailBilling) {
+    const snap = await db.collection('invoice_clients').where('email', '==', emailBilling).limit(1).get();
+    if (!snap.empty) return snap.docs[0].id;
+  }
+  if (emailMain && emailMain !== emailBilling) {
+    const snap = await db.collection('invoice_clients').where('email', '==', emailMain).limit(1).get();
     if (!snap.empty) return snap.docs[0].id;
   }
   if (gcCustomerId) {
@@ -72,7 +79,8 @@ async function findExistingInvoiceClient(email, gcCustomerId) {
 }
 
 function buildInvoiceClientDoc(personId, personData, source) {
-  const email = lower(personData.email);
+  /* Email de facturation effectif : billingEmail si posé, sinon email principal */
+  const email = lower(personData.billingEmail || personData.email);
   const phone = personData.telephone || '';
   const { firstName, lastName } = parseContactName(personData.nom);
   return {
@@ -154,7 +162,8 @@ module.exports = async function(req, res) {
         continue;
       }
 
-      const email = lower(personData.email);
+      const emailMain = lower(personData.email);
+      const email = lower(personData.billingEmail || personData.email);  /* email de facturation effectif */
       const gcId = personData.gcCustomerId || null;
 
       /* Skip si pas d'email ET pas de gcCustomerId : on ne peut pas matcher
@@ -173,7 +182,7 @@ module.exports = async function(req, res) {
       }
 
       /* Cherche un invoice_clients orphelin (pas encore lié à un persons) */
-      const existingIcId = await findExistingInvoiceClient(email, gcId);
+      const existingIcId = await findExistingInvoiceClient(email, emailMain, gcId);
 
       processed++;
 
