@@ -643,6 +643,7 @@ function renderList(){
     filtered = filtered.filter(function(p){
       if((p.nom||'').toLowerCase().indexOf(q) >= 0) return true;
       if((p.email||'').toLowerCase().indexOf(q) >= 0) return true;
+      if((p.billingEmail||'').toLowerCase().indexOf(q) >= 0) return true;
       if(qd && (p.phoneNormalized||'').indexOf(qd) >= 0) return true;
       if(qd && (p.telephone||'').replace(/\D/g,'').indexOf(qd) >= 0) return true;
       if(p.knownEmails && p.knownEmails.some(function(e){return (e||'').toLowerCase().indexOf(q) >= 0;})) return true;
@@ -771,6 +772,7 @@ function renderDetail(){
     +     '</div>'
     +     '<div class="ap-id-meta">'
     +       '<span><i class="ti ti-mail"></i>'+esc(p.email||'—')+'</span>'
+    + (p.billingEmail ? '<span title="Email de facturation (module Facturation uniquement)"><i class="ti ti-receipt"></i>'+esc(p.billingEmail)+'</span>' : '')
     +       '<span><i class="ti ti-phone"></i>'+esc(fmtPhone(p.telephone))+'</span>'
     + (p.gcCustomerId ? '<span><i class="ti ti-credit-card"></i><a href="https://manage.gocardless.com/customers/'+attr(p.gcCustomerId)+'" target="_blank" style="color:inherit">'+esc(p.gcCustomerId)+'</a></span>' : '')
     +     '</div>'
@@ -865,6 +867,7 @@ function renderDetail(){
   } else {
     html += '<div class="ap-grid-line"><span class="lbl">type :</span> '+esc(ic.clientType||'individual')+'</div>'
       + '<div class="ap-grid-line"><span class="lbl">nom contact :</span> '+esc(((ic.contactFirstName||'')+' '+(ic.contactLastName||'')).trim()||'—')+'</div>'
+      + '<div class="ap-grid-line"><span class="lbl">email fact. :</span> '+esc(ic.email||p.billingEmail||p.email||'—')+(p.billingEmail?'':' (= principal)')+'</div>'
       + '<a href="admin-facturation.html?clientId='+attr(ic._id)+'" class="ap-grid-link">Ouvrir invoice_client <i class="ti ti-external-link"></i></a>';
   }
   html += '</div>';
@@ -943,6 +946,25 @@ function renderDetail(){
     + '<div style="font-size:10.5px;color:var(--ap-text-soft);margin-top:5px">L\'email actuel est en bleu. Les anciens (archivés dans _previousEmails) sont en gris — jamais supprimés.</div>'
     + '</div>';
 
+  /* Email de facturation (affiché uniquement si renseigné ou historisé) */
+  var prevBilling = p._previousBillingEmail || [];
+  if(p.billingEmail || prevBilling.length){
+    html += '<div class="ap-hist-row">'
+      + '<div class="ap-hist-label">Email de facturation</div>'
+      + '<div>';
+    if(p.billingEmail){
+      html += '<span class="ap-chip"><i class="ti ti-receipt"></i>'+esc(p.billingEmail)+'</span>';
+    } else {
+      html += '<span class="ap-chip">'+esc(p.email||'—')+' (suit l\'email principal)</span>';
+    }
+    prevBilling.forEach(function(e){
+      if(e && e !== p.billingEmail) html += '<span class="ap-chip archived"><i class="ti ti-archive"></i>'+esc(e)+'</span>';
+    });
+    html += '</div>'
+      + '<div style="font-size:10.5px;color:var(--ap-text-soft);margin-top:5px">Utilisé uniquement par le module Facturation. Jamais mélangé aux emails connus (pas de fusion à tort via un email comptable partagé).</div>'
+      + '</div>';
+  }
+
   /* knownPhones */
   var knownPhones = p.knownPhones || [];
   var prevPhones = p._previousTelephone || [];
@@ -1010,8 +1032,11 @@ function apOpenEditModal(){
     +   '<div class="ap-form-row"><label>Type</label><select id="ef_clientType"><option value="individual"'+(p.clientType!=='company'?' selected':'')+'>Individual</option><option value="company"'+(isCompany?' selected':'')+'>Company</option></select></div>'
     + '</div>'
     + '<div class="ap-form-grid">'
-    +   '<div class="ap-form-row"><label>Email</label><input type="email" id="ef_email" value="'+attr(p.email||'')+'"/></div>'
+    +   '<div class="ap-form-row"><label>Email principal</label><input type="email" id="ef_email" value="'+attr(p.email||'')+'"/></div>'
     +   '<div class="ap-form-row"><label>Téléphone (E.164)</label><input type="text" id="ef_telephone" value="'+attr(p.telephone||'')+'" placeholder="+33612345678"/></div>'
+    + '</div>'
+    + '<div class="ap-form-row"><label>Email de facturation</label><input type="email" id="ef_billingEmail" value="'+attr(p.billingEmail||'')+'" placeholder="'+attr(p.email||'(identique à l\'email principal)')+'"/>'
+    +   '<div style="font-size:10.5px;color:var(--ap-text-soft);margin-top:4px">Utilisé uniquement par le module Facturation (factures, relances, PDF). Vide = suit l\'email principal. CRM, coaching, paiements et mandats GoCardless restent sur l\'email principal.</div>'
     + '</div>'
     + '<div class="ap-form-row"><label>GoCardless customer ID</label><input type="text" id="ef_gcCustomerId" value="'+attr(p.gcCustomerId||'')+'" placeholder="CU000XXX"/></div>'
     + '<div class="ap-form-grid">'
@@ -1054,12 +1079,14 @@ function apCloseModal(){
 window.apCloseModal = apCloseModal;
 
 /* Champs identité dur (génèrent le preview de propagation) */
-var HARD_IDENTITY_FIELDS = ['nom','email','telephone','gcCustomerId'];
+var HARD_IDENTITY_FIELDS = ['nom','email','billingEmail','telephone','gcCustomerId'];
 
 /* Mapping champ persons → collections impactées (côté frontend, juste pour le preview) */
 var FIELD_TO_TARGETS = {
   nom:           [{coll:'leads',field:'nom'},{coll:'clients',field:'nom'},{coll:'payments',field:'leadName'},{coll:'subscriptions',field:'leadName'}],
-  email:         [{coll:'leads',field:'email'},{coll:'clients',field:'email'},{coll:'invoice_clients',field:'email'},{coll:'payments',field:'leadEmail'}],
+  /* email principal : ne touche PLUS invoice_clients (réservé à billingEmail ; repli géré dynamiquement dans le preview) */
+  email:         [{coll:'leads',field:'email'},{coll:'clients',field:'email'},{coll:'payments',field:'leadEmail'}],
+  billingEmail:  [{coll:'invoice_clients',field:'email'}],
   telephone:     [{coll:'leads',field:'telephone'},{coll:'clients',field:'telephone'},{coll:'invoice_clients',field:'telephone'},{coll:'payments',field:'leadPhone'}],
   gcCustomerId:  [{coll:'leads',field:'gcCustomerId'},{coll:'invoice_clients',field:'gcCustomerId'},{coll:'payments',field:'gcCustomerId'},{coll:'subscriptions',field:'gcCustomerId'}],
   companyName:   [{coll:'invoice_clients',field:'companyName'}],
@@ -1084,6 +1111,7 @@ function apPreviewSave(){
   var newVals = {
     nom: v('ef_nom'),
     email: v('ef_email').toLowerCase(),
+    billingEmail: v('ef_billingEmail').toLowerCase() || null,
     telephone: v('ef_telephone'),
     gcCustomerId: v('ef_gcCustomerId') || null,
     closeurSlug: v('ef_closeurSlug') || null,
@@ -1132,7 +1160,11 @@ function apPreviewSave(){
   /* Pour chaque champ d'identité dur modifié, lister les targets */
   var targetsListed = 0;
   hardChanges.forEach(function(c){
-    var targets = FIELD_TO_TARGETS[c.field] || [];
+    var targets = (FIELD_TO_TARGETS[c.field] || []).slice();
+    /* Repli : email principal modifié SANS email de facturation posé → il alimente aussi la facturation */
+    if(c.field === 'email' && !newVals.billingEmail){
+      targets.push({coll:'invoice_clients',field:'email'});
+    }
     targets.forEach(function(t){
       var hasTarget = false;
       if(t.coll === 'leads') hasTarget = (STATE.leadsByPerson[p._id] || []).length > 0;
@@ -1142,6 +1174,9 @@ function apPreviewSave(){
       else if(t.coll === 'subscriptions') hasTarget = (STATE.subsByPerson[p._id] || []).length > 0;
       if(!hasTarget) return;
       var newDisp = (c.newVal===null||c.newVal===undefined||c.newVal==='')?'(vide)':String(c.newVal);
+      if(c.field==='billingEmail' && (c.newVal===null||c.newVal===undefined||c.newVal==='')){
+        newDisp = (newVals.email||'(vide)')+' — repli email principal';
+      }
       html += '<div class="ap-propag-row">'
         + '<i class="ti '+ICONS_COLL[t.coll]+'"></i>'
         + '<span class="col">'+esc(t.coll)+'</span>'
@@ -1185,6 +1220,7 @@ function apPreviewSave(){
     /* Tous les changements à appliquer */
     nom: newVals.nom,
     email: newVals.email,
+    billingEmail: newVals.billingEmail,
     telephone: newVals.telephone,
     phoneNormalized: newVals.phoneNormalized,
     gcCustomerId: newVals.gcCustomerId,
