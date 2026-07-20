@@ -269,6 +269,24 @@ async function deliverToCoachingClient(ctx, bookingId, b, atts) {
   const { email, prenom, clientDoc } = await resolveClient(b);
   const ref = db.collection('bookings').doc(bookingId);
 
+  // ── Fin d'accompagnement : pas de replay pour un ancien client ────────
+  // La fiche coaching fait foi (ancienClient / statut inactif). Si le
+  // booking n'a pas de clientId, on tente un lookup par email — un client
+  // désactivé ne doit plus rien recevoir automatiquement. L'envoi MANUEL
+  // depuis coaching.html (coaching-send-replay) reste possible : geste
+  // délibéré d'un coach/CSM.
+  let inactiveCheck = clientDoc && clientDoc.data ? clientDoc.data : null;
+  if (!inactiveCheck && email) {
+    try {
+      const q = await db.collection('clients').where('email', '==', email.toLowerCase()).limit(1).get();
+      if (!q.empty) inactiveCheck = q.docs[0].data() || null;
+    } catch (e) { /* fail-soft : au pire on envoie comme avant */ }
+  }
+  if (inactiveCheck && (inactiveCheck.ancienClient === true || inactiveCheck.statut === 'inactif')) {
+    if (!ctx.dry) await ref.set({ meetClientEmailSkipped: 'client_inactive', meetClientEmailCheckedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    return { status: 'skipped_inactive' };
+  }
+
   if (!email) {
     if (!ctx.dry) await ref.set({ meetClientEmailSkipped: 'no_email', meetClientEmailCheckedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     return { status: 'no_email' };

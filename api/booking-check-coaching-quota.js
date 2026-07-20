@@ -199,6 +199,24 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // ── 1bis. Fin d'accompagnement : un ancien client (ou une fiche passée
+    // inactive côté coach) ne peut plus réserver de coaching, quel que soit
+    // son quota. Le frontend affiche un message dédié (reason
+    // 'client_inactive') — y compris en mode agent CSM : il faut réactiver
+    // la fiche (CSM / Admin Personnes) avant de pouvoir reprendre un RDV.
+    if (clientData.ancienClient === true || clientData.statut === 'inactif') {
+      res.status(200).json({
+        ok: true,
+        allowed: false,
+        clientFound: true,
+        reason: 'client_inactive',
+        used: 0,
+        quota: 0,
+        programme: clientData.programme || null
+      });
+      return;
+    }
+
     // ── 2. Compte les sessions "fait" du mois ──────────────────────────────
     const sessionsCount = countSessionsInMonth(clientData, monthYear);
 
