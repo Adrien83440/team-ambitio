@@ -1836,7 +1836,7 @@ function renderCard(c){
 
   // Coach pill : couleur dynamique via style inline (lookup TEAM_MEMBERS)
   const coachPill = isInactive
-    ? `<span class="cc-status-badge inactive">Inactif</span>`
+    ? `<span class="cc-status-badge inactive">${c.ancienClient === true ? '🎓 Ancien client' : 'Inactif'}</span>`
     : (lastCoach
         ? `<div class="cc-coach" style="background:${coachColor}18;color:${coachColor}">${lastCoach}</div>`
         : '');
@@ -1878,7 +1878,7 @@ function renderList(){
     const barCls = isInactive ? '' : (alert === 'alert' ? 'alert' : alert === 'warning' ? 'warn' : (pct >= 100 ? 'ok' : ''));
     const qColor = q.status === 'ok' ? 'var(--green-2)' : q.status === 'empty' ? 'var(--red-2)' : q.status === 'partial' ? 'var(--amber-2)' : 'var(--ink-muted)';
     const statusLabel = isInactive
-      ? '<span style="color:var(--slate);font-weight:600">Inactif</span>'
+      ? '<span style="color:var(--slate);font-weight:600">' + (c.ancienClient === true ? '🎓 Ancien client' : 'Inactif') + '</span>'
       : alert === 'alert'
         ? '<span style="color:var(--red-2);font-weight:600">En retard</span>'
         : alert === 'warning'
@@ -2618,11 +2618,11 @@ function openDetail(id){
     <!-- STATUT ACTIF / INACTIF -->
     <div class="status-toggle-wrap">
       <div>
-        <div class="status-toggle-label">${c.statut === 'inactif' ? '⚫ Client inactif' : '🟢 Client actif'}</div>
-        <div class="status-toggle-sub">${c.statut === 'inactif' ? 'Contrat terminé — non renouvelé' : 'Contrat en cours'}</div>
+        <div class="status-toggle-label">${c.ancienClient === true ? '🎓 Ancien client' : (c.statut === 'inactif' ? '⚫ Client inactif' : '🟢 Client actif')}</div>
+        <div class="status-toggle-sub">${c.ancienClient === true ? 'Fin d\'accompagnement — désactivé partout (Academy, RDV, CRM). Réactivation via CSM ou Admin Personnes.' : (c.statut === 'inactif' ? 'Contrat terminé — non renouvelé' : 'Contrat en cours')}</div>
       </div>
-      <label class="toggle-switch" title="Changer le statut">
-        <input type="checkbox" ${c.statut !== 'inactif' ? 'checked' : ''} onchange="toggleClientStatus('${id}', this.checked)"/>
+      <label class="toggle-switch" title="${c.ancienClient === true ? 'Verrouillé — fiche ancien client (réactivation via CSM / Admin Personnes)' : 'Changer le statut'}" style="${c.ancienClient === true ? 'opacity:.45;pointer-events:none' : ''}">
+        <input type="checkbox" ${c.statut !== 'inactif' ? 'checked' : ''} ${c.ancienClient === true ? 'disabled' : ''} onchange="toggleClientStatus('${id}', this.checked)"/>
         <span class="toggle-slider"></span>
       </label>
     </div>
@@ -3894,6 +3894,14 @@ async function scanDriveForClient(clientId){
 async function toggleClientStatus(clientId, isActive){
   const c = _clients.find(x=>x._id===clientId);
   if(!c) return;
+  // Fin d'accompagnement (07/2026) : une fiche « ancien client » est
+  // désactivée PARTOUT (Academy, RDV, CRM) par /api/client-deactivate —
+  // le toggle local ne doit pas pouvoir désynchroniser cet état.
+  if(c.ancienClient === true){
+    showToast('🎓 Fiche « ancien client » — réactivation via le CSM ou Admin Personnes', 'error');
+    setTimeout(()=>openDetail(clientId), 150);
+    return;
+  }
   c.statut = isActive ? 'actif' : 'inactif';
   try{
     await window._updateDoc(window._doc(window._db,'clients',clientId),{statut: c.statut});

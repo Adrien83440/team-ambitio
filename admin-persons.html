@@ -373,6 +373,41 @@ function fmtDateTime(ts){
   } catch(e){ return '—'; }
 }
 
+/* ─── Fin d'accompagnement (07/2026) ───
+   Délègue à ClientDeactivate (client-deactivate-ui.js → /api/client-deactivate).
+   Pas de listeners temps réel sur cette page : on recharge tout après. */
+function apOpenDeactivate(){
+  var p = STATE.personsById[STATE.selectedId];
+  var coaching = p ? STATE.clientsByPerson[p._id] : null;
+  if(!coaching){ toast('Pas de fiche coaching liée à cette persons', ''); return; }
+  if(!window.ClientDeactivate){ toast('client-deactivate-ui.js manquant — recharge la page', ''); return; }
+  ClientDeactivate.open({
+    clientId: coaching._id,
+    clientName: p.nom || coaching.nom || null,
+    onDone: function(){
+      toast('🎓 Client passé en ancien client', 'success');
+      loadAll();
+    }
+  });
+}
+window.apOpenDeactivate = apOpenDeactivate;
+
+function apReactivate(){
+  var p = STATE.personsById[STATE.selectedId];
+  var coaching = p ? STATE.clientsByPerson[p._id] : null;
+  if(!coaching){ toast('Pas de fiche coaching liée à cette persons', ''); return; }
+  if(!window.ClientDeactivate){ toast('client-deactivate-ui.js manquant — recharge la page', ''); return; }
+  ClientDeactivate.reactivate({
+    clientId: coaching._id,
+    clientName: p.nom || coaching.nom || null,
+    onDone: function(){
+      toast('↩️ Client réactivé', 'success');
+      loadAll();
+    }
+  });
+}
+window.apReactivate = apReactivate;
+
 function toast(msg, type){
   var t = document.getElementById('apToast');
   t.textContent = msg;
@@ -678,7 +713,7 @@ function renderList(){
       + '<div class="ap-item-email">'+esc(p.email||p.telephone||'—')+'</div>'
       + '<div class="ap-item-badges">'
       + (p.crmStatus ? '<span class="ap-item-badge '+(p.crmStatus==='active'?'ok':(p.crmStatus==='paused'||p.crmStatus==='churned'||p.crmStatus==='stopped'?'warn':''))+'">'+esc(p.crmStatus)+'</span>' : '')
-      + (hasC ? '<span class="ap-item-badge">coach</span>' : '')
+      + (hasC && hasC.ancienClient === true ? '<span class="ap-item-badge warn">🎓 ancien</span>' : (hasC ? '<span class="ap-item-badge">coach</span>' : ''))
       + (hasIc ? '<span class="ap-item-badge">facturation</span>' : '')
       + (hasS ? '<span class="ap-item-badge">abo</span>' : '')
       + '</div>'
@@ -754,6 +789,13 @@ function renderDetail(){
     +   '</div>'
     +   '<div class="ap-pg-actions">'
     + (STATE.canEdit && STATE.duplicatePersonIds[p._id] ? '<button class="ap-btn warn" onclick="apOpenMergeModal()"><i class="ti ti-git-merge"></i>Fusionner…</button>' : '')
+    /* Fin d'accompagnement (07/2026) : visible si une fiche coaching existe.
+       Admin ET CSM (l'endpoint /api/client-deactivate re-vérifie le rôle). */
+    + (coaching && (STATE.currentRole === 'admin' || STATE.currentRole === 'csm')
+        ? (coaching.ancienClient === true
+            ? '<button class="ap-btn" onclick="apReactivate()" title="Réactiver le client (coaching + Academy + fiche CRM)"><i class="ti ti-rotate-2"></i>Réactiver</button>'
+            : '<button class="ap-btn danger" onclick="apOpenDeactivate()" title="Passer en ancien client : coaching inactif, Academy coupée, RDV à venir annulés, badge fiche CRM"><i class="ti ti-door-exit"></i>Fin d\'accompagnement</button>')
+        : '')
     + (STATE.canEdit ? '<button class="ap-btn primary" onclick="apOpenEditModal()"><i class="ti ti-edit"></i>Modifier</button>' : '<span class="ap-badge neutral"><i class="ti ti-eye"></i>Lecture seule</span>')
     +   '</div>'
     + '</div>';
@@ -766,7 +808,9 @@ function renderDetail(){
     +   '<div class="ap-id-info">'
     +     '<div class="ap-id-name-row">'
     +       '<span class="ap-id-name">'+esc(p.nom||'(sans nom)')+'</span>'
-    + (p.isClient ? '<span class="ap-badge success"><i class="ti ti-check"></i>Client</span>' : '')
+    + ((coaching && coaching.ancienClient === true) || p.isFormerClient === true
+        ? '<span class="ap-badge warn" title="Fin d\'accompagnement — désactivé partout">🎓 Ancien client</span>'
+        : (p.isClient ? '<span class="ap-badge success"><i class="ti ti-check"></i>Client</span>' : ''))
     + (p.crmStatus ? '<span class="ap-badge '+(p.crmStatus==='active'?'success':(p.crmStatus==='paused'||p.crmStatus==='churned'?'warn':'neutral'))+'">'+esc(p.crmStatus)+'</span>' : '')
     + '<span class="ap-badge info">'+esc(p.clientType||'individual')+'</span>'
     +     '</div>'
@@ -1554,5 +1598,6 @@ document.addEventListener('keydown', function(e){
 });
 
 </script>
+<script src="client-deactivate-ui.js"></script>
 </body>
 </html>

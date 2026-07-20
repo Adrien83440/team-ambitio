@@ -33,6 +33,7 @@ body{overflow:hidden;display:flex;flex-direction:column}
 .fiche-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px}
 .fiche-badge.client{background:rgba(52,211,153,0.12);color:#6ee7b7}
 .fiche-badge.lead{background:rgba(245,158,11,0.12);color:#fcd34d}
+.fiche-badge.former{background:rgba(167,139,250,0.14);color:#c4b5fd}
 .fiche-top-actions{display:flex;gap:6px;flex-shrink:0}
 .fiche-top-btn{padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--muted);font-family:var(--fb);font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:5px;transition:all .15s}
 .fiche-top-btn:hover{border-color:var(--border2);color:var(--text)}
@@ -431,7 +432,7 @@ function renderAll(){
 var l=lead,st=SM[l.stage||'lead']||STAGES[0],ci=st._i||0,sc=l.assignedTo==='guillaume'?'#ef4444':'#60a5fa',ini=(l.nom||'?')[0].toUpperCase(),isC=isClient(l);
 var h='';
 // Top
-h+='<div class="fiche-top"><a class="fiche-back" href="sales-crm.html" onclick="return ficheBack()" title="Retour">\u2190</a><div class="fiche-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><span class="fiche-name">'+esc(l.nom||'\u2014')+'</span><span class="fiche-badge '+(isC?'client':'lead')+'">'+(isC?'\u2705 Client':'\ud83d\udccb Lead')+'</span><div class="fiche-top-actions">';
+h+='<div class="fiche-top"><a class="fiche-back" href="sales-crm.html" onclick="return ficheBack()" title="Retour">\u2190</a><div class="fiche-av" style="background:linear-gradient(135deg,'+sc+','+sc+'88)">'+ini+'</div><span class="fiche-name">'+esc(l.nom||'\u2014')+'</span><span class="fiche-badge '+(l.isFormerClient===true?'former':(isC?'client':'lead'))+'">'+(l.isFormerClient===true?'\ud83c\udf93 Ancien client':(isC?'\u2705 Client':'\ud83d\udccb Lead'))+'</span><div class="fiche-top-actions">';
 if(l.telephone)h+='<button class="fiche-top-btn" onclick="dialerCallFromFiche()">\ud83d\udcde Appeler</button>';
 if(l.email)h+='<a class="fiche-top-btn" href="mailto:'+escA(l.email)+'">\u2709\ufe0f Email</a>';
 h+='<button class="fiche-top-btn" style="color:#a78bfa;border-color:rgba(167,139,250,.25)" onclick="openBookingFromFiche()">\ud83d\udcc5 RDV</button>';

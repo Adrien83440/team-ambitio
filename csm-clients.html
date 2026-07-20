@@ -423,6 +423,7 @@ body {
 .csm-badge.cs-completed { background: #eeedfe; color: #534ab7; border: 1px solid rgba(83,74,183,.22); }
 .csm-badge.cs-stopped   { background: var(--crit-bg); color: var(--crit-color); border: 1px solid var(--crit-border); }
 .csm-badge.cs-procedure { background: #fef3c7; color: #92400e; border: 1px solid rgba(146,64,14,.22); }
+.csm-badge.former       { background: #eeedfe; color: #534ab7; border: 1px solid rgba(83,74,183,.30); font-weight: 800; }
 
 .csm-badge.pay-active        { background: #e1f5ee; color: #0f6e56; border: 1px solid rgba(15,110,86,.22); }
 .csm-badge.pay-failed        { background: var(--crit-bg); color: var(--crit-color); border: 1px solid var(--crit-border); }
@@ -1254,6 +1255,10 @@ function buildAllClients(){
 
       // Marqueurs CSM (depuis clients/, source primaire)
       clientStatus: status,
+      // Fin d'accompagnement (07/2026) : posé par /api/client-deactivate
+      ancienClient: co.ancienClient === true,
+      deactivatedAt: co.deactivatedAt || null,
+      deactivatedByName: co.deactivatedByName || null,
       clientSince: co.dateEntree || (lead && lead.clientSince) || null,
       lastCsmFollowupAt: co.lastCsmFollowupAt || (lead && lead.lastCsmFollowupAt) || null,
       lastCsmFollowupBy: co.lastCsmFollowupBy || (lead && lead.lastCsmFollowupBy) || null,
@@ -1731,6 +1736,9 @@ function renderSidebarRow(c){
   // Tags : on prend les 1-2 raisons les plus prioritaires
   var reasons = (c._reasons || computeReasons(c)).slice(0, 1);
   var tagsHtml = '';
+  if(c.ancienClient){
+    tagsHtml += '<span class="csm-cr-tag muted">🎓 Ancien</span>';
+  }
   if(reasons.length){
     var r = reasons[0];
     var tagCls = r.level === 'crit' ? 'crit' : r.level === 'warn' ? 'warn' : 'att';
@@ -2529,7 +2537,9 @@ function renderModal(){
 
   // ───── HEADER ─────
   h += '<div class="csm-modal-h">';
-  h += '<div><div class="csm-modal-title">' + esc(clientDisplayName(c)) + lvlBadge + '<span class="csm-badge ' + cs.cls + '">' + cs.label + '</span></div>';
+  h += '<div><div class="csm-modal-title">' + esc(clientDisplayName(c)) + lvlBadge + '<span class="csm-badge ' + cs.cls + '">' + cs.label + '</span>'
+     + (c.ancienClient ? '<span class="csm-badge former" title="Fin d\'accompagnement — désactivé partout (coaching, Academy, RDV)">🎓 Ancien client</span>' : '')
+     + '</div>';
   if(c.commerce) h += '<div style="font-size:12px;color:var(--ink-muted);margin-top:4px">' + esc(c.commerce) + '</div>';
   h += '</div>';
   // Le bouton ✕ n'a plus de sens en V2 (panel inline toujours visible)
@@ -2622,6 +2632,28 @@ function renderModal(){
     h += '<button class="csm-status-btn" style="' + st + '" onclick="changeStatus(\'' + s + '\')">' + CLIENT_STATUS[s].label + '</button>';
   });
   h += '</div></div>';
+
+  // ───── FIN D'ACCOMPAGNEMENT (07/2026) ─────
+  // UN bouton = le client passe en « ancien client » PARTOUT : fiche
+  // coaching inactive, Academy coupée, RDV coaching à venir annulés
+  // (+ Google Calendar), badge fiche CRM. Orchestré côté serveur par
+  // /api/client-deactivate, modale de confirmation avec aperçu avant
+  // d'agir (client-deactivate-ui.js). Réversible via « Réactiver ».
+  h += '<div class="csm-section">';
+  h += '<div class="csm-section-title">🚪 Fin d\'accompagnement</div>';
+  if(!c.ancienClient){
+    h += '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:10px">Quand le client termine (ou arrête) son accompagnement : un clic le désactive partout — coaching, plateforme Academy, RDV à venir, fiche CRM. Les paiements GoCardless ne sont jamais touchés. Réversible.</div>';
+    h += '<button class="csm-btn danger" onclick="csmOpenDeactivate()">🚪 Fin d\'accompagnement…</button>';
+  } else {
+    h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#eeedfe;border:1px solid rgba(83,74,183,0.25);border-radius:10px;padding:11px 14px">';
+    h += '<div style="flex:1;min-width:200px">';
+    h += '<div style="font-size:12.5px;font-weight:800;color:#534ab7">🎓 Ancien client' + (c.deactivatedAt ? ' depuis le ' + fmtDate(c.deactivatedAt) : '') + '</div>';
+    h += '<div style="font-size:11px;color:var(--ink-muted);margin-top:2px">Coaching inactif · Academy désactivée · réservations bloquées' + (c.deactivatedByName ? ' — par ' + esc(c.deactivatedByName) : '') + '</div>';
+    h += '</div>';
+    h += '<button class="csm-btn" onclick="csmReactivate()">↩️ Réactiver</button>';
+    h += '</div>';
+  }
+  h += '</div>';
 
   // 4 mini-cards synthèse
   h += '<div class="overview-grid">';
@@ -3451,6 +3483,38 @@ function changeStatus(newStatus){
   });
 }
 
+/* ─── Fin d'accompagnement (07/2026) ───
+   Délègue tout à ClientDeactivate (client-deactivate-ui.js) qui appelle
+   /api/client-deactivate. Le listener onSnapshot sur clients/ rafraîchit
+   la liste tout seul ; on force juste le re-render du panneau ouvert. */
+function csmOpenDeactivate(){
+  if(!openClientId) return;
+  var c = allClients.find(function(x){ return x.id === openClientId; });
+  if(!window.ClientDeactivate){ showToast('❌ client-deactivate-ui.js manquant — recharge la page', 'error'); return; }
+  ClientDeactivate.open({
+    clientId: openClientId,
+    clientName: c ? clientDisplayName(c) : null,
+    onDone: function(){
+      showToast('🎓 Client passé en ancien client');
+      setTimeout(function(){ renderSidebarList(); renderDetailPanel(); }, 600);
+    }
+  });
+}
+
+function csmReactivate(){
+  if(!openClientId) return;
+  var c = allClients.find(function(x){ return x.id === openClientId; });
+  if(!window.ClientDeactivate){ showToast('❌ client-deactivate-ui.js manquant — recharge la page', 'error'); return; }
+  ClientDeactivate.reactivate({
+    clientId: openClientId,
+    clientName: c ? clientDisplayName(c) : null,
+    onDone: function(){
+      showToast('↩️ Client réactivé');
+      setTimeout(function(){ renderSidebarList(); renderDetailPanel(); }, 600);
+    }
+  });
+}
+
 function addNote(){
   if(!openClientId) return;
   var input = document.getElementById('csmNoteInput');
@@ -3628,11 +3692,14 @@ window.openClientModal = openClientModal;
 window.closeModal = closeModal;
 window.changeStatus = changeStatus;
 window.addNote = addNote;
+window.csmOpenDeactivate = csmOpenDeactivate;
+window.csmReactivate = csmReactivate;
 window.deleteNote = deleteNote;
 window.markFollowedUp = markFollowedUp;
 window.quickSms = quickSms;
 window.quickEmail = quickEmail;
 </script>
 <script src="academy-widget.js"></script>
+<script src="client-deactivate-ui.js"></script>
 </body>
 </html>

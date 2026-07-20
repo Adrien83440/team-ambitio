@@ -1392,6 +1392,14 @@ async function handleSubmit() {
       });
       var quotaData = await resp.json();
       if (quotaData && quotaData.allowed === false) {
+        if (quotaData.reason === 'client_inactive') {
+          // Fin d'accompagnement : blocage TOTAL, y compris en mode agent
+          // (décision 07/2026 — il faut réactiver la fiche avant de
+          // réserver, pour éviter les RDV posés par erreur sur un ancien
+          // client). Le message de la modale s'adapte au mode.
+          showQuotaModal(quotaData);
+          return;
+        }
         if (_agentMode) {
           // Mode agent (CSM) : on n'interrompt PAS la réservation. Choix
           // métier — le RDV est créé malgré le quota mensuel atteint. On pose
@@ -1573,7 +1581,26 @@ async function handleSubmit() {
    ═══════════════════════════════════════════════════ */
 function showQuotaModal(quotaData) {
   // Affiche le modal de blocage avec les chiffres du quota.
-  // quotaData = { allowed:false, used, quota, programme, ... }
+  // quotaData = { allowed:false, used, quota, programme, reason?, ... }
+  // Cas 'client_inactive' (fin d'accompagnement) : message dédié, pas de
+  // compteur — le client est un ancien client, le quota n'a plus de sens.
+  var titleEl = document.getElementById('quotaTitle');
+  var statEl = document.getElementById('quotaStatBlock');
+  if (quotaData && quotaData.reason === 'client_inactive') {
+    if (titleEl) titleEl.textContent = 'Accompagnement terminé';
+    if (statEl) statEl.style.display = 'none';
+    var inactiveText;
+    if (_agentMode) {
+      inactiveText = 'Cette fiche client est désactivée (<strong>ancien client</strong> — fin d\'accompagnement). Réactive la fiche depuis le CSM ou Admin Personnes avant de pouvoir réserver un coaching.';
+    } else {
+      inactiveText = 'Ton accompagnement est terminé — il n\'est plus possible de réserver de coaching individuel. Si tu penses qu\'il s\'agit d\'une erreur, contacte l\'équipe.';
+    }
+    document.getElementById('quotaText').innerHTML = inactiveText;
+    document.getElementById('quotaOverlay').classList.add('show');
+    return;
+  }
+  if (titleEl) titleEl.textContent = 'Quota mensuel atteint';
+  if (statEl) statEl.style.display = '';
   var num = (quotaData && typeof quotaData.used === 'number' && typeof quotaData.quota === 'number')
     ? quotaData.used + '/' + quotaData.quota
     : '—';
@@ -1834,9 +1861,9 @@ firebase.auth().onAuthStateChanged(function(u) {
 <div class="bk-quota-overlay" id="quotaOverlay" onclick="if(event.target===this)closeQuotaModal()">
   <div class="bk-quota-modal">
     <div class="bk-quota-icon">🚫</div>
-    <div class="bk-quota-title">Quota mensuel atteint</div>
+    <div class="bk-quota-title" id="quotaTitle">Quota mensuel atteint</div>
     <div class="bk-quota-text" id="quotaText">Tu as déjà utilisé tous tes coachings individuels pour ce mois.</div>
-    <div class="bk-quota-stat">
+    <div class="bk-quota-stat" id="quotaStatBlock">
       <div class="bk-quota-stat-num" id="quotaStatNum">—</div>
       <div class="bk-quota-stat-lbl">coachings ce mois</div>
     </div>
