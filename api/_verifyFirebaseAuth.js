@@ -107,8 +107,38 @@ async function requireAdmin(req, res) {
   return auth;
 }
 
+/**
+ * Comme requireAuth, mais pour le DÉCLENCHEMENT des prélèvements GoCardless
+ * (endpoints gocardless-payment + gocardless-finalize). Autorise :
+ *   - les admins — peuvent déclencher tous les paiements ;
+ *   - tout utilisateur avec users/{uid}.paymentsTrigger === true, quel que
+ *     soit son rôle (sales, csm…) — peut déclencher tous les paiements ;
+ *   - les sales SANS flag — régime historique : uniquement leurs propres
+ *     paiements. Le check createdBy reste à la charge de l'endpoint :
+ *       if (!auth.canTriggerAll && pay.createdBy !== auth.uid) → 403
+ * Pose auth.canTriggerAll = true quand le droit couvre tous les paiements.
+ * Miroir du helper Firestore rules canTriggerPayments() et de la case
+ * « 🚀 Déclenchement des prélèvements » dans admin-users.html.
+ * NE COUVRE PAS : création, génération/envoi du lien mandat, annulation —
+ * ces endpoints gardent leur gate d'origine (admin ou sales propriétaire).
+ */
+async function requirePaymentsTrigger(req, res) {
+  const auth = await requireAuth(req, res);
+  if (!auth) return null; // requireAuth a déjà répondu 401/403
+
+  const canTriggerAll = auth.role === 'admin' || auth.userData.paymentsTrigger === true;
+  if (!canTriggerAll && auth.role !== 'sales') {
+    res.status(403).json({ error: 'Droit de déclenchement requis (paymentsTrigger)' });
+    return null;
+  }
+
+  auth.canTriggerAll = canTriggerAll;
+  return auth;
+}
+
 module.exports = {
   verifyFirebaseAuth,
   requireAuth,
   requireAdmin,
+  requirePaymentsTrigger,
 };

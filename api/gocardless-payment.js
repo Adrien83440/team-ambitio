@@ -6,11 +6,12 @@
 // - Fractionné         → POST /subscriptions
 //
 // Body : { paymentId }
-// Auth : Bearer Firebase ID token (rôle sales ou admin)
+// Auth : Bearer Firebase ID token — admin, flag paymentsTrigger (tout rôle),
+//        ou sales sur ses propres paiements (historique)
 // ==========================================================================
 
 const { db, admin } = require('./_firebaseAdmin');
-const { requireAuth } = require('./_verifyFirebaseAuth');
+const { requirePaymentsTrigger } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 
 const GC_BASE = process.env.GOCARDLESS_ENVIRONMENT === 'sandbox'
@@ -38,11 +39,8 @@ async function gcRequest(method, path, body) {
 module.exports = async (req, res) => {
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
-  const auth = await requireAuth(req, res);
+  const auth = await requirePaymentsTrigger(req, res);
   if (!auth) return;
-  if (auth.role !== 'sales' && auth.role !== 'admin') {
-    res.status(403).json({ error: 'Rôle sales ou admin requis' }); return;
-  }
 
   try {
     const { paymentId } = parseBody(req);
@@ -52,7 +50,7 @@ module.exports = async (req, res) => {
     if (!paySnap.exists) { res.status(404).json({ error: 'Paiement introuvable' }); return; }
     const pay = paySnap.data();
 
-    if (auth.role !== 'admin' && pay.createdBy !== auth.uid) {
+    if (!auth.canTriggerAll && pay.createdBy !== auth.uid) {
       res.status(403).json({ error: 'Accès non autorisé' }); return;
     }
     if (!pay.gcMandateId) {
