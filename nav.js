@@ -556,9 +556,12 @@
         try { var af=JSON.parse(localStorage.getItem('ambitio_alteoforms_forms')||'[]'); return af.length>0; } catch(e){ return false; }
       }
       if (m.perm === 'payments') {
-        // Admin et CSM ont accès paiements par défaut.
-        // Pour les autres rôles : flag explicite via localStorage.
-        if (role === 'admin' || role === 'csm') return true;
+        // Admin a accès d'office. TOUS les autres rôles (sales, csm, coach)
+        // passent par un flag explicite sur users/{uid} — « Accès au module
+        // Paiements » (paymentsAccess) OU « 🚀 Déclenchement des
+        // prélèvements » (paymentsTrigger) — synchronisé dans localStorage
+        // par initAlteoFormsAccessWatch().
+        if (role === 'admin') return true;
         return localStorage.getItem('ambitio_payments_access') === '1';
       }
       if (m.perm === 'signatures') {
@@ -1264,7 +1267,7 @@
         var formIds = userData.alteoformsFormIds || [];
         var prev = localStorage.getItem('ambitio_alteoforms_forms');
         var next = JSON.stringify(formIds);
-        var payAccess = userData.paymentsAccess === true ? '1' : '0';
+        var payAccess = (userData.paymentsAccess === true || userData.paymentsTrigger === true) ? '1' : '0';
         var prevPay = localStorage.getItem('ambitio_payments_access') || '0';
         var sigAccess = userData.signaturesAccess === true ? '1' : '0';
         var prevSig = localStorage.getItem('ambitio_signatures_access') || '0';

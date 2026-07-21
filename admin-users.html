@@ -1114,7 +1114,17 @@ function openEditModal(u){
   h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:8px">';
   h+='<input type="checkbox" id="ePaymentsAccess"'+(paymentsChecked?' checked':'')+' style="width:16px;height:16px;accent-color:#10b981"/>';
   h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.8)">💳 Accès au module Paiements</div>';
-  h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Peut créer et voir les paiements GoCardless</div></div>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Affiche le module Paiements dans le menu — un sales y voit et gère ses propres paiements</div></div>';
+  h+='</label></div>';
+
+  // Déclenchement des prélèvements (droit ciblé, indépendant de la case
+  // ci-dessus : cochée seule, elle affiche aussi le module dans le menu)
+  var trigChecked = u.paymentsTrigger === true;
+  h+='<div class="mf" style="margin-top:8px">';
+  h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:8px">';
+  h+='<input type="checkbox" id="ePaymentsTrigger"'+(trigChecked?' checked':'')+' style="width:16px;height:16px;accent-color:#f59e0b"/>';
+  h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.8)">🚀 Déclenchement des prélèvements</div>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Voit toute la liste des paiements et peut déclencher les prélèvements GoCardless (mandat actif). Ne peut ni créer, ni envoyer le lien mandat, ni annuler.</div></div>';
   h+='</label></div>';
 
   // Accès Signatures
@@ -1337,6 +1347,8 @@ async function handleSave(uid){
     if(afFormIds!==null)upd.alteoformsFormIds=afFormIds;
     var paymentsEl=document.getElementById('ePaymentsAccess');
     if(paymentsEl)upd.paymentsAccess=paymentsEl.checked;
+    var trigEl=document.getElementById('ePaymentsTrigger');
+    if(trigEl)upd.paymentsTrigger=trigEl.checked;
     var sigEl=document.getElementById('eSignaturesAccess');
     if(sigEl)upd.signaturesAccess=sigEl.checked;
     await updateDoc(doc(db,'users',uid),upd);

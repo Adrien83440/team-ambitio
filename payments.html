@@ -227,6 +227,7 @@
 const db = firebase.firestore();
 let currentUser = null;
 let currentRole = null;
+let canTriggerAll = false; // admin OU flag users.paymentsTrigger — peut déclencher TOUS les prélèvements
 let allPayments = [];
 let filteredPayments = [];
 let members = [];
@@ -265,10 +266,19 @@ firebase.auth().onAuthStateChanged(async u => {
 
   currentUser = u;
   const snap = await db.collection('users').doc(u.uid).get();
-  currentRole = snap.exists ? snap.data().role : 'sales';
+  const userData = snap.exists ? snap.data() : {};
+  currentRole = userData.role || 'sales';
+  // Droit de déclenchement : admin, ou case « 🚀 Déclenchement des
+  // prélèvements » cochée dans Gestion utilisateurs (users.paymentsTrigger).
+  // La personne voit alors TOUTE la liste (lecture) + le bouton 🚀 sur les
+  // mandats actifs — rien d'autre. Créer / lien mandat / annuler restent
+  // admin (+ régime historique : un sales gère SES propres paiements).
+  canTriggerAll = currentRole === 'admin' || userData.paymentsTrigger === true;
 
-  // Show/hide new payment button for non-sales
-  if (currentRole === 'admin') document.getElementById('btnNewPay').style.display = '';
+  // Bouton « Nouveau paiement » : admin, ou sales historique (parcours
+  // close-wizard ?leadId=). Jamais pour un simple droit de déclenchement.
+  document.getElementById('btnNewPay').style.display =
+    (currentRole === 'admin' || currentRole === 'sales') ? '' : 'none';
 
   // Load team members for filter (à chaque fire, idempotent via appendChild sur select vide)
   const tmSnap = await db.collection('_meta').doc('team_members').get();
@@ -361,12 +371,22 @@ function loadPayments() {
   // Cleanup si re-appel manuel (défensif)
   if (_paymentsUnsub) { _paymentsUnsub(); _paymentsUnsub = null; }
   let q = db.collection('payments').orderBy('createdAt', 'desc');
-  if (currentRole === 'sales') q = q.where('createdBy', '==', currentUser.uid);
+  // Un sales sans droit de déclenchement global ne voit que SES paiements
+  // (historique). Case cochée : toute la liste, pour retrouver le paiement
+  // à déclencher.
+  if (currentRole === 'sales' && !canTriggerAll) q = q.where('createdBy', '==', currentUser.uid);
   _paymentsUnsub = q.onSnapshot(snap => {
     allPayments = [];
     snap.forEach(d => { allPayments.push({ id: d.id, ...d.data() }); });
     renderStats();
     applyFilters();
+  }, err => {
+    // Rôle sans aucun droit (csm/coach non flaggés ouvrant la page en
+    // direct) : les rules Firestore refusent la lecture → message clair
+    // au lieu du « Chargement… » infini.
+    console.error('[payments] listener:', err && err.message);
+    document.getElementById('payTableBody').innerHTML =
+      '<tr><td colspan="8"><div class="pay-empty"><div class="pay-empty-icon">🔒</div><div>Accès au module Paiements non autorisé.<br>Demande à un admin de cocher « 🚀 Déclenchement des prélèvements » sur ton compte (Gestion utilisateurs).</div></div></td></tr>';
   });
 }
 
@@ -449,7 +469,7 @@ async function openDetail(id) {
   }
 
   const ini = (p.leadName || '💳')[0].toUpperCase();
-  const canTrigger = (p.status === 'mandate_active') && (currentRole === 'admin' || p.createdBy === currentUser.uid);
+  const canTrigger = (p.status === 'mandate_active') && (canTriggerAll || p.createdBy === currentUser.uid);
   const canSendLink = (p.status === 'pending_mandate' || p.status === 'draft') && (currentRole === 'admin' || p.createdBy === currentUser.uid);
   const canRefresh = (p.status === 'pending_mandate') && p.gcBillingRequestId;
   const isAdmin = currentRole === 'admin';
@@ -461,8 +481,8 @@ async function openDetail(id) {
       <div class="pay-link-url">${esc(p.gcBillingRequestFlowUrl)}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="pay-btn pay-btn-ghost" style="font-size:12px" onclick="copyLink('${esc(p.gcBillingRequestFlowUrl)}')">📋 Copier</button>
-        ${p.leadPhone ? `<button class="pay-btn pay-btn-amber" style="font-size:12px" onclick="sendLink('${id}','sms')">📱 Envoyer SMS</button>` : ''}
-        ${p.leadEmail ? `<button class="pay-btn pay-btn-amber" style="font-size:12px" onclick="sendLink('${id}','email')">📧 Envoyer email</button>` : ''}
+        ${canSendLink && p.leadPhone ? `<button class="pay-btn pay-btn-amber" style="font-size:12px" onclick="sendLink('${id}','sms')">📱 Envoyer SMS</button>` : ''}
+        ${canSendLink && p.leadEmail ? `<button class="pay-btn pay-btn-amber" style="font-size:12px" onclick="sendLink('${id}','email')">📧 Envoyer email</button>` : ''}
         ${canRefresh ? `<button class="pay-btn pay-btn-ghost" style="font-size:12px" onclick="finalizeMandate('${id}')">🔄 Rafraîchir statut</button>` : ''}
       </div>
     </div>`;

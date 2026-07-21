@@ -77,6 +77,20 @@ service cloud.firestore {
       );
     }
 
+    // Helper : droit de DÉCLENCHEMENT des prélèvements GoCardless. Un flag
+    // booléen paymentsTrigger sur users/{uid} donne la LECTURE de tous les
+    // paiements (retrouver celui à déclencher) — le déclenchement lui-même
+    // passe par l'endpoint Vercel gocardless-payment (Admin SDK, gate
+    // requirePaymentsTrigger). Ne donne NI création, NI update, NI
+    // suppression : créer / lien mandat / annuler restent admin (+ sales
+    // sur ses propres paiements, régime historique). Admins : automatique.
+    function canTriggerPayments() {
+      return isAuth() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.paymentsTrigger == true
+      );
+    }
+
     // Helper : l'utilisateur authentifié est-il propriétaire de la fiche
     // expert booking_config/{personId} ? Basé sur le champ firebaseUid
     // posé par l'admin depuis la page booking-admin. Utilisé pour gater
@@ -638,7 +652,7 @@ service cloud.firestore {
 
     // ═══ PAYMENTS ═══
     match /payments/{paymentId} {
-      allow read:   if isSalesOrAdmin();
+      allow read:   if isSalesOrAdmin() || canTriggerPayments();
       allow create: if isSalesOrAdmin();
       allow update: if isAdmin() || (isSalesOrAdmin() && resource.data.createdBy == request.auth.uid);
       allow delete: if isAdmin();
