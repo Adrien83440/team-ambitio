@@ -433,6 +433,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ld-status-btn[data-status="client"]:hover { background: rgba(251,191,36,0.12); box-shadow: 0 5px 18px rgba(251,191,36,0.15); }
 .ld-status-grid { display: contents; }
 
+/* ── Score qualité du lead (1-5) — pastilles post-appel (22/07/2026) ── */
+.ld-score-row { display: flex; align-items: center; gap: 7px; }
+.ld-score-btn {
+  width: 42px; height: 36px; border-radius: 10px; border: 1.5px solid var(--border);
+  background: var(--bg3); color: var(--muted); font-family: var(--fh);
+  font-size: 13.5px; font-weight: 800; cursor: pointer; transition: all .13s;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+}
+.ld-score-btn:hover { border-color: var(--border2); color: var(--text); }
+.ld-score-btn.active { border-color: currentColor; background: rgba(255,255,255,0.05); box-shadow: 0 0 0 1px currentColor inset; }
+.ld-score-hint { font-size: 10.5px; color: var(--muted2); margin-top: 6px; }
+.ld-badge-score {
+  display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 6px;
+  font-size: 10px; font-weight: 800; font-family: var(--fm); white-space: nowrap;
+  color: #fbbf24; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+}
+
 .ld-rdv-section { margin-top: 10px; }
 .ld-rdv-row { display: flex; gap: 8px; margin-bottom: 10px; }
 .ld-rdv-row input {
@@ -2976,6 +2993,10 @@ function renderLeadTags(l, compact) {
      (Élite/Business…) → badge doré Self Booking, idem à la chip du RDV. */
   if (sbSituation && l.type !== 'self_booking') h += '<span class="ld-badge self">Self Booking</span>';
   h += '<span class="ld-badge-status" style="background:' + statusObj.bg + ';color:' + statusObj.color + '"><span class="sd" style="background:' + statusObj.color + '"></span>' + statusObj.label + '</span>';
+  /* Score qualité (1-5) — badge doré compact, visible en liste et en fiche */
+  if (l.leadScore >= 1 && l.leadScore <= 5) {
+    h += '<span class="ld-badge-score" title="Qualité du lead : ' + l.leadScore + '/5">★ ' + l.leadScore + '</span>';
+  }
   if (setterObj && !(compact && personalUser && l.assignedTo === personalUser)) {
     h += '<span class="ld-assigned" style="color:' + setterObj.color + '">' + escHtml(setterObj.name) + '</span>';
   }
@@ -3088,6 +3109,33 @@ function renderCard(l) {
   return h;
 }
 
+/* ── Score qualité du lead (1-5) — annotation post-appel (validé Adrien 22/07) ──
+   Pastilles 1→5 sous le bloc Statut du segment ⚡ Action. Champ leads.leadScore
+   (number 1-5) + leadScoreAt/By/ByUid/ByName. Re-tap sur la note active = efface
+   (FieldValue.delete()). PAS journalisé dans lead_actions : c'est une annotation
+   qualité, pas une action de setting — le rapport Set NB reste intact. */
+var LEAD_SCORE_COLORS = { 1: '#ef4444', 2: '#f97316', 3: '#f59e0b', 4: '#a3e635', 5: '#34d399' };
+
+function ldScoreBlockHTML(l, id) {
+  var cur = (l.leadScore >= 1 && l.leadScore <= 5) ? l.leadScore : 0;
+  var h = '<div class="ld-actions-title">⭐ Qualité du lead</div>';
+  h += '<div class="ld-score-row" data-score-row="' + id + '">';
+  for (var i = 1; i <= 5; i++) {
+    var on = (cur === i);
+    var col = LEAD_SCORE_COLORS[i];
+    h += '<button type="button" class="ld-score-btn' + (on ? ' active' : '') + '" style="' + (on ? 'color:' + col + ';border-color:' + col : '') + '" data-action="setScore" data-id="' + id + '" data-score="' + i + '" title="Qualité ' + i + '/5' + (on ? ' — re-tap pour effacer' : '') + '">' + i + '</button>';
+  }
+  h += '</div>';
+  if (cur) {
+    var byN = l.leadScoreByName ? ' par ' + escHtml(l.leadScoreByName) : '';
+    var agoS = l.leadScoreAt ? ' · ' + timeAgo(l.leadScoreAt) : '';
+    h += '<div class="ld-score-hint">Noté ' + cur + '/5' + byN + agoS + ' — re-tap sur la note pour effacer</div>';
+  } else {
+    h += '<div class="ld-score-hint">À remplir après avoir eu le lead</div>';
+  }
+  return h;
+}
+
 /* ═══ FICHE — construction des segments ═══ */
 function l2SegAction(l, id) {
   var h = '<div class="ld-actions">';
@@ -3104,6 +3152,9 @@ function l2SegAction(l, id) {
     h += '</div></div>';
   }
   h += '</div>';
+
+  // ── Score qualité du lead (1-5) — annotation post-appel ──
+  h += ldScoreBlockHTML(l, id);
 
   // RDV fields (hidden unless rdv_pose)
   var showRdv = (l.status || 'nouveau') === 'rdv_pose';
@@ -3861,6 +3912,64 @@ document.addEventListener('click', function(e) {
     var rrB = rrList.find(function (x) { return x.id === rrBk; });
     if (rrB && window.RdvOutcome) window.RdvOutcome.openReschedule(rrB, {});
     else toast('❌ RDV introuvable');
+    return;
+  }
+
+  // ── Score qualité du lead (1-5) — annotation post-appel ──
+  // Re-tap sur la note active = efface. PAS de journal lead_actions ni de
+  // sync stage : simple annotation sur la fiche (rapport Set NB intact).
+  var scoreBtn = e.target.closest('[data-action="setScore"]');
+  if (scoreBtn) {
+    e.stopPropagation();
+    var scId = scoreBtn.dataset.id;
+    var scVal = parseInt(scoreBtn.dataset.score, 10);
+    if (!(scVal >= 1 && scVal <= 5)) return;
+    var scLead = null;
+    for (var sci = 0; sci < allLeads.length; sci++) { if (allLeads[sci].id === scId) { scLead = allLeads[sci]; break; } }
+    if (!scLead) return;
+    var scClear = (scLead.leadScore === scVal);            // re-tap = effacer
+    var scUser = (typeof getCurrentVoiceUser === 'function') ? getCurrentVoiceUser() : null;
+
+    // Mise à jour locale + visuel immédiat (le onSnapshot confirmera et
+    // repeindra la carte + le hint de la fiche avec les données fraîches).
+    scLead.leadScore = scClear ? null : scVal;
+    var scRow = scoreBtn.closest('[data-score-row]');
+    if (scRow) {
+      scRow.querySelectorAll('.ld-score-btn').forEach(function (b) {
+        b.classList.remove('active'); b.style.color = ''; b.style.borderColor = '';
+      });
+      if (!scClear) {
+        scoreBtn.classList.add('active');
+        scoreBtn.style.color = LEAD_SCORE_COLORS[scVal];
+        scoreBtn.style.borderColor = LEAD_SCORE_COLORS[scVal];
+      }
+    }
+
+    var scUpdates;
+    if (scClear) {
+      scUpdates = {
+        leadScore: firebase.firestore.FieldValue.delete(),
+        leadScoreAt: firebase.firestore.FieldValue.delete(),
+        leadScoreBy: firebase.firestore.FieldValue.delete(),
+        leadScoreByUid: firebase.firestore.FieldValue.delete(),
+        leadScoreByName: firebase.firestore.FieldValue.delete(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+    } else {
+      scUpdates = {
+        leadScore: scVal,
+        leadScoreAt: firebase.firestore.FieldValue.serverTimestamp(),
+        leadScoreBy: scUser ? scUser.slug : null,
+        leadScoreByUid: scUser ? scUser.uid : null,
+        leadScoreByName: scUser ? scUser.name : null,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+    }
+    db.collection('leads').doc(scId).update(scUpdates).then(function () {
+      toast(scClear ? '✅ Score effacé' : '⭐ Qualité : ' + scVal + '/5');
+    }).catch(function (err) {
+      toast('❌ ' + err.message);
+    });
     return;
   }
 
