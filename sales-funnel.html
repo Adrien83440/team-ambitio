@@ -306,6 +306,22 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     }
   }
 
+  /* ── Clé « créative » d'un lead (section UTM — validé Adrien 22/07) ──
+     Le lead porte UN champ utm (string posée par l'opt-in / Make, parfois
+     %-encodée, parfois querystring complète). Règle : utm décodé tel quel ;
+     si la valeur contient utm_content= (= la créative chez Meta), on extrait
+     ce paramètre. Vide → « — » (bucket « sans UTM »). */
+  function utmKeyOf(l) {
+    var raw = decodeUtm(l && l.utm);
+    var str = raw == null ? '' : String(raw).trim();
+    if (!str) return '—';
+    var m = str.match(/(?:^|[?&\s])utm_content=([^&\s]+)/i);
+    if (m && m[1]) {
+      try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+    }
+    return str;
+  }
+
   /* ── Dates "réelles" lead — portage ES5 de api/_leadDates.js ── */
   function parseFlexMs(v) {
     if (v == null) return null;
@@ -1512,6 +1528,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       if (pay.con > 0) con = pay.con;
       else if (decl) con = decl.con;
       if (col == null) { colMissing++; colMissingNames.push(l.nom || lem || l._id); }
+      l._wonCol = (col || 0);   /* collecté consolidé par fiche — réutilisé par la section « par créative » */
       if (sb2) { wonColSB += (col || 0); wonConSB += con; } else { wonColNB += (col || 0); wonConNB += con; }
     });
     /* Closes RDV sans fiche liée : Paiements par email/téléphone, repli cartes. */
@@ -1555,6 +1572,54 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     k.collecteMissing = colMissing;
     k.collecteMissingNames = colMissingNames;
     k.closesNoPayment = noPayCount;
+
+    /* ── 🎨 Performance par créative (UTM) — validé Adrien 22/07 ──
+       Axe = utmKeyOf(lead). Chaque métrique garde l'axe temporel de SA
+       section (décision 3a) : leads = entrés période (cohorte) · RDV pris =
+       créés période (replanifs dédupliquées, comme Prise de RDV) · annulés /
+       no-show = RDV ayant lieu dans la période (prédicats de la Tenue,
+       replanifiés exclus) · closes = fiches gagnées clientSince période +
+       collecté consolidé (_wonCol — Paiements, repli cartes). Qualifiés =
+       leadScore 4-5 (curseur Leads Live) ; non notés hors moyenne.
+       Les événements dont le lead n'est pas rattachable (hors fenêtre de
+       chargement, close sans fiche, close détecté via Paiements) partent
+       dans k.utmUnattr — affichés en note, jamais un zéro muet. */
+    var utmMap = {};
+    function utmRowOf(key) {
+      if (!utmMap[key]) utmMap[key] = { key: key, leads: 0, scoreSum: 0, scoreN: 0, qual: 0, booked: 0, cancelled: 0, noshow: 0, closes: 0, col: 0 };
+      return utmMap[key];
+    }
+    cohort.forEach(function (l) {
+      var ur = utmRowOf(utmKeyOf(l));
+      ur.leads++;
+      if (l.leadScore >= 1 && l.leadScore <= 5) {
+        ur.scoreSum += l.leadScore; ur.scoreN++;
+        if (l.leadScore >= 4) ur.qual++;
+      }
+    });
+    var utmUnattr = { booked: 0, cancelled: 0, noshow: 0, closes: 0 };
+    createdFunnel.forEach(function (b) {
+      var ul = bookingLead(b);
+      if (ul) utmRowOf(utmKeyOf(ul)).booked++; else utmUnattr.booked++;
+    });
+    due.forEach(function (b) {
+      var isCancel = dueCancelledF(b);
+      var isNoShow = b.status === 'no_show';
+      if (!isCancel && !isNoShow) return;
+      var ul2 = bookingLead(b);
+      if (!ul2) { if (isCancel) utmUnattr.cancelled++; else utmUnattr.noshow++; return; }
+      var ur2 = utmRowOf(utmKeyOf(ul2));
+      if (isCancel) ur2.cancelled++; else ur2.noshow++;
+    });
+    closedLeads.forEach(function (l) {
+      var ur3 = utmRowOf(utmKeyOf(l));
+      ur3.closes++;
+      ur3.col += (l._wonCol || 0);
+    });
+    utmUnattr.closes = closesNoLeadSB + closesNoLeadNB + payClosesSB + payClosesNB;
+    k.utmRows = Object.keys(utmMap).map(function (uk) { return utmMap[uk]; })
+      .sort(function (a, b) { return (b.leads - a.leads) || (b.closes - a.closes) || (a.key < b.key ? -1 : 1); });
+    k.utmUnattr = utmUnattr;
 
     /* ROAS résultats = collecté réel (HT) / dépense — rien d'autre. */
     k.roasOutcome = (k.spend > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.spend : null;
@@ -1752,6 +1817,50 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
 
+    /* 3bis. 🎨 Performance par créative (UTM) — validé Adrien 22/07.
+       Tableau par valeur UTM du lead : leads · score · qualifiés · RDV pris ·
+       annulés · no-show · closes · collecté. Chaque colonne garde l'axe de sa
+       section — les totaux retombent sur le héro / Prise de RDV / Tenue. */
+    h += stageOpen('🎨', 'Performance par créative (UTM)', 'axe = champ UTM du lead (utm_content extrait si querystring) · chaque colonne garde l\'axe de sa section : leads entrés · RDV pris · annulés &amp; no-show ayant lieu · closes gagnés sur la période · qualifiés = score ⭐ 4-5 (Leads Live)');
+    if (!k.utmRows || !k.utmRows.length) {
+      h += '<div class="fn-empty" style="padding:14px">Aucun lead sur la période.</div>';
+    } else {
+      h += '<div class="fn-table-wrap" style="margin-top:10px"><table class="fn-table" style="min-width:940px"><thead><tr>';
+      h += '<th style="cursor:default">Créative (UTM)</th><th style="cursor:default">Leads</th><th style="cursor:default">Score moy ⭐</th><th style="cursor:default">Qualifiés 4-5</th><th style="cursor:default">RDV pris</th><th style="cursor:default">Annulés</th><th style="cursor:default">No-show</th><th style="cursor:default">Closes</th><th style="cursor:default">Collecté HT</th>';
+      h += '</tr></thead><tbody>';
+      k.utmRows.forEach(function (r) {
+        var avg = r.scoreN ? Math.round(r.scoreSum / r.scoreN * 10) / 10 : null;
+        var avgColor = avg == null ? 'var(--muted2)' : (avg >= 4 ? '#34d399' : (avg >= 3 ? '#f59e0b' : '#ef4444'));
+        var ltbPct = (r.leads > 0 && r.booked > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(r.booked / r.leads * 100, 0) + '</span>' : '';
+        var closePct = (r.leads > 0 && r.closes > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(r.closes / r.leads * 100, 1) + '</span>' : '';
+        h += '<tr>';
+        h += '<td><span class="fn-utm" title="' + escAttr(r.key) + '">' + esc(r.key) + '</span></td>';
+        h += '<td class="num">' + fmtNum(r.leads) + '</td>';
+        h += '<td class="num" style="color:' + avgColor + '">' + (avg == null ? '—' : '⭐ ' + avg.toLocaleString('fr-FR')) + (r.scoreN ? ' <span style="color:var(--muted2);font-size:10px">(' + r.scoreN + ' noté' + (r.scoreN > 1 ? 's' : '') + ')</span>' : '') + '</td>';
+        h += '<td class="num">' + (r.scoreN ? fmtNum(r.qual) : '—') + '</td>';
+        h += '<td class="num">' + fmtNum(r.booked) + ltbPct + '</td>';
+        h += '<td class="num"' + (r.cancelled ? ' style="color:var(--red3)"' : '') + '>' + fmtNum(r.cancelled) + '</td>';
+        h += '<td class="num"' + (r.noshow ? ' style="color:var(--gold)"' : '') + '>' + fmtNum(r.noshow) + '</td>';
+        h += '<td class="num"' + (r.closes ? ' style="color:#34d399;font-weight:700"' : '') + '>' + fmtNum(r.closes) + closePct + '</td>';
+        h += '<td class="num">' + (r.closes ? fmtEuro(r.col) : '—') + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table></div>';
+      var uu = k.utmUnattr || {};
+      if (uu.booked || uu.cancelled || uu.noshow || uu.closes) {
+        var uuParts = [];
+        if (uu.booked) uuParts.push(fmtNum(uu.booked) + ' RDV pris');
+        if (uu.cancelled) uuParts.push(fmtNum(uu.cancelled) + ' annulé(s)');
+        if (uu.noshow) uuParts.push(fmtNum(uu.noshow) + ' no-show');
+        if (uu.closes) uuParts.push(fmtNum(uu.closes) + ' close(s)');
+        h += '<div class="fn-stage-note" style="margin-top:8px">⚠ Non ventilables par créative : ' + uuParts.join(' · ')
+          + ' — lead hors fenêtre de chargement (45 j), close sans fiche liée ou détecté via Paiements. Comptés dans les totaux des sections, absents du tableau.</div>';
+      }
+      h += '<div class="fn-stage-note" style="margin-top:6px">Le score ⭐ se remplit dans Leads Live après chaque appel — plus l\'équipe note, plus cette colonne devient fiable.</div>';
+    }
+    h += '</div>';
+    h += '<div class="fn-arrow">▼</div>';
+
     /* 4. Prise de RDV — DEUX LIGNES Self Booking / No Booking.
        Refonte 14/07 (retour Vincent) : TOUT est sur l'axe « RDV créés sur
        la période », chaînes de replanification dédupliquées, résultat de
@@ -1921,8 +2030,10 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   /* ════════════════════════════════════════════════════════════════
      RENDER — ONGLET LEADS (détail par lead)
      ════════════════════════════════════════════════════════════════ */
+  var FN_SCORE_COLORS = { 1: '#ef4444', 2: '#f97316', 3: '#f59e0b', 4: '#a3e635', 5: '#34d399' };
   var SORTERS = {
     name:    function (l) { return (l.nom || '').toLowerCase(); },
+    score:   function (l) { return (l.leadScore >= 1 && l.leadScore <= 5) ? l.leadScore : 0; },
     tunnel:  function (l) { return l._tunnel; },
     utm:     function (l) { return (decodeUtm(l.utm) || '').toLowerCase(); },
     entry:   function (l) { return l._entry || 0; },
@@ -1957,7 +2068,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<button class="fn-btn" id="fnLeadsCsv">⬇ Export CSV</button>';
     h += '</div>';
     h += '<div class="fn-table-wrap"><table class="fn-table"><thead><tr>';
-    var cols = [['name', 'Lead'], ['tunnel', 'Tunnel'], ['utm', 'UTM'], ['entry', 'Entrée réelle'], ['calls', '📞'], ['sms', '💬'], ['ttc', '1er contact'], ['rdv', 'RDV'], ['status', 'Statut RDV'], ['ttb', '⏱ Book']];
+    var cols = [['name', 'Lead'], ['tunnel', 'Tunnel'], ['utm', 'UTM'], ['score', '⭐'], ['entry', 'Entrée réelle'], ['calls', '📞'], ['sms', '💬'], ['ttc', '1er contact'], ['rdv', 'RDV'], ['status', 'Statut RDV'], ['ttb', '⏱ Book']];
     cols.forEach(function (c) {
       var arrow = leadsSort.key === c[0] ? (leadsSort.dir > 0 ? ' ▲' : ' ▼') : '';
       h += '<th data-sort="' + c[0] + '">' + c[1] + arrow + '</th>';
@@ -2007,7 +2118,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       return 0;
     });
     $('#fnLeadsCount').textContent = list.length + ' lead(s)';
-    if (!list.length) { body.innerHTML = '<tr><td colspan="10"><div class="fn-empty">Aucun lead ne correspond.</div></td></tr>'; return; }
+    if (!list.length) { body.innerHTML = '<tr><td colspan="11"><div class="fn-empty">Aucun lead ne correspond.</div></td></tr>'; return; }
     var rows = '';
     var shown = list.slice(0, 800);
     shown.forEach(function (l) {
@@ -2018,6 +2129,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       rows += '<td><a class="fn-lead-link" href="sales-contact.html?id=' + encodeURIComponent(l._id) + '" target="_blank">' + esc(l.nom || l.email || '—') + '</a>' + reopt + '</td>';
       rows += '<td><span class="fn-tbadge ' + l._tunnel + '">' + tunnelLabel(l._tunnel) + '</span></td>';
       rows += '<td><span class="fn-utm" title="' + escAttr(utm) + '">' + esc(utm) + '</span></td>';
+      var lsc = (l.leadScore >= 1 && l.leadScore <= 5) ? l.leadScore : null;
+      rows += '<td class="num">' + (lsc ? '<span style="color:' + FN_SCORE_COLORS[lsc] + ';font-weight:700" title="Qualité du lead (Leads Live)' + (l.leadScoreByName ? ' — noté par ' + escAttr(l.leadScoreByName) : '') + '">⭐ ' + lsc + '</span>' : '<span style="color:var(--muted2)">—</span>') + '</td>';
       rows += '<td class="num">' + frDate(l._entry) + '</td>';
       rows += '<td class="num">' + (l._nbCalls || 0) + '</td>';
       rows += '<td class="num">' + (l._nbSms || 0) + '</td>';
@@ -2033,14 +2146,14 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       rows += '<td class="num">' + fmtDelay(l._ttb) + '</td>';
       rows += '</tr>';
     });
-    if (list.length > shown.length) rows += '<tr><td colspan="10" style="text-align:center;color:var(--muted);font-size:11.5px;padding:10px">Affichage limité à 800 lignes — affine la recherche ou exporte en CSV (complet).</td></tr>';
+    if (list.length > shown.length) rows += '<tr><td colspan="11" style="text-align:center;color:var(--muted);font-size:11.5px;padding:10px">Affichage limité à 800 lignes — affine la recherche ou exporte en CSV (complet).</td></tr>';
     body.innerHTML = rows;
   }
 
   function exportLeadsCsv() {
     var list = filteredLeads();
     var sep = ';';
-    var head = ['Nom', 'Email', 'Telephone', 'Tunnel', 'UTM', 'Entree reelle', 'Re-optins', 'Appels', 'SMS', '1er contact (h)', 'RDV', 'Statut RDV', 'Date RDV', 'Time-to-book (h)'];
+    var head = ['Nom', 'Email', 'Telephone', 'Tunnel', 'UTM', 'Score', 'Entree reelle', 'Re-optins', 'Appels', 'SMS', '1er contact (h)', 'RDV', 'Statut RDV', 'Date RDV', 'Time-to-book (h)'];
     var lines = [head.join(sep)];
     list.forEach(function (l) {
       var bk = leadRdvInfo(l);
@@ -2049,6 +2162,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       lines.push([
         cell(l.nom || ''), cell(l.email || ''), cell(l.telephone || l.phone || ''),
         cell(tunnelLabel(l._tunnel)), cell(decodeUtm(l.utm) || ''),
+        cell((l.leadScore >= 1 && l.leadScore <= 5) ? l.leadScore : ''),
         cell(l._entry ? new Date(l._entry).toISOString() : ''),
         cell(l.engagementHistory ? l.engagementHistory.length : 0),
         cell(l._nbCalls || 0), cell(l._nbSms || 0), cell(hours(l._ttc)),
