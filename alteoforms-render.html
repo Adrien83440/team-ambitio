@@ -196,6 +196,33 @@ body.embed-mode .error-page{padding:48px 20px}
   body.embed-mode .card-question{font-size:21px}
   body.embed-mode .card-desc{margin-bottom:18px}
 }
+/* ═══ Finir plus tard — brouillons (07/2026) ═══ */
+.af-resume-banner{width:100%;max-width:640px;display:flex;align-items:center;justify-content:space-between;gap:14px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.28);border-radius:14px;padding:14px 18px;margin-bottom:22px;animation:fadeUp .5s ease both;flex-wrap:wrap}
+.af-rb-txt{font-size:14px;font-weight:700}
+.af-rb-txt span{display:block;font-size:11px;font-weight:400;color:var(--text-muted);margin-top:2px}
+.af-rb-actions{display:flex;gap:8px}
+.af-rb-btn{padding:9px 16px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:all .2s}
+.af-rb-btn:hover{color:var(--text);border-color:rgba(255,255,255,.18)}
+.af-rb-primary{background:var(--accent);border-color:var(--accent);color:#000}
+.af-rb-primary:hover{background:#d97706;border-color:#d97706;color:#000}
+.af-save-btn{background:transparent;color:var(--text-muted);border:1px solid var(--border);font-size:13px}
+.af-save-btn:hover{color:var(--text);border-color:rgba(255,255,255,.2)}
+.pf-submit-wrap .af-save-btn{margin-right:10px}
+@media(max-width:640px){.af-save-lbl{display:none}.af-save-btn{padding:11px 13px}}
+.af-resume-link{font-size:11px;color:var(--text-muted);margin-top:20px;text-align:center;width:100%}
+body.page-mode .af-resume-link{padding-bottom:90px}
+.af-resume-link a{color:var(--accent);cursor:pointer;text-decoration:underline}
+.af-modal-ov{position:fixed;inset:0;background:rgba(5,5,12,.74);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.af-modal{width:100%;max-width:430px;background:var(--card-bg);border:1px solid rgba(255,255,255,.09);border-radius:18px;padding:26px 26px 22px;animation:fadeUp .35s ease both}
+.af-modal-title{font-size:18px;font-weight:800;margin-bottom:8px;letter-spacing:-.2px}
+.af-modal-desc{font-size:13px;color:var(--text-muted);line-height:1.55;margin-bottom:16px}
+.af-modal-input{font-size:16px!important}
+.af-modal-err{font-size:12px;color:#ef4444;margin-top:8px;display:none}
+.af-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.af-modal-done{font-size:14px;line-height:1.65;color:var(--text)}
+.af-modal-done .af-md-btn{margin-top:18px}
+.af-notice{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--card-bg);border:1px solid rgba(245,158,11,.4);color:var(--text);font-size:12.5px;font-weight:600;padding:10px 18px;border-radius:999px;z-index:210;box-shadow:0 8px 24px rgba(0,0,0,.45);animation:fadeUp .3s ease both;max-width:88vw;text-align:center}
+.af-notice-err{border-color:rgba(239,68,68,.45)}
 </style>
 </head>
 <body>
@@ -312,6 +339,7 @@ document.getElementById('navHint').style.display='block';
 buildCards();
 showCard(0);
 }
+initDraftFeature(params);
 }).catch(function(e){showError('Erreur : '+e.message);});
 })();
 
@@ -818,6 +846,7 @@ if(group&&group.length===1)setTimeout(goNext,350);
 // Keyboard navigation
 document.addEventListener('keydown',function(e){
 if(submitted)return;
+if(window._afModalOpen)return;
 if(e.key==='Enter'&&!e.shiftKey){
 e.preventDefault();
 goNext();
@@ -851,6 +880,7 @@ submitAnswers(answersMap);
 function submitAnswers(answersMap){
 if(submitted)return;
 submitted=true;
+draftOnSubmitted();
 
 // ── Mode page : les handlers pfSelect* (radio/check/scale/rating)
 //    n'écrivent pas dans la variable globale `answers`. submitPageForm()
@@ -1071,6 +1101,389 @@ container.innerHTML='<div class="card active" style="display:block"><div class="
 }
 setTimeout(notifyParentHeight,50);
 }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FINIR PLUS TARD — sauvegarde & reprise de brouillon (07/2026)
+   - Auto-save localStorage (même appareil), debounce 600 ms
+   - Bouton « 💾 Finir plus tard » → email → lien magique via
+     POST /api/alteoform-draft (Admin SDK ; collection
+     alteo_forms/{id}/drafts, invisible côté client anonyme)
+   - Reprise : ?draft={token} (tout appareil) ou bannière locale
+   - « Reprendre par email » : RENVOIE le lien à l'adresse saisie
+     — jamais de chargement direct par email seul (sinon
+     n'importe qui pourrait lire les réponses d'autrui)
+   - Désactivable par formulaire : settings.allowDraft === false
+   - Preview builder : totalement inerte
+   ═══════════════════════════════════════════════════════════ */
+var DRAFT={enabled:false,id:null,email:'',saveTimer:null,localKey:null,preview:false};
+
+function draftApi(payload){
+return fetch('/api/alteoform-draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json();});
+}
+
+// Snapshot des réponses courantes — lecture DOM via pfGetValue, qui gère
+// tous les types de champs et marche dans les DEUX modes (cards et page).
+function buildCurrentAnswers(){
+var map={};
+FIELDS.forEach(function(f){
+if(f.type==='info')return;
+var v;
+if(f.type==='checkbox'){
+// pfGetValue ne renvoie que la PREMIÈRE option sélectionnée : pour les
+// checkbox on rejoint toutes les valeurs par ', ' (même format que
+// toggleCheck / la collecte page mode).
+var el=document.querySelector('[data-fid="'+f.id+'"]');
+var vals=[];
+if(el)el.querySelectorAll('.af-option.selected').forEach(function(o){vals.push(o.dataset.value);});
+v=vals.join(', ');
+}else{
+v=pfGetValue(f.id);
+}
+if(v===undefined||v===null||v==='')return;
+map[f.id]=String(v);
+});
+return map;
+}
+
+function initDraftFeature(params){
+if(!FORM)return;
+DRAFT.localKey='af_draft_'+FORM._id;
+DRAFT.preview=!!params.get('preview');
+DRAFT.enabled=(!FORM.settings||FORM.settings.allowDraft!==false)&&!DRAFT.preview;
+if(!DRAFT.enabled)return;
+injectDraftUi();
+// Écouteurs additifs (aucun handler existant modifié) : couvrent la saisie
+// texte des deux modes + tous les clics option/échelle/rating.
+document.addEventListener('input',draftActivity);
+document.addEventListener('change',draftActivity);
+document.addEventListener('click',function(e){
+var t=e.target;
+if(!t||!t.closest)return;
+if(t.closest('.af-option')||t.closest('.af-scale-btn')||t.closest('.af-rating-btn'))draftActivity();
+});
+var urlDraft=params.get('draft');
+if(urlDraft){loadServerDraft(urlDraft);return;}
+var local=readLocalDraft();
+if(local)showResumeBanner(local);
+}
+
+function draftActivity(){
+if(!DRAFT.enabled||submitted)return;
+scheduleDraftSave();
+updateSaveBtnVisibility();
+}
+
+function scheduleDraftSave(){
+if(DRAFT.saveTimer)clearTimeout(DRAFT.saveTimer);
+DRAFT.saveTimer=setTimeout(writeLocalDraft,600);
+}
+
+function writeLocalDraft(){
+if(!DRAFT.enabled||submitted)return;
+try{
+var map=buildCurrentAnswers();
+if(!Object.keys(map).length)return;
+localStorage.setItem(DRAFT.localKey,JSON.stringify({v:1,formId:FORM._id,answers:map,updatedAt:Date.now(),draftId:DRAFT.id||null,email:DRAFT.email||''}));
+}catch(e){}
+}
+
+function readLocalDraft(){
+try{
+var raw=localStorage.getItem(DRAFT.localKey);
+if(!raw)return null;
+var d=JSON.parse(raw);
+if(!d||!d.answers)return null;
+// Même durée de vie que le brouillon serveur : 60 jours.
+if(d.updatedAt&&(Date.now()-d.updatedAt)>60*86400000){localStorage.removeItem(DRAFT.localKey);return null;}
+d.count=Object.keys(d.answers).length;
+return d.count>0?d:null;
+}catch(e){return null;}
+}
+
+function clearLocalDraft(){try{if(DRAFT.localKey)localStorage.removeItem(DRAFT.localKey);}catch(e){}}
+
+// Appelé par submitAnswers() : purge locale + consommation du brouillon
+// serveur (fire & forget — la soumission n'attend jamais cet appel).
+function draftOnSubmitted(){
+if(DRAFT.saveTimer)clearTimeout(DRAFT.saveTimer);
+clearLocalDraft();
+if(DRAFT.id&&FORM){
+try{draftApi({action:'consume',formId:FORM._id,draftId:DRAFT.id}).catch(function(){});}catch(e){}
+}
+}
+
+/* ── UI : boutons, lien de reprise, modal ── */
+function injectDraftUi(){
+var nb=document.getElementById('navBar');
+if(nb){
+var sb=document.createElement('button');
+sb.type='button';sb.className='nav-btn af-save-btn';sb.id='afSaveBtn';
+sb.title='Sauvegarder et finir plus tard';
+sb.innerHTML='💾<span class="af-save-lbl"> Finir plus tard</span>';
+sb.style.display='none';
+sb.onclick=function(){openDraftModal('save');};
+nb.insertBefore(sb,nb.firstChild);
+}
+var pw=document.querySelector('.pf-submit-wrap');
+if(pw){
+var sp=document.createElement('button');
+sp.type='button';sp.className='nav-btn af-save-btn';sp.id='afSaveBtnPage';
+sp.title='Sauvegarder et finir plus tard';
+sp.innerHTML='💾<span class="af-save-lbl"> Finir plus tard</span>';
+sp.style.display='none';
+sp.onclick=function(){openDraftModal('save');};
+pw.insertBefore(sp,pw.firstChild);
+}
+var fc=document.getElementById('formContainer');
+if(fc){
+var rl=document.createElement('div');
+rl.className='af-resume-link';rl.id='afResumeLink';
+rl.innerHTML='Déjà une sauvegarde sur un autre appareil ? <a id="afResumeLinkA">Reprendre par email</a>';
+fc.appendChild(rl);
+var a=rl.querySelector('#afResumeLinkA');
+if(a)a.onclick=function(){openDraftModal('resend');};
+}
+var ov=document.createElement('div');
+ov.className='af-modal-ov';ov.id='afDraftModal';ov.style.display='none';
+ov.innerHTML='<div class="af-modal">'
++'<div class="af-modal-title" id="afDmTitle"></div>'
++'<div class="af-modal-desc" id="afDmDesc"></div>'
++'<div id="afDmFormZone">'
++'<input type="email" class="af-input af-modal-input" id="afDmEmail" placeholder="votre@email.com" autocomplete="email"/>'
++'<div class="af-modal-err" id="afDmErr"></div>'
++'<div class="af-modal-actions">'
++'<button type="button" class="nav-btn nav-btn-back" id="afDmCancel">Annuler</button>'
++'<button type="button" class="nav-btn nav-btn-next" id="afDmSend">Recevoir mon lien</button>'
++'</div></div>'
++'<div class="af-modal-done" id="afDmDone" style="display:none"></div>'
++'</div>';
+document.body.appendChild(ov);
+document.getElementById('afDmCancel').onclick=closeDraftModal;
+document.getElementById('afDmSend').onclick=sendDraftModal;
+document.getElementById('afDmEmail').addEventListener('keydown',function(e){
+if(e.key==='Enter'){e.preventDefault();e.stopPropagation();sendDraftModal();}
+});
+ov.addEventListener('click',function(e){if(e.target===ov)closeDraftModal();});
+}
+
+function updateSaveBtnVisibility(){
+if(!DRAFT.enabled)return;
+var show=!submitted&&Object.keys(buildCurrentAnswers()).length>0;
+var b1=document.getElementById('afSaveBtn');
+var b2=document.getElementById('afSaveBtnPage');
+if(b1)b1.style.display=show?'':'none';
+if(b2)b2.style.display=show?'':'none';
+}
+
+// Pré-remplissage de l'email du modal : champ mappé contact email, sinon
+// premier champ de type email déjà renseigné.
+function guessDraftEmail(){
+if(DRAFT.email)return DRAFT.email;
+var map=buildCurrentAnswers();
+var best='';
+FIELDS.forEach(function(f){
+if(best)return;
+var v=map[f.id];
+if(!v)return;
+if(f.contactMapping==='email'||f.type==='email')best=v;
+});
+return best;
+}
+
+var _afModalMode='save';
+function openDraftModal(mode){
+_afModalMode=mode||'save';
+var ov=document.getElementById('afDraftModal');
+if(!ov)return;
+window._afModalOpen=true;
+document.getElementById('afDmFormZone').style.display='';
+document.getElementById('afDmDone').style.display='none';
+var err=document.getElementById('afDmErr');err.style.display='none';err.textContent='';
+var inp=document.getElementById('afDmEmail');
+var send=document.getElementById('afDmSend');
+send.disabled=false;
+if(_afModalMode==='resend'){
+document.getElementById('afDmTitle').textContent='🔁 Reprendre une sauvegarde';
+document.getElementById('afDmDesc').textContent='Entrez l\'email utilisé lors de votre sauvegarde. Si une sauvegarde existe, nous vous renverrons votre lien de reprise.';
+send.textContent='Renvoyer mon lien';
+inp.value=DRAFT.email||'';
+}else{
+document.getElementById('afDmTitle').textContent='💾 Finir plus tard';
+document.getElementById('afDmDesc').textContent='Recevez un lien par email pour reprendre ce formulaire exactement où vous en êtes, depuis n\'importe quel appareil. Le lien est valable 60 jours.';
+send.textContent='Recevoir mon lien';
+inp.value=guessDraftEmail();
+}
+ov.style.display='flex';
+setTimeout(function(){try{inp.focus();}catch(e){}},80);
+}
+
+function closeDraftModal(){
+var ov=document.getElementById('afDraftModal');
+if(ov)ov.style.display='none';
+window._afModalOpen=false;
+}
+
+function sendDraftModal(){
+var inp=document.getElementById('afDmEmail');
+var err=document.getElementById('afDmErr');
+var send=document.getElementById('afDmSend');
+var email=(inp.value||'').trim();
+if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){
+err.textContent='Adresse email invalide.';err.style.display='block';return;
+}
+err.style.display='none';
+send.disabled=true;send.textContent='Envoi…';
+var payload;
+if(_afModalMode==='resend'){
+payload={action:'resend',formId:FORM._id,email:email};
+}else{
+payload={action:'save',formId:FORM._id,email:email,draftId:DRAFT.id||null,answers:buildCurrentAnswers()};
+}
+draftApi(payload).then(function(r){
+if(_afModalMode==='resend'){
+// Réponse volontairement neutre (anti-énumération d'emails).
+showDraftDone('📩 Si une sauvegarde existe pour <strong>'+esc(email)+'</strong>, votre lien de reprise vient d\'être renvoyé. Pensez à vérifier vos spams.');
+return;
+}
+if(!r||r.ok!==true){
+send.disabled=false;send.textContent='Recevoir mon lien';
+err.textContent=(r&&r.error==='draft_disabled')?'La sauvegarde n\'est pas activée sur ce formulaire.':'Impossible de sauvegarder pour le moment. Réessayez.';
+err.style.display='block';
+return;
+}
+DRAFT.id=r.draftId||DRAFT.id;
+DRAFT.email=email;
+writeLocalDraft();
+if(r.emailSent){
+showDraftDone('📩 Lien envoyé à <strong>'+esc(email)+'</strong>.<br/>Vous pouvez fermer cette page — ou continuer maintenant, votre progression est sauvegardée.');
+}else if(r.emailReason==='cooldown'){
+showDraftDone('💾 Progression mise à jour ! Le lien déjà reçu par email reste valable — il ouvrira toujours votre dernière version.');
+}else{
+showDraftDone('💾 Progression sauvegardée, mais l\'email n\'a pas pu partir. Réessayez dans un instant via « Finir plus tard ».');
+}
+}).catch(function(){
+send.disabled=false;
+send.textContent=_afModalMode==='resend'?'Renvoyer mon lien':'Recevoir mon lien';
+err.textContent='Erreur réseau. Vérifiez votre connexion et réessayez.';
+err.style.display='block';
+});
+}
+
+function showDraftDone(html){
+document.getElementById('afDmFormZone').style.display='none';
+var d=document.getElementById('afDmDone');
+d.innerHTML=html+'<div><button type="button" class="nav-btn nav-btn-next af-md-btn" onclick="closeDraftModal()">Continuer</button></div>';
+d.style.display='block';
+}
+
+/* ── Restauration ── */
+function restoreAnswers(map){
+if(!map)return;
+Object.keys(map).forEach(function(k){answers[k]=map[k];});
+FIELDS.forEach(function(f){
+if(f.type==='info')return;
+var v=map[f.id];
+if(v===undefined||v===null||v==='')return;
+v=String(v);
+var el=document.querySelector('[data-fid="'+f.id+'"]');
+if(!el)return;
+if(el.classList.contains('af-options')){
+// Checkbox : valeurs jointes par ', ' (même format que la collecte).
+var vals=f.type==='checkbox'?v.split(', '):[v];
+el.querySelectorAll('.af-option').forEach(function(o){
+o.classList.toggle('selected',vals.indexOf(o.dataset.value)>=0);
+});
+}else if(el.classList.contains('af-scale')){
+el.querySelectorAll('.af-scale-btn').forEach(function(b){b.classList.toggle('selected',b.dataset.value===v);});
+}else if(el.classList.contains('af-rating')){
+var n=parseInt(v)||0;
+el.querySelectorAll('.af-rating-btn').forEach(function(b){b.classList.toggle('active',parseInt(b.dataset.value)<=n);});
+}else{
+el.value=v;
+}
+});
+if(document.body.classList.contains('page-mode')){
+pfEvalConditions();
+}else{
+jumpToFirstUnanswered();
+}
+updateSaveBtnVisibility();
+scheduleDraftSave();
+setTimeout(notifyParentHeight,80);
+}
+
+// Mode cards : saute à la première carte visible contenant un champ vide
+// (conditions recalculées depuis `answers`) ; sinon dernière carte.
+function jumpToFirstUnanswered(){
+var visible=getVisibleGroups();
+if(!visible.length)return;
+var idx=visible.length-1;
+for(var i=0;i<visible.length;i++){
+var hasEmpty=visible[i].some(function(f){
+if(f.type==='info')return false;
+var v=answers[f.id];
+return v===undefined||v===null||v==='';
+});
+if(hasEmpty){idx=i;break;}
+}
+showCard(idx);
+}
+
+function loadServerDraft(token){
+draftApi({action:'load',formId:FORM._id,draftId:token}).then(function(r){
+if(r&&r.ok===true){
+DRAFT.id=token;
+if(r.email)DRAFT.email=r.email;
+restoreAnswers(r.answers||{});
+hideResumeBanner();
+showDraftNotice('✅ Sauvegarde restaurée — reprenez où vous en étiez.');
+}else if(r&&r.error==='expired'){
+showDraftNotice('⏳ Cette sauvegarde a expiré (60 jours). Le formulaire repart de zéro.',true);
+}else{
+showDraftNotice('Cette sauvegarde est introuvable ou a déjà été envoyée.',true);
+}
+}).catch(function(){
+showDraftNotice('Impossible de charger la sauvegarde (réseau).',true);
+});
+}
+
+function showResumeBanner(local){
+if(document.getElementById('afResumeBanner'))return;
+var when='';
+try{when=new Date(local.updatedAt).toLocaleDateString('fr-FR');}catch(e){}
+var b=document.createElement('div');
+b.className='af-resume-banner';b.id='afResumeBanner';
+b.innerHTML='<div class="af-rb-txt">💾 Reprendre où vous en étiez ?<span>'+local.count+' réponse'+(local.count>1?'s':'')+(when?' · sauvegardé le '+when:'')+'</span></div>'
++'<div class="af-rb-actions"><button type="button" class="af-rb-btn af-rb-primary" id="afRbResume">Reprendre</button><button type="button" class="af-rb-btn" id="afRbReset">Recommencer</button></div>';
+var fc=document.getElementById('formContainer');
+if(!fc)return;
+fc.insertBefore(b,fc.firstChild);
+document.getElementById('afRbResume').onclick=function(){
+if(local.draftId)DRAFT.id=local.draftId;
+if(local.email)DRAFT.email=local.email;
+restoreAnswers(local.answers);
+hideResumeBanner();
+};
+document.getElementById('afRbReset').onclick=function(){
+clearLocalDraft();
+hideResumeBanner();
+};
+setTimeout(notifyParentHeight,60);
+}
+
+function hideResumeBanner(){
+var b=document.getElementById('afResumeBanner');
+if(b&&b.parentNode)b.parentNode.removeChild(b);
+setTimeout(notifyParentHeight,60);
+}
+
+function showDraftNotice(msg,isErr){
+var n=document.createElement('div');
+n.className='af-notice'+(isErr?' af-notice-err':'');
+n.textContent=msg;
+document.body.appendChild(n);
+setTimeout(function(){if(n.parentNode)n.parentNode.removeChild(n);},4500);
 }
 
 // Shake animation

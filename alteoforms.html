@@ -837,6 +837,10 @@ if(s.createLead){
   h+='</div>';
 }
 h+='</div>';
+// Finir plus tard — sauvegarde & reprise (brouillons)
+h+='<div class="ed-set-card"><div class="ed-set-title">💾 Finir plus tard</div><div class="ed-set-desc">Le répondant peut sauvegarder sa progression (bouton + auto-save sur son appareil) et recevoir un lien de reprise par email, valable 60 jours. Les sauvegardes non envoyées apparaissent en haut de l\'onglet Réponses.</div>';
+h+='<div style="margin-top:8px"><label style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" id="set-allowDraft"'+(s.allowDraft!==false?' checked':'')+' onchange="currentForm.settings.allowDraft=this.checked;saveForm(true)"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Autoriser la sauvegarde &amp; la reprise</span></label></div>';
+h+='</div>';
 // Booking link
 h+='<div class="ed-set-card"><div class="ed-set-title">📅 Liaison Booking</div><div class="ed-set-desc">Après soumission, rediriger vers un calendrier de prise de RDV</div>';
 h+='<div class="ed-field-row"><div class="ed-group-label">Consultation liée</div>';
@@ -869,8 +873,10 @@ h+='</div>';
 
 else if(edSection==='responses'){
 h+='<div class="ed-sec-title">📊 Réponses</div>';
+h+='<div id="draftList"></div>';
 h+='<div id="respList" style="font-size:12px;color:rgba(255,255,255,.38)">Chargement…</div>';
 loadResponses();
+loadDrafts();
 }
 
 el.innerHTML=h;
@@ -1117,6 +1123,79 @@ detail.style.display=open?'none':'block';
 if(arrow)arrow.style.transform=open?'':'rotate(180deg)';
 }
 window.toggleResp=toggleResp;
+
+// ── Sauvegardes « Finir plus tard » (brouillons non envoyés) ──────────
+// Collection alteo_forms/{id}/drafts, écrite UNIQUEMENT par la Vercel
+// Function api/alteoform-draft.js (Admin SDK). Lecture + suppression
+// admin via rules dédiées — si les rules ne sont pas encore déployées,
+// bannière d'aide au lieu d'un échec silencieux (pattern journal Set NB).
+function loadDrafts(){
+if(!currentForm)return;
+if(!document.getElementById('draftList'))return;
+var fields=currentForm.fields||[];
+db.collection('alteo_forms').doc(currentForm._id).collection('drafts').get().then(function(sn){
+var el=document.getElementById('draftList');
+if(!el)return;
+if(!sn.size){el.innerHTML='';return;}
+var items=[];
+sn.forEach(function(d){var r=d.data();r._id=d.id;items.push(r);});
+items.sort(function(a,b){
+var ta=(a.updatedAt&&a.updatedAt.toMillis)?a.updatedAt.toMillis():0;
+var tb=(b.updatedAt&&b.updatedAt.toMillis)?b.updatedAt.toMillis():0;
+return tb-ta;
+});
+var h='<div style="font-size:12px;font-weight:800;color:#fbbf24;margin:4px 0 10px">⏳ Sauvegardes en cours ('+items.length+') <span style="font-weight:400;color:rgba(255,255,255,.35)">— commencées via « Finir plus tard », non envoyées</span></div>';
+items.forEach(function(r){
+var date=(r.updatedAt&&r.updatedAt.toDate)?r.updatedAt.toDate().toLocaleString('fr-FR'):'—';
+var prog=(r.progress!=null?r.progress:'?')+(r.fieldCount?' / '+r.fieldCount:'');
+h+='<div style="margin-bottom:10px">';
+h+='<div class="ed-field" style="cursor:pointer;border-color:rgba(251,191,36,.22)" onclick="toggleResp(this)">';
+h+='<div class="ed-field-icon">⏳</div>';
+h+='<div class="ed-field-info"><div class="ed-field-name" style="font-size:12px">'+esc(r.email||'—')+' <span style="color:#fbbf24;font-weight:700">· '+prog+' réponses</span></div><div class="ed-field-meta"><span style="color:rgba(255,255,255,.2)">'+date+'</span><span style="color:rgba(255,255,255,.15)">partiel — non envoyé</span></div></div>';
+h+='<button class="resp-act-btn" title="Supprimer cette sauvegarde (le lien du prospect ne fonctionnera plus)" onclick="event.stopPropagation();deleteDraft(\''+r._id+'\')">🗑</button>';
+h+='<span style="font-size:12px;color:rgba(255,255,255,.25);transition:transform .2s;margin-left:6px" class="resp-arrow">▼</span>';
+h+='</div>';
+h+='<div class="resp-detail" style="display:none;background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.07);border-top:0;border-radius:0 0 10px 10px;padding:16px 18px;margin-top:-8px">';
+var aMap=r.answers||{};
+var any=false;
+for(var key in aMap){
+any=true;
+var fld=fields.find(function(f){return f.id===key;});
+var label=fld?fld.label:key;
+var fType=fld?fld.type:'';
+h+='<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.04)">';
+h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">'+esc(label)+'</div>';
+h+='<div style="font-size:14px;color:rgba(255,255,255,.85);line-height:1.5">'+_respRenderValue(aMap[key],fType,key,fields)+'</div>';
+h+='</div>';
+}
+if(!any)h+='<div style="font-size:12px;color:rgba(255,255,255,.3)">Aucune réponse enregistrée.</div>';
+h+='</div>';
+h+='</div>';
+});
+h+='<div style="height:14px"></div>';
+el.innerHTML=h;
+}).catch(function(e){
+var el=document.getElementById('draftList');
+if(!el)return;
+if(e&&e.code==='permission-denied'){
+el.innerHTML='<div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:8px;padding:10px 14px;font-size:11px;color:#fbbf24;margin-bottom:14px">⏳ Sauvegardes « Finir plus tard » : déployez les rules Firestore (bloc alteo_forms/{formId}/drafts) pour les afficher ici. Côté prospects, la sauvegarde fonctionne déjà.</div>';
+}else{
+el.innerHTML='';
+}
+});
+}
+
+function deleteDraft(id){
+if(!currentForm)return;
+if(!confirm('Supprimer cette sauvegarde ? Le lien de reprise envoyé au prospect ne fonctionnera plus.'))return;
+db.collection('alteo_forms').doc(currentForm._id).collection('drafts').doc(id).delete().then(function(){
+toast('🗑 Sauvegarde supprimée');
+loadDrafts();
+}).catch(function(e){
+toast('❌ '+(e&&e.message?e.message:'Suppression impossible'));
+});
+}
+window.deleteDraft=deleteDraft;
 
 // ═══════════════════════════════════════════════════════════════════════
 // EXPORTS RÉPONSES : XLSX, PDF récap, PDF fiches détaillées
