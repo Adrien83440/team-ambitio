@@ -182,7 +182,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
       <!-- Marqueur de build : incrémenté à chaque livraison pour vérifier
            d'un coup d'œil quelle version est réellement déployée/chargée. -->
-      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 26.07-a</span></div>
+      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 26.07-b</span></div>
     </div>
     <div class="fn-sync"><span class="fn-sync-dot" id="fnSyncDot"></span><span id="fnSyncText">Chargement…</span></div>
   </div>
@@ -301,7 +301,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   /* Marqueur de build — DOIT rester identique au texte affiché dans le
      header (.fn-sub). Recopié tel quel dans chaque snapshot agence pour
      savoir quelle version du funnel a produit les chiffres publiés. */
-  var FN_BUILD = '26.07-a';
+  var FN_BUILD = '26.07-b';
   var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
   var ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
   var LEADS_QUERY_LIMIT = 6000;
@@ -1696,8 +1696,10 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
 
     K = k;
 
-    /* Publication de l'instantané agence — fire & forget, jamais bloquant. */
-    publishAgencySnapshot();
+    /* Publication des instantanés agence — différée, fire & forget, jamais
+       bloquante (et neutralisée pendant la publication elle-même, qui
+       rejoue compute() pour chaque tunnel). */
+    scheduleAgencyPublish();
   }
 
   /* ════════════════════════════════════════════════════════════════
@@ -2560,49 +2562,97 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   };
 
   var AGENCY_BASE_URL = 'https://team.alteore.com/agency-funnel.html';
-  /* Anti-spam d'écritures : dernier snapshot réellement publié (mois + JSON).
-     compute() tourne à chaque changement de filtre / sauvegarde ; sans ça on
-     réécrirait le même document plusieurs fois par consultation. */
-  var _agencyPub = { key: null, json: null };
+  /* Un instantané par tunnel : l'agence choisit Tous / Élite / Business
+     exactement comme le funnel interne. Les trois sont publiés à CHAQUE
+     calcul, quel que soit le filtre affiché à l'écran — sinon l'agence ne
+     verrait « Élite » que si quelqu'un a pensé à basculer le filtre en
+     interne ce mois-là. */
+  var AGENCY_TUNNELS = ['all', 'elite', 'business'];
+  /* Anti-spam d'écritures : empreinte JSON du dernier snapshot publié, par
+     document. compute() tourne à chaque changement de filtre / sauvegarde ;
+     sans ça on réécrirait les mêmes documents plusieurs fois par consultation. */
+  var _agencyPub = {};
+  var _agencyBusy = false;    // garde anti-récursion (la publication rappelle compute())
+  var _agencyTimer = null;
 
-  /* Instantané agence — appelé à la fin de compute(). Publie UNIQUEMENT en
-     vue Mois calendaire + Tous les tunnels (la maille de l'agence, et la
-     seule où K correspond exactement au mois du document).
+  /* Appelé à la fin de compute(). Différé + anti-rebond : le rendu passe en
+     premier, et un enchaînement rapide de changements de filtre ne déclenche
+     qu'une seule publication. */
+  function scheduleAgencyPublish() {
+    if (_agencyBusy) return;
+    if (_agencyTimer) clearTimeout(_agencyTimer);
+    _agencyTimer = setTimeout(function () {
+      _agencyTimer = null;
+      publishAgencySnapshots();
+    }, 400);
+  }
+
+  function agencyDocId(monthKey, tf) { return tf === 'all' ? monthKey : monthKey + '_' + tf; }
+
+  /* Copie assainie de K + journal, prête à écrire. */
+  function agencyPayload(k) {
+    var kOut = {};
+    Object.keys(k).forEach(function (f) { if (!AGENCY_EXCLUDE[f]) kOut[f] = k[f]; });
+    /* Journal marketing : date / catégorie / texte seulement — l'auteur
+       (membre de l'équipe) et l'_id Firestore ne sortent pas. */
+    var journal = (DATA.journalPeriod || []).map(function (j) {
+      return { date: j.date || null, category: j.category || null, text: j.text || '' };
+    });
+    return { build: FN_BUILD, k: kOut, journal: journal };
+  }
+
+  function publishAgencyDoc(monthKey, tf, k) {
+    var docId = agencyDocId(monthKey, tf);
+    /* JSON.stringify → assainissement technique : les undefined disparaissent,
+       NaN / Infinity deviennent null (Firestore refuse les undefined et n'a
+       pas de NaN). Sert AUSSI d'empreinte anti-réécriture. */
+    var json = JSON.stringify(agencyPayload(k));
+    if (_agencyPub[docId] === json) return;
+
+    var doc = JSON.parse(json);
+    doc.monthKey = monthKey;
+    doc.tunnel = tf;
+    doc.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+    _agencyPub[docId] = json;
+    db.collection('funnel_snapshots').doc(docId).set(doc).catch(function (e) {
+      delete _agencyPub[docId];                 // échec → on retentera au prochain calcul
+      console.warn('[funnel] snapshot agence ' + docId + ' non publié :', e && e.message);
+    });
+  }
+
+  /* Publie les 3 tunnels du mois affiché. compute() étant une fonction pure
+     de (DATA, P, tunnelFilter), on la rejoue pour chaque tunnel puis on
+     restaure l'état de l'écran — c'est exactement ce que fait le sélecteur
+     de tunnel, en trois fois.
+     Publie UNIQUEMENT en vue Mois calendaire : c'est la seule maille où K
+     correspond au mois du document (voir la note « périodes » du README
+     d'implémentation).
      Fail-safe absolu : aucune erreur ne doit remonter à l'écran ni ralentir
      le rendu — si les rules ne sont pas déployées, on log et on continue. */
-  function publishAgencySnapshot() {
+  function publishAgencySnapshots() {
+    if (_agencyBusy) return;
     try {
       if (!db || !K) return;
       if (!periodIsCalendarMonth()) return;
-      if (tunnelFilter !== 'all') return;
 
       var monthKey = P.start.getFullYear() + '-' + pad2(P.start.getMonth() + 1);
-
-      var kOut = {};
-      Object.keys(K).forEach(function (f) { if (!AGENCY_EXCLUDE[f]) kOut[f] = K[f]; });
-
-      /* Journal marketing : date / catégorie / texte seulement — l'auteur
-         (membre de l'équipe) et l'_id Firestore ne sortent pas. */
-      var journal = (DATA.journalPeriod || []).map(function (j) {
-        return { date: j.date || null, category: j.category || null, text: j.text || '' };
-      });
-
-      /* JSON.stringify → assainissement technique : les undefined
-         disparaissent, NaN / Infinity deviennent null (Firestore refuse les
-         undefined et n'a pas de NaN). Sert AUSSI d'empreinte anti-réécriture. */
-      var json = JSON.stringify({ build: FN_BUILD, k: kOut, journal: journal });
-      if (_agencyPub.key === monthKey && _agencyPub.json === json) return;
-
-      var doc = JSON.parse(json);
-      doc.monthKey = monthKey;
-      doc.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-
-      _agencyPub = { key: monthKey, json: json };
-      db.collection('funnel_snapshots').doc(monthKey).set(doc).catch(function (e) {
-        _agencyPub = { key: null, json: null };   // échec → on retentera au prochain calcul
-        console.warn('[funnel] snapshot agence non publié :', e && e.message);
-      });
+      var savedFilter = tunnelFilter, savedK = K;
+      _agencyBusy = true;
+      try {
+        AGENCY_TUNNELS.forEach(function (tf) {
+          tunnelFilter = tf;
+          compute();                            // remplit K pour ce tunnel
+          publishAgencyDoc(monthKey, tf, K);
+        });
+      } finally {
+        /* On rend à l'écran l'état exact qu'il avait avant la publication. */
+        tunnelFilter = savedFilter;
+        K = savedK;
+        _agencyBusy = false;
+      }
     } catch (e) {
+      _agencyBusy = false;
       console.warn('[funnel] snapshot agence :', e && e.message);
     }
   }

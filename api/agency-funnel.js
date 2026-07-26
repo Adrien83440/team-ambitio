@@ -5,13 +5,14 @@
 // Firestore. Sert l'instantané publié par sales-funnel.html dans
 // funnel_snapshots/{YYYY-MM} à qui présente le token de _config/agency_access.
 //
-// URL  : GET https://team.alteore.com/api/agency-funnel?t=TOKEN[&month=YYYY-MM]
+// URL  : GET https://team.alteore.com/api/agency-funnel
+//            ?t=TOKEN [&month=YYYY-MM] [&tunnel=all|elite|business]
 // Auth : token secret dans l'URL (capacité) — PAS de Firebase Auth.
 // Front: agency-funnel.html (page publique autonome, aucun SDK Firebase).
 //
 // Réponses
-//   200 { ok:true, month, months:[…], updatedAt:<ms>, build, k, journal }
-//   200 { ok:true, month, months:[…], empty:true }   ← mois sans snapshot
+//   200 { ok:true, month, tunnel, months:[…], updatedAt:<ms>, build, k, journal }
+//   200 { ok:true, month, tunnel, months:[…], empty:true }  ← pas de snapshot
 //   403 { ok:false }                                  ← token absent/faux/révoqué
 //   405 { ok:false }                                  ← autre verbe que GET
 //   500 { ok:false }
@@ -39,7 +40,16 @@ const crypto = require('crypto');
 const { db, admin } = require('./_firebaseAdmin');
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
+const TUNNEL_RE = /^(all|elite|business)$/;
 const MONTHS_LIMIT = 24;
+
+/* Un document par mois ET par tunnel : funnel_snapshots/2026-07 (tous),
+   /2026-07_elite, /2026-07_business. Le suffixe garde les IDs « mois nu »
+   pour le tunnel « tous », ce qui laisse le listing des mois filtrable par
+   MONTH_RE (les variantes tunnel n'y apparaissent donc jamais). */
+function snapshotDocId(month, tunnel) {
+  return tunnel === 'all' ? month : month + '_' + tunnel;
+}
 
 /* Comparaison timing-safe. On hache les deux valeurs avant de comparer :
    timingSafeEqual exige des buffers de même longueur (il jette sinon, ce qui
@@ -60,12 +70,13 @@ function clientIp(req) {
 
 /* Journalisation best-effort : une trace d'audit ne doit JAMAIS faire échouer
    la réponse (ni la retarder au point de casser la page agence). */
-async function logAccess(req, ok, month) {
+async function logAccess(req, ok, month, tunnel) {
   try {
     await db.collection('audit_log').add({
       type: 'agency_funnel_read',
       ok: !!ok,
       month: month || null,
+      tunnel: tunnel || null,
       ip: clientIp(req),
       ua: String(req.headers['user-agent'] || '').slice(0, 300) || null,
       at: admin.firestore.FieldValue.serverTimestamp(),
@@ -89,13 +100,16 @@ module.exports = async (req, res) => {
      chemin de document, jamais renvoyée en écho. */
   const rawMonth = typeof req.query.month === 'string' ? req.query.month : '';
   const askedMonth = MONTH_RE.test(rawMonth) ? rawMonth : null;
+  /* Tunnel demandé, même traitement : valeur inconnue → repli sur « all ». */
+  const rawTunnel = typeof req.query.tunnel === 'string' ? req.query.tunnel : '';
+  const tunnel = TUNNEL_RE.test(rawTunnel) ? rawTunnel : 'all';
 
   try {
     const cfgSnap = await db.collection('_config').doc('agency_access').get();
     const cfg = cfgSnap.exists ? cfgSnap.data() : null;
 
     if (!cfg || cfg.active !== true || !tokenMatches(cfg.token, token)) {
-      await logAccess(req, false, askedMonth);
+      await logAccess(req, false, askedMonth, tunnel);
       res.status(403).json({ ok: false });
       return;
     }
@@ -117,16 +131,19 @@ module.exports = async (req, res) => {
 
     const month = askedMonth || months[0] || null;
     if (!month) {
-      await logAccess(req, true, null);
-      res.status(200).json({ ok: true, month: null, months: [], empty: true });
+      await logAccess(req, true, null, tunnel);
+      res.status(200).json({ ok: true, month: null, tunnel, months: [], empty: true });
       return;
     }
 
-    const snap = await db.collection('funnel_snapshots').doc(month).get();
-    await logAccess(req, true, month);
+    const snap = await db.collection('funnel_snapshots').doc(snapshotDocId(month, tunnel)).get();
+    await logAccess(req, true, month, tunnel);
 
+    /* Mois antérieur à la mise en place des variantes par tunnel → le
+       document Élite / Business n'existe pas : état vide explicite, jamais
+       un repli silencieux sur « tous » (qui afficherait de faux chiffres). */
     if (!snap.exists) {
-      res.status(200).json({ ok: true, month, months, empty: true });
+      res.status(200).json({ ok: true, month, tunnel, months, empty: true });
       return;
     }
 
@@ -138,6 +155,7 @@ module.exports = async (req, res) => {
     res.status(200).json({
       ok: true,
       month,
+      tunnel,
       months,
       updatedAt,
       build: d.build || null,
