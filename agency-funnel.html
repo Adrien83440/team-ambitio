@@ -13,9 +13,10 @@
 /* ═══════════════════════════════════════════════════════════════════════
    Alteore — Tunnel marketing · vue AGENCE (lecture seule)
    Page publique AUTONOME : aucun SDK Firebase, aucune auth, aucun nav.js.
-   Seule dépendance : GET /api/agency-funnel?t=TOKEN — qui sert l'instantané
-   publié par le funnel interne. Styles repris de sales.css / sales-funnel.html
-   (mêmes variables, mêmes cartes) pour que les deux vues se ressemblent.
+   Seule dépendance : GET /api/agency-funnel?t=TOKEN — qui calcule les KPIs
+   à la demande avec funnel-core.js, le module que fait tourner le funnel
+   interne. Styles repris de sales.css / sales-funnel.html (mêmes variables,
+   mêmes cartes) pour que les deux vues se ressemblent.
    ═══════════════════════════════════════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -62,6 +63,11 @@ html, body {
 .ag-seg button.active { background: var(--bg4); color: var(--text); font-weight: 600; }
 .ag-seg button[data-tunnel="elite"].active    { color: var(--violet); }
 .ag-seg button[data-tunnel="business"].active { color: var(--blue); }
+.ag-top-2 { padding-top: 0; gap: 8px; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 10px; }
+.ag-mnav input[type="date"] { background: none; border: none; color: var(--text); font-size: 12.5px; font-family: var(--font-m); padding: 4px 6px; outline: none; color-scheme: dark; }
+.ag-arrowto { color: var(--muted); font-size: 12px; }
+.ag-ok { background: var(--bg4) !important; color: var(--text) !important; font-size: 11.5px !important; font-weight: 600; padding: 5px 10px !important; }
+.ag-range { font-size: 11px; font-family: var(--font-m); color: var(--muted2); white-space: nowrap; }
 
 .ag-main { max-width: 1320px; margin: 0 auto; padding: 20px 24px 60px; }
 .ag-stamp { font-size: 11.5px; color: var(--muted); font-family: var(--font-m); background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 14px; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -147,11 +153,31 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
       <button data-tunnel="elite">Élite</button>
       <button data-tunnel="business">Business</button>
     </div>
-    <div class="ag-mnav" id="agMonthNav" style="display:none">
-      <button id="agPrev" title="Mois précédent">‹</button>
-      <select id="agMonthSel"></select>
-      <button id="agNext" title="Mois suivant">›</button>
+  </div>
+  <div class="ag-top-in ag-top-2">
+    <div class="ag-seg" id="agModeSeg">
+      <button data-mode="day">Jour</button>
+      <button data-mode="month" class="active">Mois</button>
+      <button data-mode="7d">7 jours</button>
+      <button data-mode="30d">30 jours</button>
+      <button data-mode="custom">Plage</button>
     </div>
+    <div class="ag-mnav" id="agMonthNav">
+      <button id="agPrevM" title="Mois précédent">‹</button>
+      <select id="agMonthSel"></select>
+      <button id="agNextM" title="Mois suivant">›</button>
+    </div>
+    <div class="ag-mnav" id="agDayNav" style="display:none">
+      <button id="agPrevD" title="Jour précédent">‹</button>
+      <input type="date" id="agDayPick">
+      <button id="agNextD" title="Jour suivant">›</button>
+    </div>
+    <div class="ag-mnav" id="agCustom" style="display:none">
+      <input type="date" id="agFrom"><span class="ag-arrowto">→</span><input type="date" id="agTo">
+      <button id="agCustOk" class="ag-ok">OK</button>
+    </div>
+    <div class="ag-spacer"></div>
+    <div class="ag-range" id="agRange"></div>
   </div>
 </div>
 
@@ -164,11 +190,11 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   'use strict';
 
   /* ════════════════════════════════════════════════════════════════
-     Vue AGENCE — rendu de l'instantané funnel_snapshots/{YYYY-MM}.
-     ZÉRO calcul : tous les chiffres viennent tels quels de l'objet `k`
-     produit par compute() dans sales-funnel.html. Les libellés et les
-     formats sont recopiés de renderFunnel() pour que les deux vues
-     disent exactement la même chose, avec les mêmes définitions.
+     Vue AGENCE — rendu de l'objet `k` renvoyé par /api/agency-funnel.
+     ZÉRO calcul métier ici : les chiffres sortent de funnel-core.js, le
+     même module que le funnel interne, pour la période et le tunnel
+     demandés. Les libellés et les formats sont recopiés de renderFunnel()
+     pour que les deux vues disent exactement la même chose.
      ════════════════════════════════════════════════════════════════ */
 
   var ENDPOINT = '/api/agency-funnel';
@@ -179,8 +205,11 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 
   var TOKEN = '';
   var MONTHS = [];
-  var CURRENT = null;
+  var CURRENT = null;          // mois affiché (mode month)
   var TUNNEL = 'all';
+  var MODE = 'month';          // day | month | 7d | 30d | custom
+  var DAY = null;              // YYYY-MM-DD (mode day)
+  var FROM = null, TO = null;  // YYYY-MM-DD (mode custom)
   var busy = false;
 
   function $(s) { return document.querySelector(s); }
@@ -231,20 +260,54 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     $('#agRoot').innerHTML = '<div class="ag-gate"><div class="ic">🔒</div><h1>' + esc(title) + '</h1><p>' + esc(msg) + '</p></div>';
   }
 
-  function renderMonthNav() {
-    var nav = $('#agMonthNav');
-    if (!MONTHS.length) { nav.style.display = 'none'; return; }
-    nav.style.display = 'flex';
-    var sel = $('#agMonthSel');
-    var h = '';
-    for (var i = 0; i < MONTHS.length; i++) {
-      h += '<option value="' + escAttr(MONTHS[i]) + '"' + (MONTHS[i] === CURRENT ? ' selected' : '') + '>' + esc(monthLabel(MONTHS[i])) + '</option>';
+  /* Affiche le sélecteur correspondant au mode et met à jour ses valeurs. */
+  function renderControls() {
+    $$('#agModeSeg button').forEach(function (b) {
+      b.className = b.getAttribute('data-mode') === MODE ? 'active' : '';
+    });
+    $('#agMonthNav').style.display = MODE === 'month'  ? 'flex' : 'none';
+    $('#agDayNav').style.display   = MODE === 'day'    ? 'flex' : 'none';
+    $('#agCustom').style.display   = MODE === 'custom' ? 'flex' : 'none';
+
+    if (MODE === 'month' && MONTHS.length) {
+      var h = '';
+      for (var i = 0; i < MONTHS.length; i++) {
+        h += '<option value="' + escAttr(MONTHS[i]) + '"' + (MONTHS[i] === CURRENT ? ' selected' : '') + '>' + esc(monthLabel(MONTHS[i])) + '</option>';
+      }
+      $('#agMonthSel').innerHTML = h;
+      var idx = MONTHS.indexOf(CURRENT);
+      /* MONTHS est trié du plus récent au plus ancien : ‹ = index+1. */
+      $('#agPrevM').disabled = idx < 0 || idx >= MONTHS.length - 1;
+      $('#agNextM').disabled = idx <= 0;
     }
-    sel.innerHTML = h;
-    var idx = MONTHS.indexOf(CURRENT);
-    /* MONTHS est trié du plus récent au plus ancien : ‹ = index+1. */
-    $('#agPrev').disabled = idx < 0 || idx >= MONTHS.length - 1;
-    $('#agNext').disabled = idx <= 0;
+    if (MODE === 'day' && DAY) $('#agDayPick').value = DAY;
+    if (MODE === 'custom') {
+      if (FROM) $('#agFrom').value = FROM;
+      if (TO) $('#agTo').value = TO;
+    }
+  }
+
+  /* Paramètres de période envoyés à l'API — reflet exact de l'état d'écran. */
+  function periodQuery() {
+    if (MODE === 'day')    return '&mode=day' + (DAY ? '&day=' + encodeURIComponent(DAY) : '');
+    if (MODE === '7d')     return '&mode=7d';
+    if (MODE === '30d')    return '&mode=30d';
+    if (MODE === 'custom') return '&mode=custom' + (FROM && TO ? '&from=' + encodeURIComponent(FROM) + '&to=' + encodeURIComponent(TO) : '');
+    return '&mode=month' + (CURRENT ? '&month=' + encodeURIComponent(CURRENT) : '');
+  }
+
+  function periodLabel(data) {
+    if (!data) return '';
+    if (data.mode === 'month') return monthLabel(data.month);
+    if (data.mode === 'day')   return 'Journée du ' + frFull(data.day);
+    if (data.mode === '7d')    return '7 derniers jours';
+    if (data.mode === '30d')   return '30 derniers jours';
+    return 'Du ' + frFull(data.from) + ' au ' + frFull(data.to);
+  }
+  function frFull(iso) {
+    if (!iso) return '—';
+    var p = String(iso).split('-');
+    return p[2] + '/' + p[1] + '/' + p[0];
   }
 
   function renderTunnelSeg() {
@@ -257,30 +320,33 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 
   function render(data) {
     $('#agTop').style.display = '';
-    CURRENT = data.month || CURRENT;
+    if (data.mode) MODE = data.mode;
+    if (data.month) CURRENT = data.month;
+    if (data.day) DAY = data.day;
+    if (data.mode === 'custom') { FROM = data.from; TO = data.to; }
     if (data.tunnel) TUNNEL = data.tunnel;
     if (data.months && data.months.length) MONTHS = data.months;
-    renderMonthNav();
+    renderControls();
     renderTunnelSeg();
+    $('#agRange').textContent = data.from && data.to ? (frFull(data.from) + ' → ' + frFull(data.to)) : '';
 
     var root = $('#agRoot');
+    var k = data.k;
     var h = '';
 
-    /* Bandeau de fraîcheur — la donnée est celle du dernier passage de
-       l'équipe sur le funnel interne, pas un temps réel. C'est dit. */
-    if (data.empty || !data.k) {
-      h += '<div class="ag-stamp"><span class="dot" style="background:var(--muted2);box-shadow:none"></span>'
-        + esc(monthLabel(CURRENT)) + ' <em>· ' + esc(TUNNEL_LABEL[TUNNEL] || '') + '</em></div>';
-      h += '<div class="ag-stage"><div class="ag-empty">Pas encore de données publiées pour ce mois'
-        + (TUNNEL !== 'all' ? ' sur le ' + esc(TUNNEL_LABEL[TUNNEL]) : '') + '.</div></div>';
+    /* Bandeau — les chiffres sont calculés à la demande sur les données du
+       moment, pas repris d'un instantané figé. */
+    h += '<div class="ag-stamp"><span class="dot"></span>Calculé le ' + esc(frDateTime(data.computedAt))
+      + ' <em>· ' + esc(periodLabel(data)) + ' · ' + esc(TUNNEL_LABEL[TUNNEL] || '') + '</em></div>';
+
+    if (!k || !k.leads && !k.spend && !(k.chAll && k.chAll.n) && !k.closesWonTotal) {
+      /* Rien du tout sur la période : on le dit, on n'affiche pas une grille
+         de zéros qui ressemblerait à un bug. */
+      h += '<div class="ag-stage"><div class="ag-empty">Aucune activité sur cette période'
+        + (TUNNEL !== 'all' ? ' pour le ' + esc(TUNNEL_LABEL[TUNNEL]) : '') + '.</div></div>';
       root.innerHTML = h;
       return;
     }
-
-    var k = data.k;
-    h += '<div class="ag-stamp"><span class="dot"></span>Données au ' + esc(frDateTime(data.updatedAt))
-      + ' <em>· ' + esc(monthLabel(CURRENT)) + ' · ' + esc(TUNNEL_LABEL[TUNNEL] || '')
-      + ' · mis à jour à chaque consultation interne du funnel</em></div>';
 
     h += renderHero(k);
     h += renderAds(k);
@@ -289,7 +355,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += renderProfit(k);
     h += renderJournal(data.journal || []);
 
-    h += '<div class="ag-foot">Vue agence en lecture seule — Alteore. Chiffres issus du tunnel interne (pub → opt-in → leads → RDV → closing).<br>Aucune donnée nominative n\'est exposée sur cette page.</div>';
+    h += '<div class="ag-foot">Vue agence en lecture seule — Alteore. Chiffres calculés à la demande sur le tunnel interne (pub → opt-in → leads → RDV → closing).<br>Aucune donnée nominative n\'est exposée sur cette page.</div>';
     root.innerHTML = h;
   }
 
@@ -535,11 +601,11 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   /* ════════════════════════════════════════════════════════════════
      CHARGEMENT
      ════════════════════════════════════════════════════════════════ */
-  function load(month) {
+  function load() {
     if (busy) return;
     busy = true;
     var url = ENDPOINT + '?t=' + encodeURIComponent(TOKEN)
-      + (month ? '&month=' + encodeURIComponent(month) : '')
+      + periodQuery()
       + '&tunnel=' + encodeURIComponent(TUNNEL);
     fetch(url, { method: 'GET', credentials: 'omit', cache: 'no-store' })
       .then(function (r) {
@@ -561,20 +627,21 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
       .then(function () { busy = false; });
   }
 
-  function goMonth(mk) {
-    if (!mk || mk === CURRENT || busy) return;
-    CURRENT = mk;
-    renderMonthNav();
-    $('#agRoot').innerHTML = '<div class="ag-loading">Chargement de ' + esc(monthLabel(mk)) + '…</div>';
-    load(mk);
+  /* Un seul point d'entrée pour toute navigation : on met à jour l'état,
+     on montre l'attente, on recharge. Le calcul étant fait à la demande
+     côté serveur, chaque changement est une vraie requête. */
+  function go(label) {
+    if (busy) return;
+    renderControls();
+    $('#agRoot').innerHTML = '<div class="ag-loading">Calcul en cours' + (label ? ' — ' + esc(label) : '') + '…</div>';
+    load();
   }
 
-  function goTunnel(tf) {
-    if (!tf || tf === TUNNEL || busy) return;
-    TUNNEL = tf;
-    renderTunnelSeg();
-    $('#agRoot').innerHTML = '<div class="ag-loading">Chargement — ' + esc(TUNNEL_LABEL[tf] || '') + '…</div>';
-    load(CURRENT);
+  function shiftDay(delta) {
+    var base = DAY ? new Date(DAY.slice(0, 4), +DAY.slice(5, 7) - 1, +DAY.slice(8, 10)) : new Date();
+    base.setDate(base.getDate() + delta);
+    DAY = base.getFullYear() + '-' + pad2(base.getMonth() + 1) + '-' + pad2(base.getDate());
+    go(frFull(DAY));
   }
 
   function init() {
@@ -584,13 +651,51 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
       renderGate('Lien invalide ou révoqué', 'Ce lien n\'est plus valable. Demande un nouveau lien à ton contact chez Alteore.');
       return;
     }
-    $('#agPrev').onclick = function () { var i = MONTHS.indexOf(CURRENT); if (i >= 0 && i < MONTHS.length - 1) goMonth(MONTHS[i + 1]); };
-    $('#agNext').onclick = function () { var i = MONTHS.indexOf(CURRENT); if (i > 0) goMonth(MONTHS[i - 1]); };
-    $('#agMonthSel').onchange = function () { goMonth(this.value); };
-    $$('#agTunnelSeg button').forEach(function (b) {
-      b.onclick = function () { goTunnel(b.getAttribute('data-tunnel')); };
+
+    $$('#agModeSeg button').forEach(function (b) {
+      b.onclick = function () {
+        var mode = b.getAttribute('data-mode');
+        if (mode === MODE) return;
+        MODE = mode;
+        if (mode === 'day' && !DAY) {
+          var n = new Date();
+          DAY = n.getFullYear() + '-' + pad2(n.getMonth() + 1) + '-' + pad2(n.getDate());
+        }
+        /* Mode Plage : on attend le clic OK, sinon on requêterait sur des
+           dates vides à chaque frappe. */
+        if (mode === 'custom' && (!FROM || !TO)) { renderControls(); return; }
+        go(null);
+      };
     });
-    load(null);
+
+    $('#agPrevM').onclick = function () { var i = MONTHS.indexOf(CURRENT); if (i >= 0 && i < MONTHS.length - 1) { CURRENT = MONTHS[i + 1]; go(monthLabel(CURRENT)); } };
+    $('#agNextM').onclick = function () { var i = MONTHS.indexOf(CURRENT); if (i > 0) { CURRENT = MONTHS[i - 1]; go(monthLabel(CURRENT)); } };
+    $('#agMonthSel').onchange = function () { CURRENT = this.value; go(monthLabel(CURRENT)); };
+
+    $('#agPrevD').onclick = function () { shiftDay(-1); };
+    $('#agNextD').onclick = function () { shiftDay(1); };
+    $('#agDayPick').onchange = function () { if (this.value) { DAY = this.value; go(frFull(DAY)); } };
+
+    $('#agCustOk').onclick = function () {
+      var a = $('#agFrom').value, b = $('#agTo').value;
+      if (!a || !b) { $('#agRange').textContent = 'Choisis les deux dates'; return; }
+      if (a > b) { $('#agRange').textContent = 'Plage invalide'; return; }
+      FROM = a; TO = b; MODE = 'custom';
+      go(frFull(a) + ' → ' + frFull(b));
+    };
+
+    $$('#agTunnelSeg button').forEach(function (b) {
+      b.onclick = function () {
+        var tf = b.getAttribute('data-tunnel');
+        if (tf === TUNNEL || busy) return;
+        TUNNEL = tf;
+        renderTunnelSeg();
+        go(TUNNEL_LABEL[tf] || '');
+      };
+    });
+
+    renderControls();
+    load();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

@@ -759,15 +759,13 @@ service cloud.firestore {
     }
 
 
-    // ═══ FUNNEL SNAPSHOTS — instantanés partagés (accès agence) ═══
-    // Écrits par sales-funnel.html (admin) à chaque calcul en vue Mois /
-    // Tous les tunnels : copie ASSAINIE de l'objet K (aucun nom de client,
-    // de prospect ou de membre d'équipe, aucun coût interne ni commission
-    // — blacklist AGENCY_EXCLUDE côté page) + journal marketing sans auteur.
-    // Lus côté externe UNIQUEMENT via api/agency-funnel.js (Admin SDK,
-    // token secret de _config/agency_access) : l'agence n'a ni compte
-    // Firebase ni accès Firestore, et aucune rule de lecture ne lui est
-    // ouverte ici — c'est volontaire.
+    // ═══ FUNNEL SNAPSHOTS — OBSOLÈTE (26/07/2026) ═══
+    // Mécanisme d'instantanés pré-publiés, remplacé par le calcul à la
+    // demande : api/agency-funnel.js exécute funnel-core.js (le module que
+    // fait aussi tourner sales-funnel.html) pour la période demandée. Plus
+    // rien n'écrit ici, et aucune copie des chiffres n'est stockée.
+    // Bloc conservé en admin-only le temps de purger les documents restants
+    // depuis la Console — supprimable ensuite avec la collection.
     match /funnel_snapshots/{monthKey} {
       allow read:           if isAdmin();
       allow create, update: if isAdmin();

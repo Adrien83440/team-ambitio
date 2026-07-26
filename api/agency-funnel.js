@@ -2,53 +2,103 @@
 // api/agency-funnel.js
 // ----------------------------------------------------------------------------
 // Accès AGENCE au tunnel marketing — lecture seule, sans compte, sans accès
-// Firestore. Sert l'instantané publié par sales-funnel.html dans
-// funnel_snapshots/{YYYY-MM} à qui présente le token de _config/agency_access.
+// Firestore. Calcule les KPIs À LA DEMANDE avec funnel-core.js, le module
+// que fait tourner sales-funnel.html : mêmes données, même code, mêmes
+// chiffres, pour n'importe quelle période.
 //
 // URL  : GET https://team.alteore.com/api/agency-funnel
-//            ?t=TOKEN [&month=YYYY-MM] [&tunnel=all|elite|business]
+//          ?t=TOKEN
+//          &mode=month|day|7d|30d|custom      (défaut : month)
+//          &month=YYYY-MM      (mode month)
+//          &day=YYYY-MM-DD     (mode day)
+//          &from=&to=          (mode custom, YYYY-MM-DD)
+//          &tunnel=all|elite|business          (défaut : all)
 // Auth : token secret dans l'URL (capacité) — PAS de Firebase Auth.
 // Front: agency-funnel.html (page publique autonome, aucun SDK Firebase).
 //
 // Réponses
-//   200 { ok:true, month, tunnel, months:[…], updatedAt:<ms>, build, k, journal }
-//   200 { ok:true, month, tunnel, months:[…], empty:true }  ← pas de snapshot
-//   403 { ok:false }                                  ← token absent/faux/révoqué
-//   405 { ok:false }                                  ← autre verbe que GET
+//   200 { ok:true, mode, tunnel, month, day, from, to, months:[…],
+//         computedAt:<ms>, k, journal }
+//   403 { ok:false }   ← token absent / faux / révoqué
+//   405 { ok:false }   ← autre verbe que GET
 //   500 { ok:false }
 //
 // SÉCURITÉ
 // --------
-// - Le token EST le secret (24 octets base64url, généré côté admin depuis la
-//   modale « 🔗 Agence » du funnel). Même modèle de capacité que les
-//   brouillons AlteoForm : la collection n'est PAS lisible côté client, tout
-//   passe par cet endpoint (Admin SDK, bypass des rules).
+// - Le token EST le secret (24 octets base64url, généré depuis la modale
+//   « 🔗 Agence » du funnel). La collection n'est pas lisible côté client :
+//   tout passe par cet endpoint (Admin SDK, bypass des rules).
 // - Comparaison timing-safe (sha256 des deux valeurs puis timingSafeEqual :
-//   les digests font toujours 32 octets, aucune fuite de longueur).
+//   digests de 32 octets, aucune fuite de longueur).
 // - Réponse d'erreur volontairement pauvre : { ok:false } — impossible de
-//   savoir si c'est le token ou le mois qui est en cause.
-// - Le snapshot lui-même ne contient AUCUNE donnée nominative ni coût interne
-//   (blacklist AGENCY_EXCLUDE côté sales-funnel.html) : même en cas de fuite
-//   du lien, il n'y a rien de personnel à exfiltrer.
+//   savoir si c'est le token, le mois ou le tunnel qui est en cause.
+// - ⚠ CE FICHIER EST LE SEUL POINT DE SORTIE des chiffres du funnel vers
+//   l'extérieur : l'assainissement (AGENCY_EXCLUDE ci-dessous) s'y fait,
+//   et nulle part ailleurs.
 // - Chaque accès (accepté comme refusé) est journalisé dans audit_log.
-//
-// Aucune variable d'environnement ni dépendance nouvelle. Aucun index
-// (composite ou non) : lecture par ID de document + un listing sans orderBy.
 // ============================================================================
+
+/* ⚠ AVANT TOUTE MANIPULATION DE DATE — les bornes de période sont
+   construites en heure LOCALE (new Date(y, m, 1)). Vercel tourne en UTC :
+   sans ça, « juillet » commencerait le 01/07 à 02:00 heure de Paris et les
+   leads des deux premières heures du mois tomberaient hors période. Le
+   funnel interne, lui, calcule en heure de Paris — les deux vues doivent
+   découper le temps exactement pareil. */
+process.env.TZ = 'Europe/Paris';
 
 const crypto = require('crypto');
 const { db, admin } = require('./_firebaseAdmin');
+const Core = require('../funnel-core.js');
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TUNNEL_RE = /^(all|elite|business)$/;
-const MONTHS_LIMIT = 24;
+const MODE_RE = /^(month|day|7d|30d|custom)$/;
+const MONTHS_LISTED = 12;
+const MAX_RANGE_DAYS = 92;      // garde-fou de charge sur les plages libres
+const CACHE_TTL_MS = 120 * 1000;
 
-/* Un document par mois ET par tunnel : funnel_snapshots/2026-07 (tous),
-   /2026-07_elite, /2026-07_business. Le suffixe garde les IDs « mois nu »
-   pour le tunnel « tous », ce qui laisse le listing des mois filtrable par
-   MONTH_RE (les variantes tunnel n'y apparaissent donc jamais). */
-function snapshotDocId(month, tunnel) {
-  return tunnel === 'all' ? month : month + '_' + tunnel;
+/* ⚠ CONTRAT DE DONNÉES — champs de K qui ne sortent JAMAIS de la maison.
+   Toute évolution future de K qui ajoute un champ nominatif (nom de client,
+   de prospect ou de membre d'équipe) ou une donnée financière interne
+   (salaire, commission, coût d'outillage) DOIT être ajoutée ici — c'est
+   l'absence totale de donnée personnelle dans la réponse qui rend l'accès
+   externe conforme (RGPD) sans contrat de sous-traitance de données. */
+const AGENCY_EXCLUDE = {
+  /* Nominatifs clients / prospects */
+  collecteMissingNames: 1,
+  payCloseNames: 1,
+  payCloseOther: 1,
+  /* Équipe, par personne */
+  callsByUser: 1,
+  /* Coûts internes & commissions */
+  commSetting: 1,
+  commSettingN: 1,
+  costFixe: 1,
+  costOutils: 1,
+  costConfigured: 1,
+  costSrcMonth: 1,
+  costOwnEntry: 1,
+  costSetting: 1,
+  costPerRdvNB: 1,
+};
+
+function sanitizeK(k) {
+  const out = {};
+  Object.keys(k || {}).forEach((f) => { if (!AGENCY_EXCLUDE[f]) out[f] = k[f]; });
+  /* JSON round-trip : supprime les undefined et transforme NaN/Infinity en
+     null — la page agence affiche « — » pour tout null. */
+  return JSON.parse(JSON.stringify(out));
+}
+
+/* Journal marketing : date / catégorie / texte seulement. L'auteur (membre
+   de l'équipe) et l'_id Firestore ne sortent pas. */
+function sanitizeJournal(list) {
+  return (list || []).map((j) => ({
+    date: j.date || null,
+    category: j.category || null,
+    text: j.text || '',
+  }));
 }
 
 /* Comparaison timing-safe. On hache les deux valeurs avant de comparer :
@@ -69,14 +119,16 @@ function clientIp(req) {
 }
 
 /* Journalisation best-effort : une trace d'audit ne doit JAMAIS faire échouer
-   la réponse (ni la retarder au point de casser la page agence). */
-async function logAccess(req, ok, month, tunnel) {
+   la réponse. */
+async function logAccess(req, ok, info) {
   try {
     await db.collection('audit_log').add({
       type: 'agency_funnel_read',
       ok: !!ok,
-      month: month || null,
-      tunnel: tunnel || null,
+      mode: (info && info.mode) || null,
+      from: (info && info.from) || null,
+      to: (info && info.to) || null,
+      tunnel: (info && info.tunnel) || null,
       ip: clientIp(req),
       ua: String(req.headers['user-agent'] || '').slice(0, 300) || null,
       at: admin.firestore.FieldValue.serverTimestamp(),
@@ -84,6 +136,62 @@ async function logAccess(req, ok, month, tunnel) {
   } catch (e) {
     console.warn('[agency-funnel] audit_log:', e && e.message);
   }
+}
+
+/* Construit la période demandée. Toute valeur malformée retombe sur le mois
+   courant — jamais d'erreur qui distinguerait « mauvais paramètre » de
+   « mauvais token ». */
+function buildPeriod(q) {
+  const mode = MODE_RE.test(q.mode) ? q.mode : 'month';
+  if (mode === 'day' && DAY_RE.test(q.day)) return Core.periodDay(q.day);
+  if (mode === '7d') return Core.periodPreset(7);
+  if (mode === '30d') return Core.periodPreset(30);
+  if (mode === 'custom' && DAY_RE.test(q.from) && DAY_RE.test(q.to) && q.from <= q.to) {
+    const P = Core.periodCustom(q.from, q.to);
+    const days = Math.round((P.end.getTime() - P.start.getTime()) / 86400000) + 1;
+    /* Plage trop large : on la ramène à MAX_RANGE_DAYS en gardant la fin
+       demandée. Mieux qu'un timeout silencieux côté agence. */
+    if (days > MAX_RANGE_DAYS) {
+      const s = new Date(P.end.getTime() - (MAX_RANGE_DAYS - 1) * 86400000);
+      return Core.periodCustom(Core.isoDate(s), Core.isoDate(P.end));
+    }
+    return P;
+  }
+  if (mode === 'month' && MONTH_RE.test(q.month)) {
+    const p = q.month.split('-');
+    return Core.periodMonth(+p[0], +p[1] - 1);
+  }
+  const now = new Date();
+  return Core.periodMonth(now.getFullYear(), now.getMonth());
+}
+
+/* Les MONTHS_LISTED derniers mois calendaires — sert à peupler le sélecteur
+   de mois côté agence. Aucune requête Firestore : la liste ne dépend que du
+   calendrier, et un mois sans activité s'affiche naturellement à zéro. */
+function recentMonths() {
+  const out = [];
+  const now = new Date();
+  for (let i = 0; i < MONTHS_LISTED; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(d.getFullYear() + '-' + Core.pad2(d.getMonth() + 1));
+  }
+  return out;
+}
+
+/* Cache mémoire par instance de lambda. On met en cache les DONNÉES CHARGÉES
+   (la partie coûteuse), pas les KPIs : le calcul par tunnel est instantané
+   et computeKpis() est rejouable sur les mêmes données — c'est exactement ce
+   que fait le sélecteur de tunnel du funnel interne. */
+const cache = new Map();
+async function loadPeriodData(P) {
+  const key = Core.isoDate(P.start) + '|' + Core.isoDate(P.end);
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.res;
+  const res = await Core.loadAll(db, { P });
+  cache.set(key, { at: Date.now(), res });
+  /* Bornage trivial : une instance ne garde que quelques périodes. */
+  if (cache.size > 8) cache.delete(cache.keys().next().value);
+  return res;
 }
 
 module.exports = async (req, res) => {
@@ -94,76 +202,51 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const token = typeof req.query.t === 'string' ? req.query.t : '';
-  /* Mois demandé : validé par regex. Une valeur malformée est simplement
-     IGNORÉE (repli sur le mois le plus récent) — jamais concaténée dans un
-     chemin de document, jamais renvoyée en écho. */
-  const rawMonth = typeof req.query.month === 'string' ? req.query.month : '';
-  const askedMonth = MONTH_RE.test(rawMonth) ? rawMonth : null;
-  /* Tunnel demandé, même traitement : valeur inconnue → repli sur « all ». */
-  const rawTunnel = typeof req.query.tunnel === 'string' ? req.query.tunnel : '';
-  const tunnel = TUNNEL_RE.test(rawTunnel) ? rawTunnel : 'all';
+  const q = req.query || {};
+  const token = typeof q.t === 'string' ? q.t : '';
+  const tunnel = TUNNEL_RE.test(q.tunnel) ? q.tunnel : 'all';
+  const P = buildPeriod(q);
+  const info = { mode: P.mode, from: Core.isoDate(P.start), to: Core.isoDate(P.end), tunnel };
 
   try {
     const cfgSnap = await db.collection('_config').doc('agency_access').get();
     const cfg = cfgSnap.exists ? cfgSnap.data() : null;
 
     if (!cfg || cfg.active !== true || !tokenMatches(cfg.token, token)) {
-      await logAccess(req, false, askedMonth, tunnel);
+      await logAccess(req, false, info);
       res.status(403).json({ ok: false });
       return;
     }
 
-    /* Mois disponibles — projection VIDE (aucun payload transféré : on ne
-       veut que les identifiants) et AUCUN orderBy.
-       ⚠ Ne pas « optimiser » en orderBy(documentId(),'desc') : Firestore
-       n'indexe automatiquement __name__ qu'en ASCENDANT, un tri descendant
-       exige un index composite (incident du 26/07/2026 → 500 en prod). La
-       collection compte un document par mois — quelques dizaines à vie :
-       on lit tout et on trie en mémoire, sans index d'aucune sorte. */
-    const monthsSnap = await db.collection('funnel_snapshots').select().get();
-    const months = monthsSnap.docs
-      .map((d) => d.id)
-      .filter((id) => MONTH_RE.test(id))
-      .sort()
-      .reverse()
-      .slice(0, MONTHS_LIMIT);
+    const loaded = await loadPeriodData(P);
+    const k = Core.computeKpis({
+      DATA: loaded.DATA,
+      P,
+      tunnelFilter: tunnel,
+      teamMembers: loaded.teamMembers,
+    });
 
-    const month = askedMonth || months[0] || null;
-    if (!month) {
-      await logAccess(req, true, null, tunnel);
-      res.status(200).json({ ok: true, month: null, tunnel, months: [], empty: true });
-      return;
-    }
-
-    const snap = await db.collection('funnel_snapshots').doc(snapshotDocId(month, tunnel)).get();
-    await logAccess(req, true, month, tunnel);
-
-    /* Mois antérieur à la mise en place des variantes par tunnel → le
-       document Élite / Business n'existe pas : état vide explicite, jamais
-       un repli silencieux sur « tous » (qui afficherait de faux chiffres). */
-    if (!snap.exists) {
-      res.status(200).json({ ok: true, month, tunnel, months, empty: true });
-      return;
-    }
-
-    const d = snap.data() || {};
-    const updatedAt = d.updatedAt && typeof d.updatedAt.toMillis === 'function'
-      ? d.updatedAt.toMillis()
-      : null;
+    await logAccess(req, true, info);
 
     res.status(200).json({
       ok: true,
-      month,
+      mode: P.mode,
       tunnel,
-      months,
-      updatedAt,
-      build: d.build || null,
-      k: d.k || null,
-      journal: Array.isArray(d.journal) ? d.journal : [],
+      from: info.from,
+      to: info.to,
+      month: P.mode === 'month' ? info.from.slice(0, 7) : null,
+      day: P.mode === 'day' ? info.from : null,
+      months: recentMonths(),
+      computedAt: Date.now(),
+      k: sanitizeK(k),
+      journal: sanitizeJournal(loaded.DATA.journalPeriod),
     });
   } catch (e) {
     console.error('[agency-funnel]', e && e.message);
     res.status(500).json({ ok: false });
   }
 };
+
+/* Le chargement complet d'une grande période (jusqu'à 6000 leads + 5000
+   appels) dépasse largement les 10 s par défaut. */
+module.exports.config = { maxDuration: 60 };
