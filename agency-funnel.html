@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Alteore — Tunnel marketing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   Alteore — Tunnel marketing · vue AGENCE (lecture seule)
+   Page publique AUTONOME : aucun SDK Firebase, aucune auth, aucun nav.js.
+   Seule dépendance : GET /api/agency-funnel?t=TOKEN — qui sert l'instantané
+   publié par le funnel interne. Styles repris de sales.css / sales-funnel.html
+   (mêmes variables, mêmes cartes) pour que les deux vues se ressemblent.
+   ═══════════════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #08080f;
+  --bg2:     #0f0f1a;
+  --bg3:     #14141f;
+  --bg4:     #1a1a28;
+  --border:  rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --red3:    #fca5a5;
+  --gold:    #f59e0b;
+  --green:   #34d399;
+  --blue:    #60a5fa;
+  --violet:  #a78bfa;
+  --text:    rgba(255,255,255,0.92);
+  --muted:   rgba(255,255,255,0.48);
+  --muted2:  rgba(255,255,255,0.22);
+  --font-b:  'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-m:  'JetBrains Mono', ui-monospace, monospace;
+}
+html, body {
+  min-height: 100vh; background: var(--bg); color: var(--text);
+  font-family: var(--font-b); font-size: 14px; line-height: 1.5;
+  overflow-x: hidden; -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ── */
+.ag-top { position: sticky; top: 0; z-index: 20; background: rgba(8,8,15,0.96); border-bottom: 1px solid var(--border); backdrop-filter: blur(20px); }
+.ag-top-in { max-width: 1320px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ag-logo { width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; background: linear-gradient(135deg,#7f1d1d,#dc2626); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+.ag-brand { font-size: 15px; font-weight: 700; letter-spacing: -0.4px; }
+.ag-brand span { color: var(--muted); font-weight: 500; }
+.ag-ro { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 3px 8px; border-radius: 6px; background: rgba(251,191,36,0.12); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); }
+.ag-spacer { flex: 1; }
+.ag-mnav { display: flex; align-items: center; gap: 6px; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 3px; }
+.ag-mnav button { background: none; border: none; color: var(--muted); font-size: 14px; cursor: pointer; padding: 5px 9px; border-radius: 7px; font-family: var(--font-b); }
+.ag-mnav button:hover:not(:disabled) { color: var(--text); background: var(--bg4); }
+.ag-mnav button:disabled { opacity: .3; cursor: not-allowed; }
+.ag-mnav select { background: none; border: none; color: var(--text); font-size: 12.5px; font-weight: 600; font-family: var(--font-b); cursor: pointer; padding: 4px 2px; outline: none; }
+.ag-mnav select option { background: var(--bg3); color: var(--text); }
+
+.ag-main { max-width: 1320px; margin: 0 auto; padding: 20px 24px 60px; }
+.ag-stamp { font-size: 11.5px; color: var(--muted); font-family: var(--font-m); background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 14px; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ag-stamp .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px rgba(52,211,153,0.6); flex-shrink: 0; }
+.ag-stamp em { font-style: normal; color: var(--muted2); font-family: var(--font-b); }
+
+/* ── Cartes (mêmes classes que le funnel interne) ── */
+.ag-hero { display: grid; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); gap: 10px; margin-bottom: 14px; }
+.ag-hero-kpi { background: linear-gradient(160deg,var(--bg3),var(--bg2)); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+.ag-hero-kpi .v { font-size: 24px; font-weight: 800; letter-spacing: -0.8px; font-family: var(--font-m); }
+.ag-hero-kpi .l { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; font-weight: 700; margin-top: 3px; }
+.ag-hero-kpi .s { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.ag-hero-kpi .s .pct { color: var(--blue); font-weight: 700; }
+.ag-rates { display: flex; flex-wrap: wrap; gap: 8px 26px; background: linear-gradient(160deg,var(--bg3),var(--bg2)); border: 1px solid var(--border); border-radius: 14px; padding: 12px 16px; margin-bottom: 18px; align-items: center; }
+.ag-rates .rt { font-size: 11.5px; color: var(--muted); }
+.ag-rates .rt strong { font-size: 16px; color: var(--text); font-family: var(--font-m); margin-right: 6px; letter-spacing: -0.4px; }
+
+.ag-stage { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; margin-bottom: 14px; }
+.ag-stage-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.ag-stage-title { font-size: 14px; font-weight: 700; letter-spacing: -0.3px; }
+.ag-stage-note { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.ag-sub { font-size: 10.5px; font-weight: 800; letter-spacing: 0.7px; margin: 14px 0 8px; }
+.ag-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(158px,1fr)); gap: 10px; }
+.ag-kpi { background: var(--bg3); border: 1px solid var(--border); border-radius: 11px; padding: 11px 13px; }
+.ag-kpi .v { font-size: 19px; font-weight: 700; font-family: var(--font-m); letter-spacing: -0.5px; }
+.ag-kpi .v.muted { color: var(--muted2); }
+.ag-kpi .l { font-size: 10.5px; color: var(--muted); font-weight: 600; margin-top: 3px; line-height: 1.35; }
+.ag-kpi .s { font-size: 10.5px; color: var(--muted2); margin-top: 2px; line-height: 1.35; }
+.ag-arrow { text-align: center; color: var(--muted2); font-size: 15px; margin: 2px 0 12px; }
+
+.ag-minibars { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.ag-minibar { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+.ag-minibar .mb-l { width: 78px; color: var(--muted); }
+.ag-minibar .mb-track { flex: 1; height: 7px; background: var(--bg4); border-radius: 6px; overflow: hidden; }
+.ag-minibar .mb-fill { height: 100%; border-radius: 6px; }
+.ag-minibar .mb-v { width: 200px; text-align: right; font-family: var(--font-m); font-size: 11px; }
+
+.ag-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; background: var(--bg2); }
+table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ag-table th { text-align: left; padding: 10px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); border-bottom: 1px solid var(--border2); white-space: nowrap; }
+.ag-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.ag-table tr:last-child td { border-bottom: none; }
+.ag-table .num { font-family: var(--font-m); font-size: 11.5px; text-align: right; }
+.ag-table th.num { text-align: right; }
+.ag-utm { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; color: var(--muted); }
+.ag-badge { display: inline-block; font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: 0.3px; }
+.ag-badge.ok   { background: rgba(52,211,153,0.12); color: var(--green); border: 1px solid rgba(52,211,153,0.25); }
+.ag-badge.warn { background: rgba(245,158,11,0.12); color: var(--gold);  border: 1px solid rgba(245,158,11,0.25); }
+.ag-badge.bad  { background: rgba(239,68,68,0.12);  color: var(--red3);  border: 1px solid rgba(239,68,68,0.25); }
+
+.ag-jr-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; align-items: flex-start; }
+.ag-jr-item:last-child { border-bottom: none; }
+.ag-jr-date { font-family: var(--font-m); font-size: 11px; color: var(--muted); white-space: nowrap; padding-top: 2px; }
+.ag-jr-cat { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 12px; background: var(--bg4); border: 1px solid var(--border); white-space: nowrap; }
+.ag-jr-text { flex: 1; line-height: 1.45; }
+
+.ag-empty { text-align: center; color: var(--muted); padding: 30px 10px; font-size: 13px; }
+.ag-loading { text-align: center; color: var(--muted); padding: 60px 10px; font-size: 13px; }
+.ag-gate { max-width: 460px; margin: 90px auto; text-align: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 18px; padding: 34px 28px; }
+.ag-gate .ic { font-size: 34px; margin-bottom: 12px; }
+.ag-gate h1 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+.ag-gate p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.ag-foot { margin-top: 26px; font-size: 11px; color: var(--muted2); text-align: center; line-height: 1.6; }
+
+@media (max-width: 760px) {
+  .ag-top-in { padding: 10px 14px; }
+  .ag-main { padding: 16px 12px 44px; }
+  .ag-hero-kpi .v { font-size: 19px; }
+  .ag-minibar .mb-v { width: 130px; }
+}
+</style>
+</head>
+<body>
+
+<div class="ag-top" id="agTop" style="display:none">
+  <div class="ag-top-in">
+    <div class="ag-logo">A</div>
+    <div class="ag-brand">Alteore <span>— Tunnel marketing</span></div>
+    <div class="ag-ro">Lecture seule</div>
+    <div class="ag-spacer"></div>
+    <div class="ag-mnav" id="agMonthNav" style="display:none">
+      <button id="agPrev" title="Mois précédent">‹</button>
+      <select id="agMonthSel"></select>
+      <button id="agNext" title="Mois suivant">›</button>
+    </div>
+  </div>
+</div>
+
+<div class="ag-main" id="agRoot">
+  <div class="ag-loading">Chargement…</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ════════════════════════════════════════════════════════════════
+     Vue AGENCE — rendu de l'instantané funnel_snapshots/{YYYY-MM}.
+     ZÉRO calcul : tous les chiffres viennent tels quels de l'objet `k`
+     produit par compute() dans sales-funnel.html. Les libellés et les
+     formats sont recopiés de renderFunnel() pour que les deux vues
+     disent exactement la même chose, avec les mêmes définitions.
+     ════════════════════════════════════════════════════════════════ */
+
+  var ENDPOINT = '/api/agency-funnel';
+  var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  var JCATS = { budget: '💰 Budget', crea: '🎨 Créa', vsl: '🎬 VSL', optin: '📄 Page opt-in', ciblage: '🎯 Ciblage', offre: '💼 Offre', autre: '🔧 Autre' };
+
+  var TOKEN = '';
+  var MONTHS = [];
+  var CURRENT = null;
+  var busy = false;
+
+  function $(s) { return document.querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function escAttr(s) { if (s == null) return ''; return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  /* ── Formats — copie conforme de sales-funnel.html ──
+     Règle maison : une valeur absente s'affiche « — », jamais un 0 inventé. */
+  function pad2(n) { return String(n).length < 2 ? '0' + n : String(n); }
+  function fmtNum(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return Math.round(v).toLocaleString('fr-FR'); }
+  function fmtEuro(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return Math.round(v).toLocaleString('fr-FR') + ' €'; }
+  function fmtEuro2(v) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; return (Math.round(v * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+  function fmtPct(v, dec) { if (v == null || isNaN(v) || !isFinite(v)) return '—'; var f = dec == null ? 1 : dec; return (Math.round(v * Math.pow(10, f)) / Math.pow(10, f)).toLocaleString('fr-FR') + ' %'; }
+  function fmtPts(d) { if (d == null || isNaN(d) || !isFinite(d)) return '—'; var r = Math.round(d * 10) / 10; return (r >= 0 ? '+' : '') + r.toLocaleString('fr-FR') + ' pts'; }
+  /* « — » quand le 0 n'est pas un vrai 0 mais un manque de statuts RDV. */
+  function numOrDash(v, unknown) { return (v === 0 && unknown > 0) ? '—' : fmtNum(v); }
+  function monthLabel(mk) {
+    if (!mk) return '—';
+    var p = String(mk).split('-');
+    return (MONTHS_FR[parseInt(p[1], 10) - 1] || '') + ' ' + p[0];
+  }
+  function frDateTime(ms) {
+    if (ms == null) return '—';
+    var d = new Date(ms);
+    if (isNaN(d.getTime())) return '—';
+    return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' à ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+  function frDay(iso) { if (!iso) return '—'; var p = String(iso).split('-'); return p[2] + '/' + p[1]; }
+
+  /* Sous-objets de k : absents sur un vieux snapshot → objet neutre. */
+  function ch(k, name) { return (k && k[name]) || { n: 0, kept: 0, present: 0, pitched: 0, cancelled: 0, noshow: 0, aVenir: 0, sansDetail: 0, disqua: 0, nonCloses: 0 }; }
+
+  function kpi(value, label, sub, muted) {
+    return '<div class="ag-kpi"><div class="v' + (muted ? ' muted' : '') + '">' + value + '</div><div class="l">' + label + '</div>'
+      + (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>';
+  }
+  function stageOpen(icon, title, note) {
+    return '<div class="ag-stage"><div class="ag-stage-head"><div class="ag-stage-title">' + icon + ' ' + title + '</div>'
+      + (note ? '<div class="ag-stage-note">' + note + '</div>' : '') + '</div>';
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     RENDU
+     ════════════════════════════════════════════════════════════════ */
+  function renderGate(title, msg) {
+    $('#agTop').style.display = 'none';
+    $('#agRoot').innerHTML = '<div class="ag-gate"><div class="ic">🔒</div><h1>' + esc(title) + '</h1><p>' + esc(msg) + '</p></div>';
+  }
+
+  function renderMonthNav() {
+    var nav = $('#agMonthNav');
+    if (!MONTHS.length) { nav.style.display = 'none'; return; }
+    nav.style.display = 'flex';
+    var sel = $('#agMonthSel');
+    var h = '';
+    for (var i = 0; i < MONTHS.length; i++) {
+      h += '<option value="' + escAttr(MONTHS[i]) + '"' + (MONTHS[i] === CURRENT ? ' selected' : '') + '>' + esc(monthLabel(MONTHS[i])) + '</option>';
+    }
+    sel.innerHTML = h;
+    var idx = MONTHS.indexOf(CURRENT);
+    /* MONTHS est trié du plus récent au plus ancien : ‹ = index+1. */
+    $('#agPrev').disabled = idx < 0 || idx >= MONTHS.length - 1;
+    $('#agNext').disabled = idx <= 0;
+  }
+
+  function render(data) {
+    $('#agTop').style.display = '';
+    CURRENT = data.month || CURRENT;
+    if (data.months && data.months.length) MONTHS = data.months;
+    renderMonthNav();
+
+    var root = $('#agRoot');
+    var h = '';
+
+    /* Bandeau de fraîcheur — la donnée est celle du dernier passage de
+       l'équipe sur le funnel interne, pas un temps réel. C'est dit. */
+    if (data.empty || !data.k) {
+      h += '<div class="ag-stamp"><span class="dot" style="background:var(--muted2);box-shadow:none"></span>' + esc(monthLabel(CURRENT)) + '</div>';
+      h += '<div class="ag-stage"><div class="ag-empty">Pas encore de données publiées pour ce mois.</div></div>';
+      root.innerHTML = h;
+      return;
+    }
+
+    var k = data.k;
+    h += '<div class="ag-stamp"><span class="dot"></span>Données au ' + esc(frDateTime(data.updatedAt))
+      + ' <em>· ' + esc(monthLabel(CURRENT)) + ' · tous tunnels · mis à jour à chaque consultation interne du funnel</em></div>';
+
+    h += renderHero(k);
+    h += renderAds(k);
+    h += renderBooking(k);
+    h += renderLeads(k);
+    h += renderProfit(k);
+    h += renderJournal(data.journal || []);
+
+    h += '<div class="ag-foot">Vue agence en lecture seule — Alteore. Chiffres issus du tunnel interne (pub → opt-in → leads → RDV → closing).<br>Aucune donnée nominative n\'est exposée sur cette page.</div>';
+    root.innerHTML = h;
+  }
+
+  /* ── 1. Héro — mêmes définitions que la Ligne 1 / Ligne 2 du funnel ── */
+  function renderHero(k) {
+    var c = ch(k, 'chAll');
+    var h = '<div class="ag-hero">';
+    h += '<div class="ag-hero-kpi"><div class="v">' + fmtNum(k.leads) + '</div><div class="l">Leads</div><div class="s">'
+      + (k.reoptins ? '+ ' + fmtNum(k.reoptins) + ' ré-optins 🔄' : 'entrés sur la période') + '</div></div>';
+    h += '<div class="ag-hero-kpi"><div class="v">' + fmtNum(c.n) + '</div><div class="l">RDV pris</div><div class="s">'
+      + (k.ltb != null ? 'LTB ' + fmtPct(k.ltb) + ' (RDV ÷ leads)' : 'SB + NB, replanif. dédupliqués') + '</div></div>';
+    h += '<div class="ag-hero-kpi"><div class="v">' + fmtNum(c.kept) + '</div><div class="l">Kept</div><div class="s">pris − ' + fmtNum(c.cancelled) + ' annulés'
+      + (c.n > 0 ? ' · <span class="pct">' + fmtPct(c.kept / c.n * 100, 0) + '</span>' : '') + '</div></div>';
+    h += '<div class="ag-hero-kpi"><div class="v">' + fmtNum(k.closesWonTotal) + '</div><div class="l">Closes</div><div class="s">clients gagnés sur la période</div></div>';
+    h += '<div class="ag-hero-kpi"><div class="v">' + fmtEuro(k.wonCollecte) + '</div><div class="l">Collecté (HT)</div><div class="s">contracté ' + fmtEuro(k.wonContracte) + '</div></div>';
+    h += '</div>';
+
+    /* Taux de close du mois — présents uniquement si le snapshot les porte. */
+    if (k.closeRateRdv != null || k.closeRateLive != null || k.closeRateOffre != null) {
+      var oc = k.ocDue || {};
+      h += '<div class="ag-rates">';
+      h += '<div class="rt"><strong>' + fmtPct(k.closeRateRdv, 1) + '</strong>Taux de close / RDV du mois <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' closes ÷ ' + fmtNum(k.rdvMois) + ' RDV)</span></div>';
+      h += '<div class="rt"><strong>' + fmtPct(k.closeRateLive, 1) + '</strong>Taux de close / live <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' ÷ ' + fmtNum(oc.present) + ' présents)</span></div>';
+      h += '<div class="rt"><strong>' + fmtPct(k.closeRateOffre, 1) + '</strong>Taux de close / offre <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' ÷ ' + fmtNum(oc.pitched) + ' pitchés)</span></div>';
+      h += '</div>';
+    }
+    return h;
+  }
+
+  /* ── 2. Publicité — dépense → CPM/CTR/CPC → opt-in → échelle CPR → ROAS ── */
+  function renderAds(k) {
+    var sb = ch(k, 'chSB');
+    var h = stageOpen('💰', 'Publicité (Meta)', k.hasAds ? (fmtNum(k.adsDays) + ' jour(s) de data') : 'Aucune donnée sur la période');
+    h += '<div class="ag-grid">';
+    h += kpi(fmtEuro2(k.spend || null), 'Dépense pub', null, !k.hasAds);
+    h += kpi(fmtNum(k.impressions || null), 'Impressions', null, !k.hasAds);
+    h += kpi(fmtEuro2(k.cpm), 'CPM', 'coût / 1000 impressions');
+    h += kpi(fmtNum(k.clicks || null), 'Clics sortants', null, !k.hasAds);
+    h += kpi(fmtPct(k.ctr, 2), 'CTR', 'clics / impressions');
+    h += kpi(fmtEuro2(k.cpc), 'CPC', 'coût / clic');
+    h += kpi(fmtEuro2(k.cpl), 'CPL réel', 'dépense ÷ ' + fmtNum(k.leads) + ' leads réels');
+    h += kpi(k.views > 0 ? fmtNum(k.views) : '—', 'Vues page opt-in', k.views > 0 ? null : 'mesure beacon non active', !(k.views > 0));
+    if (k.views > 0) h += kpi(fmtPct(k.optinReal), 'Taux d\'opt-in réel', 'leads ÷ vues');
+    h += kpi(fmtPct(k.optinClicks), 'Taux d\'opt-in / clics', 'leads ÷ clics Meta');
+    h += kpi(k.roasOutcome != null ? (Math.round(k.roasOutcome * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS', 'collecté réel (HT) ÷ dépense pub', k.roasOutcome == null);
+    h += '</div>';
+
+    /* Échelle CPR — même axe que « RDV pris SB » (RDV self-bookés créés
+       sur la période, chaînes de replanification dédupliquées). */
+    h += '<div class="ag-sub" style="color:var(--gold)">📉 Coût par RDV — l\'échelle complète (self-booking)</div>';
+    h += '<div class="ag-grid">';
+    h += kpi(fmtEuro2(k.cprSB), 'CPR', 'dépense ÷ ' + fmtNum(sb.n) + ' RDV SB pris (annulés inclus)', k.cprSB == null);
+    h += kpi(fmtEuro2(k.cprKept), 'CPR KEPT', 'dépense ÷ ' + fmtNum(sb.kept) + ' RDV SB kept', k.cprKept == null);
+    h += kpi(fmtEuro2(k.cprLive), 'CPR Live', 'dépense ÷ ' + fmtNum(sb.present) + ' RDV SB présents', k.cprLive == null);
+    h += kpi(fmtEuro2(k.cprOffre), 'CPR Offre', 'dépense ÷ ' + fmtNum(sb.pitched) + ' RDV SB pitchés', k.cprOffre == null);
+    h += '</div>';
+
+    /* A/B tests opt-in — mesure beacon par variante, z-test 2 proportions. */
+    if (k.abTests && k.abTests.length) {
+      for (var t = 0; t < k.abTests.length; t++) {
+        var test = k.abTests[t];
+        var vars = test.variants || [];
+        if (vars.length < 2) continue;
+        var ref = vars[0];
+        var refRate = ref.views > 0 ? ref.optins / ref.views * 100 : null;
+        h += '<div class="ag-sub" style="color:var(--muted)">🧪 A/B test — page ' + esc(test.page) + ' <span style="font-weight:500;letter-spacing:0;text-transform:none">(variante ' + esc(String(ref.variant).toUpperCase()) + ' = référence)</span></div>';
+        h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr><th>Variante</th><th class="num">Vues</th><th class="num">Opt-ins</th><th class="num">Taux</th><th class="num">Δ vs ' + esc(String(ref.variant).toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead><tbody>';
+        for (var v = 0; v < vars.length; v++) {
+          var va = vars[v];
+          var rate = va.views > 0 ? va.optins / va.views * 100 : null;
+          var delta = '—', sig = '<span style="color:var(--muted2)">référence</span>';
+          if (v > 0) {
+            delta = (rate != null && refRate != null) ? fmtPts(rate - refRate) : '—';
+            var st = abSignif(ref.views, ref.optins, va.views, va.optins);
+            if (!st) sig = '<span style="color:var(--muted2)">échantillon insuffisant (≥ 30 vues/variante)</span>';
+            else if (st.p < 0.05) sig = '<span class="ag-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
+            else sig = '<span class="ag-badge warn">en cours · p = ' + st.p.toFixed(2) + '</span>';
+          }
+          h += '<tr><td><strong>' + esc(String(va.variant).toUpperCase()) + '</strong></td><td class="num">' + fmtNum(va.views) + '</td><td class="num">' + fmtNum(va.optins) + '</td><td class="num">' + fmtPct(rate) + '</td><td class="num">' + delta + '</td><td>' + sig + '</td></tr>';
+        }
+        h += '</tbody></table></div>';
+      }
+    }
+    h += '</div><div class="ag-arrow">▼</div>';
+    return h;
+  }
+
+  /* Loi normale (approx. Zelen & Severo) + z-test 2 proportions — recopié du
+     funnel pour afficher la MÊME significativité, jamais un calcul divergent. */
+  function normCdf(z) {
+    var t = 1 / (1 + 0.2316419 * Math.abs(z));
+    var d = 0.3989423 * Math.exp(-z * z / 2);
+    var pr = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return z > 0 ? 1 - pr : pr;
+  }
+  function abSignif(vRef, oRef, vChal, oChal) {
+    if (vRef < 30 || vChal < 30) return null;
+    var pp = (oRef + oChal) / (vRef + vChal);
+    var se = Math.sqrt(pp * (1 - pp) * (1 / vRef + 1 / vChal));
+    if (!se || !isFinite(se)) return null;
+    var z = (oChal / vChal - oRef / vRef) / se;
+    return { z: z, p: 2 * (1 - normCdf(Math.abs(z))) };
+  }
+
+  /* ── 3. Prise de RDV — Self Booking / No Booking, agrégats seulement ── */
+  function renderBooking(k) {
+    var sb = ch(k, 'chSB'), nb = ch(k, 'chNB');
+    var h = stageOpen('📅', 'Prise de RDV — Self Booking / No Booking',
+      'RDV <strong>pris</strong> sur la période, peu importe quand ils ont lieu (replanifications dédupliquées, résultat de fin de chaîne)');
+
+    h += '<div class="ag-sub" style="color:var(--gold)">🔗 Self Booking — le lead prend RDV seul (lien public)</div>';
+    h += '<div class="ag-grid">';
+    h += kpi(fmtNum(sb.n), 'RDV pris SB', 'LTB (SB) ' + fmtPct(k.ltbSB) + ' — RDV self ÷ leads');
+    h += kpi(fmtNum(sb.kept), 'Kept SB', 'pris − <span style="color:var(--red3)">' + fmtNum(sb.cancelled) + ' annulés</span>'
+      + (sb.noshow ? ' · <span style="color:var(--gold)">' + fmtNum(sb.noshow) + ' no-show</span> (dans kept)' : '')
+      + (sb.aVenir ? ' · ' + fmtNum(sb.aVenir) + ' à venir' : ''));
+    h += kpi(numOrDash(sb.present, sb.sansDetail), 'Live SB (présents)',
+      (sb.kept > 0 && sb.present > 0 ? 'show-up ' + fmtPct(sb.present / sb.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV')
+      + (sb.sansDetail ? ' · ⚠ ' + fmtNum(sb.sansDetail) + ' sans détail' : ''));
+    h += kpi(numOrDash(sb.pitched, sb.sansDetail), 'Pitchés SB', 'offres faites'
+      + (sb.disqua ? ' · ' + fmtNum(sb.disqua) + ' disqualifiés' : '')
+      + (sb.nonCloses ? ' · ' + fmtNum(sb.nonCloses) + ' non closes' : ''));
+    h += kpi(fmtNum(k.wonSelf), 'Closes SB', 'clients gagnés SB'
+      + (sb.pitched > 0 ? ' · ' + fmtPct(k.wonSelf / sb.pitched * 100, 0) + ' des offres' : ''));
+    h += kpi(fmtEuro(k.wonCollecteSB), 'Collecté SB (HT)', 'contracté ' + fmtEuro(k.wonContracteSB));
+    h += '</div>';
+
+    h += '<div class="ag-sub" style="color:#c4b5fd">📞 No Booking — RDV posés par l\'équipe (lien setter)</div>';
+    h += '<div class="ag-grid">';
+    h += kpi(fmtNum(k.leadsNoSB), 'Leads à travailler', fmtNum(k.leads) + ' leads de la période − ' + fmtNum(k.cohortSelf) + ' self-bookés');
+    h += kpi(fmtNum(nb.n), 'RDV pris NB', 'posés par l\'équipe sur des leads qui n\'avaient pas booké seuls');
+    h += kpi(fmtPct(k.recovery), 'Taux de récupération', fmtNum(k.cohortSetter) + ' des ' + fmtNum(k.leadsNoSB) + ' leads sans RDV self ont eu un RDV posé', k.recovery == null);
+    h += kpi(fmtNum(nb.kept), 'Kept NB', 'pris − <span style="color:var(--red3)">' + fmtNum(nb.cancelled) + ' annulés</span>'
+      + (nb.noshow ? ' · <span style="color:var(--gold)">' + fmtNum(nb.noshow) + ' no-show</span> (dans kept)' : ''));
+    h += kpi(numOrDash(nb.present, nb.sansDetail), 'Live NB (présents)',
+      (nb.kept > 0 && nb.present > 0 ? 'show-up ' + fmtPct(nb.present / nb.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV')
+      + (nb.sansDetail ? ' · ⚠ ' + fmtNum(nb.sansDetail) + ' sans détail' : ''));
+    h += kpi(fmtNum(k.wonSetting), 'Closes NB', 'clients gagnés via un RDV posé par l\'équipe');
+    h += '</div>';
+    h += '</div><div class="ag-arrow">▼</div>';
+    return h;
+  }
+
+  /* ── 4. Leads — tunnels + performance par créative (UTM) ── */
+  function renderLeads(k) {
+    var byT = k.leadsByTunnel || { elite: 0, business: 0 };
+    var rdvT = k.bookedByTunnel || null;
+    var total = (byT.elite || 0) + (byT.business || 0);
+    var h = stageOpen('👥', 'Leads', null);
+    h += '<div class="ag-grid">';
+    h += kpi(fmtNum(k.leads), 'Nouveaux leads', 'date d\'entrée réelle dans la période');
+    h += kpi('<span style="color:#fb923c">' + fmtNum(k.reoptins) + '</span>', 'Ré-optins 🔄', 'leads antérieurs revenus via opt-in');
+    h += '<div class="ag-kpi" style="grid-column:span 2;min-width:320px"><div class="l" style="margin-top:0;margin-bottom:6px">Répartition par tunnel — leads' + (rdvT ? ' &amp; RDV pris' : '') + '</div><div class="ag-minibars">';
+    var rows = [['elite', 'Élite', '#a78bfa'], ['business', 'Business', '#60a5fa']];
+    for (var i = 0; i < rows.length; i++) {
+      var key = rows[i][0], n = byT[key] || 0;
+      var pct = total > 0 ? n / total * 100 : 0;
+      var rr = rdvT ? (rdvT[key] || 0) : null;
+      h += '<div class="ag-minibar"><span class="mb-l">' + rows[i][1] + '</span>'
+        + '<span class="mb-track"><span class="mb-fill" style="width:' + pct.toFixed(1) + '%;background:' + rows[i][2] + '"></span></span>'
+        + '<span class="mb-v">' + fmtNum(n) + ' leads · ' + fmtPct(pct, 0) + (rr != null ? ' · <strong>' + fmtNum(rr) + ' RDV pris</strong>' : '') + '</span></div>';
+    }
+    h += '</div></div>';
+    h += '</div>';
+
+    /* Performance par créative — axe = champ UTM du lead (utm_content extrait
+       si la valeur est une querystring). Chaque colonne garde l'axe de sa
+       section dans le funnel : leads entrés · RDV pris · annulés & no-show
+       ayant lieu · closes gagnés sur la période. */
+    h += '<div class="ag-sub" style="color:var(--muted)">🎨 Performance par créative (UTM)</div>';
+    var rowsU = k.utmRows || [];
+    if (!rowsU.length) {
+      h += '<div class="ag-empty" style="padding:14px">Aucun lead sur la période.</div>';
+    } else {
+      h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr>'
+        + '<th>Créative (UTM)</th><th class="num">Leads</th><th class="num">RDV pris</th><th class="num">Annulés</th><th class="num">No-show</th><th class="num">Closes</th><th class="num">Collecté HT</th>'
+        + '</tr></thead><tbody>';
+      for (var r = 0; r < rowsU.length; r++) {
+        var u = rowsU[r];
+        var ltbPct = (u.leads > 0 && u.booked > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(u.booked / u.leads * 100, 0) + '</span>' : '';
+        var clPct = (u.leads > 0 && u.closes > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(u.closes / u.leads * 100, 1) + '</span>' : '';
+        h += '<tr>';
+        h += '<td><span class="ag-utm" title="' + escAttr(u.key) + '">' + esc(u.key) + '</span></td>';
+        h += '<td class="num">' + fmtNum(u.leads) + '</td>';
+        h += '<td class="num">' + fmtNum(u.booked) + ltbPct + '</td>';
+        h += '<td class="num"' + (u.cancelled ? ' style="color:var(--red3)"' : '') + '>' + fmtNum(u.cancelled) + '</td>';
+        h += '<td class="num"' + (u.noshow ? ' style="color:var(--gold)"' : '') + '>' + fmtNum(u.noshow) + '</td>';
+        h += '<td class="num"' + (u.closes ? ' style="color:#34d399;font-weight:700"' : '') + '>' + fmtNum(u.closes) + clPct + '</td>';
+        h += '<td class="num">' + (u.closes ? fmtEuro(u.col) : '—') + '</td>';
+        h += '</tr>';
+      }
+      h += '</tbody></table></div>';
+      var uu = k.utmUnattr || {};
+      if (uu.booked || uu.cancelled || uu.noshow || uu.closes) {
+        var parts = [];
+        if (uu.booked) parts.push(fmtNum(uu.booked) + ' RDV pris');
+        if (uu.cancelled) parts.push(fmtNum(uu.cancelled) + ' annulé(s)');
+        if (uu.noshow) parts.push(fmtNum(uu.noshow) + ' no-show');
+        if (uu.closes) parts.push(fmtNum(uu.closes) + ' close(s)');
+        h += '<div class="ag-stage-note" style="margin-top:8px">⚠ Non ventilables par créative : ' + parts.join(' · ')
+          + ' — lead hors fenêtre de rattachement. Comptés dans les totaux des sections, absents du tableau.</div>';
+      }
+    }
+    h += '</div><div class="ag-arrow">▼</div>';
+    return h;
+  }
+
+  /* ── 5. Rentabilité — CPL · CAC Market Only · AOV ── */
+  function renderProfit(k) {
+    var h = stageOpen('💶', 'Rentabilité', 'collecté = encaissements réels (HT) rattachés aux clients gagnés sur la période');
+    h += '<div class="ag-grid">';
+    h += kpi(fmtEuro2(k.cpl), 'CPL', 'dépense ÷ ' + fmtNum(k.leads) + ' leads', k.cpl == null);
+    h += kpi(fmtEuro2(k.cacMarketOnly), 'CAC Market Only', 'dépense pub ÷ ' + fmtNum(k.closesWonTotal) + ' client(s) acquis — ≠ « CPA » Meta', k.cacMarketOnly == null);
+    h += kpi(k.aovAll != null ? fmtEuro2(k.aovAll) : '—', 'AOV', 'collecté ' + fmtEuro(k.wonCollecte) + ' ÷ ' + fmtNum(k.closesWonTotal) + ' client(s)', k.aovAll == null);
+    h += '</div></div><div class="ag-arrow">▼</div>';
+    return h;
+  }
+
+  /* ── 6. Journal marketing (sans auteur) ── */
+  function renderJournal(journal) {
+    var h = stageOpen('📒', 'Journal marketing de la période', 'changements consignés par l\'équipe (créa, budget, ciblage, VSL…)');
+    if (!journal.length) {
+      h += '<div class="ag-empty" style="padding:14px">Aucune action consignée sur la période.</div>';
+    } else {
+      h += '<div>';
+      for (var i = 0; i < journal.length; i++) {
+        var j = journal[i];
+        h += '<div class="ag-jr-item">';
+        h += '<span class="ag-jr-date">' + esc(frDay(j.date)) + '</span>';
+        h += '<span class="ag-jr-cat">' + esc(JCATS[j.category] || JCATS.autre) + '</span>';
+        h += '<span class="ag-jr-text">' + esc(j.text || '') + '</span>';
+        h += '</div>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     CHARGEMENT
+     ════════════════════════════════════════════════════════════════ */
+  function load(month) {
+    if (busy) return;
+    busy = true;
+    var url = ENDPOINT + '?t=' + encodeURIComponent(TOKEN) + (month ? '&month=' + encodeURIComponent(month) : '');
+    fetch(url, { method: 'GET', credentials: 'omit', cache: 'no-store' })
+      .then(function (r) {
+        if (r.status === 403) { renderGate('Lien invalide ou révoqué', 'Ce lien n\'est plus valable. Demande un nouveau lien à ton contact chez Alteore.'); return null; }
+        if (!r.ok) throw new Error('http_' + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        if (data.ok !== true) { renderGate('Lien invalide ou révoqué', 'Ce lien n\'est plus valable. Demande un nouveau lien à ton contact chez Alteore.'); return; }
+        render(data);
+      })
+      .catch(function () {
+        $('#agTop').style.display = '';
+        $('#agRoot').innerHTML = '<div class="ag-stage"><div class="ag-empty">Impossible de charger les données pour le moment. Réessaie dans un instant.</div></div>';
+      })
+      .then(function () { busy = false; });
+  }
+
+  function goMonth(mk) {
+    if (!mk || mk === CURRENT || busy) return;
+    CURRENT = mk;
+    renderMonthNav();
+    $('#agRoot').innerHTML = '<div class="ag-loading">Chargement de ' + esc(monthLabel(mk)) + '…</div>';
+    load(mk);
+  }
+
+  function init() {
+    var m = (window.location.search || '').match(/[?&]t=([^&]+)/);
+    TOKEN = m ? decodeURIComponent(m[1]) : '';
+    if (!TOKEN) {
+      renderGate('Lien invalide ou révoqué', 'Ce lien n\'est plus valable. Demande un nouveau lien à ton contact chez Alteore.');
+      return;
+    }
+    $('#agPrev').onclick = function () { var i = MONTHS.indexOf(CURRENT); if (i >= 0 && i < MONTHS.length - 1) goMonth(MONTHS[i + 1]); };
+    $('#agNext').onclick = function () { var i = MONTHS.indexOf(CURRENT); if (i > 0) goMonth(MONTHS[i - 1]); };
+    $('#agMonthSel').onchange = function () { goMonth(this.value); };
+    load(null);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
+</body>
+</html>

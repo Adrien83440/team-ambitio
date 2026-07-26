@@ -182,7 +182,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
       <!-- Marqueur de build : incrémenté à chaque livraison pour vérifier
            d'un coup d'œil quelle version est réellement déployée/chargée. -->
-      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 15.07-f</span></div>
+      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 26.07-a</span></div>
     </div>
     <div class="fn-sync"><span class="fn-sync-dot" id="fnSyncDot"></span><span id="fnSyncText">Chargement…</span></div>
   </div>
@@ -216,6 +216,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <option value="business">Business</option>
     </select>
     <div style="flex:1"></div>
+    <button class="fn-btn" id="fnAgencyBtn" title="Lien de consultation en lecture seule pour l'agence pub">🔗 Agence</button>
     <button class="fn-btn" id="fnCostsBtn">💶 Coûts</button>
     <button class="fn-btn" id="fnTargetsBtn">🎯 Cibles</button>
     <button class="fn-btn" id="fnRefreshBtn">⟳ Actualiser</button>
@@ -261,6 +262,18 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   </div>
 </div>
 
+<!-- Modal accès agence (lien de consultation en lecture seule) -->
+<div class="fn-modal-bg" id="fnAgencyModal">
+  <div class="fn-modal">
+    <h3>🔗 Accès agence — lecture seule</h3>
+    <div class="hint">Un lien secret que l'agence pub peut ouvrir quand elle veut, sans compte ni accès Firestore. Elle ne voit QUE les KPIs marketing du mois (pub, opt-in, prise de RDV, créatives, rentabilité, journal) — <strong>jamais</strong> un nom de lead, un montant de commission ni un coût interne. Les chiffres sont l'instantané publié à chaque consultation du funnel en vue <strong>Mois / Tous les tunnels</strong>. Stocké dans <code>_config/agency_access</code>.</div>
+    <div id="fnAgencyBody"></div>
+    <div class="fn-modal-actions">
+      <button class="fn-btn" id="fnAgencyCloseBtn">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <div class="fn-toast" id="fnToast"></div>
 
 <script>
@@ -285,6 +298,10 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   function escAttr(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   var db, currentUser;
+  /* Marqueur de build — DOIT rester identique au texte affiché dans le
+     header (.fn-sub). Recopié tel quel dans chaque snapshot agence pour
+     savoir quelle version du funnel a produit les chiffres publiés. */
+  var FN_BUILD = '26.07-a';
   var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
   var ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
   var LEADS_QUERY_LIMIT = 6000;
@@ -1678,6 +1695,9 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     k.leadsNoSB = Math.max(0, k.leads - k.cohortSelf);
 
     K = k;
+
+    /* Publication de l'instantané agence — fire & forget, jamais bloquant. */
+    publishAgencySnapshot();
   }
 
   /* ════════════════════════════════════════════════════════════════
@@ -2504,6 +2524,200 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   }
 
   /* ════════════════════════════════════════════════════════════════
+     ACCÈS AGENCE — instantané public assaini + gestion du lien secret
+     ════════════════════════════════════════════════════════════════
+     L'agence pub n'a NI compte Firebase NI accès Firestore. Le funnel
+     publie une copie assainie de K dans funnel_snapshots/{YYYY-MM} ;
+     api/agency-funnel.js (Admin SDK) la sert à qui présente le token de
+     _config/agency_access, et agency-funnel.html l'affiche. Zéro
+     duplication de logique : les chiffres de l'agence SONT ceux du funnel.
+     ════════════════════════════════════════════════════════════════ */
+
+  /* ⚠ CONTRAT DE DONNÉES — champs de K qui ne sortent JAMAIS de la maison.
+     Toute évolution future de K qui ajoute un champ nominatif (nom de
+     client, de prospect ou de membre d'équipe) ou une donnée financière
+     interne (salaire, commission, coût d'outillage) DOIT être ajoutée à
+     AGENCY_EXCLUDE — c'est l'absence totale de donnée personnelle dans
+     funnel_snapshots qui rend l'accès externe conforme (RGPD) sans
+     contrat de sous-traitance de données. */
+  var AGENCY_EXCLUDE = {
+    /* Nominatifs clients / prospects */
+    collecteMissingNames: 1,
+    payCloseNames: 1,
+    payCloseOther: 1,
+    /* Équipe, par personne */
+    callsByUser: 1,
+    /* Coûts internes & commissions */
+    commSetting: 1,
+    commSettingN: 1,
+    costFixe: 1,
+    costOutils: 1,
+    costConfigured: 1,
+    costSrcMonth: 1,
+    costOwnEntry: 1,
+    costSetting: 1,
+    costPerRdvNB: 1
+  };
+
+  var AGENCY_BASE_URL = 'https://team.alteore.com/agency-funnel.html';
+  /* Anti-spam d'écritures : dernier snapshot réellement publié (mois + JSON).
+     compute() tourne à chaque changement de filtre / sauvegarde ; sans ça on
+     réécrirait le même document plusieurs fois par consultation. */
+  var _agencyPub = { key: null, json: null };
+
+  /* Instantané agence — appelé à la fin de compute(). Publie UNIQUEMENT en
+     vue Mois calendaire + Tous les tunnels (la maille de l'agence, et la
+     seule où K correspond exactement au mois du document).
+     Fail-safe absolu : aucune erreur ne doit remonter à l'écran ni ralentir
+     le rendu — si les rules ne sont pas déployées, on log et on continue. */
+  function publishAgencySnapshot() {
+    try {
+      if (!db || !K) return;
+      if (!periodIsCalendarMonth()) return;
+      if (tunnelFilter !== 'all') return;
+
+      var monthKey = P.start.getFullYear() + '-' + pad2(P.start.getMonth() + 1);
+
+      var kOut = {};
+      Object.keys(K).forEach(function (f) { if (!AGENCY_EXCLUDE[f]) kOut[f] = K[f]; });
+
+      /* Journal marketing : date / catégorie / texte seulement — l'auteur
+         (membre de l'équipe) et l'_id Firestore ne sortent pas. */
+      var journal = (DATA.journalPeriod || []).map(function (j) {
+        return { date: j.date || null, category: j.category || null, text: j.text || '' };
+      });
+
+      /* JSON.stringify → assainissement technique : les undefined
+         disparaissent, NaN / Infinity deviennent null (Firestore refuse les
+         undefined et n'a pas de NaN). Sert AUSSI d'empreinte anti-réécriture. */
+      var json = JSON.stringify({ build: FN_BUILD, k: kOut, journal: journal });
+      if (_agencyPub.key === monthKey && _agencyPub.json === json) return;
+
+      var doc = JSON.parse(json);
+      doc.monthKey = monthKey;
+      doc.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+      _agencyPub = { key: monthKey, json: json };
+      db.collection('funnel_snapshots').doc(monthKey).set(doc).catch(function (e) {
+        _agencyPub = { key: null, json: null };   // échec → on retentera au prochain calcul
+        console.warn('[funnel] snapshot agence non publié :', e && e.message);
+      });
+    } catch (e) {
+      console.warn('[funnel] snapshot agence :', e && e.message);
+    }
+  }
+
+  /* Token 24 octets base64url — même format que api/alteoform-draft.js. */
+  function genAgencyToken() {
+    var bytes = new Uint8Array(24);
+    (window.crypto || window.msCrypto).getRandomValues(bytes);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function agencyLink(token) { return AGENCY_BASE_URL + '?t=' + token; }
+
+  function loadAgencyAccess() {
+    return db.collection('_config').doc('agency_access').get().then(function (snap) {
+      return snap.exists ? snap.data() : null;
+    });
+  }
+
+  function openAgencyModal() {
+    var body = $('#fnAgencyBody');
+    body.innerHTML = '<div class="fn-empty" style="padding:20px">Chargement…</div>';
+    $('#fnAgencyModal').classList.add('show');
+    loadAgencyAccess().then(renderAgencyBody).catch(function (e) {
+      body.innerHTML = '<div class="fn-empty" style="padding:20px">Erreur de lecture : ' + esc(e && e.message) + '</div>';
+    });
+  }
+
+  function renderAgencyBody(cfg) {
+    var body = $('#fnAgencyBody');
+    var active = !!(cfg && cfg.active === true && cfg.token);
+    var h = '';
+
+    if (active) {
+      var url = agencyLink(cfg.token);
+      h += '<div class="fn-trow" style="border-bottom:none;padding-bottom:2px"><span class="tl"><span class="fn-badge ok" style="margin-top:0">● Lien actif</span></span></div>';
+      h += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-family:var(--font-m);font-size:11.5px;word-break:break-all;color:var(--text)" id="fnAgencyUrl">' + esc(url) + '</div>';
+      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">';
+      h += '<button class="fn-btn primary" id="fnAgencyCopy">📋 Copier le lien</button>';
+      h += '<button class="fn-btn" id="fnAgencyRotate">🔄 Régénérer</button>';
+      h += '<button class="fn-btn danger" id="fnAgencyOff">⛔ Désactiver</button>';
+      h += '</div>';
+      var since = parseFlexMs(cfg.rotatedAt) || parseFlexMs(cfg.createdAt);
+      if (since) h += '<div class="hint" style="margin:12px 0 0">Lien en service depuis le ' + esc(frDate(since)) + '. Régénérer crée un nouveau token : l\'ancien lien cesse immédiatement de fonctionner.</div>';
+    } else {
+      var revoked = !!(cfg && cfg.active === false);
+      h += '<div class="fn-trow" style="border-bottom:none;padding-bottom:2px"><span class="tl"><span class="fn-badge ' + (revoked ? 'bad' : 'warn') + '" style="margin-top:0">' + (revoked ? '● Lien désactivé' : '● Aucun lien') + '</span></span></div>';
+      h += '<div class="hint" style="margin:8px 0 0">' + (revoked
+        ? 'L\'accès agence est coupé. Générer un lien crée un <strong>nouveau</strong> token — l\'ancien reste mort.'
+        : 'Aucun lien n\'a encore été généré pour l\'agence.') + '</div>';
+      h += '<div style="display:flex;gap:8px;margin-top:12px"><button class="fn-btn primary" id="fnAgencyGen">🔗 Générer le lien</button></div>';
+    }
+    body.innerHTML = h;
+
+    var cp = $('#fnAgencyCopy');
+    if (cp) cp.onclick = function () { copyAgencyLink(agencyLink(cfg.token)); };
+    var gen = $('#fnAgencyGen');
+    if (gen) gen.onclick = function () { writeAgencyToken(false); };
+    var rot = $('#fnAgencyRotate');
+    if (rot) rot.onclick = function () {
+      if (!confirm('Régénérer le lien agence ?\n\nL\'ancien lien cessera immédiatement de fonctionner — il faudra transmettre le nouveau à l\'agence.')) return;
+      writeAgencyToken(true);
+    };
+    var off = $('#fnAgencyOff');
+    if (off) off.onclick = function () {
+      if (!confirm('Désactiver l\'accès agence ?\n\nLe lien renverra « Lien invalide ou révoqué ».')) return;
+      db.collection('_config').doc('agency_access').set({
+        active: false,
+        disabledAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: currentUser ? (currentUser.email || currentUser.uid) : null
+      }, { merge: true }).then(function () {
+        toast('⛔ Accès agence désactivé');
+        return loadAgencyAccess();
+      }).then(renderAgencyBody).catch(function (e) { toast('Erreur : ' + e.message, true); });
+    };
+  }
+
+  /* Écrit un token neuf dans _config/agency_access (admin-only en rules). */
+  function writeAgencyToken(isRotation) {
+    var token = genAgencyToken();
+    var now = firebase.firestore.FieldValue.serverTimestamp();
+    var patch = {
+      token: token,
+      active: true,
+      label: 'Agence',
+      rotatedAt: now,
+      updatedBy: currentUser ? (currentUser.email || currentUser.uid) : null
+    };
+    if (!isRotation) patch.createdAt = now;
+    db.collection('_config').doc('agency_access').set(patch, { merge: true }).then(function () {
+      toast(isRotation ? '🔄 Nouveau lien agence généré' : '🔗 Lien agence généré');
+      copyAgencyLink(agencyLink(token));
+      return loadAgencyAccess();
+    }).then(renderAgencyBody).catch(function (e) { toast('Erreur : ' + e.message, true); });
+  }
+
+  function copyAgencyLink(url) {
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        toast('📋 Lien copié');
+      } catch (e) { toast('Copie impossible — sélectionne le lien à la main', true); }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(function () { toast('📋 Lien copié'); }).catch(fallback);
+    } else fallback();
+  }
+
+  /* ════════════════════════════════════════════════════════════════
      ORCHESTRATION
      ════════════════════════════════════════════════════════════════ */
   function renderActiveTab() {
@@ -2580,8 +2794,11 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     $('#fnTargetsCancel').onclick = function () { $('#fnTargetsModal').classList.remove('show'); };
     $('#fnTargetsSave').onclick = saveTargets;
     $('#fnTargetsModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
+    $('#fnAgencyBtn').onclick = openAgencyModal;
+    $('#fnAgencyCloseBtn').onclick = function () { $('#fnAgencyModal').classList.remove('show'); };
+    $('#fnAgencyModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });
     $$('#fnTabs .fn-tab').forEach(function (t) { t.onclick = function () { switchTab(t.getAttribute('data-tab')); }; });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { $('#fnTargetsModal').classList.remove('show'); $('#fnCostsModal').classList.remove('show'); } });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { $('#fnTargetsModal').classList.remove('show'); $('#fnCostsModal').classList.remove('show'); $('#fnAgencyModal').classList.remove('show'); } });
   }
 
   /* ── INIT — garde admin (même schéma que admin-data-center) ── */
