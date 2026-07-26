@@ -32,7 +32,7 @@
 // - Chaque accès (accepté comme refusé) est journalisé dans audit_log.
 //
 // Aucune variable d'environnement ni dépendance nouvelle. Aucun index
-// composite : la liste des mois est un orderBy sur l'ID de document.
+// (composite ou non) : lecture par ID de document + un listing sans orderBy.
 // ============================================================================
 
 const crypto = require('crypto');
@@ -100,14 +100,20 @@ module.exports = async (req, res) => {
       return;
     }
 
-    /* Mois disponibles — tri par ID de document décroissant, projection vide
-       (aucun payload transféré : on ne veut que les identifiants). */
-    const monthsSnap = await db.collection('funnel_snapshots')
-      .orderBy(admin.firestore.FieldPath.documentId(), 'desc')
-      .limit(MONTHS_LIMIT)
-      .select()
-      .get();
-    const months = monthsSnap.docs.map((d) => d.id).filter((id) => MONTH_RE.test(id));
+    /* Mois disponibles — projection VIDE (aucun payload transféré : on ne
+       veut que les identifiants) et AUCUN orderBy.
+       ⚠ Ne pas « optimiser » en orderBy(documentId(),'desc') : Firestore
+       n'indexe automatiquement __name__ qu'en ASCENDANT, un tri descendant
+       exige un index composite (incident du 26/07/2026 → 500 en prod). La
+       collection compte un document par mois — quelques dizaines à vie :
+       on lit tout et on trie en mémoire, sans index d'aucune sorte. */
+    const monthsSnap = await db.collection('funnel_snapshots').select().get();
+    const months = monthsSnap.docs
+      .map((d) => d.id)
+      .filter((id) => MONTH_RE.test(id))
+      .sort()
+      .reverse()
+      .slice(0, MONTHS_LIMIT);
 
     const month = askedMonth || months[0] || null;
     if (!month) {
