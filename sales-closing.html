@@ -6,6 +6,13 @@
 <meta name="theme-color" content="#07080f"/>
 <title>Alteore — Close SB (rapport Closing)</title>
 <link rel="stylesheet" href="alteore-ui.css"/>
+<style>
+/* Alerte de cohérence des corrections manuelles (modale ✎ Corriger). */
+.ov-warn { background: rgba(245,158,11,0.09); border: 1px solid rgba(245,158,11,0.32); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; line-height: 1.5; color: #f59e0b; }
+.ov-warn ul { margin: 6px 0 6px 16px; padding: 0; }
+.ov-warn li { margin: 2px 0; }
+.ov-warn b { color: #fbbf24; }
+</style>
 
 <!-- ── Firebase v9 compat ── -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -75,6 +82,8 @@
     <h3 id="ovTitle">✎ Corriger la journée</h3>
     <div class="hint">Correction ponctuelle par jour et par champ — vider un champ = retour à la valeur automatique. <span style="color:var(--gold)">●</span> = valeur corrigée.</div>
     <div class="au-modal-grid" id="ovGrid"></div>
+    <!-- Alerte de cohérence des corrections (offres ≤ présents, etc.) -->
+    <div id="ovWarn"></div>
     <div class="au-modal-f" style="margin-bottom:12px">
       <label>Note (raison de la correction)</label>
       <input type="text" id="ovNote" placeholder="optionnel"/>
@@ -469,7 +478,38 @@
     });
     $('#ovGrid').innerHTML = h;
     $('#ovNote').value = (S.overrides[dk] && S.overrides[dk].note) || '';
+    ovCheckCoherence();
+    document.querySelectorAll('#ovGrid input[data-ovkey]').forEach(function (inp) {
+      inp.addEventListener('input', ovCheckCoherence);
+    });
     $('#ovModal').classList.add('show');
+  }
+
+  /* ══ Cohérence des corrections manuelles ══════════════════════════════
+     Les valeurs auto respectent toujours ces règles (un pitché EST un
+     présent, etc.). Une correction saisie colonne par colonne peut les
+     casser sans s'en rendre compte — c'est le mécanisme qui produit un
+     « moins de Live que d'Offres » impossible autrement (constaté 26/07).
+     On AVERTIT sans bloquer : Adrien peut avoir une raison, mais il doit
+     la voir. Aucune valeur n'est corrigée ni inventée automatiquement. */
+  function ovCheckCoherence() {
+    var box = $('#ovWarn');
+    if (!box || !ovDay) return;
+    var vals = {};
+    document.querySelectorAll('#ovGrid input[data-ovkey]').forEach(function (inp) {
+      var k = inp.getAttribute('data-ovkey'), v = inp.value.trim();
+      var auto = (S.data.days[ovDay] && S.data.days[ovDay][k]) || 0;
+      vals[k] = v === '' ? auto : (Number(v) || 0);   // vide = valeur auto
+    });
+    var msgs = [];
+    if (vals.offres > vals.presents) msgs.push('<b>' + vals.offres + ' offres</b> pour <b>' + vals.presents + ' présents</b> — une offre suppose un prospect présent.');
+    if (vals.closes > vals.offres) msgs.push('<b>' + vals.closes + ' closes</b> pour <b>' + vals.offres + ' offres</b> — un close suppose une offre.');
+    var kept = vals.rdvSb - vals.annules - vals.noshow - vals.replanifies;
+    if (vals.presents > kept) msgs.push('<b>' + vals.presents + ' présents</b> pour <b>' + kept + ' RDV tenus</b> (RDV − annulés − no-show − replanifiés).');
+    if (vals.disqua > vals.presents) msgs.push('<b>' + vals.disqua + ' disqualifiés</b> pour <b>' + vals.presents + ' présents</b>.');
+    box.innerHTML = msgs.length
+      ? '<div class="ov-warn">⚠️ Correction incohérente :<ul><li>' + msgs.join('</li><li>') + '</li></ul>Tu peux enregistrer quand même — mais les rapports afficheront ces chiffres tels quels.</div>'
+      : '';
   }
   $('#ovCancel').addEventListener('click', function () { $('#ovModal').classList.remove('show'); });
   $('#ovModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('show'); });

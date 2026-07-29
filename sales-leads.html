@@ -3951,7 +3951,13 @@ document.addEventListener('click', function(e) {
     var roLead = rdvOutBtn.dataset.leadId, roBk = rdvOutBtn.dataset.bookingId;
     var roList = _ldRdvCache[roLead] || [];
     var roB = roList.find(function (x) { return x.id === roBk; });
-    if (roB && window.RdvOutcome) window.RdvOutcome.open(roB, { typeMap: _ldTypeMap || {} });
+    /* onDone : le résultat statué ici doit se voir immédiatement dans le
+       feed et la fiche (statut, badges SB/NB, tuiles du bandeau) — les
+       listeners finissent par le faire, on ne l'attend pas. */
+    if (roB && window.RdvOutcome) window.RdvOutcome.open(roB, {
+      typeMap: _ldTypeMap || {},
+      onDone: function () { if (!isEditingLead && typeof renderFeed === 'function') renderFeed(); }
+    });
     else toast('❌ RDV introuvable');
     return;
   }

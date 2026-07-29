@@ -306,10 +306,29 @@
        2. propagation fiche lead (stage/status/timeline/isClient)
        3. commissions auto si close
      Retourne Promise<{ok, deals}> */
+  /* ⚠ LIAISON ENTRE LES PAGES (fix 26/07) — statuer un RDV doit donner
+     EXACTEMENT le même résultat depuis Leads Live, Booking admin, Mes RDV
+     ou la fiche CRM. Le maillon faible était le typeMap :
+     booking-admin.html n'en a aucun, et une page peut en passer un vide
+     ({} pendant le fetch). Sans lui, classifyBooking retombe sur le seul
+     champ `source` — un RDV pris sur le lien SETTER dont le source est
+     resté 'self_booking' (fiches d'avant le fix du bridge) était alors
+     compté Self Booking. Résultat : commission de setting et split SB/NB
+     DIFFÉRENTS selon la page depuis laquelle on statuait.
+     On le charge donc ici quand il manque — même garde que applyFicheClose. */
   function setOutcome(booking, outcome, opts) {
     opts = opts || {};
+    if (!booking || !booking.id || !OUTCOMES[outcome]) return Promise.reject(new Error('Outcome invalide'));
+    /* closeData.sb explicite = réponse humaine des cartes du Close : elle
+       prime sur toute classification, aucun typeMap n'est nécessaire. */
+    var sbExplicit = !!(opts.closeData && typeof opts.closeData.sb === 'boolean');
+    var hasMap = !!(opts.typeMap && Object.keys(opts.typeMap).length);
+    if (sbExplicit || hasMap) return applyOutcome(booking, outcome, opts, opts.typeMap || {});
+    return loadTypeMap().then(function (tm) { return applyOutcome(booking, outcome, opts, tm || {}); });
+  }
+
+  function applyOutcome(booking, outcome, opts, typeMap) {
     var o = OUTCOMES[outcome];
-    if (!booking || !booking.id || !o) return Promise.reject(new Error('Outcome invalide'));
     var _db = db();
     var m = me() || { uid: null, name: null, slug: null };
     var now = new Date();
@@ -318,7 +337,7 @@
        réalité travaillé par le setting (fix revue 14/07). */
     var sb = (opts.closeData && typeof opts.closeData.sb === 'boolean')
       ? opts.closeData.sb
-      : isSB(booking, opts.typeMap);
+      : isSB(booking, typeMap);
 
     /* — 1. patch booking — */
     var legacy = OUTCOME_TO_BOOKING_STATUS[outcome];
