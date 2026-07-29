@@ -460,14 +460,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: #fbbf24; background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
 }
 
-.ld-rdv-section { margin-top: 10px; }
-.ld-rdv-row { display: flex; gap: 8px; margin-bottom: 10px; }
-.ld-rdv-row input {
-  flex: 1; padding: 9px 10px; background: var(--bg3); border: 1.5px solid var(--border);
-  border-radius: 9px; color: var(--text); font-family: var(--fb); font-size: 12px; outline: none;
-  color-scheme: dark; min-width: 0;
-}
-.ld-rdv-row input:focus { border-color: rgba(239,68,68,0.5); }
+/* .ld-rdv-section / .ld-rdv-row : styles des champs de saisie RDV retirés le
+   26/07/2026 (voir la note dans le segment Action). À ne pas confondre avec
+   .ld-rdv-block / .ld-rdv-list / .ld-rdvx-* : le VRAI bloc Rendez-vous. */
 
 /* ── Parcours RDV (RdvOutcome) ── */
 .ld-rdv-block { margin: 12px 0 4px; padding: 10px 12px; border: 1px solid rgba(167,139,250,0.28); background: rgba(167,139,250,0.05); border-radius: var(--radius); display: none; }
@@ -3473,15 +3468,14 @@ function l2SegAction(l, id) {
   // ── Score qualité du lead (1-5) — annotation post-appel ──
   h += ldScoreBlockHTML(l, id);
 
-  // RDV fields (hidden unless rdv_pose)
-  var showRdv = (l.status || 'nouveau') === 'rdv_pose';
-  h += '<div class="ld-rdv-section" data-rdv-section="' + id + '" style="display:' + (showRdv ? 'block' : 'none') + '">';
-  h += '<div class="ld-actions-title">📅 Rendez-vous</div>';
-  h += '<div class="ld-rdv-row">';
-  h += '<input type="date" data-field="rdvDate" data-id="' + id + '" value="' + (l.rdvDate || '') + '"/>';
-  h += '<input type="time" data-field="rdvHeure" data-id="' + id + '" value="' + (l.rdvHeure || '') + '"/>';
-  h += '</div>';
-  h += '</div>';
+  /* Les champs de saisie « 📅 Rendez-vous » (leads.rdvDate / rdvHeure) ont
+     été retirés le 26/07/2026 : vestige d'avant le module Booking. Personne
+     ne lisait ces champs (le funnel et les rapports lisent `bookings`), donc
+     les modifier ne déplaçait rien — ni l'agenda, ni la notification au
+     prospect — tout en pouvant contredire le vrai RDV affiché juste dessous.
+     La vérité et les actions vivent dans le bloc « Rendez-vous » (Replanifier)
+     et derrière le bouton RDV de l'en-tête. Les écritures de ces champs par
+     Booking admin / la fiche CRM sont conservées : elles sont inertes. */
 
   /* Parcours de close — peint par paintCloseRail dès que les listeners
      signatures/paiements répondent. Vide tant que le lead n'a pas de RDV. */
@@ -4389,11 +4383,6 @@ document.addEventListener('click', function(e) {
     for (var i = 0; i < allLeads.length; i++) {
       if (allLeads[i].id === leadId) { allLeads[i].status = newStatus; break; }
     }
-    // Show/hide RDV section
-    var rdvSection = card2.querySelector('[data-rdv-section="' + leadId + '"]');
-    if (rdvSection) {
-      rdvSection.style.display = (newStatus === 'rdv_pose') ? 'block' : 'none';
-    }
     // Auto-save status + sync pipeline stage
     var STATUS_TO_STAGE = {
       nouveau:'lead', appele:'lead', decroche:'lead', messagerie:'lead',
@@ -4690,27 +4679,9 @@ document.addEventListener('click', function(e) {
 
 });
 
-/* ═══ AUTO-SAVE RDV FIELDS ═══ */
-document.addEventListener('change', function(e) {
-  var rdvEl = e.target.closest('[data-field="rdvDate"], [data-field="rdvHeure"]');
-  if (!rdvEl) return;
-  var leadId = rdvEl.dataset.id;
-  var card = document.querySelector('#ldSheetInner [data-lead-id="' + leadId + '"]')
-          || document.querySelector('[data-lead-id="' + leadId + '"]');
-  if (!card) return;
-  var rdvDate = card.querySelector('[data-field="rdvDate"]');
-  var rdvHeure = card.querySelector('[data-field="rdvHeure"]');
-  var updates = {
-    rdvDate: rdvDate ? rdvDate.value : '',
-    rdvHeure: rdvHeure ? rdvHeure.value : '',
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
-  db.collection('leads').doc(leadId).update(updates).then(function() {
-    toast('✅ RDV enregistré');
-  }).catch(function(err) {
-    toast('❌ ' + err.message);
-  });
-});
+/* Le listener « AUTO-SAVE RDV FIELDS » (leads.rdvDate / rdvHeure) a été
+   retiré avec les champs qu'il servait (26/07/2026) — plus aucun élément ne
+   pouvait le déclencher. Voir la note dans le segment Action. */
 
 /* ═══ AUTO-SAVE EDIT FIELDS ═══ */
 var autoSaveTimers = {};
