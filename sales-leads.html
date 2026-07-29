@@ -184,7 +184,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .l2filters-btn.on .n { display: inline-flex; }
 
 /* Triage */
-.l2tri-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-top: 9px; }
+/* 6 tuiles depuis le 26/07 (ajout Self Booking / No Booking) : la grille
+   passe à 3 colonnes sur mobile pour garder des libellés lisibles. */
+.l2tri-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; margin-top: 9px; }
+@media (max-width: 760px) { .l2tri-row { grid-template-columns: repeat(3, 1fr); } }
 .l2tri {
   position: relative; border: 1.5px solid var(--border); border-radius: 13px;
   background: var(--bg2); padding: 7px 4px 6px; cursor: pointer; text-align: center;
@@ -196,6 +199,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .l2tri .l { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-top: 1px; }
 .l2tri.active { border-color: rgba(239,68,68,0.55); background: rgba(239,68,68,0.07); box-shadow: 0 4px 18px rgba(239,68,68,0.12); }
 .l2tri.active .l { color: var(--red3); }
+/* SB / NB — mêmes couleurs que les badges de fiche (doré / violet). */
+.l2tri.sb .n { color: #fbbf24; }
+.l2tri.nb .n { color: #a78bfa; }
+.l2tri.sb.active { border-color: rgba(251,191,36,0.55); background: rgba(251,191,36,0.07); box-shadow: 0 4px 18px rgba(251,191,36,0.12); }
+.l2tri.sb.active .l { color: #fbbf24; }
+.l2tri.nb.active { border-color: rgba(167,139,250,0.55); background: rgba(167,139,250,0.07); box-shadow: 0 4px 18px rgba(167,139,250,0.12); }
+.l2tri.nb.active .l { color: #a78bfa; }
 
 /* Barre de période (header) — mêmes chips que la feuille Filtres */
 .l2periodbar { margin-top: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 1px; }
@@ -2295,7 +2305,8 @@ function l2El(id) { return document.getElementById(id); }
 var l2View = 'arrivees';
 try {
   var _l2v = localStorage.getItem('ll2_view');
-  if (_l2v === 'arrivees' || _l2v === 'atraiter' || _l2v === 'new' || _l2v === 'fu') l2View = _l2v;
+  if (_l2v === 'arrivees' || _l2v === 'atraiter' || _l2v === 'new' || _l2v === 'fu'
+      || _l2v === 'sb' || _l2v === 'nb') l2View = _l2v;
 } catch (e) {}
 var l2Seg = 'action';          // segment actif de la fiche (action|infos|ech)
 var l2QuickOpenId = null;      // carte dont la rangée ⚡ est dépliée
@@ -2316,6 +2327,41 @@ function l2FuStats(l) {
 function l2HasOverdueFu(l) { return l2FuStats(l).overdue > 0; }
 function l2HasPendingFu(l) { return l2FuStats(l).pending > 0; }
 
+/* ═══ « Jamais traité » = AUCUNE action, quelle qu'elle soit ═══
+   Règle Adrien 26/07 : dès qu'un NRP — ou n'importe quelle autre action —
+   existe, le lead sort de la file des jamais traités. Le statut ne suffit
+   pas : un appel sans réponse, un SMS, une note ou une note de qualité
+   peuvent exister sans que personne n'ait pensé à changer le statut. Ces
+   leads-là ont bel et bien été travaillés, ils partent en « En cours ». */
+function l2HasAnyAction(l) {
+  if (!l) return false;
+  if ((l.status || 'nouveau') !== 'nouveau') return true;      // NRP, Appelé, SET…
+  var comms = l.communications || [];
+  for (var i = 0; i < comms.length; i++) {
+    var t = comms[i] && comms[i].type;
+    if (t === 'call' || t === 'sms') return true;              // appel (même sans réponse) ou SMS
+  }
+  if ((l.followUps || []).length) return true;                 // follow-up programmé
+  if ((l.notesHistory || []).length) return true;              // note écrite
+  if (l.leadScore >= 1 && l.leadScore <= 5) return true;       // qualité notée après contact
+  return false;
+}
+function l2IsUntouched(l) { return !l2HasAnyAction(l); }
+
+/* ═══ SB / NB d'une fiche — définition UNIQUE ═══
+   Partagée par les badges de fiche ET les tuiles du bandeau : deux copies
+   finiraient par diverger. La classification RÉELLE du RDV prime toujours
+   (même règle que la chip SB/NB du bloc Rendez-vous) ; statut et stage ne
+   servent que de repli quand aucun RDV n'est connu. */
+function l2SbNb(l) {
+  if (!l) return null;
+  var rdvClass = l2RdvClassification(l);
+  if (rdvClass) return rdvClass === 'self' ? 'sb' : 'nb';   // setter + admin = posé par l'équipe
+  if (isNbSituation(l)) return 'nb';
+  if (l.stage === 'rdv_self_booking' || l.status === 'rdv_self_booking') return 'sb';
+  return null;
+}
+
 /* Groupes de la vue « À traiter » (pur tri client, aucune écriture). */
 function l2Groups(leads) {
   var gFu = [], gNew = [], gRecall = [], gCours = [];
@@ -2324,9 +2370,9 @@ function l2Groups(leads) {
     var st = l.status || 'nouveau';
     if (L2_TERMINAL[st]) continue;
     if (l2HasOverdueFu(l)) gFu.push(l);
-    else if (st === 'nouveau') gNew.push(l);
+    else if (l2IsUntouched(l)) gNew.push(l);   // zéro action — cf. l2HasAnyAction
     else if (L2_RECALL[st]) gRecall.push(l);
-    else gCours.push(l);
+    else gCours.push(l);                       // statut « nouveau » mais déjà travaillé
   }
   return [
     { t: '🔔 Follow-ups en retard', hot: true, list: gFu },
@@ -2377,14 +2423,17 @@ function l2ArriveesSections(leads) {
 }
 
 function l2ViewCounts(leads) {
-  var c = { atraiter: 0, nouveaux: 0, fu: 0, fuOver: 0, tous: leads.length };
+  var c = { atraiter: 0, nouveaux: 0, fu: 0, fuOver: 0, sb: 0, nb: 0, tous: leads.length };
   var groups = l2Groups(leads);
   for (var g = 0; g < groups.length; g++) c.atraiter += groups[g].list.length;
   for (var i = 0; i < leads.length; i++) {
-    if ((leads[i].status || 'nouveau') === 'nouveau') c.nouveaux++;
+    if (l2IsUntouched(leads[i])) c.nouveaux++;
     var fs = l2FuStats(leads[i]);
     if (fs.pending > 0) c.fu++;
     if (fs.overdue > 0) c.fuOver++;
+    var sn = l2SbNb(leads[i]);
+    if (sn === 'sb') c.sb++;
+    else if (sn === 'nb') c.nb++;
   }
   return c;
 }
@@ -2406,13 +2455,16 @@ function l2RenderTriage(leads) {
   var defs = [
     { v: 'arrivees', l: 'Arrivées',  n: String(c.tous) },
     { v: 'atraiter', l: 'À traiter', n: String(c.atraiter) },
-    { v: 'new',      l: 'Nouveaux',  n: String(c.nouveaux) },
-    { v: 'fu',       l: 'Follow-ups', n: c.fuOver > 0 ? c.fu + ' <span class="warn">·' + c.fuOver + '</span>' : String(c.fu) }
+    { v: 'new',      l: 'Non traités', n: String(c.nouveaux) },
+    { v: 'fu',       l: 'Follow-ups', n: c.fuOver > 0 ? c.fu + ' <span class="warn">·' + c.fuOver + '</span>' : String(c.fu) },
+    /* SB / NB — même classification que les badges de fiche (l2SbNb). */
+    { v: 'sb',       l: 'Self Booking', n: String(c.sb), cls: ' sb' },
+    { v: 'nb',       l: 'No Booking',   n: String(c.nb), cls: ' nb' }
   ];
   var h = '';
   for (var i = 0; i < defs.length; i++) {
     var d = defs[i];
-    h += '<button type="button" class="l2tri' + (l2View === d.v ? ' active' : '') + '" data-l2="view" data-view="' + d.v + '">' +
+    h += '<button type="button" class="l2tri' + (d.cls || '') + (l2View === d.v ? ' active' : '') + '" data-l2="view" data-view="' + d.v + '">' +
          '<div class="n">' + d.n + '</div><div class="l">' + d.l + '</div></button>';
   }
   host.innerHTML = h;
@@ -2448,8 +2500,12 @@ function renderFeed() {
   if (l2View === 'atraiter') {
     sections = l2Groups(leads);
   } else if (l2View === 'new') {
-    var ln = leads.filter(function (l) { return (l.status || 'nouveau') === 'nouveau'; });
-    sections = [{ t: '🆕 Jamais traités', list: ln }];
+    var ln = leads.filter(l2IsUntouched);
+    sections = [{ t: '🆕 Jamais traités — aucune action', list: ln }];
+  } else if (l2View === 'sb' || l2View === 'nb') {
+    var want = l2View;
+    var lsb = leads.filter(function (l) { return l2SbNb(l) === want; });
+    sections = [{ t: want === 'sb' ? '📆 Self Booking — RDV pris par le lead' : '📞 No Booking — RDV posé par l\'équipe', list: lsb }];
   } else if (l2View === 'fu') {
     var lf = leads.filter(l2HasPendingFu);
     lf.sort(function (a, b) { return (l2HasOverdueFu(b) ? 1 : 0) - (l2HasOverdueFu(a) ? 1 : 0); });
@@ -2973,15 +3029,10 @@ function renderLeadTags(l, compact) {
      Rendez-vous). Le statut/stage de la fiche ne sert que de repli quand
      aucun RDV n'est connu — il a pu être corrompu par le bridge (events
      Make sans source) dans les deux sens. */
-  var rdvClass = l2RdvClassification(l);   // 'self' | 'setter' | 'admin' | null
-  var nbSituation, sbSituation;
-  if (rdvClass) {
-    nbSituation = rdvClass !== 'self';     // setter + admin = RDV posé par l'équipe
-    sbSituation = rdvClass === 'self';
-  } else {
-    nbSituation = isNbSituation(l);
-    sbSituation = !nbSituation && (l.stage === 'rdv_self_booking' || l.status === 'rdv_self_booking');
-  }
+  /* Même helper que les tuiles SB/NB du bandeau — une seule définition. */
+  var sbnb = l2SbNb(l);
+  var nbSituation = sbnb === 'nb';         // setter + admin = RDV posé par l'équipe
+  var sbSituation = sbnb === 'sb';
   var h = '';
   /* NB : « Self-Booking » (tunnel d'entrée) contredirait la réalité → on le
      remplace par NO BOOKING. Élite/Business gardent leur badge tunnel + NB. */
