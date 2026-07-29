@@ -12,6 +12,19 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <style>
+/* ═══ MODE EMBARQUÉ (?embed=1) ═══════════════════════════════════════════
+   Cette page s'ouvre aussi dans un panneau de Leads Live : la closeuse
+   enchaîne contrat et paiement sans quitter sa fiche. On masque alors la
+   navigation (sidebar nav.js) et l'en-tête de page — le module reste
+   strictement identique par ailleurs, c'est LA source unique.
+   Même convention que booking.html?embed=1 (iframe de replanification). */
+body.ae-embed #ambitio-sidebar,
+body.ae-embed .nav-mobile-toggle,
+body.ae-embed .nav-overlay { display: none !important; }
+body.ae-embed.has-sidebar,
+body.ae-embed.has-sidebar.sidebar-collapsed { padding-left: 0 !important; }
+body.ae-embed .sig-header { display: none !important; }
+
 :root{--bg:#08080f;--bg2:#0e0e1a;--bg3:#141420;--fg:#f0f0f5;--muted:rgba(255,255,255,.38);--border:rgba(255,255,255,.07);--accent:#6366f1;--accent2:#818cf8;--green:#34d399;--red:#ef4444;--fh:'Bricolage Grotesque',sans-serif;--fm:'Plus Jakarta Sans',sans-serif;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh;}
@@ -97,6 +110,18 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
 </style>
 </head>
 <body>
+<script>
+/* Mode embarqué (?embed=1) — cf. le bloc CSS ae-embed. Posé au plus tôt
+   pour éviter tout flash de la navigation dans le panneau. */
+try {
+  if (new URLSearchParams(window.location.search).has('embed')) {
+    document.documentElement.classList.add('ae-embed');
+    var _aeMark = function () { document.body.classList.add('ae-embed'); };
+    if (document.body) _aeMark();
+    else document.addEventListener('DOMContentLoaded', _aeMark);
+  }
+} catch (e) {}
+</script>
 <script src="nav.js"></script>
 <main class="main-content">
 <div class="sig-wrap">

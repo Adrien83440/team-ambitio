@@ -10,6 +10,19 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}</script>
 <style>
+/* ═══ MODE EMBARQUÉ (?embed=1) ═══════════════════════════════════════════
+   Cette page s'ouvre aussi dans un panneau de Leads Live : la closeuse
+   enchaîne contrat et paiement sans quitter sa fiche. On masque alors la
+   navigation (sidebar nav.js) et l'en-tête de page — le module reste
+   strictement identique par ailleurs, c'est LA source unique.
+   Même convention que booking.html?embed=1 (iframe de replanification). */
+body.ae-embed #ambitio-sidebar,
+body.ae-embed .nav-mobile-toggle,
+body.ae-embed .nav-overlay { display: none !important; }
+body.ae-embed.has-sidebar,
+body.ae-embed.has-sidebar.sidebar-collapsed { padding-left: 0 !important; }
+body.ae-embed .pay-header { display: none !important; }
+
 :root{--pay-green:#10b981;--pay-amber:#f59e0b;--pay-red:#ef4444;--pay-blue:#60a5fa;--pay-purple:#a78bfa}
 .pay-wrap{max-width:1200px;margin:0 auto;padding:20px 24px 80px}
 /* Header */
@@ -97,6 +110,18 @@
 </style>
 </head>
 <body>
+<script>
+/* Mode embarqué (?embed=1) — cf. le bloc CSS ae-embed. Posé au plus tôt
+   pour éviter tout flash de la navigation dans le panneau. */
+try {
+  if (new URLSearchParams(window.location.search).has('embed')) {
+    document.documentElement.classList.add('ae-embed');
+    var _aeMark = function () { document.body.classList.add('ae-embed'); };
+    if (document.body) _aeMark();
+    else document.addEventListener('DOMContentLoaded', _aeMark);
+  }
+} catch (e) {}
+</script>
 <div class="pay-wrap">
   <div class="pay-header">
     <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center;font-size:18px">💳</div>

@@ -487,6 +487,39 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ld-rdvx-btn:hover { border-color: rgba(91,124,250,0.6); box-shadow: 0 4px 12px rgba(91,124,250,0.2); }
 .ld-rdvx-btn.ghost { background: transparent; border-color: rgba(255,255,255,0.12); color: var(--muted); }
 .ld-rdvx-sep { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted2); margin: 7px 0 2px; opacity: 0.9; }
+/* ── Parcours de close (rail) ─────────────────────────────────────────── */
+.ld-rail-block:empty { display: none; }
+.ld-rail-block { background: rgba(167,139,250,0.05); border: 1px solid rgba(167,139,250,0.18); border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
+.ld-rail-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ld-rail-head .t { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #c4b5fd; }
+.ld-rail-head .n { font-size: 11px; font-weight: 800; font-family: var(--fm); color: var(--muted); }
+.ld-rail { display: flex; flex-direction: column; gap: 1px; }
+.ld-rail-step { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--muted); }
+.ld-rail-step .dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.16); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; flex-shrink: 0; }
+.ld-rail-step.done { color: var(--text); }
+.ld-rail-step.done .dot { background: rgba(52,211,153,0.16); border-color: rgba(52,211,153,0.45); color: #34d399; }
+.ld-rail-step.next { color: #fff; font-weight: 700; }
+.ld-rail-step.next .dot { background: rgba(251,191,36,0.16); border-color: rgba(251,191,36,0.5); color: #fbbf24; }
+.ld-rail-step .lbl { flex: 1; }
+.ld-rail-step .hint { font-size: 10.5px; color: var(--muted2); font-weight: 400; font-style: italic; }
+.ld-rail-btn { background: rgba(91,124,250,0.14); border: 1px solid rgba(91,124,250,0.42); color: #b6c3ff; padding: 3px 10px; border-radius: 7px; font-size: 10.5px; font-weight: 800; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.ld-rail-btn:hover { border-color: rgba(91,124,250,0.65); }
+.ld-rail-btn.ghost { background: transparent; border-color: rgba(255,255,255,0.13); color: var(--muted); }
+.ld-rail-btn.ghost:hover { color: var(--text); border-color: rgba(255,255,255,0.25); }
+.ld-rail-actions { display: flex; gap: 6px; margin-top: 9px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.07); }
+
+/* ── Panneau embarqué Signatures / Paiements ──────────────────────────── */
+#ldFrameBg { position: fixed; inset: 0; background: rgba(3,5,14,0.8); backdrop-filter: blur(4px); z-index: 99996; display: none; align-items: center; justify-content: center; padding: 18px; }
+#ldFrameBg.show { display: flex; }
+.ld-frame { background: var(--bg2, #0e111c); border: 1px solid rgba(148,163,214,0.18); border-radius: 16px; width: min(1180px, 97vw); height: min(880px, 94vh); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 30px 90px rgba(0,0,0,0.6); }
+.ld-frame-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid rgba(148,163,214,0.12); font-size: 13px; font-weight: 800; color: var(--text); }
+.ld-frame-head #ldFrameOpen { margin-left: auto; color: var(--muted); text-decoration: none; font-size: 14px; padding: 3px 8px; border-radius: 7px; }
+.ld-frame-head #ldFrameOpen:hover { color: var(--text); background: rgba(148,163,214,0.1); }
+.ld-frame-head button { background: none; border: none; color: var(--muted); font-size: 17px; cursor: pointer; padding: 2px 9px; border-radius: 7px; }
+.ld-frame-head button:hover { color: var(--text); background: rgba(148,163,214,0.1); }
+.ld-frame iframe { flex: 1; border: none; width: 100%; background: var(--bg, #07080f); }
+@media (max-width: 760px) { .ld-frame { width: 100vw; height: 100vh; border-radius: 0; } #ldFrameBg { padding: 0; } }
+
 /* Bouton Meet — vert visio, distinct des actions de statut. */
 .ld-rdvx-btn.meet { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.42); color: #6ee7b7; text-decoration: none; display: inline-flex; align-items: center; }
 .ld-rdvx-btn.meet:hover { border-color: rgba(52,211,153,0.65); box-shadow: 0 4px 12px rgba(52,211,153,0.2); }
@@ -1467,6 +1500,61 @@ function escAttr(s) {
 function safeUrlLd(u) {
   var s = String(u == null ? '' : u).trim();
   return /^https?:\/\//i.test(s) ? s : '';
+}
+
+/* ═══ PANNEAU EMBARQUÉ — Signatures / Paiements ══════════════════════════
+   Même motif que l'iframe de replanification (rdv-outcome.js) : on ouvre le
+   VRAI module en ?embed=1, pré-rempli par ?leadId=. Aucune logique de
+   contrat ni de paiement n'est réécrite ici — dupliquer ces circuits serait
+   la garantie d'une dérive. À la fermeture, les listeners de la fiche ont
+   déjà mis le rail à jour tout seuls (onSnapshot). */
+var LD_MODULES = {
+  sig: { url: 'sales-signatures.html', title: '📝 Signatures' },
+  pay: { url: 'payments.html',         title: '💳 Paiements' }
+};
+
+function ldEnsureFrameDom() {
+  if (document.getElementById('ldFrameBg')) return;
+  var bg = document.createElement('div');
+  bg.id = 'ldFrameBg';
+  bg.innerHTML =
+    '<div class="ld-frame">' +
+      '<div class="ld-frame-head">' +
+        '<span id="ldFrameTitle"></span>' +
+        '<a id="ldFrameOpen" href="#" target="_blank" rel="noopener" title="Ouvrir dans un onglet">↗</a>' +
+        '<button id="ldFrameClose" title="Fermer (Échap)">✕</button>' +
+      '</div>' +
+      '<iframe id="ldFrameIf" src="about:blank"></iframe>' +
+    '</div>';
+  document.body.appendChild(bg);
+  bg.addEventListener('click', function (e) { if (e.target === bg) ldCloseModule(); });
+  document.getElementById('ldFrameClose').addEventListener('click', ldCloseModule);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && bg.classList.contains('show')) ldCloseModule();
+  });
+}
+
+function ldOpenModule(mod, leadId) {
+  var m = LD_MODULES[mod];
+  if (!m || !leadId) return;
+  ldEnsureFrameDom();
+  var url = m.url + '?embed=1&leadId=' + encodeURIComponent(leadId);
+  document.getElementById('ldFrameTitle').textContent = m.title;
+  document.getElementById('ldFrameOpen').href = m.url + '?leadId=' + encodeURIComponent(leadId);
+  document.getElementById('ldFrameIf').src = url;
+  document.getElementById('ldFrameBg').classList.add('show');
+}
+
+function ldCloseModule() {
+  var bg = document.getElementById('ldFrameBg');
+  if (!bg) return;
+  bg.classList.remove('show');
+  /* On vide l'iframe après l'animation : évite qu'un module lourd continue
+     de tourner en fond et garantit un état neuf à la réouverture. */
+  setTimeout(function () {
+    var f = document.getElementById('ldFrameIf');
+    if (f) f.src = 'about:blank';
+  }, 250);
 }
 
 // Décode les UTM percent-encodés (ex: "3%29NEW-%C3%A9t%C3%A9" -> "3)NEW-été").
@@ -2573,6 +2661,15 @@ function renderFeed() {
    et le bouton 🎯 Résultat / ✎ qui ouvre la modale partagée RdvOutcome. */
 var _ldRdvUnsubs = {};   // leadId -> unsubscribe fn
 var _ldRdvCache = {};    // leadId -> [bookings]
+
+/* ═══ COCKPIT DE CLOSE — signatures & paiements de la fiche ouverte ═══════
+   Objectif (Adrien 26/07) : la closeuse ne sort JAMAIS de Leads Live. Le
+   parcours complet (RDV → offre → contrat → signature → paiement → mandat
+   → close) se lit et s'actionne depuis la fiche. Les modules Signatures et
+   Paiements restent la source unique : on les ouvre dans un panneau
+   embarqué (?embed=1), jamais on ne réimplémente leur logique ici. */
+var _ldSigUnsubs = {}, _ldSigCache = {};   // leadId -> demandes de signature
+var _ldPayUnsubs = {}, _ldPayCache = {};   // leadId -> paiements
 var _ldTypeMap = null;   // booking_config/_types (SB/NB + exclusion coaching)
 
 function _ldEnsureTypeMap() {
@@ -2620,6 +2717,117 @@ function detachLeadRdvListener(leadId) {
   if (!leadId) return;
   var unsub = _ldRdvUnsubs[leadId];
   if (unsub) { try { unsub(); } catch(e){} delete _ldRdvUnsubs[leadId]; }
+}
+
+/* Signatures & paiements du lead ouvert — where single-field sur leadId,
+   aucun index composite. Écoutés seulement à l'ouverture de la fiche : ces
+   collections sont lourdes, on ne les charge jamais pour tout le feed. */
+function attachLeadDealListeners(leadId) {
+  if (!leadId) return;
+  if (!_ldSigUnsubs[leadId]) {
+    _ldSigUnsubs[leadId] = db.collection('signature_requests')
+      .where('leadId', '==', leadId)
+      .onSnapshot(function (snap) {
+        var out = [];
+        snap.forEach(function (doc) { var d = doc.data(); d.id = doc.id; out.push(d); });
+        _ldSigCache[leadId] = out;
+        paintCloseRail(leadId);
+      }, function (err) { console.warn('[ldSig] snapshot', leadId, err && err.message); });
+  }
+  if (!_ldPayUnsubs[leadId]) {
+    _ldPayUnsubs[leadId] = db.collection('payments')
+      .where('leadId', '==', leadId)
+      .onSnapshot(function (snap) {
+        var out = [];
+        snap.forEach(function (doc) { var d = doc.data(); d.id = doc.id; out.push(d); });
+        _ldPayCache[leadId] = out;
+        paintCloseRail(leadId);
+      }, function (err) { console.warn('[ldPay] snapshot', leadId, err && err.message); });
+  }
+}
+
+function detachLeadDealListeners(leadId) {
+  if (!leadId) return;
+  [[_ldSigUnsubs, _ldSigCache], [_ldPayUnsubs, _ldPayCache]].forEach(function (pair) {
+    var u = pair[0][leadId];
+    if (u) { try { u(); } catch (e) {} delete pair[0][leadId]; }
+  });
+}
+
+/* ═══ RAIL « PARCOURS DE CLOSE » ═════════════════════════════════════════
+   Sept étapes, TOUTES déduites de données existantes — zéro déclaratif, zéro
+   case à cocher : ce que le rail affiche est ce qui est réellement en base.
+   Affiché uniquement sur les leads qui ont un RDV (à venir ou tenu) : c'est
+   là que le parcours de close commence. Ailleurs, la fiche reste sobre. */
+function ldCloseSteps(l) {
+  var AF = window.AlteoreFlow;
+  var rdvs = (_ldRdvCache[l.id] || _sbnbByLead[l.id] || []).filter(function (b) {
+    return !AF || AF.classifyBooking(b, _ldTypeMap || {}) !== 'excluded';
+  });
+  if (!rdvs.length) return null;
+
+  var sigs = _ldSigCache[l.id] || [];
+  var pays = (_ldPayCache[l.id] || []).filter(function (p) { return p.status !== 'cancelled'; });
+  var anyRdv = function (fn) { for (var i = 0; i < rdvs.length; i++) if (fn(rdvs[i])) return rdvs[i]; return null; };
+
+  var held    = anyRdv(function (b) { return AF ? AF.isPresent(b.outcome) : b.status === 'completed'; });
+  var pitched = anyRdv(function (b) { return AF ? AF.isPitched(b.outcome) : false; });
+  var sent    = sigs.length ? sigs[0] : null;
+  var signed  = null;
+  for (var i = 0; i < sigs.length; i++) if (sigs[i].status === 'signed') { signed = sigs[i]; break; }
+  var payCreated = pays.length ? pays[0] : null;
+  var mandate = null;
+  for (var j = 0; j < pays.length; j++) {
+    var st = pays[j].status;
+    if (st === 'active' || st === 'mandate_active' || st === 'completed') { mandate = pays[j]; break; }
+  }
+  var won = !!(l.isClient === true || l.clientSince || String(l.stage || '').indexOf('closed_won') === 0);
+
+  return [
+    { k: 'rdv',    l: 'RDV tenu',       done: !!held,       hint: held ? '' : 'statue le RDV ci-dessous' },
+    { k: 'offre',  l: 'Offre pitchée',  done: !!pitched,    hint: pitched ? '' : 'résultat « Offre » ou « Close »' },
+    { k: 'contrat',l: 'Contrat envoyé', done: !!sent,       act: 'sig',  actLabel: 'Envoyer' },
+    { k: 'signe',  l: 'Signé',          done: !!signed,     act: sent && !signed ? 'sig' : null, actLabel: 'Relancer' },
+    { k: 'pay',    l: 'Paiement créé',  done: !!payCreated, act: 'pay',  actLabel: 'Créer' },
+    { k: 'mandat', l: 'Mandat actif',   done: !!mandate,    act: payCreated && !mandate ? 'pay' : null, actLabel: 'Suivre' },
+    { k: 'close',  l: 'Close',          done: won,          hint: won ? '' : 'cartes du Close sur le RDV' }
+  ];
+}
+
+function paintCloseRail(leadId) {
+  var host = document.querySelector('[data-close-rail="' + leadId + '"]');
+  if (!host) return;
+  var l = (typeof allLeads !== 'undefined' ? allLeads : []).find
+    ? (allLeads.find(function (x) { return x.id === leadId; }) || null) : null;
+  if (!l) { host.innerHTML = ''; return; }
+  var steps = ldCloseSteps(l);
+  if (!steps) { host.innerHTML = ''; return; }
+
+  var doneN = steps.filter(function (s) { return s.done; }).length;
+  /* Prochaine étape = première non faite : c'est elle qui porte l'action. */
+  var nextIdx = steps.findIndex(function (s) { return !s.done; });
+  var h = '<div class="ld-rail-head"><span class="t">🎯 Parcours de close</span>'
+        + '<span class="n">' + doneN + '/' + steps.length + '</span></div>';
+  h += '<div class="ld-rail">';
+  steps.forEach(function (s, i) {
+    var cls = s.done ? 'done' : (i === nextIdx ? 'next' : '');
+    h += '<div class="ld-rail-step ' + cls + '">';
+    h += '<span class="dot">' + (s.done ? '✓' : (i === nextIdx ? '▶' : '')) + '</span>';
+    h += '<span class="lbl">' + escHtml(s.l) + '</span>';
+    if (!s.done && i === nextIdx) {
+      if (s.act) h += '<button class="ld-rail-btn" data-action="openModule" data-mod="' + s.act + '" data-lead-id="' + escAttr(leadId) + '">' + escHtml(s.actLabel) + '</button>';
+      else if (s.hint) h += '<span class="hint">' + escHtml(s.hint) + '</span>';
+    }
+    h += '</div>';
+  });
+  h += '</div>';
+  /* Accès directs, indépendants de l'étape courante : elle doit pouvoir
+     ouvrir un module quand elle veut, pas seulement quand le rail le dit. */
+  h += '<div class="ld-rail-actions">';
+  h += '<button class="ld-rail-btn ghost" data-action="openModule" data-mod="sig" data-lead-id="' + escAttr(leadId) + '">📝 Signatures</button>';
+  h += '<button class="ld-rail-btn ghost" data-action="openModule" data-mod="pay" data-lead-id="' + escAttr(leadId) + '">💳 Paiements</button>';
+  h += '</div>';
+  host.innerHTML = h;
 }
 
 function paintLeadRdvBox(leadId, items) {
@@ -3272,6 +3480,10 @@ function l2SegAction(l, id) {
   h += '</div>';
   h += '</div>';
 
+  /* Parcours de close — peint par paintCloseRail dès que les listeners
+     signatures/paiements répondent. Vide tant que le lead n'a pas de RDV. */
+  h += '<div class="ld-rail-block" data-close-rail="' + id + '"></div>';
+
   // Parcours RDV (temps réel bookings — peint par paintLeadRdvBox)
   h += '<div class="ld-rdv-block" data-rdv-block="' + id + '">';
   h += '<div class="ld-rdv-block-title">📅 Rendez-vous</div>';
@@ -3673,7 +3885,7 @@ function l2DetachSheetModules(leadId) {
     var vn = inner.querySelector('.vn-container');
     if (vn && window.VoiceNotes) { try { window.VoiceNotes.detach(vn); } catch (e) {} }
   }
-  if (leadId) detachLeadRdvListener(leadId);
+  if (leadId) { detachLeadRdvListener(leadId); detachLeadDealListeners(leadId); }
 }
 
 function l2RenderSheet(id, preserve) {
@@ -3722,6 +3934,9 @@ function l2RenderSheet(id, preserve) {
   if (typeof _ldRdvCache !== 'undefined' && _ldRdvCache[id]) {
     paintLeadRdvBox(id, _ldRdvCache[id]);
   }
+  // Parcours de close : signatures + paiements du lead, puis peinture
+  attachLeadDealListeners(id);
+  paintCloseRail(id);
 
   // Vocaux : uniquement quand le segment Échanges est affiché
   if (l2Seg === 'ech' && window.VoiceNotes) {
@@ -4016,6 +4231,15 @@ document.addEventListener('click', function(e) {
     else toast('❌ RDV introuvable');
     return;
   }
+  /* Ouvrir Signatures / Paiements dans un panneau embarqué — la closeuse
+     reste dans Leads Live, le module reste la source unique. */
+  var modBtn = e.target.closest('[data-action="openModule"]');
+  if (modBtn) {
+    e.stopPropagation();
+    ldOpenModule(modBtn.getAttribute('data-mod'), modBtn.getAttribute('data-lead-id'));
+    return;
+  }
+
   /* Copier le lien Meet — la closeuse le colle dans un SMS / une relance
      sans quitter la fiche. */
   var copyMeetBtn = e.target.closest('[data-action="copyMeet"]');
