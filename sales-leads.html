@@ -487,6 +487,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ld-rdvx-btn:hover { border-color: rgba(91,124,250,0.6); box-shadow: 0 4px 12px rgba(91,124,250,0.2); }
 .ld-rdvx-btn.ghost { background: transparent; border-color: rgba(255,255,255,0.12); color: var(--muted); }
 .ld-rdvx-sep { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted2); margin: 7px 0 2px; opacity: 0.9; }
+/* Bouton Meet — vert visio, distinct des actions de statut. */
+.ld-rdvx-btn.meet { background: rgba(52,211,153,0.12); border-color: rgba(52,211,153,0.42); color: #6ee7b7; text-decoration: none; display: inline-flex; align-items: center; }
+.ld-rdvx-btn.meet:hover { border-color: rgba(52,211,153,0.65); box-shadow: 0 4px 12px rgba(52,211,153,0.2); }
+/* Brief du RDV : ce que le prospect a rempli en réservant. */
+.ld-rdvx-info { padding: 2px 0 7px 0; font-size: 11px; line-height: 1.5; }
+.ld-rdvx-info .bits { color: var(--muted); }
+.ld-rdvx-info .msg { color: var(--text); background: rgba(255,255,255,0.03); border-left: 2px solid rgba(167,139,250,0.45); border-radius: 0 7px 7px 0; padding: 5px 9px; margin-top: 5px; }
+.ld-rdvx-info .url { color: var(--muted2); font-family: var(--fm); font-size: 9.5px; margin-top: 4px; word-break: break-all; }
 
 /* ── Réponses formulaire (AlteoForms) ── */
 .ld-form-answers { margin: 12px 0 4px; padding: 10px 12px; border: 1px solid rgba(91,124,250,0.25); background: rgba(91,124,250,0.05); border-radius: var(--radius); display: none; }
@@ -1452,6 +1460,13 @@ function escHtml(s) {
 function escAttr(s) {
   if (!s) return '';
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* URL de confiance pour un href construit en innerHTML : http(s) uniquement.
+   Bloque javascript: / data: quelle que soit l'origine du champ. */
+function safeUrlLd(u) {
+  var s = String(u == null ? '' : u).trim();
+  return /^https?:\/\//i.test(s) ? s : '';
 }
 
 // Décode les UTM percent-encodés (ex: "3%29NEW-%C3%A9t%C3%A9" -> "3)NEW-été").
@@ -2633,17 +2648,57 @@ function paintLeadRdvBox(leadId, items) {
     var sb = AF ? AF.isSB(b, _ldTypeMap || {}) : (b.source === 'self_booking');
     var meta = escHtml(typeName) + (personName ? ' · ' + escHtml(personName) : '');
     var chip = window.RdvOutcome ? window.RdvOutcome.chip(b) : '';
+    /* Lien visio — même chaîne de repli que le panneau de booking-admin,
+       filtrée : on n'injecte dans un href que du http(s) (le lien vient de la
+       synchro Google Agenda, mais il transite par un doc Firestore). */
+    var meetUrl = safeUrlLd(b.meetLink || b.meetUrl || b.calendarEventLink);
     var h = '<div class="ld-rdvx-row' + (past ? ' past' : '') + '">';
     h += '<span class="ld-rdvx-when">' + escHtml(when) + ' <span class="d">à</span> ' + escHtml(b.time || '') + '</span>';
     h += chip;
     h += '<span class="au-chip" style="color:' + (sb ? '#fbbf24' : '#a78bfa') + ';border:1px solid ' + (sb ? 'rgba(251,191,36,.4)' : 'rgba(167,139,250,.4)') + ';background:' + (sb ? 'rgba(251,191,36,.08)' : 'rgba(167,139,250,.08)') + ';border-radius:999px;padding:1px 8px;font-size:9.5px;font-weight:800">' + (sb ? 'SB' : 'NB') + '</span>';
     h += '<span class="ld-rdvx-meta">' + meta + (b.outcomeNote ? ' — <em>' + escHtml(b.outcomeNote) + '</em>' : '') + '</span>';
+    /* 📹 Meet en tête des actions : c'est le geste le plus fréquent avant un
+       RDV, il ne doit demander aucun aller-retour vers Booking. */
+    if (meetUrl) {
+      h += '<a class="ld-rdvx-btn meet" href="' + escAttr(meetUrl) + '" target="_blank" rel="noopener" title="Rejoindre la visio">📹 Meet</a>';
+      h += '<button class="ld-rdvx-btn ghost" data-action="copyMeet" data-url="' + escAttr(meetUrl) + '" title="Copier le lien de la visio">📋</button>';
+    }
     if (past) {
       h += '<button class="ld-rdvx-btn" data-action="rdvOutcome" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '">' + (b.outcome ? '✎' : '🎯 Résultat') + '</button>';
     } else {
       h += '<button class="ld-rdvx-btn ghost" data-action="rdvResched" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '" title="Replanifier">📅 Replanifier</button>';
       h += '<button class="ld-rdvx-btn ghost" data-action="rdvOutcome" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '" title="Statuer (annulation anticipée...)">✎</button>';
     }
+    h += '</div>';
+    h += rdvInfoLine(b, meetUrl);
+    return h;
+  }
+
+  /* Ligne d'infos du RDV — ce que le prospect a rempli en réservant, plus le
+     cadre pratique (durée, fuseau). Sert de brief avant l'appel : la closeuse
+     ne doit pas avoir à ouvrir Booking pour savoir à qui elle parle. */
+  function rdvInfoLine(b, meetUrl) {
+    var pr = b.prospect || {};
+    var bits = [];
+    if (b.duration) bits.push(b.duration + ' min');
+    if (pr.secteur) bits.push('🏢 ' + escHtml(pr.secteur));
+    if (pr.telephone) bits.push('📞 ' + escHtml(pr.telephone));
+    if (b.timezone && b.timezone !== 'Europe/Paris') bits.push('🌍 ' + escHtml(b.timezone));
+    /* Réponses libres du formulaire de réservation, hors champs déjà affichés. */
+    var SKIP = { prenom: 1, nom: 1, email: 1, phone: 1, telephone: 1, secteur: 1, message: 1 };
+    var fd = b.formData || {};
+    Object.keys(fd).forEach(function (kk) {
+      if (SKIP[kk]) return;
+      var v = fd[kk];
+      if (v == null || v === '' || typeof v === 'object') return;
+      bits.push(escHtml(kk) + ' : ' + escHtml(String(v).slice(0, 90)));
+    });
+    var msg = (pr.message || fd.message || '').trim();
+    if (!bits.length && !msg && !meetUrl) return '';
+    var h = '<div class="ld-rdvx-info">';
+    if (bits.length) h += '<div class="bits">' + bits.join(' · ') + '</div>';
+    if (msg) h += '<div class="msg" title="Message laissé à la réservation">💬 ' + escHtml(msg) + '</div>';
+    if (meetUrl) h += '<div class="url">' + escHtml(meetUrl) + '</div>';
     h += '</div>';
     return h;
   }
@@ -3961,6 +4016,23 @@ document.addEventListener('click', function(e) {
     else toast('❌ RDV introuvable');
     return;
   }
+  /* Copier le lien Meet — la closeuse le colle dans un SMS / une relance
+     sans quitter la fiche. */
+  var copyMeetBtn = e.target.closest('[data-action="copyMeet"]');
+  if (copyMeetBtn) {
+    e.stopPropagation();
+    var mUrl = copyMeetBtn.getAttribute('data-url') || '';
+    var doneCopy = function () {
+      var old = copyMeetBtn.textContent;
+      copyMeetBtn.textContent = '✓';
+      setTimeout(function () { copyMeetBtn.textContent = old; }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(mUrl).then(doneCopy).catch(function () { window.prompt('Copie le lien :', mUrl); });
+    } else window.prompt('Copie le lien :', mUrl);
+    return;
+  }
+
   var rdvReschedBtn = e.target.closest('[data-action="rdvResched"]');
   if (rdvReschedBtn) {
     e.stopPropagation();
