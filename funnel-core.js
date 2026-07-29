@@ -395,9 +395,18 @@
       TEAM.forEach(function (m) {
         if (m && m.slug && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter')) slugs[m.slug] = 1;
       });
+      /* ⚠ Fenêtre ÉLARGIE d'un mois de chaque côté (26/07/2026) — depuis le
+         décalage des commissions Setting, le deal d'un close de juillet est
+         stocké dans le document d'AOÛT (versement M+1), et peut avoir été
+         déplacé à la main vers juin. Le filtre qui compte reste `dl.date`
+         ∈ période : élargir le balayage ne fait qu'aller CHERCHER le deal là
+         où il dort, sans jamais en compter un hors période.
+         Sans ça, commSetting — donc le coût setting et le coût / RDV NB —
+         serait silencieusement sous-évalué. */
       var mks = {};
-      var d = new Date(P.start.getFullYear(), P.start.getMonth(), 1);
-      while (d.getTime() <= P.end.getTime()) {
+      var d = new Date(P.start.getFullYear(), P.start.getMonth() - 1, 1);
+      var lastMk = new Date(P.end.getFullYear(), P.end.getMonth() + 1, 1);
+      while (d.getTime() <= lastMk.getTime()) {
         mks[d.getFullYear() + '-' + pad2(d.getMonth() + 1)] = 1;
         d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
       }

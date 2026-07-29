@@ -460,18 +460,38 @@
     return sb ? r.selfBooking : r.noBooking;
   }
 
-  function appendDealIfAbsent(slug, mk, deal) {
+  /* Mois voisins d'une clé 'YYYY-MM'. */
+  function shiftMonthKey(mk, delta) {
+    var p = String(mk).split('-');
+    var d = new Date(+p[0], (+p[1] - 1) + delta, 1);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1);
+  }
+
+  /* alsoLookIn : mois SUPPLÉMENTAIRES où chercher le dealKey avant de créer.
+     Indispensable depuis le décalage des commissions Setting : si le deal a
+     été déplacé à la main vers un autre mois (module Commissions), re-valider
+     le close ne doit pas en recréer un second dans le mois par défaut. */
+  function appendDealIfAbsent(slug, mk, deal, alsoLookIn) {
     var _db = db();
     var ref = _db.collection('commissions').doc(slug).collection('mois').doc(mk);
+    var others = (alsoLookIn || []).filter(function (o) { return o && o !== mk; })
+      .map(function (o) { return _db.collection('commissions').doc(slug).collection('mois').doc(o); });
     return _db.runTransaction(function (tx) {
-      return tx.get(ref).then(function (snap) {
-        var deals = (snap.exists && snap.data().deals) || [];
-        var exists = deals.some(function (d) { return d && d.dealKey && d.dealKey === deal.dealKey; });
-        if (exists) return { created: false, slug: slug, deal: deal };
-        deals.push(deal);
-        tx.set(ref, { deals: deals }, { merge: true });
-        return { created: true, slug: slug, deal: deal };
-      });
+      /* Toutes les lectures AVANT la moindre écriture (contrainte Firestore). */
+      return Promise.all([tx.get(ref)].concat(others.map(function (r) { return tx.get(r); })))
+        .then(function (snaps) {
+          var elsewhere = snaps.slice(1).some(function (s) {
+            return ((s.exists && s.data().deals) || []).some(function (d) { return d && d.dealKey && d.dealKey === deal.dealKey; });
+          });
+          if (elsewhere) return { created: false, slug: slug, deal: deal, movedByHand: true };
+          var snap = snaps[0];
+          var deals = (snap.exists && snap.data().deals) || [];
+          var exists = deals.some(function (d) { return d && d.dealKey && d.dealKey === deal.dealKey; });
+          if (exists) return { created: false, slug: slug, deal: deal };
+          deals.push(deal);
+          tx.set(ref, { deals: deals }, { merge: true });
+          return { created: true, slug: slug, deal: deal };
+        });
     }).catch(function (e) {
       /* Erreur REMONTÉE (rules csm, offline…) — jamais avalée : l'UI doit
          pouvoir prévenir que la commission n'a PAS été créée. */
@@ -516,7 +536,15 @@
       }));
     }
     if (closeData.setterSlug) {
-      jobs.push(appendDealIfAbsent(closeData.setterSlug, mk, {
+      /* ⚠ DÉCALAGE SETTING (règle Adrien 26/07) — la commission de setting
+         d'un close du mois M est versée avec la paie de M+1, alors que le
+         closing reste sur M. Seul le DOCUMENT MENSUEL qui héberge le deal
+         change : sa date reste celle du close, et le funnel continue de le
+         compter sur le mois du close (il filtre sur `date`, pas sur le doc).
+         Décision réversible : le module Commissions permet de déplacer le
+         deal d'un mois (bouton ⇄), c'est l'équipe qui tranche. */
+      var mkSetting = shiftMonthKey(mk, 1);
+      jobs.push(appendDealIfAbsent(closeData.setterSlug, mkSetting, {
         client: clientName, email: email,
         offre: closeData.offre, type: 'Setting',
         subtype: sb ? 'selfBooking' : 'noBooking',
@@ -524,13 +552,16 @@
         contracteHT: 0, collecteHT: 0,
         comm: calcSettingComm(closeData.offre, sb),
         bonus: 0,
-        notes: 'AUTO — Setting ' + (sb ? 'Self Booking' : 'No-Booking') + ' du close de ' + clientName,
+        notes: 'AUTO — Setting ' + (sb ? 'Self Booking' : 'No-Booking') + ' du close de ' + clientName
+             + ' (close ' + mk + ', versé ' + mkSetting + ')',
         ok: false,
         auto: true,
+        closeMonth: mk,          // mois du close — trace du décalage
+        shifted: true,           // posé par la règle M+1 (≠ déplacement manuel)
         bookingId: booking.id,
         leadId: booking.leadId || null,
         dealKey: booking.id + '_setting'
-      }));
+      }, [mk, shiftMonthKey(mk, 2), shiftMonthKey(mk, -1)]));
     }
     return Promise.all(jobs); // chaque job catch ses erreurs et les remonte ({error})
   }
