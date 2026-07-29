@@ -2871,11 +2871,14 @@ function paintLeadRdvBox(leadId, items) {
       h += '<a class="ld-rdvx-btn meet" href="' + escAttr(meetUrl) + '" target="_blank" rel="noopener" title="Rejoindre la visio">📹 Meet</a>';
       h += '<button class="ld-rdvx-btn ghost" data-action="copyMeet" data-url="' + escAttr(meetUrl) + '" title="Copier le lien de la visio">📋</button>';
     }
+    /* Boutons TOUJOURS libellés — un crayon seul n'annonce pas ce qu'il fait
+       (retour Adrien 26/07). Même action `rdvOutcome` partout, mais le libellé
+       dit l'intention selon l'état du RDV. */
     if (past) {
-      h += '<button class="ld-rdvx-btn" data-action="rdvOutcome" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '">' + (b.outcome ? '✎' : '🎯 Résultat') + '</button>';
+      h += '<button class="ld-rdvx-btn" data-action="rdvOutcome" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '" title="' + (b.outcome ? 'Corriger le résultat du RDV' : 'Saisir le résultat du RDV') + '">' + (b.outcome ? '✎ Modifier' : '🎯 Résultat') + '</button>';
     } else {
       h += '<button class="ld-rdvx-btn ghost" data-action="rdvResched" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '" title="Replanifier">📅 Replanifier</button>';
-      h += '<button class="ld-rdvx-btn ghost" data-action="rdvOutcome" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '" title="Statuer (annulation anticipée...)">✎</button>';
+      h += '<button class="ld-rdvx-btn ghost" data-action="rdvOutcome" data-lead-id="' + leadId + '" data-booking-id="' + b.id + '" title="Statuer ce RDV (annulation anticipée, no-show, résultat…)">🎯 Statut</button>';
     }
     h += '</div>';
     h += rdvInfoLine(b, meetUrl);
