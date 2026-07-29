@@ -59,6 +59,8 @@
     '.rvo-btn.primary{background:linear-gradient(135deg,rgba(91,124,250,.28),rgba(91,124,250,.14));border-color:rgba(91,124,250,.5);color:#c3cdff}',
     '.rvo-btn.primary:hover{box-shadow:0 6px 18px rgba(91,124,250,.25)}',
     '.rvo-btn:disabled{opacity:.5;cursor:not-allowed}',
+    '.rvo-btn.danger{border-color:rgba(239,68,68,.35);color:#fca5a5}',
+    '.rvo-btn.danger:hover{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.55)}',
     '.rvo-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.3px;white-space:nowrap;border:1px solid}',
     '#rvoToast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--bg3,#151928);border:1px solid var(--border,rgba(148,163,214,.25));color:var(--text,#eef0f8);padding:11px 18px;border-radius:12px;font-size:13px;font-weight:600;z-index:99999;opacity:0;transition:all .25s;box-shadow:0 14px 40px rgba(0,0,0,.5);font-family:var(--fb,system-ui)}',
     '#rvoToast.show{opacity:1;transform:translateX(-50%) translateY(0)}',
@@ -106,6 +108,8 @@
           '<div class="rvo-desc" id="rvoDesc"></div>' +
           '<div class="rvo-panel" id="rvoPanel"></div>' +
           '<div class="rvo-actions">' +
+            '<button class="rvo-btn danger" id="rvoReset" style="display:none" title="Effacer le résultat et remettre le RDV à statuer">↩︎ Réinitialiser</button>' +
+            '<div style="flex:1"></div>' +
             '<button class="rvo-btn" id="rvoCancel">Annuler</button>' +
             '<button class="rvo-btn primary" id="rvoOk" disabled>Enregistrer</button>' +
           '</div>' +
@@ -131,6 +135,7 @@
     $('rvoX').addEventListener('click', close);
     $('rvoCancel').addEventListener('click', close);
     $('rvoOk').addEventListener('click', confirmOutcome);
+    $('rvoReset').addEventListener('click', resetOutcome);
     $('rvoReschedX').addEventListener('click', closeResched);
     rb.addEventListener('click', function (e) { if (e.target === rb) closeResched(); });
 
@@ -230,6 +235,13 @@
       '<span>·</span><span>' + esc(dateFr) + ' à ' + esc(booking.time || '') + '</span>' +
       '<span>·</span><span>' + esc(booking.typeLabel || booking.typeName || booking.type || 'RDV') + '</span>' +
       '<span class="rvo-sbchip ' + (sb ? 'sb' : 'nb') + '">' + (sb ? 'Self Booking' : 'Setting NB') + '</span>';
+
+    /* Réinitialiser n'a de sens que si un résultat existe déjà — et jamais
+       sur un RDV replanifié (son remplaçant dépend de la chaîne). */
+    var resetBtn = $('rvoReset');
+    resetBtn.style.display = (booking.outcome && !booking.rescheduledToId) ? '' : 'none';
+    resetBtn.disabled = false;
+    resetBtn.textContent = '↩︎ Réinitialiser';
 
     renderGrid();
     $('rvoPanel').className = 'rvo-panel';
@@ -459,6 +471,44 @@
       '<span>Commissions auto :</span>' +
       '<span>Closing <b>' + cc + '€' + (cb ? ' +' + cb + '€ PIF' : '') + '</b></span>' +
       '<span>Setting ' + (sb ? 'SB' : 'NB') + ' <b>' + sc + '€</b></span>';
+  }
+
+  /* ── Réinitialisation (clic par erreur) ──
+     Efface le résultat et remet la fiche dans son état d'avant. Les
+     commissions déjà créées ne sont PAS supprimées : on les liste pour que
+     la suppression reste une décision consciente, dans le module dédié. */
+  function resetOutcome() {
+    var AF = window.AlteoreFlow;
+    if (!AF || !AF.clearOutcome || !state.booking || state.saving) return;
+    var b = state.booking;
+    var label = (AF.OUTCOMES[b.outcome] || {}).label || b.outcome;
+    if (!confirm('Effacer le résultat « ' + label + ' » de ce RDV ?\n\n'
+      + 'Le RDV repassera « à statuer » et la fiche retrouvera son état d\'avant.\n'
+      + 'L\'historique est conservé. Les commissions déjà créées ne sont pas supprimées.')) return;
+
+    var btn = $('rvoReset');
+    state.saving = true;
+    btn.disabled = true;
+    btn.textContent = 'Réinitialisation…';
+
+    AF.clearOutcome(b, {}).then(function (res) {
+      var msg = '↩︎ Résultat effacé — RDV à statuer';
+      if (!res.restored) msg += ' · fiche non restaurée (résultat antérieur à cette fonction) : vérifie son statut';
+      if (res.deals && res.deals.length) {
+        var tot = res.deals.reduce(function (s, d) { return s + (Number(d.comm) || 0) + (Number(d.bonus) || 0); }, 0);
+        msg += ' · ⚠️ ' + res.deals.length + ' commission(s) (' + tot + '€) restent dans Commissions — à supprimer à la main';
+      }
+      toastMsg(msg);
+      var cb = state.opts.onDone;
+      close();
+      state.saving = false;
+      if (typeof cb === 'function') cb({ ok: true, outcome: null, reset: true, result: res });
+    }).catch(function (e) {
+      state.saving = false;
+      btn.disabled = false;
+      btn.textContent = '↩︎ Réinitialiser';
+      toastMsg('❌ ' + (e && e.message || 'Erreur'));
+    });
   }
 
   /* ── Confirmation ── */

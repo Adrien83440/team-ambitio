@@ -400,6 +400,10 @@
      + status (axe setter Leads Live) + timeline + conversion client.
      Annulé / no-show ⇒ retour périmètre Setting (follow_up_pm, à récupérer)
      — règle validée : l'annulation SB alimente le taux de récupération. */
+  /* Champs de la fiche qu'un résultat de RDV peut écraser — la liste sert à
+     la fois à la propagation et à la restauration (clearOutcome). */
+  var LEAD_OUTCOME_FIELDS = ['stage', 'status', 'isClient', 'clientSince', 'closedData'];
+
   function propagateOutcomeToLead(booking, outcome, sb, opts, m, cdNorm) {
     var _db = db();
     var leadId = booking.leadId;
@@ -439,9 +443,123 @@
     var tlText = o.icon + ' RDV ' + when + ' → ' + o.label + (sb ? ' (Self Booking)' : ' (Setting NB)') + (opts.note ? ' — ' + opts.note : '');
     updates.timeline_history = arrayUnion({ text: tlText, date: frDateTime(), color: tlColor });
 
-    return _db.collection('leads').doc(leadId).update(updates).catch(function (e) {
+    /* PHOTO AVANT ÉCRASEMENT — permet à clearOutcome() de remettre la fiche
+       exactement dans son état d'avant, plutôt que de deviner. On ne
+       photographie que les champs qu'on s'apprête à modifier, et seulement
+       s'il n'y a pas déjà une photo (un « ✎ Modifier » ne doit pas écraser
+       l'état d'origine par un état déjà pollué par le premier clic). */
+    return _db.collection('leads').doc(leadId).get().then(function (snap) {
+      var before = snap.exists ? (snap.data() || {}) : {};
+      var undo = {};
+      LEAD_OUTCOME_FIELDS.forEach(function (f) {
+        if (updates[f] !== undefined) undo[f] = before[f] === undefined ? null : before[f];
+      });
+      return _db.collection('leads').doc(leadId).update(updates).then(function () {
+        if (booking.outcome) return null;   // déjà statué → photo d'origine conservée
+        return _db.collection('bookings').doc(booking.id)
+          .update({ outcomeUndo: { lead: undo, bookingStatus: booking.status || null, at: ts() } })
+          .catch(function () {});
+      });
+    }).catch(function (e) {
       console.warn('[AlteoreFlow] propagation lead:', e && e.message, leadId, name);
     });
+  }
+
+  /* ═══ RÉINITIALISER UN RÉSULTAT DE RDV (clic par erreur) ═══════════════
+     Efface le résultat du RDV et remet la fiche dans l'état photographié
+     avant le clic. Ce qui n'est PAS fait, volontairement :
+       · l'historique (outcomeHistory, timeline de la fiche) est conservé et
+         complété d'une ligne « réinitialisé » — on ne réécrit pas le passé ;
+       · les commissions déjà créées ne sont JAMAIS supprimées ici (c'est de
+         l'argent) : elles sont retournées à l'appelant pour qu'il le dise,
+         et se suppriment à la main dans le module Commissions.
+     Refus si le RDV a été replanifié vers un autre RDV : la chaîne serait
+     orpheline. On annule d'abord le RDV de remplacement. */
+  function clearOutcome(booking, opts) {
+    opts = opts || {};
+    if (!booking || !booking.id) return Promise.reject(new Error('RDV introuvable'));
+    var _db = db();
+    var m = me() || { uid: null, name: null };
+
+    return _db.collection('bookings').doc(booking.id).get().then(function (snap) {
+      if (!snap.exists) throw new Error('RDV introuvable');
+      var b = snap.data() || {};
+      b.id = booking.id;
+      if (!b.outcome) throw new Error('Ce RDV n\'a aucun résultat à effacer.');
+      if (b.rescheduledToId) throw new Error('Ce RDV a été replanifié vers un autre RDV — supprime d\'abord le RDV de remplacement.');
+
+      var DEL = firebase.firestore.FieldValue.delete();
+      var undo = b.outcomeUndo || null;
+      var patch = {
+        outcome: DEL, outcomeAt: DEL, outcomeBy: DEL, outcomeByName: DEL,
+        outcomeNote: DEL, outcomeDay: DEL, closeData: DEL,
+        cancelledAt: DEL, cancelledBy: DEL, cancelledByName: DEL, cancelledOrigin: DEL,
+        noShowAt: DEL, noShowBy: DEL, noShowByName: DEL, completedAt: DEL,
+        rescheduled: DEL, outcomeUndo: DEL,
+        /* Statut legacy : celui d'avant le clic si on l'a, sinon « confirmé »
+           — un RDV sans résultat est un RDV qui reste à statuer. */
+        status: (undo && undo.bookingStatus) || 'confirmed',
+        statusUpdatedAt: ts(), statusUpdatedBy: m.uid, statusUpdatedByName: m.name,
+        outcomeHistory: arrayUnion({
+          outcome: null, reset: true, previous: b.outcome || null,
+          at: new Date().toISOString(), by: m.uid, byName: m.name
+        })
+      };
+
+      return _db.collection('bookings').doc(booking.id).update(patch).then(function () {
+        /* Fiche : restauration à l'identique quand la photo existe. */
+        var pLead = Promise.resolve();
+        if (b.leadId && undo && undo.lead) {
+          var restore = { updatedAt: ts() };
+          LEAD_OUTCOME_FIELDS.forEach(function (f) {
+            if (undo.lead[f] === undefined) return;
+            restore[f] = undo.lead[f] === null ? firebase.firestore.FieldValue.delete() : undo.lead[f];
+          });
+          restore.timeline_history = arrayUnion({
+            text: '↩️ Résultat « ' + ((OUTCOMES[b.outcome] || {}).label || b.outcome) + ' » réinitialisé'
+                + (m.name ? ' par ' + m.name : ''),
+            date: frDateTime(), color: '#94a3b8'
+          });
+          pLead = _db.collection('leads').doc(b.leadId).update(restore)
+            .catch(function (e) { console.warn('[AlteoreFlow] restauration fiche:', e && e.message); });
+        }
+        /* Commissions auto de ce RDV — signalées, jamais supprimées. */
+        return pLead.then(function () { return findAutoDealsForBooking(b); })
+          .then(function (deals) {
+            return { ok: true, restored: !!(undo && undo.lead), deals: deals || [] };
+          });
+      });
+    });
+  }
+
+  /* Retrouve les commissions AUTO générées par un RDV (dealKey = id_closing /
+     id_setting), en balayant les mois où elles ont pu être rangées : le
+     Setting est versé sur M+1 et peut avoir été déplacé à la main. */
+  function findAutoDealsForBooking(b) {
+    var _db = db();
+    var cd = b.closeData || {};
+    var slugs = [];
+    if (cd.closerSlug) slugs.push(cd.closerSlug);
+    if (cd.setterSlug && slugs.indexOf(cd.setterSlug) < 0) slugs.push(cd.setterSlug);
+    if (!slugs.length) return Promise.resolve([]);
+    var base = (b.outcomeDay && /^\d{4}-\d{2}/.test(String(b.outcomeDay)))
+      ? String(b.outcomeDay).slice(0, 7) : monthKey();
+    var mks = [-1, 0, 1, 2].map(function (d) { return shiftMonthKey(base, d); });
+    var keys = { }; keys[b.id + '_closing'] = 1; keys[b.id + '_setting'] = 1;
+    var found = [];
+    var proms = [];
+    slugs.forEach(function (slug) {
+      mks.forEach(function (mk) {
+        proms.push(_db.collection('commissions').doc(slug).collection('mois').doc(mk).get()
+          .then(function (s) {
+            if (!s.exists) return;
+            ((s.data() || {}).deals || []).forEach(function (d) {
+              if (d && d.dealKey && keys[d.dealKey]) found.push({ slug: slug, month: mk, type: d.type, comm: d.comm, bonus: d.bonus });
+            });
+          }).catch(function () {}));
+      });
+    });
+    return Promise.all(proms).then(function () { return found; });
   }
 
   /* ═══ 4. COMMISSIONS AUTO ══════════════════════════════════════════════
@@ -821,6 +939,7 @@
     applyLeadStatus: applyLeadStatus,
     addLeadTimeline: addLeadTimeline,
     setOutcome: setOutcome,
+    clearOutcome: clearOutcome,
     WIZARD_PRICING: WIZARD_PRICING,
     resolveClosingActors: resolveClosingActors,
     applyFicheClose: applyFicheClose,
