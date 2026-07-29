@@ -185,7 +185,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       <div class="fn-title">🎯 Funnel Sales <span class="fn-title-badge">Admin</span></div>
       <!-- Marqueur de build : incrémenté à chaque livraison pour vérifier
            d'un coup d'œil quelle version est réellement déployée/chargée. -->
-      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 26.07-c</span></div>
+      <div class="fn-sub">Lecture complète du tunnel — Pub → Opt-in → Leads → RDV → Closing · 100 % données logiciel (RDV statués · journal · Paiements) — zéro saisie manuelle · coaching &amp; CSM exclus · <span style="color:var(--muted2);font-family:var(--font-m)">build 26.07-d</span></div>
     </div>
     <div class="fn-sync"><span class="fn-sync-dot" id="fnSyncDot"></span><span id="fnSyncText">Chargement…</span></div>
   </div>
@@ -303,7 +303,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   var db, currentUser;
   /* Marqueur de build — DOIT rester identique au texte affiché dans le
      header (.fn-sub). */
-  var FN_BUILD = '26.07-c';
+  var FN_BUILD = '26.07-d';
   var MONTHS_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
   var ALL_WEEKS = ['s1','s2','s3','s4','s5','s6'];
 
@@ -622,10 +622,17 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(k.ocDue.present, k.ocDue.sansDetail) + '</div><div class="l">Live du mois</div><div class="s">présents (résultats RDV)' + (k.ocDue.sansDetail ? ' · ⚠ ' + k.ocDue.sansDetail + ' sans détail' : '') + '</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + numOrDash(k.ocDue.pitched, k.ocDue.sansDetail) + '</div><div class="l">Pitchés du mois</div><div class="s">offres faites (résultats RDV)</div></div>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtNum(k.closesWonTotal) + '</div><div class="l">Closes</div><div class="s">clients gagnés — fiches + RDV + Paiements</div></div>';
-    var heroColSub = 'contracté ' + fmtEuro(k.wonContracte);
+    var heroColSub = 'encaissé à date';
     if (k.collecteMandat > 0) heroColSub += ' · dont ' + fmtEuro(k.collecteMandat) + ' à prélever (mandat)';
     if (k.collecteMissing > 0) heroColSub += ' · <span style="color:var(--orange,#e8a13c)">⚠ ' + k.collecteMissing + ' close(s) sans montant</span>';
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtEuro(k.wonCollecte) + '</div><div class="l">Collecté (HT)</div><div class="s">' + heroColSub + '</div></div>';
+    /* Contracté = valeur totale des contrats signés sur la période (module
+       Paiements : totalAmount, repli tarif des cartes du Close). Le collecté
+       n'en est que la part déjà encaissée — d'où le reste affiché ici. */
+    var heroConSub = 'SB ' + fmtEuro(k.wonContracteSB) + ' · NB ' + fmtEuro(k.wonContracteNB);
+    var resteAEnc = (k.wonContracte || 0) - (k.wonCollecte || 0);
+    if (k.wonContracte > 0 && resteAEnc > 0) heroConSub += ' · reste à encaisser ' + fmtEuro(resteAEnc);
+    h += '<div class="fn-hero-kpi"><div class="v">' + fmtEuro(k.wonContracte) + '</div><div class="l">Contracté (HT)</div><div class="s">' + heroConSub + '</div></div>';
     h += '</div>';
 
     /* Bandeau — taux de close du mois (demande Vincent 14/07) */

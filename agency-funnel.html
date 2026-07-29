@@ -370,7 +370,13 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += '<div class="ag-hero-kpi"><div class="v">' + fmtNum(c.kept) + '</div><div class="l">Kept</div><div class="s">pris − ' + fmtNum(c.cancelled) + ' annulés'
       + (c.n > 0 ? ' · <span class="pct">' + fmtPct(c.kept / c.n * 100, 0) + '</span>' : '') + '</div></div>';
     h += '<div class="ag-hero-kpi"><div class="v">' + fmtNum(k.closesWonTotal) + '</div><div class="l">Closes</div><div class="s">clients gagnés sur la période</div></div>';
-    h += '<div class="ag-hero-kpi"><div class="v">' + fmtEuro(k.wonCollecte) + '</div><div class="l">Collecté (HT)</div><div class="s">contracté ' + fmtEuro(k.wonContracte) + '</div></div>';
+    h += '<div class="ag-hero-kpi"><div class="v">' + fmtEuro(k.wonCollecte) + '</div><div class="l">Collecté (HT)</div><div class="s">encaissé à date</div></div>';
+    /* Contracté = valeur totale des contrats signés sur la période ; le
+       collecté n'en est que la part déjà encaissée. */
+    var reste = (k.wonContracte || 0) - (k.wonCollecte || 0);
+    h += '<div class="ag-hero-kpi"><div class="v">' + fmtEuro(k.wonContracte) + '</div><div class="l">Contracté (HT)</div><div class="s">'
+      + 'SB ' + fmtEuro(k.wonContracteSB) + ' · NB ' + fmtEuro(k.wonContracteNB)
+      + (k.wonContracte > 0 && reste > 0 ? ' · reste à encaisser ' + fmtEuro(reste) : '') + '</div></div>';
     h += '</div>';
 
     /* Taux de close du mois — présents uniquement si le snapshot les porte. */
@@ -493,6 +499,11 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += kpi(numOrDash(nb.present, nb.sansDetail), 'Live NB (présents)',
       (nb.kept > 0 && nb.present > 0 ? 'show-up ' + fmtPct(nb.present / nb.kept * 100, 0) + ' (live ÷ kept)' : 'résultats RDV')
       + (nb.sansDetail ? ' · ⚠ ' + fmtNum(nb.sansDetail) + ' sans détail' : ''));
+    /* Pitchés NB — symétrique de la ligne SB : un pitché est toujours un
+       sous-ensemble des présents, les deux se lisent côte à côte. */
+    h += kpi(numOrDash(nb.pitched, nb.sansDetail), 'Pitchés NB', 'offres faites'
+      + (nb.disqua ? ' · ' + fmtNum(nb.disqua) + ' disqualifiés' : '')
+      + (nb.nonCloses ? ' · ' + fmtNum(nb.nonCloses) + ' non closes' : ''));
     h += kpi(fmtNum(k.wonSetting), 'Closes NB', 'clients gagnés via un RDV posé par l\'équipe');
     h += '</div>';
     h += '</div><div class="ag-arrow">▼</div>';
