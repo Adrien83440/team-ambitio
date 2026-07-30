@@ -78,6 +78,27 @@ function dateNowFR() {
   return new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
 }
 
+/* Liste de blocage (api/lead-block.js) — lecture par ID de document, donc
+   deux get() au pire, aucune requête ni index. Retourne la clé qui a
+   matché, ou null. En cas d'erreur Firestore on NE bloque pas : mieux vaut
+   laisser passer un lead pourri que perdre un vrai lead. */
+async function isBlockedContact(emailLc, phoneNorm) {
+  const keys = [];
+  if (emailLc) keys.push('email:' + emailLc.replace(/\//g, '_'));
+  if (phoneNorm) keys.push('phone:' + String(phoneNorm).replace(/\//g, '_'));
+  if (!keys.length) return null;
+  try {
+    const snaps = await Promise.all(
+      keys.map((k) => db.collection('blocked_contacts').doc(k).get())
+    );
+    for (let i = 0; i < snaps.length; i++) if (snaps[i].exists) return keys[i];
+    return null;
+  } catch (e) {
+    console.warn('[lead-optin] blocklist injoignable, on laisse passer :', e && e.message);
+    return null;
+  }
+}
+
 // Mapping type brut → clé canonique LEAD_TYPES côté front
 // Make peut envoyer plusieurs variantes ("VSL BUSINESS", "Business", "business"...)
 // → on canonise pour que le badge Lead Live s'affiche correctement.
@@ -139,6 +160,19 @@ module.exports = async (req, res) => {
                     : (typeRaw || type);
   const utm         = String(utmRaw || tunnelLabel);
   const source      = String(sourceRaw || 'webhook');
+
+  // ─── 3bis. LISTE DE BLOCAGE ─────────────────────────────────────────
+  // Faux numéros et emails bidon bloqués depuis Leads Live : on s'arrête
+  // AVANT toute écriture — ni création, ni résurrection d'une fiche
+  // existante (sinon un contact bloqué reviendrait à chaque ré-opt-in).
+  // Réponse 200 volontaire : Make ne doit pas la traiter comme une panne
+  // et rejouer l'appel en boucle.
+  const blockHit = await isBlockedContact(emailLc, phoneNorm);
+  if (blockHit) {
+    console.log('[lead-optin] contact bloqué → ignoré :', blockHit);
+    res.status(200).json({ ok: true, action: 'blocked', blockedBy: blockHit });
+    return;
+  }
 
   // ─── 4. Recherche d'un lead existant ────────────────────────────────
   // Stratégie : email d'abord (clé la plus fiable), puis téléphone normalisé.

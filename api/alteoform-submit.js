@@ -79,6 +79,27 @@ function phoneNormalized(raw) {
 
 // Format date FR pour timeline_history et notesHistory — cohérent avec
 // le reste du code (ex: Cloud Function onWebhookInbox).
+/* Liste de blocage (api/lead-block.js) — lecture par ID de document, donc
+   deux get() au pire, aucune requête ni index. Retourne la clé qui a
+   matché, ou null. En cas d'erreur Firestore on NE bloque pas : mieux vaut
+   laisser passer un lead pourri que perdre un vrai lead. */
+async function isBlockedContact(emailLc, phoneNorm) {
+  const keys = [];
+  if (emailLc) keys.push('email:' + String(emailLc).replace(/\//g, '_'));
+  if (phoneNorm) keys.push('phone:' + String(phoneNorm).replace(/\//g, '_'));
+  if (!keys.length) return null;
+  try {
+    const snaps = await Promise.all(
+      keys.map((k) => db.collection('blocked_contacts').doc(k).get())
+    );
+    for (let i = 0; i < snaps.length; i++) if (snaps[i].exists) return keys[i];
+    return null;
+  } catch (e) {
+    console.warn('[alteoform-submit] blocklist injoignable, on laisse passer :', e && e.message);
+    return null;
+  }
+}
+
 function dateNowFR() {
   return new Date().toLocaleString('fr-FR');
 }
@@ -167,6 +188,19 @@ module.exports = async (req, res) => {
     // on retourne ok pour que le flow front continue normalement vers
     // l'écran de remerciement ou la redirection booking.
     res.status(200).json({ ok: true, action: 'skipped', leadId: null, assignedTo: '' });
+    return;
+  }
+
+  // ── 3bis. LISTE DE BLOCAGE (api/lead-block.js) ───────────────────────
+  // Contact bloqué depuis Leads Live (faux numéro, email bidon) : aucune
+  // écriture CRM, ni création ni résurrection. On répond ok pour que le
+  // répondant garde un parcours normal (écran de remerciement, redirection
+  // booking) — le blocage est une décision interne, pas un message à lui
+  // adresser.
+  const blockHit = await isBlockedContact(emailLc, phoneNorm);
+  if (blockHit) {
+    console.log('[alteoform-submit] contact bloqué → CRM ignoré :', blockHit);
+    res.status(200).json({ ok: true, action: 'blocked', leadId: null, assignedTo: '' });
     return;
   }
 

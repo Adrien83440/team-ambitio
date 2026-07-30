@@ -764,6 +764,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   transition: all .2s; margin-top: 18px;
 }
 .ld-delete-btn:hover { background: rgba(239,68,68,0.1); color: var(--red3); border-color: rgba(239,68,68,0.5); }
+/* Blocage définitif d'un contact (faux numéro / email bidon). */
+.ld-block-btn {
+  width: 100%; margin-top: 10px; padding: 10px; background: none;
+  border: 1px solid rgba(245,158,11,0.35); border-radius: 10px;
+  color: var(--gold, #f59e0b); font-family: var(--fb); font-size: 12.5px;
+  font-weight: 700; cursor: pointer; transition: all 0.15s;
+}
+.ld-block-btn:hover { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.55); }
+.ld-block-btn:disabled { opacity: .55; cursor: not-allowed; }
+.ld-block-btn.unblock { border-color: rgba(52,211,153,0.35); color: var(--green, #34d399); }
+.ld-block-btn.unblock:hover { background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.55); }
+.ld-blocked-note {
+  margin-top: 12px; padding: 9px 11px; border-radius: 10px; font-size: 11.5px; line-height: 1.5;
+  background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.28); color: #fca5a5;
+}
+.ld-blocked-note span { color: var(--muted); }
 .ld-delete-btn.confirming { background: rgba(239,68,68,0.15); color: var(--red3); border-color: var(--red2); animation: deletePulse 1s infinite; }
 @keyframes deletePulse { 0%,100% { border-color: var(--red2); } 50% { border-color: rgba(239,68,68,0.4); } }
 
@@ -3662,6 +3678,19 @@ function l2SegInfos(l, id) {
   h += '<div class="ld-autosave-msg" data-autosave-msg="' + id + '" style="font-size:11px;color:var(--green);text-align:center;padding:6px 0;opacity:0;transition:opacity 0.3s">✅ Sauvegardé automatiquement</div>';
   h += '</div>';
 
+  /* Blocage définitif — faux numéro, email bidon. L'email ET le téléphone
+     partent en liste de blocage : le contact ne redescendra plus jamais du
+     tunnel, quel que soit le formulaire. Réversible (bouton Débloquer). */
+  if (l.blocked) {
+    h += '<div class="ld-blocked-note">🚫 Contact bloqué'
+      + (l.blockedBy ? ' par ' + escHtml(l.blockedBy) : '')
+      + (l.blockedReason ? ' — ' + escHtml(l.blockedReason) : '')
+      + '<br><span>Ses nouveaux opt-ins et formulaires sont ignorés à l\'entrée.</span></div>';
+    h += '<button class="ld-block-btn unblock" data-action="unblockLead" data-id="' + id + '">✅ Débloquer ce contact</button>';
+  } else {
+    h += '<button class="ld-block-btn" data-action="blockLead" data-id="' + id + '" title="Faux numéro, email bidon : ne plus jamais recevoir ce contact">🚫 Bloquer ce contact</button>';
+  }
+
   h += '<button class="ld-delete-btn" data-action="deleteLead" data-id="' + id + '">🗑 Supprimer cette fiche</button>';
   return h;
 }
@@ -4643,6 +4672,51 @@ document.addEventListener('click', function(e) {
   }
 
   // Delete lead (two-step confirmation)
+  /* Blocage / déblocage d'un contact — passe par api/lead-block.js (Admin
+     SDK) : aucune rule Firestore à déployer, la fonction marche dès le
+     déploiement du code. */
+  var blockBtn = e.target.closest('[data-action="blockLead"], [data-action="unblockLead"]');
+  if (blockBtn) {
+    e.stopPropagation();
+    var blkId = blockBtn.dataset.id;
+    var doBlock = blockBtn.getAttribute('data-action') === 'blockLead';
+    var lb = allLeads.find(function (x) { return x.id === blkId; }) || {};
+    var who = (lb.nom || lb.email || lb.telephone || 'ce contact');
+    var motif = null;
+    if (doBlock) {
+      motif = window.prompt('🚫 Bloquer ' + who + ' ?\n\n'
+        + 'Son email ET son téléphone seront refusés à l\'entrée : plus aucun opt-in\n'
+        + 'ni formulaire de sa part ne créera de fiche. Réversible à tout moment.\n\n'
+        + 'Motif (facultatif) :', 'Faux numéro / email bidon');
+      if (motif === null) return;                    // annulé
+    } else if (!confirm('Débloquer ' + who + ' ?\n\nSes prochains opt-ins recréeront une fiche normalement.')) {
+      return;
+    }
+    blockBtn.disabled = true;
+    var oldTxt = blockBtn.textContent;
+    blockBtn.textContent = doBlock ? 'Blocage…' : 'Déblocage…';
+    firebase.auth().currentUser.getIdToken().then(function (tok) {
+      return fetch('/api/lead-block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        body: JSON.stringify({ leadId: blkId, action: doBlock ? 'block' : 'unblock', reason: motif || null })
+      });
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok || !res.j.ok) throw new Error(res.j && res.j.error || 'échec');
+        toast(doBlock ? '🚫 Contact bloqué — il ne redescendra plus' : '✅ Blocage levé');
+        /* Le listener leads reflète déjà le champ `blocked` ; on re-rend la
+           fiche pour basculer le bouton sans attendre. */
+        if (typeof renderFeed === 'function') renderFeed();
+      })
+      .catch(function (err) {
+        blockBtn.disabled = false;
+        blockBtn.textContent = oldTxt;
+        toast('❌ ' + (err && err.message || 'Erreur'));
+      });
+    return;
+  }
+
   var delLeadBtn = e.target.closest('[data-action="deleteLead"]');
   if (delLeadBtn) {
     var dlId = delLeadBtn.dataset.id;
