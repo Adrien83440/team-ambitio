@@ -764,9 +764,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   transition: all .2s; margin-top: 18px;
 }
 .ld-delete-btn:hover { background: rgba(239,68,68,0.1); color: var(--red3); border-color: rgba(239,68,68,0.5); }
-/* Blocage définitif d'un contact (faux numéro / email bidon). */
+/* Blacklist — un bouton PAR coordonnée (email / numéro). */
+.ld-bl-title { margin-top: 16px; margin-bottom: 2px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted2); }
 .ld-block-btn {
-  width: 100%; margin-top: 10px; padding: 10px; background: none;
+  width: 100%; margin-top: 8px; padding: 10px; background: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   border: 1px solid rgba(245,158,11,0.35); border-radius: 10px;
   color: var(--gold, #f59e0b); font-family: var(--fb); font-size: 12.5px;
   font-weight: 700; cursor: pointer; transition: all 0.15s;
@@ -3678,17 +3680,33 @@ function l2SegInfos(l, id) {
   h += '<div class="ld-autosave-msg" data-autosave-msg="' + id + '" style="font-size:11px;color:var(--green);text-align:center;padding:6px 0;opacity:0;transition:opacity 0.3s">✅ Sauvegardé automatiquement</div>';
   h += '</div>';
 
-  /* Blocage définitif — faux numéro, email bidon. L'email ET le téléphone
-     partent en liste de blocage : le contact ne redescendra plus jamais du
-     tunnel, quel que soit le formulaire. Réversible (bouton Débloquer). */
-  if (l.blocked) {
-    h += '<div class="ld-blocked-note">🚫 Contact bloqué'
-      + (l.blockedBy ? ' par ' + escHtml(l.blockedBy) : '')
-      + (l.blockedReason ? ' — ' + escHtml(l.blockedReason) : '')
-      + '<br><span>Ses nouveaux opt-ins et formulaires sont ignorés à l\'entrée.</span></div>';
-    h += '<button class="ld-block-btn unblock" data-action="unblockLead" data-id="' + id + '">✅ Débloquer ce contact</button>';
-  } else {
-    h += '<button class="ld-block-btn" data-action="blockLead" data-id="' + id + '" title="Faux numéro, email bidon : ne plus jamais recevoir ce contact">🚫 Bloquer ce contact</button>';
+  /* ── Blacklist : on blackliste UNE VALEUR, pas une personne ──
+     Le mail bidon OU le faux numéro — celui qui est faux. Si la personne
+     revient avec une autre coordonnée, la fiche est créée normalement :
+     on la garde au cas où (règle Adrien 30/07). D'où deux boutons
+     indépendants, chacun affichant la valeur qu'il refuse. */
+  var blEmail = (l.email || '').trim();
+  var blPhone = (l.telephone || l.phone || '').trim();
+  if (blEmail || blPhone) {
+    h += '<div class="ld-bl-title">🚫 Blacklist — refuser à l\'entrée</div>';
+    if (blEmail) {
+      h += '<button class="ld-block-btn' + (l.blockedEmail ? ' unblock' : '') + '"'
+        + ' data-action="' + (l.blockedEmail ? 'unblockLead' : 'blockLead') + '" data-target="email" data-id="' + id + '"'
+        + ' title="' + (l.blockedEmail ? 'Réautoriser cet email' : 'Ne plus jamais accepter d\'inscription avec cet email') + '">'
+        + (l.blockedEmail ? '✅ Réautoriser ' : '🚫 Blacklister ') + escHtml(blEmail) + '</button>';
+    }
+    if (blPhone) {
+      h += '<button class="ld-block-btn' + (l.blockedPhone ? ' unblock' : '') + '"'
+        + ' data-action="' + (l.blockedPhone ? 'unblockLead' : 'blockLead') + '" data-target="phone" data-id="' + id + '"'
+        + ' title="' + (l.blockedPhone ? 'Réautoriser ce numéro' : 'Ne plus jamais accepter d\'inscription avec ce numéro') + '">'
+        + (l.blockedPhone ? '✅ Réautoriser ' : '🚫 Blacklister ') + escHtml(blPhone) + '</button>';
+    }
+    if (l.blockedEmail || l.blockedPhone) {
+      h += '<div class="ld-blocked-note">Coordonnée(s) refusée(s) à l\'entrée'
+        + (l.blockedBy ? ' — par ' + escHtml(l.blockedBy) : '')
+        + (l.blockedReason ? ' (' + escHtml(l.blockedReason) + ')' : '')
+        + '<br><span>Une réinscription avec une AUTRE coordonnée crée une fiche normalement.</span></div>';
+    }
   }
 
   h += '<button class="ld-delete-btn" data-action="deleteLead" data-id="' + id + '">🗑 Supprimer cette fiche</button>';
@@ -4679,17 +4697,20 @@ document.addEventListener('click', function(e) {
   if (blockBtn) {
     e.stopPropagation();
     var blkId = blockBtn.dataset.id;
+    var blkTarget = blockBtn.getAttribute('data-target') === 'email' ? 'email' : 'phone';
     var doBlock = blockBtn.getAttribute('data-action') === 'blockLead';
     var lb = allLeads.find(function (x) { return x.id === blkId; }) || {};
-    var who = (lb.nom || lb.email || lb.telephone || 'ce contact');
+    var val = blkTarget === 'email' ? (lb.email || '') : (lb.telephone || lb.phone || '');
+    var quoi = blkTarget === 'email' ? 'l\'email' : 'le numéro';
     var motif = null;
     if (doBlock) {
-      motif = window.prompt('🚫 Bloquer ' + who + ' ?\n\n'
-        + 'Son email ET son téléphone seront refusés à l\'entrée : plus aucun opt-in\n'
-        + 'ni formulaire de sa part ne créera de fiche. Réversible à tout moment.\n\n'
-        + 'Motif (facultatif) :', 'Faux numéro / email bidon');
+      motif = window.prompt('🚫 Blacklister ' + quoi + ' ' + val + ' ?\n\n'
+        + 'Plus aucune inscription avec cette valeur ne créera de fiche.\n'
+        + 'L\'autre coordonnée de ce lead n\'est PAS touchée : si la personne\n'
+        + 'revient avec une autre, on garde la fiche au cas où.\n\n'
+        + 'Motif (facultatif) :', blkTarget === 'email' ? 'Email bidon' : 'Faux numéro');
       if (motif === null) return;                    // annulé
-    } else if (!confirm('Débloquer ' + who + ' ?\n\nSes prochains opt-ins recréeront une fiche normalement.')) {
+    } else if (!confirm('Réautoriser ' + quoi + ' ' + val + ' ?\n\nLes prochaines inscriptions avec cette valeur créeront à nouveau une fiche.')) {
       return;
     }
     blockBtn.disabled = true;
@@ -4699,12 +4720,12 @@ document.addEventListener('click', function(e) {
       return fetch('/api/lead-block', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-        body: JSON.stringify({ leadId: blkId, action: doBlock ? 'block' : 'unblock', reason: motif || null })
+        body: JSON.stringify({ leadId: blkId, target: blkTarget, action: doBlock ? 'block' : 'unblock', reason: motif || null })
       });
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
         if (!res.ok || !res.j.ok) throw new Error(res.j && res.j.error || 'échec');
-        toast(doBlock ? '🚫 Contact bloqué — il ne redescendra plus' : '✅ Blocage levé');
+        toast(doBlock ? '🚫 ' + quoi + ' blacklisté — refusé à l\'entrée' : '✅ ' + quoi + ' réautorisé');
         /* Le listener leads reflète déjà le champ `blocked` ; on re-rend la
            fiche pour basculer le bouton sans attendre. */
         if (typeof renderFeed === 'function') renderFeed();

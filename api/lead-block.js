@@ -9,13 +9,20 @@
 //
 // URL  : POST https://team.alteore.com/api/lead-block
 // Auth : Bearer ID token Firebase (membre d'équipe connecté).
-// Body : { leadId, action:'block'|'unblock', reason? }
+// Body : { leadId, target:'email'|'phone', action:'block'|'unblock', reason? }
 //
 // Réponses
-//   200 { ok:true, action, blocked:[clés], lead:{email,phone} }
+//   200 { ok:true, action, target, key }
 //   400 { ok:false, error }
 //   401/403 (helper d'auth)
 //   404 { ok:false, error:'lead_not_found' }
+//
+// ─── ON BLOQUE UNE VALEUR, PAS UNE PERSONNE ───────────────────────────
+// Règle Adrien 30/07 : on blackliste LE mail bidon, ou LE faux numéro —
+// celui qui est faux, pas les deux d'office. Si la personne se réinscrit
+// avec un autre numéro (ou un autre mail), la nouvelle fiche est CRÉÉE :
+// on la garde au cas où. Bloquer les deux ensemble reviendrait à bannir
+// l'individu, et ferait perdre un lead peut-être réel.
 //
 // ─── POURQUOI UN ENDPOINT PLUTÔT QU'UNE ÉCRITURE CLIENT ────────────────
 // Écrire blocked_contacts depuis le navigateur imposerait un nouveau bloc
@@ -57,13 +64,16 @@ function safeKey(prefix, value) {
   return prefix + ':' + v;
 }
 
-function blockKeys(email, phone) {
-  const keys = [];
-  const em = String(email || '').trim().toLowerCase();
-  if (em) { const k = safeKey('email', em); if (k) keys.push({ key: k, type: 'email', value: em }); }
-  const ph = phoneNormalized(phone);
-  if (ph) { const k = safeKey('phone', ph); if (k) keys.push({ key: k, type: 'phone', value: ph }); }
-  return keys;
+/* La valeur visée par la demande — UNE seule, jamais les deux. */
+function targetOf(lead, target) {
+  if (target === 'email') {
+    const em = String(lead.email || '').trim().toLowerCase();
+    if (!em) return null;
+    return { key: safeKey('email', em), type: 'email', value: em };
+  }
+  const ph = phoneNormalized(lead.telephone || lead.phone);
+  if (!ph) return null;
+  return { key: safeKey('phone', ph), type: 'phone', value: ph };
 }
 
 module.exports = async (req, res) => {
@@ -81,6 +91,7 @@ module.exports = async (req, res) => {
   try { body = await parseBody(req); } catch (e) { body = null; }
   const leadId = body && typeof body.leadId === 'string' ? body.leadId.trim() : '';
   const action = body && body.action === 'unblock' ? 'unblock' : 'block';
+  const target = body && body.target === 'email' ? 'email' : 'phone';
   const reason = body && typeof body.reason === 'string' ? body.reason.slice(0, 300) : null;
 
   if (!leadId) {
@@ -95,53 +106,66 @@ module.exports = async (req, res) => {
       return;
     }
     const lead = snap.data() || {};
-    const keys = blockKeys(lead.email, lead.telephone || lead.phone);
+    const t = targetOf(lead, target);
 
-    if (!keys.length) {
-      res.status(400).json({ ok: false, error: 'no_contact_to_block' });
+    if (!t || !t.key) {
+      res.status(400).json({ ok: false, error: target === 'email' ? 'no_email_on_lead' : 'no_phone_on_lead' });
       return;
     }
 
     const batch = db.batch();
     const now = admin.firestore.FieldValue.serverTimestamp();
+    const ref = db.collection('blocked_contacts').doc(t.key);
 
-    keys.forEach((k) => {
-      const ref = db.collection('blocked_contacts').doc(k.key);
-      if (action === 'block') {
-        batch.set(ref, {
-          type: k.type,
-          value: k.value,
-          reason: reason || null,
-          leadId,
-          leadName: lead.nom || null,
-          by: auth.uid || null,
-          byEmail: auth.email || null,
-          at: now,
-        });
-      } else {
-        batch.delete(ref);
-      }
-    });
+    if (action === 'block') {
+      batch.set(ref, {
+        type: t.type,
+        value: t.value,
+        reason: reason || null,
+        leadId,
+        leadName: lead.nom || null,
+        by: auth.uid || null,
+        byEmail: auth.email || null,
+        at: now,
+      });
+    } else {
+      batch.delete(ref);
+    }
 
-    /* Marquage de la fiche — jamais de suppression : l'historique reste, et
-       le funnel garde une trace de ce qui est entré puis a été écarté. */
+    /* Marquage de la fiche — un drapeau PAR VALEUR, jamais de suppression :
+       l'historique reste, et on sait exactement laquelle des deux coordonnées
+       est refusée à l'entrée. */
+    const DEL = admin.firestore.FieldValue.delete();
+    const flag = target === 'email' ? 'blockedEmail' : 'blockedPhone';
+    const otherFlag = target === 'email' ? 'blockedPhone' : 'blockedEmail';
+    const otherStillBlocked = lead[otherFlag] === true;
     const leadPatch = {
-      blocked: action === 'block',
-      blockedAt: action === 'block' ? now : admin.firestore.FieldValue.delete(),
-      blockedBy: action === 'block' ? (auth.email || auth.uid || null) : admin.firestore.FieldValue.delete(),
-      blockedReason: action === 'block' ? (reason || null) : admin.firestore.FieldValue.delete(),
       updatedAt: now,
       timeline_history: admin.firestore.FieldValue.arrayUnion({
-        text: (action === 'block' ? '🚫 Contact bloqué' : '✅ Blocage levé')
+        text: (action === 'block' ? '🚫 Blacklist ' : '✅ Blacklist levée ')
+            + (target === 'email' ? 'email ' + t.value : 'numéro ' + t.value)
             + (reason ? ' — ' + reason : '')
             + (auth.email ? ' (par ' + auth.email + ')' : ''),
         date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),
         color: action === 'block' ? '#ef4444' : '#34d399',
       }),
     };
-    /* Bloquer sort le lead des files de travail ; débloquer ne devine pas
-       un statut, il laisse celui en place (à l'équipe de le requalifier). */
-    if (action === 'block') { leadPatch.status = 'poubelle'; leadPatch.stage = 'poubelle'; }
+    leadPatch[flag] = action === 'block' ? true : DEL;
+    /* `blocked` = au moins une coordonnée blacklistée (sert à l'affichage). */
+    leadPatch.blocked = action === 'block' ? true : otherStillBlocked;
+    if (action === 'block') {
+      leadPatch.blockedAt = now;
+      leadPatch.blockedBy = auth.email || auth.uid || null;
+      leadPatch.blockedReason = reason || null;
+      /* Sort la fiche des files de travail. Débloquer ne devine PAS un
+         statut : c'est à l'équipe de la requalifier. */
+      leadPatch.status = 'poubelle';
+      leadPatch.stage = 'poubelle';
+    } else if (!otherStillBlocked) {
+      leadPatch.blockedAt = DEL;
+      leadPatch.blockedBy = DEL;
+      leadPatch.blockedReason = DEL;
+    }
     batch.update(db.collection('leads').doc(leadId), leadPatch);
 
     await batch.commit();
@@ -151,8 +175,10 @@ module.exports = async (req, res) => {
       await db.collection('audit_log').add({
         type: 'lead_block',
         action,
+        target,
         leadId,
-        keys: keys.map((k) => k.key),
+        key: t.key,
+        value: t.value,
         reason: reason || null,
         actorUid: auth.uid || null,
         actorEmail: auth.email || null,
@@ -162,12 +188,7 @@ module.exports = async (req, res) => {
       console.warn('[lead-block] audit_log:', e && e.message);
     }
 
-    res.status(200).json({
-      ok: true,
-      action,
-      blocked: keys.map((k) => k.key),
-      lead: { email: lead.email || null, phone: phoneNormalized(lead.telephone || lead.phone) },
-    });
+    res.status(200).json({ ok: true, action, target, key: t.key, value: t.value });
   } catch (e) {
     console.error('[lead-block]', e && e.message);
     res.status(500).json({ ok: false, error: 'server_error' });
