@@ -311,7 +311,10 @@
     }
     .kanban{
       display:grid;
-      grid-template-columns: repeat(4, 1fr);
+      /* Nombre de colonnes pose par le JS (--kb-cols) : il suit PROG_CONFIG
+         + la colonne « Autres ». Fige a 4, l'ajout d'un programme cassait
+         la mise en page. */
+      grid-template-columns: repeat(var(--kb-cols, 5), minmax(0, 1fr));
       gap:14px;
       align-items:flex-start;
       min-height:400px;
@@ -539,7 +542,7 @@
 
     /* Responsive kanban */
     @media (max-width:1300px){
-      .kanban{grid-template-columns: repeat(4, minmax(260px, 1fr)); min-width: max-content;}
+      .kanban{grid-template-columns: repeat(var(--kb-cols, 5), minmax(240px, 1fr)); min-width: max-content;}
     }
     @media (max-width:900px){
       .kanban{grid-template-columns: repeat(2, 1fr); min-width: auto;}
@@ -1218,6 +1221,7 @@
     <option value="BP 12 Mois - 24C">BP 12M — 24C</option>
     <option value="BP 6 Mois - 6C">BP 6M — 6C</option>
     <option value="Elite - 12 Mois - 24C">Elite 12M — 24C</option>
+    <option value="Elite NEW - 6 Mois - 24C">Elite NEW 6M — 24C</option>
   </select>
   <select class="select-ambitio" id="filterCoach" onchange="applyFilters()">
     <option value="">Tous les coachs</option>
@@ -1287,6 +1291,7 @@
             <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
             <option value="BP 6 Mois - 6C">BP 6 Mois - 6C</option>
             <option value="Elite - 12 Mois - 24C">Elite - 12 Mois - 24C</option>
+            <option value="Elite NEW - 6 Mois - 24C">Elite NEW - 6 Mois - 24C</option>
           </select>
         </div>
         <div class="mf"><label>Date d'entrée</label><input id="nc-date" type="date"/></div>
@@ -1326,6 +1331,7 @@
             <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
             <option value="BP 6 Mois - 6C">BP 6 Mois - 6C</option>
             <option value="Elite - 12 Mois - 24C">Elite - 12 Mois - 24C</option>
+            <option value="Elite NEW - 6 Mois - 24C">Elite NEW - 6 Mois - 24C</option>
           </select>
         </div>
         <div class="mf"><label>Date d'entrée</label><input id="ec-date" type="date"/></div>
@@ -1412,9 +1418,27 @@ let _viewYear = new Date().getFullYear();
 let _viewMonth = new Date().getMonth(); // 0-indexed
 
 // ── QUOTA LOGIC ──
+/* Quota mensuel = nombre de séances ÷ durée du programme.
+   ⚠ Avant le 31/07/2026 il était déduit du seul « 24C » (→ 2/mois), ce qui
+   devient faux dès qu'un programme condense le même nombre de séances sur
+   une durée plus courte : Elite NEW, c'est 24 séances sur 6 mois, donc
+   4 par mois et non 2. On lit donc LES DEUX nombres du libellé.
+   Les programmes existants gardent exactement leur quota :
+     BP 12 Mois - 12C      → 12/12 = 1
+     BP 12 Mois - 24C      → 24/12 = 2
+     BP 6 Mois - 6C        →  6/6  = 1
+     Elite - 12 Mois - 24C → 24/12 = 2
+     Elite NEW - 6 Mois - 24C → 24/6 = 4   (nouveau)
+   Libellé non reconnu → on retombe sur l'ancienne règle. */
 function getMonthlyQuota(programme){
   if(!programme) return 1;
-  const p = programme.toLowerCase();
+  const p = String(programme).toLowerCase();
+  const mMois = p.match(/(\d+)\s*mois/);
+  const mSeances = p.match(/(\d+)\s*c\b/);
+  if(mMois && mSeances){
+    const mois = parseInt(mMois[1], 10), seances = parseInt(mSeances[1], 10);
+    if(mois > 0 && seances > 0) return Math.max(1, Math.round(seances / mois));
+  }
   if(p.includes('24c')) return 2;
   if(p.includes('12c')) return 1;
   if(p.includes('6c')) return 1;
@@ -1784,16 +1808,19 @@ function render(){
 // ── RENDER KANBAN ──
 // Les colonnes ont des largeurs adaptatives via les classes weight-xs/s/m/l
 // calculées selon le nombre de cartes dans chaque colonne.
-// Les "Autres" programmes (hors 4 standards) sont agrégés dans une colonne "custom".
+// Les "Autres" programmes (hors programmes standards) sont agrégés dans une colonne "custom".
 function renderKanban(){
   const PROG_CONFIG = [
     { key: 'bp12-12', prog: 'BP 12 Mois - 12C',      title: 'BP 12 Mois',               sub: '12 coachings sur 12 mois' },
     { key: 'bp12-24', prog: 'BP 12 Mois - 24C',      title: 'BP 12 Mois · Premium',     sub: '24 coachings sur 12 mois' },
     { key: 'bp6',     prog: 'BP 6 Mois - 6C',        title: 'BP 6 Mois',                sub: '6 coachings sur 6 mois' },
-    { key: 'elite',   prog: 'Elite - 12 Mois - 24C', title: 'Elite ★',                  sub: '24 coachings sur 12 mois' }
+    { key: 'elite',   prog: 'Elite - 12 Mois - 24C', title: 'Elite ★',                  sub: '24 coachings sur 12 mois' },
+    /* Nouveau format d'accompagnement (31/07/2026) : même volume, moitié
+       moins de temps — 4 séances par mois. */
+    { key: 'elite-new', prog: 'Elite NEW - 6 Mois - 24C', title: 'Elite NEW ★',              sub: '24 coachings sur 6 mois' }
   ];
 
-  // Grouper : 4 standards + 1 colonne "Autres" pour les programmes non listés
+  // Grouper : les standards de PROG_CONFIG + 1 colonne "Autres"
   const standards = PROG_CONFIG.map(cfg => ({
     ...cfg,
     items: _filtered.filter(c => c.programme === cfg.prog)
@@ -1822,6 +1849,9 @@ function renderKanban(){
   }
 
   const kanban = document.getElementById('kanbanView');
+  /* La grille suit le nombre reel de colonnes (programmes + « Autres ») :
+     ajouter un programme ne demande plus de toucher au CSS. */
+  kanban.style.setProperty('--kb-cols', cols.length);
   kanban.innerHTML = cols.map(col => {
     const wcls = weightClass(col.items.length);
     const body = col.items.length
