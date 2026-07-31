@@ -91,10 +91,23 @@ function buildPrompt(client, q) {
     '     "freq":"Mensuel","actuel":"8 %","cible":"12 %"}]',
     '   « actuel » vient du questionnaire ; s\'il est inconnu, mets "—" (jamais une invention).',
     '10. risques — 2 à 4 risques ou freins : [{"titre":"...","detail":"..."}]',
+    '11. ditClient — 4 à 7 informations MARQUANTES que le dirigeant a dites dans',
+    '    le questionnaire, reformulées en une ligne, hors chiffres purs :',
+    '    [{"titre":"Présent sur tous les chantiers","detail":"soirs et samedis compris"}]',
+    '    C\'est ce qui montre au client qu\'on l\'a écouté — reste fidèle à ses mots.',
+    '12. jalons — le CONTENU de chacune des 6 étapes, adapté à CE dossier.',
+    '    Objet dont les clés sont A1, A2, A3, A4, A5, B :',
+    '    {"A1":{"titre":"...","focus":"une phrase : ce qu\'on traite à cette étape",',
+    '      "actions":["2 à 3 actions concrètes, verbe à l\'infinitif"]}, …}',
+    '    A1 = alléger la charge du dirigeant · A2 = bras droit / délégation',
+    '    A3 = sortie de la production · A4 = pilotage par les chiffres',
+    '    A5 = marge & trésorerie · B = consolidation',
     '',
     'Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code :',
     '{"pointA":"...","pointB":"...","verrou":"...","organisme":"...","synthese":"...",',
     ' "chiffres":[{"label":"...","valeur":"..."}],',
+    ' "ditClient":[{"titre":"...","detail":"..."}],',
+    ' "jalons":{"A1":{"titre":"...","focus":"...","actions":["..."]}},',
     ' "problemes":[{"titre":"...","detail":"..."}],',
     ' "objectifs":["..."],',
     ' "kpis":[{"cat":"...","nom":"...","freq":"...","actuel":"...","cible":"..."}],',
@@ -154,6 +167,25 @@ function sanitize(raw) {
       const t = str(x && x.titre);
       return t ? { titre: t.slice(0, 80), detail: str(x && x.detail) } : null;
     }),
+    ditClient: list(raw.ditClient, 7, (x) => {
+      const t = str(x && x.titre);
+      return t ? { titre: t.slice(0, 90), detail: str(x && x.detail).slice(0, 160) } : null;
+    }),
+    /* Contenu par jalon — clés strictement limitées aux 6 étapes connues. */
+    jalons: (() => {
+      const src = raw.jalons && typeof raw.jalons === 'object' ? raw.jalons : {};
+      const out = {};
+      ['A1', 'A2', 'A3', 'A4', 'A5', 'B'].forEach((k) => {
+        const j = src[k];
+        if (!j || typeof j !== 'object') return;
+        const actions = (Array.isArray(j.actions) ? j.actions : [])
+          .map((a) => str(a).slice(0, 160)).filter(Boolean).slice(0, 3);
+        const titre = str(j.titre).slice(0, 70);
+        const focus = str(j.focus).slice(0, 200);
+        if (titre || focus || actions.length) out[k] = { titre, focus, actions };
+      });
+      return out;
+    })(),
   };
 }
 
@@ -215,7 +247,7 @@ module.exports = async (req, res) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 2500,
+        max_tokens: 4000,
         messages: [{ role: 'user', content: buildPrompt(client, q) }],
       }),
     });

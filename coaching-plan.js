@@ -106,6 +106,8 @@
       pointA: '', pointB: '',
       verrou: '', organisme: '', synthese: '',
       chiffres: [],             // [{label, valeur}]  repères du dossier
+      ditClient: [],            // [{titre, detail}]  ce que le dirigeant a dit
+      jalons: {},               // { A1:{titre, focus, actions[]}, … }
       problemes: [],            // [{titre, detail}]
       objectifs: [],            // ['…']
       kpis: [],                 // [{cat, nom, freq, actuel, cible}]
@@ -192,9 +194,12 @@
     });
     if (s.organisme && (overwrite || !p.organisme)) p.organisme = s.organisme;
     if (s.synthese && (overwrite || isTodo(p.synthese))) p.synthese = s.synthese;
-    ['chiffres', 'problemes', 'objectifs', 'kpis', 'risques'].forEach(function (k) {
+    ['chiffres', 'ditClient', 'problemes', 'objectifs', 'kpis', 'risques'].forEach(function (k) {
       if ((s[k] || []).length && (overwrite || !(p[k] || []).length)) p[k] = s[k];
     });
+    if (s.jalons && Object.keys(s.jalons).length && (overwrite || !Object.keys(p.jalons || {}).length)) {
+      p.jalons = s.jalons;
+    }
   }
 
   function paintSuggBar() {
@@ -509,6 +514,18 @@
       h += '</div>';
     }
 
+    /* Ce que le client nous a dit — montre qu'on l'a écouté, et sert de
+       socle factuel à tout ce qui suit. */
+    if ((p.ditClient || []).length) {
+      h += blocOpen(++n, '💬', 'Ce que vous nous avez dit');
+      h += '<div class="cpv-said">';
+      p.ditClient.forEach(function (x) {
+        h += '<div class="cpv-sd"><div class="t">' + esc(x.titre) + '</div>'
+          + (x.detail ? '<div class="d">' + esc(x.detail) + '</div>' : '') + '</div>';
+      });
+      h += '</div></div>';
+    }
+
     /* BLOC — Point A → Point B */
     h += blocOpen(++n, '📍', 'Point A → Point B');
     h += '<div class="cpv-ab">';
@@ -541,20 +558,32 @@
       + (org ? '<br>' + esc(org.note) : '') + '</div>';
     h += '</div>';
 
-    /* BLOC — Les 6 jalons datés */
-    h += blocOpen(++n, '📆', 'Les 6 jalons');
-    h += '<div class="cpv-tw"><table class="cpv-t"><thead><tr><th>Jalon</th><th>Échéance</th><th>Objectif</th><th>Preuve attendue</th><th>Statut</th></tr></thead><tbody>';
+    /* BLOC — La feuille de route : la route, puis le détail de chaque étape */
+    h += blocOpen(++n, '🛣️', 'Votre feuille de route');
+    h += roadSvg(p);
+    h += '<div class="cpv-steps">';
     JALONS.forEach(function (j) {
       var st = STATUTS[p.jalonStatus && p.jalonStatus[j.k]] || STATUTS.todo;
-      h += '<tr><td><b>' + j.k + '</b></td><td class="num">' + esc(frDate(jalonDate(p, j.j))) + '<span class="j">J+' + j.j + '</span></td>'
-        + '<td>' + esc(j.obj) + '</td><td class="mut">' + esc(j.preuve) + '</td><td>'
+      var c = (p.jalons || {})[j.k] || {};
+      h += '<div class="cpv-step ' + (st === STATUTS.ok ? 'done' : '') + '">';
+      h += '<div class="cpv-steph"><span class="b" style="border-color:' + st.col + ';color:' + st.col + '">' + j.k + '</span>'
+        + '<span class="t">' + esc(jalonTitre(p, j)) + '</span>'
+        + '<span class="dt">' + esc(frDate(jalonDate(p, j.j))) + ' · J+' + j.j + '</span>'
         + (ro
             ? '<span class="cpv-st ro" style="color:' + st.col + '">' + st.ico + ' ' + st.lbl + '</span>'
             : '<button class="cpv-st" data-cp-jalon="' + j.k + '" data-cp-id="' + esc(clientId || '') + '" style="color:' + st.col + '">' + st.ico + ' ' + st.lbl + '</button>')
-        + '</td></tr>';
+        + '</div>';
+      if (c.focus) h += '<div class="cpv-stepf">' + esc(c.focus) + '</div>';
+      if ((c.actions || []).length) {
+        h += '<ul class="cpv-ul">';
+        c.actions.forEach(function (a) { h += '<li>' + esc(a) + '</li>'; });
+        h += '</ul>';
+      }
+      h += '<div class="cpv-stepp">Preuve attendue : ' + esc(c.preuve || j.preuve) + '</div>';
+      h += '</div>';
     });
-    h += '</tbody></table></div>';
-    h += '<div class="cpv-rule">Un jalon manqué → on cherche la cause avant d\'avancer. Jamais un simple report.</div>';
+    h += '</div>';
+    h += '<div class="cpv-rule">Une étape manquée → on cherche la cause avant d\'avancer. Jamais un simple report.</div>';
     h += '</div>';
 
     /* BLOC — Actions de la semaine */
@@ -603,6 +632,53 @@
 
     h += '</div>';
     return h;
+  }
+
+  /* ── La route ────────────────────────────────────────────────────────
+     Feuille de route en serpentin : les 6 jalons posés le long d'une route
+     qui descend en zigzag. SVG pur (viewBox + width:100%) : net à toutes
+     les tailles, et il sort proprement à l'impression — une image matricielle
+     baverait. Les positions sont calculées, pas dessinées à la main. */
+  function roadSvg(p) {
+    var n = JALONS.length;
+    var W_ = 300, STEP = 108, TOP = 46, PAD = 58;
+    var H = TOP + (n - 1) * STEP + PAD;
+    var pts = JALONS.map(function (j, i) {
+      return { x: (i % 2 === 0) ? 86 : 214, y: TOP + i * STEP, j: j, i: i };
+    });
+    /* Tracé : une courbe douce d'un jalon au suivant (S-curve verticale). */
+    var d = 'M ' + pts[0].x + ' ' + (pts[0].y - 26);
+    pts.forEach(function (pt, i) {
+      if (i === 0) { d += ' L ' + pt.x + ' ' + pt.y; return; }
+      var prev = pts[i - 1], my = (prev.y + pt.y) / 2;
+      d += ' C ' + prev.x + ' ' + my + ', ' + pt.x + ' ' + my + ', ' + pt.x + ' ' + pt.y;
+    });
+    d += ' L ' + pts[n - 1].x + ' ' + (pts[n - 1].y + 30);
+
+    var h = '<svg class="cpv-road" viewBox="0 0 ' + W_ + ' ' + H + '" role="img" aria-label="Feuille de route en 6 étapes">';
+    /* Deux traits superposés = bitume + ligne médiane discontinue. */
+    h += '<path d="' + d + '" fill="none" stroke="#dfe4f7" stroke-width="26" stroke-linecap="round"/>';
+    h += '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="9 11" opacity=".9"/>';
+    pts.forEach(function (pt) {
+      var st = STATUTS[p.jalonStatus && p.jalonStatus[pt.j.k]] || STATUTS.todo;
+      var done = st === STATUTS.ok;
+      var side = pt.x < 150 ? 1 : -1;                 // texte du côté opposé au virage
+      var tx = pt.x + side * 34;
+      var anchor = side > 0 ? 'start' : 'end';
+      h += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="19" fill="' + (done ? '#10b981' : '#fff') + '" stroke="' + st.col + '" stroke-width="3"/>';
+      h += '<text x="' + pt.x + '" y="' + (pt.y + 5) + '" text-anchor="middle" class="rk" fill="' + (done ? '#fff' : '#0f1f5c') + '">' + esc(pt.j.k) + '</text>';
+      h += '<text x="' + tx + '" y="' + (pt.y - 3) + '" text-anchor="' + anchor + '" class="rt">' + esc(jalonTitre(p, pt.j)) + '</text>';
+      h += '<text x="' + tx + '" y="' + (pt.y + 12) + '" text-anchor="' + anchor + '" class="rd">' + esc(frDate(jalonDate(p, pt.j.j))) + ' · J+' + pt.j.j + '</text>';
+    });
+    h += '</svg>';
+    return h;
+  }
+
+  /* Titre d'un jalon : celui proposé pour CE dossier, sinon le libellé
+     générique du programme. */
+  function jalonTitre(p, j) {
+    var c = (p.jalons || {})[j.k];
+    return (c && c.titre) ? c.titre : j.obj;
   }
 
   function blocOpen(n, ico, titre) {
