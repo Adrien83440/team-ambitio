@@ -117,7 +117,7 @@
       startDate: toYMD(new Date()),
       coach: '',
       pointA: '', pointB: '',
-      verrou: '', organisme: '', organismeWhy: '',
+      verrou: '', organisme: '',
       chantiers: [],
       jalonStatus: {},          // { A1:'todo', … }
       semaines: [],             // [{ n, from, to, coach, focus, actions:[{txt,who,due,st}] }]
@@ -151,7 +151,78 @@
   /* ═════════════════════════════════════════════════════════════════════
      ASSISTANT — 6 cartes
      ═══════════════════════════════════════════════════════════════════ */
-  var W = { client: null, plan: null, step: 0, onSave: null };
+  var W = { client: null, plan: null, step: 0, onSave: null, sugg: null, suggState: 'idle' };
+
+  /* ── Propositions à partir du questionnaire ────────────────────────────
+     api/coaching-plan-suggest.js lit le questionnaire du client et propose
+     Point A / Point B / verrou / organisme / chantiers. Le mentor n'a plus
+     qu'à valider ou corriger : rien n'est écrit sans son passage.
+     Silencieux en cas d'échec — l'assistant reste utilisable à la main. */
+  function loadSuggestion(force) {
+    var id = W.client && (W.client._id || W.client.id);
+    if (!id || W.suggState === 'loading') return;
+    W.suggState = 'loading';
+    paintSuggBar();
+    /* Même récupération de jeton que le reste de coaching.html (SDK
+       modulaire, window._auth exposé par la page). */
+    var getTok = (window._auth && window._auth.currentUser)
+      ? window._auth.currentUser.getIdToken()
+      : Promise.reject(new Error('non authentifié'));
+    getTok.then(function (tok) {
+      return fetch('/api/coaching-plan-suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        body: JSON.stringify({ clientId: id, force: !!force })
+      });
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || j.ok !== true || !j.suggestion) {
+        W.suggState = (j && j.error === 'no_questionnaire') ? 'none' : 'error';
+        paintSuggBar();
+        return;
+      }
+      W.sugg = j.suggestion;
+      W.suggState = 'ready';
+      applySuggestion(false);      // ne remplit que les champs vides
+      go(W.step);
+    }).catch(function (e) {
+      console.warn('[plan] suggestion', e && e.message);
+      W.suggState = 'error';
+      paintSuggBar();
+    });
+  }
+
+  /* overwrite=false : on ne touche QU'AUX champs vides — une saisie du
+     mentor n'est jamais écrasée par une proposition. */
+  function applySuggestion(overwrite) {
+    var s = W.sugg, p = W.plan;
+    if (!s) return;
+    ['pointA', 'pointB', 'verrou'].forEach(function (k) {
+      if (s[k] && (overwrite || isTodo(p[k]))) p[k] = s[k];
+    });
+    if (s.organisme && (overwrite || !p.organisme)) p.organisme = s.organisme;
+    if ((s.chantiers || []).length && (overwrite || !(p.chantiers || []).length)) {
+      p.chantiers = s.chantiers.slice(0, 4);
+    }
+  }
+
+  function paintSuggBar() {
+    var el = document.getElementById('cpSugg');
+    if (!el) return;
+    var msg = {
+      loading: '<span class="sp"></span> Lecture du questionnaire et proposition en cours…',
+      ready: '✨ Champs pré-remplis à partir du questionnaire — <b>relis et corrige</b>, c\'est une proposition.',
+      none: 'Aucun questionnaire pour ce client — saisie manuelle.',
+      error: 'Proposition automatique indisponible — saisie manuelle.',
+      idle: ''
+    }[W.suggState] || '';
+    if (!msg) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.className = 'cp-sugg ' + W.suggState;
+    el.innerHTML = msg + (W.suggState === 'ready'
+      ? ' <button type="button" id="cpReSugg">↻ Reproposer</button>' : '');
+    var b = document.getElementById('cpReSugg');
+    if (b) b.onclick = function () { collect(); loadSuggestion(true); };
+  }
 
   var STEPS = [
     { key: 'cadrage',   t: 'Cadrage',            ico: '📆', sub: 'Date de démarrage et coach référent — toutes les échéances en découlent.' },
@@ -184,6 +255,13 @@
       '.cp-qa:last-child{border-bottom:none}',
       '.cp-qa .q{font-size:10.5px;font-weight:700;color:' + C.muted + '}',
       '.cp-qa .a{font-size:12px;color:' + C.ink + ';white-space:pre-wrap;margin-top:1px}',
+      '.cp-sugg{font-size:11.5px;line-height:1.5;border-radius:9px;padding:9px 11px;margin-bottom:14px}',
+      '.cp-sugg.ready{background:#eef7ee;border:1px solid #bfe3c4;color:#1d6b34}',
+      '.cp-sugg.loading{background:' + C.ghost + ';border:1px solid ' + C.line + ';color:' + C.main + '}',
+      '.cp-sugg.none,.cp-sugg.error{background:#fdf6e6;border:1px solid #f0dfae;color:#8a6412}',
+      '.cp-sugg button{margin-left:6px;border:1px solid currentColor;background:none;color:inherit;border-radius:7px;padding:2px 8px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit}',
+      '.cp-sugg .sp{display:inline-block;width:9px;height:9px;border:2px solid ' + C.line + ';border-top-color:' + C.main + ';border-radius:50%;animation:cpspin .7s linear infinite;vertical-align:-1px}',
+      '@keyframes cpspin{to{transform:rotate(360deg)}}',
       '.cp-f{margin-bottom:14px}',
       '.cp-f label{display:block;font-size:11px;font-weight:800;letter-spacing:.3px;color:' + C.muted + ';margin-bottom:5px;text-transform:uppercase}',
       '.cp-f input,.cp-f textarea,.cp-f select{width:100%;box-sizing:border-box;border:1.5px solid ' + C.line + ';border-radius:10px;padding:10px 12px;font-size:13px;font-family:inherit;color:' + C.ink + ';outline:none;background:#fff}',
@@ -194,6 +272,10 @@
       '.cp-org button{border:1.5px solid ' + C.line + ';background:#fff;border-radius:11px;padding:11px 8px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:800;color:' + C.muted + ';transition:all .13s}',
       '.cp-org button.on{border-color:' + C.main + ';background:' + C.ghost + ';color:' + C.main + '}',
       '.cp-ch{display:flex;flex-direction:column;gap:6px}',
+      /* ⚠ La règle .cp-f input ci-dessus pose width:100% — elle attrapait aussi
+         la case à cocher, qui occupait alors toute la ligne et rejetait le
+         libellé hors de la carte (bug constaté 31/07). */
+      '.cp-ch input[type=checkbox]{width:auto;flex:0 0 auto;margin:0;accent-color:' + C.main + '}',
       '.cp-ch label{display:flex;align-items:center;gap:9px;border:1.5px solid ' + C.line + ';border-radius:10px;padding:9px 11px;cursor:pointer;font-size:12.5px;font-weight:600;text-transform:none;letter-spacing:0;color:' + C.ink + ';margin:0}',
       '.cp-ch label.on{border-color:' + C.main + ';background:' + C.ghost + '}',
       '.cp-ch label.reco::after{content:"conseillé";margin-left:auto;font-size:9.5px;font-weight:800;color:' + C.main + ';background:#fff;border:1px solid ' + C.main + ';border-radius:999px;padding:1px 7px}',
@@ -218,7 +300,7 @@
           '<div class="cp-steps" id="cpSteps"></div>' +
         '</div>' +
         '<div class="cp-body">' +
-          '<div class="cp-main" id="cpMain"></div>' +
+          '<div class="cp-main"><div class="cp-sugg" id="cpSugg" style="display:none"></div><div id="cpMain"></div></div>' +
           '<div class="cp-aside" id="cpAside"></div>' +
         '</div>' +
         '<div class="cp-foot">' +
@@ -257,8 +339,15 @@
       : emptyPlan();
     if (!W.plan.coach) W.plan.coach = client && client.coach ? client.coach : '';
     W.step = 0;
+    W.sugg = null;
+    W.suggState = 'idle';
     go(0);
     document.getElementById('cpBg').classList.add('show');
+    /* Proposition automatique dès l'ouverture, uniquement s'il reste des
+       champs à remplir — régénérer un plan complet ne relance rien. */
+    if (isTodo(W.plan.pointA) || isTodo(W.plan.pointB) || isTodo(W.plan.verrou) || !W.plan.organisme) {
+      loadSuggestion(false);
+    }
   }
 
   /* Colonne de droite : le questionnaire du client, toujours sous les yeux. */
@@ -289,7 +378,9 @@
     document.getElementById('cpMain').innerHTML = STEP_HTML[s.key]();
     bindStep(s.key);
     renderAside();
-    document.getElementById('cpMain').scrollTop = 0;
+    paintSuggBar();
+    var sc = document.querySelector('#cpBg .cp-main');
+    if (sc) sc.scrollTop = 0;
   }
 
   function f(label, inner, hint) {
@@ -329,9 +420,6 @@
         h += '<button type="button" data-org="' + k + '" class="' + (p.organisme === k ? 'on' : '') + '">' + ORGANISMES[k].label + '</button>';
       });
       h += '</div><div class="hint" id="cpOrgNote">' + (p.organisme ? esc(ORGANISMES[p.organisme].note) : 'Ordre de traitement : Délivrabilité → Rentabilité → Acquisition.') + '</div></div>';
-      h += f('Pourquoi cet organisme',
-        '<textarea id="cpOrgWhy" placeholder="Ex : transformer le chiffre en résultat passe par la structuration financière en priorité.">' + esc(p.organismeWhy || '') + '</textarea>',
-        'Une ligne. Sert à justifier l\'ordre si on s\'écarte de la règle.');
       return h;
     },
     chantiers: function () {
@@ -410,7 +498,6 @@
     if ((v = g('cpA')) !== null) p.pointA = v.trim();
     if ((v = g('cpB')) !== null) p.pointB = v.trim();
     if ((v = g('cpVerrou')) !== null) p.verrou = v.trim();
-    if ((v = g('cpOrgWhy')) !== null) p.organismeWhy = v.trim();
     var boxes = document.querySelectorAll('[data-chbox]');
     if (boxes.length) {
       p.chantiers = [];
@@ -472,7 +559,6 @@
     h += '<div class="cpv-k">Verrou identifié</div><div class="cpv-p' + (isTodo(p.verrou) ? ' todo' : '') + '">' + esc(val(p.verrou)) + '</div>';
     h += '<div class="cpv-k" style="margin-top:12px">Organisme bloqué</div>';
     h += '<div class="cpv-org">' + (org ? esc(org.label) : TODO) + '</div>';
-    if (!isTodo(p.organismeWhy)) h += '<div class="cpv-p">' + esc(p.organismeWhy) + '</div>';
     h += '<div class="cpv-rule">Ordre de traitement : <b>Délivrabilité → Rentabilité → Acquisition</b>'
       + (org ? '<br>' + esc(org.note) : '') + '</div>';
     h += '</div>';
@@ -604,7 +690,6 @@
     var org = ORGANISMES[p.organisme];
     text('ORGANISME BLOQUÉ', M, 8, 'bold', C.muted);
     text(org ? org.label : TODO, M, 13, 'bold', org ? C.main : C.muted);
-    if (!isTodo(p.organismeWhy)) text(p.organismeWhy, M, 10, 'normal', C.ink);
     y += 1.5;
     text('Ordre de traitement : Délivrabilité → Rentabilité → Acquisition', M, 9, 'italic', C.muted);
     if (org) text(org.note, M, 9, 'italic', C.muted);
