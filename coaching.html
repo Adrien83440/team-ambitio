@@ -3068,6 +3068,7 @@ async function addSession(clientId){
   try{
     c._updatedAt = Date.now();
     await saveClientDoc(clientId, c);
+    syncSeanceAcademy(clientId, newSession.numero, '');
     showToast('✅ Séance ajoutée !','success');
     openDetail(clientId);
     applyFilters(); renderRecentActivity();
@@ -3474,6 +3475,7 @@ async function quickMarkDone(clientId, sessionNum){
   try{
     c._updatedAt = Date.now();
     await saveClientDoc(clientId, c);
+    syncSeanceAcademy(clientId, sessionNum, '');
     showToast('✅ Séance enregistrée !','success');
     applyFilters(); renderRecentActivity();
     openDetail(clientId);
@@ -3492,6 +3494,44 @@ function toggleSessionEdit(clientId, sessionNum){
 }
 
 // ── SAVE SESSION EDIT ──
+// ────────────────────────────────────────────────────────────────────────────
+//  Section Parcours — la séance part vers l'Academy
+//
+//  Dès qu'une séance passe à « fait », le dirigeant voit dans son espace son
+//  compte rendu et ses devoirs : UNE LIGNE DE LA ZONE « DEVOIRS » = UN DEVOIR
+//  cochable. On continue d'écrire ici comme on l'a toujours fait, rien n'est
+//  ressaisi ailleurs.
+//
+//  FAIL-SOFT, et c'est important : la séance est DÉJÀ enregistrée dans la
+//  fiche quand cet appel part. Un envoi qui échoue ne doit donc jamais faire
+//  croire que l'enregistrement a raté. On prévient sans alarmer, et la séance
+//  repartira au prochain enregistrement.
+//
+//  Renvoyer la même séance la MET À JOUR côté Academy : ce que l'élève a
+//  coché et ce que le coach y a noté sont conservés.
+// ────────────────────────────────────────────────────────────────────────────
+async function syncSeanceAcademy(clientId, numero, annee){
+  try{
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    if(!token) return;
+    const r = await fetch('/api/academy-seance', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+      body: JSON.stringify({ clientId: clientId, numero: numero, annee: annee || '' })
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok && j.found){
+      showToast('📘 Envoyée à l\'Academy — ' + j.devoirs + ' devoir' + (j.devoirs>1?'s':''), 'success');
+    } else if(j && j.ok && j.found === false){
+      // Le client n'a pas de compte Academy : ce n'est pas une erreur.
+      console.info('[academy-seance] aucun compte Academy pour ce client');
+    } else {
+      console.warn('[academy-seance] envoi impossible', j && j.error);
+    }
+  }catch(e){ console.warn('[academy-seance]', e && e.message); }
+}
+window.syncSeanceAcademy = syncSeanceAcademy;
+
 async function saveSessionEdit(clientId, sessionNum){
   const c = _clients.find(x=>x._id===clientId);
   if(!c) return;
@@ -3515,6 +3555,7 @@ async function saveSessionEdit(clientId, sessionNum){
   try{
     c._updatedAt = Date.now();
     await saveClientDoc(clientId, c);
+    if(s.statut==='fait') syncSeanceAcademy(clientId, sessionNum, '');
     showToast('✅ Séance mise à jour !','success');
     applyFilters(); renderRecentActivity();
     openDetail(clientId);
@@ -4055,6 +4096,7 @@ async function markYrDone(clientId,yi,sn){
   try{
     c._updatedAt = Date.now();
     await saveClientDoc(clientId, c);
+    syncSeanceAcademy(clientId, sn, (c.years[yi]||{}).label || '');
     showToast('Séance validée !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
@@ -4091,6 +4133,7 @@ async function saveYrEdit(clientId,yi,sn){
   try{
     c._updatedAt = Date.now();
     await saveClientDoc(clientId, c);
+    if(s.statut==='fait') syncSeanceAcademy(clientId, sn, (c.years[yi]||{}).label || '');
     showToast('Séance mise à jour !','success');applyFilters(); renderRecentActivity();openDetail(clientId);
   }catch(e){showToast('Erreur: '+e.message,'error');}
 }
