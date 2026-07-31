@@ -2809,7 +2809,7 @@ function openDetail(id){
               <button class="dp-plan-edit-btn" onclick="openPlanWizard('${id}')">✏️ Modifier / régénérer</button>
               <button class="btn btn-primary btn-sm" onclick="sharePlan('${id}')">🔗 Lien client</button>
               <button class="dp-plan-edit-btn" onclick="exportPlanPdf('${id}')">📄 PDF</button>
-              <button class="dp-plan-edit-btn" style="color:#dc2626;border-color:#f3c9c9" onclick="deletePlan('${id}')">🗑 Supprimer</button>
+              <button class="dp-plan-edit-btn" style="color:#dc2626;border-color:#f3c9c9" onclick="deletePlanV2('${id}')">🗑 Supprimer</button>
             ` : ''}
           </div>
         </div>
@@ -3328,9 +3328,13 @@ async function sharePlan(clientId){
   }catch(e){ window.prompt('Lien à envoyer au client :', url); }
 }
 
-/* Suppression du plan — le lien client meurt avec lui (l'endpoint refuse
-   dès que planV2 n'existe plus). */
-async function deletePlan(clientId){
+/* Suppression du plan structuré — le lien client meurt avec lui
+   (l'endpoint refuse dès que planV2 n'existe plus).
+   ⚠ Nom distinct de deletePlan(clientId, planId), qui supprime un
+   DOCUMENT HTML uploadé dans la section « 📜 Plans d'action ». Les deux
+   coexistent dans cette page : une collision faisait exécuter la mauvaise
+   (incident du 31/07). */
+async function deletePlanV2(clientId){
   const c = _clients.find(x=>x._id===clientId);
   if(!c || !c.planV2) return;
   if(!confirm('Supprimer le plan d\'action de ce client ?\n\nLe lien client cessera immédiatement de fonctionner. Cette action est définitive.')) return;
