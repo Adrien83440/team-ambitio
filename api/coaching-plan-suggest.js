@@ -2,15 +2,18 @@
 // api/coaching-plan-suggest.js — PROPOSITIONS POUR LE PLAN D'ACTION
 // ----------------------------------------------------------------------------
 // Lit le questionnaire AlteoForms d'un client coaching et propose le Point A,
-// le Point B, le verrou principal, l'organisme bloqué et les chantiers — pour
-// que le mentor n'ait plus qu'à valider ou corriger dans l'assistant.
+// le Point B, le verrou principal et l'organisme bloqué — pour que le mentor
+// n'ait plus qu'à valider ou corriger dans l'assistant.
+//
+// Pas de « chantiers » : l'accompagnement n'est plus adossé à des modules ni
+// à des vidéos (décision Adrien 31/07). Le plan tient dans les jalons.
 //
 // URL  : POST https://team.alteore.com/api/coaching-plan-suggest
 // Auth : Bearer ID token Firebase — rôles admin / coach / csm.
 // Body : { clientId, force? }
 //
 // Réponses
-//   200 { ok:true, suggestion:{ pointA, pointB, verrou, organisme, chantiers[] },
+//   200 { ok:true, suggestion:{ pointA, pointB, verrou, organisme },
 //         cached:bool, model }
 //   200 { ok:false, error:'no_questionnaire' }   ← rien à analyser
 //   400/401/403/404/500
@@ -38,18 +41,6 @@ const ROLES = ['admin', 'coach', 'csm'];
 const MODEL = 'claude-sonnet-4-6';
 
 const ORGANISMES = ['delivrabilite', 'rentabilite', 'acquisition'];
-const CHANTIERS = [
-  'Alignement du dirigeant',
-  'Structure & modèle économique',
-  'Culture d\'entreprise & management',
-  'Organisation & pilotage',
-  'Délégation stratégique',
-  'Marges, trésorerie & rentabilité',
-  'Marketing & visibilité premium',
-  'Digitalisation & automatisation',
-  'Expérience client & fidélisation',
-  'Expansion & scalabilité',
-];
 
 /* Empreinte du questionnaire — change dès qu'une réponse change. */
 function qKey(q) {
@@ -88,11 +79,9 @@ function buildPrompt(client, q) {
     '   delivrabilite = le dirigeant est le goulot, rien ne tourne sans lui.',
     '   rentabilite  = ça produit du chiffre mais pas de résultat ni de trésorerie.',
     '   acquisition  = la machine tourne et est rentable, il manque du volume.',
-    '5. chantiers — 2 à 4 numéros parmi cette liste, ceux qui débloquent le palier suivant :',
-    CHANTIERS.map((c, i) => '   ' + (i + 1) + '. ' + c).join('\n'),
     '',
     'Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code :',
-    '{"pointA":"...","pointB":"...","verrou":"...","organisme":"...","chantiers":[6,4]}',
+    '{"pointA":"...","pointB":"...","verrou":"...","organisme":"..."}',
   ].join('\n');
 }
 
@@ -111,15 +100,11 @@ function sanitize(raw) {
   const str = (v) => String(v == null ? '' : v).trim().slice(0, 400);
   const org = ORGANISMES.indexOf(String(raw.organisme || '').toLowerCase()) >= 0
     ? String(raw.organisme).toLowerCase() : '';
-  let ch = Array.isArray(raw.chantiers) ? raw.chantiers : [];
-  ch = ch.map((n) => parseInt(n, 10)).filter((n) => n >= 1 && n <= 10);
-  ch = ch.filter((n, i) => ch.indexOf(n) === i).slice(0, 4);   // dédoublonné, 4 max
   return {
     pointA: str(raw.pointA),
     pointB: str(raw.pointB),
     verrou: str(raw.verrou),
     organisme: org,
-    chantiers: ch,
   };
 }
 

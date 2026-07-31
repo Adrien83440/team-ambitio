@@ -8,9 +8,12 @@
         client). Chaque carte affiche en regard les réponses du
         questionnaire AlteoForms du client, pour répondre sans changer
         d'écran. Rien n'est inventé : un champ vide reste « À compléter ».
-     2. PLAN — 5 blocs (Point A→B · Verrou · 6 jalons datés · Chantiers ·
-        Actions de la semaine). Statuts des jalons et des actions
-        modifiables en un clic. Régénérable à tout moment.
+     2. PLAN — 4 blocs (Point A→B · Verrou · 6 jalons datés · Actions de
+        la semaine). Statuts des jalons et des actions modifiables en un
+        clic. Régénérable à tout moment.
+        ⚠ Pas de « chantiers » : l'accompagnement n'est plus adossé à des
+        modules ni à des vidéos (décision Adrien 31/07). Le plan tient
+        dans les jalons et les étapes.
      3. EXPORT PDF — mise en page vectorielle (jsPDF), texte sélectionnable,
         aux couleurs bleues de la maison. Pas de capture d'écran : un
         screenshot en PDF est flou et pèse dix fois plus.
@@ -38,33 +41,17 @@
   var ORGANISMES = {
     delivrabilite: {
       label: 'DÉLIVRABILITÉ',
-      chantiers: [4, 5, 3],
       note: 'Les jalons A1 et A2 sont critiques — ne pas avancer sans les avoir atteints.'
     },
     rentabilite: {
       label: 'RENTABILITÉ',
-      chantiers: [6, 4, 2],
       note: 'Le tableau de bord et le seuil de rentabilité sont la priorité immédiate.'
     },
     acquisition: {
       label: 'ACQUISITION',
-      chantiers: [7, 2, 9],
       note: 'À n\'activer qu\'une fois la délivrabilité et la rentabilité stabilisées.'
     }
   };
-
-  var CHANTIERS = [
-    'Alignement du dirigeant',
-    'Structure & modèle économique',
-    'Culture d\'entreprise & management',
-    'Organisation & pilotage',
-    'Délégation stratégique',
-    'Marges, trésorerie & rentabilité',
-    'Marketing & visibilité premium',
-    'Digitalisation & automatisation',
-    'Expérience client & fidélisation',
-    'Expansion & scalabilité'
-  ];
 
   /* Les 6 jalons du programme — décalages en jours depuis J0. */
   var JALONS = [
@@ -118,7 +105,6 @@
       coach: '',
       pointA: '', pointB: '',
       verrou: '', organisme: '',
-      chantiers: [],
       jalonStatus: {},          // { A1:'todo', … }
       semaines: [],             // [{ n, from, to, coach, focus, actions:[{txt,who,due,st}] }]
       createdAt: null, updatedAt: null, updatedBy: null
@@ -155,7 +141,7 @@
 
   /* ── Propositions à partir du questionnaire ────────────────────────────
      api/coaching-plan-suggest.js lit le questionnaire du client et propose
-     Point A / Point B / verrou / organisme / chantiers. Le mentor n'a plus
+     Point A / Point B / verrou / organisme. Le mentor n'a plus
      qu'à valider ou corriger : rien n'est écrit sans son passage.
      Silencieux en cas d'échec — l'assistant reste utilisable à la main. */
   function loadSuggestion(force) {
@@ -200,9 +186,6 @@
       if (s[k] && (overwrite || isTodo(p[k]))) p[k] = s[k];
     });
     if (s.organisme && (overwrite || !p.organisme)) p.organisme = s.organisme;
-    if ((s.chantiers || []).length && (overwrite || !(p.chantiers || []).length)) {
-      p.chantiers = s.chantiers.slice(0, 4);
-    }
   }
 
   function paintSuggBar() {
@@ -229,7 +212,6 @@
     { key: 'pointA',    t: 'Point A',            ico: '📍', sub: 'La situation aujourd\'hui, en une phrase factuelle et sans jugement.' },
     { key: 'pointB',    t: 'Point B à J180',     ico: '🎯', sub: 'L\'objectif à 6 mois, concret et mesurable.' },
     { key: 'verrou',    t: 'Verrou & organisme', ico: '🔒', sub: 'Le vrai problème, et l\'organisme qu\'il bloque.' },
-    { key: 'chantiers', t: 'Chantiers',          ico: '🛠️', sub: '2 à 4 chantiers — seulement ceux qui débloquent le palier suivant.' },
     { key: 'semaine',   t: 'Semaine 1',          ico: '⚡', sub: 'Le diagnostic initial. 3 actions maximum, chacune avec un responsable et une date.' }
   ];
 
@@ -271,14 +253,6 @@
       '.cp-org{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}',
       '.cp-org button{border:1.5px solid ' + C.line + ';background:#fff;border-radius:11px;padding:11px 8px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:800;color:' + C.muted + ';transition:all .13s}',
       '.cp-org button.on{border-color:' + C.main + ';background:' + C.ghost + ';color:' + C.main + '}',
-      '.cp-ch{display:flex;flex-direction:column;gap:6px}',
-      /* ⚠ La règle .cp-f input ci-dessus pose width:100% — elle attrapait aussi
-         la case à cocher, qui occupait alors toute la ligne et rejetait le
-         libellé hors de la carte (bug constaté 31/07). */
-      '.cp-ch input[type=checkbox]{width:auto;flex:0 0 auto;margin:0;accent-color:' + C.main + '}',
-      '.cp-ch label{display:flex;align-items:center;gap:9px;border:1.5px solid ' + C.line + ';border-radius:10px;padding:9px 11px;cursor:pointer;font-size:12.5px;font-weight:600;text-transform:none;letter-spacing:0;color:' + C.ink + ';margin:0}',
-      '.cp-ch label.on{border-color:' + C.main + ';background:' + C.ghost + '}',
-      '.cp-ch label.reco::after{content:"conseillé";margin-left:auto;font-size:9.5px;font-weight:800;color:' + C.main + ';background:#fff;border:1px solid ' + C.main + ';border-radius:999px;padding:1px 7px}',
       '.cp-act{border:1.5px solid ' + C.line + ';border-radius:11px;padding:11px;margin-bottom:9px}',
       '.cp-act .row{display:grid;grid-template-columns:1fr 130px;gap:8px;margin-top:7px}',
       '.cp-foot{display:flex;align-items:center;gap:9px;padding:14px 22px;border-top:1px solid ' + C.line + ';background:#fbfbfe}',
@@ -422,21 +396,6 @@
       h += '</div><div class="hint" id="cpOrgNote">' + (p.organisme ? esc(ORGANISMES[p.organisme].note) : 'Ordre de traitement : Délivrabilité → Rentabilité → Acquisition.') + '</div></div>';
       return h;
     },
-    chantiers: function () {
-      var p = W.plan;
-      var reco = p.organisme && ORGANISMES[p.organisme] ? ORGANISMES[p.organisme].chantiers : [];
-      var h = '<div class="cp-f"><label>Chantiers activés — 2 à 4</label><div class="cp-ch" id="cpCh">';
-      CHANTIERS.forEach(function (nom, i) {
-        var n = i + 1;
-        var on = (p.chantiers || []).indexOf(n) >= 0;
-        h += '<label class="' + (on ? 'on ' : '') + (reco.indexOf(n) >= 0 ? 'reco' : '') + '" data-ch="' + n + '">'
-          + '<input type="checkbox" data-chbox="' + n + '"' + (on ? ' checked' : '') + '> ' + n + '. ' + esc(nom) + '</label>';
-      });
-      h += '</div><div class="hint">Seulement ceux qui débloquent le palier suivant. '
-        + (reco.length ? 'Pour ' + esc(ORGANISMES[p.organisme].label) + ', les chantiers conseillés sont marqués.' : '')
-        + '</div></div>';
-      return h;
-    },
     semaine: function () {
       var p = W.plan;
       if (!p.semaines || !p.semaines.length) p.semaines = [semaine1(p)];
@@ -476,16 +435,6 @@
         });
       });
     }
-    if (key === 'chantiers') {
-      Array.prototype.forEach.call(document.querySelectorAll('#cpCh label'), function (l) {
-        l.addEventListener('click', function () {
-          setTimeout(function () {
-            var box = l.querySelector('input');
-            l.classList.toggle('on', box.checked);
-          }, 0);
-        });
-      });
-    }
   }
 
   /* Lit l'écran courant dans W.plan — appelé à chaque navigation. */
@@ -498,13 +447,6 @@
     if ((v = g('cpA')) !== null) p.pointA = v.trim();
     if ((v = g('cpB')) !== null) p.pointB = v.trim();
     if ((v = g('cpVerrou')) !== null) p.verrou = v.trim();
-    var boxes = document.querySelectorAll('[data-chbox]');
-    if (boxes.length) {
-      p.chantiers = [];
-      Array.prototype.forEach.call(boxes, function (b) {
-        if (b.checked) p.chantiers.push(parseInt(b.getAttribute('data-chbox'), 10));
-      });
-    }
     var focus = g('cpFocus');
     if (focus !== null) {
       if (!p.semaines || !p.semaines.length) p.semaines = [semaine1(p)];
@@ -525,11 +467,6 @@
 
   function finish() {
     var p = W.plan;
-    if ((p.chantiers || []).length > 4) {
-      alert('4 chantiers maximum — garde seulement ceux qui débloquent le palier suivant.');
-      go(4);
-      return;
-    }
     JALONS.forEach(function (j) { if (!p.jalonStatus[j.k]) p.jalonStatus[j.k] = 'todo'; });
     p.updatedAt = new Date().toISOString();
     if (!p.createdAt) p.createdAt = p.updatedAt;
@@ -576,21 +513,8 @@
     h += '<div class="cpv-rule">Un jalon manqué → analyse de cause avant de continuer. Jamais un simple report.</div>';
     h += '</div>';
 
-    /* BLOC 4 — Chantiers activés */
-    h += blocOpen('4', '🛠️', 'Chantiers activés');
-    if (!(p.chantiers || []).length) {
-      h += '<div class="cpv-p todo">' + TODO + '</div>';
-    } else {
-      h += '<div class="cpv-ch">';
-      p.chantiers.forEach(function (n) {
-        h += '<div class="cpv-chi"><div class="n">Chantier ' + n + '</div><div class="t">' + esc(CHANTIERS[n - 1] || '') + '</div></div>';
-      });
-      h += '</div>';
-    }
-    h += '</div>';
-
-    /* BLOC 5 — Actions de la semaine */
-    h += blocOpen('5', '⚡', 'Actions de la semaine');
+    /* BLOC 4 — Actions de la semaine */
+    h += blocOpen('4', '⚡', 'Actions de la semaine');
     (p.semaines || []).forEach(function (s, si) {
       h += '<div class="cpv-sem"><div class="cpv-semh"><b>Semaine ' + (s.n || si + 1) + '</b>'
         + '<span>du ' + esc(frDate(s.from)) + ' au ' + esc(frDate(s.to)) + '</span>'
@@ -723,24 +647,8 @@
     y += 1.5;
     text('Un jalon manqué → analyse de cause avant de continuer. Jamais un simple report.', M, 8.4, 'italic', C.muted);
 
-    /* ── 4. Chantiers ── */
-    bloc(4, 'Chantiers activés');
-    if (!(p.chantiers || []).length) {
-      text(TODO, M, 10, 'normal', C.muted);
-    } else {
-      p.chantiers.forEach(function (n) {
-        need(11);
-        fill(C.ghost); doc.roundedRect(M, y - 4, w, 9, 1.6, 1.6, 'F');
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.6); color(C.main);
-        doc.text('Chantier ' + n, M + 3, y + 1.4);
-        doc.setFont('helvetica', 'normal'); color(C.ink);
-        doc.text(CHANTIERS[n - 1] || '', M + 26, y + 1.4);
-        y += 12;
-      });
-    }
-
-    /* ── 5. Actions ── */
-    bloc(5, 'Actions de la semaine');
+    /* ── 4. Actions ── */
+    bloc(4, 'Actions de la semaine');
     (p.semaines || []).forEach(function (s, si) {
       need(20);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); color(C.dark);
@@ -791,7 +699,6 @@
     emptyPlan: emptyPlan,
     cycleStatus: cycle,
     JALONS: JALONS,
-    CHANTIERS: CHANTIERS,
     ORGANISMES: ORGANISMES,
     STATUTS: STATUTS
   };
