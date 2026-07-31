@@ -802,6 +802,54 @@
     .list-table tr.inactive-row:hover { opacity: 0.8; background: #f8fafc; }
 
     /* ── PLAN D'ACTION ── */
+    /* ── Plan d'action Elite Phénix (rendu par coaching-plan.js) ── */
+    .cpv-b { border:1px solid var(--line,#e4e1f7); border-radius:12px; margin-bottom:10px; background:#fff; overflow:hidden; }
+    .cpv-b > summary { list-style:none; cursor:pointer; padding:11px 14px; font-size:13px; font-weight:800; color:var(--blue-dark);
+      display:flex; align-items:center; gap:9px; background:linear-gradient(90deg,var(--blue-ghost),#fff); }
+    .cpv-b > summary::-webkit-details-marker { display:none; }
+    .cpv-b > summary .n { width:20px; height:20px; border-radius:6px; background:var(--blue-main); color:#fff;
+      font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .cpv-bb { padding:13px 15px 15px; }
+    .cpv-ab { display:grid; grid-template-columns:1fr 28px 1fr; align-items:center; gap:6px; }
+    .cpv-ab-c { border:1px solid var(--line,#e4e1f7); border-radius:11px; padding:11px 13px; }
+    .cpv-ab-c.b { border-color:var(--blue-main); background:var(--blue-ghost); }
+    .cpv-ab-c .k { font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+    .cpv-ab-c .v { font-size:13px; line-height:1.5; color:var(--ink); }
+    .cpv-arrow { text-align:center; color:var(--blue-main); font-size:17px; font-weight:800; }
+    .cpv-k { font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
+    .cpv-p { font-size:13px; line-height:1.5; color:var(--ink); }
+    .cpv-p.todo, .cpv-ab-c .v.todo { color:var(--muted); font-style:italic; }
+    .cpv-org { display:inline-block; font-size:13px; font-weight:800; letter-spacing:.5px; color:#fff;
+      background:var(--blue-main); border-radius:999px; padding:3px 13px; margin:2px 0 6px; }
+    .cpv-rule { margin-top:11px; font-size:11.5px; line-height:1.55; color:var(--muted);
+      background:var(--blue-ghost); border-radius:9px; padding:9px 11px; }
+    .cpv-tw { overflow-x:auto; }
+    .cpv-t { width:100%; border-collapse:collapse; font-size:12px; min-width:600px; }
+    .cpv-t th { text-align:left; padding:7px 9px; font-size:9.5px; text-transform:uppercase; letter-spacing:.6px;
+      color:var(--blue-dark); background:var(--blue-ghost); white-space:nowrap; }
+    .cpv-t td { padding:8px 9px; border-bottom:1px solid var(--line,#e4e1f7); vertical-align:top; }
+    .cpv-t td.mut { color:var(--muted); }
+    .cpv-t td.num { white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .cpv-t td.num .j { display:block; font-size:9.5px; color:var(--muted); }
+    .cpv-st { background:none; border:1px solid var(--line,#e4e1f7); border-radius:999px; padding:3px 9px;
+      font-size:10.5px; font-weight:800; cursor:pointer; font-family:inherit; white-space:nowrap; }
+    .cpv-st:hover { border-color:var(--blue-main); }
+    .cpv-st.sq { border-radius:8px; padding:3px 7px; font-size:13px; }
+    .cpv-ch { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:8px; }
+    .cpv-chi { border:1px solid var(--line,#e4e1f7); border-left:3px solid var(--blue-main); border-radius:9px; padding:9px 11px; }
+    .cpv-chi .n { font-size:9.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--blue-main); }
+    .cpv-chi .t { font-size:12.5px; font-weight:600; color:var(--ink); margin-top:1px; }
+    .cpv-sem { border:1px solid var(--line,#e4e1f7); border-radius:11px; padding:11px 13px; margin-bottom:9px; }
+    .cpv-semh { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; font-size:12.5px; margin-bottom:8px; }
+    .cpv-semh b { color:var(--blue-dark); }
+    .cpv-semh span { font-size:11.5px; color:var(--muted); }
+    .cpv-semh .c { margin-left:auto; font-weight:700; color:var(--blue-main); }
+    .cpv-act { display:flex; gap:9px; align-items:flex-start; padding:6px 0; border-top:1px dashed var(--line,#e4e1f7); }
+    .cpv-act .x { flex:1; }
+    .cpv-act .t { font-size:12.5px; line-height:1.45; color:var(--ink); }
+    .cpv-act .m { font-size:11px; color:var(--muted); margin-top:1px; }
+    .cpv-focus { margin-top:9px; font-size:11.5px; color:var(--blue-dark); background:var(--blue-ghost); border-radius:8px; padding:8px 10px; }
+
     .dp-plan-section {
       margin: 0 24px 16px;
       border: 1.5px solid var(--border);
@@ -1074,6 +1122,10 @@
     })();
   </script>
   <script src="nav.js"></script>
+  <!-- Plan d'action Elite Phénix : assistant, rendu et export PDF.
+       jsPDF n'est utilisé QUE par l'export (defer, sans blocage du rendu). -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+  <script src="coaching-plan.js" defer></script>
 </head>
 <body class="ambitio-v2">
 
@@ -2699,32 +2751,49 @@ function openDetail(id){
       </div>
 
       ${questionnaireBlock(c, id)}
-      <!-- PLAN D'ACTION -->
+      <!-- PLAN D'ACTION ELITE PHÉNIX (structuré — coaching-plan.js) -->
       <div class="dp-plan-section" style="margin: 0 0 16px">
         <div class="dp-plan-header">
-          <div class="dp-plan-title">🎯 Plan d'action client
-            ${c.planAction ? '<span class="dp-plan-badge">✅ Défini</span>' : '<span class="dp-plan-badge" style="background:#fef3c7;color:#92400e">À compléter</span>'}
+          <div class="dp-plan-title">🎯 Plan d'action — Elite Phénix
+            ${c.planV2 ? '<span class="dp-plan-badge">✅ Généré</span>' : '<span class="dp-plan-badge" style="background:#fef3c7;color:#92400e">À générer</span>'}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            ${c.planV2 ? `
+              <button class="dp-plan-edit-btn" onclick="openPlanWizard('${id}')">✏️ Modifier / régénérer</button>
+              <button class="btn btn-primary btn-sm" onclick="exportPlanPdf('${id}')">📄 Exporter en PDF</button>
+            ` : ''}
+          </div>
+        </div>
+        <div class="dp-plan-body">
+          <div id="planV2-${id}">
+            ${c.planV2
+              ? window.CoachingPlan ? window.CoachingPlan.render(c.planV2, id) : ''
+              : `<div class="dp-plan-empty">
+                  <div class="dp-plan-empty-icon">🎯</div>
+                  <div>Aucun plan d'action généré</div>
+                  <div class="dp-plan-empty-sub">6 questions à partir du questionnaire du client, puis le plan est prêt</div>
+                  <button class="dp-plan-btn-ia" onclick="openPlanWizard('${id}')">✨ Générer le plan d'action</button>
+                </div>`
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- NOTES LIBRES SUR LE PLAN (champ historique planAction) -->
+      <div class="dp-plan-section" style="margin: 0 0 16px">
+        <div class="dp-plan-header">
+          <div class="dp-plan-title">📝 Notes libres
+            ${c.planAction ? '<span class="dp-plan-badge">✅ Défini</span>' : ''}
           </div>
           <div style="display:flex;gap:8px;align-items:center">
-            ${c.planAction
-              ? `<button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">✏️ Modifier</button>`
-              : `<button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">+ Rédiger</button>`
-            }
+            <button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">${c.planAction ? '✏️ Modifier' : '+ Rédiger'}</button>
           </div>
         </div>
         <div class="dp-plan-body">
           <div id="planView-${id}">
             ${c.planAction
               ? `<div class="dp-plan-content">${escHtml(c.planAction)}</div>`
-              : `<div class="dp-plan-empty">
-                  <div class="dp-plan-empty-icon">🎯</div>
-                  <div>Aucun plan d'action défini</div>
-                  <div class="dp-plan-empty-sub">Rédigez le plan manuellement ou générez-le avec l'IA</div>
-                  <button class="dp-plan-btn-ia">
-                    ✨ Générer avec l'IA
-                    <span class="soon-tag">Bientôt</span>
-                  </button>
-                </div>`
+              : `<div class="dp-plan-empty-sub" style="padding:6px 0">Notes libres du coach — complètent le plan structuré ci-dessus.</div>`
             }
           </div>
           <div id="planEdit-${id}" style="display:none">
@@ -2733,12 +2802,8 @@ function openDetail(id){
               <button class="dp-plan-edit-btn" onclick="togglePlanEdit('${id}')">Annuler</button>
               <button class="btn btn-primary btn-sm" onclick="savePlanAction('${id}')">💾 Sauvegarder</button>
             </div>
-            <div style="margin-top:10px;padding:10px 12px;background:var(--purple-light);border-radius:8px;display:flex;align-items:center;gap:8px">
-              <span style="font-size:18px">✨</span>
-              <div>
-                <div style="font-size:12px;font-weight:700;color:var(--purple)">Génération IA — Bientôt disponible</div>
-                <div style="font-size:11px;color:#818cf8;margin-top:2px">L'IA analysera les séances passées pour générer un plan d'action personnalisé</div>
-              </div>
+            <div style="margin-top:10px;padding:10px 12px;background:var(--blue-ghost);border-radius:8px;font-size:11.5px;color:var(--muted);line-height:1.5">
+              Ces notes sont libres et n'apparaissent pas dans le PDF client — le plan structuré ci-dessus est le document remis au client.
             </div>
           </div>
         </div>
@@ -3159,6 +3224,67 @@ function togglePlanEdit(clientId){
   view.style.display = isEditing ? '' : 'none';
   edit.style.display = isEditing ? 'none' : '';
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   PLAN D'ACTION ELITE PHÉNIX — assistant, statuts, export
+   ─────────────────────────────────────────────────────────────────
+   Le plan vit dans clients/{id}.planV2 (objet structuré). Toute la
+   logique de génération, de rendu et de PDF est dans coaching-plan.js :
+   cette page ne fait que le stockage et le rafraîchissement.
+══════════════════════════════════════════════════════════════════ */
+function openPlanWizard(clientId){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+  if(!window.CoachingPlan){ showToast('Module plan non chargé — recharge la page','error'); return; }
+  window.CoachingPlan.openWizard(c, {
+    onSave: async function(plan){
+      plan.updatedBy = (window._userEmail || window._role || null);
+      c.planV2 = plan;
+      try{
+        await window._updateDoc(window._doc(window._db,'clients',clientId),{planV2: plan});
+        showToast('🎯 Plan d\'action généré !','success');
+        openDetail(clientId);
+      }catch(e){ showToast('Erreur: '+e.message,'error'); }
+    }
+  });
+}
+
+function exportPlanPdf(clientId){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.planV2) return;
+  if(!window.CoachingPlan){ showToast('Module plan non chargé','error'); return; }
+  try{ window.CoachingPlan.exportPdf(c.planV2, c); }
+  catch(e){ showToast('Export PDF impossible : '+e.message,'error'); }
+}
+
+/* Statuts cliquables (jalons et actions) — délégation d'événement : le
+   plan est ré-rendu à chaque ouverture de fiche, un listener par bouton
+   ne survivrait pas. */
+document.addEventListener('click', async function(e){
+  const btn = e.target.closest && e.target.closest('[data-cp-jalon],[data-cp-act]');
+  if(!btn) return;
+  const clientId = btn.getAttribute('data-cp-id');
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.planV2 || !window.CoachingPlan) return;
+  const p = c.planV2;
+  const jal = btn.getAttribute('data-cp-jalon');
+  if(jal){
+    p.jalonStatus = p.jalonStatus || {};
+    p.jalonStatus[jal] = window.CoachingPlan.cycleStatus(p.jalonStatus[jal]);
+  } else {
+    const parts = (btn.getAttribute('data-cp-act')||'').split('.');
+    const s = (p.semaines||[])[+parts[0]];
+    const a = s && (s.actions||[])[+parts[1]];
+    if(!a) return;
+    a.st = window.CoachingPlan.cycleStatus(a.st);
+  }
+  p.updatedAt = new Date().toISOString();
+  /* Re-rendu immédiat du seul bloc plan : la fiche ne clignote pas. */
+  const host = document.getElementById('planV2-'+clientId);
+  if(host) host.innerHTML = window.CoachingPlan.render(p, clientId);
+  try{ await window._updateDoc(window._doc(window._db,'clients',clientId),{planV2: p}); }
+  catch(err){ showToast('Statut non sauvegardé : '+err.message,'error'); }
+});
 
 async function savePlanAction(clientId){
   const c = _clients.find(x=>x._id===clientId);
