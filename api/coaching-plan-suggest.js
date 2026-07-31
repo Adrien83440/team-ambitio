@@ -13,7 +13,8 @@
 // Body : { clientId, force? }
 //
 // Réponses
-//   200 { ok:true, suggestion:{ pointA, pointB, verrou, organisme },
+//   200 { ok:true, suggestion:{ pointA, pointB, verrou, organisme, synthese,
+//         chiffres[], problemes[], objectifs[], kpis[], risques[] },
 //         cached:bool, model }
 //   200 { ok:false, error:'no_questionnaire' }   ← rien à analyser
 //   400/401/403/404/500
@@ -60,7 +61,7 @@ function buildPrompt(client, q) {
     '',
     lignes,
     '',
-    'Produis une proposition pour quatre points. Le mentor la relira et la corrigera.',
+    'Produis une proposition complète de plan d\'action. Le mentor la relira et la corrigera.',
     '',
     'RÈGLES ABSOLUES',
     '- N\'invente AUCUN chiffre. Utilise uniquement ceux du questionnaire ci-dessus.',
@@ -79,9 +80,25 @@ function buildPrompt(client, q) {
     '   delivrabilite = le dirigeant est le goulot, rien ne tourne sans lui.',
     '   rentabilite  = ça produit du chiffre mais pas de résultat ni de trésorerie.',
     '   acquisition  = la machine tourne et est rentable, il manque du volume.',
+    '5. synthese — UNE phrase forte : de quoi vers quoi on emmène ce dirigeant en 6 mois.',
+    '6. chiffres — 4 à 8 repères du dossier, tels quels : [{"label":"CA annuel","valeur":"2 400 000 €"}].',
+    '   Uniquement des valeurs présentes dans le questionnaire.',
+    '7. problemes — 3 à 5 problématiques, la plus grave d\'abord :',
+    '   [{"titre":"Micro-gestion chronique","detail":"une phrase factuelle"}]',
+    '8. objectifs — 3 à 5 objectifs des 6 mois, concrets : ["...", "..."]',
+    '9. kpis — 4 à 8 indicateurs à suivre :',
+    '   [{"cat":"Financier|Commercial|Opérationnel|Humain","nom":"Marge nette",',
+    '     "freq":"Mensuel","actuel":"8 %","cible":"12 %"}]',
+    '   « actuel » vient du questionnaire ; s\'il est inconnu, mets "—" (jamais une invention).',
+    '10. risques — 2 à 4 risques ou freins : [{"titre":"...","detail":"..."}]',
     '',
     'Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code :',
-    '{"pointA":"...","pointB":"...","verrou":"...","organisme":"..."}',
+    '{"pointA":"...","pointB":"...","verrou":"...","organisme":"...","synthese":"...",',
+    ' "chiffres":[{"label":"...","valeur":"..."}],',
+    ' "problemes":[{"titre":"...","detail":"..."}],',
+    ' "objectifs":["..."],',
+    ' "kpis":[{"cat":"...","nom":"...","freq":"...","actuel":"...","cible":"..."}],',
+    ' "risques":[{"titre":"...","detail":"..."}]}',
   ].join('\n');
 }
 
@@ -100,11 +117,43 @@ function sanitize(raw) {
   const str = (v) => String(v == null ? '' : v).trim().slice(0, 400);
   const org = ORGANISMES.indexOf(String(raw.organisme || '').toLowerCase()) >= 0
     ? String(raw.organisme).toLowerCase() : '';
+  /* Listes bornées et normalisées — le modèle peut être bavard ou hors
+     format ; rien ne sort d'ici sans être passé au filtre. */
+  const list = (arr, max, shape) => (Array.isArray(arr) ? arr : [])
+    .map(shape).filter(Boolean).slice(0, max);
+  const CATS = ['Financier', 'Commercial', 'Opérationnel', 'Humain'];
+
   return {
     pointA: str(raw.pointA),
     pointB: str(raw.pointB),
     verrou: str(raw.verrou),
     organisme: org,
+    synthese: str(raw.synthese),
+    chiffres: list(raw.chiffres, 8, (x) => {
+      const l = str(x && x.label), v = str(x && x.valeur);
+      return (l && v) ? { label: l.slice(0, 40), valeur: v.slice(0, 40) } : null;
+    }),
+    problemes: list(raw.problemes, 5, (x) => {
+      const t = str(x && x.titre);
+      return t ? { titre: t.slice(0, 80), detail: str(x && x.detail) } : null;
+    }),
+    objectifs: list(raw.objectifs, 5, (x) => { const v = str(x); return v || null; }),
+    kpis: list(raw.kpis, 8, (x) => {
+      const n = str(x && x.nom);
+      if (!n) return null;
+      const c = str(x && x.cat);
+      return {
+        cat: CATS.indexOf(c) >= 0 ? c : 'Opérationnel',
+        nom: n.slice(0, 60),
+        freq: str(x && x.freq).slice(0, 20) || 'Mensuel',
+        actuel: str(x && x.actuel).slice(0, 30) || '—',
+        cible: str(x && x.cible).slice(0, 30) || '—',
+      };
+    }),
+    risques: list(raw.risques, 4, (x) => {
+      const t = str(x && x.titre);
+      return t ? { titre: t.slice(0, 80), detail: str(x && x.detail) } : null;
+    }),
   };
 }
 
@@ -166,7 +215,7 @@ module.exports = async (req, res) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 900,
+        max_tokens: 2500,
         messages: [{ role: 'user', content: buildPrompt(client, q) }],
       }),
     });

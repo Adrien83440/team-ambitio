@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Mon plan d'action — Elite Phénix</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   Mon plan d'action — page CLIENT (lien unique, lecture seule)
+   Page publique autonome : aucun SDK Firebase, aucune connexion. Elle
+   n'appelle que /api/coaching-plan-public?t=TOKEN.
+   Le rendu des blocs vient de coaching-plan.js — le MÊME module que la
+   fiche coach : ce que le client lit est exactement ce que le coach voit.
+   Remplace l'envoi de PDF : le lien montre toujours la version du jour.
+   ═══════════════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --blue-main:#1a3dce; --blue-dark:#0f1f5c; --blue-light:#4f7ef8; --blue-ghost:#f0f4ff;
+  --ink:#0b0d17; --muted:#6b7280; --line:#e4e1f7; --green:#10b981; --orange:#f59e0b;
+}
+html, body { background:#f6f7fc; color:var(--ink); font-size:14px; line-height:1.5;
+  font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+
+.pc-top { background:linear-gradient(135deg,var(--blue-main),var(--blue-dark)); color:#fff; }
+.pc-top-in { max-width:920px; margin:0 auto; padding:24px 22px 26px; }
+.pc-badge { display:inline-block; font-size:10px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
+  background:rgba(255,255,255,.16); border-radius:999px; padding:4px 11px; }
+.pc-top h1 { font-size:24px; font-weight:800; letter-spacing:-.4px; margin-top:11px; }
+.pc-top p { font-size:13px; opacity:.8; margin-top:5px; }
+.pc-main { max-width:920px; margin:0 auto; padding:20px 22px 60px; }
+.pc-stamp { font-size:11.5px; color:var(--muted); background:#fff; border:1px solid var(--line);
+  border-radius:10px; padding:9px 13px; margin-bottom:16px; }
+.pc-gate { max-width:440px; margin:80px auto; background:#fff; border:1px solid var(--line);
+  border-radius:16px; padding:34px 28px; text-align:center; }
+.pc-gate .i { font-size:34px; }
+.pc-gate h2 { font-size:17px; margin:12px 0 8px; }
+.pc-gate p { font-size:13px; color:var(--muted); line-height:1.6; }
+.pc-load { text-align:center; color:var(--muted); padding:70px 10px; font-size:13px; }
+.pc-foot { margin-top:26px; text-align:center; font-size:11px; color:#9aa0b4; line-height:1.6; }
+@media print {
+  .pc-top { background:var(--blue-dark) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .pc-print { display:none !important; }
+  .cpv-b > summary { background:var(--blue-ghost) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+}
+.pc-print { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.4); color:#fff;
+  border-radius:9px; padding:7px 14px; font-size:12px; font-weight:700; cursor:pointer;
+  font-family:inherit; margin-top:14px; }
+.pc-print:hover { background:rgba(255,255,255,.26); }
+
+/* ── Blocs du plan (mêmes classes que la fiche coach) ── */
+.cpv-b { border:1px solid var(--line); border-radius:12px; margin-bottom:10px; background:#fff; overflow:hidden; }
+.cpv-b > summary { list-style:none; cursor:pointer; padding:12px 15px; font-size:13.5px; font-weight:800;
+  color:var(--blue-dark); display:flex; align-items:center; gap:9px; background:linear-gradient(90deg,var(--blue-ghost),#fff); }
+.cpv-b > summary::-webkit-details-marker { display:none; }
+.cpv-b > summary .n { width:20px; height:20px; border-radius:6px; background:var(--blue-main); color:#fff;
+  font-size:11px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.cpv-bb { padding:14px 16px 16px; }
+.cpv-hero { background:linear-gradient(135deg,var(--blue-main),var(--blue-dark)); color:#fff;
+  border-radius:14px; padding:15px 17px; margin-bottom:12px; }
+.cpv-hero .k { font-size:10px; font-weight:800; letter-spacing:.9px; text-transform:uppercase; opacity:.72; }
+.cpv-hero .v { font-size:15px; font-weight:700; line-height:1.5; margin-top:5px; }
+.cpv-nums { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:9px; margin-bottom:12px; }
+.cpv-num { border:1px solid var(--line); border-radius:11px; padding:10px 12px; background:#fff; }
+.cpv-num .l { font-size:9.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); }
+.cpv-num .v { font-size:15px; font-weight:800; color:var(--blue-dark); margin-top:2px; }
+.cpv-ab { display:grid; grid-template-columns:1fr 28px 1fr; align-items:center; gap:6px; }
+.cpv-ab-c { border:1px solid var(--line); border-radius:11px; padding:11px 13px; }
+.cpv-ab-c.b { border-color:var(--blue-main); background:var(--blue-ghost); }
+.cpv-ab-c .k { font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+.cpv-ab-c .v { font-size:13px; line-height:1.5; }
+.cpv-ab-c .v.todo, .cpv-p.todo { color:var(--muted); font-style:italic; }
+.cpv-arrow { text-align:center; color:var(--blue-main); font-size:17px; font-weight:800; }
+.cpv-k { font-size:10px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); margin-bottom:3px; }
+.cpv-p { font-size:13px; line-height:1.5; }
+.cpv-ul { margin:6px 0 0; padding-left:17px; }
+.cpv-ul li { font-size:12.5px; line-height:1.55; margin:4px 0; }
+.cpv-org { display:inline-block; font-size:13px; font-weight:800; letter-spacing:.5px; color:#fff;
+  background:var(--blue-main); border-radius:999px; padding:3px 13px; margin:2px 0 6px; }
+.cpv-pbs { display:flex; flex-direction:column; gap:7px; margin-top:6px; }
+.cpv-pb { border-left:3px solid var(--blue-main); background:var(--blue-ghost); border-radius:0 9px 9px 0; padding:9px 12px; }
+.cpv-pb.warn { border-left-color:var(--orange); background:#fff8ec; }
+.cpv-pb .t { font-size:12.5px; font-weight:700; color:var(--blue-dark); }
+.cpv-pb.warn .t { color:#8a5a08; }
+.cpv-pb .d { font-size:12px; color:var(--muted); line-height:1.5; margin-top:2px; }
+.cpv-rule { margin-top:11px; font-size:11.5px; line-height:1.55; color:var(--muted);
+  background:var(--blue-ghost); border-radius:9px; padding:9px 11px; }
+.cpv-tw { overflow-x:auto; }
+.cpv-t { width:100%; border-collapse:collapse; font-size:12px; min-width:560px; }
+.cpv-t th { text-align:left; padding:7px 9px; font-size:9.5px; text-transform:uppercase; letter-spacing:.6px;
+  color:var(--blue-dark); background:var(--blue-ghost); white-space:nowrap; }
+.cpv-t td { padding:8px 9px; border-bottom:1px solid var(--line); vertical-align:top; }
+.cpv-t td.mut { color:var(--muted); }
+.cpv-t td.num { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.cpv-t td.num .j { display:block; font-size:9.5px; color:var(--muted); }
+.cpv-t td.goal { font-weight:800; color:var(--green); }
+.cpv-cat { font-size:9.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
+  color:var(--blue-main); background:var(--blue-ghost); border-radius:999px; padding:2px 8px; white-space:nowrap; }
+.cpv-st { background:none; border:1px solid var(--line); border-radius:999px; padding:3px 9px;
+  font-size:10.5px; font-weight:800; white-space:nowrap; }
+.cpv-st.sq { border-radius:8px; padding:3px 7px; font-size:13px; }
+.cpv-st.ro { cursor:default; border-color:transparent; }
+.cpv-sem { border:1px solid var(--line); border-radius:11px; padding:11px 13px; margin-bottom:9px; }
+.cpv-semh { display:flex; align-items:baseline; gap:9px; flex-wrap:wrap; font-size:12.5px; margin-bottom:8px; }
+.cpv-semh b { color:var(--blue-dark); }
+.cpv-semh span { font-size:11.5px; color:var(--muted); }
+.cpv-semh .c { margin-left:auto; font-weight:700; color:var(--blue-main); }
+.cpv-act { display:flex; gap:9px; align-items:flex-start; padding:6px 0; border-top:1px dashed var(--line); }
+.cpv-act .x { flex:1; }
+.cpv-act .t { font-size:12.5px; line-height:1.45; }
+.cpv-act .m { font-size:11px; color:var(--muted); margin-top:1px; }
+.cpv-focus { margin-top:9px; font-size:11.5px; color:var(--blue-dark); background:var(--blue-ghost); border-radius:8px; padding:8px 10px; }
+@media (max-width:640px){ .cpv-ab{grid-template-columns:1fr} .cpv-arrow{transform:rotate(90deg)} }
+</style>
+</head>
+<body>
+
+<div class="pc-top" id="pcTop" style="display:none">
+  <div class="pc-top-in">
+    <span class="pc-badge">Elite Phénix</span>
+    <h1 id="pcTitle">Mon plan d'action</h1>
+    <p id="pcSub"></p>
+    <button class="pc-print" onclick="window.print()">🖨️ Imprimer / enregistrer en PDF</button>
+  </div>
+</div>
+
+<div class="pc-main" id="pcRoot">
+  <div class="pc-load">Chargement de votre plan…</div>
+</div>
+
+<!-- Rendu des blocs : MÊME module que la fiche coach (une seule vérité). -->
+<script src="coaching-plan.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+  function gate(titre, msg) {
+    document.getElementById('pcTop').style.display = 'none';
+    document.getElementById('pcRoot').innerHTML =
+      '<div class="pc-gate"><div class="i">🔒</div><h2>' + esc(titre) + '</h2><p>' + esc(msg) + '</p></div>';
+  }
+
+  function frDateTime(v) {
+    var ms = null;
+    if (typeof v === 'number') ms = v;
+    else if (typeof v === 'string') { var d = new Date(v); if (!isNaN(d.getTime())) ms = d.getTime(); }
+    if (ms == null) return '';
+    var d2 = new Date(ms), p = function (n) { return String(n).padStart(2, '0'); };
+    return p(d2.getDate()) + '/' + p(d2.getMonth() + 1) + '/' + d2.getFullYear();
+  }
+
+  var m = (window.location.search || '').match(/[?&]t=([^&]+)/);
+  var token = m ? decodeURIComponent(m[1]) : '';
+  if (!token) {
+    gate('Lien invalide', 'Ce lien n\'est plus valable. Demandez-en un nouveau à votre coach.');
+    return;
+  }
+
+  fetch('/api/coaching-plan-public?t=' + encodeURIComponent(token), { credentials: 'omit', cache: 'no-store' })
+    .then(function (r) {
+      if (r.status === 403) { gate('Lien invalide ou expiré', 'Ce lien n\'est plus valable. Demandez-en un nouveau à votre coach.'); return null; }
+      if (!r.ok) throw new Error('http_' + r.status);
+      return r.json();
+    })
+    .then(function (data) {
+      if (!data) return;
+      if (data.ok !== true || !data.plan) {
+        gate('Lien invalide ou expiré', 'Ce lien n\'est plus valable. Demandez-en un nouveau à votre coach.');
+        return;
+      }
+      var c = data.client || {};
+      document.getElementById('pcTop').style.display = '';
+      document.getElementById('pcTitle').textContent = 'Plan d\'action' + (c.prenom ? ' — ' + c.prenom : '');
+      var bits = [];
+      if (c.entreprise) bits.push(c.entreprise);
+      if (data.plan.coach) bits.push('Coach : ' + data.plan.coach);
+      var maj = frDateTime(data.updatedAt);
+      if (maj) bits.push('mis à jour le ' + maj);
+      document.getElementById('pcSub').textContent = bits.join(' · ');
+
+      /* readonly : mêmes blocs, sans statut cliquable. */
+      var html = window.CoachingPlan
+        ? window.CoachingPlan.render(data.plan, null, { readonly: true })
+        : '';
+      document.getElementById('pcRoot').innerHTML = html
+        + '<div class="pc-foot">Ce plan est mis à jour par votre coach après chaque séance.<br>'
+        + 'Ce lien affiche toujours la version la plus récente — inutile de le redemander.</div>';
+      /* Tous les blocs ouverts : le client lit d'une traite, il n'a pas à
+         deviner qu'il faut déplier. */
+      Array.prototype.forEach.call(document.querySelectorAll('#pcRoot details'), function (d) { d.open = true; });
+    })
+    .catch(function () {
+      gate('Indisponible', 'Impossible d\'afficher votre plan pour le moment. Réessayez dans un instant.');
+    });
+})();
+</script>
+</body>
+</html>

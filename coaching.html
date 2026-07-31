@@ -806,6 +806,27 @@
 
     /* ── PLAN D'ACTION ── */
     /* ── Plan d'action Elite Phénix (rendu par coaching-plan.js) ── */
+    /* ── Plan d'action : blocs enrichis (rendu partagé fiche coach / page client) ── */
+    .cpv-hero { background:linear-gradient(135deg,var(--blue-main),var(--blue-dark)); color:#fff;
+      border-radius:14px; padding:15px 17px; margin-bottom:12px; }
+    .cpv-hero .k { font-size:10px; font-weight:800; letter-spacing:.9px; text-transform:uppercase; opacity:.72; }
+    .cpv-hero .v { font-size:15px; font-weight:700; line-height:1.5; margin-top:5px; }
+    .cpv-nums { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:9px; margin-bottom:12px; }
+    .cpv-num { border:1px solid var(--line,#e4e1f7); border-radius:11px; padding:10px 12px; background:#fff; }
+    .cpv-num .l { font-size:9.5px; font-weight:800; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); }
+    .cpv-num .v { font-size:15px; font-weight:800; color:var(--blue-dark); margin-top:2px; }
+    .cpv-ul { margin:6px 0 0; padding-left:17px; }
+    .cpv-ul li { font-size:12.5px; line-height:1.55; color:var(--ink); margin:4px 0; }
+    .cpv-pbs { display:flex; flex-direction:column; gap:7px; margin-top:6px; }
+    .cpv-pb { border-left:3px solid var(--blue-main); background:var(--blue-ghost); border-radius:0 9px 9px 0; padding:9px 12px; }
+    .cpv-pb.warn { border-left-color:var(--orange,#f59e0b); background:#fff8ec; }
+    .cpv-pb .t { font-size:12.5px; font-weight:700; color:var(--blue-dark); }
+    .cpv-pb.warn .t { color:#8a5a08; }
+    .cpv-pb .d { font-size:12px; color:var(--muted); line-height:1.5; margin-top:2px; }
+    .cpv-cat { font-size:9.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
+      color:var(--blue-main); background:var(--blue-ghost); border-radius:999px; padding:2px 8px; white-space:nowrap; }
+    .cpv-t td.goal { font-weight:800; color:var(--green,#10b981); }
+    .cpv-st.ro { cursor:default; border-color:transparent; }
     .cpv-b { border:1px solid var(--line,#e4e1f7); border-radius:12px; margin-bottom:10px; background:#fff; overflow:hidden; }
     .cpv-b > summary { list-style:none; cursor:pointer; padding:11px 14px; font-size:13px; font-weight:800; color:var(--blue-dark);
       display:flex; align-items:center; gap:9px; background:linear-gradient(90deg,var(--blue-ghost),#fff); }
@@ -1350,7 +1371,7 @@
 <script type="module">
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc,query,where}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc,deleteField,query,where}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   const app=initializeApp({
     apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
     authDomain:"ambitio-team.firebaseapp.com",
@@ -1362,7 +1383,7 @@
   const auth=getAuth(app),db=getFirestore(app);
   window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
   window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
-  window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._signOut=signOut;
+  window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._deleteField=deleteField;window._signOut=signOut;
   window._query=query;window._where=where;
 
   onAuthStateChanged(auth,async user=>{
@@ -2786,7 +2807,9 @@ function openDetail(id){
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             ${c.planV2 ? `
               <button class="dp-plan-edit-btn" onclick="openPlanWizard('${id}')">✏️ Modifier / régénérer</button>
-              <button class="btn btn-primary btn-sm" onclick="exportPlanPdf('${id}')">📄 Exporter en PDF</button>
+              <button class="btn btn-primary btn-sm" onclick="sharePlan('${id}')">🔗 Lien client</button>
+              <button class="dp-plan-edit-btn" onclick="exportPlanPdf('${id}')">📄 PDF</button>
+              <button class="dp-plan-edit-btn" style="color:#dc2626;border-color:#f3c9c9" onclick="deletePlan('${id}')">🗑 Supprimer</button>
             ` : ''}
           </div>
         </div>
@@ -3273,6 +3296,53 @@ function openPlanWizard(clientId){
       }catch(e){ showToast('Erreur: '+e.message,'error'); }
     }
   });
+}
+
+/* ═══ LIEN CLIENT ═══════════════════════════════════════════════════
+   Un lien unique par client : il consulte son plan quand il veut, et voit
+   toujours la version du jour. C'est ce qui remplace l'envoi de PDF.
+   Le token vit dans clients/{id}.planShare — api/coaching-plan-public.js
+   ne sert QUE le plan, jamais le reste de la fiche. */
+function planToken(){
+  var b = new Uint8Array(24);
+  (window.crypto || window.msCrypto).getRandomValues(b);
+  var s = ''; for (var i=0;i<b.length;i++) s += String.fromCharCode(b[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function sharePlan(clientId){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.planV2) return;
+  let share = c.planShare;
+  if(!share || share.active !== true || !share.token){
+    share = { token: planToken(), active: true, createdAt: new Date().toISOString() };
+    try{
+      await window._updateDoc(window._doc(window._db,'clients',clientId),{planShare: share});
+      c.planShare = share;
+    }catch(e){ showToast('Erreur: '+e.message,'error'); return; }
+  }
+  const url = window.location.origin + '/plan-client.html?t=' + share.token;
+  try{
+    await navigator.clipboard.writeText(url);
+    showToast('🔗 Lien copié — à envoyer au client','success');
+  }catch(e){ window.prompt('Lien à envoyer au client :', url); }
+}
+
+/* Suppression du plan — le lien client meurt avec lui (l'endpoint refuse
+   dès que planV2 n'existe plus). */
+async function deletePlan(clientId){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.planV2) return;
+  if(!confirm('Supprimer le plan d\'action de ce client ?\n\nLe lien client cessera immédiatement de fonctionner. Cette action est définitive.')) return;
+  try{
+    await window._updateDoc(window._doc(window._db,'clients',clientId),{
+      planV2: window._deleteField ? window._deleteField() : null,
+      planShare: window._deleteField ? window._deleteField() : null
+    });
+    delete c.planV2; delete c.planShare;
+    showToast('🗑 Plan d\'action supprimé','success');
+    openDetail(clientId);
+  }catch(e){ showToast('Erreur: '+e.message,'error'); }
 }
 
 function exportPlanPdf(clientId){

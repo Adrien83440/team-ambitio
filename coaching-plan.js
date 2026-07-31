@@ -104,7 +104,12 @@
       startDate: toYMD(new Date()),
       coach: '',
       pointA: '', pointB: '',
-      verrou: '', organisme: '',
+      verrou: '', organisme: '', synthese: '',
+      chiffres: [],             // [{label, valeur}]  repères du dossier
+      problemes: [],            // [{titre, detail}]
+      objectifs: [],            // ['…']
+      kpis: [],                 // [{cat, nom, freq, actuel, cible}]
+      risques: [],              // [{titre, detail}]
       jalonStatus: {},          // { A1:'todo', … }
       semaines: [],             // [{ n, from, to, coach, focus, actions:[{txt,who,due,st}] }]
       createdAt: null, updatedAt: null, updatedBy: null
@@ -186,6 +191,10 @@
       if (s[k] && (overwrite || isTodo(p[k]))) p[k] = s[k];
     });
     if (s.organisme && (overwrite || !p.organisme)) p.organisme = s.organisme;
+    if (s.synthese && (overwrite || isTodo(p.synthese))) p.synthese = s.synthese;
+    ['chiffres', 'problemes', 'objectifs', 'kpis', 'risques'].forEach(function (k) {
+      if ((s[k] || []).length && (overwrite || !(p[k] || []).length)) p[k] = s[k];
+    });
   }
 
   function paintSuggBar() {
@@ -477,51 +486,90 @@
   /* ═════════════════════════════════════════════════════════════════════
      RENDU DU PLAN — 5 blocs, aux couleurs bleues de la maison
      ═══════════════════════════════════════════════════════════════════ */
-  function render(plan, clientId) {
+  /* opts.readonly = vue client (lien public) : mêmes blocs, mais aucun
+     statut cliquable et aucune mention interne. Un seul rendu pour les deux
+     vues — deux copies auraient fini par diverger. */
+  function render(plan, clientId, opts) {
     if (!plan) return '';
-    var p = plan;
+    var p = plan, ro = !!(opts && opts.readonly);
     var h = '<div class="cpv">';
+    var n = 0;
 
-    /* BLOC 1 — Point A → Point B */
-    h += blocOpen('1', '📍', 'Point A → Point B');
+    /* Synthèse — la phrase qui résume les 6 mois, en tête. */
+    if (!isTodo(p.synthese)) {
+      h += '<div class="cpv-hero"><div class="k">Ce qu\'on vise en 6 mois</div><div class="v">' + esc(p.synthese) + '</div></div>';
+    }
+
+    /* Repères du dossier — les chiffres réels, tels qu\'ils sont. */
+    if ((p.chiffres || []).length) {
+      h += '<div class="cpv-nums">';
+      p.chiffres.forEach(function (c) {
+        h += '<div class="cpv-num"><div class="l">' + esc(c.label) + '</div><div class="v">' + esc(c.valeur) + '</div></div>';
+      });
+      h += '</div>';
+    }
+
+    /* BLOC — Point A → Point B */
+    h += blocOpen(++n, '📍', 'Point A → Point B');
     h += '<div class="cpv-ab">';
     h += '<div class="cpv-ab-c"><div class="k">Point A — aujourd\'hui</div><div class="v' + (isTodo(p.pointA) ? ' todo' : '') + '">' + esc(val(p.pointA)) + '</div></div>';
     h += '<div class="cpv-arrow">→</div>';
-    h += '<div class="cpv-ab-c b"><div class="k">Point B — à J180</div><div class="v' + (isTodo(p.pointB) ? ' todo' : '') + '">' + esc(val(p.pointB)) + '</div></div>';
-    h += '</div></div>';
+    h += '<div class="cpv-ab-c b"><div class="k">Point B — à 6 mois</div><div class="v' + (isTodo(p.pointB) ? ' todo' : '') + '">' + esc(val(p.pointB)) + '</div></div>';
+    h += '</div>';
+    if ((p.objectifs || []).length) {
+      h += '<div class="cpv-k" style="margin-top:13px">Objectifs</div><ul class="cpv-ul">';
+      p.objectifs.forEach(function (o) { h += '<li>' + esc(o) + '</li>'; });
+      h += '</ul>';
+    }
+    h += '</div>';
 
-    /* BLOC 2 — Verrou & organisme */
+    /* BLOC — Diagnostic : verrou, organisme, problématiques */
     var org = ORGANISMES[p.organisme];
-    h += blocOpen('2', '🔒', 'Verrou principal & organisme bloqué');
-    h += '<div class="cpv-k">Verrou identifié</div><div class="cpv-p' + (isTodo(p.verrou) ? ' todo' : '') + '">' + esc(val(p.verrou)) + '</div>';
-    h += '<div class="cpv-k" style="margin-top:12px">Organisme bloqué</div>';
+    h += blocOpen(++n, '🔍', 'Diagnostic');
+    h += '<div class="cpv-k">Verrou principal</div><div class="cpv-p' + (isTodo(p.verrou) ? ' todo' : '') + '">' + esc(val(p.verrou)) + '</div>';
+    h += '<div class="cpv-k" style="margin-top:13px">Priorité de traitement</div>';
     h += '<div class="cpv-org">' + (org ? esc(org.label) : TODO) + '</div>';
+    if ((p.problemes || []).length) {
+      h += '<div class="cpv-k" style="margin-top:13px">Ce qui bloque aujourd\'hui</div><div class="cpv-pbs">';
+      p.problemes.forEach(function (x) {
+        h += '<div class="cpv-pb"><div class="t">' + esc(x.titre) + '</div>'
+          + (x.detail ? '<div class="d">' + esc(x.detail) + '</div>' : '') + '</div>';
+      });
+      h += '</div>';
+    }
     h += '<div class="cpv-rule">Ordre de traitement : <b>Délivrabilité → Rentabilité → Acquisition</b>'
       + (org ? '<br>' + esc(org.note) : '') + '</div>';
     h += '</div>';
 
-    /* BLOC 3 — Les 6 jalons datés */
-    h += blocOpen('3', '📆', 'Les 6 jalons datés');
+    /* BLOC — Les 6 jalons datés */
+    h += blocOpen(++n, '📆', 'Les 6 jalons');
     h += '<div class="cpv-tw"><table class="cpv-t"><thead><tr><th>Jalon</th><th>Échéance</th><th>Objectif</th><th>Preuve attendue</th><th>Statut</th></tr></thead><tbody>';
     JALONS.forEach(function (j) {
       var st = STATUTS[p.jalonStatus && p.jalonStatus[j.k]] || STATUTS.todo;
       h += '<tr><td><b>' + j.k + '</b></td><td class="num">' + esc(frDate(jalonDate(p, j.j))) + '<span class="j">J+' + j.j + '</span></td>'
-        + '<td>' + esc(j.obj) + '</td><td class="mut">' + esc(j.preuve) + '</td>'
-        + '<td><button class="cpv-st" data-cp-jalon="' + j.k + '" data-cp-id="' + esc(clientId || '') + '" style="color:' + st.col + '">' + st.ico + ' ' + st.lbl + '</button></td></tr>';
+        + '<td>' + esc(j.obj) + '</td><td class="mut">' + esc(j.preuve) + '</td><td>'
+        + (ro
+            ? '<span class="cpv-st ro" style="color:' + st.col + '">' + st.ico + ' ' + st.lbl + '</span>'
+            : '<button class="cpv-st" data-cp-jalon="' + j.k + '" data-cp-id="' + esc(clientId || '') + '" style="color:' + st.col + '">' + st.ico + ' ' + st.lbl + '</button>')
+        + '</td></tr>';
     });
     h += '</tbody></table></div>';
-    h += '<div class="cpv-rule">Un jalon manqué → analyse de cause avant de continuer. Jamais un simple report.</div>';
+    h += '<div class="cpv-rule">Un jalon manqué → on cherche la cause avant d\'avancer. Jamais un simple report.</div>';
     h += '</div>';
 
-    /* BLOC 4 — Actions de la semaine */
-    h += blocOpen('4', '⚡', 'Actions de la semaine');
+    /* BLOC — Actions de la semaine */
+    h += blocOpen(++n, '⚡', 'Actions de la semaine');
+    if (!(p.semaines || []).length) h += '<div class="cpv-p todo">' + TODO + '</div>';
     (p.semaines || []).forEach(function (s, si) {
       h += '<div class="cpv-sem"><div class="cpv-semh"><b>Semaine ' + (s.n || si + 1) + '</b>'
         + '<span>du ' + esc(frDate(s.from)) + ' au ' + esc(frDate(s.to)) + '</span>'
         + '<span class="c">' + esc(s.coach || p.coach || TODO) + '</span></div>';
       (s.actions || []).forEach(function (a, ai) {
         var st = STATUTS[a.st] || STATUTS.todo;
-        h += '<div class="cpv-act"><button class="cpv-st sq" data-cp-act="' + si + '.' + ai + '" data-cp-id="' + esc(clientId || '') + '" style="color:' + st.col + '">' + st.ico + '</button>'
+        h += '<div class="cpv-act">'
+          + (ro
+              ? '<span class="cpv-st sq ro" style="color:' + st.col + '">' + st.ico + '</span>'
+              : '<button class="cpv-st sq" data-cp-act="' + si + '.' + ai + '" data-cp-id="' + esc(clientId || '') + '" style="color:' + st.col + '">' + st.ico + '</button>')
           + '<div class="x"><div class="t">' + esc(a.txt) + '</div>'
           + '<div class="m">' + esc(a.who || TODO) + ' · échéance ' + esc(frDate(a.due)) + '</div></div></div>';
       });
@@ -529,6 +577,29 @@
       h += '</div>';
     });
     h += '</div>';
+
+    /* BLOC — Indicateurs de pilotage */
+    if ((p.kpis || []).length) {
+      h += blocOpen(++n, '📊', 'Indicateurs de pilotage');
+      h += '<div class="cpv-tw"><table class="cpv-t"><thead><tr><th>Catégorie</th><th>Indicateur</th><th>Suivi</th><th>Aujourd\'hui</th><th>Objectif</th></tr></thead><tbody>';
+      p.kpis.forEach(function (k) {
+        h += '<tr><td><span class="cpv-cat">' + esc(k.cat) + '</span></td><td>' + esc(k.nom) + '</td>'
+          + '<td class="mut">' + esc(k.freq) + '</td><td class="num">' + esc(k.actuel) + '</td>'
+          + '<td class="num goal">' + esc(k.cible) + '</td></tr>';
+      });
+      h += '</tbody></table></div></div>';
+    }
+
+    /* BLOC — Points de vigilance */
+    if ((p.risques || []).length) {
+      h += blocOpen(++n, '⚠️', 'Points de vigilance');
+      h += '<div class="cpv-pbs">';
+      p.risques.forEach(function (x) {
+        h += '<div class="cpv-pb warn"><div class="t">' + esc(x.titre) + '</div>'
+          + (x.detail ? '<div class="d">' + esc(x.detail) + '</div>' : '') + '</div>';
+      });
+      h += '</div></div>';
+    }
 
     h += '</div>';
     return h;
