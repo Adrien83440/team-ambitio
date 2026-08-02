@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ambitio — Documents</title>
+<link rel="stylesheet" href="alteore-ui.css"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script>if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"});}</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   Documents — les supports HTML internes, au même endroit.
+   Sert à ENVOYER LE LIEN aux équipes : chaque document a son bouton
+   « Copier le lien ». Les documents sont des pages autonomes du repo ;
+   pour en ajouter un, il suffit d'une ligne dans DOCS ci-dessous.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --bg:#08080f; --bg2:#0f0f1a; --bg3:#14141f; --bg4:#1a1a28;
+  --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+  --txt:rgba(255,255,255,.92); --mut:rgba(255,255,255,.48); --mut2:rgba(255,255,255,.24);
+  --cy:#4DD0F0; --blue:#5B8CFF;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;background:var(--bg);color:var(--txt);
+  font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+.dc-main{max-width:1000px;margin:0 auto;padding:28px 24px 70px}
+.dc-head{margin-bottom:22px}
+.dc-head h1{font-size:23px;font-weight:800;letter-spacing:-.5px;display:flex;align-items:center;gap:10px}
+.dc-head p{font-size:13px;color:var(--mut);margin-top:6px;max-width:62ch;line-height:1.6}
+.dc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.dc-card{background:linear-gradient(160deg,var(--bg3),var(--bg2));border:1px solid var(--line);
+  border-radius:16px;padding:16px 17px;display:flex;flex-direction:column;gap:9px}
+.dc-card:hover{border-color:var(--line2)}
+.dc-tag{align-self:flex-start;font-size:9.5px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;
+  color:var(--cy);background:rgba(77,208,240,.1);border:1px solid rgba(77,208,240,.28);
+  border-radius:999px;padding:3px 9px}
+.dc-card h2{font-size:15.5px;font-weight:700;letter-spacing:-.2px}
+.dc-card p{font-size:12.5px;color:var(--mut);line-height:1.55;flex:1}
+.dc-meta{font-size:11px;color:var(--mut2)}
+.dc-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:3px}
+.dc-btn{border:1px solid var(--line2);background:var(--bg4);color:var(--txt);border-radius:9px;
+  padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;text-decoration:none;
+  display:inline-flex;align-items:center;gap:6px;transition:all .14s}
+.dc-btn:hover{border-color:rgba(77,208,240,.5);color:#fff}
+.dc-btn.main{background:rgba(77,208,240,.13);border-color:rgba(77,208,240,.42);color:#bdeeff}
+.dc-empty{color:var(--mut);font-size:13px;padding:30px 0}
+.dc-note{margin-top:24px;font-size:11.5px;color:var(--mut2);line-height:1.6;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<script src="nav.js"></script>
+
+<div class="dc-main" id="dcApp" style="display:none">
+  <div class="dc-head">
+    <h1>📚 Documents</h1>
+    <p>Les supports internes en HTML, réunis ici. Chaque document est une page à part entière :
+       copie son lien et envoie-le à l'équipe, il s'ouvre dans n'importe quel navigateur,
+       sans connexion.</p>
+  </div>
+  <div class="dc-grid" id="dcGrid"></div>
+  <div class="dc-note" id="dcNote"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ═══ REGISTRE DES DOCUMENTS ═══════════════════════════════════════
+     Pour ajouter un support : dépose son fichier .html à la racine du
+     repo, puis ajoute une ligne ici. Rien d'autre à faire.
+     ═══════════════════════════════════════════════════════════════════ */
+  var DOCS = [
+    {
+      file: 'doc-parcours-elite-phenix.html',
+      tag: 'Elite Phénix',
+      titre: 'Parcours client — du closing au jour 180',
+      desc: 'Les six jalons, les cinq phases, les responsables et les canaux en un coup d\'œil. '
+          + 'Inclut la fourche J180 (reconduction / sortie) et les trois protocoles d\'exception.',
+      maj: 'Août 2026'
+    }
+  ];
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function attr(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+  function urlOf(file) { return window.location.origin + '/' + file; }
+
+  function render() {
+    var grid = document.getElementById('dcGrid');
+    if (!DOCS.length) {
+      grid.innerHTML = '<div class="dc-empty">Aucun document pour le moment.</div>';
+      return;
+    }
+    grid.innerHTML = DOCS.map(function (d, i) {
+      return '<div class="dc-card">'
+        + '<span class="dc-tag">' + esc(d.tag) + '</span>'
+        + '<h2>' + esc(d.titre) + '</h2>'
+        + '<p>' + esc(d.desc) + '</p>'
+        + (d.maj ? '<div class="dc-meta">Mis à jour : ' + esc(d.maj) + '</div>' : '')
+        + '<div class="dc-acts">'
+        +   '<a class="dc-btn main" href="' + attr(d.file) + '" target="_blank" rel="noopener">📄 Ouvrir</a>'
+        +   '<button class="dc-btn" data-copy="' + i + '">🔗 Copier le lien</button>'
+        + '</div></div>';
+    }).join('');
+
+    Array.prototype.forEach.call(grid.querySelectorAll('[data-copy]'), function (b) {
+      b.addEventListener('click', function () {
+        var url = urlOf(DOCS[+b.getAttribute('data-copy')].file);
+        var done = function () {
+          var old = b.textContent;
+          b.textContent = '✓ Copié';
+          setTimeout(function () { b.textContent = old; }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(done).catch(function () { window.prompt('Lien à envoyer :', url); });
+        } else window.prompt('Lien à envoyer :', url);
+      });
+    });
+
+    document.getElementById('dcNote').textContent =
+      DOCS.length + ' document' + (DOCS.length > 1 ? 's' : '')
+      + ' — ces pages sont publiques : le lien suffit, aucun compte n\'est demandé. '
+      + 'Ne les utilise donc pas pour des données nominatives ou confidentielles.';
+  }
+
+  /* Garde d'accès : la page est derrière la nav, on vérifie juste qu'on
+     est connecté (les documents eux-mêmes sont publics). */
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (!user) { window.location.href = 'login.html'; return; }
+    document.getElementById('dcApp').style.display = '';
+    render();
+  });
+})();
+</script>
+</body>
+</html>

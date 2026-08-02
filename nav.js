@@ -82,6 +82,7 @@
     { id: 'admin-dedup',       icon: '🔄', label: 'Dédup Clients', href: 'clients-dedup.html',    section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
+    { id: 'documents',         icon: '📚', label: 'Documents',    href: 'documents.html',         section: 'Outils', perm: '_all' },
   ];
 
   const THEMES = {
@@ -570,6 +571,9 @@
         if (role === 'admin' || role === 'csm') return true;
         return localStorage.getItem('ambitio_signatures_access') === '1';
       }
+      // '_all' : support interne consultable par toute l'équipe connectée
+      // (les documents eux-mêmes sont des pages publiques sans donnée client).
+      if (m.perm === '_all') return true;
       var p = perms[m.perm];
       return p && p !== 'none';
     });
