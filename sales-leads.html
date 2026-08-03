@@ -2839,6 +2839,10 @@ function paintCloseRail(leadId) {
   h += '<div class="ld-rail-actions">';
   h += '<button class="ld-rail-btn ghost" data-action="openModule" data-mod="sig" data-lead-id="' + escAttr(leadId) + '">📝 Signatures</button>';
   h += '<button class="ld-rail-btn ghost" data-action="openModule" data-mod="pay" data-lead-id="' + escAttr(leadId) + '">💳 Paiements</button>';
+  /* Aide-mémoire du closer : les 6 etapes a derouler PENDANT la visio de
+     signature. Ouvert dans un onglet a part pour qu'elle garde la fiche du
+     lead sous les yeux pendant l'appel. */
+  h += '<button class="ld-rail-btn" data-action="closerGuide">🎯 Je close</button>';
   h += '</div>';
   host.innerHTML = h;
 }
@@ -4154,6 +4158,15 @@ document.getElementById('l2PeriodBar').addEventListener('click', function (e) {
 
 /* ═══ FEED EVENTS ═══ */
 document.addEventListener('click', function(e) {
+  /* Aide-mémoire du closer. Placé en tête du dispatcher : le bouton vit dans
+     la carte du lead, il ne doit pas déclencher le repli de la fiche. */
+  var cgBtn = e.target.closest('[data-action="closerGuide"]');
+  if (cgBtn) {
+    e.preventDefault(); e.stopPropagation();
+    window.open('process-onboarding-elite-closer.html', '_blank', 'noopener');
+    return;
+  }
+
   // Appel via Ringover (DialerBridge) — numéro de tél du détail
   var dcTarget = e.target.closest('[data-action="dialerCall"]');
   if (dcTarget) {

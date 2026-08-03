@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Process Onboarding — Elite Phénix · Guide du closer</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070B1E; --panel:#0C1330; --panel-2:#0A1029;
+    --line:rgba(101,141,255,.18); --line-strong:rgba(101,141,255,.34);
+    --txt:#EAF0FF; --soft:#C6D0EA; --mut:#93A3C8; --dim:#5B6890;
+    --blue:#2E6FE8; --cy:#4DD0F0;
+    --grad:linear-gradient(135deg,#2E6FE8 0%,#3FC6F0 100%);
+    --gold:#C9A24B; --gold-lt:#E8CC7E;
+    --wa:#25D366;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    background-image:
+      radial-gradient(900px 500px at 88% -10%, rgba(46,111,232,.30), transparent 62%),
+      radial-gradient(700px 480px at -8% 32%, rgba(77,208,240,.10), transparent 58%);
+    background-attachment:fixed;
+    font-family:'Inter',system-ui,sans-serif; color:var(--txt);
+    line-height:1.6; padding:40px 20px 80px;
+  }
+  .wrap{max-width:940px;margin:0 auto}
+
+  /* ---------- En-tête ---------- */
+  header{margin-bottom:46px}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:9px;
+    font-family:'Sora',sans-serif;font-size:11px;font-weight:600;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--cy);
+    border:1px solid var(--line-strong);border-radius:999px;padding:7px 16px;margin-bottom:22px;
+  }
+  .eyebrow::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--cy)}
+  h1{font-family:'Sora',sans-serif;font-weight:800;font-size:clamp(30px,5vw,46px);line-height:1.08;letter-spacing:-.02em}
+  h1 span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .kicker{margin-top:16px;font-size:17px;color:var(--mut);max-width:640px}
+  .kicker b{color:var(--txt);font-weight:600}
+
+  /* ---------- Bandeau offre ---------- */
+  .deal{
+    margin-top:30px;display:grid;grid-template-columns:1fr 1fr;gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  }
+  .deal>div{background:var(--panel);padding:20px 24px}
+  .deal .lab{font-family:'Sora',sans-serif;font-size:10px;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--mut);margin-bottom:8px}
+  .deal .val{font-family:'Sora',sans-serif;font-size:22px;font-weight:700;color:var(--txt)}
+  .deal .val em{font-style:normal;color:var(--cy)}
+  .deal .note{font-size:12.5px;color:var(--mut);margin-top:6px}
+
+  /* ---------- Sections ---------- */
+  h2{
+    font-family:'Sora',sans-serif;font-weight:700;font-size:13px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--cy);margin:56px 0 20px;
+    display:flex;align-items:center;gap:14px;
+  }
+  h2::after{content:'';flex:1;height:1px;background:var(--line)}
+
+  /* ---------- Étapes ---------- */
+  .step{
+    display:grid;grid-template-columns:56px 1fr;gap:20px;
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:22px 24px;margin-bottom:14px;transition:border-color .2s;
+  }
+  .step:hover{border-color:var(--line-strong)}
+  .num{
+    width:40px;height:40px;border-radius:12px;background:var(--grad);
+    font-family:'Sora',sans-serif;font-weight:700;font-size:17px;color:#F4F9FF;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .step h3{font-family:'Sora',sans-serif;font-size:17px;font-weight:700;margin-bottom:4px}
+  .step .when{font-size:12px;color:var(--cy);font-family:'Sora',sans-serif;letter-spacing:.06em;margin-bottom:12px}
+  .step ul{list-style:none;display:flex;flex-direction:column;gap:9px}
+  .step li{position:relative;padding-left:20px;font-size:14.5px;color:var(--soft)}
+  .step li::before{content:'';position:absolute;left:2px;top:9px;width:6px;height:6px;border-radius:50%;background:var(--blue)}
+  .step li b{color:var(--txt);font-weight:600}
+  a.link{color:var(--cy);text-decoration:none;border-bottom:1px solid rgba(77,208,240,.4);word-break:break-all}
+  a.link:hover{border-bottom-color:var(--cy)}
+
+  .flag{
+    margin-top:14px;border-left:3px solid var(--gold);background:rgba(201,162,75,.09);
+    border-radius:0 8px 8px 0;padding:11px 15px;font-size:13.5px;color:#E4D6AE;
+  }
+  .flag b{color:#F6EDD4}
+
+  /* ---------- Scripts ---------- */
+  .script{background:var(--panel-2);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:16px}
+  .script .head{
+    display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:15px 20px;background:rgba(46,111,232,.12);border-bottom:1px solid var(--line);
+  }
+  .script .head .id{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--cy);letter-spacing:.06em}
+  .script .head .t{font-family:'Sora',sans-serif;font-size:14.5px;font-weight:600;flex:1;min-width:180px}
+  .copy{
+    font-family:'Sora',sans-serif;font-size:12px;font-weight:600;color:#F4F9FF;
+    background:var(--grad);border:none;border-radius:999px;padding:9px 20px;cursor:pointer;
+    transition:opacity .15s;
+  }
+  .copy:hover{opacity:.86}
+  .copy:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+  .copy.done{background:var(--wa)}
+  .script pre{
+    padding:20px;font-family:'Inter',sans-serif;font-size:14px;line-height:1.68;
+    color:var(--soft);white-space:pre-wrap;word-break:break-word;
+  }
+  .script pre mark{background:rgba(201,162,75,.18);color:var(--gold-lt);padding:1px 5px;border-radius:4px}
+
+  /* ---------- Auto / suite ---------- */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+  .card h3{font-family:'Sora',sans-serif;font-size:15px;font-weight:700;margin-bottom:14px;color:var(--txt)}
+  .card ul{list-style:none;display:flex;flex-direction:column;gap:10px}
+  .card li{font-size:14px;color:var(--soft);padding-left:18px;position:relative}
+  .card li::before{content:'';position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--cy)}
+  .card li b{color:var(--txt);font-weight:600}
+  .card .t{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--cy);display:block;margin-bottom:1px;letter-spacing:.04em}
+
+  /* ---------- Contacts ---------- */
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  th{
+    font-family:'Sora',sans-serif;font-size:10px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--cy);text-align:left;padding:13px 20px;background:rgba(46,111,232,.12);border-bottom:1px solid var(--line);
+  }
+  td{padding:12px 20px;font-size:14px;color:var(--soft);border-bottom:1px solid rgba(101,141,255,.08)}
+  tr:last-child td{border-bottom:none}
+  td:first-child{color:var(--txt);font-weight:600;white-space:nowrap}
+  td.tel{font-family:'JetBrains Mono',monospace;font-size:13.5px;color:var(--txt);white-space:nowrap}
+  .role{color:var(--mut);font-size:13px}
+
+  /* ---------- Interdits ---------- */
+  .never{border:1px solid rgba(201,162,75,.32);background:rgba(201,162,75,.06);border-radius:14px;padding:24px}
+  .never h3{font-family:'Sora',sans-serif;font-size:15px;font-weight:700;color:var(--gold-lt);margin-bottom:14px}
+  .never ul{list-style:none;display:flex;flex-direction:column;gap:11px}
+  .never li{font-size:14px;color:#E4D6AE;padding-left:24px;position:relative}
+  .never li::before{content:'✕';position:absolute;left:0;top:-1px;color:var(--gold);font-size:13px;font-weight:700}
+  .never li b{color:#F6EDD4;font-weight:600}
+
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);
+    display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    font-family:'Sora',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+
+  @media (max-width:720px){
+    .deal,.grid2{grid-template-columns:1fr}
+    .step{grid-template-columns:1fr;gap:14px}
+  }
+  @media print{
+    body{background:#fff;color:#111;padding:0}
+    .copy{display:none}
+    .step,.card,.script,table,.never,.deal>div{background:#fff;border-color:#ccc}
+    h1 span,.deal .val em{color:#2E6FE8;-webkit-text-fill-color:#2E6FE8}
+    .num{background:#2E6FE8}
+    .step li,.card li,td,.script pre{color:#333}
+    h1,.step h3,.card h3,td:first-child{color:#111}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Interne · Équipe closing</div>
+  <h1>Process Onboarding<br><span>Elite Phénix</span></h1>
+  <p class="kicker">Tout ce que tu fais <b>pendant la visio de signature</b>, sans raccrocher. À la fin de l'appel, le client a signé, son RDV Plan d'Action est calé et son groupe WhatsApp est ouvert.</p>
+
+  <div class="deal">
+    <div>
+      <div class="lab">Paiement intégral</div>
+      <div class="val">12 000 € <em>HT</em></div>
+      <div class="note">L'option à privilégier systématiquement.</div>
+    </div>
+    <div>
+      <div class="lab">Échelonné — 4 fois maximum</div>
+      <div class="val">4 × 3 250 € <em>= 13 000 € HT</em></div>
+      <div class="note">Premier prélèvement le jour même. Jamais plus de 4 mensualités.</div>
+    </div>
+  </div>
+</header>
+
+<h2>Les 6 étapes</h2>
+
+<div class="step">
+  <div class="num">1</div>
+  <div>
+    <h3>Faire signer en visio, avec le client</h3>
+    <div class="when">Pendant l'appel — jamais en différé</div>
+    <ul>
+      <li>Tu restes <b>en visio</b> et tu accompagnes le client pendant qu'il signe. On n'envoie pas le contrat pour qu'il le signe « plus tard ».</li>
+      <li>Dans la foulée : <b>mandat GoCardless</b> signé, avec le montant et l'échéancier convenus.</li>
+      <li>Le premier prélèvement part <b>le jour même</b>.</li>
+      <li>L'accompagnement démarre immédiatement — on n'attend pas la compensation bancaire.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step">
+  <div class="num">2</div>
+  <div>
+    <h3>Caler le RDV Plan d'Action en direct</h3>
+    <div class="when">Avant de raccrocher — dans les 72 h, au plus tard avant J7</div>
+    <ul>
+      <li>Tu ouvres l'agenda et vous choisissez la date <b>ensemble, pendant l'appel</b>.</li>
+      <li>Booking « RDV PLAN ACTION AVEC ADRIEN &amp; EMILY » :<br><a class="link" href="https://team.alteore.com/booking.html?type=rdv_plan_action_adrien">team.alteore.com/booking.html?type=rdv_plan_action_adrien</a></li>
+      <li>Ce rendez-vous est <b>systématique</b>, pour tous les clients — ce n'est plus réservé aux « bons profils ».</li>
+    </ul>
+    <div class="flag"><b>Le point de bascule.</b> Un client qui raccroche sans date de RDV, c'est un démarrage qui glisse d'une semaine. Tu ne quittes pas l'appel sans la date.</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="num">3</div>
+  <div>
+    <h3>Envoyer le lien de l'espace de démarrage</h3>
+    <div class="when">Pendant l'appel, pour qu'il l'ouvre avec toi</div>
+    <ul>
+      <li><a class="link" href="https://www.ambitiocorp.com/ressources-elitev2">ambitiocorp.com/ressources-elitev2</a></li>
+      <li>Il y trouve tout : le questionnaire de démarrage, le RDV Plan d'Action, le livret d'accueil, Le Cercle et les coachings de groupe.</li>
+      <li>Tu lui donnes <b>une seule consigne d'ici le RDV</b> : remplir le questionnaire, le plus précisément possible.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step">
+  <div class="num">4</div>
+  <div>
+    <h3>Créer le groupe WhatsApp privé</h3>
+    <div class="when">Juste après la signature</div>
+    <ul>
+      <li>Nom du groupe : <b>Elite Phénix — [Prénom]</b></li>
+      <li>Membres : le client, <b>son coach référent</b>, Adrien, Emily et Marine.</li>
+      <li>Le coach est attribué <b>en round robin</b> — demande le nom dans le groupe coaching interne avant de créer le groupe.</li>
+    </ul>
+    <div class="flag">Ce groupe devient le <b>canal principal</b> du client pendant six mois. Tout y passe : questions, vocaux, avancées.</div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="num">5</div>
+  <div>
+    <h3>Poster le message de bienvenue</h3>
+    <div class="when">Dès le groupe créé</div>
+    <ul>
+      <li>Message <b>WA-CLO-01</b> ci-dessous — il présente l'équipe et rappelle la date du RDV.</li>
+      <li>Personnalise les crochets. On ne laisse jamais un <b>[Prénom]</b> dans le message.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step">
+  <div class="num">6</div>
+  <div>
+    <h3>Épingler le message des liens</h3>
+    <div class="when">Dans la foulée</div>
+    <ul>
+      <li>Message <b>WA-PIN-01</b> ci-dessous, posté puis <b>épinglé</b> en haut du groupe.</li>
+      <li>C'est ce que le client rouvrira toute l'année pour retrouver ses accès.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Les deux messages à copier</h2>
+
+<div class="script">
+  <div class="head">
+    <span class="id">WA-CLO-01</span>
+    <span class="t">Bienvenue &amp; présentation de l'équipe</span>
+    <button class="copy" data-target="s1">Copier</button>
+  </div>
+  <pre id="s1">Bienvenue <mark>[Prénom]</mark> 👋 Je te présente ton équipe Elite Phénix : <mark>[Prénom Coach]</mark>, ton coach référent — Adrien et Emily, tes mentors — et Marine, qui veille au bon déroulement de ton accompagnement.
+
+Ce groupe est ton canal principal : tout se passe ici entre les séances.
+
+Ton RDV Plan d'Action est calé le <mark>[date]</mark> à <mark>[heure]</mark> avec <mark>[Adrien/Emily]</mark>. D'ici là, une seule priorité : remplir le questionnaire de démarrage 👉 https://team.alteore.com/alteoforms-render.html?id=6sYCUup0lDdz6mWAPlIg
+
+À très vite !</pre>
+</div>
+
+<div class="script">
+  <div class="head">
+    <span class="id">WA-PIN-01</span>
+    <span class="t">Liens essentiels — à épingler</span>
+    <button class="copy" data-target="s2">Copier</button>
+  </div>
+  <pre id="s2">🔗 LES LIENS ESSENTIELS
+
+Espace de démarrage : https://www.ambitiocorp.com/ressources-elitev2
+Questionnaire : https://team.alteore.com/alteoforms-render.html?id=6sYCUup0lDdz6mWAPlIg
+Plateforme de suivi : https://academy.adrienemily.com
+Le Cercle : https://chat.whatsapp.com/K2tb386twjj280vgIsqu8f
+Coachings de groupe : liens sur l'espace de démarrage</pre>
+</div>
+
+<h2>Ce qui part sans toi</h2>
+
+<div class="grid2">
+  <div class="card">
+    <h3>Automatique, dès la signature</h3>
+    <ul>
+      <li><b>Trois mails d'onboarding</b> partent immédiatement : bienvenue et deux actions · Le Cercle et le questionnaire · la semaine type.</li>
+      <li>Les <b>accès à la plateforme de suivi</b> (academy.adrienemily.com) arrivent par mail.</li>
+      <li>Le <b>contrat signé</b> est envoyé au client par mail.</li>
+      <li>Déclencheur : le tag <b>« [vente] elite phenix »</b> sur la fiche contact.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Ce qui se passe après ton appel</h3>
+    <ul>
+      <li><span class="t">+ 2 h ouvrées</span> Vocal de bienvenue d'Adrien ou Emily dans le groupe.</li>
+      <li><span class="t">Sous 48 h</span> Le coach référent se présente et cale le <b>créneau hebdomadaire fixe</b> avec le client.</li>
+      <li><span class="t">Avant J7</span> Le RDV Plan d'Action avec Adrien ou Emily.</li>
+      <li><span class="t">J7</span> Appel de check de Marine, 5 minutes, pour vérifier que tout est en place.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Qui ajouter au groupe</h2>
+
+<table>
+  <tr><th>Contact</th><th>Rôle</th><th>Numéro</th></tr>
+  <tr><td>Adrien</td><td class="role">Mentor · co-fondateur</td><td class="tel">07 66 83 36 32</td></tr>
+  <tr><td>Emily</td><td class="role">Mentor · co-fondatrice</td><td class="tel">07 67 11 63 82</td></tr>
+  <tr><td>Marine</td><td class="role">Customer Satisfaction Manager</td><td class="tel">07 72 08 97 92</td></tr>
+  <tr><td>Vincent</td><td class="role">Responsable des accompagnements</td><td class="tel">07 51 36 47 77</td></tr>
+  <tr><td>Édouard</td><td class="role">Coach référent</td><td class="tel">06 08 95 18 50</td></tr>
+  <tr><td>Thomas</td><td class="role">Coach référent</td><td class="tel">06 15 29 66 82</td></tr>
+  <tr><td>Flore</td><td class="role">Coach référent</td><td class="tel">07 56 82 60 05</td></tr>
+</table>
+
+<h2>À ne jamais faire</h2>
+
+<div class="never">
+  <h3>Les quatre erreurs qui coûtent un démarrage</h3>
+  <ul>
+    <li><b>Raccrocher sans la date du RDV Plan d'Action.</b> C'est la seule étape qu'on ne rattrape pas facilement.</li>
+    <li><b>Proposer plus de 4 mensualités.</b> Le barème s'arrête à 4 × 3 250 €. Au-delà, tu escalades aux mentors.</li>
+    <li><b>Parler de « formation » ou de « modules ».</b> Elite Phénix est un accompagnement d'exécution : un coach, une séance par semaine, un plan d'action. Promettre des vidéos crée une déception dès la première semaine.</li>
+    <li><b>Créer le groupe avant la signature.</b> On ouvre le groupe une fois le contrat et le mandat signés, pas avant.</li>
+  </ul>
+</div>
+
+<footer>
+  <span>Elite Phénix · Ambitio Corp</span>
+  <span>Document interne — équipe closing</span>
+</footer>
+
+</div>
+
+<script>
+document.querySelectorAll('.copy').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var el = document.getElementById(btn.dataset.target);
+    var txt = el.innerText;
+    navigator.clipboard.writeText(txt).then(function(){
+      var old = btn.textContent;
+      btn.textContent = 'Copié ✓';
+      btn.classList.add('done');
+      setTimeout(function(){ btn.textContent = old; btn.classList.remove('done'); }, 1800);
+    }).catch(function(){
+      var r = document.createRange(); r.selectNodeContents(el);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      btn.textContent = 'Sélectionné';
+      setTimeout(function(){ btn.textContent = 'Copier'; }, 1800);
+    });
+  });
+});
+</script>
+</body>
+</html>
