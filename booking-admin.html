@@ -1092,6 +1092,15 @@ if(w.length)console.warn('[désactivation expert]',j);
 closeExDetail();loadAll();
 }).catch(function(e){alert('❌ '+e.message);});
 }
+/* L'URL nominative d'un expert. Avec une consultation par defaut, le client
+   arrive DIRECTEMENT sur le calendrier : plus d'etape « quelle consultation ? ».
+   Le type est aussi porte par l'URL, donc le lien deja distribue continue de
+   marcher meme si le reglage par defaut change plus tard. */
+function personBookingUrl(p){
+  var u=window.location.origin+'/booking.html?person='+p.id;
+  if(p&&p.defaultTypeId)u+='&type='+encodeURIComponent(p.defaultTypeId);
+  return u;
+}
 function openShareModal(id,kind){
 var base=window.location.origin+'/booking.html';
 var url=kind==='type'?base+'?type='+id:base+'?person='+id;
@@ -1484,7 +1493,7 @@ function computeEaster(year){var a=year%19,b=Math.floor(year/100),c=year%100,d=M
 function getHolidayDate(hol,year){if(hol.month)return new Date(year,hol.month-1,hol.day);var e=computeEaster(year);var d=new Date(e);d.setDate(d.getDate()+hol.easter);return d;}
 function formatHolDate(d){return d.getDate()+' '+MF[d.getMonth()]+' '+d.getFullYear();}
 
-function rEx(){document.getElementById('cE').textContent=P.length;document.getElementById('cE2').textContent=P.length;var el=document.getElementById('exG');if(!P.length){el.innerHTML='<div class="rv-em" style="grid-column:1/-1">Aucun expert.</div>';return;}var h='';P.forEach(function(p){var pt=p.types||[],sc=p.schedule||{},sd=JR.filter(function(d){return(sc[d]||[]).length>0;});var _ro=exIsReadOnly(p.id);var _self=(p.id===window._selfPersonId);var _extra=(_self?' ec-self':'')+(_ro?' ec-locked':'');h+='<div class="ec'+_extra+'" style="cursor:pointer;position:relative" onclick="openExDetail(\''+p.id+'\')">';h+='<div class="ec-top"><div class="ec-av" style="background:'+p.color+';overflow:hidden">'+(p.photoUrl?'<img src="'+p.photoUrl+'" style="width:100%;height:100%;object-fit:cover">':(p.name||'?')[0].toUpperCase())+'</div><div style="flex:1;min-width:0"><div class="ec-nm">'+esc(p.name)+(p.isCoach?' <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(167,139,250,.15);color:#c4b5fd;border:1px solid rgba(167,139,250,.3);margin-left:4px;font-weight:700;letter-spacing:.3px;vertical-align:middle">🎯 COACH</span>':'')+'</div><div class="ec-rl">'+esc(p.role||'Expert')+'</div></div></div>';h+='<div>';pt.forEach(function(tid){var tO=T.find(function(t){return t.id===tid;});if(tO)h+='<span class="ec-tb" style="background:'+tO.color+'18;color:'+tO.color+'">'+esc(tO.label)+'</span>';});if(!pt.length)h+='<span style="font-size:11px;color:rgba(255,255,255,.48)">Aucune consultation</span>';h+='</div>';h+='<div style="font-size:11px;color:rgba(255,255,255,.48);margin:8px 0">📅 '+(sd.length?sd.length+' jours/sem':'Non configuré');if(p.calendarConnected)h+=' · <span style="color:#34d399">✨ Meet Auto</span>';else if(p.meetLink)h+=' · <span style="color:#60a5fa">📹 Meet</span>';h+='</div>';h+='<div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;color:#a78bfa;font-weight:600">'+(_ro?'Consulter →':'Configurer →')+'</span><span class="cc-sh" style="margin-left:auto" onclick="event.stopPropagation();navigator.clipboard.writeText(window.location.origin+\'/booking.html?person='+p.id+'\');toast(\'📋 Copié !\')">↗ Partager</span></div>';h+='</div>';});el.innerHTML=h;}
+function rEx(){document.getElementById('cE').textContent=P.length;document.getElementById('cE2').textContent=P.length;var el=document.getElementById('exG');if(!P.length){el.innerHTML='<div class="rv-em" style="grid-column:1/-1">Aucun expert.</div>';return;}var h='';P.forEach(function(p){var pt=p.types||[],sc=p.schedule||{},sd=JR.filter(function(d){return(sc[d]||[]).length>0;});var _ro=exIsReadOnly(p.id);var _self=(p.id===window._selfPersonId);var _extra=(_self?' ec-self':'')+(_ro?' ec-locked':'');h+='<div class="ec'+_extra+'" style="cursor:pointer;position:relative" onclick="openExDetail(\''+p.id+'\')">';h+='<div class="ec-top"><div class="ec-av" style="background:'+p.color+';overflow:hidden">'+(p.photoUrl?'<img src="'+p.photoUrl+'" style="width:100%;height:100%;object-fit:cover">':(p.name||'?')[0].toUpperCase())+'</div><div style="flex:1;min-width:0"><div class="ec-nm">'+esc(p.name)+(p.isCoach?' <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(167,139,250,.15);color:#c4b5fd;border:1px solid rgba(167,139,250,.3);margin-left:4px;font-weight:700;letter-spacing:.3px;vertical-align:middle">🎯 COACH</span>':'')+'</div><div class="ec-rl">'+esc(p.role||'Expert')+'</div></div></div>';h+='<div>';pt.forEach(function(tid){var tO=T.find(function(t){return t.id===tid;});if(tO)h+='<span class="ec-tb" style="background:'+tO.color+'18;color:'+tO.color+'">'+esc(tO.label)+'</span>';});if(!pt.length)h+='<span style="font-size:11px;color:rgba(255,255,255,.48)">Aucune consultation</span>';h+='</div>';h+='<div style="font-size:11px;color:rgba(255,255,255,.48);margin:8px 0">📅 '+(sd.length?sd.length+' jours/sem':'Non configuré');if(p.calendarConnected)h+=' · <span style="color:#34d399">✨ Meet Auto</span>';else if(p.meetLink)h+=' · <span style="color:#60a5fa">📹 Meet</span>';h+='</div>';h+='<div style="display:flex;gap:6px;align-items:center"><span style="font-size:11px;color:#a78bfa;font-weight:600">'+(_ro?'Consulter →':'Configurer →')+'</span><span class="cc-sh" style="margin-left:auto" onclick="event.stopPropagation();navigator.clipboard.writeText(\''+personBookingUrl(p)+'\');toast(\'📋 Copié !\')">↗ Partager</span></div>';h+='</div>';});el.innerHTML=h;}
 
 function openExDetail(pid){exPerson=P.find(function(x){return x.id===pid;});if(!exPerson)return;exSection='profil';document.getElementById('exGridView').style.display='none';document.getElementById('exDetailView').style.display='';renderExHead();renderExNav();renderExSection();applyExReadOnly();}
 function closeExDetail(){document.getElementById('exDetailView').style.display='none';document.getElementById('exGridView').style.display='';exPerson=null;renderAll();}
@@ -1502,7 +1511,7 @@ pt.forEach(function(tid){var tO=T.find(function(t){return t.id===tid;});if(tO)h+
 h+='</div></div>';
 var _exCal=exPerson.calendarConnected===true;
 if(_exCal){h+='<div class="ex-head-meet" style="color:#34d399">✨ Meet Auto</div>';}else if(ml){h+='<div class="ex-head-meet">📹 '+esc(ml.length>30?ml.slice(0,30)+'…':ml)+'</div>';}else{h+='<div class="ex-head-meet none">📹 Non configuré</div>';}
-h+='<div style="display:flex;gap:6px"><button class="bb bb-o" onclick="navigator.clipboard.writeText(window.location.origin+\'/booking.html?person='+exPerson.id+'\');toast(\'📋 Copié !\')">↗ Partager</button></div>';
+h+='<div style="display:flex;gap:6px"><button class="bb bb-o" onclick="navigator.clipboard.writeText(\''+personBookingUrl(exPerson)+'\');toast(\'📋 Copié !\')">↗ Partager</button></div>';
 document.getElementById('exHead').innerHTML=h;}
 
 function renderExNav(){document.querySelectorAll('[data-exs]').forEach(function(n){n.classList.toggle('on',n.dataset.exs===exSection);});}
@@ -1796,6 +1805,20 @@ h+='</div>';
 
 else if(exSection==='advanced'){
 h+='<div class="cd-sec-title">⚙️ Paramètres avancés</div>';
+
+// Lien nominatif + consultation par défaut
+var _ptl=(exPerson.types||[]).map(function(tid){return T.find(function(t){return t.id===tid;});}).filter(Boolean);
+h+='<div style="font-family:\'Bricolage Grotesque\',sans-serif;font-size:14px;font-weight:700;margin-bottom:8px">🔗 Lien de prise de RDV personnel</div>';
+if(!_ptl.length){
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:20px">Aucune consultation attribuée à cet expert. Attribuez-lui d\'abord une consultation pour qu\'il ait un lien.</div>';
+}else{
+h+='<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:10px">Le client qui ouvre ce lien ne peut réserver qu\'avec cet expert. Choisissez une consultation par défaut : il arrivera <strong>directement sur le calendrier</strong>, sans avoir à choisir. Durée, buffers, Meet et notifications restent ceux de la consultation.</div>';
+h+='<div class="cd-field" style="margin-bottom:10px"><select class="bi" id="exDefaultType" style="width:100%" onchange="renderExLinkPreview()">';
+h+='<option value="">— Le client choisit sa consultation —</option>';
+_ptl.forEach(function(t){h+='<option value="'+escA(t.id)+'"'+(exPerson.defaultTypeId===t.id?' selected':'')+'>'+esc(t.label)+' · '+(t.duration>=60?(t.duration/60)+'h':t.duration+' min')+'</option>';});
+h+='</select></div>';
+h+='<div style="display:flex;gap:8px;margin-bottom:20px"><input class="bi" id="exLinkPreview" readonly value="'+escA(personBookingUrl(exPerson))+'" style="flex:1;font-family:monospace;font-size:11px"/><button class="bb bb-o" onclick="copyExLink()">Copier</button></div>';
+}
 
 // Meet link
 var _exCalConn=exPerson.calendarConnected===true;
@@ -2554,6 +2577,24 @@ renderExHead();renderExSection();toast('✅');
 }
 window.handleExPhoto=handleExPhoto;window.removeExPhoto=removeExPhoto;window.setExColor=setExColor;
 
+/* Le lien affiche suit le menu deroulant en direct, avant meme d'enregistrer. */
+function exLinkUrl(){
+if(!exPerson)return '';
+var sel=document.getElementById('exDefaultType');
+var tid=sel?sel.value:(exPerson.defaultTypeId||'');
+var u=window.location.origin+'/booking.html?person='+exPerson.id;
+if(tid)u+='&type='+encodeURIComponent(tid);
+return u;
+}
+function renderExLinkPreview(){var el=document.getElementById('exLinkPreview');if(el)el.value=exLinkUrl();}
+function copyExLink(){
+var u=exLinkUrl();
+if(!u)return;
+navigator.clipboard.writeText(u).then(function(){toast('📋 Lien copié !');})
+.catch(function(e){console.error('[booking] copie lien expert:',e);window.prompt('Lien à envoyer :',u);});
+}
+window.renderExLinkPreview=renderExLinkPreview;window.copyExLink=copyExLink;
+
 function saveExAdvanced(silent){
 if(!exPerson)return;
 var u={};
@@ -2564,8 +2605,13 @@ var ba=parseInt(document.getElementById('exBufAfter').value);u.bufferAfter=isNaN
 var mn=parseInt(document.getElementById('exMinNotice').value);u.minNoticeHours=isNaN(mn)?0:mn;
 var md=parseInt(document.getElementById('exMaxDay').value);u.maxPerDay=isNaN(md)?0:md;
 var mw=parseInt(document.getElementById('exMaxWeek').value);u.maxPerWeek=isNaN(mw)?0:mw;
+var _dtEl=document.getElementById('exDefaultType'),_dtv=_dtEl?(_dtEl.value||''):null;
+if(_dtEl)u.defaultTypeId=_dtv?_dtv:firebase.firestore.FieldValue.delete();
 CR.doc(exPerson.id).update(u).then(function(){
 Object.assign(exPerson,u);
+/* Object.assign recopierait le sentinelle de suppression : on remet la vraie
+   valeur, sinon le lien affiche ensuite &type=[object Object]. */
+if(_dtEl)exPerson.defaultTypeId=_dtv;
 // Écriture _settings (holidays partagés) : admin uniquement.
 // Les rules Firestore bloquent cette écriture pour non-admin, et le bloc
 // holidays UI est de toute façon gardé en read-only côté CSS.
@@ -2771,7 +2817,7 @@ window.history.replaceState({},document.title,window.location.pathname);
 })();
 document.getElementById('addE').addEventListener('click',function(){document.getElementById('addEF').style.display='';});
 document.getElementById('eSub').addEventListener('click',function(){if(window._currentRole!=='admin'){toast('🔒 Admin requis');return;}var n=document.getElementById('eN').value.trim();if(!n)return;var r=document.getElementById('eR').value.trim(),c=document.getElementById('eCo').value,id=n.toLowerCase().replace(/[^a-z]/g,'').slice(0,15)+'_'+gid().slice(0,4);CR.doc(id).set({__type:'person',name:n,role:r,color:c,types:[],schedule:{},blockedDates:[]}).then(function(){document.getElementById('eN').value='';document.getElementById('eR').value='';document.getElementById('addEF').style.display='none';loadAll();toast('✅ Expert ajouté');});});
-function rPg(){var el=document.getElementById('pgC'),base=window.location.origin+'/booking.html';var h='<div class="pg-m"><div class="pg-av">A</div><div style="flex:1"><div class="pg-nm">SARL Ambitio Corp</div><div class="pg-ds">Page de réservation principale.</div></div><div style="display:flex;gap:8px"><button class="bb bb-o" onclick="window.open(\''+base+'\',\'_blank\')">↗ Ouvrir</button><button class="bb bb-o" onclick="navigator.clipboard.writeText(\''+base+'\');toast(\'📋 Copié !\')">Partager</button></div></div>';if(T.length){h+='<div class="pg-sh">Consultations</div>';T.forEach(function(t){var u=base+'?type='+t.id;h+='<div class="pg-l" onclick="navigator.clipboard.writeText(\''+u+'\');toast(\'📋 Copié !\')"><div class="pg-la" style="background:'+t.color+'">'+t.label[0].toUpperCase()+'</div><div class="pg-ln">'+esc(t.label)+'</div><div class="pg-lu">'+u+'</div><span class="pg-lc">Copier</span></div>';});}if(P.length){h+='<div class="pg-sh">Experts</div><div style="font-size:12px;color:rgba(255,255,255,.48);margin-bottom:10px">Chaque expert a sa propre page. Le lien verrouille l\'expert : le client ne peut réserver qu\'avec lui — c\'est le lien à donner à ses clients.</div>';P.forEach(function(p){var u=base+'?person='+p.id;h+='<div class="pg-l" onclick="navigator.clipboard.writeText(\''+u+'\');toast(\'📋 Copié !\')"><div class="pg-la" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</div><div class="pg-ln">'+esc(p.name)+'</div><div class="pg-lu">'+u+'</div><span class="pg-lc">Copier</span></div>';});}el.innerHTML=h;}
+function rPg(){var el=document.getElementById('pgC'),base=window.location.origin+'/booking.html';var h='<div class="pg-m"><div class="pg-av">A</div><div style="flex:1"><div class="pg-nm">SARL Ambitio Corp</div><div class="pg-ds">Page de réservation principale.</div></div><div style="display:flex;gap:8px"><button class="bb bb-o" onclick="window.open(\''+base+'\',\'_blank\')">↗ Ouvrir</button><button class="bb bb-o" onclick="navigator.clipboard.writeText(\''+base+'\');toast(\'📋 Copié !\')">Partager</button></div></div>';if(T.length){h+='<div class="pg-sh">Consultations</div>';T.forEach(function(t){var u=base+'?type='+t.id;h+='<div class="pg-l" onclick="navigator.clipboard.writeText(\''+u+'\');toast(\'📋 Copié !\')"><div class="pg-la" style="background:'+t.color+'">'+t.label[0].toUpperCase()+'</div><div class="pg-ln">'+esc(t.label)+'</div><div class="pg-lu">'+u+'</div><span class="pg-lc">Copier</span></div>';});}if(P.length){h+='<div class="pg-sh">Experts</div><div style="font-size:12px;color:rgba(255,255,255,.48);margin-bottom:10px">Chaque expert a sa propre page. Le lien verrouille l\'expert : le client ne peut réserver qu\'avec lui — c\'est le lien à donner à ses clients.</div>';P.forEach(function(p){var u=personBookingUrl(p);h+='<div class="pg-l" onclick="navigator.clipboard.writeText(\''+u+'\');toast(\'📋 Copié !\')"><div class="pg-la" style="background:'+p.color+'">'+(p.name||'?')[0].toUpperCase()+'</div><div class="pg-ln">'+esc(p.name)+'</div><div class="pg-lu">'+u+'</div><span class="pg-lc">Copier</span></div>';});}el.innerHTML=h;}
 function lSt(){
 var el;
 el=document.getElementById('stOrgName');if(el)el.value=S.orgName||'';

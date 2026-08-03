@@ -659,7 +659,15 @@ function initBooking() {
     if (S.selPerson) {
       S.lockPerson = S.selPerson;          // verrou : ce lien = ce coach
       var personTypes = S.types.filter(function(t) { return (S.lockPerson.types || []).indexOf(t.id) >= 0; });
-      if (personTypes.length === 1) { S.selType = personTypes[0]; S.rrPool = null; goStep(3); return; }
+      /* Consultation par défaut de l'expert (réglée dans Booking admin) : son
+         lien tombe droit sur le calendrier, sans étape « quelle consultation ? ».
+         Le RDV reste un RDV typé normal — durée, buffers, Meet, notifications. */
+      var dflt = null;
+      if (S.lockPerson.defaultTypeId) {
+        dflt = personTypes.filter(function(t) { return t.id === S.lockPerson.defaultTypeId; })[0] || null;
+      }
+      if (!dflt && personTypes.length === 1) dflt = personTypes[0];
+      if (dflt) { S.selType = dflt; S.rrPool = null; goStep(3); return; }
     }
   }
   renderTypeCards();
