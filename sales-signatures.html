@@ -178,6 +178,8 @@ try {
     <button class="sig-btn sig-btn-o" onclick="closeEditor()">← Retour</button>
     <input class="ep-input" id="edTplName" placeholder="Nom du modèle" style="flex:1;max-width:300px;font-size:14px;font-weight:700"/>
     <span id="edAdhocBadge" style="display:none;font-size:11px;font-weight:800;padding:3px 10px;border-radius:6px;color:#f59e0b;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25)">⚡ Envoi rapide — sans modèle</span>
+    <button class="sig-btn sig-btn-o" id="edReplaceBtn" onclick="replaceTplPdf()" title="Changer le document sans refaire le modèle">🔄 Remplacer le PDF</button>
+    <span id="edPdfDirty" style="display:none;font-size:11px;font-weight:800;padding:3px 10px;border-radius:6px;color:#34d399;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.25)">📄 Nouveau document — enregistre pour l'appliquer</span>
     <button class="sig-btn sig-btn-p" id="edSaveBtn" onclick="saveTpl()">💾 Enregistrer</button>
     <button class="sig-btn sig-btn-g" onclick="sendForSignature()">📨 Envoyer pour signature</button>
   </div>
@@ -410,6 +412,111 @@ function openTpl(id){
     });
   }
 }
+/* ═══ REMPLACER LE PDF D'UN MODÈLE EXISTANT ═══════════════════════════
+   Avant, changer le document imposait de recréer le modèle et de reposer
+   tous les champs. Ici on ne remplace QUE le document : nom, champs,
+   automatisation Make et formation Academy restent en place. Rien n'est
+   écrit tant qu'on n'a pas cliqué Enregistrer. */
+function replaceTplPdf(){
+  if(!currentTpl){alert('Aucun document ouvert.');return;}
+  var inp=document.createElement('input');
+  inp.type='file';inp.accept='.pdf';
+  inp.onchange=function(){
+    var file=inp.files[0];
+    if(!file)return;
+    if(file.size>3*1024*1024){alert('PDF trop lourd (max 3 Mo)');return;}
+    var reader=new FileReader();
+    reader.onerror=function(){alert('Erreur lecture du fichier.');console.error('[SIG] FileReader error',reader.error);};
+    reader.onload=function(e){_applyReplacementPdf(e.target.result);};
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+
+/* Les envois déjà partis lisent le PDF du modèle EN DIRECT (sign.html) :
+   remplacer le document change donc ce que signera un client dont le contrat
+   est encore en attente. On le dit avant, jamais après. */
+function _pendingRequestsFor(tplId){
+  if(!tplId)return Promise.resolve(0);
+  return db.collection('signature_requests').where('templateId','==',tplId).get()
+    .then(function(sn){
+      var n=0;sn.forEach(function(d){if(((d.data()||{}).status||'')!=='signed')n++;});
+      return n;
+    })
+    .catch(function(e){console.error('[SIG] pending check failed:',e.message);return -1;});
+}
+
+/* Le nouveau document peut avoir MOINS de pages. Un champ resté sur une page
+   disparue est invisible pour le signataire alors qu'il reste obligatoire :
+   le bouton « Signer » ne s'activerait jamais. On les ramène sur la dernière
+   page plutôt que de laisser un contrat impossible à signer. */
+function _clampFieldsToPages(n){
+  var moved=0;
+  (currentTpl.fields||[]).forEach(function(f){
+    if(!f.page||f.page<1){f.page=1;moved++;}
+    else if(f.page>n){f.page=n;moved++;}
+  });
+  return moved;
+}
+
+function _applyReplacementPdf(dataUrl){
+  var b64Part=(dataUrl||'').split(',')[1];
+  if(!b64Part){alert('Format PDF invalide (pas de base64).');return;}
+  var arr;
+  try{
+    var raw=atob(b64Part);
+    arr=new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+  }catch(e){console.error('[SIG] replace decode:',e);alert('Fichier illisible : '+e.message);return;}
+  /* On valide le nouveau PDF AVANT de toucher au modèle ouvert : un fichier
+     corrompu ne doit pas laisser l'éditeur à moitié remplacé. */
+  pdfjsLib.getDocument({data:arr}).promise.then(function(pdf){
+    return _pendingRequestsFor(currentTpl.id).then(function(pending){
+      if(pending>0){
+        var m='⚠️ '+pending+' contrat'+(pending>1?'s':'')+' en attente de signature utilise'+(pending>1?'nt':'')+' ce modèle.\n\n'
+          +'Le signataire voit toujours la dernière version du document : s\'il signe après ton enregistrement, c\'est le NOUVEAU document qu\'il signera.\n\n'
+          +'Remplacer quand même ?';
+        if(!confirm(m))return null;
+      }else if(pending<0){
+        if(!confirm('Impossible de vérifier les contrats en attente (erreur réseau).\n\nSi un contrat est en attente, il basculera sur le nouveau document.\n\nRemplacer quand même ?'))return null;
+      }
+      return pdf;
+    });
+  }).then(function(pdf){
+    if(!pdf)return;
+    var newPages=pdf.numPages;
+    var fields=currentTpl.fields||[];
+    if(fields.length){
+      var m=fields.length+(fields.length>1?' champs sont déjà placés':' champ est déjà placé')+' sur l\'ancien document.\n\n'
+        +'OK  = les garder (à repositionner sur le nouveau document)\n'
+        +'Annuler = repartir de zéro';
+      if(!confirm(m))currentTpl.fields=[];
+    }
+    var moved=_clampFieldsToPages(newPages);
+    currentTpl.pdfBase64=dataUrl;
+    currentTpl.pages=newPages;
+    pdfDoc=pdf;totalPages=newPages;currentPage=1;selectedField=null;
+    renderPdfPage();
+    _markPdfDirty(true);
+    if(moved){
+      alert(moved+(moved>1?' champs étaient':' champ était')+' sur une page qui n\'existe plus dans le nouveau document.\n\n'
+        +(moved>1?'Ils ont été ramenés':'Il a été ramené')+' sur la dernière page — repositionne-'+(moved>1?'les':'le')+'.');
+    }else{
+      toast('📄 Document remplacé — repositionne les champs puis Enregistre');
+    }
+  }).catch(function(err){
+    console.error('[SIG] replace PDF error:',err);
+    alert('Ce fichier n\'a pas pu être lu comme un PDF : '+((err&&err.message)||''));
+  });
+}
+
+function _markPdfDirty(on){
+  var el=document.getElementById('edPdfDirty');
+  if(!el)return;
+  el.style.display=on?'':'none';
+  if(on)el.textContent=(currentTpl&&currentTpl._adhoc)?'📄 Nouveau document chargé':'📄 Nouveau document — enregistre pour l\'appliquer';
+}
+
 function openEditorWithPdf(dataUrl){
   document.getElementById('tabTemplates').style.display='none';
   document.getElementById('tabRequests').style.display='none';
@@ -420,6 +527,7 @@ function openEditorWithPdf(dataUrl){
   var isAdhoc=currentTpl._adhoc===true;
   document.getElementById('edSaveBtn').style.display=isAdhoc?'none':'';
   document.getElementById('edAdhocBadge').style.display=isAdhoc?'':'none';
+  _markPdfDirty(false);
   document.getElementById('edTplName').placeholder=isAdhoc?'Nom du document (visible par le client)':'Nom du modèle';
   var autoEn=currentTpl.automationEnabled===true;
   document.getElementById('edAutoEnabled').checked=autoEn;
@@ -778,9 +886,16 @@ function saveTpl(){
   var data=built.data,pdfB64=built.pdfB64,pdfSizeKB=built.pdfSizeKB;
   if(currentTpl.id){
     // Update existing
+    /* Le nouveau document passe en morceaux : il FAUT retirer l'ancienne copie
+       inline, sinon elle reste dans le doc et garde la priorité au chargement
+       (openTpl et sign.html lisent pdfBase64 avant les morceaux) — on croirait
+       le remplacement raté. */
+    if(pdfSizeKB>=700)data.pdfBase64=firebase.firestore.FieldValue.delete();
     db.collection('signature_templates').doc(currentTpl.id).update(data).then(function(){
       if(pdfSizeKB>=700)savePdfChunks(currentTpl.id,pdfB64);
+      else _purgePdfChunks(currentTpl.id);   // cas inverse : morceaux de l'ancien PDF devenus inutiles
       toast('✅ Modèle enregistré');
+      _markPdfDirty(false);
     }).catch(function(e){alert('Erreur: '+e.message);});
   }else{
     // Create new
@@ -789,6 +904,7 @@ function saveTpl(){
       currentTpl.id=ref.id;
       if(pdfSizeKB>=700)savePdfChunks(ref.id,pdfB64);
       toast('✅ Modèle créé');
+      _markPdfDirty(false);
     }).catch(function(e){alert('Erreur: '+e.message);});
   }
 }
@@ -797,12 +913,38 @@ function savePdfChunks(tplId,b64){
   var chunkSize=600000; // ~600KB per chunk
   var chunks=[];
   for(var i=0;i<raw.length;i+=chunkSize)chunks.push(raw.slice(i,i+chunkSize));
-  var batch=db.batch();
-  chunks.forEach(function(c,idx){
-    var ref=db.collection('signature_templates').doc(tplId).collection('pdf').doc('chunk_'+String(idx).padStart(3,'0'));
-    batch.set(ref,{chunk:idx,data:c});
+  var col=db.collection('signature_templates').doc(tplId).collection('pdf');
+  /* Purge des morceaux de l'ANCIEN document : remplacer un PDF par un plus
+     court laissait des morceaux orphelins, que orderBy('chunk') recolle à la
+     fin du nouveau au chargement — document illisible. */
+  col.get().then(function(sn){
+    var batch=db.batch();
+    chunks.forEach(function(c,idx){
+      batch.set(col.doc('chunk_'+String(idx).padStart(3,'0')),{chunk:idx,data:c});
+    });
+    sn.forEach(function(d){
+      var ci=(d.data()||{}).chunk;
+      if(typeof ci!=='number')ci=parseInt(String(d.id).replace(/\D/g,''),10);
+      if(!isNaN(ci)&&ci>=chunks.length)batch.delete(d.ref);
+    });
+    return batch.commit();
+  }).then(function(){
+    console.log('[SIG] PDF chunks saved: '+chunks.length);
+  }).catch(function(e){
+    console.error('[SIG] savePdfChunks error:',e);
+    alert('Le document n\'a pas pu être enregistré en entier : '+e.message+'\nRéessaie avant d\'envoyer le contrat.');
   });
-  batch.commit().then(function(){console.log('PDF chunks saved: '+chunks.length);});
+}
+/* Le document tient de nouveau en une seule pièce : les morceaux de l'ancien
+   PDF ne servent plus à rien. */
+function _purgePdfChunks(tplId){
+  var col=db.collection('signature_templates').doc(tplId).collection('pdf');
+  col.get().then(function(sn){
+    if(sn.empty)return null;
+    var batch=db.batch();
+    sn.forEach(function(d){batch.delete(d.ref);});
+    return batch.commit();
+  }).catch(function(e){console.error('[SIG] purge chunks:',e.message);});
 }
 function deleteTpl(id){
   if(!confirm('Supprimer ce modèle ?'))return;
@@ -834,8 +976,11 @@ function _saveAdhocThenOpen(){
   data.isAdhoc=true;
   if(currentTpl.id){
     // Déjà persisté (double clic sur Envoyer, ou retour depuis le modal) : maj puis modal
+    if(pdfSizeKB>=700)data.pdfBase64=firebase.firestore.FieldValue.delete();
     db.collection('signature_templates').doc(currentTpl.id).update(data).then(function(){
       if(pdfSizeKB>=700)savePdfChunks(currentTpl.id,pdfB64);
+      else _purgePdfChunks(currentTpl.id);
+      _markPdfDirty(false);
       document.getElementById('sendModal').style.display='flex';
     }).catch(function(e){alert('Erreur: '+e.message);});
     return;
