@@ -295,7 +295,7 @@ body.bk-embed .bk-progress{position:relative}
           <div class="bk-continue-bar" id="continueBar" style="display:none">
             <button class="bk-btn bk-btn-primary" onclick="goStep(4)">Continuer →</button>
           </div>
-          <button class="bk-btn bk-btn-back" onclick="goStep(2)" style="margin-top:8px">← Retour</button>
+          <button class="bk-btn bk-btn-back" onclick="backFromCal()" style="margin-top:8px">← Retour</button>
         </div>
 
         <!-- STEP 4: Form -->
@@ -341,6 +341,10 @@ var S = {
   settings: {},
   selType: null,
   selPerson: null,
+  /* Personne VERROUILLÉE par le lien nominatif (?person=…). Le lien du
+     coach référent doit garantir que son client réserve avec LUI : sans ce
+     verrou, choisir un type de RDV renvoyait au choix libre du coach. */
+  lockPerson: null,
   selDate: null,
   selTime: null,
   calMonth: new Date().getMonth(),
@@ -434,6 +438,15 @@ function setProgress(step) {
 }
 
 /* ── STEP NAVIGATION ── */
+/* Retour depuis le calendrier. Sur un lien nominatif, l'étape « avec qui ? »
+   n'existe pas : on remonte au choix de la consultation, jamais au choix
+   du coach — sinon le verrou sauterait par le bouton Retour. */
+function backFromCal() {
+  if (S.lockPerson) { renderTypeCards(); goStep(1); return; }
+  goStep(2);
+}
+window.backFromCal = backFromCal;
+
 function goStep(n) {
   S.currentStep = n;
   document.querySelectorAll('.bk-step').forEach(function(el) { el.classList.remove('active'); });
@@ -636,7 +649,7 @@ function initBooking() {
     if (S.selType) {
       if (presetPerson) {
         S.selPerson = S.persons.find(function(p) { return p.id === presetPerson; });
-        if (S.selPerson) { goStep(3); return; }
+        if (S.selPerson) { S.lockPerson = S.selPerson; S.rrPool = null; goStep(3); return; }
       }
       renderPersonCards(); goStep(2); return;
     }
@@ -644,8 +657,9 @@ function initBooking() {
   if (presetPerson) {
     S.selPerson = S.persons.find(function(p) { return p.id === presetPerson; });
     if (S.selPerson) {
-      var personTypes = S.types.filter(function(t) { return (S.selPerson.types || []).indexOf(t.id) >= 0; });
-      if (personTypes.length === 1) { S.selType = personTypes[0]; goStep(3); return; }
+      S.lockPerson = S.selPerson;          // verrou : ce lien = ce coach
+      var personTypes = S.types.filter(function(t) { return (S.lockPerson.types || []).indexOf(t.id) >= 0; });
+      if (personTypes.length === 1) { S.selType = personTypes[0]; S.rrPool = null; goStep(3); return; }
     }
   }
   renderTypeCards();
@@ -660,6 +674,9 @@ function renderTypeCards() {
   var h = '';
   for (var i = 0; i < S.types.length; i++) {
     var t = S.types[i];
+    /* Lien nominatif : on ne propose que les consultations que CE coach
+       assure — sinon le visiteur choisit un type qu'il ne fait pas. */
+    if (S.lockPerson && (S.lockPerson.types || []).indexOf(t.id) < 0) continue;
     h += '<div class="bk-type-card" style="--type-color:' + t.color + '" data-action="selectType" data-idx="' + i + '">';
     h += '<div class="bk-type-top">';
     h += '<span class="bk-type-dot" style="background:' + t.color + '"></span>';
@@ -1805,7 +1822,15 @@ document.addEventListener('click', function(e) {
 
   if (action === 'selectType') {
     S.selType = S.types[+a.dataset.idx];
-    S.selPerson = null; S.selDate = null; S.selTime = null;
+    S.selDate = null; S.selTime = null;
+    /* Lien nominatif : on saute l'étape « avec qui ? » — la réponse est
+       déjà dans le lien. */
+    if (S.lockPerson) {
+      S.selPerson = S.lockPerson;
+      S.rrPool = null;                     // pas d'attribution auto sur un lien nominatif
+      goStep(3); return;
+    }
+    S.selPerson = null;
     renderPersonCards();
     goStep(2);
   }
