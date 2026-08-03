@@ -806,6 +806,23 @@
 
     /* ── PLAN D'ACTION ── */
     /* ── Plan d'action Elite Phénix (rendu par coaching-plan.js) ── */
+    /* ── Bandeau Guide du coach (au-dessus du tableau, toutes vues) ── */
+    .guide-strip { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+      margin:0 24px 14px; padding:11px 15px; border-radius:13px;
+      background:linear-gradient(100deg,var(--blue-ghost),#fff);
+      border:1px solid rgba(26,61,206,.18); }
+    .guide-strip .gs-ico { font-size:19px; line-height:1; }
+    .guide-strip .gs-txt { flex:1; min-width:220px; line-height:1.4; }
+    .guide-strip .gs-txt b { display:block; font-size:13px; color:var(--blue-dark); }
+    .guide-strip .gs-txt span { font-size:11.5px; color:var(--muted); }
+    .gs-btn { border:1px solid rgba(26,61,206,.28); background:#fff; color:var(--blue-main);
+      border-radius:9px; padding:6px 13px; font-size:12px; font-weight:700; cursor:pointer;
+      font-family:inherit; text-decoration:none; white-space:nowrap; transition:all .14s; }
+    .gs-btn:hover { border-color:var(--blue-main); }
+    .gs-btn.main { background:var(--blue-main); border-color:var(--blue-main); color:#fff; }
+    .gs-btn.main:hover { background:var(--blue-dark); }
+    @media(max-width:760px){ .guide-strip { margin:0 12px 12px; } }
+
     /* ── Plan d'action : blocs enrichis (rendu partagé fiche coach / page client) ── */
     /* ── Feuille de route : la route + les étapes détaillées ── */
     .cpv-road { display:block; width:100%; max-width:520px; margin:2px auto 14px; height:auto; }
@@ -1277,6 +1294,17 @@
 
 <!-- RECENT STRIP (activité récente) -->
 <div id="recentActivityBar" class="recent-strip"></div>
+
+<!-- GUIDE COACH — toujours sous les yeux de l'équipe coaching -->
+<div class="guide-strip">
+  <span class="gs-ico">📘</span>
+  <div class="gs-txt">
+    <b>Guide du coach référent</b>
+    <span>Rôle, discours, grille des trois organismes, séance type, jalons, protocoles, rémunération.</span>
+  </div>
+  <a class="gs-btn main" href="doc-guide-coach-elite-phenix.html" target="_blank" rel="noopener">Ouvrir</a>
+  <button class="gs-btn" id="gsCopy" title="Copier le lien pour l'envoyer">🔗 Copier</button>
+</div>
 
 <!-- KANBAN VIEW -->
 <div class="kanban-wrap">
@@ -3294,6 +3322,20 @@ function togglePlanEdit(clientId){
   view.style.display = isEditing ? '' : 'none';
   edit.style.display = isEditing ? 'none' : '';
 }
+
+/* Bandeau Guide du coach — copie du lien pour l'envoyer à un coach. */
+(function(){
+  var b = document.getElementById('gsCopy');
+  if(!b) return;
+  b.addEventListener('click', function(){
+    var url = window.location.origin + '/doc-guide-coach-elite-phenix.html';
+    var done = function(){ var o = b.textContent; b.textContent = '✓ Copié';
+      setTimeout(function(){ b.textContent = o; }, 1500); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(done).catch(function(){ window.prompt('Lien du guide :', url); });
+    } else window.prompt('Lien du guide :', url);
+  });
+})();
 
 /* ══════════════════════════════════════════════════════════════════
    PLAN D'ACTION ELITE PHÉNIX — assistant, statuts, export
