@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Guide du Coach Référent — Elite Phénix</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070B1E; --card:rgba(12,19,45,.92); --line:rgba(101,141,255,.16);
+    --txt:#EAF0FF; --mut:#93A3C8; --soft:#C6D0EA; --cy:#4DD0F0; --cy-soft:#7FD8F5;
+    --grad:linear-gradient(135deg,#2E6FE8 0%,#3FC6F0 100%);
+    --gold:#C9A24B; --goldbg:rgba(201,162,75,.09);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);
+    background-image:radial-gradient(1000px 560px at 92% -5%, rgba(46,111,232,.25), transparent 60%),
+                     radial-gradient(800px 520px at -12% 30%, rgba(46,111,232,.11), transparent 55%);
+    font-family:'Inter',system-ui,sans-serif; color:var(--txt);
+  }
+  .wrap{max-width:980px; margin:0 auto; padding:0 20px 70px;}
+
+  /* ---------- Nav ---------- */
+  nav{
+    position:sticky; top:0; z-index:50;
+    background:rgba(7,11,30,.88); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  nav .in{max-width:980px; margin:0 auto; padding:12px 20px; display:flex; gap:8px; overflow-x:auto; scrollbar-width:none;}
+  nav .in::-webkit-scrollbar{display:none;}
+  nav a{
+    flex:0 0 auto; font-family:'Sora',sans-serif; font-size:11.5px; font-weight:600; letter-spacing:.05em;
+    color:var(--mut); text-decoration:none; border:1px solid var(--line); border-radius:999px;
+    padding:6px 13px; transition:color .15s, border-color .15s;
+  }
+  nav a:hover{color:var(--cy); border-color:rgba(77,208,240,.5);}
+
+  /* ---------- Hero ---------- */
+  header{padding:58px 0 40px;}
+  .eyebrow{font-family:'Sora',sans-serif; font-weight:600; font-size:12px; letter-spacing:.24em; text-transform:uppercase; color:var(--cy); margin-bottom:14px;}
+  h1{font-family:'Sora',sans-serif; font-weight:800; font-size:clamp(30px,4.6vw,44px); line-height:1.1; margin-bottom:12px;}
+  .sub{color:var(--mut); font-size:15.5px; line-height:1.6; max-width:640px;}
+  .accent{font-family:Georgia,'Times New Roman',serif; font-style:italic; color:var(--cy-soft);}
+
+  /* ---------- Sections ---------- */
+  section{padding-top:54px; scroll-margin-top:74px;}
+  .secno{font-family:'Sora',sans-serif; font-weight:600; font-size:11.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--cy); margin-bottom:10px;}
+  h2{font-family:'Sora',sans-serif; font-weight:700; font-size:clamp(21px,3vw,28px); margin-bottom:8px;}
+  .intro{color:var(--mut); font-size:15px; line-height:1.6; max-width:660px; margin-bottom:22px;}
+  .intro b{color:var(--txt);}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:22px 24px;}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+
+  .callout{border-left:3px solid var(--cy); background:rgba(77,208,240,.07); border-radius:0 12px 12px 0; padding:15px 18px; font-size:14px; line-height:1.6; color:var(--soft); margin-top:18px;}
+  .callout b{color:var(--txt);}
+  .callout.gold{border-left-color:var(--gold); background:var(--goldbg); color:#E4D6AE;}
+  .callout.gold b{color:#F2E7C8;}
+
+  /* ---------- Tables ---------- */
+  table{width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden;}
+  th{font-family:'Sora',sans-serif; font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--cy); text-align:left; padding:12px 16px; background:rgba(46,111,232,.14); border-bottom:1px solid var(--line);}
+  td{padding:12px 16px; font-size:14px; line-height:1.55; color:var(--soft); border-bottom:1px solid rgba(101,141,255,.09); vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  td:first-child{color:var(--txt); font-weight:600;}
+  .tw{overflow-x:auto; border-radius:14px;}
+
+  /* ---------- Listes duo ---------- */
+  .duo .card h3{font-family:'Sora',sans-serif; font-size:13px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; margin-bottom:14px;}
+  .duo .yes h3{color:var(--cy);} .duo .no h3{color:var(--gold);}
+  .duo ul{list-style:none;}
+  .duo li{position:relative; padding-left:20px; font-size:14px; line-height:1.55; color:var(--soft); margin-bottom:10px;}
+  .duo .yes li::before{content:''; position:absolute; left:0; top:8px; width:7px; height:7px; border-radius:50%; background:var(--cy);}
+  .duo .no li::before{content:'✕'; position:absolute; left:0; top:0; color:var(--gold); font-size:12px; font-weight:700;}
+
+  /* ---------- Citations discours ---------- */
+  .quotes{display:grid; gap:12px;}
+  .q{display:grid; grid-template-columns:170px 1fr; gap:16px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 20px; align-items:center;}
+  .q .l{font-family:'Sora',sans-serif; font-size:11px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--mut);}
+  .q .t{font-family:Georgia,serif; font-style:italic; font-size:15.5px; line-height:1.55; color:var(--cy-soft);}
+
+  /* ---------- Étapes numérotées ---------- */
+  .steps{display:grid; gap:12px;}
+  .step{display:grid; grid-template-columns:44px 1fr; gap:14px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; align-items:start;}
+  .step b.num{display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%; background:var(--cy); color:#06122A; font-family:'Sora',sans-serif; font-size:15px;}
+  .step .tt{font-family:'Sora',sans-serif; font-weight:700; font-size:15px; margin-bottom:4px;}
+  .step p{font-size:14px; line-height:1.55; color:var(--soft);}
+
+  /* ---------- Tags dominante ---------- */
+  .tg{display:inline-block; font-family:'Sora',sans-serif; font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; border:1px solid; border-radius:6px; padding:2px 8px; white-space:nowrap;}
+  .tg.fon{color:var(--gold); border-color:rgba(201,162,75,.5);}
+  .tg.del{color:#7FA4FF; border-color:rgba(127,164,255,.45);}
+  .tg.ren{color:var(--cy); border-color:rgba(77,208,240,.45);}
+  .tg.acq{color:#4FD6B8; border-color:rgba(79,214,184,.45);}
+  .tg.tra{color:var(--mut); border-color:var(--line);}
+
+  /* ---------- Chiffres essentiels ---------- */
+  .kpis{display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-top:18px;}
+  .kpi{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 14px; text-align:center;}
+  .kpi b{display:block; font-family:'Sora',sans-serif; font-size:21px; color:var(--cy); margin-bottom:5px;}
+  .kpi span{font-size:11.5px; line-height:1.45; color:var(--mut); display:block;}
+
+  /* ---------- Boussole ---------- */
+  .final{margin-top:60px; background:var(--card); border:1px solid rgba(77,208,240,.4); border-top:3px solid; border-image:linear-gradient(90deg,#2E6FE8,#3FC6F0) 1; border-radius:0 0 16px 16px; padding:28px 30px;}
+  .final h2{margin-bottom:16px;}
+  .final ol{list-style:none; counter-reset:b;}
+  .final li{counter-increment:b; position:relative; padding-left:38px; font-size:15px; line-height:1.6; color:var(--soft); margin-bottom:12px;}
+  .final li::before{content:counter(b); position:absolute; left:0; top:1px; width:26px; height:26px; border-radius:50%; background:var(--cy); color:#06122A; font-family:'Sora',sans-serif; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center;}
+  .final li b{color:var(--txt);}
+
+  footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; align-items:center;}
+  .logo{font-family:'Sora',sans-serif; font-weight:700; font-size:15px; letter-spacing:.16em; text-transform:uppercase; color:var(--cy);}
+  footer .sub{font-size:12.5px;}
+
+  @media (max-width:820px){
+    .grid2,.grid3{grid-template-columns:1fr;}
+    .kpis{grid-template-columns:1fr 1fr;}
+    .q{grid-template-columns:1fr; gap:6px;}
+    section{padding-top:44px;}
+  }
+  @media print{
+    body{background:#070B1E !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    nav{display:none;}
+    section,.step,.q,.final{page-break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+
+<nav><div class="in">
+  <a href="#essentiel">Essentiel</a>
+  <a href="#role">Rôle</a>
+  <a href="#discours">Discours</a>
+  <a href="#grille">Grille</a>
+  <a href="#chantiers">Chantiers</a>
+  <a href="#seance">Séance</a>
+  <a href="#semaine">Semaine</a>
+  <a href="#sixmois">6 mois</a>
+  <a href="#protocoles">Protocoles</a>
+  <a href="#reconduction">Reconduction</a>
+  <a href="#remuneration">Rémunération</a>
+  <a href="#cadre">Cadre &amp; outils</a>
+</div></nav>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Document interne · Équipe coaching</div>
+  <h1>Guide du Coach Référent.</h1>
+  <p class="sub">Votre rôle, votre méthode, votre feuille de route — <span class="accent">l'essentiel, clair et applicable.</span> Basé sur la Trame v2.1 et le Parcours Client v1.</p>
+</header>
+
+<!-- ================= ESSENTIEL ================= -->
+<section id="essentiel">
+  <div class="secno">L'essentiel en une page</div>
+  <h2>Votre mission.</h2>
+  <p class="intro"><b>Amener votre client du point A au point B en six mois</b> — de « tout repose sur lui » à « 50 % de ses tâches déléguées, croissance absorbée » — avec un premier résultat visible dès le premier mois.</p>
+
+  <div class="kpis">
+    <div class="kpi"><b>1</b><span>séance / semaine — créneau fixe, 24 au total</span></div>
+    <div class="kpi"><b>3</b><span>actions max / semaine, datées, responsable nommé</span></div>
+    <div class="kpi"><b>2</b><span>touchpoints WhatsApp minimum entre les séances</span></div>
+    <div class="kpi"><b>24 h</b><span>pour déposer le CR et mettre les jalons à jour</span></div>
+    <div class="kpi"><b>75 €</b><span>par séance tenue · +150 € reconduction · +20 € témoignage</span></div>
+  </div>
+
+  <div class="callout gold"><b>Les 3 règles d'or.</b> 1. Un seul verrou à la fois — délivrabilité, puis rentabilité, puis acquisition. 2. Aucun client ne termine le mois 1 sans un résultat concret et nommable. 3. Vous êtes libre du chemin. Pas du résultat.</div>
+</section>
+
+<!-- ================= RÔLE ================= -->
+<section id="role">
+  <div class="secno">01 · Votre rôle</div>
+  <h2>Une locomotive, pas un miroir.</h2>
+  <p class="intro"><b>Le client ne paie pas un accompagnement, il paie des résultats.</b> En signant, il vous délègue la responsabilité de sa réussite. Vous prenez un rôle de mentor, pas une posture de coach.</p>
+
+  <div class="grid2 duo">
+    <div class="card yes">
+      <h3>Vous êtes</h3>
+      <ul>
+        <li>Une locomotive : vous donnez le cap, le tempo, et vous tenez le client responsable</li>
+        <li>Son interlocuteur unique — dossier, chiffres et blocages par cœur</li>
+        <li>Le pilote qui mobilise le bon expert, puis reprend la main</li>
+        <li>Celui qui capte le témoignage dès le premier résultat</li>
+        <li>Celui qui porte la reconduction, accord écrit à l'appui</li>
+      </ul>
+    </div>
+    <div class="card no">
+      <h3>Vous n'êtes pas</h3>
+      <ul>
+        <li>Un miroir : « et vous, vous feriez comment ? »</li>
+        <li>Un coach parmi d'autres, réservable au coup par coup</li>
+        <li>Un expert qui s'attribue ses propres calls</li>
+        <li>Celui qui attend le jour 180 pour le témoignage</li>
+        <li>Celui qui clôt seul un refus — signalement à Marine + CEO</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout"><b>Le périmètre de l'offre ne se négocie jamais.</b> La session fiscaliste n'est proposée qu'à l'initiative des CEO mentors — jamais promise, jamais exigible.</div>
+</section>
+
+<!-- ================= DISCOURS ================= -->
+<section id="discours">
+  <div class="secno">02 · Le discours à maîtriser</div>
+  <h2>Cinq phrases qui recadrent.</h2>
+  <p class="intro">Tous vos clients arrivent avec la même croyance : <b>« il me faut plus de clients »</b>. Apprenez ces phrases — elles servent à chaque séance.</p>
+
+  <div class="quotes">
+    <div class="q"><div class="l">L'ordre des choses</div><div class="t">« D'abord une entreprise qui tourne sans vous. Ensuite les clients. Dans cet ordre, jamais l'inverse. »</div></div>
+    <div class="q"><div class="l">Le vrai plafond</div><div class="t">« Votre plafond n'est pas commercial, il est structurel : deux fois plus de clients, c'est deux fois plus d'heures — et vous êtes déjà à 60 par semaine. »</div></div>
+    <div class="q"><div class="l">Le test</div><div class="t">« Si vous vous arrêtez 30 jours, votre entreprise gagne-t-elle toujours de l'argent ? »</div></div>
+    <div class="q"><div class="l">Le piège</div><div class="t">« Vous êtes le meilleur ouvrier de votre boîte. C'est exactement le problème. »</div></div>
+    <div class="q"><div class="l">La valeur</div><div class="t">« Une entreprise qui dépend de vous ne vaut rien, même très rentable. »</div></div>
+  </div>
+
+  <div class="callout"><b>En séance :</b> quand le client veut ouvrir les vannes trop tôt, ne débattez pas. Revenez à l'ordre.</div>
+</section>
+
+<!-- ================= GRILLE ================= -->
+<section id="grille">
+  <div class="secno">03 · La méthode</div>
+  <h2>Une entreprise, trois organismes.</h2>
+  <p class="intro">La croissance s'arrête toujours parce que l'un des trois est grippé. À chaque séance, vous savez lequel vous traitez.</p>
+
+  <div class="grid3">
+    <div class="card"><div class="secno">1 · Délivrabilité</div><p style="font-size:14px; color:var(--soft); line-height:1.55;"><b style="color:var(--txt)">Tenir la promesse, sans le dirigeant.</b><br>Signes : retards, qualité en baisse, tout remonte à lui.</p></div>
+    <div class="card"><div class="secno">2 · Rentabilité</div><p style="font-size:14px; color:var(--soft); line-height:1.55;"><b style="color:var(--txt)">Transformer le chiffre en résultat.</b><br>Signes : CA en hausse mais résultat stable, marge inconnue.</p></div>
+    <div class="card"><div class="secno">3 · Acquisition</div><p style="font-size:14px; color:var(--soft); line-height:1.55;"><b style="color:var(--txt)">Faire venir la demande.</b><br>Signes : volume insuffisant, devis non transformés, un seul canal.</p></div>
+  </div>
+
+  <div class="callout"><b>Posez la grille dès la première séance.</b> L'ordre des cartes est l'ordre de traitement. Et chaque palier franchi révèle le suivant : posée au début, la grille rend la reconduction évidente. Posée au mois 6, elle sonne comme une vente.</div>
+</section>
+
+<!-- ================= CHANTIERS ================= -->
+<section id="chantiers">
+  <div class="secno">04 · Le référentiel</div>
+  <h2>Dix chantiers. Vous piochez selon le verrou.</h2>
+  <p class="intro"><b>Une boîte à outils, pas un catalogue.</b> Personne ne les traite tous. Les trames, scripts et modèles prêts à l'emploi sont dans The Vault.</p>
+
+  <div class="tw"><table>
+    <tr><th>Chantier</th><th>En clair</th><th>Dominante</th></tr>
+    <tr><td>1. Alignement du dirigeant</td><td>Vision, rôle réel, zone de génie</td><td><span class="tg fon">Fondation</span></td></tr>
+    <tr><td>2. Structure &amp; modèle éco</td><td>Offres, business model, plan d'évolution</td><td><span class="tg fon">Fondation</span></td></tr>
+    <tr><td>3. Culture &amp; management</td><td>Valeurs, posture de leader, charte d'équipe</td><td><span class="tg del">Délivrabilité</span></td></tr>
+    <tr><td>4. Organisation &amp; pilotage</td><td>Organigramme, process, tableaux de bord, KPI</td><td><span class="tg del">Délivrabilité</span></td></tr>
+    <tr><td>5. Délégation stratégique</td><td>Matrice à déléguer, recrutement, management</td><td><span class="tg del">Délivrabilité</span></td></tr>
+    <tr><td>6. Marges &amp; trésorerie</td><td>Coûts, marge nette, trésorerie stable</td><td><span class="tg ren">Rentabilité</span></td></tr>
+    <tr><td>7. Marketing &amp; visibilité</td><td>Positionnement d'élite, campagnes prêtes</td><td><span class="tg acq">Acquisition</span></td></tr>
+    <tr><td>8. Digitalisation</td><td>Tunnel, CRM, automatisations</td><td><span class="tg tra">Transverse</span></td></tr>
+    <tr><td>9. Expérience client</td><td>Fidélité, ambassadeurs, avis, upsells</td><td><span class="tg acq">Acquisition</span></td></tr>
+    <tr><td>10. Expansion</td><td>Duplication du modèle, équipes autonomes</td><td><span class="tg tra">Expansion</span></td></tr>
+  </table></div>
+</section>
+
+<!-- ================= SÉANCE ================= -->
+<section id="seance">
+  <div class="secno">05 · La séance type</div>
+  <h2>52 minutes utiles.</h2>
+
+  <div class="steps">
+    <div class="step"><b class="num">1</b><div><div class="tt">Ce qui a bougé</div><p>Ses chiffres, ses actions, ce qui a tenu, ce qui a lâché. Jamais « comment ça va ? » — toujours « où en est-on ? ».</p></div></div>
+    <div class="step"><b class="num">2</b><div><div class="tt">Le verrou</div><p>Un seul sujet : celui qui bloque le palier suivant. Tout le reste attend.</p></div></div>
+    <div class="step"><b class="num">3</b><div><div class="tt">Trois actions</div><p>Datées, avec un responsable. Trois maximum — c'est un plafond, pas un objectif.</p></div></div>
+    <div class="step"><b class="num">4</b><div><div class="tt">Verrouiller</div><p>Le client reformule ce qu'il fait lundi matin. Rendez-vous suivant confirmé.</p></div></div>
+  </div>
+
+  <div class="callout"><b>Après la séance :</b> compte rendu sur la plateforme sous 24 h · jalons à jour sans exception · jalon manqué = analyse de cause, jamais un simple report.</div>
+</section>
+
+<!-- ================= SEMAINE ================= -->
+<section id="semaine">
+  <div class="secno">06 · Votre semaine type</div>
+  <h2>Le rythme qui fait tout tenir.</h2>
+
+  <div class="tw"><table>
+    <tr><th>Quand</th><th>Quoi</th></tr>
+    <tr><td>La veille</td><td>Rappel WhatsApp au client (WA-COACH-RAP). Alteore envoie déjà mail + SMS automatiques.</td></tr>
+    <tr><td>Jour J</td><td>La séance — structure en 4 temps ci-dessus.</td></tr>
+    <tr><td>J+1 max</td><td>Compte rendu déposé + jalons à jour.</td></tr>
+    <tr><td>Dans la semaine</td><td>Au moins 2 touchpoints WhatsApp à votre initiative — vocaux privilégiés : plus efficaces que l'écrit, et plus rapides pour vous.</td></tr>
+    <tr><td>En continu</td><td>Moins de 12 h pour répondre à toute sollicitation client (en semaine).</td></tr>
+  </table></div>
+</section>
+
+<!-- ================= 6 MOIS ================= -->
+<section id="sixmois">
+  <div class="secno">07 · La feuille de route</div>
+  <h2>Six mois, quatre temps, six jalons.</h2>
+
+  <div class="tw"><table>
+    <tr><th>Mois</th><th>Objectif</th><th>Jalons</th><th>Chantiers</th><th>Votre moment clé</th></tr>
+    <tr><td>M1</td><td>Diagnostic + premier résultat</td><td>A1 (J10) · A2 (J20)</td><td>1, 4, 5</td><td>1re séance : restitution, verrou, plan</td></tr>
+    <tr><td>M2-3</td><td>Sortir le dirigeant de la production</td><td>A3 (J45)</td><td>3, 4, 5</td><td>Témoignage au 1er résultat</td></tr>
+    <tr><td>M4-5</td><td>Piloter par les chiffres</td><td>A4 (J90) · A5 (J135)</td><td>6, 4, puis 7</td><td>Les mentors appellent le client (5 min, ≈ J120)</td></tr>
+    <tr><td>M6</td><td>Dupliquer ce qui marche</td><td>B (J180)</td><td>8, 9, 10</td><td>Votre conversation de reconduction</td></tr>
+  </table></div>
+
+  <div style="height:16px"></div>
+
+  <div class="tw"><table>
+    <tr><th>Jalon</th><th>Jour</th><th>La preuve attendue</th></tr>
+    <tr><td>A1</td><td>10</td><td>− 30 % de charge dirigeant en moins</td></tr>
+    <tr><td>A2</td><td>20</td><td>Le dirigeant est sorti du cycle de vente</td></tr>
+    <tr><td>A3</td><td>45</td><td>Process documentés et tenus par l'équipe sur au moins un pôle</td></tr>
+    <tr><td>A4</td><td>90</td><td>Tableau de bord actif, KPI suivis, rituel de revue en place</td></tr>
+    <tr><td>A5</td><td>135</td><td>Marge nette en progression, trésorerie sous contrôle</td></tr>
+    <tr><td>B</td><td>180</td><td>50 % des tâches opérationnelles déléguées, croissance absorbée</td></tr>
+  </table></div>
+
+  <div class="callout gold"><b>Règle du premier mois.</b> Aucun client ne termine le mois 1 sans un résultat concret et nommable : du temps récupéré, une tâche sortie de son périmètre, un chiffre qui bouge. C'est l'indicateur prioritaire du programme — et le socle du témoignage et de la reconduction.</div>
+</section>
+
+<!-- ================= PROTOCOLES ================= -->
+<section id="protocoles">
+  <div class="secno">08 · Les protocoles</div>
+  <h2>Cinq réflexes à connaître par cœur.</h2>
+
+  <div class="steps">
+    <div class="step"><b class="num">1</b><div><div class="tt">Le démarrage</div><p>Vous êtes dans le groupe WhatsApp privé dès la signature. <b style="color:var(--txt)">Sous 48 h :</b> présentation + créneau fixe posé avec le client (non renégociable). Diagnostic mené par Adrien ou Emily — ou par vous à défaut — avant J7 → passation complète. Votre 1re séance : restitution, verrou, plan.</p></div></div>
+    <div class="step"><b class="num">2</b><div><div class="tt">Le jalon</div><p><b style="color:var(--txt)">Atteint :</b> vocal de félicitations + validation plateforme. <b style="color:var(--txt)">Manqué :</b> analyse de cause avant de poursuivre + remontée en revue mensuelle.</p></div></div>
+    <div class="step"><b class="num">3</b><div><div class="tt">Le témoignage</div><p>Vous détectez le premier résultat → vous signalez à Marine la visio et l'horodatage → Marine extrait, les mentors valident → prime de 20 €. <b style="color:var(--txt)">Le bon réflexe :</b> faites formuler le résultat par le client, seul, en une prise — question posée, micro coupé. Critères : très bonne qualité + on ne vous voit ni ne vous entend.</p></div></div>
+    <div class="step"><b class="num">4</b><div><div class="tt">Le call expert</div><p><b style="color:var(--txt)">Quand :</b> sujet hors expertise · client qui n'implémente plus · besoin d'une autre voix · décision structurante. <b style="color:var(--txt)">Comment :</b> besoin écrit → débrief complet à l'expert → 1 h, 1 sujet, à la place de votre séance → l'expert rend CR + plan → vous reprenez la main. Les 75 € vont à l'expert — déclenchez quand même : c'est un devoir, et le taux est suivi en réunion coachs.</p></div></div>
+    <div class="step"><b class="num">5</b><div><div class="tt">Le no-show</div><p>10 minutes d'attente en relançant sur WhatsApp → séance close et <b style="color:var(--txt)">décomptée</b> (payée si le rappel de veille a été envoyé et les relances faites pendant l'attente) → 3 messages : client, Marine, groupe coaching. <b style="color:var(--txt)">×2 :</b> Marine relance. <b style="color:var(--txt)">×3 ou 2 semaines de silence :</b> les mentors appellent.</p></div></div>
+  </div>
+</section>
+
+<!-- ================= RECONDUCTION ================= -->
+<section id="reconduction">
+  <div class="secno">09 · La reconduction</div>
+  <h2>Votre moment.</h2>
+  <p class="intro"><b>Elle se prépare dès la première séance</b> (la grille), pas au mois 6.</p>
+
+  <div class="tw"><table>
+    <tr><th>Étape</th><th>Ce qui se passe</th></tr>
+    <tr><td>Dès le diagnostic</td><td>La grille des trois organismes est posée : chaque palier révèle le suivant.</td></tr>
+    <tr><td>M4</td><td>Les mentors appellent le client (5 min). Rien à faire pour vous.</td></tr>
+    <tr><td>M5-M6</td><td>Vous ouvrez en séance, sur son propre point d'étape. Vous validez : durée, démarrage, modalités.</td></tr>
+    <tr><td>Accord écrit</td><td>Le client confirme par écrit — WhatsApp, SMS ou mail (WA-COACH-REC-DEM). <b style="color:var(--txt)">Aucun traitement sans cet écrit.</b></td></tr>
+    <tr><td>Fiche</td><td>Fiche Reconduction remplie, accord référencé, déposée dans le groupe coaching interne.</td></tr>
+    <tr><td>Confirmation</td><td>WA-COACH-REC au client → les mentors traitent → votre prime de 150 € est déclenchée.</td></tr>
+    <tr><td>Refus</td><td>Jamais clos seul : signalement à Marine et aux mentors.</td></tr>
+  </table></div>
+
+  <div class="callout"><b>Pourquoi ça marche :</b> il n'y a plus rien à « avoir vu » — il y a des paliers, et le suivant est déjà nommé. La période 2 traite des sujets distincts, jamais une répétition des six premiers mois.</div>
+</section>
+
+<!-- ================= RÉMUNÉRATION ================= -->
+<section id="remuneration">
+  <div class="secno">10 · Votre rémunération</div>
+  <h2>Simple, alignée sur les résultats.</h2>
+
+  <div class="tw"><table>
+    <tr><th>Quoi</th><th>Montant</th><th>Condition</th></tr>
+    <tr><td>Séance individuelle tenue</td><td style="color:var(--cy); font-family:'Sora',sans-serif; font-weight:700;">75 €</td><td>No-show client : décomptée et payée si rappel de veille envoyé + relances pendant les 10 minutes d'attente</td></tr>
+    <tr><td>Séance déléguée en call expert</td><td style="color:var(--mut); font-family:'Sora',sans-serif; font-weight:700;">0 €</td><td>Les 75 € vont à l'expert — la rémunération suit la séance</td></tr>
+    <tr><td>Prime de reconduction</td><td style="color:var(--cy); font-family:'Sora',sans-serif; font-weight:700;">150 €</td><td>Une fois par renouvellement, au traitement de l'accord écrit</td></tr>
+    <tr><td>Prime témoignage</td><td style="color:var(--cy); font-family:'Sora',sans-serif; font-weight:700;">20 €</td><td>Clip validé par les mentors (qualité + coach ni visible ni audible)</td></tr>
+    <tr><td>Hors barème</td><td style="color:var(--mut);">—</td><td>Diagnostic, appels de check, coachings de groupe, entretien de reconduction</td></tr>
+  </table></div>
+
+  <div class="callout"><b>Lisez le système :</b> vos deux primes sont vos deux indicateurs clés. Faire réussir votre client vite et jusqu'au bout est, littéralement, votre meilleur revenu.</div>
+</section>
+
+<!-- ================= CADRE ================= -->
+<section id="cadre">
+  <div class="secno">11 · Cadre, indicateurs &amp; outils</div>
+  <h2>Vos standards, vos canaux.</h2>
+
+  <div class="tw"><table>
+    <tr><th>Standard</th><th>Engagement</th></tr>
+    <tr><td>Rendez-vous hebdo</td><td>Créneau fixe posé dès la semaine 1 — même jour, même heure, sur toute la période</td></tr>
+    <tr><td>Délai de réponse</td><td>Moins de 12 h en semaine</td></tr>
+    <tr><td>Contact</td><td>Au moins 2 touchpoints / semaine, vocaux WhatsApp privilégiés</td></tr>
+    <tr><td>Compte rendu</td><td>Déposé sous 24 h sur la plateforme</td></tr>
+    <tr><td>Jalons</td><td>Mis à jour après chaque séance, sans exception</td></tr>
+    <tr><td>Actions</td><td>3 maximum par semaine, datées, responsable nommé</td></tr>
+    <tr><td>Rappel</td><td>Message WhatsApp la veille de chaque séance</td></tr>
+  </table></div>
+
+  <div class="callout"><b>Vos 5 indicateurs :</b> séances tenues · délai de réponse · taux d'atteinte A1-A2 · témoignages obtenus · taux de reconduction. <b>Vos rituels :</b> revue des jalons mensuelle · réunion coachs mensuelle avec Adrien · coordination hebdo entre animateurs de groupe (lundi 14 h : Édouard · jeudi 12 h 30 : Thomas).</div>
+
+  <div style="height:16px"></div>
+
+  <div class="tw"><table>
+    <tr><th>Canal / outil</th><th>Usage</th></tr>
+    <tr><td>Groupe WhatsApp privé client</td><td>Votre canal principal — rappels, touchpoints, vocaux de jalon, reconduction</td></tr>
+    <tr><td>Groupe coaching interne</td><td>No-shows, Fiches Reconduction, coordination équipe</td></tr>
+    <tr><td>Team Alteore</td><td>Comptes rendus des coachings, décompte des séances, synchronisation des récaps et replays Meet</td></tr>
+    <tr><td>Plateforme academy.adrienemily.com</td><td>Point A/B, jalons, actions, comptes rendus, livrables</td></tr>
+    <tr><td>The Vault</td><td>Trames, scripts, SOP et modèles prêts à l'emploi, par chantier</td></tr>
+    <tr><td>Le Cercle</td><td>Communauté WhatsApp des membres — vous y répondez en mentor de proximité</td></tr>
+    <tr><td>Parcours Client v1 — annexe A</td><td>Tous vos scripts mot à mot : WA-COACH-01, RAP, JAL, NS-C, NS-I, REC-DEM, REC</td></tr>
+  </table></div>
+</section>
+
+<!-- ================= BOUSSOLE ================= -->
+<div class="final">
+  <div class="secno">Votre boussole</div>
+  <h2>Cinq phrases à retenir.</h2>
+  <ol>
+    <li><b>Vous donnez le cap, le tempo,</b> et vous tenez le client responsable de l'exécution.</li>
+    <li><b>Un seul verrou à la fois</b> — délivrabilité, rentabilité, puis acquisition.</li>
+    <li><b>Aucun client ne termine le mois 1</b> sans un résultat concret et nommable.</li>
+    <li><b>La rémunération suit la séance ;</b> vos primes suivent la réussite du client.</li>
+    <li><b>Vous êtes libre de l'ordre et des moyens.</b> Vous n'êtes pas libre du résultat.</li>
+  </ol>
+</div>
+
+<footer>
+  <div class="logo">Elite Phénix</div>
+  <p class="sub"><span class="accent">Diriger sans être indispensable.</span> &nbsp;·&nbsp; Réf. : Trame v2.1 · Parcours Client v1 · Guide Coach v2</p>
+</footer>
+
+</div>
+</body>
+</html>
