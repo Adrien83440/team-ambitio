@@ -80,6 +80,48 @@ async function validateApiKey(key) {
   }
 }
 
+/* ═══ LISTE DE BLOCAGE ════════════════════════════════════════════════
+   Faux numeros et emails bidon blacklistes depuis Leads Live
+   (api/lead-block.js ecrit blocked_contacts/{cle}).
+
+   ⚠ C'EST ICI que le blocage doit vivre, pas dans api/lead-optin.js :
+   Make n'appelle aucun endpoint, il depose un document dans
+   webhook_inbox et c'est cette fonction qui cree le lead. Le controle
+   pose cote Vercel le 30/07 n'etait donc jamais execute (constat du
+   03/08 : zero appel a /api/lead-optin en 7 jours de logs).
+
+   Lecture par ID de document : deux get() au pire, aucune requete ni
+   index. Meme normalisation que api/lead-block.js et sales-leads.html
+   (9 derniers chiffres) — toute divergence laisserait passer un numero
+   pourtant bloque.
+   En cas d'erreur Firestore on NE bloque PAS : mieux vaut un lead
+   pourri qu'un vrai lead perdu. */
+function phone9(raw) {
+  if (!raw) return null;
+  const d = String(raw).replace(/[^\d]/g, "");
+  if (d.length < 6) return null;
+  return d.length >= 9 ? d.slice(-9) : d;
+}
+
+async function blockedContactKey(email, phone) {
+  const keys = [];
+  const em = String(email || "").trim().toLowerCase();
+  if (em) keys.push("email:" + em.replace(/\//g, "_"));
+  const ph = phone9(phone);
+  if (ph) keys.push("phone:" + ph.replace(/\//g, "_"));
+  if (!keys.length) return null;
+  try {
+    const snaps = await Promise.all(
+      keys.map((k) => db.collection("blocked_contacts").doc(k).get())
+    );
+    for (let i = 0; i < snaps.length; i++) if (snaps[i].exists) return keys[i];
+    return null;
+  } catch (e) {
+    console.warn("blocklist injoignable, on laisse passer:", e && e.message);
+    return null;
+  }
+}
+
 async function findLead(email, phone) {
   if (email) {
     const emailNorm = email.trim().toLowerCase();
@@ -329,6 +371,21 @@ exports.onWebhookInbox = functions.firestore
       const action = data.action;
       if (!action) {
         await snap.ref.update({ status: "error", error: "Missing action field" });
+        return null;
+      }
+
+      /* Contact blackliste : on s'arrete AVANT toute ecriture — ni
+         creation, ni mise a jour, ni activite. Sans ce garde, un opt-in
+         d'un faux numero ressuscitait la fiche a chaque passage.
+         Le document webhook_inbox est marque "blocked" (pas "error") :
+         ce n'est pas une panne, c'est une decision. */
+      const blockHit = await blockedContactKey(
+        data.email,
+        data.telephone || data.phone
+      );
+      if (blockHit) {
+        console.log("onWebhookInbox: contact blacklisté → ignoré (" + blockHit + ")");
+        await snap.ref.update({ status: "blocked", blockedBy: blockHit, processedAt: admin.firestore.FieldValue.serverTimestamp() });
         return null;
       }
 
