@@ -312,26 +312,54 @@ function goToStep(n){
 /* ═══ OTP ═══ */
 function otpNav(el,i){if(el.value&&i<5)document.getElementById('otp'+(i+1)).focus();}
 function otpBack(e,i){if(e.key==='Backspace'&&!e.target.value&&i>0)document.getElementById('otp'+(i-1)).focus();}
+/* Le code SMS passe par /api/signature-otp (Vercel), qui repond directement.
+   Avant, le navigateur deposait un document dans webhook_inbox et attendait
+   qu'une Cloud Function le traite : quand cette fonction a cesse de gerer les
+   actions signature, le code ne partait plus et rien ne le signalait. */
+function otpCall(payload){
+  return fetch('/api/signature-otp',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  }).then(function(r){
+    return r.json().catch(function(){return {};}).then(function(j){
+      return {status:r.status,ok:r.ok,j:j||{}};
+    });
+  });
+}
 function requestOtp(){
   var b=document.getElementById('otpSendBtn');b.disabled=true;b.textContent='Envoi…';
-  db.collection('webhook_inbox').add({action:'signature_otp_send',signatureRequestId:REQ_ID,phone:(CURRENT_SIGNER&&CURRENT_SIGNER.phone)||REQ.clientPhone,signerIndex:CURRENT_SIGNER_IDX,createdAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
-    b.textContent='✅ Code envoyé';hide('otpSendWrap');show('otpVerifyWrap');document.getElementById('otp0').focus();
-  }).catch(function(e){b.disabled=false;b.textContent='📱 Recevoir le code';alert(e.message);});
+  otpCall({action:'send',reqId:REQ_ID,signerIndex:CURRENT_SIGNER_IDX}).then(function(o){
+    if(!o.ok){
+      b.disabled=false;b.textContent='📱 Recevoir le code';
+      alert(o.j.error||'Envoi impossible. Réessayez dans un instant.');
+      return;
+    }
+    b.textContent='✅ Code envoyé';hide('otpSendWrap');show('otpVerifyWrap');
+    document.getElementById('otp0').focus();
+  }).catch(function(e){
+    b.disabled=false;b.textContent='📱 Recevoir le code';
+    alert('Connexion indisponible : '+e.message);
+  });
 }
 function verifyOtp(){
   var code='';for(var i=0;i<6;i++)code+=document.getElementById('otp'+i).value;
   if(code.length!==6){alert('Entrez les 6 chiffres.');return;}
   var b=document.getElementById('otpVerifyBtn');b.disabled=true;b.textContent='Vérification…';
-  db.collection('webhook_inbox').add({action:'signature_otp_verify',signatureRequestId:REQ_ID,code:code,createdAt:firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
-    var att=0,iv=setInterval(function(){att++;
-      db.collection('signature_requests').doc(REQ_ID).get().then(function(d){
-        var r=d.data();
-        if(r.otpVerified){clearInterval(iv);goToStep(2);}
-        else if(r.otpError){clearInterval(iv);b.disabled=false;b.textContent='Vérifier';alert(r.otpError);db.collection('signature_requests').doc(REQ_ID).update({otpError:firebase.firestore.FieldValue.delete()});}
-        else if(att>15){clearInterval(iv);goToStep(2);}
-      });
-    },1500);
-  }).catch(function(e){b.disabled=false;b.textContent='Vérifier';alert(e.message);});
+  otpCall({action:'verify',reqId:REQ_ID,code:code}).then(function(o){
+    if(o.ok&&o.j.ok){goToStep(2);return;}
+    /* Panne de notre cote (5xx) : on laisse passer, comme le faisait l'ancien
+       parcours quand la Cloud Function ne repondait pas. Un code FAUX (400) ou
+       trop de tentatives (429) bloquent, eux. */
+    if(o.status>=500){
+      console.error('[otp] service indisponible, passage en mode degrade',o.j);
+      goToStep(2);return;
+    }
+    b.disabled=false;b.textContent='Vérifier';
+    alert(o.j.error||'Code incorrect.');
+  }).catch(function(e){
+    console.error('[otp] reseau',e);
+    goToStep(2);   /* reseau coupe : on ne bloque pas une signature en cours */
+  });
 }
 
 /* ═══ PDF RENDER + OVERLAYS ═══ */
