@@ -1209,7 +1209,9 @@ auth.onAuthStateChanged(async function(user) {
     /* Step 5 : ouverture directe d'un onglet via ?tab=invoices&clientId=... */
     const urlParams = new URLSearchParams(window.location.search);
     const requestedTab = urlParams.get('tab');
-    if (requestedTab && ['invoices', 'clients', 'products', 'subscriptions', 'alerts', 'settings', 'export'].indexOf(requestedTab) > -1) {
+    /* 'validate' manquait dans cette liste : un ?tab=validate etait ignore en
+       silence et on retombait sur l'onglet par defaut. */
+    if (requestedTab && ['invoices', 'validate', 'clients', 'products', 'subscriptions', 'alerts', 'settings', 'export'].indexOf(requestedTab) > -1) {
       switchTab(requestedTab);
     }
   } catch (err) {

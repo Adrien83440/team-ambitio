@@ -1632,10 +1632,11 @@ async function submitSendModal() {
 
     toast('📨 Facture envoyée à ' + toList.join(', '));
     closeSendModal();
-    /* Retour à la liste des factures après envoi.
+    /* Retour sur « À valider » après envoi : c'est de là qu'on enchaîne les
+       factures une par une, y revenir évite de refaire le chemin à chaque fois.
        NB : ne PAS faire location.reload() ici — l'URL contient encore ?action=send,
        ce qui rouvrirait automatiquement le modal d'envoi (bug de réouverture). */
-    setTimeout(function(){ location.href = 'admin-facturation.html?tab=invoices'; }, 1000);
+    setTimeout(function(){ location.href = 'admin-facturation.html?tab=validate'; }, 1000);
   } catch (err) {
     console.error('[send]', err);
     toast('Erreur envoi : ' + err.message, true);
