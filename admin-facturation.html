@@ -802,6 +802,13 @@
         </div>
       </div>
 
+      <!-- ═══ PRÊT POUR LA FACTURATION ÉLECTRONIQUE ═══════════════════════
+           Une facture B2B doit porter la raison sociale ET le SIREN/SIRET du
+           client. Ce panneau liste ce qui manque, sans rien bloquer : on
+           remplit a son rythme, et on ne rendra le SIRET obligatoire qu'une
+           fois la liste vide. ═══ -->
+      <div id="qrPanel" style="display:none;margin-bottom:16px"></div>
+
       <div class="bill-toolbar">
         <div class="bill-search">
           <span class="bill-search-icon">🔍</span>
@@ -2796,6 +2803,7 @@ function updateClientsStats() {
 }
 
 function renderClientsList() {
+  renderQontoReadiness();
   const wrap = document.getElementById('clientsTableWrap');
   const q = (document.getElementById('clientsSearch').value || '').toLowerCase().trim();
   const typeFilter = document.getElementById('clientsTypeFilter').value;
@@ -2913,6 +2921,132 @@ function showInvoicesForClient(clientId) {
   window.history.replaceState({}, '', url.toString());
   switchTab('invoices');
   /* Le filtre s'applique automatiquement via applyClientIdFilter dans renderInvoicesList */
+}
+
+/* ═══ PRÊT POUR LA FACTURATION ÉLECTRONIQUE ═════════════════════════════
+   Une facture B2B doit porter la raison sociale et le SIREN/SIRET du client.
+   Aujourd'hui la majorité des fiches sont typées « particulier » sans aucune
+   identité d'entreprise : ce panneau rend le trou visible et cliquable.
+   Aucun blocage — la validation des factures n'est pas touchée. */
+
+function qrMissingOf(c) {
+  var missing = [];
+  if (c.clientType !== 'company') missing.push('type société');
+  if (!String(c.companyName || '').trim()) missing.push('raison sociale');
+  var siret = String(c.siret || '').replace(/\s+/g, '');
+  if (!siret) missing.push('SIRET');
+  else if (siret.length !== 9 && siret.length !== 14) missing.push('SIRET incomplet (' + siret.length + ' chiffres)');
+  return missing;
+}
+
+function qrIncompleteList() {
+  var out = [];
+  for (var i = 0; i < clientsCache.length; i++) {
+    var c = clientsCache[i];
+    if (c.archived) continue;
+    var missing = qrMissingOf(c);
+    if (missing.length) out.push({ client: c, missing: missing });
+  }
+  out.sort(function (a, b) {
+    return String(a.client.companyName || a.client.contactLastName || '')
+      .localeCompare(String(b.client.companyName || b.client.contactLastName || ''));
+  });
+  return out;
+}
+
+function qrLabel(c) {
+  var soc = String(c.companyName || '').trim();
+  var nom = ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')).trim();
+  if (soc && nom) return soc + ' — ' + nom;
+  return soc || nom || c.email || '(sans nom)';
+}
+
+function renderQontoReadiness() {
+  var panel = document.getElementById('qrPanel');
+  if (!panel) return;
+  var active = clientsCache.filter(function (c) { return !c.archived; });
+  if (!active.length) { panel.style.display = 'none'; return; }
+
+  var incomplete = qrIncompleteList();
+  var done = active.length - incomplete.length;
+  var pct = active.length ? Math.round((done / active.length) * 100) : 0;
+  panel.style.display = 'block';
+
+  if (!incomplete.length) {
+    panel.innerHTML = '<div style="padding:14px 16px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.3);border-radius:10px;font-size:13px">'
+      + '<strong style="color:#10b981">✅ Tous les clients sont prêts pour la facturation électronique.</strong>'
+      + '<div style="color:var(--muted);margin-top:4px">Raison sociale et SIRET renseignés sur les ' + active.length + ' fiches actives.</div></div>';
+    return;
+  }
+
+  var html = '<div style="padding:14px 16px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.28);border-radius:10px">';
+  html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
+  html += '<strong style="font-size:13px;color:#f59e0b">⚡ ' + incomplete.length + ' client' + (incomplete.length > 1 ? 's' : '') + ' à compléter pour la facturation électronique</strong>';
+  html += '<span style="font-size:12px;color:var(--muted)">' + done + '/' + active.length + ' prêts (' + pct + ' %)</span>';
+  html += '<div style="margin-left:auto;display:flex;gap:6px">';
+  html += '<button class="bill-btn bill-btn-ghost" style="font-size:11px;padding:4px 10px" onclick="qrExportCsv()">⬇️ Exporter en CSV</button>';
+  html += '<button class="bill-btn bill-btn-ghost" style="font-size:11px;padding:4px 10px" onclick="qrToggle()"><span id="qrToggleLabel">Voir la liste</span></button>';
+  html += '</div></div>';
+  html += '<div style="height:6px;background:rgba(255,255,255,.07);border-radius:3px;margin-top:10px;overflow:hidden">'
+    + '<div style="height:100%;width:' + pct + '%;background:#10b981"></div></div>';
+  html += '<div style="font-size:11px;color:var(--muted);margin-top:8px">Une facture B2B doit porter la raison sociale et le SIREN/SIRET du client. Rien n\'est bloqué : complète à ton rythme, le SIRET ne deviendra obligatoire qu\'une fois cette liste vide.</div>';
+
+  html += '<div id="qrList" style="display:none;margin-top:12px;max-height:340px;overflow-y:auto;border-top:1px solid rgba(245,158,11,.2);padding-top:10px">';
+  for (var i = 0; i < incomplete.length; i++) {
+    var it = incomplete[i];
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12.5px">';
+    html += '<div style="flex:1;min-width:0"><div style="color:var(--text);font-weight:600">' + escapeHtml(qrLabel(it.client)) + '</div>';
+    html += '<div style="color:var(--muted);font-size:11px">manque : ' + escapeHtml(it.missing.join(', ')) + '</div></div>';
+    html += '<button class="bill-btn bill-btn-ghost" style="font-size:11px;padding:4px 10px;flex-shrink:0" data-qr-edit="' + escapeHtml(it.client.id) + '">Compléter →</button>';
+    html += '</div>';
+  }
+  html += '</div></div>';
+  panel.innerHTML = html;
+}
+
+function qrToggle() {
+  var list = document.getElementById('qrList');
+  var label = document.getElementById('qrToggleLabel');
+  if (!list) return;
+  var open = list.style.display !== 'none';
+  list.style.display = open ? 'none' : 'block';
+  if (label) label.textContent = open ? 'Voir la liste' : 'Masquer la liste';
+}
+
+/* Délégation : les identifiants clients passent par data-* plutôt que par un
+   onclick inline, qui casserait sur une apostrophe dans un nom. */
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest ? e.target.closest('[data-qr-edit]') : null;
+  if (!btn) return;
+  openClientDrawer(btn.getAttribute('data-qr-edit'));
+});
+
+function qrExportCsv() {
+  var incomplete = qrIncompleteList();
+  var rows = [['Nom actuel', 'Type', 'Raison sociale', 'SIRET', 'Email', 'Ce qui manque']];
+  for (var i = 0; i < incomplete.length; i++) {
+    var c = incomplete[i].client;
+    rows.push([
+      qrLabel(c), c.clientType || '', c.companyName || '', c.siret || '',
+      c.email || '', incomplete[i].missing.join(' / ')
+    ]);
+  }
+  var csv = '';
+  for (var r = 0; r < rows.length; r++) {
+    var cells = [];
+    for (var k = 0; k < rows[r].length; k++) {
+      cells.push('"' + String(rows[r][k]).replace(/"/g, '""') + '"');
+    }
+    csv += cells.join(';') + '\r\n';
+  }
+  /* BOM + séparateur ; = Excel FR ouvre le fichier proprement. */
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'clients-a-completer.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  toast('⬇️ ' + incomplete.length + ' clients exportés');
 }
 
 /* ═══ DRAWER : CLIENT ═══ */
