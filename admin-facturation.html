@@ -1541,6 +1541,26 @@ async function runQontoDiagnostic() {
       var ic = checks[i].status === 'ok' ? '✅' : (checks[i].status === 'warn' ? '⚠️' : '❌');
       html += '<div style="margin-top:3px">' + ic + ' <strong>' + escapeHtml(checks[i].label) + '</strong> — ' + escapeHtml(checks[i].detail || '') + '</div>';
     }
+    /* Contenu des réglages e-invoicing renvoyés par Qonto : c'est là qu'on lit
+       si la facturation électronique est réellement active sur l'organisation,
+       sans avoir à interroger le support. */
+    var ei = data.einvoicing;
+    if (ei && typeof ei === 'object') {
+      var keys = Object.keys(ei);
+      if (keys.length) {
+        html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08)">';
+        html += '<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">Réglages e-invoicing chez Qonto</div>';
+        for (var k = 0; k < keys.length; k++) {
+          var val = ei[keys[k]];
+          var shown = (val === null || val === undefined)
+            ? '—'
+            : (typeof val === 'object' ? JSON.stringify(val) : String(val));
+          html += '<div style="font-size:12px;color:var(--muted)">' + escapeHtml(keys[k]) + ' : <span style="color:var(--text)">' + escapeHtml(shown) + '</span></div>';
+        }
+        html += '</div>';
+      }
+    }
+
     var accounts = data.bankAccounts || [];
     if (accounts.length) {
       html += '<div style="margin-top:8px;font-size:12px;color:var(--muted)">Comptes de l\'organisation : ';
