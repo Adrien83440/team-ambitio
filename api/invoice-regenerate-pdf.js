@@ -106,6 +106,18 @@ async function regenerateOne(invoiceId, fonts, sharedConfig) {
   }
 
   /* Génération PDF */
+  /* Une facture émise via Qonto ne doit JAMAIS être régénérée avec le
+     générateur maison : le document légal est le Factur-X de la Plateforme
+     Agréée. On renvoie vers le rattrapage Qonto, qui re-télécharge le bon. */
+  if (invoice.pdfSource === 'qonto') {
+    const e = new Error(
+      'Cette facture a été émise via Qonto : son PDF est le Factur-X de la Plateforme Agréée. '
+      + 'Utilise « Resynchroniser Qonto » plutôt que la régénération.'
+    );
+    e.status = 409;
+    throw e;
+  }
+
   const pdfBuf = await generateInvoicePdf({
     invoice: invoice,
     issuer: issuerSnapshot,

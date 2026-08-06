@@ -26,6 +26,7 @@
 const { admin, db, requireAuth, requireAuthOrSystemKey, sha256, chunkBufferToBase64, addDays, sendError, setCors } = require('./_billing-helpers');
 const { loadMontserratFonts } = require('./_billing-fonts');
 const { generateInvoicePdf } = require('./_billing-pdf');
+const qontoFlow = require('./_qonto-invoice-flow');
 
 module.exports = async function(req, res) {
   setCors(res);
@@ -109,6 +110,30 @@ module.exports = async function(req, res) {
       const k = requiredIssuer[i];
       if (!issuerData[k]) {
         const e = new Error('Configuration émetteur incomplète : ' + k + ' manquant'); e.status = 400; throw e;
+      }
+    }
+
+    /* ── Réglages Qonto ──
+       Lus tôt : ils conditionnent une validation supplémentaire ci-dessous.
+       Quand enabled est false, RIEN ne change dans tout ce fichier. */
+    const qontoCfg = await qontoFlow.loadQontoConfig(db);
+
+    /* Facture B2B électronique : le SIREN/SIRET du destinataire est une
+       mention obligatoire. On ne l'exige QUE si Qonto est actif — sinon on
+       bloquerait aujourd'hui 54 factures société sur 60, sans bénéfice. */
+    if (qontoCfg.enabled) {
+      const cs = invoice.clientSnapshot || {};
+      if (cs.clientType === 'company') {
+        const csSiret = String(cs.siret || '').replace(/\s+/g, '');
+        if (!csSiret) {
+          const e = new Error(
+            'SIRET manquant sur le client « ' + (cs.companyName || 'société')
+            + ' ». Il est obligatoire pour une facture électronique : complète la fiche client '
+            + '(la recherche par raison sociale le remplit automatiquement), puis rouvre cette facture.'
+          );
+          e.status = 400;
+          throw e;
+        }
       }
     }
 
@@ -222,17 +247,56 @@ module.exports = async function(req, res) {
     const updatedSnap = await invRef.get();
     const updatedInvoice = updatedSnap.data();
 
-    /* ── Génération PDF ── */
+    /* ── Document légal ──
+       Deux chemins mutuellement exclusifs, jamais les deux : pas de double
+       document pour une même facture.
+         - Qonto actif  : le PDF Factur-X produit par la Plateforme Agréée ;
+         - sinon        : le générateur maison, strictement inchangé. */
     let pdfBuf;
-    try {
-      pdfBuf = await generateInvoicePdf({
-        invoice: updatedInvoice,
-        issuer: issuerSnapshot,
-        cgv: cgvSnapshot,
-        logoBuf: logoBuf,
-        fonts: fonts,
-      });
-    } catch (pdfErr) {
+    let pdfSource = 'legacy';
+    let qontoResult = null;
+
+    if (qontoCfg.enabled) {
+      try {
+        qontoResult = await qontoFlow.runQontoFlow({
+          db: db, admin: admin,
+          invoice: Object.assign({}, updatedInvoice, { id: invoiceId }),
+          invoiceId: invoiceId,
+          issuer: issuerSnapshot,
+          billing: issuerData,
+          config: qontoCfg,
+        });
+        pdfBuf = qontoResult.pdfBuf;
+        pdfSource = 'qonto';
+      } catch (qErr) {
+        /* La facture est numérotée et validée : on ne rejoue JAMAIS un numéro.
+           On trace l'échec et on remonte un message clair — le rattrapage se
+           fait par /api/invoice-qonto-sync, qui est idempotent. */
+        console.error('[invoice-validate] Qonto KO après attribution du numéro:', qErr);
+        await invRef.update({
+          qontoSyncStatus: 'failed',
+          pdfPending: true,
+          'qonto.lastError': String(qErr.message || qErr).substring(0, 500),
+          'qonto.lastErrorAt': admin.firestore.FieldValue.serverTimestamp(),
+          'qonto.attempts': admin.firestore.FieldValue.increment(1),
+        });
+        const e = new Error(
+          'Facture validée sous le numéro ' + txResult.number + ', mais Qonto a échoué : '
+          + (qErr.message || qErr) + ' — relance « Resynchroniser Qonto » sur la facture.'
+        );
+        e.status = qErr.status || 502;
+        throw e;
+      }
+    } else {
+      try {
+        pdfBuf = await generateInvoicePdf({
+          invoice: updatedInvoice,
+          issuer: issuerSnapshot,
+          cgv: cgvSnapshot,
+          logoBuf: logoBuf,
+          fonts: fonts,
+        });
+      } catch (pdfErr) {
       console.error('[invoice-validate] PDF generation failed AFTER counter increment:', pdfErr);
       /* La facture est validée et numérotée. On flag pour retry mais on
          renvoie une erreur pour que l'UI puisse remonter le souci. */
@@ -241,7 +305,8 @@ module.exports = async function(req, res) {
         pdfError: String(pdfErr.message || pdfErr).substring(0, 500),
         pdfErrorAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      const e = new Error('Facture validée (numéro ' + txResult.number + ') mais génération PDF échouée. Vérifiez la console.'); e.status = 500; throw e;
+        const e = new Error('Facture validée (numéro ' + txResult.number + ') mais génération PDF échouée. Vérifiez la console.'); e.status = 500; throw e;
+      }
     }
 
     const pdfHash = sha256(pdfBuf);
@@ -256,7 +321,7 @@ module.exports = async function(req, res) {
       const chunkRef = pdfCol.doc('chunk_' + String(i).padStart(4, '0'));
       batch.set(chunkRef, { index: i, total: chunks.length, data: data });
     });
-    batch.update(invRef, {
+    const batchUpdate = {
       pdfHash: pdfHash,
       pdfChunkCount: chunks.length,
       pdfSizeBytes: pdfBuf.length,
@@ -264,7 +329,23 @@ module.exports = async function(req, res) {
       pdfPending: false,
       pdfError: null,
       pdfErrorAt: null,
-    });
+      pdfSource: pdfSource,
+    };
+    if (qontoResult) {
+      batchUpdate.qontoSyncStatus = qontoResult.einvoice && qontoResult.einvoice.sent ? 'sent' : 'created';
+      batchUpdate.qonto = Object.assign({}, qontoResult.qonto, {
+        syncedAt: admin.firestore.FieldValue.serverTimestamp(),
+        sentByEinvoiceAt: (qontoResult.einvoice && qontoResult.einvoice.sent)
+          ? admin.firestore.FieldValue.serverTimestamp() : null,
+        einvoiceSkipReason: (qontoResult.einvoice && !qontoResult.einvoice.sent)
+          ? (qontoResult.einvoice.reason || null) : null,
+        lastError: null,
+        lastErrorAt: null,
+      });
+    } else {
+      batchUpdate.qontoSyncStatus = 'skipped';
+    }
+    batch.update(invRef, batchUpdate);
     await batch.commit();
 
     /* ── Réponse ── */
@@ -277,6 +358,8 @@ module.exports = async function(req, res) {
       pdfHash: pdfHash,
       pdfSizeBytes: pdfBuf.length,
       pdfChunkCount: chunks.length,
+      pdfSource: pdfSource,
+      qonto: qontoResult ? qontoResult.qonto : null,
     });
   } catch (err) {
     sendError(res, err);
