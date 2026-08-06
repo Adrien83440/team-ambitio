@@ -275,6 +275,7 @@
         <div class="bill-subnav-item" data-sub="email" onclick="switchSettingsSub('email')">📨 Email</div>
         <div class="bill-subnav-item" data-sub="automation" onclick="switchSettingsSub('automation')">🤖 Automation</div>
         <div class="bill-subnav-item" data-sub="cgv" onclick="switchSettingsSub('cgv')">📜 CGV</div>
+        <div class="bill-subnav-item" data-sub="qonto" onclick="switchSettingsSub('qonto')">⚡ Facturation électronique</div>
       </div>
 
       <!-- Sub-tab : Entreprise -->
@@ -673,6 +674,82 @@
       </div>
 
       <!-- Sub-tab : CGV -->
+      <!-- ═══ QONTO — FACTURATION ÉLECTRONIQUE ══════════════════════════
+           Réglages NON secrets uniquement. Les identifiants Qonto sont des
+           accès bancaires : variables d'environnement Vercel, jamais ici.
+           Tant que « Activer » est décoché, la chaîne actuelle (PDF maison)
+           reste strictement en place. ═══ -->
+      <div class="bill-settings-sub" data-sub="qonto" style="display:none">
+        <div class="bill-card">
+          <div class="bill-card-h">
+            <div>
+              <h3>Qonto — Plateforme Agréée</h3>
+              <p>À partir du 1er septembre 2027, les factures devront transiter par une Plateforme Agréée. Qonto est immatriculée PA-0025. Ce réglage prépare la bascule sans rien changer tant qu'il est désactivé.</p>
+            </div>
+          </div>
+          <div class="bill-form-grid full">
+            <div class="bill-form-row">
+              <div class="bill-label">État de la connexion</div>
+              <div id="qtDiagBox" style="padding:12px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--muted)">Aucun test effectué.</div>
+              <div style="margin-top:8px"><button class="bill-btn bill-btn-ghost" id="qtDiagBtn" onclick="runQontoDiagnostic()">🔌 Tester la connexion Qonto</button></div>
+              <div class="bill-help">Lecture seule : aucune facture ni client n'est créé chez Qonto.</div>
+            </div>
+          </div>
+          <div class="bill-form-grid">
+            <div class="bill-form-row span2">
+              <div class="bill-label">Activer la facturation via Qonto</div>
+              <label class="bill-checkbox-label" style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px">
+                <input type="checkbox" id="qtEnabled" style="accent-color:#10b981;width:18px;height:18px"/>
+                <div>
+                  <div style="font-weight:700;color:var(--text)">Générer les factures chez Qonto (Factur-X)</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px">Décoché : rien ne change, le PDF actuel continue d'être généré. Ne cocher qu'après un diagnostic vert en production et un test sur une facture réelle de faible montant.</div>
+                </div>
+              </label>
+            </div>
+            <div class="bill-form-row span2">
+              <div class="bill-label">IBAN Qonto de règlement</div>
+              <input class="bill-input" id="qtIban" placeholder="FR76 ..." style="font-family:var(--font-m)"/>
+              <div class="bill-help">Doit être un compte de l'organisation Qonto. Le diagnostic le vérifie et liste les IBAN disponibles.</div>
+            </div>
+            <div class="bill-form-row span2">
+              <div class="bill-label">Envoi réseau automatique (clients société)</div>
+              <label class="bill-checkbox-label" style="display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px">
+                <input type="checkbox" id="qtAutoSend" style="accent-color:#10b981;width:18px;height:18px"/>
+                <div>
+                  <div style="font-weight:700;color:var(--text)">Transmettre les factures B2B via le réseau</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px">Concerne les clients de type société disposant d'un SIRET. Les particuliers relèvent de l'e-reporting, pas de la transmission.</div>
+                </div>
+              </label>
+            </div>
+            <div class="bill-form-row">
+              <div class="bill-label">Catégorie d'opération</div>
+              <select class="bill-input" id="qtTransactionType">
+                <option value="services">Prestation de services</option>
+                <option value="goods">Livraison de biens</option>
+                <option value="goods_and_services">Mixte (biens et services)</option>
+              </select>
+              <div class="bill-help">Mention désormais obligatoire. Coaching et formation = prestation de services.</div>
+            </div>
+            <div class="bill-form-row">
+              <div class="bill-label">Exigibilité de la TVA</div>
+              <select class="bill-input" id="qtVatCondition">
+                <option value="on_receipts">TVA sur les encaissements</option>
+                <option value="compensated_for_sales">TVA sur les débits</option>
+              </select>
+              <div class="bill-help">Mention désormais obligatoire. À confirmer avec ton comptable.</div>
+            </div>
+            <div class="bill-form-row span2">
+              <div class="bill-label">CGV courtes (525 caractères maximum)</div>
+              <textarea class="bill-input" id="qtCgvShort" rows="5" maxlength="525" oninput="qontoCountCgv()" style="font-family:var(--font-m);font-size:12px"></textarea>
+              <div class="bill-help"><span id="qtCgvCount">0</span>/525 caractères — plafond imposé par l'API Qonto. Tes CGV intégrales restent figées dans la facture à la validation : ce texte ne les remplace pas, il les résume sur le document.</div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:16px">
+            <button class="bill-btn bill-btn-primary" id="qtSaveBtn" onclick="saveQontoSettings()">💾 Enregistrer</button>
+          </div>
+        </div>
+      </div>
+
       <div class="bill-settings-sub" data-sub="cgv" style="display:none">
         <div class="bill-card">
           <div class="bill-card-h">
@@ -1340,6 +1417,138 @@ function renderSettingsActiveSub() {
   if (activeSub === 'email') renderEmailForm();
   if (activeSub === 'automation') renderAutomationForm();
   if (activeSub === 'cgv') renderCgvVersions();
+  if (activeSub === 'qonto') renderQontoForm();
+}
+
+/* ═══ QONTO — FACTURATION ÉLECTRONIQUE ═══════════════════════════════════
+   Les réglages secrets sont dans Vercel ; ici on ne manipule que
+   _config/qonto (activation, IBAN, CGV courtes) et deux champs de
+   _config/billing (catégorie d'opération, exigibilité TVA). */
+var qontoConfig = null;
+
+var QONTO_CGV_DEFAULT = 'Prestations de coaching et de formation. Paiement a reception de facture, sauf echeancier convenu. '
+  + 'Tout retard entraine des penalites au taux directeur BCE majore de 10 points, plus une indemnite forfaitaire de '
+  + 'recouvrement de 40 EUR (art. L441-10 du Code de commerce). Reclamation sous 8 jours a compter de la reception. '
+  + 'Consommateurs : droit de retractation de 14 jours (art. L221-18 du Code de la consommation). '
+  + 'CGV integrales : https://team.alteore.com/terms.html';
+
+function qontoCountCgv() {
+  var el = document.getElementById('qtCgvShort');
+  var out = document.getElementById('qtCgvCount');
+  if (el && out) out.textContent = String(el.value.length);
+}
+
+function renderQontoForm() {
+  if (qontoConfig) { fillQontoForm(); return; }
+  db.collection('_config').doc('qonto').get().then(function (snap) {
+    qontoConfig = snap.exists ? (snap.data() || {}) : {};
+    fillQontoForm();
+  }).catch(function (err) {
+    console.error('[qonto] lecture config', err);
+    qontoConfig = {};
+    fillQontoForm();
+    toast('Lecture des réglages Qonto impossible : ' + err.message, true);
+  });
+}
+
+function fillQontoForm() {
+  var c = qontoConfig || {};
+  var b = billingConfig || {};
+  document.getElementById('qtEnabled').checked = c.enabled === true;
+  document.getElementById('qtAutoSend').checked = c.autoSendEinvoice !== false;
+  document.getElementById('qtIban').value = c.iban || b.iban || '';
+  document.getElementById('qtTransactionType').value = b.transactionType || 'services';
+  document.getElementById('qtVatCondition').value = b.vatPaymentCondition || 'on_receipts';
+  document.getElementById('qtCgvShort').value = c.cgvShortText || QONTO_CGV_DEFAULT;
+  qontoCountCgv();
+  renderQontoDiagSummary(c);
+}
+
+function renderQontoDiagSummary(c) {
+  var box = document.getElementById('qtDiagBox');
+  if (!box) return;
+  var r = c && c.lastDiagnosticResult;
+  if (!r) { box.textContent = 'Aucun test effectué.'; return; }
+  var when = '';
+  if (c.lastDiagnosticAt && typeof c.lastDiagnosticAt.toDate === 'function') {
+    when = ' le ' + c.lastDiagnosticAt.toDate().toLocaleString('fr-FR');
+  }
+  var color = r.ok ? '#10b981' : '#ef4444';
+  var html = '<div style="color:' + color + ';font-weight:700">' + (r.ok ? '✅ Connexion OK' : '❌ Problème détecté') + '</div>';
+  html += '<div style="margin-top:4px">' + escapeHtml(r.organizationName || '—') + ' · environnement ' + escapeHtml(r.env || '—') + when + '</div>';
+  box.innerHTML = html;
+}
+
+async function saveQontoSettings() {
+  var btn = document.getElementById('qtSaveBtn');
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  try {
+    var enabled = document.getElementById('qtEnabled').checked;
+    var iban = (document.getElementById('qtIban').value || '').replace(/\s+/g, '').toUpperCase();
+    if (enabled && !iban) {
+      throw new Error('Un IBAN Qonto est obligatoire pour activer la facturation électronique.');
+    }
+    await db.collection('_config').doc('qonto').set({
+      enabled: enabled,
+      iban: iban,
+      autoSendEinvoice: document.getElementById('qtAutoSend').checked,
+      cgvShortText: (document.getElementById('qtCgvShort').value || '').substring(0, 525),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.uid
+    }, { merge: true });
+    /* Ces deux mentions figurent sur la facture : elles restent avec le reste
+       des réglages d'émission, dans _config/billing. */
+    await db.collection('_config').doc('billing').update({
+      transactionType: document.getElementById('qtTransactionType').value,
+      vatPaymentCondition: document.getElementById('qtVatCondition').value,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.uid
+    });
+    qontoConfig = null;
+    toast('✅ Réglages Qonto enregistrés' + (enabled ? ' — facturation électronique ACTIVE' : ''));
+  } catch (err) {
+    console.error(err);
+    toast('Erreur : ' + err.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Enregistrer';
+  }
+}
+
+async function runQontoDiagnostic() {
+  var btn = document.getElementById('qtDiagBtn');
+  var box = document.getElementById('qtDiagBox');
+  btn.disabled = true; btn.textContent = 'Test en cours…';
+  box.textContent = 'Interrogation de Qonto…';
+  try {
+    var token = await currentUser.getIdToken();
+    var response = await fetch('/api/qonto-diagnostic', { headers: { 'Authorization': 'Bearer ' + token } });
+    var data = {};
+    try { data = await response.json(); } catch (e) { data = {}; }
+    if (!response.ok) throw new Error(data.error || ('Erreur HTTP ' + response.status));
+
+    var html = '<div style="color:' + (data.ok ? '#10b981' : '#ef4444') + ';font-weight:700;margin-bottom:6px">'
+      + (data.ok ? '✅ Connexion OK' : '❌ Problème détecté') + ' — environnement ' + escapeHtml(data.env || '—') + '</div>';
+    if (data.organizationName) html += '<div style="margin-bottom:6px">Organisation : <strong>' + escapeHtml(data.organizationName) + '</strong></div>';
+    var checks = data.checks || [];
+    for (var i = 0; i < checks.length; i++) {
+      var ic = checks[i].status === 'ok' ? '✅' : (checks[i].status === 'warn' ? '⚠️' : '❌');
+      html += '<div style="margin-top:3px">' + ic + ' <strong>' + escapeHtml(checks[i].label) + '</strong> — ' + escapeHtml(checks[i].detail || '') + '</div>';
+    }
+    var accounts = data.bankAccounts || [];
+    if (accounts.length) {
+      html += '<div style="margin-top:8px;font-size:12px;color:var(--muted)">Comptes de l\'organisation : ';
+      var names = [];
+      for (var j = 0; j < accounts.length; j++) names.push(escapeHtml(accounts[j].name) + ' (' + escapeHtml(accounts[j].iban) + ')');
+      html += names.join(' · ') + '</div>';
+    }
+    box.innerHTML = html;
+    qontoConfig = null;
+  } catch (err) {
+    console.error('[qonto] diagnostic', err);
+    box.innerHTML = '<div style="color:#ef4444;font-weight:700">❌ Test impossible</div><div style="margin-top:4px">' + escapeHtml(err.message) + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = '🔌 Tester la connexion Qonto';
+  }
 }
 
 function loadBillingConfig() { renderSettingsActiveSub(); }
