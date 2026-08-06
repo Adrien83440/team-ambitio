@@ -172,6 +172,26 @@ module.exports = async function(req, res) {
       const padded = String(seq).padStart(5, '0');
       const number = 'F' + year + '-' + padded;
 
+      /* ── VERROU D'UNICITÉ ──
+         Le compteur seul ne suffit pas : il a déjà été remis à zéro le
+         29/05/2026 (invoice_counters/2026._resetReason = purge-refonte),
+         ce qui a produit 59 numéros portés chacun par plusieurs factures.
+         Un numéro de facture doit être unique (art. 242 nonies A CGI).
+         On vérifie donc, dans la même transaction, qu'il n'est pas déjà pris.
+         Lecture placée AVANT toute écriture : Firestore l'impose. */
+      const dupSnap = await tx.get(
+        db.collection('invoices').where('number', '==', number).limit(1)
+      );
+      if (!dupSnap.empty) {
+        const e = new Error(
+          'Le numéro ' + number + ' est déjà attribué à une autre facture. '
+          + 'Le compteur de numérotation est désynchronisé — corrigez '
+          + 'invoice_counters/' + year + '.invoiceNextSeq avant de revalider.'
+        );
+        e.status = 409;
+        throw e;
+      }
+
       tx.update(invRef, {
         status: 'validated',
         isLocked: true,

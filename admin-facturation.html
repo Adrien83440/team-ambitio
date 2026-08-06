@@ -2943,6 +2943,103 @@ function showInvoicesForClient(clientId) {
   /* Le filtre s'applique automatiquement via applyClientIdFilter dans renderInvoicesList */
 }
 
+/* ═══ RECHERCHE D'ENTREPRISE (annuaire DINUM) ═══════════════════════════
+   Remplit le bloc société d'une fiche client depuis un SIRET, un SIREN ou une
+   raison sociale. Rien n'est écrit en base : on remplit le formulaire, c'est
+   « Enregistrer » qui décide. */
+var csLastResults = [];
+
+function csSearch() {
+  var input = document.getElementById('csQuery');
+  var box = document.getElementById('csResults');
+  var btn = document.getElementById('csBtn');
+  if (!input || !box) return;
+  var q = (input.value || '').trim();
+  if (q.length < 3) { box.innerHTML = '<div style="font-size:12px;color:#f59e0b">Saisis au moins 3 caractères, ou un SIRET complet.</div>'; return; }
+
+  btn.disabled = true; btn.textContent = 'Recherche…';
+  box.innerHTML = '<div style="font-size:12px;color:var(--muted)">Interrogation de l\'annuaire…</div>';
+
+  currentUser.getIdToken().then(function (token) {
+    return fetch('/api/company-search?q=' + encodeURIComponent(q), { headers: { 'Authorization': 'Bearer ' + token } });
+  }).then(function (response) {
+    return response.json().catch(function () { return {}; }).then(function (data) {
+      return { ok: response.ok, data: data || {} };
+    });
+  }).then(function (out) {
+    btn.disabled = false; btn.textContent = 'Rechercher';
+    if (!out.ok) { box.innerHTML = '<div style="font-size:12px;color:#ef4444">' + escapeHtml(out.data.error || 'Recherche impossible.') + '</div>'; return; }
+    csLastResults = out.data.results || [];
+    if (!csLastResults.length) { box.innerHTML = '<div style="font-size:12px;color:var(--muted)">Aucune entreprise trouvée.</div>'; return; }
+
+    var html = '';
+    for (var i = 0; i < csLastResults.length; i++) {
+      var r = csLastResults[i];
+      var ville = r.address.postalCode || r.address.city
+        ? (r.address.postalCode + ' ' + r.address.city).trim()
+        : (r.addressHidden ? 'adresse non diffusible' : '—');
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06)">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:13px;font-weight:600;color:var(--text)">' + escapeHtml(r.name || '(sans nom)');
+      if (r.closed) html += ' <span style="font-size:10px;color:#ef4444;font-weight:700">CESSÉE</span>';
+      html += '</div>';
+      html += '<div style="font-size:11px;color:var(--muted);font-family:var(--font-m)">SIRET ' + escapeHtml(r.siret || '—') + ' · ' + escapeHtml(ville) + '</div>';
+      html += '</div>';
+      html += '<button type="button" class="bill-btn bill-btn-ghost" style="font-size:11px;padding:4px 10px;flex-shrink:0" data-cs-apply="' + i + '">Utiliser</button>';
+      html += '</div>';
+    }
+    box.innerHTML = html;
+  }).catch(function (err) {
+    console.error('[company-search]', err);
+    btn.disabled = false; btn.textContent = 'Rechercher';
+    box.innerHTML = '<div style="font-size:12px;color:#ef4444">' + escapeHtml(err.message) + '</div>';
+  });
+}
+
+/* Délégation : l'index passe par data-* — un onclick inline casserait sur une
+   apostrophe dans une raison sociale. */
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest ? e.target.closest('[data-cs-apply]') : null;
+  if (!btn) return;
+  csApply(parseInt(btn.getAttribute('data-cs-apply'), 10));
+});
+
+function csSet(id, value) {
+  var el = document.getElementById(id);
+  /* On n'écrase jamais une valeur déjà saisie par un champ vide de l'annuaire. */
+  if (el && value) el.value = value;
+}
+
+function csApply(index) {
+  var r = csLastResults[index];
+  if (!r) return;
+
+  /* Une fiche remplie depuis l'annuaire est par définition une société. */
+  var typeCompany = document.getElementById('ctTypeCompany');
+  /* C'est un <button class="bill-type-btn on">, pas une case a cocher :
+     l'etat se lit sur la classe « on », pas sur .checked. */
+  if (typeCompany && typeCompany.className.indexOf('on') < 0) typeCompany.click();
+
+  csSet('ctCompanyName', r.name);
+  csSet('ctSiret', r.siret);
+  csSet('ctVatNumber', r.vatNumber);
+  csSet('ctAddrLine1', r.address.line1);
+  csSet('ctAddrLine2', r.address.line2);
+  csSet('ctAddrPostal', r.address.postalCode);
+  csSet('ctAddrCity', r.address.city);
+  csSet('ctAddrCountry', r.address.country);
+
+  var warn = [];
+  if (r.addressHidden) warn.push('adresse non diffusible par l\'INSEE — à saisir à la main');
+  if (r.closed) warn.push('entreprise cessée');
+  var box = document.getElementById('csResults');
+  if (box) {
+    box.innerHTML = '<div style="font-size:12px;color:#10b981;font-weight:600">✅ ' + escapeHtml(r.name) + ' appliqué</div>'
+      + (warn.length ? '<div style="font-size:11px;color:#f59e0b;margin-top:3px">⚠️ ' + escapeHtml(warn.join(' · ')) + '</div>' : '');
+  }
+  toast('✅ Fiche pré-remplie — vérifie puis Enregistre');
+}
+
 /* ═══ PRÊT POUR LA FACTURATION ÉLECTRONIQUE ═════════════════════════════
    Une facture B2B doit porter la raison sociale et le SIREN/SIRET du client.
    Aujourd'hui la majorité des fiches sont typées « particulier » sans aucune
@@ -3110,6 +3207,18 @@ function openClientDrawer(clientId) {
   html += '<div id="cfFieldsCompany" ' + (data.clientType === 'individual' ? 'style="display:none"' : '') + '>';
   html += '  <div class="bill-form-grid full">';
   html += '    <div class="bill-form-row"><div class="bill-label">Nom de la société <span class="bill-req">*</span></div><input class="bill-input" id="ctCompanyName" value="' + attr(data.companyName) + '"/></div>';
+  html += '  </div>';
+  /* Recherche d'entreprise (annuaire DINUM) : on saisit un SIRET ou un nom et
+     tout le bloc société se remplit. Manuel volontairement — c'est l'admin qui
+     valide le résultat avant de l'appliquer. */
+  html += '  <div style="margin-top:14px;padding:12px 14px;background:rgba(99,102,241,.06);border:1px solid rgba(99,102,241,.22);border-radius:10px">';
+  html += '    <div class="bill-label" style="margin-bottom:6px">🔎 Remplir automatiquement depuis l\'annuaire des entreprises</div>';
+  html += '    <div style="display:flex;gap:8px;flex-wrap:wrap">';
+  html += '      <input class="bill-input" id="csQuery" placeholder="SIRET, SIREN ou raison sociale" style="flex:1;min-width:200px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();csSearch();}"/>';
+  html += '      <button type="button" class="bill-btn bill-btn-ghost" id="csBtn" onclick="csSearch()">Rechercher</button>';
+  html += '    </div>';
+  html += '    <div id="csResults" style="margin-top:8px"></div>';
+  html += '    <div class="bill-help" style="margin-top:6px">Source : annuaire officiel des entreprises (DINUM). Gratuit, sans limite. Le résultat n\'est appliqué qu\'après ton clic.</div>';
   html += '  </div>';
   html += '  <div class="bill-form-grid" style="margin-top:14px">';
   html += '    <div class="bill-form-row"><div class="bill-label">Forme juridique</div><input class="bill-input" id="ctLegalForm" value="' + attr(data.companyLegalForm) + '" placeholder="SARL, SAS, EURL, EI…"/></div>';
