@@ -293,6 +293,36 @@ try {
 </div>
 
 </div>
+<!-- ═══ ENVOI DE SECOURS ═══════════════════════════════════════════════
+     Filet quand la signature électronique ne passe pas : le contrat part en
+     PDF par email, le client l'imprime et le signe. Le téléchargement, lui,
+     est 100 % local — il marche même si le serveur est en panne.
+     Couche additive : ne touche à aucun élément du parcours existant. ═══ -->
+<div id="sosModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:600;backdrop-filter:blur(4px);align-items:center;justify-content:center" onclick="if(event.target===this)sosClose()">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:92%;max-width:460px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <div style="font-size:22px">🆘</div>
+      <div style="font-family:var(--fh);font-size:16px;font-weight:800">Envoi de secours</div>
+      <button onclick="sosClose()" style="margin-left:auto;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.55;margin-bottom:16px">
+      Le client reçoit le contrat en PDF par email, l'imprime, le signe et le renvoie.
+      Aucune signature électronique, aucun code SMS — à utiliser quand le parcours normal ne passe pas.
+    </div>
+    <div style="padding:10px 12px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.2);border-radius:9px;margin-bottom:14px;font-size:12px">
+      <span style="color:var(--muted)">Modèle&nbsp;:</span> <strong id="sosTplName">—</strong>
+    </div>
+    <div style="margin-bottom:8px"><div class="ep-label">Nom du client *</div><input class="ep-input" id="sosName" placeholder="Prénom Nom"/></div>
+    <div style="margin-bottom:8px"><div class="ep-label">Email du client *</div><input class="ep-input" id="sosEmail" type="email" placeholder="email@client.com"/></div>
+    <div style="margin-bottom:16px"><div class="ep-label">Message (optionnel)</div><textarea class="ep-input" id="sosMsg" rows="3" placeholder="Laisser vide pour le message standard."></textarea></div>
+    <button class="sig-btn sig-btn-p" style="width:100%;justify-content:center;padding:12px;font-size:14px;margin-bottom:8px" id="sosSendBtn" onclick="sosSend()">📧 Envoyer le contrat par email</button>
+    <button class="sig-btn" style="width:100%;justify-content:center;padding:10px;font-size:13px" id="sosDlBtn" onclick="sosDownload()">⬇️ Télécharger le PDF</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5">
+      Le téléchargement fonctionne même si l'envoi d'email est en panne : tu récupères le PDF et tu le transmets comme tu veux.
+    </div>
+  </div>
+</div>
+
 <div class="sig-toast" id="sigToast"></div>
 </main>
 
@@ -364,6 +394,7 @@ function renderTemplates(){
     else if(t.academyCourseId){h+='<div class="tpl-card-meta" style="color:#34d399">🎓 '+esc(t.academyCourseName||'Formation liée')+'</div>';}
     h+='<div style="display:flex;gap:6px;margin-top:10px">';
     h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();sendForSignatureFromList(\''+t.id+'\')">📨 Envoyer</button>';
+    h+='<button class="sig-btn" style="font-size:11px;padding:4px 10px;border-color:rgba(245,158,11,.4);color:#fbbf24" onclick="event.stopPropagation();sosOpen(\''+t.id+'\')" title="Envoyer le contrat par email à imprimer et signer — sans signature électronique">🆘 Secours</button>';
     h+='<button class="sig-btn sig-btn-r" style="font-size:11px;padding:4px 10px" onclick="event.stopPropagation();deleteTpl(\''+t.id+'\')">🗑</button>';
     h+='</div></div>';
   });
@@ -1339,6 +1370,93 @@ firebase.auth().onAuthStateChanged(function(u){
     console.log('[SIG] Not authenticated');
   }
 });
+</script>
+
+<script>
+/* ═══ ENVOI DE SECOURS ═══════════════════════════════════════════════════
+   Bloc autonome, ajoute apres le script principal : il ne fait que LIRE
+   TPL et db, et n'entre dans aucun chemin du parcours de signature. */
+var sosTplId = null;
+
+function sosOpen(tplId) {
+  var t = TPL.find(function (x) { return x.id === tplId; });
+  if (!t) { toast('❌ Modèle introuvable'); return; }
+  sosTplId = tplId;
+  document.getElementById('sosTplName').textContent = t.name || 'Sans nom';
+  document.getElementById('sosName').value = '';
+  document.getElementById('sosEmail').value = '';
+  document.getElementById('sosMsg').value = '';
+  document.getElementById('sosModal').style.display = 'flex';
+  document.getElementById('sosName').focus();
+}
+function sosClose() { document.getElementById('sosModal').style.display = 'none'; }
+
+/* Meme lecture que openTpl : pdfBase64 d'abord, morceaux ensuite. */
+function sosLoadPdf(tplId) {
+  var t = TPL.find(function (x) { return x.id === tplId; }) || {};
+  if (t.pdfBase64) return Promise.resolve(t.pdfBase64);
+  return db.collection('signature_templates').doc(tplId).collection('pdf').orderBy('chunk').get()
+    .then(function (sn) {
+      var parts = [];
+      sn.forEach(function (d) { parts.push(d.data().data); });
+      if (!parts.length) throw new Error('Ce modèle n\'a pas de PDF enregistré.');
+      return 'data:application/pdf;base64,' + parts.join('');
+    });
+}
+
+/* Telechargement 100 % local : aucun appel serveur, donc disponible meme
+   si l'API ou l'envoi d'email est en panne. C'est le vrai filet. */
+function sosDownload() {
+  if (!sosTplId) return;
+  var b = document.getElementById('sosDlBtn');
+  b.disabled = true; b.textContent = 'Préparation…';
+  sosLoadPdf(sosTplId).then(function (dataUrl) {
+    var t = TPL.find(function (x) { return x.id === sosTplId; }) || {};
+    var a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = String(t.name || 'contrat').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_') + '.pdf';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    b.disabled = false; b.textContent = '⬇️ Télécharger le PDF';
+    toast('⬇️ PDF téléchargé');
+  }).catch(function (e) {
+    console.error('[secours] telechargement:', e);
+    b.disabled = false; b.textContent = '⬇️ Télécharger le PDF';
+    alert('Téléchargement impossible : ' + e.message);
+  });
+}
+
+function sosSend() {
+  if (!sosTplId) return;
+  var name = document.getElementById('sosName').value.trim();
+  var email = document.getElementById('sosEmail').value.trim();
+  var msg = document.getElementById('sosMsg').value.trim();
+  if (!name) { alert('Le nom du client est obligatoire.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Email du client invalide.'); return; }
+  var b = document.getElementById('sosSendBtn');
+  b.disabled = true; b.textContent = 'Envoi en cours…';
+  var user = firebase.auth().currentUser;
+  if (!user) { b.disabled = false; b.textContent = '📧 Envoyer le contrat par email'; alert('Session expirée, reconnecte-toi.'); return; }
+  user.getIdToken().then(function (tok) {
+    return fetch('/api/signature-fallback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+      body: JSON.stringify({ templateId: sosTplId, clientName: name, clientEmail: email, message: msg })
+    });
+  }).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, j: j || {} }; });
+  }).then(function (o) {
+    b.disabled = false; b.textContent = '📧 Envoyer le contrat par email';
+    if (!o.ok) { alert(o.j.error || 'Envoi impossible.'); return; }
+    sosClose();
+    toast('📧 Contrat envoyé à ' + o.j.sentTo);
+  }).catch(function (e) {
+    console.error('[secours] envoi:', e);
+    b.disabled = false; b.textContent = '📧 Envoyer le contrat par email';
+    alert('Envoi impossible : ' + e.message + '\n\nUtilise « Télécharger le PDF » et envoie-le à la main.');
+  });
+}
+window.sosOpen = sosOpen; window.sosClose = sosClose;
+window.sosSend = sosSend; window.sosDownload = sosDownload;
 </script>
 </body>
 </html>
