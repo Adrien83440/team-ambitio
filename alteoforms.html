@@ -449,6 +449,131 @@ var _quillBody=null;
 var FT_ICONS={text:'Aa',textarea:'¶',email:'@',tel:'📞',select:'▾',checkbox:'☑',radio:'◉',scale:'⬤',number:'🔢',date:'📅',info:'📄',rating:'⭐'};
 var FT_LABELS={text:'Texte',textarea:'Zone de texte',email:'Email',tel:'Téléphone',select:'Liste déroulante',checkbox:'Cases à cocher',radio:'Choix unique',scale:'Échelle',number:'Nombre',date:'Date',info:'Texte informatif',rating:'Note / Icônes'};
 
+/* ═══ RATTACHER UNE RÉPONSE À UNE FICHE COACHING ════════════════════════
+   Filet manuel : le rapprochement automatique (coaching.html) se fait sur
+   l'email puis sur le nom, mais il refuse de trancher quand c'est ambigu.
+   Ici, c'est un humain qui décide. Écrit le même objet `questionnaire` que
+   l'automatique, donc la fiche l'affiche à l'identique. */
+var qlkRespId = null;
+var qlkClients = null;
+
+function qlkOpen(respId){
+  qlkRespId = respId;
+  var box = document.getElementById('qlkModal');
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'qlkModal';
+    box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:900;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)';
+    box.onclick = function(e){ if(e.target === box) qlkClose(); };
+    box.innerHTML = '<div style="background:var(--bg2,#0e0e1a);border:1px solid rgba(255,255,255,.1);border-radius:16px;width:92%;max-width:520px;padding:22px;max-height:85vh;display:flex;flex-direction:column">'
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'
+      + '<div style="font-size:20px">🔗</div>'
+      + '<div style="font-size:16px;font-weight:800;color:rgba(255,255,255,.9)">Rattacher à une fiche coaching</div>'
+      + '<button onclick="qlkClose()" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,.4);font-size:20px;cursor:pointer">✕</button>'
+      + '</div>'
+      + '<div style="font-size:12px;color:rgba(255,255,255,.45);margin-bottom:14px">Le questionnaire apparaîtra dans la fiche du client choisi.</div>'
+      + '<input id="qlkSearch" placeholder="Rechercher un client…" oninput="qlkRender()" style="width:100%;padding:10px 12px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.85);font-size:13px;font-family:inherit;margin-bottom:10px"/>'
+      + '<div id="qlkList" style="overflow-y:auto;flex:1;min-height:120px"></div>'
+      + '</div>';
+    document.body.appendChild(box);
+  }
+  box.style.display = 'flex';
+  document.getElementById('qlkSearch').value = '';
+  document.getElementById('qlkList').innerHTML = '<div style="color:rgba(255,255,255,.4);font-size:13px;padding:14px">Chargement des fiches…</div>';
+
+  if(qlkClients){ qlkRender(); return; }
+  db.collection('clients').get().then(function(sn){
+    qlkClients = [];
+    sn.forEach(function(d){
+      var c = d.data();
+      qlkClients.push({
+        id: d.id,
+        nom: c.nom || '',
+        email: c.email || '',
+        programme: c.programme || '',
+        hasQ: !!c.questionnaire
+      });
+    });
+    qlkClients.sort(function(a,b){ return String(a.nom).localeCompare(String(b.nom)); });
+    qlkRender();
+  }).catch(function(e){
+    document.getElementById('qlkList').innerHTML = '<div style="color:#ef4444;font-size:13px;padding:14px">Lecture impossible : ' + esc(e.message) + '</div>';
+  });
+}
+
+function qlkClose(){
+  var box = document.getElementById('qlkModal');
+  if(box) box.style.display = 'none';
+}
+
+function qlkRender(){
+  var el = document.getElementById('qlkList');
+  if(!el || !qlkClients) return;
+  var q = (document.getElementById('qlkSearch').value || '').toLowerCase().trim();
+  var list = qlkClients.filter(function(c){
+    if(!q) return true;
+    return (c.nom + ' ' + c.email + ' ' + c.programme).toLowerCase().indexOf(q) >= 0;
+  });
+  if(!list.length){ el.innerHTML = '<div style="color:rgba(255,255,255,.4);font-size:13px;padding:14px">Aucun client trouvé.</div>'; return; }
+  var h = '';
+  for(var i=0;i<list.length && i<80;i++){
+    var c = list[i];
+    h += '<div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(255,255,255,.05)">';
+    h += '<div style="flex:1;min-width:0">';
+    h += '<div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.85)">' + esc(c.nom || '(sans nom)');
+    /* On prévient au lieu d'interdire : remplacer un questionnaire peut être
+       volontaire (mauvais rattachement précédent). */
+    if(c.hasQ) h += ' <span style="font-size:10px;color:#f59e0b">déjà un questionnaire</span>';
+    h += '</div>';
+    h += '<div style="font-size:11px;color:rgba(255,255,255,.35)">' + esc(c.email || '—') + (c.programme ? ' · ' + esc(c.programme) : '') + '</div>';
+    h += '</div>';
+    h += '<button class="bb bb-g" style="font-size:11px;padding:4px 12px;flex-shrink:0" data-qlk-pick="' + esc(c.id) + '">Rattacher</button>';
+    h += '</div>';
+  }
+  el.innerHTML = h;
+}
+
+/* Délégation : l'identifiant passe par data-*, jamais par un onclick inline —
+   une apostrophe dans un nom casserait l'attribut. */
+document.addEventListener('click', function(e){
+  var btn = e.target.closest ? e.target.closest('[data-qlk-pick]') : null;
+  if(!btn) return;
+  qlkApply(btn.getAttribute('data-qlk-pick'));
+});
+
+function qlkApply(clientId){
+  var c = null;
+  for(var i=0;i<(qlkClients||[]).length;i++){ if(qlkClients[i].id === clientId) c = qlkClients[i]; }
+  if(!c || !qlkRespId || !currentForm) return;
+  if(c.hasQ && !confirm('« ' + c.nom + ' » a déjà un questionnaire rattaché.\n\nLe remplacer par celui-ci ?')) return;
+
+  var resp = (window._currentResponses || []).filter(function(r){ return r._id === qlkRespId; })[0];
+  if(!resp){ toast('❌ Réponse introuvable — recharge la page'); return; }
+
+  /* Même forme que l'objet posé par le rattachement automatique. */
+  var answers = (resp.answers || [])
+    .filter(function(a){ return a.value != null && a.value !== ''; })
+    .map(function(a){ return { q: String(a.label || a.fieldId || ''), a: String(a.value) }; });
+
+  var q = {
+    formId: currentForm._id,
+    formTitle: currentForm.title || '',
+    responseId: qlkRespId,
+    submittedAt: (resp.submittedAt && resp.submittedAt.toMillis) ? resp.submittedAt.toMillis() : Date.now(),
+    answers: answers,
+    linkedAt: Date.now(),
+    linkedBy: (window._currentUserName || 'admin') + ' (manuel)'
+  };
+
+  db.collection('clients').doc(clientId).update({ questionnaire: q }).then(function(){
+    c.hasQ = true;
+    qlkClose();
+    toast('🔗 Questionnaire rattaché à ' + c.nom);
+  }).catch(function(e){
+    alert('Rattachement impossible : ' + e.message);
+  });
+}
+
 function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 function gid(){return Math.random().toString(36).slice(2,10);}
 function toast(msg){var t=document.getElementById('afToast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2500);}
@@ -1081,6 +1206,7 @@ h+='<div class="ed-field-info"><div class="ed-field-name" style="font-size:12px"
 // Boutons d'export par soumission (stopPropagation pour ne pas déplier la carte).
 h+='<button class="resp-act-btn" title="Exporter cette réponse en Excel" onclick="event.stopPropagation();exportSingleRespXlsx(\''+d.id+'\')">📥</button>';
 h+='<button class="resp-act-btn" title="Exporter cette réponse en PDF" onclick="event.stopPropagation();exportSingleRespPdf(\''+d.id+'\')">📄</button>';
+h+='<button class="resp-act-btn" title="Rattacher cette réponse à une fiche coaching" onclick="event.stopPropagation();qlkOpen(\''+d.id+'\')">🔗</button>';
 h+='<span style="font-size:12px;color:rgba(255,255,255,.25);transition:transform .2s;margin-left:6px" class="resp-arrow">▼</span>';
 h+='</div>';
 

@@ -2620,6 +2620,21 @@ function qNorm(s){
   return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]+/g,' ').trim();
 }
 function qTokens(s){ return qNorm(s).split(' ').filter(t=>t.length>1); }
+/* L'email d'une réponse : c'est le seul identifiant fiable. Le rapprochement
+   par nom échoue dès que la fiche coaching porte un prénom seul (« Gregoire »),
+   puisqu'il exige deux mots en commun. */
+function qEmailFromResponse(r){
+  let found = '';
+  (r.answers||[]).forEach(a=>{
+    if(found || a.value==null || a.value==='') return;
+    const l = qNorm(a.label);
+    if(l.includes('mail')) found = String(a.value);
+  });
+  return qNormEmail(found);
+}
+function qNormEmail(v){
+  return String(v||'').trim().toLowerCase();
+}
 function qSameName(a, b){
   if(!a.length || !b.length) return false;
   const A = new Set(a), B = new Set(b);
@@ -2633,7 +2648,7 @@ function qNameFromResponse(r){
     const l = qNorm(a.label);
     if(!l || a.value==null || a.value==='') return;
     const isPrenom = l.includes('prenom');
-    const isNom = /\bnom\b/.test(l) && !/entreprise|societe|marque|business|activite|domaine|projet|boite/.test(l);
+    const isNom = /\bnom\b/.test(l) && !/entreprise|societe|marque|business|activite|domaine|projet|boite|commerce|enseigne|magasin|boutique/.test(l);
     if(isPrenom || isNom) parts.push(String(a.value));
   });
   return qTokens(parts.join(' '));
@@ -2653,16 +2668,24 @@ async function autoLinkQuestionnaires(){
     _clients.forEach(c=>{ if(c.questionnaire && c.questionnaire.responseId) used.add(c.questionnaire.responseId); });
     const open = _clients.filter(c=>!c.questionnaire && (c.nom||'').trim());
     if(!open.length) return;
-    const keys = open.map(c=>({ c, t: qTokens(c.nom) }));
+    const keys = open.map(c=>({ c, t: qTokens(c.nom), e: qNormEmail(c.email) }));
     // 3) Parcourir les réponses et lier les correspondances uniques.
     const rs = await window._getDocs(window._collection(window._db,'alteo_forms',form._id,'responses'));
     let linked = 0;
     for (const d of rs.docs){
       if(used.has(d.id)) continue;
       const r = d.data();
-      const nameT = qNameFromResponse(r);
-      if(nameT.length < 2) continue;
-      const hits = keys.filter(k=>!k.c.questionnaire && qSameName(nameT, k.t));
+
+      /* 1) Email — identifiant sûr, testé en premier. */
+      const mail = qEmailFromResponse(r);
+      let hits = mail ? keys.filter(k=>!k.c.questionnaire && k.e && k.e === mail) : [];
+
+      /* 2) À défaut seulement, le nom (deux mots communs minimum). */
+      if(hits.length !== 1){
+        const nameT = qNameFromResponse(r);
+        if(nameT.length < 2) continue;
+        hits = keys.filter(k=>!k.c.questionnaire && qSameName(nameT, k.t));
+      }
       if(hits.length !== 1) continue; // ambigu ou introuvable → on ne force jamais
       const c = hits[0].c;
       const answers = (r.answers||[]).filter(a=>a.value!=null&&a.value!=='').map(a=>({ q: String(a.label||a.fieldId||''), a: String(a.value) }));
