@@ -164,6 +164,29 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
 .fn-trow input { width:76px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:6px 8px; font-size:12px; font-family:var(--font-m); text-align:right; outline:none; }
 .fn-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
 
+/* Capacité & dispos (couche additive — préfixe fn-dispo, aucune collision) */
+.fn-dispo-t { min-width:660px !important; }
+.fn-dispo-t th { cursor:default; }
+.fn-dispo-t td.num { font-family:var(--font-m); font-size:12px; text-align:right; white-space:nowrap; }
+.fn-dispo-t th.num { text-align:right; }
+.fn-dispo-t tr.fn-dispo-tot td { border-top:2px solid var(--border2); font-weight:700; background:var(--bg3); }
+.fn-dispo-who { display:flex; align-items:center; gap:8px; white-space:nowrap; }
+.fn-dispo-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.fn-dispo-role { font-size:10px; color:var(--muted2); }
+.fn-dispo-bar { display:flex; height:7px; width:96px; border-radius:6px; overflow:hidden; background:var(--bg4); margin-left:auto; }
+.fn-dispo-bar i { display:block; height:100%; }
+.fn-dispo-bar i.bk { background:var(--blue); }
+.fn-dispo-bar i.pe { background:var(--muted2); }
+.fn-dispo-est { font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:10px; background:rgba(245,158,11,0.12); color:var(--gold); border:1px solid rgba(245,158,11,0.25); margin-left:6px; }
+.fn-dispo-notes { font-size:11.5px; color:var(--muted); line-height:1.65; margin-top:11px; }
+.fn-dispo-notes b { color:var(--text); }
+.fn-dispo-det { margin-top:12px; border-top:1px solid var(--border); padding-top:6px; }
+.fn-dispo-det summary { cursor:pointer; font-size:11.5px; font-weight:700; color:var(--muted); padding:6px 0; list-style:none; user-select:none; }
+.fn-dispo-det summary::-webkit-details-marker { display:none; }
+.fn-dispo-det[open] summary { color:var(--text); }
+.fn-dispo-det .fn-table-wrap { margin-top:8px; }
+.fn-dispo-d0 td { color:var(--muted2); }
+
 .fn-empty { text-align:center; color:var(--muted); padding:34px 10px; font-size:13px; }
 .fn-loading { text-align:center; color:var(--muted); padding:44px 10px; font-size:13px; }
 .fn-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--bg4); border:1px solid var(--border2); color:var(--text); padding:10px 18px; border-radius:12px; font-size:13px; opacity:0; pointer-events:none; transition:all .25s; z-index:300; box-shadow:0 10px 40px rgba(0,0,0,0.5); }
@@ -176,6 +199,9 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
 <!-- Cœur du funnel (chargement + calcul des KPIs), partagé à l'identique
      avec api/agency-funnel.js. Doit être chargé AVANT le script de page. -->
 <script src="funnel-core.js"></script>
+<!-- Comptage des créneaux (capacité des closeurs / setteurs), partagé à
+     l'identique avec api/availability-snapshot.js qui alimente l'archive. -->
+<script src="dispo-core.js"></script>
 <script src="nav.js"></script>
 
 <div class="fn-main" id="fnApp" style="display:none">
@@ -541,6 +567,204 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     }).catch(function (e) { console.warn('[funnel] journal all', e.message); journalAll = []; });
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     CAPACITÉ & DISPOS — couche additive (Vincent 07/08)
+     ────────────────────────────────────────────────────────────────
+     Combien de créneaux d'1 h les closeurs / setteurs ont ouverts sur la
+     période, combien ont été pris, combien sont restés libres.
+
+     D'OÙ VIENT CHAQUE JOUR
+     ----------------------
+     · jour ÉCOULÉ et présent dans availability_daily → l'archive fait foi.
+       C'est ce qui était réellement ouvert ce jour-là, même si les horaires
+       ont changé depuis.
+     · sinon → recalcul sur les horaires ACTUELS de booking_config. Pour
+       aujourd'hui et les jours à venir c'est la vérité du moment (retirer 3 h
+       demain fait baisser le total tout de suite) ; pour un jour passé non
+       archivé c'est une reconstitution, marquée « estimé ».
+
+     Le comptage vit dans dispo-core.js, partagé avec le cron d'archivage :
+     un jour ne doit pas changer de valeur en passant de « calculé » à
+     « archivé ».
+     ════════════════════════════════════════════════════════════════ */
+  var DC = window.DispoCore;
+  var DISPO = {
+    ready: false, err: null, archiveDenied: false,
+    settings: {}, targets: [], busy: {}, archive: {}, archiveFrom: null,
+    days: [], rows: [], totals: null,
+    year: null, yearLoading: false, yearErr: null
+  };
+
+  /* booking_config : experts + réglages (jours fériés actifs). Lecture
+     publique côté rules — même source que la page de réservation. */
+  function loadDispoConfig() {
+    return db.collection('booking_config').get().then(function (snap) {
+      var persons = [], settings = {};
+      snap.forEach(function (doc) {
+        var d = doc.data() || {};
+        if (doc.id === '_settings') { settings = d; return; }
+        if (d.__type === 'person') { d.id = doc.id; persons.push(d); }
+      });
+      DISPO.settings = settings;
+      DISPO.targets = DC.salesPersons(persons, window.TEAM_MEMBERS_LIST || []);
+    });
+  }
+
+  /* Agenda Google (calendar_busy) — uniquement pour les experts connectés.
+     Le cache serveur ne couvre que ~60 jours à venir : sur une période
+     passée il est vide, et c'est l'archive qui porte l'info « perso ». */
+  function loadDispoBusy() {
+    DISPO.busy = {};
+    var connected = DISPO.targets.filter(function (t) { return t.person.calendarConnected; });
+    return Promise.all(connected.map(function (t) {
+      return db.collection('calendar_busy').doc(t.person.id).get().then(function (s) {
+        DISPO.busy[t.person.id] = (s.exists && (s.data() || {}).busy) || [];
+      }).catch(function (e) {
+        console.warn('[funnel/dispos] calendar_busy ' + t.person.id, e.message);
+        DISPO.busy[t.person.id] = [];
+      });
+    }));
+  }
+
+  /* Archive availability_daily : un doc par personne et par mois.
+     Un permission-denied ici veut dire « les rules ne sont pas déployées » —
+     on le signale à l'écran plutôt que d'afficher des chiffres reconstitués
+     en faisant croire qu'ils sont constatés. */
+  function loadDispoArchive(days) {
+    DISPO.archive = {};
+    DISPO.archiveDenied = false;
+    DISPO.archiveFrom = null;
+    var mks = DC.monthKeysFor(days).slice(0, 24);
+    var jobs = [];
+    DISPO.targets.forEach(function (t) {
+      DISPO.archive[t.person.id] = {};
+      mks.forEach(function (mk) {
+        jobs.push(
+          db.collection('availability_daily').doc(DC.archiveDocId(t.person.id, mk)).get()
+            .then(function (s) {
+              if (!s.exists) return;
+              var d = (s.data() || {}).days || {};
+              Object.keys(d).forEach(function (ds) {
+                DISPO.archive[t.person.id][ds] = d[ds];
+                if (!DISPO.archiveFrom || ds < DISPO.archiveFrom) DISPO.archiveFrom = ds;
+              });
+            })
+            .catch(function (e) {
+              if (e && e.code === 'permission-denied') DISPO.archiveDenied = true;
+              else console.warn('[funnel/dispos] archive ' + t.person.id + ' ' + mk, e.message);
+            })
+        );
+      });
+    });
+    return Promise.all(jobs);
+  }
+
+  /* Chargement complet de la section, en parallèle du reste du funnel.
+     Une erreur ici ne doit JAMAIS empêcher le funnel de s'afficher : elle est
+     stockée et rendue dans la section, le reste de la page est intact. */
+  function loadDispos() {
+    DISPO.ready = false;
+    DISPO.err = null;
+    DISPO.year = null;
+    /* Garde-fou : si dispo-core.js n'a pas été servi (cache, 404, blocage
+       réseau), la section le dit et le funnel continue de s'afficher. Sans
+       ça, le premier appel à DC.* lèverait avant même la promesse et
+       emporterait tout refresh(). */
+    if (!DC) {
+      console.error('[funnel/dispos] dispo-core.js non chargé');
+      DISPO.err = 'dispo-core.js n\'a pas été chargé';
+      return Promise.resolve();
+    }
+    DISPO.days = DC.eachDay(isoDate(P.start), isoDate(P.end));
+    return loadDispoConfig()
+      .then(function () {
+        if (!DISPO.targets.length) return null;
+        return Promise.all([loadDispoBusy(), loadDispoArchive(DISPO.days)]);
+      })
+      .catch(function (e) {
+        console.error('[funnel/dispos] chargement', e);
+        DISPO.err = e && e.message ? e.message : 'erreur inconnue';
+      });
+  }
+
+  /* Agrégat par personne + total équipe, sur la période affichée. */
+  function computeDispos() {
+    DISPO.rows = [];
+    DISPO.totals = null;
+    DISPO.ready = true;
+    if (DISPO.err || !DC || !DISPO.targets.length) return;
+    var sIso = isoDate(P.start), eIso = isoDate(P.end);
+    /* DATA.bookings contient les RDV de la fenêtre de DATE et ceux de la
+       fenêtre de CRÉATION : on refiltre sur la date pour ne compter que ce
+       qui occupe vraiment un créneau de la période. Tous statuts — c'est
+       dispo-core qui écarte les annulés. */
+    var idx = DC.indexBookings(DATA.bookings.filter(function (b) {
+      return b && b.date >= sIso && b.date <= eIso;
+    }));
+    var today = DC.todayParis();
+    DISPO.rows = DISPO.targets.map(function (t) {
+      var r = DC.rangeCapacity(t.person, DISPO.days, {
+        settings: DISPO.settings,
+        bookingsByDate: idx[t.person.id] || {},
+        busy: DISPO.busy[t.person.id] || [],
+        archive: DISPO.archive[t.person.id] || {},
+        today: today
+      });
+      return {
+        person: t.person, member: t.member, matchedBy: t.matchedBy,
+        totals: r.totals, byDay: r.byDay
+      };
+    });
+    DISPO.totals = DC.sumTotals(DISPO.rows.map(function (r) { return r.totals; }));
+  }
+
+  /* Cumul de l'année en cours — chargé À LA DEMANDE : il faut les RDV depuis
+     le 1er janvier, une requête bien plus lourde que celle de la période.
+     On ne l'impose pas à chaque rafraîchissement du funnel. */
+  function loadDispoYear() {
+    if (DISPO.yearLoading || !DC || DISPO.err) return;
+    DISPO.yearLoading = true;
+    DISPO.yearErr = null;
+    renderActiveTab();
+
+    var today = DC.todayParis();
+    var jan1 = today.slice(0, 4) + '-01-01';
+    var days = DC.eachDay(jan1, today);
+
+    Promise.all([
+      db.collection('bookings').where('date', '>=', jan1).where('date', '<=', today).get(),
+      loadDispoArchive(days)
+    ]).then(function (res) {
+      var bks = [];
+      res[0].forEach(function (doc) { var d = doc.data() || {}; d._id = doc.id; bks.push(d); });
+      var idx = DC.indexBookings(bks);
+      var rows = DISPO.targets.map(function (t) {
+        var r = DC.rangeCapacity(t.person, days, {
+          settings: DISPO.settings,
+          bookingsByDate: idx[t.person.id] || {},
+          busy: DISPO.busy[t.person.id] || [],
+          archive: DISPO.archive[t.person.id] || {},
+          today: today
+        });
+        return { person: t.person, totals: r.totals };
+      });
+      DISPO.year = {
+        from: jan1, to: today, rows: rows,
+        totals: DC.sumTotals(rows.map(function (r) { return r.totals; }))
+      };
+    }).catch(function (e) {
+      console.error('[funnel/dispos] cumul année', e);
+      DISPO.yearErr = e && e.message ? e.message : 'erreur inconnue';
+      toast('Cumul année : ' + DISPO.yearErr, true);
+    }).then(function () {
+      DISPO.yearLoading = false;
+      /* L'archive a été rechargée sur toute l'année : on recalcule la période
+         pour rester cohérent (elle ne peut que gagner des jours constatés). */
+      computeDispos();
+      renderActiveTab();
+    });
+  }
+
   function waitForTeamMembers() {
     return new Promise(function (resolve) {
       if (window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length) { resolve(); return; }
@@ -578,6 +802,179 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   function stageOpen(icon, title, note) {
     return '<div class="fn-stage"><div class="fn-stage-head"><div class="fn-stage-title">' + icon + ' ' + title + '</div>'
       + (note ? '<div class="fn-stage-note">' + note + '</div>' : '') + '</div>';
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     RENDER — SECTION « CAPACITÉ & DISPOS »
+     ════════════════════════════════════════════════════════════════ */
+  function fmtAvg(v) {
+    if (v == null || isNaN(v) || !isFinite(v)) return '—';
+    return (Math.round(v * 10) / 10).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+
+  /* Barre pris / perso / libre — proportions de la capacité ouverte. */
+  function dispoBar(t) {
+    if (!t || !t.open) return '';
+    var b = Math.max(0, Math.round(t.booked / t.open * 100));
+    var p = Math.max(0, Math.round(t.perso / t.open * 100));
+    return '<div class="fn-dispo-bar" title="' + escAttr(t.booked + ' pris · ' + t.perso + ' agenda perso · ' + t.free + ' libres') + '">'
+      + '<i class="bk" style="width:' + b + '%"></i><i class="pe" style="width:' + p + '%"></i></div>';
+  }
+
+  function dispoRowHtml(label, sub, color, t, isTotal) {
+    var perDay = t.days ? t.open / t.days : null;
+    var perWork = t.workDays ? t.openWork / t.workDays : null;
+    var fr = DC.fillRate(t);
+    var est = t.estimated > 0
+      ? '<span class="fn-dispo-est" title="' + escAttr(t.estimated + ' jour(s) reconstitué(s) depuis les horaires actuels, faute d\'archive') + '">estimé</span>'
+      : '';
+    var h = '<tr' + (isTotal ? ' class="fn-dispo-tot"' : '') + '>';
+    h += '<td><div class="fn-dispo-who">'
+      + (color ? '<span class="fn-dispo-dot" style="background:' + escAttr(color) + '"></span>' : '')
+      + '<span>' + esc(label) + est + (sub ? '<div class="fn-dispo-role">' + esc(sub) + '</div>' : '') + '</span></div></td>';
+    h += '<td class="num">' + fmtNum(t.open) + '</td>';
+    h += '<td class="num">' + fmtAvg(perDay) + '</td>';
+    h += '<td class="num">' + fmtAvg(perWork) + '</td>';
+    h += '<td class="num">' + fmtNum(t.booked) + '</td>';
+    h += '<td class="num">' + (t.perso ? fmtNum(t.perso) : '—') + '</td>';
+    h += '<td class="num">' + fmtNum(t.free) + '</td>';
+    h += '<td class="num">' + (fr == null ? '—' : fmtPct(fr, 0)) + '</td>';
+    h += '<td style="width:110px">' + dispoBar(t) + '</td>';
+    h += '</tr>';
+    return h;
+  }
+
+  /* Détail jour par jour — une ligne par journée, une colonne par membre.
+     Les journées où PERSONNE n'a de créneau ouvert sont masquées : sur un
+     mois, ça retire les week-ends et rend le tableau lisible. */
+  function dispoDetailHtml() {
+    var rows = DISPO.rows;
+    if (!rows.length) return '';
+    var shown = DISPO.days.filter(function (ds) {
+      for (var i = 0; i < rows.length; i++) {
+        var d = rows[i].byDay[ds];
+        if (d && (d.open > 0 || d.booked > 0)) return true;
+      }
+      return false;
+    });
+    var hidden = DISPO.days.length - shown.length;
+
+    var h = '<details class="fn-dispo-det"><summary>▸ Détail jour par jour (' + shown.length + ' jour' + (shown.length > 1 ? 's' : '') + ' avec des créneaux)</summary>';
+    if (!shown.length) {
+      h += '<div class="fn-empty" style="padding:14px">Aucun créneau ouvert sur la période.</div></details>';
+      return h;
+    }
+    h += '<div class="fn-table-wrap"><table class="fn-table fn-dispo-t"><thead><tr>';
+    h += '<th>Jour</th>';
+    rows.forEach(function (r) { h += '<th class="num">' + esc(r.person.name || '—') + '</th>'; });
+    h += '<th class="num">Ouverts</th><th class="num">Pris</th><th class="num">Libres</th></tr></thead><tbody>';
+    shown.forEach(function (ds) {
+      var open = 0, booked = 0, free = 0;
+      var cells = '';
+      rows.forEach(function (r) {
+        var d = r.byDay[ds] || { open: 0, booked: 0, free: 0 };
+        open += d.open; booked += d.booked; free += d.free;
+        cells += '<td class="num">' + (d.open ? d.booked + ' / ' + d.open : '—') + '</td>';
+      });
+      var dd = DC.ymdToDate(ds);
+      var jour = ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'][dd.getDay()];
+      h += '<tr' + (open === 0 ? ' class="fn-dispo-d0"' : '') + '>';
+      h += '<td style="white-space:nowrap">' + jour + ' ' + frDay(ds) + '</td>' + cells;
+      h += '<td class="num">' + fmtNum(open) + '</td><td class="num">' + fmtNum(booked) + '</td><td class="num">' + fmtNum(free) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div class="fn-dispo-notes">Par membre : <b>pris / ouverts</b>.'
+      + (hidden ? ' ' + hidden + ' journée(s) sans aucun créneau ouvert masquée(s) (week-ends, fériés, jours non travaillés).' : '')
+      + '</div>';
+    h += '</details>';
+    return h;
+  }
+
+  function renderDisposSection() {
+    var note = 'créneaux d\'1 h · ' + esc(periodLabel());
+    var h = stageOpen('📅', 'Capacité &amp; dispos', note);
+
+    if (DISPO.err) {
+      h += '<div class="fn-alert">Impossible de charger la capacité : ' + esc(DISPO.err)
+        + '. Le reste du funnel n\'est pas affecté.</div></div>';
+      return h;
+    }
+    if (!DISPO.ready) {
+      h += '<div class="fn-loading" style="padding:20px">Chargement de la capacité…</div></div>';
+      return h;
+    }
+    if (!DISPO.targets.length) {
+      h += '<div class="fn-alert">Aucun expert de <b>Booking admin</b> n\'est rattaché à un membre d\'équipe de rôle '
+        + 'setter, closer ou closer_setter. Relie le compte de l\'expert dans Booking admin (champ « compte Firebase ») '
+        + 'pour que sa capacité apparaisse ici.</div></div>';
+      return h;
+    }
+
+    var tot = DISPO.totals;
+    h += '<div class="fn-table-wrap"><table class="fn-table fn-dispo-t"><thead><tr>';
+    h += '<th>Membre</th>';
+    h += '<th class="num" title="Créneaux d\'1 h ouverts dans son planning sur la période">Ouverts</th>';
+    h += '<th class="num" title="Créneaux ouverts ÷ nombre de jours de la période">/ jour</th>';
+    h += '<th class="num" title="Créneaux ouverts les jours ouvrés ÷ nombre de jours ouvrés (lundi-vendredi hors fériés)">/ jour ouvré</th>';
+    h += '<th class="num" title="Créneaux occupés par un RDV non annulé (no-show inclus : le créneau a bien été consommé)">Pris</th>';
+    h += '<th class="num" title="Créneaux neutralisés par un événement de son agenda Google personnel">Perso</th>';
+    h += '<th class="num" title="Ouverts − Pris − Perso">Libres</th>';
+    h += '<th class="num" title="Pris ÷ Ouverts — l\'agenda perso n\'entre pas dans le taux">Rempl.</th>';
+    h += '<th></th></tr></thead><tbody>';
+    DISPO.rows.forEach(function (r) {
+      var role = r.member.role === 'setter' ? 'setteur'
+        : r.member.role === 'closer' ? 'closeur' : 'closeur / setteur';
+      h += dispoRowHtml(r.person.name || r.member.shortName || r.member.slug, role,
+        r.member.color || r.person.color, r.totals, false);
+    });
+    if (DISPO.rows.length > 1) h += dispoRowHtml('TOTAL ÉQUIPE', null, null, tot, true);
+    h += '</tbody></table></div>';
+
+    /* ── Cumul de l'année, chargé à la demande ── */
+    h += '<div style="margin-top:11px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
+    if (DISPO.year) {
+      var y = DISPO.year.totals;
+      var yFr = DC.fillRate(y);
+      h += '<div class="fn-stage-note"><b style="color:var(--text);font-family:var(--font-m);font-size:14px">'
+        + fmtNum(y.open) + '</b> créneaux ouverts du ' + frDay(DISPO.year.from) + ' au ' + frDay(DISPO.year.to)
+        + ' · ' + fmtNum(y.booked) + ' pris · ' + fmtNum(y.free) + ' libres'
+        + (yFr != null ? ' · ' + fmtPct(yFr, 0) + ' de remplissage' : '')
+        + (y.estimated > 0 ? ' <span class="fn-dispo-est">dont ' + y.estimated + ' j estimés</span>' : '')
+        + '</div>';
+    } else {
+      h += '<button class="fn-btn" id="fnDispoYear"' + (DISPO.yearLoading ? ' disabled' : '') + '>'
+        + (DISPO.yearLoading ? '⏳ Calcul…' : '📊 Cumul de l\'année') + '</button>';
+      h += '<span class="fn-stage-note">depuis le 1<sup>er</sup> janvier — chargé à la demande (requête plus lourde)</span>';
+    }
+    h += '</div>';
+
+    /* ── Ce que les chiffres valent : dit à l'écran, pas seulement ici ── */
+    var notes = [];
+    notes.push('Un <b>créneau</b> = 1 h ouverte dans le planning Booking. Les créneaux réellement proposés au prospect '
+      + 'dépendent du type de consultation (30 / 45 / 60 min) : on compte ici une <b>capacité</b>, pas une simulation de réservation.');
+    notes.push('<b>Ouverts = Pris + Perso + Libres.</b> Le taux de remplissage ne compte que les RDV — une semaine de congés '
+      + 'ne fait donc pas grimper le taux à 100 %.');
+    if (DISPO.archiveDenied) {
+      notes.push('⚠ <b>Archive inaccessible</b> — la règle Firestore <code>availability_daily</code> n\'est pas encore déployée. '
+        + 'Tant qu\'elle manque, les jours passés sont tous reconstitués depuis les horaires actuels.');
+    } else if (tot && tot.estimated > 0) {
+      notes.push('Les jours marqués <b>estimé</b> sont reconstitués depuis les horaires d\'aujourd\'hui : l\'archive quotidienne '
+        + (DISPO.archiveFrom ? 'ne remonte qu\'au ' + frDay(DISPO.archiveFrom) : 'n\'a pas encore tourné')
+        + '. Si un planning a changé depuis, ces jours-là sont approximatifs — les <b>Pris</b>, eux, restent exacts.');
+    } else {
+      notes.push('Tous les jours passés de la période viennent de l\'<b>archive quotidienne</b> : c\'est ce qui était réellement ouvert, '
+        + 'même si les plannings ont changé depuis.');
+    }
+    var byName = DISPO.rows.filter(function (r) { return r.matchedBy === 'name'; });
+    if (byName.length) {
+      notes.push('⚠ Rattaché(s) par le <b>nom</b> faute de compte Firebase relié dans Booking admin : '
+        + byName.map(function (r) { return esc(r.person.name || '?'); }).join(', ') + '.');
+    }
+    h += '<div class="fn-dispo-notes">' + notes.join('<br>') + '</div>';
+
+    h += dispoDetailHtml();
+    h += '</div>';
+    return h;
   }
 
   function renderFunnel() {
@@ -641,6 +1038,10 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="rt"><strong>' + fmtPct(k.closeRateLive, 1) + '</strong>Taux de close / live <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' ÷ ' + fmtNum(k.ocDue.present) + ' présents)</span></div>';
     h += '<div class="rt"><strong>' + fmtPct(k.closeRateOffre, 1) + '</strong>Taux de close / offre <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' ÷ ' + fmtNum(k.ocDue.pitched) + ' pitchés)</span></div>';
     h += '</div>';
+
+    /* Capacité & dispos — combien de créneaux l'équipe a ouverts sur la
+       période, et ce qui a été pris dessus (demande Vincent 07/08). */
+    h += renderDisposSection();
 
     /* 1. Publicité */
     h += stageOpen('💰', 'Publicité (Meta)', k.hasAds ? k.adsDays + ' jour(s) de data · source Make / saisie' : 'Aucune donnée — onglet « Données Ads » ou scénario Make');
@@ -908,6 +1309,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     el.innerHTML = h;
     var go = $('#fnGoJournal');
     if (go) go.onclick = function (e) { e.preventDefault(); switchTab('journal'); };
+    var yb = $('#fnDispoYear');
+    if (yb) yb.onclick = loadDispoYear;
   }
 
   /* Libellé récupération — explicite (retour Adrien 14/07) :
@@ -1553,10 +1956,19 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     var t0 = Date.now();
     /* Tout le pipeline de chargement vit dans funnel-core.js — strictement
        le même que celui qu'exécute l'API agence. */
-    FC.loadAll(db, { P: P, typeMap: TYPE_MAP, teamMembers: window.TEAM_MEMBERS_LIST || [] })
-      .then(function (res) {
+    /* La capacité se charge EN PARALLÈLE du funnel : ses sources (booking_config,
+       calendar_busy, availability_daily) sont indépendantes. loadDispos()
+       n'échoue jamais — elle range son erreur dans DISPO.err pour que la
+       section l'affiche sans emporter le reste de la page. */
+    Promise.all([
+      FC.loadAll(db, { P: P, typeMap: TYPE_MAP, teamMembers: window.TEAM_MEMBERS_LIST || [] }),
+      loadDispos()
+    ])
+      .then(function (all) {
+        var res = all[0];
         DATA = res.DATA;
         compute();
+        computeDispos();
         renderActiveTab();
         setSync('ok', periodLabel() + ' · ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s');
       })
