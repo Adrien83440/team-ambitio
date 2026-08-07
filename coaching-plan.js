@@ -98,30 +98,228 @@
   function val(v) { var s = String(v == null ? '' : v).trim(); return s || TODO; }
   function isTodo(v) { return !String(v == null ? '' : v).trim(); }
 
+  /* ═════════════════════════════════════════════════════════════════════
+     MODE VOCAL — dictée dans n'importe quel champ
+     ─────────────────────────────────────────────────────────────────────
+     Reconnaissance vocale NATIVE du navigateur (SpeechRecognition), en
+     français. Aucun upload, aucune clé, aucun coût, aucune donnée client qui
+     part chez un tiers : le texte est produit sur la machine du mentor.
+     Non supporté par Firefox → on le dit clairement plutôt que d'afficher un
+     bouton mort.
+
+     Un seul micro actif à la fois : deux dictées simultanées se voleraient le
+     flux audio et rempliraient le mauvais champ.
+     ═══════════════════════════════════════════════════════════════════ */
+  var VOX = {
+    rec: null, target: null, btn: null, base: '', keep: false,
+
+    supported: function () {
+      return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    },
+
+    paint: function (on) {
+      if (!this.btn) return;
+      if (on) this.btn.classList.add('on'); else this.btn.classList.remove('on');
+      this.btn.textContent = on ? '⏹' : '🎤';
+      this.btn.title = on ? 'Arrêter la dictée' : 'Dicter (français)';
+    },
+
+    stop: function () {
+      this.keep = false;
+      if (this.rec) { try { this.rec.stop(); } catch (e) { /* déjà arrêtée */ } }
+    },
+
+    toggle: function (el, btn) {
+      var self = this;
+      if (!el) return;
+      /* Re-clic sur le même micro = on arrête. Clic sur un autre = on bascule. */
+      if (this.rec && this.target === el) { this.stop(); return; }
+      if (this.rec) this.stop();
+
+      var Reco = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!Reco) {
+        alert('La dictée vocale n\'est pas disponible dans ce navigateur.\n\nUtilise Chrome, Edge ou Safari — la saisie au clavier reste possible partout.');
+        return;
+      }
+      var rec;
+      try { rec = new Reco(); }
+      catch (e) {
+        console.error('[plan] dictée indisponible', e);
+        alert('Impossible de démarrer la dictée : ' + (e && e.message ? e.message : 'micro indisponible'));
+        return;
+      }
+      rec.lang = 'fr-FR';
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+
+      this.rec = rec; this.target = el; this.btn = btn || null; this.keep = true;
+      /* On repart de ce qui est déjà écrit : la dictée complète, elle n'efface
+         jamais une saisie au clavier. */
+      this.base = el.value ? (String(el.value).replace(/\s+$/, '') + ' ') : '';
+      this.paint(true);
+
+      rec.onresult = function (ev) {
+        var fin = '', interim = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) {
+          var t = ev.results[i][0].transcript;
+          if (ev.results[i].isFinal) fin += t; else interim += t;
+        }
+        if (fin.trim()) self.base = self.base + fin.trim() + ' ';
+        el.value = self.base + interim;
+        if (el.tagName === 'TEXTAREA') el.scrollTop = el.scrollHeight;
+        try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) { /* vieux navigateur */ }
+      };
+
+      rec.onerror = function (ev) {
+        var code = ev && ev.error;
+        console.warn('[plan] dictée', code);
+        if (code === 'not-allowed' || code === 'service-not-allowed') {
+          self.keep = false;
+          alert('Le micro est bloqué pour ce site.\n\nAutorise-le dans la barre d\'adresse (icône 🎤), puis réessaie.');
+        }
+        /* « no-speech » et « aborted » sont normaux : onend relancera. */
+      };
+
+      rec.onend = function () {
+        /* Chrome coupe tout seul après quelques secondes de silence. Tant que
+           le mentor n'a pas cliqué sur stop, on relance : il parle à son
+           rythme, pas à celui du navigateur. */
+        if (self.keep) {
+          try { rec.start(); return; } catch (e) { /* relance impossible → on ferme proprement */ }
+        }
+        el.value = self.base.replace(/\s+$/, '');
+        try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) { /* idem */ }
+        self.paint(false);
+        self.rec = null; self.target = null; self.btn = null;
+      };
+
+      try { rec.start(); }
+      catch (e) {
+        console.error('[plan] démarrage dictée', e);
+        this.keep = false; this.paint(false); this.rec = null; this.target = null; this.btn = null;
+        alert('Impossible de démarrer la dictée : ' + (e && e.message ? e.message : 'micro occupé'));
+      }
+    }
+  };
+
+  /* Bouton micro rattaché à un champ par son id. Délégation d'événement plus
+     bas : les formulaires sont ré-rendus en permanence, un listener par bouton
+     ne survivrait pas. */
+  function mic(id, label) {
+    return '<button type="button" class="cp-mic" data-mic="' + esc(id) + '"'
+      + ' title="Dicter (français)" aria-label="Dicter">' + (label || '🎤') + '</button>';
+  }
+
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-mic]') : null;
+    if (!b) return;
+    e.preventDefault();
+    VOX.toggle(document.getElementById(b.getAttribute('data-mic')), b);
+  });
+
+  /* ── Styles communs (micro + compléments du plan affiché) ──────────────
+     Posés au chargement du module, donc valables sur la fiche coach ET sur
+     la page client, sans dupliquer une ligne de CSS dans les deux pages. */
+  function ensureViewCss() {
+    if (document.getElementById('cpViewCss')) return;
+    var s = document.createElement('style');
+    s.id = 'cpViewCss';
+    s.textContent = [
+      '.cp-mic{border:1.5px solid ' + C.line + ';background:#fff;color:' + C.main + ';border-radius:999px;width:26px;height:26px;line-height:1;padding:0;font-size:12px;cursor:pointer;font-family:inherit;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;transition:all .12s}',
+      '.cp-mic:hover{border-color:' + C.light + ';background:' + C.ghost + '}',
+      '.cp-mic.on{background:' + C.red + ';border-color:' + C.red + ';color:#fff;animation:cpmic 1.15s ease-in-out infinite}',
+      '@keyframes cpmic{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{box-shadow:0 0 0 7px rgba(239,68,68,0)}}',
+      '.cp-mic.big{width:auto;height:auto;border-radius:10px;padding:9px 15px;font-size:12.5px;font-weight:700;gap:6px}',
+
+      /* Bandeau d'avancement en tête de la feuille de route. */
+      '.cpv2-prog{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:0 0 13px;padding:10px 13px;border:1px solid ' + C.line + ';border-radius:12px;background:#fff}',
+      '.cpv2-prog .lb{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + C.muted + '}',
+      '.cpv2-prog .tr{flex:1;min-width:110px;height:8px;border-radius:999px;background:#eef1fb;overflow:hidden}',
+      '.cpv2-prog .fi{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,' + C.light + ',' + C.green + ')}',
+      '.cpv2-prog .vv{font-size:12px;font-weight:800;color:' + C.dark + ';font-variant-numeric:tabular-nums;white-space:nowrap}',
+
+      /* Barre de retouche IA (fiche coach uniquement — jamais côté client). */
+      '.cpv2-ai{border:1.5px solid ' + C.line + ';border-radius:12px;background:' + C.ghost + ';padding:11px 13px;margin-bottom:12px}',
+      '.cpv2-ai-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.main + ';margin-bottom:8px}',
+      '.cpv2-ai textarea{width:100%;box-sizing:border-box;border:1.5px solid ' + C.line + ';border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;font-family:inherit;color:' + C.ink + ';background:#fff;outline:none;resize:vertical;min-height:58px}',
+      '.cpv2-ai textarea:focus{border-color:' + C.light + '}',
+      '.cpv2-ai-a{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px}',
+      '.cpv2-ai-n{font-size:10.5px;color:' + C.muted + ';line-height:1.5;margin-top:7px}',
+      '.cpv2-btn{border:1.5px solid ' + C.main + ';background:' + C.main + ';color:#fff;border-radius:10px;padding:9px 15px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}',
+      '.cpv2-btn:hover{background:' + C.dark + ';border-color:' + C.dark + '}',
+      '.cpv2-btn:disabled{opacity:.55;cursor:not-allowed}',
+      '.cpv2-btn.ghost{background:#fff;color:' + C.ink + ';border-color:' + C.line + '}',
+      '.cpv2-btn.ghost:hover{border-color:' + C.light + ';background:' + C.ghost + '}',
+      '.cpv2-spin{display:inline-block;width:11px;height:11px;border:2px solid ' + C.line + ';border-top-color:' + C.main + ';border-radius:50%;animation:cpspin2 .7s linear infinite;vertical-align:-1px;margin-right:5px}',
+      '@keyframes cpspin2{to{transform:rotate(360deg)}}',
+
+      /* Compteur d'actions faites, en tête de chaque semaine. */
+      '.cpv2-cnt{font-size:10.5px;font-weight:800;color:' + C.main + ';background:' + C.ghost + ';border-radius:999px;padding:2px 9px;white-space:nowrap}'
+    ].join('\n');
+    document.head.appendChild(s);
+  }
+  ensureViewCss();
+
   function emptyPlan() {
     return {
-      version: 2,
+      version: 3,
       startDate: toYMD(new Date()),
       coach: '',
       pointA: '', pointB: '',
       verrou: '', organisme: '', synthese: '',
       chiffres: [],             // [{label, valeur}]  repères du dossier
       ditClient: [],            // [{titre, detail}]  ce que le dirigeant a dit
-      jalons: {},               // { A1:{titre, focus, actions[]}, … }
+      jalons: {},               // { A1:{titre, focus, actions[], preuve, j}, … }
       problemes: [],            // [{titre, detail}]
       objectifs: [],            // ['…']
       kpis: [],                 // [{cat, nom, freq, actuel, cible}]
       risques: [],              // [{titre, detail}]
       jalonStatus: {},          // { A1:'todo', … }
       semaines: [],             // [{ n, from, to, coach, focus, actions:[{txt,who,due,st}] }]
+      collecte: {},             // { cadrage:'…', pointA:'…', … } infos relevées par le mentor
+      vocal: '',                // dictée libre de la séance (mode vocal)
+      historique: [],           // [{at, by, instruction}] retouches demandées à l'IA
       createdAt: null, updatedAt: null, updatedBy: null
     };
+  }
+
+  /* Un plan d'avant la v3 n'a ni collecte, ni vocal, ni historique : on les
+     pose à l'ouverture plutôt que de tester partout ailleurs. Additif — aucune
+     donnée existante n'est touchée. */
+  function normalize(p) {
+    if (!p || typeof p !== 'object') return emptyPlan();
+    if (!p.collecte || typeof p.collecte !== 'object') p.collecte = {};
+    if (typeof p.vocal !== 'string') p.vocal = '';
+    if (!Array.isArray(p.historique)) p.historique = [];
+    if (!p.jalons || typeof p.jalons !== 'object') p.jalons = {};
+    if (!p.jalonStatus || typeof p.jalonStatus !== 'object') p.jalonStatus = {};
+    if (!Array.isArray(p.semaines)) p.semaines = [];
+    ['chiffres', 'ditClient', 'problemes', 'objectifs', 'kpis', 'risques'].forEach(function (k) {
+      if (!Array.isArray(p[k])) p[k] = [];
+    });
+    return p;
   }
 
   /* Date d'échéance d'un jalon, calculée depuis J0. */
   function jalonDate(plan, j) {
     var d0 = fromYMD(plan.startDate);
     return d0 ? toYMD(addDays(d0, j)) : '';
+  }
+
+  /* Décalage en jours d'un jalon : celui saisi pour CE dossier s'il existe,
+     sinon celui du programme. ⚠ 0 est une valeur légitime (« dès J0 ») → on
+     teste le type, jamais la vérité de la valeur. */
+  function jOf(p, j) {
+    var c = (p.jalons || {})[j.k];
+    var v = c ? c.j : null;
+    return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : j.j;
+  }
+
+  /* Preuve attendue : celle écrite pour ce dossier, sinon celle du programme. */
+  function jalonPreuve(p, j) {
+    var c = (p.jalons || {})[j.k];
+    return (c && String(c.preuve || '').trim()) ? String(c.preuve).trim() : j.preuve;
   }
 
   /* Semaine 1 = diagnostic initial, identique pour tous (brief Elite Phénix). */
@@ -151,7 +349,7 @@
      Point A / Point B / verrou / organisme. Le mentor n'a plus
      qu'à valider ou corriger : rien n'est écrit sans son passage.
      Silencieux en cas d'échec — l'assistant reste utilisable à la main. */
-  function loadSuggestion(force) {
+  function loadSuggestion(force, overwrite) {
     var id = W.client && (W.client._id || W.client.id);
     if (!id || W.suggState === 'loading') return;
     W.suggState = 'loading';
@@ -165,17 +363,21 @@
       return fetch('/api/coaching-plan-suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-        body: JSON.stringify({ clientId: id, force: !!force })
+        body: JSON.stringify({ clientId: id, force: !!force, notes: notesText() })
       });
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j || j.ok !== true || !j.suggestion) {
-        W.suggState = (j && j.error === 'no_questionnaire') ? 'none' : 'error';
+        var err = j && j.error;
+        W.suggState = err === 'no_questionnaire' ? 'none' : (err === 'ai_refused' ? 'refused' : 'error');
         paintSuggBar();
         return;
       }
       W.sugg = j.suggestion;
       W.suggState = 'ready';
-      applySuggestion(false);      // ne remplit que les champs vides
+      /* overwrite : le mentor vient explicitement de demander « remplis les
+         champs » depuis le mode vocal — sa dictée fait autorité sur ce qui
+         était là. Sinon on ne touche QU'AUX champs vides. */
+      applySuggestion(!!overwrite);
       go(W.step);
     }).catch(function (e) {
       console.warn('[plan] suggestion', e && e.message);
@@ -202,13 +404,64 @@
     }
   }
 
+  /* Tout ce que le mentor a apporté lui-même : la dictée libre + les cases
+     « Infos collectées » de chaque étape. C'est ce qu'on envoie à l'IA en plus
+     du questionnaire — et ce qui fait la différence entre un plan générique et
+     un plan qui ressemble à CE dossier. */
+  function notesText() {
+    var p = W.plan || {};
+    var out = [];
+    if (String(p.vocal || '').trim()) out.push('— Ce que le mentor raconte de la séance :\n' + String(p.vocal).trim());
+    var col = p.collecte || {};
+    STEPS.forEach(function (s) {
+      var v = String(col[s.key] || '').trim();
+      if (v) out.push('— Infos collectées sur « ' + s.t + ' » :\n' + v);
+    });
+    return out.join('\n\n');
+  }
+
+  function paintVox() {
+    var el = document.getElementById('cpVoxBody');
+    if (!el) return;
+    var h = '<textarea id="cpVoxTxt" placeholder="Raconte à voix haute ce que tu sais du dossier : son activité, ses chiffres, ce qui le bloque, ce qu\'il veut dans 6 mois. Pas besoin de faire des phrases — l\'IA range.">'
+      + esc(W.plan && W.plan.vocal ? W.plan.vocal : '') + '</textarea>';
+    h += '<div class="cp-vox-a">'
+      + (VOX.supported() ? '<button type="button" class="cp-mic big" data-mic="cpVoxTxt">🎤 Parler</button>' : '')
+      + '<button type="button" class="cp-btn primary" id="cpVoxGo">✨ Remplir les champs</button>'
+      + '</div>';
+    if (!VOX.supported()) {
+      h += '<div class="cp-vox-ko">La dictée n\'est pas disponible dans ce navigateur — Chrome, Edge et Safari la gèrent. '
+        + 'Tu peux écrire dans la case ci-dessus : l\'IA la lit exactement de la même façon.</div>';
+    }
+    h += '<div class="cp-vox-n">Le texte reste dans la fiche : il sert de mémoire de séance et nourrit chaque régénération du plan.</div>';
+    el.innerHTML = h;
+
+    var t = document.getElementById('cpVoxTxt');
+    if (t) t.addEventListener('input', function () { W.plan.vocal = this.value; });
+
+    var go = document.getElementById('cpVoxGo');
+    if (go) go.addEventListener('click', function () {
+      collect();
+      var tx = document.getElementById('cpVoxTxt');
+      if (tx) W.plan.vocal = tx.value;
+      if (!notesText().trim()) {
+        alert('Dis (ou écris) d\'abord ce que tu sais de ce dossier — l\'IA ne peut pas inventer.');
+        return;
+      }
+      var dejaRempli = !isTodo(W.plan.pointA) || !isTodo(W.plan.pointB) || !isTodo(W.plan.verrou);
+      if (dejaRempli && !confirm('Les champs déjà remplis seront REMPLACÉS par la nouvelle proposition.\n\nContinuer ?')) return;
+      loadSuggestion(true, true);
+    });
+  }
+
   function paintSuggBar() {
     var el = document.getElementById('cpSugg');
     if (!el) return;
     var msg = {
-      loading: '<span class="sp"></span> Lecture du questionnaire et proposition en cours…',
-      ready: '✨ Champs pré-remplis à partir du questionnaire — <b>relis et corrige</b>, c\'est une proposition.',
-      none: 'Aucun questionnaire pour ce client — saisie manuelle.',
+      loading: '<span class="sp"></span> Analyse en cours — le modèle réfléchit avant de proposer, compte une minute.',
+      ready: '✨ Champs pré-remplis à partir du questionnaire et de tes notes — <b>relis et corrige</b>, c\'est une proposition.',
+      none: 'Ni questionnaire ni notes pour ce client — utilise le mode vocal ci-dessous, ou saisis à la main.',
+      refused: 'Le modèle a refusé de traiter ce contenu. Reformule tes notes, ou saisis à la main.',
       error: 'Proposition automatique indisponible — saisie manuelle.',
       idle: ''
     }[W.suggState] || '';
@@ -254,7 +507,7 @@
       '.cp-sugg{font-size:11.5px;line-height:1.5;border-radius:9px;padding:9px 11px;margin-bottom:14px}',
       '.cp-sugg.ready{background:#eef7ee;border:1px solid #bfe3c4;color:#1d6b34}',
       '.cp-sugg.loading{background:' + C.ghost + ';border:1px solid ' + C.line + ';color:' + C.main + '}',
-      '.cp-sugg.none,.cp-sugg.error{background:#fdf6e6;border:1px solid #f0dfae;color:#8a6412}',
+      '.cp-sugg.none,.cp-sugg.error,.cp-sugg.refused{background:#fdf6e6;border:1px solid #f0dfae;color:#8a6412}',
       '.cp-sugg button{margin-left:6px;border:1px solid currentColor;background:none;color:inherit;border-radius:7px;padding:2px 8px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit}',
       '.cp-sugg .sp{display:inline-block;width:9px;height:9px;border:2px solid ' + C.line + ';border-top-color:' + C.main + ';border-radius:50%;animation:cpspin .7s linear infinite;vertical-align:-1px}',
       '@keyframes cpspin{to{transform:rotate(360deg)}}',
@@ -275,7 +528,40 @@
       '.cp-btn.primary{background:' + C.main + ';border-color:' + C.main + ';color:#fff}',
       '.cp-btn.primary:hover{background:' + C.dark + '}',
       '.cp-btn:disabled{opacity:.5;cursor:not-allowed}',
-      '@media(max-width:820px){.cp-body{grid-template-columns:1fr}.cp-aside{display:none}}'
+      '@media(max-width:820px){.cp-body{grid-template-columns:1fr}.cp-aside{display:none}}',
+
+      /* ── Correctifs de lisibilité (couche v3) ────────────────────────────
+         Les champs de la semaine 1 vivaient hors de .cp-f : ils n'héritaient
+         d'AUCUN style et s'affichaient en champs bruts minuscules, quasi
+         invisibles sur fond blanc. On les rhabille ici, à l'identique du
+         reste de l'assistant. Ces règles sont en fin de feuille : elles
+         gagnent sur les précédentes sans qu'on ait à y toucher. */
+      '.cp-f label{display:flex;align-items:center;gap:8px}',
+      '.cp-act{border:1.5px solid ' + C.line + ';border-radius:12px;padding:12px 12px 13px;margin-bottom:10px;background:#fbfbff}',
+      '.cp-act > label{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.muted + ';margin-bottom:7px}',
+      '.cp-act input{width:100%;box-sizing:border-box;border:1.5px solid ' + C.line + ';border-radius:9px;padding:10px 12px;font-size:13px;line-height:1.35;font-family:inherit;color:' + C.ink + ';background:#fff;outline:none}',
+      '.cp-act input:focus{border-color:' + C.light + ';box-shadow:0 0 0 3px rgba(79,126,248,.15)}',
+      '.cp-act input::placeholder{color:#9aa3b8;opacity:1}',
+      '.cp-act .row{display:grid;grid-template-columns:1fr 160px;gap:8px;margin-top:8px}',
+      '@media(max-width:520px){.cp-act .row{grid-template-columns:1fr}}',
+
+      /* ── Infos collectées : ce que le mentor a relevé de son côté ── */
+      '.cp-collect{margin:2px 0 16px;border:1.5px dashed ' + C.line + ';border-radius:12px;padding:11px 12px;background:#fcfcff}',
+      '.cp-collect-h{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.main + ';margin-bottom:7px}',
+      '.cp-collect textarea{width:100%;box-sizing:border-box;border:1.5px solid ' + C.line + ';border-radius:9px;padding:9px 11px;font-size:12.5px;line-height:1.5;font-family:inherit;color:' + C.ink + ';background:#fff;outline:none;resize:vertical;min-height:56px}',
+      '.cp-collect textarea:focus{border-color:' + C.light + '}',
+      '.cp-collect .n{font-size:10.5px;color:' + C.muted + ';line-height:1.45;margin-top:6px}',
+
+      /* ── Panneau du mode vocal ── */
+      '.cp-vox{border:1.5px solid ' + C.line + ';border-radius:12px;background:' + C.ghost + ';margin-bottom:14px;overflow:hidden}',
+      '.cp-vox > summary{list-style:none;cursor:pointer;padding:10px 13px;font-size:12px;font-weight:800;color:' + C.main + ';display:flex;align-items:center;gap:8px}',
+      '.cp-vox > summary::-webkit-details-marker{display:none}',
+      '.cp-vox-b{padding:0 13px 13px}',
+      '.cp-vox textarea{width:100%;box-sizing:border-box;border:1.5px solid ' + C.line + ';border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.55;font-family:inherit;color:' + C.ink + ';background:#fff;outline:none;resize:vertical;min-height:92px}',
+      '.cp-vox textarea:focus{border-color:' + C.light + '}',
+      '.cp-vox-a{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px}',
+      '.cp-vox-n{font-size:10.5px;color:' + C.muted + ';line-height:1.5;margin-top:8px}',
+      '.cp-vox-ko{font-size:11.5px;color:#8a6412;background:#fdf6e6;border:1px solid #f0dfae;border-radius:9px;padding:8px 10px;margin-top:8px;line-height:1.5}'
     ].join('\n');
     document.head.appendChild(css);
 
@@ -288,7 +574,16 @@
           '<div class="cp-steps" id="cpSteps"></div>' +
         '</div>' +
         '<div class="cp-body">' +
-          '<div class="cp-main"><div class="cp-sugg" id="cpSugg" style="display:none"></div><div id="cpMain"></div></div>' +
+          '<div class="cp-main">' +
+            '<div class="cp-sugg" id="cpSugg" style="display:none"></div>' +
+            /* Le panneau vocal vit HORS de #cpMain : il survit au changement
+               d'étape, donc une dictée en cours n'est jamais coupée. */
+            '<details class="cp-vox" id="cpVox">' +
+              '<summary>🎙️ Mode vocal — raconte la séance, l\'IA remplit le plan</summary>' +
+              '<div class="cp-vox-b" id="cpVoxBody"></div>' +
+            '</details>' +
+            '<div id="cpMain"></div>' +
+          '</div>' +
           '<div class="cp-aside" id="cpAside"></div>' +
         '</div>' +
         '<div class="cp-foot">' +
@@ -311,6 +606,9 @@
   }
 
   function closeWizard() {
+    /* On coupe le micro en fermant : sinon il continue d'écouter derrière une
+       fenêtre invisible, ce qui est autant un bug qu'un problème de confiance. */
+    VOX.stop();
     var bg = document.getElementById('cpBg');
     if (bg) bg.classList.remove('show');
   }
@@ -322,14 +620,17 @@
     W.onSave = opts.onSave || null;
     /* Régénérer part du plan existant : on ne perd pas les réponses déjà
        validées par le mentor. */
-    W.plan = client && client.planV2
+    W.plan = normalize(client && client.planV2
       ? JSON.parse(JSON.stringify(client.planV2))
-      : emptyPlan();
+      : emptyPlan());
     if (!W.plan.coach) W.plan.coach = client && client.coach ? client.coach : '';
     W.step = 0;
     W.sugg = null;
     W.suggState = 'idle';
     go(0);
+    /* Le panneau vocal est peint UNE fois : il vit hors de #cpMain, donc une
+       dictée en cours n'est pas interrompue quand on change d'étape. */
+    paintVox();
     document.getElementById('cpBg').classList.add('show');
     /* Proposition automatique dès l'ouverture, uniquement s'il reste des
        champs à remplir — régénérer un plan complet ne relance rien. */
@@ -371,9 +672,21 @@
     if (sc) sc.scrollTop = 0;
   }
 
-  function f(label, inner, hint) {
-    return '<div class="cp-f"><label>' + label + '</label>' + inner
+  function f(label, inner, hint, micId) {
+    return '<div class="cp-f"><label>' + label + (micId ? mic(micId) : '') + '</label>' + inner
       + (hint ? '<div class="hint">' + hint + '</div>' : '') + '</div>';
+  }
+
+  /* Case « Infos collectées » présente sur CHAQUE étape : ce que le mentor a
+     appris et qui n'est nulle part ailleurs (au téléphone, en visio, sur le
+     terrain). Repris tel quel par l'IA, et conservé dans la fiche. */
+  function collecteBlock(key, exemple) {
+    var v = (W.plan.collecte || {})[key] || '';
+    return '<div class="cp-collect">'
+      + '<div class="cp-collect-h"><span>📎 Infos collectées</span>' + mic('cpCol_' + key) + '</div>'
+      + '<textarea id="cpCol_' + key + '" data-col="' + key + '" placeholder="' + esc(exemple) + '">' + esc(v) + '</textarea>'
+      + '<div class="n">Ce que tu notes ici alimente la proposition de l\'IA et reste dans la fiche du client.</div>'
+      + '</div>';
   }
 
   var STEP_HTML = {
@@ -381,51 +694,67 @@
       var p = W.plan;
       var d0 = fromYMD(p.startDate);
       var apercu = d0
-        ? JALONS.map(function (j) { return j.k + ' ' + frDate(jalonDate(p, j.j)); }).join(' · ')
+        ? JALONS.map(function (j) { return j.k + ' ' + frDate(jalonDate(p, jOf(p, j))); }).join(' · ')
         : '';
       return f('Date de démarrage (J0)', '<input type="date" id="cpStart" value="' + esc(p.startDate || '') + '">',
               apercu ? 'Échéances calculées : ' + esc(apercu) : 'Les 6 jalons sont datés à partir de J0.')
         + f('Coach référent', '<input type="text" id="cpCoach" value="' + esc(p.coach || '') + '" placeholder="Prénom du coach">',
-              'La semaine 1 reste menée par Adrien / Emily — le coach prend la main en semaine 2.');
+              'La semaine 1 reste menée par Adrien / Emily — le coach prend la main en semaine 2.')
+        + collecteBlock('cadrage', 'Ex : dispo le mardi matin uniquement, associé à convaincre, comptable qui rend les bilans avec 4 mois de retard…');
     },
     pointA: function () {
       return f('Point A — la situation aujourd\'hui',
         '<textarea id="cpA" placeholder="Ex : CA de 22K€/mois, trésorerie à 0, la dirigeante est présente sur tous les postes.">' + esc(W.plan.pointA || '') + '</textarea>',
-        'Une phrase, au présent, factuelle et sans jugement. Reprends les chiffres du questionnaire — n\'en invente aucun : si une donnée manque, laisse-la de côté.');
+        'Une phrase, au présent, factuelle et sans jugement. Reprends les chiffres du questionnaire — n\'en invente aucun : si une donnée manque, laisse-la de côté.',
+        'cpA')
+        + collecteBlock('pointA', 'Ex : chiffres qu\'il t\'a donnés de vive voix, ce que tu as vu sur place, ce qui ne colle pas avec le questionnaire…');
     },
     pointB: function () {
       return f('Point B — l\'objectif à J180',
         '<textarea id="cpB" placeholder="Ex : 30K€/mois, marge brute à 30 %, tableau de bord actif, 50 % des tâches déléguées.">' + esc(W.plan.pointB || '') + '</textarea>',
-        'Une phrase concrète et mesurable. Ce qui n\'est pas mesurable ne se pilote pas.');
+        'Une phrase concrète et mesurable. Ce qui n\'est pas mesurable ne se pilote pas.',
+        'cpB')
+        + collecteBlock('pointB', 'Ex : ce qu\'il dit vouloir vraiment, ses contraintes (emprunt, associé, saison), ce qu\'il refuse de faire…');
     },
     verrou: function () {
       var p = W.plan;
       var h = f('Verrou principal',
         '<textarea id="cpVerrou" placeholder="Ex : Pas de prévisionnel, aucun suivi de marge — pilotage à l\'instinct depuis 5 ans.">' + esc(p.verrou || '') + '</textarea>',
-        'Une phrase qui nomme le vrai problème — pas le symptôme.');
+        'Une phrase qui nomme le vrai problème — pas le symptôme.',
+        'cpVerrou');
       h += '<div class="cp-f"><label>Organisme bloqué (un seul)</label><div class="cp-org" id="cpOrg">';
       Object.keys(ORGANISMES).forEach(function (k) {
         h += '<button type="button" data-org="' + k + '" class="' + (p.organisme === k ? 'on' : '') + '">' + ORGANISMES[k].label + '</button>';
       });
       h += '</div><div class="hint" id="cpOrgNote">' + (p.organisme ? esc(ORGANISMES[p.organisme].note) : 'Ordre de traitement : Délivrabilité → Rentabilité → Acquisition.') + '</div></div>';
+      h += collecteBlock('verrou', 'Ex : ce qu\'il a déjà essayé et qui a échoué, les tensions dans l\'équipe, ce qu\'il ne veut pas entendre…');
       return h;
     },
     semaine: function () {
       var p = W.plan;
       if (!p.semaines || !p.semaines.length) p.semaines = [semaine1(p)];
       var s = p.semaines[0];
-      var h = '<div class="hint" style="margin-bottom:12px;color:' + C.muted + ';font-size:12px">'
+      if (!Array.isArray(s.actions)) s.actions = [];
+      var h = '<div class="hint" style="margin-bottom:14px">'
         + 'La semaine 1 est le diagnostic initial, mené par Adrien / Emily. Elle est pré-remplie — ajuste si besoin. '
-        + 'Les semaines suivantes se saisissent directement dans le plan, après chaque séance.</div>';
-      h += f('Point de focus de la séance', '<input type="text" id="cpFocus" value="' + esc(s.focus || '') + '">');
-      s.actions.slice(0, 3).forEach(function (a, i) {
+        + 'Les semaines suivantes se saisissent après chaque séance, dans « Modifier le plan ».</div>';
+      h += f('Point de focus de la séance',
+        '<input type="text" id="cpFocus" value="' + esc(s.focus || '') + '" placeholder="Ce qu\'on cherche à obtenir cette semaine">',
+        null, 'cpFocus');
+      /* 3 emplacements TOUJOURS affichés : une action vide reste modifiable,
+         alors qu'auparavant une ligne effacée disparaissait de l'écran. */
+      for (var i = 0; i < 3; i++) {
+        var a = s.actions[i] || {};
         h += '<div class="cp-act">'
-          + '<label style="font-size:11px;font-weight:800;color:' + C.muted + ';text-transform:uppercase">Action ' + (i + 1) + '</label>'
-          + '<input type="text" data-atxt="' + i + '" value="' + esc(a.txt || '') + '" placeholder="Verbe d\'action + quoi + comment">'
-          + '<div class="row"><input type="text" data-awho="' + i + '" value="' + esc(a.who || '') + '" placeholder="Responsable">'
-          + '<input type="date" data-adue="' + i + '" value="' + esc(a.due || '') + '"></div></div>';
-      });
+          + '<label>Action ' + (i + 1) + (i > 0 ? ' <span style="font-weight:600;text-transform:none;letter-spacing:0">(facultative)</span>' : '') + mic('cpAct' + i) + '</label>'
+          + '<input type="text" id="cpAct' + i + '" data-atxt="' + i + '" value="' + esc(a.txt || '') + '" placeholder="Verbe d\'action + quoi + comment">'
+          + '<div class="row">'
+          + '<input type="text" data-awho="' + i + '" value="' + esc(a.who || '') + '" placeholder="Responsable (Client, Adrien…)">'
+          + '<input type="date" data-adue="' + i + '" value="' + esc(a.due || '') + '" title="Échéance">'
+          + '</div></div>';
+      }
       h += '<div class="hint">Chaque action commence par un verbe, porte un responsable et une date. Une action sans date n\'existe pas.</div>';
+      h += collecteBlock('semaine', 'Ex : ce qu\'il s\'est engagé à faire, les documents qu\'il doit t\'envoyer, la date de la prochaine séance…');
       return h;
     }
   };
@@ -477,6 +806,14 @@
       });
       p.semaines[0].actions = p.semaines[0].actions.filter(function (a) { return a && a.txt; });
     }
+    /* Cases « Infos collectées » de l'étape affichée + dictée libre. Lues à
+       chaque navigation : rien ne se perd en changeant d'écran. */
+    p.collecte = p.collecte || {};
+    Array.prototype.forEach.call(document.querySelectorAll('#cpMain [data-col]'), function (t) {
+      p.collecte[t.getAttribute('data-col')] = t.value.trim();
+    });
+    var vx = document.getElementById('cpVoxTxt');
+    if (vx) p.vocal = vx.value;
   }
 
   function finish() {
@@ -499,6 +836,10 @@
     var p = plan, ro = !!(opts && opts.readonly);
     var h = '<div class="cpv">';
     var n = 0;
+
+    /* Barre de retouche — fiche coach uniquement. En vue client (readonly),
+       rien de tout ça n'est rendu : il lit son plan, il ne le pilote pas. */
+    if (!ro && clientId) h += aiBar(clientId);
 
     /* Synthèse — la phrase qui résume les 6 mois, en tête. */
     if (!isTodo(p.synthese)) {
@@ -560,15 +901,18 @@
 
     /* BLOC — La feuille de route : la route, puis le détail de chaque étape */
     h += blocOpen(++n, '🛣️', 'Votre feuille de route');
+    h += progBar(p);
     h += roadSvg(p);
     h += '<div class="cpv-steps">';
     JALONS.forEach(function (j) {
       var st = STATUTS[p.jalonStatus && p.jalonStatus[j.k]] || STATUTS.todo;
       var c = (p.jalons || {})[j.k] || {};
-      h += '<div class="cpv-step ' + (st === STATUTS.ok ? 'done' : '') + '">';
+      var jj = jOf(p, j);
+      /* Liseré coloré à gauche : le statut se lit sans chercher le bouton. */
+      h += '<div class="cpv-step ' + (st === STATUTS.ok ? 'done' : '') + '" style="border-left:4px solid ' + st.col + '">';
       h += '<div class="cpv-steph"><span class="b" style="border-color:' + st.col + ';color:' + st.col + '">' + j.k + '</span>'
         + '<span class="t">' + esc(jalonTitre(p, j)) + '</span>'
-        + '<span class="dt">' + esc(frDate(jalonDate(p, j.j))) + ' · J+' + j.j + '</span>'
+        + '<span class="dt">' + esc(frDate(jalonDate(p, jj))) + ' · J+' + jj + '</span>'
         + (ro
             ? '<span class="cpv-st ro" style="color:' + st.col + '">' + st.ico + ' ' + st.lbl + '</span>'
             : '<button class="cpv-st" data-cp-jalon="' + j.k + '" data-cp-id="' + esc(clientId || '') + '" style="color:' + st.col + '">' + st.ico + ' ' + st.lbl + '</button>')
@@ -579,7 +923,7 @@
         c.actions.forEach(function (a) { h += '<li>' + esc(a) + '</li>'; });
         h += '</ul>';
       }
-      h += '<div class="cpv-stepp">Preuve attendue : ' + esc(c.preuve || j.preuve) + '</div>';
+      h += '<div class="cpv-stepp">Preuve attendue : ' + esc(jalonPreuve(p, j)) + '</div>';
       h += '</div>';
     });
     h += '</div>';
@@ -590,9 +934,13 @@
     h += blocOpen(++n, '⚡', 'Actions de la semaine');
     if (!(p.semaines || []).length) h += '<div class="cpv-p todo">' + TODO + '</div>';
     (p.semaines || []).forEach(function (s, si) {
+      var tot = (s.actions || []).length;
+      var faites = (s.actions || []).filter(function (a) { return a && a.st === 'ok'; }).length;
       h += '<div class="cpv-sem"><div class="cpv-semh"><b>Semaine ' + (s.n || si + 1) + '</b>'
         + '<span>du ' + esc(frDate(s.from)) + ' au ' + esc(frDate(s.to)) + '</span>'
-        + '<span class="c">' + esc(s.coach || p.coach || TODO) + '</span></div>';
+        + '<span class="c">' + esc(s.coach || p.coach || TODO) + '</span>'
+        + (tot ? '<span class="cpv2-cnt">' + faites + '/' + tot + ' faites</span>' : '')
+        + '</div>';
       (s.actions || []).forEach(function (a, ai) {
         var st = STATUTS[a.st] || STATUTS.todo;
         h += '<div class="cpv-act">'
@@ -667,8 +1015,9 @@
       var anchor = side > 0 ? 'start' : 'end';
       h += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="19" fill="' + (done ? '#10b981' : '#fff') + '" stroke="' + st.col + '" stroke-width="3"/>';
       h += '<text x="' + pt.x + '" y="' + (pt.y + 5) + '" text-anchor="middle" class="rk" fill="' + (done ? '#fff' : '#0f1f5c') + '">' + esc(pt.j.k) + '</text>';
+      var jj = jOf(p, pt.j);
       h += '<text x="' + tx + '" y="' + (pt.y - 3) + '" text-anchor="' + anchor + '" class="rt">' + esc(jalonTitre(p, pt.j)) + '</text>';
-      h += '<text x="' + tx + '" y="' + (pt.y + 12) + '" text-anchor="' + anchor + '" class="rd">' + esc(frDate(jalonDate(p, pt.j.j))) + ' · J+' + pt.j.j + '</text>';
+      h += '<text x="' + tx + '" y="' + (pt.y + 12) + '" text-anchor="' + anchor + '" class="rd">' + esc(frDate(jalonDate(p, jj))) + ' · J+' + jj + '</text>';
     });
     h += '</svg>';
     return h;
@@ -685,10 +1034,531 @@
     return '<details class="cpv-b" open><summary><span class="n">' + n + '</span>' + ico + ' ' + esc(titre) + '</summary><div class="cpv-bb">';
   }
 
+  /* Où on en est, en une ligne : plus lisible qu'un parcours à décoder. */
+  function progBar(p) {
+    var ok = 0;
+    JALONS.forEach(function (j) { if ((p.jalonStatus || {})[j.k] === 'ok') ok++; });
+    var pct = Math.round(ok / JALONS.length * 100);
+    return '<div class="cpv2-prog"><span class="lb">Avancement</span>'
+      + '<span class="tr"><span class="fi" style="width:' + pct + '%"></span></span>'
+      + '<span class="vv">' + ok + ' / ' + JALONS.length + ' étapes · ' + pct + ' %</span></div>';
+  }
+
+  /* Retouche en langage naturel + accès à l'éditeur manuel. Le bouton porte
+     data-cp-ai / data-cp-edit : coaching.html branche les deux en délégation,
+     comme les statuts — le plan est ré-rendu en permanence. */
+  function aiBar(clientId) {
+    var id = 'cpAi_' + clientId;
+    return '<div class="cpv2-ai">'
+      + '<div class="cpv2-ai-h"><span>✍️ Dis ce que tu veux changer</span>' + mic(id) + '</div>'
+      + '<textarea id="' + esc(id) + '" placeholder="Ex : « le point B est trop ambitieux, mets 28 000 € par mois » · « décale l\'étape A3 à J+60 » · « ajoute une semaine 2 sur le tri des devis, échéance vendredi » · « la preuve de A2 doit être un contrat signé »"></textarea>'
+      + '<div class="cpv2-ai-a">'
+      + '<button type="button" class="cpv2-btn" data-cp-ai="' + esc(clientId) + '">✨ Appliquer</button>'
+      + '<button type="button" class="cpv2-btn ghost" data-cp-edit="' + esc(clientId) + '">✏️ Tout modifier à la main</button>'
+      + '</div>'
+      + '<div class="cpv2-ai-n">Écris ou dicte en français, comme à un assistant. Tout ce que tu ne mentionnes pas est conservé mot pour mot — statuts d\'avancement et dates de séance compris.</div>'
+      + '</div>';
+  }
+
   /* Cycle de statut au clic — todo → wip → ok → ko → todo. */
   function cycle(cur) {
     var i = STATUT_ORDER.indexOf(cur || 'todo');
     return STATUT_ORDER[(i + 1) % STATUT_ORDER.length];
+  }
+
+  /* ═════════════════════════════════════════════════════════════════════
+     ÉDITEUR MANUEL — tout le plan, champ par champ
+     ─────────────────────────────────────────────────────────────────────
+     L'assistant sert à CRÉER le plan ; l'éditeur sert à le VIVRE : décaler une
+     étape, réécrire une preuve, ajouter la semaine 4 après la séance. Tout est
+     modifiable, y compris ce que l'IA avait proposé — elle propose, le mentor
+     décide.
+
+     Rien n'est enregistré tant qu'on n'a pas cliqué sur « Enregistrer » :
+     l'éditeur travaille sur une COPIE du plan.
+     ═══════════════════════════════════════════════════════════════════ */
+  var E = { plan: null, client: null, onSave: null };
+
+  function ensureEditorDom() {
+    if (document.getElementById('ceBg')) return;
+    var css = document.createElement('style');
+    css.id = 'ceCss';
+    css.textContent = [
+      '#ceBg{position:fixed;inset:0;background:rgba(11,13,23,.55);backdrop-filter:blur(4px);z-index:99991;display:none;align-items:flex-start;justify-content:center;padding:3vh 16px;overflow-y:auto}',
+      '#ceBg.show{display:flex}',
+      '.ce{background:#fff;border-radius:18px;width:min(980px,100%);box-shadow:0 30px 90px rgba(15,31,92,.28);overflow:hidden;color:' + C.ink + ';font-family:inherit}',
+      '.ce-head{background:linear-gradient(135deg,' + C.main + ',' + C.dark + ');color:#fff;padding:17px 22px}',
+      '.ce-head h3{margin:0;font-size:17px;font-weight:800}',
+      '.ce-head p{margin:4px 0 0;font-size:12.5px;opacity:.82;line-height:1.45}',
+      '.ce-body{padding:16px 18px;max-height:66vh;overflow-y:auto;background:#fbfbfe}',
+      '.ce-s{border:1px solid ' + C.line + ';border-radius:12px;background:#fff;margin-bottom:10px;overflow:hidden}',
+      '.ce-s > summary{list-style:none;cursor:pointer;padding:11px 14px;font-size:13px;font-weight:800;color:' + C.dark + ';background:linear-gradient(90deg,' + C.ghost + ',#fff);display:flex;align-items:center;gap:8px}',
+      '.ce-s > summary::-webkit-details-marker{display:none}',
+      '.ce-sb{padding:13px 15px 15px}',
+      '.ce-f{margin-bottom:12px}',
+      '.ce-f > label{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.muted + ';margin-bottom:5px}',
+      '.ce-i{width:100%;box-sizing:border-box;border:1.5px solid ' + C.line + ';border-radius:9px;padding:9px 11px;font-size:13px;line-height:1.4;font-family:inherit;color:' + C.ink + ';background:#fff;outline:none}',
+      '.ce-i:focus{border-color:' + C.light + ';box-shadow:0 0 0 3px rgba(79,126,248,.15)}',
+      '.ce-i::placeholder{color:#9aa3b8;opacity:1}',
+      'textarea.ce-i{resize:vertical;min-height:60px;line-height:1.5}',
+      '.ce-hint{font-size:11px;color:' + C.muted + ';line-height:1.45;margin-top:5px}',
+      '.ce-row{display:grid;gap:8px;align-items:start;margin-bottom:8px}',
+      '.ce-row.a{grid-template-columns:1fr 34px}',
+      '.ce-row.b{grid-template-columns:1fr 1.4fr 34px}',
+      '.ce-row.k{grid-template-columns:132px 1fr 106px 106px 106px 34px}',
+      '.ce-row.act{grid-template-columns:1fr 150px 148px 116px 34px}',
+      '@media(max-width:760px){.ce-row.k,.ce-row.b,.ce-row.act{grid-template-columns:1fr}}',
+      '.ce-x{border:1.5px solid ' + C.line + ';background:#fff;color:' + C.red + ';border-radius:9px;height:36px;cursor:pointer;font-size:13px;font-family:inherit;padding:0}',
+      '.ce-x:hover{border-color:' + C.red + ';background:#fff5f5}',
+      '.ce-add{border:1.5px dashed ' + C.line + ';background:#fff;color:' + C.main + ';border-radius:9px;padding:7px 13px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:2px}',
+      '.ce-add:hover{border-color:' + C.main + ';background:' + C.ghost + '}',
+      '.ce-j,.ce-sem{border:1.5px solid ' + C.line + ';border-radius:12px;padding:12px 13px 13px;margin-bottom:10px;background:#fcfcff}',
+      '.ce-jh,.ce-semh{display:flex;align-items:center;gap:9px;margin-bottom:11px;flex-wrap:wrap}',
+      '.ce-jk{min-width:36px;height:28px;padding:0 8px;border-radius:8px;background:' + C.main + ';color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}',
+      '.ce-jn{font-size:11px;color:' + C.muted + ';flex:1;min-width:130px;line-height:1.4}',
+      '.ce-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}',
+      '@media(max-width:720px){.ce-grid{grid-template-columns:1fr}}',
+      '.ce-foot{display:flex;align-items:center;gap:9px;padding:13px 20px;border-top:1px solid ' + C.line + ';background:#fff;flex-wrap:wrap}',
+      '.ce-org{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}',
+      '.ce-org button{border:1.5px solid ' + C.line + ';background:#fff;border-radius:10px;padding:10px 8px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:800;color:' + C.muted + '}',
+      '.ce-org button.on{border-color:' + C.main + ';background:' + C.ghost + ';color:' + C.main + '}'
+    ].join('\n');
+    document.head.appendChild(css);
+
+    var bg = document.createElement('div');
+    bg.id = 'ceBg';
+    bg.innerHTML =
+      '<div class="ce">' +
+        '<div class="ce-head"><h3 id="ceTitle">✏️ Modifier le plan d\'action</h3>' +
+          '<p>Tout est modifiable. Le micro 🎤 dicte dans le champ d\'à côté. Rien n\'est enregistré tant que tu n\'as pas cliqué sur « Enregistrer ».</p></div>' +
+        '<div class="ce-body" id="ceBody"></div>' +
+        '<div class="ce-foot">' +
+          '<button type="button" class="cpv2-btn ghost" id="ceCancel">Annuler</button>' +
+          '<div style="flex:1"></div>' +
+          '<button type="button" class="cpv2-btn" id="ceSave">💾 Enregistrer</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(bg);
+
+    bg.addEventListener('click', function (e) { if (e.target === bg) closeEditor(); });
+    document.getElementById('ceCancel').addEventListener('click', closeEditor);
+    document.getElementById('ceSave').addEventListener('click', function () {
+      editorCollect();
+      var p = E.plan;
+      p.updatedAt = new Date().toISOString();
+      if (!p.createdAt) p.createdAt = p.updatedAt;
+      closeEditor();
+      if (typeof E.onSave === 'function') E.onSave(p);
+    });
+
+    /* Ajout / suppression de lignes : délégation, le corps est repeint à
+       chaque changement de structure. */
+    document.getElementById('ceBody').addEventListener('click', function (e) {
+      var t = e.target && e.target.closest ? e.target.closest('[data-add],[data-del],[data-eorg]') : null;
+      if (!t) return;
+      e.preventDefault();
+      editorCollect();
+      var add = t.getAttribute('data-add');
+      var del = t.getAttribute('data-del');
+      var org = t.getAttribute('data-eorg');
+      if (org) E.plan.organisme = (E.plan.organisme === org) ? '' : org;
+      else if (add) editorAdd(add);
+      else if (del) editorDel(del);
+      paintEditor(true);
+    });
+  }
+
+  function closeEditor() {
+    VOX.stop();
+    var bg = document.getElementById('ceBg');
+    if (bg) bg.classList.remove('show');
+  }
+
+  function openEditor(client, opts) {
+    ensureEditorDom();
+    opts = opts || {};
+    E.client = client || {};
+    E.onSave = opts.onSave || null;
+    E.plan = normalize(client && client.planV2
+      ? JSON.parse(JSON.stringify(client.planV2))
+      : emptyPlan());
+    paintEditor(false);
+    document.getElementById('ceBg').classList.add('show');
+  }
+
+  function editorAdd(what) {
+    var p = E.plan, m = String(what).split('.');
+    if (m[0] === 'semaine') {
+      var last = p.semaines[p.semaines.length - 1];
+      /* La semaine suivante démarre le lendemain de la précédente : le mentor
+         n'a pas à recalculer des dates à la main. */
+      var from = last && fromYMD(last.to) ? addDays(fromYMD(last.to), 1) : (fromYMD(p.startDate) || new Date());
+      p.semaines.push({
+        n: p.semaines.length + 1,
+        from: toYMD(from), to: toYMD(addDays(from, 6)),
+        coach: p.coach || '', focus: '',
+        actions: [{ txt: '', who: '', due: '', st: 'todo' }]
+      });
+      return;
+    }
+    if (m[0] === 'sact') {
+      var s = p.semaines[+m[1]];
+      if (s) { s.actions = s.actions || []; s.actions.push({ txt: '', who: '', due: '', st: 'todo' }); }
+      return;
+    }
+    if (m[0] === 'objectifs') { p.objectifs.push(''); return; }
+    if (['problemes', 'risques', 'ditClient'].indexOf(m[0]) >= 0) { p[m[0]].push({ titre: '', detail: '' }); return; }
+    if (m[0] === 'chiffres') { p.chiffres.push({ label: '', valeur: '' }); return; }
+    if (m[0] === 'kpis') { p.kpis.push({ cat: 'Financier', nom: '', freq: 'Mensuel', actuel: '—', cible: '' }); return; }
+  }
+
+  function editorDel(what) {
+    var p = E.plan, m = String(what).split('.');
+    if (m[0] === 'semaine') { p.semaines.splice(+m[1], 1); return; }
+    if (m[0] === 'sact') {
+      var s = p.semaines[+m[1]];
+      if (s && s.actions) s.actions.splice(+m[2], 1);
+      return;
+    }
+    if (Array.isArray(p[m[0]])) p[m[0]].splice(+m[1], 1);
+  }
+
+  /* ── Briques de formulaire ───────────────────────────────────────────── */
+  function ceF(label, inner, hint, micId) {
+    return '<div class="ce-f"><label>' + label + (micId ? mic(micId) : '') + '</label>' + inner
+      + (hint ? '<div class="ce-hint">' + hint + '</div>' : '') + '</div>';
+  }
+  function ceIn(attr, value, ph, type) {
+    return '<input type="' + (type || 'text') + '" class="ce-i" ' + attr
+      + ' value="' + esc(value == null ? '' : value) + '"'
+      + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '>';
+  }
+  function ceTa(attr, value, ph, id) {
+    return '<textarea class="ce-i" ' + attr + (id ? ' id="' + esc(id) + '"' : '')
+      + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '>' + esc(value == null ? '' : value) + '</textarea>';
+  }
+  function ceStatut(attr, cur) {
+    var h = '<select class="ce-i" ' + attr + '>';
+    STATUT_ORDER.forEach(function (k) {
+      h += '<option value="' + k + '"' + ((cur || 'todo') === k ? ' selected' : '') + '>' + STATUTS[k].ico + ' ' + STATUTS[k].lbl + '</option>';
+    });
+    return h + '</select>';
+  }
+  function ceDel(ref, titre) {
+    return '<button type="button" class="ce-x" data-del="' + esc(ref) + '" title="' + esc(titre || 'Supprimer cette ligne') + '">✕</button>';
+  }
+  function ceAdd(ref, txt) {
+    return '<button type="button" class="ce-add" data-add="' + esc(ref) + '">+ ' + esc(txt) + '</button>';
+  }
+  function ceSection(titre, corps, open) {
+    return '<details class="ce-s"' + (open === false ? '' : ' open') + '><summary>' + titre + '</summary><div class="ce-sb">' + corps + '</div></details>';
+  }
+
+  /* Listes « titre + détail » (problématiques, vigilance, ce qu'il a dit). */
+  function ceListeTD(cle, rows, phT, phD) {
+    var h = '';
+    (rows || []).forEach(function (x, i) {
+      h += '<div class="ce-row b">'
+        + ceIn('data-p="' + cle + '.' + i + '.titre"', x.titre, phT)
+        + ceIn('data-p="' + cle + '.' + i + '.detail"', x.detail, phD)
+        + ceDel(cle + '.' + i) + '</div>';
+    });
+    return h + ceAdd(cle, 'Ajouter une ligne');
+  }
+
+  function paintEditor(keepScroll) {
+    var body = document.getElementById('ceBody');
+    if (!body) return;
+    var top = keepScroll ? body.scrollTop : 0;
+    var p = E.plan;
+    var h = '';
+
+    /* 1. Cadrage */
+    h += ceSection('📆 Cadrage',
+      '<div class="ce-grid">'
+      + ceF('Date de démarrage (J0)', ceIn('data-e="startDate"', p.startDate, '', 'date'),
+            'Toutes les échéances des 6 étapes sont recalculées à partir d\'ici.')
+      + ceF('Coach référent', ceIn('data-e="coach"', p.coach, 'Prénom du coach'))
+      + '</div>'
+      + ceF('Ce qu\'on vise en 6 mois', ceTa('data-e="synthese"', p.synthese, 'La phrase qui résume l\'accompagnement, affichée en tête du plan.', 'ceSynthese'),
+            'Une phrase forte : d\'où on part, où on l\'emmène.', 'ceSynthese'));
+
+    /* 2. Point A → B */
+    h += ceSection('📍 Point A → Point B',
+      ceF('Point A — aujourd\'hui', ceTa('data-e="pointA"', p.pointA, 'La situation actuelle, factuelle et sans jugement.', 'cePointA'), null, 'cePointA')
+      + ceF('Point B — à 6 mois', ceTa('data-e="pointB"', p.pointB, 'L\'objectif, concret et mesurable.', 'cePointB'), null, 'cePointB')
+      + '<label style="display:block;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.muted + ';margin-bottom:6px">Objectifs des 6 mois</label>'
+      + (function () {
+          var s = '';
+          (p.objectifs || []).forEach(function (o, i) {
+            s += '<div class="ce-row a">' + ceIn('data-l="objectifs.' + i + '"', o, 'Un objectif concret') + ceDel('objectifs.' + i) + '</div>';
+          });
+          return s + ceAdd('objectifs', 'Ajouter un objectif');
+        })());
+
+    /* 3. Diagnostic */
+    h += ceSection('🔍 Diagnostic',
+      ceF('Verrou principal', ceTa('data-e="verrou"', p.verrou, 'Le vrai problème — pas le symptôme.', 'ceVerrou'), null, 'ceVerrou')
+      + '<div class="ce-f"><label>Organisme bloqué (un seul)</label><div class="ce-org">'
+      + Object.keys(ORGANISMES).map(function (k) {
+          return '<button type="button" data-eorg="' + k + '" class="' + (p.organisme === k ? 'on' : '') + '">' + ORGANISMES[k].label + '</button>';
+        }).join('')
+      + '</div><div class="ce-hint">Ordre de traitement : Délivrabilité → Rentabilité → Acquisition. Re-clic pour désélectionner.</div></div>'
+      + '<label style="display:block;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.muted + ';margin-bottom:6px">Ce qui bloque aujourd\'hui</label>'
+      + ceListeTD('problemes', p.problemes, 'Problématique', 'Une phrase factuelle'));
+
+    /* 4. Les 6 étapes */
+    var hj = '';
+    JALONS.forEach(function (j) {
+      var c = (p.jalons || {})[j.k] || {};
+      var acts = (c.actions || []).slice(0, 3);
+      while (acts.length < 3) acts.push('');
+      hj += '<div class="ce-j">'
+        + '<div class="ce-jh"><span class="ce-jk">' + j.k + '</span>'
+        + '<span class="ce-jn">Repère du programme : ' + j.obj + ' — J+' + j.j + '</span>'
+        + ceStatut('data-j="' + j.k + '.st" style="max-width:150px"', (p.jalonStatus || {})[j.k])
+        + '</div>'
+        + '<div class="ce-grid">'
+        + ceF('Titre de l\'étape', ceIn('data-j="' + j.k + '.titre"', c.titre, j.obj))
+        + ceF('Échéance — jours depuis J0', ceIn('data-j="' + j.k + '.j"', (typeof c.j === 'number' ? c.j : ''), 'Par défaut : ' + j.j, 'number'),
+              'Vide = ' + j.j + ' jours (le repère du programme). Date calculée : ' + frDate(jalonDate(p, jOf(p, j))))
+        + '</div>'
+        + ceF('Ce qu\'on traite à cette étape', ceTa('data-j="' + j.k + '.focus"', c.focus, 'Une phrase.', 'ceJf' + j.k), null, 'ceJf' + j.k)
+        + '<label style="display:block;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.muted + ';margin-bottom:6px">Actions de l\'étape</label>'
+        + acts.map(function (a, i) {
+            return '<div class="ce-row" style="grid-template-columns:1fr">' + ceIn('data-ja="' + j.k + '.' + i + '"', a, 'Action ' + (i + 1) + ' — verbe à l\'infinitif') + '</div>';
+          }).join('')
+        + ceF('Preuve attendue', ceIn('data-j="' + j.k + '.preuve"', c.preuve, j.preuve),
+              'Un fait vérifiable sans discussion. Vide = « ' + j.preuve + ' ».')
+        + '</div>';
+    });
+    h += ceSection('🛣️ Les 6 étapes', hj);
+
+    /* 5. Semaines */
+    var hs = '';
+    (p.semaines || []).forEach(function (s, i) {
+      var acts = Array.isArray(s.actions) ? s.actions : [];
+      hs += '<div class="ce-sem">'
+        + '<div class="ce-semh"><span class="ce-jk">S' + (s.n || i + 1) + '</span>'
+        + '<b style="flex:1;min-width:120px">Semaine ' + (s.n || i + 1) + '</b>'
+        + ceDel('semaine.' + i, 'Supprimer la semaine') + '</div>'
+        + '<div class="ce-grid">'
+        + ceF('Du', ceIn('data-s="' + i + '.from"', s.from, '', 'date'))
+        + ceF('Au', ceIn('data-s="' + i + '.to"', s.to, '', 'date'))
+        + '</div>'
+        + '<div class="ce-grid">'
+        + ceF('Numéro de semaine', ceIn('data-s="' + i + '.n"', s.n, '', 'number'))
+        + ceF('Coach de la séance', ceIn('data-s="' + i + '.coach"', s.coach, 'Adrien / Emily'))
+        + '</div>'
+        + ceF('Point de focus de la séance', ceTa('data-s="' + i + '.focus"', s.focus, 'Ce qu\'on cherche à obtenir cette semaine.', 'ceSf' + i), null, 'ceSf' + i)
+        + '<label style="display:block;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.muted + ';margin-bottom:6px">Actions de la semaine</label>'
+        + acts.map(function (a, k) {
+            return '<div class="ce-row act">'
+              + ceIn('data-sa="' + i + '.' + k + '.txt"', a.txt, 'Verbe + quoi + comment')
+              + ceIn('data-sa="' + i + '.' + k + '.who"', a.who, 'Responsable')
+              + ceIn('data-sa="' + i + '.' + k + '.due"', a.due, '', 'date')
+              + ceStatut('data-sa="' + i + '.' + k + '.st"', a.st)
+              + ceDel('sact.' + i + '.' + k, 'Supprimer l\'action') + '</div>';
+          }).join('')
+        + ceAdd('sact.' + i, 'Ajouter une action')
+        + '</div>';
+    });
+    if (!(p.semaines || []).length) {
+      hs += '<div class="ce-hint" style="margin-bottom:10px">Aucune semaine pour l\'instant.</div>';
+    }
+    hs += ceAdd('semaine', 'Ajouter une semaine');
+    h += ceSection('⚡ Semaines & actions', hs);
+
+    /* 6. Repères chiffrés */
+    h += ceSection('🔢 Repères chiffrés du dossier', (function () {
+      var s = '';
+      (p.chiffres || []).forEach(function (x, i) {
+        s += '<div class="ce-row b">'
+          + ceIn('data-p="chiffres.' + i + '.label"', x.label, 'Libellé (ex : CA annuel)')
+          + ceIn('data-p="chiffres.' + i + '.valeur"', x.valeur, 'Valeur (ex : 480 000 €)')
+          + ceDel('chiffres.' + i) + '</div>';
+      });
+      return s + ceAdd('chiffres', 'Ajouter un repère')
+        + '<div class="ce-hint">Uniquement des chiffres réels, donnés par le client. Rien d\'estimé.</div>';
+    })(), false);
+
+    /* 7. Ce qu'il nous a dit */
+    h += ceSection('💬 Ce qu\'il nous a dit', ceListeTD('ditClient', p.ditClient, 'En une ligne', 'Précision'), false);
+
+    /* 8. Indicateurs */
+    h += ceSection('📊 Indicateurs de pilotage', (function () {
+      var s = '';
+      (p.kpis || []).forEach(function (k, i) {
+        var sel = '<select class="ce-i" data-p="kpis.' + i + '.cat">';
+        ['Financier', 'Commercial', 'Opérationnel', 'Humain'].forEach(function (c2) {
+          sel += '<option value="' + c2 + '"' + (k.cat === c2 ? ' selected' : '') + '>' + c2 + '</option>';
+        });
+        sel += '</select>';
+        s += '<div class="ce-row k">' + sel
+          + ceIn('data-p="kpis.' + i + '.nom"', k.nom, 'Indicateur')
+          + ceIn('data-p="kpis.' + i + '.freq"', k.freq, 'Suivi')
+          + ceIn('data-p="kpis.' + i + '.actuel"', k.actuel, 'Aujourd\'hui')
+          + ceIn('data-p="kpis.' + i + '.cible"', k.cible, 'Objectif')
+          + ceDel('kpis.' + i) + '</div>';
+      });
+      return s + ceAdd('kpis', 'Ajouter un indicateur');
+    })(), false);
+
+    /* 9. Vigilance */
+    h += ceSection('⚠️ Points de vigilance', ceListeTD('risques', p.risques, 'Risque ou frein', 'Précision'), false);
+
+    /* 10. Mémoire de séance — modifiable, c'est ce que relit l'IA */
+    h += ceSection('📎 Notes & mémoire de séance', (function () {
+      var s = ceF('Dictée / notes libres', ceTa('data-e="vocal"', p.vocal, 'Ce que tu sais du dossier, en vrac.', 'ceVocal'),
+        'Repris par l\'IA à chaque régénération ou retouche du plan. Jamais montré au client.', 'ceVocal');
+      STEPS.forEach(function (st) {
+        s += ceF('Infos collectées — ' + st.t,
+          ceTa('data-col="' + st.key + '"', (p.collecte || {})[st.key], '', 'ceCol_' + st.key), null, 'ceCol_' + st.key);
+      });
+      return s;
+    })(), false);
+
+    body.innerHTML = h;
+    body.scrollTop = top;
+  }
+
+  /* Lit tout le formulaire dans E.plan. Appelé avant chaque ajout/suppression
+     et avant l'enregistrement : aucune saisie ne se perd. */
+  function editorCollect() {
+    var body = document.getElementById('ceBody');
+    if (!body || !E.plan) return;
+    var p = E.plan;
+    var q = function (sel) { return Array.prototype.slice.call(body.querySelectorAll(sel)); };
+    var vide = function (o) {
+      return !Object.keys(o).some(function (f) { return String(o[f] == null ? '' : o[f]).trim(); });
+    };
+
+    /* Champs simples. */
+    q('[data-e]').forEach(function (el) {
+      var k = el.getAttribute('data-e');
+      p[k] = (k === 'vocal') ? el.value : el.value.trim();
+    });
+
+    /* Infos collectées. */
+    p.collecte = p.collecte || {};
+    q('[data-col]').forEach(function (el) { p.collecte[el.getAttribute('data-col')] = el.value.trim(); });
+
+    /* Listes de chaînes. */
+    var simples = {};
+    q('[data-l]').forEach(function (el) {
+      var m = el.getAttribute('data-l').split('.');
+      (simples[m[0]] = simples[m[0]] || [])[+m[1]] = el.value.trim();
+    });
+    Object.keys(simples).forEach(function (k) {
+      p[k] = simples[k].filter(function (v) { return v; });
+    });
+
+    /* Listes d'objets. */
+    var objs = {};
+    q('[data-p]').forEach(function (el) {
+      var m = el.getAttribute('data-p').split('.');
+      objs[m[0]] = objs[m[0]] || [];
+      objs[m[0]][+m[1]] = objs[m[0]][+m[1]] || {};
+      objs[m[0]][+m[1]][m[2]] = el.value.trim();
+    });
+    /* Une ligne ne compte que si son champ identifiant est rempli : sinon un
+       indicateur créé puis laissé vide se retrouverait dans le tableau du
+       client avec une catégorie et une fréquence, mais aucun nom. */
+    var CLE = { chiffres: 'label', kpis: 'nom', problemes: 'titre', risques: 'titre', ditClient: 'titre' };
+    Object.keys(objs).forEach(function (k) {
+      var cle = CLE[k];
+      p[k] = objs[k].filter(function (o) {
+        if (!o) return false;
+        return cle ? !!String(o[cle] || '').trim() : !vide(o);
+      });
+    });
+
+    /* Jalons : contenu, décalage et statut. */
+    p.jalons = p.jalons || {};
+    p.jalonStatus = p.jalonStatus || {};
+    q('[data-j]').forEach(function (el) {
+      var m = el.getAttribute('data-j').split('.'), k = m[0], f = m[1];
+      if (f === 'st') {
+        p.jalonStatus[k] = STATUT_ORDER.indexOf(el.value) >= 0 ? el.value : 'todo';
+        return;
+      }
+      p.jalons[k] = p.jalons[k] || {};
+      if (f === 'j') {
+        var n = parseInt(String(el.value).replace(/[^\d]/g, ''), 10);
+        /* Champ vide = on retombe sur le repère du programme. 0 reste une
+           valeur valide (« dès le premier jour ») → test sur isFinite. */
+        if (String(el.value).trim() !== '' && isFinite(n) && n >= 0 && n <= 400) p.jalons[k].j = n;
+        else delete p.jalons[k].j;
+        return;
+      }
+      p.jalons[k][f] = el.value.trim();
+    });
+    var jacts = {};
+    q('[data-ja]').forEach(function (el) {
+      var m = el.getAttribute('data-ja').split('.');
+      (jacts[m[0]] = jacts[m[0]] || [])[+m[1]] = el.value.trim();
+    });
+    Object.keys(jacts).forEach(function (k) {
+      p.jalons[k] = p.jalons[k] || {};
+      p.jalons[k].actions = jacts[k].filter(function (v) { return v; });
+    });
+
+    /* Semaines et leurs actions. */
+    var sem = [];
+    q('[data-s]').forEach(function (el) {
+      var m = el.getAttribute('data-s').split('.'), i = +m[0];
+      sem[i] = sem[i] || { actions: [] };
+      sem[i][m[1]] = el.value.trim();
+    });
+    q('[data-sa]').forEach(function (el) {
+      var m = el.getAttribute('data-sa').split('.'), i = +m[0], k = +m[1];
+      sem[i] = sem[i] || { actions: [] };
+      sem[i].actions = sem[i].actions || [];
+      sem[i].actions[k] = sem[i].actions[k] || {};
+      sem[i].actions[k][m[2]] = el.value.trim();
+    });
+    p.semaines = sem.filter(Boolean).map(function (s, i) {
+      var n = parseInt(s.n, 10);
+      return {
+        n: (isFinite(n) && n > 0) ? n : (i + 1),
+        from: s.from || '', to: s.to || '', coach: s.coach || '', focus: s.focus || '',
+        actions: (s.actions || []).filter(Boolean)
+          .filter(function (a) { return String(a.txt || '').trim(); })
+          .map(function (a) {
+            return {
+              txt: a.txt, who: a.who || '', due: a.due || '',
+              st: STATUT_ORDER.indexOf(a.st) >= 0 ? a.st : 'todo'
+            };
+          })
+      };
+    });
+  }
+
+  /* ═════════════════════════════════════════════════════════════════════
+     RETOUCHE PAR L'IA — « dis ce que tu veux changer »
+     ═══════════════════════════════════════════════════════════════════ */
+  function revise(clientId, plan, instructions) {
+    var getTok = (window._auth && window._auth.currentUser)
+      ? window._auth.currentUser.getIdToken()
+      : Promise.reject(new Error('non authentifié'));
+    return getTok.then(function (tok) {
+      return fetch('/api/coaching-plan-revise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        body: JSON.stringify({ clientId: clientId, plan: plan, instructions: instructions })
+      });
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || j.ok !== true || !j.plan) {
+        var msg = {
+          ai_refused: 'Le modèle a refusé de traiter cette demande. Reformule-la.',
+          ai_unparsable: 'Réponse inexploitable du modèle. Réessaie en formulant autrement.',
+          ai_unavailable: 'Service IA momentanément indisponible. Réessaie dans un instant.',
+          ai_not_configured: 'L\'IA n\'est pas configurée sur ce serveur.'
+        }[j && j.error] || 'Retouche impossible.';
+        throw new Error(msg);
+      }
+      return j;
+    });
   }
 
   /* ═════════════════════════════════════════════════════════════════════
@@ -742,7 +1612,8 @@
     var nom = (client && (client.nom || client.name || client.prenom)) || '';
     doc.text(nom + (p.coach ? '   ·   Coach : ' + p.coach : ''), M, 22.5);
     doc.setFontSize(8.5); doc.setTextColor(210, 222, 255);
-    doc.text('Démarrage ' + frDate(p.startDate) + '   ·   Horizon J180 : ' + frDate(jalonDate(p, 180)), M, 28.5);
+    var jFin = jOf(p, JALONS[JALONS.length - 1]);
+    doc.text('Démarrage ' + frDate(p.startDate) + '   ·   Horizon J+' + jFin + ' : ' + frDate(jalonDate(p, jFin)), M, 28.5);
     y = 46;
 
     /* ── 1. Point A → B ── */
@@ -776,14 +1647,17 @@
     JALONS.forEach(function (j) {
       need(13);
       var st = STATUTS[p.jalonStatus && p.jalonStatus[j.k]] || STATUTS.todo;
+      var jj = jOf(p, j);
       doc.setFontSize(8.6);
-      var oL = doc.splitTextToSize(j.obj, cols[2] - 3);
-      var pL = doc.splitTextToSize(j.preuve, cols[3] - 3);
+      /* Titre et preuve du dossier, pas ceux du programme : le PDF doit dire
+         exactement ce que le mentor a validé à l'écran. */
+      var oL = doc.splitTextToSize(jalonTitre(p, j), cols[2] - 3);
+      var pL = doc.splitTextToSize(jalonPreuve(p, j), cols[3] - 3);
       var rows = Math.max(oL.length, pL.length);
       doc.setFont('helvetica', 'bold'); color(C.main); doc.text(j.k, xs[0] + 1.5, y);
       doc.setFont('helvetica', 'normal'); color(C.ink);
-      doc.text(frDate(jalonDate(p, j.j)), xs[1] + 1.5, y);
-      doc.setFontSize(6.8); color(C.muted); doc.text('J+' + j.j, xs[1] + 1.5, y + 3.4);
+      doc.text(frDate(jalonDate(p, jj)), xs[1] + 1.5, y);
+      doc.setFontSize(6.8); color(C.muted); doc.text('J+' + jj, xs[1] + 1.5, y + 3.4);
       doc.setFontSize(8.6); color(C.ink); doc.text(oL, xs[2] + 1.5, y);
       color(C.muted); doc.text(pL, xs[3] + 1.5, y);
       doc.setFont('helvetica', 'bold'); doc.setFontSize(7.6); color(st.col);
@@ -841,9 +1715,14 @@
 
   window.CoachingPlan = {
     openWizard: openWizard,
+    openEditor: openEditor,       // édition manuelle, champ par champ
+    revise: revise,               // retouche en langage naturel (IA)
     render: render,
     exportPdf: exportPdf,
     emptyPlan: emptyPlan,
+    normalize: normalize,
+    voiceSupported: function () { return VOX.supported(); },
+    stopVoice: function () { VOX.stop(); },
     cycleStatus: cycle,
     JALONS: JALONS,
     ORGANISMES: ORGANISMES,

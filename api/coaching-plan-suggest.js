@@ -10,7 +10,12 @@
 //
 // URL  : POST https://team.alteore.com/api/coaching-plan-suggest
 // Auth : Bearer ID token Firebase — rôles admin / coach / csm.
-// Body : { clientId, force? }
+// Body : { clientId, force?, notes? }
+//
+// « notes » = ce que le mentor a collecté lui-même (cases « Infos collectées »
+// de l'assistant + dictée du mode vocal). C'est de la matière de PREMIÈRE main :
+// elle prime sur le questionnaire en cas de contradiction, et elle entre dans la
+// clé de cache pour qu'une nouvelle info regénère la proposition.
 //
 // Réponses
 //   200 { ok:true, suggestion:{ pointA, pointB, verrou, organisme, synthese,
@@ -37,37 +42,55 @@ const { requireAuth } = require('./_verifyFirebaseAuth');
 const { admin, db } = require('./_firebaseAdmin');
 
 const ROLES = ['admin', 'coach', 'csm'];
-/* Tâche de raisonnement sur des données d'entreprise, jouée rarement (une
-   fois par client, puis mise en cache) → Sonnet plutôt que Haiku. */
-const MODEL = 'claude-sonnet-4-6';
+/* Le plan engage 6 mois d'accompagnement d'un dirigeant : c'est le document le
+   plus structurant qu'on produise, joué une fois par client puis mis en cache.
+   On prend donc le modèle le plus capable — Opus 5 — et pas un modèle rapide.
+   La réflexion est active par défaut sur ce modèle ; « effort » règle sa
+   profondeur (voir output_config plus bas). */
+const MODEL = 'claude-opus-5';
 
 const ORGANISMES = ['delivrabilite', 'rentabilite', 'acquisition'];
 
-/* Empreinte du questionnaire — change dès qu'une réponse change. */
-function qKey(q) {
+/* Empreinte du questionnaire + des notes du mentor — change dès qu'une réponse
+   ou une info collectée change, ce qui invalide le cache au bon moment. */
+function qKey(q, notes) {
   const parts = (q.answers || []).map((a) => String(a.q || '') + '=' + String(a.a || ''));
-  return String(q.formTitle || '') + '|' + parts.length + '|' + parts.join('~').slice(0, 4000);
+  return String(q.formTitle || '') + '|' + parts.length + '|' + parts.join('~').slice(0, 4000)
+    + '|N:' + String(notes || '').slice(0, 4000);
 }
 
-function buildPrompt(client, q) {
+function buildPrompt(client, q, notes) {
   const lignes = (q.answers || [])
     .filter((a) => a && String(a.a || '').trim())
     .map((a) => '- ' + String(a.q).trim() + ' : ' + String(a.a).trim())
     .join('\n');
 
-  return [
-    'Tu prépares le plan d\'action d\'un client du programme Elite Phénix (accompagnement de dirigeants de TPE/PME).',
-    'Voici le questionnaire qu\'il a rempli à son inscription :',
-    '',
-    lignes,
-    '',
+  const bloc = [];
+  bloc.push('Tu prépares le plan d\'action d\'un client du programme Elite Phénix (accompagnement de dirigeants de TPE/PME).');
+  bloc.push('Voici le questionnaire qu\'il a rempli à son inscription :');
+  bloc.push('');
+  bloc.push(lignes);
+  bloc.push('');
+  if (String(notes || '').trim()) {
+    bloc.push('NOTES DU MENTOR — collectées de vive voix pendant les échanges.');
+    bloc.push('Ce sont des informations de première main : elles PRIMENT sur le questionnaire');
+    bloc.push('en cas de contradiction, et tu dois t\'en servir en priorité.');
+    bloc.push('"""');
+    bloc.push(String(notes).trim().slice(0, 12000));
+    bloc.push('"""');
+    bloc.push('');
+  }
+
+  return bloc.concat([
     'Produis une proposition complète de plan d\'action. Le mentor la relira et la corrigera.',
     '',
     'RÈGLES ABSOLUES',
-    '- N\'invente AUCUN chiffre. Utilise uniquement ceux du questionnaire ci-dessus.',
+    '- N\'invente AUCUN chiffre. Utilise uniquement ceux du questionnaire et des notes ci-dessus.',
     '  Si une donnée manque, n\'en parle pas — ne l\'estime pas, ne l\'arrondis pas.',
     '- Phrases courtes, factuelles, au présent. Pas de jargon, pas de conseil théorique.',
     '- Vouvoiement interdit : on parle DU client, pas AU client (3e personne).',
+    '- Tout doit être RÉALISABLE par ce dirigeant-là, avec les moyens qu\'il a décrits.',
+    '  Une action qu\'il ne peut pas faire cette semaine n\'a rien à faire dans le plan.',
     '',
     'CE QUE TU PRODUIS',
     '1. pointA — UNE phrase : la situation aujourd\'hui, factuelle, sans jugement.',
@@ -98,21 +121,24 @@ function buildPrompt(client, q) {
     '12. jalons — le CONTENU de chacune des 6 étapes, adapté à CE dossier.',
     '    Objet dont les clés sont A1, A2, A3, A4, A5, B :',
     '    {"A1":{"titre":"...","focus":"une phrase : ce qu\'on traite à cette étape",',
-    '      "actions":["2 à 3 actions concrètes, verbe à l\'infinitif"]}, …}',
+    '      "actions":["2 à 3 actions concrètes, verbe à l\'infinitif"],',
+    '      "preuve":"le résultat observable qui prouve que l\'étape est atteinte"}, …}',
     '    A1 = alléger la charge du dirigeant · A2 = bras droit / délégation',
     '    A3 = sortie de la production · A4 = pilotage par les chiffres',
     '    A5 = marge & trésorerie · B = consolidation',
+    '    « preuve » doit être vérifiable sans discussion (un chiffre, un document,',
+    '    un fait constatable) — jamais un ressenti.',
     '',
     'Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code :',
     '{"pointA":"...","pointB":"...","verrou":"...","organisme":"...","synthese":"...",',
     ' "chiffres":[{"label":"...","valeur":"..."}],',
     ' "ditClient":[{"titre":"...","detail":"..."}],',
-    ' "jalons":{"A1":{"titre":"...","focus":"...","actions":["..."]}},',
+    ' "jalons":{"A1":{"titre":"...","focus":"...","actions":["..."],"preuve":"..."}},',
     ' "problemes":[{"titre":"...","detail":"..."}],',
     ' "objectifs":["..."],',
     ' "kpis":[{"cat":"...","nom":"...","freq":"...","actuel":"...","cible":"..."}],',
     ' "risques":[{"titre":"...","detail":"..."}]}',
-  ].join('\n');
+  ]).join('\n');
 }
 
 /* Le modèle peut encadrer le JSON malgré la consigne — on récupère le
@@ -182,7 +208,8 @@ function sanitize(raw) {
           .map((a) => str(a).slice(0, 160)).filter(Boolean).slice(0, 3);
         const titre = str(j.titre).slice(0, 70);
         const focus = str(j.focus).slice(0, 200);
-        if (titre || focus || actions.length) out[k] = { titre, focus, actions };
+        const preuve = str(j.preuve).slice(0, 200);
+        if (titre || focus || preuve || actions.length) out[k] = { titre, focus, actions, preuve };
       });
       return out;
     })(),
@@ -208,6 +235,9 @@ module.exports = async (req, res) => {
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }
   const clientId = body && typeof body.clientId === 'string' ? body.clientId.trim() : '';
   const force = !!(body && body.force);
+  /* Notes du mentor : bornées ici, jamais renvoyées au client, jamais écrites
+     ailleurs que dans la clé de cache. */
+  const notes = body && typeof body.notes === 'string' ? body.notes.trim().slice(0, 12000) : '';
   if (!clientId) {
     res.status(400).json({ ok: false, error: 'clientId_required' });
     return;
@@ -221,12 +251,17 @@ module.exports = async (req, res) => {
     }
     const client = snap.data() || {};
     const q = client.questionnaire;
-    if (!q || !(q.answers || []).length) {
+    /* Sans questionnaire on peut quand même travailler si le mentor a dicté
+       ses notes : c'est tout l'intérêt du mode vocal pour les dossiers entrés
+       sans formulaire. Sans NI l'un NI l'autre, il n'y a rien à analyser. */
+    const qOk = !!(q && (q.answers || []).length);
+    if (!qOk && !notes) {
       res.status(200).json({ ok: false, error: 'no_questionnaire' });
       return;
     }
+    const qSafe = qOk ? q : { formTitle: '', answers: [] };
 
-    const key = qKey(q);
+    const key = qKey(qSafe, notes);
     const cache = client.planSuggestion;
     if (!force && cache && cache.key === key && cache.data) {
       res.status(200).json({ ok: true, suggestion: cache.data, cached: true, model: cache.model || null });
@@ -247,8 +282,11 @@ module.exports = async (req, res) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 4000,
-        messages: [{ role: 'user', content: buildPrompt(client, q) }],
+        /* Opus 5 réfléchit par défaut : max_tokens couvre réflexion + réponse,
+           d'où la marge très au-dessus de la taille du JSON attendu. */
+        max_tokens: 24000,
+        output_config: { effort: 'high' },
+        messages: [{ role: 'user', content: buildPrompt(client, qSafe, notes) }],
       }),
     });
 
@@ -260,6 +298,13 @@ module.exports = async (req, res) => {
     }
 
     const j = await r.json();
+    /* Un refus des garde-fous revient en HTTP 200 avec un contenu vide :
+       sans ce test, on lirait du vide et on croirait à une panne. */
+    if (j.stop_reason === 'refusal') {
+      console.warn('[coaching-plan-suggest] refus', JSON.stringify(j.stop_details || {}).slice(0, 200));
+      res.status(200).json({ ok: false, error: 'ai_refused' });
+      return;
+    }
     const txt = ((j.content || []).find((c) => c.type === 'text') || {}).text || '';
     const suggestion = sanitize(parseJson(txt));
     if (!suggestion || (!suggestion.pointA && !suggestion.verrou)) {
