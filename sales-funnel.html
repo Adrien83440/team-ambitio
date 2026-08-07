@@ -591,6 +591,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   var DISPO = {
     ready: false, err: null, archiveDenied: false,
     settings: {}, targets: [], busy: {}, archive: {}, archiveFrom: null,
+    personCount: 0, teamCount: 0, salesCount: 0, rosterFallback: false,
     days: [], rows: [], totals: null,
     year: null, yearLoading: false, yearErr: null
   };
@@ -606,7 +607,20 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
         if (d.__type === 'person') { d.id = doc.id; persons.push(d); }
       });
       DISPO.settings = settings;
-      DISPO.targets = DC.salesPersons(persons, window.TEAM_MEMBERS_LIST || []);
+      DISPO.personCount = persons.length;
+      /* Périmètre : mêmes règles que alteore-flow.js salesMembers() — rôle
+         sales, actif, non parti, repli Élodie si le roster ne porte aucun
+         rôle. C'est ce repli qui manquait : la section annonçait « aucun
+         expert rattaché » alors qu'Élodie a bien un planning. */
+      var scope = DC.salesPersons(persons, window.TEAM_MEMBERS_LIST || []);
+      DISPO.targets = scope.list;
+      DISPO.rosterFallback = scope.fallback;
+      DISPO.teamCount = scope.teamCount;
+      DISPO.salesCount = scope.salesCount;
+      if (scope.fallback) {
+        console.warn('[funnel/dispos] roster sans rôle sales (' + scope.teamCount
+          + ' membres lus) → repli Élodie, comme alteore-flow.js');
+      }
     });
   }
 
@@ -904,9 +918,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       return h;
     }
     if (!DISPO.targets.length) {
-      h += '<div class="fn-alert">Aucun expert de <b>Booking admin</b> n\'est rattaché à un membre d\'équipe de rôle '
-        + 'setter, closer ou closer_setter. Relie le compte de l\'expert dans Booking admin (champ « compte Firebase ») '
-        + 'pour que sa capacité apparaisse ici.</div></div>';
+      /* Message de diagnostic, pas juste un constat d'échec : sans les trois
+         compteurs, impossible de savoir si le problème vient du roster, du
+         rattachement des comptes ou de la liste des experts. */
+      h += '<div class="fn-alert">Aucun expert booking rattaché à un membre sales.<br>'
+        + '<span style="opacity:.85">Lu : <b>' + fmtNum(DISPO.personCount) + '</b> expert(s) dans Booking admin · '
+        + '<b>' + fmtNum(DISPO.teamCount) + '</b> membre(s) d\'équipe · '
+        + '<b>' + fmtNum(DISPO.salesCount) + '</b> avec un rôle sales.</span><br>'
+        + 'Vérifie dans <b>Booking admin</b> que la fiche de l\'expert est reliée à son compte Firebase, '
+        + 'et que son rôle d\'équipe est bien setter, closer ou closer_setter.</div></div>';
       return h;
     }
 
@@ -965,10 +985,15 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       notes.push('Tous les jours passés de la période viennent de l\'<b>archive quotidienne</b> : c\'est ce qui était réellement ouvert, '
         + 'même si les plannings ont changé depuis.');
     }
-    var byName = DISPO.rows.filter(function (r) { return r.matchedBy === 'name'; });
+    var byName = DISPO.rows.filter(function (r) { return r.matchedBy === 'nom' || r.matchedBy === 'prenom'; });
     if (byName.length) {
       notes.push('⚠ Rattaché(s) par le <b>nom</b> faute de compte Firebase relié dans Booking admin : '
         + byName.map(function (r) { return esc(r.person.name || '?'); }).join(', ') + '.');
+    }
+    if (DISPO.rosterFallback) {
+      notes.push('⚠ Le roster d\'équipe ne porte <b>aucun rôle sales</b> (' + fmtNum(DISPO.teamCount)
+        + ' membre(s) lu(s)) : on retombe sur Élodie seule, comme le font déjà le journal de setting et le funnel. '
+        + 'Renseigne les rôles setter / closer / closer_setter dans l\'équipe pour voir tout le monde ici.');
     }
     h += '<div class="fn-dispo-notes">' + notes.join('<br>') + '</div>';
 

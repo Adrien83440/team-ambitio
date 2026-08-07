@@ -158,10 +158,16 @@ module.exports = async function handler(req, res) {
       loadBookingConfig(), loadTeamMembers(), loadBookings(startDs, today)
     ]);
 
-    const targets = Dispo.salesPersons(persons, members);
+    const scope = Dispo.salesPersons(persons, members);
+    const targets = scope.list;
+    if (scope.fallback) {
+      console.warn('[availability-snapshot] roster sans rôle sales ('
+        + scope.teamCount + ' membres lus) → repli Élodie, comme alteore-flow.js');
+    }
     if (!targets.length) {
       return json(res, 200, {
         ok: true, today, written: 0, persons: 0,
+        teamCount: scope.teamCount, rosterFallback: scope.fallback,
         warning: 'Aucun expert booking rattaché à un membre sales (rôle setter / closer / closer_setter).'
       });
     }
@@ -220,6 +226,7 @@ module.exports = async function handler(req, res) {
     return json(res, 200, {
       ok: true, today, from: startDs, days: days.length,
       persons: targets.length, docsWritten: written,
+      teamCount: scope.teamCount, rosterFallback: scope.fallback,
       elapsedMs: Date.now() - t0, report
     });
   } catch (e) {
