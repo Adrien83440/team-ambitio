@@ -819,7 +819,12 @@ function renderLineCard(l, idx) {
   html += '<option value="">— Choisir un produit —</option>';
   for (let p = 0; p < productsCache.length; p++) {
     const prod = productsCache[p];
-    const variants = prod.variants || [];
+    /* Un produit sans variante ne serait jamais listé : la boucle interne ne
+       tournerait pas. On lui en fabrique une, à partir de son prix de base. */
+    let variants = prod.variants || [];
+    if (!variants.length) {
+      variants = [{ id: '__base', label: prod.name, priceHt: prod.priceHt || 0, vatRate: prod.vatRate }];
+    }
     for (let v = 0; v < variants.length; v++) {
       const variant = variants[v];
       const optKey = prod.id + '|' + variant.id;
@@ -853,11 +858,11 @@ function renderLineCard(l, idx) {
 
   /* Calcul live de la ligne */
   const calc = computeLine(l);
-  html += '    <div><div class="inv-label">Total HT</div><input class="inv-input right" readonly value="' + formatEur(calc.lineHtAfterDiscount) + '"/></div>';
+  html += '    <div><div class="inv-label">Total HT</div><input class="inv-input right" readonly data-lt-ht="' + idx + '" value="' + formatEur(calc.lineHtAfterDiscount) + '"/></div>';
   html += '    <button class="inv-line-rm" onclick="removeLine(' + idx + ')" title="Supprimer">🗑️</button>';
   html += '  </div>';
   /* Totals row */
-  html += '  <div class="inv-line-totals">';
+  html += '  <div class="inv-line-totals" data-lt-row="' + idx + '">';
   html += '    <span><span class="l">HT brut :</span> <span class="v">' + formatEur(calc.lineHtBeforeDiscount) + '</span>';
   if (calc.discountAmount > 0) html += '  <span class="l">· Remise :</span> <span class="v" style="color:var(--inv-amber)">−' + formatEur(calc.discountAmount) + '</span>';
   html += '    </span>';
@@ -883,8 +888,16 @@ function onProductSelect(sel) {
     const variantId = parts[1];
     const prod = productsCache.filter(function(p){ return p.id === prodId; })[0];
     if (!prod) return;
-    const variant = (prod.variants || []).filter(function(v){ return v.id === variantId; })[0];
-    if (!variant) return;
+    let variant = (prod.variants || []).filter(function(v){ return v.id === variantId; })[0];
+    if (!variant && variantId === '__base') {
+      variant = { id: '__base', label: prod.name, priceHt: prod.priceHt || 0, vatRate: prod.vatRate };
+    }
+    if (!variant) {
+      /* Ne jamais échouer en silence : sans ce message, le menu semblait
+         « ne rien récupérer » sans expliquer pourquoi. */
+      toast('Cette formule n\'existe plus dans le catalogue — recharge la page.', true);
+      return;
+    }
 
     lines[idx].productId = prodId;
     lines[idx].variantId = variantId;
@@ -921,10 +934,33 @@ function onLineFieldChange(input) {
   lines[idx][field] = val;
   invoiceState.lines = lines;
   markDirty();
-  /* Re-render uniquement la ligne (pour MAJ totaux ligne) — simple : on re-render tout */
-  refreshLines();
+  /* On ne re-rend SURTOUT PAS la liste ici : le champ en cours de saisie
+     serait recréé à chaque frappe et perdrait le focus — il fallait
+     recliquer après chaque lettre. Seuls les montants calculés de la ligne
+     sont réécrits, en place. */
+  refreshLineTotals(idx);
   refreshTotals();
   schedulePreviewRefresh();
+}
+
+/* Réécrit les montants d'UNE ligne sans toucher aux champs de saisie. */
+function refreshLineTotals(idx) {
+  const l = (invoiceState.lines || [])[idx];
+  if (!l) return;
+  const calc = computeLine(l);
+
+  const htInput = document.querySelector('[data-lt-ht="' + idx + '"]');
+  if (htInput) htInput.value = formatEur(calc.lineHtAfterDiscount);
+
+  const row = document.querySelector('[data-lt-row="' + idx + '"]');
+  if (row) {
+    let h = '';
+    h += '<span><span class="l">HT brut :</span> <span class="v">' + formatEur(calc.lineHtBeforeDiscount) + '</span>';
+    if (calc.discountAmount > 0) h += '  <span class="l">· Remise :</span> <span class="v" style="color:var(--inv-amber)">−' + formatEur(calc.discountAmount) + '</span>';
+    h += '</span>';
+    h += '<span><span class="l">TVA ' + (l.vatRate != null ? l.vatRate : 20) + '% :</span> <span class="v">' + formatEur(calc.lineVat) + '</span>  <span class="l">· TTC :</span> <span class="v">' + formatEur(calc.lineTtc) + '</span></span>';
+    row.innerHTML = h;
+  }
 }
 
 function addLine() {
