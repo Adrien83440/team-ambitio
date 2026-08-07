@@ -2083,6 +2083,57 @@ function setView(v, btn){
 
 // ── AE ACADEMY (V11a) ──
 // Avancement du client sur la plateforme de formation, via notre endpoint
+/* ══════════════════════════════════════════════════════════════════════
+   NOUVEAU PROGRAMME ELITE — parcours à étapes
+   ─────────────────────────────────────────────────────────────────────
+   L'Academy a deux programmes qui n'ont PAS la même unité de mesure :
+
+     v1 (12 mois) — des vidéos. On compte des leçons, des workbooks, des
+                    modules déverrouillés, et une IA réordonne les sujets.
+     v2 (6 mois)  — un parcours en 5 étapes (m1→m5), 7 outils, une
+                    évaluation du coach, un déverrouillage étape par étape.
+
+   Pour un client v2, « 62 % des leçons » ne veut rien dire : il n'a pas de
+   leçons. Cette fonction dit lequel des deux on a en face.
+
+   ⚠ On se base sur le LIBELLÉ DU PROGRAMME côté Alteor, volontairement en
+   « commence par Elite NEW » : un futur « Elite NEW - 12 Mois » basculera
+   sans qu'on retouche le code.
+   ⚠ On ne se base PAS sur ep.version de l'Academy : le pont ne l'expose pas
+   aujourd'hui (vérifié — dossier.js ne connaît rien des collections ep_*),
+   et son défaut est v1. Un défaut v1 mal lu ferait réapparaître le tableau
+   de bord vidéo chez un client qui n'a pas de vidéos.
+   ══════════════════════════════════════════════════════════════════════ */
+function estParcoursEtapes(c){
+  return /^\s*elite\s+new\b/i.test(String((c && c.programme) || ''));
+}
+
+/* Bloc Academy des clients du parcours à étapes. Volontairement sobre : le
+   détail des 5 étapes, des outils et de la validation du coach se suit dans
+   l'Academy, qui en est la source de vérité. Alteor ne peut pas le lire
+   aujourd'hui — il faudrait une route de lecture côté Academy (cf. le mémo
+   claude/memo-academy-parcours-etapes.md). Tant qu'elle n'existe pas, on
+   affiche ce qu'on sait vraiment plutôt qu'un chiffre faux. */
+function acadBlocEtapes(d){
+  const lien = d && d.email
+    ? `<a class="btn btn-outline btn-sm" style="text-decoration:none" href="https://academy.adrienemily.com/suivi/${encodeURIComponent(d.email)}" target="_blank" rel="noreferrer">Fiche Academy ↗</a>`
+    : '';
+  const signe = d && d.lastActivity
+    ? `<span style="color:#6b7194">dernier signe : ${escHtml(d.lastActivity)}</span>` : '';
+  return `
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <b>🎓 AE Academy</b>
+      <span style="background:#eef2ff;color:#4338ca;border-radius:999px;padding:1px 9px;font-weight:600;font-size:11px">Parcours à étapes</span>
+      ${signe}
+    </div>
+    <div style="font-size:12px;color:#4b4f6b;line-height:1.55;background:#f7f8ff;border:1px solid #e4e6f7;border-radius:9px;padding:9px 11px">
+      Programme en <b>5 étapes</b> avec outils et validation du coach.
+      Les étapes, les outils et le déverrouillage se suivent dans l'Academy — c'est elle qui en tient le compte.
+      <span style="display:block;margin-top:4px;color:#6b7194">Les séances de coaching saisies ici continuent d'y être envoyées automatiquement.</span>
+    </div>
+    ${lien ? `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${lien}</div>` : ''}`;
+}
+
 // /api/academy-progress (auth Alteor) → pont → academy.adrienemily.com.
 // Fail-soft : toute indisponibilité se résume à une ligne grise dans la fiche.
 async function loadAcademyBlock(c, id){
@@ -2098,6 +2149,10 @@ async function loadAcademyBlock(c, id){
     if(j.ok === false){ box.innerHTML = '🎓 ' + (j.error==='bridge_not_configured' ? 'Pont Academy non configuré (variables Vercel).' : 'Academy indisponible pour le moment.'); return; }
     if(!j.found){ box.innerHTML = '🎓 Aucun compte Academy pour cet e-mail.'; return; }
     const d = j.dossier;
+    /* Parcours à étapes : on s'arrête ici. Tout ce qui suit compte des leçons,
+       des workbooks et des modules — des unités du programme vidéo, qui
+       n'existent pas chez ce client. */
+    if(estParcoursEtapes(c)){ box.innerHTML = acadBlocEtapes(d); return; }
     let y2 = 0, names = [], rows = '';
     d.courses.forEach(co=>{
       rows += `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;margin:3px 0"><b>${escHtml(co.name)}</b><span style="background:#ecebfa;color:#4338ca;border-radius:999px;padding:1px 8px;font-weight:600;font-size:11px">${co.pct} %</span><span style="color:#6b7194">${co.done}/${co.total} leçons</span>${co.milestones.total?`<span style="color:#6b7194">★ ${co.milestones.reached}/${co.milestones.total}</span>`:''}${co.building?`<span style="color:#6b7194">🏗️ ${co.building.roomsDone}/${co.building.roomsTotal} pièces</span>`:''}${co.wins&&co.wins.count?`<span style="color:#6b7194">🏆 ${co.wins.count}</span>`:''}</div>`;
@@ -2146,6 +2201,15 @@ function acadWinsBox(d){
 let _pc = null; // { c, clientId, dossier, courseId, proposal, busy }
 
 function openPathCopilot(c, clientId, dossier){
+  /* Le copilote réordonne des sujets VIDÉO et écrit users.path via set-path.
+     Sur un client du parcours à étapes, ça n'a pas de sens : le pont prévu
+     pour eux (bridge/parcours) refuse justement l'ordre et le nombre
+     d'étapes. Et set-path, lui, n'a AUCUN garde-fou de version — il
+     écrirait sans rien dire. On barre la porte ici. */
+  if(estParcoursEtapes(c)){
+    showToast('Ce client suit le parcours à étapes — il n\'a pas de sujets vidéo à réordonner.','error');
+    return;
+  }
   const withPath = (dossier.courses||[]).filter(co=>co.path && (co.path.steps||[]).length);
   if(!withPath.length){ showToast('Aucune formation avec des sujets pour ce client','error'); return; }
   _pc = { c, clientId, dossier, courseId: withPath[0].id, proposal: null, busy: false };
@@ -2456,6 +2520,9 @@ async function autoGenerateWorkbooks(clientId){
     const c = _clients.find(x=>x._id===clientId);
     const em = c ? (c.email||'').trim().toLowerCase() : '';
     if(!em) return;
+    /* Les workbooks sont une brique du programme vidéo. Le parcours à étapes
+       a ses 7 outils à la place — on ne lui en fabrique pas. */
+    if(estParcoursEtapes(c)) return;
     const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
     if(!token) return;
     const pr = await fetch('/api/academy-progress',{ method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ email: em }) });
@@ -2494,6 +2561,10 @@ async function autoProposePath(clientId){
     const c = _clients.find(x=>x._id===clientId);
     const em = c ? (c.email||'').trim().toLowerCase() : '';
     if(!em) return;
+    /* Parcours à étapes : pas de sujets vidéo à ordonner. Sans ce garde, un
+       sync Drive posait un badge 🧭 et une proposition en attente sur des
+       clients qui n'ont rien à réordonner. */
+    if(estParcoursEtapes(c)) return;
     const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
     if(!token) return;
     // 1) La route actuelle — et le choix de la formation à travailler :
@@ -2540,11 +2611,13 @@ async function batchProposePaths(){
   const candidates = _clients.filter(c=>{
     if(c.actif===false) return false;
     if(!((c.email||'').trim())) return false;
+    /* Parcours à étapes : rien à ordonner, on ne les met pas dans le lot. */
+    if(estParcoursEtapes(c)) return false;
     if(c.academyPathProposal && c.academyPathProposal.status==='pending') return false;
     return hasCoachingInfo(c);
   });
   if(!candidates.length){ showToast('🧭 Personne à traiter : chaque client actif a déjà sa proposition en attente, son parcours guidé, ou pas encore de matière coaching.'); return; }
-  if(!window.confirm('🧭 Préparer une proposition de parcours IA pour '+candidates.length+' client(s) ?\n\nRien ne sera appliqué : chaque proposition attendra ta validation dans la fiche (badge 🧭). Les clients au parcours déjà guidé seront ignorés automatiquement. Compte ~10 s par client — laisse cet onglet ouvert.')) return;
+  if(!window.confirm('🧭 Préparer une proposition de parcours IA pour '+candidates.length+' client(s) ?\n\nRien ne sera appliqué : chaque proposition attendra ta validation dans la fiche (badge 🧭). Les clients au parcours déjà guidé et ceux du nouveau programme Elite (parcours à étapes) sont ignorés automatiquement. Compte ~10 s par client — laisse cet onglet ouvert.')) return;
   if(btn){ btn.disabled=true; }
   const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
   let done=0, skippedGuided=0, skippedNoPath=0, failed=[];
@@ -2585,12 +2658,17 @@ async function batchProposePaths(){
   showToast(bilan, failed.length? 'error':'success');
 }
 
+/* Une proposition préparée AVANT la bascule peut encore traîner sur un client
+   passé au parcours à étapes. On ne la propose plus : la donnée reste en base
+   (rien n'est effacé), elle n'est simplement plus offerte au clic. */
 function pcPendingBadge(c){
+  if(estParcoursEtapes(c)) return '';
   return c && c.academyPathProposal && c.academyPathProposal.status==='pending'
     ? ' <span title="Proposition de parcours IA à valider" style="font-size:12px">🧭</span>' : '';
 }
 
 function pcPendingBanner(c, id){
+  if(estParcoursEtapes(c)) return '';
   const p = c && c.academyPathProposal;
   if(!p || p.status!=='pending') return '';
   const when = p.at ? new Date(p.at).toLocaleDateString('fr-FR',{ day:'numeric', month:'short' }) : '';
@@ -2605,6 +2683,13 @@ function pcPendingBanner(c, id){
 // Ouvre le copilote avec la proposition déjà prête (préparée par l'auto).
 async function openPathCopilotStored(id){
   const c = _clients.find(x=>x._id===id);
+  /* Deuxième verrou : la bannière n'est plus affichée pour ces clients, mais
+     cette fonction est aussi l'entrée d'une proposition rangée AVANT la
+     bascule. On ne veut pas qu'un ancien lien la rouvre. */
+  if(estParcoursEtapes(c)){
+    showToast('Ce client suit le parcours à étapes — cette proposition ne le concerne plus.','error');
+    return;
+  }
   const p = c && c.academyPathProposal;
   if(!p || p.status!=='pending'){ showToast('Aucune proposition en attente'); return; }
   try{
