@@ -55,6 +55,22 @@
      que funnel-core.js — les coachs et la CSM n'ont pas de capacité de vente. */
   var SALES_ROLES = ['setter', 'closer', 'closer_setter'];
 
+  /* Membres partis, exclus en dur même si le roster n'est pas à jour.
+     Repris à l'identique de alteore-flow.js (DEPARTED). */
+  var DEPARTED = { guillaume: 1 };
+
+  /* Repli quand le roster _meta/team_members ne porte AUCUN rôle sales.
+     Ce n'est pas une hypothèse : alteore-flow.js et funnel-core.js portent
+     déjà le même repli, parce que le champ `role` n'est pas toujours
+     renseigné dans le roster. Sans lui, la section affichait « aucun expert
+     rattaché » alors qu'Élodie a bien un planning. Mêmes valeurs que
+     alteore-flow.js pour qu'un seul endroit fasse foi si ça change. */
+  var ELODIE_FALLBACK = {
+    slug: 'elodie', shortName: 'Elodie', displayName: 'Elodie Vidotto Siarri',
+    role: 'closer_setter', color: '#60a5fa',
+    firebaseUid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', active: true
+  };
+
   /* Jours fériés — définition et liste par défaut reprises TELLES QUELLES de
      booking.html, pour que « jour férié » veuille dire la même chose dans le
      moteur de réservation et dans le comptage. */
@@ -485,19 +501,32 @@
   /* ══════════════════════════════════════════════════════════════
      PÉRIMÈTRE — quels experts booking sont des « sales »
      ══════════════════════════════════════════════════════════════ */
+  /* Membres sales du roster — MÊME règle que alteore-flow.js salesMembers()
+     (rôle sales, actif, non parti), repli Élodie compris. */
+  function salesTeamMembers(teamMembers) {
+    var all = teamMembers || [];
+    var list = all.filter(function (m) {
+      return m && m.slug && !DEPARTED[m.slug] && m.active !== false && SALES_ROLES.indexOf(m.role) >= 0;
+    });
+    if (list.length) return { list: list, fallback: false, teamCount: all.length };
+    return { list: [ELODIE_FALLBACK], fallback: true, teamCount: all.length };
+  }
+
   /**
    * Rapproche les experts booking_config des membres d'équipe sales.
-   * Clé primaire : firebaseUid (posé par l'admin dans booking-admin).
-   * Repli : le nom, normalisé — un expert dont le compte n'a jamais été relié
-   * apparaîtrait sinon nulle part, et un chiffre manquant en silence est pire
-   * qu'un rapprochement approximatif signalé.
    *
-   * @returns [{ person, member, matchedBy }] trié par nom
+   * Clé primaire : firebaseUid (posé par l'admin dans booking-admin).
+   * Replis sur le nom, parce qu'un expert non rapproché disparaît de l'écran
+   * en silence — pire qu'un rapprochement approximatif signalé :
+   *   · nom complet normalisé  (« Élodie » ≡ « elodie »)
+   *   · prénom seul            (« Elodie Vidotto Siarri » ≡ « Elodie »)
+   *
+   * @returns { list: [{person, member, matchedBy}], fallback, teamCount, salesCount }
    */
   function salesPersons(persons, teamMembers) {
+    var team = salesTeamMembers(teamMembers);
     var byUid = {}, byName = {};
-    (teamMembers || []).forEach(function (m) {
-      if (!m || SALES_ROLES.indexOf(m.role) < 0) return;
+    team.list.forEach(function (m) {
       if (m.firebaseUid) byUid[m.firebaseUid] = m;
       [m.shortName, m.displayName, m.slug].forEach(function (n) {
         if (n) byName[normName(n)] = m;
@@ -508,13 +537,19 @@
     (persons || []).forEach(function (p) {
       if (!p || p.isCoach === true) return;
       var m = null, how = null;
+      var full = p.name ? normName(p.name) : '';
+      var first = p.name ? normName(String(p.name).split(/\s+/)[0]) : '';
       if (p.firebaseUid && byUid[p.firebaseUid]) { m = byUid[p.firebaseUid]; how = 'uid'; }
-      else if (p.name && byName[normName(p.name)]) { m = byName[normName(p.name)]; how = 'name'; }
+      else if (full && byName[full]) { m = byName[full]; how = 'nom'; }
+      else if (first && byName[first]) { m = byName[first]; how = 'prenom'; }
       if (!m) return;
       out.push({ person: p, member: m, matchedBy: how });
     });
     out.sort(function (a, b) { return (a.person.name || '').localeCompare(b.person.name || ''); });
-    return out;
+    return {
+      list: out, fallback: team.fallback,
+      teamCount: team.teamCount, salesCount: team.list.length
+    };
   }
 
   /* Minuscules sans accents ni espaces : « Élodie » ≡ « elodie ». */
@@ -596,6 +631,7 @@
     fillRate: fillRate,
 
     salesPersons: salesPersons,
+    salesTeamMembers: salesTeamMembers,
     normName: normName,
 
     archiveDocId: archiveDocId,
