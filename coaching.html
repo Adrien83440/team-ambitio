@@ -2878,7 +2878,8 @@ function openDetail(id){
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             ${c.planV2 ? `
-              <button class="dp-plan-edit-btn" onclick="openPlanWizard('${id}')">✏️ Modifier / régénérer</button>
+              <button class="dp-plan-edit-btn" onclick="openPlanEditor('${id}')">✏️ Modifier le plan</button>
+              <button class="dp-plan-edit-btn" onclick="openPlanWizard('${id}')">🧭 Assistant / régénérer</button>
               <button class="btn btn-primary btn-sm" onclick="sharePlan('${id}')">🔗 Lien client</button>
               <button class="dp-plan-edit-btn" onclick="exportPlanPdf('${id}')">📄 PDF</button>
               <button class="dp-plan-edit-btn" style="color:#dc2626;border-color:#f3c9c9" onclick="deletePlanV2('${id}')">🗑 Supprimer</button>
@@ -3367,22 +3368,103 @@ function togglePlanEdit(clientId){
    logique de génération, de rendu et de PDF est dans coaching-plan.js :
    cette page ne fait que le stockage et le rafraîchissement.
 ══════════════════════════════════════════════════════════════════ */
+/* Un seul chemin d'enregistrement pour les trois façons de modifier le plan :
+   l'assistant, l'éditeur manuel et la retouche IA. Évite trois copies de la
+   même écriture Firestore qui finiraient par diverger.
+   full=true → on repeint toute la fiche (le badge « Généré » change) ;
+   sinon on ne repeint que le bloc plan, la fiche ne clignote pas. */
+async function savePlanV2(clientId, plan, msg, full){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return false;
+  plan.updatedBy = (window._userEmail || window._role || null);
+  plan.updatedAt = new Date().toISOString();
+  c.planV2 = plan;
+  try{
+    await window._updateDoc(window._doc(window._db,'clients',clientId),{planV2: plan});
+    showToast(msg || '✅ Plan mis à jour','success');
+    const host = document.getElementById('planV2-'+clientId);
+    if(full || !host || !window.CoachingPlan) openDetail(clientId);
+    else host.innerHTML = window.CoachingPlan.render(plan, clientId);
+    return true;
+  }catch(e){
+    console.error('[plan] enregistrement', e);
+    showToast('Erreur: '+e.message,'error');
+    return false;
+  }
+}
+
 function openPlanWizard(clientId){
   const c = _clients.find(x=>x._id===clientId);
   if(!c) return;
   if(!window.CoachingPlan){ showToast('Module plan non chargé — recharge la page','error'); return; }
   window.CoachingPlan.openWizard(c, {
-    onSave: async function(plan){
-      plan.updatedBy = (window._userEmail || window._role || null);
-      c.planV2 = plan;
-      try{
-        await window._updateDoc(window._doc(window._db,'clients',clientId),{planV2: plan});
-        showToast('🎯 Plan d\'action généré !','success');
-        openDetail(clientId);
-      }catch(e){ showToast('Erreur: '+e.message,'error'); }
-    }
+    onSave: function(plan){ savePlanV2(clientId, plan, '🎯 Plan d\'action généré !', true); }
   });
 }
+
+/* Éditeur manuel : tout le plan, champ par champ (étapes, semaines, actions,
+   preuves, indicateurs). C'est ce qui permet de faire vivre le plan après
+   chaque séance sans repasser par l'assistant. */
+function openPlanEditor(clientId){
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c) return;
+  if(!window.CoachingPlan){ showToast('Module plan non chargé — recharge la page','error'); return; }
+  window.CoachingPlan.openEditor(c, {
+    onSave: function(plan){ savePlanV2(clientId, plan, '✅ Plan enregistré'); }
+  });
+}
+
+/* Retouche IA : le mentor décrit (ou dicte) ce qu'il veut changer, le serveur
+   renvoie le plan corrigé. Rien n'est écrit sans qu'il ait validé le résumé
+   des changements. Délégation d'événement : le bloc plan est ré-rendu à chaque
+   ouverture de fiche, un listener posé sur le bouton ne survivrait pas. */
+document.addEventListener('click', async function(e){
+  const b = e.target && e.target.closest ? e.target.closest('[data-cp-ai],[data-cp-edit]') : null;
+  if(!b) return;
+
+  const editId = b.getAttribute('data-cp-edit');
+  if(editId){ openPlanEditor(editId); return; }
+
+  const clientId = b.getAttribute('data-cp-ai');
+  const c = _clients.find(x=>x._id===clientId);
+  if(!c || !c.planV2 || !window.CoachingPlan) return;
+
+  const ta = document.getElementById('cpAi_'+clientId);
+  const instr = ta ? ta.value.trim() : '';
+  if(!instr){
+    showToast('Écris ou dicte d\'abord ce que tu veux changer','error');
+    if(ta) ta.focus();
+    return;
+  }
+
+  const label = b.innerHTML;
+  b.disabled = true;
+  b.innerHTML = '<span class="cpv2-spin"></span>Le modèle réfléchit…';
+  try{
+    if(window.CoachingPlan.stopVoice) window.CoachingPlan.stopVoice();
+    const j = await window.CoachingPlan.revise(clientId, c.planV2, instr);
+    if(!confirm('Ce que l\'IA a changé :\n\n'+(j.resume||'—')+'\n\nAppliquer au plan ?')){
+      b.disabled = false; b.innerHTML = label;
+      return;
+    }
+    /* Trace des retouches : qui a demandé quoi, et ce que l'IA en a fait.
+       Bornée à 20 entrées pour ne pas gonfler le document indéfiniment. */
+    const hist = Array.isArray(c.planV2.historique) ? c.planV2.historique.slice(-19) : [];
+    hist.push({
+      at: new Date().toISOString(),
+      by: (window._userEmail || window._role || null),
+      instruction: instr.slice(0,500),
+      resume: String(j.resume||'').slice(0,500)
+    });
+    j.plan.historique = hist;
+    const ok = await savePlanV2(clientId, j.plan, '✨ Plan retouché');
+    if(!ok){ b.disabled = false; b.innerHTML = label; }
+  }catch(err){
+    console.error('[plan] retouche', err);
+    showToast(err.message || 'Retouche impossible','error');
+    b.disabled = false; b.innerHTML = label;
+  }
+});
 
 /* ═══ LIEN CLIENT ═══════════════════════════════════════════════════
    Un lien unique par client : il consulte son plan quand il veut, et voit
