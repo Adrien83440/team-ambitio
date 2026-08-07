@@ -2,30 +2,40 @@
    coaching-plan.js — PLAN D'ACTION ELITE PHÉNIX
    ─────────────────────────────────────────────────────────────────────────
    Génère, édite et exporte le plan d'action d'un client depuis sa fiche
-   coaching. Trois temps :
+   coaching. Quatre temps :
 
-     1. ASSISTANT — 6 cartes qui posent les questions AU MENTOR (pas au
-        client). Chaque carte affiche en regard les réponses du
-        questionnaire AlteoForms du client, pour répondre sans changer
-        d'écran. Rien n'est inventé : un champ vide reste « À compléter ».
-     2. PLAN — 4 blocs (Point A→B · Verrou · 6 jalons datés · Actions de
-        la semaine). Statuts des jalons et des actions modifiables en un
-        clic. Régénérable à tout moment.
+     1. ASSISTANT — 5 étapes qui posent les questions AU MENTOR (pas au
+        client). Chaque étape affiche en regard les réponses du questionnaire
+        AlteoForms, pour répondre sans changer d'écran, et porte une case
+        « Infos collectées » pour ce que le mentor sait d'ailleurs. Un micro
+        dicte dans n'importe quel champ ; le panneau vocal permet de raconter
+        la séance et de laisser l'IA remplir.
+        Rien n'est inventé : un champ vide reste « À compléter ».
+     2. PLAN — Point A→B · Diagnostic · 6 étapes datées · Actions de la
+        semaine · Indicateurs · Vigilance. Statuts modifiables en un clic.
         ⚠ Pas de « chantiers » : l'accompagnement n'est plus adossé à des
         modules ni à des vidéos (décision Adrien 31/07). Le plan tient
         dans les jalons et les étapes.
-     3. EXPORT PDF — mise en page vectorielle (jsPDF), texte sélectionnable,
+     3. ÉDITION — deux chemins. À la main (openEditor : tout le plan, champ
+        par champ, y compris le décalage en jours de chaque étape et l'ajout
+        de semaines) ou en langage naturel (revise : on décrit le changement,
+        le serveur renvoie le plan corrigé sans toucher au reste).
+     4. EXPORT PDF — mise en page vectorielle (jsPDF), texte sélectionnable,
         aux couleurs bleues de la maison. Pas de capture d'écran : un
         screenshot en PDF est flou et pèse dix fois plus.
 
    API :
      CoachingPlan.openWizard(client, { onSave })   → assistant
-     CoachingPlan.render(plan, clientId)           → HTML du plan
+     CoachingPlan.openEditor(client, { onSave })   → édition manuelle
+     CoachingPlan.revise(clientId, plan, instr)    → retouche IA (Promise)
+     CoachingPlan.render(plan, clientId, opts)     → HTML du plan
      CoachingPlan.exportPdf(plan, client)          → télécharge le PDF
-     CoachingPlan.emptyPlan()                      → structure vierge
+     CoachingPlan.emptyPlan() / normalize(plan)    → structure du plan
+     CoachingPlan.voiceSupported() / stopVoice()   → dictée
 
    Dépend de : jsPDF (UMD, chargé par coaching.html) pour l'export seul.
-   Le reste fonctionne sans aucune dépendance externe.
+   Le reste fonctionne sans aucune dépendance externe — la dictée utilise
+   la reconnaissance vocale native du navigateur (absente de Firefox).
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
