@@ -780,7 +780,24 @@
       '.cp-ms label:hover{border-color:' + C.light + '}',
       '.cp-ms input{margin-top:3px;flex-shrink:0;accent-color:' + C.main + '}',
       '.cp-ms .t{display:block;font-size:12.5px;font-weight:800;color:' + C.dark + '}',
-      '.cp-ms .d{display:block;font-size:11px;color:' + C.muted + ';line-height:1.5;margin-top:2px}'
+      '.cp-ms .d{display:block;font-size:11px;color:' + C.muted + ';line-height:1.5;margin-top:2px}',
+
+      /* ── Lisibilité des lignes de milestone ──────────────────────────────
+         `.cp-f label` (plus haut) habille les LIBELLÉS DE CHAMP : capitales,
+         11 px, gras 800, gris, interlettrage. Or une ligne de milestone est
+         aussi un <label> dans un `.cp-f` — même spécificité (une classe + un
+         type). Tout ce que `.cp-ms label` ne redéclare pas fuit donc sur elle,
+         et les titres sortaient en CAPITALES espacées, grises et minuscules.
+
+         Chaque propriété ci-dessous annule une fuite précise. Ce n'est pas de
+         la décoration défensive : retirer text-transform, et le bug revient. */
+      '.cp-ms label{text-transform:none;letter-spacing:normal;font-size:12.5px;font-weight:400;color:' + C.ink + ';margin-bottom:0}',
+
+      /* La case et le texte : tailles EXPLICITES, et le texte prend la place
+         restante. Sans min-width:0, un mot long empêche le bloc de rétrécir :
+         il déborde de la ligne au lieu de passer à la ligne suivante. */
+      '.cp-ms label>input[type=checkbox]{width:16px;height:16px;flex:0 0 16px}',
+      '.cp-ms label>span{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}'
     ].join('\n');
     document.head.appendChild(css);
 
@@ -1354,6 +1371,39 @@
      qui descend en zigzag. SVG pur (viewBox + width:100%) : net à toutes
      les tailles, et il sort proprement à l'impression — une image matricielle
      baverait. Les positions sont calculées, pas dessinées à la main. */
+  /* Le budget d'une ligne de titre sur la route. 180 unités disponibles de
+     chaque côté (du texte au bord du cadre de 300), pour du 700 11,5 px dont
+     le signe moyen fait ~6,3 unités : 28 tiennent, on en garde 26 de marge.
+     Trois lignes au plus — au-delà, le pavé de texte pèserait plus que la
+     route qu'il annote, et l'essentiel est de reconnaître le milestone. */
+  var TITRE_SIGNES = 26, TITRE_LIGNES = 3, TITRE_INTER = 13;
+
+  /* Replie un texte en lignes de TITRE_SIGNES signes au plus, sans couper les
+     mots. Un mot plus long qu'une ligne entière est tronqué plutôt que laissé
+     déborder : c'est le seul cas où l'on préfère perdre des signes. La
+     dernière ligne porte une ellipsie si tout n'a pas tenu. */
+  function replier(texte, signes, maxLignes) {
+    var mots = String(texte == null ? '' : texte).trim().split(/\s+/).filter(Boolean);
+    var lignes = [], courante = '';
+    for (var i = 0; i < mots.length; i++) {
+      var mot = mots[i];
+      if (mot.length > signes) mot = mot.slice(0, signes - 1) + '…';
+      var essai = courante ? courante + ' ' + mot : mot;
+      if (essai.length <= signes) { courante = essai; continue; }
+      if (courante) lignes.push(courante);
+      courante = mot;
+      if (lignes.length === maxLignes) break;
+    }
+    if (courante && lignes.length < maxLignes) lignes.push(courante);
+    /* Il reste des mots non placés : la dernière ligne le dit. */
+    var places = lignes.join(' ').replace(/…$/, '').split(/\s+/).filter(Boolean).length;
+    if (places < mots.length && lignes.length) {
+      var last = lignes[lignes.length - 1];
+      lignes[lignes.length - 1] = (last.length > signes - 1 ? last.slice(0, signes - 1) : last) + '…';
+    }
+    return lignes.length ? lignes : [''];
+  }
+
   function roadSvg(p) {
     var LIST = etapes(p);
     var n = LIST.length;
@@ -1371,7 +1421,7 @@
     });
     d += ' L ' + pts[n - 1].x + ' ' + (pts[n - 1].y + 30);
 
-    var h = '<svg class="cpv-road" viewBox="0 0 ' + W_ + ' ' + H + '" role="img" aria-label="Feuille de route en 6 étapes">';
+    var h = '<svg class="cpv-road" viewBox="0 0 ' + W_ + ' ' + H + '" role="img" aria-label="Feuille de route en ' + n + ' étapes">';
     /* Deux traits superposés = bitume + ligne médiane discontinue. */
     h += '<path d="' + d + '" fill="none" stroke="#dfe4f7" stroke-width="26" stroke-linecap="round"/>';
     h += '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="9 11" opacity=".9"/>';
@@ -1384,7 +1434,25 @@
       h += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="19" fill="' + (done ? '#10b981' : '#fff') + '" stroke="' + st.col + '" stroke-width="3"/>';
       h += '<text x="' + pt.x + '" y="' + (pt.y + 5) + '" text-anchor="middle" class="rk" fill="' + (done ? '#fff' : '#0f1f5c') + '">' + esc(pt.j.k) + '</text>';
       var jj = jOf(p, pt.j);
-      h += '<text x="' + tx + '" y="' + (pt.y - 3) + '" text-anchor="' + anchor + '" class="rt">' + esc(jalonTitre(p, pt.j)) + '</text>';
+      /* LE TITRE PASSE À LA LIGNE. SVG ne sait pas replier un texte tout seul :
+         un titre du document (« Poser le cap et le cadre : vision, valeurs,
+         organisation », 55 signes ≈ 340 unités) sortait du cadre de 300 et se
+         faisait rogner — par la gauche pour les jalons ancrés à droite, par la
+         droite pour les autres. On le replie donc ici, en mots.
+
+         Les lignes s'empilent VERS LE HAUT depuis la position d'origine : la
+         dernière reste juste au-dessus de la date, la géométrie de la route ne
+         bouge pas, et rien ne vient toucher le jalon suivant (108 unités les
+         séparent, trois lignes en occupent 26). */
+      var lignes = replier(jalonTitre(p, pt.j), TITRE_SIGNES, TITRE_LIGNES);
+      var yTitre = pt.y - 3 - (lignes.length - 1) * TITRE_INTER;
+      h += '<text y="' + yTitre + '" text-anchor="' + anchor + '" class="rt">';
+      lignes.forEach(function (ligne, k) {
+        /* x sur CHAQUE tspan : sans lui, la deuxième ligne reprendrait là où
+           la première s'arrête au lieu de repartir à la marge. */
+        h += '<tspan x="' + tx + '"' + (k ? ' dy="' + TITRE_INTER + '"' : '') + '>' + esc(ligne) + '</tspan>';
+      });
+      h += '</text>';
       h += '<text x="' + tx + '" y="' + (pt.y + 12) + '" text-anchor="' + anchor + '" class="rd">' + esc(frDate(jalonDate(p, jj))) + ' · J+' + jj + '</text>';
     });
     h += '</svg>';
