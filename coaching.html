@@ -3493,6 +3493,7 @@ async function savePlanV2(clientId, plan, msg, full){
   try{
     await window._updateDoc(window._doc(window._db,'clients',clientId),{planV2: plan});
     showToast(msg || '✅ Plan mis à jour','success');
+    pousserPlanVersAcademy(clientId);
     const host = document.getElementById('planV2-'+clientId);
     if(full || !host || !window.CoachingPlan) openDetail(clientId);
     else host.innerHTML = window.CoachingPlan.render(plan, clientId);
@@ -3502,6 +3503,32 @@ async function savePlanV2(clientId, plan, msg, full){
     showToast('Erreur: '+e.message,'error');
     return false;
   }
+}
+
+/* LE PLAN DESCEND VERS L'ESPACE DU CLIENT.
+   Sans cet appel, le coach déplaçait un milestone ici et son client continuait
+   de lire l'ancienne échéance dans l'Academy : deux vérités sur le même
+   parcours, et c'est le client qui arbitrait.
+
+   Volontairement SANS await et sans bloquer : le plan est déjà enregistré: son
+   sort ne dépend pas de la disponibilité de l'Academy. On ne signale que la
+   RÉUSSITE — un pont indisponible ne doit pas ressembler à un échec
+   d'enregistrement, et le prochain enregistrement repoussera de toute façon le
+   plan entier. L'échec part quand même dans la console pour être diagnosticable.
+
+   Le plan n'est pas envoyé dans la requête : l'endpoint le relit en base. Un
+   navigateur ne peut donc pas pousser un plan que la fiche n'a pas enregistré. */
+async function pousserPlanVersAcademy(clientId){
+  try{
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    const r = await fetch('/api/academy-plan', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify({ clientId: clientId }) });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok===true && j.found){ showToast('🎓 Parcours du client mis à jour','success'); return; }
+    /* Tous les autres cas sont SILENCIEUX à l'écran, et tracés en console :
+       « pas de compte Academy » est le cas normal d'un client qui n'y est pas,
+       et un pont indisponible n'est pas un échec d'enregistrement. */
+    console.warn('[academy-plan]', (j && (j.error || (j.found===false ? 'pas de compte Academy' : ''))) || 'échec inconnu');
+  }catch(e){ console.error('[academy-plan]', e); }
 }
 
 function openPlanWizard(clientId){
