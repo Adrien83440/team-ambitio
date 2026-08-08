@@ -216,11 +216,19 @@ function buildPrompt(client, q, notes) {
     '    C\'est ce qui montre au client qu\'on l\'a écouté — reste fidèle à ses mots.',
     '15. jalons — comment CHAQUE milestone se traduit pour CE dirigeant.',
     '    Objet dont les clés sont exactement M1, M2, M3, M4, M5 :',
-    '    {"M1":{"focus":"une phrase : ce qu\'on traite chez LUI à ce milestone",',
+    '    {"M1":{"titre":"...","focus":"une phrase : ce qu\'on traite chez LUI",',
     '      "actions":["2 à 3 actions concrètes, verbe à l\'infinitif"]}, …}',
-    '    ⚠ Ne renvoie NI "titre" NI "preuve" : ils sont fixés par le programme',
-    '    et identiques pour tous. Tu personnalises le focus et les actions,',
-    '    jamais l\'intitulé ni le critère de validation.',
+    '    titre — L\'INTITULÉ DE CETTE ÉTAPE POUR LUI, 70 signes maximum.',
+    '    Il doit nommer ce qu\'on fait VRAIMENT chez ce dirigeant-là, dans ses',
+    '    termes à lui, et non répéter le libellé générique du programme.',
+    '    Si le premier mois porte d\'abord sur le pilotage et les chiffres,',
+    '    le titre de M1 doit le dire — c\'est la première chose que le',
+    '    dirigeant lira sur sa feuille de route, et il doit y reconnaître ce',
+    '    qui a été décidé en séance avec lui.',
+    '    ⚠ Ne renvoie PAS "preuve" : le critère de validation est fixé par le',
+    '    programme et identique pour tous.',
+    '    ⚠ Tu ne changes NI l\'ordre NI les échéances des cinq milestones.',
+    '    Ce qui varie est la profondeur et la formulation, jamais la séquence.',
     '    ⚠ Aucune durée, aucune date, aucun délai dans les actions.',
     '',
     'Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code :',
@@ -229,7 +237,7 @@ function buildPrompt(client, q, notes) {
     ' "horizon12":"...","horizon36":"...","synthese":"...",',
     ' "chiffres":[{"label":"...","valeur":"..."}],',
     ' "ditClient":[{"titre":"...","detail":"..."}],',
-    ' "jalons":{"M1":{"focus":"...","actions":["..."]}},',
+    ' "jalons":{"M1":{"titre":"...","focus":"...","actions":["..."]}},',
     ' "problemes":[{"titre":"...","detail":"..."}],',
     ' "objectifs":["..."],',
     ' "kpis":[{"cat":"...","nom":"...","freq":"...","actuel":"...","cible":"..."}],',
@@ -319,8 +327,15 @@ function sanitize(raw) {
       return t ? { titre: t.slice(0, 90), detail: str(x && x.detail).slice(0, 160) } : null;
     }),
     /* Contenu par milestone — clés strictement limitées aux 5 du programme.
-       Ni titre ni preuve : ils appartiennent au référentiel et sont les mêmes
-       pour tous. Le modèle personnalise le focus et les actions, rien d'autre. */
+       L'ORDRE et la PREUVE restent ceux du référentiel : ils ne se négocient
+       pas. Le TITRE, lui, se personnalise désormais.
+
+       Pourquoi ce changement : le rendu de la route lit déjà un titre par
+       dossier (jalonTitre() préfère p.jalons[k].titre au libellé générique) —
+       c'est ici qu'il était supprimé. Résultat, un dirigeant dont le premier
+       mois porte sur le pilotage lisait quand même « Libérer le temps du
+       dirigeant » en tête de sa feuille de route, et le plan ne ressemblait
+       pas à ce qui avait été décidé en séance. */
     jalons: (() => {
       const src = raw.jalons && typeof raw.jalons === 'object' ? raw.jalons : {};
       const out = {};
@@ -330,7 +345,10 @@ function sanitize(raw) {
         const actions = (Array.isArray(j.actions) ? j.actions : [])
           .map((a) => str(a).slice(0, 160)).filter(Boolean).slice(0, 3);
         const focus = str(j.focus).slice(0, 260);
-        if (focus || actions.length) out[k] = { focus, actions };
+        /* Borné court : le titre s'affiche sur la route, où trois lignes de
+           26 signes sont le maximum lisible. */
+        const titre = str(j.titre).slice(0, 78);
+        if (focus || actions.length || titre) out[k] = { focus, actions, titre };
       });
       return out;
     })(),
@@ -359,6 +377,14 @@ module.exports = async (req, res) => {
   /* Notes du mentor : bornées ici, jamais renvoyées au client, jamais écrites
      ailleurs que dans la clé de cache. */
   const notes = body && typeof body.notes === 'string' ? body.notes.trim().slice(0, 12000) : '';
+  /* LE PLAN EN COURS DE SAISIE, envoyé par l'assistant. Les décisions du mentor
+     vivent dans le navigateur jusqu'à l'enregistrement : sans elles ici, on
+     relirait l'ancien planV2 et le modèle travaillerait sans nos consignes.
+     Il n'est JAMAIS écrit en base depuis cette route — il ne sert qu'à
+     construire le prompt et la clé de cache, et decisionsDuMentor() ne lit que
+     des champs connus, tous bornés. */
+  const planCourant = (body && body.plan && typeof body.plan === 'object' && !Array.isArray(body.plan))
+    ? body.plan : null;
   if (!clientId) {
     res.status(400).json({ ok: false, error: 'clientId_required' });
     return;
@@ -401,7 +427,10 @@ module.exports = async (req, res) => {
        cache et déclenche une vraie génération.
 
        Le compte rendu des 72 h y était déjà, pour la même raison. */
-    const empreinteDecisions = decisionsDuMentor(client).join('~').slice(0, 8000);
+    /* Le plan envoyé par l'assistant l'emporte sur celui en base : c'est le plus
+       récent, et c'est celui que le mentor vient de remplir sous les yeux. */
+    const pourDecisions = planCourant ? { planV2: planCourant } : client;
+    const empreinteDecisions = decisionsDuMentor(pourDecisions).join('~').slice(0, 8000);
     const key = qKey(qSafe, notes
       + '|R:' + String(client.resume72h || '').slice(0, 6000)
       + '|D:' + empreinteDecisions);
@@ -429,7 +458,11 @@ module.exports = async (req, res) => {
            d'où la marge très au-dessus de la taille du JSON attendu. */
         max_tokens: 24000,
         output_config: { effort: 'high' },
-        messages: [{ role: 'user', content: buildPrompt(client, qSafe, notes) }],
+        /* Le plan de l'assistant est passé au prompt : c'est lui qui porte les
+           consignes que le modèle doit respecter. */
+        messages: [{ role: 'user', content: buildPrompt(
+          planCourant ? Object.assign({}, client, { planV2: planCourant }) : client,
+          qSafe, notes) }],
       }),
     });
 

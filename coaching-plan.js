@@ -521,9 +521,12 @@
      Point A / Point B / verrou / organisme. Le mentor n'a plus
      qu'à valider ou corriger : rien n'est écrit sans son passage.
      Silencieux en cas d'échec — l'assistant reste utilisable à la main. */
+  /* Renvoie une PROMESSE : « Générer le plan » doit pouvoir attendre la fin de
+     la réflexion avant d'enregistrer. Avant, la fonction partait en arrière-plan
+     et personne ne pouvait l'attendre. */
   function loadSuggestion(force, overwrite) {
     var id = W.client && (W.client._id || W.client.id);
-    if (!id || W.suggState === 'loading') return;
+    if (!id || W.suggState === 'loading') return Promise.resolve(false);
     W.suggState = 'loading';
     paintSuggBar();
     /* Même récupération de jeton que le reste de coaching.html (SDK
@@ -531,18 +534,23 @@
     var getTok = (window._auth && window._auth.currentUser)
       ? window._auth.currentUser.getIdToken()
       : Promise.reject(new Error('non authentifié'));
-    getTok.then(function (tok) {
+    return getTok.then(function (tok) {
       return fetch('/api/coaching-plan-suggest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-        body: JSON.stringify({ clientId: id, force: !!force, notes: notesText() })
+        /* LE PLAN EN COURS PART AVEC LA REQUÊTE. Les décisions de l'assistant
+           — classement, milestones renforcés, point A/B, verrou — vivent dans
+           le navigateur et ne sont PAS encore en base au moment où on demande
+           la génération. Sans elles dans le corps, le serveur relisait
+           l'ancien planV2 et le modèle travaillait sans nos consignes. */
+        body: JSON.stringify({ clientId: id, force: !!force, notes: notesText(), plan: W.plan })
       });
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j || j.ok !== true || !j.suggestion) {
         var err = j && j.error;
         W.suggState = err === 'no_questionnaire' ? 'none' : (err === 'ai_refused' ? 'refused' : 'error');
         paintSuggBar();
-        return;
+        return false;
       }
       W.sugg = j.suggestion;
       W.suggState = 'ready';
@@ -558,10 +566,12 @@
         var vx = document.getElementById('cpVox');
         if (vx) vx.open = false;
       }
+      return true;
     }).catch(function (e) {
       console.warn('[plan] suggestion', e && e.message);
       W.suggState = 'error';
       paintSuggBar();
+      return false;
     });
   }
 
@@ -1159,7 +1169,41 @@
     if (vx) p.vocal = vx.value;
   }
 
+  /* ⟨ « ✓ GÉNÉRER LE PLAN » GÉNÈRE VRAIMENT ⟩
+     Ce bouton n'appelait pas le modèle. Il enregistrait, point. La seule
+     génération avait lieu à l'OUVERTURE de l'assistant — donc AVANT que le
+     mentor n'ait saisi le cadrage, le point A, le point B, le verrou et les
+     priorités. Le plan était bâti sur le questionnaire seul, et le clic final
+     ne faisait que ranger en base une proposition périmée : d'où « ça ne
+     réfléchit pas » et « le mois 1 n'est pas bon par rapport à nos recos ».
+
+     Le clic déclenche maintenant une VRAIE génération, forcée (donc jamais
+     servie par le cache), avec tout ce qui vient d'être saisi, et on ATTEND
+     qu'elle finisse avant d'enregistrer. Une à trois minutes, annoncées.
+
+     overwrite=false : ce que le mentor a écrit lui-même fait autorité et n'est
+     jamais remplacé. Le modèle ne remplit que ce qui est vide et produit ce que
+     le mentor ne saisit pas — les intitulés, le focus et les actions de chaque
+     milestone, les KPI, les risques. Ce sont nos consignes qui commandent. */
   function finish() {
+    if (W.suggState === 'loading') return;
+    collect();
+    var btn = document.getElementById('cpNext');
+    var libelle = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '🧠 Le modèle réfléchit… (1 à 3 min)'; }
+    /* Surtout PAS de W.suggState = 'loading' ici : loadSuggestion s'en charge,
+       et le poser d'avance déclencherait son propre garde anti-double-appel —
+       la génération n'aurait pas lieu, en silence. */
+    loadSuggestion(true, false)
+      .catch(function (e) { console.warn('[plan] génération finale', e && e.message); return false; })
+      .then(function () {
+        if (btn) { btn.disabled = false; btn.textContent = libelle; }
+        enregistrerEtFermer();
+      });
+  }
+
+  /* La partie qui était finish() : elle ne fait plus que ranger et fermer. */
+  function enregistrerEtFermer() {
     var p = W.plan;
     etapes(p).forEach(function (j) { if (!p.jalonStatus[j.k]) p.jalonStatus[j.k] = 'todo'; });
     p.updatedAt = new Date().toISOString();
