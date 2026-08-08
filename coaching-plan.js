@@ -389,6 +389,13 @@
          était là. Sinon on ne touche QU'AUX champs vides. */
       applySuggestion(!!overwrite);
       go(W.step);
+      /* La dictée a fait son travail : on replie le panneau pour rendre
+         l'écran au formulaire. Le texte n'est pas perdu, juste rangé —
+         c'est lui qui nourrira la prochaine régénération. */
+      if (overwrite) {
+        var vx = document.getElementById('cpVox');
+        if (vx) vx.open = false;
+      }
     }).catch(function (e) {
       console.warn('[plan] suggestion', e && e.message);
       W.suggState = 'error';
@@ -571,7 +578,22 @@
       '.cp-vox textarea:focus{border-color:' + C.light + '}',
       '.cp-vox-a{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px}',
       '.cp-vox-n{font-size:10.5px;color:' + C.muted + ';line-height:1.5;margin-top:8px}',
-      '.cp-vox-ko{font-size:11.5px;color:#8a6412;background:#fdf6e6;border:1px solid #f0dfae;border-radius:9px;padding:8px 10px;margin-top:8px;line-height:1.5}'
+      '.cp-vox-ko{font-size:11.5px;color:#8a6412;background:#fdf6e6;border:1px solid #f0dfae;border-radius:9px;padding:8px 10px;margin-top:8px;line-height:1.5}',
+
+      /* ── Défilement de l'assistant ───────────────────────────────────────
+         La hauteur était plafonnée sur .cp-body (la GRILLE). Or une ligne de
+         grille se dimensionne sur son contenu : elle débordait du conteneur
+         plafonné au lieu de le faire défiler, et le bas du formulaire passait
+         sous la barre de boutons — impossible d'atteindre « Infos collectées »
+         dès que le mode vocal contenait quelques phrases.
+
+         On plafonne donc la COLONNE qui défile, pas la grille. min-height:0
+         est indispensable : sans lui, un élément de grille refuse de devenir
+         plus petit que son contenu et overflow-y n'a aucun effet.
+         La hauteur suit la fenêtre : sur un écran court, le formulaire reste
+         entièrement atteignable. */
+      '.cp-body{max-height:none}',
+      '.cp-main,.cp-aside{min-height:0;max-height:min(68vh,calc(100vh - 230px));overflow-y:auto;overscroll-behavior:contain}'
     ].join('\n');
     document.head.appendChild(css);
 
