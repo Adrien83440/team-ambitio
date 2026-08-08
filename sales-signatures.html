@@ -1097,12 +1097,19 @@ function submitSend(){
     createdAt:firebase.firestore.FieldValue.serverTimestamp()
   };
   db.collection('signature_requests').add(req).then(function(ref){
-    // Envoyer le SMS au signataire 1 (le 2 recevra son SMS après signature du 1)
+    /* ⚠ Ce document webhook_inbox n'envoie PLUS rien : la Cloud Function qui
+       le traitait a ete redeployee sans ses handlers signature. Il est garde
+       comme trace (et reprise possible si la fonction revit), mais l'envoi
+       reel passe desormais par /api/signature-send-link. */
     db.collection('webhook_inbox').add({
       action:'signature_resend',
       signatureRequestId:ref.id,
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
-    }).catch(function(e){console.warn('SMS send failed:',e.message);});
+    }).catch(function(e){console.warn('trace webhook_inbox:',e.message);});
+    envoyerLien(ref.id,0,function(r){
+      if(r&&r.ok)toast(messageEnvoi(r,name));
+      else toast('⚠️ Contrat cree, mais ni email ni SMS n\'ont pu partir. Utilise « Renvoyer ».');
+    });
     btn.disabled=false;btn.textContent='📨 Envoyer le contrat';
     document.getElementById('sendModal').style.display='none';
     document.getElementById('sendName').value='';
@@ -1312,18 +1319,48 @@ function academyGrantRetry(id){
     .catch(function(){toast('❌ Pont Academy indisponible — re-tente plus tard');});
 }
 
+/* Envoi du lien de signature — email et SMS, independants l'un de l'autre.
+   Le serveur dit lequel est parti ; on ne pretend jamais mieux que la
+   realite. */
+function envoyerLien(requestId,signerIndex,apres){
+  var payload={requestId:requestId};
+  if(signerIndex!==null&&signerIndex!==undefined)payload.signerIndex=signerIndex;
+  var p=(window._auth&&window._auth.currentUser)
+    ? window._auth.currentUser.getIdToken()
+    : Promise.resolve('');
+  p.then(function(tok){
+    return fetch('/api/signature-send-link',{
+      method:'POST',
+      headers:tok?{'Content-Type':'application/json','Authorization':'Bearer '+tok}
+                 :{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+  }).then(function(r){return r.json().catch(function(){return {};});})
+  .then(function(j){apres(j);})
+  .catch(function(e){console.error('[envoi lien]',e&&e.message);apres(null);});
+}
+function messageEnvoi(r,nom){
+  var ok=[];
+  if(r.email&&r.email.envoye)ok.push('email');
+  if(r.sms&&r.sms.envoye)ok.push('SMS');
+  var t='✅ '+ok.join(' + ')+' envoyé'+(ok.length>1?'s':'')+' à '+nom;
+  if(r.sms&&!r.sms.envoye)t+=' — SMS non parti';
+  if(r.email&&!r.email.envoye)t+=' — email non parti';
+  return t;
+}
+
 function resendRequest(id){
   var r=REQ.find(function(x){return x.id===id;});
   if(!r)return;
   if(!confirm('Renvoyer l\'email et le SMS à '+r.clientName+' ?'))return;
-  // Recreate the notification via webhook_inbox
-  db.collection('webhook_inbox').add({
-    action:'signature_resend',
-    signatureRequestId:id,
-    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-  }).then(function(){
-    toast('✅ Email + SMS renvoyés à '+r.clientName);
-  }).catch(function(e){alert('Erreur: '+e.message);});
+  /* Le message ne doit annoncer que ce qui est REELLEMENT parti : l'ancien
+     « ✅ Email + SMS renvoyes » s'affichait alors que rien ne partait. */
+  envoyerLien(id,null,function(res){
+    if(res&&res.ok)toast(messageEnvoi(res,r.clientName));
+    else alert('Envoi impossible : ni l\'email ni le SMS n\'ont pu partir.'
+      +((res&&res.email&&res.email.erreur)?'\n\nEmail : '+res.email.erreur:'')
+      +((res&&res.sms&&res.sms.erreur)?'\nSMS : '+res.sms.erreur:''));
+  });
 }
 function deleteRequest(id,name){
   if(!confirm('Supprimer la demande pour '+name+' ? Cette action est irréversible.'))return;
