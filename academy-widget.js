@@ -340,6 +340,136 @@
     });
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     LE PARCOURS ELITE, DANS LA FICHE — milestones, étapes, outils.
+
+     Section à part, chargée après le reste : ces données viennent d'un AUTRE
+     pont (/api/bridge/etat-parcours), et un client qui n'est pas sur le nouveau
+     parcours n'en a aucune. Elle s'AJOUTE donc au panneau et ne conditionne
+     rien : si elle ne répond pas, tout le reste s'affiche quand même. Même
+     principe que la section « Gérer l'accès ».
+
+     Le coach n'a plus à changer d'onglet pour savoir si l'outil 03 est rempli.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* Les états d'étape arrivent BRUTS (destinés à l'équipe). On les rend
+     lisibles sans les adoucir : « bloquante » doit se voir. */
+  var ETAT_ETAPE = {
+    validee: { t: 'validée', c: '#3d7a34' },
+    en_cours: { t: 'en cours', c: '#4338ca' },
+    a_completer: { t: 'à compléter', c: '#c2410c' },
+    bloquante: { t: 'bloquante', c: '#b91c1c' },
+    soumise: { t: 'soumise', c: '#7c3aed' },
+    verrouillee: { t: 'verrouillée', c: '#6b7280' },
+  };
+  var STATUT_JALON = {
+    atteint: { t: '✓ atteint', c: '#3d7a34' },
+    partiel: { t: '~ en partie', c: '#c2410c' },
+    manque: { t: '✗ manqué', c: '#b91c1c' },
+    a_venir: { t: 'à venir', c: '#6b7280' },
+  };
+
+  /* Jamais new Date() sur une date nue « AAAA-MM-JJ » : selon le navigateur
+     elle est lue en UTC, et le 1er mars s'affiche « 28 février ». */
+  function jourFr(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? Number(m[3]) + '/' + m[2] : '';
+  }
+
+  function renderParcours(panel, d) {
+    var h = '<div class="acad-head" style="margin-top:10px;border-top:1px solid #ece9f7;padding-top:9px">'
+      + '<b>🎯 Parcours Elite</b>'
+      + '<span class="acad-pill">' + esc(d.outils.remplis) + '/' + esc(d.outils.total) + ' outils</span>'
+      + (d.credits ? '<span class="acad-muted">· ' + esc(d.credits.consommees) + '/' + esc(d.credits.total) + ' séances</span>' : '')
+      + (d.plan && d.plan.recu
+        ? '<span class="acad-pill" style="background:#ecfdf5;color:#065f46">plan reçu</span>'
+        : '<span class="acad-pill" style="background:#fef3c7;color:#92400e">plan non poussé</span>')
+      + '</div>';
+
+    /* LE CAP. S'il s'affiche, c'est la preuve que le plan est bien arrivé
+       jusqu'à l'écran du client. */
+    if (d.plan && (d.plan.pointA || d.plan.pointB)) {
+      h += '<div class="acad-wins" style="background:#f5f3ff;border-color:#ddd6fe">'
+        + (d.plan.pointA ? '<div><b>A :</b> ' + esc(d.plan.pointA) + '</div>' : '')
+        + (d.plan.pointB ? '<div style="margin-top:3px"><b>B :</b> ' + esc(d.plan.pointB) + '</div>' : '')
+        + '</div>';
+    }
+
+    /* LES MILESTONES, avec la date que le client voit VRAIMENT. Le repère
+       « perso » signale ceux que le plan a déplacés : sans lui, impossible de
+       distinguer « le plan dit J+140 » de « personne n'a rien décidé ». */
+    var js = d.jalons || [];
+    for (var i = 0; i < js.length; i++) {
+      var j = js[i];
+      var st = STATUT_JALON[j.statut] || STATUT_JALON.a_venir;
+      var retard = j.enRetard && j.statut === 'a_venir';
+      h += '<div class="acad-win" style="border-color:' + (retard ? '#f3dcc3' : '#ece9f7') + ';background:' + (retard ? '#fffaf3' : '#fff') + '">'
+        + '<span class="wt">' + esc(j.code) + ' · ' + esc(j.objectif) + '</span>'
+        + ' <span class="acad-muted">' + esc(jourFr(j.dateCible)) + '</span>'
+        + (j.personnalise ? ' <span class="acad-pill" style="background:#eef2ff;color:#4338ca">perso</span>' : '')
+        + ' <span style="color:' + st.c + ';font-weight:700">' + st.t + '</span>'
+        + (retard ? ' <span style="color:#c2410c;font-weight:700">· à rattraper</span>' : '')
+        + (j.nbOutils ? ' <span class="acad-muted">· ' + esc(j.nbOutilsFaits) + '/' + esc(j.nbOutils) + ' outils</span>' : '')
+        + (j.cause ? '<div class="acad-muted" style="margin-top:2px">cause : ' + esc(j.cause) + '</div>' : '')
+        + '</div>';
+    }
+
+    /* LES ÉTAPES : ce qui s'installe, et ce qui bloque. */
+    var es = d.etapes || [];
+    if (es.length) {
+      h += '<div class="acad-muted" style="margin-top:7px;font-weight:700">Étapes · '
+        + esc(d.validees) + '/' + esc(d.total) + ' validées</div>';
+      for (var k = 0; k < es.length; k++) {
+        var e = es[k];
+        var ee = ETAT_ETAPE[e.etat] || { t: e.etat || '—', c: '#6b7280' };
+        h += '<div class="acad-wb"><span>' + (e.cle === d.etapeCourante ? '▸' : '·') + '</span>'
+          + '<span class="t">' + esc(e.titre) + '</span>'
+          + '<span style="color:' + ee.c + ';font-weight:700">' + esc(ee.t) + '</span>'
+          + '</div>';
+      }
+    }
+
+    /* LES SIX OUTILS : complet, ou son avancement. C'est ce qui prouve un
+       milestone — le coach doit le lire sans quitter sa fiche. */
+    var os = (d.outils && d.outils.detail) || [];
+    for (var o = 0; o < os.length; o++) {
+      var ou = os[o];
+      h += '<div class="acad-wb"><span>' + (ou.complet ? '✅' : '⬜') + '</span>'
+        + '<span class="t">' + esc(ou.numero) + ' · ' + esc(ou.nom) + '</span>'
+        + (ou.complet
+          ? '<span style="color:#3d7a34;font-weight:700">complet</span>'
+          : '<span class="acad-muted">' + esc(ou.nbOk) + '/' + esc(ou.nbTotal) + '</span>')
+        + '</div>';
+    }
+
+    var hote = document.createElement('div');
+    hote.setAttribute('data-acad-parcours', '1');
+    hote.innerHTML = h;
+    panel.appendChild(hote);
+  }
+
+  function loadParcours(panel, email) {
+    if (panel.dataset.acadEpLoaded === '1') return;
+    panel.dataset.acadEpLoaded = '1';
+    getToken().then(function (token) {
+      if (!token) return;
+      fetch('/api/academy-etat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ email: email }),
+      })
+        .then(function (r) { return r.json().catch(function () { return null; }); })
+        .then(function (j) {
+          /* Silencieux dans tous les cas négatifs : un client hors du nouveau
+             parcours n'a rien à montrer ici, et ce n'est pas une anomalie. */
+          if (!j || j.ok !== true || !j.found) return;
+          if (j.version !== 'v2_6mois') return;
+          try { renderParcours(panel, j); } catch (e) { console.error('[academy-etat] rendu', e); }
+        })
+        .catch(function (e) { console.error('[academy-etat]', e); });
+    });
+  }
+
   function loadManager(panel, email, force) {
     if (!force && panel.dataset.acadMgrLoaded === '1') return;
     panel.dataset.acadMgrLoaded = '1';
@@ -379,6 +509,7 @@
           if (!j.found) { panel.innerHTML = '<span class="acad-muted">🎓 Aucun compte Academy pour cet e-mail.</span>'; return; }
           render(panel, j);
           loadManager(panel, email); // V12d : section ⚙️ Gérer l'accès (admin/csm)
+          loadParcours(panel, email); // 🎯 Parcours Elite : milestones, étapes, outils
         })
         .catch(function () {
           panel.innerHTML = '<span class="acad-muted">🎓 Academy indisponible pour le moment.</span>';
