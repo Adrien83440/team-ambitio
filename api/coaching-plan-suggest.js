@@ -61,6 +61,32 @@ function qKey(q, notes) {
     + '|N:' + String(notes || '').slice(0, 4000);
 }
 
+/* Les décisions déjà prises par le mentor dans l'assistant, mises en lignes
+   lisibles. Sert DEUX fois : dans le prompt (le modèle doit les respecter) et
+   dans la clé de cache (les changer doit forcer une vraie régénération).
+   Une seule fonction pour les deux, sinon l'une des deux finit par oublier un
+   champ — et c'est le bug qu'on corrige. */
+function decisionsDuMentor(client) {
+  const p = (client && client.planV2 && typeof client.planV2 === 'object') ? client.planV2 : {};
+  const t = (v, n) => String(v == null ? '' : v).trim().slice(0, n || 2000);
+  const out = [];
+  if (t(p.pointA)) out.push('POINT A (situation de départ, arrêtée par le mentor) : ' + t(p.pointA, 4000));
+  if (t(p.pointB)) out.push('POINT B (où il doit être dans six mois) : ' + t(p.pointB, 4000));
+  if (t(p.verrou)) out.push('VERROU PRINCIPAL à lever en premier : ' + t(p.verrou));
+  if (t(p.verrouPlan)) out.push('CE QU\'ON FAIT POUR LE LEVER : ' + t(p.verrouPlan));
+  const ordre = Array.isArray(p.organismes) ? p.organismes.filter((x) => typeof x === 'string' && x) : [];
+  if (ordre.length) out.push('ORDRE DE TRAITEMENT retenu, à respecter : ' + ordre.join(' puis '));
+  const renf = Array.isArray(p.renforces) ? p.renforces.filter((x) => typeof x === 'string' && x) : [];
+  if (renf.length) {
+    out.push('MILESTONES À RENFORCER pour ce dossier : ' + renf.join(', ')
+      + '. Ce sont eux qui reçoivent le plus de profondeur, de semaines et d\'actions.');
+  }
+  if (t(p.prioriteNote)) out.push('POURQUOI CET ORDRE POUR CE DIRIGEANT : ' + t(p.prioriteNote));
+  if (t(p.horizon12)) out.push('HORIZON 12 MOIS : ' + t(p.horizon12));
+  if (t(p.horizon36)) out.push('HORIZON 3 ANS : ' + t(p.horizon36));
+  return out;
+}
+
 function buildPrompt(client, q, notes) {
   const lignes = (q.answers || [])
     .filter((a) => a && String(a.a || '').trim())
@@ -104,6 +130,30 @@ function buildPrompt(client, q, notes) {
     bloc.push('en cas de contradiction, et tu dois t\'en servir en priorité.');
     bloc.push('"""');
     bloc.push(String(notes).trim().slice(0, 12000));
+    bloc.push('"""');
+    bloc.push('');
+  }
+
+  /* CE QUE LE MENTOR A DÉJÀ TRANCHÉ.
+     Adrien remplit l'assistant — point A, point B, verrou, classement des trois
+     organismes, milestones à renforcer — PUIS demande le plan. Ces décisions ne
+     partaient nulle part : le modèle produisait son propre classement et ses
+     propres milestones renforcés sans les connaître, et construisait donc tout
+     le reste (semaines, actions, objectifs) autour d'une priorité qui n'était
+     pas celle décidée en séance.
+     Elles arrivent maintenant en tête des consignes, comme un cadre à respecter
+     et non comme une suggestion à reproduire. */
+  const decide = decisionsDuMentor(client);
+  if (decide.length) {
+    bloc.push('CE QUE LE MENTOR A DÉJÀ DÉCIDÉ POUR CE DOSSIER.');
+    bloc.push('Ce sont des DÉCISIONS, pas des hypothèses : elles ont été prises en séance');
+    bloc.push('avec le dirigeant. Tu les REPRENDS À L\'IDENTIQUE et tu construis tout le');
+    bloc.push('reste du plan autour d\'elles — les semaines, les actions et les objectifs');
+    bloc.push('doivent servir CETTE priorité-là, pas celle que tu aurais choisie.');
+    bloc.push('Si une décision te paraît contredire le questionnaire, tu la suis quand même');
+    bloc.push('et tu le signales dans la synthèse en une phrase.');
+    bloc.push('"""');
+    decide.forEach((l) => bloc.push(l));
     bloc.push('"""');
     bloc.push('');
   }
@@ -338,9 +388,23 @@ module.exports = async (req, res) => {
       client.resume72h = client.planV2.resume72h;
     }
 
-    /* Le compte rendu des 72 h entre dans la clé : sans lui, le coach colle
-       son résumé et l'IA lui resservirait la proposition d'avant, en silence. */
-    const key = qKey(qSafe, notes + '|R:' + String(client.resume72h || '').slice(0, 6000));
+    /* LA CLÉ DE CACHE DOIT COUVRIR TOUT CE QU'ON A SAISI.
+       Elle ne portait que le questionnaire, les notes et le compte rendu des
+       72 h. Le mentor pouvait donc remplir tout l'assistant — point A, point B,
+       verrou, classement, milestones renforcés — cliquer « Générer », et
+       recevoir en un clin d'œil la proposition calculée AVANT ces décisions.
+       C'est exactement le symptôme rapporté : « il ne réfléchit pas et génère
+       d'un coup ». Un cache qui répond instantanément n'est pas une réflexion.
+
+       Les décisions du mentor entrent maintenant dans la clé, par la même
+       fonction qui les envoie au modèle : changer l'une d'elles invalide le
+       cache et déclenche une vraie génération.
+
+       Le compte rendu des 72 h y était déjà, pour la même raison. */
+    const empreinteDecisions = decisionsDuMentor(client).join('~').slice(0, 8000);
+    const key = qKey(qSafe, notes
+      + '|R:' + String(client.resume72h || '').slice(0, 6000)
+      + '|D:' + empreinteDecisions);
     const cache = client.planSuggestion;
     if (!force && cache && cache.key === key && cache.data) {
       res.status(200).json({ ok: true, suggestion: cache.data, cached: true, model: cache.model || null });
