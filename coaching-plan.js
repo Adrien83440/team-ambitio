@@ -178,6 +178,51 @@
   /* Ordre effectif, en clés. Sert aux écrans de réordonnancement. */
   function ordreDe(p) { return etapes(p).map(function (e) { return e.k; }); }
 
+  /* ═══════════════════════════════════════════════════════════════════
+     LE COACH RÉFÉRENT — choisi dans la liste, pas retapé
+     ───────────────────────────────────────────────────────────────────
+     Le champ était un texte libre : deux orthographes du même prénom, et
+     plus personne ne sait qui suit le dossier. On choisit maintenant dans
+     la liste des experts du booking (window._coachs, posée par la page).
+
+     Ce que le choix apporte en plus du nom : SON LIEN DE RDV PERSONNEL.
+     C'est lui qui part vers l'espace du client, pour qu'il ne voie qu'une
+     seule porte — celle de son coach référent — et jamais un choix
+     d'expert.
+
+     REPLI ASSUMÉ : si la liste n'est pas chargée (page qui ne la fournit
+     pas, lecture refusée, hors ligne), on retombe sur le champ texte
+     d'avant. Un plan doit toujours pouvoir se remplir.
+     ═══════════════════════════════════════════════════════════════════ */
+  function listeCoachs() {
+    var l = window._coachs;
+    return Array.isArray(l) ? l.filter(function (c) { return c && c.id && c.name; }) : [];
+  }
+
+  function champCoach(p) {
+    var l = listeCoachs();
+    if (!l.length) {
+      return '<input type="text" id="cpCoach" value="' + esc(p.coach || '')
+        + '" placeholder="Prénom du coach">';
+    }
+    /* Le coach déjà noté mais absent de la liste (ancien plan, expert retiré)
+       reste proposé : on n'efface jamais une attribution existante. */
+    var connu = l.some(function (c) { return c.id === p.coachId || c.name === p.coach; });
+    var h = '<select id="cpCoach">';
+    h += '<option value="">— Choisir un coach —</option>';
+    if (p.coach && !connu) {
+      h += '<option value="" data-nom="' + esc(p.coach) + '" selected>' + esc(p.coach) + ' (hors liste)</option>';
+    }
+    l.forEach(function (c) {
+      var sel = (p.coachId && c.id === p.coachId) || (!p.coachId && p.coach && c.name === p.coach);
+      h += '<option value="' + esc(c.id) + '" data-nom="' + esc(c.name) + '"'
+        + ' data-url="' + esc(c.rdvUrl || '') + '"' + (sel ? ' selected' : '') + '>'
+        + esc(c.name) + (c.rdvUrl ? '' : ' — sans lien de RDV') + '</option>';
+    });
+    h += '</select>';
+    return h;
+  }
+
   /* Déplace `cle` juste AVANT `cible`. Renvoie le nouvel ordre. */
   function deplacerEtape(p, cle, cible) {
     var o = ordreDe(p);
@@ -533,7 +578,9 @@
     return {
       version: 4,
       startDate: toYMD(new Date()),
-      coach: '',
+      coach: '',              // nom affiché du coach référent
+      coachId: '',            // son identifiant d'expert (booking_config)
+      coachRdvUrl: '',        // son lien de RDV personnel — le SEUL que le client verra
       resume72h: '',            // le compte rendu du call des 72 h — la matière de base
       pointA: '', pointB: '',
       verrou: '',               // LE blocage à lever en premier
@@ -570,6 +617,9 @@
     });
     if (!Array.isArray(p.renforces)) p.renforces = [];
     if (!Array.isArray(p.ordreEtapes)) p.ordreEtapes = [];
+    /* Champs du coach attribué : posés à l'ouverture plutôt que testés
+       partout ailleurs. Un plan d'avant continue de s'afficher. */
+    ['coachId', 'coachRdvUrl'].forEach(function (k) { if (typeof p[k] !== 'string') p[k] = ''; });
     if (!Array.isArray(p.organismes)) {
       /* Reprise de l'ancien champ « un seul organisme » : on ne perd pas le
          choix déjà fait par le coach. */
@@ -1169,8 +1219,9 @@
         + '<div class="cp-deux">'
         + f('Date de démarrage (J0)', '<input type="date" id="cpStart" value="' + esc(p.startDate || '') + '">',
               apercu ? 'Repères : ' + esc(apercu) : 'Les échéances des milestones se calculent à partir de J0.')
-        + f('Coach référent', '<input type="text" id="cpCoach" value="' + esc(p.coach || '') + '" placeholder="Prénom du coach">',
-              'Un coach référent unique du premier au dernier jour.')
+        + f('Coach référent', champCoach(p),
+              'Un coach référent unique du premier au dernier jour.'
+              + (p.coachRdvUrl ? ' Son lien de RDV personnel part vers l\'espace du client : c\'est le seul que le dirigeant verra.' : ''))
         + '</div>';
     },
     pointA: function () {
@@ -1301,7 +1352,24 @@
     var p = W.plan;
     var v;
     if ((v = g('cpStart')) !== null) p.startDate = v;
-    if ((v = g('cpCoach')) !== null) p.coach = v.trim();
+    /* Le coach : une liste déroulante porte l'identifiant, le nom ET le lien
+       de RDV dans l'option choisie ; un champ texte ne porte que le nom.
+       On lit les deux formes, pour que le repli reste vrai. */
+    (function () {
+      var e = document.getElementById('cpCoach');
+      if (!e) return;
+      if (e.tagName === 'SELECT') {
+        var o = e.options[e.selectedIndex];
+        if (!o) return;
+        /* « Choisir un coach » : on retire l'attribution, sans rien deviner. */
+        if (!o.value && !o.getAttribute('data-nom')) { p.coachId = ''; p.coach = ''; p.coachRdvUrl = ''; return; }
+        p.coachId = o.value || '';
+        p.coach = o.getAttribute('data-nom') || '';
+        p.coachRdvUrl = o.getAttribute('data-url') || '';
+      } else {
+        p.coach = String(e.value || '').trim();
+      }
+    })();
     if ((v = g('cpResume')) !== null) p.resume72h = v.trim();
     if ((v = g('cpA')) !== null) p.pointA = v.trim();
     if ((v = g('cpB')) !== null) p.pointB = v.trim();

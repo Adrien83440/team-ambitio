@@ -1626,10 +1626,42 @@ function updateQuotaStats(){
   document.getElementById('statQuotaMiss').textContent = miss;
 }
 
+/* ── LA LISTE DES COACHS, pour l'attribution dans le plan d'action ──
+   Les experts du booking vivent dans booking_config : les docs marqués
+   __type === 'person'. On en tire le nom et surtout LE LIEN DE RDV PERSONNEL,
+   construit exactement comme dans booking-admin.html — même forme, même type
+   par défaut, pour qu'un lien distribué reste valable.
+
+   Fail-soft : en cas d'échec de lecture, la liste reste vide et l'assistant
+   retombe sur son champ texte d'avant. On ne bloque jamais la saisie d'un plan
+   parce qu'une liste n'a pas pu se charger. */
+window._coachs = [];
+window.loadCoachs = async function(){
+  try{
+    const snap = await window._getDocs(window._collection(window._db,'booking_config'));
+    const l = [];
+    snap.forEach(d=>{
+      const v = d.data() || {};
+      if(v.__type !== 'person') return;
+      let url = window.location.origin + '/booking.html?person=' + d.id;
+      if(v.defaultTypeId) url += '&type=' + encodeURIComponent(v.defaultTypeId);
+      l.push({ id: d.id, name: v.name || d.id, rdvUrl: url });
+    });
+    l.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    window._coachs = l;
+  }catch(e){
+    console.warn('[coachs] liste indisponible — saisie libre conservée', e && e.message);
+    window._coachs = [];
+  }
+};
+
 // ── LOAD ──
 window.loadClients = async function(){
   if(!window._uid)return;
   _clients = [];
+  /* Sans await : la liste des coachs ne doit pas retarder l'affichage des
+     clients. Elle sera là avant qu'on ouvre un assistant. */
+  window.loadCoachs();
   try{
     const snap = await window._getDocs(window._collection(window._db,'clients'));
     snap.forEach(d=>{
@@ -3513,6 +3545,16 @@ async function savePlanV2(clientId, plan, msg, full){
   c.planV2 = plan;
   try{
     await window._updateDoc(window._doc(window._db,'clients',clientId),{planV2: plan});
+    /* LE COACH ATTRIBUÉ REMONTE SUR LA FICHE. Le champ `coach` du client est ce
+       que lisent les cartes et le suivi : sans cette ligne, le coach choisi
+       dans le plan ne se verrait nulle part ailleurs. Écriture ciblée, et
+       seulement quand un coach est réellement choisi — on n'efface jamais une
+       attribution existante avec du vide. */
+    if(plan.coach && plan.coach !== c.coach){
+      c.coach = plan.coach;
+      try{ await window._updateDoc(window._doc(window._db,'clients',clientId),{coach: plan.coach}); }
+      catch(e){ console.warn('[plan] coach sur la fiche', e); }
+    }
     showToast(msg || '✅ Plan mis à jour','success');
     pousserPlanVersAcademy(clientId);
     const host = document.getElementById('planV2-'+clientId);
