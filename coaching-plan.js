@@ -1268,8 +1268,23 @@
       });
       h += '</div>';
     }
-    h += '<div class="cpv-rule">Ordre de traitement : <b>Délivrabilité → Rentabilité → Acquisition</b>'
-      + (org ? '<br>' + esc(org.note) : '') + '</div>';
+    /* CETTE LIGNE ANNONÇAIT L'ORDRE PAR DÉFAUT, ÉCRIT EN DUR. Elle disait donc
+       « Délivrabilité → Rentabilité → Acquisition » à TOUS les clients, y
+       compris juste sous les pastilles numérotées qui affichaient, elles, le
+       vrai classement du dossier. Deux phrases contradictoires sur le même
+       écran, et c'est celle en dur que le dirigeant lisait comme la consigne.
+
+       Elle reprend maintenant l'ordre réellement retenu. Ce qui reste vrai pour
+       tout le monde — l'acquisition en dernier — est dit comme une règle du
+       programme, pas comme le classement de ce dossier-là. */
+    if (ordre.length) {
+      h += '<div class="cpv-rule">Ordre retenu pour vous : <b>'
+        + ordre.map(function (k) { return esc(ORGANISMES[k] ? ORGANISMES[k].label : k); }).join(' → ')
+        + '</b>'
+        + (org ? '<br>' + esc(org.note) : '')
+        + '<br><span style="opacity:.75">L\'acquisition ne s\'ouvre qu\'une fois que la machine tient sans elle — c\'est une règle du programme.</span>'
+        + '</div>';
+    }
     h += '</div>';
 
     /* BLOC — La feuille de route : la route, puis le détail de chaque étape */
@@ -1431,7 +1446,18 @@
       var side = pt.x < 150 ? 1 : -1;                 // texte du côté opposé au virage
       var tx = pt.x + side * 34;
       var anchor = side > 0 ? 'start' : 'end';
-      h += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="19" fill="' + (done ? '#10b981' : '#fff') + '" stroke="' + st.col + '" stroke-width="3"/>';
+      /* LE MILESTONE RENFORCÉ SE VOIT SUR LA ROUTE.
+         Le classement et les milestones renforcés étaient bien enregistrés, et
+         le détail plus bas portait son étiquette « renforcé » — mais la route,
+         elle, était rigoureusement identique d'un dossier à l'autre. Or c'est
+         la route qu'on regarde, et c'est d'elle qu'on déduit « on ne tient pas
+         compte de ce que j'ai indiqué ».
+         Un halo et un anneau plus épais : ce sont les étapes où l'on creuse. */
+      var renforce = (p.renforces || []).indexOf(pt.j.k) >= 0;
+      if (renforce) {
+        h += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="26" fill="none" stroke="' + st.col + '" stroke-width="1.5" opacity=".3"/>';
+      }
+      h += '<circle cx="' + pt.x + '" cy="' + pt.y + '" r="19" fill="' + (done ? '#10b981' : '#fff') + '" stroke="' + st.col + '" stroke-width="' + (renforce ? 4.5 : 3) + '"/>';
       h += '<text x="' + pt.x + '" y="' + (pt.y + 5) + '" text-anchor="middle" class="rk" fill="' + (done ? '#fff' : '#0f1f5c') + '">' + esc(pt.j.k) + '</text>';
       var jj = jOf(p, pt.j);
       /* LE TITRE PASSE À LA LIGNE. SVG ne sait pas replier un texte tout seul :
@@ -1453,7 +1479,8 @@
         h += '<tspan x="' + tx + '"' + (k ? ' dy="' + TITRE_INTER + '"' : '') + '>' + esc(ligne) + '</tspan>';
       });
       h += '</text>';
-      h += '<text x="' + tx + '" y="' + (pt.y + 12) + '" text-anchor="' + anchor + '" class="rd">' + esc(frDate(jalonDate(p, jj))) + ' · J+' + jj + '</text>';
+      h += '<text x="' + tx + '" y="' + (pt.y + 12) + '" text-anchor="' + anchor + '" class="rd">' + esc(frDate(jalonDate(p, jj))) + ' · J+' + jj
+        + (renforce ? ' · renforcé' : '') + '</text>';
     });
     h += '</svg>';
     return h;
@@ -2198,7 +2225,11 @@
       doc.setFontSize(8.6);
       /* Titre et preuve du dossier, pas ceux du programme : le PDF doit dire
          exactement ce que le mentor a validé à l'écran. */
-      var oL = doc.splitTextToSize(jalonTitre(p, j), cols[2] - 3);
+      /* Le renforcement apparaît AUSSI dans le PDF : c'est le document que le
+         coach remet au dirigeant. L'avoir à l'écran et pas sur le papier, c'est
+         reproduire l'incohérence qu'on vient de corriger. */
+      var renfPdf = (p.renforces || []).indexOf(j.k) >= 0;
+      var oL = doc.splitTextToSize(jalonTitre(p, j) + (renfPdf ? ' · renforcé' : ''), cols[2] - 3);
       var pL = doc.splitTextToSize(jalonPreuve(p, j), cols[3] - 3);
       var rows = Math.max(oL.length, pL.length);
       doc.setFont('helvetica', 'bold'); color(C.main); doc.text(j.k, xs[0] + 1.5, y);
