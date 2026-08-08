@@ -213,6 +213,68 @@
     }
   };
 
+  /* ═════════════════════════════════════════════════════════════════════
+     BROUILLON LOCAL — ne jamais tout recommencer
+     ─────────────────────────────────────────────────────────────────────
+     Un assistant qui se ferme par mégarde (clic à côté, onglet fermé, coup
+     de fil au mauvais moment) faisait perdre toute la saisie. Le brouillon
+     est écrit dans le navigateur à chaque frappe, avec un temps mort : coût
+     nul, aucune écriture Firestore parasite, aucune latence.
+
+     ⚠ Ce n'est PAS une sauvegarde. Le plan n'existe pour de bon qu'après
+     « Générer le plan » ou « Enregistrer » — le brouillon est un filet, et
+     il est local à ce navigateur.
+     ═══════════════════════════════════════════════════════════════════ */
+  var DRAFT_TTL = 7 * 24 * 3600 * 1000;   // au-delà, c'est un oubli, pas un brouillon
+
+  function draftKey(kind, clientId) { return 'cp.brouillon.' + kind + '.' + (clientId || '?'); }
+
+  function draftSave(kind, clientId, plan) {
+    if (!clientId) return;
+    try {
+      localStorage.setItem(draftKey(kind, clientId), JSON.stringify({ at: Date.now(), plan: plan }));
+    } catch (e) {
+      /* Quota plein ou navigation privée : on le dit, on ne bloque rien. */
+      console.warn('[plan] brouillon non enregistré :', e && e.message);
+    }
+  }
+
+  function draftLoad(kind, clientId) {
+    if (!clientId) return null;
+    try {
+      var raw = localStorage.getItem(draftKey(kind, clientId));
+      if (!raw) return null;
+      var d = JSON.parse(raw);
+      if (!d || !d.plan || typeof d.plan !== 'object') return null;
+      if (Date.now() - (d.at || 0) > DRAFT_TTL) { draftClear(kind, clientId); return null; }
+      return d;
+    } catch (e) { return null; }
+  }
+
+  function draftClear(kind, clientId) {
+    if (!clientId) return;
+    try { localStorage.removeItem(draftKey(kind, clientId)); } catch (e) { /* rien à faire */ }
+  }
+
+  function draftQuand(ms) {
+    var d = new Date(ms);
+    if (isNaN(d.getTime())) return '';
+    return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + ' à ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  /* Un brouillon ne reprend la main que s'il est POSTÉRIEUR au plan
+     enregistré : sinon on ressusciterait une saisie déjà remplacée. */
+  function draftPlusRecent(d, planEnregistre) {
+    if (!d) return false;
+    var maj = planEnregistre && planEnregistre.updatedAt ? Date.parse(planEnregistre.updatedAt) : 0;
+    if (isNaN(maj)) maj = 0;
+    return (d.at || 0) > maj;
+  }
+
+  function clientIdDe(client) {
+    return client ? (client._id || client.id || '') : '';
+  }
+
   /* Bouton micro rattaché à un champ par son id. Délégation d'événement plus
      bas : les formulaires sont ré-rendus en permanence, un listener par bouton
      ne survivrait pas. */
@@ -593,7 +655,13 @@
          La hauteur suit la fenêtre : sur un écran court, le formulaire reste
          entièrement atteignable. */
       '.cp-body{max-height:none}',
-      '.cp-main,.cp-aside{min-height:0;max-height:min(68vh,calc(100vh - 230px));overflow-y:auto;overscroll-behavior:contain}'
+      '.cp-main,.cp-aside{min-height:0;max-height:min(68vh,calc(100vh - 230px));overflow-y:auto;overscroll-behavior:contain}',
+
+      /* ── Brouillon : bandeau de reprise + témoin discret ── */
+      '.cp-draft-bar{font-size:11.5px;line-height:1.5;background:#fdf6e6;border:1px solid #f0dfae;color:#8a6412;border-radius:9px;padding:9px 11px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
+      '.cp-draft-bar button{border:1px solid currentColor;background:none;color:inherit;border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit}',
+      '.cp-draft{font-size:11px;color:' + C.muted + ';white-space:nowrap;transition:opacity .3s}',
+      '.cp-draft.off{opacity:0}'
     ].join('\n');
     document.head.appendChild(css);
 
@@ -607,6 +675,7 @@
         '</div>' +
         '<div class="cp-body">' +
           '<div class="cp-main">' +
+            '<div class="cp-draft-bar" id="cpDraftBar" style="display:none"></div>' +
             '<div class="cp-sugg" id="cpSugg" style="display:none"></div>' +
             /* Le panneau vocal vit HORS de #cpMain : il survit au changement
                d'étape, donc une dictée en cours n'est jamais coupée. */
@@ -621,14 +690,27 @@
         '<div class="cp-foot">' +
           '<button class="cp-btn" id="cpPrev">← Précédent</button>' +
           '<div style="flex:1"></div>' +
+          '<span class="cp-draft" id="cpDraft"></span>' +
           '<button class="cp-btn" id="cpCancel">Annuler</button>' +
           '<button class="cp-btn primary" id="cpNext">Suivant →</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(bg);
 
-    bg.addEventListener('click', function (e) { if (e.target === bg) closeWizard(); });
-    document.getElementById('cpCancel').addEventListener('click', closeWizard);
+    /* Clic à côté : on ne ferme plus en silence. C'était LA façon de tout
+       perdre d'un geste — et même avec le brouillon, se faire éjecter au
+       milieu d'une saisie reste désagréable. */
+    bg.addEventListener('click', function (e) {
+      if (e.target !== bg) return;
+      if (confirm('Fermer l\'assistant ?\n\nTon brouillon est conservé : tu retrouveras ta saisie en rouvrant.')) closeWizard();
+    });
+    /* Sauvegarde automatique : une seule écoute déléguée sur toute la fenêtre,
+       donc valable pour les champs ré-affichés à chaque étape. */
+    bg.addEventListener('input', planifierBrouillon);
+    bg.addEventListener('change', planifierBrouillon);
+    document.getElementById('cpCancel').addEventListener('click', function () {
+      if (confirm('Fermer l\'assistant ?\n\nTon brouillon est conservé : tu retrouveras ta saisie en rouvrant.')) closeWizard();
+    });
     document.getElementById('cpPrev').addEventListener('click', function () { collect(); go(W.step - 1); });
     document.getElementById('cpNext').addEventListener('click', function () {
       collect();
@@ -641,8 +723,58 @@
     /* On coupe le micro en fermant : sinon il continue d'écouter derrière une
        fenêtre invisible, ce qui est autant un bug qu'un problème de confiance. */
     VOX.stop();
+    /* Dernière écriture avant de partir — le temps mort de 800 ms n'a
+       peut-être pas encore expiré au moment du clic. */
+    ecrireBrouillon();
     var bg = document.getElementById('cpBg');
     if (bg) bg.classList.remove('show');
+  }
+
+  /* ── Brouillon de l'assistant ──────────────────────────────────────── */
+  var brouillonTimer = null;
+
+  function ecrireBrouillon() {
+    if (!W.plan || !W.client) return;
+    var id = clientIdDe(W.client);
+    if (!id) return;
+    collect();
+    draftSave('wizard', id, W.plan);
+    var el = document.getElementById('cpDraft');
+    if (el) {
+      el.textContent = '✓ brouillon enregistré';
+      el.classList.remove('off');
+      /* Le témoin s'efface : il rassure au moment utile, il n'encombre pas. */
+      setTimeout(function () { if (el) el.classList.add('off'); }, 2200);
+    }
+  }
+
+  function planifierBrouillon() {
+    if (brouillonTimer) clearTimeout(brouillonTimer);
+    brouillonTimer = setTimeout(function () { brouillonTimer = null; ecrireBrouillon(); }, 800);
+  }
+
+  function paintDraftBar() {
+    var el = document.getElementById('cpDraftBar');
+    if (!el) return;
+    if (!W.draftAt) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.innerHTML = '📝 <span>Brouillon repris — dernière frappe le <b>' + esc(draftQuand(W.draftAt))
+      + '</b>. Rien n\'a encore été enregistré dans la fiche.</span>'
+      + '<button type="button" id="cpDraftReset">Repartir du plan enregistré</button>';
+    var b = document.getElementById('cpDraftReset');
+    if (b) b.onclick = function () {
+      if (!confirm('Abandonner ce brouillon et repartir du plan enregistré ?\n\nCette action est définitive.')) return;
+      var id = clientIdDe(W.client);
+      draftClear('wizard', id);
+      W.draftAt = null;
+      W.plan = normalize(W.client && W.client.planV2
+        ? JSON.parse(JSON.stringify(W.client.planV2))
+        : emptyPlan());
+      if (!W.plan.coach) W.plan.coach = W.client && W.client.coach ? W.client.coach : '';
+      go(W.step);
+      paintVox();
+      paintDraftBar();
+    };
   }
 
   function openWizard(client, opts) {
@@ -656,10 +788,25 @@
       ? JSON.parse(JSON.stringify(client.planV2))
       : emptyPlan());
     if (!W.plan.coach) W.plan.coach = client && client.coach ? client.coach : '';
+
+    /* Reprise du brouillon : uniquement s'il est plus récent que le plan
+       enregistré, sinon on ressusciterait une saisie déjà remplacée. */
+    W.draftAt = null;
+    var d = draftLoad('wizard', clientIdDe(client));
+    if (d) {
+      if (draftPlusRecent(d, client && client.planV2)) {
+        W.plan = normalize(d.plan);
+        W.draftAt = d.at;
+      } else {
+        draftClear('wizard', clientIdDe(client));
+      }
+    }
+
     W.step = 0;
     W.sugg = null;
     W.suggState = 'idle';
     go(0);
+    paintDraftBar();
     /* Le panneau vocal est peint UNE fois : il vit hors de #cpMain, donc une
        dictée en cours n'est pas interrompue quand on change d'étape. */
     paintVox();
@@ -853,7 +1000,14 @@
     JALONS.forEach(function (j) { if (!p.jalonStatus[j.k]) p.jalonStatus[j.k] = 'todo'; });
     p.updatedAt = new Date().toISOString();
     if (!p.createdAt) p.createdAt = p.updatedAt;
-    closeWizard();
+    /* Le plan part en base : le brouillon n'a plus lieu d'être, et le garder
+       ferait réapparaître un bandeau de reprise à la prochaine ouverture. */
+    draftClear('wizard', clientIdDe(W.client));
+    W.draftAt = null;
+    if (brouillonTimer) { clearTimeout(brouillonTimer); brouillonTimer = null; }
+    VOX.stop();
+    var bg = document.getElementById('cpBg');
+    if (bg) bg.classList.remove('show');
     if (typeof W.onSave === 'function') W.onSave(p);
   }
 
@@ -1167,28 +1321,45 @@
         '<div class="ce-foot">' +
           '<button type="button" class="cpv2-btn ghost" id="ceCancel">Annuler</button>' +
           '<div style="flex:1"></div>' +
+          '<span class="cp-draft" id="ceDraft"></span>' +
           '<button type="button" class="cpv2-btn" id="ceSave">💾 Enregistrer</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(bg);
 
-    bg.addEventListener('click', function (e) { if (e.target === bg) closeEditor(); });
-    document.getElementById('ceCancel').addEventListener('click', closeEditor);
+    /* Même règle que l'assistant : un clic à côté ne jette plus la saisie. */
+    var demanderFermeture = function () {
+      if (confirm('Fermer l\'éditeur ?\n\nTon brouillon est conservé : tu retrouveras tes modifications en rouvrant.')) closeEditor();
+    };
+    bg.addEventListener('click', function (e) { if (e.target === bg) demanderFermeture(); });
+    bg.addEventListener('input', planifierBrouillonEditeur);
+    bg.addEventListener('change', planifierBrouillonEditeur);
+    document.getElementById('ceCancel').addEventListener('click', demanderFermeture);
     document.getElementById('ceSave').addEventListener('click', function () {
       editorCollect();
       var p = E.plan;
       p.updatedAt = new Date().toISOString();
       if (!p.createdAt) p.createdAt = p.updatedAt;
-      closeEditor();
+      /* Enregistré pour de bon → le brouillon disparaît. Fermeture directe :
+         passer par closeEditor() réécrirait le brouillon qu'on vient d'effacer. */
+      draftClear('editor', clientIdDe(E.client));
+      E.draftAt = null;
+      if (brouillonEditeurTimer) { clearTimeout(brouillonEditeurTimer); brouillonEditeurTimer = null; }
+      VOX.stop();
+      var b = document.getElementById('ceBg');
+      if (b) b.classList.remove('show');
       if (typeof E.onSave === 'function') E.onSave(p);
     });
 
     /* Ajout / suppression de lignes : délégation, le corps est repeint à
        chaque changement de structure. */
     document.getElementById('ceBody').addEventListener('click', function (e) {
-      var t = e.target && e.target.closest ? e.target.closest('[data-add],[data-del],[data-eorg]') : null;
+      var t = e.target && e.target.closest ? e.target.closest('[data-add],[data-del],[data-eorg],[data-draft-reset]') : null;
       if (!t) return;
       e.preventDefault();
+      /* Abandon du brouillon : surtout PAS de editorCollect() avant, on
+         relirait le formulaire qu'on s'apprête à remplacer. */
+      if (t.hasAttribute('data-draft-reset')) { editorDraftReset(); return; }
       editorCollect();
       var add = t.getAttribute('data-add');
       var del = t.getAttribute('data-del');
@@ -1202,8 +1373,31 @@
 
   function closeEditor() {
     VOX.stop();
+    ecrireBrouillonEditeur();
     var bg = document.getElementById('ceBg');
     if (bg) bg.classList.remove('show');
+  }
+
+  /* ── Brouillon de l'éditeur ────────────────────────────────────────── */
+  var brouillonEditeurTimer = null;
+
+  function ecrireBrouillonEditeur() {
+    if (!E.plan || !E.client) return;
+    var id = clientIdDe(E.client);
+    if (!id) return;
+    editorCollect();
+    draftSave('editor', id, E.plan);
+    var el = document.getElementById('ceDraft');
+    if (el) {
+      el.textContent = '✓ brouillon enregistré';
+      el.classList.remove('off');
+      setTimeout(function () { if (el) el.classList.add('off'); }, 2200);
+    }
+  }
+
+  function planifierBrouillonEditeur() {
+    if (brouillonEditeurTimer) clearTimeout(brouillonEditeurTimer);
+    brouillonEditeurTimer = setTimeout(function () { brouillonEditeurTimer = null; ecrireBrouillonEditeur(); }, 800);
   }
 
   function openEditor(client, opts) {
@@ -1214,6 +1408,18 @@
     E.plan = normalize(client && client.planV2
       ? JSON.parse(JSON.stringify(client.planV2))
       : emptyPlan());
+
+    E.draftAt = null;
+    var d = draftLoad('editor', clientIdDe(client));
+    if (d) {
+      if (draftPlusRecent(d, client && client.planV2)) {
+        E.plan = normalize(d.plan);
+        E.draftAt = d.at;
+      } else {
+        draftClear('editor', clientIdDe(client));
+      }
+    }
+
     paintEditor(false);
     document.getElementById('ceBg').classList.add('show');
   }
@@ -1298,12 +1504,28 @@
     return h + ceAdd(cle, 'Ajouter une ligne');
   }
 
+  function editorDraftReset() {
+    if (!confirm('Abandonner ce brouillon et repartir du plan enregistré ?\n\nCette action est définitive.')) return;
+    draftClear('editor', clientIdDe(E.client));
+    E.draftAt = null;
+    E.plan = normalize(E.client && E.client.planV2
+      ? JSON.parse(JSON.stringify(E.client.planV2))
+      : emptyPlan());
+    paintEditor(false);
+  }
+
   function paintEditor(keepScroll) {
     var body = document.getElementById('ceBody');
     if (!body) return;
     var top = keepScroll ? body.scrollTop : 0;
     var p = E.plan;
     var h = '';
+
+    if (E.draftAt) {
+      h += '<div class="cp-draft-bar">📝 <span>Brouillon repris — dernière frappe le <b>'
+        + esc(draftQuand(E.draftAt)) + '</b>. Rien n\'a encore été enregistré dans la fiche.</span>'
+        + '<button type="button" data-draft-reset="1">Repartir du plan enregistré</button></div>';
+    }
 
     /* 1. Cadrage */
     h += ceSection('📆 Cadrage',
