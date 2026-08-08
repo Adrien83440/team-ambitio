@@ -580,7 +580,13 @@ async function doSubmit(){
     if(isFinalSignature && b64.length>=900000)await saveChunks(b64);
 
     if(isFinalSignature){
-      // Email / SMS de confirmation finale (cloud function existante)
+      /* ⚠ Le document webhook_inbox ci-dessous n'envoie PLUS rien : la Cloud
+         Function qui le traitait a ete redeployee sans ses handlers signature.
+         Le client signait et ne recevait jamais sa copie, en silence. On garde
+         l'ecriture (trace, et reprise possible si la fonction revit un jour),
+         mais l'envoi passe desormais par /api/signature-completed, sur Vercel,
+         qui deploie depuis git : le code lu est le code execute.
+         Meme remede que pour le code SMS, meme cause. */
       await db.collection('webhook_inbox').add({
         action:'signature_completed',
         signatureRequestId:REQ_ID,
@@ -589,6 +595,7 @@ async function doSubmit(){
         templateName:REQ.templateName,
         createdAt:firebase.firestore.FieldValue.serverTimestamp()
       });
+
 
       // AE ACADEMY (V11b) : ouvre l'accès à la formation correspondant au
       // contrat signé, via le pont. Fire-and-forget — token et statut « signed »
@@ -608,8 +615,48 @@ async function doSubmit(){
     }
 
     goToStep(3);
+
+    /* La copie signee, par email — APRES goToStep(3), et ce n'est pas un
+       detail : goToStep(3) fait getElementById('doneEmail').textContent sans
+       garde, or #doneEmail vit DANS le #doneSub que majCopie() remplace.
+       Lancer l'envoi avant rendrait l'ecran de fin dependant du hasard
+       d'ordonnancement du reseau.
+       On n'attend pas la reponse : la signature est deja enregistree, elle ne
+       doit pas dependre d'un mail. Mais on ecoute — si l'envoi echoue, on le
+       DIT, au lieu de promettre un email qui n'arrivera jamais. */
+    if(isFinalSignature)envoyerCopieSignee();
   }catch(e){btn.disabled=false;btn.textContent='✍️ Signer le contrat';alert('Erreur: '+e.message);console.error(e);}
 }
+/* Copie du contrat signe. Le message de l'ecran de fin dit la verite :
+   « envoye » seulement quand il l'est vraiment. */
+function envoyerCopieSignee(){
+  var t=new URLSearchParams(location.search).get('t')||'';
+  fetch('/api/signature-completed',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({requestId:REQ_ID,token:t})
+  }).then(function(r){return r.json().catch(function(){return {};});})
+  .then(function(j){
+    if(j&&j.ok){majCopie(true,j.sentTo||'');return;}
+    console.error('[copie signee] echec',j);
+    majCopie(false,'');
+  }).catch(function(e){
+    console.error('[copie signee] reseau',e&&e.message);
+    majCopie(false,'');
+  });
+}
+function majCopie(ok,adresse){
+  var el=document.getElementById('doneSub');
+  if(!el)return;
+  if(ok){
+    el.innerHTML='Une copie du contrat signe vient d\'etre envoyee a <strong>'
+      +esc(adresse||'votre adresse')+'</strong>.';
+  }else{
+    el.innerHTML='<strong>Votre signature est bien enregistree.</strong><br>'
+      +'En revanche, l\'envoi de la copie par email n\'a pas abouti. '
+      +'Demandez-la a votre conseiller — il peut vous la renvoyer.';
+  }
+}
+
 function saveChunks(b64){
   var cs=600000,ch=[];for(var i=0;i<b64.length;i+=cs)ch.push(b64.slice(i,i+cs));
   var batch=db.batch();
