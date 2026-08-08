@@ -132,8 +132,72 @@
     return JALONS_LEGACY.some(function (x) { return j[x.k] || s[x.k]; });
   }
 
-  /* Les étapes d'UN plan donné. Tout le rendu passe par là. */
-  function etapes(p) { return estLegacy(p) ? JALONS_LEGACY : MILESTONES; }
+  /* ═══════════════════════════════════════════════════════════════════
+     LES ÉTAPES D'UN PLAN — dans L'ORDRE CHOISI POUR CE CLIENT
+     ───────────────────────────────────────────────────────────────────
+     Le référentiel donne l'ordre par défaut. Mais c'est le coach qui bâtit
+     le plan : s'il décide d'attaquer par le pilotage et les marges parce
+     que c'est là qu'est le verrou, la feuille de route doit le suivre.
+     `plan.ordreEtapes` porte ce choix ; vide = ordre du programme.
+
+     Deux garanties tenues ici :
+     · aucune étape ne disparaît — ce que l'ordre ne mentionne pas revient
+       à la fin, dans l'ordre du programme, même si la donnée est abîmée ;
+     · le RYTHME reste celui du parcours. Les repères (J30, J60, J120,
+       J150, J180) suivent la POSITION, pas l'étape : la 1re travaillée
+       porte J30, quelle qu'elle soit. Sinon on afficherait des dates qui
+       reculent, et le plan deviendrait illisible.
+     ═══════════════════════════════════════════════════════════════════ */
+  function etapes(p) {
+    var base = estLegacy(p) ? JALONS_LEGACY : MILESTONES;
+    var ordre = (p && Array.isArray(p.ordreEtapes)) ? p.ordreEtapes : [];
+    if (!ordre.length) return base;
+
+    var parCle = {};
+    base.forEach(function (e) { parCle[e.k] = e; });
+
+    var out = [];
+    ordre.forEach(function (k) {
+      var e = parCle[k];
+      if (e && out.indexOf(e) < 0) out.push(e);
+    });
+    base.forEach(function (e) { if (out.indexOf(e) < 0) out.push(e); });
+
+    /* Re-cadence sur les repères du programme. Copies : les constantes du
+       référentiel ne doivent jamais être modifiées. */
+    return out.map(function (e, i) {
+      var attendu = base[i] ? base[i].j : e.j;
+      if (e.j === attendu) return e;
+      var copie = {};
+      Object.keys(e).forEach(function (k) { copie[k] = e[k]; });
+      copie.j = attendu;
+      return copie;
+    });
+  }
+
+  /* Ordre effectif, en clés. Sert aux écrans de réordonnancement. */
+  function ordreDe(p) { return etapes(p).map(function (e) { return e.k; }); }
+
+  /* Déplace `cle` juste AVANT `cible`. Renvoie le nouvel ordre. */
+  function deplacerEtape(p, cle, cible) {
+    var o = ordreDe(p);
+    var i = o.indexOf(cle);
+    if (i < 0 || cle === cible) return o;
+    o.splice(i, 1);
+    var j = o.indexOf(cible);
+    if (j < 0) o.push(cle); else o.splice(j, 0, cle);
+    return o;
+  }
+
+  /* Monte (-1) ou descend (+1) une étape d'un cran. */
+  function decalerEtape(p, cle, sens) {
+    var o = ordreDe(p);
+    var i = o.indexOf(cle);
+    var j = i + sens;
+    if (i < 0 || j < 0 || j >= o.length) return o;
+    o[i] = o[j]; o[j] = cle;
+    return o;
+  }
 
   /* Compat : l'ancien nom reste exporté et pointe sur le référentiel courant. */
   var JALONS = MILESTONES;
@@ -340,6 +404,55 @@
     return client ? (client._id || client.id || '') : '';
   }
 
+  /* ═════════════════════════════════════════════════════════════════════
+     RÉORDONNANCEMENT — glisser-déposer, et boutons ↑ ↓
+     ─────────────────────────────────────────────────────────────────────
+     Les deux, et les boutons ne sont pas un repli au rabais : le
+     glisser-déposer natif est capricieux au trackpad et absent au doigt.
+     Une flèche marche partout, tout le temps.
+
+     `apply(cle, cible)` reçoit ce qui a été déplacé et devant quoi.
+     ═══════════════════════════════════════════════════════════════════ */
+  function bindReorder(root, apply) {
+    if (!root) return;
+    var pris = null;
+    var lignes = Array.prototype.slice.call(root.querySelectorAll('[data-ord]'));
+
+    function nettoyer() {
+      lignes.forEach(function (x) { x.classList.remove('over'); x.classList.remove('drag'); });
+    }
+
+    lignes.forEach(function (el) {
+      el.setAttribute('draggable', 'true');
+      el.addEventListener('dragstart', function (e) {
+        pris = el.getAttribute('data-ord');
+        el.classList.add('drag');
+        try {
+          e.dataTransfer.effectAllowed = 'move';
+          /* Safari refuse de démarrer un glisser sans données. */
+          e.dataTransfer.setData('text/plain', pris);
+        } catch (x) { /* vieux navigateur : le glisser sera inactif, les flèches restent */ }
+      });
+      el.addEventListener('dragend', function () { pris = null; nettoyer(); });
+      el.addEventListener('dragover', function (e) {
+        if (!pris || pris === el.getAttribute('data-ord')) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch (x) { /* idem */ }
+        el.classList.add('over');
+      });
+      el.addEventListener('dragleave', function () { el.classList.remove('over'); });
+      el.addEventListener('drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var cible = el.getAttribute('data-ord');
+        var src = pris;
+        pris = null;
+        nettoyer();
+        if (src && cible && src !== cible) apply(src, cible);
+      });
+    });
+  }
+
   /* Bouton micro rattaché à un champ par son id. Délégation d'événement plus
      bas : les formulaires sont ré-rendus en permanence, un listener par bouton
      ne survivrait pas. */
@@ -425,6 +538,7 @@
       pointA: '', pointB: '',
       verrou: '',               // LE blocage à lever en premier
       verrouPlan: '',           // ce qu'on va faire pour le lever — jamais de durée ici
+      ordreEtapes: [],          // l'ordre choisi POUR CE CLIENT ; vide = ordre du programme
       horizon12: '',            // où l'entreprise doit être dans 12 mois
       horizon36: '',            // et dans 3 ans — deux repères discrets, pas des objectifs
       organisme: '', synthese: '',
@@ -455,6 +569,7 @@
       if (typeof p[k] !== 'string') p[k] = '';
     });
     if (!Array.isArray(p.renforces)) p.renforces = [];
+    if (!Array.isArray(p.ordreEtapes)) p.ordreEtapes = [];
     if (!Array.isArray(p.organismes)) {
       /* Reprise de l'ancien champ « un seul organisme » : on ne perd pas le
          choix déjà fait par le coach. */
@@ -589,6 +704,9 @@
     }
     if ((s.renforces || []).length && (overwrite || !(p.renforces || []).length)) {
       p.renforces = s.renforces.slice();
+    }
+    if ((s.ordreEtapes || []).length && (overwrite || !(p.ordreEtapes || []).length)) {
+      p.ordreEtapes = s.ordreEtapes.slice();
     }
     if (s.synthese && (overwrite || isTodo(p.synthese))) p.synthese = s.synthese;
     ['chiffres', 'ditClient', 'problemes', 'objectifs', 'kpis', 'risques'].forEach(function (k) {
@@ -807,7 +925,29 @@
          restante. Sans min-width:0, un mot long empêche le bloc de rétrécir :
          il déborde de la ligne au lieu de passer à la ligne suivante. */
       '.cp-ms label>input[type=checkbox]{width:16px;height:16px;flex:0 0 16px}',
-      '.cp-ms label>span{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}'
+      '.cp-ms label>span{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}',
+
+      /* ── Étapes réordonnables ────────────────────────────────────────────
+         Ce sont des <div>, pas des <label> : elles échappent d'office aux
+         fuites décrites juste au-dessus. */
+      '.cp-ord{display:flex;align-items:center;gap:10px;border:1.5px solid ' + C.line + ';border-radius:11px;padding:9px 11px;background:#fff;transition:border-color .12s,background .12s,opacity .12s}',
+      '.cp-ord.on{border-color:' + C.orange + ';background:#fffaf1}',
+      '.cp-ord.drag{opacity:.45}',
+      '.cp-ord.over{border-color:' + C.main + ';background:' + C.ghost + ';box-shadow:0 -2px 0 0 ' + C.main + ' inset}',
+      '.cp-ord .poignee{cursor:grab;color:#b9bed4;font-size:15px;line-height:1;flex:0 0 auto;user-select:none}',
+      '.cp-ord .poignee:active{cursor:grabbing}',
+      '.cp-ord .rang{flex:0 0 22px;width:22px;height:22px;border-radius:50%;background:' + C.main + ';color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}',
+      '.cp-ord .corps{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}',
+      '.cp-ord .t{display:block;font-size:12.5px;font-weight:800;color:' + C.dark + ';text-transform:none;letter-spacing:normal}',
+      '.cp-ord .d{display:block;font-size:11px;font-weight:400;color:' + C.muted + ';line-height:1.5;margin-top:2px;text-transform:none;letter-spacing:normal}',
+      '.cp-ord .cmd{display:flex;align-items:center;gap:4px;flex:0 0 auto}',
+      '.cp-fl{border:1.5px solid ' + C.line + ';background:#fff;color:' + C.main + ';border-radius:8px;width:26px;height:26px;padding:0;font-size:12px;cursor:pointer;font-family:inherit;line-height:1}',
+      '.cp-fl:hover:not(:disabled){border-color:' + C.main + ';background:' + C.ghost + '}',
+      '.cp-fl:disabled{opacity:.3;cursor:not-allowed}',
+      '.cp-ord .renf{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:1.5px solid ' + C.line + ';border-radius:8px;cursor:pointer;font-size:13px;font-weight:800;color:' + C.muted + ';position:relative;margin:0;text-transform:none;letter-spacing:normal}',
+      '.cp-ord.on .renf{border-color:' + C.orange + ';color:' + C.orange + ';background:#fff4e2}',
+      '.cp-ord .renf input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}',
+      '.cp-reset{border:1px solid currentColor;background:none;color:inherit;border-radius:7px;padding:2px 8px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit;margin-top:4px}'
     ].join('\n');
     document.head.appendChild(css);
 
@@ -1069,15 +1209,28 @@
       h += '</div><div class="hint">Clique dans l\'ordre où on les traite. L\'acquisition ne s\'ouvre qu\'une fois que la machine tient sans lui — c\'est une règle du programme, pas une préférence.'
         + (ordre.length ? '<br>' + esc(ORGANISMES[ordre[0]].note) : '') + '</div></div>';
 
-      h += '<div class="cp-f"><label>Milestones à renforcer pour ce dossier</label><div class="cp-ms">';
-      MILESTONES.forEach(function (m) {
+      var liste = etapes(p);
+      var perso = (p.ordreEtapes || []).length > 0;
+      h += '<div class="cp-f"><label>L\'ordre des étapes pour ce client</label><div class="cp-ms" id="cpOrdre">';
+      liste.forEach(function (m, i) {
         var on = (p.renforces || []).indexOf(m.k) >= 0;
-        h += '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-renf="' + m.k + '"' + (on ? ' checked' : '') + '>'
-          + '<span><span class="t">' + m.k + ' · ' + esc(m.obj) + '</span>'
-          + '<span class="d">' + esc(m.periode) + ' — ' + esc(m.objectif) + '</span></span></label>';
+        h += '<div class="cp-ord' + (on ? ' on' : '') + '" data-ord="' + m.k + '">'
+          + '<span class="poignee" title="Glisser pour déplacer">⠿</span>'
+          + '<span class="rang">' + (i + 1) + '</span>'
+          + '<span class="corps"><span class="t">' + esc(m.obj) + '</span>'
+          + '<span class="d">' + esc(m.k) + (m.periode ? ' · repère ' + esc(m.periode) : '') + ' — ' + esc(m.objectif || m.preuve) + '</span></span>'
+          + '<span class="cmd">'
+          + '<button type="button" class="cp-fl" data-up="' + m.k + '" title="Monter"' + (i === 0 ? ' disabled' : '') + '>↑</button>'
+          + '<button type="button" class="cp-fl" data-down="' + m.k + '" title="Descendre"' + (i === liste.length - 1 ? ' disabled' : '') + '>↓</button>'
+          + '<label class="renf" title="Renforcer cette étape"><input type="checkbox" data-renf="' + m.k + '"' + (on ? ' checked' : '') + '>+</label>'
+          + '</span></div>';
       });
-      h += '</div><div class="hint">Le chemin est le même pour tous ; la profondeur donnée à chaque milestone, non. '
-        + 'Urgence rentabilité → renforcer M3. Urgence équipe → M2 et M3. Recrutement déjà lancé → M4.</div></div>';
+      h += '</div><div class="hint">Glisse une étape, ou utilise les flèches. C\'est <b>toi</b> qui décides du chemin : '
+        + 'si le verrou est la rentabilité, tu peux commencer par le pilotage et les marges.<br>'
+        + 'Les repères de dates suivent la position — la première étape porte toujours le premier repère.<br>'
+        + 'La case <b>+</b> marque une étape à approfondir pour ce dossier.'
+        + (perso ? ' <button type="button" class="cp-reset" id="cpOrdreReset">↺ Revenir à l\'ordre du programme</button>' : '')
+        + '</div></div>';
 
       h += f('Note de priorisation',
         '<textarea id="cpPrioNote" placeholder="Pourquoi cet ordre pour ce dirigeant-là.">' + esc(p.prioriteNote || '') + '</textarea>',
@@ -1113,13 +1266,32 @@
       });
       /* Les cases se marquent sans re-rendu : re-peindre l'étape ferait
          perdre le focus et la position de défilement à chaque clic. */
-      Array.prototype.forEach.call(document.querySelectorAll('[data-renf]'), function (c) {
+      Array.prototype.forEach.call(document.querySelectorAll('#cpOrdre [data-renf]'), function (c) {
         c.addEventListener('change', function () {
-          var lab = c.closest ? c.closest('label') : null;
-          if (lab) { if (c.checked) lab.classList.add('on'); else lab.classList.remove('on'); }
+          var ligne = c.closest ? c.closest('[data-ord]') : null;
+          if (ligne) { if (c.checked) ligne.classList.add('on'); else ligne.classList.remove('on'); }
           collect();
         });
       });
+
+      /* Réordonnancement : le nouvel ordre est posé dans le plan, puis
+         l'étape est repeinte pour que les rangs et les repères suivent. */
+      var poser = function (nouvel) {
+        collect();
+        W.plan.ordreEtapes = nouvel;
+        go(W.step);
+      };
+      bindReorder(document.getElementById('cpOrdre'), function (cle, cible) {
+        poser(deplacerEtape(W.plan, cle, cible));
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('#cpOrdre [data-up],#cpOrdre [data-down]'), function (b) {
+        b.addEventListener('click', function () {
+          var haut = b.getAttribute('data-up');
+          poser(decalerEtape(W.plan, haut || b.getAttribute('data-down'), haut ? -1 : 1));
+        });
+      });
+      var raz = document.getElementById('cpOrdreReset');
+      if (raz) raz.addEventListener('click', function () { poser([]); });
     }
   }
 
@@ -1624,6 +1796,13 @@
       '.ce-jh,.ce-semh{display:flex;align-items:center;gap:9px;margin-bottom:11px;flex-wrap:wrap}',
       '.ce-jk{min-width:36px;height:28px;padding:0 8px;border-radius:8px;background:' + C.main + ';color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}',
       '.ce-jn{font-size:11px;color:' + C.muted + ';flex:1;min-width:130px;line-height:1.4}',
+      '.ce-j{transition:border-color .12s,background .12s,opacity .12s}',
+      '.ce-j.drag{opacity:.45}',
+      '.ce-j.over{border-color:' + C.main + ';background:' + C.ghost + ';box-shadow:0 -3px 0 0 ' + C.main + ' inset}',
+      '.ce-j .poignee{cursor:grab;color:#b9bed4;font-size:15px;line-height:1;flex-shrink:0;user-select:none}',
+      '.ce-j .poignee:active{cursor:grabbing}',
+      '.ce-rang{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:' + C.dark + ';color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center}',
+      '.ce-cmd{display:flex;gap:4px;flex-shrink:0;margin-left:auto}',
       '.ce-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}',
       '@media(max-width:720px){.ce-grid{grid-template-columns:1fr}}',
       '.ce-foot{display:flex;align-items:center;gap:9px;padding:13px 20px;border-top:1px solid ' + C.line + ';background:#fff;flex-wrap:wrap}',
@@ -1906,14 +2085,21 @@
 
     /* 4. Les 6 étapes */
     var hj = '';
-    etapes(p).forEach(function (j) {
+    var listeE = etapes(p);
+    listeE.forEach(function (j, idx) {
       var c = (p.jalons || {})[j.k] || {};
       var acts = (c.actions || []).slice(0, 3);
       while (acts.length < 3) acts.push('');
-      hj += '<div class="ce-j">'
-        + '<div class="ce-jh"><span class="ce-jk">' + j.k + '</span>'
+      hj += '<div class="ce-j" data-ord="' + j.k + '">'
+        + '<div class="ce-jh"><span class="poignee" title="Glisser pour déplacer">⠿</span>'
+        + '<span class="ce-rang">' + (idx + 1) + '</span>'
+        + '<span class="ce-jk">' + j.k + '</span>'
         + '<span class="ce-jn">' + (j.periode ? j.periode + ' — ' : '') + j.obj + '</span>'
         + ceStatut('data-j="' + j.k + '.st" style="max-width:150px"', (p.jalonStatus || {})[j.k])
+        + '<span class="ce-cmd">'
+        + '<button type="button" class="cp-fl" data-eup="' + j.k + '" title="Monter"' + (idx === 0 ? ' disabled' : '') + '>↑</button>'
+        + '<button type="button" class="cp-fl" data-edown="' + j.k + '" title="Descendre"' + (idx === listeE.length - 1 ? ' disabled' : '') + '>↓</button>'
+        + '</span>'
         + '</div>'
         + '<div class="ce-grid">'
         + ceF('Titre de l\'étape', ceIn('data-j="' + j.k + '.titre"', c.titre, j.obj))
@@ -1929,7 +2115,7 @@
               'Un fait vérifiable sans discussion. Vide = « ' + j.preuve + ' ».')
         + '</div>';
     });
-    h += ceSection('🛣️ Les 5 milestones', hj);
+    h += ceSection('🛣️ Les 5 milestones — glisse pour changer l\'ordre', hj + '<div class="ce-hint">L\'ordre est le tien : glisse une carte ou utilise les flèches. ' + 'Les repères de dates suivent la position, pas le numéro de l\'étape.' + ((p.ordreEtapes || []).length ? ' <button type="button" class="cp-reset" data-ordreset="1">↺ Revenir à l\'ordre du programme</button>' : '') + '</div>');
 
     /* 5. Semaines */
     var hs = '';
@@ -2017,6 +2203,25 @@
 
     body.innerHTML = h;
     body.scrollTop = top;
+
+    /* Réordonnancement des étapes. editorCollect() D'ABORD : on ne veut pas
+       perdre ce qui est saisi dans les champs au moment du déplacement. */
+    var poserE = function (nouvel) {
+      editorCollect();
+      E.plan.ordreEtapes = nouvel;
+      paintEditor(true);
+    };
+    bindReorder(body, function (cle, cible) { poserE(deplacerEtape(E.plan, cle, cible)); });
+    Array.prototype.forEach.call(body.querySelectorAll('[data-eup],[data-edown]'), function (b2) {
+      b2.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        var haut = b2.getAttribute('data-eup');
+        poserE(decalerEtape(E.plan, haut || b2.getAttribute('data-edown'), haut ? -1 : 1));
+      });
+    });
+    Array.prototype.forEach.call(body.querySelectorAll('[data-ordreset]'), function (b2) {
+      b2.addEventListener('click', function (ev) { ev.preventDefault(); poserE([]); });
+    });
   }
 
   /* Lit tout le formulaire dans E.plan. Appelé avant chaque ajout/suppression

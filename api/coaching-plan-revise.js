@@ -92,6 +92,7 @@ function planForPrompt(p) {
     horizon36: o.horizon36 || '',
     organismes: Array.isArray(o.organismes) ? o.organismes : (o.organisme ? [o.organisme] : []),
     renforces: Array.isArray(o.renforces) ? o.renforces : [],
+    ordreEtapes: Array.isArray(o.ordreEtapes) ? o.ordreEtapes : [],
     chiffres: Array.isArray(o.chiffres) ? o.chiffres.slice(0, 8) : [],
     ditClient: Array.isArray(o.ditClient) ? o.ditClient.slice(0, 7) : [],
     problemes: Array.isArray(o.problemes) ? o.problemes.slice(0, 5) : [],
@@ -147,7 +148,11 @@ function buildPrompt(plan, instructions, contexte) {
     '  Chaque milestone : {"focus":"une phrase","actions":["2 à 3 actions, verbe à',
     '   l\'infinitif"]}. Le titre et la victoire vérifiable sont fixés par le',
     '  programme : ne les renvoie pas.',
-    '  ⚠ L\'ORDRE DES MILESTONES N\'EST PAS NÉGOCIABLE, quoi qu\'on te demande.',
+    '  ⚠ L\'ORDRE DES MILESTONES APPARTIENT AU MENTOR. S\'il demande de',
+    '  commencer par le pilotage, les marges ou autre chose, tu renvoies',
+    '  « ordreEtapes » avec les cinq clés M1 à M5 dans l\'ordre qu\'il indique.',
+    '  Ne renvoie « ordreEtapes » QUE s\'il parle d\'ordre — sinon omets-le,',
+    '  et la feuille de route actuelle est conservée telle quelle.',
     '  Ce qui varie, c\'est la profondeur : « renforces » liste les milestones',
     '  à approfondir pour ce dossier (0 à 2 parmi M1…M5).',
     '  ⚠ Si le plan reçu utilise encore les anciennes clés A1…B, garde-les :',
@@ -170,6 +175,7 @@ function buildPrompt(plan, instructions, contexte) {
     '{"resume":"ce qui a changé, une ou deux phrases pour le mentor",',
     ' "synthese":"...","pointA":"...","pointB":"...","verrou":"...","verrouPlan":"...",',
     ' "organismes":["...","...","..."],"renforces":["M3"],',
+    ' "ordreEtapes":["M1","M2","M3","M4","M5"],',
     ' "horizon12":"...","horizon36":"...",',
     ' "chiffres":[{"label":"...","valeur":"..."}],',
     ' "ditClient":[{"titre":"...","detail":"..."}],',
@@ -210,7 +216,22 @@ function sanitize(raw) {
     ? ordreOrganismes(raw.organismes) : [];
   const org = organismes[0] || '';
 
+  /* ⚠ Comme pour le classement des organismes : un ordre absent doit rester
+     ABSENT. Le compléter d'office ferait écraser, à chaque retouche muette,
+     la feuille de route que le mentor a construite. */
+  const ordreEtapes = (() => {
+    const vus = [];
+    (Array.isArray(raw.ordreEtapes) ? raw.ordreEtapes : []).forEach((x) => {
+      const k = String(x || '').toUpperCase().trim();
+      if (JALON_KEYS.indexOf(k) >= 0 && vus.indexOf(k) < 0) vus.push(k);
+    });
+    if (!vus.length) return [];
+    JALON_KEYS.forEach((k) => { if (vus.indexOf(k) < 0) vus.push(k); });
+    return vus;
+  })();
+
   return {
+    ordreEtapes,
     resume: str(raw.resume),
     synthese: str(raw.synthese),
     pointA: txt(raw.pointA),
@@ -307,6 +328,7 @@ function merge(base, s) {
     .forEach((k) => { if (s[k]) p[k] = s[k]; });
   if (s.organismes && s.organismes.length) { p.organismes = s.organismes; p.organisme = s.organismes[0] || ''; }
   if (s.renforces && s.renforces.length) p.renforces = s.renforces;
+  if (s.ordreEtapes && s.ordreEtapes.length) p.ordreEtapes = s.ordreEtapes;
 
   ['chiffres', 'ditClient', 'problemes', 'objectifs', 'kpis', 'risques'].forEach((k) => {
     if (s[k] && s[k].length) p[k] = s[k];

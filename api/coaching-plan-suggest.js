@@ -105,12 +105,19 @@ function buildPrompt(client, q, notes) {
   bloc.push('  M4 (mois 5)     Piloter par les chiffres et installer le relais.');
   bloc.push('  M5 (mois 6)     L\'entreprise tourne sans lui, la croissance peut repartir.');
   bloc.push('');
-  bloc.push('Ce qui varie d\'un dirigeant à l\'autre n\'est PAS l\'ordre, c\'est la PROFONDEUR :');
-  bloc.push('  urgence rentabilité → M3 renforcé (audit de marge amorcé dès le mois 1) ;');
-  bloc.push('  urgence équipe → M2 et M3 renforcés ;');
-  bloc.push('  recrutement déjà lancé → M4 renforcé.');
-  bloc.push('L\'acquisition ne s\'ouvre qu\'au M5, jamais avant : sur une organisation qui');
-  bloc.push('dépend encore du dirigeant, chaque nouveau client ajoute de la pression.');
+  bloc.push('M1→M5 est l\'ordre PAR DÉFAUT, pas une contrainte. C\'est le mentor qui');
+  bloc.push('bâtit le plan : si le verrou l\'exige, il commence ailleurs — par exemple');
+  bloc.push('par le pilotage et les marges quand la rentabilité brûle.');
+  bloc.push('⚠ SI LE MENTOR INDIQUE PAR OÙ COMMENCER, TU LE SUIS. Ses consignes');
+  bloc.push('  priment sur l\'ordre par défaut, toujours, sans discuter.');
+  bloc.push('  « il faut commencer par le pilotage, regarder les charges et les marges »');
+  bloc.push('  donne ordreEtapes = ["M4","M3", …] — surtout pas M1 en tête.');
+  bloc.push('Deux réglages, à ne pas confondre :');
+  bloc.push('  ordreEtapes = dans quel ORDRE on traite les milestones ;');
+  bloc.push('  renforces   = lesquels on APPROFONDIT, sans changer leur place.');
+  bloc.push('Repères habituels, quand rien n\'indique le contraire :');
+  bloc.push('  urgence rentabilité → M3 renforcé ; urgence équipe → M2 et M3 ;');
+  bloc.push('  recrutement déjà lancé → M4.')
   bloc.push('');
   bloc.push('Voici le questionnaire rempli à l\'inscription :');
   bloc.push('');
@@ -191,7 +198,12 @@ function buildPrompt(client, q, notes) {
     '   delivrabilite = le dirigeant est le goulot, rien ne tourne sans lui.',
     '   rentabilite  = ça produit du chiffre mais pas de résultat ni de trésorerie.',
     '   acquisition  = la machine tourne et est rentable, il manque du volume.',
-    '   ⚠ acquisition est TOUJOURS en dernier : c\'est une règle du programme.',
+    '   Suis ce que dit le mentor s\'il l\'a exprimé.',
+    '6. ordreEtapes — les cinq clés M1 à M5 dans l\'ordre où on traite CE dossier.',
+    '   Les cinq, une seule fois chacune, aucune omission.',
+    '   Par défaut ["M1","M2","M3","M4","M5"] — mais si le compte rendu ou les',
+    '   notes disent par où commencer, c\'est CELA qui décide, pas le défaut.',
+    '   La première étape de ta liste doit être celle qui lève le verrou.',
     '6. renforces — les milestones à renforcer pour ce dossier, parmi M1 à M5.',
     '   Zéro, un ou deux au maximum. Vide si rien ne le justifie.',
     '7. horizon12 / horizon36 — UNE phrase courte chacune : où cette entreprise',
@@ -227,13 +239,16 @@ function buildPrompt(client, q, notes) {
     '    qui a été décidé en séance avec lui.',
     '    ⚠ Ne renvoie PAS "preuve" : le critère de validation est fixé par le',
     '    programme et identique pour tous.',
-    '    ⚠ Tu ne changes NI l\'ordre NI les échéances des cinq milestones.',
+    '    ⚠ Tu ne changes pas les échéances : elles suivent la POSITION de',
+    '    l\'étape dans ordreEtapes, pas son numéro.',
+    '    ⚠ Le focus de la PREMIÈRE étape de ordreEtapes doit traiter le verrou.',
     '    Ce qui varie est la profondeur et la formulation, jamais la séquence.',
     '    ⚠ Aucune durée, aucune date, aucun délai dans les actions.',
     '',
     'Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code :',
     '{"pointA":"...","pointB":"...","verrou":"...","verrouPlan":"...",',
     ' "organismes":["...","...","..."],"renforces":["M3"],',
+    ' "ordreEtapes":["M1","M2","M3","M4","M5"],',
     ' "horizon12":"...","horizon36":"...","synthese":"...",',
     ' "chiffres":[{"label":"...","valeur":"..."}],',
     ' "ditClient":[{"titre":"...","detail":"..."}],',
@@ -283,7 +298,22 @@ function sanitize(raw) {
     .map(shape).filter(Boolean).slice(0, max);
   const CATS = ['Financier', 'Commercial', 'Opérationnel', 'Humain'];
 
+  /* Les cinq clés, une seule fois chacune, aucune omission : ce que le modèle
+     oublie revient à la fin dans l'ordre du programme. Un ordre incomplet
+     ferait disparaître une étape de la feuille de route. */
+  const ordreEtapes = (() => {
+    const vus = [];
+    (Array.isArray(raw.ordreEtapes) ? raw.ordreEtapes : []).forEach((x) => {
+      const k = String(x || '').toUpperCase().trim();
+      if (JALON_KEYS.indexOf(k) >= 0 && vus.indexOf(k) < 0) vus.push(k);
+    });
+    if (!vus.length) return [];
+    JALON_KEYS.forEach((k) => { if (vus.indexOf(k) < 0) vus.push(k); });
+    return vus;
+  })();
+
   return {
+    ordreEtapes,
     pointA: txt(raw.pointA),
     pointB: txt(raw.pointB),
     verrou: str(raw.verrou),
