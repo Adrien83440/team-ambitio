@@ -131,6 +131,12 @@ module.exports = async (req, res) => {
          la vague du 08/08 ils font quatre à huit phrases. */
       pointA: txt(plan.pointA, 4000),
       pointB: txt(plan.pointB, 4000),
+      /* LE LIEN DE RDV DU COACH RÉFÉRENT — la seule porte que le client doit
+         voir. Il ne choisit pas son expert : il prend rendez-vous avec le sien.
+         Schéma vérifié ici ET côté Academy : un lien qui n'est pas une adresse
+         web n'a rien à faire dans l'espace d'un dirigeant. */
+      coach: txt(plan.coach, 120),
+      lienRdv: /^https?:\/\//i.test(txt(plan.coachRdvUrl, 600)) ? txt(plan.coachRdvUrl, 600) : '',
       verrou: verrou,
       /* L'ORDRE CHOISI PAR LE COACH. Sans lui, l'Academy servait la feuille de
          route du programme et le client voyait un ordre qui n'était pas le
