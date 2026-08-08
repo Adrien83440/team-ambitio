@@ -132,6 +132,13 @@ module.exports = async (req, res) => {
       pointA: txt(plan.pointA, 4000),
       pointB: txt(plan.pointB, 4000),
       verrou: verrou,
+      /* L'ORDRE CHOISI PAR LE COACH. Sans lui, l'Academy servait la feuille de
+         route du programme et le client voyait un ordre qui n'était pas le
+         sien. Codes connus uniquement, sans doublon — l'Academy revalide de
+         son côté et re-cadence les repères sur la position, comme ici. */
+      ordreEtapes: (Array.isArray(plan.ordreEtapes) ? plan.ordreEtapes : [])
+        .map(function (k) { return String(k || '').trim(); })
+        .filter(function (k, i, t) { return CODES.indexOf(k) >= 0 && t.indexOf(k) === i; }),
       jalons: jalonsAEnvoyer(plan),
       majLe: txt(plan.updatedAt, 40),
       revision: Number(plan.version) || 0,
