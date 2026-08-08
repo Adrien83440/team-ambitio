@@ -115,8 +115,13 @@ module.exports = async (req, res) => {
 
     /* Miroir sur la demande de signature concernée, quand on la connaît :
        c'est ce que lit la page de signature pour arrêter de faire attendre
-       quelqu'un dont le SMS ne viendra jamais. */
-    const reqId = String(b.reqId || '').trim();
+       quelqu'un dont le SMS ne viendra jamais.
+
+       ⚠ reqId voyage dans la QUERY de l'URL de rappel, pas dans le corps :
+       Twilio ne recopie pas les paramètres d'URL dans les champs POST. Le lire
+       dans le body aurait toujours donné vide, et le miroir n'aurait jamais
+       été écrit — l'échec serait resté invisible côté page de signature. */
+    const reqId = String((req.query && req.query.reqId) || b.reqId || '').trim();
     if (reqId) {
       await db.collection('signature_otp').doc(reqId).set({
         livraison: { sid, statut, echec, errorCode: code, explication: trace.explication, at: Date.now() },
