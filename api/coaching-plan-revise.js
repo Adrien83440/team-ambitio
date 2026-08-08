@@ -40,7 +40,12 @@ const ROLES = ['admin', 'coach', 'csm'];
 const MODEL = 'claude-opus-5';
 
 const ORGANISMES = ['delivrabilite', 'rentabilite', 'acquisition'];
-const JALON_KEYS = ['A1', 'A2', 'A3', 'A4', 'A5', 'B'];
+/* Les 5 milestones du parcours 6 mois. Les anciennes clés A1→B restent
+   acceptées : un plan validé avant la bascule doit pouvoir être retouché
+   sans que ses étapes disparaissent. */
+const JALON_KEYS = ['M1', 'M2', 'M3', 'M4', 'M5'];
+const JALON_KEYS_LEGACY = ['A1', 'A2', 'A3', 'A4', 'A5', 'B'];
+const TOUTES_CLES = JALON_KEYS.concat(JALON_KEYS_LEGACY);
 const STATUTS = ['todo', 'wip', 'ok', 'ko'];
 const CATS = ['Financier', 'Commercial', 'Opérationnel', 'Humain'];
 
@@ -59,6 +64,22 @@ function num(v, min, max) {
 
 /* Le plan envoyé par le navigateur : on ne le rejoue au modèle qu'après
    l'avoir borné, sinon un plan corrompu ferait exploser le prompt. */
+/* Classement des trois organismes : les trois y sont toujours, sans doublon,
+   et l'acquisition finit dernière — règle du programme, pas préférence du
+   modèle. Même fonction que dans coaching-plan-suggest (inlinée : les
+   fichiers /api ne s'importent pas entre eux). */
+function ordreOrganismes(raw) {
+  const vus = [];
+  (Array.isArray(raw) ? raw : []).forEach((x) => {
+    const k = String(x || '').toLowerCase().trim();
+    if (ORGANISMES.indexOf(k) >= 0 && vus.indexOf(k) < 0) vus.push(k);
+  });
+  ORGANISMES.forEach((k) => { if (vus.indexOf(k) < 0) vus.push(k); });
+  const i = vus.indexOf('acquisition');
+  if (i >= 0 && i !== vus.length - 1) { vus.splice(i, 1); vus.push('acquisition'); }
+  return vus;
+}
+
 function planForPrompt(p) {
   const o = p && typeof p === 'object' ? p : {};
   return JSON.stringify({
@@ -66,7 +87,11 @@ function planForPrompt(p) {
     pointA: o.pointA || '',
     pointB: o.pointB || '',
     verrou: o.verrou || '',
-    organisme: o.organisme || '',
+    verrouPlan: o.verrouPlan || '',
+    horizon12: o.horizon12 || '',
+    horizon36: o.horizon36 || '',
+    organismes: Array.isArray(o.organismes) ? o.organismes : (o.organisme ? [o.organisme] : []),
+    renforces: Array.isArray(o.renforces) ? o.renforces : [],
     chiffres: Array.isArray(o.chiffres) ? o.chiffres.slice(0, 8) : [],
     ditClient: Array.isArray(o.ditClient) ? o.ditClient.slice(0, 7) : [],
     problemes: Array.isArray(o.problemes) ? o.problemes.slice(0, 5) : [],
@@ -116,11 +141,21 @@ function buildPrompt(plan, instructions, contexte) {
     '  dis-le dans « resume ».',
     '',
     'STRUCTURE À RESPECTER',
-    '- jalons : clés A1, A2, A3, A4, A5, B uniquement. Chaque jalon :',
-    '  {"titre":"...","focus":"une phrase","actions":["2 à 3 actions, verbe à',
-    '   l\'infinitif"],"preuve":"résultat observable","j":nombre de jours depuis J0}',
-    '  Repères par défaut : A1=J+10, A2=J+20, A3=J+45, A4=J+90, A5=J+135, B=J+180.',
-    '  Ne mets « j » que si le mentor demande de déplacer une étape.',
+    '- jalons : clés M1 à M5 (les 5 milestones du parcours 6 mois).',
+    '  M1 Libérer le temps · M2 Poser le cap et le cadre · M3 Déléguer pour de bon',
+    '  M4 Piloter par les chiffres et installer le relais · M5 L\'entreprise tourne sans lui.',
+    '  Chaque milestone : {"focus":"une phrase","actions":["2 à 3 actions, verbe à',
+    '   l\'infinitif"]}. Le titre et la victoire vérifiable sont fixés par le',
+    '  programme : ne les renvoie pas.',
+    '  ⚠ L\'ORDRE DES MILESTONES N\'EST PAS NÉGOCIABLE, quoi qu\'on te demande.',
+    '  Ce qui varie, c\'est la profondeur : « renforces » liste les milestones',
+    '  à approfondir pour ce dossier (0 à 2 parmi M1…M5).',
+    '  ⚠ Si le plan reçu utilise encore les anciennes clés A1…B, garde-les :',
+    '  on ne réécrit pas la trame d\'un plan déjà remis au client.',
+    '- verrouPlan : ce qu\'on fait pour lever le verrou. AUCUNE durée, aucune date.',
+    '- organismes : delivrabilite, rentabilite, acquisition classés du plus urgent',
+    '  au dernier. acquisition est TOUJOURS en dernier.',
+    '- horizon12 / horizon36 : une phrase courte chacune, sobre, sans chiffre inventé.',
     '- semaines : [{"n":1,"from":"AAAA-MM-JJ","to":"AAAA-MM-JJ","coach":"...",',
     '   "focus":"le point de focus de la séance",',
     '   "actions":[{"txt":"verbe + quoi + comment","who":"Client ou nom du coach",',
@@ -133,14 +168,16 @@ function buildPrompt(plan, instructions, contexte) {
     'Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans bloc de code.',
     'Il contient le plan COMPLET après correction, plus un champ « resume » :',
     '{"resume":"ce qui a changé, une ou deux phrases pour le mentor",',
-    ' "synthese":"...","pointA":"...","pointB":"...","verrou":"...","organisme":"...",',
+    ' "synthese":"...","pointA":"...","pointB":"...","verrou":"...","verrouPlan":"...",',
+    ' "organismes":["...","...","..."],"renforces":["M3"],',
+    ' "horizon12":"...","horizon36":"...",',
     ' "chiffres":[{"label":"...","valeur":"..."}],',
     ' "ditClient":[{"titre":"...","detail":"..."}],',
     ' "problemes":[{"titre":"...","detail":"..."}],',
     ' "objectifs":["..."],',
     ' "kpis":[{"cat":"...","nom":"...","freq":"...","actuel":"...","cible":"..."}],',
     ' "risques":[{"titre":"...","detail":"..."}],',
-    ' "jalons":{"A1":{"titre":"...","focus":"...","actions":["..."],"preuve":"..."}},',
+    ' "jalons":{"M1":{"focus":"...","actions":["..."]}},',
     ' "semaines":[{"n":1,"from":"...","to":"...","coach":"...","focus":"...",',
     '   "actions":[{"txt":"...","who":"...","due":"..."}]}]}',
   ]).join('\n');
@@ -161,19 +198,33 @@ function parseJson(txt) {
 function sanitize(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const str = (v) => String(v == null ? '' : v).trim().slice(0, 400);
+  const txt = (v) => String(v == null ? '' : v).trim().slice(0, 2500);
   const list = (arr, max, shape) => (Array.isArray(arr) ? arr : [])
     .map(shape).filter(Boolean).slice(0, max);
 
-  const org = ORGANISMES.indexOf(String(raw.organisme || '').toLowerCase()) >= 0
-    ? String(raw.organisme).toLowerCase() : '';
+  /* ⚠ Ici, contrairement à la génération, un classement absent doit rester
+     ABSENT. ordreOrganismes() complète toujours les trois : l'appeler sur du
+     vide produirait l'ordre par défaut, et merge() écraserait alors le
+     classement du coach à chaque retouche qui n'en parle pas. */
+  const organismes = (Array.isArray(raw.organismes) && raw.organismes.length)
+    ? ordreOrganismes(raw.organismes) : [];
+  const org = organismes[0] || '';
 
   return {
     resume: str(raw.resume),
     synthese: str(raw.synthese),
-    pointA: str(raw.pointA),
-    pointB: str(raw.pointB),
+    pointA: txt(raw.pointA),
+    pointB: txt(raw.pointB),
     verrou: str(raw.verrou),
+    verrouPlan: txt(raw.verrouPlan),
+    horizon12: str(raw.horizon12),
+    horizon36: str(raw.horizon36),
+    organismes,
     organisme: org,
+    renforces: (Array.isArray(raw.renforces) ? raw.renforces : [])
+      .map((x) => String(x || '').toUpperCase().trim())
+      .filter((k, i, t) => JALON_KEYS.indexOf(k) >= 0 && t.indexOf(k) === i)
+      .slice(0, 2),
     chiffres: list(raw.chiffres, 8, (x) => {
       const l = str(x && x.label), v = str(x && x.valeur);
       return (l && v) ? { label: l.slice(0, 40), valeur: v.slice(0, 40) } : null;
@@ -206,7 +257,7 @@ function sanitize(raw) {
     jalons: (() => {
       const src = raw.jalons && typeof raw.jalons === 'object' ? raw.jalons : {};
       const out = {};
-      JALON_KEYS.forEach((k) => {
+      TOUTES_CLES.forEach((k) => {
         const j = src[k];
         if (!j || typeof j !== 'object') return;
         const actions = (Array.isArray(j.actions) ? j.actions : [])
@@ -252,8 +303,10 @@ function sanitize(raw) {
 function merge(base, s) {
   const p = JSON.parse(JSON.stringify(base && typeof base === 'object' ? base : {}));
 
-  ['synthese', 'pointA', 'pointB', 'verrou'].forEach((k) => { if (s[k]) p[k] = s[k]; });
-  if (s.organisme) p.organisme = s.organisme;
+  ['synthese', 'pointA', 'pointB', 'verrou', 'verrouPlan', 'horizon12', 'horizon36']
+    .forEach((k) => { if (s[k]) p[k] = s[k]; });
+  if (s.organismes && s.organismes.length) { p.organismes = s.organismes; p.organisme = s.organismes[0] || ''; }
+  if (s.renforces && s.renforces.length) p.renforces = s.renforces;
 
   ['chiffres', 'ditClient', 'problemes', 'objectifs', 'kpis', 'risques'].forEach((k) => {
     if (s[k] && s[k].length) p[k] = s[k];

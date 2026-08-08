@@ -63,8 +63,57 @@
     }
   };
 
-  /* Les 6 jalons du programme — décalages en jours depuis J0. */
-  var JALONS = [
+  /* ═══════════════════════════════════════════════════════════════════
+     LES 5 MILESTONES — référentiel du parcours 6 mois
+     ───────────────────────────────────────────────────────────────────
+     Repris mot pour mot du document « Elite Phénix — parcours 6 mois,
+     version 2.0 du 31/07/2026 », qui remplace la version 9 mois.
+
+     ⚠ Les échéances sont des MOYENNES CONSTATÉES, pas des délais dus. Le
+     document est explicite : « Ce qui compte n'est pas la date, c'est qu'un
+     milestone soit validé avant d'ouvrir le suivant. » Elles sont donc
+     affichées en second plan, jamais comme un engagement.
+
+     ⚠ L'ORDRE N'EST PAS NÉGOCIABLE — « on ne délègue pas dans une
+     organisation dont personne ne connaît la direction ». Ce qui varie
+     d'un dirigeant à l'autre, c'est la PROFONDEUR donnée à chaque
+     milestone (champ « renforces » du plan), jamais leur ordre.
+
+     Les notes marquées « ne pas présenter au client » du document ne
+     figurent PAS ici : ce référentiel alimente aussi le lien client. */
+  var MILESTONES = [
+    { k: 'M1', j: 30,  periode: 'Mois 1',
+      obj: 'Libérer le temps du dirigeant',
+      objectif: 'Récupérer des heures dès le premier mois, sans rien casser, pour avoir de quoi travailler sur son entreprise au lieu de dedans.',
+      livrable: 'Outil 01 — Audit du temps complété, plan de sortie 30 jours daté et attribué.',
+      preuve: 'Un relevé chiffré de la semaine, une décision écrite sur chaque tâche, et les premières heures effectivement sorties : le comparatif de la semaine 5 avec la semaine 1, sur la même grille, le montre.' },
+    { k: 'M2', j: 60,  periode: 'Mois 2',
+      obj: 'Poser le cap et le cadre : vision, valeurs, organisation',
+      objectif: 'Décider où va l\'entreprise et quel est le rôle du dirigeant dedans, puis donner à chaque poste un périmètre, un standard et des indicateurs.',
+      livrable: 'Document de vision et de valeurs diffusé à l\'équipe. Outil 04 — Organigramme cible et fiches de poste signées.',
+      preuve: 'L\'équipe peut redire où va l\'entreprise et ce qui ne se négocie pas. Chaque poste a une fiche signée avec au moins deux indicateurs, et le rituel hebdomadaire tient quatre semaines sans relance du dirigeant.' },
+    { k: 'M3', j: 120, periode: 'Mois 3 et 4',
+      obj: 'Déléguer pour de bon, et faire en sorte que cela rapporte',
+      objectif: 'Transférer cinq à huit responsabilités qui ne reviennent pas, et s\'assurer que ce qui est vendu rapporte avant d\'en vendre davantage.',
+      livrable: 'Outil 02 — Matrice de délégation avec taux de conformité. Outil 05 — Trame de brief en usage. Outil 03 — Marge par offre et par client. Grille tarifaire arrêtée.',
+      preuve: 'Cinq responsabilités au moins au statut conforme, un taux de conformité supérieur à 70 % et deux reprises maximum du dirigeant. Chaque offre a un prix justifié par sa marge par heure.' },
+    { k: 'M4', j: 150, periode: 'Mois 5',
+      obj: 'Piloter par les chiffres et installer votre relais',
+      objectif: 'Remplacer la présence du dirigeant par un tableau de bord, et sa disponibilité permanente par quelqu\'un qui absorbe le quotidien.',
+      livrable: 'Outil 03 — Charges arbitrées et plan de trésorerie tenu. Outil 06 — Tableau de bord alimenté quatre semaines de suite par l\'équipe. Kit recrutement complété.',
+      preuve: 'L\'entreprise se lit en moins de quinze minutes par semaine sans reconstituer les chiffres, la visibilité cash est à trois mois, le relais est en poste, et une semaine complète passe sans arbitrage du dirigeant.' },
+    { k: 'M5', j: 180, periode: 'Mois 6',
+      obj: 'L\'entreprise tourne sans vous, et la croissance peut repartir',
+      objectif: 'Prouver que l\'entreprise tient en l\'absence du dirigeant, industrialiser ce qui repose encore sur des personnes, puis ouvrir l\'acquisition sur une structure capable de l\'absorber.',
+      livrable: 'Protocole de test d\'absence débriefé. Parcours client documenté. Blueprint de duplication et plan douze mois, validés en séance.',
+      preuve: 'Dix jours d\'absence, chiffre d\'affaires du mois tenu, aucune décision bloquée en attente du dirigeant.' }
+  ];
+
+  /* Les 6 jalons de l'ancienne trame. Conservés UNIQUEMENT pour continuer
+     d'afficher les plans validés avant le passage aux milestones : on ne
+     réécrit pas derrière le dos du coach un plan qu'il a déjà remis au
+     client. Aucun plan neuf ne les utilise. */
+  var JALONS_LEGACY = [
     { k: 'A1', j: 10,  obj: 'Identification des tâches + premiers process', preuve: '~30 % de charge allégée' },
     { k: 'A2', j: 20,  obj: 'Recrutement / désignation bras droit',         preuve: 'Dirigeant sorti du cycle de vente' },
     { k: 'A3', j: 45,  obj: 'Sortie de la production',                      preuve: 'Process tenus par l\'équipe sur 1 pôle' },
@@ -72,6 +121,22 @@
     { k: 'A5', j: 135, obj: 'Marge & trésorerie structurées',               preuve: 'Marge nette en progression' },
     { k: 'B',  j: 180, obj: 'Consolidation',                                preuve: '50 % tâches déléguées, croissance absorbée' }
   ];
+
+  /* Un plan porte-t-il l'ancienne trame ? On regarde ce qui est RÉELLEMENT
+     rempli, pas la version déclarée : un plan peut avoir été créé en v2 puis
+     retouché. Les clés M gagnent dès qu'elles apparaissent. */
+  function estLegacy(p) {
+    var j = (p && p.jalons) || {}, s = (p && p.jalonStatus) || {};
+    var aDesM = MILESTONES.some(function (m) { return j[m.k] || s[m.k]; });
+    if (aDesM) return false;
+    return JALONS_LEGACY.some(function (x) { return j[x.k] || s[x.k]; });
+  }
+
+  /* Les étapes d'UN plan donné. Tout le rendu passe par là. */
+  function etapes(p) { return estLegacy(p) ? JALONS_LEGACY : MILESTONES; }
+
+  /* Compat : l'ancien nom reste exporté et pointe sur le référentiel courant. */
+  var JALONS = MILESTONES;
 
   var STATUTS = {
     todo: { ico: '⬜', lbl: 'À venir', col: C.muted },
@@ -327,7 +392,25 @@
       '@keyframes cpspin2{to{transform:rotate(360deg)}}',
 
       /* Compteur d'actions faites, en tête de chaque semaine. */
-      '.cpv2-cnt{font-size:10.5px;font-weight:800;color:' + C.main + ';background:' + C.ghost + ';border-radius:999px;padding:2px 9px;white-space:nowrap}'
+      '.cpv2-cnt{font-size:10.5px;font-weight:800;color:' + C.main + ';background:' + C.ghost + ';border-radius:999px;padding:2px 9px;white-space:nowrap}',
+
+      /* Ordre de traitement : trois pastilles numérotées. */
+      '.cpv2-ordre{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:2px 0 4px}',
+      '.cpv2-ordre .cpv-org{display:inline-flex;align-items:center;gap:7px;margin:0}',
+      '.cpv2-ordre .cpv-org b{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:rgba(255,255,255,.28);font-size:10px}',
+      '.cpv2-ordre .cpv-org:nth-child(2){background:' + C.light + '}',
+      '.cpv2-ordre .cpv-org:nth-child(3){background:#9aa8d8}',
+
+      /* Milestone renforcé pour ce dossier. */
+      '.cpv2-renf{display:inline-block;margin-left:7px;font-size:9.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#8a5a08;background:#fff8ec;border:1px solid #f3dcc3;border-radius:999px;padding:1px 8px;vertical-align:1px}',
+
+      /* Livrable de contrôle du milestone. */
+      '.cpv-stepl{font-size:11.5px;line-height:1.5;color:' + C.dark + ';background:' + C.ghost + ';border-radius:8px;padding:7px 10px;margin-top:8px}',
+
+      /* Les deux repères longs — discrets par construction. */
+      '.cpv2-horizon{display:flex;gap:18px;flex-wrap:wrap;margin-top:13px;padding-top:11px;border-top:1px dashed ' + C.line + '}',
+      '.cpv2-horizon div{font-size:11.5px;color:' + C.muted + ';line-height:1.5;flex:1;min-width:180px}',
+      '.cpv2-horizon span{display:block;font-size:9.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + C.light + ';margin-bottom:2px}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -335,11 +418,16 @@
 
   function emptyPlan() {
     return {
-      version: 3,
+      version: 4,
       startDate: toYMD(new Date()),
       coach: '',
+      resume72h: '',            // le compte rendu du call des 72 h — la matière de base
       pointA: '', pointB: '',
-      verrou: '', organisme: '', synthese: '',
+      verrou: '',               // LE blocage à lever en premier
+      verrouPlan: '',           // ce qu'on va faire pour le lever — jamais de durée ici
+      horizon12: '',            // où l'entreprise doit être dans 12 mois
+      horizon36: '',            // et dans 3 ans — deux repères discrets, pas des objectifs
+      organisme: '', synthese: '',
       chiffres: [],             // [{label, valeur}]  repères du dossier
       ditClient: [],            // [{titre, detail}]  ce que le dirigeant a dit
       jalons: {},               // { A1:{titre, focus, actions[], preuve, j}, … }
@@ -361,6 +449,18 @@
      donnée existante n'est touchée. */
   function normalize(p) {
     if (!p || typeof p !== 'object') return emptyPlan();
+    /* Champs apparus avec la trame « milestones » : posés à l'ouverture plutôt
+       que testés partout ailleurs. Un plan d'avant continue de s'afficher. */
+    ['resume72h', 'verrouPlan', 'horizon12', 'horizon36', 'prioriteNote'].forEach(function (k) {
+      if (typeof p[k] !== 'string') p[k] = '';
+    });
+    if (!Array.isArray(p.renforces)) p.renforces = [];
+    if (!Array.isArray(p.organismes)) {
+      /* Reprise de l'ancien champ « un seul organisme » : on ne perd pas le
+         choix déjà fait par le coach. */
+      p.organismes = p.organisme ? [p.organisme] : [];
+    }
+    if (!p.organisme && p.organismes.length) p.organisme = p.organismes[0];
     if (!p.collecte || typeof p.collecte !== 'object') p.collecte = {};
     if (typeof p.vocal !== 'string') p.vocal = '';
     if (!Array.isArray(p.historique)) p.historique = [];
@@ -470,10 +570,16 @@
   function applySuggestion(overwrite) {
     var s = W.sugg, p = W.plan;
     if (!s) return;
-    ['pointA', 'pointB', 'verrou'].forEach(function (k) {
+    ['pointA', 'pointB', 'verrou', 'verrouPlan', 'horizon12', 'horizon36'].forEach(function (k) {
       if (s[k] && (overwrite || isTodo(p[k]))) p[k] = s[k];
     });
-    if (s.organisme && (overwrite || !p.organisme)) p.organisme = s.organisme;
+    if ((s.organismes || []).length && (overwrite || !(p.organismes || []).length)) {
+      p.organismes = s.organismes.slice();
+      p.organisme = p.organismes[0] || '';
+    }
+    if ((s.renforces || []).length && (overwrite || !(p.renforces || []).length)) {
+      p.renforces = s.renforces.slice();
+    }
     if (s.synthese && (overwrite || isTodo(p.synthese))) p.synthese = s.synthese;
     ['chiffres', 'ditClient', 'problemes', 'objectifs', 'kpis', 'risques'].forEach(function (k) {
       if ((s[k] || []).length && (overwrite || !(p[k] || []).length)) p[k] = s[k];
@@ -554,11 +660,11 @@
   }
 
   var STEPS = [
-    { key: 'cadrage',   t: 'Cadrage',            ico: '📆', sub: 'Date de démarrage et coach référent — toutes les échéances en découlent.' },
-    { key: 'pointA',    t: 'Point A',            ico: '📍', sub: 'La situation aujourd\'hui, en une phrase factuelle et sans jugement.' },
-    { key: 'pointB',    t: 'Point B à J180',     ico: '🎯', sub: 'L\'objectif à 6 mois, concret et mesurable.' },
-    { key: 'verrou',    t: 'Verrou & organisme', ico: '🔒', sub: 'Le vrai problème, et l\'organisme qu\'il bloque.' },
-    { key: 'semaine',   t: 'Semaine 1',          ico: '⚡', sub: 'Le diagnostic initial. 3 actions maximum, chacune avec un responsable et une date.' }
+    { key: 'cadrage',   t: 'Cadrage',            ico: '📆', sub: 'Le compte rendu du call des 72 h et le coach référent — tout le plan part de là.' },
+    { key: 'pointA',    t: 'Point A',            ico: '📍', sub: 'La situation de départ, telle que le dirigeant la vit aujourd\'hui.' },
+    { key: 'pointB',    t: 'Point B à 6 mois',   ico: '🎯', sub: 'Où il veut être dans six mois. Ses objectifs, avec ses mots et ses chiffres.' },
+    { key: 'verrou',    t: 'Verrou principal',   ico: '🔒', sub: 'Le blocage à lever en premier, et ce qu\'on va faire pour le lever.' },
+    { key: 'priorites', t: 'Priorités',          ico: '🧭', sub: 'L\'ordre de traitement, et les milestones à renforcer pour ce dossier.' }
   ];
 
   function ensureDom() {
@@ -661,7 +767,20 @@
       '.cp-draft-bar{font-size:11.5px;line-height:1.5;background:#fdf6e6;border:1px solid #f0dfae;color:#8a6412;border-radius:9px;padding:9px 11px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}',
       '.cp-draft-bar button{border:1px solid currentColor;background:none;color:inherit;border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit}',
       '.cp-draft{font-size:11px;color:' + C.muted + ';white-space:nowrap;transition:opacity .3s}',
-      '.cp-draft.off{opacity:0}'
+      '.cp-draft.off{opacity:0}',
+
+      /* ── Trame milestones : grandes zones, classement, renforcement ── */
+      '.cp-f textarea.cp-grand{min-height:150px;line-height:1.6}',
+      '.cp-deux{display:grid;grid-template-columns:1fr 1fr;gap:12px}',
+      '@media(max-width:560px){.cp-deux{grid-template-columns:1fr}}',
+      '.cp-org button .r{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:' + C.main + ';color:#fff;font-size:10px;margin-right:6px;vertical-align:-2px}',
+      '.cp-ms{display:flex;flex-direction:column;gap:7px}',
+      '.cp-ms label{display:flex;gap:10px;align-items:flex-start;border:1.5px solid ' + C.line + ';border-radius:11px;padding:10px 12px;cursor:pointer;background:#fff;transition:all .12s}',
+      '.cp-ms label.on{border-color:' + C.main + ';background:' + C.ghost + '}',
+      '.cp-ms label:hover{border-color:' + C.light + '}',
+      '.cp-ms input{margin-top:3px;flex-shrink:0;accent-color:' + C.main + '}',
+      '.cp-ms .t{display:block;font-size:12.5px;font-weight:800;color:' + C.dark + '}',
+      '.cp-ms .d{display:block;font-size:11px;color:' + C.muted + ';line-height:1.5;margin-top:2px}'
     ].join('\n');
     document.head.appendChild(css);
 
@@ -873,67 +992,69 @@
       var p = W.plan;
       var d0 = fromYMD(p.startDate);
       var apercu = d0
-        ? JALONS.map(function (j) { return j.k + ' ' + frDate(jalonDate(p, jOf(p, j))); }).join(' · ')
+        ? etapes(p).map(function (j) { return j.k + ' ' + frDate(jalonDate(p, jOf(p, j))); }).join(' · ')
         : '';
-      return f('Date de démarrage (J0)', '<input type="date" id="cpStart" value="' + esc(p.startDate || '') + '">',
-              apercu ? 'Échéances calculées : ' + esc(apercu) : 'Les 6 jalons sont datés à partir de J0.')
+      return f('📋 Compte rendu du call des 72 h',
+          '<textarea id="cpResume" class="cp-grand" placeholder="Colle ici le compte rendu du call — ou clique sur le micro et raconte-le. C\'est la matière première : le point A, le point B et le verrou en découlent.">'
+          + esc(p.resume72h || '') + '</textarea>',
+          'Tout le plan est généré à partir de ça et du questionnaire. Plus c\'est précis ici, plus le plan sera juste.',
+          'cpResume')
+        + '<div class="cp-deux">'
+        + f('Date de démarrage (J0)', '<input type="date" id="cpStart" value="' + esc(p.startDate || '') + '">',
+              apercu ? 'Repères : ' + esc(apercu) : 'Les échéances des milestones se calculent à partir de J0.')
         + f('Coach référent', '<input type="text" id="cpCoach" value="' + esc(p.coach || '') + '" placeholder="Prénom du coach">',
-              'La semaine 1 reste menée par Adrien / Emily — le coach prend la main en semaine 2.')
-        + collecteBlock('cadrage', 'Ex : dispo le mardi matin uniquement, associé à convaincre, comptable qui rend les bilans avec 4 mois de retard…');
+              'Un coach référent unique du premier au dernier jour.')
+        + '</div>';
     },
     pointA: function () {
-      return f('Point A — la situation aujourd\'hui',
-        '<textarea id="cpA" placeholder="Ex : CA de 22K€/mois, trésorerie à 0, la dirigeante est présente sur tous les postes.">' + esc(W.plan.pointA || '') + '</textarea>',
-        'Une phrase, au présent, factuelle et sans jugement. Reprends les chiffres du questionnaire — n\'en invente aucun : si une donnée manque, laisse-la de côté.',
-        'cpA')
-        + collecteBlock('pointA', 'Ex : chiffres qu\'il t\'a donnés de vive voix, ce que tu as vu sur place, ce qui ne colle pas avec le questionnaire…');
+      return f('Point A — la situation de départ',
+        '<textarea id="cpA" class="cp-grand" placeholder="Généré à partir du compte rendu et du questionnaire. Ce que le dirigeant vit aujourd\'hui, avec ses chiffres.">' + esc(W.plan.pointA || '') + '</textarea>',
+        'Le constat, au présent, factuel et sans jugement — précis et détaillé. Reprends ses mots et ses chiffres ; n\'en invente aucun.',
+        'cpA');
     },
     pointB: function () {
-      return f('Point B — l\'objectif à J180',
-        '<textarea id="cpB" placeholder="Ex : 30K€/mois, marge brute à 30 %, tableau de bord actif, 50 % des tâches déléguées.">' + esc(W.plan.pointB || '') + '</textarea>',
-        'Une phrase concrète et mesurable. Ce qui n\'est pas mesurable ne se pilote pas.',
-        'cpB')
-        + collecteBlock('pointB', 'Ex : ce qu\'il dit vouloir vraiment, ses contraintes (emprunt, associé, saison), ce qu\'il refuse de faire…');
+      return f('Point B — où il veut être dans 6 mois',
+        '<textarea id="cpB" class="cp-grand" placeholder="Généré à partir du compte rendu, du questionnaire et de la synthèse de réunion. Ses objectifs à six mois.">' + esc(W.plan.pointB || '') + '</textarea>',
+        'Détaillé et concret : ce sont SES objectifs à six mois, pas les nôtres. Ce qui n\'est pas mesurable ne se pilote pas.',
+        'cpB');
     },
     verrou: function () {
       var p = W.plan;
-      var h = f('Verrou principal',
-        '<textarea id="cpVerrou" placeholder="Ex : Pas de prévisionnel, aucun suivi de marge — pilotage à l\'instinct depuis 5 ans.">' + esc(p.verrou || '') + '</textarea>',
-        'Une phrase qui nomme le vrai problème — pas le symptôme.',
+      var h = f('Le verrou principal',
+        '<textarea id="cpVerrou" placeholder="Le plus gros blocage aujourd\'hui — celui qu\'on doit lever en priorité.">' + esc(p.verrou || '') + '</textarea>',
+        'Le vrai problème, pas le symptôme. C\'est lui qui décide par où on attaque, et il oriente les premiers coachings.',
         'cpVerrou');
-      h += '<div class="cp-f"><label>Organisme bloqué (un seul)</label><div class="cp-org" id="cpOrg">';
-      Object.keys(ORGANISMES).forEach(function (k) {
-        h += '<button type="button" data-org="' + k + '" class="' + (p.organisme === k ? 'on' : '') + '">' + ORGANISMES[k].label + '</button>';
-      });
-      h += '</div><div class="hint" id="cpOrgNote">' + (p.organisme ? esc(ORGANISMES[p.organisme].note) : 'Ordre de traitement : Délivrabilité → Rentabilité → Acquisition.') + '</div></div>';
-      h += collecteBlock('verrou', 'Ex : ce qu\'il a déjà essayé et qui a échoué, les tensions dans l\'équipe, ce qu\'il ne veut pas entendre…');
+      h += f('Ce qu\'on va faire pour le lever',
+        '<textarea id="cpVerrouPlan" class="cp-grand" placeholder="Explique — ou dicte — ce qui doit être fait pour lever ce verrou.">' + esc(p.verrouPlan || '') + '</textarea>',
+        '⚠ Aucune durée ici. Ce qui compte n\'est pas la date, c\'est que ce soit levé — le rythme dépend de l\'avancement et de la validation du coach.',
+        'cpVerrouPlan');
       return h;
     },
-    semaine: function () {
+    priorites: function () {
       var p = W.plan;
-      if (!p.semaines || !p.semaines.length) p.semaines = [semaine1(p)];
-      var s = p.semaines[0];
-      if (!Array.isArray(s.actions)) s.actions = [];
-      var h = '<div class="hint" style="margin-bottom:14px">'
-        + 'La semaine 1 est le diagnostic initial, mené par Adrien / Emily. Elle est pré-remplie — ajuste si besoin. '
-        + 'Les semaines suivantes se saisissent après chaque séance, dans « Modifier le plan ».</div>';
-      h += f('Point de focus de la séance',
-        '<input type="text" id="cpFocus" value="' + esc(s.focus || '') + '" placeholder="Ce qu\'on cherche à obtenir cette semaine">',
-        null, 'cpFocus');
-      /* 3 emplacements TOUJOURS affichés : une action vide reste modifiable,
-         alors qu'auparavant une ligne effacée disparaissait de l'écran. */
-      for (var i = 0; i < 3; i++) {
-        var a = s.actions[i] || {};
-        h += '<div class="cp-act">'
-          + '<label>Action ' + (i + 1) + (i > 0 ? ' <span style="font-weight:600;text-transform:none;letter-spacing:0">(facultative)</span>' : '') + mic('cpAct' + i) + '</label>'
-          + '<input type="text" id="cpAct' + i + '" data-atxt="' + i + '" value="' + esc(a.txt || '') + '" placeholder="Verbe d\'action + quoi + comment">'
-          + '<div class="row">'
-          + '<input type="text" data-awho="' + i + '" value="' + esc(a.who || '') + '" placeholder="Responsable (Client, Adrien…)">'
-          + '<input type="date" data-adue="' + i + '" value="' + esc(a.due || '') + '" title="Échéance">'
-          + '</div></div>';
-      }
-      h += '<div class="hint">Chaque action commence par un verbe, porte un responsable et une date. Une action sans date n\'existe pas.</div>';
-      h += collecteBlock('semaine', 'Ex : ce qu\'il s\'est engagé à faire, les documents qu\'il doit t\'envoyer, la date de la prochaine séance…');
+      var ordre = Array.isArray(p.organismes) ? p.organismes : [];
+      var h = '<div class="cp-f"><label>Ordre de traitement</label><div class="cp-org" id="cpOrg">';
+      Object.keys(ORGANISMES).forEach(function (k) {
+        var rang = ordre.indexOf(k);
+        h += '<button type="button" data-org="' + k + '" class="' + (rang >= 0 ? 'on' : '') + '">'
+          + (rang >= 0 ? '<span class="r">' + (rang + 1) + '</span>' : '') + ORGANISMES[k].label + '</button>';
+      });
+      h += '</div><div class="hint">Clique dans l\'ordre où on les traite. L\'acquisition ne s\'ouvre qu\'une fois que la machine tient sans lui — c\'est une règle du programme, pas une préférence.'
+        + (ordre.length ? '<br>' + esc(ORGANISMES[ordre[0]].note) : '') + '</div></div>';
+
+      h += '<div class="cp-f"><label>Milestones à renforcer pour ce dossier</label><div class="cp-ms">';
+      MILESTONES.forEach(function (m) {
+        var on = (p.renforces || []).indexOf(m.k) >= 0;
+        h += '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-renf="' + m.k + '"' + (on ? ' checked' : '') + '>'
+          + '<span><span class="t">' + m.k + ' · ' + esc(m.obj) + '</span>'
+          + '<span class="d">' + esc(m.periode) + ' — ' + esc(m.objectif) + '</span></span></label>';
+      });
+      h += '</div><div class="hint">Le chemin est le même pour tous ; la profondeur donnée à chaque milestone, non. '
+        + 'Urgence rentabilité → renforcer M3. Urgence équipe → M2 et M3. Recrutement déjà lancé → M4.</div></div>';
+
+      h += f('Note de priorisation',
+        '<textarea id="cpPrioNote" placeholder="Pourquoi cet ordre pour ce dirigeant-là.">' + esc(p.prioriteNote || '') + '</textarea>',
+        null, 'cpPrioNote');
       return h;
     }
   };
@@ -942,18 +1063,34 @@
     if (key === 'cadrage') {
       document.getElementById('cpStart').addEventListener('change', function () {
         W.plan.startDate = this.value;
-        /* Les échéances de la semaine 1 suivent J0 tant qu'on est dans
-           l'assistant : sinon le diagnostic serait daté d'avant le départ. */
-        W.plan.semaines = [semaine1(W.plan)];
         go(W.step);
       });
     }
-    if (key === 'verrou') {
+    if (key === 'priorites') {
+      /* Clic = on ajoute à la suite du classement ; re-clic = on retire et les
+         suivants remontent. Pas de glisser-déposer : trois éléments, autant
+         que ça marche au doigt sur un portable. */
       Array.prototype.forEach.call(document.querySelectorAll('#cpOrg button'), function (b) {
         b.addEventListener('click', function () {
           collect();
-          W.plan.organisme = b.getAttribute('data-org');
+          var k = b.getAttribute('data-org');
+          var o = Array.isArray(W.plan.organismes) ? W.plan.organismes.slice() : [];
+          var i = o.indexOf(k);
+          if (i >= 0) o.splice(i, 1); else o.push(k);
+          W.plan.organismes = o;
+          /* Le champ historique reste alimenté : tout ce qui l'affiche
+             (plans existants, PDF, lien client) continue de fonctionner. */
+          W.plan.organisme = o[0] || '';
           go(W.step);
+        });
+      });
+      /* Les cases se marquent sans re-rendu : re-peindre l'étape ferait
+         perdre le focus et la position de défilement à chaque clic. */
+      Array.prototype.forEach.call(document.querySelectorAll('[data-renf]'), function (c) {
+        c.addEventListener('change', function () {
+          var lab = c.closest ? c.closest('label') : null;
+          if (lab) { if (c.checked) lab.classList.add('on'); else lab.classList.remove('on'); }
+          collect();
         });
       });
     }
@@ -966,9 +1103,19 @@
     var v;
     if ((v = g('cpStart')) !== null) p.startDate = v;
     if ((v = g('cpCoach')) !== null) p.coach = v.trim();
+    if ((v = g('cpResume')) !== null) p.resume72h = v.trim();
     if ((v = g('cpA')) !== null) p.pointA = v.trim();
     if ((v = g('cpB')) !== null) p.pointB = v.trim();
     if ((v = g('cpVerrou')) !== null) p.verrou = v.trim();
+    if ((v = g('cpVerrouPlan')) !== null) p.verrouPlan = v.trim();
+    if ((v = g('cpPrioNote')) !== null) p.prioriteNote = v.trim();
+    /* Milestones renforcés — lus seulement si l'étape est à l'écran, sinon on
+       viderait la liste en naviguant. */
+    var cases = document.querySelectorAll('#cpMain [data-renf]');
+    if (cases.length) {
+      p.renforces = Array.prototype.filter.call(cases, function (c) { return c.checked; })
+        .map(function (c) { return c.getAttribute('data-renf'); });
+    }
     var focus = g('cpFocus');
     if (focus !== null) {
       if (!p.semaines || !p.semaines.length) p.semaines = [semaine1(p)];
@@ -997,7 +1144,7 @@
 
   function finish() {
     var p = W.plan;
-    JALONS.forEach(function (j) { if (!p.jalonStatus[j.k]) p.jalonStatus[j.k] = 'todo'; });
+    etapes(p).forEach(function (j) { if (!p.jalonStatus[j.k]) p.jalonStatus[j.k] = 'todo'; });
     p.updatedAt = new Date().toISOString();
     if (!p.createdAt) p.createdAt = p.updatedAt;
     /* Le plan part en base : le brouillon n'a plus lieu d'être, et le garder
@@ -1065,14 +1212,37 @@
       p.objectifs.forEach(function (o) { h += '<li>' + esc(o) + '</li>'; });
       h += '</ul>';
     }
+    /* Les deux repères longs. Volontairement discrets et en fin de bloc :
+       ce ne sont pas des objectifs du parcours, juste la direction qu'on
+       garde en tête pendant les six mois. */
+    if (!isTodo(p.horizon12) || !isTodo(p.horizon36)) {
+      h += '<div class="cpv2-horizon">';
+      if (!isTodo(p.horizon12)) h += '<div><span>Dans 12 mois</span>' + esc(p.horizon12) + '</div>';
+      if (!isTodo(p.horizon36)) h += '<div><span>Dans 3 ans</span>' + esc(p.horizon36) + '</div>';
+      h += '</div>';
+    }
     h += '</div>';
 
     /* BLOC — Diagnostic : verrou, organisme, problématiques */
-    var org = ORGANISMES[p.organisme];
+    var ordre = (p.organismes && p.organismes.length) ? p.organismes : (p.organisme ? [p.organisme] : []);
+    var org = ORGANISMES[ordre[0]];
     h += blocOpen(++n, '🔍', 'Diagnostic');
     h += '<div class="cpv-k">Verrou principal</div><div class="cpv-p' + (isTodo(p.verrou) ? ' todo' : '') + '">' + esc(val(p.verrou)) + '</div>';
-    h += '<div class="cpv-k" style="margin-top:13px">Priorité de traitement</div>';
-    h += '<div class="cpv-org">' + (org ? esc(org.label) : TODO) + '</div>';
+    if (!isTodo(p.verrouPlan)) {
+      h += '<div class="cpv-k" style="margin-top:13px">Ce qu\'on fait pour le lever</div>'
+        + '<div class="cpv-p">' + esc(p.verrouPlan) + '</div>';
+    }
+    h += '<div class="cpv-k" style="margin-top:13px">Ordre de traitement</div>';
+    if (ordre.length) {
+      h += '<div class="cpv2-ordre">';
+      ordre.forEach(function (k, i) {
+        if (!ORGANISMES[k]) return;
+        h += '<span class="cpv-org"><b>' + (i + 1) + '</b>' + esc(ORGANISMES[k].label) + '</span>';
+      });
+      h += '</div>';
+    } else {
+      h += '<div class="cpv-org">' + TODO + '</div>';
+    }
     if ((p.problemes || []).length) {
       h += '<div class="cpv-k" style="margin-top:13px">Ce qui bloque aujourd\'hui</div><div class="cpv-pbs">';
       p.problemes.forEach(function (x) {
@@ -1090,35 +1260,45 @@
     h += progBar(p);
     h += roadSvg(p);
     h += '<div class="cpv-steps">';
-    JALONS.forEach(function (j) {
+    etapes(p).forEach(function (j) {
       var st = STATUTS[p.jalonStatus && p.jalonStatus[j.k]] || STATUTS.todo;
       var c = (p.jalons || {})[j.k] || {};
       var jj = jOf(p, j);
       /* Liseré coloré à gauche : le statut se lit sans chercher le bouton. */
       h += '<div class="cpv-step ' + (st === STATUTS.ok ? 'done' : '') + '" style="border-left:4px solid ' + st.col + '">';
+      var renf = (p.renforces || []).indexOf(j.k) >= 0;
       h += '<div class="cpv-steph"><span class="b" style="border-color:' + st.col + ';color:' + st.col + '">' + j.k + '</span>'
-        + '<span class="t">' + esc(jalonTitre(p, j)) + '</span>'
-        + '<span class="dt">' + esc(frDate(jalonDate(p, jj))) + ' · J+' + jj + '</span>'
+        + '<span class="t">' + esc(jalonTitre(p, j)) + (renf ? '<span class="cpv2-renf">renforcé</span>' : '') + '</span>'
+        + '<span class="dt">' + (j.periode ? esc(j.periode) + ' · ' : '') + 'repère ' + esc(frDate(jalonDate(p, jj))) + '</span>'
         + (ro
             ? '<span class="cpv-st ro" style="color:' + st.col + '">' + st.ico + ' ' + st.lbl + '</span>'
             : '<button class="cpv-st" data-cp-jalon="' + j.k + '" data-cp-id="' + esc(clientId || '') + '" style="color:' + st.col + '">' + st.ico + ' ' + st.lbl + '</button>')
         + '</div>';
       if (c.focus) h += '<div class="cpv-stepf">' + esc(c.focus) + '</div>';
+      else if (j.objectif) h += '<div class="cpv-stepf">' + esc(j.objectif) + '</div>';
       if ((c.actions || []).length) {
         h += '<ul class="cpv-ul">';
         c.actions.forEach(function (a) { h += '<li>' + esc(a) + '</li>'; });
         h += '</ul>';
       }
+      if (j.livrable) h += '<div class="cpv-stepl">📎 ' + esc(j.livrable) + '</div>';
       h += '<div class="cpv-stepp">Preuve attendue : ' + esc(jalonPreuve(p, j)) + '</div>';
       h += '</div>';
     });
     h += '</div>';
-    h += '<div class="cpv-rule">Une étape manquée → on cherche la cause avant d\'avancer. Jamais un simple report.</div>';
+    /* La règle du programme, mot pour mot : c'est elle qui justifie que les
+       dates soient au second plan partout ailleurs. */
+    h += '<div class="cpv-rule">Les échéances sont des <b>moyennes constatées</b>. Ce qui compte n\'est pas la date, '
+      + 'c\'est qu\'un milestone soit <b>validé avant d\'ouvrir le suivant</b>.<br>'
+      + 'Une étape manquée → on cherche la cause avant d\'avancer. Jamais un simple report.</div>';
     h += '</div>';
 
     /* BLOC — Actions de la semaine */
+    /* Bloc affiché seulement s'il porte quelque chose. La trame milestones ne
+       crée plus de « semaine 1 » d'office ; les plans qui en ont déjà une la
+       gardent, et le coach peut toujours en ajouter depuis l'éditeur. */
+    if ((p.semaines || []).length) {
     h += blocOpen(++n, '⚡', 'Actions de la semaine');
-    if (!(p.semaines || []).length) h += '<div class="cpv-p todo">' + TODO + '</div>';
     (p.semaines || []).forEach(function (s, si) {
       var tot = (s.actions || []).length;
       var faites = (s.actions || []).filter(function (a) { return a && a.st === 'ok'; }).length;
@@ -1140,6 +1320,7 @@
       h += '</div>';
     });
     h += '</div>';
+    }
 
     /* BLOC — Indicateurs de pilotage */
     if ((p.kpis || []).length) {
@@ -1174,10 +1355,11 @@
      les tailles, et il sort proprement à l'impression — une image matricielle
      baverait. Les positions sont calculées, pas dessinées à la main. */
   function roadSvg(p) {
-    var n = JALONS.length;
+    var LIST = etapes(p);
+    var n = LIST.length;
     var W_ = 300, STEP = 108, TOP = 46, PAD = 58;
     var H = TOP + (n - 1) * STEP + PAD;
-    var pts = JALONS.map(function (j, i) {
+    var pts = LIST.map(function (j, i) {
       return { x: (i % 2 === 0) ? 86 : 214, y: TOP + i * STEP, j: j, i: i };
     });
     /* Tracé : une courbe douce d'un jalon au suivant (S-curve verticale). */
@@ -1223,11 +1405,12 @@
   /* Où on en est, en une ligne : plus lisible qu'un parcours à décoder. */
   function progBar(p) {
     var ok = 0;
-    JALONS.forEach(function (j) { if ((p.jalonStatus || {})[j.k] === 'ok') ok++; });
-    var pct = Math.round(ok / JALONS.length * 100);
+    var LIST = etapes(p);
+    LIST.forEach(function (j) { if ((p.jalonStatus || {})[j.k] === 'ok') ok++; });
+    var pct = Math.round(ok / LIST.length * 100);
     return '<div class="cpv2-prog"><span class="lb">Avancement</span>'
       + '<span class="tr"><span class="fi" style="width:' + pct + '%"></span></span>'
-      + '<span class="vv">' + ok + ' / ' + JALONS.length + ' étapes · ' + pct + ' %</span></div>';
+      + '<span class="vv">' + ok + ' / ' + LIST.length + ' étapes · ' + pct + ' %</span></div>';
   }
 
   /* Retouche en langage naturel + accès à l'éditeur manuel. Le bouton porte
@@ -1307,7 +1490,8 @@
       '.ce-foot{display:flex;align-items:center;gap:9px;padding:13px 20px;border-top:1px solid ' + C.line + ';background:#fff;flex-wrap:wrap}',
       '.ce-org{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}',
       '.ce-org button{border:1.5px solid ' + C.line + ';background:#fff;border-radius:10px;padding:10px 8px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:800;color:' + C.muted + '}',
-      '.ce-org button.on{border-color:' + C.main + ';background:' + C.ghost + ';color:' + C.main + '}'
+      '.ce-org button.on{border-color:' + C.main + ';background:' + C.ghost + ';color:' + C.main + '}',
+      '.ce-org button .r{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:' + C.main + ';color:#fff;font-size:10px;margin-right:6px;vertical-align:-2px}'
     ].join('\n');
     document.head.appendChild(css);
 
@@ -1364,7 +1548,15 @@
       var add = t.getAttribute('data-add');
       var del = t.getAttribute('data-del');
       var org = t.getAttribute('data-eorg');
-      if (org) E.plan.organisme = (E.plan.organisme === org) ? '' : org;
+      if (org) {
+        /* Même logique que l'assistant : clic = on ajoute au classement,
+           re-clic = on retire et les suivants remontent. */
+        var oe = Array.isArray(E.plan.organismes) ? E.plan.organismes.slice() : [];
+        var ie = oe.indexOf(org);
+        if (ie >= 0) oe.splice(ie, 1); else oe.push(org);
+        E.plan.organismes = oe;
+        E.plan.organisme = oe[0] || '';
+      }
       else if (add) editorAdd(add);
       else if (del) editorDel(del);
       paintEditor(true);
@@ -1529,9 +1721,12 @@
 
     /* 1. Cadrage */
     h += ceSection('📆 Cadrage',
-      '<div class="ce-grid">'
+      ceF('Compte rendu du call des 72 h',
+          ceTa('data-e="resume72h"', p.resume72h, 'La matière première du plan.', 'ceResume'),
+          'C\'est de là que sortent le point A, le point B et le verrou. Repris par l\'IA à chaque régénération.', 'ceResume')
+      + '<div class="ce-grid">'
       + ceF('Date de démarrage (J0)', ceIn('data-e="startDate"', p.startDate, '', 'date'),
-            'Toutes les échéances des 6 étapes sont recalculées à partir d\'ici.')
+            'Les repères des milestones se recalculent à partir d\'ici.')
       + ceF('Coach référent', ceIn('data-e="coach"', p.coach, 'Prénom du coach'))
       + '</div>'
       + ceF('Ce qu\'on vise en 6 mois', ceTa('data-e="synthese"', p.synthese, 'La phrase qui résume l\'accompagnement, affichée en tête du plan.', 'ceSynthese'),
@@ -1551,31 +1746,40 @@
         })());
 
     /* 3. Diagnostic */
+    var ordreE = Array.isArray(p.organismes) ? p.organismes : [];
     h += ceSection('🔍 Diagnostic',
       ceF('Verrou principal', ceTa('data-e="verrou"', p.verrou, 'Le vrai problème — pas le symptôme.', 'ceVerrou'), null, 'ceVerrou')
-      + '<div class="ce-f"><label>Organisme bloqué (un seul)</label><div class="ce-org">'
+      + ceF('Ce qu\'on fait pour le lever', ceTa('data-e="verrouPlan"', p.verrouPlan, 'Ce qui doit être fait.', 'ceVerrouPlan'),
+            'Aucune durée ici : le rythme dépend de l\'avancement et de la validation du coach.', 'ceVerrouPlan')
+      + '<div class="ce-f"><label>Ordre de traitement</label><div class="ce-org">'
       + Object.keys(ORGANISMES).map(function (k) {
-          return '<button type="button" data-eorg="' + k + '" class="' + (p.organisme === k ? 'on' : '') + '">' + ORGANISMES[k].label + '</button>';
+          var r = ordreE.indexOf(k);
+          return '<button type="button" data-eorg="' + k + '" class="' + (r >= 0 ? 'on' : '') + '">'
+            + (r >= 0 ? '<span class="r">' + (r + 1) + '</span>' : '') + ORGANISMES[k].label + '</button>';
         }).join('')
-      + '</div><div class="ce-hint">Ordre de traitement : Délivrabilité → Rentabilité → Acquisition. Re-clic pour désélectionner.</div></div>'
+      + '</div><div class="ce-hint">Clique dans l\'ordre où on les traite ; re-clic pour retirer. L\'acquisition ne s\'ouvre qu\'au dernier milestone.</div></div>'
+      + '<div class="ce-grid">'
+      + ceF('Dans 12 mois', ceTa('data-e="horizon12"', p.horizon12, 'Repère de direction, discret.', 'ceH12'), null, 'ceH12')
+      + ceF('Dans 3 ans', ceTa('data-e="horizon36"', p.horizon36, 'Repère de direction, discret.', 'ceH36'), null, 'ceH36')
+      + '</div>'
       + '<label style="display:block;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.muted + ';margin-bottom:6px">Ce qui bloque aujourd\'hui</label>'
       + ceListeTD('problemes', p.problemes, 'Problématique', 'Une phrase factuelle'));
 
     /* 4. Les 6 étapes */
     var hj = '';
-    JALONS.forEach(function (j) {
+    etapes(p).forEach(function (j) {
       var c = (p.jalons || {})[j.k] || {};
       var acts = (c.actions || []).slice(0, 3);
       while (acts.length < 3) acts.push('');
       hj += '<div class="ce-j">'
         + '<div class="ce-jh"><span class="ce-jk">' + j.k + '</span>'
-        + '<span class="ce-jn">Repère du programme : ' + j.obj + ' — J+' + j.j + '</span>'
+        + '<span class="ce-jn">' + (j.periode ? j.periode + ' — ' : '') + j.obj + '</span>'
         + ceStatut('data-j="' + j.k + '.st" style="max-width:150px"', (p.jalonStatus || {})[j.k])
         + '</div>'
         + '<div class="ce-grid">'
         + ceF('Titre de l\'étape', ceIn('data-j="' + j.k + '.titre"', c.titre, j.obj))
-        + ceF('Échéance — jours depuis J0', ceIn('data-j="' + j.k + '.j"', (typeof c.j === 'number' ? c.j : ''), 'Par défaut : ' + j.j, 'number'),
-              'Vide = ' + j.j + ' jours (le repère du programme). Date calculée : ' + frDate(jalonDate(p, jOf(p, j))))
+        + ceF('Repère — jours depuis J0', ceIn('data-j="' + j.k + '.j"', (typeof c.j === 'number' ? c.j : ''), 'Par défaut : ' + j.j, 'number'),
+              'Vide = ' + j.j + ' jours. Repère indicatif, pas un délai dû : ' + frDate(jalonDate(p, jOf(p, j))))
         + '</div>'
         + ceF('Ce qu\'on traite à cette étape', ceTa('data-j="' + j.k + '.focus"', c.focus, 'Une phrase.', 'ceJf' + j.k), null, 'ceJf' + j.k)
         + '<label style="display:block;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:' + C.muted + ';margin-bottom:6px">Actions de l\'étape</label>'
@@ -1586,7 +1790,7 @@
               'Un fait vérifiable sans discussion. Vide = « ' + j.preuve + ' ».')
         + '</div>';
     });
-    h += ceSection('🛣️ Les 6 étapes', hj);
+    h += ceSection('🛣️ Les 5 milestones', hj);
 
     /* 5. Semaines */
     var hs = '';
@@ -1866,7 +2070,8 @@
     var nom = (client && (client.nom || client.name || client.prenom)) || '';
     doc.text(nom + (p.coach ? '   ·   Coach : ' + p.coach : ''), M, 22.5);
     doc.setFontSize(8.5); doc.setTextColor(210, 222, 255);
-    var jFin = jOf(p, JALONS[JALONS.length - 1]);
+    var LISTE_PDF = etapes(p);
+    var jFin = jOf(p, LISTE_PDF[LISTE_PDF.length - 1]);
     doc.text('Démarrage ' + frDate(p.startDate) + '   ·   Horizon J+' + jFin + ' : ' + frDate(jalonDate(p, jFin)), M, 28.5);
     y = 46;
 
@@ -1878,27 +2083,47 @@
     text('POINT B — À J180', M, 8, 'bold', C.muted);
     text(val(p.pointB), M, 10.5, 'normal', isTodo(p.pointB) ? C.muted : C.ink);
 
+    /* Les deux repères longs, discrets, juste après le point B. */
+    if (!isTodo(p.horizon12) || !isTodo(p.horizon36)) {
+      y += 2;
+      if (!isTodo(p.horizon12)) {
+        text('DANS 12 MOIS', M, 7.4, 'bold', C.light);
+        text(p.horizon12, M, 9, 'italic', C.muted);
+      }
+      if (!isTodo(p.horizon36)) {
+        text('DANS 3 ANS', M, 7.4, 'bold', C.light);
+        text(p.horizon36, M, 9, 'italic', C.muted);
+      }
+    }
+
     /* ── 2. Verrou ── */
-    bloc(2, 'Verrou principal & organisme bloqué');
+    bloc(2, 'Verrou principal');
     text('VERROU IDENTIFIÉ', M, 8, 'bold', C.muted);
     text(val(p.verrou), M, 10.5, 'normal', isTodo(p.verrou) ? C.muted : C.ink);
+    if (!isTodo(p.verrouPlan)) {
+      y += 2.5;
+      text('CE QU\'ON FAIT POUR LE LEVER', M, 8, 'bold', C.muted);
+      text(p.verrouPlan, M, 10, 'normal', C.ink);
+    }
     y += 2.5;
-    var org = ORGANISMES[p.organisme];
-    text('ORGANISME BLOQUÉ', M, 8, 'bold', C.muted);
-    text(org ? org.label : TODO, M, 13, 'bold', org ? C.main : C.muted);
+    var ordrePdf = (p.organismes && p.organismes.length) ? p.organismes : (p.organisme ? [p.organisme] : []);
+    var org = ORGANISMES[ordrePdf[0]];
+    text('ORDRE DE TRAITEMENT', M, 8, 'bold', C.muted);
+    text(ordrePdf.length
+      ? ordrePdf.map(function (k, i) { return (i + 1) + '. ' + (ORGANISMES[k] ? ORGANISMES[k].label : k); }).join('   ')
+      : TODO, M, 12, 'bold', ordrePdf.length ? C.main : C.muted);
     y += 1.5;
-    text('Ordre de traitement : Délivrabilité → Rentabilité → Acquisition', M, 9, 'italic', C.muted);
     if (org) text(org.note, M, 9, 'italic', C.muted);
 
     /* ── 3. Jalons ── */
-    bloc(3, 'Les 6 jalons datés');
+    bloc(3, estLegacy(p) ? 'Les 6 jalons datés' : 'Les 5 milestones');
     var cols = [16, 26, 62, 52, 22];
     var xs = [M]; cols.forEach(function (c, i) { xs.push(xs[i] + c); });
     fill(C.ghost); doc.rect(M, y - 4, w, 7, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(7.6); color(C.dark);
-    ['JALON', 'ÉCHÉANCE', 'OBJECTIF', 'PREUVE ATTENDUE', 'STATUT'].forEach(function (t, i) { doc.text(t, xs[i] + 1.5, y); });
+    [estLegacy(p) ? 'JALON' : 'ÉTAPE', 'REPÈRE', 'CHANTIER', 'VICTOIRE VÉRIFIABLE', 'STATUT'].forEach(function (t, i) { doc.text(t, xs[i] + 1.5, y); });
     y += 5.5;
-    JALONS.forEach(function (j) {
+    LISTE_PDF.forEach(function (j) {
       need(13);
       var st = STATUTS[p.jalonStatus && p.jalonStatus[j.k]] || STATUTS.todo;
       var jj = jOf(p, j);
@@ -1920,7 +2145,10 @@
       draw(C.line); doc.setLineWidth(0.15); doc.line(M, y - 1.4, M + w, y - 1.4);
     });
     y += 1.5;
-    text('Un jalon manqué → analyse de cause avant de continuer. Jamais un simple report.', M, 8.4, 'italic', C.muted);
+    text(estLegacy(p)
+      ? 'Un jalon manqué → analyse de cause avant de continuer. Jamais un simple report.'
+      : 'Les échéances sont des moyennes constatées. Ce qui compte n\'est pas la date, c\'est qu\'un milestone soit validé avant d\'ouvrir le suivant.',
+      M, 8.4, 'italic', C.muted);
 
     /* ── 4. Actions ── */
     bloc(4, 'Actions de la semaine');
