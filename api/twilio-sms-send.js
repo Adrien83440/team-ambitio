@@ -31,10 +31,14 @@
 // 7. Retourne OK au frontend (sync, pas de polling)
 //
 // Notes :
-// - Pas besoin de statusCallback pour cette v1 — Twilio garantit que si
-//   messages.create() renvoie sans erreur, le SMS est bien envoyé (ou en
-//   queue). Les échecs de délivrabilité (numéro invalide, opérateur qui
-//   bloque) pourront être trackés plus tard via un webhook dédié.
+// - ⚠ CORRECTION (08/08/2026) : ce fichier affirmait que « Twilio garantit que
+//   si messages.create() renvoie sans erreur, le SMS est bien envoyé ». C'EST
+//   FAUX. Un retour sans erreur signifie seulement que Twilio a ACCEPTÉ le
+//   message. La livraison peut échouer ensuite — en France, un envoi depuis un
+//   numéro non déclaré est régulièrement filtré par l'opérateur (code 30007),
+//   et Twilio ne le signale QUE de façon asynchrone, via statusCallback.
+//   Cette croyance a rendu invisible pendant des semaines le problème des
+//   codes de signature qui n'arrivaient pas. Voir api/twilio-sms-status.js.
 // - On délègue la normalisation E.164 à normalizePhone() avant l'envoi.
 // ============================================================================
 

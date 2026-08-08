@@ -2,8 +2,13 @@
 // api/signature-otp.js — CODE SMS DE SIGNATURE (envoi + vérification)
 // ----------------------------------------------------------------------------
 // POST /api/signature-otp
-//   { action: 'send',   reqId, signerIndex? }  → 200 { ok:true, phoneHint }
+//   { action: 'send',   reqId, signerIndex? }  → 200 { ok:true, phoneHint, sid }
 //   { action: 'verify', reqId, code }          → 200 { ok:true } | 400 { error }
+//   { action: 'status', reqId }                → 200 { ok:true, etat, explication }
+//
+// « status » repond ce que Twilio a fini par faire du SMS : en_cours, livre
+// ou echec. Sans lui, un message filtre par l'operateur laissait le
+// signataire attendre indefiniment devant un « ✅ Code envoye ».
 //
 // POURQUOI CET ENDPOINT
 // ---------------------
@@ -84,8 +89,8 @@ module.exports = async (req, res) => {
   const action = String(body.action || '');
   const reqId = typeof body.reqId === 'string' ? body.reqId.trim() : '';
   if (!reqId) { res.status(400).json({ error: 'reqId requis' }); return; }
-  if (action !== 'send' && action !== 'verify') {
-    res.status(400).json({ error: 'action doit valoir send ou verify' });
+  if (action !== 'send' && action !== 'verify' && action !== 'status') {
+    res.status(400).json({ error: 'action doit valoir send, verify ou status' });
     return;
   }
 
@@ -125,7 +130,9 @@ module.exports = async (req, res) => {
       }
 
       /* On ecrit le code AVANT d'envoyer : si Twilio repond apres un timeout
-         Vercel, le client aura quand meme recu son SMS et le code sera valide. */
+         Vercel, le client aura quand meme recu son SMS et le code sera valide.
+         `livraison` est remis a zero : le statut d'un envoi precedent ne doit
+         pas faire croire a un echec sur le nouveau. */
       await otpRef.set({
         code,
         signerIndex,
@@ -133,15 +140,26 @@ module.exports = async (req, res) => {
         sends,
         attempts: 0,
         expiresAt: Date.now() + OTP_TTL_MS,
+        livraison: admin.firestore.FieldValue.delete(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
       const client = await getTwilioClient();
+      let msg = null;
       try {
-        await client.messages.create({
+        /* statusCallback : SANS LUI, ON NE SAIT RIEN. `messages.create()` qui
+           rend la main veut seulement dire que Twilio a ACCEPTÉ le message —
+           pas qu'il arrivera. C'est exactement ce qui rendait invisible le
+           probleme des codes qui n'arrivent pas : 200 cote API, « code
+           envoye » a l'ecran, et un SMS filtre par l'operateur.
+           reqId voyage dans l'URL pour que le rappel sache quelle demande
+           mettre a jour. */
+        msg = await client.messages.create({
           from: smsFrom,
           to,
           body: 'Votre code de signature : ' + code + '\nValable 10 minutes. Ne le communiquez à personne.',
+          statusCallback: 'https://' + (req.headers['x-forwarded-host'] || req.headers.host)
+            + '/api/twilio-sms-status?reqId=' + encodeURIComponent(reqId),
         });
       } catch (twilioErr) {
         console.error('[signature-otp] Twilio error:', twilioErr && twilioErr.message, twilioErr && twilioErr.code);
@@ -152,7 +170,29 @@ module.exports = async (req, res) => {
         return;
       }
 
-      res.status(200).json({ ok: true, phoneHint: phoneHint(to) });
+      /* Trace de l'envoi : le SID permet de retrouver le message dans Twilio
+         et de recouper avec le rappel de statut. */
+      console.log('[signature-otp] envoyé sid=' + (msg && msg.sid) + ' statut=' + (msg && msg.status)
+        + ' from=' + smsFrom + ' vers=' + phoneHint(to));
+      await otpRef.set({ sid: (msg && msg.sid) || null }, { merge: true }).catch(function () { /* trace seule */ });
+
+      res.status(200).json({ ok: true, phoneHint: phoneHint(to), sid: (msg && msg.sid) || null });
+      return;
+    }
+
+    // ─── OÙ EN EST LE SMS ? ────────────────────────────────────────────────
+    /* La page interroge ce point apres l'envoi. Tant que Twilio n'a pas
+       tranche, on repond « en cours » ; des qu'il signale un echec, la page
+       cesse de faire patienter quelqu'un pour rien. Aucun secret ne sort
+       d'ici : ni le code, ni le numero complet. */
+    if (action === 'status') {
+      const snap = await otpRef.get();
+      const L = (snap.exists && snap.data() && snap.data().livraison) || null;
+      res.status(200).json({
+        ok: true,
+        etat: L ? (L.echec ? 'echec' : (L.statut === 'delivered' ? 'livre' : 'en_cours')) : 'en_cours',
+        explication: (L && L.explication) || '',
+      });
       return;
     }
 

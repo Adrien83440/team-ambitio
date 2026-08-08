@@ -59,6 +59,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
 .info-box{padding:12px 16px;border-radius:10px;font-size:13px;margin:12px 0;}
 .info-box.blue{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.15);color:var(--accent);}
 .info-box.green{background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.15);color:var(--green);}
+.info-box.red{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.2);color:#dc2626;line-height:1.55;text-align:left;}
 .loader{display:flex;align-items:center;justify-content:center;gap:8px;padding:60px;color:var(--muted);font-size:14px;}
 .spinner{width:20px;height:20px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -92,6 +93,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
       <div class="otp-wrap" id="otpInputs"></div>
       <button class="btn btn-primary" id="otpVerifyBtn" onclick="verifyOtp()">Vérifier</button>
       <div style="text-align:center;margin-top:10px"><button class="btn btn-outline" style="font-size:12px;padding:6px 14px" onclick="requestOtp()">🔄 Renvoyer</button></div>
+      <div class="info-box red" id="otpFail" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -336,17 +338,49 @@ function requestOtp(){
     }
     b.textContent='✅ Code envoyé';hide('otpSendWrap');show('otpVerifyWrap');
     document.getElementById('otp0').focus();
+    otpSurveiller();
   }).catch(function(e){
     b.disabled=false;b.textContent='📱 Recevoir le code';
     alert('Connexion indisponible : '+e.message);
   });
 }
+/* Twilio ACCEPTE un message sans garantir qu'il arrive : en France, un envoi
+   depuis un numero non declare est regulierement filtre par l'operateur.
+   Sans cette surveillance, la page affichait « ✅ Code envoye » et le
+   signataire attendait un SMS qui ne viendrait jamais, sans rien pour le lui
+   dire. On interroge donc le statut reel, et on parle des qu'il est mauvais. */
+var otpTimer=null;
+function otpSurveiller(){
+  var essais=0;
+  var f=document.getElementById('otpFail');
+  if(f){f.style.display='none';f.innerHTML='';}
+  clearInterval(otpTimer);
+  otpTimer=setInterval(function(){
+    essais++;
+    if(essais>20){clearInterval(otpTimer);return;}   /* ~1 minute suffit */
+    otpCall({action:'status',reqId:REQ_ID}).then(function(o){
+      if(!o.ok||!o.j)return;
+      if(o.j.etat==='echec'){clearInterval(otpTimer);otpNonRecu(o.j.explication||'');}
+      else if(o.j.etat==='livre'){clearInterval(otpTimer);}
+    }).catch(function(){/* reseau : on retentera au tour suivant */});
+  },3000);
+}
+function otpNonRecu(pourquoi){
+  var f=document.getElementById('otpFail');
+  if(!f)return;
+  f.innerHTML='<strong>Le SMS n\'a pas pu être remis à votre téléphone.</strong>'
+    +(pourquoi?'<br>'+pourquoi:'')
+    +'<br><br>Inutile d\'attendre : contactez votre conseiller. Il peut vous envoyer '
+    +'le document à signer par e-mail.';
+  f.style.display='';
+}
+
 function verifyOtp(){
   var code='';for(var i=0;i<6;i++)code+=document.getElementById('otp'+i).value;
   if(code.length!==6){alert('Entrez les 6 chiffres.');return;}
   var b=document.getElementById('otpVerifyBtn');b.disabled=true;b.textContent='Vérification…';
   otpCall({action:'verify',reqId:REQ_ID,code:code}).then(function(o){
-    if(o.ok&&o.j.ok){goToStep(2);return;}
+    if(o.ok&&o.j.ok){clearInterval(otpTimer);goToStep(2);return;}
     /* Panne de notre cote (5xx) : on laisse passer, comme le faisait l'ancien
        parcours quand la Cloud Function ne repondait pas. Un code FAUX (400) ou
        trop de tentatives (429) bloquent, eux. */
