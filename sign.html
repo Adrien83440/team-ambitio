@@ -605,13 +605,29 @@ async function doSubmit(){
         fetch('/api/academy-grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:REQ_ID,token:new URLSearchParams(location.search).get('t')||''})}).catch(function(e){console.warn('[academy-grant]',e&&e.message);});
       }catch(e){}
     } else {
-      // Trigger SMS vers le signataire 2 — action gérée côté backend (cf. snippet L2)
+      /* ⚠ Ce document webhook_inbox n'envoie PLUS rien (Cloud Function
+         redeployee sans ses handlers signature) : le 2e signataire n'etait
+         JAMAIS prevenu. Garde comme trace ; l'envoi reel est juste en dessous. */
       await db.collection('webhook_inbox').add({
         action:'signature_resend',
         signatureRequestId:REQ_ID,
         targetSignerIndex:CURRENT_SIGNER_IDX+1,
         createdAt:firebase.firestore.FieldValue.serverTimestamp()
       });
+      /* Le token du lien courant prouve qu'on est bien sur ce dossier : c'est
+         la porte d'entree publique de l'endpoint (le signataire n'a pas de
+         compte). Fire-and-forget : la signature du 1er est deja enregistree,
+         elle ne doit pas dependre de la notification du 2e. */
+      try{
+        fetch('/api/signature-send-link',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            requestId:REQ_ID,
+            signerIndex:CURRENT_SIGNER_IDX+1,
+            token:new URLSearchParams(location.search).get('t')||''
+          })
+        }).catch(function(e){console.warn('[lien signataire 2]',e&&e.message);});
+      }catch(e){}
     }
 
     goToStep(3);
