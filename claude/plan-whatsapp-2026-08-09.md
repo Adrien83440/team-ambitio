@@ -205,8 +205,11 @@ Trois règles de Meta à respecter, sinon c'est refusé sans explication utile :
 - catégorie **Utilitaire** (*Utility*) pour tout ce qui suit. Basculer en
   *Marketing* coûterait plus cher et exigerait un consentement distinct.
 
-Langue : `fr`. Les clients sont vouvoyés, les coachs tutoyés — dis-moi si tu
-préfères autre chose pour les coachs.
+Langue : `fr`. **Tutoiement pour tout le monde**, clients compris — décision
+d'Adrien du 09/08/2026. C'est un écart assumé à la règle « emails clients :
+vouvoiement » du CLAUDE.md : elle vaut pour Alteore, le SaaS. Ici on est dans
+l'accompagnement Ambitio, où le tutoiement est la norme entre coach et coaché.
+Ne pas « corriger » ces textes vers le vouvoiement.
 
 ### `coach_assigne` — vers le coach *(vague 1)*
 > Bonjour {{1}}, tu es désormais le coach référent de {{2}} ({{3}}). Sa fiche
@@ -216,21 +219,21 @@ préfères autre chose pour les coachs.
 `{{1}}` prénom du coach · `{{2}}` nom du client · `{{3}}` entreprise
 
 ### `rappel_rdv_j1` — vers le client *(vague 2)*
-> Bonjour {{1}}, petit rappel : votre séance de coaching avec {{2}} a lieu
-> demain {{3}} à {{4}}. Si vous ne pouvez pas être présent, prévenez-nous au
-> plus tôt, nous la replacerons.
+> Salut {{1}}, petit rappel : ta séance de coaching avec {{2}} a lieu demain
+> {{3}} à {{4}}. Si tu ne peux pas être là, préviens-nous au plus tôt, on la
+> replacera.
 
 `{{1}}` prénom du client · `{{2}}` prénom du coach · `{{3}}` date · `{{4}}` heure
 
 ### `rappel_rdv_h2` — vers le client *(vague 2)*
-> Bonjour {{1}}, votre séance avec {{2}} commence dans deux heures, à {{3}}.
+> Salut {{1}}, ta séance avec {{2}} commence dans deux heures, à {{3}}.
 > À tout à l'heure !
 
 `{{1}}` prénom du client · `{{2}}` prénom du coach · `{{3}}` heure
 
 ### `invitation_groupe` — vers l'équipe et le client *(vague 3)*
-> Bonjour {{1}}, le groupe de suivi de {{2}} vient d'être créé. Rejoignez-le
-> pour recevoir les points d'étape et échanger directement avec l'équipe.
+> Salut {{1}}, le groupe de suivi de {{2}} vient d'être créé. Rejoins-le pour
+> recevoir les points d'étape et échanger directement avec l'équipe.
 
 `{{1}}` prénom du destinataire · `{{2}}` nom du client
 
@@ -240,16 +243,16 @@ d'invitation collé dans le corps du message passe beaucoup moins bien la
 validation qu'un bouton dont la base est fixe.
 
 ### `bienvenue_groupe_1` — dans le groupe *(vague 3)*
-> Bienvenue dans le groupe de suivi de {{1}} ! Vous y retrouvez {{2}}, votre
-> coach référent, ainsi que l'équipe qui vous accompagne. C'est ici que nous
-> partagerons les points d'étape et les rappels de séance.
+> Bienvenue dans le groupe de suivi de {{1}} ! Tu y retrouves {{2}}, ton coach
+> référent, ainsi que l'équipe qui t'accompagne. C'est ici qu'on partagera les
+> points d'étape et les rappels de séance.
 
 `{{1}}` nom du client · `{{2}}` prénom du coach
 
 ### `bienvenue_groupe_2` — dans le groupe *(vague 3)*
-> Première étape : votre séance de cadrage avec {{1}}. Vous pouvez la réserver
-> dès maintenant depuis votre espace Academy. Une question d'ici là ? Posez-la
-> directement ici, nous vous répondons.
+> Première étape : ta séance de cadrage avec {{1}}. Tu peux la réserver dès
+> maintenant depuis ton espace Academy. Une question d'ici là ? Pose-la
+> directement ici, on te répond.
 
 `{{1}}` prénom du coach
 
