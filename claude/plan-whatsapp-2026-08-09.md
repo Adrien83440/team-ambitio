@@ -160,16 +160,22 @@ C'est un budget distinct de celui de Twilio : deux canaux, deux factures.
 
 ---
 
-## 7. Ce qu'il reste à trancher
+## 7. Décisions — toutes prises
 
-Une seule question ouverte : **le clic d'invitation est-il acceptable ?**
-Si non, le repli raisonnable est que les rappels partent en tête-à-tête à chaque
-membre — moins convivial, mais réellement automatique et sans dépendre de
-l'Official Business Account.
+| Question | Décision | Date |
+|---|---|---|
+| Meta en direct ou intermédiaire ? | **Meta en direct** | 09/08/2026 |
+| WhatsApp greffé sur Twilio ou canal séparé ? | **Canal séparé, Twilio intact** | 09/08/2026 |
+| Où vont les identifiants ? | `_config/whatsapp_credentials`, document propre | 09/08/2026 |
+| Les six clics d'invitation sont-ils acceptables ? | **Oui** — le repli en tête-à-tête est abandonné | 09/08/2026 |
 
-Tout le reste est décidé. Je n'écris pas de code avant que le numéro de test
-réponde : sans identifiants, rien ne serait testable, et on ne construit pas en
-spéculatif.
+Plus rien n'est en attente d'arbitrage. Le projet n'attend que les démarches
+Meta du §3.
+
+Je n'écris pas de code avant que le numéro de test réponde : sans identifiants
+rien ne serait testable, et on ne construit pas en spéculatif. En revanche les
+modèles de messages, eux, ne dépendent d'aucun identifiant et prennent des jours
+à se faire approuver — ils sont rédigés en annexe, prêts à soumettre.
 
 ---
 
@@ -181,3 +187,78 @@ groupe ne peut pas servir à la coordination interne — il en faut un autre.
 **RGPD.** Le numéro de chaque participant devient visible des autres membres :
 c'est une donnée personnelle partagée avec des tiers. À mentionner dans les
 conditions, et il faut pouvoir sortir quelqu'un d'un groupe sur demande.
+
+---
+
+## 9. Annexe — les modèles, prêts à soumettre
+
+À déposer dans le gestionnaire de modèles de Meta dès que le WABA existe
+(étape 3 du §3). **Aucun identifiant n'est nécessaire pour ça** : c'est le
+travail à faire en parallèle des démarches, et c'est ce qui évite d'attendre
+une semaine de plus après coup.
+
+Trois règles de Meta à respecter, sinon c'est refusé sans explication utile :
+- le corps ne peut **ni commencer ni finir par une variable**, et deux variables
+  ne peuvent pas se toucher ;
+- chaque variable doit être **accompagnée d'un exemple** au moment de la
+  soumission — un modèle sans exemples est rejeté ;
+- catégorie **Utilitaire** (*Utility*) pour tout ce qui suit. Basculer en
+  *Marketing* coûterait plus cher et exigerait un consentement distinct.
+
+Langue : `fr`. Les clients sont vouvoyés, les coachs tutoyés — dis-moi si tu
+préfères autre chose pour les coachs.
+
+### `coach_assigne` — vers le coach *(vague 1)*
+> Bonjour {{1}}, tu es désormais le coach référent de {{2}} ({{3}}). Sa fiche
+> coaching est à jour dans Alteore : tu y retrouves son plan d'action, ses
+> jalons et ses échéances. Bon accompagnement !
+
+`{{1}}` prénom du coach · `{{2}}` nom du client · `{{3}}` entreprise
+
+### `rappel_rdv_j1` — vers le client *(vague 2)*
+> Bonjour {{1}}, petit rappel : votre séance de coaching avec {{2}} a lieu
+> demain {{3}} à {{4}}. Si vous ne pouvez pas être présent, prévenez-nous au
+> plus tôt, nous la replacerons.
+
+`{{1}}` prénom du client · `{{2}}` prénom du coach · `{{3}}` date · `{{4}}` heure
+
+### `rappel_rdv_h2` — vers le client *(vague 2)*
+> Bonjour {{1}}, votre séance avec {{2}} commence dans deux heures, à {{3}}.
+> À tout à l'heure !
+
+`{{1}}` prénom du client · `{{2}}` prénom du coach · `{{3}}` heure
+
+### `invitation_groupe` — vers l'équipe et le client *(vague 3)*
+> Bonjour {{1}}, le groupe de suivi de {{2}} vient d'être créé. Rejoignez-le
+> pour recevoir les points d'étape et échanger directement avec l'équipe.
+
+`{{1}}` prénom du destinataire · `{{2}}` nom du client
+
+**Avec un bouton « Rejoindre le groupe »**, en URL dynamique : base fixe
+`https://chat.whatsapp.com/`, suffixe variable. C'est important — un lien
+d'invitation collé dans le corps du message passe beaucoup moins bien la
+validation qu'un bouton dont la base est fixe.
+
+### `bienvenue_groupe_1` — dans le groupe *(vague 3)*
+> Bienvenue dans le groupe de suivi de {{1}} ! Vous y retrouvez {{2}}, votre
+> coach référent, ainsi que l'équipe qui vous accompagne. C'est ici que nous
+> partagerons les points d'étape et les rappels de séance.
+
+`{{1}}` nom du client · `{{2}}` prénom du coach
+
+### `bienvenue_groupe_2` — dans le groupe *(vague 3)*
+> Première étape : votre séance de cadrage avec {{1}}. Vous pouvez la réserver
+> dès maintenant depuis votre espace Academy. Une question d'ici là ? Posez-la
+> directement ici, nous vous répondons.
+
+`{{1}}` prénom du coach
+
+### `rappel_coaching_groupe` — dans le groupe *(vague 4)*
+> Point d'étape sur le parcours de {{1}} : le jalon « {{2}} » est prévu pour le
+> {{3}}. On fait le point ensemble à la prochaine séance.
+
+`{{1}}` nom du client · `{{2}}` intitulé du jalon · `{{3}}` date
+
+⚠️ Meta exige des modèles **dédiés aux groupes** : `bienvenue_groupe_1/2` et
+`rappel_coaching_groupe` ne peuvent pas être réutilisés en tête-à-tête, et
+inversement. C'est pour ça qu'ils sont nommés séparément.
