@@ -2,79 +2,64 @@
 
 *09/08/2026 — demande d'Adrien : rappels WhatsApp aux clients, notification au
 coach quand il est assigné, et un groupe automatique par client (closeuse,
-Marine, Emily, Adrien, coach) avec les deux premiers messages envoyés seuls.
-Rien n'existe côté WhatsApp aujourd'hui. En revanche, une bonne partie de la
-plomberie existe déjà — c'est le point le plus important de ce plan.*
+Marine, Emily, Adrien, coach) avec les deux premiers messages envoyés seuls.*
+
+> **DÉCISION D'ADRIEN, 09/08/2026 — actée.**
+> WhatsApp passe par **l'API Meta en direct**, comme un **canal entièrement
+> séparé**. **Twilio n'est pas touché** : il continue à faire exactement ce
+> qu'il fait aujourd'hui (SMS, voix, Ringover). Aucun fichier `twilio-*` ni
+> `_twilio*` n'est modifié par ce chantier.
 
 ---
 
-## 1. La bonne nouvelle : la moitié du travail est déjà faite
+## 1. Ce à quoi on ne touche pas
 
-Twilio est **déjà branché de bout en bout** dans ce repo :
+Twilio est déjà branché de bout en bout dans ce repo — `_twilioClient.js`,
+`_twilioSignature.js`, `twilio-sms-send/-inbound/-status.js`, la dépendance npm,
+les identifiants dans `_config/telco_credentials`. **Tout cela reste tel quel.**
 
-| Ce qui existe | Fichier |
-|---|---|
-| Le client Twilio partagé, avec cache | `api/_twilioClient.js` |
-| Les identifiants, **rangés dans Firestore** (`_config/telco_credentials`) | idem |
-| La vérification de signature des webhooks entrants | `api/_twilioSignature.js` |
-| L'envoi de SMS, la réception, le suivi de statut | `api/twilio-sms-send.js`, `-inbound.js`, `-status.js` |
-| La dépendance npm `twilio` | `package.json` |
-| Trois crons quotidiens qui tournent déjà | `vercel.json` |
+Deux canaux distincts, qui ne se croisent jamais :
 
-Conséquence directe : **si on passe par Twilio, il n'y a ni nouvelle dépendance
-npm, ni nouvelle variable d'environnement.** Les identifiants WhatsApp iraient
-dans le document Firestore qui contient déjà ceux de Twilio. C'est la voie la
-plus courte, et de loin.
+| | Twilio | WhatsApp |
+|---|---|---|
+| Sert à | SMS, voix, Ringover | rappels, notifications, groupe |
+| Client | `api/_twilioClient.js` | `api/_whatsappClient.js` *(nouveau)* |
+| Identifiants | `_config/telco_credentials` | `_config/whatsapp_credentials` *(nouveau doc)* |
+| Webhook | `api/twilio-*-inbound.js` | `api/whatsapp-webhook.js` *(nouveau)* |
+| Dépendance npm | `twilio` | **aucune** — appels HTTP directs |
+
+Ce qu'on reprend de Twilio, c'est **la méthode, pas le canal** : identifiants en
+base plutôt qu'en variables d'environnement, cache au niveau module, signature
+vérifiée sur tout ce qui entre. Un document Firestore séparé, pour que la
+séparation soit réelle et pas seulement de façade.
+
+**Conséquence : aucune nouvelle dépendance npm, aucune nouvelle variable
+d'environnement.** Rien à valider de ce côté-là.
 
 ---
 
-## 2. Le point qui décide de tout : le groupe
+## 2. Les trois contraintes que Meta impose sur le groupe
 
-Il y a deux façons d'envoyer sur WhatsApp, et elles ne se valent pas sur ce
-point précis.
-
-### Voie A — Twilio (Conversations)
-
-Twilio propose des « groupes ». **Ce ne sont pas de vrais groupes WhatsApp.**
-Chaque participant reste dans sa conversation en tête-à-tête avec le numéro de
-l'entreprise, et Twilio recopie les messages des uns chez les autres. Marine ne
-verrait pas « le groupe Client X » dans son WhatsApp : elle verrait un fil avec
-un numéro d'entreprise où défilent des messages relayés.
-
-Pour toi, c'est disqualifiant. Ce que tu décris — l'équipe et le client dans un
-même fil, où chacun répond naturellement — n'est pas ce que ça produit.
-
-### Voie B — l'API Meta en direct (Cloud API)
-
-C'est la seule qui crée un **vrai groupe WhatsApp**. Avec deux limites dures :
+Ce sont elles qui dessinent le calendrier — autant les avoir en tête avant de
+commencer.
 
 1. **On ne peut ajouter personne d'office.** L'API crée le groupe et fournit un
    lien d'invitation ; chaque participant clique. À chaque signature, six
-   personnes cliquent une fois. C'est verrouillé par Meta. Les bibliothèques
-   non officielles qui contournent ça font bannir le numéro — on ne les touche pas.
+   personnes cliquent une fois. C'est verrouillé par Meta. Les bibliothèques non
+   officielles qui contournent ça font bannir le numéro — on n'y touche pas.
 2. **Huit participants maximum.** Ton groupe en compte six (closeuse, Marine,
    Emily, toi, le coach, le client). Deux places de marge.
-
-Et une condition d'entrée : les groupes exigent un **Official Business Account**,
-un statut que Meta accorde au cas par cas. Les messages en tête-à-tête, eux, ne
-l'exigent pas.
-
-### ⚠️ Un numéro ne peut pas faire les deux
-
-Un numéro WhatsApp appartient soit à Twilio, soit à ton compte Meta. Basculer
-plus tard, c'est refaire l'enregistrement et perdre l'historique. **C'est donc
-une décision à prendre maintenant, pas en cours de route.**
-
-**Ma recommandation : la voie B, Meta en direct.** Le groupe est le cœur de ta
-demande, et c'est le seul chemin qui y mène. La voie A ferait gagner une semaine
-sur les rappels, puis nous bloquerait sur l'essentiel.
+3. **Le groupe exige un Official Business Account**, un statut que Meta accorde
+   au cas par cas. **Les messages en tête-à-tête, eux, ne l'exigent pas** — d'où
+   le découpage en vagues ci-dessous : on livre les rappels pendant que le
+   dossier avance, au lieu d'attendre.
 
 ---
 
 ## 3. Ce que TU fais chez Meta — dans cet ordre
 
 Rien de tout ça ne se code, et c'est ce qui prend le plus de temps. **C'est le
-chemin critique.**
+chemin critique du projet.**
 
 | # | Étape | Bloque quoi | Délai |
 |---|---|---|---|
@@ -87,28 +72,32 @@ chemin critique.**
 | 7 | **Official Business Account** | **le groupe uniquement** | variable, pas garanti |
 
 ⚠️ **Le numéro est définitif.** Un numéro déjà utilisé dans l'app WhatsApp
-Business doit en être détaché et perd son historique. Prends un numéro neuf.
+Business doit en être détaché et perd son historique. Prends un numéro neuf —
+et surtout pas un numéro Twilio existant, les deux canaux doivent rester
+indépendants.
 
 **Pendant les étapes 1 à 3**, Meta fournit un numéro de test qui envoie à
 quelques destinataires déclarés. Il me suffit pour développer et à toi pour
-valider — sans attendre la vérification. C'est ce qui permet d'avancer en
+valider, sans attendre la vérification. C'est ce qui permet d'avancer en
 parallèle des démarches.
+
+**Ce dont j'ai besoin à l'arrivée**, à déposer dans `_config/whatsapp_credentials` :
+le token permanent, l'identifiant du numéro (*phone number ID*), l'identifiant
+du WABA, et un jeton de vérification de webhook que tu inventes toi-même.
 
 ---
 
 ## 4. Ce que JE code — par vagues
 
 Chaque vague : une branche, une préversion, ton GO. Les vagues 1 et 2 ne
-dépendent **pas** de l'Official Business Account : on livre pendant que le
-dossier avance.
+dépendent **pas** de l'Official Business Account.
 
 ### Vague 1 — le socle et la notification coach
-- `api/_whatsappClient.js`, calqué sur `_twilioClient.js` : identifiants lus
-  dans `_config/telco_credentials` (même document, nouveau bloc), cache module.
-  Aucune dépendance npm, un simple appel HTTP.
+- `api/_whatsappClient.js` : identifiants lus dans `_config/whatsapp_credentials`,
+  cache au niveau module, appels HTTP directs.
 - `api/whatsapp-webhook.js` : accusés de réception et réponses entrantes, avec
-  vérification de signature — le pendant de `_twilioSignature.js`. Meta l'exige
-  pour valider le numéro, et c'est lui qui dira si un message est bien passé.
+  vérification de signature. Meta l'exige pour valider le numéro, et c'est lui
+  qui dira si un message est réellement passé.
 - **Notification au coach à l'attribution** : quand tu choisis le coach dans le
   plan d'action, il reçoit « Tu es le coach référent de X ». Le point d'accroche
   existe déjà — on l'a construit hier avec le sélecteur de coach.
@@ -116,9 +105,9 @@ dossier avance.
   reçu » reste sans réponse.
 
 ### Vague 2 — les rappels de RDV
-- Un quatrième cron quotidien, sur le modèle des trois existants. Il lit la
-  collection `bookings` (déjà utilisée par `booking-check-coaching-quota.js`)
-  et envoie **J−1** puis **H−2**.
+- Un quatrième cron quotidien, sur le modèle des trois existants dans
+  `vercel.json`. Il lit la collection `bookings` (déjà utilisée par
+  `booking-check-coaching-quota.js`) et envoie **J−1** puis **H−2**.
 - Anti-doublon par identifiant de RDV : un rappel envoyé deux fois, c'est un
   client qui se désabonne.
 - RDV annulé ou déplacé → rappel annulé. C'est le piège classique de ce genre
@@ -167,22 +156,20 @@ dans la fenêtre de 24 h**, aujourd'hui gratuits. Un volume de rappels qui
 paraît gratuit maintenant deviendra une ligne de coût — à chiffrer avant de
 généraliser, pas après.
 
+C'est un budget distinct de celui de Twilio : deux canaux, deux factures.
+
 ---
 
-## 7. Ce que j'attends de toi pour démarrer
+## 7. Ce qu'il reste à trancher
 
-1. **Valide la voie B** (Meta en direct) — ou dis-moi si tu préfères la voie A
-   en renonçant au vrai groupe.
-2. **Lance les étapes 1 à 5 du §3** et le dossier Official Business Account.
-   Ce sont les délais qui commandent, pas le code.
-3. **Confirme que le clic d'invitation est acceptable.** Si non, le repli
-   raisonnable : les rappels partent en tête-à-tête à chaque membre — moins
-   convivial, mais réellement automatique et sans Official Business Account.
-4. **Confirme le rangement des identifiants** dans `_config/telco_credentials`,
-   comme pour Twilio. Si tu préfères des variables d'environnement Vercel, il
-   m'en faut quatre et il me faut ton accord explicite.
+Une seule question ouverte : **le clic d'invitation est-il acceptable ?**
+Si non, le repli raisonnable est que les rappels partent en tête-à-tête à chaque
+membre — moins convivial, mais réellement automatique et sans dépendre de
+l'Official Business Account.
 
-Dès que le numéro de test répond, je livre la vague 1.
+Tout le reste est décidé. Je n'écris pas de code avant que le numéro de test
+réponde : sans identifiants, rien ne serait testable, et on ne construit pas en
+spéculatif.
 
 ---
 
