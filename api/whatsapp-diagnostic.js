@@ -79,6 +79,14 @@ module.exports = async (req, res) => {
       permanent: exp === 0,
       expireLe: exp === 0 ? null : quand(exp),
       scopes: Array.isArray(d.scopes) ? d.scopes : [],
+      /* Les comptes WhatsApp que ce token peut réellement piloter. C'est le
+         moyen le plus direct de retrouver le bon `wabaId` : la console Meta ne
+         l'affiche nulle part clairement, et un `wabaId` qui ne contient pas le
+         numéro configuré condamne silencieusement tous les envois. */
+      comptesAccessibles: (Array.isArray(d.granular_scopes) ? d.granular_scopes : [])
+        .filter((g) => g && String(g.scope || '').indexOf('whatsapp_business') === 0)
+        .reduce((acc, g) => acc.concat(Array.isArray(g.target_ids) ? g.target_ids : []), [])
+        .filter((v, i, a) => a.indexOf(v) === i),
     };
   }
 
