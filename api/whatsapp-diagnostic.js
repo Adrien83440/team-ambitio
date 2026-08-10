@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
   const auth = await requireAdmin(req, res);
   if (!auth) return; /* requireAdmin a déjà répondu 401/403 */
 
-  const sortie = { ok: true, config: {}, token: null, numero: null, modeles: null, effectifs: null, coachs: null };
+  const sortie = { ok: true, config: {}, token: null, numero: null, numerosDuCompte: null, modeles: null, effectifs: null, coachs: null };
 
   // ── 1. Complétude de la configuration ──────────────────────────────────
   let creds;
@@ -96,6 +96,30 @@ module.exports = async (req, res) => {
       verification: n.code_verification_status || null,
       plateforme: n.platform_type || null,
     };
+  }
+
+  // ── 3 bis. Le numéro appartient-il bien au WABA configuré ? ────────────
+  /* Un modèle n'est utilisable que par les numéros de SON compte. Si le
+     `phoneNumberId` et le `wabaId` de la configuration ne désignent pas le
+     même compte, chaque envoi échouerait sur un « template not found » très
+     peu bavard. Les deux lectures précédentes ne le disent pas : elles
+     réussissent séparément. */
+  if (creds.wabaId) {
+    const np = await graph(creds.wabaId + '/phone_numbers?fields=id,display_phone_number,platform_type&limit=50');
+    if (!np.ok) {
+      sortie.numerosDuCompte = { erreur: np.erreur || 'illisible' };
+    } else {
+      const l = (np.data && np.data.data) || [];
+      sortie.numerosDuCompte = {
+        liste: l.map((n) => ({
+          id: n.id,
+          affichage: n.display_phone_number || null,
+          plateforme: n.platform_type || null,
+          configure: String(n.id) === String(creds.phoneNumberId),
+        })),
+        configureAppartientAuCompte: l.some((n) => String(n.id) === String(creds.phoneNumberId)),
+      };
+    }
   }
 
   // ── 4. Les modèles ─────────────────────────────────────────────────────
