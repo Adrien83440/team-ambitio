@@ -22,7 +22,7 @@
 
 const { requireAdmin } = require('./_verifyFirebaseAuth');
 const { getWhatsappCreds, graph, normaliserNumero } = require('./_whatsappClient');
-const { chargerMembres, coachsActifs, numeroDe } = require('./_teamMembers');
+const { chargerUtilisateurs, chargerFichesExperts, resoudreCoach } = require('./_coachLookup');
 
 function quand(secondes) {
   if (!secondes) return null;
@@ -112,17 +112,27 @@ module.exports = async (req, res) => {
     sortie.modeles = { erreur: 'wabaId absent de la configuration' };
   }
 
-  // ── 5. Les coachs sont-ils joignables ? ────────────────────────────────
-  /* La panne la plus probable du module, et la plus invisible : un coach sans
-     numéro exploitable dans Admin → Utilisateurs. Même résolution que l'envoi,
-     en version constat — on ne cherche personne, on liste qui est joignable. */
+  // ── 5. Qui est joignable dans le sélecteur de coach ? ──────────────────
+  /* On parcourt EXACTEMENT la liste que voit le mentor dans le plan d'action
+     — les fiches expert de booking_config — et on tente pour chacune la même
+     résolution que l'envoi. `via` dit par quel chemin le compte a été trouvé :
+     `firebaseUid` est le lien propre, tout le reste est un repli qui mériterait
+     d'être réparé dans Admin → Utilisateurs. */
   try {
-    const membres = await chargerMembres();
-    sortie.coachs = coachsActifs(membres).map((m) => ({
-      slug: m.slug || null,
-      nom: m.displayName || null,
-      joignable: !!numeroDe(m, normaliserNumero),
-    }));
+    const [utilisateurs, fiches] = await Promise.all([
+      chargerUtilisateurs(),
+      chargerFichesExperts(),
+    ]);
+    sortie.coachs = fiches.map((f) => {
+      const r = resoudreCoach(utilisateurs, f, f.name, normaliserNumero);
+      return {
+        id: f.id,
+        nom: f.name || null,
+        joignable: !r.erreur,
+        via: r.via || null,
+        probleme: r.erreur || null,
+      };
+    });
   } catch (e) {
     sortie.coachs = { erreur: (e && e.message) || 'illisible' };
   }

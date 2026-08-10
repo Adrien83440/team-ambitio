@@ -30,7 +30,7 @@
 const { db } = require('./_firebaseAdmin');
 const { verifyFirebaseAuth } = require('./_verifyFirebaseAuth');
 const { envoyerModele, normaliserNumero } = require('./_whatsappClient');
-const { cle, prenomDe, chargerMembres, resoudreCoach } = require('./_teamMembers');
+const { prenomDe, chargerUtilisateurs, chargerFicheExpert, resoudreCoach } = require('./_coachLookup');
 const parseBody = require('./_parseBody');
 
 const MODELE = 'coach_assigne';
@@ -67,8 +67,13 @@ module.exports = async (req, res) => {
     const C = snap.data() || {};
 
     const nomCoach = coachNom || C.coach || '';
-    const membres = await chargerMembres();
-    const r = resoudreCoach(membres, coachId, nomCoach, normaliserNumero);
+    /* La fiche expert porte le lien exact vers le compte ; les deux lectures
+       sont indépendantes, donc menées de front. */
+    const [utilisateurs, fiche] = await Promise.all([
+      chargerUtilisateurs(),
+      chargerFicheExpert(coachId),
+    ]);
+    const r = resoudreCoach(utilisateurs, fiche, nomCoach, normaliserNumero);
     if (r.erreur) {
       console.warn('[whatsapp-notify-coach]', clientId, r.erreur, 'coachId=' + coachId, 'nom=' + nomCoach);
       res.status(200).json({ ok: true, envoye: false, raison: r.erreur });
@@ -79,8 +84,8 @@ module.exports = async (req, res) => {
        sans ce garde-fou, le coach recevrait le même message à chaque
        sauvegarde. On ne rejoue que si le coach a changé, ou sur `force`. */
     const deja = C.whatsappCoachNotifie || null;
-    if (!force && deja && cle(deja.coachSlug) === cle(r.membre.slug)) {
-      res.status(200).json({ ok: true, envoye: false, raison: 'deja_notifie', coach: { slug: r.membre.slug } });
+    if (!force && deja && deja.coachUid === r.utilisateur.uid) {
+      res.status(200).json({ ok: true, envoye: false, raison: 'deja_notifie', coach: { uid: r.utilisateur.uid } });
       return;
     }
 
@@ -99,11 +104,11 @@ module.exports = async (req, res) => {
       to: r.numero,
       template: MODELE,
       langue: 'fr',
-      params: [prenomDe(r.membre.displayName), nomClient, contexte],
+      params: [prenomDe(r.utilisateur.displayName), nomClient, contexte],
       contexte: {
         type: 'coach_assigne',
         clientId: clientId,
-        coachSlug: r.membre.slug || null,
+        coachUid: r.utilisateur.uid,
         par: par,
       },
     });
@@ -113,8 +118,9 @@ module.exports = async (req, res) => {
     if (envoi.ok) {
       await ref.set({
         whatsappCoachNotifie: {
-          coachSlug: r.membre.slug || null,
-          coachNom: r.membre.displayName || null,
+          coachUid: r.utilisateur.uid,
+          coachNom: r.utilisateur.displayName || null,
+          via: r.via,
           wamid: envoi.wamid,
           at: Date.now(),
           par: par,
@@ -127,7 +133,7 @@ module.exports = async (req, res) => {
       envoye: envoi.ok,
       wamid: envoi.wamid,
       raison: envoi.ok ? null : envoi.erreur,
-      coach: { slug: r.membre.slug || null, nom: r.membre.displayName || null },
+      coach: { uid: r.utilisateur.uid, nom: r.utilisateur.displayName || null, via: r.via },
     });
   } catch (e) {
     console.error('[whatsapp-notify-coach]', e && e.stack ? e.stack : e);
