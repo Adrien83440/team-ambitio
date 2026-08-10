@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
   const auth = await requireAdmin(req, res);
   if (!auth) return; /* requireAdmin a déjà répondu 401/403 */
 
-  const sortie = { ok: true, config: {}, token: null, numero: null, numerosDuCompte: null, modeles: null, effectifs: null, coachs: null };
+  const sortie = { ok: true, config: {}, token: null, numero: null, numerosDuCompte: null, abonnement: null, modeles: null, effectifs: null, coachs: null };
 
   // ── 1. Complétude de la configuration ──────────────────────────────────
   let creds;
@@ -126,6 +126,26 @@ module.exports = async (req, res) => {
           configure: String(n.id) === String(creds.phoneNumberId),
         })),
         configureAppartientAuCompte: l.some((n) => String(n.id) === String(creds.phoneNumberId)),
+      };
+    }
+  }
+
+  // ── 3 ter. L'app est-elle abonnée au compte ? ──────────────────────────
+  /* Sans cet abonnement, Meta n'appelle JAMAIS le webhook : l'URL est
+     enregistrée, elle répond, et pourtant rien n'arrive. Aucune erreur nulle
+     part — c'est la panne la plus silencieuse de toute la chaîne. */
+  if (creds.wabaId) {
+    const ab = await graph(creds.wabaId + '/subscribed_apps');
+    if (!ab.ok) {
+      sortie.abonnement = { erreur: ab.erreur || 'illisible' };
+    } else {
+      const l = (ab.data && ab.data.data) || [];
+      sortie.abonnement = {
+        apps: l.map((a) => ({
+          id: (a.whatsapp_business_api_data || {}).id || null,
+          nom: (a.whatsapp_business_api_data || {}).name || null,
+        })),
+        actif: l.length > 0,
       };
     }
   }
