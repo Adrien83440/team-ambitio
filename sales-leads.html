@@ -29,6 +29,7 @@
 <!-- Refonte 07/2026 : journal d'actions setting + résultats RDV -->
 <script src="alteore-flow.js" defer></script>
 <script src="rdv-outcome.js" defer></script>
+<script src="whatsapp-lead.js" defer></script>
 <script src="close-wizard.js" defer></script>
 <script>
   if (!firebase.apps.length) {
@@ -3752,6 +3753,11 @@ function l2SegEch(l, id) {
     h += '</div>';
   }
 
+  // ── WhatsApp (module WhatsAppLead, attaché au rendu du segment) ──
+  // Même conversation que la boîte partagée : un message envoyé d'ici s'y
+  // retrouve, et inversement.
+  h += '<div data-wal-mount="' + id + '"></div>';
+
   // ── Vocaux (module VoiceNotes, attaché au rendu du segment) ──
   h += '<div class="ld-actions-title" style="margin-top:14px">🎙️ Vocaux</div>';
   h += '<div class="vn-container" data-vn-mount="' + id + '"></div>';
@@ -3934,6 +3940,9 @@ function l2DetachSheetModules(leadId) {
     if (vn && window.VoiceNotes) { try { window.VoiceNotes.detach(vn); } catch (e) {} }
   }
   if (leadId) { detachLeadRdvListener(leadId); detachLeadDealListeners(leadId); }
+  /* WhatsApp ouvre deux écouteurs Firestore par fiche : les laisser vivre
+     après fermeture ferait s'accumuler les abonnements au fil de la journée. */
+  if (leadId && window.WhatsAppLead) { try { window.WhatsAppLead.detach(leadId); } catch (e) {} }
 }
 
 function l2RenderSheet(id, preserve) {
@@ -3990,6 +3999,17 @@ function l2RenderSheet(id, preserve) {
   if (l2Seg === 'ech' && window.VoiceNotes) {
     var mount = inner.querySelector('[data-vn-mount="' + id + '"]');
     if (mount) window.VoiceNotes.attach(mount, id, getCurrentVoiceUser());
+  }
+
+  // WhatsApp : même règle. Le module ouvre deux écouteurs temps réel, il ne
+  // doit vivre que tant que le segment est affiché.
+  if (l2Seg === 'ech' && window.WhatsAppLead) {
+    var wam = inner.querySelector('[data-wal-mount="' + id + '"]');
+    var lw = null;
+    for (var iw = 0; iw < allLeads.length; iw++) { if (allLeads[iw].id === id) { lw = allLeads[iw]; break; } }
+    if (wam) window.WhatsAppLead.attach(wam, id, lw && lw.telephone);
+  } else if (window.WhatsAppLead) {
+    window.WhatsAppLead.detach(id);
   }
 }
 

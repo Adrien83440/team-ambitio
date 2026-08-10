@@ -126,6 +126,107 @@ async function graph(chemin, opts) {
   return { ok: true, status: rep.status, data: data };
 }
 
+/* Types de médias acceptés. Volontairement court : une image, un document.
+   La vidéo est exclue — elle dépasse presque toujours la limite de corps
+   d'une fonction Vercel, et un envoi qui échoue à 4 Mo près serait pire que
+   pas d'envoi du tout. */
+const MEDIAS = {
+  'image/jpeg': 'image', 'image/png': 'image', 'image/webp': 'image',
+  'application/pdf': 'document',
+};
+
+/**
+ * Téléverse un fichier chez Meta et renvoie son identifiant.
+ * L'identifiant est valable 30 jours et ne sert qu'une fois côté message.
+ * @returns {Promise<{ok:boolean, id:string|null, erreur:string|null}>}
+ */
+async function televerserMedia(buffer, mime, nom) {
+  const creds = await getWhatsappCreds();
+  if (!MEDIAS[mime]) return { ok: false, id: null, erreur: 'type_non_supporte' };
+
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', mime);
+  form.append('file', new Blob([buffer], { type: mime }), nom || 'fichier');
+
+  let rep;
+  try {
+    rep = await fetch('https://graph.facebook.com/' + creds.apiVersion + '/'
+      + creds.phoneNumberId + '/media', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + creds.token },
+      body: form,
+    });
+  } catch (e) {
+    return { ok: false, id: null, erreur: (e && e.message) || 'reseau' };
+  }
+
+  let data = null;
+  try { data = await rep.json(); } catch (_) { data = null; }
+  if (!rep.ok || !data || !data.id) {
+    const err = (data && data.error) || {};
+    return { ok: false, id: null, erreur: err.message || ('HTTP ' + rep.status) };
+  }
+  return { ok: true, id: data.id, erreur: null };
+}
+
+/**
+ * Envoie un média déjà téléversé. Même contrainte que le texte libre : la
+ * fenêtre de 24 h doit être ouverte, et c'est à l'appelant de l'avoir vérifié.
+ */
+async function envoyerMedia(opts) {
+  opts = opts || {};
+  const to = normaliserNumero(opts.to);
+  const mime = String(opts.mime || '');
+  const genre = MEDIAS[mime];
+  const contexte = opts.contexte || {};
+  const legende = String(opts.legende || '').trim();
+  const nom = String(opts.nom || 'fichier');
+
+  const base = { media: true, mime: mime, nomFichier: nom, contexte: contexte };
+  if (!to) {
+    await journaliser(null, Object.assign({}, base, { statut: 'refuse', erreur: 'numero_invalide' }));
+    return { ok: false, wamid: null, erreur: 'numero_invalide' };
+  }
+  if (!genre) {
+    await journaliser(null, Object.assign({}, base, { statut: 'refuse', erreur: 'type_non_supporte' }));
+    return { ok: false, wamid: null, erreur: 'type_non_supporte' };
+  }
+
+  const creds = await getWhatsappCreds();
+  const contenu = { id: opts.mediaId };
+  /* Une légende n'est acceptée que sur l'image ; sur un document, WhatsApp
+     affiche le nom du fichier. */
+  if (genre === 'image' && legende) contenu.caption = legende;
+  if (genre === 'document') contenu.filename = nom;
+
+  const corps = { messaging_product: 'whatsapp', recipient_type: 'individual', to: to, type: genre };
+  corps[genre] = contenu;
+
+  const rep = await graph(creds.phoneNumberId + '/messages', { method: 'POST', body: corps });
+  if (!rep.ok) {
+    console.error('[whatsapp] media →', to, ':', rep.erreur);
+    await journaliser(null, Object.assign({}, base, {
+      statut: 'echec', to: to, erreur: rep.erreur || 'echec',
+      codeMeta: rep.code != null ? rep.code : null,
+    }));
+    return { ok: false, wamid: null, erreur: rep.erreur || 'echec' };
+  }
+
+  const msgs = (rep.data && rep.data.messages) || [];
+  const wamid = (msgs[0] && msgs[0].id) || null;
+  await journaliser(wamid, Object.assign({}, base, { statut: 'accepte', to: to, wamid: wamid }));
+  if (wamid) {
+    await majConversation(to, {
+      sens: 'out', wamid: wamid,
+      texte: (genre === 'image' ? '📷 ' : '📎 ') + (legende || nom),
+      extra: { media: genre, mime: mime, nomFichier: nom, contexte: contexte },
+    });
+  }
+  console.log('[whatsapp] media', genre, '→', to, 'wamid=' + wamid);
+  return { ok: true, wamid: wamid, erreur: null };
+}
+
 /**
  * Écrit une ligne de journal. Ne lance jamais : un envoi réussi ne doit pas
  * être signalé en échec parce que sa trace n'a pas pu s'écrire.
@@ -426,4 +527,7 @@ module.exports = {
   journaliser,
   envoyerModele,
   envoyerTexte,
+  televerserMedia,
+  envoyerMedia,
+  MEDIAS,
 };
