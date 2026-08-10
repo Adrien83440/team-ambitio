@@ -37,7 +37,7 @@ module.exports = async (req, res) => {
   const auth = await requireAdmin(req, res);
   if (!auth) return; /* requireAdmin a déjà répondu 401/403 */
 
-  const sortie = { ok: true, config: {}, token: null, numero: null, modeles: null, coachs: null };
+  const sortie = { ok: true, config: {}, token: null, numero: null, modeles: null, effectifs: null, coachs: null };
 
   // ── 1. Complétude de la configuration ──────────────────────────────────
   let creds;
@@ -123,6 +123,10 @@ module.exports = async (req, res) => {
       chargerUtilisateurs(),
       chargerFichesExperts(),
     ]);
+    /* Sans ces compteurs, un `coachs` vide ne dit pas s'il n'y a aucune fiche
+       expert, aucun compte, ou si la résolution échoue. Trois causes très
+       différentes qui se ressemblaient toutes. */
+    sortie.effectifs = { utilisateurs: utilisateurs.length, fichesExpert: fiches.length };
     sortie.coachs = fiches.map((f) => {
       const r = resoudreCoach(utilisateurs, f, f.name, normaliserNumero);
       return {
