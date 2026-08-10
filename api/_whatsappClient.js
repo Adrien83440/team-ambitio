@@ -57,6 +57,9 @@ async function getWhatsappCreds() {
     verifyToken: d.verifyToken ? String(d.verifyToken) : null,
     appSecret: d.appSecret ? String(d.appSecret) : null,
     apiVersion: d.apiVersion ? String(d.apiVersion) : 'v25.0',
+    /* Interrupteur des rappels automatiques, lu par whatsapp-rappels-rdv.js.
+       Absent = éteint : on n'allume jamais un envoi de masse par défaut. */
+    rappelsActifs: d.rappelsActifs === true,
   };
   return _creds;
 }
