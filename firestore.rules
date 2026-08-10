@@ -804,5 +804,46 @@ service cloud.firestore {
       allow delete:         if isAdmin();
     }
 
+    // ─── BOÎTE WHATSAPP PARTAGÉE ─────────────────────────────────────────
+    // Un seul numéro pour toute l'entreprise, donc une seule boîte. Réservée
+    // aux rôles `sales` et `admin` — même régime que le Dialer : un coach ou
+    // la CSM n'y a jamais accès.
+    //
+    // Écriture réservée à l'Admin SDK (webhook et endpoints Vercel), qui
+    // contourne naturellement ces rules. Le navigateur ne fait que LIRE :
+    // un message ne doit jamais pouvoir être fabriqué ou réécrit depuis un
+    // onglet, sinon le fil cesse d'être une preuve de ce qui a été envoyé.
+    // Seul `nonLus` fait exception — le marquage « lu » vient de l'écran.
+    match /whatsapp_conversations/{numero} {
+      allow read:   if isSalesOrAdmin();
+      allow create: if false;                       // Admin SDK uniquement
+      allow update: if isSalesOrAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['nonLus', 'attribueA', 'statut', 'luA']);
+      allow delete: if false;                       // rien ne se supprime
+    }
+
+    // ⚠ Les rules ne cascadent JAMAIS du parent vers la sous-collection.
+    // Sans ce bloc, le fil de discussion serait illisible et la page
+    // afficherait des conversations vides — l'incident du 22/07/2026 sur
+    // _config/billing/cgv est né exactement de cet oubli.
+    match /whatsapp_conversations/{numero}/messages/{wamid} {
+      allow read:                   if isSalesOrAdmin();
+      allow create, update, delete:  if false;      // Admin SDK uniquement
+    }
+
+    // Journal technique des envois et messages entrants bruts. Lecture pour
+    // le dépannage, écriture jamais : ce sont les traces qui permettent de
+    // répondre à « le client dit qu'il n'a rien reçu ».
+    match /whatsapp_messages/{wamid} {
+      allow read:                   if isSalesOrAdmin();
+      allow create, update, delete:  if false;      // Admin SDK uniquement
+    }
+
+    match /whatsapp_inbound/{wamid} {
+      allow read:                   if isSalesOrAdmin();
+      allow create, update, delete:  if false;      // Admin SDK uniquement
+    }
+
   }
 }

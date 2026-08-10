@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WhatsApp — Alteore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #08080f;
+  --bg-elev: #12121d;
+  --bg-card: #1a1a28;
+  --border: rgba(255,255,255,0.08);
+  --border-soft: rgba(255,255,255,0.05);
+  --text: #f5f5f5;
+  --text-muted: rgba(255,255,255,0.55);
+  --text-dim: rgba(255,255,255,0.35);
+  --red: #ef4444;
+  --orange: #f59e0b;
+  --green: #4ade80;
+  --blue: #60a5fa;
+  --fh: 'Bricolage Grotesque', system-ui, sans-serif;
+  --fb: 'Figtree', 'Segoe UI', sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:var(--fb); }
+
+.wa-wrap { display:grid; grid-template-columns:340px 1fr; height:100vh; }
+@media (max-width: 860px) {
+  /* Sur petit écran on ne montre qu'une colonne à la fois : une liste et un
+     fil côte à côte sur 360 px ne donnent ni l'un ni l'autre. */
+  .wa-wrap { grid-template-columns:1fr; }
+  .wa-wrap.lit .wa-list { display:none; }
+  .wa-wrap:not(.lit) .wa-thread { display:none; }
+}
+
+/* ── Colonne gauche ── */
+.wa-list { border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0; background:var(--bg-elev); }
+.wa-list-top { padding:16px 16px 10px; border-bottom:1px solid var(--border-soft); }
+.wa-title { font-family:var(--fh); font-size:19px; font-weight:800; margin:0 0 10px; }
+.wa-search { width:100%; padding:9px 11px; border-radius:9px; border:1px solid var(--border);
+  background:var(--bg-card); color:var(--text); font-family:var(--fb); font-size:13px; }
+.wa-search::placeholder { color:var(--text-dim); }
+.wa-scope { display:flex; gap:6px; margin-top:9px; }
+.wa-chip { flex:1; padding:6px 8px; border-radius:8px; border:1px solid var(--border);
+  background:transparent; color:var(--text-muted); font-family:var(--fb); font-size:11px;
+  font-weight:700; cursor:pointer; }
+.wa-chip.on { background:rgba(96,165,250,.14); border-color:rgba(96,165,250,.4); color:var(--blue); }
+
+.wa-items { flex:1; overflow-y:auto; min-height:0; }
+.wa-item { padding:12px 16px; border-bottom:1px solid var(--border-soft); cursor:pointer; display:block; width:100%;
+  text-align:left; background:transparent; border-left:3px solid transparent; color:inherit; font-family:var(--fb); }
+.wa-item:hover { background:rgba(255,255,255,.03); }
+.wa-item.on { background:rgba(96,165,250,.08); border-left-color:var(--blue); }
+.wa-item-l1 { display:flex; align-items:baseline; gap:8px; }
+.wa-nom { font-weight:700; font-size:14px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-quand { font-size:10px; color:var(--text-dim); flex-shrink:0; }
+.wa-item-l2 { display:flex; align-items:center; gap:8px; margin-top:4px; }
+.wa-apercu { flex:1; font-size:12px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-pastille { background:var(--green); color:#062; font-size:10px; font-weight:800; border-radius:10px;
+  padding:1px 7px; flex-shrink:0; }
+.wa-vide { padding:40px 20px; text-align:center; color:var(--text-dim); font-size:13px; line-height:1.6; }
+
+/* ── Colonne droite ── */
+.wa-thread { display:flex; flex-direction:column; min-height:0; }
+.wa-thread-top { padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+.wa-retour { display:none; background:transparent; border:1px solid var(--border); color:var(--text-muted);
+  border-radius:8px; padding:5px 9px; cursor:pointer; font-size:14px; }
+@media (max-width: 860px) { .wa-retour { display:block; } }
+.wa-thread-nom { font-family:var(--fh); font-size:16px; font-weight:800; }
+.wa-thread-sub { font-size:11px; color:var(--text-dim); margin-top:2px; }
+.wa-thread-sub a { color:var(--blue); text-decoration:none; }
+.wa-fenetre { margin-left:auto; font-size:11px; font-weight:700; padding:5px 10px; border-radius:8px; flex-shrink:0; }
+.wa-fenetre.ouverte { background:rgba(74,222,128,.13); color:var(--green); }
+.wa-fenetre.fermee { background:rgba(245,158,11,.13); color:var(--orange); }
+
+.wa-msgs { flex:1; overflow-y:auto; min-height:0; padding:20px; display:flex; flex-direction:column; gap:10px; }
+.wa-jour { align-self:center; font-size:10px; color:var(--text-dim); text-transform:uppercase;
+  letter-spacing:.6px; margin:8px 0 2px; }
+.wa-bulle { max-width:min(68%, 560px); padding:9px 13px; border-radius:14px; font-size:13.5px; line-height:1.5;
+  white-space:pre-wrap; word-break:break-word; }
+.wa-bulle.in  { align-self:flex-start; background:var(--bg-card); border:1px solid var(--border-soft); border-bottom-left-radius:4px; }
+.wa-bulle.out { align-self:flex-end; background:rgba(96,165,250,.16); border:1px solid rgba(96,165,250,.28); border-bottom-right-radius:4px; }
+.wa-modele { font-size:10px; font-weight:800; color:var(--blue); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.wa-meta { font-size:10px; color:var(--text-dim); margin-top:5px; text-align:right; }
+.wa-meta.echec { color:var(--red); font-weight:700; }
+
+.wa-pied { border-top:1px solid var(--border); padding:14px 20px; font-size:12px; color:var(--text-dim); line-height:1.6; }
+.wa-pied strong { color:var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div class="wa-wrap" id="waWrap">
+  <aside class="wa-list">
+    <div class="wa-list-top">
+      <h1 class="wa-title">💬 WhatsApp</h1>
+      <input class="wa-search" id="waSearch" type="search" placeholder="Rechercher un nom, un numéro…">
+      <div class="wa-scope" id="waScope"></div>
+    </div>
+    <div class="wa-items" id="waItems">
+      <div class="wa-vide">Chargement…</div>
+    </div>
+  </aside>
+
+  <main class="wa-thread">
+    <div class="wa-thread-top" id="waTop">
+      <div><div class="wa-thread-nom">Aucune conversation</div></div>
+    </div>
+    <div class="wa-msgs" id="waMsgs">
+      <div class="wa-vide">Choisis une conversation à gauche.</div>
+    </div>
+    <div class="wa-pied" id="waPied"></div>
+  </main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="nav.js" defer></script>
+
+<script>
+if (!firebase.apps.length) {
+  firebase.initializeApp({
+    apiKey:            "AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
+    authDomain:        "ambitio-team.firebaseapp.com",
+    projectId:         "ambitio-team",
+    storageBucket:     "ambitio-team.firebasestorage.app",
+    messagingSenderId: "1079366902268",
+    appId:             "1:1079366902268:web:b4ec1691dba54230339279"
+  });
+  /* Firestore : auto-detect long-polling — sans lui WebChannel se bloque sur Safari. */
+  try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); }
+  catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }
+}
+
+var db = firebase.firestore();
+
+var STATE = {
+  uid: null, role: null, slug: null, nom: null,
+  convs: [],          /* toutes les conversations lues */
+  actif: null,        /* numéro de la conversation ouverte */
+  filtre: '',
+  portee: 'moi',      /* 'moi' | 'tout' */
+  offFil: null        /* désabonnement de l'écouteur du fil */
+};
+
+/* ── Formatage ─────────────────────────────────────────────────────────── */
+
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function deuxCh(n) { return (n < 10 ? '0' : '') + n; }
+
+function heureDe(ts) {
+  if (!ts) return '';
+  var d = new Date(ts);
+  return deuxCh(d.getHours()) + ':' + deuxCh(d.getMinutes());
+}
+
+/* « aujourd'hui / hier / 12 août » — on ne met la date que quand elle apporte
+   quelque chose, sinon la colonne devient illisible. */
+function quandCourt(ts) {
+  if (!ts) return '';
+  var d = new Date(ts), now = new Date();
+  var memeJour = d.toDateString() === now.toDateString();
+  if (memeJour) return heureDe(ts);
+  var hier = new Date(now.getTime() - 86400000);
+  if (d.toDateString() === hier.toDateString()) return 'hier';
+  try {
+    return new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(d);
+  } catch (e) { return deuxCh(d.getDate()) + '/' + deuxCh(d.getMonth() + 1); }
+}
+
+function jourLong(ts) {
+  try {
+    return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(ts));
+  } catch (e) { return ''; }
+}
+
+/* Numéro brut (chiffres) → affichage lisible. */
+function numLisible(n) {
+  var s = String(n || '');
+  if (s.indexOf('33') === 0 && s.length === 11) {
+    var r = '0' + s.slice(2);
+    return r.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+  }
+  return '+' + s;
+}
+
+/* ── La fenêtre de 24 h ─────────────────────────────────────────────────
+   Le seul état que l'équipe DOIT voir en permanence : hors fenêtre, un
+   message libre est refusé par Meta. Tant que la vague B n'est pas là, on
+   l'affiche déjà — savoir qu'on ne peut pas répondre vaut mieux que de
+   l'apprendre en essayant. */
+function fenetre(c) {
+  var fin = c && c.fenetreExpireA;
+  if (!fin) return { ouverte: false, texte: 'Fenêtre fermée' };
+  var reste = fin - Date.now();
+  if (reste <= 0) return { ouverte: false, texte: 'Fenêtre fermée' };
+  var h = Math.floor(reste / 3600000);
+  var m = Math.floor((reste % 3600000) / 60000);
+  return { ouverte: true, texte: 'Réponse libre — ' + (h > 0 ? h + ' h ' + deuxCh(m) : m + ' min') };
+}
+
+/* ── Portée d'affichage ─────────────────────────────────────────────────
+   FILTRE D'AFFICHAGE, PAS UNE BARRIÈRE DE SÉCURITÉ. Les règles Firestore
+   autorisent tout `sales` à lire toutes les conversations : c'est une
+   commodité pour ne pas noyer chacun sous le travail des autres, rien de
+   plus. Si un cloisonnement réel devient nécessaire, il faudra le porter
+   dans les rules, pas ici. */
+function visible(c) {
+  if (STATE.role === 'admin' || STATE.portee === 'tout') return true;
+  if (!c.attribueA) return true;
+  return c.attribueA === STATE.slug || c.attribueA === STATE.uid;
+}
+
+function correspond(c) {
+  if (!STATE.filtre) return true;
+  var f = STATE.filtre.toLowerCase();
+  return String(c.nom || '').toLowerCase().indexOf(f) >= 0
+      || String(c.nomLead || '').toLowerCase().indexOf(f) >= 0
+      || String(c.numero || '').indexOf(f.replace(/\D/g, '')) >= 0;
+}
+
+/* ── Rendu de la liste ─────────────────────────────────────────────────── */
+
+function rendreListe() {
+  var host = document.getElementById('waItems');
+  var l = STATE.convs.filter(function (c) { return visible(c) && correspond(c); });
+
+  if (!l.length) {
+    host.innerHTML = '<div class="wa-vide">' + (STATE.convs.length
+      ? 'Aucune conversation ne correspond.'
+      : 'Aucune conversation pour le moment.<br><br>La boîte se remplit à partir du premier message reçu — l\'API WhatsApp ne restitue aucun historique antérieur.') + '</div>';
+    return;
+  }
+
+  var h = '';
+  l.forEach(function (c) {
+    var dm = c.dernierMessage || {};
+    var apercu = (dm.sens === 'out' ? '↗ ' : '') + (dm.texte || '—');
+    h += '<button class="wa-item' + (c.numero === STATE.actif ? ' on' : '') + '" data-num="' + esc(c.numero) + '">'
+       +   '<div class="wa-item-l1">'
+       +     '<span class="wa-nom">' + esc(c.nom || c.nomLead || numLisible(c.numero)) + '</span>'
+       +     '<span class="wa-quand">' + esc(quandCourt(dm.at || c.majA)) + '</span>'
+       +   '</div>'
+       +   '<div class="wa-item-l2">'
+       +     '<span class="wa-apercu">' + esc(apercu) + '</span>'
+       +     (c.nonLus ? '<span class="wa-pastille">' + c.nonLus + '</span>' : '')
+       +   '</div>'
+       + '</button>';
+  });
+  host.innerHTML = h;
+}
+
+function rendrePortee() {
+  var host = document.getElementById('waScope');
+  if (STATE.role === 'admin') { host.innerHTML = ''; return; }
+  host.innerHTML =
+      '<button class="wa-chip' + (STATE.portee === 'moi' ? ' on' : '') + '" data-portee="moi">Les miennes</button>'
+    + '<button class="wa-chip' + (STATE.portee === 'tout' ? ' on' : '') + '" data-portee="tout">Toutes</button>';
+}
+
+/* ── Rendu du fil ──────────────────────────────────────────────────────── */
+
+function rendreEntete(c) {
+  var top = document.getElementById('waTop');
+  if (!c) { top.innerHTML = '<div><div class="wa-thread-nom">Aucune conversation</div></div>'; return; }
+  var f = fenetre(c);
+  var sub = numLisible(c.numero);
+  if (c.leadId) sub += ' · <a href="sales-contact.html?leadId=' + encodeURIComponent(c.leadId) + '">Fiche du lead</a>';
+  top.innerHTML =
+      '<button class="wa-retour" id="waRetour">←</button>'
+    + '<div><div class="wa-thread-nom">' + esc(c.nom || c.nomLead || numLisible(c.numero)) + '</div>'
+    +      '<div class="wa-thread-sub">' + sub + '</div></div>'
+    + '<span class="wa-fenetre ' + (f.ouverte ? 'ouverte' : 'fermee') + '">' + esc(f.texte) + '</span>';
+}
+
+function rendreFil(msgs) {
+  var host = document.getElementById('waMsgs');
+  if (!msgs.length) { host.innerHTML = '<div class="wa-vide">Aucun message dans cette conversation.</div>'; return; }
+
+  var h = '', dernierJour = '';
+  msgs.forEach(function (m) {
+    var j = jourLong(m.at);
+    if (j !== dernierJour) { h += '<div class="wa-jour">' + esc(j) + '</div>'; dernierJour = j; }
+
+    var sortant = m.sens === 'out';
+    var corps = m.texte || '';
+    var enTete = '';
+    /* Un modèle n'a pas de corps côté API : on annonce lequel est parti, et
+       on montre les valeurs envoyées — c'est ce qu'a réellement lu le
+       destinataire, et la seule façon de vérifier après coup. */
+    if (sortant && m.modele) {
+      enTete = '<div class="wa-modele">Modèle · ' + esc(m.modele) + '</div>';
+      if (m.params && m.params.length) corps = m.params.join(' · ');
+      else corps = '';
+    }
+
+    var st = m.statut || '';
+    var echec = st === 'failed' || st === 'echec';
+    var meta = sortant ? (heureDe(m.at) + ' · ' + (st || '—')) : heureDe(m.at);
+
+    h += '<div class="wa-bulle ' + (sortant ? 'out' : 'in') + '">'
+       +   enTete
+       +   esc(corps)
+       +   '<div class="wa-meta' + (echec ? ' echec' : '') + '">' + esc(meta) + '</div>'
+       + '</div>';
+  });
+  host.innerHTML = h;
+  host.scrollTop = host.scrollHeight;
+}
+
+/* ── Ouverture d'une conversation ──────────────────────────────────────── */
+
+function ouvrir(numero) {
+  STATE.actif = numero;
+  document.getElementById('waWrap').classList.add('lit');
+  rendreListe();
+
+  var c = null;
+  STATE.convs.forEach(function (x) { if (x.numero === numero) c = x; });
+  rendreEntete(c);
+  document.getElementById('waPied').innerHTML =
+    '<strong>Lecture seule pour le moment.</strong> Répondre depuis cette page arrive à la vague suivante — '
+    + 'hors fenêtre de 24 h, seul un modèle approuvé peut partir, et l\'interface le proposera au lieu d\'un champ libre qui échouerait.';
+
+  if (STATE.offFil) { STATE.offFil(); STATE.offFil = null; }
+  document.getElementById('waMsgs').innerHTML = '<div class="wa-vide">Chargement…</div>';
+
+  STATE.offFil = db.collection('whatsapp_conversations').doc(numero)
+    .collection('messages').orderBy('at')
+    .onSnapshot(function (snap) {
+      var l = [];
+      snap.forEach(function (d) { l.push(d.data() || {}); });
+      rendreFil(l);
+    }, function (e) {
+      document.getElementById('waMsgs').innerHTML =
+        '<div class="wa-vide">Fil illisible : ' + esc(e && e.message) + '</div>';
+    });
+
+  /* Marquage lu — le seul champ que le navigateur a le droit d'écrire, avec
+     l'attribution. Silencieux : un échec ne doit pas gêner la lecture. */
+  if (c && c.nonLus) {
+    db.collection('whatsapp_conversations').doc(numero)
+      .update({ nonLus: 0, luA: Date.now() })
+      .catch(function (e) { if (window.console) console.warn('[wa] marquage lu', e && e.message); });
+  }
+}
+
+/* ── Écouteurs ─────────────────────────────────────────────────────────── */
+
+function ecouterConversations() {
+  db.collection('whatsapp_conversations').orderBy('majA', 'desc').limit(300)
+    .onSnapshot(function (snap) {
+      var l = [];
+      snap.forEach(function (d) {
+        var v = d.data() || {};
+        v.numero = v.numero || d.id;
+        l.push(v);
+      });
+      STATE.convs = l;
+      rendreListe();
+      /* L'entête porte un compte à rebours : il doit suivre les mises à jour. */
+      if (STATE.actif) {
+        var c = null;
+        l.forEach(function (x) { if (x.numero === STATE.actif) c = x; });
+        if (c) rendreEntete(c);
+      }
+    }, function (e) {
+      document.getElementById('waItems').innerHTML =
+        '<div class="wa-vide">Conversations illisibles : ' + esc(e && e.message)
+        + '<br><br>Si le message parle de permissions, les règles Firestore ne sont pas déployées.</div>';
+    });
+}
+
+/* Le compte à rebours doit vivre sans nouveau message : sans ça une fenêtre
+   affichée « 12 min » le resterait après son expiration. */
+setInterval(function () {
+  if (!STATE.actif) return;
+  var c = null;
+  STATE.convs.forEach(function (x) { if (x.numero === STATE.actif) c = x; });
+  if (c) rendreEntete(c);
+}, 30000);
+
+/* ── Évènements, par délégation ────────────────────────────────────────── */
+
+document.addEventListener('click', function (ev) {
+  var it = ev.target.closest ? ev.target.closest('[data-num]') : null;
+  if (it) { ouvrir(it.getAttribute('data-num')); return; }
+
+  var sc = ev.target.closest ? ev.target.closest('[data-portee]') : null;
+  if (sc) { STATE.portee = sc.getAttribute('data-portee'); rendrePortee(); rendreListe(); return; }
+
+  if (ev.target && ev.target.id === 'waRetour') {
+    document.getElementById('waWrap').classList.remove('lit');
+  }
+});
+
+document.getElementById('waSearch').addEventListener('input', function (e) {
+  STATE.filtre = e.target.value || '';
+  rendreListe();
+});
+
+/* ── Démarrage ─────────────────────────────────────────────────────────── */
+
+firebase.auth().onAuthStateChanged(async function (user) {
+  if (!user) { window.location.href = 'login.html'; return; }
+  STATE.uid = user.uid;
+
+  try {
+    var udoc = await db.collection('users').doc(user.uid).get();
+    var u = udoc.exists ? udoc.data() : {};
+    STATE.role = u.role || 'sales';
+    STATE.slug = u.slug || u.bookingSlug || null;
+    STATE.nom  = u.displayName || (user.email || '').split('@')[0];
+  } catch (e) { STATE.role = 'sales'; }
+
+  /* Même règle que le Dialer : jamais un coach, jamais la CSM. */
+  if (STATE.role !== 'sales' && STATE.role !== 'admin') {
+    document.body.innerHTML =
+      '<div style="padding:60px;text-align:center;color:var(--red);font-family:var(--fb)">'
+      + 'Accès réservé aux sales et aux admins.</div>';
+    return;
+  }
+
+  rendrePortee();
+  ecouterConversations();
+});
+</script>
+</body>
+</html>

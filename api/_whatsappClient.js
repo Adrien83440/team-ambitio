@@ -145,6 +145,98 @@ async function journaliser(wamid, infos) {
   }
 }
 
+/* La fenêtre de service WhatsApp : 24 h après le DERNIER message entrant du
+   contact. Au-delà, seul un modèle approuvé peut partir. C'est la contrainte
+   qui commande toute l'interface de la boîte partagée — un champ de saisie
+   libre hors fenêtre produirait des messages qui échouent sans que personne
+   comprenne pourquoi. */
+const FENETRE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Retrouve le lead derrière un numéro. Le téléphone canonique est `telephone`,
+ * en E.164 strict avec le `+` ; nos numéros WhatsApp sont en chiffres nus.
+ * Les documents fusionnés (`_merged: true`) sont ignorés — motif pickAlive().
+ * @returns {{leadId:string, nom:string}|null}
+ */
+async function rattacherLead(numero) {
+  if (!numero) return null;
+  try {
+    const snap = await db.collection('leads').where('telephone', '==', '+' + numero).limit(5).get();
+    let trouve = null;
+    snap.forEach((d) => {
+      if (trouve) return;
+      const v = d.data() || {};
+      if (v._merged === true) return;
+      trouve = { leadId: d.id, nom: v.nom || v.prenom || null };
+    });
+    return trouve;
+  } catch (e) {
+    console.warn('[whatsapp] rattachement lead', numero, e && e.message);
+    return null;
+  }
+}
+
+/**
+ * Tient à jour l'index de conversation ET le fil, pour la boîte partagée.
+ *
+ * Appelée par l'envoi ET par le webhook : c'est LE point d'écriture unique,
+ * pour que l'index, le fil et le journal technique ne puissent pas diverger.
+ *
+ * @param {string} numero  destinataire ou émetteur, chiffres nus
+ * @param {Object} m
+ * @param {'in'|'out'} m.sens
+ * @param {string} m.wamid
+ * @param {string} [m.texte]     corps lisible — pour un modèle, son nom suffit
+ * @param {string} [m.nom]       nom du profil WhatsApp, sur un entrant
+ * @param {string} [m.statut]
+ * @param {Object} [m.extra]     champs libres écrits sur le message du fil
+ */
+async function majConversation(numero, m) {
+  if (!numero || !m || !m.wamid) return;
+  const maintenant = Date.now();
+  const entrant = m.sens === 'in';
+  const ref = db.collection('whatsapp_conversations').doc(String(numero));
+
+  try {
+    /* Le fil d'abord : même si l'index échoue, le message n'est pas perdu. */
+    await ref.collection('messages').doc(String(m.wamid)).set(Object.assign({
+      wamid: String(m.wamid),
+      sens: m.sens === 'in' ? 'in' : 'out',
+      texte: m.texte || null,
+      statut: m.statut || (entrant ? 'recu' : 'accepte'),
+      at: maintenant,
+      date: new Date().toISOString(),
+    }, m.extra || {}), { merge: true });
+
+    const snap = await ref.get();
+    const actuel = snap.exists ? (snap.data() || {}) : {};
+
+    const patch = {
+      numero: String(numero),
+      dernierMessage: { texte: m.texte || null, sens: entrant ? 'in' : 'out', at: maintenant },
+      majA: maintenant,
+    };
+    if (!snap.exists) {
+      patch.statut = 'ouverte';
+      patch.creeA = maintenant;
+      patch.nonLus = 0;
+      /* Rattachement tenté une seule fois, à la création : une requête par
+         message entrant serait du gaspillage sur une conversation active. */
+      const lead = await rattacherLead(numero);
+      if (lead) { patch.leadId = lead.leadId; patch.nomLead = lead.nom; }
+    }
+    if (entrant) {
+      /* Chaque entrant rouvre la fenêtre pour 24 h. */
+      patch.fenetreExpireA = maintenant + FENETRE_MS;
+      patch.nonLus = (Number(actuel.nonLus) || 0) + 1;
+      if (m.nom && m.nom !== actuel.nom) patch.nom = m.nom;
+    }
+    await ref.set(patch, { merge: true });
+  } catch (e) {
+    console.error('[whatsapp] conversation', numero, e && e.message);
+  }
+}
+
 /**
  * Envoie un modèle approuvé.
  *
@@ -246,11 +338,25 @@ async function envoyerModele(opts) {
     wamid: wamid,
   }));
 
+  /* Le message rejoint la boîte partagée. Un modèle n'a pas de corps lisible
+     côté API : on affiche son nom, l'interface saura l'habiller. */
+  if (wamid) {
+    await majConversation(to, {
+      sens: 'out',
+      wamid: wamid,
+      texte: '[' + modele + ']',
+      extra: { modele: modele, params: base.params, contexte: contexte },
+    });
+  }
+
   console.log('[whatsapp]', modele, '→', to, 'wamid=' + wamid);
   return { ok: true, wamid: wamid, erreur: null };
 }
 
 module.exports = {
+  FENETRE_MS,
+  rattacherLead,
+  majConversation,
   getWhatsappCreds,
   normaliserNumero,
   graph,
