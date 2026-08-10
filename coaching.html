@@ -3537,6 +3537,32 @@ function togglePlanEdit(clientId){
    même écriture Firestore qui finiraient par diverger.
    full=true → on repeint toute la fiche (le badge « Généré » change) ;
    sinon on ne repeint que le bloc plan, la fiche ne clignote pas. */
+/* Prévient le coach référent sur WhatsApp qu'il vient de se voir attribuer un
+   client. Ne lance jamais et ne bloque rien : le plan d'action est enregistré
+   avant, et le reste vit sa vie même si Meta est indisponible.
+   Le serveur retrouve seul le numéro du coach (Admin → Utilisateurs) et refuse
+   de rejouer une notification déjà envoyée. */
+async function notifierCoachWhatsapp(clientId, plan){
+  try{
+    const token = (window._auth && window._auth.currentUser) ? await window._auth.currentUser.getIdToken() : '';
+    if(!token) return;
+    const r = await fetch('/api/whatsapp-notify-coach', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+      body: JSON.stringify({ clientId: clientId, coachId: plan.coachId || '', coachNom: plan.coach || '' })
+    });
+    const d = await r.json().catch(()=>({}));
+    if(d && d.envoye){
+      showToast('📲 '+((d.coach && d.coach.nom) || 'Le coach')+' a été prévenu sur WhatsApp','success');
+    }else if(d && d.raison && d.raison !== 'deja_notifie'){
+      /* Silencieux pour l'utilisateur, explicite dans la console : « coach
+         introuvable » ou « numéro absent » se corrige dans Admin → Utilisateurs,
+         pas au milieu d'une saisie de plan. */
+      console.warn('[whatsapp] coach non prévenu :', d.raison);
+    }
+  }catch(e){ console.warn('[whatsapp] notification coach', e && e.message); }
+}
+
 async function savePlanV2(clientId, plan, msg, full){
   const c = _clients.find(x=>x._id===clientId);
   if(!c) return false;
@@ -3554,6 +3580,11 @@ async function savePlanV2(clientId, plan, msg, full){
       c.coach = plan.coach;
       try{ await window._updateDoc(window._doc(window._db,'clients',clientId),{coach: plan.coach}); }
       catch(e){ console.warn('[plan] coach sur la fiche', e); }
+      /* Le coach vient de CHANGER : on le prévient sur WhatsApp. Appel
+         volontairement détaché — une notification qui échoue ne doit jamais
+         faire échouer l'enregistrement du plan. Le anti-doublon est côté
+         serveur, sur la fiche : rejouer cet appel ne renvoie rien. */
+      notifierCoachWhatsapp(clientId, plan);
     }
     showToast(msg || '✅ Plan mis à jour','success');
     pousserPlanVersAcademy(clientId);
