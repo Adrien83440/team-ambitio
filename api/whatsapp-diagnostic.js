@@ -56,6 +56,10 @@ module.exports = async (req, res) => {
     /* appSecret conditionne TOUT le webhook : sans lui, aucun accusé de
        réception ne peut être vérifié, donc aucun ne sera accepté. */
     appSecretPresent: !!creds.appSecret,
+    /* L'interrupteur des rappels automatiques : tant qu'il est faux, le cron
+       tourne à vide. C'est la première chose à regarder si « les rappels ne
+       partent pas ». */
+    rappelsActifs: creds.rappelsActifs === true,
   };
 
   // ── 2. Le token est-il permanent ? ─────────────────────────────────────

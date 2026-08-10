@@ -34,7 +34,7 @@
 // ============================================================================
 
 const { db } = require('./_firebaseAdmin');
-const { envoyerModele, normaliserNumero } = require('./_whatsappClient');
+const { envoyerModele, normaliserNumero, getWhatsappCreds } = require('./_whatsappClient');
 const Dispo = require('../dispo-core.js');
 
 /* Heures de silence : rien avant 8 h, rien après 21 h, heure de Paris.
@@ -192,6 +192,28 @@ module.exports = async (req, res) => {
   }
 
   const dryRun = !!(req.query && (req.query.dryRun === '1' || req.query.dryRun === 'true'));
+
+  /* INTERRUPTEUR — `_config/whatsapp_credentials.rappelsActifs`.
+     Tant qu'il n'est pas à true, le cron tourne à vide. Il le restera jusqu'au
+     numéro de production : sur le numéro de TEST, tout envoi vers un client non
+     déclaré échoue, et l'échec consommerait la réservation — ces clients
+     n'auraient alors JAMAIS leur rappel, même une fois le vrai numéro en place.
+     La simulation, elle, reste toujours accessible : elle n'écrit rien. */
+  if (!dryRun) {
+    let actif = false;
+    try {
+      const creds = await getWhatsappCreds();
+      actif = creds.rappelsActifs === true;
+    } catch (e) {
+      console.error('[rappels-rdv] config illisible :', e && e.message);
+      res.status(200).json({ ok: true, inactif: true, raison: 'config_illisible' });
+      return;
+    }
+    if (!actif) {
+      res.status(200).json({ ok: true, inactif: true, raison: 'rappelsActifs absent ou false' });
+      return;
+    }
+  }
   const maintenant = Dispo.parisStamp(new Date());
   const aujourdhui = maintenant.ymd;
   const demain = Dispo.addDays(aujourdhui, 1);
