@@ -32,7 +32,7 @@
 
 const crypto = require('crypto');
 const { db } = require('./_firebaseAdmin');
-const { getWhatsappCreds } = require('./_whatsappClient');
+const { getWhatsappCreds, majConversation } = require('./_whatsappClient');
 
 /* Lecture du corps brut. La signature porte sur les octets exacts envoyés par
    Meta : re-sérialiser un objet déjà parsé donnerait un JSON différent (ordre
@@ -124,6 +124,19 @@ async function appliquerStatut(st) {
   } catch (e) {
     console.error('[whatsapp-webhook] statut', wamid, e && e.message);
   }
+
+  /* Le même statut se répercute sur le message du fil, sinon la boîte
+     partagée afficherait éternellement « envoyé » sur un message échoué.
+     `recipient_id` donne la conversation sans requête. */
+  if (st.recipient_id) {
+    try {
+      await db.collection('whatsapp_conversations').doc(String(st.recipient_id))
+        .collection('messages').doc(String(wamid))
+        .set({ statut: statut, statutA: Date.now() }, { merge: true });
+    } catch (e) {
+      console.warn('[whatsapp-webhook] statut fil', wamid, e && e.message);
+    }
+  }
 }
 
 /**
@@ -168,6 +181,19 @@ async function enregistrerEntrant(msg, contacts) {
     }, { merge: true });
   } catch (e) {
     console.error('[whatsapp-webhook] entrant', wamid, e && e.message);
+  }
+
+  /* Et il rejoint la boîte partagée, en rouvrant la fenêtre de 24 h. C'est le
+     seul évènement qui autorise à nouveau un message libre vers ce contact. */
+  if (de) {
+    await majConversation(de, {
+      sens: 'in',
+      wamid: wamid,
+      texte: texte,
+      nom: nom,
+      statut: 'recu',
+      extra: { type: msg.type || null },
+    });
   }
 }
 
