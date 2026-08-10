@@ -6,89 +6,149 @@
 <title>WhatsApp — Alteore</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+/* ══════════════════════════════════════════════════════════════════════════
+   Habillage WhatsApp Web, thème sombre — mêmes teintes que l'application, pour
+   que l'équipe n'ait rien à réapprendre. Les codes visuels de WhatsApp portent
+   du SENS et sont repris tels quels : la bulle verte à droite est ce qu'on a
+   envoyé, les coches disent où en est la remise, le fond texturé sépare le fil
+   des panneaux. Inventer une autre grammaire ici obligerait à la traduire.
+   ══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --bg: #08080f;
-  --bg-elev: #12121d;
-  --bg-card: #1a1a28;
-  --border: rgba(255,255,255,0.08);
-  --border-soft: rgba(255,255,255,0.05);
-  --text: #f5f5f5;
-  --text-muted: rgba(255,255,255,0.55);
-  --text-dim: rgba(255,255,255,0.35);
-  --red: #ef4444;
-  --orange: #f59e0b;
-  --green: #4ade80;
-  --blue: #60a5fa;
-  --fh: 'Bricolage Grotesque', system-ui, sans-serif;
-  --fb: 'Figtree', 'Segoe UI', sans-serif;
+  --wa-liste:   #111b21;   /* colonne de gauche */
+  --wa-panneau: #202c33;   /* en-têtes et champs */
+  --wa-fond:    #0b141a;   /* fond du fil */
+  --wa-in:      #202c33;   /* bulle reçue */
+  --wa-out:     #005c4b;   /* bulle envoyée */
+  --wa-texte:   #e9edef;
+  --wa-doux:    #8696a0;
+  --wa-vert:    #00a884;
+  --wa-lu:      #53bdeb;   /* les deux coches bleues */
+  --wa-bord:    #222d34;
+  --wa-survol:  #202c33;
+  --wa-actif:   #2a3942;
+  --wa-rouge:   #f15c6d;
+  --fb: 'Figtree', 'Segoe UI', system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--text); font-family:var(--fb); }
+body { margin:0; background:var(--wa-fond); color:var(--wa-texte);
+  font-family:var(--fb); font-size:14px; -webkit-font-smoothing:antialiased; }
+button { font-family:inherit; }
 
-.wa-wrap { display:grid; grid-template-columns:340px 1fr; height:100vh; }
+.wa-wrap { display:grid; grid-template-columns:minmax(300px,30%) 1fr; height:100vh; }
 @media (max-width: 860px) {
-  /* Sur petit écran on ne montre qu'une colonne à la fois : une liste et un
-     fil côte à côte sur 360 px ne donnent ni l'un ni l'autre. */
+  /* Une seule colonne à la fois : côte à côte sur 360 px, ni la liste ni le
+     fil ne sont utilisables. */
   .wa-wrap { grid-template-columns:1fr; }
   .wa-wrap.lit .wa-list { display:none; }
   .wa-wrap:not(.lit) .wa-thread { display:none; }
 }
 
-/* ── Colonne gauche ── */
-.wa-list { border-right:1px solid var(--border); display:flex; flex-direction:column; min-height:0; background:var(--bg-elev); }
-.wa-list-top { padding:16px 16px 10px; border-bottom:1px solid var(--border-soft); }
-.wa-title { font-family:var(--fh); font-size:19px; font-weight:800; margin:0 0 10px; }
-.wa-search { width:100%; padding:9px 11px; border-radius:9px; border:1px solid var(--border);
-  background:var(--bg-card); color:var(--text); font-family:var(--fb); font-size:13px; }
-.wa-search::placeholder { color:var(--text-dim); }
-.wa-scope { display:flex; gap:6px; margin-top:9px; }
-.wa-chip { flex:1; padding:6px 8px; border-radius:8px; border:1px solid var(--border);
-  background:transparent; color:var(--text-muted); font-family:var(--fb); font-size:11px;
-  font-weight:700; cursor:pointer; }
-.wa-chip.on { background:rgba(96,165,250,.14); border-color:rgba(96,165,250,.4); color:var(--blue); }
+/* ── Colonne de gauche ─────────────────────────────────────────────────── */
+.wa-list { background:var(--wa-liste); border-right:1px solid var(--wa-bord);
+  display:flex; flex-direction:column; min-height:0; }
+.wa-list-top { background:var(--wa-panneau); padding:10px 16px; display:flex;
+  align-items:center; gap:10px; min-height:59px; }
+.wa-title { font-size:16px; font-weight:600; margin:0; flex:1; }
+.wa-count { font-size:11px; color:var(--wa-doux); }
+
+.wa-search-wrap { padding:7px 12px; background:var(--wa-liste); }
+.wa-search-box { display:flex; align-items:center; gap:10px; background:var(--wa-panneau);
+  border-radius:8px; padding:0 12px; }
+.wa-loupe { color:var(--wa-doux); font-size:13px; flex-shrink:0; }
+.wa-search { flex:1; border:0; background:transparent; color:var(--wa-texte);
+  font-family:var(--fb); font-size:14px; padding:9px 0; outline:none; }
+.wa-search::placeholder { color:var(--wa-doux); }
+
+.wa-scope { display:flex; gap:8px; padding:4px 12px 8px; }
+.wa-chip { padding:5px 12px; border-radius:14px; border:0; background:var(--wa-panneau);
+  color:var(--wa-doux); font-size:12px; font-weight:500; cursor:pointer; }
+.wa-chip.on { background:rgba(0,168,132,.18); color:var(--wa-vert); }
 
 .wa-items { flex:1; overflow-y:auto; min-height:0; }
-.wa-item { padding:12px 16px; border-bottom:1px solid var(--border-soft); cursor:pointer; display:block; width:100%;
-  text-align:left; background:transparent; border-left:3px solid transparent; color:inherit; font-family:var(--fb); }
-.wa-item:hover { background:rgba(255,255,255,.03); }
-.wa-item.on { background:rgba(96,165,250,.08); border-left-color:var(--blue); }
+.wa-item { display:flex; align-items:center; gap:13px; width:100%; padding:10px 14px;
+  background:transparent; border:0; border-bottom:1px solid var(--wa-bord);
+  cursor:pointer; text-align:left; color:inherit; }
+.wa-item:hover { background:var(--wa-survol); }
+.wa-item.on { background:var(--wa-actif); }
+.wa-av { width:46px; height:46px; border-radius:50%; flex-shrink:0; display:flex;
+  align-items:center; justify-content:center; font-size:16px; font-weight:600; color:#fff; }
+.wa-item-body { flex:1; min-width:0; }
 .wa-item-l1 { display:flex; align-items:baseline; gap:8px; }
-.wa-nom { font-weight:700; font-size:14px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.wa-quand { font-size:10px; color:var(--text-dim); flex-shrink:0; }
-.wa-item-l2 { display:flex; align-items:center; gap:8px; margin-top:4px; }
-.wa-apercu { flex:1; font-size:12px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.wa-pastille { background:var(--green); color:#062; font-size:10px; font-weight:800; border-radius:10px;
-  padding:1px 7px; flex-shrink:0; }
-.wa-vide { padding:40px 20px; text-align:center; color:var(--text-dim); font-size:13px; line-height:1.6; }
+.wa-nom { font-size:15px; font-weight:500; flex:1; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; }
+.wa-quand { font-size:11px; color:var(--wa-doux); flex-shrink:0; }
+.wa-item.nonlu .wa-quand { color:var(--wa-vert); }
+.wa-item-l2 { display:flex; align-items:center; gap:8px; margin-top:3px; }
+.wa-apercu { flex:1; font-size:13px; color:var(--wa-doux); overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; }
+.wa-pastille { background:var(--wa-vert); color:#0b141a; font-size:11px; font-weight:700;
+  border-radius:11px; min-width:20px; height:20px; padding:0 6px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; }
+.wa-vide { padding:48px 26px; text-align:center; color:var(--wa-doux);
+  font-size:13.5px; line-height:1.7; }
 
-/* ── Colonne droite ── */
-.wa-thread { display:flex; flex-direction:column; min-height:0; }
-.wa-thread-top { padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
-.wa-retour { display:none; background:transparent; border:1px solid var(--border); color:var(--text-muted);
-  border-radius:8px; padding:5px 9px; cursor:pointer; font-size:14px; }
+/* ── Colonne de droite ─────────────────────────────────────────────────── */
+.wa-thread { display:flex; flex-direction:column; min-height:0; background:var(--wa-fond);
+  /* Le fond texturé de WhatsApp, obtenu sans image : une trame de points très
+     faible. Aucune requête réseau, aucun fichier à héberger. */
+  background-image: radial-gradient(rgba(255,255,255,.021) 1px, transparent 1px);
+  background-size: 22px 22px; }
+.wa-thread-top { background:var(--wa-panneau); padding:9px 16px; display:flex;
+  align-items:center; gap:13px; min-height:59px; flex-shrink:0; }
+.wa-retour { display:none; background:transparent; border:0; color:var(--wa-doux);
+  font-size:20px; cursor:pointer; padding:0 4px; }
 @media (max-width: 860px) { .wa-retour { display:block; } }
-.wa-thread-nom { font-family:var(--fh); font-size:16px; font-weight:800; }
-.wa-thread-sub { font-size:11px; color:var(--text-dim); margin-top:2px; }
-.wa-thread-sub a { color:var(--blue); text-decoration:none; }
-.wa-fenetre { margin-left:auto; font-size:11px; font-weight:700; padding:5px 10px; border-radius:8px; flex-shrink:0; }
-.wa-fenetre.ouverte { background:rgba(74,222,128,.13); color:var(--green); }
-.wa-fenetre.fermee { background:rgba(245,158,11,.13); color:var(--orange); }
+.wa-thread-nom { font-size:16px; font-weight:500; }
+.wa-thread-sub { font-size:12px; color:var(--wa-doux); margin-top:1px; }
+.wa-thread-sub a { color:var(--wa-vert); text-decoration:none; }
+.wa-thread-sub a:hover { text-decoration:underline; }
+.wa-fenetre { margin-left:auto; font-size:11.5px; font-weight:600; padding:5px 11px;
+  border-radius:13px; flex-shrink:0; }
+.wa-fenetre.ouverte { background:rgba(0,168,132,.16); color:var(--wa-vert); }
+.wa-fenetre.fermee  { background:rgba(241,92,109,.13); color:var(--wa-rouge); }
 
-.wa-msgs { flex:1; overflow-y:auto; min-height:0; padding:20px; display:flex; flex-direction:column; gap:10px; }
-.wa-jour { align-self:center; font-size:10px; color:var(--text-dim); text-transform:uppercase;
-  letter-spacing:.6px; margin:8px 0 2px; }
-.wa-bulle { max-width:min(68%, 560px); padding:9px 13px; border-radius:14px; font-size:13.5px; line-height:1.5;
-  white-space:pre-wrap; word-break:break-word; }
-.wa-bulle.in  { align-self:flex-start; background:var(--bg-card); border:1px solid var(--border-soft); border-bottom-left-radius:4px; }
-.wa-bulle.out { align-self:flex-end; background:rgba(96,165,250,.16); border:1px solid rgba(96,165,250,.28); border-bottom-right-radius:4px; }
-.wa-modele { font-size:10px; font-weight:800; color:var(--blue); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
-.wa-meta { font-size:10px; color:var(--text-dim); margin-top:5px; text-align:right; }
-.wa-meta.echec { color:var(--red); font-weight:700; }
+.wa-msgs { flex:1; overflow-y:auto; min-height:0; padding:16px 6%; display:flex;
+  flex-direction:column; gap:3px; }
 
-.wa-pied { border-top:1px solid var(--border); padding:14px 20px; font-size:12px; color:var(--text-dim); line-height:1.6; }
-.wa-pied strong { color:var(--text-muted); }
+.wa-jour { align-self:center; background:var(--wa-panneau); color:var(--wa-doux);
+  font-size:12px; padding:5px 13px; border-radius:8px; margin:14px 0 8px;
+  box-shadow:0 1px 1px rgba(0,0,0,.2); }
+
+.wa-bulle { position:relative; max-width:min(72%, 620px); padding:6px 9px 8px;
+  border-radius:8px; font-size:14.2px; line-height:1.42; white-space:pre-wrap;
+  word-break:break-word; box-shadow:0 1px 1px rgba(0,0,0,.16); margin-top:2px; }
+.wa-bulle.in  { align-self:flex-start; background:var(--wa-in);  border-top-left-radius:0; }
+.wa-bulle.out { align-self:flex-end;   background:var(--wa-out); border-top-right-radius:0; }
+/* La pointe de la bulle — le détail qui fait qu'on reconnaît WhatsApp au
+   premier coup d'œil. Uniquement sur le premier message d'une série, comme
+   dans l'application. */
+.wa-bulle.in.tete::before, .wa-bulle.out.tete::before {
+  content:''; position:absolute; top:0; width:9px; height:13px;
+}
+.wa-bulle.in.tete::before  { left:-8px;  background:var(--wa-in);
+  clip-path: polygon(100% 0, 0 0, 100% 100%); }
+.wa-bulle.out.tete::before { right:-8px; background:var(--wa-out);
+  clip-path: polygon(0 0, 100% 0, 0 100%); }
+.wa-bulle:not(.tete) { margin-top:1px; }
+.wa-bulle.in:not(.tete)  { border-top-left-radius:8px; }
+.wa-bulle.out:not(.tete) { border-top-right-radius:8px; }
+
+.wa-modele { font-size:11px; font-weight:700; color:var(--wa-vert);
+  letter-spacing:.3px; margin-bottom:3px; }
+.wa-corps-vide { color:var(--wa-doux); font-style:italic; }
+/* L'heure et les coches flottent à droite du dernier mot, comme dans
+   l'application : elles se glissent sur la ligne quand la place existe. */
+.wa-meta { float:right; margin:7px -2px -3px 10px; font-size:11px;
+  color:rgba(233,237,239,.55); display:inline-flex; align-items:center; gap:3px; }
+.wa-tick { font-size:12px; letter-spacing:-2px; }
+.wa-tick.lu { color:var(--wa-lu); }
+.wa-meta.echec { color:var(--wa-rouge); font-weight:600; }
+
+.wa-pied { background:var(--wa-panneau); padding:11px 18px; font-size:12.5px;
+  color:var(--wa-doux); line-height:1.6; flex-shrink:0; }
+.wa-pied strong { color:var(--wa-texte); font-weight:600; }
 </style>
 </head>
 <body>
@@ -96,10 +156,16 @@ body { margin:0; background:var(--bg); color:var(--text); font-family:var(--fb);
 <div class="wa-wrap" id="waWrap">
   <aside class="wa-list">
     <div class="wa-list-top">
-      <h1 class="wa-title">💬 WhatsApp</h1>
-      <input class="wa-search" id="waSearch" type="search" placeholder="Rechercher un nom, un numéro…">
-      <div class="wa-scope" id="waScope"></div>
+      <h1 class="wa-title">WhatsApp</h1>
+      <span class="wa-count" id="waCount"></span>
     </div>
+    <div class="wa-search-wrap">
+      <div class="wa-search-box">
+        <span class="wa-loupe">🔍</span>
+        <input class="wa-search" id="waSearch" type="search" placeholder="Rechercher…">
+      </div>
+    </div>
+    <div class="wa-scope" id="waScope"></div>
     <div class="wa-items" id="waItems">
       <div class="wa-vide">Chargement…</div>
     </div>
@@ -163,13 +229,12 @@ function heureDe(ts) {
   return deuxCh(d.getHours()) + ':' + deuxCh(d.getMinutes());
 }
 
-/* « aujourd'hui / hier / 12 août » — on ne met la date que quand elle apporte
+/* « 14:32 / hier / 12 août » — la date n'apparaît que quand elle apporte
    quelque chose, sinon la colonne devient illisible. */
 function quandCourt(ts) {
   if (!ts) return '';
   var d = new Date(ts), now = new Date();
-  var memeJour = d.toDateString() === now.toDateString();
-  if (memeJour) return heureDe(ts);
+  if (d.toDateString() === now.toDateString()) return heureDe(ts);
   var hier = new Date(now.getTime() - 86400000);
   if (d.toDateString() === hier.toDateString()) return 'hier';
   try {
@@ -177,9 +242,15 @@ function quandCourt(ts) {
   } catch (e) { return deuxCh(d.getDate()) + '/' + deuxCh(d.getMonth() + 1); }
 }
 
+/* Séparateur de date : « aujourd'hui » et « hier » plutôt qu'une date, comme
+   dans l'application. */
 function jourLong(ts) {
+  var d = new Date(ts), now = new Date();
+  if (d.toDateString() === now.toDateString()) return "aujourd'hui";
+  var hier = new Date(now.getTime() - 86400000);
+  if (d.toDateString() === hier.toDateString()) return 'hier';
   try {
-    return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(ts));
+    return new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
   } catch (e) { return ''; }
 }
 
@@ -187,33 +258,58 @@ function jourLong(ts) {
 function numLisible(n) {
   var s = String(n || '');
   if (s.indexOf('33') === 0 && s.length === 11) {
-    var r = '0' + s.slice(2);
-    return r.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+    return ('0' + s.slice(2)).replace(/(\d{2})(?=\d)/g, '$1 ').trim();
   }
   return '+' + s;
 }
 
+function initiales(nom, numero) {
+  var t = String(nom || '').trim().split(/\s+/).filter(Boolean);
+  if (t.length >= 2) return (t[0][0] + t[1][0]).toUpperCase();
+  if (t.length === 1 && t[0].length) return t[0].slice(0, 2).toUpperCase();
+  return String(numero || '?').slice(-2);
+}
+
+/* Couleur d'avatar stable, tirée du numéro : le même contact garde la même
+   pastille d'une session à l'autre. */
+var AV_COULEURS = ['#6a7ba2','#7f9c6c','#a2756a','#6a9ca2','#8f6aa2','#a2996a','#6aa287','#a26a86'];
+function couleurAvatar(numero) {
+  var h = 0, s = String(numero || 'x');
+  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+  return AV_COULEURS[Math.abs(h) % AV_COULEURS.length];
+}
+
+/* ── Les coches de remise ───────────────────────────────────────────────
+   La grammaire de WhatsApp, reprise à l'identique parce que toute l'équipe
+   la connaît déjà : une coche = parti, deux = remis, deux bleues = lu. */
+function coches(statut) {
+  if (statut === 'read')      return '<span class="wa-tick lu">✓✓</span>';
+  if (statut === 'delivered') return '<span class="wa-tick">✓✓</span>';
+  if (statut === 'sent')      return '<span class="wa-tick">✓</span>';
+  if (statut === 'failed' || statut === 'echec') return '<span>⚠</span>';
+  return '<span class="wa-tick">🕐</span>';   /* accepté par Meta, pas encore parti */
+}
+
 /* ── La fenêtre de 24 h ─────────────────────────────────────────────────
    Le seul état que l'équipe DOIT voir en permanence : hors fenêtre, un
-   message libre est refusé par Meta. Tant que la vague B n'est pas là, on
-   l'affiche déjà — savoir qu'on ne peut pas répondre vaut mieux que de
-   l'apprendre en essayant. */
+   message libre est refusé par Meta. Affiché dès maintenant, avant même que
+   la réponse soit livrée — savoir qu'on ne peut pas répondre vaut mieux que
+   de l'apprendre en essayant. */
 function fenetre(c) {
   var fin = c && c.fenetreExpireA;
-  if (!fin) return { ouverte: false, texte: 'Fenêtre fermée' };
+  if (!fin) return { ouverte: false, texte: 'Réponse fermée' };
   var reste = fin - Date.now();
-  if (reste <= 0) return { ouverte: false, texte: 'Fenêtre fermée' };
+  if (reste <= 0) return { ouverte: false, texte: 'Réponse fermée' };
   var h = Math.floor(reste / 3600000);
   var m = Math.floor((reste % 3600000) / 60000);
-  return { ouverte: true, texte: 'Réponse libre — ' + (h > 0 ? h + ' h ' + deuxCh(m) : m + ' min') };
+  return { ouverte: true, texte: 'Réponse libre · ' + (h > 0 ? h + ' h ' + deuxCh(m) : m + ' min') };
 }
 
 /* ── Portée d'affichage ─────────────────────────────────────────────────
    FILTRE D'AFFICHAGE, PAS UNE BARRIÈRE DE SÉCURITÉ. Les règles Firestore
    autorisent tout `sales` à lire toutes les conversations : c'est une
-   commodité pour ne pas noyer chacun sous le travail des autres, rien de
-   plus. Si un cloisonnement réel devient nécessaire, il faudra le porter
-   dans les rules, pas ici. */
+   commodité pour ne pas noyer chacun sous le travail des autres. Un
+   cloisonnement réel devrait être porté dans les rules, pas ici. */
 function visible(c) {
   if (STATE.role === 'admin' || STATE.portee === 'tout') return true;
   if (!c.attribueA) return true;
@@ -228,32 +324,42 @@ function correspond(c) {
       || String(c.numero || '').indexOf(f.replace(/\D/g, '')) >= 0;
 }
 
+function nomDe(c) { return c.nom || c.nomLead || numLisible(c.numero); }
+
 /* ── Rendu de la liste ─────────────────────────────────────────────────── */
 
 function rendreListe() {
   var host = document.getElementById('waItems');
   var l = STATE.convs.filter(function (c) { return visible(c) && correspond(c); });
 
+  document.getElementById('waCount').textContent =
+    l.length ? l.length + (l.length > 1 ? ' conversations' : ' conversation') : '';
+
   if (!l.length) {
     host.innerHTML = '<div class="wa-vide">' + (STATE.convs.length
       ? 'Aucune conversation ne correspond.'
-      : 'Aucune conversation pour le moment.<br><br>La boîte se remplit à partir du premier message reçu — l\'API WhatsApp ne restitue aucun historique antérieur.') + '</div>';
+      : 'Aucune conversation pour le moment.<br><br>La boîte se remplit à partir du premier message reçu — WhatsApp ne restitue aucun historique antérieur.') + '</div>';
     return;
   }
 
   var h = '';
   l.forEach(function (c) {
     var dm = c.dernierMessage || {};
-    var apercu = (dm.sens === 'out' ? '↗ ' : '') + (dm.texte || '—');
-    h += '<button class="wa-item' + (c.numero === STATE.actif ? ' on' : '') + '" data-num="' + esc(c.numero) + '">'
-       +   '<div class="wa-item-l1">'
-       +     '<span class="wa-nom">' + esc(c.nom || c.nomLead || numLisible(c.numero)) + '</span>'
-       +     '<span class="wa-quand">' + esc(quandCourt(dm.at || c.majA)) + '</span>'
-       +   '</div>'
-       +   '<div class="wa-item-l2">'
-       +     '<span class="wa-apercu">' + esc(apercu) + '</span>'
-       +     (c.nonLus ? '<span class="wa-pastille">' + c.nonLus + '</span>' : '')
-       +   '</div>'
+    var apercu = (dm.sens === 'out' ? '↗&nbsp; ' : '') + esc(dm.texte || '—');
+    h += '<button class="wa-item' + (c.numero === STATE.actif ? ' on' : '')
+       +   (c.nonLus ? ' nonlu' : '') + '" data-num="' + esc(c.numero) + '">'
+       +   '<span class="wa-av" style="background:' + couleurAvatar(c.numero) + '">'
+       +     esc(initiales(nomDe(c), c.numero)) + '</span>'
+       +   '<span class="wa-item-body">'
+       +     '<span class="wa-item-l1">'
+       +       '<span class="wa-nom">' + esc(nomDe(c)) + '</span>'
+       +       '<span class="wa-quand">' + esc(quandCourt(dm.at || c.majA)) + '</span>'
+       +     '</span>'
+       +     '<span class="wa-item-l2">'
+       +       '<span class="wa-apercu">' + apercu + '</span>'
+       +       (c.nonLus ? '<span class="wa-pastille">' + c.nonLus + '</span>' : '')
+       +     '</span>'
+       +   '</span>'
        + '</button>';
   });
   host.innerHTML = h;
@@ -277,7 +383,9 @@ function rendreEntete(c) {
   if (c.leadId) sub += ' · <a href="sales-contact.html?leadId=' + encodeURIComponent(c.leadId) + '">Fiche du lead</a>';
   top.innerHTML =
       '<button class="wa-retour" id="waRetour">←</button>'
-    + '<div><div class="wa-thread-nom">' + esc(c.nom || c.nomLead || numLisible(c.numero)) + '</div>'
+    + '<span class="wa-av" style="background:' + couleurAvatar(c.numero) + ';width:40px;height:40px;font-size:14px">'
+    +   esc(initiales(nomDe(c), c.numero)) + '</span>'
+    + '<div><div class="wa-thread-nom">' + esc(nomDe(c)) + '</div>'
     +      '<div class="wa-thread-sub">' + sub + '</div></div>'
     + '<span class="wa-fenetre ' + (f.ouverte ? 'ouverte' : 'fermee') + '">' + esc(f.texte) + '</span>';
 }
@@ -286,32 +394,42 @@ function rendreFil(msgs) {
   var host = document.getElementById('waMsgs');
   if (!msgs.length) { host.innerHTML = '<div class="wa-vide">Aucun message dans cette conversation.</div>'; return; }
 
-  var h = '', dernierJour = '';
+  var h = '', dernierJour = '', dernierSens = '';
   msgs.forEach(function (m) {
     var j = jourLong(m.at);
-    if (j !== dernierJour) { h += '<div class="wa-jour">' + esc(j) + '</div>'; dernierJour = j; }
+    if (j !== dernierJour) {
+      h += '<div class="wa-jour">' + esc(j) + '</div>';
+      dernierJour = j; dernierSens = '';
+    }
 
     var sortant = m.sens === 'out';
-    var corps = m.texte || '';
+    var sens = sortant ? 'out' : 'in';
+    /* La pointe n'apparaît que sur le premier message d'une série, comme dans
+       l'application — sinon chaque bulle porte un ergot et le fil devient
+       bruyant. */
+    var tete = sens !== dernierSens ? ' tete' : '';
+    dernierSens = sens;
+
+    var corps = esc(m.texte || '');
     var enTete = '';
-    /* Un modèle n'a pas de corps côté API : on annonce lequel est parti, et
-       on montre les valeurs envoyées — c'est ce qu'a réellement lu le
-       destinataire, et la seule façon de vérifier après coup. */
+    /* Un modèle n'a pas de corps côté API : on annonce lequel est parti et on
+       montre les valeurs envoyées — c'est ce qu'a réellement lu le
+       destinataire, et la seule façon de le vérifier après coup. */
     if (sortant && m.modele) {
-      enTete = '<div class="wa-modele">Modèle · ' + esc(m.modele) + '</div>';
-      if (m.params && m.params.length) corps = m.params.join(' · ');
-      else corps = '';
+      enTete = '<div class="wa-modele">' + esc(m.modele) + '</div>';
+      corps = (m.params && m.params.length)
+        ? esc(m.params.join(' · '))
+        : '<span class="wa-corps-vide">modèle sans variable</span>';
     }
 
     var st = m.statut || '';
     var echec = st === 'failed' || st === 'echec';
-    var meta = sortant ? (heureDe(m.at) + ' · ' + (st || '—')) : heureDe(m.at);
+    var meta = '<span class="wa-meta' + (echec ? ' echec' : '') + '">'
+             +   esc(heureDe(m.at))
+             +   (sortant ? coches(st) : '')
+             + '</span>';
 
-    h += '<div class="wa-bulle ' + (sortant ? 'out' : 'in') + '">'
-       +   enTete
-       +   esc(corps)
-       +   '<div class="wa-meta' + (echec ? ' echec' : '') + '">' + esc(meta) + '</div>'
-       + '</div>';
+    h += '<div class="wa-bulle ' + sens + tete + '">' + enTete + meta + corps + '</div>';
   });
   host.innerHTML = h;
   host.scrollTop = host.scrollHeight;
@@ -345,8 +463,8 @@ function ouvrir(numero) {
         '<div class="wa-vide">Fil illisible : ' + esc(e && e.message) + '</div>';
     });
 
-  /* Marquage lu — le seul champ que le navigateur a le droit d'écrire, avec
-     l'attribution. Silencieux : un échec ne doit pas gêner la lecture. */
+  /* Marquage lu — l'un des rares champs que le navigateur a le droit d'écrire.
+     Silencieux : un échec ne doit pas gêner la lecture. */
   if (c && c.nonLus) {
     db.collection('whatsapp_conversations').doc(numero)
       .update({ nonLus: 0, luA: Date.now() })
@@ -380,8 +498,8 @@ function ecouterConversations() {
     });
 }
 
-/* Le compte à rebours doit vivre sans nouveau message : sans ça une fenêtre
-   affichée « 12 min » le resterait après son expiration. */
+/* Le compte à rebours doit vivre sans nouveau message : sinon une fenêtre
+   affichée « 12 min » le resterait longtemps après son expiration. */
 setInterval(function () {
   if (!STATE.actif) return;
   var c = null;
@@ -392,15 +510,15 @@ setInterval(function () {
 /* ── Évènements, par délégation ────────────────────────────────────────── */
 
 document.addEventListener('click', function (ev) {
-  var it = ev.target.closest ? ev.target.closest('[data-num]') : null;
-  if (it) { ouvrir(it.getAttribute('data-num')); return; }
-
+  if (ev.target && ev.target.id === 'waRetour') {
+    document.getElementById('waWrap').classList.remove('lit');
+    return;
+  }
   var sc = ev.target.closest ? ev.target.closest('[data-portee]') : null;
   if (sc) { STATE.portee = sc.getAttribute('data-portee'); rendrePortee(); rendreListe(); return; }
 
-  if (ev.target && ev.target.id === 'waRetour') {
-    document.getElementById('waWrap').classList.remove('lit');
-  }
+  var it = ev.target.closest ? ev.target.closest('[data-num]') : null;
+  if (it) { ouvrir(it.getAttribute('data-num')); }
 });
 
 document.getElementById('waSearch').addEventListener('input', function (e) {
@@ -425,7 +543,7 @@ firebase.auth().onAuthStateChanged(async function (user) {
   /* Même règle que le Dialer : jamais un coach, jamais la CSM. */
   if (STATE.role !== 'sales' && STATE.role !== 'admin') {
     document.body.innerHTML =
-      '<div style="padding:60px;text-align:center;color:var(--red);font-family:var(--fb)">'
+      '<div style="padding:60px;text-align:center;color:#f15c6d;font-family:var(--fb)">'
       + 'Accès réservé aux sales et aux admins.</div>';
     return;
   }
