@@ -12,22 +12,22 @@
   /* ─── Permission keys ─── */
   const PERM_KEYS = [
     'coaching_clients','coaching_dashboard','coaching_communication',
-    'sales_crm','sales_dashboard','sales_saisie','sales_dialer',
+    'sales_crm','sales_dashboard','sales_saisie','sales_dialer','sales_whatsapp',
     'sales_equipe','sales_commissions','sales_projections','booking',
     'csm_dashboard','csm_clients'
   ];
 
   const ROLE_DEFAULTS = {
     admin: { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
-             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_dialer:'edit',
+             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_dialer:'edit',sales_whatsapp:'edit',
              sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit',
              csm_dashboard:'edit',csm_clients:'edit' },
     coach: { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
-             sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_dialer:'none',
+             sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_dialer:'none',sales_whatsapp:'none',
              sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',
              csm_dashboard:'none',csm_clients:'none' },
     sales: { coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',
-             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_dialer:'edit',
+             sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_dialer:'edit',sales_whatsapp:'edit',
              sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit',
              csm_dashboard:'none',csm_clients:'none' },
     // ─── CSM (Customer Success Manager) ───
@@ -35,7 +35,7 @@
     // communication coaching, le coaching dashboard. Les flags signaturesAccess
     // et l'accès paiements sont gérés ailleurs (rule Firestore + flag user).
     csm:   { coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',
-             sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_dialer:'none',
+             sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_dialer:'none',sales_whatsapp:'none',
              sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',
              csm_dashboard:'edit',csm_clients:'edit' },
   };
@@ -44,6 +44,7 @@
     coaching_clients:'Clients (Coaching)',coaching_dashboard:'Dashboard (Coaching)',coaching_communication:'Communication',
     sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'Set NB / Close SB / EOD',
     sales_dialer:'Dialer',
+    sales_whatsapp:'WhatsApp',
     sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking',alteoforms:'AlteoForms',
     csm_dashboard:'Dashboard CSM',csm_clients:'Clients (CSM)'
   };
@@ -74,6 +75,7 @@
     { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
     { id: 'sales-rdv',         icon: '🗓️', label: 'Rendez-vous',  href: 'sales-rdv.html',         section: 'Sales', perm: 'booking' },
     { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
+    { id: 'sales-whatsapp',    icon: '💬', label: 'WhatsApp',    href: 'whatsapp.html',          section: 'Sales', perm: 'sales_whatsapp' },
     { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: 'signatures' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
     { id: 'admin-persons',     icon: '👤', label: 'Persons',      href: 'admin-persons.html',    section: 'Admin', perm: '_admin' },
