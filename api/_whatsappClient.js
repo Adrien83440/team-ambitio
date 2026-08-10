@@ -238,6 +238,69 @@ async function majConversation(numero, m) {
 }
 
 /**
+ * Envoie un message texte LIBRE.
+ *
+ * N'est autorisé que dans la fenêtre de 24 h suivant le dernier message du
+ * contact — c'est l'appelant qui doit l'avoir vérifié. Hors fenêtre, Meta
+ * refuse avec l'erreur 131047, tracée telle quelle dans le journal.
+ *
+ * @returns {Promise<{ok:boolean, wamid:string|null, erreur:string|null}>}
+ */
+async function envoyerTexte(opts) {
+  opts = opts || {};
+  const texte = String(opts.texte == null ? '' : opts.texte).trim();
+  const contexte = opts.contexte || {};
+  const to = normaliserNumero(opts.to);
+
+  const base = { texteLibre: true, contexte: contexte,
+                 destinataireBrut: opts.to != null ? String(opts.to) : null };
+
+  if (!texte) {
+    await journaliser(null, Object.assign({}, base, { statut: 'refuse', erreur: 'texte_vide' }));
+    return { ok: false, wamid: null, erreur: 'texte_vide' };
+  }
+  if (!to) {
+    await journaliser(null, Object.assign({}, base, { statut: 'refuse', erreur: 'numero_invalide' }));
+    return { ok: false, wamid: null, erreur: 'numero_invalide' };
+  }
+
+  const creds = await getWhatsappCreds();
+  const rep = await graph(creds.phoneNumberId + '/messages', {
+    method: 'POST',
+    body: {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: to,
+      type: 'text',
+      text: { preview_url: false, body: texte },
+    },
+  });
+
+  if (!rep.ok) {
+    console.error('[whatsapp] texte →', to, ':', rep.erreur, 'code=' + rep.code);
+    await journaliser(null, Object.assign({}, base, {
+      statut: 'echec', to: to, erreur: rep.erreur || 'echec',
+      codeMeta: rep.code != null ? rep.code : null,
+    }));
+    return { ok: false, wamid: null, erreur: rep.erreur || 'echec' };
+  }
+
+  const msgs = (rep.data && rep.data.messages) || [];
+  const wamid = (msgs[0] && msgs[0].id) || null;
+
+  await journaliser(wamid, Object.assign({}, base, { statut: 'accepte', to: to, wamid: wamid }));
+  if (wamid) {
+    await majConversation(to, {
+      sens: 'out', wamid: wamid, texte: texte,
+      extra: { contexte: contexte, par: contexte.par || null },
+    });
+  }
+
+  console.log('[whatsapp] texte →', to, 'wamid=' + wamid);
+  return { ok: true, wamid: wamid, erreur: null };
+}
+
+/**
  * Envoie un modèle approuvé.
  *
  * @param {Object} opts
@@ -362,4 +425,5 @@ module.exports = {
   graph,
   journaliser,
   envoyerModele,
+  envoyerTexte,
 };

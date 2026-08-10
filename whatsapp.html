@@ -146,9 +146,56 @@ button { font-family:inherit; }
 .wa-tick.lu { color:var(--wa-lu); }
 .wa-meta.echec { color:var(--wa-rouge); font-weight:600; }
 
-.wa-pied { background:var(--wa-panneau); padding:11px 18px; font-size:12.5px;
-  color:var(--wa-doux); line-height:1.6; flex-shrink:0; }
-.wa-pied strong { color:var(--wa-texte); font-weight:600; }
+/* ── Le composeur ─────────────────────────────────────────────────────
+   Deux états, jamais les deux à la fois : champ libre quand la fenêtre de
+   24 h est ouverte, choix d'un modèle quand elle est fermée. Afficher un
+   champ de saisie hors fenêtre produirait des messages refusés par Meta —
+   autant ne pas le proposer du tout. */
+.wa-compose { background:var(--wa-panneau); flex-shrink:0; }
+
+.wa-barre { display:flex; align-items:flex-end; gap:10px; padding:9px 16px; }
+.wa-input { flex:1; background:var(--wa-fond); border:0; border-radius:9px;
+  color:var(--wa-texte); font-family:var(--fb); font-size:14.2px; line-height:1.45;
+  padding:10px 13px; resize:none; max-height:140px; outline:none; }
+.wa-input::placeholder { color:var(--wa-doux); }
+.wa-send { width:42px; height:42px; border-radius:50%; border:0; background:var(--wa-vert);
+  color:#0b141a; font-size:17px; cursor:pointer; flex-shrink:0; display:flex;
+  align-items:center; justify-content:center; }
+.wa-send:disabled { opacity:.4; cursor:default; }
+
+.wa-ferme { padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.wa-ferme-txt { flex:1; min-width:220px; font-size:12.5px; color:var(--wa-doux); line-height:1.55; }
+.wa-ferme-txt strong { color:var(--wa-texte); font-weight:600; }
+.wa-btn { border:0; border-radius:8px; padding:9px 15px; font-family:var(--fb);
+  font-size:13px; font-weight:600; cursor:pointer; background:var(--wa-vert); color:#0b141a; }
+.wa-btn.ghost { background:transparent; color:var(--wa-doux); box-shadow:inset 0 0 0 1px var(--wa-bord); }
+.wa-btn:disabled { opacity:.45; cursor:default; }
+
+/* ── Le choix d'un modèle ── */
+.wa-tpl { padding:12px 16px 16px; max-height:52vh; overflow-y:auto; }
+.wa-tpl-h { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.wa-tpl-h h3 { margin:0; font-size:14px; font-weight:600; flex:1; }
+.wa-tpl-l { display:flex; flex-direction:column; gap:7px; }
+.wa-tpl-i { text-align:left; background:var(--wa-fond); border:0; border-radius:9px;
+  padding:10px 13px; cursor:pointer; color:var(--wa-texte); font-family:var(--fb); }
+.wa-tpl-i:hover { background:var(--wa-actif); }
+.wa-tpl-n { font-size:12.5px; font-weight:700; color:var(--wa-vert); margin-bottom:3px; }
+.wa-tpl-t { font-size:12.5px; color:var(--wa-doux); line-height:1.5; }
+.wa-tpl-form { display:flex; flex-direction:column; gap:9px; }
+.wa-var { display:flex; align-items:center; gap:10px; }
+.wa-var label { font-size:12px; color:var(--wa-doux); width:42px; flex-shrink:0; }
+.wa-var input { flex:1; background:var(--wa-fond); border:0; border-radius:7px;
+  color:var(--wa-texte); font-family:var(--fb); font-size:13.5px; padding:8px 11px; outline:none; }
+.wa-apercu-tpl { background:var(--wa-out); border-radius:8px; padding:9px 12px;
+  font-size:13.5px; line-height:1.45; white-space:pre-wrap; }
+.wa-tpl-actions { display:flex; gap:8px; justify-content:flex-end; }
+
+/* ── Attribution ── */
+.wa-assign { background:var(--wa-fond); border:0; border-radius:7px; color:var(--wa-doux);
+  font-family:var(--fb); font-size:12px; padding:6px 9px; outline:none; cursor:pointer; }
+
+.wa-erreur { padding:9px 16px; background:rgba(241,92,109,.12); color:var(--wa-rouge);
+  font-size:12.5px; line-height:1.5; }
 </style>
 </head>
 <body>
@@ -178,7 +225,7 @@ button { font-family:inherit; }
     <div class="wa-msgs" id="waMsgs">
       <div class="wa-vide">Choisis une conversation à gauche.</div>
     </div>
-    <div class="wa-pied" id="waPied"></div>
+    <div class="wa-compose" id="waCompose"></div>
   </main>
 </div>
 
@@ -210,6 +257,10 @@ var STATE = {
   actif: null,        /* numéro de la conversation ouverte */
   filtre: '',
   portee: 'moi',      /* 'moi' | 'tout' */
+  modeles: null,      /* modèles approuvés, chargés une fois */
+  modeleActif: null,  /* modèle en cours de remplissage */
+  envoiEnCours: false,
+  equipe: [],         /* membres à qui attribuer une conversation */
   offFil: null        /* désabonnement de l'écouteur du fil */
 };
 
@@ -387,7 +438,202 @@ function rendreEntete(c) {
     +   esc(initiales(nomDe(c), c.numero)) + '</span>'
     + '<div><div class="wa-thread-nom">' + esc(nomDe(c)) + '</div>'
     +      '<div class="wa-thread-sub">' + sub + '</div></div>'
-    + '<span class="wa-fenetre ' + (f.ouverte ? 'ouverte' : 'fermee') + '">' + esc(f.texte) + '</span>';
+    + '<span class="wa-fenetre ' + (f.ouverte ? 'ouverte' : 'fermee') + '">' + esc(f.texte) + '</span>'
+    + rendreAttribution(c);
+}
+
+/* Attribuer une conversation : c'est ce qui décide de ce que chacun voit dans
+   « Les miennes ». La liste vient de _meta/team_members via nav.js — la
+   collection `users` n'est lisible que par son propriétaire et les admins,
+   un sales ne pourrait pas y lire ses collègues. */
+function rendreAttribution(c) {
+  if (!STATE.equipe.length) return '';
+  var h = '<select class="wa-assign" data-assign="' + esc(c.numero) + '">'
+        + '<option value="">Non attribuée</option>';
+  STATE.equipe.forEach(function (m) {
+    var sel = (c.attribueA && c.attribueA === m.slug) ? ' selected' : '';
+    h += '<option value="' + esc(m.slug) + '"' + sel + '>' + esc(m.nom) + '</option>';
+  });
+  return h + '</select>';
+}
+
+/* ── Le composeur ──────────────────────────────────────────────────────── */
+
+function rendreCompose(c) {
+  var host = document.getElementById('waCompose');
+  if (!c) { host.innerHTML = ''; return; }
+
+  /* Un modèle est en cours de remplissage : il occupe tout le composeur. */
+  if (STATE.modeleActif) { rendreFormulaireModele(host, c); return; }
+
+  var f = fenetre(c);
+  if (f.ouverte) {
+    host.innerHTML =
+        '<div class="wa-barre">'
+      +   '<textarea class="wa-input" id="waTexte" rows="1" placeholder="Écris un message…"></textarea>'
+      +   '<button class="wa-send" id="waEnvoyer" title="Envoyer">➤</button>'
+      + '</div>';
+    var ta = document.getElementById('waTexte');
+    if (ta) {
+      ta.focus();
+      /* Le champ grandit avec le texte, comme dans l'application. */
+      ta.addEventListener('input', function () {
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+      });
+      ta.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyerTexte(c); }
+      });
+    }
+    return;
+  }
+
+  host.innerHTML =
+      '<div class="wa-ferme">'
+    +   '<div class="wa-ferme-txt"><strong>Fenêtre de réponse fermée.</strong> '
+    +     'Ce contact n\'a pas écrit depuis plus de 24 h : WhatsApp n\'autorise plus '
+    +     'qu\'un modèle approuvé. Sa réponse rouvrira la fenêtre pour 24 h.</div>'
+    +   '<button class="wa-btn" id="waChoisirModele">Choisir un modèle</button>'
+    + '</div>';
+}
+
+function rendreFormulaireModele(host, c) {
+  var m = STATE.modeleActif;
+
+  /* Étape 1 : la liste. */
+  if (m === true) {
+    var l = (STATE.modeles || []).filter(function (x) { return !x.boutons; });
+    var h = '<div class="wa-tpl"><div class="wa-tpl-h"><h3>Modèles approuvés</h3>'
+          + '<button class="wa-btn ghost" data-tpl-annuler="1">Annuler</button></div>';
+    if (STATE.modeles === null) {
+      h += '<div class="wa-tpl-t">Chargement…</div>';
+    } else if (!l.length) {
+      h += '<div class="wa-tpl-t">Aucun modèle approuvé pour l\'instant. '
+         + 'Tes modèles sont encore en examen chez Meta — dès qu\'ils passent, ils apparaissent ici.</div>';
+    } else {
+      h += '<div class="wa-tpl-l">';
+      l.forEach(function (x) {
+        h += '<button class="wa-tpl-i" data-tpl="' + esc(x.nom) + '">'
+           +   '<div class="wa-tpl-n">' + esc(x.nom) + '</div>'
+           +   '<div class="wa-tpl-t">' + esc(x.corps) + '</div>'
+           + '</button>';
+      });
+      h += '</div>';
+    }
+    host.innerHTML = h + '</div>';
+    return;
+  }
+
+  /* Étape 2 : le remplissage, avec aperçu de ce que le client va lire. */
+  var vals = STATE.modeleValeurs || [];
+  var apercu = m.corps;
+  for (var i = 0; i < m.variables; i++) {
+    var v = vals[i] ? vals[i] : '{{' + (i + 1) + '}}';
+    apercu = apercu.split('{{' + (i + 1) + '}}').join(v);
+  }
+  var pret = true;
+  for (var j = 0; j < m.variables; j++) { if (!vals[j] || !String(vals[j]).trim()) pret = false; }
+
+  var h2 = '<div class="wa-tpl"><div class="wa-tpl-h"><h3>' + esc(m.nom) + '</h3>'
+         + '<button class="wa-btn ghost" data-tpl-retour="1">← Modèles</button></div>'
+         + '<div class="wa-tpl-form">';
+  for (var k = 0; k < m.variables; k++) {
+    h2 += '<div class="wa-var"><label>{{' + (k + 1) + '}}</label>'
+        + '<input type="text" data-var="' + k + '" value="' + esc(vals[k] || '') + '"></div>';
+  }
+  h2 += '<div class="wa-apercu-tpl">' + esc(apercu) + '</div>'
+      + '<div class="wa-tpl-actions">'
+      +   '<button class="wa-btn ghost" data-tpl-annuler="1">Annuler</button>'
+      +   '<button class="wa-btn" id="waEnvoyerModele"' + (pret ? '' : ' disabled') + '>Envoyer</button>'
+      + '</div></div></div>';
+  host.innerHTML = h2;
+}
+
+/* ── Envois ────────────────────────────────────────────────────────────── */
+
+function afficherErreur(msg) {
+  var host = document.getElementById('waCompose');
+  var d = document.createElement('div');
+  d.className = 'wa-erreur';
+  d.textContent = msg;
+  host.insertBefore(d, host.firstChild);
+  setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 8000);
+}
+
+async function poster(corps) {
+  var a = window._auth || firebase.auth();
+  var t = await a.currentUser.getIdToken();
+  var r = await fetch('/api/whatsapp-send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+    body: JSON.stringify(corps)
+  });
+  var d = null;
+  try { d = await r.json(); } catch (e) { d = null; }
+  return d || { ok: false, erreur: 'reponse_illisible' };
+}
+
+async function envoyerTexte(c) {
+  if (STATE.envoiEnCours) return;
+  var ta = document.getElementById('waTexte');
+  var txt = ta ? ta.value.trim() : '';
+  if (!txt) return;
+
+  STATE.envoiEnCours = true;
+  var btn = document.getElementById('waEnvoyer');
+  if (btn) btn.disabled = true;
+  /* Le champ se vide tout de suite : le message apparaîtra dans le fil par
+     l'écouteur temps réel, comme n'importe quel autre. */
+  if (ta) { ta.value = ''; ta.style.height = 'auto'; }
+
+  var d = await poster({ numero: c.numero, texte: txt });
+  STATE.envoiEnCours = false;
+  if (btn) btn.disabled = false;
+
+  if (!d.ok) {
+    /* On rend le texte plutôt que de le perdre — c'est la moindre des choses
+       quand on vient de le taper. */
+    if (ta) ta.value = txt;
+    afficherErreur(d.erreur === 'fenetre_fermee'
+      ? 'La fenêtre de 24 h vient de se fermer. Passe par un modèle approuvé.'
+      : ('Envoi refusé : ' + (d.detail || d.erreur || 'erreur inconnue')));
+    if (d.erreur === 'fenetre_fermee') rendreCompose(c);
+  }
+}
+
+async function envoyerModele(c) {
+  if (STATE.envoiEnCours) return;
+  var m = STATE.modeleActif;
+  if (!m || m === true) return;
+
+  STATE.envoiEnCours = true;
+  var btn = document.getElementById('waEnvoyerModele');
+  if (btn) { btn.disabled = true; btn.textContent = 'Envoi…'; }
+
+  var d = await poster({
+    numero: c.numero, template: m.nom, langue: m.langue,
+    params: (STATE.modeleValeurs || []).slice(0, m.variables)
+  });
+  STATE.envoiEnCours = false;
+
+  if (d.ok) {
+    STATE.modeleActif = null; STATE.modeleValeurs = [];
+    rendreCompose(c);
+  } else {
+    if (btn) { btn.disabled = false; btn.textContent = 'Envoyer'; }
+    afficherErreur('Envoi refusé : ' + (d.detail || d.erreur || 'erreur inconnue'));
+  }
+}
+
+async function chargerModeles() {
+  if (STATE.modeles !== null) return;
+  try {
+    var a = window._auth || firebase.auth();
+    var t = await a.currentUser.getIdToken();
+    var r = await fetch('/api/whatsapp-templates', { headers: { Authorization: 'Bearer ' + t } });
+    var d = await r.json();
+    STATE.modeles = (d && d.ok && d.modeles) ? d.modeles : [];
+  } catch (e) { STATE.modeles = []; }
 }
 
 function rendreFil(msgs) {
@@ -445,9 +691,8 @@ function ouvrir(numero) {
   var c = null;
   STATE.convs.forEach(function (x) { if (x.numero === numero) c = x; });
   rendreEntete(c);
-  document.getElementById('waPied').innerHTML =
-    '<strong>Lecture seule pour le moment.</strong> Répondre depuis cette page arrive à la vague suivante — '
-    + 'hors fenêtre de 24 h, seul un modèle approuvé peut partir, et l\'interface le proposera au lieu d\'un champ libre qui échouerait.';
+  STATE.modeleActif = null;
+  rendreCompose(c);
 
   if (STATE.offFil) { STATE.offFil(); STATE.offFil = null; }
   document.getElementById('waMsgs').innerHTML = '<div class="wa-vide">Chargement…</div>';
@@ -509,7 +754,62 @@ setInterval(function () {
 
 /* ── Évènements, par délégation ────────────────────────────────────────── */
 
+/* La conversation ouverte, telle qu'elle est en base à l'instant. */
+function convActive() {
+  var c = null;
+  STATE.convs.forEach(function (x) { if (x.numero === STATE.actif) c = x; });
+  return c;
+}
+
+/* Met à jour l'aperçu et l'état du bouton SANS repeindre le formulaire :
+   repeindre à chaque frappe ferait perdre le curseur au bout d'un caractère. */
+function rafraichirApercu() {
+  var m = STATE.modeleActif;
+  if (!m || m === true) return;
+  var vals = STATE.modeleValeurs || [];
+  var txt = m.corps, pret = true;
+  for (var i = 0; i < m.variables; i++) {
+    var v = (vals[i] || '').trim();
+    if (!v) pret = false;
+    txt = txt.split('{{' + (i + 1) + '}}').join(v || '{{' + (i + 1) + '}}');
+  }
+  var ap = document.querySelector('.wa-apercu-tpl');
+  if (ap) ap.textContent = txt;
+  var b = document.getElementById('waEnvoyerModele');
+  if (b) b.disabled = !pret;
+}
+
 document.addEventListener('click', function (ev) {
+  var t = ev.target;
+
+  if (t && t.id === 'waEnvoyer') { envoyerTexte(convActive()); return; }
+  if (t && t.id === 'waEnvoyerModele') { envoyerModele(convActive()); return; }
+
+  if (t && t.id === 'waChoisirModele') {
+    STATE.modeleActif = true; STATE.modeleValeurs = [];
+    rendreCompose(convActive());
+    chargerModeles().then(function () {
+      if (STATE.modeleActif === true) rendreCompose(convActive());
+    });
+    return;
+  }
+  if (t && t.closest && t.closest('[data-tpl-annuler]')) {
+    STATE.modeleActif = null; STATE.modeleValeurs = [];
+    rendreCompose(convActive()); return;
+  }
+  if (t && t.closest && t.closest('[data-tpl-retour]')) {
+    STATE.modeleActif = true; STATE.modeleValeurs = [];
+    rendreCompose(convActive()); return;
+  }
+  var tpl = t && t.closest ? t.closest('[data-tpl]') : null;
+  if (tpl) {
+    var nom = tpl.getAttribute('data-tpl');
+    (STATE.modeles || []).forEach(function (x) { if (x.nom === nom) STATE.modeleActif = x; });
+    STATE.modeleValeurs = [];
+    rendreCompose(convActive());
+    return;
+  }
+
   if (ev.target && ev.target.id === 'waRetour') {
     document.getElementById('waWrap').classList.remove('lit');
     return;
@@ -525,6 +825,44 @@ document.getElementById('waSearch').addEventListener('input', function (e) {
   STATE.filtre = e.target.value || '';
   rendreListe();
 });
+
+/* Saisie des variables d'un modèle — délégation, car les champs naissent et
+   meurent avec le formulaire. */
+document.addEventListener('input', function (ev) {
+  var el = ev.target;
+  if (!el || !el.getAttribute) return;
+  var i = el.getAttribute('data-var');
+  if (i === null) return;
+  STATE.modeleValeurs = STATE.modeleValeurs || [];
+  STATE.modeleValeurs[Number(i)] = el.value;
+  rafraichirApercu();
+});
+
+/* Attribution d'une conversation. */
+document.addEventListener('change', function (ev) {
+  var el = ev.target;
+  if (!el || !el.getAttribute) return;
+  var num = el.getAttribute('data-assign');
+  if (!num) return;
+  db.collection('whatsapp_conversations').doc(num)
+    .update({ attribueA: el.value || null })
+    .catch(function (e) {
+      if (window.console) console.warn('[wa] attribution', e && e.message);
+      afficherErreur('Attribution refusée : ' + (e && e.message));
+    });
+});
+
+/* L'équipe à qui attribuer : sales et admin actifs, lus par nav.js dans
+   _meta/team_members (la collection `users` n'est pas lisible par un sales). */
+function chargerEquipe() {
+  var l = window.TEAM_MEMBERS_ACTIVE || [];
+  STATE.equipe = l
+    .filter(function (m) { return m && (m.role === 'sales' || m.role === 'admin'); })
+    .map(function (m) { return { slug: m.slug, nom: m.displayName || m.shortName || m.slug }; });
+  var c = convActive();
+  if (c) rendreEntete(c);
+}
+window.addEventListener('team-members-loaded', chargerEquipe);
 
 /* ── Démarrage ─────────────────────────────────────────────────────────── */
 
@@ -550,6 +888,7 @@ firebase.auth().onAuthStateChanged(async function (user) {
 
   rendrePortee();
   ecouterConversations();
+  if (window.loadTeamMembers) { window.loadTeamMembers().then(chargerEquipe).catch(function () {}); }
 });
 </script>
 </body>
