@@ -29,7 +29,8 @@
 
 const { db } = require('./_firebaseAdmin');
 const { verifyFirebaseAuth } = require('./_verifyFirebaseAuth');
-const { envoyerTexte, envoyerModele, normaliserNumero } = require('./_whatsappClient');
+const { envoyerTexte, envoyerModele, envoyerMedia, televerserMedia,
+        normaliserNumero, MEDIAS } = require('./_whatsappClient');
 const parseBody = require('./_parseBody');
 
 module.exports = async (req, res) => {
@@ -55,9 +56,14 @@ module.exports = async (req, res) => {
   const texte = String(body.texte == null ? '' : body.texte).trim();
   const template = String(body.template || '').trim();
   const params = Array.isArray(body.params) ? body.params : [];
+  const media64 = String(body.mediaBase64 || '');
+  const mime = String(body.mime || '');
 
   if (!numero) { res.status(400).json({ ok: false, erreur: 'numero_invalide' }); return; }
-  if (!texte && !template) { res.status(400).json({ ok: false, erreur: 'texte_ou_template_requis' }); return; }
+  if (!texte && !template && !media64) {
+    res.status(400).json({ ok: false, erreur: 'texte_media_ou_template_requis' });
+    return;
+  }
 
   const par = (auth && auth.email) || 'equipe';
   const contexte = { type: 'reponse', par: par, uid: (auth && auth.uid) || null };
@@ -84,6 +90,38 @@ module.exports = async (req, res) => {
         detail: 'Le contact n\'a pas écrit depuis plus de 24 h. Seul un modèle approuvé peut encore partir.',
         fenetreExpireA: fin || null,
       });
+      return;
+    }
+
+    /* ── Média : même fenêtre, deux temps (téléversement puis envoi) ── */
+    if (media64) {
+      if (!MEDIAS[mime]) {
+        res.status(400).json({ ok: false, erreur: 'type_non_supporte',
+          detail: 'Images JPEG/PNG/WebP et PDF uniquement.' });
+        return;
+      }
+      let buf;
+      try { buf = Buffer.from(media64, 'base64'); }
+      catch (e) { res.status(400).json({ ok: false, erreur: 'fichier_illisible' }); return; }
+      /* Vercel plafonne le corps d'une requête : au-delà, la fonction n'est
+         même pas appelée. On refuse avant, avec un message compréhensible,
+         plutôt que de laisser un échec réseau sans explication. */
+      if (buf.length > 3500000) {
+        res.status(400).json({ ok: false, erreur: 'fichier_trop_lourd',
+          detail: 'Maximum 3,5 Mo. Au-delà, la requête n\'atteint même pas le serveur.' });
+        return;
+      }
+
+      const up = await televerserMedia(buf, mime, body.nom || 'fichier');
+      if (!up.ok) {
+        res.status(200).json({ ok: false, erreur: up.erreur || 'televersement_echoue' });
+        return;
+      }
+      const envoiM = await envoyerMedia({
+        to: numero, mediaId: up.id, mime: mime,
+        nom: body.nom || 'fichier', legende: texte, contexte: contexte,
+      });
+      res.status(200).json({ ok: envoiM.ok, wamid: envoiM.wamid, erreur: envoiM.erreur });
       return;
     }
 
