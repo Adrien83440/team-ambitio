@@ -86,7 +86,7 @@ async function upsertClient(ctx) {
   if (!payload.email) {
     const e = new Error('Le client n\'a pas d\'email — Qonto l\'exige pour créer une facture.'); e.status = 400; throw e;
   }
-  if (payload.type === 'company' && !payload.name) {
+  if (payload.kind === 'company' && !payload.name) {
     const e = new Error('Le client est de type société mais n\'a pas de raison sociale.'); e.status = 400; throw e;
   }
 

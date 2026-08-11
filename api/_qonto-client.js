@@ -266,14 +266,19 @@ function mapClientToQonto(client) {
   const line2 = String(addr.line2 || '').trim();
   const street = truncate(line1 + (line2 ? (', ' + line2) : ''), 250);
 
+  /* Le champ s'appelle « kind » côté Qonto, PAS « type ». Avec « type », l'API
+     répond « Client.kind failed on the required tag », et enchaîne sur des
+     erreurs en cascade pour name / first_name / last_name : sans kind, elle ne
+     sait pas lesquels sont obligatoires. Le message n'est pas explicite, la
+     cause est unique. */
   const payload = {
-    type: client.clientType === 'company' ? 'company' : 'individual',
+    kind: client.clientType === 'individual' ? 'individual' : 'company',
     email: String(client.email || '').trim(),
     currency: 'EUR',
     locale: 'fr',
   };
 
-  if (payload.type === 'company') {
+  if (payload.kind === 'company') {
     payload.name = truncate(client.companyName || '', 250);
   } else {
     payload.first_name = truncate(client.contactFirstName || '', 100);
