@@ -163,7 +163,10 @@
   }
 
   /* ─── Carte complète ──────────────────────────────────────────────── */
-  function cardHtml(item, idx, admin) {
+  // opts.admin      → vue de gestion : badges d'état et boutons d'action
+  // opts.canPublish → inclut la bascule mur public (admin uniquement)
+  function cardHtml(item, idx, opts) {
+    var admin = !!opts.admin;
     var cls = 'tw-card';
     if (item.archived) cls += ' is-archived';
     if (item.featured) cls += ' is-featured';
@@ -183,7 +186,9 @@
       acts = '<div class="tw-acts">'
         + '<button class="tw-act" type="button" data-act="edit" data-id="' + esc(item.id) + '" title="Modifier">✎</button>'
         + '<button class="tw-act' + (item.featured ? ' on' : '') + '" type="button" data-act="feature" data-id="' + esc(item.id) + '" title="Épingler en tête">★</button>'
-        + '<button class="tw-act' + (item.isPublic ? ' on-pub' : '') + '" type="button" data-act="public" data-id="' + esc(item.id) + '" title="' + (item.isPublic ? 'Retirer du mur public' : 'Publier sur le mur public') + '">' + (item.isPublic ? '🌐' : '🔒') + '</button>'
+        + (opts.canPublish
+            ? '<button class="tw-act' + (item.isPublic ? ' on-pub' : '') + '" type="button" data-act="public" data-id="' + esc(item.id) + '" title="' + (item.isPublic ? 'Retirer du mur public' : 'Publier sur le mur public') + '">' + (item.isPublic ? '🌐' : '🔒') + '</button>'
+            : '')
         + (item.archived
             ? '<button class="tw-act" type="button" data-act="restore" data-id="' + esc(item.id) + '" title="Restaurer">↩</button>'
             : '<button class="tw-act" type="button" data-act="archive" data-id="' + esc(item.id) + '" title="Archiver">🗄</button>')
@@ -211,7 +216,7 @@
   /* ─── Rendu du mur ────────────────────────────────────────────────── */
   // container : élément DOM
   // items     : tableau déjà filtré par la page appelante
-  // opts      : { admin: bool, emptyTitle: string, emptyText: string }
+  // opts      : { admin: bool, canPublish: bool, emptyTitle, emptyText }
   function render(container, items, opts) {
     if (!container) return [];
     opts = opts || {};
@@ -230,7 +235,7 @@
     container.style.columns = '';
     var html = '';
     for (var i = 0; i < sorted.length; i++) {
-      html += cardHtml(sorted[i], i, !!opts.admin);
+      html += cardHtml(sorted[i], i, opts);
     }
     container.innerHTML = html;
     container._twItems = sorted;

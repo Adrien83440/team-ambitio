@@ -869,17 +869,37 @@ service cloud.firestore {
     // toujours écrit à la création, un document sans le champ resterait
     // invisible côté public plutôt que d'être exposé par accident.
     //
-    // Écriture : admin uniquement — c'est le module personnel d'Adrien.
+    // Écriture : tout membre connecté dépose et édite — coachs et CSM
+    // compris, ce sont eux qui reçoivent le plus de retours clients.
+    // MAIS le champ `isPublic` reste la chasse gardée des admins : c'est lui
+    // qui décide de ce qu'un prospect voit sur le lien partageable.
+    //   • create : un admin fait ce qu'il veut ; tout autre membre à la
+    //     condition que le document naisse NON public. Un non-admin ne peut
+    //     donc pas faire entrer quelque chose sur le mur externe, même en
+    //     une seule écriture.
+    //   • update : un admin fait ce qu'il veut ; un non-admin ne passe que
+    //     s'il laisse `isPublic` strictement identique à ce qu'il était.
+    //     Il peut donc renommer, recatégoriser, épingler, archiver — jamais
+    //     publier ni dépublier.
+    // Corollaire assumé : archiver un témoignage déjà public ne le dépublie
+    // pas côté non-admin. Sans conséquence, le mur public exige aussi
+    // archived == false.
+    //
     // L'import Drive (api/temoignages-drive-sync.js) passe par l'Admin SDK
     // et contourne naturellement ces rules.
     // Suppression : jamais. On archive (archived:true), le document et son
     // blob Storage restent — règle métier du repo.
     match /testimonials/{temoId} {
-      allow read:           if isAuth()
-                            || (resource.data.isPublic == true
-                                && resource.data.archived == false);
-      allow create, update: if isAdmin();
-      allow delete:         if false;
+      allow read:   if isAuth()
+                    || (resource.data.isPublic == true
+                        && resource.data.archived == false);
+      allow create: if isAdmin()
+                    || (isAuth()
+                        && request.resource.data.isPublic == false);
+      allow update: if isAdmin()
+                    || (isAuth()
+                        && request.resource.data.isPublic == resource.data.isPublic);
+      allow delete: if false;
     }
 
   }

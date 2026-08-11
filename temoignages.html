@@ -282,9 +282,21 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     toastTimer = setTimeout(function () { t.classList.remove('show'); }, 3200);
   }
 
-  function guardAdmin() {
+  // Deux niveaux, miroir exact des rules Firestore :
+  //   guardWrite   — déposer, nommer, catégoriser, épingler, archiver.
+  //                  Ouvert à tout membre connecté.
+  //   guardPublish — basculer un témoignage sur le mur PUBLIC, et régler
+  //                  le dossier Drive. Admin seul : ce qu'un prospect voit
+  //                  ne se décide pas à cinq.
+  function guardWrite() {
+    if (UID) return true;
+    toast('🔒 Connexion requise');
+    return false;
+  }
+
+  function guardPublish() {
     if (IS_ADMIN) return true;
-    toast('🔒 Modification réservée aux administrateurs');
+    toast('🔒 La publication sur le mur public est réservée aux admins');
     return false;
   }
 
@@ -374,6 +386,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     renderPills();
     window.TemoWall.render($('wall'), visible(), {
       admin: true,
+      canPublish: IS_ADMIN,
       emptyTitle: FILTER.archived ? 'Aucun témoignage archivé' : 'Le mur est encore vide',
       emptyText: FILTER.archived
         ? 'Les témoignages archivés se retrouvent ici — rien n’est jamais supprimé.'
@@ -533,7 +546,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   }
 
   function uploadOne(file) {
-    if (!guardAdmin()) return;
+    if (!guardWrite()) return;
     var ui   = queueRow(file);
     var ref  = db.collection(COL).doc();
     var id   = ref.id;
@@ -616,7 +629,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 
   function handleFiles(list) {
     if (!list || !list.length) return;
-    if (!guardAdmin()) return;
+    if (!guardWrite()) return;
     for (var i = 0; i < list.length; i++) uploadOne(list[i]);
   }
 
@@ -716,7 +729,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   }
 
   function saveLink() {
-    if (!guardAdmin()) return;
+    if (!guardWrite()) return;
     var parsed = parseLink($('lUrl').value);
     if (!parsed) { toast('❌ Adresse requise'); return; }
     var doc = {
@@ -734,7 +747,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       clientName: $('lName').value.trim(),
       caption:    $('lCap').value.trim(),
       text:       '',
-      isPublic:   !!$('lPublic').checked,
+      isPublic:   IS_ADMIN && !!$('lPublic').checked,
       featured:   false,
       archived:   false,
       order:      Date.now(),
@@ -751,7 +764,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   }
 
   function saveText() {
-    if (!guardAdmin()) return;
+    if (!guardWrite()) return;
     var txt = $('tText').value.trim();
     if (!txt) { toast('❌ Le texte est vide'); return; }
     db.collection(COL).add({
@@ -763,7 +776,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       width: 0, height: 0, duration: 0,
       clientName: $('tName').value.trim(),
       caption:    $('tCap').value.trim(),
-      isPublic:   !!$('tPublic').checked,
+      isPublic:   IS_ADMIN && !!$('tPublic').checked,
       featured:   false,
       archived:   false,
       order:      Date.now(),
@@ -786,7 +799,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   }
 
   function patch(id, data) {
-    if (!guardAdmin()) return Promise.resolve();
+    if (!guardWrite()) return Promise.resolve();
     data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
     return db.collection(COL).doc(id).update(data)
       .catch(function (e) { toast('❌ ' + e.message); });
@@ -818,9 +831,9 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       clientName: $('fName').value.trim(),
       caption:    $('fCap').value.trim(),
       category:   $('fCat').value,
-      isPublic:   !!$('fPublic').checked,
       featured:   !!$('fFeat').checked
     };
+    if (IS_ADMIN) data.isPublic = !!$('fPublic').checked;
     if (it && it.kind === 'text') data.text = $('fText').value.trim();
     patch(editingId, data).then(function () {
       closeModal('mEdit');
@@ -842,13 +855,14 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       if (act === 'edit')    { openEdit(id); return; }
       if (act === 'feature') { patch(id, { featured: !it.featured }); return; }
       if (act === 'public')  {
+        if (!guardPublish()) return;
         patch(id, { isPublic: !it.isPublic });
         toast(it.isPublic ? '🔒 Retiré du mur public' : '🌐 Publié sur le mur public');
         return;
       }
       if (act === 'archive') {
         if (!confirm('Archiver ce témoignage ? Il disparaît du mur mais rien n’est supprimé — tu le retrouves dans « Archives ».')) return;
-        patch(id, { archived: true, isPublic: false });
+        patch(id, IS_ADMIN ? { archived: true, isPublic: false } : { archived: true });
         toast('🗄 Archivé');
         return;
       }
@@ -876,7 +890,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   }
 
   function openDrive() {
-    if (!guardAdmin()) return;
+    if (!guardPublish()) return;
     db.doc(CFG_DOC).get().then(function (s) {
       CFG = s.exists ? (s.data() || {}) : {};
       $('dFolder').value  = CFG.driveFolderId || '';
@@ -904,7 +918,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   }
 
   function saveDrive() {
-    if (!guardAdmin()) return;
+    if (!guardPublish()) return;
     var folder = extractFolderId($('dFolder').value);
     db.doc(CFG_DOC).set({
       driveFolderId:   folder,
@@ -921,7 +935,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   }
 
   function runSync(dry) {
-    if (!guardAdmin()) return;
+    if (!guardPublish()) return;
     var btn = dry ? $('bDryRun') : $('bSyncNow');
     var old = btn.textContent;
     btn.disabled = true;
@@ -982,12 +996,12 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     });
 
     $('bLink').addEventListener('click', function () {
-      if (!guardAdmin()) return;
+      if (!guardWrite()) return;
       fillCatSelect($('lCat'), 'video');
       openModal('mLink');
     });
     $('bText').addEventListener('click', function () {
-      if (!guardAdmin()) return;
+      if (!guardWrite()) return;
       fillCatSelect($('tCat'), 'autre');
       openModal('mText');
     });
@@ -998,7 +1012,9 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       if (!editingId) return;
       var it = byId(editingId);
       if (!it) return;
-      patch(editingId, it.archived ? { archived: false } : { archived: true, isPublic: false });
+      patch(editingId, it.archived
+        ? { archived: false }
+        : (IS_ADMIN ? { archived: true, isPublic: false } : { archived: true }));
       closeModal('mEdit');
       toast(it.archived ? '↩ Restauré' : '🗄 Archivé');
     });
@@ -1032,10 +1048,15 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       window.TemoWall.skeleton($('wall'), 12);
 
       if (!IS_ADMIN) {
-        // Lecture seule : on retire tout ce qui écrit.
-        $('drop').style.display = 'none';
-        var bar = $('bAdd').parentNode;
-        bar.style.display = 'none';
+        // Tout membre connecté dépose et édite. Seuls les leviers qui
+        // exposent à l'extérieur — publication et réglages Drive — sont
+        // retirés de l'écran, en écho aux rules Firestore.
+        $('bDrive').style.display = 'none';
+        var pubRows = [$('fPublic'), $('lPublic'), $('tPublic')];
+        for (var k = 0; k < pubRows.length; k++) {
+          var row = pubRows[k] && pubRows[k].closest('.tw-check');
+          if (row) row.style.display = 'none';
+        }
       }
 
       initDropzone();

@@ -85,10 +85,11 @@
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
     { id: 'documents',         icon: '📚', label: 'Documents',    href: 'documents.html',         section: 'Outils', perm: '_all' },
-    // Mur de témoignages : module personnel d'Adrien (gestion admin). Le mur
-    // partageable aux prospects est temoignages-public.html, sans connexion.
-    // Passer perm à '_all' si l'équipe doit voir le mur interne.
-    { id: 'temoignages',       icon: '⭐', label: 'Témoignages',  href: 'temoignages.html',       section: 'Outils', perm: '_admin' },
+    // Mur de témoignages : ouvert à toute l'équipe connectée, coachs et CSM
+    // compris — ce sont eux qui reçoivent le plus de retours clients. Chacun
+    // dépose et édite ; seul un admin bascule un témoignage sur le mur PUBLIC
+    // (temoignages-public.html, partageable sans connexion) et règle le Drive.
+    { id: 'temoignages',       icon: '⭐', label: 'Témoignages',  href: 'temoignages.html',       section: 'Outils', perm: '_all' },
   ];
 
   const THEMES = {
