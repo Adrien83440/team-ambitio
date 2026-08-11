@@ -8,12 +8,13 @@
 // plus aucun moyen de dire « en juillet elle avait ouvert 168 créneaux ».
 // Ce cron fige donc, chaque nuit, ce qui était réellement ouvert / pris /
 // libre — c'est la mémoire que lit la section « Capacité & dispos » du funnel.
+// L'agenda Google personnel n'entre pas dans le comptage (retiré le 11/08).
 //
 // CE QU'IL ÉCRIT
 // --------------
 //   availability_daily/{personId}__{YYYY-MM}
-//     { personId, personName, month, days: { 'YYYY-MM-DD': {open,booked,perso,free,work} },
-//       updatedAt, lastRunAt }
+//     { personId, personName, month, days: { 'YYYY-MM-DD': {open,booked,free,work,final,approx} },
+//       updatedAt }
 //
 // QUELS JOURS
 // -----------
@@ -101,17 +102,6 @@ async function loadBookings(startDs, endDs) {
   return out;
 }
 
-/* ── calendar_busy d'un expert connecté à Google Calendar ── */
-async function loadBusy(personId) {
-  try {
-    const snap = await db.collection('calendar_busy').doc(personId).get();
-    return (snap.exists && (snap.data() || {}).busy) || [];
-  } catch (e) {
-    console.warn('[availability-snapshot] busy', personId, e.message);
-    return [];
-  }
-}
-
 /* ── Archive déjà écrite pour les mois couverts ── */
 async function loadArchive(personId, monthKeys) {
   const out = {};
@@ -178,7 +168,6 @@ module.exports = async function handler(req, res) {
 
     for (const t of targets) {
       const p = t.person;
-      const busy = p.calendarConnected ? await loadBusy(p.id) : [];
       const existing = await loadArchive(p.id, monthKeys);
       const byDate = bookingIdx[p.id] || {};
 
@@ -194,11 +183,11 @@ module.exports = async function handler(req, res) {
            Tout le reste (aujourd'hui, et les jours qu'une nuit ratée a laissés
            non clôturés) est recalculé — le rattrapage est auto-cicatrisant. */
         if (!Dispo.shouldRewriteArchiveDay(existing[ds])) continue;
-        const cap = Dispo.dayCapacity(p, ds, { settings, bookings: byDate[ds], busy });
+        const cap = Dispo.dayCapacity(p, ds, { settings, bookings: byDate[ds] });
         const meta = Dispo.archiveDayMeta(ds, today);
         const mk = Dispo.monthKeyOf(ds);
         (perMonth[mk] = perMonth[mk] || {})[ds] = {
-          open: cap.open, booked: cap.booked, perso: cap.perso, free: cap.free, work: cap.work,
+          open: cap.open, booked: cap.booked, free: cap.free, work: cap.work,
           final: meta.final, approx: meta.approx
         };
         daysWritten++;

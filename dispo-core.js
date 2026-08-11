@@ -333,24 +333,6 @@
     return out;
   }
 
-  /* Plages Google Calendar de ce jour-là, en minutes PARISIENNES.
-     `busy` = tableau brut de calendar_busy/{personId}.busy ({start,end} ISO). */
-  function busyRangesFor(busy, ds) {
-    var out = [];
-    for (var i = 0; i < (busy || []).length; i++) {
-      var b = busy[i];
-      if (!b || !b.start || !b.end) continue;
-      var s = parisStamp(new Date(b.start));
-      var e = parisStamp(new Date(b.end));
-      if (s.ymd > ds || e.ymd < ds) continue;
-      out.push({
-        start: s.ymd === ds ? s.min : 0,
-        end: e.ymd === ds ? e.min : 1440
-      });
-    }
-    return out;
-  }
-
   function overlaps(slotStart, ranges) {
     var slotEnd = slotStart + SLOT_MINUTES;
     for (var i = 0; i < ranges.length; i++) {
@@ -363,28 +345,25 @@
    * Capacité d'une personne sur UNE journée.
    * @param person   doc booking_config (__type === 'person')
    * @param ds       'YYYY-MM-DD'
-   * @param opts     { settings, bookings: [RDV de cette personne ce jour],
-   *                   busy: [plages Google brutes de cette personne] }
-   * @returns { open, booked, perso, free, work }
+   * @param opts     { settings, bookings: [RDV de cette personne ce jour] }
+   * @returns { open, booked, free, work }
    *
-   * `booked` l'emporte sur `perso` : un RDV pris via le module crée AUSSI un
-   * événement Google (Meet auto) — sans cette priorité, la même heure serait
-   * comptée deux fois et `free` deviendrait négatif.
+   * L'agenda Google personnel n'entre PAS dans le comptage (retiré le
+   * 11/08 à la demande d'Adrien) : une heure ouverte au planning mais
+   * occupée par un rendez-vous perso compte donc comme libre. En échange
+   * le tableau est arithmétiquement simple — Ouverts = Pris + Libres.
    */
   function dayCapacity(person, ds, opts) {
     var o = opts || {};
     var slots = hourSlots(person, ds, o.settings);
-    var res = { open: slots.length, booked: 0, perso: 0, free: 0, work: isWorkingDay(ds, o.settings) };
+    var res = { open: slots.length, booked: 0, free: 0, work: isWorkingDay(ds, o.settings) };
     if (!slots.length) return res;
 
     var bRanges = bookedRangesFor(o.bookings);
-    var gRanges = busyRangesFor(o.busy, ds);
-
     for (var i = 0; i < slots.length; i++) {
       if (overlaps(slots[i], bRanges)) res.booked++;
-      else if (overlaps(slots[i], gRanges)) res.perso++;
     }
-    res.free = res.open - res.booked - res.perso;
+    res.free = res.open - res.booked;
     return res;
   }
 
@@ -403,7 +382,7 @@
 
   function emptyTotals() {
     return {
-      open: 0, booked: 0, perso: 0, free: 0,
+      open: 0, booked: 0, free: 0,
       /* Capacité ouverte sur les seuls jours ouvrés. Sans ça, la moyenne
          « par jour ouvré » d'une personne qui ouvre aussi le samedi serait
          gonflée par des créneaux qui ne tombent pas dans le dénominateur. */
@@ -413,8 +392,7 @@
   }
 
   function addDayTo(tot, day) {
-    tot.open += day.open; tot.booked += day.booked;
-    tot.perso += day.perso; tot.free += day.free;
+    tot.open += day.open; tot.booked += day.booked; tot.free += day.free;
     tot.days++;
     if (day.work) { tot.workDays++; tot.openWork += day.open; }
     if (day.open > 0) tot.openDays++;
@@ -431,8 +409,8 @@
    *
    * @param person   doc booking_config
    * @param days     ['YYYY-MM-DD', ...]
-   * @param opts     { settings, bookingsByDate: {ds:[RDV]}, busy: [...],
-   *                   archive: {ds:{open,booked,perso,free,work}}, today: 'YYYY-MM-DD' }
+   * @param opts     { settings, bookingsByDate: {ds:[RDV]},
+   *                   archive: {ds:{open,booked,work,final,approx}}, today: 'YYYY-MM-DD' }
    * @returns { totals, byDay }
    */
   function rangeCapacity(person, days, opts) {
@@ -453,17 +431,18 @@
          faire foi — sinon un jour resterait éternellement à « 0 pris ». */
       if (a && a.final === true && ds < today) {
         day = {
-          open: a.open || 0, booked: a.booked || 0, perso: a.perso || 0,
-          free: a.free != null ? a.free : (a.open || 0) - (a.booked || 0) - (a.perso || 0),
+          open: a.open || 0, booked: a.booked || 0,
+          /* `free` est TOUJOURS recalculé, jamais lu : les entrées écrites
+             avant le 11/08 stockent un free amputé de l'agenda perso, qui
+             ne veut plus rien dire sous la définition actuelle. */
+          free: (a.open || 0) - (a.booked || 0),
           work: a.work != null ? a.work : isWorkingDay(ds, o.settings),
           /* `approx` : capacité reconstituée par un rattrapage tardif, donc
              depuis des horaires postérieurs à la journée concernée. */
           estimated: a.approx === true
         };
       } else {
-        day = dayCapacity(person, ds, {
-          settings: o.settings, bookings: byDate[ds], busy: o.busy
-        });
+        day = dayCapacity(person, ds, { settings: o.settings, bookings: byDate[ds] });
         /* Jour passé sans archive = reconstitué depuis les horaires
            d'aujourd'hui. Le chiffre est plausible, pas constaté : on le marque
            pour que l'écran puisse le dire. */
@@ -479,7 +458,7 @@
     var t = emptyTotals();
     for (var i = 0; i < list.length; i++) {
       var s = list[i];
-      t.open += s.open; t.booked += s.booked; t.perso += s.perso; t.free += s.free;
+      t.open += s.open; t.booked += s.booked; t.free += s.free;
       t.openWork += s.openWork;
       t.estimated += s.estimated;
       /* days / workDays sont des propriétés du CALENDRIER, pas des personnes :
