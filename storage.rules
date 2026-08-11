@@ -11,9 +11,11 @@ rules_version = '2';
 //  Ces rules sont indépendantes de firestore.rules (deux services
 //  différents).
 //
-//  Couvrent pour l'instant uniquement la sous-arborescence des vocaux
-//  liés aux leads. Si d'autres usages Storage apparaissent (avatars,
-//  exports CSV, etc.), ajouter d'autres `match` dédiés.
+//  Deux usages couverts aujourd'hui :
+//    • voice_notes/  — vocaux de fil de discussion par lead (privé)
+//    • testimonials/ — médias du mur de témoignages (lecture publique)
+//  Si d'autres usages Storage apparaissent (avatars, exports CSV, etc.),
+//  ajouter d'autres `match` dédiés AU-DESSUS du catch-all final.
 
 service firebase.storage {
   match /b/{bucket}/o {
@@ -40,6 +42,34 @@ service firebase.storage {
                     && request.resource.contentType.matches('audio/.*');
       allow update: if false;  // les vocaux sont immuables
       allow delete: if request.auth != null;
+    }
+
+    // ═══ TÉMOIGNAGES — mur de témoignages clients ═══
+    //
+    //  Path : testimonials/{temoId}/{fileName}
+    //    • le fichier lui-même (vidéo, image, capture, tout format)
+    //    • poster.jpg — vignette générée pour les vidéos
+    //
+    //  Read   : PUBLIC, et c'est délibéré. temoignages-public.html est un
+    //           mur partagé par lien à des prospects, sans authentification :
+    //           les médias doivent être servis sans session. Le chemin est
+    //           impossible à deviner (ID Firestore + jeton de téléchargement)
+    //           et seuls y vivent des témoignages destinés à être montrés.
+    //  Write  : utilisateur authentifié. La page ne laisse écrire que les
+    //           admins (miroir de la rule Firestore) ; ici on reste au niveau
+    //           du bucket, qui ne sait pas lire les rôles Firestore.
+    //           Plafond 2 Go : garde-fou contre le fichier déposé par erreur,
+    //           pas une contrainte de fonctionnement (une vidéo de témoignage
+    //           dépasse rarement 500 Mo).
+    //  Delete : refusé. Rien n'est jamais supprimé — archiver un témoignage
+    //           pose archived:true côté Firestore, le blob reste en place.
+    match /testimonials/{temoId}/{fileName} {
+      allow read:   if true;
+      allow create: if request.auth != null
+                    && request.resource.size < 2 * 1024 * 1024 * 1024;
+      allow update: if request.auth != null
+                    && request.resource.size < 2 * 1024 * 1024 * 1024;
+      allow delete: if false;
     }
 
     // Tout le reste : refusé par défaut. Ajouter d'autres `match` au-dessus

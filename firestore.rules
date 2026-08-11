@@ -845,5 +845,42 @@ service cloud.firestore {
       allow create, update, delete:  if false;      // Admin SDK uniquement
     }
 
+
+    // ═══ TÉMOIGNAGES — mur de témoignages clients ═══
+    //
+    // Deux publics, une seule collection :
+    //   • l'équipe connectée voit TOUT (isAuth) — mur interne, archives
+    //     comprises ;
+    //   • le monde entier ne voit que ce qui a été explicitement publié.
+    //
+    // Le champ s'appelle `isPublic` et non `public` : on ne pariera pas sur
+    // le statut de mot réservé de `public` dans le langage des rules.
+    //
+    // La condition publique porte sur `resource.data` : Firestore n'accepte
+    // alors une requête de LISTE que si elle contraint elle-même ces deux
+    // champs. temoignages-public.html interroge donc obligatoirement
+    //     .where('isPublic','==',true).where('archived','==',false)
+    // et toute autre requête anonyme est rejetée — c'est ce qui garantit
+    // qu'un témoignage interne ne peut pas fuiter par la page publique.
+    // Deux filtres d'égalité : les index simples automatiques suffisent,
+    // aucun index composite à créer.
+    //
+    // `archived == false` (et pas `!= true`) est volontaire : le champ est
+    // toujours écrit à la création, un document sans le champ resterait
+    // invisible côté public plutôt que d'être exposé par accident.
+    //
+    // Écriture : admin uniquement — c'est le module personnel d'Adrien.
+    // L'import Drive (api/temoignages-drive-sync.js) passe par l'Admin SDK
+    // et contourne naturellement ces rules.
+    // Suppression : jamais. On archive (archived:true), le document et son
+    // blob Storage restent — règle métier du repo.
+    match /testimonials/{temoId} {
+      allow read:           if isAuth()
+                            || (resource.data.isPublic == true
+                                && resource.data.archived == false);
+      allow create, update: if isAdmin();
+      allow delete:         if false;
+    }
+
   }
 }

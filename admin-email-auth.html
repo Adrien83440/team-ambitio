@@ -23,6 +23,7 @@ h1{font-size:22px;font-weight:800;margin-bottom:8px}
 .account-icon.strategie{background:rgba(96,165,250,0.12)}
 .account-icon.coaching{background:rgba(52,211,153,0.12)}
 .account-icon.contact{background:rgba(167,139,250,0.12)}
+.account-icon.temo{background:rgba(245,185,66,0.12)}
 .account-info{flex:1}
 .account-name{font-size:14px;font-weight:700}
 .account-email{font-size:12px;color:var(--muted)}
@@ -40,18 +41,34 @@ h1{font-size:22px;font-weight:800;margin-bottom:8px}
 <body>
 <div class="card">
 <h1>Connexion Email</h1>
-<p class="sub">Connecte les comptes Gmail de l'équipe pour envoyer et recevoir des emails depuis les fiches contacts.</p>
+<p class="sub">Connecte les comptes Gmail de l'équipe pour envoyer et recevoir des emails depuis les fiches contacts.
+Le dernier n'est pas une bo&icirc;te mail&nbsp;: c'est l'acc&egrave;s Google&nbsp;Drive du mur de t&eacute;moignages.</p>
 <div id="accounts"></div>
 <div class="msg" id="msg"></div>
 <a href="sales-equipe.html" class="back">← Retour</a>
 </div>
 <script>
 var db=firebase.firestore();
+var GMAIL_SCOPES='openid email https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
+// Mur de témoignages : lecture du dossier Drive surveillé ET modification du
+// partage des grosses vidéos (permissions.create), ce que drive.readonly ne
+// permet pas — d'où le scope Drive complet. Si tu préfères t'en tenir à la
+// lecture seule, remplace par .../auth/drive.readonly : l'import continue de
+// fonctionner, mais les vidéos de plus de 100 Mo devront être partagées à la
+// main (« Tous ceux qui ont le lien ») pour s'afficher sur le mur.
+var DRIVE_SCOPES='openid email https://www.googleapis.com/auth/drive';
+
 var ACCOUNTS=[
-  {key:'strategie',label:'Stratégie',email:'strategie@adrienemily.com',icon:'📊',cls:'strategie'},
-  {key:'coaching',label:'Coaching',email:'coaching@adrienemily.com',icon:'🎓',cls:'coaching'},
-  {key:'contact',label:'Contact (Admin)',email:'contact@adrienemily.com',icon:'📧',cls:'contact'}
+  {key:'strategie',label:'Stratégie',email:'strategie@adrienemily.com',icon:'📊',cls:'strategie',scopes:GMAIL_SCOPES},
+  {key:'coaching',label:'Coaching',email:'coaching@adrienemily.com',icon:'🎓',cls:'coaching',scopes:GMAIL_SCOPES},
+  {key:'contact',label:'Contact (Admin)',email:'contact@adrienemily.com',icon:'📧',cls:'contact',scopes:GMAIL_SCOPES},
+  {key:'drive_temoignages',label:'Drive Témoignages',email:'Accès au dossier Drive du mur de témoignages',icon:'⭐',cls:'temo',scopes:DRIVE_SCOPES}
 ];
+
+function scopesFor(key){
+  for(var i=0;i<ACCOUNTS.length;i++){ if(ACCOUNTS[i].key===key) return ACCOUNTS[i].scopes||GMAIL_SCOPES; }
+  return GMAIL_SCOPES;
+}
 var oauthConf=null;
 
 function showMsg(type,text){var m=document.getElementById('msg');m.className='msg '+type;m.textContent=text;}
@@ -75,13 +92,17 @@ async function init(){
       var tokenDoc=await db.collection('email_tokens').doc(acc.key).get();
       var connected=tokenDoc.exists&&tokenDoc.data().accessToken;
       var connEmail=connected?tokenDoc.data().email:'';
-      html+='<div class="account" onclick="connectAccount(\''+acc.key+'\')">';
+      html+='<div class="account" data-account="'+acc.key+'">';
       html+='<div class="account-icon '+acc.cls+'">'+acc.icon+'</div>';
       html+='<div class="account-info"><div class="account-name">'+acc.label+'</div><div class="account-email">'+acc.email+'</div></div>';
       html+='<span class="account-status '+(connected?'connected':'disconnected')+'">'+(connected?'✓ '+connEmail:'Non connecté')+'</span>';
       html+='</div>';
     }
     document.getElementById('accounts').innerHTML=html;
+    document.getElementById('accounts').addEventListener('click',function(e){
+      var card=e.target.closest('[data-account]');
+      if(card) connectAccount(card.getAttribute('data-account'));
+    });
 
     // Handle OAuth callback
     var params=new URLSearchParams(window.location.search);
@@ -122,7 +143,7 @@ async function init(){
 function connectAccount(accountKey){
   if(!oauthConf){showMsg('error','Config OAuth non chargée');return;}
   var redirectUri='https://team.alteore.com/admin-email-auth.html';
-  var scopes='openid email https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
+  var scopes=scopesFor(accountKey);
   var url='https://accounts.google.com/o/oauth2/v2/auth'
     +'?client_id='+encodeURIComponent(oauthConf.client_id)
     +'&redirect_uri='+encodeURIComponent(redirectUri)
