@@ -3814,9 +3814,21 @@ function renderInvoicesList() {
     html += '</td>';
     html += '<td><span style="font-size:12px;color:var(--muted)">' + dateStr + '</span></td>';
     html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
-    html += '<td>' + statusBadge + '</td>';
+    html += '<td>' + statusBadge + qontoBadgeOf(inv) + '</td>';
     html += '<td class="col-actions">';
     html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();editInvoice(\'' + inv.id + '\')">' + (inv.status === 'draft' ? '✏️ Éditer' : '👁️ Voir') + '</button>';
+    /* Lien direct vers la facture chez Qonto, quand elle y existe. */
+    if (inv.qonto && inv.qonto.invoiceUrl) {
+      html += ' <a class="bill-btn bill-btn-ghost" href="' + escapeAttr(inv.qonto.invoiceUrl) + '" target="_blank" rel="noopener"'
+        + ' onclick="event.stopPropagation()" title="Ouvrir chez Qonto">↗</a>';
+    }
+    /* Rattrapage : proposé sur toute facture validée qui n'est pas déjà passée
+       chez Qonto. Si Qonto est désactivé ou le client rattaché à l'EI,
+       l'endpoint répond par un message explicite plutôt qu'en silence. */
+    if (inv.status !== 'draft' && inv.qontoSyncStatus !== 'sent' && inv.qontoSyncStatus !== 'created') {
+      html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();resyncQonto(\'' + inv.id + '\')"'
+        + ' title="Synchroniser cette facture avec Qonto">⚡</button>';
+    }
     if (inv.status === 'draft') {
       html += ' <button class="bill-btn bill-btn-red" onclick="event.stopPropagation();deleteDraft(\'' + inv.id + '\')" title="Supprimer le brouillon">🗑️</button>';
     } else if (inv.pdfHash) {
@@ -3835,6 +3847,80 @@ function renderInvoicesList() {
   }
   html += '</tbody></table>';
   wrap.innerHTML = html;
+}
+
+/* ═══ ÉTAT QONTO D'UNE FACTURE ═══════════════════════════════════════════
+   Quatre états possibles, écrits par invoice-validate.js et invoice-qonto-sync.js :
+     sent    → créée chez Qonto ET transmise sur le réseau e-invoicing
+     created → créée chez Qonto, mais NON transmise (le motif est dans
+               qonto.einvoiceSkipReason : envoi désactivé, ou client sans SIRET)
+     failed  → l'appel a échoué ; la facture reste validée et numérotée
+     skipped → Qonto était désactivé à la validation (PDF maison, cas normal)
+
+   Une facture antérieure à Qonto n'a aucun de ces champs : pas de badge. */
+function qontoBadgeOf(inv) {
+  const st = inv.qontoSyncStatus;
+  if (!st || st === 'skipped') return '';
+  const q = inv.qonto || {};
+  const base = 'display:inline-block;margin-top:4px;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;white-space:nowrap;';
+
+  if (st === 'sent') {
+    const d = (q.sentByEinvoiceAt && q.sentByEinvoiceAt.toDate) ? q.sentByEinvoiceAt.toDate() : null;
+    return '<div><span style="' + base + 'background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.3)"'
+      + ' title="Transmise sur le réseau de facturation électronique'
+      + (d ? ' le ' + d.toLocaleDateString('fr-FR') + ' à ' + d.toLocaleTimeString('fr-FR').substring(0, 5) : '')
+      + '">⚡ Transmise</span></div>';
+  }
+  if (st === 'created') {
+    const reason = q.einvoiceSkipReason || 'motif non précisé';
+    return '<div><span style="' + base + 'background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3)"'
+      + ' title="Créée chez Qonto mais NON transmise sur le réseau — ' + escapeAttr(reason) + '">⚡ Non transmise</span></div>';
+  }
+  if (st === 'failed') {
+    const err = q.lastError || 'erreur non détaillée';
+    const tries = q.attempts ? (' · ' + q.attempts + ' tentative(s)') : '';
+    return '<div><span style="' + base + 'background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3)"'
+      + ' title="Échec Qonto' + escapeAttr(tries) + ' — ' + escapeAttr(err) + '">⚡ Échec Qonto</span></div>';
+  }
+  return '';
+}
+
+/* Rattrapage manuel. L'endpoint est idempotent : il vérifie chez Qonto avant
+   de créer quoi que ce soit, un double clic ne produit pas deux factures.
+   La confirmation reste nécessaire — une transmission réseau ne s'annule pas. */
+async function resyncQonto(invoiceId) {
+  const inv = invoicesCache.filter(function (x) { return x.id === invoiceId; })[0];
+  if (!inv) return toast('Facture introuvable', true);
+  if (inv.status === 'draft') return toast('Une facture doit être validée avant d\'être synchronisée', true);
+
+  const ok = confirm(
+    'Synchroniser la facture ' + (inv.number || '') + ' avec Qonto ?\n\n'
+    + 'Si le client est une société avec SIRET, la facture sera transmise sur le '
+    + 'réseau de facturation électronique — cette transmission est définitive.\n\n'
+    + 'L\'opération est sans risque de doublon : elle reprend la facture existante '
+    + 'chez Qonto si elle a déjà été créée.'
+  );
+  if (!ok) return;
+
+  toast('⏳ Synchronisation Qonto…');
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const response = await fetch('/api/invoice-qonto-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ invoiceId: invoiceId })
+    });
+    let data = {};
+    try { data = await response.json(); } catch (e) {}
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+
+    if (data.alreadySynced) toast('✅ Déjà synchronisée — rien à faire');
+    else if (data.qontoSyncStatus === 'sent') toast('✅ Facture transmise sur le réseau');
+    else toast('✅ Facture créée chez Qonto (non transmise — voir le détail du badge)');
+  } catch (err) {
+    console.error('[qonto-resync]', err);
+    toast('Erreur : ' + err.message, true);
+  }
 }
 
 function invoiceStatusBadge(status) {

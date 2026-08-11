@@ -1590,32 +1590,49 @@ async function loadBillingConfig() {
   return _billingConfigCache;
 }
 
+/* onclick appelle une fonction async : sans ce try/catch, la moindre exception
+   partait en rejet de promesse non capturé — le bouton semblait mort, sans
+   message ni trace visible. Toute erreur doit se voir. */
 async function openSendModal() {
   if (invoiceState.status === 'draft') return toast('Validez la facture avant l\'envoi', true);
-  if (!invoiceState.pdfHash) return toast('PDF non disponible', true);
+  if (!invoiceState.pdfHash) {
+    return toast(
+      invoiceState.pdfPending
+        ? 'PDF en cours de génération — réessaie dans quelques secondes'
+        : (invoiceState.pdfError
+            ? 'PDF indisponible : ' + invoiceState.pdfError
+            : 'PDF non disponible pour cette facture'),
+      true
+    );
+  }
 
-  const billing = await loadBillingConfig();
-  const tmpl = (billing.emailTemplates && billing.emailTemplates.invoice) || {};
-  const subjectTmpl = tmpl.subject || DEFAULT_EMAIL_SUBJECT;
-  const bodyTmpl = tmpl.body || DEFAULT_EMAIL_BODY;
-  const vars = buildEmailVarsFromState(billing);
+  try {
+    const billing = await loadBillingConfig();
+    const tmpl = (billing.emailTemplates && billing.emailTemplates.invoice) || {};
+    const subjectTmpl = tmpl.subject || DEFAULT_EMAIL_SUBJECT;
+    const bodyTmpl = tmpl.body || DEFAULT_EMAIL_BODY;
+    const vars = buildEmailVarsFromState(billing);
 
-  /* Pré-remplissage destinataire depuis client */
-  const c = invoiceState.clientSnapshot || {};
-  document.getElementById('sendToInput').value = c.email || '';
-  document.getElementById('sendCcInput').value = '';
-  document.getElementById('sendSubjectInput').value = renderEmailTemplate(subjectTmpl, vars);
-  document.getElementById('sendBodyInput').value = renderEmailTemplate(bodyTmpl, vars);
+    /* Pré-remplissage destinataire depuis client */
+    const c = invoiceState.clientSnapshot || {};
+    document.getElementById('sendToInput').value = c.email || '';
+    document.getElementById('sendCcInput').value = '';
+    document.getElementById('sendSubjectInput').value = renderEmailTemplate(subjectTmpl, vars);
+    document.getElementById('sendBodyInput').value = renderEmailTemplate(bodyTmpl, vars);
 
-  const enableBcc = billing.enableBcc != null ? billing.enableBcc : true;
-  document.getElementById('sendBccCheckbox').checked = enableBcc;
+    const enableBcc = billing.enableBcc != null ? billing.enableBcc : true;
+    document.getElementById('sendBccCheckbox').checked = enableBcc;
 
-  /* Indiquer s'il s'agit d'un renvoi */
-  const isResend = !!invoiceState.sentAt;
-  document.getElementById('sendModalTitle').textContent = isResend ? '📨 Renvoyer la facture' : '📨 Envoyer la facture';
-  document.getElementById('sendModalSubmit').textContent = isResend ? 'Renvoyer' : 'Envoyer';
+    /* Indiquer s'il s'agit d'un renvoi */
+    const isResend = !!invoiceState.sentAt;
+    document.getElementById('sendModalTitle').textContent = isResend ? '📨 Renvoyer la facture' : '📨 Envoyer la facture';
+    document.getElementById('sendModalSubmit').textContent = isResend ? 'Renvoyer' : 'Envoyer';
 
-  document.getElementById('sendModal').classList.add('active');
+    document.getElementById('sendModal').classList.add('active');
+  } catch (err) {
+    console.error('[openSendModal]', err);
+    toast('Impossible d\'ouvrir la fenêtre d\'envoi : ' + (err && err.message ? err.message : err), true);
+  }
 }
 
 function closeSendModal() {
