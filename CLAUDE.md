@@ -168,10 +168,28 @@ facture en production (incident du 22/07/2026 sur `_config/billing/cgv`).
 
 ### Dualité EI / SARL
 L'activité a démarré en entreprise individuelle avant la création de la SARL. Certains
-clients restent facturés sur l'EI et **n'ont volontairement aucun** document
-`invoice_clients`, `subscriptions` ou `payments` : BERNARD Mireille, BERTOLINO Laure,
-COMBES Alexandre, JANVIER Delphine, NAVES Anne-Lise, PRAX Aurore.
-**Ce n'est pas un bug. Ne pas tenter de les réparer.**
+clients restent facturés sur l'EI, **depuis un autre outil** : BERNARD Mireille,
+BERTOLINO Laure, COMBES Alexandre, JANVIER Delphine, NAVES Anne-Lise, PRAX Aurore.
+
+Ils **ont** une fiche `invoice_clients` — créée pour simplifier le suivi — mais aucune
+facture ne doit sortir d'Alteore pour eux. Le marqueur est le champ
+**`billingScope: 'ei'`** sur la fiche client :
+
+- `api/invoice-validate.js` refuse la validation (409) ;
+- `api/invoice-qonto-sync.js` refuse la synchronisation, donc l'envoi réseau ;
+- ils sont exclus du panneau « prêt pour la facturation électronique ».
+
+Le blocage lit la **fiche client**, jamais le `clientSnapshot` : un draft ancien peut
+dater d'avant le marquage. En revanche, l'absence de `subscriptions` et de `payments`
+sur ces clients est volontaire — **ne pas tenter de la réparer.**
+
+### 100 % B2B
+Aucun client particulier. Une fiche `invoice_clients` portant `clientType: 'individual'`
+est une erreur de saisie, pas un cas métier : la transmission e-invoicing ne part que si
+`clientSnapshot.clientType === 'company'` (`sendByEinvoice` dans
+`api/_qonto-invoice-flow.js`). Une fiche mal typée produit donc une facture **jamais
+transmise, sans erreur visible**. Le sélecteur de type a été retiré du formulaire client,
+et les quatre constructeurs de `clientSnapshot` défaussent sur `'company'`.
 
 ---
 

@@ -79,7 +79,10 @@ module.exports = async function(req, res) {
 
     /* ── Snapshot client (mêmes champs que makeClientSnapshot frontend) ── */
     const clientSnapshot = {
-      clientType: client.clientType || 'individual',
+      /* 100 % B2B : aucun client particulier. Un défaut à 'individual'
+         produirait une facture jamais transmise sur le réseau e-invoicing
+         (voir sendByEinvoice dans api/_qonto-invoice-flow.js), sans erreur. */
+      clientType: client.clientType || 'company',
       companyName: client.companyName || '',
       contactFirstName: client.contactFirstName || '',
       contactLastName: client.contactLastName || '',

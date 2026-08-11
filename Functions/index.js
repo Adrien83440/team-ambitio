@@ -3826,7 +3826,13 @@ async function createInvoiceFromGcPayment(gcPaymentId, paymentRef) {
     : [{ rate: 0, base: lineHt, vat: 0 }];
 
   const clientSnapshot = {
-    clientType: client.clientType || 'individual',
+    /* 100 % B2B : aucun client particulier. Un défaut à 'individual'
+       produirait une facture jamais transmise sur le réseau e-invoicing
+       (voir sendByEinvoice dans api/_qonto-invoice-flow.js), sans erreur.
+       NB : cette correction ne prendra effet qu'au prochain déploiement des
+       Cloud Functions, aujourd'hui bloqué. Sans impact tant que toutes les
+       fiches portent un clientType explicite. */
+    clientType: client.clientType || 'company',
     companyName: client.companyName || '',
     contactFirstName: client.contactFirstName || '',
     contactLastName: client.contactLastName || '',

@@ -59,6 +59,22 @@ module.exports = async function (req, res) {
       e.status = 409; throw e;
     }
 
+    /* Même garde-fou qu'à la validation : un client rattaché à l'entreprise
+       individuelle ne doit jamais atteindre Qonto, donc jamais le réseau.
+       Ce chemin-ci est celui du rattrapage, souvent lancé en série sur
+       d'anciennes factures — c'est précisément là qu'une fiche EI passerait
+       inaperçue. */
+    if (invoice.clientId) {
+      const cSnap = await db.collection('invoice_clients').doc(invoice.clientId).get();
+      if (cSnap.exists && (cSnap.data() || {}).billingScope === 'ei') {
+        const e = new Error(
+          'Ce client est rattaché à l\'entreprise individuelle : ses factures ne '
+          + 'transitent pas par Qonto. Synchronisation refusée.'
+        );
+        e.status = 409; throw e;
+      }
+    }
+
     /* Déjà complète : on ne retélécharge pas un PDF déjà stocké. */
     if (!force && invoice.pdfHash && invoice.pdfSource === 'qonto'
         && invoice.qonto && invoice.qonto.invoiceId) {

@@ -789,12 +789,12 @@
           <div class="bill-stat-v" id="statClientsTotal">—</div>
         </div>
         <div class="bill-stat blue">
-          <div class="bill-stat-l">Sociétés</div>
-          <div class="bill-stat-v" id="statClientsCompany">—</div>
+          <div class="bill-stat-l">Facturés ici (SARL)</div>
+          <div class="bill-stat-v" id="statClientsSarl">—</div>
         </div>
         <div class="bill-stat purple">
-          <div class="bill-stat-l">Particuliers</div>
-          <div class="bill-stat-v" id="statClientsIndiv">—</div>
+          <div class="bill-stat-l">Hors périmètre (EI)</div>
+          <div class="bill-stat-v" id="statClientsEi">—</div>
         </div>
         <div class="bill-stat amber">
           <div class="bill-stat-l">Liés GoCardless</div>
@@ -814,10 +814,18 @@
           <span class="bill-search-icon">🔍</span>
           <input id="clientsSearch" placeholder="Rechercher par nom, société, email, SIRET…" oninput="renderClientsList()"/>
         </div>
-        <select class="bill-select" id="clientsTypeFilter" onchange="renderClientsList()" style="min-width:140px">
-          <option value="all">Tous types</option>
-          <option value="company">🏢 Sociétés</option>
-          <option value="individual">👤 Particuliers</option>
+        <select class="bill-select" id="clientsScopeFilter" onchange="renderClientsList()" style="min-width:170px">
+          <option value="all">Tous périmètres</option>
+          <option value="sarl">🏢 Facturés ici (SARL)</option>
+          <option value="ei">🔒 Hors périmètre (EI)</option>
+        </select>
+        <select class="bill-select" id="clientsStatusFilter" onchange="renderClientsList()" style="min-width:150px">
+          <option value="all">Tous statuts</option>
+          <option value="active">✅ Actif</option>
+          <option value="paused">⏸ En pause</option>
+          <option value="completed">🎉 Terminé</option>
+          <option value="stopped">🛑 Stoppé</option>
+          <option value="procedure">⚖️ Procédure</option>
         </select>
         <select class="bill-select" id="clientsOwnerFilter" onchange="renderClientsList()" style="min-width:160px">
           <option value="all">Tous les sales</option>
@@ -2791,16 +2799,45 @@ async function activateCgv(id) {
 }
 
 /* ═══ CLIENTS LIST ═══ */
+
+/* Périmètre de facturation. L'activité a démarré en entreprise individuelle
+   avant la création de la SARL : quelques clients restent facturés sur l'EI,
+   depuis un autre outil. Leur fiche existe ici pour le suivi, mais AUCUNE
+   facture ne doit sortir d'Alteore pour eux — d'où le blocage dur côté
+   api/invoice-validate.js, et l'exclusion du flux Qonto. */
+function scopeOf(c) { return (c && c.billingScope === 'ei') ? 'ei' : 'sarl'; }
+
+/* Statut client — même vocabulaire que la CSM et le CRM (sales-clients-app.js),
+   volontairement : un sixième vocabulaire pour dire la même chose ne rendrait
+   service à personne. */
+var CLIENT_STATUS = {
+  active:    { label: '✅ Actif',     color: '#10b981' },
+  paused:    { label: '⏸ En pause',   color: '#f59e0b' },
+  completed: { label: '🎉 Terminé',   color: '#a78bfa' },
+  stopped:   { label: '🛑 Stoppé',    color: '#ef4444' },
+  procedure: { label: '⚖️ Procédure', color: '#f97316' }
+};
+function statusOf(c) {
+  var s = c && c.clientStatus;
+  return CLIENT_STATUS[s] ? s : 'active';
+}
+/* Un client terminé ou stoppé ne sera plus facturé : inutile de réclamer son
+   SIRET. Une procédure collective, si : il reste des factures à émettre. */
+function isBillableAhead(c) {
+  var s = statusOf(c);
+  return s !== 'completed' && s !== 'stopped';
+}
+
 function updateClientsStats() {
   /* Stats sur les clients NON archivés (les archivés ne sont visibles qu'avec le toggle dédié) */
   const active = clientsCache.filter(function(c){ return !c.archived; });
   const total = active.length;
-  const company = active.filter(function(c){ return c.clientType === 'company'; }).length;
-  const indiv = active.filter(function(c){ return c.clientType === 'individual'; }).length;
+  const sarl = active.filter(function(c){ return scopeOf(c) === 'sarl'; }).length;
+  const ei = active.filter(function(c){ return scopeOf(c) === 'ei'; }).length;
   const linkedGc = active.filter(function(c){ return !!(c.gocardlessCustomerId || c.gcCustomerId); }).length;
   document.getElementById('statClientsTotal').textContent = total;
-  document.getElementById('statClientsCompany').textContent = company;
-  document.getElementById('statClientsIndiv').textContent = indiv;
+  document.getElementById('statClientsSarl').textContent = sarl;
+  document.getElementById('statClientsEi').textContent = ei;
   document.getElementById('statClientsLinked').textContent = linkedGc;
 
   /* Peuple le filtre Sales owner avec les valeurs distinctes effectivement présentes */
@@ -2826,14 +2863,16 @@ function renderClientsList() {
   renderQontoReadiness();
   const wrap = document.getElementById('clientsTableWrap');
   const q = (document.getElementById('clientsSearch').value || '').toLowerCase().trim();
-  const typeFilter = document.getElementById('clientsTypeFilter').value;
+  const scopeFilter = document.getElementById('clientsScopeFilter').value;
+  const statusFilterC = document.getElementById('clientsStatusFilter').value;
   const ownerFilter = document.getElementById('clientsOwnerFilter').value;
   const gcFilter = document.getElementById('clientsGcFilter').value;
   const showArchived = document.getElementById('clientsShowArchived').checked;
 
   let list = clientsCache.filter(function(c) {
     if (!showArchived && c.archived) return false;
-    if (typeFilter !== 'all' && c.clientType !== typeFilter) return false;
+    if (scopeFilter !== 'all' && scopeOf(c) !== scopeFilter) return false;
+    if (statusFilterC !== 'all' && statusOf(c) !== statusFilterC) return false;
     if (ownerFilter === '__none__' && c.salesOwner) return false;
     if (ownerFilter !== 'all' && ownerFilter !== '__none__' && c.salesOwner !== ownerFilter) return false;
     if (gcFilter === 'yes' && !(c.gocardlessCustomerId || c.gcCustomerId)) return false;
@@ -2854,7 +2893,7 @@ function renderClientsList() {
   });
 
   if (!list.length) {
-    const hasFilters = q || typeFilter !== 'all' || ownerFilter !== 'all' || gcFilter !== 'all' || showArchived;
+    const hasFilters = q || scopeFilter !== 'all' || statusFilterC !== 'all' || ownerFilter !== 'all' || gcFilter !== 'all' || showArchived;
     wrap.innerHTML = '<div class="bill-empty">' +
       '<div class="bill-empty-icon">👥</div>' +
       '<h4>' + (hasFilters ? 'Aucun résultat' : 'Aucun client de facturation') + '</h4>' +
@@ -2877,15 +2916,25 @@ function renderClientsList() {
 
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
-    const name = c.clientType === 'company'
-      ? (c.companyName || '—')
-      : ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')).trim() || c.email || '—';
-    const contactName = c.clientType === 'company'
+    /* 100 % B2B : le nom affiché est la raison sociale, avec repli sur le
+       contact tant que des fiches héritées n'ont pas de companyName. */
+    const name = (c.companyName || '').trim()
+      || ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')).trim()
+      || c.email || '—';
+    const contactName = (c.companyName || '').trim()
       ? ((c.contactFirstName || '') + ' ' + (c.contactLastName || '')).trim()
       : '';
-    const badge = c.clientType === 'company'
-      ? '<span class="bill-badge company">🏢</span>'
-      : '<span class="bill-badge individual">👤</span>';
+    const _scope = scopeOf(c);
+    const badge = _scope === 'ei'
+      ? '<span class="bill-badge" style="background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.35);color:#f97316" title="Facturé sur l\'EI, hors de cet outil">🔒</span>'
+      : '<span class="bill-badge company">🏢</span>';
+    const _st = statusOf(c);
+    const statusBadge = _st === 'active' ? '' :
+      ' <span class="bill-badge" style="background:' + CLIENT_STATUS[_st].color + '18;border:1px solid ' + CLIENT_STATUS[_st].color + '44;color:' + CLIENT_STATUS[_st].color + '">'
+      + escapeHtml(CLIENT_STATUS[_st].label) + '</span>';
+    const eiBadge = _scope === 'ei'
+      ? ' <span class="bill-badge" style="background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.35);color:#f97316">EI — facturé ailleurs</span>'
+      : '';
     const archivedBadge = c.archived ? ' <span class="bill-badge" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444">Archivé</span>' : '';
     const exempt = c.vatExempt ? ' <span class="bill-badge exempt">Hors TVA</span>' : '';
 
@@ -2910,7 +2959,7 @@ function renderClientsList() {
 
     html += '<tr ' + (c.archived ? 'style="opacity:.5"' : '') + ' onclick="openClientDrawer(\'' + c.id + '\')">';
     html += '<td>' + badge + '</td>';
-    html += '<td><div style="font-weight:700">' + escapeHtml(name) + archivedBadge + exempt + '</div>'
+    html += '<td><div style="font-weight:700">' + escapeHtml(name) + eiBadge + statusBadge + archivedBadge + exempt + '</div>'
       + (contactName ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + escapeHtml(contactName) + '</div>' : '')
       + (c.linkedLeadId ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">🔗 Lead lié</div>' : '')
       + '</td>';
@@ -3014,11 +3063,8 @@ function csApply(index) {
   var r = csLastResults[index];
   if (!r) return;
 
-  /* Une fiche remplie depuis l'annuaire est par définition une société. */
-  var typeCompany = document.getElementById('ctTypeCompany');
-  /* C'est un <button class="bill-type-btn on">, pas une case a cocher :
-     l'etat se lit sur la classe « on », pas sur .checked. */
-  if (typeCompany && typeCompany.className.indexOf('on') < 0) typeCompany.click();
+  /* Toutes les fiches sont des sociétés : plus rien à basculer ici. */
+  setClientType('company');
 
   csSet('ctCompanyName', r.name);
   csSet('ctSiret', r.siret);
@@ -3052,15 +3098,25 @@ function qrMissingOf(c) {
   if (!String(c.companyName || '').trim()) missing.push('raison sociale');
   var siret = String(c.siret || '').replace(/\s+/g, '');
   if (!siret) missing.push('SIRET');
-  else if (siret.length !== 9 && siret.length !== 14) missing.push('SIRET incomplet (' + siret.length + ' chiffres)');
+  else if (siret.length !== 14) missing.push('SIRET incomplet (' + siret.length + ' chiffres sur 14)');
   return missing;
+}
+
+/* Le périmètre du panneau : ce qui sera réellement facturé depuis cet outil.
+   En sortent les fiches EI (facturées ailleurs) et les clients terminés ou
+   stoppés (plus rien à émettre). Réclamer leur SIRET serait du bruit. */
+function qrInScope(c) {
+  if (c.archived) return false;
+  if (scopeOf(c) === 'ei') return false;
+  if (!isBillableAhead(c)) return false;
+  return true;
 }
 
 function qrIncompleteList() {
   var out = [];
   for (var i = 0; i < clientsCache.length; i++) {
     var c = clientsCache[i];
-    if (c.archived) continue;
+    if (!qrInScope(c)) continue;
     var missing = qrMissingOf(c);
     if (missing.length) out.push({ client: c, missing: missing });
   }
@@ -3081,7 +3137,15 @@ function qrLabel(c) {
 function renderQontoReadiness() {
   var panel = document.getElementById('qrPanel');
   if (!panel) return;
-  var active = clientsCache.filter(function (c) { return !c.archived; });
+  var active = clientsCache.filter(qrInScope);
+  var excluded = clientsCache.filter(function (c) {
+    return !c.archived && !qrInScope(c);
+  }).length;
+  var excludedNote = excluded
+    ? '<div style="font-size:11px;color:var(--muted);margin-top:6px">' + excluded
+      + ' fiche' + (excluded > 1 ? 's' : '') + ' hors périmètre (EI, client terminé ou stoppé) '
+      + (excluded > 1 ? 'sont exclues' : 'est exclue') + ' de ce décompte.</div>'
+    : '';
   if (!active.length) { panel.style.display = 'none'; return; }
 
   var incomplete = qrIncompleteList();
@@ -3092,7 +3156,8 @@ function renderQontoReadiness() {
   if (!incomplete.length) {
     panel.innerHTML = '<div style="padding:14px 16px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.3);border-radius:10px;font-size:13px">'
       + '<strong style="color:#10b981">✅ Tous les clients sont prêts pour la facturation électronique.</strong>'
-      + '<div style="color:var(--muted);margin-top:4px">Raison sociale et SIRET renseignés sur les ' + active.length + ' fiches actives.</div></div>';
+      + '<div style="color:var(--muted);margin-top:4px">Raison sociale et SIRET renseignés sur les ' + active.length + ' fiches à facturer ici.</div>'
+      + excludedNote + '</div>';
     return;
   }
 
@@ -3106,7 +3171,8 @@ function renderQontoReadiness() {
   html += '</div></div>';
   html += '<div style="height:6px;background:rgba(255,255,255,.07);border-radius:3px;margin-top:10px;overflow:hidden">'
     + '<div style="height:100%;width:' + pct + '%;background:#10b981"></div></div>';
-  html += '<div style="font-size:11px;color:var(--muted);margin-top:8px">Une facture B2B doit porter la raison sociale et le SIREN/SIRET du client. Rien n\'est bloqué : complète à ton rythme, le SIRET ne deviendra obligatoire qu\'une fois cette liste vide.</div>';
+  html += '<div style="font-size:11px;color:var(--muted);margin-top:8px">Une facture B2B doit porter la raison sociale et le SIRET du client. Rien n\'est bloqué tant que la facturation électronique n\'est pas activée dans les Paramètres — une fois activée, une facture société sans SIRET sera refusée à la validation.</div>';
+  html += excludedNote;
 
   html += '<div id="qrList" style="display:none;margin-top:12px;max-height:340px;overflow-y:auto;border-top:1px solid rgba(245,158,11,.2);padding-top:10px">';
   for (var i = 0; i < incomplete.length; i++) {
@@ -3140,11 +3206,11 @@ document.addEventListener('click', function (e) {
 
 function qrExportCsv() {
   var incomplete = qrIncompleteList();
-  var rows = [['Nom actuel', 'Type', 'Raison sociale', 'SIRET', 'Email', 'Ce qui manque']];
+  var rows = [['Nom actuel', 'Statut', 'Raison sociale', 'SIRET', 'Email', 'Ce qui manque']];
   for (var i = 0; i < incomplete.length; i++) {
     var c = incomplete[i].client;
     rows.push([
-      qrLabel(c), c.clientType || '', c.companyName || '', c.siret || '',
+      qrLabel(c), CLIENT_STATUS[statusOf(c)].label, c.companyName || '', c.siret || '',
       c.email || '', incomplete[i].missing.join(' / ')
     ]);
   }
@@ -3192,19 +3258,48 @@ function openClientDrawer(clientId) {
     linkedLeadId: null,
     gocardlessCustomerId: null,
     salesOwner: null,
+    billingScope: 'sarl',
+    clientStatus: 'active',
     archived: false
   };
   /* Rétrocompat : ancien champ leadId remplacé par linkedLeadId */
   const linkedLeadId = data.linkedLeadId || data.leadId || null;
+  const curScope = scopeOf(data);
+  const curStatus = statusOf(data);
 
   let html = '';
-  html += '<div class="bill-type-toggle">';
-  html += '  <button class="bill-type-btn ' + (data.clientType === 'company' ? 'on' : '') + '" id="ctTypeCompany" onclick="setClientType(\'company\')">🏢 Société</button>';
-  html += '  <button class="bill-type-btn ' + (data.clientType === 'individual' ? 'on' : '') + '" id="ctTypeIndiv" onclick="setClientType(\'individual\')">👤 Particulier</button>';
+
+  /* Périmètre + statut. Le type de client a disparu du formulaire : Alteore
+     ne facture que des entreprises, un choix « particulier » n'aurait servi
+     qu'à produire des factures jamais transmises sur le réseau. */
+  html += '<div class="bill-form-grid" style="margin-bottom:4px">';
+  html += '  <div class="bill-form-row"><div class="bill-label">Facturé par <span class="bill-req">*</span></div>';
+  html += '    <select class="bill-select" id="ctBillingScope" onchange="onScopeChange()">';
+  html += '      <option value="sarl"' + (curScope === 'sarl' ? ' selected' : '') + '>🏢 SARL Ambitio Corp — facturé ici</option>';
+  html += '      <option value="ei"' + (curScope === 'ei' ? ' selected' : '') + '>🔒 Entreprise individuelle — facturé ailleurs</option>';
+  html += '    </select>';
+  html += '    <div class="bill-help" style="font-size:11px;margin-top:4px">Sur « EI », aucune facture ne peut être émise depuis cet outil.</div>';
+  html += '  </div>';
+  html += '  <div class="bill-form-row"><div class="bill-label">Statut du client</div>';
+  html += '    <select class="bill-select" id="ctClientStatus">';
+  var _stKeys = ['active', 'paused', 'completed', 'stopped', 'procedure'];
+  for (var _si = 0; _si < _stKeys.length; _si++) {
+    html += '<option value="' + _stKeys[_si] + '"' + (curStatus === _stKeys[_si] ? ' selected' : '') + '>'
+      + escapeHtml(CLIENT_STATUS[_stKeys[_si]].label) + '</option>';
+  }
+  html += '    </select>';
+  html += '    <div class="bill-help" style="font-size:11px;margin-top:4px">« Terminé » et « Stoppé » sortent la fiche du suivi facturation électronique.</div>';
+  html += '  </div>';
   html += '</div>';
 
-  /* Section société (cachée si individuel) */
-  html += '<div id="cfFieldsCompany" ' + (data.clientType === 'individual' ? 'style="display:none"' : '') + '>';
+  html += '<div id="ctEiWarn" style="' + (curScope === 'ei' ? '' : 'display:none;')
+    + 'margin:10px 0 4px;padding:11px 14px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:8px;font-size:12px;color:#f97316">'
+    + '🔒 <strong>Client de l\'entreprise individuelle.</strong> Ses factures sont traitées en dehors d\'Alteore. '
+    + 'La fiche reste consultable, mais toute tentative de validation de facture sera refusée, et le client n\'est jamais transmis à Qonto.'
+    + '</div>';
+
+  /* Bloc identité société — toujours visible : 100 % des clients sont des entreprises. */
+  html += '<div id="cfFieldsCompany">';
   html += '  <div class="bill-form-grid full">';
   html += '    <div class="bill-form-row"><div class="bill-label">Nom de la société <span class="bill-req">*</span></div><input class="bill-input" id="ctCompanyName" value="' + attr(data.companyName) + '"/></div>';
   html += '  </div>';
@@ -3235,8 +3330,8 @@ function openClientDrawer(clientId) {
 
   /* Contact (toujours visible) */
   html += '<div class="bill-form-grid" style="margin-top:14px">';
-  html += '  <div class="bill-form-row"><div class="bill-label">Prénom contact ' + (data.clientType === 'individual' ? '<span class="bill-req">*</span>' : '') + '</div><input class="bill-input" id="ctFirstName" value="' + attr(data.contactFirstName) + '"/></div>';
-  html += '  <div class="bill-form-row"><div class="bill-label">Nom contact ' + (data.clientType === 'individual' ? '<span class="bill-req">*</span>' : '') + '</div><input class="bill-input" id="ctLastName" value="' + attr(data.contactLastName) + '"/></div>';
+  html += '  <div class="bill-form-row"><div class="bill-label">Prénom contact</div><input class="bill-input" id="ctFirstName" value="' + attr(data.contactFirstName) + '"/></div>';
+  html += '  <div class="bill-form-row"><div class="bill-label">Nom contact</div><input class="bill-input" id="ctLastName" value="' + attr(data.contactLastName) + '"/></div>';
   html += '  <div class="bill-form-row"><div class="bill-label">Email de facturation <span class="bill-req">*</span></div><input class="bill-input" id="ctEmail" type="email" value="' + attr(data.email) + '" oninput="validateEmailSoft(this)"/><div class="bill-help" id="ctEmailHelp" style="display:none;color:#f59e0b;font-size:11px;margin-top:4px"></div><div class="bill-help" style="font-size:11px;margin-top:4px">Utilisé uniquement pour les factures et relances. Ne modifie pas l\'email principal du client (CRM, coaching, paiements, mandats GoCardless) — celui-ci se gère dans la fiche Personnes.</div></div>';
   html += '  <div class="bill-form-row"><div class="bill-label">Téléphone</div><input class="bill-input" id="ctPhone" value="' + attr(data.phone) + '" oninput="validatePhoneSoft(this)"/><div class="bill-help" id="ctPhoneHelp" style="display:none;color:#f59e0b;font-size:11px;margin-top:4px"></div></div>';
   html += '</div>';
@@ -3330,11 +3425,20 @@ function closeDrawer() {
   editingClientId = null;
 }
 
+/* Le sélecteur de type a disparu du formulaire (100 % B2B). La fonction reste
+   pour les appelants historiques — elle ne fait plus que mémoriser le type,
+   sans jamais toucher à des éléments qui n'existent plus. */
 function setClientType(t) {
-  document.getElementById('ctTypeCompany').classList.toggle('on', t === 'company');
-  document.getElementById('ctTypeIndiv').classList.toggle('on', t === 'individual');
-  document.getElementById('cfFieldsCompany').style.display = t === 'company' ? 'block' : 'none';
-  document.getElementById('drawerBody')._currentType = t;
+  var body = document.getElementById('drawerBody');
+  if (body) body._currentType = (t === 'individual') ? 'individual' : 'company';
+}
+
+/* Bascule SARL ↔ EI : le bandeau d'avertissement suit le sélecteur. */
+function onScopeChange() {
+  var sel = document.getElementById('ctBillingScope');
+  var warn = document.getElementById('ctEiWarn');
+  if (!sel || !warn) return;
+  warn.style.display = (sel.value === 'ei') ? 'block' : 'none';
 }
 
 let leadSearchTimer = null;
@@ -3406,8 +3510,13 @@ function clearLeadLink() {
 async function saveClient() {
   const btn = document.getElementById('ctSaveBtn');
   const v = function(id) { const el = document.getElementById(id); return el ? (el.value || '').trim() : ''; };
-  const type = document.getElementById('drawerBody')._currentType
-    || (document.getElementById('ctTypeCompany').classList.contains('on') ? 'company' : 'individual');
+  /* 100 % B2B : plus de choix de type dans le formulaire, une fiche est
+     toujours une entreprise. Le champ reste écrit en base pour que le
+     clientSnapshot des factures — et donc la transmission e-invoicing —
+     trouve bien 'company'. */
+  const type = 'company';
+  const billingScope = (v('ctBillingScope') === 'ei') ? 'ei' : 'sarl';
+  const clientStatus = CLIENT_STATUS[v('ctClientStatus')] ? v('ctClientStatus') : 'active';
 
   const email = v('ctEmail');
   const addrLine1 = v('ctAddrLine1');
@@ -3420,8 +3529,7 @@ async function saveClient() {
   const lastName = v('ctLastName');
 
   /* Validations BLOQUANTES (champs obligatoires uniquement) */
-  if (type === 'company' && !companyName) return toast('Nom de la société obligatoire', true);
-  if (type === 'individual' && (!firstName || !lastName)) return toast('Prénom et nom obligatoires pour un particulier', true);
+  if (!companyName) return toast('Nom de la société obligatoire', true);
   if (!email) return toast('Email obligatoire', true);
   if (!addrLine1) return toast('Adresse ligne 1 obligatoire', true);
   if (!postal) return toast('Code postal obligatoire', true);
@@ -3457,6 +3565,9 @@ async function saveClient() {
       /* sync inter-modules : double-write nom canonique. lectures rétrocompat gocardlessCustomerId || gcCustomerId partout. */
       gcCustomerId: v('ctGcCustomerId') || null,
       salesOwner: v('ctSalesOwner') || null,
+      /* Périmètre : 'ei' = facturé hors Alteore, bloqué à la validation. */
+      billingScope: billingScope,
+      clientStatus: clientStatus,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       updatedBy: currentUser.uid
     };
