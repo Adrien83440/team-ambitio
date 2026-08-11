@@ -15,7 +15,7 @@
    ── Forme d'un item ───────────────────────────────────────────────────
      id          string
      kind        'image' | 'video' | 'embed' | 'text' | 'file'
-     category    'interview' | 'video' | 'trustpilot' | 'message' | 'autre'
+     category    'interview' | 'video' | 'trustpilot' | 'message' | 'coaching' | 'autre'
      mediaUrl    URL du fichier (Storage) — image ou vidéo
      embedUrl    URL d'iframe (Drive / YouTube / Loom) pour kind 'embed'
      posterUrl   vignette (vidéos + embeds)
@@ -39,6 +39,7 @@
     { key: 'video',      label: 'Vidéos',           icon: '🎬' },
     { key: 'trustpilot', label: 'Avis Trustpilot',  icon: '⭐' },
     { key: 'message',    label: 'Messages clients', icon: '💬' },
+    { key: 'coaching',   label: 'Coaching',         icon: '🎓' },
     { key: 'autre',      label: 'Autres',           icon: '✨' }
   ];
 

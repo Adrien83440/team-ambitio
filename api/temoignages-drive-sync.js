@@ -14,7 +14,8 @@
 // ─── PRINCIPE ─────────────────────────────────────────────────────────────
 // Adrien dépose un fichier dans le dossier Drive surveillé → au run suivant
 // il apparaît sur le mur. Les SOUS-DOSSIERS de premier niveau deviennent des
-// catégories (« Interviews », « Vidéos », « Trustpilot », « Messages »).
+// catégories (« Interviews », « Vidéos », « Trustpilot », « Messages »,
+// « Coaching »).
 //
 // ─── OÙ ATTERRISSENT LES FICHIERS ─────────────────────────────────────────
 //   • Images (≤ IMG_COPY_MAX)   → recopiées dans Firebase Storage.
@@ -71,6 +72,7 @@ const FOLDER_MIME     = 'application/vnd.google-apps.folder';
 function categoryFromFolderName(name) {
   const n = String(name || '').toLowerCase();
   if (/interview|entretien|dirigeant/.test(n))            return 'interview';
+  if (/coaching|s[ée]ances?|accompagnement/.test(n))      return 'coaching';
   if (/trustpilot|avis|review|google\s*avis/.test(n))     return 'trustpilot';
   if (/message|whatsapp|sms|capture|screen/.test(n))      return 'message';
   if (/vid[ée]o|video|t[ée]moignage/.test(n))             return 'video';
