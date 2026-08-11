@@ -278,15 +278,17 @@ function mapClientToQonto(client) {
     locale: 'fr',
   };
 
+  /* Longueurs imposées par l'API : name 250, first_name / last_name 60,
+     vat_number et tax_identification_number 20. Un dépassement part en 422. */
   if (payload.kind === 'company') {
     payload.name = truncate(client.companyName || '', 250);
   } else {
-    payload.first_name = truncate(client.contactFirstName || '', 100);
-    payload.last_name = truncate(client.contactLastName || '', 100);
+    payload.first_name = truncate(client.contactFirstName || '', 60);
+    payload.last_name = truncate(client.contactLastName || '', 60);
   }
 
-  if (client.vatNumber) payload.vat_number = truncate(client.vatNumber, 30);
-  if (client.siret) payload.tax_identification_number = truncate(client.siret, 30);
+  if (client.vatNumber) payload.vat_number = truncate(client.vatNumber, 20);
+  if (client.siret) payload.tax_identification_number = truncate(client.siret, 20);
 
   payload.billing_address = {
     street_address: street,

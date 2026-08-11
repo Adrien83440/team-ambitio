@@ -98,7 +98,7 @@ async function upsertClient(ctx) {
   let qontoClientId = existingId;
   if (existingId) {
     try {
-      await qonto.qontoFetch('PATCH', '/v2/clients/' + encodeURIComponent(existingId), { client: payload });
+      await qonto.qontoFetch('PATCH', '/v2/clients/' + encodeURIComponent(existingId), payload);
     } catch (patchErr) {
       /* Le client a pu être supprimé côté Qonto : on repart sur une création
          plutôt que de bloquer une facture pour ça. */
@@ -108,7 +108,12 @@ async function upsertClient(ctx) {
   }
 
   if (!qontoClientId) {
-    const created = await qonto.qontoFetch('POST', '/v2/clients', { client: payload });
+    /* Corps PLAT, sans enveloppe : Qonto attend les champs à la racine. Avec
+       { client: … } l'API ne voit rien et répond « kind required » puis
+       « name required_without_all » — quatre erreurs pour une seule cause,
+       et aucune ne parle de l'enveloppe. Idem pour PATCH et pour les
+       factures. */
+    const created = await qonto.qontoFetch('POST', '/v2/clients', payload);
     const c = (created && created.client) ? created.client : created;
     qontoClientId = c && c.id ? c.id : null;
     if (!qontoClientId) {
@@ -177,7 +182,7 @@ async function createInvoice(ctx) {
   });
 
   try {
-    const created = await qonto.qontoFetch('POST', '/v2/client_invoices', { client_invoice: payload });
+    const created = await qonto.qontoFetch('POST', '/v2/client_invoices', payload);
     return (created && created.client_invoice) ? created.client_invoice : created;
   } catch (err) {
     /* Numéro déjà pris chez Qonto = la facture existe. Ce n'est pas un échec :
