@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Mur de témoignages</title>
+<link rel="stylesheet" href="temoignages.css"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+</head>
+<body class="tw-body">
+<script src="nav.js"></script>
+<script src="temoignages-wall.js"></script>
+
+<div class="tw-main" id="app" style="display:none">
+
+  <div class="tw-head">
+    <div class="tw-eyebrow">Preuve &amp; résultats</div>
+    <h1>Mur de <span class="tw-accent">témoignages</span></h1>
+    <p>Chaque vidéo, capture, avis ou message client déposé ici vient agrandir le mur.
+       Ce qui est marqué <b>Public</b> apparaît sur le lien partageable — le reste
+       reste interne. Rien n'est jamais supprimé : on archive.</p>
+    <div class="tw-stats" id="stats"></div>
+  </div>
+
+  <!-- ── Dépôt de fichiers ─────────────────────────────────────────── -->
+  <div class="tw-drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des témoignages">
+    <span class="tw-drop-ico">⬆</span>
+    <div class="tw-drop-t">Glisse tes témoignages ici</div>
+    <div class="tw-drop-s">
+      Vidéos, captures d'écran, avis, photos — <b>tous formats, sans limite de taille</b>.<br>
+      Tu peux aussi <b>coller directement une capture</b> (Cmd&nbsp;+&nbsp;V) ou cliquer pour choisir des fichiers.
+    </div>
+  </div>
+  <input type="file" id="picker" multiple style="display:none"/>
+  <div class="tw-queue" id="queue"></div>
+
+  <!-- ── Barre d'outils ────────────────────────────────────────────── -->
+  <div class="tw-bar" id="bar">
+    <div id="pills" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div class="tw-bar-spacer"></div>
+    <input type="search" class="tw-search" id="q" placeholder="Rechercher un nom, une légende…"/>
+    <button class="tw-pill" type="button" id="tgArchived">🗄 Archives</button>
+    <button class="tw-pill" type="button" id="tgPublic">🌐 Publics</button>
+  </div>
+
+  <div class="tw-bar" style="border-bottom:none;padding-bottom:0;margin-top:-6px">
+    <button class="tw-btn main" type="button" id="bAdd">⬆ Ajouter des fichiers</button>
+    <button class="tw-btn" type="button" id="bLink">🔗 Lien externe</button>
+    <button class="tw-btn" type="button" id="bText">✍️ Témoignage écrit</button>
+    <div class="tw-bar-spacer"></div>
+    <button class="tw-btn ghost" type="button" id="bDrive">☁️ Dossier Drive</button>
+    <button class="tw-btn ghost" type="button" id="bShare">🔗 Copier le lien public</button>
+    <a class="tw-btn ghost" href="temoignages-public.html" target="_blank" rel="noopener">↗ Voir le mur public</a>
+  </div>
+
+  <!-- ── Le mur ────────────────────────────────────────────────────── -->
+  <div class="tw-wall" id="wall" style="margin-top:22px"></div>
+
+  <div class="tw-note">
+    <b>Comment ça marche.</b> Les fichiers partent directement dans Firebase Storage
+    (<code>testimonials/{id}/</code>) — le navigateur les envoie sans passer par un serveur,
+    donc aucune limite de taille. Une vignette est générée automatiquement pour les vidéos
+    afin que le mur reste léger : seule la lecture en plein écran charge la vidéo entière.<br>
+    <b>Formats.</b> Les images HEIC (iPhone) et certains <code>.mov</code> HEVC ne sont pas
+    lisibles par les navigateurs : le fichier est bien conservé, mais la carte affiche une
+    fiche cliquable au lieu d'un aperçu. Convertis-les en JPEG / MP4 pour un rendu plein écran.
+  </div>
+</div>
+
+<!-- ═══ MODALE — ÉDITION ═══════════════════════════════════════════════ -->
+<div class="tw-modal" id="mEdit">
+  <div class="tw-sheet">
+    <h2>Modifier le témoignage</h2>
+    <p class="hint" id="editHint"></p>
+
+    <div class="tw-field">
+      <label>Nom affiché</label>
+      <input class="tw-input" id="fName" placeholder="Ex : Anne-Lise M."/>
+    </div>
+    <div class="tw-field">
+      <label>Légende</label>
+      <input class="tw-input" id="fCap" placeholder="Ex : +38 % de CA en 4 mois"/>
+    </div>
+    <div class="tw-field">
+      <label>Catégorie</label>
+      <select class="tw-select" id="fCat"></select>
+    </div>
+    <div class="tw-field" id="fTextWrap" style="display:none">
+      <label>Texte du témoignage</label>
+      <textarea class="tw-area" id="fText"></textarea>
+    </div>
+
+    <label class="tw-check">
+      <input type="checkbox" id="fPublic"/>
+      <span><span class="tw-check-t">Visible sur le mur public</span>
+      <span class="tw-check-s">Apparaît sur le lien partageable aux prospects. Décoché, il reste strictement interne.</span></span>
+    </label>
+    <label class="tw-check">
+      <input type="checkbox" id="fFeat"/>
+      <span><span class="tw-check-t">Épingler en tête du mur</span>
+      <span class="tw-check-s">Les épinglés passent devant tous les autres, dans les deux vues.</span></span>
+    </label>
+
+    <div class="tw-sheet-acts">
+      <button class="tw-btn danger" type="button" id="bArchive">🗄 Archiver</button>
+      <div class="tw-bar-spacer"></div>
+      <button class="tw-btn ghost" type="button" data-close="mEdit">Annuler</button>
+      <button class="tw-btn main" type="button" id="bSave">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODALE — LIEN EXTERNE ══════════════════════════════════════════ -->
+<div class="tw-modal" id="mLink">
+  <div class="tw-sheet">
+    <h2>Ajouter un lien</h2>
+    <p class="hint">YouTube, Vimeo, Loom, Google&nbsp;Drive, ou l'adresse directe d'une image
+       ou d'une vidéo. Le format est détecté tout seul.</p>
+    <div class="tw-field">
+      <label>Adresse</label>
+      <input class="tw-input" id="lUrl" placeholder="https://…"/>
+    </div>
+    <div class="tw-field">
+      <label>Nom affiché</label>
+      <input class="tw-input" id="lName" placeholder="Ex : Fabien D."/>
+    </div>
+    <div class="tw-field">
+      <label>Légende</label>
+      <input class="tw-input" id="lCap" placeholder="Optionnel"/>
+    </div>
+    <div class="tw-field">
+      <label>Catégorie</label>
+      <select class="tw-select" id="lCat"></select>
+    </div>
+    <label class="tw-check">
+      <input type="checkbox" id="lPublic"/>
+      <span><span class="tw-check-t">Visible sur le mur public</span></span>
+    </label>
+    <div class="tw-sheet-acts">
+      <button class="tw-btn ghost" type="button" data-close="mLink">Annuler</button>
+      <button class="tw-btn main" type="button" id="bLinkSave">Ajouter au mur</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODALE — TÉMOIGNAGE ÉCRIT ══════════════════════════════════════ -->
+<div class="tw-modal" id="mText">
+  <div class="tw-sheet">
+    <h2>Témoignage écrit</h2>
+    <p class="hint">Un retour reçu par mail, WhatsApp ou en séance, que tu veux afficher
+       en citation plutôt qu'en capture.</p>
+    <div class="tw-field">
+      <label>Texte</label>
+      <textarea class="tw-area" id="tText" placeholder="« Depuis qu'on a mis ça en place… »"></textarea>
+    </div>
+    <div class="tw-field">
+      <label>Nom affiché</label>
+      <input class="tw-input" id="tName" placeholder="Ex : Judith R."/>
+    </div>
+    <div class="tw-field">
+      <label>Légende</label>
+      <input class="tw-input" id="tCap" placeholder="Optionnel"/>
+    </div>
+    <div class="tw-field">
+      <label>Catégorie</label>
+      <select class="tw-select" id="tCat"></select>
+    </div>
+    <label class="tw-check">
+      <input type="checkbox" id="tPublic"/>
+      <span><span class="tw-check-t">Visible sur le mur public</span></span>
+    </label>
+    <div class="tw-sheet-acts">
+      <button class="tw-btn ghost" type="button" data-close="mText">Annuler</button>
+      <button class="tw-btn main" type="button" id="bTextSave">Ajouter au mur</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODALE — DOSSIER DRIVE ═════════════════════════════════════════ -->
+<div class="tw-modal" id="mDrive">
+  <div class="tw-sheet">
+    <h2>Import automatique depuis Google Drive</h2>
+    <p class="hint">Tu déposes un fichier dans le dossier Drive, il arrive sur le mur tout seul
+       (vérification toutes les heures). Les <b>sous-dossiers</b> deviennent des catégories :
+       nomme-les « Interviews », « Vidéos », « Trustpilot », « Messages ».</p>
+
+    <div class="tw-field">
+      <label>1 · Compte Google connecté</label>
+      <div id="driveConn" style="font-size:12.5px;color:#8f97b2;line-height:1.6"></div>
+    </div>
+
+    <div class="tw-field">
+      <label>2 · Dossier surveillé</label>
+      <input class="tw-input" id="dFolder" placeholder="Colle l'URL du dossier Drive ou son ID"/>
+    </div>
+
+    <div class="tw-field">
+      <label>Catégorie par défaut (fichiers à la racine)</label>
+      <select class="tw-select" id="dCat"></select>
+    </div>
+
+    <label class="tw-check">
+      <input type="checkbox" id="dAuto"/>
+      <span><span class="tw-check-t">Import automatique activé</span>
+      <span class="tw-check-s">Sans cette case, seul le bouton « Synchroniser maintenant » importe.</span></span>
+    </label>
+    <label class="tw-check">
+      <input type="checkbox" id="dPublic"/>
+      <span><span class="tw-check-t">Publier directement sur le mur public</span>
+      <span class="tw-check-s">Sinon les imports arrivent en interne et tu les publies un par un.</span></span>
+    </label>
+    <label class="tw-check">
+      <input type="checkbox" id="dShare"/>
+      <span><span class="tw-check-t">Rendre les grosses vidéos accessibles par lien</span>
+      <span class="tw-check-s">⚠️ Les vidéos de plus de 100&nbsp;Mo ne sont pas recopiées : elles sont lues
+      depuis Drive. Pour qu'elles s'affichent, leur partage passe à « Tous ceux qui ont le lien ».
+      Ne concerne que les fichiers de ce dossier. Décoché, elles seront importées mais illisibles
+      tant que tu ne les partages pas à la main.</span></span>
+    </label>
+
+    <div class="tw-field" style="margin-top:14px">
+      <label>Dernière synchronisation</label>
+      <div id="dLast" style="font-size:12.5px;color:#8f97b2;line-height:1.6">—</div>
+    </div>
+
+    <div class="tw-sheet-acts">
+      <button class="tw-btn ghost" type="button" id="bDryRun">Tester à blanc</button>
+      <button class="tw-btn" type="button" id="bSyncNow">Synchroniser maintenant</button>
+      <div class="tw-bar-spacer"></div>
+      <button class="tw-btn ghost" type="button" data-close="mDrive">Fermer</button>
+      <button class="tw-btn main" type="button" id="bDriveSave">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="tw-toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   temoignages.html — MUR DE TÉMOIGNAGES (gestion)
+   ─────────────────────────────────────────────────────────────────────
+   Écriture réservée aux admins (miroir de la rule Firestore). Les fichiers
+   partent en direct du navigateur vers Firebase Storage : aucune limite de
+   4,5 Mo comme sur les endpoints Vercel, et pas de coupure sur les vidéos.
+
+   Rien n'est jamais supprimé : « archiver » pose archived:true, le blob
+   Storage et le document restent en base (règle métier du repo).
+
+   ES5 strict (var, pas d'arrow, pas de template literal) — convention repo.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  var db      = firebase.firestore();
+  var storage = firebase.storage();
+  var COL     = 'testimonials';
+  var CFG_DOC = '_config/temoignages';
+  var DRIVE_TOKEN_KEY = 'drive_temoignages';
+
+  var ITEMS = [];
+  var CFG   = {};
+  var UID = null, ROLE = null, IS_ADMIN = false;
+  var FILTER = { cat: 'all', q: '', archived: false, publicOnly: false };
+  var editingId = null;
+  var qSeq = 0;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ─── Toast ─────────────────────────────────────────────────────── */
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 3200);
+  }
+
+  function guardAdmin() {
+    if (IS_ADMIN) return true;
+    toast('🔒 Modification réservée aux administrateurs');
+    return false;
+  }
+
+  /* ─── Modales ───────────────────────────────────────────────────── */
+  function openModal(id) { $(id).classList.add('open'); }
+  function closeModal(id) { $(id).classList.remove('open'); }
+
+  document.addEventListener('click', function (e) {
+    var c = e.target.closest('[data-close]');
+    if (c) { closeModal(c.getAttribute('data-close')); return; }
+    // Clic sur le fond de la modale
+    if (e.target.classList && e.target.classList.contains('tw-modal')) {
+      e.target.classList.remove('open');
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var open = document.querySelectorAll('.tw-modal.open');
+    for (var i = 0; i < open.length; i++) open[i].classList.remove('open');
+  });
+
+  /* ─── Sélecteurs de catégorie ───────────────────────────────────── */
+  function fillCatSelect(sel, value) {
+    var cats = window.TemoWall.CATEGORIES;
+    var html = '';
+    for (var i = 0; i < cats.length; i++) {
+      html += '<option value="' + cats[i].key + '">' + cats[i].icon + ' ' + cats[i].label + '</option>';
+    }
+    sel.innerHTML = html;
+    sel.value = value || 'autre';
+  }
+
+  /* ─── Filtres ───────────────────────────────────────────────────── */
+  function visible() {
+    var q = FILTER.q.toLowerCase();
+    return ITEMS.filter(function (it) {
+      if (FILTER.archived !== !!it.archived) return false;
+      if (FILTER.publicOnly && !it.isPublic) return false;
+      if (FILTER.cat !== 'all' && it.category !== FILTER.cat) return false;
+      if (q) {
+        var hay = ((it.clientName || '') + ' ' + (it.caption || '') + ' ' +
+                   (it.text || '') + ' ' + (it.fileName || '')).toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderPills() {
+    var live = ITEMS.filter(function (it) { return FILTER.archived === !!it.archived; });
+    var counts = {};
+    for (var i = 0; i < live.length; i++) {
+      var k = live[i].category || 'autre';
+      counts[k] = (counts[k] || 0) + 1;
+    }
+    var html = '<button class="tw-pill' + (FILTER.cat === 'all' ? ' active' : '') +
+               '" type="button" data-cat="all">Tous <span class="tw-n">' + live.length + '</span></button>';
+    var cats = window.TemoWall.CATEGORIES;
+    for (var j = 0; j < cats.length; j++) {
+      var c = cats[j];
+      var n = counts[c.key] || 0;
+      if (!n && FILTER.cat !== c.key) continue;   // on masque les catégories vides
+      html += '<button class="tw-pill' + (FILTER.cat === c.key ? ' active' : '') +
+              '" type="button" data-cat="' + c.key + '">' + c.icon + ' ' + c.label +
+              ' <span class="tw-n">' + n + '</span></button>';
+    }
+    $('pills').innerHTML = html;
+  }
+
+  function renderStats() {
+    var live = ITEMS.filter(function (it) { return !it.archived; });
+    var vid = 0, pub = 0, arch = 0;
+    for (var i = 0; i < live.length; i++) {
+      if (live[i].kind === 'video' || live[i].kind === 'embed') vid++;
+      if (live[i].isPublic) pub++;
+    }
+    for (var j = 0; j < ITEMS.length; j++) { if (ITEMS[j].archived) arch++; }
+    var html = '<span class="tw-stat"><b>' + live.length + '</b><span>témoignages</span></span>'
+             + '<span class="tw-stat"><b>' + vid + '</b><span>vidéos</span></span>'
+             + '<span class="tw-stat"><b>' + pub + '</b><span>sur le mur public</span></span>';
+    if (arch) html += '<span class="tw-stat"><b>' + arch + '</b><span>archivés</span></span>';
+    $('stats').innerHTML = html;
+  }
+
+  function renderAll() {
+    renderStats();
+    renderPills();
+    window.TemoWall.render($('wall'), visible(), {
+      admin: true,
+      emptyTitle: FILTER.archived ? 'Aucun témoignage archivé' : 'Le mur est encore vide',
+      emptyText: FILTER.archived
+        ? 'Les témoignages archivés se retrouvent ici — rien n’est jamais supprimé.'
+        : 'Glisse tes premiers fichiers dans la zone du haut, colle un lien YouTube ou Drive, ou branche le dossier Drive pour que ça se remplisse tout seul.'
+    });
+  }
+
+  /* ─── Chargement temps réel ─────────────────────────────────────── */
+  function watchItems() {
+    db.collection(COL).orderBy('createdAt', 'desc').limit(800)
+      .onSnapshot(function (snap) {
+        var arr = [];
+        snap.forEach(function (d) {
+          var it = d.data() || {};
+          it.id = d.id;
+          if (typeof it.archived !== 'boolean') it.archived = false;
+          if (typeof it.isPublic !== 'boolean') it.isPublic = false;
+          arr.push(it);
+        });
+        ITEMS = arr;
+        renderAll();
+      }, function (err) {
+        console.error('[temoignages] snapshot', err);
+        toast('❌ Lecture impossible : ' + err.message);
+      });
+  }
+
+  /* ─── Config Drive ──────────────────────────────────────────────── */
+  function loadConfig() {
+    db.doc(CFG_DOC).get().then(function (s) {
+      CFG = s.exists ? (s.data() || {}) : {};
+    }).catch(function (e) {
+      console.warn('[temoignages] config', e.message);
+    });
+  }
+
+  /* ═══ AJOUT DE FICHIERS ══════════════════════════════════════════ */
+
+  function safeName(name) {
+    return String(name || 'fichier')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .slice(-90);
+  }
+
+  function kindOf(file) {
+    var t = (file.type || '').toLowerCase();
+    var n = (file.name || '').toLowerCase();
+    // HEIC/HEIF : stockés mais non rendus par les navigateurs → fiche fichier
+    if (t.indexOf('heic') >= 0 || t.indexOf('heif') >= 0 ||
+        /\.(heic|heif)$/.test(n)) return 'file';
+    if (t.indexOf('image/') === 0) return 'image';
+    if (t.indexOf('video/') === 0) return 'video';
+    if (/\.(jpe?g|png|gif|webp|avif|bmp)$/.test(n)) return 'image';
+    if (/\.(mp4|webm|m4v|ogv)$/.test(n)) return 'video';
+    if (/\.(mov|avi|mkv|wmv|flv)$/.test(n)) return 'video';
+    return 'file';
+  }
+
+  // Dimensions d'une image
+  function imageDims(file, cb) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () { cb(img.naturalWidth, img.naturalHeight); URL.revokeObjectURL(url); };
+    img.onerror = function () { cb(0, 0); URL.revokeObjectURL(url); };
+    img.src = url;
+  }
+
+  // Vignette d'une vidéo : on saisit une frame au premier tiers, redimensionnée
+  // à 900 px de large. Sans ça le mur chargerait toutes les vidéos entières.
+  function videoPoster(file, cb) {
+    var url = URL.createObjectURL(file);
+    var v = document.createElement('video');
+    var settled = false;
+    function finish(blob, w, h, dur) {
+      if (settled) return;
+      settled = true;
+      try { URL.revokeObjectURL(url); } catch (e) {}
+      cb(blob, w, h, dur);
+    }
+    var timer = setTimeout(function () { finish(null, 0, 0, 0); }, 15000);
+    v.preload = 'metadata';
+    v.muted = true;
+    v.playsInline = true;
+    v.setAttribute('playsinline', '');
+    v.addEventListener('error', function () { clearTimeout(timer); finish(null, 0, 0, 0); });
+    v.addEventListener('loadeddata', function () {
+      var d = isFinite(v.duration) ? v.duration : 0;
+      try { v.currentTime = d ? Math.min(1.5, d / 3) : 0.1; }
+      catch (e) { clearTimeout(timer); finish(null, v.videoWidth, v.videoHeight, d); }
+    });
+    v.addEventListener('seeked', function () {
+      if (settled) return;
+      var w = v.videoWidth, h = v.videoHeight;
+      var d = isFinite(v.duration) ? v.duration : 0;
+      if (!w || !h) { clearTimeout(timer); finish(null, 0, 0, d); return; }
+      var scale = Math.min(1, 900 / w);
+      var c = document.createElement('canvas');
+      c.width  = Math.max(1, Math.round(w * scale));
+      c.height = Math.max(1, Math.round(h * scale));
+      try { c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); }
+      catch (e) { clearTimeout(timer); finish(null, w, h, d); return; }
+      c.toBlob(function (blob) { clearTimeout(timer); finish(blob, w, h, d); }, 'image/jpeg', 0.82);
+    });
+    v.src = url;
+  }
+
+  /* ─── File d'attente d'upload ───────────────────────────────────── */
+  function queueRow(file) {
+    var id = 'q' + (++qSeq);
+    var ico = kindOf(file) === 'video' ? '🎬' : (kindOf(file) === 'image' ? '🖼' : '📄');
+    var row = document.createElement('div');
+    row.className = 'tw-q';
+    row.id = id;
+    row.innerHTML = '<div class="tw-q-ico">' + ico + '</div>'
+      + '<div class="tw-q-body">'
+      + '<div class="tw-q-name"></div>'
+      + '<div class="tw-q-sub"></div>'
+      + '<div class="tw-q-track"><div class="tw-q-fill"></div></div>'
+      + '</div><div class="tw-q-pct">0 %</div>';
+    row.querySelector('.tw-q-name').textContent = file.name || 'Capture';
+    row.querySelector('.tw-q-sub').textContent = window.TemoWall.fmtBytes(file.size) + ' — préparation…';
+    $('queue').appendChild(row);
+    return {
+      el: row,
+      progress: function (pct) {
+        row.querySelector('.tw-q-fill').style.width = pct + '%';
+        row.querySelector('.tw-q-pct').textContent = Math.round(pct) + ' %';
+      },
+      sub: function (txt) { row.querySelector('.tw-q-sub').textContent = txt; },
+      done: function () {
+        row.classList.add('done');
+        row.querySelector('.tw-q-fill').style.width = '100%';
+        row.querySelector('.tw-q-pct').textContent = '✓';
+        row.querySelector('.tw-q-sub').textContent = 'Ajouté au mur';
+        setTimeout(function () { if (row.parentNode) row.parentNode.removeChild(row); }, 2600);
+      },
+      fail: function (msg) {
+        row.classList.add('err');
+        row.querySelector('.tw-q-pct').textContent = '✕';
+        var s = row.querySelector('.tw-q-sub');
+        s.className = 'tw-q-sub err';
+        s.textContent = msg;
+      }
+    };
+  }
+
+  function putFile(path, blob, contentType, onPct) {
+    return new Promise(function (resolve, reject) {
+      var task = storage.ref(path).put(blob, contentType ? { contentType: contentType } : undefined);
+      task.on('state_changed', function (snap) {
+        if (onPct && snap.totalBytes) onPct((snap.bytesTransferred / snap.totalBytes) * 100);
+      }, reject, function () {
+        task.snapshot.ref.getDownloadURL().then(resolve, reject);
+      });
+    });
+  }
+
+  function uploadOne(file) {
+    if (!guardAdmin()) return;
+    var ui   = queueRow(file);
+    var ref  = db.collection(COL).doc();
+    var id   = ref.id;
+    var kind = kindOf(file);
+    var base = 'testimonials/' + id + '/';
+
+    var meta = { width: 0, height: 0, duration: 0, posterUrl: '', posterPath: '' };
+
+    // 1. Mesures + vignette (avant l'upload, pour créer un doc complet)
+    new Promise(function (resolve) {
+      if (kind === 'image') {
+        imageDims(file, function (w, h) { meta.width = w; meta.height = h; resolve(null); });
+      } else if (kind === 'video') {
+        ui.sub('Génération de la vignette…');
+        videoPoster(file, function (blob, w, h, dur) {
+          meta.width = w; meta.height = h; meta.duration = dur;
+          resolve(blob);
+        });
+      } else {
+        resolve(null);
+      }
+    })
+    // 2. Vignette dans Storage
+    .then(function (posterBlob) {
+      if (!posterBlob) return null;
+      var pPath = base + 'poster.jpg';
+      return putFile(pPath, posterBlob, 'image/jpeg', null).then(function (url) {
+        meta.posterUrl = url; meta.posterPath = pPath;
+        return null;
+      }).catch(function () { return null; });  // vignette optionnelle
+    })
+    // 3. Le fichier lui-même
+    .then(function () {
+      ui.sub('Envoi vers Firebase Storage…');
+      var path = base + safeName(file.name || (kind + '-' + id));
+      return putFile(path, file, file.type || undefined, ui.progress).then(function (url) {
+        return { url: url, path: path };
+      });
+    })
+    // 4. Le document Firestore
+    .then(function (up) {
+      ui.sub('Enregistrement…');
+      return ref.set({
+        kind:       kind,
+        source:     'upload',
+        category:   defaultCategoryFor(kind),
+        mediaUrl:   up.url,
+        storagePath: up.path,
+        posterUrl:  meta.posterUrl || '',
+        posterPath: meta.posterPath || '',
+        fileName:   file.name || '',
+        mime:       file.type || '',
+        bytes:      file.size || 0,
+        width:      meta.width || 0,
+        height:     meta.height || 0,
+        duration:   Math.round(meta.duration || 0),
+        clientName: '',
+        caption:    '',
+        text:       '',
+        isPublic:   false,
+        featured:   false,
+        archived:   false,
+        order:      Date.now(),
+        createdBy:  UID,
+        createdAt:  firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt:  firebase.firestore.FieldValue.serverTimestamp()
+      });
+    })
+    .then(function () { ui.done(); })
+    .catch(function (err) {
+      console.error('[temoignages] upload', err);
+      ui.fail((err && err.message) || 'Échec de l’envoi');
+    });
+  }
+
+  function defaultCategoryFor(kind) {
+    if (kind === 'video' || kind === 'embed') return 'video';
+    return 'autre';
+  }
+
+  function handleFiles(list) {
+    if (!list || !list.length) return;
+    if (!guardAdmin()) return;
+    for (var i = 0; i < list.length; i++) uploadOne(list[i]);
+  }
+
+  /* ─── Zone de dépôt + presse-papier ─────────────────────────────── */
+  function initDropzone() {
+    var dz = $('drop');
+    var picker = $('picker');
+
+    dz.addEventListener('click', function () { picker.click(); });
+    dz.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); picker.click(); }
+    });
+    $('bAdd').addEventListener('click', function () { picker.click(); });
+    picker.addEventListener('change', function () {
+      handleFiles(picker.files);
+      picker.value = '';
+    });
+
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('over'); });
+    });
+    dz.addEventListener('drop', function (e) {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+    });
+
+    // Le navigateur ouvrirait le fichier déposé hors zone : on l'en empêche.
+    window.addEventListener('dragover', function (e) { e.preventDefault(); });
+    window.addEventListener('drop', function (e) { e.preventDefault(); });
+
+    // Coller une capture (Cmd+V) — le raccourci le plus utilisé du module.
+    document.addEventListener('paste', function (e) {
+      if (!e.clipboardData) return;
+      var tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      var files = [];
+      var items = e.clipboardData.items || [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind !== 'file') continue;
+        var f = items[i].getAsFile();
+        if (f) files.push(f);
+      }
+      if (!files.length) return;
+      e.preventDefault();
+      handleFiles(files);
+      toast('📋 ' + files.length + ' capture' + (files.length > 1 ? 's' : '') + ' en cours d’ajout');
+    });
+  }
+
+  /* ═══ LIENS EXTERNES ═════════════════════════════════════════════ */
+
+  // Détecte la plateforme et renvoie de quoi afficher le média.
+  function parseLink(raw) {
+    var url = String(raw || '').trim();
+    if (!url) return null;
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+    var m;
+    // YouTube
+    m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+    if (m) {
+      return { kind: 'embed', embedUrl: 'https://www.youtube.com/embed/' + m[1],
+               posterUrl: 'https://i.ytimg.com/vi/' + m[1] + '/hqdefault.jpg',
+               width: 16, height: 9, sourceUrl: url };
+    }
+    // Vimeo
+    m = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (m) {
+      return { kind: 'embed', embedUrl: 'https://player.vimeo.com/video/' + m[1],
+               posterUrl: '', width: 16, height: 9, sourceUrl: url };
+    }
+    // Loom
+    m = url.match(/loom\.com\/(?:share|embed)\/([A-Za-z0-9]+)/);
+    if (m) {
+      return { kind: 'embed', embedUrl: 'https://www.loom.com/embed/' + m[1],
+               posterUrl: '', width: 16, height: 9, sourceUrl: url };
+    }
+    // Google Drive (fichier)
+    m = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)([A-Za-z0-9_-]{10,})/);
+    if (m) {
+      return { kind: 'embed', embedUrl: 'https://drive.google.com/file/d/' + m[1] + '/preview',
+               posterUrl: 'https://drive.google.com/thumbnail?id=' + m[1] + '&sz=w1000',
+               driveFileId: m[1], width: 16, height: 9, sourceUrl: url };
+    }
+    // Fichier image ou vidéo servi en direct
+    if (/\.(jpe?g|png|gif|webp|avif)(\?|#|$)/i.test(url)) {
+      return { kind: 'image', mediaUrl: url, sourceUrl: url };
+    }
+    if (/\.(mp4|webm|m4v|ogv)(\?|#|$)/i.test(url)) {
+      return { kind: 'video', mediaUrl: url, sourceUrl: url };
+    }
+    // Repli : on tente l'iframe (Trustpilot, page d'avis, etc.)
+    return { kind: 'embed', embedUrl: url, posterUrl: '', width: 16, height: 9, sourceUrl: url };
+  }
+
+  function saveLink() {
+    if (!guardAdmin()) return;
+    var parsed = parseLink($('lUrl').value);
+    if (!parsed) { toast('❌ Adresse requise'); return; }
+    var doc = {
+      kind:       parsed.kind,
+      source:     'link',
+      category:   $('lCat').value || 'autre',
+      mediaUrl:   parsed.mediaUrl || '',
+      embedUrl:   parsed.embedUrl || '',
+      posterUrl:  parsed.posterUrl || '',
+      sourceUrl:  parsed.sourceUrl || '',
+      driveFileId: parsed.driveFileId || '',
+      width:      parsed.width || 0,
+      height:     parsed.height || 0,
+      duration:   0,
+      clientName: $('lName').value.trim(),
+      caption:    $('lCap').value.trim(),
+      text:       '',
+      isPublic:   !!$('lPublic').checked,
+      featured:   false,
+      archived:   false,
+      order:      Date.now(),
+      createdBy:  UID,
+      createdAt:  firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt:  firebase.firestore.FieldValue.serverTimestamp()
+    };
+    db.collection(COL).add(doc).then(function () {
+      closeModal('mLink');
+      $('lUrl').value = ''; $('lName').value = ''; $('lCap').value = '';
+      $('lPublic').checked = false;
+      toast('✅ Lien ajouté au mur');
+    }).catch(function (e) { toast('❌ ' + e.message); });
+  }
+
+  function saveText() {
+    if (!guardAdmin()) return;
+    var txt = $('tText').value.trim();
+    if (!txt) { toast('❌ Le texte est vide'); return; }
+    db.collection(COL).add({
+      kind:       'text',
+      source:     'text',
+      category:   $('tCat').value || 'autre',
+      text:       txt,
+      mediaUrl:   '', embedUrl: '', posterUrl: '',
+      width: 0, height: 0, duration: 0,
+      clientName: $('tName').value.trim(),
+      caption:    $('tCap').value.trim(),
+      isPublic:   !!$('tPublic').checked,
+      featured:   false,
+      archived:   false,
+      order:      Date.now(),
+      createdBy:  UID,
+      createdAt:  firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt:  firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function () {
+      closeModal('mText');
+      $('tText').value = ''; $('tName').value = ''; $('tCap').value = '';
+      $('tPublic').checked = false;
+      toast('✅ Témoignage ajouté');
+    }).catch(function (e) { toast('❌ ' + e.message); });
+  }
+
+  /* ═══ ACTIONS SUR UNE CARTE ══════════════════════════════════════ */
+
+  function byId(id) {
+    for (var i = 0; i < ITEMS.length; i++) if (ITEMS[i].id === id) return ITEMS[i];
+    return null;
+  }
+
+  function patch(id, data) {
+    if (!guardAdmin()) return Promise.resolve();
+    data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    return db.collection(COL).doc(id).update(data)
+      .catch(function (e) { toast('❌ ' + e.message); });
+  }
+
+  function openEdit(id) {
+    var it = byId(id);
+    if (!it) return;
+    editingId = id;
+    $('editHint').textContent =
+      (it.source === 'drive' ? 'Importé automatiquement depuis Google Drive. ' : '') +
+      (it.fileName ? it.fileName + ' — ' : '') +
+      (it.bytes ? window.TemoWall.fmtBytes(it.bytes) : '');
+    $('fName').value = it.clientName || '';
+    $('fCap').value  = it.caption || '';
+    fillCatSelect($('fCat'), it.category || 'autre');
+    $('fTextWrap').style.display = it.kind === 'text' ? '' : 'none';
+    $('fText').value = it.text || '';
+    $('fPublic').checked = !!it.isPublic;
+    $('fFeat').checked   = !!it.featured;
+    $('bArchive').textContent = it.archived ? '↩ Restaurer' : '🗄 Archiver';
+    openModal('mEdit');
+  }
+
+  function saveEdit() {
+    if (!editingId) return;
+    var it = byId(editingId);
+    var data = {
+      clientName: $('fName').value.trim(),
+      caption:    $('fCap').value.trim(),
+      category:   $('fCat').value,
+      isPublic:   !!$('fPublic').checked,
+      featured:   !!$('fFeat').checked
+    };
+    if (it && it.kind === 'text') data.text = $('fText').value.trim();
+    patch(editingId, data).then(function () {
+      closeModal('mEdit');
+      toast('✅ Enregistré');
+    });
+  }
+
+  function initCardActions() {
+    $('wall').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-act]');
+      if (!b) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var id  = b.getAttribute('data-id');
+      var act = b.getAttribute('data-act');
+      var it  = byId(id);
+      if (!it) return;
+
+      if (act === 'edit')    { openEdit(id); return; }
+      if (act === 'feature') { patch(id, { featured: !it.featured }); return; }
+      if (act === 'public')  {
+        patch(id, { isPublic: !it.isPublic });
+        toast(it.isPublic ? '🔒 Retiré du mur public' : '🌐 Publié sur le mur public');
+        return;
+      }
+      if (act === 'archive') {
+        if (!confirm('Archiver ce témoignage ? Il disparaît du mur mais rien n’est supprimé — tu le retrouves dans « Archives ».')) return;
+        patch(id, { archived: true, isPublic: false });
+        toast('🗄 Archivé');
+        return;
+      }
+      if (act === 'restore') { patch(id, { archived: false }); toast('↩ Restauré'); return; }
+    });
+  }
+
+  /* ═══ DRIVE ══════════════════════════════════════════════════════ */
+
+  function extractFolderId(raw) {
+    var s = String(raw || '').trim();
+    if (!s) return '';
+    var m = s.match(/\/folders\/([A-Za-z0-9_-]{10,})/);
+    if (m) return m[1];
+    m = s.match(/[?&]id=([A-Za-z0-9_-]{10,})/);
+    if (m) return m[1];
+    return s.replace(/[^A-Za-z0-9_-]/g, '');
+  }
+
+  function fmtWhen(ts) {
+    if (!ts) return '—';
+    var d = ts.toDate ? ts.toDate() : new Date(ts);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function openDrive() {
+    if (!guardAdmin()) return;
+    db.doc(CFG_DOC).get().then(function (s) {
+      CFG = s.exists ? (s.data() || {}) : {};
+      $('dFolder').value  = CFG.driveFolderId || '';
+      $('dAuto').checked  = CFG.autoImport !== false;
+      $('dPublic').checked = !!CFG.autoPublish;
+      $('dShare').checked = !!CFG.autoShare;
+      fillCatSelect($('dCat'), CFG.defaultCategory || 'autre');
+
+      var last = CFG.lastSyncAt
+        ? fmtWhen(CFG.lastSyncAt) + ' — ' + (CFG.lastSyncSummary || 'aucun détail')
+        : 'Jamais synchronisé.';
+      $('dLast').textContent = last;
+
+      return db.collection('email_tokens').doc(DRIVE_TOKEN_KEY).get();
+    }).then(function (t) {
+      var ok = t && t.exists && (t.data() || {}).refreshToken;
+      $('driveConn').innerHTML = ok
+        ? '✅ Connecté — <b>' + window.TemoWall.esc((t.data() || {}).email || '') + '</b><br>'
+          + '<a href="admin-email-auth.html" style="color:#7d97ff">Reconnecter ou changer de compte</a>'
+        : '⚠️ Aucun compte Google connecté pour les témoignages.<br>'
+          + '<a href="admin-email-auth.html" style="color:#7d97ff">→ Connecter « Drive Témoignages »</a> '
+          + 'puis reviens ici.';
+      openModal('mDrive');
+    }).catch(function (e) { toast('❌ ' + e.message); });
+  }
+
+  function saveDrive() {
+    if (!guardAdmin()) return;
+    var folder = extractFolderId($('dFolder').value);
+    db.doc(CFG_DOC).set({
+      driveFolderId:   folder,
+      autoImport:      !!$('dAuto').checked,
+      autoPublish:     !!$('dPublic').checked,
+      autoShare:       !!$('dShare').checked,
+      defaultCategory: $('dCat').value || 'autre',
+      tokenKey:        DRIVE_TOKEN_KEY,
+      updatedAt:       firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true }).then(function () {
+      $('dFolder').value = folder;
+      toast('✅ Réglages Drive enregistrés');
+    }).catch(function (e) { toast('❌ ' + e.message); });
+  }
+
+  function runSync(dry) {
+    if (!guardAdmin()) return;
+    var btn = dry ? $('bDryRun') : $('bSyncNow');
+    var old = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = dry ? 'Test en cours…' : 'Synchronisation…';
+
+    firebase.auth().currentUser.getIdToken().then(function (tok) {
+      return fetch('/api/temoignages-drive-sync' + (dry ? '?dry=1' : ''), {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + tok }
+      });
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+    }).then(function (res) {
+      btn.disabled = false;
+      btn.textContent = old;
+      if (!res.ok) { toast('❌ ' + (res.body.error || 'Échec de la synchronisation')); return; }
+      var b = res.body;
+      var msg = (dry ? '🔍 Test : ' : '☁️ ') + (b.imported || 0) + ' importé(s), '
+              + (b.skipped || 0) + ' déjà présent(s)'
+              + (b.failed ? ', ' + b.failed + ' en échec' : '');
+      toast(msg);
+      $('dLast').textContent = (dry ? 'Test à blanc — ' : 'À l’instant — ') + (b.summary || msg);
+      if (b.warnings && b.warnings.length) {
+        console.warn('[temoignages] avertissements Drive :', b.warnings);
+      }
+    }).catch(function (e) {
+      btn.disabled = false;
+      btn.textContent = old;
+      toast('❌ ' + e.message);
+    });
+  }
+
+  /* ═══ INITIALISATION ═════════════════════════════════════════════ */
+
+  function initToolbar() {
+    $('pills').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-cat]');
+      if (!b) return;
+      FILTER.cat = b.getAttribute('data-cat');
+      renderAll();
+    });
+
+    var qTimer = null;
+    $('q').addEventListener('input', function () {
+      if (qTimer) clearTimeout(qTimer);
+      qTimer = setTimeout(function () { FILTER.q = $('q').value.trim(); renderAll(); }, 180);
+    });
+
+    $('tgArchived').addEventListener('click', function () {
+      FILTER.archived = !FILTER.archived;
+      $('tgArchived').classList.toggle('active', FILTER.archived);
+      renderAll();
+    });
+    $('tgPublic').addEventListener('click', function () {
+      FILTER.publicOnly = !FILTER.publicOnly;
+      $('tgPublic').classList.toggle('active', FILTER.publicOnly);
+      renderAll();
+    });
+
+    $('bLink').addEventListener('click', function () {
+      if (!guardAdmin()) return;
+      fillCatSelect($('lCat'), 'video');
+      openModal('mLink');
+    });
+    $('bText').addEventListener('click', function () {
+      if (!guardAdmin()) return;
+      fillCatSelect($('tCat'), 'autre');
+      openModal('mText');
+    });
+    $('bLinkSave').addEventListener('click', saveLink);
+    $('bTextSave').addEventListener('click', saveText);
+    $('bSave').addEventListener('click', saveEdit);
+    $('bArchive').addEventListener('click', function () {
+      if (!editingId) return;
+      var it = byId(editingId);
+      if (!it) return;
+      patch(editingId, it.archived ? { archived: false } : { archived: true, isPublic: false });
+      closeModal('mEdit');
+      toast(it.archived ? '↩ Restauré' : '🗄 Archivé');
+    });
+
+    $('bDrive').addEventListener('click', openDrive);
+    $('bDriveSave').addEventListener('click', saveDrive);
+    $('bSyncNow').addEventListener('click', function () { runSync(false); });
+    $('bDryRun').addEventListener('click', function () { runSync(true); });
+
+    $('bShare').addEventListener('click', function () {
+      var url = window.location.origin + '/temoignages-public.html';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          toast('📋 Lien public copié : ' + url);
+        }, function () { window.prompt('Lien du mur public :', url); });
+      } else {
+        window.prompt('Lien du mur public :', url);
+      }
+    });
+  }
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (!user) { window.location.href = 'login.html'; return; }
+    UID = user.uid;
+    db.collection('users').doc(user.uid).get().then(function (s) {
+      ROLE = s.exists ? (s.data() || {}).role : null;
+      IS_ADMIN = ROLE === 'admin';
+      window._currentRole = ROLE || window._currentRole;
+
+      $('app').style.display = '';
+      window.TemoWall.skeleton($('wall'), 12);
+
+      if (!IS_ADMIN) {
+        // Lecture seule : on retire tout ce qui écrit.
+        $('drop').style.display = 'none';
+        var bar = $('bAdd').parentNode;
+        bar.style.display = 'none';
+      }
+
+      initDropzone();
+      initToolbar();
+      initCardActions();
+      fillCatSelect($('fCat'), 'autre');
+      loadConfig();
+      watchItems();
+    }).catch(function (e) {
+      console.error('[temoignages] init', e);
+      document.body.innerHTML = '<div style="padding:60px;text-align:center;color:#f0596b">'
+        + 'Impossible de charger la page : ' + window.TemoWall.esc(e.message) + '</div>';
+    });
+  });
+})();
+</script>
+</body>
+</html>

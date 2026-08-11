@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Alteore — Ils en parlent mieux que nous</title>
+<meta name="description" content="Les retours, vidéos et messages de celles et ceux que nous accompagnons."/>
+<!-- Page partagée par lien, pas destinée à être indexée. Retire cette ligne
+     le jour où tu veux la référencer. -->
+<meta name="robots" content="noindex, nofollow"/>
+<meta property="og:title" content="Alteore — Ils en parlent mieux que nous"/>
+<meta property="og:description" content="Les retours, vidéos et messages de celles et ceux que nous accompagnons."/>
+<meta property="og:type" content="website"/>
+<link rel="stylesheet" href="temoignages.css"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+</head>
+<body class="tw-body">
+<script src="temoignages-wall.js"></script>
+
+<div class="tw-main is-public">
+
+  <div class="tw-head">
+    <div class="tw-eyebrow">Preuve &amp; résultats</div>
+    <h1>Ils en parlent <span class="tw-accent">mieux que nous</span></h1>
+    <p>Des vidéos, des messages reçus, des avis laissés spontanément. Rien de scénarisé :
+       ce que vivent réellement les dirigeants que nous accompagnons, dans leurs mots.</p>
+    <div class="tw-stats" id="stats"></div>
+  </div>
+
+  <div class="tw-bar">
+    <div id="pills" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+  </div>
+
+  <div class="tw-wall" id="wall"></div>
+
+  <div class="tw-public-foot">
+    <b>Alteore</b> — accompagnement et formation de dirigeants.<br>
+    Chaque témoignage est publié avec l'accord de son auteur.
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   temoignages-public.html — MUR PUBLIC (lecture seule)
+   ─────────────────────────────────────────────────────────────────────
+   Aucune authentification : la requête est volontairement contrainte à
+   `isPublic == true` ET `archived == false`, ce qui est exactement la
+   condition autorisée par la rule Firestore. Toute autre requête depuis
+   cette page serait refusée — c'est la garantie qu'un témoignage interne
+   ne peut pas fuiter par ici.
+
+   Deux filtres d'égalité seulement : Firestore les sert avec ses index
+   simples automatiques (jointure zig-zag), aucun index composite à créer.
+   Le tri est fait côté client par temoignages-wall.js.
+
+   ES5 strict — convention repo.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  var db = firebase.firestore();
+  var ITEMS = [];
+  var CAT = 'all';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function visible() {
+    if (CAT === 'all') return ITEMS;
+    return ITEMS.filter(function (it) { return it.category === CAT; });
+  }
+
+  function renderStats() {
+    var vid = 0;
+    for (var i = 0; i < ITEMS.length; i++) {
+      if (ITEMS[i].kind === 'video' || ITEMS[i].kind === 'embed') vid++;
+    }
+    var html = '<span class="tw-stat"><b>' + ITEMS.length + '</b><span>témoignages</span></span>';
+    if (vid) html += '<span class="tw-stat"><b>' + vid + '</b><span>vidéos</span></span>';
+    $('stats').innerHTML = html;
+  }
+
+  function renderPills() {
+    var counts = {};
+    for (var i = 0; i < ITEMS.length; i++) {
+      var k = ITEMS[i].category || 'autre';
+      counts[k] = (counts[k] || 0) + 1;
+    }
+    // Une seule catégorie représentée : la barre de filtres n'apporte rien.
+    var keys = Object.keys(counts);
+    if (keys.length < 2) { $('pills').innerHTML = ''; return; }
+
+    var html = '<button class="tw-pill' + (CAT === 'all' ? ' active' : '') +
+               '" type="button" data-cat="all">Tous <span class="tw-n">' + ITEMS.length + '</span></button>';
+    var cats = window.TemoWall.CATEGORIES;
+    for (var j = 0; j < cats.length; j++) {
+      var c = cats[j];
+      if (!counts[c.key]) continue;
+      html += '<button class="tw-pill' + (CAT === c.key ? ' active' : '') +
+              '" type="button" data-cat="' + c.key + '">' + c.icon + ' ' + c.label +
+              ' <span class="tw-n">' + counts[c.key] + '</span></button>';
+    }
+    $('pills').innerHTML = html;
+  }
+
+  function renderAll() {
+    renderStats();
+    renderPills();
+    window.TemoWall.render($('wall'), visible(), {
+      admin: false,
+      emptyTitle: 'Rien à afficher pour le moment',
+      emptyText: 'Les témoignages arrivent très bientôt.'
+    });
+  }
+
+  $('pills').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-cat]');
+    if (!b) return;
+    CAT = b.getAttribute('data-cat');
+    renderAll();
+  });
+
+  window.TemoWall.skeleton($('wall'), 12);
+
+  db.collection('testimonials')
+    .where('isPublic', '==', true)
+    .where('archived', '==', false)
+    .limit(500)
+    .get()
+    .then(function (snap) {
+      var arr = [];
+      snap.forEach(function (d) {
+        var it = d.data() || {};
+        it.id = d.id;
+        arr.push(it);
+      });
+      ITEMS = arr;
+      renderAll();
+    })
+    .catch(function (err) {
+      console.error('[mur public]', err);
+      $('wall').style.columns = 'auto';
+      $('wall').innerHTML = '<div class="tw-empty"><span class="e">⚠️</span>'
+        + '<h3>Le mur n’a pas pu être chargé</h3>'
+        + '<p>Réessaie dans un instant. Si le problème persiste, préviens-nous.</p></div>';
+    });
+})();
+</script>
+</body>
+</html>

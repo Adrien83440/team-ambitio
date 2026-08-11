@@ -85,6 +85,10 @@
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
     { id: 'documents',         icon: '📚', label: 'Documents',    href: 'documents.html',         section: 'Outils', perm: '_all' },
+    // Mur de témoignages : module personnel d'Adrien (gestion admin). Le mur
+    // partageable aux prospects est temoignages-public.html, sans connexion.
+    // Passer perm à '_all' si l'équipe doit voir le mur interne.
+    { id: 'temoignages',       icon: '⭐', label: 'Témoignages',  href: 'temoignages.html',       section: 'Outils', perm: '_admin' },
   ];
 
   const THEMES = {
