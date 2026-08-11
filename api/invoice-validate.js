@@ -76,6 +76,33 @@ module.exports = async function(req, res) {
     if (!invoice.clientId || !invoice.clientSnapshot) {
       const e = new Error('Aucun client sélectionné'); e.status = 400; throw e;
     }
+
+    /* ── Périmètre de facturation ──
+       Quelques clients ont démarré sur l'entreprise individuelle et y sont
+       restés : leurs factures sont émises depuis un autre outil. Leur fiche
+       existe ici pour le suivi, mais une facture émise depuis la SARL pour
+       l'un d'eux serait une erreur comptable — et, une fois la facturation
+       électronique active, une erreur transmise au réseau, donc irrattrapable.
+       D'où un blocage dur, et non un simple avertissement.
+
+       On lit la FICHE client, pas le clientSnapshot : le snapshot d'un draft
+       ancien peut dater d'avant le marquage EI, et c'est justement ce cas-là
+       qu'il faut attraper. */
+    const clientRefScope = db.collection('invoice_clients').doc(invoice.clientId);
+    const clientScopeSnap = await clientRefScope.get();
+    if (clientScopeSnap.exists && (clientScopeSnap.data() || {}).billingScope === 'ei') {
+      const cData = clientScopeSnap.data() || {};
+      const cName = cData.companyName
+        || ((cData.contactFirstName || '') + ' ' + (cData.contactLastName || '')).trim()
+        || 'ce client';
+      const e = new Error(
+        'Facturation impossible : « ' + cName + ' » est rattaché à l\'entreprise '
+        + 'individuelle, ses factures sont traitées en dehors d\'Alteore. Si c\'est une '
+        + 'erreur, change « Facturé par » sur sa fiche client.'
+      );
+      e.status = 409;
+      throw e;
+    }
     if (!invoice.lines || !invoice.lines.length) {
       const e = new Error('Au moins une ligne est requise'); e.status = 400; throw e;
     }
