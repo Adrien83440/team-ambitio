@@ -176,7 +176,6 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
 .fn-dispo-bar { display:flex; height:7px; width:96px; border-radius:6px; overflow:hidden; background:var(--bg4); margin-left:auto; }
 .fn-dispo-bar i { display:block; height:100%; }
 .fn-dispo-bar i.bk { background:var(--blue); }
-.fn-dispo-bar i.pe { background:var(--muted2); }
 .fn-dispo-est { font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:10px; background:rgba(245,158,11,0.12); color:var(--gold); border:1px solid rgba(245,158,11,0.25); margin-left:6px; }
 .fn-dispo-notes { font-size:11.5px; color:var(--muted); line-height:1.65; margin-top:11px; }
 .fn-dispo-notes b { color:var(--text); }
@@ -590,7 +589,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   var DC = window.DispoCore;
   var DISPO = {
     ready: false, err: null, archiveDenied: false,
-    settings: {}, targets: [], busy: {}, archive: {}, archiveFrom: null,
+    settings: {}, targets: [], archive: {}, archiveFrom: null,
     personCount: 0, teamCount: 0, salesCount: 0, rosterFallback: false,
     days: [], rows: [], totals: null,
     year: null, yearLoading: false, yearErr: null
@@ -622,22 +621,6 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
           + ' membres lus) → repli Élodie, comme alteore-flow.js');
       }
     });
-  }
-
-  /* Agenda Google (calendar_busy) — uniquement pour les experts connectés.
-     Le cache serveur ne couvre que ~60 jours à venir : sur une période
-     passée il est vide, et c'est l'archive qui porte l'info « perso ». */
-  function loadDispoBusy() {
-    DISPO.busy = {};
-    var connected = DISPO.targets.filter(function (t) { return t.person.calendarConnected; });
-    return Promise.all(connected.map(function (t) {
-      return db.collection('calendar_busy').doc(t.person.id).get().then(function (s) {
-        DISPO.busy[t.person.id] = (s.exists && (s.data() || {}).busy) || [];
-      }).catch(function (e) {
-        console.warn('[funnel/dispos] calendar_busy ' + t.person.id, e.message);
-        DISPO.busy[t.person.id] = [];
-      });
-    }));
   }
 
   /* Archive availability_daily : un doc par personne et par mois.
@@ -693,7 +676,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     return loadDispoConfig()
       .then(function () {
         if (!DISPO.targets.length) return null;
-        return Promise.all([loadDispoBusy(), loadDispoArchive(DISPO.days)]);
+        return loadDispoArchive(DISPO.days);
       })
       .catch(function (e) {
         console.error('[funnel/dispos] chargement', e);
@@ -720,7 +703,6 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       var r = DC.rangeCapacity(t.person, DISPO.days, {
         settings: DISPO.settings,
         bookingsByDate: idx[t.person.id] || {},
-        busy: DISPO.busy[t.person.id] || [],
         archive: DISPO.archive[t.person.id] || {},
         today: today
       });
@@ -756,7 +738,6 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
         var r = DC.rangeCapacity(t.person, days, {
           settings: DISPO.settings,
           bookingsByDate: idx[t.person.id] || {},
-          busy: DISPO.busy[t.person.id] || [],
           archive: DISPO.archive[t.person.id] || {},
           today: today
         });
@@ -826,13 +807,12 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     return (Math.round(v * 10) / 10).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   }
 
-  /* Barre pris / perso / libre — proportions de la capacité ouverte. */
+  /* Barre — part des créneaux ouverts déjà pris. */
   function dispoBar(t) {
     if (!t || !t.open) return '';
     var b = Math.max(0, Math.round(t.booked / t.open * 100));
-    var p = Math.max(0, Math.round(t.perso / t.open * 100));
-    return '<div class="fn-dispo-bar" title="' + escAttr(t.booked + ' pris · ' + t.perso + ' agenda perso · ' + t.free + ' libres') + '">'
-      + '<i class="bk" style="width:' + b + '%"></i><i class="pe" style="width:' + p + '%"></i></div>';
+    return '<div class="fn-dispo-bar" title="' + escAttr(t.booked + ' pris · ' + t.free + ' libres') + '">'
+      + '<i class="bk" style="width:' + b + '%"></i></div>';
   }
 
   function dispoRowHtml(label, sub, color, t, isTotal) {
@@ -850,7 +830,6 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<td class="num">' + fmtAvg(perDay) + '</td>';
     h += '<td class="num">' + fmtAvg(perWork) + '</td>';
     h += '<td class="num">' + fmtNum(t.booked) + '</td>';
-    h += '<td class="num">' + (t.perso ? fmtNum(t.perso) : '—') + '</td>';
     h += '<td class="num">' + fmtNum(t.free) + '</td>';
     h += '<td class="num">' + (fr == null ? '—' : fmtPct(fr, 0)) + '</td>';
     h += '<td style="width:110px">' + dispoBar(t) + '</td>';
@@ -937,9 +916,8 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<th class="num" title="Créneaux ouverts ÷ nombre de jours de la période">/ jour</th>';
     h += '<th class="num" title="Créneaux ouverts les jours ouvrés ÷ nombre de jours ouvrés (lundi-vendredi hors fériés)">/ jour ouvré</th>';
     h += '<th class="num" title="Créneaux occupés par un RDV non annulé (no-show inclus : le créneau a bien été consommé)">Pris</th>';
-    h += '<th class="num" title="Créneaux neutralisés par un événement de son agenda Google personnel">Perso</th>';
-    h += '<th class="num" title="Ouverts − Pris − Perso">Libres</th>';
-    h += '<th class="num" title="Pris ÷ Ouverts — l\'agenda perso n\'entre pas dans le taux">Rempl.</th>';
+    h += '<th class="num" title="Ouverts − Pris">Libres</th>';
+    h += '<th class="num" title="Pris ÷ Ouverts">Rempl.</th>';
     h += '<th></th></tr></thead><tbody>';
     DISPO.rows.forEach(function (r) {
       var role = r.member.role === 'setter' ? 'setteur'
@@ -972,8 +950,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     var notes = [];
     notes.push('Un <b>créneau</b> = 1 h ouverte dans le planning Booking. Les créneaux réellement proposés au prospect '
       + 'dépendent du type de consultation (30 / 45 / 60 min) : on compte ici une <b>capacité</b>, pas une simulation de réservation.');
-    notes.push('<b>Ouverts = Pris + Perso + Libres.</b> Le taux de remplissage ne compte que les RDV — une semaine de congés '
-      + 'ne fait donc pas grimper le taux à 100 %.');
+    notes.push('<b>Ouverts = Pris + Libres.</b> « Libres » = les créneaux du planning sur lesquels aucun rendez-vous n\'est posé.');
     if (DISPO.archiveDenied) {
       notes.push('⚠ <b>Archive inaccessible</b> — la règle Firestore <code>availability_daily</code> n\'est pas encore déployée. '
         + 'Tant qu\'elle manque, les jours passés sont tous reconstitués depuis les horaires actuels.');
@@ -1982,7 +1959,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     /* Tout le pipeline de chargement vit dans funnel-core.js — strictement
        le même que celui qu'exécute l'API agence. */
     /* La capacité se charge EN PARALLÈLE du funnel : ses sources (booking_config,
-       calendar_busy, availability_daily) sont indépendantes. loadDispos()
+       availability_daily) sont indépendantes. loadDispos()
        n'échoue jamais — elle range son erreur dans DISPO.err pour que la
        section l'affiche sans emporter le reste de la page. */
     Promise.all([
