@@ -61,15 +61,22 @@ service firebase.storage {
     //           Plafond 2 Go : garde-fou contre le fichier déposé par erreur,
     //           pas une contrainte de fonctionnement (une vidéo de témoignage
     //           dépasse rarement 500 Mo).
-    //  Delete : refusé. Rien n'est jamais supprimé — archiver un témoignage
-    //           pose archived:true côté Firestore, le blob reste en place.
+    //  Delete : refusé — `request.resource` est null sur une suppression,
+    //           la condition tombe donc d'elle-même. Rien n'est jamais
+    //           supprimé : archiver pose archived:true côté Firestore et le
+    //           blob reste en place.
+    //
+    //  ⚠ Les règles Storage ne connaissent QUE `read` et `write` — pas les
+    //  opérations granulaires create / update / delete de Firestore. Écrire
+    //  `allow create:` ici passe la compilation mais n'accorde rien, et tout
+    //  upload repart en storage/unauthorized. (Erreur commise le 11/08/2026 ;
+    //  le bloc voice_notes ci-dessus a la même forme et mérite le même
+    //  traitement s'il s'avère que les vocaux ne montent plus.)
     match /testimonials/{temoId}/{fileName} {
-      allow read:   if true;
-      allow create: if request.auth != null
-                    && request.resource.size < 2 * 1024 * 1024 * 1024;
-      allow update: if request.auth != null
-                    && request.resource.size < 2 * 1024 * 1024 * 1024;
-      allow delete: if false;
+      allow read:  if true;
+      allow write: if request.auth != null
+                   && request.resource != null
+                   && request.resource.size < 2 * 1024 * 1024 * 1024;
     }
 
     // Tout le reste : refusé par défaut. Ajouter d'autres `match` au-dessus
