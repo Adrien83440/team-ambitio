@@ -3814,7 +3814,7 @@ function renderInvoicesList() {
     html += '</td>';
     html += '<td><span style="font-size:12px;color:var(--muted)">' + dateStr + '</span></td>';
     html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
-    html += '<td>' + statusBadge + qontoBadgeOf(inv) + '</td>';
+    html += '<td>' + statusBadge + qontoBadgeOf(inv) + qontoPaidBadgeOf(inv) + '</td>';
     html += '<td class="col-actions">';
     html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();editInvoice(\'' + inv.id + '\')">' + (inv.status === 'draft' ? '✏️ Éditer' : '👁️ Voir') + '</button>';
     /* Lien direct vers la facture chez Qonto, quand elle y existe. */
@@ -3825,7 +3825,9 @@ function renderInvoicesList() {
     /* Rattrapage : proposé sur toute facture validée qui n'est pas déjà passée
        chez Qonto. Si Qonto est désactivé ou le client rattaché à l'EI,
        l'endpoint répond par un message explicite plutôt qu'en silence. */
-    if (inv.status !== 'draft' && inv.qontoSyncStatus !== 'sent' && inv.qontoSyncStatus !== 'created') {
+    const _needsPaidRetry = !!(inv.qonto && inv.qonto.paidSyncError);
+    if (inv.status !== 'draft'
+        && (_needsPaidRetry || (inv.qontoSyncStatus !== 'sent' && inv.qontoSyncStatus !== 'created'))) {
       html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();resyncQonto(\'' + inv.id + '\')"'
         + ' title="Synchroniser cette facture avec Qonto">⚡</button>';
     }
@@ -3883,6 +3885,18 @@ function qontoBadgeOf(inv) {
       + ' title="Échec Qonto' + escapeAttr(tries) + ' — ' + escapeAttr(err) + '">⚡ Échec Qonto</span></div>';
   }
   return '';
+}
+
+/* Le paiement est répercuté chez Qonto au marquage « payée ». Quand ce report
+   échoue, la facture reste « impayée » de leur côté : il faut le voir, sinon
+   l'écart se découvre au rapprochement bancaire. */
+function qontoPaidBadgeOf(inv) {
+  const q = inv.qonto || {};
+  if (!q.paidSyncError) return '';
+  return '<div><span style="display:inline-block;margin-top:4px;font-size:10px;padding:2px 7px;border-radius:4px;'
+    + 'font-weight:600;white-space:nowrap;background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3)"'
+    + ' title="Le paiement n\'a pas pu être reporté chez Qonto — ' + escapeAttr(q.paidSyncError)
+    + '. La facture y est encore marquée impayée ; le bouton ⚡ réessaie.">⚡ Paiement non reporté</span></div>';
 }
 
 /* Rattrapage manuel. L'endpoint est idempotent : il vérifie chez Qonto avant

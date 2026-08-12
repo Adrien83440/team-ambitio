@@ -257,6 +257,44 @@ async function fetchFacturX(qontoInvoiceId) {
 }
 
 /**
+ * Marque une facture comme payée chez Qonto.
+ *
+ * POST /v2/client_invoices/{id}/mark_as_paid, corps { paid_at } optionnel.
+ * L'appel est idempotent côté Qonto : une facture déjà payée voit simplement
+ * sa date mise à jour, il n'y a pas d'erreur à absorber.
+ *
+ * Best-effort assumé : le marquage dans Alteore fait foi et ne doit jamais
+ * échouer parce que Qonto est indisponible. On renvoie le résultat, l'appelant
+ * le trace.
+ *
+ * @param {string} qontoInvoiceId
+ * @param {Date} paidAtDate
+ * @returns {Promise<{ ok: boolean, reason?: string }>}
+ */
+async function markPaidAtQonto(qontoInvoiceId, paidAtDate) {
+  if (!qontoInvoiceId) return { ok: false, reason: 'facture absente de Qonto' };
+
+  const body = {};
+  /* Qonto refuse une date future. Une saisie en avance de phase ne doit pas
+     faire échouer l'appel : on laisse alors Qonto retenir la date du jour. */
+  const ymd = qonto.toYmd(paidAtDate);
+  const todayYmd = qonto.toYmd(new Date());
+  if (ymd && ymd <= todayYmd) body.paid_at = ymd;
+
+  try {
+    await qonto.qontoFetch(
+      'POST',
+      '/v2/client_invoices/' + encodeURIComponent(qontoInvoiceId) + '/mark_as_paid',
+      body
+    );
+    return { ok: true };
+  } catch (e) {
+    console.error('[qonto-flow] mark_as_paid:', e && e.message);
+    return { ok: false, reason: String((e && e.message) || e).substring(0, 200) };
+  }
+}
+
+/**
  * Le flux complet.
  *
  * @param {Object} ctx { db, admin, invoice, invoiceId, issuer, billing, config }
@@ -301,6 +339,7 @@ module.exports = {
   upsertClient: upsertClient,
   createInvoice: createInvoice,
   sendByEinvoice: sendByEinvoice,
+  markPaidAtQonto: markPaidAtQonto,
   fetchFacturX: fetchFacturX,
   findInvoiceByNumber: findInvoiceByNumber,
 };

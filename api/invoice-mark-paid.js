@@ -20,6 +20,7 @@
  */
 
 const { admin, db, requireAuth, sendError, setCors } = require('./_billing-helpers');
+const qontoFlow = require('./_qonto-invoice-flow');
 
 const VALID_PAYMENT_METHODS = ['gocardless', 'transfer', 'card', 'check', 'cash', 'other'];
 
@@ -94,12 +95,39 @@ module.exports = async function(req, res) {
       }),
     });
 
+    /* ── Report du paiement chez Qonto ──
+       Uniquement si la facture y existe déjà : une facture en PDF maison n'a
+       rien à y synchroniser. On ne regarde volontairement PAS le flag
+       d'activation — si la facture est chez Qonto, elle doit y rester juste,
+       même si la génération a été désactivée entre-temps.
+
+       Best-effort strict : le marquage dans Alteore est déjà écrit et fait
+       foi. Un échec Qonto est tracé sur la facture, jamais remonté en erreur —
+       sinon un incident chez eux empêcherait d'encaisser chez nous.
+
+       L'écriture de la trace précède la réponse HTTP : Vercel coupe la
+       fonction dès res.end(). */
+    let qontoPaid = null;
+    const qontoInvoiceId = (invoice.qonto && invoice.qonto.invoiceId) || null;
+    if (qontoInvoiceId) {
+      qontoPaid = await qontoFlow.markPaidAtQonto(qontoInvoiceId, paidAtDate);
+      try {
+        await invRef.update({
+          'qonto.paidSyncedAt': qontoPaid.ok ? admin.firestore.FieldValue.serverTimestamp() : null,
+          'qonto.paidSyncError': qontoPaid.ok ? null : (qontoPaid.reason || 'échec'),
+        });
+      } catch (traceErr) {
+        console.error('[invoice-mark-paid] trace Qonto non écrite:', traceErr && traceErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       paidAt: paidAtDate.toISOString(),
       paidAmount: paidAmount,
       paidVia: paidVia,
       paymentRef: paymentRef,
+      qontoPaid: qontoPaid,
     });
   } catch (err) {
     sendError(res, err);

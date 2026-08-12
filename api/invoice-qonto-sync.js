@@ -75,13 +75,36 @@ module.exports = async function (req, res) {
       }
     }
 
-    /* Déjà complète : on ne retélécharge pas un PDF déjà stocké. */
+    /* Déjà complète : on ne retélécharge pas un PDF déjà stocké.
+       Une exception : le report du paiement. Il peut avoir échoué alors que
+       la facture, elle, est bien passée — c'est même le cas le plus courant,
+       Qonto ayant pu être injoignable une seconde au mauvais moment. Ce
+       chemin doit donc pouvoir le rejouer seul, sinon le bouton ⚡ n'aurait
+       aucun effet sur une facture par ailleurs complète. */
     if (!force && invoice.pdfHash && invoice.pdfSource === 'qonto'
         && invoice.qonto && invoice.qonto.invoiceId) {
+      let retryPaid = null;
+      const needsPaidRetry = invoice.status === 'paid'
+        && !(invoice.qonto && invoice.qonto.paidSyncedAt);
+      if (needsPaidRetry) {
+        const paidAtDate = (invoice.paidAt && invoice.paidAt.toDate)
+          ? invoice.paidAt.toDate()
+          : new Date();
+        retryPaid = await qontoFlow.markPaidAtQonto(invoice.qonto.invoiceId, paidAtDate);
+        try {
+          await invRef.update({
+            'qonto.paidSyncedAt': retryPaid.ok ? admin.firestore.FieldValue.serverTimestamp() : null,
+            'qonto.paidSyncError': retryPaid.ok ? null : (retryPaid.reason || 'échec'),
+          });
+        } catch (traceErr) {
+          console.error('[invoice-qonto-sync] trace paiement non écrite:', traceErr && traceErr.message);
+        }
+      }
       res.status(200).json({
         success: true, invoiceId: invoiceId, number: invoice.number,
         qontoSyncStatus: invoice.qontoSyncStatus || 'created',
         alreadySynced: true, pdfHash: invoice.pdfHash, pdfSource: 'qonto',
+        qontoPaid: retryPaid,
       });
       return;
     }
@@ -154,12 +177,34 @@ module.exports = async function (req, res) {
     });
     await batch.commit();
 
+    /* ── Report du paiement ──
+       Une facture encaissée avant d'exister chez Qonto — typiquement un
+       rattrapage — y serait créée en « impayée ». On répercute donc l'état
+       réel dans la foulée. Best-effort : la facture et son PDF sont déjà
+       enregistrés, un échec ici ne doit pas les remettre en cause. */
+    let qontoPaid = null;
+    if (invoice.status === 'paid') {
+      const paidAtDate = (invoice.paidAt && invoice.paidAt.toDate)
+        ? invoice.paidAt.toDate()
+        : new Date();
+      qontoPaid = await qontoFlow.markPaidAtQonto(result.qonto.invoiceId, paidAtDate);
+      try {
+        await invRef.update({
+          'qonto.paidSyncedAt': qontoPaid.ok ? admin.firestore.FieldValue.serverTimestamp() : null,
+          'qonto.paidSyncError': qontoPaid.ok ? null : (qontoPaid.reason || 'échec'),
+        });
+      } catch (traceErr) {
+        console.error('[invoice-qonto-sync] trace paiement non écrite:', traceErr && traceErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       invoiceId: invoiceId,
       number: invoice.number,
       qontoSyncStatus: (result.einvoice && result.einvoice.sent) ? 'sent' : 'created',
       einvoice: result.einvoice || null,
+      qontoPaid: qontoPaid,
       pdfHash: pdfHash,
       pdfSource: 'qonto',
       pdfChunkCount: chunks.length,
