@@ -39,10 +39,19 @@
       '.wal-f{font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;white-space:nowrap}',
       '.wal-f.on{background:rgba(0,168,132,.16);color:#4fd1b0}',
       '.wal-f.off{background:rgba(251,191,36,.12);color:#fbbf24}',
-      '.wal-fil{max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;',
-      'padding:8px 4px;margin-bottom:8px}',
-      '.wal-fil::-webkit-scrollbar{width:4px}',
-      '.wal-fil::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}',
+      /* Hauteur relative à la fenêtre plutôt que 260 px figés : sur un grand
+         écran le fil respirait à peine, et sur un portable il mangeait toute
+         la fiche. `min()` garde une borne haute pour ne pas repousser le
+         composeur hors de vue. */
+      '.wal-fil{max-height:min(46vh,340px);overflow-y:auto;display:flex;flex-direction:column;gap:3px;',
+      'padding:8px 4px;margin-bottom:8px;scrollbar-width:thin;',
+      'scrollbar-color:rgba(255,255,255,.28) transparent}',
+      /* macOS masque les barres de défilement au repos : un fil tronqué net
+         passait pour un affichage cassé. Le pouce est assez contrasté pour
+         qu'on comprenne qu'il reste du contenu. */
+      '.wal-fil::-webkit-scrollbar{width:7px}',
+      '.wal-fil::-webkit-scrollbar-thumb{background:rgba(255,255,255,.24);border-radius:4px}',
+      '.wal-fil::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.4)}',
       '.wal-b{max-width:82%;padding:6px 10px;border-radius:9px;font-size:12.5px;line-height:1.45;',
       'white-space:pre-wrap;word-break:break-word}',
       '.wal-b.in{align-self:flex-start;background:rgba(255,255,255,.06)}',

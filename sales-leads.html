@@ -316,6 +316,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .l2backdrop.on { display: block; }
 .l2sheet {
   position: fixed; z-index: 210; left: 0; right: 0; bottom: 0;
+  /* Repli d'abord : une déclaration en `dvh` est ignorée en bloc par un
+     navigateur qui ne connaît pas l'unité, et la feuille repartirait sans
+     aucune hauteur. */
+  height: 92vh;
   height: min(92dvh, 92vh);
   background: var(--bg2); border: 1px solid var(--border2); border-bottom: none;
   border-radius: 22px 22px 0 0;
@@ -338,6 +342,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .l2backdrop.on { display: none; }
   .l2sheet {
     position: sticky; top: var(--l2-hd); left: auto; right: auto; bottom: auto;
+    height: calc(100vh - var(--l2-hd));
     height: calc(100dvh - var(--l2-hd));
     transform: none; transition: none;
     border-radius: 0; border: none; border-left: 1px solid var(--border-soft);
@@ -2596,13 +2601,40 @@ function l2RenderTriage(leads) {
   }
 }
 
-/* Hauteur réelle du header sticky → alignement du panneau desktop. */
+/* Hauteur réelle du header sticky → alignement du panneau desktop.
+
+   Ce n'est PAS un réglage cosmétique : le panneau vaut
+   `height: calc(100dvh - var(--l2-hd))`. Si la variable est plus petite que la
+   hauteur réelle du header, le bas du panneau descend sous la fenêtre et cette
+   portion devient inatteignable — le fil se coupe et le composeur disparaît.
+
+   Or le header grandit sans que la fenêtre bouge : `.l2hd-row1` passe à la
+   ligne, la barre de période apparaît, les compteurs changent de largeur.
+   S'accrocher à `resize` et `load` laissait donc la variable fausse la moitié
+   du temps. Un ResizeObserver suit la vraie hauteur, quoi qu'il arrive. */
 function l2SyncHdH() {
   var hd = l2El('l2hd');
   if (hd) document.documentElement.style.setProperty('--l2-hd', hd.offsetHeight + 'px');
 }
 window.addEventListener('resize', l2SyncHdH);
 window.addEventListener('load', l2SyncHdH);
+/* Le chargement des polices décale la hauteur APRÈS `load` : sans ça, la
+   première mesure est celle d'un header rendu en police de repli. */
+if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+  document.fonts.ready.then(l2SyncHdH).catch(function () {});
+}
+window.addEventListener('orientationchange', function () { setTimeout(l2SyncHdH, 120); });
+(function () {
+  if (typeof ResizeObserver !== 'function') return;
+  function brancher() {
+    var hd = l2El('l2hd');
+    if (!hd) { setTimeout(brancher, 300); return; }
+    try { new ResizeObserver(l2SyncHdH).observe(hd); } catch (e) { /* rien de vital */ }
+    l2SyncHdH();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', brancher);
+  else brancher();
+})();
 
 function renderFeed() {
   var leads = getFilteredLeads();

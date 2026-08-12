@@ -73,8 +73,14 @@
   position: fixed;
   bottom: 90px;
   right: 22px;
+  /* Bornes relatives plutôt que fixes : une fenêtre Mac réduite en hauteur
+     faisait sortir le haut du panneau de l'écran, et l'onglet actif devenait
+     inatteignable. La media query à 480 px reste, elle affine le cas mobile. */
   width: 380px;
+  width: min(380px, calc(100vw - 28px));
   max-height: 540px;
+  max-height: min(540px, calc(100vh - 130px));
+  max-height: min(540px, calc(100dvh - 130px));
   background: linear-gradient(180deg, #1a1a28 0%, #14141f 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
@@ -342,6 +348,9 @@
   bottom: 22px;
   right: 22px;
   width: 380px;
+  width: min(380px, calc(100vw - 28px));
+  max-height: 88vh;
+  max-height: 88dvh;
   background: linear-gradient(180deg, #1a1a28 0%, #14141f 100%);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 16px;

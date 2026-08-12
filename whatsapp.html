@@ -36,7 +36,12 @@ body { margin:0; background:var(--wa-fond); color:var(--wa-texte);
   font-family:var(--fb); font-size:14px; -webkit-font-smoothing:antialiased; }
 button { font-family:inherit; }
 
-.wa-wrap { display:grid; grid-template-columns:minmax(300px,30%) 1fr; height:100vh; }
+/* `dvh` plutôt que `vh` : sur iOS et sur Safari, `100vh` compte la barre
+   d'adresse comme si elle était rétractée, donc le bas du fil — et avec lui le
+   composeur — passe sous l'écran. Le `vh` reste en repli pour les navigateurs
+   qui ignorent l'unité. */
+.wa-wrap { display:grid; grid-template-columns:minmax(300px,30%) 1fr;
+  height:100vh; height:100dvh; }
 @media (max-width: 860px) {
   /* Une seule colonne à la fois : côte à côte sur 360 px, ni la liste ni le
      fil ne sont utilisables. */
