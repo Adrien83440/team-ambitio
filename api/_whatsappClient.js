@@ -27,7 +27,8 @@
 // C'est précisément l'angle mort qui a masqué la panne SMS pendant des mois.
 // ============================================================================
 
-const { db } = require('./_firebaseAdmin');
+const crypto = require('crypto');
+const { db, admin } = require('./_firebaseAdmin');
 
 /* Cache niveau module — vidé à chaque cold start. */
 let _creds = null;
@@ -227,6 +228,138 @@ async function envoyerMedia(opts) {
   return { ok: true, wamid: wamid, erreur: null };
 }
 
+/* ── MÉDIAS ENTRANTS ──────────────────────────────────────────────────────
+   Meta ne pousse JAMAIS le fichier dans le webhook : la charge utile ne
+   contient qu'un `id`. Il faut deux appels de plus — un pour obtenir une URL
+   signée, un pour la télécharger — et cette URL expire en 5 minutes ET refuse
+   toute requête sans l'en-tête Bearer. Un `<img src>` pointé dessus depuis le
+   navigateur ne montrerait donc jamais rien.
+
+   D'où l'archivage immédiat dans Firebase Storage : le fichier survit aux
+   30 jours de rétention Meta, et l'URL produite reste lisible pour toujours.
+   ------------------------------------------------------------------------ */
+
+/* Au-delà de ce poids, on garde le message sans le fichier. Le webhook doit
+   répondre 200 rapidement : Meta rejoue en boucle tout appel qui traîne, et un
+   rejeu ne se passerait pas mieux. 8 Mo couvre toutes les photos de téléphone
+   et tous les vocaux ; seule une vidéo longue dépasse. */
+const MEDIA_MAX_OCTETS = 8 * 1024 * 1024;
+
+/* Extension déduite du type déclaré par Meta : sans elle, le fichier stocké
+   s'ouvre en « inconnu » et aucun navigateur ne l'affiche en ligne. */
+const EXTENSIONS = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+  'video/mp4': 'mp4', 'video/3gpp': '3gp',
+  'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/amr': 'amr',
+  'audio/aac': 'aac',
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+};
+
+function extensionDe(mime) {
+  const propre = String(mime || '').split(';')[0].trim().toLowerCase();
+  return EXTENSIONS[propre] || 'bin';
+}
+
+/**
+ * Copie un binaire dans Firebase Storage et renvoie une URL lisible.
+ *
+ * On pose nous-mêmes un `firebaseStorageDownloadTokens` : l'URL produite est
+ * exactement de la forme qu'aurait produite un téléversement navigateur, elle
+ * ne dépend ni des ACL du bucket ni des règles Storage, et n'expire pas.
+ * Même méthode qu'api/temoignages-drive-sync.js, éprouvée en production.
+ */
+async function archiverMedia(buffer, chemin, mime) {
+  const bucket = admin.storage().bucket();
+  const token = crypto.randomUUID();
+  await bucket.file(chemin).save(buffer, {
+    resumable: false,
+    contentType: mime || 'application/octet-stream',
+    metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+  });
+  return 'https://firebasestorage.googleapis.com/v0/b/' + bucket.name
+       + '/o/' + encodeURIComponent(chemin) + '?alt=media&token=' + token;
+}
+
+/**
+ * Récupère un média entrant chez Meta et l'archive.
+ *
+ * Ne lance jamais : une photo qu'on n'a pas pu rapatrier ne doit pas faire
+ * perdre le message qui la portait. En cas d'échec, le webhook écrit quand
+ * même la bulle, avec la raison.
+ *
+ * @param {Object} o
+ * @param {string} o.mediaId  identifiant renvoyé par Meta dans le webhook
+ * @param {string} o.numero   émetteur, chiffres nus — sert de dossier
+ * @param {string} o.wamid    identifiant du message — sert de nom de fichier
+ * @returns {Promise<{ok:boolean, mediaUrl:string|null, mime:string|null,
+ *                    taille:number|null, erreur:string|null}>}
+ */
+async function importerMediaEntrant(o) {
+  o = o || {};
+  const mediaId = String(o.mediaId || '').trim();
+  const vide = { ok: false, mediaUrl: null, mime: null, taille: null };
+  if (!mediaId) return Object.assign({}, vide, { erreur: 'media_id_absent' });
+
+  /* 1. L'URL signée, valable 5 minutes. */
+  const meta = await graph(encodeURIComponent(mediaId));
+  if (!meta.ok) {
+    console.warn('[whatsapp] média', mediaId, 'introuvable :', meta.erreur);
+    return Object.assign({}, vide, { erreur: meta.erreur || 'media_introuvable' });
+  }
+  const d = meta.data || {};
+  const url = d.url;
+  const mime = d.mime_type || null;
+  const taille = Number(d.file_size || 0) || null;
+  if (!url) return Object.assign({}, vide, { mime: mime, erreur: 'url_absente' });
+
+  /* Le poids est connu AVANT le téléchargement : autant refuser tout de suite
+     plutôt que de tirer 40 Mo pour les jeter ensuite. */
+  if (taille && taille > MEDIA_MAX_OCTETS) {
+    return Object.assign({}, vide, { mime: mime, taille: taille, erreur: 'media_trop_lourd' });
+  }
+
+  /* 2. Le téléchargement — l'en-tête Bearer est obligatoire, lookaside.fbsbx
+        répond 401 sans lui. */
+  const creds = await getWhatsappCreds();
+  let rep;
+  try {
+    rep = await fetch(url, { headers: { Authorization: 'Bearer ' + creds.token } });
+  } catch (e) {
+    return Object.assign({}, vide, { mime: mime, erreur: (e && e.message) || 'reseau' });
+  }
+  if (!rep.ok) {
+    return Object.assign({}, vide, { mime: mime, erreur: 'HTTP ' + rep.status });
+  }
+
+  let buf;
+  try {
+    buf = Buffer.from(await rep.arrayBuffer());
+  } catch (e) {
+    return Object.assign({}, vide, { mime: mime, erreur: 'lecture_impossible' });
+  }
+  /* Meta annonce parfois un `file_size` optimiste : on revérifie sur le réel. */
+  if (buf.length > MEDIA_MAX_OCTETS) {
+    return Object.assign({}, vide, { mime: mime, taille: buf.length, erreur: 'media_trop_lourd' });
+  }
+
+  /* 3. L'archivage. Le wamid comme nom de fichier rend l'opération idempotente :
+        un webhook rejoué par Meta réécrit le même objet au lieu d'en empiler
+        une copie. */
+  const chemin = 'whatsapp_media/' + String(o.numero || 'inconnu') + '/'
+               + String(o.wamid || mediaId) + '.' + extensionDe(mime);
+  try {
+    const mediaUrl = await archiverMedia(buf, chemin, mime);
+    return { ok: true, mediaUrl: mediaUrl, mime: mime, taille: buf.length, erreur: null };
+  } catch (e) {
+    console.error('[whatsapp] archivage média', chemin, e && e.message);
+    return Object.assign({}, vide, { mime: mime, taille: buf.length, erreur: 'archivage_impossible' });
+  }
+}
+
 /**
  * Écrit une ligne de journal. Ne lance jamais : un envoi réussi ne doit pas
  * être signalé en échec parce que sa trace n'a pas pu s'écrire.
@@ -257,7 +390,10 @@ const FENETRE_MS = 24 * 60 * 60 * 1000;
  * Retrouve le lead derrière un numéro. Le téléphone canonique est `telephone`,
  * en E.164 strict avec le `+` ; nos numéros WhatsApp sont en chiffres nus.
  * Les documents fusionnés (`_merged: true`) sont ignorés — motif pickAlive().
- * @returns {{leadId:string, nom:string}|null}
+ *
+ * `assignedTo` est un SLUG d'équipe (`elodie`), pas un uid Firebase : c'est au
+ * webhook de le convertir avant d'en faire un `ownerUid` de notification.
+ * @returns {{leadId:string, nom:string, assignedTo:string|null}|null}
  */
 async function rattacherLead(numero) {
   if (!numero) return null;
@@ -268,7 +404,11 @@ async function rattacherLead(numero) {
       if (trouve) return;
       const v = d.data() || {};
       if (v._merged === true) return;
-      trouve = { leadId: d.id, nom: v.nom || v.prenom || null };
+      trouve = {
+        leadId: d.id,
+        nom: v.nom || v.prenom || null,
+        assignedTo: v.assignedTo || null,
+      };
     });
     return trouve;
   } catch (e) {
@@ -519,6 +659,10 @@ async function envoyerModele(opts) {
 
 module.exports = {
   FENETRE_MS,
+  MEDIA_MAX_OCTETS,
+  extensionDe,
+  archiverMedia,
+  importerMediaEntrant,
   rattacherLead,
   majConversation,
   getWhatsappCreds,

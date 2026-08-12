@@ -146,6 +146,25 @@ button { font-family:inherit; }
 .wa-tick.lu { color:var(--wa-lu); }
 .wa-meta.echec { color:var(--wa-rouge); font-weight:600; }
 
+/* ── Pièces jointes reçues ─────────────────────────────────────────────
+   Meta ne pousse qu'un identifiant : ce que le navigateur affiche ici vient
+   de Firebase Storage, où le webhook a archivé le fichier. */
+.wa-media { display:block; margin:1px 0 4px; }
+.wa-media img, .wa-media video { display:block; max-width:100%; max-height:340px;
+  border-radius:6px; }
+.wa-media img { cursor:zoom-in; }
+.wa-media audio { display:block; width:250px; max-width:100%; margin:4px 0 2px; }
+.wa-fichier { display:inline-flex; align-items:center; gap:8px; padding:9px 11px;
+  border-radius:8px; background:rgba(255,255,255,.07); color:inherit;
+  text-decoration:none; font-size:13.5px; max-width:100%; }
+.wa-fichier:hover { background:rgba(255,255,255,.13); }
+.wa-fichier span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-media-ko { font-size:12.5px; font-style:italic; color:var(--wa-doux); }
+/* Le motif d'un échec d'envoi. Sans lui, la bulle ne portait qu'un ⚠ muet et
+   il fallait ouvrir la console Firestore pour savoir ce que Meta reprochait. */
+.wa-motif { display:block; clear:both; margin-top:4px; font-size:11.5px;
+  font-weight:600; color:var(--wa-rouge); }
+
 /* ── Le composeur ─────────────────────────────────────────────────────
    Deux états, jamais les deux à la fois : champ libre quand la fenêtre de
    24 h est ouverte, choix d'un modèle quand elle est fermée. Afficher un
@@ -636,6 +655,63 @@ async function chargerModeles() {
   } catch (e) { STATE.modeles = []; }
 }
 
+/* ── Ce que Meta reproche, en français ──────────────────────────────────
+   Le webhook recopie désormais `erreurMeta` sur le message du fil. Traduire
+   les codes ici évite d'avoir à les chercher : ce sont les seuls qu'on ait
+   réellement rencontrés, le reste s'affiche brut plutôt que d'être deviné. */
+var MOTIFS_META = {
+  131042: 'Paiement WhatsApp non configuré sur le compte',
+  131047: 'Fenêtre de 24 h fermée — il faut un modèle',
+  131049: 'Bloqué par Meta pour préserver l\'écosystème',
+  130472: 'Bloqué par Meta — numéro dans une expérience marketing',
+  131026: 'Destinataire injoignable sur WhatsApp',
+  131051: 'Type de message non pris en charge',
+  132000: 'Modèle : nombre de variables incorrect',
+  132001: 'Modèle introuvable dans cette langue',
+  132015: 'Modèle suspendu par Meta'
+};
+
+function motifMeta(e) {
+  if (!e) return '';
+  var code = e.code != null ? Number(e.code) : null;
+  var libelle = (code != null && MOTIFS_META[code]) ? MOTIFS_META[code] : (e.titre || e.detail || 'Échec de distribution');
+  return libelle + (code != null ? ' (' + code + ')' : '');
+}
+
+var MOTIFS_MEDIA = {
+  media_trop_lourd: 'fichier de plus de 8 Mo, non archivé',
+  media_introuvable: 'fichier expiré chez Meta',
+  media_id_absent: 'identifiant absent'
+};
+
+/* La pièce jointe d'un message reçu. `mediaUrl` pointe sur Firebase Storage :
+   l'URL de Meta, elle, expire en 5 minutes et exige un en-tête d'autorisation,
+   donc elle ne peut pas servir de source à une balise <img>. */
+function blocMedia(m) {
+  var genre = m.media;
+  var nom = m.nomFichier || m.libelleMedia || 'Pièce jointe';
+
+  if (!m.mediaUrl) {
+    var pourquoi = MOTIFS_MEDIA[m.mediaErreur] || 'téléchargement impossible';
+    return '<div class="wa-media-ko">' + esc(m.libelleMedia || 'Pièce jointe')
+         + ' — ' + esc(pourquoi) + '</div>';
+  }
+
+  var url = esc(m.mediaUrl);
+  if (genre === 'image' || genre === 'sticker') {
+    return '<div class="wa-media"><a href="' + url + '" target="_blank" rel="noopener">'
+         + '<img src="' + url + '" alt="' + esc(nom) + '" loading="lazy"></a></div>';
+  }
+  if (genre === 'video') {
+    return '<div class="wa-media"><video src="' + url + '" controls preload="metadata"></video></div>';
+  }
+  if (genre === 'audio') {
+    return '<div class="wa-media"><audio src="' + url + '" controls preload="metadata"></audio></div>';
+  }
+  return '<div class="wa-media"><a class="wa-fichier" href="' + url + '" target="_blank" rel="noopener">'
+       + '📎 <span>' + esc(nom) + '</span></a></div>';
+}
+
 function rendreFil(msgs) {
   var host = document.getElementById('waMsgs');
   if (!msgs.length) { host.innerHTML = '<div class="wa-vide">Aucun message dans cette conversation.</div>'; return; }
@@ -668,6 +744,19 @@ function rendreFil(msgs) {
         : '<span class="wa-corps-vide">modèle sans variable</span>';
     }
 
+    /* Une pièce jointe remplace le corps : `texte` porte alors l'étiquette du
+       média (« 📷 Photo »), qui ferait doublon sous l'image. Seule une vraie
+       légende mérite d'être écrite. */
+    /* Uniquement ce qui a été ARCHIVÉ, ou reçu. Un média sortant ne porte pas
+       d'URL — on n'archive que l'entrant — et le passer ici afficherait un
+       « téléchargement impossible » alors que l'envoi s'est très bien passé.
+       Dans ce cas, `texte` porte déjà « 📷 légende », qui suffit. */
+    var media = '';
+    if (m.media && (m.mediaUrl || m.sens === 'in')) {
+      media = blocMedia(m);
+      corps = m.legende ? esc(m.legende) : '';
+    }
+
     var st = m.statut || '';
     var echec = st === 'failed' || st === 'echec';
     var meta = '<span class="wa-meta' + (echec ? ' echec' : '') + '">'
@@ -675,7 +764,12 @@ function rendreFil(msgs) {
              +   (sortant ? coches(st) : '')
              + '</span>';
 
-    h += '<div class="wa-bulle ' + sens + tete + '">' + enTete + meta + corps + '</div>';
+    var motif = (echec && m.erreurMeta)
+      ? '<span class="wa-motif">⚠ ' + esc(motifMeta(m.erreurMeta)) + '</span>'
+      : '';
+
+    h += '<div class="wa-bulle ' + sens + tete + '">'
+       + enTete + meta + media + corps + motif + '</div>';
   });
   host.innerHTML = h;
   host.scrollTop = host.scrollHeight;
@@ -719,6 +813,17 @@ function ouvrir(numero) {
 
 /* ── Écouteurs ─────────────────────────────────────────────────────────── */
 
+/* Numéro à ouvrir dès que la liste est chargée — posé par `?n=` dans l'URL,
+   consommé une seule fois pour ne pas reprendre la main à chaque snapshot. */
+var DEMANDE = (function () {
+  var m = /[?&]n=([^&]+)/.exec(window.location.search || '');
+  if (!m) return null;
+  var brut = '';
+  try { brut = decodeURIComponent(m[1]); } catch (e) { brut = m[1]; }
+  var chiffres = String(brut).replace(/[^0-9]/g, '');
+  return chiffres.length >= 10 ? chiffres : null;
+})();
+
 function ecouterConversations() {
   db.collection('whatsapp_conversations').orderBy('majA', 'desc').limit(300)
     .onSnapshot(function (snap) {
@@ -730,6 +835,15 @@ function ecouterConversations() {
       });
       STATE.convs = l;
       rendreListe();
+      /* Conversation demandée dans l'URL (`?n=336…`), typiquement depuis la
+         cloche de notifications. On attend le premier chargement plutôt que
+         d'ouvrir à l'aveugle : sans la conversation en mémoire, l'entête
+         s'afficherait sans nom et le composeur resterait vide. */
+      if (DEMANDE) {
+        var vise = DEMANDE;
+        DEMANDE = null;
+        ouvrir(vise);
+      }
       /* L'entête porte un compte à rebours : il doit suivre les mises à jour. */
       if (STATE.actif) {
         var c = null;

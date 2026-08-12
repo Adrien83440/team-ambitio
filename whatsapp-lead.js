@@ -49,6 +49,17 @@
       '.wal-b.out{align-self:flex-end;background:rgba(0,168,132,.18)}',
       '.wal-m{font-size:9.5px;opacity:.6;margin-top:3px;text-align:right}',
       '.wal-m.ko{color:#f87171;opacity:1;font-weight:700}',
+      /* Pièces jointes reçues : la source est Firebase Storage, où le webhook
+         a archivé le fichier — l'URL de Meta expire en 5 min. */
+      '.wal-media{display:block;margin:1px 0 4px}',
+      '.wal-media img,.wal-media video{display:block;max-width:100%;max-height:220px;border-radius:6px}',
+      '.wal-media img{cursor:zoom-in}',
+      '.wal-media audio{display:block;width:100%;max-width:230px;margin:3px 0 1px}',
+      '.wal-fichier{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:7px;',
+      'background:rgba(255,255,255,.08);color:inherit;text-decoration:none;font-size:12px;max-width:100%}',
+      '.wal-fichier span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.wal-media-ko{font-size:11.5px;font-style:italic;opacity:.6}',
+      '.wal-motif{display:block;margin-top:3px;font-size:10.5px;font-weight:700;color:#f87171}',
       '.wal-vide{text-align:center;font-size:11.5px;color:rgba(255,255,255,.35);padding:14px 6px;line-height:1.6}',
       '.wal textarea{width:100%;min-height:56px;padding:8px 10px;border-radius:9px;',
       'border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.25);color:#f5f5f5;',
@@ -116,6 +127,59 @@
     return '🕐';
   }
 
+  /* Ce que Meta reproche, en français. Le webhook recopie `erreurMeta` sur le
+     message du fil : sans cette table, la bulle ne portait qu'un ⚠ muet.
+     Même liste que whatsapp.html — volontairement, les deux écrans lisent la
+     même donnée et doivent en dire la même chose. */
+  var MOTIFS_META = {
+    131042: 'Paiement WhatsApp non configuré',
+    131047: 'Fenêtre de 24 h fermée',
+    131049: 'Bloqué par Meta (écosystème)',
+    130472: 'Bloqué par Meta (expérience marketing)',
+    131026: 'Destinataire injoignable sur WhatsApp',
+    131051: 'Type de message non pris en charge',
+    132000: 'Modèle : variables incorrectes',
+    132001: 'Modèle introuvable dans cette langue',
+    132015: 'Modèle suspendu par Meta'
+  };
+
+  function motifMeta(e) {
+    if (!e) return '';
+    var code = e.code != null ? Number(e.code) : null;
+    var lib = (code != null && MOTIFS_META[code])
+      ? MOTIFS_META[code]
+      : (e.titre || e.detail || 'Échec de distribution');
+    return lib + (code != null ? ' (' + code + ')' : '');
+  }
+
+  var MOTIFS_MEDIA = {
+    media_trop_lourd: 'fichier de plus de 8 Mo',
+    media_introuvable: 'fichier expiré chez Meta',
+    media_id_absent: 'identifiant absent'
+  };
+
+  /* La pièce jointe d'un message reçu. */
+  function blocMedia(m) {
+    var nom = m.nomFichier || m.libelleMedia || 'Pièce jointe';
+    if (!m.mediaUrl) {
+      return '<div class="wal-media-ko">' + esc(m.libelleMedia || 'Pièce jointe')
+           + ' — ' + esc(MOTIFS_MEDIA[m.mediaErreur] || 'téléchargement impossible') + '</div>';
+    }
+    var url = esc(m.mediaUrl);
+    if (m.media === 'image' || m.media === 'sticker') {
+      return '<div class="wal-media"><a href="' + url + '" target="_blank" rel="noopener">'
+           + '<img src="' + url + '" alt="' + esc(nom) + '" loading="lazy"></a></div>';
+    }
+    if (m.media === 'video') {
+      return '<div class="wal-media"><video src="' + url + '" controls preload="metadata"></video></div>';
+    }
+    if (m.media === 'audio') {
+      return '<div class="wal-media"><audio src="' + url + '" controls preload="metadata"></audio></div>';
+    }
+    return '<div class="wal-media"><a class="wal-fichier" href="' + url + '" target="_blank" rel="noopener">'
+         + '📎 <span>' + esc(nom) + '</span></a></div>';
+  }
+
   function fenetreOuverte(conv) {
     return !!(conv && conv.fenetreExpireA && conv.fenetreExpireA > Date.now());
   }
@@ -170,7 +234,22 @@
         var ko = m.statut === 'failed' || m.statut === 'echec';
         var corps = m.texte || '';
         if (out && m.modele) corps = '[' + m.modele + '] ' + ((m.params || []).join(' · '));
-        h += '<div class="wal-b ' + (out ? 'out' : 'in') + '">' + esc(corps)
+
+        /* Une pièce jointe remplace le corps : `texte` porte alors l'étiquette
+           du média (« 📷 Photo »), qui ferait doublon sous l'image. */
+        /* Uniquement ce qui a été archivé, ou reçu : un média sortant n'a pas
+           d'URL et afficherait un faux échec. Son `texte` dit déjà l'essentiel. */
+        var media = '';
+        if (m.media && (m.mediaUrl || m.sens === 'in')) {
+          media = blocMedia(m);
+          corps = m.legende || '';
+        }
+
+        var motif = (ko && m.erreurMeta)
+          ? '<span class="wal-motif">⚠ ' + esc(motifMeta(m.erreurMeta)) + '</span>'
+          : '';
+
+        h += '<div class="wal-b ' + (out ? 'out' : 'in') + '">' + media + esc(corps) + motif
            +   '<div class="wal-m' + (ko ? ' ko' : '') + '">' + heure(m.at)
            +     (out ? ' ' + coches(m.statut) : '') + '</div>'
            + '</div>';

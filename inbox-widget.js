@@ -114,6 +114,7 @@
     if (type === 'sms')         return { cls: 'sms',    glyph: '💬' };
     if (type === 'call_missed') return { cls: 'missed', glyph: '📵' };
     if (type === 'call')        return { cls: 'call',   glyph: '📞' };
+    if (type === 'whatsapp')    return { cls: 'whatsapp', glyph: '📲' };
     return { cls: 'sms', glyph: '🔔' };
   }
 
@@ -121,6 +122,7 @@
     if (type === 'sms')         return 'SMS';
     if (type === 'call_missed') return 'Appel manqué';
     if (type === 'call')        return 'Appel entrant';
+    if (type === 'whatsapp')    return 'WhatsApp';
     return 'Notif';
   }
 
@@ -128,7 +130,22 @@
     if (!source) return '';
     if (source.includes('twilio'))   return 'Twilio';
     if (source.includes('ringover')) return 'Ringover';
+    if (source === 'whatsapp')       return 'WhatsApp';
     return source;
+  }
+
+  // Un WhatsApp ne se répond QUE dans la boîte partagée. Le composer de ce
+  // widget parle à Twilio : l'ouvrir sur une notif WhatsApp ferait partir un
+  // SMS depuis un autre numéro, sans erreur visible et sans que le prospect
+  // comprenne d'où ça vient. Cette fonction est le garde-fou unique.
+  function isWhatsapp(notif) {
+    return !!notif && notif.type === 'whatsapp';
+  }
+
+  function whatsappTarget(notif) {
+    if (notif && notif.deepLinkUrl) return notif.deepLinkUrl;
+    var num = (notif && notif.fromNumber) ? String(notif.fromNumber).replace(/[^0-9]/g, '') : '';
+    return num ? ('whatsapp.html?n=' + encodeURIComponent(num)) : 'whatsapp.html';
   }
 
   // ---------- SON ----------
@@ -272,6 +289,7 @@
         '<button class="iw-tab active" data-filter="all">Tout</button>' +
         '<button class="iw-tab" data-filter="unread">Non lu</button>' +
         '<button class="iw-tab" data-filter="sms">SMS</button>' +
+        '<button class="iw-tab" data-filter="whatsapp">WhatsApp</button>' +
         '<button class="iw-tab" data-filter="calls">Appels</button>' +
       '</div>' +
       '<div class="iw-panel-list"></div>';
@@ -384,6 +402,7 @@
     let filtered = notifications.slice();
     if (activeFilter === 'unread') filtered = filtered.filter(isUnreadByMe);
     else if (activeFilter === 'sms') filtered = filtered.filter(n => n.type === 'sms');
+    else if (activeFilter === 'whatsapp') filtered = filtered.filter(isWhatsapp);
     else if (activeFilter === 'calls') filtered = filtered.filter(n => n.type === 'call' || n.type === 'call_missed');
 
     if (filtered.length === 0) {
@@ -442,6 +461,9 @@
     if (notif.type === 'sms' && notif.leadId) {
       actions.push('<button class="iw-action-btn" data-action="reply" title="Répondre">💬</button>');
     }
+    if (isWhatsapp(notif)) {
+      actions.push('<button class="iw-action-btn" data-action="whatsapp" title="Répondre sur WhatsApp">📲</button>');
+    }
     if (notif.fromNumber) {
       actions.push('<button class="iw-action-btn" data-action="call" title="Rappeler">📞</button>');
     }
@@ -492,6 +514,9 @@
     const actions = [];
     if (notif.type === 'sms' && notif.leadId) {
       actions.push('<button class="iw-action-btn" data-action="reply" title="Répondre">💬</button>');
+    }
+    if (isWhatsapp(notif)) {
+      actions.push('<button class="iw-action-btn" data-action="whatsapp" title="Répondre sur WhatsApp">📲</button>');
     }
     if (notif.fromNumber) {
       actions.push('<button class="iw-action-btn" data-action="call" title="Rappeler">📞</button>');
@@ -566,6 +591,12 @@
 
   function handleNotifClick(notif) {
     markAsRead(notif);
+    // WhatsApp : toujours la boîte partagée, jamais le composer SMS — y compris
+    // sans fiche lead, où le repli historique aurait ouvert une réponse Twilio.
+    if (isWhatsapp(notif)) {
+      window.location.href = whatsappTarget(notif);
+      return;
+    }
     var target = resolveNotifTarget(notif);
     if (target) {
       window.location.href = target;
@@ -579,8 +610,16 @@
   }
 
   function handleNotifAction(notif, action) {
+    if (action === 'whatsapp') {
+      markAsRead(notif);
+      window.location.href = whatsappTarget(notif);
+      return;
+    }
     if (action === 'reply') {
       markAsRead(notif);
+      // Ceinture et bretelles : le bouton n'est pas rendu sur une notif
+      // WhatsApp, mais une notif mal typée ne doit pas pouvoir déclencher un SMS.
+      if (isWhatsapp(notif)) { window.location.href = whatsappTarget(notif); return; }
       openComposer(notif);
       return;
     }

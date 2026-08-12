@@ -31,8 +31,9 @@
 // ============================================================================
 
 const crypto = require('crypto');
-const { db } = require('./_firebaseAdmin');
-const { getWhatsappCreds, majConversation } = require('./_whatsappClient');
+const { db, admin } = require('./_firebaseAdmin');
+const { getWhatsappCreds, majConversation, rattacherLead,
+        importerMediaEntrant } = require('./_whatsappClient');
 
 /* Lecture du corps brut. La signature porte sur les octets exacts envoyés par
    Meta : re-sérialiser un objet déjà parsé donnerait un JSON différent (ordre
@@ -127,15 +128,115 @@ async function appliquerStatut(st) {
 
   /* Le même statut se répercute sur le message du fil, sinon la boîte
      partagée afficherait éternellement « envoyé » sur un message échoué.
-     `recipient_id` donne la conversation sans requête. */
+     `recipient_id` donne la conversation sans requête.
+
+     ET LE MOTIF AVEC LUI. Pendant des semaines, `erreurMeta` n'était écrit que
+     sur la ligne technique de `whatsapp_messages` : l'interface ne pouvait
+     afficher qu'un ⚠ muet, et comprendre un échec demandait d'ouvrir la
+     console Firestore. Un code d'erreur qui n'atteint pas l'écran ne sert à
+     personne — c'est ce qui a coûté une heure sur le blocage 131042. */
   if (st.recipient_id) {
     try {
+      const patchFil = { statut: statut, statutA: Date.now() };
+      if (maj.erreurMeta) patchFil.erreurMeta = maj.erreurMeta;
       await db.collection('whatsapp_conversations').doc(String(st.recipient_id))
         .collection('messages').doc(String(wamid))
-        .set({ statut: statut, statutA: Date.now() }, { merge: true });
+        .set(patchFil, { merge: true });
     } catch (e) {
       console.warn('[whatsapp-webhook] statut fil', wamid, e && e.message);
     }
+  }
+}
+
+/* Les types de message qui portent un fichier, et l'étiquette lisible qui les
+   représente dans la liste des conversations. Sans elle, une photo produisait
+   une bulle VIDE avec juste l'heure : le message était bien enregistré, mais
+   `texte` restait null parce que seuls text/button/interactive étaient lus. */
+const GENRES_MEDIA = {
+  image:    { libelle: '📷 Photo' },
+  video:    { libelle: '🎬 Vidéo' },
+  audio:    { libelle: '🎵 Audio' },
+  document: { libelle: '📎 Document' },
+  sticker:  { libelle: '😀 Sticker' },
+};
+
+/* Slug d'équipe → uid Firebase. `leads.assignedTo` porte un slug (`elodie`),
+   alors que `inbox_notifications.ownerUid` est interrogé par uid : sans cette
+   conversion, la notification n'atteindrait jamais la personne assignée.
+   Cache au niveau module — une lecture par cold start, comme les identifiants. */
+let _membres = null;
+
+async function uidDuSlug(slug) {
+  if (!slug) return null;
+  if (!_membres) {
+    /* Le cache ne retient QUE les succès : mémoriser une lecture ratée
+       priverait d'attribution tous les messages reçus jusqu'au prochain cold
+       start, sans rien dans les journaux pour l'expliquer. */
+    const table = {};
+    try {
+      const snap = await db.collection('_meta').doc('team_members').get();
+      const brut = (snap.exists ? (snap.data() || {}) : {}).members;
+      /* `members` est tantôt une map, tantôt un tableau — Firestore convertit
+         selon la façon dont le document a été écrit. Même tolérance que
+         nav.js, et toujours le `slug` interne comme clé de vérité. */
+      const entrees = Array.isArray(brut) ? brut
+        : (brut && typeof brut === 'object' ? Object.keys(brut).map((k) => (
+            Object.assign({ slug: k }, brut[k])
+          )) : []);
+      entrees.forEach((m) => {
+        if (m && m.slug && m.firebaseUid) table[String(m.slug)] = String(m.firebaseUid);
+      });
+      _membres = table;
+    } catch (e) {
+      console.warn('[whatsapp-webhook] team_members illisible :', e && e.message);
+      return null;
+    }
+  }
+  return _membres[String(slug)] || null;
+}
+
+/**
+ * Crée la notification de la cloche pour un WhatsApp entrant.
+ *
+ * Même collection et même schéma que les SMS (api/twilio-sms-inbound.js) : le
+ * widget sait déjà jouer le son, empiler le toast et compter les non-lus, il
+ * ne lui manquait qu'une source. `ownerUid: null` signifie « visible des
+ * admins seulement » — exactement la règle déjà appliquée à un SMS dont le
+ * numéro n'est rattaché à aucune fiche.
+ *
+ * Ne lance jamais : une notification manquée ne doit pas empêcher le message
+ * d'être enregistré.
+ */
+async function notifierInbox(o) {
+  try {
+    /* Identifiant dérivé du wamid plutôt qu'auto-généré : Meta rejoue un
+       webhook dès qu'une réponse tarde, et un `add()` empilerait alors une
+       seconde cloche pour le même message. Le `/` est neutralisé — un wamid
+       est du base64, et une barre oblique y couperait le chemin du document. */
+    const cle = 'wa_' + String(o.wamid || '').replace(/\//g, '_');
+    await db.collection('inbox_notifications').doc(cle).set({
+      type: 'whatsapp',
+      direction: 'inbound',
+      leadId: o.leadId || null,
+      leadName: o.leadName || null,
+      fromNumber: o.fromNumber ? '+' + String(o.fromNumber) : null,
+      toNumber: null,
+      preview: o.preview ? String(o.preview).substring(0, 200) : null,
+      ownerUid: o.ownerUid || null,
+      ownerSlug: o.ownerSlug || null,
+      /* Le clic mène à la boîte partagée, jamais au composeur SMS : répondre à
+         un WhatsApp par un SMS Twilio partirait du mauvais numéro, sans que
+         personne le remarque. */
+      deepLinkUrl: 'whatsapp.html?n=' + encodeURIComponent(String(o.fromNumber || '')),
+      source: 'whatsapp',
+      providerMessageSid: o.wamid || null,
+      readBy: {},
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      /* `merge` préserve les `readBy` déjà posés : un rejeu ne doit pas faire
+         repasser en non lu un message que quelqu'un a déjà traité. */
+    }, { merge: true });
+  } catch (e) {
+    console.error('[whatsapp-webhook] notifierInbox', e && e.message);
   }
 }
 
@@ -155,14 +256,56 @@ async function enregistrerEntrant(msg, contacts) {
     if (c && c.profile) nom = c.profile.name || null;
   }
 
+  const type = msg.type || null;
   let texte = null;
-  if (msg.type === 'text' && msg.text) texte = msg.text.body || null;
-  else if (msg.type === 'button' && msg.button) texte = msg.button.text || null;
-  else if (msg.type === 'interactive' && msg.interactive) {
+  if (type === 'text' && msg.text) texte = msg.text.body || null;
+  else if (type === 'button' && msg.button) texte = msg.button.text || null;
+  else if (type === 'interactive' && msg.interactive) {
     const it = msg.interactive;
     texte = (it.button_reply && it.button_reply.title)
       || (it.list_reply && it.list_reply.title)
       || null;
+  }
+
+  /* ── Pièce jointe ────────────────────────────────────────────────────
+     Le webhook ne reçoit qu'un identifiant : on rapatrie le fichier tout de
+     suite. C'est un aller-retour réseau de plus AVANT la réponse 200, mais
+     Vercel tue la fonction dès `res.end()` — un téléchargement lancé sans être
+     attendu ne finirait jamais. Une photo de téléphone pèse quelques centaines
+     de kilo-octets : le coût est sans commune mesure avec une bulle vide. */
+  const extra = { type: type };
+  const genre = GENRES_MEDIA[type];
+  if (genre) {
+    const charge = msg[type] || {};
+    const nomFichier = charge.filename || null;
+    /* Un vocal et un fichier audio joint sont deux gestes différents, et
+       l'équipe ne les traite pas pareil. */
+    const libelle = (type === 'audio' && charge.voice === true)
+      ? '🎤 Message vocal'
+      : (type === 'document' && nomFichier ? '📎 ' + nomFichier : genre.libelle);
+    const legende = charge.caption || null;
+
+    extra.media = type;
+    extra.mime = charge.mime_type || null;
+    extra.nomFichier = nomFichier;
+    extra.legende = legende;
+    extra.libelleMedia = libelle;
+
+    const imp = await importerMediaEntrant({ mediaId: charge.id, numero: de, wamid: wamid });
+    if (imp.ok) {
+      extra.mediaUrl = imp.mediaUrl;
+      extra.mime = imp.mime || extra.mime;
+      extra.taille = imp.taille || null;
+    } else {
+      /* Le message reste, la pièce jointe manque : on écrit pourquoi plutôt
+         que de laisser une bulle muette de plus. */
+      extra.mediaErreur = imp.erreur || 'media_indisponible';
+      console.warn('[whatsapp-webhook] média', type, wamid, ':', extra.mediaErreur);
+    }
+
+    /* La liste des conversations et la notification ont besoin d'un texte :
+       la légende quand il y en a une, l'étiquette du média sinon. */
+    texte = legende || libelle;
   }
 
   try {
@@ -170,8 +313,11 @@ async function enregistrerEntrant(msg, contacts) {
       wamid: String(wamid),
       de: de,
       nom: nom,
-      type: msg.type || null,
+      type: type,
       texte: texte,
+      media: extra.media || null,
+      mediaUrl: extra.mediaUrl || null,
+      mime: extra.mime || null,
       /* Horodatage Meta en secondes — on garde les deux pour pouvoir trier
          même si l'un des deux manque. */
       tsMeta: msg.timestamp ? Number(msg.timestamp) * 1000 : null,
@@ -192,7 +338,23 @@ async function enregistrerEntrant(msg, contacts) {
       texte: texte,
       nom: nom,
       statut: 'recu',
-      extra: { type: msg.type || null },
+      extra: extra,
+    });
+
+    /* La cloche. Le rattachement est refait ici plutôt que lu sur la
+       conversation : `majConversation` ne le tente qu'à la CRÉATION du
+       document, donc une conversation ancienne dont le lead a été créé depuis
+       n'aurait jamais de propriétaire. */
+    const lead = await rattacherLead(de);
+    const ownerSlug = (lead && lead.assignedTo) || null;
+    await notifierInbox({
+      leadId: lead ? lead.leadId : null,
+      leadName: (lead && lead.nom) || nom || null,
+      fromNumber: de,
+      preview: texte,
+      ownerUid: await uidDuSlug(ownerSlug),
+      ownerSlug: ownerSlug,
+      wamid: wamid,
     });
   }
 }

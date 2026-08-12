@@ -1,7 +1,8 @@
 // ============================================================================
 // api/whatsapp-diagnostic.js — ÉTAT DE SANTÉ DU CANAL WHATSAPP
 // ----------------------------------------------------------------------------
-// GET /api/whatsapp-diagnostic   → 200 { ok, config, token, numero, modeles, coachs }
+// GET /api/whatsapp-diagnostic   → 200 { ok, config, token, numero, abonnement,
+//                                         facturation, sante, modeles, coachs }
 // Réservé aux administrateurs.
 //
 // POURQUOI
@@ -37,7 +38,7 @@ module.exports = async (req, res) => {
   const auth = await requireAdmin(req, res);
   if (!auth) return; /* requireAdmin a déjà répondu 401/403 */
 
-  const sortie = { ok: true, config: {}, token: null, numero: null, numerosDuCompte: null, abonnement: null, modeles: null, effectifs: null, coachs: null };
+  const sortie = { ok: true, config: {}, token: null, numero: null, numerosDuCompte: null, abonnement: null, facturation: null, sante: null, modeles: null, effectifs: null, coachs: null };
 
   // ── 1. Complétude de la configuration ──────────────────────────────────
   let creds;
@@ -148,6 +149,63 @@ module.exports = async (req, res) => {
         actif: l.length > 0,
       };
     }
+  }
+
+  // ── 3 quater. Le compte peut-il PAYER ses envois ? ─────────────────────
+  /* Depuis la facturation au message, tout modèle est payant. Sans moyen de
+     paiement rattaché au compte, Meta ACCEPTE l'envoi (200 + wamid, donc une
+     bulle dans la boîte partagée) puis refuse de le distribuer avec l'erreur
+     131042. Rien dans le token, le numéro ni les modèles ne le laisse voir :
+     tout est vert, et rien n'arrive. C'est exactement la panne du 12/08/2026.
+
+     Deux lectures indépendantes, isolées l'une de l'autre : un champ retiré
+     d'une version de l'API ferait échouer la requête entière, et ce diagnostic
+     doit continuer de répondre même amputé d'une section. */
+  if (creds.wabaId) {
+    const fac = await graph(creds.wabaId
+      + '?fields=account_review_status,business_verification_status,currency,primary_funding_id');
+    if (!fac.ok) {
+      sortie.facturation = { erreur: fac.erreur || 'illisible' };
+    } else {
+      const f = fac.data || {};
+      sortie.facturation = {
+        examenCompte: f.account_review_status || null,
+        verificationEntreprise: f.business_verification_status || null,
+        devise: f.currency || null,
+        /* LE champ qui répond à « pourquoi 131042 ». Absent = aucun moyen de
+           paiement rattaché au compte WhatsApp — c'est le portefeuille du
+           portfolio publicitaire qui ne descend pas jusqu'au WABA. */
+        moyenDePaiementId: f.primary_funding_id || null,
+        moyenDePaiementPresent: !!f.primary_funding_id,
+      };
+    }
+  }
+
+  /* L'avis de Meta lui-même sur la capacité à envoyer. Quand il existe, c'est
+     la réponse la plus directe : `can_send_message` passe à BLOCKED avec le
+     motif, avant même la première tentative. Le champ est récent — s'il n'est
+     pas servi par cette version de l'API, on le dit et on n'en fait pas un
+     échec. */
+  const sante = await graph(creds.phoneNumberId + '?fields=health_status');
+  if (!sante.ok) {
+    sortie.sante = { erreur: sante.erreur || 'indisponible' };
+  } else {
+    const hs = (sante.data && sante.data.health_status) || null;
+    sortie.sante = hs
+      ? {
+          envoiPossible: hs.can_send_message || null,
+          entites: (Array.isArray(hs.entities) ? hs.entities : []).map((e) => ({
+            type: e.entity_type || null,
+            id: e.id || null,
+            envoiPossible: e.can_send_message || null,
+            motifs: (Array.isArray(e.errors) ? e.errors : []).map((x) => ({
+              code: x.error_code != null ? x.error_code : null,
+              description: x.error_description || null,
+              solution: x.possible_solution || null,
+            })),
+          })),
+        }
+      : { erreur: 'health_status non servi par ' + creds.apiVersion };
   }
 
   // ── 4. Les modèles ─────────────────────────────────────────────────────
