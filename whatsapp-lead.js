@@ -98,7 +98,13 @@
       '.wal-var input{flex:1;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.1);',
       'border-radius:7px;color:#f5f5f5;font-family:inherit;font-size:12px;padding:6px 9px;outline:none}',
       '.wal-ap{background:rgba(0,168,132,.18);border-radius:9px;padding:8px 11px;margin-top:8px;',
-      'font-size:12.5px;line-height:1.45;white-space:pre-wrap}'
+      'font-size:12.5px;line-height:1.45;white-space:pre-wrap}',
+      /* Sur grand écran, la fiche est une colonne qui se prolonge : une
+         deuxième barre de défilement à l'intérieur d'une page déjà longue est
+         exactement ce qu'on cherche à éviter. Le fil s'étale, la page défile.
+         Sur mobile la fiche redevient une modale à hauteur fixe, et le
+         plafond reprend tout son sens. */
+      '@media (min-width:980px){.wal-fil{max-height:none;overflow-y:visible}}'
     ].join('');
     document.head.appendChild(s);
   }
