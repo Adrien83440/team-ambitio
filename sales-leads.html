@@ -357,10 +357,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   }
   .l2inner { min-height: 0; }
   .l2body { flex: none; overflow-y: visible; }
-  /* Les sous-listes de la fiche avaient chacune leur propre fenêtre de scroll,
-     pour la même raison et avec le même défaut. Sur mobile elles restent
-     bornées : là, la fiche est une modale à hauteur fixe. */
-  .ld-notes-history, .ld-comm-list { max-height: none; overflow-y: visible; }
+  /* L'historique des notes se prolonge avec la fiche — il est fini et court.
+     Les FILS DE CONVERSATION, eux, gardent un plafond : une discussion de
+     deux cents messages étirerait la fiche sans fin et il faudrait dérouler
+     la page entière pour atteindre le composeur. Le plafond est plus généreux
+     qu'avant, puisque la page prend désormais le relais. */
+  .ld-notes-history { max-height: none; overflow-y: visible; }
+  .ld-comm-list { max-height: min(56vh, 460px); }
   .l2grab { display: none; }
   /* Sans lead sélectionné, la colonne n'a plus de contenu pour se déployer :
      on lui rend la hauteur d'un écran, sinon le message d'invite se tasserait
@@ -753,8 +756,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ld-comm-toggle.open .ct-arrow { transform: rotate(180deg); }
 .ld-comm-count { font-family: var(--fm); font-size: 10px; padding: 1px 6px; border-radius: 5px; }
 .ld-comm-list { margin-top: 9px; max-height: 380px; overflow-y: auto; flex-direction: column; gap: 6px; padding: 4px 2px; }
-.ld-comm-list::-webkit-scrollbar { width: 4px; }
-.ld-comm-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+/* macOS masque les barres de défilement au repos : à 4 px et 10 % d'opacité,
+   un fil borné passait pour un affichage coupé. */
+.ld-comm-list { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.28) transparent; }
+.ld-comm-list::-webkit-scrollbar { width: 7px; }
+.ld-comm-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.24); border-radius: 4px; }
+.ld-comm-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
 .ld-comm-empty { text-align: center; font-size: 11.5px; color: var(--muted2); padding: 18px 6px; line-height: 1.6; }
 .ld-conv-date-sep { text-align: center; font-family: var(--fm); font-size: 10px; color: var(--muted2); margin: 8px 0 2px; text-transform: capitalize; }
 .ld-conv-row { display: flex; flex-direction: column; max-width: 84%; }
