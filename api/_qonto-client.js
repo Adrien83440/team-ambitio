@@ -255,6 +255,30 @@ function truncate(value, max) {
   return s.length > max ? s.substring(0, max) : s;
 }
 
+/* Adresse de routage e-invoicing, pour une entreprise française.
+   C'est elle — et non tax_identification_number — qui sert à localiser le
+   destinataire dans l'Annuaire ; sans elle, Qonto renvoie systématiquement
+   e_invoicing_reachable: false.
+
+   Quatre formats sont acceptés (siren, siren_siret, siren_siret_routingCode,
+   siren_suffix). On pose le SIREN seul, le plus simple et le seul qu'on
+   puisse dériver sans information supplémentaire : c'est le niveau
+   entreprise, suffisant tant qu'un client ne demande pas le routage vers un
+   établissement précis. Le jour où l'un l'exige, il faudra un champ dédié
+   sur la fiche client. */
+function einvoicingAddressFrom(client) {
+  client = client || {};
+  const addr = client.address || {};
+  const country = String(addr.country || 'FR').trim().toUpperCase();
+  /* Hors France, le routage passe par Peppol avec une autre codification :
+     on n'invente rien. */
+  if (country && country !== 'FR' && country !== 'FRANCE') return '';
+
+  const digits = String(client.siret || '').replace(/\D/g, '');
+  if (digits.length !== 9 && digits.length !== 14) return '';
+  return digits.substring(0, 9);
+}
+
 /**
  * invoice_clients/{id} → payload client Qonto.
  * street_address concatène line1 et line2 : Qonto n'a qu'un champ.
@@ -289,6 +313,9 @@ function mapClientToQonto(client) {
 
   if (client.vatNumber) payload.vat_number = truncate(client.vatNumber, 20);
   if (client.siret) payload.tax_identification_number = truncate(client.siret, 20);
+
+  const eiAddress = einvoicingAddressFrom(client);
+  if (eiAddress) payload.e_invoicing_address = eiAddress;
 
   payload.billing_address = {
     street_address: street,
@@ -400,6 +427,7 @@ module.exports = {
   baseUrl: baseUrl,
   describeQontoError: describeQontoError,
   mapClientToQonto: mapClientToQonto,
+  einvoicingAddressFrom: einvoicingAddressFrom,
   mapInvoiceToQonto: mapInvoiceToQonto,
   buildItemTitle: buildItemTitle,
   mapUnit: mapUnit,

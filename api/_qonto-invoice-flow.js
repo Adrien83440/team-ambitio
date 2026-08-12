@@ -96,9 +96,16 @@ async function upsertClient(ctx) {
   if (existingId && client.qontoFieldsHash === hash) return existingId;
 
   let qontoClientId = existingId;
+  /* Qonto renvoie le client à jour sur create comme sur patch : on en tire
+     e_invoicing_reachable, qui dit si l'adresse de routage est active dans
+     l'Annuaire ET sur Peppol. C'est la seule façon de savoir, avant d'émettre,
+     si le client peut réellement recevoir une facture électronique. */
+  let qontoClientBody = null;
+
   if (existingId) {
     try {
-      await qonto.qontoFetch('PATCH', '/v2/clients/' + encodeURIComponent(existingId), payload);
+      const patched = await qonto.qontoFetch('PATCH', '/v2/clients/' + encodeURIComponent(existingId), payload);
+      qontoClientBody = (patched && patched.client) ? patched.client : patched;
     } catch (patchErr) {
       /* Le client a pu être supprimé côté Qonto : on repart sur une création
          plutôt que de bloquer une facture pour ça. */
@@ -115,17 +122,28 @@ async function upsertClient(ctx) {
        factures. */
     const created = await qonto.qontoFetch('POST', '/v2/clients', payload);
     const c = (created && created.client) ? created.client : created;
+    qontoClientBody = c;
     qontoClientId = c && c.id ? c.id : null;
     if (!qontoClientId) {
       const e = new Error('Qonto n\'a pas renvoyé d\'identifiant client.'); e.status = 502; throw e;
     }
   }
 
-  await ref.set({
+  const update = {
     qontoClientId: qontoClientId,
     qontoFieldsHash: hash,
     qontoSyncedAt: admin.firestore.FieldValue.serverTimestamp(),
-  }, { merge: true });
+  };
+  /* On n'écrit la joignabilité que si Qonto l'a effectivement renvoyée :
+     écraser un true connu par un null faute de réponse serait pire que ne
+     rien dire. */
+  if (qontoClientBody && typeof qontoClientBody.e_invoicing_reachable === 'boolean') {
+    update.einvoicingReachable = qontoClientBody.e_invoicing_reachable;
+    update.einvoicingAddress = qontoClientBody.e_invoicing_address || payload.e_invoicing_address || null;
+    update.einvoicingCheckedAt = admin.firestore.FieldValue.serverTimestamp();
+  }
+
+  await ref.set(update, { merge: true });
 
   return qontoClientId;
 }

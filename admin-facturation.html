@@ -2935,6 +2935,15 @@ function renderClientsList() {
     const eiBadge = _scope === 'ei'
       ? ' <span class="bill-badge" style="background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.35);color:#f97316">EI — facturé ailleurs</span>'
       : '';
+    /* Joignabilité e-invoicing : renseignée par Qonto (Annuaire + Peppol).
+       Trois états distincts — joignable, non joignable, jamais vérifié — et
+       le troisième ne doit pas se confondre avec le deuxième. */
+    let reachBadge = '';
+    if (_scope !== 'ei' && typeof c.einvoicingReachable === 'boolean') {
+      reachBadge = c.einvoicingReachable
+        ? ' <span class="bill-badge" style="background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);color:#10b981" title="Actif dans l\'Annuaire et sur Peppol — peut recevoir une facture électronique">📡 Joignable</span>'
+        : ' <span class="bill-badge" style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:#f59e0b" title="Introuvable dans l\'Annuaire ou sur Peppol — la facture ne pourra pas lui être transmise sur le réseau">📡 Non joignable</span>';
+    }
     const archivedBadge = c.archived ? ' <span class="bill-badge" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444">Archivé</span>' : '';
     const exempt = c.vatExempt ? ' <span class="bill-badge exempt">Hors TVA</span>' : '';
 
@@ -2959,7 +2968,7 @@ function renderClientsList() {
 
     html += '<tr ' + (c.archived ? 'style="opacity:.5"' : '') + ' onclick="openClientDrawer(\'' + c.id + '\')">';
     html += '<td>' + badge + '</td>';
-    html += '<td><div style="font-weight:700">' + escapeHtml(name) + eiBadge + statusBadge + archivedBadge + exempt + '</div>'
+    html += '<td><div style="font-weight:700">' + escapeHtml(name) + eiBadge + reachBadge + statusBadge + archivedBadge + exempt + '</div>'
       + (contactName ? '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + escapeHtml(contactName) + '</div>' : '')
       + (c.linkedLeadId ? '<div style="font-size:10px;color:var(--muted);margin-top:2px">🔗 Lead lié</div>' : '')
       + '</td>';
@@ -3292,6 +3301,30 @@ function openClientDrawer(clientId) {
   html += '  </div>';
   html += '</div>';
 
+  /* Joignabilité e-invoicing — visible seulement sur une fiche existante :
+     la vérification a besoin du client enregistré, SIRET compris. */
+  if (isEdit && curScope !== 'ei') {
+    let reachTxt = 'Jamais vérifiée.';
+    let reachColor = 'var(--muted)';
+    if (typeof data.einvoicingReachable === 'boolean') {
+      const rd = (data.einvoicingCheckedAt && data.einvoicingCheckedAt.toDate)
+        ? data.einvoicingCheckedAt.toDate() : null;
+      reachTxt = data.einvoicingReachable
+        ? '📡 Joignable — actif dans l\'Annuaire et sur Peppol.'
+        : '📡 Non joignable — introuvable dans l\'Annuaire ou sur Peppol : une facture électronique ne pourra pas lui être transmise.';
+      if (data.einvoicingAddress) reachTxt += ' Adresse de routage : ' + data.einvoicingAddress + '.';
+      if (rd) reachTxt += ' Vérifié le ' + rd.toLocaleDateString('fr-FR') + '.';
+      reachColor = data.einvoicingReachable ? '#10b981' : '#f59e0b';
+    }
+    html += '<div style="margin:12px 0 4px;padding:11px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px">';
+    html += '  <div class="bill-label" style="margin-bottom:6px">Facturation électronique</div>';
+    html += '  <div id="ctReachTxt" style="font-size:12px;color:' + reachColor + '">' + escapeHtml(reachTxt) + '</div>';
+    html += '  <button type="button" class="bill-btn bill-btn-ghost" style="font-size:11px;padding:4px 10px;margin-top:8px"'
+      + ' id="ctReachBtn" data-client-id="' + escapeAttr(clientId || '') + '">📡 Vérifier la joignabilité</button>';
+    html += '  <div class="bill-help" style="font-size:11px;margin-top:6px">Interroge l\'Annuaire via Qonto. Le client y est créé s\'il n\'y existe pas encore — ce qui arriverait de toute façon à sa première facture.</div>';
+    html += '</div>';
+  }
+
   html += '<div id="ctEiWarn" style="' + (curScope === 'ei' ? '' : 'display:none;')
     + 'margin:10px 0 4px;padding:11px 14px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:8px;font-size:12px;color:#f97316">'
     + '🔒 <strong>Client de l\'entreprise individuelle.</strong> Ses factures sont traitées en dehors d\'Alteore. '
@@ -3432,6 +3465,56 @@ function setClientType(t) {
   var body = document.getElementById('drawerBody');
   if (body) body._currentType = (t === 'individual') ? 'individual' : 'company';
 }
+
+/* Vérification de joignabilité, déclenchée depuis le drawer client.
+   Délégation plutôt qu'onclick inline : un identifiant Firestore est sûr,
+   mais la règle du projet vaut aussi pour les cas sûrs. */
+document.addEventListener('click', async function (e) {
+  const btn = e.target.closest ? e.target.closest('#ctReachBtn') : null;
+  if (!btn) return;
+  const clientId = btn.getAttribute('data-client-id');
+  if (!clientId) return;
+
+  const out = document.getElementById('ctReachTxt');
+  btn.disabled = true;
+  const previousLabel = btn.textContent;
+  btn.textContent = 'Vérification…';
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const response = await fetch('/api/client-einvoicing-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ clientId: clientId })
+    });
+    let data = {};
+    try { data = await response.json(); } catch (err) {}
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+
+    if (out) {
+      if (data.reachable === true) {
+        out.style.color = '#10b981';
+        out.textContent = '📡 Joignable — actif dans l\'Annuaire et sur Peppol.'
+          + (data.address ? ' Adresse de routage : ' + data.address + '.' : '');
+        toast('📡 Client joignable');
+      } else if (data.reachable === false) {
+        out.style.color = '#f59e0b';
+        out.textContent = '📡 Non joignable — introuvable dans l\'Annuaire ou sur Peppol : '
+          + 'une facture électronique ne pourra pas lui être transmise.'
+          + (data.address ? ' Adresse testée : ' + data.address + '.' : '');
+        toast('📡 Client non joignable', true);
+      } else {
+        out.style.color = 'var(--muted)';
+        out.textContent = 'Qonto n\'a pas renvoyé la joignabilité de ce client.';
+      }
+    }
+  } catch (err) {
+    console.error('[einvoicing-check]', err);
+    toast('Erreur : ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = previousLabel;
+  }
+});
 
 /* Bascule SARL ↔ EI : le bandeau d'avertissement suit le sélecteur. */
 function onScopeChange() {
@@ -3825,6 +3908,11 @@ function renderInvoicesList() {
     /* Rattrapage : proposé sur toute facture validée qui n'est pas déjà passée
        chez Qonto. Si Qonto est désactivé ou le client rattaché à l'EI,
        l'endpoint répond par un message explicite plutôt qu'en silence. */
+    /* Statut réseau : proposé dès que la facture a été déposée. */
+    if (inv.qontoSyncStatus === 'sent') {
+      html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();refreshEinvoicingStatus(\'' + inv.id + '\')"'
+        + ' title="Relire le statut réseau chez Qonto">🔄</button>';
+    }
     const _needsPaidRetry = !!(inv.qonto && inv.qonto.paidSyncError);
     if (inv.status !== 'draft'
         && (_needsPaidRetry || (inv.qontoSyncStatus !== 'sent' && inv.qontoSyncStatus !== 'created'))) {
@@ -3868,10 +3956,29 @@ function qontoBadgeOf(inv) {
 
   if (st === 'sent') {
     const d = (q.sentByEinvoiceAt && q.sentByEinvoiceAt.toDate) ? q.sentByEinvoiceAt.toDate() : null;
-    return '<div><span style="' + base + 'background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.3)"'
-      + ' title="Transmise sur le réseau de facturation électronique'
-      + (d ? ' le ' + d.toLocaleDateString('fr-FR') + ' à ' + d.toLocaleTimeString('fr-FR').substring(0, 5) : '')
-      + '">⚡ Transmise</span></div>';
+    const depot = 'Déposée sur le réseau'
+      + (d ? ' le ' + d.toLocaleDateString('fr-FR') + ' à ' + d.toLocaleTimeString('fr-FR').substring(0, 5) : '');
+
+    /* Le statut réseau réel, quand il a été relu. Sans relecture, « déposée »
+       est tout ce qu'on peut honnêtement affirmer : notre appel a été accepté
+       par Qonto, le cheminement vers le destinataire se joue après. */
+    const net = q.einvoicingStatus || null;
+    const ev = q.einvoicingLastEvent || null;
+    const evTxt = ev ? (' · ' + (ev.reason || '') + (ev.timestamp ? ' (' + ev.timestamp + ')' : '')) : '';
+
+    if (net === 'approved') {
+      return '<div><span style="' + base + 'background:rgba(16,185,129,.16);color:#10b981;border:1px solid rgba(16,185,129,.4)"'
+        + ' title="' + escapeAttr(depot + ' · acceptée par la plateforme du destinataire' + evTxt) + '">⚡ Acceptée</span></div>';
+    }
+    if (net === 'declined' || net === 'not_delivered' || net === 'submission_failed') {
+      const lbl = net === 'declined' ? 'Refusée' : (net === 'not_delivered' ? 'Non délivrée' : 'Échec du dépôt');
+      return '<div><span style="' + base + 'background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3)"'
+        + ' title="' + escapeAttr(depot + evTxt) + '">⚡ ' + lbl + '</span></div>';
+    }
+    /* pending, submitted, ou pas encore relu */
+    return '<div><span style="' + base + 'background:rgba(96,165,250,.12);color:#60a5fa;border:1px solid rgba(96,165,250,.3)"'
+      + ' title="' + escapeAttr(depot + (net ? (' · statut réseau : ' + net + evTxt) : ' · statut réseau pas encore relu — bouton 🔄'))
+      + '">⚡ Déposée</span></div>';
   }
   if (st === 'created') {
     const reason = q.einvoiceSkipReason || 'motif non précisé';
@@ -3897,6 +4004,31 @@ function qontoPaidBadgeOf(inv) {
     + 'font-weight:600;white-space:nowrap;background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3)"'
     + ' title="Le paiement n\'a pas pu être reporté chez Qonto — ' + escapeAttr(q.paidSyncError)
     + '. La facture y est encore marquée impayée ; le bouton ⚡ réessaie.">⚡ Paiement non reporté</span></div>';
+}
+
+/* Relecture du statut réseau. Le statut capté à la création vaut toujours
+   « pending » : le cheminement se joue après notre appel. Sans ce bouton, on
+   afficherait indéfiniment une valeur périmée dès son écriture. */
+async function refreshEinvoicingStatus(invoiceId) {
+  toast('⏳ Lecture du statut réseau…');
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const response = await fetch('/api/invoice-einvoicing-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ invoiceId: invoiceId })
+    });
+    let data = {};
+    try { data = await response.json(); } catch (e) {}
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+
+    let msg = '📡 ' + (data.label || data.status || 'statut inconnu');
+    if (data.lastEvent && data.lastEvent.reason) msg += ' — ' + data.lastEvent.reason;
+    toast(msg);
+  } catch (err) {
+    console.error('[einvoicing-status]', err);
+    toast('Erreur : ' + err.message, true);
+  }
 }
 
 /* Rattrapage manuel. L'endpoint est idempotent : il vérifie chez Qonto avant
