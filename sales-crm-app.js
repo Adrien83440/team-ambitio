@@ -1248,7 +1248,7 @@ function updateKanbanPreview(){
   if(active.indexOf('createdAt')>=0)h+='<div style="font-size:11px;color:var(--subtle-text)">02/04/2026</div>';
   h+='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">';
   if(active.indexOf('type')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(167,139,250,0.12);color:#c4b5fd">VSL</span>';
-  if(active.indexOf('assignedTo')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--red3)">Guillaume</span>';
+  if(active.indexOf('assignedTo')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--red3)">Élodie</span>';
   if(active.indexOf('status')>=0)h+='<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--blue)">📞 Appelé</span>';
   if(active.indexOf('utm')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--purple)">🔗 FB Ads</span>';
   if(active.indexOf('closeur')>=0)h+='<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--hover-bg);color:var(--gold)">🎯 Adrien</span>';

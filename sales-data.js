@@ -65,11 +65,9 @@ const DB = {
   },
   team: {
     week: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:33020, collecte:3342,  calls:23, lives:20, offres:14, closes:6, showup:0.87, txOffre:0.70,  txTransfoShow:0.30,  txTransfoOffre:0.429, caCall:1435.7 },
       { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
     ],
     month: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:48469, collecte:4686, calls:56, lives:33, offres:17, closes:9, showup:0.589, txOffre:0.515, txTransfoShow:0.273, txTransfoOffre:0.529, caCall:721.3 },
       { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
     ],
   },
@@ -251,8 +249,10 @@ const U = {
   g:   id => document.getElementById(id),
   getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
   getCurrentUser:  () => ({
-    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || 'guillaume',
-    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Guillaume',
+    /* Aucun repli sur une personne : un utilisateur non identifie prenait
+       l'identite d'un membre parti. */
+    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || '',
+    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Utilisateur',
     role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
   }),
 

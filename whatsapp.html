@@ -976,18 +976,20 @@ document.addEventListener('change', function (ev) {
 function chargerEquipe() {
   /* `sales` est un rôle TECHNIQUE, jamais une valeur stockée : dans
      _meta/team_members, un commercial porte `setter`, `closer` ou
-     `closer_setter` — Élodie est `closer_setter`. Filtrer sur `sales` ne
-     laissait donc passer que les admins, et la principale utilisatrice du
-     canal était absente de son propre sélecteur.
-     Même liste que dispo-core.js et alteore-flow.js, DEPARTED compris :
-     Guillaume est parti, son historique reste en base mais son nom ne doit
+     `closer_setter`. Filtrer sur `sales` ne laissait passer que les admins.
+
+     Le filtre est donc une liste NOIRE et non blanche : deviner la valeur
+     exacte du rôle a déjà échoué, et une conversation non attribuable est un
+     problème bien plus concret qu'un nom de trop dans un menu interne. Seuls
+     les métiers qui n'ont rien à faire sur ce canal sont écartés, plus les
+     partis — Guillaume garde son historique en base, mais son nom ne doit
      apparaître dans aucun choix. */
-  var ROLES_ATTRIBUABLES = { admin: 1, sales: 1, setter: 1, closer: 1, closer_setter: 1 };
+  var ROLES_EXCLUS = { coach: 1, csm: 1 };
   var DEPARTED = { guillaume: 1 };
   var l = window.TEAM_MEMBERS_ACTIVE || [];
   STATE.equipe = l
     .filter(function (m) {
-      return m && m.slug && !DEPARTED[m.slug] && ROLES_ATTRIBUABLES[m.role];
+      return m && m.slug && !DEPARTED[m.slug] && !ROLES_EXCLUS[m.role];
     })
     /* Prénom court d'abord : « Elodie Vidotto Siarri » déborderait d'un menu
        où tous les autres tiennent en un mot. */

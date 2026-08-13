@@ -922,7 +922,7 @@
 
    Utilisation depuis n'importe quelle page :
      await window.loadTeamMembers();
-     const guillaume = window.TEAM_MEMBERS.guillaume;
+     const elodie = window.TEAM_MEMBERS.elodie;
      for (const m of window.TEAM_MEMBERS_ACTIVE) { ... }
 
    Expose aussi un événement 'team-members-loaded' pour les pages qui

@@ -75,11 +75,9 @@ const DB = {
   },
   team: {
     week: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:33020, collecte:3342,  calls:23, lives:20, offres:14, closes:6, showup:0.87, txOffre:0.70,  txTransfoShow:0.30,  txTransfoOffre:0.429, caCall:1435.7 },
       { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:22748, collecte:13629, calls:29, lives:24, offres:19, closes:7, showup:0.83, txOffre:0.792, txTransfoShow:0.292, txTransfoOffre:0.368, caCall:784.4  },
     ],
     month: [
-      { name:'Guillaume', role:'Closing + Setting', color:'#ef4444', contracte:48469, collecte:4686, calls:56, lives:33, offres:17, closes:9, showup:0.589, txOffre:0.515, txTransfoShow:0.273, txTransfoOffre:0.529, caCall:721.3 },
       { name:'Elodie',    role:'Closing',           color:'#60a5fa', contracte:34069, collecte:3966, calls:46, lives:28, offres:13, closes:7, showup:0.609, txOffre:0.464, txTransfoShow:0.25,  txTransfoOffre:0.538, caCall:617.2 },
     ],
   },
@@ -261,8 +259,10 @@ const U = {
   g:   id => document.getElementById(id),
   getCurrentMonth: () => (typeof localStorage !== 'undefined' && localStorage.getItem('sales_month')) || 'Février 2026',
   getCurrentUser:  () => ({
-    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || 'guillaume',
-    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Guillaume',
+    /* Aucun repli sur une personne : un utilisateur non identifie prenait
+       l'identite d'un membre parti, et lisait son espace. */
+    uid:  window._currentUserUid  || localStorage.getItem('ambitio_uid')  || '',
+    name: window._currentUserName || localStorage.getItem('ambitio_name') || 'Utilisateur',
     role: window._currentRole     || localStorage.getItem('ambitio_role') || 'sales',
   }),
 
@@ -451,9 +451,8 @@ window.getMonthWeeks=getMonthWeeks; window.ALL_WEEKS=ALL_WEEKS;
  * monthKey = "Février 2026" (identique à sales_month)
  */
 
-const SYNC_UIDS = ['guillaume', 'elodie'];
+const SYNC_UIDS = ['elodie'];
 const SYNC_MEMBERS = [
-  { uid: 'guillaume', name: 'Guillaume', role: 'Closing + Setting', color: '#ef4444' },
   { uid: 'elodie',    name: 'Élodie',    role: 'Closing',           color: '#60a5fa' },
 ];
 
@@ -1128,10 +1127,16 @@ function _isAdminView() {
   var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
   return role === 'admin';
 }
+/* Membres partis de la societe : exclus de TOUS les affichages, admin
+   compris. Meme liste qu'alteore-flow.js et dispo-core.js. Leur fiche et
+   leurs series historiques restent en place — rien n'est supprime, la
+   donnee devient seulement inatteignable par l'interface. */
+var DEPARTED_EQUIPE = { guillaume: 1 };
 function _visibleMembers() {
   _markArchivedMembers();
-  if (_isAdminView()) return MEMBERS;
-  return MEMBERS.filter(function(m) { return !m.archived; });
+  var vivants = MEMBERS.filter(function(m) { return !DEPARTED_EQUIPE[m.uid]; });
+  if (_isAdminView()) return vivants;
+  return vivants.filter(function(m) { return !m.archived; });
 }
 if (window.TEAM_MEMBERS) _markArchivedMembers();
 window.addEventListener('team-members-loaded', function() {
@@ -1192,12 +1197,11 @@ function getSampleMeetings() {
   return [
     { id:'m1', date:'2026-02-24', jourSemaine:'Lundi', heure:'09h00',
       lien_meet: MEETING_LINK,
-      sujets:['Bilan semaine S7','Points de progression Guillaume & Élodie','Objectifs S8','Nouvelles offres Q1'],
+      sujets:['Bilan semaine S7','Points de progression Élodie','Objectifs S8','Nouvelles offres Q1'],
       questions:[
-        { uid:'guillaume', text:'Est-ce qu\'on peut revoir le script d\'objection prix ?', reponse:'Oui, on va y travailler en debrief jeudi', ts: 1740355200000 },
         { uid:'elodie', text:'Les leads cold sont-ils toujours disponibles cette semaine ?', reponse:'', ts: 1740355600000 },
       ],
-      resume:'Morning meeting productif. Focus sur les objections prix BP12. Guillaume et Élodie progressent bien. Objectif S8 : 5 closes minimum chacun. Rappel : bien qualifier le budget avant le pitch.',
+      resume:'Morning meeting productif. Focus sur les objections prix BP12. Élodie progresse bien. Objectif S8 : 5 closes minimum chacun. Rappel : bien qualifier le budget avant le pitch.',
       statut:'Terminé' },
     { id:'m2', date:'2026-02-26', jourSemaine:'Mercredi', heure:'09h00',
       lien_meet: MEETING_LINK,
@@ -1215,7 +1219,7 @@ function getSampleMeetings() {
       questions:[], resume:'', statut:'À venir' },
     { id:'m5', date:'2026-03-05', jourSemaine:'Mercredi', heure:'09h00',
       lien_meet: MEETING_LINK,
-      sujets:['Flash mi-semaine S9','Review calls Guillaume'],
+      sujets:['Flash mi-semaine S9','Review calls Élodie'],
       questions:[], resume:'', statut:'À venir' },
   ];
 }
@@ -2432,14 +2436,12 @@ document.addEventListener('DOMContentLoaded', () => {
   <!-- SECTION ESPACES -->
   <div class="section active" id="sec-espaces">
     <div class="member-selector" id="member-selector"></div>
-    <div id="espace-guillaume" class="espace"></div>
     <div id="espace-elodie" class="espace"></div>
   </div>
 
   <!-- SECTION CALL BREAKDOWN -->
   <div class="section" id="sec-breakdown">
     <div class="cb-member-tabs" id="cb-member-tabs"></div>
-    <div id="cb-guillaume" class="cb-panel"></div>
     <div id="cb-elodie" class="cb-panel"></div>
   </div>
 
