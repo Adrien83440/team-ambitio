@@ -974,10 +974,24 @@ document.addEventListener('change', function (ev) {
 /* L'équipe à qui attribuer : sales et admin actifs, lus par nav.js dans
    _meta/team_members (la collection `users` n'est pas lisible par un sales). */
 function chargerEquipe() {
+  /* `sales` est un rôle TECHNIQUE, jamais une valeur stockée : dans
+     _meta/team_members, un commercial porte `setter`, `closer` ou
+     `closer_setter` — Élodie est `closer_setter`. Filtrer sur `sales` ne
+     laissait donc passer que les admins, et la principale utilisatrice du
+     canal était absente de son propre sélecteur.
+     Même liste que dispo-core.js et alteore-flow.js, DEPARTED compris :
+     Guillaume est parti, son historique reste en base mais son nom ne doit
+     apparaître dans aucun choix. */
+  var ROLES_ATTRIBUABLES = { admin: 1, sales: 1, setter: 1, closer: 1, closer_setter: 1 };
+  var DEPARTED = { guillaume: 1 };
   var l = window.TEAM_MEMBERS_ACTIVE || [];
   STATE.equipe = l
-    .filter(function (m) { return m && (m.role === 'sales' || m.role === 'admin'); })
-    .map(function (m) { return { slug: m.slug, nom: m.displayName || m.shortName || m.slug }; });
+    .filter(function (m) {
+      return m && m.slug && !DEPARTED[m.slug] && ROLES_ATTRIBUABLES[m.role];
+    })
+    /* Prénom court d'abord : « Elodie Vidotto Siarri » déborderait d'un menu
+       où tous les autres tiennent en un mot. */
+    .map(function (m) { return { slug: m.slug, nom: m.shortName || m.displayName || m.slug }; });
   var c = convActive();
   if (c) rendreEntete(c);
 }
