@@ -46,9 +46,15 @@ body.embed-mode .form-container{
   transition:height .4s var(--ease);
 }
 .card{position:absolute;top:0;left:0;width:100%;opacity:0;transform:translateY(40px);transition:opacity .45s var(--ease),transform .45s var(--ease);pointer-events:none}
-.card.active{opacity:1;transform:translateY(0);pointer-events:auto;position:relative}
 .card.exit-up{opacity:0;transform:translateY(-60px)}
 .card.exit-down{opacity:0;transform:translateY(60px)}
+/* .active est déclaré APRÈS exit-up / exit-down : à spécificité égale (0,2,0)
+   c'est l'ordre source qui tranche. showThankYou() posait exit-up sur TOUTES
+   les cards — y compris la card de remerciement — avant de lui ajouter active :
+   opacity:0 l'emportait, la card restait invisible et le visiteur se retrouvait
+   devant un écran noir en fin de formulaire (nav masquée, fond #0a0a14).
+   Corrigé aussi côté JS ; cette règle est la ceinture de sécurité. */
+.card.active{opacity:1;transform:translateY(0);pointer-events:auto;position:relative}
 /* Card content */
 .card-num{font-size:13px;font-weight:700;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .card-num span{font-size:11px;color:var(--text-muted);font-weight:400}
@@ -1078,12 +1084,21 @@ function findAndUpdateLead(contact, callback) {
 }
 
 function showThankYou(msg){
+// Le contenu qui remplace le formulaire est beaucoup plus court : si le
+// visiteur avait scrollé (mode page surtout), il resterait sur une zone vide.
+try{window.scrollTo(0,0);}catch(e){}
 var ty=document.getElementById('card-thankyou');
 if(ty){
 // ── Mode cards (Typeform-style) ─────────────────────────────
-document.querySelectorAll('.card').forEach(function(c){c.classList.remove('active');c.classList.add('exit-up');});
+// On sort toutes les cards SAUF celle de remerciement : lui poser exit-up
+// puis active la laissait à opacity:0 (cf. commentaire CSS) → écran noir.
+document.querySelectorAll('.card').forEach(function(c){
+c.classList.remove('active','exit-down');
+if(c!==ty)c.classList.add('exit-up');
+});
 var msgEl=ty.querySelector('.thankyou-msg');
 if(msgEl)msgEl.textContent=msg;
+ty.classList.remove('exit-up','exit-down');
 ty.classList.add('active');
 var navBar=document.getElementById('navBar');if(navBar)navBar.style.display='none';
 var navHint=document.getElementById('navHint');if(navHint)navHint.style.display='none';
