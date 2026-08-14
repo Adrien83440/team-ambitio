@@ -356,7 +356,7 @@
     }
     .kanban-col[data-prog="bp12-12"] .col-prog-mark{background:var(--prog-1)}
     .kanban-col[data-prog="bp12-24"] .col-prog-mark{background:var(--prog-2)}
-    .kanban-col[data-prog="bp6"] .col-prog-mark{background:var(--prog-3)}
+    /* --prog-3 était la pastille de « bp6 », colonne retirée le 13/08/2026. */
     .kanban-col[data-prog="elite"] .col-prog-mark{background:var(--prog-4)}
     .kanban-col[data-prog="custom"] .col-prog-mark{background:var(--prog-5)}
     .col-sub{
@@ -1298,7 +1298,9 @@
     <option value="">Tous les programmes</option>
     <option value="BP 12 Mois - 12C">BP 12M — 12C</option>
     <option value="BP 12 Mois - 24C">BP 12M — 24C</option>
-    <option value="BP 6 Mois - 6C">BP 6M — 6C</option>
+    <!-- « BP 6 Mois - 6C » retiré le 13/08/2026 : programme arrêté, plus aucun
+         client dessus. Les dossiers d'archive qui le portent encore restent
+         visibles (colonne « Autres programmes » du kanban). -->
     <option value="Elite - 12 Mois - 24C">Elite 12M — 24C</option>
     <option value="Elite NEW - 6 Mois - 24C">Elite NEW 6M — 24C</option>
   </select>
@@ -1379,7 +1381,7 @@
           <select id="nc-programme">
             <option value="BP 12 Mois - 12C">BP 12 Mois - 12C</option>
             <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
-            <option value="BP 6 Mois - 6C">BP 6 Mois - 6C</option>
+            <!-- « BP 6 Mois - 6C » retiré le 13/08/2026 : programme arrêté. -->
             <option value="Elite - 12 Mois - 24C">Elite - 12 Mois - 24C</option>
             <option value="Elite NEW - 6 Mois - 24C">Elite NEW - 6 Mois - 24C</option>
           </select>
@@ -1419,7 +1421,9 @@
           <select id="ec-programme">
             <option value="BP 12 Mois - 12C">BP 12 Mois - 12C</option>
             <option value="BP 12 Mois - 24C">BP 12 Mois - 24C</option>
-            <option value="BP 6 Mois - 6C">BP 6 Mois - 6C</option>
+            <!-- « BP 6 Mois - 6C » retiré le 13/08/2026 : programme arrêté.
+                 editClient() réinjecte une option « (archivé) » à la volée si
+                 un dossier porte encore un programme absent de cette liste. -->
             <option value="Elite - 12 Mois - 24C">Elite - 12 Mois - 24C</option>
             <option value="Elite NEW - 6 Mois - 24C">Elite NEW - 6 Mois - 24C</option>
           </select>
@@ -1516,7 +1520,9 @@ let _viewMonth = new Date().getMonth(); // 0-indexed
    Les programmes existants gardent exactement leur quota :
      BP 12 Mois - 12C      → 12/12 = 1
      BP 12 Mois - 24C      → 24/12 = 2
-     BP 6 Mois - 6C        →  6/6  = 1
+     BP 6 Mois - 6C        →  6/6  = 1   (programme arrêté le 13/08/2026 ;
+                                          la règle reste valable pour les
+                                          dossiers d'archive qui le portent)
      Elite - 12 Mois - 24C → 24/12 = 2
      Elite NEW - 6 Mois - 24C → 24/6 = 4   (nouveau)
    Libellé non reconnu → on retombe sur l'ancienne règle. */
@@ -1935,7 +1941,9 @@ function renderKanban(){
   const PROG_CONFIG = [
     { key: 'bp12-12', prog: 'BP 12 Mois - 12C',      title: 'BP 12 Mois',               sub: '12 coachings sur 12 mois' },
     { key: 'bp12-24', prog: 'BP 12 Mois - 24C',      title: 'BP 12 Mois · Premium',     sub: '24 coachings sur 12 mois' },
-    { key: 'bp6',     prog: 'BP 6 Mois - 6C',        title: 'BP 6 Mois',                sub: '6 coachings sur 6 mois' },
+    /* « BP 6 Mois - 6C » retiré le 13/08/2026 : programme arrêté, plus aucun
+       client dessus. Pas de perte d'affichage — un dossier qui le porterait
+       encore bascule automatiquement dans la colonne « Autres programmes ». */
     { key: 'elite',   prog: 'Elite - 12 Mois - 24C', title: 'Elite ★',                  sub: '24 coachings sur 12 mois' },
     /* Nouveau format d'accompagnement (31/07/2026) : même volume, moitié
        moins de temps — 4 séances par mois. */
@@ -5175,7 +5183,21 @@ function editClient(id){
   document.getElementById('ec-notes').value    = c.clientNotes || '';
 
   const sel = document.getElementById('ec-programme');
-  sel.value = c.programme || 'BP 12 Mois - 12C';
+  /* Un dossier peut porter un programme retiré de la liste (ex. « BP 6 Mois - 6C »,
+     arrêté le 13/08/2026). Sans option correspondante, sel.value tombe à '' et
+     la sauvegarde écraserait silencieusement le programme du client. On réinjecte
+     donc l'ancienne valeur, marquée « (archivé) », le temps de l'édition. */
+  const progActuel = c.programme || 'BP 12 Mois - 12C';
+  const dejaListe = Array.from(sel.options).some(o => o.value === progActuel);
+  if(!dejaListe){
+    sel.querySelectorAll('option[data-legacy]').forEach(o => o.remove());
+    const legacy = document.createElement('option');
+    legacy.value = progActuel;
+    legacy.textContent = progActuel + ' (archivé)';
+    legacy.dataset.legacy = '1';
+    sel.insertBefore(legacy, sel.firstChild);
+  }
+  sel.value = progActuel;
 
   document.getElementById('editClientModal').classList.add('show');
 }
