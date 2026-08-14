@@ -355,6 +355,14 @@ var FIELD_DEFS={
   lu_approuve:    {label:'Lu et approuvé',  icon:'☑️',  type:'checkbox',  w:200, h:28, color:'#a855f7'},
   paraphe:        {label:'Paraphe',         icon:'✏️',  type:'paraphe',   w:80,  h:50, color:'#ec4899'},
   signature:      {label:'Signature',       icon:'✍️',  type:'signature', w:240, h:80, color:'#ef4444'},
+  /* Texte libre (13/08/2026) — le signataire écrit ce qu'il veut, sur plusieurs
+     lignes. Deux différences avec les autres champs :
+       · sa valeur est indexée par f.id et non par fieldType, pour que deux
+         zones posées sur le même contrat aient chacune leur contenu ;
+       · il naît NON obligatoire (voir addField), un commentaire libre étant
+         le plus souvent facultatif.
+     Le label personnalisé sert de consigne affichée dans la zone vide. */
+  texte_libre:    {label:'Texte libre',     icon:'📝',  type:'textarea',  w:300, h:72, color:'#0ea5e9'},
 };
 
 /* ═══ UTILS ═══ */
@@ -741,7 +749,10 @@ function addField(type){
     fieldType:type,
     label:def.label,
     type:def.type,
-    required:true,
+    /* Le texte libre naît facultatif : un champ obligatoire oublié bloque le
+       bouton de signature sans que le client comprenne pourquoi. Le toggle
+       « Obligatoire » reste disponible dans le panneau de droite. */
+    required:type!=='texte_libre',
     signerRole:1,
     page:currentPage,
     x:60,y:100+(currentTpl.fields||[]).filter(function(ff){return ff.page===currentPage;}).length*40,

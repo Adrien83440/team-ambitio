@@ -320,11 +320,22 @@ function render(r,docId){
   // Filled fields
   var fv=r.fieldValues||{};
   var fieldLabels={nom_prenom:'Nom Prénom',email:'Email',telephone:'Téléphone',adresse:'Adresse',entreprise:'Entreprise',type_entreprise:'Type entreprise',siege_social:'Siège social',siret:'SIRET',date_signature:'Date signature',case_cocher:'Case à cocher',lu_approuve:'Lu et approuvé'};
+  /* Les textes libres sont indexés par identifiant de champ et non par type
+     (deux zones sur un contrat ont chacune leur contenu). Sans cette table, le
+     certificat afficherait « f_k3j9x2 » en guise de libellé. */
+  var labelsById={};
+  fields.forEach(function(f){
+    if(f&&f.id)labelsById[f.id]=f.label||'Texte libre';
+  });
   var ffH='';
   Object.keys(fv).forEach(function(k){
     var val=fv[k];
     if(typeof val==='boolean')val=val?'✅ Oui':'❌ Non';
-    ffH+='<div class="info-item"><div class="info-label">'+(fieldLabels[k]||k)+'</div><div class="info-value">'+esc(String(val))+'</div></div>';
+    val=String(val);
+    /* Un texte libre peut contenir des retours à la ligne : on les conserve. */
+    var multi=val.indexOf('\n')>=0;
+    ffH+='<div class="info-item"><div class="info-label">'+esc(labelsById[k]||fieldLabels[k]||k)+'</div>'
+      +'<div class="info-value"'+(multi?' style="white-space:pre-wrap"':'')+'>'+esc(val)+'</div></div>';
   });
   document.getElementById('filledFields').innerHTML=ffH||'<div style="color:#94a3b8;font-size:13px">Aucun champ.</div>';
 }

@@ -45,6 +45,12 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
 .field-overlay{position:absolute;border-radius:3px;overflow:visible;}
 .field-overlay input[type=text],.field-overlay input[type=email],.field-overlay input[type=tel]{width:100%;height:100%;border:1.5px solid rgba(99,102,241,.5);border-radius:3px;background:rgba(255,255,255,.9);padding:0 4px;font-family:var(--fm);color:var(--fg);outline:none;}
 .field-overlay input:focus{border-color:#4f46e5;box-shadow:0 0 0 2px rgba(99,102,241,.15);}
+/* Texte libre : même boîte que les autres champs, mais multi-ligne. Pas de
+   resize manuel — la zone doit rester calée sur le cadre dessiné dans le PDF,
+   sinon ce qui est saisi ne correspond plus à ce qui sera imprimé. */
+.field-overlay textarea{width:100%;height:100%;border:1.5px solid rgba(14,165,233,.55);border-radius:3px;background:rgba(255,255,255,.9);padding:2px 4px;font-family:var(--fm);color:var(--fg);outline:none;resize:none;line-height:1.25;overflow:auto;}
+.field-overlay textarea:focus{border-color:#0284c7;box-shadow:0 0 0 2px rgba(14,165,233,.18);}
+.field-overlay textarea:disabled{color:var(--fg);opacity:1;}
 .field-overlay .sig-zone{width:100%;height:100%;border:2px dashed rgba(99,102,241,.4);border-radius:4px;background:rgba(255,255,255,.93);display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}
 .field-overlay .sig-zone.filled{border-style:solid;border-color:var(--green);background:rgba(255,255,255,.97);}
 .field-overlay .sig-zone .sig-text{font-family:var(--fsig);color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px;}
@@ -143,6 +149,10 @@ body{background:var(--bg);color:var(--fg);font-family:var(--fm);min-height:100vh
 var db=firebase.firestore(),REQ=null,REQ_ID=null,TPL=null;
 var pdfDoc=null,pdfBytes=null,curPage=1,totalPages=1;
 var tplScale=1.2,renderScale=1;
+/* Taille visée pour le texte libre, en points PDF. C'est un plafond : si le
+   texte saisi ne tient pas dans la zone, drawFreeText() descend jusqu'à 6 pt
+   avant de couper. */
+var TL_FONT_PT=9;
 var fieldValues={},sigText='',parapheText='';
 // Multi-signataire
 var CURRENT_SIGNER=null;      // référence à signers[N] du signataire courant
@@ -417,6 +427,18 @@ function renderPage(){
 }
 function goPdfPage(d){var p=curPage+d;if(p>=1&&p<=totalPages){curPage=p;renderPage();}}
 
+/* Clé de stockage d'une valeur dans fieldValues.
+   Historiquement tout est indexé par fieldType : « Nom Prénom » posé sur trois
+   pages doit afficher la même valeur partout, c'est voulu. Le texte libre est
+   l'exception — deux zones sur un même contrat doivent avoir chacune leur
+   contenu — donc il s'indexe sur l'identifiant de l'instance. Les champs
+   existants ne changent pas de clé : les requêtes déjà envoyées ou signées
+   restent lisibles telles quelles. */
+function fieldKey(f){
+  if(f.fieldType==='texte_libre'&&f.id)return f.id;
+  return f.fieldType;
+}
+
 function renderOverlays(){
   var layer=document.getElementById('fieldsLayer');
   var fields=REQ.fields||[];
@@ -425,7 +447,8 @@ function renderOverlays(){
   fields.forEach(function(f){
     if(f.page!==curPage)return;
     var x=f.x*r,y=f.y*r,w=f.w*r,fh=f.h*r;
-    var val=fieldValues[f.fieldType]||'';
+    var fkey=fieldKey(f);
+    var val=fieldValues[fkey]||'';
     // Multi-signataire : un champ "appartient" au signataire 1 ou 2 selon signerRole
     var fRole=f.signerRole===2?2:1;   // défaut 1
     var myRole=IS_COSIGNER?2:1;
@@ -463,14 +486,24 @@ function renderOverlays(){
       }
     }else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
       if(belongsToMe){
-        h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[f.fieldType]?'checked':'')+' onchange="fieldValues[\''+f.fieldType+'\']=this.checked;updateBtn()"/></div>';
+        h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[fkey]?'checked':'')+' onchange="fieldValues[\''+fkey+'\']=this.checked;updateBtn()"/></div>';
       } else {
-        h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[f.fieldType]?'checked':'')+' disabled/></div>';
+        h+='<div class="cb-wrap"><input type="checkbox" '+(fieldValues[fkey]?'checked':'')+' disabled/></div>';
+      }
+    }else if(f.fieldType==='texte_libre'){
+      /* La taille à l'écran suit celle visée dans le PDF pour que le signataire
+         voie à peu près le même découpage. Le PDF reste l'autorité : il
+         réajuste tout seul si le texte déborde. */
+      var tfs=Math.max(7,Math.min(TL_FONT_PT*renderScale,14));
+      if(belongsToMe){
+        h+='<textarea data-tlkey="'+esc(fkey)+'" placeholder="'+esc(f.label||'Texte libre')+'" style="font-size:'+tfs+'px">'+esc(val)+'</textarea>';
+      } else {
+        h+='<textarea style="font-size:'+tfs+'px" readonly disabled>'+esc(val)+'</textarea>';
       }
     }else{
       var fs=Math.min(fh*.55,13);
       if(belongsToMe){
-        h+='<input type="text" value="'+esc(val)+'" placeholder="'+esc(f.label)+'" style="font-size:'+fs+'px" oninput="fieldValues[\''+f.fieldType+'\']=this.value;updateBtn()"/>';
+        h+='<input type="text" value="'+esc(val)+'" placeholder="'+esc(f.label)+'" style="font-size:'+fs+'px" oninput="fieldValues[\''+fkey+'\']=this.value;updateBtn()"/>';
       } else {
         h+='<input type="text" value="'+esc(val)+'" style="font-size:'+fs+'px" readonly disabled/>';
       }
@@ -479,6 +512,17 @@ function renderOverlays(){
   });
   layer.innerHTML=h;
 }
+
+/* Saisie du texte libre : délégation d'événement plutôt qu'un oninput inline.
+   La clé est un identifiant de champ, on évite de l'injecter dans du HTML avec
+   des quotes imbriquées. On ne re-rend surtout PAS la couche : ça ferait
+   perdre le focus et la position du curseur à chaque frappe. */
+document.addEventListener('input',function(e){
+  var t=e.target;
+  if(!t||!t.dataset||!t.dataset.tlkey)return;
+  fieldValues[t.dataset.tlkey]=t.value;
+  updateBtn();
+});
 
 /* ═══ SIGNATURE / PARAPHE TYPED ═══ */
 function onSigType(){
@@ -498,12 +542,16 @@ function updateBtn(){
     // Ne valider que les champs du signataire courant
     var fRole=f.signerRole===2?2:1;
     if(fRole!==myRole)return;
-    if(done[f.fieldType])return;done[f.fieldType]=true;
+    /* Dédoublonnage par clé : les champs sémantiques posés plusieurs fois ne
+       sont validés qu'une fois, alors que deux textes libres sont deux
+       exigences distinctes (clés différentes). */
+    var fkey=fieldKey(f);
+    if(done[fkey])return;done[fkey]=true;
     if(f.required===false)return;
     if(f.fieldType==='signature'&&!sigText.trim())ok=false;
     else if(f.fieldType==='paraphe'&&!parapheText.trim())ok=false;
-    else if((f.fieldType==='case_cocher'||f.fieldType==='lu_approuve')&&!fieldValues[f.fieldType])ok=false;
-    else if(f.fieldType!=='signature'&&f.fieldType!=='paraphe'&&f.fieldType!=='case_cocher'&&f.fieldType!=='lu_approuve'&&!(fieldValues[f.fieldType]||'').trim())ok=false;
+    else if((f.fieldType==='case_cocher'||f.fieldType==='lu_approuve')&&!fieldValues[fkey])ok=false;
+    else if(f.fieldType!=='signature'&&f.fieldType!=='paraphe'&&f.fieldType!=='case_cocher'&&f.fieldType!=='lu_approuve'&&!(fieldValues[fkey]||'').trim())ok=false;
   });
   document.getElementById('submitBtn').disabled=!(ok&&document.getElementById('acceptCheck').checked);
 }
@@ -681,6 +729,56 @@ function saveChunks(b64){
 }
 
 /* ═══ PDF GEN (pdf-lib) ═══ */
+/* Découpe un texte en lignes qui tiennent dans maxW, à la taille donnée.
+   Respecte les retours à la ligne saisis par le signataire, et coupe les mots
+   plus larges que la boîte (URL, référence sans espace) plutôt que de les
+   laisser déborder de la page. */
+function wrapPdfText(text,font,size,maxW){
+  var out=[];
+  String(text).split(/\r?\n/).forEach(function(para){
+    var words=para.split(/\s+/).filter(function(w){return w.length;});
+    if(!words.length){out.push('');return;}
+    var line='';
+    words.forEach(function(w){
+      while(font.widthOfTextAtSize(w,size)>maxW&&w.length>1){
+        var cut=w.length;
+        while(cut>1&&font.widthOfTextAtSize(w.slice(0,cut),size)>maxW)cut--;
+        if(line){out.push(line);line='';}
+        out.push(w.slice(0,cut));
+        w=w.slice(cut);
+      }
+      var test=line?line+' '+w:w;
+      if(font.widthOfTextAtSize(test,size)<=maxW)line=test;
+      else{if(line)out.push(line);line=w;}
+    });
+    out.push(line);
+  });
+  return out;
+}
+
+/* Appose un texte libre dans sa zone. On cherche la plus grande taille, de
+   TL_FONT_PT jusqu'à 6 pt, dont le texte découpé tient dans la hauteur. Si
+   même 6 pt déborde, on écrit ce qui rentre et on marque la coupure par « … » —
+   jamais de texte qui déborde par-dessus le contrat. */
+function drawFreeText(pg,P,font,v,px,py,pw,pfh){
+  var maxW=Math.max(4,pw-4),size=TL_FONT_PT,lh=size*1.25,lines=wrapPdfText(v,font,size,maxW);
+  while(size>6&&lines.length*lh>pfh-2){
+    size-=0.5;lh=size*1.25;
+    lines=wrapPdfText(v,font,size,maxW);
+  }
+  var maxLines=Math.max(1,Math.floor((pfh-2)/lh));
+  if(lines.length>maxLines){
+    lines=lines.slice(0,maxLines);
+    lines[maxLines-1]=String(lines[maxLines-1]).replace(/.$/,'')+'…';
+  }
+  /* Première ligne calée en haut de la zone, comme dans le champ à l'écran. */
+  var ty=py+pfh-lh;
+  for(var i=0;i<lines.length;i++){
+    if(lines[i])pg.drawText(lines[i],{x:px+2,y:ty,size:size,font:font,color:P.rgb(0,0,0)});
+    ty-=lh;
+  }
+}
+
 async function genPdf(){
   var P=window.PDFLib,doc=await P.PDFDocument.load(pdfBytes);
   var font=await doc.embedFont(P.StandardFonts.Helvetica);
@@ -709,15 +807,19 @@ async function genPdf(){
     var px=f.x/tplScale,py=ph-f.y/tplScale-f.h/tplScale,pw=f.w/tplScale,pfh=f.h/tplScale;
     var fRole=f.signerRole===2?2:1;
     var isMine=(fRole===myRole);
+    var fkey=fieldKey(f);
 
     // Champs du signataire courant : écrits avec ses données
     if(isMine){
       if(f.fieldType==='signature'&&sigImg)pg.drawImage(sigImg,{x:px,y:py,width:pw,height:pfh});
       else if(f.fieldType==='paraphe'&&parImg)pg.drawImage(parImg,{x:px,y:py,width:pw,height:pfh});
       else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
-        if(fieldValues[f.fieldType])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
+        if(fieldValues[fkey])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
+      }else if(f.fieldType==='texte_libre'){
+        var tv=fieldValues[fkey]||'';if(!tv)return;
+        drawFreeText(pg,P,font,tv,px,py,pw,pfh);
       }else{
-        var v=fieldValues[f.fieldType]||'';if(!v)return;
+        var v=fieldValues[fkey]||'';if(!v)return;
         pg.drawText(v,{x:px+2,y:py+pfh*.25,size:Math.min(pfh*.65,11),font:font,color:P.rgb(0,0,0)});
       }
       return;
@@ -733,9 +835,12 @@ async function genPdf(){
     if(f.fieldType==='signature'&&prevSig)pg.drawImage(prevSig,{x:px,y:py,width:pw,height:pfh});
     else if(f.fieldType==='paraphe'&&prevPar)pg.drawImage(prevPar,{x:px,y:py,width:pw,height:pfh});
     else if(f.fieldType==='case_cocher'||f.fieldType==='lu_approuve'){
-      if(prevFieldValues[f.fieldType])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
+      if(prevFieldValues[fkey])pg.drawText('X',{x:px+pw*.3,y:py+pfh*.15,size:Math.min(pfh*.8,14),font:fontB,color:P.rgb(0,0,0)});
+    }else if(f.fieldType==='texte_libre'){
+      var ptv=prevFieldValues[fkey]||'';if(!ptv)return;
+      drawFreeText(pg,P,font,ptv,px,py,pw,pfh);
     }else{
-      var pv=prevFieldValues[f.fieldType]||'';if(!pv)return;
+      var pv=prevFieldValues[fkey]||'';if(!pv)return;
       pg.drawText(pv,{x:px+2,y:py+pfh*.25,size:Math.min(pfh*.65,11),font:font,color:P.rgb(0,0,0)});
     }
   });
