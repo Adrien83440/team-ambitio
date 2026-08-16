@@ -1234,6 +1234,7 @@ function renderForm() {
 }
 
 /* ═══ PRE-FILL FROM ALTEOFORMS ═══ */
+var _autoSubmitTimer = null;
 function prefillFromForm() {
   if (!_fromForm && !_formPrenom && !_formEmail) return;
   // Pre-fill fields
@@ -1249,12 +1250,19 @@ function prefillFromForm() {
   if (phoneEl && _formTel) phoneEl.value = _formTel;
 
   // If all required fields are filled, auto-submit
-  if (_fromForm && _formPrenom && _formEmail) {
+  if (_fromForm && _formPrenom && _formEmail && !_submitting) {
     // Small delay to let user see what's filled, then auto-submit
     var btn = document.getElementById('confirmBtn');
     if (btn) {
       btn.textContent = 'Confirmation automatique…';
-      setTimeout(function() { handleSubmit(); }, 800);
+      // prefillFromForm() est rappelé à CHAQUE passage à l'étape 4
+      // (goStep(4)) : sans ce clearTimeout, un aller-retour étape 3 ↔ 4
+      // empilait autant d'auto-submits que d'allers-retours.
+      if (_autoSubmitTimer) clearTimeout(_autoSubmitTimer);
+      _autoSubmitTimer = setTimeout(function() {
+        _autoSubmitTimer = null;
+        handleSubmit();
+      }, 800);
     }
   }
 }
@@ -1262,7 +1270,148 @@ function prefillFromForm() {
 /* ═══════════════════════════════════════════════════
    STEP 5 — SUBMIT BOOKING
    ═══════════════════════════════════════════════════ */
+
+/* ── VERROU DE SOUMISSION ────────────────────────────────────────────────
+   Incident 08/2026 : un même client s'est retrouvé avec 10 RDV coaching sur
+   le créneau 15:00, chacun avec son propre événement Google Calendar et son
+   propre lien Meet. Cause : le bouton n'était désactivé qu'APRÈS l'aller-
+   retour réseau vers /api/booking-check-coaching-quota (plusieurs secondes
+   sur un cold start Vercel). Pendant ce temps le bouton restait cliquable et
+   chaque clic relançait la soumission de zéro, donc une écriture Firestore
+   de plus — et un trigger onBookingCreated de plus.
+
+   Le verrou est posé AVANT toute opération asynchrone. Il n'est relâché que
+   si l'écriture n'a pas été engagée (champ manquant, quota bloquant), ou si
+   l'écriture a échoué. Une fois la réservation partie, le bouton reste mort
+   jusqu'à l'écran de confirmation.
+─────────────────────────────────────────────────────────────────────────── */
+var _submitting = false;    // une soumission est en cours
+var _writeEngaged = false;  // l'écriture Firestore a été lancée
+
+function lockConfirmBtn(label) {
+  var btn = document.getElementById('confirmBtn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = label || 'Réservation en cours…';
+}
+
+function unlockConfirmBtn() {
+  var btn = document.getElementById('confirmBtn');
+  if (!btn) return;
+  btn.disabled = false;
+  btn.textContent = 'Confirmer le rendez-vous';
+}
+
 async function handleSubmit() {
+  if (_submitting) return;  // 2e clic (ou auto-submit concurrent) : ignoré
+  _submitting = true;
+  _writeEngaged = false;
+  lockConfirmBtn();
+
+  try {
+    await submitBooking();
+  } catch (e) {
+    console.error('[booking] submit:', e);
+    _writeEngaged = false;
+    alert('Erreur : ' + ((e && e.message) ? e.message : e));
+  }
+
+  // Écriture jamais lancée (validation refusée, quota bloquant, erreur) →
+  // on rend la main. Sinon le verrou est géré par le .catch() de l'écriture.
+  if (!_writeEngaged) {
+    _submitting = false;
+    unlockConfirmBtn();
+  }
+}
+
+/* ── ID DÉTERMINISTE DE CRÉNEAU (anti-doublon) ───────────────────────────
+   Deuxième filet, indépendant du verrou ci-dessus : il couvre ce que le
+   verrou ne peut pas voir — un second onglet, un retour arrière, un retry
+   réseau, une page rechargée puis resoumise.
+
+   Un même prospect, sur un même créneau, chez un même expert produit
+   TOUJOURS le même identifiant de document. Une resoumission retombe donc
+   sur le document déjà créé au lieu d'en créer un nouveau : comme
+   onBookingCreated est un trigger onCreate, aucun second événement Google
+   Calendar, aucun second lien Meet, aucun second email de confirmation.
+
+   Repli sur .add() (ID aléatoire) quand aucune identité de prospect n'est
+   exploitable : deux inconnus sur un créneau ouvert (slotOpen) doivent
+   rester deux réservations distinctes.
+─────────────────────────────────────────────────────────────────────────── */
+function bkIdSlug(s) {
+  return String(s || '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+// djb2 — suffisant ici : on cherche une clé stable, pas une garantie
+// cryptographique. La collision éventuelle serait rattrapée par la
+// comparaison d'email faite avant de considérer un doc comme le nôtre.
+function bkIdHash(s) {
+  var h = 5381;
+  for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+function bkSlotDocId(b) {
+  var who = (b.prospect && b.prospect.email) ? String(b.prospect.email) : '';
+  if (!who) {
+    who = (((b.prospect && b.prospect.prenom) || '') + ' ' +
+           ((b.prospect && b.prospect.nom) || '')).trim();
+  }
+  who = who.toLowerCase().trim();
+  if (!who || !b.personId || !b.date || !b.time) return null;  // → repli .add()
+  var raw = b.personId + '|' + b.date + '|' + b.time + '|' + who;
+  return 'sl-' + bkIdSlug(b.date + '-' + b.time) + '-' + bkIdHash(raw);
+}
+
+/* Crée la réservation en garantissant l'unicité (personId + date + heure +
+   prospect). Résout { ref, existed } — existed:true = le document était déjà
+   là, on n'a rien écrit. */
+function bkCreateBooking(booking) {
+  var slotId = bkSlotDocId(booking);
+  if (!slotId) {
+    return db.collection('bookings').add(booking).then(function(ref) {
+      return { ref: ref, existed: false };
+    });
+  }
+
+  var ref = db.collection('bookings').doc(slotId);
+  return ref.get().then(function(snap) {
+    if (snap.exists) {
+      var ex = snap.data() || {};
+      // Créneau réservé PUIS annulé par ce même prospect : c'est une vraie
+      // nouvelle réservation. On ne peut pas réécrire le doc annulé (les
+      // rules n'autorisent l'update qu'aux rôles internes) et il ne
+      // redéclencherait pas onCreate — donc ID neuf.
+      if (ex.status === 'cancelled') {
+        return db.collection('bookings').add(booking).then(function(r2) {
+          return { ref: r2, existed: false };
+        });
+      }
+      return { ref: ref, existed: true };  // doublon : rien à écrire
+    }
+    return ref.set(booking).then(function() {
+      return { ref: ref, existed: false };
+    });
+  }).catch(function(err) {
+    // Course entre deux onglets : l'autre a créé le document une fraction de
+    // seconde avant, notre set() devient un update → refusé par les rules
+    // pour un visiteur public. C'est exactement le doublon qu'on voulait
+    // éviter : on adopte le document existant au lieu de remonter l'erreur.
+    if (err && err.code === 'permission-denied') {
+      return ref.get().then(function(s2) {
+        if (s2.exists) return { ref: ref, existed: true };
+        throw err;
+      });
+    }
+    throw err;
+  });
+}
+
+async function submitBooking() {
   var prenomEl = document.getElementById('fPrenom');
   var nomEl = document.getElementById('fNom');
   var prenom = prenomEl ? prenomEl.value.trim() : '';
@@ -1448,19 +1597,36 @@ async function handleSubmit() {
   }
 
   var btn = document.getElementById('confirmBtn');
-  btn.disabled = true;
-  btn.textContent = 'Réservation en cours…';
+  lockConfirmBtn();
 
-  db.collection('bookings').add(booking).then(function(docRef) {
+  // À partir d'ici l'écriture part : le verrou ne sera plus relâché par
+  // handleSubmit(), seulement par le .catch() ci-dessous en cas d'échec.
+  _writeEngaged = true;
+
+  bkCreateBooking(booking).then(function(res) {
+    var docRef = res.ref;
+    var alreadyExisted = res.existed === true;
+
     // Stocker les infos de la résa pour générer un .ics riche
     S.confirmedBookingId = docRef.id;
     S.confirmedBooking = booking;
     S.confirmedMeetLink = null;
 
+    if (alreadyExisted) {
+      // Ce prospect avait déjà réservé ce créneau (double soumission passée
+      // au travers du verrou : autre onglet, page rechargée…). Le RDV existe,
+      // son event Calendar et son email aussi — on réaffiche simplement la
+      // confirmation, sans rien recréer ni retoucher au lead.
+      console.warn('[booking] soumission en doublon ignorée: ' + docRef.id);
+    }
+
     // ── Replanification : l'ancien RDV passe en outcome "replanifie" ──
     // (status legacy 'cancelled' + rescheduled:true → exclu des annulations,
     //  le nouveau RDV le remplace dans tous les rapports).
-    if (_rescheduleOld) {
+    // `!alreadyExisted` : sur une soumission en doublon, l'ancien RDV a déjà
+    // été basculé en "replanifie" au premier passage. Le refaire ajouterait
+    // une seconde entrée dans outcomeHistory et réécrirait la timeline lead.
+    if (_rescheduleOld && !alreadyExisted) {
       var _now = new Date();
       var _me = firebase.auth().currentUser;
       db.collection('bookings').doc(_rescheduleId).update({
@@ -1595,6 +1761,10 @@ async function handleSubmit() {
 
     showConfirmation(prenom, email);
   }).catch(function(err) {
+    // Échec de l'écriture : on relâche le verrou pour permettre un nouvel
+    // essai (sinon le client reste bloqué sur un bouton mort).
+    _submitting = false;
+    _writeEngaged = false;
     btn.disabled = false;
     btn.textContent = 'Confirmer le rendez-vous';
     alert('Erreur : ' + err.message);
