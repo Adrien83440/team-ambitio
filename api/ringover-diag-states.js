@@ -173,10 +173,71 @@ module.exports = async (req, res) => {
   const seuil5 = out.filter((c) => (Number(c.incall_duration) || 0) >= 5).length;
   const isAnswered = out.filter((c) => c.is_answered === true).length;
 
+  /* ── SIMULATION DES RÈGLES CANDIDATES (2ᵉ passage, 17/08) ──────────
+     Le discriminant est apparu dans ringing_duration : une douzaine
+     d'appels sonnent entre 23,1 et 23,9 s avant d'être « décrochés » puis
+     de durer 5 s. Un humain ne décroche pas douze fois à la même
+     demi-seconde — c'est le délai fixe de bascule vers la messagerie de
+     l'opérateur. La signature d'un répondeur est donc « sonnerie longue,
+     conversation courte ».
+     On chiffre plusieurs règles plutôt que d'en choisir une à l'intuition,
+     et on liste ce que chacune retire — un décroché réel écarté par erreur
+     doit se voir. */
+  function ring(c) { return Number(c.ringing_duration) || 0; }
+  function incall(c) { return Number(c.incall_duration) || 0; }
+
+  const REGLES = [
+    { id: 'A_actuelle', desc: 'conversation ≥ 5 s (règle du funnel aujourd\'hui)',
+      f: (c) => incall(c) >= 5 },
+    { id: 'B_amd', desc: '≥ 5 s et amd ≠ true — la détection Ringover seule',
+      f: (c) => incall(c) >= 5 && c.amd !== true },
+    { id: 'C_sonnerie', desc: '≥ 5 s, sauf sonnerie ≥ 15 s suivie de moins de 15 s de conversation',
+      f: (c) => incall(c) >= 5 && !(ring(c) >= 15 && incall(c) < 15) },
+    { id: 'D_combinee', desc: 'C + amd ≠ true — ceinture et bretelles',
+      f: (c) => incall(c) >= 5 && c.amd !== true && !(ring(c) >= 15 && incall(c) < 15) },
+    { id: 'E_seuil10', desc: 'conversation ≥ 10 s — seuil brut, sans signature',
+      f: (c) => incall(c) >= 10 },
+    { id: 'F_seuil30', desc: 'conversation ≥ 30 s — seuil brut haut',
+      f: (c) => incall(c) >= 30 },
+  ];
+
+  const base = out.filter((c) => incall(c) >= 5);
+  const simulation = {};
+  REGLES.forEach((r) => {
+    const gardes = out.filter(r.f);
+    /* Ce que la règle retire par rapport à l'actuelle : c'est là qu'on
+       vérifie qu'on n'écarte pas de vraies conversations. */
+    const retires = base.filter((c) => !r.f(c))
+      .map((c) => ({ sonnerie: Math.round(ring(c) * 10) / 10, conversation: incall(c), amd: c.amd === true }))
+      .sort((a, b) => b.conversation - a.conversation);
+    simulation[r.id] = {
+      description: r.desc,
+      decroches: gardes.length,
+      taux: out.length ? Math.round(gardes.length / out.length * 1000) / 10 : null,
+      retireVsActuelle: retires.length,
+      /* Les plus longues d'abord : si une conversation de plusieurs minutes
+         apparaît ici, la règle est mauvaise. */
+      plusLonguesRetirees: retires.slice(0, 12),
+    };
+  });
+
+  /* Croisement sonnerie × conversation — la carte complète, pour vérifier
+     que l'amas « sonnerie ~23 s » ne contient bien que du court. */
+  const croise = {};
+  out.forEach((c) => {
+    const rb = ring(c) < 5 ? '0-5 s' : (ring(c) < 15 ? '5-15 s' : (ring(c) < 20 ? '15-20 s'
+             : (ring(c) < 26 ? '20-26 s ⚠ bascule messagerie' : '26 s +')));
+    if (!croise[rb]) croise[rb] = {};
+    const cb = bucketOf(incall(c));
+    croise[rb][cb] = (croise[rb][cb] || 0) + 1;
+  });
+
   res.status(200).json({
     ok: true,
     fenetreHeures: hours,
     appelsSortants: out.length,
+    simulation,
+    sonnerieXconversation: croise,
     regleActuelle: {
       description: 'durationSec >= 5 s — celle du funnel aujourd\'hui',
       decroches: seuil5,
