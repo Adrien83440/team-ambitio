@@ -391,12 +391,16 @@
     var s = normalizeCreative(decodeUtm(raw == null ? '' : raw));
     if (!s || attrIsPlaceholder(s)) return { kind: 'none', value: '' };
     /* Artefacts posés par la plateforme sur elle-même : ils ne disent rien
-       de l'origine du lead, seulement de son dernier passage interne. */
+       de l'origine du lead, seulement de son dernier passage interne.
+       ⚠ `DIRECT` n'en fait PAS partie — vérifié avec Adrien le 17/08 : c'est
+       le lien de la page Instagram, donc un canal d'acquisition réel, au
+       même titre que `link_in_bio` et `insta`. Les trois restent distincts,
+       ce sont trois portes d'entrée différentes. */
     var low = s.toLowerCase();
     if (low.indexOf('alteoform') === 0 || low.indexOf('form ') === 0 ||
         low.indexOf('vsl business') === 0 || low.indexOf('vsl élite') === 0 ||
         low.indexOf('vsl elite') === 0 || low.indexOf('booking') === 0 ||
-        low === 'direct' || low === 'test' || low === 'webhook' ||
+        low === 'test' || low === 'webhook' ||
         low === 'manuel' || low === 'orphan_recovery' || low === 'prospects') {
       return { kind: 'none', value: '' };
     }
