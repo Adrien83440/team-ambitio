@@ -738,6 +738,31 @@ service cloud.firestore {
     }
 
 
+    // ═══ ADS INSIGHTS AD-LEVEL — dépense PAR CRÉATIVE (17/08/2026) ═══
+    // 1 doc / jour / pub : ads_insights_ad/{YYYY-MM-DD}_{ad_id}.
+    // ads_insights est agrégé jour × tunnel et ne peut donc mécaniquement
+    // pas produire un coût par créative : c'est cette collection qui
+    // alimente les colonnes Dépense / CPL / ROAS de la section 🎨.
+    // Écrit UNIQUEMENT par api/ads-creatives-ingest.js (Admin SDK, bypass) ;
+    // lu par sales-funnel.html (SDK client, rôle admin).
+    match /ads_insights_ad/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+
+    // ═══ ADS CREATIVES — référentiel ad_id → nom de pub (17/08/2026) ═══
+    // ads_creatives/{ad_id} : { ad_id, ad_name, adset_id, adset_name,
+    // campaign_id, campaign_name }. Sert à rendre lisibles les UTM qui ne
+    // portent qu'un identifiant Meta (template réglé sur {{ad.id}}) —
+    // les lignes « 120246655604620308 » de la section 🎨.
+    // Écrit UNIQUEMENT par api/ads-creatives-ingest.js (Admin SDK, bypass).
+    match /ads_creatives/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+
     // ═══ MARKETING JOURNAL — tableau d'actions marketing (Funnel) ═══
     // Journal « telle date, tel changement » : consigné et lu depuis
     // sales-funnel.html (admin only).

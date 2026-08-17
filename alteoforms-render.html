@@ -1046,6 +1046,80 @@ showThankYou(settings.thankYouMessage||'Merci pour vos réponses !');
 //     un lead existant fait remonter la carte en haut de Lead Live avec
 //     le badge "🔄 Déjà CRM", popup et son — exactement comme un webhook.
 // ─────────────────────────────────────────────────────────────────────────
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CAPTURE D'ATTRIBUTION (chantier UTM 17/08/2026)
+   -----------------------------------------------------------------------
+   Ce formulaire ne transmettait AUCUN paramètre d'URL au backend, qui
+   écrivait donc "AlteoForm - <titre>" dans le champ utm du lead — écrasant
+   la créative qui avait amené le prospect. Résultat dans le funnel : toute
+   la performance des pubs remontait sur une seule ligne « AlteoForm ».
+
+   Trois sources, dans l'ordre :
+     1. la querystring de CETTE page ;
+     2. document.referrer — en embed iframe, c'est l'URL de la landing page
+        parente, celle qui porte réellement les UTM de la pub ;
+     3. sessionStorage — le visiteur qui recharge ou revient en arrière ne
+        doit pas perdre son attribution.
+   La première source non vide gagne et est mémorisée pour la session.
+   ═══════════════════════════════════════════════════════════════════════ */
+var ATTR_KEYS = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term',
+                 'ad_id','adset_id','campaign_id','fbclid'];
+var ATTR_SS_KEY = 'alteo_attr_v1';
+
+function _attrFromSearch(search) {
+  var out = null;
+  if (!search) return null;
+  var sp;
+  try { sp = new URLSearchParams(search); } catch (e) { return null; }
+  for (var i = 0; i < ATTR_KEYS.length; i++) {
+    var v = sp.get(ATTR_KEYS[i]);
+    if (v == null) continue;
+    v = String(v).trim();
+    if (!v || v.indexOf('{{') >= 0) continue;   // macro Meta non substituée
+    if (!out) out = {};
+    out[ATTR_KEYS[i]] = v.slice(0, 300);
+  }
+  return out;
+}
+
+function _attrFromUrl(url) {
+  if (!url) return null;
+  var q = String(url).indexOf('?');
+  return q >= 0 ? _attrFromSearch(String(url).slice(q)) : null;
+}
+
+/* { attribution, pageUrl } — pageUrl = la page réellement porteuse. */
+function captureAttribution() {
+  var own = _attrFromSearch(window.location.search);
+  if (own) {
+    var r1 = { attribution: own, pageUrl: String(window.location.href).slice(0, 500) };
+    try { sessionStorage.setItem(ATTR_SS_KEY, JSON.stringify(r1)); } catch (e) {}
+    return r1;
+  }
+  var ref = '';
+  try { ref = document.referrer || ''; } catch (e) { ref = ''; }
+  var fromRef = _attrFromUrl(ref);
+  if (fromRef) {
+    var r2 = { attribution: fromRef, pageUrl: String(ref).slice(0, 500) };
+    try { sessionStorage.setItem(ATTR_SS_KEY, JSON.stringify(r2)); } catch (e) {}
+    return r2;
+  }
+  try {
+    var saved = sessionStorage.getItem(ATTR_SS_KEY);
+    if (saved) {
+      var p = JSON.parse(saved);
+      if (p && p.attribution) return p;
+    }
+  } catch (e) {}
+  /* Aucun UTM : on remonte quand même l'URL pour le champ landingPage. */
+  return { attribution: null, pageUrl: String(ref || window.location.href).slice(0, 500) };
+}
+
+/* Capturé au CHARGEMENT, pas à l'envoi : un formulaire multi-cartes peut
+   rester ouvert longtemps, et document.referrer ne survit pas toujours. */
+var ATTR_CAPTURED = captureAttribution();
+
 function findAndUpdateLead(contact, callback) {
   // Mode preview : test admin depuis le builder, on ne touche pas au CRM
   var qp = new URLSearchParams(window.location.search);
@@ -1056,7 +1130,9 @@ function findAndUpdateLead(contact, callback) {
   var payload = {
     formId: FORM._id,
     contact: contact,
-    answers: answers
+    answers: answers,
+    attribution: ATTR_CAPTURED.attribution,
+    pageUrl: ATTR_CAPTURED.pageUrl
   };
 
   fetch('/api/alteoform-submit', {

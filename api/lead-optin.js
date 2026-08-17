@@ -63,6 +63,33 @@
 
 const { db, admin } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
+// Parsing d'attribution : implémentation UNIQUE, partagée avec le funnel
+// (même module que celui qui relit ces champs — aucune dérive possible).
+const Core = require('../funnel-core.js');
+
+// ─── ATTRIBUTION PUBLICITAIRE (chantier UTM 17/08/2026) ───────────────
+// Le champ `utm` reste écrit tel quel (Leads Live, CRM, export en
+// dépendent), mais il est écrasé à chaque ré-engagement : il ne peut pas
+// servir d'axe créative. On pose donc deux blocs structurés :
+//   attributionFirst — PREMIER touch, jamais réécrit une fois posé
+//   attributionLast  — rafraîchi à chaque opt-in porteur d'UTM
+// Sources acceptées, dans l'ordre : body.attribution (objet), champs
+// utm_* posés à plat dans le body, querystring contenue dans `utm`,
+// URL de landing complète. Rien d'exploitable → aucun bloc écrit.
+function buildAttribution(body, utmRaw, via) {
+  const landing = body && (body.landingUrl || body.pageUrl || body.url) ;
+  const attr =
+    Core.parseAttribution(body && typeof body.attribution === 'object' ? body.attribution : null) ||
+    Core.parseAttribution(body) ||
+    Core.parseAttribution(utmRaw) ||
+    Core.parseAttribution(landing);
+  if (!attr) return null;
+  const out = Object.assign({}, attr);
+  out.via = via;
+  out.capturedAt = new Date().toISOString();
+  if (landing) out.landingPage = String(landing).slice(0, 500);
+  return out;
+}
 
 // 9 derniers digits — cohérent avec sales-leads.html telVariants() et
 // alteoform-submit.js phoneNormalized().
@@ -158,8 +185,13 @@ module.exports = async (req, res) => {
   const tunnelLabel = type === 'business' ? 'VSL Business'
                     : type === 'vsl_elite' ? 'VSL Élite'
                     : (typeRaw || type);
-  const utm         = String(utmRaw || tunnelLabel);
+  // Décodage défensif : certaines landing pages transmettent l'utm_campaign
+  // %-encodé ("3%29NEW-%C3%A9t%C3%A9"). Le correctif existait dans une copie
+  // du fichier restée à la racine du repo — donc jamais routée par Vercel,
+  // donc jamais en production. Il est à sa place ici.
+  const utm         = Core.decodeUtm(String(utmRaw || tunnelLabel));
   const source      = String(sourceRaw || 'webhook');
+  const attribution = buildAttribution(body, utmRaw, 'optin');
 
   // ─── 3bis. LISTE DE BLOCAGE ─────────────────────────────────────────
   // Faux numéros et emails bidon bloqués depuis Leads Live : on s'arrête
@@ -236,7 +268,8 @@ module.exports = async (req, res) => {
         formId:          prev.formId          || null,
         formTitle:       prev.formTitle       || null,
         formAnswers:     prev.formAnswers     || null,
-        formSubmittedAt: prev.formSubmittedAt || null
+        formSubmittedAt: prev.formSubmittedAt || null,
+        attribution:     prev.attributionLast || prev.attributionFirst || null
       }),
 
       // ─── Audit trails ──────────────────────────────────────────────
@@ -252,6 +285,15 @@ module.exports = async (req, res) => {
 
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
+
+    // ─── Attribution ───────────────────────────────────────────────────
+    // Dernier touch toujours rafraîchi ; premier touch posé UNIQUEMENT
+    // s'il n'existe pas encore — c'est tout l'intérêt du champ, il ne doit
+    // jamais bouger une fois la créative d'origine connue.
+    if (attribution) {
+      update.attributionLast = attribution;
+      if (!Core.attrHasSignal(prev.attributionFirst)) update.attributionFirst = attribution;
+    }
 
     // ─── Soft-reset stage/status (sauf clients) ────────────────────────
     if (!isClient) {
@@ -310,10 +352,15 @@ module.exports = async (req, res) => {
     createdAt:       admin.firestore.FieldValue.serverTimestamp(),
     updatedAt:       admin.firestore.FieldValue.serverTimestamp()
   };
+  if (attribution) {
+    newLead.attributionFirst = attribution;
+    newLead.attributionLast  = attribution;
+  }
 
   try {
     const ref = await db.collection('leads').add(newLead);
-    console.log('[lead-optin] created new lead', ref.id, 'type=', type);
+    console.log('[lead-optin] created new lead', ref.id, 'type=', type,
+      'attribution=', attribution ? (attribution.utm_content || attribution.ad_id || 'partielle') : 'aucune');
     res.status(200).json({
       ok:          true,
       action:      'created',

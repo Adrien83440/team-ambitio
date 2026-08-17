@@ -66,6 +66,37 @@
 
 const { db, admin } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
+const Core = require('../funnel-core.js');
+
+// ─── ATTRIBUTION PUBLICITAIRE (chantier UTM 17/08/2026) ───────────────
+// AVANT : ce fichier posait `utm: 'AlteoForm - ' + formTitle` en dur, à la
+// création ET à chaque re-soumission. Un lead venu d'une pub, passé par la
+// VSL puis par ce formulaire, perdait définitivement sa créative — et toute
+// sa performance (RDV, closes, collecté) était recomptée sur la ligne
+// « AlteoForm - … » du funnel. C'est exactement ce que montrait la capture
+// du 17/08 : 4 closes et 8 600 € sur AlteoForm, 0 close sur toutes les
+// vraies créatives.
+//
+// MAINTENANT :
+//   · le renderer transmet les paramètres d'URL de la page (payload.attribution
+//     + payload.pageUrl) → on pose attributionFirst / attributionLast ;
+//   · sur un lead EXISTANT on ne touche plus au champ `utm`. L'information
+//     « ce lead a rempli tel formulaire » est déjà portée par formTitle et
+//     sourceDetail, qui eux sont faits pour ça ;
+//   · sur un lead NEUF sans aucun UTM, on garde le libellé « AlteoForm - … »
+//     comme repli : il vaut mieux que rien, et il n'écrase rien.
+function buildAttribution(body, via) {
+  const landing = body && (body.pageUrl || body.landingUrl || body.url);
+  const attr =
+    Core.parseAttribution(body && typeof body.attribution === 'object' ? body.attribution : null) ||
+    Core.parseAttribution(landing);
+  if (!attr) return null;
+  const out = Object.assign({}, attr);
+  out.via = via;
+  out.capturedAt = new Date().toISOString();
+  if (landing) out.landingPage = String(landing).slice(0, 500);
+  return out;
+}
 
 // 9 derniers digits — cohérent avec sales-leads.html telVariants() et
 // l'ancienne _phoneNormalized() côté alteoforms-render.html.
@@ -124,6 +155,7 @@ module.exports = async (req, res) => {
   const formId = body.formId;
   const contact = body.contact || {};
   const answers = body.answers || {};
+  const attribution = buildAttribution(body, 'form');
 
   if (!formId || typeof formId !== 'string') {
     res.status(400).json({ error: 'formId_required' });
@@ -286,13 +318,14 @@ module.exports = async (req, res) => {
       formAnswers: formAnswersArr,
       formSubmittedAt: new Date().toISOString(),
 
-      // Q3 : écrase source/UTM/sourceDetail/type pour refléter la dernière
-      // action du lead. L'ancien UTM reste retrouvable via formSubmissionsHistory
-      // (snapshot ci-dessous) si jamais on en a besoin pour audit.
+      // Q3 : type/source/sourceDetail reflètent la dernière action du lead.
+      // ⚠ `utm` N'EST PLUS ÉCRASÉ ICI (correctif attribution 17/08/2026) :
+      // écraser la créative d'origine par le titre du formulaire détruisait
+      // l'attribution publicitaire de tous les leads passés par un AlteoForm.
+      // sourceDetail + formTitle portent déjà l'information « formulaire ».
       type:         'alteoform',
       source:       'alteoform',
       sourceDetail: formTitle,
-      utm:          'AlteoForm' + (formTitle ? ' - ' + formTitle : ''),
 
       // Déclencheur de la résurrection côté Lead Live
       // (startOptinResurrectListening écoute ce champ).
@@ -345,8 +378,22 @@ module.exports = async (req, res) => {
       formId:          prevData.formId          || null,
       formTitle:       prevData.formTitle       || null,
       formAnswers:     prevAnswers              || null,
-      formSubmittedAt: prevData.formSubmittedAt || null
+      formSubmittedAt: prevData.formSubmittedAt || null,
+      attribution:     prevData.attributionLast || prevData.attributionFirst || null
     });
+
+    // ─── Attribution ─────────────────────────────────────────────────────
+    // Un formulaire peut être embarqué sur une landing page portant les UTM
+    // de la pub : dans ce cas on rafraîchit le dernier touch, et on pose le
+    // premier touch s'il manquait encore (lead créé avant ce chantier).
+    if (attribution) {
+      update.attributionLast = attribution;
+      if (!Core.attrHasSignal(prevData.attributionFirst)) update.attributionFirst = attribution;
+    }
+
+    // Le lead avait-il déjà `utm` figé sur un titre de formulaire ? On le
+    // laisse tel quel (rien n'est jamais supprimé) : le funnel lit
+    // attributionFirst en priorité et ne s'appuie plus dessus.
 
     // ─── Legacy : formSubmissionsHistory (conservé pour compatibilité
     //     avec sales-contact.html qui l'utilise encore). À retirer plus
@@ -405,7 +452,13 @@ module.exports = async (req, res) => {
     stage: 'lead',
     status: 'nouveau',
     assignedTo: '',
-    utm: 'AlteoForm' + (formTitle ? ' - ' + formTitle : ''),
+    // Lead neuf : si la page portait des UTM, on écrit la créative dans
+    // `utm` (c'est ce que le funnel legacy et Leads Live affichent) ; sinon
+    // seulement, repli sur le libellé du formulaire. Aucun écrasement
+    // possible ici — le lead n'existait pas avant cette soumission.
+    utm: (attribution && attribution.utm_content)
+      || (attribution && attribution.utm_campaign)
+      || ('AlteoForm' + (formTitle ? ' - ' + formTitle : '')),
     formId,
     formTitle,
     formAnswers: formAnswersArr,
@@ -417,6 +470,10 @@ module.exports = async (req, res) => {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   };
+  if (attribution) {
+    newLead.attributionFirst = attribution;
+    newLead.attributionLast  = attribution;
+  }
 
   try {
     const ref = await db.collection('leads').add(newLead);

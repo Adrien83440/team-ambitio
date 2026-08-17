@@ -412,9 +412,11 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   var P = { mode: 'month', y: 0, m: 0, start: null, end: null };  // end inclusif (23:59:59.999)
   var tunnelFilter = 'all';
   var activeTab = 'funnel';
+  var utmAxis = 'creative';    // section 🎨 : creative | adset | campaign
+  var utmShowAll = false;      // section 🎨 : déplier les valeurs à < 3 leads
   var TYPE_MAP = {};           // booking_config/_types → {id:{isSetterOnly,isCoaching,label}}
   var TARGETS = {};            // _config/funnel_targets
-  var DATA = { ads: [], views: [], leads: [], reoptins: [], bookings: [], bookingsById: {}, bookingsTtb: [], calls: [], costs: null, settingDeals: [], journalPeriod: [], leadsTruncated: false, callsTruncated: false };
+  var DATA = { ads: [], adsByAd: [], creatives: [], views: [], leads: [], reoptins: [], bookings: [], bookingsById: {}, bookingsTtb: [], calls: [], costs: null, settingDeals: [], journalPeriod: [], leadsTruncated: false, callsTruncated: false };
   var K = null;                // KPIs calculés
   var adsDraft = {};           // édition grille ads {docId:{field:val}}
   var journalAll = [];         // tab journal (indépendant de la période)
@@ -979,6 +981,149 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     return h;
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     🎨 PERFORMANCE PUBLICITAIRE — section « par créative » refondue
+     ----------------------------------------------------------------
+     Trois axes (créative / adset / campagne) déjà calculés par
+     funnel-core : basculer ne recharge rien et ne recalcule rien.
+
+     Trois choses que l'ancienne version faisait mal et qui sont
+     corrigées ici :
+       · elle affichait un « % » RDV/leads qui mélangeait deux axes
+         temporels et pouvait dépasser 100 % (106 % sur AlteoForm) ;
+       · elle sortait une ligne par valeur, y compris pour un seul lead
+         — 7 lignes de bruit sur 16 ;
+       · elle ne disait jamais quelle part de la cohorte était réellement
+         attribuée, donc on ne savait pas si le tableau était lisible.
+     ════════════════════════════════════════════════════════════════ */
+  var UTM_AXIS_LABELS = { creative: 'Créative', adset: 'Adset / audience', campaign: 'Campagne' };
+  var UTM_MIN_LEADS = 3;   /* sous ce seuil ET sans RDV ni close → replié */
+
+  function renderCreativeSection(k) {
+    var rows = (k.utmRowsByAxis && k.utmRowsByAxis[utmAxis]) || k.utmRows || [];
+    var uu = (k.utmUnattrByAxis && k.utmUnattrByAxis[utmAxis]) || k.utmUnattr || {};
+    var axisLabel = UTM_AXIS_LABELS[utmAxis] || 'Créative';
+    var showSpend = !!k.hasAdLevelSpend;
+
+    var h = stageOpen('🎨', 'Performance publicitaire',
+      'axe = attribution capturée à l\'arrivée du lead (attributionFirst), plus le champ UTM écrasable · chaque colonne garde l\'axe de sa section : leads entrés · RDV pris · annulés &amp; no-show ayant lieu · closes gagnés sur la période · qualifiés = score ⭐ 4-5 (Leads Live)');
+
+    /* — Sélecteur d'axe — */
+    h += '<div class="fn-utm-axis" style="display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap">';
+    h += '<span style="font-size:10.5px;color:var(--muted2);letter-spacing:0.6px;font-weight:700">VENTILER PAR</span>';
+    ['creative', 'adset', 'campaign'].forEach(function (ax) {
+      var on = ax === utmAxis;
+      h += '<button type="button" data-utm-axis="' + ax + '" style="cursor:pointer;font:inherit;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid ' + (on ? 'var(--blue)' : 'var(--line)') + ';background:' + (on ? 'rgba(96,165,250,0.15)' : 'transparent') + ';color:' + (on ? 'var(--blue)' : 'var(--muted)') + '">' + esc(UTM_AXIS_LABELS[ax]) + '</button>';
+    });
+    h += '</div>';
+
+    /* — Couverture d'attribution : LE chiffre qui dit si le tableau est
+         exploitable. Sans lui, un tableau bien rangé mais alimenté par 8 %
+         des leads passe pour une vérité. — */
+    if (k.attributedPct != null) {
+      var ap = k.attributedPct;
+      var apColor = ap >= 80 ? '#34d399' : (ap >= 40 ? '#f59e0b' : '#ef4444');
+      h += '<div class="fn-stage-note" style="margin-top:8px">📡 <strong style="color:' + apColor + '">' + fmtPct(ap, 0) + '</strong> des ' + fmtNum(k.leads) + ' leads de la période portent une attribution publicitaire structurée (' + fmtNum(k.attributedLeads) + ').';
+      if (ap < 80) {
+        h += ' Le reste est ventilé sur l\'ancien champ UTM — marqué <span style="color:var(--gold)">⚠</span> dans le tableau : ces lignes peuvent avoir été écrasées par un titre de formulaire ou un nom de tunnel.';
+      }
+      h += ' La capture ne vaut que pour les leads entrés <strong>après</strong> la mise en place du 17/08/2026 ; l\'historique remonte par le backfill.</div>';
+    }
+    if (k.creativeIndexSize === 0) {
+      h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Référentiel créatives (<code>ads_creatives</code>) vide : les UTM ne portant qu\'un identifiant Meta restent affichés « ID 1202466… ». Alimente-le pour voir les noms de pub.</div>';
+    }
+
+    if (!rows.length) {
+      h += '<div class="fn-empty" style="padding:14px">Aucun lead sur la période.</div></div>';
+      return h;
+    }
+
+    /* — Repli du bruit : une ligne à 1-2 leads SANS RDV ni close n'apprend
+         rien et noie les lignes utiles. Elle reste comptée, agrégée dans
+         « Autres », et le détail est dépliable. — */
+    var main = [], small = [];
+    rows.forEach(function (r) {
+      if (!utmShowAll && r.leads < UTM_MIN_LEADS && !r.booked && !r.closes) small.push(r);
+      else main.push(r);
+    });
+    var agg = null;
+    if (small.length) {
+      agg = { key: 'Autres (' + small.length + ' valeur' + (small.length > 1 ? 's' : '') + ' à moins de ' + UTM_MIN_LEADS + ' leads)',
+        leads: 0, scoreSum: 0, scoreN: 0, qual: 0, booked: 0, cancelled: 0, noshow: 0,
+        closes: 0, col: 0, spend: 0, hasSpend: false, legacy: false, _agg: true };
+      small.forEach(function (r) {
+        agg.leads += r.leads; agg.scoreSum += r.scoreSum; agg.scoreN += r.scoreN;
+        agg.qual += r.qual; agg.booked += r.booked; agg.cancelled += r.cancelled;
+        agg.noshow += r.noshow; agg.closes += r.closes; agg.col += r.col;
+        agg.spend += r.spend || 0; if (r.hasSpend) agg.hasSpend = true;
+        if (r.legacy) agg.legacy = true;
+      });
+      agg.cpl = (agg.hasSpend && agg.leads > 0) ? agg.spend / agg.leads : null;
+      agg.roas = (agg.hasSpend && agg.spend > 0 && agg.col > 0) ? agg.col / agg.spend : null;
+      main.push(agg);
+    }
+
+    var minW = showSpend ? 1180 : 940;
+    h += '<div class="fn-table-wrap" style="margin-top:10px"><table class="fn-table" style="min-width:' + minW + 'px"><thead><tr>';
+    h += '<th style="cursor:default">' + esc(axisLabel) + '</th>';
+    h += '<th style="cursor:default">Leads</th><th style="cursor:default">Score moy ⭐</th><th style="cursor:default">Qualifiés 4-5</th>';
+    h += '<th style="cursor:default">RDV pris</th><th style="cursor:default">Annulés</th><th style="cursor:default">No-show</th>';
+    h += '<th style="cursor:default">Closes</th><th style="cursor:default">Collecté HT</th>';
+    if (showSpend) h += '<th style="cursor:default">Dépense</th><th style="cursor:default">CPL</th><th style="cursor:default">ROAS</th>';
+    h += '</tr></thead><tbody>';
+
+    main.forEach(function (r) {
+      var avg = r.scoreN ? Math.round(r.scoreSum / r.scoreN * 10) / 10 : null;
+      var avgColor = avg == null ? 'var(--muted2)' : (avg >= 4 ? '#34d399' : (avg >= 3 ? '#f59e0b' : '#ef4444'));
+      /* Le taux de close reste un vrai ratio de cohorte : numérateur et
+         dénominateur portent tous deux sur des leads. Le ratio RDV/leads,
+         lui, ne l'est pas — il n'est plus affiché comme un pourcentage. */
+      var closePct = (r.leads > 0 && r.closes > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(r.closes / r.leads * 100, 1) + '</span>' : '';
+      var mark = r.legacy && !r._agg
+        ? '<span style="color:var(--gold)" title="Ligne issue de l\'ancien champ UTM, sans attribution capturée — valeur potentiellement écrasée par un titre de formulaire ou un nom de tunnel">⚠ </span>' : '';
+      h += '<tr' + (r._agg ? ' style="opacity:0.75"' : '') + '>';
+      h += '<td>' + mark + '<span class="fn-utm" title="' + escAttr(r.key) + '">' + esc(r.key) + '</span></td>';
+      h += '<td class="num">' + fmtNum(r.leads) + '</td>';
+      h += '<td class="num" style="color:' + avgColor + '">' + (avg == null ? '—' : '⭐ ' + avg.toLocaleString('fr-FR')) + (r.scoreN ? ' <span style="color:var(--muted2);font-size:10px">(' + r.scoreN + ' noté' + (r.scoreN > 1 ? 's' : '') + ')</span>' : '') + '</td>';
+      h += '<td class="num">' + (r.scoreN ? fmtNum(r.qual) : '—') + '</td>';
+      h += '<td class="num">' + fmtNum(r.booked) + '</td>';
+      h += '<td class="num"' + (r.cancelled ? ' style="color:var(--red3)"' : '') + '>' + fmtNum(r.cancelled) + '</td>';
+      h += '<td class="num"' + (r.noshow ? ' style="color:var(--gold)"' : '') + '>' + fmtNum(r.noshow) + '</td>';
+      h += '<td class="num"' + (r.closes ? ' style="color:#34d399;font-weight:700"' : '') + '>' + fmtNum(r.closes) + closePct + '</td>';
+      h += '<td class="num">' + (r.closes ? fmtEuro(r.col) : '—') + '</td>';
+      if (showSpend) {
+        h += '<td class="num">' + (r.hasSpend ? fmtEuro(r.spend) : '—') + '</td>';
+        h += '<td class="num">' + (r.cpl != null ? fmtEuro2(r.cpl) : '—') + '</td>';
+        h += '<td class="num"' + (r.roas != null && r.roas >= 1 ? ' style="color:#34d399;font-weight:700"' : '') + '>' + (r.roas != null ? r.roas.toFixed(2).replace('.', ',') + '×' : '—') + '</td>';
+      }
+      h += '</tr>';
+    });
+    h += '</tbody></table></div>';
+
+    if (small.length || utmShowAll) {
+      h += '<div style="margin-top:8px"><button type="button" data-utm-more="1" style="cursor:pointer;font:inherit;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--muted)">'
+        + (utmShowAll ? '▲ Replier les valeurs à moins de ' + UTM_MIN_LEADS + ' leads' : '▼ Déplier les ' + small.length + ' valeur' + (small.length > 1 ? 's' : '') + ' repliée' + (small.length > 1 ? 's' : ''))
+        + '</button></div>';
+    }
+
+    if (uu.booked || uu.cancelled || uu.noshow || uu.closes) {
+      var uuParts = [];
+      if (uu.booked) uuParts.push(fmtNum(uu.booked) + ' RDV pris');
+      if (uu.cancelled) uuParts.push(fmtNum(uu.cancelled) + ' annulé(s)');
+      if (uu.noshow) uuParts.push(fmtNum(uu.noshow) + ' no-show');
+      if (uu.closes) uuParts.push(fmtNum(uu.closes) + ' close(s)');
+      /* Note corrigée 17/08 : les « 45 j » annoncés jusqu'ici étaient faux.
+         C'est une borne HAUTE sur createdAt (rattrapage des imports tardifs),
+         pas une fenêtre en arrière. La vraie cause est ci-dessous. */
+      h += '<div class="fn-stage-note" style="margin-top:8px">⚠ Non ventilables : ' + uuParts.join(' · ')
+        + ' — lead entré <strong>avant</strong> la période et sans ré-optin (donc hors du jeu de leads chargé), close sans fiche liée, ou close détecté via Paiements. Comptés dans les totaux des sections, absents du tableau.</div>';
+    }
+    h += '<div class="fn-stage-note" style="margin-top:6px">Le ratio RDV/leads n\'est volontairement plus affiché sur cette ligne : les RDV incluent ceux de leads ré-optinés entrés avant la période, le pourcentage dépassait 100 %. Le LTB fiable est dans « Prise de RDV ».</div>';
+    h += '<div class="fn-stage-note" style="margin-top:6px">Le score ⭐ se remplit dans Leads Live après chaque appel — plus l\'équipe note, plus cette colonne devient fiable.</div>';
+    h += '</div>';
+    return h;
+  }
+
   function renderFunnel() {
     var el = $('#fnTabFunnel');
     if (!K) { el.innerHTML = '<div class="fn-loading">Chargement…</div>'; return; }
@@ -1114,48 +1259,14 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
 
-    /* 3bis. 🎨 Performance par créative (UTM) — validé Adrien 22/07.
-       Tableau par valeur UTM du lead : leads · score · qualifiés · RDV pris ·
-       annulés · no-show · closes · collecté. Chaque colonne garde l'axe de sa
+    /* 3bis. 🎨 Performance publicitaire — refonte attribution 17/08/2026.
+       AXE : plus le champ `utm` (texte libre écrasé par le dernier
+       engagement du lead — c'est lui qui faisait remonter « AlteoForm - … »
+       avec les closes de toutes les vraies créatives), mais le bloc
+       attributionFirst posé à la capture. Trois axes calculés par
+       funnel-core, bascule sans recharger. Chaque colonne garde l'axe de sa
        section — les totaux retombent sur le héro / Prise de RDV / Tenue. */
-    h += stageOpen('🎨', 'Performance par créative (UTM)', 'axe = champ UTM du lead (utm_content extrait si querystring) · chaque colonne garde l\'axe de sa section : leads entrés · RDV pris · annulés &amp; no-show ayant lieu · closes gagnés sur la période · qualifiés = score ⭐ 4-5 (Leads Live)');
-    if (!k.utmRows || !k.utmRows.length) {
-      h += '<div class="fn-empty" style="padding:14px">Aucun lead sur la période.</div>';
-    } else {
-      h += '<div class="fn-table-wrap" style="margin-top:10px"><table class="fn-table" style="min-width:940px"><thead><tr>';
-      h += '<th style="cursor:default">Créative (UTM)</th><th style="cursor:default">Leads</th><th style="cursor:default">Score moy ⭐</th><th style="cursor:default">Qualifiés 4-5</th><th style="cursor:default">RDV pris</th><th style="cursor:default">Annulés</th><th style="cursor:default">No-show</th><th style="cursor:default">Closes</th><th style="cursor:default">Collecté HT</th>';
-      h += '</tr></thead><tbody>';
-      k.utmRows.forEach(function (r) {
-        var avg = r.scoreN ? Math.round(r.scoreSum / r.scoreN * 10) / 10 : null;
-        var avgColor = avg == null ? 'var(--muted2)' : (avg >= 4 ? '#34d399' : (avg >= 3 ? '#f59e0b' : '#ef4444'));
-        var ltbPct = (r.leads > 0 && r.booked > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(r.booked / r.leads * 100, 0) + '</span>' : '';
-        var closePct = (r.leads > 0 && r.closes > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(r.closes / r.leads * 100, 1) + '</span>' : '';
-        h += '<tr>';
-        h += '<td><span class="fn-utm" title="' + escAttr(r.key) + '">' + esc(r.key) + '</span></td>';
-        h += '<td class="num">' + fmtNum(r.leads) + '</td>';
-        h += '<td class="num" style="color:' + avgColor + '">' + (avg == null ? '—' : '⭐ ' + avg.toLocaleString('fr-FR')) + (r.scoreN ? ' <span style="color:var(--muted2);font-size:10px">(' + r.scoreN + ' noté' + (r.scoreN > 1 ? 's' : '') + ')</span>' : '') + '</td>';
-        h += '<td class="num">' + (r.scoreN ? fmtNum(r.qual) : '—') + '</td>';
-        h += '<td class="num">' + fmtNum(r.booked) + ltbPct + '</td>';
-        h += '<td class="num"' + (r.cancelled ? ' style="color:var(--red3)"' : '') + '>' + fmtNum(r.cancelled) + '</td>';
-        h += '<td class="num"' + (r.noshow ? ' style="color:var(--gold)"' : '') + '>' + fmtNum(r.noshow) + '</td>';
-        h += '<td class="num"' + (r.closes ? ' style="color:#34d399;font-weight:700"' : '') + '>' + fmtNum(r.closes) + closePct + '</td>';
-        h += '<td class="num">' + (r.closes ? fmtEuro(r.col) : '—') + '</td>';
-        h += '</tr>';
-      });
-      h += '</tbody></table></div>';
-      var uu = k.utmUnattr || {};
-      if (uu.booked || uu.cancelled || uu.noshow || uu.closes) {
-        var uuParts = [];
-        if (uu.booked) uuParts.push(fmtNum(uu.booked) + ' RDV pris');
-        if (uu.cancelled) uuParts.push(fmtNum(uu.cancelled) + ' annulé(s)');
-        if (uu.noshow) uuParts.push(fmtNum(uu.noshow) + ' no-show');
-        if (uu.closes) uuParts.push(fmtNum(uu.closes) + ' close(s)');
-        h += '<div class="fn-stage-note" style="margin-top:8px">⚠ Non ventilables par créative : ' + uuParts.join(' · ')
-          + ' — lead hors fenêtre de chargement (45 j), close sans fiche liée ou détecté via Paiements. Comptés dans les totaux des sections, absents du tableau.</div>';
-      }
-      h += '<div class="fn-stage-note" style="margin-top:6px">Le score ⭐ se remplit dans Leads Live après chaque appel — plus l\'équipe note, plus cette colonne devient fiable.</div>';
-    }
-    h += '</div>';
+    h += renderCreativeSection(k);
     h += '<div class="fn-arrow">▼</div>';
 
     /* 4. Prise de RDV — DEUX LIGNES Self Booking / No Booking.
@@ -2005,6 +2116,16 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       applyCustom(a, b); refresh();
     };
     $('#fnTunnel').onchange = function () { tunnelFilter = this.value; compute(); renderActiveTab(); };
+    /* Section 🎨 — délégation sur le conteneur de l'onglet : renderFunnel()
+       réécrit tout l'innerHTML, un binding direct sur les boutons ne
+       survivrait pas au premier rendu. Les trois axes sont déjà calculés
+       par funnel-core → simple re-rendu, aucun rechargement. */
+    $('#fnTabFunnel').addEventListener('click', function (e) {
+      var bAx = e.target.closest ? e.target.closest('[data-utm-axis]') : null;
+      if (bAx) { utmAxis = bAx.getAttribute('data-utm-axis'); utmShowAll = false; renderFunnel(); return; }
+      var bMore = e.target.closest ? e.target.closest('[data-utm-more]') : null;
+      if (bMore) { utmShowAll = !utmShowAll; renderFunnel(); }
+    });
     $('#fnRefreshBtn').onclick = refresh;
     $('#fnTargetsBtn').onclick = openTargetsModal;
     $('#fnCostsBtn').onclick = openCostsModal;

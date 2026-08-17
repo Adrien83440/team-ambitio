@@ -75,14 +75,255 @@
      si la valeur contient utm_content= (= la créative chez Meta), on extrait
      ce paramètre. Vide → « — » (bucket « sans UTM »). */
   function utmKeyOf(l) {
-    var raw = decodeUtm(l && l.utm);
-    var str = raw == null ? '' : String(raw).trim();
-    if (!str) return '—';
-    var m = str.match(/(?:^|[?&\s])utm_content=([^&\s]+)/i);
-    if (m && m[1]) {
-      try { return decodeURIComponent(m[1]); } catch (e) { return m[1]; }
+    var rawStr = (l && l.utm) == null ? '' : String(l.utm).trim();
+    if (!rawStr) return '—';
+    /* ⚠ L'extraction se fait sur la chaîne BRUTE, avant décodage : décoder
+       d'abord transformait « Pub%20A&… » en « Pub A&… », et [^&\s]+
+       s'arrêtait sur l'espace — la créative « Pub A » remontait « Pub »
+       (corrigé 17/08/2026). Le groupe capturé, lui, est décodé ensuite. */
+    var m = rawStr.match(/(?:^|[?&\s])utm_content=([^&\s]*)/i);
+    if (m && m[1]) return decodeUtm(m[1]).replace(/\+/g, ' ').trim();
+    var dec = decodeUtm(rawStr);
+    return dec == null ? '—' : String(dec).trim() || '—';
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     ATTRIBUTION — parsing, normalisation, axes (chantier UTM 17/08/2026)
+     ------------------------------------------------------------------
+     POURQUOI : le champ `utm` est UN texte libre écrasé à chaque
+     ré-engagement (opt-in, AlteoForm, booking, saisie manuelle). Il ne
+     peut donc pas servir d'axe créative : un lead venu d'une pub puis
+     passé par un AlteoForm portait « AlteoForm - <titre> », et toute sa
+     performance était volée à la créative qui l'avait amené.
+
+     Les endpoints d'entrée écrivent maintenant DEUX blocs structurés :
+       attributionFirst — posé au PREMIER touch, jamais réécrit
+       attributionLast  — rafraîchi à chaque engagement porteur d'UTM
+     Le champ `utm` legacy continue d'être écrit (Leads Live, CRM, export).
+
+     Ce bloc est la source UNIQUE du parsing : les Vercel Functions le
+     consomment via require('../funnel-core.js'), exactement comme
+     api/agency-funnel.js consomme computeKpis. Une seule implémentation
+     entre ce qui est écrit en base et ce qui est lu par le funnel.
+     ══════════════════════════════════════════════════════════════════ */
+  var ATTR_FIELDS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content',
+                     'utm_term', 'ad_id', 'adset_id', 'campaign_id', 'fbclid'];
+
+  /* Alias tolérés à la capture. Volontairement restreints aux clés NON
+     ambiguës : pas de `source` ni `campaign` nus, qui entreraient en
+     collision avec les champs métier du body d'api/lead-optin.js. */
+  var ATTR_ALIASES = {
+    utm_campaign: ['campaign_name'],
+    utm_content:  ['ad_name'],
+    utm_term:     ['adset_name'],
+    ad_id:        ['adid'],
+    adset_id:     ['adsetid'],
+    campaign_id:  ['campaignid']
+  };
+
+  /* Décodage d'une valeur d'URL. Deux pièges corrigés ici :
+     · '+' vaut espace dans une querystring — decodeURIComponent ne le
+       convertit PAS, d'où des créatives affichées « Nom+De+Pub » ;
+     · double encodage fréquent quand Make relaie une LP (%2520) → on
+       repasse une fois, jamais plus (une valeur légitime « 100%25 » ne
+       doit pas boucler). */
+  function attrDecodeValue(v) {
+    if (v == null) return '';
+    var s = String(v).replace(/\+/g, ' ');
+    for (var i = 0; i < 2 && s.indexOf('%') !== -1; i++) {
+      var before = s;
+      s = decodeUtm(s);
+      if (s === before) break;
     }
-    return str;
+    return s.replace(/\s+/g, ' ').trim();
+  }
+
+  /* Macro Meta non substituée ({{ad.name}}), placeholder ou vide : c'est
+     une ABSENCE d'information, pas une créative nommée « {{ad.name}} ».
+     La ligne parasite de ta capture vient exactement de là. */
+  function attrIsPlaceholder(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return true;
+    if (s.charAt(0) === '{' || s.indexOf('{{') >= 0) return true;
+    if (s.indexOf('%7B%7B') === 0 || s.indexOf('%7b%7b') === 0) return true;
+    var low = s.toLowerCase();
+    return low === 'null' || low === 'undefined' || low === 'none' ||
+           low === '(not set)' || low === 'n/a' || low === '-';
+  }
+
+  /* Paires clé=valeur d'une querystring, d'une URL complète ou d'un
+     fragment : '?a=1&b=2', 'https://x.fr/p?a=1', 'a=1&b=2'. */
+  function parseQueryPairs(raw) {
+    var out = {};
+    var s = String(raw == null ? '' : raw);
+    var q = s.indexOf('?');
+    if (q >= 0) s = s.slice(q + 1);
+    var h = s.indexOf('#');
+    if (h >= 0) s = s.slice(0, h);
+    if (s.indexOf('=') === -1) return out;
+    var parts = s.split(/[&;]/);
+    for (var i = 0; i < parts.length; i++) {
+      var eq = parts[i].indexOf('=');
+      if (eq <= 0) continue;
+      var k = attrDecodeValue(parts[i].slice(0, eq)).toLowerCase();
+      var v = attrDecodeValue(parts[i].slice(eq + 1));
+      if (k && out[k] == null) out[k] = v;
+    }
+    return out;
+  }
+
+  /* input = objet de paramètres (renderer AlteoForm, body Make) OU chaîne
+     (champ utm legacy, querystring, URL de landing).
+     Retourne un objet ne portant QUE les champs réellement renseignés, ou
+     null si rien d'exploitable — on ne pose jamais un bloc vide en base. */
+  function parseAttribution(input) {
+    var src = {};
+    if (input && typeof input === 'object') {
+      Object.keys(input).forEach(function (kk) { src[String(kk).toLowerCase()] = input[kk]; });
+    } else {
+      src = parseQueryPairs(input);
+    }
+    var out = {}, got = false;
+    for (var i = 0; i < ATTR_FIELDS.length; i++) {
+      var f = ATTR_FIELDS[i];
+      var v = src[f];
+      var al = ATTR_ALIASES[f] || [];
+      for (var j = 0; v == null && j < al.length; j++) v = src[al[j]];
+      v = attrDecodeValue(v);
+      if (attrIsPlaceholder(v)) continue;
+      if (v.length > 300) v = v.slice(0, 300);
+      out[f] = v; got = true;
+    }
+    return got ? out : null;
+  }
+
+  /* Un bloc d'attribution porte-t-il un signal publicitaire exploitable ?
+     (capturedAt / via / landingPage seuls ne comptent pas.) */
+  function attrHasSignal(a) {
+    if (!a || typeof a !== 'object') return false;
+    for (var i = 0; i < ATTR_FIELDS.length; i++) {
+      if (a[ATTR_FIELDS[i]]) return true;
+    }
+    return false;
+  }
+
+  /* Bloc d'attribution retenu pour un lead : premier touch d'abord (la
+     vérité publicitaire), dernier touch en repli. */
+  function leadAttribution(l) {
+    if (!l) return null;
+    if (attrHasSignal(l.attributionFirst)) return l.attributionFirst;
+    if (attrHasSignal(l.attributionLast)) return l.attributionLast;
+    return null;
+  }
+
+  /* Normalisation d'un libellé de créative / adset / campagne :
+     décodage, espaces, et surtout fusion des duplications Meta
+     (« …-Copie », « … - Copy 2 ») qui produisaient DEUX lignes pour la
+     même pub — « 6)NEW-été-Vision » et « 6)NEW-été-Vision-Copie » dans
+     la capture du 17/08. */
+  function normalizeCreative(v) {
+    var s = attrDecodeValue(v);
+    s = s.replace(/[\s_-]*\(?\b(copie|copy)\b\s*\d*\)?\s*$/i, '');
+    return s.trim();
+  }
+
+  /* Clé de regroupement : insensible à la casse et aux accents, pour que
+     « ADV_BROAD » et « adv_broad » ne fassent pas deux lignes. Le libellé
+     affiché reste la première graphie rencontrée. */
+  function creativeGroupKey(label) {
+    var s = String(label == null ? '' : label);
+    if (typeof s.normalize === 'function') {
+      try { s = s.normalize('NFD').replace(/[\u0300-\u036F]/g, ''); } catch (e) { /* vieux Safari */ }
+    }
+    return s.toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+  }
+
+  /* Référentiel créatives : ads_creatives/{ad_id} → noms lisibles.
+     Indexé par ad_id, adset_id et campaign_id pour résoudre les trois axes. */
+  function buildCreativeIndex(list) {
+    var idx = { ad: {}, adset: {}, campaign: {} };
+    (list || []).forEach(function (c) {
+      if (!c) return;
+      if (c.ad_id) idx.ad[String(c.ad_id)] = c;
+      if (c.adset_id && !idx.adset[String(c.adset_id)]) idx.adset[String(c.adset_id)] = c;
+      if (c.campaign_id && !idx.campaign[String(c.campaign_id)]) idx.campaign[String(c.campaign_id)] = c;
+    });
+    return idx;
+  }
+
+  var AXIS_NAME_FIELD = { creative: 'ad_name', adset: 'adset_name', campaign: 'campaign_name' };
+
+  /* Valeur d'axe d'un bloc d'attribution.
+     Retourne { label, adId, resolved } ou null.
+     · un nom purement numérique EST un ad id (template Meta réglé sur
+       {{ad.id}} au lieu de {{ad.name}}) — on tente le référentiel, sinon
+       on l'affiche « ID 1202466… » pour qu'il soit lisible comme tel et
+       non pris pour un nom de créative ;
+     · le référentiel résout via ad_id en priorité (le plus précis). */
+  function axisValueOf(a, axis, IDX) {
+    if (!a) return null;
+    var nameField = axis === 'campaign' ? 'utm_campaign' : (axis === 'adset' ? 'utm_term' : 'utm_content');
+    var idField   = axis === 'campaign' ? 'campaign_id'  : (axis === 'adset' ? 'adset_id' : 'ad_id');
+    var name = a[nameField] || '';
+    var id   = a[idField] || '';
+    var adId = a.ad_id || '';
+    var refField = AXIS_NAME_FIELD[axis] || 'ad_name';
+
+    /* Un nom numérique long est un identifiant déguisé. */
+    if (name && /^\d{6,}$/.test(name)) { if (!id) id = name; name = ''; }
+
+    if (!name && IDX) {
+      var ref = (adId && IDX.ad[String(adId)]) ||
+                (id && IDX[axis === 'creative' ? 'ad' : axis] && IDX[axis === 'creative' ? 'ad' : axis][String(id)]) ||
+                null;
+      if (!ref && id && axis !== 'creative') ref = IDX[axis] ? IDX[axis][String(id)] : null;
+      if (ref && ref[refField]) {
+        return { label: normalizeCreative(ref[refField]), adId: adId || (axis === 'creative' ? id : ''), resolved: true };
+      }
+    }
+    if (name) return { label: normalizeCreative(name), adId: adId || '', resolved: false };
+    if (id)   return { label: 'ID ' + id, adId: adId || (axis === 'creative' ? id : ''), resolved: false };
+    return null;
+  }
+
+  /* Clé d'axe d'un LEAD. Ordre : attribution structurée → champ `utm`
+     legacy (uniquement sur l'axe créative : un `utm` legacy ne dit rien
+     de la campagne ni de l'adset, l'inventer serait mentir).
+     `legacy: true` signale une ligne qui repose encore sur le champ `utm`
+     (donc potentiellement volée par un titre de formulaire) : le rendu
+     l'affiche avec un marqueur plutôt que de la faire passer pour une
+     attribution propre.
+     Retourne { label, group, adId, legacy }. */
+  var UNATTRIB_LABEL = '— non attribué';
+
+  function leadAxisKey(l, axis, IDX) {
+    var ax = axis || 'creative';
+    var a = leadAttribution(l);
+    var v = a ? axisValueOf(a, ax, IDX) : null;
+    if (v && v.label) {
+      return { label: v.label, group: creativeGroupKey(v.label), adId: v.adId || '', legacy: false };
+    }
+    /* Le champ `utm` legacy contient parfois une querystring complète posée
+       par la landing page : c'est une VRAIE capture, exploitable sur les
+       trois axes. On la parse avant de retomber sur le libellé libre. */
+    var legacyAttr = parseAttribution(l && l.utm);
+    if (legacyAttr) {
+      var v2 = axisValueOf(legacyAttr, ax, IDX);
+      if (v2 && v2.label) {
+        return { label: v2.label, group: creativeGroupKey(v2.label), adId: v2.adId || '', legacy: true };
+      }
+    }
+    if (ax === 'creative') {
+      var legacy = normalizeCreative(utmKeyOf(l));
+      /* Une macro non substituée ou un placeholder n'est pas une créative :
+         il rejoint le bucket « — » au lieu de faire sa propre ligne. */
+      if (attrIsPlaceholder(legacy)) legacy = '';
+      if (legacy && legacy !== '—') {
+        return { label: legacy, group: creativeGroupKey(legacy), adId: '', legacy: true };
+      }
+      return { label: '—', group: '—', adId: '', legacy: true };
+    }
+    return { label: UNATTRIB_LABEL, group: UNATTRIB_LABEL, adId: '', legacy: true };
   }
 
   /* ── Dates "réelles" lead — portage ES5 de api/_leadDates.js ── */
@@ -201,6 +442,31 @@
       DATA.ads = [];
       snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.ads.push(d); });
     }).catch(function (e) { console.warn('[funnel] ads', e.message); DATA.ads = []; });
+  }
+
+  /* Insights AD-LEVEL — ads_insights_ad/{date}_{ad_id}, alimentés par
+     api/ads-metrics-ingest.js quand Make envoie le breakdown par pub.
+     C'est la SEULE source possible d'un coût par créative : ads_insights
+     est agrégé date × tunnel et ne peut mécaniquement pas ventiler.
+     Collection absente / vide → colonnes coût masquées, jamais inventées. */
+  function loadAdsByAd(db, P, DATA) {
+    var sIso = isoDate(P.start), eIso = isoDate(P.end);
+    return db.collection('ads_insights_ad').where('date', '>=', sIso).where('date', '<=', eIso).get()
+      .then(function (snap) {
+        DATA.adsByAd = [];
+        snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; DATA.adsByAd.push(d); });
+      }).catch(function (e) { console.warn('[funnel] adsByAd', e.message); DATA.adsByAd = []; });
+  }
+
+  /* Référentiel créatives — ads_creatives/{ad_id} : { ad_id, ad_name,
+     adset_id, adset_name, campaign_id, campaign_name }. Sert à rendre
+     lisibles les UTM qui ne portent qu'un identifiant numérique (template
+     Meta réglé sur {{ad.id}}). Petite collection → chargée en entier. */
+  function loadCreatives(db, DATA) {
+    return db.collection('ads_creatives').get().then(function (snap) {
+      DATA.creatives = [];
+      snap.forEach(function (doc) { var d = doc.data(); d._id = doc.id; if (!d.ad_id) d.ad_id = doc.id; DATA.creatives.push(d); });
+    }).catch(function (e) { console.warn('[funnel] creatives', e.message); DATA.creatives = []; });
   }
 
   function loadViews(db, P, DATA) {
@@ -1149,53 +1415,162 @@
     k.collecteMissingNames = colMissingNames;
     k.closesNoPayment = noPayCount;
 
-    /* ── 🎨 Performance par créative (UTM) — validé Adrien 22/07 ──
-       Axe = utmKeyOf(lead). Chaque métrique garde l'axe temporel de SA
-       section (décision 3a) : leads = entrés période (cohorte) · RDV pris =
-       créés période (replanifs dédupliquées, comme Prise de RDV) · annulés /
-       no-show = RDV ayant lieu dans la période (prédicats de la Tenue,
-       replanifiés exclus) · closes = fiches gagnées clientSince période +
-       collecté consolidé (_wonCol — Paiements, repli cartes). Qualifiés =
-       leadScore 4-5 (curseur Leads Live) ; non notés hors moyenne.
-       Les événements dont le lead n'est pas rattachable (hors fenêtre de
-       chargement, close sans fiche, close détecté via Paiements) partent
-       dans k.utmUnattr — affichés en note, jamais un zéro muet. */
-    var utmMap = {};
-    function utmRowOf(key) {
-      if (!utmMap[key]) utmMap[key] = { key: key, leads: 0, scoreSum: 0, scoreN: 0, qual: 0, booked: 0, cancelled: 0, noshow: 0, closes: 0, col: 0 };
-      return utmMap[key];
-    }
-    cohort.forEach(function (l) {
-      var ur = utmRowOf(utmKeyOf(l));
-      ur.leads++;
-      if (l.leadScore >= 1 && l.leadScore <= 5) {
-        ur.scoreSum += l.leadScore; ur.scoreN++;
-        if (l.leadScore >= 4) ur.qual++;
+    /* ── 🎨 Performance par créative — refonte attribution 17/08/2026 ──
+       AXE : plus le champ `utm` (texte libre écrasé par le dernier
+       engagement — c'est lui qui faisait remonter « AlteoForm - … » avec
+       tous les closes des vraies créatives), mais le bloc attributionFirst
+       du lead, normalisé et regroupé (voir leadAxisKey plus haut).
+       TROIS axes calculés d'un coup — créative / adset / campagne : le
+       sélecteur de la page bascule sans recharger ni recalculer.
+
+       Chaque métrique garde l'axe temporel de SA section (décision 3a du
+       22/07) : leads = entrés période (cohorte) · RDV pris = créés période
+       (replanifs dédupliquées, comme Prise de RDV) · annulés / no-show =
+       RDV ayant lieu dans la période (prédicats de la Tenue, replanifiés
+       exclus) · closes = fiches gagnées clientSince période + collecté
+       consolidé (_wonCol — Paiements, repli cartes). Qualifiés = leadScore
+       4-5 (curseur Leads Live) ; non notés hors moyenne.
+
+       ⚠ Le ratio RDV/leads N'EST PAS un LTB : son numérateur accepte les
+       RDV de leads ré-optinés entrés avant la période (d'où les 106 % de
+       la capture du 17/08). Les deux compteurs restent exposés bruts, mais
+       le rendu ne les divise plus l'un par l'autre — le LTB fiable est
+       celui de la section « Prise de RDV ».
+
+       Les événements dont le lead n'est pas rattachable partent dans
+       utmUnattr — affichés en note, jamais un zéro muet. */
+    var CRE_IDX = buildCreativeIndex(DATA.creatives || []);
+    k.creativeIndexSize = Object.keys(CRE_IDX.ad).length;
+
+    /* Dépense ad-level de la période, sommée par ad_id (vide si Make
+       n'envoie pas encore le breakdown → colonnes coût masquées). */
+    var spendByAd = {}, adLevelSpend = 0;
+    (DATA.adsByAd || []).forEach(function (a) {
+      if (!a || !a.ad_id) return;
+      /* tunnel absent = Make n'a pas su le déduire : on garde la dépense
+         plutôt que de la ranger d'office en Élite (ce qui la ferait
+         disparaître du filtre Business et gonfler l'Élite). */
+      if (a.tunnel && !tunnelMatch(a.tunnel === 'business' ? 'business' : 'elite')) return;
+      var id = String(a.ad_id);
+      if (!spendByAd[id]) spendByAd[id] = { spend: 0, impressions: 0, clicks: 0 };
+      spendByAd[id].spend += Number(a.spend) || 0;
+      spendByAd[id].impressions += Number(a.impressions) || 0;
+      spendByAd[id].clicks += Number(a.clicks) || 0;
+      adLevelSpend += Number(a.spend) || 0;
+    });
+    k.adLevelSpend = Math.round(adLevelSpend * 100) / 100;
+    k.hasAdLevelSpend = adLevelSpend > 0;
+
+    var AXES = ['creative', 'adset', 'campaign'];
+    var maps = { creative: {}, adset: {}, campaign: {} };
+    var unattr = {
+      creative: { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
+      adset:    { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
+      campaign: { booked: 0, cancelled: 0, noshow: 0, closes: 0 }
+    };
+
+    function rowOf(axis, l) {
+      var kk = leadAxisKey(l, axis, CRE_IDX);
+      var m = maps[axis];
+      if (!m[kk.group]) {
+        m[kk.group] = { key: kk.label, group: kk.group, legacy: kk.legacy, adIds: {},
+          leads: 0, scoreSum: 0, scoreN: 0, qual: 0,
+          booked: 0, cancelled: 0, noshow: 0, closes: 0, col: 0,
+          spend: 0, impressions: 0, clicks: 0, hasSpend: false };
       }
+      var r = m[kk.group];
+      /* Une ligne redevient « propre » dès qu'un seul lead y arrive avec
+         une attribution structurée : le marqueur ⚠ ne survit pas à une
+         fusion legacy + attribué sur le même libellé. */
+      if (!kk.legacy) r.legacy = false;
+      if (kk.adId) r.adIds[String(kk.adId)] = 1;
+      return r;
+    }
+
+    AXES.forEach(function (axis) {
+      cohort.forEach(function (l) {
+        var r = rowOf(axis, l);
+        r.leads++;
+        if (l.leadScore >= 1 && l.leadScore <= 5) {
+          r.scoreSum += l.leadScore; r.scoreN++;
+          if (l.leadScore >= 4) r.qual++;
+        }
+      });
+      createdFunnel.forEach(function (b) {
+        var ul = bookingLead(b);
+        if (ul) rowOf(axis, ul).booked++; else unattr[axis].booked++;
+      });
+      due.forEach(function (b) {
+        var isCancel = dueCancelledF(b);
+        var isNoShow = b.status === 'no_show';
+        if (!isCancel && !isNoShow) return;
+        var ul2 = bookingLead(b);
+        if (!ul2) { if (isCancel) unattr[axis].cancelled++; else unattr[axis].noshow++; return; }
+        var r2 = rowOf(axis, ul2);
+        if (isCancel) r2.cancelled++; else r2.noshow++;
+      });
+      closedLeads.forEach(function (l) {
+        var r3 = rowOf(axis, l);
+        r3.closes++;
+        r3.col += (l._wonCol || 0);
+      });
+      unattr[axis].closes = closesNoLeadSB + closesNoLeadNB + payClosesSB + payClosesNB;
     });
-    var utmUnattr = { booked: 0, cancelled: 0, noshow: 0, closes: 0 };
-    createdFunnel.forEach(function (b) {
-      var ul = bookingLead(b);
-      if (ul) utmRowOf(utmKeyOf(ul)).booked++; else utmUnattr.booked++;
+
+    /* Dépense par ligne : somme des ad_id rattachés à la ligne.
+       ⚠ Un même ad_id PEUT se retrouver sur deux lignes d'un même axe —
+       une pub renommée entre deux leads produit deux libellés. Sans garde,
+       sa dépense serait comptée deux fois et le total des colonnes
+       dépasserait la dépense réelle. On l'attribue donc à UNE seule ligne :
+       la plus grosse en volume de leads (rows parcourues dans cet ordre).
+       Si AUCUN ad_id n'est connu pour la ligne, hasSpend reste false et le
+       rendu affiche « — » plutôt qu'un 0 € qui se lirait « pub gratuite ». */
+    AXES.forEach(function (axis) {
+      var claimed = {};
+      var ordered = Object.keys(maps[axis]).sort(function (ga, gb) {
+        return maps[axis][gb].leads - maps[axis][ga].leads;
+      });
+      ordered.forEach(function (g) {
+        var r = maps[axis][g];
+        Object.keys(r.adIds).forEach(function (id) {
+          var s = spendByAd[id];
+          if (!s || claimed[id]) return;
+          claimed[id] = 1;
+          r.spend += s.spend; r.impressions += s.impressions; r.clicks += s.clicks;
+          r.hasSpend = true;
+        });
+        r.spend = Math.round(r.spend * 100) / 100;
+        r.col = Math.round(r.col * 100) / 100;
+        r.cpl  = (r.hasSpend && r.leads > 0)  ? r.spend / r.leads  : null;
+        r.cpr  = (r.hasSpend && r.booked > 0) ? r.spend / r.booked : null;
+        r.roas = (r.hasSpend && r.spend > 0 && r.col > 0) ? r.col / r.spend : null;
+        r.adIdList = Object.keys(r.adIds);
+        delete r.adIds;
+      });
     });
-    due.forEach(function (b) {
-      var isCancel = dueCancelledF(b);
-      var isNoShow = b.status === 'no_show';
-      if (!isCancel && !isNoShow) return;
-      var ul2 = bookingLead(b);
-      if (!ul2) { if (isCancel) utmUnattr.cancelled++; else utmUnattr.noshow++; return; }
-      var ur2 = utmRowOf(utmKeyOf(ul2));
-      if (isCancel) ur2.cancelled++; else ur2.noshow++;
-    });
-    closedLeads.forEach(function (l) {
-      var ur3 = utmRowOf(utmKeyOf(l));
-      ur3.closes++;
-      ur3.col += (l._wonCol || 0);
-    });
-    utmUnattr.closes = closesNoLeadSB + closesNoLeadNB + payClosesSB + payClosesNB;
-    k.utmRows = Object.keys(utmMap).map(function (uk) { return utmMap[uk]; })
-      .sort(function (a, b) { return (b.leads - a.leads) || (b.closes - a.closes) || (a.key < b.key ? -1 : 1); });
-    k.utmUnattr = utmUnattr;
+
+    function sortRows(m) {
+      return Object.keys(m).map(function (g) { return m[g]; })
+        .sort(function (a, b) {
+          return (b.leads - a.leads) || (b.closes - a.closes) ||
+                 (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0));
+        });
+    }
+    k.utmRowsByAxis = {
+      creative: sortRows(maps.creative),
+      adset:    sortRows(maps.adset),
+      campaign: sortRows(maps.campaign)
+    };
+    k.utmUnattrByAxis = unattr;
+    /* Compat : api/agency-funnel.js et l'export lisent encore ces deux clés. */
+    k.utmRows = k.utmRowsByAxis.creative;
+    k.utmUnattr = unattr.creative;
+    /* Part de la cohorte réellement attribuée — c'est CE chiffre qui dit
+       si le tableau est exploitable, pas le nombre de lignes. */
+    var attributed = 0;
+    cohort.forEach(function (l) { if (leadAttribution(l)) attributed++; });
+    k.attributedLeads = attributed;
+    k.attributedPct = cohort.length > 0 ? attributed / cohort.length * 100 : null;
 
     /* ROAS résultats = collecté réel (HT) / dépense — rien d'autre. */
     k.roasOutcome = (k.spend > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.spend : null;
@@ -1332,7 +1707,8 @@
      CHARGEMENT COMPLET — même pipeline que refresh() dans sales-funnel.html
      ══════════════════════════════════════════════════════════════════ */
   function emptyData() {
-    return { ads: [], views: [], leads: [], reoptins: [], bookings: [], bookingsById: {},
+    return { ads: [], adsByAd: [], creatives: [], views: [], leads: [], reoptins: [],
+      bookings: [], bookingsById: {},
       bookingsTtb: [], calls: [], costs: null, settingDeals: [], journalPeriod: [],
       actions: [], closedLeads: [], payments: [],
       leadsTruncated: false, callsTruncated: false };
@@ -1351,7 +1727,8 @@
 
     return Promise.all(pre).then(function () {
       return Promise.all([
-        loadAds(db, P, DATA), loadViews(db, P, DATA), loadLeads(db, P, DATA),
+        loadAds(db, P, DATA), loadAdsByAd(db, P, DATA), loadCreatives(db, DATA),
+        loadViews(db, P, DATA), loadLeads(db, P, DATA),
         loadBookings(db, P, DATA, TYPE_MAP), loadCalls(db, P, DATA),
         loadFunnelCosts(db, DATA), loadSettingDeals(db, P, DATA, TEAM),
         loadJournalPeriod(db, P, DATA), loadActionsAll(db, P, DATA, TEAM),
@@ -1372,6 +1749,14 @@
     CALLS_QUERY_LIMIT: CALLS_QUERY_LIMIT,
     /* Helpers réutilisés par les pages (rendu, tri, export) */
     decodeUtm: decodeUtm, utmKeyOf: utmKeyOf, parseFlexMs: parseFlexMs,
+    /* Attribution — consommé par les Vercel Functions d'entrée
+       (api/lead-optin.js, api/alteoform-submit.js) ET par le rendu. */
+    ATTR_FIELDS: ATTR_FIELDS, parseAttribution: parseAttribution,
+    attrHasSignal: attrHasSignal, attrDecodeValue: attrDecodeValue,
+    attrIsPlaceholder: attrIsPlaceholder, parseQueryPairs: parseQueryPairs,
+    leadAttribution: leadAttribution, normalizeCreative: normalizeCreative,
+    creativeGroupKey: creativeGroupKey, buildCreativeIndex: buildCreativeIndex,
+    axisValueOf: axisValueOf, leadAxisKey: leadAxisKey,
     realEntryMs: realEntryMs, pad2: pad2, isoDate: isoDate, median: median,
     phone9: phone9, leadTunnel: leadTunnel, frDateMs: frDateMs,
     effectiveCosts: effectiveCosts, classifyBooking: classifyBooking,
@@ -1383,7 +1768,8 @@
     emptyData: emptyData, loadAll: loadAll, computeKpis: computeKpis,
     /* Loaders unitaires — sales-funnel.html en rappelle certains seuls après
        une sauvegarde (grille Ads, coûts, journal) sans tout recharger. */
-    loadAds: loadAds, loadViews: loadViews, loadLeads: loadLeads,
+    loadAds: loadAds, loadAdsByAd: loadAdsByAd, loadCreatives: loadCreatives,
+    loadViews: loadViews, loadLeads: loadLeads,
     loadBookings: loadBookings, loadClosedLeads: loadClosedLeads,
     loadPayments: loadPayments, loadCalls: loadCalls,
     loadFunnelCosts: loadFunnelCosts, loadSettingDeals: loadSettingDeals,

@@ -535,26 +535,52 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += '</div></div>';
     h += '</div>';
 
-    /* Performance par créative — axe = champ UTM du lead (utm_content extrait
-       si la valeur est une querystring). Chaque colonne garde l'axe de sa
-       section dans le funnel : leads entrés · RDV pris · annulés & no-show
-       ayant lieu · closes gagnés sur la période. */
-    h += '<div class="ag-sub" style="color:var(--muted)">🎨 Performance par créative (UTM)</div>';
-    var rowsU = k.utmRows || [];
+    /* Performance par créative — refonte attribution 17/08/2026.
+       Axe = attributionFirst du lead (la créative capturée à son arrivée),
+       repli sur l'ancien champ UTM pour l'historique. Mêmes lignes que le
+       funnel interne, même cœur de calcul : k.utmRowsByAxis.creative.
+       Chaque colonne garde l'axe de sa section dans le funnel : leads
+       entrés · RDV pris · annulés & no-show ayant lieu · closes gagnés. */
+    h += '<div class="ag-sub" style="color:var(--muted)">🎨 Performance par créative</div>';
+    var rowsAll = (k.utmRowsByAxis && k.utmRowsByAxis.creative) || k.utmRows || [];
+    /* Repli du bruit : une valeur à 1-2 leads sans RDV ni close n'apprend
+       rien et noie les lignes utiles. Elle reste comptée dans « Autres ». */
+    var rowsU = [], smallU = [];
+    for (var si = 0; si < rowsAll.length; si++) {
+      var ru = rowsAll[si];
+      if (ru.leads < 3 && !ru.booked && !ru.closes) smallU.push(ru); else rowsU.push(ru);
+    }
+    if (smallU.length) {
+      var aggU = { key: 'Autres (' + smallU.length + ' valeur' + (smallU.length > 1 ? 's' : '') + ' à moins de 3 leads)',
+        leads: 0, booked: 0, cancelled: 0, noshow: 0, closes: 0, col: 0, legacy: false, _agg: true };
+      for (var sj = 0; sj < smallU.length; sj++) {
+        aggU.leads += smallU[sj].leads; aggU.booked += smallU[sj].booked;
+        aggU.cancelled += smallU[sj].cancelled; aggU.noshow += smallU[sj].noshow;
+        aggU.closes += smallU[sj].closes; aggU.col += smallU[sj].col;
+      }
+      rowsU.push(aggU);
+    }
     if (!rowsU.length) {
       h += '<div class="ag-empty" style="padding:14px">Aucun lead sur la période.</div>';
     } else {
+      if (k.attributedPct != null && k.attributedPct < 80) {
+        h += '<div class="ag-stage-note" style="margin-bottom:8px">📡 ' + fmtPct(k.attributedPct, 0) + ' des leads de la période portent une attribution publicitaire capturée. Les lignes marquées ⚠ reposent sur l\'ancien champ UTM, écrasable par un titre de formulaire ou un nom de tunnel — à lire avec prudence.</div>';
+      }
       h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr>'
-        + '<th>Créative (UTM)</th><th class="num">Leads</th><th class="num">RDV pris</th><th class="num">Annulés</th><th class="num">No-show</th><th class="num">Closes</th><th class="num">Collecté HT</th>'
+        + '<th>Créative</th><th class="num">Leads</th><th class="num">RDV pris</th><th class="num">Annulés</th><th class="num">No-show</th><th class="num">Closes</th><th class="num">Collecté HT</th>'
         + '</tr></thead><tbody>';
       for (var r = 0; r < rowsU.length; r++) {
         var u = rowsU[r];
-        var ltbPct = (u.leads > 0 && u.booked > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(u.booked / u.leads * 100, 0) + '</span>' : '';
+        /* Le ratio RDV/leads n'est plus affiché : son numérateur accepte
+           les RDV de leads ré-optinés entrés avant la période, il pouvait
+           dépasser 100 %. Le taux de close, lui, reste un vrai ratio de
+           cohorte (leads au numérateur comme au dénominateur). */
         var clPct = (u.leads > 0 && u.closes > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(u.closes / u.leads * 100, 1) + '</span>' : '';
-        h += '<tr>';
-        h += '<td><span class="ag-utm" title="' + escAttr(u.key) + '">' + esc(u.key) + '</span></td>';
+        var mk = (u.legacy && !u._agg) ? '<span style="color:var(--gold)" title="Ligne issue de l\'ancien champ UTM, sans attribution capturée">⚠ </span>' : '';
+        h += '<tr' + (u._agg ? ' style="opacity:0.75"' : '') + '>';
+        h += '<td>' + mk + '<span class="ag-utm" title="' + escAttr(u.key) + '">' + esc(u.key) + '</span></td>';
         h += '<td class="num">' + fmtNum(u.leads) + '</td>';
-        h += '<td class="num">' + fmtNum(u.booked) + ltbPct + '</td>';
+        h += '<td class="num">' + fmtNum(u.booked) + '</td>';
         h += '<td class="num"' + (u.cancelled ? ' style="color:var(--red3)"' : '') + '>' + fmtNum(u.cancelled) + '</td>';
         h += '<td class="num"' + (u.noshow ? ' style="color:var(--gold)"' : '') + '>' + fmtNum(u.noshow) + '</td>';
         h += '<td class="num"' + (u.closes ? ' style="color:#34d399;font-weight:700"' : '') + '>' + fmtNum(u.closes) + clPct + '</td>';
@@ -562,7 +588,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         h += '</tr>';
       }
       h += '</tbody></table></div>';
-      var uu = k.utmUnattr || {};
+      var uu = (k.utmUnattrByAxis && k.utmUnattrByAxis.creative) || k.utmUnattr || {};
       if (uu.booked || uu.cancelled || uu.noshow || uu.closes) {
         var parts = [];
         if (uu.booked) parts.push(fmtNum(uu.booked) + ' RDV pris');
@@ -570,7 +596,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         if (uu.noshow) parts.push(fmtNum(uu.noshow) + ' no-show');
         if (uu.closes) parts.push(fmtNum(uu.closes) + ' close(s)');
         h += '<div class="ag-stage-note" style="margin-top:8px">⚠ Non ventilables par créative : ' + parts.join(' · ')
-          + ' — lead hors fenêtre de rattachement. Comptés dans les totaux des sections, absents du tableau.</div>';
+          + ' — lead entré avant la période et sans ré-optin, ou close sans fiche liée. Comptés dans les totaux des sections, absents du tableau.</div>';
       }
     }
     h += '</div><div class="ag-arrow">▼</div>';
