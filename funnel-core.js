@@ -597,15 +597,40 @@
        une créative INCONNUE — ils n'en ont PAS, et c'est une réponse, pas
        une lacune. La ligne porte donc son canal, et se range en bas du
        tableau (outOfAds) pour ne pas concurrencer le classement des pubs. */
-    var chan = leadAxisKey(l, 'channel', IDX);
-    /* Libellé du seau résiduel validé par Adrien le 17/08 : ces leads sont
-       en pratique du direct réseaux (message privé, lien de page Instagram)
-       — c'est sa lecture métier, confirmée sur les fiches examinées.
-       ⚠ Ce n'est pas une mesure : une capture d'UTM qui échouerait demain
-       atterrirait ici aussi, sous ce même nom. */
-    var lbl = (chan && chan.label && chan.label !== '—')
-      ? 'Hors pub · ' + chan.label
-      : 'Hors pub · réseaux direct';
+    /* ⚠ D'ABORD : ce lead vient-il quand même de la publicité ?
+       Un lead peut porter une attribution d'ADSET (« adv_broad ») sans
+       jamais avoir eu de créative — l'UTM ne transportait que l'audience.
+       La version du 17/08 le rangeait en « Hors pub · réseaux direct » :
+       faux sur les deux mots. Sur juillet, cela mettait ~107 leads
+       publicitaires dans le seau du direct réseaux, alors que le bandeau
+       annonçait 86 % d'attribution publicitaire — la contradiction était à
+       l'écran, dans le même tableau.
+       Ces leads sont publicitaires ; c'est la créative qui manque, pas la
+       pub. Ils restent en bas du tableau (outOfAds) puisqu'ils ne peuvent
+       pas concourir au classement des créatives, mais sous leur vrai nom.
+       L'axe Adset, lui, les affiche normalement. */
+    var lbl;
+    /* Publicitaire par l'attribution structurée, OU par le libellé legacy
+       (un « adv_broad » jamais backfillé vit encore dans le seul champ utm
+       et n'a pas d'attributionFirst — il n'en vient pas moins d'une pub). */
+    var legacyKind = classifyLegacyLabel(l && l.utm).kind;
+    var estPub = !!leadAttribution(l) ||
+                 legacyKind === 'ad_id' || legacyKind === 'creative' || legacyKind === 'adset';
+    if (estPub) {
+      lbl = ax === 'adset' ? 'Pub · adset non transmis'
+          : (ax === 'campaign' ? 'Pub · campagne non transmise'
+          : 'Pub · créative non transmise');
+    } else {
+      var chan = leadAxisKey(l, 'channel', IDX);
+      /* Libellé du seau résiduel validé par Adrien le 17/08 : ces leads
+         sont en pratique du direct réseaux (message privé, lien de page
+         Instagram) — sa lecture métier, confirmée sur les fiches examinées.
+         ⚠ Ce n'est pas une mesure : une capture d'UTM qui échouerait demain
+         atterrirait ici aussi, sous ce même nom. */
+      lbl = (chan && chan.label && chan.label !== '—')
+        ? 'Hors pub · ' + chan.label
+        : 'Hors pub · réseaux direct';
+    }
     return { label: lbl, group: creativeGroupKey(lbl), adId: '', legacy: true, outOfAds: true };
   }
 
