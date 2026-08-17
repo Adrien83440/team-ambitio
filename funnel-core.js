@@ -1984,17 +1984,12 @@
     k.wonCollecteNonRattache = Math.round((k.wonCollecte - wonColAds - wonColHorsPub) * 100) / 100;
 
     k.roasAds = (k.spend > 0 && wonColAds > 0) ? wonColAds / k.spend : null;
-    /* Décomposition additive : les trois ROAS partagent le MÊME
-       dénominateur — la dépense publicitaire — donc roasAds + roasOrganique
-       + roasNonRattache = roasTotal, à l'euro près.
-       ⚠ roasOrganique n'est PAS une mesure d'efficacité de l'organique :
-       celui-ci n'a pas de budget média propre. Il répond à « pour 1 € mis
-       en pub, combien l'entreprise encaisse-t-elle par ailleurs ». Le
-       nommer autrement induirait en erreur, d'où le libellé explicite côté
-       rendu. L'organique a ses coûts — contenu, setting, temps — mais ils
-       ne sont pas dans ce dénominateur. */
-    k.roasOrganique = (k.spend > 0 && wonColHorsPub > 0) ? wonColHorsPub / k.spend : null;
-    k.roasTotal = (k.spend > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.spend : null;
+    /* Un ROAS « organique » a été écarté (Adrien, 17/08) : l'organique n'a
+       pas de budget média propre, le rapporter à la dépense publicitaire
+       n'aurait mesuré l'efficacité de rien. Le collecté hors pub reste
+       exposé en euros — k.wonCollecteHorsPub — pour que l'écart avec le
+       total soit lisible sans être déguisé en ratio.
+       Le second ROAS est calculé plus bas, une fois les coûts connus. */
     k.cacAds  = (k.spend > 0 && closesAds > 0) ? k.spend / closesAds : null;
     k.aovAds  = (closesAds > 0 && wonColAds > 0) ? wonColAds / closesAds : null;
 
@@ -2051,6 +2046,21 @@
     k.costOwnEntry = !!(DATA.costs && DATA.costs[mkStart]);
     k.costSetting = k.costConfigured ? Math.round((k.costFixe + k.costOutils + k.commSetting) * 100) / 100 : null;
     k.costPerRdvNB = (k.costSetting != null && k.chNB.n > 0) ? k.costSetting / k.chNB.n : null;
+
+    /* ── ROAS GLOBAL — tout le collecté ÷ TOUS les coûts connus ───────
+       Le ROAS pub répond « la pub est-elle rentable ». Celui-ci répond
+       « l'entreprise l'est-elle » : au dénominateur, la dépense
+       publicitaire ET le coût setting réel (fixe proratisé + outils +
+       commissions Setting du module Commissions).
+       Calculé ICI et non plus haut : costSetting n'existe qu'après le
+       prorata des coûts mensuels.
+       Sans coûts renseignés → null. La convention du funnel est constante :
+       un coût manquant donne « — » et une explication, jamais un ratio
+       calculé sur un dénominateur amputé — qui serait flatteur, donc pire
+       qu'une case vide. */
+    k.coutTotal = k.costSetting != null ? Math.round((k.spend + k.costSetting) * 100) / 100 : null;
+    k.roasGlobal = (k.coutTotal > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.coutTotal : null;
+    k.margeGlobale = k.coutTotal != null ? Math.round((k.wonCollecte - k.coutTotal) * 100) / 100 : null;
 
     /* Leads restants côté setting = cohorte − leads ayant self-booké. */
     k.leadsNoSB = Math.max(0, k.leads - k.cohortSelf);
