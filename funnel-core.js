@@ -121,21 +121,29 @@
     campaign_id:  ['campaignid']
   };
 
-  /* Décodage d'une valeur d'URL. Deux pièges corrigés ici :
-     · '+' vaut espace dans une querystring — decodeURIComponent ne le
-       convertit PAS, d'où des créatives affichées « Nom+De+Pub » ;
-     · double encodage fréquent quand Make relaie une LP (%2520) → on
-       repasse une fois, jamais plus (une valeur légitime « 100%25 » ne
-       doit pas boucler). */
+  /* Décodage d'une valeur. Gère le double encodage, fréquent quand Make
+     relaie une landing page (%2520) : on repasse une fois, jamais plus —
+     une valeur légitime « 100%25 » ne doit pas boucler.
+
+     ⚠ NE convertit PAS '+' en espace. Cette règle n'existe QUE dans une
+     querystring (voir parseQueryPairs) : l'appliquer partout amputait les
+     noms venus du référentiel ou saisis à la main — « BROAD - ADV+ »
+     devenait « BROAD - ADV », et la créative « Ads++ » devenait « Ads ». */
   function attrDecodeValue(v) {
     if (v == null) return '';
-    var s = String(v).replace(/\+/g, ' ');
+    var s = String(v);
     for (var i = 0; i < 2 && s.indexOf('%') !== -1; i++) {
       var before = s;
       s = decodeUtm(s);
       if (s === before) break;
     }
     return s.replace(/\s+/g, ' ').trim();
+  }
+
+  /* Valeur issue d'une QUERYSTRING : là, et seulement là, '+' vaut espace —
+     decodeURIComponent ne le fait pas, d'où des créatives « Nom+De+Pub ». */
+  function attrDecodeQueryValue(v) {
+    return attrDecodeValue(v == null ? '' : String(v).replace(/\+/g, ' '));
   }
 
   /* Macro Meta non substituée ({{ad.name}}), placeholder ou vide : c'est
@@ -165,8 +173,8 @@
     for (var i = 0; i < parts.length; i++) {
       var eq = parts[i].indexOf('=');
       if (eq <= 0) continue;
-      var k = attrDecodeValue(parts[i].slice(0, eq)).toLowerCase();
-      var v = attrDecodeValue(parts[i].slice(eq + 1));
+      var k = attrDecodeQueryValue(parts[i].slice(0, eq)).toLowerCase();
+      var v = attrDecodeQueryValue(parts[i].slice(eq + 1));
       if (k && out[k] == null) out[k] = v;
     }
     return out;
@@ -363,8 +371,19 @@
      Retourne { label, group, adId, legacy }. */
   var UNATTRIB_LABEL = '— non attribué';
 
+  /* Kind attendu par chaque axe. « campaign » se mappe sur lui-même, un kind
+     que classifyLegacyLabel n'émet JAMAIS — et c'est voulu : aucune campagne
+     n'a jamais transité par le champ `utm`. La version du 17/08 renvoyait
+     'creative' ici, et l'axe Campagne affichait donc des publicités
+     (« 6)NEW-été-Vision » présenté comme une campagne, alors que les vraies
+     campagnes du BM sont « Acquisition | Audiences froides | ELITE » et
+     consorts). Un axe vide est honnête ; un axe rempli de la mauvaise chose
+     ne l'est pas. */
   function axisKind(ax) {
-    return ax === 'adset' ? 'adset' : (ax === 'channel' ? 'channel' : 'creative');
+    if (ax === 'adset') return 'adset';
+    if (ax === 'channel') return 'channel';
+    if (ax === 'campaign') return 'campaign';
+    return 'creative';
   }
 
   function leadAxisKey(l, axis, IDX) {

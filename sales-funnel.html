@@ -1046,6 +1046,20 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       return h;
     }
 
+    /* Axe structurellement vide : tous les leads dans le seau « non
+       attribué ». Ça n'a rien d'un bug — le champ UTM historique n'a jamais
+       porté ni campagne ni adset, et le dire vaut mieux qu'afficher une
+       ligne grise que personne ne sait interpréter. */
+    var namedLeads = 0;
+    rows.forEach(function (r) { if (r.key !== '—' && r.key !== '— non attribué') namedLeads += r.leads; });
+    if (namedLeads === 0 && (utmAxis === 'campaign' || utmAxis === 'adset')) {
+      h += '<div class="fn-stage-note" style="margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:8px">'
+        + '🚧 <strong>Aucun' + (utmAxis === 'campaign' ? 'e campagne' : ' adset') + ' sur la période.</strong> '
+        + 'Le champ UTM historique ne transportait que le nom de la publicité, jamais celui de l\'' + (utmAxis === 'campaign' ? 'a campagne' : 'adset') + '. '
+        + 'Cet axe se remplira quand le template d\'URL Meta enverra <code>utm_' + (utmAxis === 'campaign' ? 'campaign={{campaign.name}}' : 'term={{adset.name}}') + '</code>, '
+        + 'ou dès que le référentiel <code>ads_creatives</code> sera alimenté — il résout l\'identifiant de pub vers sa campagne et son adset.</div>';
+    }
+
     /* — Repli du bruit : une ligne à 1-2 leads SANS RDV ni close n'apprend
          rien et noie les lignes utiles. Elle reste comptée, agrégée dans
          « Autres », et le détail est dépliable. — */
