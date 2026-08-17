@@ -1036,8 +1036,10 @@ h+='</div>';
 // dont un close.
 h+='<div class="ed-set-card"><div class="ed-set-title">🚪 Canal par défaut</div>';
 h+='<div class="ed-set-desc">Si un lead arrive par ce formulaire <strong>sans aucune origine connue</strong>, on lui attribue celle-ci. Un lead qui porte déjà une origine (UTM dans le lien, passage antérieur) la conserve — ce réglage ne l\'écrase jamais.</div>';
-h+='<select class="bs" id="set-defchan" style="width:100%;margin-top:8px" onchange="currentForm.settings.defaultChannel=this.value;saveForm(true)">';
-var _dc=s.defaultChannel||'';
+h+='<select class="bs" id="set-defchan" style="width:100%;margin-top:8px" onchange="currentForm.settings=currentForm.settings||{};currentForm.settings.defaultChannel=this.value;saveForm(true)">';
+// ⚠ `s` est déclaré dans la branche « settings », pas ici : le lire depuis
+// l'onglet Partager levait une TypeError et vidait tout l'écran.
+var _dc=(f.settings||{}).defaultChannel||'';
 [['','— Aucun (laisser vide) —'],['DIRECT','Lien partagé à la main / message privé'],['messenger','Messenger'],['instagram-dm','Instagram — message privé'],['whatsapp','WhatsApp'],['link_in_bio','Instagram — lien en bio'],['VSL','VSL'],['Webinaire Dimanche','Webinaire Dimanche'],['Lead Skool','Skool'],['email','E-mail'],['Recommandation','Recommandation']].forEach(function(o){
   h+='<option value="'+esc(o[0])+'"'+(_dc===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';
 });

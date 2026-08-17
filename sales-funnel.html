@@ -1082,7 +1082,10 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
          « Autres », et le détail est dépliable. — */
     var main = [], small = [];
     rows.forEach(function (r) {
-      if (!utmShowAll && r.leads < UTM_MIN_LEADS && !r.booked && !r.closes) small.push(r);
+      /* Les lignes « Hors pub » ne se replient jamais : ce sont déjà des
+         agrégats par canal, et les noyer dans « Autres » reproduirait le
+         trou muet qu'on vient de supprimer. */
+      if (!r.outOfAds && !utmShowAll && r.leads < UTM_MIN_LEADS && !r.booked && !r.closes) small.push(r);
       else main.push(r);
     });
     var agg = null;

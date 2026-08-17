@@ -512,8 +512,20 @@
       return mk(cl.value, true, '');
     }
 
-    if (ax === 'creative' || ax === 'channel') return mk('—', true);
-    return mk(UNATTRIB_LABEL, true);
+    /* Sur l'axe Canal, « — » veut vraiment dire « on ne sait pas ». */
+    if (ax === 'channel') return mk('—', true);
+
+    /* Sur les axes publicitaires, en revanche, « — » était trompeur : il
+       mettait dans le même seau muet un lead venu d'Instagram, un RDV posé
+       par le setting et une fiche réellement vide. Or ces leads n'ont pas
+       une créative INCONNUE — ils n'en ont PAS, et c'est une réponse, pas
+       une lacune. La ligne porte donc son canal, et se range en bas du
+       tableau (outOfAds) pour ne pas concurrencer le classement des pubs. */
+    var chan = leadAxisKey(l, 'channel', IDX);
+    var lbl = (chan && chan.label && chan.label !== '—')
+      ? 'Hors pub · ' + chan.label
+      : 'Hors pub · origine inconnue';
+    return { label: lbl, group: creativeGroupKey(lbl), adId: '', legacy: true, outOfAds: true };
   }
 
   /* ── Dates "réelles" lead — portage ES5 de api/_leadDates.js ── */
@@ -1695,7 +1707,8 @@
       var kk = leadAxisKey(l, axis, CRE_IDX);
       var m = maps[axis];
       if (!m[kk.group]) {
-        m[kk.group] = { key: kk.label, group: kk.group, legacy: kk.legacy, adIds: {},
+        m[kk.group] = { key: kk.label, group: kk.group, legacy: kk.legacy,
+          outOfAds: !!kk.outOfAds, adIds: {},
           leads: 0, scoreSum: 0, scoreN: 0, qual: 0,
           booked: 0, cancelled: 0, noshow: 0, closes: 0, col: 0,
           spend: 0, impressions: 0, clicks: 0, hasSpend: false };
@@ -1771,9 +1784,14 @@
       });
     });
 
+    /* Les lignes « hors pub » descendent en bas quel que soit leur volume :
+       sur un axe publicitaire, 30 leads Instagram ne doivent pas coiffer le
+       classement des créatives. Elles restent comptées, simplement rangées
+       après ce que l'axe est censé mesurer. */
     function sortRows(m) {
       return Object.keys(m).map(function (g) { return m[g]; })
         .sort(function (a, b) {
+          if (!!a.outOfAds !== !!b.outOfAds) return a.outOfAds ? 1 : -1;
           return (b.leads - a.leads) || (b.closes - a.closes) ||
                  (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0));
         });
