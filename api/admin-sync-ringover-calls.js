@@ -145,6 +145,16 @@ module.exports = async (req, res) => {
         /* Fix 15/07 (aligné cron) : conversation stricte, jamais la sonnerie. */
         durationSec:       (function () { var n = Number(call.incall_duration); return isFinite(n) && n > 0 ? Math.round(n) : 0; })(),
         totalDurationSec:  (function () { var n = Number(call.total_duration); return isFinite(n) && n > 0 ? Math.round(n) : null; })(),
+        /* Sonnerie et détection de répondeur (17/08/2026) — lus depuis
+        toujours par l'API, jamais stockés jusqu'ici. Ce sont eux qui
+        permettent de ne plus compter une messagerie comme un décroché
+        (voir isAnsweredCall dans funnel-core.js). Sur l'historique la
+        sonnerie se déduit de total − incall ; à partir d'ici elle est
+        mesurée, ce qui est plus sûr si Ringover ajoute un jour de
+        l'attente en file ou de la mise en garde au total. */
+        ringingDurationSec: (function () { var n = Number(call.ringing_duration); return isFinite(n) && n >= 0 ? Math.round(n) : null; })(),
+        amd: call.amd === true ? true : (call.amd === false ? false : null),
+        hangupBy: call.hangup_by || null,
         startTime:         call.start_time || null,
         endTime:           call.end_time   || null,
         syncedAt:          admin.firestore.FieldValue.serverTimestamp(),

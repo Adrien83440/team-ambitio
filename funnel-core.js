@@ -39,6 +39,10 @@
   var LEADS_QUERY_LIMIT = 6000;
   var CALLS_QUERY_LIMIT = 5000;
   var ANSWERED_MIN_SEC  = 5;                  // même seuil que le Dashboard Sales
+  /* Signature du répondeur (mesurée sur les appels réels le 17/08/2026) :
+     une sonnerie longue suivie d'une conversation courte. Voir isAnsweredCall. */
+  var VOICEMAIL_MIN_RING_SEC = 15;
+  var VOICEMAIL_MAX_TALK_SEC = 15;
   var JOURNAL_GOLIVE    = '2026-07-14';       // mise en ligne du journal d'actions
   var TTX_LOOKAHEAD_MS  = 14 * 86400000;      // TTC/TTB cherchés jusqu'à 14 j après la fenêtre
 
@@ -55,6 +59,65 @@
     return Math.min(P.end.getTime() + TTX_LOOKAHEAD_MS, Date.now());
   }
 
+
+  /* ══════════════════════════════════════════════════════════════════
+     DÉCROCHÉ RÉEL — un répondeur n'est pas une conversation (17/08/2026)
+     ------------------------------------------------------------------
+     Le funnel annonçait 81,4 % de décrochés là où Élodie constatait
+     l'inverse. Le prédicat était « conversation ≥ 5 s », et une annonce de
+     messagerie le franchit sans peine.
+
+     CE QUI A ÉTÉ ÉCARTÉ, MESURES À L'APPUI (api/ringover-diag-states.js,
+     97 appels sortants sur 7 jours) :
+       · `last_state`  — 96 appels sur 97 en « ANSWERED »
+       · `is_answered` — 99 %, pire que le funnel
+       · `voicemail`   — null sur la totalité des appels
+       · `amd`         — n'attrape que 8 des 36 suspects, ET étiquette
+                         « machine » des conversations de 42 à 148 s. Faux
+                         négatifs ET faux positifs : inutilisable seul.
+
+     CE QUI MARCHE : la durée de SONNERIE. Douze appels sonnaient entre
+     23,1 et 23,9 s avant d'être « décrochés » puis de durer exactement 5 s.
+     Un humain ne décroche pas douze fois à la même demi-seconde — c'est le
+     délai fixe de bascule vers la messagerie de l'opérateur. Le répondeur
+     décroche, le setter reconnaît l'annonce et raccroche.
+
+     RÈGLE : conversation ≥ 5 s, SAUF sonnerie ≥ 15 s suivie de moins de
+     15 s de conversation. Elle préserve les vrais décrochés tardifs —
+     3 appels décrochés après ~23 s de sonnerie ont duré 45 s à 2 min, ils
+     restent comptés, ce qu'un simple seuil relevé aurait perdu.
+
+     LIMITE ASSUMÉE : 11 appels sonnent 2-5 s puis durent 5-9 s. Ce peut
+     être un humain qui raccroche aussitôt (décroché) ou un téléphone
+     éteint basculant instantanément sur la messagerie (pas un décroché).
+     Aucun champ Ringover ne les sépare. On les COMPTE — mieux vaut
+     surestimer de peu que jeter de vraies conversations. Le taux réel est
+     donc entre 44 % et 57 %, et on retient la borne haute.
+
+     Sur l'historique, la sonnerie se déduit de totalDurationSec −
+     durationSec (vérifié sur les exemples Ringover). Les appels dont la
+     durée totale n'a jamais été stockée gardent l'ancien comportement :
+     sans sonnerie connue, on ne peut RIEN exclure, et inventer serait pire.
+     ══════════════════════════════════════════════════════════════════ */
+  function ringingSecOf(c) {
+    if (!c) return null;
+    var r = Number(c.ringingDurationSec);
+    if (isFinite(r) && r >= 0) return r;          // posé au sync (à partir du 17/08)
+    var tot = Number(c.totalDurationSec);
+    var talk = Number(c.durationSec) || 0;
+    if (!isFinite(tot) || tot <= 0) return null;  // inconnue → aucune exclusion
+    var diff = tot - talk;
+    return diff > 0 ? diff : 0;
+  }
+
+  function isAnsweredCall(c) {
+    var talk = Number(c && c.durationSec) || 0;
+    if (talk < ANSWERED_MIN_SEC) return false;
+    var ring = ringingSecOf(c);
+    if (ring == null) return true;                // sonnerie inconnue : on garde
+    if (ring >= VOICEMAIL_MIN_RING_SEC && talk < VOICEMAIL_MAX_TALK_SEC) return false;
+    return true;
+  }
 
   /* ── Décodage UTM défensif (identique sales-leads.html) ── */
   function decodeUtm(v) {
@@ -1386,7 +1449,7 @@
        en lookahead pour le TTC ne comptent jamais ici. */
     var callsOut = DATA.calls.filter(function (c) { return c.direction === 'outbound' && c._inPeriod && callMatches(c); });
     k.callsOut = callsOut.length;
-    k.callsAnswered = callsOut.filter(function (c) { return (Number(c.durationSec) || 0) >= ANSWERED_MIN_SEC; }).length;
+    k.callsAnswered = callsOut.filter(isAnsweredCall).length;
     k.answerRate = k.callsOut > 0 ? k.callsAnswered / k.callsOut * 100 : null;
 
     /* time-to-first-contact — premier appel sortant vers chaque lead de la
@@ -1397,7 +1460,7 @@
     DATA.calls.forEach(function (c) {
       if (c.direction !== 'outbound' || !c._p9 || c._ms == null) return;
       if (!callsByP9[c._p9]) callsByP9[c._p9] = [];
-      callsByP9[c._p9].push({ ms: c._ms, ans: (Number(c.durationSec) || 0) >= ANSWERED_MIN_SEC });
+      callsByP9[c._p9].push({ ms: c._ms, ans: isAnsweredCall(c) });
     });
     var ttcArr = [], ttbArr = [], ttbSelfArr = [], ttbSetArr = [];
     cohort.forEach(function (l) {
@@ -1460,7 +1523,7 @@
     var ansDurSum = 0, ansDurN = 0;
     callsOut.forEach(function (c) {
       var dSec = Number(c.durationSec) || 0;
-      if (dSec >= ANSWERED_MIN_SEC) { ansDurSum += dSec; ansDurN++; }
+      if (isAnsweredCall(c)) { ansDurSum += dSec; ansDurN++; }
     });
     k.avgAnsweredDurSec = ansDurN > 0 ? ansDurSum / ansDurN : null;
 
@@ -1470,7 +1533,7 @@
       var uid = c.userId || c.ringoverUserId || 'unknown';
       if (!byUser[uid]) byUser[uid] = { name: null, out: 0, ans: 0, rawName: c.userName || c.ringoverUserName || null };
       byUser[uid].out++;
-      if ((Number(c.durationSec) || 0) >= ANSWERED_MIN_SEC) byUser[uid].ans++;
+      if (isAnsweredCall(c)) byUser[uid].ans++;
       if (!byUser[uid].rawName && (c.userName || c.ringoverUserName)) byUser[uid].rawName = c.userName || c.ringoverUserName;
     });
     var tmList = TEAM;
@@ -1989,6 +2052,7 @@
   return {
     /* Constantes */
     ANSWERED_MIN_SEC: ANSWERED_MIN_SEC,
+    isAnsweredCall: isAnsweredCall, ringingSecOf: ringingSecOf,
     JOURNAL_GOLIVE: JOURNAL_GOLIVE,
     TTX_LOOKAHEAD_MS: TTX_LOOKAHEAD_MS,
     LEADS_QUERY_LIMIT: LEADS_QUERY_LIMIT,
