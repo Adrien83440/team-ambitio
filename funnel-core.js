@@ -67,8 +67,8 @@
      l'inverse. Le prédicat était « conversation ≥ 5 s », et une annonce de
      messagerie le franchit sans peine.
 
-     CE QUI A ÉTÉ ÉCARTÉ, MESURES À L'APPUI (api/ringover-diag-states.js,
-     97 appels sortants sur 7 jours) :
+     CE QUI A ÉTÉ ÉCARTÉ, MESURES À L'APPUI — endpoint de diagnostic
+     temporaire, retiré depuis (97 appels sortants sur 7 jours) :
        · `last_state`  — 96 appels sur 97 en « ANSWERED »
        · `is_answered` — 99 %, pire que le funnel
        · `voicemail`   — null sur la totalité des appels
