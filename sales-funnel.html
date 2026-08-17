@@ -1124,7 +1124,10 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
          dénominateur portent tous deux sur des leads. Le ratio RDV/leads,
          lui, ne l'est pas — il n'est plus affiché comme un pourcentage. */
       var closePct = (r.leads > 0 && r.closes > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(r.closes / r.leads * 100, 1) + '</span>' : '';
-      var mark = r.legacy && !r._agg
+      /* Le ⚠ signale une attribution PUBLICITAIRE douteuse. Une ligne
+         « Hors pub » n'en est pas une : elle est nommée et assumée, le
+         marqueur n'y ferait que du bruit. */
+      var mark = (r.legacy && !r._agg && !r.outOfAds)
         ? '<span style="color:var(--gold)" title="Ligne issue de l\'ancien champ UTM, sans attribution capturée — valeur potentiellement écrasée par un titre de formulaire ou un nom de tunnel">⚠ </span>' : '';
       h += '<tr' + (r._agg ? ' style="opacity:0.75"' : '') + '>';
       h += '<td>' + mark + '<span class="fn-utm" title="' + escAttr(r.key) + '">' + esc(r.key) + '</span></td>';

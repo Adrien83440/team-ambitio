@@ -579,7 +579,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
            dépasser 100 %. Le taux de close, lui, reste un vrai ratio de
            cohorte (leads au numérateur comme au dénominateur). */
         var clPct = (u.leads > 0 && u.closes > 0) ? ' <span style="color:var(--muted2);font-size:10px">' + fmtPct(u.closes / u.leads * 100, 1) + '</span>' : '';
-        var mk = (u.legacy && !u._agg) ? '<span style="color:var(--gold)" title="Ligne issue de l\'ancien champ UTM, sans attribution capturée">⚠ </span>' : '';
+        var mk = (u.legacy && !u._agg && !u.outOfAds) ? '<span style="color:var(--gold)" title="Ligne issue de l\'ancien champ UTM, sans attribution capturée">⚠ </span>' : '';
         h += '<tr' + (u._agg ? ' style="opacity:0.75"' : '') + '>';
         h += '<td>' + mk + '<span class="ag-utm" title="' + escAttr(u.key) + '">' + esc(u.key) + '</span></td>';
         h += '<td class="num">' + fmtNum(u.leads) + '</td>';

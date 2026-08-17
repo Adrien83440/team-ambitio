@@ -522,9 +522,14 @@
        une lacune. La ligne porte donc son canal, et se range en bas du
        tableau (outOfAds) pour ne pas concurrencer le classement des pubs. */
     var chan = leadAxisKey(l, 'channel', IDX);
+    /* Libellé du seau résiduel validé par Adrien le 17/08 : ces leads sont
+       en pratique du direct réseaux (message privé, lien de page Instagram)
+       — c'est sa lecture métier, confirmée sur les fiches examinées.
+       ⚠ Ce n'est pas une mesure : une capture d'UTM qui échouerait demain
+       atterrirait ici aussi, sous ce même nom. */
     var lbl = (chan && chan.label && chan.label !== '—')
       ? 'Hors pub · ' + chan.label
-      : 'Hors pub · origine inconnue';
+      : 'Hors pub · réseaux direct';
     return { label: lbl, group: creativeGroupKey(lbl), adId: '', legacy: true, outOfAds: true };
   }
 
