@@ -1411,6 +1411,13 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     /* Le taux a chuté d'un tiers le 17/08 en corrigeant le prédicat. Sans
        cette phrase, l'équipe croit à une mauvaise semaine. */
     telNotes.push('📵 messageries exclues depuis le 17/08 — un répondeur n\'est plus compté comme un décroché');
+    /* Les appels du jour n'ont pas encore leur sonnerie (sync à 3 h 30) :
+       la règle ne peut pas s'y appliquer et le taux remonte artificiellement.
+       Le dire vaut mieux que d'afficher 81,8 % au lieu de 60 % en silence. */
+    if (k.callsNoRingData > 0) {
+      telNotes.push('⏳ <strong>taux provisoire</strong> — ' + fmtNum(k.callsNoRingData) + ' appel' + (k.callsNoRingData > 1 ? 's' : '')
+        + ' sans donnée de sonnerie, comptés décrochés par défaut. Le sync Ringover les enrichit chaque nuit ; d\'ici là le taux est surestimé.');
+    }
     h += stageOpen('☎️', 'Activité téléphonique (Ringover — auto)', telNotes.length ? telNotes.join(' · ') : null);
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.callsOut), 'Appels sortants', null);

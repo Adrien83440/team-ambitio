@@ -1474,6 +1474,13 @@
     k.callsOut = callsOut.length;
     k.callsAnswered = callsOut.filter(isAnsweredCall).length;
     k.answerRate = k.callsOut > 0 ? k.callsAnswered / k.callsOut * 100 : null;
+    /* Appels sans aucune information de sonnerie : la règle « messagerie »
+       ne peut pas s'y appliquer, ils sont comptés décrochés par défaut et
+       gonflent le taux. C'est le cas des appels du JOUR — le sync Ringover
+       tourne à 3 h 30, ils ne sont enrichis que la nuit suivante. Sans ce
+       compteur, la journée en cours affiche un taux faux sans rien dire :
+       81,8 % au lieu de ~60 %, constaté le 17/08. */
+    k.callsNoRingData = callsOut.filter(function (c) { return ringingSecOf(c) == null; }).length;
 
     /* time-to-first-contact — premier appel sortant vers chaque lead de la
        cohorte, cherché jusqu'au lookahead (fix censure 15/07 : avant, un
