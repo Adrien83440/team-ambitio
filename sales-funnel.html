@@ -433,7 +433,12 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     recovery:    { min: 15, max: 35,   label: 'Taux de récupération setting (%)' },
     kept:        { min: 80, max: null, label: 'Kept — RDV maintenus (%)' },
     showup:      { min: 75, max: null, label: 'Show-up (%)' },
-    decroche:    { min: 10, max: null, label: 'Taux de décroché (%)' },
+    /* Relevée de 10 à 40 le 17/08 : l'ancienne valeur avait été posée quand
+       une messagerie comptait pour un décroché, et le taux affiché tournait
+       à 81 %. Un plancher à 10 % était alors toujours vert, donc muet.
+       Mesuré depuis la correction : 50 % sur la journée, 60 % sur le mois —
+       40 % est un plancher qui alerte vraiment. */
+    decroche:    { min: 40, max: null, label: 'Taux de décroché (%)' },
     reach:       { min: 40, max: null, label: 'Joignabilité — leads joints (%)' },
     closingLive: { min: 20, max: null, label: 'Closing live (%)' }
   };
