@@ -99,11 +99,24 @@
      durée totale n'a jamais été stockée gardent l'ancien comportement :
      sans sonnerie connue, on ne peut RIEN exclure, et inventer serait pire.
      ══════════════════════════════════════════════════════════════════ */
+  /* Trois sources, de la plus sûre à la plus indirecte. Les appels du JOUR
+     arrivent par le webhook temps réel et non par le sync nocturne : ils
+     n'ont pas toujours de durée totale, d'où la 2ᵉ source — le webhook, lui,
+     horodate initiatedAt et answeredAt, dont l'écart EST la sonnerie.
+     Sans ces trois-là, on renvoie null et rien n'est exclu : mieux vaut un
+     décroché de trop qu'une conversation jetée sur une supposition. */
   function ringingSecOf(c) {
     if (!c) return null;
     var r = Number(c.ringingDurationSec);
-    if (isFinite(r) && r >= 0) return r;          // posé au sync (à partir du 17/08)
-    var tot = Number(c.totalDurationSec);
+    if (isFinite(r) && r >= 0) return r;          // 1. posé au sync (depuis le 17/08)
+
+    var ansMs = parseFlexMs(c.answeredAt);        // 2. horodatages du webhook
+    var iniMs = parseFlexMs(c.initiatedAt);
+    if (ansMs != null && iniMs != null && ansMs >= iniMs) {
+      return Math.round((ansMs - iniMs) / 1000);
+    }
+
+    var tot = Number(c.totalDurationSec);         // 3. déduction totale − conversation
     var talk = Number(c.durationSec) || 0;
     if (!isFinite(tot) || tot <= 0) return null;  // inconnue → aucune exclusion
     var diff = tot - talk;
@@ -603,6 +616,16 @@
       if (typeof v.toMillis === 'function') { try { return v.toMillis(); } catch (e) { return null; } }
       if (typeof v.seconds === 'number') return v.seconds * 1000 + (v.nanoseconds ? Math.floor(v.nanoseconds / 1e6) : 0);
       if (typeof v._seconds === 'number') return v._seconds * 1000 + (v._nanoseconds ? Math.floor(v._nanoseconds / 1e6) : 0);
+      /* Date natif — ajouté le 17/08. Les trois formes ci-dessus couvrent
+         les Timestamp des deux SDK, mais un Date brut retombait à null : la
+         fonction rendait « date inconnue » pour la forme la plus banale du
+         langage. Sans conséquence connue en production, où Firestore ne
+         renvoie que des Timestamp, mais tout appelant passant un Date se
+         serait fait silencieusement ignorer. */
+      if (typeof v.getTime === 'function') {
+        var t = v.getTime();
+        return isNaN(t) ? null : t;
+      }
       return null;
     }
     if (typeof v === 'number' && isFinite(v)) return v < 1e12 ? v * 1000 : v;

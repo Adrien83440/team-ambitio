@@ -101,6 +101,22 @@ module.exports = async (req, res) => {
       const totalC = totalP != null ? totalP
         : (initiatedMs != null ? Math.max(0, Math.round((nowMs - initiatedMs) / 1000)) : null);
       if (totalC != null) clUpdate.totalDurationSec = totalC;
+
+      /* Sonnerie (17/08/2026) — indispensable pour ne pas compter une
+         messagerie comme un décroché (isAnsweredCall dans funnel-core.js).
+         Les appels du jour passent par ici et non par le sync nocturne :
+         sans cette ligne, ils échappaient à la règle et le taux du jour
+         restait faux jusqu'au lendemain matin.
+         La source directe d'abord, sinon l'écart entre le décrochage et le
+         lancement — que ce webhook horodate lui-même. */
+      const ringP = numOrNull(d.ringing_duration) ?? numOrNull(payload.ringing_duration);
+      if (ringP != null && ringP >= 0) {
+        clUpdate.ringingDurationSec = Math.round(ringP);
+      } else if (answeredMs != null && initiatedMs != null && answeredMs >= initiatedMs) {
+        clUpdate.ringingDurationSec = Math.round((answeredMs - initiatedMs) / 1000);
+      }
+      const amdP = d.amd !== undefined ? d.amd : payload.amd;
+      if (amdP === true || amdP === false) clUpdate.amd = amdP;
       const recUrl = d.recording_url || d.recording
         || (d.recording && typeof d.recording === 'object' ? d.recording.url : null)
         || null;
