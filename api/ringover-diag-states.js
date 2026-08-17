@@ -93,20 +93,38 @@ module.exports = async (req, res) => {
   }
 
   // ─── Distribution croisée ───────────────────────────────────────────
+  // Premier passage (17/08) : last_state ne sert à rien, 97 appels sur 98
+  // sont « ANSWERED » et Ringover annonce 99 % de décroché. En revanche
+  // l'inventaire des champs a révélé `amd` (Answering Machine Detection),
+  // `voicemail` et `hangup_by` — jamais lus par le sync. On les ventile
+  // donc ici : ce sont eux qui doivent séparer le répondeur du décroché.
   const out = callList.filter((c) => c && c.direction === 'out');
-  const byState = {};       // last_state → { n, answered, durations{bucket:n}, exemples[] }
-  const allKeys = {};       // inventaire des champs renvoyés, pour repérer
-                            // un éventuel indicateur de répondeur non exploité
+  const byState = {};
+  const allKeys = {};
+
+  // Une dimension = un champ candidat. Pour chacun : combien d'appels par
+  // valeur, et la distribution des durées à l'intérieur — un champ qui
+  // isole proprement l'amas des 5-9 s est notre réponse.
+  const DIMS = ['amd', 'voicemail', 'hangup_by', 'response_type', 'type'];
+  const parChamp = {};
+  DIMS.forEach((d) => { parChamp[d] = {}; });
+
+  function shortVal(v) {
+    if (v === null || v === undefined) return '(null)';
+    if (typeof v === 'object') { try { return JSON.stringify(v).slice(0, 80); } catch (e) { return '(objet)'; } }
+    return String(v).slice(0, 60);
+  }
 
   out.forEach((c) => {
     Object.keys(c || {}).forEach((k) => { allKeys[k] = (allKeys[k] || 0) + 1; });
+    const sec = Math.max(0, Math.round(Number(c.incall_duration) || 0));
+    const bk = bucketOf(sec);
+
     const st = String(c.last_state == null ? '(absent)' : c.last_state);
     if (!byState[st]) byState[st] = { n: 0, isAnsweredTrue: 0, durees: {}, exemples: [] };
     const b = byState[st];
     b.n++;
     if (c.is_answered === true) b.isAnsweredTrue++;
-    const sec = Math.max(0, Math.round(Number(c.incall_duration) || 0));
-    const bk = bucketOf(sec);
     b.durees[bk] = (b.durees[bk] || 0) + 1;
     if (b.exemples.length < 4) {
       b.exemples.push({
@@ -116,6 +134,39 @@ module.exports = async (req, res) => {
         start_time: c.start_time || null,
       });
     }
+
+    DIMS.forEach((d) => {
+      const v = shortVal(c[d]);
+      if (!parChamp[d][v]) parChamp[d][v] = { n: 0, durees: {}, secMoy: 0, _somme: 0 };
+      const e = parChamp[d][v];
+      e.n++;
+      e._somme += sec;
+      e.durees[bk] = (e.durees[bk] || 0) + 1;
+    });
+  });
+
+  DIMS.forEach((d) => {
+    Object.keys(parChamp[d]).forEach((v) => {
+      const e = parChamp[d][v];
+      e.secMoy = e.n ? Math.round(e._somme / e.n) : 0;
+      delete e._somme;
+    });
+  });
+
+  /* L'amas suspect isolé : les appels « décrochés » de moins de 10 s. Si un
+     champ vaut systématiquement la même chose ici et autre chose ailleurs,
+     c'est le discriminant cherché. */
+  const suspects = out.filter((c) => {
+    const s = Number(c.incall_duration) || 0;
+    return s >= 5 && s < 10;
+  });
+  const signatureSuspects = {};
+  DIMS.concat(['ringing_duration', 'answered_time']).forEach((d) => {
+    signatureSuspects[d] = {};
+    suspects.forEach((c) => {
+      const v = shortVal(c[d]);
+      signatureSuspects[d][v] = (signatureSuspects[d][v] || 0) + 1;
+    });
   });
 
   // Ce que dirait la règle ACTUELLE du funnel, pour mesurer l'écart.
@@ -136,9 +187,19 @@ module.exports = async (req, res) => {
       decroches: isAnswered,
       taux: out.length ? Math.round(isAnswered / out.length * 1000) / 10 : null,
     },
-    // LA réponse cherchée : si un état distingue le répondeur, il est ici.
+    // Sans intérêt au premier passage (tout est ANSWERED), conservé pour
+    // vérifier que ça reste vrai sur une autre fenêtre.
     parLastState: byState,
-    // Si aucun état ne le fait, un champ non exploité le trahit peut-être.
+    // LA réponse cherchée : amd, voicemail, hangup_by ventilés par valeur,
+    // avec la durée moyenne de chacune.
+    parChamp: parChamp,
+    // L'amas des 5-9 s isolé : ce que valent ses champs, et rien d'autre.
+    // Une valeur qui n'apparaît QUE là est le discriminant.
+    amasSuspect: {
+      description: 'appels « décrochés » de 5 à 9 s — répondeurs présumés',
+      n: suspects.length,
+      signature: signatureSuspects,
+    },
     champsDisponibles: Object.keys(allKeys).sort(),
   });
 };
