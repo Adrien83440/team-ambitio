@@ -308,6 +308,19 @@
     return null;
   }
 
+  /* Ce lead vient-il de la PUBLICITÉ PAYANTE ?
+     Vrai s'il porte une attribution publicitaire structurée, ou si son
+     libellé legacy désigne une pub, un adset ou un identifiant Meta.
+     Faux pour un canal (Instagram organique, lien partagé, setting
+     téléphonique) et pour une fiche sans origine.
+     Sert au ROAS isolé ET au classement du tableau — une seule définition,
+     pour que les deux ne puissent pas diverger. */
+  function isAdvertisingLead(l) {
+    if (leadAttribution(l)) return true;
+    var k = classifyLegacyLabel(l && l.utm).kind;
+    return k === 'ad_id' || k === 'creative' || k === 'adset';
+  }
+
   /* Normalisation d'un libellé de créative / adset / campagne :
      décodage, espaces, et surtout fusion des duplications Meta
      (« …-Copie », « … - Copy 2 ») qui produisaient DEUX lignes pour la
@@ -621,10 +634,7 @@
     /* Publicitaire par l'attribution structurée, OU par le libellé legacy
        (un « adv_broad » jamais backfillé vit encore dans le seul champ utm
        et n'a pas d'attributionFirst — il n'en vient pas moins d'une pub). */
-    var legacyKind = classifyLegacyLabel(l && l.utm).kind;
-    var estPub = !!leadAttribution(l) ||
-                 legacyKind === 'ad_id' || legacyKind === 'creative' || legacyKind === 'adset';
-    if (estPub) {
+    if (isAdvertisingLead(l)) {
       lbl = ax === 'adset' ? 'Pub · adset non transmis'
           : (ax === 'campaign' ? 'Pub · campagne non transmise'
           : 'Pub · créative non transmise');
@@ -1690,6 +1700,10 @@
       return { n: list.length, col: Math.round(col * 100) / 100, con: Math.round(con * 100) / 100, mandat: Math.round(mandat * 100) / 100 };
     }
     var wonColSB = 0, wonConSB = 0, wonColNB = 0, wonConNB = 0;
+    /* Collecté isolé de la PUBLICITÉ PAYANTE — seul numérateur légitime
+       d'un ROAS, puisque le dénominateur est la dépense pub. */
+    var wonColAds = 0, wonConAds = 0, closesAds = 0;
+    var wonColHorsPub = 0, closesHorsPub = 0;
     var colMissing = 0, noPayCount = 0, mandatSum = 0, colMissingNames = [];
     closedLeads.forEach(function (l) {
       var sb2 = l.stage === 'closed_won_self';
@@ -1704,6 +1718,13 @@
       else if (decl) con = decl.con;
       if (col == null) { colMissing++; colMissingNames.push(l.nom || lem || l._id); }
       l._wonCol = (col || 0);   /* collecté consolidé par fiche — réutilisé par la section « par créative » */
+      /* Ventilation pub / hors pub — le ROAS global divisait TOUT le
+         collecté par la dépense publicitaire, créditant donc les pubs du
+         chiffre venu d'Instagram organique, du setting téléphonique et des
+         liens partagés à la main. Sur août : 8 600 € au numérateur dont
+         5 650 € hors publicité. */
+      if (isAdvertisingLead(l)) { wonColAds += (col || 0); wonConAds += con; closesAds++; }
+      else { wonColHorsPub += (col || 0); closesHorsPub++; }
       if (sb2) { wonColSB += (col || 0); wonConSB += con; } else { wonColNB += (col || 0); wonConNB += con; }
     });
     /* Closes RDV sans fiche liée : Paiements par email/téléphone, repli cartes. */
@@ -1944,7 +1965,30 @@
     k.attributedLeads = attributed;
     k.attributedPct = cohort.length > 0 ? attributed / cohort.length * 100 : null;
 
-    /* ROAS résultats = collecté réel (HT) / dépense — rien d'autre. */
+    /* ── ROAS ────────────────────────────────────────────────────────
+       roasAds est le vrai : collecté des clients VENUS DE LA PUB ÷ dépense
+       pub. L'ancien roasOutcome divisait TOUT le collecté par la dépense
+       publicitaire — il créditait donc les pubs des ventes issues
+       d'Instagram organique, du setting téléphonique et des liens partagés
+       à la main. Sur août, 8 600 € au numérateur dont 5 650 € hors pub :
+       le ROAS était presque trois fois trop beau.
+       Les closes non rattachables à une fiche (détectés via Paiements,
+       close sans lead) restent HORS du numérateur publicitaire : on ne
+       crédite pas la pub d'un chiffre dont on ignore l'origine. */
+    k.wonCollecteAds = Math.round(wonColAds * 100) / 100;
+    k.wonContracteAds = Math.round(wonConAds * 100) / 100;
+    k.closesWonAds = closesAds;
+    k.wonCollecteHorsPub = Math.round(wonColHorsPub * 100) / 100;
+    k.closesWonHorsPub = closesHorsPub;
+    /* Non rattachable : ni pub, ni hors pub — aucune fiche à interroger. */
+    k.wonCollecteNonRattache = Math.round((k.wonCollecte - wonColAds - wonColHorsPub) * 100) / 100;
+
+    k.roasAds = (k.spend > 0 && wonColAds > 0) ? wonColAds / k.spend : null;
+    k.cacAds  = (k.spend > 0 && closesAds > 0) ? k.spend / closesAds : null;
+    k.aovAds  = (closesAds > 0 && wonColAds > 0) ? wonColAds / closesAds : null;
+
+    /* Conservé pour l'historique et la vue agence, mais ce n'est PAS un
+       ROAS : c'est le rapport de tout le chiffre à la seule dépense pub. */
     k.roasOutcome = (k.spend > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.spend : null;
 
     /* ── Taux de close du mois (bandeau héro — demande Vincent 14/07) :
@@ -2116,6 +2160,7 @@
     /* Constantes */
     ANSWERED_MIN_SEC: ANSWERED_MIN_SEC,
     isAnsweredCall: isAnsweredCall, ringingSecOf: ringingSecOf,
+    isAdvertisingLead: isAdvertisingLead,
     JOURNAL_GOLIVE: JOURNAL_GOLIVE,
     TTX_LOOKAHEAD_MS: TTX_LOOKAHEAD_MS,
     LEADS_QUERY_LIMIT: LEADS_QUERY_LIMIT,

@@ -1254,7 +1254,21 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += kpiCard(fmtNum(k.clicks || null), 'Clics sortants', null, null, !k.hasAds);
     h += kpiCard(fmtPct(k.ctr, 2), 'CTR', 'clics / impressions', targetBadge('ctr', k.ctr));
     h += kpiCard(fmtEuro2(k.cpc), 'CPC', 'coût / clic');
-    h += kpiCard(k.roasOutcome != null ? (Math.round(k.roasOutcome * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS', 'collecté réel (HT) ÷ dépense pub', null, k.roasOutcome == null);
+    /* ROAS isolé à la publicité (17/08). L'ancienne carte divisait TOUT le
+       collecté par la dépense pub — Instagram organique, setting
+       téléphonique et liens partagés compris. Le dénominateur étant une
+       dépense publicitaire, seul le chiffre venu de la pub a sa place au
+       numérateur. Le détail est affiché sous la carte : sans lui, un ROAS
+       qui baisse de moitié passe pour une contre-performance. */
+    var roasSub = 'collecté des clients venus de la PUB (HT) ÷ dépense pub';
+    if (k.wonCollecteHorsPub > 0 || k.wonCollecteNonRattache > 0) {
+      var horsParts = [];
+      if (k.wonCollecteHorsPub > 0) horsParts.push(fmtEuro(k.wonCollecteHorsPub) + ' hors pub');
+      if (k.wonCollecteNonRattache > 0) horsParts.push(fmtEuro(k.wonCollecteNonRattache) + ' non rattaché');
+      roasSub += ' · ' + fmtEuro(k.wonCollecteAds) + ' retenus sur ' + fmtEuro(k.wonCollecte)
+        + ' — ' + horsParts.join(' · ') + ' exclus';
+    }
+    h += kpiCard(k.roasAds != null ? (Math.round(k.roasAds * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS pub', roasSub, null, k.roasAds == null);
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
 
@@ -1457,7 +1471,12 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += stageOpen('💶', 'Coûts &amp; rentabilité', 'collecté = module Paiements (HT), repli encaissé déclaré aux cartes du Close — 100 % logiciel, zéro saisie manuelle');
     h += '<div class="fn-grid">';
     h += kpiCard(fmtEuro2(k.cpl), 'CPL', 'dépense ÷ ' + fmtNum(k.leads) + ' leads', targetBadge('cpl', k.cpl));
-    h += kpiCard(fmtEuro2(k.cacMarketOnly), 'CAC Market Only', 'dépense pub ÷ ' + fmtNum(k.closesWonTotal) + ' client(s) acquis — ≠ « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacMarketOnly == null);
+    /* Même correction que le ROAS : le CAC divisait la dépense pub par TOUS
+       les clients, y compris ceux qui n'ont jamais vu une publicité — il
+       sortait donc un coût d'acquisition artificiellement bas. */
+    h += kpiCard(fmtEuro2(k.cacAds), 'CAC pub', 'dépense pub ÷ ' + fmtNum(k.closesWonAds) + ' client(s) venus de la pub'
+      + (k.closesWonHorsPub > 0 ? ' · ' + fmtNum(k.closesWonHorsPub) + ' client(s) hors pub exclus' : '')
+      + ' — ≠ « CPA » Meta (achat, RDV ou lead selon la campagne)', null, k.cacAds == null);
     var aovHint;
     if (k.closesWonTotal > 0 && !k.wonCollecte) {
       aovHint = fmtNum(k.closesWonTotal) + ' client(s) mais collecté manquant — valide les cartes du Close ou crée le paiement GoCardless (module Paiements)';
