@@ -199,9 +199,19 @@ module.exports = async (req, res) => {
         // Doublons soft-merged : jamais affichés, jamais consommés.
         if (d._merged === true) { skippedMerged++; continue; }
 
-        // Idempotence : un premier touch signifiant existe déjà → on ne
-        // repasse JAMAIS dessus, c'est tout l'intérêt du champ.
-        if (Core.attrHasSignal(d.attributionFirst)) { skippedAlreadyDone++; continue; }
+        // Idempotence : un premier touch existe déjà → on ne repasse JAMAIS
+        // dessus, c'est tout l'intérêt du champ.
+        //
+        // ⚠ attrHasSignal seul ne suffit PAS : il ne regarde que les champs
+        // publicitaires, et ignore volontairement `channel` (un canal n'est
+        // pas de la pub). Une fiche backfillée en canal repassait donc à
+        // chaque exécution — 2 700 réécritures pour rien au second passage
+        // du 17/08, à valeurs identiques. On teste la présence du bloc, pas
+        // la nature de son contenu.
+        const af = d.attributionFirst;
+        if (af && typeof af === 'object' && (Core.attrHasSignal(af) || af.channel)) {
+          skippedAlreadyDone++; continue;
+        }
 
         const rec = reconstruct(d);
         if (!rec) {
