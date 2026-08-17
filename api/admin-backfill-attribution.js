@@ -61,20 +61,23 @@ const FieldPath = admin.firestore.FieldPath;
 const SELECT_FIELDS = ['utm', 'engagementHistory', 'formSubmissionsHistory',
   'attributionFirst', 'attributionLast', 'nom', 'email', '_merged'];
 
-// ─── Libellés génériques ────────────────────────────────────────────────────
-// Ces valeurs ne désignent JAMAIS une créative : ce sont des noms de
-// formulaire, de tunnel ou de canal posés par la plateforme elle-même. Les
-// retenir comme attribution reproduirait exactement le bug qu'on corrige.
-function isGenericLabel(raw) {
-  const t = String(raw || '').trim().toLowerCase();
-  if (!t) return true;
-  if (t.indexOf('alteoform') === 0) return true;   // api/alteoform-submit.js
-  if (t.indexOf('form ') === 0) return true;       // onBookingCreated
-  if (t.indexOf('vsl ') === 0) return true;        // api/lead-optin.js
-  if (t.indexOf('booking') === 0) return true;     // onBookingCreated
-  if (t === 'direct' || t === 'webhook' || t === 'test' || t === 'manuel') return true;
-  return false;
-}
+// ─── Classification des libellés ────────────────────────────────────────────
+// La taxonomie vit dans funnel-core (Core.classifyLegacyLabel) : le backfill
+// écrit exactement ce que le funnel relit, sans risque de dérive. Elle a été
+// établie sur le relevé réel des 8 051 fiches et validée par Adrien le
+// 17/08/2026 — voir le commentaire du module pour le détail des volumes.
+//
+// Rappel du principe : le champ `utm` ne contient presque jamais une
+// créative. Ce sont, dans l'ordre de volume, des canaux (VSL, ACFLIX,
+// Webinaire Dimanche), des audiences (adv_broad, LaL) et seulement à la
+// marge de vraies pubs. Chaque libellé part donc dans SON champ, et le
+// défaut est « canal », jamais « créative ».
+const KIND_TO_FIELD = {
+  ad_id:    'ad_id',
+  creative: 'utm_content',
+  adset:    'utm_term',
+  channel:  'channel',
+};
 
 // Candidats d'attribution, du PLUS ANCIEN au plus récent. Les dates archivées
 // sont des ISO strings : l'ordre lexicographique EST l'ordre chronologique.
@@ -96,13 +99,30 @@ function candidatesOf(d) {
   return out;
 }
 
-// Reconstruction. Deux passes volontaires :
-//   1. une querystring archivée est une VRAIE capture (utm_source, ad_id…) →
-//      elle prime, où qu'elle se trouve dans l'historique ;
-//   2. sinon, le plus ancien libellé non générique, promu en utm_content
-//      (ou en ad_id s'il est purement numérique — template Meta {{ad.id}}).
-// La source retenue est remontée dans le rapport : une reconstruction
-// « legacy-label » est une déduction, pas une mesure.
+// Reconstruction. Les passes sont ordonnées de la mesure vers la déduction,
+// et NON par ancienneté seule — c'est le correctif du dry-run du 17/08 :
+// une fiche portant l'identifiant Meta 120246654691110308 se voyait attribuer
+// un « VSL » plus ancien trouvé dans son historique. Un identifiant de pub
+// perdu au profit d'un nom de page : l'inverse de ce qu'on cherche.
+//
+//   1. attribution déjà structurée dans l'historique  → mesure
+//   2. querystring archivée (utm_source, ad_id…)      → mesure
+//   3. identifiant Meta, le plus ancien               → signal publicitaire sûr
+//   4. créative nommée, la plus ancienne              → signal publicitaire
+//   5. adset nommé, le plus ancien                    → signal publicitaire
+//   6. canal, le plus ancien                          → PAS de la publicité
+//
+// À l'intérieur d'une passe, le plus ancien gagne : c'est bien un premier
+// touch. Entre deux passes, la qualité du signal prime sur l'ancienneté.
+// La source retenue est remontée dans le rapport — « legacy-* » est une
+// déduction, pas une mesure.
+const KIND_PASSES = [
+  { kind: 'ad_id',    from: 'legacy-adid' },
+  { kind: 'creative', from: 'legacy-creative' },
+  { kind: 'adset',    from: 'legacy-adset' },
+  { kind: 'channel',  from: 'legacy-channel' },
+];
+
 function reconstruct(d) {
   const cands = candidatesOf(d);
   for (let i = 0; i < cands.length; i++) {
@@ -113,12 +133,16 @@ function reconstruct(d) {
     const parsed = Core.parseAttribution(cands[i].raw);
     if (parsed) return { attr: parsed, from: 'querystring', at: cands[i].at };
   }
-  for (let i = 0; i < cands.length; i++) {
-    if (!cands[i].raw) continue;
-    const label = Core.normalizeCreative(Core.decodeUtm(cands[i].raw));
-    if (!label || Core.attrIsPlaceholder(label) || isGenericLabel(label)) continue;
-    if (/^\d{6,}$/.test(label)) return { attr: { ad_id: label }, from: 'legacy-adid', at: cands[i].at };
-    return { attr: { utm_content: label.slice(0, 300) }, from: 'legacy-label', at: cands[i].at };
+  for (let p = 0; p < KIND_PASSES.length; p++) {
+    const pass = KIND_PASSES[p];
+    for (let i = 0; i < cands.length; i++) {
+      if (!cands[i].raw) continue;
+      const cl = Core.classifyLegacyLabel(cands[i].raw);
+      if (cl.kind !== pass.kind) continue;
+      const attr = {};
+      attr[KIND_TO_FIELD[cl.kind]] = String(cl.value).slice(0, 300);
+      return { attr, from: pass.from, at: cands[i].at };
+    }
   }
   return null;
 }
@@ -146,7 +170,8 @@ module.exports = async (req, res) => {
     let skippedMerged = 0;
     let skippedAlreadyDone = 0;
     let unresolved = 0;                       // aucune trace exploitable
-    const bySource = { 'history-attribution': 0, querystring: 0, 'legacy-adid': 0, 'legacy-label': 0 };
+    const bySource = { 'history-attribution': 0, querystring: 0, 'legacy-adid': 0,
+      'legacy-creative': 0, 'legacy-adset': 0, 'legacy-channel': 0 };
 
     const mutations = [];
     const items = [];
@@ -228,10 +253,14 @@ module.exports = async (req, res) => {
       candidates: mutations.length,
       unresolved,
       bySource,
-      // Lecture du rapport : « querystring » et « history-attribution » sont
-      // des captures réelles ; « legacy-label » est une déduction depuis un
-      // libellé libre, « legacy-adid » un identifiant Meta à résoudre via le
-      // référentiel ads_creatives.
+      // Lecture du rapport :
+      //   history-attribution / querystring → captures réelles
+      //   legacy-adid                       → identifiant Meta, lisible une
+      //                                       fois ads_creatives alimentée
+      //   legacy-creative / legacy-adset    → déduction publicitaire
+      //   legacy-channel                    → canal d'acquisition, PAS de la
+      //                                       pub : n'entre pas dans le taux
+      //                                       d'attribution publicitaire
       unresolvedSample,
       cursor: lastDocId,
       hasMore,

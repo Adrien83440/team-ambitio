@@ -996,7 +996,13 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
        · elle ne disait jamais quelle part de la cohorte était réellement
          attribuée, donc on ne savait pas si le tableau était lisible.
      ════════════════════════════════════════════════════════════════ */
-  var UTM_AXIS_LABELS = { creative: 'Créative', adset: 'Adset / audience', campaign: 'Campagne' };
+  /* 4ᵉ axe « Canal » (17/08/2026) : le relevé de la base a montré que
+     2 741 des 8 051 fiches ne portent ni créative ni adset mais un canal
+     d'acquisition — VSL (1274), ACFLIX (545), Webinaire Dimanche (475),
+     Lead Skool, bio Instagram… Les ranger dans « Créative » ferait passer
+     une page pour une pub ; les jeter perdrait la seule chose que ces
+     fiches savent dire. D'où leur axe. */
+  var UTM_AXIS_LABELS = { creative: 'Créative', adset: 'Adset / audience', campaign: 'Campagne', channel: 'Canal' };
   var UTM_MIN_LEADS = 3;   /* sous ce seuil ET sans RDV ni close → replié */
 
   function renderCreativeSection(k) {
@@ -1011,7 +1017,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     /* — Sélecteur d'axe — */
     h += '<div class="fn-utm-axis" style="display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap">';
     h += '<span style="font-size:10.5px;color:var(--muted2);letter-spacing:0.6px;font-weight:700">VENTILER PAR</span>';
-    ['creative', 'adset', 'campaign'].forEach(function (ax) {
+    ['creative', 'adset', 'campaign', 'channel'].forEach(function (ax) {
       var on = ax === utmAxis;
       h += '<button type="button" data-utm-axis="' + ax + '" style="cursor:pointer;font:inherit;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid ' + (on ? 'var(--blue)' : 'var(--line)') + ';background:' + (on ? 'rgba(96,165,250,0.15)' : 'transparent') + ';color:' + (on ? 'var(--blue)' : 'var(--muted)') + '">' + esc(UTM_AXIS_LABELS[ax]) + '</button>';
     });
@@ -1020,12 +1026,14 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     /* — Couverture d'attribution : LE chiffre qui dit si le tableau est
          exploitable. Sans lui, un tableau bien rangé mais alimenté par 8 %
          des leads passe pour une vérité. — */
-    if (k.attributedPct != null) {
+    if (utmAxis === 'channel') {
+      h += '<div class="fn-stage-note" style="margin-top:8px">🚪 <strong>Canal d\'acquisition, pas publicité.</strong> D\'où arrive le lead — VSL, webinaire, Skool, bio Instagram, recommandation. Ces lignes ne portent aucune information de créative : c\'est normal, et c\'est tout ce que ces fiches savent dire. Pour la performance des pubs, bascule sur « Créative ».</div>';
+    } else if (k.attributedPct != null) {
       var ap = k.attributedPct;
       var apColor = ap >= 80 ? '#34d399' : (ap >= 40 ? '#f59e0b' : '#ef4444');
-      h += '<div class="fn-stage-note" style="margin-top:8px">📡 <strong style="color:' + apColor + '">' + fmtPct(ap, 0) + '</strong> des ' + fmtNum(k.leads) + ' leads de la période portent une attribution publicitaire structurée (' + fmtNum(k.attributedLeads) + ').';
+      h += '<div class="fn-stage-note" style="margin-top:8px">📡 <strong style="color:' + apColor + '">' + fmtPct(ap, 0) + '</strong> des ' + fmtNum(k.leads) + ' leads de la période portent une attribution <strong>publicitaire</strong> structurée (' + fmtNum(k.attributedLeads) + ').';
       if (ap < 80) {
-        h += ' Le reste est ventilé sur l\'ancien champ UTM — marqué <span style="color:var(--gold)">⚠</span> dans le tableau : ces lignes peuvent avoir été écrasées par un titre de formulaire ou un nom de tunnel.';
+        h += ' Le reste est ventilé sur l\'ancien champ UTM — marqué <span style="color:var(--gold)">⚠</span> dans le tableau : ces lignes peuvent avoir été écrasées par un titre de formulaire ou un nom de tunnel. Les leads dont la seule origine connue est un canal (VSL, webinaire…) sont sur l\'axe <strong>Canal</strong>, pas ici.';
       }
       h += ' La capture ne vaut que pour les leads entrés <strong>après</strong> la mise en place du 17/08/2026 ; l\'historique remonte par le backfill.</div>';
     }

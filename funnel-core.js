@@ -286,9 +286,76 @@
     return null;
   }
 
-  /* Clé d'axe d'un LEAD. Ordre : attribution structurée → champ `utm`
-     legacy (uniquement sur l'axe créative : un `utm` legacy ne dit rien
-     de la campagne ni de l'adset, l'inventer serait mentir).
+  /* ── CLASSIFICATION DES LIBELLÉS LEGACY (taxonomie validée Adrien
+        17/08/2026, sur les 8 051 fiches de la base) ──────────────────
+     Le champ `utm` historique ne contient presque jamais une créative.
+     Relevé réel :
+       ·    71 vraies créatives  « 6)NEW-été-Vision », « 15)VSLElite__… »
+       ·    96 identifiants Meta « 120246656447370308 »
+       ·   158 famille Ads*      « AdsProche|New », « Ads++ »   → CRÉATIVES
+       ·   267 audiences         « adv_broad », « interet1 », « LaL » → ADSETS
+       · 2 741 canaux / pages    « VSL » (1274), « ACFLIX » (545),
+                                 « Webinaire Dimanche » (475), « Lead Skool »…
+     Écrire « VSL » dans utm_content ferait passer une page pour une pub :
+     1 274 leads sur une ligne « créative » qui n'en est pas une. D'où
+     cette classification, appliquée AUSSI BIEN au backfill (ce qu'on
+     écrit en base) qu'à l'affichage (ce qu'on lit) — un lead non encore
+     backfillé se range donc déjà au bon endroit.
+
+     ⚠ Le défaut est « canal », jamais « créative ». Un libellé inconnu ne
+     doit pas être promu en attribution publicitaire : les vraies pubs
+     arrivent désormais par le template d'URL Meta, en utm_content propre.
+     Retourne { kind: 'ad_id'|'creative'|'adset'|'channel'|'none', value }. */
+  /* ⚠ Testés sur la forme REPLIÉE (creativeGroupKey : minuscules, sans
+     accents, séparateurs unifiés en espace). L'équipe écrit « interet1 »
+     et « intéret2 » — l'accent ne tombe pas au même endroit d'une saisie à
+     l'autre, un motif accentué en dur en rate systématiquement une.
+
+     `canon` fusionne les graphies d'une MÊME audience sous un seul libellé.
+     Le regroupement par défaut normalise les séparateurs mais ne peut pas
+     deviner que « ADVbroad » et « adv_broad » sont la même chose — sans
+     canon, deux lignes pour 255 leads. À l'inverse `interet1` / `interet2`
+     et `LaL` / `LaL1` sont des audiences DISTINCTES : pas de canon, elles
+     doivent rester séparées. */
+  var ADSET_PATTERNS = [
+    { re: /^adv ?broad/,    canon: 'adv_broad' },  // Advantage+ audience large
+    { re: /^interets?\d*$/  },                     // intérêt : interet1, intéret2
+    { re: /^lal\d*$/        },                     // lookalike : LaL, LaL1
+    { re: /^cbo /           }                      // CBO_chauds
+  ];
+
+  function classifyLegacyLabel(raw) {
+    var s = normalizeCreative(decodeUtm(raw == null ? '' : raw));
+    if (!s || attrIsPlaceholder(s)) return { kind: 'none', value: '' };
+    /* Artefacts posés par la plateforme sur elle-même : ils ne disent rien
+       de l'origine du lead, seulement de son dernier passage interne. */
+    var low = s.toLowerCase();
+    if (low.indexOf('alteoform') === 0 || low.indexOf('form ') === 0 ||
+        low.indexOf('vsl business') === 0 || low.indexOf('vsl élite') === 0 ||
+        low.indexOf('vsl elite') === 0 || low.indexOf('booking') === 0 ||
+        low === 'direct' || low === 'test' || low === 'webhook' ||
+        low === 'manuel' || low === 'orphan_recovery' || low === 'prospects') {
+      return { kind: 'none', value: '' };
+    }
+    if (/^\d{6,}$/.test(s)) return { kind: 'ad_id', value: s };
+    /* « 6)NEW-été-Vision », « 15)VSLElite__Pain-délégation… » : la
+       numérotation en tête est la convention de nommage des créatives. Ce
+       test passe AVANT tout le reste — « 10)VSL__Gagnerplus… » est une
+       créative, pas le canal « VSL ». */
+    if (/^\d{1,3}\s*\)/.test(s)) return { kind: 'creative', value: s };
+    if (/^ads/i.test(s)) return { kind: 'creative', value: s };   // validé Adrien
+    var folded = creativeGroupKey(s);
+    for (var i = 0; i < ADSET_PATTERNS.length; i++) {
+      if (ADSET_PATTERNS[i].re.test(folded)) {
+        return { kind: 'adset', value: ADSET_PATTERNS[i].canon || s };
+      }
+    }
+    return { kind: 'channel', value: s };
+  }
+
+  /* Clé d'axe d'un LEAD. Ordre : attribution structurée → querystring
+     éventuellement présente dans le champ `utm` → classification du
+     libellé legacy.
      `legacy: true` signale une ligne qui repose encore sur le champ `utm`
      (donc potentiellement volée par un titre de formulaire) : le rendu
      l'affiche avec un marqueur plutôt que de la faire passer pour une
@@ -296,34 +363,57 @@
      Retourne { label, group, adId, legacy }. */
   var UNATTRIB_LABEL = '— non attribué';
 
+  function axisKind(ax) {
+    return ax === 'adset' ? 'adset' : (ax === 'channel' ? 'channel' : 'creative');
+  }
+
   function leadAxisKey(l, axis, IDX) {
     var ax = axis || 'creative';
-    var a = leadAttribution(l);
-    var v = a ? axisValueOf(a, ax, IDX) : null;
-    if (v && v.label) {
-      return { label: v.label, group: creativeGroupKey(v.label), adId: v.adId || '', legacy: false };
+    function mk(label, isLegacy, adId) {
+      return { label: label, group: creativeGroupKey(label), adId: adId || '', legacy: !!isLegacy };
     }
-    /* Le champ `utm` legacy contient parfois une querystring complète posée
-       par la landing page : c'est une VRAIE capture, exploitable sur les
-       trois axes. On la parse avant de retomber sur le libellé libre. */
+
+    /* 1. Attribution structurée. Le canal a son propre champ : ce n'est pas
+       une donnée publicitaire, il n'entre pas dans attrHasSignal. */
+    var blk = (l && l.attributionFirst) || (l && l.attributionLast) || null;
+    if (ax === 'channel') {
+      if (blk && blk.channel) return mk(normalizeCreative(blk.channel), false);
+    } else {
+      var a = leadAttribution(l);
+      var v = a ? axisValueOf(a, ax, IDX) : null;
+      if (v && v.label) return mk(v.label, false, v.adId);
+    }
+
+    /* 2. Querystring complète stockée dans le champ `utm` : vraie capture. */
     var legacyAttr = parseAttribution(l && l.utm);
-    if (legacyAttr) {
+    if (legacyAttr && ax !== 'channel') {
       var v2 = axisValueOf(legacyAttr, ax, IDX);
-      if (v2 && v2.label) {
-        return { label: v2.label, group: creativeGroupKey(v2.label), adId: v2.adId || '', legacy: true };
-      }
+      if (v2 && v2.label) return mk(v2.label, true, v2.adId);
     }
-    if (ax === 'creative') {
-      var legacy = normalizeCreative(utmKeyOf(l));
-      /* Une macro non substituée ou un placeholder n'est pas une créative :
-         il rejoint le bucket « — » au lieu de faire sa propre ligne. */
-      if (attrIsPlaceholder(legacy)) legacy = '';
-      if (legacy && legacy !== '—') {
-        return { label: legacy, group: creativeGroupKey(legacy), adId: '', legacy: true };
+
+    /* 3. Libellé libre, classé selon la taxonomie. Un libellé ne remonte
+       que sur SON axe : « VSL » n'apparaît plus dans les créatives, et
+       « adv_broad » plus que dans les adsets. */
+    var cl = classifyLegacyLabel(l && l.utm);
+    if (cl.kind === 'ad_id') {
+      if (ax === 'creative') {
+        var byAd = (IDX && IDX.ad[cl.value]) || null;
+        if (byAd && byAd.ad_name) return mk(normalizeCreative(byAd.ad_name), true, cl.value);
+        return mk('ID ' + cl.value, true, cl.value);
       }
-      return { label: '—', group: '—', adId: '', legacy: true };
+      if (IDX && IDX.ad[cl.value]) {
+        var ref = IDX.ad[cl.value];
+        var nm = ax === 'adset' ? ref.adset_name : (ax === 'campaign' ? ref.campaign_name : null);
+        if (nm) return mk(normalizeCreative(nm), true, cl.value);
+      }
+    } else if (cl.kind === axisKind(ax) && cl.kind !== 'channel') {
+      return mk(cl.value, true, '');
+    } else if (cl.kind === 'channel' && ax === 'channel') {
+      return mk(cl.value, true, '');
     }
-    return { label: UNATTRIB_LABEL, group: UNATTRIB_LABEL, adId: '', legacy: true };
+
+    if (ax === 'creative' || ax === 'channel') return mk('—', true);
+    return mk(UNATTRIB_LABEL, true);
   }
 
   /* ── Dates "réelles" lead — portage ES5 de api/_leadDates.js ── */
@@ -1461,12 +1551,17 @@
     k.adLevelSpend = Math.round(adLevelSpend * 100) / 100;
     k.hasAdLevelSpend = adLevelSpend > 0;
 
-    var AXES = ['creative', 'adset', 'campaign'];
-    var maps = { creative: {}, adset: {}, campaign: {} };
+    /* 4 axes. « Canal » n'est PAS de la publicité : il répond à « d'où
+       viennent mes leads » (VSL, webinaire, Skool, bio Instagram…), la
+       question que 2 741 des 8 051 fiches savent réellement documenter.
+       Le mélanger aux créatives ferait passer une page pour une pub. */
+    var AXES = ['creative', 'adset', 'campaign', 'channel'];
+    var maps = { creative: {}, adset: {}, campaign: {}, channel: {} };
     var unattr = {
       creative: { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
       adset:    { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
-      campaign: { booked: 0, cancelled: 0, noshow: 0, closes: 0 }
+      campaign: { booked: 0, cancelled: 0, noshow: 0, closes: 0 },
+      channel:  { booked: 0, cancelled: 0, noshow: 0, closes: 0 }
     };
 
     function rowOf(axis, l) {
@@ -1559,7 +1654,8 @@
     k.utmRowsByAxis = {
       creative: sortRows(maps.creative),
       adset:    sortRows(maps.adset),
-      campaign: sortRows(maps.campaign)
+      campaign: sortRows(maps.campaign),
+      channel:  sortRows(maps.channel)
     };
     k.utmUnattrByAxis = unattr;
     /* Compat : api/agency-funnel.js et l'export lisent encore ces deux clés. */
@@ -1757,6 +1853,7 @@
     leadAttribution: leadAttribution, normalizeCreative: normalizeCreative,
     creativeGroupKey: creativeGroupKey, buildCreativeIndex: buildCreativeIndex,
     axisValueOf: axisValueOf, leadAxisKey: leadAxisKey,
+    classifyLegacyLabel: classifyLegacyLabel,
     realEntryMs: realEntryMs, pad2: pad2, isoDate: isoDate, median: median,
     phone9: phone9, leadTunnel: leadTunnel, frDateMs: frDateMs,
     effectiveCosts: effectiveCosts, classifyBooking: classifyBooking,
