@@ -1027,6 +1027,23 @@ h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">';
 });
 h+='</div>';
 h+='</div>';
+// ── Canal par défaut (17/08/2026) ──
+// REPLI, jamais un écrasement. Un lead qui arrive avec une origine — UTM
+// dans l'URL, ou passage antérieur retrouvé dans son historique — la garde.
+// Ce réglage ne sert QUE pour les fiches autrement vides.
+// Né du cas réel : le lien de ce formulaire est partagé à la main en message
+// privé, donc sans aucun paramètre, et les leads tombaient en « inconnu » —
+// dont un close.
+h+='<div class="ed-set-card"><div class="ed-set-title">🚪 Canal par défaut</div>';
+h+='<div class="ed-set-desc">Si un lead arrive par ce formulaire <strong>sans aucune origine connue</strong>, on lui attribue celle-ci. Un lead qui porte déjà une origine (UTM dans le lien, passage antérieur) la conserve — ce réglage ne l\'écrase jamais.</div>';
+h+='<select class="bs" id="set-defchan" style="width:100%;margin-top:8px" onchange="currentForm.settings.defaultChannel=this.value;saveForm(true)">';
+var _dc=s.defaultChannel||'';
+[['','— Aucun (laisser vide) —'],['DIRECT','Lien partagé à la main / message privé'],['messenger','Messenger'],['instagram-dm','Instagram — message privé'],['whatsapp','WhatsApp'],['link_in_bio','Instagram — lien en bio'],['VSL','VSL'],['Webinaire Dimanche','Webinaire Dimanche'],['Lead Skool','Skool'],['email','E-mail'],['Recommandation','Recommandation']].forEach(function(o){
+  h+='<option value="'+esc(o[0])+'"'+(_dc===o[0]?' selected':'')+'>'+esc(o[1])+'</option>';
+});
+h+='</select>';
+h+='<div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:8px">S\'applique aux nouveaux leads <strong>et</strong> aux anciens, au prochain passage du backfill d\'attribution.</div>';
+h+='</div>';
 h+='<div class="ed-set-card"><div style="display:flex;gap:16px;align-items:center"><img src="'+qrUrl+'" style="width:100px;height:100px;border-radius:8px;background:white;padding:4px"/><div><div class="ed-set-title">QR Code</div><div style="font-size:11px;color:rgba(255,255,255,.35)">Partagez ce code QR pour un accès instantané.</div></div></div></div>';
 // Embed
 h+='<div class="ed-set-card"><div class="ed-set-title">📄 Code d\'intégration (embed)</div>';

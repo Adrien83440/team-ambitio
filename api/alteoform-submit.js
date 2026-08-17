@@ -155,7 +155,7 @@ module.exports = async (req, res) => {
   const formId = body.formId;
   const contact = body.contact || {};
   const answers = body.answers || {};
-  const attribution = buildAttribution(body, 'form');
+  let attribution = buildAttribution(body, 'form');
 
   if (!formId || typeof formId !== 'string') {
     res.status(400).json({ error: 'formId_required' });
@@ -184,6 +184,23 @@ module.exports = async (req, res) => {
   const fields = formData.fields || [];
   const settings = formData.settings || {};
   const formTitle = formData.title || '';
+
+  // ─── Canal par défaut du formulaire ─────────────────────────────────
+  // REPLI STRICT : ne s'applique que si la page n'a transmis AUCUN UTM.
+  // Le lien de certains formulaires est partagé à la main en message privé,
+  // donc nu — le lead arrivait alors sans la moindre origine, dont un close
+  // du 17/08. Un lead porteur d'un vrai UTM n'est jamais concerné : le test
+  // ci-dessous ne se déclenche que sur `attribution` vide.
+  const defaultChannel = String(settings.defaultChannel || '').trim();
+  if (!attribution && defaultChannel) {
+    attribution = {
+      channel: defaultChannel.slice(0, 120),
+      via: 'form-default',
+      declared: true,
+      formId: String(formId).slice(0, 80),
+      capturedAt: new Date().toISOString(),
+    };
+  }
   const fieldIndex = {}; // {fieldId: {label, type}}
   fields.forEach(f => {
     if (f && f.id) fieldIndex[f.id] = { label: f.label || '', type: f.type || 'text' };

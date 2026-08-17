@@ -59,7 +59,55 @@ const Core = require('../funnel-core.js');
 const FieldPath = admin.firestore.FieldPath;
 
 const SELECT_FIELDS = ['utm', 'engagementHistory', 'formSubmissionsHistory',
-  'attributionFirst', 'attributionLast', 'nom', 'email', '_merged'];
+  'attributionFirst', 'attributionLast', 'nom', 'email', '_merged', 'formId'];
+
+// ─── Référentiels chargés une fois pour les deux replis de dernier recours ──
+
+// alteo_forms/{id}.settings.defaultChannel — le canal à attribuer quand un
+// lead venu de ce formulaire n'a AUCUNE autre origine. Cas réel : le lien
+// d'un formulaire partagé à la main en message privé arrive nu.
+async function loadFormChannels() {
+  const out = {};
+  try {
+    const snap = await db.collection('alteo_forms').get();
+    snap.forEach((d) => {
+      const s = (d.data() || {}).settings || {};
+      const c = String(s.defaultChannel || '').trim();
+      if (c) out[d.id] = c.slice(0, 120);
+    });
+  } catch (e) {
+    console.warn('[backfill-attribution] alteo_forms illisible :', e && e.message);
+  }
+  return out;
+}
+
+// leadId → 'setter' quand le RDV a été posé par le setting sur le lien
+// setter. Ces leads n'ont pas de canal d'acquisition : ils ont été appelés.
+// Le dire vaut mieux que de les laisser dans « inconnu » — mais uniquement
+// en dernier recours, après toutes les origines réelles.
+async function loadSetterBookings() {
+  const out = {};
+  try {
+    const FieldPathB = admin.firestore.FieldPath;
+    let last = null;
+    for (let page = 0; page < 200; page++) {
+      let q = db.collection('bookings').select('leadId', 'source')
+        .orderBy(FieldPathB.documentId()).limit(500);
+      if (last) q = q.startAfter(last);
+      const snap = await q.get();
+      if (snap.empty) break;
+      snap.forEach((d) => {
+        const b = d.data() || {};
+        if (b.leadId && b.source === 'setter_booking') out[String(b.leadId)] = 1;
+        last = d.id;
+      });
+      if (snap.size < 500) break;
+    }
+  } catch (e) {
+    console.warn('[backfill-attribution] bookings illisibles :', e && e.message);
+  }
+  return out;
+}
 
 // ─── Classification des libellés ────────────────────────────────────────────
 // La taxonomie vit dans funnel-core (Core.classifyLegacyLabel) : le backfill
@@ -123,7 +171,7 @@ const KIND_PASSES = [
   { kind: 'channel',  from: 'legacy-channel' },
 ];
 
-function reconstruct(d) {
+function reconstruct(d, leadId, FORM_CHANNELS, SETTER_LEADS) {
   const cands = candidatesOf(d);
   for (let i = 0; i < cands.length; i++) {
     if (cands[i].attr) return { attr: cands[i].attr, from: 'history-attribution', at: cands[i].at };
@@ -144,6 +192,27 @@ function reconstruct(d) {
       return { attr, from: pass.from, at: cands[i].at };
     }
   }
+
+  // ─── DERNIERS RECOURS ───────────────────────────────────────────────
+  // Volontairement APRÈS toutes les passes ci-dessus : ce sont des
+  // déductions de contexte, jamais des mesures. Une origine réelle, même
+  // approximative, les précède toujours — c'est pour ça que Gregoire et
+  // Solen gardent leur `link_in_bio` alors qu'ils sont passés par le même
+  // formulaire que Gunter et Lionel.
+
+  // 1. Canal par défaut du formulaire d'origine.
+  const fid = d.formId ? String(d.formId) : '';
+  if (fid && FORM_CHANNELS && FORM_CHANNELS[fid]) {
+    return { attr: { channel: FORM_CHANNELS[fid], formId: fid }, from: 'form-default', at: '' };
+  }
+
+  // 2. RDV posé par le setting sur le lien setter : pas un canal
+  //    d'acquisition, un mode de prise de contact — mais c'est une
+  //    information réelle, et bien plus utile qu'un « inconnu » muet.
+  if (leadId && SETTER_LEADS && SETTER_LEADS[String(leadId)]) {
+    return { attr: { channel: 'setting-telephone' }, from: 'setter-booking', at: '' };
+  }
+
   return null;
 }
 
@@ -171,7 +240,15 @@ module.exports = async (req, res) => {
     let skippedAlreadyDone = 0;
     let unresolved = 0;                       // aucune trace exploitable
     const bySource = { 'history-attribution': 0, querystring: 0, 'legacy-adid': 0,
-      'legacy-creative': 0, 'legacy-adset': 0, 'legacy-channel': 0 };
+      'legacy-creative': 0, 'legacy-adset': 0, 'legacy-channel': 0,
+      'form-default': 0, 'setter-booking': 0 };
+
+    // Référentiels des deux replis de dernier recours, chargés une seule fois.
+    const FORM_CHANNELS = await loadFormChannels();
+    const SETTER_LEADS = await loadSetterBookings();
+    console.log('[admin-backfill-attribution] formulaires avec canal par défaut : '
+      + Object.keys(FORM_CHANNELS).length
+      + ' · leads avec RDV setter : ' + Object.keys(SETTER_LEADS).length);
 
     const mutations = [];
     const items = [];
@@ -213,7 +290,7 @@ module.exports = async (req, res) => {
           skippedAlreadyDone++; continue;
         }
 
-        const rec = reconstruct(d);
+        const rec = reconstruct(d, doc.id, FORM_CHANNELS, SETTER_LEADS);
         if (!rec) {
           unresolved++;
           if (unresolvedSample.length < 50) {
@@ -271,6 +348,8 @@ module.exports = async (req, res) => {
       //   legacy-channel                    → canal d'acquisition, PAS de la
       //                                       pub : n'entre pas dans le taux
       //                                       d'attribution publicitaire
+      //   form-default / setter-booking     → déductions de contexte, posées
+      //                                       en dernier recours seulement
       unresolvedSample,
       cursor: lastDocId,
       hasMore,
