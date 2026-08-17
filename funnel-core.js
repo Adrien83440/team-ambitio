@@ -188,10 +188,18 @@
   /* Alias tolérés à la capture. Volontairement restreints aux clés NON
      ambiguës : pas de `source` ni `campaign` nus, qui entreraient en
      collision avec les champs métier du body d'api/lead-optin.js. */
+  /* `audience` : l'agence nomme l'adset dans un paramètre MAISON plutôt que
+     dans utm_term — son template est
+       utm_source={{site_source_name}}&utm_medium={{placement}}
+       &utm_campaign={{campaign.name}}&utm_content={{ad.name}}
+       &Audience={{adset.name}}
+     Sans cet alias, l'adset arrivait dans l'URL et repartait à la poubelle :
+     l'axe Adset serait resté vide alors que la donnée était là (17/08/2026).
+     Les clés sont comparées en minuscules, « Audience » passe donc. */
   var ATTR_ALIASES = {
     utm_campaign: ['campaign_name'],
     utm_content:  ['ad_name'],
-    utm_term:     ['adset_name'],
+    utm_term:     ['adset_name', 'audience'],
     ad_id:        ['adid'],
     adset_id:     ['adsetid'],
     campaign_id:  ['campaignid']
