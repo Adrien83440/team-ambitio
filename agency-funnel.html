@@ -548,15 +548,18 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     var rowsU = [], smallU = [];
     for (var si = 0; si < rowsAll.length; si++) {
       var ru = rowsAll[si];
-      if (ru.leads < 3 && !ru.booked && !ru.closes) smallU.push(ru); else rowsU.push(ru);
+      if (!ru.outOfAds && ru.leads < 3 && !ru.booked && !ru.closes) smallU.push(ru); else rowsU.push(ru);
     }
     if (smallU.length) {
       var aggU = { key: 'Autres (' + smallU.length + ' valeur' + (smallU.length > 1 ? 's' : '') + ' à moins de 3 leads)',
-        leads: 0, booked: 0, cancelled: 0, noshow: 0, closes: 0, col: 0, legacy: false, _agg: true };
+        leads: 0, booked: 0, cancelled: 0, noshow: 0, closes: 0, col: 0,
+        scoreSum: 0, scoreN: 0, qual: 0, legacy: false, _agg: true };
       for (var sj = 0; sj < smallU.length; sj++) {
         aggU.leads += smallU[sj].leads; aggU.booked += smallU[sj].booked;
         aggU.cancelled += smallU[sj].cancelled; aggU.noshow += smallU[sj].noshow;
         aggU.closes += smallU[sj].closes; aggU.col += smallU[sj].col;
+        aggU.scoreSum += smallU[sj].scoreSum || 0; aggU.scoreN += smallU[sj].scoreN || 0;
+        aggU.qual += smallU[sj].qual || 0;
       }
       rowsU.push(aggU);
     }
@@ -567,7 +570,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         h += '<div class="ag-stage-note" style="margin-bottom:8px">📡 ' + fmtPct(k.attributedPct, 0) + ' des leads de la période portent une attribution publicitaire capturée. Les lignes marquées ⚠ reposent sur l\'ancien champ UTM, écrasable par un titre de formulaire ou un nom de tunnel — à lire avec prudence.</div>';
       }
       h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr>'
-        + '<th>Créative</th><th class="num">Leads</th><th class="num">RDV pris</th><th class="num">Annulés</th><th class="num">No-show</th><th class="num">Closes</th><th class="num">Collecté HT</th>'
+        + '<th>Créative</th><th class="num">Leads</th><th class="num">Score moy ⭐</th><th class="num">Qualifiés 4-5</th><th class="num">RDV pris</th><th class="num">Annulés</th><th class="num">No-show</th><th class="num">Closes</th><th class="num">Collecté HT</th>'
         + '</tr></thead><tbody>';
       for (var r = 0; r < rowsU.length; r++) {
         var u = rowsU[r];
@@ -580,6 +583,15 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         h += '<tr' + (u._agg ? ' style="opacity:0.75"' : '') + '>';
         h += '<td>' + mk + '<span class="ag-utm" title="' + escAttr(u.key) + '">' + esc(u.key) + '</span></td>';
         h += '<td class="num">' + fmtNum(u.leads) + '</td>';
+        /* Qualité du lead, notée par l'équipe dans Leads Live après chaque
+           appel. C'est LA colonne qui dit à une agence si une créative
+           ramène du volume ou du volume utile — elle manquait ici alors
+           que la donnée était déjà transmise. */
+        var avgU = u.scoreN ? Math.round(u.scoreSum / u.scoreN * 10) / 10 : null;
+        var avgC = avgU == null ? 'var(--muted2)' : (avgU >= 4 ? '#34d399' : (avgU >= 3 ? '#f59e0b' : '#ef4444'));
+        h += '<td class="num" style="color:' + avgC + '">' + (avgU == null ? '—' : '⭐ ' + avgU.toLocaleString('fr-FR'))
+          + (u.scoreN ? ' <span style="color:var(--muted2);font-size:10px">(' + u.scoreN + ' noté' + (u.scoreN > 1 ? 's' : '') + ')</span>' : '') + '</td>';
+        h += '<td class="num">' + (u.scoreN ? fmtNum(u.qual) : '—') + '</td>';
         h += '<td class="num">' + fmtNum(u.booked) + '</td>';
         h += '<td class="num"' + (u.cancelled ? ' style="color:var(--red3)"' : '') + '>' + fmtNum(u.cancelled) + '</td>';
         h += '<td class="num"' + (u.noshow ? ' style="color:var(--gold)"' : '') + '>' + fmtNum(u.noshow) + '</td>';
@@ -598,6 +610,10 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         h += '<div class="ag-stage-note" style="margin-top:8px">⚠ Non ventilables par créative : ' + parts.join(' · ')
           + ' — lead entré avant la période et sans ré-optin, ou close sans fiche liée. Comptés dans les totaux des sections, absents du tableau.</div>';
       }
+      /* Sans cette phrase, une agence lit « ⭐ 1 » comme une créative
+         catastrophique alors que c'est souvent « un seul lead noté ». */
+      h += '<div class="ag-stage-note" style="margin-top:6px">Le score ⭐ est la qualité du lead notée par l\'équipe après appel (1 à 5). Le nombre entre parenthèses dit combien de leads de la ligne ont été notés — une moyenne sur 2 notes ne vaut pas une moyenne sur 30.</div>';
+      h += '<div class="ag-stage-note" style="margin-top:6px">Les lignes « Hors pub » regroupent les leads venus d\'ailleurs que de la publicité (Instagram organique, lien partagé, setting téléphonique). Elles sont là pour que les totaux tombent juste, pas pour être optimisées.</div>';
     }
     h += '</div><div class="ag-arrow">▼</div>';
     return h;
