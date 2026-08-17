@@ -1010,6 +1010,13 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     var uu = (k.utmUnattrByAxis && k.utmUnattrByAxis[utmAxis]) || k.utmUnattr || {};
     var axisLabel = UTM_AXIS_LABELS[utmAxis] || 'Créative';
     var showSpend = !!k.hasAdLevelSpend;
+    /* CPL et ROAS divisent une dépense par un volume de leads. Tant que la
+       dépense ne couvre pas TOUTE la période, les deux ne portent pas sur
+       le même intervalle et le ratio est faux — dans le sens flatteur, ce
+       qui est le pire. On garde la Dépense (une somme partielle annoncée
+       comme telle reste lisible) et on masque les ratios. */
+    var spendComplete = showSpend && k.adSpendComplete === true;
+    var showRatios = showSpend && spendComplete;
 
     var h = stageOpen('🎨', 'Performance publicitaire',
       'axe = attribution capturée à l\'arrivée du lead (attributionFirst), plus le champ UTM écrasable · chaque colonne garde l\'axe de sa section : leads entrés · RDV pris · annulés &amp; no-show ayant lieu · closes gagnés sur la période · qualifiés = score ⭐ 4-5 (Leads Live)');
@@ -1038,7 +1045,17 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       h += ' La capture ne vaut que pour les leads entrés <strong>après</strong> la mise en place du 17/08/2026 ; l\'historique remonte par le backfill.</div>';
     }
     if (k.creativeIndexSize === 0) {
-      h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Référentiel créatives (<code>ads_creatives</code>) vide : les UTM ne portant qu\'un identifiant Meta restent affichés « ID 1202466… ». Alimente-le pour voir les noms de pub.</div>';
+      h += '<div class="fn-stage-note" style="margin-top:6px">ℹ Référentiel créatives (<code>ads_creatives</code>) vide : les UTM ne portant qu\'un identifiant Meta restent affichés « ID 1202466… », et ni l\'adset ni la campagne ne peuvent être retrouvés. Alimente-le pour voir les noms de pub.</div>';
+    }
+    /* Le chiffre le plus important de la section quand Make vient d'être
+       branché : sans lui, un CPL calculé sur un jour de dépense passe pour
+       le CPL du mois. */
+    if (showSpend && !spendComplete) {
+      h += '<div class="fn-stage-note" style="margin-top:6px;border-left:3px solid var(--gold);padding-left:8px">'
+        + '⚠ <strong>Dépense incomplète : ' + fmtNum(k.adSpendDaysCovered) + ' jour' + (k.adSpendDaysCovered > 1 ? 's' : '') + ' sur ' + fmtNum(k.adSpendDaysExpected) + '</strong> de la période ont de la donnée publicitaire. '
+        + 'La colonne Dépense ne montre donc qu\'une <strong>partie</strong> du budget réel, alors que la colonne Leads couvre tout. '
+        + '<strong>CPL et ROAS sont masqués</strong> tant que c\'est le cas : les calculer reviendrait à diviser un jour de dépense par un mois de leads, et à afficher un coût par lead bien trop flatteur. '
+        + 'Fais rejouer l\'ingestion Make sur les jours manquants — l\'endpoint est idempotent.</div>';
     }
 
     if (!rows.length) {
@@ -1085,13 +1102,16 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       main.push(agg);
     }
 
-    var minW = showSpend ? 1180 : 940;
+    var minW = showRatios ? 1180 : (showSpend ? 1020 : 940);
     h += '<div class="fn-table-wrap" style="margin-top:10px"><table class="fn-table" style="min-width:' + minW + 'px"><thead><tr>';
     h += '<th style="cursor:default">' + esc(axisLabel) + '</th>';
     h += '<th style="cursor:default">Leads</th><th style="cursor:default">Score moy ⭐</th><th style="cursor:default">Qualifiés 4-5</th>';
     h += '<th style="cursor:default">RDV pris</th><th style="cursor:default">Annulés</th><th style="cursor:default">No-show</th>';
     h += '<th style="cursor:default">Closes</th><th style="cursor:default">Collecté HT</th>';
-    if (showSpend) h += '<th style="cursor:default">Dépense</th><th style="cursor:default">CPL</th><th style="cursor:default">ROAS</th>';
+    if (showSpend) {
+      h += '<th style="cursor:default">Dépense' + (spendComplete ? '' : ' <span style="color:var(--gold)" title="Partielle — ' + k.adSpendDaysCovered + ' j sur ' + k.adSpendDaysExpected + '">⚠</span>') + '</th>';
+      if (showRatios) h += '<th style="cursor:default">CPL</th><th style="cursor:default">ROAS</th>';
+    }
     h += '</tr></thead><tbody>';
 
     main.forEach(function (r) {
@@ -1114,9 +1134,11 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
       h += '<td class="num"' + (r.closes ? ' style="color:#34d399;font-weight:700"' : '') + '>' + fmtNum(r.closes) + closePct + '</td>';
       h += '<td class="num">' + (r.closes ? fmtEuro(r.col) : '—') + '</td>';
       if (showSpend) {
-        h += '<td class="num">' + (r.hasSpend ? fmtEuro(r.spend) : '—') + '</td>';
-        h += '<td class="num">' + (r.cpl != null ? fmtEuro2(r.cpl) : '—') + '</td>';
-        h += '<td class="num"' + (r.roas != null && r.roas >= 1 ? ' style="color:#34d399;font-weight:700"' : '') + '>' + (r.roas != null ? r.roas.toFixed(2).replace('.', ',') + '×' : '—') + '</td>';
+        h += '<td class="num"' + (spendComplete ? '' : ' style="color:var(--muted)" title="Dépense partielle sur la période"') + '>' + (r.hasSpend ? fmtEuro(r.spend) : '—') + '</td>';
+        if (showRatios) {
+          h += '<td class="num">' + (r.cpl != null ? fmtEuro2(r.cpl) : '—') + '</td>';
+          h += '<td class="num"' + (r.roas != null && r.roas >= 1 ? ' style="color:#34d399;font-weight:700"' : '') + '>' + (r.roas != null ? r.roas.toFixed(2).replace('.', ',') + '×' : '—') + '</td>';
+        }
       }
       h += '</tr>';
     });

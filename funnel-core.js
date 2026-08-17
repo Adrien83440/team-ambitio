@@ -246,28 +246,83 @@
     return s.toLowerCase().replace(/[\s_-]+/g, ' ').trim();
   }
 
+  /* Clé de RAPPROCHEMENT d'un nom de créative avec le référentiel Meta.
+     Plus agressive que creativeGroupKey : elle supprime TOUTE ponctuation
+     et tout espace. Raison : Meta retire les espaces quand il substitue
+     {{ad.name}} dans une URL, si bien que la même publicité arrive
+     « 6)NEW-été-Vision » côté lead et « 6) NEW - été - Vision » côté API.
+
+        6)NEW-été-Vision       → 6newetevision
+        6) NEW - été - Vision  → 6newetevision   ✅ même publicité
+
+     Réservée au JOIN contre un référentiel fini et connu. Jamais utilisée
+     pour regrouper des lignes entre elles — à ce niveau d'agressivité, deux
+     créatives réellement distinctes pourraient se confondre. */
+  function creativeMatchKey(s) {
+    var v = attrDecodeValue(s);
+    if (typeof v.normalize === 'function') {
+      try { v = v.normalize('NFD').replace(/[\u0300-\u036F]/g, ''); } catch (e) { /* vieux Safari */ }
+    }
+    return v.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
   /* Référentiel créatives : ads_creatives/{ad_id} → noms lisibles.
-     Indexé par ad_id, adset_id et campaign_id pour résoudre les trois axes. */
+     Indexé par ad_id, adset_id, campaign_id ET par nom normalisé — c'est
+     ce dernier index qui permet de rattacher les leads dont l'UTM ne
+     portait qu'un nom de pub (le gros du volume historique) à leur adset
+     et à leur campagne. */
   function buildCreativeIndex(list) {
-    var idx = { ad: {}, adset: {}, campaign: {} };
+    var idx = { ad: {}, adset: {}, campaign: {}, byName: {} };
     (list || []).forEach(function (c) {
       if (!c) return;
       if (c.ad_id) idx.ad[String(c.ad_id)] = c;
       if (c.adset_id && !idx.adset[String(c.adset_id)]) idx.adset[String(c.adset_id)] = c;
       if (c.campaign_id && !idx.campaign[String(c.campaign_id)]) idx.campaign[String(c.campaign_id)] = c;
+      if (c.ad_name) {
+        var mk = creativeMatchKey(c.ad_name);
+        /* Collision de noms : on ne devine pas. La première publicité
+           indexée gagne, et on marque la clé pour ne pas s'y fier. */
+        if (mk) {
+          if (idx.byName[mk] && idx.byName[mk].ad_id !== c.ad_id) idx.byName[mk]._ambiguous = true;
+          else if (!idx.byName[mk]) idx.byName[mk] = c;
+        }
+      }
     });
     return idx;
+  }
+
+  /* Publicité du référentiel correspondant à un bloc d'attribution.
+     Par identifiant d'abord (certain), par nom ensuite (déduit mais sûr
+     sur un référentiel de quelques dizaines de pubs aux noms distincts). */
+  function refAdOf(a, IDX) {
+    if (!a || !IDX) return null;
+    var adId = a.ad_id || '';
+    if (!adId && a.utm_content && /^\d{6,}$/.test(a.utm_content)) adId = a.utm_content;
+    if (adId && IDX.ad[String(adId)]) return IDX.ad[String(adId)];
+    if (a.utm_content) {
+      var mk = creativeMatchKey(a.utm_content);
+      var byName = mk ? IDX.byName[mk] : null;
+      if (byName && !byName._ambiguous) return byName;
+    }
+    return null;
   }
 
   var AXIS_NAME_FIELD = { creative: 'ad_name', adset: 'adset_name', campaign: 'campaign_name' };
 
   /* Valeur d'axe d'un bloc d'attribution.
      Retourne { label, adId, resolved } ou null.
-     · un nom purement numérique EST un ad id (template Meta réglé sur
-       {{ad.id}} au lieu de {{ad.name}}) — on tente le référentiel, sinon
-       on l'affiche « ID 1202466… » pour qu'il soit lisible comme tel et
-       non pris pour un nom de créative ;
-     · le référentiel résout via ad_id en priorité (le plus précis). */
+
+     LE RÉFÉRENTIEL PASSE EN PREMIER, et c'est tout l'enjeu de fidélité :
+     une même publicité arrivait jusqu'ici sur DEUX lignes — l'une nommée
+     « 6)NEW-été-Vision » (leads dont l'UTM portait le nom), l'autre
+     « ID 120246655604620308 » (leads dont l'UTM portait l'identifiant).
+     Mêmes créatives, notes ⭐ et closes éparpillés. Résolues contre le
+     référentiel, les deux prennent le nom canonique Meta « 6) NEW - été -
+     Vision » et fusionnent — et récupèrent au passage leur adset et leur
+     campagne, que le champ UTM n'a jamais transportés.
+
+     Ordre : identifiant de pub (certain) → nom de pub (déduit, cf.
+     creativeMatchKey) → identifiant propre à l'axe → valeur brute. */
   function axisValueOf(a, axis, IDX) {
     if (!a) return null;
     var nameField = axis === 'campaign' ? 'utm_campaign' : (axis === 'adset' ? 'utm_term' : 'utm_content');
@@ -280,13 +335,13 @@
     /* Un nom numérique long est un identifiant déguisé. */
     if (name && /^\d{6,}$/.test(name)) { if (!id) id = name; name = ''; }
 
-    if (!name && IDX) {
-      var ref = (adId && IDX.ad[String(adId)]) ||
-                (id && IDX[axis === 'creative' ? 'ad' : axis] && IDX[axis === 'creative' ? 'ad' : axis][String(id)]) ||
-                null;
-      if (!ref && id && axis !== 'creative') ref = IDX[axis] ? IDX[axis][String(id)] : null;
+    if (IDX) {
+      /* Publicité connue → ses noms font foi sur les trois axes, même si
+         l'UTM portait déjà un libellé : celui de Meta est le bon. */
+      var ref = refAdOf(a, IDX);
+      if (!ref && id) ref = (axis === 'creative' ? IDX.ad : IDX[axis]) ? (axis === 'creative' ? IDX.ad : IDX[axis])[String(id)] : null;
       if (ref && ref[refField]) {
-        return { label: normalizeCreative(ref[refField]), adId: adId || (axis === 'creative' ? id : ''), resolved: true };
+        return { label: normalizeCreative(ref[refField]), adId: ref.ad_id || adId || '', resolved: true };
       }
     }
     if (name) return { label: normalizeCreative(name), adId: adId || '', resolved: false };
@@ -414,20 +469,35 @@
        que sur SON axe : « VSL » n'apparaît plus dans les créatives, et
        « adv_broad » plus que dans les adsets. */
     var cl = classifyLegacyLabel(l && l.utm);
-    if (cl.kind === 'ad_id') {
-      if (ax === 'creative') {
-        var byAd = (IDX && IDX.ad[cl.value]) || null;
-        if (byAd && byAd.ad_name) return mk(normalizeCreative(byAd.ad_name), true, cl.value);
-        return mk('ID ' + cl.value, true, cl.value);
+
+    /* 3a. Le libellé désigne-t-il une publicité que le référentiel connaît ?
+       Par identifiant, ou par NOM — Meta ayant retiré les espaces en posant
+       {{ad.name}} dans l'URL, « 6)NEW-été-Vision » et « 6) NEW - été -
+       Vision » sont la même pub. C'est ce rapprochement qui fait remonter
+       adset et campagne pour le gros du volume historique, et qui réunit
+       sur UNE ligne les leads arrivés par nom et ceux arrivés par
+       identifiant. Résolue contre Meta, la ligne n'est plus « legacy ». */
+    /* ⚠ Jamais sur l'axe Canal : une publicité n'est pas un canal
+       d'acquisition. Sans ce garde, « 6) NEW - été - Vision » remontait
+       dans la colonne Canal — la même erreur que l'axe Campagne affichant
+       des publicités. Chaque axe ne reçoit que ce qui lui correspond. */
+    if ((cl.kind === 'ad_id' || cl.kind === 'creative') && ax !== 'channel') {
+      var probe = cl.kind === 'ad_id' ? { ad_id: cl.value } : { utm_content: cl.value };
+      var ref = refAdOf(probe, IDX);
+      if (ref) {
+        var nm = ax === 'adset' ? ref.adset_name
+               : (ax === 'campaign' ? ref.campaign_name : ref.ad_name);
+        if (nm) return mk(normalizeCreative(nm), false, ref.ad_id || '');
       }
-      if (IDX && IDX.ad[cl.value]) {
-        var ref = IDX.ad[cl.value];
-        var nm = ax === 'adset' ? ref.adset_name : (ax === 'campaign' ? ref.campaign_name : null);
-        if (nm) return mk(normalizeCreative(nm), true, cl.value);
-      }
-    } else if (cl.kind === axisKind(ax) && cl.kind !== 'channel') {
+      /* Publicité inconnue du référentiel : un identifiant reste lisible en
+         tant que tel sur l'axe créative, mais ne dit rien des deux autres. */
+      if (cl.kind === 'ad_id' && ax === 'creative') return mk('ID ' + cl.value, true, cl.value);
+    }
+
+    if (cl.kind === axisKind(ax) && cl.kind !== 'channel') {
       return mk(cl.value, true, '');
-    } else if (cl.kind === 'channel' && ax === 'channel') {
+    }
+    if (cl.kind === 'channel' && ax === 'channel') {
       return mk(cl.value, true, '');
     }
 
@@ -1570,6 +1640,33 @@
     k.adLevelSpend = Math.round(adLevelSpend * 100) / 100;
     k.hasAdLevelSpend = adLevelSpend > 0;
 
+    /* ── COUVERTURE de la dépense ad-level — garde-fou (17/08/2026) ──
+       Piège constaté en production : Make n'avait ingéré QU'UNE journée,
+       la colonne Dépense sommait donc un jour pendant que la colonne Leads
+       comptait tout le mois. Résultat affiché : CPL 2,46 € là où Meta
+       annonçait 20,19 €. Un CPL huit fois trop beau invite à augmenter un
+       budget — c'est le genre de chiffre qui coûte de l'argent.
+       On mesure donc combien de jours de la période ont réellement de la
+       donnée, et le rendu masque les ratios tant que ce n'est pas complet.
+       Borne haute = aujourd'hui : un mois en cours ne peut pas avoir de
+       dépense pour ses jours à venir, ce n'est pas un trou. */
+    var adDates = {};
+    (DATA.adsByAd || []).forEach(function (a) { if (a && a.date) adDates[a.date] = 1; });
+    var covEnd = Math.min(P.end.getTime(), Date.now());
+    var expected = 0, coveredDays = 0;
+    var dCov = new Date(P.start.getFullYear(), P.start.getMonth(), P.start.getDate());
+    while (dCov.getTime() <= covEnd) {
+      expected++;
+      if (adDates[isoDate(dCov)]) coveredDays++;
+      dCov = new Date(dCov.getFullYear(), dCov.getMonth(), dCov.getDate() + 1);
+    }
+    k.adSpendDaysExpected = expected;
+    k.adSpendDaysCovered = coveredDays;
+    k.adSpendCoverage = expected > 0 ? coveredDays / expected * 100 : null;
+    /* « Complet » se juge sur les jours attendus, pas sur un pourcentage
+       arrondi : 16 jours sur 17 n'est pas complet. */
+    k.adSpendComplete = expected > 0 && coveredDays >= expected;
+
     /* 4 axes. « Canal » n'est PAS de la publicité : il répond à « d'où
        viennent mes leads » (VSL, webinaire, Skool, bio Instagram…), la
        question que 2 741 des 8 051 fiches savent réellement documenter.
@@ -1870,7 +1967,8 @@
     attrHasSignal: attrHasSignal, attrDecodeValue: attrDecodeValue,
     attrIsPlaceholder: attrIsPlaceholder, parseQueryPairs: parseQueryPairs,
     leadAttribution: leadAttribution, normalizeCreative: normalizeCreative,
-    creativeGroupKey: creativeGroupKey, buildCreativeIndex: buildCreativeIndex,
+    creativeGroupKey: creativeGroupKey, creativeMatchKey: creativeMatchKey,
+    buildCreativeIndex: buildCreativeIndex, refAdOf: refAdOf,
     axisValueOf: axisValueOf, leadAxisKey: leadAxisKey,
     classifyLegacyLabel: classifyLegacyLabel,
     realEntryMs: realEntryMs, pad2: pad2, isoDate: isoDate, median: median,
