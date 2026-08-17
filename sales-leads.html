@@ -1171,7 +1171,40 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
       <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Type</label><select id="clType" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="vsl_elite">VSL Élite</option><option value="self_booking">Self Booking</option><option value="business">Business</option><option value="webinaire">Webinaire</option></select></div>
       <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Attribuer à</label><select id="clAssign" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="">Non attribué</option></select></div>
     </div>
-    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">UTM / Source</label><input id="clUtm" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="Ex: Ads, Organique, Parrainage…"></div>
+    <!-- Provenance — liste fermée (17/08/2026). Ce champ était en texte
+         libre : c'est lui qui a produit « test », « DIRECT » et une dizaine
+         de graphies pour la même chose, et le funnel ne pouvait rien en
+         faire. Les valeurs ci-dessous sont EXACTEMENT celles déjà présentes
+         en base, pour que les lignes fusionnent au lieu de se dédoubler.
+         Une fiche créée à la main est le seul cas où quelqu'un CONNAÎT
+         l'origine : autant la lui demander. -->
+    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">D'où vient ce lead ? <span style="color:var(--muted2);font-weight:500">— alimente le funnel, axe Canal</span></label>
+      <select id="clOrigine" onchange="clOrigineChanged()" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)">
+        <option value="">— Je ne sais pas —</option>
+        <optgroup label="Message privé (setting écrit)">
+          <option value="messenger">Messenger</option>
+          <option value="instagram-dm">Instagram — message privé</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="linkedin">LinkedIn</option>
+        </optgroup>
+        <optgroup label="Instagram">
+          <option value="link_in_bio">Lien en bio</option>
+          <option value="DIRECT">Lien de la page</option>
+        </optgroup>
+        <optgroup label="Tunnels">
+          <option value="VSL">VSL</option>
+          <option value="Webinaire Dimanche">Webinaire Dimanche</option>
+          <option value="Lead Skool">Skool</option>
+          <option value="Calculateur Rentabilité">Calculateur Rentabilité</option>
+        </optgroup>
+        <optgroup label="Autres">
+          <option value="Recommandation">Recommandation / bouche-à-oreille</option>
+          <option value="meta-ads">Publicité Meta</option>
+          <option value="_autre">Autre — je précise…</option>
+        </optgroup>
+      </select>
+      <input id="clUtm" style="width:100%;margin-top:6px;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm);display:none" placeholder="Précise l'origine (ex : podcast Untel, salon…)">
+    </div>
     <button id="clSubmit" onclick="submitCreateLead()" style="margin-top:16px;width:100%;padding:12px;border-radius:10px;border:none;background:linear-gradient(135deg,#34d399,#059669);color:white;font-size:14px;font-weight:700;font-family:var(--fh);cursor:pointer;transition:opacity .15s">Créer la fiche</button>
   </div>
 </div>
@@ -6163,6 +6196,8 @@ function openCreateLead() {
   document.getElementById('clType').value = 'vsl_elite';
   document.getElementById('clAssign').value = '';
   document.getElementById('clUtm').value = '';
+  document.getElementById('clOrigine').value = '';
+  clOrigineChanged();
   document.getElementById('clSubmit').disabled = false;
   document.getElementById('clSubmit').textContent = 'Créer la fiche';
   // Anti-autofill : les champs email/tel repassent en readonly à chaque
@@ -6278,6 +6313,16 @@ window.addEventListener('message', function(e) {
   // Close modal after a short delay
   setTimeout(closeBookingModal, 1500);
 });
+/* « Autre » ouvre le champ de précision, sinon il reste masqué. */
+function clOrigineChanged() {
+  var sel = document.getElementById('clOrigine');
+  var inp = document.getElementById('clUtm');
+  if (!sel || !inp) return;
+  var autre = sel.value === '_autre';
+  inp.style.display = autre ? '' : 'none';
+  if (autre) inp.focus(); else inp.value = '';
+}
+
 function submitCreateLead() {
   var prenom = document.getElementById('clPrenom').value.trim();
   var nom = document.getElementById('clNom').value.trim();
@@ -6285,7 +6330,15 @@ function submitCreateLead() {
   var tel = document.getElementById('clTel').value.trim();
   var type = document.getElementById('clType').value;
   var assign = document.getElementById('clAssign').value;
-  var utm = document.getElementById('clUtm').value.trim();
+  /* Provenance : la liste fermée d'abord, le texte libre seulement pour
+     « Autre ». On écrit dans les DEUX endroits — `utm` pour l'affichage
+     historique (Leads Live, CRM, export) et attributionFirst.channel pour
+     le funnel, qui ne lit plus le champ libre. */
+  var origSel = document.getElementById('clOrigine');
+  var origVal = origSel ? origSel.value : '';
+  var precision = document.getElementById('clUtm').value.trim();
+  var canal = origVal === '_autre' ? precision : origVal;
+  var utm = canal;
   if (!prenom) { alert('Le prénom est obligatoire.'); return; }
   if (!email) { alert('L\'email est obligatoire.'); return; }
   var btn = document.getElementById('clSubmit');
@@ -6308,6 +6361,19 @@ function submitCreateLead() {
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
+  /* Attribution structurée — `declared: true` est important : cette origine
+     est DÉCLARÉE par un membre de l'équipe, pas mesurée depuis une URL. On
+     ne la fera jamais passer pour une capture. */
+  if (canal) {
+    var attr = {
+      channel: canal,
+      via: 'manuel',
+      declared: true,
+      capturedAt: new Date().toISOString()
+    };
+    lead.attributionFirst = attr;
+    lead.attributionLast = attr;
+  }
   db.collection('leads').add(lead).then(function(ref) {
     toast('✅ Fiche créée !');
     closeCreateLead();

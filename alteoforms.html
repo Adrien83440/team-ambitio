@@ -578,6 +578,32 @@ function esc(s){var d=document.createElement('div');d.textContent=s;return d.inn
 function gid(){return Math.random().toString(36).slice(2,10);}
 function toast(msg){var t=document.getElementById('afToast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2500);}
 
+// ── Lien de partage tagué par canal (17/08/2026) ──────────────────────
+// Pose utm_source (le canal) et utm_medium=setting-ecrit (envoyé à la main
+// par l'équipe, par opposition à une arrivée spontanée). Le renderer les
+// capture au chargement, l'endpoint les écrit dans attributionFirst, et le
+// funnel les remonte sur l'axe Canal.
+// ch vide = lien nu, comportement d'origine du bouton Copier.
+function shareTag(ch){
+  var inp=document.getElementById('shareUrl');
+  if(!inp)return;
+  var base=inp.getAttribute('data-base')||inp.value;
+  var url=base;
+  if(ch){
+    url+=(base.indexOf('?')>=0?'&':'?')
+      +'utm_source='+encodeURIComponent(ch)
+      +'&utm_medium=setting-ecrit';
+  }
+  inp.value=url;
+  try{
+    navigator.clipboard.writeText(url);
+    toast(ch?('📋 Lien '+ch+' copié'):'📋 Copié !');
+  }catch(e){
+    inp.select();
+    toast('Copie manuelle : Cmd+C');
+  }
+}
+
 // ═══ FORM LIST ═══
 function loadForms(){
 db.collection('alteo_forms').orderBy('createdAt','desc').get().then(function(sn){
@@ -986,7 +1012,20 @@ var qrUrl='https://api.qrserver.com/v1/create-qr-code/?data='+encodeURIComponent
 h+='<div class="ed-sec-title">🔗 Partager le formulaire</div>';
 if(f.status!=='live')h+='<div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:8px;padding:10px 14px;font-size:12px;color:#fbbf24;margin-bottom:16px">⚠️ Ce formulaire est en brouillon. Publiez-le pour le rendre accessible.</div>';
 h+='<div class="ed-set-card"><div class="ed-set-title">🌐 Lien direct</div>';
-h+='<div style="display:flex;gap:8px;margin-top:8px"><input class="ed-share-url" value="'+esc(url)+'" readonly id="shareUrl"/><button class="bb bb-p" onclick="navigator.clipboard.writeText(document.getElementById(\'shareUrl\').value);toast(\'📋 Copié !\')">Copier</button></div>';
+h+='<div style="display:flex;gap:8px;margin-top:8px"><input class="ed-share-url" value="'+esc(url)+'" readonly id="shareUrl" data-base="'+esc(url)+'"/><button class="bb bb-p" onclick="shareTag(\'\')">Copier</button></div>';
+// ── Liens tagués par canal (17/08/2026) ──
+// Un lien envoyé à la main en message privé n'emporte aucune origine : le
+// lead arrive sans rien, et le funnel ne peut que l'afficher en « inconnu ».
+// C'est arrivé sur un close réel (Aymeric, lien Messenger). Or c'est le seul
+// cas où l'URL est entièrement sous notre contrôle — d'où ces boutons, qui
+// posent utm_source avant le copier-coller. Le renderer capture déjà ces
+// paramètres et le funnel les remonte sur l'axe Canal.
+h+='<div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,.45);line-height:1.5">Tu envoies ce lien à la main ? Choisis par où — le lead arrivera avec son origine, au lieu de tomber dans « inconnu » du funnel.</div>';
+h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">';
+[['messenger','💬 Messenger'],['instagram-dm','📸 Instagram DM'],['whatsapp','🟢 WhatsApp'],['email','✉️ E-mail'],['sms','📱 SMS'],['linkedin','💼 LinkedIn']].forEach(function(c){
+  h+='<button class="bb bb-o" style="font-size:11px;padding:5px 10px" onclick="shareTag(\''+c[0]+'\')">'+c[1]+'</button>';
+});
+h+='</div>';
 h+='</div>';
 h+='<div class="ed-set-card"><div style="display:flex;gap:16px;align-items:center"><img src="'+qrUrl+'" style="width:100px;height:100px;border-radius:8px;background:white;padding:4px"/><div><div class="ed-set-title">QR Code</div><div style="font-size:11px;color:rgba(255,255,255,.35)">Partagez ce code QR pour un accès instantané.</div></div></div></div>';
 // Embed

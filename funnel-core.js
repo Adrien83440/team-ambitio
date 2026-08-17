@@ -456,6 +456,13 @@
     var blk = (l && l.attributionFirst) || (l && l.attributionLast) || null;
     if (ax === 'channel') {
       if (blk && blk.channel) return mk(normalizeCreative(blk.channel), false);
+      /* Repli sur utm_source : c'est LE champ qui désigne le canal dans une
+         URL taguée. Sans ce repli, un lien partagé à la main
+         (?utm_source=messenger) capturait bien son origine mais ne
+         s'affichait nulle part — cas d'Aymeric, close du 17/08 venu d'un
+         lien Messenger envoyé par Adrien. */
+      var aSrc = leadAttribution(l);
+      if (aSrc && aSrc.utm_source) return mk(normalizeCreative(aSrc.utm_source), false);
     } else {
       var a = leadAttribution(l);
       var v = a ? axisValueOf(a, ax, IDX) : null;
