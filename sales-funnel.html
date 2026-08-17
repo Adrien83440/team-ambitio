@@ -1234,6 +1234,23 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     h += '<div class="fn-hero-kpi"><div class="v">' + fmtEuro(k.wonContracte) + '</div><div class="l">Contracté (HT)</div><div class="s">' + heroConSub + '</div></div>';
     h += '</div>';
 
+    /* ── Bandeau ROAS (demande Adrien 17/08) ─────────────────────────
+       Trois lectures d'un même euro de budget publicitaire. Elles partagent
+       le même dénominateur, donc elles s'additionnent — c'est ce qui rend la
+       décomposition lisible d'un coup d'œil.
+       Le libellé de l'organique est volontairement long : « ROAS organique »
+       tout court laisserait croire à une mesure d'efficacité de l'organique,
+       alors qu'il n'a pas de budget média propre au dénominateur. */
+    if (k.roasTotal != null || k.roasAds != null) {
+      function roasFmt(v) { return v == null ? '—' : (Math.round(v * 100) / 100).toLocaleString('fr-FR') + '×'; }
+      h += '<div class="fn-rates" style="margin-bottom:10px">';
+      h += '<div class="rt"><strong style="color:#34d399">' + roasFmt(k.roasAds) + '</strong>ROAS <strong style="font-size:11.5px;color:var(--text);margin:0">PUB</strong> <span style="color:var(--muted2)">(' + fmtEuro(k.wonCollecteAds) + ' de clients venus de la pub ÷ ' + fmtEuro(k.spend) + ' dépensés)</span></div>';
+      h += '<div class="rt"><strong style="color:#60a5fa">' + roasFmt(k.roasOrganique) + '</strong>ROAS <strong style="font-size:11.5px;color:var(--text);margin:0">ORGANIQUE</strong> <span style="color:var(--muted2)">(' + fmtEuro(k.wonCollecteHorsPub) + ' venus d\'ailleurs, rapportés au même budget pub — l\'organique n\'a pas de budget média propre)</span></div>';
+      h += '<div class="rt"><strong style="color:var(--gold)">' + roasFmt(k.roasTotal) + '</strong>ROAS <strong style="font-size:11.5px;color:var(--text);margin:0">TOTAL</strong> <span style="color:var(--muted2)">(' + fmtEuro(k.wonCollecte) + ' encaissés ÷ ' + fmtEuro(k.spend) + ' — pub + organique'
+        + (k.wonCollecteNonRattache > 0 ? ' + ' + fmtEuro(k.wonCollecteNonRattache) + ' non rattaché' : '') + ')</span></div>';
+      h += '</div>';
+    }
+
     /* Bandeau — taux de close du mois (demande Vincent 14/07) */
     h += '<div class="fn-rates">';
     h += '<div class="rt"><strong>' + fmtPct(k.closeRateRdv, 1) + '</strong>Taux de close / RDV du mois <span style="color:var(--muted2)">(' + fmtNum(k.closesWonTotal) + ' closes ÷ ' + fmtNum(k.rdvMois) + ' RDV)</span></div>';

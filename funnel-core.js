@@ -1984,6 +1984,17 @@
     k.wonCollecteNonRattache = Math.round((k.wonCollecte - wonColAds - wonColHorsPub) * 100) / 100;
 
     k.roasAds = (k.spend > 0 && wonColAds > 0) ? wonColAds / k.spend : null;
+    /* Décomposition additive : les trois ROAS partagent le MÊME
+       dénominateur — la dépense publicitaire — donc roasAds + roasOrganique
+       + roasNonRattache = roasTotal, à l'euro près.
+       ⚠ roasOrganique n'est PAS une mesure d'efficacité de l'organique :
+       celui-ci n'a pas de budget média propre. Il répond à « pour 1 € mis
+       en pub, combien l'entreprise encaisse-t-elle par ailleurs ». Le
+       nommer autrement induirait en erreur, d'où le libellé explicite côté
+       rendu. L'organique a ses coûts — contenu, setting, temps — mais ils
+       ne sont pas dans ce dénominateur. */
+    k.roasOrganique = (k.spend > 0 && wonColHorsPub > 0) ? wonColHorsPub / k.spend : null;
+    k.roasTotal = (k.spend > 0 && k.wonCollecte > 0) ? k.wonCollecte / k.spend : null;
     k.cacAds  = (k.spend > 0 && closesAds > 0) ? k.spend / closesAds : null;
     k.aovAds  = (closesAds > 0 && wonColAds > 0) ? wonColAds / closesAds : null;
 
