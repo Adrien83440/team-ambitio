@@ -40,7 +40,8 @@
 //          dont la date est >= aujourd'hui (RDV à venir), en excluant ceux
 //          flaggés excludeFromQuota === true
 //   quota = clientData.quotaOverrides[monthYear] si présent (override admin)
-//         | sinon 2 si c.programme contient "24c" (case-insensitive), sinon 1
+//         | sinon séances ÷ durée du programme, lues sur le libellé
+//           (« Elite NEW - 6 Mois - 24C » → 24/6 = 4). Cf. getMonthlyQuota.
 //   → la partie "sessions fait" est strictement alignée sur coaching.html
 //     (getSessionsInMonth) : même exclusion numero 0 / rdv72h.
 //
@@ -73,15 +74,27 @@
 
 const { db } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
+const { monthlyQuotaFromProgramme } = require('./_recurrence-core');
 
 function normEmail(e) {
   return (e || '').toString().trim().toLowerCase();
 }
 
-function getMonthlyQuota(programme) {
-  if (!programme) return 1;
-  return String(programme).toLowerCase().includes('24c') ? 2 : 1;
-}
+/* ── QUOTA MENSUEL ────────────────────────────────────────────────────────
+   CORRIGÉ le 18/08/2026. Cet endpoint dérivait le quota du seul « 24C »
+   (→ 2/mois) alors que coaching.html avait été corrigé le 31/07 : le quota,
+   c'est le nombre de séances DIVISÉ par la durée du programme.
+
+     BP 12 Mois - 12C          → 12/12 = 1   (inchangé)
+     BP 12 Mois - 24C          → 24/12 = 2   (inchangé)
+     Elite - 12 Mois - 24C     → 24/12 = 2   (inchangé)
+     Elite NEW - 6 Mois - 24C  → 24/6  = 4   ← était calculé à 2
+
+   Conséquence de l'ancienne règle : un client Elite NEW, qui a une séance par
+   semaine, se voyait refuser sa 3e séance du mois avec « quota atteint ».
+   La règle vit maintenant dans api/_recurrence-core.js, partagée avec la
+   récurrence hebdomadaire — un seul endroit à corriger si elle bouge. */
+const getMonthlyQuota = monthlyQuotaFromProgramme;
 
 // Aplatit les sessions d'un client : supporte le format legacy (sessions[]
 // flat à la racine) et le nouveau format (years[].sessions[]). Cohérent

@@ -154,6 +154,35 @@ body.bk-embed .bk-progress{position:relative}
 .bk-field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .bk-field-error{font-size:11px;color:var(--red);margin-top:3px;display:none}
 
+/* ── RÉCURRENCE HEBDOMADAIRE (parcours Elite NEW) ──
+   Bloc proposé sous le formulaire quand la fiche coaching du client ouvre
+   droit à une série : il pose ses 24 séances d'un coup. */
+.bk-rec{margin:4px 0 18px;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--bg);overflow:hidden;transition:border-color .2s var(--ease)}
+.bk-rec.on{border-color:var(--primary);background:var(--primary-pale)}
+.bk-rec-head{display:flex;align-items:center;gap:13px;padding:16px 18px;cursor:pointer}
+.bk-rec-ico{font-size:22px;flex-shrink:0;line-height:1}
+.bk-rec-txt{flex:1;min-width:0}
+.bk-rec-title{font-family:var(--fh);font-size:14px;font-weight:700;color:var(--text);line-height:1.35}
+.bk-rec-sub{font-size:12px;color:var(--muted);margin-top:3px;line-height:1.5}
+.bk-rec-sw{position:relative;width:46px;height:26px;flex-shrink:0;border-radius:26px;background:var(--muted3);transition:background .2s var(--ease)}
+.bk-rec.on .bk-rec-sw{background:var(--primary)}
+.bk-rec-sw span{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .2s var(--ease-bounce)}
+.bk-rec.on .bk-rec-sw span{left:23px}
+.bk-rec-body{border-top:1px solid var(--border);padding:14px 18px 16px;background:var(--card)}
+.bk-rec-count{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.55}
+.bk-rec-count b{color:var(--text)}
+.bk-rec-list{max-height:330px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--card)}
+.bk-rec-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px}
+.bk-rec-row:last-child{border-bottom:none}
+.bk-rec-row.warn{background:var(--amber-pale)}
+.bk-rec-n{font-size:11px;font-weight:700;color:var(--muted2);width:42px;flex-shrink:0}
+.bk-rec-date{flex:1;min-width:0;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bk-rec-ok{font-weight:700;color:var(--green);white-space:nowrap}
+.bk-rec-row select{padding:6px 9px;border:1.5px solid var(--amber);border-radius:var(--radius-xs);font-family:var(--fb);font-size:12px;font-weight:600;color:var(--text);background:var(--card);outline:none;max-width:190px}
+.bk-rec-note{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.55}
+.bk-rec-warn{font-size:12px;color:var(--amber);background:var(--amber-pale);border:1px solid rgba(217,119,6,.2);border-radius:var(--radius-xs);padding:9px 12px;margin-top:10px;line-height:1.5}
+.bk-rec-loading{font-size:12px;color:var(--muted);padding:14px 18px}
+
 /* ── BUTTONS ── */
 .bk-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px 20px;border:none;border-radius:var(--radius);font-family:var(--fb);font-size:15px;font-weight:700;cursor:pointer;transition:all .2s var(--ease)}
 .bk-btn-primary{background:var(--primary);color:white;box-shadow:0 4px 14px rgba(109,40,217,0.3)}
@@ -313,6 +342,8 @@ body.bk-embed .bk-progress{position:relative}
             <div class="bk-confirm-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
             <div class="bk-confirm-title">Rendez-vous confirmé !</div>
             <div class="bk-confirm-text" id="confirmText"></div>
+            <!-- Série hebdomadaire (parcours Elite NEW) : état de la programmation -->
+            <div id="recConfirmWrap" style="display:none;margin:16px 0"></div>
             <div id="meetLinkWrap" style="display:none;margin:16px 0;padding:14px 20px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:12px;text-align:center"><div style="font-size:13px;font-weight:700;color:#60a5fa;margin-bottom:6px">📹 Lien de la réunion</div><a id="meetLinkBtn" href="" target="_blank" style="display:inline-block;padding:10px 24px;background:#1a73e8;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px">Rejoindre Google Meet</a><div id="meetLinkUrl" style="font-size:11px;color:rgba(255,255,255,.48);margin-top:6px"></div></div>
             <div class="bk-confirm-actions">
               <button class="bk-btn bk-btn-primary" id="icsBtn" style="width:auto">📅 Ajouter au calendrier</button>
@@ -457,7 +488,9 @@ function goStep(n) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
   if (n === 3) renderCalendar();
-  if (n === 4) { renderSummary(); renderForm(); prefillFromForm(); }
+  // renderForm() reconstruit le formulaire à chaque passage : recOnStep4()
+  // vient après prefillFromForm() pour voir l'email éventuellement pré-rempli.
+  if (n === 4) { renderSummary(); renderForm(); prefillFromForm(); recOnStep4(); }
 }
 
 /* ── INFO PANEL (left side) ── */
@@ -1225,12 +1258,24 @@ function renderForm() {
     }
     h += '</div>';
   });
+  // Réceptacle du bloc « récurrence hebdomadaire » (parcours Elite NEW).
+  // Toujours présent, rempli seulement si la fiche coaching y donne droit.
+  h += '<div id="bkRecWrap"></div>';
   h += '<button class="bk-btn bk-btn-primary" id="confirmBtn">Confirmer le rendez-vous</button>';
   h += '<button class="bk-btn bk-btn-back" onclick="goStep(3)" style="margin-top:8px">← Retour</button>';
   wrap.innerHTML = h;
 
   // Bind confirm button
   document.getElementById('confirmBtn').addEventListener('click', handleSubmit);
+
+  /* L'email est la clé d'entrée de la récurrence : c'est lui qui relie le
+     visiteur à sa fiche coaching. On interroge donc le serveur dès qu'il est
+     saisi (blur / autocomplete), jamais à chaque frappe. */
+  var mailEl = document.getElementById('fField_email');
+  if (mailEl) {
+    mailEl.addEventListener('change', recFetchPlan);
+    mailEl.addEventListener('blur', recFetchPlan);
+  }
 }
 
 /* ═══ PRE-FILL FROM ALTEOFORMS ═══ */
@@ -1265,6 +1310,361 @@ function prefillFromForm() {
       }, 800);
     }
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RÉCURRENCE HEBDOMADAIRE — parcours « Elite NEW - 6 Mois - 24C »
+   ═══════════════════════════════════════════════════════════════════════════
+
+   CE QUE ÇA FAIT
+   --------------
+   24 séances en 6 mois, c'est une par semaine. Plutôt que de faire revenir le
+   client 24 fois sur le lien de son coach, on lui propose — par un simple
+   interrupteur, qu'il active ou non — de poser toute la suite d'un coup, le
+   même jour à la même heure, jusqu'à épuisement de son forfait.
+
+   POUR QUI
+   --------
+   UNIQUEMENT les clients dont la fiche coaching porte un programme Elite NEW
+   hebdomadaire (décision Adrien du 18/08/2026). C'est le SERVEUR qui tranche,
+   jamais cette page : /api/booking-recurrence-plan relit la fiche `clients`,
+   que les règles Firestore interdisent à un visiteur anonyme. Un email inconnu,
+   un ancien client, un programme mensuel → aucun bloc ne s'affiche et la
+   réservation simple suit son cours, exactement comme avant.
+
+   LE COMPTE
+   ---------
+   24 séances AU TOTAL, le rendez-vous en cours compris. Deux séances déjà
+   faites → ce RDV + 21 en récurrence. Aucune → ce RDV + 23.
+
+   LES SEMAINES OÙ LE COACH N'EST PAS LIBRE
+   ----------------------------------------
+   Le serveur vérifie l'agenda Google du coach sur TOUT l'horizon (six mois),
+   pas seulement les 60 jours de `calendar_busy`. Une semaine occupée s'affiche
+   en orange avec un menu : une autre heure le même jour (la plus proche est
+   présélectionnée), le même horaire un autre jour de la semaine, ou « passer
+   cette semaine » — et dans ce dernier cas la série se prolonge d'une semaine
+   pour arriver quand même au compte. Les semaines de réserve sont fournies par
+   le serveur avec le plan : changer d'avis ne coûte aucun aller-retour.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var REC = {
+  plan: null,      // réponse de /api/booking-recurrence-plan
+  enabled: false,  // l'interrupteur, décoché par défaut
+  pick: {},        // index d'occurrence → 'YYYY-MM-DD|HH:MM' ou 'skip'
+  loading: false,
+  key: '',         // email|date|heure du plan chargé — sert à l'invalider
+  pending: null,   // promesse de création de la série
+  result: null     // retour de /api/booking-series-create
+};
+
+/* Le contexte permet-il seulement de PROPOSER une série ?
+   Une replanification est exclue : on déplace un RDV existant, on n'ouvre pas
+   un parcours.
+
+   ⚠ FLAG D'ACTIVATION — booking_config/_settings.coachingRecurrenceEnabled
+   La fonctionnalité reste INVISIBLE tant que ce flag n'est pas à true. Ce
+   n'est pas un réglage de confort : tant que le garde-fou `seriesManaged`
+   n'est pas déployé dans onBookingCreated, chaque séance de la série
+   déclencherait son propre événement Google, sa propre invitation et son
+   propre email — près de 70 envois pour un seul clic client.
+   Ordre à respecter : garde-fou Cloud Function → flag à true.
+   (Convention maison : les bascules fonctionnelles se font par un flag de
+   configuration, pas par un déploiement.) */
+function recContextOk() {
+  if (!S.settings || S.settings.coachingRecurrenceEnabled !== true) return false;
+  return !!(S.selType && S.selType.isCoaching === true
+    && S.selPerson && S.selDate && S.selTime && !_rescheduleOld);
+}
+
+function recEmail() {
+  var el = document.getElementById('fField_email');
+  return el ? el.value.trim() : '';
+}
+
+function recKey() {
+  return recEmail().toLowerCase() + '|' + (S.selDate || '') + '|' + (S.selTime || '');
+}
+
+function recIsActive() {
+  return !!(REC.enabled && REC.plan && REC.plan.eligible && recActive().length);
+}
+
+/* Appelé à chaque arrivée sur l'étape 4. renderForm() reconstruit le
+   formulaire à chaque passage : si le plan déjà chargé correspond au même
+   email et au même créneau, on se contente de le réafficher. */
+function recOnStep4() {
+  if (!recContextOk()) { REC.plan = null; REC.key = ''; renderRecurrence(); return; }
+  if (REC.plan && recKey() === REC.key) { renderRecurrence(); return; }
+  recFetchPlan();
+}
+
+function recFetchPlan() {
+  if (!recContextOk()) { REC.plan = null; REC.key = ''; renderRecurrence(); return; }
+
+  var mail = recEmail();
+  if (!mail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+    REC.plan = null; REC.key = ''; REC.loading = false;
+    renderRecurrence();
+    return;
+  }
+
+  var k = recKey();
+  if (k === REC.key) { renderRecurrence(); return; }   // rien de neuf
+
+  REC.key = k;
+  REC.plan = null;
+  REC.enabled = false;
+  REC.pick = {};
+  REC.loading = true;
+  renderRecurrence();
+
+  fetch('/api/booking-recurrence-plan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: mail,
+      personId: S.selPerson.id,
+      typeId: S.selType.id,
+      date: S.selDate,
+      time: S.selTime
+    })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    // Une réponse qui arrive après un changement d'email ou de créneau ne
+    // doit rien écraser : le plan qu'elle porte ne correspond plus.
+    if (k !== REC.key) return;
+    REC.loading = false;
+    REC.plan = (data && data.ok) ? data : null;
+    renderRecurrence();
+  }).catch(function(e) {
+    if (k !== REC.key) return;
+    REC.loading = false;
+    REC.plan = null;
+    // Panne de l'endpoint : on n'affiche rien. Le RDV simple reste possible,
+    // c'est le seul comportement acceptable ici.
+    console.warn('[booking] plan de récurrence indisponible:', e && e.message);
+    renderRecurrence();
+  });
+}
+
+/* Créneau retenu pour une occurrence : le choix du client, sinon le meilleur
+   repli automatique. `null` = cette semaine sera sautée. */
+function recChoice(o) {
+  var v = REC.pick[o.index];
+  if (v === 'skip') return null;
+  if (v) { var p = v.split('|'); return { date: p[0], time: p[1] }; }
+  if (o.status === 'ok') return { date: o.date, time: o.time };
+  if (o.sameDaySlots && o.sameDaySlots.length) return { date: o.date, time: o.sameDaySlots[0] };
+  if (o.altDays && o.altDays.length) return { date: o.altDays[0].date, time: o.altDays[0].time };
+  return null;   // coach indisponible toute la semaine et aucun repli
+}
+
+/* Les occurrences réellement programmées : on parcourt la liste (série + les
+   semaines de réserve) et on retient les premières qui aboutissent, jusqu'au
+   nombre de séances restantes. Sauter une semaine fait donc automatiquement
+   entrer la suivante. */
+function recActive() {
+  var p = REC.plan;
+  if (!p || !p.eligible || !p.occurrences) return [];
+  var out = [];
+  for (var i = 0; i < p.occurrences.length && out.length < p.recurrenceCount; i++) {
+    var o = p.occurrences[i];
+    var c = recChoice(o);
+    if (!c) continue;
+    out.push({ occ: o, date: c.date, time: c.time });
+  }
+  return out;
+}
+
+/* Lignes affichées : les séances retenues ET les semaines écartées, dans
+   l'ordre du calendrier. Montrer les semaines écartées est indispensable —
+   sinon « Passer cette semaine » fait disparaître la ligne et le client n'a
+   plus aucun moyen de revenir sur son choix. */
+function recRows() {
+  var p = REC.plan;
+  if (!p || !p.eligible || !p.occurrences) return [];
+  var rows = [];
+  var n = 0;
+  for (var i = 0; i < p.occurrences.length && n < p.recurrenceCount; i++) {
+    var o = p.occurrences[i];
+    var c = recChoice(o);
+    if (c) {
+      n++;
+      rows.push({ occ: o, date: c.date, time: c.time, num: n + 1, skipped: false });
+    } else {
+      // Écartée : soit par le client, soit faute du moindre créneau cette
+      // semaine-là (coach en congé, semaine fériée…).
+      rows.push({ occ: o, skipped: true, forced: REC.pick[o.index] !== 'skip' });
+    }
+  }
+  return rows;
+}
+
+function recFmtDate(ds) {
+  var d = new Date(ds + 'T12:00:00');
+  return JOURS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_FR[d.getMonth()];
+}
+
+function recFmtShort(ds) {
+  var d = new Date(ds + 'T12:00:00');
+  return JOURS_SHORT[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_FR[d.getMonth()].slice(0, 4) + '.';
+}
+
+function renderRecurrence() {
+  var wrap = document.getElementById('bkRecWrap');
+  if (!wrap) return;
+
+  if (REC.loading) {
+    wrap.innerHTML = '<div class="bk-rec"><div class="bk-rec-loading">⏳ Vérification de l\'agenda de votre coach…</div></div>';
+    return;
+  }
+
+  var p = REC.plan;
+  if (!p || !p.eligible) { wrap.innerHTML = ''; return; }
+
+  var active = recActive();
+  var on = REC.enabled;
+
+  var h = '<div class="bk-rec' + (on ? ' on' : '') + '">';
+  h += '<div class="bk-rec-head" data-action="recToggle">';
+  h += '<div class="bk-rec-ico">🔁</div>';
+  h += '<div class="bk-rec-txt">';
+  h += '<div class="bk-rec-title">Programmer toutes mes séances, une par semaine</div>';
+  var suite = (p.recurrenceCount > 1)
+    ? 'On peut poser les <b>' + p.recurrenceCount + '</b> suivantes tous les ' + esc(p.weekdayLabel) + 's à ' + esc(S.selTime) + '.'
+    : 'On peut poser <b>la dernière</b> le ' + esc(p.weekdayLabel) + ' suivant à ' + esc(S.selTime) + '.';
+  h += '<div class="bk-rec-sub">Il vous reste <b>' + p.remaining + ' séances sur ' + p.total + '</b>, celle-ci comprise. ' + suite + '</div>';
+  h += '</div>';
+  h += '<div class="bk-rec-sw"><span></span></div>';
+  h += '</div>';
+
+  if (on) {
+    h += '<div class="bk-rec-body">';
+    h += '<div class="bk-rec-count">Séance <b>1/' + p.total + '</b> le ' + esc(recFmtDate(S.selDate)) + ' à <b>' + esc(S.selTime) + '</b>, '
+       + 'puis <b>' + active.length + '</b> séance' + (active.length > 1 ? 's' : '') + ' programmée' + (active.length > 1 ? 's' : '') + ' ci-dessous.</div>';
+
+    var rows = recRows();
+    h += '<div class="bk-rec-list">';
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var o = row.occ;
+      var hasAlt = ((o.sameDaySlots || []).length + (o.altDays || []).length) > 0;
+      var moved = !row.skipped && (row.date !== o.date || row.time !== o.time);
+
+      h += '<div class="bk-rec-row' + (o.status === 'ok' && !row.skipped ? '' : ' warn') + '"'
+         + (row.skipped ? ' style="opacity:.62"' : '') + '>';
+      h += '<div class="bk-rec-n">' + (row.skipped ? '—' : (row.num + '/' + p.total)) + '</div>';
+      h += '<div class="bk-rec-date">' + esc(recFmtDate(row.skipped ? o.date : row.date)) + '</div>';
+
+      if (row.skipped && row.forced) {
+        // Aucune ouverture cette semaine-là et aucun repli : rien à choisir.
+        h += '<div style="font-size:12px;color:var(--muted);white-space:nowrap">Coach indisponible</div>';
+      } else if (o.status === 'ok' && !moved && !row.skipped) {
+        h += '<div class="bk-rec-ok">' + esc(row.time) + ' ✓</div>';
+      } else {
+        // Coach occupé cette semaine-là : on propose, on n'impose pas.
+        var cur = REC.pick[o.index] || (row.date + '|' + row.time);
+        h += '<select data-rec-sel="' + o.index + '">';
+        var j;
+        for (j = 0; j < (o.sameDaySlots || []).length; j++) {
+          var v1 = o.date + '|' + o.sameDaySlots[j];
+          h += '<option value="' + v1 + '"' + (v1 === cur ? ' selected' : '') + '>' + esc(o.sameDaySlots[j]) + ' — même jour</option>';
+        }
+        for (j = 0; j < (o.altDays || []).length; j++) {
+          var v2 = o.altDays[j].date + '|' + o.altDays[j].time;
+          h += '<option value="' + v2 + '"' + (v2 === cur ? ' selected' : '') + '>' + esc(recFmtShort(o.altDays[j].date)) + ' à ' + esc(o.altDays[j].time) + '</option>';
+        }
+        h += '<option value="skip"' + (REC.pick[o.index] === 'skip' ? ' selected' : '') + '>'
+           + (hasAlt ? 'Passer cette semaine' : 'Aucun créneau — passer') + '</option>';
+        h += '</select>';
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+
+    if (active.length < p.recurrenceCount) {
+      h += '<div class="bk-rec-warn">L\'agenda de votre coach ne permet de poser que ' + active.length + ' des '
+         + p.recurrenceCount + ' séances restantes sur cette période. Les autres se réserveront plus tard, '
+         + 'sur ce même lien.</div>';
+    }
+    if (!p.calendarConnected) {
+      h += '<div class="bk-rec-warn">L\'agenda Google de votre coach n\'est pas relié : les créneaux proposés '
+         + 'tiennent compte de son planning et des rendez-vous Alteore, mais pas de ses éventuels engagements personnels.</div>';
+    }
+
+    h += '<div class="bk-rec-note">Vous recevrez un récapitulatif unique avec toutes vos séances et un fichier à ajouter '
+       + 'à votre agenda. Chaque séance reste modifiable individuellement — décaler l\'une ne touche pas aux autres.</div>';
+    h += '</div>';
+  }
+
+  h += '</div>';
+  wrap.innerHTML = h;
+}
+
+/* Création de la série, APRÈS que le premier RDV est confirmé. Le premier
+   rendez-vous ne dépend jamais de cet appel : s'il échoue, le client a quand
+   même son RDV et l'écran le lui dit. */
+function recCreateSeries(firstBookingId) {
+  var active = recActive();
+  if (!active.length) return Promise.resolve(null);
+
+  var occ = [];
+  for (var i = 0; i < active.length; i++) occ.push({ date: active[i].date, time: active[i].time });
+
+  return fetch('/api/booking-series-create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      firstBookingId: firstBookingId,
+      personId: S.selPerson.id,
+      typeId: S.selType.id,
+      timezone: S.userTz,
+      occurrences: occ
+    })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    REC.result = data || null;
+    renderConfirmSeries();
+    return data;
+  }).catch(function(e) {
+    console.error('[booking] création de la série:', e);
+    REC.result = { ok: false, error: 'network' };
+    renderConfirmSeries();
+    return null;
+  });
+}
+
+/* Bloc « vos séances » de l'écran de confirmation. Trois états : en cours,
+   posé, échoué — jamais de silence. */
+function renderConfirmSeries() {
+  var el = document.getElementById('recConfirmWrap');
+  if (!el) return;
+
+  if (!recIsActive()) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = '';
+
+  var r = REC.result;
+  if (!r) {
+    el.innerHTML = '<div style="padding:14px 18px;background:var(--primary-pale);border:1px solid rgba(109,40,217,.15);border-radius:12px;font-size:13px;color:var(--text2)">'
+      + '⏳ Programmation de vos séances suivantes… merci de patienter quelques secondes sans fermer cette page.</div>';
+    return;
+  }
+
+  if (!r.ok) {
+    el.innerHTML = '<div style="padding:14px 18px;background:var(--amber-pale);border:1px solid rgba(217,119,6,.25);border-radius:12px;font-size:13px;color:var(--text2);text-align:left">'
+      + '<strong>Votre rendez-vous est bien confirmé</strong>, mais les séances suivantes n\'ont pas pu être programmées automatiquement. '
+      + 'Notre équipe s\'en occupe — vous pouvez aussi revenir sur ce lien plus tard.</div>';
+    return;
+  }
+
+  var n = (r.created || []).length;
+  var h = '<div style="padding:14px 18px;background:var(--green-pale);border:1px solid var(--green-border);border-radius:12px;font-size:13px;color:var(--text2);text-align:left">';
+  h += '<strong>' + n + ' séance' + (n > 1 ? 's' : '') + ' programmée' + (n > 1 ? 's' : '') + '</strong> à la suite de ce rendez-vous. '
+     + 'Le récapitulatif complet, avec le fichier à ajouter à votre agenda, part par email.';
+  if (r.skipped && r.skipped.length) {
+    h += '<div style="margin-top:8px;color:var(--amber)">' + r.skipped.length + ' créneau(x) venait(ent) d\'être pris et n\'a (ont) pas pu être retenu(s) — le détail est dans l\'email.</div>';
+  }
+  h += '</div>';
+  el.innerHTML = h;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1612,6 +2012,18 @@ async function submitBooking() {
     S.confirmedBooking = booking;
     S.confirmedMeetLink = null;
 
+    /* ── SÉRIE HEBDOMADAIRE ──────────────────────────────────────────────
+       Le premier RDV est confirmé : on lance la pose des séances suivantes.
+       L'appel n'est PAS attendu ici — l'écran de confirmation s'affiche tout
+       de suite avec un état « en cours », puis se met à jour. Poser 23
+       événements Google prend une dizaine de secondes ; faire patienter le
+       client devant un bouton mort serait pire que tout.
+       L'endpoint est idempotent (identifiants déterministes) : une soumission
+       en doublon retombe sur la même série, jamais sur une seconde. */
+    if (recIsActive()) {
+      REC.pending = recCreateSeries(docRef.id);
+    }
+
     if (alreadyExisted) {
       // Ce prospect avait déjà réservé ce créneau (double soumission passée
       // au travers du verrou : autre onglet, page rechargée…). Le RDV existe,
@@ -1721,15 +2133,21 @@ async function submitBooking() {
       // En mode embed on redirige la fenêtre hôte (la page qui contient
       // l'iframe). Repli sur la fenêtre courante si l'accès au top est
       // bloqué (iframe cross-origin sandboxée sans allow-top-navigation).
-      try {
-        if (_embedMode && window.top && window.top !== window.self) {
-          window.top.location.href = _redirectUrl;
-        } else {
+      // Quand une série est en cours de pose, on attend qu'elle aboutisse :
+      // quitter la page tuerait la requête et le client n'aurait qu'un RDV
+      // sur les 24.
+      var _go = function() {
+        try {
+          if (_embedMode && window.top && window.top !== window.self) {
+            window.top.location.href = _redirectUrl;
+          } else {
+            window.location.href = _redirectUrl;
+          }
+        } catch (e) {
           window.location.href = _redirectUrl;
         }
-      } catch (e) {
-        window.location.href = _redirectUrl;
-      }
+      };
+      if (REC.pending) { REC.pending.then(_go, _go); } else { _go(); }
       return;
     }
 
@@ -1851,6 +2269,9 @@ function showConfirmation(prenom, email) {
   confirmHtml += '<br><br>Une confirmation sera envoyée à <strong>' + esc(email) + '</strong>.';
 
   document.getElementById('confirmText').innerHTML = confirmHtml;
+
+  // Série hebdomadaire : bloc d'état sous la confirmation (en cours → posé).
+  renderConfirmSeries();
 
   // Embed mode: notify parent window
   if (_embedMode && window.parent !== window) {
@@ -2044,6 +2465,20 @@ document.addEventListener('click', function(e) {
     renderSlots();
     updateInfoPanel();
   }
+  if (action === 'recToggle') {
+    REC.enabled = !REC.enabled;
+    renderRecurrence();
+  }
+});
+
+/* Menus de rattrapage des semaines occupées. Délégation : la liste est
+   reconstruite à chaque changement, un listener par <select> ne survivrait
+   pas au re-render. */
+document.addEventListener('change', function(e) {
+  var sel = e.target;
+  if (!sel || !sel.getAttribute || !sel.getAttribute('data-rec-sel')) return;
+  REC.pick[parseInt(sel.getAttribute('data-rec-sel'), 10)] = sel.value;
+  renderRecurrence();
 });
 
 /* ═══════════════════════════════════════════════════

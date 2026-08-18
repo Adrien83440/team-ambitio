@@ -99,8 +99,36 @@ function base64url(str) {
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+// Découpe une chaîne base64 en lignes de 76 caractères (RFC 2045).
+function b64Lines(buf) {
+  return buf.toString('base64').replace(/(.{76})/g, '$1\r\n');
+}
+
+/* Enveloppe le corps du message dans un multipart/mixed pour y joindre des
+   fichiers. Ajouté le 18/08/2026 pour le récapitulatif de série coaching, qui
+   embarque un .ics contenant les 24 séances d'un coup.
+   `bodyPart` est le message tel qu'il aurait été construit sans pièce jointe
+   (en-tête Content-Type compris) — on ne réécrit donc jamais le corps. */
+function wrapWithAttachments(bodyPart, attachments) {
+  const boundary = '----=_Mixed_' + Math.random().toString(36).substring(2);
+  let out = 'Content-Type: multipart/mixed; boundary="' + boundary + '"\r\n\r\n';
+  out += '--' + boundary + '\r\n' + bodyPart + '\r\n';
+  attachments.forEach((a) => {
+    const content = Buffer.isBuffer(a.content) ? a.content : Buffer.from(String(a.content), 'utf-8');
+    out += '--' + boundary + '\r\n'
+      + 'Content-Type: ' + (a.mimeType || 'application/octet-stream') + '; name="' + a.filename + '"\r\n'
+      + 'Content-Disposition: attachment; filename="' + a.filename + '"\r\n'
+      + 'Content-Transfer-Encoding: base64\r\n\r\n'
+      + b64Lines(content) + '\r\n';
+  });
+  out += '--' + boundary + '--';
+  return out;
+}
+
 // Construit le message MIME (RFC 822)
-function buildMime({ from, to, subject, bodyHtml, bodyText, replyTo }) {
+// `cc` et `attachments` sont optionnels et purement additifs : sans eux, la
+// sortie est identique à ce qu'elle a toujours été (facturation, relances…).
+function buildMime({ from, to, cc, subject, bodyHtml, bodyText, replyTo, attachments }) {
   const boundary = '----=_Boundary_' + Math.random().toString(36).substring(2);
   // Subject doit être encodé si contient non-ASCII
   const encodedSubject = '=?UTF-8?B?' + Buffer.from(subject, 'utf-8').toString('base64') + '?=';
@@ -108,10 +136,36 @@ function buildMime({ from, to, subject, bodyHtml, bodyText, replyTo }) {
   const headers = [
     'From: ' + from,
     'To: ' + to,
-    'Subject: ' + encodedSubject,
-    'MIME-Version: 1.0',
   ];
+  if (cc) headers.push('Cc: ' + cc);
+  headers.push('Subject: ' + encodedSubject);
+  headers.push('MIME-Version: 1.0');
   if (replyTo) headers.push('Reply-To: ' + replyTo);
+
+  const atts = Array.isArray(attachments) ? attachments.filter(function (a) { return a && a.filename && a.content; }) : [];
+
+  // Avec pièces jointes : les en-têtes d'enveloppe restent en tête, le corps
+  // (et son propre Content-Type) devient la première partie du multipart.
+  if (atts.length) {
+    let bodyPart;
+    if (bodyHtml && bodyText) {
+      bodyPart = 'Content-Type: multipart/alternative; boundary="' + boundary + '"\r\n\r\n'
+        + '--' + boundary + '\r\n'
+        + 'Content-Type: text/plain; charset="UTF-8"\r\n'
+        + 'Content-Transfer-Encoding: 7bit\r\n\r\n'
+        + bodyText + '\r\n'
+        + '--' + boundary + '\r\n'
+        + 'Content-Type: text/html; charset="UTF-8"\r\n'
+        + 'Content-Transfer-Encoding: 7bit\r\n\r\n'
+        + bodyHtml + '\r\n'
+        + '--' + boundary + '--';
+    } else if (bodyHtml) {
+      bodyPart = 'Content-Type: text/html; charset="UTF-8"\r\n\r\n' + bodyHtml;
+    } else {
+      bodyPart = 'Content-Type: text/plain; charset="UTF-8"\r\n\r\n' + (bodyText || '');
+    }
+    return headers.join('\r\n') + '\r\n' + wrapWithAttachments(bodyPart, atts);
+  }
 
   if (bodyHtml && bodyText) {
     headers.push('Content-Type: multipart/alternative; boundary="' + boundary + '"');
@@ -162,9 +216,12 @@ async function gmailApiSend(accessToken, mimeMessage) {
  * @param {string} [params.bodyHtml] — HTML body (recommandé)
  * @param {string} [params.bodyText] — texte brut (fallback / multipart)
  * @param {string} [params.replyTo] — adresse de réponse (optionnel)
+ * @param {string} [params.cc] — copie(s), séparées par des virgules (optionnel)
+ * @param {Array}  [params.attachments] — [{ filename, mimeType, content }] où
+ *                 content est un Buffer ou une chaîne (optionnel)
  * @returns {Promise<{ok: boolean, messageId?: string, error?: string}>}
  */
-async function sendEmailFromAccount({ accountKey, to, subject, bodyHtml, bodyText, replyTo }) {
+async function sendEmailFromAccount({ accountKey, to, cc, subject, bodyHtml, bodyText, replyTo, attachments }) {
   if (!accountKey || !to || !subject) {
     throw new Error('sendEmailFromAccount : accountKey, to et subject sont requis');
   }
@@ -181,7 +238,7 @@ async function sendEmailFromAccount({ accountKey, to, subject, bodyHtml, bodyTex
   let needsRefresh = !accessToken;
 
   if (!needsRefresh) {
-    const mime = buildMime({ from: fromAddr, to, subject, bodyHtml, bodyText, replyTo });
+    const mime = buildMime({ from: fromAddr, to, cc, subject, bodyHtml, bodyText, replyTo, attachments });
     const result = await gmailApiSend(accessToken, mime);
     if (result.ok) {
       return { ok: true, messageId: result.data.id, from: fromAddr };
@@ -196,7 +253,7 @@ async function sendEmailFromAccount({ accountKey, to, subject, bodyHtml, bodyTex
   // Refresh + retry
   if (needsRefresh) {
     accessToken = await refreshAccessToken(accountKey, tokens.refreshToken, oauth);
-    const mime = buildMime({ from: fromAddr, to, subject, bodyHtml, bodyText, replyTo });
+    const mime = buildMime({ from: fromAddr, to, cc, subject, bodyHtml, bodyText, replyTo, attachments });
     const result = await gmailApiSend(accessToken, mime);
     if (result.ok) {
       return { ok: true, messageId: result.data.id, from: fromAddr };

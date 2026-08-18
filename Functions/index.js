@@ -2370,6 +2370,28 @@ exports.onBookingCreated = functions.firestore
     const personId = booking.personId;
     if (!personId) return null;
 
+    /* ═══ SÉRIE HEBDOMADAIRE DE COACHING — on rend la main ═══════════════
+       Ajouté le 18/08/2026 pour le parcours « Elite NEW - 6 Mois - 24C » :
+       le client pose ses 24 séances d'un coup depuis le lien de son coach.
+       Sans ce garde-fou, les 23 séances suivantes déclencheraient chacune un
+       événement Google, une invitation, un email de confirmation et une
+       notification équipe — soit près de 70 emails d'un seul clic.
+
+       Ces documents sont écrits par api/booking-series-create.js, qui a DÉJÀ
+       créé leur événement Google (sendUpdates:'none') et envoyé UN unique
+       récapitulatif au client et à l'équipe. Il n'y a donc rien à faire ici.
+
+       Le premier RDV de la série, lui, ne porte PAS ce drapeau : il suit le
+       chemin normal ci-dessous (confirmation immédiate, notification équipe,
+       timeline du lead). C'est voulu — le client est confirmé tout de suite.
+
+       ⚠ Ne jamais élargir ce drapeau à d'autres réservations : il coupe
+       toutes les notifications de création. Seule la série coaching le pose. */
+    if (booking.seriesManaged === true) {
+      console.log('[onBookingCreated] série coaching gérée par l\'API — aucun event ni email ici (' + bookingId + ', série ' + (booking.seriesId || '?') + ')');
+      return null;
+    }
+
     const dur = booking.duration || 30;
     const time = booking.time || '09:00';
     const parts = time.split(':');
