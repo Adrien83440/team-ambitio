@@ -1254,16 +1254,67 @@ function renderCompleted(){
     }
     var dt=d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
     h+='<tr>';
-    h+='<td style="font-weight:600">'+esc(r.clientName)+_autoBadge(r)+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail)+'</div></td>';
+    h+='<td style="font-weight:600">'+esc(r.clientName)+_autoBadge(r)+_copieBadge(r)+'<div style="font-size:11px;color:var(--muted)">'+esc(r.clientEmail)+'</div></td>';
     h+='<td>'+esc(r.templateName||'—')+_adhocBadge(r)+_academyPill(r)+'</td>';
     h+='<td style="font-size:12px">'+dt+'</td>';
     h+='<td style="white-space:nowrap">';
     h+='<button class="sig-btn sig-btn-g" style="font-size:11px;padding:4px 10px" onclick="downloadSignedPdf(\''+r.id+'\')">📥 PDF</button> ';
-    h+='<a href="sign-certificate.html?id='+r.id+'" target="_blank" class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px;text-decoration:none">📜 Certificat</a>'+_academyBtn(r);
+    h+='<a href="sign-certificate.html?id='+r.id+'" target="_blank" class="sig-btn sig-btn-p" style="font-size:11px;padding:4px 10px;text-decoration:none">📜 Certificat</a>'+_copieBtn(r)+_academyBtn(r);
     h+='</td></tr>';
   });
   el.innerHTML=h;
 }
+/* ═══ COPIE DU CONTRAT SIGNÉ ═══
+   Le client reçoit sa copie automatiquement dès qu'il signe : sign.html
+   appelle /api/signature-completed à la fin du parcours. Ce bloc-ci est le
+   rattrapage manuel — mail perdu, spam, adresse corrigée. Même endpoint,
+   avec force:true pour lever le garde d'idempotence, et un jeton Firebase :
+   c'est l'équipe qui demande, pas le signataire.
+   L'adresse n'est JAMAIS envoyée au serveur — elle vient de la demande. */
+function _copieBadge(r){
+  var css='display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;margin-left:6px;';
+  if(r.copieEnvoyeeAt){
+    var n=Number(r.copieEnvoyeeCount)||1;
+    return '<span style="'+css+'color:#34d399;background:rgba(52,211,153,.12)" title="Copie signée envoyée à '+esc(r.copieEnvoyeeA||'')+(n>1?(' — '+n+' envois'):'')+'">✉️ Copie envoyée</span>';
+  }
+  return '<span style="'+css+'color:#f59e0b;background:rgba(245,158,11,.12)" title="Le client n\'a pas encore reçu sa copie signée — utilise le bouton « Envoyer la copie »">✉️ Copie non envoyée</span>';
+}
+function _copieBtn(r){
+  var lbl=r.copieEnvoyeeAt?'✉️ Renvoyer':'✉️ Envoyer la copie';
+  return ' <button class="sig-btn sig-btn-o" style="font-size:11px;padding:4px 10px" onclick="sendSignedCopy(\''+r.id+'\')">'+lbl+'</button>';
+}
+function sendSignedCopy(id){
+  var r=REQ.find(function(x){return x.id===id;});
+  if(!r)return;
+  var dest=r.clientEmail||(r.signers&&r.signers[0]&&r.signers[0].email)||'';
+  if(!dest){alert('Aucune adresse email sur cette demande.');return;}
+  if(!confirm((r.copieEnvoyeeAt?'Renvoyer':'Envoyer')+' le contrat signé à '+dest+' ?'))return;
+  var u=firebase.auth().currentUser;
+  if(!u){alert('Session expirée, reconnecte-toi.');return;}
+  toast('✉️ Envoi de la copie signée…');
+  u.getIdToken().then(function(tok){
+    return fetch('/api/signature-completed',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({requestId:id,force:true})
+    });
+  }).then(function(res){return res.json().catch(function(){return {};});})
+  .then(function(j){
+    if(j&&j.ok){toast('✅ Contrat signé envoyé à '+(j.sentTo||dest));return;}
+    /* On dit ce qui bloque, pas « erreur » : chacun de ces cas a un geste. */
+    var m={
+      not_signed_yet:'Ce contrat n\'est pas encore signé.',
+      signed_pdf_missing:'Le PDF signé est introuvable sur cette demande — télécharge-le depuis « PDF » si tu l\'as, sinon préviens Adrien.',
+      no_client_email:'Aucune adresse email sur cette demande.',
+      request_not_found:'Demande introuvable.'
+    };
+    alert('Envoi impossible : '+((j&&m[j.error])||(j&&j.error)||'erreur serveur'));
+  }).catch(function(e){
+    console.error('[copie signee]',e);
+    alert('Envoi impossible : '+(e&&e.message)+'\n\nUtilise « PDF » et envoie-le à la main.');
+  });
+}
+
 /* ═══ AE ACADEMY (V11b) : accès formation sur contrat signé ═══ */
 // Formations Academy (id + nom), chargées une fois par session pour l'éditeur.
 var _ACAD_COURSES=null;

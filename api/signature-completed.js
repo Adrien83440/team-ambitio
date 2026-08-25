@@ -1,8 +1,9 @@
 // ============================================================================
 // api/signature-completed.js — LA COPIE DU CONTRAT SIGNÉ, PAR EMAIL
 // ----------------------------------------------------------------------------
-// POST /api/signature-completed   { requestId, token }
-//   → 200 { ok:true, sentTo, filename }
+// POST /api/signature-completed   { requestId, token }            (signataire)
+// POST /api/signature-completed   { requestId, force }  + Bearer  (équipe)
+//   → 200 { ok:true, sentTo, filename, envois }
 //   → 200 { ok:true, already:true }     déjà envoyée, on ne double pas
 //
 // POURQUOI CET ENDPOINT
@@ -20,19 +21,22 @@
 // traitement revient sur Vercel, qui déploie depuis git — le code lu est donc
 // le code exécuté, et la divergence n'est plus possible.
 //
-// SÉCURITÉ
-// --------
-// - Endpoint PUBLIC : le signataire n'a pas de compte. Mais on ne fait rien
-//   sur la seule foi du corps de requête :
-//     · le token doit correspondre à celui de la demande (même secret que le
-//       lien de signature) — vérification identique à api/academy-grant.js ;
-//     · la demande doit être en statut « signed » : on n'envoie pas un
-//       contrat qui n'a pas été signé ;
-//     · l'adresse de destination vient TOUJOURS du document Firestore, jamais
-//       du corps — sinon n'importe qui ferait expédier un contrat signé à
-//       l'adresse de son choix.
-// - Idempotent : `copieEnvoyeeAt` marque l'envoi. Un rechargement de page ou
-//   un double clic ne renvoie pas le contrat une seconde fois.
+// DEUX PORTES D'ENTRÉE, TOUTES DEUX VÉRIFIÉES — même modèle que
+// api/signature-send-link.js :
+//   · le signataire, avec le token de la demande — il n'a pas de compte, mais
+//     il vient de signer et son token prouve qu'il est bien sur ce dossier ;
+//   · l'équipe, avec un jeton Firebase — c'est le bouton « Envoyer la copie »
+//     de l'onglet Terminés dans sales-signatures.
+// Aucune des deux ne choisit le destinataire : l'adresse vient TOUJOURS du
+// document Firestore, jamais du corps de requête — sinon n'importe qui ferait
+// expédier un contrat signé à l'adresse de son choix.
+//
+// IDEMPOTENCE — ET SA LEVÉE VOLONTAIRE
+// `copieEnvoyeeAt` marque l'envoi : un rechargement de la page de fin ou un
+// double clic ne renvoie pas le contrat une seconde fois. L'équipe, elle, peut
+// passer outre avec force:true — c'est tout l'intérêt du bouton : le client a
+// perdu son mail, il est parti en spam, l'adresse a été corrigée. Le garde
+// reste absolu pour la porte publique, qui ne peut PAS demander force.
 //
 // COUCHE ADDITIVE : l'écriture dans webhook_inbox reste en place côté
 // sign.html. Si la Cloud Function revenait un jour à la vie, le garde
@@ -40,6 +44,7 @@
 // ============================================================================
 
 const { db, admin } = require('./_firebaseAdmin');
+const { verifyFirebaseAuth } = require('./_verifyFirebaseAuth');
 const { sendGmailWithAttachment } = require('./_billing-gmail');
 const parseBody = require('./_parseBody');
 
@@ -92,7 +97,7 @@ function emailDuClient(R) {
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'method_not_allowed' }); return; }
@@ -100,10 +105,7 @@ module.exports = async (req, res) => {
   const body = parseBody(req) || {};
   const requestId = String(body.requestId || '').trim();
   const token = String(body.token || '').trim();
-  if (!requestId || !token) {
-    res.status(400).json({ ok: false, error: 'requestId_and_token_required' });
-    return;
-  }
+  if (!requestId) { res.status(400).json({ ok: false, error: 'requestId_required' }); return; }
 
   try {
     const reqRef = db.collection('signature_requests').doc(requestId);
@@ -111,18 +113,29 @@ module.exports = async (req, res) => {
     if (!snap.exists) { res.status(404).json({ ok: false, error: 'request_not_found' }); return; }
     const R = snap.data() || {};
 
-    if (!tokenMatches(R, token)) {
-      res.status(401).json({ ok: false, error: 'invalid_token' });
-      return;
+    /* Porte 1 : l'équipe, avec un jeton Firebase. Porte 2 : le token de la
+       demande. L'une des deux suffit, aucune n'est facultative. */
+    let par = null;
+    let equipe = false;
+    try {
+      const auth = await verifyFirebaseAuth(req);
+      if (auth) { equipe = true; par = auth.email || 'equipe'; }
+    } catch (e) { /* pas de jeton : on tente le token de la demande */ }
+    if (!equipe) {
+      if (!tokenMatches(R, token)) { res.status(401).json({ ok: false, error: 'invalid_token' }); return; }
+      par = 'systeme';
     }
+
     if (R.status !== 'signed') {
       res.status(409).json({ ok: false, error: 'not_signed_yet' });
       return;
     }
 
     /* Déjà envoyée : on répond sans rien refaire. Un rechargement de la page
-       de fin ne doit pas expédier le contrat une deuxième fois. */
-    if (R.copieEnvoyeeAt) {
+       de fin ne doit pas expédier le contrat une deuxième fois. Seule l'équipe
+       peut passer outre, et seulement en le demandant explicitement. */
+    const force = equipe && body.force === true;
+    if (R.copieEnvoyeeAt && !force) {
       res.status(200).json({ ok: true, already: true, sentTo: R.copieEnvoyeeA || null });
       return;
     }
@@ -171,20 +184,25 @@ module.exports = async (req, res) => {
     });
 
     /* Trace sur la demande : sert de garde d'idempotence ET de preuve d'envoi
-       dans la fiche signature. */
+       dans la fiche signature. Le compteur dit combien de fois la copie est
+       partie — un renvoi manuel ne doit pas effacer la trace du premier. */
+    const envois = (Number(R.copieEnvoyeeCount) || (R.copieEnvoyeeAt ? 1 : 0)) + 1;
     await reqRef.set({
       copieEnvoyeeAt: admin.firestore.FieldValue.serverTimestamp(),
       copieEnvoyeeA: to,
+      copieEnvoyeeCount: envois,
+      copieEnvoyeePar: par,
       events: admin.firestore.FieldValue.arrayUnion({
         type: 'copie_envoyee',
         date: new Date().toISOString(),
         to,
-        by: 'systeme',
+        by: par,
       }),
     }, { merge: true });
 
-    console.log('[signature-completed] copie envoyée', requestId, '→', to, 'msg=' + (sent && sent.messageId));
-    res.status(200).json({ ok: true, sentTo: to, filename: fichier });
+    console.log('[signature-completed] copie envoyée', requestId, '→', to,
+      'par=' + par, 'envoi n°' + envois, 'msg=' + (sent && sent.messageId));
+    res.status(200).json({ ok: true, sentTo: to, filename: fichier, envois });
   } catch (e) {
     console.error('[signature-completed]', e && e.stack ? e.stack : e);
     res.status(500).json({ ok: false, error: 'server_error' });
