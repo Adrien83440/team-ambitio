@@ -174,6 +174,13 @@ async function televerserMedia(buffer, mime, nom) {
 /**
  * Envoie un média déjà téléversé. Même contrainte que le texte libre : la
  * fenêtre de 24 h doit être ouverte, et c'est à l'appelant de l'avoir vérifié.
+ *
+ * `opts.mediaUrl` — copie archivée du fichier dans Firebase Storage, produite
+ * par l'appelant AVANT l'envoi. Sans elle, la bulle sortante n'afficherait que
+ * « 📷 nom-du-fichier » : on saurait qu'une pièce jointe est partie, jamais
+ * laquelle. Meta ne permet pas de relire un média sortant — son identifiant
+ * n'est valable qu'une fois, à l'envoi — donc si on ne garde pas la copie
+ * nous-mêmes, personne ne pourra plus jamais vérifier ce qui a été envoyé.
  */
 async function envoyerMedia(opts) {
   opts = opts || {};
@@ -184,7 +191,9 @@ async function envoyerMedia(opts) {
   const legende = String(opts.legende || '').trim();
   const nom = String(opts.nom || 'fichier');
 
-  const base = { media: true, mime: mime, nomFichier: nom, contexte: contexte };
+  const mediaUrl = opts.mediaUrl ? String(opts.mediaUrl) : null;
+  const base = { media: true, mime: mime, nomFichier: nom, contexte: contexte,
+                 mediaUrl: mediaUrl };
   if (!to) {
     await journaliser(null, Object.assign({}, base, { statut: 'refuse', erreur: 'numero_invalide' }));
     return { ok: false, wamid: null, erreur: 'numero_invalide' };
@@ -221,7 +230,11 @@ async function envoyerMedia(opts) {
     await majConversation(to, {
       sens: 'out', wamid: wamid,
       texte: (genre === 'image' ? '📷 ' : '📎 ') + (legende || nom),
-      extra: { media: genre, mime: mime, nomFichier: nom, contexte: contexte },
+      /* `legende` à part du `texte` : l'écran affiche le média PUIS la légende,
+         et réutiliser `texte` — qui porte déjà « 📷 nom » — ferait doublon
+         sous l'image. */
+      extra: { media: genre, mime: mime, nomFichier: nom, legende: legende || null,
+               mediaUrl: mediaUrl, contexte: contexte },
     });
   }
   console.log('[whatsapp] media', genre, '→', to, 'wamid=' + wamid);

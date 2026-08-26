@@ -251,8 +251,11 @@
 
         /* Une pièce jointe remplace le corps : `texte` porte alors l'étiquette
            du média (« 📷 Photo »), qui ferait doublon sous l'image. */
-        /* Uniquement ce qui a été archivé, ou reçu : un média sortant n'a pas
-           d'URL et afficherait un faux échec. Son `texte` dit déjà l'essentiel. */
+        /* Uniquement ce qui a été archivé, ou reçu. Les deux sens portent
+           désormais une `mediaUrl` — api/whatsapp-send.js archive aussi le
+           sortant — mais la condition reste : un envoi dont l'archivage a
+           échoué doit garder son « 📷 légende » plutôt qu'un faux échec, car
+           le message, lui, est bien parti. */
         var media = '';
         if (m.media && (m.mediaUrl || m.sens === 'in')) {
           media = blocMedia(m);

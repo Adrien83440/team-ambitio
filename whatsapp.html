@@ -186,6 +186,22 @@ button { font-family:inherit; }
   color:#0b141a; font-size:17px; cursor:pointer; flex-shrink:0; display:flex;
   align-items:center; justify-content:center; }
 .wa-send:disabled { opacity:.4; cursor:default; }
+/* Pièce jointe : le trombone occupe la même boîte que le bouton d'envoi, pour
+   que la barre reste équilibrée quand le champ grandit avec le texte. */
+.wa-clip { width:42px; height:42px; flex-shrink:0; border-radius:50%; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:19px; color:var(--wa-doux); }
+.wa-clip:hover { color:var(--wa-texte); background:rgba(255,255,255,.06); }
+.wa-clip input { display:none; }
+/* Le fichier choisi s'annonce AU-DESSUS du champ, pas à côté : on doit voir ce
+   qui va partir avant d'appuyer, et pouvoir le retirer sans rouvrir le
+   sélecteur. */
+.wa-jointe { display:flex; align-items:center; gap:8px; padding:9px 16px 0;
+  font-size:12.5px; color:var(--wa-doux); }
+.wa-jointe strong { color:var(--wa-texte); font-weight:600; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wa-jointe button { border:0; background:transparent; color:var(--wa-doux);
+  cursor:pointer; font-size:16px; line-height:1; padding:2px 5px; }
+.wa-jointe button:hover { color:#f87171; }
 
 .wa-ferme { padding:12px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
 .wa-ferme-txt { flex:1; min-width:220px; font-size:12.5px; color:var(--wa-doux); line-height:1.55; }
@@ -493,7 +509,12 @@ function rendreCompose(c) {
   var f = fenetre(c);
   if (f.ouverte) {
     host.innerHTML =
-        '<div class="wa-barre">'
+        '<div class="wa-jointe" id="waJointe" style="display:none"></div>'
+      + '<div class="wa-barre">'
+      +   '<label class="wa-clip" title="Joindre une image ou un PDF">📎'
+      +     '<input type="file" id="waFichier" '
+      +       'accept="image/jpeg,image/png,image/webp,application/pdf">'
+      +   '</label>'
       +   '<textarea class="wa-input" id="waTexte" rows="1" placeholder="Écris un message…"></textarea>'
       +   '<button class="wa-send" id="waEnvoyer" title="Envoyer">➤</button>'
       + '</div>';
@@ -506,7 +527,7 @@ function rendreCompose(c) {
         ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
       });
       ta.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyerTexte(c); }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyerMessage(c); }
       });
     }
     return;
@@ -597,11 +618,60 @@ async function poster(corps) {
   return d || { ok: false, erreur: 'reponse_illisible' };
 }
 
-async function envoyerTexte(c) {
+/* Le fichier en base64, sans le préfixe `data:` que le serveur ne saurait pas
+   décoder. Même lecture que whatsapp-lead.js — les deux écrans parlent au même
+   endpoint, ils doivent lui envoyer la même chose. */
+function lireFichier(f) {
+  return new Promise(function (resolve, reject) {
+    var r = new FileReader();
+    r.onload = function () {
+      var s = String(r.result || '');
+      var i = s.indexOf(',');
+      resolve(i >= 0 ? s.slice(i + 1) : s);
+    };
+    r.onerror = function () { reject(new Error('Fichier illisible')); };
+    r.readAsDataURL(f);
+  });
+}
+
+function viderFichier() {
+  var fi = document.getElementById('waFichier');
+  if (fi) fi.value = '';
+  var z = document.getElementById('waJointe');
+  if (z) { z.style.display = 'none'; z.innerHTML = ''; }
+}
+
+/* Poids maximal accepté par api/whatsapp-send.js. Au-delà, Vercel refuse le
+   corps de la requête avant même d'appeler la fonction : on préfère refuser
+   ici, où l'on peut encore expliquer pourquoi. */
+var MAX_OCTETS = 3500000;
+
+function annoncerFichier(f) {
+  var z = document.getElementById('waJointe');
+  if (!z) return;
+  if (!f) { viderFichier(); return; }
+  var mo = (f.size / 1048576).toFixed(1).replace('.', ',');
+  z.style.display = 'flex';
+  z.innerHTML = (f.type === 'application/pdf' ? '📎' : '📷')
+    + ' <strong>' + esc(f.name) + '</strong>'
+    + '<span>' + esc(mo) + ' Mo</span>'
+    + '<button id="waJointeRetirer" title="Retirer">×</button>';
+}
+
+async function envoyerMessage(c) {
   if (STATE.envoiEnCours) return;
   var ta = document.getElementById('waTexte');
+  var fi = document.getElementById('waFichier');
   var txt = ta ? ta.value.trim() : '';
-  if (!txt) return;
+  var f = (fi && fi.files && fi.files[0]) ? fi.files[0] : null;
+  if (!txt && !f) return;
+
+  /* Refus AVANT de vider le champ : sinon on perdrait la légende en même temps
+     qu'on annonce que le fichier est trop lourd. */
+  if (f && f.size > MAX_OCTETS) {
+    afficherErreur('Fichier trop lourd — 3,5 Mo maximum. Au-delà, la requête n\'atteint même pas le serveur.');
+    return;
+  }
 
   STATE.envoiEnCours = true;
   var btn = document.getElementById('waEnvoyer');
@@ -610,19 +680,39 @@ async function envoyerTexte(c) {
      l'écouteur temps réel, comme n'importe quel autre. */
   if (ta) { ta.value = ''; ta.style.height = 'auto'; }
 
-  var d = await poster({ numero: c.numero, texte: txt });
+  var corps = { numero: c.numero, texte: txt };
+  if (f) {
+    try {
+      corps.mediaBase64 = await lireFichier(f);
+      corps.mime = f.type;
+      corps.nom = f.name;
+    } catch (e) {
+      STATE.envoiEnCours = false;
+      if (btn) btn.disabled = false;
+      if (ta) ta.value = txt;
+      afficherErreur((e && e.message) || 'Fichier illisible');
+      return;
+    }
+  }
+
+  var d = await poster(corps);
   STATE.envoiEnCours = false;
   if (btn) btn.disabled = false;
 
-  if (!d.ok) {
-    /* On rend le texte plutôt que de le perdre — c'est la moindre des choses
-       quand on vient de le taper. */
-    if (ta) ta.value = txt;
-    afficherErreur(d.erreur === 'fenetre_fermee'
-      ? 'La fenêtre de 24 h vient de se fermer. Passe par un modèle approuvé.'
-      : ('Envoi refusé : ' + (d.detail || d.erreur || 'erreur inconnue')));
-    if (d.erreur === 'fenetre_fermee') rendreCompose(c);
+  if (d.ok) {
+    /* Le fichier ne se vide qu'au succès : sur un refus, il reste attaché et
+       l'envoi se retente sans avoir à le rechoisir. */
+    viderFichier();
+    return;
   }
+
+  /* On rend le texte plutôt que de le perdre — c'est la moindre des choses
+     quand on vient de le taper. */
+  if (ta) ta.value = txt;
+  afficherErreur(d.erreur === 'fenetre_fermee'
+    ? 'La fenêtre de 24 h vient de se fermer. Passe par un modèle approuvé.'
+    : ('Envoi refusé : ' + (d.detail || d.erreur || 'erreur inconnue')));
+  if (d.erreur === 'fenetre_fermee') rendreCompose(c);
 }
 
 async function envoyerModele(c) {
@@ -752,10 +842,11 @@ function rendreFil(msgs) {
     /* Une pièce jointe remplace le corps : `texte` porte alors l'étiquette du
        média (« 📷 Photo »), qui ferait doublon sous l'image. Seule une vraie
        légende mérite d'être écrite. */
-    /* Uniquement ce qui a été ARCHIVÉ, ou reçu. Un média sortant ne porte pas
-       d'URL — on n'archive que l'entrant — et le passer ici afficherait un
-       « téléchargement impossible » alors que l'envoi s'est très bien passé.
-       Dans ce cas, `texte` porte déjà « 📷 légende », qui suffit. */
+    /* Uniquement ce qui a été ARCHIVÉ, ou reçu. Les deux sens portent désormais
+       une `mediaUrl` — api/whatsapp-send.js archive aussi le sortant — mais la
+       condition reste : un envoi dont l'archivage a échoué doit afficher son
+       « 📷 légende » plutôt qu'un « téléchargement impossible » trompeur, car
+       le message, lui, est bien parti. */
     var media = '';
     if (m.media && (m.mediaUrl || m.sens === 'in')) {
       media = blocMedia(m);
@@ -901,7 +992,11 @@ function rafraichirApercu() {
 document.addEventListener('click', function (ev) {
   var t = ev.target;
 
-  if (t && t.id === 'waEnvoyer') { envoyerTexte(convActive()); return; }
+  if (t && t.id === 'waEnvoyer') { envoyerMessage(convActive()); return; }
+
+  /* Retirer la pièce jointe choisie. On vide l'input lui-même : c'est lui qui
+     porte le fichier jusqu'à l'envoi, pas une variable d'état. */
+  if (t && t.id === 'waJointeRetirer') { viderFichier(); return; }
   if (t && t.id === 'waEnvoyerModele') { envoyerModele(convActive()); return; }
 
   if (t && t.id === 'waChoisirModele') {
@@ -957,10 +1052,16 @@ document.addEventListener('input', function (ev) {
   rafraichirApercu();
 });
 
-/* Attribution d'une conversation. */
+/* Attribution d'une conversation, et choix d'une pièce jointe. */
 document.addEventListener('change', function (ev) {
   var el = ev.target;
   if (!el || !el.getAttribute) return;
+
+  if (el.id === 'waFichier') {
+    annoncerFichier((el.files && el.files[0]) ? el.files[0] : null);
+    return;
+  }
+
   var num = el.getAttribute('data-assign');
   if (!num) return;
   db.collection('whatsapp_conversations').doc(num)

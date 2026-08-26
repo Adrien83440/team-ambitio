@@ -530,6 +530,159 @@
 .iw-comp-status.error { color: #ef4444; }
 .iw-comp-status.ok { color: #4ade80; }
 
+/* ---------- COMPOSER EN MODE WHATSAPP ----------
+   Le panneau change de couleur avec le canal. Ce n'est pas de la décoration :
+   SMS et WhatsApp partent de deux numéros différents, et une réponse envoyée
+   sur le mauvais canal est invisible côté équipe — le prospect, lui, reçoit un
+   message d'un numéro qu'il ne connaît pas. Le vert doit se voir avant d'avoir
+   commencé à taper. */
+.iw-comp-canal {
+  padding: 7px 14px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.iw-comp-canal-p {
+  font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 9px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+#ambitio-inbox-composer.wa .iw-comp-canal-p {
+  background: rgba(0, 168, 132, 0.18);
+  color: #4fd1b0;
+}
+
+#ambitio-inbox-composer.wa .iw-comp-bubble.out {
+  background: linear-gradient(135deg, #047857 0%, #00a884 100%);
+}
+
+#ambitio-inbox-composer.wa .iw-comp-send {
+  background: linear-gradient(135deg, #047857 0%, #00a884 100%);
+}
+
+#ambitio-inbox-composer.wa .iw-comp-textarea:focus {
+  border-color: rgba(0, 168, 132, 0.5);
+}
+
+/* Un envoi refusé par Meta ne doit pas ressembler à un envoi réussi. */
+.iw-comp-bubble.ko { opacity: 0.55; }
+
+/* Pièce jointe : le trombone n'existe qu'en WhatsApp (le SMS Ringover ne
+   transporte pas de fichier) — masqué en JS, pas seulement en CSS. */
+.iw-comp-clip {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.iw-comp-clip:hover { color: #fff; background: rgba(255, 255, 255, 0.09); }
+.iw-comp-clip input { display: none; }
+
+/* Le fichier choisi s'annonce au-dessus du champ : on doit voir ce qui va
+   partir avant d'appuyer, et pouvoir le retirer sans rouvrir le sélecteur. */
+.iw-comp-jointe {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px 0;
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.iw-comp-jointe strong {
+  color: #f5f5f5;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iw-comp-jointe-x {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 5px;
+  margin-left: auto;
+}
+
+.iw-comp-jointe-x:hover { color: #ef4444; }
+
+/* Pièces jointes dans le fil. */
+.iw-comp-media { display: block; margin-bottom: 4px; }
+.iw-comp-media img {
+  display: block;
+  max-width: 100%;
+  max-height: 160px;
+  border-radius: 7px;
+}
+
+.iw-comp-fichier {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  text-decoration: none;
+  font-size: 11.5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fenêtre de 24 h fermée : remplace la zone de saisie. Un champ qui échouerait
+   à tous les coups ne vaut mieux pas exister. */
+.iw-comp-bloc {
+  display: none;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.iw-comp-bloc-t {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #fbbf24;
+  margin-bottom: 9px;
+}
+
+.iw-comp-bloc-t strong { color: #fde68a; }
+
+.iw-comp-bloc-b {
+  display: inline-block;
+  padding: 7px 13px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #047857 0%, #00a884 100%);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 /* ---------- TOAST (en cas d'arrivée pendant qu'un panneau est ouvert) ---------- */
 #ambitio-inbox-toast-stack {
   position: fixed;

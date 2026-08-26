@@ -23,8 +23,18 @@
  *   - Browser Notification API (demande permission au 1er load)
  *   - toast in-app (top-right)
  *
- * COMPOSER SMS : envoi via /api/twilio-sms-send (Vercel Function), récupère
- * idToken Firebase pour auth.
+ * COMPOSER BI-CANAL : le même panneau répond en SMS (Ringover) ou en WhatsApp,
+ * selon la notif d'où il est ouvert. Le canal actif est écrit en toutes lettres
+ * au-dessus du fil et colore le panneau — rouge pour le SMS, vert pour
+ * WhatsApp. Ce n'est pas décoratif : les deux canaux partent de NUMÉROS
+ * DIFFÉRENTS, et répondre par erreur en SMS à un WhatsApp est invisible côté
+ * équipe et incompréhensible côté prospect.
+ *   · SMS      → /api/ringover-sms-send, fil lu dans leads/{id}.communications
+ *   · WhatsApp → /api/whatsapp-send, fil temps réel dans
+ *                whatsapp_conversations/{numero}/messages
+ * WhatsApp impose sa fenêtre de 24 h : hors fenêtre, la saisie libre est
+ * remplacée par un renvoi vers la boîte partagée, seule à porter les modèles
+ * approuvés avec leurs variables.
  *
  * ARCHI : module IIFE auto-injectant, expose window.InboxWidget pour debug.
  * ==========================================================================
@@ -46,6 +56,11 @@
   const TOAST_TTL_MS = 6000;       // durée d'affichage d'un toast
   const SOUND_DEBOUNCE_MS = 1500;  // ne pas spammer le son
   const SMS_SEND_ENDPOINT = '/api/ringover-sms-send';
+  const WA_SEND_ENDPOINT  = '/api/whatsapp-send';
+  // Même plafond que api/whatsapp-send.js : au-delà, Vercel refuse le corps de
+  // la requête avant même d'appeler la fonction.
+  const WA_MAX_OCTETS = 3500000;
+  const WA_ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf';
 
   // ---------- ÉTAT ----------
   let firebaseAuth = null;
@@ -58,6 +73,10 @@
   let initialSnapshotDone = false;
   let activeFilter = 'all';        // 'all' | 'unread' | 'sms' | 'calls'
   let composerLeadId = null;       // lead actuellement ouvert dans composer
+  let composerCanal = 'sms';       // 'sms' | 'whatsapp' — commande TOUT le panneau
+  let composerWaOff = null;        // détachement de l'écouteur temps réel du fil
+  let composerWaOffConv = null;    // idem pour le document de conversation
+  let composerFenetre = 0;         // fenetreExpireA en ms, 0 = fermée ou inconnue
 
   // ---------- HELPERS ----------
   function escapeHtml(str) {
@@ -344,16 +363,37 @@
         '</div>' +
         '<button class="iw-comp-close" title="Fermer">×</button>' +
       '</div>' +
+      // Le canal, toujours visible : c'est ce qui empêche de croire qu'on répond
+      // en WhatsApp alors qu'un SMS part d'un autre numéro.
+      '<div class="iw-comp-canal"></div>' +
       '<div class="iw-comp-thread"></div>' +
+      '<div class="iw-comp-jointe"></div>' +
       '<div class="iw-comp-input-zone">' +
+        '<label class="iw-comp-clip" title="Joindre une image ou un PDF">📎' +
+          '<input type="file" class="iw-comp-file" accept="' + WA_ACCEPT + '">' +
+        '</label>' +
         '<textarea class="iw-comp-textarea" placeholder="Tapez votre réponse SMS…" rows="1"></textarea>' +
         '<button class="iw-comp-send" title="Envoyer">➤</button>' +
       '</div>' +
+      // Prend la place de la zone de saisie quand la fenêtre WhatsApp est
+      // fermée : un champ qui échouerait à tous les coups ne vaut mieux pas
+      // exister.
+      '<div class="iw-comp-bloc"></div>' +
       '<div class="iw-comp-status"></div>';
     document.body.appendChild(composer);
 
     composer.querySelector('.iw-comp-close').addEventListener('click', closeComposer);
-    composer.querySelector('.iw-comp-send').addEventListener('click', sendComposerSms);
+    composer.querySelector('.iw-comp-send').addEventListener('click', sendComposerMessage);
+
+    // Pièce jointe : WhatsApp uniquement. Le SMS Ringover ne transporte pas de
+    // fichier, et le bouton est masqué en mode SMS (cf. appliquerCanal).
+    const fileInput = composer.querySelector('.iw-comp-file');
+    fileInput.addEventListener('change', function () {
+      annoncerJointe(fileInput.files && fileInput.files[0] ? fileInput.files[0] : null);
+    });
+    composer.querySelector('.iw-comp-jointe').addEventListener('click', function (e) {
+      if (e.target && e.target.classList.contains('iw-comp-jointe-x')) viderJointe();
+    });
     const ta = composer.querySelector('.iw-comp-textarea');
     ta.addEventListener('input', function () {
       ta.style.height = 'auto';
@@ -362,7 +402,7 @@
     ta.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendComposerSms();
+        sendComposerMessage();
       }
     });
 
@@ -591,10 +631,12 @@
 
   function handleNotifClick(notif) {
     markAsRead(notif);
-    // WhatsApp : toujours la boîte partagée, jamais le composer SMS — y compris
-    // sans fiche lead, où le repli historique aurait ouvert une réponse Twilio.
+    // WhatsApp : le panneau s'ouvre EN MODE WHATSAPP — il parle à
+    // /api/whatsapp-send, jamais à Ringover. Le garde-fou historique renvoyait
+    // vers la boîte partagée faute de composer WhatsApp ; maintenant qu'il
+    // existe, on répond sur place. La boîte reste à un clic pour les modèles.
     if (isWhatsapp(notif)) {
-      window.location.href = whatsappTarget(notif);
+      openComposer(notif);
       return;
     }
     var target = resolveNotifTarget(notif);
@@ -612,14 +654,15 @@
   function handleNotifAction(notif, action) {
     if (action === 'whatsapp') {
       markAsRead(notif);
-      window.location.href = whatsappTarget(notif);
+      openComposer(notif);
       return;
     }
     if (action === 'reply') {
       markAsRead(notif);
-      // Ceinture et bretelles : le bouton n'est pas rendu sur une notif
-      // WhatsApp, mais une notif mal typée ne doit pas pouvoir déclencher un SMS.
-      if (isWhatsapp(notif)) { window.location.href = whatsappTarget(notif); return; }
+      // Ceinture et bretelles : openComposer choisit le canal d'après la notif,
+      // donc une notif WhatsApp mal typée ne peut pas déclencher un SMS — mais
+      // on garde le test explicite, c'est lui qui documente l'intention.
+      if (isWhatsapp(notif)) { openComposer(notif); return; }
       openComposer(notif);
       return;
     }
@@ -689,6 +732,209 @@
   }
 
   // ---------- COMPOSER SMS ----------
+  // ---------- WHATSAPP DANS LE COMPOSER ----------
+
+  // Chiffres nus, indicatif compris — la clé des documents
+  // whatsapp_conversations. Mêmes règles que normaliserNumero() côté serveur :
+  // les deux doivent tomber sur la MÊME clé, sinon le panneau ouvrirait une
+  // conversation vide à côté de la vraie.
+  function waNumeroDe(brut) {
+    const n = String(brut || '').replace(/[^0-9+]/g, '');
+    if (!n) return '';
+    if (n.charAt(0) === '+') return n.slice(1);
+    if (n.indexOf('00') === 0) return n.slice(2);
+    if (n.charAt(0) === '0' && n.length === 10) return '33' + n.slice(1);
+    return n;
+  }
+
+  // « encore 6 h » / « encore 40 min » — la précision à la minute n'aide pas,
+  // mais savoir qu'il reste vingt minutes change ce qu'on écrit.
+  function waResteLisible(ms) {
+    const min = Math.max(0, Math.floor(ms / 60000));
+    if (min < 60) return 'encore ' + min + ' min';
+    return 'encore ' + Math.floor(min / 60) + ' h';
+  }
+
+  // Le canal colore le panneau, change le texte d'invite et décide si le
+  // trombone existe. Appelé à chaque ouverture, jamais entre deux.
+  function appliquerCanal(canal) {
+    const composer = document.getElementById('ambitio-inbox-composer');
+    if (!composer) return;
+    composerCanal = (canal === 'whatsapp') ? 'whatsapp' : 'sms';
+    const wa = composerCanal === 'whatsapp';
+    composer.classList.toggle('wa', wa);
+    composer.querySelector('.iw-comp-clip').style.display = wa ? 'flex' : 'none';
+    composer.querySelector('.iw-comp-textarea').placeholder =
+      wa ? 'Réponse WhatsApp…' : 'Tapez votre réponse SMS…';
+    viderJointe();
+  }
+
+  // L'état de la fenêtre de 24 h, et ce qu'on a le droit d'en faire. En SMS,
+  // rien de tout ça : la zone de saisie est toujours ouverte.
+  function majFenetreWhatsapp() {
+    const composer = document.getElementById('ambitio-inbox-composer');
+    if (!composer) return;
+    const canalEl = composer.querySelector('.iw-comp-canal');
+    const zone = composer.querySelector('.iw-comp-input-zone');
+    const bloc = composer.querySelector('.iw-comp-bloc');
+
+    if (composerCanal !== 'whatsapp') {
+      canalEl.innerHTML = '<span class="iw-comp-canal-p">SMS</span> Ringover';
+      zone.style.display = 'flex';
+      bloc.style.display = 'none';
+      return;
+    }
+
+    const reste = composerFenetre - Date.now();
+    if (reste > 0) {
+      canalEl.innerHTML = '<span class="iw-comp-canal-p">WhatsApp</span> fenêtre ouverte, '
+        + escapeHtml(waResteLisible(reste));
+      zone.style.display = 'flex';
+      bloc.style.display = 'none';
+      return;
+    }
+
+    // Hors fenêtre, seul un modèle approuvé peut encore partir — et son
+    // formulaire de variables n'a pas sa place dans un panneau de cette
+    // taille. On renvoie donc là où il existe plutôt que d'offrir un champ
+    // qui échouerait à tous les coups.
+    canalEl.innerHTML = '<span class="iw-comp-canal-p">WhatsApp</span> fenêtre fermée';
+    zone.style.display = 'none';
+    bloc.style.display = 'block';
+    bloc.innerHTML =
+      '<div class="iw-comp-bloc-t">Ce contact n\'a pas écrit depuis plus de 24 h. '
+      + 'WhatsApp n\'autorise plus qu\'un <strong>modèle approuvé</strong> — sa réponse '
+      + 'rouvrira la fenêtre.</div>'
+      + '<a class="iw-comp-bloc-b" href="' + escapeHtml(composer.dataset.waLien || 'whatsapp.html')
+      + '">Ouvrir la boîte WhatsApp</a>';
+  }
+
+  function annoncerJointe(f) {
+    const composer = document.getElementById('ambitio-inbox-composer');
+    if (!composer) return;
+    const z = composer.querySelector('.iw-comp-jointe');
+    if (!f) { z.style.display = 'none'; z.innerHTML = ''; return; }
+    const mo = (f.size / 1048576).toFixed(1).replace('.', ',');
+    z.style.display = 'flex';
+    z.innerHTML = (f.type === 'application/pdf' ? '📎' : '📷')
+      + ' <strong>' + escapeHtml(f.name) + '</strong>'
+      + '<span>' + escapeHtml(mo) + ' Mo</span>'
+      + '<button class="iw-comp-jointe-x" title="Retirer">×</button>';
+  }
+
+  function viderJointe() {
+    const composer = document.getElementById('ambitio-inbox-composer');
+    if (!composer) return;
+    const fi = composer.querySelector('.iw-comp-file');
+    if (fi) fi.value = '';
+    annoncerJointe(null);
+  }
+
+  // Base64 sans le préfixe `data:` — c'est ce qu'attend api/whatsapp-send.js.
+  function lireFichierBase64(f) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const v = String(r.result || '');
+        const i = v.indexOf(',');
+        resolve(i >= 0 ? v.slice(i + 1) : v);
+      };
+      r.onerror = () => reject(new Error('Fichier illisible'));
+      r.readAsDataURL(f);
+    });
+  }
+
+  function detacherWhatsapp() {
+    if (composerWaOff) { try { composerWaOff(); } catch (e) {} composerWaOff = null; }
+    if (composerWaOffConv) { try { composerWaOffConv(); } catch (e) {} composerWaOffConv = null; }
+  }
+
+  // Une pièce jointe dans le fil. `mediaUrl` pointe sur Firebase Storage, où
+  // le webhook (entrant) et api/whatsapp-send.js (sortant) archivent le
+  // fichier : l'URL de Meta, elle, expire en 5 minutes et exige un en-tête
+  // d'autorisation, donc elle ne peut pas servir de source à une balise <img>.
+  function waBlocMedia(m) {
+    if (!m.mediaUrl) return '';
+    const url = escapeHtml(m.mediaUrl);
+    if (m.media === 'image' || m.media === 'sticker') {
+      return '<a class="iw-comp-media" href="' + url + '" target="_blank" rel="noopener">'
+        + '<img src="' + url + '" alt="" loading="lazy"></a>';
+    }
+    return '<a class="iw-comp-fichier" href="' + url + '" target="_blank" rel="noopener">'
+      + '📎 ' + escapeHtml(m.nomFichier || 'Pièce jointe') + '</a>';
+  }
+
+  function rendreFilWhatsapp(msgs) {
+    const composer = document.getElementById('ambitio-inbox-composer');
+    if (!composer) return;
+    const threadEl = composer.querySelector('.iw-comp-thread');
+    if (!msgs.length) {
+      threadEl.innerHTML = '<div class="iw-comp-thread-empty">Aucun message dans cette conversation</div>';
+      return;
+    }
+    threadEl.innerHTML = msgs.map(m => {
+      const dir = m.sens === 'in' ? 'in' : 'out';
+      const media = m.media ? waBlocMedia(m) : '';
+      // La légende double le `texte` (« 📷 photo.jpg ») quand un média est
+      // affiché : on montre l'un OU l'autre, jamais les deux.
+      const corps = media ? escapeHtml(m.legende || '') : escapeHtml(m.texte || '');
+      const echec = m.statut === 'failed' || m.statut === 'echec';
+      return '<div class="iw-comp-bubble ' + dir + (echec ? ' ko' : '') + '">'
+        + media + corps
+        + '<span class="iw-comp-bubble-time">' + escapeHtml(formatTime(m.at)) + '</span>'
+        + '</div>';
+    }).join('');
+    threadEl.scrollTop = threadEl.scrollHeight;
+  }
+
+  function chargerFilWhatsapp(numero) {
+    const composer = document.getElementById('ambitio-inbox-composer');
+    if (!composer) return;
+    const threadEl = composer.querySelector('.iw-comp-thread');
+    detacherWhatsapp();
+
+    if (!numero) {
+      threadEl.innerHTML = '<div class="iw-comp-thread-empty">Numéro illisible</div>';
+      return;
+    }
+
+    const ref = firebaseDb.collection('whatsapp_conversations').doc(numero);
+
+    // La fenêtre AVANT le fil : c'est elle qui décide si la zone de saisie a
+    // le droit d'exister, et on préfère l'afficher fermée à tort une seconde
+    // que d'offrir un champ qui échouerait.
+    composerFenetre = 0;
+    majFenetreWhatsapp();
+    composerWaOffConv = ref.onSnapshot(snap => {
+      const d = snap.exists ? (snap.data() || {}) : {};
+      composerFenetre = Number(d.fenetreExpireA || 0);
+      majFenetreWhatsapp();
+      // Le panneau est ouvert, donc lu : le compteur de non-lus de la boîte
+      // partagée doit suivre, sinon la pastille reste allumée après lecture.
+      if (d.nonLus) {
+        ref.update({ nonLus: 0, luA: Date.now() })
+          .catch(e => console.warn('[InboxWidget] marquage lu WhatsApp:', e && e.message));
+      }
+    }, err => {
+      console.warn('[InboxWidget] conversation WhatsApp:', err);
+      composerFenetre = 0;
+      majFenetreWhatsapp();
+    });
+
+    // `desc` + `limit` puis inversion : `limitToLast` impose des contraintes de
+    // tri que cette requête n'a pas besoin de porter, et trente messages
+    // suffisent à répondre sans charger un fil de deux ans.
+    composerWaOff = ref.collection('messages').orderBy('at', 'desc').limit(30)
+      .onSnapshot(snap => {
+        const l = [];
+        snap.forEach(d => l.push(d.data() || {}));
+        rendreFilWhatsapp(l.reverse());
+      }, err => {
+        console.warn('[InboxWidget] fil WhatsApp:', err);
+        threadEl.innerHTML = '<div class="iw-comp-thread-empty">Fil illisible</div>';
+      });
+  }
+
   function openComposer(notif) {
     const composer = document.getElementById('ambitio-inbox-composer');
     if (!composer) return;
@@ -706,8 +952,24 @@
     composer.dataset.toNumber = notif.fromNumber || '';
     composer.classList.add('open');
 
+    appliquerCanal(isWhatsapp(notif) ? 'whatsapp' : 'sms');
+
     // Focus textarea
     setTimeout(() => composer.querySelector('.iw-comp-textarea').focus(), 50);
+
+    if (composerCanal === 'whatsapp') {
+      const num = waNumeroDe(notif.fromNumber);
+      composer.dataset.waNumero = num;
+      // Le lien vers la boîte partagée, pour les modèles : il honore le
+      // `deepLinkUrl` que le webhook pose sur la notif, plutôt que d'être
+      // reconstruit ici.
+      composer.dataset.waLien = whatsappTarget(notif);
+      chargerFilWhatsapp(num);
+      return;
+    }
+
+    detacherWhatsapp();
+    majFenetreWhatsapp();
 
     if (notif.leadId) {
       loadThreadForLead(notif.leadId);
@@ -738,6 +1000,12 @@
     if (!composer) return;
     composer.classList.remove('open');
     composerLeadId = null;
+    // Sans ce détachement, chaque ouverture empilerait un écouteur temps réel
+    // de plus sur Firestore, et le panneau finirait par rendre le fil d'une
+    // conversation qu'on a quittée.
+    detacherWhatsapp();
+    composerFenetre = 0;
+    viderJointe();
   }
 
   function loadThreadForLead(leadId) {
@@ -776,6 +1044,95 @@
         console.warn('[InboxWidget] loadThreadForLead error:', err);
         threadEl.innerHTML = '<div class="iw-comp-thread-empty">Erreur de chargement</div>';
       });
+  }
+
+  // Aiguillage : le canal a été fixé à l'ouverture du panneau et ne change
+  // jamais en cours de route. Un seul point d'entrée, pour qu'aucun chemin —
+  // clic, touche Entrée — ne puisse contourner ce choix.
+  function sendComposerMessage() {
+    if (composerCanal === 'whatsapp') { sendComposerWhatsapp(); return; }
+    sendComposerSms();
+  }
+
+  async function sendComposerWhatsapp() {
+    const composer = document.getElementById('ambitio-inbox-composer');
+    if (!composer || !composer.classList.contains('open')) return;
+
+    const ta = composer.querySelector('.iw-comp-textarea');
+    const fi = composer.querySelector('.iw-comp-file');
+    const sendBtn = composer.querySelector('.iw-comp-send');
+    const statusEl = composer.querySelector('.iw-comp-status');
+    const text = (ta.value || '').trim();
+    const f = (fi && fi.files && fi.files[0]) ? fi.files[0] : null;
+    const numero = composer.dataset.waNumero || '';
+
+    if (!text && !f) return;
+    if (!numero) {
+      statusEl.textContent = 'Numéro destinataire manquant';
+      statusEl.className = 'iw-comp-status error';
+      return;
+    }
+    // Refusé ici plutôt qu'au serveur : au-delà de cette taille, Vercel coupe
+    // la requête avant d'appeler la fonction, et l'échec n'aurait aucune
+    // explication lisible.
+    if (f && f.size > WA_MAX_OCTETS) {
+      statusEl.textContent = '❌ Fichier trop lourd — 3,5 Mo maximum';
+      statusEl.className = 'iw-comp-status error';
+      return;
+    }
+
+    sendBtn.disabled = true;
+    statusEl.textContent = 'Envoi…';
+    statusEl.className = 'iw-comp-status';
+
+    const corps = { numero: numero, texte: text };
+    try {
+      if (f) {
+        corps.mediaBase64 = await lireFichierBase64(f);
+        corps.mime = f.type;
+        corps.nom = f.name;
+      }
+      const idToken = await firebaseAuth.currentUser.getIdToken();
+      const resp = await fetch(WA_SEND_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+        body: JSON.stringify(corps),
+      });
+      const data = await resp.json().catch(() => null);
+
+      if (!data || !data.ok) {
+        const motif = data && data.erreur;
+        // 409 : la fenêtre s'est fermée entre l'affichage et l'envoi. On rend
+        // le panneau cohérent avec la réalité au lieu de laisser un champ qui
+        // refusera tout.
+        if (motif === 'fenetre_fermee') {
+          composerFenetre = 0;
+          majFenetreWhatsapp();
+          statusEl.textContent = '❌ Fenêtre de 24 h fermée — passe par un modèle';
+        } else {
+          statusEl.textContent = '❌ ' + ((data && (data.detail || data.erreur)) || 'Erreur envoi');
+        }
+        statusEl.className = 'iw-comp-status error';
+        return;
+      }
+
+      statusEl.textContent = '✅ Envoyé';
+      statusEl.className = 'iw-comp-status ok';
+      ta.value = '';
+      ta.style.height = 'auto';
+      viderJointe();
+      // Pas de rechargement : l'écouteur temps réel du fil fera apparaître le
+      // message de lui-même, comme n'importe quel autre.
+      setTimeout(() => {
+        if (composer.classList.contains('open')) statusEl.textContent = '';
+      }, 2500);
+    } catch (err) {
+      console.error('[InboxWidget] WhatsApp send failed:', err);
+      statusEl.textContent = '❌ ' + ((err && err.message) || 'Erreur envoi');
+      statusEl.className = 'iw-comp-status error';
+    } finally {
+      sendBtn.disabled = false;
+    }
   }
 
   function sendComposerSms() {

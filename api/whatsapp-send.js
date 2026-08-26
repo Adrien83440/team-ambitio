@@ -21,6 +21,17 @@
 // rejeté par Meta (erreur 131047) — autant refuser avec un message clair plutôt
 // que de laisser l'équipe croire que le message est parti.
 //
+// LA PIÈCE JOINTE EST ARCHIVÉE AVANT DE PARTIR
+// -------------------------------------------
+// Meta ne rend pas relisible un média SORTANT : l'identifiant rendu par le
+// téléversement ne sert qu'une fois, à l'envoi. Sans copie de notre côté, la
+// bulle afficherait « 📎 devis.pdf » sans jamais pouvoir rouvrir le fichier —
+// impossible de vérifier après coup LEQUEL est parti.
+//
+// On archive donc dans Firebase Storage avant l'envoi, exactement comme le
+// webhook le fait pour les médias entrants. L'archivage ne bloque jamais un
+// envoi : s'il échoue, le message part quand même, sans sa copie.
+//
 // LE DESTINATAIRE VIENT DU CORPS, ET C'EST ASSUMÉ
 // Contrairement aux notifications automatiques, ici c'est un humain qui choisit
 // à qui il écrit : c'est le principe même d'une messagerie. La restriction de
@@ -30,7 +41,8 @@
 const { db } = require('./_firebaseAdmin');
 const { verifyFirebaseAuth } = require('./_verifyFirebaseAuth');
 const { envoyerTexte, envoyerModele, envoyerMedia, televerserMedia,
-        normaliserNumero, MEDIAS } = require('./_whatsappClient');
+        normaliserNumero, archiverMedia, extensionDe, MEDIAS } = require('./_whatsappClient');
+const crypto = require('crypto');
 const parseBody = require('./_parseBody');
 
 module.exports = async (req, res) => {
@@ -117,9 +129,27 @@ module.exports = async (req, res) => {
         res.status(200).json({ ok: false, erreur: up.erreur || 'televersement_echoue' });
         return;
       }
+
+      /* La copie pour le fil. Nom aléatoire plutôt que le nom d'origine : deux
+         « photo.jpg » envoyés à la même personne s'écraseraient l'un l'autre,
+         et la première bulle pointerait alors sur le fichier de la seconde.
+         Le wamid ferait un meilleur nom, mais il n'existe qu'après l'envoi —
+         et l'envoi écrit déjà la bulle. */
+      let mediaUrl = null;
+      try {
+        mediaUrl = await archiverMedia(
+          buf,
+          'whatsapp_media/' + numero + '/out-' + crypto.randomUUID() + '.' + extensionDe(mime),
+          mime
+        );
+      } catch (e) {
+        console.warn('[whatsapp-send] archivage sortant:', e && e.message);
+      }
+
       const envoiM = await envoyerMedia({
         to: numero, mediaId: up.id, mime: mime,
         nom: body.nom || 'fichier', legende: texte, contexte: contexte,
+        mediaUrl: mediaUrl,
       });
       res.status(200).json({ ok: envoiM.ok, wamid: envoiM.wamid, erreur: envoiM.erreur });
       return;
