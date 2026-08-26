@@ -2747,7 +2747,13 @@ function renderFeed() {
 
   // Fiche ouverte : rafraîchir le panneau avec les données fraîches
   // (brouillons note/SMS/FU et scroll préservés — cf. l2RenderSheet).
-  if (openCardId) {
+  //
+  // SAUF pendant une édition des infos. Ce re-render reconstruit tout le corps
+  // de la fiche : le panneau d'édition repasse à `display:none` et les champs
+  // reprennent les valeurs de la base. Autrement dit, la saisie en cours
+  // disparaissait sous les doigts dès qu'un lead — n'importe lequel — bougeait
+  // dans le flux. `renderFeed()` porte déjà cette même garde ; il manquait ici.
+  if (openCardId && !isEditingLead) {
     var openEl = document.querySelector('#ldFeed .ld-card[data-lead-id="' + openCardId + '"]');
     if (openEl) openEl.classList.add('is-open');
     l2RenderSheet(openCardId, true);
@@ -3995,10 +4001,24 @@ function l2SheetHeadHTML(l, id) {
 }
 
 function l2CaptureDrafts(root) {
-  var d = { note: '', sms: '', fuDate: '', fuTime: '', fuNote: '', fuDur: '', fuCal: null };
+  var d = { note: '', sms: '', fuDate: '', fuTime: '', fuNote: '', fuDur: '', fuCal: null,
+            edits: null, editing: false };
   if (!root) return d;
   var q = function (sel) { return root.querySelector(sel); };
   var el;
+
+  /* Les champs du mode Infos, et le fait que le panneau soit ouvert. Sans ça,
+     un re-render rétablit les valeurs de la base et referme le panneau —
+     autrement dit efface ce qu'on vient de taper. */
+  var zoneEdit = q('[data-edit-mode]');
+  if (zoneEdit && zoneEdit.style.display !== 'none') {
+    d.editing = true;
+    d.edits = {};
+    var champs = zoneEdit.querySelectorAll('[data-edit]');
+    for (var ci = 0; ci < champs.length; ci++) {
+      d.edits[champs[ci].getAttribute('data-edit')] = champs[ci].value;
+    }
+  }
   el = q('[data-field="newNote"]');       if (el) d.note = el.value;
   el = q('[data-sms-input]');             if (el) d.sms = el.value;
   el = q('[data-fu-field="date"]');       if (el) d.fuDate = el.value;
@@ -4012,6 +4032,23 @@ function l2RestoreDrafts(root, d, id) {
   if (!root || !d) return;
   var q = function (sel) { return root.querySelector(sel); };
   var el;
+
+  if (d.editing) {
+    var vue = q('[data-view-mode="' + id + '"]');
+    var zone = q('[data-edit-mode="' + id + '"]');
+    if (vue && zone) {
+      vue.style.display = 'none';
+      zone.style.display = '';
+      var bouton = q('[data-action="toggleEdit"]');
+      if (bouton) { bouton.classList.add('editing'); bouton.innerHTML = '✓ Terminer'; }
+      if (d.edits) {
+        for (var f in d.edits) {
+          var ch = zone.querySelector('[data-edit="' + f + '"]');
+          if (ch) ch.value = d.edits[f];
+        }
+      }
+    }
+  }
   el = q('[data-field="newNote"]');     if (el && d.note) el.value = d.note;
   el = q('[data-sms-input]');           if (el && d.sms) { el.value = d.sms; updateSmsCounter(id); }
   el = q('[data-fu-field="date"]');     if (el && d.fuDate) el.value = d.fuDate;
@@ -4364,6 +4401,9 @@ document.addEventListener('click', function(e) {
     if (!viewEl || !editEl) return;
     var isEditing = editEl.style.display !== 'none';
     if (isEditing) {
+      /* Écrire AVANT de reconstruire : le re-render qui suit détruit les
+         champs, et un debounce encore en vol partirait dans le vide. */
+      autoSaveFlush(eid);
       // Closing edit mode → re-render with fresh data
       isEditingLead = false;
       openCardId = eid;
@@ -4373,7 +4413,9 @@ document.addEventListener('click', function(e) {
       viewEl.style.display = 'none';
       editEl.style.display = '';
       editBtn.classList.add('editing');
-      editBtn.innerHTML = '✕ Annuler';
+      /* Surtout pas « Annuler » : la sauvegarde est automatique, il n'y a
+         rien à annuler quand on presse ce bouton. */
+      editBtn.innerHTML = '✓ Terminer';
       isEditingLead = true;
     }
     return;
@@ -4899,61 +4941,103 @@ document.addEventListener('click', function(e) {
    retiré avec les champs qu'il servait (26/07/2026) — plus aucun élément ne
    pouvait le déclencher. Voir la note dans le segment Action. */
 
-/* ═══ AUTO-SAVE EDIT FIELDS ═══ */
+/* ═══ AUTO-SAVE EDIT FIELDS ═══
+   Les champs sont cherchés PAR EUX-MÊMES (`[data-edit][data-id]`), jamais en
+   remontant à un conteneur. La version précédente visait
+   `#ldSheetInner [data-lead-id]`, qui tombe sur le lien « Appeler » de
+   l'en-tête — rendu AVANT le corps de la fiche — et non sur `.l2body`. Aucun
+   champ n'était donc trouvé : l'écriture ne portait que sur `updatedAt`, et le
+   message « ✅ Sauvegardé » s'affichait quand même. Le pire des cas : ça avait
+   l'air de marcher, et rien n'était enregistré.
+
+   Corollaire : on n'écrit RIEN si aucun champ n'est trouvé. Un `updatedAt`
+   seul ferait remonter la fiche en tête de tri sans avoir rien sauvegardé. */
 var autoSaveTimers = {};
 
-function autoSaveField(leadId, field, value) {
-  // Debounce per lead
+/* Assez court pour qu'un aller-retour rapide entre deux champs n'attende pas,
+   assez long pour ne pas écrire à chaque frappe. Le `focusout` ci-dessous
+   sauvegarde de toute façon dès qu'on quitte un champ. */
+var AUTOSAVE_DELAI = 800;
+
+/* Liste blanche : le DOM ne décide pas de ce qui part en base. */
+var AUTOSAVE_CHAMPS = {
+  nom: 1, telephone: 1, email: 1, utm: 1, type: 1, assignedTo: 1,
+  secteur: 1, ca: 1, defi: 1, disponibilite: 1, timeline: 1
+};
+
+function collectEditFields(leadId) {
+  var updates = {};
+  var els = document.querySelectorAll('[data-edit][data-id="' + leadId + '"]');
+  for (var i = 0; i < els.length; i++) {
+    var f = els[i].getAttribute('data-edit');
+    if (!AUTOSAVE_CHAMPS[f]) continue;
+    updates[f] = String(els[i].value == null ? '' : els[i].value).trim();
+  }
+  return updates;
+}
+
+/* L'écriture elle-même. Appelée par le debounce, par `focusout`, et avant
+   toute fermeture du mode édition — une saisie ne doit jamais être perdue
+   parce que le panneau s'est refermé une seconde trop tôt. */
+function autoSaveFlush(leadId) {
+  if (!leadId) return;
+  if (autoSaveTimers[leadId]) { clearTimeout(autoSaveTimers[leadId]); delete autoSaveTimers[leadId]; }
+
+  var updates = collectEditFields(leadId);
+  var noms = Object.keys(updates);
+  if (!noms.length) return;   /* champs absents du DOM : ne rien écrire */
+
+  // Si le téléphone fait partie du payload, recalculer phoneNormalized
+  if (updates.telephone != null) {
+    updates.phoneNormalized = phoneNormalized(updates.telephone);
+  }
+  updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+  // Update local state
+  for (var li = 0; li < allLeads.length; li++) {
+    if (allLeads[li].id === leadId) {
+      for (var key in updates) { if (key !== 'updatedAt') allLeads[li][key] = updates[key]; }
+      break;
+    }
+  }
+
+  db.collection('leads').doc(leadId).update(updates).then(function() {
+    // Flash autosave message
+    var msg = document.querySelector('[data-autosave-msg="' + leadId + '"]');
+    if (msg) {
+      msg.style.opacity = '1';
+      setTimeout(function() { msg.style.opacity = '0'; }, 1500);
+    }
+  }).catch(function(err) {
+    toast('❌ Erreur : ' + err.message);
+  });
+}
+
+function autoSaveField(leadId) {
+  if (!leadId) return;
   if (autoSaveTimers[leadId]) clearTimeout(autoSaveTimers[leadId]);
-  autoSaveTimers[leadId] = setTimeout(function() {
-    // Gather ALL edit fields for this lead (not just the changed one)
-    var card = document.querySelector('#ldSheetInner [data-lead-id="' + leadId + '"]')
-            || document.querySelector('[data-lead-id="' + leadId + '"]');
-    if (!card) return;
-    var fields = ['nom', 'telephone', 'email', 'utm', 'type', 'assignedTo', 'secteur', 'ca', 'defi', 'disponibilite', 'timeline'];
-    var updates = {};
-    for (var i = 0; i < fields.length; i++) {
-      var el = card.querySelector('[data-edit="' + fields[i] + '"]');
-      if (el) updates[fields[i]] = el.value.trim();
-    }
-    // Si le téléphone fait partie du payload, recalculer phoneNormalized
-    if (updates.telephone != null) {
-      updates.phoneNormalized = phoneNormalized(updates.telephone);
-    }
-    updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-
-    // Update local state
-    for (var li = 0; li < allLeads.length; li++) {
-      if (allLeads[li].id === leadId) {
-        for (var key in updates) { if (key !== 'updatedAt') allLeads[li][key] = updates[key]; }
-        break;
-      }
-    }
-
-    db.collection('leads').doc(leadId).update(updates).then(function() {
-      // Flash autosave message
-      var msg = document.querySelector('[data-autosave-msg="' + leadId + '"]');
-      if (msg) {
-        msg.style.opacity = '1';
-        setTimeout(function() { msg.style.opacity = '0'; }, 1500);
-      }
-    }).catch(function(err) {
-      toast('❌ Erreur : ' + err.message);
-    });
-  }, 3000);
+  autoSaveTimers[leadId] = setTimeout(function() { autoSaveFlush(leadId); }, AUTOSAVE_DELAI);
 }
 
 // Listen on input (text fields) and change (selects)
 document.addEventListener('input', function(e) {
   var el = e.target.closest('[data-edit]');
-  if (el) autoSaveField(el.dataset.id, el.dataset.edit, el.value);
+  if (el) autoSaveField(el.dataset.id);
   // Compteur dynamique du composer SMS
   var smsTa = e.target.closest('[data-sms-input]');
   if (smsTa) updateSmsCounter(smsTa.dataset.smsInput);
 });
+/* Un select est un choix terminé : on écrit tout de suite plutôt que
+   d'attendre un délai qui n'apporte rien ici. */
 document.addEventListener('change', function(e) {
   var el = e.target.closest('[data-edit]');
-  if (el) autoSaveField(el.dataset.id, el.dataset.edit, el.value);
+  if (el) autoSaveFlush(el.dataset.id);
+});
+/* Quitter un champ vaut validation. `focusout` et non `blur` : seul le premier
+   remonte jusqu'au document. */
+document.addEventListener('focusout', function(e) {
+  var el = e.target.closest ? e.target.closest('[data-edit]') : null;
+  if (el) autoSaveFlush(el.dataset.id);
 });
 
 /* ═══ ROUND-ROBIN ASSIGNMENT ═══
