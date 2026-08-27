@@ -6,7 +6,11 @@
      ① Type de contrat signé   : Elite / Business
      ② Paiement                : PIF / MENS
      ③ Booking                 : Self Booking / No Booking
-     ④ Encaissé à la signature : montants suggérés (tarifs officiels HT)
+     ④ Coach référent        : qui accompagnera le client (facultatif —
+                                 « Décider plus tard » n'empêche pas le close).
+                                 Le coach choisi est prévenu sur WhatsApp, et
+                                 sert ensuite à créer le groupe de suivi.
+     ⑤ Encaissé à la signature : montants suggérés (tarifs officiels HT)
                                  + bouton Confirmer (pas de carte récap —
                                  chaque réponse est déjà une validation
                                  manuelle, cette carte = la signature ;
@@ -150,7 +154,20 @@
   /* 4 cartes, pas de récap (demande Adrien 14/07) : chaque réponse est déjà
      une validation manuelle — la carte Encaissé fait office de signature,
      avec le bouton Confirmer directement dessus. */
-  var STEPS = ['contrat', 'paiement', 'booking', 'encaisse'];
+  var STEPS = ['contrat', 'paiement', 'booking', 'coach', 'encaisse'];
+
+  /* Les coachs sélectionnables. `TEAM_MEMBERS_LIST` est déjà en mémoire (nav.js
+     l'alimente depuis _meta/team_members) : aucune lecture Firestore de plus.
+     On ne garde que les comptes actifs de rôle `coach` — un closer ou un CSM
+     dans cette liste produirait une attribution que le module Coaching ne
+     saurait pas relire. */
+  function coachsDisponibles() {
+    var src = window.TEAM_MEMBERS_LIST || [];
+    return src.filter(function (m) {
+      if (!m || m.active === false || m.archivedAt) return false;
+      return m.role === 'coach';
+    });
+  }
 
   function render() {
     var dots = '';
@@ -191,6 +208,22 @@
       if (state.sbSuggest !== null) {
         h += '<div class="cw-sugg">💡 Suggestion : ' + (state.sbSuggest ? 'Self Booking' : 'No Booking') + ' (détecté depuis ' + (state.booking ? 'le RDV' : 'la fiche') + ')</div>';
       }
+    } else if (key === 'coach') {
+      document.getElementById('cwTitle').textContent = 'Close — coach référent';
+      var coachs = coachsDisponibles();
+      h += '<div class="cw-q">Qui sera le coach référent ?<small>Il est prévenu sur WhatsApp dès la confirmation, et c\'est lui qui rejoindra le groupe de suivi.</small></div>';
+      if (!coachs.length) {
+        h += '<div class="cw-warn">Aucun coach trouvé dans l\'annuaire de l\'équipe. Le close reste possible — à attribuer depuis le plan d\'action.</div>';
+      } else {
+        h += '<div class="cw-chips">';
+        coachs.forEach(function (c) {
+          var nom = c.nom || c.displayName || c.slug;
+          var sel = (state.a.coachSlug === c.slug) ? ' sel' : '';
+          h += '<button class="cw-chip' + sel + '" data-coach="' + esc(c.slug) + '" data-coach-nom="' + esc(nom) + '">🎓 ' + esc(nom) + '</button>';
+        });
+        h += '</div>';
+      }
+      h += '<div class="cw-hint">Le coach peut aussi être décidé plus tard, depuis le plan d\'action.</div>';
     } else if (key === 'encaisse') {
       document.getElementById('cwTitle').textContent = 'Close — encaissé & signature';
       var pc = payCfg();
@@ -205,6 +238,8 @@
         + '<button class="cw-chip sel" data-goto="0">' + (state.a.contrat === 'Elite' ? '👑 Elite' : '🚀 Business') + '<small>✎</small></button>'
         + '<button class="cw-chip sel" data-goto="1">' + (state.a.paiement === 'pif' ? '💎 PIF' : '📅 MENS') + '<small>✎</small></button>'
         + '<button class="cw-chip sel" data-goto="2">' + (state.a.booking === 'sb' ? '🔗 Self Booking' : '📞 No Booking') + '<small>✎</small></button>'
+        + '<button class="cw-chip' + (state.a.coachNom ? ' sel' : '') + '" data-goto="3">'
+        +   (state.a.coachNom ? '🎓 ' + esc(state.a.coachNom) : '🎓 Coach à décider') + '<small>✎</small></button>'
         + '</div>';
       h += '<div class="cw-q">Combien a été encaissé à la signature ? <small>Montant HT — ' + (state.a.paiement === 'pif' ? 'PIF : la totalité' : '1ʳᵉ échéance (mensualité)') + '. La vérité du cash reste le module Paiements, le funnel croisera.</small></div>';
       h += '<div class="cw-chips">';
@@ -228,6 +263,9 @@
     var f = '';
     f += state.step > 0 ? '<button class="cw-back" id="cwBack">← Retour</button>' : '<span></span>';
     if (key === 'encaisse') f += '<button class="cw-ok" id="cwConfirm" ' + (state.a.encaisse == null ? 'disabled' : '') + '>✅ Confirmer le close</button>';
+    /* Un close ne doit jamais être bloqué parce que le coach n'est pas encore
+       arbitré : la sortie est explicite, pas cachée dans un coin. */
+    else if (key === 'coach') f += '<button class="cw-back" id="cwSkipCoach">Décider plus tard →</button>';
     else f += '<span></span>';
     foot.innerHTML = f;
 
@@ -243,6 +281,22 @@
         if (STEPS[state.step] === 'encaisse' && state.a.paiement === 'pif' && payCfg()) state.a.encaisse = payCfg().contracte;
         render();
       });
+    });
+    body.querySelectorAll('[data-coach]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.a.coachSlug = btn.getAttribute('data-coach');
+        state.a.coachNom = btn.getAttribute('data-coach-nom');
+        state.step = Math.min(state.step + 1, STEPS.length - 1);
+        if (STEPS[state.step] === 'encaisse' && state.a.paiement === 'pif' && payCfg()) state.a.encaisse = payCfg().contracte;
+        render();
+      });
+    });
+    var skip = document.getElementById('cwSkipCoach');
+    if (skip) skip.addEventListener('click', function () {
+      state.a.coachSlug = null; state.a.coachNom = null;
+      state.step = Math.min(state.step + 1, STEPS.length - 1);
+      if (STEPS[state.step] === 'encaisse' && state.a.paiement === 'pif' && payCfg()) state.a.encaisse = payCfg().contracte;
+      render();
     });
     body.querySelectorAll('[data-enc]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -312,6 +366,11 @@
       if (!state) return;
       state.finished = true;
       state.saving = false;
+      /* Le coach est prévenu APRÈS l'enregistrement, jamais avant : un message
+         « tu as un nouveau client » suivi d'un close qui échoue serait pire
+         que pas de message du tout. Et jamais bloquant — le close est acquis,
+         Meta n'a pas son mot à dire dessus. */
+      notifierCoach();
       var deals = (res && res.deals) || [];
       var errs = deals.filter(function (d) { return d && d.error; });
       var okDeals = deals.filter(function (d) { return d && d.created; });
@@ -325,6 +384,49 @@
       if (btn) { btn.disabled = false; btn.textContent = '✅ Confirmer le close'; }
       toastMsg('❌ ' + ((e && e.message) || 'Erreur d\'enregistrement'), 7000);
     });
+  }
+
+  /* Prévient le coach référent sur WhatsApp. Silencieux en cas d'échec côté
+     interface — le détail part dans la console et dans `whatsapp_messages` —
+     parce qu'un coach injoignable se corrige dans Admin → Utilisateurs, pas au
+     milieu d'un close. */
+  function notifierCoach() {
+    if (!state || !state.a.coachSlug || !state.leadId) return;
+    var leadId = state.leadId;
+    var coachSlug = state.a.coachSlug;
+    var coachNom = state.a.coachNom;
+    var programme = state.a.contrat;
+
+    /* Le choix est écrit sur la fiche AVANT l'envoi, et indépendamment de lui :
+       c'est lui que relira le bouton « Créer le groupe de suivi ». Si Meta est
+       indisponible, l'attribution ne doit pas être perdue pour autant. */
+    try {
+      if (window.firebase && firebase.firestore) {
+        firebase.firestore().collection('leads').doc(leadId).set({
+          coachAssigne: { slug: coachSlug, nom: coachNom, at: Date.now(), programme: programme }
+        }, { merge: true }).catch(function (e) {
+          console.warn('[close-wizard] coach non enregistré :', e && e.message);
+        });
+      }
+    } catch (e) { console.warn('[close-wizard] coach non enregistré', e && e.message); }
+
+    try {
+      var auth = (window.firebase && firebase.auth) ? firebase.auth() : null;
+      if (!auth || !auth.currentUser) return;
+      auth.currentUser.getIdToken().then(function (t) {
+        return fetch('/api/whatsapp-notify-coach', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+          body: JSON.stringify({ leadId: leadId, coachNom: coachNom, programme: programme })
+        });
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d && d.envoye) {
+          toastMsg('📲 ' + ((d.coach && d.coach.nom) || 'Le coach') + ' a été prévenu sur WhatsApp');
+        } else if (d && d.raison && d.raison !== 'deja_notifie') {
+          console.warn('[close-wizard] coach non prévenu :', d.raison);
+        }
+      }).catch(function (e) { console.warn('[close-wizard] notification coach', e && e.message); });
+    } catch (e) { console.warn('[close-wizard] notification coach', e && e.message); }
   }
 
   function renderDone(res, nbDeals, errs) {
@@ -342,6 +444,10 @@
             : (res && res.updated ? 'close mis à jour — commissions existantes conservées'
               : (nbDeals ? nbDeals + ' commission(s) créée(s) automatiquement' : 'commissions déjà en place'))) +
           ' · encaissé déclaré <strong>' + euro(state.a.encaisse) + ' HT</strong></div>' +
+        (state.a.coachNom
+          ? '<div class="cw-comm" style="margin-bottom:12px">🎓 Coach référent : <strong>' + esc(state.a.coachNom) + '</strong> — prévenu sur WhatsApp.<br>'
+            + 'Le groupe de suivi se crée depuis la fiche du client, quand tu veux.</div>'
+          : '<div class="cw-warn" style="margin-bottom:12px">Aucun coach attribué — à faire depuis le plan d\'action.</div>') +
         '<a class="cw-pay" href="' + payUrl + '" target="_blank">💳 Créer le paiement GoCardless</a>' +
         '<button class="cw-ghost" id="cwDoneClose">Fermer</button>' +
         '<div class="cw-hint" style="margin-top:10px">Le module Paiements est la vérité du cash — le funnel croise automatiquement encaissé déclaré ↔ prélèvements réels.</div>' +
@@ -397,7 +503,8 @@
       step: 0,
       saving: false,
       finished: false,
-      a: { contrat: null, paiement: null, booking: sbSuggest === null ? null : (sbSuggest ? 'sb' : 'nb'), encaisse: null }
+      a: { contrat: null, paiement: null, booking: sbSuggest === null ? null : (sbSuggest ? 'sb' : 'nb'),
+           coachSlug: null, coachNom: null, encaisse: null }
     };
 
     /* Lead pas encore chargé → on va le chercher (nom + setter pour les commissions). */

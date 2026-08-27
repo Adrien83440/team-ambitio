@@ -92,8 +92,13 @@ module.exports = async (req, res) => {
   }
 
   // ── 3. Le numéro ───────────────────────────────────────────────────────
+  /* `is_official_business_account` conditionne la Groups API : sans OBA, la
+     création de groupe est refusée. Ce n'est PAS la même chose que
+     `code_verification_status`, qui ne dit que « le numéro a été vérifié par
+     code ». Les confondre ferait croire le module de groupe disponible. */
   const num = await graph(creds.phoneNumberId
-    + '?fields=verified_name,display_phone_number,quality_rating,code_verification_status,platform_type');
+    + '?fields=verified_name,display_phone_number,quality_rating,code_verification_status,'
+    + 'platform_type,is_official_business_account');
   if (!num.ok) {
     sortie.numero = { erreur: num.erreur || 'illisible' };
   } else {
@@ -104,6 +109,8 @@ module.exports = async (req, res) => {
       qualite: n.quality_rating || null,
       verification: n.code_verification_status || null,
       plateforme: n.platform_type || null,
+      /* true = badge vérifié Meta, donc Groups API utilisable. */
+      compteOfficiel: n.is_official_business_account === true,
     };
   }
 

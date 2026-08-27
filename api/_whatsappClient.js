@@ -373,6 +373,89 @@ async function importerMediaEntrant(o) {
   }
 }
 
+/* ── GROUPES ───────────────────────────────────────────────────────────────
+   Ouvert depuis 2026 sur l'API Cloud, et réservé aux comptes portant le badge
+   vérifié (Official Business Account). Sans OBA, la création est refusée par
+   Meta — `whatsapp-diagnostic` expose `numero.compteOfficiel` pour le savoir
+   avant d'essayer.
+
+   TROIS LIMITES QUI COMMANDENT LA CONCEPTION
+   ------------------------------------------
+   · 8 participants maximum. Client + closer + Adrien + Emily + Marine + coach
+     = 6 : ça tient, mais il n'y a pas la place pour une septième habitude.
+   · AUCUN endpoint pour ajouter quelqu'un d'office. On crée le groupe, on
+     obtient un lien, et chacun le rejoint en cliquant. C'est pour ça que le
+     modèle `invitation_groupe` existe : il EST le véhicule du lien.
+   · Les statistiques de modèle ne remontent pas pour les envois en groupe, et
+     chaque invitation est facturée comme un message.
+   ------------------------------------------------------------------------ */
+
+/**
+ * Crée un groupe et renvoie son identifiant.
+ *
+ * ⚠️ Le nom du champ portant le sujet n'est pas documenté publiquement de
+ * façon fiable : on envoie `subject`, qui est la convention WhatsApp, et on
+ * renvoie la réponse brute de Meta en cas d'échec pour pouvoir trancher au
+ * premier appel réel plutôt que de deviner ici.
+ *
+ * @returns {Promise<{ok:boolean, groupId:string|null, lien:string|null,
+ *                    erreur:string|null, brut:Object|null}>}
+ */
+async function creerGroupe(opts) {
+  opts = opts || {};
+  const sujet = String(opts.sujet || '').trim();
+  if (!sujet) return { ok: false, groupId: null, lien: null, erreur: 'sujet_requis', brut: null };
+
+  const creds = await getWhatsappCreds();
+  const rep = await graph(creds.phoneNumberId + '/groups', {
+    method: 'POST',
+    body: { messaging_product: 'whatsapp', subject: sujet },
+  });
+
+  if (!rep.ok) {
+    console.error('[whatsapp] création groupe «' + sujet + '» :', rep.erreur, 'code=' + rep.code);
+    return {
+      ok: false, groupId: null, lien: null,
+      erreur: rep.erreur || 'echec', brut: rep.data || null,
+    };
+  }
+
+  const d = rep.data || {};
+  /* Meta renvoie l'identifiant et, selon les versions, le lien d'invitation
+     dans la foulée. On accepte les deux formes plutôt que d'imposer la
+     nôtre — et l'appelant redemandera le lien s'il manque. */
+  const groupId = d.id || d.group_id || (Array.isArray(d.groups) && d.groups[0] && d.groups[0].id) || null;
+  const lien = d.invite_link || (Array.isArray(d.groups) && d.groups[0] && d.groups[0].invite_link) || null;
+
+  if (!groupId) {
+    return { ok: false, groupId: null, lien: null, erreur: 'identifiant_absent', brut: d };
+  }
+  console.log('[whatsapp] groupe créé', groupId, '«' + sujet + '»');
+  return { ok: true, groupId: String(groupId), lien: lien || null, erreur: null, brut: d };
+}
+
+/**
+ * Le lien d'invitation d'un groupe.
+ * GET le lit ; POST en génère un nouveau ET INVALIDE LE PRÉCÉDENT — d'où le
+ * GET par défaut : régénérer par erreur laisserait sur le carreau tous ceux
+ * qui n'ont pas encore cliqué.
+ */
+async function lienInvitationGroupe(groupId, regenerer) {
+  const id = String(groupId || '').trim();
+  if (!id) return { ok: false, lien: null, erreur: 'group_id_requis' };
+
+  const rep = regenerer
+    ? await graph(encodeURIComponent(id) + '/invite_link', {
+        method: 'POST', body: { messaging_product: 'whatsapp' },
+      })
+    : await graph(encodeURIComponent(id) + '/invite_link');
+
+  if (!rep.ok) return { ok: false, lien: null, erreur: rep.erreur || 'echec' };
+  const lien = (rep.data && rep.data.invite_link) || null;
+  if (!lien) return { ok: false, lien: null, erreur: 'lien_absent' };
+  return { ok: true, lien: lien, erreur: null };
+}
+
 /**
  * Écrit une ligne de journal. Ne lance jamais : un envoi réussi ne doit pas
  * être signalé en échec parce que sa trace n'a pas pu s'écrire.
@@ -504,9 +587,13 @@ async function envoyerTexte(opts) {
   opts = opts || {};
   const texte = String(opts.texte == null ? '' : opts.texte).trim();
   const contexte = opts.contexte || {};
-  const to = normaliserNumero(opts.to);
+  /* `groupId` prend le pas sur `to` : un groupe n'a pas de numéro, et le faire
+     passer par normaliserNumero le réduirait à null. La fenêtre de 24 h ne
+     s'applique pas à un groupe dont on est membre. */
+  const groupId = opts.groupId ? String(opts.groupId).trim() : null;
+  const to = groupId || normaliserNumero(opts.to);
 
-  const base = { texteLibre: true, contexte: contexte,
+  const base = { texteLibre: true, contexte: contexte, groupId: groupId,
                  destinataireBrut: opts.to != null ? String(opts.to) : null };
 
   if (!texte) {
@@ -523,7 +610,7 @@ async function envoyerTexte(opts) {
     method: 'POST',
     body: {
       messaging_product: 'whatsapp',
-      recipient_type: 'individual',
+      recipient_type: groupId ? 'group' : 'individual',
       to: to,
       type: 'text',
       text: { preview_url: false, body: texte },
@@ -543,7 +630,12 @@ async function envoyerTexte(opts) {
   const wamid = (msgs[0] && msgs[0].id) || null;
 
   await journaliser(wamid, Object.assign({}, base, { statut: 'accepte', to: to, wamid: wamid }));
-  if (wamid) {
+  /* Un groupe n'entre PAS dans la boîte partagée : `whatsapp_conversations` est
+     indexée par le numéro d'un contact, et y ranger un identifiant de groupe
+     créerait un fil fantôme auquel personne ne pourrait répondre — l'API
+     n'accepte pas de réponse libre entrante côté groupe. Le journal technique
+     garde la trace, lui. */
+  if (wamid && !groupId) {
     await majConversation(to, {
       sens: 'out', wamid: wamid, texte: texte,
       extra: { contexte: contexte, par: contexte.par || null },
@@ -575,13 +667,16 @@ async function envoyerModele(opts) {
   const langue = String(opts.langue || 'fr').trim();
   const params = Array.isArray(opts.params) ? opts.params : [];
   const contexte = opts.contexte || {};
-  const to = normaliserNumero(opts.to);
+  /* Même règle que pour le texte : un groupe se désigne par son identifiant. */
+  const groupId = opts.groupId ? String(opts.groupId).trim() : null;
+  const to = groupId || normaliserNumero(opts.to);
 
   const base = {
     modele: modele,
     langue: langue,
     params: params.map((v) => (v == null ? '' : String(v))),
     contexte: contexte,
+    groupId: groupId,
     destinataireBrut: opts.to != null ? String(opts.to) : null,
   };
 
@@ -620,7 +715,7 @@ async function envoyerModele(opts) {
     method: 'POST',
     body: {
       messaging_product: 'whatsapp',
-      recipient_type: 'individual',
+      recipient_type: groupId ? 'group' : 'individual',
       to: to,
       type: 'template',
       template: {
@@ -655,9 +750,10 @@ async function envoyerModele(opts) {
     wamid: wamid,
   }));
 
-  /* Le message rejoint la boîte partagée. Un modèle n'a pas de corps lisible
-     côté API : on affiche son nom, l'interface saura l'habiller. */
-  if (wamid) {
+  /* Le message rejoint la boîte partagée — sauf s'il est parti dans un groupe,
+     qui n'a pas sa place dans une messagerie de contacts. Un modèle n'a pas de
+     corps lisible côté API : on affiche son nom, l'interface saura l'habiller. */
+  if (wamid && !groupId) {
     await majConversation(to, {
       sens: 'out',
       wamid: wamid,
@@ -671,6 +767,8 @@ async function envoyerModele(opts) {
 }
 
 module.exports = {
+  creerGroupe,
+  lienInvitationGroupe,
   FENETRE_MS,
   MEDIA_MAX_OCTETS,
   extensionDe,

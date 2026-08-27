@@ -3565,9 +3565,70 @@ function ldScoreBlockHTML(l, id) {
   return h;
 }
 
+/* ═══ GROUPE DE SUIVI WHATSAPP ═══
+   N'apparaît que sur un lead devenu client : créer un groupe pour quelqu'un
+   qui n'a pas signé n'aurait aucun sens, et le bouton n'a rien à faire dans
+   une fiche de prospection.
+
+   Le bouton est SÉPARÉ du parcours de close, volontairement. Créer un groupe
+   est irréversible et consomme une invitation par personne : le glisser dans
+   la confirmation d'un close signifierait qu'une fausse manœuvre crée un
+   groupe et prévient six personnes. Ici, c'est un geste conscient.
+
+   Le coach vient de `coachAssigne`, posé par la carte du parcours de close.
+   Sans lui, on ne propose rien : un groupe sans coach devrait être refait. */
+function ldGroupeBlockHTML(l, id) {
+  var estClient = !!(l.isClient || l.clientSince
+    || l.stage === 'closed_won_self' || l.stage === 'closed_won_setting');
+  if (!estClient) return '';
+
+  var g = l.whatsappGroupe || null;
+  var h = '<div class="ld-actions" style="margin-top:12px">';
+  h += '<div class="ld-actions-title">Groupe de suivi WhatsApp</div>';
+
+  if (g && g.groupId) {
+    var ok = (g.invitations || []).filter(function (x) { return x && x.ok; }).length;
+    var tot = (g.invitations || []).length;
+    h += '<div class="ld-detail-row"><span class="ld-detail-label">Groupe</span>'
+      +  '<span class="ld-detail-val">' + escHtml(g.sujet || 'créé') + '</span></div>';
+    h += '<div class="ld-detail-row"><span class="ld-detail-label">Invitations</span>'
+      +  '<span class="ld-detail-val">' + ok + ' / ' + tot + ' envoyée(s)</span></div>';
+    if (g.lien) {
+      h += '<div class="ld-detail-row"><span class="ld-detail-label">Lien</span>'
+        +  '<span class="ld-detail-val"><a href="' + escAttr(g.lien) + '" target="_blank" rel="noopener">Rejoindre le groupe</a></span></div>';
+    }
+    /* Les absents sont nommés : une invitation qui n'est pas partie se
+       rattrape à la main, mais encore faut-il savoir laquelle. */
+    var rates = (g.invitations || []).filter(function (x) { return x && !x.ok; });
+    if (rates.length) {
+      h += '<div class="ld-blocked-note">Non prévenu(s) : '
+        + rates.map(function (x) { return escHtml(x.qui); }).join(', ')
+        + '<br><span>À inviter à la main avec le lien ci-dessus.</span></div>';
+    }
+    if (g.manquants && g.manquants.length) {
+      h += '<div class="ld-blocked-note">Sans numéro exploitable : '
+        + g.manquants.map(function (x) { return escHtml(x.qui); }).join(', ')
+        + '<br><span>À compléter dans Admin → Utilisateurs.</span></div>';
+    }
+    return h + '</div>';
+  }
+
+  var coach = l.coachAssigne || null;
+  if (!coach || !coach.nom) {
+    h += '<div class="ld-score-hint">Aucun coach référent attribué — à choisir dans le parcours de close ou le plan d\'action avant de créer le groupe.</div>';
+    return h + '</div>';
+  }
+
+  h += '<div class="ld-score-hint">Coach référent : <strong>' + escHtml(coach.nom) + '</strong>. '
+    + 'Le groupe réunira le client, le closer, Adrien, Emily, Marine et le coach — chacun reçoit une invitation WhatsApp.</div>';
+  h += '<button class="ld-edit-toggle" data-action="createGroup" data-id="' + id + '">💬 Créer le groupe de suivi</button>';
+  return h + '</div>';
+}
+
 /* ═══ FICHE — construction des segments ═══ */
 function l2SegAction(l, id) {
-  var h = '<div class="ld-actions">';
+  var h = ldGroupeBlockHTML(l, id);
+  h += '<div class="ld-actions">';
   h += '<div class="ld-actions-title">Statut</div>';
   h += '<div class="ld-status-grid">';
   for (var f = 0; f < L2_FAMILIES.length; f++) {
@@ -4132,7 +4193,17 @@ function l2RenderSheet(id, preserve) {
     var wam = inner.querySelector('[data-wal-mount="' + id + '"]');
     var lw = null;
     for (var iw = 0; iw < allLeads.length; iw++) { if (allLeads[iw].id === id) { lw = allLeads[iw]; break; } }
-    if (wam) window.WhatsAppLead.attach(wam, id, lw && lw.telephone);
+    /* Le contexte de la fiche accompagne le module : il s'en sert pour
+       pré-remplir les variables des modèles (prénom du prospect, prénom de
+       qui écrit). Sans lui, l'équipe retape à chaque envoi ce que la fiche
+       affiche juste au-dessus. */
+    var moi = null;
+    try { moi = getCurrentVoiceUser(); } catch (e) { moi = null; }
+    if (wam) window.WhatsAppLead.attach(wam, id, lw && lw.telephone, {
+      nom: (lw && lw.nom) || '',
+      assignedTo: (lw && lw.assignedTo) || '',
+      moiNom: (moi && moi.name) || ''
+    });
   } else if (window.WhatsAppLead) {
     window.WhatsAppLead.detach(id);
   }
@@ -4346,6 +4417,13 @@ document.addEventListener('click', function(e) {
     if (e.target.closest('.l2side') || e.target.closest('.l2qrow')) return;
     var tCard = toggle.closest('.ld-card');
     if (tCard && tCard.dataset.leadId) l2OpenLead(tCard.dataset.leadId);
+    return;
+  }
+
+  // Créer le groupe de suivi WhatsApp
+  var grpBtn = e.target.closest('[data-action="createGroup"]');
+  if (grpBtn) {
+    createSuiviGroup(grpBtn.dataset.id, grpBtn);
     return;
   }
 
@@ -4940,6 +5018,54 @@ document.addEventListener('click', function(e) {
 /* Le listener « AUTO-SAVE RDV FIELDS » (leads.rdvDate / rdvHeure) a été
    retiré avec les champs qu'il servait (26/07/2026) — plus aucun élément ne
    pouvait le déclencher. Voir la note dans le segment Action. */
+
+/* ═══ GROUPE DE SUIVI WHATSAPP ═══
+   Le geste est irréversible et consomme une invitation par personne : d'où la
+   confirmation explicite, et le bouton neutralisé pendant l'appel. Le serveur
+   refuse de son côté un second groupe sur le même lead (trace whatsappGroupe),
+   mais un double-clic ne doit même pas arriver jusque-là. */
+async function createSuiviGroup(leadId, btn) {
+  if (!leadId || !btn || btn.disabled) return;
+  var lead = null;
+  for (var i = 0; i < allLeads.length; i++) { if (allLeads[i].id === leadId) { lead = allLeads[i]; break; } }
+  var coach = lead && lead.coachAssigne ? lead.coachAssigne : null;
+  if (!coach || !coach.nom) { toast('❌ Aucun coach référent attribué'); return; }
+
+  if (!window.confirm('Créer le groupe de suivi de ' + ((lead && lead.nom) || 'ce client') + ' ?\n\n'
+      + 'Le client, le closer, Adrien, Emily, Marine et ' + coach.nom
+      + ' recevront chacun une invitation WhatsApp.')) return;
+
+  btn.disabled = true;
+  var libelle = btn.textContent;
+  btn.textContent = '⏳ Création…';
+  try {
+    var t = await firebase.auth().currentUser.getIdToken();
+    var r = await fetch('/api/whatsapp-group-create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t },
+      body: JSON.stringify({ leadId: leadId, coachNom: coach.nom, coachId: coach.slug || '' })
+    });
+    var d = await r.json().catch(function () { return null; });
+
+    if (!d || !d.ok) {
+      btn.disabled = false; btn.textContent = libelle;
+      /* La réponse brute de Meta est bien plus parlante que notre traduction :
+         c'est elle qui dira si le refus tient au badge vérifié manquant. */
+      if (d && d.brut) console.warn('[groupe] refus Meta :', d.brut);
+      toast('❌ ' + ((d && (d.detail || d.erreur)) || 'Création impossible'));
+      return;
+    }
+
+    var ok = (d.invitations || []).filter(function (x) { return x && x.ok; }).length;
+    toast(d.deja ? '💬 Le groupe existait déjà'
+                 : '💬 Groupe créé — ' + ok + '/' + (d.invitations || []).length + ' invitation(s) envoyée(s)');
+    /* La fiche se repeint depuis le flux temps réel : la trace posée côté
+       serveur arrive seule, on ne recharge rien à la main. */
+  } catch (err) {
+    btn.disabled = false; btn.textContent = libelle;
+    toast('❌ ' + ((err && err.message) || 'Erreur réseau'));
+  }
+}
 
 /* ═══ AUTO-SAVE EDIT FIELDS ═══
    Les champs sont cherchés PAR EUX-MÊMES (`[data-edit][data-id]`), jamais en

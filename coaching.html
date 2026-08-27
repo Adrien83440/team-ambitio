@@ -1199,7 +1199,7 @@
     // Guard: only coaches and admins
     (function(){
       const role = localStorage.getItem('ambitio_role');
-      if(role && role === 'sales') { window.location.href = 'sales.html'; }
+      if(role && role === 'sales') { window.location.href = 'sales-dashboard.html'; }
       // admin a accès à tout
     })();
   </script>
@@ -1448,7 +1448,7 @@
 <script type="module">
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import{getAuth,onAuthStateChanged,signOut}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-  import{getFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc,deleteField,query,where}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  import{getFirestore,initializeFirestore,doc,setDoc,getDoc,collection,getDocs,deleteDoc,updateDoc,deleteField,query,where}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
   const app=initializeApp({
     apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
     authDomain:"ambitio-team.firebaseapp.com",
@@ -1457,7 +1457,7 @@
     messagingSenderId:"1079366902268",
     appId:"1:1079366902268:web:b4ec1691dba54230339279"
   });
-  const auth=getAuth(app),db=getFirestore(app);
+  const auth=getAuth(app),db=initializeFirestore(app,{experimentalAutoDetectLongPolling:true}); /* auto-detect long-polling : sans lui WebChannel se bloque sur Safari. En SDK modulaire le reglage se pose ici, pas via settings(). */
   window._auth=auth;window._db=db;window._doc=doc;window._setDoc=setDoc;
   window._getDoc=getDoc;window._collection=collection;window._getDocs=getDocs;
   window._deleteDoc=deleteDoc;window._updateDoc=updateDoc;window._deleteField=deleteField;window._signOut=signOut;
@@ -3548,6 +3548,9 @@ function togglePlanEdit(clientId){
 /* Prévient le coach référent sur WhatsApp qu'il vient de se voir attribuer un
    client. Ne lance jamais et ne bloque rien : le plan d'action est enregistré
    avant, et le reste vit sa vie même si Meta est indisponible.
+
+   ⚠️ N'est plus appelée automatiquement — voir savePlanV2. Le parcours de
+   close est devenu le point de notification par défaut.
    Le serveur retrouve seul le numéro du coach (Admin → Utilisateurs) et refuse
    de rejouer une notification déjà envoyée. */
 async function notifierCoachWhatsapp(clientId, plan){
@@ -3588,11 +3591,22 @@ async function savePlanV2(clientId, plan, msg, full){
       c.coach = plan.coach;
       try{ await window._updateDoc(window._doc(window._db,'clients',clientId),{coach: plan.coach}); }
       catch(e){ console.warn('[plan] coach sur la fiche', e); }
-      /* Le coach vient de CHANGER : on le prévient sur WhatsApp. Appel
-         volontairement détaché — une notification qui échoue ne doit jamais
-         faire échouer l'enregistrement du plan. Le anti-doublon est côté
-         serveur, sur la fiche : rejouer cet appel ne renvoie rien. */
-      notifierCoachWhatsapp(clientId, plan);
+      /* Le coach vient de CHANGER. On NE prévient plus automatiquement : depuis
+         que le parcours de close attribue le coach et le notifie lui-même, cet
+         envoi produisait un SECOND message dès que le plan d'action reprenait
+         le même coach — c'est-à-dire dans le cas le plus courant. Le garde-fou
+         anti-rejeu du serveur ne peut rien y faire : il vit sur clients/{id},
+         alors que le close trace sur leads/{id}, et rien ne relie les deux en
+         base.
+
+         La notification reste possible, mais devient un geste explicite : on
+         la propose, on ne la déclenche pas. Le cas qui la justifie encore est
+         le client jamais passé par le wizard (imports, reprises), ou un
+         changement de coach en cours d'accompagnement. */
+      if (window.confirm('Prévenir ' + plan.coach + ' sur WhatsApp ?\n\n'
+          + 'À refuser si le coach a déjà été prévenu lors du close.')) {
+        notifierCoachWhatsapp(clientId, plan);
+      }
     }
     showToast(msg || '✅ Plan mis à jour','success');
     pousserPlanVersAcademy(clientId);

@@ -1,7 +1,8 @@
 /* ============================================================================
    whatsapp-lead.js — CANAL WHATSAPP DANS LA FICHE D'UN LEAD
    ----------------------------------------------------------------------------
-   window.WhatsAppLead.attach(mount, leadId, telephone)
+   window.WhatsAppLead.attach(mount, leadId, telephone, infos)
+     infos = { nom, assignedTo, moiNom } — sert au pré-remplissage des modèles.
    window.WhatsAppLead.detach(leadId)
 
    Se greffe dans le segment « Échange » de Leads Live, à côté du SMS et des
@@ -24,7 +25,68 @@
 (function () {
   'use strict';
 
-  var ETATS = {};   /* leadId → { numero, offConv, offFil, conv, msgs, modeles, modeleActif, vals } */
+  var ETATS = {};   /* leadId → { numero, offConv, offFil, conv, msgs, modeles, modeleActif, vals, infos } */
+
+  /* ── PRÉ-REMPLISSAGE DES MODÈLES ──────────────────────────────────────
+     Ce qu'on sait déjà de la fiche n'a pas à être retapé. La table dit, pour
+     chaque modèle, à quoi correspond chaque variable DANS L'ORDRE.
+
+     Une table explicite plutôt qu'une déduction depuis le texte : « Bonjour
+     {{1}}, c'est {{2}} » se devine, mais un modèle réécrit chez Meta sans
+     qu'on le sache inverserait silencieusement les deux — et le prospect
+     recevrait « Bonjour Élodie, c'est Amina ». Un nom absent d'ici ne
+     pré-remplit rien, ce qui est le bon défaut.
+
+     Les valeurs restent MODIFIABLES : c'est une aide à la saisie, pas une
+     décision prise à la place de l'équipe.
+
+       prenomLead → le prénom du prospect, tiré du nom de la fiche
+       prenomMoi  → le prénom de qui écrit — l'utilisateur CONNECTÉ, et non le
+                    propriétaire du lead : c'est lui qui signe « c'est X de
+                    Adrien&Emily » et à qui le prospect répondra. Signer du nom
+                    du propriétaire quand quelqu'un d'autre écrit produirait un
+                    message faux. Repli sur le propriétaire si l'identité du
+                    connecté n'est pas résolue. */
+  var PREREMPLISSAGE = {
+    ouverture_lead:          ['prenomLead', 'prenomMoi'],
+    ouverture_lead_noc_call: ['prenomLead', 'prenomMoi'],
+    partage_temoignages:     ['prenomLead']
+  };
+
+  /* Le premier mot d'un nom complet. « Amina » depuis « Amina Belkacem », et
+     « Amina » depuis « Amina » tout court. */
+  function prenomDe(nom) {
+    var t = String(nom == null ? '' : nom).trim().split(/\s+/);
+    return t[0] || '';
+  }
+
+  /* Un slug d'équipe → le prénom affichable. `TEAM_MEMBERS` est peuplé par
+     nav.js ; s'il ne l'est pas encore, le slug lui-même fait un repli
+     acceptable — « elodie » vaut mieux qu'un champ vide. */
+  function prenomDuSlug(slug) {
+    if (!slug) return '';
+    var m = (window.TEAM_MEMBERS || {})[slug];
+    var nom = (m && (m.nom || m.fullName || m.name || m.displayName)) || slug;
+    return prenomDe(nom);
+  }
+
+  /** Les valeurs proposées pour un modèle, dans l'ordre de ses variables. */
+  function valeursProposees(E, modele) {
+    var plan = PREREMPLISSAGE[modele && modele.nom];
+    if (!plan) return [];
+    var infos = (E && E.infos) || {};
+    var source = {
+      prenomLead: prenomDe(infos.nom || (E && E.conv && E.conv.nomLead) || ''),
+      /* `moiNom` est déjà résolu par la page appelante (auth Firebase croisée
+         avec l'annuaire) : on n'a pas à refaire ce travail ici. */
+      prenomMoi: prenomDe(infos.moiNom || '') || prenomDuSlug(infos.assignedTo || '')
+    };
+    var out = [];
+    for (var i = 0; i < plan.length && i < modele.variables; i++) {
+      out.push(source[plan[i]] || '');
+    }
+    return out;
+  }
 
   /* ── Styles, injectés une seule fois ─────────────────────────────────── */
   function ensureCss() {
@@ -478,7 +540,9 @@
       if (quoi === 'tpl-choisir') {
         var nom = b.getAttribute('data-nom');
         (E.modeles || []).forEach(function (x) { if (x.nom === nom) E.modeleActif = x; });
-        E.vals = []; rendre(id);
+        /* Ce qu'on sait déjà est posé d'avance ; le reste attend la saisie. */
+        E.vals = valeursProposees(E, E.modeleActif);
+        rendre(id);
       }
     });
 
@@ -520,7 +584,7 @@
 
   /* ── API publique ────────────────────────────────────────────────────── */
 
-  function attach(mount, leadId, telephone) {
+  function attach(mount, leadId, telephone, infos) {
     if (!mount || !leadId) return;
     ensureCss();
     brancher();
@@ -534,7 +598,7 @@
     }
 
     var E = { numero: numero, mount: mount, conv: null, msgs: [], modeles: null,
-              modeleActif: null, vals: [], envoi: false };
+              modeleActif: null, vals: [], envoi: false, infos: infos || {} };
     ETATS[leadId] = E;
     rendre(leadId);
 

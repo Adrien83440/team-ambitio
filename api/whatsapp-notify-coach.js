@@ -2,8 +2,19 @@
 // api/whatsapp-notify-coach.js — NOTIFIER LE COACH DE SON ATTRIBUTION
 // ----------------------------------------------------------------------------
 // POST /api/whatsapp-notify-coach
-//   { clientId, coachId?, coachNom?, force? }
+//   { clientId | leadId, coachId?, coachNom?, programme?, force? }
 //   → 200 { ok, envoye, wamid, coach:{slug,nom,numero}, raison }
+//
+// DEUX POINTS D'ENTRÉE, UNE SEULE NOTIFICATION
+// --------------------------------------------
+// `clientId` vise une fiche `clients` — le chemin historique, depuis le plan
+// d'action. `leadId` vise une fiche `leads` : c'est celui du parcours de close,
+// où le coach est choisi AVANT que la fiche client n'existe. Sans lui, la carte
+// coach du wizard écrirait dans le vide, puisque rien ne crée de document
+// `clients` au moment du close.
+//
+// La trace anti-rejeu est posée sur le document d'origine, quel qu'il soit :
+// deux enregistrements de suite ne produisent jamais deux messages.
 //
 // POURQUOI
 // --------
@@ -55,15 +66,25 @@ module.exports = async (req, res) => {
 
   const body = parseBody(req) || {};
   const clientId = String(body.clientId || '').trim();
+  const leadId = String(body.leadId || '').trim();
   const coachId = String(body.coachId || '').trim();
   const coachNom = String(body.coachNom || '').trim();
+  const programme = String(body.programme || '').trim();
   const force = body.force === true;
-  if (!clientId) { res.status(400).json({ ok: false, error: 'clientId_required' }); return; }
+  if (!clientId && !leadId) {
+    res.status(400).json({ ok: false, error: 'clientId_or_leadId_required' });
+    return;
+  }
 
   try {
-    const ref = db.collection('clients').doc(clientId);
+    const ref = clientId
+      ? db.collection('clients').doc(clientId)
+      : db.collection('leads').doc(leadId);
     const snap = await ref.get();
-    if (!snap.exists) { res.status(404).json({ ok: false, error: 'client_not_found' }); return; }
+    if (!snap.exists) {
+      res.status(404).json({ ok: false, error: clientId ? 'client_not_found' : 'lead_not_found' });
+      return;
+    }
     const C = snap.data() || {};
 
     const nomCoach = coachNom || C.coach || '';
@@ -92,8 +113,15 @@ module.exports = async (req, res) => {
     /* {{3}} = le contexte du client. `activite` est saisie à la main et peut
        manquer ; le programme, lui, est toujours présent et reste une
        information utile au coach. Un paramètre vide ferait échouer l'envoi
-       entier — d'où ce repli plutôt qu'un blocage. */
-    const contexte = String(C.activite || '').trim() || String(C.programme || '').trim();
+       entier — d'où ce repli plutôt qu'un blocage.
+
+       Depuis un lead, ni l'un ni l'autre n'existe encore : le parcours de
+       close transmet le contrat qu'il vient de faire choisir (« Elite » ou
+       « Business »), qui est exactement l'information utile au coach à cet
+       instant. */
+    const contexte = String(C.activite || '').trim()
+                  || String(C.programme || '').trim()
+                  || programme;
     const nomClient = String(C.nom || '').trim();
     if (!nomClient || !contexte) {
       res.status(200).json({ ok: true, envoye: false, raison: 'fiche_incomplete' });
@@ -107,7 +135,8 @@ module.exports = async (req, res) => {
       params: [prenomDe(r.utilisateur.displayName), nomClient, contexte],
       contexte: {
         type: 'coach_assigne',
-        clientId: clientId,
+        clientId: clientId || null,
+        leadId: leadId || null,
         coachUid: r.utilisateur.uid,
         par: par,
       },
