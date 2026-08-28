@@ -41,7 +41,8 @@
 const { db } = require('./_firebaseAdmin');
 const { verifyFirebaseAuth } = require('./_verifyFirebaseAuth');
 const { envoyerTexte, envoyerModele, envoyerMedia, televerserMedia,
-        normaliserNumero, archiverMedia, extensionDe, MEDIAS } = require('./_whatsappClient');
+        normaliserNumero, archiverMedia, extensionDe, rattacherLead,
+        MEDIAS } = require('./_whatsappClient');
 const crypto = require('crypto');
 const parseBody = require('./_parseBody');
 
@@ -63,8 +64,21 @@ async function marquerLead(numero, infos) {
        création de la conversation : on le relit plutôt que de relancer une
        requête sur `telephone`. */
     const conv = await db.collection('whatsapp_conversations').doc(numero).get();
-    const leadId = conv.exists ? (conv.data() || {}).leadId : null;
-    if (!leadId) return;
+    let leadId = conv.exists ? (conv.data() || {}).leadId : null;
+
+    /* Le rattachement n'a lieu qu'à la CRÉATION de la conversation : une
+       conversation née avant que rattacherLead ne sache chercher sur
+       `phoneNormalized` n'a pas de leadId, et n'en aura jamais. On retente
+       ici, et on répare l'index au passage — sinon la boîte partagée
+       continuerait d'afficher un numéro nu à la place du nom. */
+    if (!leadId) {
+      const lead = await rattacherLead(numero);
+      if (!lead) return;
+      leadId = lead.leadId;
+      await db.collection('whatsapp_conversations').doc(numero)
+        .set({ leadId: leadId, nomLead: lead.nom || null }, { merge: true })
+        .catch((e) => console.warn('[whatsapp-send] réparation index:', e && e.message));
+    }
 
     const ref = db.collection('leads').doc(String(leadId));
     const lead = await ref.get();

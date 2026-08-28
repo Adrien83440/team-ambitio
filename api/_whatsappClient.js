@@ -491,22 +491,47 @@ const FENETRE_MS = 24 * 60 * 60 * 1000;
  * webhook de le convertir avant d'en faire un `ownerUid` de notification.
  * @returns {{leadId:string, nom:string, assignedTo:string|null}|null}
  */
+function premierVivant(snap) {
+  let trouve = null;
+  snap.forEach((d) => {
+    if (trouve) return;
+    const v = d.data() || {};
+    /* Motif pickAlive : un document fusionné n'est plus la fiche de
+       référence, et y écrire reviendrait à écrire dans le vide. */
+    if (v._merged === true) return;
+    trouve = {
+      leadId: d.id,
+      nom: v.nom || v.prenom || null,
+      assignedTo: v.assignedTo || null,
+    };
+  });
+  return trouve;
+}
+
 async function rattacherLead(numero) {
   if (!numero) return null;
   try {
-    const snap = await db.collection('leads').where('telephone', '==', '+' + numero).limit(5).get();
-    let trouve = null;
-    snap.forEach((d) => {
-      if (trouve) return;
-      const v = d.data() || {};
-      if (v._merged === true) return;
-      trouve = {
-        leadId: d.id,
-        nom: v.nom || v.prenom || null,
-        assignedTo: v.assignedTo || null,
-      };
-    });
-    return trouve;
+    /* 1. Le téléphone canonique, en E.164 strict. */
+    const parTel = await db.collection('leads')
+      .where('telephone', '==', '+' + numero).limit(5).get();
+    const direct = premierVivant(parTel);
+    if (direct) return direct;
+
+    /* 2. Repli sur les NEUF DERNIERS CHIFFRES. Le champ `telephone` n'est pas
+       toujours en E.164 — des fiches anciennes ou importées portent encore
+       « 06 68 … » ou un numéro sans « + » — et une comparaison stricte les
+       manque toutes. `phoneNormalized` est justement le champ que
+       api/lead-optin.js utilise pour dédoublonner à l'entrée : c'est le seul
+       rapprochement qui ne dépende d'aucun formatage.
+
+       Sans ce repli, la conversation n'était rattachée à aucun lead : la boîte
+       partagée affichait un numéro nu au lieu d'un nom, et aucune trace ne
+       pouvait être posée sur la fiche. */
+    const court = String(numero).replace(/[^0-9]/g, '').slice(-9);
+    if (court.length < 9) return null;
+    const parCourt = await db.collection('leads')
+      .where('phoneNormalized', '==', court).limit(5).get();
+    return premierVivant(parCourt);
   } catch (e) {
     console.warn('[whatsapp] rattachement lead', numero, e && e.message);
     return null;
