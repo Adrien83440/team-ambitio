@@ -375,9 +375,19 @@
   background: rgba(0, 0, 0, 0.3);
 }
 
+/* Le nom ne doit pas pousser les actions hors du panneau : un lead au nom
+   long faisait disparaître le bouton « Fiche » sur la droite. */
+.iw-comp-header > div:first-child {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .iw-comp-to {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.7);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .iw-comp-to-name {
@@ -403,6 +413,37 @@
 }
 
 .iw-comp-close:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+
+/* Les actions de l'en-tête. « Fiche » ouvre le lead dans Leads Live sans
+   fermer la conversation — répondre puis retrouver le lead à la main était
+   le geste le plus fréquent après une réponse. */
+.iw-comp-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.iw-comp-fiche {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+}
+
+.iw-comp-fiche:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+#ambitio-inbox-composer.wa .iw-comp-fiche:hover {
+  border-color: rgba(0, 168, 132, 0.45);
+  color: #4fd1b0;
+}
 
 .iw-comp-thread {
   max-height: 240px;

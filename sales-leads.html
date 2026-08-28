@@ -1527,6 +1527,48 @@ var coachingLeadIds = {};   // { leadId: true }            (via booking.leadId)
 var coachingEmails  = {};   // { emailLowerCase: true }    (via booking.prospect.email)
 var _coachingBookingsUnsub = null;
 
+/* ── Ouvrir une fiche directement depuis l'URL ──────────────────────────
+   sales-leads.html?leadId=<id>  (ou ?lead=<id>)
+
+   Trois endroits produisaient déjà ce lien — csm-clients, admin-persons et
+   l'événement de relance calendrier — mais la page ne lisait AUCUN paramètre :
+   ils ouvraient Leads Live sans ouvrir la fiche, et il fallait retrouver le
+   lead à la main. Les deux orthographes sont acceptées, parce que les deux
+   existent en production et qu'en renommer une casserait des liens déjà
+   envoyés par mail.
+
+   L'ouverture est différée : les leads arrivent par un snapshot Firestore, et
+   demander la fiche avant qu'ils soient là ne donnerait rien. */
+var _ldPendingOpen = (function () {
+  var q = new URLSearchParams(window.location.search);
+  return q.get('leadId') || q.get('lead') || null;
+})();
+
+/* Un lead plus vieux que la fenêtre glissante de 30 jours n'est pas dans le
+   snapshot : on va le chercher pièce par pièce plutôt que d'ouvrir une fiche
+   vide. Sinon un lien vers un client de l'an dernier ne mènerait nulle part. */
+function _ldOuvrirEnAttente() {
+  if (!_ldPendingOpen) return;
+  var id = _ldPendingOpen;
+
+  for (var i = 0; i < allLeads.length; i++) {
+    if (allLeads[i].id === id) { _ldPendingOpen = null; l2OpenLead(id); return; }
+  }
+
+  _ldPendingOpen = null;   /* une seule tentative, quoi qu'il arrive */
+  db.collection('leads').doc(id).get().then(function (snap) {
+    if (!snap.exists) { toast('Fiche introuvable'); return; }
+    var d = snap.data() || {};
+    if (d._merged === true) { toast('Cette fiche a été fusionnée'); return; }
+    d.id = snap.id;
+    allLeads.unshift(d);
+    renderFeed();
+    l2OpenLead(id);
+  }).catch(function (e) {
+    if (window.console) console.warn('[leads] ouverture directe', e && e.message);
+  });
+}
+
 /* ── Personal mode via URL param ── */
 var personalUser = null;
 (function detectPersonalMode() {
@@ -5650,6 +5692,9 @@ function startListening() {
       }
 
       isFirstLoad = false;
+
+      /* La fiche demandée dans l'URL, maintenant que le feed est peuplé. */
+      _ldOuvrirEnAttente();
 
       // On first load, assign any unassigned recent leads (arrived while page was closed)
       if (!window._firstLoadAssignDone) {

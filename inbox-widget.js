@@ -78,6 +78,20 @@
   let composerWaOffConv = null;    // idem pour le document de conversation
   let composerFenetre = 0;         // fenetreExpireA en ms, 0 = fermée ou inconnue
 
+  /* Le bouton « Fiche » n'apparaît que si l'on SAIT de quel lead il s'agit.
+     En SMS c'est `composerLeadId`, posé par la notif ; en WhatsApp c'est la
+     conversation qui le porte — le webhook la rattache à la réception, et
+     api/whatsapp-send répare l'index quand il manque. */
+  function majBoutonFiche(leadId) {
+    const composer = document.getElementById('ambitio-inbox-composer');
+    if (!composer) return;
+    const a = composer.querySelector('.iw-comp-fiche');
+    if (!a) return;
+    if (!leadId) { a.style.display = 'none'; a.removeAttribute('href'); return; }
+    a.href = 'sales-leads.html?leadId=' + encodeURIComponent(leadId);
+    a.style.display = '';
+  }
+
   // ---------- HELPERS ----------
   function escapeHtml(str) {
     if (str == null) return '';
@@ -361,7 +375,12 @@
           '<div class="iw-comp-to-name"></div>' +
           '<div class="iw-comp-to"></div>' +
         '</div>' +
-        '<button class="iw-comp-close" title="Fermer">×</button>' +
+        '<div class="iw-comp-head-actions">' +
+          // Ouvrir la fiche sans quitter la conversation des yeux : répondre
+          // puis chercher le lead à la main était le geste le plus fréquent.
+          '<a class="iw-comp-fiche" title="Ouvrir la fiche dans Leads Live" style="display:none">Fiche ↗</a>' +
+          '<button class="iw-comp-close" title="Fermer">×</button>' +
+        '</div>' +
       '</div>' +
       // Le canal, toujours visible : c'est ce qui empêche de croire qu'on répond
       // en WhatsApp alors qu'un SMS part d'un autre numéro.
@@ -891,6 +910,7 @@
     const composer = document.getElementById('ambitio-inbox-composer');
     if (!composer) return;
     const threadEl = composer.querySelector('.iw-comp-thread');
+    majBoutonFiche(null);   /* masqué tant que la conversation n'a pas répondu */
     detacherWhatsapp();
 
     if (!numero) {
@@ -909,6 +929,9 @@
       const d = snap.exists ? (snap.data() || {}) : {};
       composerFenetre = Number(d.fenetreExpireA || 0);
       majFenetreWhatsapp();
+      majBoutonFiche(d.leadId || null);
+      /* Le nom du lead vaut mieux que le numéro dans l'en-tête, quand on l'a. */
+      if (d.nomLead) composer.querySelector('.iw-comp-to-name').textContent = d.nomLead;
       // Le panneau est ouvert, donc lu : le compteur de non-lus de la boîte
       // partagée doit suivre, sinon la pastille reste allumée après lecture.
       if (d.nonLus) {
@@ -970,6 +993,7 @@
 
     detacherWhatsapp();
     majFenetreWhatsapp();
+    majBoutonFiche(composerLeadId);
 
     if (notif.leadId) {
       loadThreadForLead(notif.leadId);
