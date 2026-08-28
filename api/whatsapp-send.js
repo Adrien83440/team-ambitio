@@ -45,6 +45,42 @@ const { envoyerTexte, envoyerModele, envoyerMedia, televerserMedia,
 const crypto = require('crypto');
 const parseBody = require('./_parseBody');
 
+/* ── LA TRACE SUR LE LEAD ──────────────────────────────────────────────────
+   Le feed de Leads Live ne lit que `leads` : sans marqueur posé ici, savoir
+   qu'un WhatsApp est parti imposerait d'ouvrir chaque fiche, ou de charger
+   toutes les conversations dans le navigateur pour les croiser par numéro.
+   Une écriture au moment de l'envoi coûte infiniment moins.
+
+   Seuls les envois HUMAINS passent par ce fichier — les rappels automatiques
+   et la notification coach ont leurs propres endpoints, et n'ont rien à
+   marquer sur un lead : ils ne s'adressent pas à lui.
+
+   Ne lance jamais : un message parti ne doit pas être signalé en échec parce
+   que sa trace n'a pas pu s'écrire. */
+async function marquerLead(numero, infos) {
+  try {
+    /* Le rattachement au lead a déjà été fait par majConversation à la
+       création de la conversation : on le relit plutôt que de relancer une
+       requête sur `telephone`. */
+    const conv = await db.collection('whatsapp_conversations').doc(numero).get();
+    const leadId = conv.exists ? (conv.data() || {}).leadId : null;
+    if (!leadId) return;
+
+    const ref = db.collection('leads').doc(String(leadId));
+    const lead = await ref.get();
+    const actuel = (lead.exists ? (lead.data() || {}) : {}).whatsappEnvoye || {};
+
+    const trace = { at: Date.now(), modele: infos.modele || null, par: infos.par || null };
+    /* Le tout premier envoi date la prise de contact : il ne s'écrase jamais,
+       alors que `at` suit le dernier message parti. */
+    if (!actuel.premierAt) trace.premierAt = trace.at;
+
+    await ref.set({ whatsappEnvoye: trace }, { merge: true });
+  } catch (e) {
+    console.warn('[whatsapp-send] trace lead:', e && e.message);
+  }
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') { res.status(204).end(); return; }
@@ -87,6 +123,9 @@ module.exports = async (req, res) => {
         to: numero, template: template,
         langue: body.langue || 'fr', params: params, contexte: contexte,
       });
+      /* Écrit AVANT la réponse : Vercel tue la fonction dès qu'elle part, et
+         une écriture non attendue serait perdue. */
+      if (envoi.ok) await marquerLead(numero, { modele: template, par: par });
       res.status(200).json({ ok: envoi.ok, wamid: envoi.wamid, erreur: envoi.erreur });
       return;
     }
@@ -151,11 +190,13 @@ module.exports = async (req, res) => {
         nom: body.nom || 'fichier', legende: texte, contexte: contexte,
         mediaUrl: mediaUrl,
       });
+      if (envoiM.ok) await marquerLead(numero, { modele: null, par: par });
       res.status(200).json({ ok: envoiM.ok, wamid: envoiM.wamid, erreur: envoiM.erreur });
       return;
     }
 
     const envoi = await envoyerTexte({ to: numero, texte: texte, contexte: contexte });
+    if (envoi.ok) await marquerLead(numero, { modele: null, par: par });
     res.status(200).json({ ok: envoi.ok, wamid: envoi.wamid, erreur: envoi.erreur });
   } catch (e) {
     console.error('[whatsapp-send]', e && e.stack ? e.stack : e);
