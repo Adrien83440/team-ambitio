@@ -170,6 +170,40 @@
     document.head.appendChild(s);
   }
 
+  /* Le compte à rebours doit descendre tout seul : rien ne se passe entre deux
+     messages, et un « 3 h » figé pendant trois heures est un mensonge.
+
+     On met à jour LE SEUL élément concerné, jamais tout le module : `rendre()`
+     réécrit le mount, ce qui effacerait un message en cours de frappe et la
+     pièce jointe déjà choisie. */
+  var _battement = null;
+  function demarrerBattement() {
+    if (_battement) return;
+    _battement = setInterval(function () {
+      var actifs = 0;
+      for (var id in ETATS) {
+        if (!Object.prototype.hasOwnProperty.call(ETATS, id)) continue;
+        var E = ETATS[id];
+        if (!E || !E.mount || !E.mount.isConnected) continue;
+        actifs++;
+        var el = E.mount.querySelector('.wal-f');
+        if (!el) continue;
+        var ouverte = fenetreOuverte(E.conv);
+        el.className = 'wal-f ' + (ouverte ? 'on' : 'off');
+        el.textContent = ouverte ? 'Réponse libre · ' + resteFenetre(E.conv) : 'Fenêtre fermée';
+        /* La fenêtre vient de se refermer sous les doigts : là, il FAUT
+           repeindre — le champ de saisie libre ne doit plus être proposé,
+           il produirait un envoi refusé par Meta. */
+        if (!ouverte && E.conv && E.conv.fenetreExpireA && !E.fermetureVue) {
+          E.fermetureVue = true;
+          rendre(id);
+        }
+        if (ouverte) E.fermetureVue = false;
+      }
+      if (!actifs) { clearInterval(_battement); _battement = null; }
+    }, 60000);
+  }
+
   /* ── Outils ──────────────────────────────────────────────────────────── */
 
   function esc(s) {
@@ -601,6 +635,7 @@
               modeleActif: null, vals: [], envoi: false, infos: infos || {} };
     ETATS[leadId] = E;
     rendre(leadId);
+    demarrerBattement();
 
     if (!window.firebase || !firebase.firestore) return;
     var db = firebase.firestore();

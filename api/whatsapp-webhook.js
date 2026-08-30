@@ -33,7 +33,7 @@
 const crypto = require('crypto');
 const { db, admin } = require('./_firebaseAdmin');
 const { getWhatsappCreds, majConversation, rattacherLead,
-        importerMediaEntrant } = require('./_whatsappClient');
+        importerMediaEntrant, FENETRE_MS } = require('./_whatsappClient');
 
 /* Lecture du corps brut. La signature porte sur les octets exacts envoyés par
    Meta : re-sérialiser un objet déjà parsé donnerait un JSON différent (ordre
@@ -356,6 +356,20 @@ async function enregistrerEntrant(msg, contacts) {
       ownerSlug: ownerSlug,
       wamid: wamid,
     });
+
+    /* La fenêtre de 24 h recopiée SUR LE LEAD. Le feed de Leads Live ne lit
+       que `leads` : sans ce champ, savoir qu'il reste deux heures pour
+       répondre imposerait d'ouvrir la conversation — c'est-à-dire de le
+       découvrir trop tard, ce que le compte à rebours doit justement éviter.
+
+       La donnée fait double emploi avec `whatsapp_conversations`, et c'est
+       assumé : la conversation reste la vérité, le lead n'en porte qu'un
+       reflet daté, rafraîchi à chaque message entrant. */
+    if (lead && lead.leadId) {
+      await db.collection('leads').doc(String(lead.leadId)).set({
+        whatsappFenetre: Date.now() + FENETRE_MS,
+      }, { merge: true }).catch((e) => console.warn('[whatsapp-webhook] fenêtre lead:', e && e.message));
+    }
   }
 }
 

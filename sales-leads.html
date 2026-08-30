@@ -1547,6 +1547,25 @@ var _ldPendingOpen = (function () {
 /* Un lead plus vieux que la fenêtre glissante de 30 jours n'est pas dans le
    snapshot : on va le chercher pièce par pièce plutôt que d'ouvrir une fiche
    vide. Sinon un lien vers un client de l'an dernier ne mènerait nulle part. */
+/* Le compte à rebours WhatsApp doit descendre tout seul : rien ne se passe
+   entre deux messages, et sans battement l'affichage resterait figé sur « 3 h »
+   pendant trois heures.
+
+   Le re-rendu ne part QUE s'il y a une fenêtre ouverte à l'écran — repeindre
+   tout le feed chaque minute pour rien serait payé par tout le monde. Et jamais
+   pendant une édition, même règle que partout ailleurs ici. */
+var _ldReboursTimer = null;
+function _ldDemarrerReboursWhatsapp() {
+  if (_ldReboursTimer) return;
+  _ldReboursTimer = setInterval(function () {
+    if (isEditingLead) return;
+    var maintenant = Date.now();
+    for (var i = 0; i < allLeads.length; i++) {
+      if (Number(allLeads[i].whatsappFenetre || 0) > maintenant) { renderFeed(); return; }
+    }
+  }, 60000);
+}
+
 function _ldOuvrirEnAttente() {
   if (!_ldPendingOpen) return;
   var id = _ldPendingOpen;
@@ -3492,15 +3511,44 @@ function renderLeadTags(l, compact) {
      occuper une place sur la carte. */
   if (l.telephone || l.phone) {
     var waOn = !!(l.whatsappEnvoye && l.whatsappEnvoye.at);
-    var waTitre = waOn
-      ? ('WhatsApp envoyé' + (l.whatsappEnvoye.modele ? ' — ' + l.whatsappEnvoye.modele : '')
-         + ' · ' + formatDateTimeFr(l.whatsappEnvoye.premierAt || l.whatsappEnvoye.at))
-      : 'Aucun WhatsApp envoyé à ce lead';
-    h += '<span class="ld-assigned" title="' + escAttr(waTitre) + '" style="'
-      + (waOn ? 'color:#25d366;border-color:rgba(37,211,102,.4);background:rgba(37,211,102,.12)'
-              : 'color:rgba(255,255,255,.28);border-color:rgba(255,255,255,.12)')
+    /* `whatsappFenetre` est recopié sur le lead par le webhook à chaque
+       message reçu. Le feed ne lit que `leads` : sans ce reflet, il faudrait
+       ouvrir la conversation pour savoir qu'il reste deux heures — donc le
+       découvrir trop tard. */
+    var waReste = Number(l.whatsappFenetre || 0) - Date.now();
+    var waOuverte = waReste > 0;
+    var waUrgent = waOuverte && waReste < 3 * 3600000;
+
+    var waTexte = '';
+    if (waOuverte) {
+      var waMin = Math.floor(waReste / 60000);
+      waTexte = waMin < 60 ? waMin + ' min' : Math.floor(waMin / 60) + ' h';
+    }
+
+    /* Une fenêtre ouverte prime sur la coche : c'est la seule des deux
+       informations sur laquelle on peut encore agir, et elle expire. */
+    var waStyle, waTitre, waSuffixe;
+    if (waOuverte) {
+      waStyle = waUrgent
+        ? 'color:#fbbf24;border-color:rgba(251,191,36,.45);background:rgba(251,191,36,.14)'
+        : 'color:#25d366;border-color:rgba(37,211,102,.4);background:rgba(37,211,102,.12)';
+      waTitre = 'Réponse libre possible encore ' + waTexte
+              + ' — ensuite, seul un modèle approuvé pourra partir';
+      waSuffixe = '<span style="font-weight:800">' + escHtml(waTexte) + '</span>';
+    } else if (waOn) {
+      waStyle = 'color:#25d366;border-color:rgba(37,211,102,.4);background:rgba(37,211,102,.12)';
+      waTitre = 'WhatsApp envoyé' + (l.whatsappEnvoye.modele ? ' — ' + l.whatsappEnvoye.modele : '')
+              + ' · ' + formatDateTimeFr(l.whatsappEnvoye.premierAt || l.whatsappEnvoye.at);
+      waSuffixe = '<span style="font-weight:800">✓</span>';
+    } else {
+      waStyle = 'color:rgba(255,255,255,.28);border-color:rgba(255,255,255,.12)';
+      waTitre = 'Aucun WhatsApp envoyé à ce lead';
+      waSuffixe = '';
+    }
+
+    h += '<span class="ld-assigned" title="' + escAttr(waTitre) + '" style="' + waStyle
       + ';display:inline-flex;align-items:center;gap:3px;padding-left:5px;padding-right:6px">'
-      + LD_WA_ICON + (waOn ? '<span style="font-weight:800">✓</span>' : '')
+      + LD_WA_ICON + waSuffixe
       + '</span>';
   }
   if (l._resurrected) {
@@ -5695,6 +5743,7 @@ function startListening() {
 
       /* La fiche demandée dans l'URL, maintenant que le feed est peuplé. */
       _ldOuvrirEnAttente();
+      _ldDemarrerReboursWhatsapp();
 
       // On first load, assign any unassigned recent leads (arrived while page was closed)
       if (!window._firstLoadAssignDone) {

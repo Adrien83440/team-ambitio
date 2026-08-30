@@ -88,6 +88,10 @@ button { font-family:inherit; }
 .wa-item-l2 { display:flex; align-items:center; gap:8px; margin-top:3px; }
 .wa-apercu { flex:1; font-size:13px; color:var(--wa-doux); overflow:hidden;
   text-overflow:ellipsis; white-space:nowrap; }
+/* Discret tant qu'il reste du temps, orange quand la fenêtre se referme. */
+.wa-rebours { flex-shrink:0; font-size:10.5px; font-weight:700; padding:1px 6px;
+  border-radius:9px; background:rgba(255,255,255,.06); color:var(--wa-doux); }
+.wa-rebours.urgent { background:rgba(251,191,36,.14); color:#fbbf24; }
 .wa-pastille { background:var(--wa-vert); color:#0b141a; font-size:11px; font-weight:700;
   border-radius:11px; min-width:20px; height:20px; padding:0 6px; flex-shrink:0;
   display:flex; align-items:center; justify-content:center; }
@@ -419,6 +423,30 @@ function nomDe(c) { return c.nom || c.nomLead || numLisible(c.numero); }
 
 /* ── Rendu de la liste ─────────────────────────────────────────────────── */
 
+/* Le temps qu'il reste pour répondre librement, DANS LA LISTE.
+   Jusqu'ici l'état de la fenêtre n'existait qu'une fois la conversation
+   ouverte : on découvrait qu'elle s'était refermée après coup, et il fallait
+   alors repasser par un modèle approuvé. Le voir de loin, c'est pouvoir
+   répondre à temps.
+
+   Rien n'est affiché quand la fenêtre est fermée : la liste dirait « fermée »
+   sur presque toutes les lignes, et le bruit noierait les deux qui comptent. */
+function compteARebours(c) {
+  var fin = c && c.fenetreExpireA;
+  if (!fin) return '';
+  var reste = fin - Date.now();
+  if (reste <= 0) return '';
+
+  var min = Math.floor(reste / 60000);
+  var texte = min < 60 ? min + ' min' : Math.floor(min / 60) + ' h';
+  /* Sous trois heures, la couleur change : c'est le moment où répondre
+     devient urgent, pas quand il n'en reste plus que dix minutes. */
+  var urgent = reste < 3 * 3600000;
+  return '<span class="wa-rebours' + (urgent ? ' urgent' : '') + '" title="'
+    + 'Réponse libre possible encore ' + esc(texte)
+    + ' — ensuite, seul un modèle approuvé pourra partir">⏱ ' + esc(texte) + '</span>';
+}
+
 function rendreListe() {
   var host = document.getElementById('waItems');
   var l = STATE.convs.filter(function (c) { return visible(c) && correspond(c); });
@@ -448,6 +476,7 @@ function rendreListe() {
        +     '</span>'
        +     '<span class="wa-item-l2">'
        +       '<span class="wa-apercu">' + apercu + '</span>'
+       +       compteARebours(c)
        +       (c.nonLus ? '<span class="wa-pastille">' + c.nonLus + '</span>' : '')
        +     '</span>'
        +   '</span>'
@@ -870,6 +899,17 @@ function rendreFil(msgs) {
   host.innerHTML = h;
   host.scrollTop = host.scrollHeight;
 }
+
+/* Un compte à rebours qui ne descend pas ment. Rien ne se passe entre deux
+   messages : sans ce battement, l'affichage resterait figé sur « 3 h » pendant
+   trois heures. Une minute suffit — la précision affichée n'est pas plus fine.
+   Le fil n'est PAS repeint : seule la liste vieillit. */
+setInterval(function () {
+  if (!STATE.convs.length) return;
+  rendreListe();
+  var c = convActive();
+  if (c) rendreEntete(c);
+}, 60000);
 
 /* ── Ouverture d'une conversation ──────────────────────────────────────── */
 
