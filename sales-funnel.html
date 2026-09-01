@@ -2231,10 +2231,19 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     else if (d && d.err) { h += '⚠️ ' + esc(d.err); }
     else if (d && d.items) {
       var go = d.items.filter(function (c) { return c.isGo; });
+      var nbRep = d.items.filter(function (c) { return c.isReply; }).length;
+      /* Ce que Meta ANNONCE face à ce qu'on a réellement lu. L'écart est la
+         première chose à regarder quand un GO connu ne ressort pas : il
+         distingue « le commentaire n'a pas été récupéré » de « il a été
+         récupéré et ne contient pas le mot-clé ». Sans ces deux nombres
+         côte à côte, les deux cas ont exactement la même tête à l'écran. */
+      var lu = d.items.length + ' commentaire(s) lu(s)'
+        + (nbRep ? ' dont ' + nbRep + ' réponse(s)' : '')
+        + (m.comments != null ? ' · Meta en annonce ' + fmtNum(m.comments) : '');
       if (!go.length) {
-        h += 'Aucun « GO » sur cette publication — ' + d.items.length + ' commentaire(s) au total.';
+        h += 'Aucun « GO » sur cette publication — ' + lu + '.';
       } else {
-        h += '<strong style="color:var(--text)">' + go.length + ' GO</strong> sur ' + d.items.length + ' commentaire(s) · '
+        h += '<strong style="color:var(--text)">' + go.length + ' GO</strong> · ' + lu + ' · '
           + go.filter(function (c) { return c.leadId; }).length + ' rattaché(s) à une fiche<div style="margin-top:8px">';
         go.forEach(function (c) {
           var lbl = '@' + (c.username || '?');

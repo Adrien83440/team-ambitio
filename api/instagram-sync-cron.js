@@ -58,6 +58,17 @@ const IG = require('./_instagramClient');
 const BUDGET_MS = 240000;
 const MAX_BATCH = 400;
 
+/* Version de la logique de comptage des commentaires. À incrémenter à CHAQUE
+   changement de ce qui est lu ou de ce qui compte comme « GO » : les
+   publications dont la version stockée diffère sont recomptées au passage
+   suivant, sans intervention. Sans ce marqueur, une correction du comptage
+   ne s'appliquerait qu'aux nouvelles publications, et l'historique resterait
+   faux — invisible, donc pire.
+     1 → commentaires de premier niveau uniquement
+     2 → réponses aux commentaires incluses (01/09/2026)
+     3 → commentaires du compte lui-même exclus du comptage (01/09/2026) */
+const COMMENTS_VERSION = 3;
+
 /* Métriques tentées par type de publication, de la plus riche à la plus
    pauvre. La dernière ligne est vide : on renonce aux insights et on garde
    like_count / comments_count, qui viennent du média lui-même et ne
@@ -262,24 +273,74 @@ async function listerMedias(creds, depuisIso, plafondPages) {
 /* ══════════════════════════════════════════════════════════════════════
    3. COMMENTAIRES + COMPTAGE « GO »
    ══════════════════════════════════════════════════════════════════════ */
-async function syncCommentaires(creds, media, mapLeads, ecrivain, rapport) {
-  const { items, tronque } = await IG.graphGetPagine(media.id + '/comments', {
-    fields: 'id,text,username,timestamp,like_count',
-    limit: 50,
-  }, creds, 10);
+/* Champs des commentaires, du plus complet au plus pauvre.
+   ─────────────────────────────────────────────────────────────────────
+   L'edge /comments ne renvoie QUE les commentaires de premier niveau. Or
+   sous un appel à l'action « écris GO », une partie des réponses arrive en
+   RÉPONSE à un commentaire (souvent celui, épinglé, qui porte la consigne) —
+   ces messages n'apparaissent nulle part dans la liste principale. Les
+   compter à zéro, c'est déclarer qu'une publication n'a produit aucun
+   signal alors qu'elle en a produit.
+   D'où `replies{...}` demandé dans le même appel : une seule requête, les
+   deux niveaux. Si Meta refuse le sous-champ, on retombe sur la forme
+   simple plutôt que de perdre tous les commentaires. */
+const CHAMPS_COMMENTAIRES = [
+  'id,text,username,timestamp,like_count,replies.limit(50){id,text,username,timestamp,like_count}',
+  'id,text,username,timestamp,like_count',
+];
 
+/** Aplatit un commentaire et ses réponses en une liste unique. */
+function aplatirCommentaires(items) {
+  const out = [];
+  (items || []).forEach((c) => {
+    if (!c || !c.id) return;
+    out.push({ c: c, parentId: null });
+    const rep = c.replies && Array.isArray(c.replies.data) ? c.replies.data : [];
+    rep.forEach((r) => { if (r && r.id) out.push({ c: r, parentId: String(c.id) }); });
+  });
+  return out;
+}
+
+async function syncCommentaires(creds, media, mapLeads, ecrivain, rapport, usernameCompte) {
+  let bruts = null;
+  let tronque = false;
+  let derniereErreur = null;
+
+  for (let ci = 0; ci < CHAMPS_COMMENTAIRES.length; ci++) {
+    try {
+      const r = await IG.graphGetPagine(media.id + '/comments', {
+        fields: CHAMPS_COMMENTAIRES[ci],
+        limit: 25,
+      }, creds, 20);
+      bruts = r.items;
+      tronque = r.tronque;
+      break;
+    } catch (e) {
+      derniereErreur = e;
+      if (e.metaCode === 190 || e.metaCode === 4 || e.metaCode === 17 || e.metaCode === 32) throw e;
+    }
+  }
+  if (bruts === null) throw (derniereErreur || new Error('commentaires illisibles'));
+
+  const items = aplatirCommentaires(bruts);
   let go = 0;
   let goLeads = 0;
   const auteursGo = {};
   const auteursTous = {};
 
   for (let i = 0; i < items.length; i++) {
-    const c = items[i];
+    const c = items[i].c;
+    const parentId = items[i].parentId;
     if (!c || !c.id) continue;
     const username = IG.normaliserUsername(c.username);
-    const isGo = IG.contientMotCle(c.text, creds.keywords);
+    /* Le commentaire du compte lui-même ne compte JAMAIS comme un signal.
+       La consigne s'écrit précisément « écris GO » : sans cette exclusion,
+       chaque publication portant l'appel à l'action se créditerait d'un GO
+       qui n'est que sa propre voix. */
+    const estAuteur = !!(usernameCompte && username === usernameCompte);
+    const isGo = !estAuteur && IG.contientMotCle(c.text, creds.keywords);
     if (isGo) { go++; if (username) auteursGo[username] = 1; }
-    if (username) auteursTous[username] = 1;
+    if (username && !estAuteur) auteursTous[username] = 1;
 
     const leadId = username && mapLeads[username] ? mapLeads[username] : null;
     if (isGo && leadId) goLeads++;
@@ -288,6 +349,9 @@ async function syncCommentaires(creds, media, mapLeads, ecrivain, rapport) {
     await ecrivain.set(db.collection('ig_comments').doc(String(c.id)), {
       commentId: String(c.id),
       mediaId: String(media.id),
+      parentId: parentId,
+      isReply: parentId != null,
+      isAuthor: estAuteur,
       username: username,
       text: c.text != null ? String(c.text).slice(0, 2000) : '',
       isGo: isGo,
@@ -302,6 +366,7 @@ async function syncCommentaires(creds, media, mapLeads, ecrivain, rapport) {
 
   return {
     total: items.length,
+    replies: items.filter((x) => x.parentId != null).length,
     go: go,
     goLeads: goLeads,
     goUniques: Object.keys(auteursGo).length,
@@ -398,6 +463,7 @@ module.exports = async (req, res) => {
     for (let i = days - 1; i >= 0; i--) jours.push(IG.decalerJour(aujourdhui, -i));
     const profil = await syncCompte(credsAJour, jours, ecrivain, rapport, deadline);
     const igUserIdReel = (profil && (profil.user_id || profil.id)) || credsAJour.igUserId;
+    const usernameCompte = IG.normaliserUsername((profil && profil.username) || credsAJour.compteNom);
 
     // ─── 4. Publications ──────────────────────────────────────────────
     const depuis = IG.decalerJour(aujourdhui, -(mediaDays - 1));
@@ -462,11 +528,13 @@ module.exports = async (req, res) => {
       // ─── Commentaires + GO ──────────────────────────────────────────
       const dejaVu = connus[String(m.id)] || {};
       const besoinComments = avecCommentaires && nb(m.comments_count) > 0
-        && (dejaVu.commentsFetchedCount == null || nb(dejaVu.commentsFetchedCount) !== nb(m.comments_count));
+        && (dejaVu.commentsFetchedCount == null
+            || dejaVu.commentsVersion !== COMMENTS_VERSION
+            || nb(dejaVu.commentsFetchedCount) !== nb(m.comments_count));
 
       if (besoinComments) {
         try {
-          const c = await syncCommentaires(credsAJour, m, mapLeads, ecrivain, rapport);
+          const c = await syncCommentaires(credsAJour, m, mapLeads, ecrivain, rapport, usernameCompte);
           doc.goCount = c.go;
           /* Combien de ces GO ont déjà une fiche : le reste, c'est le volume
              de setting laissé sur la table sous la publication. */
@@ -474,6 +542,8 @@ module.exports = async (req, res) => {
           doc.goUniques = c.goUniques;
           doc.commentAuthors = c.auteursUniques;
           doc.commentsFetchedCount = c.total;
+          doc.commentsReplies = c.replies;
+          doc.commentsVersion = COMMENTS_VERSION;
           doc.commentsTronques = c.tronque;
           doc.commentsFetchedAt = admin.firestore.FieldValue.serverTimestamp();
           rapport.goTotal += c.go;

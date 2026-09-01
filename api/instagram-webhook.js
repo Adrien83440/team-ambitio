@@ -182,7 +182,10 @@ async function traiterCommentaire(value, creds, rapport) {
   const from = value.from || {};
   const username = IG.normaliserUsername(from.username);
   const texte = value.text != null ? String(value.text) : '';
-  const isGo = IG.contientMotCle(texte, creds.keywords);
+  /* Même règle que le cron : un commentaire du compte lui-même n'est jamais
+     un GO. C'est lui qui porte la consigne « écris GO ». */
+  const estAuteur = !!(creds.compteNom && username === IG.normaliserUsername(creds.compteNom));
+  const isGo = !estAuteur && IG.contientMotCle(texte, creds.keywords);
 
   const ref = db.collection('ig_comments').doc(id);
   const dejaVu = await ref.get();
@@ -199,6 +202,7 @@ async function traiterCommentaire(value, creds, rapport) {
     commentId: id,
     mediaId: mediaId,
     username: username,
+    isAuthor: estAuteur,
     igsid: from.id ? String(from.id) : null,
     text: texte.slice(0, 2000),
     isGo: isGo,
