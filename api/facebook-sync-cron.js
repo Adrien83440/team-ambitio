@@ -45,6 +45,18 @@ const MAX_BATCH = 400;
 const HOT_DAYS = 14;              // publications encore mouvantes
 const COMMENTS_VERSION = 1;
 
+/* Version des LISTES DE CANDIDATES ci-dessous. À incrémenter dès qu'on en
+   ajoute une : sans ce marqueur, la liste mémorisée — qui fonctionne — est
+   réutilisée telle quelle et les nouvelles candidates ne sont JAMAIS
+   testées. C'est exactement ce qui est arrivé le 01/09/2026 : page_follows,
+   page_daily_follows et page_video_views étaient ajoutées au code, mais la
+   Page continuait d'afficher trois métriques et des cartes vides, parce que
+   la mémoire d'un premier passage réussi n'avait aucune raison d'être
+   remise en cause.
+     1 → listes initiales
+     2 → ajout de page_follows / page_daily_follows / page_video_views */
+const CANDIDATS_VERSION = 2;
+
 /* MÉTRIQUES — DÉCOUVERTES, PAS DEVINÉES
    ─────────────────────────────────────────────────────────────────────
    Meta a supprimé 85 métriques de portée et d'impressions le 15/06/2026 :
@@ -115,8 +127,11 @@ async function decouvrirMetriques(chemin, candidats, creds) {
  * fonctionne encore, sinon une découverte fraîche.
  * `memo` est l'objet _config/facebook_sync_state déjà lu.
  */
-async function metriquesUtilisables(chemin, candidats, memoListe, creds, rapport, cle) {
-  if (Array.isArray(memoListe) && memoListe.length) {
+async function metriquesUtilisables(chemin, candidats, memoListe, creds, rapport, cle, memoVersion) {
+  /* La mémoire n'est valable que pour la liste de candidates qui l'a
+     produite. Une liste élargie doit être re-testée, même si l'ancienne
+     marche encore : « ça fonctionne » ne veut pas dire « c'est complet ». */
+  if (memoVersion === CANDIDATS_VERSION && Array.isArray(memoListe) && memoListe.length) {
     try {
       await FB.graphGet(chemin, { metric: memoListe.join(',') }, creds);
       return memoListe;
@@ -516,9 +531,13 @@ module.exports = async (req, res) => {
 
     let metriquesPage = [];
     try {
+      /* Découverte sur HIER : les métriques d'aujourd'hui sont souvent
+         encore vides, et une valeur absente n'aide pas à trancher. */
+      const bHier = FB.bornesJour(FB.decalerJour(aujourdhui, -1));
       metriquesPage = await metriquesUtilisables(
-        creds.pageId + '/insights', CANDIDATS_PAGE, memo.metriquesPage,
-        creds, rapport, 'metriquesPage');
+        creds.pageId + '/insights?period=day&since=' + bHier.since + '&until=' + bHier.until,
+        CANDIDATS_PAGE, memo.metriquesPage,
+        creds, rapport, 'metriquesPage', memo.metriquesVersion);
     } catch (e) {
       if (e.metaCode === 190) throw e;
       rapport.erreurs.push('métriques Page indécouvrables: ' + e.message);
@@ -582,7 +601,7 @@ module.exports = async (req, res) => {
       try {
         metriquesPost = await metriquesUtilisables(
           ordre[0].id + '/insights', CANDIDATS_POST, memo.metriquesPost,
-          creds, rapport, 'metriquesPost');
+          creds, rapport, 'metriquesPost', memo.metriquesVersion);
       } catch (e) {
         if (e.metaCode === 190) throw e;
         rapport.erreurs.push('métriques post indécouvrables: ' + e.message);
@@ -723,6 +742,7 @@ module.exports = async (req, res) => {
          par candidate, elle ne doit se payer qu'une fois. */
       metriquesPage: metriquesPage,
       metriquesPost: metriquesPost,
+      metriquesVersion: CANDIDATS_VERSION,
     }, { merge: true });
 
     res.status(200).json(rapport);
