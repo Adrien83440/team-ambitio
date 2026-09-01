@@ -176,6 +176,61 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ─── 5 bis. INSIGHTS — quelle métrique Meta accepte-t-il encore ? ──
+    // Meta a supprimé 85 métriques de portée le 15/06/2026 et continuera.
+    // Deviner leurs remplaçantes depuis la documentation s'est révélé
+    // inutile : seule la réponse de l'API fait foi. On les teste donc une
+    // par une, et on affiche le refus mot pour mot — c'est cette liste qui
+    // dit ce que le tableau peut afficher, et ce qui n'existe plus.
+    const CANDIDATS_POST = [
+      'post_total_media_view_unique', 'post_impressions_unique', 'post_views',
+      'post_impressions', 'blue_reels_play_count', 'post_video_views',
+      'post_clicks', 'post_reactions_by_type_total', 'post_engaged_users',
+      'post_activity', 'post_activity_unique', 'post_negative_feedback',
+    ];
+    const CANDIDATS_PAGE = [
+      'page_views_total', 'page_post_engagements', 'page_impressions_unique',
+      'page_impressions', 'page_fans', 'page_total_actions',
+      'page_daily_follows', 'page_follows', 'page_video_views',
+    ];
+
+    async function testerMetriques(chemin, candidats, params) {
+      const out = [];
+      for (let i = 0; i < candidats.length; i++) {
+        try {
+          const j = await FB.graphGet(chemin, Object.assign({ metric: candidats[i] }, params || {}), creds);
+          const d = Array.isArray(j.data) ? j.data : [];
+          const v = d.length && Array.isArray(d[0].values) && d[0].values.length
+            ? d[0].values[d[0].values.length - 1].value : null;
+          out.push({ metrique: candidats[i], ok: true, valeur: v });
+        } catch (e) {
+          out.push({ metrique: candidats[i], ok: false, refus: String(e.message || '').slice(0, 120) });
+        }
+      }
+      return out;
+    }
+
+    try {
+      const state = await db.collection('_config').doc('facebook_sync_state').get();
+      const st = state.exists ? (state.data() || {}) : {};
+      out.etapes.insights = {
+        memorisePost: st.metriquesPost || null,
+        memorisePage: st.metriquesPage || null,
+      };
+      if (cible && cible.id) {
+        out.etapes.insights.post = await testerMetriques(cible.id + '/insights', CANDIDATS_POST, {});
+      }
+      const b = FB.bornesJour(FB.decalerJour(FB.jourParis(), -1));
+      out.etapes.insights.page = await testerMetriques(creds.pageId + '/insights', CANDIDATS_PAGE,
+        { period: 'day', since: b.since, until: b.until });
+      const okPost = (out.etapes.insights.post || []).filter((x) => x.ok).map((x) => x.metrique);
+      const okPage = (out.etapes.insights.page || []).filter((x) => x.ok).map((x) => x.metrique);
+      out.etapes.insights.verdict = 'publications : ' + (okPost.length ? okPost.join(', ') : 'AUCUNE métrique acceptée')
+        + ' — page : ' + (okPage.length ? okPage.join(', ') : 'AUCUNE métrique acceptée');
+    } catch (e) {
+      out.etapes.insights = { ok: false, erreur: extraitErreur(e) };
+    }
+
     // ─── 6. Messenger ─────────────────────────────────────────────────
     try {
       const r = await FB.graphGet(creds.pageId + '/conversations', {
