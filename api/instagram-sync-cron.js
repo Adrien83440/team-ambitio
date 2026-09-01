@@ -55,8 +55,13 @@ const IG = require('./_instagramClient');
 /* Une exécution Vercel a 300 s (voir vercel.json). On s'arrête à 240 s pour
    avoir le temps d'écrire et de répondre : une synchro tuée en plein vol par
    le runtime ne dit jamais où elle en était. */
-const BUDGET_MS = 240000;
+const BUDGET_MS = 250000;
 const MAX_BATCH = 400;
+
+/* Publications « chaudes » : celles dont les compteurs bougent encore. Elles
+   sont rafraîchies à CHAQUE passage, sans condition. Au-delà, un post est
+   quasi figé — le relire tous les jours ne change rien à ses chiffres. */
+const HOT_DAYS = 14;
 
 /* Version de la logique de comptage des commentaires. À incrémenter à CHAQUE
    changement de ce qui est lu ou de ce qui compte comme « GO » : les
@@ -445,12 +450,14 @@ module.exports = async (req, res) => {
      sur ~30 jours glissants — les redemander toutes les nuits ne coûte
      qu'une poignée d'appels et rattrape automatiquement tout trou laissé par
      une nuit en échec. Un défaut à 3 laissait ces trous définitifs.
-     mediaDays : 60 le temps du rattrapage initial des deux derniers mois,
-     à repasser à 30 ensuite (au-delà d'un mois, les compteurs d'un post ne
-     bougent quasiment plus, et 120 publications par nuit frôlent le budget
-     de temps de la fonction). */
+     mediaDays : 90. Une fenêtre large ne coûte plus le risque qu'elle
+     coûtait : les publications sont désormais traitées par PRIORITÉ
+     (voir plus bas), pas dans l'ordre du flux. Ce qui ne tient pas dans le
+     budget d'une nuit passe en tête de la suivante, et la couverture
+     complète est atteinte en deux ou trois passages au lieu d'être
+     amputée toujours du même côté. */
   const days = Math.max(1, Math.min(90, parseInt(q.days, 10) || 30));
-  const mediaDays = Math.max(1, Math.min(400, parseInt(q.mediaDays, 10) || 60));
+  const mediaDays = Math.max(1, Math.min(400, parseInt(q.mediaDays, 10) || 90));
   const avecCommentaires = String(q.comments || '1') !== '0';
 
   const rapport = {
@@ -491,15 +498,47 @@ module.exports = async (req, res) => {
        vieille publication, on ne repagine pas ses commentaires. Sans ce
        garde-fou, chaque nuit relirait des milliers de commentaires figés. */
     const connus = {};
-    if (avecCommentaires && medias.length) {
+    if (medias.length) {
       const refs = medias.map((m) => db.collection('ig_media').doc(String(m.id)));
       const snaps = await db.getAll.apply(db, refs);
       snaps.forEach((s) => { if (s.exists) connus[s.id] = s.data() || {}; });
     }
 
-    for (let i = 0; i < medias.length; i++) {
-      if (Date.now() > deadline) { rapport.tronque = true; break; }
-      const m = medias[i];
+    /* ── ORDRE DE TRAITEMENT — la pièce qui rend une grande fenêtre sûre ──
+       Traiter les publications dans l'ordre du flux (récent → ancien) et
+       s'arrêter sur le budget revient à sacrifier TOUJOURS les mêmes : les
+       plus anciennes de la fenêtre ne seraient jamais rafraîchies, et
+       l'élargir ne ferait qu'agrandir la zone morte.
+       D'où deux groupes :
+       · les publications récentes, dont les chiffres bougent encore —
+         toujours traitées, en premier ;
+       · les autres, triées par ANCIENNETÉ DE SYNCHRO : celle qu'on a laissée
+         de côté la nuit dernière passe en tête cette nuit. La fenêtre tourne
+         d'elle-même, sans curseur à stocker ni à réparer. */
+    const seuilChaud = IG.decalerJour(aujourdhui, -(HOT_DAYS - 1));
+    const msSync = (m) => {
+      const d = connus[String(m.id)];
+      if (!d || !d.lastSyncAt) return 0;                 // jamais vu : priorité maximale
+      try { return d.lastSyncAt.toMillis ? d.lastSyncAt.toMillis() : Number(d.lastSyncAt) || 0; }
+      catch (_) { return 0; }
+    };
+    const chauds = medias.filter((m) => m._jour && m._jour >= seuilChaud);
+    const froids = medias.filter((m) => !m._jour || m._jour < seuilChaud)
+      .sort((a, b) => msSync(a) - msSync(b));
+    const ordre = chauds.concat(froids);
+    rapport.chauds = chauds.length;
+    rapport.froids = froids.length;
+
+    for (let i = 0; i < ordre.length; i++) {
+      if (Date.now() > deadline) {
+        rapport.tronque = true;
+        /* Ce qui reste n'est pas perdu : ces publications sont les moins
+           récemment synchronisées, donc les premières servies au passage
+           suivant. */
+        rapport.reportees = ordre.length - i;
+        break;
+      }
+      const m = ordre[i];
       const estReel = String(m.media_product_type || '').toUpperCase() === 'REELS';
       const cascade = estReel ? METRIQUES_MEDIA.REELS : METRIQUES_MEDIA.FEED;
 

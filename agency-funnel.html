@@ -238,6 +238,14 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     if (isNaN(d.getTime())) return '—';
     return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' à ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
+  function fmtDelay(ms) {
+    if (ms == null || isNaN(ms) || ms < 0) return '—';
+    var min = Math.round(ms / 60000);
+    if (min < 60) return min + ' min';
+    var hh = ms / 3600000;
+    if (hh < 48) return (Math.round(hh * 10) / 10).toLocaleString('fr-FR') + ' h';
+    return (Math.round(ms / 86400000 * 10) / 10).toLocaleString('fr-FR') + ' j';
+  }
   function frDay(iso) { if (!iso) return '—'; var p = String(iso).split('-'); return p[2] + '/' + p[1]; }
 
   /* Sous-objets de k : absents sur un vieux snapshot → objet neutre. */
@@ -662,6 +670,28 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
       h += '<div class="ag-stage-note" style="margin-top:10px">⚠️ La <strong>portée cumulée</strong> additionne des portées quotidiennes déjà dédupliquées jour par jour : une même personne touchée trois jours de suite y compte trois fois. À lire comme un volume d\'exposition, jamais comme un nombre de personnes.</div>';
     }
 
+    /* ── Messages privés ──
+       Uniquement des agrégats, calculés côté serveur. Aucun pseudo, aucun
+       contenu de message : la question posée ici est « le canal
+       convertit-il ? », pas « qui a écrit quoi ». */
+    var dm = ig.dm;
+    if (dm && dm.conversations) {
+      h += '<div class="ag-stage-note" style="margin-top:16px;color:var(--text);font-weight:700">💬 Messages privés</div>';
+      h += '<div class="ag-grid" style="margin-top:8px">';
+      h += kpi(dm.initiesNous ? fmtPct(dm.tauxReponse) : '—', 'Taux de réponse',
+               dm.repondus + ' / ' + dm.initiesNous + ' conversations ouvertes par nous', !dm.initiesNous);
+      h += kpi(fmtNum(dm.sortants || null), 'Messages envoyés', null, !dm.sortants);
+      h += kpi(fmtNum(dm.entrants || null), 'Messages reçus', null, !dm.entrants);
+      h += kpi(fmtDelay(dm.delaiMedianMs), 'Délai médian de réponse', 'côté prospect', dm.delaiMedianMs == null);
+      h += kpi(fmtNum(dm.initiesEux || null), 'Conversations entrantes', 'ouvertes par le prospect', !dm.initiesEux);
+      h += kpi(fmtDelay(dm.notreDelaiMedianMs), 'Notre délai de réponse', 'sur les conversations entrantes', dm.notreDelaiMedianMs == null);
+      h += kpi(fmtNum(dm.rattacheesFiche || null), 'Devenues un contact',
+               dm.conversations ? fmtPct(dm.rattacheesFiche / dm.conversations * 100, 0) + ' des conversations' : null,
+               !dm.rattacheesFiche);
+      h += '</div>';
+      h += '<div class="ag-stage-note" style="margin-top:8px">Conversations <strong>ouvertes</strong> pendant la période. Instagram n\'expose aucun historique de messagerie : ces chiffres ne comptent que ce qui a été observé depuis la mise en service du suivi.</div>';
+    }
+
     /* Les publications, de la plus performante à la moins : sur cette page
        c'est le classement qui sert, pas la chronologie. */
     var arr = ig.publications.slice().sort(function (x, y) {
@@ -671,15 +701,16 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 
     h += '<div class="ag-table-wrap" style="margin-top:12px"><table class="ag-table"><thead><tr>';
     h += '<th>Publiée</th><th>Publication</th><th class="num">Portée</th><th class="num">Vues</th>';
-    h += '<th class="num">Likes</th><th class="num">Comm.</th><th class="num">GO</th>';
+    h += '<th class="num">Likes</th><th class="num">Comm.</th><th class="num">GO</th><th class="num">GO ↔ contact</th>';
     h += '<th class="num">Saves</th><th class="num">Partages</th><th class="num">Engag.</th>';
     h += '</tr></thead><tbody>';
 
-    var tot = { reach: 0, views: 0, likes: 0, comments: 0, go: 0, saved: 0, shares: 0 };
+    var tot = { reach: 0, views: 0, likes: 0, comments: 0, go: 0, goLeads: 0, saved: 0, shares: 0 };
     arr.forEach(function (m) {
       tot.reach += (Number(m.reach) || 0); tot.views += (Number(m.views) || 0);
       tot.likes += (Number(m.likes) || 0); tot.comments += (Number(m.comments) || 0);
-      tot.go += (Number(m.goCount) || 0); tot.saved += (Number(m.saved) || 0);
+      tot.go += (Number(m.goCount) || 0); tot.goLeads += (Number(m.goLeads) || 0);
+      tot.saved += (Number(m.saved) || 0);
       tot.shares += (Number(m.shares) || 0);
     });
 
@@ -698,6 +729,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
       h += '<td class="num">' + fmtNum(m.likes) + '</td>';
       h += '<td class="num">' + fmtNum(m.comments) + '</td>';
       h += '<td class="num" style="font-weight:700">' + (m.goCount == null ? '—' : fmtNum(m.goCount)) + '</td>';
+      h += '<td class="num">' + (m.goLeads == null ? '—' : fmtNum(m.goLeads)) + '</td>';
       h += '<td class="num">' + fmtNum(m.saved) + '</td>';
       h += '<td class="num">' + fmtNum(m.shares) + '</td>';
       h += '<td class="num">' + fmtPct(m.engagementRate) + '</td>';
@@ -708,7 +740,8 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += '<td>Total</td><td>' + arr.length + ' publication(s)</td>';
     h += '<td class="num">' + fmtNum(tot.reach) + '</td><td class="num">' + fmtNum(tot.views) + '</td>';
     h += '<td class="num">' + fmtNum(tot.likes) + '</td><td class="num">' + fmtNum(tot.comments) + '</td>';
-    h += '<td class="num">' + fmtNum(tot.go) + '</td><td class="num">' + fmtNum(tot.saved) + '</td>';
+    h += '<td class="num">' + fmtNum(tot.go) + '</td><td class="num">' + fmtNum(tot.goLeads) + '</td>';
+    h += '<td class="num">' + fmtNum(tot.saved) + '</td>';
     h += '<td class="num">' + fmtNum(tot.shares) + '</td><td class="num">—</td>';
     h += '</tr>';
     h += '</tbody></table></div>';
@@ -716,7 +749,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     if (arr.length > top.length) {
       h += '<div class="ag-stage-note" style="margin-top:8px">Les ' + top.length + ' publications les plus vues sont détaillées ; le total porte sur les ' + arr.length + '.</div>';
     }
-    h += '<div class="ag-stage-note" style="margin-top:8px"><strong>GO</strong> = nombre de commentaires contenant le mot-clé de l\'appel à l\'action, réponses comprises. Les commentaires du compte lui-même ne sont pas comptés.</div>';
+    h += '<div class="ag-stage-note" style="margin-top:8px"><strong>GO</strong> = nombre de commentaires contenant le mot-clé de l\'appel à l\'action, réponses comprises ; les commentaires du compte lui-même ne sont pas comptés. <strong>GO ↔ contact</strong> = ceux dont l\'auteur est déjà une fiche dans le CRM — l\'écart entre les deux colonnes est le volume de prise de contact restant à faire.</div>';
     h += '</div>';
     return h;
   }

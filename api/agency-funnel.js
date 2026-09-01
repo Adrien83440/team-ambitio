@@ -93,17 +93,21 @@ const AGENCY_EXCLUDE = {
    Ne sortent donc QUE des mesures d'audience de publications publiques.
 
    NE SORTENT JAMAIS, et ce n'est pas un oubli :
-   · ig_comments  — le pseudo d'un commentateur est une donnée personnelle
-                    d'un tiers qui n'a rien signé avec l'agence ;
-   · ig_dm_threads — contenu et métriques de messagerie privée ;
-   · goLeads       — combien de GO sont devenus des fiches est une donnée
-                    CRM interne, pas une mesure d'audience. */
+   · le PSEUDO d'un commentateur ou d'un interlocuteur — donnée personnelle
+     d'un tiers, qui n'apporte rien à une lecture de performance ;
+   · le CONTENU d'un message privé — jamais lu, jamais transmis.
+
+   Les métriques de messagerie, elles, SONT exposées (décision d'Adrien du
+   01/09/2026 : l'agence a déjà accès au compte Instagram lui-même). Elles
+   sont agrégées ICI, côté serveur : ig_dm_threads porte des pseudos, des
+   identifiants de conversation et des noms de leads, et ces documents ne
+   quittent jamais la maison — seuls des nombres sortent. */
 const AGENCY_IG_MEDIA_FIELDS = [
   'date', 'timestamp', 'mediaType', 'mediaProductType', 'isReel',
   'caption', 'permalink', 'thumbnailUrl',
   'reach', 'views', 'likes', 'comments', 'saved', 'shares',
   'totalInteractions', 'engagementRate', 'avgWatchTimeMs',
-  'goCount', 'goUniques',
+  'goCount', 'goUniques', 'goLeads',
 ];
 const AGENCY_IG_ACCOUNT_FIELDS = [
   'date', 'followers', 'reach', 'views', 'profileViews',
@@ -116,9 +120,67 @@ function pickFields(src, champs) {
   return out;
 }
 
+function mediane(arr) {
+  if (!arr.length) return null;
+  const a = arr.slice().sort((x, y) => x - y);
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2);
+}
+
+/* Messagerie privée — AGRÉGATS SEULEMENT.
+   Les documents ig_dm_threads portent le pseudo de l'interlocuteur, son
+   identifiant de conversation et parfois le nom du lead rattaché. Ils sont
+   lus ici et réduits à des nombres avant de sortir : rien de nominatif ne
+   traverse cette fonction, et il n'existe aucun chemin qui renverrait un
+   thread brut.
+   Deux populations distinctes, jamais mélangées : les conversations que
+   NOUS ouvrons (« ont-ils répondu ? ») et celles qu'ILS ouvrent (« avons-
+   nous répondu, et en combien de temps ? »). Un taux unique sur les deux
+   ne voudrait rien dire. */
+async function loadInstagramDm(P) {
+  const a = Core.isoDate(P.start);
+  const b = Core.isoDate(P.end);
+  try {
+    const snap = await db.collection('ig_dm_threads')
+      .where('firstEventDate', '>=', a).where('firstEventDate', '<=', b)
+      .limit(3000).get();
+
+    const o = { conversations: snap.size, sortants: 0, entrants: 0,
+                initiesNous: 0, repondus: 0, tauxReponse: null,
+                delaiMedianMs: null, initiesEux: 0, notreDelaiMedianMs: null,
+                rattacheesFiche: 0 };
+    const delais = [];
+    const nos = [];
+
+    snap.forEach((doc) => {
+      const t = doc.data() || {};
+      o.sortants += Number(t.outboundCount) || 0;
+      o.entrants += Number(t.inboundCount) || 0;
+      if (t.leadId) o.rattacheesFiche++;
+      if (t.initiatedBy === 'us') {
+        o.initiesNous++;
+        if (t.replied === true) {
+          o.repondus++;
+          if (t.responseDelayMs != null) delais.push(Number(t.responseDelayMs));
+        }
+      } else if (t.initiatedBy === 'them') {
+        o.initiesEux++;
+        if (t.ourReplyDelayMs != null) nos.push(Number(t.ourReplyDelayMs));
+      }
+    });
+
+    if (o.initiesNous > 0) o.tauxReponse = (o.repondus / o.initiesNous) * 100;
+    o.delaiMedianMs = mediane(delais);
+    o.notreDelaiMedianMs = mediane(nos);
+    return JSON.parse(JSON.stringify(o));
+  } catch (e) {
+    console.warn('[agency-funnel] dm indisponible:', e && e.message);
+    return null;
+  }
+}
+
 /* Publications et audience du compte sur la période. Aucune lecture de
-   ig_comments ni de ig_dm_threads : ces collections ne sont pas interrogées
-   du tout, pas même pour en tirer un agrégat. */
+   ig_comments : le contenu et l'auteur d'un commentaire ne sortent pas. */
 async function loadInstagram(P) {
   const a = Core.isoDate(P.start);
   const b = Core.isoDate(P.end);
@@ -300,10 +362,12 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const [loaded, instagram] = await Promise.all([
+    const [loaded, instagram, instagramDm] = await Promise.all([
       loadPeriodData(P),
       loadInstagram(P),
+      loadInstagramDm(P),
     ]);
+    if (instagram) instagram.dm = instagramDm;
     const k = Core.computeKpis({
       DATA: loaded.DATA,
       P,
