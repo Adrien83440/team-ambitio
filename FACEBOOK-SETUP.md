@@ -44,24 +44,26 @@ C'est l'étape la plus technique. Elle se fait dans
 
 - **Générer un jeton d'accès** → accepte la fenêtre Facebook
 
-**2.2 — Le rendre longue durée**
+**2.2 — Le rendre longue durée (un bouton, aucune URL)**
 
-Colle ceci dans la barre de requête de l'Explorateur (remplace les trois
-valeurs), puis **Envoyer** :
+Va sur **developers.facebook.com/tools/debug/accesstoken/**, colle le jeton de
+2.1, clique **Déboguer**, puis le bouton bleu **« Extend Access Token »** tout
+en bas de la page. Copie le jeton obtenu : il vaut 60 jours.
 
-```
-/oauth/access_token?grant_type=fb_exchange_token&client_id=APP_ID&client_secret=APP_SECRET&fb_exchange_token=LE_JETON_DE_2.1
-```
-
-Récupère le `access_token` renvoyé : c'est ton jeton utilisateur longue durée.
+> ⚠️ Il existe une méthode par URL (`/oauth/access_token?grant_type=…`) ;
+> évite-la. Ce n'est pas un lien : collée dans la barre d'adresse du
+> navigateur, elle produit « impossible d'accéder à votre fichier ». Et elle
+> ferait passer ton App Secret par l'historique du navigateur. Le bouton fait
+> la même chose, sans les deux pièges.
 
 **2.3 — En dériver le jeton de Page**
 
-Toujours dans l'Explorateur, colle le jeton de 2.2 dans le champ du haut, puis
-appelle :
+Retourne dans l'Explorateur d'API Graph. Colle le jeton de 2.2 dans le champ
+**Jeton d'accès** en haut, puis tape ceci dans la **barre de requête** — celle
+à côté du bouton **Envoyer**, pas celle du navigateur :
 
 ```
-/me/accounts
+me/accounts
 ```
 
 Dans la réponse, trouve ta Page et copie son `access_token`. **Celui-là
