@@ -1167,6 +1167,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
          avec le mauvais email). -->
     <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Email *</label><input id="clEmail" type="email" name="cl-email-nofill" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="email@exemple.com"></div>
     <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Téléphone</label><input id="clTel" type="tel" name="cl-tel-nofill" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="06 12 34 56 78"></div>
+    <!-- Pseudo Instagram (01/09/2026) : c'est LA clé de rattachement entre
+         l'onglet 📸 Instagram du funnel et cette fiche. Sans lui, un « GO »
+         sous une publication et une conversation en DM restent des pseudos
+         anonymes, et on ne saura jamais quelle publication a produit quel
+         client. L'arobase est retirée à l'enregistrement. -->
+    <div style="margin-top:10px"><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Instagram <span style="color:var(--muted2);font-weight:500">— pseudo, pour relier les GO et les DM à cette fiche</span></label><input id="clInsta" autocomplete="off" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)" placeholder="@pseudo"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
       <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Type</label><select id="clType" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="vsl_elite">VSL Élite</option><option value="self_booking">Self Booking</option><option value="business">Business</option><option value="webinaire">Webinaire</option></select></div>
       <div><label style="font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px">Attribuer à</label><select id="clAssign" style="width:100%;padding:10px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--fg);font-size:13px;font-family:var(--fm)"><option value="">Non attribué</option></select></div>
@@ -6549,6 +6555,8 @@ function openCreateLead() {
 }
 function closeCreateLead() {
   document.getElementById('createLeadOverlay').style.display = 'none';
+  var ci = document.getElementById('clInsta');
+  if (ci) ci.value = '';
 }
 
 /* ── BOOKING MODAL ── */
@@ -6666,6 +6674,11 @@ function submitCreateLead() {
      « Autre ». On écrit dans les DEUX endroits — `utm` pour l'affichage
      historique (Leads Live, CRM, export) et attributionFirst.channel pour
      le funnel, qui ne lit plus le champ libre. */
+  var instaEl = document.getElementById('clInsta');
+  /* Même normalisation que api/_instagramClient.js (normaliserUsername) :
+     sans arobase, sans espace, en minuscules. Les deux côtés DOIVENT écrire
+     la même forme, sinon le rattachement ne trouve jamais rien. */
+  var insta = instaEl ? instaEl.value.trim().replace(/^@+/, '').replace(/\s+/g, '').toLowerCase() : '';
   var origSel = document.getElementById('clOrigine');
   var origVal = origSel ? origSel.value : '';
   var precision = document.getElementById('clUtm').value.trim();
@@ -6693,6 +6706,7 @@ function submitCreateLead() {
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
+  if (insta) lead.instagramUsername = insta;
   /* Attribution structurée — `declared: true` est important : cette origine
      est DÉCLARÉE par un membre de l'équipe, pas mesurée depuis une URL. On
      ne la fera jamais passer pour une capture. */

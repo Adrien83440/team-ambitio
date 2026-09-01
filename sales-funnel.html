@@ -148,6 +148,38 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
 .fn-jform textarea { flex:1; min-width:260px; background:var(--bg3); border:1px solid var(--border); border-radius:9px; color:var(--text); padding:8px 10px; font-size:13px; font-family:var(--font-b); resize:vertical; min-height:38px; outline:none; }
 .fn-jform textarea:focus { border-color:var(--border2); }
 .fn-jlist { background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:6px 16px; }
+
+/* ═══ Onglet Instagram (01/09/2026) ═══ */
+.fn-ig-alert { background:rgba(239,68,68,0.07); border:1px solid rgba(239,68,68,0.25); border-radius:11px; padding:10px 14px; font-size:12.5px; color:var(--red3); margin-bottom:12px; }
+.fn-ig-alert.warn { background:rgba(245,158,11,0.08); border-color:rgba(245,158,11,0.25); color:var(--gold); }
+.fn-ig-alert strong { font-weight:800; }
+table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1240px; }
+.fn-igt th { text-align:right; padding:9px 10px; font-size:10px; text-transform:uppercase; letter-spacing:0.7px; color:var(--muted); border-bottom:1px solid var(--border2); white-space:nowrap; cursor:pointer; user-select:none; position:sticky; top:0; background:var(--bg2); z-index:1; }
+.fn-igt th:hover { color:var(--text); }
+.fn-igt th.l, .fn-igt td.l { text-align:left; }
+.fn-igt td { padding:8px 10px; border-bottom:1px solid var(--border); text-align:right; font-family:var(--font-m); font-size:11.5px; vertical-align:middle; }
+.fn-igt tr:hover td { background:rgba(255,255,255,0.02); }
+.fn-igt tr.tot td { border-top:2px solid var(--border2); font-weight:700; background:var(--bg3); }
+.fn-ig-post { display:flex; align-items:center; gap:9px; min-width:260px; max-width:340px; }
+.fn-ig-thumb { width:38px; height:38px; border-radius:8px; object-fit:cover; background:var(--bg4); flex-shrink:0; border:1px solid var(--border); }
+.fn-ig-thumb.ph { display:flex; align-items:center; justify-content:center; font-size:15px; }
+.fn-ig-cap { min-width:0; }
+.fn-ig-cap a { color:var(--text); text-decoration:none; font-family:var(--font-b); font-size:12px; font-weight:600; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:270px; }
+.fn-ig-cap a:hover { color:var(--blue); }
+.fn-ig-cap .sub { font-size:10px; color:var(--muted2); font-family:var(--font-b); margin-top:2px; }
+.fn-ig-type { display:inline-block; font-size:9px; font-weight:700; padding:1px 6px; border-radius:10px; font-family:var(--font-b); letter-spacing:0.3px; }
+.fn-ig-type.reel { background:rgba(167,139,250,0.13); color:#a78bfa; border:1px solid rgba(167,139,250,0.25); }
+.fn-ig-type.feed { background:rgba(96,165,250,0.13); color:var(--blue); border:1px solid rgba(96,165,250,0.25); }
+.fn-ig-go { font-weight:800; color:var(--green); }
+.fn-ig-go.zero { color:var(--muted2); font-weight:400; }
+.fn-ig-detbtn { background:none; border:1px solid var(--border); color:var(--muted); border-radius:7px; padding:3px 8px; font-size:10px; cursor:pointer; font-family:var(--font-b); }
+.fn-ig-detbtn:hover { color:var(--text); border-color:var(--border2); }
+.fn-ig-det { background:var(--bg3); border-top:1px solid var(--border2); }
+.fn-ig-det td { text-align:left; font-family:var(--font-b); font-size:11.5px; padding:10px 14px; color:var(--muted); }
+.fn-ig-chip { display:inline-block; background:var(--bg4); border:1px solid var(--border); border-radius:11px; padding:2px 9px; font-size:11px; margin:2px 4px 2px 0; font-family:var(--font-m); }
+.fn-ig-chip.lead { background:rgba(52,211,153,0.12); color:var(--green); border-color:rgba(52,211,153,0.25); }
+.fn-ig-chip a { color:inherit; text-decoration:none; }
+.fn-ig-chip a:hover { text-decoration:underline; }
 .fn-jmonth { font-size:11px; text-transform:uppercase; letter-spacing:0.8px; font-weight:800; color:var(--muted); padding:12px 0 4px; }
 .fn-jdel { background:none; border:none; color:var(--muted2); cursor:pointer; font-size:13px; padding:2px 6px; border-radius:6px; }
 .fn-jdel:hover { color:var(--red3); background:rgba(239,68,68,0.1); }
@@ -254,12 +286,14 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     <div class="fn-tab active" data-tab="funnel">🎯 Funnel</div>
     <div class="fn-tab" data-tab="leads">👥 Leads</div>
     <div class="fn-tab" data-tab="ads">💶 Données Ads</div>
+    <div class="fn-tab" data-tab="instagram">📸 Instagram</div>
     <div class="fn-tab" data-tab="journal">📒 Journal</div>
   </div>
 
   <section id="fnTabFunnel"><div class="fn-loading">Chargement du funnel…</div></section>
   <section id="fnTabLeads" style="display:none"></section>
   <section id="fnTabAds" style="display:none"></section>
+  <section id="fnTabInsta" style="display:none"></section>
   <section id="fnTabJournal" style="display:none"></section>
 
 </div>
@@ -1851,6 +1885,424 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
   }
 
   /* ════════════════════════════════════════════════════════════════
+     ONGLET INSTAGRAM (01/09/2026)
+     ────────────────────────────────────────────────────────────────
+     Sources — toutes écrites côté serveur, la page ne fait que lire :
+       ig_account_daily   api/instagram-sync-cron.js  (snapshot quotidien)
+       ig_media           api/instagram-sync-cron.js  (+ webhook en direct)
+       ig_comments        idem — porte le drapeau isGo
+       ig_dm_threads      api/instagram-webhook.js    (temps réel uniquement)
+
+     Chargement PARESSEUX : rien n'est lu tant qu'on n'ouvre pas l'onglet.
+     Le funnel est la page de travail quotidienne ; lui imposer quatre
+     requêtes Instagram à chaque changement de période serait payer tous les
+     jours pour un onglet consulté une fois par semaine.
+     ════════════════════════════════════════════════════════════════ */
+  var IG = { key: '', loading: false, loaded: false, err: null,
+             account: [], media: [], threads: [], state: null };
+  var igSort = { key: 'date', dir: -1 };
+  var igOpen = {};           // mediaId → commentaires chargés pour le détail
+
+  function igPeriodKey() { return isoDate(P.start) + '_' + isoDate(P.end); }
+  function igInvalidate() { IG.loaded = false; IG.err = null; igOpen = {}; }
+
+  function loadInstagram() {
+    var a = isoDate(P.start), b = isoDate(P.end);
+    var key = igPeriodKey();
+    IG.loading = true; IG.err = null;
+    return Promise.all([
+      db.collection('ig_media').where('date', '>=', a).where('date', '<=', b).get(),
+      db.collection('ig_account_daily').where('date', '>=', a).where('date', '<=', b).get(),
+      /* Cohorte de conversations OUVERTES dans la période — voir la note
+         affichée au-dessus du bloc DM : c'est la seule lecture honnête d'un
+         taux de réponse. */
+      db.collection('ig_dm_threads').where('firstEventDate', '>=', a).where('firstEventDate', '<=', b).limit(3000).get(),
+      db.collection('_config').doc('instagram_sync_state').get()
+    ]).then(function (r) {
+      IG.media = r[0].docs.map(function (d) { var o = d.data() || {}; o._id = d.id; return o; });
+      IG.account = r[1].docs.map(function (d) { return d.data() || {}; });
+      IG.threads = r[2].docs.map(function (d) { return d.data() || {}; });
+      IG.state = r[3].exists ? (r[3].data() || {}) : null;
+      IG.account.sort(function (x, y) { return (x.date || '') < (y.date || '') ? -1 : 1; });
+      IG.key = key; IG.loaded = true; IG.loading = false;
+    }).catch(function (e) {
+      console.error('[funnel] instagram', e);
+      IG.err = e.message || 'erreur inconnue';
+      IG.loading = false; IG.loaded = true;
+    });
+  }
+
+  /* ── Agrégats compte ── */
+  function igComputeAccount() {
+    var o = { reach: 0, views: 0, profileViews: 0, websiteClicks: 0,
+              accountsEngaged: 0, totalInteractions: 0,
+              followersFin: null, followersDelta: null, jours: IG.account.length };
+    var premierFollowers = null;
+    IG.account.forEach(function (d) {
+      o.reach += (d.reach || 0);
+      o.views += (d.views || 0);
+      o.profileViews += (d.profileViews || 0);
+      o.websiteClicks += (d.websiteClicks || 0);
+      o.accountsEngaged += (d.accountsEngaged || 0);
+      o.totalInteractions += (d.totalInteractions || 0);
+      if (d.followers != null) {
+        if (premierFollowers === null) premierFollowers = d.followers;
+        o.followersFin = d.followers;
+      }
+    });
+    if (premierFollowers !== null && o.followersFin !== null && IG.account.length > 1) {
+      o.followersDelta = o.followersFin - premierFollowers;
+    }
+    return o;
+  }
+
+  /* ── Agrégats DM ──
+     Deux populations à ne JAMAIS mélanger : les conversations que NOUS
+     ouvrons (démarchage — la question est « ont-ils répondu ? ») et celles
+     qu'ILS ouvrent (la question devient « avons-nous répondu, et en combien
+     de temps ? »). Un taux unique sur les deux ne voudrait rien dire. */
+  function igComputeDm() {
+    var o = { total: IG.threads.length, sortants: 0, entrants: 0,
+              initiesNous: 0, repondus: 0, tauxReponse: null, delaiMedian: null,
+              initiesEux: 0, notreDelaiMedian: null, avecLead: 0 };
+    var delais = [], nosDelais = [];
+    IG.threads.forEach(function (t) {
+      o.sortants += (t.outboundCount || 0);
+      o.entrants += (t.inboundCount || 0);
+      if (t.leadId) o.avecLead++;
+      if (t.initiatedBy === 'us') {
+        o.initiesNous++;
+        if (t.replied === true) {
+          o.repondus++;
+          if (t.responseDelayMs != null) delais.push(t.responseDelayMs);
+        }
+      } else if (t.initiatedBy === 'them') {
+        o.initiesEux++;
+        if (t.ourReplyDelayMs != null) nosDelais.push(t.ourReplyDelayMs);
+      }
+    });
+    if (o.initiesNous > 0) o.tauxReponse = (o.repondus / o.initiesNous) * 100;
+    o.delaiMedian = igMediane(delais);
+    o.notreDelaiMedian = igMediane(nosDelais);
+    return o;
+  }
+
+  function igMediane(arr) {
+    if (!arr || !arr.length) return null;
+    var a = arr.slice().sort(function (x, y) { return x - y; });
+    var m = Math.floor(a.length / 2);
+    return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2);
+  }
+
+  /* ── Tri du tableau des publications ── */
+  var IG_COLS = [
+    ['date',        'Publié',       'l'],
+    ['post',        'Publication',  'l'],
+    ['reach',       'Portée',       ''],
+    ['views',       'Vues',         ''],
+    ['likes',       'Likes',        ''],
+    ['comments',    'Comm.',        ''],
+    ['goCount',     'GO',           ''],
+    ['goRate',      'GO / portée',  ''],
+    ['goLeads',     'GO ↔ fiche',   ''],
+    ['saved',       'Saves',        ''],
+    ['shares',      'Partages',     ''],
+    ['engagementRate', 'Engag.',    ''],
+    ['det',         '',             '']
+  ];
+
+  function igVal(m, key) {
+    if (key === 'goRate') {
+      if (!m.reach || m.goCount == null) return null;
+      return (m.goCount / m.reach) * 100;
+    }
+    if (key === 'post') return (m.caption || '').toLowerCase();
+    if (key === 'date') return m.timestamp || m.date || '';
+    return m[key] == null ? null : m[key];
+  }
+
+  function igSorted() {
+    var arr = IG.media.slice();
+    arr.sort(function (x, y) {
+      var a = igVal(x, igSort.key), b = igVal(y, igSort.key);
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;          // les trous en bas, toujours
+      if (b == null) return -1;
+      if (a < b) return -igSort.dir;
+      if (a > b) return igSort.dir;
+      return 0;
+    });
+    return arr;
+  }
+
+  function igCaption(m) {
+    var c = (m.caption || '').replace(/\s+/g, ' ').trim();
+    if (!c) return '(sans légende)';
+    return c.length > 64 ? c.slice(0, 64) + '…' : c;
+  }
+
+  function renderInstagram() {
+    var el = $('#fnTabInsta');
+    if (!IG.loaded || IG.key !== igPeriodKey()) {
+      el.innerHTML = '<div class="fn-loading">Chargement des données Instagram — ' + esc(periodLabel()) + '…</div>';
+      if (!IG.loading) {
+        loadInstagram().then(function () { if (activeTab === 'instagram') renderInstagram(); });
+      }
+      return;
+    }
+    if (IG.err) {
+      el.innerHTML = '<div class="fn-ig-alert">⚠️ Lecture impossible : ' + esc(IG.err)
+        + '<div style="margin-top:6px;font-size:11.5px;color:var(--muted)">Si le message parle de permissions, les règles Firestore des collections <code>ig_*</code> ne sont pas déployées.</div></div>';
+      return;
+    }
+
+    var acc = igComputeAccount();
+    var dm = igComputeDm();
+    var h = '';
+
+    /* ── Bandeau d'état de la synchro ──
+       Un jeton Instagram meurt à 60 jours. Sans ce bandeau, l'onglet se vide
+       en silence deux mois après la mise en service et personne ne sait
+       pourquoi. */
+    h += igSyncBanner();
+
+    /* ── Compte ── */
+    h += '<div class="fn-stage">';
+    h += '<div class="fn-stage-head"><div class="fn-stage-title">📸 Compte — ' + esc(periodLabel()) + '</div>';
+    h += '<div class="fn-stage-note">' + acc.jours + ' jour(s) de snapshot · source API Instagram</div></div>';
+    h += '<div class="fn-grid">';
+    h += igKpi(acc.followersFin == null ? '—' : fmtNum(acc.followersFin), 'Abonnés',
+               acc.followersDelta == null ? 'photo du jour' : (acc.followersDelta >= 0 ? '+' : '') + fmtNum(acc.followersDelta) + ' sur la période');
+    h += igKpi(fmtNum(acc.reach), 'Portée cumulée', 'somme des portées quotidiennes');
+    h += igKpi(fmtNum(acc.views), 'Vues', 'toutes publications');
+    h += igKpi(fmtNum(acc.profileViews), 'Visites de profil', '');
+    h += igKpi(fmtNum(acc.websiteClicks), 'Clics lien en bio', '');
+    h += igKpi(fmtNum(acc.totalInteractions), 'Interactions', 'likes + comm. + saves + partages');
+    h += '</div>';
+    h += '<div class="fn-stage-note" style="margin-top:10px">⚠️ La <strong>portée cumulée</strong> additionne des portées quotidiennes déjà dédupliquées jour par jour : une même personne touchée trois jours de suite y compte trois fois. À lire comme un volume d\'exposition, jamais comme un nombre de personnes.</div>';
+    h += '</div>';
+
+    /* ── Messages privés ── */
+    h += igRenderDm(dm);
+
+    /* ── Publications ── */
+    h += igRenderPosts();
+
+    /* ── Meilleurs hooks ── */
+    h += igRenderHooks();
+
+    el.innerHTML = h;
+    igBind();
+  }
+
+  function igKpi(v, l, s) {
+    return '<div class="fn-kpi"><div class="v' + (v === '—' ? ' muted' : '') + '">' + v + '</div>'
+      + '<div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+  }
+
+  function igSyncBanner() {
+    var st = IG.state || {};
+    var last = st.lastRun || {};
+    var h = '';
+    /* Jeton proche de l'expiration : c'est la panne annoncée. */
+    if (st.tokenExpiresAt) {
+      var restant = new Date(st.tokenExpiresAt).getTime() - Date.now();
+      if (isFinite(restant) && restant < 12 * 86400000) {
+        h += '<div class="fn-ig-alert' + (restant < 3 * 86400000 ? '' : ' warn') + '">🔑 <strong>Jeton Instagram</strong> — expire '
+          + (restant < 0 ? 'depuis ' + fmtDelay(-restant) : 'dans ' + fmtDelay(restant))
+          + '. Le rafraîchissement automatique n\'a pas abouti : sans intervention, la synchro s\'arrêtera et cet onglet se figera.</div>';
+      }
+    }
+    if (!IG.state) {
+      h += '<div class="fn-ig-alert warn">⚙️ Aucune synchronisation n\'a encore tourné. Lance le rattrapage initial (voir la doc de <code>api/instagram-sync-cron.js</code>) ou attends le cron de 04:40 UTC.</div>';
+    } else if (last.ok === false) {
+      h += '<div class="fn-ig-alert">⚠️ Dernière synchronisation en échec : ' + esc(last.erreur || 'erreur inconnue') + '</div>';
+    } else if (last.tronque) {
+      h += '<div class="fn-ig-alert warn">⏳ Dernière synchronisation <strong>interrompue par le budget de temps</strong> — les publications les plus anciennes de la fenêtre n\'ont pas été rafraîchies. Relance avec un <code>mediaDays</code> plus court.</div>';
+    }
+    return h;
+  }
+
+  function igRenderDm(dm) {
+    var h = '<div class="fn-stage">';
+    h += '<div class="fn-stage-head"><div class="fn-stage-title">💬 Messages privés</div>';
+    h += '<div class="fn-stage-note">conversations <strong>ouvertes</strong> pendant la période</div></div>';
+
+    /* Le piège n°1 de cette brique : si les échos Meta n'arrivent pas, on ne
+       voit que les messages entrants et le taux de réponse est faux par
+       construction. Mieux vaut le dire que d'afficher un beau 0 %. */
+    if (dm.total > 0 && dm.sortants === 0) {
+      h += '<div class="fn-ig-alert">⚠️ <strong>Aucun message sortant enregistré</strong> alors que ' + fmtNum(dm.entrants) + ' message(s) entrant(s) sont arrivés. Les échos Meta ne remontent pas : le taux de réponse ci-dessous est inexploitable tant que l\'abonnement au champ <code>messages</code> et l\'accès aux outils connectés ne sont pas actifs côté Instagram.</div>';
+    }
+
+    h += '<div class="fn-grid">';
+    h += igKpi(dm.initiesNous ? fmtPct(dm.tauxReponse) : '—', 'Taux de réponse',
+               dm.repondus + ' / ' + dm.initiesNous + ' conversations ouvertes par nous');
+    h += igKpi(fmtNum(dm.sortants), 'Messages envoyés', '');
+    h += igKpi(fmtNum(dm.entrants), 'Messages reçus', '');
+    h += igKpi(dm.delaiMedian == null ? '—' : fmtDelay(dm.delaiMedian), 'Délai médian de réponse', 'côté prospect');
+    h += igKpi(dm.initiesEux ? fmtNum(dm.initiesEux) : '—', 'Conversations entrantes', 'ouvertes par le prospect');
+    h += igKpi(dm.notreDelaiMedian == null ? '—' : fmtDelay(dm.notreDelaiMedian), 'Notre délai de réponse', 'sur les conversations entrantes');
+    h += igKpi(fmtNum(dm.avecLead), 'Rattachées à une fiche', dm.total ? fmtPct((dm.avecLead / dm.total) * 100) + ' des conversations' : '');
+    h += '</div>';
+    h += '<div class="fn-stage-note" style="margin-top:10px">📌 <strong>Aucun rattrapage n\'est possible ici.</strong> Instagram n\'expose aucun historique de messagerie : ces chiffres ne comptent que ce que le webhook a vu passer depuis sa mise en service. Une conversation est rattachée à une fiche lead quand le pseudo Instagram est renseigné sur la fiche (champ « Instagram » de la création de lead).</div>';
+    h += '</div>';
+    return h;
+  }
+
+  function igRenderPosts() {
+    var arr = igSorted();
+    var h = '<div class="fn-stage" style="padding-bottom:8px">';
+    h += '<div class="fn-stage-head"><div class="fn-stage-title">🗂 Publications — ' + arr.length + '</div>';
+    h += '<div class="fn-stage-note">GO = commentaires contenant le mot-clé, doublons d\'un même compte inclus</div></div>';
+
+    if (!arr.length) {
+      h += '<div class="fn-empty">Aucune publication sur la période. Si le compte a publié, c\'est que la synchro n\'a pas encore couvert ces dates — relance avec <code>?mediaDays=60</code>.</div></div>';
+      return h;
+    }
+
+    var tot = { reach: 0, views: 0, likes: 0, comments: 0, goCount: 0, goLeads: 0, saved: 0, shares: 0 };
+    arr.forEach(function (m) {
+      tot.reach += (m.reach || 0); tot.views += (m.views || 0);
+      tot.likes += (m.likes || 0); tot.comments += (m.comments || 0);
+      tot.goCount += (m.goCount || 0); tot.goLeads += (m.goLeads || 0);
+      tot.saved += (m.saved || 0); tot.shares += (m.shares || 0);
+    });
+
+    h += '<div class="fn-table-wrap"><table class="fn-igt"><thead><tr>';
+    IG_COLS.forEach(function (c) {
+      var actif = igSort.key === c[0];
+      h += '<th class="' + c[2] + '" data-igsort="' + c[0] + '">' + c[1]
+        + (actif ? ' ' + (igSort.dir === 1 ? '▲' : '▼') : '') + '</th>';
+    });
+    h += '</tr></thead><tbody>';
+
+    arr.forEach(function (m) {
+      var gr = igVal(m, 'goRate');
+      h += '<tr data-igrow="' + escAttr(m._id) + '">';
+      h += '<td class="l" style="white-space:nowrap;color:var(--muted)">' + esc(frDay(m.date)) + '</td>';
+      h += '<td class="l"><div class="fn-ig-post">';
+      h += m.thumbnailUrl
+        ? '<img class="fn-ig-thumb" src="' + escAttr(m.thumbnailUrl) + '" alt="" loading="lazy">'
+        : '<div class="fn-ig-thumb ph">' + (m.isReel ? '🎬' : '🖼') + '</div>';
+      h += '<div class="fn-ig-cap">';
+      h += m.permalink
+        ? '<a href="' + escAttr(m.permalink) + '" target="_blank" rel="noopener">' + esc(igCaption(m)) + '</a>'
+        : '<span>' + esc(igCaption(m)) + '</span>';
+      h += '<div class="sub"><span class="fn-ig-type ' + (m.isReel ? 'reel' : 'feed') + '">' + (m.isReel ? 'REEL' : 'POST') + '</span>'
+        + (m.avgWatchTimeMs ? ' · ⏱ ' + fmtSec(m.avgWatchTimeMs / 1000) : '') + '</div>';
+      h += '</div></div></td>';
+      h += '<td>' + fmtNum(m.reach) + '</td>';
+      h += '<td>' + fmtNum(m.views) + '</td>';
+      h += '<td>' + fmtNum(m.likes) + '</td>';
+      h += '<td>' + fmtNum(m.comments) + '</td>';
+      h += '<td class="fn-ig-go' + (m.goCount ? '' : ' zero') + '">' + (m.goCount == null ? '—' : fmtNum(m.goCount)) + '</td>';
+      h += '<td>' + fmtPct(gr, 2) + '</td>';
+      h += '<td>' + (m.goLeads == null ? '—' : fmtNum(m.goLeads)) + '</td>';
+      h += '<td>' + fmtNum(m.saved) + '</td>';
+      h += '<td>' + fmtNum(m.shares) + '</td>';
+      h += '<td>' + fmtPct(m.engagementRate) + '</td>';
+      h += '<td><button class="fn-ig-detbtn" data-igdet="' + escAttr(m._id) + '">' + (igOpen[m._id] ? '▲' : 'GO ▾') + '</button></td>';
+      h += '</tr>';
+      if (igOpen[m._id]) h += igDetailRow(m);
+    });
+
+    h += '<tr class="tot"><td class="l">Total</td><td class="l">' + arr.length + ' publication(s)</td>';
+    h += '<td>' + fmtNum(tot.reach) + '</td><td>' + fmtNum(tot.views) + '</td><td>' + fmtNum(tot.likes) + '</td>';
+    h += '<td>' + fmtNum(tot.comments) + '</td><td class="fn-ig-go">' + fmtNum(tot.goCount) + '</td>';
+    h += '<td>' + fmtPct(tot.reach ? (tot.goCount / tot.reach) * 100 : null, 2) + '</td>';
+    h += '<td>' + fmtNum(tot.goLeads) + '</td><td>' + fmtNum(tot.saved) + '</td><td>' + fmtNum(tot.shares) + '</td>';
+    h += '<td>—</td><td></td></tr>';
+    h += '</tbody></table></div></div>';
+    return h;
+  }
+
+  function igDetailRow(m) {
+    var d = igOpen[m._id];
+    var h = '<tr class="fn-ig-det"><td colspan="' + IG_COLS.length + '">';
+    if (d === 'loading') { h += 'Chargement des commentaires…'; }
+    else if (d && d.err) { h += '⚠️ ' + esc(d.err); }
+    else if (d && d.items) {
+      var go = d.items.filter(function (c) { return c.isGo; });
+      if (!go.length) {
+        h += 'Aucun « GO » sur cette publication — ' + d.items.length + ' commentaire(s) au total.';
+      } else {
+        h += '<strong style="color:var(--text)">' + go.length + ' GO</strong> sur ' + d.items.length + ' commentaire(s) · '
+          + go.filter(function (c) { return c.leadId; }).length + ' rattaché(s) à une fiche<div style="margin-top:8px">';
+        go.forEach(function (c) {
+          var lbl = '@' + (c.username || '?');
+          h += c.leadId
+            ? '<span class="fn-ig-chip lead"><a href="sales-contact.html?id=' + encodeURIComponent(c.leadId) + '" target="_blank">' + esc(lbl) + '</a></span>'
+            : '<span class="fn-ig-chip">' + esc(lbl) + '</span>';
+        });
+        h += '</div>';
+        h += '<div style="margin-top:8px;font-size:11px;color:var(--muted2)">Les pseudos en vert ont une fiche lead. Les autres sont des GO sans fiche : c\'est là que se trouve le volume de setting non exploité.</div>';
+      }
+    }
+    h += '</td></tr>';
+    return h;
+  }
+
+  function igBind() {
+    var root = $('#fnTabInsta');
+    $$('th[data-igsort]', root).forEach(function (th) {
+      th.onclick = function () {
+        var k = th.getAttribute('data-igsort');
+        if (k === 'det') return;
+        if (igSort.key === k) igSort.dir = -igSort.dir;
+        else { igSort.key = k; igSort.dir = -1; }
+        renderInstagram();
+      };
+    });
+    $$('button[data-igdet]', root).forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-igdet');
+        if (igOpen[id]) { delete igOpen[id]; renderInstagram(); return; }
+        igOpen[id] = 'loading';
+        renderInstagram();
+        /* Chargé À LA DEMANDE : une publication virale peut porter des
+           milliers de commentaires, hors de question de les tirer tous pour
+           afficher un tableau de synthèse. */
+        db.collection('ig_comments').where('mediaId', '==', id).limit(2000).get()
+          .then(function (snap) {
+            igOpen[id] = { items: snap.docs.map(function (d) { return d.data() || {}; }) };
+          })
+          .catch(function (e) { igOpen[id] = { err: e.message }; })
+          .then(function () { if (activeTab === 'instagram') renderInstagram(); });
+      };
+    });
+  }
+
+  function igRenderHooks() {
+    if (!IG.media.length) return '';
+    /* Un plancher de portée : sans lui, le classement est trusté par un post
+       vu 40 fois avec 2 GO — 5 % de « taux GO » qui ne prouve rien. */
+    var PLANCHER = 300;
+    var elig = IG.media.filter(function (m) { return m.reach && m.reach >= PLANCHER && m.goCount != null; });
+    elig.sort(function (a, b) { return (b.goCount / b.reach) - (a.goCount / a.reach); });
+    var top = elig.slice(0, 5);
+    if (!top.length) return '';
+
+    var h = '<div class="fn-stage">';
+    h += '<div class="fn-stage-head"><div class="fn-stage-title">🏆 Hooks les plus efficaces</div>';
+    h += '<div class="fn-stage-note">classement par GO rapportés à la portée · publications sous ' + PLANCHER + ' de portée exclues</div></div>';
+    h += '<div class="fn-minibars">';
+    var max = (top[0].goCount / top[0].reach) * 100;
+    top.forEach(function (m) {
+      var tx = (m.goCount / m.reach) * 100;
+      h += '<div class="fn-minibar">';
+      h += '<span class="mb-l" style="width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(igCaption(m).slice(0, 30)) + '</span>';
+      h += '<span class="mb-track"><span class="mb-fill" style="width:' + Math.max(2, Math.round((tx / (max || 1)) * 100)) + '%;background:linear-gradient(90deg,#34d399,#059669)"></span></span>';
+      h += '<span class="mb-v">' + fmtPct(tx, 2) + ' · ' + fmtNum(m.goCount) + ' GO</span>';
+      h += '</div>';
+    });
+    h += '</div>';
+    h += '<div class="fn-stage-note" style="margin-top:10px">Lire ce bloc avec la légende sous les yeux : le classement compare des <strong>accroches</strong>, pas des formats. Un Reel et un carrousel n\'ont ni la même portée ni la même mécanique de commentaire.</div>';
+    h += '</div>';
+    return h;
+  }
+
+  /* ════════════════════════════════════════════════════════════════
      RENDER — ONGLET JOURNAL (tableau d'actions marketing)
      ════════════════════════════════════════════════════════════════ */
   var JCATS = [['budget', '💰 Budget'], ['crea', '🎨 Créa'], ['vsl', '🎬 VSL'], ['optin', '📄 Page opt-in'], ['ciblage', '🎯 Ciblage'], ['offre', '💼 Offre'], ['autre', '🔧 Autre']];
@@ -2155,6 +2607,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     if (activeTab === 'funnel') renderFunnel();
     else if (activeTab === 'leads') renderLeads();
     else if (activeTab === 'ads') renderAds();
+    else if (activeTab === 'instagram') renderInstagram();
     else if (activeTab === 'journal') renderJournal();
   }
 
@@ -2164,6 +2617,7 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     $('#fnTabFunnel').style.display  = tab === 'funnel'  ? '' : 'none';
     $('#fnTabLeads').style.display   = tab === 'leads'   ? '' : 'none';
     $('#fnTabAds').style.display     = tab === 'ads'     ? '' : 'none';
+    $('#fnTabInsta').style.display   = tab === 'instagram' ? '' : 'none';
     $('#fnTabJournal').style.display = tab === 'journal' ? '' : 'none';
     renderActiveTab();
   }
@@ -2173,6 +2627,10 @@ table.fn-ads { width:100%; border-collapse:collapse; font-size:11.5px; min-width
     if (_loading) return;
     _loading = true;
     adsDraft = {};
+    /* L'onglet Instagram a ses propres sources et son propre chargement
+       paresseux : changer de période l'invalide, il se rechargera à sa
+       prochaine ouverture — pas avant. */
+    igInvalidate();
     setSync('', 'Chargement ' + periodLabel() + '…');
     updateToolbar();
     $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';

@@ -453,7 +453,7 @@ h+='<div class="fiche-split">';
 h+='<div class="fiche-left">';
 h+='<div class="fl-section"><div class="fl-row"><span class="fl-icon">\u2b50</span><select class="fl-select" data-f="assignedTo">'+ctAssignOptions(l.assignedTo)+'</select></div></div>';
 h+='<div class="fl-section"><div class="fl-title">Informations de base</div>';
-h+=flR('\u2709\ufe0f','Email','email',l.email);h+=flR('\ud83d\udcf1','T\u00e9l\u00e9phone','telephone',l.telephone);h+=flR('\ud83c\udf10','Source / UTM','utm',l.utm);
+h+=flR('\u2709\ufe0f','Email','email',l.email);h+=flR('\ud83d\udcf1','T\u00e9l\u00e9phone','telephone',l.telephone);h+=flR('\ud83c\udf10','Source / UTM','utm',l.utm);h+=flR('\ud83d\udcf8','Instagram','instagramUsername',l.instagramUsername);
 h+='</div>';
 h+='<div class="fl-section"><div class="fl-title">Balises</div><div class="fl-tags" id="ft">';
 var tg=l.tags||[];for(var ti=0;ti<tg.length;ti++)h+='<span class="fl-tag">'+esc(tg[ti])+'<button data-action="delTag" data-idx="'+ti+'">\u2715</button></span>';
@@ -948,8 +948,13 @@ else if(checks>15){clearInterval(iv);toast('\u274c Timeout');btn.disabled=false;
 }
 
 function saveF(){
-var flds='nom,telephone,email,assignedTo,type,utm,description,secteur,ca,defi,disponibilite,timeline,prospectWebinaire,dateWebinaire,present,tagsWebi,dateReceptionLead,rejetMails,formule,dateInscription,dateFinProgramme,retractation,plateformePaiement,commissions,coaching72h,coach72h,closeur,setting,goodies,dateEnvoiGoodies'.split(',');
+var flds='nom,telephone,email,assignedTo,type,utm,instagramUsername,description,secteur,ca,defi,disponibilite,timeline,prospectWebinaire,dateWebinaire,present,tagsWebi,dateReceptionLead,rejetMails,formule,dateInscription,dateFinProgramme,retractation,plateformePaiement,commissions,coaching72h,coach72h,closeur,setting,goodies,dateEnvoiGoodies'.split(',');
 var u={};flds.forEach(function(f){var el=document.querySelector('[data-f="'+f+'"]');if(el){u[f]=el.value.trim();lead[f]=u[f];}});
+/* Pseudo Instagram : normalisé exactement comme api/_instagramClient.js
+   (sans arobase, sans espace, minuscules). C'est la clé de rattachement des
+   GO et des DM à cette fiche : écrite sous une autre forme, elle ne matche
+   jamais et l'onglet Instagram du funnel reste muet sur ce lead. */
+if(u.instagramUsername!=null){u.instagramUsername=u.instagramUsername.replace(/^@+/,'').replace(/\s+/g,'').toLowerCase();lead.instagramUsername=u.instagramUsername;}
 sv(u);var m=document.getElementById('flS');if(m){m.style.opacity='1';setTimeout(function(){m.style.opacity='0';},1500);}
 }
 function sv(u){u.updatedAt=firebase.firestore.FieldValue.serverTimestamp();db.collection('leads').doc(leadId).update(u).catch(function(e){toast('\u274c '+e.message);});}
