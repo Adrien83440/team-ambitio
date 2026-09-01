@@ -353,6 +353,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += renderBooking(k);
     h += renderLeads(k);
     h += renderProfit(k);
+    h += renderInstagram(data.instagram);
     h += renderJournal(data.journal || []);
 
     h += '<div class="ag-foot">Vue agence en lecture seule — Alteore. Chiffres calculés à la demande sur le tunnel interne (pub → opt-in → leads → RDV → closing).<br>Aucune donnée nominative n\'est exposée sur cette page.</div>';
@@ -631,6 +632,95 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   }
 
   /* ── 6. Journal marketing (sans auteur) ── */
+  /* ── 6. Instagram organique ──
+     Audience des publications, et rien d'autre. Les pseudos des
+     commentateurs et les messages privés ne transitent pas par cette page :
+     l'API ne les envoie pas, et cette fonction ne saurait pas quoi en faire.
+     Le compteur GO est un NOMBRE de commentaires portant le mot-clé — il ne
+     dit jamais qui l'a écrit. */
+  function renderInstagram(ig) {
+    if (!ig || !ig.publications || !ig.publications.length) return '';
+    var c = ig.compte || {};
+    var h = stageOpen('📸', 'Instagram organique', ig.publications.length + ' publication(s) · '
+      + (ig.jours || 0) + ' jour(s) de mesure d\'audience');
+
+    h += '<div class="ag-grid">';
+    h += kpi(fmtNum(c.followers), 'Abonnés',
+             c.followersDelta != null ? ((c.followersDelta >= 0 ? '+' : '') + fmtNum(c.followersDelta) + ' sur la période') : null,
+             c.followers == null);
+    h += kpi(fmtNum(c.reach || null), 'Portée cumulée', 'somme des portées quotidiennes', !c.reach);
+    h += kpi(fmtNum(c.views || null), 'Vues', 'toutes publications', !c.views);
+    h += kpi(fmtNum(c.profileViews || null), 'Visites de profil', null, !c.profileViews);
+    h += kpi(fmtNum(c.websiteClicks || null), 'Clics lien en bio', null, !c.websiteClicks);
+    h += kpi(fmtNum(c.totalInteractions || null), 'Interactions', 'likes + comm. + saves + partages', !c.totalInteractions);
+    h += '</div>';
+
+    /* Même mise en garde que côté interne : la portée cumulée est un volume
+       d'exposition, pas un nombre de personnes. Une agence qui la lirait
+       comme une audience unique surestimerait la couverture. */
+    if (c.reach) {
+      h += '<div class="ag-stage-note" style="margin-top:10px">⚠️ La <strong>portée cumulée</strong> additionne des portées quotidiennes déjà dédupliquées jour par jour : une même personne touchée trois jours de suite y compte trois fois. À lire comme un volume d\'exposition, jamais comme un nombre de personnes.</div>';
+    }
+
+    /* Les publications, de la plus performante à la moins : sur cette page
+       c'est le classement qui sert, pas la chronologie. */
+    var arr = ig.publications.slice().sort(function (x, y) {
+      return (Number(y.reach) || 0) - (Number(x.reach) || 0);
+    });
+    var top = arr.slice(0, 25);
+
+    h += '<div class="ag-table-wrap" style="margin-top:12px"><table class="ag-table"><thead><tr>';
+    h += '<th>Publiée</th><th>Publication</th><th class="num">Portée</th><th class="num">Vues</th>';
+    h += '<th class="num">Likes</th><th class="num">Comm.</th><th class="num">GO</th>';
+    h += '<th class="num">Saves</th><th class="num">Partages</th><th class="num">Engag.</th>';
+    h += '</tr></thead><tbody>';
+
+    var tot = { reach: 0, views: 0, likes: 0, comments: 0, go: 0, saved: 0, shares: 0 };
+    arr.forEach(function (m) {
+      tot.reach += (Number(m.reach) || 0); tot.views += (Number(m.views) || 0);
+      tot.likes += (Number(m.likes) || 0); tot.comments += (Number(m.comments) || 0);
+      tot.go += (Number(m.goCount) || 0); tot.saved += (Number(m.saved) || 0);
+      tot.shares += (Number(m.shares) || 0);
+    });
+
+    top.forEach(function (m) {
+      var cap = (m.caption || '').replace(/\s+/g, ' ').trim();
+      if (cap.length > 58) cap = cap.slice(0, 58) + '…';
+      if (!cap) cap = '(sans légende)';
+      h += '<tr>';
+      h += '<td style="white-space:nowrap;color:var(--muted)">' + esc(frDay(m.date)) + '</td>';
+      h += '<td>' + (m.permalink
+        ? '<a href="' + esc(m.permalink) + '" target="_blank" rel="noopener noreferrer" style="color:var(--text);text-decoration:none">' + esc(cap) + '</a>'
+        : esc(cap))
+        + ' <span style="font-size:9px;font-weight:700;color:var(--muted2)">' + (m.isReel ? 'REEL' : 'POST') + '</span></td>';
+      h += '<td class="num">' + fmtNum(m.reach) + '</td>';
+      h += '<td class="num">' + fmtNum(m.views) + '</td>';
+      h += '<td class="num">' + fmtNum(m.likes) + '</td>';
+      h += '<td class="num">' + fmtNum(m.comments) + '</td>';
+      h += '<td class="num" style="font-weight:700">' + (m.goCount == null ? '—' : fmtNum(m.goCount)) + '</td>';
+      h += '<td class="num">' + fmtNum(m.saved) + '</td>';
+      h += '<td class="num">' + fmtNum(m.shares) + '</td>';
+      h += '<td class="num">' + fmtPct(m.engagementRate) + '</td>';
+      h += '</tr>';
+    });
+
+    h += '<tr style="border-top:2px solid var(--border2);font-weight:700;background:var(--bg3)">';
+    h += '<td>Total</td><td>' + arr.length + ' publication(s)</td>';
+    h += '<td class="num">' + fmtNum(tot.reach) + '</td><td class="num">' + fmtNum(tot.views) + '</td>';
+    h += '<td class="num">' + fmtNum(tot.likes) + '</td><td class="num">' + fmtNum(tot.comments) + '</td>';
+    h += '<td class="num">' + fmtNum(tot.go) + '</td><td class="num">' + fmtNum(tot.saved) + '</td>';
+    h += '<td class="num">' + fmtNum(tot.shares) + '</td><td class="num">—</td>';
+    h += '</tr>';
+    h += '</tbody></table></div>';
+
+    if (arr.length > top.length) {
+      h += '<div class="ag-stage-note" style="margin-top:8px">Les ' + top.length + ' publications les plus vues sont détaillées ; le total porte sur les ' + arr.length + '.</div>';
+    }
+    h += '<div class="ag-stage-note" style="margin-top:8px"><strong>GO</strong> = nombre de commentaires contenant le mot-clé de l\'appel à l\'action, réponses comprises. Les commentaires du compte lui-même ne sont pas comptés.</div>';
+    h += '</div>';
+    return h;
+  }
+
   function renderJournal(journal) {
     var h = stageOpen('📒', 'Journal marketing de la période', 'changements consignés par l\'équipe (créa, budget, ciblage, VSL…)');
     if (!journal.length) {

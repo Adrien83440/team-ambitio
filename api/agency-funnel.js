@@ -18,7 +18,7 @@
 //
 // Réponses
 //   200 { ok:true, mode, tunnel, month, day, from, to, months:[…],
-//         computedAt:<ms>, k, journal }
+//         computedAt:<ms>, k, instagram, journal }
 //   403 { ok:false }   ← token absent / faux / révoqué
 //   405 { ok:false }   ← autre verbe que GET
 //   500 { ok:false }
@@ -82,6 +82,88 @@ const AGENCY_EXCLUDE = {
   costSetting: 1,
   costPerRdvNB: 1,
 };
+
+/* ⚠ INSTAGRAM — LISTE BLANCHE, pas liste noire.
+   Le reste du fichier assainit K en retirant des champs connus ; ici on fait
+   l'inverse et c'est délibéré. Les collections ig_* portent des données
+   PERSONNELLES DE TIERS — pseudo d'un commentateur, identifiant de
+   conversation, contenu de message privé — qui n'ont rien à faire hors de
+   la maison, et une whitelist est la seule forme qui reste sûre quand un
+   champ est ajouté plus tard sans que personne ne repense à ce fichier.
+   Ne sortent donc QUE des mesures d'audience de publications publiques.
+
+   NE SORTENT JAMAIS, et ce n'est pas un oubli :
+   · ig_comments  — le pseudo d'un commentateur est une donnée personnelle
+                    d'un tiers qui n'a rien signé avec l'agence ;
+   · ig_dm_threads — contenu et métriques de messagerie privée ;
+   · goLeads       — combien de GO sont devenus des fiches est une donnée
+                    CRM interne, pas une mesure d'audience. */
+const AGENCY_IG_MEDIA_FIELDS = [
+  'date', 'timestamp', 'mediaType', 'mediaProductType', 'isReel',
+  'caption', 'permalink', 'thumbnailUrl',
+  'reach', 'views', 'likes', 'comments', 'saved', 'shares',
+  'totalInteractions', 'engagementRate', 'avgWatchTimeMs',
+  'goCount', 'goUniques',
+];
+const AGENCY_IG_ACCOUNT_FIELDS = [
+  'date', 'followers', 'reach', 'views', 'profileViews',
+  'websiteClicks', 'accountsEngaged', 'totalInteractions',
+];
+
+function pickFields(src, champs) {
+  const out = {};
+  champs.forEach((f) => { if (src[f] !== undefined) out[f] = src[f]; });
+  return out;
+}
+
+/* Publications et audience du compte sur la période. Aucune lecture de
+   ig_comments ni de ig_dm_threads : ces collections ne sont pas interrogées
+   du tout, pas même pour en tirer un agrégat. */
+async function loadInstagram(P) {
+  const a = Core.isoDate(P.start);
+  const b = Core.isoDate(P.end);
+  try {
+    const [snapMedia, snapAcc] = await Promise.all([
+      db.collection('ig_media').where('date', '>=', a).where('date', '<=', b).limit(500).get(),
+      db.collection('ig_account_daily').where('date', '>=', a).where('date', '<=', b).limit(400).get(),
+    ]);
+
+    const medias = snapMedia.docs
+      .map((d) => pickFields(d.data() || {}, AGENCY_IG_MEDIA_FIELDS))
+      .sort((x, y) => String(y.timestamp || y.date || '').localeCompare(String(x.timestamp || x.date || '')));
+
+    const jours = snapAcc.docs
+      .map((d) => pickFields(d.data() || {}, AGENCY_IG_ACCOUNT_FIELDS))
+      .sort((x, y) => String(x.date || '').localeCompare(String(y.date || '')));
+
+    const tot = { reach: 0, views: 0, profileViews: 0, websiteClicks: 0,
+                  accountsEngaged: 0, totalInteractions: 0 };
+    let followersFin = null;
+    let followersDebut = null;
+    jours.forEach((d) => {
+      Object.keys(tot).forEach((f) => { tot[f] += Number(d[f]) || 0; });
+      if (d.followers != null) {
+        if (followersDebut === null) followersDebut = d.followers;
+        followersFin = d.followers;
+      }
+    });
+
+    return JSON.parse(JSON.stringify({
+      jours: jours.length,
+      compte: Object.assign({}, tot, {
+        followers: followersFin,
+        followersDelta: (followersDebut !== null && followersFin !== null && jours.length > 1)
+          ? followersFin - followersDebut : null,
+      }),
+      publications: medias,
+    }));
+  } catch (e) {
+    /* Instagram ne doit jamais faire tomber la vue agence : le tunnel
+       publicitaire, lui, est la raison d'être de cette page. */
+    console.warn('[agency-funnel] instagram indisponible:', e && e.message);
+    return null;
+  }
+}
 
 function sanitizeK(k) {
   const out = {};
@@ -218,7 +300,10 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const loaded = await loadPeriodData(P);
+    const [loaded, instagram] = await Promise.all([
+      loadPeriodData(P),
+      loadInstagram(P),
+    ]);
     const k = Core.computeKpis({
       DATA: loaded.DATA,
       P,
@@ -239,6 +324,7 @@ module.exports = async (req, res) => {
       months: recentMonths(),
       computedAt: Date.now(),
       k: sanitizeK(k),
+      instagram: instagram,
       journal: sanitizeJournal(loaded.DATA.journalPeriod),
     });
   } catch (e) {
