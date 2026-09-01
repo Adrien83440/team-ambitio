@@ -23,6 +23,38 @@ leur `id`.
 
 ---
 
+## ÉTAPE 1 bis — Débloquer les permissions Pages sur l'application (5 min)
+
+**À faire en premier, sans quoi l'étape 2 est impossible.** L'application est
+configurée pour *Instagram API with Instagram Login*, qui n'expose QUE les
+permissions Instagram : dans l'Explorateur d'API Graph, aucune permission
+`pages_*` n'apparaîtra tant que ce qui suit n'est pas fait. Symptôme observé
+le 01/09/2026 : impossible d'ajouter autre chose qu'une autorisation
+Instagram, puis `me/accounts` qui répond `{"data": []}`.
+
+Ce ne sont pas des produits à ajouter, mais un **cas d'utilisation** — et ils
+coexistent : la configuration Instagram n'est pas touchée.
+
+1. Tableau de bord de l'application → **Cas d'utilisation** (*Use cases*)
+2. **Ajouter un cas d'utilisation** → **« Gérer tout sur votre Page »**
+   (*Manage everything on your Page*). Il apporte d'office
+   `business_management`, `pages_show_list` et `public_profile`.
+3. Sur ce cas d'utilisation → **Personnaliser** (*Customize*) → onglet
+   **Autorisations** → ajouter :
+
+| Permission | Sans elle |
+|---|---|
+| `pages_read_user_content` | **zéro GO** — c'est celle des commentaires |
+| `pages_read_engagement` | pas de réactions ni de partages |
+| `read_insights` | pas de portée ni d'impressions |
+| `pages_messaging` | pas de Messenger |
+
+⚠️ Vérifie aussi que tu es sur **la bonne application** — celle qui a été
+basculée en mode Live pour Instagram. Un doublon vide se sélectionne très
+facilement dans l'Explorateur, et tout échouera silencieusement ensuite.
+
+---
+
 ## ÉTAPE 2 — Générer un jeton de Page permanent (10 min)
 
 C'est l'étape la plus technique. Elle se fait dans
@@ -42,7 +74,11 @@ C'est l'étape la plus technique. Elle se fait dans
 | `read_insights` | portée, impressions, engagements |
 | `pages_messaging` | Messenger |
 
-- **Générer un jeton d'accès** → accepte la fenêtre Facebook
+- **Générer un jeton d'accès** → dans la fenêtre Facebook, à l'écran
+  **« Quelles Pages voulez-vous utiliser ? »**, **COCHE TA PAGE** (ou
+  *toutes les Pages actuelles et futures*). Passer cet écran sans rien
+  sélectionner donne un jeton valide qui ne voit aucune Page :
+  `me/accounts` répond alors `{"data": []}` sans la moindre erreur.
 
 **2.2 — Le rendre longue durée (un bouton, aucune URL)**
 
