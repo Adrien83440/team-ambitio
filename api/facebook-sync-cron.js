@@ -45,21 +45,83 @@ const MAX_BATCH = 400;
 const HOT_DAYS = 14;              // publications encore mouvantes
 const COMMENTS_VERSION = 1;
 
-/* Métriques tentées, de la plus riche à la plus pauvre. Meta retire des
-   métriques Page et Post à chaque version : demander une métrique disparue
-   fait échouer TOUT l'appel, pas seulement le champ fautif. */
-const METRIQUES_POST = [
-  ['post_impressions', 'post_impressions_unique', 'post_clicks', 'post_reactions_by_type_total', 'post_video_views'],
-  ['post_impressions', 'post_impressions_unique', 'post_clicks', 'post_reactions_by_type_total'],
-  ['post_impressions', 'post_impressions_unique'],
-  ['post_impressions'],
+/* MÉTRIQUES — DÉCOUVERTES, PAS DEVINÉES
+   ─────────────────────────────────────────────────────────────────────
+   Meta a supprimé 85 métriques de portée et d'impressions le 15/06/2026 :
+   `post_impressions` et ses variantes ont disparu, `post_impressions_unique`
+   est devenu `post_total_media_view_unique`, et pour un Reel il ne reste
+   qu'un compteur de lectures. Une liste écrite en dur serait périmée à la
+   prochaine vague — et son échec est SILENCIEUX au niveau du tableau : des
+   colonnes vides, aucune erreur visible.
+
+   D'où ce fonctionnement : on tente le lot complet ; s'il est refusé, on
+   teste chaque métrique UNE PAR UNE et on retient celles que Meta accepte.
+   La liste retenue est mémorisée dans _config/facebook_sync_state et
+   réutilisée telle quelle aux passages suivants. Un seul passage paie la
+   découverte ; les suivants font un appel par publication au lieu de
+   quatre lots refusés — c'est aussi ce qui a fait passer la synchro de
+   250 s (tronquée) à une durée tenable.
+
+   Quand Meta déprécie à nouveau, la liste mémorisée échoue, la découverte
+   se relance seule et le tableau se remplit à nouveau. Sans intervention. */
+const CANDIDATS_POST = [
+  'post_total_media_view_unique',   // remplaçant officiel de post_impressions_unique
+  'post_impressions_unique',        // ancien nom, encore servi sur certaines Pages
+  'post_views',
+  'post_impressions',
+  'blue_reels_play_count',          // Reels : seul compteur restant
+  'post_video_views',
+  'post_clicks',
+  'post_reactions_by_type_total',
+  'post_engaged_users',
 ];
-const METRIQUES_PAGE = [
-  ['page_impressions', 'page_impressions_unique', 'page_post_engagements', 'page_views_total', 'page_fans'],
-  ['page_impressions', 'page_impressions_unique', 'page_post_engagements', 'page_fans'],
-  ['page_impressions', 'page_impressions_unique'],
-  ['page_impressions'],
+const CANDIDATS_PAGE = [
+  'page_views_total',
+  'page_post_engagements',
+  'page_impressions_unique',
+  'page_impressions',
+  'page_fans',
+  'page_total_actions',
 ];
+
+/**
+ * Teste les métriques une par une et retourne celles que Meta accepte.
+ * Coûteux (un appel par candidate), donc appelé une seule fois puis mémorisé.
+ */
+async function decouvrirMetriques(chemin, candidats, creds) {
+  const ok = [];
+  for (let i = 0; i < candidats.length; i++) {
+    try {
+      await FB.graphGet(chemin, { metric: candidats[i] }, creds);
+      ok.push(candidats[i]);
+    } catch (e) {
+      /* 190 = jeton mort, 4/17/32 = quota : insister ne changerait rien et
+         brûlerait le budget. Tout le reste = métrique refusée, on continue. */
+      if (e.metaCode === 190 || e.metaCode === 4 || e.metaCode === 17 || e.metaCode === 32) throw e;
+    }
+  }
+  return ok;
+}
+
+/**
+ * Renvoie la liste de métriques à utiliser : celle mémorisée si elle
+ * fonctionne encore, sinon une découverte fraîche.
+ * `memo` est l'objet _config/facebook_sync_state déjà lu.
+ */
+async function metriquesUtilisables(chemin, candidats, memoListe, creds, rapport, cle) {
+  if (Array.isArray(memoListe) && memoListe.length) {
+    try {
+      await FB.graphGet(chemin, { metric: memoListe.join(',') }, creds);
+      return memoListe;
+    } catch (e) {
+      if (e.metaCode === 190) throw e;
+      rapport.erreurs.push(cle + ': liste mémorisée refusée, redécouverte');
+    }
+  }
+  const trouvees = await decouvrirMetriques(chemin, candidats, creds);
+  rapport[cle] = trouvees;
+  return trouvees;
+}
 
 function nb(v) { const n = Number(v); return isFinite(n) ? n : 0; }
 
@@ -77,21 +139,6 @@ function creerEcrivain() {
     async flush() { if (n > 0) { await batch.commit(); batch = db.batch(); n = 0; } return total; },
     get total() { return total; },
   };
-}
-
-async function insightsAvecRepli(chemin, paramsBase, cascades, creds) {
-  let derniereErreur = null;
-  for (let i = 0; i < cascades.length; i++) {
-    try {
-      const json = await FB.graphGet(chemin, Object.assign({}, paramsBase, { metric: cascades[i].join(',') }), creds);
-      return { data: Array.isArray(json.data) ? json.data : [], metriques: cascades[i] };
-    } catch (e) {
-      derniereErreur = e;
-      if (e.metaCode === 190 || e.metaCode === 4 || e.metaCode === 17 || e.metaCode === 32) throw e;
-    }
-  }
-  if (derniereErreur) console.warn('[facebook-sync] insights abandonnés', chemin, derniereErreur.message);
-  return null;
 }
 
 /** Aplatit la réponse insights en { metrique: valeur }. */
@@ -120,7 +167,7 @@ function aplatirInsights(data) {
 /* ══════════════════════════════════════════════════════════════════════
    1. PAGE — snapshot jour par jour
    ══════════════════════════════════════════════════════════════════════ */
-async function syncPage(creds, jours, ecrivain, rapport, deadline) {
+async function syncPage(creds, jours, ecrivain, rapport, deadline, metriques) {
   let profil = {};
   try {
     profil = await FB.graphGet(creds.pageId, { fields: 'id,name,username,fan_count,followers_count' }, creds);
@@ -134,17 +181,26 @@ async function syncPage(creds, jours, ecrivain, rapport, deadline) {
     if (Date.now() > deadline) { rapport.tronque = true; break; }
     const jour = jours[i];
     const b = FB.bornesJour(jour);
-    const res = await insightsAvecRepli(creds.pageId + '/insights', {
-      period: 'day', since: b.since, until: b.until,
-    }, METRIQUES_PAGE, creds);
-    const m = res ? aplatirInsights(res.data) : {};
-    if (!res) rapport.joursSansInsights = (rapport.joursSansInsights || 0) + 1;
+    let m = {};
+    if (metriques && metriques.length) {
+      try {
+        const json = await FB.graphGet(creds.pageId + '/insights', {
+          metric: metriques.join(','), period: 'day', since: b.since, until: b.until,
+        }, creds);
+        m = aplatirInsights(Array.isArray(json.data) ? json.data : []);
+      } catch (e) {
+        if (e.metaCode === 190) throw e;
+        rapport.joursSansInsights = (rapport.joursSansInsights || 0) + 1;
+      }
+    }
 
     const doc = {
       date: jour,
       pageId: creds.pageId,
+      /* Noms flottants côté Meta : on prend le premier servi. */
       impressions: m.page_impressions != null ? m.page_impressions : null,
-      reach: m.page_impressions_unique != null ? m.page_impressions_unique : null,
+      reach: m.page_impressions_unique != null ? m.page_impressions_unique
+             : (m.page_total_actions != null ? null : null),
       engagements: m.page_post_engagements != null ? m.page_post_engagements : null,
       pageViews: m.page_views_total != null ? m.page_views_total : null,
       fans: m.page_fans != null ? m.page_fans : null,
@@ -439,11 +495,42 @@ module.exports = async (req, res) => {
     const ecrivain = creerEcrivain();
     const aujourdhui = FB.jourParis();
 
+    /* État mémorisé : les métriques que Meta acceptait au dernier passage. */
+    const snapState = await db.collection('_config').doc('facebook_sync_state').get();
+    const memo = snapState.exists ? (snapState.data() || {}) : {};
+
     // ─── Page ─────────────────────────────────────────────────────────
     const jours = [];
     for (let i = days - 1; i >= 0; i--) jours.push(FB.decalerJour(aujourdhui, -i));
-    const profil = await syncPage(creds, jours, ecrivain, rapport, deadline);
+
+    let metriquesPage = [];
+    try {
+      metriquesPage = await metriquesUtilisables(
+        creds.pageId + '/insights', CANDIDATS_PAGE, memo.metriquesPage,
+        creds, rapport, 'metriquesPage');
+    } catch (e) {
+      if (e.metaCode === 190) throw e;
+      rapport.erreurs.push('métriques Page indécouvrables: ' + e.message);
+    }
+
+    const profil = await syncPage(creds, jours, ecrivain, rapport, deadline, metriquesPage);
     rapport.pageNom = profil && profil.name ? profil.name : null;
+
+    /* ── MESSENGER AVANT LES PUBLICATIONS ──
+       Il passait en dernier et n'était jamais atteint : les 196 publications
+       consommaient tout le budget, la synchro s'arrêtait, et le bloc
+       Messenger restait vide alors que l'API rendait bien 5 conversations.
+       Cinq conversations coûtent quelques secondes ; deux cents publications
+       en coûtent deux cent cinquante. C'est au petit poste de passer devant,
+       sans quoi il ne passe jamais. */
+    if (avecDm) {
+      try {
+        await syncMessenger(creds, FB.decalerJour(aujourdhui, -(dmDays - 1)), ecrivain, rapport, deadline);
+      } catch (e) {
+        rapport.erreurs.push('messenger: ' + e.message);
+        if (e.metaCode === 190) throw e;
+      }
+    }
 
     // ─── Publications ─────────────────────────────────────────────────
     const depuis = FB.decalerJour(aujourdhui, -(postDays - 1));
@@ -476,6 +563,21 @@ module.exports = async (req, res) => {
     rapport.chauds = chauds.length;
     rapport.froids = froids.length;
 
+    /* Découverte sur la PREMIÈRE publication seulement — le jeu de métriques
+       accepté ne dépend pas de la publication, seulement de la version d'API
+       et des dépréciations en cours. */
+    let metriquesPost = [];
+    if (ordre.length) {
+      try {
+        metriquesPost = await metriquesUtilisables(
+          ordre[0].id + '/insights', CANDIDATS_POST, memo.metriquesPost,
+          creds, rapport, 'metriquesPost');
+      } catch (e) {
+        if (e.metaCode === 190) throw e;
+        rapport.erreurs.push('métriques post indécouvrables: ' + e.message);
+      }
+    }
+
     for (let i = 0; i < ordre.length; i++) {
       if (Date.now() > deadline) {
         rapport.tronque = true;
@@ -484,13 +586,33 @@ module.exports = async (req, res) => {
       }
       const p = ordre[i];
       let ins = {};
-      const resIns = await insightsAvecRepli(p.id + '/insights', {}, METRIQUES_POST, creds);
-      if (resIns) { ins = aplatirInsights(resIns.data); rapport.postsInsights++; }
+      if (metriquesPost.length) {
+        try {
+          const json = await FB.graphGet(p.id + '/insights', { metric: metriquesPost.join(',') }, creds);
+          ins = aplatirInsights(Array.isArray(json.data) ? json.data : []);
+          rapport.postsInsights++;
+        } catch (e) {
+          if (e.metaCode === 190) throw e;
+          /* Une publication peut refuser une métrique que d'autres acceptent
+             (un Reel n'expose pas ce qu'expose une photo). On ne relance pas
+             la découverte pour autant : elle coûterait un appel par candidate
+             sur chaque publication récalcitrante. */
+        }
+      }
 
       const commentsCount = p.comments && p.comments.summary ? nb(p.comments.summary.total_count) : 0;
       const reactions = p.reactions && p.reactions.summary ? nb(p.reactions.summary.total_count) : 0;
       const partages = p.shares && p.shares.count != null ? nb(p.shares.count) : 0;
-      const reach = ins.post_impressions_unique != null ? ins.post_impressions_unique : null;
+      /* La portée a changé de nom le 15/06/2026 : post_impressions_unique →
+         post_total_media_view_unique. On accepte les deux, l'ancien étant
+         encore servi sur certaines Pages. */
+      const reach = ins.post_total_media_view_unique != null ? ins.post_total_media_view_unique
+                  : (ins.post_impressions_unique != null ? ins.post_impressions_unique : null);
+      /* Les impressions ont disparu au profit des vues ; pour un Reel il ne
+         reste que le compteur de lectures. */
+      const impressions = ins.post_views != null ? ins.post_views
+                        : (ins.post_impressions != null ? ins.post_impressions
+                        : (ins.blue_reels_play_count != null ? ins.blue_reels_play_count : null));
       const interactions = reactions + commentsCount + partages;
       const media = p.attachments && p.attachments.data && p.attachments.data[0]
         ? (p.attachments.data[0].media_type || p.attachments.data[0].type || null) : null;
@@ -506,7 +628,7 @@ module.exports = async (req, res) => {
         isVideo: String(media || '').toLowerCase().indexOf('video') >= 0,
         timestamp: p.created_time || null,
         date: p._jour || null,
-        impressions: ins.post_impressions != null ? ins.post_impressions : null,
+        impressions: impressions,
         reach: reach,
         clicks: ins.post_clicks != null ? ins.post_clicks : null,
         videoViews: ins.post_video_views != null ? ins.post_video_views : null,
@@ -561,16 +683,6 @@ module.exports = async (req, res) => {
       });
     }
 
-    // ─── Messenger ────────────────────────────────────────────────────
-    if (avecDm && Date.now() < deadline) {
-      try {
-        await syncMessenger(creds, FB.decalerJour(aujourdhui, -(dmDays - 1)), ecrivain, rapport, deadline);
-      } catch (e) {
-        rapport.erreurs.push('messenger: ' + e.message);
-        if (e.metaCode === 190) throw e;
-      }
-    }
-
     await ecrivain.flush();
     rapport.ecritures = ecrivain.total;
     rapport.dureeMs = Date.now() - t0;
@@ -579,6 +691,10 @@ module.exports = async (req, res) => {
     await db.collection('_config').doc('facebook_sync_state').set({
       lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
       lastRun: rapport,
+      /* Mémorisées pour le prochain passage : la découverte coûte un appel
+         par candidate, elle ne doit se payer qu'une fois. */
+      metriquesPage: metriquesPage,
+      metriquesPost: metriquesPost,
     }, { merge: true });
 
     res.status(200).json(rapport);
