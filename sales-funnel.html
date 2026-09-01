@@ -2120,6 +2120,32 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
           + '. Le rafraîchissement automatique n\'a pas abouti : sans intervention, la synchro s\'arrêtera et cet onglet se figera.</div>';
       }
     }
+    /* Compte rendu de la dernière synchro, en clair et en permanence.
+       Un compteur de GO à zéro a deux causes opposées — « les commentaires
+       n'ont pas été récupérés » et « ils l'ont été et ne contiennent pas le
+       mot-clé » — qui ont exactement la même tête à l'écran. Le nombre de
+       commentaires lus est ce qui les sépare, et il n'a pas à se mériter en
+       ouvrant une publication au hasard. */
+    if (IG.state && last.ok !== false) {
+      var quand = IG.state.lastRunAt && IG.state.lastRunAt.toDate
+        ? frDate(IG.state.lastRunAt.toDate().getTime()) : null;
+      h += '<div class="fn-stage" style="padding:11px 16px;margin-bottom:12px">';
+      h += '<div class="fn-stage-note">⚙️ <strong style="color:var(--text)">Dernière synchronisation</strong>'
+        + (quand ? ' · ' + esc(quand) : '')
+        + ' — ' + fmtNum(last.medias) + ' publication(s), '
+        + fmtNum(last.commentaires) + ' commentaire(s) lu(s), '
+        + fmtNum(last.goTotal) + ' GO'
+        + (last.days ? ' · fenêtre ' + last.days + ' j compte / ' + last.mediaDays + ' j publications' : '')
+        + (last.dureeMs ? ' · ' + (Math.round(last.dureeMs / 100) / 10) + ' s' : '')
+        + '</div>';
+      if (last.erreurs && last.erreurs.length) {
+        h += '<div class="fn-stage-note" style="margin-top:6px;color:var(--gold)">⚠️ ' + last.erreurs.length + ' erreur(s) pendant la synchro : ';
+        h += esc(last.erreurs.slice(0, 3).join(' · '));
+        h += (last.erreurs.length > 3 ? ' … et ' + (last.erreurs.length - 3) + ' autre(s)' : '') + '</div>';
+      }
+      h += '</div>';
+    }
+
     if (!IG.state) {
       h += '<div class="fn-ig-alert warn">⚙️ Aucune synchronisation n\'a encore tourné. Lance le rattrapage initial (voir la doc de <code>api/instagram-sync-cron.js</code>) ou attends le cron de 04:40 UTC.</div>';
     } else if (last.ok === false) {
