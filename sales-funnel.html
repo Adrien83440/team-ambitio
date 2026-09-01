@@ -1902,6 +1902,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
              account: [], media: [], threads: [], state: null };
   var igSort = { key: 'date', dir: -1 };
   var igOpen = {};           // mediaId → commentaires chargés pour le détail
+  var igDiag = null;         // sortie du diagnostic (null | 'loading' | objet)
 
   function igPeriodKey() { return isoDate(P.start) + '_' + isoDate(P.end); }
   function igInvalidate() { IG.loaded = false; IG.err = null; igOpen = {}; }
@@ -2138,11 +2139,24 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
         + (last.days ? ' · fenêtre ' + last.days + ' j compte / ' + last.mediaDays + ' j publications' : '')
         + (last.dureeMs ? ' · ' + (Math.round(last.dureeMs / 100) / 10) + ' s' : '')
         + '</div>';
+      h += '<div style="margin-top:8px"><button class="fn-btn" id="igDiagBtn">🩺 Diagnostic</button>'
+        + '<span class="fn-stage-note" style="margin-left:8px">interroge l\'API Instagram en direct — aucune écriture, aucun secret dans la réponse</span></div>';
       if (last.erreurs && last.erreurs.length) {
         h += '<div class="fn-stage-note" style="margin-top:6px;color:var(--gold)">⚠️ ' + last.erreurs.length + ' erreur(s) pendant la synchro : ';
         h += esc(last.erreurs.slice(0, 3).join(' · '));
         h += (last.erreurs.length > 3 ? ' … et ' + (last.erreurs.length - 3) + ' autre(s)' : '') + '</div>';
       }
+      h += '</div>';
+    }
+
+    if (igDiag === 'loading') {
+      h += '<div class="fn-stage" style="padding:11px 16px;margin-bottom:12px"><div class="fn-stage-note">🩺 Diagnostic en cours…</div></div>';
+    } else if (igDiag) {
+      h += '<div class="fn-stage" style="padding:11px 16px;margin-bottom:12px">';
+      h += '<div class="fn-stage-head" style="margin-bottom:8px"><div class="fn-stage-title">🩺 Diagnostic</div>';
+      h += '<div><button class="fn-btn" id="igDiagCopy">📋 Copier</button> <button class="fn-btn" id="igDiagClose">✕</button></div></div>';
+      h += '<pre style="margin:0;max-height:420px;overflow:auto;font-family:var(--font-m);font-size:11px;line-height:1.5;color:var(--muted);white-space:pre-wrap;word-break:break-word">'
+        + esc(JSON.stringify(igDiag, null, 2)) + '</pre>';
       h += '</div>';
     }
 
@@ -2287,6 +2301,32 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
 
   function igBind() {
     var root = $('#fnTabInsta');
+    var bDiag = $('#igDiagBtn', root);
+    if (bDiag) bDiag.onclick = function () {
+      igDiag = 'loading';
+      renderInstagram();
+      var u = firebase.auth().currentUser;
+      if (!u) { igDiag = { erreur: 'session expirée — recharge la page' }; renderInstagram(); return; }
+      u.getIdToken().then(function (tok) {
+        return fetch('/api/instagram-diagnostic', { headers: { Authorization: 'Bearer ' + tok } });
+      }).then(function (r) {
+        return r.json().catch(function () { return { erreur: 'réponse illisible (HTTP ' + r.status + ')' }; });
+      }).then(function (j) {
+        igDiag = j;
+      }).catch(function (e) {
+        igDiag = { erreur: e.message || String(e) };
+      }).then(function () { if (activeTab === 'instagram') renderInstagram(); });
+    };
+    var bClose = $('#igDiagClose', root);
+    if (bClose) bClose.onclick = function () { igDiag = null; renderInstagram(); };
+    var bCopy = $('#igDiagCopy', root);
+    if (bCopy) bCopy.onclick = function () {
+      var txt = JSON.stringify(igDiag, null, 2);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function () { toast('📋 Diagnostic copié'); })
+          .catch(function () { toast('Copie impossible — sélectionne le texte', true); });
+      } else toast('Copie impossible — sélectionne le texte', true);
+    };
     $$('th[data-igsort]', root).forEach(function (th) {
       th.onclick = function () {
         var k = th.getAttribute('data-igsort');
