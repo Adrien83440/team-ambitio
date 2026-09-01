@@ -85,6 +85,48 @@ module.exports = async (req, res) => {
       out.etapes.profil = { ok: false, erreur: extraitErreur(e) };
     }
 
+    // ─── 2 bis. Permissions portées par le jeton ──────────────────────
+    // Le point aveugle du reste du diagnostic : sans la permission
+    // commentaires, l'edge /comments répond 200 avec une liste VIDE — pas
+    // une erreur. Impossible de distinguer « pas le droit » de « pas de
+    // commentaire » sans regarder les scopes eux-mêmes.
+    // debug_token vit sur graph.facebook.com et exige appId + appSecret ;
+    // si l'un manque, on le dit plutôt que d'échouer en silence.
+    try {
+      if (!creds.appId || !creds.appSecret) {
+        out.etapes.permissions = {
+          ok: false,
+          raison: 'appId et/ou appSecret absents de _config/instagram_credentials — scopes non vérifiables',
+        };
+      } else {
+        const u = 'https://graph.facebook.com/' + creds.apiVersion + '/debug_token'
+          + '?input_token=' + encodeURIComponent(creds.token)
+          + '&access_token=' + encodeURIComponent(creds.appId + '|' + creds.appSecret);
+        const rep = await fetch(u);
+        const txt = await rep.text();
+        let j = {};
+        try { j = txt ? JSON.parse(txt) : {}; } catch (_) { j = {}; }
+        if (j.error) {
+          out.etapes.permissions = { ok: false, erreur: { message: String(j.error.message || '').slice(0, 300), code: j.error.code } };
+        } else {
+          const d = j.data || {};
+          const scopes = Array.isArray(d.scopes) ? d.scopes : [];
+          out.etapes.permissions = {
+            ok: true,
+            scopes: scopes,
+            valide: d.is_valid,
+            expireLe: d.expires_at ? new Date(d.expires_at * 1000).toISOString() : null,
+            /* Le verdict, en clair : c'est la seule ligne à lire. */
+            peutLireCommentaires: scopes.some((x) => String(x).indexOf('manage_comments') >= 0),
+            peutLireMessages: scopes.some((x) => String(x).indexOf('manage_messages') >= 0),
+            peutLireInsights: scopes.some((x) => String(x).indexOf('manage_insights') >= 0),
+          };
+        }
+      }
+    } catch (e) {
+      out.etapes.permissions = { ok: false, erreur: extraitErreur(e) };
+    }
+
     // ─── 3. Dernières publications ────────────────────────────────────
     let medias = [];
     try {
