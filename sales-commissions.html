@@ -623,6 +623,31 @@ tr.member-archived-admin:hover td{opacity:.88;filter:grayscale(.25)}
 
 </style>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
+<script>
+/* ═══ GARDE D'ACCÈS MODULE ═══════════════════════════════════════════════
+   Masquer une entrée du menu (nav.js) ne protège PAS l'URL : n'importe qui
+   pouvait ouvrir cette page en la tapant. On relit ici la même permission
+   que la sidebar — snapshot `ambitio_modules` écrit au login — et on renvoie
+   l'utilisateur vers un module qu'il possède réellement.
+   Clé contrôlée : sales_commissions */
+(function () {
+  var r = localStorage.getItem('ambitio_role');
+  if (!r) { window.location.href = 'login.html'; return; }
+  if (r === 'coach') { window.location.href = 'coaching.html'; return; }
+  if (r === 'admin') return;                    // admin : accès d'office
+  var mods = null;
+  try { mods = JSON.parse(localStorage.getItem('ambitio_modules') || 'null'); } catch (e) { mods = null; }
+  function perm(cle, defautSales) {
+    if (mods && Object.prototype.hasOwnProperty.call(mods, cle)) return mods[cle];
+    return (r === 'sales') ? defautSales : 'none';
+  }
+  var p = perm('sales_commissions', 'edit');
+  if (p && p !== 'none') return;
+  var crm = perm('sales_crm', 'edit');
+  window.location.replace((crm && crm !== 'none') ? 'sales-leads.html' : 'documents.html');
+})();
+</script>
+
 </head>
 <body>
 <script>
@@ -1374,11 +1399,37 @@ function _isAdminView() {
   var role = window._currentRole || localStorage.getItem('ambitio_role') || '';
   return role === 'admin';
 }
+/* Membre connecté, résolu via _meta/team_members.firebaseUid. */
+function _commMe() {
+  try {
+    var u = firebase.auth().currentUser;
+    if (!u) return null;
+    var list = window.TEAM_MEMBERS_LIST || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].firebaseUid === u.uid) {
+        return { slug: list[i].slug, role: String(list[i].role || '') };
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 function _visibleMembers() {
   _markArchivedMembers();
   /* Équipe sales active uniquement : les membres partis (departed) et
      archivés sont masqués pour TOUT LE MONDE, admin compris (14/07/2026). */
-  return MEMBERS_COMM.filter(function(m) { return !m.departed && !m.archived && !DEPARTED_COMM[m.uid]; });
+  var list = MEMBERS_COMM.filter(function(m) { return !m.departed && !m.archived && !DEPARTED_COMM[m.uid]; });
+
+  /* ─── Un SETTER ne voit que ses propres commissions ────────────────────
+     Cette page affiche le détail des deals et des montants de chaque membre.
+     Les closers, closer_setters et admins gardent la vue équipe (pilotage) ;
+     un setter est ramené à sa seule fiche. Tant que le roster n'est pas
+     chargé, on n'affiche personne plutôt que tout le monde : une donnée de
+     paie ne se divulgue pas par défaut le temps d'un chargement. */
+  if (_isAdminView()) return list;
+  var me = _commMe();
+  if (!me || me.role !== 'setter') return list;
+  return list.filter(function(m) { return m.uid === me.slug; });
 }
 if (window.TEAM_MEMBERS) _markArchivedMembers();
 window.addEventListener('team-members-loaded', function() {

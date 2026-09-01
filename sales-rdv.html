@@ -310,6 +310,7 @@ var STATE = {
   unsub: null,
   unsubPast: null,
   ownerSlug: null,
+  myPersonIds: {},   // ids des fiches booking_config dont firebaseUid == moi
   maxOpen: 2,
 };
 
@@ -431,13 +432,7 @@ function startListener() {
       if (d.status !== 'confirmed' && d.status !== 'pending') return;
       if (isClientBooking(d)) return; // RDV clients/coaching exclus
       // Filtrage par owner si sales (admin voit tout)
-      if (STATE.role !== 'admin') {
-        var matchesOwner =
-          (d.ownerSlug && STATE.ownerSlug && d.ownerSlug === STATE.ownerSlug) ||
-          (d.personId && STATE.ownerSlug && d.personId === STATE.ownerSlug) ||
-          (d.assignedToUid && d.assignedToUid === STATE.uid);
-        if (!matchesOwner) return;
-      }
+      if (!bookingIsMine(d)) return;
       all.push(d);
     });
     // Sort par date+time croissant
@@ -453,6 +448,43 @@ function startListener() {
     document.getElementById('rdvList').innerHTML =
       '<div class="rdv-empty"><div class="rdv-empty-icon">⚠️</div><div class="rdv-empty-text">Erreur de chargement : ' + escapeHtml(err.message || err.code) + '</div></div>';
   });
+}
+
+/* ── APPARTENANCE D'UN RDV AU MEMBRE CONNECTÉ ──
+   Le filtre historique testait `ownerSlug` / `personId` / `assignedToUid`.
+   Or booking.html n'écrit AUCUN de ces trois champs : il écrit `bookedBySlug`
+   (le membre qui a posé le RDV) et `personId` (l'id de la fiche expert, pas un
+   slug d'équipe). Résultat : la page restait vide pour tout non-admin.
+   On couvre désormais les deux bouts de la chaîne :
+     - le RDV que J'AI POSÉ         → bookedBySlug / bookedByUid
+     - le RDV qui EST SUR MON AGENDA → personId ∈ mes fiches booking_config
+   plus les champs legacy, conservés pour les RDV transférés (booking-transfer). */
+function bookingIsMine(d) {
+  if (!d) return false;
+  if (STATE.role === 'admin') return true;
+  if (d.bookedByUid && d.bookedByUid === STATE.uid) return true;
+  if (d.assignedToUid && d.assignedToUid === STATE.uid) return true;
+  if (STATE.ownerSlug) {
+    if (d.bookedBySlug && d.bookedBySlug === STATE.ownerSlug) return true;
+    if (d.ownerSlug && d.ownerSlug === STATE.ownerSlug) return true;
+    if (d.personId && d.personId === STATE.ownerSlug) return true;
+  }
+  if (d.personId && STATE.myPersonIds[d.personId]) return true;
+  return false;
+}
+
+/* Fiches expert booking_config rattachées à mon compte (firebaseUid). C'est
+   ce qui fait qu'un closer voit les RDV posés sur SON agenda par un setter. */
+async function loadMyPersonIds() {
+  try {
+    var snap = await db.collection('booking_config').where('firebaseUid', '==', STATE.uid).get();
+    var map = {};
+    snap.forEach(function (doc) { if ((doc.data() || {}).__type === 'person') map[doc.id] = true; });
+    STATE.myPersonIds = map;
+  } catch (e) {
+    console.warn('[sales-rdv] fiches expert:', e && e.message);
+    STATE.myPersonIds = {};
+  }
 }
 
 /* ── LOAD — RDV PASSÉS (7 derniers jours) ──
@@ -475,13 +507,7 @@ function startPastListener() {
       var d = doc.data();
       d.id = doc.id;
       if (isClientBooking(d)) return; // RDV clients/coaching exclus
-      if (STATE.role !== 'admin') {
-        var matchesOwner =
-          (d.ownerSlug && STATE.ownerSlug && d.ownerSlug === STATE.ownerSlug) ||
-          (d.personId && STATE.ownerSlug && d.personId === STATE.ownerSlug) ||
-          (d.assignedToUid && d.assignedToUid === STATE.uid);
-        if (!matchesOwner) return;
-      }
+      if (!bookingIsMine(d)) return;
       if (!isPast(d)) return; // seulement les RDV dont l'heure de fin est dépassée
       all.push(d);
     });
@@ -1024,7 +1050,18 @@ firebase.auth().onAuthStateChanged(async function(user) {
     var udoc = await db.collection('users').doc(user.uid).get();
     var udata = udoc.exists ? udoc.data() : {};
     STATE.role = udata.role || 'sales';
+    /* users/{uid}.slug n'est écrit par aucune page : la source de vérité du
+       slug d'équipe est _meta/team_members, relié par firebaseUid. */
     STATE.ownerSlug = udata.slug || udata.bookingSlug || null;
+    if (!STATE.ownerSlug) {
+      try {
+        if (typeof window.loadTeamMembers === 'function') await window.loadTeamMembers();
+        var _list = window.TEAM_MEMBERS_LIST || [];
+        for (var _i = 0; _i < _list.length; _i++) {
+          if (_list[_i] && _list[_i].firebaseUid === user.uid) { STATE.ownerSlug = _list[_i].slug; break; }
+        }
+      } catch (e) { /* on continue : bookedByUid / fiches expert prennent le relais */ }
+    }
     STATE.userName = udata.displayName || udata.name || (user.email || '').split('@')[0];
   } catch (e) { STATE.role = 'sales'; }
 
@@ -1032,6 +1069,8 @@ firebase.auth().onAuthStateChanged(async function(user) {
     document.body.innerHTML = '<div style="padding:60px;text-align:center;color:var(--red)">Accès réservé aux sales et admins.</div>';
     return;
   }
+
+  await loadMyPersonIds();
 
   // Récup config max bookings
   try {

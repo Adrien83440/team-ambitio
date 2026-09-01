@@ -220,6 +220,13 @@
         var byMap = l.firstActionAtBy || {};
         var firstTouchMember = !byMap[m.slug];
 
+        /* silentTouch : action de TRAÇABILITÉ pure (attribution d'un lead,
+           réattribution…). Elle doit laisser une trace nominative dans le
+           journal, mais ne JAMAIS être comptée comme premier contact — sinon
+           s'attribuer un lead suffirait à incrémenter la colonne « Leads » du
+           rapport Setting sans avoir décroché son téléphone. */
+        if (opts.silentTouch === true) { firstTouch = false; firstTouchMember = false; }
+
         tx.set(actionRef, {
           leadId: leadId,
           leadName: (leadData && leadData.nom) || l.nom || '',
@@ -231,6 +238,8 @@
           prevStatus: opts.prevStatus || (leadData && leadData.status) || null,
           origin: opts.origin || 'leads_live',
           bookingId: opts.bookingId || null,
+          assignFrom: opts.assignFrom || null,
+          assignTo: opts.assignTo || null,
           firstTouch: firstTouch,
           firstTouchMember: firstTouchMember,
           createdAt: ts()
@@ -281,6 +290,40 @@
     return _db.collection('leads').doc(leadId).update(updates).then(function () {
       return { stage: syncStage };
     });
+  }
+
+  /* ═══ 2bis. ATTRIBUTION D'UN LEAD — trace nominative ═══════════════════
+     Le champ `assignedTo` d'un lead décide de la commission Setting NB au
+     close (resolveClosingActors) et du destinataire des notifications. Le
+     changer sans trace rendait impossible de dire qui avait pris quel lead,
+     et à qui. On journalise donc :
+       - lead_actions/{slug}/items : événement immuable `assign`, silentTouch
+         (ne compte pas comme premier contact) ;
+       - timeline_history de la fiche : une ligne lisible « X → Y ».
+     Appelé par Leads Live (bouton « M'attribuer » ET select « Attribué à »).
+     Fire-and-forget : ne bloque jamais l'écriture de l'attribution. */
+  function recordAssignment(leadId, leadData, prevSlug, nextSlug, opts) {
+    opts = opts || {};
+    if (!leadId || prevSlug === nextSlug) return Promise.resolve(null);
+    var nameOf = function (slug) {
+      if (!slug) return 'Non attribué';
+      var mm = memberBySlug(slug);
+      return mm ? (mm.shortName || mm.displayName || mm.fullName || slug) : slug;
+    };
+    var m = me();
+    var author = (m && m.resolved) ? (m.name || m.slug) : 'Inconnu';
+    recordLeadAction(leadId, leadData, 'assign', {
+      prevStatus: (leadData && leadData.status) || null,
+      origin: opts.origin || 'leads_live',
+      silentTouch: true,
+      assignFrom: prevSlug || null,
+      assignTo: nextSlug || null
+    });
+    return addLeadTimeline(
+      leadId,
+      '📥 Attribution : ' + nameOf(prevSlug) + ' → ' + nameOf(nextSlug) + ' (par ' + author + ')',
+      '#22d3ee'
+    );
   }
 
   /* Timeline fiche — même format que sales-contact.html ({text,date,color}).
@@ -936,6 +979,7 @@
     isAnswered: isAnswered,
 
     recordLeadAction: recordLeadAction,
+    recordAssignment: recordAssignment,
     applyLeadStatus: applyLeadStatus,
     addLeadTimeline: addLeadTimeline,
     setOutcome: setOutcome,

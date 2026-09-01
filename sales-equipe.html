@@ -1082,6 +1082,31 @@ tr.member-archived-admin td{opacity:.55;filter:grayscale(.65)}
 tr.member-archived-admin:hover td{opacity:.88;filter:grayscale(.25)}
 </style>
 <script>(function(){var r=localStorage.getItem('ambitio_role');if(!r)window.location.href='login.html';if(r==='coach')window.location.href='coaching.html';})()</script>
+<script>
+/* ═══ GARDE D'ACCÈS MODULE ═══════════════════════════════════════════════
+   Masquer une entrée du menu (nav.js) ne protège PAS l'URL : n'importe qui
+   pouvait ouvrir cette page en la tapant. On relit ici la même permission
+   que la sidebar — snapshot `ambitio_modules` écrit au login — et on renvoie
+   l'utilisateur vers un module qu'il possède réellement.
+   Clé contrôlée : sales_equipe */
+(function () {
+  var r = localStorage.getItem('ambitio_role');
+  if (!r) { window.location.href = 'login.html'; return; }
+  if (r === 'coach') { window.location.href = 'coaching.html'; return; }
+  if (r === 'admin') return;                    // admin : accès d'office
+  var mods = null;
+  try { mods = JSON.parse(localStorage.getItem('ambitio_modules') || 'null'); } catch (e) { mods = null; }
+  function perm(cle, defautSales) {
+    if (mods && Object.prototype.hasOwnProperty.call(mods, cle)) return mods[cle];
+    return (r === 'sales') ? defautSales : 'none';
+  }
+  var p = perm('sales_equipe', 'edit');
+  if (p && p !== 'none') return;
+  var crm = perm('sales_crm', 'edit');
+  window.location.replace((crm && crm !== 'none') ? 'sales-leads.html' : 'documents.html');
+})();
+</script>
+
 </head>
 <body>
 <script>
@@ -1705,7 +1730,7 @@ function addCall(uid) {
   const calls = getCallBreakdowns(uid);
   calls.push({
     id: 'c' + Date.now(), client,
-    date: document.getElementById('cc-date-' + uid)?.value || new Date().toISOString().split('T')[0],
+    date: document.getElementById('cc-date-' + uid)?.value || ymdLocal(new Date()),
     duree: document.getElementById('cc-duree-' + uid)?.value,
     type: document.getElementById('cc-type-' + uid)?.value || 'Closing',
     lien: document.getElementById('cc-lien-' + uid)?.value,
@@ -1880,6 +1905,15 @@ function deleteCall(uid, i) {
 // Calendar state
 let calWeekOffset = 0; // 0 = current week
 
+/* Date au format YYYY-MM-DD en heure LOCALE.
+   toISOString() convertit en UTC : appliqué à un minuit local, il renvoie
+   la veille (Paris est à UTC+1 ou +2). C'est ce qui décalait tout le
+   calendrier d'une journée. */
+function ymdLocal(d) {
+  const p2 = n => (n < 10 ? '0' : '') + n;
+  return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+}
+
 function getWeekStart(offset) {
   const now = new Date();
   const day = now.getDay();
@@ -1897,7 +1931,7 @@ function renderMeeting() {
   const meetings = getMeetings();
   // Auto-select most recent past or next upcoming
   if (!currentMeeting) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = ymdLocal(new Date());
     const past = meetings.filter(m => m.date <= today).sort((a,b)=>b.date.localeCompare(a.date));
     currentMeeting = (past[0] || meetings[0])?.id || null;
   }
@@ -1922,7 +1956,7 @@ function renderCalendar() {
   let html = '<div class="cal-grid">';
   for (let d = 0; d < 7; d++) {
     const day = new Date(weekStart); day.setDate(weekStart.getDate() + d);
-    const dateStr = day.toISOString().split('T')[0];
+    const dateStr = ymdLocal(day);
     const isToday = day.getTime() === today.getTime();
     const dayMeetings = meetings.filter(m => m.date === dateStr);
     const hasMeeting = dayMeetings.length > 0;
@@ -2316,7 +2350,7 @@ function applyVisioLink() {
   const newLien = document.getElementById('visio-new-lien')?.value.trim();
   if (!newLien) { toast('⚠️ Entrez un lien de réunion'); return; }
   const meetings = getMeetings();
-  const today = new Date().toISOString().split('T')[0];
+  const today = ymdLocal(new Date());
   let count = 0;
 
   if (_visioScope === 'all_future') {

@@ -18,7 +18,7 @@
     <header class="an-header">
       <div>
         <h1 class="an-title">Numéros de téléphone <span class="an-flag" aria-label="France">🇫🇷</span></h1>
-        <p class="an-subtitle">Gestion des numéros Twilio rattachés à l'équipe</p>
+        <p class="an-subtitle">Numéros Twilio et Ringover rattachés à l'équipe — un numéro par personne pour savoir qui appelle qui</p>
       </div>
       <button id="btn-sync" class="an-btn an-btn-secondary">
         <span class="an-btn-icon">↻</span> Synchroniser depuis Twilio
@@ -53,6 +53,7 @@
           <thead>
             <tr>
               <th>Numéro</th>
+              <th>Opérateur</th>
               <th>Type</th>
               <th>Nom convivial</th>
               <th>Assigné à</th>
@@ -61,10 +62,48 @@
             </tr>
           </thead>
           <tbody id="numbers-tbody">
-            <tr><td colspan="6" class="an-empty">Chargement…</td></tr>
+            <tr><td colspan="7" class="an-empty">Chargement…</td></tr>
           </tbody>
         </table>
       </div>
+    </section>
+
+    <!-- Section 2bis : Numéro Ringover (déclaration manuelle) -->
+    <!--
+      Les numéros Twilio s'achètent depuis cette page. Les numéros RINGOVER,
+      eux, sont créés dans la console Ringover : on les DÉCLARE ici pour les
+      rattacher à un membre. C'est ce rattachement qui permet de savoir qui a
+      appelé qui — api/ringover-sync-cron.js mappe ringoverUserId → firebaseUid
+      via ces documents, et api/ringover-sms-inbound.js retrouve le
+      destinataire d'un SMS entrant par son numéro.
+      Sans ça, tous les appels Ringover retombaient sur un seul compte.
+    -->
+    <section class="an-section">
+      <h2 class="an-section-title">Déclarer un numéro Ringover</h2>
+      <form id="ringover-form" class="an-search-form">
+        <div class="an-field">
+          <label for="rg-number">Numéro (E.164)</label>
+          <input id="rg-number" type="text" placeholder="+33755546371" maxlength="20">
+        </div>
+        <div class="an-field">
+          <label for="rg-friendly">Nom convivial</label>
+          <input id="rg-friendly" type="text" placeholder="Ex: Ligne Élodie">
+        </div>
+        <div class="an-field">
+          <label for="rg-userid">ID utilisateur Ringover</label>
+          <input id="rg-userid" type="text" placeholder="22855712" maxlength="24">
+        </div>
+        <div class="an-field">
+          <label for="rg-assigned">Assigner à</label>
+          <select id="rg-assigned"></select>
+        </div>
+        <button type="submit" class="an-btn an-btn-primary">Déclarer</button>
+      </form>
+      <p class="an-subtitle" style="margin-top:10px">
+        L'<strong>ID utilisateur Ringover</strong> se lit dans Ringover → Administration →
+        Utilisateurs (il apparaît aussi dans l'URL de la fiche). C'est lui qui rattache
+        chaque appel synchronisé au bon membre de l'équipe.
+      </p>
     </section>
 
     <!-- Section 3 : Recherche -->

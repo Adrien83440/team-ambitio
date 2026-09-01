@@ -1594,6 +1594,34 @@ function _ldOuvrirEnAttente() {
   });
 }
 
+/* ── Identité du membre connecté (auth Firebase → slug équipe) ──────────
+   `personalUser` ci-dessous vient du paramètre d'URL `?user=` : il bascule la
+   page en mode « Mes Leads » (titre, filtres, popups restreintes). On le
+   laisse tel quel — c'est un mode d'affichage volontaire.
+   `myIdentitySlug` est différent : c'est simplement QUI EST CONNECTÉ, résolu
+   via _meta/team_members.firebaseUid. Il sert à proposer « M'attribuer » à
+   tout le monde (le bouton n'existait qu'avec ?user= dans l'URL, donc jamais
+   dans le menu) et à signer les changements d'attribution. Il ne change ni le
+   filtre par défaut, ni les notifications. */
+var myIdentitySlug = null;
+
+function applyIdentityFromAuth() {
+  try {
+    var u = firebase.auth().currentUser;
+    if (!u) return false;
+    var list = window.TEAM_MEMBERS_LIST || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && (list[i].firebaseUid === u.uid || list[i].uid === u.uid)) {
+        var before = myIdentitySlug;
+        myIdentitySlug = list[i].slug;
+        window.myIdentitySlug = myIdentitySlug;
+        return before !== myIdentitySlug;
+      }
+    }
+  } catch (e) { /* roster pas encore chargé — réessayé au prochain appel */ }
+  return false;
+}
+
 /* ── Personal mode via URL param ── */
 var personalUser = null;
 (function detectPersonalMode() {
@@ -3901,7 +3929,8 @@ function l2SegInfos(l, id) {
   var h = '';
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
   h += '<button class="ld-edit-toggle" data-action="toggleEdit" data-id="' + id + '">✏️ Modifier les infos</button>';
-  if (personalUser && l.assignedTo && l.assignedTo !== personalUser) {
+  var _mine = myIdentitySlug || personalUser;
+  if (_mine && l.assignedTo !== _mine) {
     h += '<button class="ld-reassign-btn" data-action="reassign" data-id="' + id + '">📥 M\'attribuer</button>';
   }
   h += '</div>';
@@ -5037,17 +5066,24 @@ document.addEventListener('click', function(e) {
   var reassignBtn = e.target.closest('[data-action="reassign"]');
   if (reassignBtn) {
     var raId = reassignBtn.dataset.id;
-    if (!personalUser) return;
+    var raTarget = myIdentitySlug || personalUser;
+    if (!raTarget) { toast('❌ Votre compte n\'est pas relié à un membre de l\'équipe'); return; }
     var raLead = allLeads.find(function(l) { return l.id === raId; });
-    var prevSetter = raLead ? raLead.assignedTo : '';
+    var prevSetter = raLead ? (raLead.assignedTo || '') : '';
+    if (prevSetter === raTarget) return;
+    var nameOfSlug = function (sg) { return sg ? (SETTERS[sg] ? SETTERS[sg].name : sg) : 'Non attribué'; };
     db.collection('leads').doc(raId).update({
-      assignedTo: personalUser,
+      assignedTo: raTarget,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }).then(function() {
-      toast('📥 Lead réattribué à ' + (SETTERS[personalUser] ? SETTERS[personalUser].name : personalUser));
-      // Add note about reassignment
-      var raNote = { text: '📥 Réattribué de ' + (SETTERS[prevSetter] ? SETTERS[prevSetter].name : prevSetter) + ' à ' + (SETTERS[personalUser] ? SETTERS[personalUser].name : personalUser), date: new Date().toLocaleString('fr-FR') };
-      var notes = (raLead && raLead.notesHistory) ? raLead.notesHistory : [];
+      toast('📥 Lead réattribué à ' + nameOfSlug(raTarget));
+      /* Trace nominative : journal immuable lead_actions + timeline de fiche.
+         Sans ça, « qui a pris ce lead à qui » n'était nulle part. */
+      if (window.AlteoreFlow && window.AlteoreFlow.recordAssignment) {
+        window.AlteoreFlow.recordAssignment(raId, raLead || null, prevSetter, raTarget, { origin: 'leads_live' });
+      }
+      var raNote = { text: '📥 Réattribué de ' + nameOfSlug(prevSetter) + ' à ' + nameOfSlug(raTarget), date: new Date().toLocaleString('fr-FR') };
+      var notes = (raLead && raLead.notesHistory) ? raLead.notesHistory.slice() : [];
       notes.push(raNote);
       db.collection('leads').doc(raId).update({ notesHistory: notes });
     }).catch(function(err) { toast('❌ ' + err.message); });
@@ -5243,6 +5279,22 @@ function autoSaveFlush(leadId) {
   }
   updates.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
 
+  /* Le select « Attribué à » du mode édition écrivait `assignedTo` sans
+     laisser la moindre trace — c'est pourtant ce champ qui décide de la
+     commission Setting NB au close. On capture l'ancienne valeur AVANT de
+     mettre à jour l'état local, et on journalise le changement. */
+  var _prevAssigned = null, _leadBefore = null;
+  for (var lp = 0; lp < allLeads.length; lp++) {
+    if (allLeads[lp].id === leadId) {
+      _leadBefore = allLeads[lp];
+      _prevAssigned = allLeads[lp].assignedTo || '';
+      break;
+    }
+  }
+  var _assignChanged = (updates.assignedTo != null)
+    && _leadBefore != null
+    && (updates.assignedTo || '') !== _prevAssigned;
+
   // Update local state
   for (var li = 0; li < allLeads.length; li++) {
     if (allLeads[li].id === leadId) {
@@ -5252,6 +5304,9 @@ function autoSaveFlush(leadId) {
   }
 
   db.collection('leads').doc(leadId).update(updates).then(function() {
+    if (_assignChanged && window.AlteoreFlow && window.AlteoreFlow.recordAssignment) {
+      window.AlteoreFlow.recordAssignment(leadId, _leadBefore, _prevAssigned, updates.assignedTo || '', { origin: 'leads_live_edit' });
+    }
     // Flash autosave message
     var msg = document.querySelector('[data-autosave-msg="' + leadId + '"]');
     if (msg) {
@@ -6396,6 +6451,7 @@ function startBookingBridge() {
 /* ═══ TEAM MEMBERS — initialisation et re-render ═══ */
 function onTeamMembersReady() {
   refreshSettersFromTeamMembers();
+  applyIdentityFromAuth();
   injectTeamMemberStyles();
   // Re-render les pills membres (leur contenu dépend de TEAM_MEMBERS_ACTIVE)
   if (typeof renderMemberPills === 'function') renderMemberPills();
@@ -6438,6 +6494,13 @@ window.addEventListener('team-members-loaded', onTeamMembersReady);
         window._currentUserName = user.displayName || user.email.split('@')[0];
         localStorage.setItem('ambitio_role', data.role || 'sales');
         localStorage.setItem('ambitio_name', window._currentUserName);
+        /* Le roster a pu se charger AVANT que l'auth ne réponde : dans ce cas
+           onTeamMembersReady n'a rien pu résoudre. On refait le calcul ici, et
+           on re-render si l'identité vient seulement d'être trouvée. */
+        if (applyIdentityFromAuth() && typeof renderFeed === 'function'
+            && typeof allLeads !== 'undefined' && allLeads && allLeads.length) {
+          renderFeed();
+        }
         if (!_leadsListenersStarted) {
           _leadsListenersStarted = true;
           startListening();

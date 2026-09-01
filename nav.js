@@ -68,9 +68,9 @@
       { id: 'sales-setting',      icon: '📞', label: 'Set NB',       href: 'sales-setting.html' },
       { id: 'sales-closing',      icon: '🎯', label: 'Close SB',     href: 'sales-closing.html' },
       { id: 'sales-eod',          icon: '📝', label: 'EOD',          href: 'sales-eod.html' },
-      { id: 'sales-commissions',  icon: '💰', label: 'Commissions',  href: 'sales-commissions.html' },
-      { id: 'sales-projections',  icon: '📈', label: 'Projections',  href: 'sales-projections.html' },
-      { id: 'sales-equipe',       icon: '👥', label: 'Équipe Sales', href: 'sales-equipe.html' },
+      { id: 'sales-commissions',  icon: '💰', label: 'Commissions',  href: 'sales-commissions.html', perm: 'sales_commissions' },
+      { id: 'sales-projections',  icon: '📈', label: 'Projections',  href: 'sales-projections.html', perm: 'sales_projections' },
+      { id: 'sales-equipe',       icon: '👥', label: 'Équipe Sales', href: 'sales-equipe.html', perm: 'sales_equipe' },
     ]},
     { id: 'booking',           icon: '📅', label: 'Booking',     href: 'booking-admin.html',     section: 'Sales', perm: 'booking' },
     { id: 'sales-rdv',         icon: '🗓️', label: 'Rendez-vous',  href: 'sales-rdv.html',         section: 'Sales', perm: 'booking' },
@@ -584,6 +584,28 @@
       var p = perms[m.perm];
       return p && p !== 'none';
     });
+    /* ─── Sous-menus : chacun peut porter sa PROPRE permission ───────────
+       Historiquement les enfants d'un parent (« Set NB / Close SB ») étaient
+       tous affichés dès que la permission du PARENT était accordée. Résultat :
+       impossible de donner Set NB à un setter sans lui ouvrir Commissions,
+       Projections et Équipe Sales — les clés existaient dans la grille admin
+       mais ne servaient à rien. Un enfant SANS `perm` continue d'hériter du
+       parent (Leads Live, Pipeline, Set NB, Close SB, EOD…).
+       Rappel : masquer un item du menu ne protège pas l'URL — chaque page
+       concernée porte en plus son propre garde d'accès. */
+    const visibleChild = c => {
+      if (!c.perm) return true;
+      if (role === 'admin') return true;
+      var pc = perms[c.perm];
+      return pc && pc !== 'none';
+    };
+    const modulesTree = modules.map(m => {
+      if (!m.children) return m;
+      var kids = m.children.filter(visibleChild);
+      if (kids.length === m.children.length) return m;
+      return Object.assign({}, m, { children: kids });
+    }).filter(m => !m.children || m.children.length > 0);
+
     const user    = getUserInfo();
     const { path } = getActivePage();
 
@@ -614,7 +636,7 @@
     try { secState = JSON.parse(localStorage.getItem('nav_sections_open') || '{}') || {}; } catch (e) { secState = {}; }
 
     const groups = [];
-    modules.forEach(m => {
+    modulesTree.forEach(m => {
       const secName = m.section || 'Autres';
       let g = groups.find(x => x.name === secName);
       if (!g) { g = { name: secName, items: [] }; groups.push(g); }
@@ -901,7 +923,11 @@
     PERM_KEYS, ROLE_DEFAULTS, PERM_LABELS,
     getUserModules,
     rebuild() {
-      document.getElementById('ambitio-sidebar')?.remove();
+      /* Pas de chaînage optionnel : nav.js est chargé par toutes les pages,
+         et `?.` (ES2020) ferait échouer le parse du fichier entier sur les
+         Safari antérieurs à 13.1 — plus aucune navigation, partout. */
+      var _oldSidebar = document.getElementById('ambitio-sidebar');
+      if (_oldSidebar) _oldSidebar.remove();
       document.querySelectorAll('.nav-mobile-toggle,.nav-overlay').forEach(e => e.remove());
       document.body.classList.remove('has-sidebar','sidebar-collapsed');
       buildSidebar();

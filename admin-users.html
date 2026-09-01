@@ -347,7 +347,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 <script type="module">
 import{initializeApp,deleteApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import{getAuth,onAuthStateChanged,signOut,createUserWithEmailAndPassword,sendPasswordResetEmail}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import{getFirestore,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,deleteField,query,where,orderBy,writeBatch,serverTimestamp,addDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{getFirestore,initializeFirestore,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,deleteField,query,where,orderBy,writeBatch,serverTimestamp,addDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FBCFG={
   apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
@@ -358,27 +358,66 @@ const FBCFG={
   appId:"1:1079366902268:web:b4ec1691dba54230339279"
 };
 const app=initializeApp(FBCFG);
-const auth=getAuth(app),db=getFirestore(app);
+const auth=getAuth(app),db=initializeFirestore(app,{experimentalAutoDetectLongPolling:true}); /* auto-detect long-polling : sans lui WebChannel se bloque sur Safari. En SDK modulaire le reglage se pose ici, pas via settings(). */
 window._auth=auth;window._signOut=signOut;
 
 // ─── Permission config from nav.js ───
-const PERM_KEYS=window.AmbitioNav?.PERM_KEYS||['coaching_clients','coaching_dashboard','coaching_communication','sales_crm','sales_dashboard','sales_saisie','sales_equipe','sales_commissions','sales_projections','booking','csm_dashboard','csm_clients'];
-const ROLE_DEFAULTS=window.AmbitioNav?.ROLE_DEFAULTS||{
+const PERM_KEYS=(window.AmbitioNav&&window.AmbitioNav.PERM_KEYS)||['coaching_clients','coaching_dashboard','coaching_communication','sales_crm','sales_dashboard','sales_saisie','sales_dialer','sales_whatsapp','sales_equipe','sales_commissions','sales_projections','booking','csm_dashboard','csm_clients'];
+const ROLE_DEFAULTS=(window.AmbitioNav&&window.AmbitioNav.ROLE_DEFAULTS)||{
   admin:Object.fromEntries(PERM_KEYS.map(k=>[k,'edit'])),
   coach:{coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',csm_dashboard:'none',csm_clients:'none'},
-  sales:{coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit',csm_dashboard:'none',csm_clients:'none'},
+  sales:{coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',sales_crm:'edit',sales_dashboard:'edit',sales_saisie:'edit',sales_dialer:'edit',sales_whatsapp:'edit',sales_equipe:'edit',sales_commissions:'edit',sales_projections:'edit',booking:'edit',csm_dashboard:'none',csm_clients:'none'},
   csm:{coaching_clients:'edit',coaching_dashboard:'edit',coaching_communication:'edit',sales_crm:'none',sales_dashboard:'none',sales_saisie:'none',sales_equipe:'none',sales_commissions:'none',sales_projections:'none',booking:'none',csm_dashboard:'edit',csm_clients:'edit'},
 };
-const PERM_LABELS=window.AmbitioNav?.PERM_LABELS||{
+const PERM_LABELS=(window.AmbitioNav&&window.AmbitioNav.PERM_LABELS)||{
   coaching_clients:'Clients',coaching_dashboard:'Dashboard (Coaching)',coaching_communication:'Communication',
   sales_crm:'CRM',sales_dashboard:'Dashboard (Sales)',sales_saisie:'Setting / Closing / EOD',
+  sales_dialer:'Dialer',sales_whatsapp:'WhatsApp',
   sales_equipe:'Équipe',sales_commissions:'Commissions',sales_projections:'Projections',booking:'Booking',
   csm_dashboard:'Dashboard CSM',csm_clients:'Clients (CSM)'
 };
 const PERM_SECTIONS={coaching_clients:'Coaching',coaching_dashboard:'Coaching',coaching_communication:'Coaching',
   sales_crm:'Sales',sales_dashboard:'Sales',sales_saisie:'Sales',
+  sales_dialer:'Sales',sales_whatsapp:'Sales',
   sales_equipe:'Sales',sales_commissions:'Sales',sales_projections:'Sales',booking:'Booking',
   csm_dashboard:'Customer Success',csm_clients:'Customer Success'};
+
+/* ═══ RÔLE ÉQUIPE (SALES) — _meta/team_members[].role ════════════════════
+   À ne pas confondre avec le rôle TECHNIQUE de users/{uid} (admin / sales /
+   coach / csm), qui décide de l'espace et des rules Firestore.
+   Ce rôle-ci est le rôle MÉTIER du commercial. Il ne vit que dans
+   _meta/team_members et c'est lui — et lui seul — qui pilote :
+     · l'apparition dans le rapport Set NB (sales-setting.html)
+     · l'appartenance à l'équipe sales (AlteoreFlow.salesMembers)
+     · l'attribution de la commission Setting NB au close
+       (resolveClosingActors : un `bookedBySlug` d'un membre sans ce rôle
+        est purement et simplement IGNORÉ)
+     · la présence dans Commissions, Projections, Funnel
+   La Cloud Function onUserSyncToTeamMembers y écrit « sales » à la création
+   et ne le corrige JAMAIS ensuite : sans ce sélecteur, un nouveau setter
+   restait invisible de tout le module Setting et ses NB n'étaient payés à
+   personne. */
+const TEAM_ROLES_SALES=[
+  {v:'',            l:'— (non commercial)'},
+  {v:'setter',      l:'📞 Setter — setting uniquement'},
+  {v:'closer',      l:'🎯 Closer — closing uniquement'},
+  {v:'closer_setter',l:'📞🎯 Setter + Closer'}
+];
+
+/* Préréglage « Setter » : le périmètre validé pour un setter pur.
+   Booking + CRM + Set NB/Close SB + Dialer + WhatsApp.
+   Volontairement à 'none' : Commissions / Projections / Équipe Sales (chiffres
+   des autres commerciaux) et Dashboard Sales (objectifs et CA global de la
+   société). Documents et Témoignages restent visibles : ils sont ouverts à
+   toute l'équipe connectée et ne dépendent d'aucune permission. */
+const PRESET_SETTER={
+  coaching_clients:'none',coaching_dashboard:'none',coaching_communication:'none',
+  sales_crm:'edit',sales_dashboard:'none',sales_saisie:'edit',
+  sales_dialer:'edit',sales_whatsapp:'edit',
+  sales_equipe:'none',sales_commissions:'none',sales_projections:'none',
+  booking:'edit',
+  csm_dashboard:'none',csm_clients:'none'
+};
 
 const ROLE_COLORS={admin:'#f59e0b',coach:'#8b5cf6',sales:'#10b981',csm:'#5eead4'};
 const ROLE_EMOJIS={admin:'👑',coach:'🎓',sales:'📈',csm:'💎'};
@@ -875,9 +914,27 @@ function closeModal(){
 document.getElementById('moClose').addEventListener('click',closeModal);
 document.getElementById('modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 
+/* Applique un jeu de permissions à une grille déjà rendue (prefix 'c' ou 'e').
+   Les clés absentes du préréglage sont laissées telles quelles. */
+window.applyPreset=function(prefix,preset,label){
+  if(!confirm('Appliquer le préréglage « '+label+' » ?\n\nLes permissions actuellement cochées seront remplacées.'))return;
+  PERM_KEYS.forEach(function(k){
+    if(!(k in preset))return;
+    ['none','read','edit'].forEach(function(v){
+      var r=document.getElementById(prefix+'_'+k+'_'+v);
+      if(r)r.checked=(v===preset[k]);
+    });
+  });
+};
+window.applySetterPreset=function(prefix){ window.applyPreset(prefix,PRESET_SETTER,'Setter'); };
+
 // ─── Build permission grid HTML ───
 function buildPermGrid(modules,prefix){
   var h='<div class="perm-section"><div class="perm-title">📋 Permissions par module</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px">';
+  h+='<button type="button" class="bb bb-o" style="padding:6px 12px;font-size:11px" onclick="applySetterPreset(\''+prefix+'\')">📞 Préréglage Setter</button>';
+  h+='<span style="font-size:10px;color:rgba(255,255,255,.3);align-self:center">Booking · CRM · Set NB/Close SB · Dialer · WhatsApp — sans les chiffres des autres commerciaux</span>';
+  h+='</div>';
   h+='<div class="perm-head"><span>Module</span><span>❌ Aucun</span><span>👁 Lecture</span><span>✏️ Édition</span></div>';
   var lastSec='';
   PERM_KEYS.forEach(function(k){
@@ -1166,7 +1223,9 @@ function openEditModal(u){
   if (tmMember) {
     var inLM = tmMember.inLeadsModule !== false; // true par défaut
     var eligibleLeads = tmMember.eligibleForLeads === true; // false par défaut (sécurité)
+    var canCalls = tmMember.canPassCalls === true; // false par défaut (sécurité)
     var tmColor = tmMember.color || '#6b7280';
+    var tmRole = tmMember.role || '';
     var tmShortName = tmMember.shortName || '';
     var tmInitials = tmMember.initials || '';
     var tmSlug = tmMember.slug || '';
@@ -1185,8 +1244,31 @@ function openEditModal(u){
     h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(34,211,153,0.05);border:1px solid rgba(34,211,153,0.18);border-radius:8px;margin-bottom:10px">';
     h+='<input type="checkbox" id="eEligibleForLeads"'+(eligibleLeads?' checked':'')+' style="width:16px;height:16px;accent-color:#22d3ee"/>';
     h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">🎯 Reçoit des leads en round-robin</div>';
-    h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Inclus dans la rotation automatique d\'attribution. ⚠️ Réservé aux closers actifs uniquement (pas Heads of Sales, pas admins).</div></div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Inclus dans la rotation automatique d\'attribution des leads entrants. ⚠️ Réservé aux <b>setters actifs</b> — jamais les Heads of Sales ni les admins. Un closer qui ne fait que du Self Booking reste hors rotation.</div></div>';
     h+='</label>';
+
+    // Toggle canPassCalls — conditionne l'attribution d'un numéro de ligne
+    h+='<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:10px 12px;background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.18);border-radius:8px;margin-bottom:10px">';
+    h+='<input type="checkbox" id="eCanPassCalls"'+(canCalls?' checked':'')+' style="width:16px;height:16px;accent-color:#a78bfa"/>';
+    h+='<div><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.85)">☎️ Passe des appels (ligne dédiée)</div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Rend le membre sélectionnable dans <b>Admin → Numéros</b> pour lui attribuer sa propre ligne Twilio ou Ringover. C\'est ce rattachement qui permet de savoir qui a appelé qui, et de router vers lui les SMS entrants sur son numéro.</div></div>';
+    h+='</label>';
+
+    // Rôle métier commercial (_meta/team_members.role) — cf. TEAM_ROLES_SALES
+    h+='<div style="padding:10px 12px;background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.2);border-radius:8px;margin-bottom:10px">';
+    h+='<label style="font-size:11px;color:#fbbf24;font-weight:800;text-transform:uppercase;letter-spacing:.04em">Rôle équipe (Sales)</label>';
+    h+='<select class="bs" id="eTmRole" style="width:100%;margin-top:5px">';
+    TEAM_ROLES_SALES.forEach(function(o){
+      var sel=(String(tmRole)===o.v)?' selected':'';
+      h+='<option value="'+esc(o.v)+'"'+sel+'>'+esc(o.l)+'</option>';
+    });
+    // Valeur héritée non commerciale (sales / coach / admin / csm posée par la
+    // sync auto) : on la garde visible pour ne pas l'effacer par inadvertance.
+    var _known=TEAM_ROLES_SALES.some(function(o){return o.v===String(tmRole);});
+    if(!_known&&tmRole){ h+='<option value="'+esc(tmRole)+'" selected>⚠️ '+esc(tmRole)+' (valeur actuelle)</option>'; }
+    h+='</select>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:5px;line-height:1.5">Différent du rôle technique ci-dessus. C\'est CE champ qui fait apparaître le membre dans <b>Set NB</b>, dans les <b>Commissions</b> et le <b>Funnel</b>, et qui fait créditer la commission Setting NB au bon nom lors d\'un close. La synchronisation automatique y écrit « sales » à la création : un setter reste invisible du module Setting tant qu\'il n\'est pas passé sur « Setter ».</div>';
+    h+='</div>';
 
     // Identité d'équipe : couleur, slug, shortName, initials
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">';
@@ -1362,6 +1444,13 @@ async function handleSave(uid){
         inLeadsModule: inLMEl.checked,
         eligibleForLeads: eligibleEl ? eligibleEl.checked : false
       };
+      var callsEl = document.getElementById('eCanPassCalls');
+      if (callsEl) tmPatch.canPassCalls = callsEl.checked;
+      var roleVal = (document.getElementById('eTmRole') || {}).value;
+      /* undefined = le select n'est pas dans le DOM → on ne touche pas au
+         champ. Chaîne vide = choix explicite « non commercial » → on écrit ''
+         plutôt que de laisser un ancien 'setter' traîner. */
+      if (roleVal !== undefined) tmPatch.role = String(roleVal || '');
       var slugVal = (document.getElementById('eTmSlug') || {}).value;
       var colorVal = (document.getElementById('eTmColorHex') || {}).value;
       var shortVal = (document.getElementById('eTmShortName') || {}).value;

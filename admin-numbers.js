@@ -100,6 +100,47 @@
     return '<span style="color:var(--an-text-muted)">—</span>';
   }
 
+  // ─── Membres pouvant se voir attribuer un numéro ──────────────────────
+  // Critère : membre actif, non coach, et flag canPassCalls posé (il se règle
+  // dans admin-users.html → « Visibilité dans l'équipe »). Le flag existe pour
+  // écarter ceux qui ne prennent pas d'appels (Head of Sales, admins).
+  function eligibleCallMembers() {
+    const tm = Array.isArray(window.TEAM_MEMBERS_ACTIVE) ? window.TEAM_MEMBERS_ACTIVE : [];
+    return tm.filter(m => {
+      if (m.active === false) return false;
+      if (m.canPassCalls !== true) return false;
+      return !((m.role || '').toLowerCase().includes('coach'));
+    });
+  }
+
+  // Construit les <option> d'un select d'attribution. `selectedSlug` présélectionne.
+  function assignOptionsHtml(selectedSlug) {
+    return '<option value="">— Non assigné —</option>' +
+      eligibleCallMembers().map(m => {
+        let matchUser = null;
+        if (m.firebaseUid) matchUser = usersCache.find(u => u.uid === m.firebaseUid);
+        if (!matchUser && m.email) {
+          matchUser = usersCache.find(u => u.email && u.email.toLowerCase() === m.email.toLowerCase());
+        }
+        const uid = matchUser ? matchUser.uid : (m.firebaseUid || '');
+        const sel = (selectedSlug && m.slug === selectedSlug) ? ' selected' : '';
+        return `<option value="${esc(m.slug)}" data-uid="${esc(uid)}" data-role="${esc(matchUser ? matchUser.role : '')}"${sel}>${esc(m.fullName || m.shortName || m.slug)} (${esc(m.role || '')})</option>`;
+      }).join('');
+  }
+
+  // E.164 strict — même règle que les Vercel Functions (api/twilio-sms-send.js).
+  // Renvoie null plutôt qu'une valeur à moitié normalisée : un numéro mal formé
+  // ne matcherait aucun SMS entrant et l'attribution serait silencieusement fausse.
+  function toE164(raw) {
+    if (!raw) return null;
+    const c = String(raw).replace(/[\s\-().]/g, '');
+    if (/^\+[1-9]\d{7,14}$/.test(c)) return c;
+    if (/^00[1-9]\d{7,14}$/.test(c)) return '+' + c.slice(2);
+    if (/^0\d{9}$/.test(c)) return '+33' + c.slice(1);
+    if (/^33\d{9}$/.test(c)) return '+' + c;
+    return null;
+  }
+
   // ─── Live phone_numbers ───────────────────────────────────────────────
   function subscribePhoneNumbers() {
     if (phoneUnsub) phoneUnsub();
@@ -143,22 +184,35 @@
     const tbody = $('#numbers-tbody');
     if (!tbody) return;
     if (numbersCache.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="6" class="an-empty">Aucun numéro actif. Achetez-en un ci-dessous ou synchronisez depuis Twilio.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="an-empty">Aucun numéro actif. Achetez-en un ci-dessous, déclarez un numéro Ringover, ou synchronisez depuis Twilio.</td></tr>';
       return;
     }
-    tbody.innerHTML = numbersCache.map(n => `
+    tbody.innerHTML = numbersCache.map(n => {
+      const isRingover = (n.provider || 'twilio') === 'ringover';
+      /* Un numéro Ringover n'appartient pas à Twilio : « Libérer » (qui appelle
+         l'API Twilio) n'a aucun sens dessus et échouerait. On le retire de la
+         liste en le passant inactif — le document reste en base, conformément à
+         la règle « rien n'est jamais supprimé ». */
+      const action = isRingover
+        ? `<button class="an-btn an-btn-danger" data-action="unlink" data-id="${esc(n.id)}" data-num="${esc(n.phoneNumber)}">Retirer</button>`
+        : `<button class="an-btn an-btn-danger" data-action="release" data-id="${esc(n.id)}" data-num="${esc(n.phoneNumber)}">Libérer</button>`;
+      const op = isRingover
+        ? `<span class="an-badge an-badge-mobile">Ringover${n.ringoverUserId ? ' · ' + esc(n.ringoverUserId) : ''}</span>`
+        : '<span class="an-badge an-badge-local">Twilio</span>';
+      return `
       <tr>
         <td><strong>${esc(n.phoneNumber)}</strong></td>
+        <td>${op}</td>
         <td>${badge(n.numberType)}</td>
         <td>${esc(n.friendlyName || '')}</td>
         <td>${userLabel(n.assignedToSlug, n.assignedTo)}</td>
         <td>${esc(n.locality || n.region || (n.regionIndicatif ? 'Indicatif ' + String(n.regionIndicatif).replace(/^0+/, '0') : (n.countryCode || '')))}</td>
         <td class="an-row-actions">
           <button class="an-btn an-btn-ghost" data-action="edit" data-id="${esc(n.id)}">Modifier</button>
-          <button class="an-btn an-btn-danger" data-action="release" data-id="${esc(n.id)}" data-num="${esc(n.phoneNumber)}">Libérer</button>
+          ${action}
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
   }
 
   // ─── Render résultats de recherche ────────────────────────────────────
@@ -296,26 +350,7 @@
     $('#pm-friendly').value = n.friendlyName || '';
 
     // Même logique de population que pour l'achat
-    const tm = Array.isArray(window.TEAM_MEMBERS_ACTIVE) ? window.TEAM_MEMBERS_ACTIVE : [];
-    const eligible = tm.filter(m => {
-      if (m.active === false) return false;
-      if (m.canPassCalls !== true) return false;
-      return !((m.role || '').toLowerCase().includes('coach'));
-    });
-    const select = $('#pm-assigned');
-    select.innerHTML = '<option value="">— Non assigné —</option>' +
-      eligible.map(m => {
-        let matchUser = null;
-        if (m.firebaseUid) {
-          matchUser = usersCache.find(u => u.uid === m.firebaseUid);
-        }
-        if (!matchUser && m.email) {
-          matchUser = usersCache.find(u => u.email && u.email.toLowerCase() === m.email.toLowerCase());
-        }
-        const uid = matchUser ? matchUser.uid : (m.firebaseUid || '');
-        const sel = (m.slug === n.assignedToSlug) ? ' selected' : '';
-        return `<option value="${esc(m.slug)}" data-uid="${esc(uid)}" data-role="${esc(matchUser ? matchUser.role : '')}"${sel}>${esc(m.fullName || m.shortName || m.slug)} (${esc(m.role || '')})</option>`;
-      }).join('');
+    $('#pm-assigned').innerHTML = assignOptionsHtml(n.assignedToSlug);
 
     // Adapter les libellés et boutons en mode édition
     $('.an-modal-content h3').textContent = "Modifier le numéro";
@@ -410,9 +445,105 @@
     }
   }
 
+  // ─── Déclaration d'un numéro Ringover ─────────────────────────────────
+  // Upsert idempotent : re-déclarer le même numéro met à jour sa fiche au lieu
+  // d'en créer une seconde (id déterministe dérivé du numéro).
+  async function handleRingoverDeclare(ev) {
+    ev.preventDefault();
+    const raw = $('#rg-number').value.trim();
+    const phoneNumber = toE164(raw);
+    if (!phoneNumber) {
+      toast("Numéro invalide. Format attendu : +33XXXXXXXXX.", 'error');
+      return;
+    }
+    const ringoverUserId = $('#rg-userid').value.trim();
+    if (!ringoverUserId || !/^\d{4,20}$/.test(ringoverUserId)) {
+      toast("ID utilisateur Ringover invalide (chiffres uniquement).", 'error');
+      return;
+    }
+    const select = $('#rg-assigned');
+    const slug = select.value || null;
+    const opt = slug ? select.options[select.selectedIndex] : null;
+    const assignedTo = opt ? (opt.dataset.uid || null) : null;
+    const assignedToRole = opt ? (opt.dataset.role || null) : null;
+    if (!slug) {
+      toast("Choisissez le membre à qui ce numéro appartient — c'est tout l'intérêt de la déclaration.", 'error');
+      return;
+    }
+    if (!assignedTo) {
+      toast(`Aucun compte Firebase trouvé pour ${slug}. Vérifiez admin-users.html.`, 'error');
+      return;
+    }
+    // Un même ID Ringover attribué à deux personnes rendrait le mapping des
+    // appels ambigu : ringover-sync-cron prendrait la dernière valeur lue.
+    const conflit = numbersCache.find(n => n.provider === 'ringover'
+      && String(n.ringoverUserId || '') === ringoverUserId
+      && n.phoneNumber !== phoneNumber);
+    if (conflit && !confirm(
+      `L'ID Ringover ${ringoverUserId} est déjà déclaré sur ${conflit.phoneNumber}`
+      + ` (${conflit.assignedToSlug || 'non assigné'}).\n\n`
+      + `Deux numéros sur le même ID rendent l'attribution des appels ambiguë. Continuer quand même ?`)) {
+      return;
+    }
+
+    const docId = 'ringover_' + phoneNumber.replace(/[^0-9]/g, '');
+    const btn = ev.target.querySelector('button[type="submit"]');
+    btn.disabled = true; btn.textContent = 'Enregistrement…';
+    try {
+      await db.collection('phone_numbers').doc(docId).set({
+        phoneNumber,
+        provider: 'ringover',
+        ringoverUserId,
+        friendlyName: $('#rg-friendly').value.trim() || null,
+        numberType: 'national',
+        countryCode: 'FR',
+        active: true,
+        assignedTo,
+        assignedToSlug: slug,
+        assignedToRole,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: firebase.auth().currentUser.uid,
+      }, { merge: true });
+      toast(`Numéro ${phoneNumber} rattaché à ${slug}.`, 'success');
+      $('#rg-number').value = '';
+      $('#rg-friendly').value = '';
+      $('#rg-userid').value = '';
+      select.value = '';
+    } catch (e) {
+      console.error('[admin-numbers] ringover declare:', e);
+      toast("Erreur d'enregistrement : " + (e.message || e.code), 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Déclarer';
+    }
+  }
+
+  // Retire un numéro Ringover de la liste sans rien supprimer en base.
+  async function handleUnlink(numberId, label) {
+    if (!confirm(`Retirer le numéro ${label} de la liste ?\n\n`
+      + `Il n'est PAS supprimé chez Ringover ni en base : il passe simplement `
+      + `inactif et n'est plus rattaché à personne.`)) return;
+    try {
+      await db.collection('phone_numbers').doc(numberId).update({
+        active: false,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: firebase.auth().currentUser.uid,
+      });
+      toast(`Numéro ${label} retiré.`, 'success');
+    } catch (e) {
+      toast("Erreur : " + (e.message || e.code), 'error');
+    }
+  }
+
   // ─── Bind UI ──────────────────────────────────────────────────────────
   function bindUI() {
     $('#search-form').addEventListener('submit', handleSearch);
+    $('#ringover-form').addEventListener('submit', handleRingoverDeclare);
+    $('#rg-assigned').innerHTML = assignOptionsHtml(null);
+    // Le roster peut arriver après le premier rendu du formulaire.
+    window.addEventListener('team-members-loaded', () => {
+      const sel = $('#rg-assigned');
+      if (sel) { const v = sel.value; sel.innerHTML = assignOptionsHtml(v || null); }
+    });
     $('#btn-sync').addEventListener('click', handleSync);
     $('#pm-cancel').addEventListener('click', closePurchaseModal);
     $('#pm-confirm').addEventListener('click', () => {
@@ -434,6 +565,8 @@
         openEditModal(btn.dataset.id);
       } else if (action === 'release') {
         handleRelease(btn.dataset.id, btn.dataset.num);
+      } else if (action === 'unlink') {
+        handleUnlink(btn.dataset.id, btn.dataset.num);
       }
     });
 

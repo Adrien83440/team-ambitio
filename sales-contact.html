@@ -948,6 +948,10 @@ else if(checks>15){clearInterval(iv);toast('\u274c Timeout');btn.disabled=false;
 }
 
 function saveF(){
+/* Attribution : même trace que dans Leads Live. `assignedTo` décide de la
+   commission Setting NB au close, il ne doit jamais bouger anonymement. */
+var _prevAssigned=(lead&&lead.assignedTo)||'';
+var _leadBefore=lead?Object.assign({},lead):null;
 var flds='nom,telephone,email,assignedTo,type,utm,instagramUsername,description,secteur,ca,defi,disponibilite,timeline,prospectWebinaire,dateWebinaire,present,tagsWebi,dateReceptionLead,rejetMails,formule,dateInscription,dateFinProgramme,retractation,plateformePaiement,commissions,coaching72h,coach72h,closeur,setting,goodies,dateEnvoiGoodies'.split(',');
 var u={};flds.forEach(function(f){var el=document.querySelector('[data-f="'+f+'"]');if(el){u[f]=el.value.trim();lead[f]=u[f];}});
 /* Pseudo Instagram : normalisé exactement comme api/_instagramClient.js
@@ -955,7 +959,11 @@ var u={};flds.forEach(function(f){var el=document.querySelector('[data-f="'+f+'"
    GO et des DM à cette fiche : écrite sous une autre forme, elle ne matche
    jamais et l'onglet Instagram du funnel reste muet sur ce lead. */
 if(u.instagramUsername!=null){u.instagramUsername=u.instagramUsername.replace(/^@+/,'').replace(/\s+/g,'').toLowerCase();lead.instagramUsername=u.instagramUsername;}
-sv(u);var m=document.getElementById('flS');if(m){m.style.opacity='1';setTimeout(function(){m.style.opacity='0';},1500);}
+sv(u);
+if(u.assignedTo!=null&&(u.assignedTo||'')!==_prevAssigned&&window.AlteoreFlow&&window.AlteoreFlow.recordAssignment){
+window.AlteoreFlow.recordAssignment(leadId,_leadBefore,_prevAssigned,u.assignedTo||'',{origin:'fiche_crm'});
+}
+var m=document.getElementById('flS');if(m){m.style.opacity='1';setTimeout(function(){m.style.opacity='0';},1500);}
 }
 function sv(u){u.updatedAt=firebase.firestore.FieldValue.serverTimestamp();db.collection('leads').doc(leadId).update(u).catch(function(e){toast('\u274c '+e.message);});}
 function addTL(t,c){lead.timeline_history=(lead.timeline_history||[]);lead.timeline_history.push({text:t,date:fmtNow(),color:c||'var(--muted)'});db.collection('leads').doc(leadId).update({timeline_history:lead.timeline_history}).catch(function(){});}

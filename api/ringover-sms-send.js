@@ -46,17 +46,41 @@ module.exports = async (req, res) => {
     if (!toNumber) return res.status(400).json({ error: 'Numéro destinataire manquant ou invalide' });
 
     const creds = await getRingoverCreds();
-    const fromNumber = creds.fromNumber; // E.164 string : "+33755546371"
+
+    /* ── Numéro expéditeur : celui de l'AUTEUR s'il en a un ────────────────
+       Chaque commercial a sa propre ligne Ringover, déclarée dans
+       phone_numbers (admin-numbers.html). Envoyer depuis sa ligne, et non
+       depuis la ligne partagée, est ce qui permet au prospect de répondre à
+       la bonne personne : api/ringover-sms-inbound.js retrouve le
+       destinataire d'un SMS entrant par le numéro appelé.
+       Repli sur la ligne partagée si l'auteur n'a pas encore de ligne. */
+    let fromNumber = null;
+    try {
+      const numSnap = await db.collection('phone_numbers')
+        .where('assignedTo', '==', auth.uid)
+        .where('provider', '==', 'ringover')
+        .where('active', '==', true)
+        .limit(1).get();
+      if (!numSnap.empty) fromNumber = numSnap.docs[0].data().phoneNumber || null;
+    } catch (e) {
+      console.warn('[ringover-sms-send] lookup ligne:', e.message);
+    }
+    fromNumber = fromNumber || creds.fromNumber; // E.164 string : "+33755546371"
     if (!fromNumber) return res.status(500).json({ error: 'ringover.fromNumber manquant' });
 
-    // Nom expéditeur (non-bloquant)
+    // Nom + slug expéditeur (non-bloquant)
     let ownerName = null;
+    let ownerSlug = null;
     try {
       const metaSnap = await db.collection('_meta').doc('team_members').get();
       if (metaSnap.exists) {
-        const list = Object.values(metaSnap.data().members || {});
-        const me = list.find(m => m.firebaseUid === auth.uid);
-        if (me) ownerName = me.shortName || me.displayName || null;
+        const raw = metaSnap.data().members;
+        const list = Array.isArray(raw) ? raw : Object.values(raw || {});
+        const me = list.find(m => m && m.firebaseUid === auth.uid);
+        if (me) {
+          ownerName = me.shortName || me.displayName || me.fullName || null;
+          ownerSlug = me.slug || null;
+        }
       }
     } catch (_) {}
 
@@ -87,7 +111,7 @@ module.exports = async (req, res) => {
       communications: admin.firestore.FieldValue.arrayUnion({
         type: 'sms', direction: 'outbound', content: trimmed,
         source: 'ringover-sms', date: nowIso, createdAt: nowIso,
-        ownerUid: auth.uid, ownerName: ownerName || auth.email,
+        ownerUid: auth.uid, ownerName: ownerName || auth.email, ownerSlug: ownerSlug || null,
         providerMessageId: String(resp?.message_id || ''),
         fromNumber, toNumber,
       }),

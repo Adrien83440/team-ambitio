@@ -14,8 +14,32 @@ async function getRingoverCreds() {
   return creds;
 }
 
-async function ringoverFetch(path, { method = 'GET', body = null } = {}) {
+/* Poste Ringover d'un utilisateur donné.
+   Un seul compte Ringover ne peut pas servir plusieurs commerciaux : la clé
+   API identifie l'utilisateur dont le téléphone sonne. Tant qu'il n'y avait
+   qu'une utilisatrice, la clé partagée suffisait ; à plusieurs, chaque poste
+   doit avoir sa propre clé, déclarée dans
+     _config/telco_credentials.ringover.users.{firebaseUid}
+       = { apiKey?, userId?, fromNumber?, device? }
+   (aucun secret dans le repo — les identifiants restent en base, comme le
+   reste de _config/*). Les champs absents retombent sur la config partagée.
+   Renvoie toujours un objet exploitable : { apiKey, userId, fromNumber,
+   device, dedicated } — `dedicated` dit si l'appelant a SA propre clé. */
+async function getRingoverCredsForUser(uid) {
   const creds = await getRingoverCreds();
+  const perUser = (uid && creds.users && creds.users[uid]) || null;
+  return {
+    apiKey:     (perUser && perUser.apiKey)     || creds.apiKey,
+    userId:     (perUser && perUser.userId)     || creds.userId || null,
+    fromNumber: (perUser && perUser.fromNumber) || creds.fromNumber || null,
+    device:     (perUser && perUser.device)     || creds.device || 'APP',
+    dedicated:  !!(perUser && perUser.apiKey),
+    shared:     creds,
+  };
+}
+
+async function ringoverFetch(path, { method = 'GET', body = null, apiKey = null } = {}) {
+  const creds = apiKey ? { apiKey } : await getRingoverCreds();
 
   const doFetch = async (authValue) => {
     const opts = {
@@ -58,4 +82,4 @@ async function ringoverFetch(path, { method = 'GET', body = null } = {}) {
   return data;
 }
 
-module.exports = { getRingoverCreds, ringoverFetch };
+module.exports = { getRingoverCreds, getRingoverCredsForUser, ringoverFetch };
