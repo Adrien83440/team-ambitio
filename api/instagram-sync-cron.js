@@ -66,8 +66,9 @@ const MAX_BATCH = 400;
    faux — invisible, donc pire.
      1 → commentaires de premier niveau uniquement
      2 → réponses aux commentaires incluses (01/09/2026)
-     3 → commentaires du compte lui-même exclus du comptage (01/09/2026) */
-const COMMENTS_VERSION = 3;
+     3 → commentaires du compte lui-même exclus du comptage (01/09/2026)
+     4 → auteur résolu via from{} quand username est absent (01/09/2026) */
+const COMMENTS_VERSION = 4;
 
 /* Métriques tentées par type de publication, de la plus riche à la plus
    pauvre. La dernière ligne est vide : on renonce aux insights et on garde
@@ -284,8 +285,17 @@ async function listerMedias(creds, depuisIso, plafondPages) {
    D'où `replies{...}` demandé dans le même appel : une seule requête, les
    deux niveaux. Si Meta refuse le sous-champ, on retombe sur la forme
    simple plutôt que de perdre tous les commentaires. */
+const REP = 'replies.limit(50){id,text,username,timestamp,like_count,from{id,username}}';
+const REP_SANS_FROM = 'replies.limit(50){id,text,username,timestamp,like_count}';
 const CHAMPS_COMMENTAIRES = [
-  'id,text,username,timestamp,like_count,replies.limit(50){id,text,username,timestamp,like_count}',
+  /* `from{id,username}` en premier : sur l'API Instagram, le champ `username`
+     d'un commentaire n'est servi que pour le propriétaire du compte — les
+     autres arrivent anonymes. Or sans pseudo, un GO ne peut être relié à
+     aucune fiche lead : on saurait combien de personnes ont réagi, jamais
+     lesquelles. `from` est l'autre porte ; si Meta la refuse, on dégrade
+     plutôt que de perdre les commentaires. */
+  'id,text,username,timestamp,like_count,from{id,username},' + REP,
+  'id,text,username,timestamp,like_count,' + REP_SANS_FROM,
   'id,text,username,timestamp,like_count',
 ];
 
@@ -305,6 +315,7 @@ async function syncCommentaires(creds, media, mapLeads, ecrivain, rapport, usern
   let bruts = null;
   let tronque = false;
   let derniereErreur = null;
+  let forme = null;
 
   for (let ci = 0; ci < CHAMPS_COMMENTAIRES.length; ci++) {
     try {
@@ -314,6 +325,7 @@ async function syncCommentaires(creds, media, mapLeads, ecrivain, rapport, usern
       }, creds, 20);
       bruts = r.items;
       tronque = r.tronque;
+      forme = ci;
       break;
     } catch (e) {
       derniereErreur = e;
@@ -332,7 +344,8 @@ async function syncCommentaires(creds, media, mapLeads, ecrivain, rapport, usern
     const c = items[i].c;
     const parentId = items[i].parentId;
     if (!c || !c.id) continue;
-    const username = IG.normaliserUsername(c.username);
+    const username = IG.normaliserUsername(c.username || (c.from && c.from.username));
+    const igsid = c.from && c.from.id ? String(c.from.id) : null;
     /* Le commentaire du compte lui-même ne compte JAMAIS comme un signal.
        La consigne s'écrit précisément « écris GO » : sans cette exclusion,
        chaque publication portant l'appel à l'action se créditerait d'un GO
@@ -353,6 +366,7 @@ async function syncCommentaires(creds, media, mapLeads, ecrivain, rapport, usern
       isReply: parentId != null,
       isAuthor: estAuteur,
       username: username,
+      igsid: igsid,
       text: c.text != null ? String(c.text).slice(0, 2000) : '',
       isGo: isGo,
       likeCount: nb(c.like_count),
@@ -367,6 +381,7 @@ async function syncCommentaires(creds, media, mapLeads, ecrivain, rapport, usern
   return {
     total: items.length,
     replies: items.filter((x) => x.parentId != null).length,
+    champs: forme,
     go: go,
     goLeads: goLeads,
     goUniques: Object.keys(auteursGo).length,

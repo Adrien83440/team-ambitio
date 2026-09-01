@@ -176,6 +176,7 @@ module.exports = async (req, res) => {
       /* Deux formes, exactement celles du cron : avec les réponses, puis
          sans. Savoir LAQUELLE passe est la moitié du diagnostic. */
       const formes = [
+        ['avec from + réponses', 'id,text,username,timestamp,like_count,from{id,username},replies.limit(50){id,text,username,timestamp,like_count,from{id,username}}'],
         ['avec réponses', 'id,text,username,timestamp,like_count,replies.limit(50){id,text,username,timestamp,like_count}'],
         ['sans réponses', 'id,text,username,timestamp,like_count'],
       ];
@@ -193,7 +194,7 @@ module.exports = async (req, res) => {
           const echantillon = [];
           data.slice(0, 15).forEach((c) => {
             echantillon.push({
-              de: c.username || null,
+              de: c.username || (c.from && c.from.username) || null,
               texte: c.text != null ? String(c.text).slice(0, 80) : '',
               estGo: IG.contientMotCle(c.text, creds.keywords),
               reponse: false,
@@ -201,7 +202,7 @@ module.exports = async (req, res) => {
             const rep = c.replies && Array.isArray(c.replies.data) ? c.replies.data : [];
             rep.slice(0, 10).forEach((rr) => {
               echantillon.push({
-                de: rr.username || null,
+                de: rr.username || (rr.from && rr.from.username) || null,
                 texte: rr.text != null ? String(rr.text).slice(0, 80) : '',
                 estGo: IG.contientMotCle(rr.text, creds.keywords),
                 reponse: true,
@@ -212,6 +213,7 @@ module.exports = async (req, res) => {
           out.etapes.commentaires.essais.push({
             forme: formes[i][0], ok: true,
             premierNiveau: data.length, reponses: replies,
+            auteursIdentifies: echantillon.filter((x) => x.de).length + ' / ' + echantillon.length,
             pageSuivante: !!(r.paging && r.paging.next),
             goDetectes: echantillon.filter((x) => x.estGo).length,
             echantillon: echantillon.slice(0, 25),
