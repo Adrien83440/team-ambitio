@@ -287,6 +287,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     <div class="fn-tab" data-tab="leads">👥 Leads</div>
     <div class="fn-tab" data-tab="ads">💶 Données Ads</div>
     <div class="fn-tab" data-tab="instagram">📸 Instagram</div>
+    <div class="fn-tab" data-tab="facebook">📘 Facebook</div>
     <div class="fn-tab" data-tab="journal">📒 Journal</div>
   </div>
 
@@ -294,6 +295,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   <section id="fnTabLeads" style="display:none"></section>
   <section id="fnTabAds" style="display:none"></section>
   <section id="fnTabInsta" style="display:none"></section>
+  <section id="fnTabFb" style="display:none"></section>
   <section id="fnTabJournal" style="display:none"></section>
 
 </div>
@@ -2073,13 +2075,13 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += '<div class="fn-stage-head"><div class="fn-stage-title">📸 Compte — ' + esc(periodLabel()) + '</div>';
     h += '<div class="fn-stage-note">' + acc.jours + ' jour(s) de snapshot sur ' + joursPeriode + ' · source API Instagram</div></div>';
     h += '<div class="fn-grid">';
-    h += igKpi(acc.followersFin == null ? '—' : fmtNum(acc.followersFin), 'Abonnés',
+    h += socialKpi(acc.followersFin == null ? '—' : fmtNum(acc.followersFin), 'Abonnés',
                acc.followersDelta == null ? 'photo du jour' : (acc.followersDelta >= 0 ? '+' : '') + fmtNum(acc.followersDelta) + ' sur la période');
-    h += igKpi(fmtNum(acc.reach), 'Portée cumulée', 'somme des portées quotidiennes');
-    h += igKpi(fmtNum(acc.views), 'Vues', 'toutes publications');
-    h += igKpi(fmtNum(acc.profileViews), 'Visites de profil', '');
-    h += igKpi(fmtNum(acc.websiteClicks), 'Clics lien en bio', '');
-    h += igKpi(fmtNum(acc.totalInteractions), 'Interactions', 'likes + comm. + saves + partages');
+    h += socialKpi(fmtNum(acc.reach), 'Portée cumulée', 'somme des portées quotidiennes');
+    h += socialKpi(fmtNum(acc.views), 'Vues', 'toutes publications');
+    h += socialKpi(fmtNum(acc.profileViews), 'Visites de profil', '');
+    h += socialKpi(fmtNum(acc.websiteClicks), 'Clics lien en bio', '');
+    h += socialKpi(fmtNum(acc.totalInteractions), 'Interactions', 'likes + comm. + saves + partages');
     h += '</div>';
     /* Un total sur 3 jours affiché sous un titre « 30 jours » est un
        mensonge par omission : le chiffre est juste, la période ne l'est pas.
@@ -2103,7 +2105,9 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     igBind();
   }
 
-  function igKpi(v, l, s) {
+  /* Carte KPI — partagée par les onglets Instagram et Facebook : c'est un
+     helper de présentation, il n'appartient à aucun réseau. */
+  function socialKpi(v, l, s) {
     return '<div class="fn-kpi"><div class="v' + (v === '—' ? ' muted' : '') + '">' + v + '</div>'
       + '<div class="l">' + l + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
   }
@@ -2183,14 +2187,14 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     }
 
     h += '<div class="fn-grid">';
-    h += igKpi(dm.initiesNous ? fmtPct(dm.tauxReponse) : '—', 'Taux de réponse',
+    h += socialKpi(dm.initiesNous ? fmtPct(dm.tauxReponse) : '—', 'Taux de réponse',
                dm.repondus + ' / ' + dm.initiesNous + ' conversations ouvertes par nous');
-    h += igKpi(fmtNum(dm.sortants), 'Messages envoyés', '');
-    h += igKpi(fmtNum(dm.entrants), 'Messages reçus', '');
-    h += igKpi(dm.delaiMedian == null ? '—' : fmtDelay(dm.delaiMedian), 'Délai médian de réponse', 'côté prospect');
-    h += igKpi(dm.initiesEux ? fmtNum(dm.initiesEux) : '—', 'Conversations entrantes', 'ouvertes par le prospect');
-    h += igKpi(dm.notreDelaiMedian == null ? '—' : fmtDelay(dm.notreDelaiMedian), 'Notre délai de réponse', 'sur les conversations entrantes');
-    h += igKpi(fmtNum(dm.avecLead), 'Rattachées à une fiche', dm.total ? fmtPct((dm.avecLead / dm.total) * 100) + ' des conversations' : '');
+    h += socialKpi(fmtNum(dm.sortants), 'Messages envoyés', '');
+    h += socialKpi(fmtNum(dm.entrants), 'Messages reçus', '');
+    h += socialKpi(dm.delaiMedian == null ? '—' : fmtDelay(dm.delaiMedian), 'Délai médian de réponse', 'côté prospect');
+    h += socialKpi(dm.initiesEux ? fmtNum(dm.initiesEux) : '—', 'Conversations entrantes', 'ouvertes par le prospect');
+    h += socialKpi(dm.notreDelaiMedian == null ? '—' : fmtDelay(dm.notreDelaiMedian), 'Notre délai de réponse', 'sur les conversations entrantes');
+    h += socialKpi(fmtNum(dm.avecLead), 'Rattachées à une fiche', dm.total ? fmtPct((dm.avecLead / dm.total) * 100) + ' des conversations' : '');
     h += '</div>';
     h += '<div class="fn-stage-note" style="margin-top:10px">📌 <strong>Aucun rattrapage n\'est possible ici.</strong> Instagram n\'expose aucun historique de messagerie : ces chiffres ne comptent que ce que le webhook a vu passer depuis sa mise en service. Une conversation est rattachée à une fiche lead quand le pseudo Instagram est renseigné sur la fiche (champ « Instagram » de la création de lead).</div>';
     h += '</div>';
@@ -2382,6 +2386,382 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += '<div class="fn-stage-note" style="margin-top:10px">Lire ce bloc avec la légende sous les yeux : le classement compare des <strong>accroches</strong>, pas des formats. Un Reel et un carrousel n\'ont ni la même portée ni la même mécanique de commentaire.</div>';
     h += '</div>';
     return h;
+  }
+
+  /* ════════════════════════════════════════════════════════════════
+     ONGLET FACEBOOK (01/09/2026)
+     ────────────────────────────────────────────────────────────────
+     Sources — toutes écrites côté serveur, la page ne fait que lire :
+       fb_page_daily   api/facebook-sync-cron.js  (audience de la Page)
+       fb_posts        idem (+ webhook en direct)
+       fb_comments     idem — porte le drapeau isGo
+       fb_dm_threads   Messenger, RATTRAPABLE contrairement à Instagram
+
+     Onglet distinct d'Instagram, et pas par commodité : la portée
+     Facebook (post_impressions_unique) et la portée Instagram ne se
+     définissent pas de la même façon. Les additionner dans un tableau
+     commun produirait un total à l'apparence solide et au sens nul.
+     ════════════════════════════════════════════════════════════════ */
+  var FB = { key: '', loading: false, loaded: false, err: null,
+             page: [], posts: [], threads: [], state: null };
+  var fbSort = { key: 'date', dir: -1 };
+  var fbOpen = {};
+  var fbDiag = null;
+
+  function fbPeriodKey() { return isoDate(P.start) + '_' + isoDate(P.end); }
+  function fbInvalidate() { FB.loaded = false; FB.err = null; fbOpen = {}; }
+
+  function loadFacebook() {
+    var a = isoDate(P.start), b = isoDate(P.end);
+    var key = fbPeriodKey();
+    FB.loading = true; FB.err = null;
+    return Promise.all([
+      db.collection('fb_posts').where('date', '>=', a).where('date', '<=', b).get(),
+      db.collection('fb_page_daily').where('date', '>=', a).where('date', '<=', b).get(),
+      db.collection('fb_dm_threads').where('firstEventDate', '>=', a).where('firstEventDate', '<=', b).limit(3000).get(),
+      db.collection('_config').doc('facebook_sync_state').get()
+    ]).then(function (r) {
+      FB.posts = r[0].docs.map(function (d) { var o = d.data() || {}; o._id = d.id; return o; });
+      FB.page = r[1].docs.map(function (d) { return d.data() || {}; });
+      FB.threads = r[2].docs.map(function (d) { return d.data() || {}; });
+      FB.state = r[3].exists ? (r[3].data() || {}) : null;
+      FB.page.sort(function (x, y) { return (x.date || '') < (y.date || '') ? -1 : 1; });
+      FB.key = key; FB.loaded = true; FB.loading = false;
+    }).catch(function (e) {
+      console.error('[funnel] facebook', e);
+      FB.err = e.message || 'erreur inconnue';
+      FB.loading = false; FB.loaded = true;
+    });
+  }
+
+  function fbComputePage() {
+    var o = { impressions: 0, reach: 0, engagements: 0, pageViews: 0,
+              followersFin: null, followersDelta: null, jours: FB.page.length };
+    var premier = null;
+    FB.page.forEach(function (d) {
+      o.impressions += (d.impressions || 0);
+      o.reach += (d.reach || 0);
+      o.engagements += (d.engagements || 0);
+      o.pageViews += (d.pageViews || 0);
+      var f = d.followers != null ? d.followers : (d.fans != null ? d.fans : null);
+      if (f != null) { if (premier === null) premier = f; o.followersFin = f; }
+    });
+    if (premier !== null && o.followersFin !== null && FB.page.length > 1) {
+      o.followersDelta = o.followersFin - premier;
+    }
+    return o;
+  }
+
+  function fbComputeDm() {
+    var o = { total: FB.threads.length, sortants: 0, entrants: 0, initiesNous: 0,
+              repondus: 0, tauxReponse: null, delaiMedian: null, initiesEux: 0,
+              notreDelaiMedian: null, avecLead: 0 };
+    var d1 = [], d2 = [];
+    FB.threads.forEach(function (t) {
+      o.sortants += (t.outboundCount || 0);
+      o.entrants += (t.inboundCount || 0);
+      if (t.leadId) o.avecLead++;
+      if (t.initiatedBy === 'us') {
+        o.initiesNous++;
+        if (t.replied === true) { o.repondus++; if (t.responseDelayMs != null) d1.push(t.responseDelayMs); }
+      } else if (t.initiatedBy === 'them') {
+        o.initiesEux++;
+        if (t.ourReplyDelayMs != null) d2.push(t.ourReplyDelayMs);
+      }
+    });
+    if (o.initiesNous > 0) o.tauxReponse = (o.repondus / o.initiesNous) * 100;
+    o.delaiMedian = igMediane(d1);
+    o.notreDelaiMedian = igMediane(d2);
+    return o;
+  }
+
+  var FB_COLS = [
+    ['date', 'Publié', 'l'], ['post', 'Publication', 'l'],
+    ['reach', 'Portée', ''], ['impressions', 'Impressions', ''],
+    ['reactions', 'Réactions', ''], ['comments', 'Comm.', ''],
+    ['goCount', 'GO', ''], ['goRate', 'GO / portée', ''], ['goLeads', 'GO ↔ fiche', ''],
+    ['shares', 'Partages', ''], ['clicks', 'Clics', ''],
+    ['engagementRate', 'Engag.', ''], ['det', '', '']
+  ];
+
+  function fbVal(m, key) {
+    if (key === 'goRate') {
+      if (!m.reach || m.goCount == null) return null;
+      return (m.goCount / m.reach) * 100;
+    }
+    if (key === 'post') return (m.message || '').toLowerCase();
+    if (key === 'date') return m.timestamp || m.date || '';
+    return m[key] == null ? null : m[key];
+  }
+
+  function fbSorted() {
+    var arr = FB.posts.slice();
+    arr.sort(function (x, y) {
+      var a = fbVal(x, fbSort.key), b = fbVal(y, fbSort.key);
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      if (a < b) return -fbSort.dir;
+      if (a > b) return fbSort.dir;
+      return 0;
+    });
+    return arr;
+  }
+
+  function fbTexte(m) {
+    var c = (m.message || '').replace(/\s+/g, ' ').trim();
+    if (!c) return '(sans texte)';
+    return c.length > 64 ? c.slice(0, 64) + '…' : c;
+  }
+
+  function renderFacebook() {
+    var el = $('#fnTabFb');
+    if (!FB.loaded || FB.key !== fbPeriodKey()) {
+      el.innerHTML = '<div class="fn-loading">Chargement des données Facebook — ' + esc(periodLabel()) + '…</div>';
+      if (!FB.loading) loadFacebook().then(function () { if (activeTab === 'facebook') renderFacebook(); });
+      return;
+    }
+    if (FB.err) {
+      el.innerHTML = '<div class="fn-ig-alert">⚠️ Lecture impossible : ' + esc(FB.err)
+        + '<div style="margin-top:6px;font-size:11.5px;color:var(--muted)">Si le message parle de permissions, les règles Firestore des collections <code>fb_*</code> ne sont pas déployées.</div></div>';
+      return;
+    }
+
+    var pg = fbComputePage();
+    var dm = fbComputeDm();
+    var h = '';
+
+    h += fbSyncBanner();
+
+    /* ── Page ── */
+    var joursPeriode = Math.round((P.end - P.start) / 86400000) + 1;
+    h += '<div class="fn-stage">';
+    h += '<div class="fn-stage-head"><div class="fn-stage-title">📘 Page — ' + esc(periodLabel()) + '</div>';
+    h += '<div class="fn-stage-note">' + pg.jours + ' jour(s) de snapshot sur ' + joursPeriode + ' · source API Facebook</div></div>';
+    h += '<div class="fn-grid">';
+    h += socialKpi(pg.followersFin == null ? '—' : fmtNum(pg.followersFin), 'Abonnés',
+                   pg.followersDelta == null ? 'photo du jour' : (pg.followersDelta >= 0 ? '+' : '') + fmtNum(pg.followersDelta) + ' sur la période');
+    h += socialKpi(fmtNum(pg.reach), 'Portée cumulée', 'personnes touchées / jour');
+    h += socialKpi(fmtNum(pg.impressions), 'Impressions', 'affichages, doublons inclus');
+    h += socialKpi(fmtNum(pg.engagements), 'Engagements', 'clics, réactions, commentaires');
+    h += socialKpi(fmtNum(pg.pageViews), 'Vues de la Page', '');
+    h += '</div>';
+    if (pg.jours < joursPeriode) {
+      h += '<div class="fn-ig-alert warn" style="margin-top:10px">📅 Ces totaux ne couvrent que <strong>' + pg.jours + ' jour(s)</strong> sur les ' + joursPeriode + ' de la période : le reste n\'a pas encore été synchronisé.</div>';
+    }
+    h += '<div class="fn-stage-note" style="margin-top:10px">⚠️ <strong>Portée</strong> et <strong>impressions</strong> ne se confondent pas : la portée compte des personnes, les impressions comptent des affichages. Et ni l\'une ni l\'autre ne se compare à celles d\'Instagram, qui ne les définit pas pareil — d\'où deux onglets et jamais un total commun.</div>';
+    h += '</div>';
+
+    /* ── Messenger ── */
+    h += '<div class="fn-stage">';
+    h += '<div class="fn-stage-head"><div class="fn-stage-title">💬 Messenger</div>';
+    h += '<div class="fn-stage-note">conversations <strong>ouvertes</strong> pendant la période</div></div>';
+    h += '<div class="fn-grid">';
+    h += socialKpi(dm.initiesNous ? fmtPct(dm.tauxReponse) : '—', 'Taux de réponse',
+                   dm.repondus + ' / ' + dm.initiesNous + ' conversations ouvertes par nous');
+    h += socialKpi(fmtNum(dm.sortants), 'Messages envoyés', '');
+    h += socialKpi(fmtNum(dm.entrants), 'Messages reçus', '');
+    h += socialKpi(dm.delaiMedian == null ? '—' : fmtDelay(dm.delaiMedian), 'Délai médian de réponse', 'côté prospect');
+    h += socialKpi(dm.initiesEux ? fmtNum(dm.initiesEux) : '—', 'Conversations entrantes', 'ouvertes par le prospect');
+    h += socialKpi(dm.notreDelaiMedian == null ? '—' : fmtDelay(dm.notreDelaiMedian), 'Notre délai de réponse', 'sur les conversations entrantes');
+    h += socialKpi(fmtNum(dm.avecLead), 'Rattachées à une fiche', dm.total ? fmtPct((dm.avecLead / dm.total) * 100) + ' des conversations' : '');
+    h += '</div>';
+    /* La différence majeure avec Instagram, et elle est à l'avantage de
+       Facebook : ces chiffres ne dépendent pas du branchement d'un webhook. */
+    h += '<div class="fn-stage-note" style="margin-top:10px">✅ <strong>L\'historique est rattrapable ici.</strong> Contrairement à Instagram, l\'API Messenger rend les conversations passées : ces chiffres remontent aussi loin que la synchronisation est allée, pas seulement depuis la mise en service.</div>';
+    h += '</div>';
+
+    h += fbRenderPosts();
+    el.innerHTML = h;
+    fbBind();
+  }
+
+  function fbSyncBanner() {
+    var st = FB.state || {};
+    var last = st.lastRun || {};
+    var h = '';
+    if (FB.state && last.ok !== false) {
+      var quand = st.lastRunAt && st.lastRunAt.toDate ? frDate(st.lastRunAt.toDate().getTime()) : null;
+      h += '<div class="fn-stage" style="padding:11px 16px;margin-bottom:12px">';
+      h += '<div class="fn-stage-note">⚙️ <strong style="color:var(--text)">Dernière synchronisation</strong>'
+        + (quand ? ' · ' + esc(quand) : '')
+        + ' — ' + fmtNum(last.posts) + ' publication(s), ' + fmtNum(last.commentaires) + ' commentaire(s) lu(s), '
+        + fmtNum(last.goTotal) + ' GO, ' + fmtNum(last.conversations) + ' conversation(s)'
+        + (last.dureeMs ? ' · ' + (Math.round(last.dureeMs / 100) / 10) + ' s' : '') + '</div>';
+      if (last.erreurs && last.erreurs.length) {
+        h += '<div class="fn-stage-note" style="margin-top:6px;color:var(--gold)">⚠️ ' + last.erreurs.length + ' erreur(s) : '
+          + esc(last.erreurs.slice(0, 3).join(' · ')) + '</div>';
+      }
+      h += '<div style="margin-top:8px"><button class="fn-btn" id="fbDiagBtn">🩺 Diagnostic</button>'
+        + '<span class="fn-stage-note" style="margin-left:8px">interroge l\'API Facebook en direct — aucune écriture, aucun secret dans la réponse</span></div>';
+      h += '</div>';
+    }
+    if (fbDiag === 'loading') {
+      h += '<div class="fn-stage" style="padding:11px 16px;margin-bottom:12px"><div class="fn-stage-note">🩺 Diagnostic en cours…</div></div>';
+    } else if (fbDiag) {
+      h += '<div class="fn-stage" style="padding:11px 16px;margin-bottom:12px">';
+      h += '<div class="fn-stage-head" style="margin-bottom:8px"><div class="fn-stage-title">🩺 Diagnostic</div>';
+      h += '<div><button class="fn-btn" id="fbDiagCopy">📋 Copier</button> <button class="fn-btn" id="fbDiagClose">✕</button></div></div>';
+      h += '<pre style="margin:0;max-height:420px;overflow:auto;font-family:var(--font-m);font-size:11px;line-height:1.5;color:var(--muted);white-space:pre-wrap;word-break:break-word">'
+        + esc(JSON.stringify(fbDiag, null, 2)) + '</pre></div>';
+    }
+    if (!FB.state) {
+      h += '<div class="fn-ig-alert warn">⚙️ Aucune synchronisation Facebook n\'a encore tourné. Lance le cron <code>/api/facebook-sync-cron</code> depuis Vercel, ou attends 04:50 UTC.</div>';
+    } else if (last.ok === false) {
+      h += '<div class="fn-ig-alert">⚠️ Dernière synchronisation en échec : ' + esc(last.erreur || 'erreur inconnue') + '</div>';
+    } else if (last.tronque) {
+      h += '<div class="fn-ig-alert warn">⏳ Dernière synchronisation <strong>interrompue par le budget de temps</strong> — ' + fmtNum(last.reportees) + ' publication(s) reportée(s). Elles passeront en tête au prochain passage.</div>';
+    }
+    return h;
+  }
+
+  function fbRenderPosts() {
+    var arr = fbSorted();
+    var h = '<div class="fn-stage" style="padding-bottom:8px">';
+    h += '<div class="fn-stage-head"><div class="fn-stage-title">🗂 Publications — ' + arr.length + '</div>';
+    h += '<div class="fn-stage-note">GO = commentaires contenant le mot-clé, réponses comprises</div></div>';
+    if (!arr.length) {
+      h += '<div class="fn-empty">Aucune publication sur la période.</div></div>';
+      return h;
+    }
+
+    var tot = { reach: 0, impressions: 0, reactions: 0, comments: 0, goCount: 0, goLeads: 0, shares: 0, clicks: 0 };
+    arr.forEach(function (m) {
+      tot.reach += (m.reach || 0); tot.impressions += (m.impressions || 0);
+      tot.reactions += (m.reactions || 0); tot.comments += (m.comments || 0);
+      tot.goCount += (m.goCount || 0); tot.goLeads += (m.goLeads || 0);
+      tot.shares += (m.shares || 0); tot.clicks += (m.clicks || 0);
+    });
+
+    h += '<div class="fn-table-wrap"><table class="fn-igt"><thead><tr>';
+    FB_COLS.forEach(function (c) {
+      var actif = fbSort.key === c[0];
+      h += '<th class="' + c[2] + '" data-fbsort="' + c[0] + '">' + c[1] + (actif ? ' ' + (fbSort.dir === 1 ? '▲' : '▼') : '') + '</th>';
+    });
+    h += '</tr></thead><tbody>';
+
+    arr.forEach(function (m) {
+      h += '<tr>';
+      h += '<td class="l" style="white-space:nowrap;color:var(--muted)">' + esc(frDay(m.date)) + '</td>';
+      h += '<td class="l"><div class="fn-ig-post">';
+      h += m.thumbnailUrl
+        ? '<img class="fn-ig-thumb" src="' + escAttr(m.thumbnailUrl) + '" alt="" loading="lazy">'
+        : '<div class="fn-ig-thumb ph">' + (m.isVideo ? '🎬' : '📄') + '</div>';
+      h += '<div class="fn-ig-cap">';
+      h += m.permalink
+        ? '<a href="' + escAttr(m.permalink) + '" target="_blank" rel="noopener">' + esc(fbTexte(m)) + '</a>'
+        : '<span>' + esc(fbTexte(m)) + '</span>';
+      h += '<div class="sub"><span class="fn-ig-type ' + (m.isVideo ? 'reel' : 'feed') + '">' + (m.isVideo ? 'VIDÉO' : 'POST') + '</span></div>';
+      h += '</div></div></td>';
+      h += '<td>' + fmtNum(m.reach) + '</td>';
+      h += '<td>' + fmtNum(m.impressions) + '</td>';
+      h += '<td>' + fmtNum(m.reactions) + '</td>';
+      h += '<td>' + fmtNum(m.comments) + '</td>';
+      h += '<td class="fn-ig-go' + (m.goCount ? '' : ' zero') + '">' + (m.goCount == null ? '—' : fmtNum(m.goCount)) + '</td>';
+      h += '<td>' + fmtPct(fbVal(m, 'goRate'), 2) + '</td>';
+      h += '<td>' + (m.goLeads == null ? '—' : fmtNum(m.goLeads)) + '</td>';
+      h += '<td>' + fmtNum(m.shares) + '</td>';
+      h += '<td>' + fmtNum(m.clicks) + '</td>';
+      h += '<td>' + fmtPct(m.engagementRate) + '</td>';
+      h += '<td><button class="fn-ig-detbtn" data-fbdet="' + escAttr(m._id) + '">' + (fbOpen[m._id] ? '▲' : 'GO ▾') + '</button></td>';
+      h += '</tr>';
+      if (fbOpen[m._id]) h += fbDetailRow(m);
+    });
+
+    h += '<tr class="tot"><td class="l">Total</td><td class="l">' + arr.length + ' publication(s)</td>';
+    h += '<td>' + fmtNum(tot.reach) + '</td><td>' + fmtNum(tot.impressions) + '</td>';
+    h += '<td>' + fmtNum(tot.reactions) + '</td><td>' + fmtNum(tot.comments) + '</td>';
+    h += '<td class="fn-ig-go">' + fmtNum(tot.goCount) + '</td>';
+    h += '<td>' + fmtPct(tot.reach ? (tot.goCount / tot.reach) * 100 : null, 2) + '</td>';
+    h += '<td>' + fmtNum(tot.goLeads) + '</td><td>' + fmtNum(tot.shares) + '</td>';
+    h += '<td>' + fmtNum(tot.clicks) + '</td><td>—</td><td></td></tr>';
+    h += '</tbody></table></div></div>';
+    return h;
+  }
+
+  function fbDetailRow(m) {
+    var d = fbOpen[m._id];
+    var h = '<tr class="fn-ig-det"><td colspan="' + FB_COLS.length + '">';
+    if (d === 'loading') { h += 'Chargement des commentaires…'; }
+    else if (d && d.err) { h += '⚠️ ' + esc(d.err); }
+    else if (d && d.items) {
+      var go = d.items.filter(function (c) { return c.isGo; });
+      var nbRep = d.items.filter(function (c) { return c.isReply; }).length;
+      var anon = d.items.filter(function (c) { return !c.authorId; }).length;
+      var lu = d.items.length + ' commentaire(s) lu(s)'
+        + (nbRep ? ' dont ' + nbRep + ' réponse(s)' : '')
+        + (m.comments != null ? ' · Meta en annonce ' + fmtNum(m.comments) : '');
+      if (!go.length) {
+        h += 'Aucun « GO » sur cette publication — ' + lu + '.';
+      } else {
+        h += '<strong style="color:var(--text)">' + go.length + ' GO</strong> · ' + lu + ' · '
+          + go.filter(function (c) { return c.leadId; }).length + ' rattaché(s) à une fiche<div style="margin-top:8px">';
+        go.forEach(function (c) {
+          var lbl = c.authorName || 'anonyme';
+          h += c.leadId
+            ? '<span class="fn-ig-chip lead"><a href="sales-contact.html?id=' + encodeURIComponent(c.leadId) + '" target="_blank">' + esc(lbl) + '</a></span>'
+            : '<span class="fn-ig-chip">' + esc(lbl) + '</span>';
+        });
+        h += '</div>';
+      }
+      /* Restriction Meta de 2018 : l'identité d'un commentateur n'est
+         divulguée que s'il utilise l'application. Le dire évite de croire
+         à un bug de rattachement. */
+      if (anon) {
+        h += '<div style="margin-top:8px;font-size:11px;color:var(--muted2)">' + anon + ' commentaire(s) sans identité : Facebook ne divulgue le nom d\'un commentateur que s\'il utilise l\'application. Ils comptent dans les GO, mais ne peuvent être rattachés à aucune fiche.</div>';
+      }
+    }
+    h += '</td></tr>';
+    return h;
+  }
+
+  function fbBind() {
+    var root = $('#fnTabFb');
+    $$('th[data-fbsort]', root).forEach(function (th) {
+      th.onclick = function () {
+        var k = th.getAttribute('data-fbsort');
+        if (k === 'det') return;
+        if (fbSort.key === k) fbSort.dir = -fbSort.dir;
+        else { fbSort.key = k; fbSort.dir = -1; }
+        renderFacebook();
+      };
+    });
+    $$('button[data-fbdet]', root).forEach(function (b) {
+      b.onclick = function () {
+        var id = b.getAttribute('data-fbdet');
+        if (fbOpen[id]) { delete fbOpen[id]; renderFacebook(); return; }
+        fbOpen[id] = 'loading';
+        renderFacebook();
+        db.collection('fb_comments').where('postId', '==', id).limit(2000).get()
+          .then(function (snap) { fbOpen[id] = { items: snap.docs.map(function (d) { return d.data() || {}; }) }; })
+          .catch(function (e) { fbOpen[id] = { err: e.message }; })
+          .then(function () { if (activeTab === 'facebook') renderFacebook(); });
+      };
+    });
+    var bDiag = $('#fbDiagBtn', root);
+    if (bDiag) bDiag.onclick = function () {
+      fbDiag = 'loading';
+      renderFacebook();
+      var u = firebase.auth().currentUser;
+      if (!u) { fbDiag = { erreur: 'session expirée — recharge la page' }; renderFacebook(); return; }
+      u.getIdToken().then(function (tok) {
+        return fetch('/api/facebook-diagnostic', { headers: { Authorization: 'Bearer ' + tok } });
+      }).then(function (r) {
+        return r.json().catch(function () { return { erreur: 'réponse illisible (HTTP ' + r.status + ')' }; });
+      }).then(function (j) { fbDiag = j; })
+        .catch(function (e) { fbDiag = { erreur: e.message || String(e) }; })
+        .then(function () { if (activeTab === 'facebook') renderFacebook(); });
+    };
+    var bClose = $('#fbDiagClose', root);
+    if (bClose) bClose.onclick = function () { fbDiag = null; renderFacebook(); };
+    var bCopy = $('#fbDiagCopy', root);
+    if (bCopy) bCopy.onclick = function () {
+      var txt = JSON.stringify(fbDiag, null, 2);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(function () { toast('📋 Diagnostic copié'); })
+          .catch(function () { toast('Copie impossible — sélectionne le texte', true); });
+      } else toast('Copie impossible — sélectionne le texte', true);
+    };
   }
 
   /* ════════════════════════════════════════════════════════════════
@@ -2690,6 +3070,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     else if (activeTab === 'leads') renderLeads();
     else if (activeTab === 'ads') renderAds();
     else if (activeTab === 'instagram') renderInstagram();
+    else if (activeTab === 'facebook') renderFacebook();
     else if (activeTab === 'journal') renderJournal();
   }
 
@@ -2700,6 +3081,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     $('#fnTabLeads').style.display   = tab === 'leads'   ? '' : 'none';
     $('#fnTabAds').style.display     = tab === 'ads'     ? '' : 'none';
     $('#fnTabInsta').style.display   = tab === 'instagram' ? '' : 'none';
+    $('#fnTabFb').style.display      = tab === 'facebook'  ? '' : 'none';
     $('#fnTabJournal').style.display = tab === 'journal' ? '' : 'none';
     renderActiveTab();
   }
@@ -2720,6 +3102,8 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
        précédente, sans le dire. */
     igInvalidate();
     if (activeTab === 'instagram') renderInstagram();
+    fbInvalidate();
+    if (activeTab === 'facebook') renderFacebook();
     setSync('', 'Chargement ' + periodLabel() + '…');
     updateToolbar();
     $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';

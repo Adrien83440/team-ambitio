@@ -18,7 +18,7 @@
 //
 // Réponses
 //   200 { ok:true, mode, tunnel, month, day, from, to, months:[…],
-//         computedAt:<ms>, k, instagram, journal }
+//         computedAt:<ms>, k, instagram, facebook, journal }
 //   403 { ok:false }   ← token absent / faux / révoqué
 //   405 { ok:false }   ← autre verbe que GET
 //   500 { ok:false }
@@ -112,6 +112,21 @@ const AGENCY_IG_MEDIA_FIELDS = [
 const AGENCY_IG_ACCOUNT_FIELDS = [
   'date', 'followers', 'reach', 'views', 'profileViews',
   'websiteClicks', 'accountsEngaged', 'totalInteractions',
+];
+
+/* Facebook — même doctrine de liste blanche que pour Instagram, et pour la
+   même raison : fb_comments porte le NOM d'un commentateur et fb_dm_threads
+   celui d'un interlocuteur. Seules des mesures d'audience sortent. */
+const AGENCY_FB_POST_FIELDS = [
+  'date', 'timestamp', 'message', 'permalink', 'thumbnailUrl',
+  'isVideo', 'mediaType', 'statusType',
+  'reach', 'impressions', 'reactions', 'comments', 'shares', 'clicks',
+  'videoViews', 'totalInteractions', 'engagementRate',
+  'goCount', 'goUniques', 'goLeads',
+];
+const AGENCY_FB_PAGE_FIELDS = [
+  'date', 'followers', 'fans', 'fanCount',
+  'reach', 'impressions', 'engagements', 'pageViews',
 ];
 
 function pickFields(src, champs) {
@@ -223,6 +238,79 @@ async function loadInstagram(P) {
     /* Instagram ne doit jamais faire tomber la vue agence : le tunnel
        publicitaire, lui, est la raison d'être de cette page. */
     console.warn('[agency-funnel] instagram indisponible:', e && e.message);
+    return null;
+  }
+}
+
+/* Publications et audience de la Page. Aucune lecture de fb_comments :
+   le nom d'un commentateur ne sort pas. */
+async function loadFacebook(P) {
+  const a = Core.isoDate(P.start);
+  const b = Core.isoDate(P.end);
+  try {
+    const [snapPosts, snapPage, snapDm] = await Promise.all([
+      db.collection('fb_posts').where('date', '>=', a).where('date', '<=', b).limit(500).get(),
+      db.collection('fb_page_daily').where('date', '>=', a).where('date', '<=', b).limit(400).get(),
+      db.collection('fb_dm_threads').where('firstEventDate', '>=', a).where('firstEventDate', '<=', b).limit(3000).get(),
+    ]);
+
+    const posts = snapPosts.docs
+      .map((d) => pickFields(d.data() || {}, AGENCY_FB_POST_FIELDS))
+      .sort((x, y) => String(y.timestamp || y.date || '').localeCompare(String(x.timestamp || x.date || '')));
+
+    const jours = snapPage.docs
+      .map((d) => pickFields(d.data() || {}, AGENCY_FB_PAGE_FIELDS))
+      .sort((x, y) => String(x.date || '').localeCompare(String(y.date || '')));
+
+    const tot = { reach: 0, impressions: 0, engagements: 0, pageViews: 0 };
+    let fin = null;
+    let debut = null;
+    jours.forEach((d) => {
+      Object.keys(tot).forEach((f) => { tot[f] += Number(d[f]) || 0; });
+      const f = d.followers != null ? d.followers : (d.fans != null ? d.fans : null);
+      if (f != null) { if (debut === null) debut = f; fin = f; }
+    });
+
+    /* Messenger — agrégats seulement, calculés ici : fb_dm_threads porte le
+       nom de l'interlocuteur et parfois celui du lead rattaché, et aucun de
+       ces documents ne sort. Seuls des nombres traversent. */
+    const dm = { conversations: snapDm.size, sortants: 0, entrants: 0,
+                 initiesNous: 0, repondus: 0, tauxReponse: null,
+                 delaiMedianMs: null, initiesEux: 0, notreDelaiMedianMs: null,
+                 rattacheesFiche: 0 };
+    const d1 = [];
+    const d2 = [];
+    snapDm.forEach((doc) => {
+      const t = doc.data() || {};
+      dm.sortants += Number(t.outboundCount) || 0;
+      dm.entrants += Number(t.inboundCount) || 0;
+      if (t.leadId) dm.rattacheesFiche++;
+      if (t.initiatedBy === 'us') {
+        dm.initiesNous++;
+        if (t.replied === true) {
+          dm.repondus++;
+          if (t.responseDelayMs != null) d1.push(Number(t.responseDelayMs));
+        }
+      } else if (t.initiatedBy === 'them') {
+        dm.initiesEux++;
+        if (t.ourReplyDelayMs != null) d2.push(Number(t.ourReplyDelayMs));
+      }
+    });
+    if (dm.initiesNous > 0) dm.tauxReponse = (dm.repondus / dm.initiesNous) * 100;
+    dm.delaiMedianMs = mediane(d1);
+    dm.notreDelaiMedianMs = mediane(d2);
+
+    return JSON.parse(JSON.stringify({
+      jours: jours.length,
+      page: Object.assign({}, tot, {
+        followers: fin,
+        followersDelta: (debut !== null && fin !== null && jours.length > 1) ? fin - debut : null,
+      }),
+      publications: posts,
+      dm: dm,
+    }));
+  } catch (e) {
+    console.warn('[agency-funnel] facebook indisponible:', e && e.message);
     return null;
   }
 }
@@ -362,10 +450,11 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const [loaded, instagram, instagramDm] = await Promise.all([
+    const [loaded, instagram, instagramDm, facebook] = await Promise.all([
       loadPeriodData(P),
       loadInstagram(P),
       loadInstagramDm(P),
+      loadFacebook(P),
     ]);
     if (instagram) instagram.dm = instagramDm;
     const k = Core.computeKpis({
@@ -389,6 +478,7 @@ module.exports = async (req, res) => {
       computedAt: Date.now(),
       k: sanitizeK(k),
       instagram: instagram,
+      facebook: facebook,
       journal: sanitizeJournal(loaded.DATA.journalPeriod),
     });
   } catch (e) {

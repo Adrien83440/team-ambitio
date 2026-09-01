@@ -362,6 +362,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += renderLeads(k);
     h += renderProfit(k);
     h += renderInstagram(data.instagram);
+    h += renderFacebook(data.facebook);
     h += renderJournal(data.journal || []);
 
     h += '<div class="ag-foot">Vue agence en lecture seule — Alteore. Chiffres calculés à la demande sur le tunnel interne (pub → opt-in → leads → RDV → closing).<br>Aucune donnée nominative n\'est exposée sur cette page.</div>';
@@ -750,6 +751,102 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
       h += '<div class="ag-stage-note" style="margin-top:8px">Les ' + top.length + ' publications les plus vues sont détaillées ; le total porte sur les ' + arr.length + '.</div>';
     }
     h += '<div class="ag-stage-note" style="margin-top:8px"><strong>GO</strong> = nombre de commentaires contenant le mot-clé de l\'appel à l\'action, réponses comprises ; les commentaires du compte lui-même ne sont pas comptés. <strong>GO ↔ contact</strong> = ceux dont l\'auteur est déjà une fiche dans le CRM — l\'écart entre les deux colonnes est le volume de prise de contact restant à faire.</div>';
+    h += '</div>';
+    return h;
+  }
+
+  /* ── 7. Facebook ──
+     Section distincte d'Instagram, et pas par commodité : la portée
+     Facebook et la portée Instagram ne se définissent pas de la même
+     façon. Les additionner donnerait un total d'apparence solide et de
+     sens nul. Ici comme ailleurs, aucun nom de commentateur ni contenu de
+     message ne transite — l'API ne les envoie pas. */
+  function renderFacebook(fb) {
+    if (!fb || !fb.publications || !fb.publications.length) return '';
+    var p = fb.page || {};
+    var h = stageOpen('📘', 'Facebook', fb.publications.length + ' publication(s) · '
+      + (fb.jours || 0) + ' jour(s) de mesure d\'audience');
+
+    h += '<div class="ag-grid">';
+    h += kpi(fmtNum(p.followers), 'Abonnés',
+             p.followersDelta != null ? ((p.followersDelta >= 0 ? '+' : '') + fmtNum(p.followersDelta) + ' sur la période') : null,
+             p.followers == null);
+    h += kpi(fmtNum(p.reach || null), 'Portée cumulée', 'personnes touchées / jour', !p.reach);
+    h += kpi(fmtNum(p.impressions || null), 'Impressions', 'affichages, doublons inclus', !p.impressions);
+    h += kpi(fmtNum(p.engagements || null), 'Engagements', 'clics, réactions, commentaires', !p.engagements);
+    h += kpi(fmtNum(p.pageViews || null), 'Vues de la Page', null, !p.pageViews);
+    h += '</div>';
+    h += '<div class="ag-stage-note" style="margin-top:10px">⚠️ <strong>Portée</strong> et <strong>impressions</strong> ne se confondent pas : la première compte des personnes, la seconde des affichages. Et aucune des deux ne se compare à celles d\'Instagram, qui ne les définit pas pareil.</div>';
+
+    var dm = fb.dm;
+    if (dm && dm.conversations) {
+      h += '<div class="ag-stage-note" style="margin-top:16px;color:var(--text);font-weight:700">💬 Messenger</div>';
+      h += '<div class="ag-grid" style="margin-top:8px">';
+      h += kpi(dm.initiesNous ? fmtPct(dm.tauxReponse) : '—', 'Taux de réponse',
+               dm.repondus + ' / ' + dm.initiesNous + ' conversations ouvertes par nous', !dm.initiesNous);
+      h += kpi(fmtNum(dm.sortants || null), 'Messages envoyés', null, !dm.sortants);
+      h += kpi(fmtNum(dm.entrants || null), 'Messages reçus', null, !dm.entrants);
+      h += kpi(fmtDelay(dm.delaiMedianMs), 'Délai médian de réponse', 'côté prospect', dm.delaiMedianMs == null);
+      h += kpi(fmtNum(dm.initiesEux || null), 'Conversations entrantes', 'ouvertes par le prospect', !dm.initiesEux);
+      h += kpi(fmtDelay(dm.notreDelaiMedianMs), 'Notre délai de réponse', 'sur les conversations entrantes', dm.notreDelaiMedianMs == null);
+      h += kpi(fmtNum(dm.rattacheesFiche || null), 'Devenues un contact',
+               dm.conversations ? fmtPct(dm.rattacheesFiche / dm.conversations * 100, 0) + ' des conversations' : null,
+               !dm.rattacheesFiche);
+      h += '</div>';
+    }
+
+    var arr = fb.publications.slice().sort(function (x, y) {
+      return (Number(y.reach) || 0) - (Number(x.reach) || 0);
+    });
+    var top = arr.slice(0, 25);
+
+    h += '<div class="ag-table-wrap" style="margin-top:12px"><table class="ag-table"><thead><tr>';
+    h += '<th>Publiée</th><th>Publication</th><th class="num">Portée</th><th class="num">Impr.</th>';
+    h += '<th class="num">Réactions</th><th class="num">Comm.</th><th class="num">GO</th>';
+    h += '<th class="num">GO ↔ contact</th><th class="num">Partages</th><th class="num">Clics</th><th class="num">Engag.</th>';
+    h += '</tr></thead><tbody>';
+
+    var tot = { reach: 0, impressions: 0, reactions: 0, comments: 0, go: 0, goLeads: 0, shares: 0, clicks: 0 };
+    arr.forEach(function (m) {
+      tot.reach += (Number(m.reach) || 0); tot.impressions += (Number(m.impressions) || 0);
+      tot.reactions += (Number(m.reactions) || 0); tot.comments += (Number(m.comments) || 0);
+      tot.go += (Number(m.goCount) || 0); tot.goLeads += (Number(m.goLeads) || 0);
+      tot.shares += (Number(m.shares) || 0); tot.clicks += (Number(m.clicks) || 0);
+    });
+
+    top.forEach(function (m) {
+      var cap = (m.message || '').replace(/\s+/g, ' ').trim();
+      if (cap.length > 58) cap = cap.slice(0, 58) + '…';
+      if (!cap) cap = '(sans texte)';
+      h += '<tr>';
+      h += '<td style="white-space:nowrap;color:var(--muted)">' + esc(frDay(m.date)) + '</td>';
+      h += '<td>' + (m.permalink
+        ? '<a href="' + esc(m.permalink) + '" target="_blank" rel="noopener noreferrer" style="color:var(--text);text-decoration:none">' + esc(cap) + '</a>'
+        : esc(cap))
+        + ' <span style="font-size:9px;font-weight:700;color:var(--muted2)">' + (m.isVideo ? 'VIDÉO' : 'POST') + '</span></td>';
+      h += '<td class="num">' + fmtNum(m.reach) + '</td>';
+      h += '<td class="num">' + fmtNum(m.impressions) + '</td>';
+      h += '<td class="num">' + fmtNum(m.reactions) + '</td>';
+      h += '<td class="num">' + fmtNum(m.comments) + '</td>';
+      h += '<td class="num" style="font-weight:700">' + (m.goCount == null ? '—' : fmtNum(m.goCount)) + '</td>';
+      h += '<td class="num">' + (m.goLeads == null ? '—' : fmtNum(m.goLeads)) + '</td>';
+      h += '<td class="num">' + fmtNum(m.shares) + '</td>';
+      h += '<td class="num">' + fmtNum(m.clicks) + '</td>';
+      h += '<td class="num">' + fmtPct(m.engagementRate) + '</td>';
+      h += '</tr>';
+    });
+
+    h += '<tr style="border-top:2px solid var(--border2);font-weight:700;background:var(--bg3)">';
+    h += '<td>Total</td><td>' + arr.length + ' publication(s)</td>';
+    h += '<td class="num">' + fmtNum(tot.reach) + '</td><td class="num">' + fmtNum(tot.impressions) + '</td>';
+    h += '<td class="num">' + fmtNum(tot.reactions) + '</td><td class="num">' + fmtNum(tot.comments) + '</td>';
+    h += '<td class="num">' + fmtNum(tot.go) + '</td><td class="num">' + fmtNum(tot.goLeads) + '</td>';
+    h += '<td class="num">' + fmtNum(tot.shares) + '</td><td class="num">' + fmtNum(tot.clicks) + '</td><td class="num">—</td>';
+    h += '</tr></tbody></table></div>';
+
+    if (arr.length > top.length) {
+      h += '<div class="ag-stage-note" style="margin-top:8px">Les ' + top.length + ' publications les plus vues sont détaillées ; le total porte sur les ' + arr.length + '.</div>';
+    }
     h += '</div>';
     return h;
   }

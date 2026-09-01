@@ -841,6 +841,59 @@ service cloud.firestore {
     }
 
 
+    // ═══ FACEBOOK — Page, publications, commentaires, Messenger ═══
+    // (01/09/2026) Alimente l'onglet 📘 Facebook du Funnel Sales.
+    //
+    // Écrit UNIQUEMENT côté serveur — api/facebook-sync-cron.js (cron
+    // quotidien, qui fait autorité) et api/facebook-webhook.js (temps réel,
+    // qui ne fait que tenir l'écran à jour entre deux passages), tous deux
+    // via l'Admin SDK. Le client ne fait que lire.
+    //
+    // Rappel : les rules ne cascadent JAMAIS. Chaque collection a son bloc.
+
+    // 1 doc / jour : fb_page_daily/{YYYY-MM-DD}. Portée, impressions,
+    // engagements, vues de la Page, abonnés.
+    match /fb_page_daily/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // 1 doc / publication : fb_posts/{postId} — dernier état connu.
+    match /fb_posts/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // 1 doc / publication / jour : fb_post_daily/{postId}_{YYYY-MM-DD}.
+    match /fb_post_daily/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // 1 doc / commentaire : fb_comments/{commentId}, avec le drapeau `isGo`.
+    // `filter=stream` rend les réponses à plat : un GO écrit en réponse est
+    // ici un document comme un autre.
+    match /fb_comments/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // 1 doc / conversation Messenger : fb_dm_threads/{conversationId}.
+    // Contrairement à Instagram, l'historique est rattrapable : ces
+    // documents ne dépendent pas du seul webhook pour exister.
+    match /fb_dm_threads/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // 1 doc / message Messenger : fb_dm_events/{messageId}. Journal brut,
+    // garant de l'idempotence quand Meta rejoue un webhook.
+    match /fb_dm_events/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+
     // ═══ MARKETING JOURNAL — tableau d'actions marketing (Funnel) ═══
     // Journal « telle date, tel changement » : consigné et lu depuis
     // sales-funnel.html (admin only).
