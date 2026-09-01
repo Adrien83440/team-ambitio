@@ -361,8 +361,16 @@ module.exports = async (req, res) => {
   }
 
   const q = req.query || {};
-  const days = Math.max(1, Math.min(90, parseInt(q.days, 10) || 3));
-  const mediaDays = Math.max(1, Math.min(400, parseInt(q.mediaDays, 10) || 30));
+  /* days : 30 par défaut. Meta ne sert les statistiques JOUR du compte que
+     sur ~30 jours glissants — les redemander toutes les nuits ne coûte
+     qu'une poignée d'appels et rattrape automatiquement tout trou laissé par
+     une nuit en échec. Un défaut à 3 laissait ces trous définitifs.
+     mediaDays : 60 le temps du rattrapage initial des deux derniers mois,
+     à repasser à 30 ensuite (au-delà d'un mois, les compteurs d'un post ne
+     bougent quasiment plus, et 120 publications par nuit frôlent le budget
+     de temps de la fonction). */
+  const days = Math.max(1, Math.min(90, parseInt(q.days, 10) || 30));
+  const mediaDays = Math.max(1, Math.min(400, parseInt(q.mediaDays, 10) || 60));
   const avecCommentaires = String(q.comments || '1') !== '0';
 
   const rapport = {

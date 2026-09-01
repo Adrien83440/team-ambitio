@@ -2068,8 +2068,9 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
 
     /* ── Compte ── */
     h += '<div class="fn-stage">';
+    var joursPeriode = Math.round((P.end - P.start) / 86400000) + 1;
     h += '<div class="fn-stage-head"><div class="fn-stage-title">📸 Compte — ' + esc(periodLabel()) + '</div>';
-    h += '<div class="fn-stage-note">' + acc.jours + ' jour(s) de snapshot · source API Instagram</div></div>';
+    h += '<div class="fn-stage-note">' + acc.jours + ' jour(s) de snapshot sur ' + joursPeriode + ' · source API Instagram</div></div>';
     h += '<div class="fn-grid">';
     h += igKpi(acc.followersFin == null ? '—' : fmtNum(acc.followersFin), 'Abonnés',
                acc.followersDelta == null ? 'photo du jour' : (acc.followersDelta >= 0 ? '+' : '') + fmtNum(acc.followersDelta) + ' sur la période');
@@ -2079,6 +2080,12 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += igKpi(fmtNum(acc.websiteClicks), 'Clics lien en bio', '');
     h += igKpi(fmtNum(acc.totalInteractions), 'Interactions', 'likes + comm. + saves + partages');
     h += '</div>';
+    /* Un total sur 3 jours affiché sous un titre « 30 jours » est un
+       mensonge par omission : le chiffre est juste, la période ne l'est pas.
+       On le dit avant que quelqu'un en tire une conclusion. */
+    if (acc.jours < joursPeriode) {
+      h += '<div class="fn-ig-alert warn" style="margin-top:10px">📅 Ces totaux ne couvrent que <strong>' + acc.jours + ' jour(s)</strong> sur les ' + joursPeriode + ' de la période : le reste n\'a pas encore été synchronisé. Meta ne conserve les statistiques <em>jour</em> du compte que ~30 jours en arrière — au-delà, elles sont définitivement perdues. Les publications, elles, sont complètes.</div>';
+    }
     h += '<div class="fn-stage-note" style="margin-top:10px">⚠️ La <strong>portée cumulée</strong> additionne des portées quotidiennes déjà dédupliquées jour par jour : une même personne touchée trois jours de suite y compte trois fois. À lire comme un volume d\'exposition, jamais comme un nombre de personnes.</div>';
     h += '</div>';
 
@@ -2629,8 +2636,15 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     adsDraft = {};
     /* L'onglet Instagram a ses propres sources et son propre chargement
        paresseux : changer de période l'invalide, il se rechargera à sa
-       prochaine ouverture — pas avant. */
+       prochaine ouverture — pas avant.
+       S'il est DÉJÀ à l'écran, on le relance tout de suite, sans attendre la
+       fin du chargement du funnel. Deux raisons : ses sources n'ont rien à
+       voir (aucune donnée à partager, donc rien à attendre), et surtout le
+       re-rendu ne doit pas dépendre du succès de `FC.loadAll` — sinon une
+       erreur sur le funnel fige l'onglet Instagram sur la période
+       précédente, sans le dire. */
     igInvalidate();
+    if (activeTab === 'instagram') renderInstagram();
     setSync('', 'Chargement ' + periodLabel() + '…');
     updateToolbar();
     $('#fnTabFunnel').innerHTML = '<div class="fn-loading">Chargement du funnel — ' + esc(periodLabel()) + '…</div>';
