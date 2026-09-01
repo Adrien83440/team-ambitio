@@ -262,6 +262,34 @@ module.exports = async (req, res) => {
       if (!aRecu) out.ok = false;
     }
 
+    // ─── 4 bis. Messagerie — le webhook a-t-il déjà parlé ? ───────────
+    // Les DM n'ont aucun rattrapage possible : si le webhook n'est pas
+    // branché, il ne se passe RIEN et l'écran affiche des zéros parfaitement
+    // silencieux. Compter ce qui est arrivé est le seul moyen de distinguer
+    // « personne n'écrit » de « rien n'est branché ».
+    try {
+      const [snapEv, snapTh] = await Promise.all([
+        db.collection('ig_dm_events').orderBy('timestampMs', 'desc').limit(1).get(),
+        db.collection('ig_dm_threads').limit(1).get(),
+      ]);
+      const dernier = snapEv.empty ? null : (snapEv.docs[0].data() || {});
+      out.etapes.dm = {
+        ok: true,
+        aRecuDesEvenements: !snapEv.empty,
+        conversations: snapTh.empty ? 0 : 'au moins 1',
+        dernierEvenement: dernier ? {
+          date: dernier.date || null,
+          quand: dernier.timestampMs ? new Date(dernier.timestampMs).toISOString() : null,
+          direction: dernier.direction || null,
+        } : null,
+        verdict: snapEv.empty
+          ? 'aucun événement reçu — le webhook Meta n\'est pas branché (champ `messages`), ou les outils connectés ne sont pas autorisés dans l\'app Instagram'
+          : 'le webhook reçoit bien les messages',
+      };
+    } catch (e) {
+      out.etapes.dm = { ok: false, erreur: extraitErreur(e) };
+    }
+
     // ─── 5. Ce que la base a retenu ───────────────────────────────────
     try {
       const snapState = await db.collection('_config').doc('instagram_sync_state').get();
