@@ -2436,6 +2436,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
 
   function fbComputePage() {
     var o = { impressions: 0, reach: 0, engagements: 0, pageViews: 0,
+              videoViews: 0, nouveauxAbonnes: 0,
               followersFin: null, followersDelta: null, jours: FB.page.length };
     var premier = null;
     FB.page.forEach(function (d) {
@@ -2443,6 +2444,8 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       o.reach += (d.reach || 0);
       o.engagements += (d.engagements || 0);
       o.pageViews += (d.pageViews || 0);
+      o.videoViews += (d.videoViews || 0);
+      o.nouveauxAbonnes += (d.nouveauxAbonnes || 0);
       var f = d.followers != null ? d.followers : (d.fans != null ? d.fans : null);
       if (f != null) { if (premier === null) premier = f; o.followersFin = f; }
     });
@@ -2477,7 +2480,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
 
   var FB_COLS = [
     ['date', 'Publié', 'l'], ['post', 'Publication', 'l'],
-    ['reach', 'Portée', ''], ['impressions', 'Impressions', ''],
+    ['reach', 'Portée', ''], ['impressions', 'Vues', ''],
     ['reactions', 'Réactions', ''], ['comments', 'Comm.', ''],
     ['goCount', 'GO', ''], ['goRate', 'GO / portée', ''], ['goLeads', 'GO ↔ fiche', ''],
     ['shares', 'Partages', ''], ['clicks', 'Clics', ''],
@@ -2541,15 +2544,19 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += '<div class="fn-grid">';
     h += socialKpi(pg.followersFin == null ? '—' : fmtNum(pg.followersFin), 'Abonnés',
                    pg.followersDelta == null ? 'photo du jour' : (pg.followersDelta >= 0 ? '+' : '') + fmtNum(pg.followersDelta) + ' sur la période');
-    h += socialKpi(fmtNum(pg.reach), 'Portée cumulée', 'personnes touchées / jour');
-    h += socialKpi(fmtNum(pg.impressions), 'Impressions', 'affichages, doublons inclus');
+    h += socialKpi(pg.nouveauxAbonnes ? '+' + fmtNum(pg.nouveauxAbonnes) : '—', 'Nouveaux abonnés', 'sur la période');
+    h += socialKpi(fmtNum(pg.videoViews), 'Vues vidéo', 'toutes publications');
     h += socialKpi(fmtNum(pg.engagements), 'Engagements', 'clics, réactions, commentaires');
     h += socialKpi(fmtNum(pg.pageViews), 'Vues de la Page', '');
+    /* Portée et impressions ne s'affichent QUE si Meta les sert encore.
+       Une carte vide en permanence ferait croire à une panne. */
+    if (pg.reach) h += socialKpi(fmtNum(pg.reach), 'Portée cumulée', 'personnes touchées / jour');
+    if (pg.impressions) h += socialKpi(fmtNum(pg.impressions), 'Impressions', 'affichages, doublons inclus');
     h += '</div>';
     if (pg.jours < joursPeriode) {
       h += '<div class="fn-ig-alert warn" style="margin-top:10px">📅 Ces totaux ne couvrent que <strong>' + pg.jours + ' jour(s)</strong> sur les ' + joursPeriode + ' de la période : le reste n\'a pas encore été synchronisé.</div>';
     }
-    h += '<div class="fn-stage-note" style="margin-top:10px">⚠️ <strong>Portée</strong> et <strong>impressions</strong> ne se confondent pas : la portée compte des personnes, les impressions comptent des affichages. Et ni l\'une ni l\'autre ne se compare à celles d\'Instagram, qui ne les définit pas pareil — d\'où deux onglets et jamais un total commun.</div>';
+    h += '<div class="fn-stage-note" style="margin-top:10px">📉 <strong>La portée de Page n\'existe plus.</strong> Meta a supprimé 85 métriques de portée et d\'impressions le 15/06/2026, sans remplaçante au niveau de la Page — les vues vidéo sont le seul volume d\'exposition encore servi. Au niveau des publications, en revanche, la portée est bien là. Rien de tout cela ne se compare à Instagram, qui ne définit rien pareil : d\'où deux onglets et jamais un total commun.</div>';
     h += '</div>';
 
     /* ── Messenger ── */

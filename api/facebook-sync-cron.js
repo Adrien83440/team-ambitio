@@ -76,12 +76,19 @@ const CANDIDATS_POST = [
   'post_engaged_users',
 ];
 const CANDIDATS_PAGE = [
+  /* Les trois premières sont les remplaçantes réelles, découvertes par le
+     diagnostic du 01/09/2026 : page_fans, page_impressions et
+     page_impressions_unique sont refusées depuis le 15/06/2026, et la
+     documentation ne nommait pas leurs successeurs. */
+  'page_follows',            // total d'abonnés — remplace page_fans
+  'page_daily_follows',      // nouveaux abonnés du jour
+  'page_video_views',        // le seul volume d'exposition encore servi
   'page_views_total',
   'page_post_engagements',
-  'page_impressions_unique',
-  'page_impressions',
-  'page_fans',
   'page_total_actions',
+  'page_impressions_unique', // conservées : elles peuvent revenir, et une
+  'page_impressions',        // Page plus ancienne les sert peut-être encore
+  'page_fans',
 ];
 
 /**
@@ -197,13 +204,17 @@ async function syncPage(creds, jours, ecrivain, rapport, deadline, metriques) {
     const doc = {
       date: jour,
       pageId: creds.pageId,
-      /* Noms flottants côté Meta : on prend le premier servi. */
+      /* Noms flottants côté Meta : on prend le premier servi, et on laisse
+         null plutôt que d'inventer un équivalent. La portée Page n'existe
+         tout simplement plus — c'est une information, pas un trou à combler. */
       impressions: m.page_impressions != null ? m.page_impressions : null,
-      reach: m.page_impressions_unique != null ? m.page_impressions_unique
-             : (m.page_total_actions != null ? null : null),
+      reach: m.page_impressions_unique != null ? m.page_impressions_unique : null,
+      videoViews: m.page_video_views != null ? m.page_video_views : null,
+      nouveauxAbonnes: m.page_daily_follows != null ? m.page_daily_follows : null,
       engagements: m.page_post_engagements != null ? m.page_post_engagements : null,
       pageViews: m.page_views_total != null ? m.page_views_total : null,
-      fans: m.page_fans != null ? m.page_fans : null,
+      fans: m.page_follows != null ? m.page_follows
+            : (m.page_fans != null ? m.page_fans : null),
       source: 'api',
       syncedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
@@ -585,18 +596,34 @@ module.exports = async (req, res) => {
         break;
       }
       const p = ordre[i];
+      /* UN LOT, PUIS DEUX REPLIS.
+         Meta valide les métriques publication par publication : une seule
+         refusée fait échouer TOUT l'appel, donc les cinq. Un Reel n'expose
+         pas ce qu'expose une photo, et le lot mémorisé — pourtant correct —
+         revenait vide sur une bonne partie des publications. D'où la
+         dégradation : le lot complet, puis le lot sans les métriques vidéo,
+         puis la portée seule. Elle est la seule dont l'absence viderait le
+         tableau de son sens. */
       let ins = {};
       if (metriquesPost.length) {
-        try {
-          const json = await FB.graphGet(p.id + '/insights', { metric: metriquesPost.join(',') }, creds);
-          ins = aplatirInsights(Array.isArray(json.data) ? json.data : []);
-          rapport.postsInsights++;
-        } catch (e) {
-          if (e.metaCode === 190) throw e;
-          /* Une publication peut refuser une métrique que d'autres acceptent
-             (un Reel n'expose pas ce qu'expose une photo). On ne relance pas
-             la découverte pour autant : elle coûterait un appel par candidate
-             sur chaque publication récalcitrante. */
+        const sansVideo = metriquesPost.filter(function (x) {
+          return x.indexOf('video') < 0 && x.indexOf('reels') < 0;
+        });
+        const essais = [metriquesPost];
+        if (sansVideo.length && sansVideo.length !== metriquesPost.length) essais.push(sansVideo);
+        if (metriquesPost.indexOf('post_total_media_view_unique') >= 0) essais.push(['post_total_media_view_unique']);
+
+        for (let ei = 0; ei < essais.length; ei++) {
+          try {
+            const json = await FB.graphGet(p.id + '/insights', { metric: essais[ei].join(',') }, creds);
+            ins = aplatirInsights(Array.isArray(json.data) ? json.data : []);
+            rapport.postsInsights++;
+            if (ei > 0) rapport.postsInsightsDegrades = (rapport.postsInsightsDegrades || 0) + 1;
+            break;
+          } catch (e) {
+            if (e.metaCode === 190) throw e;
+            if (ei === essais.length - 1) rapport.postsSansInsights = (rapport.postsSansInsights || 0) + 1;
+          }
         }
       }
 
@@ -612,7 +639,8 @@ module.exports = async (req, res) => {
          reste que le compteur de lectures. */
       const impressions = ins.post_views != null ? ins.post_views
                         : (ins.post_impressions != null ? ins.post_impressions
-                        : (ins.blue_reels_play_count != null ? ins.blue_reels_play_count : null));
+                        : (ins.post_video_views != null ? ins.post_video_views
+                        : (ins.blue_reels_play_count != null ? ins.blue_reels_play_count : null)));
       const interactions = reactions + commentsCount + partages;
       const media = p.attachments && p.attachments.data && p.attachments.data[0]
         ? (p.attachments.data[0].media_type || p.attachments.data[0].type || null) : null;

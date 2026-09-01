@@ -771,12 +771,13 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += kpi(fmtNum(p.followers), 'Abonnés',
              p.followersDelta != null ? ((p.followersDelta >= 0 ? '+' : '') + fmtNum(p.followersDelta) + ' sur la période') : null,
              p.followers == null);
-    h += kpi(fmtNum(p.reach || null), 'Portée cumulée', 'personnes touchées / jour', !p.reach);
-    h += kpi(fmtNum(p.impressions || null), 'Impressions', 'affichages, doublons inclus', !p.impressions);
+    h += kpi(p.nouveauxAbonnes ? '+' + fmtNum(p.nouveauxAbonnes) : '—', 'Nouveaux abonnés', 'sur la période', !p.nouveauxAbonnes);
+    h += kpi(fmtNum(p.videoViews || null), 'Vues vidéo', 'toutes publications', !p.videoViews);
     h += kpi(fmtNum(p.engagements || null), 'Engagements', 'clics, réactions, commentaires', !p.engagements);
     h += kpi(fmtNum(p.pageViews || null), 'Vues de la Page', null, !p.pageViews);
+    if (p.reach) h += kpi(fmtNum(p.reach), 'Portée cumulée', 'personnes touchées / jour', false);
     h += '</div>';
-    h += '<div class="ag-stage-note" style="margin-top:10px">⚠️ <strong>Portée</strong> et <strong>impressions</strong> ne se confondent pas : la première compte des personnes, la seconde des affichages. Et aucune des deux ne se compare à celles d\'Instagram, qui ne les définit pas pareil.</div>';
+    h += '<div class="ag-stage-note" style="margin-top:10px">📉 <strong>La portée de Page n\'existe plus</strong> : Meta a supprimé 85 métriques de portée et d\'impressions le 15/06/2026, sans remplaçante à ce niveau. Les vues vidéo sont le seul volume d\'exposition encore servi. Au niveau des publications, la portée est bien là. Rien de tout cela ne se compare à Instagram, qui ne définit rien pareil.</div>';
 
     var dm = fb.dm;
     if (dm && dm.conversations) {
@@ -801,7 +802,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     var top = arr.slice(0, 25);
 
     h += '<div class="ag-table-wrap" style="margin-top:12px"><table class="ag-table"><thead><tr>';
-    h += '<th>Publiée</th><th>Publication</th><th class="num">Portée</th><th class="num">Impr.</th>';
+    h += '<th>Publiée</th><th>Publication</th><th class="num">Portée</th><th class="num">Vues</th>';
     h += '<th class="num">Réactions</th><th class="num">Comm.</th><th class="num">GO</th>';
     h += '<th class="num">GO ↔ contact</th><th class="num">Partages</th><th class="num">Clics</th><th class="num">Engag.</th>';
     h += '</tr></thead><tbody>';

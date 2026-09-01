@@ -127,6 +127,7 @@ const AGENCY_FB_POST_FIELDS = [
 const AGENCY_FB_PAGE_FIELDS = [
   'date', 'followers', 'fans', 'fanCount',
   'reach', 'impressions', 'engagements', 'pageViews',
+  'videoViews', 'nouveauxAbonnes',
 ];
 
 function pickFields(src, champs) {
@@ -262,7 +263,8 @@ async function loadFacebook(P) {
       .map((d) => pickFields(d.data() || {}, AGENCY_FB_PAGE_FIELDS))
       .sort((x, y) => String(x.date || '').localeCompare(String(y.date || '')));
 
-    const tot = { reach: 0, impressions: 0, engagements: 0, pageViews: 0 };
+    const tot = { reach: 0, impressions: 0, engagements: 0, pageViews: 0,
+                  videoViews: 0, nouveauxAbonnes: 0 };
     let fin = null;
     let debut = null;
     jours.forEach((d) => {
