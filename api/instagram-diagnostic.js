@@ -93,7 +93,17 @@ module.exports = async (req, res) => {
     // debug_token vit sur graph.facebook.com et exige appId + appSecret ;
     // si l'un manque, on le dit plutôt que d'échouer en silence.
     try {
-      if (!creds.appId || !creds.appSecret) {
+      if (creds.authMode !== 'facebook') {
+        /* debug_token vit sur graph.facebook.com et ne sait valider que des
+           jetons Facebook. Un jeton Instagram Login (IGAA…) y produit un 190
+           « Invalid OAuth access token signature » qui ne dit RIEN des
+           permissions — un faux négatif pire qu'une absence de réponse.
+           Les scopes se lisent alors dans le tableau de bord Meta. */
+        out.etapes.permissions = {
+          ok: false,
+          raison: 'scopes non lisibles par l\'API en authMode "instagram" — debug_token ne valide que les jetons Facebook. Voir le test comments ci-dessous, qui tranche aussi bien.',
+        };
+      } else if (!creds.appId || !creds.appSecret) {
         out.etapes.permissions = {
           ok: false,
           raison: 'appId et/ou appSecret absents de _config/instagram_credentials — scopes non vérifiables',
@@ -206,13 +216,48 @@ module.exports = async (req, res) => {
             goDetectes: echantillon.filter((x) => x.estGo).length,
             echantillon: echantillon.slice(0, 25),
           });
-          break;  // la première forme qui passe suffit
+          /* Ne s'arrêter QUE si la forme a réellement ramené quelque chose.
+             Une réponse vide sans erreur est le symptôme central de ce
+             problème : s'arrêter là laisserait la forme suivante — celle
+             qui marche peut-être — jamais essayée. */
+          if (data.length > 0) break;
         } catch (e) {
           out.etapes.commentaires.essais.push({ forme: formes[i][0], ok: false, erreur: extraitErreur(e) });
         }
       }
-      out.etapes.commentaires.ok = out.etapes.commentaires.essais.some((x) => x.ok);
-      if (!out.etapes.commentaires.ok) out.ok = false;
+      /* Deuxième voie d'accès : le champ `comments` demandé directement sur
+         la publication, au lieu de l'edge. Meta ne les gate pas toujours de
+         la même manière — quand l'edge rend du vide en silence, ce chemin
+         renvoie parfois l'erreur explicite qui nomme la permission
+         manquante. Deux portes valent mieux qu'une devinette. */
+      try {
+        const r2 = await IG.graphGet(String(cible.id), {
+          fields: 'id,comments_count,comments.limit(5){id,text,username}',
+        }, creds);
+        const d2 = r2.comments && Array.isArray(r2.comments.data) ? r2.comments.data : null;
+        out.etapes.commentaires.champImbrique = {
+          ok: true,
+          champPresent: d2 !== null,
+          recus: d2 ? d2.length : 0,
+          textes: d2 ? d2.slice(0, 5).map((c) => ({
+            de: c.username || null,
+            texte: c.text != null ? String(c.text).slice(0, 80) : '',
+            estGo: IG.contientMotCle(c.text, creds.keywords),
+          })) : [],
+        };
+      } catch (e) {
+        out.etapes.commentaires.champImbrique = { ok: false, erreur: extraitErreur(e) };
+      }
+
+      /* Le verdict porte sur ce qui est REÇU, pas sur l'absence d'erreur :
+         une réponse vide et une réponse pleine ont le même code HTTP. */
+      const aRecu = out.etapes.commentaires.essais.some((x) => x.ok && x.premierNiveau > 0)
+        || (out.etapes.commentaires.champImbrique && out.etapes.commentaires.champImbrique.recus > 0);
+      out.etapes.commentaires.ok = aRecu;
+      out.etapes.commentaires.verdict = aRecu
+        ? 'commentaires accessibles'
+        : 'Meta annonce ' + cible.comments_count + ' commentaire(s) et n\'en rend AUCUN, sans erreur : signature d\'une permission instagram_business_manage_comments absente du jeton.';
+      if (!aRecu) out.ok = false;
     }
 
     // ─── 5. Ce que la base a retenu ───────────────────────────────────
