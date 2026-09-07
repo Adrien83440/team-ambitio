@@ -13,10 +13,17 @@
 // Relais serveur → serveur (le secret ne transite jamais par un navigateur) :
 //   POST {ACADEMY_BRIDGE_URL|https://academy.adrienemily.com}/api/bridge/etat-parcours
 //
-// LA RÉPONSE EST TRANSMISE TELLE QUELLE. L'Academy filtre déjà à la source ce
-// qu'elle refuse de laisser sortir — les notes du coach, la décision d'étape,
-// le CONTENU des outils. Remodeler ici n'ajouterait aucune sécurité et
-// créerait un deuxième endroit où la forme peut diverger.
+// LA RÉPONSE EST TRANSMISE TELLE QUELLE, à UN champ près. L'Academy filtre
+// déjà à la source ce qu'elle refuse de laisser sortir — les notes du coach,
+// la décision d'étape, le CONTENU des outils. Remodeler ici n'ajouterait
+// aucune sécurité et créerait un deuxième endroit où la forme peut diverger.
+//
+// Le champ ajouté : « peutAgir ». Vrai pour admin et coach, faux pour la CSM.
+// C'est lui qui décide si la fiche montre les boutons « Constater » et
+// « Valider » (api/academy-jalon.js, api/academy-validation.js). Il est posé
+// ICI, d'après le rôle vérifié côté serveur, plutôt que déduit par la page :
+// le widget est le même dans l'espace CSM et dans la fiche coaching, et il ne
+// doit pas avoir à connaître les rôles.
 //
 // ⚠️ Les états d'étape sont BRUTS (« a_completer », « bloquante ») : ils sont
 // destinés à l'équipe. Si cette réponse devait un jour alimenter un écran vu
@@ -32,6 +39,9 @@ const { requireAuth } = require('./_verifyFirebaseAuth');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach', 'csm'];
+// Ceux qui posent les actes (constat de jalon, notation, décision) — la même
+// frontière que la matrice de droits de l'Academy : la CSM observe.
+const ROLES_ACTEURS = ['admin', 'coach'];
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -70,6 +80,7 @@ module.exports = async (req, res) => {
     let j = null;
     try { j = await r.json(); } catch (e) { j = null; }
     if (!j || j.ok !== true) { res.status(200).json({ ok: false, error: 'academy_unreachable' }); return; }
+    j.peutAgir = ROLES_ACTEURS.indexOf(auth.role) >= 0;
     res.status(200).json(j);
   } catch (e) {
     console.error('[academy-etat]', e && e.message);

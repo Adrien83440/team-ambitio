@@ -929,6 +929,9 @@
       border-radius: 20px; background: var(--purple-light); color: var(--purple);
     }
     .dp-plan-body { padding: 16px; background: white; }
+    /* Le plan replié : l'en-tête reste (titre, badge, boutons), le corps disparaît. */
+    .dp-plan-section.collapsed .dp-plan-body { display: none; }
+    .dp-plan-section.collapsed .dp-plan-header { border-bottom: none; }
     /* ⚠ Le bouton « Générer le plan » était resté en cursor:not-allowed +
        opacity:.7, hérité de l'époque où la fonctionnalité était annoncée mais
        pas encore livrée (cf. .soon-tag juste dessous, plus utilisé). Elle est
@@ -3020,13 +3023,14 @@ function openDetail(id){
 
       ${questionnaireBlock(c, id)}
       <!-- PLAN D'ACTION ELITE PHÉNIX (structuré — coaching-plan.js) -->
-      <div class="dp-plan-section" style="margin: 0 0 16px">
+      <div class="dp-plan-section${c.planV2 && planSectionCollapsed() ? ' collapsed' : ''}" style="margin: 0 0 16px" data-plan-section="${id}">
         <div class="dp-plan-header">
           <div class="dp-plan-title">🎯 Plan d'action — Elite Phénix
             ${c.planV2 ? '<span class="dp-plan-badge">✅ Généré</span>' : '<span class="dp-plan-badge" style="background:#fef3c7;color:#92400e">À générer</span>'}
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             ${c.planV2 ? `
+              <button class="dp-plan-edit-btn" data-plan-toggle onclick="togglePlanSection('${id}')">${planSectionCollapsed() ? '▸ Afficher' : '▾ Réduire'}</button>
               <button class="dp-plan-edit-btn" onclick="openPlanEditor('${id}')">✏️ Modifier le plan</button>
               <button class="dp-plan-edit-btn" onclick="openPlanWizard('${id}')">🧭 Assistant / régénérer</button>
               <button class="btn btn-primary btn-sm" onclick="sharePlan('${id}')">🔗 Lien client</button>
@@ -3610,9 +3614,11 @@ async function savePlanV2(clientId, plan, msg, full){
     }
     showToast(msg || '✅ Plan mis à jour','success');
     pousserPlanVersAcademy(clientId);
+    /* Ce qu'on vient d'enregistrer doit se voir : la section se déplie. */
+    setPlanSectionCollapsed(false);
     const host = document.getElementById('planV2-'+clientId);
     if(full || !host || !window.CoachingPlan) openDetail(clientId);
-    else host.innerHTML = window.CoachingPlan.render(plan, clientId);
+    else { host.innerHTML = window.CoachingPlan.render(plan, clientId); applyPlanSectionState(clientId, false); }
     return true;
   }catch(e){
     console.error('[plan] enregistrement', e);
@@ -3659,6 +3665,31 @@ function openPlanWizard(clientId){
 /* Éditeur manuel : tout le plan, champ par champ (étapes, semaines, actions,
    preuves, indicateurs). C'est ce qui permet de faire vivre le plan après
    chaque séance sans repasser par l'assistant. */
+/* ── LE PLAN D'ACTION SE REPLIE. Il occupe toute la hauteur de la fiche, et
+   le coach y vient d'abord pour sa séance, pas pour relire le plan. Un seul
+   réglage pour toutes les fiches, mémorisé dans le navigateur : replié par
+   défaut, déplié d'un clic — et déplié automatiquement après un enregistrement,
+   pour voir ce qu'on vient de modifier. ── */
+function planSectionCollapsed(){
+  try{ return localStorage.getItem('coaching_plan_collapsed') !== '0'; }catch(e){ return true; }
+}
+function setPlanSectionCollapsed(v){
+  try{ localStorage.setItem('coaching_plan_collapsed', v ? '1' : '0'); }catch(e){}
+}
+function applyPlanSectionState(clientId, collapsed){
+  const sec = document.querySelector('[data-plan-section="'+clientId+'"]');
+  if(!sec) return;
+  sec.classList.toggle('collapsed', collapsed);
+  const b = sec.querySelector('[data-plan-toggle]');
+  if(b) b.textContent = collapsed ? '▸ Afficher' : '▾ Réduire';
+}
+function togglePlanSection(clientId){
+  const sec = document.querySelector('[data-plan-section="'+clientId+'"]');
+  if(!sec) return;
+  const collapsed = !sec.classList.contains('collapsed');
+  setPlanSectionCollapsed(collapsed);
+  applyPlanSectionState(clientId, collapsed);
+}
 function openPlanEditor(clientId){
   const c = _clients.find(x=>x._id===clientId);
   if(!c) return;
