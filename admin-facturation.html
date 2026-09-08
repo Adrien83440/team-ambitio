@@ -247,7 +247,6 @@
     <a class="bill-side-item" data-tab="export" onclick="switchTab('export')">
       <span class="bsi-icon">📤</span>
       <span>Export</span>
-      <span class="bsi-soon">S5</span>
     </a>
   </aside>
 
@@ -545,6 +544,11 @@
                 <span>Recevoir une copie en BCC à chaque envoi (sur le compte expéditeur)</span>
               </label>
               <div class="bill-help">Pratique pour avoir la trace dans la boîte de réception du compte expéditeur. Override possible au cas par cas dans le modal.</div>
+            </div>
+            <div class="bill-form-row">
+              <div class="bill-label">Email du comptable</div>
+              <input class="bill-input" id="cfAccountantEmail" type="email" placeholder="comptable@cabinet.fr"/>
+              <div class="bill-help">Pré-rempli comme destinataire lors de l'envoi d'un relevé de compte (onglet Export). Modifiable à chaque envoi.</div>
             </div>
           </div>
         </div>
@@ -1117,13 +1121,51 @@
 
     </div>
 
-    <!-- ============ TAB : EXPORT (placeholder) ============ -->
+    <!-- ============ TAB : EXPORT ============ -->
     <div class="bill-tab" data-tab="export">
-      <div class="bill-soon">
-        <div class="bill-soon-icon">📤</div>
-        <h3>Export — disponible en Step 5</h3>
-        <p>Dashboard CA mensuel, export PDF groupé, export FEC pour expert-comptable.</p>
+
+      <!-- Relevé de compte client -->
+      <div class="bill-card">
+        <div class="bill-card-h">
+          <div>
+            <h3>📊 Relevé de compte client</h3>
+            <p>Grand livre du client : factures au débit, règlements au crédit, solde progressif. À télécharger ou envoyer au comptable.</p>
+          </div>
+        </div>
+        <div class="bill-toolbar" style="margin-bottom:0">
+          <select class="bill-select" id="stClientSelect" style="width:auto;min-width:240px" onchange="stOnClientChange()">
+            <option value="">— Choisir un client —</option>
+          </select>
+          <select class="bill-select" id="stPeriodPreset" style="width:auto" onchange="stApplyPreset()">
+            <option value="year">Année en cours</option>
+            <option value="prevyear">Année N-1</option>
+            <option value="all">Tout l'historique</option>
+            <option value="custom">Personnalisé</option>
+          </select>
+          <span style="display:inline-flex;align-items:center;gap:6px">
+            <input type="date" class="bill-input" id="stFrom" style="width:auto;padding:8px 10px" onchange="stMarkCustom()" title="Du"/>
+            <span style="color:var(--muted);font-size:12px">→</span>
+            <input type="date" class="bill-input" id="stTo" style="width:auto;padding:8px 10px" onchange="stMarkCustom()" title="Au"/>
+          </span>
+          <button class="bill-btn bill-btn-ghost" id="stPreviewBtn" onclick="stPreview()">👁 Aperçu</button>
+          <button class="bill-btn bill-btn-ghost" id="stPdfBtn" onclick="stDownload('pdf')">📄 PDF</button>
+          <button class="bill-btn bill-btn-ghost" id="stCsvBtn" onclick="stDownload('csv')">🧾 CSV</button>
+          <button class="bill-btn bill-btn-primary" id="stSendBtn" onclick="stOpenSendDrawer()">✉️ Envoyer au comptable</button>
+        </div>
+        <div id="stPreviewWrap" style="margin-top:16px"></div>
       </div>
+
+      <!-- Grand livre tous clients -->
+      <div class="bill-card">
+        <div class="bill-card-h">
+          <div>
+            <h3>📚 Grand livre tous clients</h3>
+            <p>Toutes les écritures de tous les clients sur la période sélectionnée ci-dessus, dans un seul CSV (une colonne Client, sous-totaux par client) — le format que demande l'expert-comptable.</p>
+          </div>
+        </div>
+        <button class="bill-btn bill-btn-ghost bill-btn-lg" id="stAllBtn" onclick="stDownloadAll()">🧾 Télécharger le grand livre (CSV)</button>
+      </div>
+
     </div>
 
   </main>
@@ -1360,6 +1402,7 @@ function initClientsListener() {
     qs.forEach(function(d) { clientsCache.push(Object.assign({ id: d.id }, d.data())); });
     updateClientsStats();
     if (activeTab === 'clients') renderClientsList();
+    if (activeTab === 'export') stFillClientSelect();
   }, function(err) {
     console.error('[billing] clients listener error', err);
     toast('Erreur lecture clients : ' + err.message, true);
@@ -1395,7 +1438,7 @@ function switchTab(tab) {
     alerts: { t: 'Alertes', s: 'Cas non résolus du matching automatique paiements GoCardless → factures.' },
     sync: { t: 'Synchronisation', s: 'Sync manuelle GoCardless + purge totale (admin).' },
     settings: { t: 'Paramètres', s: 'Configurez votre identité d\'émetteur, votre logo, vos coordonnées bancaires et vos CGV.' },
-    export: { t: 'Export', s: 'Exports comptables et factures groupées.' }
+    export: { t: 'Export', s: 'Relevés de compte client et grand livre pour l\'expert-comptable.' }
   };
   document.getElementById('billHeaderTitle').textContent = titles[tab].t;
   document.getElementById('billHeaderSubtitle').textContent = titles[tab].s;
@@ -1408,6 +1451,7 @@ function switchTab(tab) {
   if (tab === 'alerts') renderAlertsList();
   if (tab === 'subscriptions') renderSubscriptionsList();
   if (tab === 'sync') initSyncTab();
+  if (tab === 'export') initExportTab();
 }
 
 function switchSettingsSub(sub) {
@@ -1888,6 +1932,7 @@ function renderEmailForm() {
   const c = billingConfig;
   setVal('cfSenderAccount', c.senderAccount || 'contact');
   document.getElementById('cfEnableBcc').checked = (c.enableBcc != null ? c.enableBcc : true);
+  setVal('cfAccountantEmail', c.accountantEmail || '');
   const tmpl = (c.emailTemplates && c.emailTemplates.invoice) || {};
   setVal('cfEmailSubject', tmpl.subject || DEFAULT_EMAIL_SUBJECT);
   setVal('cfEmailBody', tmpl.body || DEFAULT_EMAIL_BODY);
@@ -1897,12 +1942,16 @@ async function saveEmailSettings() {
   const btn = document.getElementById('emailSaveBtn');
   const senderAccount = (document.getElementById('cfSenderAccount').value || '').trim() || 'contact';
   const enableBcc = document.getElementById('cfEnableBcc').checked;
+  const accountantEmail = (document.getElementById('cfAccountantEmail').value || '').trim();
   const subject = (document.getElementById('cfEmailSubject').value || '').trim() || DEFAULT_EMAIL_SUBJECT;
   const body = (document.getElementById('cfEmailBody').value || '').trim() || DEFAULT_EMAIL_BODY;
 
   /* Slug validation : alphanumeric + underscore + dash */
   if (!/^[a-zA-Z0-9_-]+$/.test(senderAccount)) {
     return toast('Slug invalide (caractères autorisés : a-z, 0-9, _, -)', true);
+  }
+  if (accountantEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(accountantEmail)) {
+    return toast('Email du comptable invalide', true);
   }
 
   btn.disabled = true; btn.textContent = 'Enregistrement…';
@@ -1920,6 +1969,7 @@ async function saveEmailSettings() {
     await db.collection('_config').doc('billing').update({
       senderAccount: senderAccount,
       enableBcc: enableBcc,
+      accountantEmail: accountantEmail,
       'emailTemplates.invoice.subject': subject,
       'emailTemplates.invoice.body': body,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2982,6 +3032,7 @@ function renderClientsList() {
     if (invCount > 0) {
       html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();showInvoicesForClient(\'' + c.id + '\')" title="Voir les factures de ce client">📄</button> ';
     }
+    html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();openStatementForClient(\'' + c.id + '\')" title="Relevé de compte">📊</button> ';
     html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();openClientDrawer(\'' + c.id + '\')" title="Éditer">✏️</button>';
     html += '</td>';
     html += '</tr>';
@@ -4454,6 +4505,402 @@ async function downloadInvoicePdf(id, number) {
   } catch (err) {
     console.error('[downloadInvoicePdf]', err);
     toast('Erreur téléchargement : ' + err.message, true);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════
+   RELEVÉ DE COMPTE CLIENT — onglet Export
+   Grand livre par client (factures au débit, règlements au crédit),
+   agrégé côté serveur par /api/client-statement : le cache local est
+   plafonné à 500 factures, il n'est pas fiable pour un historique complet.
+   ═══════════════════════════════════════════════ */
+let stCurrent = null; /* dernier relevé JSON affiché (aperçu / envoi) */
+
+function initExportTab() {
+  stFillClientSelect();
+  const preset = document.getElementById('stPeriodPreset');
+  if (preset && preset.value !== 'custom') stApplyPreset();
+}
+
+function stFillClientSelect() {
+  const sel = document.getElementById('stClientSelect');
+  if (!sel) return;
+  const prev = sel.value;
+  const list = clientsCache.slice().sort(function(a, b) {
+    return getClientDisplayName(a).localeCompare(getClientDisplayName(b), 'fr');
+  });
+  let html = '<option value="">— Choisir un client —</option>';
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    let label = getClientDisplayName(c);
+    if (scopeOf(c) === 'ei') label += ' — EI';
+    if (c.archived) label += ' (archivé)';
+    html += '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(label) + '</option>';
+  }
+  sel.innerHTML = html;
+  if (prev) sel.value = prev;
+}
+
+function stApplyPreset() {
+  const preset = document.getElementById('stPeriodPreset').value;
+  const f = document.getElementById('stFrom');
+  const t = document.getElementById('stTo');
+  if (preset === 'custom') return;
+  const now = new Date();
+  const iso = function(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  if (preset === 'year') { f.value = now.getFullYear() + '-01-01'; t.value = iso(now); }
+  else if (preset === 'prevyear') { const y = now.getFullYear() - 1; f.value = y + '-01-01'; t.value = y + '-12-31'; }
+  else if (preset === 'all') { f.value = ''; t.value = ''; }
+}
+
+function stMarkCustom() {
+  const preset = document.getElementById('stPeriodPreset');
+  if (preset) preset.value = 'custom';
+}
+
+function stOnClientChange() {
+  stCurrent = null;
+  document.getElementById('stPreviewWrap').innerHTML = '';
+}
+
+/* Bouton 📊 de la liste Clients : ouvre l'onglet Export pré-rempli */
+function openStatementForClient(clientId) {
+  switchTab('export');
+  const sel = document.getElementById('stClientSelect');
+  if (sel) sel.value = clientId;
+  stOnClientChange();
+  stPreview();
+}
+
+/* Lit et valide la sélection courante (client + période) */
+function stParams() {
+  const clientId = document.getElementById('stClientSelect').value;
+  if (!clientId) { toast('Choisis un client d\'abord', true); return null; }
+  const from = document.getElementById('stFrom').value;
+  const to = document.getElementById('stTo').value;
+  if (from && to && from > to) { toast('Plage invalide : « du » est après « au »', true); return null; }
+  return { clientId: clientId, from: from, to: to };
+}
+
+function stFrDate(isoDay) {
+  if (!isoDay) return '';
+  const p = isoDay.split('-');
+  return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : isoDay;
+}
+
+function stPeriodText(from, to) {
+  if (from && to) return 'du ' + stFrDate(from) + ' au ' + stFrDate(to);
+  if (from) return 'depuis le ' + stFrDate(from);
+  if (to) return 'jusqu\'au ' + stFrDate(to);
+  return 'historique complet';
+}
+
+function stQueryString(p, extra) {
+  let qs = '?clientId=' + encodeURIComponent(p.clientId);
+  if (p.from) qs += '&from=' + p.from;
+  if (p.to) qs += '&to=' + p.to;
+  if (extra) qs += extra;
+  return qs;
+}
+
+/* ── Aperçu ── */
+async function stPreview() {
+  const p = stParams();
+  if (!p) return;
+  const user = firebase.auth().currentUser;
+  if (!user) return toast('Session expirée — reconnectez-vous', true);
+  const btn = document.getElementById('stPreviewBtn');
+  const wrap = document.getElementById('stPreviewWrap');
+  btn.disabled = true;
+  wrap.innerHTML = '<div class="bill-loader"><span class="bill-spinner"></span> Calcul du relevé…</div>';
+  try {
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/client-statement' + stQueryString(p, '&format=json'), {
+      headers: { 'Authorization': 'Bearer ' + idToken }
+    });
+    let data = {};
+    try { data = await response.json(); } catch (e) {}
+    if (!response.ok) throw new Error(data.error || ('Erreur HTTP ' + response.status));
+    stCurrent = data.statement;
+    stRenderPreview(stCurrent);
+  } catch (err) {
+    console.error('[stPreview]', err);
+    wrap.innerHTML = '';
+    toast('Erreur : ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function stRenderPreview(st) {
+  const wrap = document.getElementById('stPreviewWrap');
+  let html = '';
+
+  if (st.scope === 'ei') {
+    html += '<div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);color:#f97316;border-radius:10px;padding:10px 14px;font-size:12px;margin-bottom:14px">'
+      + '🔒 Client facturé sur l\'entreprise individuelle, hors périmètre Alteore — ce relevé ne couvre que les éventuelles écritures émises depuis cet outil.</div>';
+  }
+
+  html += '<div class="bill-stats" style="margin-bottom:14px">';
+  html += '<div class="bill-stat"><div class="bill-stat-l">Solde ' + (st.period.to ? 'au ' + stFrDate(st.period.to) : 'final') + '</div>'
+    + '<div class="bill-stat-v">' + formatEur(st.totals.balance) + '</div>'
+    + '<div class="bill-stat-s">' + (st.totals.balance > 0 ? 'Restant dû par le client' : (st.totals.balance < 0 ? 'En faveur du client' : 'Compte soldé')) + '</div></div>';
+  html += '<div class="bill-stat blue"><div class="bill-stat-l">Débits (factures)</div>'
+    + '<div class="bill-stat-v">' + formatEur(st.totals.debit) + '</div>'
+    + '<div class="bill-stat-s">' + st.counts.invoices + ' facture(s)</div></div>';
+  html += '<div class="bill-stat purple"><div class="bill-stat-l">Crédits (règlements)</div>'
+    + '<div class="bill-stat-v">' + formatEur(st.totals.credit) + '</div>'
+    + '<div class="bill-stat-s">' + st.counts.payments + ' règlement(s)</div></div>';
+  html += '<div class="bill-stat amber"><div class="bill-stat-l">En attente</div>'
+    + '<div class="bill-stat-v">' + st.counts.unpaid + '</div>'
+    + '<div class="bill-stat-s">Facture(s) non payée(s) sur la période</div></div>';
+  html += '</div>';
+
+  html += '<div class="bill-table-wrap"><table class="bill-table"><thead><tr>'
+    + '<th>Date</th><th>Pièce</th><th>Libellé</th>'
+    + '<th style="text-align:right">Débit</th><th style="text-align:right">Crédit</th><th style="text-align:right">Solde</th>'
+    + '</tr></thead><tbody>';
+
+  if (st.period.from) {
+    html += '<tr style="cursor:default"><td style="color:var(--muted)">' + stFrDate(st.period.from) + '</td><td></td>'
+      + '<td style="color:var(--muted);font-style:italic">Report à nouveau</td><td></td><td></td>'
+      + '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(st.opening) + '</td></tr>';
+  }
+
+  if (!st.entries.length) {
+    html += '<tr style="cursor:default"><td colspan="6" style="text-align:center;color:var(--muted);padding:26px">Aucune écriture sur la période.</td></tr>';
+  }
+  for (let i = 0; i < st.entries.length; i++) {
+    const ev = st.entries[i];
+    const d = new Date(ev.date);
+    const dateFr = isNaN(d.getTime()) ? '—' : d.toLocaleDateString('fr-FR');
+    html += '<tr style="cursor:default">'
+      + '<td style="white-space:nowrap">' + dateFr + '</td>'
+      + '<td style="font-family:var(--font-m);font-size:12px">' + escapeHtml(ev.piece || '—') + '</td>'
+      + '<td>' + escapeHtml(ev.label || '') + '</td>'
+      + '<td style="text-align:right;font-family:var(--font-m)">' + (ev.debit ? formatEur(ev.debit) : '') + '</td>'
+      + '<td style="text-align:right;font-family:var(--font-m);color:var(--bill-green)">' + (ev.credit ? formatEur(ev.credit) : '') + '</td>'
+      + '<td style="text-align:right;font-family:var(--font-m);font-weight:700">' + formatEur(ev.balance) + '</td>'
+      + '</tr>';
+  }
+
+  html += '<tr style="cursor:default;border-top:2px solid var(--border2)">'
+    + '<td></td><td></td><td style="font-weight:700">Totaux de la période</td>'
+    + '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(st.totals.debit) + '</td>'
+    + '<td style="text-align:right;font-weight:700;font-family:var(--font-m);color:var(--bill-green)">' + formatEur(st.totals.credit) + '</td>'
+    + '<td style="text-align:right;font-weight:800;font-family:var(--font-m)">' + formatEur(st.totals.balance) + '</td>'
+    + '</tr>';
+  html += '</tbody></table></div>';
+
+  wrap.innerHTML = html;
+}
+
+/* ── Téléchargements ── */
+async function stDownload(format) {
+  const p = stParams();
+  if (!p) return;
+  const user = firebase.auth().currentUser;
+  if (!user) return toast('Session expirée — reconnectez-vous', true);
+  const btn = document.getElementById(format === 'pdf' ? 'stPdfBtn' : 'stCsvBtn');
+  btn.disabled = true;
+  toast('⏳ Génération du relevé…');
+  try {
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/client-statement' + stQueryString(p, '&format=' + format), {
+      headers: { 'Authorization': 'Bearer ' + idToken }
+    });
+    if (!response.ok) {
+      let errMsg = 'Erreur HTTP ' + response.status;
+      try { const data = await response.json(); errMsg = data.error || errMsg; } catch (e) {}
+      throw new Error(errMsg);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = stDispositionFilename(response, 'releve.' + format);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast(format === 'pdf' ? '📄 Relevé PDF téléchargé' : '🧾 Relevé CSV téléchargé');
+  } catch (err) {
+    console.error('[stDownload]', err);
+    toast('Erreur : ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function stDownloadAll() {
+  const from = document.getElementById('stFrom').value;
+  const to = document.getElementById('stTo').value;
+  if (from && to && from > to) return toast('Plage invalide : « du » est après « au »', true);
+  const user = firebase.auth().currentUser;
+  if (!user) return toast('Session expirée — reconnectez-vous', true);
+  const btn = document.getElementById('stAllBtn');
+  btn.disabled = true;
+  toast('⏳ Génération du grand livre (tous clients)…');
+  try {
+    const idToken = await user.getIdToken();
+    let qs = '?all=1';
+    if (from) qs += '&from=' + from;
+    if (to) qs += '&to=' + to;
+    const response = await fetch('/api/client-statement' + qs, {
+      headers: { 'Authorization': 'Bearer ' + idToken }
+    });
+    if (!response.ok) {
+      let errMsg = 'Erreur HTTP ' + response.status;
+      try { const data = await response.json(); errMsg = data.error || errMsg; } catch (e) {}
+      throw new Error(errMsg);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = stDispositionFilename(response, 'grand-livre-clients.csv');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast('🧾 Grand livre téléchargé');
+  } catch (err) {
+    console.error('[stDownloadAll]', err);
+    toast('Erreur : ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* Nom de fichier depuis Content-Disposition, avec fallback */
+function stDispositionFilename(response, fallback) {
+  const cd = response.headers.get('Content-Disposition') || '';
+  const m = cd.match(/filename="([^"]+)"/);
+  return (m && m[1]) || fallback;
+}
+
+/* ── Envoi au comptable ── */
+async function stOpenSendDrawer() {
+  const p = stParams();
+  if (!p) return;
+  /* On a besoin du relevé pour pré-remplir sujet + corps : le fetch JSON est
+     léger, on le (re)fait pour être sûr d'être en phase avec la sélection. */
+  await stPreview();
+  const st = stCurrent;
+  if (!st) return;
+
+  const periodText = stPeriodText(p.from, p.to);
+  const accountantEmail = (billingConfig && billingConfig.accountantEmail) || '';
+  const issuerName = (billingConfig && billingConfig.companyName) || 'Ambitio Corp';
+
+  const defaultSubject = 'Relevé de compte — ' + st.clientName + ' — ' + periodText;
+  const defaultBody = 'Bonjour,\n\n'
+    + 'Veuillez trouver ci-joint le relevé de compte client de ' + st.clientName + ' (' + periodText + ') :\n'
+    + '- ' + st.counts.invoices + ' facture(s) émise(s) pour ' + formatEur(st.totals.debit) + '\n'
+    + '- ' + st.counts.payments + ' règlement(s) reçu(s) pour ' + formatEur(st.totals.credit) + '\n'
+    + '- Solde : ' + formatEur(st.totals.balance) + '\n\n'
+    + 'Le détail est joint en PDF ainsi qu\'en CSV.\n\n'
+    + 'Cordialement,\n'
+    + issuerName;
+
+  document.getElementById('drawerTitle').textContent = 'Envoyer le relevé de compte';
+
+  let html = '';
+  html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;margin-bottom:16px">'
+    + '<div style="font-weight:700;margin-bottom:2px">' + escapeHtml(st.clientName) + '</div>'
+    + '<div style="color:var(--muted)">' + escapeHtml(periodText) + ' · Solde : ' + formatEur(st.totals.balance) + '</div>'
+    + '</div>';
+  html += '<div class="bill-form-grid full">';
+  html += '<div class="bill-form-row"><div class="bill-label">À <span class="bill-req">*</span></div>'
+    + '<input class="bill-input" id="stSendTo" placeholder="comptable@cabinet.fr (plusieurs : séparés par des virgules)" value="' + attr(accountantEmail) + '"/>'
+    + (accountantEmail ? '' : '<div class="bill-help">💡 Renseigne « Email du comptable » dans Paramètres → Email pour le pré-remplir automatiquement.</div>')
+    + '</div>';
+  html += '<div class="bill-form-row"><div class="bill-label">CC</div>'
+    + '<input class="bill-input" id="stSendCc" placeholder="optionnel"/></div>';
+  html += '<div class="bill-form-row"><div class="bill-label">Sujet <span class="bill-req">*</span></div>'
+    + '<input class="bill-input" id="stSendSubject" value="' + attr(defaultSubject) + '"/></div>';
+  html += '<div class="bill-form-row"><div class="bill-label">Message <span class="bill-req">*</span></div>'
+    + '<textarea class="bill-input" id="stSendBody" rows="10" style="font-family:inherit;line-height:1.55">' + escapeHtml(defaultBody) + '</textarea></div>';
+  html += '<div class="bill-form-row"><div class="bill-label">Pièces jointes</div>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:6px">'
+    + '<input type="checkbox" id="stSendPdf" checked style="accent-color:#10b981;width:16px;height:16px"/><span>📄 Relevé PDF</span></label>'
+    + '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">'
+    + '<input type="checkbox" id="stSendCsv" checked style="accent-color:#10b981;width:16px;height:16px"/><span>🧾 Relevé CSV (tableur)</span></label>'
+    + '</div>';
+  html += '</div>';
+  document.getElementById('drawerBody').innerHTML = html;
+
+  document.getElementById('drawerFoot').innerHTML =
+    '<button class="bill-btn bill-btn-ghost" onclick="closeDrawer()">Annuler</button>'
+    + '<button class="bill-btn bill-btn-primary bill-btn-lg" id="stSendConfirmBtn" onclick="stSendStatement()">✉️ Envoyer</button>';
+
+  /* La période et le client sont figés au moment de l'ouverture */
+  document.getElementById('drawer')._stSendParams = p;
+
+  document.getElementById('drawerBg').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+}
+
+async function stSendStatement() {
+  const p = document.getElementById('drawer')._stSendParams;
+  if (!p) return toast('Sélection perdue — rouvre le panneau d\'envoi', true);
+
+  const splitEmails = function(v) {
+    return (v || '').split(/[,;]/).map(function(s){ return s.trim(); }).filter(function(s){ return s; });
+  };
+  const to = splitEmails(document.getElementById('stSendTo').value);
+  const cc = splitEmails(document.getElementById('stSendCc').value);
+  const subject = (document.getElementById('stSendSubject').value || '').trim();
+  const bodyText = (document.getElementById('stSendBody').value || '').trim();
+  const attachPdf = document.getElementById('stSendPdf').checked;
+  const attachCsv = document.getElementById('stSendCsv').checked;
+
+  if (!to.length) return toast('Au moins un destinataire requis', true);
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  for (let i = 0; i < to.length; i++) {
+    if (!emailRe.test(to[i])) return toast('Email invalide : ' + to[i], true);
+  }
+  for (let i = 0; i < cc.length; i++) {
+    if (!emailRe.test(cc[i])) return toast('Email CC invalide : ' + cc[i], true);
+  }
+  if (!subject) return toast('Sujet requis', true);
+  if (!bodyText) return toast('Message requis', true);
+  if (!attachPdf && !attachCsv) return toast('Choisis au moins une pièce jointe (PDF ou CSV)', true);
+
+  const user = firebase.auth().currentUser;
+  if (!user) return toast('Session expirée — reconnectez-vous', true);
+
+  const btn = document.getElementById('stSendConfirmBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Envoi…';
+  try {
+    const idToken = await user.getIdToken();
+    const response = await fetch('/api/client-statement-send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({
+        clientId: p.clientId,
+        periodFrom: p.from || null,
+        periodTo: p.to || null,
+        to: to,
+        cc: cc,
+        subject: subject,
+        bodyText: bodyText,
+        attachPdf: attachPdf,
+        attachCsv: attachCsv
+      })
+    });
+    let data = {};
+    try { data = await response.json(); } catch (e) {}
+    if (!response.ok) throw new Error(data.error || ('Erreur HTTP ' + response.status));
+    toast('✉️ Relevé envoyé à ' + to.join(', '));
+    closeDrawer();
+  } catch (err) {
+    console.error('[stSendStatement]', err);
+    toast('Erreur envoi : ' + err.message, true);
+    btn.disabled = false;
+    btn.textContent = '✉️ Envoyer';
   }
 }
 
