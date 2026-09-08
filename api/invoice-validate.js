@@ -90,7 +90,8 @@ module.exports = async function(req, res) {
        qu'il faut attraper. */
     const clientRefScope = db.collection('invoice_clients').doc(invoice.clientId);
     const clientScopeSnap = await clientRefScope.get();
-    if (clientScopeSnap.exists && (clientScopeSnap.data() || {}).billingScope === 'ei') {
+    const clientCard = clientScopeSnap.exists ? (clientScopeSnap.data() || {}) : null;
+    if (clientCard && clientCard.billingScope === 'ei') {
       const cData = clientScopeSnap.data() || {};
       const cName = cData.companyName
         || ((cData.contactFirstName || '') + ' ' + (cData.contactLastName || '')).trim()
@@ -103,6 +104,34 @@ module.exports = async function(req, res) {
       e.status = 409;
       throw e;
     }
+    /* ── Snapshot client rafraîchi depuis la fiche ──
+       Le snapshot du brouillon date de sa création (synchro GoCardless,
+       abonnement, saisie manuelle) : la fiche a pu être complétée depuis —
+       SIRET, raison sociale, adresse. C'est à la validation que le snapshot
+       devient légal, et c'est déjà la fiche que Qonto reçoit (upsertClient) :
+       on aligne les deux ici, avant la numérotation.
+       vatExempt reste celui du brouillon : les montants ont été calculés avec.
+       L'ancien snapshot est conservé (_clientSnapshotAtDraft), rien n'est perdu. */
+    const draftSnapshot = invoice.clientSnapshot || {};
+    let clientSnapshot = draftSnapshot;
+    let snapshotRefreshed = false;
+    if (clientCard) {
+      clientSnapshot = {
+        clientType: clientCard.clientType || 'company',
+        companyName: clientCard.companyName || '',
+        contactFirstName: clientCard.contactFirstName || '',
+        contactLastName: clientCard.contactLastName || '',
+        email: clientCard.email || '',
+        phone: clientCard.phone || '',
+        siret: clientCard.siret || '',
+        vatNumber: clientCard.vatNumber || '',
+        vatExempt: !!draftSnapshot.vatExempt,
+        address: Object.assign({ line1: '', line2: '', postalCode: '', city: '', country: 'France' },
+          clientCard.address || {}),
+      };
+      snapshotRefreshed = true;
+    }
+
     if (!invoice.lines || !invoice.lines.length) {
       const e = new Error('Au moins une ligne est requise'); e.status = 400; throw e;
     }
@@ -149,7 +178,7 @@ module.exports = async function(req, res) {
        mention obligatoire. On ne l'exige QUE si Qonto est actif — sinon on
        bloquerait aujourd'hui 54 factures société sur 60, sans bénéfice. */
     if (qontoCfg.enabled) {
-      const cs = invoice.clientSnapshot || {};
+      const cs = clientSnapshot;
       if (cs.clientType === 'company') {
         const csSiret = String(cs.siret || '').replace(/\s+/g, '');
         if (!csSiret) {
@@ -244,7 +273,7 @@ module.exports = async function(req, res) {
         throw e;
       }
 
-      tx.update(invRef, {
+      const txUpdate = {
         status: 'validated',
         isLocked: true,
         number: number,
@@ -256,7 +285,13 @@ module.exports = async function(req, res) {
         validatedBy: user.uid,
         validatedByEmail: user.email || null,
         pdfPending: true, /* sera passé à false après stockage chunks */
-      });
+      };
+      if (snapshotRefreshed) {
+        txUpdate.clientSnapshot = clientSnapshot;
+        txUpdate._clientSnapshotAtDraft = draftSnapshot;
+        txUpdate._clientSnapshotRefreshedAt = admin.firestore.FieldValue.serverTimestamp();
+      }
+      tx.update(invRef, txUpdate);
 
       tx.set(counterRef, {
         year: year,
@@ -387,6 +422,13 @@ module.exports = async function(req, res) {
       pdfChunkCount: chunks.length,
       pdfSource: pdfSource,
       qonto: qontoResult ? qontoResult.qonto : null,
+      /* Résultat réseau, pour que le front sache si un envoi par email
+         a encore un sens : 'sent' → transmise, 'created' → non transmise
+         (motif dans einvoiceSkipReason), 'skipped' → Qonto inactif. */
+      qontoSyncStatus: batchUpdate.qontoSyncStatus,
+      einvoiceSent: !!(qontoResult && qontoResult.einvoice && qontoResult.einvoice.sent),
+      einvoiceSkipReason: (qontoResult && qontoResult.einvoice && !qontoResult.einvoice.sent)
+        ? (qontoResult.einvoice.reason || null) : null,
     });
   } catch (err) {
     sendError(res, err);

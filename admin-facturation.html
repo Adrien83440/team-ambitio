@@ -4199,10 +4199,14 @@ async function validateAndCollect(invoiceId) {
       body: JSON.stringify({ invoiceId: invoiceId, issueDate: paidAt })
     });
     var vData = await vResp.json().catch(function(){ return {}; });
+    var validatedWithoutPdf = false;
+    var validateErrMsg = '';
     if (!vResp.ok) {
       var em = vData.error || ('HTTP ' + vResp.status);
       /* Cas "validée mais PDF échouée" : la facture EST numérotée, on continue. */
       if (em.indexOf('Facture validée') < 0) throw new Error('Validation : ' + em);
+      validatedWithoutPdf = true;
+      validateErrMsg = em;
       toast('⚠️ Facture validée, PDF à régénérer plus tard', true);
     }
 
@@ -4224,9 +4228,30 @@ async function validateAndCollect(invoiceId) {
     /* 3. Sortir de la file « À valider » */
     try { await db.collection('invoices').doc(invoiceId).update({ _pendingValidation: false }); } catch (_) {}
 
-    toast('✅ Facture ' + (vData.number || '') + ' validée et encaissée');
-
-    if (confirm('Facture ' + (vData.number || '') + ' validée et encaissée.\n\nEnvoyer la facture au client par email maintenant ?')) {
+    /* 4. Suite selon le résultat réseau — l'email n'est proposé que s'il
+       a encore un sens :
+         - transmise sur le réseau e-invoicing → rien à envoyer, on s'arrête ;
+         - numérotée mais sans PDF (Qonto ou génération en échec) → aucun envoi
+           possible, il faut d'abord ⚡ resynchroniser ;
+         - non transmise (SIRET absent, envoi désactivé, Qonto inactif…) →
+           on propose l'email, motif affiché. */
+    var numLbl = 'Facture ' + (vData.number || '');
+    if (validatedWithoutPdf) {
+      alert(numLbl + ' validée et encaissée, mais son PDF n\'a pas pu être produit :\n\n'
+        + validateErrMsg + '\n\nAucun envoi n\'est possible pour l\'instant : '
+        + 'relance ⚡ Synchroniser avec Qonto sur cette facture (onglet Factures), puis envoie-la.');
+      return;
+    }
+    if (vData.qontoSyncStatus === 'sent' || vData.einvoiceSent) {
+      toast('✅ ' + numLbl + ' validée, encaissée et transmise sur le réseau');
+      return;
+    }
+    toast('✅ ' + numLbl + ' validée et encaissée');
+    var whyNoNet = vData.qontoSyncStatus === 'skipped'
+      ? 'Qonto est désactivé : pas de transmission électronique.'
+      : ('Elle n\'a PAS été transmise sur le réseau électronique'
+        + (vData.einvoiceSkipReason ? ' (' + vData.einvoiceSkipReason + ')' : '') + '.');
+    if (confirm(numLbl + ' validée et encaissée.\n\n' + whyNoNet + '\n\nEnvoyer la facture au client par email maintenant ?')) {
       location.href = 'admin-invoice-edit.html?id=' + encodeURIComponent(invoiceId) + '&action=send';
     }
   } catch (err) {
