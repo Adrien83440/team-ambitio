@@ -86,8 +86,8 @@ async function upsertClient(ctx) {
   if (!payload.email) {
     const e = new Error('Le client n\'a pas d\'email — Qonto l\'exige pour créer une facture.'); e.status = 400; throw e;
   }
-  if (payload.kind === 'company' && !payload.name) {
-    const e = new Error('Le client est de type société mais n\'a pas de raison sociale.'); e.status = 400; throw e;
+  if (!payload.name) {
+    const e = new Error('Le client n\'a ni raison sociale ni nom de contact — Qonto exige une dénomination.'); e.status = 400; throw e;
   }
 
   const hash = fieldsHash(payload);
@@ -222,10 +222,11 @@ async function sendByEinvoice(ctx, qontoInvoice) {
   if (!ctx.config.autoSendEinvoice) return { sent: false, reason: 'désactivé dans les réglages' };
   if (invoice.qonto && invoice.qonto.sentByEinvoiceAt) return { sent: false, reason: 'déjà transmise' };
 
+  /* 100 % B2B : le type porté par le snapshot n'entre plus en compte — une
+     fiche mal typée « individual » n'est pas un particulier, c'est une
+     saisie ancienne. Seul le SIRET conditionne la transmission. */
   const snapshot = invoice.clientSnapshot || {};
-  const isCompany = snapshot.clientType === 'company';
   const siret = String(snapshot.siret || '').replace(/\s+/g, '');
-  if (!isCompany) return { sent: false, reason: 'client particulier — relève de l\'e-reporting' };
   if (!siret) return { sent: false, reason: 'SIRET absent' };
 
   try {

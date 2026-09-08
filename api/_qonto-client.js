@@ -295,21 +295,24 @@ function mapClientToQonto(client) {
      erreurs en cascade pour name / first_name / last_name : sans kind, elle ne
      sait pas lesquels sont obligatoires. Le message n'est pas explicite, la
      cause est unique. */
+  /* 100 % B2B : toute fiche part en « company », quel que soit son
+     clientType. Une fiche restée typée « individual » (saisie ancienne) était
+     envoyée comme particulier : Qonto exigeait alors un last_name, souvent
+     vide, et refusait le client — facture numérotée sans PDF ni transmission
+     (F2026-00099, 08/09/2026). Quand la raison sociale manque, le nom du
+     contact fait office de dénomination : c'est celle d'une entreprise
+     individuelle, et c'est ce qui figure déjà sur les factures émises. */
+  const contactName = ((client.contactFirstName || '') + ' ' + (client.contactLastName || '')).trim();
   const payload = {
-    kind: client.clientType === 'individual' ? 'individual' : 'company',
+    kind: 'company',
     email: String(client.email || '').trim(),
     currency: 'EUR',
     locale: 'fr',
   };
 
-  /* Longueurs imposées par l'API : name 250, first_name / last_name 60,
-     vat_number et tax_identification_number 20. Un dépassement part en 422. */
-  if (payload.kind === 'company') {
-    payload.name = truncate(client.companyName || '', 250);
-  } else {
-    payload.first_name = truncate(client.contactFirstName || '', 60);
-    payload.last_name = truncate(client.contactLastName || '', 60);
-  }
+  /* Longueurs imposées par l'API : name 250, vat_number et
+     tax_identification_number 20. Un dépassement part en 422. */
+  payload.name = truncate(String(client.companyName || '').trim() || contactName, 250);
 
   if (client.vatNumber) payload.vat_number = truncate(client.vatNumber, 20);
   if (client.siret) payload.tax_identification_number = truncate(client.siret, 20);

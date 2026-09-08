@@ -634,14 +634,15 @@ function lockAllInputs() {
   }
 
   /* Envoi email (Step 2B-2) */
+  /* Jamais désactivé : un bouton inerte ne dit rien. Sans PDF, le clic
+     explique pourquoi et propose de relancer Qonto (voir openSendModal). */
   const btnSend = document.getElementById('btnSend');
+  btnSend.disabled = false;
+  btnSend.innerHTML = invoiceState.sentAt ? '📨 Renvoyer' : '📨 Envoyer';
   if (invoiceState.pdfHash) {
-    btnSend.disabled = false;
     btnSend.removeAttribute('title');
-    btnSend.innerHTML = invoiceState.sentAt ? '📨 Renvoyer' : '📨 Envoyer';
   } else {
-    btnSend.disabled = true;
-    btnSend.title = 'PDF requis pour l\'envoi';
+    btnSend.title = 'PDF indisponible — clique pour voir pourquoi et relancer Qonto';
   }
 
   /* Marquer payée (Step 2B-2) */
@@ -1595,16 +1596,7 @@ async function loadBillingConfig() {
    message ni trace visible. Toute erreur doit se voir. */
 async function openSendModal() {
   if (invoiceState.status === 'draft') return toast('Validez la facture avant l\'envoi', true);
-  if (!invoiceState.pdfHash) {
-    return toast(
-      invoiceState.pdfPending
-        ? 'PDF en cours de génération — réessaie dans quelques secondes'
-        : (invoiceState.pdfError
-            ? 'PDF indisponible : ' + invoiceState.pdfError
-            : 'PDF non disponible pour cette facture'),
-      true
-    );
-  }
+  if (!invoiceState.pdfHash) return offerQontoResync();
 
   try {
     const billing = await loadBillingConfig();
@@ -1637,6 +1629,58 @@ async function openSendModal() {
 
 function closeSendModal() {
   document.getElementById('sendModal').classList.remove('active');
+}
+
+/* Facture numérotée mais sans PDF : Qonto a échoué à la validation (fiche
+   client refusée, réseau…) ou la génération maison a planté. Plutôt qu'un
+   bouton mort, on dit pourquoi et on relance la synchronisation ici même.
+   Si Qonto transmet la facture sur le réseau, l'email n'a plus lieu d'être. */
+async function offerQontoResync() {
+  const q = invoiceState.qonto || {};
+  let why;
+  if (invoiceState.qontoSyncStatus === 'failed' && q.lastError) why = 'Qonto a refusé : ' + q.lastError;
+  else if (invoiceState.pdfError) why = 'Génération du PDF en échec : ' + invoiceState.pdfError;
+  else if (invoiceState.pdfPending) why = 'Le PDF n\'a jamais été produit (synchronisation Qonto interrompue).';
+  else why = 'PDF non disponible pour cette facture.';
+
+  const ok = confirm(
+    'Impossible d\'envoyer la facture ' + (invoiceState.number || '') + ' : aucun PDF.\n\n'
+    + why + '\n\n'
+    + 'Relancer la synchronisation Qonto maintenant ?\n'
+    + '(Si la fiche client a été corrigée entre-temps, elle est reprise telle quelle. '
+    + 'Si le client a un SIRET, la facture sera transmise sur le réseau — c\'est définitif.)'
+  );
+  if (!ok) return;
+
+  const btn = document.getElementById('btnSend');
+  btn.disabled = true;
+  btn.textContent = '⏳ Qonto…';
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const response = await fetch('/api/invoice-qonto-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ invoiceId: invoiceFirestoreId })
+    });
+    let data = {};
+    try { data = await response.json(); } catch (e) {}
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+
+    const base = 'admin-invoice-edit.html?id=' + encodeURIComponent(invoiceFirestoreId);
+    if (data.qontoSyncStatus === 'sent') {
+      alert('Facture ' + (data.number || '') + ' transmise sur le réseau de facturation électronique. '
+        + 'Le PDF est disponible ; un envoi par email n\'est plus nécessaire.');
+      location.href = base;
+    } else {
+      toast('✅ PDF disponible — ouverture de l\'envoi');
+      setTimeout(function(){ location.href = base + '&action=send'; }, 600);
+    }
+  } catch (err) {
+    console.error('[offerQontoResync]', err);
+    toast('Synchronisation Qonto échouée : ' + err.message, true);
+    btn.disabled = false;
+    btn.innerHTML = invoiceState.sentAt ? '📨 Renvoyer' : '📨 Envoyer';
+  }
 }
 
 async function submitSendModal() {

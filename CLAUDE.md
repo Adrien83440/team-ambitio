@@ -185,11 +185,14 @@ sur ces clients est volontaire — **ne pas tenter de la réparer.**
 
 ### 100 % B2B
 Aucun client particulier. Une fiche `invoice_clients` portant `clientType: 'individual'`
-est une erreur de saisie, pas un cas métier : la transmission e-invoicing ne part que si
-`clientSnapshot.clientType === 'company'` (`sendByEinvoice` dans
-`api/_qonto-invoice-flow.js`). Une fiche mal typée produit donc une facture **jamais
-transmise, sans erreur visible**. Le sélecteur de type a été retiré du formulaire client,
-et les quatre constructeurs de `clientSnapshot` défaussent sur `'company'`.
+est une erreur de saisie, pas un cas métier. Depuis le 08/09/2026, le type n'a plus
+d'effet nulle part : `mapClientToQonto` envoie toujours `kind: 'company'` (raison
+sociale, ou nom du contact à défaut), `sendByEinvoice` ne conditionne la transmission
+qu'au SIRET, et `invoice-validate` reconstruit le `clientSnapshot` depuis la fiche en
+`'company'` avant la numérotation (l'ancien snapshot est gardé dans
+`_clientSnapshotAtDraft`). Avant cela, une fiche mal typée partait chez Qonto en
+particulier sans nom → client refusé → facture numérotée **sans PDF ni transmission**
+(F2026-00099). Le sélecteur de type a été retiré du formulaire client.
 
 ---
 

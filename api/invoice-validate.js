@@ -116,9 +116,13 @@ module.exports = async function(req, res) {
     let clientSnapshot = draftSnapshot;
     let snapshotRefreshed = false;
     if (clientCard) {
+      /* 100 % B2B : le snapshot légal est toujours une société. Sans raison
+         sociale, le nom du contact tient lieu de dénomination (cas d'une
+         entreprise individuelle). */
+      const cardContactName = ((clientCard.contactFirstName || '') + ' ' + (clientCard.contactLastName || '')).trim();
       clientSnapshot = {
-        clientType: clientCard.clientType || 'company',
-        companyName: clientCard.companyName || '',
+        clientType: 'company',
+        companyName: String(clientCard.companyName || '').trim() || cardContactName,
         contactFirstName: clientCard.contactFirstName || '',
         contactLastName: clientCard.contactLastName || '',
         email: clientCard.email || '',
