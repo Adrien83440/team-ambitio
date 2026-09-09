@@ -84,7 +84,7 @@ HTML / CSS / JavaScript **vanilla**, aucun build, aucun bundler. Chaque page est
 |---|---|---|
 | Usage | **tous** les endpoints HTTP appelables | uniquement triggers Firestore et jobs planifiés |
 | Pourquoi | la policy GCP `iam.allowedPolicyMemberDomains` bloque `allUsers` / `allAuthenticatedUsers` sur les callables Cloud Functions | — |
-| Runtime | Node 20 | Node 20 |
+| Runtime | Node 24 (depuis le 09/09/2026 — Vercel refusait les builds Node 20 à partir du 01/10/2026) | Node 20 |
 
 **Conséquence : tout nouvel endpoint HTTP va dans `api/`, jamais dans Cloud Functions.**
 
@@ -275,7 +275,7 @@ firebase deploy                                                 # ⛔ jamais
 
 ### Frontend
 Commit + push → Vercel déploie automatiquement. Aucun build, aucune dépendance ajoutée
-sans validation explicite (Node 20 fournit `fetch` et `FormData` nativement).
+sans validation explicite (Node 24 fournit `fetch` et `FormData` nativement).
 
 ### Règles Firestore
 ```bash
