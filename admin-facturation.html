@@ -888,6 +888,7 @@
           <option value="sent">Envoyées</option>
           <option value="paid">Payées</option>
           <option value="cancelled">Annulées</option>
+          <option value="standby">⏸ En standby</option>
         </select>
         <span style="display:inline-flex;align-items:center;gap:6px;margin-left:4px">
           <input type="date" class="bill-input" id="expFrom" style="width:auto;padding:8px 10px" title="Exporter du"/>
@@ -3871,7 +3872,8 @@ function renderInvoicesList() {
 
   let list = invoicesCache;
   if (clientIdFilter) list = list.filter(function(i){ return i.clientId === clientIdFilter; });
-  if (statusFilter !== 'all') list = list.filter(function(i){ return i.status === statusFilter; });
+  if (statusFilter === 'standby') list = list.filter(function(i){ return !!standbyOf(i); });
+  else if (statusFilter !== 'all') list = list.filter(function(i){ return i.status === statusFilter; });
   if (q) {
     list = list.filter(function(i) {
       const number = (i.number || '').toLowerCase();
@@ -3948,9 +3950,17 @@ function renderInvoicesList() {
     html += '</td>';
     html += '<td><span style="font-size:12px;color:var(--muted)">' + dateStr + '</span></td>';
     html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
-    html += '<td>' + statusBadge + qontoBadgeOf(inv) + qontoPaidBadgeOf(inv) + '</td>';
+    html += '<td>' + statusBadge + standbyBadge(inv) + qontoBadgeOf(inv) + qontoPaidBadgeOf(inv) + '</td>';
     html += '<td class="col-actions">';
     html += '<button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();editInvoice(\'' + inv.id + '\')">' + (inv.status === 'draft' ? '✏️ Éditer' : '👁️ Voir') + '</button>';
+    /* Standby (contentieux, difficultés…) : toute facture non payée peut être
+       marquée avec une situation + un motif. */
+    if (inv.status !== 'paid') {
+      const _sb = standbyOf(inv);
+      html += ' <button class="bill-btn bill-btn-ghost" onclick="event.stopPropagation();openStandbyDrawer(\'' + inv.id + '\')"'
+        + ' title="' + (_sb ? 'Modifier la situation / le motif' : 'Mettre en standby (contentieux, difficultés…)') + '"'
+        + (_sb ? ' style="color:#f59e0b;border-color:rgba(245,158,11,.4)"' : '') + '>⏸</button>';
+    }
     /* Lien direct vers la facture chez Qonto, quand elle y existe. */
     if (inv.qonto && inv.qonto.invoiceUrl) {
       html += ' <a class="bill-btn bill-btn-ghost" href="' + escapeAttr(inv.qonto.invoiceUrl) + '" target="_blank" rel="noopener"'
@@ -4159,9 +4169,196 @@ function newInvoice() {
 }
 
 /* ═══════════════════════════════════════════════
+   STANDBY — factures en attente pour cause client
+   Un client au contentieux, en difficulté ou sous échéancier bloque une
+   facture (brouillon non validable ou facture émise impayée). Le marquage
+   pose une situation (liste fermée) + un motif libre sur la facture, avec
+   historique conservé (standbyHistory — rien n'est jamais supprimé).
+   ═══════════════════════════════════════════════ */
+var STANDBY_SITUATIONS = {
+  contentieux:    { label: '⚖️ Contentieux',                     color: '#ef4444' },
+  precontentieux: { label: '📨 Pré-contentieux (mise en demeure)', color: '#f97316' },
+  difficultes:    { label: '💶 Difficultés de paiement',          color: '#f59e0b' },
+  echeancier:     { label: '📅 Échéancier convenu',               color: '#60a5fa' },
+  promesse:       { label: '🤝 Promesse de paiement',             color: '#a78bfa' },
+  autre:          { label: '❓ Autre',                            color: '#9ca3af' }
+};
+
+function standbyOf(inv) {
+  return (inv && inv.standby && inv.standby.active) ? inv.standby : null;
+}
+
+function standbyBadge(inv) {
+  var sb = standbyOf(inv);
+  if (!sb) return '';
+  var s = STANDBY_SITUATIONS[sb.situation] || STANDBY_SITUATIONS.autre;
+  var title = s.label + (sb.motif ? ' — ' + sb.motif : '');
+  return '<div><span style="display:inline-block;margin-top:4px;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;white-space:nowrap;background:' + s.color + '1f;border:1px solid ' + s.color + '55;color:' + s.color + '" title="' + attr(title) + '">⏸ ' + s.label + '</span></div>';
+}
+
+function openStandbyDrawer(invoiceId) {
+  var inv = invoicesCache.filter(function(x){ return x.id === invoiceId; })[0];
+  if (!inv) return toast('Facture introuvable', true);
+  if (inv.status === 'paid') return toast('Cette facture est payée — rien à mettre en standby', true);
+
+  var sb = standbyOf(inv);
+  var cs = inv.clientSnapshot || {};
+  var cliName = cs.companyName
+    || ((cs.contactFirstName || '') + ' ' + (cs.contactLastName || '')).trim()
+    || cs.email || '—';
+  var piece = inv.number || 'Brouillon';
+
+  document.getElementById('drawerTitle').textContent = sb ? 'Modifier le standby' : 'Mettre en standby';
+
+  var html = '';
+  html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;margin-bottom:16px">'
+    + '<div style="font-weight:700;margin-bottom:2px">' + escapeHtml(cliName) + '</div>'
+    + '<div style="color:var(--muted)">' + escapeHtml(piece) + ' · ' + formatEur(inv.totalTtc || 0)
+    + ' · ' + invoiceStatusBadge(inv.status) + '</div>'
+    + '</div>';
+  html += '<div class="bill-form-grid full">';
+  html += '<div class="bill-form-row"><div class="bill-label">Situation <span class="bill-req">*</span></div>'
+    + '<select class="bill-select" id="sbSituation">';
+  for (var key in STANDBY_SITUATIONS) {
+    var sel = (sb ? sb.situation === key : key === 'contentieux') ? ' selected' : '';
+    html += '<option value="' + key + '"' + sel + '>' + STANDBY_SITUATIONS[key].label + '</option>';
+  }
+  html += '</select></div>';
+  html += '<div class="bill-form-row"><div class="bill-label">Motif <span class="bill-req">*</span></div>'
+    + '<textarea class="bill-input" id="sbMotif" rows="5" style="font-family:inherit;line-height:1.55" '
+    + 'placeholder="Ex. : 3 prélèvements rejetés, mise en demeure envoyée le 02/09, dossier transmis au cabinet X…">'
+    + escapeHtml(sb ? (sb.motif || '') : '') + '</textarea>'
+    + '<div class="bill-help">Visible dans les listes (au survol du badge) et conservé dans l\'historique de la facture.</div></div>';
+
+  /* Répercussion optionnelle sur la fiche client */
+  var cli = inv.clientId ? clientById(inv.clientId) : null;
+  if (cli && statusOf(cli) !== 'procedure') {
+    html += '<div class="bill-form-row">'
+      + '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">'
+      + '<input type="checkbox" id="sbClientProcedure" style="accent-color:#f97316;width:16px;height:16px"/>'
+      + '<span>Basculer aussi le statut client en ⚖️ Procédure</span></label>'
+      + '<div class="bill-help">Statut actuel : ' + escapeHtml(CLIENT_STATUS[statusOf(cli)].label) + '. La bascule s\'applique à toute la fiche client (CSM, CRM…).</div>'
+      + '</div>';
+  }
+  html += '</div>';
+
+  if (sb && sb.setAt) {
+    var setDate = new Date(sb.setAt);
+    html += '<div style="font-size:11px;color:var(--muted);margin-top:14px">Posé le '
+      + (isNaN(setDate.getTime()) ? '—' : setDate.toLocaleDateString('fr-FR'))
+      + (sb.setByEmail ? ' par ' + escapeHtml(sb.setByEmail) : '') + '</div>';
+  }
+
+  document.getElementById('drawerBody').innerHTML = html;
+
+  var foot = '<button class="bill-btn bill-btn-ghost" onclick="closeDrawer()">Annuler</button>';
+  if (sb) {
+    foot += '<button class="bill-btn bill-btn-ghost" id="sbClearBtn" onclick="clearStandby()" style="color:var(--bill-green)">▶️ Lever le standby</button>';
+  }
+  foot += '<button class="bill-btn bill-btn-primary bill-btn-lg" id="sbSaveBtn" onclick="saveStandby()">💾 Enregistrer</button>';
+  document.getElementById('drawerFoot').innerHTML = foot;
+
+  document.getElementById('drawer')._sbInvoiceId = invoiceId;
+  document.getElementById('drawerBg').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+}
+
+async function saveStandby() {
+  var invoiceId = document.getElementById('drawer')._sbInvoiceId;
+  var inv = invoicesCache.filter(function(x){ return x.id === invoiceId; })[0];
+  if (!inv) return toast('Facture introuvable', true);
+
+  var situation = document.getElementById('sbSituation').value;
+  var motif = (document.getElementById('sbMotif').value || '').trim();
+  if (!STANDBY_SITUATIONS[situation]) return toast('Choisis une situation', true);
+  if (!motif) return toast('Le motif est obligatoire — c\'est toute l\'information', true);
+
+  var procCheckbox = document.getElementById('sbClientProcedure');
+  var alsoProcedure = !!(procCheckbox && procCheckbox.checked);
+
+  var btn = document.getElementById('sbSaveBtn');
+  btn.disabled = true; btn.textContent = '⏳ Enregistrement…';
+  try {
+    var wasActive = !!standbyOf(inv);
+    var nowIso = new Date().toISOString();
+    await db.collection('invoices').doc(invoiceId).update({
+      standby: {
+        active: true,
+        situation: situation,
+        motif: motif,
+        setAt: nowIso,
+        setBy: currentUser.uid,
+        setByEmail: currentUser.email || null
+      },
+      standbyHistory: firebase.firestore.FieldValue.arrayUnion({
+        action: wasActive ? 'update' : 'set',
+        situation: situation,
+        motif: motif,
+        at: nowIso,
+        by: currentUser.uid,
+        byEmail: currentUser.email || null
+      }),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.uid
+    });
+
+    if (alsoProcedure && inv.clientId) {
+      await db.collection('invoice_clients').doc(inv.clientId).update({
+        clientStatus: 'procedure',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: currentUser.uid
+      });
+    }
+
+    toast('⏸ Standby enregistré' + (alsoProcedure ? ' · client passé en ⚖️ Procédure' : ''));
+    closeDrawer();
+  } catch (err) {
+    console.error('[saveStandby]', err);
+    toast('Erreur : ' + err.message, true);
+    btn.disabled = false; btn.textContent = '💾 Enregistrer';
+  }
+}
+
+async function clearStandby() {
+  var invoiceId = document.getElementById('drawer')._sbInvoiceId;
+  var inv = invoicesCache.filter(function(x){ return x.id === invoiceId; })[0];
+  if (!inv) return toast('Facture introuvable', true);
+  var sb = standbyOf(inv);
+  if (!sb) return closeDrawer();
+  if (!confirm('Lever le standby de cette facture ?\n\nElle redevient une facture en attente normale (l\'historique du standby est conservé).')) return;
+
+  var btn = document.getElementById('sbClearBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+  try {
+    await db.collection('invoices').doc(invoiceId).update({
+      standby: null,
+      standbyHistory: firebase.firestore.FieldValue.arrayUnion({
+        action: 'clear',
+        situation: sb.situation || null,
+        motif: sb.motif || null,
+        at: new Date().toISOString(),
+        by: currentUser.uid,
+        byEmail: currentUser.email || null
+      }),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.uid
+    });
+    toast('▶️ Standby levé');
+    closeDrawer();
+  } catch (err) {
+    console.error('[clearStandby]', err);
+    toast('Erreur : ' + err.message, true);
+    if (btn) { btn.disabled = false; btn.textContent = '▶️ Lever le standby'; }
+  }
+}
+
+
+/* ═══════════════════════════════════════════════
    À VALIDER — contrôle manuel des encaissements GoCardless
    Brouillons _pendingValidation : l'admin fixe la date d'encaissement,
    valide (numéro + PDF à cette date) puis marque payée, et envoie.
+   Les factures en standby (contentieux…) sortent de la file principale
+   vers une section repliable dédiée en dessous.
    ═══════════════════════════════════════════════ */
 function pendingValidationInvoices() {
   return invoicesCache.filter(function(i) {
@@ -4177,47 +4374,91 @@ function pendingValidationInvoices() {
 function updateValidateBadge() {
   var badge = document.getElementById('sideBadgeValidate');
   if (!badge) return;
-  var n = pendingValidationInvoices().length;
+  /* Les factures en standby ne sont pas des actions à faire : le badge ne
+     compte que la file active. */
+  var n = pendingValidationInvoices().filter(function(i){ return !standbyOf(i); }).length;
   badge.textContent = n;
   badge.style.display = n > 0 ? 'inline-block' : 'none';
+}
+
+/* Ligne de la file À valider — commune à la file active et à la section
+   standby (mode 'standby' : badge situation + motif au lieu du bouton primaire). */
+function validateQueueRow(inv, mode) {
+  var cs = inv.clientSnapshot || {};
+  var cliName = cs.companyName ||
+    ((cs.contactFirstName || '') + ' ' + (cs.contactLastName || '')).trim() ||
+    cs.email || '—';
+  var firstLine = inv.lines && inv.lines.length ? inv.lines[0] : null;
+  var desc = firstLine ? (firstLine.description || '') : '';
+  if (desc.length > 70) desc = desc.substring(0, 67) + '…';
+  var dateVal = inv.gcChargeDate ||
+    (inv.suggestedPaidAt && inv.suggestedPaidAt.toDate
+      ? inv.suggestedPaidAt.toDate().toISOString().substring(0, 10)
+      : new Date().toISOString().substring(0, 10));
+
+  var html = '<tr>';
+  html += '<td><div style="font-weight:600">' + escapeHtml(cliName) + '</div>';
+  if (cs.email) html += '<div style="font-size:11px;color:var(--muted)">' + escapeHtml(cs.email) + '</div>';
+  html += '</td>';
+  html += '<td style="font-size:12px">' + escapeHtml(desc);
+  if (mode === 'standby') {
+    var sb = standbyOf(inv) || {};
+    html += '<div style="font-size:11px;color:var(--muted);margin-top:3px">' + escapeHtml(sb.motif || '') + '</div>';
+  }
+  html += '</td>';
+  html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
+  if (mode === 'standby') {
+    html += '<td>' + standbyBadge(inv) + '</td>';
+    html += '<td class="col-actions" style="white-space:nowrap">';
+    html += '<button class="bill-btn bill-btn-ghost" onclick="openStandbyDrawer(\'' + inv.id + '\')" title="Modifier la situation / le motif ou lever le standby">✏️ Situation</button> ';
+    html += '<button class="bill-btn bill-btn-ghost" onclick="editInvoice(\'' + inv.id + '\')" title="Ouvrir le brouillon">👁️</button>';
+    html += '</td>';
+  } else {
+    html += '<td><input type="date" class="bill-input" id="valDate_' + inv.id + '" value="' + dateVal + '" style="min-width:150px;padding:6px 8px"/></td>';
+    html += '<td class="col-actions" style="white-space:nowrap">';
+    html += '<button class="bill-btn bill-btn-primary" id="valBtn_' + inv.id + '" onclick="validateAndCollect(\'' + inv.id + '\')">✅ Valider + encaisser</button> ';
+    html += '<button class="bill-btn bill-btn-ghost" onclick="openStandbyDrawer(\'' + inv.id + '\')" title="Mettre en standby (contentieux, difficultés…)">⏸</button>';
+    html += '</td>';
+  }
+  html += '</tr>';
+  return html;
 }
 
 function renderValidateQueue() {
   var wrap = document.getElementById('validateTableWrap');
   if (!wrap) return;
-  var list = pendingValidationInvoices();
-  if (!list.length) {
-    wrap.innerHTML = '<div class="bill-empty"><div class="bill-empty-icon">✅</div><h4>Aucune facture à valider</h4><p>Les nouveaux encaissements GoCardless apparaîtront ici automatiquement.</p></div>';
-    return;
+  var all = pendingValidationInvoices();
+  var active = all.filter(function(i){ return !standbyOf(i); });
+  var standby = all.filter(function(i){ return !!standbyOf(i); });
+
+  var html = '';
+
+  if (!active.length) {
+    html += '<div class="bill-empty"><div class="bill-empty-icon">✅</div><h4>Aucune facture à valider</h4><p>Les nouveaux encaissements GoCardless apparaîtront ici automatiquement.</p></div>';
+  } else {
+    html += '<table class="bill-table"><thead><tr>' +
+      '<th>Client</th><th>Description</th><th style="text-align:right">Montant TTC</th>' +
+      '<th>Date d\'encaissement</th><th class="col-actions"></th>' +
+      '</tr></thead><tbody>';
+    active.forEach(function(inv) { html += validateQueueRow(inv, 'active'); });
+    html += '</tbody></table>';
   }
-  var html = '<table class="bill-table"><thead><tr>' +
-    '<th>Client</th><th>Description</th><th style="text-align:right">Montant TTC</th>' +
-    '<th>Date d\'encaissement</th><th class="col-actions"></th>' +
-    '</tr></thead><tbody>';
-  list.forEach(function(inv) {
-    var cs = inv.clientSnapshot || {};
-    var cliName = cs.companyName ||
-      ((cs.contactFirstName || '') + ' ' + (cs.contactLastName || '')).trim() ||
-      cs.email || '—';
-    var firstLine = inv.lines && inv.lines.length ? inv.lines[0] : null;
-    var desc = firstLine ? (firstLine.description || '') : '';
-    if (desc.length > 70) desc = desc.substring(0, 67) + '…';
-    var dateVal = inv.gcChargeDate ||
-      (inv.suggestedPaidAt && inv.suggestedPaidAt.toDate
-        ? inv.suggestedPaidAt.toDate().toISOString().substring(0, 10)
-        : new Date().toISOString().substring(0, 10));
-    html += '<tr>';
-    html += '<td><div style="font-weight:600">' + escapeHtml(cliName) + '</div>';
-    if (cs.email) html += '<div style="font-size:11px;color:var(--muted)">' + escapeHtml(cs.email) + '</div>';
-    html += '</td>';
-    html += '<td style="font-size:12px">' + escapeHtml(desc) + '</td>';
-    html += '<td style="text-align:right;font-weight:700;font-family:var(--font-m)">' + formatEur(inv.totalTtc || 0) + '</td>';
-    html += '<td><input type="date" class="bill-input" id="valDate_' + inv.id + '" value="' + dateVal + '" style="min-width:150px;padding:6px 8px"/></td>';
-    html += '<td class="col-actions" style="white-space:nowrap">';
-    html += '<button class="bill-btn bill-btn-primary" id="valBtn_' + inv.id + '" onclick="validateAndCollect(\'' + inv.id + '\')">✅ Valider + encaisser</button>';
-    html += '</td></tr>';
-  });
-  html += '</tbody></table>';
+
+  /* Section standby repliable — repliée par défaut : ce ne sont pas des
+     actions à faire, juste de l'information à garder sous les yeux. */
+  if (standby.length) {
+    html += '<details style="margin-top:20px">';
+    html += '<summary style="cursor:pointer;font-size:13px;font-weight:700;color:#f59e0b;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:10px;list-style-position:inside">'
+      + '⏸ En standby — ' + standby.length + ' facture(s) en attente pour cause client (contentieux, difficultés…)</summary>';
+    html += '<div style="margin-top:10px"><table class="bill-table"><thead><tr>' +
+      '<th>Client</th><th>Description / motif</th><th style="text-align:right">Montant TTC</th>' +
+      '<th>Situation</th><th class="col-actions"></th>' +
+      '</tr></thead><tbody>';
+    standby.forEach(function(inv) { html += validateQueueRow(inv, 'standby'); });
+    html += '</tbody></table></div>';
+    html += '</details>';
+  }
+
   wrap.innerHTML = html;
 }
 
