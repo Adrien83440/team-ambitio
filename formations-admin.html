@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alteore — Gérer les formations</title>
+<link rel="stylesheet" href="alteore-ui.css"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   Formations internes — BUILDER (admins et éditeurs).
+   Liste des formations · plan (modules / sous-modules / leçons / classeurs)
+   · éditeur de leçon · éditeur de classeur · import Google Drive.
+   Tout est autosauvegardé (~1 s après la dernière modification).
+   ═══════════════════════════════════════════════════════════════════════ */
+.fb-crumb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.fb-crumb a{color:var(--muted);text-decoration:none}.fb-crumb a:hover{color:var(--text)}.fb-crumb .sep{opacity:.4}.fb-crumb .cur{color:var(--text)}
+.fb-save{font-size:11px;font-family:var(--fm);color:var(--muted2);display:inline-flex;align-items:center;gap:6px}
+.fb-save.dirty{color:var(--gold)}.fb-save.saving{color:var(--blue)}.fb-save.saved{color:var(--green)}.fb-save.error{color:var(--red)}
+.fb-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;border:1px solid;cursor:pointer;font-family:inherit;background:transparent;white-space:nowrap}
+.fb-pill.pub{color:var(--green);border-color:rgba(52,211,153,.45);background:rgba(52,211,153,.1)}
+.fb-pill.draft{color:var(--gold);border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.1)}
+.fb-ib{background:none;border:1px solid transparent;color:var(--muted);width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:12px;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.fb-ib:hover{color:var(--text);background:var(--bg3);border-color:var(--border)}
+.fb-ib.danger:hover{color:var(--red);border-color:rgba(239,68,68,.4)}
+.fb-add{background:none;border:1px dashed var(--border2);color:var(--muted);padding:5px 10px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.fb-add:hover{color:var(--text);border-color:var(--blue)}
+
+/* Liste */
+.fb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px}
+.fb-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:18px;display:flex;flex-direction:column;gap:10px}
+.fb-card-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;background:var(--bg3);border:1px solid var(--border)}
+.fb-card-n{font-family:var(--fh);font-size:16px;font-weight:700}
+.fb-card-m{font-size:11px;color:var(--muted2);font-family:var(--fm)}
+.fb-card-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+
+/* Builder */
+.fb-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.fb-head .ico{width:52px;height:52px;border-radius:14px;font-size:24px;text-align:center;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:inherit}
+.fb-head .name{flex:1;min-width:220px;font-family:var(--fh);font-size:22px;font-weight:700;background:transparent;border:1px solid transparent;border-radius:9px;padding:6px 10px;color:var(--text)}
+.fb-head .name:hover,.fb-head .name:focus{border-color:var(--border);background:var(--bg2);outline:none}
+.fb-desc-f{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:9px 12px;font-size:13px;font-family:inherit;resize:vertical;min-height:44px;margin-bottom:16px}
+.fb-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.fb-mod{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);margin-bottom:12px;overflow:hidden}
+.fb-mod-h{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border-soft);background:linear-gradient(180deg,rgba(148,163,214,.05),transparent);flex-wrap:wrap}
+.fb-num{font-size:10px;font-weight:800;letter-spacing:.5px;color:#b6c3ff;background:rgba(91,124,250,.14);border-radius:6px;padding:3px 7px;white-space:nowrap}
+.fb-title{flex:1;min-width:160px;background:transparent;border:1px solid transparent;border-radius:7px;padding:5px 8px;color:var(--text);font-size:13.5px;font-weight:600;font-family:inherit}
+.fb-title:hover,.fb-title:focus{border-color:var(--border);background:var(--bg);outline:none}
+.fb-mod-h .fb-title{font-family:var(--fh);font-size:15px;font-weight:700}
+.fb-tools{display:inline-flex;gap:2px;align-items:center;margin-left:auto}
+.fb-mod-b{padding:8px 10px 10px}
+.fb-descrow{padding:0 12px 8px;background:linear-gradient(180deg,rgba(148,163,214,.03),transparent)}
+.fb-descrow input{width:100%;background:transparent;border:1px solid transparent;border-radius:7px;padding:4px 8px;color:var(--muted);font-size:12px;font-family:inherit}
+.fb-descrow input:hover,.fb-descrow input:focus{border-color:var(--border);background:var(--bg);outline:none;color:var(--text)}
+.fb-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:9px}
+.fb-row:hover{background:rgba(148,163,214,.05)}
+.fb-ico{width:24px;text-align:center;font-size:13px;color:var(--muted);flex:none}
+.fb-sub{margin:6px 0 8px;border:1px solid var(--border-soft);border-radius:12px;background:rgba(148,163,214,.025)}
+.fb-sub-h{display:flex;align-items:center;gap:8px;padding:6px 8px 4px;flex-wrap:wrap}
+.fb-sub-b{padding:2px 6px 6px 22px}
+.fb-empty{font-size:11.5px;color:var(--muted2);padding:6px 10px;font-style:italic}
+.fb-addbar{display:flex;gap:6px;flex-wrap:wrap;padding:6px 6px 0}
+
+/* Éditeurs */
+.fb-ed{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+@media (max-width:980px){.fb-ed{grid-template-columns:1fr}}
+.fb-f{margin-bottom:14px}
+.fb-f label{display:block;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px}
+.fb-f input[type=text],.fb-f input[type=url],.fb-f select,.fb-f textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:9px 11px;font-size:13px;font-family:inherit;outline:none}
+.fb-f input:focus,.fb-f select:focus,.fb-f textarea:focus{border-color:rgba(91,124,250,.55)}
+.fb-f .hint{font-size:10.5px;color:var(--muted2);margin-top:4px;line-height:1.45}
+.fb-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fb-prev{position:relative;width:100%;padding-top:56.25%;background:#000;border-radius:12px;overflow:hidden;border:1px solid var(--border);margin-top:8px}
+.fb-prev iframe,.fb-prev video,.fb-prev img{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:cover}
+.fb-thumbprev{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:10px;border:1px solid var(--border);background:var(--bg3);display:block;margin-bottom:8px}
+.fb-upl{display:flex;gap:6px;align-items:center}
+.fb-upl input{flex:1}
+.fb-rte-bar{display:flex;gap:2px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-bottom:none;border-radius:9px 9px 0 0;padding:5px}
+.fb-rte-bar button{background:none;border:1px solid transparent;color:var(--muted);min-width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;padding:0 7px;font-weight:700}
+.fb-rte-bar button:hover{color:var(--text);background:var(--bg3);border-color:var(--border)}
+.fb-rte-bar .sp{width:1px;background:var(--border);margin:4px 3px}
+.fb-rte{min-height:220px;max-height:60vh;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:0 0 9px 9px;padding:14px 16px;font-size:14px;line-height:1.65;color:var(--text);outline:none}
+.fb-rte:focus{border-color:rgba(91,124,250,.55)}
+.fb-rte p{margin:0 0 10px}.fb-rte h2{font-size:19px;margin:16px 0 8px}.fb-rte h3{font-size:15.5px;margin:14px 0 6px}
+.fb-rte a{color:#b6c3ff;text-decoration:underline}.fb-rte blockquote{margin:10px 0;padding:8px 14px;border-left:3px solid var(--blue);background:rgba(91,124,250,.06);color:var(--muted)}
+.fb-rte ul,.fb-rte ol{padding-left:22px}.fb-rte img{max-width:100%;border-radius:8px}
+.fb-rte-html{width:100%;min-height:220px;background:var(--bg);border:1px solid var(--border);border-radius:0 0 9px 9px;color:var(--text);padding:12px;font-family:var(--fm);font-size:12px;outline:none;resize:vertical}
+.fb-res{display:grid;grid-template-columns:minmax(120px,1fr) minmax(160px,2fr) auto auto;gap:6px;align-items:center;margin-bottom:6px}
+.fb-res input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 9px;font-size:12.5px;font-family:inherit;outline:none;min-width:0}
+.fb-sec{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;background:var(--bg2)}
+.fb-sec-h{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.fb-file{display:grid;grid-template-columns:minmax(120px,1fr) minmax(150px,2fr) minmax(100px,1fr) auto auto;gap:6px;align-items:center;margin-bottom:6px}
+.fb-file input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 9px;font-size:12.5px;font-family:inherit;outline:none;min-width:0}
+
+/* Drive */
+.drv-nav{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.drv-nav input{flex:1;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:8px 10px;font-size:12.5px;font-family:var(--fm);outline:none}
+.drv-crumb{font-size:11.5px;color:var(--muted);margin-bottom:8px;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.drv-crumb button{background:none;border:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:11.5px;padding:2px 4px;border-radius:5px}
+.drv-crumb button:hover{color:var(--text);background:var(--bg3)}
+.drv-crumb .cur{color:var(--text);font-weight:700}
+.drv-list{max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:11px;background:var(--bg);padding:4px}
+.drv-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;font-size:13px}
+.drv-item.folder{cursor:pointer;font-weight:600}.drv-item.folder:hover{background:rgba(148,163,214,.07)}
+.drv-item .k{font-family:var(--fm);font-size:10px;color:var(--muted2);min-width:40px}
+.drv-item .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drv-item.doc{opacity:.5}
+.drv-foot{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.drv-foot label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.drv-foot select{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 9px;font-size:12.5px;font-family:inherit}
+.drv-prev{font-size:12px;color:var(--text);background:rgba(91,124,250,.08);border:1px solid rgba(91,124,250,.25);border-radius:9px;padding:8px 12px}
+.drv-warn{font-size:12px;color:var(--gold);background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:9px;padding:8px 12px}
+</style>
+</head>
+<body class="au-page">
+<script src="nav.js"></script>
+<script src="formations-core.js"></script>
+
+<div class="au-main" id="app" style="display:none">
+  <div id="view"><div class="au-loading"><div class="au-spinner"></div>Chargement…</div></div>
+</div>
+<div id="auToast"></div>
+<input type="file" id="fileInput" style="display:none">
+
+<!-- Nouvelle formation -->
+<div class="au-modal-bg" id="newModal"><div class="au-modal">
+  <h3>Nouvelle formation</h3>
+  <div class="hint">Un espace de formation interne. L'accès se donne ensuite membre par membre depuis la page Utilisateurs.</div>
+  <div class="fb-f"><label>Nom</label><input type="text" id="nfName" placeholder="Ex. Onboarding CSM"></div>
+  <div class="fb-row2">
+    <div class="fb-f"><label>Icône (emoji)</label><input type="text" id="nfIcon" value="🎓" maxlength="4"></div>
+    <div class="fb-f"><label>Identifiant</label><input type="text" id="nfId" placeholder="onboarding-csm"><div class="hint">Fixe une fois créé. Lettres, chiffres, tirets.</div></div>
+  </div>
+  <div class="au-modal-actions"><button type="button" class="au-btn" data-modal-close="newModal">Annuler</button><button type="button" class="au-btn primary" id="nfCreate">Créer</button></div>
+</div></div>
+
+<!-- Déplacer un élément -->
+<div class="au-modal-bg" id="moveModal"><div class="au-modal" style="max-width:440px">
+  <h3>Déplacer vers…</h3>
+  <div class="hint" id="mvLabel"></div>
+  <div class="fb-f"><select id="mvTarget"></select></div>
+  <div class="au-modal-actions"><button type="button" class="au-btn" data-modal-close="moveModal">Annuler</button><button type="button" class="au-btn primary" id="mvGo">Déplacer</button></div>
+</div></div>
+
+<!-- Membres ayant accès -->
+<div class="au-modal-bg" id="membersModal"><div class="au-modal" style="max-width:520px">
+  <h3>👥 Qui a accès</h3>
+  <div class="hint">L'accès se règle dans <a href="admin-users.html" style="color:#b6c3ff">Utilisateurs</a> (fiche du membre → Formations internes). Les admins ont tout d'office.</div>
+  <div id="membersList" style="font-size:13px;line-height:1.8"></div>
+  <div class="au-modal-actions"><button type="button" class="au-btn" data-modal-close="membersModal">Fermer</button></div>
+</div></div>
+
+<!-- Import Google Drive -->
+<div class="au-modal-bg" id="driveModal"><div class="au-modal" style="max-width:780px">
+  <h3>☁ Importer depuis Google Drive</h3>
+  <div class="hint" id="drvTarget"></div>
+  <div id="drvStatus" class="fb-empty">Vérification du compte Drive…</div>
+  <div class="drv-nav">
+    <button type="button" class="au-btn" data-drv="root">🏠 Mon Drive</button>
+    <button type="button" class="au-btn" data-drv="shared">🤝 Partagés avec moi</button>
+    <input type="text" id="drvFolderInput" placeholder="ou colle l'ID / le lien d'un dossier">
+    <button type="button" class="au-btn" data-drv="open">Ouvrir</button>
+  </div>
+  <div class="drv-crumb" id="drvCrumb"></div>
+  <div class="drv-list" id="drvList"><div class="fb-empty">Choisis un point de départ ci-dessus.</div></div>
+  <div class="drv-foot">
+    <label>Mode d'import <select id="drvMode"></select></label>
+    <label><input type="checkbox" id="drvShare" checked> Partager les vidéos importées en lecture « tous ceux qui ont le lien » (sinon elles resteront noires pour les membres sans accès au fichier)</label>
+    <div id="drvPreview"></div>
+    <div class="au-modal-actions">
+      <button type="button" class="au-btn" data-drv="close">Fermer</button>
+      <button type="button" class="au-btn" data-drv="scan" id="drvScan" disabled>🔍 Analyser ce dossier</button>
+      <button type="button" class="au-btn primary" data-drv="import" id="drvImport" disabled>Importer</button>
+    </div>
+  </div>
+</div></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var C = window.FormationsCore;
+  var db = firebase.firestore();
+  var storage = firebase.storage();
+  var esc = C.esc;
+  var UID = null, USER = {}, IS_ADMIN = false;
+  var FORMS = {}, ORDER = [];
+  var F = null;                 // formation ouverte dans le builder
+  var VIEW = 'list';            // list | builder | lesson | binder
+  var DIRTY = false, SAVE_T = null, FORM_T = null;
+  var UPLOAD = null;            // { kind:'thumbnail'|'image'|'audio'|'resource'|'file', idx, sec }
+  var DRIVE = { target: null, stack: [], node: null, connected: null, email: '', tokenKey: '' };
+  var $view = document.getElementById('view');
+
+  function toast(msg, err) {
+    var t = document.getElementById('auToast');
+    t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = ''; }, 3200);
+  }
+  function parseHash() {
+    var out = {};
+    window.location.hash.replace(/^#/, '').split('&').forEach(function (p) { var kv = p.split('='); if (kv[0]) out[kv[0]] = decodeURIComponent(kv[1] || ''); });
+    return out;
+  }
+  function hashFor(params) {
+    var parts = [];
+    for (var k in params) if (params[k]) parts.push(k + '=' + encodeURIComponent(params[k]));
+    return '#' + parts.join('&');
+  }
+  function serverTs() { return firebase.firestore.FieldValue.serverTimestamp(); }
+  function openModal(id) { document.getElementById(id).classList.add('show'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+  function iconOf(f) { var k = C.knownById(f.id) || {}; return f.icon || k.icon || '🎓'; }
+  function withId(d) { var x = d.data() || {}; x.id = d.id; return x; }
+
+  /* ─── Chargement ────────────────────────────────────────────────────── */
+  function loadForms() {
+    return db.collection('formations').get().then(function (qs) {
+      FORMS = {}; ORDER = [];
+      qs.forEach(function (d) { var f = withId(d); f.modules = C.normalizeModules(f.modules); FORMS[f.id] = f; });
+      ORDER = Object.keys(FORMS).sort(function (a, b) {
+        var oa = FORMS[a].order || 0, ob = FORMS[b].order || 0;
+        if (oa !== ob) return oa - ob;
+        return String(FORMS[a].name || '').localeCompare(String(FORMS[b].name || ''));
+      });
+    });
+  }
+
+  /* ─── Sauvegarde ────────────────────────────────────────────────────── */
+  function setSaveState(state, detail) {
+    var el = document.getElementById('saveState');
+    if (!el) return;
+    var txt = { dirty: '● modifications en attente', saving: '⏳ enregistrement…', saved: '✓ enregistré', error: '⚠ non enregistré' + (detail ? ' — ' + detail : '') }[state] || '';
+    el.className = 'fb-save ' + state; el.textContent = txt;
+  }
+  function markDirty() {
+    DIRTY = true; setSaveState('dirty');
+    clearTimeout(SAVE_T); SAVE_T = setTimeout(saveNow, 900);
+  }
+  function saveNow() {
+    clearTimeout(SAVE_T);
+    if (!F || !DIRTY) return Promise.resolve();
+    DIRTY = false; setSaveState('saving');
+    var modules = C.clone(F.modules);
+    return db.collection('formations').doc(F.id).update({ modules: modules, updatedAt: serverTs(), updatedBy: UID })
+      .then(function () { if (!DIRTY) setSaveState('saved'); })
+      .catch(function (e) { DIRTY = true; setSaveState('error', e.message); console.error(e); });
+  }
+  function saveMeta(fields) {
+    C.assign(F, fields);
+    var upd = C.assign({}, fields, { updatedAt: serverTs(), updatedBy: UID });
+    setSaveState('saving');
+    return db.collection('formations').doc(F.id).update(upd)
+      .then(function () { setSaveState('saved'); })
+      .catch(function (e) { setSaveState('error', e.message); toast('Erreur : ' + e.message, true); });
+  }
+  // Applique une transformation à l'arbre, re-rend le plan, programme la sauvegarde.
+  function mutate(fn) {
+    fn(F.modules);
+    F.modules = C.normalizeModules(F.modules);
+    markDirty();
+    if (VIEW === 'builder') renderTree();
+  }
+  window.addEventListener('beforeunload', function (e) {
+    if (DIRTY) { saveNow(); e.preventDefault(); e.returnValue = 'Des modifications ne sont pas encore enregistrées.'; return e.returnValue; }
+  });
+
+  /* ─── Upload Storage ────────────────────────────────────────────────── */
+  function uploadFile(file) {
+    var ext = (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 6) || 'bin';
+    var path = 'formations/' + F.id + '/' + Date.now() + '-' + Math.random().toString(36).slice(2, 7) + '.' + ext;
+    var task = storage.ref(path).put(file, { contentType: file.type || 'application/octet-stream' });
+    return new Promise(function (resolve, reject) {
+      task.on('state_changed', function (s) {
+        var pct = s.totalBytes ? Math.round(s.bytesTransferred / s.totalBytes * 100) : 0;
+        toast('⤒ Envoi ' + file.name + ' — ' + pct + ' %');
+      }, reject, function () { task.snapshot.ref.getDownloadURL().then(resolve, reject); });
+    });
+  }
+
+  /* ─── Rendu : liste ─────────────────────────────────────────────────── */
+  function pageHead(icon, title, sub, right) {
+    return '<div class="au-head"><div class="au-head-ico">' + icon + '</div><div><h1 class="au-title">' + esc(title) + '</h1>' +
+      (sub ? '<div class="au-sub">' + sub + '</div>' : '') + '</div>' + (right ? '<div class="au-head-right">' + right + '</div>' : '') + '</div>';
+  }
+  function renderList() {
+    VIEW = 'list'; F = null;
+    var h = pageHead('🎓', 'Gérer les formations', 'Setting LAB, Closing LAB, Coach LAB… Les espaces de formation interne de l\'équipe.',
+      '<a class="au-btn" href="formations.html">👁 Vue membre</a><button type="button" class="au-btn primary" data-act="new">＋ Nouvelle formation</button>');
+    if (!ORDER.length) {
+      h += '<div class="au-empty"><span class="i">🎓</span>Aucune formation pour le moment.<br>Crée-en une, ou lance le script de migration depuis AE Academy.</div>';
+    } else {
+      h += '<div class="fb-grid">' + ORDER.map(function (id) {
+        var f = FORMS[id], n = C.countTree(f.modules);
+        return '<div class="fb-card"><div style="display:flex;align-items:center;gap:12px"><div class="fb-card-ico">' + esc(iconOf(f)) + '</div>' +
+          '<div style="flex:1;min-width:0"><div class="fb-card-n">' + esc(f.name || id) + '</div><div class="fb-card-m">' + esc(id) + '</div></div>' +
+          '<button type="button" class="fb-pill ' + (f.status === 'draft' ? 'draft' : 'pub') + '" data-act="toggle-form-status" data-id="' + esc(id) + '" title="Basculer publié / brouillon">' + (f.status === 'draft' ? 'Brouillon' : 'Publié') + '</button></div>' +
+          (f.description ? '<div style="font-size:12.5px;color:var(--muted);line-height:1.5">' + esc(f.description) + '</div>' : '') +
+          '<div class="fb-card-m">' + n.modules + ' modules · ' + n.subs + ' sous-modules · ' + n.lessons + ' leçons (' + n.published + ' publiées) · ' + n.binders + ' classeurs</div>' +
+          '<div class="fb-card-acts"><a class="au-btn primary" href="' + hashFor({ f: id }) + '">✏️ Ouvrir le plan</a><a class="au-btn" href="formations.html' + hashFor({ f: id }) + '" target="_blank" rel="noopener">👁 Aperçu</a><button type="button" class="au-btn ghost" data-act="dup-form" data-id="' + esc(id) + '">⧉ Dupliquer</button></div></div>';
+      }).join('') + '</div>';
+    }
+    $view.innerHTML = h;
+  }
+
+  /* ─── Rendu : builder ───────────────────────────────────────────────── */
+  function renderBuilder() {
+    VIEW = 'builder';
+    var h = '<div class="fb-crumb"><a href="#">Formations</a><span class="sep">›</span><span class="cur">' + esc(F.name || F.id) + '</span></div>';
+    h += '<div class="fb-head"><input class="ico" id="fmIcon" value="' + esc(iconOf(F)) + '" maxlength="4" title="Icône">' +
+      '<input class="name" id="fmName" value="' + esc(F.name || '') + '" placeholder="Nom de la formation">' +
+      '<button type="button" class="fb-pill ' + (F.status === 'draft' ? 'draft' : 'pub') + '" id="fmStatus" title="Basculer publié / brouillon">' + (F.status === 'draft' ? 'Brouillon' : 'Publié') + '</button>' +
+      '<span class="fb-save" id="saveState"></span></div>';
+    h += '<textarea class="fb-desc-f" id="fmDesc" placeholder="Description courte, affichée sur la carte de la formation (optionnel)">' + esc(F.description || '') + '</textarea>';
+    h += '<div class="fb-toolbar"><button type="button" class="au-btn primary" data-act="add-module">＋ Module</button>' +
+      '<button type="button" class="au-btn" data-act="drive" data-kind="formation">☁ Importer depuis Drive</button>' +
+      '<a class="au-btn" href="formations.html' + hashFor({ f: F.id }) + '" target="_blank" rel="noopener">👁 Aperçu membre</a>' +
+      (IS_ADMIN ? '<button type="button" class="au-btn ghost" data-act="members">👥 Qui a accès</button>' : '') +
+      '<span style="margin-left:auto;font-size:11px;color:var(--muted2)">Brouillon = invisible pour les membres, à chaque niveau.</span></div>';
+    h += '<div id="tree"></div>';
+    $view.innerHTML = h;
+    renderTree();
+    setSaveState(DIRTY ? 'dirty' : 'saved');
+  }
+
+  function toolsHtml(id, opts) {
+    var h = '<span class="fb-tools">';
+    if (opts.edit) h += '<a class="fb-ib" href="' + opts.edit + '" title="Éditer">✏️</a>';
+    h += '<button type="button" class="fb-ib" data-act="up" data-id="' + esc(id) + '" title="Monter">↑</button><button type="button" class="fb-ib" data-act="down" data-id="' + esc(id) + '" title="Descendre">↓</button>';
+    if (opts.move) h += '<button type="button" class="fb-ib" data-act="move" data-id="' + esc(id) + '" title="Déplacer vers…">⇄</button>';
+    h += '<button type="button" class="fb-ib" data-act="dup" data-id="' + esc(id) + '" title="Dupliquer">⧉</button>';
+    h += '<button type="button" class="fb-ib danger" data-act="del" data-id="' + esc(id) + '" title="Retirer">✕</button></span>';
+    return h;
+  }
+  function statusPill(node) {
+    return '<button type="button" class="fb-pill ' + (node.status === 'draft' ? 'draft' : 'pub') + '" data-act="status" data-id="' + esc(node.id) + '">' + (node.status === 'draft' ? 'Brouillon' : 'Publié') + '</button>';
+  }
+  function lessonRowHtml(l) {
+    var thumb = C.lessonThumbUrl(l);
+    return '<div class="fb-row"><span class="fb-ico">' + (thumb ? '<img src="' + esc(thumb) + '" alt="" style="width:24px;height:16px;object-fit:cover;border-radius:3px" onerror="this.style.display=\'none\'">' : '▶') + '</span>' +
+      '<input class="fb-title" data-title="' + esc(l.id) + '" value="' + esc(l.title || '') + '" placeholder="Titre de la leçon">' +
+      (l.video ? '' : '<span style="font-size:10px;color:var(--gold)" title="Pas de vidéo">∅ vidéo</span>') +
+      (l.duration ? '<span style="font-size:10.5px;color:var(--muted2);font-family:var(--fm)">' + esc(l.duration) + '</span>' : '') +
+      statusPill(l) + toolsHtml(l.id, { edit: hashFor({ f: F.id, l: l.id }), move: true }) + '</div>';
+  }
+  function binderRowHtml(b) {
+    var n = 0; (b.sections || []).forEach(function (s) { n += (s.files || []).length; });
+    return '<div class="fb-row"><span class="fb-ico">📎</span><input class="fb-title" data-title="' + esc(b.id) + '" value="' + esc(b.title || '') + '" placeholder="Titre du classeur">' +
+      '<span style="font-size:10.5px;color:var(--muted2);font-family:var(--fm)">' + n + ' fichier' + (n > 1 ? 's' : '') + '</span>' +
+      statusPill(b) + toolsHtml(b.id, { edit: hashFor({ f: F.id, b: b.id }), move: true }) + '</div>';
+  }
+  function addBar(parentId, isSub) {
+    return '<div class="fb-addbar"><button type="button" class="fb-add" data-act="add-lesson" data-parent="' + esc(parentId) + '">＋ Leçon</button>' +
+      (isSub ? '' : '<button type="button" class="fb-add" data-act="add-sub" data-parent="' + esc(parentId) + '">＋ Sous-module</button>') +
+      '<button type="button" class="fb-add" data-act="add-binder" data-parent="' + esc(parentId) + '">＋ Classeur</button>' +
+      '<button type="button" class="fb-add" data-act="drive" data-kind="' + (isSub ? 'sub' : 'module') + '" data-parent="' + esc(parentId) + '">☁ Drive</button></div>';
+  }
+  function renderTree() {
+    var el = document.getElementById('tree');
+    if (!el) return;
+    if (!F.modules.length) { el.innerHTML = '<div class="au-empty"><span class="i">🧱</span>Aucun module. Ajoute un module, ou importe un dossier Drive.</div>'; return; }
+    el.innerHTML = F.modules.map(function (m, mi) {
+      var h = '<div class="fb-mod"><div class="fb-mod-h"><span class="fb-num">M' + (mi + 1) + '</span>' +
+        '<input class="fb-title" data-title="' + esc(m.id) + '" value="' + esc(m.title || '') + '" placeholder="Titre du module">' + statusPill(m) + toolsHtml(m.id, {}) + '</div>';
+      h += '<div class="fb-descrow"><input data-desc="' + esc(m.id) + '" value="' + esc(m.description || '') + '" placeholder="Description du module (optionnel)"></div>';
+      h += '<div class="fb-mod-b">';
+      if (!m.children.length) h += '<div class="fb-empty">Module vide.</div>';
+      m.children.forEach(function (c) {
+        if (c.kind === 'sub') {
+          h += '<div class="fb-sub"><div class="fb-sub-h"><span class="fb-ico">▤</span><input class="fb-title" data-title="' + esc(c.id) + '" value="' + esc(c.title || '') + '" placeholder="Titre du sous-module">' +
+            '<span style="font-size:10.5px;color:var(--muted2);font-family:var(--fm)">' + c.lessons.length + ' élément' + (c.lessons.length > 1 ? 's' : '') + '</span>' + toolsHtml(c.id, { move: true }) + '</div><div class="fb-sub-b">';
+          if (!c.lessons.length) h += '<div class="fb-empty">Sous-module vide.</div>';
+          c.lessons.forEach(function (l) { h += l.kind === 'binder' ? binderRowHtml(l) : lessonRowHtml(l); });
+          h += addBar(c.id, true) + '</div></div>';
+        } else if (c.kind === 'binder') h += binderRowHtml(c);
+        else h += lessonRowHtml(c);
+      });
+      h += addBar(m.id, false) + '</div></div>';
+      return h;
+    }).join('');
+  }
+
+  /* ─── Actions sur l'arbre ───────────────────────────────────────────── */
+  function nodeLabel(loc) {
+    var k = { module: 'le module', sub: 'le sous-module', lesson: 'la leçon', binder: 'le classeur' }[loc.kind] || 'l\'élément';
+    return k + ' « ' + (loc.node.title || 'sans titre') + ' »';
+  }
+  function addInto(parentId, kind) {
+    mutate(function (mods) {
+      var node = kind === 'sub' ? C.emptySub() : (kind === 'binder' ? C.emptyBinder() : C.emptyLesson());
+      if (!parentId) { mods.push(C.emptyModule()); return; }
+      var loc = C.locate(mods, parentId);
+      if (!loc) return;
+      if (loc.kind === 'module') loc.node.children.push(node);
+      else if (loc.kind === 'sub' && kind !== 'sub') loc.node.lessons.push(node);
+    });
+  }
+  function openMove(nodeId) {
+    var loc = C.locate(F.modules, nodeId);
+    if (!loc) return;
+    var opts = [];
+    F.modules.forEach(function (m, mi) {
+      if (m.id === loc.moduleId && loc.subId === null && loc.kind !== 'module') return;
+      opts.push({ id: m.id, label: 'M' + (mi + 1) + ' · ' + (m.title || 'sans titre') });
+      if (loc.kind === 'sub') return;
+      (m.children || []).forEach(function (c) {
+        if (c.kind !== 'sub' || c.id === loc.subId) return;
+        opts.push({ id: c.id, label: '    ▤ ' + (c.title || 'sans titre') + '  (dans M' + (mi + 1) + ')' });
+      });
+    });
+    if (!opts.length) { toast('Aucune destination possible.', true); return; }
+    document.getElementById('mvLabel').textContent = 'Déplacer ' + nodeLabel(loc) + ' à la fin de :';
+    document.getElementById('mvTarget').innerHTML = opts.map(function (o) { return '<option value="' + esc(o.id) + '">' + esc(o.label) + '</option>'; }).join('');
+    document.getElementById('mvGo').setAttribute('data-node', nodeId);
+    openModal('moveModal');
+  }
+  function doMove() {
+    var nodeId = document.getElementById('mvGo').getAttribute('data-node');
+    var target = document.getElementById('mvTarget').value;
+    closeModal('moveModal');
+    mutate(function (mods) { if (!C.moveNodeInTree(mods, nodeId, target, 99999)) toast('Déplacement impossible.', true); });
+  }
+  function handleTreeAct(act, btn) {
+    var id = btn.getAttribute('data-id');
+    var parent = btn.getAttribute('data-parent');
+    if (act === 'add-module') { addInto(null, 'module'); return; }
+    if (act === 'add-lesson') { addInto(parent, 'lesson'); return; }
+    if (act === 'add-sub') { addInto(parent, 'sub'); return; }
+    if (act === 'add-binder') { addInto(parent, 'binder'); return; }
+    if (act === 'drive') { openDrive(btn.getAttribute('data-kind'), parent); return; }
+    if (act === 'members') { openMembers(); return; }
+    if (act === 'move') { openMove(id); return; }
+    var loc = C.locate(F.modules, id);
+    if (!loc) return;
+    if (act === 'status') { mutate(function () { loc.node.status = loc.node.status === 'draft' ? 'published' : 'draft'; }); return; }
+    if (act === 'up') { mutate(function () { C.moveInList(loc.list, loc.index, -1); }); return; }
+    if (act === 'down') { mutate(function () { C.moveInList(loc.list, loc.index, 1); }); return; }
+    if (act === 'dup') { mutate(function () { var copy = C.regenIds(loc.node); copy.title = (copy.title || '') + ' (copie)'; loc.list.splice(loc.index + 1, 0, copy); }); return; }
+    if (act === 'del') {
+      if (!window.confirm('Retirer ' + nodeLabel(loc) + ' du plan ?' + (loc.kind === 'module' || loc.kind === 'sub' ? '\nTout son contenu sera retiré avec lui.' : ''))) return;
+      mutate(function () { loc.list.splice(loc.index, 1); });
+      toast('Retiré. (Ctrl+Z impossible : ré-ajoute-le si besoin.)');
+    }
+  }
+
+  /* ─── Rendu : éditeur de leçon ──────────────────────────────────────── */
+  function fieldHtml(id, label, value, placeholder, hint, type) {
+    return '<div class="fb-f"><label for="' + id + '">' + label + '</label><input type="' + (type || 'text') + '" id="' + id + '" value="' + esc(value || '') + '" placeholder="' + esc(placeholder || '') + '">' + (hint ? '<div class="hint">' + hint + '</div>' : '') + '</div>';
+  }
+  function uploadField(id, label, value, kind, hint, previewImg) {
+    return '<div class="fb-f"><label>' + label + '</label>' + (previewImg ? '<img class="fb-thumbprev" id="' + id + 'Prev" src="' + esc(value || '') + '" alt="" style="' + (value ? '' : 'display:none') + '">' : '') +
+      '<div class="fb-upl"><input type="url" id="' + id + '" value="' + esc(value || '') + '" placeholder="https://…"><button type="button" class="au-btn" data-upload="' + kind + '" title="Envoyer un fichier">⤒</button></div>' + (hint ? '<div class="hint">' + hint + '</div>' : '') + '</div>';
+  }
+  function videoPreviewHtml(url) {
+    if (!url) return '';
+    var e = C.toEmbed(url);
+    if (e) return '<div class="fb-prev"><iframe src="' + esc(e) + '" allow="autoplay; fullscreen; encrypted-media" allowfullscreen loading="lazy"></iframe></div>';
+    if (C.isDirectVideo(url)) return '<div class="fb-prev"><video src="' + esc(url) + '" controls preload="metadata"></video></div>';
+    return '<div class="hint" style="color:var(--gold)">⚠ Lien non reconnu : il s\'ouvrira dans un nouvel onglet côté membre.</div>';
+  }
+  function resourcesHtml(list) {
+    var h = '';
+    (list || []).forEach(function (r, i) {
+      h += '<div class="fb-res" data-res="' + i + '"><input data-rf="title" value="' + esc(r.title) + '" placeholder="Titre"><input data-rf="url" value="' + esc(r.url) + '" placeholder="https://…">' +
+        '<button type="button" class="fb-ib" data-upload="resource" data-idx="' + i + '" title="Envoyer un fichier">⤒</button><button type="button" class="fb-ib danger" data-act="res-del" data-idx="' + i + '" title="Retirer">✕</button></div>';
+    });
+    return h + '<button type="button" class="fb-add" data-act="res-add">＋ Ressource</button>';
+  }
+  function renderLessonEditor(lid) {
+    VIEW = 'lesson';
+    var loc = C.locate(F.modules, lid);
+    if (!loc || loc.kind !== 'lesson') { $view.innerHTML = '<div class="au-empty">Leçon introuvable. <a class="au-btn" href="' + hashFor({ f: F.id }) + '">← Plan</a></div>'; return; }
+    var l = loc.node;
+    var h = '<div class="fb-crumb"><a href="#">Formations</a><span class="sep">›</span><a href="' + hashFor({ f: F.id }) + '">' + esc(F.name || F.id) + '</a><span class="sep">›</span><span class="cur">Leçon</span></div>';
+    h += '<div class="fb-head"><a class="au-btn" href="' + hashFor({ f: F.id }) + '">← Plan</a><div style="flex:1;font-family:var(--fh);font-size:18px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="edHeadTitle">' + esc(l.title || 'Sans titre') + '</div>' +
+      '<span class="fb-save" id="saveState"></span><a class="au-btn" href="formations.html' + hashFor({ f: F.id, l: l.id }) + '" target="_blank" rel="noopener">👁 Voir en membre</a></div>';
+    h += '<div class="fb-ed" id="edForm"><div>';
+    h += fieldHtml('edTitle', 'Titre', l.title, 'Titre de la leçon');
+    h += '<div class="fb-row2"><div class="fb-f"><label for="edStatus">Statut</label><select id="edStatus"><option value="draft"' + (l.status === 'draft' ? ' selected' : '') + '>Brouillon (invisible)</option><option value="published"' + (l.status !== 'draft' ? ' selected' : '') + '>Publié</option></select></div>' +
+      fieldHtml('edDuration', 'Durée affichée', l.duration, 'Ex. 12 min') + '</div>';
+    h += '<div class="fb-f"><label for="edVideo">Vidéo</label><input type="url" id="edVideo" value="' + esc(l.video || '') + '" placeholder="Lien YouTube, Vimeo, Loom, Tella ou Google Drive (fichier)"><div id="edVideoPrev">' + videoPreviewHtml(l.video) + '</div>' +
+      '<div class="hint">Pour Drive, colle le lien du <b>fichier</b> (…/file/d/…/view). Il doit être partagé « tous ceux qui ont le lien » pour se lire chez les membres.</div></div>';
+    h += '<div class="fb-f"><label>Contenu de la leçon</label><div class="fb-rte-bar">' +
+      '<button type="button" data-cmd="bold" title="Gras"><b>B</b></button><button type="button" data-cmd="italic" title="Italique"><i>I</i></button><button type="button" data-cmd="underline" title="Souligné"><u>U</u></button><span class="sp"></span>' +
+      '<button type="button" data-cmd="formatBlock" data-arg="H2">H2</button><button type="button" data-cmd="formatBlock" data-arg="H3">H3</button><button type="button" data-cmd="formatBlock" data-arg="P">¶</button><button type="button" data-cmd="formatBlock" data-arg="BLOCKQUOTE">❝</button><span class="sp"></span>' +
+      '<button type="button" data-cmd="insertUnorderedList" title="Liste">• Liste</button><button type="button" data-cmd="insertOrderedList" title="Liste numérotée">1. Liste</button><span class="sp"></span>' +
+      '<button type="button" data-cmd="createLink" title="Lien">🔗</button><button type="button" data-cmd="unlink" title="Retirer le lien">⛓</button><button type="button" data-cmd="removeFormat" title="Nettoyer">🧹</button><span class="sp"></span>' +
+      '<button type="button" data-act="rte-html" title="Voir / éditer le HTML">&lt;/&gt;</button></div>' +
+      '<div class="fb-rte" id="edBody" contenteditable="true">' + C.sanitizeHtml(C.plainToHtml(l.body)) + '</div>' +
+      '<textarea class="fb-rte-html" id="edBodyHtml" style="display:none" spellcheck="false"></textarea>' +
+      '<div class="hint">Colle du texte, mets en forme avec la barre. Le HTML est stocké tel quel (compatible avec les leçons migrées d\'Academy).</div></div>';
+    h += '<div class="fb-f"><label>Ressources téléchargeables</label><div id="edRes">' + resourcesHtml(l.resources) + '</div><div class="hint">Titre + lien, ou envoie un fichier (PDF, doc…) avec ⤒ — il est hébergé sur le Storage du projet.</div></div>';
+    h += '</div><div>';
+    h += uploadField('edThumb', 'Vignette', l.thumbnail, 'thumbnail', 'Sinon la vignette est déduite de la vidéo (YouTube, Loom, Drive).', true);
+    h += uploadField('edImage', 'Image (à la place d\'une vidéo)', l.image, 'image', 'Affichée seulement si la leçon n\'a pas de vidéo.', true);
+    h += uploadField('edAudio', 'Audio', l.audio, 'audio', 'URL directe (.m4a / .mp3). Un lien Drive ne se joue pas dans un lecteur audio : envoie le fichier avec ⤒.', false);
+    h += '</div></div>';
+    $view.innerHTML = h;
+    setSaveState(DIRTY ? 'dirty' : 'saved');
+  }
+  function readLessonForm() {
+    var p = parseHash();
+    var loc = C.locate(F.modules, p.l);
+    if (!loc || loc.kind !== 'lesson') return;
+    var l = loc.node;
+    var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    l.title = g('edTitle'); l.status = g('edStatus') || 'draft'; l.duration = g('edDuration');
+    l.video = g('edVideo'); l.thumbnail = g('edThumb'); l.image = g('edImage'); l.audio = g('edAudio');
+    var ta = document.getElementById('edBodyHtml'), rte = document.getElementById('edBody');
+    l.body = C.sanitizeHtml(ta && ta.style.display !== 'none' ? ta.value : (rte ? rte.innerHTML : ''));
+    if (/^(<p><br><\/p>|<br>|\s)*$/.test(l.body)) l.body = '';
+    var res = [];
+    document.querySelectorAll('#edRes .fb-res').forEach(function (row) {
+      var t = row.querySelector('[data-rf="title"]').value.trim(), u = row.querySelector('[data-rf="url"]').value.trim();
+      if (t || u) res.push({ title: t, url: u });
+    });
+    l.resources = res;
+    var ht = document.getElementById('edHeadTitle'); if (ht) ht.textContent = l.title || 'Sans titre';
+  }
+  function scheduleFormRead(fn) {
+    clearTimeout(FORM_T);
+    FORM_T = setTimeout(function () { fn(); markDirty(); }, 500);
+  }
+  function refreshPreviews() {
+    var v = document.getElementById('edVideo'), pv = document.getElementById('edVideoPrev');
+    if (v && pv && pv.getAttribute('data-for') !== v.value) { pv.setAttribute('data-for', v.value); pv.innerHTML = videoPreviewHtml(v.value.trim()); }
+    ['edThumb', 'edImage'].forEach(function (id) {
+      var i = document.getElementById(id), img = document.getElementById(id + 'Prev');
+      if (i && img) { img.src = i.value.trim(); img.style.display = i.value.trim() ? '' : 'none'; }
+    });
+  }
+
+  /* ─── Rendu : éditeur de classeur ───────────────────────────────────── */
+  function renderBinderEditor(bid) {
+    VIEW = 'binder';
+    var loc = C.locate(F.modules, bid);
+    if (!loc || loc.kind !== 'binder') { $view.innerHTML = '<div class="au-empty">Classeur introuvable. <a class="au-btn" href="' + hashFor({ f: F.id }) + '">← Plan</a></div>'; return; }
+    var b = loc.node;
+    var h = '<div class="fb-crumb"><a href="#">Formations</a><span class="sep">›</span><a href="' + hashFor({ f: F.id }) + '">' + esc(F.name || F.id) + '</a><span class="sep">›</span><span class="cur">Classeur</span></div>';
+    h += '<div class="fb-head"><a class="au-btn" href="' + hashFor({ f: F.id }) + '">← Plan</a><div style="flex:1;font-family:var(--fh);font-size:18px;font-weight:700" id="edHeadTitle">📎 ' + esc(b.title || 'Classeur') + '</div><span class="fb-save" id="saveState"></span>' +
+      '<a class="au-btn" href="formations.html' + hashFor({ f: F.id, b: b.id }) + '" target="_blank" rel="noopener">👁 Voir en membre</a></div>';
+    h += '<div id="edForm" style="max-width:900px">';
+    h += '<div class="fb-row2">' + fieldHtml('bdTitle', 'Titre', b.title, 'Titre du classeur') +
+      '<div class="fb-f"><label for="bdStatus">Statut</label><select id="bdStatus"><option value="draft"' + (b.status === 'draft' ? ' selected' : '') + '>Brouillon (invisible)</option><option value="published"' + (b.status !== 'draft' ? ' selected' : '') + '>Publié</option></select></div></div>';
+    h += '<div class="fb-f"><label for="bdIntro">Texte d\'introduction</label><textarea id="bdIntro" rows="3" placeholder="À quoi servent ces fichiers, comment les utiliser…">' + esc(b.intro || '') + '</textarea></div>';
+    h += '<div class="fb-f"><label>Sections et fichiers</label><div id="bdSecs">' + sectionsHtml(b.sections) + '</div></div>';
+    h += '</div>';
+    $view.innerHTML = h;
+    setSaveState(DIRTY ? 'dirty' : 'saved');
+  }
+  function sectionsHtml(sections) {
+    var h = '';
+    (sections || []).forEach(function (s, si) {
+      h += '<div class="fb-sec" data-sec="' + si + '"><div class="fb-sec-h"><input class="fb-title" data-sf="title" value="' + esc(s.title) + '" placeholder="Titre de la section" style="font-family:var(--fh)"><button type="button" class="fb-ib danger" data-act="sec-del" data-sec="' + si + '" title="Retirer la section">✕</button></div>';
+      (s.files || []).forEach(function (f, fi) {
+        h += '<div class="fb-file" data-file="' + fi + '"><input data-ff="title" value="' + esc(f.title) + '" placeholder="Titre"><input data-ff="url" value="' + esc(f.url) + '" placeholder="https://…"><input data-ff="note" value="' + esc(f.note) + '" placeholder="Note (optionnel)">' +
+          '<button type="button" class="fb-ib" data-upload="file" data-sec="' + si + '" data-idx="' + fi + '" title="Envoyer un fichier">⤒</button><button type="button" class="fb-ib danger" data-act="file-del" data-sec="' + si + '" data-idx="' + fi + '" title="Retirer">✕</button></div>';
+      });
+      h += '<button type="button" class="fb-add" data-act="file-add" data-sec="' + si + '">＋ Fichier</button></div>';
+    });
+    return h + '<button type="button" class="fb-add" data-act="sec-add">＋ Section</button>';
+  }
+  function readBinderForm() {
+    var p = parseHash();
+    var loc = C.locate(F.modules, p.b);
+    if (!loc || loc.kind !== 'binder') return;
+    var b = loc.node;
+    var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    b.title = g('bdTitle'); b.status = g('bdStatus') || 'draft'; b.intro = g('bdIntro');
+    var secs = [];
+    document.querySelectorAll('#bdSecs .fb-sec').forEach(function (sec, si) {
+      var old = (b.sections || [])[si] || {};
+      var s = { id: old.id || C.uid(), title: sec.querySelector('[data-sf="title"]').value.trim(), files: [] };
+      sec.querySelectorAll('.fb-file').forEach(function (row, fi) {
+        var of = ((old.files || [])[fi]) || {};
+        s.files.push({ id: of.id || C.uid(), title: row.querySelector('[data-ff="title"]').value.trim(), url: row.querySelector('[data-ff="url"]').value.trim(), note: row.querySelector('[data-ff="note"]').value.trim() });
+      });
+      secs.push(s);
+    });
+    b.sections = secs;
+    var ht = document.getElementById('edHeadTitle'); if (ht) ht.textContent = '📎 ' + (b.title || 'Classeur');
+  }
+  function rerenderSections() {
+    readBinderForm();
+    var loc = C.locate(F.modules, parseHash().b);
+    document.getElementById('bdSecs').innerHTML = sectionsHtml(loc.node.sections);
+    markDirty();
+  }
+
+  /* ─── Membres ayant accès (admin) ───────────────────────────────────── */
+  function openMembers() {
+    var el = document.getElementById('membersList');
+    el.innerHTML = '<div class="fb-empty">Chargement…</div>';
+    openModal('membersModal');
+    db.collection('users').get().then(function (qs) {
+      var admins = [], members = [], editors = [];
+      qs.forEach(function (d) {
+        var u = d.data() || {};
+        if (u.status === 'archived' || u.status === 'disabled') return;
+        var name = u.displayName || u.email || d.id;
+        if (u.role === 'admin') { admins.push(name); return; }
+        if (u.formationsEditor === true) editors.push(name);
+        if (u.formationsAccess && u.formationsAccess[F.id] === true) members.push(name);
+      });
+      var h = '<div><b>Membres :</b> ' + (members.length ? members.map(esc).join(', ') : '<span style="color:var(--muted)">aucun pour l\'instant</span>') + '</div>';
+      h += '<div><b>Éditeurs :</b> ' + (editors.length ? editors.map(esc).join(', ') : '<span style="color:var(--muted)">—</span>') + '</div>';
+      h += '<div><b>Admins (accès complet) :</b> ' + admins.map(esc).join(', ') + '</div>';
+      el.innerHTML = h;
+    }).catch(function (e) { el.innerHTML = '<span style="color:var(--red)">' + esc(e.message) + '</span>'; });
+  }
+
+  /* ─── Création / duplication ────────────────────────────────────────── */
+  function createFormation() {
+    var name = document.getElementById('nfName').value.trim();
+    var icon = document.getElementById('nfIcon').value.trim() || '🎓';
+    var id = C.slugify(document.getElementById('nfId').value.trim() || name);
+    if (!name) { toast('Donne un nom.', true); return; }
+    if (FORMS[id]) { toast('L\'identifiant « ' + id + ' » existe déjà.', true); return; }
+    var ref = db.collection('formations').doc(id);
+    ref.get().then(function (d) {
+      if (d.exists) throw new Error('Cet identifiant existe déjà.');
+      return ref.set({ name: name, icon: icon, type: 'Espace équipe', team: true, status: 'draft', order: Date.now(), description: '', modules: [], createdAt: serverTs(), updatedAt: serverTs(), updatedBy: UID });
+    }).then(function () {
+      closeModal('newModal');
+      toast('✅ Formation créée (brouillon)');
+      return loadForms();
+    }).then(function () { window.location.hash = hashFor({ f: id }); render(); })
+      .catch(function (e) { toast('Erreur : ' + e.message, true); });
+  }
+  function duplicateFormation(id) {
+    var src = FORMS[id]; if (!src) return;
+    var name = window.prompt('Nom de la copie :', (src.name || id) + ' (copie)');
+    if (!name) return;
+    var base = C.slugify(name), nid = base, n = 2;
+    while (FORMS[nid]) { nid = base + '-' + n; n += 1; }
+    db.collection('formations').doc(nid).set({
+      name: name, icon: src.icon || '', type: src.type || 'Espace équipe', team: true, status: 'draft', order: Date.now(),
+      description: src.description || '', modules: C.clone(src.modules), createdAt: serverTs(), updatedAt: serverTs(), updatedBy: UID, _duplicatedFrom: id
+    }).then(function () { toast('✅ Copie créée en brouillon'); return loadForms(); }).then(renderList)
+      .catch(function (e) { toast('Erreur : ' + e.message, true); });
+  }
+  function toggleFormStatus(id) {
+    var f = FORMS[id]; if (!f) return;
+    var next = f.status === 'draft' ? 'published' : 'draft';
+    db.collection('formations').doc(id).update({ status: next, updatedAt: serverTs(), updatedBy: UID })
+      .then(function () { f.status = next; renderList(); toast(next === 'draft' ? 'Formation dépubliée' : '✅ Formation publiée'); })
+      .catch(function (e) { toast('Erreur : ' + e.message, true); });
+  }
+
+  /* ─── Google Drive ──────────────────────────────────────────────────── */
+  function api(action, payload) {
+    return firebase.auth().currentUser.getIdToken().then(function (tok) {
+      return fetch('/api/formations-drive', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify(C.assign({ action: action }, payload || {})) });
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+  function driveModes(kind) {
+    if (kind === 'formation') return [{ v: 'single', l: 'Le dossier devient UN module (ses sous-dossiers → sous-modules)' }, { v: 'multiple', l: 'Chaque sous-dossier devient SON PROPRE module' }];
+    if (kind === 'module') return [{ v: 'sub', l: 'Le dossier devient un sous-module (vidéos aplaties)' }, { v: 'multi', l: 'Chaque sous-dossier → un sous-module, vidéos racine → leçons' }, { v: 'flat', l: 'Toutes les vidéos → leçons directes du module' }];
+    return [{ v: 'flat', l: 'Toutes les vidéos → leçons du sous-module' }];
+  }
+  function openDrive(kind, parentId) {
+    var label = 'toute la formation';
+    if (kind !== 'formation') { var loc = C.locate(F.modules, parentId); label = loc ? nodeLabel(loc) : kind; }
+    DRIVE.target = { kind: kind, parentId: parentId || null };
+    DRIVE.node = null;
+    document.getElementById('drvTarget').innerHTML = 'Cible : <b>' + esc(label) + '</b>. Les vidéos et audios deviennent des leçons en brouillon ; les documents sont ignorés (ajoute-les en ressources ou en classeur).';
+    document.getElementById('drvMode').innerHTML = driveModes(kind).map(function (m) { return '<option value="' + m.v + '">' + esc(m.l) + '</option>'; }).join('');
+    document.getElementById('drvPreview').innerHTML = '';
+    document.getElementById('drvImport').disabled = true;
+    document.getElementById('drvScan').disabled = !DRIVE.stack.length;
+    openModal('driveModal');
+    if (DRIVE.connected === null) {
+      api('status').then(function (j) {
+        DRIVE.connected = j.connected; DRIVE.email = j.email || ''; DRIVE.tokenKey = j.tokenKey;
+        renderDriveStatus();
+        if (j.connected && !DRIVE.stack.length) driveGo('root', 'Mon Drive');
+      }).catch(function (e) { DRIVE.connected = false; renderDriveStatus(e.message); });
+    } else renderDriveStatus();
+  }
+  function renderDriveStatus(err) {
+    var el = document.getElementById('drvStatus');
+    if (DRIVE.connected) { el.className = 'fb-empty'; el.innerHTML = '✓ Compte Drive connecté' + (DRIVE.email ? ' : ' + esc(DRIVE.email) : '') + ' <span style="opacity:.6">(' + esc(DRIVE.tokenKey) + ')</span>'; return; }
+    el.className = 'drv-warn';
+    el.innerHTML = '⚠ Aucun compte Google Drive connecté' + (err ? ' — ' + esc(err) : '') + '. Un admin doit connecter « Drive Formations » depuis <a href="admin-email-auth.html" style="color:#b6c3ff">admin-email-auth.html</a>.';
+  }
+  function driveGo(folderId, name, push) {
+    var list = document.getElementById('drvList');
+    list.innerHTML = '<div class="au-loading"><div class="au-spinner"></div>Lecture du dossier…</div>';
+    if (push === 'reset') DRIVE.stack = [];
+    if (folderId !== 'root' && folderId !== 'shared') DRIVE.stack.push({ id: folderId, name: name });
+    else DRIVE.stack = [{ id: folderId, name: name, virtual: true }];
+    DRIVE.node = null;
+    document.getElementById('drvPreview').innerHTML = '';
+    document.getElementById('drvImport').disabled = true;
+    renderDriveCrumb();
+    api('list', { folderId: folderId }).then(function (j) {
+      var h = '';
+      j.folders.forEach(function (f) { h += '<div class="drv-item folder" data-drv-folder="' + esc(f.id) + '" data-name="' + esc(f.name) + '"><span>📁</span><span class="n">' + esc(f.name) + '</span><span class="k">ouvrir ›</span></div>'; });
+      j.files.forEach(function (f) {
+        var media = f.kind === 'video' || f.kind === 'audio';
+        h += '<div class="drv-item' + (media ? '' : ' doc') + '"><span>' + (f.kind === 'video' ? '🎬' : f.kind === 'audio' ? '🎧' : f.kind === 'image' ? '🖼' : '📄') + '</span><span class="n">' + esc(f.name) + '</span><span class="k">' + (f.size ? Math.round(f.size / 1048576) + ' Mo' : '') + '</span>' +
+          (media ? '<button type="button" class="fb-add" data-drv-file="' + esc(f.id) + '" data-name="' + esc(f.name) + '">＋ leçon</button>' : '') + '</div>';
+      });
+      if (!h) h = '<div class="fb-empty">Dossier vide.</div>';
+      list.innerHTML = h;
+      var cur = DRIVE.stack[DRIVE.stack.length - 1];
+      document.getElementById('drvScan').disabled = !cur || !!cur.virtual;
+    }).catch(function (e) { list.innerHTML = '<div class="drv-warn">' + esc(e.message) + '</div>'; });
+  }
+  function renderDriveCrumb() {
+    var el = document.getElementById('drvCrumb');
+    el.innerHTML = DRIVE.stack.map(function (s, i) {
+      var last = i === DRIVE.stack.length - 1;
+      return (i ? '<span>›</span>' : '') + (last ? '<span class="cur">' + esc(s.name) + '</span>' : '<button type="button" data-drv-crumb="' + i + '">' + esc(s.name) + '</button>');
+    }).join('');
+  }
+  function driveScan() {
+    var cur = DRIVE.stack[DRIVE.stack.length - 1];
+    if (!cur || cur.virtual) return;
+    var pv = document.getElementById('drvPreview');
+    pv.innerHTML = '<div class="fb-empty">Analyse de l\'arborescence…</div>';
+    api('tree', { folderId: cur.id, name: cur.name }).then(function (j) {
+      DRIVE.node = j.node;
+      var st = C.driveTreeStats(j.node);
+      pv.innerHTML = '<div class="drv-prev">📁 <b>' + esc(cur.name) + '</b> : ' + st.folders + ' sous-dossier' + (st.folders > 1 ? 's' : '') + ', <b>' + st.videos + ' vidéo/audio</b> → leçons, ' + st.docs + ' document' + (st.docs > 1 ? 's' : '') + ' ignoré' + (st.docs > 1 ? 's' : '') +
+        (j.truncated ? '<br>⚠ Arborescence tronquée (trop de fichiers) : importe sous-dossier par sous-dossier.' : '') + '</div>';
+      document.getElementById('drvImport').disabled = st.videos === 0;
+    }).catch(function (e) { pv.innerHTML = '<div class="drv-warn">' + esc(e.message) + '</div>'; });
+  }
+  function shareIfWanted(nodes) {
+    if (!document.getElementById('drvShare').checked) return Promise.resolve();
+    var ids = C.collectDriveIds(nodes);
+    if (!ids.length) return Promise.resolve();
+    var chunks = []; for (var i = 0; i < ids.length; i += 100) chunks.push(ids.slice(i, i + 100));
+    var failed = 0, shared = 0;
+    return chunks.reduce(function (p, ch) {
+      return p.then(function () { return api('share', { fileIds: ch }).then(function (j) { shared += j.shared.length; failed += j.failed.length; }); });
+    }, Promise.resolve()).then(function () {
+      if (failed) toast('Partage : ' + shared + ' ok, ' + failed + ' en échec (à partager à la main dans Drive).', true);
+      else toast('✓ ' + shared + ' vidéo' + (shared > 1 ? 's' : '') + ' partagée' + (shared > 1 ? 's' : '') + ' en lecture par lien');
+    }).catch(function (e) { toast('Partage impossible : ' + e.message, true); });
+  }
+  function driveImport() {
+    if (!DRIVE.node || !DRIVE.target) return;
+    var mode = document.getElementById('drvMode').value;
+    var t = DRIVE.target, created = [];
+    mutate(function (mods) {
+      if (t.kind === 'formation') { created = C.driveNodeToModules(DRIVE.node, mode); created.forEach(function (m) { mods.push(m); }); return; }
+      var loc = C.locate(mods, t.parentId);
+      if (!loc) return;
+      if (t.kind === 'module') { created = C.driveNodeToChildren(DRIVE.node, mode); created.forEach(function (c) { loc.node.children.push(c); }); }
+      else { created = C.driveNodeToLessons(DRIVE.node); created.forEach(function (l) { loc.node.lessons.push(l); }); }
+    });
+    var n = C.countTree(t.kind === 'formation' ? created : [{ children: created }]);
+    toast('✓ Import : ' + n.lessons + ' leçon' + (n.lessons > 1 ? 's' : '') + ' en brouillon');
+    closeModal('driveModal');
+    shareIfWanted(created);
+  }
+  function driveImportSingle(fileId, name) {
+    var t = DRIVE.target; if (!t) return;
+    var lesson = C.normalizeLesson({ title: C.cleanFileTitle(name), status: 'draft', video: C.driveFileUrl(fileId) });
+    mutate(function (mods) {
+      if (t.kind === 'formation') {
+        if (!mods.length) mods.push(C.emptyModule('Import Drive'));
+        mods[mods.length - 1].children.push(lesson); return;
+      }
+      var loc = C.locate(mods, t.parentId); if (!loc) return;
+      if (t.kind === 'module') loc.node.children.push(lesson); else loc.node.lessons.push(lesson);
+    });
+    toast('✓ Leçon ajoutée en brouillon : ' + lesson.title);
+    shareIfWanted([lesson]);
+  }
+
+  /* ─── Routeur ───────────────────────────────────────────────────────── */
+  function render() {
+    var p = parseHash();
+    if (!p.f) { renderList(); return; }
+    if (!F || F.id !== p.f) {
+      F = FORMS[p.f] || null;
+      if (!F) { $view.innerHTML = '<div class="au-empty"><span class="i">🔍</span>Formation introuvable. <a class="au-btn" href="#">← Liste</a></div>'; return; }
+      DRIVE.stack = []; DRIVE.node = null;
+    }
+    if (p.l) renderLessonEditor(p.l);
+    else if (p.b) renderBinderEditor(p.b);
+    else renderBuilder();
+  }
+  window.addEventListener('hashchange', function () {
+    clearTimeout(FORM_T);
+    if (VIEW === 'lesson') readLessonForm();
+    if (VIEW === 'binder') readBinderForm();
+    if (DIRTY) saveNow();
+    render();
+  });
+
+  /* ─── Délégation d'événements ───────────────────────────────────────── */
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    var close = t.closest('[data-modal-close]');
+    if (close) { closeModal(close.getAttribute('data-modal-close')); return; }
+    if (t.id === 'nfCreate') { createFormation(); return; }
+    if (t.id === 'mvGo') { doMove(); return; }
+    if (t.id === 'fmStatus') { saveMeta({ status: F.status === 'draft' ? 'published' : 'draft' }).then(renderBuilder); return; }
+
+    var drvF = t.closest('[data-drv-folder]');
+    if (drvF) { driveGo(drvF.getAttribute('data-drv-folder'), drvF.getAttribute('data-name')); return; }
+    var drvC = t.closest('[data-drv-crumb]');
+    if (drvC) { var i = parseInt(drvC.getAttribute('data-drv-crumb'), 10); var s = DRIVE.stack[i]; DRIVE.stack = DRIVE.stack.slice(0, i); driveGo(s.id, s.name); return; }
+    var drvFile = t.closest('[data-drv-file]');
+    if (drvFile) { driveImportSingle(drvFile.getAttribute('data-drv-file'), drvFile.getAttribute('data-name')); return; }
+    var drv = t.closest('[data-drv]');
+    if (drv) {
+      var a = drv.getAttribute('data-drv');
+      if (a === 'root') driveGo('root', 'Mon Drive', 'reset');
+      else if (a === 'shared') driveGo('shared', 'Partagés avec moi', 'reset');
+      else if (a === 'open') {
+        var raw = document.getElementById('drvFolderInput').value.trim();
+        var m = raw.match(/folders\/([A-Za-z0-9_-]{5,})/) || raw.match(/^([A-Za-z0-9_-]{5,})$/);
+        if (!m) { toast('Colle un ID ou un lien de dossier Drive.', true); return; }
+        driveGo(m[1], 'Dossier ' + m[1].slice(0, 8) + '…', 'reset');
+      }
+      else if (a === 'scan') driveScan();
+      else if (a === 'import') driveImport();
+      else if (a === 'close') closeModal('driveModal');
+      return;
+    }
+
+    var up = t.closest('[data-upload]');
+    if (up) {
+      UPLOAD = { kind: up.getAttribute('data-upload'), idx: parseInt(up.getAttribute('data-idx') || '-1', 10), sec: parseInt(up.getAttribute('data-sec') || '-1', 10) };
+      document.getElementById('fileInput').click();
+      return;
+    }
+    var cmd = t.closest('[data-cmd]');
+    if (cmd) {
+      var c = cmd.getAttribute('data-cmd'), arg = cmd.getAttribute('data-arg') || null;
+      document.getElementById('edBody').focus();
+      if (c === 'createLink') { var url = window.prompt('Adresse du lien (https://…)'); if (!url) return; document.execCommand('createLink', false, url); }
+      else document.execCommand(c, false, arg);
+      scheduleFormRead(readLessonForm);
+      return;
+    }
+
+    var btn = t.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    if (act === 'new') { document.getElementById('nfName').value = ''; document.getElementById('nfId').value = ''; openModal('newModal'); return; }
+    if (act === 'dup-form') { duplicateFormation(btn.getAttribute('data-id')); return; }
+    if (act === 'toggle-form-status') { toggleFormStatus(btn.getAttribute('data-id')); return; }
+    if (act === 'rte-html') {
+      var rte = document.getElementById('edBody'), ta = document.getElementById('edBodyHtml');
+      if (ta.style.display === 'none') { ta.value = rte.innerHTML; ta.style.display = ''; rte.style.display = 'none'; }
+      else { rte.innerHTML = C.sanitizeHtml(ta.value); rte.style.display = ''; ta.style.display = 'none'; }
+      return;
+    }
+    if (act === 'res-add') { readLessonForm(); var lc = C.locate(F.modules, parseHash().l); lc.node.resources.push({ title: '', url: '' }); document.getElementById('edRes').innerHTML = resourcesHtml(lc.node.resources); return; }
+    if (act === 'res-del') { var row = btn.closest('.fb-res'); row.parentNode.removeChild(row); scheduleFormRead(readLessonForm); return; }
+    if (act === 'sec-add') { readBinderForm(); var lb = C.locate(F.modules, parseHash().b); lb.node.sections.push({ id: C.uid(), title: '', files: [] }); document.getElementById('bdSecs').innerHTML = sectionsHtml(lb.node.sections); markDirty(); return; }
+    if (act === 'sec-del') { if (!window.confirm('Retirer cette section et ses fichiers ?')) return; var se = btn.closest('.fb-sec'); se.parentNode.removeChild(se); rerenderSections(); return; }
+    if (act === 'file-add') { readBinderForm(); var lb2 = C.locate(F.modules, parseHash().b); lb2.node.sections[parseInt(btn.getAttribute('data-sec'), 10)].files.push({ id: C.uid(), title: '', url: '', note: '' }); document.getElementById('bdSecs').innerHTML = sectionsHtml(lb2.node.sections); markDirty(); return; }
+    if (act === 'file-del') { var fr = btn.closest('.fb-file'); fr.parentNode.removeChild(fr); rerenderSections(); return; }
+    if (VIEW === 'builder') handleTreeAct(act, btn);
+  });
+
+  // Barre d'outils du texte riche : ne pas voler la sélection au clic.
+  document.addEventListener('mousedown', function (e) { if (e.target.closest('[data-cmd]')) e.preventDefault(); });
+
+  document.addEventListener('input', function (e) {
+    var t = e.target;
+    if (VIEW === 'builder') {
+      if (t.id === 'fmName') { clearTimeout(FORM_T); FORM_T = setTimeout(function () { saveMeta({ name: t.value.trim() }); }, 700); return; }
+      if (t.id === 'fmDesc') { clearTimeout(FORM_T); FORM_T = setTimeout(function () { saveMeta({ description: t.value.trim() }); }, 700); return; }
+      if (t.id === 'fmIcon') { clearTimeout(FORM_T); FORM_T = setTimeout(function () { saveMeta({ icon: t.value.trim() }); }, 700); return; }
+      var tid = t.getAttribute('data-title'), did = t.getAttribute('data-desc');
+      if (tid || did) {
+        var loc = C.locate(F.modules, tid || did);
+        if (loc) { if (tid) loc.node.title = t.value; else loc.node.description = t.value; markDirty(); }
+      }
+      return;
+    }
+    if (!t.closest('#edForm')) return;
+    if (VIEW === 'lesson') { refreshPreviews(); scheduleFormRead(readLessonForm); }
+    if (VIEW === 'binder') scheduleFormRead(readBinderForm);
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.id === 'fileInput') {
+      var file = t.files && t.files[0]; t.value = '';
+      if (!file || !UPLOAD) return;
+      var u = UPLOAD; UPLOAD = null;
+      uploadFile(file).then(function (url) {
+        if (u.kind === 'thumbnail') document.getElementById('edThumb').value = url;
+        else if (u.kind === 'image') document.getElementById('edImage').value = url;
+        else if (u.kind === 'audio') document.getElementById('edAudio').value = url;
+        else if (u.kind === 'resource') {
+          var row = document.querySelectorAll('#edRes .fb-res')[u.idx];
+          if (row) { row.querySelector('[data-rf="url"]').value = url; var ti = row.querySelector('[data-rf="title"]'); if (!ti.value) ti.value = file.name; }
+        } else if (u.kind === 'file') {
+          var sec = document.querySelectorAll('#bdSecs .fb-sec')[u.sec];
+          var fr = sec && sec.querySelectorAll('.fb-file')[u.idx];
+          if (fr) { fr.querySelector('[data-ff="url"]').value = url; var ft = fr.querySelector('[data-ff="title"]'); if (!ft.value) ft.value = file.name; }
+        }
+        toast('✓ Fichier envoyé');
+        if (VIEW === 'lesson') { refreshPreviews(); readLessonForm(); }
+        if (VIEW === 'binder') readBinderForm();
+        markDirty();
+      }).catch(function (e2) { toast('Envoi impossible : ' + e2.message, true); });
+      return;
+    }
+    if (t.closest('#edForm')) {
+      if (VIEW === 'lesson') { refreshPreviews(); scheduleFormRead(readLessonForm); }
+      if (VIEW === 'binder') scheduleFormRead(readBinderForm);
+    }
+    if (t.id === 'nfName' && !document.getElementById('nfId').value) document.getElementById('nfId').value = C.slugify(t.value);
+  });
+
+  /* ─── Démarrage ─────────────────────────────────────────────────────── */
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (!user) { window.location.href = 'login.html'; return; }
+    UID = user.uid;
+    db.collection('users').doc(UID).get().then(function (s) {
+      USER = s.exists ? (s.data() || {}) : {};
+      IS_ADMIN = USER.role === 'admin';
+      window._currentRole = USER.role || window._currentRole;
+      if (!C.canEdit(USER)) { window.location.href = 'formations.html'; return; }
+      document.getElementById('app').style.display = '';
+      return loadForms().then(render);
+    }).catch(function (e) {
+      console.error(e);
+      document.getElementById('app').style.display = '';
+      $view.innerHTML = '<div class="au-empty"><span class="i">⚠️</span>' + esc(e.message || e) + '</div>';
+    });
+  });
+})();
+</script>
+</body>
+</html>

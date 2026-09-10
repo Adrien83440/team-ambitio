@@ -77,6 +77,26 @@ service cloud.firestore {
       );
     }
 
+    // Helper : formations internes (Setting LAB / Closing LAB / Coach LAB).
+    // L'accès se donne formation par formation, membre par membre, via la
+    // map users/{uid}.formationsAccess = { 'setting-lab': true, … } cochée
+    // dans admin-users.html. L'édition est réservée aux admins, ou à un
+    // membre portant formationsEditor == true. Les admins ont tout d'office.
+    function canReadFormation(formationId) {
+      return isAuth() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('formationsEditor', false) == true ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('formationsAccess', {}).get(formationId, false) == true
+      );
+    }
+
+    function canEditFormations() {
+      return isAuth() && (
+        isAdmin() ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('formationsEditor', false) == true
+      );
+    }
+
     // Helper : droit de DÉCLENCHEMENT des prélèvements GoCardless. Un flag
     // booléen paymentsTrigger sur users/{uid} donne la LECTURE de tous les
     // paiements (retrouver celui à déclencher) — le déclenchement lui-même
@@ -1058,5 +1078,38 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+
+    // ═══ FORMATIONS INTERNES — Setting LAB / Closing LAB / Coach LAB ═══
+    // Un document par formation, tout l'arbre (modules → sous-modules →
+    // leçons) embarqué — même modèle qu'AE Academy, d'où il a été rapatrié.
+    // Lecture : les membres à qui la formation a été ouverte (map
+    // formationsAccess), les éditeurs, les admins. Un membre ne peut pas
+    // LISTER la collection : formations.html lit chaque formation par id,
+    // depuis la liste d'accès de sa propre fiche users/{uid}.
+    // Écriture : éditeurs et admins. Suppression : jamais (on dépublie).
+    match /formations/{formationId} {
+      allow read:   if canReadFormation(formationId);
+      allow create: if canEditFormations();
+      allow update: if canEditFormations();
+      allow delete: if false;
+    }
+
+    // Archive des versions précédentes (posée par le script de migration
+    // et par l'éditeur avant un remplacement). Lecture admin seulement.
+    match /formations/{formationId}/history/{versionId} {
+      allow read:   if isAdmin();
+      allow create: if canEditFormations();
+      allow update, delete: if false;
+    }
+
+    // Progression : un document par membre, une map par formation
+    // ({ lessons:[…], lessonDates:{…}, lastLessonId }). Le membre écrit la
+    // sienne, l'admin lit tout. Vit hors de users/{uid}, dont l'écriture est
+    // réservée aux admins.
+    match /formations_progress/{userId} {
+      allow read:   if isSelfOrAdmin(userId);
+      allow create, update: if isAuth() && request.auth.uid == userId;
+      allow delete: if false;
+    }
   }
 }

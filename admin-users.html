@@ -1193,6 +1193,23 @@ function openEditModal(u){
   h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin-top:1px">Peut créer et envoyer des demandes de signature électronique</div></div>';
   h+='</label></div>';
 
+  // ─── Formations internes (Setting LAB / Closing LAB / Coach LAB) ───
+  // Accès formation par formation → users/{uid}.formationsAccess (map
+  // id → bool). La liste des formations est chargée en asynchrone
+  // (loadFormationsAccessList). Le flag formationsEditor ouvre le builder
+  // (formations-admin.html) et l'import Drive à un non-admin.
+  if((u.role||'coach')!=='admin'){
+    h+='<div class="mf" style="margin-top:8px"><div style="padding:10px 12px;background:rgba(45,212,191,0.06);border:1px solid rgba(45,212,191,0.15);border-radius:8px">';
+    h+='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div style="font-size:13px;font-weight:700;color:rgba(255,255,255,.8);flex:1">🎓 Formations internes</div>';
+    h+='<button type="button" data-fm-preset="sales" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid rgba(16,185,129,.4);background:rgba(16,185,129,.1);color:#6ee7b7;cursor:pointer;font-family:inherit">📈 Sales</button>';
+    h+='<button type="button" data-fm-preset="coach" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid rgba(139,92,246,.4);background:rgba(139,92,246,.1);color:#c4b5fd;cursor:pointer;font-family:inherit">🎓 Coach</button>';
+    h+='<button type="button" data-fm-preset="none" style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:transparent;color:rgba(255,255,255,.5);cursor:pointer;font-family:inherit">Aucune</button></div>';
+    h+='<div style="font-size:10px;color:rgba(255,255,255,.35);margin:2px 0 8px">Coche les espaces ouverts à ce membre. Dès qu\'un accès est coché, le module Formations apparaît dans son menu.</div>';
+    h+='<div id="eFmList" style="display:flex;flex-direction:column;gap:6px"><span style="font-size:11px;color:rgba(255,255,255,.35)">Chargement des formations…</span></div>';
+    h+='<label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer"><input type="checkbox" id="eFmEditor"'+(u.formationsEditor===true?' checked':'')+' style="width:14px;height:14px;accent-color:#2dd4bf"/><span style="font-size:12px;color:rgba(255,255,255,.7)">✏️ Peut éditer les formations (builder, import Drive)</span></label>';
+    h+='</div></div>';
+  }
+
   // ─── Visibilité dans l'équipe (team_members) ───
   // Les flags ci-dessous sont écrits directement dans _meta/team_members
   // (et non users/) — ils définissent la présence dans Lead Live, la couleur
@@ -1352,6 +1369,7 @@ function openEditModal(u){
   // Load AlteoForms list async if non-admin
   if((u.role||'coach')!=='admin'){
     loadAlteoFormsList(u.alteoformsFormIds||[]);
+    loadFormationsAccessList(u);
   }
   document.getElementById('eResetPwd').addEventListener('click',function(){openPasswordModal(u);});
   var delBtn=document.getElementById('eDelete');
@@ -1408,6 +1426,39 @@ function readAlteoFormsAccess(){
   return ids;
 }
 
+/* ─── Formations internes : liste + préréglages ─────────────────────── */
+// Préréglages par métier — mêmes ids fixes que FormationsCore.KNOWN.
+const FM_PRESETS={sales:['setting-lab','closing-lab'],coach:['coach-lab'],none:[]};
+let FM_CACHE=null;
+async function loadFormationsAccessList(u){
+  const el=document.getElementById('eFmList');
+  if(!el)return;
+  try{
+    if(!FM_CACHE){
+      const qs=await getDocs(collection(db,'formations'));
+      FM_CACHE=[];
+      qs.forEach(d=>{const x=d.data()||{};FM_CACHE.push({id:d.id,name:x.name||d.id,icon:x.icon||'🎓',status:x.status||'draft',order:x.order||0});});
+      FM_CACHE.sort((a,b)=>a.order-b.order||a.name.localeCompare(b.name));
+    }
+    if(!FM_CACHE.length){el.innerHTML='<span style="font-size:11px;color:rgba(255,255,255,.35)">Aucune formation créée pour l\'instant (formations-admin.html).</span>';return;}
+    const access=u.formationsAccess||{};
+    el.innerHTML=FM_CACHE.map(f=>'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:rgba(255,255,255,.75)"><input type="checkbox" class="fm-access-check" data-fid="'+esc(f.id)+'"'+(access[f.id]===true?' checked':'')+' style="width:14px;height:14px;accent-color:#2dd4bf"/>'+esc(f.icon)+' '+esc(f.name)+(f.status==='draft'?' <span style="opacity:.45;font-size:10px">(brouillon)</span>':'')+'</label>').join('');
+  }catch(e){el.innerHTML='<span style="color:#ef4444;font-size:11px">Erreur : '+esc(e.message)+'</span>';}
+}
+function readFormationsAccess(){
+  const checks=document.querySelectorAll('.fm-access-check');
+  if(!checks.length)return null; // null = bloc absent (admin, ou liste non chargée) → on ne touche pas au champ
+  const map={};
+  checks.forEach(c=>{map[c.dataset.fid]=c.checked;});
+  return map;
+}
+document.addEventListener('click',function(e){
+  const b=e.target.closest('[data-fm-preset]');
+  if(!b)return;
+  const ids=FM_PRESETS[b.dataset.fmPreset]||[];
+  document.querySelectorAll('.fm-access-check').forEach(c=>{c.checked=ids.indexOf(c.dataset.fid)>=0;});
+});
+
 async function handleSave(uid){
   var btn=document.getElementById('eSave');
   btn.disabled=true;btn.textContent='⏳…';
@@ -1433,6 +1484,10 @@ async function handleSave(uid){
     if(trigEl)upd.paymentsTrigger=trigEl.checked;
     var sigEl=document.getElementById('eSignaturesAccess');
     if(sigEl)upd.signaturesAccess=sigEl.checked;
+    var fmMap=readFormationsAccess();
+    if(fmMap!==null)upd.formationsAccess=fmMap;
+    var fmEd=document.getElementById('eFmEditor');
+    if(fmEd)upd.formationsEditor=fmEd.checked;
     await updateDoc(doc(db,'users',uid),upd);
 
     // ─── Sync vers _meta/team_members (visibilité Lead Live + identité équipe) ───

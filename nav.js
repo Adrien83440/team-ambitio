@@ -84,6 +84,11 @@
     { id: 'admin-dedup',       icon: '🔄', label: 'Dédup Clients', href: 'clients-dedup.html',    section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
+    // Formations internes (Setting LAB / Closing LAB / Coach LAB) : accès
+    // membre par membre via users/{uid}.formationsAccess (case dans
+    // admin-users.html), admin d'office. Le flag est projeté dans
+    // localStorage par initAlteoFormsAccessWatch().
+    { id: 'formations',        icon: '🎓', label: 'Formations',   href: 'formations.html',        section: 'Outils', perm: 'formations' },
     { id: 'documents',         icon: '📚', label: 'Documents',    href: 'documents.html',         section: 'Outils', perm: '_all' },
     // Mur de témoignages : ouvert à toute l'équipe connectée, coachs et CSM
     // compris — ce sont eux qui reçoivent le plus de retours clients. Chacun
@@ -141,7 +146,8 @@
     'admin-data-center.html', 'admin-facturation.html', 'admin-invoice-edit.html',
     'admin-numbers.html', 'admin-persons.html', 'admin-users.html',
     'alteoforms.html', 'booking-admin.html', 'clients-dedup.html',
-    'csm-diagnostic.html', 'csm-import.html', 'payments.html',
+    'csm-diagnostic.html', 'csm-import.html', 'formations.html',
+    'formations-admin.html', 'payments.html',
     'sales-clients.html', 'sales-closing.html', 'sales-commissions.html',
     'sales-contact.html', 'sales-crm.html', 'sales-dashboard.html',
     'sales-dialer.html', 'sales-eod.html', 'sales-equipe.html',
@@ -577,6 +583,10 @@
         // Pour les autres rôles (sales) : flag explicite via localStorage.
         if (role === 'admin' || role === 'csm') return true;
         return localStorage.getItem('ambitio_signatures_access') === '1';
+      }
+      if (m.perm === 'formations') {
+        if (role === 'admin') return true;
+        return localStorage.getItem('ambitio_formations_access') === '1';
       }
       // '_all' : support interne consultable par toute l'équipe connectée
       // (les documents eux-mêmes sont des pages publiques sans donnée client).
@@ -1293,31 +1303,65 @@
   }
 
   function initAlteoFormsAccessWatch() {
-    if (typeof firebase === 'undefined' || !firebase.auth) return;
-    firebase.auth().onAuthStateChanged(async function(user) {
-      if (!user) { localStorage.removeItem('ambitio_alteoforms_forms'); return; }
-      var role = localStorage.getItem('ambitio_role') || 'coach';
-      if (role === 'admin') return; // admin always has access
-      try {
-        var snap = await firebase.firestore().collection('users').doc(user.uid).get();
-        var userData = snap.exists ? snap.data() : {};
-        var formIds = userData.alteoformsFormIds || [];
-        var prev = localStorage.getItem('ambitio_alteoforms_forms');
-        var next = JSON.stringify(formIds);
-        var payAccess = (userData.paymentsAccess === true || userData.paymentsTrigger === true) ? '1' : '0';
-        var prevPay = localStorage.getItem('ambitio_payments_access') || '0';
-        var sigAccess = userData.signaturesAccess === true ? '1' : '0';
-        var prevSig = localStorage.getItem('ambitio_signatures_access') || '0';
-        var changed = prev !== next || prevPay !== payAccess || prevSig !== sigAccess;
-        if (formIds.length > 0) localStorage.setItem('ambitio_alteoforms_forms', next);
-        else localStorage.removeItem('ambitio_alteoforms_forms');
-        if (payAccess === '1') localStorage.setItem('ambitio_payments_access', '1');
-        else localStorage.removeItem('ambitio_payments_access');
-        if (sigAccess === '1') localStorage.setItem('ambitio_signatures_access', '1');
-        else localStorage.removeItem('ambitio_signatures_access');
-        if (changed && typeof buildSidebar === 'function') buildSidebar();
-      } catch(e) { console.warn('[nav] alteoforms access check:', e); }
-    });
+    // Projette dans localStorage les flags d'accès portés par users/{uid}
+    // (AlteoForms, Paiements, Signatures, Formations) pour que buildSidebar()
+    // puisse filtrer sans lecture Firestore. Fonctionne avec les DEUX SDK :
+    // compat (pages sales / outils) et modulaire (pages coaching / admin —
+    // via les helpers window._db / _doc / _getDoc posés par la page).
+    function applyUserFlags(userData) {
+      var formIds = userData.alteoformsFormIds || [];
+      var prev = localStorage.getItem('ambitio_alteoforms_forms');
+      var next = JSON.stringify(formIds);
+      var payAccess = (userData.paymentsAccess === true || userData.paymentsTrigger === true) ? '1' : '0';
+      var prevPay = localStorage.getItem('ambitio_payments_access') || '0';
+      var sigAccess = userData.signaturesAccess === true ? '1' : '0';
+      var prevSig = localStorage.getItem('ambitio_signatures_access') || '0';
+      var fmMap = userData.formationsAccess || {};
+      var fmAny = userData.formationsEditor === true;
+      for (var k in fmMap) { if (Object.prototype.hasOwnProperty.call(fmMap, k) && fmMap[k] === true) fmAny = true; }
+      var fmAccess = fmAny ? '1' : '0';
+      var prevFm = localStorage.getItem('ambitio_formations_access') || '0';
+      var changed = prev !== next || prevPay !== payAccess || prevSig !== sigAccess || prevFm !== fmAccess;
+      if (formIds.length > 0) localStorage.setItem('ambitio_alteoforms_forms', next);
+      else localStorage.removeItem('ambitio_alteoforms_forms');
+      if (payAccess === '1') localStorage.setItem('ambitio_payments_access', '1');
+      else localStorage.removeItem('ambitio_payments_access');
+      if (sigAccess === '1') localStorage.setItem('ambitio_signatures_access', '1');
+      else localStorage.removeItem('ambitio_signatures_access');
+      if (fmAccess === '1') localStorage.setItem('ambitio_formations_access', '1');
+      else localStorage.removeItem('ambitio_formations_access');
+      // buildSidebar() vit dans la première IIFE du fichier : depuis ici on
+      // passe par l'API publique pour reconstruire le menu sans recharger.
+      if (changed && window.AmbitioNav && typeof window.AmbitioNav.rebuild === 'function') window.AmbitioNav.rebuild();
+    }
+    function clearFlags() {
+      localStorage.removeItem('ambitio_alteoforms_forms');
+      localStorage.removeItem('ambitio_formations_access');
+    }
+    var role = localStorage.getItem('ambitio_role') || 'coach';
+
+    // Cas A : SDK compat
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      firebase.auth().onAuthStateChanged(async function(user) {
+        if (!user) { clearFlags(); return; }
+        if (role === 'admin') return; // admin always has access
+        try {
+          var snap = await firebase.firestore().collection('users').doc(user.uid).get();
+          applyUserFlags(snap.exists ? snap.data() : {});
+        } catch(e) { console.warn('[nav] alteoforms access check:', e); }
+      });
+      return;
+    }
+    // Cas B : SDK modulaire — la page a déjà confirmé l'auth (_firebaseReady)
+    if (window._db && window._doc && window._getDoc && window._auth && window._auth.currentUser) {
+      if (role === 'admin') return;
+      (async function() {
+        try {
+          var snapM = await window._getDoc(window._doc(window._db, 'users', window._auth.currentUser.uid));
+          applyUserFlags(snapM.exists() ? snapM.data() : {});
+        } catch(e2) { console.warn('[nav] access check (modular):', e2); }
+      })();
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -79,6 +79,26 @@ service firebase.storage {
                    && request.resource.size < 2 * 1024 * 1024 * 1024;
     }
 
+    // ═══ FORMATIONS INTERNES — médias déposés depuis le builder ═══
+    //
+    //  Path : formations/{formationId}/{fileName}
+    //    • vignettes de leçons, images de leçon, pistes audio, ressources
+    //      téléchargeables (PDF, docs…). Les vidéos, elles, restent sur
+    //      Drive / YouTube / Loom et ne passent jamais par ce bucket.
+    //
+    //  Read   : utilisateur authentifié. L'accès fin (quelle formation pour
+    //           quel membre) est porté par Firestore ; le bucket ne sait pas
+    //           lire ces rules, et les URLs sont impossibles à deviner.
+    //  Write  : utilisateur authentifié, < 200 Mo. Seuls les éditeurs
+    //           atteignent l'upload dans l'UI (formations-admin.html).
+    //  Delete : refusé (request.resource null) — on ne supprime rien.
+    match /formations/{formationId}/{fileName} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && request.resource != null
+                   && request.resource.size < 200 * 1024 * 1024;
+    }
+
     // Tout le reste : refusé par défaut. Ajouter d'autres `match` au-dessus
     // de cette règle "catch-all" si besoin de nouveaux usages Storage.
     match /{allPaths=**} {

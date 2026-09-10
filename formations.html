@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alteore — Formations</title>
+<link rel="stylesheet" href="alteore-ui.css"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   Formations internes — espace MEMBRE (catalogue, plan, lecteur de leçon).
+   Setting LAB / Closing LAB / Coach LAB, rapatriés depuis AE Academy.
+   L'édition se fait dans formations-admin.html.
+   ═══════════════════════════════════════════════════════════════════════ */
+.fm-crumb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.fm-crumb a{color:var(--muted);text-decoration:none}
+.fm-crumb a:hover{color:var(--text)}
+.fm-crumb .sep{opacity:.4}
+.fm-crumb .cur{color:var(--text)}
+
+/* Catalogue */
+.fm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.fm-card{display:flex;flex-direction:column;gap:10px;background:linear-gradient(180deg,rgba(148,163,214,.04),transparent 40%),var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:18px;text-decoration:none;color:var(--text);transition:border-color .16s,transform .16s;position:relative;overflow:hidden}
+.fm-card::before{content:'';position:absolute;top:0;left:18px;right:18px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--fm-c,var(--blue)),transparent)}
+.fm-card:hover{border-color:rgba(91,124,250,.35);transform:translateY(-2px)}
+.fm-card-ico{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:24px;background:color-mix(in srgb,var(--fm-c,var(--blue)) 16%,transparent);border:1px solid color-mix(in srgb,var(--fm-c,var(--blue)) 40%,transparent)}
+.fm-card-n{font-family:var(--fh);font-size:17px;font-weight:700;letter-spacing:-.2px}
+.fm-card-h{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.fm-card-d{font-size:12.5px;color:var(--muted);line-height:1.5;flex:1}
+.fm-card-m{font-size:11px;color:var(--muted2);font-family:var(--fm)}
+.fm-bar{height:5px;border-radius:4px;background:rgba(148,163,214,.1);overflow:hidden}
+.fm-bar>i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--fm-c,var(--blue)),color-mix(in srgb,var(--fm-c,var(--blue)) 55%,#fff));transition:width .5s}
+.fm-bar.done>i{background:linear-gradient(90deg,#DCA84E,#f3cf7a)}
+.fm-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;border:1px solid}
+.fm-pill.draft{color:var(--gold);border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.1)}
+.fm-pill.gold{color:#DCA84E;border-color:rgba(220,168,78,.45);background:rgba(220,168,78,.12)}
+
+/* Plan d'une formation */
+.fm-head{display:flex;gap:16px;align-items:flex-start;margin-bottom:22px;flex-wrap:wrap}
+.fm-head-ico{width:60px;height:60px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:30px;flex:none;background:color-mix(in srgb,var(--fm-c,var(--blue)) 16%,transparent);border:1px solid color-mix(in srgb,var(--fm-c,var(--blue)) 40%,transparent)}
+.fm-head-t{font-family:var(--fh);font-size:26px;font-weight:700;letter-spacing:-.5px;margin:0}
+.fm-head-d{font-size:13px;color:var(--muted);margin-top:4px;max-width:70ch;line-height:1.55}
+.fm-head-p{margin-top:10px;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);font-family:var(--fm)}
+.fm-head-p .fm-bar{width:220px}
+.fm-mod{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);margin-bottom:14px;overflow:hidden}
+.fm-mod-h{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border-soft);background:linear-gradient(180deg,rgba(148,163,214,.04),transparent)}
+.fm-mod-n{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:color-mix(in srgb,var(--fm-c,var(--blue)) 80%,#fff);background:color-mix(in srgb,var(--fm-c,var(--blue)) 14%,transparent);border-radius:6px;padding:3px 8px;white-space:nowrap}
+.fm-mod-t{font-family:var(--fh);font-size:15px;font-weight:700;flex:1}
+.fm-mod-p{font-size:11px;color:var(--muted);font-family:var(--fm);white-space:nowrap}
+.fm-mod-b{padding:8px 10px}
+.fm-sub{margin:6px 0 10px;border:1px solid var(--border-soft);border-radius:12px;background:rgba(148,163,214,.025)}
+.fm-sub-h{display:flex;align-items:center;gap:8px;padding:9px 12px 5px;font-size:12px;font-weight:700;color:var(--text)}
+.fm-sub-h .c{font-size:10.5px;color:var(--muted2);font-family:var(--fm);font-weight:400}
+.fm-row{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:10px;text-decoration:none;color:var(--text);transition:background .12s}
+.fm-row:hover{background:rgba(148,163,214,.06)}
+.fm-thumb{width:64px;height:40px;border-radius:7px;background:var(--bg3);border:1px solid var(--border-soft);flex:none;display:flex;align-items:center;justify-content:center;font-size:16px;overflow:hidden;color:var(--muted2)}
+.fm-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.fm-row-t{flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fm-row-m{font-size:11px;color:var(--muted2);font-family:var(--fm);white-space:nowrap}
+.fm-dot{width:20px;height:20px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:11px;border:1.5px dashed var(--border2);color:transparent}
+.fm-dot.done{border:none;background:linear-gradient(135deg,#DCA84E,#c99334);color:#1a1200;font-weight:900}
+.fm-dot.cur{border:2px solid var(--blue);box-shadow:0 0 0 4px rgba(91,124,250,.18)}
+.fm-row.binder .fm-thumb{font-size:18px}
+
+/* Lecteur de leçon */
+.fm-lgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start}
+@media (max-width:960px){.fm-lgrid{grid-template-columns:1fr}.fm-panel{position:static!important}}
+.fm-ltitle{font-family:var(--fh);font-size:24px;font-weight:700;letter-spacing:-.4px;margin:0 0 14px;line-height:1.2}
+.fm-media{position:relative;width:100%;padding-top:56.25%;background:#000;border-radius:14px;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow)}
+.fm-media iframe,.fm-media video{position:absolute;inset:0;width:100%;height:100%;border:0}
+.fm-drive-mask{position:absolute;top:0;right:0;width:68px;height:54px;background:transparent}
+.fm-image{width:100%;border-radius:14px;border:1px solid var(--border);display:block;cursor:zoom-in}
+.fm-audio{width:100%;margin-top:14px}
+.fm-nomedia{padding:26px;border:1px dashed var(--border2);border-radius:14px;color:var(--muted);font-size:13px;text-align:center}
+.fm-body{margin-top:22px;font-size:14.5px;line-height:1.7;color:var(--text)}
+.fm-body p{margin:0 0 12px}
+.fm-body h1,.fm-body h2,.fm-body h3{font-family:var(--fh);letter-spacing:-.2px;margin:22px 0 10px;line-height:1.25}
+.fm-body h2{font-size:20px}.fm-body h3{font-size:16px}
+.fm-body ul,.fm-body ol{padding-left:22px;margin:0 0 12px}
+.fm-body li{margin:4px 0}
+.fm-body a{color:#b6c3ff;text-decoration:underline;text-underline-offset:3px}
+.fm-body blockquote{margin:14px 0;padding:10px 16px;border-left:3px solid var(--blue);background:rgba(91,124,250,.06);border-radius:0 10px 10px 0;color:var(--muted)}
+.fm-body img{max-width:100%;border-radius:10px}
+.fm-body code{font-family:var(--fm);font-size:13px;background:var(--bg3);padding:1px 6px;border-radius:5px}
+.fm-res-h{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:24px 0 8px}
+.fm-res{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--border);border-radius:11px;background:var(--bg2);text-decoration:none;color:var(--text);margin-bottom:8px;transition:border-color .14s,transform .14s}
+.fm-res:hover{border-color:var(--border2);transform:translateY(-1px)}
+.fm-res .k{font-family:var(--fm);font-size:10px;font-weight:700;color:var(--muted);background:var(--bg3);border-radius:6px;padding:3px 7px;min-width:44px;text-align:center}
+.fm-res .t{flex:1;font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-res .n{font-size:11.5px;color:var(--muted);flex:1}
+.fm-actions{display:flex;align-items:center;gap:10px;margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);flex-wrap:wrap}
+.fm-actions .spacer{flex:1}
+.fm-done{background:linear-gradient(135deg,rgba(91,124,250,.28),rgba(91,124,250,.14));border:1px solid rgba(91,124,250,.5);color:#dfe6ff;padding:10px 18px;border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;transition:filter .18s,transform .18s}
+.fm-done:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.fm-done.is-done{background:linear-gradient(135deg,#DCA84E,#c99334);border-color:#DCA84E;color:#1a1200}
+.fm-panel{position:sticky;top:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius2);padding:14px;box-shadow:0 1px 0 rgba(255,255,255,.025) inset}
+.fm-panel-h{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
+.fm-panel-t{font-family:var(--fh);font-size:14px;font-weight:700;margin:3px 0 8px}
+.fm-panel .fm-bar{margin-bottom:10px}
+.fm-prow{display:flex;align-items:center;gap:10px;padding:8px 8px;border-radius:9px;text-decoration:none;color:var(--text);font-size:12.5px;border:1px solid transparent}
+.fm-prow:hover{background:rgba(148,163,214,.06)}
+.fm-prow.cur{background:rgba(91,124,250,.08);border-color:rgba(91,124,250,.25)}
+.fm-prow .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.fm-prow .d{font-size:10.5px;color:var(--muted2);font-family:var(--fm)}
+.fm-prow .fm-dot{width:16px;height:16px;font-size:9px}
+.fm-rail{height:3px;border-radius:3px;background:rgba(148,163,214,.1);margin:-6px 0 18px;overflow:hidden}
+.fm-rail>i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),#9d7bfa);box-shadow:0 0 10px rgba(91,124,250,.5)}
+.fm-edit-link{font-size:11.5px;color:var(--muted);text-decoration:none;border:1px dashed var(--border2);border-radius:8px;padding:5px 10px}
+.fm-edit-link:hover{color:var(--text);border-color:var(--border2)}
+.fm-binder-intro{font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:18px;max-width:75ch}
+.fm-section-t{font-family:var(--fh);font-size:15px;font-weight:700;margin:22px 0 10px}
+</style>
+</head>
+<body class="au-page">
+<script src="nav.js"></script>
+<script src="formations-core.js"></script>
+
+<div class="au-main" id="app" style="display:none">
+  <div id="view"><div class="au-loading"><div class="au-spinner"></div>Chargement des formations…</div></div>
+</div>
+<div id="auToast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var C  = window.FormationsCore;
+  var db = firebase.firestore();
+  var UID = null, USER = {}, IS_ADMIN = false, CAN_EDIT = false;
+  var FORMATIONS = {};   // id → document (modules normalisés)
+  var ORDER = [];        // ids triés
+  var PROGRESS = {};     // fid → { lessons:[], lessonDates:{}, lastLessonId }
+  var LAST_SEEN = {};    // fid → dernier lastLessonId écrit (évite les écritures répétées)
+  var $view = document.getElementById('view');
+  var esc = C.esc;
+
+  function toast(msg, err) {
+    var t = document.getElementById('auToast');
+    t.textContent = msg; t.className = 'show' + (err ? ' err' : '');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = ''; }, 2600);
+  }
+
+  /* ─── Routage par hash : #f=<id>[&l=<leçon>|&b=<classeur>] ─────────── */
+  function parseHash() {
+    var out = {};
+    window.location.hash.replace(/^#/, '').split('&').forEach(function (p) {
+      var kv = p.split('=');
+      if (kv[0]) out[kv[0]] = decodeURIComponent(kv[1] || '');
+    });
+    return out;
+  }
+  function hashFor(params) {
+    var parts = [];
+    for (var k in params) if (params[k]) parts.push(k + '=' + encodeURIComponent(params[k]));
+    return '#' + parts.join('&');
+  }
+
+  function doneList(fid) { return (PROGRESS[fid] && PROGRESS[fid].lessons) || []; }
+  function colorOf(f) { var k = C.knownById(f.id) || {}; return f.color || k.color || '#5b7cfa'; }
+  function iconOf(f) { var k = C.knownById(f.id) || {}; return f.icon || k.icon || '🎓'; }
+  function hintOf(f) { var k = C.knownById(f.id) || {}; return f.hint || k.hint || f.type || 'Espace équipe'; }
+
+  /* ─── Chargement ────────────────────────────────────────────────────── */
+  function withId(d) { var x = d.data() || {}; x.id = d.id; return x; }
+
+  function loadAll() {
+    return db.collection('users').doc(UID).get().then(function (uSnap) {
+      USER = uSnap.exists ? (uSnap.data() || {}) : {};
+      IS_ADMIN = USER.role === 'admin';
+      CAN_EDIT = C.canEdit(USER);
+      window._currentRole = USER.role || window._currentRole;
+      if (CAN_EDIT) {
+        return db.collection('formations').get().then(function (qs) {
+          var docs = []; qs.forEach(function (d) { docs.push(withId(d)); }); return docs;
+        });
+      }
+      var ids = C.accessibleIds(USER);
+      return Promise.all(ids.map(function (id) {
+        return db.collection('formations').doc(id).get().then(function (d) { return d.exists ? withId(d) : null; }, function () { return null; });
+      })).then(function (arr) { return arr.filter(Boolean); });
+    }).then(function (docs) {
+      FORMATIONS = {};
+      docs.forEach(function (f) {
+        f.modules = C.normalizeModules(f.modules);
+        if (!CAN_EDIT && f.status === 'draft') return;   // brouillon : invisible aux membres
+        FORMATIONS[f.id] = f;
+      });
+      ORDER = Object.keys(FORMATIONS).sort(function (a, b) {
+        var oa = FORMATIONS[a].order || 0, ob = FORMATIONS[b].order || 0;
+        if (oa !== ob) return oa - ob;
+        return String(FORMATIONS[a].name || '').localeCompare(String(FORMATIONS[b].name || ''));
+      });
+      return db.collection('formations_progress').doc(UID).get();
+    }).then(function (pSnap) {
+      PROGRESS = pSnap.exists ? (pSnap.data() || {}) : {};
+    });
+  }
+
+  /* ─── Progression ───────────────────────────────────────────────────── */
+  // Les ids de formation contiennent des tirets : impossible en chemin
+  // pointé « setting-lab.lessons » → on passe par FieldPath.
+  function FP(fid, field) { return new firebase.firestore.FieldPath(fid, field); }
+  function progressRef() { return db.collection('formations_progress').doc(UID); }
+
+  function writeProgress(fid, fields) {
+    var ref = progressRef();
+    var args = [];
+    for (var k in fields) { args.push(FP(fid, k)); args.push(fields[k]); }
+    args.push(FP(fid, 'updatedAt')); args.push(firebase.firestore.FieldValue.serverTimestamp());
+    return ref.update.apply(ref, args).catch(function (e) {
+      if (e && e.code === 'not-found') {
+        var o = {}; o[fid] = C.assign({}, fields, { updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        return ref.set(o, { merge: true });
+      }
+      throw e;
+    });
+  }
+
+  function toggleDone(fid, lid) {
+    var p = PROGRESS[fid] || {};
+    var lessons = (p.lessons || []).slice();
+    var dates = C.assign({}, p.lessonDates || {});
+    var i = lessons.indexOf(lid);
+    if (i >= 0) { lessons.splice(i, 1); delete dates[lid]; }
+    else { lessons.push(lid); dates[lid] = Date.now(); }
+    PROGRESS[fid] = C.assign({}, p, { lessons: lessons, lessonDates: dates });
+    render();
+    writeProgress(fid, { lessons: lessons, lessonDates: dates }).catch(function (e) {
+      console.error(e); toast('Progression non enregistrée : ' + e.message, true);
+    });
+  }
+
+  function rememberLesson(fid, lid) {
+    if (LAST_SEEN[fid] === lid) return;
+    LAST_SEEN[fid] = lid;
+    PROGRESS[fid] = C.assign({}, PROGRESS[fid] || {}, { lastLessonId: lid });
+    writeProgress(fid, { lastLessonId: lid }).catch(function () { /* silencieux */ });
+  }
+
+  /* ─── Rendu : catalogue ─────────────────────────────────────────────── */
+  function pageHead(icon, title, sub, right) {
+    return '<div class="au-head"><div class="au-head-ico">' + icon + '</div><div><h1 class="au-title">' + esc(title) + '</h1>' +
+      (sub ? '<div class="au-sub">' + sub + '</div>' : '') + '</div>' +
+      (right ? '<div class="au-head-right">' + right + '</div>' : '') + '</div>';
+  }
+
+  function renderCatalogue() {
+    var right = CAN_EDIT ? '<a class="au-btn primary" href="formations-admin.html">✏️ Gérer les formations</a>' : '';
+    var h = pageHead('🎓', 'Formations', 'Les espaces de formation interne ouverts pour toi. Ta progression est enregistrée automatiquement.', right);
+    if (!ORDER.length) {
+      h += '<div class="au-empty"><span class="i">🎓</span>Aucune formation ne t\'a encore été ouverte.<br>' +
+           (CAN_EDIT ? 'Crée-en une depuis « Gérer les formations ».' : 'Demande l\'accès à un admin depuis la page Utilisateurs.') + '</div>';
+    } else {
+      h += '<div class="fm-grid">' + ORDER.map(cardHtml).join('') + '</div>';
+    }
+    $view.innerHTML = h;
+  }
+
+  function cardHtml(id) {
+    var f = FORMATIONS[id];
+    var st = C.progressStats(f, doneList(id));
+    var last = PROGRESS[id] && PROGRESS[id].lastLessonId;
+    var cta = st.total === 0 ? 'Bientôt' : (st.complete === 0 ? 'Commencer' : (st.pct === 100 ? 'Revoir' : 'Continuer'));
+    var href = (last && st.complete > 0 && st.pct < 100) ? hashFor({ f: id, l: last }) : hashFor({ f: id });
+    return '<a class="fm-card" href="' + href + '" style="--fm-c:' + esc(colorOf(f)) + '">' +
+      '<div style="display:flex;align-items:center;gap:12px"><div class="fm-card-ico">' + esc(iconOf(f)) + '</div>' +
+      '<div style="flex:1;min-width:0"><div class="fm-card-n">' + esc(f.name || id) + '</div><div class="fm-card-h">' + esc(hintOf(f)) + '</div></div>' +
+      (f.status === 'draft' ? '<span class="fm-pill draft">Brouillon</span>' : (st.pct === 100 && st.total ? '<span class="fm-pill gold">✓ Terminé</span>' : '')) + '</div>' +
+      (f.description ? '<div class="fm-card-d">' + esc(f.description) + '</div>' : '<div class="fm-card-d"></div>') +
+      '<div class="fm-bar' + (st.pct === 100 && st.total ? ' done' : '') + '"><i style="width:' + st.pct + '%"></i></div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between"><span class="fm-card-m">' + st.complete + ' / ' + st.total + ' leçons · ' + st.pct + ' %</span>' +
+      '<span class="au-btn primary" style="padding:6px 12px">' + cta + ' →</span></div></a>';
+  }
+
+  /* ─── Rendu : plan d'une formation ──────────────────────────────────── */
+  function crumb(parts) {
+    var h = '<div class="fm-crumb">';
+    parts.forEach(function (p, i) {
+      if (i) h += '<span class="sep">›</span>';
+      h += p.href ? '<a href="' + p.href + '">' + esc(p.label) + '</a>' : '<span class="cur">' + esc(p.label) + '</span>';
+    });
+    return h + '</div>';
+  }
+
+  function rowHtml(l, fid, done, current) {
+    var thumb = C.lessonThumbUrl(l);
+    return '<a class="fm-row" href="' + hashFor({ f: fid, l: l.id }) + '">' +
+      '<div class="fm-thumb">' + (thumb ? '<img src="' + esc(thumb) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">' : '▶') + '</div>' +
+      '<div class="fm-row-t">' + esc(l.title || 'Sans titre') + '</div>' +
+      (l.duration ? '<div class="fm-row-m">' + esc(l.duration) + '</div>' : '') +
+      '<div class="fm-dot' + (done ? ' done' : (current ? ' cur' : '')) + '">' + (done ? '✓' : '') + '</div></a>';
+  }
+  function binderRowHtml(b, fid) {
+    var n = 0; (b.sections || []).forEach(function (s) { n += (s.files || []).length; });
+    return '<a class="fm-row binder" href="' + hashFor({ f: fid, b: b.id }) + '">' +
+      '<div class="fm-thumb">📎</div><div class="fm-row-t">' + esc(b.title || 'Classeur') + '</div>' +
+      '<div class="fm-row-m">' + n + ' fichier' + (n > 1 ? 's' : '') + '</div><div class="fm-dot" style="border-style:solid;opacity:.35"></div></a>';
+  }
+
+  function renderFormation(f) {
+    var fid = f.id;
+    var mods = C.studentModules(f);
+    var done = doneList(fid);
+    var st = C.progressStats(f, done);
+    var h = crumb([{ label: 'Formations', href: '#' }, { label: f.name || fid }]);
+    h += '<div class="fm-head" style="--fm-c:' + esc(colorOf(f)) + '"><div class="fm-head-ico">' + esc(iconOf(f)) + '</div><div style="flex:1;min-width:0">' +
+      '<h1 class="fm-head-t">' + esc(f.name || fid) + (f.status === 'draft' ? ' <span class="fm-pill draft">Brouillon</span>' : '') + '</h1>' +
+      (f.description ? '<div class="fm-head-d">' + esc(f.description) + '</div>' : '') +
+      '<div class="fm-head-p"><div class="fm-bar' + (st.pct === 100 && st.total ? ' done' : '') + '"><i style="width:' + st.pct + '%"></i></div><span>' + st.complete + ' / ' + st.total + ' leçons · ' + st.pct + ' %</span></div></div>' +
+      (CAN_EDIT ? '<a class="au-btn" href="formations-admin.html#f=' + encodeURIComponent(fid) + '">✏️ Modifier</a>' : '') + '</div>';
+
+    if (!mods.length) {
+      h += '<div class="au-empty"><span class="i">🚧</span>Aucun module publié pour le moment.</div>';
+    }
+    mods.forEach(function (m, mi) {
+      var mDone = 0, mTot = 0;
+      C.flattenLessons({ modules: [m] }, true).forEach(function (l) { mTot += 1; if (done.indexOf(l.id) >= 0) mDone += 1; });
+      h += '<div class="fm-mod" style="--fm-c:' + esc(colorOf(f)) + '"><div class="fm-mod-h"><span class="fm-mod-n">Module ' + (mi + 1) + '</span><div class="fm-mod-t">' + esc(m.title || 'Sans titre') + '</div>' +
+        (mTot ? '<div class="fm-mod-p">' + mDone + ' / ' + mTot + '</div>' : '') + '</div><div class="fm-mod-b">';
+      if (m.description) h += '<div style="font-size:12.5px;color:var(--muted);padding:4px 10px 8px;line-height:1.5">' + esc(m.description) + '</div>';
+      (m.children || []).forEach(function (c) {
+        if (c.kind === 'sub') {
+          h += '<div class="fm-sub"><div class="fm-sub-h">' + esc(c.title || 'Sous-module') + '<span class="c">· ' + c.lessons.length + ' élément' + (c.lessons.length > 1 ? 's' : '') + '</span></div><div style="padding:0 4px 4px">';
+          c.lessons.forEach(function (l) { h += l.kind === 'binder' ? binderRowHtml(l, fid) : rowHtml(l, fid, done.indexOf(l.id) >= 0, false); });
+          h += '</div></div>';
+        } else if (c.kind === 'binder') h += binderRowHtml(c, fid);
+        else h += rowHtml(c, fid, done.indexOf(c.id) >= 0, false);
+      });
+      h += '</div></div>';
+    });
+    $view.innerHTML = h;
+  }
+
+  /* ─── Rendu : leçon ─────────────────────────────────────────────────── */
+  function mediaHtml(l) {
+    var h = '';
+    if (l.video) {
+      var embed = C.toEmbed(l.video);
+      if (embed) {
+        h += '<div class="fm-media"><iframe src="' + esc(embed) + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe>' +
+             (C.driveFileId(l.video) ? '<div class="fm-drive-mask"></div>' : '') + '</div>';
+      } else if (C.isDirectVideo(l.video)) {
+        h += '<div class="fm-media"><video src="' + esc(l.video) + '" controls playsinline preload="metadata"' + (l.thumbnail ? ' poster="' + esc(l.thumbnail) + '"' : '') + '></video></div>';
+      } else {
+        h += '<div class="fm-nomedia">Cette vidéo ne peut pas s\'afficher ici.<br><a class="au-btn" style="margin-top:10px" href="' + esc(l.video) + '" target="_blank" rel="noopener">Ouvrir la vidéo dans un nouvel onglet ↗</a></div>';
+      }
+    } else if (l.image) {
+      h += '<a href="' + esc(l.image) + '" target="_blank" rel="noopener"><img class="fm-image" src="' + esc(l.image) + '" alt=""></a>';
+    }
+    if (l.audio) h += '<audio class="fm-audio" controls preload="metadata" src="' + esc(l.audio) + '"></audio>';
+    if (!h) h = '<div class="fm-nomedia">Cette leçon n\'a pas de média : le contenu est ci-dessous.</div>';
+    return h;
+  }
+
+  function renderLesson(f, lid) {
+    var fid = f.id;
+    var mods = C.studentModules(f);
+    var res = C.findLesson({ modules: mods }, lid, true);
+    if (!res.lesson) {
+      $view.innerHTML = crumb([{ label: 'Formations', href: '#' }, { label: f.name || fid, href: hashFor({ f: fid }) }, { label: 'Leçon' }]) +
+        '<div class="au-empty"><span class="i">🔍</span>Cette leçon n\'existe pas ou n\'est pas encore publiée.<br><a class="au-btn" style="margin-top:12px" href="' + hashFor({ f: fid }) + '">← Retour au plan</a></div>';
+      return;
+    }
+    var l = res.lesson;
+    var done = doneList(fid);
+    var isDone = done.indexOf(lid) >= 0;
+    var scope = C.panelScope(mods, l);
+    var scopeDone = 0, scopeTot = 0;
+    scope.items.forEach(function (it) { if (it.kind === 'binder') return; scopeTot += 1; if (done.indexOf(it.id) >= 0) scopeDone += 1; });
+    var st = C.progressStats(f, done);
+
+    var parts = [{ label: 'Formations', href: '#' }, { label: f.name || fid, href: hashFor({ f: fid }) }, { label: l.moduleTitle || 'Module' }];
+    if (l.subTitle) parts.push({ label: l.subTitle });
+    parts.push({ label: 'Leçon ' + (res.index + 1) + ' / ' + res.total });
+    var h = crumb(parts);
+    h += '<div class="fm-rail"><i style="width:' + st.pct + '%"></i></div>';
+    h += '<div class="fm-lgrid"><div>';
+    h += '<div style="display:flex;align-items:flex-start;gap:12px"><h1 class="fm-ltitle" style="flex:1">' + esc(l.title || 'Sans titre') + '</h1>' +
+      (CAN_EDIT ? '<a class="fm-edit-link" href="formations-admin.html' + hashFor({ f: fid, l: lid }) + '">✏️ Modifier</a>' : '') + '</div>';
+    h += mediaHtml(l);
+    if (l.body) h += '<div class="fm-body">' + C.sanitizeHtml(C.plainToHtml(l.body)) + '</div>';
+    if (l.resources && l.resources.length) {
+      h += '<div class="fm-res-h">Ressources</div>';
+      l.resources.forEach(function (r) {
+        if (!r.url) return;
+        h += '<a class="fm-res" href="' + esc(r.url) + '" target="_blank" rel="noopener"><span class="k">' + esc(C.fileKind(r.url, r.title)) + '</span><span class="t">' + esc(r.title || r.url) + '</span><span>⤓</span></a>';
+      });
+    }
+    h += '<div class="fm-actions">' +
+      (res.prev ? '<a class="au-btn" href="' + hashFor({ f: fid, l: res.prev.id }) + '">← Précédente</a>' : '<a class="au-btn" href="' + hashFor({ f: fid }) + '">← Plan</a>') +
+      '<span class="spacer"></span>' +
+      '<button type="button" class="fm-done' + (isDone ? ' is-done' : '') + '" data-act="toggle-done" data-fid="' + esc(fid) + '" data-lid="' + esc(lid) + '">' + (isDone ? '✓ Terminée' : 'Marquer comme terminée') + '</button>' +
+      (res.next ? '<a class="au-btn primary" href="' + hashFor({ f: fid, l: res.next.id }) + '">Suivante →</a>' : '<a class="au-btn primary" href="' + hashFor({ f: fid }) + '">Retour au plan ✓</a>') +
+      '</div></div>';
+
+    // Barre latérale : le niveau courant seulement
+    h += '<div class="fm-panel"><div class="fm-panel-h">' + (l.subId ? 'Dans ce sujet' : 'Dans ce module') + '</div><div class="fm-panel-t">' + esc(scope.title || '') + '</div>' +
+      '<div class="fm-bar"><i style="width:' + (scopeTot ? Math.round(scopeDone / scopeTot * 100) : 0) + '%"></i></div>' +
+      '<div style="font-size:10.5px;color:var(--muted2);font-family:var(--fm);margin:-4px 0 8px">' + scopeDone + ' / ' + scopeTot + ' terminées</div>';
+    scope.items.forEach(function (it) {
+      if (it.kind === 'binder') {
+        h += '<a class="fm-prow" href="' + hashFor({ f: fid, b: it.id }) + '"><span style="font-size:13px">📎</span><span class="t">' + esc(it.title || 'Classeur') + '</span></a>';
+        return;
+      }
+      var d = done.indexOf(it.id) >= 0, cur = it.id === lid;
+      h += '<a class="fm-prow' + (cur ? ' cur' : '') + '" href="' + hashFor({ f: fid, l: it.id }) + '"><span class="fm-dot' + (d ? ' done' : (cur ? ' cur' : '')) + '">' + (d ? '✓' : '') + '</span><span class="t">' + esc(it.title || 'Sans titre') + '</span>' + (it.duration ? '<span class="d">' + esc(it.duration) + '</span>' : '') + '</a>';
+    });
+    h += '<a class="au-btn ghost" style="width:100%;justify-content:center;margin-top:10px" href="' + hashFor({ f: fid }) + '">Voir tout le plan</a></div>';
+    h += '</div>';
+    $view.innerHTML = h;
+    rememberLesson(fid, lid);
+    window.scrollTo(0, 0);
+  }
+
+  /* ─── Rendu : classeur ──────────────────────────────────────────────── */
+  function renderBinder(f, bid) {
+    var fid = f.id;
+    var res = C.findBinder({ modules: C.studentModules(f) }, bid);
+    if (!res.binder || res.binder.status === 'draft') {
+      $view.innerHTML = crumb([{ label: 'Formations', href: '#' }, { label: f.name || fid, href: hashFor({ f: fid }) }, { label: 'Classeur' }]) +
+        '<div class="au-empty"><span class="i">🔍</span>Ce classeur n\'existe pas ou n\'est pas publié.<br><a class="au-btn" style="margin-top:12px" href="' + hashFor({ f: fid }) + '">← Retour au plan</a></div>';
+      return;
+    }
+    var b = res.binder;
+    var parts = [{ label: 'Formations', href: '#' }, { label: f.name || fid, href: hashFor({ f: fid }) }, { label: res.moduleTitle || 'Module' }];
+    if (res.subTitle) parts.push({ label: res.subTitle });
+    parts.push({ label: 'Classeur' });
+    var h = crumb(parts);
+    h += '<div style="display:flex;align-items:flex-start;gap:12px"><h1 class="fm-ltitle" style="flex:1">📎 ' + esc(b.title || 'Classeur') + '</h1>' +
+      (CAN_EDIT ? '<a class="fm-edit-link" href="formations-admin.html' + hashFor({ f: fid, b: bid }) + '">✏️ Modifier</a>' : '') + '</div>';
+    if (b.intro) h += '<div class="fm-binder-intro">' + C.sanitizeHtml(C.plainToHtml(b.intro)) + '</div>';
+    var any = false;
+    (b.sections || []).forEach(function (s) {
+      var files = (s.files || []).filter(function (x) { return x.url; });
+      if (!files.length) return;
+      any = true;
+      if (s.title) h += '<div class="fm-section-t">' + esc(s.title) + '</div>';
+      files.forEach(function (x) {
+        h += '<a class="fm-res" href="' + esc(x.url) + '" target="_blank" rel="noopener"><span class="k">' + esc(C.fileKind(x.url, x.title)) + '</span><span class="t" style="flex:0 1 auto;max-width:50%">' + esc(x.title || x.url) + '</span>' + (x.note ? '<span class="n">' + esc(x.note) + '</span>' : '<span class="n"></span>') + '<span>⤓</span></a>';
+      });
+    });
+    if (!any) h += '<div class="au-empty"><span class="i">📎</span>Ce classeur est encore vide.</div>';
+    h += '<div class="fm-actions"><a class="au-btn" href="' + hashFor({ f: fid }) + '">← Retour au plan</a></div>';
+    $view.innerHTML = h;
+    window.scrollTo(0, 0);
+  }
+
+  /* ─── Routeur ───────────────────────────────────────────────────────── */
+  function render() {
+    var p = parseHash();
+    if (!p.f) { renderCatalogue(); return; }
+    var f = FORMATIONS[p.f];
+    if (!f) {
+      $view.innerHTML = crumb([{ label: 'Formations', href: '#' }, { label: 'Introuvable' }]) +
+        '<div class="au-empty"><span class="i">🔒</span>Cette formation n\'existe pas ou ne t\'a pas été ouverte.<br><a class="au-btn" style="margin-top:12px" href="#">← Toutes mes formations</a></div>';
+      return;
+    }
+    if (p.l) renderLesson(f, p.l);
+    else if (p.b) renderBinder(f, p.b);
+    else renderFormation(f);
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    if (btn.getAttribute('data-act') === 'toggle-done') {
+      e.preventDefault();
+      toggleDone(btn.getAttribute('data-fid'), btn.getAttribute('data-lid'));
+    }
+  });
+  window.addEventListener('hashchange', render);
+
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (!user) { window.location.href = 'login.html'; return; }
+    UID = user.uid;
+    document.getElementById('app').style.display = '';
+    loadAll().then(render).catch(function (e) {
+      console.error(e);
+      $view.innerHTML = '<div class="au-empty"><span class="i">⚠️</span>Impossible de charger les formations.<br><span style="font-family:var(--fm);font-size:11px">' + esc(e.message || e) + '</span></div>';
+    });
+  });
+})();
+</script>
+</body>
+</html>
