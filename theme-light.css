@@ -1,0 +1,490 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   theme-light.css — THÈME CLAIR « LIQUID GLASS » ALTEORE
+   ─────────────────────────────────────────────────────────────────────────
+   Chargé par nav.js sur toutes les pages internes, actif uniquement quand
+   <body> porte la classe `light-theme` (bascule ☀️/🌙 dans la sidebar).
+
+   Deux couches :
+     1. ce fichier (écrit à la main) — tokens clairs (superset des variables
+        de toutes les pages), atmosphère, verre (sidebar, topbar, modales),
+        formulaires, héritages ;
+     2. theme-light-pages.css (GÉNÉRÉ par scripts/build-theme-light.py) —
+        surcharges des couleurs codées en dur page par page.
+
+   Règles : 100 % peinture. Aucune propriété de layout n'est touchée.
+   Spécificité : toujours préfixé `body.light-theme` (+ variantes) pour
+   passer devant brand.css / alteore-ui.css quel que soit l'ordre de charge.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ═══ §1 — TOKENS ═══════════════════════════════════════════════════════ */
+body.light-theme,
+body.light-theme.al-rebrand,
+body.light-theme.au-page,
+body.light-theme.tw-body,
+body.light-theme.ambitio-v2 {
+  color-scheme: light;
+
+  /* Surfaces — du sol vers les cartes. bg2/bg3/bg4 sont translucides : le
+     verre laisse passer l'atmosphère du fond (fixe au scroll). */
+  --bg:      #eef0f7;
+  --bg2:     rgba(255, 255, 255, 0.68);
+  --bg3:     rgba(238, 241, 250, 0.80);
+  --bg4:     rgba(226, 230, 243, 0.86);
+  --bg-elev: rgba(255, 255, 255, 0.74);
+  --bg-card: rgba(255, 255, 255, 0.68);
+  --card:    rgba(255, 255, 255, 0.68);
+
+  /* Lignes */
+  --border:        rgba(17, 19, 36, 0.09);
+  --border2:       rgba(17, 19, 36, 0.16);
+  --border-soft:   rgba(17, 19, 36, 0.05);
+  --subtle-border: rgba(17, 19, 36, 0.06);
+  --line:          rgba(17, 19, 36, 0.09);
+  --line2:         rgba(17, 19, 36, 0.16);
+
+  /* Encre */
+  --text:        #14162b;
+  --fg:          #14162b;
+  --txt:         #14162b;
+  --ink:         #14162b;
+  --muted:       #5d6380;
+  --text-muted:  #5d6380;
+  --text-2:      #5d6380;
+  --mut:         #5d6380;
+  --ink-muted:   #5d6380;
+  --muted2:      #8e93ab;
+  --text-dim:    #8e93ab;
+  --text-3:      #8e93ab;
+  --mut2:        #8e93ab;
+  --ink-soft:    #8e93ab;
+  --subtle-text: rgba(17, 19, 36, 0.5);
+  --item-text:   rgba(17, 19, 36, 0.8);
+  --note-text:   rgba(17, 19, 36, 0.86);
+
+  /* Surfaces d'interaction (anciennement blanc translucide sur fond sombre) */
+  --hover-bg:      rgba(17, 19, 36, 0.04);
+  --hover-bg2:     rgba(17, 19, 36, 0.07);
+  --subtle-bg:     rgba(17, 19, 36, 0.05);
+  --subtle-bg2:    rgba(17, 19, 36, 0.025);
+  --subtle-bg3:    rgba(17, 19, 36, 0.035);
+  --subtle-bg4:    rgba(17, 19, 36, 0.08);
+  --subtle-bg5:    rgba(17, 19, 36, 0.10);
+  --scroll-thumb:  rgba(17, 19, 36, 0.16);
+  --toggle-track:  rgba(17, 19, 36, 0.12);
+  --toggle-knob:   #ffffff;
+  --toggle-border: rgba(17, 19, 36, 0.10);
+
+  /* Accents — les pastels du sombre deviennent des teintes franches,
+     lisibles en texte sur blanc (≥ 4.5:1) et porteuses de texte blanc en
+     fond plein. */
+  --red:       #b91c1c;
+  --red2:      #dc2626;
+  --red3:      #c02626;
+  --red-dark:  #991b1b;
+  --gold:      #b45309;
+  --amber:     #b45309;
+  --yellow:    #a16207;
+  --orange:    #c2410c;
+  --green:     #059669;
+  --blue:      #2563eb;
+  --indigo:    #3b5bdb;
+  --violet:    #6d28d9;
+  --purple:    #6d28d9;
+  --teal:      #0d9488;
+  --cy:        #0e7490;
+  --blue-soft: rgba(37, 99, 235, 0.10);
+  --accent2:   #4f46e5;
+
+  /* Ombres */
+  --shadow: 0 14px 40px -12px rgba(24, 28, 52, 0.18), 0 1px 2px rgba(24, 28, 52, 0.05);
+}
+
+/* Tokens à espace de noms (pages qui ne partagent pas --bg/--text) */
+body.light-theme {
+  /* admin-numbers.css */
+  --an-bg:          #eef0f7;
+  --an-bg-elev:     rgba(255, 255, 255, 0.68);
+  --an-bg-elev-2:   rgba(238, 241, 250, 0.82);
+  --an-border:      rgba(17, 19, 36, 0.12);
+  --an-border-soft: rgba(17, 19, 36, 0.07);
+  --an-text:        #14162b;
+  --an-text-dim:    #5d6380;
+  --an-text-muted:  #8e93ab;
+  --an-teal:        #0f766e;
+  --an-teal-soft:   rgba(15, 118, 110, 0.14);
+  --an-teal-hover:  #115e59;
+  --an-success:     #15803d;
+  --an-warning:     #b45309;
+  --an-danger:      #dc2626;
+  --an-shadow:      0 4px 16px rgba(24, 28, 52, 0.10);
+
+  /* temoignages.css */
+  --tw-bg:      #eef0f7;
+  --tw-bg2:     rgba(255, 255, 255, 0.68);
+  --tw-bg3:     rgba(238, 241, 250, 0.80);
+  --tw-bg4:     rgba(226, 230, 243, 0.86);
+  --tw-line:    rgba(17, 19, 36, 0.09);
+  --tw-line2:   rgba(17, 19, 36, 0.16);
+  --tw-line3:   rgba(17, 19, 36, 0.26);
+  --tw-txt:     #14162b;
+  --tw-mut:     #5d6380;
+  --tw-mut2:    #8e93ab;
+  --tw-blue:    #3b5bdb;
+  --tw-blue2:   #2f4fd0;
+  --tw-blue-bg: rgba(59, 91, 219, 0.12);
+  --tw-violet:  #6d28d9;
+  --tw-teal:    #0d9488;
+  --tw-gold:    #b45309;
+  --tw-red:     #dc2626;
+  --tw-shadow:  0 14px 42px -14px rgba(24, 28, 52, 0.20);
+
+  /* csm-*.html */
+  --csm-accent:      #0f766e;
+  --csm-accent-2:    #0d9488;
+  --csm-accent-dark: #115e59;
+  --csm-glow:        rgba(15, 118, 110, 0.14);
+  --csm-bg-soft:     rgba(15, 118, 110, 0.08);
+  --csm-border:      rgba(15, 118, 110, 0.28);
+  --warn-color:      #c2410c;
+  --crit-color:      #dc2626;
+
+  /* admin-persons.html (brand.css les relie déjà à --bg/--text en al-rebrand) */
+  --ap-bg:            #eef0f7;
+  --ap-surface:       rgba(255, 255, 255, 0.68);
+  --ap-surface-alt:   rgba(238, 241, 250, 0.80);
+  --ap-border:        rgba(17, 19, 36, 0.10);
+  --ap-border-strong: rgba(17, 19, 36, 0.18);
+  --ap-text:          #14162b;
+  --ap-text-muted:    #5d6380;
+  --ap-text-soft:     #8e93ab;
+  --ap-accent:        #1d4ed8;
+  --ap-accent-bg:     rgba(29, 78, 216, 0.10);
+  --ap-success:       #0f766e;
+  --ap-success-bg:    rgba(15, 118, 110, 0.12);
+  --ap-warning:       #b45309;
+  --ap-warning-bg:    rgba(180, 83, 9, 0.12);
+  --ap-danger:        #b91c1c;
+  --ap-danger-bg:     rgba(185, 28, 28, 0.10);
+  --ap-purple:        #6d28d9;
+  --ap-purple-bg:     rgba(109, 40, 217, 0.12);
+
+  /* Facturation / paiements */
+  --bill-green:    #059669;
+  --bill-green-bg: rgba(5, 150, 105, 0.10);
+  --bill-green-bd: rgba(5, 150, 105, 0.24);
+  --bill-amber:    #b45309;
+  --bill-red:      #dc2626;
+  --bill-blue:     #2563eb;
+  --bill-purple:   #6d28d9;
+  --inv-green:     #059669;
+  --inv-green-bg:  rgba(5, 150, 105, 0.10);
+  --inv-green-bd:  rgba(5, 150, 105, 0.24);
+  --inv-amber:     #b45309;
+  --inv-red:       #dc2626;
+  --inv-blue:      #2563eb;
+  --pay-green:     #059669;
+  --pay-amber:     #b45309;
+  --pay-red:       #dc2626;
+  --pay-blue:      #2563eb;
+
+  /* whatsapp.html — palette WhatsApp Web claire */
+  --wa-liste:   rgba(255, 255, 255, 0.78);
+  --wa-panneau: rgba(240, 242, 245, 0.92);
+  --wa-fond:    #e9e4dc;
+  --wa-in:      #ffffff;
+  --wa-out:     #d9fdd3;
+  --wa-texte:   #111b21;
+  --wa-doux:    #667781;
+  --wa-vert:    #008069;
+  --wa-lu:      #53bdeb;
+  --wa-bord:    #e2e6ea;
+  --wa-survol:  #f5f6f6;
+  --wa-actif:   #e9edef;
+  --wa-rouge:   #dc2626;
+}
+
+/* Tokens dont le nom est partagé mais le sens propre à une page */
+body.light-theme[data-al-page="sales-suivi-client"] {
+  --accent:     #b91c1c;
+  --accent-dim: rgba(185, 28, 28, 0.12);
+}
+body.light-theme[data-al-page="sales-signatures"] {
+  --accent:  #4f46e5;
+  --accent2: #4338ca;
+}
+body.light-theme[data-al-page="sales-rdv"] {
+  --green: #15803d;
+}
+
+/* ═══ §2 — ATMOSPHÈRE ═══════════════════════════════════════════════════ */
+
+/* Sol : voile clair + trois halos (celui du haut-gauche prend la teinte du
+   rôle via --nav-accent-glow, posé par nav.js). Fixe au scroll : c'est ce
+   que le verre des cartes laisse transparaître. */
+body.light-theme,
+body.light-theme.al-rebrand,
+body.light-theme.au-page,
+body.light-theme.tw-body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1000px 620px at 4% -10%, var(--nav-accent-glow, rgba(91, 124, 250, 0.18)), transparent 62%),
+    radial-gradient(820px 520px at 100% 2%, rgba(157, 123, 250, 0.16), transparent 60%),
+    radial-gradient(1000px 640px at 55% 112%, rgba(45, 212, 191, 0.14), transparent 62%),
+    linear-gradient(180deg, #f5f6fc 0%, #eceef7 100%);
+  background-attachment: fixed;
+  color: var(--text);
+}
+
+body.light-theme ::selection {
+  background: rgba(91, 124, 250, 0.22);
+  color: #14162b;
+}
+
+body.light-theme ::-webkit-scrollbar { width: 9px; height: 9px; }
+body.light-theme ::-webkit-scrollbar-track { background: transparent; }
+body.light-theme ::-webkit-scrollbar-thumb {
+  background: rgba(17, 19, 36, 0.16);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+body.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(17, 19, 36, 0.30);
+  background-clip: content-box;
+}
+
+body.light-theme :focus-visible {
+  outline: 2px solid rgba(59, 91, 219, 0.55);
+  outline-offset: 2px;
+}
+
+/* ═══ §3 — FORMULAIRES ══════════════════════════════════════════════════ */
+body.light-theme input,
+body.light-theme select,
+body.light-theme textarea {
+  color: var(--text);
+  color-scheme: light;
+}
+body.light-theme select option {
+  background: #ffffff;
+  color: var(--text);
+}
+body.light-theme ::placeholder { color: rgba(17, 19, 36, 0.38); }
+body.light-theme input[type="date"]::-webkit-calendar-picker-indicator,
+body.light-theme input[type="time"]::-webkit-calendar-picker-indicator { filter: none; }
+
+/* ═══ §4 — CHROME PARTAGÉ : TOPBAR (sales.css) ══════════════════════════ */
+body.light-theme .topbar,
+body.light-theme .fiche-top,
+body.light-theme .ld-header,
+body.light-theme .crm-header {
+  background: rgba(255, 255, 255, 0.62);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.85);
+  border-image: none;
+  box-shadow: 0 1px 0 rgba(17, 19, 36, 0.06), 0 12px 32px -20px rgba(24, 28, 52, 0.22);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7);
+  backdrop-filter: blur(24px) saturate(1.7);
+}
+body.light-theme .tb-month,
+body.light-theme .tb-user {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 #ffffff, 0 1px 2px rgba(24, 28, 52, 0.06);
+}
+
+/* ═══ §5 — SIDEBAR (nav.js) ═════════════════════════════════════════════ */
+
+/* Le dégradé de rôle est posé en style inline par nav.js → !important. */
+body.light-theme #ambitio-sidebar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0.64) 100%) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.7);
+  backdrop-filter: blur(30px) saturate(1.7);
+  border-right: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 1px 0 0 rgba(17, 19, 36, 0.06), 28px 0 70px -44px rgba(24, 28, 52, 0.22);
+}
+/* Le grain devient une teinte de rôle en tête de sidebar ; le halo reste. */
+body.light-theme #ambitio-sidebar::before {
+  background-image: linear-gradient(180deg, var(--nav-accent-glow) 0%, transparent 42%);
+  opacity: 1;
+}
+body.light-theme #ambitio-sidebar::after { opacity: 0.85; }
+
+body.light-theme .nav-header { border-bottom-color: rgba(17, 19, 36, 0.07); }
+body.light-theme .nav-logo {
+  background: var(--nav-accent);
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 18px -8px var(--nav-accent);
+}
+body.light-theme .nav-brand-title { color: var(--text); }
+body.light-theme .nav-brand-sub { color: rgba(17, 19, 36, 0.5); }
+body.light-theme .nav-collapse-btn {
+  background: rgba(17, 19, 36, 0.05);
+  border-color: rgba(17, 19, 36, 0.08);
+  color: rgba(17, 19, 36, 0.55);
+}
+body.light-theme .nav-collapse-btn:hover { background: rgba(17, 19, 36, 0.10); color: var(--text); }
+
+body.light-theme .nav-sec-head:hover { background: rgba(17, 19, 36, 0.04); }
+body.light-theme .nav-sec-label { color: rgba(17, 19, 36, 0.48); }
+body.light-theme .nav-sec-count { color: rgba(17, 19, 36, 0.45); background: rgba(17, 19, 36, 0.06); }
+body.light-theme .nav-sec-caret { color: rgba(17, 19, 36, 0.35); }
+
+body.light-theme .nav-item { color: rgba(17, 19, 36, 0.68); }
+body.light-theme .nav-item:hover { background: rgba(17, 19, 36, 0.05); color: var(--text); }
+/* Item actif : pastille de verre en relief, texte à la couleur du rôle */
+body.light-theme .nav-item.active {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.7));
+  color: var(--nav-accent);
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: inset 0 1px 0 #ffffff, 0 8px 20px -10px rgba(24, 28, 52, 0.30);
+}
+body.light-theme .nav-item-badge.num { color: #ffffff; }
+body.light-theme .nav-parent-caret { color: rgba(17, 19, 36, 0.35); }
+body.light-theme .nav-children { border-left-color: rgba(17, 19, 36, 0.10); }
+
+body.light-theme .nav-footer { border-top-color: rgba(17, 19, 36, 0.07); }
+body.light-theme .nav-profile-btn {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 #ffffff, 0 1px 2px rgba(24, 28, 52, 0.05);
+}
+body.light-theme .nav-profile-btn:hover { background: rgba(255, 255, 255, 0.8); border-color: #ffffff; }
+body.light-theme .nav-avatar { color: var(--nav-accent); }
+body.light-theme .nav-profile-name { color: var(--text); }
+body.light-theme .nav-profile-role,
+body.light-theme .nav-profile-caret { color: rgba(17, 19, 36, 0.45); }
+body.light-theme .nav-legal { opacity: 0.45; }
+body.light-theme .nav-legal:hover { opacity: 0.8; }
+
+body.light-theme .nav-ps-slim { color: rgba(17, 19, 36, 0.6); border-color: rgba(17, 19, 36, 0.18); }
+body.light-theme .nav-ps-slim:hover {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.4);
+  background: rgba(185, 28, 28, 0.06);
+}
+
+body.light-theme .nav-theme-toggle {
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 1px 0 #ffffff, 0 1px 2px rgba(24, 28, 52, 0.05);
+}
+body.light-theme .nav-theme-toggle:hover { background: rgba(255, 255, 255, 0.8); }
+body.light-theme .nav-theme-switch { background: rgba(17, 19, 36, 0.12); }
+body.light-theme .nav-theme-toggle.light .nav-theme-switch { background: #f59e0b; }
+body.light-theme .nav-theme-switch::after { box-shadow: 0 1px 3px rgba(24, 28, 52, 0.25); }
+body.light-theme .nav-theme-label { color: rgba(17, 19, 36, 0.6); }
+
+body.light-theme .nav-mobile-toggle {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+  box-shadow: 0 6px 20px -8px rgba(24, 28, 52, 0.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(16px) saturate(1.6);
+}
+body.light-theme .nav-overlay {
+  background: rgba(24, 28, 52, 0.32);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* Modale profil */
+body.light-theme .profile-modal-backdrop {
+  background: rgba(24, 28, 52, 0.36);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+}
+body.light-theme .profile-modal {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.82));
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: inset 0 1px 0 #ffffff, 0 40px 90px -30px rgba(24, 28, 52, 0.45);
+  -webkit-backdrop-filter: blur(30px) saturate(1.7);
+  backdrop-filter: blur(30px) saturate(1.7);
+}
+body.light-theme .pm-title { color: var(--text); }
+body.light-theme .pm-close {
+  background: rgba(17, 19, 36, 0.05);
+  border-color: rgba(17, 19, 36, 0.10);
+  color: rgba(17, 19, 36, 0.55);
+}
+body.light-theme .pm-close:hover { background: rgba(17, 19, 36, 0.10); color: var(--text); }
+body.light-theme .pm-avatar-section { border-bottom-color: rgba(17, 19, 36, 0.07); }
+body.light-theme .pm-avatar-big { color: var(--nav-accent); }
+body.light-theme .pm-avatar-name { color: var(--text); }
+body.light-theme .pm-section-title { color: rgba(17, 19, 36, 0.45); }
+body.light-theme .pm-field label { color: rgba(17, 19, 36, 0.5); }
+body.light-theme .pm-field input,
+body.light-theme .pm-field select,
+body.light-theme .pm-field textarea {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(17, 19, 36, 0.10);
+  color: var(--text);
+}
+body.light-theme .pm-field input::placeholder,
+body.light-theme .pm-field textarea::placeholder { color: rgba(17, 19, 36, 0.35); }
+body.light-theme .pm-field input:focus,
+body.light-theme .pm-field select:focus,
+body.light-theme .pm-field textarea:focus { background: #ffffff; border-color: var(--nav-accent); }
+body.light-theme .pm-field select option { background: #ffffff; color: var(--text); }
+body.light-theme .pm-actions { border-top-color: rgba(17, 19, 36, 0.07); }
+body.light-theme .pm-btn-primary {
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 8px 18px -8px var(--nav-accent);
+}
+body.light-theme .pm-btn-ghost {
+  background: rgba(17, 19, 36, 0.05);
+  color: rgba(17, 19, 36, 0.7);
+  border-color: rgba(17, 19, 36, 0.10);
+}
+body.light-theme .pm-btn-ghost:hover { background: rgba(17, 19, 36, 0.10); color: var(--text); }
+body.light-theme .pm-logout-btn { color: #b91c1c; }
+body.light-theme .pm-save-toast {
+  background: #ecfdf5;
+  border-color: rgba(5, 150, 105, 0.35);
+  color: #047857;
+  box-shadow: 0 12px 30px -12px rgba(24, 28, 52, 0.3);
+}
+
+/* ═══ §6 — HÉRITAGE (ancien bloc light de nav.js, conservé) ═════════════ */
+body.light-theme .eod-textarea,
+body.light-theme .eod-panel,
+body.light-theme .crm-card,
+body.light-theme .crm-col-head,
+body.light-theme .ld-card,
+body.light-theme .ct-card,
+body.light-theme .fl-desc,
+body.light-theme .note-item,
+body.light-theme .act-item,
+body.light-theme .file-item { background: var(--bg2); }
+body.light-theme .mindset-slider { background: var(--bg4); }
+body.light-theme .fl-editable,
+body.light-theme .qv-field-input,
+body.light-theme .crm-modal-input,
+body.light-theme .ct-input { background: var(--bg3); color: var(--text); }
+body.light-theme .crm-board { background: transparent; }
+body.light-theme .crm-col { border-color: var(--border); }
+
+/* Cartes du pipeline / leads : reflet de verre (peinture uniquement) */
+body.light-theme .crm-card,
+body.light-theme .ld-card,
+body.light-theme .ct-card {
+  background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.18) 55%, rgba(255, 255, 255, 0.4));
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(24, 28, 52, 0.05), 0 12px 30px -16px rgba(24, 28, 52, 0.2);
+}
+
+/* Widgets injectés (inbox, infos équipe, dialer) : bulles flottantes en verre */
+body.light-theme .iw-panel,
+body.light-theme #alteoInfosPanel,
+body.light-theme .dbr-action-bar {
+  -webkit-backdrop-filter: blur(24px) saturate(1.7);
+  backdrop-filter: blur(24px) saturate(1.7);
+}
+
+/* Mouvement réduit : pas de flou coûteux */
+@media (prefers-reduced-motion: reduce) {
+  body.light-theme *,
+  body.light-theme *::before,
+  body.light-theme *::after { transition-duration: 0.01ms !important; }
+}

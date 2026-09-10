@@ -196,6 +196,28 @@ particulier sans nom → client refusé → facture numérotée **sans PDF ni tr
 
 ---
 
+## Thème clair « liquid glass »
+
+Bascule ☀️/🌙 dans la sidebar (`localStorage.ambitio_theme`, classe
+`body.light-theme`, attribut `body[data-al-page]` posé par nav.js). Deux feuilles,
+chargées par nav.js sur toutes les pages internes, inertes en sombre :
+
+- `theme-light.css` — écrit à la main : tokens clairs (superset des variables de
+  toutes les pages), atmosphère, sidebar, topbar, modale profil, formulaires.
+- `theme-light-pages.css` — **GÉNÉRÉ**, ne jamais l'éditer : surcharges des
+  couleurs codées en dur (`rgba(255,255,255,.x)`, `#0f0f1a`, pastels…) page par
+  page, scopées par `data-al-page`.
+
+**Après toute modification de CSS dans une page ou un fichier partagé :**
+
+```bash
+python3 scripts/build-theme-light.py           # régénère theme-light-pages.css
+python3 scripts/build-theme-light.py --check   # vérifie qu'il est à jour
+```
+
+Règle : 100 % peinture, jamais de layout. Un nouveau token de page se déclare
+aussi dans `theme-light.css` §1 avec sa valeur claire.
+
 ## `nav.js` — trois variables globales
 
 Ce ne sont **pas** des fonctions :

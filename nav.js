@@ -6,8 +6,16 @@
 
 (function () {
 
-  // Apply saved theme immediately to prevent flash
-  if (localStorage.getItem('ambitio_theme') === 'light') document.body.classList.add('light-theme');
+  // Thème clair : classe `light-theme` + attribut `data-al-page` (scope des
+  // surcharges de theme-light-pages.css) posés au plus tôt pour éviter tout
+  // flash. nav.js peut être chargé dans <head> (defer) : body absent → DOMReady.
+  const AL_PAGE_NAME = (window.location.pathname.split('/').pop() || 'index.html').replace(/\.html$/, '');
+  function applyBodyThemeMarkers() {
+    document.body.setAttribute('data-al-page', AL_PAGE_NAME);
+    if (localStorage.getItem('ambitio_theme') === 'light') document.body.classList.add('light-theme');
+  }
+  if (document.body) applyBodyThemeMarkers();
+  else document.addEventListener('DOMContentLoaded', applyBodyThemeMarkers);
 
   /* ─── Permission keys ─── */
   const PERM_KEYS = [
@@ -97,6 +105,9 @@
     { id: 'temoignages',       icon: '⭐', label: 'Témoignages',  href: 'temoignages.html',       section: 'Outils', perm: '_all' },
   ];
 
+  /* `light` : variantes des accents pour le thème clair (theme-light.css) —
+     les pastels du sombre sont illisibles sur blanc, on passe aux teintes
+     franches ; le halo (`accentGlow`) teinte aussi le fond de page. */
   const THEMES = {
     coach: {
       label: 'Espace Coaching', emoji: '🎓',
@@ -104,6 +115,8 @@
       accent: '#a78bfa', accentLight: '#ede9fe',
       accentGlow: 'rgba(167,139,250,0.18)',
       roleBg: 'rgba(167,139,250,0.12)', roleBorder: 'rgba(167,139,250,0.25)',
+      light: { accent: '#6d28d9', accentGlow: 'rgba(124,58,237,0.16)',
+               roleBg: 'rgba(124,58,237,0.10)', roleBorder: 'rgba(124,58,237,0.30)' },
     },
     sales: {
       label: 'Espace Sales', emoji: '📈',
@@ -111,6 +124,8 @@
       accent: '#fca5a5', accentLight: '#fff1f2',
       accentGlow: 'rgba(252,165,165,0.18)',
       roleBg: 'rgba(252,165,165,0.12)', roleBorder: 'rgba(252,165,165,0.25)',
+      light: { accent: '#b91c1c', accentGlow: 'rgba(220,38,38,0.14)',
+               roleBg: 'rgba(220,38,38,0.09)', roleBorder: 'rgba(220,38,38,0.30)' },
     },
     admin: {
       label: 'Administration', emoji: '👑',
@@ -118,6 +133,8 @@
       accent: '#60a5fa', accentLight: '#eff6ff',
       accentGlow: 'rgba(96,165,250,0.18)',
       roleBg: 'rgba(251,191,36,0.12)', roleBorder: 'rgba(251,191,36,0.25)',
+      light: { accent: '#1d4ed8', accentGlow: 'rgba(37,99,235,0.16)',
+               roleBg: 'rgba(180,83,9,0.10)', roleBorder: 'rgba(180,83,9,0.30)' },
     },
     // ─── Customer Success Manager — émeraude/teal pour différencier ───
     csm: {
@@ -126,8 +143,22 @@
       accent: '#5eead4', accentLight: '#ccfbf1',
       accentGlow: 'rgba(94,234,212,0.18)',
       roleBg: 'rgba(94,234,212,0.12)', roleBorder: 'rgba(94,234,212,0.25)',
+      light: { accent: '#0f766e', accentGlow: 'rgba(13,148,136,0.16)',
+               roleBg: 'rgba(13,148,136,0.10)', roleBorder: 'rgba(13,148,136,0.30)' },
     },
   };
+
+  function isLightTheme() { return localStorage.getItem('ambitio_theme') === 'light'; }
+
+  /* Variables d'accent de rôle (--nav-*) : jeu sombre ou jeu clair selon le
+     thème actif. Appelé au build de la sidebar et à chaque bascule. */
+  function applyNavThemeVars(target, theme, light) {
+    const t = (light && theme.light) ? theme.light : theme;
+    target.style.setProperty('--nav-accent',      t.accent);
+    target.style.setProperty('--nav-accent-glow', t.accentGlow);
+    target.style.setProperty('--nav-role-bg',     t.roleBg);
+    target.style.setProperty('--nav-role-border', t.roleBorder);
+  }
 
   const ROLE_LABELS = { coach: '🎓 Coach', sales: '📈 Commercial', admin: '👑 Administrateur', csm: '💎 Customer Success' };
 
@@ -165,6 +196,24 @@
     document.body
       ? document.body.classList.add('al-rebrand')
       : document.addEventListener('DOMContentLoaded', function () { document.body.classList.add('al-rebrand'); });
+  })();
+
+  /* ═══ THÈME CLAIR « LIQUID GLASS » ════════════════════════════════════
+     Deux feuilles, toujours chargées (inertes sans body.light-theme, la
+     bascule est donc instantanée) et APRÈS brand.css pour gagner les
+     égalités de spécificité :
+       - theme-light.css        : tokens, atmosphère, sidebar, modales (main)
+       - theme-light-pages.css  : GÉNÉRÉ par scripts/build-theme-light.py,
+                                  surcharges des couleurs codées en dur. */
+  (function injectThemeLight() {
+    ['theme-light.css', 'theme-light-pages.css'].forEach(function (href) {
+      if (document.querySelector('link[href="' + href + '"]')) return;
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      link.setAttribute('data-theme-light', '1');
+      document.head.appendChild(link);
+    });
   })();
 
   const style = document.createElement('style');
@@ -472,40 +521,7 @@
     #ambitio-sidebar.collapsed .nav-theme-label { opacity:0; pointer-events:none; }
     #ambitio-sidebar.collapsed .nav-theme-toggle { justify-content:center; padding:8px; }
 
-    /* ── LIGHT THEME ── */
-    body.light-theme {
-      --bg: #f5f5f7;
-      --bg2: #ffffff;
-      --bg3: #f0f0f3;
-      --bg4: #e8e8ed;
-      --border: rgba(0,0,0,0.08);
-      --border2: rgba(0,0,0,0.14);
-      --text: rgba(0,0,0,0.88);
-      --muted: rgba(0,0,0,0.45);
-      --muted2: rgba(0,0,0,0.2);
-    }
-    body.light-theme .topbar,
-    body.light-theme .fiche-top,
-    body.light-theme .ld-header,
-    body.light-theme .crm-header { background:rgba(255,255,255,0.95); }
-    body.light-theme .eod-textarea,
-    body.light-theme .eod-panel,
-    body.light-theme .crm-card,
-    body.light-theme .crm-col-head,
-    body.light-theme .ld-card,
-    body.light-theme .ct-card,
-    body.light-theme .fl-desc,
-    body.light-theme .note-item,
-    body.light-theme .act-item,
-    body.light-theme .file-item { background:var(--bg2); }
-    body.light-theme .mindset-slider { background:var(--bg4); }
-    body.light-theme input, body.light-theme select, body.light-theme textarea { color:var(--text); }
-    body.light-theme .fl-editable,
-    body.light-theme .qv-field-input,
-    body.light-theme .crm-modal-input,
-    body.light-theme .ct-input { background:var(--bg3); color:var(--text); }
-    body.light-theme .crm-board { background:var(--bg); }
-    body.light-theme .crm-col { border-color:var(--border); }
+    /* Thème clair : voir theme-light.css + theme-light-pages.css (chargés plus haut). */
   `;
   document.head.appendChild(style);
 
@@ -619,14 +635,10 @@
     const user    = getUserInfo();
     const { path } = getActivePage();
 
-    document.documentElement.style.setProperty('--nav-accent',      theme.accent);
-    document.documentElement.style.setProperty('--nav-accent-glow', theme.accentGlow);
-    document.documentElement.style.setProperty('--nav-role-bg',     theme.roleBg);
-    document.documentElement.style.setProperty('--nav-role-border', theme.roleBorder);
-
     const isCollapsed = localStorage.getItem('nav_collapsed') === '1';
-    const isLight = localStorage.getItem('ambitio_theme') === 'light';
+    const isLight = isLightTheme();
     if (isLight) document.body.classList.add('light-theme');
+    applyNavThemeVars(document.documentElement, theme, isLight);
 
     const sidebar = document.createElement('div');
     sidebar.id = 'ambitio-sidebar';
@@ -797,6 +809,7 @@
     document.getElementById('navThemeToggle').addEventListener('click', () => {
       const isNowLight = document.body.classList.toggle('light-theme');
       localStorage.setItem('ambitio_theme', isNowLight ? 'light' : 'dark');
+      applyNavThemeVars(document.documentElement, theme, isNowLight);
       const toggle = document.getElementById('navThemeToggle');
       toggle.classList.toggle('light', isNowLight);
       toggle.querySelector('.nav-theme-label').innerHTML = isNowLight ? '☀️ Clair' : '🌙 Sombre';
@@ -817,10 +830,7 @@
 
     const backdrop = document.createElement('div');
     backdrop.className = 'profile-modal-backdrop';
-    backdrop.style.setProperty('--nav-accent',      theme.accent);
-    backdrop.style.setProperty('--nav-accent-glow', theme.accentGlow);
-    backdrop.style.setProperty('--nav-role-bg',     theme.roleBg);
-    backdrop.style.setProperty('--nav-role-border', theme.roleBorder);
+    applyNavThemeVars(backdrop, theme, isLightTheme());
 
     const opt = (val, s) => `<option value="${val}" ${saved.dept===val?'selected':''}>${s}</option>`;
 
