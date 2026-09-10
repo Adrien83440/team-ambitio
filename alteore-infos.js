@@ -30,9 +30,10 @@
   var BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT + '/databases/(default)/documents';
   var ROLE_LABELS = { all: 'Toute l\'équipe', admin: 'Admins', sales: 'Sales', coach: 'Coachs', csm: 'CSM' };
   var SNOOZE_MS = 60 * 60 * 1000;   // « Plus tard » : pas de nouveau popup pendant 1 h dans cet onglet
-  var POLL_MS = 10 * 60 * 1000;     // rafraîchissement silencieux
+  var POLL_MS = 10 * 60 * 1000;     // rafraîchissement complet silencieux
+  var FAST_POLL_MS = 45 * 1000;     // guet des NOUVELLES infos (diffusion immédiate)
 
-  var S = { user: null, role: '', name: '', items: [], read: {}, open: false, composing: false, queue: [], queueIdx: 0, loaded: false, error: null };
+  var S = { user: null, role: '', name: '', items: [], read: {}, open: false, composing: false, queue: [], queueIdx: 0, loaded: false, error: null, lastCreatedAt: null };
 
   /* ── Auth : compat (sales) ou modulaire (coaching / admin) ────────────── */
   function getAuthUser() {
@@ -101,8 +102,23 @@
   function saveLocalRead() { try { localStorage.setItem(localReadKey(), JSON.stringify(S.read)); } catch (e) {} }
   function visibleFor(d) {
     if (isAdmin()) return true;
+    /* Ciblage nominatif : seuls les membres listés (firebaseUid) la voient. */
+    if (Array.isArray(d.targets) && d.targets.length) return d.targets.indexOf(S.user.uid) >= 0;
     var aud = Array.isArray(d.audience) && d.audience.length ? d.audience : ['all'];
     return aud.indexOf('all') >= 0 || aud.indexOf(S.role) >= 0;
+  }
+  function audienceLabel(d) {
+    if (Array.isArray(d.targets) && d.targets.length) {
+      var names = Array.isArray(d.targetsNames) && d.targetsNames.length ? d.targetsNames : d.targets;
+      return '→ ' + names.join(', ');
+    }
+    var aud = Array.isArray(d.audience) && d.audience.length ? d.audience : ['all'];
+    if (aud.indexOf('all') >= 0) return '';
+    return aud.map(function (a) { return ROLE_LABELS[a] || a; }).join(' · ');
+  }
+  function rosterMembers() {
+    var list = window.TEAM_MEMBERS_ACTIVE || window.TEAM_MEMBERS_LIST || [];
+    return list.filter(function (m) { return m && m.firebaseUid && m.active !== false && !(typeof window.isDepartedMember === 'function' && window.isDepartedMember(m)); });
   }
   function unread() { return S.items.filter(function (d) { return !S.read[d.id]; }); }
   function toast(msg, err) {
@@ -125,6 +141,7 @@
         return d;
       });
       S.items = docs.filter(function (d) { return d.active !== false && visibleFor(d); });
+      docs.forEach(function (d) { if (d.createdAt && (!S.lastCreatedAt || d.createdAt > S.lastCreatedAt)) S.lastCreatedAt = d.createdAt; });
       var remote = r[1] ? fromFields(r[1].fields || {}) : {};
       S.read = Object.assign({}, localRead(), (remote.read && typeof remote.read === 'object') ? remote.read : {});
       saveLocalRead();
@@ -135,6 +152,38 @@
       S.read = localRead();
       S.loaded = true;
     });
+  }
+  /* Guet léger : seulement les infos publiées APRÈS la dernière connue. Une
+     requête vide coûte une lecture ; 45 s d'intervalle = quelques milliers de
+     lectures par jour pour toute l'équipe, bien sous le palier gratuit. */
+  function pollNew() {
+    if (!S.loaded || !S.lastCreatedAt) return Promise.resolve();
+    var q = { structuredQuery: { from: [{ collectionId: 'announcements' }],
+      where: { fieldFilter: { field: { fieldPath: 'createdAt' }, op: 'GREATER_THAN', value: { timestampValue: S.lastCreatedAt } } },
+      orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'ASCENDING' }], limit: 20 } };
+    return api('POST', ':runQuery', q).then(function (r) {
+      var fresh = (r || []).filter(function (x) { return x.document; }).map(function (x) {
+        var d = fromFields(x.document.fields || {}); d.id = x.document.name.split('/').pop(); return d;
+      });
+      if (!fresh.length) return;
+      var toShow = [];
+      fresh.forEach(function (d) {
+        if (d.createdAt && d.createdAt > S.lastCreatedAt) S.lastCreatedAt = d.createdAt;
+        if (d.active === false || !visibleFor(d)) return;
+        if (S.items.some(function (x) { return x.id === d.id; })) return;
+        S.items.unshift(d);
+        if (d.urgent === true && d.popup !== false && !S.read[d.id]) toShow.push(d);
+      });
+      renderBell();
+      if (S.open && !S.composing) renderPanel();
+      /* Diffusion immédiate : popup tout de suite, même page déjà ouverte,
+         sans tenir compte d'un « Plus tard » précédent. */
+      if (toShow.length) {
+        var bg = document.getElementById('alteoInfosModalBg');
+        if (bg && bg.classList.contains('show')) { S.queue = S.queue.concat(toShow); renderModal(); }
+        else { S.queue = toShow; S.queueIdx = 0; renderModal(); }
+      }
+    }).catch(function (e) { console.warn('[infos] guet :', e && e.message); });
   }
   function markRead(id) {
     if (S.read[id]) return Promise.resolve();
@@ -152,7 +201,8 @@
   function publish(data) {
     var doc = {
       title: data.title, body: data.body, links: data.links, audience: data.audience,
-      popup: data.popup !== false, active: true,
+      targets: data.targets || [], targetsNames: data.targetsNames || [],
+      popup: data.popup !== false, urgent: data.urgent === true, active: true,
       createdAt: new Date(), createdBy: S.user.uid, createdByName: S.name
     };
     return api('POST', '/announcements', { fields: toFields(doc) });
@@ -274,9 +324,9 @@
       else if (!S.items.length) h += '<div class="empty">Aucune info pour le moment.</div>';
       S.items.forEach(function (d) {
         var isUnread = !S.read[d.id];
-        var aud = Array.isArray(d.audience) && d.audience.length ? d.audience : ['all'];
         h += '<div class="it' + (isUnread ? ' unread' : '') + '" data-id="' + esc(d.id) + '">';
-        h += '<div class="t">' + (isUnread ? '🔵 ' : '') + esc(d.title || '(sans titre)') + (isAdmin() && aud.indexOf('all') < 0 ? ' <span class="aud">' + esc(aud.map(function (a) { return ROLE_LABELS[a] || a; }).join(' · ')) + '</span>' : '') + '</div>';
+        var audLbl = isAdmin() ? audienceLabel(d) : '';
+        h += '<div class="t">' + (isUnread ? '🔵 ' : '') + (d.urgent ? '⚡ ' : '') + esc(d.title || '(sans titre)') + (audLbl ? ' <span class="aud">' + esc(audLbl) + '</span>' : '') + '</div>';
         h += '<div class="m">' + esc(frDate(d.createdAt)) + (d.createdByName ? ' · ' + esc(d.createdByName) : '') + '</div>';
         h += '<div class="b">' + linkify(d.body || '') + '</div>';
         h += renderLinks(d.links);
@@ -307,8 +357,18 @@
       h += '<label><input type="checkbox" class="aiAud" value="' + r[0] + '"' + (r[0] === 'all' ? ' checked' : '') + '/> ' + r[1] + '</label>';
     });
     h += '</div></div>';
-    h += '<div class="chk"><label><input type="checkbox" id="aiPopup" checked/> Afficher en popup à l\'ouverture (tant que non lu)</label></div>';
-    h += '<div class="hint">Publié au nom de ' + esc(S.name) + '. Chacun la reçoit à sa prochaine page ouverte, puis la retrouve dans la cloche. Une info retirée reste en base.</div>';
+    var members = rosterMembers();
+    if (members.length) {
+      h += '<div><label>Ou des membres précis (optionnel — remplace les rôles)</label><div class="chk" id="aiTargets">';
+      members.forEach(function (m) {
+        var nm = m.shortName || m.displayName || m.fullName || m.slug;
+        h += '<label><input type="checkbox" class="aiTgt" value="' + esc(m.firebaseUid) + '" data-name="' + esc(nm) + '"/> ' + esc(nm) + '</label>';
+      });
+      h += '</div></div>';
+    }
+    h += '<div class="chk"><label><input type="checkbox" id="aiPopup" checked/> Afficher en popup (tant que non lu)</label>';
+    h += '<label><input type="checkbox" id="aiUrgent" checked/> ⚡ Diffusion immédiate — popup dans la minute, même sur une page déjà ouverte</label></div>';
+    h += '<div class="hint">Publié au nom de ' + esc(S.name) + '. En diffusion immédiate, chacun la reçoit dans la minute sur la page où il se trouve ; sinon à sa prochaine page ouverte. Elle reste ensuite dans la cloche. Une info retirée reste en base.</div>';
     h += '<div class="bt"><button type="button" data-act="cancel">Annuler</button><button type="button" class="pri" data-act="publish">📣 Publier</button></div>';
     return h + '</div>';
   }
@@ -344,8 +404,13 @@
       Array.prototype.forEach.call(document.querySelectorAll('.aiAud:checked'), function (c) { aud.push(c.value); });
       if (!aud.length || aud.indexOf('all') >= 0) aud = ['all'];
       var popup = !!document.getElementById('aiPopup').checked;
+      var urgentEl = document.getElementById('aiUrgent');
+      var urgent = urgentEl ? !!urgentEl.checked : false;
+      var targets = [], targetsNames = [];
+      Array.prototype.forEach.call(document.querySelectorAll('.aiTgt:checked'), function (c) { targets.push(c.value); targetsNames.push(c.getAttribute('data-name') || c.value); });
+      if (targets.length) aud = ['members'];
       b.disabled = true; b.textContent = '⏳ Publication…';
-      publish({ title: title || 'Info équipe', body: body, links: links, audience: aud, popup: popup })
+      publish({ title: title || 'Info équipe', body: body, links: links, audience: aud, targets: targets, targetsNames: targetsNames, popup: popup, urgent: urgent })
         .then(function (res) {
           /* L'auteur n'a pas besoin de lire sa propre info. */
           var newId = res && res.name ? res.name.split('/').pop() : null;
@@ -372,7 +437,7 @@
     if (!bg || !m) return;
     var d = S.queue[S.queueIdx];
     if (!d) { bg.classList.remove('show'); return; }
-    var h = '<div class="mh"><div class="k">📣 Info équipe</div><div class="t">' + esc(d.title || '(sans titre)') + '</div>' +
+    var h = '<div class="mh"><div class="k">' + (d.urgent ? '⚡ Info immédiate' : '📣 Info équipe') + '</div><div class="t">' + esc(d.title || '(sans titre)') + '</div>' +
       '<div class="m">' + esc(frDate(d.createdAt)) + (d.createdByName ? ' · ' + esc(d.createdByName) : '') + '</div></div>';
     h += '<div class="b">' + linkify(d.body || '') + renderLinks(d.links) + '</div>';
     h += '<div class="mf"><span class="cnt">' + (S.queue.length > 1 ? (S.queueIdx + 1) + ' / ' + S.queue.length : '') + '</span>' +
@@ -405,6 +470,8 @@
       injectCss(); buildDom(); renderBell();
       loadAll().then(function () { renderBell(); startPopups(); });
       setInterval(function () { if (!S.open) loadAll().then(renderBell); }, POLL_MS);
+      setInterval(function () { if (document.hidden) return; pollNew(); }, FAST_POLL_MS);
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) pollNew(); });
     }, 400);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
