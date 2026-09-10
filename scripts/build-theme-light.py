@@ -539,6 +539,13 @@ def transform(decls, sel=''):
         new = None
         if text_gradient and prop in BG_PROPS:
             new = map_text_gradient(val)
+            if new is not None:
+                # Jamais le raccourci `background` : il réinitialiserait
+                # background-clip et le dégradé peindrait tout le bloc.
+                out.append(('background-image', new, imp))
+                out.append(('-webkit-background-clip', 'text', imp))
+                out.append(('background-clip', 'text', imp))
+            continue
         elif prop in ('color', 'fill', 'stroke', '-webkit-text-fill-color', 'caret-color'):
             if prop == '-webkit-text-fill-color' and text_gradient:
                 continue
