@@ -501,17 +501,47 @@ def is_chip_like(sel, decls):
     return False
 
 
+def map_text_gradient(val):
+    """Dégradé utilisé comme couleur de TEXTE (background-clip:text) : chaque
+    couleur est traitée comme un texte (blanc → encre, pastel → foncé)."""
+    changed = False
+
+    def sub(m):
+        nonlocal changed
+        new = map_text_color(m.group(1), False)
+        if new is None:
+            return m.group(0)
+        changed = True
+        return new
+    out = COLOR_RE.sub(sub, val)
+    return out if changed else None
+
+
+def is_text_gradient(decls):
+    for p, v, _ in decls:
+        if p in ('-webkit-text-fill-color', 'text-fill-color') and v.strip().lower() == 'transparent':
+            return True
+        if p in ('-webkit-background-clip', 'background-clip') and v.strip().lower() == 'text':
+            return True
+    return False
+
+
 def transform(decls, sel=''):
     """Retourne la liste des déclarations de surcharge pour un bloc."""
     out = []
-    accent_bg = has_solid_accent_bg(decls)
+    text_gradient = is_text_gradient(decls)
+    accent_bg = False if text_gradient else has_solid_accent_bg(decls)
     accent_token_bg = has_accent_token_bg(decls)
     chip_like = is_chip_like(sel, decls)
     for prop, val, imp in decls:
         if '__I__' in val:
             continue
         new = None
-        if prop in ('color', 'fill', 'stroke', '-webkit-text-fill-color', 'caret-color'):
+        if text_gradient and prop in BG_PROPS:
+            new = map_text_gradient(val)
+        elif prop in ('color', 'fill', 'stroke', '-webkit-text-fill-color', 'caret-color'):
+            if prop == '-webkit-text-fill-color' and text_gradient:
+                continue
             new = map_text_color(val, accent_bg, chip_like)
             if new is None and accent_token_bg and prop == 'color':
                 c = parse_color(val.strip())
