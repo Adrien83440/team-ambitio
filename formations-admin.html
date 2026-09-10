@@ -99,13 +99,18 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .fb-file input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 9px;font-size:12.5px;font-family:inherit;outline:none;min-width:0}
 
 /* Apparence */
-.fb-wdg{border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;background:var(--bg2)}
+.fb-ap{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;margin-bottom:6px}
+@media (max-width:980px){.fb-ap{grid-template-columns:1fr}}
+.fb-wdg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:14px;margin-bottom:12px}
+@media (max-width:520px){.fb-wdg-grid{grid-template-columns:1fr}}
+.fb-wdg{border:1px solid var(--border);border-radius:14px;padding:14px;background:var(--bg2);min-width:0}
 .fb-wdg.off{opacity:.55}
 .fb-wdg-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .fb-wdg-h .fb-title{font-family:var(--fh);font-size:14px}
 .fb-chk{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
 .fb-chk input{width:14px;height:14px;accent-color:var(--blue)}
-.fb-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.fb-row3{display:grid;grid-template-columns:1.2fr 1.6fr .9fr;gap:10px}
+.fb-row3 input,.fb-row3 select{min-width:0}
 @media (max-width:700px){.fb-row3{grid-template-columns:1fr}}
 .fb-heroprev{position:relative;border-radius:14px;overflow:hidden;min-height:150px;display:flex;align-items:center;justify-content:center;text-align:center;padding:26px;border:1px solid var(--border);background:var(--bg3) center/cover no-repeat;margin-bottom:12px}
 .fb-heroprev::before{content:'';position:absolute;inset:0;background:rgba(3,5,14,var(--fm-ov,.45))}
@@ -497,7 +502,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       '<div class="fb-row3"><div class="fb-f"><label>Libellé du bouton</label><input type="text" data-wf="ctaText" value="' + esc(w.ctaText) + '" placeholder="Envoyer ma facture"></div>' +
       '<div class="fb-f"><label>Lien du bouton</label><input type="url" data-wf="ctaUrl" value="' + esc(w.ctaUrl) + '" placeholder="https://…"></div>' +
       '<div class="fb-f"><label>Couleur</label><select data-wf="ctaColor">' + colorOpts + '</select></div></div>' +
-      '<div class="fb-row3"><div class="fb-f"><label>Couleur du texte (hex, optionnel)</label><input type="text" data-wf="ctaTextColor" value="' + esc(w.ctaTextColor) + '" placeholder="#FFFFFF"></div>' +
+      '<div class="fb-row3"><div class="fb-f"><label>Texte du bouton (hex)</label><input type="text" data-wf="ctaTextColor" value="' + esc(w.ctaTextColor) + '" placeholder="#FFFFFF"></div>' +
       '<div class="fb-f"><label>Largeur</label><select data-wf="ctaWidth"><option value="auto"' + (w.ctaWidth !== 'full' ? ' selected' : '') + '>Ajustée</option><option value="full"' + (w.ctaWidth === 'full' ? ' selected' : '') + '>Pleine largeur</option></select></div>' +
       '<div class="fb-f"><label>&nbsp;</label><label class="fb-chk" style="text-transform:none;letter-spacing:0;font-size:12px;margin-top:9px"><input type="checkbox" data-wf="ctaNewTab"' + (w.ctaNewTab ? ' checked' : '') + '> Ouvrir dans un nouvel onglet</label></div></div>' +
       '</div>';
@@ -509,17 +514,18 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     var h = '<div class="fb-crumb"><a href="#">Formations</a><span class="sep">›</span><a href="' + hashFor({ f: F.id }) + '">' + esc(F.name || F.id) + '</a><span class="sep">›</span><span class="cur">Apparence</span></div>';
     h += '<div class="fb-head"><a class="au-btn" href="' + hashFor({ f: F.id }) + '">← Plan</a><div style="flex:1;font-family:var(--fh);font-size:18px;font-weight:700">🎨 Apparence de l\'espace membre</div><span class="fb-save" id="saveState"></span>' +
       '<a class="au-btn" href="formations.html' + hashFor({ f: F.id }) + '" target="_blank" rel="noopener">👁 Voir en membre</a></div>';
-    h += '<div class="fb-ed" id="edForm"><div>';
+    h += '<div id="edForm"><div class="fb-ap"><div>';
     h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Bannière</div><div class="au-card-note">Affichée en haut du plan de la formation, si elle a une image ou une accroche.</div></div>';
     h += '<div class="fb-heroprev" id="thHeroPrev" style="--fm-ov:' + t.hero.overlay + (t.hero.image ? ';background-image:url(' + esc(t.hero.image).replace(/[()]/g, '') + ')' : '') + '"><div><b id="thHeroPrevT">' + esc(t.hero.title || F.name || '') + '</b><span id="thHeroPrevS">' + esc(t.hero.tagline) + '</span></div></div>';
     h += '<div class="fb-row2">' + fieldHtml('thTitle', 'Titre', t.hero.title, F.name || 'Titre de la bannière') + fieldHtml('thTagline', 'Accroche', t.hero.tagline, 'Une phrase sous le titre (optionnel)') + '</div>';
     h += '<div class="fb-row2">' + uploadField('thImage', 'Image de fond', t.hero.image, 'heroImage', 'Format large (1600×600 conseillé).', false) +
       '<div class="fb-f"><label for="thOverlay">Assombrissement (' + Math.round(t.hero.overlay * 100) + ' %)</label><input type="range" id="thOverlay" min="0" max="0.9" step="0.05" value="' + t.hero.overlay + '" style="width:100%"></div></div></div>';
-    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Texte d\'accueil</div><div class="au-card-note">Sous la bannière, au-dessus des modules. Vide = rien.</div></div>' + rteHtml('thWelcome', C.widgetBodyHtml(t.welcome), 120) + '</div>';
     h += '</div><div>';
-    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Widgets latéraux</div><div class="au-card-note">Facture de fin de mois, identifiants, point hebdo… affichés à droite du plan.</div></div><div id="thWidgets">' +
-      t.sidebar.map(widgetHtml).join('') + '</div><button type="button" class="fb-add" data-act="w-add">＋ Widget</button></div>';
+    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Texte d\'accueil</div><div class="au-card-note">Sous la bannière, au-dessus des modules. Vide = rien.</div></div>' + rteHtml('thWelcome', C.widgetBodyHtml(t.welcome), 220) + '</div>';
     h += '</div></div>';
+    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Widgets latéraux</div><div class="au-card-note">Facture de fin de mois, identifiants, point hebdo… affichés à droite du plan, dans cet ordre.</div></div><div id="thWidgets" class="fb-wdg-grid">' +
+      t.sidebar.map(widgetHtml).join('') + '</div><button type="button" class="fb-add" data-act="w-add">＋ Widget</button></div>';
+    h += '</div>';
     $view.innerHTML = h;
     setSaveState('saved');
   }
