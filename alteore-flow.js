@@ -144,7 +144,22 @@
      apparaissent jamais. DEPARTED : membres partis de la société, exclus en
      dur même si le roster _meta/team_members n'est pas encore à jour. */
   var DEPARTED = { guillaume: 1 }; // Guillaume Bilcke — parti (07/2026)
-  var SALES_ROLES = { setter: 1, closer: 1, closer_setter: 1 };
+  /* setter_ecrit (10/09/2026) : setter « écrit » — travaille les prospects
+     par messages (DM Instagram / Meta), jamais au téléphone. Membre de
+     l'équipe sales à part entière (Set NB, EOD, Commissions, Équipe), mais
+     jamais closer ni disponible au booking. */
+  var SALES_ROLES = { setter: 1, closer: 1, closer_setter: 1, setter_ecrit: 1 };
+  var SETTER_ROLES = { setter: 1, closer_setter: 1, setter_ecrit: 1 };
+  var CLOSER_ROLES = { closer: 1, closer_setter: 1 };
+  function isSetterRole(role) { return !!SETTER_ROLES[role]; }
+  function isCloserRole(role) { return !!CLOSER_ROLES[role]; }
+  function roleLabel(role) {
+    if (role === 'closer_setter') return 'Setting + Closing';
+    if (role === 'setter') return 'Setting';
+    if (role === 'setter_ecrit') return 'Setting écrit';
+    if (role === 'closer') return 'Closing';
+    return role || '';
+  }
 
   function salesMembers() {
     var list = (window.TEAM_MEMBERS_LIST || []).filter(function (m) {
@@ -165,6 +180,85 @@
     var members = window.TEAM_MEMBERS_LIST || [];
     for (var i = 0; i < members.length; i++) { if (members[i] && members[i].firebaseUid === uid) return members[i]; }
     return null;
+  }
+
+  /* ═══ CONTRAT PAR MEMBRE (10/09/2026) ═══════════════════════════════════
+     _meta/team_members[].contract = {
+       fixe: 1500,                                   // € brut / mois
+       closing: { 'BP 12': { mensualise, pif }, … },  // barème closing
+       setting: { 'BP 12': { noBooking, selfBooking }, … },
+       pifBonus: { 'BP 12': 100, … }
+     }
+     Saisi dans Admin → Utilisateurs. Un membre SANS contrat garde le barème
+     historique (COMM_RULES / PIF_BONUS = contrat Full Cycle d'Élodie). Un
+     barème partiel se complète offre par offre avec le barème historique :
+     un contrat qui ne mentionne pas Titan ne fait pas disparaître Titan. */
+  function memberContract(slug) {
+    var m = slug ? memberBySlug(slug) : null;
+    return (m && m.contract && typeof m.contract === 'object') ? m.contract : null;
+  }
+  function contractFixe(slug) {
+    var c = memberContract(slug);
+    return c ? (Number(c.fixe) || 0) : 0;
+  }
+  function closingRule(slug, offre) {
+    var c = memberContract(slug);
+    var r = c && c.closing && c.closing[offre];
+    return r || COMM_RULES.closing[offre] || null;
+  }
+  function settingRule(slug, offre) {
+    var c = memberContract(slug);
+    var r = c && c.setting && c.setting[offre];
+    return r || COMM_RULES.setting[offre] || null;
+  }
+  function pifBonusRule(slug, offre) {
+    var c = memberContract(slug);
+    if (c && c.pifBonus && c.pifBonus[offre] != null) return Number(c.pifBonus[offre]) || 0;
+    return PIF_BONUS[offre] || 0;
+  }
+
+  /* Date de début d'un membre (startDate 'YYYY-MM-DD' dans le roster).
+     Un jour antérieur n'a PAS de donnée — il ne vaut pas zéro. */
+  function memberStartDate(m) {
+    var v = m && m.startDate;
+    return (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v : null;
+  }
+  function isBeforeStart(m, dayIso) {
+    var sd = memberStartDate(m);
+    return !!(sd && dayIso && dayIso < sd);
+  }
+
+  /* Patch d'UN membre dans _meta/team_members (format array OU objet
+     conservé). Transaction : deux admins qui éditent en même temps ne
+     s'écrasent pas. Recharge le roster nav.js ensuite. */
+  function patchTeamMember(slug, patch) {
+    var ref = db().collection('_meta').doc('team_members');
+    return db().runTransaction(function (tx) {
+      return tx.get(ref).then(function (snap) {
+        if (!snap.exists) throw new Error('Roster _meta/team_members introuvable');
+        var data = snap.data() || {};
+        var raw = data.members;
+        var found = false;
+        if (Array.isArray(raw)) {
+          raw = raw.slice();
+          for (var i = 0; i < raw.length; i++) {
+            if (raw[i] && raw[i].slug === slug) { raw[i] = Object.assign({}, raw[i], patch); found = true; break; }
+          }
+        } else if (raw && typeof raw === 'object') {
+          raw = Object.assign({}, raw);
+          var keys = Object.keys(raw);
+          for (var k = 0; k < keys.length; k++) {
+            var e = raw[keys[k]];
+            if (e && (e.slug === slug || keys[k] === slug)) { raw[keys[k]] = Object.assign({}, e, patch); found = true; break; }
+          }
+        }
+        if (!found) throw new Error('Membre « ' + slug + ' » introuvable dans le roster');
+        tx.update(ref, { members: raw, updatedAt: ts() });
+      });
+    }).then(function () {
+      if (typeof window.loadTeamMembers === 'function') return window.loadTeamMembers(true);
+      return null;
+    });
   }
 
   /* Classification d'un booking — MÊME règle que sales-funnel.html.
@@ -611,14 +705,16 @@
        - Setting (setter)  : noBooking si RDV setter (NB), selfBooking si SB
      Idempotent par dealKey = {bookingId}_{closing|setting} : re-cliquer
      Close ne duplique jamais. ok:false → validé à l'encaissement. */
-  function calcClosingComm(offre, subtype) {
-    var r = COMM_RULES.closing[offre]; if (!r) return 0;
-    return subtype === 'pif' ? r.pif : r.mensualise;
+  /* slug optionnel : barème du CONTRAT du membre (memberContract), sinon
+     barème historique. */
+  function calcClosingComm(offre, subtype, slug) {
+    var r = closingRule(slug, offre); if (!r) return 0;
+    return Number(subtype === 'pif' ? r.pif : r.mensualise) || 0;
   }
-  function calcClosingBonus(offre, subtype) { return subtype === 'pif' ? (PIF_BONUS[offre] || 0) : 0; }
-  function calcSettingComm(offre, sb) {
-    var r = COMM_RULES.setting[offre]; if (!r) return 0;
-    return sb ? r.selfBooking : r.noBooking;
+  function calcClosingBonus(offre, subtype, slug) { return subtype === 'pif' ? pifBonusRule(slug, offre) : 0; }
+  function calcSettingComm(offre, sb, slug) {
+    var r = settingRule(slug, offre); if (!r) return 0;
+    return Number(sb ? r.selfBooking : r.noBooking) || 0;
   }
 
   /* Mois voisins d'une clé 'YYYY-MM'. */
@@ -686,8 +782,8 @@
         date: dateFr,
         contracteHT: Number(closeData.contracte) || 0,
         collecteHT: Number(closeData.collecte) || 0,
-        comm: calcClosingComm(closeData.offre, closeData.subtype),
-        bonus: calcClosingBonus(closeData.offre, closeData.subtype),
+        comm: calcClosingComm(closeData.offre, closeData.subtype, closeData.closerSlug),
+        bonus: calcClosingBonus(closeData.offre, closeData.subtype, closeData.closerSlug),
         notes: 'AUTO — Close ' + (sb ? 'Self Booking' : 'Setting NB') + (closeData.paiement ? ' · ' + closeData.paiement : ''),
         ok: false,
         auto: true,
@@ -711,7 +807,7 @@
         subtype: sb ? 'selfBooking' : 'noBooking',
         date: dateFr,
         contracteHT: 0, collecteHT: 0,
-        comm: calcSettingComm(closeData.offre, sb),
+        comm: calcSettingComm(closeData.offre, sb, closeData.setterSlug),
         bonus: 0,
         notes: 'AUTO — Setting ' + (sb ? 'Self Booking' : 'No-Booking') + ' du close de ' + clientName
              + ' (close ' + mk + ', versé ' + mkSetting + ')',
@@ -736,9 +832,9 @@
     var team = salesMembers();
     var m = me();
     var closer = null;
-    if (m && m.resolved && isSalesMember(m.slug) && (m.role === 'closer' || m.role === 'closer_setter')) closer = m.slug;
+    if (m && m.resolved && isSalesMember(m.slug) && isCloserRole(m.role)) closer = m.slug;
     if (!closer) {
-      var closers = team.filter(function (x) { return x.role === 'closer' || x.role === 'closer_setter'; });
+      var closers = team.filter(function (x) { return isCloserRole(x.role); });
       if (closers.length === 1) closer = closers[0].slug;
       else if (m && m.resolved && isSalesMember(m.slug)) closer = m.slug;
     }
@@ -746,7 +842,7 @@
     if (booking && booking.bookedBySlug && isSalesMember(booking.bookedBySlug)) setter = booking.bookedBySlug;
     if (!setter && lead && lead.assignedTo && isSalesMember(lead.assignedTo)) setter = lead.assignedTo;
     if (!setter) {
-      var setters = team.filter(function (x) { return x.role === 'setter' || x.role === 'closer_setter'; });
+      var setters = team.filter(function (x) { return isSetterRole(x.role); });
       if (setters.length === 1) setter = setters[0].slug;
     }
     return { closerSlug: closer, setterSlug: setter };
@@ -863,7 +959,10 @@
     return db().collection('booking_config').doc('_types').get().then(function (snap) {
       var map = {};
       ((snap.exists && snap.data().list) || []).forEach(function (t) {
-        if (t && t.id) map[t.id] = { isSetterOnly: t.isSetterOnly === true, isCoaching: t.isCoaching === true, label: t.label || t.id };
+        /* formFields : sert à sales-leads pour retrouver le libellé des
+           réponses de formulaire des RDV antérieurs au champ formAnswers
+           (posé sur les bookings depuis le 02/09/2026). */
+        if (t && t.id) map[t.id] = { isSetterOnly: t.isSetterOnly === true, isCoaching: t.isCoaching === true, label: t.label || t.id, formFields: t.formFields || [] };
       });
       return map;
     }).catch(function () { return {}; });
@@ -965,6 +1064,14 @@
     memberByFirebaseUid: memberByFirebaseUid,
     salesMembers: salesMembers,
     isSalesMember: isSalesMember,
+    isSetterRole: isSetterRole,
+    isCloserRole: isCloserRole,
+    roleLabel: roleLabel,
+    memberContract: memberContract,
+    contractFixe: contractFixe,
+    memberStartDate: memberStartDate,
+    isBeforeStart: isBeforeStart,
+    patchTeamMember: patchTeamMember,
     DEPARTED: DEPARTED,
     dayKey: dayKey,
     monthKey: monthKey,

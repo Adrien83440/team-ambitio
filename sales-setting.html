@@ -6,6 +6,14 @@
 <meta name="theme-color" content="#07080f"/>
 <title>Alteore — Set NB (rapport Setting)</title>
 <link rel="stylesheet" href="alteore-ui.css"/>
+<style>
+/* Barre « date de début » du membre (10/09/2026) — admin : édition ; sales : lecture. */
+.au-startbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; }
+.au-startbar .lbl { color: var(--muted); }
+.au-startbar input[type="date"] { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: inherit; padding: 5px 8px; font: inherit; font-size: 12px; }
+.au-startbar .warn { color: var(--gold); }
+.au-table td.au-before { color: rgba(255,255,255,.22); }
+</style>
 
 <!-- ── Firebase v9 compat ── -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -35,7 +43,7 @@
     <div class="au-head-ico">📞</div>
     <div>
       <h1 class="au-title">Set NB <span style="color:var(--muted);font-weight:500">· rapport Setting</span></h1>
-      <div class="au-sub">Équipe sales uniquement — appels Ringover, actions fiche Leads Live et RDV remontent automatiquement, jour après jour. RDV coaching &amp; clients exclus.</div>
+      <div class="au-sub" id="headSub">Équipe sales uniquement — appels Ringover, actions fiche Leads Live et RDV remontent automatiquement, jour après jour. RDV coaching &amp; clients exclus.</div>
     </div>
     <div class="au-head-right">
       <span class="au-badge-auto"><span class="dot"></span> Données automatiques</span>
@@ -61,6 +69,8 @@
   </div>
 
   <div class="au-members" id="memberTabs"></div>
+
+  <div class="au-card au-startbar" id="startBar" style="display:none"></div>
 
   <div id="content"><div class="au-loading"><div class="au-spinner"></div>Chargement du rapport…</div></div>
 
@@ -96,8 +106,16 @@
   var JOURS_FR = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
   var pad2 = function (n) { return String(n).padStart(2, '0'); };
 
-  /* Champs du rapport (ordre des colonnes). type: auto source pour le hint. */
-  var COLS = [
+  /* ══ Colonnes ═════════════════════════════════════════════════════════
+     Deux rapports dans la même page :
+       · SETTING TÉLÉPHONE (setter / closer_setter) — Ringover + journal
+         fiches + RDV. Inchangé.
+       · SETTING ÉCRIT (setter_ecrit, 10/09/2026) — messages Instagram
+         (journal du webhook Meta : ig_dm_events / ig_dm_threads) + journal
+         fiches + RDV. Aucune colonne téléphone : ce membre n'appelle pas.
+     grp : tel | dm | act | rdv — le hint « journal pas encore actif » ne
+     s'applique qu'au groupe act. */
+  var COLS_TEL = [
     { key: 'tempsAppelSec', label: '⏱ Temps',   grp: 'tel', fmt: 'dur',  ovKey: 'tempsAppelMin', ovLabel: "Temps d'appel (min)" },
     { key: 'calls',         label: 'Calls',      grp: 'tel', fmt: 'n' },
     { key: 'decroches',     label: 'Décro.',     grp: 'tel', fmt: 'n' },
@@ -116,6 +134,22 @@
     { key: 'closesNb',      label: 'Closes',     grp: 'rdv', fmt: 'good' },
     { key: 'collecteNb',    label: 'Collecté',   grp: 'rdv', fmt: 'eur' }
   ];
+  var COLS_ECRIT = [
+    { key: 'dmOut',      label: 'DM envoyés',  grp: 'dm',  fmt: 'n',    title: 'Messages Instagram sortants (échos Meta), comptés le jour de l\'envoi' },
+    { key: 'dmIn',       label: 'DM reçus',    grp: 'dm',  fmt: 'n',    title: 'Messages Instagram entrants' },
+    { key: 'convOut',    label: 'Conv. ouv.',  grp: 'dm',  fmt: 'n',    title: 'Conversations ouvertes par nous ce jour (démarchage)' },
+    { key: 'replies',    label: 'Réponses',    grp: 'dm',  fmt: 'good', title: 'Conversations ouvertes par nous ayant reçu leur 1ʳᵉ réponse ce jour' },
+    { key: 'convIn',     label: 'Conv. entr.', grp: 'dm',  fmt: 'n',    title: 'Conversations ouvertes par le prospect ce jour' },
+    { key: 'leads',      label: 'Leads',       grp: 'act', fmt: 'n' },
+    { key: 'follow_up',  label: 'FU',          grp: 'act', fmt: 'n' },
+    { key: 'out',        label: 'Out',         grp: 'act', fmt: 'n', title: 'Faux numéro + pas intéressé + disqualifié + poubelle' },
+    { key: 'sets',       label: 'Sets',        grp: 'act', fmt: 'hot' },
+    { key: 'annulesNb',  label: 'Annulé',      grp: 'rdv', fmt: 'bad' },
+    { key: 'noshowNb',   label: 'No-show',     grp: 'rdv', fmt: 'bad' },
+    { key: 'presentsNb', label: 'Présents',    grp: 'rdv', fmt: 'good' },
+    { key: 'closesNb',   label: 'Closes',      grp: 'rdv', fmt: 'good' },
+    { key: 'collecteNb', label: 'Collecté',    grp: 'rdv', fmt: 'eur' }
+  ];
 
   var S = {
     mode: 'month',          // 'day' | '3d' | '7d' | 'month' — tous les KPIs suivent la période
@@ -125,10 +159,11 @@
     slug: null,             // membre sélectionné
     role: localStorage.getItem('ambitio_role') || 'sales',
     typeMap: {},
-    data: null,             // { days: {day: {…}}, callsOk: bool }
+    data: null,             // { days: {day: {…}}, callsOk: bool, dmOk: bool, dmError }
     overrides: {},
     legacy: null,           // doc saisies/{slug}/mois/{key} si existant (vue Mois)
     legacyOpen: false,
+    startDate: null,        // date de début du membre sélectionné ('YYYY-MM-DD' | null)
     loading: false
   };
   (function initPeriod() {
@@ -168,12 +203,15 @@
   }
   function fmtEuro(n) { return (Math.round(Number(n) || 0)).toLocaleString('fr-FR') + ' €'; }
   function fmtPct(n) { return n == null ? '—' : (Math.round(n * 10) / 10).toLocaleString('fr-FR') + ' %'; }
+  function frOfIso(iso) { var d = new Date(iso + 'T12:00:00'); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
+  function isAdmin() { return S.role === 'admin'; }
 
   /* ── Membres : ÉQUIPE SALES uniquement (validé Adrien 14/07/2026) ──
-     AF.salesMembers() = rôles setter/closer/closer_setter, actifs, membres
-     partis exclus. Ni admins, ni coachs, ni CSM ici. */
+     AF.salesMembers() = rôles setter/closer/closer_setter/setter_ecrit,
+     actifs, membres partis exclus. Ni admins, ni coachs, ni CSM ici.
+     Ici : les rôles SETTING seulement (AF.isSetterRole). */
   function computeMembers() {
-    var setters = AF.salesMembers().filter(function (m) { return m.role === 'setter' || m.role === 'closer_setter'; });
+    var setters = AF.salesMembers().filter(function (m) { return AF.isSetterRole(m.role); });
     if (!setters.length) setters = AF.salesMembers();
     S.members = setters;
     if (!S.slug || !setters.some(function (m) { return m.slug === S.slug; })) {
@@ -182,13 +220,15 @@
     }
   }
   function currentMember() { return S.members.find(function (m) { return m.slug === S.slug; }) || null; }
+  function isEcrit(m) { return !!(m && m.role === 'setter_ecrit'); }
+  function cols() { return isEcrit(currentMember()) ? COLS_ECRIT : COLS_TEL; }
 
   function renderMembers() {
     var h = '';
     S.members.forEach(function (m) {
       var name = m.shortName || m.displayName || m.slug;
       var initials = (m.initials || name.slice(0, 2)).toUpperCase();
-      var roleLbl = m.role === 'closer_setter' ? 'Setting + Closing' : m.role === 'setter' ? 'Setting' : (m.role || '');
+      var roleLbl = (isEcrit(m) ? '✍️ ' : '') + AF.roleLabel(m.role);
       h += '<button class="au-member' + (m.slug === S.slug ? ' active' : '') + '" style="--au-mc:' + (m.color || '#5b7cfa') + '" data-slug="' + m.slug + '">' +
         '<span class="au-member-av">' + initials + '</span>' +
         '<span><span class="au-member-n">' + name + (m.active === false ? ' 🔒' : '') + '</span><br/><span class="au-member-r">' + roleLbl + '</span></span></button>';
@@ -201,39 +241,114 @@
         refresh();
       });
     });
+    renderStartBar();
+  }
+
+  /* ── Barre « date de début » (10/09/2026) ──
+     Un membre qui commence la semaine prochaine ne doit pas afficher des
+     zéros sur les jours d'avant : ces jours n'existent pas pour lui.
+     Admin : saisie directe ici (écrit _meta/team_members[].startDate via
+     AF.patchTeamMember). Sales : lecture seule. */
+  function renderStartBar() {
+    var bar = $('#startBar');
+    var m = currentMember();
+    if (!m) { bar.style.display = 'none'; return; }
+    var sd = AF.memberStartDate(m);
+    var name = m.shortName || m.displayName || m.slug;
+    var h = '<span class="lbl">📅 Date de début de ' + name + ' :</span>';
+    if (isAdmin()) {
+      h += '<input type="date" id="startInput" value="' + (sd || '') + '"/>' +
+        '<button class="au-btn primary" id="startSave" style="padding:5px 10px;font-size:12px">💾 Enregistrer</button>' +
+        (sd ? '<button class="au-btn ghost" id="startClear" style="padding:5px 10px;font-size:12px" title="Retirer la date de début">✕</button>' : '') +
+        '<span class="lbl" style="font-size:11px">les jours antérieurs affichent « — » et ne comptent pas dans les totaux</span>';
+    } else {
+      h += sd ? '<strong>' + frOfIso(sd) + '</strong>' : '<span class="lbl">non renseignée</span>';
+    }
+    bar.innerHTML = h;
+    bar.style.display = '';
+    var save = $('#startSave');
+    if (save) {
+      save.addEventListener('click', function () {
+        var v = ($('#startInput').value || '').trim();
+        if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { toast('Date invalide', true); return; }
+        saveStartDate(m.slug, v);
+      });
+    }
+    var clear = $('#startClear');
+    if (clear) clear.addEventListener('click', function () { saveStartDate(m.slug, null); });
+  }
+  function saveStartDate(slug, value) {
+    var btn = $('#startSave'); if (btn) btn.disabled = true;
+    AF.patchTeamMember(slug, { startDate: value })
+      .then(function () {
+        toast(value ? '📅 Date de début enregistrée' : '📅 Date de début retirée');
+        computeMembers(); renderMembers(); refresh();
+      })
+      .catch(function (e) { toast('❌ ' + (e && e.message || 'Erreur'), true); if (btn) btn.disabled = false; });
   }
 
   /* ══ CHARGEMENT + AGRÉGATION ══════════════════════════════════════════ */
   function emptyDay() {
     var o = {};
-    COLS.forEach(function (c) { o[c.key] = 0; });
+    cols().forEach(function (c) { o[c.key] = 0; });
     o._setLeadIds = {};
     return o;
+  }
+  /* Incrément tolérant : une colonne absente du rapport courant (NRP en
+     mode écrit, DM en mode téléphone) est simplement ignorée. */
+  function bump(row, key, v) { if (row && row[key] != null) row[key] += (v == null ? 1 : v); }
+
+  /* Journal des messages Instagram (webhook Meta) — mode écrit uniquement.
+     Trois lectures : les messages du jour (ig_dm_events.date), les
+     conversations OUVERTES dans la période (ig_dm_threads.firstEventDate)
+     et les conversations qui ont reçu leur 1ʳᵉ réponse dans la période
+     (ig_dm_threads.repliedAtMs) — une réponse peut arriver des jours après
+     l'ouverture, elle compte le jour où elle arrive. */
+  function loadDm(fromDay, toDay, from, to) {
+    return Promise.all([
+      db.collection('ig_dm_events').where('date', '>=', fromDay).where('date', '<=', toDay).get(),
+      db.collection('ig_dm_threads').where('firstEventDate', '>=', fromDay).where('firstEventDate', '<=', toDay).get(),
+      db.collection('ig_dm_threads').where('repliedAtMs', '>=', from.getTime()).where('repliedAtMs', '<=', to.getTime()).get()
+    ]).then(function (r) {
+      var out = { ok: true, events: [], opened: [], replied: [] };
+      r[0].forEach(function (d) { out.events.push(d.data() || {}); });
+      r[1].forEach(function (d) { out.opened.push(d.data() || {}); });
+      r[2].forEach(function (d) { out.replied.push(d.data() || {}); });
+      return out;
+    }).catch(function (e) {
+      console.warn('[setting] DM Instagram :', e && e.message);
+      return { ok: false, error: (e && e.message) || 'Erreur', events: [], opened: [], replied: [] };
+    });
   }
 
   function refresh() {
     if (S.loading) return;
     S.loading = true;
-    $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>Agrégation Ringover · actions · RDV…</div>';
+    var member = currentMember();
+    var ecrit = isEcrit(member);
+    $('#content').innerHTML = '<div class="au-loading"><div class="au-spinner"></div>' + (ecrit ? 'Agrégation messages Instagram · actions · RDV…' : 'Agrégation Ringover · actions · RDV…') + '</div>';
     try { localStorage.setItem('setting_v2_mode', S.mode); localStorage.setItem('setting_v2_anchor', isoOf(S.anchor)); } catch (e) {}
     S.range = period();
     var R = S.range;
     document.querySelectorAll('#periodSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.mode === S.mode); });
     $('#monthLbl').textContent = periodLabel();
     $('#btnToday').textContent = S.mode === 'month' ? 'Ce mois-ci' : 'Aujourd\'hui';
+    $('#headSub').textContent = ecrit
+      ? 'Setting écrit — messages Instagram (webhook Meta), actions fiche Leads Live et RDV remontent automatiquement, jour après jour. RDV coaching & clients exclus.'
+      : 'Équipe sales uniquement — appels Ringover, actions fiche Leads Live et RDV remontent automatiquement, jour après jour. RDV coaching & clients exclus.';
 
-    var member = currentMember();
     if (!member) { $('#content').innerHTML = '<div class="au-empty"><span class="i">👤</span>Aucun membre setting.</div>'; S.loading = false; return; }
+    S.startDate = AF.memberStartDate(member);
 
     var from = new Date(R.from.getFullYear(), R.from.getMonth(), R.from.getDate(), 0, 0, 0, 0);
     var to = new Date(R.to.getFullYear(), R.to.getMonth(), R.to.getDate(), 23, 59, 59, 999);
     var fromDay = R.days[0], toDay = R.days[R.days.length - 1];
-    var isAdminRole = S.role === 'admin';
+    var isAdminRole = isAdmin();
     var meM = AF.me();
     var canSeeCalls = isAdminRole || (meM && member.firebaseUid && meM.uid === member.firebaseUid);
 
     Promise.all([
-      member.firebaseUid ? AF.loadCallsForMember(member.firebaseUid, from, to, isAdminRole) : Promise.resolve([]),
+      (!ecrit && member.firebaseUid) ? AF.loadCallsForMember(member.firebaseUid, from, to, isAdminRole) : Promise.resolve([]),
       AF.loadActions(member.slug, fromDay, toDay),
       AF.loadBookingsRange(fromDay, toDay, from, to),
       AF.loadOverrides(member.slug, fromDay, toDay),
@@ -247,13 +362,15 @@
       db.collection('lead_actions').doc(member.slug).collection('items')
         .orderBy('createdAt', 'asc').limit(1).get()
         .then(function (s) { var d0 = null; s.forEach(function (doc) { d0 = (doc.data() || {}).day || null; }); return d0; })
-        .catch(function () { return null; })
+        .catch(function () { return null; }),
+      ecrit ? loadDm(fromDay, toDay, from, to) : Promise.resolve(null)
     ]).then(function (res) {
       var calls = res[0], actions = res[1], bookings = res[2];
       S.overrides = res[3] || {};
       S.typeMap = res[4] || {};
       S.legacy = (res[5] && res[5].exists) ? res[5].data() : null;
       S.journalStart = res[6] || null;
+      var dm = res[7];
 
       /* — Attribution NB legacy : RDV setter sans bookedBySlug (antérieurs à
          la refonte, ou pris via un lien public de type setter-only) → on
@@ -277,7 +394,7 @@
       var days = {};
       R.days.forEach(function (dk) { days[dk] = emptyDay(); });
 
-      /* — Ringover : calls / décrochés / temps — */
+      /* — Ringover : calls / décrochés / temps (mode téléphone) — */
       calls.forEach(function (c) {
         if (c.direction !== 'outbound') return;
         var ms = c.initiatedAt && c.initiatedAt.toMillis ? c.initiatedAt.toMillis() : null;
@@ -285,24 +402,46 @@
         var dk = AF.dayKey(new Date(ms));
         var row = days[dk];
         if (!row) return;
-        row.calls++;
+        bump(row, 'calls');
         var dur = Number(c.durationSec) || 0;
-        if (dur >= AF.ANSWERED_MIN_SEC) { row.decroches++; row.tempsAppelSec += dur; }
+        if (dur >= AF.ANSWERED_MIN_SEC) { bump(row, 'decroches'); bump(row, 'tempsAppelSec', dur); }
       });
+
+      /* — Messages Instagram (mode écrit) — tous les DM du compte sont ceux
+         du setter écrit : il est le seul à démarcher par messages. — */
+      if (dm && dm.ok) {
+        dm.events.forEach(function (ev) {
+          var row = days[ev.date];
+          if (!row) return;
+          if (ev.direction === 'out') bump(row, 'dmOut');
+          else if (ev.direction === 'in') bump(row, 'dmIn');
+        });
+        dm.opened.forEach(function (t) {
+          var row = days[t.firstEventDate];
+          if (!row) return;
+          if (t.initiatedBy === 'us') bump(row, 'convOut');
+          else if (t.initiatedBy === 'them') bump(row, 'convIn');
+        });
+        dm.replied.forEach(function (t) {
+          if (t.initiatedBy !== 'us' || !t.repliedAtMs) return;
+          var dk = AF.dayKey(new Date(Number(t.repliedAtMs)));
+          bump(days[dk], 'replies');
+        });
+      }
 
       /* — Actions fiche : leads (1ʳᵉ action), NRP, sets… — */
       actions.forEach(function (a) {
         var row = days[a.day];
         if (!row) return;
-        if (a.firstTouchMember) row.leads++;
+        if (a.firstTouchMember) bump(row, 'leads');
         var act = a.action;
-        if (act === 'nrp1') row.nrp1++;
-        else if (act === 'nrp2') row.nrp2++;
-        else if (act === 'nrp3') row.nrp3++;
-        else if (act === 'all_nrp') row.all_nrp++;
-        else if (act === 'messagerie') row.messagerie++;
-        else if (act === 'follow_up_pm') row.follow_up++;
-        else if (act === 'faux_numero' || act === 'pas_interesse' || act === 'disqualifie' || act === 'poubelle') row.out++;
+        if (act === 'nrp1') bump(row, 'nrp1');
+        else if (act === 'nrp2') bump(row, 'nrp2');
+        else if (act === 'nrp3') bump(row, 'nrp3');
+        else if (act === 'all_nrp') bump(row, 'all_nrp');
+        else if (act === 'messagerie') bump(row, 'messagerie');
+        else if (act === 'follow_up_pm') bump(row, 'follow_up');
+        else if (act === 'faux_numero' || act === 'pas_interesse' || act === 'disqualifie' || act === 'poubelle') bump(row, 'out');
         if (AF.SET_ACTIONS[act] && a.leadId) row._setLeadIds[a.leadId] = 1; // unique lead / jour
       });
 
@@ -329,12 +468,12 @@
         if (!b._inDue || !days[b.date]) return;
         var row = days[b.date];
         var oc = b.outcome || null;
-        if (oc === 'annule' || (!oc && b.status === 'cancelled' && b.rescheduled !== true)) row.annulesNb++;
-        else if (oc === 'no_show' || (!oc && b.status === 'no_show')) row.noshowNb++;
-        if (oc ? AF.isPresent(oc) : b.status === 'completed') row.presentsNb++;
+        if (oc === 'annule' || (!oc && b.status === 'cancelled' && b.rescheduled !== true)) bump(row, 'annulesNb');
+        else if (oc === 'no_show' || (!oc && b.status === 'no_show')) bump(row, 'noshowNb');
+        if (oc ? AF.isPresent(oc) : b.status === 'completed') bump(row, 'presentsNb');
         if (oc === 'close') {
-          row.closesNb++;
-          row.collecteNb += (b.closeData && Number(b.closeData.collecte)) || 0;
+          bump(row, 'closesNb');
+          bump(row, 'collecteNb', (b.closeData && Number(b.closeData.collecte)) || 0);
         }
       });
 
@@ -342,7 +481,13 @@
         days[dk].sets = Object.keys(days[dk]._setLeadIds).length;
       });
 
-      S.data = { days: days, callsOk: canSeeCalls || calls.length > 0 };
+      S.data = {
+        days: days,
+        callsOk: ecrit ? true : (canSeeCalls || calls.length > 0),
+        dmOk: !dm || dm.ok !== false,
+        dmError: dm && dm.ok === false ? dm.error : null,
+        dmCount: dm ? dm.events.length : 0
+      };
       S.loading = false;
       render();
       }); // fin .then(leadSetter)
@@ -364,6 +509,7 @@
     }
     return { v: (S.data.days[dk] && S.data.days[dk][key]) || 0, ov: false };
   }
+  function beforeStart(dk) { return !!(S.startDate && dk < S.startDate); }
 
   /* ══ RENDER ═══════════════════════════════════════════════════════════ */
   function fmtCell(c, val) {
@@ -378,12 +524,15 @@
 
   function render() {
     var member = currentMember();
+    var ecrit = isEcrit(member);
+    var COLS = cols();
     var R = S.range || period();
     var todayIso = AF.dayKey(new Date());
     var tot = emptyDay();
     var weekAgg = emptyDay(), weekStartIdx = 0, weekIdx = 1;
     var rowsH = '';
     var showWeeks = S.mode === 'month'; // lignes Semaine uniquement en vue Mois
+    var skippedBefore = 0;
 
     function addTo(agg, dk) {
       COLS.forEach(function (c) { agg[c.key] += eff(dk, c.key).v; });
@@ -402,13 +551,19 @@
       var dt = new Date(dk + 'T12:00:00');
       var dow = dt.getDay();
       var isFuture = dk > todayIso;
-      var cls = (dk === todayIso ? 'today ' : '') + (dow === 0 || dow === 6 ? 'weekend ' : '') + (isFuture ? 'future' : '');
+      var before = beforeStart(dk);
+      var cls = (dk === todayIso ? 'today ' : '') + (dow === 0 || dow === 6 ? 'weekend ' : '') + (isFuture || before ? 'future' : '');
       var dayLbl = JOURS_FR[dow] + ' ' + dk.slice(8) + (S.mode === 'month' ? '' : '/' + dk.slice(5, 7));
 
       rowsH += '<tr class="' + cls + '"><td>' + dayLbl + '</td>';
       COLS.forEach(function (c, i) {
         var e = eff(dk, c.key);
         var grpStart = i > 0 && COLS[i - 1].grp !== c.grp;
+        if (before) {
+          /* Avant la date de début : pas de donnée, pas un zéro. */
+          rowsH += '<td class="' + (grpStart ? 'grp ' : '') + 'au-before" title="Avant la date de début (' + frOfIso(S.startDate) + ')">—</td>';
+          return;
+        }
         /* Colonnes issues du journal d'actions (Leads, NRP, Msg, FU, Out) :
            avant la 1ʳᵉ action enregistrée, on affiche — (données inexistantes,
            pas « zéro activité »). Sets exclu : il vient aussi des RDV. */
@@ -417,36 +572,56 @@
         rowsH += '<td class="' + (grpStart ? 'grp ' : '') + (e.ov ? 'au-ov' : '') + '"' + (c.title ? ' title="' + c.title + '"' : '') + '>' +
           (preJournal ? '<span class="z" title="Journal d\'actions pas encore actif ce jour-là">—</span>' : fmtCell(c, e.v)) + '</td>';
       });
-      rowsH += '<td><button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button></td></tr>';
+      rowsH += '<td>' + (before ? '' : '<button class="au-day-edit" data-day="' + dk + '" title="Corriger cette journée">✎</button>') + '</td></tr>';
 
-      addTo(tot, dk);
-      addTo(weekAgg, dk);
+      if (before) skippedBefore++;
+      else { addTo(tot, dk); addTo(weekAgg, dk); }
       if (showWeeks && (dow === 0 || di === R.days.length - 1)) { // fin de semaine (dimanche) ou fin de mois
         rowsH += aggRow(weekAgg, 'Semaine ' + weekIdx + ' <span style="opacity:.6;font-weight:500">(' + R.days[weekStartIdx].slice(8) + '→' + dk.slice(8) + ')</span>', 'au-week');
         weekAgg = emptyDay(); weekStartIdx = di + 1; weekIdx++;
       }
     });
 
-    /* — KPIs du mois — */
-    var txDecro = tot.calls > 0 ? tot.decroches / tot.calls * 100 : null;
-    var txSet = tot.decroches > 0 ? tot.sets / tot.decroches * 100 : null;
-    var txShow = tot.sets > 0 ? tot.presentsNb / tot.sets * 100 : null;
-    var kpis =
-      kpi(AF.fmtDuration(tot.tempsAppelSec), "Temps d'appel", 'Ringover · auto', '#2dd4bf') +
-      kpi(tot.calls.toLocaleString('fr-FR'), 'Calls passés', tot.decroches + ' décrochés · ' + fmtPct(txDecro), '#5b7cfa') +
-      kpi(String(tot.leads), 'Leads travaillés', '1ʳᵉ action fiche · jamais recomptés', '#5b7cfa') +
-      kpi(String(tot.sets), 'Sets (NB)', 'Set % décro ' + fmtPct(txSet), '#a78bfa') +
-      kpi(String(tot.presentsNb), 'Présents NB', 'Show-up ' + fmtPct(txShow) + ' · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
-      kpi(String(tot.closesNb), 'Closes NB', fmtEuro(tot.collecteNb) + ' collecté', '#34d399');
-
-    /* — Funnel — */
-    var fun = funnel([
-      { l: 'Leads', v: tot.leads },
-      { l: 'Décrochés', v: tot.decroches },
-      { l: 'Sets', v: tot.sets },
-      { l: 'Présents', v: tot.presentsNb },
-      { l: 'Closes', v: tot.closesNb }
-    ]);
+    /* — KPIs de la période — */
+    var kpis, fun;
+    if (ecrit) {
+      var txRep = tot.convOut > 0 ? tot.replies / tot.convOut * 100 : null;
+      var txSetConv = tot.replies > 0 ? tot.sets / tot.replies * 100 : null;
+      var txShowE = tot.sets > 0 ? tot.presentsNb / tot.sets * 100 : null;
+      kpis =
+        kpi(tot.dmOut.toLocaleString('fr-FR'), 'DM envoyés', tot.dmIn.toLocaleString('fr-FR') + ' reçus · Instagram', '#e1306c') +
+        kpi(String(tot.convOut), 'Conversations ouvertes', tot.replies + ' réponses · ' + fmtPct(txRep) + ' · ' + tot.convIn + ' entrantes', '#5b7cfa') +
+        kpi(String(tot.leads), 'Leads travaillés', '1ʳᵉ action fiche · jamais recomptés', '#5b7cfa') +
+        kpi(String(tot.sets), 'Sets (NB)', 'Set % réponses ' + fmtPct(txSetConv), '#a78bfa') +
+        kpi(String(tot.presentsNb), 'Présents NB', 'Show-up ' + fmtPct(txShowE) + ' · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
+        kpi(String(tot.closesNb), 'Closes NB', fmtEuro(tot.collecteNb) + ' collecté', '#34d399');
+      fun = funnel([
+        { l: 'DM envoyés', v: tot.dmOut },
+        { l: 'Conv. ouvertes', v: tot.convOut },
+        { l: 'Réponses', v: tot.replies },
+        { l: 'Sets', v: tot.sets },
+        { l: 'Présents', v: tot.presentsNb },
+        { l: 'Closes', v: tot.closesNb }
+      ]);
+    } else {
+      var txDecro = tot.calls > 0 ? tot.decroches / tot.calls * 100 : null;
+      var txSet = tot.decroches > 0 ? tot.sets / tot.decroches * 100 : null;
+      var txShow = tot.sets > 0 ? tot.presentsNb / tot.sets * 100 : null;
+      kpis =
+        kpi(AF.fmtDuration(tot.tempsAppelSec), "Temps d'appel", 'Ringover · auto', '#2dd4bf') +
+        kpi(tot.calls.toLocaleString('fr-FR'), 'Calls passés', tot.decroches + ' décrochés · ' + fmtPct(txDecro), '#5b7cfa') +
+        kpi(String(tot.leads), 'Leads travaillés', '1ʳᵉ action fiche · jamais recomptés', '#5b7cfa') +
+        kpi(String(tot.sets), 'Sets (NB)', 'Set % décro ' + fmtPct(txSet), '#a78bfa') +
+        kpi(String(tot.presentsNb), 'Présents NB', 'Show-up ' + fmtPct(txShow) + ' · ' + tot.annulesNb + ' annulés · ' + tot.noshowNb + ' no-show', '#34d399') +
+        kpi(String(tot.closesNb), 'Closes NB', fmtEuro(tot.collecteNb) + ' collecté', '#34d399');
+      fun = funnel([
+        { l: 'Leads', v: tot.leads },
+        { l: 'Décrochés', v: tot.decroches },
+        { l: 'Sets', v: tot.sets },
+        { l: 'Présents', v: tot.presentsNb },
+        { l: 'Closes', v: tot.closesNb }
+      ]);
+    }
 
     /* — Table — */
     var headH = '<tr><th>Jour</th>';
@@ -458,38 +633,52 @@
 
     var callsNote = S.data.callsOk ? '' :
       '<div style="font-size:11.5px;color:var(--gold);margin-top:10px">🔒 Les appels Ringover d\'un autre membre ne sont visibles que par un admin — colonnes ⏱/Calls/Décro. limitées à ton propre rapport.</div>';
+    var dmNote = '';
+    if (ecrit && !S.data.dmOk) {
+      dmNote = '<div style="font-size:11.5px;color:var(--gold);margin-top:10px">⚠️ Messages Instagram illisibles (' + (S.data.dmError || 'erreur') + ') — si le message parle de permissions, les règles Firestore <code>ig_dm_events</code> / <code>ig_dm_threads</code> ne sont pas déployées pour les rôles sales.</div>';
+    } else if (ecrit && S.data.dmCount === 0) {
+      dmNote = '<div style="font-size:11.5px;color:var(--muted);margin-top:10px">💬 Aucun message Instagram journalisé sur la période. Les DM ne comptent qu\'à partir du branchement du webhook Meta, et les envois manuels depuis l\'app Instagram ne remontent que si les échos Meta sont actifs (voir l\'onglet Instagram du Funnel).</div>';
+    }
 
     /* — Bannière journal d'actions : zéros trompeurs interdits — */
     var journalNote = '';
     var lastDay = R.days[R.days.length - 1];
+    var actCols = ecrit ? 'Leads · FU · Out' : 'Leads · NRP1/2/3 · AllNRP · Msg · FU · Out';
     if (!S.journalStart) {
       journalNote =
         '<div class="au-card" style="border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.05);padding:14px 16px;font-size:12.5px;line-height:1.6">' +
-        '📒 <strong>Journal d\'actions encore vide.</strong> Les colonnes <strong>Leads · NRP1/2/3 · AllNRP · Msg · FU · Out</strong> comptent chaque clic de statut sur les fiches Leads Live <strong>à partir de la mise en ligne (14/07/2026)</strong> — les clics d\'avant n\'ont laissé aucune trace datée en base, ils ne peuvent pas être reconstitués (contrairement aux appels Ringover et aux RDV, recalculés sur le passé).<br/>' +
+        '📒 <strong>Journal d\'actions encore vide.</strong> Les colonnes <strong>' + actCols + '</strong> comptent chaque clic de statut sur les fiches Leads Live <strong>à partir de la mise en ligne (14/07/2026)</strong> — les clics d\'avant n\'ont laissé aucune trace datée en base, ils ne peuvent pas être reconstitués (contrairement aux ' + (ecrit ? 'messages' : 'appels Ringover') + ' et aux RDV, recalculés sur le passé).<br/>' +
         '<span style="color:var(--gold)">🧪 Test rapide : change un statut sur une fiche dans Leads Live puis ⟳ Actualiser ici. Si tout reste à 0, les règles Firestore ne sont pas déployées → <code>firebase deploy --only firestore:rules</code>.</span></div>';
     } else if (R.days[0] < S.journalStart) {
-      var jd = new Date(S.journalStart + 'T12:00:00');
-      var jdFr = pad2(jd.getDate()) + '/' + pad2(jd.getMonth() + 1) + '/' + jd.getFullYear();
+      var jdFr = frOfIso(S.journalStart);
       journalNote =
         '<div class="au-card" style="border-color:rgba(91,124,250,.3);background:rgba(91,124,250,.05);padding:12px 16px;font-size:12px">' +
         (lastDay < S.journalStart
-          ? '📒 Période entièrement antérieure au journal d\'actions (actif depuis le <strong>' + jdFr + '</strong>) — colonnes Leads · NRP · Msg · FU · Out : « — », données inexistantes. Appels et RDV, eux, couvrent tout le passé.'
-          : '📒 Les colonnes d\'actions (Leads · NRP · Msg · FU · Out) comptent depuis le <strong>' + jdFr + '</strong> (1ʳᵉ action enregistrée) — avant cette date : « — », données inexistantes. Appels et RDV, eux, couvrent tout le passé.') +
+          ? '📒 Période entièrement antérieure au journal d\'actions (actif depuis le <strong>' + jdFr + '</strong>) — colonnes ' + actCols + ' : « — », données inexistantes.'
+          : '📒 Les colonnes d\'actions (' + actCols + ') comptent depuis le <strong>' + jdFr + '</strong> (1ʳᵉ action enregistrée) — avant cette date : « — », données inexistantes.') +
+        '</div>';
+    }
+    var startNote = '';
+    if (skippedBefore > 0) {
+      startNote = '<div class="au-card" style="border-color:rgba(91,124,250,.3);background:rgba(91,124,250,.05);padding:12px 16px;font-size:12px">📅 ' +
+        (skippedBefore === R.days.length
+          ? 'Période entièrement antérieure à la date de début (<strong>' + frOfIso(S.startDate) + '</strong>) — aucune donnée à afficher.'
+          : skippedBefore + ' jour(s) antérieur(s) à la date de début (<strong>' + frOfIso(S.startDate) + '</strong>) — affichés « — », exclus des totaux.') +
         '</div>';
     }
 
     var h =
-      journalNote +
+      startNote + journalNote +
       '<div class="au-kpis">' + kpis + '</div>' +
-      '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel Set NB — ' + periodLabel() + '</div>' +
-        '<div class="au-card-note">sets = statuts SET/RDV posé + RDV setter créés (uniques par lead/jour)</div></div>' + fun + '</div>' +
+      '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Funnel ' + (ecrit ? 'Setting écrit' : 'Set NB') + ' — ' + periodLabel() + '</div>' +
+        '<div class="au-card-note">' + (ecrit ? 'DM = webhook Instagram (Meta) · ' : '') + 'sets = statuts SET/RDV posé + RDV setter créés (uniques par lead/jour)</div></div>' + fun + '</div>' +
       '<div class="au-card" style="padding:0;overflow:hidden">' +
         '<div class="au-card-head" style="padding:16px 18px 0;margin-bottom:12px"><div class="au-card-title">Jour par jour</div>' +
-          '<div class="au-card-note">téléphonie · actions fiche · RDV setting (NB)</div>' +
-          '<div class="right"><span class="au-chip nb">Set NB</span></div></div>' +
+          '<div class="au-card-note">' + (ecrit ? 'messages Instagram · actions fiche · RDV setting (NB)' : 'téléphonie · actions fiche · RDV setting (NB)') + '</div>' +
+          '<div class="right"><span class="au-chip nb">' + (ecrit ? '✍️ Setting écrit' : 'Set NB') + '</span></div></div>' +
         '<div class="au-twrap" style="border:none;border-radius:0"><table class="au-table"><thead>' + headH + '</thead><tbody>' +
         rowsH + (R.days.length > 1 ? aggRow(tot, 'TOTAL — ' + periodLabel().toUpperCase(), 'au-total') : '') +
-        '</tbody></table></div>' + (callsNote ? '<div style="padding:0 18px 14px">' + callsNote + '</div>' : '') +
+        '</tbody></table></div>' + ((callsNote || dmNote) ? '<div style="padding:0 18px 14px">' + callsNote + dmNote + '</div>' : '') +
       '</div>' +
       legacyBlock();
 
@@ -546,7 +735,7 @@
     $('#ovTitle').textContent = '✎ Corriger le ' + JOURS_FR[d.getDay()] + ' ' + pad2(d.getDate()) + ' ' + MONTHS_FR[d.getMonth()];
     var ov = (S.overrides[dk] && S.overrides[dk].setting) || {};
     var h = '';
-    COLS.forEach(function (c) {
+    cols().forEach(function (c) {
       var ovKey = c.ovKey || c.key;
       var auto = (S.data.days[dk] && S.data.days[dk][c.key]) || 0;
       var autoLbl = c.fmt === 'dur' ? AF.fmtDuration(auto) : (c.fmt === 'eur' ? fmtEuro(auto) : auto);

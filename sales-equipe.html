@@ -1132,9 +1132,67 @@ const MEMBERS = [
   },
 ];
 
+/* ─── ROSTER DYNAMIQUE (10/09/2026) ──────────────────────────────────────
+   MEMBERS n'est plus figé : tout membre de l'équipe sales actif du roster
+   _meta/team_members (setter, closer, closer_setter, setter_ecrit) qui n'y
+   figure pas encore est ajouté, avec son rôle, son contrat (fixe) et sa date
+   de début lus dans le roster. Les entrées historiques restent telles
+   quelles ; les profils sauvegardés en localStorage sont appliqués. */
+var EQUIPE_SALES_ROLES = { setter: 1, closer: 1, closer_setter: 1, setter_ecrit: 1 };
+function _equipeRoleLabel(role) {
+  if (role === 'closer_setter') return 'Closer + Setter';
+  if (role === 'closer') return 'Closer';
+  if (role === 'setter') return 'Setter';
+  if (role === 'setter_ecrit') return 'Setter écrit';
+  return role || '';
+}
+function _equipeFrDate(iso) {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return '';
+  var p = iso.split('-'); return p[2] + '/' + p[1] + '/' + p[0];
+}
+function _syncEquipeRoster() {
+  var list = window.TEAM_MEMBERS_LIST || [];
+  var added = 0;
+  list.forEach(function(m) {
+    if (!m || !m.slug || !EQUIPE_SALES_ROLES[m.role]) return;
+    if (DEPARTED_EQUIPE[m.slug]) return;
+    var existing = MEMBERS.find(function(x) { return x.uid === m.slug; });
+    if (existing) {
+      /* Entrée historique : on complète seulement ce qui manque. */
+      if (!existing.color && m.color) existing.color = m.color;
+      if (!existing.dateDebut && m.startDate) existing.dateDebut = _equipeFrDate(m.startDate);
+      return;
+    }
+    var c = (m.contract && typeof m.contract === 'object') ? m.contract : null;
+    var fixe = c ? (Number(c.fixe) || 0) : 0;
+    var entry = {
+      uid: m.slug,
+      name: m.shortName || m.displayName || m.fullName || m.slug,
+      surname: '',
+      role: _equipeRoleLabel(m.role),
+      color: m.color || '#60a5fa',
+      email: m.email || '',
+      phone: '',
+      contrat: c ? (fixe > 0 ? 'Fixe ' + fixe.toLocaleString('fr-FR') + ' € + commissions' : 'Commissions (barème contrat)') : 'Commissions (barème standard)',
+      dateDebut: _equipeFrDate(m.startDate) || '—',
+      statut: m.active === false ? 'Inactif' : 'Actif',
+      linkedin: ''
+    };
+    var saved = lsGet('equipe_profile_' + m.slug, null);
+    if (saved) Object.assign(entry, saved);
+    MEMBERS.push(entry);
+    if (typeof SYNC_MEMBERS !== 'undefined' && !SYNC_MEMBERS.some(function(x) { return x.uid === m.slug; })) {
+      SYNC_MEMBERS.push({ uid: m.slug, name: entry.name, role: entry.role, color: entry.color });
+    }
+    added++;
+  });
+  return added;
+}
+
 /* ─── ARCHIVED FLAG + VIEW FILTER (source : _meta/team_members via nav.js) ─── */
 function _markArchivedMembers() {
   var tm = window.TEAM_MEMBERS || {};
+  _syncEquipeRoster();
   MEMBERS.forEach(function(m) {
     var meta = tm[m.uid];
     m.archived = !!(meta && meta.active === false);

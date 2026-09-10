@@ -928,19 +928,42 @@ function fmtDec(n) {
   return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n) + ' €';
 }
 
-function autoCalcComm(offre, type, subtype) {
-  const rules = COMM_RULES[type.toLowerCase()];
-  if (!rules || !rules[offre]) return 0;
-  const r = rules[offre];
+/* ═══ CONTRAT PAR MEMBRE (10/09/2026) ═══════════════════════════
+   _meta/team_members[].contract = { fixe, closing:{offre:{mensualise,pif}},
+   setting:{offre:{noBooking,selfBooking}}, pifBonus:{offre:€} } — saisi
+   dans Admin → Utilisateurs. Sans contrat : barème historique (COMM_RULES,
+   contrat Full Cycle d'Élodie). Même règle qu'alteore-flow.js. */
+function _memberContract(uid) {
+  var tm = (window.TEAM_MEMBERS || {})[uid];
+  return (tm && tm.contract && typeof tm.contract === 'object') ? tm.contract : null;
+}
+function _memberFixe(uid) {
+  var c = _memberContract(uid);
+  return c ? (Number(c.fixe) || 0) : 0;
+}
+function _ruleFor(uid, type, offre) {
+  var c = _memberContract(uid);
+  var key = type.toLowerCase();
+  var r = c && c[key] && c[key][offre];
+  return r || (COMM_RULES[key] || {})[offre] || null;
+}
+
+function autoCalcComm(offre, type, subtype, uid) {
+  if (uid === undefined && currentMember) uid = currentMember.uid;
+  const r = _ruleFor(uid, type, offre);
+  if (!r) return 0;
   if (type === 'Closing') {
-    return subtype === 'pif' ? r.pif : r.mensualise;
+    return Number(subtype === 'pif' ? r.pif : r.mensualise) || 0;
   } else {
-    return subtype === 'noBooking' ? r.noBooking : r.selfBooking;
+    return Number(subtype === 'noBooking' ? r.noBooking : r.selfBooking) || 0;
   }
 }
 
-function autoCalcBonus(offre, type, subtype) {
+function autoCalcBonus(offre, type, subtype, uid) {
+  if (uid === undefined && currentMember) uid = currentMember.uid;
   if (type === 'Closing' && subtype === 'pif') {
+    const c = _memberContract(uid);
+    if (c && c.pifBonus && c.pifBonus[offre] != null) return Number(c.pifBonus[offre]) || 0;
     return PIF_BONUS[offre] || 0;
   }
   return 0;
@@ -977,6 +1000,11 @@ function renderDashboard() {
   const totPtsMonth = _visibleMembers().reduce((t, m) => t + calcPoints(getDeals(m.uid, month)), 0);
 
   document.getElementById('dash-comm').textContent      = fmtDec(totalComm);
+  const totalFixe = _visibleMembers().reduce((t, m) => t + _memberFixe(m.uid), 0);
+  const dashCommSub = document.getElementById('dash-comm-sub');
+  if (dashCommSub) dashCommSub.textContent = totalFixe > 0
+    ? 'Deals validés & encaissés · + ' + fmt(totalFixe) + ' de fixes = ' + fmtDec(totalComm + totalFixe)
+    : 'Deals validés & encaissés';
   document.getElementById('dash-contracte').textContent = fmt(totalContracte);
   document.getElementById('dash-collecte').textContent  = fmt(totalCollecte);
   document.getElementById('dash-deals').textContent     = nClos + ' closes · ' + nSet + ' sets';
@@ -1000,7 +1028,7 @@ function renderDashboard() {
       <div class="comp-bar-track">
         <div class="comp-bar-fill" style="width:${pct}%;background:${m.color}"></div>
       </div>
-      <div class="comp-bar-sub">${nc} closes · ${pts.toFixed(1)} pts ce mois</div>
+      <div class="comp-bar-sub">${nc} closes · ${pts.toFixed(1)} pts ce mois${_memberFixe(m.uid) > 0 ? ' · fixe ' + fmt(_memberFixe(m.uid)) + ' → total ' + fmtDec(comm + _memberFixe(m.uid)) : ''}</div>
     </div>`;
   }).join('');
   document.getElementById('dash-comp').innerHTML = compHtml;
@@ -1056,6 +1084,7 @@ function renderListe() {
     const prev = prevMilestone(totalPts);
     const nClos = deals.filter(d => d.type === 'Closing' && d.ok).length;
     const nSet  = deals.filter(d => d.type === 'Setting' && d.ok).length;
+    const fixe  = _memberFixe(m.uid);
 
     const progressPct = next
       ? Math.min(100, ((totalPts - (prev ? prev.pts : 0)) / (next.pts - (prev ? prev.pts : 0))) * 100)
@@ -1078,6 +1107,15 @@ function renderListe() {
           <div class="mc-kpi-label">Deals ce mois</div>
           <div class="mc-kpi-val">${nClos} clos · ${nSet} sets</div>
         </div>
+        ${fixe > 0 ? `
+        <div class="mc-kpi">
+          <div class="mc-kpi-label">Fixe mensuel</div>
+          <div class="mc-kpi-val">${fmt(fixe)}</div>
+        </div>
+        <div class="mc-kpi">
+          <div class="mc-kpi-label">Total (fixe + comm.)</div>
+          <div class="mc-kpi-val" style="color:var(--gold)">${fmtDec(fixe + comm)}</div>
+        </div>` : ''}
       </div>
       <div class="mc-points-row">
         <div class="mc-pts-label">Points cumulés (total carrière)</div>
@@ -1142,6 +1180,15 @@ function renderFiche() {
 
   // KPIs
   document.getElementById('kpi-comm').textContent = fmtDec(comm);
+  const fixeM = _memberFixe(m.uid);
+  const kpiFixe = document.getElementById('kpi-fixe-card');
+  const kpiTotal = document.getElementById('kpi-total-card');
+  if (kpiFixe && kpiTotal) {
+    kpiFixe.style.display = fixeM > 0 ? '' : 'none';
+    kpiTotal.style.display = fixeM > 0 ? '' : 'none';
+    document.getElementById('kpi-fixe').textContent = fmt(fixeM);
+    document.getElementById('kpi-total').textContent = fmtDec(fixeM + comm);
+  }
   document.getElementById('kpi-contracte').textContent = fmt(contracte);
   document.getElementById('kpi-collecte').textContent = fmt(collecte);
   document.getElementById('kpi-deals').textContent = deals.filter(d=>d.ok).length;
@@ -1381,12 +1428,12 @@ function _syncRosterMembers() {
     if (DEPARTED_COMM[m.slug]) return;       // parti de la société
     if (m.active === false) return;          // archivé dans le roster
     if (MEMBERS_COMM.some(function(x) { return x.uid === m.slug; })) return;
-    if (m.role !== 'closer' && m.role !== 'setter' && m.role !== 'closer_setter') return;
+    if (m.role !== 'closer' && m.role !== 'setter' && m.role !== 'closer_setter' && m.role !== 'setter_ecrit') return;
     MEMBERS_COMM.push({
       uid: m.slug,
       name: m.shortName || m.displayName || m.slug,
       surname: '',
-      role: m.role === 'closer' ? 'Closing' : m.role === 'setter' ? 'Setting' : 'Closing + Setting',
+      role: m.role === 'closer' ? 'Closing' : m.role === 'setter' ? 'Setting' : m.role === 'setter_ecrit' ? 'Setting écrit' : 'Closing + Setting',
       color: m.color || '#6b7280',
       careerPtsBase: 0,
       data: {}
@@ -1428,7 +1475,7 @@ function _visibleMembers() {
      paie ne se divulgue pas par défaut le temps d'un chargement. */
   if (_isAdminView()) return list;
   var me = _commMe();
-  if (!me || me.role !== 'setter') return list;
+  if (!me || (me.role !== 'setter' && me.role !== 'setter_ecrit')) return list;
   return list.filter(function(m) { return m.uid === me.slug; });
 }
 if (window.TEAM_MEMBERS) _markArchivedMembers();
@@ -1590,7 +1637,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="dash-kpi" style="--dk-color:var(--green)">
         <div class="dash-kpi-label">Commissions équipe</div>
         <div class="dash-kpi-val" id="dash-comm">—</div>
-        <div class="dash-kpi-sub">Deals validés &amp; encaissés</div>
+        <div class="dash-kpi-sub" id="dash-comm-sub">Deals validés &amp; encaissés</div>
       </div>
       <div class="dash-kpi" style="--dk-color:var(--blue)">
         <div class="dash-kpi-label">Contracté HT</div>
@@ -1656,6 +1703,14 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="kpi-card highlight">
         <div class="kpi-label">Commissions du mois</div>
         <div class="kpi-val" id="kpi-comm" style="color:var(--green)">0 €</div>
+      </div>
+      <div class="kpi-card" id="kpi-fixe-card" style="display:none">
+        <div class="kpi-label">Fixe mensuel (contrat)</div>
+        <div class="kpi-val" id="kpi-fixe">0 €</div>
+      </div>
+      <div class="kpi-card highlight" id="kpi-total-card" style="display:none">
+        <div class="kpi-label">Total fixe + commissions</div>
+        <div class="kpi-val" id="kpi-total" style="color:var(--gold)">0 €</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Contracté HT</div>

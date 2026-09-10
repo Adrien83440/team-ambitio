@@ -43,6 +43,7 @@ function _getSyncMembers() {
       role:   m.role === 'closer' ? 'Closing'
             : m.role === 'setter' ? 'Setting'
             : m.role === 'closer_setter' ? 'Closing + Setting'
+            : m.role === 'setter_ecrit' ? 'Setting écrit'
             : (m.role || ''),
       color:  m.color || '#6b7280',
       active: m.active !== false,

@@ -995,7 +995,7 @@
     return Promise.resolve().then(function () {
       var slugs = { elodie: 1, guillaume: 1 };
       TEAM.forEach(function (m) {
-        if (m && m.slug && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter')) slugs[m.slug] = 1;
+        if (m && m.slug && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter' || m.role === 'setter_ecrit')) slugs[m.slug] = 1;
       });
       /* ⚠ Fenêtre ÉLARGIE d'un mois de chaque côté (26/07/2026) — depuis le
          décalage des commissions Setting, le deal d'un close de juillet est
@@ -1149,7 +1149,7 @@
     return Promise.resolve().then(function () {
       var members = TEAM.filter(function (m) {
         return m && m.slug && m.slug !== 'guillaume' && m.active !== false
-          && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter');
+          && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter' || m.role === 'setter_ecrit');
       });
       if (!members.length) members = [{ slug: 'elodie' }];
       var sIso = isoDate(P.start), eIso = isoDate(P.end);

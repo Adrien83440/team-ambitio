@@ -401,8 +401,79 @@ const TEAM_ROLES_SALES=[
   {v:'',            l:'— (non commercial)'},
   {v:'setter',      l:'📞 Setter — setting uniquement'},
   {v:'closer',      l:'🎯 Closer — closing uniquement'},
-  {v:'closer_setter',l:'📞🎯 Setter + Closer'}
+  {v:'closer_setter',l:'📞🎯 Setter + Closer'},
+  {v:'setter_ecrit', l:'✍️ Setter écrit — messages Meta, sans téléphone'}
 ];
+
+/* ═══ CONTRAT & RÉMUNÉRATION — _meta/team_members[].contract (10/09/2026) ═══
+   { fixe, closing:{offre:{mensualise,pif}}, setting:{offre:{noBooking,
+   selfBooking}}, pifBonus:{offre:€} }. Lu par alteore-flow.js (commission
+   automatique au Close, barème du membre concerné) et sales-commissions.html
+   (Fixe + Commissions). Valeurs par défaut = barème historique (contrat Full
+   Cycle Art.3 + avenant Elite) — miroir d'alteore-flow.js COMM_RULES. */
+const CONTRACT_OFFRES=[
+  {k:'bp6',  o:'BP 6'},
+  {k:'bp12', o:'BP 12'},
+  {k:'elite',o:'Elite'},
+  {k:'titan',o:'Titan'}
+];
+const CONTRACT_DEFAULT={
+  closing:{'BP 6':{mensualise:200,pif:200},'BP 12':{mensualise:500,pif:500},'Elite':{mensualise:800,pif:800},'Titan':{mensualise:1200,pif:1200}},
+  setting:{'BP 6':{noBooking:100,selfBooking:50},'BP 12':{noBooking:250,selfBooking:125},'Elite':{noBooking:300,selfBooking:150},'Titan':{noBooking:500,selfBooking:250}},
+  pifBonus:{'BP 6':0,'BP 12':100,'Elite':100,'Titan':0}
+};
+function _ctVal(contract,section,offre,field){
+  var c=contract&&contract[section]&&contract[section][offre];
+  if(c&&c[field]!=null&&c[field]!=='')return c[field];
+  var d=CONTRACT_DEFAULT[section][offre];
+  return d?d[field]:'';
+}
+function _ctPif(contract,offre){
+  if(contract&&contract.pifBonus&&contract.pifBonus[offre]!=null)return contract.pifBonus[offre];
+  return CONTRACT_DEFAULT.pifBonus[offre];
+}
+function renderContractBlock(tmMember){
+  var ct=(tmMember&&tmMember.contract&&typeof tmMember.contract==='object')?tmMember.contract:null;
+  var sd=(tmMember&&typeof tmMember.startDate==='string')?tmMember.startDate:'';
+  var h='';
+  h+='<div style="padding:10px 12px;background:rgba(45,212,191,.05);border:1px solid rgba(45,212,191,.2);border-radius:8px;margin-bottom:10px">';
+  h+='<label style="font-size:11px;color:#2dd4bf;font-weight:800;text-transform:uppercase;letter-spacing:.04em">📅 Date de début</label>';
+  h+='<input type="date" class="bi" id="eTmStartDate" value="'+esc(sd)+'" style="margin-top:5px;width:100%"/>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:5px;line-height:1.5">Les rapports (Set NB) affichent « — » avant cette date et l\'excluent des totaux. Un membre qui commence la semaine prochaine n\'a pas de zéros à afficher aujourd\'hui. Modifiable aussi depuis Set NB (admin).</div>';
+  h+='</div>';
+  h+='<div style="padding:10px 12px;background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.2);border-radius:8px;margin-bottom:10px">';
+  h+='<label style="font-size:11px;color:#fbbf24;font-weight:800;text-transform:uppercase;letter-spacing:.04em">💼 Contrat &amp; rémunération</label>';
+  h+='<div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;align-items:center;margin-top:6px"><span style="font-size:12px;color:rgba(255,255,255,.7)">Fixe mensuel brut (€)</span>';
+  h+='<input type="number" min="0" step="1" class="bi" id="eCtFixe" value="'+esc(ct&&ct.fixe!=null?String(ct.fixe):'')+'" placeholder="0 si 100 % variable"/></div>';
+  h+='<div style="overflow-x:auto;margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:11px">';
+  h+='<thead><tr style="color:rgba(255,255,255,.45)"><th style="text-align:left;padding:4px 2px">Offre</th><th style="padding:4px 2px">Closing mensu.</th><th style="padding:4px 2px">Closing PIF</th><th style="padding:4px 2px">Prime PIF</th><th style="padding:4px 2px">Setting NB</th><th style="padding:4px 2px">Setting SB</th></tr></thead><tbody>';
+  CONTRACT_OFFRES.forEach(function(x){
+    var inp=function(id,val){return '<td style="padding:2px"><input type="number" min="0" step="1" class="bi" id="'+id+'" value="'+esc(String(val))+'" style="width:100%;padding:5px 6px;font-size:11px;text-align:right"/></td>';};
+    h+='<tr><td style="padding:4px 2px;font-weight:700;white-space:nowrap">'+esc(x.o)+'</td>';
+    h+=inp('eCt_'+x.k+'_cm',_ctVal(ct,'closing',x.o,'mensualise'));
+    h+=inp('eCt_'+x.k+'_cp',_ctVal(ct,'closing',x.o,'pif'));
+    h+=inp('eCt_'+x.k+'_pb',_ctPif(ct,x.o));
+    h+=inp('eCt_'+x.k+'_sn',_ctVal(ct,'setting',x.o,'noBooking'));
+    h+=inp('eCt_'+x.k+'_ss',_ctVal(ct,'setting',x.o,'selfBooking'));
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:6px;line-height:1.5">Pré-rempli avec le barème historique (contrat Full Cycle). Adapte les montants au contrat de la personne : c\'est CE barème qui est appliqué automatiquement au Close (commission Closing du closer, commission Setting NB/SB du setter) et affiché dans Commissions avec le fixe.'+(ct&&ct.updatedAt?' Dernière mise à jour : '+esc(String(ct.updatedAt).slice(0,10))+'.':'')+'</div>';
+  h+='</div>';
+  return h;
+}
+function readContractForm(){
+  var fixeEl=document.getElementById('eCtFixe');
+  if(!fixeEl)return null;
+  var num=function(id){var el=document.getElementById(id);if(!el)return 0;var v=parseFloat(el.value);return isNaN(v)?0:v;};
+  var out={fixe:parseFloat(fixeEl.value)||0,closing:{},setting:{},pifBonus:{},updatedAt:new Date().toISOString()};
+  CONTRACT_OFFRES.forEach(function(x){
+    out.closing[x.o]={mensualise:num('eCt_'+x.k+'_cm'),pif:num('eCt_'+x.k+'_cp')};
+    out.pifBonus[x.o]=num('eCt_'+x.k+'_pb');
+    out.setting[x.o]={noBooking:num('eCt_'+x.k+'_sn'),selfBooking:num('eCt_'+x.k+'_ss')};
+  });
+  return out;
+}
 
 /* Préréglage « Setter » : le périmètre validé pour un setter pur.
    Booking + CRM + Set NB/Close SB + Dialer + WhatsApp.
@@ -752,7 +823,7 @@ function renderTeamColors(){
     const color = m.color || suggestColorFor(m.slug);
     const isDefault = !m.color;
     const initials = (m.name || m.slug).slice(0,2).toUpperCase();
-    const roleCls = ['coach','sales','setter','closer','admin'].includes(m.role) ? m.role : 'other';
+    const roleCls = ['coach','sales','setter','closer','admin'].includes(m.role) ? m.role : (m.role === 'setter_ecrit' || m.role === 'closer_setter') ? 'setter' : 'other';
     const roleLbl = m.role ? m.role : '—';
     return `<div class="tc-item" data-slug="${esc(m.slug)}">
       <div class="tc-swatch" style="background:${color}" title="Cliquez pour changer">
@@ -1287,6 +1358,9 @@ function openEditModal(u){
     h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:5px;line-height:1.5">Différent du rôle technique ci-dessus. C\'est CE champ qui fait apparaître le membre dans <b>Set NB</b>, dans les <b>Commissions</b> et le <b>Funnel</b>, et qui fait créditer la commission Setting NB au bon nom lors d\'un close. La synchronisation automatique y écrit « sales » à la création : un setter reste invisible du module Setting tant qu\'il n\'est pas passé sur « Setter ».</div>';
     h+='</div>';
 
+    // Date de début + contrat & rémunération (10/09/2026)
+    h+=renderContractBlock(tmMember);
+
     // Identité d'équipe : couleur, slug, shortName, initials
     h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px">';
 
@@ -1506,6 +1580,13 @@ async function handleSave(uid){
          champ. Chaîne vide = choix explicite « non commercial » → on écrit ''
          plutôt que de laisser un ancien 'setter' traîner. */
       if (roleVal !== undefined) tmPatch.role = String(roleVal || '');
+      var startEl = document.getElementById('eTmStartDate');
+      if (startEl) {
+        var sdv = (startEl.value || '').trim();
+        tmPatch.startDate = /^\d{4}-\d{2}-\d{2}$/.test(sdv) ? sdv : null;
+      }
+      var ctForm = readContractForm();
+      if (ctForm) tmPatch.contract = ctForm;
       var slugVal = (document.getElementById('eTmSlug') || {}).value;
       var colorVal = (document.getElementById('eTmColorHex') || {}).value;
       var shortVal = (document.getElementById('eTmShortName') || {}).value;

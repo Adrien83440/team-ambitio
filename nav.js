@@ -1146,7 +1146,7 @@
   window.getCoachOptions = function () {
     // 1. Mode normal : TEAM_MEMBERS chargé avec succès
     if (window.TEAM_MEMBERS_ACTIVE && window.TEAM_MEMBERS_ACTIVE.length) {
-      var EXCLUDED_ROLES = { sales: 1, setter: 1, closer: 1, closing: 1, csm: 1 };
+      var EXCLUDED_ROLES = { sales: 1, setter: 1, closer: 1, closing: 1, csm: 1, setter_ecrit: 1 };
       var filtered = window.TEAM_MEMBERS_ACTIVE.filter(function (m) {
         if (!m.role) return true;
         var r = String(m.role).toLowerCase();

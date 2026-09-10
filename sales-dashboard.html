@@ -1130,7 +1130,7 @@ function renderTeamTable(perMember) {
      n'affiche RIEN plutôt que tout : une donnée de paie ne se divulgue pas
      par défaut le temps d'un chargement. */
   var _me = _dashMe();
-  var _isSetterOnly = !!(_me && _me.role === 'setter');
+  var _isSetterOnly = !!(_me && (_me.role === 'setter' || _me.role === 'setter_ecrit'));
   var _rosterReady = !!(window.TEAM_MEMBERS_LIST && window.TEAM_MEMBERS_LIST.length);
   if (!_isAdmin && _rosterReady && (_isSetterOnly || !_me)) {
     var _mySlug = _me ? _me.slug : null;

@@ -848,15 +848,17 @@ service cloud.firestore {
     // sortants, réponse ou non, délai. Aucune API Meta ne rend ces chiffres
     // rétroactivement : ils n'existent que parce que le webhook les a
     // journalisés au fil de l'eau.
+    // Lecture ouverte aux sales depuis le 10/09/2026 : le rapport
+    // Set NB « Setting écrit » (setter_ecrit) compte ses DM ici.
     match /ig_dm_threads/{docId} {
-      allow read:  if isAdmin();
+      allow read:  if isSalesOrAdmin();
       allow write: if false;
     }
 
     // 1 doc / message : ig_dm_events/{mid}. Journal brut, garant de
     // l'idempotence quand Meta rejoue un webhook.
     match /ig_dm_events/{docId} {
-      allow read:  if isAdmin();
+      allow read:  if isSalesOrAdmin();
       allow write: if false;
     }
 
