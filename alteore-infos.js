@@ -33,7 +33,10 @@
   var POLL_MS = 10 * 60 * 1000;     // rafraîchissement complet silencieux
   var FAST_POLL_MS = 45 * 1000;     // guet des NOUVELLES infos (diffusion immédiate)
 
-  var S = { user: null, role: '', name: '', items: [], read: {}, open: false, composing: false, queue: [], queueIdx: 0, loaded: false, error: null, lastCreatedAt: null };
+  var S = { user: null, role: '', name: '', items: [], read: {}, open: false, composing: false, queue: [], queueIdx: 0, loaded: false, error: null, lastCreatedAt: null, readers: null, readersOpen: {} };
+  /* Rôle technique (audience) ↔ rôle équipe du roster, pour savoir qui était
+     destinataire d'une info et n'a pas encore lu. */
+  var ROSTER_TO_AUDIENCE = { admin: 'admin', coach: 'coach', csm: 'csm', sales: 'sales', setter: 'sales', closer: 'sales', closer_setter: 'sales', setter_ecrit: 'sales' };
 
   /* ── Auth : compat (sales) ou modulaire (coaching / admin) ────────────── */
   function getAuthUser() {
@@ -188,15 +191,70 @@
   function markRead(id) {
     if (S.read[id]) return Promise.resolve();
     S.read[id] = true; saveLocalRead(); renderBell();
-    var fields = { read: { mapValue: { fields: {} } }, updatedAt: toVal(new Date()) };
+    var fields = { read: { mapValue: { fields: {} } }, readAt: { mapValue: { fields: {} } }, updatedAt: toVal(new Date()), name: toVal(S.name) };
     fields.read.mapValue.fields[id] = { booleanValue: true };
+    fields.readAt.mapValue.fields[id] = toVal(new Date());
     return api('PATCH', '/announcements_reads/' + encodeURIComponent(S.user.uid), { fields: fields },
-      '?updateMask.fieldPaths=read.' + encodeURIComponent(id) + '&updateMask.fieldPaths=updatedAt')
+      '?updateMask.fieldPaths=read.' + encodeURIComponent(id) + '&updateMask.fieldPaths=readAt.' + encodeURIComponent(id) + '&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=name')
       .catch(function (e) { console.warn('[infos] accusé de lecture :', e && e.message); });
   }
   function markAllRead() {
     var todo = unread();
     return Promise.all(todo.map(function (d) { return markRead(d.id); })).then(function () { renderPanel(); renderBell(); });
+  }
+  /* Admin : tous les accusés de lecture (une lecture par membre). */
+  function loadReaders() {
+    if (S.readers) return Promise.resolve(S.readers);
+    return api('GET', '/announcements_reads', null, '?pageSize=300').then(function (r) {
+      var map = {};
+      ((r && r.documents) || []).forEach(function (doc) {
+        var uid = doc.name.split('/').pop();
+        var d = fromFields(doc.fields || {});
+        map[uid] = { read: d.read || {}, readAt: d.readAt || {}, name: d.name || '' };
+      });
+      S.readers = map;
+      return map;
+    });
+  }
+  function memberName(uid, fallback) {
+    var list = window.TEAM_MEMBERS_LIST || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].firebaseUid === uid) return list[i].shortName || list[i].displayName || list[i].fullName || list[i].slug;
+    }
+    return fallback || uid.slice(0, 6) + '…';
+  }
+  function recipientsOf(d) {
+    if (Array.isArray(d.targets) && d.targets.length) return d.targets.slice();
+    var aud = Array.isArray(d.audience) && d.audience.length ? d.audience : ['all'];
+    return rosterMembers().filter(function (m) {
+      if (aud.indexOf('all') >= 0) return true;
+      var a = ROSTER_TO_AUDIENCE[String(m.role || '')] || '';
+      return aud.indexOf(a) >= 0;
+    }).map(function (m) { return m.firebaseUid; });
+  }
+  function readersHtml(d) {
+    var readers = S.readers || {};
+    var expected = recipientsOf(d);
+    var seen = {};
+    var lu = [], pas = [];
+    expected.forEach(function (uid) {
+      seen[uid] = 1;
+      var r = readers[uid];
+      if (r && r.read && r.read[d.id]) lu.push({ uid: uid, name: memberName(uid, r.name), at: r.readAt && r.readAt[d.id] });
+      else pas.push({ uid: uid, name: memberName(uid) });
+    });
+    /* Lecteurs hors destinataires attendus (admins, membres hors roster) */
+    Object.keys(readers).forEach(function (uid) {
+      if (seen[uid] || uid === d.createdBy) return;
+      var r = readers[uid];
+      if (r && r.read && r.read[d.id]) lu.push({ uid: uid, name: memberName(uid, r.name), at: r.readAt && r.readAt[d.id], extra: true });
+    });
+    var h = '<div class="rd">';
+    h += '<div class="rd-t">✅ Lu (' + lu.length + ')</div>';
+    h += lu.length ? '<div class="rd-l">' + lu.map(function (x) { return '<span class="rd-p ok" title="' + esc(x.at ? frDate(x.at) : '') + '">' + esc(x.name) + (x.at ? ' <i>' + esc(frDate(x.at).slice(0, 5)) + '</i>' : '') + (x.extra ? ' <i>(hors cible)</i>' : '') + '</span>'; }).join('') + '</div>' : '<div class="rd-l"><span class="rd-none">personne pour l\'instant</span></div>';
+    h += '<div class="rd-t">⏳ Pas encore lu (' + pas.length + ')</div>';
+    h += pas.length ? '<div class="rd-l">' + pas.map(function (x) { return '<span class="rd-p">' + esc(x.name) + '</span>'; }).join('') + '</div>' : '<div class="rd-l"><span class="rd-none">tout le monde a lu 🎉</span></div>';
+    return h + '</div>';
   }
   function publish(data) {
     var doc = {
@@ -238,6 +296,13 @@
       '#alteoInfosPanel .lk a,#alteoInfosModal .lk a{display:inline-block;padding:4px 9px;border-radius:7px;background:rgba(91,124,250,.14);border:1px solid rgba(91,124,250,.35);color:#c7d2fe;text-decoration:none;font-size:11.5px;font-weight:700}' +
       '#alteoInfosPanel .it .ac{margin-top:7px;display:flex;gap:6px}' +
       '#alteoInfosPanel .it .ac button{background:none;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.55);border-radius:6px;padding:3px 8px;font-size:10.5px;cursor:pointer}' +
+      '#alteoInfosPanel .rd{margin-top:8px;padding:8px 10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:9px}' +
+      '#alteoInfosPanel .rd-t{font-size:10.5px;font-weight:800;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.4px;margin:4px 0 4px}' +
+      '#alteoInfosPanel .rd-l{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}' +
+      '#alteoInfosPanel .rd-p{font-size:11px;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.75)}' +
+      '#alteoInfosPanel .rd-p.ok{background:rgba(52,211,153,.12);color:#6ee7b7}' +
+      '#alteoInfosPanel .rd-p i{font-style:normal;opacity:.6;font-size:10px}' +
+      '#alteoInfosPanel .rd-none{font-size:11px;color:rgba(255,255,255,.35)}' +
       '#alteoInfosPanel .empty{padding:26px 14px;text-align:center;color:rgba(255,255,255,.4);font-size:12.5px}' +
       '#alteoInfosPanel .aud{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:5px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.3px}' +
       '#alteoInfosPanel .cf{padding:12px 14px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}' +
@@ -308,7 +373,7 @@
   }
   function togglePanel() {
     S.open = !S.open;
-    if (S.open) { S.composing = false; renderPanel(); loadAll().then(function () { renderPanel(); renderBell(); }); }
+    if (S.open) { S.composing = false; S.readers = null; renderPanel(); loadAll().then(function () { renderPanel(); renderBell(); }); }
     else renderPanel();
   }
   function renderPanel() {
@@ -335,7 +400,9 @@
         h += '<div class="b">' + linkify(d.body || '') + '</div>';
         h += renderLinks(d.links);
         h += '<div class="ac">' + (isUnread ? '<button type="button" data-act="read" data-id="' + esc(d.id) + '">✓ Marquer lu</button>' : '') +
+          (isAdmin() ? '<button type="button" data-act="readers" data-id="' + esc(d.id) + '">👁 ' + (S.readersOpen[d.id] ? 'Masquer' : 'Qui a lu ?') + '</button>' : '') +
           (isAdmin() ? '<button type="button" data-act="archive" data-id="' + esc(d.id) + '" title="Retirer cette info (conservée en base)">🗄 Retirer</button>' : '') + '</div>';
+        if (isAdmin() && S.readersOpen[d.id]) h += S.readers ? readersHtml(d) : '<div class="rd"><span class="rd-none">Chargement…</span></div>';
         h += '</div>';
       });
       h += '</div>';
@@ -383,6 +450,11 @@
     if (act === 'compose') { S.composing = true; renderPanel(); var t = document.getElementById('aiTitle'); if (t) t.focus(); }
     else if (act === 'cancel') { S.composing = false; renderPanel(); }
     else if (act === 'readall') { markAllRead(); }
+    else if (act === 'readers' && id) {
+      S.readersOpen[id] = !S.readersOpen[id];
+      renderPanel();
+      if (S.readersOpen[id]) loadReaders().then(renderPanel).catch(function (err) { toast('❌ ' + err.message, true); });
+    }
     else if (act === 'read' && id) { markRead(id).then(function () { renderPanel(); renderBell(); }); }
     else if (act === 'archive' && id) {
       var d = S.items.find(function (x) { return x.id === id; });
