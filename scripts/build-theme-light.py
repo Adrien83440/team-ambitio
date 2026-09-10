@@ -531,8 +531,12 @@ GLASS_BLUR = 'blur(22px) saturate(1.6)'
 # Calque plat (pas de dégradé : un reflet oblique donnait un effet « buée »)
 # qui ramène la carte à ~94 % de blanc tout en laissant `background:` des
 # états (hover, ouvert) reprendre la main puisqu'il réinitialise l'image.
-GLASS_CARD_IMAGE = 'linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5))'
-GLASS_CARD_SHADOW = '0 1px 1px rgba(24,28,52,.04),0 8px 24px -12px rgba(24,28,52,.14)'
+GLASS_CARD_IMAGE = 'linear-gradient(165deg,rgba(255,255,255,.42),rgba(255,255,255,.12) 45%,rgba(255,255,255,.28))'
+# « Bulle » liquid glass : rim blanc intérieur (bord éclairé), anneau sombre
+# extérieur fin (détourage), ombre de contact + ombre portée diffuse.
+GLASS_CARD_SHADOW = ('inset 0 1px 0 rgba(255,255,255,.95),inset 0 0 0 1px rgba(255,255,255,.45),'
+                     '0 0 0 1px rgba(17,19,36,.12),0 2px 6px rgba(24,28,52,.08),0 18px 40px -14px rgba(24,28,52,.30)')
+GLASS_CARD_BORDER = 'rgba(255,255,255,.85)'
 
 
 def radius_px(val):
@@ -571,6 +575,7 @@ def glass_decls(decls, sel=''):
     if re.search(r'(chip|pill|badge|tag|btn|button|input|select|toggle|switch|av\b|avatar)', sel):
         return out
     out.append(('background-image', GLASS_CARD_IMAGE, False))
+    out.append(('border-color', GLASS_CARD_BORDER, False))
     out.append(('box-shadow', GLASS_CARD_SHADOW, False))
     return out
 

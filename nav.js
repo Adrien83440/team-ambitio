@@ -115,7 +115,7 @@
       accent: '#a78bfa', accentLight: '#ede9fe',
       accentGlow: 'rgba(167,139,250,0.18)',
       roleBg: 'rgba(167,139,250,0.12)', roleBorder: 'rgba(167,139,250,0.25)',
-      light: { accent: '#6d28d9', accentGlow: 'rgba(124,58,237,0.16)',
+      light: { accent: '#6d28d9', accentGlow: 'rgba(124,58,237,0.16)', accentMesh: 'rgba(139,92,246,0.40)',
                roleBg: 'rgba(124,58,237,0.10)', roleBorder: 'rgba(124,58,237,0.30)' },
     },
     sales: {
@@ -124,7 +124,7 @@
       accent: '#fca5a5', accentLight: '#fff1f2',
       accentGlow: 'rgba(252,165,165,0.18)',
       roleBg: 'rgba(252,165,165,0.12)', roleBorder: 'rgba(252,165,165,0.25)',
-      light: { accent: '#b91c1c', accentGlow: 'rgba(220,38,38,0.14)',
+      light: { accent: '#b91c1c', accentGlow: 'rgba(220,38,38,0.14)', accentMesh: 'rgba(244,63,94,0.34)',
                roleBg: 'rgba(220,38,38,0.09)', roleBorder: 'rgba(220,38,38,0.30)' },
     },
     admin: {
@@ -133,7 +133,7 @@
       accent: '#60a5fa', accentLight: '#eff6ff',
       accentGlow: 'rgba(96,165,250,0.18)',
       roleBg: 'rgba(251,191,36,0.12)', roleBorder: 'rgba(251,191,36,0.25)',
-      light: { accent: '#1d4ed8', accentGlow: 'rgba(37,99,235,0.16)',
+      light: { accent: '#1d4ed8', accentGlow: 'rgba(37,99,235,0.16)', accentMesh: 'rgba(59,130,246,0.40)',
                roleBg: 'rgba(180,83,9,0.10)', roleBorder: 'rgba(180,83,9,0.30)' },
     },
     // ─── Customer Success Manager — émeraude/teal pour différencier ───
@@ -143,7 +143,7 @@
       accent: '#5eead4', accentLight: '#ccfbf1',
       accentGlow: 'rgba(94,234,212,0.18)',
       roleBg: 'rgba(94,234,212,0.12)', roleBorder: 'rgba(94,234,212,0.25)',
-      light: { accent: '#0f766e', accentGlow: 'rgba(13,148,136,0.16)',
+      light: { accent: '#0f766e', accentGlow: 'rgba(13,148,136,0.16)', accentMesh: 'rgba(20,184,166,0.40)',
                roleBg: 'rgba(13,148,136,0.10)', roleBorder: 'rgba(13,148,136,0.30)' },
     },
   };
@@ -158,6 +158,8 @@
     target.style.setProperty('--nav-accent-glow', t.accentGlow);
     target.style.setProperty('--nav-role-bg',     t.roleBg);
     target.style.setProperty('--nav-role-border', t.roleBorder);
+    // Halo principal du fond maillé (thème clair) : même teinte, plus dense.
+    target.style.setProperty('--nav-accent-mesh', t.accentMesh || t.accentGlow);
   }
 
   const ROLE_LABELS = { coach: '🎓 Coach', sales: '📈 Commercial', admin: '👑 Administrateur', csm: '💎 Customer Success' };
