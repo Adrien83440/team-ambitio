@@ -162,6 +162,35 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
   font-style:italic;
 }
 
+/* ═══ Activité de connexion ═══ */
+.u-act{font-size:11px;color:rgba(255,255,255,.42);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.u-act b{color:rgba(255,255,255,.7);font-weight:600}
+.u-act .u-act-on{color:#34d399;font-weight:700}
+.act-controls{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.act-controls .bs{padding:5px 10px;font-size:11px}
+.act-body{display:block}
+.act-body.collapsed{display:none}
+.act-wrap{overflow-x:auto}
+.act-table{width:100%;border-collapse:collapse;font-size:12px;min-width:720px}
+.act-table th{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.4);text-align:left;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.08);white-space:nowrap}
+.act-table td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle;white-space:nowrap}
+.act-table tr:last-child td{border-bottom:none}
+.act-table tr:hover td{background:rgba(255,255,255,.03)}
+.act-table td.num,.act-table th.num{text-align:right;font-variant-numeric:tabular-nums}
+.act-user{display:flex;align-items:center;gap:9px;min-width:0}
+.act-av{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0}
+.act-name{font-weight:700;font-size:12px}
+.act-sub{font-size:10px;color:rgba(255,255,255,.35)}
+.act-muted{color:rgba(255,255,255,.3)}
+.act-on{display:inline-flex;align-items:center;gap:5px;color:#34d399;font-weight:700}
+.act-on::before{content:'';width:7px;height:7px;border-radius:50%;background:#34d399;box-shadow:0 0 0 3px rgba(52,211,153,.18)}
+.act-approx{font-size:10px;color:rgba(255,255,255,.3);font-style:italic}
+.act-foot{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:10px;color:rgba(255,255,255,.32);line-height:1.5}
+.act-block{padding:10px 12px;background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.15);border-radius:8px;font-size:12px;line-height:1.7}
+.act-block .act-block-t{font-size:13px;font-weight:700;color:rgba(255,255,255,.8);margin-bottom:2px}
+.act-block span{color:rgba(255,255,255,.45)}
+.act-block b{color:rgba(255,255,255,.85);font-weight:600}
+
 /* Modal */
 .mo-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:1000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
 .mo-bg.on{display:flex}
@@ -310,6 +339,28 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
     </div>
     <div class="tc-body" id="teamColorsBody">
       <div class="tc-empty">Chargement des membres…</div>
+    </div>
+  </div>
+
+  <!-- Activité de connexion (user_activity, alimenté par nav.js via /api/user-activity) -->
+  <div class="tc-section" id="activitySection">
+    <div class="tc-head">
+      <div>
+        <div class="tc-title">📊 Activité de connexion</div>
+        <div class="tc-sub">Dernière connexion, nombre de connexions et temps d'activité réel (onglet au premier plan). Une connexion = une période d'activité séparée d'au moins 30 min de la précédente.</div>
+      </div>
+      <div class="act-controls">
+        <select class="bs" id="actDays">
+          <option value="7">7 jours</option>
+          <option value="30" selected>30 jours</option>
+          <option value="90">90 jours</option>
+        </select>
+        <button class="tc-toggle" id="actRefresh" title="Recharger">↻</button>
+        <button class="tc-toggle" id="actToggle">Masquer</button>
+      </div>
+    </div>
+    <div class="act-body" id="activityBody">
+      <div class="tc-empty">Chargement de l'activité…</div>
     </div>
   </div>
 
@@ -571,6 +622,7 @@ onAuthStateChanged(auth,async user=>{
     currentUid=user.uid;
     loadUsers();
     loadTeamColors();
+    loadActivity();
   }catch(e){console.error(e);window.location.href='login.html';}
 });
 
@@ -1104,7 +1156,219 @@ document.addEventListener('click', function(ev){
     const isCollapsed = body.classList.toggle('collapsed');
     btn.textContent = isCollapsed ? 'Afficher' : 'Masquer';
   }
+  if(ev.target && ev.target.id === 'actToggle'){
+    const abody = document.getElementById('activityBody');
+    if(!abody) return;
+    const aCollapsed = abody.classList.toggle('collapsed');
+    ev.target.textContent = aCollapsed ? 'Afficher' : 'Masquer';
+  }
+  if(ev.target && ev.target.id === 'actRefresh'){
+    loadActivity();
+  }
 });
+document.getElementById('actDays').addEventListener('change', function(){ loadActivity(); });
+
+// ══════════════════════════════════════════════════════════════════
+// ─── ACTIVITÉ DE CONNEXION ───
+// Source : POST /api/user-activity { action:'report', days } (admin).
+// ACTIVITY.users[uid] = { lastSeenAt, lastLoginAt, loginCount, totalActiveMs,
+//   lastPage, period:{sessions,activeMs,activeDays}, today:{…}, auth:{…} }
+// Les métadonnées Firebase Auth (auth.lastSignInTime / lastRefreshTime)
+// servent de repère approximatif tant que le traceur n'a rien enregistré.
+// ══════════════════════════════════════════════════════════════════
+let ACTIVITY = null;
+let ACTIVITY_LOADING = false;
+const ACT_ONLINE_MS = 6 * 60 * 1000; // dernier signal < 6 min → « en ligne »
+
+function actMs(iso){ if(!iso) return 0; var t=Date.parse(iso); return isFinite(t)?t:0; }
+
+function fmtDuration(ms){
+  ms = Number(ms)||0;
+  if(ms < 60000) return ms > 0 ? '< 1 min' : '0 min';
+  var totalMin = Math.round(ms/60000);
+  var h = Math.floor(totalMin/60), m = totalMin%60;
+  if(h === 0) return m+' min';
+  if(h < 100) return h+' h '+(m<10?'0':'')+m;
+  return h+' h';
+}
+
+function fmtRelative(iso){
+  var t = actMs(iso);
+  if(!t) return '—';
+  var diff = Date.now()-t;
+  if(diff < 60000) return 'à l\'instant';
+  if(diff < 3600000) return 'il y a '+Math.round(diff/60000)+' min';
+  if(diff < 86400000){ var hh=Math.floor(diff/3600000); return 'il y a '+hh+' h'; }
+  var d = new Date(t);
+  var days = Math.floor(diff/86400000);
+  var hm = d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  if(days === 1) return 'hier '+hm;
+  if(days < 7) return 'il y a '+days+' j';
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'})+' '+hm;
+}
+
+function fmtDateTime(iso){
+  var t = actMs(iso);
+  if(!t) return '—';
+  var d = new Date(t);
+  return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+}
+
+function actEntry(uid){
+  return (ACTIVITY && ACTIVITY.users && ACTIVITY.users[uid]) || null;
+}
+
+function actIsOnline(a){
+  return !!(a && a.lastSeenAt && (Date.now()-actMs(a.lastSeenAt)) < ACT_ONLINE_MS);
+}
+
+// Dernière activité connue : traceur en priorité, sinon dernier rafraîchissement
+// de token Firebase Auth (approximatif, marqué ≈).
+function actLastSeen(a){
+  if(!a) return { iso:null, approx:false };
+  if(a.lastSeenAt) return { iso:a.lastSeenAt, approx:false };
+  var au = a.auth||{};
+  var iso = au.lastRefreshTime || au.lastSignInTime || null;
+  return { iso:iso, approx:!!iso };
+}
+
+function actLastLogin(a){
+  if(!a) return { iso:null, approx:false };
+  if(a.lastLoginAt) return { iso:a.lastLoginAt, approx:false };
+  var au = a.auth||{};
+  return { iso:au.lastSignInTime||null, approx:!!au.lastSignInTime };
+}
+
+async function loadActivity(){
+  if(ACTIVITY_LOADING) return;
+  ACTIVITY_LOADING = true;
+  var body = document.getElementById('activityBody');
+  var sel = document.getElementById('actDays');
+  var days = sel ? parseInt(sel.value,10)||30 : 30;
+  if(!ACTIVITY && body) body.innerHTML = '<div class="tc-empty">Chargement de l\'activité…</div>';
+  try{
+    var token = await auth.currentUser.getIdToken();
+    var resp = await fetch('/api/user-activity', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+token },
+      body: JSON.stringify({ action:'report', days:days })
+    });
+    var data = await resp.json().catch(function(){ return {}; });
+    if(!resp.ok) throw new Error(data.error || ('HTTP '+resp.status));
+    ACTIVITY = data;
+  }catch(e){
+    console.error('loadActivity error:', e);
+    if(body) body.innerHTML = '<div class="tc-empty">❌ Activité indisponible : '+esc(e.message||String(e))+'</div>';
+    ACTIVITY_LOADING = false;
+    return;
+  }
+  ACTIVITY_LOADING = false;
+  renderActivity();
+  renderList();
+}
+
+function activityCardLine(uid){
+  var a = actEntry(uid);
+  if(!ACTIVITY) return '';
+  if(!a) return '<div class="u-act act-muted">Aucune activité enregistrée</div>';
+  var seen = actLastSeen(a);
+  var parts = [];
+  if(actIsOnline(a)) parts.push('<span class="u-act-on">● En ligne</span>');
+  else parts.push('Vu <b>'+esc(fmtRelative(seen.iso))+(seen.approx?' ≈':'')+'</b>');
+  var days = ACTIVITY.days||30;
+  parts.push('<b>'+(a.period.sessions||0)+'</b> connexion'+((a.period.sessions||0)>1?'s':'')+' / '+days+' j');
+  parts.push('<b>'+esc(fmtDuration(a.period.activeMs))+'</b> / '+days+' j');
+  return '<div class="u-act">'+parts.join(' · ')+'</div>';
+}
+
+function activityModalBlock(u){
+  if(!ACTIVITY) return '';
+  var a = actEntry(u.uid);
+  var h = '<div class="mf" style="margin-top:8px"><div class="act-block"><div class="act-block-t">📊 Activité de connexion</div>';
+  if(!a){
+    h += '<span>Aucune activité enregistrée pour ce compte.</span></div></div>';
+    return h;
+  }
+  var seen = actLastSeen(a), login = actLastLogin(a);
+  var days = ACTIVITY.days||30;
+  h += '<div><span>Dernière activité :</span> <b>'+(actIsOnline(a)?'En ligne':esc(fmtDateTime(seen.iso)))+'</b>'+(seen.approx?' <span class="act-approx">≈ Firebase Auth</span>':'')+'</div>';
+  h += '<div><span>Dernière connexion :</span> <b>'+esc(fmtDateTime(login.iso))+'</b>'+(login.approx?' <span class="act-approx">≈ Firebase Auth</span>':'')+'</div>';
+  h += '<div><span>Sur '+days+' jours :</span> <b>'+(a.period.sessions||0)+'</b> connexion'+((a.period.sessions||0)>1?'s':'')+', <b>'+esc(fmtDuration(a.period.activeMs))+'</b> d\'activité, <b>'+(a.period.activeDays||0)+'</b> jour'+((a.period.activeDays||0)>1?'s':'')+' actif'+((a.period.activeDays||0)>1?'s':'')+'</div>';
+  h += '<div><span>Aujourd\'hui :</span> <b>'+(a.today.sessions||0)+'</b> connexion'+((a.today.sessions||0)>1?'s':'')+', <b>'+esc(fmtDuration(a.today.activeMs))+'</b></div>';
+  h += '<div><span>Depuis le début du suivi'+(a.firstSeenAt?' ('+esc(fmtDateTime(a.firstSeenAt).split(' ')[0])+')':'')+' :</span> <b>'+(a.loginCount||0)+'</b> connexion'+((a.loginCount||0)>1?'s':'')+', <b>'+esc(fmtDuration(a.totalActiveMs))+'</b></div>';
+  if(a.lastPage) h += '<div><span>Dernière page :</span> <b>'+esc(a.lastPage)+'</b></div>';
+  h += '</div></div>';
+  return h;
+}
+
+function renderActivity(){
+  var body = document.getElementById('activityBody');
+  if(!body || !ACTIVITY) return;
+  var days = ACTIVITY.days||30;
+  var fStatus = document.getElementById('filterStatus').value;
+  var rows = USERS.filter(function(u){
+    var st = u.status||'active';
+    if(!fStatus && st==='archived') return false;
+    return true;
+  }).map(function(u){
+    var a = actEntry(u.uid);
+    return { u:u, a:a, seenMs: a ? actMs(actLastSeen(a).iso) : 0 };
+  });
+  rows.sort(function(x,y){ return y.seenMs - x.seenMs; });
+
+  var onlineCount = rows.filter(function(r){ return actIsOnline(r.a); }).length;
+  var totalSessions = 0, totalMs = 0, tracked = 0;
+  rows.forEach(function(r){ if(r.a){ totalSessions += r.a.period.sessions||0; totalMs += r.a.period.activeMs||0; if(r.a.lastSeenAt) tracked++; } });
+
+  var h = '<div class="act-wrap"><table class="act-table"><thead><tr>';
+  h += '<th>Utilisateur</th><th>Dernière activité</th><th>Dernière connexion</th>';
+  h += '<th class="num">Connexions<br><span style="font-weight:500;text-transform:none;letter-spacing:0">'+days+' j</span></th>';
+  h += '<th class="num">Durée<br><span style="font-weight:500;text-transform:none;letter-spacing:0">'+days+' j</span></th>';
+  h += '<th class="num">Jours actifs<br><span style="font-weight:500;text-transform:none;letter-spacing:0">'+days+' j</span></th>';
+  h += '<th class="num">Aujourd\'hui</th>';
+  h += '<th class="num">Connexions<br><span style="font-weight:500;text-transform:none;letter-spacing:0">total</span></th>';
+  h += '<th class="num">Durée<br><span style="font-weight:500;text-transform:none;letter-spacing:0">total</span></th>';
+  h += '</tr></thead><tbody>';
+  if(!rows.length) h += '<tr><td colspan="9" class="act-muted" style="text-align:center;padding:20px">Aucun utilisateur</td></tr>';
+  rows.forEach(function(r){
+    var u = r.u, a = r.a;
+    var name = u.displayName||u.email||'?';
+    var role = u.role||'coach';
+    h += '<tr data-uid="'+esc(u.uid)+'" style="cursor:pointer">';
+    h += '<td><div class="act-user"><div class="act-av" style="background:'+tmColorForUser(u,role)+'">'+esc(name[0].toUpperCase())+'</div><div><div class="act-name">'+esc(name)+'</div><div class="act-sub">'+(ROLE_EMOJIS[role]||'')+' '+esc(role)+(u.status&&u.status!=='active'?' · '+esc(STATUS_LABELS[u.status]||u.status):'')+'</div></div></div></td>';
+    if(!a){
+      h += '<td class="act-muted" colspan="8">Aucune activité enregistrée</td></tr>';
+      return;
+    }
+    var seen = actLastSeen(a), login = actLastLogin(a);
+    h += '<td>'+(actIsOnline(a)?'<span class="act-on">En ligne</span>':'<span title="'+esc(fmtDateTime(seen.iso))+'">'+esc(fmtRelative(seen.iso))+'</span>'+(seen.approx?' <span class="act-approx" title="Dernier rafraîchissement de session Firebase Auth — le traceur n\'a pas encore de données">≈</span>':''))+'</td>';
+    h += '<td><span title="'+esc(fmtDateTime(login.iso))+'">'+esc(fmtRelative(login.iso))+'</span>'+(login.approx?' <span class="act-approx" title="Dernier sign-in Firebase Auth — le traceur n\'a pas encore de données">≈</span>':'')+'</td>';
+    h += '<td class="num">'+(a.period.sessions||0)+'</td>';
+    h += '<td class="num">'+esc(fmtDuration(a.period.activeMs))+'</td>';
+    h += '<td class="num">'+(a.period.activeDays||0)+'</td>';
+    h += '<td class="num" title="'+(a.today.sessions||0)+' connexion(s) aujourd\'hui">'+esc(fmtDuration(a.today.activeMs))+'</td>';
+    h += '<td class="num">'+(a.loginCount||0)+'</td>';
+    h += '<td class="num">'+esc(fmtDuration(a.totalActiveMs))+'</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  h += '<div class="act-foot">';
+  h += '<span><b style="color:#34d399">'+onlineCount+'</b> en ligne</span>';
+  h += '<span><b>'+totalSessions+'</b> connexions et <b>'+esc(fmtDuration(totalMs))+'</b> d\'activité cumulés sur '+days+' j</span>';
+  h += '<span>'+tracked+'/'+rows.length+' comptes avec des données du traceur</span>';
+  h += '<span>≈ : repère Firebase Auth, en attendant les données du traceur · durée = onglet Alteore au premier plan · actualisé '+esc(fmtDateTime(ACTIVITY.generatedAt))+'</span>';
+  h += '</div>';
+  body.innerHTML = h;
+}
+
+// Clic sur une ligne du tableau d'activité → modale d'édition
+document.getElementById('activityBody').addEventListener('click', function(e){
+  var tr = e.target.closest('tr[data-uid]');
+  if(!tr) return;
+  var u = USERS.find(function(x){ return x.uid === tr.dataset.uid; });
+  if(u) openEditModal(u);
+});
+document.getElementById('filterStatus').addEventListener('change', renderActivity);
 
 // ══════════════════════════════════════════════════════════════════
 
@@ -1151,7 +1415,7 @@ function renderList(){
     if(readCount)permText+=', '+readCount+' lecture';
     h+='<div class="u-card" data-uid="'+u.uid+'">';
     h+='<div class="u-av" style="background:'+tmColorForUser(u,role)+'">'+name[0].toUpperCase()+'</div>';
-    h+='<div class="u-info"><div class="u-name">'+esc(name)+'</div><div class="u-email">'+esc(u.email||'')+'</div></div>';
+    h+='<div class="u-info"><div class="u-name">'+esc(name)+'</div><div class="u-email">'+esc(u.email||'')+'</div>'+activityCardLine(u.uid)+'</div>';
     h+='<div class="u-badges">';
     h+='<span class="u-badge u-b-'+role+'">'+(ROLE_EMOJIS[role]||'')+' '+role.charAt(0).toUpperCase()+role.slice(1)+'</span>';
     h+='<span class="u-badge '+STATUS_CLS[status]+'">'+(STATUS_LABELS[status]||status)+'</span>';
@@ -1418,6 +1682,8 @@ function openEditModal(u){
   h+='<option value="invited"'+(status==='invited'?' selected':'')+'>📩 Invité</option>';
   h+='<option value="disabled"'+(status==='disabled'?' selected':'')+'>🚫 Désactivé</option>';
   h+='</select></div>';
+  // Activité de connexion (lecture seule, données de /api/user-activity)
+  h+=activityModalBlock(u);
   // Numéros Ringover (un par ligne)
   var phonesValue = Array.isArray(u.ringoverPhones) ? u.ringoverPhones.join('\n') : '';
   h+='<div class="mf"><label>📞 Numéros Ringover (un par ligne)</label>';

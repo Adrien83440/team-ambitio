@@ -1469,11 +1469,135 @@
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // ACTIVITY TRACKER — connexions et temps d'activité par utilisateur
+  // Alimente user_activity/* via POST /api/user-activity { action:'beat' }.
+  // Lu par admin-users.html (section « Activité de connexion »).
+  //
+  // Un signal part :
+  //   - au chargement de la page (throttle 60 s entre deux pages) ;
+  //   - toutes les 5 min tant que l'onglet est visible ;
+  //   - au passage en arrière-plan / fermeture (fetch keepalive), si au
+  //     moins 30 s de temps visible se sont accumulées.
+  // Le client ne mesure que le temps d'onglet VISIBLE (activeMs). C'est le
+  // serveur qui décide de l'ouverture d'une nouvelle connexion (écart > 30
+  // min, ou `login:true` quand on arrive depuis login.html).
+  // Dual SDK : compat → firebase.auth().currentUser ; modulaire → window._auth.
+  // Aucune erreur n'est remontée à l'utilisateur : le traceur est silencieux.
+  // ─────────────────────────────────────────────────────────────────────────
+  var ACT_BEAT_MS = 5 * 60 * 1000;
+  var ACT_MIN_FLUSH_MS = 30 * 1000;
+  var ACT_NAV_THROTTLE_MS = 60 * 1000;
+  var ACT_LS_LAST = 'ambitio_act_last';
+
+  function initActivityTracker() {
+    if (window.__activityTrackerInit) return;
+    window.__activityTrackerInit = true;
+    if (typeof fetch !== 'function') return;
+
+    var visibleSince = (document.visibilityState === 'visible') ? Date.now() : null;
+    var pendingMs = 0;
+    var sending = false;
+    var started = false;
+    var fromLogin = /login\.html/.test(document.referrer || '');
+
+    function getUser() {
+      try {
+        if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser;
+      } catch (_) {}
+      if (window._auth && window._auth.currentUser) return window._auth.currentUser;
+      return null;
+    }
+
+    function flushVisible() {
+      if (visibleSince) {
+        var now = Date.now();
+        pendingMs += Math.max(0, now - visibleSince);
+        visibleSince = now;
+      }
+    }
+
+    function lastBeatAt() {
+      try { return parseInt(localStorage.getItem(ACT_LS_LAST), 10) || 0; } catch (_) { return 0; }
+    }
+    function markBeat() {
+      try { localStorage.setItem(ACT_LS_LAST, String(Date.now())); } catch (_) {}
+    }
+
+    function beat(reason) {
+      var user = getUser();
+      if (!user) return;
+      flushVisible();
+      var ms = pendingMs;
+      var login = fromLogin;
+      if (reason === 'hide' && ms < ACT_MIN_FLUSH_MS) return;
+      if ((reason === 'load' || reason === 'show') && !login &&
+          ms < ACT_MIN_FLUSH_MS && (Date.now() - lastBeatAt()) < ACT_NAV_THROTTLE_MS) return;
+      if (sending) return;
+      sending = true;
+      pendingMs = 0;
+      fromLogin = false;
+      markBeat();
+      var payload = JSON.stringify({ action: 'beat', page: AL_PAGE_NAME, activeMs: Math.round(ms), reason: reason, login: login });
+      Promise.resolve(user.getIdToken()).then(function (token) {
+        return fetch('/api/user-activity', {
+          method: 'POST',
+          keepalive: reason === 'hide',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: payload
+        });
+      }).then(function (resp) {
+        if (!resp || !resp.ok) throw new Error('http ' + (resp && resp.status));
+      }).catch(function () {
+        // Réseau ou token indisponible : on re-créditera au prochain signal.
+        pendingMs += ms;
+        if (login) fromLogin = true;
+      }).then(function () { sending = false; });
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') {
+        visibleSince = Date.now();
+        if (started) beat('show');
+      } else {
+        flushVisible();
+        visibleSince = null;
+        if (started) beat('hide');
+      }
+    });
+    window.addEventListener('pagehide', function () {
+      flushVisible();
+      visibleSince = null;
+      if (started) beat('hide');
+    });
+    setInterval(function () {
+      if (started && document.visibilityState === 'visible') beat('interval');
+    }, ACT_BEAT_MS);
+
+    // Démarrage : attend qu'un des deux SDK expose un utilisateur authentifié.
+    function tryStart() {
+      if (started) return true;
+      if (!getUser()) return false;
+      started = true;
+      beat('load');
+      return true;
+    }
+    if (tryStart()) return;
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      try { firebase.auth().onAuthStateChanged(function () { tryStart(); }); } catch (_) {}
+    }
+    var pollStart = Date.now();
+    var pollId = setInterval(function () {
+      if (tryStart() || (Date.now() - pollStart) > 30000) clearInterval(pollId);
+    }, 500);
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); });
+    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); initActivityTracker(); });
   } else {
     injectInboxWidget();
     injectInfosWidget();
+    initActivityTracker();
   }
 })();
 
