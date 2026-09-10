@@ -98,6 +98,21 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .fb-file{display:grid;grid-template-columns:minmax(120px,1fr) minmax(150px,2fr) minmax(100px,1fr) auto auto;gap:6px;align-items:center;margin-bottom:6px}
 .fb-file input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 9px;font-size:12.5px;font-family:inherit;outline:none;min-width:0}
 
+/* Apparence */
+.fb-wdg{border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px;background:var(--bg2)}
+.fb-wdg.off{opacity:.55}
+.fb-wdg-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.fb-wdg-h .fb-title{font-family:var(--fh);font-size:14px}
+.fb-chk{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.fb-chk input{width:14px;height:14px;accent-color:var(--blue)}
+.fb-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media (max-width:700px){.fb-row3{grid-template-columns:1fr}}
+.fb-heroprev{position:relative;border-radius:14px;overflow:hidden;min-height:150px;display:flex;align-items:center;justify-content:center;text-align:center;padding:26px;border:1px solid var(--border);background:var(--bg3) center/cover no-repeat;margin-bottom:12px}
+.fb-heroprev::before{content:'';position:absolute;inset:0;background:rgba(3,5,14,var(--fm-ov,.45))}
+.fb-heroprev>*{position:relative}
+.fb-heroprev b{font-family:var(--fh);font-size:24px;color:#fff}
+.fb-heroprev span{display:block;font-size:13px;color:rgba(255,255,255,.85);margin-top:4px}
+
 /* Drive */
 .drv-nav{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
 .drv-nav input{flex:1;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:8px 10px;font-size:12.5px;font-family:var(--fm);outline:none}
@@ -320,6 +335,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     h += '<textarea class="fb-desc-f" id="fmDesc" placeholder="Description courte, affichée sur la carte de la formation (optionnel)">' + esc(F.description || '') + '</textarea>';
     h += '<div class="fb-toolbar"><button type="button" class="au-btn primary" data-act="add-module">＋ Module</button>' +
       '<button type="button" class="au-btn" data-act="drive" data-kind="formation">☁ Importer depuis Drive</button>' +
+      '<a class="au-btn" href="' + hashFor({ f: F.id, v: 'apparence' }) + '">🎨 Apparence</a>' +
       '<a class="au-btn" href="formations.html' + hashFor({ f: F.id }) + '" target="_blank" rel="noopener">👁 Aperçu membre</a>' +
       (IS_ADMIN ? '<button type="button" class="au-btn ghost" data-act="members">👥 Qui a accès</button>' : '') +
       '<span style="margin-left:auto;font-size:11px;color:var(--muted2)">Brouillon = invisible pour les membres, à chaque niveau.</span></div>';
@@ -449,6 +465,110 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     }
   }
 
+  /* ─── Éditeur de texte riche (barre + zone contenteditable + vue HTML) ─ */
+  // Utilisé pour le corps des leçons, le texte d'accueil et les widgets.
+  // Les ids <id> et <id>Html sont lus par les fonctions read*Form().
+  function rteHtml(id, html, minH) {
+    return '<div class="fb-rte-wrap"><div class="fb-rte-bar">' +
+      '<button type="button" data-cmd="bold" title="Gras"><b>B</b></button><button type="button" data-cmd="italic" title="Italique"><i>I</i></button><button type="button" data-cmd="underline" title="Souligné"><u>U</u></button><span class="sp"></span>' +
+      '<button type="button" data-cmd="formatBlock" data-arg="H2">H2</button><button type="button" data-cmd="formatBlock" data-arg="H3">H3</button><button type="button" data-cmd="formatBlock" data-arg="P">¶</button><button type="button" data-cmd="formatBlock" data-arg="BLOCKQUOTE">❝</button><span class="sp"></span>' +
+      '<button type="button" data-cmd="insertUnorderedList" title="Liste">• Liste</button><button type="button" data-cmd="insertOrderedList" title="Liste numérotée">1. Liste</button><span class="sp"></span>' +
+      '<button type="button" data-cmd="createLink" title="Lien">🔗</button><button type="button" data-cmd="unlink" title="Retirer le lien">⛓</button><button type="button" data-cmd="removeFormat" title="Nettoyer">🧹</button><span class="sp"></span>' +
+      '<button type="button" data-act="rte-html" title="Voir / éditer le HTML">&lt;/&gt;</button></div>' +
+      '<div class="fb-rte" id="' + id + '" contenteditable="true"' + (minH ? ' style="min-height:' + minH + 'px"' : '') + '>' + html + '</div>' +
+      '<textarea class="fb-rte-html" id="' + id + 'Html" style="display:none" spellcheck="false"></textarea></div>';
+  }
+  function rteValue(id) {
+    var ta = document.getElementById(id + 'Html'), rte = document.getElementById(id);
+    var v = C.sanitizeHtml(ta && ta.style.display !== 'none' ? ta.value : (rte ? rte.innerHTML : ''));
+    return /^(<p><br><\/p>|<br>|<div><br><\/div>|\s)*$/.test(v) ? '' : v;
+  }
+
+  /* ─── Rendu : apparence (bannière, accueil, widgets latéraux) ───────── */
+  function widgetHtml(w, i) {
+    var colorOpts = C.CTA_COLORS.map(function (c) { return '<option value="' + c + '"' + (w.ctaColor === c ? ' selected' : '') + '>' + { ink: 'Nuit', gold: 'Or', ember: 'Braise', green: 'Vert', blue: 'Bleu', white: 'Blanc' }[c] + '</option>'; }).join('');
+    return '<div class="fb-wdg' + (w.enabled ? '' : ' off') + '" data-w="' + i + '"><div class="fb-wdg-h">' +
+      '<label class="fb-chk"><input type="checkbox" data-wf="enabled"' + (w.enabled ? ' checked' : '') + '> Actif</label>' +
+      '<input class="fb-title" data-wf="title" value="' + esc(w.title) + '" placeholder="Titre du widget">' +
+      '<span class="fb-tools"><button type="button" class="fb-ib" data-act="w-up" data-idx="' + i + '" title="Monter">↑</button><button type="button" class="fb-ib" data-act="w-down" data-idx="' + i + '" title="Descendre">↓</button><button type="button" class="fb-ib danger" data-act="w-del" data-idx="' + i + '" title="Retirer">✕</button></span></div>' +
+      '<div class="fb-f"><label>Image</label><div class="fb-upl"><label class="fb-chk"><input type="checkbox" data-wf="showImage"' + (w.showImage ? ' checked' : '') + '> Afficher</label><input type="url" data-wf="image" id="wImage_' + i + '" value="' + esc(w.image) + '" placeholder="https://…"><button type="button" class="au-btn" data-upload="wImage" data-idx="' + i + '" title="Envoyer une image">⤒</button></div></div>' +
+      '<div class="fb-f"><label>Texte</label>' + rteHtml('wBody_' + i, C.widgetBodyHtml(w.body), 90) + '<div class="hint">Liens : sélectionne le texte puis 🔗. Les numéros et adresses restent en texte.</div></div>' +
+      '<div class="fb-f"><label class="fb-chk" style="text-transform:none;letter-spacing:0;font-size:12px"><input type="checkbox" data-wf="showCta"' + (w.showCta ? ' checked' : '') + '> Bouton d\'action</label></div>' +
+      '<div class="fb-row3"><div class="fb-f"><label>Libellé du bouton</label><input type="text" data-wf="ctaText" value="' + esc(w.ctaText) + '" placeholder="Envoyer ma facture"></div>' +
+      '<div class="fb-f"><label>Lien du bouton</label><input type="url" data-wf="ctaUrl" value="' + esc(w.ctaUrl) + '" placeholder="https://…"></div>' +
+      '<div class="fb-f"><label>Couleur</label><select data-wf="ctaColor">' + colorOpts + '</select></div></div>' +
+      '<div class="fb-row3"><div class="fb-f"><label>Couleur du texte (hex, optionnel)</label><input type="text" data-wf="ctaTextColor" value="' + esc(w.ctaTextColor) + '" placeholder="#FFFFFF"></div>' +
+      '<div class="fb-f"><label>Largeur</label><select data-wf="ctaWidth"><option value="auto"' + (w.ctaWidth !== 'full' ? ' selected' : '') + '>Ajustée</option><option value="full"' + (w.ctaWidth === 'full' ? ' selected' : '') + '>Pleine largeur</option></select></div>' +
+      '<div class="fb-f"><label>&nbsp;</label><label class="fb-chk" style="text-transform:none;letter-spacing:0;font-size:12px;margin-top:9px"><input type="checkbox" data-wf="ctaNewTab"' + (w.ctaNewTab ? ' checked' : '') + '> Ouvrir dans un nouvel onglet</label></div></div>' +
+      '</div>';
+  }
+  function renderAppearance() {
+    VIEW = 'apparence';
+    F.theme = C.normalizeTheme(F.theme);
+    var t = F.theme;
+    var h = '<div class="fb-crumb"><a href="#">Formations</a><span class="sep">›</span><a href="' + hashFor({ f: F.id }) + '">' + esc(F.name || F.id) + '</a><span class="sep">›</span><span class="cur">Apparence</span></div>';
+    h += '<div class="fb-head"><a class="au-btn" href="' + hashFor({ f: F.id }) + '">← Plan</a><div style="flex:1;font-family:var(--fh);font-size:18px;font-weight:700">🎨 Apparence de l\'espace membre</div><span class="fb-save" id="saveState"></span>' +
+      '<a class="au-btn" href="formations.html' + hashFor({ f: F.id }) + '" target="_blank" rel="noopener">👁 Voir en membre</a></div>';
+    h += '<div class="fb-ed" id="edForm"><div>';
+    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Bannière</div><div class="au-card-note">Affichée en haut du plan de la formation, si elle a une image ou une accroche.</div></div>';
+    h += '<div class="fb-heroprev" id="thHeroPrev" style="--fm-ov:' + t.hero.overlay + (t.hero.image ? ';background-image:url(' + esc(t.hero.image).replace(/[()]/g, '') + ')' : '') + '"><div><b id="thHeroPrevT">' + esc(t.hero.title || F.name || '') + '</b><span id="thHeroPrevS">' + esc(t.hero.tagline) + '</span></div></div>';
+    h += '<div class="fb-row2">' + fieldHtml('thTitle', 'Titre', t.hero.title, F.name || 'Titre de la bannière') + fieldHtml('thTagline', 'Accroche', t.hero.tagline, 'Une phrase sous le titre (optionnel)') + '</div>';
+    h += '<div class="fb-row2">' + uploadField('thImage', 'Image de fond', t.hero.image, 'heroImage', 'Format large (1600×600 conseillé).', false) +
+      '<div class="fb-f"><label for="thOverlay">Assombrissement (' + Math.round(t.hero.overlay * 100) + ' %)</label><input type="range" id="thOverlay" min="0" max="0.9" step="0.05" value="' + t.hero.overlay + '" style="width:100%"></div></div></div>';
+    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Texte d\'accueil</div><div class="au-card-note">Sous la bannière, au-dessus des modules. Vide = rien.</div></div>' + rteHtml('thWelcome', C.widgetBodyHtml(t.welcome), 120) + '</div>';
+    h += '</div><div>';
+    h += '<div class="au-card"><div class="au-card-head"><div class="au-card-title">Widgets latéraux</div><div class="au-card-note">Facture de fin de mois, identifiants, point hebdo… affichés à droite du plan.</div></div><div id="thWidgets">' +
+      t.sidebar.map(widgetHtml).join('') + '</div><button type="button" class="fb-add" data-act="w-add">＋ Widget</button></div>';
+    h += '</div></div>';
+    $view.innerHTML = h;
+    setSaveState('saved');
+  }
+  function readThemeForm() {
+    if (VIEW !== 'apparence' || !F) return;
+    var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    var prev = C.normalizeTheme(F.theme);
+    var sidebar = [];
+    document.querySelectorAll('#thWidgets .fb-wdg').forEach(function (card, i) {
+      var old = prev.sidebar[i] || {};
+      var v = function (f) { var el = card.querySelector('[data-wf="' + f + '"]'); if (!el) return ''; return el.type === 'checkbox' ? el.checked : el.value.trim(); };
+      sidebar.push(C.normalizeWidget({
+        id: old.id, title: v('title'), showImage: v('showImage'), image: v('image'), body: rteValue('wBody_' + i),
+        showCta: v('showCta'), ctaText: v('ctaText'), ctaUrl: v('ctaUrl'), ctaNewTab: v('ctaNewTab'),
+        ctaColor: v('ctaColor'), ctaTextColor: v('ctaTextColor'), ctaWidth: v('ctaWidth'), enabled: v('enabled')
+      }));
+    });
+    F.theme = {
+      hero: { title: g('thTitle'), tagline: g('thTagline'), image: g('thImage'), overlay: parseFloat(g('thOverlay')) || 0, ctaText: prev.hero.ctaText },
+      welcome: rteValue('thWelcome'),
+      sidebar: sidebar
+    };
+    // aperçu de la bannière
+    var pv = document.getElementById('thHeroPrev');
+    if (pv) {
+      pv.style.setProperty('--fm-ov', String(F.theme.hero.overlay));
+      pv.style.backgroundImage = F.theme.hero.image ? 'url(' + F.theme.hero.image.replace(/[()]/g, '') + ')' : '';
+      document.getElementById('thHeroPrevT').textContent = F.theme.hero.title || F.name || '';
+      document.getElementById('thHeroPrevS').textContent = F.theme.hero.tagline;
+      var lab = document.querySelector('label[for="thOverlay"]'); if (lab) lab.textContent = 'Assombrissement (' + Math.round(F.theme.hero.overlay * 100) + ' %)';
+    }
+    document.querySelectorAll('#thWidgets .fb-wdg').forEach(function (card, i) { card.classList.toggle('off', !(F.theme.sidebar[i] && F.theme.sidebar[i].enabled)); });
+  }
+  function saveTheme() { readThemeForm(); return saveMeta({ theme: C.clone(F.theme) }); }
+  function scheduleThemeSave() {
+    setSaveState('dirty');
+    clearTimeout(FORM_T); FORM_T = setTimeout(saveTheme, 800);
+  }
+  function widgetAct(act, idx) {
+    readThemeForm();
+    var list = F.theme.sidebar;
+    if (act === 'w-add') list.push(C.emptyWidget());
+    else if (act === 'w-del') { if (!window.confirm('Retirer ce widget ?')) return; list.splice(idx, 1); }
+    else if (act === 'w-up') C.moveInList(list, idx, -1);
+    else if (act === 'w-down') C.moveInList(list, idx, 1);
+    renderAppearance();
+    saveMeta({ theme: C.clone(F.theme) });
+  }
+
   /* ─── Rendu : éditeur de leçon ──────────────────────────────────────── */
   function fieldHtml(id, label, value, placeholder, hint, type) {
     return '<div class="fb-f"><label for="' + id + '">' + label + '</label><input type="' + (type || 'text') + '" id="' + id + '" value="' + esc(value || '') + '" placeholder="' + esc(placeholder || '') + '">' + (hint ? '<div class="hint">' + hint + '</div>' : '') + '</div>';
@@ -486,14 +606,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       fieldHtml('edDuration', 'Durée affichée', l.duration, 'Ex. 12 min') + '</div>';
     h += '<div class="fb-f"><label for="edVideo">Vidéo</label><input type="url" id="edVideo" value="' + esc(l.video || '') + '" placeholder="Lien YouTube, Vimeo, Loom, Tella ou Google Drive (fichier)"><div id="edVideoPrev">' + videoPreviewHtml(l.video) + '</div>' +
       '<div class="hint">Pour Drive, colle le lien du <b>fichier</b> (…/file/d/…/view). Il doit être partagé « tous ceux qui ont le lien » pour se lire chez les membres.</div></div>';
-    h += '<div class="fb-f"><label>Contenu de la leçon</label><div class="fb-rte-bar">' +
-      '<button type="button" data-cmd="bold" title="Gras"><b>B</b></button><button type="button" data-cmd="italic" title="Italique"><i>I</i></button><button type="button" data-cmd="underline" title="Souligné"><u>U</u></button><span class="sp"></span>' +
-      '<button type="button" data-cmd="formatBlock" data-arg="H2">H2</button><button type="button" data-cmd="formatBlock" data-arg="H3">H3</button><button type="button" data-cmd="formatBlock" data-arg="P">¶</button><button type="button" data-cmd="formatBlock" data-arg="BLOCKQUOTE">❝</button><span class="sp"></span>' +
-      '<button type="button" data-cmd="insertUnorderedList" title="Liste">• Liste</button><button type="button" data-cmd="insertOrderedList" title="Liste numérotée">1. Liste</button><span class="sp"></span>' +
-      '<button type="button" data-cmd="createLink" title="Lien">🔗</button><button type="button" data-cmd="unlink" title="Retirer le lien">⛓</button><button type="button" data-cmd="removeFormat" title="Nettoyer">🧹</button><span class="sp"></span>' +
-      '<button type="button" data-act="rte-html" title="Voir / éditer le HTML">&lt;/&gt;</button></div>' +
-      '<div class="fb-rte" id="edBody" contenteditable="true">' + C.sanitizeHtml(C.plainToHtml(l.body)) + '</div>' +
-      '<textarea class="fb-rte-html" id="edBodyHtml" style="display:none" spellcheck="false"></textarea>' +
+    h += '<div class="fb-f"><label>Contenu de la leçon</label>' + rteHtml('edBody', C.sanitizeHtml(C.plainToHtml(l.body)), 220) +
       '<div class="hint">Colle du texte, mets en forme avec la barre. Le HTML est stocké tel quel (compatible avec les leçons migrées d\'Academy).</div></div>';
     h += '<div class="fb-f"><label>Ressources téléchargeables</label><div id="edRes">' + resourcesHtml(l.resources) + '</div><div class="hint">Titre + lien, ou envoie un fichier (PDF, doc…) avec ⤒ — il est hébergé sur le Storage du projet.</div></div>';
     h += '</div><div>';
@@ -512,9 +625,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
     l.title = g('edTitle'); l.status = g('edStatus') || 'draft'; l.duration = g('edDuration');
     l.video = g('edVideo'); l.thumbnail = g('edThumb'); l.image = g('edImage'); l.audio = g('edAudio');
-    var ta = document.getElementById('edBodyHtml'), rte = document.getElementById('edBody');
-    l.body = C.sanitizeHtml(ta && ta.style.display !== 'none' ? ta.value : (rte ? rte.innerHTML : ''));
-    if (/^(<p><br><\/p>|<br>|\s)*$/.test(l.body)) l.body = '';
+    l.body = rteValue('edBody');
     var res = [];
     document.querySelectorAll('#edRes .fb-res').forEach(function (row) {
       var t = row.querySelector('[data-rf="title"]').value.trim(), u = row.querySelector('[data-rf="url"]').value.trim();
@@ -793,12 +904,14 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     }
     if (p.l) renderLessonEditor(p.l);
     else if (p.b) renderBinderEditor(p.b);
+    else if (p.v === 'apparence') renderAppearance();
     else renderBuilder();
   }
   window.addEventListener('hashchange', function () {
     clearTimeout(FORM_T);
     if (VIEW === 'lesson') readLessonForm();
     if (VIEW === 'binder') readBinderForm();
+    if (VIEW === 'apparence') { readThemeForm(); saveMeta({ theme: C.clone(F.theme) }); }
     if (DIRTY) saveNow();
     render();
   });
@@ -844,10 +957,11 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     var cmd = t.closest('[data-cmd]');
     if (cmd) {
       var c = cmd.getAttribute('data-cmd'), arg = cmd.getAttribute('data-arg') || null;
-      document.getElementById('edBody').focus();
+      var wrap = cmd.closest('.fb-rte-wrap'), ed = wrap && wrap.querySelector('.fb-rte');
+      if (ed) ed.focus();
       if (c === 'createLink') { var url = window.prompt('Adresse du lien (https://…)'); if (!url) return; document.execCommand('createLink', false, url); }
       else document.execCommand(c, false, arg);
-      scheduleFormRead(readLessonForm);
+      if (VIEW === 'apparence') scheduleThemeSave(); else scheduleFormRead(VIEW === 'binder' ? readBinderForm : readLessonForm);
       return;
     }
 
@@ -858,11 +972,12 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     if (act === 'dup-form') { duplicateFormation(btn.getAttribute('data-id')); return; }
     if (act === 'toggle-form-status') { toggleFormStatus(btn.getAttribute('data-id')); return; }
     if (act === 'rte-html') {
-      var rte = document.getElementById('edBody'), ta = document.getElementById('edBodyHtml');
+      var wrapH = btn.closest('.fb-rte-wrap'), rte = wrapH.querySelector('.fb-rte'), ta = wrapH.querySelector('.fb-rte-html');
       if (ta.style.display === 'none') { ta.value = rte.innerHTML; ta.style.display = ''; rte.style.display = 'none'; }
       else { rte.innerHTML = C.sanitizeHtml(ta.value); rte.style.display = ''; ta.style.display = 'none'; }
       return;
     }
+    if (act === 'w-add' || act === 'w-del' || act === 'w-up' || act === 'w-down') { widgetAct(act, parseInt(btn.getAttribute('data-idx') || '-1', 10)); return; }
     if (act === 'res-add') { readLessonForm(); var lc = C.locate(F.modules, parseHash().l); lc.node.resources.push({ title: '', url: '' }); document.getElementById('edRes').innerHTML = resourcesHtml(lc.node.resources); return; }
     if (act === 'res-del') { var row = btn.closest('.fb-res'); row.parentNode.removeChild(row); scheduleFormRead(readLessonForm); return; }
     if (act === 'sec-add') { readBinderForm(); var lb = C.locate(F.modules, parseHash().b); lb.node.sections.push({ id: C.uid(), title: '', files: [] }); document.getElementById('bdSecs').innerHTML = sectionsHtml(lb.node.sections); markDirty(); return; }
@@ -889,6 +1004,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       return;
     }
     if (!t.closest('#edForm')) return;
+    if (VIEW === 'apparence') { readThemeForm(); scheduleThemeSave(); return; }
     if (VIEW === 'lesson') { refreshPreviews(); scheduleFormRead(readLessonForm); }
     if (VIEW === 'binder') scheduleFormRead(readBinderForm);
   });
@@ -902,6 +1018,8 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
         if (u.kind === 'thumbnail') document.getElementById('edThumb').value = url;
         else if (u.kind === 'image') document.getElementById('edImage').value = url;
         else if (u.kind === 'audio') document.getElementById('edAudio').value = url;
+        else if (u.kind === 'heroImage') document.getElementById('thImage').value = url;
+        else if (u.kind === 'wImage') { var wi = document.getElementById('wImage_' + u.idx); if (wi) wi.value = url; var wc = wi && wi.closest('.fb-wdg'); var ws = wc && wc.querySelector('[data-wf="showImage"]'); if (ws) ws.checked = true; }
         else if (u.kind === 'resource') {
           var row = document.querySelectorAll('#edRes .fb-res')[u.idx];
           if (row) { row.querySelector('[data-rf="url"]').value = url; var ti = row.querySelector('[data-rf="title"]'); if (!ti.value) ti.value = file.name; }
@@ -913,11 +1031,13 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
         toast('✓ Fichier envoyé');
         if (VIEW === 'lesson') { refreshPreviews(); readLessonForm(); }
         if (VIEW === 'binder') readBinderForm();
+        if (VIEW === 'apparence') { saveTheme(); return; }
         markDirty();
       }).catch(function (e2) { toast('Envoi impossible : ' + e2.message, true); });
       return;
     }
     if (t.closest('#edForm')) {
+      if (VIEW === 'apparence') { readThemeForm(); scheduleThemeSave(); }
       if (VIEW === 'lesson') { refreshPreviews(); scheduleFormRead(readLessonForm); }
       if (VIEW === 'binder') scheduleFormRead(readBinderForm);
     }

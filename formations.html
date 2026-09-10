@@ -67,6 +67,25 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .fm-dot.cur{border:2px solid var(--blue);box-shadow:0 0 0 4px rgba(91,124,250,.18)}
 .fm-row.binder .fm-thumb{font-size:18px}
 
+/* Apparence : bannière, accueil, widgets latéraux (theme.* d'Academy) */
+.fm-hero{position:relative;border-radius:18px;overflow:hidden;min-height:220px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:44px 32px;margin-bottom:22px;border:1px solid var(--border);background:var(--bg2) center/cover no-repeat;box-shadow:var(--shadow)}
+.fm-hero::before{content:'';position:absolute;inset:0;background:rgba(3,5,14,var(--fm-ov,.45))}
+.fm-hero>*{position:relative}
+.fm-hero-t{font-family:var(--fh);font-size:34px;font-weight:700;letter-spacing:-.6px;color:#fff;margin:0;text-shadow:0 2px 14px rgba(0,0,0,.4)}
+.fm-hero-s{font-size:15px;color:rgba(255,255,255,.85);margin-top:8px;max-width:60ch;line-height:1.5}
+.fm-welcome{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:18px 22px;font-size:14.5px;line-height:1.65;margin-bottom:22px}
+.fm-welcome p{margin:0 0 10px}.fm-welcome p:last-child{margin-bottom:0}.fm-welcome a{color:#b6c3ff}
+.fm-pgrid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;align-items:start}
+@media (max-width:960px){.fm-pgrid{grid-template-columns:1fr}}
+.fm-w{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:16px 18px;margin-bottom:14px;box-shadow:0 1px 0 rgba(255,255,255,.025) inset}
+.fm-w-t{font-family:var(--fh);font-size:15px;font-weight:700;margin-bottom:8px}
+.fm-w-img{width:100%;border-radius:10px;display:block;margin-bottom:10px;border:1px solid var(--border-soft)}
+.fm-w-b{font-size:13.5px;line-height:1.6;color:var(--text);word-break:break-word}
+.fm-w-b p{margin:0 0 8px}.fm-w-b p:last-child{margin-bottom:0}.fm-w-b a{color:#b6c3ff}
+.fm-w-cta{display:inline-flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:800;text-decoration:none;border:1px solid transparent;transition:filter .15s,transform .15s}
+.fm-w-cta:hover{filter:brightness(1.07);transform:translateY(-1px)}
+.fm-w-cta.full{display:flex;width:100%}
+
 /* Lecteur de leçon */
 .fm-lgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start}
 @media (max-width:960px){.fm-lgrid{grid-template-columns:1fr}.fm-panel{position:static!important}}
@@ -307,12 +326,22 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     var mods = C.studentModules(f);
     var done = doneList(fid);
     var st = C.progressStats(f, done);
+    var theme = C.normalizeTheme(f.theme);
+    var widgets = theme.sidebar.filter(function (w) { return w.enabled; });
     var h = crumb([{ label: 'Formations', href: '#' }, { label: f.name || fid }]);
+    if (theme.hero.image || theme.hero.tagline) {
+      h += '<div class="fm-hero" style="--fm-ov:' + theme.hero.overlay + (theme.hero.image ? ';background-image:url(' + esc(theme.hero.image).replace(/[()]/g, '') + ')' : '') + '">' +
+        '<h1 class="fm-hero-t">' + esc(theme.hero.title || f.name || fid) + '</h1>' +
+        (theme.hero.tagline ? '<div class="fm-hero-s">' + esc(theme.hero.tagline) + '</div>' : '') + '</div>';
+    }
     h += '<div class="fm-head" style="--fm-c:' + esc(colorOf(f)) + '"><div class="fm-head-ico">' + esc(iconOf(f)) + '</div><div style="flex:1;min-width:0">' +
       '<h1 class="fm-head-t">' + esc(f.name || fid) + (f.status === 'draft' ? ' <span class="fm-pill draft">Brouillon</span>' : '') + '</h1>' +
       (f.description ? '<div class="fm-head-d">' + esc(f.description) + '</div>' : '') +
       '<div class="fm-head-p"><div class="fm-bar' + (st.pct === 100 && st.total ? ' done' : '') + '"><i style="width:' + st.pct + '%"></i></div><span>' + st.complete + ' / ' + st.total + ' leçons · ' + st.pct + ' %</span></div></div>' +
       (CAN_EDIT ? '<a class="au-btn" href="formations-admin.html#f=' + encodeURIComponent(fid) + '">✏️ Modifier</a>' : '') + '</div>';
+
+    h += '<div class="fm-pgrid' + (widgets.length ? '' : ' single') + '"' + (widgets.length ? '' : ' style="grid-template-columns:1fr"') + '><div>';
+    if (theme.welcome && theme.welcome.trim()) h += '<div class="fm-welcome">' + C.widgetBodyHtml(theme.welcome) + '</div>';
 
     if (!mods.length) {
       h += '<div class="au-empty"><span class="i">🚧</span>Aucun module publié pour le moment.</div>';
@@ -333,6 +362,19 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       });
       h += '</div></div>';
     });
+    h += '</div>';
+    if (widgets.length) {
+      h += '<div>';
+      widgets.forEach(function (w) {
+        h += '<div class="fm-w">' + (w.title ? '<div class="fm-w-t">' + esc(w.title) + '</div>' : '') +
+          (w.showImage && w.image ? '<img class="fm-w-img" src="' + esc(w.image) + '" alt="" loading="lazy">' : '') +
+          (w.body ? '<div class="fm-w-b">' + C.widgetBodyHtml(w.body) + '</div>' : '') +
+          (w.showCta && w.ctaText ? '<a class="fm-w-cta' + (w.ctaWidth === 'full' ? ' full' : '') + '" style="' + C.ctaStyle(w) + '" href="' + esc(w.ctaUrl || '#') + '"' + (w.ctaNewTab ? ' target="_blank" rel="noopener"' : '') + '>' + esc(w.ctaText) + '</a>' : '') +
+          '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
     $view.innerHTML = h;
   }
 

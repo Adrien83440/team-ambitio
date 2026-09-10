@@ -15,6 +15,9 @@
 //   • le statut est normalisé : Academy stocke « pub » (ancien format) ou
 //     « published », et considère tout ce qui n'est pas « draft » comme publié —
 //     on écrit « published » dans ces deux cas ;
+//   • l'apparence (`theme` : bannière, texte d'accueil, widgets latéraux —
+//     facture de fin de mois, identifiants, point hebdo…) est copiée telle
+//     quelle, ainsi que le `tag` (« Pôle Closeur ») en `hint` ;
 //   • les ids internes (modules, leçons) sont CONSERVÉS ;
 //   • les URLs de médias (Drive, Storage d'Academy) restent telles quelles :
 //     elles fonctionnent depuis n'importe quel domaine.
@@ -33,6 +36,9 @@
 //   node scripts/migrate-labs-from-academy.js --execute --overwrite   # remplace l'existant
 //   node scripts/migrate-labs-from-academy.js --only=closing-lab      # une seule
 //   node scripts/migrate-labs-from-academy.js --publish     # arrive publiée (défaut : brouillon)
+//   node scripts/migrate-labs-from-academy.js --execute --theme-only
+//       met à jour UNIQUEMENT l'apparence (bannière, accueil, widgets) des
+//       formations déjà migrées, sans toucher aux modules ni au statut
 //
 // Les clés de service account restent hors du repo.
 // ============================================================================
@@ -45,6 +51,7 @@ const admin = require('firebase-admin');
 const EXECUTE   = process.argv.indexOf('--execute') >= 0;
 const OVERWRITE = process.argv.indexOf('--overwrite') >= 0;
 const PUBLISH   = process.argv.indexOf('--publish') >= 0;
+const THEME_ONLY = process.argv.indexOf('--theme-only') >= 0;
 const ONLY      = (process.argv.find((a) => a.indexOf('--only=') === 0) || '').slice(7);
 
 function expand(p) { return p && p[0] === '~' ? path.join(os.homedir(), p.slice(1)) : p; }
@@ -80,6 +87,51 @@ function targetIdFor(name) {
   return slugify(name);
 }
 const ICONS = { 'setting-lab': '📞', 'closing-lab': '🎯', 'coach-lab': '🎓' };
+
+/* ─── Apparence (theme) : même forme que FormationsCore.normalizeTheme ─── */
+const CTA_COLORS = ['ink', 'gold', 'ember', 'green', 'blue', 'white'];
+const HEX_TO_NAME = {
+  '#dc5b34': 'ember', '#b8431f': 'ember', '#b0822a': 'gold', '#be9447': 'gold', '#e9c877': 'gold',
+  '#1f9d57': 'green', '#3fa463': 'green', '#2f7fd1': 'blue', '#2d7cf0': 'blue',
+  '#3a2540': 'ink', '#2a1b2e': 'ink', '#f4f1ec': 'white', '#ffffff': 'white',
+};
+function ctaColorName(v) {
+  if (!v) return 'ink';
+  if (CTA_COLORS.indexOf(v) >= 0) return v;
+  return HEX_TO_NAME[String(v).toLowerCase()] || 'ink';
+}
+function cleanTheme(t) {
+  const th = t || {};
+  const h = th.hero || {};
+  return {
+    hero: {
+      title: h.title || '',
+      tagline: typeof h.tagline === 'string' ? h.tagline : (h.subtitle || ''),
+      image: h.image || '',
+      overlay: typeof h.overlay === 'number' ? h.overlay : 0.45,
+      ctaText: h.ctaText || '',
+    },
+    welcome: typeof th.welcome === 'string' ? th.welcome : '',
+    sidebar: (th.sidebar || []).map((b) => {
+      const ctaText = b.ctaText || b.btnLabel || '';
+      return {
+        id: b.id || ('w' + Math.random().toString(36).slice(2, 10)),
+        title: b.title || '',
+        showImage: typeof b.showImage === 'boolean' ? b.showImage : !!b.image,
+        image: b.image || '',
+        body: typeof b.body === 'string' ? b.body : (b.text || ''),
+        showCta: typeof b.showCta === 'boolean' ? b.showCta : !!ctaText,
+        ctaText,
+        ctaUrl: b.ctaUrl || b.btnUrl || '',
+        ctaNewTab: typeof b.ctaNewTab === 'boolean' ? b.ctaNewTab : true,
+        ctaColor: ctaColorName(b.ctaColor || b.btnColor),
+        ctaTextColor: typeof b.ctaTextColor === 'string' ? b.ctaTextColor : '',
+        ctaWidth: b.ctaWidth === 'full' ? 'full' : 'auto',
+        enabled: typeof b.enabled === 'boolean' ? b.enabled : true,
+      };
+    }),
+  };
+}
 
 /* ─── Transformation d'un cours Academy en formation Team ─────────────── */
 const stats = { modules: 0, subs: 0, lessons: 0, binders: 0, apps: 0, drip: 0, tools: 0, drafts: 0 };
@@ -173,7 +225,8 @@ function describe(modules) {
     const modules = cleanModules(c.modules);
     const sizeBytes = Buffer.byteLength(JSON.stringify(modules), 'utf8');
     const existing = await dst.collection('formations').doc(id).get();
-    plan.push({ srcId: d.id, id, name: c.name, status: c.status, modules, sizeBytes, existing: existing.exists, existingData: existing.exists ? existing.data() : null, stats: Object.assign({}, stats) });
+    const theme = cleanTheme(c.theme);
+    plan.push({ srcId: d.id, id, name: c.name, status: c.status, modules, theme, hint: c.tag || '', sizeBytes, existing: existing.exists, existingData: existing.exists ? existing.data() : null, stats: Object.assign({}, stats) });
   }
 
   if (!plan.length) { console.log('Rien à faire (filtre --only=' + ONLY + ').'); process.exit(0); }
@@ -187,6 +240,9 @@ function describe(modules) {
       console.log('   ignoré : ' + p.stats.apps + ' mini-apps, ' + p.stats.drip + ' drips, ' + p.stats.tools + ' leçons-outils (gardées comme leçons simples)');
     }
     if (p.sizeBytes > 900 * 1024) console.log('   ⚠ proche de la limite de 1 Mo par document Firestore');
+    const wOn = p.theme.sidebar.filter((w) => w.enabled).length;
+    console.log('   apparence : bannière « ' + (p.theme.hero.title || '—') + ' »' + (p.theme.hero.image ? ' avec image' : '') + ' · ' + wOn + ' widget(s) latéraux' + (p.theme.welcome ? ' · texte d\'accueil' : '') + (p.hint ? ' · ' + p.hint : ''));
+    p.theme.sidebar.forEach((w) => console.log('      ▪ ' + (w.enabled ? '' : '(désactivé) ') + w.title + (w.showCta && w.ctaText ? '  → [' + w.ctaText + '] ' + w.ctaUrl : '')));
     console.log(describe(p.modules));
   });
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -199,6 +255,13 @@ function describe(modules) {
   let written = 0, skipped = 0;
   for (const p of plan) {
     const ref = dst.collection('formations').doc(p.id);
+    if (THEME_ONLY) {
+      if (!p.existing) { console.log('⏭  ' + p.id + ' n\'existe pas encore côté Team — lance d\'abord la migration complète.'); skipped += 1; continue; }
+      await ref.update({ theme: p.theme, hint: p.hint, updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: 'migrate-labs-from-academy --theme-only' });
+      written += 1;
+      console.log('✅ formations/' + p.id + ' : apparence mise à jour (' + p.theme.sidebar.length + ' widgets).');
+      continue;
+    }
     if (p.existing && !OVERWRITE) { console.log('⏭  ' + p.id + ' existe déjà — ignoré (utilise --overwrite).'); skipped += 1; continue; }
     if (p.existing) {
       const ts = Date.now();
@@ -214,6 +277,8 @@ function describe(modules) {
       order: plan.indexOf(p) + 1,
       icon: ICONS[p.id] || '🎓',
       description: '',
+      hint: p.hint,
+      theme: p.theme,
       modules: p.modules,
       createdAt: p.existing && p.existingData.createdAt ? p.existingData.createdAt : now,
       updatedAt: now,

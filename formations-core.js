@@ -540,6 +540,88 @@
     return ids;
   }
 
+  /* ─── Apparence : bannière, texte d'accueil, widgets latéraux ──────── */
+  // Même modèle que theme.* d'AE Academy (hero / welcome / sidebar), pour
+  // que la migration copie le champ tel quel. Les widgets sont les cartes
+  // « Facture fin de mois », « Identifiants Google », « Point hebdo »…
+  var CTA_COLORS = ['ink', 'gold', 'ember', 'green', 'blue', 'white'];
+  var CTA_STYLES = {
+    ink:   { bg: '#1b2a44', fg: '#ffffff' },
+    gold:  { bg: '#c9a24b', fg: '#1a1200' },
+    ember: { bg: '#dc5b34', fg: '#ffffff' },
+    green: { bg: '#2e9e6b', fg: '#ffffff' },
+    blue:  { bg: '#2d7cf0', fg: '#ffffff' },
+    white: { bg: '#f4f1ec', fg: '#152238' }
+  };
+  var HEX_TO_NAME = {
+    '#dc5b34': 'ember', '#b8431f': 'ember', '#b0822a': 'gold', '#be9447': 'gold', '#e9c877': 'gold',
+    '#1f9d57': 'green', '#3fa463': 'green', '#2f7fd1': 'blue', '#2d7cf0': 'blue',
+    '#3a2540': 'ink', '#2a1b2e': 'ink', '#f4f1ec': 'white', '#ffffff': 'white'
+  };
+  function ctaColorName(v, fallback) {
+    if (!v) return fallback;
+    if (CTA_COLORS.indexOf(v) >= 0) return v;
+    var n = HEX_TO_NAME[String(v).toLowerCase()];
+    return n || fallback;
+  }
+  function ctaStyle(widget) {
+    var c = CTA_STYLES[widget.ctaColor] || CTA_STYLES.ink;
+    var fg = /^#[0-9a-fA-F]{6}$/.test(widget.ctaTextColor || '') ? widget.ctaTextColor : c.fg;
+    return 'background:' + c.bg + ';color:' + fg + ';border-color:' + c.bg;
+  }
+
+  function normalizeWidget(b) {
+    var x = b || {};
+    var body = typeof x.body === 'string' ? x.body : (x.text || '');
+    var ctaText = x.ctaText || x.btnLabel || '';
+    return {
+      id: x.id || uid(),
+      title: x.title || '',
+      showImage: typeof x.showImage === 'boolean' ? x.showImage : !!x.image,
+      image: x.image || '',
+      body: body,
+      showCta: typeof x.showCta === 'boolean' ? x.showCta : !!ctaText,
+      ctaText: ctaText,
+      ctaUrl: x.ctaUrl || x.btnUrl || '',
+      ctaNewTab: typeof x.ctaNewTab === 'boolean' ? x.ctaNewTab : true,
+      ctaColor: ctaColorName(x.ctaColor || x.btnColor, 'ink'),
+      ctaTextColor: typeof x.ctaTextColor === 'string' ? x.ctaTextColor : '',
+      ctaWidth: x.ctaWidth === 'full' ? 'full' : 'auto',
+      enabled: typeof x.enabled === 'boolean' ? x.enabled : true
+    };
+  }
+
+  function normalizeTheme(t) {
+    var th = t || {};
+    var h = th.hero || {};
+    return {
+      hero: {
+        title: h.title || '',
+        tagline: typeof h.tagline === 'string' ? h.tagline : (h.subtitle || ''),
+        image: h.image || '',
+        overlay: typeof h.overlay === 'number' ? Math.max(0, Math.min(0.9, h.overlay)) : 0.45,
+        ctaText: h.ctaText || ''
+      },
+      welcome: typeof th.welcome === 'string' ? th.welcome : '',
+      sidebar: (th.sidebar || []).map(normalizeWidget)
+    };
+  }
+
+  function emptyWidget(title) {
+    return normalizeWidget({ title: title || 'Nouveau widget', body: '', showCta: false, ctaColor: 'ink' });
+  }
+
+  // Corps d'un widget ou texte d'accueil : texte brut (retours à la ligne)
+  // ou HTML collé depuis un autre outil. On retire les styles inline et les
+  // balises <font> : un « color: rgb(0,0,0) » hérité d'Academy rendrait le
+  // texte invisible sur le fond sombre de Team.
+  function widgetBodyHtml(body) {
+    var html = plainToHtml(body);
+    html = html.replace(/<\s*\/?\s*font[^>]*>/gi, '')
+               .replace(/\s(style|color|face|class)\s*=\s*("[^"]*"|'[^']*')/gi, '');
+    return sanitizeHtml(html);
+  }
+
   /* ─── Accès ─────────────────────────────────────────────────────────── */
   // users/{uid}.formationsAccess = { 'setting-lab': true, … }
   function accessibleIds(userData) {
@@ -567,6 +649,8 @@
     plainToHtml: plainToHtml, sanitizeHtml: sanitizeHtml, looksLikeHtml: looksLikeHtml,
     cleanFileTitle: cleanFileTitle, driveNodeToModules: driveNodeToModules, driveNodeToChildren: driveNodeToChildren,
     driveNodeToLessons: driveNodeToLessons, driveTreeStats: driveTreeStats, collectDriveIds: collectDriveIds,
-    accessibleIds: accessibleIds, canEdit: canEdit, fmtDuration: fmtDuration
+    accessibleIds: accessibleIds, canEdit: canEdit, fmtDuration: fmtDuration,
+    CTA_COLORS: CTA_COLORS, ctaStyle: ctaStyle, normalizeTheme: normalizeTheme, normalizeWidget: normalizeWidget,
+    emptyWidget: emptyWidget, widgetBodyHtml: widgetBodyHtml
   };
 });
