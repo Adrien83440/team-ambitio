@@ -12,6 +12,9 @@
 //     Closing LAB → closing-lab, Coachs LAB → coach-lab (sinon slug du nom) ;
 //   • on retire ce qui n'a pas d'équivalent ici : bâtiment 3D, victoires,
 //     copilote, route, thème, jalons, mini-apps (`lesson.app`), drip ;
+//   • le statut est normalisé : Academy stocke « pub » (ancien format) ou
+//     « published », et considère tout ce qui n'est pas « draft » comme publié —
+//     on écrit « published » dans ces deux cas ;
 //   • les ids internes (modules, leçons) sont CONSERVÉS ;
 //   • les URLs de médias (Drive, Storage d'Academy) restent telles quelles :
 //     elles fonctionnent depuis n'importe quel domaine.
@@ -86,7 +89,7 @@ function cleanLesson(l) {
     kind: 'lesson',
     id: l.id,
     title: l.title || '',
-    status: l.status === 'published' ? 'published' : 'draft',
+    status: l.status === 'draft' ? 'draft' : 'published',
     video: l.video || '',
     image: l.image || '',
     audio: l.audio || '',
@@ -109,7 +112,7 @@ function cleanBinder(b) {
     kind: 'binder',
     id: b.id,
     title: b.title || '',
-    status: b.status === 'published' ? 'published' : 'draft',
+    status: b.status === 'draft' ? 'draft' : 'published',
     intro: b.intro || '',
     sections: (b.sections || []).map((s) => ({
       id: s.id, title: s.title || '',
@@ -132,7 +135,7 @@ function cleanChild(c) {
 function cleanModules(modules) {
   return (modules || []).map((m) => {
     stats.modules += 1;
-    const out = { id: m.id, title: m.title || '', status: m.status === 'published' ? 'published' : 'draft', children: (m.children || []).map(cleanChild).filter(Boolean) };
+    const out = { id: m.id, title: m.title || '', status: m.status === 'draft' ? 'draft' : 'published', children: (m.children || []).map(cleanChild).filter(Boolean) };
     if (m.description) out.description = m.description;
     if (m.thumbnail) out.thumbnail = m.thumbnail;
     return out;
