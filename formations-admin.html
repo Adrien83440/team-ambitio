@@ -688,8 +688,8 @@ table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
     h += fieldHtml('edTitle', 'Titre', l.title, 'Titre de la leçon');
     h += '<div class="fb-row2"><div class="fb-f"><label for="edStatus">Statut</label><select id="edStatus"><option value="draft"' + (l.status === 'draft' ? ' selected' : '') + '>Brouillon (invisible)</option><option value="published"' + (l.status !== 'draft' ? ' selected' : '') + '>Publié</option></select></div>' +
       fieldHtml('edDuration', 'Durée affichée', l.duration, 'Ex. 12 min') + '</div>';
-    h += '<div class="fb-f"><label for="edVideo">Vidéo</label><input type="url" id="edVideo" value="' + esc(l.video || '') + '" placeholder="Lien YouTube, Vimeo, Loom, Tella ou Google Drive (fichier)"><div id="edVideoPrev">' + videoPreviewHtml(l.video) + '</div>' +
-      '<div class="hint">Pour Drive, colle le lien du <b>fichier</b> (…/file/d/…/view). Il doit être partagé « tous ceux qui ont le lien » pour se lire chez les membres.</div></div>';
+    h += '<div class="fb-f"><label for="edVideo">Vidéo</label><input type="url" id="edVideo" value="' + esc(l.video || '') + '" placeholder="Lien YouTube, Vimeo, Loom, Tella, Fathom ou Google Drive (fichier)"><div id="edVideoPrev">' + videoPreviewHtml(l.video) + '</div>' +
+      '<div class="hint">Pour Drive, colle le lien du <b>fichier</b> (…/file/d/…/view), partagé « tous ceux qui ont le lien ». Pour Fathom, colle le lien de <b>partage</b> (fathom.video/share/…), pas le lien interne /calls/… qui exige une connexion Fathom.</div></div>';
     h += '<div class="fb-f"><label>Contenu de la leçon</label>' + rteHtml('edBody', C.sanitizeHtml(C.plainToHtml(l.body)), 220) +
       '<div class="hint">Colle du texte, mets en forme avec la barre. Le HTML est stocké tel quel (compatible avec les leçons migrées d\'Academy).</div></div>';
     h += '<div class="fb-f"><label>Ressources téléchargeables</label><div id="edRes">' + resourcesHtml(l.resources) + '</div><div class="hint">Titre + lien, ou envoie un fichier (PDF, doc…) avec ⤒ — il est hébergé sur le Storage du projet.</div></div>';

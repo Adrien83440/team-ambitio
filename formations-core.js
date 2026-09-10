@@ -380,6 +380,10 @@
     if (m) return 'https://www.loom.com/embed/' + m[1];
     m = u.match(/tella\.tv\/video\/([A-Za-z0-9_-]+)/);
     if (m) return 'https://www.tella.tv/video/' + m[1] + '/embed';
+    // Fathom : lien de partage (/share/<token>) ou d'intégration (/embed/<token>).
+    // Les liens /calls/<id> sont privés (connexion Fathom requise) : non intégrables.
+    m = u.match(/fathom\.video\/(?:share|embed)\/([A-Za-z0-9_-]+)/);
+    if (m) return 'https://fathom.video/embed/' + m[1];
     m = u.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/);
     if (m) return 'https://drive.google.com/file/d/' + m[1] + '/preview';
     m = u.match(/[?&]id=([A-Za-z0-9_-]+)/);
