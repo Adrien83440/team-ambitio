@@ -1148,7 +1148,7 @@
     DATA.actions = [];
     return Promise.resolve().then(function () {
       var members = TEAM.filter(function (m) {
-        return m && m.slug && m.slug !== 'guillaume' && m.active !== false
+        return m && m.slug && m.slug !== 'guillaume' && m.slug !== 'guillaumes' && m.active !== false
           && (m.role === 'setter' || m.role === 'closer' || m.role === 'closer_setter' || m.role === 'setter_ecrit');
       });
       if (!members.length) members = [{ slug: 'elodie' }];

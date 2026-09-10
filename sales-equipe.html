@@ -1214,7 +1214,7 @@ function _isAdminView() {
    compris. Meme liste qu'alteore-flow.js et dispo-core.js. Leur fiche et
    leurs series historiques restent en place — rien n'est supprime, la
    donnee devient seulement inatteignable par l'interface. */
-var DEPARTED_EQUIPE = { guillaume: 1 };
+var DEPARTED_EQUIPE = { guillaume: 1, guillaumes: 1 }; // slug réel du roster : guillaumes
 function _visibleMembers() {
   _markArchivedMembers();
   var vivants = MEMBERS.filter(function(m) { return !DEPARTED_EQUIPE[m.uid]; });
@@ -1321,12 +1321,13 @@ let currentMemberUid = (function() {
     var tm = window.TEAM_MEMBERS || {};
     for (var i = 0; i < MEMBERS.length; i++) {
       var m = MEMBERS[i];
+      if (DEPARTED_EQUIPE[m.uid]) continue;   // parti : jamais sélectionné par défaut
       var meta = tm[m.uid];
       var archived = !!(meta && meta.active === false);
       if (isAdmin || !archived) return m.uid;
     }
   } catch(e) {}
-  return MEMBERS[0].uid;
+  return 'elodie';
 })();
 let currentEspaceTab = {};  // uid → tab name
 let currentCbMember = (function() {
@@ -1336,12 +1337,13 @@ let currentCbMember = (function() {
     var tm = window.TEAM_MEMBERS || {};
     for (var i = 0; i < MEMBERS.length; i++) {
       var m = MEMBERS[i];
+      if (DEPARTED_EQUIPE[m.uid]) continue;   // parti : jamais sélectionné par défaut
       var meta = tm[m.uid];
       var archived = !!(meta && meta.active === false);
       if (isAdmin || !archived) return m.uid;
     }
   } catch(e) {}
-  return MEMBERS[0].uid;
+  return 'elodie';
 })();
 let currentMeeting = null;
 

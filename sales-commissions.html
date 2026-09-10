@@ -614,6 +614,9 @@ body {
   margin-bottom: 14px; margin-top: 2px;
 }
 
+/* Setters : pas de programme de bonus → colonne Points masquée sur la fiche. */
+#view-fiche.no-bonus .col-pts { display: none; }
+
 /* ── Membres archivés (visibles admin seulement, marqués d'une pill) ── */
 .archived-pill{display:inline-block;margin-left:8px;background:rgba(0,0,0,.72);color:#fed7aa;font-size:9px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid rgba(251,146,60,.4);vertical-align:middle;text-transform:uppercase;letter-spacing:.3px}
 .member-archived-admin{opacity:.55;filter:grayscale(.65);transition:opacity .2s,filter .2s}
@@ -695,7 +698,7 @@ const BONUS_MILESTONES = [
 ══════════════════════════════════════════════════════════ */
 /* Membres partis de la société — masqués PARTOUT (dashboard, fiches,
    comparatifs) mais données historiques conservées. Validé Adrien 14/07/2026. */
-const DEPARTED_COMM = { guillaume: true };
+const DEPARTED_COMM = { guillaume: true, guillaumes: true }; // slug réel du roster : guillaumes
 
 const MEMBERS_COMM = [
   {
@@ -728,6 +731,7 @@ const MEMBERS_COMM = [
   {
     uid: 'elodie', name: 'Elodie', surname: '',
     role: 'Closing + Setting', color: '#60a5fa',
+    bonus: true, // programme de bonus vente (points / paliers) — closers uniquement
     careerPtsBase: 13.5, // Points bonus historiques (avant données trackées)
     data: {
       'Janvier 2026': [
@@ -861,6 +865,16 @@ function saveCommStatut(month, statut) {
       syncBridge_saveCommStatut(month, statut);
     }
   } catch(e) {}
+}
+
+/* ═══ PROGRAMME DE BONUS VENTE — CLOSERS UNIQUEMENT (10/09/2026) ═══
+   Les points, paliers et cadeaux (iPad, voyage, Suite Apple) sont un
+   objectif de CLOSING (contrat d'Élodie). Un setter (setter / setter_ecrit)
+   n'a ni points ni paliers : rien de tout cela ne s'affiche sur sa carte,
+   sa fiche ou dans le comparatif. `bonus` est posé à l'entrée du roster
+   (closer / closer_setter → true) ; les entrées historiques le portent. */
+function _hasBonus(m) {
+  return !!(m && m.bonus === true);
 }
 
 function calcPoints(deals) {
@@ -1028,7 +1042,7 @@ function renderDashboard() {
       <div class="comp-bar-track">
         <div class="comp-bar-fill" style="width:${pct}%;background:${m.color}"></div>
       </div>
-      <div class="comp-bar-sub">${nc} closes · ${pts.toFixed(1)} pts ce mois${_memberFixe(m.uid) > 0 ? ' · fixe ' + fmt(_memberFixe(m.uid)) + ' → total ' + fmtDec(comm + _memberFixe(m.uid)) : ''}</div>
+      <div class="comp-bar-sub">${nc} closes${_hasBonus(m) ? ' · ' + pts.toFixed(1) + ' pts' : ''} ce mois${_memberFixe(m.uid) > 0 ? ' · fixe ' + fmt(_memberFixe(m.uid)) + ' → total ' + fmtDec(comm + _memberFixe(m.uid)) : ''}</div>
     </div>`;
   }).join('');
   document.getElementById('dash-comp').innerHTML = compHtml;
@@ -1117,7 +1131,7 @@ function renderListe() {
           <div class="mc-kpi-val" style="color:var(--gold)">${fmtDec(fixe + comm)}</div>
         </div>` : ''}
       </div>
-      <div class="mc-points-row">
+      ${!_hasBonus(m) ? '' : `<div class="mc-points-row">
         <div class="mc-pts-label">Points cumulés (total carrière)</div>
         <div class="mc-pts-val">
           <span>${totalPts.toFixed(1)} pts</span>
@@ -1136,7 +1150,7 @@ function renderListe() {
       <div class="mc-next-bonus">
         <span class="bonus-icon">🏆</span>
         <div class="bonus-name">Tous les paliers débloqués !</div>
-      </div>`}
+      </div>`}`}
     </div>`;
   }).join('');
 }
@@ -1195,8 +1209,14 @@ function renderFiche() {
   document.getElementById('kpi-pts-month').textContent = pts.toFixed(1) + ' pts';
   document.getElementById('kpi-pts-total').textContent = totalPts.toFixed(1) + ' pts';
 
-  // Bonus section
-  renderBonusSection(totalPts, pts, next, prev);
+  // Programme de bonus : closers uniquement
+  const hasBonus = _hasBonus(m);
+  ['kpi-pts-month-card', 'kpi-pts-total-card', 'bonus-section'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = hasBonus ? '' : 'none';
+  });
+  document.getElementById('view-fiche').classList.toggle('no-bonus', !hasBonus);
+  if (hasBonus) renderBonusSection(totalPts, pts, next, prev);
 
   // Deals table
   renderDealsTable(deals);
@@ -1249,7 +1269,7 @@ function renderDealsTable(deals) {
         <td>
           <div class="deal-comm">${fmtDec(d.comm)}${d.bonus ? ` <span style="font-size:11px;color:var(--gold)">+${d.bonus}€</span>` : ''}</div>
         </td>
-        <td><span class="deal-pts">${d.type === 'Closing' ? '⭐ ×' + (POINTS[d.offre] || 0) : '—'}</span></td>
+        <td class="col-pts"><span class="deal-pts">${d.type === 'Closing' ? '⭐ ×' + (POINTS[d.offre] || 0) : '—'}</span></td>
         <td onclick="toggleDealOk(${i})" style="cursor:pointer" title="Clic pour basculer le statut">
           <div class="deal-status">
             <div class="status-dot ${d.ok ? 'status-ok' : 'status-pending'}"></div>
@@ -1434,6 +1454,7 @@ function _syncRosterMembers() {
       name: m.shortName || m.displayName || m.slug,
       surname: '',
       role: m.role === 'closer' ? 'Closing' : m.role === 'setter' ? 'Setting' : m.role === 'setter_ecrit' ? 'Setting écrit' : 'Closing + Setting',
+      bonus: (m.role === 'closer' || m.role === 'closer_setter'),
       color: m.color || '#6b7280',
       careerPtsBase: 0,
       data: {}
@@ -1724,18 +1745,18 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="kpi-label">Deals validés</div>
         <div class="kpi-val" id="kpi-deals">0</div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" id="kpi-pts-month-card">
         <div class="kpi-label">Points ce mois</div>
         <div class="kpi-val" id="kpi-pts-month" style="color:var(--gold)">0 pts</div>
       </div>
-      <div class="kpi-card">
+      <div class="kpi-card" id="kpi-pts-total-card">
         <div class="kpi-label">Points total carrière</div>
         <div class="kpi-val" id="kpi-pts-total" style="color:var(--gold)">0 pts</div>
       </div>
     </div>
 
     <!-- Bonus section -->
-    <div class="bonus-section">
+    <div class="bonus-section" id="bonus-section">
       <div class="bonus-section-title">🎁 Programme de Bonus Vente</div>
       <div class="bonus-milestones" id="bonus-milestones"></div>
       <div style="height:16px"></div>
@@ -1829,7 +1850,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <th>Type</th>
             <th>Date</th>
             <th>Commission</th>
-            <th>Points</th>
+            <th class="col-pts">Points</th>
             <th>Statut</th>
             <th>Notes</th>
             <th></th>

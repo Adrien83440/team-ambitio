@@ -543,16 +543,15 @@ document.getElementById('eodDate').value = fmtDate(new Date());
 // ⚠ 2026-04-13 : UID Guillaume corrigé (manquait un O) + flag archived.
 // 2026-09-10 : la liste n'est plus figée — elle se complète depuis le roster
 // _meta/team_members (nav.js) : tout membre de l'ÉQUIPE SALES actif portant
-// un firebaseUid (setter, closer, closer_setter, setter_ecrit). Les deux
-// entrées ci-dessous restent le socle : Élodie (repli si le roster tarde)
-// et Guillaume (parti — masqué, historique EOD consultable par un admin).
+// un firebaseUid (setter, closer, closer_setter, setter_ecrit). Élodie reste
+// le socle (repli si le roster tarde). Guillaume (parti 07/2026) n'apparaît
+// plus pour personne ; ses EOD restent en base sous eod/{son uid}.
 var MEMBER_MAP = {
-  guillaume: { uid: 'uEE8DLaCNRZOOiztmlBuHmWPSSx52', name: 'Guillaume', color: '#ef4444', role: 'closer_setter', order: 998, departed: true },
   elodie:    { uid: 'IrL8bfOrUfMH2fEPFzuojPT8bQh1', name: 'Élodie',    color: '#60a5fa', role: 'closer_setter', order: 999 }
 };
 var EOD_SALES_ROLES = { setter: 1, closer: 1, closer_setter: 1, setter_ecrit: 1 };
 var EOD_SETTER_ONLY = { setter: 1, setter_ecrit: 1 };   // pas de panneau Closing
-var EOD_DEPARTED = { guillaume: 1 };                    // même liste qu'alteore-flow.js
+var EOD_DEPARTED = { guillaume: 1, guillaumes: 1 };     // même liste que nav.js / alteore-flow.js
 var VIEWING_ROLE = '';
 
 function _eodRoleLabel(role) {
@@ -570,6 +569,7 @@ function _eodSyncRoster() {
   for (var i = 0; i < list.length; i++) {
     var m = list[i];
     if (!m || !m.slug || !EOD_SALES_ROLES[m.role]) continue;
+    if (EOD_DEPARTED[m.slug] || m.departed === true) continue;
     if (!m.firebaseUid) continue;
     var cur = MEMBER_MAP[m.slug] || {};
     MEMBER_MAP[m.slug] = {
@@ -595,12 +595,12 @@ function _eodRenderGate() {
   var h = '';
   keys.forEach(function(key) {
     var info = MEMBER_MAP[key];
-    if (info.departed && !isAdmin) return;
+    if (info.departed) return;
     var initial = (info.name || key)[0].toUpperCase();
     h += '<div class="eod-gate-btn' + (key === (localStorage.getItem('eod_last_member') || '') ? ' sel' : '') + '" data-pick="' + key + '">';
     h += '<div class="eod-gate-av" style="background:linear-gradient(135deg,' + info.color + '55,' + info.color + ')">' + initial + '</div>';
     h += '<div class="eod-gate-name">' + info.name.replace(/</g, '&lt;') + '</div>';
-    h += '<div class="eod-gate-role">' + (info.departed ? '🚪 Parti · ' : '') + _eodRoleLabel(info.role) + '</div>';
+    h += '<div class="eod-gate-role">' + _eodRoleLabel(info.role) + '</div>';
     h += '</div>';
   });
   if (!h) h = '<div style="font-size:13px;color:var(--muted)">Aucun membre sales relié à un compte — vérifie les rôles équipe dans Admin → Utilisateurs.</div>';

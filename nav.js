@@ -971,6 +971,29 @@
   window._teamMembersLoadPromise = null;
   window._teamMembersLastLoadAt = 0;
 
+  /* ═══ MEMBRES PARTIS — exclusion en dur, source unique (10/09/2026) ═══
+     Guillaume Bilcke a quitté la société (07/2026). Son entrée du roster
+     porte le slug « guillaumes » (pas « guillaume ») : toutes les listes
+     DEPARTED locales ne le reconnaissaient pas, et chaque page qui montre
+     les archivés à un admin (« (archivé) », pill 📦) continuait de
+     l'afficher. Ici : un membre parti est retiré de TEAM_MEMBERS_LIST et
+     TEAM_MEMBERS_ACTIVE (donc de TOUTES les énumérations : sélecteurs,
+     pills, filtres, rapports) mais reste dans la map TEAM_MEMBERS avec
+     departed:true / active:false pour que l'historique (assignedTo,
+     timeline, commissions passées) garde son nom. Rien n'est supprimé en
+     base. */
+  var TEAM_DEPARTED = { guillaume: 1, guillaumes: 1 };
+  var TEAM_DEPARTED_UIDS = { uEE8DLaCNRZOiztmlBuHmWPSSx52: 1, uEE8DLaCNRZOOiztmlBuHmWPSSx52: 1 };
+  window.TEAM_DEPARTED = TEAM_DEPARTED;
+  window.isDepartedMember = function (m) {
+    if (!m) return false;
+    if (typeof m === 'string') return !!TEAM_DEPARTED[m];
+    if (m.departed === true) return true;
+    if (m.slug && TEAM_DEPARTED[m.slug]) return true;
+    if (m.firebaseUid && TEAM_DEPARTED_UIDS[m.firebaseUid]) return true;
+    return false;
+  };
+
   /**
    * Charge (ou recharge) la liste des membres équipe depuis Firestore.
    * Cache 5 min sauf si force=true.
@@ -1063,11 +1086,17 @@
         }
 
         list.sort(function (a, b) { return (a.order || 999) - (b.order || 999); });
+        /* Partis : hors LIST / ACTIVE, conservés dans la map (historique). */
+        var roster = list.filter(function (m) {
+          if (!window.isDepartedMember(m)) return true;
+          m.departed = true; m.active = false; m.inLeadsModule = false; m.eligibleForLeads = false;
+          return false;
+        });
         window.TEAM_MEMBERS = map;
-        window.TEAM_MEMBERS_LIST = list;
-        window.TEAM_MEMBERS_ACTIVE = list.filter(function (m) { return m.active !== false; });
-        fireEvent(list.length, true);
-        return list;
+        window.TEAM_MEMBERS_LIST = roster;
+        window.TEAM_MEMBERS_ACTIVE = roster.filter(function (m) { return m.active !== false; });
+        fireEvent(roster.length, true);
+        return roster;
       } catch (e) {
         console.error('[loadTeamMembers] erreur', e);
         // Init structures vides pour que les helpers downstream fonctionnent

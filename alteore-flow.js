@@ -143,7 +143,7 @@
      closer_setter, membres actifs. Les admins, coachs et la CSM n'y
      apparaissent jamais. DEPARTED : membres partis de la société, exclus en
      dur même si le roster _meta/team_members n'est pas encore à jour. */
-  var DEPARTED = { guillaume: 1 }; // Guillaume Bilcke — parti (07/2026)
+  var DEPARTED = { guillaume: 1, guillaumes: 1 }; // Guillaume Bilcke — parti (07/2026) ; slug réel du roster : guillaumes
   /* setter_ecrit (10/09/2026) : setter « écrit » — travaille les prospects
      par messages (DM Instagram / Meta), jamais au téléphone. Membre de
      l'équipe sales à part entière (Set NB, EOD, Commissions, Équipe), mais
