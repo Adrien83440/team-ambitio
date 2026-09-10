@@ -347,7 +347,7 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#08080f;col
 <script type="module">
 import{initializeApp,deleteApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import{getAuth,onAuthStateChanged,signOut,createUserWithEmailAndPassword,sendPasswordResetEmail}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import{getFirestore,initializeFirestore,doc,getDoc,getDocs,setDoc,updateDoc,deleteDoc,collection,deleteField,query,where,orderBy,writeBatch,serverTimestamp,addDoc}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import{getFirestore, initializeFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, deleteField, query, where, orderBy, writeBatch, serverTimestamp, addDoc, arrayUnion}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FBCFG={
   apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",
@@ -762,6 +762,7 @@ async function loadTeamColors(){
     }
     const data = snap.data() || {};
     const raw = data.members;
+    ROLE_PALETTE = Object.assign({}, ROLE_PALETTE_DEFAULT, (data.rolePalette && typeof data.rolePalette === 'object') ? data.rolePalette : {});
 
     // Normaliser en liste + mémoriser le format original
     const list = [];
@@ -774,10 +775,12 @@ async function loadTeamColors(){
         list.push({
           _rawIndex: i,
           slug: slug,
-          name: entry.name || entry.displayName || slug,
+          name: entry.shortName || entry.name || entry.displayName || entry.fullName || slug,
           role: entry.role || '',
           color: entry.color || '',
           active: entry.active !== false,
+          firebaseUid: entry.firebaseUid || '',
+          email: entry.email || '',
           order: entry.order || 999
         });
       });
@@ -791,10 +794,12 @@ async function loadTeamColors(){
         list.push({
           _rawKey: slug,
           slug: realSlug,
-          name: entry.name || entry.displayName || realSlug,
+          name: entry.shortName || entry.name || entry.displayName || entry.fullName || realSlug,
           role: entry.role || '',
           color: entry.color || '',
           active: entry.active !== false,
+          firebaseUid: entry.firebaseUid || '',
+          email: entry.email || '',
           order: entry.order || 999
         });
       });
@@ -809,32 +814,68 @@ async function loadTeamColors(){
        l'historique (leads assignés, commissions passées) ; rien n'est supprimé. */
     TEAM_MEMBERS_CACHE = list.filter(m => !(typeof window.isDepartedMember === 'function' && window.isDepartedMember({ slug: m.slug })));
     renderTeamColors();
+    // Les avatars de la liste utilisateurs prennent la couleur du roster.
+    try{ if(Array.isArray(USERS) && USERS.length) renderList(); }catch(_e){}
   }catch(e){
     console.error('loadTeamColors error:', e);
     body.innerHTML = '<div class="tc-empty" style="color:#fca5a5">Erreur chargement : ' + esc(e.message) + '</div>';
   }
 }
 
+/* ═══ PALETTE PAR RÔLE (10/09/2026) ═══════════════════════════════════════
+   _meta/team_members.rolePalette = { role: '#rrggbb' }. Une couleur par
+   rôle, appliquée en un clic à tous les membres du rôle. La couleur d'un
+   membre reste modifiable individuellement ensuite. */
+let ROLE_PALETTE = {};
+const ROLE_PALETTE_DEFAULT = {
+  admin:'#f59e0b', coach:'#8b5cf6', csm:'#14b8a6', sales:'#10b981',
+  setter:'#3b82f6', setter_ecrit:'#ec4899', closer:'#ef4444', closer_setter:'#60a5fa'
+};
+const ROLE_PALETTE_LABELS = [
+  ['admin','👑 Admin'], ['coach','🎓 Coach'], ['csm','💎 CSM'],
+  ['setter','📞 Setter'], ['setter_ecrit','✍️ Setter écrit'], ['closer','🎯 Closer'],
+  ['closer_setter','📞🎯 Setter + Closer'], ['sales','📈 Sales (ancien)']
+];
+
 function renderTeamColors(){
   const body = document.getElementById('teamColorsBody');
   if(!body || !TEAM_MEMBERS_CACHE) return;
+  const counts = {};
+  TEAM_MEMBERS_CACHE.forEach(m => { counts[m.role || ''] = (counts[m.role || ''] || 0) + 1; });
+  let palette = '<div class="tc-palette" style="grid-column:1/-1;width:100%;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px">';
+  palette += '<div style="font-size:12px;font-weight:800;margin-bottom:8px">🎯 Couleur par rôle <span style="font-weight:400;color:rgba(255,255,255,.4)">— choisis une couleur par rôle, puis « Appliquer » la pose sur tous les membres de ce rôle. Une couleur reste ensuite modifiable membre par membre.</span></div>';
+  palette += '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">';
+  ROLE_PALETTE_LABELS.forEach(([role, label]) => {
+    const n = counts[role] || 0;
+    if(!n && role === 'sales') return; // rôle hérité : masqué s'il ne reste personne dessus
+    const col = ROLE_PALETTE[role] || ROLE_PALETTE_DEFAULT[role] || '#6b7280';
+    palette += `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(255,255,255,.02)">
+      <input type="color" value="${col}" onchange="window.__setRoleColor('${role}', this.value)" title="Couleur du rôle" style="width:26px;height:26px;border:none;background:transparent;cursor:pointer;padding:0"/>
+      <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.85)">${label} <span style="color:rgba(255,255,255,.35);font-weight:500">(${n})</span></span>
+      <button class="bb bb-o" style="font-size:10px;padding:3px 8px" onclick="window.__applyRoleColor('${role}')"${n ? '' : ' disabled'}>Appliquer</button>
+    </div>`;
+  });
+  palette += '<button class="bb bb-p" style="font-size:11px;padding:6px 12px" onclick="window.__applyAllRoleColors()">🎨 Tout appliquer</button>';
+  palette += '</div></div>';
+
   if(TEAM_MEMBERS_CACHE.length === 0){
-    body.innerHTML = '<div class="tc-empty">Aucun membre trouvé.</div>';
+    body.innerHTML = palette + '<div class="tc-empty">Aucun membre trouvé.</div>';
     return;
   }
-  body.innerHTML = TEAM_MEMBERS_CACHE.map(m => {
+  body.innerHTML = palette + TEAM_MEMBERS_CACHE.map(m => {
     const color = m.color || suggestColorFor(m.slug);
     const isDefault = !m.color;
     const initials = (m.name || m.slug).slice(0,2).toUpperCase();
     const roleCls = ['coach','sales','setter','closer','admin'].includes(m.role) ? m.role : (m.role === 'setter_ecrit' || m.role === 'closer_setter') ? 'setter' : 'other';
     const roleLbl = m.role ? m.role : '—';
-    return `<div class="tc-item" data-slug="${esc(m.slug)}">
+    const hasAccount = !!(m.firebaseUid && Array.isArray(USERS) && USERS.some(u => u.uid === m.firebaseUid && (u.status || 'active') !== 'archived'));
+    return `<div class="tc-item" data-slug="${esc(m.slug)}" style="position:relative">
       <div class="tc-swatch" style="background:${color}" title="Cliquez pour changer">
         ${initials}
         <input type="color" value="${color}" onchange="window.__saveTeamColor('${esc(m.slug)}', this.value)"/>
       </div>
       <div class="tc-info">
-        <div class="tc-name">${esc(m.name)}${!m.active ? ' <span style="color:rgba(255,255,255,.3);font-weight:400">(inactif)</span>' : ''}</div>
+        <div class="tc-name">${esc(m.name)}${!m.active ? ' <span style="color:rgba(255,255,255,.3);font-weight:400">(inactif)</span>' : ''}${!hasAccount ? ' <span style="color:rgba(251,146,60,.8);font-weight:400;font-size:10px" title="Aucun compte utilisateur actif relié à cette entrée">· sans compte</span>' : ''}</div>
         <div class="tc-meta">
           <span class="tc-role-pill ${roleCls}">${esc(roleLbl)}</span>
           <span>${esc(m.slug)}</span>
@@ -842,9 +883,118 @@ function renderTeamColors(){
         </div>
       </div>
       <div class="tc-save-ind">✓</div>
+      <button type="button" title="Retirer de l'équipe (copie conservée)" onclick="window.__removeTeamMember('${esc(m.slug)}')" style="position:absolute;top:6px;right:6px;width:20px;height:20px;border-radius:6px;border:1px solid rgba(239,68,68,.25);background:rgba(239,68,68,.08);color:#fca5a5;font-size:11px;cursor:pointer;line-height:1;padding:0">✕</button>
     </div>`;
   }).join('');
 }
+
+/* Couleur d'un utilisateur dans la liste : celle du roster (par firebaseUid,
+   sinon email), à défaut la couleur du rôle technique. */
+function tmColorForUser(u, role){
+  try{
+    if(TEAM_MEMBERS_CACHE && u){
+      let m = u.uid ? TEAM_MEMBERS_CACHE.find(x => x.firebaseUid && x.firebaseUid === u.uid) : null;
+      if(!m && u.email){ const em = String(u.email).toLowerCase(); m = TEAM_MEMBERS_CACHE.find(x => x.email && String(x.email).toLowerCase() === em); }
+      if(m && m.color) return m.color;
+    }
+  }catch(_e){}
+  return ROLE_COLORS[role] || '#6b7280';
+}
+
+/* Propage la couleur d'un ou plusieurs membres vers leur fiche expert
+   booking_config (même firebaseUid) et recharge le cache nav.js, pour que
+   cartes, badges et avatars s'accordent partout. */
+async function propagateMemberColors(members){
+  const withUid = (members || []).filter(m => m && m.firebaseUid && m.color);
+  let n = 0;
+  if(withUid.length){
+    try{
+      const experts = await loadBookingExperts();
+      for(const m of withUid){
+        const ex = experts.find(e => e.firebaseUid === m.firebaseUid);
+        if(ex && ex.color !== m.color){ await updateDoc(doc(db,'booking_config',ex.id), { color: m.color }); n++; }
+      }
+    }catch(e){ console.warn('[tmColor] propagation booking_config :', e); }
+  }
+  try{ if(typeof window.loadTeamMembers === 'function') window.loadTeamMembers(true); }catch(_e){}
+  return n;
+}
+
+function _rawEntryOf(member){
+  if(!member || !TEAM_MEMBERS_RAW_DATA) return null;
+  return TEAM_MEMBERS_RAW_FORMAT === 'array' ? TEAM_MEMBERS_RAW_DATA[member._rawIndex] : TEAM_MEMBERS_RAW_DATA[member._rawKey];
+}
+function _setRawColor(member, color){
+  if(TEAM_MEMBERS_RAW_FORMAT === 'array'){
+    const idx = member._rawIndex;
+    if(idx == null || !TEAM_MEMBERS_RAW_DATA[idx]) throw new Error('Index introuvable');
+    TEAM_MEMBERS_RAW_DATA[idx] = Object.assign({}, TEAM_MEMBERS_RAW_DATA[idx], { color });
+  } else {
+    const key = member._rawKey;
+    if(!key || !TEAM_MEMBERS_RAW_DATA[key]) throw new Error('Clé introuvable');
+    TEAM_MEMBERS_RAW_DATA[key] = Object.assign({}, TEAM_MEMBERS_RAW_DATA[key], { color });
+  }
+  member.color = color;
+}
+
+window.__setRoleColor = async function(role, color){
+  if(!/^#[0-9a-fA-F]{6}$/.test(color || '')) return;
+  ROLE_PALETTE[role] = color;
+  try{
+    await updateDoc(doc(db,'_meta','team_members'), { rolePalette: ROLE_PALETTE });
+    toast('🎨 Couleur du rôle enregistrée — « Appliquer » pour la poser sur les membres');
+  }catch(e){ console.error(e); toast('❌ ' + e.message); }
+};
+
+async function _applyRoleColors(roles){
+  if(!TEAM_MEMBERS_CACHE || !TEAM_MEMBERS_RAW_DATA){ toast('❌ Données non chargées'); return; }
+  const touched = [];
+  roles.forEach(role => {
+    const color = ROLE_PALETTE[role] || ROLE_PALETTE_DEFAULT[role];
+    if(!color) return;
+    TEAM_MEMBERS_CACHE.forEach(m => { if((m.role || '') === role && m.color !== color){ _setRawColor(m, color); touched.push(m); } });
+  });
+  if(!touched.length){ toast('Rien à changer : les membres portent déjà la couleur de leur rôle'); return; }
+  try{
+    await updateDoc(doc(db,'_meta','team_members'), { members: TEAM_MEMBERS_RAW_DATA, rolePalette: ROLE_PALETTE });
+    const n = await propagateMemberColors(touched);
+    renderTeamColors();
+    try{ renderList(); }catch(_e){}
+    toast('🎨 ' + touched.length + ' membre(s) recoloré(s)' + (n ? ' · ' + n + ' fiche(s) booking alignée(s)' : ''));
+  }catch(e){ console.error(e); toast('❌ ' + e.message); loadTeamColors(); }
+}
+window.__applyRoleColor = function(role){ return _applyRoleColors([role]); };
+window.__applyAllRoleColors = function(){
+  if(!confirm('Appliquer la couleur de chaque rôle à tous les membres ?\n\nLes couleurs individuelles actuelles seront remplacées.')) return;
+  return _applyRoleColors(ROLE_PALETTE_LABELS.map(x => x[0]));
+};
+
+/* Retrait d'un membre du roster (10/09/2026). L'entrée sort de
+   _meta/team_members (donc de toutes les listes) ; une copie datée part
+   dans _meta/team_members_trash. Leads, RDV, commissions : intacts. */
+window.__removeTeamMember = async function(slug){
+  const member = (TEAM_MEMBERS_CACHE || []).find(m => m.slug === slug);
+  if(!member){ toast('❌ Membre introuvable : ' + slug); return; }
+  const hasUser = !!(member.firebaseUid && Array.isArray(USERS) && USERS.some(u => u.uid === member.firebaseUid && (u.status || 'active') !== 'archived'));
+  let msg = 'Retirer « ' + member.name + ' » de l\'équipe ?\n\nL\'entrée disparaît de toutes les listes (couleurs, filtres, sélecteurs, rapports). Une copie est conservée dans _meta/team_members_trash. Les données historiques (leads, RDV, commissions) ne sont pas touchées.';
+  if(hasUser) msg += '\n\n⚠️ Ce membre a encore un compte utilisateur actif : archive ou supprime d\'abord le compte, sinon la synchronisation automatique recréera l\'entrée à sa prochaine modification.';
+  if(!confirm(msg)) return;
+  try{
+    const raw = _rawEntryOf(member) || { slug: member.slug };
+    const copy = Object.assign({}, raw, { removedAt: new Date().toISOString(), removedBy: currentUid || null });
+    await setDoc(doc(db,'_meta','team_members_trash'), { members: arrayUnion(copy) }, { merge: true });
+    if(TEAM_MEMBERS_RAW_FORMAT === 'array'){
+      TEAM_MEMBERS_RAW_DATA = TEAM_MEMBERS_RAW_DATA.filter((_, i) => i !== member._rawIndex);
+    } else {
+      TEAM_MEMBERS_RAW_DATA = Object.assign({}, TEAM_MEMBERS_RAW_DATA);
+      delete TEAM_MEMBERS_RAW_DATA[member._rawKey];
+    }
+    await updateDoc(doc(db,'_meta','team_members'), { members: TEAM_MEMBERS_RAW_DATA });
+    try{ if(typeof window.loadTeamMembers === 'function') window.loadTeamMembers(true); }catch(_e){}
+    toast('🗑 ' + member.name + ' retiré de l\'équipe (copie dans team_members_trash)');
+    loadTeamColors();
+  }catch(e){ console.error('removeTeamMember error:', e); toast('❌ ' + e.message); loadTeamColors(); }
+};
 
 // Exposé en global pour l'onchange inline du <input type="color">
 window.__saveTeamColor = async function(slug, newColor){
@@ -869,6 +1019,8 @@ window.__saveTeamColor = async function(slug, newColor){
 
     // Mettre à jour le cache UI
     member.color = newColor;
+    // Propagation : fiche expert booking + cache nav.js + avatars de la liste
+    propagateMemberColors([member]).then(function(){ try{ renderList(); }catch(_e){} });
 
     // Feedback visuel discret
     const el = document.querySelector('.tc-item[data-slug="' + slug.replace(/"/g,'\\"') + '"]');
@@ -942,7 +1094,7 @@ function renderList(){
     var permText=editCount+' édition';
     if(readCount)permText+=', '+readCount+' lecture';
     h+='<div class="u-card" data-uid="'+u.uid+'">';
-    h+='<div class="u-av" style="background:'+ROLE_COLORS[role]+'">'+name[0].toUpperCase()+'</div>';
+    h+='<div class="u-av" style="background:'+tmColorForUser(u,role)+'">'+name[0].toUpperCase()+'</div>';
     h+='<div class="u-info"><div class="u-name">'+esc(name)+'</div><div class="u-email">'+esc(u.email||'')+'</div></div>';
     h+='<div class="u-badges">';
     h+='<span class="u-badge u-b-'+role+'">'+(ROLE_EMOJIS[role]||'')+' '+role.charAt(0).toUpperCase()+role.slice(1)+'</span>';
@@ -1608,6 +1760,10 @@ async function handleSave(uid){
         TEAM_MEMBERS_RAW_DATA[tmRawKey] = Object.assign({}, TEAM_MEMBERS_RAW_DATA[tmRawKey], tmPatch);
       }
       await updateDoc(doc(db,'_meta','team_members'), { members: TEAM_MEMBERS_RAW_DATA });
+      if (tmPatch.color) {
+        var _tmEntry = (TEAM_MEMBERS_RAW_FORMAT === 'array') ? TEAM_MEMBERS_RAW_DATA[tmRawKey] : TEAM_MEMBERS_RAW_DATA[tmRawKey];
+        try { await propagateMemberColors([{ firebaseUid: (_tmEntry && _tmEntry.firebaseUid) || uid, color: tmPatch.color }]); } catch (_e) {}
+      }
       // Recharge le cache pour que la prochaine ouverture soit fraîche
       loadTeamColors();
     }
