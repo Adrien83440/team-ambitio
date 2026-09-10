@@ -804,7 +804,10 @@ async function loadTeamColors(){
     }
 
     list.sort((a,b) => (a.order||999) - (b.order||999) || a.name.localeCompare(b.name));
-    TEAM_MEMBERS_CACHE = list;
+    /* Membres partis (nav.js TEAM_DEPARTED — Guillaume, slug « guillaumes ») :
+       jamais affichés, même ici. L'entrée reste dans _meta/team_members pour
+       l'historique (leads assignés, commissions passées) ; rien n'est supprimé. */
+    TEAM_MEMBERS_CACHE = list.filter(m => !(typeof window.isDepartedMember === 'function' && window.isDepartedMember({ slug: m.slug })));
     renderTeamColors();
   }catch(e){
     console.error('loadTeamColors error:', e);
