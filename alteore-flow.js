@@ -840,6 +840,11 @@
     }
     var setter = null;
     if (booking && booking.bookedBySlug && isSalesMember(booking.bookedBySlug)) setter = booking.bookedBySlug;
+    /* setterSlug (10/09/2026) : le setter qui a CRÉÉ et travaillé la fiche —
+       posé à la création par un membre au rôle setting. Prime sur assignedTo :
+       Steven crée la fiche, l'attribue à Élodie et le prospect réserve seul →
+       la commission Setting est à Steven, pas à Élodie (contrat art. 7.3). */
+    if (!setter && lead && lead.setterSlug && isSalesMember(lead.setterSlug)) setter = lead.setterSlug;
     if (!setter && lead && lead.assignedTo && isSalesMember(lead.assignedTo)) setter = lead.assignedTo;
     if (!setter) {
       var setters = team.filter(function (x) { return isSetterRole(x.role); });

@@ -6792,6 +6792,24 @@ function submitCreateLead() {
     alert('Erreur : ' + e.message);
   });
 }
+  /* ═══ TRAÇABILITÉ DU SETTING (10/09/2026) ═══
+     Qui a créé la fiche, et — si c'est un membre au rôle setting — qui en
+     est le setter (setterSlug). Ce champ prime sur assignedTo pour la
+     commission Setting et le rapport Set NB : Steven (setting écrit) crée la
+     fiche, l'attribue à Élodie pour le closing, et le prospect réserve seul
+     via le lien → le set et la commission restent à Steven (contrat art. 7.3).
+     Un membre hors setting (admin, closer pur) ne pose pas de setterSlug. */
+  var _cvu = (typeof getCurrentVoiceUser === 'function') ? getCurrentVoiceUser() : null;
+  if (_cvu && _cvu.slug) {
+    lead.createdBySlug = _cvu.slug;
+    var _cvm = (window.TEAM_MEMBERS || {})[_cvu.slug];
+    var _cvRole = _cvm ? String(_cvm.role || '') : '';
+    if (_cvRole === 'setter' || _cvRole === 'setter_ecrit' || _cvRole === 'closer_setter') {
+      lead.setterSlug = _cvu.slug;
+      lead.setterName = _cvu.name || _cvu.slug;
+      lead.timeline_history.push({ text: '🎯 Setting par ' + (_cvu.name || _cvu.slug) + (_cvRole === 'setter_ecrit' ? ' (setting écrit)' : ''), date: new Date().toLocaleString('fr-FR'), color: '#60a5fa' });
+    }
+  }
 
 function toggleSharePanel() {
   var panel = document.getElementById('sharePanel');

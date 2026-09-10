@@ -382,6 +382,7 @@
     var b = state.booking || {};
     if (b.closeData && b.closeData.setterSlug && AF.isSalesMember(b.closeData.setterSlug)) return b.closeData.setterSlug;
     if (b.bookedBySlug && AF.isSalesMember(b.bookedBySlug)) return b.bookedBySlug;
+    if (state.lead && state.lead.setterSlug && AF.isSalesMember(state.lead.setterSlug)) return state.lead.setterSlug;
     if (state.lead && state.lead.assignedTo && AF.isSalesMember(state.lead.assignedTo)) return state.lead.assignedTo;
     return '';
   }

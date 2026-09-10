@@ -422,6 +422,37 @@ const CONTRACT_DEFAULT={
   setting:{'BP 6':{noBooking:100,selfBooking:50},'BP 12':{noBooking:250,selfBooking:125},'Elite':{noBooking:300,selfBooking:150},'Titan':{noBooking:500,selfBooking:250}},
   pifBonus:{'BP 6':0,'BP 12':100,'Elite':100,'Titan':0}
 };
+/* Contrats de setting (setter téléphonique / setter écrit, signés 09/2026) :
+   forfait 250 € TTC / mois (16 h/mois, prorata), commission par vente issue
+   de leur setting — Élite Phénix 350 €, Business Phénix 200 € — quelle que
+   soit la façon dont le RDV a été pris (NB ou SB confondus). Aucune autre
+   formule (BP 6, Titan) sans avenant, pas de closing, pas de prime PIF, pas
+   de programme de bonus. */
+const CONTRACT_SETTER_ROLES={setter:1,setter_ecrit:1};
+const CONTRACT_SETTER_DEFAULT={ fixe:250, setting:{'Elite':350,'BP 12':200,'BP 6':0,'Titan':0} };
+const CONTRACT_SETTER_OFFRES=[ {k:'elite',o:'Elite',l:'Élite Phénix'}, {k:'bp12',o:'BP 12',l:'Business Phénix'}, {k:'bp6',o:'BP 6',l:'BP 6 (sans avenant : 0)'}, {k:'titan',o:'Titan',l:'Titan (sans avenant : 0)'} ];
+function _ctSetterVal(contract,offre){
+  var c=contract&&contract.setting&&contract.setting[offre];
+  if(c&&c.noBooking!=null&&c.noBooking!=='')return c.noBooking;
+  return CONTRACT_SETTER_DEFAULT.setting[offre]!=null?CONTRACT_SETTER_DEFAULT.setting[offre]:0;
+}
+function renderSetterContractBlock(tmMember,ct){
+  var h='';
+  h+='<div style="padding:10px 12px;background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.2);border-radius:8px;margin-bottom:10px" data-contract-mode="setter">';
+  h+='<label style="font-size:11px;color:#fbbf24;font-weight:800;text-transform:uppercase;letter-spacing:.04em">💼 Contrat de setting &amp; rémunération</label>';
+  h+='<div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;align-items:center;margin-top:6px"><span style="font-size:12px;color:rgba(255,255,255,.7)">Forfait mensuel (€ TTC)</span>';
+  h+='<input type="number" min="0" step="1" class="bi" id="eCtFixe" value="'+esc(ct&&ct.fixe!=null?String(ct.fixe):String(CONTRACT_SETTER_DEFAULT.fixe))+'"/></div>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin:4px 0 8px;line-height:1.5">Versé par mois civil complet (16 h/mois), prorata temporis sur le mois d\'entrée à partir de la date de début ci-dessus. Affiché automatiquement chaque mois dans Commissions.</div>';
+  h+='<div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.75);margin-bottom:4px">Commission par vente issue de son setting (RDV posé par lui ou réservé par le prospect qu\'il a qualifié)</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
+  CONTRACT_SETTER_OFFRES.forEach(function(x){
+    h+='<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;border:1px solid rgba(255,255,255,.08);border-radius:8px;font-size:11px;color:rgba(255,255,255,.8)">'+esc(x.l)+'<input type="number" min="0" step="1" class="bi" id="eCtS_'+x.k+'" value="'+esc(String(_ctSetterVal(ct,x.o)))+'" style="width:90px;padding:5px 6px;font-size:11px;text-align:right"/></label>';
+  });
+  h+='</div>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:6px;line-height:1.5">Un setter n\'a que des commissions de <b>Setting</b> : aucun closing, aucune prime PIF, aucun programme de bonus. Le barème s\'applique au Close quel que soit le mode de prise du RDV.'+(ct&&ct.updatedAt?' Dernière mise à jour : '+esc(String(ct.updatedAt).slice(0,10))+'.':'')+'</div>';
+  h+='</div>';
+  return h;
+}
 function _ctVal(contract,section,offre,field){
   var c=contract&&contract[section]&&contract[section][offre];
   if(c&&c[field]!=null&&c[field]!=='')return c[field];
@@ -435,13 +466,15 @@ function _ctPif(contract,offre){
 function renderContractBlock(tmMember){
   var ct=(tmMember&&tmMember.contract&&typeof tmMember.contract==='object')?tmMember.contract:null;
   var sd=(tmMember&&typeof tmMember.startDate==='string')?tmMember.startDate:'';
+  var isSetterRole=!!(tmMember&&CONTRACT_SETTER_ROLES[String(tmMember.role||'')]);
   var h='';
   h+='<div style="padding:10px 12px;background:rgba(45,212,191,.05);border:1px solid rgba(45,212,191,.2);border-radius:8px;margin-bottom:10px">';
   h+='<label style="font-size:11px;color:#2dd4bf;font-weight:800;text-transform:uppercase;letter-spacing:.04em">📅 Date de début</label>';
   h+='<input type="date" class="bi" id="eTmStartDate" value="'+esc(sd)+'" style="margin-top:5px;width:100%"/>';
   h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:5px;line-height:1.5">Les rapports (Set NB) affichent « — » avant cette date et l\'excluent des totaux. Un membre qui commence la semaine prochaine n\'a pas de zéros à afficher aujourd\'hui. Modifiable aussi depuis Set NB (admin).</div>';
   h+='</div>';
-  h+='<div style="padding:10px 12px;background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.2);border-radius:8px;margin-bottom:10px">';
+  if(isSetterRole) return h+renderSetterContractBlock(tmMember,ct);
+  h+='<div style="padding:10px 12px;background:rgba(251,191,36,.05);border:1px solid rgba(251,191,36,.2);border-radius:8px;margin-bottom:10px" data-contract-mode="full">';
   h+='<label style="font-size:11px;color:#fbbf24;font-weight:800;text-transform:uppercase;letter-spacing:.04em">💼 Contrat &amp; rémunération</label>';
   h+='<div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;align-items:center;margin-top:6px"><span style="font-size:12px;color:rgba(255,255,255,.7)">Fixe mensuel brut (€)</span>';
   h+='<input type="number" min="0" step="1" class="bi" id="eCtFixe" value="'+esc(ct&&ct.fixe!=null?String(ct.fixe):'')+'" placeholder="0 si 100 % variable"/></div>';
@@ -466,6 +499,20 @@ function readContractForm(){
   var fixeEl=document.getElementById('eCtFixe');
   if(!fixeEl)return null;
   var num=function(id){var el=document.getElementById(id);if(!el)return 0;var v=parseFloat(el.value);return isNaN(v)?0:v;};
+  var modeEl=fixeEl.closest('[data-contract-mode]');
+  if(modeEl&&modeEl.getAttribute('data-contract-mode')==='setter'){
+    /* Setter : un seul montant par offre, identique NB / SB ; pas de closing,
+       pas de PIF. Les 0 sont ÉCRITS (pas absents) pour qu'aucun repli sur le
+       barème historique ne rende une commission non prévue au contrat. */
+    var out={kind:'setter',fixe:parseFloat(fixeEl.value)||0,closing:{},setting:{},pifBonus:{},updatedAt:new Date().toISOString()};
+    CONTRACT_SETTER_OFFRES.forEach(function(x){
+      var v=num('eCtS_'+x.k);
+      out.setting[x.o]={noBooking:v,selfBooking:v};
+      out.closing[x.o]={mensualise:0,pif:0};
+      out.pifBonus[x.o]=0;
+    });
+    return out;
+  }
   var out={fixe:parseFloat(fixeEl.value)||0,closing:{},setting:{},pifBonus:{},updatedAt:new Date().toISOString()};
   CONTRACT_OFFRES.forEach(function(x){
     out.closing[x.o]={mensualise:num('eCt_'+x.k+'_cm'),pif:num('eCt_'+x.k+'_cp')};

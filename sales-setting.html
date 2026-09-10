@@ -388,7 +388,7 @@
       })).then(function (snaps) {
         var leadSetter = {};
         snaps.forEach(function (s) {
-          if (s && s.exists) { var d0 = s.data() || {}; if (d0.assignedTo) leadSetter[s.id] = d0.assignedTo; }
+          if (s && s.exists) { var d0 = s.data() || {}; var ls = d0.setterSlug || d0.assignedTo; if (ls) leadSetter[s.id] = ls; }
         });
 
       var days = {};
@@ -450,7 +450,8 @@
       function attributedToMember(b) {
         if (b.bookedBySlug) return b.bookedBySlug === member.slug;
         if (b.closeData && b.closeData.setterSlug) return b.closeData.setterSlug === member.slug;
-        /* legacy : setter attribué du lead, sinon attribué si un seul setter actif */
+        /* fiche : setterSlug (setter qui l'a créée/travaillée) sinon assignedTo ;
+           sinon attribué si un seul setter actif */
         if (b.leadId && leadSetter[b.leadId]) return leadSetter[b.leadId] === member.slug;
         return visibleSetters.length === 1 && visibleSetters[0].slug === member.slug;
       }

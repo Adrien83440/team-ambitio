@@ -951,9 +951,45 @@ function _memberContract(uid) {
   var tm = (window.TEAM_MEMBERS || {})[uid];
   return (tm && tm.contract && typeof tm.contract === 'object') ? tm.contract : null;
 }
-function _memberFixe(uid) {
+/* Fixe du mois : contrat art. 7.1.d — prorata temporis des jours calendaires
+   d'exécution sur le mois d'entrée (startDate du roster). Un mois entier
+   après la date de début = forfait plein. Avant la date de début = 0. */
+function _memberFixe(uid, month) {
   var c = _memberContract(uid);
-  return c ? (Number(c.fixe) || 0) : 0;
+  var fixe = c ? (Number(c.fixe) || 0) : 0;
+  if (!fixe) return 0;
+  var m = month || cmk();
+  var fsKey = _mToFs(m);
+  var tm = (window.TEAM_MEMBERS || {})[uid];
+  var sd = tm && typeof tm.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(tm.startDate) ? tm.startDate : null;
+  if (!fsKey || !sd) return fixe;
+  var y = parseInt(fsKey.slice(0, 4), 10), mo = parseInt(fsKey.slice(5, 7), 10);
+  var daysInMonth = new Date(y, mo, 0).getDate();
+  var monthStart = fsKey + '-01', monthEnd = fsKey + '-' + String(daysInMonth).padStart(2, '0');
+  if (sd > monthEnd) return 0;                 // pas encore arrivé ce mois-là
+  if (sd <= monthStart) return fixe;            // mois complet
+  var firstDay = parseInt(sd.slice(8, 10), 10);
+  var worked = daysInMonth - firstDay + 1;
+  return Math.round(fixe * worked / daysInMonth * 100) / 100;
+}
+function _fixeNote(uid, month) {
+  var c = _memberContract(uid);
+  if (!c || !Number(c.fixe)) return '';
+  var full = Number(c.fixe) || 0, cur = _memberFixe(uid, month);
+  if (cur === full) return '';
+  var tm = (window.TEAM_MEMBERS || {})[uid];
+  var sd = tm && tm.startDate ? String(tm.startDate) : '';
+  var fr = sd ? sd.slice(8, 10) + '/' + sd.slice(5, 7) : '';
+  return cur === 0 ? 'avant la date de début' : 'prorata depuis le ' + fr + ' (' + fmt(full) + ' / mois plein)';
+}
+/* Setter (setter / setter_ecrit) : rémunéré sur le setting uniquement — un
+   seul type de deal (Setting), une commission par vente Élite ou Business,
+   pas de modalité NB/SB, pas de closing. */
+function _isSetterMember(m) {
+  if (!m) return false;
+  var tm = (window.TEAM_MEMBERS || {})[m.uid];
+  var role = tm ? String(tm.role || '') : '';
+  return role === 'setter' || role === 'setter_ecrit';
 }
 function _ruleFor(uid, type, offre) {
   var c = _memberContract(uid);
@@ -1099,6 +1135,7 @@ function renderListe() {
     const nClos = deals.filter(d => d.type === 'Closing' && d.ok).length;
     const nSet  = deals.filter(d => d.type === 'Setting' && d.ok).length;
     const fixe  = _memberFixe(m.uid);
+    const hasFixeContract = !!(_memberContract(m.uid) && Number(_memberContract(m.uid).fixe));
 
     const progressPct = next
       ? Math.min(100, ((totalPts - (prev ? prev.pts : 0)) / (next.pts - (prev ? prev.pts : 0))) * 100)
@@ -1121,9 +1158,9 @@ function renderListe() {
           <div class="mc-kpi-label">Deals ce mois</div>
           <div class="mc-kpi-val">${nClos} clos · ${nSet} sets</div>
         </div>
-        ${fixe > 0 ? `
+        ${hasFixeContract ? `
         <div class="mc-kpi">
-          <div class="mc-kpi-label">Fixe mensuel</div>
+          <div class="mc-kpi-label">Fixe mensuel${_fixeNote(m.uid) ? ' <span style="text-transform:none;letter-spacing:0" title="' + _fixeNote(m.uid) + '">· prorata</span>' : ''}</div>
           <div class="mc-kpi-val">${fmt(fixe)}</div>
         </div>
         <div class="mc-kpi">
@@ -1197,10 +1234,13 @@ function renderFiche() {
   const fixeM = _memberFixe(m.uid);
   const kpiFixe = document.getElementById('kpi-fixe-card');
   const kpiTotal = document.getElementById('kpi-total-card');
-  if (kpiFixe && kpiTotal) {
-    kpiFixe.style.display = fixeM > 0 ? '' : 'none';
-    kpiTotal.style.display = fixeM > 0 ? '' : 'none';
+  const hasFixeM = !!(_memberContract(m.uid) && Number(_memberContract(m.uid).fixe));
+  if(kpiFixe && kpiTotal) {
+    kpiFixe.style.display = hasFixeM ? '' : 'none';
+    kpiTotal.style.display = hasFixeM ? '' : 'none';
     document.getElementById('kpi-fixe').textContent = fmt(fixeM);
+    const fixeSub = document.getElementById('kpi-fixe-sub');
+    if (fixeSub) fixeSub.textContent = _fixeNote(m.uid) || 'contrat · mois plein';
     document.getElementById('kpi-total').textContent = fmtDec(fixeM + comm);
   }
   document.getElementById('kpi-contracte').textContent = fmt(contracte);
@@ -1295,10 +1335,32 @@ function renderDealsTable(deals) {
 /* ══════════════════════════════════════════════════════════
    ADD DEAL
 ══════════════════════════════════════════════════════════ */
+function _applyDealFormMode() {
+  const setter = _isSetterMember(currentMember);
+  const typeSel = document.getElementById('f-type');
+  const stWrap = document.getElementById('f-subtype').closest('.form-field');
+  const offre = document.getElementById('f-offre');
+  if (setter) {
+    typeSel.value = 'Setting';
+    typeSel.disabled = true;
+    if (stWrap) stWrap.style.display = 'none';
+    /* Seules les formules prévues au contrat : Élite Phénix et Business Phénix. */
+    [...offre.options].forEach(o => { o.hidden = !(o.value === 'Elite' || o.value === 'BP 12'); });
+    if (offre.value !== 'Elite' && offre.value !== 'BP 12') offre.value = 'BP 12';
+  } else {
+    typeSel.disabled = false;
+    if (stWrap) stWrap.style.display = '';
+    [...offre.options].forEach(o => { o.hidden = false; });
+  }
+  const note = document.getElementById('f-setter-note');
+  if (note) note.style.display = setter ? '' : 'none';
+}
+
 function toggleAddForm() {
   addFormOpen = !addFormOpen;
   document.getElementById('add-deal-form').className = 'add-deal-form' + (addFormOpen ? ' open' : '');
   if (addFormOpen) {
+    _applyDealFormMode();
     document.getElementById('f-client').focus();
     updateCommPreview();
   }
@@ -1728,6 +1790,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="kpi-card" id="kpi-fixe-card" style="display:none">
         <div class="kpi-label">Fixe mensuel (contrat)</div>
         <div class="kpi-val" id="kpi-fixe">0 €</div>
+        <div class="kpi-sub" id="kpi-fixe-sub"></div>
       </div>
       <div class="kpi-card highlight" id="kpi-total-card" style="display:none">
         <div class="kpi-label">Total fixe + commissions</div>
@@ -1829,6 +1892,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <input class="form-input" id="f-notes" placeholder="Observations..."/>
           </div>
         </div>
+        <div id="f-setter-note" style="display:none;font-size:11px;color:var(--gold);margin:-4px 0 10px">✍️ Setter : commission de <b>Setting</b> uniquement, un montant par vente Élite Phénix ou Business Phénix (barème de son contrat), sans modalité ni closing.</div>
         <div class="form-actions">
           <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--muted)">
             <input type="checkbox" id="f-ok" style="accent-color:var(--green)"/>
