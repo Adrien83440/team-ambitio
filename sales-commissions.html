@@ -1103,8 +1103,10 @@ function renderDashboard() {
   document.getElementById('dash-top-deals').innerHTML = topHtml;
 
   // Offre distribution
-  const offres = ['BP 12', 'BP 6', 'Elite', 'Titan'];
-  const colors  = { 'BP 12': '#a78bfa', 'BP 6': '#60a5fa', 'Elite': '#f59e0b', 'Titan': '#ef4444' };
+  /* BP 6 retiré des choix (offre disparue, 10/09/2026) — les deals
+     historiques BP 6 restent lisibles ligne par ligne. */
+  const offres = ['BP 12', 'Elite', 'Titan'];
+  const colors  = { 'BP 12': '#a78bfa', 'Elite': '#f59e0b', 'Titan': '#ef4444' };
   const offreCounts = {};
   offres.forEach(o => { offreCounts[o] = allDeals.filter(d => d.offre === o && d.type === 'Closing').length; });
   const maxCount = Math.max(...Object.values(offreCounts), 1);
@@ -1855,8 +1857,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <div class="form-field">
             <label class="form-label">Offre</label>
             <select class="form-select" id="f-offre" onchange="updateCommPreview()">
-              <option value="BP 12">BP 12</option>
-              <option value="BP 6">BP 6</option>
+              <option value="BP 12">Business Phénix (BP 12)</option>
               <option value="Elite">Elite Phénix</option>
               <option value="Titan">Titan</option>
             </select>

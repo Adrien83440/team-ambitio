@@ -65,7 +65,9 @@
     }
   };
   var PIF_BONUS = { 'BP 6': 0, 'BP 12': 100, 'Elite': 100, 'Titan': 0 };
-  var OFFRES = ['BP 6', 'BP 12', 'Elite', 'Titan'];
+  /* BP 6 retiré des choix le 10/09/2026 (offre disparue) — le barème
+     COMM_RULES le garde pour recalculer les deals historiques. */
+  var OFFRES = ['BP 12', 'Elite', 'Titan'];
   var PAIEMENTS = [
     { key: 'carte',       label: '💳 Carte' },
     { key: 'virement',    label: '🏦 Virement' },

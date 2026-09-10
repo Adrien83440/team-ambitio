@@ -411,8 +411,9 @@ const TEAM_ROLES_SALES=[
    automatique au Close, barème du membre concerné) et sales-commissions.html
    (Fixe + Commissions). Valeurs par défaut = barème historique (contrat Full
    Cycle Art.3 + avenant Elite) — miroir d'alteore-flow.js COMM_RULES. */
+/* BP 6 retiré des formulaires le 10/09/2026 (offre disparue). Élodie
+   (closer + setter) garde tout le reste : closing, setting NB / SB, Titan. */
 const CONTRACT_OFFRES=[
-  {k:'bp6',  o:'BP 6'},
   {k:'bp12', o:'BP 12'},
   {k:'elite',o:'Elite'},
   {k:'titan',o:'Titan'}
@@ -430,7 +431,10 @@ const CONTRACT_DEFAULT={
    de programme de bonus. */
 const CONTRACT_SETTER_ROLES={setter:1,setter_ecrit:1};
 const CONTRACT_SETTER_DEFAULT={ fixe:250, setting:{'Elite':350,'BP 12':200,'BP 6':0,'Titan':0} };
-const CONTRACT_SETTER_OFFRES=[ {k:'elite',o:'Elite',l:'Élite Phénix'}, {k:'bp12',o:'BP 12',l:'Business Phénix'}, {k:'bp6',o:'BP 6',l:'BP 6 (sans avenant : 0)'}, {k:'titan',o:'Titan',l:'Titan (sans avenant : 0)'} ];
+const CONTRACT_SETTER_OFFRES=[ {k:'elite',o:'Elite',l:'Élite Phénix'}, {k:'bp12',o:'BP 12',l:'Business Phénix'} ];
+/* Formules hors contrat de setting : jamais proposées, mais écrites à 0 pour
+   qu'un close sur l'une d'elles ne déclenche aucune commission par repli. */
+const CONTRACT_SETTER_HIDDEN=['BP 6','Titan'];
 function _ctSetterVal(contract,offre){
   var c=contract&&contract.setting&&contract.setting[offre];
   if(c&&c.noBooking!=null&&c.noBooking!=='')return c.noBooking;
@@ -449,7 +453,7 @@ function renderSetterContractBlock(tmMember,ct){
     h+='<label style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;border:1px solid rgba(255,255,255,.08);border-radius:8px;font-size:11px;color:rgba(255,255,255,.8)">'+esc(x.l)+'<input type="number" min="0" step="1" class="bi" id="eCtS_'+x.k+'" value="'+esc(String(_ctSetterVal(ct,x.o)))+'" style="width:90px;padding:5px 6px;font-size:11px;text-align:right"/></label>';
   });
   h+='</div>';
-  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:6px;line-height:1.5">Un setter n\'a que des commissions de <b>Setting</b> : aucun closing, aucune prime PIF, aucun programme de bonus. Le barème s\'applique au Close quel que soit le mode de prise du RDV.'+(ct&&ct.updatedAt?' Dernière mise à jour : '+esc(String(ct.updatedAt).slice(0,10))+'.':'')+'</div>';
+  h+='<div style="font-size:10px;color:rgba(255,255,255,.4);margin-top:6px;line-height:1.5">Un setter n\'a que des commissions de <b>Setting</b> sur ces deux formules : aucune autre formule sans avenant, aucun closing, aucune prime PIF, aucun programme de bonus. Le barème s\'applique au Close quel que soit le mode de prise du RDV.'+(ct&&ct.updatedAt?' Dernière mise à jour : '+esc(String(ct.updatedAt).slice(0,10))+'.':'')+'</div>';
   h+='</div>';
   return h;
 }
@@ -510,6 +514,11 @@ function readContractForm(){
       out.setting[x.o]={noBooking:v,selfBooking:v};
       out.closing[x.o]={mensualise:0,pif:0};
       out.pifBonus[x.o]=0;
+    });
+    CONTRACT_SETTER_HIDDEN.forEach(function(o){
+      out.setting[o]={noBooking:0,selfBooking:0};
+      out.closing[o]={mensualise:0,pif:0};
+      out.pifBonus[o]=0;
     });
     return out;
   }
