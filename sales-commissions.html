@@ -1337,22 +1337,27 @@ function renderDealsTable(deals) {
 /* ══════════════════════════════════════════════════════════
    ADD DEAL
 ══════════════════════════════════════════════════════════ */
+/* Offres proposées dans le formulaire d'ajout. Les setters n'ont que les deux
+   formules de leur contrat (pas de Titan) ; Élodie garde Titan. Les options
+   sont RECONSTRUITES et non masquées : Safari ignore `hidden` sur <option>. */
+const OFFER_OPTIONS_ALL = [['BP 12', 'Business Phénix (BP 12)'], ['Elite', 'Elite Phénix'], ['Titan', 'Titan']];
+const OFFER_OPTIONS_SETTER = [['BP 12', 'Business Phénix (BP 12)'], ['Elite', 'Elite Phénix']];
 function _applyDealFormMode() {
   const setter = _isSetterMember(currentMember);
   const typeSel = document.getElementById('f-type');
   const stWrap = document.getElementById('f-subtype').closest('.form-field');
   const offre = document.getElementById('f-offre');
+  const prev = offre.value;
+  const list = setter ? OFFER_OPTIONS_SETTER : OFFER_OPTIONS_ALL;
+  offre.innerHTML = list.map(o => '<option value="' + o[0] + '">' + o[1] + '</option>').join('');
+  offre.value = list.some(o => o[0] === prev) ? prev : 'BP 12';
   if (setter) {
     typeSel.value = 'Setting';
     typeSel.disabled = true;
     if (stWrap) stWrap.style.display = 'none';
-    /* Seules les formules prévues au contrat : Élite Phénix et Business Phénix. */
-    [...offre.options].forEach(o => { o.hidden = !(o.value === 'Elite' || o.value === 'BP 12'); });
-    if (offre.value !== 'Elite' && offre.value !== 'BP 12') offre.value = 'BP 12';
   } else {
     typeSel.disabled = false;
     if (stWrap) stWrap.style.display = '';
-    [...offre.options].forEach(o => { o.hidden = false; });
   }
   const note = document.getElementById('f-setter-note');
   if (note) note.style.display = setter ? '' : 'none';
