@@ -528,8 +528,11 @@ def transform(decls, sel=''):
 
 SURFACE_TOKEN_RE = re.compile(r'^\s*var\(\s*--(bg2|bg3|bg-elev|bg-card|card|panel|tw-bg2|tw-bg3|an-bg-elev|an-bg-elev-2|wa-panneau|wa-liste)\s*(?:,[^)]*)?\)\s*$')
 GLASS_BLUR = 'blur(22px) saturate(1.6)'
-GLASS_CARD_IMAGE = 'linear-gradient(160deg,rgba(255,255,255,.55),rgba(255,255,255,.18) 55%,rgba(255,255,255,.4))'
-GLASS_CARD_SHADOW = 'inset 0 1px 0 rgba(255,255,255,.9),0 1px 2px rgba(24,28,52,.05),0 14px 34px -16px rgba(24,28,52,.22)'
+# Calque plat (pas de dégradé : un reflet oblique donnait un effet « buée »)
+# qui ramène la carte à ~94 % de blanc tout en laissant `background:` des
+# états (hover, ouvert) reprendre la main puisqu'il réinitialise l'image.
+GLASS_CARD_IMAGE = 'linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5))'
+GLASS_CARD_SHADOW = '0 1px 1px rgba(24,28,52,.04),0 8px 24px -12px rgba(24,28,52,.14)'
 
 
 def radius_px(val):
@@ -568,7 +571,6 @@ def glass_decls(decls, sel=''):
     if re.search(r'(chip|pill|badge|tag|btn|button|input|select|toggle|switch|av\b|avatar)', sel):
         return out
     out.append(('background-image', GLASS_CARD_IMAGE, False))
-    out.append(('border-color', 'rgba(255,255,255,.85)', False))
     out.append(('box-shadow', GLASS_CARD_SHADOW, False))
     return out
 
@@ -576,7 +578,12 @@ def glass_decls(decls, sel=''):
 # ─── Sélecteurs ─────────────────────────────────────────────────────────────
 
 def scope_selector(sel, scope):
-    """Préfixe un sélecteur avec le scope light (spécificité ↑)."""
+    """Préfixe un sélecteur avec le scope light SANS augmenter sa spécificité
+    (`:where()` pèse zéro) : la surcharge gagne sur la règle d'origine par
+    ordre de chargement seulement, et continue de perdre face aux états plus
+    spécifiques de la page (`.card:hover`, `.card.is-open`…), exactement
+    comme la règle qu'elle remplace. `scope` est le contenu du body, ex.
+    `.light-theme[data-al-page="x"]`."""
     parts = [p.strip() for p in split_top(sel, ',')]
     out = []
     for p in parts:
@@ -588,9 +595,9 @@ def scope_selector(sel, scope):
         if 'light-theme' in low:
             continue
         if low == 'body' or low.startswith('body ') or low.startswith('body.') or low.startswith('body>') or low.startswith('body:') or low.startswith('body['):
-            out.append(scope + p[4:])
+            out.append('body:where(' + scope + ')' + p[4:])
             continue
-        out.append(scope + ' ' + p)
+        out.append(':where(body' + scope + ') ' + p)
     return ', '.join(out)
 
 
@@ -713,6 +720,39 @@ def inline_style_rules(files):
     return sorted(lines)
 
 
+def pastel_inline_rules(files):
+    """Couleurs d'accent posées en inline par le JS (`style="color:' + obj.color`) :
+    on ne peut pas suivre la construction, mais on connaît la palette — tout
+    hex littéral du code trop clair pour du texte sur blanc reçoit une règle
+    d'attribut `[style*="color:#hex"]` avec sa version assombrie."""
+    hexes = set()
+    for f in files:
+        for m in re.findall(r"['\"]#([0-9a-fA-F]{6})['\"]", read(f)):
+            hexes.add(m.lower())
+    # Pas de garde sur `background:rgba(` : en inline c'est toujours une
+    # teinte translucide (`statusObj.bg`), jamais un fond plein.
+    guard = ''.join(':not([style*="%s"])' % g for g in (
+        'background:#', 'background: #', 'background-color:#', 'background-color: #',
+        'background:linear', 'background: linear', 'background:var(', 'background: var(',
+    ))
+    lines = []
+    for h in sorted(hexes):
+        c = parse_color('#' + h)
+        if is_whiteish(c) or is_dark_neutral(c) or contrast(c[:3], (255, 255, 255)) >= 4.5:
+            continue
+        hh, ll, ss = colorsys.rgb_to_hls(c[0] / 255.0, c[1] / 255.0, c[2] / 255.0)
+        if ss < 0.3 and ll > 0.55:
+            new = rgba(INK, round(0.55 + (ll - 0.55) * (0.4 / 0.45), 2))
+        else:
+            new = rgba(darken_for_contrast(c[:3]), 1.0)
+        for form in ('color:#' + h, 'color: #' + h):
+            lines.append('body.light-theme [style*="%s"]%s{color:%s !important;}' % (form, guard, new))
+        # Fond de la MÊME couleur suffixée d'un alpha (`background:#hex1a`) :
+        # forcément une teinte → même texte assombri.
+        lines.append('body.light-theme [style*="color:#%s"][style*="background:#%s"]{color:%s !important;}' % (h, h, new))
+    return lines
+
+
 def main():
     check = '--check' in sys.argv
     os.chdir(ROOT)
@@ -732,7 +772,7 @@ def main():
             continue
         rules = parse_rules(read(f))
         st = [0]
-        lines = emit(rules, 'body.light-theme', st)
+        lines = emit(rules, '.light-theme', st)
         if lines:
             out.append('/* %s (%d) */' % (f, st[0]))
             out.extend(lines)
@@ -747,7 +787,7 @@ def main():
             continue
         rules = parse_rules(css)
         st = [0]
-        lines = emit(rules, 'body.light-theme', st)
+        lines = emit(rules, '.light-theme', st)
         if lines:
             out.append('/* %s (%d) */' % (f, st[0]))
             out.extend(lines)
@@ -761,7 +801,7 @@ def main():
             continue
         rules = parse_rules(css)
         st = [0]
-        lines = emit(rules, 'body.light-theme[data-al-page="%s"]' % name, st)
+        lines = emit(rules, '.light-theme[data-al-page="%s"]' % name, st)
         if lines:
             out.append('/* %s (%d) */' % (f, st[0]))
             out.extend(lines)
@@ -771,6 +811,11 @@ def main():
     inline = inline_style_rules(pages + sorted(glob.glob('*.js')))
     out.extend(inline)
     total[0] += len(inline)
+
+    out.append('\n/* ── Palette d\'accents pastels posée en inline par le JS ── */')
+    pastel = pastel_inline_rules(pages + sorted(glob.glob('*.js')))
+    out.extend(pastel)
+    total[0] += len(pastel)
 
     result = '\n'.join(out) + '\n'
     if check:
