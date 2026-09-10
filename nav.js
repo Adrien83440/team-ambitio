@@ -208,14 +208,27 @@
        - theme-light-pages.css  : GÉNÉRÉ par scripts/build-theme-light.py,
                                   surcharges des couleurs codées en dur. */
   (function injectThemeLight() {
-    ['theme-light.css', 'theme-light-pages.css'].forEach(function (href) {
-      if (document.querySelector('link[href="' + href + '"]')) return;
-      const link = document.createElement('link');
+    const links = ['theme-light.css', 'theme-light-pages.css'].map(function (href) {
+      let link = document.querySelector('link[href="' + href + '"]');
+      if (link) return link;
+      link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = href;
       link.setAttribute('data-theme-light', '1');
-      document.head.appendChild(link);
+      document.head.appendChild(link);   // tout de suite : pas de flash en clair
+      return link;
     });
+    /* Les surcharges générées ont la MÊME spécificité que les règles des
+       pages (:where) : elles ne gagnent que si elles viennent APRÈS dans le
+       document. Or nav.js peut être chargé en tête de <head>, avant le
+       <style> de la page (admin-users, csm-*…). Une fois le DOM prêt, on
+       déplace donc les deux <link> en fin de <body> — déplacer un <link>
+       ne recharge pas la feuille, seul l'ordre de cascade change. */
+    function moveToEnd() {
+      links.forEach(function (l) { document.body.appendChild(l); });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', moveToEnd);
+    else moveToEnd();
   })();
 
   const style = document.createElement('style');

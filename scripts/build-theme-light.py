@@ -410,7 +410,7 @@ def map_bg(val):
                 return m.group(0)
             if is_whiteish(c) and c[3] <= 0.35:
                 changed = True
-                return rgba(INK, round(c[3] * 0.55, 3))
+                return 'rgba(255,255,255,%s)' % ('.55' if c[3] <= 0.12 else '.75')
             if is_dark_neutral(c):
                 changed = True
                 return dark_tier(c)
@@ -425,8 +425,13 @@ def map_bg(val):
         return None
     r, g, b, a = c
     if is_whiteish(c):
+        # Panneau / survol « subtil » du sombre (blanc à 3-12 %) : en clair une
+        # encre à 2 % serait invisible → on en fait une surface de verre blanc,
+        # lisible sur le fond maillé comme sur une carte.
+        if a <= 0.12:
+            return 'rgba(255,255,255,.55)'
         if a <= 0.35:
-            return rgba(INK, round(a * 0.55, 3))
+            return 'rgba(255,255,255,.75)'
         return None
     if is_dark_neutral(c):
         return dark_tier(c)
@@ -451,7 +456,7 @@ def map_border(val):
         if is_whiteish(c):
             changed = True
             a = c[3]
-            return rgba(INK, min(0.32, round(a * 1.5, 3)) if a < 0.9 else 0.18)
+            return rgba(INK, min(0.32, max(0.12, round(a * 1.5, 3))) if a < 0.9 else 0.2)
         if is_dark_neutral(c):
             changed = True
             return 'var(--border)'
@@ -720,7 +725,7 @@ def inline_style_rules(files):
                 else:
                     if c[3] > 0.35:
                         continue
-                    val = rgba(INK, round(c[3] * 0.55, 3))
+                    val = 'rgba(255,255,255,%s)' % ('.55' if c[3] <= 0.12 else '.75')
                     lines.append('body.light-theme [style*="%s"]{%s:%s !important;}' % (key, prop, val))
     return sorted(lines)
 
