@@ -265,7 +265,11 @@
       '#alteoInfosToast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(16px);z-index:1500;background:#1a2e1a;border:1px solid rgba(52,211,153,.35);color:#6ee7b7;font:600 12.5px system-ui,sans-serif;padding:9px 16px;border-radius:10px;opacity:0;transition:all .25s;pointer-events:none}' +
       '#alteoInfosToast.show{opacity:1;transform:translateX(-50%) translateY(0)}' +
       '#alteoInfosToast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}' +
-      '@media(max-width:640px){#alteoInfosBell{top:8px;right:10px;width:30px;height:30px;line-height:28px;font-size:14px}#alteoInfosPanel{top:46px;right:8px}}';
+      '@media(max-width:768px){' +
+        '#alteoInfosBell{top:auto;right:auto;bottom:22px;left:16px;width:40px;height:40px;line-height:38px;font-size:17px;opacity:.9}' +
+        '#alteoInfosBell .n{top:-4px;right:-4px}' +
+        '#alteoInfosPanel{top:auto;right:8px;left:8px;bottom:72px;width:auto;max-width:none;max-height:min(70vh,560px);border-radius:16px}' +
+      '}';
     var st = document.createElement('style'); st.id = 'alteoInfosCss'; st.textContent = css; document.head.appendChild(st);
   }
 
@@ -274,7 +278,7 @@
     if (document.getElementById('alteoInfosBell')) return;
     var bell = document.createElement('button');
     bell.id = 'alteoInfosBell'; bell.type = 'button'; bell.title = 'Infos équipe';
-    bell.innerHTML = '🔔';
+    bell.innerHTML = '📣';
     bell.addEventListener('click', function (e) { e.stopPropagation(); togglePanel(); });
     document.body.appendChild(bell);
 
@@ -298,7 +302,7 @@
     var bell = document.getElementById('alteoInfosBell');
     if (!bell) return;
     var n = unread().length;
-    bell.innerHTML = '🔔' + (n ? '<span class="n">' + (n > 9 ? '9+' : n) + '</span>' : '');
+    bell.innerHTML = '📣' + (n ? '<span class="n">' + (n > 9 ? '9+' : n) + '</span>' : '');
     bell.classList.toggle('has-new', n > 0);
     bell.title = n ? n + ' info(s) non lue(s)' : 'Infos équipe';
   }
