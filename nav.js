@@ -1426,10 +1426,29 @@
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // INFOS ÉQUIPE — cloche en haut à droite + popup des annonces (10/09/2026)
+  // Injecté sur TOUTES les pages internes. alteore-infos.js ne dépend d'aucun
+  // SDK Firebase (API REST + jeton de l'utilisateur), il s'active seulement
+  // quand un rôle est en session et qu'un utilisateur est connecté.
+  // ─────────────────────────────────────────────────────────────────────────
+  function injectInfosWidget() {
+    if (window.__infosWidgetInjected) return;
+    window.__infosWidgetInjected = true;
+    if (!document.querySelector('script[data-infos-widget]')) {
+      var script = document.createElement('script');
+      script.src = 'alteore-infos.js';
+      script.defer = true;
+      script.setAttribute('data-infos-widget', '1');
+      document.head.appendChild(script);
+    }
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', injectInboxWidget);
+    document.addEventListener('DOMContentLoaded', function () { injectInboxWidget(); injectInfosWidget(); });
   } else {
     injectInboxWidget();
+    injectInfosWidget();
   }
 })();
 

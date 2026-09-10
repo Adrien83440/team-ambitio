@@ -279,6 +279,23 @@ service cloud.firestore {
     }
 
 
+    // ═══ INFOS ÉQUIPE — annonces internes (10/09/2026) ═══
+    // announcements/{id} : message publié par un admin (Adrien, Emily,
+    // Vincent), lu par toute l'équipe connectée via la cloche en haut à
+    // droite (alteore-infos.js, injecté par nav.js sur toutes les pages).
+    // Jamais supprimé : archivage par active:false.
+    match /announcements/{annId} {
+      allow read:           if isAuth();
+      allow create, update: if isAdmin();
+      allow delete:         if false;
+    }
+    // announcements_reads/{uid} : accusés de lecture de CHAQUE membre
+    // ({ read: { annId: true } }). Un membre n'écrit que le sien.
+    match /announcements_reads/{userId} {
+      allow read:  if isSelfOrAdmin(userId);
+      allow write: if isSelfOrAdmin(userId);
+    }
+
     // ═══ EOD (End of Day) ═══
     match /eod/{userId}/jours/{dateKey} {
       allow read:           if isSalesOrAdmin();
