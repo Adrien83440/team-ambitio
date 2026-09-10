@@ -112,6 +112,12 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .fm-res .k{font-family:var(--fm);font-size:10px;font-weight:700;color:var(--muted);background:var(--bg3);border-radius:6px;padding:3px 7px;min-width:44px;text-align:center}
 .fm-res .t{flex:1;font-size:13px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fm-res .n{font-size:11.5px;color:var(--muted);flex:1}
+.fm-react{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:22px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--bg2)}
+.fm-react-l{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-right:6px}
+.fm-react button{background:var(--bg3);border:1px solid var(--border);border-radius:10px;width:40px;height:36px;font-size:18px;cursor:pointer;font-family:inherit;transition:transform .12s,border-color .12s;line-height:1}
+.fm-react button:hover{transform:translateY(-2px) scale(1.08);border-color:var(--border2)}
+.fm-react button.on{border-color:var(--blue);background:rgba(91,124,250,.18);box-shadow:0 0 0 3px rgba(91,124,250,.15)}
+.fm-react-t{font-size:11px;color:var(--muted2);font-family:var(--fm);margin-left:auto}
 .fm-actions{display:flex;align-items:center;gap:10px;margin-top:26px;padding-top:18px;border-top:1px solid var(--border-soft);flex-wrap:wrap}
 .fm-actions .spacer{flex:1}
 .fm-done{background:linear-gradient(135deg,rgba(91,124,250,.28),rgba(91,124,250,.14));border:1px solid rgba(91,124,250,.5);color:#dfe6ff;padding:10px 18px;border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;transition:filter .18s,transform .18s}
@@ -226,18 +232,54 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   function FP(fid, field) { return new firebase.firestore.FieldPath(fid, field); }
   function progressRef() { return db.collection('formations_progress').doc(UID); }
 
-  function writeProgress(fid, fields) {
+  // entries = [ [ ['views', lessonId, 'last'], valeur ], … ] — chemins par
+  // segments (les ids contiennent des tirets, interdits en chemin pointé).
+  function fieldPathOf(segs) {
+    var Ctor = firebase.firestore.FieldPath;
+    return new (Function.prototype.bind.apply(Ctor, [null].concat(segs)))();
+  }
+  function writeProgressPaths(fid, entries) {
     var ref = progressRef();
     var args = [];
-    for (var k in fields) { args.push(FP(fid, k)); args.push(fields[k]); }
+    entries.forEach(function (e) { args.push(fieldPathOf([fid].concat(e[0]))); args.push(e[1]); });
     args.push(FP(fid, 'updatedAt')); args.push(firebase.firestore.FieldValue.serverTimestamp());
     return ref.update.apply(ref, args).catch(function (e) {
       if (e && e.code === 'not-found') {
-        var o = {}; o[fid] = C.assign({}, fields, { updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        var o = {};
+        entries.forEach(function (en) {
+          var segs = [fid].concat(en[0]), cur = o;
+          for (var i = 0; i < segs.length - 1; i++) { cur[segs[i]] = cur[segs[i]] || {}; cur = cur[segs[i]]; }
+          cur[segs[segs.length - 1]] = en[1];
+        });
+        o[fid] = o[fid] || {}; o[fid].updatedAt = firebase.firestore.FieldValue.serverTimestamp();
         return ref.set(o, { merge: true });
       }
       throw e;
     });
+  }
+  function writeProgress(fid, fields) {
+    var entries = [];
+    for (var k in fields) entries.push([[k], fields[k]]);
+    return writeProgressPaths(fid, entries);
+  }
+
+  /* ─── Réactions : un seul emoji par membre et par leçon ─────────────── */
+  var EMOJIS = ['👍', '🔥', '❤️', '🙏', '💡', '🤔'];
+  function reactionOf(fid, lid) { var p = PROGRESS[fid] || {}; return (p.reactions || {})[lid] || null; }
+  function react(fid, lid, emoji) {
+    var cur = reactionOf(fid, lid);
+    var remove = !!(cur && cur.emoji === emoji);
+    var p = C.assign({}, PROGRESS[fid] || {});
+    p.reactions = C.assign({}, p.reactions || {});
+    if (remove) delete p.reactions[lid]; else p.reactions[lid] = { emoji: emoji, at: Date.now() };
+    PROGRESS[fid] = p;
+    render();
+    writeProgressPaths(fid, [[['reactions', lid], remove ? firebase.firestore.FieldValue['delete']() : p.reactions[lid]]])
+      .catch(function (e) { console.error(e); toast('Réaction non enregistrée : ' + e.message, true); });
+  }
+  function fmtWhen(ms) {
+    if (!ms) return '';
+    try { return new Date(ms).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; }
   }
 
   function toggleDone(fid, lid) {
@@ -254,11 +296,21 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     });
   }
 
+  // Trace de lecture : première ouverture, dernière ouverture, nombre
+  // d'ouvertures — ce que l'admin voit dans le builder (👁).
   function rememberLesson(fid, lid) {
     if (LAST_SEEN[fid] === lid) return;
     LAST_SEEN[fid] = lid;
-    PROGRESS[fid] = C.assign({}, PROGRESS[fid] || {}, { lastLessonId: lid });
-    writeProgress(fid, { lastLessonId: lid }).catch(function () { /* silencieux */ });
+    var now = Date.now();
+    var p = C.assign({}, PROGRESS[fid] || {});
+    p.views = C.assign({}, p.views || {});
+    var v = p.views[lid] || {};
+    p.views[lid] = { first: v.first || now, last: now, count: (v.count || 0) + 1 };
+    p.lastLessonId = lid;
+    PROGRESS[fid] = p;
+    var entries = [[['lastLessonId'], lid], [['views', lid, 'last'], now], [['views', lid, 'count'], firebase.firestore.FieldValue.increment(1)]];
+    if (!v.first) entries.push([['views', lid, 'first'], now]);
+    writeProgressPaths(fid, entries).catch(function () { /* silencieux */ });
   }
 
   /* ─── Rendu : catalogue ─────────────────────────────────────────────── */
@@ -433,6 +485,10 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
         h += '<a class="fm-res" href="' + esc(r.url) + '" target="_blank" rel="noopener"><span class="k">' + esc(C.fileKind(r.url, r.title)) + '</span><span class="t">' + esc(r.title || r.url) + '</span><span>⤓</span></a>';
       });
     }
+    var myR = reactionOf(fid, lid);
+    h += '<div class="fm-react"><span class="fm-react-l">Ta réaction</span>' + EMOJIS.map(function (em) {
+      return '<button type="button" class="' + (myR && myR.emoji === em ? 'on' : '') + '" data-act="react" data-fid="' + esc(fid) + '" data-lid="' + esc(lid) + '" data-emoji="' + em + '" title="' + (myR && myR.emoji === em ? 'Retirer' : 'Réagir') + '">' + em + '</button>';
+    }).join('') + (myR ? '<span class="fm-react-t">' + esc(myR.emoji) + ' le ' + esc(fmtWhen(myR.at)) + '</span>' : '') + '</div>';
     h += '<div class="fm-actions">' +
       (res.prev ? '<a class="au-btn" href="' + hashFor({ f: fid, l: res.prev.id }) + '">← Précédente</a>' : '<a class="au-btn" href="' + hashFor({ f: fid }) + '">← Plan</a>') +
       '<span class="spacer"></span>' +
@@ -510,9 +566,13 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-act]');
     if (!btn) return;
-    if (btn.getAttribute('data-act') === 'toggle-done') {
+    var act = btn.getAttribute('data-act');
+    if (act === 'toggle-done') {
       e.preventDefault();
       toggleDone(btn.getAttribute('data-fid'), btn.getAttribute('data-lid'));
+    } else if (act === 'react') {
+      e.preventDefault();
+      react(btn.getAttribute('data-fid'), btn.getAttribute('data-lid'), btn.getAttribute('data-emoji'));
     }
   });
   window.addEventListener('hashchange', render);

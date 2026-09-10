@@ -98,6 +98,15 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 .fb-file{display:grid;grid-template-columns:minmax(120px,1fr) minmax(150px,2fr) minmax(100px,1fr) auto auto;gap:6px;align-items:center;margin-bottom:6px}
 .fb-file input{background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 9px;font-size:12.5px;font-family:inherit;outline:none;min-width:0}
 
+.fb-stat{background:rgba(45,212,191,.08);border:1px solid rgba(45,212,191,.28);color:var(--teal);border-radius:999px;padding:2px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:var(--fm);white-space:nowrap}
+.fb-stat:hover{background:rgba(45,212,191,.16)}
+.fb-stat.empty{color:var(--muted2);border-color:var(--border);background:transparent}
+table.fb-stats{width:100%;border-collapse:collapse;font-size:12.5px}
+.fb-stats th{text-align:left;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border)}
+.fb-stats td{padding:7px 8px;border-bottom:1px solid var(--border-soft);vertical-align:top}
+.fb-stats td.m{font-family:var(--fm);font-size:11.5px;color:var(--muted);white-space:nowrap}
+.fb-stats td.e{font-size:18px;line-height:1}
+
 /* Apparence */
 .fb-ap{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;margin-bottom:6px}
 @media (max-width:980px){.fb-ap{grid-template-columns:1fr}}
@@ -176,6 +185,14 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   <div class="au-modal-actions"><button type="button" class="au-btn" data-modal-close="membersModal">Fermer</button></div>
 </div></div>
 
+<!-- Lectures et réactions d'une leçon -->
+<div class="au-modal-bg" id="statsModal"><div class="au-modal" style="max-width:640px">
+  <h3 id="stTitle">👁 Lectures et réactions</h3>
+  <div class="hint">Qui a ouvert la leçon (première et dernière fois, nombre d'ouvertures) et la réaction laissée. Une seule réaction par membre.</div>
+  <div id="stBody"></div>
+  <div class="au-modal-actions"><button type="button" class="au-btn" data-modal-close="statsModal">Fermer</button></div>
+</div></div>
+
 <!-- Import Google Drive -->
 <div class="au-modal-bg" id="driveModal"><div class="au-modal" style="max-width:780px">
   <h3>☁ Importer depuis Google Drive</h3>
@@ -216,6 +233,8 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
   var DIRTY = false, SAVE_T = null, FORM_T = null;
   var UPLOAD = null;            // { kind:'thumbnail'|'image'|'audio'|'resource'|'file', idx, sec }
   var DRIVE = { target: null, stack: [], node: null, connected: null, email: '', tokenKey: '' };
+  var STATS = null;             // lessonId → { views:[…], reactions:[…] } pour F (admin)
+  var NAMES = null;             // uid → nom affiché (admin)
   var $view = document.getElementById('view');
 
   function toast(msg, err) {
@@ -348,6 +367,64 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     $view.innerHTML = h;
     renderTree();
     setSaveState(DIRTY ? 'dirty' : 'saved');
+    if (IS_ADMIN && (!STATS || STATS._fid !== F.id)) loadStats();
+  }
+
+  /* ─── Lectures et réactions (admin) ─────────────────────────────────── */
+  // formations_progress/{uid}.{fid}.views[lid] = { first, last, count }
+  // formations_progress/{uid}.{fid}.reactions[lid] = { emoji, at }
+  function loadStats() {
+    var fid = F.id;
+    var namesP = NAMES ? Promise.resolve(NAMES) : db.collection('users').get().then(function (qs) {
+      NAMES = {}; qs.forEach(function (d) { var u = d.data() || {}; NAMES[d.id] = u.displayName || u.email || d.id; }); return NAMES;
+    });
+    return Promise.all([namesP, db.collection('formations_progress').get()]).then(function (r) {
+      var st = { _fid: fid };
+      r[1].forEach(function (d) {
+        var p = (d.data() || {})[fid]; if (!p) return;
+        var views = p.views || {}, reactions = p.reactions || {}, lid;
+        for (lid in views) { if (!Object.prototype.hasOwnProperty.call(views, lid)) continue; st[lid] = st[lid] || { views: [], reactions: [] }; st[lid].views.push(C.assign({ uid: d.id }, views[lid])); }
+        for (lid in reactions) { if (!Object.prototype.hasOwnProperty.call(reactions, lid)) continue; st[lid] = st[lid] || { views: [], reactions: [] }; st[lid].reactions.push(C.assign({ uid: d.id }, reactions[lid])); }
+      });
+      if (F && F.id === fid) { STATS = st; if (VIEW === 'builder') renderTree(); }
+    }).catch(function (e) { console.warn('[formations] stats:', e.message); });
+  }
+  function statChip(l) {
+    if (!IS_ADMIN || !STATS) return '';
+    var st = STATS[l.id];
+    if (!st) return '<button type="button" class="fb-stat empty" data-act="stats" data-id="' + esc(l.id) + '" title="Personne n\'a encore ouvert cette leçon">👁 0</button>';
+    var byEmoji = {}; st.reactions.forEach(function (r) { byEmoji[r.emoji] = (byEmoji[r.emoji] || 0) + 1; });
+    var em = Object.keys(byEmoji).map(function (k) { return k + byEmoji[k]; }).join(' ');
+    return '<button type="button" class="fb-stat" data-act="stats" data-id="' + esc(l.id) + '" title="Lectures et réactions">👁 ' + st.views.length + (em ? ' · ' + em : '') + '</button>';
+  }
+  function fmtWhen(ms) {
+    if (!ms) return '—';
+    try { return new Date(ms).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return '—'; }
+  }
+  function openStats(lid) {
+    var loc = C.locate(F.modules, lid);
+    document.getElementById('stTitle').textContent = '👁 ' + ((loc && loc.node.title) || 'Leçon');
+    var st = (STATS && STATS[lid]) || { views: [], reactions: [] };
+    var rows = {};
+    st.views.forEach(function (v) { rows[v.uid] = C.assign(rows[v.uid] || {}, { view: v }); });
+    st.reactions.forEach(function (r) { rows[r.uid] = C.assign(rows[r.uid] || {}, { react: r }); });
+    var uids = Object.keys(rows).sort(function (a, b) {
+      var la = (rows[a].view && rows[a].view.last) || (rows[a].react && rows[a].react.at) || 0;
+      var lb = (rows[b].view && rows[b].view.last) || (rows[b].react && rows[b].react.at) || 0;
+      return lb - la;
+    });
+    var h = '';
+    if (!uids.length) h = '<div class="au-empty"><span class="i">👁</span>Personne n\'a encore ouvert cette leçon.</div>';
+    else {
+      h = '<table class="fb-stats"><thead><tr><th>Membre</th><th>Première lecture</th><th>Dernière lecture</th><th>Ouvert.</th><th>Réaction</th><th>Réagi le</th></tr></thead><tbody>';
+      uids.forEach(function (uid) {
+        var v = rows[uid].view, r = rows[uid].react;
+        h += '<tr><td><b>' + esc((NAMES && NAMES[uid]) || uid) + '</b></td><td class="m">' + esc(fmtWhen(v && v.first)) + '</td><td class="m">' + esc(fmtWhen(v && v.last)) + '</td><td class="m">' + (v ? (v.count || 1) : '—') + '</td><td class="e">' + esc(r ? r.emoji : '—') + '</td><td class="m">' + esc(fmtWhen(r && r.at)) + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+    document.getElementById('stBody').innerHTML = h;
+    openModal('statsModal');
   }
 
   function toolsHtml(id, opts) {
@@ -368,7 +445,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
       '<input class="fb-title" data-title="' + esc(l.id) + '" value="' + esc(l.title || '') + '" placeholder="Titre de la leçon">' +
       (l.video ? '' : '<span style="font-size:10px;color:var(--gold)" title="Pas de vidéo">∅ vidéo</span>') +
       (l.duration ? '<span style="font-size:10.5px;color:var(--muted2);font-family:var(--fm)">' + esc(l.duration) + '</span>' : '') +
-      statusPill(l) + toolsHtml(l.id, { edit: hashFor({ f: F.id, l: l.id }), move: true }) + '</div>';
+      statChip(l) + statusPill(l) + toolsHtml(l.id, { edit: hashFor({ f: F.id, l: l.id }), move: true }) + '</div>';
   }
   function binderRowHtml(b) {
     var n = 0; (b.sections || []).forEach(function (s) { n += (s.files || []).length; });
@@ -456,6 +533,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
     if (act === 'add-binder') { addInto(parent, 'binder'); return; }
     if (act === 'drive') { openDrive(btn.getAttribute('data-kind'), parent); return; }
     if (act === 'members') { openMembers(); return; }
+    if (act === 'stats') { openStats(id); return; }
     if (act === 'move') { openMove(id); return; }
     var loc = C.locate(F.modules, id);
     if (!loc) return;
