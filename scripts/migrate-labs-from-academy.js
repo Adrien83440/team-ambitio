@@ -234,7 +234,8 @@ function describe(modules) {
   plan.forEach((p) => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('Academy courses/' + p.srcId + '  « ' + p.name + ' »  (' + (p.status || 'draft') + ')');
-    console.log('   →  Team formations/' + p.id + (p.existing ? '   ⚠ EXISTE DÉJÀ' + (OVERWRITE ? ' (sera archivé puis remplacé)' : ' (refusé sans --overwrite)') : '   (nouveau)'));
+    const existLabel = THEME_ONLY ? (p.existing ? '   (apparence seule)' : '   ⚠ ABSENT — migration complète d\'abord') : (p.existing ? '   ⚠ EXISTE DÉJÀ' + (OVERWRITE ? ' (sera archivé puis remplacé)' : ' (refusé sans --overwrite)') : '   (nouveau)');
+    console.log('   →  Team formations/' + p.id + existLabel);
     console.log('   ' + p.stats.modules + ' modules · ' + p.stats.subs + ' sous-modules · ' + p.stats.lessons + ' leçons (' + p.stats.drafts + ' brouillons) · ' + p.stats.binders + ' classeurs · ' + Math.round(p.sizeBytes / 1024) + ' Ko');
     if (p.stats.apps || p.stats.drip || p.stats.tools) {
       console.log('   ignoré : ' + p.stats.apps + ' mini-apps, ' + p.stats.drip + ' drips, ' + p.stats.tools + ' leçons-outils (gardées comme leçons simples)');
@@ -299,6 +300,7 @@ function describe(modules) {
     console.log('✅ formations/' + p.id + ' écrit (' + (PUBLISH ? 'publié' : 'brouillon') + ').');
   }
   console.log('\nTerminé : ' + written + ' écrit(s), ' + skipped + ' ignoré(s).');
-  if (written && !PUBLISH) console.log('Les formations arrivent en BROUILLON : publie-les depuis formations-admin.html une fois vérifiées.');
+  if (written && THEME_ONLY) console.log('Apparence seule : modules, leçons et statut de publication n\'ont pas été touchés.');
+  else if (written && !PUBLISH) console.log('Les formations arrivent en BROUILLON : publie-les depuis formations-admin.html une fois vérifiées.');
   process.exit(0);
 })().catch((e) => { console.error('Erreur :', e); process.exit(1); });
