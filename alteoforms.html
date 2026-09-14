@@ -885,6 +885,7 @@ if(!currentForm)return;
 var clean={
 title:currentForm.title,description:currentForm.description,color:currentForm.color,
 status:currentForm.status,fields:currentForm.fields||[],rules:currentForm.rules||[],settings:currentForm.settings||{},
+slug:currentForm.slug||'',
 responseCount:currentForm.responseCount||0,
 updatedAt:firebase.firestore.FieldValue.serverTimestamp()
 };
@@ -1048,10 +1049,26 @@ h+='</div>';
 }
 
 else if(edSection==='share'){
-var url=window.location.origin+'/alteoforms-render.html?id='+f._id;
+// ── Lien court /f/<slug> (14/09/2026) ──
+// Rewrite Vercel /f/:slug → alteoforms-render.html ; le renderer lit le
+// slug dans le pathname et résout le formulaire par where('slug','==',…).
+// Dès qu'un slug existe, c'est LUI le lien de référence : champ Lien
+// direct, boutons par canal et QR code l'utilisent. L'embed garde l'URL
+// canonique (peu importe sa longueur dans du code).
+var canonUrl=window.location.origin+'/alteoforms-render.html?id='+f._id;
+var shortUrl=f.slug?(window.location.origin+'/f/'+f.slug):'';
+var url=shortUrl||canonUrl;
 var qrUrl='https://api.qrserver.com/v1/create-qr-code/?data='+encodeURIComponent(url)+'&size=150x150&bgcolor=ffffff&color=1a1a2e';
 h+='<div class="ed-sec-title">🔗 Partager le formulaire</div>';
 if(f.status!=='live')h+='<div style="background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);border-radius:8px;padding:10px 14px;font-size:12px;color:#fbbf24;margin-bottom:16px">⚠️ Ce formulaire est en brouillon. Publiez-le pour le rendre accessible.</div>';
+h+='<div class="ed-set-card"><div class="ed-set-title">✂️ Lien court</div>';
+h+='<div class="ed-set-desc">Parfait pour la bio Instagram. Minuscules, chiffres et tirets. Astuce : avec « Canal par défaut » réglé sur « Instagram — lien en bio » ci-dessous, le lien court <b>nu</b> suffit — l\'attribution est posée automatiquement.</div>';
+h+='<div style="display:flex;gap:8px;margin-top:8px;align-items:center">';
+h+='<span style="font-size:12px;color:rgba(255,255,255,.45);font-family:monospace;white-space:nowrap">'+esc(window.location.host)+'/f/</span>';
+h+='<input class="bi" id="set-slug" value="'+esc(f.slug||'')+'" placeholder="mon-formulaire" style="flex:1;font-family:monospace" onchange="saveSlug(this.value)"/>';
+h+='<button class="bb bb-p" onclick="copyShortLink()"'+(f.slug?'':' disabled style="opacity:.4;cursor:not-allowed"')+'>Copier</button></div>';
+if(shortUrl)h+='<div style="font-size:11px;color:#34d399;margin-top:8px">✅ '+esc(shortUrl)+'</div>';
+h+='</div>';
 h+='<div class="ed-set-card"><div class="ed-set-title">🌐 Lien direct</div>';
 h+='<div style="display:flex;gap:8px;margin-top:8px"><input class="ed-share-url" value="'+esc(url)+'" readonly id="shareUrl" data-base="'+esc(url)+'"/><button class="bb bb-p" onclick="shareTag(\'\')">Copier</button></div>';
 // ── Liens tagués par canal (17/08/2026) ──
@@ -1090,7 +1107,7 @@ h+='</div>';
 h+='<div class="ed-set-card"><div style="display:flex;gap:16px;align-items:center"><img src="'+qrUrl+'" style="width:100px;height:100px;border-radius:8px;background:white;padding:4px"/><div><div class="ed-set-title">QR Code</div><div style="font-size:11px;color:rgba(255,255,255,.35)">Partagez ce code QR pour un accès instantané.</div></div></div></div>';
 // Embed
 h+='<div class="ed-set-card"><div class="ed-set-title">📄 Code d\'intégration (embed)</div>';
-h+='<textarea class="bi" readonly style="width:100%;font-size:11px;font-family:monospace;resize:none;margin-top:8px" rows="3">&lt;iframe src=&quot;'+esc(url)+'&quot; width=&quot;100%&quot; height=&quot;700&quot; frameborder=&quot;0&quot; style=&quot;border-radius:12px&quot;&gt;&lt;/iframe&gt;</textarea>';
+h+='<textarea class="bi" readonly style="width:100%;font-size:11px;font-family:monospace;resize:none;margin-top:8px" rows="3">&lt;iframe src=&quot;'+esc(canonUrl)+'&quot; width=&quot;100%&quot; height=&quot;700&quot; frameborder=&quot;0&quot; style=&quot;border-radius:12px&quot;&gt;&lt;/iframe&gt;</textarea>';
 h+='<button class="bb bb-o" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);toast(\'📋 Code copié !\')" style="margin-top:6px">Copier le code</button>';
 h+='</div>';
 }
@@ -2570,6 +2587,44 @@ if(!currentForm)return;
 currentForm.settings=currentForm.settings||{};
 currentForm.settings.thankYouTemplate=tpl;
 saveForm(true).then(function(){renderEdSection();toast('✅');});
+}
+
+// ── Lien court : slug par formulaire (14/09/2026) ──
+// Normalise (minuscules, accents retirés, [a-z0-9-]), vérifie l'unicité
+// dans alteo_forms, puis écrit form.slug (champ racine, requis par le
+// where('slug','==',…) du renderer). Chaîne vide = lien court retiré.
+function _normalizeSlug(v){
+v=String(v||'').toLowerCase();
+try{v=v.normalize('NFD').replace(/[\u0300-\u036f]/g,'');}catch(e){}
+v=v.replace(/[^a-z0-9-]+/g,'-').replace(/-+/g,'-').replace(/^-+|-+$/g,'');
+return v.slice(0,40);
+}
+function saveSlug(raw){
+if(!currentForm)return;
+var v=_normalizeSlug(raw);
+var inp=document.getElementById('set-slug');
+if(!v){
+if(!currentForm.slug)return;
+currentForm.slug='';
+saveForm(true).then(function(){renderEdSection();toast('Lien court retiré');});
+return;
+}
+db.collection('alteo_forms').where('slug','==',v).get().then(function(sn){
+var taken=false;
+sn.forEach(function(d){if(d.id!==currentForm._id)taken=true;});
+if(taken){
+toast('⚠️ « '+v+' » est déjà pris par un autre formulaire');
+if(inp)inp.value=currentForm.slug||'';
+return;
+}
+currentForm.slug=v;
+saveForm(true).then(function(){renderEdSection();toast('✅ Lien court : /f/'+v);});
+}).catch(function(e){toast('Erreur : '+e.message);});
+}
+function copyShortLink(){
+if(!currentForm||!currentForm.slug)return;
+var u=window.location.origin+'/f/'+currentForm.slug;
+try{navigator.clipboard.writeText(u);toast('📋 '+u);}catch(e){toast('Copie manuelle : '+u);}
 }
 
 // Aperçu réel d'un template de page de remerciement : ouvre le renderer

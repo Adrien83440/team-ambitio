@@ -385,9 +385,18 @@ function esc(s){var d=document.createElement('div');d.textContent=s;return d.inn
 (function(){
 var params=new URLSearchParams(window.location.search);
 var formId=params.get('id');
-if(!formId){showError('Aucun formulaire spécifié.');return;}
-db.collection('alteo_forms').doc(formId).get().then(function(doc){
-if(!doc.exists){showError('Formulaire introuvable.');return;}
+// Lien court /f/<slug> (14/09/2026) : le rewrite Vercel sert cette page
+// telle quelle sous /f/…, sans réécrire l'URL du navigateur — le slug se
+// lit donc dans le pathname, et window.location.search (UTM, draft…)
+// continue de fonctionner normalement.
+var slug='';
+if(!formId){
+var _m=window.location.pathname.match(/^\/f\/([A-Za-z0-9_-]{1,60})\/?$/);
+if(_m)slug=_m[1];
+}
+if(!formId&&!slug){showError('Aucun formulaire spécifié.');return;}
+function handleFormDoc(doc){
+if(!doc||!doc.exists){showError('Formulaire introuvable.');return;}
 FORM=doc.data();FORM._id=doc.id;
 if(FORM.status!=='live'&&!params.get('preview')){showError('Ce formulaire n\'est pas encore publié.');return;}
 document.title=FORM.title||'Formulaire';
@@ -412,7 +421,17 @@ initDraftFeature(params);
 // (?typreview=1, combinable avec &tytpl=<template> pour tester
 // chaque style sans soumettre ni sauvegarder).
 if(params.get('typreview')){setTimeout(function(){showThankYou('');},400);}
-}).catch(function(e){showError('Erreur : '+e.message);});
+}
+function loadFail(e){showError('Erreur : '+e.message);}
+if(formId){
+db.collection('alteo_forms').doc(formId).get().then(handleFormDoc).catch(loadFail);
+}else{
+db.collection('alteo_forms').where('slug','==',slug).limit(1).get().then(function(sn){
+if(!sn.empty){handleFormDoc(sn.docs[0]);return;}
+// Repli : /f/<id de document> (slug jamais posé sur ce formulaire)
+return db.collection('alteo_forms').doc(slug).get().then(handleFormDoc);
+}).catch(loadFail);
+}
 })();
 
 function showError(msg){
@@ -1079,7 +1098,7 @@ if(matchedRule.action==='redirect'&&matchedRule.actionValue){
 window.location.href=matchedRule.actionValue;return;
 }
 if(matchedRule.action==='booking'&&matchedRule.actionValue){
-window.location.href='booking.html?type='+matchedRule.actionValue+_bkParams;return;
+window.location.href='/booking.html?type='+matchedRule.actionValue+_bkParams;return;
 }
 if(matchedRule.action==='message'&&matchedRule.actionValue){
 showThankYou(matchedRule.actionValue);return;
@@ -1088,7 +1107,7 @@ showThankYou(matchedRule.actionValue);return;
 
 // Default: settings-based behavior
 if(settings.linkedBookingType){
-window.location.href='booking.html?type='+settings.linkedBookingType+_bkParams;
+window.location.href='/booking.html?type='+settings.linkedBookingType+_bkParams;
 return;
 }
 if(settings.redirectUrl){
