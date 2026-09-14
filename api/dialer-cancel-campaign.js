@@ -38,14 +38,23 @@ module.exports = async (req, res) => {
       return res.status(200).json({ ok: true, already: true });
     }
 
-    // ─── Raccrocher les legs actifs via Ringover ─────────────────────────────
+    // ─── Raccrocher les legs qui SONNENT — jamais une conversation ──────────
+    // (14/09/2026) Ce endpoint est aussi appelé par le sendBeacon de
+    // sales-dialer.js quand la page se ferme ou navigue (retour sur la fiche
+    // du lead en plein appel, typiquement). Son rôle est d'arrêter les
+    // sonneries en cours, PAS de couper un appel décroché : Élodie continue
+    // sa conversation sur son app Ringover même une fois la page quittée.
+    // Un leg 'in-progress' (ou une campagne 'connected') est donc préservé —
+    // le raccrochage volontaire passe par api/ringover-call-hangup.
     const terminalStatuses = new Set(['completed', 'ended', 'no-answer', 'busy', 'failed', 'cancelled', 'missed', 'canceled']);
-    const activeLegs = (camp.legs || []).filter(l =>
-      (l.callId || l.callSid) && !terminalStatuses.has(l.status)
+    const legs = camp.legs || [];
+    const hasLiveLeg = camp.status === 'connected' || legs.some(l => l.status === 'in-progress');
+    const legsToCancel = legs.filter(l =>
+      (l.callId || l.callSid) && !terminalStatuses.has(l.status) && l.status !== 'in-progress'
     );
 
     let cancelledLegs = 0;
-    for (const leg of activeLegs) {
+    for (const leg of legsToCancel) {
       const cid = leg.callId || leg.callSid;
       try {
         await ringoverFetch(`/calls/${cid}`, { method: 'DELETE' });
@@ -53,6 +62,17 @@ module.exports = async (req, res) => {
       } catch (e) {
         console.warn('[cancel-campaign] Ringover DELETE failed for', cid, e.message);
       }
+    }
+
+    if (hasLiveLeg) {
+      // L'appel vivant garde sa campagne : le webhook HANGUP la clôturera
+      // (status 'ended' + incrément dialer_attempts). La marquer 'cancelled'
+      // ici la sortirait du radar de ringover-call-status.
+      await campRef.update({
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      res.status(200).json({ ok: true, cancelledLegs, liveCallPreserved: true });
+      return;
     }
 
     await campRef.update({

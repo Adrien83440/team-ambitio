@@ -1,6 +1,11 @@
-// api/ringover-aftercall.js  (v2 — écritures Firestore AVANT res.end)
+// api/ringover-aftercall.js  (v3 — corps lu en brut, ids uint64 préservés)
+// v3 (14/09/2026) : le corps est parsé par readRingoverPayload et plus par
+// req.body. Les call_id Ringover sont des uint64 (19 chiffres) : pré-parsés
+// en Number par Vercel, ils sont arrondis et l'écriture part dans un doc
+// call_logs qui n'existe pas. Même correctif que ringover-call-status (v5).
 const { db, admin } = require('./_firebaseAdmin');
 const { ringoverFetch } = require('./_ringoverClient');
+const { readRingoverPayload } = require('./_ringoverWebhook');
 
 /* parseDurationSec-fix-2026-07-15 : record_duration arrive en "SS",
    "MM:SS" ou "HH:MM:SS" selon les payloads — normalise en secondes. */
@@ -22,7 +27,7 @@ module.exports = async (req, res) => {
 
   // Écriture Firestore AVANT de répondre (évite que Vercel kill la fonction)
   try {
-    const payload = req.body || {};
+    const payload = await readRingoverPayload(req);
     const event   = (payload.event || '').toLowerCase();
     const d       = payload.data || {};
     const callId  = d.call_id ? String(d.call_id) : null;

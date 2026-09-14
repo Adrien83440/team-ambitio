@@ -55,20 +55,30 @@ module.exports = async (req, res) => {
     return;
   }
 
+  /* Répond 200 en s'assurant que l'ajout webhook_inbox a bien abouti.
+     Vercel gèle la fonction dès la réponse : sans cette attente, les
+     sorties anticipées (campagne introuvable, leg inconnu) coupaient
+     l'écriture en vol et le call_log n'était jamais créé. */
+  const finish = async (inboxP) => {
+    if (inboxP) { try { await inboxP; } catch (e) { console.warn('[mc-status] webhook_inbox push failed:', e.message); } }
+    res.status(200).send('');
+  };
+
   try {
-    // Push dans webhook_inbox pour traitement call_logs (fire and forget)
-    db.collection('webhook_inbox').add({
+    /* Lancé sans await : les autres legs doivent être annulés au plus vite
+       (sinon ils sonnent pour rien). La promesse est attendue par finish(). */
+    const inboxP = db.collection('webhook_inbox').add({
       source: 'twilio_voice_status',
       payload,
       receivedAt: admin.firestore.FieldValue.serverTimestamp(),
       processed: false,
       campaignContext: { campaignId, leadId },
-    }).catch(e => console.warn('[mc-status] webhook_inbox push failed:', e.message));
+    });
 
     const campRef = db.collection('dialer_campaigns').doc(campaignId);
     const campSnap = await campRef.get();
     if (!campSnap.exists) {
-      res.status(200).send('');
+      await finish(inboxP);
       return;
     }
     const camp = campSnap.data();
@@ -77,7 +87,7 @@ module.exports = async (req, res) => {
     const legs = camp.legs || [];
     const legIdx = legs.findIndex(l => l.callSid === callSid || l.leadId === leadId);
     if (legIdx === -1) {
-      res.status(200).send('');
+      await finish(inboxP);
       return;
     }
     legs[legIdx].status = callStatus;
@@ -141,7 +151,7 @@ module.exports = async (req, res) => {
       await campRef.update({ legs, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     }
 
-    res.status(200).send('');
+    await finish(inboxP);
   } catch (err) {
     console.error('[mc-status] error:', err);
     res.status(200).send(''); // toujours 200 pour éviter retry Twilio

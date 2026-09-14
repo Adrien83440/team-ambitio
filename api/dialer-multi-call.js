@@ -24,13 +24,21 @@ const { getTwilioClient } = require('./_twilioClient');
 const { requireAuth } = require('./_verifyFirebaseAuth');
 const parseBody = require('./_parseBody');
 
+/* Aligné sur api/twilio-sms-send.js et api/ringover-sms-send.js.
+   Renvoie null — jamais une valeur partiellement normalisée — quand
+   l'entrée ne donne pas un E.164 strict. L'ancien `return c` laissait
+   passer « 33612345678 » sans le « + » jusqu'à client.calls.create(),
+   où Twilio le refusait avec une erreur illisible. Le garde
+   `if (!phone) return { error: 'phone invalide' }` plus bas attrape
+   maintenant le cas proprement, par lead. */
 function normalizePhone(raw) {
   if (!raw) return null;
   const c = String(raw).replace(/[\s\-().]/g, '');
   if (c.startsWith('+')) return c;
   if (c.startsWith('00')) return '+' + c.slice(2);
   if (c.startsWith('0') && c.length === 10) return '+33' + c.slice(1);
-  return c;
+  if (c.startsWith('33') && c.length >= 11) return '+' + c;
+  return null;
 }
 
 module.exports = async (req, res) => {

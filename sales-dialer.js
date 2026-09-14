@@ -596,9 +596,15 @@
   // ─── Lead loading ───────────────────────────────────────────────────────
   async function tryAttachLeadByPhone(phone) {
     try {
-      const snap = await db.collection('leads').where('telephone', '==', phone).limit(1).get();
-      if (!snap.empty) {
-        const d = snap.docs[0];
+      /* limit(1) retiré : rien ne garantissait que le premier document
+         renvoyé soit la fiche vivante. Sur un numéro dédupliqué, l'appel
+         pouvait être rattaché — et son activité journalisée — sur un
+         doublon _merged, donc invisible partout ailleurs.
+         limit(5) borne la lecture tout en laissant de quoi choisir. */
+      const snap = await db.collection('leads').where('telephone', '==', phone).limit(5).get();
+      const alive = snap.docs.filter(function (d) { return (d.data() || {})._merged !== true; });
+      if (alive.length) {
+        const d = alive[0];
         activeLeadId = d.id;
         activeLeadData = d.data();
         renderLead();
@@ -1016,7 +1022,14 @@
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       window.addEventListener('beforeunload', () => {
-        if (autoSession && autoSession.currentCampaignId) {
+        // Le beacon sert à arrêter les legs qui SONNENT quand la page se
+        // ferme (widget détruit par une navigation, onglet fermé). Si un
+        // appel est DÉCROCHÉ, on ne l'envoie pas : la conversation vit sur
+        // l'app Ringover d'Élodie et doit survivre à la navigation — c'est
+        // ce beacon qui coupait l'appel quand elle revenait sur la fiche du
+        // lead. Le serveur (dialer-cancel-campaign) épargne de toute façon
+        // les legs 'in-progress' : double sécurité.
+        if (autoSession && autoSession.currentCampaignId && !activeCampaignConnected) {
           try {
             const blob = new Blob([JSON.stringify({ campaignId: autoSession.currentCampaignId })], { type: 'application/json' });
             navigator.sendBeacon('/api/dialer-cancel-campaign', blob);

@@ -339,13 +339,21 @@
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
+  /* Aligné sur api/twilio-sms-send.js. Renvoie '' quand l'entrée ne donne
+     pas un E.164 plausible, au lieu de préfixer un « + » à l'aveugle :
+     une saisie à 9 chiffres produisait « +612345678 », un numéro qui
+     n'existe pas, composé tel quel par le dialer. Les trois appelants
+     (callLead, startCampaign, startAutoCampaign) testaient déjà la valeur
+     de retour — ce garde ne servait à rien tant que la fonction renvoyait
+     toujours une chaîne non vide. */
   function normalizePhone(raw) {
     if (!raw) return '';
     let p = String(raw).replace(/[^\d+]/g, '');
-    if (p.startsWith('00')) p = '+' + p.slice(2);
-    if (p.startsWith('0') && p.length === 10) p = '+33' + p.slice(1);
-    if (!p.startsWith('+')) p = '+' + p;
-    return p;
+    if (p.startsWith('+')) return p;
+    if (p.startsWith('00')) return '+' + p.slice(2);
+    if (p.startsWith('0') && p.length === 10) return '+33' + p.slice(1);
+    if (p.startsWith('33') && p.length >= 11) return '+' + p;
+    return '';
   }
 
   function openDialer() {
@@ -614,10 +622,12 @@
         b.style.display = 'flex';
         saveWidgetState({ minimized: true });
       } else if (act === 'close') {
-        // Demander confirmation si appel en cours
+        // Demander confirmation avant de fermer. Un appel DÉCROCHÉ continue
+        // sur l'app Ringover (le beacon d'annulation épargne les legs
+        // in-progress) — seules les sonneries en cours seront arrêtées.
         try {
           if (ifr && ifr.contentWindow) {
-            const ok = confirm('Fermer le Dialer ? Un appel en cours sera terminé.');
+            const ok = confirm('Fermer le Dialer ? Un appel décroché continue sur votre app Ringover ; une numérotation en cours sera annulée.');
             if (!ok) return;
           }
         } catch (_) { /* ignore */ }
