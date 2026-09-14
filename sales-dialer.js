@@ -512,6 +512,28 @@
     } catch (e) { console.error(e); }
   }
 
+  // ─── Reprise des appels en attente quand le widget existe déjà ──────────
+  // dialer-bridge.js poste 'dialer:pickup-pending' à l'iframe quand un clic
+  // « Appeler » survient alors que le widget flottant est DÉJÀ ouvert (ou
+  // réduit en bulle). Ce listener manquait depuis l'introduction du widget :
+  // seul le premier clic après chargement de la page déclenchait un appel
+  // (l'iframe lisait le pending à son démarrage), tous les suivants étaient
+  // perdus en silence — « je clique sur Appeler et il ne se passe rien ».
+  window.addEventListener('message', (evt) => {
+    if (evt.origin !== window.location.origin) return;
+    const data = evt.data;
+    if (!data || data.type !== 'dialer:pickup-pending') return;
+    if (!currentUser) return; // boot pas terminé : handlePendingCall viendra
+    if (activeCampaignConnected) {
+      toast('Appel déjà en cours — raccrochez avant d\'en lancer un autre', 'error');
+      return;
+    }
+    // Nouveau lead demandé : on remplace le contexte courant
+    activeLeadId = null;
+    activeLeadData = null;
+    handlePendingCall();
+  });
+
   // ─── Single call sortant (Ringover) ──────────────────────────────────────
   async function ringoverPlaceCall() {
     const phone = normalizePhone($('sd-phone-input').value);

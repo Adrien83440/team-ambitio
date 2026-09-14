@@ -746,7 +746,14 @@
   // ─── API publique : single call / campaign / power ──────────────────────
   function callLead(leadId, phone, name) {
     const norm = normalizePhone(phone);
-    if (!norm) { console.warn('[DialerBridge] Numéro invalide', leadId); return; }
+    if (!norm) {
+      // Jamais d'échec silencieux : un clic « Appeler » doit toujours donner
+      // un retour visible, sinon on croit que le dialer est cassé.
+      console.warn('[DialerBridge] Numéro invalide', leadId, phone);
+      alert('Numéro de téléphone invalide : « ' + (phone || '—') + ' »\n'
+        + 'Corrigez le numéro sur la fiche (format attendu : +33XXXXXXXXX ou 0XXXXXXXXX).');
+      return;
+    }
     sessionStorage.setItem(STORAGE_PENDING_CALL, JSON.stringify({
       leadId: leadId || null,
       phone: norm,
