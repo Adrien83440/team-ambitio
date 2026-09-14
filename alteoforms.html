@@ -170,6 +170,29 @@
 .ed-toggle{display:flex;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.1)}
 .ed-toggle-btn{flex:1;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;border:none;color:rgba(255,255,255,.35);text-align:center;transition:all .15s}
 .ed-toggle-btn.on{background:rgba(245,158,11,.12);color:#fbbf24}
+/* Page de remerciement — sélecteur de template (mini-aperçus 100 % CSS) */
+.ty-tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:8px 0 4px}
+.ty-tpl-tile{border:1.5px solid rgba(255,255,255,.08);border-radius:10px;background:#0d0d17;cursor:pointer;padding:6px;transition:all .15s;text-align:center;position:relative}
+.ty-tpl-tile:hover{border-color:rgba(255,255,255,.22)}
+.ty-tpl-tile.on{border-color:#f59e0b;background:rgba(245,158,11,.06)}
+.ty-tpl-name{font-size:10px;font-weight:700;color:rgba(255,255,255,.55)}
+.ty-tpl-tile.on .ty-tpl-name{color:#fbbf24}
+.ty-tpl-eye{position:absolute;top:4px;right:4px;font-size:9px;font-weight:600;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.14);border-radius:5px;padding:2px 6px;cursor:pointer;opacity:0;transition:opacity .15s;color:#fff;line-height:1.3;z-index:2}
+.ty-tpl-tile:hover .ty-tpl-eye{opacity:1}
+.ty-tpl-mini{height:64px;border-radius:6px;background:#0a0a14;position:relative;overflow:hidden;margin-bottom:6px}
+.ty-mini-classic::before{content:'';position:absolute;top:8px;left:50%;margin-left:-10px;width:20px;height:20px;border:2px solid #f59e0b;border-radius:50%}
+.ty-mini-classic::after{content:'';position:absolute;top:38px;left:22%;right:22%;height:6px;border-radius:3px;background:rgba(255,255,255,.3);box-shadow:0 11px 0 -2px rgba(255,255,255,.12)}
+.ty-mini-aurora::before{content:'';position:absolute;top:-14px;left:-14px;width:46px;height:46px;border-radius:50%;background:#f59e0b;opacity:.5;filter:blur(12px)}
+.ty-mini-aurora .m2{position:absolute;bottom:-16px;right:-12px;width:48px;height:48px;border-radius:50%;background:#8b5cf6;opacity:.45;filter:blur(12px)}
+.ty-mini-aurora::after{content:'';position:absolute;top:26px;left:18%;right:18%;height:8px;border-radius:3px;background:linear-gradient(90deg,#fff,#f59e0b);opacity:.75;box-shadow:0 14px 0 -3px rgba(255,255,255,.14)}
+.ty-mini-glass::before{content:'';position:absolute;top:8px;left:12px;right:12px;bottom:8px;border:1px solid rgba(255,255,255,.25);border-radius:6px;background:rgba(255,255,255,.06)}
+.ty-mini-glass::after{content:'';position:absolute;top:18px;left:30%;right:30%;height:9px;border-radius:3px;background:rgba(245,158,11,.55);box-shadow:0 15px 0 -3px rgba(255,255,255,.2)}
+.ty-mini-burst::before{content:'';position:absolute;top:10px;left:50%;margin-left:-8px;width:16px;height:16px;border-radius:50%;background:#f59e0b}
+.ty-mini-burst .m2{position:absolute;top:4px;left:50%;margin-left:-14px;width:28px;height:28px;border-radius:50%;border:1px solid rgba(245,158,11,.45)}
+.ty-mini-burst::after{content:'';position:absolute;top:42px;left:24%;right:24%;height:6px;border-radius:3px;background:rgba(255,255,255,.3);box-shadow:0 10px 0 -2px rgba(255,255,255,.12)}
+.ty-mini-editorial::before{content:'';position:absolute;top:12px;left:38%;right:38%;height:3px;background:rgba(255,255,255,.18);border-radius:2px}
+.ty-mini-editorial::after{content:'';position:absolute;top:24px;left:22%;right:22%;height:8px;border-radius:3px;background:rgba(255,255,255,.35);box-shadow:0 14px 0 -6px #f59e0b}
+.ty-mini-editorial .m2{position:absolute;top:50px;left:30%;right:30%;height:4px;border-radius:2px;background:rgba(255,255,255,.12)}
 /* Rules */
 .rule-card{background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 18px;margin-bottom:12px;transition:border-color .2s}
 .rule-card:hover{border-color:rgba(255,255,255,.12)}
@@ -675,7 +698,7 @@ description:document.getElementById('new-desc').value.trim(),
 color:document.getElementById('new-color').value,
 status:'draft',
 fields:[],
-settings:{redirectUrl:'',formStyle:'cards',submitLabel:'Envoyer',thankYouMessage:'Merci pour vos réponses !'},
+settings:{redirectUrl:'',formStyle:'cards',submitLabel:'Envoyer',thankYouMessage:'Merci pour vos réponses !',thankYouTemplate:'classic'},
 responseCount:0,
 createdAt:firebase.firestore.FieldValue.serverTimestamp(),
 updatedAt:firebase.firestore.FieldValue.serverTimestamp()
@@ -970,7 +993,17 @@ h+='</div>';
 // Page de remerciement (refonte 09/2026) — affichée après soumission quand
 // aucune redirection/booking ne s'applique. Les règles « Afficher message »
 // profitent du même habillage (icône + titre), seul le texte change.
-h+='<div class="ed-set-card"><div class="ed-set-title">🎉 Page de remerciement</div><div class="ed-set-desc">Affichée après soumission (sans redirection ni booking lié). Coche animée dans la couleur du formulaire par défaut. Astuce : <b>{prenom}</b> dans le titre ou le message est remplacé par le prénom du répondant (champ mappé prénom).</div>';
+h+='<div class="ed-set-card"><div class="ed-set-title">🎉 Page de remerciement</div><div class="ed-set-desc">Affichée après soumission (sans redirection ni booking lié). Choisissez un template, puis personnalisez icône, titre, message et bouton. Astuce : <b>{prenom}</b> dans le titre ou le message est remplacé par le prénom du répondant (champ mappé prénom).</div>';
+var _tyTpls=[['classic','Classique','ty-mini-classic'],['aurora','Aurora','ty-mini-aurora'],['glass','Carte verre','ty-mini-glass'],['burst','Célébration','ty-mini-burst'],['editorial','Épuré','ty-mini-editorial']];
+var _curTyTpl=s.thankYouTemplate||'classic';
+h+='<div class="ed-group-label">Template</div><div class="ty-tpl-grid">';
+_tyTpls.forEach(function(tt){
+h+='<div class="ty-tpl-tile'+(_curTyTpl===tt[0]?' on':'')+'" data-tytpl="'+tt[0]+'" onclick="setTyTemplate(this.getAttribute(\'data-tytpl\'))">';
+h+='<span class="ty-tpl-eye" data-tytpl="'+tt[0]+'" onclick="previewTyTemplate(event,this.getAttribute(\'data-tytpl\'))">👁 Aperçu</span>';
+h+='<div class="ty-tpl-mini '+tt[2]+'"><span class="m2"></span></div><div class="ty-tpl-name">'+tt[1]+'</div></div>';
+});
+h+='</div>';
+if(_curTyTpl==='burst')h+='<div style="font-size:11px;color:rgba(255,255,255,.35);margin-bottom:8px">🎊 Le template Célébration lance toujours les confettis.</div>';
 h+='<div class="ed-field-row" style="display:flex;gap:12px"><div style="width:110px"><div class="ed-group-label">Icône (emoji)</div><input class="bi" id="set-ty-icon" value="'+esc(s.thankYouIcon||'')+'" placeholder="✅ auto" style="width:100%;text-align:center" onchange="currentForm.settings.thankYouIcon=this.value.trim();saveForm(true)"/></div><div style="flex:1"><div class="ed-group-label">Titre</div><input class="bi" id="set-ty-title" value="'+esc(s.thankYouTitle||'')+'" placeholder="Merci !" style="width:100%" onchange="currentForm.settings.thankYouTitle=this.value;saveForm(true)"/></div></div>';
 h+='<div class="ed-field-row"><div class="ed-group-label">Message (les retours à la ligne sont conservés)</div><textarea class="bi" id="set-thanks" style="width:100%;min-height:90px;resize:vertical" placeholder="Nous avons bien reçu les réponses à ce formulaire. Si votre profil correspond à nos critères, une personne de notre équipe vous recontactera rapidement afin de faire le point." onchange="currentForm.settings.thankYouMessage=this.value;saveForm(true)">'+esc(s.thankYouMessage||'')+'</textarea></div>';
 h+='<div class="ed-field-row" style="display:flex;gap:12px"><div style="flex:1"><div class="ed-group-label">Bouton (optionnel)</div><input class="bi" id="set-ty-cta-label" value="'+esc(s.thankYouCtaLabel||'')+'" placeholder="Retour au site" style="width:100%" onchange="currentForm.settings.thankYouCtaLabel=this.value.trim();saveForm(true)"/></div><div style="flex:1"><div class="ed-group-label">URL du bouton</div><input class="bi" id="set-ty-cta-url" value="'+esc(s.thankYouCtaUrl||'')+'" placeholder="https://..." style="width:100%" onchange="currentForm.settings.thankYouCtaUrl=this.value.trim();saveForm(true)"/></div></div>';
@@ -2530,6 +2563,22 @@ if(!currentForm)return;
 currentForm.settings=currentForm.settings||{};
 currentForm.settings.formStyle=style;
 saveForm(true).then(function(){renderEdSection();toast('✅');});
+}
+
+function setTyTemplate(tpl){
+if(!currentForm)return;
+currentForm.settings=currentForm.settings||{};
+currentForm.settings.thankYouTemplate=tpl;
+saveForm(true).then(function(){renderEdSection();toast('✅');});
+}
+
+// Aperçu réel d'un template de page de remerciement : ouvre le renderer
+// en preview avec ?typreview=1&tytpl=<tpl> — aucune sauvegarde, aucune
+// soumission, on peut donc tester chaque style avant de choisir.
+function previewTyTemplate(ev,tpl){
+if(ev&&ev.stopPropagation)ev.stopPropagation();
+if(!currentForm)return;
+window.open('alteoforms-render.html?id='+currentForm._id+'&preview=1&typreview=1&tytpl='+encodeURIComponent(tpl),'_blank');
 }
 
 function publishForm(){
