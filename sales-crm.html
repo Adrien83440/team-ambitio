@@ -13,23 +13,23 @@
 </head>
 <body style="display:flex;flex-direction:column;height:100vh">
 <div class="crm-header"><div class="crm-logo">A</div><div class="crm-title">CRM Pipeline</div><div class="crm-stats"><div class="crm-stat"><div class="crm-stat-val" id="statTotal">—</div><div class="crm-stat-label">Total</div></div><div class="crm-stat"><div class="crm-stat-val" style="color:var(--green)" id="statWon">—</div><div class="crm-stat-label">Won</div></div><div class="crm-stat"><div class="crm-stat-val" style="color:var(--red3)" id="statLost">—</div><div class="crm-stat-label">Lost</div></div></div><button class="settings-gear" id="settingsGear" title="Paramètres">⚙</button></div>
-<div class="crm-toolbar"><div class="sv-wrapper" id="svWrapper"><div class="sv-trigger" id="svTrigger"><span style="font-size:14px">📋</span> <span id="svTriggerLabel">Toutes les Affaires</span> <span class="sv-count" id="svTriggerCount">—</span> <span class="sv-trigger-caret">▼</span></div><div class="sv-dropdown" id="svDropdown"><div class="sv-search-wrap"><input class="sv-search-input" id="svSearchInput" placeholder="Rechercher des affichages"/></div><div id="svListDefault"></div><div id="svListCustom"></div><button class="sv-create-btn" id="svCreateBtn">+ Créer l'affichage</button></div></div><input class="crm-search" id="crmSearch" placeholder="Rechercher..."/><button class="crm-filter-pill active" data-setter="all">Tous</button><button class="crm-filter-pill" data-setter="elodie">Élodie</button><button class="crm-section-pill active" data-section="all">Tout</button><button class="crm-section-pill" data-section="Prospection">Prospection</button><button class="crm-section-pill" data-section="Closing">Closing</button><div class="view-toggle"><button class="view-btn active" data-view="pipeline" title="Pipeline">▥</button><button class="view-btn" data-view="list" title="Liste">☰</button><button class="view-btn" data-view="sheet" title="Feuille">▦</button></div><div class="sort-wrapper" id="sortWrapper"><span style="font-size:12px;color:var(--muted);font-weight:600">Trier par</span><div class="sort-trigger" id="sortTrigger"><span id="sortTriggerLabel">Heure de création</span> <span style="font-size:9px">▼</span></div><div class="sort-dd" id="sortDD"></div><button class="sort-dir-btn" id="sortDirBtn" title="Inverser le tri">↕</button></div><button class="colcfg-btn" id="colcfgBtn" title="Colonnes affichées">⚙</button><a class="crm-clients-btn" href="sales-clients.html" style="text-decoration:none">👥 Clients actifs <span class="crm-clients-count" id="crmClientsCount"></span></a><button class="crm-add-btn" id="crmAddBtn">+ Nouveau lead</button></div>
+<div class="crm-toolbar"><div class="sv-wrapper" id="svWrapper"><div class="sv-trigger" id="svTrigger"><span style="font-size:14px">📋</span> <span id="svTriggerLabel">Toutes les Affaires</span> <span class="sv-count" id="svTriggerCount">—</span> <span class="sv-trigger-caret">▼</span></div><div class="sv-dropdown" id="svDropdown"><div class="sv-search-wrap"><input class="sv-search-input" id="svSearchInput" placeholder="Rechercher des affichages"/></div><div id="svListDefault"></div><div id="svListCustom"></div><button class="sv-create-btn" id="svCreateBtn">+ Créer l'affichage</button></div></div><input class="crm-search" id="crmSearch" placeholder="Nom, tél, email, secteur, source, @insta…" title="Recherche : nom, téléphone (chiffres seuls acceptés), email, secteur, source, pseudo Instagram"/><!-- Pastilles setter générées depuis le roster (_meta/team_members) par renderSetterPills() : plus aucun prénom codé en dur. --><div class="crm-setter-pills" id="crmSetterPills"><button class="crm-filter-pill active" data-setter="all">Tous</button></div><button class="crm-section-pill active" data-section="all">Tout</button><button class="crm-section-pill" data-section="Prospection">Prospection</button><button class="crm-section-pill" data-section="Closing">Closing</button><div class="view-toggle"><button class="view-btn active" data-view="pipeline" title="Pipeline">▥</button><button class="view-btn" data-view="list" title="Liste">☰</button><button class="view-btn" data-view="sheet" title="Feuille">▦</button></div><div class="sort-wrapper" id="sortWrapper"><span style="font-size:12px;color:var(--muted);font-weight:600">Trier par</span><div class="sort-trigger" id="sortTrigger"><span id="sortTriggerLabel">Date réelle</span> <span style="font-size:9px">▼</span></div><div class="sort-dd" id="sortDD"></div><button class="sort-dir-btn" id="sortDirBtn" title="Inverser le tri">↓</button></div><button class="colcfg-btn" id="colcfgBtn" title="Colonnes affichées">⚙</button><a class="crm-clients-btn" href="sales-clients.html" style="text-decoration:none">👥 Clients actifs <span class="crm-clients-count" id="crmClientsCount"></span></a><button class="crm-add-btn" id="crmAddBtn">+ Nouveau lead</button></div>
 <div class="filter-bar" id="filterBar">
-  <div class="fb-archive-toggle" id="fbArchiveToggle"><button class="fb-archive-btn active" data-archive="recent">📅 Récents</button><button class="fb-archive-btn" data-archive="old">📦 Anciens (+6 mois)</button></div>
-  <div class="fb-sep"></div>
+  <!-- Période : pilote la requête Firestore (createdAt >= borne basse) ET le filtre en mémoire sur la date réelle. Contenu rendu par renderPeriodDD(). -->
   <div class="fb-dd-wrapper" id="fbDateWrapper">
     <div class="fb-dd-trigger" id="fbDateTrigger">📅 Période <span class="fb-dd-caret">▼</span></div>
-    <div class="fb-dd-menu" id="fbDateDD">
-      <div class="fb-dd-item active" data-daterange="all">Tout</div>
-      <div class="fb-dd-item" data-daterange="7d">7 jours</div>
-      <div class="fb-dd-item" data-daterange="30d">30 jours</div>
-      <div class="fb-dd-item" data-daterange="90d">3 mois</div>
-      <div class="fb-dd-item" data-daterange="year">Cette année</div>
-      <div class="fb-dd-item" data-daterange="custom">Personnalisé</div>
-    </div>
+    <div class="fb-dd-menu" id="fbDateDD"></div>
   </div>
-  <input type="date" class="fb-date-input" id="fbDateFrom" style="display:none" title="Du"/>
-  <input type="date" class="fb-date-input" id="fbDateTo" style="display:none" title="Au"/>
+  <!-- Statut Leads Live (multi-sélection), rendu par renderStatusDD() -->
+  <div class="fb-dd-wrapper" id="fbStatusWrapper">
+    <div class="fb-dd-trigger" id="fbStatusTrigger">📞 Statut <span class="fb-dd-caret">▼</span></div>
+    <div class="fb-dd-menu" id="fbStatusDD"></div>
+  </div>
+  <!-- Dernier contact : jamais / plus de N jours, rendu par renderContactDD() -->
+  <div class="fb-dd-wrapper" id="fbContactWrapper">
+    <div class="fb-dd-trigger" id="fbContactTrigger">⏱ Dernier contact <span class="fb-dd-caret">▼</span></div>
+    <div class="fb-dd-menu" id="fbContactDD"></div>
+  </div>
   <div class="fb-dd-wrapper" id="fbTagWrapper">
     <div class="fb-dd-trigger" id="fbTagTrigger">🏷 Tags <span class="fb-dd-caret">▼</span></div>
     <div class="fb-tag-dd" id="fbTagDD"></div>
@@ -38,9 +38,15 @@
     <div class="fb-dd-trigger" id="fbTypeTrigger">📦 Type <span class="fb-dd-caret">▼</span></div>
     <div class="fb-dd-menu" id="fbTypeDD"></div>
   </div>
+  <!-- Secteur / Source « contient », rendu par renderMoreDD() -->
+  <div class="fb-dd-wrapper" id="fbMoreWrapper">
+    <div class="fb-dd-trigger" id="fbMoreTrigger">➕ Plus <span class="fb-dd-caret">▼</span></div>
+    <div class="fb-dd-menu" id="fbMoreDD"></div>
+  </div>
   <div class="fb-active-chips" id="fbActiveChips"></div>
-  <button class="fb-clear-all" id="fbClearAll" style="display:none">Tout effacer</button>
+  <button class="fb-clear-all" id="fbClearAll" style="display:none" title="Remet période, filtres, tri et recherche par défaut">Tout effacer</button>
 </div>
+<div class="crm-limit-banner" id="crmLimitBanner" style="display:none"></div>
 <div class="crm-views-container"><div class="crm-view active" id="viewPipeline"><div class="crm-board" id="crmBoard"></div></div><div class="crm-view list-view" id="viewList"><div class="list-table-wrap"><table class="list-table" id="listTable"><thead><tr id="listHead"></tr></thead><tbody id="listBody"></tbody></table></div><div class="pagi-bar" id="pagiList"></div></div><div class="crm-view sheet-view" id="viewSheet"><div class="sheet-table-wrap"><table class="sheet-table" id="sheetTable"><thead><tr id="sheetHead"></tr></thead><tbody id="sheetBody"></tbody></table></div><div class="pagi-bar" id="pagiSheet"></div></div></div>
 <div class="bulk-bar" id="bulkBar"><span class="bulk-count" id="bulkCount">0 sélectionnés</span><div style="position:relative"><button class="bulk-btn" id="bulkStageBtn">🔀 Changer étape</button><div class="bulk-stage-dropdown" id="bulkStageDD"></div></div><button class="bulk-btn" id="bulkSetterBtn">⭐ Changer setter</button><button class="bulk-btn" id="bulkTagBtn" style="border-color:rgba(167,139,250,0.25);background:rgba(167,139,250,0.08);color:#c4b5fd">🏷 Ajouter tag</button><button class="bulk-btn danger" id="bulkDeleteBtn">🗑 Supprimer</button><button class="bulk-deselect" id="bulkDeselect">✕ Désélectionner tout</button></div>
 <div class="crm-modal-bg" id="modalBg"><div class="crm-modal" id="modalPanel"></div></div>
@@ -57,6 +63,5 @@
 <script src="close-wizard.js"></script>
 <script src="sales-crm-app.js"></script>
 <script src="nav.js"></script>
-</div>
 </body>
 </html>
