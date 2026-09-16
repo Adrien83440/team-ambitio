@@ -51,6 +51,20 @@ service cloud.firestore {
       return isAuth() && (getRole() == 'sales' || getRole() == 'admin' || getRole() == 'csm');
     }
 
+    // ═══ SETTER IMMUABLE (16/09/2026) ═══
+    // leads.setterSlug est posé UNE fois (à la création, par le membre au
+    // rôle setting qui crée la fiche) et porte la commission Setting + le
+    // rapport Set NB. Une fois présent, aucune mise à jour ne peut le
+    // changer ni le retirer — admin compris (correction : Console uniquement).
+    // Tant qu'il est absent ou vide, il reste possible de le poser (write-once).
+    function setterUnchanged() {
+      return !('setterSlug' in resource.data)
+          || resource.data.setterSlug == null
+          || resource.data.setterSlug == ''
+          || (('setterSlug' in request.resource.data)
+              && request.resource.data.setterSlug == resource.data.setterSlug);
+    }
+
     function isSelfOrAdmin(userId) {
       return isAuth() && (request.auth.uid == userId || isAdmin());
     }
@@ -333,9 +347,10 @@ service cloud.firestore {
     // ═══ LEADS ═══
     match /leads/{leadId} {
       // CSM peut read les leads (dashboard) et update (notes/relances/status)
+      // setterUnchanged() : le setter d'origine est verrouillé (voir helper).
       allow read:           if isSalesOrAdminOrCsm();
       allow create:         if true;
-      allow update:         if isSalesOrAdminOrCsm();
+      allow update:         if isSalesOrAdminOrCsm() && setterUnchanged();
       allow delete:         if isAdmin();
     }
 

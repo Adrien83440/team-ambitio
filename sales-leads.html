@@ -1873,6 +1873,7 @@ function processPopupQueue() {
   if (setterObj) {
     h += '<div class="ld-popup-assigned">Attribué à <strong style="color:' + setterObj.color + '">' + setterObj.name + '</strong></div>';
   }
+  h += l2SetterRowHtml(lead, 'popup');
   document.getElementById('popupBody').innerHTML = h;
 
   // Call button
@@ -3925,6 +3926,39 @@ function l2SegAction(l, id) {
   return h;
 }
 
+/* ═══ SETTER IMMUABLE (16/09/2026) ═══
+   Le setter d'une fiche (setterSlug) est posé UNE fois, à la création, par le
+   membre au rôle setting qui l'a créée — puis verrouillé par les règles
+   Firestore (write-once : impossible de le changer ou de le retirer depuis le
+   front). Il ne se confond pas avec « Attribué à », qui peut changer (Steven
+   crée la fiche, l'attribue à Élodie pour le closing, le prospect réserve sur
+   le lien d'Élodie) : c'est lui qui porte la commission Setting et le rapport
+   Set NB. Affiché en lecture seule, jamais éditable. */
+function l2SetterInfo(l) {
+  if (!l || !l.setterSlug) return null;
+  var so = SETTERS[l.setterSlug] || null;
+  var role = (so && so._meta && so._meta.role) ? String(so._meta.role) : String(l.setterRole || '');
+  return {
+    slug: l.setterSlug,
+    name: so ? so.name : (l.setterName || l.setterSlug),
+    color: so ? so.color : '#6b7280',
+    ecrit: role === 'setter_ecrit',
+    at: l.setterAt || null
+  };
+}
+function l2SetterRowHtml(l, mode) {
+  var s = l2SetterInfo(l);
+  if (!s) return '';
+  var val = '<strong style="color:' + s.color + '">' + escHtml(s.name) + '</strong>';
+  if (s.ecrit) val += ' <span style="color:var(--muted);font-size:11px">· setting écrit</span>';
+  if (s.at) val += ' <span style="color:var(--muted);font-size:11px">· depuis le ' + escHtml(formatDateTimeFr(s.at)) + '</span>';
+  var lock = ' <span title="Enregistré à la création de la fiche — ne change jamais" style="opacity:.6;cursor:help">🔒</span>';
+  if (mode === 'popup') {
+    return '<div class="ld-popup-field"><span class="ld-popup-field-label">🎯 Setter' + lock + '</span><span class="ld-popup-field-val">' + val + '</span></div>';
+  }
+  return '<div class="ld-detail-row"><span class="ld-detail-label">🎯 Setter' + lock + '</span><span class="ld-detail-val">' + val + '</span></div>';
+}
+
 function l2SegInfos(l, id) {
   var h = '';
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">';
@@ -3952,6 +3986,7 @@ function l2SegInfos(l, id) {
     h += '<div class="ld-detail-row"><span class="ld-detail-label">Entrée initiale</span><span class="ld-detail-val">' + formatSmartFr(_entryInit) + '</span></div>';
   }
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(_effRecu || l.createdAt) + '</span></div>';
+  h += l2SetterRowHtml(l, 'detail');
 
   // 📦 Historique Zoho — leads importés depuis l'ancien CRM uniquement
   if (l.zohoCreatedAt || l.zohoModifiedAt || l.zohoLastActivityAt || l.zohoGestionnaire || l.zohoOrigine) {
@@ -6770,6 +6805,28 @@ function submitCreateLead() {
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   if (insta) lead.instagramUsername = insta;
+  /* ═══ TRAÇABILITÉ DU SETTING (10/09/2026) ═══
+     Qui a créé la fiche, et — si c'est un membre au rôle setting — qui en
+     est le setter (setterSlug). Ce champ prime sur assignedTo pour la
+     commission Setting et le rapport Set NB : Steven (setting écrit) crée la
+     fiche, l'attribue à Élodie pour le closing, et le prospect réserve seul
+     via le lien → le set et la commission restent à Steven (contrat art. 7.3).
+     Un membre hors setting (admin, closer pur) ne pose pas de setterSlug. */
+  var _cvu = (typeof getCurrentVoiceUser === 'function') ? getCurrentVoiceUser() : null;
+  if (_cvu && _cvu.slug) {
+    lead.createdBySlug = _cvu.slug;
+    var _cvm = (window.TEAM_MEMBERS || {})[_cvu.slug];
+    var _cvRole = _cvm ? String(_cvm.role || '') : '';
+    if (_cvRole === 'setter' || _cvRole === 'setter_ecrit' || _cvRole === 'closer_setter') {
+      lead.setterSlug = _cvu.slug;
+      lead.setterName = _cvu.name || _cvu.slug;
+      /* Rôle figé au moment du setting et horodatage : le roster peut
+         changer, la fiche garde ce qui était vrai à sa création. */
+      lead.setterRole = _cvRole;
+      lead.setterAt = firebase.firestore.FieldValue.serverTimestamp();
+      lead.timeline_history.push({ text: '🎯 Setting par ' + (_cvu.name || _cvu.slug) + (_cvRole === 'setter_ecrit' ? ' (setting écrit)' : ''), date: new Date().toLocaleString('fr-FR'), color: '#60a5fa' });
+    }
+  }
   /* Attribution structurée — `declared: true` est important : cette origine
      est DÉCLARÉE par un membre de l'équipe, pas mesurée depuis une URL. On
      ne la fera jamais passer pour une capture. */
@@ -6792,24 +6849,6 @@ function submitCreateLead() {
     alert('Erreur : ' + e.message);
   });
 }
-  /* ═══ TRAÇABILITÉ DU SETTING (10/09/2026) ═══
-     Qui a créé la fiche, et — si c'est un membre au rôle setting — qui en
-     est le setter (setterSlug). Ce champ prime sur assignedTo pour la
-     commission Setting et le rapport Set NB : Steven (setting écrit) crée la
-     fiche, l'attribue à Élodie pour le closing, et le prospect réserve seul
-     via le lien → le set et la commission restent à Steven (contrat art. 7.3).
-     Un membre hors setting (admin, closer pur) ne pose pas de setterSlug. */
-  var _cvu = (typeof getCurrentVoiceUser === 'function') ? getCurrentVoiceUser() : null;
-  if (_cvu && _cvu.slug) {
-    lead.createdBySlug = _cvu.slug;
-    var _cvm = (window.TEAM_MEMBERS || {})[_cvu.slug];
-    var _cvRole = _cvm ? String(_cvm.role || '') : '';
-    if (_cvRole === 'setter' || _cvRole === 'setter_ecrit' || _cvRole === 'closer_setter') {
-      lead.setterSlug = _cvu.slug;
-      lead.setterName = _cvu.name || _cvu.slug;
-      lead.timeline_history.push({ text: '🎯 Setting par ' + (_cvu.name || _cvu.slug) + (_cvRole === 'setter_ecrit' ? ' (setting écrit)' : ''), date: new Date().toLocaleString('fr-FR'), color: '#60a5fa' });
-    }
-  }
 
 function toggleSharePanel() {
   var panel = document.getElementById('sharePanel');
