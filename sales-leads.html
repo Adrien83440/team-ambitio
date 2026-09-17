@@ -5706,6 +5706,46 @@ function isCoachingOrClientLead(l) {
    + les résurrections (déclenchées par un booking récent par définition).
    Volume : quelques centaines de docs — même ordre que le listener coaching.
    where single-field → aucun index composite requis. */
+/* ═══ RATTRAPAGE LIEN SETTER (17/09/2026) ═══
+   Un RDV pris via un lien setter attribué porte setterLinkSlug. Normalement
+   api/booking-setter-attribution.js a déjà posé le setter sur la fiche ; s'il
+   a échoué (réseau — booking.html est fail-open), la fiche créée par
+   onBookingCreated naît sans setter. On le pose ici, une fois par RDV.
+   Les rules n'autorisent cette écriture que si setterSlug est encore vide
+   (write-once) : aucun risque d'écraser un setter d'origine. */
+var _slCatchUpSeen = {};
+function slCatchUpSetter(bookingId, b) {
+  if (!b || !b.setterLinkSlug || !b.leadId || b.setterLinkConflict === true) return;
+  if (b.status === 'cancelled' || _slCatchUpSeen[bookingId]) return;
+  var m = (window.TEAM_MEMBERS || {})[b.setterLinkSlug];
+  if (!m) return; // roster pas encore chargé (ou slug inconnu) : prochain snapshot
+  var role = String(m.role || '');
+  if (role !== 'setter' && role !== 'setter_ecrit' && role !== 'closer_setter') return;
+  _slCatchUpSeen[bookingId] = true;
+  var ref = db.collection('leads').doc(b.leadId);
+  ref.get().then(function (s) {
+    if (!s.exists) { delete _slCatchUpSeen[bookingId]; return; }
+    var d = s.data() || {};
+    if (d.setterSlug || d._merged === true) return;
+    var name = m.fullName || m.displayName || m.name || m.slug;
+    return ref.update({
+      setterSlug: b.setterLinkSlug,
+      setterName: name,
+      setterRole: role,
+      setterAt: firebase.firestore.FieldValue.serverTimestamp(),
+      setterVia: 'booking_link_catchup',
+      setterLinkTypeId: b.type || '',
+      timeline_history: firebase.firestore.FieldValue.arrayUnion({
+        text: '🎯 Setting par ' + name + ' · RDV pris via son lien (' + (b.typeLabel || b.type || '') + ')',
+        date: new Date().toLocaleString('fr-FR'),
+        color: '#fb923c'
+      })
+    });
+  }).catch(function (e) {
+    console.warn('[lien-setter] rattrapage refusé:', e && e.message);
+  });
+}
+
 var _sbnbBookingsUnsub = null;
 function startSbNbBookingsListening() {
   if (_sbnbBookingsUnsub) { _sbnbBookingsUnsub(); _sbnbBookingsUnsub = null; }
@@ -5724,6 +5764,7 @@ function startSbNbBookingsListening() {
       });
       _sbnbByLead = byLead;
       _sbnbByEmail = byEmail;
+      snap.forEach(function (doc) { slCatchUpSetter(doc.id, doc.data()); });
       if (!isEditingLead && typeof renderFeed === 'function') renderFeed();
     }, function (err) {
       console.warn('[sbnb-bookings] listener error:', err && err.message);

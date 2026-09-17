@@ -57,12 +57,19 @@ service cloud.firestore {
     // rapport Set NB. Une fois présent, aucune mise à jour ne peut le
     // changer ni le retirer — admin compris (correction : Console uniquement).
     // Tant qu'il est absent ou vide, il reste possible de le poser (write-once).
+    // 17/09/2026 : le verrou couvre aussi setterName / setterRole / setterAt —
+    // une fois setterSlug présent, ces trois champs ne bougent plus non plus
+    // (sinon le slug restait figé mais le rôle ou la date pouvaient dériver).
+    // Les écritures serveur (Admin SDK, ex. api/booking-setter-attribution.js)
+    // contournent les rules : elles ré-appliquent le write-once elles-mêmes.
     function setterUnchanged() {
       return !('setterSlug' in resource.data)
           || resource.data.setterSlug == null
           || resource.data.setterSlug == ''
           || (('setterSlug' in request.resource.data)
-              && request.resource.data.setterSlug == resource.data.setterSlug);
+              && request.resource.data.setterSlug == resource.data.setterSlug
+              && !request.resource.data.diff(resource.data).affectedKeys()
+                    .hasAny(['setterName', 'setterRole', 'setterAt']));
     }
 
     function isSelfOrAdmin(userId) {

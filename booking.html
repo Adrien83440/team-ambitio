@@ -691,7 +691,9 @@ function initBooking() {
     S.selPerson = S.persons.find(function(p) { return p.id === presetPerson; });
     if (S.selPerson) {
       S.lockPerson = S.selPerson;          // verrou : ce lien = ce coach
-      var personTypes = S.types.filter(function(t) { return (S.lockPerson.types || []).indexOf(t.id) >= 0; });
+      /* Les liens setter attribués (attributedSetterSlug) ne s'ouvrent que par
+         leur lien direct ?type= — jamais depuis la page de l'experte. */
+      var personTypes = S.types.filter(function(t) { return (S.lockPerson.types || []).indexOf(t.id) >= 0 && !t.attributedSetterSlug; });
       /* Consultation par défaut de l'expert (réglée dans Booking admin) : son
          lien tombe droit sur le calendrier, sans étape « quelle consultation ? ».
          Le RDV reste un RDV typé normal — durée, buffers, Meet, notifications. */
@@ -718,6 +720,9 @@ function renderTypeCards() {
     /* Lien nominatif : on ne propose que les consultations que CE coach
        assure — sinon le visiteur choisit un type qu'il ne fait pas. */
     if (S.lockPerson && (S.lockPerson.types || []).indexOf(t.id) < 0) continue;
+    /* Lien setter attribué : accessible uniquement par son lien direct, sinon
+       un visiteur lambda attribuerait son RDV à un setter par hasard. */
+    if (t.attributedSetterSlug) continue;
     h += '<div class="bk-type-card" style="--type-color:' + t.color + '" data-action="selectType" data-idx="' + i + '">';
     h += '<div class="bk-type-top">';
     h += '<span class="bk-type-dot" style="background:' + t.color + '"></span>';
@@ -1917,6 +1922,58 @@ async function submitBooking() {
     booking.bookedBySlug = _setterSlug;
     if (_setterUid)  booking.bookedByUid  = _setterUid;
     if (_setterName) booking.bookedByName = _setterName;
+  }
+
+  /* ── LIEN SETTER ATTRIBUÉ (17/09/2026) ──────────────────────────────────
+     Consultation marquée « Lien attribué à un setter » dans booking-admin
+     (type.attributedSetterSlug) : le setter vient de la CONFIG DU TYPE, jamais
+     de l'URL — il prime donc sur ?setter=. Le RDV est un RDV setter (NB).
+     /api/booking-setter-attribution retrouve ou crée la fiche lead et y pose
+     le setter immuable (write-once, premier setter gagne) ; le leadId retourné
+     fait prendre à onBookingCreated sa branche « lead existant ».
+     Fail-open : en cas d'erreur le RDV part quand même, attribué au
+     propriétaire du lien ; Leads Live rattrape le setter sur la fiche. */
+  var _linkSetterSlug = (S.selType && S.selType.attributedSetterSlug) ? String(S.selType.attributedSetterSlug) : '';
+  if (_linkSetterSlug && !_agentMode && !_rescheduleOld && booking.isCoaching !== true) {
+    booking.source = 'setter_booking';
+    booking.setterLinkSlug = _linkSetterSlug;
+    booking.bookedBySlug = _linkSetterSlug;
+    booking.bookedByName = S.selType.attributedSetterName || _linkSetterSlug;
+    delete booking.bookedByUid;
+    try {
+      var _slCtl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var _slTimer = _slCtl ? setTimeout(function() { _slCtl.abort(); }, 8000) : null;
+      var _slResp = await fetch('/api/booking-setter-attribution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: _slCtl ? _slCtl.signal : undefined,
+        body: JSON.stringify({
+          typeId: booking.type,
+          personId: booking.personId,
+          leadId: booking.leadId || '',
+          prenom: prenom,
+          nom: nom,
+          email: email,
+          telephone: booking.prospect.telephone,
+          secteur: booking.prospect.secteur,
+          message: booking.prospect.message
+        })
+      });
+      if (_slTimer) clearTimeout(_slTimer);
+      var _slData = await _slResp.json();
+      if (_slData && _slData.attributed === true) {
+        if (_slData.leadId) booking.leadId = _slData.leadId;
+        if (_slData.setterSlug) {
+          // Setter EFFECTIF de la fiche (premier setter gagne).
+          booking.bookedBySlug = _slData.setterSlug;
+          booking.bookedByName = _slData.setterName || _slData.setterSlug;
+        }
+        if (_slData.setterUid) booking.bookedByUid = _slData.setterUid;
+        if (_slData.conflict === true) booking.setterLinkConflict = true;
+      }
+    } catch (errSl) {
+      console.warn('[booking] attribution lien setter en échec, fail-open:', errSl);
+    }
   }
 
   // ── Replanification : copie STRICTE de l'attribution d'origine ──
