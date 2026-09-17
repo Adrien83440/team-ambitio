@@ -49,7 +49,7 @@ function openCloseWizard(lid){
     renderAll();
   }});
 }
-var LT={vsl_elite:'VSL',self_booking:'Self Booking',webinaire:'Webinaire'};
+var LT={vsl_elite:'VSL',self_booking:'Self Booking',webinaire:'Webinaire',business:'Business',alteoform:'AlteoForm'};
 var TB={vsl_elite:'vsl',self_booking:'self',webinaire:'other'};
 var S2S={lead:'nouveau',nrp1:'nrp1',nrp2:'nrp2',nrp3:'nrp3',all_nrp:'all_nrp',faux_numero:'faux_numero',poubelle:'poubelle',disqualification:'disqualifie',follow_up_pm:'follow_up_pm',set:'set',rdv_self_booking:'rdv_self_booking',rdv_confirmes:'rdv_pose',rdv_annules_prospect:'pas_interesse',rdv_annules_equipe:'pas_interesse',no_show_self:'pas_interesse',no_show_setting:'pas_interesse',partenariats:'rdv_pose',closed_won_setting:'rdv_pose',closed_won_self:'rdv_pose',closed_lost:'pas_interesse',follow_up_closing:'appele',disqualifie_closing:'disqualifie'};
 
@@ -133,7 +133,7 @@ function rebuildTeamDependentConfig(){
   for(var i=0;i<CRIT_FIELDS.length;i++){
     if(CRIT_FIELDS[i].key==='assignedTo'||CRIT_FIELDS[i].key==='setterSlug')CRIT_FIELDS[i].opts=teamOpts;
   }
-  renderSetterPills();
+  renderSetterDD();
   // DEFAULT_VIEWS : retire les anciennes vues hardcodées par membre et regénère
   DEFAULT_VIEWS=DEFAULT_VIEWS.filter(function(v){return !v._teamMemberView;});
   tmActive().forEach(function(m){
@@ -156,6 +156,9 @@ var allLeads=[],filterSetter='all',filterSection='all',filterType='all',searchQu
    La période (periodKey…) vit dans le bloc PÉRIODE : elle pilote AUSSI la
    requête Firestore (plus de silos Récents / Anciens). */
 var filterStatus=[],filterContact='all',filterSecteur='',filterSource='';
+/* Kanban : quand un filtre restreint la liste, les colonnes sans résultat sont
+   repliées (sinon 4 résultats se perdent parmi 20 colonnes vides). */
+var hideEmptyCols=true;
 var currentView='pipeline';
 /* Tri UNIQUE pour les trois vues (kanban, liste, feuille), mémorisé. */
 var globalSortKey='realDate',globalSortDir='desc';
@@ -229,12 +232,14 @@ function leadSearchBlob(l){
   l._blob=parts.join(' ').toLowerCase()+' '+tel+' '+(l.phoneNormalized||'');
   return l._blob;
 }
-function getFiltered(){
+function getFiltered(except){
   var list=allLeads.slice();
   var view=getActiveView();
   if(view&&view.criteria)list=applyCriteria(list,view.criteria);
-  if(filterSetter==='__none__')list=list.filter(function(l){return !l.assignedTo;});
-  else if(filterSetter!=='all')list=list.filter(function(l){return l.assignedTo===filterSetter;});
+  if(except!=='setter'){
+    if(filterSetter==='__none__')list=list.filter(function(l){return !l.assignedTo;});
+    else if(filterSetter!=='all')list=list.filter(function(l){return l.assignedTo===filterSetter;});
+  }
   if(filterSection!=='all'){var ss=STAGES.filter(function(s){return s.section===filterSection;}).map(function(s){return s.key;});list=list.filter(function(l){return ss.indexOf(l.stage||'lead')>=0;});}
   if(searchQuery){
     var q=searchQuery.toLowerCase();var qd=q.replace(/[^\d]/g,'');
@@ -249,15 +254,14 @@ function getFiltered(){
   if(pb.from||pb.to){
     list=list.filter(function(l){var d=getLeadDate(l);if(!d)return !pb.from;if(pb.from&&d<pb.from)return false;if(pb.to&&d>pb.to)return false;return true;});
   }
-  if(filterStatus.length>0){list=list.filter(function(l){return filterStatus.indexOf(l.status||'nouveau')>=0;});}
-  if(filterContact!=='all'){
+  if(except!=='status'&&filterStatus.length>0){list=list.filter(function(l){return filterStatus.indexOf(l.status||'nouveau')>=0;});}
+  if(except!=='contact'&&filterContact!=='all'){
     var nd=parseFloat(filterContact);var cut=isNaN(nd)?null:Date.now()-nd*86400000;
     list=list.filter(function(l){var lc=getLastContact(l);if(filterContact==='never')return !lc;if(!lc)return true;return cut===null?true:lc.date.getTime()<=cut;});
   }
   if(filterSecteur){var fsq=filterSecteur.toLowerCase();list=list.filter(function(l){return (l.secteur||'').toLowerCase().indexOf(fsq)>=0;});}
   if(filterSource){var fuq=filterSource.toLowerCase();list=list.filter(function(l){return decodeUtm(l.utm||'').toLowerCase().indexOf(fuq)>=0;});}
-  // Tag filter
-  if(filterTags.length>0){
+  if(except!=='tags'&&filterTags.length>0){
     list=list.filter(function(l){
       var allT=[];
       if(l.tags&&Array.isArray(l.tags))l.tags.forEach(function(t){allT.push((t||'').toLowerCase());});
@@ -266,10 +270,12 @@ function getFiltered(){
       return false;
     });
   }
-  // Type filter
-  if(filterType!=='all'){list=list.filter(function(l){return(l.type||'')===filterType;});}
+  if(except!=='type'&&filterType!=='all'){list=list.filter(function(l){return(l.type||'')===filterType;});}
   return list;
 }
+/* Nombre de filtres actifs (hors vue et recherche) — badge mobile + barre de résultats. */
+function activeFilterCount(){var n=0;if(periodKey!==PERIOD_DEFAULT)n++;if(filterSetter!=='all')n++;if(filterSection!=='all')n++;if(filterStatus.length)n++;if(filterContact!=='all')n++;if(filterSecteur)n++;if(filterSource)n++;if(filterTags.length)n++;if(filterType!=='all')n++;return n;}
+function hasActiveFilters(){return activeFilterCount()>0||!!searchQuery||activeViewId!=='__all__';}
 
 function getActiveView(){
   for(var i=0;i<DEFAULT_VIEWS.length;i++){if(DEFAULT_VIEWS[i].id===activeViewId)return DEFAULT_VIEWS[i];}
@@ -293,7 +299,7 @@ function buildBoard(){
   var board=document.getElementById('crmBoard');var h='';
   STAGES.forEach(function(st){
     if(st.hidden)return; /* Won internes → colonne unique « Closing » */
-    h+='<div class="crm-col" data-stage="'+st.key+'">';
+    h+='<div class="crm-col" data-stage="'+st.key+'" style="--colc:'+st.color+'">';
     h+='<div class="crm-col-head" style="position:relative">';
     h+='<div class="crm-col-head-top">';
     h+='<span class="crm-col-dot" style="background:'+st.color+'"></span>';
@@ -416,10 +422,11 @@ buildSheetHead();
 /* ═══ RENDER ═══ */
 function rebuildTypeDD(){
   var types={};
-  for(var i=0;i<allLeads.length;i++){var t=allLeads[i].type||'';if(t)types[t]=(types[t]||0)+1;}
+  var baseT=getFiltered('type');
+  for(var i=0;i<baseT.length;i++){var t=baseT[i].type||'';if(t)types[t]=(types[t]||0)+1;}
+  if(filterType!=='all'&&!types[filterType])types[filterType]=0;
   var keys=Object.keys(types).sort();
   var c=document.getElementById('fbTypeDD');
-  if(filterType!=='all'&&!types[filterType])filterType='all';
   var h='<div class="fb-dd-item'+(filterType==='all'?' active':'')+'" data-typef="all">Tous</div>';
   for(var j=0;j<keys.length;j++){var k=keys[j];var label=LT[k]||k;h+='<div class="fb-dd-item'+(filterType===k?' active':'')+'" data-typef="'+k+'">'+esc(label)+' <span class="fb-dd-count">'+types[k]+'</span></div>';}
   c.innerHTML=h;
@@ -430,7 +437,7 @@ function rebuildTypeDD(){
 function renderAll(){
   rebuildTypeDD();
   var av=getActiveView();var svl=document.getElementById('svTriggerLabel');if(svl)svl.textContent=av.name;
-  var leads=getFiltered();updateStats(leads);
+  var leads=getFiltered();updateStats(leads);updateResultBar(leads.length);
   if(currentView==='pipeline')renderPipeline(leads);
   else if(currentView==='list')renderList(leads);
   else if(currentView==='sheet')renderSheet(leads);
@@ -451,8 +458,9 @@ function renderPipeline(leads){
     if(s.hidden)return;
     var container=document.querySelector('[data-drop="'+s.key+'"]');var col=container?container.closest('.crm-col'):null;if(!col)return;
     if(filterSection!=='all'&&s.section!==filterSection){col.style.display='none';return;}
-    col.style.display='';
     var sl=leads.filter(function(l){return effStage(l)===s.key;});
+    if(hideEmptyCols&&hasActiveFilters()&&sl.length===0){col.style.display='none';return;}
+    col.style.display='';
     sl=colSorts[s.key]?sortColumnLeads(sl,colSorts[s.key]):sortLeads(sl,globalSortKey,globalSortDir);
     var limit=colCardLimits[s.key]||COL_CARD_LIMIT;
     var total=sl.length;
@@ -464,6 +472,7 @@ function renderPipeline(leads){
     }
     container.innerHTML=h;
   });
+  renderStageStrip(counts);
   // Dialer bridge : boutons d'appel + multi-sélection sur le board kanban
   if (window.DialerBridge) {
     try {
@@ -493,10 +502,10 @@ function renderCard(l){
   var _telC=(l.telephone||'').toString().replace(/\s/g,'');
   var h='<div class="crm-card" draggable="true" data-id="'+l.id+'" data-lead-id="'+l.id+'" data-phone="'+_telC+'" data-name="'+esc(l.nom||'').replace(/"/g,'&quot;')+'">';
   h+='<span class="crm-card-eye" data-action="quickview" data-id="'+l.id+'">👁</span>';
-  h+='<div class="crm-card-name">'+esc(l.nom||'—')+'</div>';
+  var cdv=isKanbanFieldVisible('createdAt')?getLeadDate(l):null;
+  h+='<div class="crm-card-top"><div class="crm-card-name">'+esc(l.nom||'—')+'</div>'+(cdv?'<span class="crm-card-date" title="Date réelle d\'entrée">'+fmtDate(cdv)+'</span>':'')+'</div>';
   if(isKanbanFieldVisible('telephone')&&l.telephone)h+='<div class="crm-card-phone">'+esc(l.telephone)+'</div>';
   if(isKanbanFieldVisible('email')&&l.email)h+='<div class="crm-card-phone" style="font-size:11px">'+esc(l.email)+'</div>';
-  if(isKanbanFieldVisible('createdAt')){var cd=getLeadDate(l);if(cd)h+='<div class="crm-card-phone" style="font-size:11px;color:var(--subtle-text)">'+fmtDate(cd)+'</div>';}
   if(isKanbanFieldVisible('lastContact')||isKanbanFieldVisible('calls')){
     var lc=getLastContact(l),nc=getCallCount(l),bits=[];
     if(isKanbanFieldVisible('lastContact'))bits.push(lc?(contactIcon(lc.type)+' '+agoLabel(lc.date)):'⏳ jamais contacté');
@@ -520,6 +529,29 @@ function renderCard(l){
   h+='</div>';return h;
 }
 
+/* Contenu d'une cellule de la liste. data-col sur le <td> permet à la CSS
+   mobile de transformer chaque ligne en carte (nom en tête, badges dessous). */
+function listCellHtml(l,key){
+  var val=l[key]||'';
+  if(key==='nom')return '<span class="lc-name">'+esc(val||'—')+'</span>';
+  if(key==='telephone')return '<span class="lc-mono">'+esc(val)+'</span>';
+  if(key==='stage'){var st=SM[val||'lead']||STAGES[0];return '<span class="list-stage-badge" style="background:'+st.color+'14;color:'+st.color+'"><span class="list-stage-dot" style="background:'+st.color+'"></span>'+esc(st.label)+'</span>';}
+  if(key==='assignedTo'){
+    if(!val)return '<span class="lc-muted">—</span>';
+    var col2=tmColor(val);var inactive2=!tmIsActive(val);
+    return '<span class="list-setter-badge" style="background:rgba('+hexToRgbCrm(col2)+',0.10);color:'+col2+(inactive2?';opacity:.55':'')+'">'+(inactive2?'🔒 ':'')+esc(tmName(val))+'</span>';
+  }
+  if(key==='type'){if(!val)return '';var tb=TB[val]||'other';return '<span class="list-type-badge '+tb+'">'+esc(LT[val]||val)+'</span>';}
+  if(key==='createdAt'){var d=getLeadDate(l);return '<span class="lc-mono">'+(d?fmtDate(d):'—')+'</span>';}
+  if(key==='updatedAt'){var u=parseFlexDate(l.updatedAt);return '<span class="lc-mono">'+(u?fmtDate(u):'—')+'</span>';}
+  if(key==='lastContact'){var lc=getLastContact(l);return '<span class="lc-mono'+(lc?'':' lc-never')+'"'+(lc?' title="'+escA(fmtDate(lc.date))+'"':'')+'>'+(lc?contactIcon(lc.type)+' '+esc(agoLabel(lc.date)):'⏳ jamais')+'</span>';}
+  if(key==='calls'){var nc=getCallCount(l);return '<span class="lc-mono">'+(nc?'📞 ×'+nc:'0')+'</span>';}
+  if(key==='status')return '<span class="list-setter-badge lc-status">'+esc(statusLabel(val||'nouveau'))+'</span>';
+  if(key==='setterSlug'){if(!val)return '<span class="lc-muted">—</span>';var sc3=tmColor(val);return '<span class="list-setter-badge" style="background:rgba('+hexToRgbCrm(sc3)+',0.10);color:'+sc3+'" title="Setter d\'origine — enregistré à la création, immuable">🔒 '+esc(tmName(val))+'</span>';}
+  if(key==='instagramUsername')return val?'<span class="lc-mono">@'+esc(String(val))+'</span>':'';
+  if(key==='utm')return '<span class="lc-muted">'+esc(decodeUtm(val))+'</span>';
+  return '<span class="lc-muted">'+esc(typeof val==='object'?'':String(val))+'</span>';
+}
 function renderList(leads){
   var sorted=sortLeads(leads,globalSortKey,globalSortDir);
   var tp=getTotalPages(sorted);if(currentPage>tp)currentPage=tp;
@@ -529,26 +561,8 @@ function renderList(leads){
     var _telL=(l.telephone||'').toString().replace(/\s/g,'');
     h+='<tr data-id="'+l.id+'" data-lead-id="'+l.id+'" data-phone="'+_telL+'" data-name="'+esc(l.nom||'').replace(/"/g,'&quot;')+'"'+(sel?' class="selected"':'')+'>';
     LIST_COLS.forEach(function(col){
-      if(col.key==='_cb'){h+='<td style="width:40px" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb" data-cbid="'+l.id+'"'+(sel?' checked':'')+'/></td>';return;}
-      var val=l[col.key]||'';
-      if(col.key==='nom'){h+='<td style="font-family:var(--fh);font-weight:700">'+esc(val||'—')+'</td>';}
-      else if(col.key==='telephone'){h+='<td style="font-family:var(--fm);color:var(--muted)">'+esc(val)+'</td>';}
-      else if(col.key==='stage'){var st=SM[val||'lead']||STAGES[0];h+='<td><span class="list-stage-badge" style="background:'+st.color+'14;color:'+st.color+'"><span class="list-stage-dot" style="background:'+st.color+'"></span>'+esc(st.label)+'</span></td>';}
-      else if(col.key==='assignedTo'){
-        var sl=val?tmName(val):'—';
-        var col2=val?tmColor(val):'#6b7280';
-        var rgb2=hexToRgbCrm(col2);
-        var inactive2=val?!tmIsActive(val):false;
-        h+='<td><span class="list-setter-badge" style="background:rgba('+rgb2+',0.10);color:'+col2+(inactive2?';opacity:.55':'')+'">'+(inactive2?'🔒 ':'')+esc(sl)+'</span></td>';
-      }
-      else if(col.key==='type'){var tl=LT[val]||val,tb=TB[val]||'other';h+='<td><span class="list-type-badge" style="background:'+(tb==='vsl'?'rgba(167,139,250,0.12);color:#c4b5fd':'rgba(245,158,11,0.12);color:#fcd34d')+'">'+tl+'</span></td>';}
-      else if(col.key==='createdAt'||col.key==='updatedAt'){h+='<td style="font-family:var(--fm);font-size:11px;color:var(--muted)">'+fmtDate(col.key==='createdAt'?getLeadDate(l):val)+'</td>';}
-      else if(col.key==='lastContact'){var lc=getLastContact(l);h+='<td style="font-family:var(--fm);font-size:11px;color:'+(lc?'var(--muted)':'var(--gold)')+'" title="'+(lc?escA(fmtDate(lc.date)):'')+'">'+(lc?contactIcon(lc.type)+' '+esc(agoLabel(lc.date)):'jamais')+'</td>';}
-      else if(col.key==='calls'){h+='<td style="font-family:var(--fm);font-size:11px;color:var(--muted);text-align:center">'+getCallCount(l)+'</td>';}
-      else if(col.key==='status'){h+='<td><span class="list-setter-badge" style="background:rgba(96,165,250,0.10);color:var(--blue)">'+esc(statusLabel(val||'nouveau'))+'</span></td>';}
-      else if(col.key==='setterSlug'){var sn=val?tmName(val):'—';var sc3=val?tmColor(val):'#6b7280';h+='<td><span class="list-setter-badge" style="background:rgba('+hexToRgbCrm(sc3)+',0.10);color:'+sc3+'" title="Setter d\'origine — enregistré à la création, immuable">'+(val?'🔒 ':'')+esc(sn)+'</span></td>';}
-      else if(col.key==='instagramUsername'){h+='<td style="font-family:var(--fm);font-size:11px;color:var(--muted)">'+(val?'@'+esc(String(val)):'')+'</td>';}
-      else{h+='<td style="color:var(--muted)">'+esc(typeof val==='object'?'':String(val))+'</td>';}
+      if(col.key==='_cb'){h+='<td data-col="_cb" style="width:40px" onclick="event.stopPropagation()"><input type="checkbox" class="row-cb" data-cbid="'+l.id+'"'+(sel?' checked':'')+'/></td>';return;}
+      h+='<td data-col="'+col.key+'">'+listCellHtml(l,col.key)+'</td>';
     });
     h+='</tr>';
   });
@@ -616,7 +630,10 @@ document.addEventListener('click',function(e){
 
 /* ═══ VIEW SWITCH ═══ */
 function setView(v){
+  /* La feuille (tableur éditable) n'a pas de sens sur téléphone → liste. */
+  if(v==='sheet'&&window.innerWidth<=768)v='list';
   currentView=v;
+  document.body.setAttribute('data-crm-view',v);
   document.querySelectorAll('.view-btn').forEach(function(b){b.classList.toggle('active',b.dataset.view===v);});
   document.querySelectorAll('.crm-view').forEach(function(x){x.classList.remove('active');});
   var el=document.getElementById('view'+v.charAt(0).toUpperCase()+v.slice(1));if(el)el.classList.add('active');
@@ -650,7 +667,7 @@ function activateView(vid){
   filterSetter='all';filterSection='all';filterType='all';currentPage=1;colCardLimits={};
   /* Une vue peut imposer son tri (« À rappeler » : dernier contact croissant). */
   if(v.sort&&v.sort.key){globalSortKey=v.sort.key;globalSortDir=v.sort.dir||'asc';updateSortUI();buildListHead();}
-  renderSetterPills();
+  renderSetterDD();
   document.querySelectorAll('.crm-section-pill').forEach(function(p){p.classList.toggle('active',p.dataset.section==='all');});
   clearSelection();renderSavedViews();renderAll();renderActiveChips();closeSvDD();savePrefs();
 }
@@ -864,8 +881,18 @@ document.getElementById('modalBg').addEventListener('change',function(e){if(e.ta
 function saveModal(){var lid=document.getElementById('modalBg')._leadId;if(!lid)return;var p=document.getElementById('modalPanel'),fs=['nom','telephone','email','utm','assignedTo','type','secteur','ca','defi'],upd={};fs.forEach(function(f){var el=p.querySelector('[data-medit="'+f+'"]');if(el)upd[f]=el.value.trim();});upd.updatedAt=firebase.firestore.FieldValue.serverTimestamp();for(var i=0;i<allLeads.length;i++){if(allLeads[i].id===lid){for(var k in upd){if(k!=='updatedAt')allLeads[i][k]=upd[k];}break;}}db.collection('leads').doc(lid).update(upd).then(function(){var m=document.getElementById('modalSaved');if(m){m.style.opacity='1';setTimeout(function(){m.style.opacity='0';},1500);}renderAll();});}
 
 /* ═══ SEARCH & FILTER ═══ */
-document.getElementById('crmSearch').addEventListener('input',function(){searchQuery=this.value.trim();currentPage=1;colCardLimits={};renderAll();});
-/* Pastilles setter : générées et gérées par renderSetterPills() (bloc PASTILLES SETTER). */
+var searchTimer=null;
+function syncSearchUI(){var w=document.getElementById('crmSearchWrap');if(w)w.classList.toggle('has-value',!!document.getElementById('crmSearch').value);}
+document.getElementById('crmSearch').addEventListener('input',function(){
+  var v=this.value;syncSearchUI();
+  if(searchTimer)clearTimeout(searchTimer);
+  /* Anti-rebond : on ne re-rend pas 1 000 cartes à chaque frappe. */
+  searchTimer=setTimeout(function(){searchQuery=v.trim();currentPage=1;colCardLimits={};renderAll();renderActiveChips();},140);
+});
+document.getElementById('crmSearchClear').addEventListener('click',function(){
+  var i=document.getElementById('crmSearch');i.value='';syncSearchUI();searchQuery='';currentPage=1;colCardLimits={};renderAll();renderActiveChips();i.focus();
+});
+/* Filtre setter : menu généré par renderSetterDD() (bloc SETTER). */
 document.querySelectorAll('.crm-section-pill').forEach(function(b){b.addEventListener('click',function(){document.querySelectorAll('.crm-section-pill').forEach(function(p){p.classList.remove('active');});b.classList.add('active');filterSection=b.dataset.section;currentPage=1;colCardLimits={};renderAll();renderActiveChips();savePrefs();});});
 
 /* ═══ DATES RÉELLES ═══
@@ -985,7 +1012,7 @@ function applyPeriod(){
   if(needsRequery())startLeadsListener();else renderAll();
   renderActiveChips();savePrefs();
 }
-function closeAllFbDD(){['fbDateDD','fbTypeDD','fbStatusDD','fbContactDD','fbMoreDD','fbTagDD'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove('open');});}
+function closeAllFbDD(){['fbSetterDD','fbDateDD','fbTypeDD','fbStatusDD','fbContactDD','fbMoreDD','fbTagDD'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove('open');});}
 document.getElementById('fbDateTrigger').addEventListener('click',function(e){
   e.stopPropagation();var dd=document.getElementById('fbDateDD');var was=dd.classList.contains('open');closeAllFbDD();if(!was){renderPeriodDD();dd.classList.add('open');}
 });
@@ -1005,32 +1032,42 @@ document.getElementById('fbDateDD').addEventListener('click',function(e){
 });
 renderPeriodDD();
 
-/* ═══ PASTILLES SETTER — roster dynamique ═══ */
-function renderSetterPills(){
-  var c=document.getElementById('crmSetterPills');if(!c)return;
+/* ═══ SETTER — menu issu du roster, avec compteurs à facettes ═══ */
+function setterMembers(){
   var members=tmActive().filter(function(m){return m.role!=='coach'&&m.role!=='csm';});
   /* Un membre inactif qui a encore des leads attribués reste sélectionnable
      (grisé) : ses fiches ne doivent pas devenir introuvables. */
   var assigned={};allLeads.forEach(function(l){if(l.assignedTo)assigned[l.assignedTo]=1;});
   tmList().forEach(function(m){if(m.active===false&&assigned[m.slug]&&members.indexOf(m)<0)members.push(m);});
   if(filterSetter!=='all'&&filterSetter!=='__none__'&&!members.some(function(m){return m.slug===filterSetter;})&&tmGet(filterSetter))members.push(tmGet(filterSetter));
-  var h='<button class="crm-filter-pill'+(filterSetter==='all'?' active':'')+'" data-setter="all">Tous</button>';
-  members.forEach(function(m){
-    var col=m.color||'#6b7280';var act=filterSetter===m.slug;
-    h+='<button class="crm-filter-pill'+(act?' active':'')+(m.active===false?' inactive':'')+'" data-setter="'+escA(m.slug)+'"'+(act?' style="border-color:'+col+';color:'+col+';background:rgba('+hexToRgbCrm(col)+',0.10)"':'')+'>'+(m.active===false?'🔒 ':'')+esc(m.shortName||m.displayName||m.slug)+'</button>';
-  });
-  h+='<button class="crm-filter-pill'+(filterSetter==='__none__'?' active':'')+'" data-setter="__none__" title="Leads sans gestionnaire">∅ Non attribué</button>';
-  c.innerHTML=h;
+  return members;
 }
-document.getElementById('crmSetterPills').addEventListener('click',function(e){
-  var b=e.target.closest('[data-setter]');if(!b)return;
+function renderSetterDD(){
+  var dd=document.getElementById('fbSetterDD');if(!dd)return;
+  var base=getFiltered('setter');var counts={},none=0;
+  base.forEach(function(l){if(l.assignedTo)counts[l.assignedTo]=(counts[l.assignedTo]||0)+1;else none++;});
+  var h='<div class="fb-dd-item'+(filterSetter==='all'?' active':'')+'" data-setter="all"><span>Tous les setters</span><span class="fb-dd-count">'+base.length+'</span></div>';
+  setterMembers().forEach(function(m){
+    var col=m.color||'#6b7280';
+    h+='<div class="fb-dd-item'+(filterSetter===m.slug?' active':'')+'" data-setter="'+escA(m.slug)+'"><span><span class="fb-dd-dot" style="background:'+col+'"></span>'+(m.active===false?'🔒 ':'')+esc(m.shortName||m.displayName||m.slug)+'</span><span class="fb-dd-count">'+(counts[m.slug]||0)+'</span></div>';
+  });
+  h+='<div class="fb-dd-item'+(filterSetter==='__none__'?' active':'')+'" data-setter="__none__"><span><span class="fb-dd-dot" style="background:var(--muted2)"></span>Non attribué</span><span class="fb-dd-count">'+none+'</span></div>';
+  dd.innerHTML=h;
+  var trig=document.getElementById('fbSetterTrigger');
+  var lbl=filterSetter==='all'?'Setter':(filterSetter==='__none__'?'Non attribué':tmName(filterSetter));
+  trig.innerHTML='👤 '+esc(lbl)+' <span class="fb-dd-caret">▼</span>';trig.classList.toggle('has-value',filterSetter!=='all');
+}
+document.getElementById('fbSetterTrigger').addEventListener('click',function(e){e.stopPropagation();var dd=document.getElementById('fbSetterDD');var was=dd.classList.contains('open');closeAllFbDD();if(!was){renderSetterDD();dd.classList.add('open');}});
+document.getElementById('fbSetterDD').addEventListener('click',function(e){
+  e.stopPropagation();var b=e.target.closest('[data-setter]');if(!b)return;
   filterSetter=b.dataset.setter;currentPage=1;colCardLimits={};
-  renderSetterPills();renderAll();renderActiveChips();savePrefs();
+  document.getElementById('fbSetterDD').classList.remove('open');
+  renderSetterDD();renderAll();renderActiveChips();savePrefs();
 });
 
 /* ═══ STATUT LEADS LIVE (multi) ═══ */
 function renderStatusDD(){
-  var counts={};allLeads.forEach(function(l){var st=l.status||'nouveau';counts[st]=(counts[st]||0)+1;});
+  var counts={};getFiltered('status').forEach(function(l){var st=l.status||'nouveau';counts[st]=(counts[st]||0)+1;});
   var keys=Object.keys(STATUS_LABELS).filter(function(k){return counts[k];});
   Object.keys(counts).forEach(function(k){if(keys.indexOf(k)<0)keys.push(k);});
   filterStatus.forEach(function(k){if(keys.indexOf(k)<0)keys.push(k);});
@@ -1053,7 +1090,9 @@ document.getElementById('fbStatusDD').addEventListener('click',function(e){
 var CONTACT_PRESETS=[{key:'all',label:'Tous'},{key:'never',label:'Jamais contacté'},{key:'7',label:'+ de 7 jours (ou jamais)'},{key:'14',label:'+ de 14 jours (ou jamais)'},{key:'30',label:'+ de 30 jours (ou jamais)'},{key:'60',label:'+ de 60 jours (ou jamais)'}];
 function contactLabel(){if(filterContact==='all')return 'Dernier contact';var p=CONTACT_PRESETS.filter(function(x){return x.key===filterContact;})[0];return p?p.label:'+ de '+filterContact+' j (ou jamais)';}
 function renderContactDD(){
-  var h='';CONTACT_PRESETS.forEach(function(p){h+='<div class="fb-dd-item'+(filterContact===p.key?' active':'')+'" data-contactf="'+p.key+'">'+esc(p.label)+'</div>';});
+  var baseC=getFiltered('contact');var nowC=Date.now();
+  function cnt(key){if(key==='all')return baseC.length;var n=0,days=parseFloat(key);baseC.forEach(function(l){var lc=getLastContact(l);if(key==='never'){if(!lc)n++;}else if(!lc||lc.date.getTime()<=nowC-days*86400000)n++;});return n;}
+  var h='';CONTACT_PRESETS.forEach(function(p){h+='<div class="fb-dd-item'+(filterContact===p.key?' active':'')+'" data-contactf="'+p.key+'"><span>'+esc(p.label)+'</span><span class="fb-dd-count">'+cnt(p.key)+'</span></div>';});
   var isCustom=!CONTACT_PRESETS.some(function(p){return p.key===filterContact;});
   h+='<div class="fb-dd-custom"><label>+ de</label><input type="number" min="1" class="fb-num-input" id="fbContactDays" value="'+(isCustom?escA(filterContact):'')+'" placeholder="N"/><label>jours</label><button class="fb-dd-apply" id="fbContactApply">OK</button></div>';
   document.getElementById('fbContactDD').innerHTML=h;
@@ -1114,6 +1153,9 @@ function loadPrefs(){
   if(p.view==='pipeline'||p.view==='list'||p.view==='sheet')setView(p.view);
   /* Vue active : getActiveView() retombe sur « Toutes » si elle n'existe plus. */
   if(typeof p.activeViewId==='string'&&p.activeViewId)activeViewId=p.activeViewId;
+  /* Des filtres mémorisés restreignent la liste dès l'ouverture : on le DIT
+     (la barre de résultats les liste, avec « Tout effacer »). */
+  if(activeFilterCount()>0||activeViewId!=='__all__')setTimeout(function(){toast('↺ Filtres de ta dernière session restaurés');},900);
 }
 
 /* ═══ TYPE FILTER ═══ */
@@ -1133,7 +1175,7 @@ document.getElementById('fbTypeDD').addEventListener('click',function(e){
 });
 /* ── Close all dropdowns on outside click ── */
 document.addEventListener('click',function(e){
-  [['fbDateWrapper','fbDateDD'],['fbTypeWrapper','fbTypeDD'],['fbStatusWrapper','fbStatusDD'],['fbContactWrapper','fbContactDD'],['fbMoreWrapper','fbMoreDD']].forEach(function(pair){
+  [['fbSetterWrapper','fbSetterDD'],['fbDateWrapper','fbDateDD'],['fbTypeWrapper','fbTypeDD'],['fbStatusWrapper','fbStatusDD'],['fbContactWrapper','fbContactDD'],['fbMoreWrapper','fbMoreDD']].forEach(function(pair){
     if(!e.target.closest('#'+pair[0]))document.getElementById(pair[1]).classList.remove('open');
   });
 });
@@ -1222,10 +1264,16 @@ document.getElementById('fbTagDD').addEventListener('click',function(e){
   }
 });
 
-/* ═══ ACTIVE FILTER CHIPS ═══ */
+/* ═══ ACTIVE FILTER CHIPS ═══
+   TOUT ce qui restreint la liste apparaît ici : vue, recherche, setter,
+   section et filtres. Un filtre mémorisé ne peut donc jamais agir en silence. */
 function renderActiveChips(){
-  var h='';var n=0;
-  function chip(icon,label,kind,val,cls){n++;h+='<span class="fb-chip'+(cls?' '+cls:'')+'">'+icon+' '+esc(label)+' <span class="fb-chip-x" data-chipclear="'+kind+'"'+(val!=null?' data-chipval="'+escA(val)+'"':'')+'>✕</span></span>';}
+  var h='';
+  function chip(icon,label,kind,val,cls){h+='<span class="fb-chip'+(cls?' '+cls:'')+'">'+icon+' '+esc(label)+' <span class="fb-chip-x" data-chipclear="'+kind+'"'+(val!=null?' data-chipval="'+escA(val)+'"':'')+' title="Retirer ce filtre">✕</span></span>';}
+  if(activeViewId!=='__all__')chip('📋','Vue : '+getActiveView().name,'view',null,'view-chip');
+  if(searchQuery)chip('🔎','« '+searchQuery+' »','search');
+  if(filterSetter!=='all')chip('👤',filterSetter==='__none__'?'Non attribué':tmName(filterSetter),'setter');
+  if(filterSection!=='all')chip('🧭',filterSection,'section');
   if(periodKey!==PERIOD_DEFAULT)chip('📅',periodLabel(),'period');
   if(filterStatus.length)chip('📞',filterStatus.map(statusLabel).join(', '),'status');
   if(filterContact!=='all')chip('⏱',contactLabel(),'contact');
@@ -1234,18 +1282,52 @@ function renderActiveChips(){
   filterTags.forEach(function(t){chip('🏷',t,'tag',t,'tag-chip');});
   if(filterType!=='all')chip('📦',LT[filterType]||filterType,'type');
   document.getElementById('fbActiveChips').innerHTML=h;
-  document.getElementById('fbClearAll').style.display=(n||filterSetter!=='all'||filterSection!=='all')?'':'none';
+}
+/* Barre de résultats, état vide, badge mobile — appelé à chaque renderAll. */
+function updateResultBar(n){
+  var active=hasActiveFilters();
+  var bar=document.getElementById('crmResultBar');if(!bar)return;
+  bar.classList.toggle('show',active);
+  var total=allLeads.length;
+  document.getElementById('crmResultCount').innerHTML='<b>'+n+'</b> lead'+(n>1?'s':'')+' sur '+total+' chargé'+(total>1?'s':'');
+  var tg=document.getElementById('crmEmptyColsToggle');
+  tg.style.display=(active&&currentView==='pipeline')?'':'none';
+  tg.textContent=hideEmptyCols?'▥ Afficher les colonnes vides':'▥ Replier les colonnes vides';
+  var cnt=activeFilterCount();
+  var mc=document.getElementById('fbMobileCount');if(mc){mc.textContent=cnt;mc.style.display=cnt?'':'none';}
+  var ap=document.getElementById('fbSheetApply');if(ap)ap.textContent='Voir '+n+' lead'+(n>1?'s':'');
+  var empty=document.getElementById('crmEmpty');
+  if(empty){
+    var show=crmDataLoaded&&n===0;
+    empty.classList.toggle('show',show);
+    if(show){
+      document.getElementById('crmEmptySub').textContent=active?('Aucun des '+total+' leads chargés ('+periodLabel()+') ne passe les filtres actifs. Retire un filtre ci-dessus ou efface tout.'):'Aucun lead sur cette période. Élargis la période.';
+      document.getElementById('crmEmptyClear').style.display=active?'':'none';
+    }
+  }
 }
 /* Remet TOUTE l'interface des filtres en cohérence avec l'état (après
    loadPrefs, un chip retiré, « Tout effacer »…). */
 function refreshFilterUI(){
-  renderPeriodDD();renderStatusDD();renderContactDD();renderMoreDD();rebuildTypeDD();renderSetterPills();
+  renderPeriodDD();renderStatusDD();renderContactDD();renderMoreDD();rebuildTypeDD();renderSetterDD();
   document.querySelectorAll('.crm-section-pill').forEach(function(p){p.classList.toggle('active',p.dataset.section===filterSection);});
-  var tt=document.getElementById('fbTagTrigger');tt.classList.toggle('has-tags',filterTags.length>0);tt.innerHTML=filterTags.length>0?(filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span class="fb-dd-caret">▼</span>'):('🏷 Tags <span class="fb-dd-caret">▼</span>');
+  var tt=document.getElementById('fbTagTrigger');tt.classList.toggle('has-tags',filterTags.length>0);tt.innerHTML=filterTags.length>0?('🏷 '+filterTags.length+' tag'+(filterTags.length>1?'s':'')+' <span class="fb-dd-caret">▼</span>'):('🏷 Tags <span class="fb-dd-caret">▼</span>');
   updateSortUI();renderActiveChips();
+}
+function clearAllFilters(){
+  periodKey=PERIOD_DEFAULT;periodFrom=null;periodTo=null;filterStatus=[];filterContact='all';filterSecteur='';filterSource='';filterTags=[];filterType='all';filterSetter='all';filterSection='all';searchQuery='';
+  activeViewId='__all__';
+  globalSortKey='realDate';globalSortDir='desc';
+  document.getElementById('crmSearch').value='';syncSearchUI();
+  currentPage=1;colCardLimits={};refreshFilterUI();buildListHead();renderSavedViews();
+  if(needsRequery())startLeadsListener();else renderAll();savePrefs();
 }
 document.getElementById('fbActiveChips').addEventListener('click',function(e){
   var x=e.target.closest('[data-chipclear]');if(!x)return;var k=x.dataset.chipclear;
+  if(k==='view'){activeViewId='__all__';renderSavedViews();}
+  if(k==='search'){searchQuery='';document.getElementById('crmSearch').value='';syncSearchUI();}
+  if(k==='setter')filterSetter='all';
+  if(k==='section')filterSection='all';
   if(k==='period'){periodKey=PERIOD_DEFAULT;periodFrom=null;periodTo=null;}
   if(k==='status')filterStatus=[];
   if(k==='contact')filterContact='all';
@@ -1255,11 +1337,46 @@ document.getElementById('fbActiveChips').addEventListener('click',function(e){
   if(k==='type')filterType='all';
   currentPage=1;colCardLimits={};refreshFilterUI();if(needsRequery())startLeadsListener();else renderAll();savePrefs();
 });
-document.getElementById('fbClearAll').addEventListener('click',function(){
-  periodKey=PERIOD_DEFAULT;periodFrom=null;periodTo=null;filterStatus=[];filterContact='all';filterSecteur='';filterSource='';filterTags=[];filterType='all';filterSetter='all';filterSection='all';searchQuery='';
-  globalSortKey='realDate';globalSortDir='desc';
-  document.getElementById('crmSearch').value='';
-  currentPage=1;colCardLimits={};refreshFilterUI();buildListHead();if(needsRequery())startLeadsListener();else renderAll();savePrefs();
+document.getElementById('fbClearAll').addEventListener('click',clearAllFilters);
+document.getElementById('crmEmptyClear').addEventListener('click',clearAllFilters);
+document.getElementById('crmEmptyColsToggle').addEventListener('click',function(){hideEmptyCols=!hideEmptyCols;renderAll();});
+
+/* ═══ BANDEAU D'ÉTAPES (mobile) — saute d'une colonne du kanban à l'autre ═══ */
+function renderStageStrip(counts){
+  var el=document.getElementById('crmStageStrip');if(!el)return;var h='';
+  STAGES.forEach(function(st){
+    if(st.hidden)return;
+    var col=document.querySelector('.crm-col[data-stage="'+st.key+'"]');if(!col||col.style.display==='none')return;
+    h+='<button class="crm-stage-chip" data-gostage="'+st.key+'" style="--colc:'+st.color+'"><span class="crm-col-dot" style="background:'+st.color+'"></span>'+esc(st.label)+' <b>'+(counts[st.key]||0)+'</b></button>';
+  });
+  el.innerHTML=h;syncStageStrip();
+}
+function syncStageStrip(){
+  var brd=document.getElementById('crmBoard'),el=document.getElementById('crmStageStrip');if(!brd||!el||!el.firstChild)return;
+  var best=null,bestD=1e9;
+  brd.querySelectorAll('.crm-col').forEach(function(c){if(c.style.display==='none')return;var d=Math.abs(c.offsetLeft-brd.scrollLeft-12);if(d<bestD){bestD=d;best=c.dataset.stage;}});
+  el.querySelectorAll('.crm-stage-chip').forEach(function(ch){var on=ch.dataset.gostage===best;ch.classList.toggle('active',on);});
+}
+document.getElementById('crmStageStrip').addEventListener('click',function(e){
+  var b=e.target.closest('[data-gostage]');if(!b)return;
+  var brd=document.getElementById('crmBoard');var col=brd.querySelector('.crm-col[data-stage="'+b.dataset.gostage+'"]');if(!col)return;
+  brd.scrollTo({left:Math.max(0,col.offsetLeft-12),behavior:'smooth'});
+});
+var stripRaf=null;
+document.getElementById('crmBoard').addEventListener('scroll',function(){if(stripRaf)return;stripRaf=window.requestAnimationFrame(function(){stripRaf=null;syncStageStrip();});});
+
+/* ═══ FEUILLE DE FILTRES (mobile) ═══ */
+function setFiltersSheet(open){document.body.classList.toggle('filters-open',!!open);if(!open)closeAllFbDD();}
+document.getElementById('fbMobileBtn').addEventListener('click',function(){setFiltersSheet(!document.body.classList.contains('filters-open'));});
+document.getElementById('fbSheetClose').addEventListener('click',function(){setFiltersSheet(false);});
+document.getElementById('fbSheetApply').addEventListener('click',function(){setFiltersSheet(false);});
+document.getElementById('fbBackdrop').addEventListener('click',function(){setFiltersSheet(false);});
+
+/* ═══ CLAVIER : « / » → recherche · Échap → ferme les menus ═══ */
+document.addEventListener('keydown',function(e){
+  var tag=(e.target&&e.target.tagName||'').toLowerCase();var typing=tag==='input'||tag==='textarea'||tag==='select'||(e.target&&e.target.isContentEditable);
+  if(e.key==='/'&&!typing&&!e.metaKey&&!e.ctrlKey){e.preventDefault();var si=document.getElementById('crmSearch');si.focus();si.select();}
+  if(e.key==='Escape'){closeAllFbDD();setFiltersSheet(false);if(tag==='input'&&e.target.id==='crmSearch')e.target.blur();}
 });
 
 /* ═══ SORT DROPDOWN ═══ */
@@ -2427,7 +2544,7 @@ function startLeadsListener(){
     });
     var banner=document.getElementById('crmLimitBanner');
     if(banner){var hit=snap.size>=LEADS_QUERY_LIMIT;banner.style.display=hit?'':'none';if(hit)banner.textContent='⚠ Plafond de '+LEADS_QUERY_LIMIT+' leads atteint pour cette période : les plus anciens ne sont pas chargés. Réduis la période pour les voir.';}
-    crmDataLoaded=true;colCardLimits={};buildBoard();collectTags();renderSetterPills();renderAll();renderSavedViews();renderActiveChips();
+    crmDataLoaded=true;colCardLimits={};buildBoard();collectTags();renderSetterDD();renderAll();renderSavedViews();renderActiveChips();
   },function(err){
     console.error('[crm] onSnapshot error:',err);
     if(board)board.innerHTML='<div style="display:flex;align-items:center;justify-content:center;width:100%;padding:60px 20px;color:var(--red3);font-size:13px;font-weight:600">⚠ Erreur de chargement. Rechargez la page.</div>';
