@@ -841,7 +841,12 @@
       else if (m && m.resolved && isSalesMember(m.slug)) closer = m.slug;
     }
     var setter = null;
-    if (booking && booking.bookedBySlug && isSalesMember(booking.bookedBySlug)) setter = booking.bookedBySlug;
+    /* LA FICHE PRIME (18/09/2026) : lead.setterSlug est verrouillé 🔒 (posé à la
+       création, par un lien setter attribué, ou désigné à la main dans Leads
+       Live) — il passe AVANT le poseur du RDV. Fiche à Valentin, RDV cliqué
+       par Élodie, setter désigné = Valentin → commission Setting à Valentin. */
+    if (lead && lead.setterSlug && isSalesMember(lead.setterSlug)) setter = lead.setterSlug;
+    if (!setter && booking && booking.bookedBySlug && isSalesMember(booking.bookedBySlug)) setter = booking.bookedBySlug;
     /* setterSlug (10/09/2026) : le setter qui a CRÉÉ et travaillé la fiche —
        posé à la création par un membre au rôle setting. Prime sur assignedTo :
        Steven crée la fiche, l'attribue à Élodie et le prospect réserve seul →

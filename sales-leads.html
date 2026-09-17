@@ -3946,13 +3946,85 @@ function l2SetterInfo(l) {
     at: l.setterAt || null
   };
 }
-function l2SetterRowHtml(l, mode) {
+/* ═══ DÉSIGNER LE SETTER (18/09/2026) ═══
+   Setting téléphone : la fiche arrive seule dans Leads Live (round robin) et
+   n'a pas de setter à la naissance. Celui qui a réellement fait le setting
+   n'est pas forcément « Attribué à » (fiche à Valentin, setting fait par
+   Élodie) : on le désigne ici, UNE fois. Écriture write-once (transaction +
+   rules setterUnchanged) — ensuite la ligne devient « 🎯 Setter 🔒 » et porte
+   la commission Setting au close (la fiche prime sur le poseur du RDV). */
+function l2SetterCandidates() {
+  var out = [];
+  Object.keys(SETTERS).forEach(function (slug) {
+    var so = SETTERS[slug];
+    var role = (so && so._meta && so._meta.role) ? String(so._meta.role) : '';
+    if (role !== 'setter' && role !== 'setter_ecrit' && role !== 'closer_setter') return;
+    if (so.active === false || (so._meta && (so._meta.active === false || so._meta.departed === true))) return;
+    out.push({ slug: slug, name: so.name || slug, role: role });
+  });
+  return out;
+}
+function l2SetterPickHtml(l, id) {
+  var cands = l2SetterCandidates();
+  if (!cands.length || !id) return '';
+  var me = (typeof getCurrentVoiceUser === 'function') ? getCurrentVoiceUser() : null;
+  var meSlug = me ? me.slug : '';
+  var rdvPose = !!(l && (l.status === 'rdv_pose' || l.stage === 'set' || l.lastBookingId));
+  var h = '<div class="ld-detail-row" data-setter-pick="' + escAttr(id) + '"' + (rdvPose ? ' style="background:rgba(251,146,60,.10);border:1px solid rgba(251,146,60,.35);border-radius:8px;padding:6px 8px"' : '') + '>';
+  h += '<span class="ld-detail-label">🎯 Setter</span><span class="ld-detail-val" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">';
+  h += '<select class="ld-detail-select" data-setter-pick-select="' + escAttr(id) + '" style="flex:1;min-width:130px"><option value="">— Qui a fait le setting ? —</option>';
+  cands.forEach(function (c) {
+    h += '<option value="' + escAttr(c.slug) + '"' + (c.slug === meSlug ? ' selected' : '') + '>' + escHtml(c.name) + (c.role === 'setter_ecrit' ? ' · écrit' : '') + '</option>';
+  });
+  h += '</select><button type="button" class="ld-btn" data-action="lockSetter" data-lead-id="' + escAttr(id) + '" style="padding:5px 10px;font-size:12px;border-radius:7px;border:1px solid rgba(251,146,60,.5);background:rgba(251,146,60,.15);color:#fb923c;cursor:pointer;font-weight:700">🔒 Verrouiller</button>';
+  if (rdvPose) h += '<span style="flex-basis:100%;font-size:11px;color:#fb923c">⚠️ RDV posé mais setter non renseigné — à désigner pour la commission Setting.</span>';
+  h += '</span></div>';
+  return h;
+}
+function l2LockSetter(leadId, slug, btn) {
+  var so = SETTERS[slug];
+  var role = (so && so._meta && so._meta.role) ? String(so._meta.role) : '';
+  if (!leadId || !so || (role !== 'setter' && role !== 'setter_ecrit' && role !== 'closer_setter')) { toast('❌ Setter invalide'); return; }
+  var name = so.name || slug;
+  if (!window.confirm('Désigner ' + name + ' comme setter de cette fiche ?\n\nC\'est DÉFINITIF : le setter ne pourra plus être changé, et il touchera la commission Setting en cas de close.')) return;
+  var me = (typeof getCurrentVoiceUser === 'function') ? getCurrentVoiceUser() : null;
+  var by = me ? (me.name || me.slug) : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  var ref = db.collection('leads').doc(leadId);
+  db.runTransaction(function (tx) {
+    return tx.get(ref).then(function (snap) {
+      if (!snap.exists) throw new Error('fiche introuvable');
+      var d = snap.data() || {};
+      if (d.setterSlug) throw new Error('déjà verrouillé sur ' + (d.setterName || d.setterSlug));
+      var up = {
+        setterSlug: slug,
+        setterName: name,
+        setterRole: role,
+        setterAt: firebase.firestore.FieldValue.serverTimestamp(),
+        setterVia: 'manual_pick',
+        timeline_history: firebase.firestore.FieldValue.arrayUnion({
+          text: '🎯 Setting par ' + name + (by && me.slug !== slug ? ' · désigné par ' + by : ''),
+          date: new Date().toLocaleString('fr-FR'),
+          color: '#fb923c'
+        })
+      };
+      if (me && me.slug) up.setterSetBy = me.slug;
+      tx.update(ref, up);
+    });
+  }).then(function () {
+    toast('🔒 Setter verrouillé : ' + name);
+  }).catch(function (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '🔒 Verrouiller'; }
+    toast('❌ Setter non enregistré : ' + ((e && e.message) || e));
+  });
+}
+function l2SetterRowHtml(l, mode, id) {
   var s = l2SetterInfo(l);
-  if (!s) return '';
+  if (!s) return (mode === 'detail') ? l2SetterPickHtml(l, id) : '';
   var val = '<strong style="color:' + s.color + '">' + escHtml(s.name) + '</strong>';
   if (s.ecrit) val += ' <span style="color:var(--muted);font-size:11px">· setting écrit</span>';
   if (s.at) val += ' <span style="color:var(--muted);font-size:11px">· depuis le ' + escHtml(formatDateTimeFr(s.at)) + '</span>';
-  var lock = ' <span title="Enregistré à la création de la fiche — ne change jamais" style="opacity:.6;cursor:help">🔒</span>';
+  var lock = ' <span title="Enregistré une seule fois — ne change jamais" style="opacity:.6;cursor:help">🔒</span>';
   if (mode === 'popup') {
     return '<div class="ld-popup-field"><span class="ld-popup-field-label">🎯 Setter' + lock + '</span><span class="ld-popup-field-val">' + val + '</span></div>';
   }
@@ -3986,7 +4058,7 @@ function l2SegInfos(l, id) {
     h += '<div class="ld-detail-row"><span class="ld-detail-label">Entrée initiale</span><span class="ld-detail-val">' + formatSmartFr(_entryInit) + '</span></div>';
   }
   h += '<div class="ld-detail-row"><span class="ld-detail-label">Reçu le</span><span class="ld-detail-val">' + formatDateTimeFr(_effRecu || l.createdAt) + '</span></div>';
-  h += l2SetterRowHtml(l, 'detail');
+  h += l2SetterRowHtml(l, 'detail', id);
 
   // 📦 Historique Zoho — leads importés depuis l'ancien CRM uniquement
   if (l.zohoCreatedAt || l.zohoModifiedAt || l.zohoLastActivityAt || l.zohoGestionnaire || l.zohoOrigine) {
@@ -4706,6 +4778,17 @@ document.addEventListener('click', function(e) {
   }
   /* Ouvrir Signatures / Paiements dans un panneau embarqué — la closeuse
      reste dans Leads Live, le module reste la source unique. */
+  /* Désigner le setter de la fiche (write-once). */
+  var lockSetterBtn = e.target.closest('[data-action="lockSetter"]');
+  if (lockSetterBtn) {
+    e.stopPropagation();
+    var lsId = lockSetterBtn.getAttribute('data-lead-id');
+    var lsSel = document.querySelector('[data-setter-pick-select="' + lsId + '"]');
+    var lsSlug = lsSel ? lsSel.value : '';
+    if (!lsSlug) { toast('Choisis d\'abord qui a fait le setting'); return; }
+    l2LockSetter(lsId, lsSlug, lockSetterBtn);
+    return;
+  }
   var modBtn = e.target.closest('[data-action="openModule"]');
   if (modBtn) {
     e.stopPropagation();

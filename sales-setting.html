@@ -377,18 +377,25 @@
          retombe sur le setter attribué du lead (leads.assignedTo).
          Nécessaire dès qu'il y a ≥ 2 setters actifs. — */
       var _needLead = {};
+      var _needLeadLock = {};
       bookings.forEach(function (b) {
         if (AF.classifyBooking(b, S.typeMap) !== 'setter') return;
-        if (b.bookedBySlug || (b.closeData && b.closeData.setterSlug)) return;
-        if (b.leadId) _needLead[b.leadId] = 1;
+        if (!b.leadId) return;
+        /* Fiche lue aussi quand le RDV a un poseur : le setter 🔒 de la fiche
+           prime sur lui (18/09/2026). Les fiches du repli legacy passent en
+           premier pour rester sous le plafond de lectures. */
+        if (b.bookedBySlug || (b.closeData && b.closeData.setterSlug)) _needLeadLock[b.leadId] = 1;
+        else _needLead[b.leadId] = 1;
       });
       var _leadIds = Object.keys(_needLead).slice(0, 150);
+      Object.keys(_needLeadLock).forEach(function (k) { if (!_needLead[k] && _leadIds.length < 300) _leadIds.push(k); });
       return Promise.all(_leadIds.map(function (id) {
         return db.collection('leads').doc(id).get().catch(function () { return null; });
       })).then(function (snaps) {
         var leadSetter = {};
+        var leadLocked = {}; // setterSlug 🔒 de la fiche : prime sur le poseur du RDV (18/09/2026)
         snaps.forEach(function (s) {
-          if (s && s.exists) { var d0 = s.data() || {}; var ls = d0.setterSlug || d0.assignedTo; if (ls) leadSetter[s.id] = ls; }
+          if (s && s.exists) { var d0 = s.data() || {}; var ls = d0.setterSlug || d0.assignedTo; if (ls) leadSetter[s.id] = ls; if (d0.setterSlug) leadLocked[s.id] = d0.setterSlug; }
         });
 
       var days = {};
@@ -448,8 +455,10 @@
       /* — RDV NB du setter : sets réels + tenue + closes — */
       var visibleSetters = S.members.filter(function (m) { return m.active !== false; });
       function attributedToMember(b) {
-        if (b.bookedBySlug) return b.bookedBySlug === member.slug;
+        /* RDV closé : le setter réellement commissionné fait foi (deal figé). */
         if (b.closeData && b.closeData.setterSlug) return b.closeData.setterSlug === member.slug;
+        if (b.leadId && leadLocked[b.leadId]) return leadLocked[b.leadId] === member.slug;
+        if (b.bookedBySlug) return b.bookedBySlug === member.slug;
         /* fiche : setterSlug (setter qui l'a créée/travaillée) sinon assignedTo ;
            sinon attribué si un seul setter actif */
         if (b.leadId && leadSetter[b.leadId]) return leadSetter[b.leadId] === member.slug;

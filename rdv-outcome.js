@@ -350,7 +350,9 @@
   function refreshSelectsOnly() {
     if (state.outcome !== 'close' || !state.booking) return;
     var selC = $('rvoCloser'), selS = $('rvoSetter');
-    if (selS && document.activeElement !== selS) {
+    if (selS && lockedSetter()) {
+      applySetterLock(selS);
+    } else if (selS && document.activeElement !== selS) {
       var curS = selS.value;
       selS.innerHTML = membersOptions(curS || prefillSetter(), true, '— aucun (pas de commission setting) —');
     }
@@ -377,9 +379,24 @@
     var sales = AF.salesMembers();
     return sales.length === 1 ? sales[0].slug : '';
   }
+  /* Setter verrouillé 🔒 de la fiche (18/09/2026) : il prime sur tout — le
+     sélecteur est forcé dessus et désactivé, sinon le verrou de la fiche se
+     contournerait en un clic au moment du close. */
+  function lockedSetter() {
+    return (state.lead && state.lead.setterSlug) ? String(state.lead.setterSlug) : '';
+  }
+  function applySetterLock(sel) {
+    var ls = lockedSetter();
+    if (!sel || !ls) return;
+    sel.innerHTML = membersOptions(ls, true, '— aucun (pas de commission setting) —');
+    sel.value = ls;
+    sel.disabled = true;
+    sel.title = 'Setter verrouillé sur la fiche du lead — non modifiable';
+  }
   function prefillSetter() {
     var AF = window.AlteoreFlow;
     var b = state.booking || {};
+    if (lockedSetter()) return lockedSetter();
     if (b.closeData && b.closeData.setterSlug && AF.isSalesMember(b.closeData.setterSlug)) return b.closeData.setterSlug;
     if (b.bookedBySlug && AF.isSalesMember(b.bookedBySlug)) return b.bookedBySlug;
     if (state.lead && state.lead.setterSlug && AF.isSalesMember(state.lead.setterSlug)) return state.lead.setterSlug;
@@ -529,7 +546,7 @@
         collecte: parseFloat($('rvoCollecte').value) || 0,
         paiement: $('rvoPaiement').value || null,
         closerSlug: $('rvoCloser').value || null,
-        setterSlug: $('rvoSetter').value || null
+        setterSlug: lockedSetter() || $('rvoSetter').value || null
       };
     }
     if (k === 'annule') {
