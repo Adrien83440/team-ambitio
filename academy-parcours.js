@@ -1001,7 +1001,7 @@
 
   /* ── Le résumé compact dans la fiche ───────────────────────────────── */
   function cell(l, v) { return '<div class="ap-summary-cell"><div class="kl">' + esc(l) + '</div><div class="kv">' + v + '</div></div>'; }
-  function renderSummary(d) {
+  function renderSummary(d, sansBouton) {
     var js = d.jalons || [], jc = null, ec = null, i;
     for (i = 0; i < js.length; i++) if (js[i].code === d.jalonCourant) jc = js[i];
     if (!jc) for (i = 0; i < js.length; i++) if (js[i].statut === 'a_venir') { jc = js[i]; break; }
@@ -1020,7 +1020,7 @@
     cells += cell('Outils du dirigeant', esc(d.outils.remplis) + ' / ' + esc(d.outils.total) + ' complets');
     if (d.credits) cells += cell('Séances', esc(d.credits.restantes) + ' restantes sur ' + esc(d.credits.total) + (d.credits.sansTrace ? '<div style="color:#8a6508;font-weight:600">' + esc(d.credits.sansTrace) + ' sans synthèse</div>' : ''));
     return '<div class="ap-summary"><div class="ap-summary-grid">' + cells + '</div><div class="ap-row">'
-      + '<button type="button" class="ap-btn primary" data-ap-open>🎛 Gérer le parcours</button>'
+      + (sansBouton ? '' : '<button type="button" class="ap-btn primary" data-ap-open>🎛 Gérer le parcours</button>')
       + (d.plan && d.plan.recu ? '<span class="ap-pill ok">plan reçu par l\'Academy</span>' : '<span class="ap-pill gold">plan non poussé</span>')
       + (d.peutAgir ? '' : '<span class="ap-muted">lecture seule</span>')
       + '</div></div>';
@@ -1037,7 +1037,12 @@
       if (!j || j.ok !== true) { el.innerHTML = '<span class="ap-muted">🎓 ' + esc(messageErreur(j)) + '</span>'; return; }
       if (!j.found) { el.innerHTML = '<span class="ap-muted">🎓 Aucun compte Academy pour cet e-mail.</span>'; return; }
       if (j.version !== 'v2_6mois') { el.innerHTML = '<span class="ap-muted">🎓 Ce client suit le programme vidéo, pas le parcours à étapes : rien à piloter ici.</span>'; return; }
-      try { el.innerHTML = renderSummary(j); } catch (e) { el.innerHTML = '<span class="ap-muted">🎓 Résumé indisponible.</span>'; console.error('[academy-parcours] résumé', e); }
+      /* La section hôte porte déjà son bouton [data-ap-open] : pas de doublon
+         dans le résumé. Sans section hôte, le résumé porte le sien. */
+      var scope = el.closest ? el.closest('[data-ap-scope]') : null;
+      var autre = scope ? scope.querySelector('[data-ap-open]') : null;
+      var sansBouton = !!(autre && !el.contains(autre));
+      try { el.innerHTML = renderSummary(j, sansBouton); } catch (e) { el.innerHTML = '<span class="ap-muted">🎓 Résumé indisponible.</span>'; console.error('[academy-parcours] résumé', e); }
     });
   }
 
