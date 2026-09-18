@@ -10,9 +10,14 @@
 // Auth : Bearer ID token Firebase — rôles admin / coach UNIQUEMENT.
 //        La CSM observe, elle ne note pas : même matrice que dans l'Academy.
 // Body : { "email": "client@exemple.com", "etape": "m2",
-//          "action": "lire" | "noter" | "decider",
+//          "action": "lire" | "noter" | "decider" | "deverrouiller",
 //          "evaluation": { date, livrables:[{libelle, renduAvantSeance,
 //                          score, commentaire}], … } }   // « noter » seulement
+//
+// « deverrouiller » (depuis le 18/09/2026) : ouvre l'étape EN DEHORS des
+// règles. Rôle admin UNIQUEMENT — même frontière que dans l'Academy —, motif
+// d'au moins dix caractères, journalisé là-bas avec le nom de l'auteur.
+// Body : { …, "action": "deverrouiller", "motif": "…" }
 //
 // Relais serveur → serveur (le secret ne transite jamais par un navigateur) :
 //   POST {ACADEMY_BRIDGE_URL|https://academy.adrienemily.com}/api/bridge/validation-etape
@@ -39,7 +44,7 @@ const { requireAuth } = require('./_verifyFirebaseAuth');
 
 const ACADEMY_URL = (process.env.ACADEMY_BRIDGE_URL || 'https://academy.adrienemily.com').replace(/\/$/, '');
 const ROLES = ['admin', 'coach'];
-const ACTIONS = ['lire', 'noter', 'decider'];
+const ACTIONS = ['lire', 'noter', 'decider', 'deverrouiller'];
 
 function txt(v, max) {
   var s = String(v == null ? '' : v).trim();
@@ -81,6 +86,18 @@ module.exports = async (req, res) => {
     res.status(200).json({ ok: false, error: 'donnees_invalides', message: 'Notation absente.' });
     return;
   }
+  if (action === 'deverrouiller') {
+    // Un acte d'administrateur — la même frontière que dans l'Academy
+    // (peutDeverrouillerExceptionnellement). Un coach ne force pas une étape.
+    if (auth.role !== 'admin') {
+      res.status(200).json({ ok: false, error: 'forbidden', message: 'Le déverrouillage exceptionnel est réservé aux administrateurs.' });
+      return;
+    }
+    if (txt(body.motif, 1000).length < 10) {
+      res.status(200).json({ ok: false, error: 'motif_requis', message: 'Un déverrouillage exceptionnel doit être motivé, en une phrase au moins.' });
+      return;
+    }
+  }
   if (!par) {
     res.status(200).json({ ok: false, error: 'auteur_inconnu', message: 'Compte sans adresse e-mail : la fiche ne peut pas être signée.' });
     return;
@@ -88,6 +105,7 @@ module.exports = async (req, res) => {
 
   const charge = { email: email, etape: etape, action: action, par: par };
   if (action === 'noter') charge.evaluation = body.evaluation;
+  if (action === 'deverrouiller') charge.motif = txt(body.motif, 1000);
 
   try {
     const r = await fetch(ACADEMY_URL + '/api/bridge/validation-etape', {

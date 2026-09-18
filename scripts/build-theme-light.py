@@ -57,7 +57,7 @@ SHARED_CSS = [
 SHARED_JS = [
     'dialer-bridge.js', 'inbox-widget.js', 'alteore-infos.js', 'rdv-outcome.js',
     'close-wizard.js', 'whatsapp-lead.js', 'client-deactivate-ui.js',
-    'academy-widget.js', 'coaching-plan.js', 'sync-bridge.js',
+    'academy-widget.js', 'academy-parcours.js', 'coaching-plan.js', 'sync-bridge.js',
     'call-detail-modal.js', 'voice-notes.js', 'temoignages-wall.js',
 ]
 # Pages sans bascule de thème (pas de sidebar) — ignorées.

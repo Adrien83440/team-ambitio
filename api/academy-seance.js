@@ -24,6 +24,15 @@
 // et chaque ligne devient une tâche cochable côté élève. Les puces (-, •, *)
 // et la numérotation en tête de ligne sont retirées.
 //
+// DEVOIRS STRUCTURÉS (depuis le 18/09/2026). Depuis la pop-up « Gérer le
+// parcours » (academy-parcours.js), le coach saisit chaque devoir avec son
+// outil et son échéance. La fiche les garde dans `devoirsList[]` ET recopie
+// leurs textes, une ligne chacun, dans la zone `devoirs` — pour le brief IA,
+// l'email replay et l'affichage. La ZONE DE TEXTE RESTE LA VÉRITÉ LISIBLE :
+// si elle a été retouchée à la main depuis (ses lignes ne correspondent plus
+// à la liste), c'est elle qui part, ligne par ligne, comme avant. Une liste
+// n'est jamais silencieusement prioritaire sur ce que le coach lit.
+//
 // L'ÉCHÉANCE d'un devoir est la date de la séance SUIVANTE quand elle est
 // planifiée : c'est bien pour cette date-là qu'il est donné.
 //
@@ -55,6 +64,36 @@ function devoirsDepuisTexte(texte, echeance, prefixe) {
     .map(function (l, i) {
       return { id: prefixe + '-d' + i, texte: cap(l, 600), outil: '', echeance: echeance || '' };
     });
+}
+
+// Le texte qu'une liste structurée produit dans la zone « devoirs ».
+function texteDepuisListe(liste) {
+  return (Array.isArray(liste) ? liste : [])
+    .map(function (d) { return String((d && d.texte) || '').trim(); })
+    .filter(function (t) { return t.length > 2; })
+    .join('\n');
+}
+
+// Les devoirs à envoyer : la liste structurée si elle correspond encore au
+// texte de la fiche, le texte ligne par ligne sinon. Mêmes identifiants
+// positionnels dans les deux cas : ce que l'élève a coché survit.
+function devoirsDeLaSeance(s, echeance, prefixe) {
+  var liste = Array.isArray(s.devoirsList) ? s.devoirsList : null;
+  var texte = String(s.devoirs == null ? '' : s.devoirs).trim();
+  if (liste && liste.length && texteDepuisListe(liste) === texte) {
+    return liste
+      .filter(function (d) { return String((d && d.texte) || '').trim().length > 2; })
+      .slice(0, 20)
+      .map(function (d, i) {
+        return {
+          id: prefixe + '-d' + i,
+          texte: cap(String(d.texte || '').trim(), 600),
+          outil: /^t0[1-6]$/.test(String(d.outil || '')) ? String(d.outil) : '',
+          echeance: dateOk(d.echeance) ? d.echeance : (echeance || ''),
+        };
+      });
+  }
+  return devoirsDepuisTexte(s.devoirs, echeance, prefixe);
 }
 
 // Toutes les séances de la fiche, à plat, avec l'année d'où elles viennent.
@@ -129,7 +168,7 @@ module.exports = async (req, res) => {
       resumePartage: cap(s.resume || '', 4000),
       // Ce qu'il ne verra jamais : l'Academy le range dans une zone séparée.
       notesInternes: cap(s.notes || '', 8000),
-      devoirs: devoirsDepuisTexte(s.devoirs, echeance, seanceId),
+      devoirs: devoirsDeLaSeance(s, echeance, seanceId),
     };
 
     const r = await fetch(ACADEMY_URL + '/api/bridge/seance', {

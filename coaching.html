@@ -3058,22 +3058,23 @@ function openDetail(id){
 
       <!-- CE QUE LE CLIENT FAIT VRAIMENT — côté Academy.
            Le plan d'action ci-dessus dit ce qui est PRÉVU. Ce panneau dit ce
-           qui est FAIT : ses milestones tels qu'il les voit avec leurs dates,
-           ses étapes et leur état, et ses six outils remplis ou non.
-           Le widget vivait déjà dans l'espace CSM ; il manquait ici, c'est-à-
-           dire dans l'écran où le coach prépare sa séance. -->
-      <div class="dp-plan-section" style="margin: 0 0 16px">
+           qui est FAIT : le jalon et l'étape en cours, les outils remplis, les
+           séances restantes. « Gérer le parcours » ouvre la pop-up de pilotage
+           (academy-parcours.js) : constats de jalon, notation et décision
+           d'étape, déverrouillage, devoirs et leur notation. Tout se joue
+           depuis la fiche ; l'Academy reste la source de vérité. -->
+      <div class="dp-plan-section" style="margin: 0 0 16px" data-ap-scope>
         <div class="dp-plan-header">
           <div class="dp-plan-title">🎓 Son espace Academy
-            <span class="dp-plan-badge" style="background:#eef2ff;color:#4338ca">jalons · étapes · outils</span>
+            <span class="dp-plan-badge" style="background:#eef2ff;color:#4338ca">jalons · étapes · outils · devoirs</span>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
-            <button type="button" class="dp-plan-edit-btn" data-academy-btn data-em="${escHtml(c.email || '')}"
-              title="Milestones datés, étapes à valider et avancement des six outils du dirigeant">👁 Afficher</button>
+            <button type="button" class="dp-plan-edit-btn" data-ap-open
+              title="Jalons, étape en cours, outils, séances et devoirs : tout se gère ici">🎛 Gérer le parcours</button>
           </div>
         </div>
         <div class="dp-plan-body">
-          <div data-academy-panel data-em="${escHtml(c.email || '')}" style="display:none"></div>
+          <div id="apSummary-${id}" data-ap-summary data-em="${escHtml(c.email || '')}"></div>
         </div>
       </div>
 
@@ -3135,6 +3136,8 @@ function openDetail(id){
   `;
   document.getElementById('detailOverlay').classList.add('show');
   loadAcademyBlock(c, id);
+  // Résumé du parcours à étapes + pop-up « Gérer le parcours » (academy-parcours.js).
+  if(window.AcademyParcours) window.AcademyParcours.summary(document.getElementById('apSummary-'+id), acadParcoursOpts(c, id));
 
   // Brief coach : régénère la synthèse IA seulement si une nouvelle séance
   // a été faite depuis la dernière génération (stale check local, 0 appel
@@ -4210,6 +4213,90 @@ async function syncSeanceAcademy(clientId, numero, annee){
   }catch(e){ console.warn('[academy-seance]', e && e.message); }
 }
 window.syncSeanceAcademy = syncSeanceAcademy;
+
+// ────────────────────────────────────────────────────────────────────────────
+//  Section Parcours — la pop-up « Gérer le parcours » (academy-parcours.js)
+//
+//  La pop-up lit et agit via /api/academy-* ; elle ne touche JAMAIS Firestore
+//  elle-même. Tout ce qui s'écrit dans la FICHE passe par ces deux crochets,
+//  pour une raison précise : coaching.html garde une copie locale du client
+//  et réécrit le document entier à chaque sauvegarde (saveClientDoc). Une
+//  écriture parallèle serait écrasée à la prochaine sauvegarde.
+//
+//  saveDevoirs(ref, devoirs) — les devoirs structurés d'une séance
+//    · ref = { seanceId, numero, annee } déduit de l'identifiant Academy
+//      (« alteor-<année sans espaces>-<numéro> ») ;
+//    · la séance reçoit devoirsList[] ET la zone de texte « devoirs »,
+//      une ligne par devoir, pour le brief IA, l'email replay et l'affichage ;
+//    · puis la séance repart vers l'Academy (api/academy-seance.js), qui y
+//      conserve ce que l'élève a coché et ce que le coach a noté.
+//
+//  syncAll() — renvoie toutes les séances faites de la fiche (hors RDV 72h).
+// ────────────────────────────────────────────────────────────────────────────
+function acadParcoursOpts(c, id){
+  return {
+    email: String(c.email || '').trim().toLowerCase(),
+    clientId: id,
+    nom: c.nom || '',
+    role: window._role || '',
+    hooks: {
+      saveDevoirs: function(ref, devoirs){ return acadSaveDevoirs(id, ref, devoirs); },
+      syncAll: function(){ return acadSyncAll(id); }
+    }
+  };
+}
+const acadSansEspaces = v => String(v || '').replace(/\s+/g, '');
+function acadTrouverSeance(c, ref){
+  if(c.years && c.years.length){
+    for(const y of c.years){
+      const label = String(y.label || y.annee || y.year || '');
+      if(acadSansEspaces(label) !== acadSansEspaces(ref.annee)) continue;
+      const s = (y.sessions || []).find(x => Number(x.numero) === Number(ref.numero));
+      if(s) return { s, label };
+    }
+    return null;
+  }
+  if(ref.annee) return null;
+  const s = (c.sessions || []).find(x => Number(x.numero) === Number(ref.numero));
+  return s ? { s, label: '' } : null;
+}
+async function acadSaveDevoirs(clientId, ref, devoirs){
+  const c = _clients.find(x => x._id === clientId);
+  if(!c) throw new Error('Client introuvable dans la fiche');
+  const t = acadTrouverSeance(c, ref || {});
+  if(!t) throw new Error('Séance introuvable dans la fiche');
+  const propres = (devoirs || []).map(d => ({
+    texte: String((d && d.texte) || '').trim(),
+    outil: /^t0[1-6]$/.test(String((d && d.outil) || '')) ? String(d.outil) : '',
+    echeance: /^\d{4}-\d{2}-\d{2}$/.test(String((d && d.echeance) || '')) ? String(d.echeance) : ''
+  })).filter(d => d.texte.length > 2);
+  t.s.devoirsList = propres;
+  t.s.devoirs = propres.map(d => d.texte).join('\n');
+  c._updatedAt = Date.now();
+  await saveClientDoc(clientId, c);
+  await syncSeanceAcademy(clientId, Number(ref.numero), t.label);
+  return propres.length;
+}
+async function acadSyncAll(clientId){
+  const c = _clients.find(x => x._id === clientId);
+  if(!c) return 0;
+  let n = 0;
+  const faite = s => s && s.statut === 'fait' && s.numero !== 0 && s.type !== 'rdv72h';
+  if(c.years && c.years.length){
+    for(const y of c.years){
+      for(const s of (y.sessions || [])){
+        if(!faite(s)) continue;
+        await syncSeanceAcademy(clientId, s.numero, y.label || ''); n++;
+      }
+    }
+  } else {
+    for(const s of (c.sessions || [])){
+      if(!faite(s)) continue;
+      await syncSeanceAcademy(clientId, s.numero, ''); n++;
+    }
+  }
+  return n;
+}
 
 async function saveSessionEdit(clientId, sessionNum){
   const c = _clients.find(x=>x._id===clientId);
@@ -5314,6 +5401,6 @@ window.saveEditClient=saveEditClient;
     </div>
   </div>
 </div>
-<script src="academy-widget.js"></script>
+<script src="academy-parcours.js"></script>
 </body>
 </html>
