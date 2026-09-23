@@ -592,6 +592,120 @@ var _setterSlug = params.get('setter') || '';
 var _setterUid  = params.get('setterUid') || '';
 var _setterName = params.get('setterName') || '';
 
+/* ═══ PROVENANCE VSL + ATTRIBUTION PUBLICITAIRE (23/09/2026) ═══
+   Les VSL system.io (Élite / Business, variantes A et B) envoient le visiteur
+   ici sans opt-in préalable : le RDV est le premier acte du prospect. Pour
+   lire l'A/B test des pages et garder la créative Meta jusqu'au RDV, la page
+   d'origine passe :
+     lp = page de provenance (vsl_elite, vsl_business)
+     v  = variante A/B (a, b)
+     utm_* / fbclid / ad_id… = attribution de la pub (template d'URL Meta)
+   Trois sources, dans l'ordre (même motif qu'alteoforms-render.html) :
+     1. la querystring de CETTE page (posée par la VSL ou relayée par
+        AlteoForms) ;
+     2. document.referrer — en iframe c'est l'URL de la page parente, mais
+        les navigateurs la tronquent au domaine en cross-origin : simple filet ;
+     3. sessionStorage — un rechargement ne doit pas perdre la provenance.
+   Capturé au CHARGEMENT : le prospect peut rester longtemps sur le
+   calendrier. Consommé par submitBooking() → booking.landing +
+   /api/booking-attribution. */
+var BK_ATTR_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+                    'ad_id', 'adset_id', 'campaign_id', 'fbclid'];
+var BK_LAND_SS_KEY = 'alteo_landing_v1';
+function _bkLandingFromSearch(search) {
+  if (!search) return null;
+  var sp;
+  try { sp = new URLSearchParams(search); } catch (e) { return null; }
+  var out = { page: '', variant: '', attribution: null };
+  var lp = String(sp.get('lp') || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+  var v = String(sp.get('v') || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20);
+  if (lp) { out.page = lp; out.variant = v; }
+  for (var i = 0; i < BK_ATTR_KEYS.length; i++) {
+    var val = sp.get(BK_ATTR_KEYS[i]);
+    if (val == null) continue;
+    val = String(val).trim();
+    if (!val || val.indexOf('{{') >= 0) continue;   // macro Meta non substituée
+    if (!out.attribution) out.attribution = {};
+    out.attribution[BK_ATTR_KEYS[i]] = val.slice(0, 300);
+  }
+  return (out.page || out.attribution) ? out : null;
+}
+function _bkLandingFromUrl(url) {
+  if (!url) return null;
+  var q = String(url).indexOf('?');
+  return q >= 0 ? _bkLandingFromSearch(String(url).slice(q)) : null;
+}
+function bkCaptureLanding() {
+  var own = _bkLandingFromSearch(window.location.search);
+  if (own) {
+    own.pageUrl = String(window.location.href).slice(0, 500);
+    try { sessionStorage.setItem(BK_LAND_SS_KEY, JSON.stringify(own)); } catch (e) {}
+    return own;
+  }
+  var ref = '';
+  try { ref = document.referrer || ''; } catch (e) { ref = ''; }
+  var fromRef = _bkLandingFromUrl(ref);
+  if (fromRef) {
+    fromRef.pageUrl = String(ref).slice(0, 500);
+    try { sessionStorage.setItem(BK_LAND_SS_KEY, JSON.stringify(fromRef)); } catch (e) {}
+    return fromRef;
+  }
+  try {
+    var saved = sessionStorage.getItem(BK_LAND_SS_KEY);
+    if (saved) {
+      var p = JSON.parse(saved);
+      if (p && (p.page || p.attribution)) return p;
+    }
+  } catch (e) {}
+  return { page: '', variant: '', attribution: null, pageUrl: '' };
+}
+var _landing = bkCaptureLanding();
+
+/* ═══ PIXEL META « Ambitio Elite » (23/09/2026) ═══
+   L'opt-in system.io disparaissant, Meta n'a plus d'événement Lead à
+   optimiser : le RDV confirmé devient la conversion (événement standard
+   `Schedule`). Chargé uniquement pour un VISITEUR PUBLIC — jamais en mode
+   agent (booking-admin), setter (CRM) ni replanification interne — et jamais
+   pour une consultation coaching. PageView n'est envoyé qu'en fenêtre
+   principale : en iframe, la page hôte system.io le fait déjà. */
+var BK_META_PIXEL_ID = '1341581597802071';
+var _bkPixelPublic = !_agentRequested && !_setterRequested && !_rescheduleId;
+var _bkPixelReady = false;
+function bkPixelInit() {
+  if (_bkPixelReady || !_bkPixelPublic) return;
+  if (S.selType && S.selType.isCoaching === true) return;
+  _bkPixelReady = true;
+  try {
+    /* Base code Meta, forme officielle en ES5. */
+    (function(f, b, e, v, n, t, sc) {
+      if (f.fbq) return;
+      n = f.fbq = function() { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); };
+      if (!f._fbq) f._fbq = n;
+      n.push = n; n.loaded = true; n.version = '2.0'; n.queue = [];
+      t = b.createElement(e); t.async = true; t.src = v;
+      sc = b.getElementsByTagName(e)[0]; sc.parentNode.insertBefore(t, sc);
+    })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+    window.fbq('init', BK_META_PIXEL_ID);
+    var inIframe = false;
+    try { inIframe = !!(window.parent && window.parent !== window); } catch (e) { inIframe = true; }
+    if (!inIframe) window.fbq('track', 'PageView');
+  } catch (e) { if (window.console) console.warn('[booking] pixel Meta non chargé:', e && e.message); }
+}
+/* Conversion : RDV confirmé. eventID = id du RDV → dédoublonnage possible
+   avec une future API Conversions côté serveur. */
+function bkPixelSchedule(booking, bookingId) {
+  if (!_bkPixelReady || !window.fbq) return;
+  if (!booking || booking.isCoaching === true || booking.source === 'csm_manual' || booking.rescheduledFromId) return;
+  try {
+    var data = { content_name: booking.typeLabel || booking.type || '' };
+    if (booking.landing && booking.landing.page) {
+      data.content_category = booking.landing.page + (booking.landing.variant ? '-' + booking.landing.variant : '');
+    }
+    if (bookingId) window.fbq('track', 'Schedule', data, { eventID: String(bookingId) });
+    else window.fbq('track', 'Schedule', data);
+  } catch (e) { if (window.console) console.warn('[booking] pixel Schedule:', e && e.message); }
+}
+
 /* ═══ MODE REPLANIFICATION (refonte 07/2026) ═══
    ?reschedule={bookingId} (embed, iframe interne authentifiée — RdvOutcome).
    On charge l'ancien RDV pour forcer type + expert + prospect + lead, puis à
@@ -673,6 +787,9 @@ db.collection('booking_config').get().then(function(snap) {
 });
 
 function initBooking() {
+  /* Pixel Meta : décidé après la résolution du type (coaching exclu). */
+  setTimeout(bkPixelInit, 0);
+
   // Timezone
   document.getElementById('tzLabel').textContent = S.userTz.replace(/_/g, ' ');
 
@@ -1976,6 +2093,52 @@ async function submitBooking() {
     }
   }
 
+  /* ── PROVENANCE VSL + ATTRIBUTION PUB (23/09/2026) ─────────────────────
+     Posée sur le RDV (booking.landing) pour l'A/B test des VSL dans le
+     Funnel Sales, puis sur la fiche lead via /api/booking-attribution qui
+     retrouve ou crée la fiche et renvoie son leadId : la Cloud Function
+     onBookingCreated prend alors sa branche « lead existant ». Uniquement
+     pour un RDV public porteur d'une provenance ; fail-open comme le lien
+     setter (le RDV part quand même, la fiche bk_<id> est créée comme avant). */
+  var _hasLanding = !!(_landing && (_landing.page || _landing.attribution));
+  if (_hasLanding && !_agentMode && !_rescheduleOld && booking.isCoaching !== true) {
+    booking.landing = { page: _landing.page || null, variant: _landing.variant || null };
+    if (_landing.pageUrl) booking.landing.pageUrl = _landing.pageUrl;
+    if (_landing.attribution) booking.landing.attribution = _landing.attribution;
+    try {
+      var _baCtl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var _baTimer = _baCtl ? setTimeout(function() { _baCtl.abort(); }, 8000) : null;
+      var _baResp = await fetch('/api/booking-attribution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: _baCtl ? _baCtl.signal : undefined,
+        body: JSON.stringify({
+          leadId: booking.leadId || '',
+          typeId: booking.type,
+          typeLabel: booking.typeLabel,
+          prenom: prenom,
+          nom: nom,
+          email: email,
+          telephone: booking.prospect.telephone,
+          secteur: booking.prospect.secteur,
+          message: booking.prospect.message,
+          landing: booking.landing.page
+            ? { page: booking.landing.page, variant: booking.landing.variant, pageUrl: booking.landing.pageUrl || '' }
+            : null,
+          attribution: _landing.attribution || null
+        })
+      });
+      if (_baTimer) clearTimeout(_baTimer);
+      var _baData = await _baResp.json();
+      if (_baData && _baData.attributed === true && _baData.leadId && !booking.leadId) {
+        booking.leadId = _baData.leadId;
+        booking.leadLinkVia = 'booking_attribution';
+      }
+    } catch (errBa) {
+      console.warn('[booking] attribution provenance en échec, fail-open:', errBa);
+    }
+  }
+
   // ── Replanification : copie STRICTE de l'attribution d'origine ──
   // Un report ne change JAMAIS la nature du RDV : un Self Booking reste SB,
   // un RDV setter reste NB, et un RDV coaching/client reste coaching/client
@@ -2068,6 +2231,10 @@ async function submitBooking() {
     S.confirmedBookingId = docRef.id;
     S.confirmedBooking = booking;
     S.confirmedMeetLink = null;
+
+    // Pixel Meta : conversion « Schedule » (RDV neuf uniquement — un doublon
+    // adopté n'est pas une seconde conversion).
+    if (!alreadyExisted) bkPixelSchedule(booking, docRef.id);
 
     /* ── SÉRIE HEBDOMADAIRE ──────────────────────────────────────────────
        Le premier RDV est confirmé : on lance la pose des séances suivantes.

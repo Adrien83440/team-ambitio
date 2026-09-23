@@ -362,6 +362,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 
     h += renderHero(k);
     h += renderAds(k);
+    if (k.vslActive) h += renderVsl(k);
     h += renderBooking(k);
     h += renderLeads(k);
     h += renderAdsPerf(k);
@@ -418,9 +419,11 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += kpi(fmtPct(k.ctr, 2), 'CTR', 'clics / impressions');
     h += kpi(fmtEuro2(k.cpc), 'CPC', 'coût / clic');
     h += kpi(fmtEuro2(k.cpl), 'CPL réel', 'dépense ÷ ' + fmtNum(k.leads) + ' leads réels');
-    h += kpi(k.views > 0 ? fmtNum(k.views) : '—', 'Vues page opt-in', k.views > 0 ? null : 'mesure beacon non active', !(k.views > 0));
-    if (k.views > 0) h += kpi(fmtPct(k.optinReal), 'Taux d\'opt-in réel', 'leads ÷ vues');
-    h += kpi(fmtPct(k.optinClicks), 'Taux d\'opt-in / clics', 'leads ÷ clics Meta');
+    if (!k.vslActive) {
+      h += kpi(k.views > 0 ? fmtNum(k.views) : '—', 'Vues page opt-in', k.views > 0 ? null : 'mesure beacon non active', !(k.views > 0));
+      if (k.views > 0) h += kpi(fmtPct(k.optinReal), 'Taux d\'opt-in réel', 'leads ÷ vues');
+      h += kpi(fmtPct(k.optinClicks), 'Taux d\'opt-in / clics', 'leads ÷ clics Meta');
+    }
     h += kpi(k.roasOutcome != null ? (Math.round(k.roasOutcome * 100) / 100).toLocaleString('fr-FR') + '×' : '—', 'ROAS', 'collecté réel (HT) ÷ dépense pub', k.roasOutcome == null);
     h += '</div>';
 
@@ -459,6 +462,63 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         }
         h += '</tbody></table></div>';
       }
+    }
+    h += '</div><div class="ag-arrow">▼</div>';
+    return h;
+  }
+
+  /* ── VSL à prise de RDV directe (23/09/2026) ───────────────────────────
+     Même lecture que le Funnel Sales : vues et clics « Réserver » mesurés
+     par le beacon des pages system.io, RDV lus dans la collection bookings
+     (provenance posée par booking.html). L'A/B test compare les RDV par vue.
+     Aucune donnée personnelle : des compteurs et des taux. */
+  function vslPageLabel(pg) {
+    var p = String(pg || '');
+    if (p === 'vsl_elite') return 'VSL Élite';
+    if (p === 'vsl_business') return 'VSL Business';
+    return p;
+  }
+  function renderVsl(k) {
+    var h = stageOpen('🎬', 'VSL — prise de RDV directe', 'vues et clics : mesure beacon · RDV : agenda Alteore · replanifications exclues');
+    h += '<div class="ag-grid">';
+    h += kpi(fmtNum(k.vslViews || null), 'Vues VSL', 'sessions, toutes variantes', !k.vslViews);
+    h += kpi(fmtNum(k.vslCtas || null), 'Clics « Réserver »', 'taux de clic ' + fmtPct(k.vslCtaRate), !k.vslCtas);
+    h += kpi(fmtNum(k.vslBookings || 0), 'RDV pris depuis la VSL', 'créés sur la période');
+    h += kpi(fmtPct(k.vslBookRate), 'Taux de RDV ÷ vues', 'remplace le taux d\'opt-in');
+    h += kpi(fmtEuro2(k.vslCpr), 'CPR VSL', 'dépense pub ÷ RDV pris depuis la VSL', k.vslCpr == null);
+    h += '</div>';
+    var pages = k.vslPages || [];
+    if (pages.length > 1) {
+      h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr><th>Page</th><th class="num">Vues</th><th class="num">Clics</th><th class="num">RDV</th><th class="num">RDV ÷ vues</th></tr></thead><tbody>';
+      for (var i = 0; i < pages.length; i++) {
+        var p = pages[i];
+        h += '<tr><td><strong>' + esc(vslPageLabel(p.page)) + '</strong></td><td class="num">' + fmtNum(p.views) + '</td><td class="num">' + fmtNum(p.ctas) + '</td><td class="num">' + fmtNum(p.bookings) + '</td><td class="num">' + fmtPct(p.views > 0 ? p.bookings / p.views * 100 : null) + '</td></tr>';
+      }
+      h += '</tbody></table></div>';
+    }
+    var tests = k.vslTests || [];
+    for (var t = 0; t < tests.length; t++) {
+      var test = tests[t];
+      var vars = test.variants || [];
+      if (vars.length < 2) continue;
+      var ref = vars[0];
+      var refRate = ref.views > 0 ? ref.bookings / ref.views * 100 : null;
+      h += '<div class="ag-sub" style="color:var(--muted)">🧪 A/B test — ' + esc(vslPageLabel(test.page)) + ' <span style="font-weight:500;letter-spacing:0;text-transform:none">(RDV par vue · variante ' + esc(String(ref.variant).toUpperCase()) + ' = référence)</span></div>';
+      h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr><th>Variante</th><th class="num">Vues</th><th class="num">Clics</th><th class="num">RDV</th><th class="num">RDV ÷ vues</th><th class="num">Δ vs ' + esc(String(ref.variant).toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead><tbody>';
+      for (var v = 0; v < vars.length; v++) {
+        var va = vars[v];
+        var rate = va.views > 0 ? va.bookings / va.views * 100 : null;
+        var delta = '—', sig = '<span style="color:var(--muted2)">référence</span>';
+        if (v > 0) {
+          delta = (rate != null && refRate != null) ? fmtPts(rate - refRate) : '—';
+          var st = abSignif(ref.views, ref.bookings, va.views, va.bookings);
+          if (!st) sig = '<span style="color:var(--muted2)">échantillon insuffisant (≥ 30 vues/variante)</span>';
+          else if (st.p < 0.05) sig = '<span class="ag-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
+          else sig = '<span class="ag-badge warn">en cours · p = ' + st.p.toFixed(2) + '</span>';
+        }
+        h += '<tr><td><strong>' + esc(String(va.variant).toUpperCase()) + '</strong></td><td class="num">' + fmtNum(va.views) + '</td><td class="num">' + fmtNum(va.ctas) + '</td><td class="num">' + fmtNum(va.bookings) + '</td><td class="num">' + fmtPct(rate) + '</td><td class="num">' + delta + '</td><td>' + sig + '</td></tr>';
+      }
+      h += '</tbody></table></div>';
     }
     h += '</div><div class="ag-arrow">▼</div>';
     return h;

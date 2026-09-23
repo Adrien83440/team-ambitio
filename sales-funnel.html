@@ -842,6 +842,60 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       + (note ? '<div class="fn-stage-note">' + note + '</div>' : '') + '</div>';
   }
 
+  /* ── VSL à prise de RDV directe (23/09/2026) ───────────────────────────
+     Le tunnel n'a plus de page d'opt-in : la pub envoie sur la VSL, et le
+     seul acte mesurable est le RDV. Vues et clics viennent du beacon posé sur
+     les pages system.io (page_views_daily, pages vsl_*), les RDV de la
+     collection bookings (bloc landing posé par booking.html). L'A/B test
+     compare les RDV par vue, avec la même significativité que l'opt-in. */
+  function vslPageLabel(pg) {
+    var p = String(pg || '');
+    if (p === 'vsl_elite') return 'VSL Élite';
+    if (p === 'vsl_business') return 'VSL Business';
+    return p;
+  }
+  function renderVslStage(k) {
+    var h = stageOpen('🎬', 'VSL — prise de RDV directe', 'vues et clics : beacon system.io · RDV : collection bookings (provenance posée par booking.html) · replanifications et RDV internes exclus');
+    h += '<div class="fn-grid">';
+    h += kpiCard(fmtNum(k.vslViews), 'Vues VSL', 'sessions, toutes variantes', null, k.vslViews === 0);
+    h += kpiCard(fmtNum(k.vslCtas), 'Clics « Réserver »', 'taux de clic ' + fmtPct(k.vslCtaRate), null, k.vslCtas === 0);
+    h += kpiCard(fmtNum(k.vslBookings), 'RDV pris depuis la VSL', 'créés sur la période');
+    h += kpiCard(fmtPct(k.vslBookRate), 'Taux de RDV / vues', 'remplace le taux d\'opt-in');
+    h += kpiCard(fmtEuro2(k.vslCpr), 'CPR VSL', 'dépense pub / RDV pris depuis la VSL', null, k.vslCpr == null);
+    h += '</div>';
+    if (k.vslPages && k.vslPages.length > 1) {
+      h += '<div class="fn-table-wrap" style="border-radius:11px;margin-top:14px"><table class="fn-table" style="min-width:520px"><thead><tr><th>Page</th><th>Vues</th><th>Clics</th><th>RDV</th><th>RDV / vues</th></tr></thead><tbody>';
+      k.vslPages.forEach(function (p) {
+        h += '<tr><td><strong>' + esc(vslPageLabel(p.page)) + '</strong></td><td class="num">' + fmtNum(p.views) + '</td><td class="num">' + fmtNum(p.ctas) + '</td><td class="num">' + fmtNum(p.bookings) + '</td><td class="num">' + fmtPct(p.views > 0 ? p.bookings / p.views * 100 : null) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    (k.vslTests || []).forEach(function (test) {
+      var ref = test.variants[0];
+      var refRate = ref.views > 0 ? ref.bookings / ref.views * 100 : null;
+      h += '<div style="margin-top:14px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">🧪 A/B test — ' + esc(vslPageLabel(test.page)) + ' <span style="font-weight:500;text-transform:none;letter-spacing:0">(RDV par vue · variante ' + esc(ref.variant.toUpperCase()) + ' = référence)</span></div>';
+      h += '<div class="fn-table-wrap" style="border-radius:11px"><table class="fn-table" style="min-width:760px"><thead><tr><th>Variante</th><th>Vues</th><th>Clics</th><th>Taux de clic</th><th>RDV</th><th>RDV / vues</th><th>Δ vs ' + esc(ref.variant.toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead><tbody>';
+      test.variants.forEach(function (v, idx) {
+        var rate = v.views > 0 ? v.bookings / v.views * 100 : null;
+        var ctaRate = v.views > 0 ? v.ctas / v.views * 100 : null;
+        var delta = '—';
+        var sig = '<span style="color:var(--muted2)">référence</span>';
+        if (idx > 0) {
+          delta = (rate != null && refRate != null) ? fmtPts(rate - refRate) : '—';
+          var st = abSignif(ref.views, ref.bookings, v.views, v.bookings);
+          if (!st) sig = '<span style="color:var(--muted2)">échantillon insuffisant (≥ 30 vues/variante)</span>';
+          else if (st.p < 0.05) sig = '<span class="fn-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '" style="margin-top:0">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
+          else sig = '<span class="fn-badge warn" style="margin-top:0">en cours · p = ' + st.p.toFixed(2) + '</span>';
+        }
+        h += '<tr><td><strong>' + esc(v.variant.toUpperCase()) + '</strong></td><td class="num">' + fmtNum(v.views) + '</td><td class="num">' + fmtNum(v.ctas) + '</td><td class="num">' + fmtPct(ctaRate) + '</td><td class="num">' + fmtNum(v.bookings) + '</td><td class="num">' + fmtPct(rate) + '</td><td class="num">' + delta + '</td><td>' + sig + '</td></tr>';
+      });
+      h += '</tbody></table></div></div>';
+    });
+    h += '<div class="fn-stage-note" style="margin-top:8px">Un RDV sans provenance (lien direct, ancien onglet, iframe sans paramètres) reste compté dans « Prise de RDV » mais pas ici : ces chiffres sont un plancher, jamais une estimation.</div>';
+    h += '</div><div class="fn-arrow">▼</div>';
+    return h;
+  }
+
   /* ════════════════════════════════════════════════════════════════
      RENDER — SECTION « CAPACITÉ & DISPOS »
      ════════════════════════════════════════════════════════════════ */
@@ -1334,15 +1388,20 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += '</div></div>';
     h += '<div class="fn-arrow">▼</div>';
 
+    /* 1b. VSL à prise de RDV directe (23/09/2026) — remplace l'opt-in */
+    if (k.vslActive) h += renderVslStage(k);
+
     /* 2. Opt-in */
-    h += stageOpen('📄', 'Page d\'opt-in', k.views > 0 ? 'Vues réelles via beacon' : 'Vues : pose le snippet sur les pages system.io pour le taux réel');
+    h += stageOpen('📄', k.vslActive ? 'Page d\'opt-in (ancien tunnel)' : 'Page d\'opt-in',
+      k.views > 0 ? 'Vues réelles via beacon'
+        : (k.vslActive ? 'Tunnel arrêté : la pub envoie droit sur la VSL — voir l\'étape ci-dessus' : 'Vues : pose le snippet sur les pages system.io pour le taux réel'));
     h += '<div class="fn-grid">';
     h += kpiCard(k.views > 0 ? fmtNum(k.views) : '—', 'Vues page opt-in', k.views > 0 ? null : 'beacon non actif', null, k.views === 0);
     h += kpiCard(fmtNum(k.leads), 'Leads (réels)', 'entrés sur la période');
     if (k.views > 0) h += kpiCard(fmtPct(k.optinReal), 'Taux d\'opt-in réel', 'leads / vues', targetBadge('optin', k.optinReal));
-    h += kpiCard(fmtPct(k.optinClicks), 'Taux d\'opt-in / clics', 'leads / clics Meta', k.views > 0 ? '' : targetBadge('optin', k.optinClicks));
+    if (!k.vslActive) h += kpiCard(fmtPct(k.optinClicks), 'Taux d\'opt-in / clics', 'leads / clics Meta', k.views > 0 ? '' : targetBadge('optin', k.optinClicks));
     h += kpiCard(fmtEuro2(k.cpl), 'CPL réel', 'dépense / leads réels', targetBadge('cpl', k.cpl));
-    h += kpiCard(k.leadsFb > 0 ? fmtNum(k.leadsFb) : '—', 'Leads pixel Meta',
+    if (!k.vslActive) h += kpiCard(k.leadsFb > 0 ? fmtNum(k.leadsFb) : '—', 'Leads pixel Meta',
       k.leadsFb > 0 && k.leads > 0
         ? 'comptage Meta (attribution) vs ' + fmtNum(k.leads) + ' réels en base — l\'écart (' + fmtNum(k.leadsFb - k.leads) + ') vient des doublons, des ré-optins (déjà en CRM, non recomptés) et de la fenêtre d\'attribution Meta'
         : 'leads comptés par le pixel Meta (attribution)', null, k.leadsFb === 0);

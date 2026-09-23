@@ -724,6 +724,13 @@
   /* Tunnel binaire (règle Adrien 07/2026) : il n'existe que DEUX tunnels.
      Un lead est Business si « business » apparaît dans son type, son utm ou
      son sourceDetail — sinon il est Élite. Aucune catégorie « Autres ». */
+  /* Pages du beacon page_views_daily : `elite` / `business` = pages d'opt-in
+     historiques ; `vsl_elite` / `vsl_business` = VSL à prise de RDV directe
+     (23/09/2026). Les secondes ne portent pas d'opt-in : leur conversion est
+     le RDV, lu dans bookings.landing (posé par booking.html). */
+  function isVslPage(p) { return String(p || '').indexOf('vsl_') === 0; }
+  function pageTunnel(p) { return String(p || '').indexOf('business') >= 0 ? 'business' : 'elite'; }
+
   function leadTunnel(l) {
     var t = (String(l.type || '') + ' ' + String(l.utm || '') + ' ' + String(l.sourceDetail || '')).toLowerCase();
     if (t.indexOf('business') >= 0) return 'business';
@@ -1216,8 +1223,8 @@
 
     /* ── Vues opt-in (beacon) ── */
     var views = DATA.views.filter(function (v) {
-      var t = v.page === 'business' ? 'business' : 'elite';
-      return tunnelMatch(t);
+      if (isVslPage(v.page)) return false;   // VSL : étape dédiée, pas d'opt-in
+      return tunnelMatch(pageTunnel(v.page));
     });
     k.views = 0;
     views.forEach(function (v) { k.views += Number(v.views) || 0; });
@@ -1228,9 +1235,8 @@
        page_views_daily avec champ variant). Affiché si ≥ 2 variantes. */
     var abByPage = {};
     DATA.views.forEach(function (v) {
-      if (!v.variant) return;
-      var t = v.page === 'business' ? 'business' : 'elite';
-      if (!tunnelMatch(t)) return;
+      if (!v.variant || isVslPage(v.page)) return;
+      if (!tunnelMatch(pageTunnel(v.page))) return;
       var pg = v.page || 'other';
       if (!abByPage[pg]) abByPage[pg] = {};
       if (!abByPage[pg][v.variant]) abByPage[pg][v.variant] = { variant: v.variant, views: 0, optins: 0 };
@@ -1279,6 +1285,50 @@
       var lbt = bookingLead(b);
       if (lbt && k.bookedByTunnel[lbt._tunnel] != null) k.bookedByTunnel[lbt._tunnel]++;
     });
+    /* ── VSL à prise de RDV directe (23/09/2026) ──
+       Vues et clics « Réserver » : beacon (page_views_daily, pages vsl_*).
+       RDV : bookings.landing posé par booking.html — même périmètre que
+       « RDV pris » (créés sur la période, self + setter, replanifications
+       exclues). Ventilé par page × variante pour l'A/B test. Un RDV sans
+       bloc landing n'est compté nulle part ici : plancher, jamais estimé. */
+    k.vslViews = 0; k.vslCtas = 0; k.vslBookings = 0;
+    var vslByPage = {};
+    function vslCell(pg, vr) {
+      if (!vslByPage[pg]) vslByPage[pg] = {};
+      if (!vslByPage[pg][vr]) vslByPage[pg][vr] = { variant: vr, views: 0, ctas: 0, bookings: 0 };
+      return vslByPage[pg][vr];
+    }
+    DATA.views.forEach(function (v) {
+      if (!isVslPage(v.page) || !tunnelMatch(pageTunnel(v.page))) return;
+      var c = vslCell(v.page, v.variant || '_');
+      c.views += Number(v.views) || 0;
+      c.ctas += Number(v.ctas) || 0;
+      k.vslViews += Number(v.views) || 0;
+      k.vslCtas += Number(v.ctas) || 0;
+    });
+    DATA.bookings.forEach(function (b) {
+      if (!b._inCreated || b.rescheduledFromId) return;
+      if (b._class !== 'self' && b._class !== 'setter') return;
+      var L = b.landing;
+      if (!L || !isVslPage(L.page) || !tunnelMatch(pageTunnel(L.page))) return;
+      vslCell(L.page, L.variant || '_').bookings++;
+      k.vslBookings++;
+    });
+    k.vslActive = k.vslViews > 0 || k.vslBookings > 0;
+    k.vslCtaRate = k.vslViews > 0 ? k.vslCtas / k.vslViews * 100 : null;
+    k.vslBookRate = k.vslViews > 0 ? k.vslBookings / k.vslViews * 100 : null;
+    k.vslCpr = k.spend > 0 && k.vslBookings > 0 ? k.spend / k.vslBookings : null;
+    k.vslPages = []; k.vslTests = [];
+    Object.keys(vslByPage).sort().forEach(function (pg) {
+      var vars = Object.keys(vslByPage[pg]).map(function (kk) { return vslByPage[pg][kk]; });
+      vars.sort(function (a, b) { return a.variant < b.variant ? -1 : 1; });
+      var tot = { page: pg, views: 0, ctas: 0, bookings: 0 };
+      vars.forEach(function (c) { tot.views += c.views; tot.ctas += c.ctas; tot.bookings += c.bookings; });
+      k.vslPages.push(tot);
+      var named = vars.filter(function (c) { return c.variant !== '_'; });
+      if (named.length >= 2) k.vslTests.push({ page: pg, variants: named });
+    });
+
     k.selfShare = k.booked > 0 ? k.bookedSelf / k.booked * 100 : null;
     k.setterShare = k.booked > 0 ? k.bookedSetter / k.booked * 100 : null;
     k.ltb = k.leads > 0 ? k.booked / k.leads * 100 : null;
@@ -2210,6 +2260,7 @@
     /* Loaders unitaires — sales-funnel.html en rappelle certains seuls après
        une sauvegarde (grille Ads, coûts, journal) sans tout recharger. */
     loadAds: loadAds, loadAdsByAd: loadAdsByAd, loadCreatives: loadCreatives,
+    isVslPage: isVslPage, pageTunnel: pageTunnel,
     loadViews: loadViews, loadLeads: loadLeads,
     loadBookings: loadBookings, loadClosedLeads: loadClosedLeads,
     loadPayments: loadPayments, loadCalls: loadCalls,

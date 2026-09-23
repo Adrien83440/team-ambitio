@@ -1060,6 +1060,17 @@ var _bkParams='&fromForm='+FORM._id;
 // du RDV, et non la seule iframe. Sans ce marqueur, booking.html se croit en
 // plein écran et la page de confirmation s'affiche coincée dans le cadre.
 if(EMBED.enabled)_bkParams+='&embed=1';
+// Provenance VSL + attribution pub relayées à booking.html (23/09/2026) :
+// le RDV et la fiche lead doivent porter la page, la variante et la créative.
+if(LANDING_CAPTURED&&LANDING_CAPTURED.page){
+_bkParams+='&lp='+encodeURIComponent(LANDING_CAPTURED.page);
+if(LANDING_CAPTURED.variant)_bkParams+='&v='+encodeURIComponent(LANDING_CAPTURED.variant);
+}
+if(ATTR_CAPTURED&&ATTR_CAPTURED.attribution){
+Object.keys(ATTR_CAPTURED.attribution).forEach(function(k){
+_bkParams+='&'+encodeURIComponent(k)+'='+encodeURIComponent(ATTR_CAPTURED.attribution[k]);
+});
+}
 if(contact.prenom)_bkParams+='&prenom='+encodeURIComponent(contact.prenom);
 if(contact.nom)_bkParams+='&nom='+encodeURIComponent(contact.nom);
 if(contact.email)_bkParams+='&email='+encodeURIComponent(contact.email);
@@ -1204,6 +1215,35 @@ function captureAttribution() {
 /* Capturé au CHARGEMENT, pas à l'envoi : un formulaire multi-cartes peut
    rester ouvert longtemps, et document.referrer ne survit pas toujours. */
 var ATTR_CAPTURED = captureAttribution();
+
+/* ═══ PROVENANCE VSL (23/09/2026) ═══════════════════════════════════════
+   La VSL system.io (variante A : formulaire puis RDV) passe `lp` (page de
+   provenance, ex. vsl_elite) et `v` (variante A/B) sur l'URL du formulaire.
+   On les relaie tels quels à booking.html, avec l'attribution capturée
+   ci-dessus, pour que le RDV et la fiche lead portent la page, la variante
+   et la créative — c'est ce qui rend l'A/B test des VSL lisible dans le
+   Funnel Sales. Mémorisé pour la session, comme l'attribution. */
+var LAND_SS_KEY = 'alteo_landing_v1';
+function captureLanding() {
+  var sp = null;
+  try { sp = new URLSearchParams(window.location.search); } catch (e) { sp = null; }
+  var lp = sp ? String(sp.get('lp') || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 40) : '';
+  var v = sp ? String(sp.get('v') || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20) : '';
+  if (lp) {
+    var r = { page: lp, variant: v };
+    try { sessionStorage.setItem(LAND_SS_KEY, JSON.stringify(r)); } catch (e) {}
+    return r;
+  }
+  try {
+    var saved = sessionStorage.getItem(LAND_SS_KEY);
+    if (saved) {
+      var p = JSON.parse(saved);
+      if (p && p.page) return { page: p.page, variant: p.variant || '' };
+    }
+  } catch (e) {}
+  return null;
+}
+var LANDING_CAPTURED = captureLanding();
 
 function findAndUpdateLead(contact, callback) {
   // Mode preview : test admin depuis le builder, on ne touche pas au CRM
