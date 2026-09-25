@@ -14,8 +14,25 @@
 //     email     : "adrien@example.com",
 //     telephone : "+33688121402",
 //     utm       : "VSL Business - Page inscription",  // optionnel
-//     source    : "webhook"                            // optionnel
+//     source    : "webhook",                           // optionnel
+//     quiz      : {                                    // optionnel — question funnel
+//       score_global       : 17,
+//       scores             : { systematisation: 25, delegation: 13,
+//                              pilotage: 17, croissance: 13 },
+//       pilier_prioritaire : "Délégation",
+//       ca_mensuel         : "Entre 20 000 € et 50 000 € par mois",
+//       objectif           : "Le doubler",
+//       equipe             : "4 à 10 personnes",
+//       heures             : "Plus de 60 h / semaine",
+//       reponses           : [ { question: "…", reponse: "…" }, … ]
+//     }
 //   }
+//
+// Le bloc quiz est nettoyé (whitelist de champs, tailles bornées) puis écrit
+// tel quel sur le document lead (champ `quiz` + `quizSubmittedAt`). Absent du
+// body → aucun champ quiz touché, comportement strictement identique à avant.
+// Au ré-opt-in, l'ancien quiz part dans engagementHistory[] comme les autres
+// déclaratifs, mais n'est PAS effacé si le nouvel opt-in n'en porte pas.
 //
 // Réponse 200 :
 //   {
@@ -105,6 +122,64 @@ function dateNowFR() {
   return new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
 }
 
+// ─── QUIZ « DIAGNOSTIC 4 PILIERS » (question funnel, 25/09/2026) ────────
+// Nettoyage strict du bloc quiz : seuls les champs connus passent, chaînes
+// bornées, scores clampés 0-100. Retourne null si rien d'exploitable —
+// on n'écrit alors AUCUN champ quiz (pas de bloc vide sur la fiche).
+const QUIZ_PILLARS = ['systematisation', 'delegation', 'pilotage', 'croissance'];
+
+function quizStr(v, max) {
+  if (v == null) return null;
+  const s = String(v).trim().slice(0, max || 300);
+  return s || null;
+}
+function quizScore(v) {
+  const n = Number(v);
+  if (!isFinite(n)) return null;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+function sanitizeQuiz(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+
+  const g = quizScore(raw.score_global);
+  if (g != null) out.score_global = g;
+
+  if (raw.scores && typeof raw.scores === 'object') {
+    const sc = {};
+    QUIZ_PILLARS.forEach((k) => {
+      const v = quizScore(raw.scores[k]);
+      if (v != null) sc[k] = v;
+    });
+    if (Object.keys(sc).length) out.scores = sc;
+  }
+
+  const prio = quizStr(raw.pilier_prioritaire, 100);
+  if (prio) out.pilier_prioritaire = prio;
+
+  ['ca_mensuel', 'objectif', 'equipe', 'heures'].forEach((k) => {
+    const v = quizStr(raw[k], 200);
+    if (v) out[k] = v;
+  });
+
+  if (Array.isArray(raw.reponses)) {
+    const rows = [];
+    for (let i = 0; i < raw.reponses.length && rows.length < 60; i++) {
+      const r = raw.reponses[i];
+      if (!r || typeof r !== 'object') continue;
+      const q = quizStr(r.question, 300);
+      const a = quizStr(r.reponse, 1000);
+      if (q && a != null) rows.push({ question: q, reponse: a });
+    }
+    if (rows.length) out.reponses = rows;
+  }
+
+  // Un quiz sans score ni réponses n'apporte rien → on l'ignore.
+  if (out.score_global == null && !out.reponses) return null;
+  out.receivedAt = new Date().toISOString();
+  return out;
+}
+
 /* Liste de blocage (api/lead-block.js) — lecture par ID de document, donc
    deux get() au pire, aucune requête ni index. Retourne la clé qui a
    matché, ou null. En cas d'erreur Firestore on NE bloque pas : mieux vaut
@@ -192,6 +267,7 @@ module.exports = async (req, res) => {
   const utm         = Core.decodeUtm(String(utmRaw || tunnelLabel));
   const source      = String(sourceRaw || 'webhook');
   const attribution = buildAttribution(body, utmRaw, 'optin');
+  const quiz        = sanitizeQuiz(body && body.quiz);
 
   // ─── 3bis. LISTE DE BLOCAGE ─────────────────────────────────────────
   // Faux numéros et emails bidon bloqués depuis Leads Live : on s'arrête
@@ -269,6 +345,7 @@ module.exports = async (req, res) => {
         formTitle:       prev.formTitle       || null,
         formAnswers:     prev.formAnswers     || null,
         formSubmittedAt: prev.formSubmittedAt || null,
+        quiz:            prev.quiz            || null,
         attribution:     prev.attributionLast || prev.attributionFirst || null
       }),
 
@@ -293,6 +370,15 @@ module.exports = async (req, res) => {
     if (attribution) {
       update.attributionLast = attribution;
       if (!Core.attrHasSignal(prev.attributionFirst)) update.attributionFirst = attribution;
+    }
+
+    // ─── Quiz diagnostic ───────────────────────────────────────────────
+    // Fourni → remplace le précédent (l'ancien est déjà archivé dans
+    // engagementHistory ci-dessus). Absent → on ne touche à rien : un
+    // opt-in VSL classique ne doit pas effacer un diagnostic existant.
+    if (quiz) {
+      update.quiz = quiz;
+      update.quizSubmittedAt = admin.firestore.FieldValue.serverTimestamp();
     }
 
     // ─── Soft-reset stage/status (sauf clients) ────────────────────────
@@ -355,6 +441,10 @@ module.exports = async (req, res) => {
   if (attribution) {
     newLead.attributionFirst = attribution;
     newLead.attributionLast  = attribution;
+  }
+  if (quiz) {
+    newLead.quiz = quiz;
+    newLead.quizSubmittedAt = admin.firestore.FieldValue.serverTimestamp();
   }
 
   try {

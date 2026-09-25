@@ -572,6 +572,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .ld-form-history-entry { padding: 10px 12px; border: 1px solid rgba(91,124,250,0.14); background: rgba(91,124,250,0.03); border-radius: 9px; }
 .ld-form-history-entry-title { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px; color: rgba(169,188,255,0.8); margin-bottom: 6px; }
 
+/* ── Diagnostic quiz (question funnel — champ leads.quiz posé par lead-optin) ── */
+.ld-quiz-block { margin: 12px 0 4px; padding: 11px 13px; border: 1px solid rgba(251,146,60,0.28); background: rgba(251,146,60,0.05); border-radius: var(--radius); }
+.ld-quiz-title { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: #fdba74; margin-bottom: 9px; }
+.ld-quiz-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.ld-quiz-global { font-size: 21px; font-weight: 800; font-family: var(--fm); line-height: 1; }
+.ld-quiz-global small { font-size: 10px; font-weight: 600; color: var(--muted); display: block; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--fb); }
+.ld-quiz-prio { font-size: 11px; font-weight: 700; color: #fdba74; background: rgba(251,146,60,0.12); border: 1px solid rgba(251,146,60,0.3); border-radius: 7px; padding: 4px 9px; }
+.ld-quiz-bars { display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; }
+.ld-quiz-bar-top { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; font-weight: 600; color: var(--muted); margin-bottom: 3px; }
+.ld-quiz-bar-top b { font-family: var(--fm); font-weight: 800; }
+.ld-quiz-bar { height: 6px; border-radius: 6px; background: rgba(255,255,255,0.07); overflow: hidden; }
+.ld-quiz-bar i { display: block; height: 100%; border-radius: 6px; }
+.ld-quiz-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.ld-quiz-fact { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; font-size: 11px; color: var(--muted); line-height: 1.4; }
+.ld-quiz-fact b { display: block; color: var(--text); font-weight: 700; }
+.ld-quiz-answers { margin-top: 9px; padding-top: 8px; border-top: 1px dashed rgba(251,146,60,0.2); }
+.ld-quiz-answers-title { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.7px; color: rgba(253,186,116,0.8); margin-bottom: 4px; }
+.ld-badge-quiz {
+  display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 6px;
+  font-size: 10px; font-weight: 800; font-family: var(--fm); white-space: nowrap;
+  color: #fdba74; background: rgba(251,146,60,0.1); border: 1px solid rgba(251,146,60,0.3);
+}
+
 /* ── Historique des passages (engagementHistory) ── */
 .ld-eng-history-wrap {
   margin: 14px 0 8px; padding: 12px 13px;
@@ -3301,6 +3324,105 @@ function renderFormHistoryBlock(l, id) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// DIAGNOSTIC QUIZ (leads.quiz — posé par api/lead-optin.js, question funnel)
+// ─────────────────────────────────────────────────────────────────────────
+// Schéma : { score_global, scores: {systematisation, delegation, pilotage,
+//            croissance}, pilier_prioritaire, ca_mensuel, objectif, equipe,
+//            heures, reponses: [{question, reponse}], receivedAt }
+// Tout est optionnel : chaque morceau ne s'affiche que s'il est présent.
+// Couleurs des barres : rouge ≤ 40 %, orange ≤ 80 %, vert au-dessus.
+// ═══════════════════════════════════════════════════════════════════════
+var LD_QUIZ_PILLARS = [
+  { k: 'systematisation', label: 'Systématisation' },
+  { k: 'delegation',      label: 'Délégation' },
+  { k: 'pilotage',        label: 'Pilotage par les chiffres' },
+  { k: 'croissance',      label: 'Croissance & duplication' }
+];
+
+// Score 0-100 sûr (Make peut envoyer un number ou une string) — null si invalide.
+function ldQuizNum(v) {
+  if (v == null || v === '') return null;
+  var n = Number(v);
+  if (!isFinite(n)) return null;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+function ldQuizColor(p) {
+  return p <= 40 ? '#f87171' : (p <= 80 ? '#fbbf24' : '#34d399');
+}
+
+function renderQuizBlock(l, id) {
+  var qz = l.quiz;
+  if (!qz || typeof qz !== 'object') return '';
+  var g = ldQuizNum(qz.score_global);
+
+  var h = '<div class="ld-quiz-block" data-quiz-block="' + id + '">';
+  var datePart = '';
+  var qzAt = qz.receivedAt || l.quizSubmittedAt;
+  if (qzAt) datePart = ' · Rempli le ' + formatDateTimeFr(qzAt);
+  h += '<div class="ld-quiz-title">🧭 Diagnostic quiz — 4 piliers' + datePart + '</div>';
+
+  // ── Score global + pilier prioritaire ──
+  h += '<div class="ld-quiz-head">';
+  if (g !== null) {
+    h += '<div class="ld-quiz-global" style="color:' + ldQuizColor(g) + '">' + g + '%<small>score global</small></div>';
+  }
+  if (qz.pilier_prioritaire) {
+    h += '<span class="ld-quiz-prio">🎯 Pilier prioritaire : ' + escHtml(qz.pilier_prioritaire) + '</span>';
+  }
+  h += '</div>';
+
+  // ── Barres des 4 piliers ──
+  if (qz.scores && typeof qz.scores === 'object') {
+    var barsHtml = '';
+    LD_QUIZ_PILLARS.forEach(function(p){
+      var v = ldQuizNum(qz.scores[p.k]);
+      if (v === null) return;
+      var c = ldQuizColor(v);
+      barsHtml += '<div>';
+      barsHtml += '<div class="ld-quiz-bar-top"><span>' + p.label + '</span><b style="color:' + c + '">' + v + '%</b></div>';
+      barsHtml += '<div class="ld-quiz-bar"><i style="width:' + v + '%;background:' + c + '"></i></div>';
+      barsHtml += '</div>';
+    });
+    if (barsHtml) h += '<div class="ld-quiz-bars">' + barsHtml + '</div>';
+  }
+
+  // ── CA / Objectif / Équipe / Heures en évidence ──
+  var facts = [
+    ['💶 CA mensuel',        qz.ca_mensuel],
+    ['🚀 Objectif 12 mois',  qz.objectif],
+    ['👥 Équipe',            qz.equipe],
+    ['⏱️ Heures / semaine',  qz.heures]
+  ];
+  var factsHtml = '';
+  facts.forEach(function(f){
+    if (!f[1]) return;
+    factsHtml += '<div class="ld-quiz-fact">' + f[0] + '<b>' + escHtml(f[1]) + '</b></div>';
+  });
+  if (factsHtml) h += '<div class="ld-quiz-facts">' + factsHtml + '</div>';
+
+  // ── Questions → réponses (mêmes rows que les réponses AlteoForm) ──
+  if (Array.isArray(qz.reponses) && qz.reponses.length) {
+    var rowsHtml = '';
+    qz.reponses.forEach(function(r){
+      if (!r || !r.question || r.reponse == null || r.reponse === '') return;
+      rowsHtml += '<div class="ld-form-answer-row">';
+      rowsHtml += '<span class="ld-form-answer-label">' + escHtml(r.question) + '</span>';
+      rowsHtml += '<span class="ld-form-answer-val">' + escHtml(String(r.reponse)) + '</span>';
+      rowsHtml += '</div>';
+    });
+    if (rowsHtml) {
+      h += '<div class="ld-quiz-answers">';
+      h += '<div class="ld-quiz-answers-title">📋 Réponses du quiz</div>';
+      h += rowsHtml;
+      h += '</div>';
+    }
+  }
+
+  h += '</div>';
+  return h;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // HISTORIQUE DES PASSAGES (engagementHistory[])
 // ─────────────────────────────────────────────────────────────────────────
 // À chaque ré-engagement d'un lead existant (opt-in webhook, re-soumission
@@ -3405,6 +3527,12 @@ function renderEngagementHistoryBlock(l, id) {
     if (e.utm)          entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">UTM</span><span class="ld-eng-detail-val">' + escHtml(decodeUtm(e.utm)) + '</span></div>';
     if (e.source)       entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Source</span><span class="ld-eng-detail-val">' + escHtml(e.source) + (e.sourceDetail ? ' — ' + escHtml(e.sourceDetail) : '') + '</span></div>';
     if (e.formSubmittedAt) entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">Soumis le</span><span class="ld-eng-detail-val">' + escHtml(formatDateTimeFr(e.formSubmittedAt)) + '</span></div>';
+    /* Quiz archivé au ré-opt-in (lead-optin) — résumé une ligne, le détail
+       complet vit sur la fiche tant que le quiz est le courant. */
+    if (e.quiz && ldQuizNum(e.quiz.score_global) !== null) {
+      var _eqz = ldQuizNum(e.quiz.score_global);
+      entriesHtml += '<div class="ld-eng-detail-row"><span class="ld-eng-detail-lbl">🧭 Quiz</span><span class="ld-eng-detail-val"><b style="color:' + ldQuizColor(_eqz) + '">' + _eqz + '%</b>' + (e.quiz.pilier_prioritaire ? ' · pilier prioritaire : ' + escHtml(e.quiz.pilier_prioritaire) : '') + '</span></div>';
+    }
 
     // Bloc formulaire (si présent)
     if (e.formAnswers) {
@@ -3564,6 +3692,12 @@ function renderLeadTags(l, compact) {
   /* Score qualité (1-5) — badge doré compact, visible en liste et en fiche */
   if (l.leadScore >= 1 && l.leadScore <= 5) {
     h += '<span class="ld-badge-score" title="Qualité du lead : ' + l.leadScore + '/5">★ ' + l.leadScore + '</span>';
+  }
+  /* Diagnostic quiz (question funnel) — badge + score global quand le bloc existe */
+  var _qzScore = ldQuizNum(l.quiz && l.quiz.score_global);
+  if (l.quiz && _qzScore !== null) {
+    h += '<span class="ld-badge-quiz" title="Diagnostic quiz — score global ' + _qzScore + '%'
+      + (l.quiz.pilier_prioritaire ? ' · pilier prioritaire : ' + escAttr(l.quiz.pilier_prioritaire) : '') + '">🧭 Quiz ' + _qzScore + '%</span>';
   }
   if (setterObj && !(compact && personalUser && l.assignedTo === personalUser)) {
     h += '<span class="ld-assigned" style="color:' + setterObj.color + '">' + escHtml(setterObj.name) + '</span>';
@@ -4107,6 +4241,9 @@ function l2SegInfos(l, id) {
     if (l.zohoLastActivityAt) h += '<div class="ld-detail-row"><span class="ld-detail-label">Dernière activité</span><span class="ld-detail-val">' + formatDateTimeFr(l.zohoLastActivityAt) + '</span></div>';
   }
   h += '</div>';
+
+  // 🧭 Diagnostic quiz (question funnel — leads.quiz)
+  h += renderQuizBlock(l, id);
 
   // Réponses du formulaire (AlteoForms) + historique des soumissions
   h += renderFormAnswersBlock(l, id);
