@@ -91,6 +91,9 @@
     { id: 'admin-billing',     icon: '🧾', label: 'Facturation',  href: 'admin-facturation.html', section: 'Admin', perm: '_admin' },
     { id: 'admin-dedup',       icon: '🔄', label: 'Dédup Clients', href: 'clients-dedup.html',    section: 'Admin', perm: '_admin' },
     { id: 'alteoforms',        icon: '📝', label: 'AlteoForms',   href: 'alteoforms.html',        section: 'Outils', perm: 'alteoforms' },
+    // Tunnels de vente hébergés (go.adrienemily.com) — pages, A/B, stats,
+    // reliés à Leads Live. Admin uniquement.
+    { id: 'tunnels',           icon: '🧭', label: 'Tunnels',      href: 'admin-tunnels.html',     section: 'Outils', perm: '_admin' },
     { id: 'payments',          icon: '💳', label: 'Paiements',    href: 'payments.html',          section: 'Outils', perm: 'payments' },
     // Formations internes (Setting LAB / Closing LAB / Coach LAB) : accès
     // membre par membre via users/{uid}.formationsAccess (case dans

@@ -976,6 +976,29 @@ service cloud.firestore {
     }
 
 
+    // ═══ TUNNELS DE VENTE HÉBERGÉS (09/2026) ═══
+    // tunnels/{tunnelId} : nom, slug, statut, réglages, étapes[] avec leurs
+    // variantes A/B (le HTML des pages vit dans Storage tunnels/…). Édité par
+    // admin-tunnels.html, lu côté serveur par api/_tunnelRegistry.js (Admin
+    // SDK) pour servir les pages : aucun visiteur n'a besoin de lire ici.
+    match /tunnels/{tunnelId} {
+      allow read:   if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;     // on archive (archived: true), jamais de suppression
+    }
+
+    // Compteurs journaliers tunnel_stats_daily/{YYYY-MM-DD}_{tunnelId}
+    // (visites, vues, clics CTA, opt-ins ; ventilés par étape et par source
+    // UTM). Incrémentés UNIQUEMENT par api/tunnel-event.js et
+    // api/tunnel-optin.js (Admin SDK). Les vues par étape × variante vont
+    // dans page_views_daily (ci-dessus), lues par le Funnel Sales.
+    match /tunnel_stats_daily/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+
     // ═══ FUNNEL SNAPSHOTS — OBSOLÈTE (26/07/2026) ═══
     // Mécanisme d'instantanés pré-publiés, remplacé par le calcul à la
     // demande : api/agency-funnel.js exécute funnel-core.js (le module que

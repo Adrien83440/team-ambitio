@@ -45,6 +45,9 @@
 
 const { db, admin } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
+// Pages des tunnels hébergés (admin-tunnels.html) : clé `<tunnel>__<etape>`,
+// reconnue via le registre (cache 20 s) — voir api/_tunnelRegistry.js.
+const Reg = require('./_tunnelRegistry');
 
 // Pages reconnues. Ajouter ici tout nouveau tunnel.
 //   elite / business          → pages d'opt-in historiques
@@ -81,8 +84,9 @@ module.exports = async (req, res) => {
   let event = 'view';
   try {
     const body = parseBody(req) || {};
-    const rawPage = String(body.page || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+    const rawPage = String(body.page || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, 90);
     if (ALLOWED_PAGES.indexOf(rawPage) >= 0) page = rawPage;
+    else if (Reg.isTunnelPageKey(rawPage) && await Reg.isKnownPage(rawPage)) page = rawPage;
 
     const rawVariant = String(body.variant || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, 20);
     if (rawVariant) variant = rawVariant;

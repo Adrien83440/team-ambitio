@@ -57,24 +57,39 @@ const Lookup = require('./_leadLookup');
 // Parsing d'attribution : implémentation UNIQUE, partagée avec le funnel,
 // lead-optin et alteoform-submit.
 const Core = require('../funnel-core.js');
+// Pages des tunnels hébergés (`<tunnel>__<etape>`) : registre en cache.
+const Reg = require('./_tunnelRegistry');
 
 const str = Lookup.str;
 
 // Pages de provenance reconnues (même liste que api/page-view.js, côté VSL).
+// Les pages de tunnel s'y ajoutent dynamiquement (voir buildLanding).
 const ALLOWED_PAGES = { vsl_elite: 1, vsl_business: 1, elite: 1, business: 1 };
 
 function cleanSlug(v, max) {
   return String(v || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, max || 40);
 }
 
-function buildLanding(body) {
+async function buildLanding(body) {
   const src = body && typeof body.landing === 'object' ? body.landing : null;
   if (!src) return null;
-  const page = cleanSlug(src.page, 40);
-  if (!page || !ALLOWED_PAGES[page]) return null;
+  const page = cleanSlug(src.page, 90);
+  if (!page) return null;
+  let tunnelHit = null;
+  if (!ALLOWED_PAGES[page]) {
+    if (!Reg.isTunnelPageKey(page)) return null;
+    try { tunnelHit = await Reg.findByPage(page); } catch (e) { tunnelHit = null; }
+    if (!tunnelHit) return null;
+  }
   const out = { page: page, variant: cleanSlug(src.variant, 20) || null };
   const url = str(src.pageUrl, 500);
   if (url) out.pageUrl = url;
+  if (tunnelHit) {
+    out.tunnelId = tunnelHit.tunnel.id;
+    out.stepId = tunnelHit.step.id;
+    out.label = Reg.pageLabel(tunnelHit.tunnel, tunnelHit.step);
+    out.leadType = String((tunnelHit.tunnel.settings && tunnelHit.tunnel.settings.leadType) || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 40);
+  }
   out.capturedAt = new Date().toISOString();
   return out;
 }
@@ -92,6 +107,7 @@ function buildAttribution(body, landing) {
 
 function landingLabel(landing) {
   if (!landing) return '';
+  if (landing.label) return landing.label + (landing.variant ? ' · variante ' + landing.variant.toUpperCase() : '');
   const base = landing.page.indexOf('business') >= 0 ? 'VSL Business' : (landing.page.indexOf('elite') >= 0 ? 'VSL Élite' : landing.page);
   return base + (landing.variant ? ' · variante ' + landing.variant.toUpperCase() : '');
 }
@@ -117,8 +133,11 @@ module.exports = async (req, res) => {
   const typeId = str(body.typeId, 80);
   const typeLabel = str(body.typeLabel, 120) || typeId;
 
-  const landing = buildLanding(body);
+  const landing = await buildLanding(body);
   const attribution = buildAttribution(body, landing);
+  // Champs de service du registre : ne partent pas dans bookings.landing.
+  const leadTypeFromTunnel = landing ? (landing.leadType || '') : '';
+  if (landing) delete landing.leadType;
 
   if (!landing && !attribution) {
     res.status(200).json({ ok: true, attributed: false, reason: 'no_signal' });
@@ -182,7 +201,7 @@ module.exports = async (req, res) => {
       phoneNormalized: phoneNorm,
       secteur: secteur,
       message: message,
-      type: (landing && landing.page.indexOf('business') >= 0) ? 'business' : 'self_booking',
+      type: leadTypeFromTunnel || ((landing && landing.page.indexOf('business') >= 0) ? 'business' : 'self_booking'),
       source: 'booking_direct',
       sourceDetail: label || typeLabel,
       utm: (attribution && (attribution.utm_content || attribution.utm_campaign)) || label || 'Booking direct',

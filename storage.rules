@@ -44,6 +44,25 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
 
+    // ═══ TUNNELS DE VENTE — pages HTML et médias (09/2026) ═══
+    //
+    //  Path : tunnels/{tunnelId}/{stepId}/{variantId}/index.html  (page)
+    //         tunnels/{tunnelId}/assets/{fileName}                (images…)
+    //
+    //  Read   : PUBLIC. Les pages sont servies par api/tunnel-render.js
+    //           (Admin SDK) mais leurs images, polices et scripts sont
+    //           référencés par URL de téléchargement depuis le HTML : ils
+    //           doivent se charger sans session. Contenu marketing
+    //           uniquement — jamais une donnée client.
+    //  Write  : utilisateur authentifié, 30 MB max. Seul un admin voit
+    //           admin-tunnels.html (miroir de la rule Firestore tunnels/).
+    match /tunnels/{tunnelId}/{allPaths=**} {
+      allow read:   if true;
+      allow create, update: if request.auth != null
+                    && request.resource.size < 30 * 1024 * 1024;
+      allow delete: if request.auth != null;
+    }
+
     // ═══ TÉMOIGNAGES — mur de témoignages clients ═══
     //
     //  Path : testimonials/{temoId}/{fileName}

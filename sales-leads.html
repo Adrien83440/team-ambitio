@@ -1868,6 +1868,7 @@ function processPopupQueue() {
   if (lead.telephone) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Téléphone</span><span class="ld-popup-field-val">' + escHtml(lead.telephone) + '</span></div>';
   if (lead.email) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Email</span><span class="ld-popup-field-val">' + escHtml(lead.email) + '</span></div>';
   if (lead.utm) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Source</span><span class="ld-popup-field-val">' + escHtml(decodeUtm(lead.utm)) + '</span></div>';
+  if (lead.landingFirst && lead.landingFirst.label) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">🧭 Tunnel</span><span class="ld-popup-field-val">' + escHtml(lead.landingFirst.label) + '</span></div>';
   if (lead.secteur) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">Secteur</span><span class="ld-popup-field-val">' + escHtml(lead.secteur) + '</span></div>';
   if (lead.ca) h += '<div class="ld-popup-field"><span class="ld-popup-field-label">CA</span><span class="ld-popup-field-val">' + escHtml(lead.ca) + '</span></div>';
   if (setterObj) {
@@ -2121,6 +2122,15 @@ document.getElementById('ldFilters').addEventListener('click', function(e) {
     _applySearch('');
     searchInput.focus();
   });
+
+  /* Lien « Voir les leads » de admin-tunnels.html : ?tunnel=<nom du tunnel>
+     pré-remplit la recherche (le nom est dans sourceDetail et
+     landingFirst.label, tous deux indexés par la recherche). */
+  var _tunnelQ = new URLSearchParams(window.location.search).get('tunnel');
+  if (_tunnelQ) {
+    searchInput.value = _tunnelQ;
+    _applySearch(_tunnelQ);
+  }
 })();
 
 /* ═══ RENDER FEED ═══ */
@@ -2281,7 +2291,9 @@ function getFilteredLeads() {
       var hay = _normForSearch([
         l.nom, l.email, decodeUtm(l.utm), l.secteur, l.ca, l.defi,
         l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
-        l.status, statusLabel, assigned, memberFull, l.id
+        l.status, statusLabel, assigned, memberFull, l.id,
+        // Tunnels hébergés (admin-tunnels.html) : nom du tunnel · étape
+        l.sourceDetail, (l.landingFirst && l.landingFirst.label)
       ].filter(Boolean).join(' \u0001 '));
       // Digits du téléphone (9 derniers)
       var phone9 = phoneNormalized(l.telephone) || '';
@@ -2418,7 +2430,9 @@ function updatePeriodCounts() {
       var hay = _normForSearch([
         l.nom, l.email, decodeUtm(l.utm), l.secteur, l.ca, l.defi,
         l.disponibilite, l.timeline, l.stage, l.type, typeLabel,
-        l.status, statusLabel, assigned, memberFull, l.id
+        l.status, statusLabel, assigned, memberFull, l.id,
+        // Tunnels hébergés (admin-tunnels.html) : nom du tunnel · étape
+        l.sourceDetail, (l.landingFirst && l.landingFirst.label)
       ].filter(Boolean).join(' \u0001 '));
       var phone9 = phoneNormalized(l.telephone) || '';
       var phoneFull = _digitsOnly(l.telephone);
@@ -3103,15 +3117,37 @@ function paintLeadRdvBox(leadId, items) {
     if (pr.secteur) bits.push('🏢 ' + escHtml(pr.secteur));
     if (pr.telephone) bits.push('📞 ' + escHtml(pr.telephone));
     if (b.timezone && b.timezone !== 'Europe/Paris') bits.push('🌍 ' + escHtml(b.timezone));
-    /* Réponses libres du formulaire de réservation, hors champs déjà affichés. */
+    /* Réponses libres du formulaire de réservation, hors champs déjà
+       affichés. formAnswers (RDV pris depuis le 02/09/2026) porte le libellé
+       du champ posé par booking.html ; les RDV antérieurs n'ont que la map
+       formData → libellé retrouvé dans les formFields de la consultation
+       (typeMap), id brut en dernier recours. « on » = case cochée par
+       l'ancien rendu du formulaire public → affiché « Oui ». */
     var SKIP = { prenom: 1, nom: 1, email: 1, phone: 1, telephone: 1, secteur: 1, message: 1 };
-    var fd = b.formData || {};
-    Object.keys(fd).forEach(function (kk) {
-      if (SKIP[kk]) return;
-      var v = fd[kk];
-      if (v == null || v === '' || typeof v === 'object') return;
-      bits.push(escHtml(kk) + ' : ' + escHtml(String(v).slice(0, 90)));
-    });
+    function ansBit(label, v) {
+      v = String(v) === 'on' ? 'Oui' : String(v);
+      label = String(label);
+      if (label.length > 80) label = label.slice(0, 80) + '…';
+      bits.push('📝 ' + escHtml(label) + ' : ' + escHtml(v.slice(0, 90)));
+    }
+    if (Array.isArray(b.formAnswers) && b.formAnswers.length) {
+      b.formAnswers.forEach(function (a) {
+        if (!a || SKIP[a.id]) return;
+        if (a.value == null || a.value === '' || typeof a.value === 'object') return;
+        ansBit(a.label || a.id, a.value);
+      });
+    } else {
+      var tDef = (_ldTypeMap && _ldTypeMap[b.type]) || {};
+      var lblById = {};
+      (tDef.formFields || []).forEach(function (ft) { if (ft && ft.id) lblById[ft.id] = ft.label; });
+      var fd = b.formData || {};
+      Object.keys(fd).forEach(function (kk) {
+        if (SKIP[kk]) return;
+        var v = fd[kk];
+        if (v == null || v === '' || typeof v === 'object') return;
+        ansBit(lblById[kk] || kk, v);
+      });
+    }
     var msg = (pr.message || fd.message || '').trim();
     if (!bits.length && !msg && !meetUrl) return '';
     var h = '<div class="ld-rdvx-info">';
@@ -4047,6 +4083,7 @@ function l2SegInfos(l, id) {
   if (l.telephone) h += '<div class="ld-detail-row"><span class="ld-detail-label">Téléphone</span><span class="ld-detail-val"><a href="#" data-action="dialerCall" data-phone="' + normalizeTel(l.telephone).replace(/\s/g, '') + '" data-lead-id="' + id + '" data-name="' + escAttr(l.nom || '') + '" title="Appeler via Ringover">' + escHtml(normalizeTel(l.telephone)) + '</a></span></div>';
   if (l.email) h += '<div class="ld-detail-row"><span class="ld-detail-label">Email</span><span class="ld-detail-val"><a href="mailto:' + escHtml(l.email) + '">' + escHtml(l.email) + '</a></span></div>';
   if (l.utm) h += '<div class="ld-detail-row"><span class="ld-detail-label">UTM / Source</span><span class="ld-detail-val">' + escHtml(decodeUtm(l.utm)) + '</span></div>';
+  if (l.landingFirst && l.landingFirst.label) h += '<div class="ld-detail-row"><span class="ld-detail-label">🧭 Tunnel</span><span class="ld-detail-val">' + escHtml(l.landingFirst.label + (l.landingFirst.variant ? ' · variante ' + String(l.landingFirst.variant).toUpperCase() : '')) + '</span></div>';
   if (l.secteur) h += '<div class="ld-detail-row"><span class="ld-detail-label">Secteur</span><span class="ld-detail-val">' + escHtml(l.secteur) + '</span></div>';
   if (l.ca) h += '<div class="ld-detail-row"><span class="ld-detail-label">CA actuel</span><span class="ld-detail-val">' + escHtml(l.ca) + '</span></div>';
   if (l.defi) h += '<div class="ld-detail-row"><span class="ld-detail-label">Défi</span><span class="ld-detail-val">' + escHtml(l.defi) + '</span></div>';

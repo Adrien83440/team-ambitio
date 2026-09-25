@@ -728,7 +728,13 @@
      historiques ; `vsl_elite` / `vsl_business` = VSL à prise de RDV directe
      (23/09/2026). Les secondes ne portent pas d'opt-in : leur conversion est
      le RDV, lu dans bookings.landing (posé par booking.html). */
-  function isVslPage(p) { return String(p || '').indexOf('vsl_') === 0; }
+  /* Pages des tunnels hébergés (admin-tunnels.html, 09/2026) : clé
+     `<tunnel>__<etape>`. Elles se mesurent comme une VSL system.io — vues et
+     clics par le beacon, RDV par bookings.landing. */
+  function isVslPage(p) {
+    var s = String(p || '');
+    return s.indexOf('vsl_') === 0 || /^[a-z0-9-]+__[a-z0-9-]+$/.test(s);
+  }
   function pageTunnel(p) { return String(p || '').indexOf('business') >= 0 ? 'business' : 'elite'; }
 
   function leadTunnel(l) {
@@ -1293,6 +1299,8 @@
        bloc landing n'est compté nulle part ici : plancher, jamais estimé. */
     k.vslViews = 0; k.vslCtas = 0; k.vslBookings = 0;
     var vslByPage = {};
+    /* Libellés lisibles des pages de tunnel (pageLabel posé par le beacon). */
+    k.vslLabels = {};
     function vslCell(pg, vr) {
       if (!vslByPage[pg]) vslByPage[pg] = {};
       if (!vslByPage[pg][vr]) vslByPage[pg][vr] = { variant: vr, views: 0, ctas: 0, bookings: 0 };
@@ -1301,6 +1309,7 @@
     DATA.views.forEach(function (v) {
       if (!isVslPage(v.page) || !tunnelMatch(pageTunnel(v.page))) return;
       var c = vslCell(v.page, v.variant || '_');
+      if (v.pageLabel && !k.vslLabels[v.page]) k.vslLabels[v.page] = String(v.pageLabel);
       c.views += Number(v.views) || 0;
       c.ctas += Number(v.ctas) || 0;
       k.vslViews += Number(v.views) || 0;

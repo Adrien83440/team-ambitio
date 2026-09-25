@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Tunnels de vente</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<script src="funnel-core.js"></script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-tunnels.html — Tunnels de vente hébergés (09/2026)
+   Pages HTML écrites à la main, hébergées sur go.adrienemily.com, mesurées
+   (visites, vues, CTA, opt-ins, RDV) et reliées à Leads Live. Admin only.
+   ═══════════════════════════════════════════════════════════════════════ */
+.tn{padding:20px 24px 80px;max-width:1180px;margin:0 auto;font-family:'Figtree',sans-serif}
+.tn-top{display:flex;align-items:center;gap:14px;margin-bottom:22px;flex-wrap:wrap}
+.tn-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px}
+.tn-top small{font-size:12px;color:rgba(255,255,255,.48);display:block;margin-top:2px}
+.tn-top .sp{flex:1}
+.tn-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#22d3ee,#0891b2);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 3px 12px rgba(34,211,238,.3);flex-shrink:0}
+.bb{padding:8px 16px;border:none;border-radius:8px;font-family:'Figtree',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s;text-decoration:none;line-height:1.3}
+.bb-p{background:#22d3ee;color:#000}.bb-p:hover{background:#06b6d4}
+.bb-g{background:rgba(52,211,153,.1);color:#34d399;border:1px solid rgba(52,211,153,.2)}
+.bb-o{background:0;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.62)}.bb-o:hover{color:#fff;border-color:rgba(255,255,255,.25)}
+.bb-r{background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.2)}
+.bb-s{padding:5px 10px;font-size:11px}
+.bb[disabled]{opacity:.4;cursor:not-allowed}
+.bi{padding:8px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0;box-sizing:border-box;width:100%}
+.bi:focus{border-color:#22d3ee}
+.bs{padding:8px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0;width:100%}
+.bs option{background:var(--bg3,#141420)}
+textarea.bi{min-height:120px;resize:vertical;font-family:var(--font-m);font-size:12px;line-height:1.5}
+.tn-banner{background:rgba(34,211,238,.06);border:1px solid rgba(34,211,238,.18);border-radius:12px;padding:12px 16px;font-size:12.5px;color:rgba(255,255,255,.7);line-height:1.5;margin-bottom:18px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.tn-banner code{font-family:var(--font-m);color:#67e8f9;font-size:12px}
+.tn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tn-card{background:var(--bg2,#0f0f1a);border:1px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;transition:border-color .15s,transform .15s;position:relative}
+.tn-card:hover{border-color:rgba(34,211,238,.35);transform:translateY(-1px)}
+.tn-card h3{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700;margin:0 0 4px;padding-right:80px}
+.tn-card .url{font-family:var(--font-m);font-size:11px;color:rgba(255,255,255,.4);word-break:break-all}
+.tn-card .meta{display:flex;gap:14px;margin-top:12px;font-size:11.5px;color:rgba(255,255,255,.55)}
+.tn-card .meta b{color:#fff;font-size:15px;display:block;font-family:'Bricolage Grotesque',sans-serif}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
+.pill-live{background:rgba(52,211,153,.12);color:#34d399;border:1px solid rgba(52,211,153,.25)}
+.pill-draft{background:rgba(255,255,255,.06);color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.1)}
+.pill-type{background:rgba(96,165,250,.1);color:#93c5fd;border:1px solid rgba(96,165,250,.2)}
+.tn-card .pill{position:absolute;top:16px;right:16px}
+.tn-empty{padding:60px 20px;text-align:center;color:rgba(255,255,255,.35);font-size:13px;border:1px dashed rgba(255,255,255,.1);border-radius:14px}
+/* Éditeur */
+.ed-head{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.ed-head .name{font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:800;background:0;border:1px solid transparent;color:#fff;padding:6px 8px;border-radius:8px;min-width:220px;outline:0}
+.ed-head .name:hover,.ed-head .name:focus{border-color:rgba(255,255,255,.12);background:var(--bg3)}
+.ed-url{font-family:var(--font-m);font-size:11.5px;color:#67e8f9;text-decoration:none}
+.ed-url:hover{text-decoration:underline}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:18px;overflow-x:auto}
+.tab{padding:10px 14px;font-size:13px;font-weight:600;color:rgba(255,255,255,.5);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;background:0;border-top:0;border-left:0;border-right:0;font-family:'Figtree',sans-serif}
+.tab.on{color:#fff;border-bottom-color:#22d3ee}
+.sec{background:var(--bg2,#0f0f1a);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:14px}
+.sec h2{font-family:'Bricolage Grotesque',sans-serif;font-size:14px;font-weight:700;margin:0 0 4px}
+.sec .sub{font-size:12px;color:rgba(255,255,255,.45);margin-bottom:14px;line-height:1.5}
+.sec .sub code{font-family:var(--font-m);color:#67e8f9}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px}
+.lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);margin-bottom:5px;display:block}
+.help{font-size:11px;color:rgba(255,255,255,.38);margin-top:5px;line-height:1.45}
+.chk{display:flex;align-items:center;gap:9px;font-size:13px;color:rgba(255,255,255,.75);cursor:pointer}
+/* Étapes */
+.step{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg3,#14141f);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;flex-wrap:wrap}
+.step .num{width:26px;height:26px;border-radius:8px;background:rgba(34,211,238,.12);color:#67e8f9;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.step .info{flex:1;min-width:200px}
+.step .info b{font-size:14px;display:block}
+.step .info span{font-family:var(--font-m);font-size:11px;color:rgba(255,255,255,.42)}
+.step .vars{font-size:11.5px;color:rgba(255,255,255,.55);min-width:140px}
+.step .acts{display:flex;gap:4px;flex-wrap:wrap}
+.step .acts .bb{padding:5px 8px;font-size:11px}
+.step.draft{opacity:.7}
+/* Variantes (modale) */
+.var{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px;background:var(--bg3,#14141f)}
+.var-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.var-head .vid{width:28px;height:28px;border-radius:8px;background:rgba(167,139,250,.15);color:#c4b5fd;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px}
+.var-head .bi{width:auto}
+.var-file{font-size:11.5px;color:rgba(255,255,255,.5);font-family:var(--font-m)}
+.var-file.ok{color:#34d399}
+.var-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.var-acts input[type=file]{display:none}
+/* Modale */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto}
+.modal.open{display:flex}
+.modal-box{background:var(--bg2,#0f0f1a);border:1px solid rgba(255,255,255,.1);border-radius:16px;width:100%;max-width:820px;padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-box h2{font-family:'Bricolage Grotesque',sans-serif;font-size:17px;margin:0 0 14px}
+.modal-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+/* Stats */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--bg3,#14141f);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.kpi b{font-family:'Bricolage Grotesque',sans-serif;font-size:22px;display:block}
+.kpi span{font-size:11px;color:rgba(255,255,255,.45);display:block;margin-top:2px}
+.kpi small{font-size:11px;color:#67e8f9;display:block;margin-top:3px}
+table.tb{width:100%;border-collapse:collapse;font-size:12.5px}
+table.tb th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);padding:8px 10px;border-bottom:1px solid var(--border)}
+table.tb td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+table.tb td.num,table.tb th.num{text-align:right;font-family:var(--font-m)}
+table.tb tr:hover td{background:rgba(255,255,255,.02)}
+.period{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.period .bi{width:auto}
+.sig-ok{color:#34d399;font-weight:700}.sig-no{color:rgba(255,255,255,.4)}
+.tn-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2e1a;border:1px solid rgba(16,185,129,.3);color:#6ee7b7;font-size:13px;font-weight:600;padding:10px 20px;border-radius:10px;z-index:2000;opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
+.tn-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.tn-toast.err{background:#2e1a1a;border-color:rgba(239,68,68,.35);color:#fca5a5}
+pre.guide{background:var(--bg3,#14141f);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:var(--font-m);font-size:11.5px;line-height:1.55;color:rgba(255,255,255,.78);overflow-x:auto;white-space:pre;margin:0 0 10px}
+.asset{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px}
+.asset .nm{flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.asset .u{font-family:var(--font-m);font-size:10.5px;color:rgba(255,255,255,.4);flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
+@media (max-width:640px){.tn{padding:14px 14px 80px}.modal-box{padding:16px}.step .acts{width:100%}}
+</style>
+</head>
+<body>
+<div class="tn" id="mainView" style="display:none">
+  <div class="tn-top">
+    <div class="tn-ic">🧭</div>
+    <div><h1>Tunnels de vente</h1><small>Pages hébergées, A/B test, stats, reliées à Leads Live</small></div>
+    <div class="sp"></div>
+    <a class="bb bb-o" id="btnBack" style="display:none" data-action="back">← Tous les tunnels</a>
+    <button class="bb bb-p" id="btnNew" data-action="new">+ Nouveau tunnel</button>
+  </div>
+
+  <div id="viewList">
+    <div class="tn-banner" id="domainBanner"></div>
+    <div class="tn-grid" id="tunnelGrid"></div>
+  </div>
+
+  <div id="viewEditor" style="display:none"></div>
+</div>
+
+<div class="locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+
+<div class="modal" id="stepModal"><div class="modal-box" id="stepModalBox"></div></div>
+<div class="modal" id="pasteModal"><div class="modal-box">
+  <h2>Coller le HTML de la page</h2>
+  <textarea class="bi" id="pasteHtml" style="min-height:280px" placeholder="&lt;!DOCTYPE html&gt; …"></textarea>
+  <div class="help">La page complète, telle que tu l'écrirais dans un fichier .html. Le runtime Alteore (mesure, pixel, provenance, opt-in) est ajouté automatiquement à la publication : rien à coller dedans.</div>
+  <div class="modal-foot"><button class="bb bb-o" data-action="pasteCancel">Annuler</button><button class="bb bb-p" data-action="pasteSave">Enregistrer cette version</button></div>
+</div></div>
+
+<div class="tn-toast" id="tnToast"></div>
+
+<script>
+(function () {
+'use strict';
+var db = firebase.firestore();
+var storage = firebase.storage();
+
+/* ═══ ÉTAT ═══ */
+var TUNNELS = [];            // liste chargée (non archivés)
+var CUR = null;              // tunnel en cours d'édition (copie de travail)
+var TAB = 'steps';
+var CFG = { primaryHost: 'go.adrienemily.com', hosts: ['go.adrienemily.com'] };
+var BOOKING_TYPES = [];
+var TYPE_MAP = {};
+var STATS = null;            // dernier calcul de stats
+var PERIOD = { mode: '7', start: null, end: null };
+var _pasteCtx = null;        // { stepId, variantId } pour la modale « coller »
+var _saveTimer = null;
+
+var LEAD_TYPES = [
+  { id: 'vsl_elite', label: 'VSL Élite' },
+  { id: 'business', label: 'Business' },
+  { id: 'self_booking', label: 'Self-Booking' },
+  { id: 'webinaire', label: 'Webinaire' }
+];
+var STEP_TYPES = [
+  { id: 'optin', label: 'Opt-in', icon: '📝' },
+  { id: 'vsl', label: 'VSL', icon: '🎬' },
+  { id: 'booking', label: 'Prise de RDV', icon: '📅' },
+  { id: 'merci', label: 'Merci / confirmation', icon: '✅' },
+  { id: 'page', label: 'Page libre', icon: '📄' }
+];
+
+/* ═══ HELPERS ═══ */
+function $(id) { return document.getElementById(id); }
+function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
+function slugify(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40); }
+function uid(prefix) { return (prefix || '') + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function toast(msg, isErr) {
+  var t = $('tnToast'); t.textContent = msg; t.className = 'tn-toast show' + (isErr ? ' err' : '');
+  clearTimeout(t._t); t._t = setTimeout(function () { t.className = 'tn-toast'; }, isErr ? 4500 : 2500);
+}
+function fmtNum(n) { return (Number(n) || 0).toLocaleString('fr-FR'); }
+function fmtPct(v) { return (v == null || !isFinite(v)) ? '—' : (Math.round(v * 10) / 10).toLocaleString('fr-FR') + ' %'; }
+function pct(a, b) { return b > 0 ? a / b * 100 : null; }
+function isoDate(d) { return FunnelCore.isoDate(d); }
+function fmtDateFR(v) {
+  if (!v) return '';
+  var d = v.toDate ? v.toDate() : new Date(v);
+  return isNaN(d.getTime()) ? '' : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function fmtSize(n) { n = Number(n) || 0; return n > 1024 * 1024 ? (n / 1048576).toFixed(1) + ' Mo' : Math.round(n / 1024) + ' Ko'; }
+function stepTypeObj(id) { for (var i = 0; i < STEP_TYPES.length; i++) if (STEP_TYPES[i].id === id) return STEP_TYPES[i]; return STEP_TYPES[4]; }
+function pageKey(t, s) { return slugify(t.slug) + '__' + slugify(s.slug); }
+function stepPath(t, s) { return (t.homeStepId && t.homeStepId === s.id) ? '/' : '/' + s.slug; }
+function liveUrl(t, s) { return 'https://' + (t.settings && t.settings.host || CFG.primaryHost) + (s ? stepPath(t, s) : '/'); }
+function previewUrl(t, s, v) { return '/t' + stepPath(t, s) + (v ? '?v=' + encodeURIComponent(v) : ''); }
+function copyText(txt) {
+  if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(txt).then(function () { toast('Copié'); }, function () { toast('Copie impossible', true); }); return; }
+  var ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('Copié'); } catch (e) { toast('Copie impossible', true); }
+  document.body.removeChild(ta);
+}
+function normCdf(z) {
+  var t = 1 / (1 + 0.2316419 * Math.abs(z));
+  var d = 0.3989423 * Math.exp(-z * z / 2);
+  var pr = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - pr : pr;
+}
+/* Même test que sales-funnel.html (deux proportions, z bilatéral). */
+function abSignif(vRef, oRef, vChal, oChal) {
+  if (vRef < 30 || vChal < 30) return null;
+  var pp = (oRef + oChal) / (vRef + vChal);
+  var se = Math.sqrt(pp * (1 - pp) * (1 / vRef + 1 / vChal));
+  if (!se || !isFinite(se)) return null;
+  var z = (oChal / vChal - oRef / vRef) / se;
+  return { z: z, p: 2 * (1 - normCdf(Math.abs(z))) };
+}
+
+/* ═══ CHARGEMENT ═══ */
+function loadConfig() {
+  return db.collection('_config').doc('tunnels').get().then(function (doc) {
+    if (doc.exists) {
+      var d = doc.data() || {};
+      if (d.primaryHost) CFG.primaryHost = d.primaryHost;
+      if (Array.isArray(d.hosts) && d.hosts.length) CFG.hosts = d.hosts;
+    }
+  }).catch(function () {});
+}
+function loadBookingTypes() {
+  return db.collection('booking_config').doc('_types').get().then(function (doc) {
+    if (doc.exists && doc.data().list) BOOKING_TYPES = doc.data().list;
+    TYPE_MAP = FunnelCore.buildTypeMap(BOOKING_TYPES);
+  }).catch(function () {});
+}
+function loadTunnels() {
+  return db.collection('tunnels').get().then(function (snap) {
+    TUNNELS = [];
+    snap.forEach(function (doc) {
+      var d = doc.data(); d.id = doc.id;
+      if (d.archived === true) return;
+      d.steps = Array.isArray(d.steps) ? d.steps.filter(function (s) { return s && s.id && s.archived !== true; }) : [];
+      d.settings = d.settings || {};
+      TUNNELS.push(d);
+    });
+    TUNNELS.sort(function (a, b) {
+      var am = a.updatedAt && a.updatedAt.toMillis ? a.updatedAt.toMillis() : 0;
+      var bm = b.updatedAt && b.updatedAt.toMillis ? b.updatedAt.toMillis() : 0;
+      return bm - am;
+    });
+  });
+}
+/* Résumé 7 jours pour les cartes : tunnel_stats_daily (date ≥ J-6). */
+function loadCardStats() {
+  var start = new Date(); start.setDate(start.getDate() - 6);
+  return db.collection('tunnel_stats_daily').where('date', '>=', isoDate(start)).get().then(function (snap) {
+    var by = {};
+    snap.forEach(function (doc) {
+      var d = doc.data(); if (!d.tunnelId) return;
+      if (!by[d.tunnelId]) by[d.tunnelId] = { visits: 0, optins: 0, ctas: 0 };
+      by[d.tunnelId].visits += Number(d.visits) || 0;
+      by[d.tunnelId].optins += Number(d.optins) || 0;
+      by[d.tunnelId].ctas += Number(d.ctas) || 0;
+    });
+    return by;
+  }).catch(function () { return {}; });
+}
+
+/* ═══ LISTE ═══ */
+function renderList() {
+  $('viewList').style.display = '';
+  $('viewEditor').style.display = 'none';
+  $('btnBack').style.display = 'none';
+  $('btnNew').style.display = '';
+  $('domainBanner').innerHTML = '<div>🌐 <strong>Domaine des tunnels :</strong> <code>' + esc(CFG.primaryHost) + '</code> — chaque étape répond sur <code>https://' + esc(CFG.primaryHost) + '/&lt;chemin&gt;</code>. '
+    + 'Aperçu interne avant DNS : <code>team.alteore.com/t/&lt;chemin&gt;</code>. Le jour où System.io s\'arrête, <code>www.adrienemily.com</code> bascule sans changement ici.</div>';
+  var grid = $('tunnelGrid');
+  if (!TUNNELS.length) {
+    grid.innerHTML = '<div class="tn-empty" style="grid-column:1/-1">Aucun tunnel. Crée le premier : un tunnel = un groupe ordonné de pages (opt-in → VSL → RDV → merci), chacune avec ses variantes A/B.</div>';
+    return;
+  }
+  grid.innerHTML = '<div class="tn-empty" style="grid-column:1/-1">Chargement…</div>';
+  loadCardStats().then(function (by) {
+    var h = '';
+    TUNNELS.forEach(function (t) {
+      var st = by[t.id] || { visits: 0, optins: 0, ctas: 0 };
+      var liveSteps = t.steps.filter(function (s) { return s.status === 'live'; }).length;
+      h += '<div class="tn-card" data-action="open" data-id="' + escAttr(t.id) + '">'
+        + '<span class="pill ' + (t.status === 'live' ? 'pill-live' : 'pill-draft') + '">' + (t.status === 'live' ? '● En ligne' : 'Brouillon') + '</span>'
+        + '<h3>' + esc(t.name || t.slug) + '</h3>'
+        + '<div class="url">' + esc((t.settings.host || CFG.primaryHost) + '/' + (t.slug || '')) + '</div>'
+        + '<div class="meta"><div><b>' + t.steps.length + '</b>étape' + (t.steps.length > 1 ? 's' : '') + (liveSteps < t.steps.length ? ' <span style="opacity:.6">(' + liveSteps + ' en ligne)</span>' : '') + '</div>'
+        + '<div><b>' + fmtNum(st.visits) + '</b>visites 7 j</div>'
+        + '<div><b>' + fmtNum(st.optins) + '</b>opt-ins 7 j</div>'
+        + '<div><b>' + fmtNum(st.ctas) + '</b>clics CTA</div></div>'
+        + '</div>';
+    });
+    grid.innerHTML = h;
+  });
+}
+
+/* ═══ CRÉATION / SAUVEGARDE ═══ */
+function createTunnel() {
+  var name = window.prompt('Nom du tunnel (ex : Élite Phénix — VSL)');
+  if (!name || !name.trim()) return;
+  var slug = slugify(name);
+  if (!slug) { toast('Nom invalide', true); return; }
+  var n = 2, base = slug;
+  while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = base + '-' + (n++);
+  var doc = {
+    name: name.trim(), slug: slug, status: 'draft', archived: false, homeStepId: '',
+    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', noindex: false, notes: '' },
+    steps: [], assets: [],
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: (firebase.auth().currentUser || {}).uid || ''
+  };
+  db.collection('tunnels').add(doc).then(function (ref) {
+    toast('Tunnel créé');
+    return loadTunnels().then(function () { openTunnel(ref.id); });
+  }).catch(function (e) { toast('Création impossible : ' + e.message, true); });
+}
+function validateTunnel(t) {
+  if (!t.slug) return 'Le slug du tunnel est vide.';
+  var clash = TUNNELS.filter(function (o) { return o.id !== t.id && o.slug === t.slug; });
+  if (clash.length) return 'Le slug « ' + t.slug + ' » est déjà utilisé par « ' + clash[0].name + ' ».';
+  var seen = {};
+  for (var i = 0; i < t.steps.length; i++) {
+    var s = t.steps[i];
+    if (!s.slug) return 'L\'étape « ' + (s.name || '?') + ' » n\'a pas de chemin.';
+    if (seen[s.slug]) return 'Deux étapes ont le même chemin « /' + s.slug + ' ».';
+    seen[s.slug] = 1;
+    // Un chemin doit être unique sur tout le domaine (tous les tunnels en ligne)
+    var other = TUNNELS.filter(function (o) {
+      return o.id !== t.id && o.status === 'live' && o.steps.some(function (os) { return os.slug === s.slug && os.status === 'live'; });
+    });
+    if (other.length && t.status === 'live' && s.status === 'live') return 'Le chemin « /' + s.slug + ' » est déjà servi par le tunnel « ' + other[0].name + ' ».';
+  }
+  if (t.status === 'live') {
+    var ok = t.steps.some(function (s) { return s.status === 'live' && (s.variants || []).some(function (v) { return v.status === 'live' && v.html && v.html.path; }); });
+    if (!ok) return 'Pour mettre en ligne, il faut au moins une étape en ligne avec une variante publiée.';
+  }
+  return null;
+}
+function saveTunnel(silent) {
+  if (!CUR) return Promise.resolve();
+  var err = validateTunnel(CUR);
+  if (err) { toast(err, true); return Promise.reject(new Error(err)); }
+  var patch = {
+    name: CUR.name, slug: CUR.slug, status: CUR.status, homeStepId: CUR.homeStepId || '',
+    settings: CUR.settings, steps: CUR.steps, assets: CUR.assets || [],
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  return db.collection('tunnels').doc(CUR.id).update(patch).then(function () {
+    for (var i = 0; i < TUNNELS.length; i++) if (TUNNELS[i].id === CUR.id) TUNNELS[i] = JSON.parse(JSON.stringify(CUR));
+    if (!silent) toast('Enregistré');
+  }).catch(function (e) { toast('Enregistrement impossible : ' + e.message, true); throw e; });
+}
+function saveSoon() { clearTimeout(_saveTimer); _saveTimer = setTimeout(function () { saveTunnel(true); }, 500); }
+
+/* ═══ ÉDITEUR ═══ */
+function openTunnel(id) {
+  var t = TUNNELS.filter(function (x) { return x.id === id; })[0];
+  if (!t) return;
+  CUR = JSON.parse(JSON.stringify(t));
+  CUR.assets = CUR.assets || [];
+  TAB = 'steps'; STATS = null;
+  try { history.replaceState(null, '', 'admin-tunnels.html?id=' + encodeURIComponent(id)); } catch (e) {}
+  renderEditor();
+}
+function renderEditor() {
+  $('viewList').style.display = 'none';
+  $('viewEditor').style.display = '';
+  $('btnBack').style.display = '';
+  $('btnNew').style.display = 'none';
+  var t = CUR;
+  var home = t.steps.filter(function (s) { return s.id === t.homeStepId; })[0];
+  var first = home || t.steps[0];
+  var h = '<div class="ed-head">'
+    + '<input class="name" id="edName" value="' + escAttr(t.name) + '" placeholder="Nom du tunnel"/>'
+    + '<span class="pill ' + (t.status === 'live' ? 'pill-live' : 'pill-draft') + '">' + (t.status === 'live' ? '● En ligne' : 'Brouillon') + '</span>'
+    + (first ? '<a class="ed-url" href="' + escAttr(liveUrl(t, first)) + '" target="_blank" rel="noopener">' + esc(liveUrl(t, first)) + ' ↗</a>' : '')
+    + '<div style="flex:1"></div>'
+    + '<a class="bb bb-o bb-s" href="sales-leads.html?tunnel=' + encodeURIComponent(t.name) + '">👥 Voir les leads</a>'
+    + (t.status === 'live'
+      ? '<button class="bb bb-o bb-s" data-action="setStatus" data-status="draft">Repasser en brouillon</button>'
+      : '<button class="bb bb-g bb-s" data-action="setStatus" data-status="live">● Mettre en ligne</button>')
+    + '<button class="bb bb-r bb-s" data-action="archiveTunnel">Archiver</button>'
+    + '</div>';
+  h += '<div class="tabs">'
+    + '<button class="tab' + (TAB === 'steps' ? ' on' : '') + '" data-action="tab" data-tab="steps">🧩 Étapes</button>'
+    + '<button class="tab' + (TAB === 'settings' ? ' on' : '') + '" data-action="tab" data-tab="settings">⚙️ Réglages</button>'
+    + '<button class="tab' + (TAB === 'stats' ? ' on' : '') + '" data-action="tab" data-tab="stats">📊 Stats</button>'
+    + '<button class="tab' + (TAB === 'guide' ? ' on' : '') + '" data-action="tab" data-tab="guide">📖 Guide des pages</button>'
+    + '</div>';
+  h += '<div id="tabBody"></div>';
+  $('viewEditor').innerHTML = h;
+  $('edName').addEventListener('change', function () { CUR.name = this.value.trim() || CUR.name; saveSoon(); });
+  if (TAB === 'steps') renderSteps();
+  else if (TAB === 'settings') renderSettings();
+  else if (TAB === 'stats') renderStats();
+  else renderGuide();
+}
+
+/* ─── Étapes ─── */
+function variantSummary(s) {
+  var vs = s.variants || [];
+  if (!vs.length) return '<span style="color:#fbbf24">Aucune variante</span>';
+  var total = vs.reduce(function (a, v) { return a + (Number(v.weight) || 0); }, 0);
+  return vs.map(function (v) {
+    var w = total > 0 ? Math.round((Number(v.weight) || 0) / total * 100) : Math.round(100 / vs.length);
+    var ok = v.html && v.html.path;
+    return '<span style="' + (v.status === 'live' && ok ? '' : 'opacity:.5') + '">' + esc(v.id.toUpperCase()) + ' ' + w + ' %' + (ok ? '' : ' ∅') + '</span>';
+  }).join(' · ');
+}
+function renderSteps() {
+  var t = CUR;
+  var h = '<div class="sec"><h2>Étapes du tunnel</h2><div class="sub">Dans l\'ordre du parcours. Chaque étape est une page : son chemin, son type, ses variantes A/B et leur répartition. Après un opt-in, le visiteur va à l\'étape suivante (modifiable par étape).</div>';
+  if (!t.steps.length) h += '<div class="tn-empty">Aucune étape. Ajoute la première page du tunnel.</div>';
+  t.steps.forEach(function (s, i) {
+    var ty = stepTypeObj(s.type);
+    h += '<div class="step' + (s.status === 'live' ? '' : ' draft') + '" data-step="' + escAttr(s.id) + '">'
+      + '<div class="num">' + (i + 1) + '</div>'
+      + '<div class="info"><b>' + esc(ty.icon + ' ' + (s.name || s.slug)) + ' ' + (t.homeStepId === s.id ? '<span class="pill pill-type">accueil</span>' : '') + ' <span class="pill ' + (s.status === 'live' ? 'pill-live' : 'pill-draft') + '">' + (s.status === 'live' ? 'en ligne' : 'brouillon') + '</span></b>'
+      + '<span>' + esc(liveUrl(t, s)) + '</span></div>'
+      + '<div class="vars">' + variantSummary(s) + '</div>'
+      + '<div class="acts">'
+      + '<button class="bb bb-o" data-action="editStep" data-id="' + escAttr(s.id) + '">✏️ Modifier</button>'
+      + '<a class="bb bb-o" href="' + escAttr(previewUrl(t, s)) + '" target="_blank" rel="noopener">👁 Aperçu</a>'
+      + '<button class="bb bb-o" data-action="copyUrl" data-url="' + escAttr(liveUrl(t, s)) + '">🔗</button>'
+      + '<button class="bb bb-o" data-action="dupStep" data-id="' + escAttr(s.id) + '" title="Dupliquer">⧉</button>'
+      + '<button class="bb bb-o" data-action="moveStep" data-id="' + escAttr(s.id) + '" data-dir="-1"' + (i === 0 ? ' disabled' : '') + '>▲</button>'
+      + '<button class="bb bb-o" data-action="moveStep" data-id="' + escAttr(s.id) + '" data-dir="1"' + (i === t.steps.length - 1 ? ' disabled' : '') + '>▼</button>'
+      + '<button class="bb bb-r" data-action="archiveStep" data-id="' + escAttr(s.id) + '">🗑</button>'
+      + '</div></div>';
+  });
+  h += '<div style="margin-top:12px"><button class="bb bb-p" data-action="addStep">+ Ajouter une étape</button></div></div>';
+  $('tabBody').innerHTML = h;
+}
+function findStep(id) { return CUR.steps.filter(function (s) { return s.id === id; })[0]; }
+function addStep() {
+  var s = { id: uid('st_'), name: 'Nouvelle étape', slug: '', type: 'page', status: 'draft', next: { mode: 'auto' }, variants: [{ id: 'a', label: 'Variante A', weight: 100, status: 'live', html: null }] };
+  var n = CUR.steps.length + 1;
+  s.name = ['Opt-in', 'VSL', 'Prise de RDV', 'Merci'][n - 1] || ('Étape ' + n);
+  s.type = ['optin', 'vsl', 'booking', 'merci'][n - 1] || 'page';
+  s.slug = slugify(CUR.slug + '-' + s.name);
+  CUR.steps.push(s);
+  openStep(s.id);
+}
+function dupStep(id) {
+  var s = findStep(id); if (!s) return;
+  var c = JSON.parse(JSON.stringify(s));
+  c.id = uid('st_'); c.name = s.name + ' (copie)'; c.slug = slugify(s.slug + '-copie'); c.status = 'draft';
+  // Le HTML n'est pas copié : chaque variante repart sans page (le fichier
+  // Storage appartient à l'étape d'origine).
+  c.variants.forEach(function (v) { v.html = null; });
+  CUR.steps.splice(CUR.steps.indexOf(s) + 1, 0, c);
+  saveTunnel(true).then(renderSteps, renderSteps);
+}
+function moveStep(id, dir) {
+  var i = CUR.steps.indexOf(findStep(id)); if (i < 0) return;
+  var j = i + dir; if (j < 0 || j >= CUR.steps.length) return;
+  var tmp = CUR.steps[i]; CUR.steps[i] = CUR.steps[j]; CUR.steps[j] = tmp;
+  saveTunnel(true).then(renderSteps, renderSteps);
+}
+function archiveStep(id) {
+  var s = findStep(id); if (!s) return;
+  if (!window.confirm('Archiver l\'étape « ' + s.name + ' » ? Elle ne sera plus servie (le HTML reste dans Storage).')) return;
+  s.archived = true; s.status = 'draft';
+  CUR.steps = CUR.steps.filter(function (x) { return x.id !== id; });
+  if (CUR.homeStepId === id) CUR.homeStepId = '';
+  saveTunnel(true).then(renderSteps, renderSteps);
+}
+
+/* ─── Modale étape ─── */
+function openStep(id) {
+  var s = findStep(id); if (!s) return;
+  var t = CUR;
+  var h = '<h2>' + esc(stepTypeObj(s.type).icon + ' ' + s.name) + '</h2>';
+  h += '<div class="row">'
+    + '<div><span class="lbl">Nom</span><input class="bi" id="stName" value="' + escAttr(s.name) + '"/></div>'
+    + '<div><span class="lbl">Chemin (URL)</span><div style="display:flex;align-items:center;gap:6px"><span style="font-family:var(--font-m);font-size:12px;color:rgba(255,255,255,.4)">/</span><input class="bi" id="stSlug" value="' + escAttr(s.slug) + '" style="font-family:var(--font-m)"/></div><div class="help">Lettres, chiffres, tirets. Pour reprendre une URL System.io à l\'identique, mets le même chemin.</div></div>'
+    + '<div><span class="lbl">Type</span><select class="bs" id="stType">' + STEP_TYPES.map(function (x) { return '<option value="' + x.id + '"' + (s.type === x.id ? ' selected' : '') + '>' + x.icon + ' ' + x.label + '</option>'; }).join('') + '</select></div>'
+    + '<div><span class="lbl">Statut</span><select class="bs" id="stStatus"><option value="draft"' + (s.status !== 'live' ? ' selected' : '') + '>Brouillon (aperçu seulement)</option><option value="live"' + (s.status === 'live' ? ' selected' : '') + '>En ligne</option></select></div>'
+    + '</div>';
+  var nx = s.next || { mode: 'auto' };
+  h += '<div class="row">'
+    + '<div><span class="lbl">Après l\'opt-in / bouton suivant</span><select class="bs" id="stNextMode">'
+    + '<option value="auto"' + (nx.mode === 'auto' || !nx.mode ? ' selected' : '') + '>Étape suivante dans l\'ordre</option>'
+    + '<option value="step"' + (nx.mode === 'step' ? ' selected' : '') + '>Une étape précise</option>'
+    + '<option value="url"' + (nx.mode === 'url' ? ' selected' : '') + '>Une URL</option>'
+    + '<option value="none"' + (nx.mode === 'none' ? ' selected' : '') + '>Rester sur la page</option></select></div>'
+    + '<div id="stNextStepWrap" style="' + (nx.mode === 'step' ? '' : 'display:none') + '"><span class="lbl">Étape cible</span><select class="bs" id="stNextStep">' + t.steps.filter(function (x) { return x.id !== s.id; }).map(function (x) { return '<option value="' + escAttr(x.id) + '"' + (nx.stepId === x.id ? ' selected' : '') + '>' + esc(x.name) + ' (/' + esc(x.slug) + ')</option>'; }).join('') + '</select></div>'
+    + '<div id="stNextUrlWrap" style="' + (nx.mode === 'url' ? '' : 'display:none') + '"><span class="lbl">URL</span><input class="bi" id="stNextUrl" value="' + escAttr(nx.url || '') + '" placeholder="https://…"/></div>'
+    + '<div><label class="chk"><input type="checkbox" id="stHome"' + (t.homeStepId === s.id ? ' checked' : '') + '/> Page d\'accueil du domaine (répond sur <code style="font-family:var(--font-m)">/</code>)</label></div>'
+    + '</div>';
+  h += '<div class="sec" style="margin-top:6px"><h2>Variantes A/B</h2><div class="sub">Une variante = une page HTML. Le serveur répartit les visiteurs selon les poids (cookie collant 30 jours). Une variante sans page publiée n\'est jamais servie. Aperçu d\'une variante : <code>/t/' + esc(s.slug) + '?v=a</code>.</div><div id="varList"></div>'
+    + '<button class="bb bb-o bb-s" data-action="addVariant">+ Variante</button></div>';
+  h += '<div class="modal-foot"><button class="bb bb-o" data-action="stepCancel">Fermer</button><button class="bb bb-p" data-action="stepSave">Enregistrer</button></div>';
+  $('stepModalBox').innerHTML = h;
+  $('stepModalBox').setAttribute('data-step-id', s.id);
+  $('stepModal').classList.add('open');
+  /* Le chemin suit le nom tant qu'aucune page n'est publiée : renommer une
+     étape en ligne ne doit jamais changer son URL. */
+  var _published = (s.variants || []).some(function (v) { return v.html && v.html.path; });
+  $('stName').addEventListener('input', function () { if (!$('stSlug').__touched && !_published) $('stSlug').value = slugify(CUR.slug + '-' + this.value); });
+  $('stSlug').addEventListener('input', function () { this.__touched = true; });
+  $('stNextMode').addEventListener('change', function () {
+    $('stNextStepWrap').style.display = this.value === 'step' ? '' : 'none';
+    $('stNextUrlWrap').style.display = this.value === 'url' ? '' : 'none';
+  });
+  renderVariants(s);
+}
+function renderVariants(s) {
+  var t = CUR;
+  var h = '';
+  (s.variants || []).forEach(function (v) {
+    var ok = v.html && v.html.path;
+    h += '<div class="var" data-variant="' + escAttr(v.id) + '">'
+      + '<div class="var-head"><div class="vid">' + esc(v.id.toUpperCase()) + '</div>'
+      + '<input class="bi" data-vfield="label" value="' + escAttr(v.label || '') + '" placeholder="Libellé" style="width:200px"/>'
+      + '<label style="font-size:12px;color:rgba(255,255,255,.5)">Poids <input class="bi" type="number" min="0" max="100" data-vfield="weight" value="' + escAttr(v.weight == null ? 100 : v.weight) + '" style="width:70px;display:inline-block"/></label>'
+      + '<select class="bs" data-vfield="status" style="width:auto"><option value="live"' + (v.status === 'live' ? ' selected' : '') + '>Publiée</option><option value="draft"' + (v.status !== 'live' ? ' selected' : '') + '>En pause</option></select>'
+      + '<div style="flex:1"></div>'
+      + '<button class="bb bb-r bb-s" data-action="delVariant" data-id="' + escAttr(v.id) + '"' + (s.variants.length <= 1 ? ' disabled' : '') + '>Retirer</button></div>'
+      + '<div class="var-file' + (ok ? ' ok' : '') + '">' + (ok ? '✔ ' + fmtSize(v.html.size) + ' · publiée le ' + esc(fmtDateFR(v.html.updatedAt)) + (v.html.fileName ? ' · ' + esc(v.html.fileName) : '') : '∅ Aucune page — dépose un fichier .html ou colle le code') + '</div>'
+      + '<div class="var-acts">'
+      + '<label class="bb bb-p bb-s">📄 Déposer un .html<input type="file" accept=".html,.htm,text/html" data-action="uploadHtml" data-id="' + escAttr(v.id) + '"/></label>'
+      + '<button class="bb bb-o bb-s" data-action="pasteOpen" data-id="' + escAttr(v.id) + '">📋 Coller le HTML</button>'
+      + (ok ? '<a class="bb bb-o bb-s" href="' + escAttr(previewUrl(t, s, v.id)) + '" target="_blank" rel="noopener">👁 Aperçu</a>' : '')
+      + (ok ? '<a class="bb bb-o bb-s" href="' + escAttr(v.html.url || '#') + '" target="_blank" rel="noopener" download>⬇ Source</a>' : '')
+      + '</div></div>';
+  });
+  $('varList').innerHTML = h;
+}
+function readStepForm(s) {
+  s.name = $('stName').value.trim() || s.name;
+  s.slug = slugify($('stSlug').value);
+  s.type = $('stType').value;
+  s.status = $('stStatus').value === 'live' ? 'live' : 'draft';
+  var mode = $('stNextMode').value;
+  s.next = { mode: mode };
+  if (mode === 'step') s.next.stepId = $('stNextStep').value;
+  if (mode === 'url') s.next.url = $('stNextUrl').value.trim();
+  if ($('stHome').checked) CUR.homeStepId = s.id; else if (CUR.homeStepId === s.id) CUR.homeStepId = '';
+  var rows = $('varList').querySelectorAll('.var');
+  for (var i = 0; i < rows.length; i++) {
+    var vid = rows[i].getAttribute('data-variant');
+    var v = s.variants.filter(function (x) { return x.id === vid; })[0]; if (!v) continue;
+    v.label = rows[i].querySelector('[data-vfield=label]').value.trim();
+    v.weight = Math.max(0, Math.min(100, Number(rows[i].querySelector('[data-vfield=weight]').value) || 0));
+    v.status = rows[i].querySelector('[data-vfield=status]').value === 'live' ? 'live' : 'draft';
+  }
+}
+function currentModalStep() { return findStep($('stepModalBox').getAttribute('data-step-id')); }
+function stepSave(keepOpen) {
+  var s = currentModalStep(); if (!s) return Promise.resolve();
+  readStepForm(s);
+  if (!s.slug) { toast('Le chemin est obligatoire', true); return Promise.reject(new Error('slug')); }
+  return saveTunnel(true).then(function () {
+    if (!keepOpen) { $('stepModal').classList.remove('open'); renderSteps(); toast('Étape enregistrée'); }
+  });
+}
+function addVariant() {
+  var s = currentModalStep(); if (!s) return;
+  readStepForm(s);
+  var letters = 'abcdefgh';
+  var id = null;
+  for (var i = 0; i < letters.length; i++) if (!s.variants.some(function (v) { return v.id === letters[i]; })) { id = letters[i]; break; }
+  if (!id) { toast('8 variantes maximum', true); return; }
+  s.variants.push({ id: id, label: 'Variante ' + id.toUpperCase(), weight: 50, status: 'draft', html: null });
+  renderVariants(s);
+}
+function delVariant(id) {
+  var s = currentModalStep(); if (!s || s.variants.length <= 1) return;
+  readStepForm(s);
+  if (!window.confirm('Retirer la variante ' + id.toUpperCase() + ' ? Ses stats restent dans l\'historique.')) return;
+  s.variants = s.variants.filter(function (v) { return v.id !== id; });
+  renderVariants(s);
+}
+/* Dépôt d'une page (fichier ou texte collé) dans Storage, puis référence
+   sur la variante. Version = horodatage : le rendu recharge la page dès
+   qu'elle change et sert la précédente sinon (cache mémoire). */
+function publishHtml(variantId, html, fileName) {
+  var s = currentModalStep(); if (!s) return;
+  readStepForm(s);
+  var v = s.variants.filter(function (x) { return x.id === variantId; })[0]; if (!v) return;
+  html = String(html || '');
+  if (html.length < 40 || html.indexOf('<') < 0) { toast('Ce contenu ne ressemble pas à une page HTML', true); return; }
+  if (html.length > 4 * 1024 * 1024) { toast('Page trop lourde (4 Mo max) : externalise les images / vidéos', true); return; }
+  if (/window\.ALTEO_TUNNEL|tunnel-runtime\.js/.test(html)) { toast('La page contient déjà le runtime Alteore : retire-le, il est injecté à la publication', true); return; }
+  var version = Date.now();
+  var path = 'tunnels/' + CUR.id + '/' + s.id + '/' + v.id + '/index.html';
+  var blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+  toast('Publication…');
+  var task = storage.ref(path).put(blob, { contentType: 'text/html; charset=utf-8', cacheControl: 'no-cache', customMetadata: { version: String(version) } });
+  task.then(function (snap) {
+    return snap.ref.getDownloadURL().then(function (url) {
+      v.html = { path: path, url: url, version: version, size: html.length, updatedAt: new Date().toISOString(), fileName: fileName || '' };
+      return saveTunnel(true);
+    });
+  }).then(function () {
+    renderVariants(s);
+    toast('Page publiée' + (s.status === 'live' && CUR.status === 'live' ? ' — en ligne sous 20 s' : ' (étape ou tunnel en brouillon : aperçu seulement)'));
+  }).catch(function (e) { toast('Publication impossible : ' + e.message, true); });
+}
+function uploadHtmlFile(variantId, file) {
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function () { publishHtml(variantId, reader.result, file.name); };
+  reader.onerror = function () { toast('Lecture du fichier impossible', true); };
+  reader.readAsText(file, 'utf-8');
+}
+
+/* ─── Réglages ─── */
+function renderSettings() {
+  var t = CUR, st = t.settings;
+  var h = '<div class="sec"><h2>Identité et domaine</h2><div class="sub">Le slug sert de préfixe aux clés de mesure (<code>' + esc(t.slug) + '__&lt;étape&gt;</code>) reprises dans le Funnel Sales, les RDV et les fiches Leads Live.</div>'
+    + '<div class="row"><div><span class="lbl">Slug du tunnel</span><input class="bi" id="setSlug" value="' + escAttr(t.slug) + '" style="font-family:var(--font-m)"/><div class="help">Changer le slug d\'un tunnel déjà mesuré coupe l\'historique des stats en deux.</div></div>'
+    + '<div><span class="lbl">Domaine</span><select class="bs" id="setHost">' + CFG.hosts.map(function (hh) { return '<option value="' + escAttr(hh) + '"' + ((st.host || CFG.primaryHost) === hh ? ' selected' : '') + '>' + esc(hh) + '</option>'; }).join('') + '</select><div class="help">Toutes les étapes en ligne répondent sur chaque domaine relié à Vercel ; ce choix fixe l\'URL affichée et copiée.</div></div>'
+    + '<div><label class="chk" style="margin-top:22px"><input type="checkbox" id="setNoindex"' + (st.noindex ? ' checked' : '') + '/> Interdire l\'indexation Google (noindex)</label></div></div></div>';
+  h += '<div class="sec"><h2>Mesure et pixel</h2>'
+    + '<div class="row"><div><span class="lbl">ID pixel Meta</span><input class="bi" id="setPixel" value="' + escAttr(st.pixelId || '') + '" placeholder="1341581597802071" style="font-family:var(--font-m)"/><div class="help">PageView sur chaque page, Lead à l\'opt-in. Le RDV (Schedule) est envoyé par booking.html. Laisse vide pour ne rien charger.</div></div></div></div>';
+  h += '<div class="sec"><h2>CRM — fiches Leads Live</h2><div class="sub">Un opt-in crée ou réveille une fiche (email puis téléphone, jamais de doublon). Un RDV pris depuis le tunnel est attribué de la même façon.</div>'
+    + '<div class="row"><div><span class="lbl">Type de lead</span><select class="bs" id="setLeadType">' + LEAD_TYPES.map(function (x) { return '<option value="' + x.id + '"' + ((st.leadType || 'vsl_elite') === x.id ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('') + '</select><div class="help">Badge affiché dans Leads Live et règle Élite / Business du funnel.</div></div>'
+    + '<div><span class="lbl">Canal par défaut (sans UTM)</span><input class="bi" id="setChannel" value="' + escAttr(st.defaultChannel || '')+ '" placeholder="ex : Bio Instagram, Skool, Recommandation"/><div class="help">Posé comme origine déclarée quand l\'URL ne porte aucun UTM. Une pub Meta avec UTM garde sa créative.</div></div>'
+    + '<div><span class="lbl">Type de RDV lié (booking)</span><select class="bs" id="setBooking"><option value="">— aucun —</option>' + BOOKING_TYPES.map(function (b) { return '<option value="' + escAttr(b.id) + '"' + (st.bookingType === b.id ? ' selected' : '') + '>' + esc(b.label || b.id) + '</option>'; }).join('') + '</select><div class="help">Exposé aux pages via <code>ALTEO.config.bookingUrl</code> ; les liens et iframes vers booking.html reçoivent la provenance automatiquement.</div></div></div></div>';
+  h += '<div class="sec"><h2>Médias et fichiers</h2><div class="sub">Images, polices, CSS ou JS référencés par tes pages. Dépose, puis copie l\'URL dans ton HTML. Les vidéos lourdes restent sur Vimeo / YouTube / Bunny.</div>'
+    + '<label class="bb bb-p bb-s">⬆ Déposer des fichiers<input type="file" multiple data-action="uploadAssets" style="display:none"/></label>'
+    + '<div id="assetList" style="margin-top:10px">' + renderAssets() + '</div></div>';
+  h += '<div class="sec"><h2>Notes</h2><textarea class="bi" id="setNotes" style="min-height:80px;font-family:\'Figtree\',sans-serif;font-size:13px" placeholder="Contexte, offre, agence, décisions…">' + esc(st.notes || '') + '</textarea></div>';
+  $('tabBody').innerHTML = h;
+  function bind(id, fn) { $(id).addEventListener('change', function () { fn(this); saveSoon(); }); }
+  bind('setSlug', function (el) { var v = slugify(el.value); if (v) { CUR.slug = v; el.value = v; } else el.value = CUR.slug; });
+  bind('setHost', function (el) { CUR.settings.host = el.value; });
+  bind('setNoindex', function (el) { CUR.settings.noindex = el.checked; });
+  bind('setPixel', function (el) { CUR.settings.pixelId = el.value.replace(/[^\d]/g, ''); el.value = CUR.settings.pixelId; });
+  bind('setLeadType', function (el) { CUR.settings.leadType = el.value; });
+  bind('setChannel', function (el) { CUR.settings.defaultChannel = el.value.trim(); });
+  bind('setBooking', function (el) { CUR.settings.bookingType = el.value; });
+  bind('setNotes', function (el) { CUR.settings.notes = el.value; });
+}
+function renderAssets() {
+  var list = CUR.assets || [];
+  if (!list.length) return '<div class="help">Aucun fichier.</div>';
+  return list.slice().reverse().map(function (a) {
+    return '<div class="asset"><span class="nm" title="' + escAttr(a.name) + '">' + esc(a.name) + '</span><span class="u">' + esc(a.url) + '</span><span style="color:rgba(255,255,255,.4);font-size:11px">' + fmtSize(a.size) + '</span>'
+      + '<button class="bb bb-o bb-s" data-action="copyUrl" data-url="' + escAttr(a.url) + '">Copier l\'URL</button><a class="bb bb-o bb-s" href="' + escAttr(a.url) + '" target="_blank" rel="noopener">↗</a></div>';
+  }).join('');
+}
+function uploadAssets(files) {
+  if (!files || !files.length) return;
+  var i = 0;
+  function next() {
+    if (i >= files.length) { saveTunnel(true).then(function () { $('assetList').innerHTML = renderAssets(); toast(files.length + ' fichier(s) déposé(s)'); }); return; }
+    var f = files[i++];
+    if (f.size > 25 * 1024 * 1024) { toast(f.name + ' : 25 Mo max', true); next(); return; }
+    var safe = String(f.name).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-');
+    var path = 'tunnels/' + CUR.id + '/assets/' + Date.now().toString(36) + '_' + safe;
+    storage.ref(path).put(f, { contentType: f.type || undefined, cacheControl: 'public, max-age=31536000, immutable' }).then(function (snap) {
+      return snap.ref.getDownloadURL();
+    }).then(function (url) {
+      CUR.assets = CUR.assets || [];
+      CUR.assets.push({ name: f.name, path: path, url: url, size: f.size, type: f.type || '', at: new Date().toISOString() });
+      next();
+    }).catch(function (e) { toast(f.name + ' : ' + e.message, true); next(); });
+  }
+  next();
+}
+
+/* ─── Guide ─── */
+function renderGuide() {
+  var t = CUR;
+  var bk = t.settings.bookingType ? 'https://team.alteore.com/booking.html?type=' + t.settings.bookingType : 'https://team.alteore.com/booking.html?type=call_strat_phenix_all';
+  var h = '<div class="sec"><h2>Écrire une page pour ce tunnel</h2><div class="sub">Une page = un fichier HTML complet, responsive, autonome (CSS et JS en ligne, médias par URL). À la publication, le serveur ajoute automatiquement le runtime Alteore : mesure des visites, vues et clics, pixel Meta, propagation de la provenance (UTM, page, variante) jusqu\'au RDV et à la fiche Leads Live, et traitement des formulaires ci-dessous. Rien à coller.</div>'
+    + '<span class="lbl">Formulaire d\'opt-in (crée / réveille la fiche Leads Live puis passe à l\'étape suivante)</span>'
+    + '<pre class="guide">' + esc('<form data-alteo-optin>\n  <input name="prenom" placeholder="Prénom" required>\n  <input name="email" type="email" placeholder="Email" required>\n  <input name="telephone" type="tel" placeholder="Téléphone">\n  <input name="secteur" placeholder="Secteur d\'activité">\n  <input name="website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px"> <!-- anti-spam, reste vide -->\n  <button type="submit">Accéder à la vidéo →</button>\n  <div data-alteo-error></div>\n</form>') + '</pre>'
+    + '<div class="help">Champs reconnus par <code>name</code> : prenom, nom, email, telephone, secteur, ca, defi, message. Tout autre champ est enregistré comme réponse libre (visible dans la fiche). Options : <code>data-next="/merci"</code> pour forcer la page suivante, <code>data-alteo-wait="Envoi…"</code>, <code>data-alteo-failed="…"</code>, <code>data-alteo-success="…"</code> (si on reste sur la page).</div>'
+    + '<span class="lbl" style="margin-top:14px">Bouton « Réserver » (compte un clic CTA, transmet la provenance au booking)</span>'
+    + '<pre class="guide">' + esc('<a data-alteo-cta href="' + bk + '">Réserver mon appel</a>') + '</pre>'
+    + '<span class="lbl">Calendrier intégré</span>'
+    + '<pre class="guide">' + esc('<iframe data-alteo-src="' + bk + '&embed=1" width="100%" height="900" style="border:0" title="Réserver"></iframe>') + '</pre>'
+    + '<div class="help">Avec <code>data-alteo-src</code>, le runtime pose l\'adresse complète avec lp, v, UTM et leadId. Une iframe AlteoForms (<code>https://team.alteore.com/f/&lt;slug&gt;</code>) fonctionne de la même manière.</div>'
+    + '<span class="lbl" style="margin-top:14px">Depuis ton JavaScript</span>'
+    + '<pre class="guide">' + esc('ALTEO.next();                 // aller à l\'étape suivante avec la provenance\nALTEO.track(\'cta\');           // compter un clic CTA (bouton custom)\nALTEO.decorate(url);          // ajouter la provenance à une URL\nALTEO.config                  // { tunnelSlug, stepSlug, variant, page, nextUrl, bookingUrl… }\nwindow.alteoOnOptin = function (r) { /* après un opt-in réussi, r.leadId */ };') + '</pre>'
+    + '<span class="lbl" style="margin-top:14px">Règles pour une page rapide et sans bug</span>'
+    + '<div class="help" style="font-size:12px;line-height:1.7">• Balise <code>&lt;meta name="viewport"&gt;</code> présente (ajoutée sinon), CSS mobile-first, pas de largeur fixe.<br>• Images en WebP/JPG compressées, déposées dans « Médias » et référencées par URL absolue ; vidéos sur Vimeo / YouTube / Bunny, jamais dans Storage.<br>• Pas de pixel Meta ni de tracking dans la page : le tunnel le porte (réglages). Un second <code>fbq(\'init\')</code> doublerait les événements.<br>• Pas de <code>&lt;base&gt;</code>, pas de lien relatif vers des fichiers de team.alteore.com.<br>• Avant de publier : aperçu sur <code>/t/&lt;chemin&gt;?v=a</code> en desktop et mobile, formulaire testé (la fiche apparaît dans Leads Live avec 🧭 ' + esc(t.name) + ').</div>'
+    + '</div>';
+  $('tabBody').innerHTML = h;
+}
+
+/* ─── Stats ─── */
+function periodRange() {
+  var end = new Date(); end.setHours(23, 59, 59, 999);
+  var start = new Date(); start.setHours(0, 0, 0, 0);
+  if (PERIOD.mode === '7') start.setDate(start.getDate() - 6);
+  else if (PERIOD.mode === '30') start.setDate(start.getDate() - 29);
+  else if (PERIOD.mode === 'month') start.setDate(1);
+  else if (PERIOD.mode === 'prev') { start = new Date(start.getFullYear(), start.getMonth() - 1, 1); end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999); }
+  else if (PERIOD.mode === 'custom' && PERIOD.start && PERIOD.end) { start = new Date(PERIOD.start + 'T00:00:00'); end = new Date(PERIOD.end + 'T23:59:59.999'); }
+  return { start: start, end: end };
+}
+function renderStats() {
+  var h = '<div class="period">'
+    + ['7|7 jours', '30|30 jours', 'month|Ce mois', 'prev|Mois dernier', 'custom|Dates'].map(function (x) { var p = x.split('|'); return '<button class="bb ' + (PERIOD.mode === p[0] ? 'bb-p' : 'bb-o') + ' bb-s" data-action="period" data-mode="' + p[0] + '">' + p[1] + '</button>'; }).join('')
+    + (PERIOD.mode === 'custom' ? '<input type="date" class="bi" id="pStart" value="' + escAttr(PERIOD.start || '') + '"/><input type="date" class="bi" id="pEnd" value="' + escAttr(PERIOD.end || '') + '"/><button class="bb bb-o bb-s" data-action="periodApply">OK</button>' : '')
+    + '<div style="flex:1"></div><button class="bb bb-o bb-s" data-action="exportCsv"' + (STATS ? '' : ' disabled') + '>⬇ CSV</button><button class="bb bb-o bb-s" data-action="reloadStats">↻</button></div>'
+    + '<div id="statsBody"><div class="tn-empty">Chargement…</div></div>';
+  $('tabBody').innerHTML = h;
+  loadStats();
+}
+function loadStats() {
+  var t = CUR;
+  var R = periodRange();
+  var sIso = isoDate(R.start), eIso = isoDate(R.end);
+  var keys = {};
+  t.steps.forEach(function (s) { keys[pageKey(t, s)] = s.id; });
+  var qDaily = db.collection('tunnel_stats_daily').where('date', '>=', sIso).where('date', '<=', eIso).get();
+  var qViews = db.collection('page_views_daily').where('date', '>=', sIso).where('date', '<=', eIso).get();
+  var qBook = db.collection('bookings').where('createdAt', '>=', R.start).where('createdAt', '<=', R.end).get();
+  var qLeads = db.collection('leads').where('createdAt', '>=', R.start).where('createdAt', '<=', R.end).limit(5000).get();
+  Promise.all([qDaily, qViews, qBook, qLeads]).then(function (res) {
+    var S = { visits: 0, views: 0, ctas: 0, optins: 0, bookings: 0, leads: 0, closes: 0, steps: {}, sources: {}, days: {} };
+    t.steps.forEach(function (s) { S.steps[s.id] = { step: s, views: 0, ctas: 0, optins: 0, bookings: 0, variants: {} }; });
+    res[0].forEach(function (doc) {
+      var d = doc.data(); if (d.tunnelId !== t.id) return;
+      S.visits += Number(d.visits) || 0;
+      S.days[d.date] = S.days[d.date] || { visits: 0, optins: 0, bookings: 0 };
+      S.days[d.date].visits += Number(d.visits) || 0;
+      S.days[d.date].optins += Number(d.optins) || 0;
+      var src = d.sources || {};
+      Object.keys(src).forEach(function (k) {
+        var e = src[k];
+        if (!S.sources[k]) S.sources[k] = { utm_source: e.utm_source || '', utm_campaign: e.utm_campaign || '', utm_content: e.utm_content || '', visits: 0, ctas: 0, optins: 0 };
+        S.sources[k].visits += Number(e.visits) || 0;
+        S.sources[k].ctas += Number(e.ctas) || 0;
+        S.sources[k].optins += Number(e.optins) || 0;
+      });
+    });
+    res[1].forEach(function (doc) {
+      var d = doc.data(); var sid = keys[d.page]; if (!sid) return;
+      var st = S.steps[sid];
+      var vk = d.variant || '_';
+      if (!st.variants[vk]) st.variants[vk] = { id: vk, views: 0, ctas: 0, optins: 0, bookings: 0 };
+      st.variants[vk].views += Number(d.views) || 0; st.variants[vk].ctas += Number(d.ctas) || 0; st.variants[vk].optins += Number(d.optins) || 0;
+      st.views += Number(d.views) || 0; st.ctas += Number(d.ctas) || 0; st.optins += Number(d.optins) || 0;
+      S.views += Number(d.views) || 0; S.ctas += Number(d.ctas) || 0; S.optins += Number(d.optins) || 0;
+    });
+    res[2].forEach(function (doc) {
+      var b = doc.data();
+      if (b.rescheduledFromId) return;
+      var cls = FunnelCore.classifyBooking(b, TYPE_MAP);
+      if (cls !== 'self' && cls !== 'setter') return;
+      var L = b.landing; if (!L || !keys[L.page]) return;
+      var st = S.steps[keys[L.page]];
+      var vk = L.variant || '_';
+      if (!st.variants[vk]) st.variants[vk] = { id: vk, views: 0, ctas: 0, optins: 0, bookings: 0 };
+      st.variants[vk].bookings++; st.bookings++; S.bookings++;
+      var dk = b.createdAt && b.createdAt.toDate ? isoDate(b.createdAt.toDate()) : null;
+      if (dk) { S.days[dk] = S.days[dk] || { visits: 0, optins: 0, bookings: 0 }; S.days[dk].bookings++; }
+    });
+    res[3].forEach(function (doc) {
+      var l = doc.data();
+      if (l._merged === true) return;
+      var lp = l.landingFirst && l.landingFirst.page;
+      var mine = (lp && keys[lp]) || (String(l.formId || '').indexOf('tunnel:' + t.id + ':') === 0);
+      if (!mine) return;
+      S.leads++;
+      if (l.stage === 'closed_won_setting' || l.stage === 'closed_won_self' || l.isClient === true) S.closes++;
+    });
+    STATS = S;
+    renderStatsBody(S);
+  }).catch(function (e) {
+    $('statsBody').innerHTML = '<div class="tn-empty">Stats indisponibles : ' + esc(e.message) + (/index/i.test(e.message) ? '<br><small>Un index Firestore est demandé — le lien est dans la console du navigateur.</small>' : '') + '</div>';
+    if (window.console) console.error('[tunnels] stats', e);
+  });
+}
+function convOf(step, cell) { return step.type === 'optin' ? cell.optins : (step.type === 'booking' || step.type === 'vsl') ? cell.bookings : Math.max(cell.optins, cell.bookings, cell.ctas); }
+function convLabel(step) { return step.type === 'optin' ? 'opt-ins' : (step.type === 'booking' || step.type === 'vsl') ? 'RDV' : 'conversions'; }
+function renderStatsBody(S) {
+  var t = CUR;
+  var h = '<div class="kpis">'
+    + '<div class="kpi"><b>' + fmtNum(S.visits) + '</b><span>Visites (sessions)</span></div>'
+    + '<div class="kpi"><b>' + fmtNum(S.views) + '</b><span>Vues de pages</span></div>'
+    + '<div class="kpi"><b>' + fmtNum(S.ctas) + '</b><span>Clics CTA</span><small>' + fmtPct(pct(S.ctas, S.views)) + ' des vues</small></div>'
+    + '<div class="kpi"><b>' + fmtNum(S.optins) + '</b><span>Opt-ins</span><small>' + fmtPct(pct(S.optins, S.visits)) + ' des visites</small></div>'
+    + '<div class="kpi"><b>' + fmtNum(S.bookings) + '</b><span>RDV pris depuis le tunnel</span><small>' + fmtPct(pct(S.bookings, S.visits)) + ' des visites</small></div>'
+    + '<div class="kpi"><b>' + fmtNum(S.leads) + '</b><span>Fiches créées (Leads Live)</span></div>'
+    + '<div class="kpi"><b>' + fmtNum(S.closes) + '</b><span>Clients signés</span><small>' + fmtPct(pct(S.closes, S.leads)) + ' des fiches</small></div>'
+    + '</div>';
+  // Entonnoir par étape
+  h += '<div class="sec"><h2>Entonnoir par étape</h2><div class="sub">Vues : beacon (1 par session et par page). Opt-ins : formulaires <code>data-alteo-optin</code>. RDV : collection bookings, provenance posée par booking.html, replanifications exclues. « Passage » = vues de l\'étape / vues de l\'étape précédente.</div>'
+    + '<div style="overflow-x:auto"><table class="tb"><thead><tr><th>#</th><th>Étape</th><th class="num">Vues</th><th class="num">Clics CTA</th><th class="num">Opt-ins</th><th class="num">RDV</th><th class="num">Conv. / vues</th><th class="num">Passage</th></tr></thead><tbody>';
+  var prev = null;
+  t.steps.forEach(function (s, i) {
+    var st = S.steps[s.id];
+    var conv = convOf(s, st);
+    h += '<tr><td>' + (i + 1) + '</td><td><strong>' + esc(stepTypeObj(s.type).icon + ' ' + s.name) + '</strong><br><span style="font-family:var(--font-m);font-size:10.5px;color:rgba(255,255,255,.4)">' + esc(stepPath(t, s)) + '</span></td>'
+      + '<td class="num">' + fmtNum(st.views) + '</td><td class="num">' + fmtNum(st.ctas) + '</td><td class="num">' + fmtNum(st.optins) + '</td><td class="num">' + fmtNum(st.bookings) + '</td>'
+      + '<td class="num">' + fmtPct(pct(conv, st.views)) + ' <span style="color:rgba(255,255,255,.35);font-size:10px">' + convLabel(s) + '</span></td>'
+      + '<td class="num">' + (prev ? fmtPct(pct(st.views, prev.views)) : '—') + '</td></tr>';
+    prev = st;
+  });
+  h += '</tbody></table></div></div>';
+  // A/B tests
+  t.steps.forEach(function (s) {
+    var st = S.steps[s.id];
+    var vars = Object.keys(st.variants).filter(function (k) { return k !== '_'; }).map(function (k) { return st.variants[k]; }).sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+    if (vars.length < 2) return;
+    var ref = vars[0];
+    h += '<div class="sec"><h2>🧪 A/B — ' + esc(s.name) + '</h2><div class="sub">' + esc(convLabel(s)) + ' par vue · variante ' + esc(ref.id.toUpperCase()) + ' = référence · significativité au seuil de 95 % (30 vues minimum par variante).</div>'
+      + '<div style="overflow-x:auto"><table class="tb"><thead><tr><th>Variante</th><th class="num">Vues</th><th class="num">Clics CTA</th><th class="num">' + esc(convLabel(s)) + '</th><th class="num">Taux</th><th class="num">Écart</th><th>Verdict</th></tr></thead><tbody>';
+    vars.forEach(function (v) {
+      var conv = convOf(s, v), rate = pct(conv, v.views), refRate = pct(convOf(s, ref), ref.views);
+      var sig = v === ref ? null : abSignif(ref.views, convOf(s, ref), v.views, conv);
+      var verdict = v === ref ? '<span style="color:rgba(255,255,255,.4)">référence</span>'
+        : !sig ? '<span class="sig-no">pas assez de données</span>'
+        : sig.p < 0.05 ? '<span class="sig-ok">' + (sig.z > 0 ? '✔ gagnante' : '✘ perdante') + ' (p = ' + sig.p.toFixed(3) + ')</span>'
+        : '<span class="sig-no">non significatif (p = ' + sig.p.toFixed(2) + ')</span>';
+      h += '<tr><td><strong>' + esc(v.id.toUpperCase()) + '</strong></td><td class="num">' + fmtNum(v.views) + '</td><td class="num">' + fmtNum(v.ctas) + '</td><td class="num">' + fmtNum(conv) + '</td><td class="num">' + fmtPct(rate) + '</td>'
+        + '<td class="num">' + (v === ref || rate == null || refRate == null ? '—' : ((rate - refRate >= 0 ? '+' : '') + (Math.round((rate - refRate) * 10) / 10).toLocaleString('fr-FR') + ' pts')) + '</td><td>' + verdict + '</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+  });
+  // Sources
+  var srcs = Object.keys(S.sources).map(function (k) { return S.sources[k]; }).sort(function (a, b) { return b.visits - a.visits; });
+  h += '<div class="sec"><h2>Acquisition</h2><div class="sub">D\'où viennent les visites (UTM de la première page vue dans la session). « direct » = aucun UTM : lien nu, bio, message privé.</div>';
+  if (!srcs.length) h += '<div class="help">Aucune visite sur la période.</div>';
+  else {
+    h += '<div style="overflow-x:auto"><table class="tb"><thead><tr><th>Source</th><th>Campagne</th><th>Contenu / créative</th><th class="num">Visites</th><th class="num">Clics CTA</th><th class="num">Opt-ins</th><th class="num">Taux opt-in</th></tr></thead><tbody>';
+    srcs.slice(0, 60).forEach(function (r) {
+      h += '<tr><td>' + esc(r.utm_source || 'direct') + '</td><td>' + esc(FunnelCore.decodeUtm(r.utm_campaign || '')) + '</td><td>' + esc(FunnelCore.decodeUtm(r.utm_content || '')) + '</td><td class="num">' + fmtNum(r.visits) + '</td><td class="num">' + fmtNum(r.ctas) + '</td><td class="num">' + fmtNum(r.optins) + '</td><td class="num">' + fmtPct(pct(r.optins, r.visits)) + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '</div>';
+  // Par jour
+  var days = Object.keys(S.days).sort();
+  if (days.length) {
+    h += '<div class="sec"><h2>Par jour</h2><div style="overflow-x:auto"><table class="tb"><thead><tr><th>Jour</th><th class="num">Visites</th><th class="num">Opt-ins</th><th class="num">RDV</th></tr></thead><tbody>';
+    days.forEach(function (d) { var r = S.days[d]; h += '<tr><td>' + esc(d) + '</td><td class="num">' + fmtNum(r.visits) + '</td><td class="num">' + fmtNum(r.optins) + '</td><td class="num">' + fmtNum(r.bookings) + '</td></tr>'; });
+    h += '</tbody></table></div></div>';
+  }
+  $('statsBody').innerHTML = h;
+  var exp = document.querySelector('[data-action=exportCsv]'); if (exp) exp.disabled = false;
+}
+function exportCsv() {
+  if (!STATS) return;
+  var t = CUR, S = STATS;
+  var rows = [['Étape', 'Chemin', 'Variante', 'Vues', 'Clics CTA', 'Opt-ins', 'RDV']];
+  t.steps.forEach(function (s) {
+    var st = S.steps[s.id];
+    rows.push([s.name, stepPath(t, s), 'total', st.views, st.ctas, st.optins, st.bookings]);
+    Object.keys(st.variants).forEach(function (k) { var v = st.variants[k]; rows.push([s.name, stepPath(t, s), k, v.views, v.ctas, v.optins, v.bookings]); });
+  });
+  rows.push([]); rows.push(['Source', 'Campagne', 'Contenu', 'Visites', 'Clics CTA', 'Opt-ins']);
+  Object.keys(S.sources).forEach(function (k) { var r = S.sources[k]; rows.push([r.utm_source || 'direct', r.utm_campaign, r.utm_content, r.visits, r.ctas, r.optins]); });
+  var csv = rows.map(function (r) { return r.map(function (c) { return '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"'; }).join(';'); }).join('\n');
+  var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tunnel-' + t.slug + '-' + isoDate(new Date()) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+/* ═══ ACTIONS (délégation) ═══ */
+document.addEventListener('click', function (ev) {
+  var el = ev.target;
+  while (el && el !== document && !(el.getAttribute && el.getAttribute('data-action'))) el = el.parentNode;
+  if (!el || el === document) return;
+  var act = el.getAttribute('data-action');
+  if (el.tagName === 'INPUT' && el.type === 'file') return;   // géré par change
+  if (act === 'new') { createTunnel(); return; }
+  if (act === 'open') { openTunnel(el.getAttribute('data-id')); return; }
+  if (act === 'back') { CUR = null; try { history.replaceState(null, '', 'admin-tunnels.html'); } catch (e) {} loadTunnels().then(renderList); return; }
+  if (act === 'tab') { TAB = el.getAttribute('data-tab'); renderEditor(); return; }
+  if (act === 'setStatus') {
+    var prevStatus = CUR.status; CUR.status = el.getAttribute('data-status');
+    saveTunnel().then(renderEditor, function () { CUR.status = prevStatus; });
+    return;
+  }
+  if (act === 'archiveTunnel') {
+    if (!window.confirm('Archiver le tunnel « ' + CUR.name + ' » ? Ses pages ne seront plus servies ; les stats et fiches restent.')) return;
+    db.collection('tunnels').doc(CUR.id).update({ archived: true, status: 'draft', updatedAt: firebase.firestore.FieldValue.serverTimestamp() }).then(function () {
+      toast('Tunnel archivé'); CUR = null; loadTunnels().then(renderList);
+    }).catch(function (e) { toast(e.message, true); });
+    return;
+  }
+  if (act === 'addStep') { addStep(); return; }
+  if (act === 'editStep') { openStep(el.getAttribute('data-id')); return; }
+  if (act === 'dupStep') { dupStep(el.getAttribute('data-id')); return; }
+  if (act === 'moveStep') { moveStep(el.getAttribute('data-id'), Number(el.getAttribute('data-dir'))); return; }
+  if (act === 'archiveStep') { archiveStep(el.getAttribute('data-id')); return; }
+  if (act === 'copyUrl') { copyText(el.getAttribute('data-url')); return; }
+  if (act === 'stepCancel') { $('stepModal').classList.remove('open'); renderSteps(); return; }
+  if (act === 'stepSave') { stepSave(false); return; }
+  if (act === 'addVariant') { addVariant(); return; }
+  if (act === 'delVariant') { delVariant(el.getAttribute('data-id')); return; }
+  if (act === 'pasteOpen') { _pasteCtx = { variantId: el.getAttribute('data-id') }; $('pasteHtml').value = ''; $('pasteModal').classList.add('open'); return; }
+  if (act === 'pasteCancel') { $('pasteModal').classList.remove('open'); return; }
+  if (act === 'pasteSave') { if (_pasteCtx) publishHtml(_pasteCtx.variantId, $('pasteHtml').value, ''); $('pasteModal').classList.remove('open'); return; }
+  if (act === 'period') { PERIOD.mode = el.getAttribute('data-mode'); renderStats(); return; }
+  if (act === 'periodApply') { PERIOD.start = $('pStart').value; PERIOD.end = $('pEnd').value; if (PERIOD.start && PERIOD.end) renderStats(); return; }
+  if (act === 'reloadStats') { renderStats(); return; }
+  if (act === 'exportCsv') { exportCsv(); return; }
+});
+document.addEventListener('change', function (ev) {
+  var el = ev.target;
+  if (!el || el.tagName !== 'INPUT' || el.type !== 'file') return;
+  var act = el.getAttribute('data-action');
+  if (act === 'uploadHtml') { uploadHtmlFile(el.getAttribute('data-id'), el.files[0]); el.value = ''; }
+  if (act === 'uploadAssets') { uploadAssets(Array.prototype.slice.call(el.files)); el.value = ''; }
+});
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape') { $('pasteModal').classList.remove('open'); }
+});
+
+/* ═══ BOOT ═══ */
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var role = localStorage.getItem('ambitio_role') || 'coach';
+  if (role !== 'admin') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  Promise.all([loadConfig(), loadBookingTypes(), loadTunnels()]).then(function () {
+    var id = new URLSearchParams(window.location.search).get('id');
+    if (id && TUNNELS.some(function (t) { return t.id === id; })) openTunnel(id);
+    else renderList();
+  }).catch(function (e) { toast('Chargement impossible : ' + e.message, true); });
+});
+})();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

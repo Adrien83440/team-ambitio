@@ -86,16 +86,36 @@
     },
     "api/facebook-webhook.js": {
       "maxDuration": 60
+    },
+    "api/tunnel-render.js": {
+      "includeFiles": "tunnel-runtime.js"
     }
   },
-  "rewrites": [
+  "routes": [
     {
-      "source": "/g/:id",
-      "destination": "/api/group-redirect?id=:id"
+      "src": "^/(?!api/)(.*)$",
+      "has": [
+        {
+          "type": "host",
+          "value": "^(go\\.adrienemily\\.com|www\\.adrienemily\\.com|adrienemily\\.com)$"
+        }
+      ],
+      "dest": "/api/tunnel-render?__p=$1"
     },
     {
-      "source": "/f/:slug",
-      "destination": "/alteoforms-render.html"
+      "src": "^/t/(.*)$",
+      "dest": "/api/tunnel-render?__p=$1&__t=1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/g/([^/]+)$",
+      "dest": "/api/group-redirect?id=$1"
+    },
+    {
+      "src": "^/f/([A-Za-z0-9_-]+)/?$",
+      "dest": "/alteoforms-render.html"
     }
   ]
 }
