@@ -116,6 +116,8 @@ pre.guide{background:var(--bg3,#14141f);border:1px solid var(--border);border-ra
 .asset{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px}
 .asset .nm{flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .asset .u{font-family:var(--font-m);font-size:10.5px;color:rgba(255,255,255,.4);flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.favrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.favprev{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);object-fit:contain;padding:4px;flex:none}
 .locked{text-align:center;padding:80px 20px;color:rgba(255,255,255,.35)}
 @media (max-width:640px){.tn{padding:14px 14px 80px}.modal-box{padding:16px}.step .acts{width:100%}}
 </style>
@@ -321,7 +323,7 @@ function createTunnel() {
   while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = base + '-' + (n++);
   var doc = {
     name: name.trim(), slug: slug, status: 'draft', archived: false, homeStepId: '',
-    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', noindex: false, notes: '' },
+    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', noindex: false, faviconUrl: '', notes: '' },
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -631,6 +633,11 @@ function renderSettings() {
     + '<div class="row"><div><span class="lbl">Slug du tunnel</span><input class="bi" id="setSlug" value="' + escAttr(t.slug) + '" style="font-family:var(--font-m)"/><div class="help">Changer le slug d\'un tunnel déjà mesuré coupe l\'historique des stats en deux.</div></div>'
     + '<div><span class="lbl">Domaine</span><select class="bs" id="setHost">' + CFG.hosts.map(function (hh) { return '<option value="' + escAttr(hh) + '"' + ((st.host || CFG.primaryHost) === hh ? ' selected' : '') + '>' + esc(hh) + '</option>'; }).join('') + '</select><div class="help">Toutes les étapes en ligne répondent sur chaque domaine relié à Vercel ; ce choix fixe l\'URL affichée et copiée.</div></div>'
     + '<div><label class="chk" style="margin-top:22px"><input type="checkbox" id="setNoindex"' + (st.noindex ? ' checked' : '') + '/> Interdire l\'indexation Google (noindex)</label></div></div></div>';
+  h += '<div class="sec"><h2>Favicon</h2><div class="sub">Icône affichée dans l\'onglet du navigateur pour toutes les pages du tunnel. PNG carré (32 × 32 ou 64 × 64), SVG ou ICO, 512 Ko max. Une page qui déclare déjà sa propre balise <code>&lt;link rel="icon"&gt;</code> garde la sienne.</div>'
+    + '<div class="favrow">' + (st.faviconUrl ? '<img class="favprev" src="' + escAttr(st.faviconUrl) + '" alt=""/>' : '<span class="favprev"></span>')
+    + '<label class="bb bb-p bb-s">' + (st.faviconUrl ? 'Remplacer' : '⬆ Déposer une icône') + '<input type="file" accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml,image/jpeg,image/webp,.ico" data-action="uploadFavicon" style="display:none"/></label>'
+    + (st.faviconUrl ? '<button class="bb bb-o bb-s" data-action="removeFavicon">Retirer</button><span class="u" style="font-family:var(--font-m);font-size:10.5px;color:rgba(255,255,255,.4)">' + esc(st.faviconUrl) + '</span>' : '')
+    + '</div></div>';
   h += '<div class="sec"><h2>Mesure et pixel</h2>'
     + '<div class="row"><div><span class="lbl">ID pixel Meta</span><input class="bi" id="setPixel" value="' + escAttr(st.pixelId || '') + '" placeholder="1341581597802071" style="font-family:var(--font-m)"/><div class="help">PageView sur chaque page, Lead à l\'opt-in. Le RDV (Schedule) est envoyé par booking.html. Laisse vide pour ne rien charger.</div></div></div></div>';
   h += '<div class="sec"><h2>CRM — fiches Leads Live</h2><div class="sub">Un opt-in crée ou réveille une fiche (email puis téléphone, jamais de doublon). Un RDV pris depuis le tunnel est attribué de la même façon.</div>'
@@ -678,6 +685,25 @@ function uploadAssets(files) {
     }).catch(function (e) { toast(f.name + ' : ' + e.message, true); next(); });
   }
   next();
+}
+
+/* Favicon : même dépôt Storage que les médias, puis URL posée dans les
+   réglages (settings.faviconUrl) — le serveur l'injecte dans le <head>. */
+function uploadFavicon(f) {
+  if (!f) return;
+  if (f.size > 512 * 1024) { toast('Favicon : 512 Ko max', true); return; }
+  var safe = String(f.name).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-');
+  var ctype = f.type || (/\.ico$/i.test(f.name) ? 'image/x-icon' : (/\.svg$/i.test(f.name) ? 'image/svg+xml' : undefined));
+  var path = 'tunnels/' + CUR.id + '/assets/favicon_' + Date.now().toString(36) + '_' + safe;
+  storage.ref(path).put(f, { contentType: ctype, cacheControl: 'public, max-age=31536000, immutable' }).then(function (snap) {
+    return snap.ref.getDownloadURL();
+  }).then(function (url) {
+    CUR.settings.faviconUrl = url;
+    CUR.assets = CUR.assets || [];
+    CUR.assets.push({ name: f.name, path: path, url: url, size: f.size, type: ctype || '', at: new Date().toISOString(), role: 'favicon' });
+    return saveTunnel(true);
+  }).then(function () { renderSettings(); toast('Favicon en place — visible au prochain chargement des pages'); })
+    .catch(function (e) { toast('Favicon : ' + e.message, true); });
 }
 
 /* ─── Guide ─── */
@@ -913,6 +939,7 @@ document.addEventListener('click', function (ev) {
   if (act === 'periodApply') { PERIOD.start = $('pStart').value; PERIOD.end = $('pEnd').value; if (PERIOD.start && PERIOD.end) renderStats(); return; }
   if (act === 'reloadStats') { renderStats(); return; }
   if (act === 'exportCsv') { exportCsv(); return; }
+  if (act === 'removeFavicon') { CUR.settings.faviconUrl = ''; saveTunnel(true).then(function () { renderSettings(); toast('Favicon retiré'); }); return; }
 });
 document.addEventListener('change', function (ev) {
   var el = ev.target;
@@ -920,6 +947,7 @@ document.addEventListener('change', function (ev) {
   var act = el.getAttribute('data-action');
   if (act === 'uploadHtml') { uploadHtmlFile(el.getAttribute('data-id'), el.files[0]); el.value = ''; }
   if (act === 'uploadAssets') { uploadAssets(Array.prototype.slice.call(el.files)); el.value = ''; }
+  if (act === 'uploadFavicon') { uploadFavicon(el.files[0]); el.value = ''; }
 });
 document.addEventListener('keydown', function (ev) {
   if (ev.key === 'Escape') { $('pasteModal').classList.remove('open'); }

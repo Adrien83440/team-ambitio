@@ -116,6 +116,13 @@ function inject(html, config) {
   block += '<script>window.ALTEO_TUNNEL=' + jsonForScript(config) + ';</script>';
   block += runtime ? '<script>' + runtime + '</script>' : '<script src="/tunnel-runtime.js"></script>';
   if (config.noindex) block += '<meta name="robots" content="noindex,nofollow">';
+  /* Favicon du tunnel (réglages admin). La page garde le sien si elle en
+     déclare un : le réglage ne sert qu'aux pages qui n'en ont pas. */
+  if (config.faviconUrl && !/<link[^>]+rel=["']?(?:shortcut\s+)?icon/i.test(html)) {
+    const fav = escapeHtml(config.faviconUrl);
+    block += '<link rel="icon" href="' + fav + '">';
+    if (/\.(png|jpe?g|webp)(\?|$)/i.test(config.faviconUrl)) block += '<link rel="apple-touch-icon" href="' + fav + '">';
+  }
 
   const headOpen = html.match(/<head(\s[^>]*)?>/i);
   if (headOpen) {
@@ -216,6 +223,7 @@ module.exports = async (req, res) => {
     variant: variant.id,
     page: Reg.pageKey(tunnel, step),
     pixelId: settings.pixelId ? String(settings.pixelId).replace(/[^\d]/g, '') : '',
+    faviconUrl: /^https:\/\//i.test(String(settings.faviconUrl || '')) ? String(settings.faviconUrl).slice(0, 600) : '',
     nextUrl: Reg.nextUrlOf(tunnel, step),
     bookingUrl: settings.bookingType ? 'https://team.alteore.com/booking.html?type=' + encodeURIComponent(String(settings.bookingType)) : '',
     hosts: PROPAGATE_HOSTS,
