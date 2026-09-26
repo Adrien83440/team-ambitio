@@ -928,12 +928,19 @@ else h+='<span class="fb-opt-badge">Optionnel</span>';
 if(f.options&&f.options.length)h+='<span style="color:rgba(255,255,255,.2)">'+f.options.length+' options</span>';
 if(f.scaleMax)h+='<span style="color:rgba(255,255,255,.2)">1-'+f.scaleMax+'</span>';
 if(f.condition)h+='<span class="fb-cond-badge">⚡ Conditionnel</span>';
+if(f.system&&f.id==='name'&&f.nameMode==='first')h+='<span class="fb-type-badge">Prénom seul</span>';
 if(f.system)h+='<span style="font-size:9px;color:rgba(255,255,255,.15)">système</span>';
 h+='</div></div>';
-if(!f.system){
-h+='<button class="pl-btn" onclick="openFieldEditor('+i+')" title="Modifier" style="font-size:11px">✏️</button>';
-h+='<button class="pl-btn pl-btn-del" onclick="deleteFormField('+i+',event)" title="Supprimer" style="font-size:11px">✕</button>';
+// Champs système : libellé + requis éditables (sauf email, clé de jointure du
+// produit, entièrement verrouillé). Le champ nom ne se déplace pas : booking.html
+// le rend toujours en premier, quel que soit l'ordre du tableau.
+var _fbIsName=f.system&&f.id==='name',_fbIsEmail=f.system&&f.id==='email';
+if(!_fbIsName){
+h+='<button class="pl-btn" onclick="moveFormField('+i+',-1,event)" title="Monter" style="font-size:11px">↑</button>';
+h+='<button class="pl-btn" onclick="moveFormField('+i+',1,event)" title="Descendre" style="font-size:11px">↓</button>';
 }
+if(!_fbIsEmail)h+='<button class="pl-btn" onclick="openFieldEditor('+i+')" title="Modifier" style="font-size:11px">✏️</button>';
+if(!f.system)h+='<button class="pl-btn pl-btn-del" onclick="deleteFormField('+i+',event)" title="Supprimer" style="font-size:11px">✕</button>';
 h+='</div>';
 });
 
@@ -945,6 +952,7 @@ h+='<div class="cd-save-bar" style="border-top:0;justify-content:flex-end"><span
 h+='<div class="fb-modal-bg" id="fbModal"><div class="fb-modal"><div class="fb-modal-title"><span id="fbModalTitle">Nouveau champ</span><button onclick="closeFbModal()" style="border:none;background:0;color:rgba(255,255,255,.5);font-size:18px;cursor:pointer">✕</button></div>';
 h+='<div class="fb-group"><div class="fb-group-label">Libellé</div><input class="bi" id="fb-label" placeholder="Ex: Secteur d\'activité" style="width:100%"/></div>';
 h+='<div class="fb-group"><div class="fb-group-label">Type de champ</div><select class="bs" id="fb-type" onchange="fbTypeChanged()" style="width:100%"><option value="text">Aa Texte court</option><option value="textarea">¶ Zone de texte</option><option value="select">▾ Liste déroulante</option><option value="radio">◉ Choix unique (boutons)</option><option value="checkbox">☑ Cases à cocher (multiple)</option><option value="scale">⬤ Échelle / Curseur</option><option value="email">@ Email</option><option value="tel">📞 Téléphone</option></select></div>';
+h+='<div class="fb-group" id="fb-namemode-wrap" style="display:none"><div class="fb-group-label">Format du nom</div><select class="bs" id="fb-namemode" onchange="fbNameModeChanged()" style="width:100%"><option value="full">Prénom + Nom (deux champs)</option><option value="first">Prénom uniquement</option></select></div>';
 
 // Options editor (for select, checkbox, radio)
 h+='<div class="fb-group" id="fb-opts-wrap" style="display:none"><div class="fb-group-label">Options</div><div class="fb-opts-list" id="fb-opts-list"></div><button class="bb" onclick="addFbOption()" style="padding:4px 12px;font-size:11px">+ Option</button></div>';
@@ -956,7 +964,7 @@ h+='<div class="fb-group" id="fb-scale-wrap" style="display:none"><div class="fb
 h+='<div class="fb-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="fb-required"/><span style="font-size:13px;color:rgba(255,255,255,.7)">Champ requis</span></label></div>';
 
 // Condition builder
-h+='<div class="fb-group"><div class="fb-group-label">Condition d\'affichage <span style="font-weight:400;color:rgba(255,255,255,.2)">(optionnel)</span></div>';
+h+='<div class="fb-group" id="fb-cond-wrap"><div class="fb-group-label">Condition d\'affichage <span style="font-weight:400;color:rgba(255,255,255,.2)">(optionnel)</span></div>';
 h+='<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">';
 h+='<span style="font-size:12px;color:rgba(255,255,255,.4)">Afficher si</span>';
 h+='<select class="bs" id="fb-cond-field" style="width:140px;font-size:11px"><option value="">— Aucune —</option>';
@@ -1012,7 +1020,7 @@ function cdConfirmRedirectChanged(checked){
 var w=document.getElementById('cd-confirmRedirectUrl-wrap');
 if(w)w.style.display=checked?'block':'none';
 }
-function cleanType(t){var o={id:t.id,label:t.label||'',duration:t.duration||30,color:t.color||'#8b5cf6'};if(t.eventType)o.eventType=t.eventType;if(t.description)o.description=t.description;if(t.active===false)o.active=false;if(t.image)o.image=t.image;if(t.location)o.location=t.location;if(t.locationUrl)o.locationUrl=t.locationUrl;if(t.confirmationRedirect===true)o.confirmationRedirect=true;if(t.confirmationRedirectUrl)o.confirmationRedirectUrl=t.confirmationRedirectUrl;if(t.formPosition)o.formPosition=t.formPosition;if(t.isCoaching===true)o.isCoaching=true;if(t.isSetterOnly===true)o.isSetterOnly=true;if(t.attributedSetterSlug){o.attributedSetterSlug=t.attributedSetterSlug;if(t.attributedSetterName)o.attributedSetterName=t.attributedSetterName;}if(t.rules){o.rules={};for(var k in t.rules)if(t.rules[k]!==undefined&&t.rules[k]!==null)o.rules[k]=t.rules[k];}if(t.notifications){o.notifications={};for(var k2 in t.notifications)if(t.notifications[k2]!==undefined&&t.notifications[k2]!==null)o.notifications[k2]=t.notifications[k2];}if(t.formFields)o.formFields=t.formFields.map(function(f){var r={id:f.id,label:f.label,type:f.type,required:!!f.required};if(f.system)r.system=true;if(f.options)r.options=f.options;if(f.scaleMax)r.scaleMax=f.scaleMax;if(f.condition)r.condition=f.condition;return r;});return o;}
+function cleanType(t){var o={id:t.id,label:t.label||'',duration:t.duration||30,color:t.color||'#8b5cf6'};if(t.eventType)o.eventType=t.eventType;if(t.description)o.description=t.description;if(t.active===false)o.active=false;if(t.image)o.image=t.image;if(t.location)o.location=t.location;if(t.locationUrl)o.locationUrl=t.locationUrl;if(t.confirmationRedirect===true)o.confirmationRedirect=true;if(t.confirmationRedirectUrl)o.confirmationRedirectUrl=t.confirmationRedirectUrl;if(t.formPosition)o.formPosition=t.formPosition;if(t.isCoaching===true)o.isCoaching=true;if(t.isSetterOnly===true)o.isSetterOnly=true;if(t.attributedSetterSlug){o.attributedSetterSlug=t.attributedSetterSlug;if(t.attributedSetterName)o.attributedSetterName=t.attributedSetterName;}if(t.rules){o.rules={};for(var k in t.rules)if(t.rules[k]!==undefined&&t.rules[k]!==null)o.rules[k]=t.rules[k];}if(t.notifications){o.notifications={};for(var k2 in t.notifications)if(t.notifications[k2]!==undefined&&t.notifications[k2]!==null)o.notifications[k2]=t.notifications[k2];}if(t.formFields)o.formFields=t.formFields.map(function(f){var r={id:f.id,label:f.label,type:f.type,required:!!f.required};if(f.system)r.system=true;if(f.nameMode)r.nameMode=f.nameMode;if(f.options)r.options=f.options;if(f.scaleMax)r.scaleMax=f.scaleMax;if(f.condition)r.condition=f.condition;return r;});return o;}
 function saveTypes(){var clean=T.map(cleanType);return CR.doc('_types').set({list:clean});}
 /* Suppression d'une consultation (admin) — 10/09/2026.
    Le type sort de la liste publiée (booking, sélecteurs, cartes) mais une
@@ -1266,6 +1274,31 @@ renderCdSection();
 saveTypes().then(function(){toast('✅ Position enregistrée');});
 }
 
+/* Bascule du libellé par défaut quand on change le format du nom, pour que
+   la page publique affiche un intitulé cohérent sans intervention manuelle. */
+function fbNameModeChanged(){
+var lbl=document.getElementById('fb-label');
+var mode=document.getElementById('fb-namemode').value;
+if(mode==='first'&&lbl.value.trim()==='Nom complet')lbl.value='Prénom';
+if(mode==='full'&&lbl.value.trim()==='Prénom')lbl.value='Nom complet';
+}
+
+/* Réordonnancement par flèches. Le champ nom système est immobile et rien ne
+   passe au-dessus de lui : booking.html le rend toujours en premier. */
+function moveFormField(idx,dir,evt){
+if(evt){evt.stopPropagation();evt.preventDefault();}
+if(!cdType||!cdType.formFields)return;
+var ff=cdType.formFields,j=idx+dir;
+if(idx<0||idx>=ff.length||j<0||j>=ff.length)return;
+if(ff[idx].system&&ff[idx].id==='name')return;
+if(ff[j].system&&ff[j].id==='name')return;
+var tmp=ff[idx];ff[idx]=ff[j];ff[j]=tmp;
+var i=T.findIndex(function(t){return t.id===cdType.id;});
+if(i>=0)T[i].formFields=ff;
+renderCdSection();
+saveTypes().then(function(){toast('✅ Ordre enregistré');});
+}
+
 function deleteFormField(idx,evt){
 if(evt){evt.stopPropagation();evt.preventDefault();}
 if(!cdType)return;
@@ -1300,6 +1333,10 @@ document.getElementById('fb-cond-val').value='';
 document.getElementById('fb-opts-list').innerHTML='';
 document.getElementById('fb-opts-wrap').style.display='none';
 document.getElementById('fb-scale-wrap').style.display='none';
+document.getElementById('fb-namemode-wrap').style.display='none';
+document.getElementById('fb-namemode').value='full';
+document.getElementById('fb-type').disabled=false;
+document.getElementById('fb-cond-wrap').style.display='block';
 // Fill if editing
 if(idx>=0&&cdType&&cdType.formFields&&cdType.formFields[idx]){
 var f=cdType.formFields[idx];
@@ -1319,6 +1356,17 @@ if(f.condition){
 document.getElementById('fb-cond-field').value=f.condition.fieldId||'';
 document.getElementById('fb-cond-op').value=f.condition.operator||'eq';
 document.getElementById('fb-cond-val').value=f.condition.value||'';
+}
+if(f.system){
+// Champ système : seuls le libellé et le caractère requis sont éditables.
+// Type figé, pas de condition (le champ nom est rendu hors boucle côté
+// booking.html et n'a pas de wrapper conditionnel).
+document.getElementById('fb-type').disabled=true;
+document.getElementById('fb-cond-wrap').style.display='none';
+if(f.id==='name'){
+document.getElementById('fb-namemode-wrap').style.display='block';
+document.getElementById('fb-namemode').value=f.nameMode==='first'?'first':'full';
+}
 }
 }
 fbTypeChanged();
@@ -1384,7 +1432,13 @@ field.condition={fieldId:condField,operator:document.getElementById('fb-cond-op'
 if(!cdType.formFields)cdType.formFields=[];
 if(_fbEditIdx>=0&&_fbEditIdx<cdType.formFields.length){
 // Preserve system flag if editing
-if(cdType.formFields[_fbEditIdx].system)field.system=true;
+var _fbOld=cdType.formFields[_fbEditIdx];
+if(_fbOld.system){
+field.system=true;
+field.type=_fbOld.type; // type figé sur les champs système
+delete field.condition;
+if(_fbOld.id==='name'&&document.getElementById('fb-namemode').value==='first')field.nameMode='first';
+}
 cdType.formFields[_fbEditIdx]=field;
 }else{
 cdType.formFields.push(field);
@@ -1397,7 +1451,7 @@ saveTypes().then(function(){toast('✅ '+(_fbEditIdx>=0?'Champ modifié':'Champ 
 }
 
 window.saveCdDetails=saveCdDetails;window.saveCdRules=saveCdRules;window.saveCdNotif=saveCdNotif;window.saveCdForm=saveCdForm;
-window.setFormPos=setFormPos;window.openFieldEditor=openFieldEditor;window.closeFbModal=closeFbModal;window.fbTypeChanged=fbTypeChanged;window.addFbOption=addFbOption;window.saveFbField=saveFbField;window.deleteFormField=deleteFormField;window.closeCsDetail=closeCsDetail;
+window.setFormPos=setFormPos;window.openFieldEditor=openFieldEditor;window.closeFbModal=closeFbModal;window.fbTypeChanged=fbTypeChanged;window.fbNameModeChanged=fbNameModeChanged;window.addFbOption=addFbOption;window.saveFbField=saveFbField;window.deleteFormField=deleteFormField;window.moveFormField=moveFormField;window.closeCsDetail=closeCsDetail;
 
 // ═══ RDV DETAIL PANEL ═══
 var rdvTab='info';

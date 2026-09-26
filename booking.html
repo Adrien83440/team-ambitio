@@ -151,6 +151,11 @@ body.bk-embed .bk-progress{position:relative}
 .bk-field input::placeholder,.bk-field textarea::placeholder{color:var(--muted2)}
 .bk-field input:focus,.bk-field textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-ring)}
 .bk-field textarea{resize:vertical;min-height:70px}
+.bk-field .bk-opt{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-xs);background:var(--card);margin-bottom:8px;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13.5px;font-weight:500;color:var(--text);line-height:1.45;transition:all .2s var(--ease)}
+.bk-field .bk-opt:hover{border-color:var(--primary)}
+.bk-field .bk-opt input{width:auto;flex:none;margin-top:2px;accent-color:var(--primary)}
+.bk-field .bk-scale{display:flex;gap:8px;flex-wrap:wrap}
+.bk-field .bk-scale .bk-opt{flex:none;width:44px;justify-content:center;padding:8px 0}
 .bk-field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .bk-field-error{font-size:11px;color:var(--red);margin-top:3px;display:none}
 
@@ -396,6 +401,7 @@ var JOURS_FR = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi
 var MOIS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
 
 function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 function fmtDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function timeToMin(t) { var p = t.split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
 function minToTime(m) { return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); }
@@ -1346,6 +1352,61 @@ function renderSummary() {
   el.innerHTML = h;
 }
 
+/* ── CHAMPS À OPTIONS & CONDITIONS ──────────────────────────────────────
+   Le builder de booking-admin produit aussi des types select / radio /
+   checkbox / scale (avec `options`) et des conditions d'affichage
+   (eq / neq / gte / lte sur la valeur d'un autre champ). Avant le
+   02/09/2026, cette page rendait tout champ non-textarea en
+   <input type="…"> nu : un « Choix unique » devenait un radio sans
+   options dont la valeur soumise était « on », sans libellé exploitable
+   côté booking-admin ni fiche lead. */
+var _bkFF = null;  // formFields de la consultation en cours (rendu + submit)
+
+function bkFieldValue(f) {
+  var sel, vals = [];
+  if (f.type === 'radio' || f.type === 'scale') {
+    sel = document.querySelector('input[name="fField_' + f.id + '"]:checked');
+    return sel ? sel.value : '';
+  }
+  if (f.type === 'checkbox') {
+    document.querySelectorAll('input[name="fField_' + f.id + '"]:checked').forEach(function(c) { vals.push(c.value); });
+    return vals.join(', ');
+  }
+  var el = document.getElementById('fField_' + f.id);
+  return el ? el.value.trim() : '';
+}
+
+function bkFieldById(id) {
+  var ff = _bkFF || [];
+  for (var i = 0; i < ff.length; i++) if (ff[i].id === id) return ff[i];
+  return null;
+}
+
+/* Un champ conditionnel n'est visible (et exigible) que si la condition
+   posée dans le builder est vraie sur la valeur actuelle du champ cible. */
+function bkCondMet(f) {
+  if (!f || !f.condition || !f.condition.fieldId) return true;
+  var target = bkFieldById(f.condition.fieldId);
+  var cur = target ? bkFieldValue(target) : '';
+  var want = String(f.condition.value == null ? '' : f.condition.value);
+  var op = f.condition.operator || 'eq';
+  if (op === 'eq') return cur === want;
+  if (op === 'neq') return cur !== want;
+  var a = parseFloat(cur), b = parseFloat(want);
+  if (isNaN(a) || isNaN(b)) return false;
+  if (op === 'gte') return a >= b;
+  if (op === 'lte') return a <= b;
+  return true;
+}
+
+function bkApplyConditions() {
+  var nodes = document.querySelectorAll('#bkFormWrap .bk-field[data-cond-field]');
+  nodes.forEach(function(node) {
+    var f = bkFieldById(node.getAttribute('data-field-wrap'));
+    node.style.display = bkCondMet(f) ? '' : 'none';
+  });
+}
+
 /* ── DYNAMIC FORM RENDERING ── */
 function renderForm() {
   var wrap = document.getElementById('bkFormWrap');
@@ -1358,23 +1419,55 @@ function renderForm() {
     {id:'message',label:'Message',type:'textarea',required:false}
   ];
   var h = '';
-  // Split system name field into prenom/nom for UX
-  var hasNameField = ff.some(function(f) { return f.id === 'name' && f.system; });
-  if (hasNameField) {
-    h += '<div class="bk-field-row">';
-    h += '<div class="bk-field"><label>Prénom <span class="req">*</span></label><input type="text" id="fPrenom" placeholder="Votre prénom" autocomplete="given-name"/></div>';
-    h += '<div class="bk-field"><label>Nom <span class="req">*</span></label><input type="text" id="fNom" placeholder="Votre nom" autocomplete="family-name"/></div>';
-    h += '</div>';
+  /* Split system name field into prenom/nom for UX.
+     nameMode 'first' (réglé dans booking-admin) : un seul champ prénom,
+     prospect.nom reste vide — tous les consommateurs aval concatènent
+     (prenom + ' ' + nom).trim() et dégradent proprement. */
+  var nameField = null;
+  ff.forEach(function(f) { if (f.id === 'name' && f.system) nameField = f; });
+  if (nameField) {
+    var nameReq = nameField.required !== false;
+    var nameStar = nameReq ? ' <span class="req">*</span>' : '';
+    if (nameField.nameMode === 'first') {
+      var nameLbl = (nameField.label && nameField.label !== 'Nom complet') ? nameField.label : 'Prénom';
+      h += '<div class="bk-field"><label>' + esc(nameLbl) + nameStar + '</label><input type="text" id="fPrenom" placeholder="Votre prénom" autocomplete="given-name"/></div>';
+    } else {
+      h += '<div class="bk-field-row">';
+      h += '<div class="bk-field"><label>Prénom' + nameStar + '</label><input type="text" id="fPrenom" placeholder="Votre prénom" autocomplete="given-name"/></div>';
+      h += '<div class="bk-field"><label>Nom' + nameStar + '</label><input type="text" id="fNom" placeholder="Votre nom" autocomplete="family-name"/></div>';
+      h += '</div>';
+    }
   }
+  _bkFF = ff;
   ff.forEach(function(f) {
     if (f.id === 'name' && f.system) return; // Already handled above
     var reqSpan = f.required ? ' <span class="req">*</span>' : '';
     var autoC = '';
     if (f.id === 'email' || f.type === 'email') autoC = ' autocomplete="email"';
     else if (f.id === 'phone' || f.type === 'tel') autoC = ' autocomplete="tel"';
-    h += '<div class="bk-field"><label>' + esc(f.label) + reqSpan + '</label>';
+    var condAttr = '';
+    if (f.condition && f.condition.fieldId) {
+      condAttr = ' data-cond-field="' + escAttr(f.condition.fieldId) + '"';
+    }
+    h += '<div class="bk-field" data-field-wrap="' + escAttr(f.id) + '"' + condAttr + '><label>' + esc(f.label) + reqSpan + '</label>';
+    var opts = f.options || [];
     if (f.type === 'textarea') {
       h += '<textarea id="fField_' + f.id + '" placeholder="' + esc(f.label) + '…"' + (f.required ? ' required' : '') + '></textarea>';
+    } else if (f.type === 'select') {
+      h += '<select id="fField_' + f.id + '"><option value="">— Choisir —</option>';
+      opts.forEach(function(o) { h += '<option value="' + escAttr(o) + '">' + esc(o) + '</option>'; });
+      h += '</select>';
+    } else if (f.type === 'radio' || f.type === 'checkbox') {
+      opts.forEach(function(o) {
+        h += '<label class="bk-opt"><input type="' + f.type + '" name="fField_' + f.id + '" value="' + escAttr(o) + '"/><span>' + esc(o) + '</span></label>';
+      });
+    } else if (f.type === 'scale') {
+      var mx = parseInt(f.scaleMax, 10) || 5;
+      h += '<div class="bk-scale">';
+      for (var si = 1; si <= mx; si++) {
+        h += '<label class="bk-opt"><input type="radio" name="fField_' + f.id + '" value="' + si + '"/><span>' + si + '</span></label>';
+      }
+      h += '</div>';
     } else {
       h += '<input type="' + (f.type || 'text') + '" id="fField_' + f.id + '" placeholder="' + esc(f.label) + '"' + autoC + (f.required ? ' required' : '') + '/>';
     }
@@ -1389,6 +1482,15 @@ function renderForm() {
 
   // Bind confirm button
   document.getElementById('confirmBtn').addEventListener('click', handleSubmit);
+
+  /* Conditions d'affichage : réévaluées à chaque saisie. Le listener est
+     posé sur le wrap (qui survit aux re-render), une seule fois. */
+  if (!wrap._bkCondBound) {
+    wrap.addEventListener('change', bkApplyConditions);
+    wrap.addEventListener('input', bkApplyConditions);
+    wrap._bkCondBound = true;
+  }
+  bkApplyConditions();
 
   /* L'email est la clé d'entrée de la récurrence : c'est lui qui relie le
      visiteur à sa fiche coaching. On interroge donc le serveur dès qu'il est
@@ -1947,18 +2049,31 @@ async function submitBooking() {
     {id:'secteur',label:'Secteur d\'activité',type:'text',required:false},
     {id:'message',label:'Message',type:'textarea',required:false}
   ];
+  _bkFF = ff;
   var formData = {};
-  var hasNameField = ff.some(function(f) { return f.id === 'name' && f.system; });
-  if (hasNameField) {
-    if (!prenom || !nom) { alert('Veuillez remplir votre prénom et nom.'); return; }
+  var formAnswers = [];
+  var nameField = null;
+  for (var nfi = 0; nfi < ff.length; nfi++) { if (ff[nfi].id === 'name' && ff[nfi].system) nameField = ff[nfi]; }
+  if (nameField && nameField.required !== false) {
+    if (nameField.nameMode === 'first') {
+      if (!prenom) { alert('Veuillez remplir votre prénom.'); return; }
+    } else if (!prenom || !nom) {
+      alert('Veuillez remplir votre prénom et nom.'); return;
+    }
   }
   for (var i = 0; i < ff.length; i++) {
     var f = ff[i];
     if (f.id === 'name' && f.system) continue;
-    var el = document.getElementById('fField_' + f.id);
-    var val = el ? el.value.trim() : '';
-    if (f.required && !val) { alert('Veuillez remplir le champ : ' + f.label); return; }
+    /* Champ conditionnel masqué : ni exigé, ni collecté. */
+    var visible = bkCondMet(f);
+    var val = visible ? bkFieldValue(f) : '';
+    if (f.required && visible && !val) { alert('Veuillez remplir le champ : ' + f.label); return; }
     formData[f.id] = val;
+    /* Archive lisible : le libellé accompagne la réponse pour que
+       booking-admin et la fiche lead (Leads Live) n'aient pas à retrouver
+       la définition du champ — qui peut être modifiée ou supprimée après
+       coup dans le builder. */
+    formAnswers.push({ id: f.id, label: f.label || f.id, type: f.type || 'text', value: val });
   }
 
   var email = formData.email || '';
@@ -1966,6 +2081,15 @@ async function submitBooking() {
     alert('Veuillez entrer un email valide.');
     return;
   }
+  /* Email canonique en minuscules (28/08/2026). `prospect.email` est la clé de
+     jointure de tout le produit : quota coaching, série hebdomadaire, fiche
+     client, rattachement du lead. Firestore compare la casse : un visiteur
+     tapant « Jean.Dupont@x.com » créait des RDV que la vérification de quota
+     ne retrouvait pas — donc jamais bloqué. Toutes les lectures normalisent
+     déjà en minuscules (sales-leads, funnel-core, Cloud Functions), et
+     bkSlotDocId() aussi : l'identifiant déterministe du créneau ne bouge pas.
+     Seul formData reste tel que saisi — c'est l'archive de la réponse. */
+  email = email.trim().toLowerCase();
 
   // Garde-fou borne haute : empêche une réservation au-delà de la fenêtre
   // autorisée même si l'état client a été manipulé ou l'onglet laissé ouvert
@@ -2000,6 +2124,7 @@ async function submitBooking() {
       message: formData.message || ''
     },
     formData: formData,
+    formAnswers: formAnswers,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   };
   if (_formLeadId) booking.leadId = _formLeadId;
@@ -2158,6 +2283,22 @@ async function submitBooking() {
     if (_rescheduleOld.clientId) {
       booking.clientId = _rescheduleOld.clientId;
       if (_rescheduleOld.clientNom) booking.clientNom = _rescheduleOld.clientNom;
+    }
+    /* Réponses du formulaire d'origine : la replanification ne re-pose pas
+       les questions (formulaire pré-rempli a minima) — on reporte donc la
+       réponse d'origine sur tout champ resté vide, pour qu'elle continue de
+       remonter dans booking-admin et sur la fiche lead. */
+    if (booking.formAnswers && (_rescheduleOld.formData || _rescheduleOld.formAnswers)) {
+      var _oldFd = _rescheduleOld.formData || {};
+      var _oldFa = {};
+      (_rescheduleOld.formAnswers || []).forEach(function(a) { if (a && a.id) _oldFa[a.id] = a.value; });
+      booking.formAnswers.forEach(function(a) {
+        if (!a || a.value) return;
+        var ov = (_oldFa[a.id] != null && _oldFa[a.id] !== '') ? _oldFa[a.id] : _oldFd[a.id];
+        if (ov == null || ov === '') return;
+        a.value = ov;
+        booking.formData[a.id] = ov;
+      });
     }
     booking.rescheduledFromId = _rescheduleId;
   }
@@ -2478,7 +2619,8 @@ function showConfirmation(prenom, email) {
   var d = new Date(S.selDate + 'T12:00:00');
   var dateFr = JOURS_FR[d.getDay()] + ' ' + d.getDate() + ' ' + MOIS_FR[d.getMonth()];
 
-  var confirmHtml = 'Merci <strong>' + esc(prenom) + '</strong> ! Votre rendez-vous <strong>' + esc(S.selType ? S.selType.label : '') + '</strong> avec <strong>' + esc(S.selPerson ? S.selPerson.name : '') + '</strong> est confirmé pour le <strong>' + dateFr + '</strong> à <strong>' + S.selTime + '</strong>.';
+  // Le prénom peut être vide si le champ nom a été rendu optionnel dans booking-admin.
+  var confirmHtml = 'Merci' + (prenom ? ' <strong>' + esc(prenom) + '</strong>' : '') + ' ! Votre rendez-vous <strong>' + esc(S.selType ? S.selType.label : '') + '</strong> avec <strong>' + esc(S.selPerson ? S.selPerson.name : '') + '</strong> est confirmé pour le <strong>' + dateFr + '</strong> à <strong>' + S.selTime + '</strong>.';
 
   // Location / Meet link
   if (S.selType && S.selType.location) {
