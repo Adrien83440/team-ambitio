@@ -2903,6 +2903,55 @@ function renderFeed() {
 var _ldRdvUnsubs = {};   // leadId -> unsubscribe fn
 var _ldRdvCache = {};    // leadId -> [bookings]
 
+/* RDV effectifs d'une fiche : requête leadId (temps réel) fusionnée avec les
+   bookings récents rattachés par leadId ou par email (_sbnbByLead/_sbnbByEmail).
+   Couvre les self-bookings nés SANS leadId (VSL sans opt-in : booking créé
+   avant la fiche) et les RDV pointant un doublon _merged — même repli que le
+   badge SB/NB (l2RdvClassification). Dédup par id de booking. */
+function ldRdvItemsFor(leadId) {
+  var l = null;
+  for (var i = 0; i < allLeads.length; i++) { if (allLeads[i].id === leadId) { l = allLeads[i]; break; } }
+  var em = l ? (l.email || '').trim().toLowerCase() : '';
+  var seen = {}, out = [];
+  [_ldRdvCache[leadId], _sbnbByLead[leadId], em ? _sbnbByEmail[em] : null].forEach(function (arr) {
+    (arr || []).forEach(function (b) {
+      if (b && b.id && !seen[b.id]) { seen[b.id] = true; out.push(b); }
+    });
+  });
+  out.sort(function (a, b) {
+    var ka = (a.date || '') + 'T' + (a.time || ''), kb = (b.date || '') + 'T' + (b.time || '');
+    return ka < kb ? -1 : (ka > kb ? 1 : 0);
+  });
+  return out;
+}
+
+/* ═══ RATTRAPAGE leadId (26/09/2026) ═══
+   Un self-booking pris sans lead préexistant naît sans leadId ; la fiche est
+   créée ensuite par onBookingCreated qui ne le stampe pas en retour sur le
+   booking. Résultat : badge SB affiché (repli email) mais boîte RDV vide
+   (requête leadId). On stampe ici, même motif que slCatchUpSetter :
+   write-once (jamais d'écrasement d'un leadId existant — un RDV rattaché à
+   un doublon _merged reste couvert par le repli d'affichage ldRdvItemsFor),
+   et seulement si l'email désigne UNE seule fiche vivante chargée. */
+var _slLeadIdSeen = {};
+function slCatchUpLeadId(b) {
+  if (!b || !b.id || b.leadId || _slLeadIdSeen[b.id]) return;
+  var em = ((b.prospect && b.prospect.email) || b.email || '').trim().toLowerCase();
+  if (!em) return;
+  var matches = [];
+  for (var i = 0; i < allLeads.length; i++) {
+    var l = allLeads[i];
+    if (l._merged === true) continue;
+    if ((l.email || '').trim().toLowerCase() === em) matches.push(l);
+  }
+  if (matches.length !== 1) return; // 0 = fiche pas chargée, >1 = ambigu : on ne devine pas
+  _slLeadIdSeen[b.id] = true;
+  db.collection('bookings').doc(b.id).update({ leadId: matches[0].id }).catch(function (e) {
+    delete _slLeadIdSeen[b.id];
+    console.warn('[leadId] rattrapage refusé:', e && e.message);
+  });
+}
+
 /* ═══ COCKPIT DE CLOSE — signatures & paiements de la fiche ouverte ═══════
    Objectif (Adrien 26/07) : la closeuse ne sort JAMAIS de Leads Live. Le
    parcours complet (RDV → offre → contrat → signature → paiement → mandat
@@ -2945,7 +2994,9 @@ function attachLeadRdvListener(leadId) {
           return ka < kb ? -1 : (ka > kb ? 1 : 0);
         });
         _ldRdvCache[leadId] = items;
-        paintLeadRdvBox(leadId, items);
+        // ldRdvItemsFor fusionne avec le repli email : la boîte affiche aussi
+        // les bookings pas (encore) rattachés par leadId.
+        paintLeadRdvBox(leadId, ldRdvItemsFor(leadId));
       }, function(err){
         console.warn('[ldRdv] snapshot error', leadId, err);
       });
@@ -3002,7 +3053,7 @@ function detachLeadDealListeners(leadId) {
    là que le parcours de close commence. Ailleurs, la fiche reste sobre. */
 function ldCloseSteps(l) {
   var AF = window.AlteoreFlow;
-  var rdvs = (_ldRdvCache[l.id] || _sbnbByLead[l.id] || []).filter(function (b) {
+  var rdvs = ldRdvItemsFor(l.id).filter(function (b) {
     return !AF || AF.classifyBooking(b, _ldTypeMap || {}) !== 'excluded';
   });
   if (!rdvs.length) return null;
@@ -4606,11 +4657,12 @@ function l2RenderSheet(id, preserve) {
   var body = inner.querySelector('.l2body');
   if (body) body.scrollTop = scrollPos;
 
-  // RDV temps réel : (ré)attache le listener + repeint depuis le cache
+  // RDV temps réel : (ré)attache le listener + repeint depuis le cache,
+  // fusionné avec le repli email (self-booking sans leadId, doublon _merged).
   attachLeadRdvListener(id);
-  if (typeof _ldRdvCache !== 'undefined' && _ldRdvCache[id]) {
-    paintLeadRdvBox(id, _ldRdvCache[id]);
-  }
+  paintLeadRdvBox(id, ldRdvItemsFor(id));
+  // Stampe les bookings orphelins de cette fiche (write-once, cf. slCatchUpLeadId)
+  ldRdvItemsFor(id).forEach(slCatchUpLeadId);
   // Parcours de close : signatures + paiements du lead, puis peinture
   attachLeadDealListeners(id);
   paintCloseRail(id);
@@ -6022,7 +6074,16 @@ function startSbNbBookingsListening() {
       _sbnbByLead = byLead;
       _sbnbByEmail = byEmail;
       snap.forEach(function (doc) { slCatchUpSetter(doc.id, doc.data()); });
+      // Rattrapage leadId des bookings orphelins (self-booking sans opt-in)
+      snap.forEach(function (doc) { var cb = doc.data(); cb.id = doc.id; slCatchUpLeadId(cb); });
       if (!isEditingLead && typeof renderFeed === 'function') renderFeed();
+      /* La boîte RDV d'une fiche ouverte dépend aussi de _sbnbByEmail :
+         repeindre les blocs présents dans le DOM quand les maps arrivent. */
+      document.querySelectorAll('[data-rdv-block]').forEach(function (el) {
+        var lid = el.getAttribute('data-rdv-block');
+        paintLeadRdvBox(lid, ldRdvItemsFor(lid));
+        paintCloseRail(lid);
+      });
     }, function (err) {
       console.warn('[sbnb-bookings] listener error:', err && err.message);
     });
