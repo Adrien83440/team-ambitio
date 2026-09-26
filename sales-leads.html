@@ -3214,6 +3214,11 @@ function paintLeadRdvBox(leadId, items) {
        (typeMap), id brut en dernier recours. « on » = case cochée par
        l'ancien rendu du formulaire public → affiché « Oui ». */
     var SKIP = { prenom: 1, nom: 1, email: 1, phone: 1, telephone: 1, secteur: 1, message: 1 };
+    /* fd doit être défini QUEL QUE SOIT le chemin : il est relu plus bas pour
+       le message. Avant le 26/09 il n'était assigné que dans la branche
+       legacy (bookings sans formAnswers) → TypeError sur tout RDV récent
+       (formAnswers présent depuis le 02/09) et boîte RDV jamais peinte. */
+    var fd = b.formData || {};
     function ansBit(label, v) {
       v = String(v) === 'on' ? 'Oui' : String(v);
       label = String(label);
@@ -3230,7 +3235,6 @@ function paintLeadRdvBox(leadId, items) {
       var tDef = (_ldTypeMap && _ldTypeMap[b.type]) || {};
       var lblById = {};
       (tDef.formFields || []).forEach(function (ft) { if (ft && ft.id) lblById[ft.id] = ft.label; });
-      var fd = b.formData || {};
       Object.keys(fd).forEach(function (kk) {
         if (SKIP[kk]) return;
         var v = fd[kk];
