@@ -266,13 +266,32 @@ function isPlaceholderPhone(tel) {
   return PLACEHOLDER_PHONES_LAST9.has(last9);
 }
 
+/* pickAlive (26/09/2026) : toute recherche de lead doit ignorer les doublons
+   _merged (règle projet). Avant ce fix, findLead prenait le premier doc
+   (limit 1) : un self-booking pouvait être stampé avec l'id d'un doublon
+   fusionné → fiche vivante SANS RDV visible dans Leads Live (incident du
+   26/09). On préfère le premier doc vivant ; si SEULS des doublons matchent,
+   on suit _mergedInto vers la fiche originale. */
+async function pickAliveLead(snap) {
+  if (snap.empty) return null;
+  for (const doc of snap.docs) {
+    if (doc.data()._merged !== true) return { id: doc.id, data: doc.data() };
+  }
+  const target = snap.docs[0].data()._mergedInto;
+  if (target) {
+    const orig = await db.collection("leads").doc(target).get();
+    if (orig.exists && orig.data()._merged !== true) return { id: orig.id, data: orig.data() };
+  }
+  return null;
+}
+
 async function findLead(email, phone) {
   if (email) {
     const emailNorm = email.trim().toLowerCase();
-    const snap = await db.collection("leads").where("email", "==", emailNorm).limit(1).get();
-    if (!snap.empty) return { id: snap.docs[0].id, data: snap.docs[0].data() };
-    const snap2 = await db.collection("leads").where("email", "==", email.trim()).limit(1).get();
-    if (!snap2.empty) return { id: snap2.docs[0].id, data: snap2.docs[0].data() };
+    let hit = await pickAliveLead(await db.collection("leads").where("email", "==", emailNorm).limit(5).get());
+    if (hit) return hit;
+    hit = await pickAliveLead(await db.collection("leads").where("email", "==", email.trim()).limit(5).get());
+    if (hit) return hit;
   }
   if (phone) {
     const digits = phone.replace(/[^\d+]/g, "").replace(/^\+/, "");
@@ -308,16 +327,16 @@ async function findLead(email, phone) {
     }
 
     for (const v of variants) {
-      const snap = await db.collection("leads").where("telephone", "==", v).limit(1).get();
-      if (!snap.empty) return { id: snap.docs[0].id, data: snap.docs[0].data() };
+      const hit = await pickAliveLead(await db.collection("leads").where("telephone", "==", v).limit(5).get());
+      if (hit) return hit;
     }
 
     // Filet de sécurité : matching par 9 derniers chiffres via phoneNormalized.
     // Rattrape tout cas tordu (espaces, formatage exotique, leads importés Bigin).
     if (digits.length >= 9) {
       const last9 = digits.slice(-9);
-      const snapNorm = await db.collection("leads").where("phoneNormalized", "==", last9).limit(1).get();
-      if (!snapNorm.empty) return { id: snapNorm.docs[0].id, data: snapNorm.docs[0].data() };
+      const hitNorm = await pickAliveLead(await db.collection("leads").where("phoneNormalized", "==", last9).limit(5).get());
+      if (hitNorm) return hitNorm;
     }
   }
   return null;
@@ -434,13 +453,19 @@ exports.onNewLead = functions.firestore
 
     // ─── Détection de doublon (email puis téléphone) ───────────────────────
     let existingDoc = null;
+    // pickAlive (26/09/2026) : une fiche vivante prime toujours sur un doublon
+    // _merged — fusionner dans un doublon mort rendait le lead invisible.
+    const considerDup = (doc) => {
+      if (doc.id === leadId) return;
+      if (!existingDoc || (existingDoc.data()._merged === true && doc.data()._merged !== true)) existingDoc = doc;
+    };
     if (email) {
       const emailClean = email.trim().toLowerCase();
-      const snap1 = await db.collection("leads").where("email", "==", emailClean).limit(2).get();
-      snap1.forEach((doc) => { if (doc.id !== leadId) existingDoc = doc; });
+      const snap1 = await db.collection("leads").where("email", "==", emailClean).limit(3).get();
+      snap1.forEach(considerDup);
       if (!existingDoc) {
-        const snap2 = await db.collection("leads").where("email", "==", email.trim()).limit(2).get();
-        snap2.forEach((doc) => { if (doc.id !== leadId) existingDoc = doc; });
+        const snap2 = await db.collection("leads").where("email", "==", email.trim()).limit(3).get();
+        snap2.forEach(considerDup);
       }
     }
     if (!existingDoc && tel && !isPlaceholderPhone(tel)) {
@@ -467,16 +492,24 @@ exports.onNewLead = functions.firestore
         ];
         for (const fmt of formats) {
           if (existingDoc) break;
-          const s = await db.collection("leads").where("telephone", "==", fmt).limit(2).get();
-          s.forEach((doc) => { if (doc.id !== leadId) existingDoc = doc; });
+          const s = await db.collection("leads").where("telephone", "==", fmt).limit(3).get();
+          s.forEach(considerDup);
         }
       }
       // Filet de sécurité : matching par phoneNormalized (9 derniers chiffres)
       if (!existingDoc && phoneClean.length >= 9) {
         const last9 = phoneClean.slice(-9);
-        const s = await db.collection("leads").where("phoneNormalized", "==", last9).limit(2).get();
-        s.forEach((doc) => { if (doc.id !== leadId) existingDoc = doc; });
+        const s = await db.collection("leads").where("phoneNormalized", "==", last9).limit(3).get();
+        s.forEach(considerDup);
       }
+    }
+
+    // S'il ne reste qu'un doublon _merged, on résout vers la fiche originale :
+    // la fusion doit toujours cibler une fiche vivante.
+    if (existingDoc && existingDoc.data()._merged === true) {
+      const mergedInto = existingDoc.data()._mergedInto;
+      const orig = mergedInto ? await db.collection("leads").doc(mergedInto).get() : null;
+      if (orig && orig.exists && orig.data()._merged !== true) existingDoc = orig;
     }
 
     // Labels de tunnels (réutilisés dans les deux branches existing/new)
@@ -2602,7 +2635,9 @@ exports.onBookingCreated = functions.firestore
 
       if (booking.leadId) {
         const direct = await db.collection('leads').doc(booking.leadId).get();
-        if (direct.exists) leadDoc = { id: direct.id, ref: direct.ref, data: direct.data() };
+        // Un leadId pointant un doublon _merged ne compte pas : on retombe
+        // sur findLead, qui résout la fiche vivante (pickAliveLead).
+        if (direct.exists && direct.data()._merged !== true) leadDoc = { id: direct.id, ref: direct.ref, data: direct.data() };
       }
       if (!leadDoc) {
         const found = await findLead(prospect.email, prospect.telephone);
