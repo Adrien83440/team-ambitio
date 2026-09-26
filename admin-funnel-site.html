@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Funnel &amp; Site</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-funnel-site.html — FUNNEL & SITE : vue d'ensemble (09/2026)
+   Hub admin qui regroupe tout le pilotage marketing au même endroit :
+   domaines, tunnels hébergés + site vitrine (collection `tunnels`),
+   stats 7 jours (tunnel_stats_daily), raccourcis, checklist de migration
+   Systeme.io → Vercel. AUCUNE écriture Firestore : lecture seule, la
+   checklist vit en localStorage. La gestion (pages, A/B, favicon…) reste
+   dans admin-tunnels.html — ce hub y renvoie via ?id=<tunnelId>.
+   ═══════════════════════════════════════════════════════════════════════ */
+.fs{padding:20px 24px 80px;max-width:1180px;margin:0 auto;font-family:'Figtree',sans-serif}
+.fs-top{display:flex;align-items:center;gap:14px;margin-bottom:24px;flex-wrap:wrap}
+.fs-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px}
+.fs-top small{font-size:12px;color:rgba(255,255,255,.48);display:block;margin-top:2px}
+.fs-top .sp{flex:1}
+.fs-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#fb923c,#ea580c);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 3px 12px rgba(251,146,60,.3);flex-shrink:0}
+.bb{padding:8px 16px;border:none;border-radius:8px;font-family:'Figtree',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s;text-decoration:none;line-height:1.3}
+.bb-p{background:#fb923c;color:#000}.bb-p:hover{background:#f97316}
+.bb-o{background:0;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.62)}.bb-o:hover{color:#fff;border-color:rgba(255,255,255,.25)}
+.bb-s{padding:5px 10px;font-size:11px}
+
+.fs-h2{font-family:'Bricolage Grotesque',sans-serif;font-size:14px;font-weight:800;letter-spacing:-.2px;margin:26px 0 12px;display:flex;align-items:center;gap:8px}
+.fs-h2 small{font-weight:500;font-size:11px;color:rgba(255,255,255,.4)}
+
+/* KPIs */
+.fs-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.fs-kpi{background:var(--bg2,#101018);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 18px}
+.fs-kpi .l{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.45);margin-bottom:6px}
+.fs-kpi .v{font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:800;line-height:1}
+.fs-kpi .d{font-size:11px;margin-top:6px;font-weight:600}
+.fs-kpi .d.up{color:#34d399}.fs-kpi .d.down{color:#f87171}.fs-kpi .d.flat{color:rgba(255,255,255,.4)}
+
+/* Domaines */
+.fs-doms{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.fs-dom{background:var(--bg2,#101018);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:15px 17px;display:flex;flex-direction:column;gap:8px}
+.fs-dom .row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.fs-dom .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.fs-dom .dot.ok{background:#34d399;box-shadow:0 0 8px rgba(52,211,153,.7)}
+.fs-dom .dot.warn{background:#fbbf24;box-shadow:0 0 8px rgba(251,191,36,.6)}
+.fs-dom .dot.off{background:rgba(255,255,255,.25)}
+.fs-dom b{font-family:var(--font-m,monospace);font-size:13.5px;font-weight:700}
+.fs-dom .st{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 8px;border-radius:5px}
+.fs-dom .st.ok{background:rgba(52,211,153,.12);color:#34d399}
+.fs-dom .st.warn{background:rgba(251,191,36,.12);color:#fbbf24}
+.fs-dom .st.off{background:rgba(255,255,255,.06);color:rgba(255,255,255,.45)}
+.fs-dom p{font-size:12px;color:rgba(255,255,255,.55);line-height:1.55}
+.fs-dom .dns{font-family:var(--font-m,monospace);font-size:11px;color:#7dd3fc;background:rgba(34,211,238,.06);border:1px dashed rgba(34,211,238,.25);border-radius:7px;padding:6px 9px;display:flex;align-items:center;gap:8px;justify-content:space-between}
+.fs-dom .dns button{color:rgba(255,255,255,.55);font-size:11px;cursor:pointer;background:none;border:none;font-family:'Figtree',sans-serif;font-weight:700}
+.fs-dom .dns button:hover{color:#fff}
+.fs-dom .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto}
+
+/* Tunnels */
+.fs-tuns{display:flex;flex-direction:column;gap:12px}
+.fs-tun{background:var(--bg2,#101018);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 18px}
+.fs-tun-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.fs-tun-h h3{font-family:'Bricolage Grotesque',sans-serif;font-size:15px;font-weight:800}
+.fs-tun-h .slug{font-family:var(--font-m,monospace);font-size:11px;color:rgba(255,255,255,.4)}
+.fs-tun-h .sp{flex:1}
+.pill{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:6px}
+.pill.live{background:rgba(52,211,153,.13);color:#34d399}
+.pill.draft{background:rgba(251,191,36,.12);color:#fbbf24}
+.pill.site{background:rgba(34,211,238,.12);color:#22d3ee}
+.fs-tun-stats{display:flex;gap:14px;flex-wrap:wrap;margin:8px 0 10px;font-size:12px;color:rgba(255,255,255,.55)}
+.fs-tun-stats b{color:#fff;font-weight:800;font-family:'Bricolage Grotesque',sans-serif}
+.fs-steps{display:flex;flex-direction:column;gap:5px}
+.fs-step{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.05);flex-wrap:wrap;font-size:12px}
+.fs-step .nm{font-weight:700;color:#fff}
+.fs-step .path{font-family:var(--font-m,monospace);font-size:11px;color:#7dd3fc}
+.fs-step .vs{font-size:10.5px;color:rgba(255,255,255,.4)}
+.fs-step .sp{flex:1}
+.fs-step a{font-size:11px;font-weight:700;color:rgba(255,255,255,.6);text-decoration:none;padding:3px 8px;border:1px solid rgba(255,255,255,.1);border-radius:6px}
+.fs-step a:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+.fs-empty{background:var(--bg2,#101018);border:1px dashed rgba(255,255,255,.14);border-radius:14px;padding:28px;text-align:center;color:rgba(255,255,255,.5);font-size:13px;line-height:1.7}
+
+/* Raccourcis */
+.fs-links{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.fs-link{display:flex;align-items:center;gap:11px;background:var(--bg2,#101018);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:13px 15px;text-decoration:none;color:#fff;transition:border-color .15s,transform .15s}
+.fs-link:hover{border-color:rgba(251,146,60,.5);transform:translateY(-2px)}
+.fs-link .em{font-size:18px;flex:none}
+.fs-link b{display:block;font-size:12.5px;font-weight:700;line-height:1.3}
+.fs-link span{font-size:10.5px;color:rgba(255,255,255,.42);display:block}
+
+/* Checklist migration */
+.fs-check{background:var(--bg2,#101018);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:16px 18px}
+.fs-check-top{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.fs-check-top .bar{flex:1;min-width:160px;height:7px;border-radius:7px;background:rgba(255,255,255,.07);overflow:hidden}
+.fs-check-top .bar i{display:block;height:100%;border-radius:7px;background:linear-gradient(90deg,#fbbf24,#f97316);transition:width .3s}
+.fs-check-top b{font-size:12px;color:rgba(255,255,255,.6);font-weight:700;white-space:nowrap}
+.fs-ck{display:flex;align-items:flex-start;gap:11px;padding:9px 10px;border-radius:9px;cursor:pointer;transition:background .12s}
+.fs-ck:hover{background:rgba(255,255,255,.03)}
+.fs-ck .box{flex:none;width:19px;height:19px;border-radius:6px;border:2px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s;font-size:11px;color:#000}
+.fs-ck.on .box{background:#34d399;border-color:#34d399}
+.fs-ck .t{font-size:13px;color:rgba(255,255,255,.85);line-height:1.5}
+.fs-ck.on .t{color:rgba(255,255,255,.4);text-decoration:line-through}
+.fs-ck .t small{display:block;font-size:11px;color:rgba(255,255,255,.4);text-decoration:none}
+
+.locked{text-align:center;padding:120px 20px;color:rgba(255,255,255,.55);font-size:14px}
+
+@media(max-width:900px){
+  .fs-kpis{grid-template-columns:repeat(2,1fr)}
+  .fs-doms{grid-template-columns:1fr}
+  .fs-links{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:560px){
+  .fs{padding:14px 12px 70px}
+  .fs-kpis{grid-template-columns:1fr 1fr}
+  .fs-links{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+
+<div class="fs" id="mainView" style="display:none">
+  <div class="fs-top">
+    <div class="fs-ic">🚀</div>
+    <div><h1>Funnel &amp; Site</h1><small>Vue d'ensemble — domaines, tunnels, site vitrine, migration</small></div>
+    <div class="sp"></div>
+    <a class="bb bb-p" href="admin-tunnels.html">🧭 Gérer les tunnels &amp; pages</a>
+    <button class="bb bb-o" data-action="reload">↻ Actualiser</button>
+  </div>
+
+  <!-- KPIs 7 jours -->
+  <div class="fs-kpis" id="kpis">
+    <div class="fs-kpi"><div class="l">Visites · 7 j</div><div class="v">—</div></div>
+    <div class="fs-kpi"><div class="l">Clics CTA · 7 j</div><div class="v">—</div></div>
+    <div class="fs-kpi"><div class="l">Opt-ins · 7 j</div><div class="v">—</div></div>
+    <div class="fs-kpi"><div class="l">Taux d'opt-in · 7 j</div><div class="v">—</div></div>
+  </div>
+
+  <!-- Domaines -->
+  <div class="fs-h2">🌐 Domaines <small>— où répond quoi, et quoi brancher le jour J</small></div>
+  <div class="fs-doms" id="domains"></div>
+
+  <!-- Tunnels & site -->
+  <div class="fs-h2">🧭 Tunnels &amp; site <small>— pages en ligne, aperçus, stats 7 jours</small></div>
+  <div class="fs-tuns" id="tunnelList"><div class="fs-empty">Chargement…</div></div>
+
+  <!-- Raccourcis -->
+  <div class="fs-h2">⚡ Raccourcis</div>
+  <div class="fs-links">
+    <a class="fs-link" href="admin-tunnels.html"><span class="em">🧭</span><span><b>Tunnels &amp; pages</b><span>éditer, A/B, favicon, médias</span></span></a>
+    <a class="fs-link" href="sales-funnel.html"><span class="em">🎯</span><span><b>Funnel Sales</b><span>de la visite au close</span></span></a>
+    <a class="fs-link" href="sales-leads.html"><span class="em">🔔</span><span><b>Leads Live</b><span>les opt-ins arrivent ici</span></span></a>
+    <a class="fs-link" href="booking-admin.html"><span class="em">📅</span><span><b>Booking</b><span>créneaux &amp; types de RDV</span></span></a>
+    <a class="fs-link" href="alteoforms.html"><span class="em">📝</span><span><b>AlteoForms</b><span>formulaires publics</span></span></a>
+    <a class="fs-link" href="temoignages.html"><span class="em">⭐</span><span><b>Témoignages</b><span>preuves pour les pages</span></span></a>
+    <a class="fs-link" href="https://adsmanager.facebook.com/adsmanager/" target="_blank" rel="noopener"><span class="em">📣</span><span><b>Meta Ads Manager</b><span>campagnes &amp; pixel ↗</span></span></a>
+    <a class="fs-link" href="https://www.ovh.com/manager/" target="_blank" rel="noopener"><span class="em">🔧</span><span><b>OVH — zone DNS</b><span>adrienemily.com ↗</span></span></a>
+  </div>
+
+  <!-- Checklist migration -->
+  <div class="fs-h2">✅ Migration Systeme.io → Vercel <small>— cochée ici, mémorisée sur ce navigateur</small></div>
+  <div class="fs-check">
+    <div class="fs-check-top"><div class="bar"><i id="ckBar"></i></div><b id="ckCount">0 / 0</b><button class="bb bb-o bb-s" data-action="ckReset">Réinitialiser</button></div>
+    <div id="checklist"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+var db = firebase.firestore();
+var $ = function (id) { return document.getElementById(id); };
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function escAttr(s) { return esc(s); }
+function num(v) { return Number(v) || 0; }
+
+var CFG = { primaryHost: 'go.adrienemily.com' };
+var TUNNELS = [];
+var STATS = null;   // { byTunnel: { id: {v,c,o} }, cur: {v,c,o}, prev: {v,c,o} }
+
+/* ─── Domaines : états descriptifs (le DNS ne se lit pas depuis un
+   navigateur — les statuts reflètent l'architecture réelle, mise à jour
+   à la main si elle change). ─── */
+var DOMAINS = [
+  { host: 'go.adrienemily.com', dot: 'ok', st: 'ok', label: 'En ligne — Vercel',
+    p: 'Domaine des tunnels hébergés. Toutes les pages publiées ci-dessous répondent ici.',
+    open: 'https://go.adrienemily.com', dns: null },
+  { host: 'www.adrienemily.com', dot: 'warn', st: 'warn', label: 'Systeme.io — à migrer',
+    p: 'Site vitrine actuel (Systeme.io). Le jour J : CNAME vers Vercel, les mêmes chemins (/about, /product…) répondront depuis le tunnel « site ».',
+    open: 'https://www.adrienemily.com', dns: 'CNAME www → cname.vercel-dns.com' },
+  { host: 'adrienemily.com', dot: 'off', st: 'off', label: 'Apex — à créer',
+    p: 'Ne répond pas aujourd\'hui (aucun enregistrement A). À brancher sur Vercel en même temps que www. Les MX Gmail ne bougent pas.',
+    open: null, dns: 'A @ → 76.76.21.21' },
+  { host: 'team.alteore.com/t/…', dot: 'ok', st: 'ok', label: 'Aperçus internes',
+    p: 'Mode aperçu des pages (brouillons visibles, aucune mesure, noindex). Idéal pour valider desktop + mobile avant publication.',
+    open: null, dns: null }
+];
+
+function renderDomains() {
+  var h = '';
+  DOMAINS.forEach(function (d) {
+    h += '<div class="fs-dom">';
+    h += '<div class="row"><span class="dot ' + d.dot + '"></span><b>' + esc(d.host) + '</b><span class="st ' + d.st + '">' + esc(d.label) + '</span></div>';
+    h += '<p>' + d.p + '</p>';
+    if (d.dns) h += '<div class="dns"><span>' + esc(d.dns) + '</span><button type="button" data-action="copy" data-copy="' + escAttr(d.dns.split('→')[1].trim()) + '">Copier</button></div>';
+    h += '<div class="acts">';
+    if (d.open) h += '<a class="bb bb-o bb-s" href="' + escAttr(d.open) + '" target="_blank" rel="noopener">Ouvrir ↗</a>';
+    h += '</div></div>';
+  });
+  $('domains').innerHTML = h;
+}
+
+/* ─── Chargements Firestore (lecture seule) ─── */
+function loadConfig() {
+  return db.collection('_config').doc('tunnels').get().then(function (doc) {
+    if (doc.exists && (doc.data() || {}).primaryHost) CFG.primaryHost = doc.data().primaryHost;
+  })['catch'](function () {});
+}
+
+function loadTunnels() {
+  return db.collection('tunnels').get().then(function (snap) {
+    TUNNELS = [];
+    snap.forEach(function (doc) {
+      var t = doc.data() || {};
+      if (t.archived === true) return;
+      TUNNELS.push({
+        id: doc.id,
+        name: String(t.name || t.slug || 'Tunnel'),
+        slug: String(t.slug || ''),
+        status: t.status === 'live' ? 'live' : 'draft',
+        homeStepId: t.homeStepId || '',
+        steps: (Array.isArray(t.steps) ? t.steps : []).filter(function (s) { return s && s.id && s.archived !== true; })
+      });
+    });
+    TUNNELS.sort(function (a, b) { return a.status === b.status ? (a.name > b.name ? 1 : -1) : (a.status === 'live' ? -1 : 1); });
+  });
+}
+
+function isoDaysAgo(n) {
+  var d = new Date(); d.setDate(d.getDate() - n);
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
+}
+
+function loadStats() {
+  var since = isoDaysAgo(13);          // 14 jours glissants : 7 courants + 7 précédents
+  var pivot = isoDaysAgo(6);
+  return db.collection('tunnel_stats_daily').where('date', '>=', since).get().then(function (snap) {
+    var S = { byTunnel: {}, cur: { v: 0, c: 0, o: 0 }, prev: { v: 0, c: 0, o: 0 } };
+    snap.forEach(function (doc) {
+      var d = doc.data() || {};
+      var isCur = String(d.date || '') >= pivot;
+      var v = num(d.visits), o = num(d.optins), c = num(d.ctas);
+      if (!c && d.sources) { Object.keys(d.sources).forEach(function (k) { c += num((d.sources[k] || {}).ctas); }); }
+      var side = isCur ? S.cur : S.prev;
+      side.v += v; side.c += c; side.o += o;
+      if (isCur && d.tunnelId) {
+        var bt = S.byTunnel[d.tunnelId] || (S.byTunnel[d.tunnelId] = { v: 0, c: 0, o: 0 });
+        bt.v += v; bt.c += c; bt.o += o;
+      }
+    });
+    STATS = S;
+  });
+}
+
+/* ─── Rendus ─── */
+function delta(cur, prev) {
+  if (!prev) return cur ? '<span class="d up">nouveau</span>' : '<span class="d flat">—</span>';
+  var p = Math.round((cur - prev) / prev * 100);
+  if (p > 0) return '<span class="d up">▲ +' + p + '% vs 7 j préc.</span>';
+  if (p < 0) return '<span class="d down">▼ ' + p + '% vs 7 j préc.</span>';
+  return '<span class="d flat">= stable</span>';
+}
+
+function renderKpis() {
+  var S = STATS || { cur: { v: 0, c: 0, o: 0 }, prev: { v: 0, c: 0, o: 0 } };
+  var rate = S.cur.v ? Math.round(S.cur.o / S.cur.v * 100) : 0;
+  var rPrev = S.prev.v ? Math.round(S.prev.o / S.prev.v * 100) : 0;
+  var h = '';
+  h += '<div class="fs-kpi"><div class="l">Visites · 7 j</div><div class="v">' + S.cur.v + '</div>' + delta(S.cur.v, S.prev.v) + '</div>';
+  h += '<div class="fs-kpi"><div class="l">Clics CTA · 7 j</div><div class="v">' + S.cur.c + '</div>' + delta(S.cur.c, S.prev.c) + '</div>';
+  h += '<div class="fs-kpi"><div class="l">Opt-ins · 7 j</div><div class="v">' + S.cur.o + '</div>' + delta(S.cur.o, S.prev.o) + '</div>';
+  h += '<div class="fs-kpi"><div class="l">Taux d\'opt-in · 7 j</div><div class="v">' + rate + '%</div>' + delta(rate, rPrev) + '</div>';
+  $('kpis').innerHTML = h;
+}
+
+function stepPath(t, s) { return (t.homeStepId && t.homeStepId === s.id) ? '/' : '/' + String(s.slug || ''); }
+
+function renderTunnels() {
+  if (!TUNNELS.length) {
+    $('tunnelList').innerHTML = '<div class="fs-empty">Aucun tunnel pour l\'instant.<br>Le site vitrine (4 pages prêtes dans <b>site-adrienemily/</b> du repo) et les tunnels de vente se créent dans <a href="admin-tunnels.html" style="color:#fb923c">Tunnels &amp; pages</a>.</div>';
+    return;
+  }
+  var h = '';
+  TUNNELS.forEach(function (t) {
+    var st = (STATS && STATS.byTunnel[t.id]) || { v: 0, c: 0, o: 0 };
+    var isSite = /site/i.test(t.name) || /site/i.test(t.slug);
+    h += '<div class="fs-tun">';
+    h += '<div class="fs-tun-h"><h3>' + esc(t.name) + '</h3><span class="slug">' + esc(t.slug) + '</span>';
+    if (isSite) h += '<span class="pill site">Site vitrine</span>';
+    h += '<span class="pill ' + t.status + '">' + (t.status === 'live' ? 'En ligne' : 'Brouillon') + '</span>';
+    h += '<span class="sp"></span>';
+    h += '<a class="bb bb-p bb-s" href="admin-tunnels.html?id=' + escAttr(t.id) + '">⚙️ Gérer</a>';
+    h += '<a class="bb bb-o bb-s" href="admin-tunnels.html?id=' + escAttr(t.id) + '">📊 Stats détaillées</a>';
+    h += '</div>';
+    h += '<div class="fs-tun-stats"><span><b>' + st.v + '</b> visites · 7 j</span><span><b>' + st.c + '</b> clics CTA</span><span><b>' + st.o + '</b> opt-ins</span><span><b>' + (st.v ? Math.round(st.o / st.v * 100) : 0) + '%</b> d\'opt-in</span></div>';
+    h += '<div class="fs-steps">';
+    if (!t.steps.length) h += '<div class="fs-step"><span class="vs">Aucune étape — à créer dans la gestion du tunnel.</span></div>';
+    t.steps.forEach(function (s) {
+      var path = stepPath(t, s);
+      var live = 'https://' + CFG.primaryHost + path;
+      var preview = '/t/' + (path === '/' ? '' : path.slice(1)) + '?v=a';
+      var nVar = Array.isArray(s.variants) ? s.variants.length : 0;
+      h += '<div class="fs-step">';
+      h += '<span class="nm">' + esc(s.name || s.slug || 'Étape') + '</span>';
+      h += '<span class="path">' + esc(path) + '</span>';
+      if (t.homeStepId === s.id) h += '<span class="vs">accueil du domaine</span>';
+      if (nVar > 1) h += '<span class="vs">' + nVar + ' variantes A/B</span>';
+      h += '<span class="sp"></span>';
+      h += '<a href="' + escAttr(preview) + '" target="_blank" rel="noopener">👁 Aperçu</a>';
+      if (t.status === 'live' && s.status === 'live') h += '<a href="' + escAttr(live) + '" target="_blank" rel="noopener">🌍 En ligne ↗</a>';
+      h += '</div>';
+    });
+    h += '</div></div>';
+  });
+  $('tunnelList').innerHTML = h;
+}
+
+/* ─── Checklist migration (localStorage, aucune écriture Firestore) ─── */
+var CK_KEY = 'al_migration_site_v1';
+var CK_ITEMS = [
+  { k: 'tunnel', t: 'Créer le tunnel « Site adrienemily.com »', s: '4 étapes : accueil (répond sur /), about, product, contacts-page — slugs identiques à Systeme.io.' },
+  { k: 'pages', t: 'Déposer les 4 pages HTML', s: 'Fichiers prêts dans le repo, dossier site-adrienemily/ (voir son README).' },
+  { k: 'favicon', t: 'Déposer le favicon dans les réglages', s: 'L\'actuel vit sur le CDN Systeme.io et disparaîtra avec la résiliation.' },
+  { k: 'apercu', t: 'Valider chaque page en aperçu, desktop + mobile', s: 'team.alteore.com/t/… — navigation, vidéos, animations.' },
+  { k: 'form', t: 'Tester le formulaire de contact', s: 'La fiche doit apparaître dans Leads Live avec le message.' },
+  { k: 'live', t: 'Passer le tunnel en ligne', s: 'Le site répond alors sur go.adrienemily.com — sans toucher au domaine actuel.' },
+  { k: 'cname', t: 'OVH : CNAME www → cname.vercel-dns.com', s: 'Bascule du site. Prévoir un moment calme ; retour arrière possible en repointant le CNAME.' },
+  { k: 'apex', t: 'OVH : A @ → 76.76.21.21', s: 'L\'apex adrienemily.com (aujourd\'hui vide) se met à répondre. Les MX Gmail ne bougent pas.' },
+  { k: 'vercel', t: 'Vercel : ajouter www.adrienemily.com + adrienemily.com au projet', s: 'vercel.json route déjà ces hôtes vers les tunnels.' },
+  { k: 'fb', t: 'Vérifier les liens Facebook', s: 'Les URLs des pubs (mêmes chemins) doivent répondre à l\'identique.' },
+  { k: 'pixel', t: 'Vérifier le pixel Meta', s: 'Événements visibles dans le gestionnaire — le runtime des tunnels le porte.' },
+  { k: 'sio', t: 'Résilier Systeme.io', s: 'Après quelques jours de recul, une fois tout validé.' }
+];
+function ckState() { try { return JSON.parse(localStorage.getItem(CK_KEY) || '{}') || {}; } catch (e) { return {}; } }
+function renderChecklist() {
+  var st = ckState(), done = 0, h = '';
+  CK_ITEMS.forEach(function (it) {
+    var on = st[it.k] === 1; if (on) done++;
+    h += '<div class="fs-ck' + (on ? ' on' : '') + '" data-action="ck" data-k="' + it.k + '"><span class="box">' + (on ? '✓' : '') + '</span><span class="t">' + esc(it.t) + '<small>' + esc(it.s) + '</small></span></div>';
+  });
+  $('checklist').innerHTML = h;
+  $('ckCount').textContent = done + ' / ' + CK_ITEMS.length;
+  $('ckBar').style.width = Math.round(done / CK_ITEMS.length * 100) + '%';
+}
+
+/* ─── Événements (délégation, pas de onclick inline) ─── */
+document.addEventListener('click', function (ev) {
+  var el = ev.target.closest('[data-action]');
+  if (!el) return;
+  var act = el.getAttribute('data-action');
+  if (act === 'reload') { boot(); return; }
+  if (act === 'copy') {
+    var val = el.getAttribute('data-copy') || '';
+    try { navigator.clipboard.writeText(val).then(function () { el.textContent = 'Copié ✓'; setTimeout(function () { el.textContent = 'Copier'; }, 1400); }); } catch (e) {}
+    return;
+  }
+  if (act === 'ck') {
+    var st = ckState(), k = el.getAttribute('data-k');
+    if (st[k] === 1) delete st[k]; else st[k] = 1;
+    try { localStorage.setItem(CK_KEY, JSON.stringify(st)); } catch (e) {}
+    renderChecklist();
+    return;
+  }
+  if (act === 'ckReset') {
+    if (!window.confirm('Décocher toute la checklist ?')) return;
+    try { localStorage.removeItem(CK_KEY); } catch (e) {}
+    renderChecklist();
+    return;
+  }
+});
+
+/* ═══ BOOT ═══ */
+function boot() {
+  renderDomains();
+  renderChecklist();
+  Promise.all([loadConfig(), loadTunnels(), loadStats()]).then(function () {
+    renderKpis();
+    renderTunnels();
+  })['catch'](function (e) {
+    $('tunnelList').innerHTML = '<div class="fs-empty">Chargement impossible : ' + esc(e && e.message) + '</div>';
+  });
+}
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var role = localStorage.getItem('ambitio_role') || 'coach';
+  if (role !== 'admin') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  boot();
+});
+})();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>
