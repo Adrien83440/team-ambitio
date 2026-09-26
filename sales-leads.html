@@ -1466,6 +1466,14 @@ function isNbSituation(l) {
    _sbnbByLead/_sbnbByEmail (listener bookings récents). */
 var _sbnbByLead = {};    // leadId -> [bookings récents]
 var _sbnbByEmail = {};   // email normalisé -> [bookings récents]
+var _sbnbByTel = {};     // 9 derniers chiffres du téléphone -> [bookings récents]
+
+/* Clé téléphone tolérante aux formats (+33/0/espaces/points) : 9 derniers
+   chiffres — même convention que phoneNormalized côté Cloud Functions. */
+function ldPhone9(p) {
+  var d = String(p || '').replace(/[^\d]/g, '');
+  return d.length >= 9 ? d.slice(-9) : '';
+}
 
 /* RDV « de référence » d'une fiche — même sélection que l'œil dans le bloc
    Rendez-vous : coaching exclu, annulés/replanifiés ignorés s'il reste des
@@ -1498,6 +1506,10 @@ function l2RdvClassification(l) {
   if (!items || !items.length) {
     var em = (l.email || '').trim().toLowerCase();
     if (em) items = _sbnbByEmail[em];
+  }
+  if (!items || !items.length) {
+    var t9c = ldPhone9(l.telephone);
+    if (t9c) items = _sbnbByTel[t9c];
   }
   var b = l2RelevantSalesBooking(items || []);
   return b ? AF.classifyBooking(b, _ldTypeMap || {}) : null;
@@ -2912,8 +2924,9 @@ function ldRdvItemsFor(leadId) {
   var l = null;
   for (var i = 0; i < allLeads.length; i++) { if (allLeads[i].id === leadId) { l = allLeads[i]; break; } }
   var em = l ? (l.email || '').trim().toLowerCase() : '';
+  var t9 = l ? ldPhone9(l.telephone) : '';
   var seen = {}, out = [];
-  [_ldRdvCache[leadId], _sbnbByLead[leadId], em ? _sbnbByEmail[em] : null].forEach(function (arr) {
+  [_ldRdvCache[leadId], _sbnbByLead[leadId], em ? _sbnbByEmail[em] : null, t9 ? _sbnbByTel[t9] : null].forEach(function (arr) {
     (arr || []).forEach(function (b) {
       if (b && b.id && !seen[b.id]) { seen[b.id] = true; out.push(b); }
     });
@@ -2937,12 +2950,15 @@ var _slLeadIdSeen = {};
 function slCatchUpLeadId(b) {
   if (!b || !b.id || b.leadId || _slLeadIdSeen[b.id]) return;
   var em = ((b.prospect && b.prospect.email) || b.email || '').trim().toLowerCase();
-  if (!em) return;
+  var t9 = ldPhone9((b.prospect && b.prospect.telephone) || (b.prospect && b.prospect.phone) || '');
+  if (!em && !t9) return;
   var matches = [];
   for (var i = 0; i < allLeads.length; i++) {
     var l = allLeads[i];
     if (l._merged === true) continue;
-    if ((l.email || '').trim().toLowerCase() === em) matches.push(l);
+    var okEm = em && (l.email || '').trim().toLowerCase() === em;
+    var okTel = t9 && ldPhone9(l.telephone) === t9;
+    if (okEm || okTel) matches.push(l);
   }
   if (matches.length !== 1) return; // 0 = fiche pas chargée, >1 = ambigu : on ne devine pas
   _slLeadIdSeen[b.id] = true;
@@ -4638,17 +4654,32 @@ function l2RenderSheet(id, preserve) {
   var comms = l.communications || [];
   for (var c = 0; c < comms.length; c++) { if (comms[c].type === 'call' || comms[c].type === 'sms') commN++; }
 
-  var h = l2SheetHeadHTML(l, id);
+  /* Fiche incassable (26/09/2026) : une donnée inattendue dans UN bloc ne
+     doit jamais donner une fiche blanche (symptôme mobile du 26/09 : tap sur
+     la fiche → rien ne s'affiche). Chaque étage est isolé ; en cas d'erreur
+     on affiche un message + l'erreur en console au lieu de rien. */
+  var h = '';
+  try {
+    h = l2SheetHeadHTML(l, id);
+  } catch (eHead) {
+    console.error('[fiche] entête en erreur', id, eHead);
+    h = '<div style="padding:14px 16px 4px;font-weight:800;font-size:15px">' + escHtml(l.nom || l.email || id) + '</div>';
+  }
   h += '<div class="l2segs">';
   h += '<button type="button" class="l2seg' + (l2Seg === 'action' ? ' active' : '') + '" data-l2="seg" data-seg="action">⚡ Action' + (fuOver ? ' <span class="b">' + fuOver + '</span>' : '') + '</button>';
   h += '<button type="button" class="l2seg' + (l2Seg === 'infos' ? ' active' : '') + '" data-l2="seg" data-seg="infos">👤 Infos</button>';
   h += '<button type="button" class="l2seg' + (l2Seg === 'ech' ? ' active' : '') + '" data-l2="seg" data-seg="ech">💬 Échanges' + (commN ? ' <span class="b blue">' + commN + '</span>' : '') + '</button>';
   h += '</div>';
-  h += '<div class="l2body ld-card" data-lead-id="' + id + '">';
-  if (l2Seg === 'action') h += l2SegAction(l, id);
-  else if (l2Seg === 'infos') h += l2SegInfos(l, id);
-  else h += l2SegEch(l, id);
-  h += '</div>';
+  var segHtml = '';
+  try {
+    if (l2Seg === 'action') segHtml = l2SegAction(l, id);
+    else if (l2Seg === 'infos') segHtml = l2SegInfos(l, id);
+    else segHtml = l2SegEch(l, id);
+  } catch (eSeg) {
+    console.error('[fiche] segment ' + l2Seg + ' en erreur', id, eSeg);
+    segHtml = '<div style="padding:16px;color:#f87171;font-size:12.5px;line-height:1.5">⚠️ Ce volet n\'a pas pu s\'afficher — les autres volets restent accessibles.<br><span style="color:var(--muted);font-size:11px">' + escHtml(String((eSeg && eSeg.message) || eSeg)) + '</span></div>';
+  }
+  h += '<div class="l2body ld-card" data-lead-id="' + id + '">' + segHtml + '</div>';
 
   inner.innerHTML = h;
   sheet.classList.add('has-lead');
@@ -4658,14 +4689,19 @@ function l2RenderSheet(id, preserve) {
   if (body) body.scrollTop = scrollPos;
 
   // RDV temps réel : (ré)attache le listener + repeint depuis le cache,
-  // fusionné avec le repli email (self-booking sans leadId, doublon _merged).
-  attachLeadRdvListener(id);
-  paintLeadRdvBox(id, ldRdvItemsFor(id));
-  // Stampe les bookings orphelins de cette fiche (write-once, cf. slCatchUpLeadId)
-  ldRdvItemsFor(id).forEach(slCatchUpLeadId);
+  // fusionné avec le repli email/téléphone (self-booking sans leadId, doublon
+  // _merged). Isolé : une erreur ici ne doit pas empêcher le reste de la fiche.
+  try {
+    attachLeadRdvListener(id);
+    paintLeadRdvBox(id, ldRdvItemsFor(id));
+    // Stampe les bookings orphelins de cette fiche (write-once, cf. slCatchUpLeadId)
+    ldRdvItemsFor(id).forEach(slCatchUpLeadId);
+  } catch (eRdv) { console.error('[fiche] bloc RDV en erreur', id, eRdv); }
   // Parcours de close : signatures + paiements du lead, puis peinture
-  attachLeadDealListeners(id);
-  paintCloseRail(id);
+  try {
+    attachLeadDealListeners(id);
+    paintCloseRail(id);
+  } catch (eDeal) { console.error('[fiche] parcours de close en erreur', id, eDeal); }
 
   // Vocaux : uniquement quand le segment Échanges est affiché
   if (l2Seg === 'ech' && window.VoiceNotes) {
@@ -6064,15 +6100,18 @@ function startSbNbBookingsListening() {
   _sbnbBookingsUnsub = db.collection('bookings')
     .where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(cutoff))
     .onSnapshot(function (snap) {
-      var byLead = {}, byEmail = {};
+      var byLead = {}, byEmail = {}, byTel = {};
       snap.forEach(function (doc) {
         var b = doc.data(); b.id = doc.id;
         if (b.leadId) (byLead[b.leadId] = byLead[b.leadId] || []).push(b);
         var em = ((b.prospect && b.prospect.email) || b.email || '').trim().toLowerCase();
         if (em) (byEmail[em] = byEmail[em] || []).push(b);
+        var t9 = ldPhone9((b.prospect && b.prospect.telephone) || (b.prospect && b.prospect.phone) || '');
+        if (t9) (byTel[t9] = byTel[t9] || []).push(b);
       });
       _sbnbByLead = byLead;
       _sbnbByEmail = byEmail;
+      _sbnbByTel = byTel;
       snap.forEach(function (doc) { slCatchUpSetter(doc.id, doc.data()); });
       // Rattrapage leadId des bookings orphelins (self-booking sans opt-in)
       snap.forEach(function (doc) { var cb = doc.data(); cb.id = doc.id; slCatchUpLeadId(cb); });
@@ -6081,8 +6120,10 @@ function startSbNbBookingsListening() {
          repeindre les blocs présents dans le DOM quand les maps arrivent. */
       document.querySelectorAll('[data-rdv-block]').forEach(function (el) {
         var lid = el.getAttribute('data-rdv-block');
-        paintLeadRdvBox(lid, ldRdvItemsFor(lid));
-        paintCloseRail(lid);
+        try {
+          paintLeadRdvBox(lid, ldRdvItemsFor(lid));
+          paintCloseRail(lid);
+        } catch (eRepaint) { console.error('[sbnb] repaint fiche en erreur', lid, eRepaint); }
       });
     }, function (err) {
       console.warn('[sbnb-bookings] listener error:', err && err.message);
