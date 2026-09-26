@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Ambitio — Site &amp; pages</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mYWYungKOu4AMhyJz6o",authDomain:"ambitio-team.firebaseapp.com",projectId:"ambitio-team",storageBucket:"ambitio-team.firebasestorage.app",messagingSenderId:"1079366902268",appId:"1:1079366902268:web:b4ec1691dba54230339279"}); /* Firestore: auto-detect long-polling (corrige les blocages de connexion intermittents sous Safari) */ try { firebase.firestore().settings({ experimentalAutoDetectLongPolling: true }); } catch (e) { if (window.console) console.warn('[firestore] settings non appliques:', e && e.message); }}
+</script>
+<link rel="stylesheet" href="sales.css"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   admin-site.html — SITE & PAGES (09/2026)
+   Le site vitrine adrienemily.com se pilote ici, sans toucher au code :
+   · Contenu : chiffres clés, photos, témoignages vidéo, secteurs, note
+     Trustpilot, URL du CTA — enregistrés via POST /api/site-config
+     (Bearer admin), lus par les pages du site au chargement.
+   · Pages : les 4 pages du tunnel « site » (aperçu, en ligne, gérer).
+   · Domaines & migration : DNS à brancher + checklist (localStorage).
+   Préfixe sw- partout : sales.css possède déjà .fs, .tabs, .funnel…
+   (l'ancien hub admin-funnel-site.html est mort d'une collision .fs).
+   ═══════════════════════════════════════════════════════════════════════ */
+.sw{display:block;padding:20px 24px 120px;max-width:1180px;margin:0 auto;font-family:'Figtree',sans-serif}
+.sw-top{display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.sw-top h1{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:800;letter-spacing:-.3px}
+.sw-top small{font-size:12px;color:rgba(255,255,255,.48);display:block;margin-top:2px}
+.sw-top .sp{flex:1}
+.sw-ic{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#3b82f6,#22d3ee);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 3px 12px rgba(34,211,238,.3);flex-shrink:0}
+.swb{padding:8px 16px;border:none;border-radius:8px;font-family:'Figtree',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .15s;text-decoration:none;line-height:1.3}
+.swb-p{background:#22d3ee;color:#000}.swb-p:hover{background:#06b6d4}
+.swb-g{background:#34d399;color:#000}.swb-g:hover{background:#10b981}
+.swb-o{background:0;border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.62)}.swb-o:hover{color:#fff;border-color:rgba(255,255,255,.25)}
+.swb-s{padding:5px 10px;font-size:11px}
+.swb[disabled]{opacity:.4;cursor:not-allowed}
+
+/* Onglets */
+.sw-tabs{display:flex;gap:3px;padding:3px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.08);border-radius:10px;width:fit-content;margin-bottom:20px;flex-wrap:wrap}
+.sw-tab{padding:8px 16px;border-radius:8px;font-size:12.5px;font-weight:700;color:rgba(255,255,255,.55);cursor:pointer;border:none;background:none;font-family:'Figtree',sans-serif}
+.sw-tab:hover{color:#fff}
+.sw-tab.on{background:rgba(34,211,238,.14);color:#22d3ee}
+
+/* Cartes / formulaires */
+.sw-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.sw-card{display:block;background:var(--bg2,#101018);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:18px 20px}
+.sw-card h2{font-family:'Bricolage Grotesque',sans-serif;font-size:14px;font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.sw-card .sub{font-size:11.5px;color:rgba(255,255,255,.45);margin-bottom:14px;line-height:1.5}
+.sw-lbl{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.5);margin:12px 0 5px}
+.sw-in{padding:9px 12px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:13px;outline:0;box-sizing:border-box;width:100%}
+.sw-in:focus{border-color:#22d3ee}
+.sw-in[type=number]{font-family:var(--font-m,monospace)}
+textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
+.sw-sel{padding:9px 10px;background:var(--bg3,#141420);border:1.5px solid rgba(255,255,255,.07);border-radius:8px;color:#fff;font-family:'Figtree',sans-serif;font-size:12.5px;outline:0}
+.sw-sel option{background:var(--bg3,#141420)}
+.sw-nums{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.sw-num small{display:block;font-size:10.5px;color:rgba(255,255,255,.4);margin-top:4px;line-height:1.4}
+.sw-chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:rgba(255,255,255,.75);cursor:pointer;margin-top:10px}
+.sw-chk input{width:16px;height:16px;accent-color:#22d3ee}
+
+/* Photos */
+.sw-photo{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.sw-photo .th{flex:none;width:52px;height:52px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,.1);background:var(--bg3,#141420)}
+.sw-photo .fx{flex:1;min-width:0}
+.sw-photo .fx b{display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,.6);margin-bottom:4px}
+
+/* Témoignages */
+.sw-tem{background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.06);border-radius:11px;padding:12px;margin-bottom:10px}
+.sw-tem-h{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.sw-tem-h b{font-size:12.5px;flex:1}
+.sw-tem-h button{color:rgba(255,255,255,.5);font-size:13px;background:none;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:'Figtree',sans-serif}
+.sw-tem-h button:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+.sw-tem-h button.del:hover{color:#fca5a5;border-color:rgba(239,68,68,.5)}
+.sw-tem-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.sw-tem-row3{display:grid;grid-template-columns:1fr 1fr 110px;gap:8px}
+
+/* Pages du site */
+.sw-pages{display:flex;flex-direction:column;gap:8px}
+.sw-page{display:flex;align-items:center;gap:11px;background:var(--bg3,#141420);border:1px solid rgba(255,255,255,.06);border-radius:11px;padding:12px 14px;flex-wrap:wrap}
+.sw-page .em{font-size:17px;flex:none}
+.sw-page b{font-size:13px}
+.sw-page .path{font-family:var(--font-m,monospace);font-size:11.5px;color:#7dd3fc}
+.sw-page .note{font-size:11px;color:rgba(255,255,255,.4)}
+.sw-page .sp{flex:1}
+.sw-page a{font-size:11px;font-weight:700;color:rgba(255,255,255,.6);text-decoration:none;padding:4px 9px;border:1px solid rgba(255,255,255,.1);border-radius:6px}
+.sw-page a:hover{color:#fff;border-color:rgba(255,255,255,.3)}
+.sw-pill{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:3px 9px;border-radius:6px}
+.sw-pill.live{background:rgba(52,211,153,.13);color:#34d399}
+.sw-pill.draft{background:rgba(251,191,36,.12);color:#fbbf24}
+.sw-pill.miss{background:rgba(239,68,68,.12);color:#fca5a5}
+.sw-guide{background:rgba(34,211,238,.05);border:1px dashed rgba(34,211,238,.3);border-radius:12px;padding:16px 18px;font-size:12.5px;color:rgba(255,255,255,.7);line-height:1.8}
+.sw-guide b{color:#fff}
+.sw-guide code{font-family:var(--font-m,monospace);font-size:11px;color:#7dd3fc;background:rgba(34,211,238,.08);padding:1px 6px;border-radius:5px}
+
+/* Domaines */
+.sw-doms{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.sw-dom{display:flex;flex-direction:column;gap:8px;background:var(--bg2,#101018);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:15px 17px}
+.sw-dom .row{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.sw-dom .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.sw-dom .dot.ok{background:#34d399;box-shadow:0 0 8px rgba(52,211,153,.7)}
+.sw-dom .dot.warn{background:#fbbf24;box-shadow:0 0 8px rgba(251,191,36,.6)}
+.sw-dom .dot.off{background:rgba(255,255,255,.25)}
+.sw-dom b.host{font-family:var(--font-m,monospace);font-size:13.5px;font-weight:700}
+.sw-dom p{font-size:12px;color:rgba(255,255,255,.55);line-height:1.55}
+.sw-dns{font-family:var(--font-m,monospace);font-size:11px;color:#7dd3fc;background:rgba(34,211,238,.06);border:1px dashed rgba(34,211,238,.25);border-radius:7px;padding:6px 9px;display:flex;align-items:center;gap:8px;justify-content:space-between}
+.sw-dns button{color:rgba(255,255,255,.55);font-size:11px;cursor:pointer;background:none;border:none;font-family:'Figtree',sans-serif;font-weight:700}
+.sw-dns button:hover{color:#fff}
+
+/* Checklist */
+.sw-check-top{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.sw-check-top .bar{flex:1;min-width:160px;height:7px;border-radius:7px;background:rgba(255,255,255,.07);overflow:hidden}
+.sw-check-top .bar i{display:block;height:100%;border-radius:7px;background:linear-gradient(90deg,#22d3ee,#3b82f6);transition:width .3s}
+.sw-check-top b{font-size:12px;color:rgba(255,255,255,.6);font-weight:700;white-space:nowrap}
+.sw-ck{display:flex;align-items:flex-start;gap:11px;padding:9px 10px;border-radius:9px;cursor:pointer;transition:background .12s}
+.sw-ck:hover{background:rgba(255,255,255,.03)}
+.sw-ck .box{flex:none;width:19px;height:19px;border-radius:6px;border:2px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all .15s;font-size:11px;color:#000}
+.sw-ck.on .box{background:#34d399;border-color:#34d399}
+.sw-ck .t{font-size:13px;color:rgba(255,255,255,.85);line-height:1.5}
+.sw-ck.on .t{color:rgba(255,255,255,.4);text-decoration:line-through}
+.sw-ck .t small{display:block;font-size:11px;color:rgba(255,255,255,.4);text-decoration:none}
+
+/* Barre d'enregistrement */
+.sw-save{position:fixed;bottom:0;left:0;right:0;z-index:60;background:rgba(10,10,18,.94);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid rgba(255,255,255,.1);padding:12px 24px;display:none}
+.sw-save.show{display:block}
+.sw-save-in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.sw-save-in .st{font-size:12px;color:rgba(255,255,255,.55);flex:1;min-width:200px}
+.sw-save-in .st b{color:#fbbf24}
+.sw-save .swb-g{padding:10px 22px;font-size:13px}
+.sw-toast{position:fixed;bottom:74px;right:22px;z-index:70;background:#101018;border:1px solid rgba(52,211,153,.4);color:#fff;font-family:'Figtree',sans-serif;font-size:13px;font-weight:600;padding:12px 18px;border-radius:11px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:none}
+.sw-toast.err{border-color:rgba(239,68,68,.5)}
+.sw-toast.show{display:block}
+
+.sw-locked{text-align:center;padding:120px 20px;color:rgba(255,255,255,.55);font-size:14px}
+.sw-empty{background:var(--bg2,#101018);border:1px dashed rgba(255,255,255,.14);border-radius:14px;padding:26px;text-align:center;color:rgba(255,255,255,.5);font-size:13px;line-height:1.7}
+
+@media(max-width:960px){.sw-grid{grid-template-columns:1fr}.sw-doms{grid-template-columns:1fr}}
+@media(max-width:560px){.sw{padding:14px 12px 130px}.sw-nums{grid-template-columns:1fr}.sw-tem-row,.sw-tem-row3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="sw-locked" id="lockedView" style="display:none"><div style="font-size:48px;margin-bottom:12px">🔒</div><div>Module réservé aux administrateurs.</div></div>
+
+<div class="sw" id="mainView" style="display:none">
+  <div class="sw-top">
+    <div class="sw-ic">🌐</div>
+    <div><h1>Site &amp; pages</h1><small>adrienemily.com — contenu, pages, domaines. Les modifications s'appliquent au site sans toucher au code.</small></div>
+    <div class="sp"></div>
+    <a class="swb swb-o" href="https://go.adrienemily.com" target="_blank" rel="noopener">👁 Voir le site ↗</a>
+    <a class="swb swb-o" href="admin-tunnels.html">🧭 Ouvrir le Funnel</a>
+  </div>
+
+  <div class="sw-tabs">
+    <button class="sw-tab on" data-action="tab" data-tab="contenu">🎨 Contenu du site</button>
+    <button class="sw-tab" data-action="tab" data-tab="pages">📄 Pages du site</button>
+    <button class="sw-tab" data-action="tab" data-tab="migration">🌐 Domaines &amp; migration</button>
+  </div>
+
+  <!-- ═══ ONGLET CONTENU ═══ -->
+  <div id="tab-contenu">
+    <div class="sw-grid">
+      <div>
+        <div class="sw-card">
+          <h2>📊 Chiffres clés</h2>
+          <div class="sub">Affichés sur l'accueil (bandeau + bulles de la photo) et la page À propos. Les compteurs s'animent avec ces valeurs.</div>
+          <div class="sw-nums">
+            <div class="sw-num"><span class="sw-lbl">Dirigeants accompagnés</span><input class="sw-in" type="number" min="0" data-cfg="stats.dirigeants"><small>« +200 dirigeants accompagnés »</small></div>
+            <div class="sw-num"><span class="sw-lbl">Marge moyenne (%)</span><input class="sw-in" type="number" min="0" data-cfg="stats.margePct"><small>« +36 % de marge en moyenne »</small></div>
+            <div class="sw-num"><span class="sw-lbl">Heures gagnées / semaine</span><input class="sw-in" type="number" min="0" data-cfg="stats.heuresSemaine"><small>« +7 h gagnées par semaine »</small></div>
+            <div class="sw-num"><span class="sw-lbl">Années d'expérience</span><input class="sw-in" type="number" min="0" data-cfg="stats.experienceAns"><small>« +26 ans d'expérience » (À propos)</small></div>
+          </div>
+        </div>
+
+        <div class="sw-card" style="margin-top:14px">
+          <h2>⭐ Avis Trustpilot</h2>
+          <div class="sub">La pastille « 4,8/5 sur Trustpilot » sous les témoignages de l'accueil.</div>
+          <span class="sw-lbl">Note affichée</span>
+          <input class="sw-in" style="max-width:120px" data-cfg="trustpilot.note" placeholder="4,8">
+          <label class="sw-chk"><input type="checkbox" data-cfg="trustpilot.visible"> Afficher la pastille Trustpilot</label>
+        </div>
+
+        <div class="sw-card" style="margin-top:14px">
+          <h2>🔗 CTA principal</h2>
+          <div class="sub">La destination de tous les boutons « Réserver mon diagnostic gratuit » du site (accueil, programmes, à propos, contact).</div>
+          <input class="sw-in" data-cfg="ctaUrl" placeholder="https://…">
+          <div style="margin-top:8px"><a class="swb swb-o swb-s" id="ctaTest" href="#" target="_blank" rel="noopener">Tester le lien ↗</a></div>
+        </div>
+
+        <div class="sw-card" style="margin-top:14px">
+          <h2>🏷️ Secteurs (bandeau défilant)</h2>
+          <div class="sub">Le bandeau qui défile sous les chiffres de l'accueil. Un secteur par ligne.</div>
+          <textarea class="sw-in" data-cfg="secteurs" placeholder="Retail&#10;Restauration&#10;…"></textarea>
+        </div>
+      </div>
+
+      <div>
+        <div class="sw-card">
+          <h2>🖼️ Photos</h2>
+          <div class="sub">Colle l'URL de l'image (Drive : partage « tous les utilisateurs disposant du lien », ou Médias du tunnel dans le Funnel). L'aperçu se met à jour tout seul.</div>
+          <div class="sw-photo"><img class="th" data-th="photos.hero" alt=""><div class="fx"><b>Accueil — grande photo du hero</b><input class="sw-in" data-cfg="photos.hero"></div></div>
+          <div class="sw-photo"><img class="th" data-th="photos.histoire" alt=""><div class="fx"><b>À propos — photo « Notre histoire »</b><input class="sw-in" data-cfg="photos.histoire"></div></div>
+          <div class="sw-photo"><img class="th" data-th="photos.adrien" alt=""><div class="fx"><b>À propos — portrait Adrien</b><input class="sw-in" data-cfg="photos.adrien"></div></div>
+          <div class="sw-photo"><img class="th" data-th="photos.emily" alt=""><div class="fx"><b>À propos — portrait Emily</b><input class="sw-in" data-cfg="photos.emily"></div></div>
+          <div class="sw-photo"><img class="th" data-th="photos.groupe" alt=""><div class="fx"><b>Accueil — photo coaching de groupe</b><input class="sw-in" data-cfg="photos.groupe"></div></div>
+        </div>
+
+        <div class="sw-card" style="margin-top:14px">
+          <h2>🎬 Témoignages vidéo</h2>
+          <div class="sub">Les vidéos Vimeo de l'accueil. L'ID et le hash sont dans l'URL Vimeo : vimeo.com/<b>ID</b>/<b>hash</b>. Format portrait = vertical (9:16), paysage = horizontal (16:9).</div>
+          <div id="temList"></div>
+          <button class="swb swb-o" data-action="temAdd" style="width:100%;justify-content:center">＋ Ajouter un témoignage</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ONGLET PAGES ═══ -->
+  <div id="tab-pages" style="display:none">
+    <div class="sw-card">
+      <h2>📄 Les pages du site</h2>
+      <div class="sub">Le site vit dans le Funnel comme un tunnel dédié : une étape = une page. L'HTML se dépose là-bas ; le contenu (chiffres, photos, témoignages…) se règle dans l'onglet Contenu.</div>
+      <div class="sw-pages" id="pagesList"><div class="sw-empty">Chargement…</div></div>
+    </div>
+    <div class="sw-guide" style="margin-top:14px" id="pagesGuide"></div>
+  </div>
+
+  <!-- ═══ ONGLET DOMAINES & MIGRATION ═══ -->
+  <div id="tab-migration" style="display:none">
+    <div class="sw-doms" id="domains"></div>
+    <div class="sw-card" style="margin-top:14px">
+      <h2>✅ Checklist migration Systeme.io → Vercel</h2>
+      <div class="sub">Cochée ici, mémorisée sur ce navigateur.</div>
+      <div class="sw-check-top"><div class="bar"><i id="ckBar"></i></div><b id="ckCount">0 / 0</b><button class="swb swb-o swb-s" data-action="ckReset">Réinitialiser</button></div>
+      <div id="checklist"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Barre d'enregistrement -->
+<div class="sw-save" id="saveBar">
+  <div class="sw-save-in">
+    <span class="st" id="saveState">Modifications non enregistrées</span>
+    <button class="swb swb-o" data-action="revert">Annuler les modifications</button>
+    <button class="swb swb-g" data-action="save" id="saveBtn">💾 Enregistrer et publier</button>
+  </div>
+</div>
+<div class="sw-toast" id="toast"></div>
+
+<script>
+(function () {
+var db = firebase.firestore();
+var $ = function (id) { return document.getElementById(id); };
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+var CFG = null;          // config en cours d'édition
+var SAVED = '';          // JSON de la dernière config enregistrée (détection de modifs)
+var META = { version: 0, updatedAt: null };
+
+function toast(msg, isErr) {
+  var t = $('toast');
+  t.textContent = msg;
+  t.className = 'sw-toast show' + (isErr ? ' err' : '');
+  setTimeout(function () { t.className = 'sw-toast'; }, 3200);
+}
+
+/* ─── Accès aux champs par chemin ("stats.margePct") ─── */
+function cfgGet(path) {
+  var parts = path.split('.'), o = CFG;
+  for (var i = 0; i < parts.length; i++) { if (o == null) return null; o = o[parts[i]]; }
+  return o;
+}
+function cfgSet(path, val) {
+  var parts = path.split('.'), o = CFG;
+  for (var i = 0; i < parts.length - 1; i++) { if (!o[parts[i]] || typeof o[parts[i]] !== 'object') o[parts[i]] = {}; o = o[parts[i]]; }
+  o[parts[parts.length - 1]] = val;
+}
+
+/* ─── Formulaire ↔ état ─── */
+function fillForm() {
+  var inputs = document.querySelectorAll('[data-cfg]');
+  for (var i = 0; i < inputs.length; i++) {
+    var el = inputs[i], path = el.getAttribute('data-cfg'), v = cfgGet(path);
+    if (el.type === 'checkbox') el.checked = v !== false;
+    else if (path === 'secteurs') el.value = (v || []).join('\n');
+    else el.value = v == null ? '' : v;
+  }
+  var ths = document.querySelectorAll('[data-th]');
+  for (var t = 0; t < ths.length; t++) {
+    var u = cfgGet(ths[t].getAttribute('data-th'));
+    ths[t].src = u || '';
+    ths[t].style.visibility = u ? 'visible' : 'hidden';
+  }
+  var cta = cfgGet('ctaUrl');
+  if ($('ctaTest')) $('ctaTest').href = cta || '#';
+  renderTems();
+}
+
+function readField(el) {
+  var path = el.getAttribute('data-cfg');
+  if (el.type === 'checkbox') { cfgSet(path, el.checked); return; }
+  if (path === 'secteurs') {
+    cfgSet(path, el.value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean));
+    return;
+  }
+  if (el.type === 'number') { cfgSet(path, Number(el.value) || 0); return; }
+  cfgSet(path, el.value.trim());
+}
+
+/* ─── Témoignages ─── */
+function renderTems() {
+  var list = CFG.temoignages || [];
+  var h = '';
+  list.forEach(function (t, i) {
+    h += '<div class="sw-tem" data-tem="' + i + '">';
+    h += '<div class="sw-tem-h"><b>🎬 Témoignage ' + (i + 1) + '</b>';
+    h += '<button type="button" data-action="temUp" data-i="' + i + '" title="Monter"' + (i === 0 ? ' disabled' : '') + '>↑</button>';
+    h += '<button type="button" data-action="temDown" data-i="' + i + '" title="Descendre"' + (i === list.length - 1 ? ' disabled' : '') + '>↓</button>';
+    h += '<button type="button" class="del" data-action="temDel" data-i="' + i + '">✕ Retirer</button></div>';
+    h += '<div class="sw-tem-row"><input class="sw-in" placeholder="Prénom" data-tem-f="nom" data-i="' + i + '" value="' + esc(t.nom) + '"><input class="sw-in" placeholder="Activité (ex. Boulangerie)" data-tem-f="activite" data-i="' + i + '" value="' + esc(t.activite) + '"></div>';
+    h += '<div class="sw-tem-row"><input class="sw-in" placeholder="Résultat (ex. +7 K€/mois)" data-tem-f="resultat" data-i="' + i + '" value="' + esc(t.resultat) + '"><input class="sw-in" placeholder="ID Vimeo (chiffres)" data-tem-f="vimeoId" data-i="' + i + '" value="' + esc(t.vimeoId) + '"></div>';
+    h += '<div class="sw-tem-row3"><input class="sw-in" placeholder="Hash Vimeo (ex. d73c2ad778)" data-tem-f="vimeoHash" data-i="' + i + '" value="' + esc(t.vimeoHash) + '">';
+    h += '<a class="swb swb-o swb-s" style="justify-content:center" href="https://vimeo.com/' + esc(t.vimeoId) + (t.vimeoHash ? '/' + esc(t.vimeoHash) : '') + '" target="_blank" rel="noopener">Voir la vidéo ↗</a>';
+    h += '<select class="sw-sel" data-tem-f="format" data-i="' + i + '"><option value="paysage"' + (t.format !== 'portrait' ? ' selected' : '') + '>Paysage 16:9</option><option value="portrait"' + (t.format === 'portrait' ? ' selected' : '') + '>Portrait 9:16</option></select></div>';
+    h += '</div>';
+  });
+  $('temList').innerHTML = h || '<div class="sw-empty">Aucun témoignage — la section restera telle quelle sur le site tant que la liste est vide.</div>';
+}
+
+/* ─── Barre d'enregistrement ─── */
+function refreshDirty() {
+  var dirty = JSON.stringify(CFG) !== SAVED;
+  $('saveBar').className = 'sw-save' + (dirty ? ' show' : '');
+}
+
+function metaLabel() {
+  if (!META.version) return 'Jamais enregistré — le site affiche ses valeurs par défaut (identiques à ce formulaire).';
+  var d = META.updatedAt ? new Date(META.updatedAt) : null;
+  return 'Version ' + META.version + (d ? ' · enregistrée le ' + d.toLocaleString('fr-FR') : '') + ' · visible sur le site en ~1 minute (cache).';
+}
+
+/* ─── Chargements ─── */
+function loadConfig() {
+  return fetch('/api/site-config?t=' + Date.now())
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      CFG = (d && d.config) || {};
+      META.version = (d && d.version) || 0;
+      META.updatedAt = (d && d.updatedAt) || null;
+      SAVED = JSON.stringify(CFG);
+      fillForm();
+      $('saveState').textContent = metaLabel();
+    });
+}
+
+function saveConfig() {
+  var btn = $('saveBtn');
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  firebase.auth().currentUser.getIdToken().then(function (token) {
+    return fetch('/api/site-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ config: CFG })
+    });
+  }).then(function (r) { return r.json().then(function (d) { return { s: r.status, d: d }; }); })
+    .then(function (x) {
+      if (x.s !== 200 || !x.d.ok) throw new Error((x.d && x.d.error) || 'HTTP ' + x.s);
+      CFG = x.d.config;
+      META.version = x.d.version;
+      META.updatedAt = new Date().toISOString();
+      SAVED = JSON.stringify(CFG);
+      fillForm();
+      refreshDirty();
+      $('saveState').textContent = metaLabel();
+      toast('✅ Publié — le site se met à jour d\'ici une minute');
+    })['catch'](function (e) {
+      toast('❌ Échec : ' + (e && e.message), true);
+    }).then(function () {
+      btn.disabled = false; btn.textContent = '💾 Enregistrer et publier';
+    });
+}
+
+/* ─── Pages du site (tunnel « site » dans le Funnel) ─── */
+var SITE_SLUGS = { '': 'Accueil', 'about': 'À propos', 'product': 'Programmes', 'contacts-page': 'Contact' };
+var PRIMARY_HOST = 'go.adrienemily.com';
+
+function loadPages() {
+  var pConf = db.collection('_config').doc('tunnels').get().then(function (doc) {
+    if (doc.exists && (doc.data() || {}).primaryHost) PRIMARY_HOST = doc.data().primaryHost;
+  })['catch'](function () {});
+  var pTun = db.collection('tunnels').get();
+  return Promise.all([pConf, pTun]).then(function (res) {
+    var site = null;
+    res[1].forEach(function (doc) {
+      var t = doc.data() || {};
+      if (t.archived === true || site) return;
+      var steps = Array.isArray(t.steps) ? t.steps : [];
+      var isSite = /site/i.test(String(t.slug || '')) || /site/i.test(String(t.name || ''))
+        || steps.some(function (s) { return s && (s.slug === 'about' || s.slug === 'contacts-page'); });
+      if (isSite) site = { id: doc.id, name: t.name, status: t.status, homeStepId: t.homeStepId || '', steps: steps.filter(function (s) { return s && s.id && s.archived !== true; }) };
+    });
+    renderPages(site);
+  })['catch'](function (e) {
+    $('pagesList').innerHTML = '<div class="sw-empty">Chargement impossible : ' + esc(e && e.message) + '</div>';
+  });
+}
+
+function renderPages(site) {
+  var guide = '<b>Déposer / mettre à jour une page :</b> Funnel → tunnel du site → étape → « Déposer un .html ». '
+    + 'Les 4 fichiers du site vivent dans le repo, dossier <code>site-adrienemily/</code> (index, about, product, contacts-page — voir son README). '
+    + 'Le favicon et les médias se règlent aussi là-bas. Aperçu avant publication : <code>team.alteore.com/t/…</code>';
+  $('pagesGuide').innerHTML = guide;
+
+  if (!site) {
+    $('pagesList').innerHTML = '<div class="sw-empty">Le tunnel du site n\'existe pas encore.<br><br>'
+      + 'Dans le <a href="admin-tunnels.html" style="color:#22d3ee">Funnel</a> : créer un tunnel « Site adrienemily.com » avec 4 étapes — '
+      + '<b>accueil</b> (cocher « Page d\'accueil du domaine »), <b>about</b>, <b>product</b>, <b>contacts-page</b> — puis déposer les 4 fichiers HTML.</div>';
+    return;
+  }
+
+  var found = {};
+  var h = '';
+  site.steps.forEach(function (s) {
+    var isHome = site.homeStepId === s.id;
+    var path = isHome ? '/' : '/' + String(s.slug || '');
+    found[isHome ? '' : String(s.slug || '')] = 1;
+    var label = SITE_SLUGS[isHome ? '' : String(s.slug || '')] || s.name || s.slug;
+    h += '<div class="sw-page"><span class="em">📄</span><b>' + esc(label) + '</b><span class="path">' + esc(path) + '</span>';
+    h += '<span class="sw-pill ' + (s.status === 'live' ? 'live' : 'draft') + '">' + (s.status === 'live' ? 'En ligne' : 'Brouillon') + '</span>';
+    h += '<span class="sp"></span>';
+    h += '<a href="/t/' + esc(isHome ? '' : String(s.slug || '')) + '?v=a" target="_blank" rel="noopener">👁 Aperçu</a>';
+    if (s.status === 'live') h += '<a href="https://' + esc(PRIMARY_HOST + path) + '" target="_blank" rel="noopener">🌍 En ligne ↗</a>';
+    h += '<a href="admin-tunnels.html?id=' + esc(site.id) + '">⚙️ Gérer</a>';
+    h += '</div>';
+  });
+  Object.keys(SITE_SLUGS).forEach(function (slug) {
+    if (found[slug]) return;
+    h += '<div class="sw-page"><span class="em">📄</span><b>' + esc(SITE_SLUGS[slug]) + '</b><span class="path">/' + esc(slug) + '</span>'
+      + '<span class="sw-pill miss">Manquante</span><span class="sp"></span>'
+      + '<span class="note">À créer comme étape du tunnel (fichier prêt dans le repo)</span>'
+      + '<a href="admin-tunnels.html?id=' + esc(site.id) + '">⚙️ Gérer</a></div>';
+  });
+  $('pagesList').innerHTML = h;
+}
+
+/* ─── Domaines & checklist ─── */
+var DOMAINS = [
+  { host: 'go.adrienemily.com', dot: 'ok', label: 'En ligne — Vercel', p: 'Domaine des tunnels et du site hébergés. Tout ce qui est publié répond ici dès maintenant.', open: 'https://go.adrienemily.com', dns: null },
+  { host: 'www.adrienemily.com', dot: 'warn', label: 'Systeme.io — à migrer', p: 'Site vitrine actuel. Le jour J, le CNAME bascule vers Vercel : les mêmes chemins répondront depuis le tunnel du site.', open: 'https://www.adrienemily.com', dns: ['CNAME www → cname.vercel-dns.com', 'cname.vercel-dns.com'] },
+  { host: 'adrienemily.com', dot: 'off', label: 'Apex — à créer', p: 'Ne répond pas aujourd\'hui (aucun enregistrement A). À brancher sur Vercel en même temps que www. Les MX Gmail ne bougent pas.', open: null, dns: ['A @ → 76.76.21.21', '76.76.21.21'] },
+  { host: 'team.alteore.com/t/…', dot: 'ok', label: 'Aperçus internes', p: 'Mode aperçu des pages : brouillons visibles, aucune mesure, noindex. Pour valider desktop + mobile avant publication.', open: null, dns: null }
+];
+function renderDomains() {
+  var h = '';
+  DOMAINS.forEach(function (d) {
+    h += '<div class="sw-dom"><div class="row"><span class="dot ' + d.dot + '"></span><b class="host">' + esc(d.host) + '</b><span class="sw-pill ' + (d.dot === 'ok' ? 'live' : d.dot === 'warn' ? 'draft' : 'miss') + '">' + esc(d.label) + '</span></div>';
+    h += '<p>' + d.p + '</p>';
+    if (d.dns) h += '<div class="sw-dns"><span>' + esc(d.dns[0]) + '</span><button type="button" data-action="copy" data-copy="' + esc(d.dns[1]) + '">Copier</button></div>';
+    if (d.open) h += '<div><a class="swb swb-o swb-s" href="' + esc(d.open) + '" target="_blank" rel="noopener">Ouvrir ↗</a></div>';
+    h += '</div>';
+  });
+  $('domains').innerHTML = h;
+}
+
+var CK_KEY = 'al_migration_site_v1';
+var CK_ITEMS = [
+  { k: 'tunnel', t: 'Créer le tunnel « Site adrienemily.com » dans le Funnel', s: '4 étapes : accueil (répond sur /), about, product, contacts-page — slugs identiques à Systeme.io.' },
+  { k: 'pages', t: 'Déposer les 4 pages HTML', s: 'Fichiers prêts dans le repo, dossier site-adrienemily/.' },
+  { k: 'favicon', t: 'Déposer le favicon dans les réglages du tunnel', s: 'L\'actuel vit sur le CDN Systeme.io et disparaîtra avec la résiliation.' },
+  { k: 'apercu', t: 'Valider chaque page en aperçu, desktop + mobile', s: 'Navigation, vidéos, animations, contenu de l\'onglet Contenu bien appliqué.' },
+  { k: 'form', t: 'Tester le formulaire de contact', s: 'La fiche doit apparaître dans Leads Live avec le message.' },
+  { k: 'live', t: 'Passer le tunnel en ligne', s: 'Le site répond alors sur go.adrienemily.com — sans toucher au domaine actuel.' },
+  { k: 'cname', t: 'OVH : CNAME www → cname.vercel-dns.com', s: 'La bascule. Retour arrière possible en repointant le CNAME vers Systeme.io.' },
+  { k: 'apex', t: 'OVH : A @ → 76.76.21.21', s: 'L\'apex adrienemily.com se met à répondre. Les MX Gmail ne bougent pas.' },
+  { k: 'vercel', t: 'Vercel : ajouter www.adrienemily.com + adrienemily.com au projet', s: 'vercel.json route déjà ces hôtes vers les pages hébergées.' },
+  { k: 'fb', t: 'Vérifier les liens Facebook', s: 'Les URLs des pubs (mêmes chemins) doivent répondre à l\'identique.' },
+  { k: 'pixel', t: 'Vérifier le pixel Meta', s: 'Événements visibles dans le gestionnaire — le runtime des pages le porte.' },
+  { k: 'sio', t: 'Résilier Systeme.io', s: 'Après quelques jours de recul, une fois tout validé.' }
+];
+function ckState() { try { return JSON.parse(localStorage.getItem(CK_KEY) || '{}') || {}; } catch (e) { return {}; } }
+function renderChecklist() {
+  var st = ckState(), done = 0, h = '';
+  CK_ITEMS.forEach(function (it) {
+    var on = st[it.k] === 1; if (on) done++;
+    h += '<div class="sw-ck' + (on ? ' on' : '') + '" data-action="ck" data-k="' + it.k + '"><span class="box">' + (on ? '✓' : '') + '</span><span class="t">' + esc(it.t) + '<small>' + esc(it.s) + '</small></span></div>';
+  });
+  $('checklist').innerHTML = h;
+  $('ckCount').textContent = done + ' / ' + CK_ITEMS.length;
+  $('ckBar').style.width = Math.round(done / CK_ITEMS.length * 100) + '%';
+}
+
+/* ─── Événements (délégation) ─── */
+document.addEventListener('input', function (ev) {
+  var el = ev.target;
+  if (el.hasAttribute && el.hasAttribute('data-cfg')) {
+    readField(el);
+    if (el.getAttribute('data-cfg') === 'ctaUrl' && $('ctaTest')) $('ctaTest').href = cfgGet('ctaUrl') || '#';
+    if (el.getAttribute('data-cfg').indexOf('photos.') === 0) {
+      var th = document.querySelector('[data-th="' + el.getAttribute('data-cfg') + '"]');
+      if (th) { th.src = el.value.trim(); th.style.visibility = el.value.trim() ? 'visible' : 'hidden'; }
+    }
+    refreshDirty();
+    return;
+  }
+  if (el.hasAttribute && el.hasAttribute('data-tem-f')) {
+    var i = Number(el.getAttribute('data-i'));
+    var t = (CFG.temoignages || [])[i];
+    if (t) { t[el.getAttribute('data-tem-f')] = el.value; refreshDirty(); }
+  }
+});
+document.addEventListener('change', function (ev) {
+  var el = ev.target;
+  if (el.hasAttribute && el.hasAttribute('data-cfg') && el.type === 'checkbox') { readField(el); refreshDirty(); }
+  if (el.hasAttribute && el.hasAttribute('data-tem-f') && el.tagName === 'SELECT') {
+    var i = Number(el.getAttribute('data-i'));
+    var t = (CFG.temoignages || [])[i];
+    if (t) { t.format = el.value; refreshDirty(); }
+  }
+});
+document.addEventListener('click', function (ev) {
+  var el = ev.target.closest ? ev.target.closest('[data-action]') : null;
+  if (!el) return;
+  var act = el.getAttribute('data-action');
+  if (act === 'tab') {
+    var tabs = document.querySelectorAll('.sw-tab');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('on');
+    el.classList.add('on');
+    ['contenu', 'pages', 'migration'].forEach(function (k) { $('tab-' + k).style.display = k === el.getAttribute('data-tab') ? '' : 'none'; });
+    return;
+  }
+  if (act === 'save') { saveConfig(); return; }
+  if (act === 'revert') {
+    if (!window.confirm('Annuler toutes les modifications non enregistrées ?')) return;
+    CFG = JSON.parse(SAVED); fillForm(); refreshDirty(); return;
+  }
+  if (act === 'temAdd') {
+    (CFG.temoignages = CFG.temoignages || []).push({ nom: '', activite: '', resultat: '', vimeoId: '', vimeoHash: '', format: 'paysage' });
+    renderTems(); refreshDirty(); return;
+  }
+  if (act === 'temDel') {
+    var di = Number(el.getAttribute('data-i'));
+    if (!window.confirm('Retirer ce témoignage du site ?')) return;
+    CFG.temoignages.splice(di, 1); renderTems(); refreshDirty(); return;
+  }
+  if (act === 'temUp' || act === 'temDown') {
+    var mi = Number(el.getAttribute('data-i'));
+    var to = act === 'temUp' ? mi - 1 : mi + 1;
+    if (to < 0 || to >= CFG.temoignages.length) return;
+    var tmp = CFG.temoignages[mi]; CFG.temoignages[mi] = CFG.temoignages[to]; CFG.temoignages[to] = tmp;
+    renderTems(); refreshDirty(); return;
+  }
+  if (act === 'copy') {
+    var val = el.getAttribute('data-copy') || '';
+    try { navigator.clipboard.writeText(val).then(function () { el.textContent = 'Copié ✓'; setTimeout(function () { el.textContent = 'Copier'; }, 1400); }); } catch (e) {}
+    return;
+  }
+  if (act === 'ck') {
+    var st = ckState(), k = el.getAttribute('data-k');
+    if (st[k] === 1) delete st[k]; else st[k] = 1;
+    try { localStorage.setItem(CK_KEY, JSON.stringify(st)); } catch (e) {}
+    renderChecklist(); return;
+  }
+  if (act === 'ckReset') {
+    if (!window.confirm('Décocher toute la checklist ?')) return;
+    try { localStorage.removeItem(CK_KEY); } catch (e) {}
+    renderChecklist(); return;
+  }
+});
+
+/* Les aperçus photo cassés ne montrent pas d'icône d'image morte. */
+document.addEventListener('error', function (ev) {
+  var el = ev.target;
+  if (el && el.tagName === 'IMG' && el.hasAttribute('data-th')) el.style.visibility = 'hidden';
+}, true);
+
+/* Garde-fou : modifications non enregistrées. */
+window.addEventListener('beforeunload', function (ev) {
+  if (CFG && JSON.stringify(CFG) !== SAVED) { ev.preventDefault(); ev.returnValue = ''; }
+});
+
+/* ═══ BOOT ═══ */
+firebase.auth().onAuthStateChanged(function (u) {
+  if (!u) return;
+  var role = localStorage.getItem('ambitio_role') || 'coach';
+  if (role !== 'admin') { $('lockedView').style.display = ''; return; }
+  $('mainView').style.display = '';
+  renderDomains();
+  renderChecklist();
+  loadConfig()['catch'](function (e) { toast('❌ Config illisible : ' + (e && e.message), true); });
+  loadPages();
+});
+})();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

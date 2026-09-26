@@ -281,7 +281,7 @@ footer::before{content:"";position:absolute;top:-1px;left:0;right:0;height:1px;b
         <div class="ic">📞</div>
         <h3>Le plus rapide : un échange direct</h3>
         <p>30 minutes au téléphone pour faire le point sur ta situation et repartir avec une vision claire de tes priorités. Gratuit et sans engagement.</p>
-        <a class="btn" data-alteo-cta href="https://team.alteore.com/alteoforms-render.html?id=MIdcp9T5fczESwm6zUEE">Réserver mon diagnostic gratuit</a>
+        <a class="btn" data-alteo-cta data-site-cta href="https://team.alteore.com/alteoforms-render.html?id=MIdcp9T5fczESwm6zUEE">Réserver mon diagnostic gratuit</a>
       </div>
       <div class="ct-card spot rv d3">
         <div class="ic">🎓</div>
@@ -397,6 +397,7 @@ footer::before{content:"";position:absolute;top:-1px;left:0;right:0;height:1px;b
     var prefix = el.getAttribute('data-prefix') || '';
     var suffix = el.getAttribute('data-suffix') || '';
     if (reduced) { el.textContent = prefix + target + suffix; return; }
+    el.__counted = true;
     var t0 = null, dur = 1400;
     function frame(ts) {
       if (!t0) t0 = ts;
@@ -472,13 +473,88 @@ footer::before{content:"";position:absolute;top:-1px;left:0;right:0;height:1px;b
     sc.onload = function () { hookPlayer(ifr); };
     document.head.appendChild(sc);
   }
-  var embeds = document.querySelectorAll('.vt-embed');
-  for (var v = 0; v < embeds.length; v++) {
-    (function (box) {
-      box.addEventListener('click', function () { mountVideo(box); });
-      box.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); mountVideo(box); } });
-    })(embeds[v]);
+  /* Délégation : les cartes témoignage peuvent être reconstruites par la
+     config du site (Site & pages) — aucun re-binding nécessaire. */
+  function vtDelegate(e) {
+    var box = e.target && e.target.closest ? e.target.closest('.vt-embed') : null;
+    if (!box || box.classList.contains('on')) return;
+    if (e.type === 'keydown') {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+    }
+    mountVideo(box);
   }
+  document.addEventListener('click', vtDelegate);
+  document.addEventListener('keydown', vtDelegate);
+
+  /* ── Contenu piloté depuis « Site & pages » (team.alteore) ──
+     Les chiffres, photos, témoignages, secteurs et l'URL du CTA sont lus
+     depuis /api/site-config : modifiables sans toucher au code des pages.
+     Les valeurs en dur ci-dessus restent le repli si l'appel échoue. */
+  function escT(x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
+  function vtHtml(list) {
+    var play = '<span class="vt-play"><svg viewBox="0 0 24 24" fill="#0B1220"><path d="M8 5v14l11-7z"/></svg></span>';
+    function card(t, cls) {
+      return '<div class="vt-card' + (cls ? ' ' + cls : '') + '"><div class="vt-embed" data-vimeo="' + escT(t.vimeoId) + '" data-hash="' + escT(t.vimeoHash) + '" data-title="' + escT('Témoignage ' + t.nom) + '" role="button" tabindex="0">' + play + '</div>'
+        + '<div class="vt-name"><b>' + escT(t.nom) + '</b>' + (t.activite ? ' · ' + escT(t.activite) : '') + (t.resultat ? ' · <span>' + escT(t.resultat) + '</span>' : '') + '</div></div>';
+    }
+    var h = '', stack = '';
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].format === 'portrait') h += card(list[i], 'vt-portrait');
+      else stack += card(list[i], '');
+    }
+    if (stack) h += '<div class="vt-stack">' + stack + '</div>';
+    return h;
+  }
+  function siteApply(cfg) {
+    if (!cfg) return;
+    var st = cfg.stats || {};
+    var maps = { dirigeants: st.dirigeants, margePct: st.margePct, heuresSemaine: st.heuresSemaine, experienceAns: st.experienceAns };
+    var cs = document.querySelectorAll('[data-site-count]');
+    for (var i = 0; i < cs.length; i++) {
+      var k = cs[i].getAttribute('data-site-count');
+      if (maps[k] == null) continue;
+      cs[i].setAttribute('data-count', String(maps[k]));
+      if (cs[i].__counted) cs[i].textContent = (cs[i].getAttribute('data-prefix') || '') + maps[k] + (cs[i].getAttribute('data-suffix') || '');
+    }
+    var chips = document.querySelectorAll('[data-site-chip]');
+    for (var c = 0; c < chips.length; c++) {
+      var ck = chips[c].getAttribute('data-site-chip');
+      if (ck === 'marge' && st.margePct != null) chips[c].textContent = '+' + st.margePct + ' %';
+      if (ck === 'heures' && st.heuresSemaine != null) chips[c].textContent = '+' + st.heuresSemaine + ' h';
+    }
+    var photos = cfg.photos || {};
+    var phs = document.querySelectorAll('[data-site-photo]');
+    for (var p = 0; p < phs.length; p++) {
+      var pk = phs[p].getAttribute('data-site-photo');
+      if (photos[pk] && phs[p].getAttribute('src') !== photos[pk]) phs[p].src = photos[pk];
+    }
+    if (cfg.ctaUrl) {
+      var ctas = document.querySelectorAll('[data-site-cta]');
+      for (var a = 0; a < ctas.length; a++) ctas[a].setAttribute('href', cfg.ctaUrl);
+    }
+    var tp = cfg.trustpilot || {};
+    var tpEl = document.querySelector('[data-site-tp]');
+    if (tpEl && tp.note) tpEl.textContent = tp.note + '/5';
+    var trustBox = document.querySelector('.trust');
+    if (trustBox && tp.visible === false) trustBox.style.display = 'none';
+    var mqIn = document.getElementById('mqIn');
+    if (mqIn && cfg.secteurs && cfg.secteurs.length) {
+      var mh = '';
+      for (var q = 0; q < cfg.secteurs.length; q++) mh += '<b>' + escT(cfg.secteurs[q]) + '</b><i>✦</i>';
+      mqIn.innerHTML = '<div class="mq-set">' + mh + '</div><div class="mq-set">' + mh + '</div>';
+    }
+    var grid = document.getElementById('vtGrid');
+    if (grid && cfg.temoignages && cfg.temoignages.length) grid.innerHTML = vtHtml(cfg.temoignages);
+  }
+  try {
+    if (window.fetch) {
+      fetch('https://team.alteore.com/api/site-config')
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && d.ok && d.config) siteApply(d.config); })
+        ['catch'](function () {});
+    }
+  } catch (e) {}
 
   /* ── Année du footer ── */
   var yr = document.getElementById('yr');

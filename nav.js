@@ -65,6 +65,7 @@
     { id: 'coach-clients',       icon: '👥', label: 'Coaching',      href: 'coaching.html',               section: 'Coaching', perm: 'coaching_clients' },
     { id: 'coach-dashboard',     icon: '📊', label: 'Dashboard',     href: 'coaching-dashboard.html',     section: 'Coaching', perm: 'coaching_dashboard' },
     { id: 'sales-dashboard',   icon: '📊', label: 'Dashboard',         href: 'sales-dashboard.html',   section: 'Sales', perm: 'sales_dashboard' },
+    { id: 'sales-funnel',      icon: '🎯', label: 'Funnel',            href: 'sales-funnel.html',      section: 'Sales', perm: '_admin' },
     { id: 'sales-crm', icon: '🧩', label: 'CRM', href: '#', section: 'Sales', perm: 'sales_crm', children: [
       { id: 'sales-leads_live',  icon: '🔔', label: 'Leads Live',    href: 'sales-leads.html' },
       { id: 'sales-pipeline',    icon: '▥',  label: 'Pipeline',      href: 'sales-crm.html' },
@@ -84,14 +85,14 @@
     { id: 'sales-dialer',      icon: '☎️', label: 'Dialer',      href: 'sales-dialer.html',      section: 'Sales', perm: 'sales_dialer' },
     { id: 'sales-whatsapp',    icon: '💬', label: 'WhatsApp',    href: 'whatsapp.html',          section: 'Sales', perm: 'sales_whatsapp' },
     { id: 'signatures',        icon: '✍️', label: 'Signatures',  href: 'sales-signatures.html',  section: 'Sales', perm: 'signatures' },
-    // ─── FUNNEL & SITE — pilotage marketing complet, admin uniquement ───
-    // Vue d'ensemble (admin-funnel-site.html) : domaines, tunnels + site
-    // vitrine, stats 7 jours, checklist de migration Systeme.io → Vercel.
-    // Les entrées Tunnels (ex-Outils) et Funnel Sales (ex-Sales) sont
-    // regroupées ici pour tout gérer au même endroit.
-    { id: 'funnel-site',       icon: '🚀', label: 'Vue d\'ensemble', href: 'admin-funnel-site.html', section: 'Funnel & Site', perm: '_admin' },
-    { id: 'tunnels',           icon: '🧭', label: 'Tunnels & pages', href: 'admin-tunnels.html',     section: 'Funnel & Site', perm: '_admin' },
-    { id: 'sales-funnel',      icon: '🎯', label: 'Funnel Sales',    href: 'sales-funnel.html',      section: 'Funnel & Site', perm: '_admin' },
+    // ─── FUNNEL & SITE — admin uniquement ───
+    // Funnel : les tunnels de vente hébergés (pages, A/B, réglages, stats)
+    //   dans admin-tunnels.html.
+    // Site & pages : le site vitrine adrienemily.com — contenu éditable
+    //   (chiffres, photos, témoignages… via api/site-config), pages HTML,
+    //   domaines et checklist de migration — dans admin-site.html.
+    { id: 'tunnels',           icon: '🧭', label: 'Funnel',        href: 'admin-tunnels.html', section: 'Funnel & Site', perm: '_admin' },
+    { id: 'site-pages',        icon: '🌐', label: 'Site & pages',  href: 'admin-site.html',    section: 'Funnel & Site', perm: '_admin' },
     { id: 'admin-users',       icon: '🔑', label: 'Utilisateurs', href: 'admin-users.html',      section: 'Admin', perm: '_admin' },
     { id: 'admin-persons',     icon: '👤', label: 'Persons',      href: 'admin-persons.html',    section: 'Admin', perm: '_admin' },
     { id: 'admin-numbers',     icon: '📞', label: 'Numéros',      href: 'admin-numbers.html',     section: 'Admin', perm: '_admin' },

@@ -39,6 +39,27 @@ ne casse à la migration.
    `cname.vercel-dns.com`) et l'apex (A → `76.76.21.21`) vers Vercel et
    ajouter les deux domaines au projet — `vercel.json` les route déjà.
 
+## Contenu éditable sans toucher au code
+
+Les pages s'hydratent au chargement depuis `GET /api/site-config` (public,
+cache edge 60 s). Tout se modifie dans **team.alteore.com → Funnel & Site →
+Site & pages** (`admin-site.html`, admin uniquement) :
+
+- chiffres clés (dirigeants, marge, heures, années d'expérience) ;
+- note Trustpilot (et affichage on/off) ;
+- URL du CTA « Réserver mon diagnostic gratuit » (tous les boutons) ;
+- secteurs du bandeau défilant ;
+- les 5 photos (hero, histoire, portraits, groupe) ;
+- les témoignages vidéo Vimeo (ajout, retrait, ordre, format).
+
+Mécanique : les éléments portent des marqueurs `data-site-*`
+(`data-site-count`, `data-site-chip`, `data-site-photo`, `data-site-cta`,
+`data-site-tp`, `#mqIn`, `#vtGrid`) et le JS partagé applique la config.
+Les valeurs en dur dans le HTML restent le **repli** si l'appel échoue —
+elles doivent rester alignées sur les défauts de `api/site-config.js`.
+L'écriture passe par `POST /api/site-config` (Bearer admin, collection
+Firestore `site_config`, Admin SDK : aucune règle à déployer).
+
 ## Corrigé par rapport au site actuel
 
 - Logo « YOURLOGO » placeholder → monogramme AE + « Adrien & Emily ».
