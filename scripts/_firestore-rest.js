@@ -122,4 +122,38 @@ async function patchDoc(path, fields, fieldPaths) {
     { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, { fields: f });
 }
 
-module.exports = { runQuery, patchDoc, ff, enc, token };
+// Jeton pour un autre périmètre (ex. Storage : devstorage.read_write) — un
+// cache par scope, même mécanique que token().
+const TOKENS = {};
+async function tokenFor(scope) {
+  if (TOKENS[scope]) return TOKENS[scope];
+  const sa = loadSa();
+  const now = Math.floor(Date.now() / 1000);
+  const hdr = b64u(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+  const pl = b64u(JSON.stringify({ iss: sa.client_email, scope: scope, aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 }));
+  const sig = crypto.sign('RSA-SHA256', Buffer.from(hdr + '.' + pl), sa.private_key);
+  const r = await request('POST', 'https://oauth2.googleapis.com/token',
+    { 'Content-Type': 'application/x-www-form-urlencoded' },
+    'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + hdr + '.' + pl + '.' + b64u(sig));
+  TOKENS[scope] = r.access_token;
+  return TOKENS[scope];
+}
+
+// Création d'un document à identifiant choisi — échoue s'il existe déjà.
+async function createDoc(path, fields) {
+  const t = await token();
+  const f = {}; Object.keys(fields).forEach(function (k) { f[k] = enc(fields[k]); });
+  return request('PATCH', BASE + '/' + path + '?currentDocument.exists=false',
+    { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, { fields: f });
+}
+
+// Lecture d'un document (null s'il n'existe pas).
+async function getDoc(path) {
+  const t = await token();
+  try {
+    const r = await request('GET', BASE + '/' + path, { Authorization: 'Bearer ' + t });
+    return r ? { id: r.name.split('/').pop(), data: decFields(r.fields || {}) } : null;
+  } catch (e) { if (/HTTP 404/.test(String(e.message))) return null; throw e; }
+}
+
+module.exports = { runQuery, patchDoc, createDoc, getDoc, ff, enc, token, tokenFor, request };

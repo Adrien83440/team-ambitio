@@ -108,6 +108,30 @@ textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
 .sw-dns button{color:rgba(255,255,255,.55);font-size:11px;cursor:pointer;background:none;border:none;font-family:'Figtree',sans-serif;font-weight:700}
 .sw-dns button:hover{color:#fff}
 
+/* Inventaire System.io */
+.sw-inv-top{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.sw-inv-top .cnt{font-size:11.5px;color:rgba(255,255,255,.5);white-space:nowrap}
+.sw-inv-top .cnt b{color:#fff}
+.sw-inv{display:grid;grid-template-columns:150px minmax(0,1.4fr) 92px 150px minmax(0,1fr) 34px;gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.sw-inv.head{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);border-bottom:1px solid rgba(255,255,255,.1)}
+.sw-inv .grp{font-size:11px;color:rgba(255,255,255,.45);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw-inv .pth{min-width:0}
+.sw-inv .pth a{font-family:var(--font-m,monospace);font-size:12px;color:#7dd3fc;text-decoration:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw-inv .pth small{display:block;font-size:11px;color:rgba(255,255,255,.45);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw-inv .st{font-size:10.5px;font-weight:700;border-radius:999px;padding:3px 8px;text-align:center;white-space:nowrap}
+.sw-inv .st.on{background:rgba(52,211,153,.15);color:#34d399}
+.sw-inv .st.draft{background:rgba(251,191,36,.15);color:#fbbf24}
+.sw-inv .st.off{background:rgba(255,255,255,.06);color:rgba(255,255,255,.4)}
+.sw-inv .sw-in{padding:6px 9px;font-size:12px}
+.sw-inv select.sw-in{font-family:'Figtree',sans-serif}
+.sw-inv button{width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:0;color:rgba(255,255,255,.5);cursor:pointer;font-size:14px}
+.sw-inv button:hover{color:#fff;border-color:rgba(248,113,113,.5)}
+.sw-inv.d-site{border-left:3px solid #22d3ee;padding-left:8px}
+.sw-inv.d-tunnel{border-left:3px solid #a78bfa;padding-left:8px}
+.sw-inv.d-clients{border-left:3px solid #fbbf24;padding-left:8px}
+.sw-inv.d-redirect{border-left:3px solid #60a5fa;padding-left:8px}
+.sw-inv.d-drop{border-left:3px solid rgba(255,255,255,.15);padding-left:8px;opacity:.6}
+
 /* Redirections */
 .sw-redir{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 84px 34px;gap:6px;align-items:center;margin-bottom:6px}
 .sw-redir .sw-in{font-family:var(--font-m,monospace);font-size:12px;padding:7px 10px}
@@ -237,6 +261,20 @@ textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
   <!-- ═══ ONGLET DOMAINES & MIGRATION ═══ -->
   <div id="tab-migration" style="display:none">
     <div class="sw-doms" id="domains"></div>
+    <div class="sw-card" style="margin-top:14px">
+      <h2>🗂️ Pages System.io — qui va où</h2>
+      <div class="sub">Toutes les adresses servies aujourd'hui par System.io sur <code>www.adrienemily.com</code> (relevé des sitemaps du 28/09/2026 + pages du site). Pour chacune : la garder (dans quel tunnel, pour qui), la rediriger, ou l'abandonner. « Statut Alteore » dit si une étape en ligne répond déjà au même chemin. Enregistré en base, partagé.</div>
+      <div class="sw-inv-top">
+        <select class="sw-in" id="invFilter" style="width:auto"><option value="">Toutes</option><option value="todo">À trier</option><option value="site">Site vitrine</option><option value="tunnel">Tunnel de vente</option><option value="clients">Espace clients</option><option value="redirect">À rediriger</option><option value="drop">Abandonnées</option><option value="missing">Gardées, pas encore en ligne</option></select>
+        <span class="cnt" id="invCount"></span>
+        <span style="flex:1"></span>
+        <button class="swb swb-o swb-s" data-action="invAdd">+ Adresse</button>
+        <button class="swb swb-o swb-s" data-action="invToRedirects">↪ Reporter dans les redirections</button>
+        <button class="swb swb-p swb-s" data-action="invSave">💾 Enregistrer l'inventaire</button>
+      </div>
+      <div id="invList"></div>
+      <div class="sub" id="invState" style="margin-top:8px"></div>
+    </div>
     <div class="sw-card" style="margin-top:14px">
       <h2>↪️ Redirections des anciennes URL</h2>
       <div class="sub">Une adresse System.io qui n'existe plus comme étape est renvoyée vers la cible indiquée (301 = définitif, 302 = temporaire). Une étape en ligne au même chemin prime toujours sur une règle. <code>plan-action/*</code> couvre tout un préfixe. Appliqué sur www et go, jamais en aperçu.</div>
@@ -493,7 +531,8 @@ var CK_ITEMS = [
   { k: 'optina', t: 'Étape optin-a en ligne : quiz (A) et VSL (B), poids 50 / 50', s: 'C\'est l\'adresse des pubs, elle ne change jamais. Pixel du tunnel renseigné (1341581597802071).' },
   { k: 'merci', t: 'Étape merci publiée, RDV test qui y atterrit', s: 'Les types « Audit Stratégique » redirigent déjà vers www.adrienemily.com/merci : même chemin, rien à changer dans Booking. Iframe du quiz en embed=1 pour que la page entière bascule.' },
   { k: 'live', t: 'Passer les tunnels en ligne', s: 'Site et funnel répondent alors sur go.adrienemily.com — sans toucher au domaine actuel.' },
-  { k: 'redir', t: 'Table de redirections remplie et enregistrée', s: 'Importer l\'inventaire System.io ci-dessus, corriger les cibles des adresses encore dans des pubs ou des emails.' },
+  { k: 'inv', t: 'Inventaire System.io trié : chaque adresse a une décision', s: 'Site, tunnel, espace clients, redirection ou abandon — et pour les pages gardées, une étape en ligne au même chemin.' },
+  { k: 'redir', t: 'Redirections reportées depuis l\'inventaire et enregistrées', s: 'Bouton « Reporter dans les redirections », puis vérifier les cibles des adresses encore dans des pubs ou des emails.' },
   { k: 'metaverif', t: 'Meta : vérification du domaine adrienemily.com par enregistrement TXT chez OVH', s: 'Si le domaine est vérifié aujourd\'hui par une balise dans les pages Systeme.io, la vérification tombe avec elles. Le TXT DNS survit à la bascule.' },
   { k: 'vercel', t: 'Vercel : ajouter www.adrienemily.com (production) et adrienemily.com (redirection 308 vers www) au projet', s: 'Réglages du projet team-ambitio → Domains. Sans effet tant que le DNS pointe sur Systeme.io. vercel.json route déjà ces hôtes.' },
   { k: 'ttl', t: 'OVH : TTL de www et de @ à 300 s, une heure avant la bascule', s: 'Un retour arrière se propage alors en 5 minutes au lieu d\'une heure.' },
@@ -514,6 +553,127 @@ function renderChecklist() {
   $('checklist').innerHTML = h;
   $('ckCount').textContent = done + ' / ' + CK_ITEMS.length;
   $('ckBar').style.width = Math.round(done / CK_ITEMS.length * 100) + '%';
+}
+
+/* ─── Inventaire des pages System.io (_config/tunnels.sioPages) ───
+   Relevé des sitemaps du 28/09/2026 (+ pages du site, hors sitemap). Les
+   décisions d'Adrien sont enregistrées par chemin ; une adresse ajoutée à la
+   main est conservée. Statut Alteore = étape en ligne au même chemin. */
+var INV_GROUPS = {
+  'site': 'Site vitrine', 'funnel/7004413': 'Funnel actuel (optin / quiz / VSL / merci)', 'funnel/6473673': 'Anciennes VSL A/B',
+  'funnel/5802335': 'VSL1 · call-strat', 'funnel/6594557': 'Accès offert 7 jours', 'funnel/6299760': 'Conférences · commerçants · ACflix · Pass VIP',
+  'funnel/6735056': 'Formations clients', 'blog/457104': 'Blog plan d\'action'
+};
+var INV_DECISIONS = [['', '— à trier —'], ['site', 'Site vitrine'], ['tunnel', 'Tunnel de vente'], ['clients', 'Espace clients'], ['redirect', 'Rediriger vers…'], ['drop', 'Abandonner (404)']];
+var SIO_INVENTORY = [
+  ['site', '', 'Adrien & Emily | Accompagnement Dirigeants TPE/PME'], ['site', 'about', 'À Propos | Adrien & Emily'], ['site', 'product', 'Nos Programmes | Business · Elite · Titan Phénix'], ['site', 'contacts-page', 'Contact'],
+  ['funnel/7004413', 'optin-a', 'Tu es un dirigeant de TPE/PME submergé qui : (adresse des pubs)'], ['funnel/7004413', 'optin-a2', 'Tu es un dirigeant de TPE/PME submergé qui :'], ['funnel/7004413', 'funnelquizz', '→ redirige vers /optin-a'], ['funnel/7004413', 'vsl-ac', 'Tout repose sur vous. Voici comment en sortir.'], ['funnel/7004413', 'merci', '👏 Félicitations ! (après RDV)'],
+  ['funnel/7004413', '18c6cc64', ''], ['funnel/7004413', '18c6cc64-e06304a1', ''], ['funnel/7004413', 'optin-z', ''], ['funnel/7004413', 'optin-x', ''], ['funnel/7004413', 'optin-y', 'Présentation pour les dirigeants'], ['funnel/7004413', 'vsl-acstop', ''], ['funnel/7004413', 'optin-afin', 'Présentation pour les dirigeants'], ['funnel/7004413', 'optin-d', 'Présentation pour les dirigeants'], ['funnel/7004413', 'optin-c', 'Présentation pour les dirigeants'], ['funnel/7004413', 'optin-cbis-5e64984b', 'Présentation pour les dirigeants'], ['funnel/7004413', 'optin-cbis', 'Présentation pour les dirigeants'], ['funnel/7004413', 'call-ok', 'Votre Call est validé'],
+  ['funnel/6473673', 'vsl-a', '→ redirige vers /vsl-b'], ['funnel/6473673', 'vsl-b', 'Vous faites du chiffre… mais à la fin du mois, il ne reste rien ?'], ['funnel/6473673', 'appel-decouverte', 'Découvre comment augmenter tes marges sans chercher plus de clients'], ['funnel/6473673', 'vsl-b-off', ''], ['funnel/6473673', 'vsl-bb', ''], ['funnel/6473673', 'vsl-a-c4f95d6d', ''], ['funnel/6473673', 'vsl-a22', 'Vous travaillez trop pour ce qu\'il vous reste !'], ['funnel/6473673', 'vsl-alose', 'Le plus dur n\'est pas de tenir un commerce…'], ['funnel/6473673', 'vsl-bloose', 'Vous travaillez trop pour ce qu\'il vous reste !'],
+  ['funnel/5802335', 'vsl1', 'Vidéo : 7 stratégies pour ton commerce'], ['funnel/5802335', 'vsl', 'AMBITIO CORP - 7 clés pour changer ton commerce'], ['funnel/5802335', 'call-strat', 'Call Stratégique Offert'], ['funnel/5802335', 'call-strat4', 'Call Stratégique Offert'], ['funnel/5802335', 'call-ok-vsl1', 'Votre Call est validé'], ['funnel/5802335', 'inscription-conference-cw-f016473f', 'Conférence en ligne offerte'], ['funnel/5802335', 'bravo-ad90a270', 'Bienvenue dans NOM DE LA FORMATION'],
+  ['funnel/6594557', 'acces-offert7-a', '→ redirige vers /acces-offert7-b'], ['funnel/6594557', 'acces-offert7-b', 'Accès formation total offert'], ['funnel/6594557', 'thankyou', ''],
+  ['funnel/6299760', 'rdv-commercants', 'Formation gratuite pour commerçants : pendant 2 semaines'], ['funnel/6299760', 'inscription-conference-wednesday-6321f8ac', 'Conférence en ligne offerte'], ['funnel/6299760', 'inscription-conference-wednesday-v2-a44092ad', 'Conférence en ligne offerte'], ['funnel/6299760', 'inscription-conference-v3-79462a71-2d2e29a8', 'Ambitio Corp - conférence en ligne offerte'], ['funnel/6299760', 'inscription-conference-cw-f56dba53-cb5a27a0', 'Conférence en ligne offerte'], ['funnel/6299760', 'inscription-confirmee-rdvcomm', 'Félicitations pour ton inscription'], ['funnel/6299760', 'abo-acflix', ''], ['funnel/6299760', 'cgv-passvip-e89c3f8f', 'CGV Pass VIP'], ['funnel/6299760', 'call-ok-dee94ef2-becc234c', 'Votre Call est validé'], ['funnel/6299760', 'bravo-a5c52e28-1fa08b42', 'Bienvenue dans NOM DE LA FORMATION'],
+  ['funnel/6735056', 'pilotage-avance', 'Pilotage Avancé'], ['funnel/6735056', 'bravo-pilotage', 'Bienvenue dans NOM DE LA FORMATION'], ['funnel/6735056', 'temps-energie', 'Temps & Énergie'], ['funnel/6735056', 'bravo-temps', 'Bienvenue dans NOM DE LA FORMATION'], ['funnel/6735056', 'mindset-dirigeant', 'Mindset Dirigeant'], ['funnel/6735056', 'bravo-mindset', 'Bienvenue dans NOM DE LA FORMATION'], ['funnel/6735056', 'recruter-juste', 'Recruter Juste'], ['funnel/6735056', 'bravo-recrute', 'Bienvenue dans NOM DE LA FORMATION'], ['funnel/6735056', 'coaching-supp', 'Coaching 1:1'], ['funnel/6735056', 'bravo-coaching', 'Bienvenue dans NOM DE LA FORMATION'],
+  ['blog/457104', 'plan-action/alaga', 'Corinne ALAGA (plan d\'action client)'], ['blog/457104', 'plan-action/isabelle-mittard', 'Isabelle Mittard (plan d\'action client)'], ['blog/457104', 'plan-action/search', 'Recherche du blog']
+];
+var INV = [];
+var INV_SAVED = '[]';
+var INV_STEPS = {};   // chemin → { live: bool, tunnel: nom }
+function invLoadSteps() {
+  return db.collection('tunnels').get().then(function (snap) {
+    INV_STEPS = {};
+    snap.forEach(function (doc) {
+      var t = doc.data() || {};
+      if (t.archived === true) return;
+      (t.steps || []).forEach(function (st) {
+        if (!st || !st.slug) return;
+        var p = (t.homeStepId && t.homeStepId === st.id) ? '' : st.slug;
+        var live = t.status === 'live' && st.status === 'live';
+        if (!INV_STEPS[p] || live) INV_STEPS[p] = { live: live, tunnel: t.name || t.slug };
+      });
+    });
+  })['catch'](function () {});
+}
+function loadInventory() {
+  return Promise.all([invLoadSteps(), db.collection('_config').doc('tunnels').get()]).then(function (res) {
+    var doc = res[1];
+    var saved = (doc.exists && Array.isArray((doc.data() || {}).sioPages)) ? doc.data().sioPages : [];
+    var byPath = {};
+    saved.forEach(function (r) { if (r && typeof r.path === 'string') byPath[r.path] = r; });
+    INV = SIO_INVENTORY.map(function (row) {
+      var sv = byPath[row[1]] || {};
+      delete byPath[row[1]];
+      return { group: row[0], path: row[1], title: row[2], decision: sv.decision || '', target: sv.target || '', note: sv.note || '' };
+    });
+    Object.keys(byPath).forEach(function (pth) {
+      var sv = byPath[pth];
+      INV.push({ group: sv.group || 'manuel', path: pth, title: sv.title || '', decision: sv.decision || '', target: sv.target || '', note: sv.note || '' });
+    });
+    INV_SAVED = JSON.stringify(INV);
+    renderInventory();
+  })['catch'](function (e) { $('invState').textContent = 'Lecture impossible : ' + (e && e.message); });
+}
+function invMatches(r, f) {
+  if (!f) return true;
+  if (f === 'todo') return !r.decision;
+  if (f === 'missing') { var st = INV_STEPS[r.path]; return (r.decision === 'site' || r.decision === 'tunnel' || r.decision === 'clients') && !(st && st.live); }
+  return r.decision === f;
+}
+function renderInventory() {
+  var f = $('invFilter').value;
+  var h = '<div class="sw-inv head"><span>Groupe System.io</span><span>Adresse · titre</span><span>Alteore</span><span>Décision</span><span>Cible / appartient à</span><span></span></div>';
+  var n = { todo: 0, keep: 0, ready: 0, redirect: 0, drop: 0 };
+  INV.forEach(function (r, i) {
+    var st = INV_STEPS[r.path];
+    if (!r.decision) n.todo++;
+    else if (r.decision === 'redirect') n.redirect++;
+    else if (r.decision === 'drop') n.drop++;
+    else { n.keep++; if (st && st.live) n.ready++; }
+    if (!invMatches(r, f)) return;
+    var stHtml = st ? (st.live ? '<span class="st on" title="' + escA(st.tunnel) + '">en ligne</span>' : '<span class="st draft" title="' + escA(st.tunnel) + '">brouillon</span>') : '<span class="st off">absente</span>';
+    var ph = r.decision === 'redirect' ? '/optin-a ou https://…' : (r.decision === 'tunnel' ? 'nom du tunnel' : (r.decision === 'clients' ? 'client / programme' : 'note'));
+    h += '<div class="sw-inv' + (r.decision ? ' d-' + r.decision : '') + '">'
+      + '<span class="grp" title="' + escA(INV_GROUPS[r.group] || r.group) + '">' + esc(INV_GROUPS[r.group] || r.group) + '</span>'
+      + '<span class="pth"><a href="https://www.adrienemily.com/' + escA(r.path) + '" target="_blank" rel="noopener">/' + esc(r.path) + ' ↗</a><small>' + esc(r.title || '—') + '</small></span>'
+      + stHtml
+      + '<select class="sw-in" data-inv="decision" data-i="' + i + '">' + INV_DECISIONS.map(function (d) { return '<option value="' + d[0] + '"' + (r.decision === d[0] ? ' selected' : '') + '>' + esc(d[1]) + '</option>'; }).join('') + '</select>'
+      + '<input class="sw-in" data-inv="target" data-i="' + i + '" value="' + escA(r.decision === 'redirect' ? r.target : (r.note || r.target)) + '" placeholder="' + escA(ph) + '"/>'
+      + '<button type="button" data-action="invDel" data-i="' + i + '" title="Retirer de l\'inventaire">✕</button></div>';
+  });
+  $('invList').innerHTML = h;
+  $('invCount').innerHTML = '<b>' + n.todo + '</b> à trier · <b>' + n.keep + '</b> gardées (' + n.ready + ' en ligne) · <b>' + n.redirect + '</b> redirigées · <b>' + n.drop + '</b> abandonnées';
+  invState();
+}
+function escA(v) { return esc(v).replace(/"/g, '&quot;'); }
+function invState() {
+  var dirty = JSON.stringify(INV) !== INV_SAVED;
+  $('invState').textContent = INV.length + ' adresse(s)' + (dirty ? ' — modifications non enregistrées' : ' — enregistrées');
+}
+function readInventory(el) {
+  var i = Number(el.getAttribute('data-i')), r = INV[i]; if (!r) return;
+  var f = el.getAttribute('data-inv');
+  if (f === 'decision') { r.decision = el.value; renderInventory(); return; }
+  if (r.decision === 'redirect') r.target = el.value.trim(); else r.note = el.value.trim();
+  invState();
+}
+function saveInventory() {
+  var rows = INV.map(function (r) { return { group: r.group, path: r.path, title: r.title, decision: r.decision, target: r.target, note: r.note }; });
+  return db.collection('_config').doc('tunnels').set({ sioPages: rows, sioPagesUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true }).then(function () {
+    INV_SAVED = JSON.stringify(INV); invState(); toast('✅ Inventaire enregistré');
+  })['catch'](function (e) { toast('❌ ' + (e && e.message), true); });
+}
+/* Décisions « rediriger » → règles de redirection (sans doublon, non enregistrées). */
+function inventoryToRedirects() {
+  var have = {}; REDIR.forEach(function (r) { have[r.from] = 1; });
+  var added = 0, missing = 0;
+  INV.forEach(function (r) {
+    if (r.decision !== 'redirect') return;
+    if (!r.target) { missing++; return; }
+    if (have[r.path]) return;
+    REDIR.push({ from: r.path, to: r.target, code: 301 }); have[r.path] = 1; added++;
+  });
+  renderRedirects();
+  toast(added + ' règle(s) ajoutée(s)' + (missing ? ' — ' + missing + ' adresse(s) « rediriger » sans cible ignorée(s)' : '') + ' — enregistre les redirections');
 }
 
 /* ─── Redirections des anciennes URL (_config/tunnels.redirects) ───
@@ -590,6 +750,7 @@ document.addEventListener('input', function (ev) {
     return;
   }
   if (el.hasAttribute && el.hasAttribute('data-rf')) { readRedirect(el); return; }
+  if (el.hasAttribute && el.hasAttribute('data-inv') && el.tagName !== 'SELECT') { readInventory(el); return; }
   if (el.hasAttribute && el.hasAttribute('data-tem-f')) {
     var i = Number(el.getAttribute('data-i'));
     var t = (CFG.temoignages || [])[i];
@@ -599,6 +760,8 @@ document.addEventListener('input', function (ev) {
 document.addEventListener('change', function (ev) {
   var el = ev.target;
   if (el.hasAttribute && el.hasAttribute('data-rf')) { readRedirect(el); return; }
+  if (el.hasAttribute && el.hasAttribute('data-inv')) { readInventory(el); return; }
+  if (el.id === 'invFilter') { renderInventory(); return; }
   if (el.hasAttribute && el.hasAttribute('data-cfg') && el.type === 'checkbox') { readField(el); refreshDirty(); }
   if (el.hasAttribute && el.hasAttribute('data-tem-f') && el.tagName === 'SELECT') {
     var i = Number(el.getAttribute('data-i'));
@@ -638,6 +801,10 @@ document.addEventListener('click', function (ev) {
     var tmp = CFG.temoignages[mi]; CFG.temoignages[mi] = CFG.temoignages[to]; CFG.temoignages[to] = tmp;
     renderTems(); refreshDirty(); return;
   }
+  if (act === 'invAdd') { var np = window.prompt('Chemin de l\'adresse (sans le domaine, ex : mon-ancienne-page)'); if (!np) return; np = np.replace(/^https?:\/\/[^\/]+/i, '').replace(/^\/+|\/+$/g, ''); if (!np || INV.some(function (r) { return r.path === np; })) { toast('Adresse vide ou déjà listée', true); return; } INV.push({ group: 'manuel', path: np, title: '', decision: '', target: '', note: '' }); renderInventory(); return; }
+  if (act === 'invDel') { INV.splice(Number(el.getAttribute('data-i')), 1); renderInventory(); return; }
+  if (act === 'invSave') { saveInventory(); return; }
+  if (act === 'invToRedirects') { inventoryToRedirects(); return; }
   if (act === 'redirAdd') { REDIR.push({ from: '', to: '/optin-a', code: 301 }); renderRedirects(); return; }
   if (act === 'redirDel') { REDIR.splice(Number(el.getAttribute('data-i')), 1); renderRedirects(); return; }
   if (act === 'redirImport') {
@@ -687,6 +854,7 @@ firebase.auth().onAuthStateChanged(function (u) {
   loadConfig()['catch'](function (e) { toast('❌ Config illisible : ' + (e && e.message), true); });
   loadPages();
   loadRedirects();
+  loadInventory();
 });
 })();
 </script>
