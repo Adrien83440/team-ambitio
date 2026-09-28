@@ -867,13 +867,13 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.vslViews), hasLeads ? 'Vues VSL & quiz' : 'Vues VSL', 'sessions, toutes pages et variantes', null, k.vslViews === 0);
     h += kpiCard(fmtNum(k.vslCtas), 'Clics « Réserver »', 'taux de clic ' + fmtPct(k.vslCtaRate), null, k.vslCtas === 0);
-    if (hasLeads) h += kpiCard(fmtNum(k.vslLeads), 'Leads quiz', 'questionnaires complétés sur la période');
+    if (hasLeads) h += kpiCard(fmtNum(k.vslLeads), 'Formulaires remplis', 'quiz + formulaire de la VSL A, sur la période');
     h += kpiCard(fmtNum(k.vslBookings), hasLeads ? 'RDV pris depuis la VSL / le quiz' : 'RDV pris depuis la VSL', 'créés sur la période');
     h += kpiCard(fmtPct(k.vslBookRate), 'Taux de RDV / vues', 'remplace le taux d\'opt-in');
     h += kpiCard(fmtEuro2(k.vslCpr), hasLeads ? 'CPR VSL & quiz' : 'CPR VSL', 'dépense pub / RDV pris depuis ces pages', null, k.vslCpr == null);
     h += '</div>';
     if (k.vslPages && k.vslPages.length > 1) {
-      h += '<div class="fn-table-wrap" style="border-radius:11px;margin-top:14px"><table class="fn-table" style="min-width:520px"><thead><tr><th>Page</th><th>Vues</th><th>Clics</th>' + (hasLeads ? '<th>Leads</th>' : '') + '<th>RDV</th><th>RDV / vues</th>' + (hasLeads ? '<th>RDV / leads</th>' : '') + '</tr></thead><tbody>';
+      h += '<div class="fn-table-wrap" style="border-radius:11px;margin-top:14px"><table class="fn-table" style="min-width:520px"><thead><tr><th>Page</th><th>Vues</th><th>Clics</th>' + (hasLeads ? '<th>Formulaires</th>' : '') + '<th>RDV</th><th>RDV / vues</th>' + (hasLeads ? '<th>RDV / formulaires</th>' : '') + '</tr></thead><tbody>';
       k.vslPages.forEach(function (p) {
         h += '<tr><td><strong>' + esc(vslPageLabel(p.page)) + '</strong></td><td class="num">' + fmtNum(p.views) + '</td><td class="num">' + fmtNum(p.ctas) + '</td>'
           + (hasLeads ? '<td class="num">' + (p.leads > 0 ? fmtNum(p.leads) : '—') + '</td>' : '')
@@ -887,7 +887,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       var ref = test.variants[0];
       var refRate = ref.views > 0 ? ref.bookings / ref.views * 100 : null;
       h += '<div style="margin-top:14px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">🧪 A/B test — ' + esc(vslPageLabel(test.page)) + ' <span style="font-weight:500;text-transform:none;letter-spacing:0">(RDV par vue · variante ' + esc(ref.variant.toUpperCase()) + ' = référence)</span></div>';
-      h += '<div class="fn-table-wrap" style="border-radius:11px"><table class="fn-table" style="min-width:760px"><thead><tr><th>Variante</th><th>Vues</th><th>Clics</th><th>Taux de clic</th><th>RDV</th><th>RDV / vues</th><th>Δ vs ' + esc(ref.variant.toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead><tbody>';
+      h += '<div class="fn-table-wrap" style="border-radius:11px"><table class="fn-table" style="min-width:760px"><thead><tr><th>Variante</th><th>Vues</th><th>Clics</th><th>Taux de clic</th>' + (hasLeads ? '<th>Formulaires</th>' : '') + '<th>RDV</th><th>RDV / vues</th><th>Δ vs ' + esc(ref.variant.toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead><tbody>';
       test.variants.forEach(function (v, idx) {
         var rate = v.views > 0 ? v.bookings / v.views * 100 : null;
         var ctaRate = v.views > 0 ? v.ctas / v.views * 100 : null;
@@ -900,7 +900,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
           else if (st.p < 0.05) sig = '<span class="fn-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '" style="margin-top:0">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
           else sig = '<span class="fn-badge warn" style="margin-top:0">en cours · p = ' + st.p.toFixed(2) + '</span>';
         }
-        h += '<tr><td><strong>' + esc(v.variant.toUpperCase()) + '</strong></td><td class="num">' + fmtNum(v.views) + '</td><td class="num">' + fmtNum(v.ctas) + '</td><td class="num">' + fmtPct(ctaRate) + '</td><td class="num">' + fmtNum(v.bookings) + '</td><td class="num">' + fmtPct(rate) + '</td><td class="num">' + delta + '</td><td>' + sig + '</td></tr>';
+        h += '<tr><td><strong>' + esc(v.variant.toUpperCase()) + '</strong></td><td class="num">' + fmtNum(v.views) + '</td><td class="num">' + fmtNum(v.ctas) + '</td><td class="num">' + fmtPct(ctaRate) + '</td>' + (hasLeads ? '<td class="num">' + (v.leads > 0 ? fmtNum(v.leads) : '—') + '</td>' : '') + '<td class="num">' + fmtNum(v.bookings) + '</td><td class="num">' + fmtPct(rate) + '</td><td class="num">' + delta + '</td><td>' + sig + '</td></tr>';
       });
       h += '</tbody></table></div></div>';
     });

@@ -491,14 +491,14 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     h += '<div class="ag-grid">';
     h += kpi(fmtNum(k.vslViews || null), hasLeads ? 'Vues VSL & quiz' : 'Vues VSL', 'sessions, toutes pages et variantes', !k.vslViews);
     h += kpi(fmtNum(k.vslCtas || null), 'Clics « Réserver »', 'taux de clic ' + fmtPct(k.vslCtaRate), !k.vslCtas);
-    if (hasLeads) h += kpi(fmtNum(k.vslLeads), 'Leads quiz', 'questionnaires complétés sur la période', false);
+    if (hasLeads) h += kpi(fmtNum(k.vslLeads), 'Formulaires remplis', 'quiz + formulaire de la VSL A, sur la période', false);
     h += kpi(fmtNum(k.vslBookings || 0), hasLeads ? 'RDV pris depuis la VSL ÷ le quiz' : 'RDV pris depuis la VSL', 'créés sur la période');
     h += kpi(fmtPct(k.vslBookRate), 'Taux de RDV ÷ vues', 'remplace le taux d\'opt-in');
     h += kpi(fmtEuro2(k.vslCpr), hasLeads ? 'CPR VSL & quiz' : 'CPR VSL', 'dépense pub ÷ RDV pris depuis ces pages', k.vslCpr == null);
     h += '</div>';
     var pages = k.vslPages || [];
     if (pages.length > 1) {
-      h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr><th>Page</th><th class="num">Vues</th><th class="num">Clics</th>' + (hasLeads ? '<th class="num">Leads</th>' : '') + '<th class="num">RDV</th><th class="num">RDV ÷ vues</th>' + (hasLeads ? '<th class="num">RDV ÷ leads</th>' : '') + '</tr></thead><tbody>';
+      h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr><th>Page</th><th class="num">Vues</th><th class="num">Clics</th>' + (hasLeads ? '<th class="num">Formulaires</th>' : '') + '<th class="num">RDV</th><th class="num">RDV ÷ vues</th>' + (hasLeads ? '<th class="num">RDV ÷ formulaires</th>' : '') + '</tr></thead><tbody>';
       for (var i = 0; i < pages.length; i++) {
         var p = pages[i];
         h += '<tr><td><strong>' + esc(vslPageLabel(p.page)) + '</strong></td><td class="num">' + fmtNum(p.views) + '</td><td class="num">' + fmtNum(p.ctas) + '</td>'
@@ -517,7 +517,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
       var ref = vars[0];
       var refRate = ref.views > 0 ? ref.bookings / ref.views * 100 : null;
       h += '<div class="ag-sub" style="color:var(--muted)">🧪 A/B test — ' + esc(vslPageLabel(test.page)) + ' <span style="font-weight:500;letter-spacing:0;text-transform:none">(RDV par vue · variante ' + esc(String(ref.variant).toUpperCase()) + ' = référence)</span></div>';
-      h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr><th>Variante</th><th class="num">Vues</th><th class="num">Clics</th><th class="num">RDV</th><th class="num">RDV ÷ vues</th><th class="num">Δ vs ' + esc(String(ref.variant).toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead><tbody>';
+      h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr><th>Variante</th><th class="num">Vues</th><th class="num">Clics</th>' + (hasLeads ? '<th class="num">Formulaires</th>' : '') + '<th class="num">RDV</th><th class="num">RDV ÷ vues</th><th class="num">Δ vs ' + esc(String(ref.variant).toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead><tbody>';
       for (var v = 0; v < vars.length; v++) {
         var va = vars[v];
         var rate = va.views > 0 ? va.bookings / va.views * 100 : null;
@@ -529,7 +529,7 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
           else if (st.p < 0.05) sig = '<span class="ag-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
           else sig = '<span class="ag-badge warn">en cours · p = ' + st.p.toFixed(2) + '</span>';
         }
-        h += '<tr><td><strong>' + esc(String(va.variant).toUpperCase()) + '</strong></td><td class="num">' + fmtNum(va.views) + '</td><td class="num">' + fmtNum(va.ctas) + '</td><td class="num">' + fmtNum(va.bookings) + '</td><td class="num">' + fmtPct(rate) + '</td><td class="num">' + delta + '</td><td>' + sig + '</td></tr>';
+        h += '<tr><td><strong>' + esc(String(va.variant).toUpperCase()) + '</strong></td><td class="num">' + fmtNum(va.views) + '</td><td class="num">' + fmtNum(va.ctas) + '</td>' + (hasLeads ? '<td class="num">' + (va.leads > 0 ? fmtNum(va.leads) : '—') + '</td>' : '') + '<td class="num">' + fmtNum(va.bookings) + '</td><td class="num">' + fmtPct(rate) + '</td><td class="num">' + delta + '</td><td>' + sig + '</td></tr>';
       }
       h += '</tbody></table></div>';
     }

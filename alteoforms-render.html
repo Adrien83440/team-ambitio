@@ -1257,7 +1257,12 @@ function findAndUpdateLead(contact, callback) {
     contact: contact,
     answers: answers,
     attribution: ATTR_CAPTURED.attribution,
-    pageUrl: ATTR_CAPTURED.pageUrl
+    pageUrl: ATTR_CAPTURED.pageUrl,
+    /* Page d'entrée (lp / v de la VSL) : posée sur la fiche dès la soumission,
+       pour que le funnel compte « formulaire rempli » même sans RDV (28/09). */
+    landing: (LANDING_CAPTURED && LANDING_CAPTURED.page)
+      ? { page: LANDING_CAPTURED.page, variant: LANDING_CAPTURED.variant || null, pageUrl: ATTR_CAPTURED.pageUrl }
+      : null
   };
 
   fetch('/api/alteoform-submit', {

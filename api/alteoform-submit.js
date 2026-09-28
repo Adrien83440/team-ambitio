@@ -98,6 +98,35 @@ function buildAttribution(body, via) {
   return out;
 }
 
+// ─── PROVENANCE (page d'entrée) — 28/09/2026 ────────────────────────────
+// Le renderer transmet `landing { page, variant, pageUrl }` (paramètres lp / v
+// posés par la VSL sur l'iframe). Posé en landingFirst (jamais réécrit) et
+// landingLast, avec via 'optin' : c'est ce marqueur qui fait compter le lead
+// comme « formulaire rempli » de sa page/variante dans le Funnel Sales, même
+// s'il ne prend jamais de RDV. Même whitelist que api/lead-optin.js.
+const LANDING_PAGES = { elite: 1, business: 1, vsl_elite: 1, vsl_business: 1, quiz_elite: 1, quiz_business: 1 };
+const TUNNEL_KEY_RE = /^[a-z0-9-]+__[a-z0-9-]+$/;
+function landingSlug(v, max) {
+  return String(v || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, max || 40);
+}
+function landingLabelOf(page) {
+  if (TUNNEL_KEY_RE.test(page) && !LANDING_PAGES[page]) return page;
+  const biz = page.indexOf('business') >= 0;
+  if (page.indexOf('quiz_') === 0) return biz ? 'Funnel Quiz Business' : 'Funnel Quiz Élite';
+  if (page.indexOf('vsl_') === 0)  return biz ? 'VSL Business' : 'VSL Élite';
+  return biz ? 'Opt-in Business' : 'Opt-in Élite';
+}
+function buildLanding(body) {
+  const src = body && typeof body.landing === 'object' ? body.landing : null;
+  if (!src) return null;
+  const page = landingSlug(src.page, 90);
+  if (!page || (!LANDING_PAGES[page] && !TUNNEL_KEY_RE.test(page))) return null;
+  const out = { page: page, variant: landingSlug(src.variant, 20) || null, label: landingLabelOf(page), via: 'optin', capturedAt: new Date().toISOString() };
+  const url = String(src.pageUrl || (body && (body.pageUrl || body.landingUrl)) || '').slice(0, 500);
+  if (url) out.pageUrl = url;
+  return out;
+}
+
 // 9 derniers digits — cohérent avec sales-leads.html telVariants() et
 // l'ancienne _phoneNormalized() côté alteoforms-render.html.
 function phoneNormalized(raw) {
@@ -156,6 +185,7 @@ module.exports = async (req, res) => {
   const contact = body.contact || {};
   const answers = body.answers || {};
   let attribution = buildAttribution(body, 'form');
+  const landing = buildLanding(body);
 
   if (!formId || typeof formId !== 'string') {
     res.status(400).json({ error: 'formId_required' });
@@ -407,6 +437,11 @@ module.exports = async (req, res) => {
       update.attributionLast = attribution;
       if (!Core.attrHasSignal(prevData.attributionFirst)) update.attributionFirst = attribution;
     }
+    // ─── Provenance ──────────────────────────────────────────────────────
+    if (landing) {
+      update.landingLast = landing;
+      if (!prevData.landingFirst || !prevData.landingFirst.page) update.landingFirst = landing;
+    }
 
     // Le lead avait-il déjà `utm` figé sur un titre de formulaire ? On le
     // laisse tel quel (rien n'est jamais supprimé) : le funnel lit
@@ -490,6 +525,10 @@ module.exports = async (req, res) => {
   if (attribution) {
     newLead.attributionFirst = attribution;
     newLead.attributionLast  = attribution;
+  }
+  if (landing) {
+    newLead.landingFirst = landing;
+    newLead.landingLast  = landing;
   }
 
   try {
