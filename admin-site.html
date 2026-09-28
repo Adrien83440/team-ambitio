@@ -454,7 +454,8 @@ function loadPages() {
       var t = doc.data() || {};
       if (t.archived === true || site) return;
       var steps = Array.isArray(t.steps) ? t.steps : [];
-      var isSite = /site/i.test(String(t.slug || '')) || /site/i.test(String(t.name || ''))
+      if (t.kind === 'funnel' || t.kind === 'pages') return;
+      var isSite = t.kind === 'site' || /site/i.test(String(t.slug || '')) || /site/i.test(String(t.name || ''))
         || steps.some(function (s) { return s && (s.slug === 'about' || s.slug === 'contacts-page'); });
       if (isSite) site = { id: doc.id, name: t.name, status: t.status, homeStepId: t.homeStepId || '', steps: steps.filter(function (s) { return s && s.id && s.archived !== true; }) };
     });

@@ -43,6 +43,8 @@ textarea.bi{min-height:120px;resize:vertical;font-family:var(--font-m);font-size
 .tn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
 .tn-card{background:var(--bg2,#0f0f1a);border:1px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;transition:border-color .15s,transform .15s;position:relative}
 .tn-card:hover{border-color:rgba(34,211,238,.35);transform:translateY(-1px)}
+.tn-card-wide{grid-column:1/-1;cursor:pointer}
+.tn-card-wide .meta div{white-space:normal;line-height:1.5;font-size:12px;color:rgba(255,255,255,.5)}
 .tn-card h3{font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:700;margin:0 0 4px;padding-right:80px}
 .tn-card .url{font-family:var(--font-m);font-size:11px;color:rgba(255,255,255,.4);word-break:break-all}
 .tn-card .meta{display:flex;gap:14px;margin-top:12px;font-size:11.5px;color:rgba(255,255,255,.55)}
@@ -208,6 +210,11 @@ function fmtDateFR(v) {
   var d = v.toDate ? v.toDate() : new Date(v);
   return isNaN(d.getTime()) ? '' : d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
+/* Nature d'un document « tunnels » : 'funnel' (tunnel de vente, défaut),
+   'site' (site vitrine, géré depuis Site & pages), 'pages' (pages communes
+   hors tunnel : merci après RDV, pages utilitaires). Même moteur d'hébergement,
+   mais seuls les tunnels de vente sont listés et mesurés comme tels. */
+function kindOf(t) { return (t && t.kind) || 'funnel'; }
 function fmtSize(n) { n = Number(n) || 0; return n > 1024 * 1024 ? (n / 1048576).toFixed(1) + ' Mo' : Math.round(n / 1024) + ' Ko'; }
 function stepTypeObj(id) { for (var i = 0; i < STEP_TYPES.length; i++) if (STEP_TYPES[i].id === id) return STEP_TYPES[i]; return STEP_TYPES[4]; }
 function pageKey(t, s) { return slugify(t.slug) + '__' + slugify(s.slug); }
@@ -294,14 +301,12 @@ function renderList() {
   $('domainBanner').innerHTML = '<div>🌐 <strong>Domaine des tunnels :</strong> <code>' + esc(CFG.primaryHost) + '</code> — chaque étape répond sur <code>https://' + esc(CFG.primaryHost) + '/&lt;chemin&gt;</code>. '
     + 'Aperçu interne : <code>team.alteore.com/t/&lt;chemin&gt;</code>. Tant que le DNS de <code>www</code> pointe sur System.io, tout ce qui est en ligne répond déjà sur <code>go.adrienemily.com</code> — mêmes pages, même mesure.</div>';
   var grid = $('tunnelGrid');
-  if (!TUNNELS.length) {
-    grid.innerHTML = '<div class="tn-empty" style="grid-column:1/-1">Aucun tunnel. Crée le premier : un tunnel = un groupe ordonné de pages (opt-in → VSL → RDV → merci), chacune avec ses variantes A/B.</div>';
-    return;
-  }
+  var funnels = TUNNELS.filter(function (t) { return kindOf(t) === 'funnel'; });
   grid.innerHTML = '<div class="tn-empty" style="grid-column:1/-1">Chargement…</div>';
   loadCardStats().then(function (by) {
     var h = '';
-    TUNNELS.forEach(function (t) {
+    if (!funnels.length) h += '<div class="tn-empty" style="grid-column:1/-1">Aucun tunnel de vente. Un tunnel = un groupe ordonné de pages (opt-in → VSL → RDV), chacune avec ses variantes A/B.</div>';
+    funnels.forEach(function (t) {
       var st = by[t.id] || { visits: 0, optins: 0, ctas: 0 };
       var liveSteps = t.steps.filter(function (s) { return s.status === 'live'; }).length;
       h += '<div class="tn-card" data-action="open" data-id="' + escAttr(t.id) + '">'
@@ -314,6 +319,15 @@ function renderList() {
         + '<div><b>' + fmtNum(st.ctas) + '</b>clics CTA</div></div>'
         + '</div>';
     });
+    /* Pages communes (hors tunnel) et site vitrine : hébergés par le même
+       moteur, mais ni listés ni mesurés comme des tunnels de vente. */
+    var pagesDoc = TUNNELS.filter(function (t) { return kindOf(t) === 'pages'; })[0];
+    var siteDoc = TUNNELS.filter(function (t) { return kindOf(t) === 'site'; })[0];
+    h += '<div class="tn-card tn-card-wide" data-action="' + (pagesDoc ? 'open' : 'newPages') + '"' + (pagesDoc ? ' data-id="' + escAttr(pagesDoc.id) + '"' : '') + '>'
+      + '<span class="pill pill-type">Hors tunnel</span><h3>📄 Pages communes</h3>'
+      + '<div class="url">' + (pagesDoc ? (esc(pagesDoc.steps.map(function (s) { return '/' + s.slug; }).join(' · ')) || 'aucune page pour l\'instant') : 'Cliquer pour créer l\'espace') + '</div>'
+      + '<div class="meta"><div>Pages servies sur le domaine sans appartenir à un tunnel : merci après RDV, pages utilitaires, mentions. Mesurées en vues, jamais comptées comme une conversion.</div></div></div>';
+    if (siteDoc) h += '<div class="tn-empty" style="grid-column:1/-1">🌐 Le site vitrine « ' + esc(siteDoc.name) + ' » est hébergé par le même moteur mais se gère dans <a href="admin-site.html" style="color:#7dd3fc">Site &amp; pages</a>.</div>';
     grid.innerHTML = h;
   });
 }
@@ -327,7 +341,7 @@ function createTunnel() {
   var n = 2, base = slug;
   while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = base + '-' + (n++);
   var doc = {
-    name: name.trim(), slug: slug, status: 'draft', archived: false, homeStepId: '',
+    name: name.trim(), slug: slug, kind: 'funnel', status: 'draft', archived: false, homeStepId: '',
     settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: '' },
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -336,6 +350,23 @@ function createTunnel() {
   };
   db.collection('tunnels').add(doc).then(function (ref) {
     toast('Tunnel créé');
+    return loadTunnels().then(function () { openTunnel(ref.id); });
+  }).catch(function (e) { toast('Création impossible : ' + e.message, true); });
+}
+function createPagesDoc() {
+  if (TUNNELS.some(function (t) { return kindOf(t) === 'pages'; })) return;
+  var slug = 'pages', n = 2;
+  while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = 'pages-' + (n++);
+  var doc = {
+    name: 'Pages communes', slug: slug, kind: 'pages', status: 'live', archived: false, homeStepId: '',
+    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: 'Pages hors tunnel : merci après RDV, pages utilitaires.' },
+    steps: [], assets: [],
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy: (firebase.auth().currentUser || {}).uid || ''
+  };
+  db.collection('tunnels').add(doc).then(function (ref) {
+    toast('Espace « Pages communes » créé');
     return loadTunnels().then(function () { openTunnel(ref.id); });
   }).catch(function (e) { toast('Création impossible : ' + e.message, true); });
 }
@@ -366,7 +397,7 @@ function saveTunnel(silent) {
   var err = validateTunnel(CUR);
   if (err) { toast(err, true); return Promise.reject(new Error(err)); }
   var patch = {
-    name: CUR.name, slug: CUR.slug, status: CUR.status, homeStepId: CUR.homeStepId || '',
+    name: CUR.name, slug: CUR.slug, kind: kindOf(CUR), status: CUR.status, homeStepId: CUR.homeStepId || '',
     settings: CUR.settings, steps: CUR.steps, assets: CUR.assets || [],
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
@@ -406,8 +437,10 @@ function renderEditor() {
       : '<button class="bb bb-g bb-s" data-action="setStatus" data-status="live">● Mettre en ligne</button>')
     + '<button class="bb bb-r bb-s" data-action="archiveTunnel">Archiver</button>'
     + '</div>';
+  if (kindOf(t) === 'site') h += '<div class="tn-banner">🌐 <strong>Site vitrine</strong> — hébergé ici, géré aussi depuis <a href="admin-site.html" style="color:#7dd3fc">Site &amp; pages</a>. Ce n\'est pas un tunnel de vente : aucune conversion attendue, les stats ne comptent que des vues.</div>';
+  if (kindOf(t) === 'pages') h += '<div class="tn-banner">📄 <strong>Pages communes</strong> — pages servies sur le domaine sans appartenir à un tunnel (merci après RDV, pages utilitaires). Chaque page a son chemin, ses variantes, ses réglages SEO / pixel / head. Mesurées en vues.</div>';
   h += '<div class="tabs">'
-    + '<button class="tab' + (TAB === 'steps' ? ' on' : '') + '" data-action="tab" data-tab="steps">🧩 Étapes</button>'
+    + '<button class="tab' + (TAB === 'steps' ? ' on' : '') + '" data-action="tab" data-tab="steps">' + (kindOf(t) === 'funnel' ? '🧩 Étapes' : '📄 Pages') + '</button>'
     + '<button class="tab' + (TAB === 'settings' ? ' on' : '') + '" data-action="tab" data-tab="settings">⚙️ Réglages</button>'
     + '<button class="tab' + (TAB === 'stats' ? ' on' : '') + '" data-action="tab" data-tab="stats">📊 Stats</button>'
     + '<button class="tab' + (TAB === 'guide' ? ' on' : '') + '" data-action="tab" data-tab="guide">📖 Guide des pages</button>'
@@ -459,6 +492,10 @@ function renderSteps() {
 function findStep(id) { return CUR.steps.filter(function (s) { return s.id === id; })[0]; }
 function addStep() {
   var s = { id: uid('st_'), name: 'Nouvelle étape', slug: '', type: 'page', status: 'draft', next: { mode: 'auto' }, seo: { title: '', description: '', ogImage: '' }, pixelEvent: '', noindex: false, headHtml: '', variants: [{ id: 'a', label: 'Variante A', weight: 100, status: 'live', html: null }] };
+  if (kindOf(CUR) !== 'funnel') {
+    s.name = 'Nouvelle page'; s.type = kindOf(CUR) === 'pages' ? 'merci' : 'page'; s.next = { mode: 'none' };
+    CUR.steps.push(s); openStep(s.id); return;
+  }
   var n = CUR.steps.length + 1;
   s.name = ['Opt-in', 'VSL', 'Prise de RDV', 'Merci'][n - 1] || ('Étape ' + n);
   s.type = ['optin', 'vsl', 'booking', 'merci'][n - 1] || 'page';
@@ -939,6 +976,7 @@ document.addEventListener('click', function (ev) {
   var act = el.getAttribute('data-action');
   if (el.tagName === 'INPUT' && el.type === 'file') return;   // géré par change
   if (act === 'new') { createTunnel(); return; }
+  if (act === 'newPages') { createPagesDoc(); return; }
   if (act === 'open') { openTunnel(el.getAttribute('data-id')); return; }
   if (act === 'back') { CUR = null; try { history.replaceState(null, '', 'admin-tunnels.html'); } catch (e) {} loadTunnels().then(renderList); return; }
   if (act === 'tab') { TAB = el.getAttribute('data-tab'); renderEditor(); return; }
