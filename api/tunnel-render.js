@@ -3,10 +3,10 @@
 // ----------------------------------------------------------------------------
 // Remplace l'hébergement System.io : les pages HTML écrites par Adrien sont
 // déposées depuis admin-tunnels.html dans Storage, et servies ici sur le
-// domaine marketing (go.adrienemily.com, puis www.adrienemily.com le jour
-// où System.io est arrêté) via les routes par hôte de vercel.json :
+// domaine marketing www.adrienemily.com (DNS basculé de System.io vers
+// Vercel le 28/09/2026) via les routes par hôte de vercel.json :
 //
-//   go.adrienemily.com/<chemin>       → /api/tunnel-render?__p=<chemin>
+//   www.adrienemily.com/<chemin>      → /api/tunnel-render?__p=<chemin>
 //   team.alteore.com/t/<chemin>       → idem, MODE APERÇU (brouillons
 //                                        visibles, aucune mesure, noindex)
 //
@@ -34,7 +34,7 @@ const crypto = require('crypto');
 const { storage } = require('./_firebaseAdmin');
 const Reg = require('./_tunnelRegistry');
 
-const PROPAGATE_HOSTS = ['go.adrienemily.com', 'www.adrienemily.com', 'adrienemily.com'];
+const PROPAGATE_HOSTS = ['www.adrienemily.com', 'adrienemily.com'];
 const COOKIE_DAYS = 30;
 const HTML_CACHE_MAX = 40;
 

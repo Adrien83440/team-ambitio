@@ -192,5 +192,5 @@ function checkScripts(html) {
   }
   va.previews = PREVIEWS;
   await R.patchDoc('tunnels/' + TUNNEL_ID, { steps: steps, updatedAt: new Date() }, ['steps', 'updatedAt']);
-  console.log('\nFait. En ligne sous 20 s : https://go.adrienemily.com/' + STEP_SLUG + '  ·  aperçu : https://team.alteore.com/t/' + STEP_SLUG + '?v=a&' + PREVIEWS[0].query);
+  console.log('\nFait. En ligne sous 20 s : https://www.adrienemily.com/' + STEP_SLUG + '  ·  aperçu : https://team.alteore.com/t/' + STEP_SLUG + '?v=a&' + PREVIEWS[0].query);
 })().catch((e) => { console.error('ERREUR :', e.message); process.exit(1); });

@@ -180,7 +180,7 @@ textarea.sw-in{min-height:110px;resize:vertical;line-height:1.6}
     <div class="sw-ic">🌐</div>
     <div><h1>Site &amp; pages</h1><small>adrienemily.com — contenu, pages, domaines. Les modifications s'appliquent au site sans toucher au code.</small></div>
     <div class="sp"></div>
-    <a class="swb swb-o" href="https://go.adrienemily.com" target="_blank" rel="noopener">👁 Voir le site ↗</a>
+    <a class="swb swb-o" href="https://www.adrienemily.com" target="_blank" rel="noopener">👁 Voir le site ↗</a>
     <a class="swb swb-o" href="admin-tunnels.html">🧭 Ouvrir le Funnel</a>
   </div>
 
@@ -505,9 +505,8 @@ function renderPages(site) {
 
 /* ─── Domaines & checklist ─── */
 var DOMAINS = [
-  { host: 'go.adrienemily.com', dot: 'ok', label: 'En ligne — Vercel', p: 'Domaine des tunnels et du site hébergés. Tout ce qui est publié répond ici dès maintenant.', open: 'https://go.adrienemily.com', dns: null },
-  { host: 'www.adrienemily.com', dot: 'warn', label: 'Systeme.io — à migrer', p: 'Domaine principal : site vitrine et tunnels (<code>/optin-a</code> reste l\'adresse des pubs). Le jour J, le CNAME bascule vers Vercel : les étapes en ligne répondent aux mêmes chemins, les anciennes adresses suivent la table de redirections ci-dessous.', open: 'https://www.adrienemily.com', dns: ['CNAME www → cname.vercel-dns.com', 'cname.vercel-dns.com'] },
-  { host: 'adrienemily.com', dot: 'warn', label: 'Apex — redirigera vers www', p: 'Pointe aujourd\'hui sur Systeme.io. Sur Vercel il redirige en 308 vers www (réglage « redirect » du domaine dans le projet, doublé côté serveur). Les MX et SPF Gmail ne bougent pas.', open: null, dns: ['A @ → 76.76.21.21', '76.76.21.21'] },
+  { host: 'www.adrienemily.com', dot: 'ok', label: 'En ligne — Vercel', p: 'Domaine principal : site vitrine et tunnels (<code>/optin-a</code> reste l\'adresse des pubs). Les étapes en ligne répondent à leur chemin, les anciennes adresses Systeme.io suivent la table de redirections ci-dessous.', open: 'https://www.adrienemily.com', dns: ['CNAME www → cname.vercel-dns.com', 'cname.vercel-dns.com'] },
+  { host: 'adrienemily.com', dot: 'ok', label: 'Apex — redirige vers www', p: 'Redirige en 308 vers www (réglage « redirect » du domaine dans le projet Vercel, doublé côté serveur). Les MX et SPF Gmail ne bougent pas.', open: null, dns: ['A @ → 76.76.21.21', '76.76.21.21'] },
   { host: 'team.alteore.com/t/…', dot: 'ok', label: 'Aperçus internes', p: 'Mode aperçu des pages : brouillons visibles, aucune mesure, noindex. Pour valider desktop + mobile avant publication.', open: null, dns: null }
 ];
 function renderDomains() {
@@ -531,7 +530,7 @@ var CK_ITEMS = [
   { k: 'form', t: 'Tester le formulaire de contact', s: 'La fiche doit apparaître dans Leads Live avec le message.' },
   { k: 'optina', t: 'Étape optin-a en ligne : quiz (A) et VSL (B), poids 50 / 50', s: 'C\'est l\'adresse des pubs, elle ne change jamais. Pixel du tunnel renseigné (1341581597802071).' },
   { k: 'merci', t: 'Étape merci publiée, RDV test qui y atterrit', s: 'Les types « Audit Stratégique » redirigent déjà vers www.adrienemily.com/merci : même chemin, rien à changer dans Booking. Iframe du quiz en embed=1 pour que la page entière bascule.' },
-  { k: 'live', t: 'Passer les tunnels en ligne', s: 'Site et funnel répondent alors sur go.adrienemily.com — sans toucher au domaine actuel.' },
+  { k: 'live', t: 'Passer les tunnels en ligne', s: 'Site et funnel répondent alors sur www.adrienemily.com.' },
   { k: 'inv', t: 'Inventaire System.io trié : chaque adresse a une décision', s: 'Site, tunnel, espace clients, redirection ou abandon — et pour les pages gardées, une étape en ligne au même chemin.' },
   { k: 'redir', t: 'Redirections reportées depuis l\'inventaire et enregistrées', s: 'Bouton « Reporter dans les redirections », puis vérifier les cibles des adresses encore dans des pubs ou des emails.' },
   { k: 'metaverif', t: 'Meta : vérification du domaine adrienemily.com par enregistrement TXT chez OVH', s: 'Si le domaine est vérifié aujourd\'hui par une balise dans les pages Systeme.io, la vérification tombe avec elles. Le TXT DNS survit à la bascule.' },

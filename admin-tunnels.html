@@ -17,7 +17,7 @@ if(!firebase.apps.length){firebase.initializeApp({apiKey:"AIzaSyDo30FASeWnhvx4mY
 <style>
 /* ═══════════════════════════════════════════════════════════════════════
    admin-tunnels.html — Tunnels de vente hébergés (09/2026)
-   Pages HTML écrites à la main, hébergées sur go.adrienemily.com, mesurées
+   Pages HTML écrites à la main, hébergées sur www.adrienemily.com, mesurées
    (visites, vues, CTA, opt-ins, RDV) et reliées à Leads Live. Admin only.
    ═══════════════════════════════════════════════════════════════════════ */
 .tn{padding:20px 24px 80px;max-width:1180px;margin:0 auto;font-family:'Figtree',sans-serif}
@@ -164,7 +164,7 @@ var storage = firebase.storage();
 var TUNNELS = [];            // liste chargée (non archivés)
 var CUR = null;              // tunnel en cours d'édition (copie de travail)
 var TAB = 'steps';
-var CFG = { primaryHost: 'www.adrienemily.com', hosts: ['www.adrienemily.com', 'go.adrienemily.com'] };
+var CFG = { primaryHost: 'www.adrienemily.com', hosts: ['www.adrienemily.com'] };
 /* Événement Meta envoyé au chargement d'une étape, en plus de PageView. */
 var PIXEL_EVENTS = [
   ['', 'Aucun — PageView seul'], ['ViewContent', 'ViewContent'], ['Lead', 'Lead'], ['Schedule', 'Schedule'],
@@ -299,7 +299,7 @@ function renderList() {
   $('btnBack').style.display = 'none';
   $('btnNew').style.display = '';
   $('domainBanner').innerHTML = '<div>🌐 <strong>Domaine des tunnels :</strong> <code>' + esc(CFG.primaryHost) + '</code> — chaque étape répond sur <code>https://' + esc(CFG.primaryHost) + '/&lt;chemin&gt;</code>. '
-    + 'Aperçu interne : <code>team.alteore.com/t/&lt;chemin&gt;</code>. Tant que le DNS de <code>www</code> pointe sur System.io, tout ce qui est en ligne répond déjà sur <code>go.adrienemily.com</code> — mêmes pages, même mesure.</div>';
+    + 'Aperçu interne : <code>team.alteore.com/t/&lt;chemin&gt;</code> (brouillons visibles, aucune mesure).</div>';
   var grid = $('tunnelGrid');
   var funnels = TUNNELS.filter(function (t) { return kindOf(t) === 'funnel'; });
   grid.innerHTML = '<div class="tn-empty" style="grid-column:1/-1">Chargement…</div>';

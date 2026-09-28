@@ -130,5 +130,5 @@ function fixVsl(html) {
   }
   step.slug = NEW_SLUG;
   await R.patchDoc('tunnels/' + TUNNEL_ID, { steps: steps, updatedAt: new Date() }, ['steps', 'updatedAt']);
-  console.log('\nFait. En ligne sous 20 s : https://go.adrienemily.com/' + NEW_SLUG);
+  console.log('\nFait. En ligne sous 20 s : https://www.adrienemily.com/' + NEW_SLUG);
 })().catch((e) => { console.error('ERREUR :', e.message); process.exit(1); });

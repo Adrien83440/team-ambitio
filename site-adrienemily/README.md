@@ -34,10 +34,9 @@ ne casse à la migration.
    et disparaîtra avec lui).
 5. Aperçu : `team.alteore.com/t/<chemin>?v=a` (desktop + mobile), tester le
    formulaire de contact (la fiche doit apparaître dans Leads Live).
-6. Passer le tunnel **live**. Les pages répondent déjà sur
-   `go.adrienemily.com` ; le jour de la migration, pointer `www` (CNAME →
-   `cname.vercel-dns.com`) et l'apex (A → `76.76.21.21`) vers Vercel et
-   ajouter les deux domaines au projet — `vercel.json` les route déjà.
+6. Passer le tunnel **live** : les pages répondent sur `www.adrienemily.com`
+   (CNAME → `cname.vercel-dns.com`, apex A → `76.76.21.21`, domaines ajoutés
+   au projet Vercel, bascule faite le 28/09/2026).
 
 ## Contenu éditable sans toucher au code
 
