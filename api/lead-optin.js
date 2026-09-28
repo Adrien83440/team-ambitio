@@ -219,7 +219,11 @@ function canonicalizeType(rawType) {
   const t = String(rawType).toLowerCase().trim();
   if (t.indexOf('business') >= 0) return 'business';
   if (t.indexOf('elite') >= 0 || t.indexOf('élite') >= 0) return 'vsl_elite';
-  if (t.indexOf('self') >= 0) return 'self_booking';
+  // RÈGLE MÉTIER (Adrien, 28/09/2026) : `self_booking` = un RDV réellement
+  // pris, jamais un simple opt-in, peu importe la source de trafic. Un type
+  // « self » envoyé par Make à l'opt-in retombe donc sur vsl_elite ; le vrai
+  // type sera posé à la prise de RDV (api/booking-attribution.js).
+  if (t.indexOf('self') >= 0) return 'vsl_elite';
   if (t.indexOf('webinaire') >= 0 || t.indexOf('webinar') >= 0) return 'webinaire';
   // Fallback : on garde tel quel, le front affichera un badge "other"
   return t;

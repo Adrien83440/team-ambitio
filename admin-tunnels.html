@@ -342,7 +342,7 @@ function createTunnel() {
   while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = base + '-' + (n++);
   var doc = {
     name: name.trim(), slug: slug, kind: 'funnel', status: 'draft', archived: false, homeStepId: '',
-    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: '' },
+    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', requiredFields: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: '' },
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -359,7 +359,7 @@ function createPagesDoc() {
   while (TUNNELS.some(function (t) { return t.slug === slug; })) slug = 'pages-' + (n++);
   var doc = {
     name: 'Pages communes', slug: slug, kind: 'pages', status: 'live', archived: false, homeStepId: '',
-    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: 'Pages hors tunnel : merci après RDV, pages utilitaires.' },
+    settings: { host: CFG.primaryHost, pixelId: '', leadType: 'vsl_elite', defaultChannel: '', bookingType: '', requiredFields: '', noindex: false, faviconUrl: '', ogImage: '', headHtml: '', notes: 'Pages hors tunnel : merci après RDV, pages utilitaires.' },
     steps: [], assets: [],
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -724,7 +724,8 @@ function renderSettings() {
   h += '<div class="sec"><h2>CRM — fiches Leads Live</h2><div class="sub">Un opt-in crée ou réveille une fiche (email puis téléphone, jamais de doublon). Un RDV pris depuis le tunnel est attribué de la même façon.</div>'
     + '<div class="row"><div><span class="lbl">Type de lead</span><select class="bs" id="setLeadType">' + LEAD_TYPES.map(function (x) { return '<option value="' + x.id + '"' + ((st.leadType || 'vsl_elite') === x.id ? ' selected' : '') + '>' + esc(x.label) + '</option>'; }).join('') + '</select><div class="help">Badge affiché dans Leads Live et règle Élite / Business du funnel.</div></div>'
     + '<div><span class="lbl">Canal par défaut (sans UTM)</span><input class="bi" id="setChannel" value="' + escAttr(st.defaultChannel || '')+ '" placeholder="ex : Bio Instagram, Skool, Recommandation"/><div class="help">Posé comme origine déclarée quand l\'URL ne porte aucun UTM. Une pub Meta avec UTM garde sa créative.</div></div>'
-    + '<div><span class="lbl">Type de RDV lié (booking)</span><select class="bs" id="setBooking"><option value="">— aucun —</option>' + BOOKING_TYPES.map(function (b) { return '<option value="' + escAttr(b.id) + '"' + (st.bookingType === b.id ? ' selected' : '') + '>' + esc(b.label || b.id) + '</option>'; }).join('') + '</select><div class="help">Exposé aux pages via <code>ALTEO.config.bookingUrl</code> ; les liens et iframes vers booking.html reçoivent la provenance automatiquement.</div></div></div></div>';
+    + '<div><span class="lbl">Type de RDV lié (booking)</span><select class="bs" id="setBooking"><option value="">— aucun —</option>' + BOOKING_TYPES.map(function (b) { return '<option value="' + escAttr(b.id) + '"' + (st.bookingType === b.id ? ' selected' : '') + '>' + esc(b.label || b.id) + '</option>'; }).join('') + '</select><div class="help">Exposé aux pages via <code>ALTEO.config.bookingUrl</code> ; les liens et iframes vers booking.html reçoivent la provenance automatiquement.</div></div>'
+    + '<div><span class="lbl">Champs obligatoires à l\'opt-in</span><input class="bi" id="setRequiredFields" value="' + escAttr(st.requiredFields || '') + '" placeholder="ex : prenom, nom, email, telephone, message" style="font-family:var(--font-m)"/><div class="help">Liste séparée par des virgules parmi : prenom, nom, email, telephone, secteur, ca, defi, message. Un opt-in incomplet est refusé par le serveur — aucune fiche créée. Vide = email ou téléphone suffit.</div></div></div></div>';
   h += '<div class="sec"><h2>Partage et code &lt;head&gt; — tout le tunnel</h2><div class="sub">Appliqué à toutes les pages du tunnel ; chaque étape peut le surcharger dans sa fenêtre (SEO, partage et pixel).</div>'
     + '<div class="row"><div><span class="lbl">Image de partage par défaut (og:image)</span><input class="bi" id="setOgImage" value="' + escAttr(st.ogImage || '') + '" placeholder="https://… (1200 × 630, déposée dans Médias)"/><div class="help">Aperçu affiché quand un lien du tunnel est partagé sur Facebook, WhatsApp, LinkedIn. Une étape sans image propre prend celle-ci.</div></div></div>'
     + '<span class="lbl" style="margin-top:10px">Code &lt;head&gt; personnalisé</span><textarea class="bi" id="setHeadHtml" style="min-height:90px" placeholder="<!-- balise de vérification Meta, Google Tag Manager, pixel TikTok… -->">' + esc(st.headHtml || '') + '</textarea><div class="help">Injecté tel quel dans le &lt;head&gt; de chaque page, après le runtime Alteore. Jamais en aperçu. Le pixel Meta du tunnel est déjà géré au-dessus : ne pas le remettre ici.</div></div>';
@@ -741,6 +742,16 @@ function renderSettings() {
   bind('setLeadType', function (el) { CUR.settings.leadType = el.value; });
   bind('setChannel', function (el) { CUR.settings.defaultChannel = el.value.trim(); });
   bind('setBooking', function (el) { CUR.settings.bookingType = el.value; });
+  bind('setRequiredFields', function (el) {
+    var known = { prenom: 1, nom: 1, email: 1, telephone: 1, secteur: 1, ca: 1, defi: 1, message: 1 };
+    var out = [];
+    el.value.split(',').forEach(function (k) {
+      var key = k.toLowerCase().trim();
+      if (known[key] && out.indexOf(key) < 0) out.push(key);
+    });
+    CUR.settings.requiredFields = out.join(', ');
+    el.value = CUR.settings.requiredFields;
+  });
   bind('setNotes', function (el) { CUR.settings.notes = el.value; });
   bind('setOgImage', function (el) { CUR.settings.ogImage = el.value.trim(); });
   bind('setHeadHtml', function (el) { CUR.settings.headHtml = el.value; });

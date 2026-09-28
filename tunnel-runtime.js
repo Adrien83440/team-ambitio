@@ -252,7 +252,12 @@
     secteur: ['secteur', 'activite', 'activité', 'sector', 'industry'],
     ca: ['ca', 'chiffre_affaires', 'chiffre-affaires', 'revenue'],
     defi: ['defi', 'défi', 'probleme', 'problème', 'challenge', 'objectif'],
-    message: ['message', 'commentaire', 'comment', 'notes']
+    message: ['message', 'commentaire', 'comment', 'notes'],
+    /* Pot de miel : DOIT rester un champ canonique pour arriver dans
+       fields.website — en « extra » il finirait affiché dans les réponses
+       du lead et le blocage anti-robot ne se déclencherait jamais
+       (incident du 28/09/2026 : robot passé par le formulaire de contact). */
+    website: ['website']
   };
   function canonicalField(name) {
     var n = String(name || '').toLowerCase().trim();
@@ -357,6 +362,15 @@
     var f = data.fields;
     showError(form, '');
     if (f.website) { /* pot de miel rempli : on fait semblant */ goNext(form); return; }
+    /* Champs `required` du HTML : un envoi qui contourne la validation
+       native du navigateur (robot, form.submit()) est arrêté ici. */
+    var req = form.querySelectorAll('[required]');
+    for (var ri = 0; ri < req.length; ri++) {
+      if (!String(req[ri].value == null ? '' : req[ri].value).trim()) {
+        showError(form, form.getAttribute('data-alteo-invalid') || 'Merci de remplir tous les champs obligatoires.');
+        return;
+      }
+    }
     var emailOk = f.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email);
     var telDigits = String(f.telephone || '').replace(/[^\d]/g, '');
     if (!emailOk && telDigits.length < 9) {

@@ -10,9 +10,13 @@
 //                                     pour une page hébergée ailleurs)
 // Auth : aucune — visiteur anonyme. Garde-fous : tunnel + étape doivent
 //        exister et être en ligne, contact obligatoire (email valide ou
-//        téléphone ≥ 9 chiffres), liste de blocage, pot de miel, champs
-//        bornés. Aucun champ de pipeline (stage, assignedTo, _merged…) ne
-//        peut être forcé par le payload.
+//        téléphone ≥ 9 chiffres), champs obligatoires du tunnel
+//        (settings.requiredFields — opt-in incomplet refusé en 400),
+//        liste de blocage, pot de miel (fields.website OU extra « website »),
+//        champs bornés. Aucun champ de pipeline (stage, assignedTo,
+//        _merged…) ne peut être forcé par le payload. Le type `self_booking`
+//        n'est JAMAIS posé ici : il est réservé aux RDV réellement pris
+//        (api/booking-attribution.js).
 //
 // Body (JSON, text/plain) :
 //   { t: tunnelId, s: stepId, v: variante,
@@ -81,11 +85,31 @@ async function isBlockedContact(emailLc, phoneNorm) {
 }
 
 function leadTypeOf(tunnel) {
-  const t = String((tunnel.settings && tunnel.settings.leadType) || '').toLowerCase().trim();
+  let t = String((tunnel.settings && tunnel.settings.leadType) || '').toLowerCase().trim();
+  // RÈGLE MÉTIER (Adrien, 28/09/2026) : `self_booking` = un RDV réellement
+  // pris, jamais un simple opt-in — quel que soit le réglage du tunnel ou la
+  // source de trafic. C'est api/booking-attribution.js qui pose ce type à la
+  // prise de RDV ; ici on retombe sur le type déduit du nom du tunnel.
+  if (t === 'self_booking') t = '';
   if (t && KNOWN_TYPES[t]) return t;
   if (t) return t.replace(/[^a-z0-9_]/g, '').slice(0, 40) || 'vsl_elite';
   const name = (tunnel.name + ' ' + tunnel.slug).toLowerCase();
   return name.indexOf('business') >= 0 ? 'business' : 'vsl_elite';
+}
+
+/* Champs canoniques exigés par le tunnel (settings.requiredFields : tableau
+   ou chaîne « prenom, nom, email »). Un opt-in incomplet est refusé : sur le
+   formulaire de contact du site, un lead n'existe que si TOUT est rempli. */
+function requiredFieldsOf(tunnel) {
+  const raw = tunnel.settings && tunnel.settings.requiredFields;
+  const list = Array.isArray(raw) ? raw : String(raw || '').split(',');
+  const known = { prenom: 1, nom: 1, email: 1, telephone: 1, secteur: 1, ca: 1, defi: 1, message: 1 };
+  const out = [];
+  list.forEach(function (k) {
+    const key = String(k || '').toLowerCase().trim();
+    if (known[key] && out.indexOf(key) < 0) out.push(key);
+  });
+  return out;
 }
 
 function buildAttribution(body, pageUrl, tunnel) {
@@ -149,8 +173,15 @@ module.exports = async (req, res) => {
 
   if (!tunnelId || !stepId) { res.status(400).json({ ok: false, error: 'tunnel_required' }); return; }
 
-  // Pot de miel : un robot a rempli le champ caché → succès simulé, rien écrit.
-  if (str(fields.website, 10)) { res.status(200).json({ ok: true, action: 'ignored' }); return; }
+  // Pot de miel : un robot a rempli le champ caché → succès simulé, rien
+  // écrit. On le cherche AUSSI dans les extras : un robot qui poste l'API
+  // directement (ou un vieux runtime qui classait `website` en réponse
+  // libre) ne doit jamais voir ce champ atterrir sur la fiche.
+  const honeypotHit = str(fields.website, 10) || extrasIn.some(function (x) {
+    return x && typeof x === 'object' && str(x.value, 10)
+      && (keyPart(x.name) === 'website' || keyPart(x.label) === 'website');
+  });
+  if (honeypotHit) { res.status(200).json({ ok: true, action: 'ignored' }); return; }
 
   let hit = null;
   try { hit = await Reg.findByIds(tunnelId, stepId); } catch (e) { console.error('[tunnel-optin] registre :', e && e.message); }
@@ -167,6 +198,18 @@ module.exports = async (req, res) => {
   const emailOk = !!emailLc && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailLc);
   if (!emailOk && !phoneNorm) { res.status(400).json({ ok: false, error: 'contact_required' }); return; }
   if (emailLc && !emailOk) { res.status(400).json({ ok: false, error: 'email_invalid' }); return; }
+
+  // Champs obligatoires du tunnel (settings.requiredFields) : un opt-in
+  // incomplet est refusé, la fiche n'est jamais créée ni réveillée.
+  const required = requiredFieldsOf(tunnel);
+  const missing = required.filter(function (k) {
+    if (k === 'email') return !emailOk;
+    if (k === 'telephone') return !phoneNorm;
+    if (k === 'prenom') return !prenom;
+    if (k === 'nom') return !nomIn;
+    return !str(fields[k], 2000);
+  });
+  if (missing.length) { res.status(400).json({ ok: false, error: 'fields_required', missing: missing }); return; }
 
   const blockHit = await isBlockedContact(emailLc, phoneNorm);
   if (blockHit) {
