@@ -96,6 +96,10 @@ module.exports = async (req, res) => {
       pageLabel: Reg.pageLabel(tunnel, step),
       updatedAt: FV.serverTimestamp()
     };
+    /* Libellé de la variante (ex. « Quiz », « VSL ») : lisible par le Funnel
+       Sales même pour un utilisateur qui n'a pas accès aux documents tunnels. */
+    const vObj = variant ? (step.variants || []).filter(function (v) { return v && String(v.id) === variant; })[0] : null;
+    if (vObj && vObj.label) patch.variantLabel = String(vObj.label).slice(0, 80);
     patch[FIELD[event]] = inc;
     writes.push(db.collection('page_views_daily').doc(docId).set(patch, { merge: true }));
   }

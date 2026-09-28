@@ -1306,6 +1306,7 @@
     var vslByPage = {};
     /* Libellés lisibles des pages de tunnel (pageLabel posé par le beacon). */
     k.vslLabels = {};
+    k.vslVarLabels = {};
     function vslCell(pg, vr) {
       if (!vslByPage[pg]) vslByPage[pg] = {};
       if (!vslByPage[pg][vr]) vslByPage[pg][vr] = { variant: vr, views: 0, ctas: 0, leads: 0, present: 0, closes: 0, bookings: 0 };
@@ -1340,6 +1341,7 @@
       if (!isVslPage(v.page) || !tunnelMatch(pageTunnel(v.page))) return;
       var c = vslCell(v.page, v.variant || '_');
       if (v.pageLabel && !k.vslLabels[v.page]) k.vslLabels[v.page] = String(v.pageLabel);
+      if (v.variant && v.variantLabel) { if (!k.vslVarLabels[v.page]) k.vslVarLabels[v.page] = {}; k.vslVarLabels[v.page][String(v.variant)] = String(v.variantLabel); }
       c.views += Number(v.views) || 0;
       c.ctas += Number(v.ctas) || 0;
       k.vslViews += Number(v.views) || 0;
@@ -1359,20 +1361,59 @@
       if (ocPresent(term)) cell.present++;
       if (ocOf(term) === 'close') cell.closes++;
     });
-    k.vslActive = k.vslViews > 0 || k.vslBookings > 0 || k.vslLeads > 0;
-    k.vslCtaRate = k.vslViews > 0 ? k.vslCtas / k.vslViews * 100 : null;
-    k.vslBookRate = k.vslViews > 0 ? k.vslBookings / k.vslViews * 100 : null;
-    k.vslCpr = k.spend > 0 && k.vslBookings > 0 ? k.spend / k.vslBookings : null;
-    k.vslPages = []; k.vslTests = [];
+    /* ── Lecture par tunnel › page › variante (28/09/2026) ──
+       Seules les pages hébergées (clé tunnel__etape) entrent dans la vue
+       générale et les totaux. Les clés System.io (vsl_*, quiz_*) sont
+       rangées à part dans k.vslLegacy : historique, affiché sur demande. */
+    var META = DATA.tunnelsMeta || {};
+    function isTunnelKey(pg) { return /^[a-z0-9-]+__[a-z0-9-]+$/.test(String(pg || '')); }
+    var ZERO = ['views', 'ctas', 'leads', 'bookings', 'present', 'closes'];
+    function zero(o) { ZERO.forEach(function (f) { o[f] = 0; }); return o; }
+    function addTo(o, c) { ZERO.forEach(function (f) { o[f] += c[f] || 0; }); }
+    var byFunnel = {};
+    k.vslLegacy = []; k.vslPages = []; k.vslTests = [];
     Object.keys(vslByPage).sort().forEach(function (pg) {
       var vars = Object.keys(vslByPage[pg]).map(function (kk) { return vslByPage[pg][kk]; });
       vars.sort(function (a, b) { return a.variant < b.variant ? -1 : 1; });
-      var tot = { page: pg, views: 0, ctas: 0, leads: 0, present: 0, closes: 0, bookings: 0 };
-      vars.forEach(function (c) { tot.views += c.views; tot.ctas += c.ctas; tot.leads += c.leads; tot.present += c.present; tot.closes += c.closes; tot.bookings += c.bookings; });
+      var tot = zero({ page: pg });
+      vars.forEach(function (c) { addTo(tot, c); });
+      if (!isTunnelKey(pg)) { tot.label = k.vslLabels[pg] || ''; k.vslLegacy.push(tot); return; }
       k.vslPages.push(tot);
-      var named = vars.filter(function (c) { return c.variant !== '_'; });
+      var parts = pg.split('__'), tslug = parts[0], sslug = parts[1];
+      var m = META[tslug] || null, ms = m && m.steps ? m.steps[sslug] : null;
+      /* Site vitrine et pages communes : hébergés pareil, mais pas des tunnels
+         de conversion — hors de cette étape et de ses totaux. */
+      if (m && m.kind && m.kind !== 'funnel') return;
+      var lbl = String(k.vslLabels[pg] || ''), lblParts = lbl.split(' · ');
+      if (!byFunnel[tslug]) byFunnel[tslug] = zero({ slug: tslug, name: (m && m.name) || lblParts[0] || tslug, kind: m ? m.kind : 'funnel', steps: [] });
+      var f = byFunnel[tslug];
+      var step = zero({ page: pg, slug: sslug, name: (ms && ms.name) || lblParts[1] || sslug, type: ms ? ms.type : '', variants: [] });
+      addTo(step, tot);
+      vars.forEach(function (c) {
+        var mv = ms && ms.variants ? ms.variants[c.variant] : null;
+        var vl = (mv && mv.label) || (k.vslVarLabels[pg] && k.vslVarLabels[pg][c.variant]) || '';
+        var row = zero({ id: c.variant, label: vl, weight: mv ? mv.weight : null, status: mv ? mv.status : '' });
+        addTo(row, c);
+        step.variants.push(row);
+      });
+      f.steps.push(step);
+      addTo(f, tot);
+      var named = step.variants.filter(function (c) { return c.id !== '_'; });
       if (named.length >= 2) k.vslTests.push({ page: pg, variants: named });
     });
+    k.vslFunnels = Object.keys(byFunnel).map(function (kk) { return byFunnel[kk]; });
+    k.vslFunnels.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+    var all = zero({});
+    k.vslFunnels.forEach(function (f) { addTo(all, f); });
+    k.vslViews = all.views; k.vslCtas = all.ctas; k.vslLeads = all.leads; k.vslBookings = all.bookings;
+    k.vslPresent = all.present; k.vslCloses = all.closes;
+    var legacyAll = zero({});
+    k.vslLegacy.forEach(function (c) { addTo(legacyAll, c); });
+    k.vslLegacyTotals = legacyAll;
+    k.vslActive = k.vslViews > 0 || k.vslBookings > 0 || k.vslLeads > 0 || k.vslLegacy.length > 0;
+    k.vslCtaRate = k.vslViews > 0 ? k.vslCtas / k.vslViews * 100 : null;
+    k.vslBookRate = k.vslViews > 0 ? k.vslBookings / k.vslViews * 100 : null;
+    k.vslCpr = k.spend > 0 && k.vslBookings > 0 ? k.spend / k.vslBookings : null;
 
     k.selfShare = k.booked > 0 ? k.bookedSelf / k.booked * 100 : null;
     k.setterShare = k.booked > 0 ? k.bookedSetter / k.booked * 100 : null;
@@ -2220,6 +2261,29 @@
     });
     return TYPE_MAP;
   }
+  /* Métadonnées des tunnels hébergés — noms de tunnel, d'étape et de variante
+     pour la lecture par tunnel › page › variante du Funnel Sales. Lecture
+     réservée aux admins (firestore.rules) : à défaut, libellés du beacon. */
+  function loadTunnelsMeta(db, DATA) {
+    DATA.tunnelsMeta = {};
+    return db.collection('tunnels').get().then(function (snap) {
+      snap.forEach(function (doc) {
+        var t = doc.data() || {};
+        if (t.archived === true || !t.slug) return;
+        var steps = {};
+        (t.steps || []).forEach(function (s) {
+          if (!s || !s.slug || s.archived === true) return;
+          var vars = {};
+          (s.variants || []).forEach(function (v) {
+            if (v && v.id) vars[String(v.id)] = { label: v.label || '', weight: Number(v.weight) || 0, status: v.status || '' };
+          });
+          steps[String(s.slug)] = { name: s.name || s.slug, type: s.type || 'page', variants: vars };
+        });
+        DATA.tunnelsMeta[String(t.slug)] = { name: t.name || t.slug, kind: t.kind || 'funnel', steps: steps };
+      });
+    }).catch(function () { DATA.tunnelsMeta = {}; });
+  }
+
   function loadTypeMap(db) {
     return db.collection('booking_config').doc('_types').get().then(function (snap) {
       return buildTypeMap((snap.exists && snap.data().list) || []);
@@ -2276,7 +2340,7 @@
         loadBookings(db, P, DATA, TYPE_MAP), loadCalls(db, P, DATA),
         loadFunnelCosts(db, DATA), loadSettingDeals(db, P, DATA, TEAM),
         loadJournalPeriod(db, P, DATA), loadActionsAll(db, P, DATA, TEAM),
-        loadClosedLeads(db, P, DATA), loadPayments(db, DATA)
+        loadClosedLeads(db, P, DATA), loadPayments(db, DATA), loadTunnelsMeta(db, DATA)
       ]);
     })
     .then(function () { return resolveChains(db, DATA, TYPE_MAP); })

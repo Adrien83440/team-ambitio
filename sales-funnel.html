@@ -449,6 +449,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
   var tunnelFilter = 'all';
   var activeTab = 'funnel';
   var utmAxis = 'creative';    // section 🎨 : creative | adset | campaign
+  var sioShow = false;         // étape pages du tunnel : historique System.io déplié
   var utmShowAll = false;      // section 🎨 : déplier les valeurs à < 3 leads
   var TYPE_MAP = {};           // booking_config/_types → {id:{isSetterOnly,isCoaching,label}}
   var TARGETS = {};            // _config/funnel_targets
@@ -876,12 +877,36 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       + '<td class="num">' + fmtNum(c.closes) + '</td><td class="num">' + r(c.closes, c.bookings) + '</td>'
       + '</tr>';
   }
-  function vslHead(first, showForms) {
+  function vslHead(first, showForms, withAb) {
     return '<thead><tr><th>' + first + '</th><th>Vues</th><th>Clics</th><th>Clics / vues</th>'
       + (showForms ? '<th>Formulaires</th><th>Form. / vues</th>' : '')
       + '<th>RDV pris</th><th>RDV / vues</th>' + (showForms ? '<th>RDV / form.</th>' : '')
-      + '<th>Présents</th><th>Présents / RDV</th><th>Closes</th><th>Closes / RDV</th></tr></thead>';
+      + '<th>Présents</th><th>Présents / RDV</th><th>Closes</th><th>Closes / RDV</th>'
+      + (withAb ? '<th>Δ RDV / vues</th><th>Significativité (95 %)</th>' : '') + '</tr></thead>';
   }
+  function vslAbCells(ref, v, idx) {
+    if (idx === 0) return '<td class="num">—</td><td><span style="color:var(--muted2)">référence</span></td>';
+    var refRate = ref.views > 0 ? ref.bookings / ref.views * 100 : null;
+    var rate = v.views > 0 ? v.bookings / v.views * 100 : null;
+    var delta = (rate != null && refRate != null) ? fmtPts(rate - refRate) : '—';
+    var st = abSignif(ref.views, ref.bookings, v.views, v.bookings);
+    var sig;
+    if (!st) sig = '<span style="color:var(--muted2)">échantillon insuffisant (≥ 30 vues/variante)</span>';
+    else if (st.p < 0.05) sig = '<span class="fn-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '" style="margin-top:0">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
+    else sig = '<span class="fn-badge warn" style="margin-top:0">en cours · p = ' + st.p.toFixed(2) + '</span>';
+    return '<td class="num">' + delta + '</td><td>' + sig + '</td>';
+  }
+  function vslVariantName(v) {
+    var n = '↳ ' + esc(String(v.id).toUpperCase());
+    if (v.label) n += ' · ' + esc(v.label);
+    if (v.weight != null && v.weight > 0) n += ' <span style="color:var(--muted2);font-weight:500">(' + v.weight + ' %)</span>';
+    if (v.status && v.status !== 'live') n += ' <span style="color:var(--muted2);font-weight:500">en pause</span>';
+    return n;
+  }
+  /* Étape « Pages du tunnel » : un tableau par tunnel — chaque page sur sa
+     ligne, chaque variante sur la sienne (c'est la seule façon de lire un
+     A/B test), total du tunnel en pied. System.io n'y figure plus : ses
+     lignes sont derrière le bouton « Historique System.io ». */
   function renderVslStage(k) {
     var hasLeads = k.vslLeads > 0;
     var h = stageOpen('🎬', 'Pages du tunnel — conversion par étape',
@@ -889,36 +914,39 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += '<div class="fn-grid">';
     h += kpiCard(fmtNum(k.vslViews), 'Vues', 'toutes pages et variantes', null, k.vslViews === 0);
     h += kpiCard(fmtNum(k.vslCtas), 'Clics « Réserver »', 'clics / vues ' + fmtPct(k.vslCtaRate), null, k.vslCtas === 0);
-    if (hasLeads) h += kpiCard(fmtNum(k.vslLeads), 'Formulaires remplis', 'quiz et formulaire de la VSL · form. / vues ' + fmtPct(k.vslViews > 0 ? k.vslLeads / k.vslViews * 100 : null));
-    h += kpiCard(fmtNum(k.vslBookings), 'RDV pris', 'créés sur la période · RDV / vues ' + fmtPct(k.vslBookRate) + (hasLeads && k.vslLeads > 0 ? ' · RDV / form. ' + fmtPct(k.vslBookings / k.vslLeads * 100) : ''));
+    if (hasLeads) h += kpiCard(fmtNum(k.vslLeads), 'Formulaires remplis', 'form. / vues ' + fmtPct(k.vslViews > 0 ? k.vslLeads / k.vslViews * 100 : null));
+    h += kpiCard(fmtNum(k.vslBookings), 'RDV pris', 'RDV / vues ' + fmtPct(k.vslBookRate) + (hasLeads && k.vslLeads > 0 ? ' · RDV / form. ' + fmtPct(k.vslBookings / k.vslLeads * 100) : ''));
+    h += kpiCard(fmtNum(k.vslPresent || 0), 'Présents', 'présents / RDV ' + fmtPct(k.vslBookings > 0 ? (k.vslPresent || 0) / k.vslBookings * 100 : null), null, !k.vslPresent);
     h += kpiCard(fmtEuro2(k.vslCpr), 'CPR', 'dépense pub / RDV pris depuis ces pages', null, k.vslCpr == null);
     h += '</div>';
-    if (k.vslPages && k.vslPages.length) {
-      h += '<div class="fn-table-wrap" style="border-radius:11px;margin-top:14px"><table class="fn-table" style="min-width:' + (hasLeads ? 1080 : 860) + 'px">' + vslHead('Page', hasLeads) + '<tbody>';
-      k.vslPages.forEach(function (p) { h += vslRow(esc(vslPageLabel(p.page)), p, hasLeads); });
-      h += '</tbody></table></div>';
-    }
-    (k.vslTests || []).forEach(function (test) {
-      var ref = test.variants[0];
-      var refRate = ref.views > 0 ? ref.bookings / ref.views * 100 : null;
-      h += '<div style="margin-top:14px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">🧪 A/B test — ' + esc(vslPageLabel(test.page)) + ' <span style="font-weight:500;text-transform:none;letter-spacing:0">(RDV par vue · variante ' + esc(ref.variant.toUpperCase()) + ' = référence)</span></div>';
-      h += '<div class="fn-table-wrap" style="border-radius:11px"><table class="fn-table" style="min-width:' + (hasLeads ? 1240 : 1020) + 'px">' + vslHead('Variante', hasLeads).replace('</tr></thead>', '<th>Δ RDV / vues vs ' + esc(ref.variant.toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead>') + '<tbody>';
-      test.variants.forEach(function (v, idx) {
-        var rate = v.views > 0 ? v.bookings / v.views * 100 : null;
-        var delta = '—';
-        var sig = '<span style="color:var(--muted2)">référence</span>';
-        if (idx > 0) {
-          delta = (rate != null && refRate != null) ? fmtPts(rate - refRate) : '—';
-          var st = abSignif(ref.views, ref.bookings, v.views, v.bookings);
-          if (!st) sig = '<span style="color:var(--muted2)">échantillon insuffisant (≥ 30 vues/variante)</span>';
-          else if (st.p < 0.05) sig = '<span class="fn-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '" style="margin-top:0">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
-          else sig = '<span class="fn-badge warn" style="margin-top:0">en cours · p = ' + st.p.toFixed(2) + '</span>';
+    (k.vslFunnels || []).forEach(function (f) {
+      h += '<div style="margin-top:14px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">🧭 ' + esc(f.name) + ' <span style="font-weight:500;text-transform:none;letter-spacing:0">(' + f.steps.length + ' page' + (f.steps.length > 1 ? 's' : '') + ')</span></div>';
+      h += '<div class="fn-table-wrap" style="border-radius:11px"><table class="fn-table" style="min-width:' + (hasLeads ? 1320 : 1100) + 'px">' + vslHead('Page · variante', hasLeads, true) + '<tbody>';
+      f.steps.forEach(function (s) {
+        var multi = s.variants.filter(function (v) { return v.id !== '_'; }).length >= 2;
+        h += vslRow(esc(s.name) + ' <span style="color:var(--muted2);font-weight:500;font-family:var(--font-m);font-size:10.5px">/' + esc(s.slug) + '</span>', s, hasLeads)
+          .replace('</tr>', '<td class="num">' + (multi ? 'A/B' : '—') + '</td><td></td></tr>');
+        if (s.variants.length > 1 || (s.variants[0] && s.variants[0].id !== '_')) {
+          s.variants.forEach(function (v, idx) {
+            h += vslRow(vslVariantName(v), v, hasLeads).replace('</tr>', (multi ? vslAbCells(s.variants[0], v, idx) : '<td class="num">—</td><td></td>') + '</tr>');
+          });
         }
-        h += vslRow(esc(v.variant.toUpperCase()), v, hasLeads).replace('</tr>', '<td class="num">' + delta + '</td><td>' + sig + '</td></tr>');
       });
+      if (f.steps.length > 1) h += vslRow('<span style="color:var(--gold)">Total ' + esc(f.name) + '</span>', f, hasLeads).replace('</tr>', '<td></td><td></td></tr>');
       h += '</tbody></table></div></div>';
     });
-    h += '<div class="fn-stage-note" style="margin-top:8px">Un RDV sans provenance (lien direct, ancien onglet) reste compté dans « Prise de RDV » mais pas ici — sauf si la fiche du lead a été créée par un formulaire du tunnel, dont la provenance est connue dès l\'opt-in. Les lignes « System.io, historique » s\'arrêtent à la bascule du domaine. Ces chiffres sont un plancher, jamais une estimation.</div>';
+    if (!(k.vslFunnels || []).length) h += '<div class="fn-stage-note" style="margin-top:10px">Aucune page hébergée mesurée sur la période.</div>';
+    if (k.vslLegacy && k.vslLegacy.length) {
+      var lt = k.vslLegacyTotals || {};
+      h += '<div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="fn-btn" data-sio-toggle>' + (sioShow ? '▾' : '▸') + ' Historique System.io</button>'
+        + '<span style="font-size:11.5px;color:var(--muted2)">' + k.vslLegacy.length + ' page(s) · ' + fmtNum(lt.views) + ' vues · ' + fmtNum(lt.bookings) + ' RDV — hors totaux et hors A/B test, arrêté à la bascule du domaine</span></div>';
+      if (sioShow) {
+        h += '<div class="fn-table-wrap" style="border-radius:11px;margin-top:8px"><table class="fn-table" style="min-width:' + (hasLeads ? 1080 : 860) + 'px">' + vslHead('Page System.io', hasLeads, false) + '<tbody>';
+        k.vslLegacy.forEach(function (c) { h += vslRow(esc(vslPageLabel(c.page)), c, hasLeads); });
+        h += '</tbody></table></div>';
+      }
+    }
+    h += '<div class="fn-stage-note" style="margin-top:8px">Un RDV sans provenance (lien direct, ancien onglet) reste compté dans « Prise de RDV » mais pas ici — sauf si la fiche du lead a été créée par un formulaire du tunnel, dont la provenance est connue dès l\'opt-in. Ces chiffres sont un plancher, jamais une estimation.</div>';
     h += '</div><div class="fn-arrow">▼</div>';
     return h;
   }
@@ -3267,7 +3295,9 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       var bAx = e.target.closest ? e.target.closest('[data-utm-axis]') : null;
       if (bAx) { utmAxis = bAx.getAttribute('data-utm-axis'); utmShowAll = false; renderFunnel(); return; }
       var bMore = e.target.closest ? e.target.closest('[data-utm-more]') : null;
-      if (bMore) { utmShowAll = !utmShowAll; renderFunnel(); }
+      if (bMore) { utmShowAll = !utmShowAll; renderFunnel(); return; }
+      var bSio = e.target.closest ? e.target.closest('[data-sio-toggle]') : null;
+      if (bSio) { sioShow = !sioShow; renderFunnel(); }
     });
     $('#fnRefreshBtn').onclick = refresh;
     $('#fnTargetsBtn').onclick = openTargetsModal;
