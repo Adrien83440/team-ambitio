@@ -476,23 +476,36 @@ table.ag-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     var p = String(pg || '');
     if (p === 'vsl_elite') return 'VSL Élite';
     if (p === 'vsl_business') return 'VSL Business';
+    if (p === 'quiz_elite') return 'Funnel Quiz Élite';
+    if (p === 'quiz_business') return 'Funnel Quiz Business';
+    if (k_labels && k_labels[p]) return k_labels[p];   // page de tunnel hébergé
     return p;
   }
+  var k_labels = null;
+  /* Funnel quiz (28/09/2026) : même étape que la VSL, colonne Leads en plus
+     (le quiz garde un questionnaire d'opt-in avant le RDV). */
   function renderVsl(k) {
-    var h = stageOpen('🎬', 'VSL — prise de RDV directe', 'vues et clics : mesure beacon · RDV : agenda Alteore · replanifications exclues');
+    k_labels = k.vslLabels || null;
+    var hasLeads = (k.vslLeads || 0) > 0;
+    var h = stageOpen('🎬', hasLeads ? 'VSL & Funnel Quiz — prise de RDV directe' : 'VSL — prise de RDV directe', 'vues et clics : mesure beacon · leads : questionnaire du funnel quiz · RDV : agenda Alteore · replanifications exclues');
     h += '<div class="ag-grid">';
-    h += kpi(fmtNum(k.vslViews || null), 'Vues VSL', 'sessions, toutes variantes', !k.vslViews);
+    h += kpi(fmtNum(k.vslViews || null), hasLeads ? 'Vues VSL & quiz' : 'Vues VSL', 'sessions, toutes pages et variantes', !k.vslViews);
     h += kpi(fmtNum(k.vslCtas || null), 'Clics « Réserver »', 'taux de clic ' + fmtPct(k.vslCtaRate), !k.vslCtas);
-    h += kpi(fmtNum(k.vslBookings || 0), 'RDV pris depuis la VSL', 'créés sur la période');
+    if (hasLeads) h += kpi(fmtNum(k.vslLeads), 'Leads quiz', 'questionnaires complétés sur la période', false);
+    h += kpi(fmtNum(k.vslBookings || 0), hasLeads ? 'RDV pris depuis la VSL ÷ le quiz' : 'RDV pris depuis la VSL', 'créés sur la période');
     h += kpi(fmtPct(k.vslBookRate), 'Taux de RDV ÷ vues', 'remplace le taux d\'opt-in');
-    h += kpi(fmtEuro2(k.vslCpr), 'CPR VSL', 'dépense pub ÷ RDV pris depuis la VSL', k.vslCpr == null);
+    h += kpi(fmtEuro2(k.vslCpr), hasLeads ? 'CPR VSL & quiz' : 'CPR VSL', 'dépense pub ÷ RDV pris depuis ces pages', k.vslCpr == null);
     h += '</div>';
     var pages = k.vslPages || [];
     if (pages.length > 1) {
-      h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr><th>Page</th><th class="num">Vues</th><th class="num">Clics</th><th class="num">RDV</th><th class="num">RDV ÷ vues</th></tr></thead><tbody>';
+      h += '<div class="ag-table-wrap"><table class="ag-table"><thead><tr><th>Page</th><th class="num">Vues</th><th class="num">Clics</th>' + (hasLeads ? '<th class="num">Leads</th>' : '') + '<th class="num">RDV</th><th class="num">RDV ÷ vues</th>' + (hasLeads ? '<th class="num">RDV ÷ leads</th>' : '') + '</tr></thead><tbody>';
       for (var i = 0; i < pages.length; i++) {
         var p = pages[i];
-        h += '<tr><td><strong>' + esc(vslPageLabel(p.page)) + '</strong></td><td class="num">' + fmtNum(p.views) + '</td><td class="num">' + fmtNum(p.ctas) + '</td><td class="num">' + fmtNum(p.bookings) + '</td><td class="num">' + fmtPct(p.views > 0 ? p.bookings / p.views * 100 : null) + '</td></tr>';
+        h += '<tr><td><strong>' + esc(vslPageLabel(p.page)) + '</strong></td><td class="num">' + fmtNum(p.views) + '</td><td class="num">' + fmtNum(p.ctas) + '</td>'
+          + (hasLeads ? '<td class="num">' + (p.leads > 0 ? fmtNum(p.leads) : '—') + '</td>' : '')
+          + '<td class="num">' + fmtNum(p.bookings) + '</td><td class="num">' + fmtPct(p.views > 0 ? p.bookings / p.views * 100 : null) + '</td>'
+          + (hasLeads ? '<td class="num">' + (p.leads > 0 ? fmtPct(p.bookings / p.leads * 100) : '—') + '</td>' : '')
+          + '</tr>';
       }
       h += '</tbody></table></div>';
     }

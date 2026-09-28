@@ -852,22 +852,34 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     var p = String(pg || '');
     if (p === 'vsl_elite') return 'VSL Élite';
     if (p === 'vsl_business') return 'VSL Business';
+    if (p === 'quiz_elite') return 'Funnel Quiz Élite';
+    if (p === 'quiz_business') return 'Funnel Quiz Business';
     if (K && K.vslLabels && K.vslLabels[p]) return K.vslLabels[p];   // page de tunnel hébergé
     return p;
   }
+  /* Funnel quiz (28/09/2026) : même étape que la VSL, avec une colonne Leads
+     en plus — le quiz garde un opt-in (questionnaire) avant le RDV. Un RDV
+     d'un lead quiz pris sans paramètre lp est rattaché via la fiche du lead. */
   function renderVslStage(k) {
-    var h = stageOpen('🎬', 'VSL — prise de RDV directe', 'vues et clics : beacon system.io · RDV : collection bookings (provenance posée par booking.html) · replanifications et RDV internes exclus');
+    var hasLeads = k.vslLeads > 0;
+    var h = stageOpen('🎬', hasLeads ? 'VSL & Funnel Quiz — prise de RDV directe' : 'VSL — prise de RDV directe',
+      'vues et clics : beacon system.io · leads : provenance posée à l\'opt-in (funnel quiz) · RDV : collection bookings (provenance posée par booking.html, ou fiche du lead) · replanifications et RDV internes exclus');
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.vslViews), 'Vues VSL', 'sessions, toutes variantes', null, k.vslViews === 0);
+    h += kpiCard(fmtNum(k.vslViews), hasLeads ? 'Vues VSL & quiz' : 'Vues VSL', 'sessions, toutes pages et variantes', null, k.vslViews === 0);
     h += kpiCard(fmtNum(k.vslCtas), 'Clics « Réserver »', 'taux de clic ' + fmtPct(k.vslCtaRate), null, k.vslCtas === 0);
-    h += kpiCard(fmtNum(k.vslBookings), 'RDV pris depuis la VSL', 'créés sur la période');
+    if (hasLeads) h += kpiCard(fmtNum(k.vslLeads), 'Leads quiz', 'questionnaires complétés sur la période');
+    h += kpiCard(fmtNum(k.vslBookings), hasLeads ? 'RDV pris depuis la VSL / le quiz' : 'RDV pris depuis la VSL', 'créés sur la période');
     h += kpiCard(fmtPct(k.vslBookRate), 'Taux de RDV / vues', 'remplace le taux d\'opt-in');
-    h += kpiCard(fmtEuro2(k.vslCpr), 'CPR VSL', 'dépense pub / RDV pris depuis la VSL', null, k.vslCpr == null);
+    h += kpiCard(fmtEuro2(k.vslCpr), hasLeads ? 'CPR VSL & quiz' : 'CPR VSL', 'dépense pub / RDV pris depuis ces pages', null, k.vslCpr == null);
     h += '</div>';
     if (k.vslPages && k.vslPages.length > 1) {
-      h += '<div class="fn-table-wrap" style="border-radius:11px;margin-top:14px"><table class="fn-table" style="min-width:520px"><thead><tr><th>Page</th><th>Vues</th><th>Clics</th><th>RDV</th><th>RDV / vues</th></tr></thead><tbody>';
+      h += '<div class="fn-table-wrap" style="border-radius:11px;margin-top:14px"><table class="fn-table" style="min-width:520px"><thead><tr><th>Page</th><th>Vues</th><th>Clics</th>' + (hasLeads ? '<th>Leads</th>' : '') + '<th>RDV</th><th>RDV / vues</th>' + (hasLeads ? '<th>RDV / leads</th>' : '') + '</tr></thead><tbody>';
       k.vslPages.forEach(function (p) {
-        h += '<tr><td><strong>' + esc(vslPageLabel(p.page)) + '</strong></td><td class="num">' + fmtNum(p.views) + '</td><td class="num">' + fmtNum(p.ctas) + '</td><td class="num">' + fmtNum(p.bookings) + '</td><td class="num">' + fmtPct(p.views > 0 ? p.bookings / p.views * 100 : null) + '</td></tr>';
+        h += '<tr><td><strong>' + esc(vslPageLabel(p.page)) + '</strong></td><td class="num">' + fmtNum(p.views) + '</td><td class="num">' + fmtNum(p.ctas) + '</td>'
+          + (hasLeads ? '<td class="num">' + (p.leads > 0 ? fmtNum(p.leads) : '—') + '</td>' : '')
+          + '<td class="num">' + fmtNum(p.bookings) + '</td><td class="num">' + fmtPct(p.views > 0 ? p.bookings / p.views * 100 : null) + '</td>'
+          + (hasLeads ? '<td class="num">' + (p.leads > 0 ? fmtPct(p.bookings / p.leads * 100) : '—') + '</td>' : '')
+          + '</tr>';
       });
       h += '</tbody></table></div>';
     }
@@ -892,7 +904,7 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
       });
       h += '</tbody></table></div></div>';
     });
-    h += '<div class="fn-stage-note" style="margin-top:8px">Un RDV sans provenance (lien direct, ancien onglet, iframe sans paramètres) reste compté dans « Prise de RDV » mais pas ici : ces chiffres sont un plancher, jamais une estimation.</div>';
+    h += '<div class="fn-stage-note" style="margin-top:8px">Un RDV sans provenance (lien direct, ancien onglet, iframe sans paramètres) reste compté dans « Prise de RDV » mais pas ici — sauf si la fiche du lead a été créée par le funnel quiz, dont la provenance est connue dès l\'opt-in. Ces chiffres sont un plancher, jamais une estimation.</div>';
     h += '</div><div class="fn-arrow">▼</div>';
     return h;
   }

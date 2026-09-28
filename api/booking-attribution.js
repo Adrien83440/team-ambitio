@@ -64,7 +64,7 @@ const str = Lookup.str;
 
 // Pages de provenance reconnues (même liste que api/page-view.js, côté VSL).
 // Les pages de tunnel s'y ajoutent dynamiquement (voir buildLanding).
-const ALLOWED_PAGES = { vsl_elite: 1, vsl_business: 1, elite: 1, business: 1 };
+const ALLOWED_PAGES = { vsl_elite: 1, vsl_business: 1, quiz_elite: 1, quiz_business: 1, elite: 1, business: 1 };
 
 function cleanSlug(v, max) {
   return String(v || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, max || 40);
@@ -108,8 +108,15 @@ function buildAttribution(body, landing) {
 function landingLabel(landing) {
   if (!landing) return '';
   if (landing.label) return landing.label + (landing.variant ? ' · variante ' + landing.variant.toUpperCase() : '');
-  const base = landing.page.indexOf('business') >= 0 ? 'VSL Business' : (landing.page.indexOf('elite') >= 0 ? 'VSL Élite' : landing.page);
+  const biz = landing.page.indexOf('business') >= 0;
+  const base = landing.page.indexOf('quiz_') === 0 ? (biz ? 'Funnel Quiz Business' : 'Funnel Quiz Élite')
+    : (biz ? 'VSL Business' : (landing.page.indexOf('elite') >= 0 ? 'VSL Élite' : landing.page));
   return base + (landing.variant ? ' · variante ' + landing.variant.toUpperCase() : '');
+}
+
+// « depuis la VSL Élite » / « depuis le Funnel Quiz Élite » — article selon le libellé.
+function landingWithArticle(label) {
+  return (label.indexOf('Funnel') === 0 ? 'le ' : 'la ') + label;
 }
 
 module.exports = async (req, res) => {
@@ -173,7 +180,7 @@ module.exports = async (req, res) => {
       }
       if (label) {
         update.timeline_history = FV.arrayUnion({
-          text: '🎬 RDV pris depuis la ' + label + (typeLabel ? ' · ' + typeLabel : ''),
+          text: '🎬 RDV pris depuis ' + landingWithArticle(label) + (typeLabel ? ' · ' + typeLabel : ''),
           date: dateFR, color: '#22d3ee'
         });
       }

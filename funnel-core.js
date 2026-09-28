@@ -731,9 +731,14 @@
   /* Pages des tunnels hébergés (admin-tunnels.html, 09/2026) : clé
      `<tunnel>__<etape>`. Elles se mesurent comme une VSL system.io — vues et
      clics par le beacon, RDV par bookings.landing. */
+  /* Funnel quiz system.io (28/09/2026) : clé `quiz_elite` / `quiz_business`.
+     Questionnaire d'opt-in (lead créé par api/lead-optin.js, qui pose
+     landingFirst / landingLast avec via 'optin') puis prise de RDV. Se mesure
+     dans la même étape : vues et clics par le beacon, leads par la provenance
+     de la fiche, RDV par bookings.landing ou, à défaut, par la fiche du lead. */
   function isVslPage(p) {
     var s = String(p || '');
-    return s.indexOf('vsl_') === 0 || /^[a-z0-9-]+__[a-z0-9-]+$/.test(s);
+    return s.indexOf('vsl_') === 0 || s.indexOf('quiz_') === 0 || /^[a-z0-9-]+__[a-z0-9-]+$/.test(s);
   }
   function pageTunnel(p) { return String(p || '').indexOf('business') >= 0 ? 'business' : 'elite'; }
 
@@ -1297,15 +1302,40 @@
        « RDV pris » (créés sur la période, self + setter, replanifications
        exclues). Ventilé par page × variante pour l'A/B test. Un RDV sans
        bloc landing n'est compté nulle part ici : plancher, jamais estimé. */
-    k.vslViews = 0; k.vslCtas = 0; k.vslBookings = 0;
+    k.vslViews = 0; k.vslCtas = 0; k.vslBookings = 0; k.vslLeads = 0;
     var vslByPage = {};
     /* Libellés lisibles des pages de tunnel (pageLabel posé par le beacon). */
     k.vslLabels = {};
     function vslCell(pg, vr) {
       if (!vslByPage[pg]) vslByPage[pg] = {};
-      if (!vslByPage[pg][vr]) vslByPage[pg][vr] = { variant: vr, views: 0, ctas: 0, bookings: 0 };
+      if (!vslByPage[pg][vr]) vslByPage[pg][vr] = { variant: vr, views: 0, ctas: 0, leads: 0, bookings: 0 };
       return vslByPage[pg][vr];
     }
+    /* Provenance d'un RDV : le bloc landing posé par booking.html (paramètre
+       lp). À défaut, la page d'entrée de la fiche du lead quand elle a été
+       posée à l'opt-in (via 'optin' — funnel quiz) : le lead existait avant
+       le RDV, sa provenance est un fait, pas une estimation. Un RDV pris par
+       le setter ou depuis l'e-mail reste ainsi rattaché au tunnel qui a
+       produit le lead. Une provenance posée au RDV (via 'booking') n'est
+       jamais réutilisée : elle appartient à un autre RDV. */
+    function bookingLanding(b) {
+      if (b.landing && b.landing.page) return b.landing;
+      var l = bookingLead(b);
+      var LF = l && l.landingFirst;
+      if (LF && LF.page && LF.via === 'optin') return LF;
+      return null;
+    }
+    /* Leads entrés par une page à conversion RDV directe — seul le funnel
+       quiz en produit (la VSL n'a pas d'opt-in). Nouveaux : page d'entrée ;
+       ré-opt-ins : dernière page. */
+    function countVslLead(L) {
+      if (!L || !L.page || L.via !== 'optin') return;
+      if (!isVslPage(L.page) || !tunnelMatch(pageTunnel(L.page))) return;
+      vslCell(L.page, L.variant || '_').leads++;
+      k.vslLeads++;
+    }
+    cohort.forEach(function (l) { countVslLead(l.landingFirst); });
+    reopt.forEach(function (l) { countVslLead(l.landingLast); });
     DATA.views.forEach(function (v) {
       if (!isVslPage(v.page) || !tunnelMatch(pageTunnel(v.page))) return;
       var c = vslCell(v.page, v.variant || '_');
@@ -1318,12 +1348,12 @@
     DATA.bookings.forEach(function (b) {
       if (!b._inCreated || b.rescheduledFromId) return;
       if (b._class !== 'self' && b._class !== 'setter') return;
-      var L = b.landing;
+      var L = bookingLanding(b);
       if (!L || !isVslPage(L.page) || !tunnelMatch(pageTunnel(L.page))) return;
       vslCell(L.page, L.variant || '_').bookings++;
       k.vslBookings++;
     });
-    k.vslActive = k.vslViews > 0 || k.vslBookings > 0;
+    k.vslActive = k.vslViews > 0 || k.vslBookings > 0 || k.vslLeads > 0;
     k.vslCtaRate = k.vslViews > 0 ? k.vslCtas / k.vslViews * 100 : null;
     k.vslBookRate = k.vslViews > 0 ? k.vslBookings / k.vslViews * 100 : null;
     k.vslCpr = k.spend > 0 && k.vslBookings > 0 ? k.spend / k.vslBookings : null;
@@ -1331,8 +1361,8 @@
     Object.keys(vslByPage).sort().forEach(function (pg) {
       var vars = Object.keys(vslByPage[pg]).map(function (kk) { return vslByPage[pg][kk]; });
       vars.sort(function (a, b) { return a.variant < b.variant ? -1 : 1; });
-      var tot = { page: pg, views: 0, ctas: 0, bookings: 0 };
-      vars.forEach(function (c) { tot.views += c.views; tot.ctas += c.ctas; tot.bookings += c.bookings; });
+      var tot = { page: pg, views: 0, ctas: 0, leads: 0, bookings: 0 };
+      vars.forEach(function (c) { tot.views += c.views; tot.ctas += c.ctas; tot.leads += c.leads; tot.bookings += c.bookings; });
       k.vslPages.push(tot);
       var named = vars.filter(function (c) { return c.variant !== '_'; });
       if (named.length >= 2) k.vslTests.push({ page: pg, variants: named });

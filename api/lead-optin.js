@@ -15,6 +15,8 @@
 //     telephone : "+33688121402",
 //     utm       : "VSL Business - Page inscription",  // optionnel
 //     source    : "webhook",                           // optionnel
+//     landing   : { page: "quiz_elite", variant: "a",  // optionnel — page d'entrée
+//                   pageUrl: "https://…" },            //   (même clé lp que booking.html)
 //     quiz      : {                                    // optionnel — question funnel
 //       score_global       : 17,
 //       scores             : { systematisation: 25, delegation: 13,
@@ -31,6 +33,14 @@
 // Le bloc quiz est nettoyé (whitelist de champs, tailles bornées) puis écrit
 // tel quel sur le document lead (champ `quiz` + `quizSubmittedAt`). Absent du
 // body → aucun champ quiz touché, comportement strictement identique à avant.
+//
+// PROVENANCE (28/09/2026) : la page d'entrée est posée sur la fiche en
+// `landingFirst` (jamais réécrite) et `landingLast`, avec `via: 'optin'`.
+// Explicite via `landing.page`, sinon déduite : un opt-in porteur d'un quiz
+// vient du funnel quiz → `quiz_elite` / `quiz_business`. C'est cette clé,
+// identique au paramètre `lp` du lien de booking, qui permet au funnel
+// (funnel-core.js) de relier vues beacon → leads → RDV d'une même page, y
+// compris un RDV pris ensuite sans paramètre (e-mail, setter).
 // Au ré-opt-in, l'ancien quiz part dans engagementHistory[] comme les autres
 // déclaratifs, mais n'est PAS effacé si le nouvel opt-in n'en porte pas.
 //
@@ -215,6 +225,43 @@ function canonicalizeType(rawType) {
   return t;
 }
 
+// ─── PROVENANCE (page d'entrée) ─────────────────────────────────────────
+// Même clé `lp` que booking.html / api/booking-attribution.js. Pages fixes
+// ci-dessous + pages des tunnels hébergés (`<tunnel>__<etape>`).
+const LANDING_PAGES = { elite: 1, business: 1, vsl_elite: 1, vsl_business: 1, quiz_elite: 1, quiz_business: 1 };
+const TUNNEL_KEY_RE = /^[a-z0-9-]+__[a-z0-9-]+$/;
+
+function landingSlug(v, max) {
+  return String(v || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, max || 40);
+}
+
+function landingLabelOf(page) {
+  if (TUNNEL_KEY_RE.test(page) && !LANDING_PAGES[page]) return page;
+  const biz = page.indexOf('business') >= 0;
+  if (page.indexOf('quiz_') === 0) return biz ? 'Funnel Quiz Business' : 'Funnel Quiz Élite';
+  if (page.indexOf('vsl_') === 0)  return biz ? 'VSL Business' : 'VSL Élite';
+  return biz ? 'Opt-in Business' : 'Opt-in Élite';
+}
+
+// body.landing explicite (page whitelistée) > déduction quiz > rien.
+function buildLanding(body, type, hasQuiz) {
+  const src = body && typeof body.landing === 'object' ? body.landing : null;
+  let page = src ? landingSlug(src.page, 90) : '';
+  if (page && !LANDING_PAGES[page] && !TUNNEL_KEY_RE.test(page)) page = '';
+  if (!page && hasQuiz) page = type === 'business' ? 'quiz_business' : 'quiz_elite';
+  if (!page) return null;
+  const out = {
+    page: page,
+    variant: (src && landingSlug(src.variant, 20)) || null,
+    label: landingLabelOf(page),
+    via: 'optin',
+    capturedAt: new Date().toISOString()
+  };
+  const url = String((src && src.pageUrl) || (body && (body.landingUrl || body.pageUrl || body.url)) || '').slice(0, 500);
+  if (url) out.pageUrl = url;
+  return out;
+}
+
 module.exports = async (req, res) => {
   // ─── 1. Auth via x-api-key ──────────────────────────────────────────
   const expectedKey = process.env.LEAD_OPTIN_API_KEY;
@@ -257,7 +304,13 @@ module.exports = async (req, res) => {
 
   const type        = canonicalizeType(typeRaw);
   const phoneNorm   = phoneNormalized(tel);
-  const tunnelLabel = type === 'business' ? 'VSL Business'
+  const quiz        = sanitizeQuiz(body && body.quiz);
+  const landing     = buildLanding(body, type, !!quiz);
+  // Libellé du tunnel : celui de la page d'entrée quand elle est connue
+  // (« Funnel Quiz Élite » plutôt que « VSL Élite » pour un lead du quiz),
+  // sinon le type. Sert de sourceDetail et d'UTM de repli.
+  const tunnelLabel = landing && landing.page.indexOf('quiz_') === 0 ? landing.label
+                    : type === 'business' ? 'VSL Business'
                     : type === 'vsl_elite' ? 'VSL Élite'
                     : (typeRaw || type);
   // Décodage défensif : certaines landing pages transmettent l'utm_campaign
@@ -267,7 +320,6 @@ module.exports = async (req, res) => {
   const utm         = Core.decodeUtm(String(utmRaw || tunnelLabel));
   const source      = String(sourceRaw || 'webhook');
   const attribution = buildAttribution(body, utmRaw, 'optin');
-  const quiz        = sanitizeQuiz(body && body.quiz);
 
   // ─── 3bis. LISTE DE BLOCAGE ─────────────────────────────────────────
   // Faux numéros et emails bidon bloqués depuis Leads Live : on s'arrête
@@ -346,6 +398,7 @@ module.exports = async (req, res) => {
         formAnswers:     prev.formAnswers     || null,
         formSubmittedAt: prev.formSubmittedAt || null,
         quiz:            prev.quiz            || null,
+        landing:         prev.landingLast     || prev.landingFirst     || null,
         attribution:     prev.attributionLast || prev.attributionFirst || null
       }),
 
@@ -379,6 +432,14 @@ module.exports = async (req, res) => {
     if (quiz) {
       update.quiz = quiz;
       update.quizSubmittedAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+
+    // ─── Provenance ────────────────────────────────────────────────────
+    // Dernière page toujours rafraîchie ; première page posée uniquement
+    // si la fiche n'en a pas encore (même logique que attributionFirst).
+    if (landing) {
+      update.landingLast = landing;
+      if (!prev.landingFirst || !prev.landingFirst.page) update.landingFirst = landing;
     }
 
     // ─── Soft-reset stage/status (sauf clients) ────────────────────────
@@ -445,6 +506,10 @@ module.exports = async (req, res) => {
   if (quiz) {
     newLead.quiz = quiz;
     newLead.quizSubmittedAt = admin.firestore.FieldValue.serverTimestamp();
+  }
+  if (landing) {
+    newLead.landingFirst = landing;
+    newLead.landingLast  = landing;
   }
 
   try {

@@ -52,7 +52,10 @@ const Reg = require('./_tunnelRegistry');
 // Pages reconnues. Ajouter ici tout nouveau tunnel.
 //   elite / business          → pages d'opt-in historiques
 //   vsl_elite / vsl_business  → pages VSL à prise de RDV directe (09/2026)
-const ALLOWED_PAGES = ['elite', 'business', 'vsl_elite', 'vsl_business'];
+//   quiz_elite / quiz_business → funnel quiz system.io (questionnaire d'opt-in
+//                                puis RDV, 09/2026) — même clé `lp` que sur le
+//                                lien de booking de la page de remerciement
+const ALLOWED_PAGES = ['elite', 'business', 'vsl_elite', 'vsl_business', 'quiz_elite', 'quiz_business'];
 const ALLOWED_EVENTS = { view: 1, optin: 1, cta: 1 };
 
 function todayIsoParis() {
