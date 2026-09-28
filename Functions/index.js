@@ -2224,6 +2224,42 @@ const _abDefaultCancel = {
         '<p>Cordialement,<br>L\'équipe Adrien&Emily</p>',
 };
 
+/* ═══ ANNULATION — origine / auteur / raison (28/09/2026) ═══
+   Lecture normalisée du bloc `cancellation` (posé par alteore-flow,
+   booking-admin, booking.html et les API), avec repli sur les champs
+   historiques : cancelledOrigin (modale résultat d'avant), cancelledReason
+   (API : transfert coach, client désactivé), outcomeByName/outcomeNote
+   quand le RDV a été statué « annule ». Jamais d'estimation : sans
+   origine, on écrit « origine non renseignée ». */
+const _AB_ROLE_LABELS = { admin: 'Admin', csm: 'CSM', coach: 'Coach', setter: 'Setting', closer: 'Closing', closer_setter: 'Setting + Closing', setter_ecrit: 'Setting écrit' };
+const _AB_VIA_LABELS = { reschedule: 'replanification', coach_transfer: 'transfert coach', client_deactivated: 'client désactivé', dedupe: 'doublon' };
+function _abCancelInfo(b) {
+  b = b || {};
+  const c = b.cancellation || {};
+  const viaOutcome = b.outcome === 'annule';
+  let origin = c.origin || b.cancelledOrigin || null;
+  if (!origin && b.cancelledReason) origin = 'systeme';
+  if (origin !== 'prospect' && origin !== 'equipe' && origin !== 'systeme') origin = null;
+  return {
+    origin,
+    byName: c.byName || (viaOutcome ? b.outcomeByName : null) || b.cancelledByName || null,
+    byRole: c.byRole || null,
+    via: c.via || b.cancelledReason || null,
+    reason: c.reason || (viaOutcome ? b.outcomeNote : null) || null,
+  };
+}
+function _abCancelText(b) {
+  const i = _abCancelInfo(b);
+  const parts = [];
+  if (i.origin === 'equipe') parts.push("annulé par l'équipe");
+  else if (i.origin === 'prospect') parts.push('annulé par le prospect');
+  else if (i.origin === 'systeme') parts.push('annulé · ' + (_AB_VIA_LABELS[i.via] || 'système'));
+  else parts.push('annulé · origine non renseignée');
+  if (i.byName) parts.push((i.origin === 'prospect' ? 'enregistré par ' : '') + i.byName + (i.byRole ? ' (' + (_AB_ROLE_LABELS[i.byRole] || i.byRole) + ')' : ''));
+  if (i.reason) parts.push(i.reason);
+  return parts.join(' · ');
+}
+
 function _abFmtDate(s) {
   if (!s) return '';
   try {
@@ -2873,6 +2909,7 @@ exports.onBookingUpdated = functions.firestore
       const subj = '🔴 RDV annulé — ' + typeLabel + ' avec ' + clientName + ' (' + _abFmtDate(after.date) + ' ' + time + ')';
       const body = '<p><strong>Un RDV vient d\'être annulé.</strong></p>' +
         '<table style="border-collapse:collapse;font-size:14px"><tbody>' +
+        '<tr><td style="padding:4px 12px 4px 0"><strong>Annulé par</strong></td><td>' + _abCancelText(after) + '</td></tr>' +
         '<tr><td style="padding:4px 12px 4px 0"><strong>Client</strong></td><td>' + clientName + '</td></tr>' +
         (prospect.email ? '<tr><td style="padding:4px 12px 4px 0"><strong>Email</strong></td><td><a href="mailto:' + prospect.email + '">' + prospect.email + '</a></td></tr>' : '') +
         (prospect.telephone ? '<tr><td style="padding:4px 12px 4px 0"><strong>Téléphone</strong></td><td><a href="tel:' + prospect.telephone + '">' + prospect.telephone + '</a></td></tr>' : '') +
@@ -2907,21 +2944,27 @@ exports.onBookingUpdated = functions.firestore
         if (leadSnap.exists) {
           const cur = leadSnap.data();
           const curStage = cur.stage || 'lead';
+          const canc = _abCancelInfo(after);
           const update = {
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             lastBookingAt: admin.firestore.FieldValue.serverTimestamp(),
             timeline_history: admin.firestore.FieldValue.arrayUnion({
-              text: '🔴 RDV annulé · ' + typeLabel + ' du ' + _abFmtDate(after.date) + ' ' + time,
+              text: '🔴 RDV ' + _abCancelText(after) + ' · ' + typeLabel + ' du ' + _abFmtDate(after.date) + ' ' + time,
               date: fmtNow(),
               color: '#ef4444'
             })
           };
-          if (TERMINAL_STAGES.indexOf(curStage) < 0) {
-            update.stage = 'rdv_annules_prospect';
+          /* Stage / status : uniquement quand l'annulation n'est PAS passée par
+             la modale résultat (outcome 'annule' = déjà propagé par
+             alteore-flow, avec le bon stage prospect/équipe et le retour en
+             follow_up_pm). Avant le 28/09/2026, la fonction écrasait ce
+             stage en rdv_annules_prospect quelle que soit l'origine. */
+          if (after.outcome !== 'annule' && TERMINAL_STAGES.indexOf(curStage) < 0) {
+            update.stage = canc.origin === 'equipe' ? 'rdv_annules_equipe' : 'rdv_annules_prospect';
             update.status = 'pas_interesse';
           }
           await leadRef.update(update);
-          console.log('[onBookingUpdated] Lead ' + linkedLeadId + ' bascule rdv_annules_prospect');
+          console.log('[onBookingUpdated] Lead ' + linkedLeadId + ' annulation ' + (canc.origin || 'origine inconnue') + (update.stage ? ' → ' + update.stage : ' (stage laissé par la modale)'));
         }
       }
     } catch (e) {

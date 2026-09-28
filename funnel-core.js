@@ -1456,6 +1456,18 @@
     k.noshowNB = dueSetter.filter(function (b) { return b.status === 'no_show'; }).length;
     k.reschedSB = dueSelf.filter(dueRescheduledF).length;
     k.reschedNB = dueSetter.filter(dueRescheduledF).length;
+    /* Origine des annulations (28/09/2026) : bloc `cancellation` posé par tous
+       les chemins d'annulation ; repli sur cancelledOrigin (modale résultat
+       d'avant) et cancelledReason (API : transfert coach, client désactivé).
+       « inconnu » = annulé avant la traçabilité, jamais estimé. */
+    function cancOrigin(b) {
+      var c = b.cancellation || null;
+      var o = (c && c.origin) || b.cancelledOrigin || null;
+      if (!o && b.cancelledReason) o = 'systeme';
+      return (o === 'prospect' || o === 'equipe' || o === 'systeme') ? o : 'inconnu';
+    }
+    k.cancByOrigin = { prospect: 0, equipe: 0, systeme: 0, inconnu: 0 };
+    due.filter(dueCancelledF).forEach(function (b) { k.cancByOrigin[cancOrigin(b)]++; });
 
     /* ══ RÉSULTATS D'APPEL — helpers outcome (refonte 07/2026) ══
        présent (live) = offre|close|non_close|disqualifie (repli : status

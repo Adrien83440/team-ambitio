@@ -365,6 +365,7 @@ module.exports = async (req, res) => {
             statusUpdatedBy: auth.uid,
             statusUpdatedByName: auth.email || null,
             excludeFromQuota: true,
+            cancellation: { origin: 'systeme', via: 'dedupe', by: auth.uid, byName: auth.email || null, byRole: 'admin', reason: 'Doublon de ' + keeper.id, at: new Date().toISOString() },
             duplicateOf: keeper.id,
             dedupedAt: now,
             dedupedBy: auth.uid,

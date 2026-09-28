@@ -166,6 +166,7 @@ async function doTransfer(auth, body, res) {
       await oldSnap.ref.update({
         status: 'cancelled',
         cancelledReason: 'coach_transfer',
+        cancellation: { origin: 'systeme', via: 'coach_transfer', by: auth.uid, byName: byName, byRole: null, reason: 'Transfert vers un autre coach', at: new Date().toISOString() },
         cancelledAt: now,
         cancelledBy: auth.uid,
         cancelledByName: byName,

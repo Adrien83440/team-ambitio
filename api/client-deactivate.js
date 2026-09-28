@@ -332,6 +332,7 @@ async function cancelBookings(bookings, byUid, byName, warnings) {
         cancelledBy: byUid || null,
         cancelledByName: byName || null,
         cancelledReason: 'client_deactivated',
+        cancellation: { origin: 'systeme', via: 'client_deactivated', by: byUid || null, byName: byName || null, byRole: null, reason: 'Client désactivé', at: new Date().toISOString() },
         statusUpdatedAt: ts,
         statusUpdatedBy: byUid || null,
         statusUpdatedByName: byName || null,

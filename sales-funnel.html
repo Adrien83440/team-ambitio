@@ -1545,7 +1545,16 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
     h += kpiCard(fmtNum(k.due), 'RDV planifiés', 'date dans la période · SB ' + fmtNum(k.dueSB) + ' · NB ' + fmtNum(k.dueNB));
     h += kpiCard(fmtNum(k.kept), 'Kept Call', 'planifiés − annulés − no-show − replanifiés', targetBadge('kept', k.keptPct));
     h += kpiCard(fmtPct(k.keptPct, 0), 'Kept %', null);
-    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.dueCancelled) + '</span>', '🔴 Annulés', 'SB ' + fmtNum(k.cancSB) + ' · NB ' + fmtNum(k.cancNB));
+    var cancOriginSub = '';
+    if (k.cancByOrigin) {
+      var cbo = k.cancByOrigin, cboParts = [];
+      if (cbo.prospect) cboParts.push(fmtNum(cbo.prospect) + ' prospect');
+      if (cbo.equipe) cboParts.push('<span style="color:var(--gold)">' + fmtNum(cbo.equipe) + ' équipe</span>');
+      if (cbo.systeme) cboParts.push(fmtNum(cbo.systeme) + ' système');
+      if (cbo.inconnu) cboParts.push(fmtNum(cbo.inconnu) + ' sans origine');
+      if (cboParts.length) cancOriginSub = '<br>' + cboParts.join(' · ');
+    }
+    h += kpiCard('<span style="color:var(--red3)">' + fmtNum(k.dueCancelled) + '</span>', '🔴 Annulés', 'SB ' + fmtNum(k.cancSB) + ' · NB ' + fmtNum(k.cancNB) + cancOriginSub);
     h += kpiCard('<span style="color:var(--gold)">' + fmtNum(k.dueNoShow) + '</span>', '🚫 No-show', 'SB ' + fmtNum(k.noshowSB) + ' · NB ' + fmtNum(k.noshowNB));
     h += kpiCard(fmtNum(k.dueRescheduled), '📅 Replanifiés', k.dueRescheduled ? 'SB ' + fmtNum(k.reschedSB) + ' · NB ' + fmtNum(k.reschedNB) + ' — remplacés, hors annulés' : 'remplacés, hors annulés', null, k.dueRescheduled === 0);
     h += kpiCard(fmtNum(k.dueCompleted), 'Tenus (statués)', k.dueUpcoming ? '+ ' + k.dueUpcoming + ' à venir' : null);

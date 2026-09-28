@@ -187,14 +187,24 @@
     return ((p.prenom || '') + ' ' + (p.nom || '')).trim() || p.email || (state.lead && state.lead.nom) || 'Prospect';
   }
 
+  /* « · prospect » / « · équipe » sur la puce Annulé — origine normalisée par
+     AlteoreFlow.cancellationInfo (bloc cancellation ou champs historiques). */
+  function cancelOriginSuffix(b) {
+    var AF = window.AlteoreFlow;
+    if (!AF || !AF.cancellationInfo || !b || b.rescheduled === true) return '';
+    var i = AF.cancellationInfo(b);
+    if (!i || !i.origin) return '';
+    return i.origin === 'equipe' ? ' · équipe' : i.origin === 'prospect' ? ' · prospect' : ' · système';
+  }
+
   function chip(b) {
     var AF = window.AlteoreFlow;
     if (b && b.outcome && AF && AF.OUTCOMES[b.outcome]) {
       var o = AF.OUTCOMES[b.outcome];
-      return '<span class="rvo-chip" style="color:' + o.color + ';border-color:' + o.color + '55;background:' + o.color + '1c">' + o.icon + ' ' + o.label + '</span>';
+      return '<span class="rvo-chip" style="color:' + o.color + ';border-color:' + o.color + '55;background:' + o.color + '1c">' + o.icon + ' ' + o.label + (b.outcome === 'annule' ? cancelOriginSuffix(b) : '') + '</span>';
     }
     if (!b) return '';
-    if (b.status === 'cancelled') return '<span class="rvo-chip" style="color:#ef4444;border-color:#ef444455;background:#ef44441c">🔴 Annulé</span>';
+    if (b.status === 'cancelled') return '<span class="rvo-chip" style="color:#ef4444;border-color:#ef444455;background:#ef44441c">🔴 Annulé' + cancelOriginSuffix(b) + '</span>';
     if (b.status === 'no_show') return '<span class="rvo-chip" style="color:#fbbf24;border-color:#fbbf2455;background:#fbbf241c">👻 No-show</span>';
     if (b.status === 'completed') return '<span class="rvo-chip" style="color:#34d399;border-color:#34d39955;background:#34d3991c">✅ Tenu</span>';
     var past = isPastBooking(b);
@@ -441,10 +451,10 @@
       h +=
         '<div class="rvo-frow single"><div class="rvo-f"><label>Annulé par</label>' +
           '<div class="rvo-radio" id="rvoCancelBy">' +
-            '<button type="button" data-v="prospect" class="sel">👤 Le prospect</button>' +
-            '<button type="button" data-v="equipe">👥 L’équipe</button>' +
-          '</div></div></div>' +
-        '<div class="rvo-frow single"><div class="rvo-f"><label>Raison</label><textarea id="rvoNote" placeholder="ex : plus disponible, a demandé à être rappelé…"></textarea></div></div>' +
+            '<button type="button" data-v="prospect"' + (b.cancelledOrigin === 'prospect' ? ' class="sel"' : '') + '>👤 Le prospect</button>' +
+            '<button type="button" data-v="equipe"' + (b.cancelledOrigin === 'equipe' ? ' class="sel"' : '') + '>👥 L’équipe</button>' +
+          '</div><div style="font-size:11px;color:var(--muted,#8f97b2);margin-top:4px">Choix obligatoire — aucune présélection : l’origine est une donnée métier.</div></div></div>' +
+        '<div class="rvo-frow single"><div class="rvo-f"><label>Raison <span style="font-weight:500;color:var(--muted,#8f97b2)">(obligatoire si l’équipe annule)</span></label><textarea id="rvoNote" placeholder="ex : plus disponible, a demandé à être rappelé…">' + esc(k === b.outcome ? (b.outcomeNote || '') : '') + '</textarea></div></div>' +
         '<div style="font-size:11.5px;color:var(--muted,#8f97b2)">ℹ️ Le lead retombe automatiquement dans le périmètre Setting (à récupérer → taux de récupération).</div>';
     } else {
       var ph = k === 'non_close' ? 'Pourquoi le prospect n’a pas signé ? (objection prix, timing, concurrent…)'
@@ -551,7 +561,10 @@
     }
     if (k === 'annule') {
       var selBtn = document.querySelector('#rvoCancelBy button.sel');
-      opts.cancelledBy = selBtn ? selBtn.getAttribute('data-v') : 'prospect';
+      if (!selBtn) { toastMsg('⚠️ Indique qui a annulé : le prospect ou l’équipe.'); return; }
+      opts.cancelledBy = selBtn.getAttribute('data-v');
+      if (opts.cancelledBy === 'equipe' && !opts.note) { toastMsg('⚠️ La raison est obligatoire quand l’équipe annule.'); return; }
+      opts.via = 'outcome_modal';
     }
 
     state.saving = true;

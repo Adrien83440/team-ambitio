@@ -1498,6 +1498,10 @@ if(pO)h+='<span style="display:inline-block;width:20px;height:20px;border-radius
 h+=esc(pO?pO.name:'—')+'</span></div>';
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Heure</span><span class="rdv-p-val">'+(b.time||'')+' – '+et+' ('+(du>=60?(du/60)+'h':du+' min')+')</span></div>';
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Statut</span><span class="rdv-p-val"><select class="bs" data-action="chSt" data-bid="'+b._id+'" style="font-size:12px;padding:4px 8px"><option value="confirmed"'+(b.status==='confirmed'?' selected':'')+'>À venir</option><option value="completed"'+(b.status==='completed'?' selected':'')+'>Terminé</option><option value="cancelled"'+(b.status==='cancelled'?' selected':'')+'>Annulé</option><option value="no_show"'+(b.status==='no_show'?' selected':'')+'>No-show</option></select></span></div>';
+if(b.status==='cancelled'&&b.rescheduled!==true){
+var _cl=(window.AlteoreFlow&&window.AlteoreFlow.cancellationLabel)?window.AlteoreFlow.cancellationLabel(b):'';
+h+='<div class="rdv-p-row"><span class="rdv-p-label">Annulation</span><span class="rdv-p-val" style="color:#fca5a5">🔴 '+esc(_cl||'origine non renseignée')+'</span></div>';
+}
 if(b.calendarEventLink){
 h+='<div class="rdv-p-row"><span class="rdv-p-label">Événement</span><span class="rdv-p-val"><a href="'+esc(b.calendarEventLink)+'" target="_blank" style="color:#60a5fa;font-size:12px">Voir dans Google Calendar ↗</a></span></div>';
 }
@@ -1600,7 +1604,58 @@ function bkOutcomeFromList(bid){
 window.bkOutcomeModal=bkOutcomeModal;window.bkRescheduleModal=bkRescheduleModal;window.bkOutcomeFromList=bkOutcomeFromList;
 /* Stamps d'audit statut RDV (lus par le Funnel Sales) : qui / quand pour annulé & no-show */
 function _bkStatusStamps(st){var ts=firebase.firestore.FieldValue.serverTimestamp();var u=firebase.auth().currentUser;var nm=null;try{var tm=window.TEAM_MEMBERS_LIST||[];for(var i=0;i<tm.length;i++){if(u&&tm[i].firebaseUid===u.uid){nm=tm[i].shortName||tm[i].displayName;break;}}}catch(e){}if(!nm&&u)nm=(u.email||'').split('@')[0]||null;var p={status:st,statusUpdatedAt:ts,statusUpdatedBy:u?u.uid:null,statusUpdatedByName:nm};if(st==='cancelled'){p.cancelledAt=ts;p.cancelledBy=u?u.uid:null;p.cancelledByName=nm;}if(st==='no_show'){p.noShowAt=ts;p.noShowBy=u?u.uid:null;p.noShowByName=nm;}if(st==='completed'){p.completedAt=ts;}return p;}
-function cancelRdv(bid){if(!confirm('Annuler ce rendez-vous ?'))return;db.collection('bookings').doc(bid).update(_bkStatusStamps('cancelled')).then(function(){closeRdvDetail();loadB();toast('🔴 RDV annulé');});}
+/* ═══ ANNULATION TRACÉE (28/09/2026) ═══
+   Plus aucun passage en « Annulé » sans origine. RDV sales → modale résultat
+   (Annulé présélectionné : origine + raison, propagation fiche/rapports).
+   RDV coaching / client → mini-dialogue « Qui annule ? » ci-dessous.
+   Un RDV déjà annulé n'est jamais re-tamponné : l'auteur et l'heure du
+   premier passage sont la vérité (cas Virginie : le sélecteur avait réécrit
+   l'annulation d'Élodie au nom d'Adrien). */
+function cancelRdv(bid){var b=B.find(function(x){return x._id===bid;});if(!b){toast('❌ RDV introuvable');return;}if(b.status==='cancelled'){toast('Ce RDV est déjà annulé');return;}bkCancelFlow(b);}
+function bkCancelFlow(b){
+  if(bkScope(b)!=='coaching'&&window.RdvOutcome){closeRdvDetail();window.RdvOutcome.open(Object.assign({},b,{id:b._id}),{preselect:'annule',onDone:function(){if(typeof loadB==='function')loadB();}});return;}
+  bkCancelDialog(b);
+}
+function bkCancelDialog(b){
+  var old=document.getElementById('bkCancelVeil');if(old)old.parentNode.removeChild(old);
+  var pr=b.prospect||{},name=((pr.prenom||'')+' '+(pr.nom||'')).trim()||'ce client';
+  var v=document.createElement('div');v.id='bkCancelVeil';
+  v.style.cssText='position:fixed;left:0;top:0;right:0;bottom:0;z-index:10050;background:rgba(3,5,15,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+  v.innerHTML='<div style="width:100%;max-width:440px;background:var(--card,#141a2e);border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:20px;color:var(--text,#fff)">'
+    +'<div style="font-weight:800;font-size:15px;margin-bottom:4px">Annuler le RDV de '+esc(name)+'</div>'
+    +'<div style="font-size:12px;color:var(--muted,#8f97b2);margin-bottom:14px">'+esc(b.typeLabel||'')+' · '+esc(dFR(b.date))+' '+esc(b.time||'')+'</div>'
+    +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted,#8f97b2);margin-bottom:6px">Qui annule ?</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:12px"><button type="button" class="bb bb-o" data-origin="prospect" style="flex:1">👤 Le client</button><button type="button" class="bb bb-o" data-origin="equipe" style="flex:1">👥 L\'équipe</button></div>'
+    +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted,#8f97b2);margin-bottom:6px">Raison</div>'
+    +'<textarea id="bkCancelReason" rows="2" style="width:100%;box-sizing:border-box;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.25);color:inherit;font:inherit;padding:8px" placeholder="obligatoire si l\'équipe annule"></textarea>'
+    +'<div id="bkCancelErr" style="min-height:16px;font-size:12px;color:#fca5a5;margin:6px 0"></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="bb bb-o" data-act="back">Retour</button><button type="button" class="bb bb-r" data-act="ok">🔴 Annuler le RDV</button></div></div>';
+  document.body.appendChild(v);
+  var origin=null;
+  v.addEventListener('click',function(e){
+    var t=e.target.closest('button');
+    if(!t){if(e.target===v)v.parentNode.removeChild(v);return;}
+    if(t.hasAttribute('data-origin')){
+      origin=t.getAttribute('data-origin');
+      var bts=v.querySelectorAll('[data-origin]');
+      for(var i=0;i<bts.length;i++){bts[i].className='bb '+(bts[i]===t?'bb-p':'bb-o');}
+      return;
+    }
+    if(t.getAttribute('data-act')==='back'){v.parentNode.removeChild(v);return;}
+    if(t.getAttribute('data-act')!=='ok')return;
+    var reason=(document.getElementById('bkCancelReason').value||'').trim(),err=document.getElementById('bkCancelErr');
+    if(!origin){err.textContent='Indique qui annule : le client ou l\'équipe.';return;}
+    if(origin==='equipe'&&!reason){err.textContent='La raison est obligatoire quand l\'équipe annule.';return;}
+    t.disabled=true;
+    var patch=_bkStatusStamps('cancelled');
+    patch.cancelledOrigin=origin;
+    patch.cancellation=(window.AlteoreFlow&&window.AlteoreFlow.cancellationBlock)
+      ?window.AlteoreFlow.cancellationBlock({origin:origin,via:'booking_admin',reason:reason||null})
+      :{origin:origin,via:'booking_admin',reason:reason||null,by:patch.cancelledBy,byName:patch.cancelledByName,byRole:null,at:new Date().toISOString()};
+    db.collection('bookings').doc(b._id).update(patch).then(function(){v.parentNode.removeChild(v);closeRdvDetail();loadB();toast('🔴 RDV annulé');}).catch(function(e2){t.disabled=false;err.textContent=(e2&&e2.message)||'Erreur';});
+  });
+}
+window.bkCancelFlow=bkCancelFlow;
 
 /* ═══ SUPPRESSION DÉFINITIVE D'UN RDV (admin) ═══
    Passe par api/booking-delete.js au lieu du .delete() direct d'avant.
@@ -3495,7 +3550,10 @@ else if(ac==='openCs'){openCsDetail(a.dataset.tid);}
 else if(ac==='assignEx'){var ap=P.find(function(x){return x.id===a.dataset.pid;});if(ap){ap.types=ap.types||[];if(ap.types.indexOf(cdType.id)<0)ap.types.push(cdType.id);CR.doc(ap.id).update({types:ap.types}).then(function(){renderCdSection();toast('✅ Expert assigné');});}}
 else if(ac==='unassignEx'){var up=P.find(function(x){return x.id===a.dataset.pid;});if(up){up.types=up.types||[];var ui=up.types.indexOf(cdType.id);if(ui>=0)up.types.splice(ui,1);CR.doc(up.id).update({types:up.types}).then(function(){renderCdSection();toast('✅ Expert retiré');});}}
 else if(ac==='togEx'){var c=document.querySelector('.ec[data-pid="'+a.dataset.pid+'"]');if(c)c.classList.toggle('open');}else if(ac==='togTy'){var pid=a.dataset.pid,tid=a.dataset.tid,p=P.find(function(x){return x.id===pid;});if(!p)return;p.types=p.types||[];var i=p.types.indexOf(tid);if(i>=0)p.types.splice(i,1);else p.types.push(tid);CR.doc(pid).update({types:p.types}).then(function(){renderAll();toast('✅');});}else if(ac==='savPS'){var pid2=a.dataset.pid,u={};document.querySelectorAll('[data-ps][data-pid="'+pid2+'"]').forEach(function(inp){var v=parseInt(inp.value);u[inp.dataset.ps]=isNaN(v)?0:v;});CR.doc(pid2).update(u).then(function(){var p2=P.find(function(x){return x.id===pid2;});if(p2)Object.assign(p2,u);toast('✅');});}else if(ac==='addSl'){var pid3=a.dataset.pid,dy=a.dataset.day,sE=document.querySelector('[data-start="'+pid3+'_'+dy+'"]'),eE=document.querySelector('[data-end="'+pid3+'_'+dy+'"]');if(!sE||!eE||!sE.value||!eE.value)return;var p3=P.find(function(x){return x.id===pid3;});if(!p3)return;p3.schedule=p3.schedule||{};p3.schedule[dy]=p3.schedule[dy]||[];p3.schedule[dy].push({start:sE.value,end:eE.value});CR.doc(pid3).update({schedule:p3.schedule}).then(function(){rEx();toast('✅');});}else if(ac==='delSl'){var pid4=a.dataset.pid,dy2=a.dataset.day,ix=+a.dataset.idx;var p4=P.find(function(x){return x.id===pid4;});if(!p4||!p4.schedule||!p4.schedule[dy2])return;p4.schedule[dy2].splice(ix,1);CR.doc(pid4).update({schedule:p4.schedule}).then(function(){rEx();toast('🗑');});}else if(ac==='addBl'){var pid5=a.dataset.pid,dE=document.querySelector('[data-bl="'+pid5+'"]');if(!dE||!dE.value)return;var p5=P.find(function(x){return x.id===pid5;});if(!p5)return;p5.blockedDates=p5.blockedDates||[];if(p5.blockedDates.indexOf(dE.value)<0)p5.blockedDates.push(dE.value);p5.blockedDates.sort();CR.doc(pid5).update({blockedDates:p5.blockedDates}).then(function(){rEx();toast('🚫');});}else if(ac==='delBl'){var pid6=a.dataset.pid,ix2=+a.dataset.idx;var p6=P.find(function(x){return x.id===pid6;});if(!p6)return;p6.blockedDates.splice(ix2,1);CR.doc(pid6).update({blockedDates:p6.blockedDates}).then(function(){rEx();toast('✅');});}else if(ac==='delP'){if(!confirm('Supprimer ?'))return;CR.doc(a.dataset.pid).delete().then(function(){loadAll();toast('🗑');});}else if(ac==='shT'){openShareModal(a.dataset.tid,'type');}else if(ac==='shEx'){navigator.clipboard.writeText(window.location.origin+'/booking.html?person='+a.dataset.pid).then(function(){toast('📋 Copié !');});}});
-document.addEventListener('change',function(e){var s=e.target.closest('[data-action="chSt"]');if(!s)return;db.collection('bookings').doc(s.dataset.bid).update(_bkStatusStamps(s.value)).then(function(){loadB();toast('✅');});});
+document.addEventListener('change',function(e){var s=e.target.closest('[data-action="chSt"]');if(!s)return;
+/* « Annulé » passe par l'annulation tracée (origine + raison) — jamais un tampon direct. */
+if(s.value==='cancelled'){var bC=B.find(function(x){return x._id===s.dataset.bid;});if(bC){s.value=bC.status||'confirmed';if(bC.status==='cancelled'){toast('Ce RDV est déjà annulé');return;}bkCancelFlow(bC);return;}}
+db.collection('bookings').doc(s.dataset.bid).update(_bkStatusStamps(s.value)).then(function(){loadB();toast('✅');});});
 /* Boot immediat (fix 16/07) : booking_config et bookings sont lisibles sans
    auth — on charge tout de suite au lieu d'attendre onAuthStateChanged
    (l'auth met 15-30 s a se restaurer sur certains postes → la modale

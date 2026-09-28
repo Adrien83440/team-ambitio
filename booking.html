@@ -2427,6 +2427,13 @@ async function submitBooking() {
         cancelledAt: firebase.firestore.FieldValue.serverTimestamp(),
         cancelledBy: _me ? _me.uid : null,
         cancelledByName: _me ? (_me.displayName || _me.email || null) : null,
+        /* Traçabilité des annulations (28/09/2026) : une replanification est
+           une annulation « système », jamais comptée comme annulation. */
+        cancellation: {
+          origin: 'systeme', via: 'reschedule',
+          by: _me ? _me.uid : null, byName: _me ? (_me.displayName || _me.email || null) : null, byRole: null,
+          reason: 'Replanifié au ' + S.selDate + ' ' + S.selTime, at: _now.toISOString()
+        },
         rescheduled: true,
         rescheduledToId: docRef.id
       }).then(function () {

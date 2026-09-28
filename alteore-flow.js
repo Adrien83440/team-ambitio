@@ -112,6 +112,70 @@
   }
   function frDate(d) { d = d || new Date(); return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
 
+  /* ═══ ANNULATION — ORIGINE, AUTEUR, RAISON (28/09/2026) ═══════════════
+     Un seul bloc `cancellation` sur le RDV, écrit par TOUS les chemins qui
+     annulent (modale résultat, booking-admin, replanification, API) :
+       { origin: 'prospect' | 'equipe' | 'systeme', by, byName, byRole,
+         via: 'outcome_modal' | 'booking_admin' | 'reschedule' | 'coach_transfer'
+              | 'client_deactivated' | 'dedupe', reason, at (ISO) }
+     Les champs historiques (cancelledBy/ByName/Origin/Reason) restent posés
+     pour les lecteurs existants. Une fois le RDV annulé, seul « ✎ Modifier le
+     résultat » peut réécrire ce bloc — jamais un simple changement de statut
+     (cas Virginie du 28/09 : le sélecteur de booking-admin avait re-tamponné
+     l'annulation d'Élodie au nom d'Adrien). */
+  var CANCEL_ORIGINS = { prospect: 1, equipe: 1, systeme: 1 };
+  var CANCEL_VIA_LABELS = { reschedule: 'replanification', coach_transfer: 'transfert coach', client_deactivated: 'client désactivé', dedupe: 'doublon' };
+  function roleLabelAny(role) {
+    if (role === 'admin') return 'Admin';
+    if (role === 'csm') return 'CSM';
+    if (role === 'coach') return 'Coach';
+    return roleLabel(role);
+  }
+  function cancellationBlock(o) {
+    o = o || {};
+    var m = o.member || me() || {};
+    return {
+      origin: CANCEL_ORIGINS[o.origin] ? o.origin : null,
+      by: m.uid || null, byName: m.name || null, byRole: m.role || null,
+      via: o.via || null, reason: o.reason || null,
+      at: new Date().toISOString()
+    };
+  }
+  /* Lecture normalisée : bloc récent, sinon champs historiques. Pour un RDV
+     statué « annule » par la modale, l'auteur et l'heure sont ceux du
+     résultat — pas d'un re-tampon de statut ultérieur. */
+  function cancellationInfo(b) {
+    if (!b) return null;
+    var c = b.cancellation || null;
+    var viaOutcome = b.outcome === 'annule';
+    var origin = (c && c.origin) || b.cancelledOrigin || null;
+    if (!origin && b.cancelledReason) origin = 'systeme';
+    var at = (c && c.at) || null;
+    var legacyAt = viaOutcome ? b.outcomeAt : b.cancelledAt;
+    if (!at && legacyAt) { try { at = legacyAt.toDate ? legacyAt.toDate().toISOString() : String(legacyAt); } catch (e) { at = null; } }
+    return {
+      origin: CANCEL_ORIGINS[origin] ? origin : null,
+      byName: (c && c.byName) || (viaOutcome ? b.outcomeByName : null) || b.cancelledByName || null,
+      byRole: (c && c.byRole) || null,
+      via: (c && c.via) || b.cancelledReason || null,
+      reason: (c && c.reason) || (viaOutcome ? b.outcomeNote : null) || null,
+      at: at
+    };
+  }
+  function cancellationLabel(b) {
+    var i = cancellationInfo(b);
+    if (!i) return '';
+    var parts = [];
+    if (i.origin === 'equipe') parts.push('Annulé par l’équipe');
+    else if (i.origin === 'prospect') parts.push('Annulé par le prospect');
+    else if (i.origin === 'systeme') parts.push('Annulé · ' + (CANCEL_VIA_LABELS[i.via] || 'système'));
+    else parts.push('Annulé · origine non renseignée');
+    if (i.byName) parts.push((i.origin === 'prospect' ? 'enregistré par ' : '') + i.byName + (i.byRole ? ' (' + roleLabelAny(i.byRole) + ')' : ''));
+    if (i.reason) parts.push(i.reason);
+    if (i.at) { var d = new Date(i.at); if (!isNaN(d.getTime())) parts.push(frDateTime(d)); }
+    return parts.join(' · ');
+  }
+
   /* Membre courant — auth Firebase + roster nav.js (_meta/team_members). */
   function me() {
     var u = firebase.auth().currentUser;
@@ -506,6 +570,8 @@
       if (opts.rescheduledToId) patch.rescheduledToId = opts.rescheduledToId;
     }
     if (outcome === 'annule' && opts.cancelledBy) patch.cancelledOrigin = opts.cancelledBy; // 'prospect' | 'equipe'
+    if (outcome === 'annule') patch.cancellation = cancellationBlock({ origin: opts.cancelledBy, via: opts.via || 'outcome_modal', reason: opts.note || null, member: m });
+    if (outcome === 'replanifie') patch.cancellation = cancellationBlock({ origin: 'systeme', via: 'reschedule', reason: opts.note || null, member: m });
     if (outcome === 'close' && opts.closeData) {
       var cd = opts.closeData;
       patch.closeData = {
@@ -579,7 +645,12 @@
     Object.keys(extra).forEach(function (k) { updates[k] = extra[k]; });
 
     var tlColor = o.color;
-    var tlText = o.icon + ' RDV ' + when + ' → ' + o.label + (sb ? ' (Self Booking)' : ' (Setting NB)') + (opts.note ? ' — ' + opts.note : '');
+    var tlLabel = o.label;
+    if (outcome === 'annule') {
+      tlLabel = opts.cancelledBy === 'equipe' ? 'Annulé par l’équipe' : opts.cancelledBy === 'prospect' ? 'Annulé par le prospect' : 'Annulé';
+      tlLabel += ' · ' + (m.name || '?') + (m.role ? ' (' + roleLabelAny(m.role) + ')' : '');
+    }
+    var tlText = o.icon + ' RDV ' + when + ' → ' + tlLabel + (sb ? ' (Self Booking)' : ' (Setting NB)') + (opts.note ? ' — ' + opts.note : '');
     updates.timeline_history = arrayUnion({ text: tlText, date: frDateTime(), color: tlColor });
 
     /* PHOTO AVANT ÉCRASEMENT — permet à clearOutcome() de remettre la fiche
@@ -632,7 +703,7 @@
       var patch = {
         outcome: DEL, outcomeAt: DEL, outcomeBy: DEL, outcomeByName: DEL,
         outcomeNote: DEL, outcomeDay: DEL, closeData: DEL,
-        cancelledAt: DEL, cancelledBy: DEL, cancelledByName: DEL, cancelledOrigin: DEL,
+        cancelledAt: DEL, cancelledBy: DEL, cancelledByName: DEL, cancelledOrigin: DEL, cancellation: DEL,
         noShowAt: DEL, noShowBy: DEL, noShowByName: DEL, completedAt: DEL,
         rescheduled: DEL, outcomeUndo: DEL,
         /* Statut legacy : celui d'avant le clic si on l'a, sinon « confirmé »
@@ -1103,6 +1174,10 @@
     addLeadTimeline: addLeadTimeline,
     setOutcome: setOutcome,
     clearOutcome: clearOutcome,
+    cancellationBlock: cancellationBlock,
+    cancellationInfo: cancellationInfo,
+    cancellationLabel: cancellationLabel,
+    roleLabelAny: roleLabelAny,
     WIZARD_PRICING: WIZARD_PRICING,
     resolveClosingActors: resolveClosingActors,
     applyFicheClose: applyFicheClose,

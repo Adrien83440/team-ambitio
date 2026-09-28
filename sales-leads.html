@@ -3203,6 +3203,10 @@ function paintLeadRdvBox(leadId, items) {
   function rdvInfoLine(b, meetUrl) {
     var pr = b.prospect || {};
     var bits = [];
+    /* Annulation : qui, enregistré par qui, pourquoi, quand (28/09/2026). */
+    if (b.status === 'cancelled' && b.rescheduled !== true && window.AlteoreFlow && window.AlteoreFlow.cancellationLabel) {
+      bits.push('🔴 ' + escHtml(window.AlteoreFlow.cancellationLabel(b)));
+    }
     if (b.duration) bits.push(b.duration + ' min');
     if (pr.secteur) bits.push('🏢 ' + escHtml(pr.secteur));
     if (pr.telephone) bits.push('📞 ' + escHtml(pr.telephone));

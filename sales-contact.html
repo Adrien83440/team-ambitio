@@ -1112,6 +1112,7 @@ function paintRdvBox(items){
       '</div>'+
       '<div class="fl-rdv-info">'+
         '<div class="fl-rdv-type">'+esc(subInfo)+sbChip+'</div>'+
+        ((b.status==='cancelled'&&b.rescheduled!==true&&AF&&AF.cancellationLabel)?'<div style="font-size:10px;color:#fca5a5;margin-top:3px">🔴 '+esc(AF.cancellationLabel(b))+'</div>':'')+
         '<div style="margin-top:3px">'+chip+(b.outcomeNote?' <span style="font-size:10px;color:var(--muted);font-style:italic">'+esc(b.outcomeNote)+'</span>':'')+'</div>'+
         (past?'':'<div class="fl-rdv-status '+(open?'open':'closed')+'" style="margin-top:3px">'+(open?'🟠 Slot ouvert':'🔒 Slot fermé')+'</div>')+
       '</div>'+
