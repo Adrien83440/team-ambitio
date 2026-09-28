@@ -599,8 +599,15 @@ function renderVariants(s) {
       + '<label class="bb bb-p bb-s">📄 Déposer un .html<input type="file" accept=".html,.htm,text/html" data-action="uploadHtml" data-id="' + escAttr(v.id) + '"/></label>'
       + '<button class="bb bb-o bb-s" data-action="pasteOpen" data-id="' + escAttr(v.id) + '">📋 Coller le HTML</button>'
       + (ok ? '<a class="bb bb-o bb-s" href="' + escAttr(previewUrl(t, s, v.id)) + '" target="_blank" rel="noopener">👁 Aperçu</a>' : '')
+      + (ok ? (v.previews || []).map(function (pv) { return '<a class="bb bb-o bb-s" href="' + escAttr(previewUrl(t, s, v.id) + '&' + pv.query) + '" target="_blank" rel="noopener">👁 ' + esc(pv.label) + '</a>'; }).join('') : '')
       + (ok ? '<a class="bb bb-o bb-s" href="' + escAttr(v.html.url || '#') + '" target="_blank" rel="noopener" download>⬇ Source</a>' : '')
-      + '</div></div>';
+      + '</div>'
+      /* Écrans d'aperçu : la page lit un paramètre d'URL et affiche directement
+         un écran interne (ex. les résultats du quiz sans refaire le parcours). */
+      + '<span class="lbl" style="margin-top:10px">Écrans d\'aperçu (un par ligne : Libellé | param=valeur)</span>'
+      + '<textarea class="bi" data-vfield="previews" style="min-height:44px;font-family:var(--font-m);font-size:12px" placeholder="Résultats du diagnostic | apercu=resultats">' + esc((v.previews || []).map(function (pv) { return pv.label + ' | ' + pv.query; }).join('\n')) + '</textarea>'
+      + '<div class="help">Ajoute un lien 👁 par ligne, ouvert sur <code>/t/' + esc(s.slug) + '?v=' + esc(v.id) + '&amp;param=valeur</code>. La page doit gérer ce paramètre elle-même (et seulement en aperçu).</div>'
+      + '</div>';
   });
   $('varList').innerHTML = h;
 }
@@ -626,7 +633,19 @@ function readStepForm(s) {
     v.label = rows[i].querySelector('[data-vfield=label]').value.trim();
     v.weight = Math.max(0, Math.min(100, Number(rows[i].querySelector('[data-vfield=weight]').value) || 0));
     v.status = rows[i].querySelector('[data-vfield=status]').value === 'live' ? 'live' : 'draft';
+    v.previews = parsePreviews(rows[i].querySelector('[data-vfield=previews]').value);
   }
+}
+/* « Libellé | param=valeur » par ligne → [{label, query}] ; la query est
+   gardée telle quelle (sans « ? » ni « & » de tête), les lignes vides ignorées. */
+function parsePreviews(text) {
+  var out = [];
+  String(text || '').split('\n').forEach(function (line) {
+    var i = line.indexOf('|'); if (i < 0) return;
+    var label = line.slice(0, i).trim(), query = line.slice(i + 1).trim().replace(/^[?&]+/, '');
+    if (label && /^[A-Za-z0-9_.-]+=[^&\s]*(&[A-Za-z0-9_.-]+=[^&\s]*)*$/.test(query)) out.push({ label: label.slice(0, 60), query: query });
+  });
+  return out;
 }
 function currentModalStep() { return findStep($('stepModalBox').getAttribute('data-step-id')); }
 function stepSave(keepOpen) {
