@@ -33,7 +33,10 @@ const { db, admin } = require('./_firebaseAdmin');
 const parseBody = require('./_parseBody');
 const Reg = require('./_tunnelRegistry');
 
-const EVENTS = { visit: 1, view: 1, cta: 1 };
+/* optin (28/09/2026) : pages dont le formulaire ne passe pas par le runtime
+   (quiz → Make → lead-optin) — la page appelle ALTEO.track('optin') après
+   l'envoi. La fiche lead, elle, reste créée par lead-optin. */
+const EVENTS = { visit: 1, view: 1, cta: 1, optin: 1 };
 
 function todayIsoParis() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
@@ -85,18 +88,19 @@ module.exports = async (req, res) => {
   const pageK = Reg.pageKey(tunnel, step);
   const writes = [];
 
-  if (event === 'view' || event === 'cta') {
+  const FIELD = { visit: 'visits', view: 'views', cta: 'ctas', optin: 'optins' };
+  if (event === 'view' || event === 'cta' || event === 'optin') {
     const docId = date + '_' + pageK + (variant ? '--' + variant : '');
     const patch = {
       date: date, page: pageK, variant: variant, tunnelId: tunnel.id, stepId: step.id,
       pageLabel: Reg.pageLabel(tunnel, step),
       updatedAt: FV.serverTimestamp()
     };
-    patch[event === 'view' ? 'views' : 'ctas'] = inc;
+    patch[FIELD[event]] = inc;
     writes.push(db.collection('page_views_daily').doc(docId).set(patch, { merge: true }));
   }
 
-  const field = event === 'visit' ? 'visits' : (event === 'view' ? 'views' : 'ctas');
+  const field = FIELD[event];
   const stats = {
     date: date, tunnelId: tunnel.id, tunnelName: tunnel.name, tunnelSlug: tunnel.slug,
     updatedAt: FV.serverTimestamp(),
@@ -107,7 +111,7 @@ module.exports = async (req, res) => {
     stats.steps[step.id] = { name: step.name || step.slug, slug: step.slug };
     stats.steps[step.id][field] = inc;
   }
-  if (event === 'visit' || event === 'cta') {
+  if (event === 'visit' || event === 'cta' || event === 'optin') {
     const sk = sourceKey(src);
     stats.sources = {};
     stats.sources[sk] = { utm_source: src.utm_source, utm_campaign: src.utm_campaign, utm_content: src.utm_content };

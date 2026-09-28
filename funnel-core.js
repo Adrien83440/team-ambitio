@@ -1308,7 +1308,7 @@
     k.vslLabels = {};
     function vslCell(pg, vr) {
       if (!vslByPage[pg]) vslByPage[pg] = {};
-      if (!vslByPage[pg][vr]) vslByPage[pg][vr] = { variant: vr, views: 0, ctas: 0, leads: 0, bookings: 0 };
+      if (!vslByPage[pg][vr]) vslByPage[pg][vr] = { variant: vr, views: 0, ctas: 0, leads: 0, present: 0, closes: 0, bookings: 0 };
       return vslByPage[pg][vr];
     }
     /* Provenance d'un RDV : le bloc landing posé par booking.html (paramètre
@@ -1350,8 +1350,14 @@
       if (b._class !== 'self' && b._class !== 'setter') return;
       var L = bookingLanding(b);
       if (!L || !isVslPage(L.page) || !tunnelMatch(pageTunnel(L.page))) return;
-      vslCell(L.page, L.variant || '_').bookings++;
+      var cell = vslCell(L.page, L.variant || '_');
+      cell.bookings++;
       k.vslBookings++;
+      /* Tenue et close : statués par le RDV terminal de la chaîne (un report
+         ne compte ni deux RDV, ni un RDV perdu). */
+      var term = chainTerminal(b);
+      if (ocPresent(term)) cell.present++;
+      if (ocOf(term) === 'close') cell.closes++;
     });
     k.vslActive = k.vslViews > 0 || k.vslBookings > 0 || k.vslLeads > 0;
     k.vslCtaRate = k.vslViews > 0 ? k.vslCtas / k.vslViews * 100 : null;
@@ -1361,8 +1367,8 @@
     Object.keys(vslByPage).sort().forEach(function (pg) {
       var vars = Object.keys(vslByPage[pg]).map(function (kk) { return vslByPage[pg][kk]; });
       vars.sort(function (a, b) { return a.variant < b.variant ? -1 : 1; });
-      var tot = { page: pg, views: 0, ctas: 0, leads: 0, bookings: 0 };
-      vars.forEach(function (c) { tot.views += c.views; tot.ctas += c.ctas; tot.leads += c.leads; tot.bookings += c.bookings; });
+      var tot = { page: pg, views: 0, ctas: 0, leads: 0, present: 0, closes: 0, bookings: 0 };
+      vars.forEach(function (c) { tot.views += c.views; tot.ctas += c.ctas; tot.leads += c.leads; tot.present += c.present; tot.closes += c.closes; tot.bookings += c.bookings; });
       k.vslPages.push(tot);
       var named = vars.filter(function (c) { return c.variant !== '_'; });
       if (named.length >= 2) k.vslTests.push({ page: pg, variants: named });

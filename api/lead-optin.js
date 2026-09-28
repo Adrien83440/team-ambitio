@@ -243,9 +243,29 @@ function landingLabelOf(page) {
   return biz ? 'Opt-in Business' : 'Opt-in Élite';
 }
 
-// body.landing explicite (page whitelistée) > déduction quiz > rien.
+// Paramètres lp / v portés par l'URL de la page (page_url envoyée par le
+// quiz hébergé → landingUrl côté Make). C'est ce qui rattache un lead du quiz
+// à l'étape et à la variante du tunnel sans toucher au scénario Make.
+function landingFromUrl(url) {
+  const s = String(url || '');
+  const q = s.indexOf('?');
+  if (q < 0) return null;
+  let sp;
+  try { sp = new URLSearchParams(s.slice(q + 1).split('#')[0]); } catch (e) { return null; }
+  const page = landingSlug(sp.get('lp'), 90);
+  if (!page) return null;
+  return { page: page, variant: landingSlug(sp.get('v'), 20) || null };
+}
+
+// body.landing explicite (page whitelistée) > lp / v de l'URL de la page >
+// déduction quiz > rien.
 function buildLanding(body, type, hasQuiz) {
-  const src = body && typeof body.landing === 'object' ? body.landing : null;
+  let src = body && typeof body.landing === 'object' ? body.landing : null;
+  const url0 = String((src && src.pageUrl) || (body && (body.landingUrl || body.pageUrl || body.url)) || '').slice(0, 500);
+  if (!src || !landingSlug(src.page, 90)) {
+    const fromUrl = landingFromUrl(url0);
+    if (fromUrl) src = Object.assign({}, src || {}, fromUrl);
+  }
   let page = src ? landingSlug(src.page, 90) : '';
   if (page && !LANDING_PAGES[page] && !TUNNEL_KEY_RE.test(page)) page = '';
   if (!page && hasQuiz) page = type === 'business' ? 'quiz_business' : 'quiz_elite';

@@ -850,47 +850,61 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
      compare les RDV par vue, avec la même significativité que l'opt-in. */
   function vslPageLabel(pg) {
     var p = String(pg || '');
-    if (p === 'vsl_elite') return 'VSL Élite';
-    if (p === 'vsl_business') return 'VSL Business';
-    if (p === 'quiz_elite') return 'Funnel Quiz Élite';
-    if (p === 'quiz_business') return 'Funnel Quiz Business';
+    if (p === 'vsl_elite') return 'VSL Élite (System.io, historique)';
+    if (p === 'vsl_business') return 'VSL Business (System.io, historique)';
+    if (p === 'quiz_elite') return 'Funnel Quiz Élite (System.io, historique)';
+    if (p === 'quiz_business') return 'Funnel Quiz Business (System.io, historique)';
     if (K && K.vslLabels && K.vslLabels[p]) return K.vslLabels[p];   // page de tunnel hébergé
     return p;
   }
   /* Funnel quiz (28/09/2026) : même étape que la VSL, avec une colonne Leads
      en plus — le quiz garde un opt-in (questionnaire) avant le RDV. Un RDV
      d'un lead quiz pris sans paramètre lp est rattaché via la fiche du lead. */
+  /* Une ligne du tableau par étape : chaque colonne de taux se lit par
+     rapport à l'étape précédente (clics / vues, formulaires / vues,
+     RDV / formulaires) et par rapport aux vues (RDV / vues). Présents et
+     closes viennent du RDV terminal de la chaîne. */
+  function vslRow(label, c, showForms) {
+    var r = function (a, b) { return b > 0 ? fmtPct(a / b * 100) : '—'; };
+    return '<tr><td><strong>' + label + '</strong></td>'
+      + '<td class="num">' + fmtNum(c.views) + '</td>'
+      + '<td class="num">' + fmtNum(c.ctas) + '</td><td class="num">' + r(c.ctas, c.views) + '</td>'
+      + (showForms ? '<td class="num">' + (c.leads > 0 ? fmtNum(c.leads) : '—') + '</td><td class="num">' + r(c.leads, c.views) + '</td>' : '')
+      + '<td class="num">' + fmtNum(c.bookings) + '</td><td class="num">' + r(c.bookings, c.views) + '</td>'
+      + (showForms ? '<td class="num">' + r(c.bookings, c.leads) + '</td>' : '')
+      + '<td class="num">' + fmtNum(c.present) + '</td><td class="num">' + r(c.present, c.bookings) + '</td>'
+      + '<td class="num">' + fmtNum(c.closes) + '</td><td class="num">' + r(c.closes, c.bookings) + '</td>'
+      + '</tr>';
+  }
+  function vslHead(first, showForms) {
+    return '<thead><tr><th>' + first + '</th><th>Vues</th><th>Clics</th><th>Clics / vues</th>'
+      + (showForms ? '<th>Formulaires</th><th>Form. / vues</th>' : '')
+      + '<th>RDV pris</th><th>RDV / vues</th>' + (showForms ? '<th>RDV / form.</th>' : '')
+      + '<th>Présents</th><th>Présents / RDV</th><th>Closes</th><th>Closes / RDV</th></tr></thead>';
+  }
   function renderVslStage(k) {
     var hasLeads = k.vslLeads > 0;
-    var h = stageOpen('🎬', hasLeads ? 'VSL & Funnel Quiz — prise de RDV directe' : 'VSL — prise de RDV directe',
-      'vues et clics : beacon system.io · leads : provenance posée à l\'opt-in (funnel quiz) · RDV : collection bookings (provenance posée par booking.html, ou fiche du lead) · replanifications et RDV internes exclus');
+    var h = stageOpen('🎬', 'Pages du tunnel — conversion par étape',
+      'vues, clics et formulaires : mesure Alteore sur les pages hébergées (une session = une vue) · RDV : collection bookings, provenance posée à la prise de RDV ou à l\'opt-in · présents et closes : RDV terminal de la chaîne · replanifications et RDV internes exclus');
     h += '<div class="fn-grid">';
-    h += kpiCard(fmtNum(k.vslViews), hasLeads ? 'Vues VSL & quiz' : 'Vues VSL', 'sessions, toutes pages et variantes', null, k.vslViews === 0);
-    h += kpiCard(fmtNum(k.vslCtas), 'Clics « Réserver »', 'taux de clic ' + fmtPct(k.vslCtaRate), null, k.vslCtas === 0);
-    if (hasLeads) h += kpiCard(fmtNum(k.vslLeads), 'Formulaires remplis', 'quiz + formulaire de la VSL A, sur la période');
-    h += kpiCard(fmtNum(k.vslBookings), hasLeads ? 'RDV pris depuis la VSL / le quiz' : 'RDV pris depuis la VSL', 'créés sur la période');
-    h += kpiCard(fmtPct(k.vslBookRate), 'Taux de RDV / vues', 'remplace le taux d\'opt-in');
-    h += kpiCard(fmtEuro2(k.vslCpr), hasLeads ? 'CPR VSL & quiz' : 'CPR VSL', 'dépense pub / RDV pris depuis ces pages', null, k.vslCpr == null);
+    h += kpiCard(fmtNum(k.vslViews), 'Vues', 'toutes pages et variantes', null, k.vslViews === 0);
+    h += kpiCard(fmtNum(k.vslCtas), 'Clics « Réserver »', 'clics / vues ' + fmtPct(k.vslCtaRate), null, k.vslCtas === 0);
+    if (hasLeads) h += kpiCard(fmtNum(k.vslLeads), 'Formulaires remplis', 'quiz et formulaire de la VSL · form. / vues ' + fmtPct(k.vslViews > 0 ? k.vslLeads / k.vslViews * 100 : null));
+    h += kpiCard(fmtNum(k.vslBookings), 'RDV pris', 'créés sur la période · RDV / vues ' + fmtPct(k.vslBookRate) + (hasLeads && k.vslLeads > 0 ? ' · RDV / form. ' + fmtPct(k.vslBookings / k.vslLeads * 100) : ''));
+    h += kpiCard(fmtEuro2(k.vslCpr), 'CPR', 'dépense pub / RDV pris depuis ces pages', null, k.vslCpr == null);
     h += '</div>';
-    if (k.vslPages && k.vslPages.length > 1) {
-      h += '<div class="fn-table-wrap" style="border-radius:11px;margin-top:14px"><table class="fn-table" style="min-width:520px"><thead><tr><th>Page</th><th>Vues</th><th>Clics</th>' + (hasLeads ? '<th>Formulaires</th>' : '') + '<th>RDV</th><th>RDV / vues</th>' + (hasLeads ? '<th>RDV / formulaires</th>' : '') + '</tr></thead><tbody>';
-      k.vslPages.forEach(function (p) {
-        h += '<tr><td><strong>' + esc(vslPageLabel(p.page)) + '</strong></td><td class="num">' + fmtNum(p.views) + '</td><td class="num">' + fmtNum(p.ctas) + '</td>'
-          + (hasLeads ? '<td class="num">' + (p.leads > 0 ? fmtNum(p.leads) : '—') + '</td>' : '')
-          + '<td class="num">' + fmtNum(p.bookings) + '</td><td class="num">' + fmtPct(p.views > 0 ? p.bookings / p.views * 100 : null) + '</td>'
-          + (hasLeads ? '<td class="num">' + (p.leads > 0 ? fmtPct(p.bookings / p.leads * 100) : '—') + '</td>' : '')
-          + '</tr>';
-      });
+    if (k.vslPages && k.vslPages.length) {
+      h += '<div class="fn-table-wrap" style="border-radius:11px;margin-top:14px"><table class="fn-table" style="min-width:' + (hasLeads ? 1080 : 860) + 'px">' + vslHead('Page', hasLeads) + '<tbody>';
+      k.vslPages.forEach(function (p) { h += vslRow(esc(vslPageLabel(p.page)), p, hasLeads); });
       h += '</tbody></table></div>';
     }
     (k.vslTests || []).forEach(function (test) {
       var ref = test.variants[0];
       var refRate = ref.views > 0 ? ref.bookings / ref.views * 100 : null;
       h += '<div style="margin-top:14px"><div style="font-size:10.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px">🧪 A/B test — ' + esc(vslPageLabel(test.page)) + ' <span style="font-weight:500;text-transform:none;letter-spacing:0">(RDV par vue · variante ' + esc(ref.variant.toUpperCase()) + ' = référence)</span></div>';
-      h += '<div class="fn-table-wrap" style="border-radius:11px"><table class="fn-table" style="min-width:760px"><thead><tr><th>Variante</th><th>Vues</th><th>Clics</th><th>Taux de clic</th>' + (hasLeads ? '<th>Formulaires</th>' : '') + '<th>RDV</th><th>RDV / vues</th><th>Δ vs ' + esc(ref.variant.toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead><tbody>';
+      h += '<div class="fn-table-wrap" style="border-radius:11px"><table class="fn-table" style="min-width:' + (hasLeads ? 1240 : 1020) + 'px">' + vslHead('Variante', hasLeads).replace('</tr></thead>', '<th>Δ RDV / vues vs ' + esc(ref.variant.toUpperCase()) + '</th><th>Significativité (95 %)</th></tr></thead>') + '<tbody>';
       test.variants.forEach(function (v, idx) {
         var rate = v.views > 0 ? v.bookings / v.views * 100 : null;
-        var ctaRate = v.views > 0 ? v.ctas / v.views * 100 : null;
         var delta = '—';
         var sig = '<span style="color:var(--muted2)">référence</span>';
         if (idx > 0) {
@@ -900,11 +914,11 @@ table.fn-igt { width:100%; border-collapse:collapse; font-size:12px; min-width:1
           else if (st.p < 0.05) sig = '<span class="fn-badge ' + ((rate || 0) >= (refRate || 0) ? 'ok' : 'bad') + '" style="margin-top:0">✓ significatif · p = ' + st.p.toFixed(3) + '</span>';
           else sig = '<span class="fn-badge warn" style="margin-top:0">en cours · p = ' + st.p.toFixed(2) + '</span>';
         }
-        h += '<tr><td><strong>' + esc(v.variant.toUpperCase()) + '</strong></td><td class="num">' + fmtNum(v.views) + '</td><td class="num">' + fmtNum(v.ctas) + '</td><td class="num">' + fmtPct(ctaRate) + '</td>' + (hasLeads ? '<td class="num">' + (v.leads > 0 ? fmtNum(v.leads) : '—') + '</td>' : '') + '<td class="num">' + fmtNum(v.bookings) + '</td><td class="num">' + fmtPct(rate) + '</td><td class="num">' + delta + '</td><td>' + sig + '</td></tr>';
+        h += vslRow(esc(v.variant.toUpperCase()), v, hasLeads).replace('</tr>', '<td class="num">' + delta + '</td><td>' + sig + '</td></tr>');
       });
       h += '</tbody></table></div></div>';
     });
-    h += '<div class="fn-stage-note" style="margin-top:8px">Un RDV sans provenance (lien direct, ancien onglet, iframe sans paramètres) reste compté dans « Prise de RDV » mais pas ici — sauf si la fiche du lead a été créée par le funnel quiz, dont la provenance est connue dès l\'opt-in. Ces chiffres sont un plancher, jamais une estimation.</div>';
+    h += '<div class="fn-stage-note" style="margin-top:8px">Un RDV sans provenance (lien direct, ancien onglet) reste compté dans « Prise de RDV » mais pas ici — sauf si la fiche du lead a été créée par un formulaire du tunnel, dont la provenance est connue dès l\'opt-in. Les lignes « System.io, historique » s\'arrêtent à la bascule du domaine. Ces chiffres sont un plancher, jamais une estimation.</div>';
     h += '</div><div class="fn-arrow">▼</div>';
     return h;
   }
